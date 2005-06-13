@@ -424,6 +424,7 @@ type
   public
     procedure SetUp; override;
   published
+    procedure TestValue; override;
   end;
 
   TestTIdSipTimestampHeader = class(THeaderTestCase)
@@ -720,6 +721,7 @@ begin
   Result.AddTest(TestTIdSipRecordRouteHeader.Suite);
   Result.AddTest(TestTIdSipReferToHeader.Suite);
   Result.AddTest(TestTIdSipReplacesHeader.Suite);
+  Result.AddTest(TestTIdSipSubscriptionStateHeader.Suite);
   Result.AddTest(TestTIdSipTimestampHeader.Suite);
   Result.AddTest(TestTIdSipUriHeader.Suite);
   Result.AddTest(TestTIdSipViaHeader.Suite);
@@ -3648,6 +3650,18 @@ end;
 function TestTIdSipSubscriptionStateHeader.HeaderType: TIdSipHeaderClass;
 begin
   Result := TIdSipSubscriptionStateHeader;
+end;
+
+//* TestTIdSipSubscriptionStateHeader Published methods ************************
+
+procedure TestTIdSipSubscriptionStateHeader.TestValue;
+begin
+  Self.SS.Value := 'pending;expires=1;reason=probation;retry-after=2';
+
+  CheckEquals(SubscriptionSubstatePending, Self.SS.SubState,   'SubState');
+  CheckEquals(1,                           Self.SS.Expires,    'Expires');
+  CheckEquals(EventReasonProbation,        Self.SS.Reason,     'Reason');
+  CheckEquals(2,                           Self.SS.RetryAfter, 'RetryAfter');
 end;
 
 //******************************************************************************

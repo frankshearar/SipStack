@@ -255,6 +255,7 @@ type
     property Parameters: TStrings read GetParameters write SetParameters;
   protected
     procedure FailParse(const Reason: String);
+    function  GetCardinalParam(const ParamName: String): Cardinal;
     function  GetName: String; virtual;
     function  GetValue: String; virtual;
     procedure MarkAsInvalid(const Reason: String);
@@ -262,6 +263,8 @@ type
     procedure ParseParameters(Value: String;
                               Parameters: TStrings;
                               Delimiter: String = ';');
+    procedure SetCardinalParam(const ParamName: String;
+                               Value: Cardinal);
     procedure SetName(const Value: String); virtual;
     procedure SetValue(const Value: String);
   public
@@ -692,9 +695,29 @@ type
   end;
 
   // cf RFC 3265, section 7.2.3
+  //
+  // The Expires parameter is not quite accurate: RFC 3261 says that you can
+  // specify an arbitrarily large positive integer. Delphi doesn't really
+  // support large integer values, so if necessary we just cap Expires at
+  // Max(Cardinal).
   TIdSipSubscriptionStateHeader = class(TIdSipHeader)
+  private
+    function  GetExpires: Cardinal;
+    function  GetReason: String;
+    function  GetRetryAfter: Cardinal;
+    function  GetSubState: String;
+    procedure SetExpires(Value: Cardinal);
+    procedure SetReason(Value: String);
+    procedure SetRetryAfter(Value: Cardinal);
+    procedure SetSubState(Value: String);
   protected
     function GetName: String; override;
+    procedure Parse(const Value: String); override;
+  public
+    property Expires:    Cardinal read GetExpires write SetExpires;
+    property Reason:     String   read GetReason write SetReason;
+    property RetryAfter: Cardinal read GetRetryAfter write SetRetryAfter;
+    property SubState:   String   read GetSubState write SetSubState;
   end;
 
   TIdSipReferToHeader = class(TIdSipAddressHeader)
@@ -1464,131 +1487,142 @@ const
 
 // Header and parameter names. Don't localise them.
 const
-  AcceptHeader               = 'Accept';
-  AcceptEncodingHeader       = 'Accept-Encoding';
-  AcceptLanguageHeader       = 'Accept-Language';
-  AlertInfoHeader            = 'Alert-Info';
-  AlgorithmParam             = 'algorithm';
-  AllowEventHeader           = 'Allow-Event';
-  AllowHeader                = 'Allow';
-  AuthenticationInfoHeader   = 'Authentication-Info';
-  AuthorizationHeader        = 'Authorization';
-  BasicAuthorizationScheme   = 'Basic';
-  BranchParam                = 'branch';
-  CallIDHeaderFull           = 'Call-ID';
-  CallIDHeaderShort          = 'i';
-  CallInfoHeader             = 'Call-Info';
-  CNonceParam                = 'cnonce';
-  ContactHeaderFull          = 'Contact';
-  ContactHeaderShort         = 'm';
-  ContactWildCard            = '*';
-  ContentDispositionHeader   = 'Content-Disposition';
-  ContentEncodingHeaderFull  = 'Content-Encoding';
-  ContentEncodingHeaderShort = 'e';
-  ContentLanguageHeader      = 'Content-Language';
-  ContentLengthHeaderFull    = 'Content-Length';
-  ContentLengthHeaderShort   = 'l';
-  ContentTypeHeaderFull      = 'Content-Type';
-  ContentTypeHeaderShort     = 'c';
-  CSeqHeader                 = 'CSeq';
-  DateHeader                 = 'Date';
-  DigestAuthorizationScheme  = 'Digest';
-  DigestResponseParam        = 'response';
-  DigestUriParam             = 'uri';
-  DispositionAlert           = 'alert';
-  DispositionIcon            = 'icon';
-  DispositionRender          = 'render';
-  DispositionSession         = 'session';
-  DomainParam                = 'domain';
-  DurationParam              = 'duration';
-  EarlyOnlyParam             = 'early-only';
-  ErrorInfoHeader            = 'Error-Info';
-  EventHeader                = 'Event';
-  ExpireNow                  = 0;
-  ExpiresHeader              = 'Expires';
-  ExpiresParam               = 'expires';
-  FromHeaderFull             = 'From';
-  FromHeaderShort            = 'f';
-  FromTagParam               = 'from-tag'; // cf. RFC 3891
-  HandlingOptional           = 'optional';
-  HandlingParam              = 'handling';
-  HandlingRequired           = 'required';
-  IdParam                    = 'id';
-  InReplyToHeader            = 'In-Reply-To';
-  LooseRoutableParam         = 'lr';
-  MaddrParam                 = 'maddr';
-  MaxForwardsHeader          = 'Max-Forwards';
-  MD5Name                    = 'MD5';
-  MD5SessionName             = 'MD5-sess';
-  MethodAck                  = 'ACK';
-  MethodBye                  = 'BYE';
-  MethodCancel               = 'CANCEL';
-  MethodInvite               = 'INVITE';
-  MethodNotify               = 'NOTIFY';
-  MethodOptions              = 'OPTIONS';
-  MethodParam                = 'method';
-  MethodRefer                = 'REFER';
-  MethodRegister             = 'REGISTER';
-  MethodSubscribe            = 'SUBSCRIBE';
-  MIMEVersionHeader          = 'MIME-Version';
-  MinExpiresHeader           = 'Min-Expires';
-  NextNonceParam             = 'nextnonce';
-  NonceCountParam            = 'nc';
-  NonceParam                 = 'nonce';
-  OpaqueParam                = 'opaque';
-  OrganizationHeader         = 'Organization';
-  PackageRefer               = 'refer';
-  PriorityHeader             = 'Priority';
-  ProxyAuthenticateHeader    = 'Proxy-Authenticate';
-  ProxyAuthorizationHeader   = 'Proxy-Authorization';
-  ProxyRequireHeader         = 'Proxy-Require';
-  QopAuth                    = 'auth';
-  QopAuthInt                 = 'auth-int';
-  QopParam                   = 'qop';
-  QParam                     = 'q';
-  RealmParam                 = 'realm';
-  ReceivedParam              = 'received';
-  RecordRouteHeader          = 'Record-Route';
-  ReferToHeader              = 'Refer-To';
-  ReplacesExtension          = 'replaces'; // cf. RFC 3891
-  ReplacesHeader             = 'Replaces'; // cf. RFC 3891
-  ReplyToHeader              = 'Reply-To';
-  RequireHeader              = 'Require';
-  ResponseDigestParam        = 'rspauth';
-  RetryAfterHeader           = 'Retry-After';
-  RouteHeader                = 'Route';
-  RportParam                 = 'rport';
-  ServerHeader               = 'Server';
-  SipScheme                  = 'sip';
-  SipsScheme                 = 'sips';
-  StaleParam                 = 'stale';
-  SubjectHeaderFull          = 'Subject';
-  SubjectHeaderShort         = 's';
-  SubscriptionStateHeader    = 'Subscription-State';
-  SupportedHeaderFull        = 'Supported';
-  SupportedHeaderShort       = 'k';
-  TagParam                   = 'tag';
-  TimestampHeader            = 'Timestamp';
-  ToHeaderFull               = 'To';
-  ToHeaderShort              = 't';
-  ToTagParam                 = 'to-tag'; // cf. RFC 3891
-  TransportParam             = 'transport';
-  TransportParamSCTP         = 'sctp';
-  TransportParamTCP          = 'tcp';
-  TransportParamTLS          = 'tls';
-  TransportParamTLS_SCTP     = 'tls-sctp';
-  TransportParamUDP          = 'udp';
-  TTLParam                   = 'ttl';
-  UnsupportedHeader          = 'Unsupported';
-  UserAgentHeader            = 'User-Agent';
-  UsernameParam              = 'username';
-  UserParam                  = 'user';
-  UserParamIp                = 'ip';
-  UserParamPhone             = 'phone';
-  ViaHeaderFull              = 'Via';
-  ViaHeaderShort             = 'v';
-  WarningHeader              = 'Warning';
-  WWWAuthenticateHeader      = 'WWW-Authenticate';
+  AcceptHeader                   = 'Accept';
+  AcceptEncodingHeader           = 'Accept-Encoding';
+  AcceptLanguageHeader           = 'Accept-Language';
+  AlertInfoHeader                = 'Alert-Info';
+  AlgorithmParam                 = 'algorithm';
+  AllowEventHeader               = 'Allow-Event';
+  AllowHeader                    = 'Allow';
+  AuthenticationInfoHeader       = 'Authentication-Info';
+  AuthorizationHeader            = 'Authorization';
+  BasicAuthorizationScheme       = 'Basic';
+  BranchParam                    = 'branch';
+  CallIDHeaderFull               = 'Call-ID';
+  CallIDHeaderShort              = 'i';
+  CallInfoHeader                 = 'Call-Info';
+  CNonceParam                    = 'cnonce';
+  ContactHeaderFull              = 'Contact';
+  ContactHeaderShort             = 'm';
+  ContactWildCard                = '*';
+  ContentDispositionHeader       = 'Content-Disposition';
+  ContentEncodingHeaderFull      = 'Content-Encoding';
+  ContentEncodingHeaderShort     = 'e';
+  ContentLanguageHeader          = 'Content-Language';
+  ContentLengthHeaderFull        = 'Content-Length';
+  ContentLengthHeaderShort       = 'l';
+  ContentTypeHeaderFull          = 'Content-Type';
+  ContentTypeHeaderShort         = 'c';
+  CSeqHeader                     = 'CSeq';
+  DateHeader                     = 'Date';
+  DigestAuthorizationScheme      = 'Digest';
+  DigestResponseParam            = 'response';
+  DigestUriParam                 = 'uri';
+  DispositionAlert               = 'alert';
+  DispositionIcon                = 'icon';
+  DispositionRender              = 'render';
+  DispositionSession             = 'session';
+  DomainParam                    = 'domain';
+  DurationParam                  = 'duration';
+  EarlyOnlyParam                 = 'early-only';
+  ErrorInfoHeader                = 'Error-Info';
+  EventHeader                    = 'Event';
+  ExpireNow                      = 0;
+  ExpiresHeader                  = 'Expires';
+  ExpiresParam                   = 'expires';
+  FromHeaderFull                 = 'From';
+  FromHeaderShort                = 'f';
+  FromTagParam                   = 'from-tag'; // cf. RFC 3891
+  HandlingOptional               = 'optional';
+  HandlingParam                  = 'handling';
+  HandlingRequired               = 'required';
+  IdParam                        = 'id';
+  InReplyToHeader                = 'In-Reply-To';
+  LooseRoutableParam             = 'lr';
+  MaddrParam                     = 'maddr';
+  MaxForwardsHeader              = 'Max-Forwards';
+  MD5Name                        = 'MD5';
+  MD5SessionName                 = 'MD5-sess';
+  MethodAck                      = 'ACK';
+  MethodBye                      = 'BYE';
+  MethodCancel                   = 'CANCEL';
+  MethodInvite                   = 'INVITE';
+  MethodNotify                   = 'NOTIFY';
+  MethodOptions                  = 'OPTIONS';
+  MethodParam                    = 'method';
+  MethodRefer                    = 'REFER';
+  MethodRegister                 = 'REGISTER';
+  MethodSubscribe                = 'SUBSCRIBE';
+  MIMEVersionHeader              = 'MIME-Version';
+  MinExpiresHeader               = 'Min-Expires';
+  NextNonceParam                 = 'nextnonce';
+  NonceCountParam                = 'nc';
+  NonceParam                     = 'nonce';
+  OpaqueParam                    = 'opaque';
+  OrganizationHeader             = 'Organization';
+  PackageRefer                   = 'refer';
+  PriorityHeader                 = 'Priority';
+  ProxyAuthenticateHeader        = 'Proxy-Authenticate';
+  ProxyAuthorizationHeader       = 'Proxy-Authorization';
+  ProxyRequireHeader             = 'Proxy-Require';
+  QopAuth                        = 'auth';
+  QopAuthInt                     = 'auth-int';
+  QopParam                       = 'qop';
+  QParam                         = 'q';
+  RealmParam                     = 'realm';
+  ReasonParam                    = 'reason';
+  RetryAfterParam                = 'retry-after';
+  EventReasonDeactivated         = 'deactivated';
+  EventReasonGiveUp              = 'giveup';
+  EventReasonNoResource          = 'noresource';
+  EventReasonProbation           = 'probation';
+  EventReasonRejected            = 'rejected';
+  EventReasonTimeout             = 'timeout';
+  ReceivedParam                  = 'received';
+  RecordRouteHeader              = 'Record-Route';
+  ReferToHeader                  = 'Refer-To';
+  ReplacesExtension              = 'replaces'; // cf. RFC 3891
+  ReplacesHeader                 = 'Replaces'; // cf. RFC 3891
+  ReplyToHeader                  = 'Reply-To';
+  RequireHeader                  = 'Require';
+  ResponseDigestParam            = 'rspauth';
+  RetryAfterHeader               = 'Retry-After';
+  RouteHeader                    = 'Route';
+  RportParam                     = 'rport';
+  ServerHeader                   = 'Server';
+  SipScheme                      = 'sip';
+  SipsScheme                     = 'sips';
+  StaleParam                     = 'stale';
+  SubjectHeaderFull              = 'Subject';
+  SubjectHeaderShort             = 's';
+  SubscriptionStateHeader        = 'Subscription-State';
+  SubscriptionSubstateActive     = 'active';
+  SubscriptionSubstatePending    = 'pending';
+  SubscriptionSubstateTerminated = 'terminated';
+  SupportedHeaderFull            = 'Supported';
+  SupportedHeaderShort           = 'k';
+  TagParam                       = 'tag';
+  TimestampHeader                = 'Timestamp';
+  ToHeaderFull                   = 'To';
+  ToHeaderShort                  = 't';
+  ToTagParam                     = 'to-tag'; // cf. RFC 3891
+  TransportParam                 = 'transport';
+  TransportParamSCTP             = 'sctp';
+  TransportParamTCP              = 'tcp';
+  TransportParamTLS              = 'tls';
+  TransportParamTLS_SCTP         = 'tls-sctp';
+  TransportParamUDP              = 'udp';
+  TTLParam                       = 'ttl';
+  UnsupportedHeader              = 'Unsupported';
+  UserAgentHeader                = 'User-Agent';
+  UsernameParam                  = 'username';
+  UserParam                      = 'user';
+  UserParamIp                    = 'ip';
+  UserParamPhone                 = 'phone';
+  ViaHeaderFull                  = 'Via';
+  ViaHeaderShort                 = 'v';
+  WarningHeader                  = 'Warning';
+  WWWAuthenticateHeader          = 'WWW-Authenticate';
 
 // Standard Status-Text messages for response Status-Codes
 const
@@ -3037,6 +3071,11 @@ begin
   raise EBadHeader.Create(Self.Name + ': ' + Reason);
 end;
 
+function TIdSipHeader.GetCardinalParam(const ParamName: String): Cardinal;
+begin
+  Result := StrToInt(Self.Params[ParamName]);
+end;
+
 function TIdSipHeader.GetName: String;
 begin
   Result := fName;
@@ -3100,6 +3139,12 @@ begin
         Parameters.Add(ParamName + '=' + ParamValue);
     end;
   end;
+end;
+
+procedure TIdSipHeader.SetCardinalParam(const ParamName: String;
+                                        Value: Cardinal);
+begin
+  Self.Params[ParamName] := IntToStr(Value);
 end;
 
 procedure TIdSipHeader.SetName(const Value: String);
@@ -4671,6 +4716,53 @@ end;
 function TIdSipSubscriptionStateHeader.GetName: String;
 begin
   Result := SubscriptionStateHeader;
+end;
+
+procedure TIdSipSubscriptionStateHeader.Parse(const Value: String);
+begin
+  inherited Parse(Value);
+end;
+
+//* TIdSipSubscriptionStateHeader Private methods ******************************
+
+function TIdSipSubscriptionStateHeader.GetExpires: Cardinal;
+begin
+  Result := Self.GetCardinalParam(ExpiresParam);
+end;
+
+function TIdSipSubscriptionStateHeader.GetReason: String;
+begin
+  Result := Self.Params[ReasonParam];
+end;
+
+function TIdSipSubscriptionStateHeader.GetRetryAfter: Cardinal;
+begin
+  Result := Self.GetCardinalParam(RetryAfterParam);
+end;
+
+function TIdSipSubscriptionStateHeader.GetSubState: String;
+begin
+  Result := Self.Value;
+end;
+
+procedure TIdSipSubscriptionStateHeader.SetExpires(Value: Cardinal);
+begin
+  Self.SetCardinalParam(ExpiresParam, Value);
+end;
+
+procedure TIdSipSubscriptionStateHeader.SetReason(Value: String);
+begin
+  Self.Params[ReasonParam] := Value;
+end;
+
+procedure TIdSipSubscriptionStateHeader.SetRetryAfter(Value: Cardinal);
+begin
+  Self.SetCardinalParam(RetryAfterParam, Value);
+end;
+
+procedure TIdSipSubscriptionStateHeader.SetSubState(Value: String);
+begin
+  Self.Value := Value;
 end;
 
 //******************************************************************************
