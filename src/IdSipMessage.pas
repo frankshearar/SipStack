@@ -255,7 +255,8 @@ type
     property Parameters: TStrings read GetParameters write SetParameters;
   protected
     procedure FailParse(const Reason: String);
-    function  GetCardinalParam(const ParamName: String): Cardinal;
+    function  GetCardinalParam(const ParamName: String;
+                               ValueIfNotPresent: Cardinal = 0): Cardinal;
     function  GetName: String; virtual;
     function  GetValue: String; virtual;
     procedure MarkAsInvalid(const Reason: String);
@@ -3071,9 +3072,13 @@ begin
   raise EBadHeader.Create(Self.Name + ': ' + Reason);
 end;
 
-function TIdSipHeader.GetCardinalParam(const ParamName: String): Cardinal;
+function TIdSipHeader.GetCardinalParam(const ParamName: String;
+                                       ValueIfNotPresent: Cardinal = 0): Cardinal;
 begin
-  Result := StrToInt(Self.Params[ParamName]);
+  if Self.HasParam(ParamName) then
+    Result := StrToInt(Self.Params[ParamName])
+  else
+    Result := ValueIfNotPresent;
 end;
 
 function TIdSipHeader.GetName: String;
@@ -4014,7 +4019,7 @@ end;
 
 function TIdSipContactHeader.GetExpires: Cardinal;
 begin
-  Result := StrToInt(Self.Params[ExpiresParam]);
+  Result := Self.GetCardinalParam(ExpiresParam);
 end;
 
 function TIdSipContactHeader.GetQ: TIdSipQValue;
@@ -4024,7 +4029,7 @@ end;
 
 procedure TIdSipContactHeader.SetExpires(Value: Cardinal);
 begin
-  Self.Params[ExpiresParam] := IntToStr(Value);
+  Self.SetCardinalParam(ExpiresParam, Value);
 end;
 
 procedure TIdSipContactHeader.SetQ(Value: TIdSipQValue);
@@ -4554,7 +4559,7 @@ end;
 function TIdSipRetryAfterHeader.GetDuration: Cardinal;
 begin
   if Self.HasDuration then
-    Result := StrToInt(Self.Params[DurationParam])
+    Result := Self.GetCardinalParam(DurationParam)
   else
     Result := 0;
 end;
@@ -4592,7 +4597,7 @@ end;
 procedure TIdSipRetryAfterHeader.SetDuration(const Value: Cardinal);
 begin
   if (Value > 0) then
-    Self.Params[DurationParam] := IntToStr(Value)
+    Self.SetCardinalParam(DurationParam, Value)
   else
     Self.Parameters.Delete(Self.IndexOfParam(DurationParam));
 end;
@@ -5227,10 +5232,7 @@ end;
 
 function TIdSipViaHeader.GetRport: Cardinal;
 begin
-  if Self.HasParam(RportParam) then
-    Result := StrToIntDef(Self.Params[RPortParam], 0)
-  else
-    Result := 0;
+  Result := Self.GetCardinalParam(RPortParam)
 end;
 
 function TIdSipViaHeader.GetSentBy: String;
@@ -5240,10 +5242,7 @@ end;
 
 function TIdSipViaHeader.GetTTL: Byte;
 begin
-  if Self.HasParam(TTLParam) then
-    Result := StrToInt(Self.Params[TTLParam])
-  else
-    Result := 0;
+  Result := Self.GetCardinalParam(TTLParam)
 end;
 
 procedure TIdSipViaHeader.SetBranch(const Value: String);
@@ -5274,7 +5273,7 @@ end;
 
 procedure TIdSipViaHeader.SetRport(Value: Cardinal);
 begin
-  Self.Params[RportParam] := IntToStr(Value);
+  Self.SetCardinalParam(RportParam, Value);
 end;
 
 procedure TIdSipViaHeader.SetSentBy(const Value: String);
@@ -5291,7 +5290,7 @@ end;
 
 procedure TIdSipViaHeader.SetTTL(Value: Byte);
 begin
-  Self.Params[TTLParam] := IntToStr(Value);
+  Self.SetCardinalParam(TTLParam, Value);
 end;
 
 //******************************************************************************
