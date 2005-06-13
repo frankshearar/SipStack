@@ -1633,6 +1633,7 @@ const
   RSSIPQueued                           = 'Queued';
   RSSIPSessionProgress                  = 'Session Progress';
   RSSIPOK                               = 'OK';
+  RSSIPAccepted                         = 'Accepted';
   RSSIPMultipleChoices                  = 'Multiple Choices';
   RSSIPMovedPermanently                 = 'Moved Permanently';
   RSSIPMovedTemporarily                 = 'Moved Temporarily';
@@ -1664,6 +1665,7 @@ const
   RSSIPBusyHere                         = 'Busy Here';
   RSSIPRequestTerminated                = 'Request Terminated';
   RSSIPNotAcceptableHere                = 'Not Acceptable Here';
+  RSSIPBadEvent                         = 'Bad Event';
   RSSIPRequestPending                   = 'Request Pending';
   RSSIPUndecipherable                   = 'Undecipherable';
   RSSIPInternalServerError              = 'Internal Server Error';
@@ -1697,6 +1699,7 @@ const
   SIPQueued                           = 182;
   SIPSessionProgress                  = 183;
   SIPOK                               = 200;
+  SIPAccepted                         = 202; // RFC 3265
   SIPMultipleChoices                  = 300;
   SIPMovedPermanently                 = 301;
   SIPMovedTemporarily                 = 302;
@@ -1728,6 +1731,7 @@ const
   SIPBusyHere                         = 486;
   SIPRequestTerminated                = 487;
   SIPNotAcceptableHere                = 488;
+  SIPBadEvent                         = 489; // RFC 3265
   SIPRequestPending                   = 491;
   SIPUndecipherable                   = 493;
   SIPInternalServerError              = 500;
@@ -7950,6 +7954,7 @@ begin
     SIPQueued:                           Self.StatusText := RSSIPQueued;
     SIPSessionProgress:                  Self.StatusText := RSSIPSessionProgress;
     SIPOK:                               Self.StatusText := RSSIPOK;
+    SIPAccepted:                         Self.StatusText := RSSIPAccepted;
     SIPMultipleChoices:                  Self.StatusText := RSSIPMultipleChoices;
     SIPMovedPermanently:                 Self.StatusText := RSSIPMovedPermanently;
     SIPMovedTemporarily:                 Self.StatusText := RSSIPMovedTemporarily;
@@ -7981,6 +7986,7 @@ begin
     SIPBusyHere:                         Self.StatusText := RSSIPBusyHere;
     SIPRequestTerminated:                Self.StatusText := RSSIPRequestTerminated;
     SIPNotAcceptableHere:                Self.StatusText := RSSIPNotAcceptableHere;
+    SIPBadEvent:                         Self.StatusText := RSSIPBadEvent;
     SIPRequestPending:                   Self.StatusText := RSSIPRequestPending;
     SIPUndecipherable:                   Self.StatusText := RSSIPUndecipherable;
     SIPInternalServerError:              Self.StatusText := RSSIPInternalServerError;
