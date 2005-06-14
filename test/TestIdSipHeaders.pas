@@ -5234,7 +5234,8 @@ begin
   CheckType(TIdSipProxyAuthorizationHeader,     Self.Headers.Add(ProxyAuthorizationHeader),   ProxyAuthorizationHeader);
   CheckType(TIdSipCommaSeparatedHeader,         Self.Headers.Add(ProxyRequireHeader),         ProxyRequireHeader);
   CheckType(TIdSipRecordRouteHeader,            Self.Headers.Add(RecordRouteHeader),          RecordRouteHeader);
-  CheckType(TIdSipReferToHeader,                Self.Headers.Add(ReferToHeader),              ReferToHeader);
+  CheckType(TIdSipReferToHeader,                Self.Headers.Add(ReferToHeaderFull),          ReferToHeaderFull);
+  CheckType(TIdSipReferToHeader,                Self.Headers.Add(ReferToHeaderShort),         ReferToHeaderShort);
   CheckType(TIdSipCommaSeparatedHeader,         Self.Headers.Add(RequireHeader),              RequireHeader);
   CheckType(TIdSipReplacesHeader,               Self.Headers.Add(ReplacesHeader),             ReplacesHeader);
   CheckType(TIdSipHeader,                       Self.Headers.Add(ReplyToHeader),              ReplyToHeader);

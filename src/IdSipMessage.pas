@@ -1589,7 +1589,8 @@ const
   EventReasonTimeout             = 'timeout';     // cf. RFC 3265
   ReceivedParam                  = 'received';
   RecordRouteHeader              = 'Record-Route';
-  ReferToHeader                  = 'Refer-To';
+  ReferToHeaderFull              = 'Refer-To'; // cf. RFC 3515
+  ReferToHeaderShort             = 'r';        // cf. RFC 3515
   ReplacesExtension              = 'replaces'; // cf. RFC 3891
   ReplacesHeader                 = 'Replaces'; // cf. RFC 3891
   ReplyToHeader                  = 'Reply-To';
@@ -4802,7 +4803,7 @@ end;
 
 function TIdSipReferToHeader.GetName: String;
 begin
-  Result := ReferToHeader;
+  Result := ReferToHeaderFull;
 end;
 
 //******************************************************************************
@@ -5506,7 +5507,8 @@ begin
     GCanonicalHeaderNames.Add(ProxyAuthorizationHeader   + '=' + ProxyAuthorizationHeader);
     GCanonicalHeaderNames.Add(ProxyRequireHeader         + '=' + ProxyRequireHeader);
     GCanonicalHeaderNames.Add(RecordRouteHeader          + '=' + RecordRouteHeader);
-    GCanonicalHeaderNames.Add(ReferToHeader              + '=' + ReferToHeader);
+    GCanonicalHeaderNames.Add(ReferToHeaderFull          + '=' + ReferToHeaderFull);
+    GCanonicalHeaderNames.Add(ReferToHeaderShort         + '=' + ReferToHeaderFull);
     GCanonicalHeaderNames.Add(ReplacesHeader             + '=' + ReplacesHeader);    
     GCanonicalHeaderNames.Add(ReplyToHeader              + '=' + ReplyToHeader);
     GCanonicalHeaderNames.Add(RequireHeader              + '=' + RequireHeader);
@@ -5679,7 +5681,7 @@ begin
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ProxyAuthorizationHeader,   TIdSipProxyAuthorizationHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ProxyRequireHeader,         TIdSipCommaSeparatedHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RecordRouteHeader,          TIdSipRecordRouteHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ReferToHeader,              TIdSipReferToHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ReferToHeaderFull,          TIdSipReferToHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RequireHeader,              TIdSipCommaSeparatedHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ReplacesHeader,             TIdSipReplacesHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RetryAfterHeader,           TIdSipRetryAfterHeader));
