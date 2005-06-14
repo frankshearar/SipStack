@@ -105,6 +105,8 @@ type
                         const Reason: String);
     procedure OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
                             Session: TIdSipInboundSession);
+    procedure OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
+                                    Subscription: TIdSipInboundSubscribe);
     procedure OnModifySession(Session: TIdSipSession;
                               const RemoteSessionDescription: String;
                               const MimeType: String);
@@ -718,6 +720,11 @@ begin
     Data.Free;
   end;
 end;
+
+procedure TIdSipStackInterface.OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
+                                                     Subscription: TIdSipInboundSubscribe);
+begin
+end;                                                     
 
 procedure TIdSipStackInterface.OnModifySession(Session: TIdSipSession;
                                                const RemoteSessionDescription: String;

@@ -179,6 +179,7 @@ type
   end;
 
   TIdSipInboundSession = class;
+  TIdSipInboundSubscribe = class;
   TIdSipAbstractUserAgent = class;
 
   // You can use OnAuthenticationChallenge to authenticate to a proxy (or
@@ -197,6 +198,8 @@ type
                                         Receiver: TIdSipTransport);
     procedure OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
                             Session: TIdSipInboundSession);
+    procedure OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
+                                    Subscription: TIdSipInboundSubscribe);
   end;
 
   TIdSipUserAgentReaction =
@@ -504,6 +507,7 @@ type
     function  CreateResponseHandler(Response: TIdSipResponse;
                                     Receiver: TIdSipTransport): TIdSipUserAgentActOnResponse;
     function  DefaultFrom: String;
+    function  DefaultSubscriptionDuration: Cardinal;
     function  DefaultUserAgent: String;
     function  GetContact: TIdSipContactHeader;
     function  GetFrom: TIdSipFromHeader;
@@ -526,6 +530,7 @@ type
 
     // Pull these into UserAgent proper:
     procedure NotifyOfInboundCall(Session: TIdSipInboundSession);
+    procedure NotifyOfSubscriptionRequest(Subscription: TIdSipInboundSubscribe);
     procedure ResendReInvite(Session: TIdSipSession;
                              Invite: TIdSipRequest);
     procedure TurnIntoInvite(OutboundRequest: TIdSipRequest;
@@ -809,6 +814,13 @@ type
 
     property BindingDB:         TIdSipAbstractBindingDatabase read fBindingDB write fBindingDB;
     property MinimumExpiryTime: Cardinal                      read fMinimumExpiryTime write fMinimumExpiryTime;
+  end;
+
+  TIdSipSubscribeModule = class(TIdSipMessageModule)
+  public
+    function Accept(Request: TIdSipRequest;
+                    UsingSecureTransport: Boolean): TIdSipAction; override;
+    function AcceptsMethods: String; override;
   end;
 
   // I represent an asynchronous message send between SIP entities - INVITEs,
@@ -1419,9 +1431,19 @@ type
     class function Method: String; override;
   end;
 
+  TIdSipInboundSubscribe = class(TIdSipSubscribe)
+  public
+    constructor Create(UA: TIdSipAbstractUserAgent;
+                       Sub: TIdSipRequest); reintroduce;
+
+    procedure Accept(MaximumDuration: Cardinal);
+    function  IsInbound: Boolean; override;
+  end;
+
   TIdSipOutboundSubscribe = class(TIdSipSubscribe)
   private
     fDestination:  TIdSipAddressHeader;
+    fDuration:     Cardinal; // in seconds
     fEventPackage: String;
 
     procedure SetDestination(Value: TIdSipAddressHeader);
@@ -1439,6 +1461,7 @@ type
 
     property Destination:  TIdSipAddressHeader read fDestination write SetDestination;
     property EventPackage: String              read fEventPackage write fEventPackage;
+    property Duration:     Cardinal            read fDuration write fDuration;
   end;
 
   TIdSipInboundInviteExpire = class(TIdSipActionClosure)
@@ -1662,6 +1685,15 @@ type
     property Session: TIdSipInboundSession read fSession write fSession;
   end;
 
+  TIdSipUserAgentSubscriptionRequestMethod = class(TIdSipUserAgentMethod)
+  private
+    fSubscription: TIdSipInboundSubscribe;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Subscription: TIdSipInboundSubscribe read fSubscription write fSubscription;
+  end;
+
   EIdSipBadSyntax = class(EIdException);
   EIdSipRegistrarNotFound = class(EIdException)
   public
@@ -1704,6 +1736,7 @@ const
   MaxPrematureInviteRetry    = 10;
   MissingContactHeader       = 'Missing Contact Header';
   OneMinute                  = 60;
+  OneHour                    = 60*OneMinute;
   FiveMinutes                = 5*OneMinute;
   TwentyMinutes              = 20*OneMinute;
 
@@ -2854,6 +2887,8 @@ begin
   Result := Self.CreateRequest(MethodSubscribe, Dest);
   try
     Result.AddHeader(EventHeaderFull).Value := EventPackage;
+    Result.AddHeader(ExpiresHeader);
+    Result.FirstExpires.NumericValue := Self.DefaultSubscriptionDuration;       
   except
     FreeAndNil(Result);
 
@@ -3432,6 +3467,11 @@ begin
   Result := 'unknown <sip:unknown@' + Self.HostName + '>';
 end;
 
+function TIdSipAbstractUserAgent.DefaultSubscriptionDuration: Cardinal;
+begin
+  Result := OneHour;
+end;
+
 function TIdSipAbstractUserAgent.DefaultUserAgent: String;
 begin
   Result := 'RNID SipStack v' + SipStackVersion;
@@ -3488,6 +3528,20 @@ begin
     Self.UserAgentListeners.Notify(Notification);
   finally
     Notification.Free;
+  end;
+end;
+
+procedure TIdSipAbstractUserAgent.NotifyOfSubscriptionRequest(Subscription: TIdSipInboundSubscribe);
+var
+  Notification: TIdSipUserAgentSubscriptionRequestMethod;
+begin
+  Notification := TIdSipUserAgentSubscriptionRequestMethod.Create;
+  try
+  finally
+    Notification.Subscription := Subscription;
+    Notification.UserAgent    := Self;
+
+    Self.UserAgentListeners.Notify(Notification);
   end;
 end;
 
@@ -4225,6 +4279,23 @@ end;
 function TIdSipRegisterModule.WillAccept(Request: TIdSipRequest): Boolean;
 begin
   Result := Request.IsRegister;
+end;
+
+//******************************************************************************
+//* TIdSipSubscribeModule                                                      *
+//******************************************************************************
+//* TIdSipSubscribeModule Public methods ***************************************
+
+function TIdSipSubscribeModule.Accept(Request: TIdSipRequest;
+                                      UsingSecureTransport: Boolean): TIdSipAction;
+begin
+  Result := nil;
+end;
+
+function TIdSipSubscribeModule.AcceptsMethods: String;
+begin
+  Result := MethodSubscribe + ', '
+          + MethodNotify;
 end;
 
 //******************************************************************************
@@ -7339,6 +7410,37 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipInboundSubscribe                                                     *
+//******************************************************************************
+//* TIdSipInboundSubscribe Public methods **************************************
+
+constructor TIdSipInboundSubscribe.Create(UA: TIdSipAbstractUserAgent;
+                                          Sub: TIdSipRequest);
+begin
+  inherited Create(UA);
+
+  Self.InitialRequest.Assign(Sub);
+  Self.ReceiveRequest(Sub);
+end;
+
+procedure TIdSipInboundSubscribe.Accept(MaximumDuration: Cardinal);
+var
+  OK: TIdSipResponse;
+begin
+  OK := TIdSipResponse.InResponseTo(Self.InitialRequest, SIPOK);
+  try
+    Self.SendResponse(OK);
+  finally
+    OK.Free;
+  end;
+end;
+
+function TIdSipInboundSubscribe.IsInbound: Boolean;
+begin
+  Result := true;
+end;
+
+//******************************************************************************
 //* TIdSipOutboundSubscribe                                                    *
 //******************************************************************************
 //* TIdSipOutboundSubscribe Public methods *************************************
@@ -7400,6 +7502,7 @@ begin
 
   Sub := Self.UA.CreateSubscribe(Self.Destination, Self.EventPackage);
   try
+    Sub.FirstExpires.NumericValue := Self.Duration;
     Self.InitialRequest.Assign(Sub);
 
     Self.SendRequest(Sub);
@@ -7689,6 +7792,17 @@ procedure TIdSipUserAgentInboundCallMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipUserAgentListener).OnInboundCall(Self.UserAgent,
                                                      Self.Session);
+end;
+
+//******************************************************************************
+//* TIdSipUserAgentSubscriptionRequestMethod                                   *
+//******************************************************************************
+//* TIdSipUserAgentSubscriptionRequestMethod Public methods ********************
+
+procedure TIdSipUserAgentSubscriptionRequestMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipUserAgentListener).OnSubscriptionRequest(Self.UserAgent,
+                                                             Self.Subscription);
 end;
 
 //******************************************************************************

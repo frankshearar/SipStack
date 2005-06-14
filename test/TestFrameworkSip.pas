@@ -85,6 +85,7 @@ type
     procedure ReceiveMovedPermanently(const SipUrl: String);
     procedure ReceiveResponse(StatusCode: Cardinal); overload;
     procedure ReceiveRinging(Invite: TIdSipRequest);
+    procedure ReceiveSubscribe;
     procedure ReceiveTrying(Invite: TIdSipRequest);
     procedure ReceiveTryingFrom(Invite: TIdSipRequest;
                                 const Contact: String);
@@ -502,6 +503,8 @@ type
     fResponseParam:           TIdSipResponse;
     fMessageParam:            TIdSipMessage;
     fSessionParam:            TIdSipInboundSession;
+    fSubscriptionParam:       TIdSipInboundSubscribe;
+    fSubscriptionRequest:     Boolean;
     fTryAgain:                Boolean;
     fUserAgentParam:          TIdSipAbstractUserAgent;
     fUsername:                String;
@@ -516,6 +519,8 @@ type
                                         Receiver: TIdSipTransport);
     procedure OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
                             Session: TIdSipInboundSession);
+    procedure OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
+                                    Subscription: TIdSipInboundSubscribe);
   public
     constructor Create; override;
 
@@ -527,6 +532,8 @@ type
     property ResponseParam:           TIdSipResponse          read fResponseParam;
     property MessageParam:            TIdSipMessage           read fMessageParam;
     property SessionParam:            TIdSipInboundSession    read fSessionParam;
+    property SubscriptionParam:       TIdSipInboundSubscribe  read fSubscriptionParam;
+    property SubscriptionRequest:     Boolean                 read fSubscriptionRequest;
     property TryAgain:                Boolean                 read fTryAgain write fTryAgain;
     property UserAgentParam:          TIdSipAbstractUserAgent read fUserAgentParam;
     property Username:                String                  read fUsername write fUsername;
@@ -1015,6 +1022,18 @@ begin
     Self.ReceiveResponse(Response);
   finally
     Response.Free;
+  end;
+end;
+
+procedure TTestCaseTU.ReceiveSubscribe;
+var
+  Sub: TIdSipRequest;
+begin
+  Sub := Self.Core.CreateSubscribe(Self.Destination, 'Foo');
+  try
+    Self.ReceiveRequest(Sub);
+  finally
+    Sub.Free;
   end;
 end;
 
@@ -1756,6 +1775,7 @@ begin
   Self.fAuthenticationChallenge := false;
   Self.fDroppedUnmatchedMessage := false;
   Self.fInboundCall             := false;
+  Self.fSubscriptionRequest     := false;
 end;
 
 //* TIdSipTestUserAgentListener Private methods ********************************
@@ -1797,6 +1817,17 @@ procedure TIdSipTestUserAgentListener.OnInboundCall(UserAgent: TIdSipAbstractUse
 begin
   Self.fInboundCall    := true;
   Self.fSessionParam   := Session;
+  Self.fUserAgentParam := UserAgent;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create(Self.ClassName + '.OnInboundCall');
+end;
+
+procedure TIdSipTestUserAgentListener.OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
+                                                            Subscription: TIdSipInboundSubscribe);
+begin
+  Self.fSubscriptionRequest := true;
+  Self.fSubscriptionParam := Subscription;
   Self.fUserAgentParam := UserAgent;
 
   if Assigned(Self.FailWith) then

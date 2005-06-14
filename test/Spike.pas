@@ -148,6 +148,8 @@ type
                         const Reason: String);
     procedure OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
                             Session: TIdSipInboundSession);
+    procedure OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
+                                    Subscription: TIdSipInboundSubscribe);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Answer: TIdSipResponse);
     procedure OnModifySession(Session: TIdSipSession;
@@ -496,6 +498,11 @@ begin
   Self.Answer.Enabled := true;
   Self.Answer.Click;
 end;
+
+procedure TrnidSpike.OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
+                                           Subscription: TIdSipInboundSubscribe);
+begin
+end;                                           
 
 procedure TrnidSpike.OnModifiedSession(Session: TIdSipSession;
                                        Answer: TIdSipResponse);
