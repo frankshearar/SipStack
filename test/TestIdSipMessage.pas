@@ -166,6 +166,7 @@ type
     procedure TestIsRefer;
     procedure TestIsRegister;
     procedure TestIsRequest;
+    procedure TestIsSubscribe;
     procedure TestMatchRFC2543Options;
     procedure TestMatchRFC2543Cancel;
     procedure TestMatchCancel;
@@ -2417,6 +2418,15 @@ end;
 procedure TestTIdSipRequest.TestIsRequest;
 begin
   Check(Self.Request.IsRequest, 'IsRequest');
+end;
+
+procedure TestTIdSipRequest.TestIsSubscribe;
+begin
+  Self.Request.Method := MethodAck;
+  Check(not Self.Request.IsOptions, MethodAck);
+
+  Self.Request.Method := MethodSubscribe;
+  Check(Self.Request.IsSubscribe, MethodSubscribe);
 end;
 
 procedure TestTIdSipRequest.TestMatchRFC2543Options;

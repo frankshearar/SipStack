@@ -1273,6 +1273,7 @@ type
     function  IsRefer: Boolean;
     function  IsRegister: Boolean;
     function  IsRequest: Boolean; override;
+    function  IsSubscribe: Boolean;
     function  MalformedException: EBadMessageClass; override;
     function  Match(Msg: TIdSipMessage): Boolean;
     function  MatchCancel(Cancel: TIdSipRequest): Boolean;
@@ -7356,6 +7357,11 @@ end;
 function TIdSipRequest.IsRequest: Boolean;
 begin
   Result := true;
+end;
+
+function TIdSipRequest.IsSubscribe: Boolean;
+begin
+  Result := Self.Method = MethodSubscribe;
 end;
 
 function TIdSipRequest.MalformedException: EBadMessageClass;
