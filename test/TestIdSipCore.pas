@@ -239,6 +239,7 @@ type
     procedure TestSetFrom;
     procedure TestSetFromMailto;
     procedure TestSimultaneousInAndOutboundCall;
+    procedure TestSubscriptionRequest;
     procedure TestTerminateAllCalls;
     procedure TestUnknownAcceptValue;
     procedure TestUnmatchedAckGetsDropped;
@@ -806,15 +807,41 @@ type
     procedure TestTerminateUnestablishedSession;
   end;
 
-  TestTIdSipInboundSubscribe = class(TestTIdSipAction)
+  TestTIdSipInboundSubscribe = class(TestTIdSipAction,
+                                     IIdSipUserAgentListener)
   private
-    procedure ReceiveSubscribe;
+    Subscription:         TIdSipInboundSubscribe;
+    SubscriptionDuration: Cardinal;
+
+    procedure CheckDuration(AcceptedDuration: Cardinal;
+                            ExpectedDuration: Cardinal);
+    procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
+                                        Challenge: TIdSipResponse;
+                                        var Username: String;
+                                        var Password: String;
+                                        var TryAgain: Boolean);
+    procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractUserAgent;
+                                        Message: TIdSipMessage;
+                                        Receiver: TIdSipTransport);
+    procedure OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
+                            Session: TIdSipInboundSession);
+    procedure OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
+                                    Subscription: TIdSipInboundSubscribe);
+    procedure ReceiveSubscribeWithExpiresInContact(Duration: Cardinal);
+    procedure ReceiveSubscribeWithoutExpires;
+    procedure ReceiveSubscribeWithZeroExpires;
+  public
+    procedure SetUp; override;
   published
     procedure TestAccept;
+    procedure TestAcceptWithExpiresInRequestContact;
+    procedure TestAcceptWithMaximalDuration;
+    procedure TestAcceptWithNoExpiresInRequest;
     procedure TestIsInbound; override;
     procedure TestIsInvite; override;
     procedure TestIsOptions; override;
     procedure TestIsRegistration; override;
+    procedure TestIsUnsubscribe;
     procedure TestIsSession; override;
   end;
 
@@ -829,6 +856,8 @@ type
   public
     procedure SetUp; override;
   published
+    procedure TestMatchNotify;
+    procedure TestMatchResponse;
     procedure TestSubscribeRequest;
   end;
 
@@ -1103,6 +1132,7 @@ const
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
+{
   Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipRegistrations.Suite);
   Result.AddTest(TestTIdSipActions.Suite);
@@ -1120,8 +1150,10 @@ begin
   Result.AddTest(TestTIdSipOutboundUnregister.Suite);
   Result.AddTest(TestTIdSipInboundSession.Suite);
   Result.AddTest(TestTIdSipOutboundSession.Suite);
+}
   Result.AddTest(TestTIdSipInboundSubscribe.Suite);
   Result.AddTest(TestTIdSipOutboundSubscribe.Suite);
+{
   Result.AddTest(TestTIdSipInboundInviteFailureMethod.Suite);
   Result.AddTest(TestTIdSipInviteDialogEstablishedMethod.Suite);
   Result.AddTest(TestTIdSipInviteFailureMethod.Suite);
@@ -1138,6 +1170,7 @@ begin
   Result.AddTest(TestTIdSipUserAgentDroppedUnmatchedMessageMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentInboundCallMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentSubscriptionRequestMethod.Suite);
+}
 end;
 
 //******************************************************************************
@@ -1877,7 +1910,7 @@ end;
 procedure TestTIdSipUserAgent.OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
                                                     Subscription: TIdSipInboundSubscribe);
 begin
-  raise Exception.Create('TestTIdSipUserAgent.OnSubscriptionRequest');
+  Self.UserAgentParam := UserAgent;
 end;
 
 procedure TestTIdSipUserAgent.OnModifiedSession(Session: TIdSipSession;
@@ -2967,6 +3000,9 @@ begin
 
   Self.ReceiveInvite;
 
+  Check(Assigned(Self.UserAgentParam),
+        'OnInboundCall didn''t fire');
+
   CheckEquals(Self.Invite.Body,
               Self.InboundCallOffer,
               'Offer');
@@ -3809,6 +3845,20 @@ begin
 
   Self.Session.AcceptCall('', '');
   CheckEquals(2, Self.Core.SessionCount, 'Session count');
+end;
+
+procedure TestTIdSipUserAgent.TestSubscriptionRequest;
+begin
+  Self.Core.AddModule(TIdSipSubscribeModule);
+  try
+    Self.ReceiveSubscribe;
+
+    Check(Assigned(Self.UserAgentParam), 'OnSubscriptionRequest didn''t fire');
+    Check(Self.Core = Self.UserAgentParam,
+          'UserAgent param of Subscribe''s SubscriptionRequest notification wrong');
+  finally
+    Self.Core.RemoveModule(TIdSipSubscribeModule);
+  end;
 end;
 
 procedure TestTIdSipUserAgent.TestTerminateAllCalls;
@@ -9641,17 +9691,99 @@ end;
 //******************************************************************************
 //* TestTIdSipInboundSubscribe                                                 *
 //******************************************************************************
+//* TestTIdSipInboundSubscribe Public methods **********************************
+
+procedure TestTIdSipInboundSubscribe.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Core.AddModule(TIdSipSubscribeModule);
+  Self.Core.AddUserAgentListener(Self);
+
+  Self.SubscriptionDuration := 1000;
+end;
+
 //* TestTIdSipInboundSubscribe Private methods *********************************
 
-procedure TestTIdSipInboundSubscribe.ReceiveSubscribe;
-var
-  Sub: TIdSipRequest;
+procedure TestTIdSipInboundSubscribe.CheckDuration(AcceptedDuration: Cardinal;
+                                                   ExpectedDuration: Cardinal);
 begin
-  Sub := Self.Core.CreateSubscribe(Self.Destination, 'Foo');
+  Check(Assigned(Self.Subscription), 'OnSubscriptionRequest didn''t fire');
+
+  Self.MarkSentResponseCount;
+  Self.Subscription.Accept(AcceptedDuration);
+  CheckResponseSent('No response sent');
+
+  CheckEquals(ExpectedDuration,
+              Self.LastSentResponse.FirstExpires.NumericValue,
+              'Wrong duration');
+end;
+
+procedure TestTIdSipInboundSubscribe.OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
+                                                               Challenge: TIdSipResponse;
+                                                               var Username: String;
+                                                               var Password: String;
+                                                               var TryAgain: Boolean);
+begin
+end;
+
+procedure TestTIdSipInboundSubscribe.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractUserAgent;
+                                                               Message: TIdSipMessage;
+                                                               Receiver: TIdSipTransport);
+begin
+end;
+
+procedure TestTIdSipInboundSubscribe.OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
+                                                   Session: TIdSipInboundSession);
+begin
+end;
+
+procedure TestTIdSipInboundSubscribe.OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
+                                                           Subscription: TIdSipInboundSubscribe);
+begin
+  Self.Subscription := Subscription
+end;
+
+procedure TestTIdSipInboundSubscribe.ReceiveSubscribeWithExpiresInContact(Duration: Cardinal);
+var
+  Subscribe: TIdSipRequest;
+begin
+  Subscribe := Self.Core.CreateSubscribe(Self.Destination, 'Foo');
   try
-    Self.ReceiveRequest(Sub);
+    Subscribe.RemoveAllHeadersNamed(ExpiresHeader);
+    Subscribe.FirstContact.Expires := Duration;
+
+    Self.ReceiveRequest(Subscribe);
   finally
-    Sub.Free;
+    Subscribe.Free;
+  end;
+end;
+
+procedure TestTIdSipInboundSubscribe.ReceiveSubscribeWithoutExpires;
+var
+  Subscribe: TIdSipRequest;
+begin
+  Subscribe := Self.Core.CreateSubscribe(Self.Destination, 'Foo');
+  try
+    Subscribe.RemoveAllHeadersNamed(ExpiresHeader);
+
+    Self.ReceiveRequest(Subscribe);
+  finally
+    Subscribe.Free;
+  end;
+end;
+
+procedure TestTIdSipInboundSubscribe.ReceiveSubscribeWithZeroExpires;
+var
+  Subscribe: TIdSipRequest;
+begin
+  Subscribe := Self.Core.CreateSubscribe(Self.Destination, 'Foo');
+  try
+    Subscribe.FirstExpires.NumericValue := 0;
+
+    Self.ReceiveRequest(Subscribe);
+  finally
+    Subscribe.Free;
   end;
 end;
 
@@ -9659,6 +9791,37 @@ end;
 
 procedure TestTIdSipInboundSubscribe.TestAccept;
 begin
+  Self.ReceiveSubscribe;
+
+  Self.CheckDuration(Self.SubscriptionDuration, Self.SubscriptionDuration);
+
+  CheckEquals(SIPAccepted,
+              Self.LastSentResponse.StatusCode,
+              'Unexpected response sent');
+  Check(Self.LastSentResponse.HasHeader(ExpiresHeader),
+        'No Expires header');
+end;
+
+procedure TestTIdSipInboundSubscribe.TestAcceptWithExpiresInRequestContact;
+begin
+  Self.ReceiveSubscribeWithExpiresInContact(Self.SubscriptionDuration * 2);
+
+  Self.CheckDuration(Self.SubscriptionDuration, Self.SubscriptionDuration);
+end;
+
+procedure TestTIdSipInboundSubscribe.TestAcceptWithMaximalDuration;
+begin
+  Self.ReceiveSubscribe;
+
+  Self.CheckDuration(Self.Subscription.InitialRequest.FirstExpires.NumericValue + 1,
+                     Self.Subscription.InitialRequest.FirstExpires.NumericValue);
+end;
+
+procedure TestTIdSipInboundSubscribe.TestAcceptWithNoExpiresInRequest;
+begin
+  Self.ReceiveSubscribeWithoutExpires;
+
+  Self.CheckDuration(Self.SubscriptionDuration, Self.SubscriptionDuration);
 end;
 
 procedure TestTIdSipInboundSubscribe.TestIsInbound;
@@ -9717,6 +9880,17 @@ begin
   end;
 end;
 
+procedure TestTIdSipInboundSubscribe.TestIsUnsubscribe;
+begin
+  Self.ReceiveSubscribe;
+  Check(not Self.Subscription.IsUnsubscribe,
+        'Marked as an unsubscribe, but Expires = ' + Self.Subscription.InitialRequest.FirstExpires.Value);
+
+  Self.ReceiveSubscribeWithZeroExpires;
+  Check(Self.Subscription.IsUnsubscribe,
+        'Not marked as an unsubscribe, but Expires = ' + Self.Subscription.InitialRequest.FirstExpires.Value);
+end;
+
 procedure TestTIdSipInboundSubscribe.TestIsSession;
 var
   Action: TIdSipAction;
@@ -9760,6 +9934,57 @@ begin
 end;
 
 //* TestTIdSipOutboundSubscribe Published methods ******************************
+
+procedure TestTIdSipOutboundSubscribe.TestMatchNotify;
+var
+  Notify: TIdSipRequest;
+  Sub:    TIdSipOutboundSubscribe;
+begin
+  Sub := Self.CreateSubscribe;
+
+  Notify := TIdSipRequest.Create;
+  try
+    Notify.Method := MethodNotify;
+
+    Check(not Sub.Match(Notify), 'Only matching request method');
+
+    Notify.CallID := Sub.InitialRequest.CallID;
+    Check(not Sub.Match(Notify), 'Only matching request method, Call-ID');
+
+    Notify.AddHeader(EventHeaderFull).Value := Sub.EventPackage;
+    Check(not Sub.Match(Notify), 'Only matching request method, Call-ID, Event');
+
+    Notify.ToHeader.Tag := Sub.InitialRequest.From.Tag;
+    Check(Sub.Match(Notify), 'Matching request method, Call-ID, Event, From-tag-and-To-tag');
+
+    Notify.Method := MethodInvite;
+    Check(not Sub.Match(Notify), 'Matches everything except method');
+  finally
+    Notify.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundSubscribe.TestMatchResponse;
+var
+  OK:  TIdSipResponse;
+  Sub: TIdSipOutboundSubscribe;
+begin
+  Sub := Self.CreateSubscribe;
+
+  OK := TIdSipResponse.Create;
+  try
+    OK.CSeq.Value := Sub.InitialRequest.CSeq.Value;
+    Check(not Sub.Match(OK), 'Only matching CSeq');
+
+    OK.CallID := Sub.InitialRequest.CallID;
+    Check(not Sub.Match(OK), 'Only matching CSeq, Call-ID');
+
+    OK.From.Tag := Sub.InitialRequest.From.Tag;
+    Check(Sub.Match(OK), 'Only matching CSeq, Call-ID, From tag');
+  finally
+    OK.Free;
+  end;
+end;
 
 procedure TestTIdSipOutboundSubscribe.TestSubscribeRequest;
 var

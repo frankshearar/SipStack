@@ -821,6 +821,21 @@ type
     function Accept(Request: TIdSipRequest;
                     UsingSecureTransport: Boolean): TIdSipAction; override;
     function AcceptsMethods: String; override;
+    function WillAccept(Request: TIdSipRequest): Boolean; override;
+  end;
+
+  TIdSipEventPackage = class(TObject)
+  public
+    class function EventPackage: String; virtual; abstract;
+  end;
+
+  TIdSipReferPackage = class(TIdSipEventPackage)
+  public
+    class function EventPackage: String; override;
+  end;
+
+  // I represent a subscription to another entity's state of some kind.
+  TIdSipSubscription = class(TObject)
   end;
 
   // I represent an asynchronous message send between SIP entities - INVITEs,
@@ -1427,8 +1442,16 @@ type
   end;
 
   TIdSipSubscribe = class(TIdSipAction)
+  private
+    fDuration:     Cardinal; // in seconds
+    fEventPackage: String;
+  protected
+    function CreateNewAttempt: TIdSipRequest; override;
   public
     class function Method: String; override;
+
+    property EventPackage: String   read fEventPackage write fEventPackage;
+    property Duration:     Cardinal read fDuration write fDuration;
   end;
 
   TIdSipInboundSubscribe = class(TIdSipSubscribe)
@@ -1438,13 +1461,12 @@ type
 
     procedure Accept(MaximumDuration: Cardinal);
     function  IsInbound: Boolean; override;
+    function  IsUnsubscribe: Boolean;
   end;
 
   TIdSipOutboundSubscribe = class(TIdSipSubscribe)
   private
-    fDestination:  TIdSipAddressHeader;
-    fDuration:     Cardinal; // in seconds
-    fEventPackage: String;
+    fDestination: TIdSipAddressHeader;
 
     procedure SetDestination(Value: TIdSipAddressHeader);
   protected
@@ -1459,9 +1481,7 @@ type
     procedure RemoveListener(Listener: IIdSipSubscribeListener);
     procedure Send; override;
 
-    property Destination:  TIdSipAddressHeader read fDestination write SetDestination;
-    property EventPackage: String              read fEventPackage write fEventPackage;
-    property Duration:     Cardinal            read fDuration write fDuration;
+    property Destination: TIdSipAddressHeader read fDestination write SetDestination;
   end;
 
   TIdSipInboundInviteExpire = class(TIdSipActionClosure)
@@ -2827,7 +2847,7 @@ function TIdSipAbstractUserAgent.CreateRefer(Session: TIdSipSession;
 begin
   Result := Self.CreateRequest(MethodRefer, Session.Dialog);
   try
-    Result.AddHeader(ReferToHeader).Value := Target.AsString;
+    Result.AddHeader(ReferToHeaderFull).Value := Target.AsString;
   except
     FreeAndNil(Result);
   end;
@@ -4288,14 +4308,35 @@ end;
 
 function TIdSipSubscribeModule.Accept(Request: TIdSipRequest;
                                       UsingSecureTransport: Boolean): TIdSipAction;
+var
+  Subscription: TIdSipInboundSubscribe;
 begin
-  Result := nil;
+  Subscription := TIdSipInboundSubscribe.Create(Self.UserAgent, Request);
+
+  Self.UserAgent.NotifyOfSubscriptionRequest(Subscription);
+
+  Result := Subscription;
 end;
 
 function TIdSipSubscribeModule.AcceptsMethods: String;
 begin
   Result := MethodSubscribe + ', '
           + MethodNotify;
+end;
+
+function TIdSipSubscribeModule.WillAccept(Request: TIdSipRequest): Boolean;
+begin
+  Result := Request.IsSubscribe or Request.IsNotify;
+end;
+
+//******************************************************************************
+//* TIdSipReferPackage                                                         *
+//******************************************************************************
+//* TIdSipReferPackage Public methods ******************************************
+
+class function TIdSipReferPackage.EventPackage: String;
+begin
+  Result := PackageRefer;
 end;
 
 //******************************************************************************
@@ -7409,6 +7450,22 @@ begin
   Result := MethodSubscribe;
 end;
 
+//* TIdSipSubscribe Protected methods ******************************************
+
+function TIdSipSubscribe.CreateNewAttempt: TIdSipRequest;
+var
+  TempTo: TIdSipToHeader;
+begin
+  TempTo := TIdSipToHeader.Create;
+  try
+    TempTo.Address := Self.InitialRequest.RequestUri;
+
+    Result := Self.UA.CreateSubscribe(TempTo, Self.EventPackage);
+  finally
+    TempTo.Free;
+  end;
+end;
+
 //******************************************************************************
 //* TIdSipInboundSubscribe                                                     *
 //******************************************************************************
@@ -7427,8 +7484,15 @@ procedure TIdSipInboundSubscribe.Accept(MaximumDuration: Cardinal);
 var
   OK: TIdSipResponse;
 begin
-  OK := TIdSipResponse.InResponseTo(Self.InitialRequest, SIPOK);
+  OK := TIdSipResponse.InResponseTo(Self.InitialRequest, SIPAccepted);
   try
+    OK.AddHeader(ExpiresHeader);
+    OK.FirstExpires.NumericValue := MaximumDuration;
+
+    if Self.InitialRequest.HasHeader(ExpiresHeader) and
+      (OK.FirstExpires.NumericValue > Self.InitialRequest.FirstExpires.NumericValue) then
+      OK.FirstExpires.NumericValue := Self.InitialRequest.FirstExpires.NumericValue;
+
     Self.SendResponse(OK);
   finally
     OK.Free;
@@ -7438,6 +7502,12 @@ end;
 function TIdSipInboundSubscribe.IsInbound: Boolean;
 begin
   Result := true;
+end;
+
+function TIdSipInboundSubscribe.IsUnsubscribe: Boolean;
+begin
+  Result := Self.InitialRequest.HasHeader(ExpiresHeader)
+        and (Self.InitialRequest.FirstExpires.NumericValue = 0);
 end;
 
 //******************************************************************************
