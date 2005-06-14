@@ -1556,12 +1556,12 @@ const
   MethodBye                      = 'BYE';
   MethodCancel                   = 'CANCEL';
   MethodInvite                   = 'INVITE';
-  MethodNotify                   = 'NOTIFY';
+  MethodNotify                   = 'NOTIFY'; // cf. RFC 3265
   MethodOptions                  = 'OPTIONS';
   MethodParam                    = 'method';
-  MethodRefer                    = 'REFER';
+  MethodRefer                    = 'REFER'; // cf. RFC 3515
   MethodRegister                 = 'REGISTER';
-  MethodSubscribe                = 'SUBSCRIBE';
+  MethodSubscribe                = 'SUBSCRIBE'; // cf. RFC 3265
   MIMEVersionHeader              = 'MIME-Version';
   MinExpiresHeader               = 'Min-Expires';
   NextNonceParam                 = 'nextnonce';
@@ -1569,7 +1569,7 @@ const
   NonceParam                     = 'nonce';
   OpaqueParam                    = 'opaque';
   OrganizationHeader             = 'Organization';
-  PackageRefer                   = 'refer';
+  PackageRefer                   = 'refer'; // cf. RFC 3515
   PriorityHeader                 = 'Priority';
   ProxyAuthenticateHeader        = 'Proxy-Authenticate';
   ProxyAuthorizationHeader       = 'Proxy-Authorization';
