@@ -6941,7 +6941,7 @@ var
 begin
   // If the response matches the reinvite, DON'T match the response.
   // Otherwise, check against the dialog. Yes, that's "response" because
-  // we Waits use messages to find actions for things like
+  // Waits use messages to find actions for things like
   // TIdSipInboundInvite.ResendOK.
   Self.ModifyLock.Acquire;
   try
