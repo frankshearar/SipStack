@@ -1019,6 +1019,7 @@ type
     procedure SetAckBody(Ack: TIdSipRequest);
   protected
     procedure ActionSucceeded(Response: TIdSipResponse); override;
+    function  CreateInvite: TIdSipRequest; virtual; abstract;
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
     function  ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionStatus; override;
     function  ReceiveGlobalFailureResponse(Response: TIdSipResponse): TIdSipActionStatus; override;
@@ -1037,6 +1038,7 @@ type
     procedure AddListener(const Listener: IIdSipInviteListener);
     procedure Cancel;
     procedure RemoveListener(const Listener: IIdSipInviteListener);
+    procedure Send; override;
     procedure SendAck(Dialog: TIdSipDialog;
                       FinalResponse: TIdSipResponse);
     procedure TransactionCompleted;
@@ -1053,11 +1055,11 @@ type
     fDestination: TIdSipAddressHeader;
 
     procedure SetDestination(Value: TIdSipAddressHeader);
+  protected
+    function CreateInvite: TIdSipRequest; override;
   public
     constructor Create(UA: TIdSipAbstractUserAgent); override;
     destructor  Destroy; override;
-
-    procedure Send; override;
 
     property Destination: TIdSipAddressHeader read fDestination write SetDestination;
   end;
@@ -1069,11 +1071,11 @@ type
 
     procedure SetContact(Value: TIdSipAddressHeader);
     procedure SetOriginalInvite(Value: TIdSipRequest);
+  protected
+    function CreateInvite: TIdSipRequest; override;
   public
     constructor Create(UA: TIdSipAbstractUserAgent); override;
     destructor  Destroy; override;
-
-    procedure Send; override;
 
     property Contact:        TIdSipAddressHeader read fContact write SetContact;
     property OriginalInvite: TIdSipRequest       read fOriginalInvite write SetOriginalInvite;
@@ -1084,11 +1086,11 @@ type
     fOriginalInvite: TIdSipRequest;
 
     procedure SetOriginalInvite(Value: TIdSipRequest);
+  protected
+    function CreateInvite: TIdSipRequest; override;
   public
     constructor Create(UA: TIdSipAbstractUserAgent); override;
     destructor  Destroy; override;
-
-    procedure Send; override;
 
     property OriginalInvite: TIdSipRequest read fOriginalInvite write SetOriginalInvite;
   end;
@@ -1101,12 +1103,12 @@ type
     fCallID:  String;
     fFromTag: String;
     fToTag:   String;
+  protected
+    function CreateInvite: TIdSipRequest; override;
   public
     property CallID:  String read fCallID write fCallID;
     property FromTag: String read fFromTag write fFromTag;
     property ToTag:   String read fToTag write fToTag;
-
-    procedure Send; override;
   end;
 
   TIdSipOptions = class(TIdSipAction)
@@ -5082,6 +5084,21 @@ begin
   Self.Listeners.RemoveListener(Listener);
 end;
 
+procedure TIdSipOutboundInvite.Send;
+var
+  Invite: TIdSipRequest;
+begin
+  inherited Send;
+
+  Invite := Self.CreateInvite;
+  try
+    Self.InitialRequest.Assign(Invite);
+    Self.SendRequest(Invite);
+  finally
+    Invite.Free;
+  end;
+end;
+
 procedure TIdSipOutboundInvite.SendAck(Dialog: TIdSipDialog;
                                        FinalResponse: TIdSipResponse);
 var
@@ -5405,22 +5422,14 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipOutboundInitialInvite.Send;
-var
-  Invite: TIdSipRequest;
-begin
-  inherited Send;
+//* TIdSipOutboundInitialInvite Protected methods ******************************
 
-  Invite := Self.UA.CreateInvite(Self.Destination, Self.Offer, Self.MimeType);
-  try
-    Self.InitialRequest.Assign(Invite);
-    Self.SendRequest(Invite);
-  finally
-    Invite.Free;
-  end;
+function TIdSipOutboundInitialInvite.CreateInvite: TIdSipRequest;
+begin
+  Result := Self.UA.CreateInvite(Self.Destination, Self.Offer, Self.MimeType);
 end;
 
-//* TIdSipOutboundInitialInvite Protected methods ******************************
+//* TIdSipOutboundInitialInvite Private methods ********************************
 
 procedure TIdSipOutboundInitialInvite.SetDestination(Value: TIdSipAddressHeader);
 begin
@@ -5448,19 +5457,18 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipOutboundRedirectedInvite.Send;
+//* TIdSipOutboundRedirectedInvite Protected methods ***************************
+
+function TIdSipOutboundRedirectedInvite.CreateInvite: TIdSipRequest;
 begin
   // Use this method in the context of a redirect to an INVITE.
   // cf RFC 3261,  section 8.1.3.4
 
-  inherited Send;
-
-  // TODO: Perhaps we should CreateInvite and assign individual headers across?
-  Self.InitialRequest.Assign(OriginalInvite);
-  Self.InitialRequest.CSeq.SequenceNo := Self.UA.NextInitialSequenceNo;
-  Self.InitialRequest.LastHop.Branch := Self.UA.NextBranch;
-  Self.InitialRequest.RequestUri := Self.Contact.Address;
-  Self.SendRequest(Self.InitialRequest);
+  Result := TIdSipRequest.Create;
+  Result.Assign(Self.OriginalInvite);
+  Result.CSeq.SequenceNo := Self.UA.NextInitialSequenceNo;
+  Result.LastHop.Branch := Self.UA.NextBranch;
+  Result.RequestUri := Self.Contact.Address;
 end;
 
 //* TIdSipOutboundRedirectedInvite Private methods *****************************
@@ -5494,24 +5502,15 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipOutboundReInvite.Send;
-var
-  Invite: TIdSipRequest;
+//* TIdSipOutboundReInvite Protected methods ***********************************
+
+function TIdSipOutboundReInvite.CreateInvite: TIdSipRequest;
 begin
-  inherited Send;
-
-  Invite := Self.UA.CreateReInvite(Self.Dialog, Self.Offer, Self.MimeType);
-  try
-    // Re-INVITEs use the same credentials as the original INVITE that
-    // established the dialog.
-    Invite.CopyHeaders(Self.OriginalInvite, AuthorizationHeader);
-    Invite.CopyHeaders(Self.OriginalInvite, ProxyAuthorizationHeader);
-
-    Self.InitialRequest.Assign(Invite);
-    Self.SendRequest(Invite);
-  finally
-    Invite.Free;
-  end;
+  Result := Self.UA.CreateReInvite(Self.Dialog, Self.Offer, Self.MimeType);
+  // Re-INVITEs use the same credentials as the original INVITE that
+  // established the dialog.
+  Result.CopyHeaders(Self.OriginalInvite, AuthorizationHeader);
+  Result.CopyHeaders(Self.OriginalInvite, ProxyAuthorizationHeader);
 end;
 
 //* TIdSipOutboundReInvite Private methods *************************************
@@ -5524,29 +5523,16 @@ end;
 //******************************************************************************
 //* TIdSipOutboundReplacingInvite                                              *
 //******************************************************************************
-//* TIdSipOutboundReplacingInvite Public methods *******************************
+//* TIdSipOutboundReplacingInvite Protected methods ****************************
 
-procedure TIdSipOutboundReplacingInvite.Send;
-var
-  Invite: TIdSipRequest;
+function TIdSipOutboundReplacingInvite.CreateInvite: TIdSipRequest;
 begin
-  if Self.SentRequest then
-    raise EIdSipTransactionUser.Create(Format(MethodInProgress, [Self.Method]));
-
-  Invite := Self.UA.CreateInvite(Self.Destination, Self.Offer, Self.MimeType);
-  try
-    Invite.AddHeader(ReplacesHeader);
-    Invite.FirstReplaces.CallID  := Self.CallID;
-    Invite.FirstReplaces.FromTag := Self.FromTag;
-    Invite.FirstReplaces.ToTag   := Self.ToTag;
-
-    Self.InitialRequest.Assign(Invite);
-    Self.SendRequest(Invite);
-  finally
-    Invite.Free;
-  end;
+  Result := Self.UA.CreateInvite(Self.Destination, Self.Offer, Self.MimeType);
+  Result.AddHeader(ReplacesHeader);
+  Result.FirstReplaces.CallID  := Self.CallID;
+  Result.FirstReplaces.FromTag := Self.FromTag;
+  Result.FirstReplaces.ToTag   := Self.ToTag;
 end;
-
 
 //******************************************************************************
 //* TIdSipOptions                                                              *
