@@ -5186,10 +5186,10 @@ begin
     else begin
       Result := asSuccess;
       if not Self.DialogEstablished then begin
-          Self.NotifyOfDialogEstablished(Response, UsingSecureTransport);
+        Self.NotifyOfDialogEstablished(Response, UsingSecureTransport);
 
-          Assert(Assigned(Self.Dialog),
-                 'Nothing set this Invite''s Dialog property');
+        Assert(Assigned(Self.Dialog),
+               'Nothing set this Invite''s Dialog property');
       end
       else begin
         // Catchall clause. We shouldn't ever reach this.
