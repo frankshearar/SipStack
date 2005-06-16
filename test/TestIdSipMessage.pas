@@ -139,6 +139,7 @@ type
     procedure TestEqualsResponse;
     procedure TestEqualsTrivial;
     procedure TestFirstAuthorization;
+    procedure TestFirstEvent;
     procedure TestFirstProxyAuthorization;
     procedure TestFirstProxyRequire;
     procedure TestFirstReplaces;
@@ -1907,6 +1908,21 @@ begin
   Self.Request.AddHeader(AuthorizationHeader);
 
   Check(A = Self.Request.FirstAuthorization, 'Wrong Authorization');
+end;
+
+procedure TestTIdSipRequest.TestFirstEvent;
+var
+  A: TIdSipHeader;
+begin
+  Self.Request.ClearHeaders;
+
+  CheckNotNull(Self.Request.FirstEvent, 'Event not present');
+  CheckEquals(1, Self.Request.HeaderCount, 'Event not auto-added');
+
+  A := Self.Request.FirstHeader(EventHeaderFull);
+  Self.Request.AddHeader(EventHeaderFull);
+
+  Check(A = Self.Request.FirstEvent, 'Wrong Event');
 end;
 
 procedure TestTIdSipRequest.TestFirstProxyAuthorization;

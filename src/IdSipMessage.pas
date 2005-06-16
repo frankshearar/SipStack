@@ -1252,6 +1252,7 @@ type
     function  DestinationUri: String;
     function  Equals(Msg: TIdSipMessage): Boolean; override;
     function  FirstAuthorization: TIdSipAuthorizationHeader;
+    function  FirstEvent: TIdSipEventHeader;
     function  FirstProxyAuthorization: TIdSipProxyAuthorizationHeader;
     function  FirstProxyRequire: TIdSipCommaSeparatedHeader;
     function  FirstReplaces: TIdSipReplacesHeader;
@@ -7222,6 +7223,11 @@ end;
 function TIdSipRequest.FirstAuthorization: TIdSipAuthorizationHeader;
 begin
   Result := Self.FirstHeader(AuthorizationHeader) as TIdSipAuthorizationHeader
+end;
+
+function TIdSipRequest.FirstEvent: TIdSipEventHeader;
+begin
+  Result := Self.FirstHeader(EventHeaderFull) as TIdSipEventHeader
 end;
 
 function TIdSipRequest.FirstProxyAuthorization: TIdSipProxyAuthorizationHeader;
