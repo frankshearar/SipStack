@@ -849,8 +849,15 @@ type
                                       IIdSipSubscribeListener)
   private
     EventPackage: String;
+    Failed:       Boolean;
+    ID:           String;
+    Succeeded:    Boolean;
 
-    function CreateSubscribe: TIdSipOutboundSubscribe;
+    function  CreateSubscribe: TIdSipOutboundSubscribe;
+    procedure OnFailure(SubscribeAgent: TIdSipOutboundSubscribe;
+                        Response: TIdSipResponse);
+    procedure OnSuccess(SubscribeAgent: TIdSipOutboundSubscribe;
+                        Response: TIdSipResponse);
   protected
     function CreateAction: TIdSipAction; override;
   public
@@ -858,7 +865,41 @@ type
   published
     procedure TestMatchNotify;
     procedure TestMatchResponse;
+    procedure TestReceive2xx;
+    procedure TestReceiveFailure;
     procedure TestSubscribeRequest;
+  end;
+
+  TestTIdSipOutboundUnsubscribe = class(TestTIdSipOutboundSubscribe)
+  private
+    function CreateUnsubscribe: TIdSipOutboundUnsubscribe;
+  protected
+    function CreateAction: TIdSipAction; override;
+  published
+    procedure TestSend;
+  end;
+
+  TestTIdSipSubscription = class(TestTIdSipAction,
+                                 IIdSipSubscriptionListener)
+  private
+    SubscriptionExpired: Boolean;
+
+    function CreateSubscription: TIdSipSubscription;
+
+    procedure OnEstablishedSubscription(Subscription: TIdSipSubscription;
+                                        Response: TIdSipResponse);
+    procedure OnExpiredSubscription(Subscription: TIdSipSubscription;
+                                    Response: TIdSipResponse);
+    procedure OnNotify(Subscription: TIdSipSubscription;
+                       Notify: TIdSipRequest);
+  protected
+    function CreateAction: TIdSipAction; override;
+  public
+    procedure SetUp; override;
+  published
+    procedure TestAddListener;
+    procedure TestRemoveListener;
+    procedure TestSubscribe;
   end;
 
   TActionMethodTestCase = class(TTestCase)
@@ -915,6 +956,36 @@ type
   TestTIdSipInviteSuccessMethod = class(TActionMethodTestCase)
   private
     Method: TIdSipInviteSuccessMethod;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TTestNotifyMethod = class(TActionMethodTestCase)
+  protected
+    Listener: TIdSipTestNotifyListener;
+    Response: TIdSipResponse;
+    Notify:   TIdSipOutboundNotify;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSipNotifyFailedMethod = class(TTestNotifyMethod)
+  private
+    Method: TIdSipNotifyFailedMethod;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TestTIdSipNotifySucceededMethod = class(TTestNotifyMethod)
+  private
+    Method: TIdSipNotifySucceededMethod;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -1006,6 +1077,76 @@ type
     Method:  TIdSipSessionModifySessionMethod;
   public
     procedure SetUp; override;
+  published
+    procedure TestRun;
+  end;
+
+  TTestSubscribeMethod = class(TActionMethodTestCase)
+  protected
+    Listener:  TIdSipTestSubscribeListener;
+    Response:  TIdSipResponse;
+    Subscribe: TIdSipOutboundSubscribe;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSipOutboundSubscribeFailedMethod = class(TTestSubscribeMethod)
+  private
+    Method: TIdSipOutboundSubscribeFailedMethod;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TestTIdSipOutboundSubscribeSucceededMethod = class(TTestSubscribeMethod)
+  private
+    Method: TIdSipOutboundSubscribeSucceededMethod;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TestTIdSipSubscriptionMethod = class(TActionMethodTestCase)
+  protected
+    Listener:     TIdSipTestSubscriptionListener;
+    Subscription: TIdSipSubscription;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSipEstablishedSubscriptionMethod = class(TestTIdSipSubscriptionMethod)
+  private
+    Method: TIdSipEstablishedSubscriptionMethod;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TestTIdSipExpiredSubscriptionMethod = class(TestTIdSipSubscriptionMethod)
+  private
+    Method: TIdSipExpiredSubscriptionMethod;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TestTIdSipSubscriptionNotifyMethod = class(TestTIdSipSubscriptionMethod)
+  private
+    Method: TIdSipSubscriptionNotifyMethod;
+    Notify: TIdSipRequest;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
   published
     procedure TestRun;
   end;
@@ -1132,6 +1273,7 @@ const
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
+{
   Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipRegistrations.Suite);
   Result.AddTest(TestTIdSipActions.Suite);
@@ -1141,6 +1283,8 @@ begin
   Result.AddTest(TestTIdSipInboundInvite.Suite);
   Result.AddTest(TestTIdSipOutboundInvite.Suite);
   Result.AddTest(TestTIdSipOutboundReInvite.Suite);
+}
+{
   Result.AddTest(TestTIdSipInboundOptions.Suite);
   Result.AddTest(TestTIdSipOutboundOptions.Suite);
   Result.AddTest(TestTIdSipInboundRegistration.Suite);
@@ -1149,13 +1293,19 @@ begin
   Result.AddTest(TestTIdSipOutboundUnregister.Suite);
   Result.AddTest(TestTIdSipInboundSession.Suite);
   Result.AddTest(TestTIdSipOutboundSession.Suite);
+}
   Result.AddTest(TestTIdSipInboundSubscribe.Suite);
   Result.AddTest(TestTIdSipOutboundSubscribe.Suite);
+  Result.AddTest(TestTIdSipOutboundUnsubscribe.Suite);
+  Result.AddTest(TestTIdSipSubscription.Suite);
+{
   Result.AddTest(TestTIdSipInboundInviteFailureMethod.Suite);
   Result.AddTest(TestTIdSipInviteDialogEstablishedMethod.Suite);
   Result.AddTest(TestTIdSipInviteFailureMethod.Suite);
   Result.AddTest(TestTIdSipInviteRedirectMethod.Suite);
   Result.AddTest(TestTIdSipInviteSuccessMethod.Suite);
+  Result.AddTest(TestTIdSipNotifyFailedMethod.Suite);
+  Result.AddTest(TestTIdSipNotifySucceededMethod.Suite);
   Result.AddTest(TestTIdSipOptionsResponseMethod.Suite);
   Result.AddTest(TestTIdSipRegistrationFailedMethod.Suite);
   Result.AddTest(TestTIdSipRegistrationSucceededMethod.Suite);
@@ -1163,10 +1313,18 @@ begin
   Result.AddTest(TestTIdSipEstablishedSessionMethod.Suite);
   Result.AddTest(TestTIdSipModifiedSessionMethod.Suite);
   Result.AddTest(TestTIdSipSessionModifySessionMethod.Suite);
+  Result.AddTest(TestTIdSipOutboundSubscribeFailedMethod.Suite);
+  Result.AddTest(TestTIdSipOutboundSubscribeSucceededMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentAuthenticationChallengeMethod.Suite);
+}
+  Result.AddTest(TestTIdSipEstablishedSubscriptionMethod.Suite);
+  Result.AddTest(TestTIdSipExpiredSubscriptionMethod.Suite);
+  Result.AddTest(TestTIdSipSubscriptionNotifyMethod.Suite);
+{
   Result.AddTest(TestTIdSipUserAgentDroppedUnmatchedMessageMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentInboundCallMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentSubscriptionRequestMethod.Suite);
+}
 end;
 
 //******************************************************************************
@@ -9911,6 +10069,9 @@ begin
   inherited SetUp;
 
   Self.EventPackage := 'Foo';
+  Self.Failed       := false;
+  Self.ID           := 'id1';
+  Self.Succeeded    := false;
 end;
 
 //* TestTIdSipOutboundSubscribe Protected methods ******************************
@@ -9924,9 +10085,24 @@ end;
 
 function TestTIdSipOutboundSubscribe.CreateSubscribe: TIdSipOutboundSubscribe;
 begin
-  Result := Self.Core.Subscribe(Self.Destination, Self.EventPackage);
+  Result := Self.Core.AddOutboundAction(TIdSipOutboundSubscribe) as TIdSipOutboundSubscribe;
+  Result.Destination  := Self.Destination;
+  Result.EventPackage := Self.EventPackage;
+  Result.ID           := Self.ID;
   Result.AddListener(Self);
   Result.Send;
+end;
+
+procedure TestTIdSipOutboundSubscribe.OnFailure(SubscribeAgent: TIdSipOutboundSubscribe;
+                                                Response: TIdSipResponse);
+begin
+  Self.Failed := true;
+end;
+
+procedure TestTIdSipOutboundSubscribe.OnSuccess(SubscribeAgent: TIdSipOutboundSubscribe;
+                                                Response: TIdSipResponse);
+begin
+  Self.Succeeded := true;
 end;
 
 //* TestTIdSipOutboundSubscribe Published methods ******************************
@@ -9947,7 +10123,7 @@ begin
     Notify.CallID := Sub.InitialRequest.CallID;
     Check(not Sub.Match(Notify), 'Only matching request method, Call-ID');
 
-    Notify.AddHeader(EventHeaderFull).Value := Sub.EventPackage;
+    Notify.AddHeader(EventHeaderFull).Value := Sub.InitialRequest.FirstHeader(EventHeaderFull).FullValue;
     Check(not Sub.Match(Notify), 'Only matching request method, Call-ID, Event');
 
     Notify.ToHeader.Tag := Sub.InitialRequest.From.Tag;
@@ -9982,6 +10158,22 @@ begin
   end;
 end;
 
+procedure TestTIdSipOutboundSubscribe.TestReceive2xx;
+begin
+  Self.CreateAction;
+  Self.ReceiveOk(Self.LastSentRequest);
+
+  Check(Self.Succeeded, 'Subscription didn''t succeed');
+end;
+
+procedure TestTIdSipOutboundSubscribe.TestReceiveFailure;
+begin
+  Self.CreateAction;
+  Self.ReceiveResponse(SIPNotImplemented);
+
+  Check(Self.Failed, 'Subscription didn''t fail');
+end;
+
 procedure TestTIdSipOutboundSubscribe.TestSubscribeRequest;
 var
   Events: TIdSipHeadersFilter;
@@ -9998,6 +10190,9 @@ begin
   CheckEquals(Self.EventPackage,
               Sub.InitialRequest.FirstHeader(EventHeaderFull).Value,
               'Wrong Event header');
+  CheckEquals(Self.ID,
+              Sub.InitialRequest.FirstHeader(EventHeaderFull).Params[IdParam],
+              'ID param of Event header');            
 
   Events := TIdSipHeadersFilter.Create(Sub.InitialRequest.Headers, EventHeaderFull);
   try
@@ -10005,6 +10200,138 @@ begin
   finally
     Events.Free;
   end;
+end;
+
+//******************************************************************************
+//* TestTIdSipOutboundUnsubscribe                                              *
+//******************************************************************************
+//* TestTIdSipOutboundUnsubscribe Protected methods ****************************
+
+function TestTIdSipOutboundUnsubscribe.CreateAction: TIdSipAction;
+begin
+  Result := Self.CreateUnsubscribe;
+end;
+
+//* TestTIdSipOutboundUnsubscribe Private methods ******************************
+
+function TestTIdSipOutboundUnsubscribe.CreateUnsubscribe: TIdSipOutboundUnsubscribe;
+begin
+  Result := Self.Core.AddOutboundAction(TIdSipOutboundUnsubscribe) as TIdSipOutboundUnsubscribe;
+  Result.Destination  := Self.Destination;
+  Result.EventPackage := Self.EventPackage;
+  Result.AddListener(Self);
+  Result.Send;
+end;
+
+//* TestTIdSipOutboundUnsubscribe Published methods ****************************
+
+procedure TestTIdSipOutboundUnsubscribe.TestSend;
+begin
+  Self.MarkSentRequestCount;
+  Self.CreateAction;
+  CheckRequestSent('No request sent');
+  CheckEquals(0,
+              Self.LastSentRequest.FirstExpires.NumericValue,
+              'Wrong Expires value');
+end;
+
+//******************************************************************************
+//* TestTIdSipSubscription                                                     *
+//******************************************************************************
+//* TestTIdSipSubscription Public methods **************************************
+
+procedure TestTIdSipSubscription.SetUp;
+begin
+  inherited SetUp;
+
+  Self.SubscriptionExpired := false;
+end;
+
+//* TestTIdSipSubscription Protected methods ***********************************
+
+function TestTIdSipSubscription.CreateAction: TIdSipAction;
+begin
+  Result := Self.CreateSubscription;
+end;
+
+//* TestTIdSipSubscription Private methods ***********************************
+
+function TestTIdSipSubscription.CreateSubscription: TIdSipSubscription;
+begin
+  Result := Self.Core.Subscribe(Self.Destination, 'Foo');
+  Result.AddListener(Self);
+  Result.Send;
+end;
+
+procedure TestTIdSipSubscription.OnEstablishedSubscription(Subscription: TIdSipSubscription;
+                                                           Response: TIdSipResponse);
+begin
+end;
+
+procedure TestTIdSipSubscription.OnExpiredSubscription(Subscription: TIdSipSubscription;
+                                                       Response: TIdSipResponse);
+begin
+  Self.SubscriptionExpired := true;
+end;
+
+procedure TestTIdSipSubscription.OnNotify(Subscription: TIdSipSubscription;
+                                          Notify: TIdSipRequest);
+begin
+end;
+
+//* TestTIdSipSubscription Published methods ***********************************
+
+procedure TestTIdSipSubscription.TestAddListener;
+var
+  Listener: TIdSipTestSubscriptionListener;
+  Sub:      TIdSipSubscription;
+begin
+  Sub := Self.CreateSubscription;
+  
+  Listener := TIdSipTestSubscriptionListener.Create;
+  try
+    Sub.AddListener(Listener);
+
+    Self.ReceiveResponse(SIPNotImplemented);
+    Check(Listener.ExpiredSubscription,
+          'Test case not notified of failure; thus, not added as listener');
+  finally
+    Sub.RemoveListener(Listener);
+    Listener.Free;
+  end;
+end;
+
+procedure TestTIdSipSubscription.TestRemoveListener;
+var
+  Listener: TIdSipTestSubscriptionListener;
+  Sub:      TIdSipSubscription;
+begin
+  Sub := Self.CreateSubscription;
+  
+  Listener := TIdSipTestSubscriptionListener.Create;
+  try
+    Sub.AddListener(Listener);
+    Sub.RemoveListener(Listener);
+
+    Self.ReceiveResponse(SIPNotImplemented);
+    Check(not Listener.ExpiredSubscription,
+          'Test case notified of failure; thus, not removed as listener');
+  finally
+    Sub.RemoveListener(Listener);
+    Listener.Free;
+  end;
+end;
+
+procedure TestTIdSipSubscription.TestSubscribe;
+var
+  Sub: TIdSipSubscription;
+begin
+  Self.MarkSentRequestCount;
+  Sub := Self.CreateSubscription;
+  CheckRequestSent('No request sent');
+  CheckEquals(Sub.Method,
+              Self.LastSentRequest.Method,
+              'Unexpected request sent');
 end;
 
 //******************************************************************************
@@ -10275,6 +10602,97 @@ begin
   finally
     Listener.Free;
   end;
+end;
+
+//******************************************************************************
+//* TTestNotifyMethod                                                          *
+//******************************************************************************
+//* TTestNotifyMethod Public methods *******************************************
+
+procedure TTestNotifyMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Listener := TIdSipTestNotifyListener.Create;
+  Self.Response := TIdSipResponse.Create;
+  Self.Notify   := TIdSipOutboundNotify.Create(Self.UA);
+end;
+
+procedure TTestNotifyMethod.TearDown;
+begin
+  Self.Notify.Free;
+  Self.Response.Free;
+  Self.Listener.Free;
+
+  inherited TearDown;
+end;
+
+//******************************************************************************
+//* TestTIdSipNotifyFailedMethod                                               *
+//******************************************************************************
+//* TestTIdSipNotifyFailedMethod Public methods ********************************
+
+procedure TestTIdSipNotifyFailedMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Method := TIdSipNotifyFailedMethod.Create;
+  Self.Method.Notify   := Self.Notify;
+  Self.Method.Response := Self.Response;
+end;
+
+procedure TestTIdSipNotifyFailedMethod.TearDown;
+begin
+  Self.Method.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipNotifyFailedMethod Published methods *****************************
+
+procedure TestTIdSipNotifyFailedMethod.TestRun;
+begin
+  Self.Method.Run(Self.Listener);
+
+  Check(Self.Listener.Failed, 'Listener not notified of failure');
+  Check(Self.Notify = Self.Listener.NotifyAgentParam,
+        'NotifyAgent param');
+  Check(Self.Response = Self.Listener.ResponseParam,
+        'Response param');
+end;
+
+//******************************************************************************
+//* TestTIdSipNotifySucceededMethod                                            *
+//******************************************************************************
+//* TestTIdSipNotifySucceededMethod Public methods *****************************
+
+procedure TestTIdSipNotifySucceededMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Method := TIdSipNotifySucceededMethod.Create;
+  Self.Method.Notify   := Self.Notify;
+  Self.Method.Response := Self.Response;
+end;
+
+procedure TestTIdSipNotifySucceededMethod.TearDown;
+begin
+  Self.Method.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipNotifySucceededMethod Published methods **************************
+
+procedure TestTIdSipNotifySucceededMethod.TestRun;
+begin
+  Self.Method.Run(Self.Listener);
+
+  Check(Self.Listener.Succeeded, 'Listener not notified of Succeedure');
+  Check(Self.Notify = Self.Listener.NotifyAgentParam,
+        'NotifyAgent param');
+  Check(Self.Response = Self.Listener.ResponseParam,
+        'Response param');
 end;
 
 //******************************************************************************
@@ -10639,6 +11057,223 @@ begin
     L.Free;
   end;
 end;
+
+//******************************************************************************
+//* TTestSubscribeMethod                                                       *
+//******************************************************************************
+//* TTestSubscribeMethod Public methods ****************************************
+
+procedure TTestSubscribeMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Listener  := TIdSipTestSubscribeListener.Create;
+  Self.Response  := TIdSipResponse.Create;
+  Self.Subscribe := TIdSipOutboundSubscribe.Create(Self.UA);
+end;
+
+procedure TTestSubscribeMethod.TearDown;
+begin
+  Self.Subscribe.Free;
+  Self.Response.Free;
+  Self.Listener.Free;
+
+  inherited TearDown;
+end;
+
+//******************************************************************************
+//* TestTIdSipOutboundSubscribeFailedMethod                                    *
+//******************************************************************************
+//* TestTIdSipOutboundSubscribeFailedMethod Public methods *********************
+
+procedure TestTIdSipOutboundSubscribeFailedMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Method := TIdSipOutboundSubscribeFailedMethod.Create;
+  Self.Method.Response  := Self.Response;
+  Self.Method.Subscribe := Self.Subscribe;
+end;
+
+procedure TestTIdSipOutboundSubscribeFailedMethod.TearDown;
+begin
+  Self.Method.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipOutboundSubscribeFailedMethod Published methods ******************
+
+procedure TestTIdSipOutboundSubscribeFailedMethod.TestRun;
+begin
+  Self.Method.Run(Self.Listener);
+
+  Check(Self.Listener.Failed, 'Listener not notified of failure');
+  Check(Self.Response = Self.Listener.ResponseParam,
+        'Response param');
+  Check(Self.Subscribe = Self.Listener.SubscribeAgentParam,
+        'SubscribeAgent param');
+end;
+
+//******************************************************************************
+//* TestTIdSipOutboundSubscribeSucceededMethod                                 *
+//******************************************************************************
+//* TestTIdSipOutboundSubscribeSucceededMethod Public methods ******************
+
+procedure TestTIdSipOutboundSubscribeSucceededMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Method := TIdSipOutboundSubscribeSucceededMethod.Create;
+  Self.Method.Subscribe := Self.Subscribe;
+end;
+
+procedure TestTIdSipOutboundSubscribeSucceededMethod.TearDown;
+begin
+  Self.Method.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipOutboundSubscribeSucceededMethod Published methods ***************
+
+procedure TestTIdSipOutboundSubscribeSucceededMethod.TestRun;
+begin
+  Self.Method.Run(Self.Listener);
+
+  Check(Self.Listener.Succeeded, 'Listener not notified of Succeedure');
+  Check(Self.Subscribe = Self.Listener.SubscribeAgentParam,
+        'SubscribeAgent param');
+end;
+
+//******************************************************************************
+//* TestTIdSipSubscriptionMethod                                               *
+//******************************************************************************
+//* TestTIdSipSubscriptionMethod Public methods ********************************
+
+procedure TestTIdSipSubscriptionMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Listener     := TIdSipTestSubscriptionListener.Create;
+  Self.Subscription := TIdSipSubscription.Create(Self.UA);
+end;
+
+procedure TestTIdSipSubscriptionMethod.TearDown;
+begin
+  Self.Subscription.Free;
+  Self.Listener.Free;
+
+  inherited TearDown;
+end;
+
+//******************************************************************************
+//* TestTIdSipEstablishedSubscriptionMethod                                    *
+//******************************************************************************
+//* TestTIdSipEstablishedSubscriptionMethod Public methods *********************
+
+procedure TestTIdSipEstablishedSubscriptionMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Method := TIdSipEstablishedSubscriptionMethod.Create;
+  Self.Method.Response     := Self.Response;
+  Self.Method.Subscription := Self.Subscription;
+end;
+
+procedure TestTIdSipEstablishedSubscriptionMethod.TearDown;
+begin
+  Self.Method.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipEstablishedSubscriptionMethod Published methods ******************
+
+procedure TestTIdSipEstablishedSubscriptionMethod.TestRun;
+begin
+  Self.Method.Run(Self.Listener);
+
+  Check(Self.Listener.EstablishedSubscription,
+        'Listener not notified of established subscription');
+  Check(Self.Response = Self.Listener.ResponseParam,
+        'Response param');
+  Check(Self.Subscription = Self.Listener.SubscriptionParam,
+        'Subscription param');
+end;
+
+//******************************************************************************
+//* TestTIdSipExpiredSubscriptionMethod                                        *
+//******************************************************************************
+//* TestTIdSipExpiredSubscriptionMethod Public methods *************************
+
+procedure TestTIdSipExpiredSubscriptionMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Method := TIdSipExpiredSubscriptionMethod.Create;
+  Self.Method.Response     := Self.Response;
+  Self.Method.Subscription := Self.Subscription;
+end;
+
+procedure TestTIdSipExpiredSubscriptionMethod.TearDown;
+begin
+  Self.Method.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipExpiredSubscriptionMethod Published methods **********************
+
+procedure TestTIdSipExpiredSubscriptionMethod.TestRun;
+begin
+  Self.Method.Run(Self.Listener);
+
+  Check(Self.Listener.ExpiredSubscription,
+        'Listener not notified of expired subscription');
+  Check(Self.Response = Self.Listener.ResponseParam,
+        'Response param');
+  Check(Self.Subscription = Self.Listener.SubscriptionParam,
+        'Subscription param');
+end;
+
+//******************************************************************************
+//* TestTIdSipSubscriptionNotifyMethod                                         *
+//******************************************************************************
+//* TestTIdSipSubscriptionNotifyMethod Public methods **************************
+
+procedure TestTIdSipSubscriptionNotifyMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Notify := TIdSipRequest.Create;
+  Self.Method := TIdSipSubscriptionNotifyMethod.Create;
+
+  Self.Method.Notify       := Self.Notify;
+  Self.Method.Subscription := Self.Subscription;
+end;
+
+procedure TestTIdSipSubscriptionNotifyMethod.TearDown;
+begin
+  Self.Notify.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipSubscriptionNotifyMethod Published methods ***********************
+
+procedure TestTIdSipSubscriptionNotifyMethod.TestRun;
+begin
+  Self.Method.Run(Self.Listener);
+
+  Check(Self.Listener.Notify,
+        'Listener not notified of inbound NOTIFY');
+  Check(Self.Notify = Self.Listener.NotifyParam,
+        'Notify param');
+  Check(Self.Subscription = Self.Listener.SubscriptionParam,
+        'Subscription param');
+end;
+
 
 //******************************************************************************
 //* TestTIdSipUserAgentAuthenticationChallengeMethod                           *

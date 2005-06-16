@@ -255,6 +255,26 @@ type
     property Success:           Boolean              read fSuccess;
   end;
 
+  TIdSipTestNotifyListener = class(TIdSipMockListener,
+                                   IIdSipNotifyListener)
+  private
+    fFailed:           Boolean;
+    fNotifyAgentParam: TIdSipOutboundNotify;
+    fSucceeded:        Boolean;
+
+    procedure OnFailure(NotifyAgent: TIdSipOutboundNotify;
+                        Response: TIdSipResponse);
+    procedure OnSuccess(NotifyAgent: TIdSipOutboundNotify;
+                        Response: TIdSipResponse);
+  public
+    constructor Create; override;
+
+    property Failed:           Boolean              read fFailed;
+    property NotifyAgentParam: TIdSipOutboundNotify read fNotifyAgentParam;
+    property Succeeded:        Boolean              read fSucceeded;
+  end;
+
+
   TIdSipTestOptionsListener = class(TIdSipMockListener,
                                     IIdSipOptionsListener)
   private
@@ -350,6 +370,50 @@ type
                              ErrorCode: Cardinal); override;
 
     property EndedNotificationCount: Integer read fEndedNotificationCount;
+  end;
+
+  TIdSipTestSubscribeListener = class(TIdSipMockListener,
+                                      IIdSipSubscribeListener)
+  private
+    fFailed:              Boolean;
+    fSubscribeAgentParam: TIdSipOutboundSubscribe;
+    fSucceeded:           Boolean;
+
+    procedure OnFailure(SubscribeAgent: TIdSipOutboundSubscribe;
+                        Response: TIdSipResponse);
+    procedure OnSuccess(SubscribeAgent: TIdSipOutboundSubscribe;
+                        Response: TIdSipResponse);
+  public
+    constructor Create; override;
+
+    property Failed:              Boolean                 read fFailed;
+    property SubscribeAgentParam: TIdSipOutboundSubscribe read fSubscribeAgentParam;
+    property Succeeded:           Boolean                 read fSucceeded;
+  end;
+
+  TIdSipTestSubscriptionListener = class(TIdSipMockListener,
+                                         IIdSipSubscriptionListener)
+  private
+    fEstablishedSubscription: Boolean;
+    fExpiredSubscription:     Boolean;
+    fNotify:                  Boolean;
+    fNotifyParam:             TIdSipRequest;
+    fSubscriptionParam:       TIdSipSubscription;
+
+    procedure OnEstablishedSubscription(Subscription: TIdSipSubscription;
+                                        Response: TIdSipResponse);
+    procedure OnExpiredSubscription(Subscription: TIdSipSubscription;
+                                    Response: TIdSipResponse);
+    procedure OnNotify(Subscription: TIdSipSubscription;
+                       Notify: TIdSipRequest);
+  public
+    constructor Create; override;
+
+    property EstablishedSubscription: Boolean read fEstablishedSubscription;
+    property ExpiredSubscription:     Boolean read fExpiredSubscription;
+    property Notify:                  Boolean read fNotify;
+    property NotifyParam:             TIdSipRequest read fNotifyParam;
+    property SubscriptionParam:       TIdSipSubscription read fSubscriptionParam;
   end;
 
   TIdSipTestTransactionListener = class(TIdSipMockListener,
@@ -1373,6 +1437,43 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipTestNotifyListener                                                   *
+//******************************************************************************
+//* TIdSipTestNotifyListener Public methods ************************************
+
+constructor TIdSipTestNotifyListener.Create;
+begin
+  inherited Create;
+
+  Self.fFailed    := false;
+  Self.fSucceeded := false;
+end;
+
+//* TIdSipTestNotifyListener Published methods *********************************
+
+procedure TIdSipTestNotifyListener.OnFailure(NotifyAgent: TIdSipOutboundNotify;
+                                             Response: TIdSipResponse);
+begin
+  Self.fFailed           := true;
+  Self.fNotifyAgentParam := NotifyAgent;
+  Self.fResponseParam    := Response;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create(Self.ClassName + '.OnFailure');
+end;
+
+procedure TIdSipTestNotifyListener.OnSuccess(NotifyAgent: TIdSipOutboundNotify;
+                                             Response: TIdSipResponse);
+begin
+  Self.fSucceeded        := true;
+  Self.fNotifyAgentParam := NotifyAgent;
+  Self.fResponseParam    := Response;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create(Self.ClassName + '.OnSuccess');
+end;
+
+//******************************************************************************
 //* TIdSipTestOptionsListener                                                  *
 //******************************************************************************
 //* TIdSipTestOptionsListener Public methods ***********************************
@@ -1538,6 +1639,92 @@ begin
   inherited OnEndedSession(Session, ErrorCode);
 
   Inc(Self.fEndedNotificationCount);
+end;
+
+//******************************************************************************
+//* TIdSipTestSubscribeListener                                                *
+//******************************************************************************
+//* TIdSipTestSubscribeListener Public methods *********************************
+
+constructor TIdSipTestSubscribeListener.Create;
+begin
+  inherited Create;
+
+  Self.fFailed    := false;
+  Self.fSucceeded := false;
+end;
+
+//* TIdSipTestSubscribeListener Private methods ********************************
+
+procedure TIdSipTestSubscribeListener.OnFailure(SubscribeAgent: TIdSipOutboundSubscribe;
+                                                Response: TIdSipResponse);
+begin
+  Self.fFailed              := true;
+  Self.fSubscribeAgentParam := SubscribeAgent;
+  Self.fResponseParam       := Response;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create(Self.ClassName + '.OnFailure');
+end;
+
+procedure TIdSipTestSubscribeListener.OnSuccess(SubscribeAgent: TIdSipOutboundSubscribe;
+                                                Response: TIdSipResponse);
+begin
+  Self.fResponseParam       := Response;
+  Self.fSubscribeAgentParam := SubscribeAgent;
+  Self.fSucceeded           := true;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create(Self.ClassName + '.OnSuccess');
+end;
+
+//******************************************************************************
+//* TIdSipTestSubscriptionListener                                             *
+//******************************************************************************
+//* TIdSipTestSubscriptionListener Public methods ******************************
+
+constructor TIdSipTestSubscriptionListener.Create;
+begin
+  inherited Create;
+
+  Self.fEstablishedSubscription := false;
+  Self.fExpiredSubscription     := false;
+  Self.fNotify                  := false;
+end;
+
+//* TIdSipTestSubscriptionListener Private methods ******************************
+
+procedure TIdSipTestSubscriptionListener.OnEstablishedSubscription(Subscription: TIdSipSubscription;
+                                                                   Response: TIdSipResponse);
+begin
+  Self.fEstablishedSubscription := true;
+  Self.fResponseParam           := Response;
+  Self.fSubscriptionParam       := Subscription;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create(Self.ClassName + '.OnEstablishedSubscription');
+end;
+
+procedure TIdSipTestSubscriptionListener.OnExpiredSubscription(Subscription: TIdSipSubscription;
+                                                               Response: TIdSipResponse);
+begin
+  Self.fExpiredSubscription := true;
+  Self.fResponseParam       := Response;
+  Self.fSubscriptionParam   := Subscription;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create(Self.ClassName + '.OnExpiredSubscription');
+end;
+
+procedure TIdSipTestSubscriptionListener.OnNotify(Subscription: TIdSipSubscription;
+                                                  Notify: TIdSipRequest);
+begin
+  Self.fNotify            := true;
+  Self.fSubscriptionParam := Subscription;
+  Self.fNotifyParam       := Notify;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create(Self.ClassName + '.OnNotify');
 end;
 
 //******************************************************************************
