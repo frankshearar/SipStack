@@ -1086,7 +1086,7 @@ type
 
   TIdSipOutboundRedirectedInvite = class(TIdSipOutboundInvite)
   private
-    fContact:    TIdSipAddressHeader;
+    fContact:        TIdSipAddressHeader;
     fOriginalInvite: TIdSipRequest;
 
     procedure SetContact(Value: TIdSipAddressHeader);
