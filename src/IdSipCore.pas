@@ -6908,11 +6908,11 @@ begin
         Exit;
       end;
 
+      // If we've not sent a final response, reject with 500 + Retry-After.
       if not Self.FullyEstablished then begin
         Self.RejectPrematureInvite(Invite);
         Exit;
       end;
-      // if we've not sent a final response, reject with 500 + Retry-After
 
       Self.ModifyLock.Acquire;
       try
