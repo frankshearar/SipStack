@@ -148,8 +148,6 @@ type
                         const Reason: String);
     procedure OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
                             Session: TIdSipInboundSession);
-    procedure OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
-                                    Subscription: TIdSipInboundSubscribe);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Answer: TIdSipResponse);
     procedure OnModifySession(Session: TIdSipSession;
@@ -174,6 +172,8 @@ type
                             Sender: TIdSipTransport);
     procedure OnSendResponse(Response: TIdSipResponse;
                              Sender: TIdSipTransport);
+    procedure OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
+                                    Subscription: TIdSipInboundSubscription);
     procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts);
     procedure ProcessPCM(Data: TStream);
@@ -499,11 +499,6 @@ begin
   Self.Answer.Click;
 end;
 
-procedure TrnidSpike.OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
-                                           Subscription: TIdSipInboundSubscribe);
-begin
-end;                                           
-
 procedure TrnidSpike.OnModifiedSession(Session: TIdSipSession;
                                        Answer: TIdSipResponse);
 begin
@@ -604,6 +599,11 @@ procedure TrnidSpike.OnSendResponse(Response: TIdSipResponse;
                                     Sender: TIdSipTransport);
 begin
   Self.LogMessage(Response, false);
+end;
+
+procedure TrnidSpike.OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
+                                           Subscription: TIdSipInboundSubscription);
+begin
 end;
 
 procedure TrnidSpike.OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
