@@ -12,8 +12,8 @@ unit IdSipMockTransactionDispatcher;
 interface
 
 uses
-  Classes, IdSipDialog, IdSipLocator, IdSipMessage, IdSipMockLocator,
-  IdSipMockTransport, IdSipTransaction, IdSipTransport, IdTimerQueue;
+  Classes, IdSipLocator, IdSipMessage, IdSipMockLocator, IdSipMockTransport,
+  IdSipTransaction, IdSipTransport, IdTimerQueue;
 
 type
   TIdSipMockTransactionDispatcher = class(TIdSipTransactionDispatcher)
