@@ -6873,7 +6873,6 @@ end;
 
 procedure TestTIdSipOutboundInvite.TestReceiveRequestFailedAfterAckSent;
 var
-  InviteCount:   Integer;
   InviteRequest: TIdSipRequest;
 begin
   //  ---          INVITE         --->
@@ -6891,14 +6890,9 @@ begin
   try
     InviteRequest.Assign(Self.LastSentRequest);
 
-    InviteCount := Self.Core.InviteCount;
-
     Self.MarkSentAckCount;
     Self.ReceiveOk(InviteRequest);
     CheckAckSent('No ACK sent');
-
-    Check(Self.Core.InviteCount < InviteCount,
-          Self.ClassName + ': Action didn''t terminate because of the 200 OK');
 
     Self.ReceiveServiceUnavailable(InviteRequest);
 
@@ -7004,15 +6998,8 @@ end;
 //* TestTIdSipOutboundRedirectedInvite Protected methods ***********************
 
 function TestTIdSipOutboundRedirectedInvite.CreateAction: TIdSipAction;
-var
-  Invite: TIdSipOutboundRedirectedInvite;
 begin
-  Invite := Self.CreateInvite;
-  Invite.Contact        := Self.Destination;
-  Invite.OriginalInvite := Self.Invite;
-  Invite.AddListener(Self);
-  Invite.Send;
-  Result := Invite;
+  Result := Self.CreateInvite;
 end;
 
 //* TestTIdSipOutboundRedirectedInvite Private methods *************************
@@ -7020,6 +7007,12 @@ end;
 function TestTIdSipOutboundRedirectedInvite.CreateInvite: TIdSipOutboundRedirectedInvite;
 begin
   Result := Self.Core.AddOutboundAction(TIdSipOutboundRedirectedInvite) as TIdSipOutboundRedirectedInvite;
+  Result.Contact        := Self.Destination;
+  Result.MimeType       := Self.InviteMimeType;
+  Result.Offer          := Self.InviteOffer;
+  Result.OriginalInvite := Self.Invite;
+  Result.AddListener(Self);
+  Result.Send;
 end;
 
 //* TestTIdSipOutboundRedirectedInvite Published methods ***********************

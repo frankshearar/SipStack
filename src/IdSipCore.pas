@@ -1057,6 +1057,7 @@ type
 
     procedure AddListener(const Listener: IIdSipInviteListener);
     procedure Cancel;
+    function  Match(Msg: TIdSipMessage): Boolean; override;
     procedure RemoveListener(const Listener: IIdSipInviteListener);
     procedure Send; override;
     procedure SendAck(Dialog: TIdSipDialog;
@@ -4600,14 +4601,8 @@ begin
   end;
 
   case Succeeded of
-    asSuccess: begin
-      Self.ActionSucceeded(Response);
-      Self.Terminate;
-    end;
-    asFailure: begin
-      Self.NotifyOfFailure(Response);
-      Self.Terminate;
-    end;
+    asSuccess: Self.ActionSucceeded(Response);
+    asFailure: Self.NotifyOfFailure(Response);
   end;
 end;
 
@@ -5236,6 +5231,11 @@ begin
     Self.SendCancel;
 end;
 
+function TIdSipOutboundInvite.Match(Msg: TIdSipMessage): Boolean;
+begin
+  Result := inherited Match(Msg);
+end;
+
 procedure TIdSipOutboundInvite.RemoveListener(const Listener: IIdSipInviteListener);
 begin
   Self.Listeners.RemoveListener(Listener);
@@ -5316,6 +5316,8 @@ begin
   finally
     Notification.Free;
   end;
+
+  Self.Terminate;
 end;
 
 function TIdSipOutboundInvite.ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionStatus;
@@ -5409,8 +5411,7 @@ procedure TIdSipOutboundInvite.SendRequest(Request: TIdSipRequest);
 begin
   Self.UA.ScheduleEvent(TIdSipOutboundInviteTransactionComplete,
                         64*DefaultT1,
-                        Request.Copy);
-
+                        Self.InitialRequest.Copy);
   inherited SendRequest(Request);
 end;
 
@@ -5860,6 +5861,8 @@ begin
   finally
     Notification.Free;
   end;
+
+  Self.Terminate;
 end;
 
 procedure TIdSipOutboundOptions.SetServer(Value: TIdSipAddressHeader);
@@ -6262,6 +6265,8 @@ begin
   finally
     CurrentBindings.Free;
   end;
+
+  Self.Terminate;
 end;
 
 function TIdSipOutboundRegistration.ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionStatus;
