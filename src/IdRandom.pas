@@ -187,7 +187,7 @@ procedure TIdBasicRandomNumber.ResetLastBranch;
 begin
   Self.BranchLock.Acquire;
   try
-    Self.fLastBranch := 0;
+    Self.fLastBranch := Self.NextCardinal($7fffffff);
   finally
     Self.BranchLock.Release;
   end;
