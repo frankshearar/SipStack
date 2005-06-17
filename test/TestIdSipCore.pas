@@ -475,6 +475,7 @@ type
 
   TestTIdSipOutboundRedirectedInvite = class(TestTIdSipOutboundInvite)
   private
+    function CreateInitialInvite: TIdSipOutboundInitialInvite;
     function CreateInvite: TIdSipOutboundRedirectedInvite;
   protected
     function CreateAction: TIdSipAction; override;
@@ -6999,18 +7000,26 @@ end;
 
 function TestTIdSipOutboundRedirectedInvite.CreateAction: TIdSipAction;
 begin
+  Self.CreateInitialInvite;
   Result := Self.CreateInvite;
 end;
 
 //* TestTIdSipOutboundRedirectedInvite Private methods *************************
 
+function TestTIdSipOutboundRedirectedInvite.CreateInitialInvite: TIdSipOutboundInitialInvite;
+begin
+  Result := Self.Core.AddOutboundAction(TIdSipOutboundInitialInvite) as TIdSipOutboundInitialInvite;
+  Result.Destination := Self.Destination;
+  Result.MimeType    := Self.InviteMimeType;
+  Result.Offer       := Self.InviteOffer;
+  Result.Send;
+end;
+
 function TestTIdSipOutboundRedirectedInvite.CreateInvite: TIdSipOutboundRedirectedInvite;
 begin
   Result := Self.Core.AddOutboundAction(TIdSipOutboundRedirectedInvite) as TIdSipOutboundRedirectedInvite;
   Result.Contact        := Self.Destination;
-  Result.MimeType       := Self.InviteMimeType;
-  Result.Offer          := Self.InviteOffer;
-  Result.OriginalInvite := Self.Invite;
+  Result.OriginalInvite := Self.LastSentRequest;
   Result.AddListener(Self);
   Result.Send;
 end;
@@ -7023,14 +7032,14 @@ var
   NewInvite:      TIdSipRequest;
   OriginalInvite: TIdSipRequest;
 begin
-  OriginalInvite := Self.Core.CreateInvite(Self.Destination, '', '');
+  OriginalInvite := TIdSipRequest.Create;
   try
-    Invite := Self.CreateInvite;
+    Self.CreateInitialInvite;
+    OriginalInvite.Assign(Self.LastSentRequest);
+
     Self.MarkSentRequestCount;
 
-    Invite.Contact := Self.Destination;
-    Invite.OriginalInvite := OriginalInvite;
-    Invite.Send;
+    Invite := Self.CreateInvite;
 
     CheckRequestSent('No INVITE sent');
 
