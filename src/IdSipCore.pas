@@ -3003,6 +3003,8 @@ begin
     Result.AddHeader(ReferToHeaderFull).Value := Target.AsString;
   except
     FreeAndNil(Result);
+
+    raise;
   end;
 end;
 
