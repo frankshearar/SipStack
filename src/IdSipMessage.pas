@@ -1184,6 +1184,7 @@ type
     function  QuickestExpiry: Cardinal;
     function  Equals(Msg: TIdSipMessage): Boolean; virtual; abstract;
     function  IsRequest: Boolean; virtual; abstract;
+    function  IsResponse: Boolean;
     function  LastHop: TIdSipViaHeader;
     function  MalformedException: EBadMessageClass; virtual; abstract;
     procedure MarkAsInvalid(const Reason: String);
@@ -6613,6 +6614,11 @@ begin
     Result := Self.Minimum(Self.QuickestContactExpiry,
                            Self.QuickestExpiresHeader)
   end;
+end;
+
+function TIdSipMessage.IsResponse: Boolean;
+begin
+  Result := not Self.IsRequest;
 end;
 
 function TIdSipMessage.LastHop: TIdSipViaHeader;

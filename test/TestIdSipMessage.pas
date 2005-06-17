@@ -167,6 +167,7 @@ type
     procedure TestIsRefer;
     procedure TestIsRegister;
     procedure TestIsRequest;
+    procedure TestIsResponse;
     procedure TestIsSubscribe;
     procedure TestMatchRFC2543Options;
     procedure TestMatchRFC2543Cancel;
@@ -239,6 +240,7 @@ type
     procedure TestIsProvisional;
     procedure TestIsRedirect;
     procedure TestIsRequest;
+    procedure TestIsResponse;
     procedure TestMatchToRFC2543DifferentCallID;
     procedure TestMatchToRFC2543DifferentCSeqMethod;
     procedure TestMatchToRFC2543DifferentCSeqSequenceNo;
@@ -2436,6 +2438,11 @@ begin
   Check(Self.Request.IsRequest, 'IsRequest');
 end;
 
+procedure TestTIdSipRequest.TestIsResponse;
+begin
+  Check(not Self.Request.IsResponse, 'IsResponse');
+end;
+
 procedure TestTIdSipRequest.TestIsSubscribe;
 begin
   Self.Request.Method := MethodAck;
@@ -3620,6 +3627,11 @@ end;
 procedure TestTIdSipResponse.TestIsRequest;
 begin
   Check(not Self.Response.IsRequest, 'IsRequest');
+end;
+
+procedure TestTIdSipResponse.TestIsResponse;
+begin
+  Check(Self.Response.IsResponse, 'IsResponse');
 end;
 
 procedure TestTIdSipResponse.TestMatchToRFC2543DifferentCallID;
