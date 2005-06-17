@@ -310,6 +310,7 @@ type
     procedure ReceiveOkWithBody(Invite: TIdSipRequest;
                                 const Body: String;
                                 const ContentType: String);
+    procedure ReceiveServiceUnavailable(Invite: TIdSipRequest);
   public
     procedure SetUp; override;
   published
@@ -409,9 +410,11 @@ type
   end;
 
   TestTIdSipOutboundInvite = class(TestTIdSipAction,
-                                   IIdSipInviteListener)
+                                   IIdSipInviteListener,
+                                   IIdSipUserAgentListener)
   private
     Dialog:                   TIdSipDialog;
+    DroppedUnmatchedResponse: Boolean;
     InviteMimeType:           String;
     InviteOffer:              String;
     OnDialogEstablishedFired: Boolean;
@@ -421,13 +424,25 @@ type
 
     procedure CheckReceiveFailed(StatusCode: Cardinal);
     function  CreateArbitraryDialog: TIdSipDialog;
+    procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
+                                        Challenge: TIdSipResponse;
+                                        var Username: String;
+                                        var Password: String;
+                                        var TryAgain: Boolean); overload;
     procedure OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
                                   NewDialog: TidSipDialog);
+    procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractUserAgent;
+                                        Message: TIdSipMessage;
+                                        Receiver: TIdSipTransport);
     procedure OnFailure(InviteAgent: TIdSipOutboundInvite;
                         Response: TIdSipResponse;
                         const Reason: String);
+    procedure OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
+                            Session: TIdSipInboundSession);
     procedure OnRedirect(Invite: TIdSipOutboundInvite;
                          Response: TIdSipResponse);
+    procedure OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
+                                    Subscription: TIdSipInboundSubscribe);
     procedure OnSuccess(InviteAgent: TIdSipOutboundInvite;
                         Response: TIdSipResponse);
   protected
@@ -449,6 +464,7 @@ type
     procedure TestReceiveGlobalFailed;
     procedure TestReceiveRedirect;
     procedure TestReceiveRequestFailed;
+    procedure TestReceiveRequestFailedAfterAckSent;
     procedure TestReceiveServerFailed;
     procedure TestRemoveListener;
     procedure TestSendTwice;
@@ -795,6 +811,7 @@ type
     procedure TestReceive3xxSendsNewInvite;
     procedure TestReceive3xxWithOneContact;
     procedure TestReceive3xxWithNoContacts;
+    procedure TestReceiveFailureResponseAfterSessionEstablished;
     procedure TestReceiveFailureResponseNotifiesOnce;
     procedure TestReceiveFinalResponseSendsAck;
     procedure TestRedirectAndAccept;
@@ -1273,7 +1290,6 @@ const
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
-{
   Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipRegistrations.Suite);
   Result.AddTest(TestTIdSipActions.Suite);
@@ -1282,9 +1298,8 @@ begin
   Result.AddTest(TestLocation.Suite);
   Result.AddTest(TestTIdSipInboundInvite.Suite);
   Result.AddTest(TestTIdSipOutboundInvite.Suite);
+  Result.AddTest(TestTIdSipOutboundRedirectedInvite.Suite);
   Result.AddTest(TestTIdSipOutboundReInvite.Suite);
-}
-{
   Result.AddTest(TestTIdSipInboundOptions.Suite);
   Result.AddTest(TestTIdSipOutboundOptions.Suite);
   Result.AddTest(TestTIdSipInboundRegistration.Suite);
@@ -1293,12 +1308,10 @@ begin
   Result.AddTest(TestTIdSipOutboundUnregister.Suite);
   Result.AddTest(TestTIdSipInboundSession.Suite);
   Result.AddTest(TestTIdSipOutboundSession.Suite);
-}
   Result.AddTest(TestTIdSipInboundSubscribe.Suite);
   Result.AddTest(TestTIdSipOutboundSubscribe.Suite);
   Result.AddTest(TestTIdSipOutboundUnsubscribe.Suite);
   Result.AddTest(TestTIdSipSubscription.Suite);
-{
   Result.AddTest(TestTIdSipInboundInviteFailureMethod.Suite);
   Result.AddTest(TestTIdSipInviteDialogEstablishedMethod.Suite);
   Result.AddTest(TestTIdSipInviteFailureMethod.Suite);
@@ -1316,15 +1329,12 @@ begin
   Result.AddTest(TestTIdSipOutboundSubscribeFailedMethod.Suite);
   Result.AddTest(TestTIdSipOutboundSubscribeSucceededMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentAuthenticationChallengeMethod.Suite);
-}
   Result.AddTest(TestTIdSipEstablishedSubscriptionMethod.Suite);
   Result.AddTest(TestTIdSipExpiredSubscriptionMethod.Suite);
   Result.AddTest(TestTIdSipSubscriptionNotifyMethod.Suite);
-{
   Result.AddTest(TestTIdSipUserAgentDroppedUnmatchedMessageMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentInboundCallMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentSubscriptionRequestMethod.Suite);
-}
 end;
 
 //******************************************************************************
@@ -4726,6 +4736,19 @@ begin
   end;
 end;
 
+procedure TestTIdSipAction.ReceiveServiceUnavailable(Invite: TIdSipRequest);
+var
+  Response: TIdSipResponse;
+begin
+  Response := TIdSipResponse.InResponseTo(Invite,
+                                          SIPServiceUnavailable);
+  try
+    Self.ReceiveResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
 //* TestTIdSipAction Published methods *****************************************
 
 procedure TestTIdSipAction.TestIsInbound;
@@ -6362,8 +6385,11 @@ procedure TestTIdSipOutboundInvite.SetUp;
 begin
   inherited SetUp;
 
+  Self.Core.AddUserAgentListener(Self);
+
   // We create Self.Dialog in Self.OnDialogEstablished
 
+  Self.DroppedUnmatchedResponse := false;
   Self.InviteMimeType           := SdpMimeType;
   Self.InviteOffer              := TIdSipTestResources.BasicSDP('1.2.3.4');
   Self.OnDialogEstablishedFired := false;
@@ -6426,6 +6452,15 @@ begin
   end;
 end;
 
+procedure TestTIdSipOutboundInvite.OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
+                                                             Challenge: TIdSipResponse;
+                                                             var Username: String;
+                                                             var Password: String;
+                                                             var TryAgain: Boolean);
+begin
+  // Unused: do nothing
+end;
+
 procedure TestTIdSipOutboundInvite.OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
                                                        NewDialog: TidSipDialog);
 begin
@@ -6436,11 +6471,24 @@ begin
   Self.ToHeaderTag := NewDialog.ID.RemoteTag;
 end;
 
+procedure TestTIdSipOutboundInvite.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractUserAgent;
+                                                             Message: TIdSipMessage;
+                                                             Receiver: TIdSipTransport);
+begin
+  Self.DroppedUnmatchedResponse := true;
+end;
+
 procedure TestTIdSipOutboundInvite.OnFailure(InviteAgent: TIdSipOutboundInvite;
                                              Response: TIdSipResponse;
                                              const Reason: String);
 begin
   Self.OnFailureFired := true;
+end;
+
+procedure TestTIdSipOutboundInvite.OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
+                                                 Session: TIdSipInboundSession);
+begin
+  // Unused: do nothing
 end;
 
 procedure TestTIdSipOutboundInvite.OnRedirect(Invite: TIdSipOutboundInvite;
@@ -6449,9 +6497,16 @@ begin
   Self.OnRedirectFired := true;
 end;
 
+procedure TestTIdSipOutboundInvite.OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
+                                                         Subscription: TIdSipInboundSubscribe);
+begin
+  // Unused: do nothing
+end;
+
 procedure TestTIdSipOutboundInvite.OnSuccess(InviteAgent: TIdSipOutboundInvite;
                                              Response: TIdSipResponse);
 begin
+  // Unused: do nothing
 end;
 
 //* TestTIdSipOutboundInvite Published methods *********************************
@@ -6814,6 +6869,45 @@ begin
   for StatusCode := SIPProxyAuthenticationRequired + 1 to 499 do
     Self.CheckReceiveFailed(StatusCode);
 }
+end;
+
+procedure TestTIdSipOutboundInvite.TestReceiveRequestFailedAfterAckSent;
+var
+  InviteCount:   Integer;
+  InviteRequest: TIdSipRequest;
+begin
+  //  ---          INVITE         --->
+  // <---          200 OK         ---
+  //  ---           ACK           --->
+  // <--- 503 Service Unavailable ---
+
+  // This situation should never arise: the remote end's sending a failure
+  // response to a request it has already accepted. Still, I've seen it happen
+  // once before...
+
+  Self.CreateAction;
+
+  InviteRequest := TIdSipRequest.Create;
+  try
+    InviteRequest.Assign(Self.LastSentRequest);
+
+    InviteCount := Self.Core.InviteCount;
+
+    Self.MarkSentAckCount;
+    Self.ReceiveOk(InviteRequest);
+    CheckAckSent('No ACK sent');
+
+    Check(Self.Core.InviteCount < InviteCount,
+          Self.ClassName + ': Action didn''t terminate because of the 200 OK');
+
+    Self.ReceiveServiceUnavailable(InviteRequest);
+
+    Check(Self.DroppedUnmatchedResponse,
+          'Invite action didn''t terminate, so the Transaction-User core '
+        + 'didn''t drop the message');
+  finally
+    InviteRequest.Free;
+  end;
 end;
 
 procedure TestTIdSipOutboundInvite.TestReceiveServerFailed;
@@ -7240,14 +7334,21 @@ end;
 
 procedure TestTIdSipOutboundOptions.TestReceiveResponse;
 var
-  StatusCode: Cardinal;
+  OptionsCount: Integer;
+  StatusCode:   Cardinal;
 begin
   for StatusCode := SIPOKResponseClass to SIPGlobalFailureResponseClass do begin
     Self.ReceivedResponse := false;
     Self.CreateAction;
+
+    OptionsCount := Self.Core.OptionsCount;
+
     Self.ReceiveResponse(StatusCode * 100);
+
     Check(Self.ReceivedResponse,
           'Listeners not notified of response ' + IntToStr(StatusCode * 100));
+    Check(Self.Core.OptionsCount < OptionsCount,
+          'OPTIONS action not terminated for ' + IntToStr(StatusCode) + ' response');       
   end;
 end;
 
@@ -7527,10 +7628,17 @@ begin
 end;
 
 procedure TestTIdSipOutboundRegistration.TestReceiveOK;
+var
+  RegistrationCount: Integer;
 begin
   Self.CreateAction;
+
+  RegistrationCount := Self.Core.RegistrationCount;
+
   Self.ReceiveOk(Self.LastSentRequest);
   Check(Self.Succeeded, 'Registration failed');
+  Check(Self.Core.RegistrationCount < RegistrationCount,
+        'REGISTER action not terminated');
 end;
 
 procedure TestTIdSipOutboundRegistration.TestRemoveListener;
@@ -9497,9 +9605,40 @@ begin
 
     Check(Self.OnEndedSessionFired,
           'Session didn''t end despite a redirect with no Contact headers');
-    CheckEquals(RedirectWithNoContacts, Self.ErrorCode, 'Stack reports wrong error code');      
+    CheckEquals(RedirectWithNoContacts, Self.ErrorCode, 'Stack reports wrong error code');
   finally
     Redirect.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundSession.TestReceiveFailureResponseAfterSessionEstablished;
+var
+  Invite: TIdSipRequest;
+begin
+  //  ---          INVITE         --->
+  // <---          200 OK         ---
+  //  ---           ACK           --->
+  // <--- 503 Service Unavailable --- (in response to the INVITE!)
+
+  // This situation should never arise: the remote end's sending a failure
+  // response to a request it has already accepted. Still, I've seen it happen
+  // once before...
+
+  Invite := TIdSipRequest.Create;
+  try
+    Invite.Assign(Self.LastSentRequest);
+
+    Self.MarkSentAckCount;
+    Self.ReceiveOk(Invite);
+    CheckAckSent('No ACK sent');
+
+    Self.ReceiveServiceUnavailable(Invite);
+
+    Check(not Self.Session.IsTerminated,
+          'The Session received the response: the Transaction-User layer didn''t '
+        + 'drop the message, or the Session Matched the request');
+  finally
+    Invite.Free;
   end;
 end;
 

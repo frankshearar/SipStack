@@ -4600,10 +4600,14 @@ begin
   end;
 
   case Succeeded of
-    asSuccess: if Response.IsOK then
+    asSuccess: begin
       Self.ActionSucceeded(Response);
-    asFailure:
+      Self.Terminate;
+    end;
+    asFailure: begin
       Self.NotifyOfFailure(Response);
+      Self.Terminate;
+    end;
   end;
 end;
 
@@ -5281,6 +5285,7 @@ end;
 procedure TIdSipOutboundInvite.Terminate;
 begin
   Self.Cancel;
+  Self.MarkAsTerminated;
 end;
 
 //* TIdSipOutboundInvite Protected methods *************************************
@@ -5311,8 +5316,6 @@ begin
   finally
     Notification.Free;
   end;
-
-  Self.MarkAsTerminated;
 end;
 
 function TIdSipOutboundInvite.ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionStatus;
@@ -5857,8 +5860,6 @@ begin
   finally
     Notification.Free;
   end;
-
-  Self.Terminate;
 end;
 
 procedure TIdSipOutboundOptions.SetServer(Value: TIdSipAddressHeader);
@@ -6261,8 +6262,6 @@ begin
   finally
     CurrentBindings.Free;
   end;
-
-  Self.Terminate;
 end;
 
 function TIdSipOutboundRegistration.ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionStatus;
