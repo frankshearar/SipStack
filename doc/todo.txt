@@ -1,0 +1,105 @@
+RFC 3265 still to do:
+
+   3.1.6.   Notifier SUBSCRIBE Behavior............................ 10
+   3.2.     Description of NOTIFY Behavior......................... 13
+   3.2.1.   Identification of Reported Events, Event Classes, and
+            Current State.......................................... 13
+   3.2.2.   Notifier NOTIFY Behavior............................... 14
+   3.2.4.   Subscriber NOTIFY Behavior............................. 16
+   3.3.     General................................................ 18
+   3.3.1.   Detecting support for SUBSCRIBE and NOTIFY............. 18
+   3.3.3.   Forking................................................ 18
+   3.3.4.   Dialog creation and termination........................ 18
+   3.3.5.   State Agents and Notifier Migration.................... 19
+   3.3.6.   Polling Resource State................................. 20
+   3.3.7.   Allow-Events header usage.............................. 21
+   3.3.8.   PINT Compatibility..................................... 21
+   4.       Event Packages......................................... 21
+   4.1.     Appropriateness of Usage............................... 21
+   4.2.     Event Template-packages................................ 22
+   4.3.     Amount of State to be Conveyed......................... 22
+   4.3.1.   Complete State Information............................. 23
+   4.3.2.   State Deltas........................................... 23
+   4.4.     Event Package Responsibilities......................... 24
+   4.4.1.   Event Package Name..................................... 24
+   4.4.2.   Event Package Parameters............................... 24
+   4.4.3.   SUBSCRIBE Bodies....................................... 24
+   4.4.4.   Subscription Duration.................................. 25
+   4.4.5.   NOTIFY Bodies.......................................... 25
+   4.4.6.   Notifier processing of SUBSCRIBE requests.............. 25
+   4.4.7.   Notifier generation of NOTIFY requests................. 25
+   4.4.8.   Subscriber processing of NOTIFY requests............... 26
+   4.4.9.   Handling of forked requests............................ 26
+   4.4.10.  Rate of notifications.................................. 26
+   4.4.11.  State Agents........................................... 27
+   4.4.12.  Examples............................................... 27
+   4.4.13.  Use of URIs to Retrieve State.......................... 27
+   5.       Security Considerations................................ 28
+   5.1.     Access Control......................................... 28
+   5.2.     Notifier Privacy Mechanism............................. 28
+   5.3.     Denial-of-Service attacks.............................. 28
+   5.4.     Replay Attacks......................................... 29
+   5.5.     Man-in-the middle attacks.............................. 29
+   5.6.     Confidentiality........................................ 29
+
+3.1.4.4. Confirmation of Subscription Creation
+
+   The subscriber can expect to receive a NOTIFY message from each node
+   which has processed a successful subscription or subscription
+   refresh.  Until the first NOTIFY message arrives, the subscriber
+   should consider the state of the subscribed resource to be in a
+   neutral state.  Documents which define new event packages MUST define
+   this "neutral state" in such a way that makes sense for their
+   application (see section 4.4.7.).
+
+
+RFC 3515 still to do:
+
+            2.4.2 Processing a REFER request. . . . . . . . . . . .  6
+            2.4.3 Accessing the Referred-to Resource. . . . . . . .  6
+            2.4.4 Using SIP Events to Report the Results
+                  of the Reference. . . . . . . . . . . . . . . . .  7
+            2.4.5 The Body of the NOTIFY. . . . . . . . . . . . . .  8
+            2.4.6 Multiple REFER Requests in a Dialog . . . . . . .  9
+            2.4.7 Using the Subscription-State Header
+                  Field with Event Refer. . . . . . . . . . . . . .  9
+       2.5  Behavior of SIP Registrars/Redirect Servers . . . . . .  9
+       2.6  Behavior of SIP Proxies . . . . . . . . . . . . . . . . 10
+   3.  Package Details: Event refer . . . . . . . . . . . . . . . . 10
+       3.1  Event Package Name. . . . . . . . . . . . . . . . . . . 10
+       3.2  Event Package Parameters. . . . . . . . . . . . . . . . 10
+       3.3  SUBSCRIBE Bodies. . . . . . . . . . . . . . . . . . . . 10
+       3.4  Subscription Duration . . . . . . . . . . . . . . . . . 10
+       3.5  NOTIFY Bodies . . . . . . . . . . . . . . . . . . . . . 11
+       3.6  Notifier processing of SUBSCRIBE requests . . . . . . . 11
+       3.7  Notifier Generation of NOTIFY Requests. . . . . . . . . 11
+       3.8  Subscriber Processing of NOTIFY Requests. . . . . . . . 11
+       3.9  Handling of Forked Requests . . . . . . . . . . . . . . 11
+       3.10 Rate of Notifications . . . . . . . . . . . . . . . . . 11
+       3.11 State Agents. . . . . . . . . . . . . . . . . . . . . . 11
+   4.  Examples . . . . . . . . . . . . . . . . . . . . . . . . . . 12
+       4.1  Prototypical REFER callflow . . . . . . . . . . . . . . 12
+       4.2  Multiple REFERs in a dialog . . . . . . . . . . . . . . 14
+   5.  Security Considerations  . . . . . . . . . . . . . . . . . . 16
+       5.1  Constructing a Refer-To URI . . . . . . . . . . . . . . 16
+       5.2  Authorization Considerations for REFER. . . . . . . . . 17
+       5.3  Considerations for the use of message/sipfrag . . . . . 18
+            5.3.1 Circumventing Privacy . . . . . . . . . . . . . . 18
+            5.3.2 Circumventing Confidentiality . . . . . . . . . . 19
+            5.3.3 Limiting the Breach . . . . . . . . . . . . . . . 19
+            5.3.4 Cut, Paste and Replay Considerations. . . . . . . 19
+
+
+RFC 3891 still to do:
+
+   3.  User Agent Server Behavior: Receiving a Replaces Header . . .   4
+   4.  User Agent Client Behavior: Sending a Replaces Header . . . .   6
+   5.  Proxy Behavior. . . . . . . . . . . . . . . . . . . . . . . .   7
+   6.  Syntax. . . . . . . . . . . . . . . . . . . . . . . . . . . .   7
+       6.1.  The Replaces Header . . . . . . . . . . . . . . . . . .   7
+       6.2.  New Option Tag for Require and Supported Headers. . . .   8
+
+
+Notes:
+SUBSCRIBE & REFER both act a bit like sessions: different messages, of
+different methods, relate to the same thing.
