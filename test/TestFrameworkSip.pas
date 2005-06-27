@@ -67,26 +67,21 @@ type
     procedure MarkSentAckCount;
     procedure MarkSentRequestCount;
     procedure MarkSentResponseCount;
-    function  SecondLastSentResponse: TIdSipResponse;
-    procedure ReceiveRequest(Request: TIdSipRequest);
-    procedure ReceiveResponse(Response: TIdSipResponse); overload;
-    function  SecondLastSentRequest: TIdSipRequest;
-    function  SentAckCount: Cardinal;
-    function  SentRequestCount: Cardinal;
-    function  SentResponseCount: Cardinal;
-    function  ThirdLastSentRequest: TIdSipRequest;
     procedure ReceiveAck;
     procedure ReceiveAckFor(Request: TIdSipRequest;
                             Response: TIdSipResponse);
     procedure ReceiveBye(LocalDialog: TIdSipDialog);
     procedure ReceiveCancel;
     procedure ReceiveInvite;
-
     procedure ReceiveOk(Invite: TIdSipRequest);
     procedure ReceiveOkFrom(Invite: TIdSipRequest;
                             const Contact: String);
     procedure ReceiveMovedPermanently(const SipUrl: String);
+    procedure ReceiveRequest(Request: TIdSipRequest);
+    procedure ReceiveResponse(Response: TIdSipResponse); overload;
     procedure ReceiveResponse(StatusCode: Cardinal); overload;
+    procedure ReceiveResponse(Request: TIdSipRequest;
+                              StatusCode: Cardinal); overload;
     procedure ReceiveRinging(Invite: TIdSipRequest);
     procedure ReceiveSubscribe(const EventPackage: String);
     procedure ReceiveTrying(Invite: TIdSipRequest);
@@ -95,7 +90,13 @@ type
     procedure ReceiveTryingWithNoToTag(Invite: TIdSipRequest);
     procedure ReceiveUnauthorized(const AuthHeaderName: String;
                                   const Qop: String);
+    function  SecondLastSentRequest: TIdSipRequest;
+    function  SecondLastSentResponse: TIdSipResponse;
+    function  SentAckCount: Cardinal;
+    function  SentRequestCount: Cardinal;
+    function  SentResponseCount: Cardinal;
     function  SentRequestAt(Index: Integer): TIdSipRequest;
+    function  ThirdLastSentRequest: TIdSipRequest;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -937,46 +938,6 @@ begin
   Self.ResponseCount := Self.SentResponseCount;
 end;
 
-function TTestCaseTU.SecondLastSentResponse: TIdSipResponse;
-begin
-  Result := Self.Dispatcher.Transport.SecondLastResponse;
-end;
-
-procedure TTestCaseTU.ReceiveRequest(Request: TIdSipRequest);
-begin
-  Self.Dispatcher.Transport.FireOnRequest(Request);
-end;
-
-procedure TTestCaseTU.ReceiveResponse(Response: TIdSipResponse);
-begin
-  Self.Dispatcher.Transport.FireOnResponse(Response);
-end;
-
-function TTestCaseTU.SecondLastSentRequest: TIdSipRequest;
-begin
-  Result := Self.Dispatcher.Transport.SecondLastRequest;
-end;
-
-function TTestCaseTU.SentAckCount: Cardinal;
-begin
-  Result := Self.Dispatcher.Transport.ACKCount;
-end;
-
-function TTestCaseTU.SentRequestCount: Cardinal;
-begin
-  Result := Self.Dispatcher.Transport.SentRequestCount;
-end;
-
-function TTestCaseTU.SentResponseCount: Cardinal;
-begin
-  Result := Self.Dispatcher.Transport.SentResponseCount;
-end;
-
-function TTestCaseTU.ThirdLastSentRequest: TIdSipRequest;
-begin
-  Result := Self.Dispatcher.Transport.ThirdLastRequest;
-end;
-
 procedure TTestCaseTU.ReceiveAck;
 var
   Ack: TIdSipRequest;
@@ -1051,11 +1012,27 @@ begin
   end;
 end;
 
+procedure TTestCaseTU.ReceiveRequest(Request: TIdSipRequest);
+begin
+  Self.Dispatcher.Transport.FireOnRequest(Request);
+end;
+
+procedure TTestCaseTU.ReceiveResponse(Response: TIdSipResponse);
+begin
+  Self.Dispatcher.Transport.FireOnResponse(Response);
+end;
+
 procedure TTestCaseTU.ReceiveResponse(StatusCode: Cardinal);
+begin
+  Self.ReceiveResponse(Self.LastSentRequest, StatusCode);
+end;
+
+procedure TTestCaseTU.ReceiveResponse(Request: TIdSipRequest;
+                                      StatusCode: Cardinal);
 var
   Response: TIdSipResponse;
 begin
-  Response := Self.Core.CreateResponse(Self.LastSentRequest,
+  Response := Self.Core.CreateResponse(Request,
                                        StatusCode);
   try
     Self.ReceiveResponse(Response);
@@ -1094,15 +1071,8 @@ begin
 end;
 
 procedure TTestCaseTU.ReceiveRinging(Invite: TIdSipRequest);
-var
-  Response: TIdSipResponse;
 begin
-  Response := Self.Core.CreateResponse(Invite, SIPRinging);
-  try
-    Self.ReceiveResponse(Response);
-  finally
-    Response.Free;
-  end;
+  Self.ReceiveResponse(Invite, SIPRinging);
 end;
 
 procedure TTestCaseTU.ReceiveSubscribe(const EventPackage: String);
@@ -1118,15 +1088,8 @@ begin
 end;
 
 procedure TTestCaseTU.ReceiveTrying(Invite: TIdSipRequest);
-var
-  Response: TIdSipResponse;
 begin
-  Response := Self.Core.CreateResponse(Invite, SIPTrying);
-  try
-    Self.ReceiveResponse(Response);
-  finally
-    Response.Free;
-  end;
+  Self.ReceiveResponse(Invite, SIPTrying);
 end;
 
 procedure TTestCaseTU.ReceiveTryingFrom(Invite: TIdSipRequest;
@@ -1181,9 +1144,39 @@ begin
   end;
 end;
 
+function TTestCaseTU.SecondLastSentRequest: TIdSipRequest;
+begin
+  Result := Self.Dispatcher.Transport.SecondLastRequest;
+end;
+
+function TTestCaseTU.SecondLastSentResponse: TIdSipResponse;
+begin
+  Result := Self.Dispatcher.Transport.SecondLastResponse;
+end;
+
+function TTestCaseTU.SentAckCount: Cardinal;
+begin
+  Result := Self.Dispatcher.Transport.ACKCount;
+end;
+
+function TTestCaseTU.SentRequestCount: Cardinal;
+begin
+  Result := Self.Dispatcher.Transport.SentRequestCount;
+end;
+
+function TTestCaseTU.SentResponseCount: Cardinal;
+begin
+  Result := Self.Dispatcher.Transport.SentResponseCount;
+end;
+
 function TTestCaseTU.SentRequestAt(Index: Integer): TIdSipRequest;
 begin
   Result := Self.Dispatcher.Transport.RequestAt(Index);
+end;
+
+function TTestCaseTU.ThirdLastSentRequest: TIdSipRequest;
+begin
+  Result := Self.Dispatcher.Transport.ThirdLastRequest;
 end;
 
 //* TTestCaseTU Private methods ************************************************
