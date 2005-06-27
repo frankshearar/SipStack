@@ -1023,6 +1023,7 @@ type
   // my listeners) when I receive a 2xx response and have sent an ACK.
   TIdSipOutboundInvite = class(TIdSipInvite)
   private
+    AnswerResponse:                 TIdSipResponse;
     Cancelling:                     Boolean;
     CancelRequest:                  TIdSipRequest;
     DialogEstablished:              Boolean;
@@ -1064,6 +1065,7 @@ type
 
     procedure AddListener(const Listener: IIdSipInviteListener);
     procedure Cancel;
+    function  Match(Msg: TIdSipMessage): Boolean; override;
     procedure RemoveListener(const Listener: IIdSipInviteListener);
     procedure Send; override;
     procedure SendAck(Dialog: TIdSipDialog;
@@ -5284,6 +5286,7 @@ begin
 
   // We only instantiate CancelRequest when we actually send a Cancel.
   // See SendCancel.
+  Self.AnswerResponse                 := TIdSipResponse.Create;
   Self.Cancelling                     := false;
   Self.HasReceivedProvisionalResponse := false;
   Self.ReceivedFinalResponse          := false;
@@ -5295,6 +5298,7 @@ end;
 destructor TIdSipOutboundInvite.Destroy;
 begin
   Self.CancelRequest.Free;
+  Self.AnswerResponse.Free;
 
   inherited Destroy;
 end;
@@ -5312,6 +5316,14 @@ begin
 
   if Self.HasReceivedProvisionalResponse then
     Self.SendCancel;
+end;
+
+function TIdSipOutboundInvite.Match(Msg: TIdSipMessage): Boolean;
+begin
+  if Self.ReceivedFinalResponse and Msg.IsResponse then
+    Result := Self.AnswerResponse.Equals(Msg)
+  else
+    Result := inherited Match(Msg);
 end;
 
 procedure TIdSipOutboundInvite.RemoveListener(const Listener: IIdSipInviteListener);
@@ -5401,14 +5413,20 @@ function TIdSipOutboundInvite.ReceiveFailureResponse(Response: TIdSipResponse): 
 begin
   Result := inherited ReceiveFailureResponse(Response);
 
-  Self.ReceivedFinalResponse := true;
+  if not Self.ReceivedFinalResponse then begin
+    Self.ReceivedFinalResponse := true;
+    Self.AnswerResponse.Assign(Response);
+  end;
 end;
 
 function TIdSipOutboundInvite.ReceiveGlobalFailureResponse(Response: TIdSipResponse): TIdSipActionStatus;
 begin
   Result := inherited ReceiveGlobalFailureResponse(Response);
 
-  Self.ReceivedFinalResponse := true;
+  if not Self.ReceivedFinalResponse then begin
+    Self.ReceivedFinalResponse := true;
+    Self.AnswerResponse.Assign(Response);
+  end;
 end;
 
 function TIdSipOutboundInvite.ReceiveOKResponse(Response: TIdSipResponse;
@@ -5426,7 +5444,10 @@ begin
     // Either we're not cancelling, or the 2xx doesn't match the CANCEL and
     // thus must match the INVITE.
 
-    Self.ReceivedFinalResponse := true;
+    if not Self.ReceivedFinalResponse then begin
+      Self.ReceivedFinalResponse := true;
+      Self.AnswerResponse.Assign(Response);
+    end;
 
     if Self.Cancelling then begin
       // (a) Don't bother notifying of an established dialog - the dialog's
@@ -5472,7 +5493,10 @@ function TIdSipOutboundInvite.ReceiveRedirectionResponse(Response: TIdSipRespons
 begin
   Result := inherited ReceiveRedirectionResponse(Response, UsingSecureTransport);
 
-  Self.ReceivedFinalResponse := true;
+  if not Self.ReceivedFinalResponse then begin
+    Self.ReceivedFinalResponse := true;
+    Self.AnswerResponse.Assign(Response);
+  end;
 
   Self.NotifyOfRedirect(Response);
 end;
@@ -5481,7 +5505,10 @@ function TIdSipOutboundInvite.ReceiveServerFailureResponse(Response: TIdSipRespo
 begin
   Result := inherited ReceiveServerFailureResponse(Response);
 
-  Self.ReceivedFinalResponse := true;
+  if not Self.ReceivedFinalResponse then begin
+    Self.ReceivedFinalResponse := true;
+    Self.AnswerResponse.Assign(Response);
+  end;
 end;
 
 procedure TIdSipOutboundInvite.SendRequest(Request: TIdSipRequest);

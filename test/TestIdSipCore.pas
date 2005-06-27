@@ -443,7 +443,7 @@ type
     procedure OnRedirect(Invite: TIdSipOutboundInvite;
                          Response: TIdSipResponse);
     procedure OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
-                                    Subscription: TIdSipInboundSubscribe);
+                                    Subscription: TIdSipInboundSubscription);
     procedure OnSuccess(InviteAgent: TIdSipOutboundInvite;
                         Response: TIdSipResponse);
   protected
@@ -772,6 +772,7 @@ type
     procedure ReceiveMovedTemporarily(const Contact: String); overload;
     procedure ReceiveMovedTemporarily(const Contacts: array of String); overload;
     procedure ReceiveOKWithRecordRoute;
+    procedure ReceiveSessionProgress(Invite: TIdSipRequest);
   protected
     MimeType: String;
     SDP:      String;
@@ -813,6 +814,7 @@ type
     procedure TestReceive3xxSendsNewInvite;
     procedure TestReceive3xxWithOneContact;
     procedure TestReceive3xxWithNoContacts;
+//    procedure TestReceiveCallProgressesThenRingingThenOk;
     procedure TestReceiveFailureResponseAfterSessionEstablished;
     procedure TestReceiveFailureResponseNotifiesOnce;
     procedure TestReceiveFinalResponseSendsAck;
@@ -1317,11 +1319,8 @@ begin
   Result.AddTest(TestTIdSipOutboundInvite.Suite);
   Result.AddTest(TestTIdSipOutboundRedirectedInvite.Suite);
   Result.AddTest(TestTIdSipOutboundReInvite.Suite);
-<<<<<<< TestIdSipCore.pas
 //  Result.AddTest(TestTIdSipInboundNotify.Suite);
 //  Result.AddTest(TestTIdSipOutboundNotify.Suite);
-=======
->>>>>>> 1.275
   Result.AddTest(TestTIdSipInboundOptions.Suite);
   Result.AddTest(TestTIdSipOutboundOptions.Suite);
   Result.AddTest(TestTIdSipInboundRegistration.Suite);
@@ -1333,13 +1332,8 @@ begin
   Result.AddTest(TestTIdSipInboundSubscribe.Suite);
   Result.AddTest(TestTIdSipOutboundSubscribe.Suite);
   Result.AddTest(TestTIdSipOutboundUnsubscribe.Suite);
-<<<<<<< TestIdSipCore.pas
   Result.AddTest(TestTIdSipInboundSubscription.Suite);
   Result.AddTest(TestTIdSipOutboundSubscription.Suite);
-{
-=======
-  Result.AddTest(TestTIdSipSubscription.Suite);
->>>>>>> 1.275
   Result.AddTest(TestTIdSipInboundInviteFailureMethod.Suite);
   Result.AddTest(TestTIdSipInviteDialogEstablishedMethod.Suite);
   Result.AddTest(TestTIdSipInviteFailureMethod.Suite);
@@ -1359,11 +1353,7 @@ begin
   Result.AddTest(TestTIdSipUserAgentAuthenticationChallengeMethod.Suite);
   Result.AddTest(TestTIdSipEstablishedSubscriptionMethod.Suite);
   Result.AddTest(TestTIdSipExpiredSubscriptionMethod.Suite);
-<<<<<<< TestIdSipCore.pas
   Result.AddTest(TestTIdSipOutboundSubscriptionNotifyMethod.Suite);
-=======
-  Result.AddTest(TestTIdSipSubscriptionNotifyMethod.Suite);
->>>>>>> 1.275
   Result.AddTest(TestTIdSipUserAgentDroppedUnmatchedMessageMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentInboundCallMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentSubscriptionRequestMethod.Suite);
@@ -6551,7 +6541,7 @@ begin
 end;
 
 procedure TestTIdSipOutboundInvite.OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
-                                                         Subscription: TIdSipInboundSubscribe);
+                                                         Subscription: TIdSipInboundSubscription);
 begin
   // Unused: do nothing
 end;
@@ -8992,6 +8982,11 @@ begin
   end;
 end;
 
+procedure TestTIdSipOutboundSession.ReceiveSessionProgress(Invite: TIdSipRequest);
+begin
+  Self.ReceiveResponse(Invite, SIPSessionProgress);
+end;
+
 //* TestTIdSipOutboundSession Published methods ********************************
 
 procedure TestTIdSipOutboundSession.TestAck;
@@ -9664,7 +9659,45 @@ begin
     Redirect.Free;
   end;
 end;
+{
+procedure TestTIdSipOutboundSession.TestReceiveCallProgressesThenRingingThenOk;
+var
+  OriginalInvite: TIdSipRequest;
+begin
+  // James Hamlin's SIP/PSTN gateway typically sends 183 Session Progress
+  // responses informing the user of the progress of the call as the TextDirect
+  //  platform dials the remote number. When the remote end starts to ring, his
+  // stack sends a 180 Ringing. This test makes sure our stack behaves
+  // appropriately: the first 183 establishes a dialog, which the subsequent
+  // provisional responses match.
 
+  //  ---        INVITE        --->
+  // <--- 183 Session Progress ---
+  // <--- 183 Session Progress ---
+  // <---      180 Ringing     ---
+  // <---        200 OK        ---
+  //  ---          ACK         --->
+
+  OriginalInvite := TIdSipRequest.Create;
+  try
+    OriginalInvite.Assign(Self.LastSentRequest);
+
+    Self.ReceiveSessionProgress(OriginalInvite);
+    Check(Self.Session.DialogEstablished, 'No dialog established by 1st 183');
+
+    Self.ReceiveSessionProgress(OriginalInvite);
+    Check(Self.Session.DialogEstablished, 'Dialog disappeared for the 2nd 183');
+
+    Self.ReceiveRinging(OriginalInvite);
+    Check(Self.Session.DialogEstablished, 'Dialog disappeared for the 180 Ringing');
+
+    Self.ReceiveOk(OriginalInvite);
+    Check(Self.Session.DialogEstablished, 'Dialog disappeared for the 200 OK');
+  finally
+    OriginalInvite.Free;
+  end;
+end;
+}
 procedure TestTIdSipOutboundSession.TestReceiveFailureResponseAfterSessionEstablished;
 var
   Invite: TIdSipRequest;
