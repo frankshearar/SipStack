@@ -1585,6 +1585,7 @@ type
     function  DialogEstablished: Boolean;
     procedure EstablishDialog(Response: TIdSipResponse);
     procedure NotifyOfExpiredSubscription(Notify: TIdSipRequest);
+    procedure NotifyOfReceivedNotify(Notify: TIdSipRequest);
     procedure NotifyOfSuccess(Response: TIdSipResponse);
     procedure OnFailure(SubscribeAgent: TIdSipOutboundSubscribe;
                         Response: TIdSipResponse);
@@ -8069,6 +8070,8 @@ begin
   // Precondition: Request contains a NOTIFY.
   inherited ReceiveNotify(Notify);
 
+  Self.NotifyOfReceivedNotify(Notify);
+
   if (Notify.FirstHeader(SubscriptionStateHeader).Value = SubscriptionSubstateTerminated) then begin
     Self.NotifyOfExpiredSubscription(Notify);
     Self.MarkAsTerminated;
@@ -8112,6 +8115,21 @@ var
   Notification: TIdSipExpiredSubscriptionMethod;
 begin
   Notification := TIdSipExpiredSubscriptionMethod.Create;
+  try
+    Notification.Notify       := Notify;
+    Notification.Subscription := Self;
+
+    Self.Listeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
+end;
+
+procedure TIdSipOutboundSubscription.NotifyOfReceivedNotify(Notify: TIdSipRequest);
+var
+  Notification: TIdSipSubscriptionNotifyMethod;
+begin
+  Notification := TIdSipSubscriptionNotifyMethod.Create;
   try
     Notification.Notify       := Notify;
     Notification.Subscription := Self;
