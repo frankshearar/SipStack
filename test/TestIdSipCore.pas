@@ -1097,6 +1097,7 @@ type
   protected
     Bindings: TIdSipContacts;
     Reg:      TIdSipOutboundRegistration;
+    Listener: TIdSipTestRegistrationListener;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -11504,10 +11505,12 @@ begin
   end;
 
   Self.Bindings := TIdSipContacts.Create;
+  Self.Listener := TIdSipTestRegistrationListener.Create;
 end;
 
 procedure TestRegistrationMethod.TearDown;
 begin
+  Self.Listener.Free;
   Self.Bindings.Free;
 
   inherited TearDown;
@@ -11538,23 +11541,16 @@ end;
 //* TestTIdSipRegistrationFailedMethod Published methods ***********************
 
 procedure TestTIdSipRegistrationFailedMethod.TestRun;
-var
-  L: TIdSipTestRegistrationListener;
 begin
-  L := TIdSipTestRegistrationListener.Create;
-  try
-    Self.Method.Run(L);
+  Self.Method.Run(Self.Listener);
 
-    Check(L.Failure, 'Listener not notified');
-    Check(Self.Method.CurrentBindings = L.CurrentBindingsParam,
-          'CurrentBindings param');
-    Check(Self.Method.Registration = L.RegisterAgentParam,
-          'RegisterAgent param');
-    Check(Self.Method.Response = L.ResponseParam,
-          'Response param');
-  finally
-    L.Free;
-  end;
+  Check(Self.Listener.Failure, 'Listener not notified');
+  Check(Self.Method.CurrentBindings = Self.Listener.CurrentBindingsParam,
+        'CurrentBindings param');
+  Check(Self.Method.Registration = Self.Listener.RegisterAgentParam,
+        'RegisterAgent param');
+  Check(Self.Method.Response = Self.Listener.ResponseParam,
+        'Response param');
 end;
 
 //******************************************************************************
@@ -11581,21 +11577,14 @@ end;
 //* TestTIdSipRegistrationSucceededMethod Published methods ********************
 
 procedure TestTIdSipRegistrationSucceededMethod.TestRun;
-var
-  L: TIdSipTestRegistrationListener;
 begin
-  L := TIdSipTestRegistrationListener.Create;
-  try
-    Self.Method.Run(L);
+  Self.Method.Run(Self.Listener);
 
-    Check(L.Success, 'Listener not notified');
-    Check(Self.Method.CurrentBindings = L.CurrentBindingsParam,
-          'CurrentBindings param');
-    Check(Self.Method.Registration = L.RegisterAgentParam,
-          'RegisterAgent param');
-  finally
-    L.Free;
-  end;
+  Check(L.Success, 'Listener not notified');
+  Check(Self.Method.CurrentBindings = Self.Listener.CurrentBindingsParam,
+        'CurrentBindings param');
+  Check(Self.Method.Registration = Self.Listener.RegisterAgentParam,
+        'RegisterAgent param');
 end;
 
 //******************************************************************************
