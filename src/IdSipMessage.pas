@@ -1757,6 +1757,20 @@ const
   SIPDoesNotExistAnywhere             = 604;
   SIPNotAcceptableGlobal              = 606;
 
+const
+  SIPLowestProvisionalCode    = 100;
+  SIPHighestProvisionalCore   = 199;
+  SIPLowestOkCode             = 200;
+  SIPHighestOkCore            = 299;
+  SIPLowestRedirectionCode    = 300;
+  SIPHighestRedirectionCore   = 399;
+  SIPLowestFailureCode        = 400;
+  SIPHighestFailureCore       = 499;
+  SIPLowestServerFailureCode  = 500;
+  SIPHighestServerFailureCore = 599;
+  SIPLowestGlobalFailureCode  = 600;
+  SIPHighestGlobalFailureCore = 699;
+
 // Standard warning codes
 const
   WarningIncompatibleNetworkProtocol              = 300;

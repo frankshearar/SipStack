@@ -427,10 +427,13 @@ type
     OnDialogEstablishedFired: Boolean;
     OnFailureFired:           Boolean;
     OnRedirectFired:          Boolean;
+    OnSuccessFired:           Boolean;
     ToHeaderTag:              String;
 
     procedure CheckReceiveFailed(StatusCode: Cardinal);
+    procedure CheckReceiveOk(StatusCode: Cardinal);
     procedure CheckReceiveProvisional(StatusCode: Cardinal);
+    procedure CheckReceiveRedirect(StatusCode: Cardinal);
     function  CreateArbitraryDialog: TIdSipDialog;
     procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
                                         Challenge: TIdSipResponse;
@@ -474,6 +477,7 @@ type
     procedure TestReceive2xxSchedulesTransactionCompleted;
     procedure TestReceiveProvisional;
     procedure TestReceiveGlobalFailed;
+    procedure TestReceiveOk;
     procedure TestReceiveRedirect;
     procedure TestReceiveRequestFailed;
     procedure TestReceiveRequestFailedAfterAckSent;
@@ -6541,6 +6545,7 @@ begin
   Self.OnDialogEstablishedFired := false;
   Self.OnFailureFired           := false;
   Self.OnRedirectFired          := false;
+  Self.OnSuccessFired           := false;
 end;
 
 procedure TestTIdSipOutboundInvite.TearDown;
@@ -6585,6 +6590,16 @@ begin
       + IntToStr(StatusCode) + ' response');
 end;
 
+procedure TestTIdSipOutboundInvite.CheckReceiveOk(StatusCode: Cardinal);
+begin
+  Self.CreateAction;
+  Self.ReceiveResponse(StatusCode);
+
+  Check(Self.OnSuccessFired,
+        'OnSuccess didn''t fire after receiving a '
+      + IntToStr(StatusCode) + ' response');
+end;
+
 procedure TestTIdSipOutboundInvite.CheckReceiveProvisional(StatusCode: Cardinal);
 begin
   Self.CreateAction;
@@ -6592,6 +6607,17 @@ begin
 
   Check(Self.OnCallProgressFired,
         'OnCallProgress didn''t fire after receiving a '
+      + IntToStr(StatusCode) + ' response');
+end;
+
+procedure TestTIdSipOutboundInvite.CheckReceiveRedirect(StatusCode: Cardinal);
+begin
+  Self.CreateAction;
+
+  Self.ReceiveResponse(StatusCode);
+
+  Check(Self.OnRedirectFired,
+        'OnRedirect didn''t fire after receiving a '
       + IntToStr(StatusCode) + ' response');
 end;
 
@@ -6668,7 +6694,7 @@ end;
 procedure TestTIdSipOutboundInvite.OnSuccess(InviteAgent: TIdSipOutboundInvite;
                                              Response: TIdSipResponse);
 begin
-  // Unused: do nothing
+  Self.OnSuccessFired := true;
 end;
 
 //* TestTIdSipOutboundInvite Published methods *********************************
@@ -7028,8 +7054,8 @@ procedure TestTIdSipOutboundInvite.TestReceiveProvisional;
 var
   StatusCode: Integer;
 begin
-  StatusCode := 100;
-//  for StatusCode := 100 to 199 do
+  StatusCode := SIPLowestProvisionalCode;
+//  for StatusCode := SIPLowestProvisionalCode to SIPHighestProvisionalCode do
     Self.CheckReceiveProvisional(StatusCode);
 end;
 
@@ -7037,35 +7063,42 @@ procedure TestTIdSipOutboundInvite.TestReceiveGlobalFailed;
 var
   StatusCode: Integer;
 begin
-  StatusCode := 600;
-//  for StatusCode := 600 to 699 do
+  StatusCode := SIPLowestGlobalFailureCode;
+//  for StatusCode := SIPLowestGlobalFailureCode to SIPHighestGlobalFailureCode do
     Self.CheckReceiveFailed(StatusCode);
 end;
 
-procedure TestTIdSipOutboundInvite.TestReceiveRedirect;
+procedure TestTIdSipOutboundInvite.TestReceiveOk;
+var
+  StatusCode: Integer;
 begin
-  Self.CreateAction;
+  StatusCode := SIPLowestOkCode;
+//  for StatusCode := SIPLowestOkCode to SIPHighestOkCode do
+    Self.CheckReceiveOk(StatusCode);
+end;
 
-  Self.ReceiveResponse(SIPMovedPermanently);
-
-  Check(Self.OnRedirectFired,
-        'OnRedirect didn''t fire after receiving a '
-      + IntToStr(SIPMovedPermanently) + ' response');
+procedure TestTIdSipOutboundInvite.TestReceiveRedirect;
+var
+  StatusCode: Integer;
+begin
+  StatusCode := SIPLowestRedirectionCode;
+//  for StatusCode := SIPLowestRedirectionCode to SIPHighestRedirectionCode do
+    Self.CheckReceiveRedirect(StatusCode);
 end;
 
 procedure TestTIdSipOutboundInvite.TestReceiveRequestFailed;
 var
   StatusCode: Integer;
 begin
-  StatusCode := 400;
+  StatusCode := SIPLowestFailureCode;
 
-//  for StatusCode := 400 to SIPUnauthorized - 1 do
+//  for StatusCode := SIPLowestFailureCode to SIPUnauthorized - 1 do
     Self.CheckReceiveFailed(StatusCode);
 {
   for StatusCode := SIPUnauthorized + 1 to SIPProxyAuthenticationRequired - 1 do
     Self.CheckReceiveFailed(StatusCode);
 
-  for StatusCode := SIPProxyAuthenticationRequired + 1 to 499 do
+  for StatusCode := SIPProxyAuthenticationRequired + 1 to SIPHighestFailureCode do
     Self.CheckReceiveFailed(StatusCode);
 }
 end;
@@ -7107,8 +7140,8 @@ procedure TestTIdSipOutboundInvite.TestReceiveServerFailed;
 var
   StatusCode: Integer;
 begin
-  StatusCode := 500;
-//  for StatusCode := 500 to 599 do
+  StatusCode := SIPLowestServerFailureCode;
+//  for StatusCode := SIPLowestServerFailureCode to SIPHighestServerFailureCode do
     Self.CheckReceiveFailed(StatusCode);
 end;
 
