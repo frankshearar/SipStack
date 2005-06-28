@@ -1759,17 +1759,17 @@ const
 
 const
   SIPLowestProvisionalCode    = 100;
-  SIPHighestProvisionalCore   = 199;
+  SIPHighestProvisionalCode   = 199;
   SIPLowestOkCode             = 200;
-  SIPHighestOkCore            = 299;
+  SIPHighestOkCode            = 299;
   SIPLowestRedirectionCode    = 300;
-  SIPHighestRedirectionCore   = 399;
+  SIPHighestRedirectionCode   = 399;
   SIPLowestFailureCode        = 400;
-  SIPHighestFailureCore       = 499;
+  SIPHighestFailureCode       = 499;
   SIPLowestServerFailureCode  = 500;
-  SIPHighestServerFailureCore = 599;
+  SIPHighestServerFailureCode = 599;
   SIPLowestGlobalFailureCode  = 600;
-  SIPHighestGlobalFailureCore = 699;
+  SIPHighestGlobalFailureCode = 699;
 
 // Standard warning codes
 const
