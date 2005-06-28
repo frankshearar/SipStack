@@ -774,7 +774,6 @@ type
     procedure ReceiveMovedTemporarily(const Contact: String); overload;
     procedure ReceiveMovedTemporarily(const Contacts: array of String); overload;
     procedure ReceiveOKWithRecordRoute;
-    procedure ReceiveSessionProgress(Invite: TIdSipRequest);
   protected
     MimeType: String;
     SDP:      String;
@@ -9049,11 +9048,6 @@ begin
   finally
     Response.Free;
   end;
-end;
-
-procedure TestTIdSipOutboundSession.ReceiveSessionProgress(Invite: TIdSipRequest);
-begin
-  Self.ReceiveResponse(Invite, SIPSessionProgress);
 end;
 
 //* TestTIdSipOutboundSession Published methods ********************************
