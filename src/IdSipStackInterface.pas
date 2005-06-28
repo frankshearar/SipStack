@@ -232,6 +232,13 @@ type
     property RemoteMimeType:           String read fRemoteMimeType write fRemoteMimeType;
   end;
 
+  TIdSessionProgressData = class(TIdSessionData)
+  private
+    fProgressCode: Cardinal;
+  public
+    property ProgressCode: Cardinal read fProgressCode write fProgressCode;
+  end;
+
   TIdInboundCallData = class(TIdSessionData)
   private
     fFrom: TIdSipFromHeader;
@@ -284,6 +291,7 @@ const
   CM_CALL_ESTABLISHED             = CM_BASE + 5;
   CM_CALL_REMOTE_MODIFY_REQUEST   = CM_BASE + 6;
   CM_CALL_OUTBOUND_MODIFY_SUCCESS = CM_BASE + 7;
+  CM_CALL_PROGRESS                = CM_BASE + 8;
 
   CM_DEBUG = CM_BASE + 10000;
 
@@ -785,8 +793,22 @@ end;
 
 procedure TIdSipStackInterface.OnProgressedSession(Session: TIdSipSession;
                                                    Progress: TIdSipResponse);
+var
+  Data: TIdSessionProgressData;
 begin
-  raise Exception.Create('implement TIdSipStackInterface.OnProgressedSession');
+  Data := TIdSessionProgressData.Create;
+  try
+    Data.Handle                   := Self.HandleFor(Session);
+    Data.LocalSessionDescription  := Session.LocalSessionDescription;
+    Data.LocalMimeType            := Session.LocalMimeType;
+    Data.ProgressCode             := Progress.StatusCode;
+    Data.RemoteSessionDescription := Progress.Body;
+    Data.RemoteMimeType           := Progress.ContentType;
+
+    Self.NotifyEvent(Session, CM_CALL_PROGRESS, Data);
+  finally
+    Data.Free;
+  end;
 end;
 
 procedure TIdSipStackInterface.OnSendRequest(Request: TIdSipRequest;
