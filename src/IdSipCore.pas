@@ -234,6 +234,7 @@ type
      uarExpireTooBrief,
      uarForbidden,
      uarLoopDetected,
+     uarMethodNotAllowed,
      uarMissingContact,
      uarNotFound,
      uarUnsupportedExtension,
@@ -542,8 +543,9 @@ type
     procedure NotifyOfDroppedMessage(Message: TIdSipMessage;
                                      Receiver: TIdSipTransport);
     procedure OnChanged(Observed: TObject);
+    procedure ReturnMethodNotAllowed(Request: TIdSipRequest);
     procedure RejectRequestBadExtension(Request: TIdSipRequest);
-    procedure RejectRequestMethodNotAllowed(Request: TIdSipRequest);
+    procedure RejectRequestMethodNotSupported(Request: TIdSipRequest);
     procedure RejectRequestUnknownAccept(Request: TIdSipRequest);
     procedure RejectRequestUnknownContentEncoding(Request: TIdSipRequest);
     procedure RejectRequestUnknownContentLanguage(Request: TIdSipRequest);
@@ -601,7 +603,8 @@ type
     function  AllowedEncodings: String;
     function  AllowedExtensions: String;
     function  AllowedLanguages: String;
-    function  AllowedMethods: String;
+    function  AllowedMethods(RequestUri: TIdSipUri): String;
+    function  KnownMethods: String;
     function  AllowedSchemes: String;
     function  CreateOptions(Dest: TIdSipAddressHeader): TIdSipRequest;
     function  CreateRequest(const Method: String;
@@ -619,7 +622,9 @@ type
     function  HasUnknownContentLanguage(Request: TIdSipRequest): Boolean;
     function  HasUnknownContentType(Request: TIdSipRequest): Boolean;
     function  IsExtensionAllowed(const Extension: String): Boolean;
-    function  IsMethodAllowed(const Method: String): Boolean;
+    function  IsMethodAllowed(RequestUri: TIdSipUri;
+                              const Method: String): Boolean;
+    function  IsMethodSupported(const Method: String): Boolean;
     function  IsSchemeAllowed(const Scheme: String): Boolean;
     function  ModuleFor(Request: TIdSipRequest): TIdSipMessageModule; overload;
     function  ModuleFor(const Method: String): TIdSipMessageModule; overload;
@@ -2979,7 +2984,13 @@ begin
   Result := Self.ConvertToHeader(Self.AllowedLanguageList);
 end;
 
-function TIdSipAbstractUserAgent.AllowedMethods: String;
+function TIdSipAbstractUserAgent.AllowedMethods(RequestUri: TIdSipUri): String;
+begin
+  // TODO: This if fake.
+  Result := Self.KnownMethods;
+end;
+
+function TIdSipAbstractUserAgent.KnownMethods: String;
 var
   I: Integer;
 begin
@@ -3233,10 +3244,19 @@ begin
   Result := false;
 end;
 
-function TIdSipAbstractUserAgent.IsMethodAllowed(const Method: String): Boolean;
+function TIdSipAbstractUserAgent.IsMethodAllowed(RequestUri: TIdSipUri;
+                                                 const Method: String): Boolean;
+begin
+  // TODO: This is just a stub at the moment. Eventually we want to support
+  // controlling rights for multiple URIs so that, for instance, we could allow a
+  // non-User Agent to say "yes, you can SUBSCRIBE to A's state, but not to B's". 
+  Result := Self.IsMethodSupported(Method);
+end;
+
+function TIdSipAbstractUserAgent.IsMethodSupported(const Method: String): Boolean;
 begin
   Result := TIdSipParser.IsToken(Method)
-        and (Pos(Lowercase(Method), Lowercase(Self.AllowedMethods)) > 0);
+        and (Pos(Lowercase(Method), Lowercase(Self.KnownMethods)) > 0);
 end;
 
 function TIdSipAbstractUserAgent.IsSchemeAllowed(const Scheme: String): Boolean;
@@ -3600,6 +3620,8 @@ begin
                               SIPTemporarilyUnavailable);
     uarLoopDetected:
       Self.ReturnResponse(Request, SIPLoopDetected);
+    uarMethodNotAllowed:
+      Self.ReturnMethodNotAllowed(Request);
     uarMissingContact:
       Self.RejectBadRequest(Request, MissingContactHeader);
     uarUnsupportedAccept:
@@ -3613,7 +3635,7 @@ begin
     uarUnsupportedExtension:
       Self.RejectRequestBadExtension(Request);
     uarUnsupportedMethod:
-      Self.RejectRequestMethodNotAllowed(Request);
+      Self.RejectRequestMethodNotSupported(Request);
     uarUnsupportedScheme:
       Self.ReturnResponse(Request, SIPUnsupportedURIScheme);
     uarUnSupportedSipVersion:
@@ -3642,8 +3664,10 @@ begin
     if (Request.SIPVersion <> SipVersion) then
       Result := uarUnsupportedSipVersion
     // inspect the method - 8.2.1
-    else if not Request.IsAck and not Self.IsMethodAllowed(Request.Method) then
+    else if not Self.IsMethodSupported(Request.Method) then
       Result := uarUnsupportedMethod
+    else if not Self.IsMethodAllowed(Request.RequestUri, Request.Method) then
+      Result := uarMethodNotAllowed
     // inspect the headers - 8.2.2
     // To & Request-URI - 8.2.2.1
     else if not Self.IsSchemeAllowed(Request.RequestUri.Scheme) then
@@ -3802,6 +3826,20 @@ begin
   Self.NotifyOfChange;
 end;
 
+procedure TIdSipAbstractUserAgent.ReturnMethodNotAllowed(Request: TIdSipRequest);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.CreateResponse(Request, SIPMethodNotAllowed);
+  try
+    Response.AddHeader(AllowHeader).Value := Self.AllowedMethods(Request.RequestUri);
+
+    Self.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
 procedure TIdSipAbstractUserAgent.RejectRequestBadExtension(Request: TIdSipRequest);
 var
   Response: TIdSipResponse;
@@ -3817,14 +3855,14 @@ begin
   end;
 end;
 
-procedure TIdSipAbstractUserAgent.RejectRequestMethodNotAllowed(Request: TIdSipRequest);
+procedure TIdSipAbstractUserAgent.RejectRequestMethodNotSupported(Request: TIdSipRequest);
 var
   Response: TIdSipResponse;
 begin
-  Response := Self.CreateResponse(Request, SIPMethodNotAllowed);
+  Response := Self.CreateResponse(Request, SIPNotImplemented);
   try
     Response.StatusText := Response.StatusText + ' (' + Request.Method + ')';
-    Response.AddHeader(AllowHeader).Value := Self.AllowedMethods;
+    Response.AddHeader(AllowHeader).Value := Self.KnownMethods;
 
     Self.SendResponse(Response);
   finally
@@ -3942,7 +3980,7 @@ begin
     OutboundRequest.ContentType              := OfferMimeType;
   end;
 
-  OutboundRequest.AddHeader(AllowHeader).Value := Self.AllowedMethods;
+  OutboundRequest.AddHeader(AllowHeader).Value := Self.KnownMethods;
   // TODO: We need to add a proper extension support thing
   OutboundRequest.AddHeader(AcceptHeader).Value := Self.AllowedContentTypes;
   OutboundRequest.AddHeader(SupportedHeaderFull).Value := Self.AllowedExtensions;
@@ -5876,7 +5914,7 @@ begin
                                      Self.UA.ResponseForInvite);
   try
     Response.AddHeader(AcceptHeader).Value := Self.UA.AllowedContentTypes;
-    Response.AddHeader(AllowHeader).Value  := Self.UA.AllowedMethods;
+    Response.AddHeader(AllowHeader).Value  := Self.UA.KnownMethods;
     Response.AddHeader(AcceptEncodingHeader).Value := Self.UA.AllowedEncodings;
     Response.AddHeader(AcceptLanguageHeader).Value := Self.UA.AllowedLanguages;
     Response.AddHeader(SupportedHeaderFull).Value := Self.UA.AllowedExtensions;

@@ -202,7 +202,7 @@ type
     procedure TestInboundCall;
     procedure TestInviteExpires;
     procedure TestInviteRaceCondition;
-    procedure TestIsMethodAllowed;
+    procedure TestIsMethodSupported;
     procedure TestIsSchemeAllowed;
     procedure TestLoopDetection;
     procedure TestMergedRequest;
@@ -219,6 +219,7 @@ type
     procedure TestReceiveOptions;
     procedure TestReceiveResponseWithMultipleVias;
     procedure TestRejectMalformedAuthorizedRequest;
+    procedure TestRejectMethodNotAllowed;
     procedure TestRejectNoContact;
     procedure TestRejectUnauthorizedRequest;
     procedure TestRejectUnknownContentEncoding;
@@ -2301,7 +2302,7 @@ var
 begin
   Methods := TStringList.Create;
   try
-    Methods.CommaText := Self.Core.AllowedMethods;
+    Methods.CommaText := Self.Core.KnownMethods;
     Methods.Sort;
 
     CheckEquals(MethodAck,     Methods[0], 'ACK first');
@@ -2324,11 +2325,11 @@ begin
   Methods := TStringList.Create;
   try
     Self.Core.AddModule(TIdSipInviteModule);
-    Methods.CommaText := Self.Core.AllowedMethods;
+    Methods.CommaText := Self.Core.KnownMethods;
     MethodCount := Methods.Count;
 
     Self.Core.AddModule(TIdSipInviteModule);
-    Methods.CommaText := Self.Core.AllowedMethods;
+    Methods.CommaText := Self.Core.KnownMethods;
 
     CheckEquals(MethodCount, Methods.Count, MethodInvite + ' was re-added');
   finally
@@ -2675,7 +2676,7 @@ begin
             'Needless Content-Disposition header');
 
       Check(Request.HasHeader(AllowHeader), 'No Allow header');
-      CheckCommaSeparatedHeaders(Self.Core.AllowedMethods,
+      CheckCommaSeparatedHeaders(Self.Core.KnownMethods,
                                  Request.FirstHeader(AllowHeader),
                                  'Allow header');
 
@@ -2709,7 +2710,7 @@ begin
             'Needless Content-Disposition header');
 
     Check(Invite.HasHeader(AllowHeader), 'No Allow header');
-    CheckCommaSeparatedHeaders(Self.Core.AllowedMethods,
+    CheckCommaSeparatedHeaders(Self.Core.KnownMethods,
                                Invite.FirstHeader(AllowHeader),
                                'Allow header');
 
@@ -3248,22 +3249,22 @@ begin
               'INVITE resend made a new INVITE action');
 end;
 
-procedure TestTIdSipUserAgent.TestIsMethodAllowed;
+procedure TestTIdSipUserAgent.TestIsMethodSupported;
 begin
-  Check(not Self.Core.IsMethodAllowed(MethodRegister),
+  Check(not Self.Core.IsMethodSupported(MethodRegister),
         MethodRegister + ' not allowed');
 
   Self.Core.AddModule(TIdSipRegisterModule);
-  Check(Self.Core.IsMethodAllowed(MethodRegister),
+  Check(Self.Core.IsMethodSupported(MethodRegister),
         MethodRegister + ' not recognised as an allowed method');
 
-  Check(not Self.Core.IsMethodAllowed(' '),
+  Check(not Self.Core.IsMethodSupported(' '),
         ''' '' recognised as an allowed method');
 end;
 
 procedure TestTIdSipUserAgent.TestIsSchemeAllowed;
 begin
-  Check(not Self.Core.IsMethodAllowed(SipScheme),
+  Check(not Self.Core.IsMethodSupported(SipScheme),
         SipScheme + ' not allowed');
 
   Self.Core.AddAllowedScheme(SipScheme);
@@ -3608,6 +3609,33 @@ begin
   end;
 end;
 
+procedure TestTIdSipUserAgent.TestRejectMethodNotAllowed;
+//var
+//  Response: TIdSipResponse;
+begin
+  // This blank test serves as a reminder of missing functionality: we want to
+  // support permissions on our URIs, so that we can express the fact that we
+  // allow someone to subscribe to URI-A's state, but not to URI-B's. 
+{
+  Self.MarkSentResponseCount;
+
+  Self.ReceiveSubscribe('Foo');
+
+  CheckResponseSent('No response sent');
+
+  Response := Self.LastSentResponse;
+  CheckEquals(SIPMethodNotAllowed,
+              Response.StatusCode,
+              'Unexpected response');
+  Check(Response.HasHeader(AllowHeader),
+        'No Allow header');
+  CheckEquals(Self.Core.KnownMethods,
+              Response.FirstHeader(AllowHeader).Value,
+              'Currently we only support one URI - as a User Agent typically '
+            + 'does. Obviously that''ll eventually change');
+}
+end;
+
 procedure TestTIdSipUserAgent.TestRejectNoContact;
 var
   Response: TIdSipResponse;
@@ -3777,10 +3805,13 @@ begin
   CheckResponseSent('No response sent');
 
   Response := Self.LastSentResponse;
+  CheckEquals(SIPNotImplemented,
+              Response.StatusCode,
+              'Unexpected response');
   Check(Response.HasHeader(AllowHeader),
         'Allow header is mandatory. cf. RFC 3261 section 8.2.1');
 
-  CheckCommaSeparatedHeaders(Self.Core.AllowedMethods,
+  CheckCommaSeparatedHeaders(Self.Core.KnownMethods,
                              Response.FirstHeader(AllowHeader),
                              'Allow header');
 end;
@@ -7256,7 +7287,7 @@ begin
   Response := Self.LastSentResponse;
   Check(Response.HasHeader(AllowHeader),
         'No Allow header');
-  CheckEquals(Self.Core.AllowedMethods,
+  CheckEquals(Self.Core.KnownMethods,
               Response.FirstHeader(AllowHeader).FullValue,
               'Allow header');
 
