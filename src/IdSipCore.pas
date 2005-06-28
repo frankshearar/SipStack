@@ -1063,7 +1063,6 @@ type
     function  ReceiveRedirectionResponse(Response: TIdSipResponse;
                                          UsingSecureTransport: Boolean): TIdSipActionStatus; override;
     function  ReceiveServerFailureResponse(Response: TIdSipResponse): TIdSipActionStatus; override;
-    procedure SendRequest(Request: TIdSipRequest); override;
   public
     constructor Create(UA: TIdSipAbstractUserAgent); override;
     destructor  Destroy; override;
@@ -5486,6 +5485,11 @@ begin
     if not Self.ReceivedFinalResponse then begin
       Self.ReceivedFinalResponse := true;
       Self.AnswerResponse.Assign(Response);
+
+      if Response.IsOK then
+        Self.UA.ScheduleEvent(TIdSipOutboundInviteTransactionComplete,
+                              64*DefaultT1,
+                              Self.InitialRequest.Copy);
     end;
 
     if Self.Cancelling then begin
@@ -5497,6 +5501,7 @@ begin
     end
     else begin
       Result := asSuccess;
+
       if not Self.DialogEstablished then begin
         Self.NotifyOfDialogEstablished(Response, UsingSecureTransport);
 
@@ -5548,15 +5553,6 @@ begin
     Self.ReceivedFinalResponse := true;
     Self.AnswerResponse.Assign(Response);
   end;
-end;
-
-procedure TIdSipOutboundInvite.SendRequest(Request: TIdSipRequest);
-begin
-  Self.UA.ScheduleEvent(TIdSipOutboundInviteTransactionComplete,
-                        64*DefaultT1,
-                        Request.Copy);
-                        
-  inherited SendRequest(Request);
 end;
 
 //* TIdSipOutboundInvite Private methods ***************************************

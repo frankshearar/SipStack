@@ -211,7 +211,7 @@ type
     procedure TestNotificationOfNewSessionRobust;
     procedure TestOutboundCallAndByeToXlite;
     procedure TestOutboundInviteSessionProgressResends;
-    procedure TestOutboundInviteTerminatesWhenNoResponse;
+    procedure TestOutboundInviteDoesNotTerminateWhenNoResponse;
     procedure TestReceiveByeForUnmatchedDialog;
     procedure TestReceiveByeForDialog;
     procedure TestReceiveByeDestroysTerminatedSession;
@@ -463,6 +463,7 @@ type
     procedure TestIsInvite; override;
     procedure TestMethod;
     procedure TestOfferInInvite;
+    procedure TestReceive2xxSchedulesTransactionCompleted;
     procedure TestReceiveGlobalFailed;
     procedure TestReceiveRedirect;
     procedure TestReceiveRequestFailed;
@@ -815,7 +816,6 @@ type
     procedure TestReceive3xxSendsNewInvite;
     procedure TestReceive3xxWithOneContact;
     procedure TestReceive3xxWithNoContacts;
-//    procedure TestReceiveCallProgressesThenRingingThenOk;
     procedure TestReceiveFailureResponseAfterSessionEstablished;
     procedure TestReceiveFailureResponseNotifiesOnce;
     procedure TestReceiveFinalResponseSendsAck;
@@ -3427,13 +3427,15 @@ begin
               'Wrong response');
 end;
 
-procedure TestTIdSipUserAgent.TestOutboundInviteTerminatesWhenNoResponse;
+procedure TestTIdSipUserAgent.TestOutboundInviteDoesNotTerminateWhenNoResponse;
 begin
   Self.Core.Call(Self.Destination, '', '').Send;
   CheckEquals(1, Self.Core.InviteCount, 'Calling makes an INVITE');
 
   Self.DebugTimer.TriggerEarliestEvent;
-  CheckEquals(0, Self.Core.InviteCount, 'If we never get a response then we give up');
+  CheckEquals(1,
+              Self.Core.InviteCount,
+              'If we never get a response then we DO NOT give up');
 end;
 
 procedure TestTIdSipUserAgent.TestReceiveByeForUnmatchedDialog;
@@ -6916,6 +6918,34 @@ begin
               'Content-Type of ACK doesn''t match INVITE');
 end;
 
+procedure TestTIdSipOutboundInvite.TestReceive2xxSchedulesTransactionCompleted;
+var
+  Invite: TIdSipAction;
+begin
+  // RFC 3261, section 13.2.2.4 says
+  //   The UAC core considers the INVITE transaction completed 64*T1 seconds
+  //   after the reception of the first 2xx response.  At this point all the
+  //   early dialogs that have not transitioned to established dialogs are
+  //   terminated.  Once the INVITE transaction is considered completed by
+  //   the UAC core, no more new 2xx responses are expected to arrive.
+  //
+  // This test makes sure we don't schedule this when we send the INVITE.
+
+  Invite := Self.CreateAction;
+  Self.DebugTimer.TriggerAllEventsOfType(TIdSipActionsWait);
+
+  Check(not Invite.IsTerminated,
+        'OutboundInvite terminated prematurely: it incorrectly scheduled '
+      + 'a TIdSipOutboundInviteTransactionComplete');
+
+  Self.ReceiveOk(Self.LastSentRequest);
+
+  Self.DebugTimer.TriggerAllEventsOfType(TIdSipActionsWait);
+
+  Check(Invite.IsTerminated,
+        'OutboundInvite didn''t schedule a TIdSipOutboundInviteTransactionComplete');
+end;
+
 procedure TestTIdSipOutboundInvite.TestReceiveGlobalFailed;
 var
   StatusCode: Integer;
@@ -9698,45 +9728,7 @@ begin
     Redirect.Free;
   end;
 end;
-{
-procedure TestTIdSipOutboundSession.TestReceiveCallProgressesThenRingingThenOk;
-var
-  OriginalInvite: TIdSipRequest;
-begin
-  // James Hamlin's SIP/PSTN gateway typically sends 183 Session Progress
-  // responses informing the user of the progress of the call as the TextDirect
-  //  platform dials the remote number. When the remote end starts to ring, his
-  // stack sends a 180 Ringing. This test makes sure our stack behaves
-  // appropriately: the first 183 establishes a dialog, which the subsequent
-  // provisional responses match.
 
-  //  ---        INVITE        --->
-  // <--- 183 Session Progress ---
-  // <--- 183 Session Progress ---
-  // <---      180 Ringing     ---
-  // <---        200 OK        ---
-  //  ---          ACK         --->
-
-  OriginalInvite := TIdSipRequest.Create;
-  try
-    OriginalInvite.Assign(Self.LastSentRequest);
-
-    Self.ReceiveSessionProgress(OriginalInvite);
-    Check(Self.Session.DialogEstablished, 'No dialog established by 1st 183');
-
-    Self.ReceiveSessionProgress(OriginalInvite);
-    Check(Self.Session.DialogEstablished, 'Dialog disappeared for the 2nd 183');
-
-    Self.ReceiveRinging(OriginalInvite);
-    Check(Self.Session.DialogEstablished, 'Dialog disappeared for the 180 Ringing');
-
-    Self.ReceiveOk(OriginalInvite);
-    Check(Self.Session.DialogEstablished, 'Dialog disappeared for the 200 OK');
-  finally
-    OriginalInvite.Free;
-  end;
-end;
-}
 procedure TestTIdSipOutboundSession.TestReceiveFailureResponseAfterSessionEstablished;
 var
   Invite: TIdSipRequest;
