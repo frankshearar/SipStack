@@ -5509,6 +5509,7 @@ begin
       Self.ReceivedFinalResponse := true;
       Self.AnswerResponse.Assign(Response);
 
+      // cf. RFC 3261, section 13.2.2.4 (last two paragraphs)
       if Response.IsOK then
         Self.UA.ScheduleEvent(TIdSipOutboundInviteTransactionComplete,
                               64*DefaultT1,
