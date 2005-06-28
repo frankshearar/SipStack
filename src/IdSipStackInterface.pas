@@ -115,6 +115,8 @@ type
     procedure OnNetworkFailure(Action: TIdSipAction;
                                ErrorCode: Cardinal;
                                const Reason: String);
+    procedure OnProgressedSession(Session: TIdSipSession;
+                                  Progress: TIdSipResponse);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport);
     procedure OnSendResponse(Response: TIdSipResponse;
@@ -779,6 +781,12 @@ begin
   finally
     Data.Free;
   end;
+end;
+
+procedure TIdSipStackInterface.OnProgressedSession(Session: TIdSipSession;
+                                                   Progress: TIdSipResponse);
+begin
+  raise Exception.Create('implement TIdSipStackInterface.OnProgressedSession');
 end;
 
 procedure TIdSipStackInterface.OnSendRequest(Request: TIdSipRequest;

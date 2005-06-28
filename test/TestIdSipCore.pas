@@ -144,6 +144,8 @@ type
     procedure OnNetworkFailure(Action: TIdSipAction;
                                ErrorCode: Cardinal;
                                const Reason: String);
+    procedure OnProgressedSession(Session: TIdSipSession;
+                                  Progress: TIdSipResponse);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport);
     procedure OnSendResponse(Response: TIdSipResponse;
@@ -340,6 +342,8 @@ type
     function  CreateAction: TIdSipOutboundInitialInvite;
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Response: TIdSipResponse);
+    procedure OnCallProgress(InviteAgent: TIdSipOutboundInvite;
+                        Response: TIdSipResponse);
     procedure OnFailure(InviteAgent: TIdSipOutboundInvite;
                         Response: TIdSipResponse;
                         const Reason: String);
@@ -419,18 +423,22 @@ type
     DroppedUnmatchedResponse: Boolean;
     InviteMimeType:           String;
     InviteOffer:              String;
+    OnCallProgressFired:      Boolean;
     OnDialogEstablishedFired: Boolean;
     OnFailureFired:           Boolean;
     OnRedirectFired:          Boolean;
     ToHeaderTag:              String;
 
     procedure CheckReceiveFailed(StatusCode: Cardinal);
+    procedure CheckReceiveProvisional(StatusCode: Cardinal);
     function  CreateArbitraryDialog: TIdSipDialog;
     procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
                                         Challenge: TIdSipResponse;
                                         var Username: String;
                                         var Password: String;
                                         var TryAgain: Boolean); overload;
+    procedure OnCallProgress(InviteAgent: TIdSipOutboundInvite;
+                        Response: TIdSipResponse);
     procedure OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
                                   NewDialog: TidSipDialog);
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractUserAgent;
@@ -464,6 +472,7 @@ type
     procedure TestMethod;
     procedure TestOfferInInvite;
     procedure TestReceive2xxSchedulesTransactionCompleted;
+    procedure TestReceiveProvisional;
     procedure TestReceiveGlobalFailed;
     procedure TestReceiveRedirect;
     procedure TestReceiveRequestFailed;
@@ -652,6 +661,8 @@ type
     procedure OnModifySession(Session: TIdSipSession;
                               const RemoteSessionDescription: String;
                               const MimeType: String); virtual;
+    procedure OnProgressedSession(Session: TIdSipSession;
+                                  Progress: TIdSipResponse); virtual;
     procedure ReceiveRemoteReInvite(Session: TIdSipSession);
   public
     procedure SetUp; override;
@@ -747,12 +758,13 @@ type
   TestTIdSipOutboundSession = class(TestTIdSipSession,
                                     IIdSipUserAgentListener)
   private
-    LocalMimeType:    String;
-    LocalDescription: String;
-    OnDroppedMessage: Boolean;
-    RemoteDesc:       String;
-    RemoteMimeType:   String;
-    Session:          TIdSipOutboundSession;
+    LocalMimeType:            String;
+    LocalDescription:         String;
+    OnDroppedMessage:         Boolean;
+    OnProgressedSessionFired: Boolean;
+    RemoteDesc:               String;
+    RemoteMimeType:           String;
+    Session:                  TIdSipOutboundSession;
 
     procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
                                         Challenge: TIdSipResponse;
@@ -785,6 +797,8 @@ type
     procedure OnEstablishedSession(Session: TIdSipSession;
                                    const RemoteSessionDescription: String;
                                    const MimeType: String); override;
+    procedure OnProgressedSession(Session: TIdSipSession;
+                                  Progress: TIdSipResponse); override;
   public
     procedure SetUp; override;
   published
@@ -811,6 +825,7 @@ type
     procedure TestMethod;
     procedure TestModifyUsesAuthentication;
     procedure TestNetworkFailuresLookLikeSessionFailures;
+    procedure TestReceive1xxNotifiesListeners;
     procedure TestReceive2xxSendsAck;
     procedure TestReceive3xxSendsNewInvite;
     procedure TestReceive3xxWithOneContact;
@@ -953,6 +968,25 @@ type
   public
     procedure SetUp; override;
     procedure TearDown; override;
+  end;
+
+  TInviteMethodTestCase = class(TActionMethodTestCase)
+  private
+    Invite:   TIdSipOutboundInvite;
+    Listener: TIdSipTestInviteListener;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSipInviteCallProgressMethod = class(TInviteMethodTestCase)
+  private
+    Method: TIdSipInviteCallProgressMethod;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
   end;
 
   TestTIdSipInboundInviteFailureMethod = class(TActionMethodTestCase)
@@ -1120,6 +1154,17 @@ type
     Method:  TIdSipSessionModifySessionMethod;
   public
     procedure SetUp; override;
+  published
+    procedure TestRun;
+  end;
+
+  TestTIdSipProgressedSessionMethod = class(TestSessionMethod)
+  private
+    Method:   TIdSipProgressedSessionMethod;
+    Progress: TIdSipResponse;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
   published
     procedure TestRun;
   end;
@@ -1342,6 +1387,7 @@ begin
   Result.AddTest(TestTIdSipOutboundUnsubscribe.Suite);
   Result.AddTest(TestTIdSipInboundSubscription.Suite);
   Result.AddTest(TestTIdSipOutboundSubscription.Suite);
+  Result.AddTest(TestTIdSipInviteCallProgressMethod.Suite);
   Result.AddTest(TestTIdSipInboundInviteFailureMethod.Suite);
   Result.AddTest(TestTIdSipInviteDialogEstablishedMethod.Suite);
   Result.AddTest(TestTIdSipInviteFailureMethod.Suite);
@@ -2117,6 +2163,11 @@ procedure TestTIdSipUserAgent.OnNetworkFailure(Action: TIdSipAction;
                                                const Reason: String);
 begin
   Self.FailReason := Reason;
+end;
+
+procedure TestTIdSipUserAgent.OnProgressedSession(Session: TIdSipSession;
+                                                  Progress: TIdSipResponse);
+begin
 end;
 
 procedure TestTIdSipUserAgent.OnSendRequest(Request: TIdSipRequest;
@@ -4955,6 +5006,11 @@ procedure TestLocation.OnAuthenticationChallenge(Action: TIdSipAction;
 begin
 end;
 
+procedure TestLocation.OnCallProgress(InviteAgent: TIdSipOutboundInvite;
+                                      Response: TIdSipResponse);
+begin
+end;                                      
+
 procedure TestLocation.OnFailure(InviteAgent: TIdSipOutboundInvite;
                                  Response: TIdSipResponse;
                                  const Reason: String);
@@ -5299,6 +5355,12 @@ begin
 
   Self.RemoteSessionDescription := RemoteSessionDescription;
   Self.MimeType                 := MimeType;
+end;
+
+procedure TestTIdSipSession.OnProgressedSession(Session: TIdSipSession;
+                                                Progress: TIdSipResponse);
+begin
+  // Do nothing.
 end;
 
 procedure TestTIdSipSession.ReceiveRemoteReInvite(Session: TIdSipSession);
@@ -6475,6 +6537,7 @@ begin
   Self.DroppedUnmatchedResponse := false;
   Self.InviteMimeType           := SdpMimeType;
   Self.InviteOffer              := TIdSipTestResources.BasicSDP('1.2.3.4');
+  Self.OnCallProgressFired      := false;
   Self.OnDialogEstablishedFired := false;
   Self.OnFailureFired           := false;
   Self.OnRedirectFired          := false;
@@ -6522,6 +6585,16 @@ begin
       + IntToStr(StatusCode) + ' response');
 end;
 
+procedure TestTIdSipOutboundInvite.CheckReceiveProvisional(StatusCode: Cardinal);
+begin
+  Self.CreateAction;
+  Self.ReceiveResponse(StatusCode);
+
+  Check(Self.OnCallProgressFired,
+        'OnCallProgress didn''t fire after receiving a '
+      + IntToStr(StatusCode) + ' response');
+end;
+
 function TestTIdSipOutboundInvite.CreateArbitraryDialog: TIdSipDialog;
 var
   Response: TIdSipResponse;
@@ -6542,6 +6615,12 @@ procedure TestTIdSipOutboundInvite.OnAuthenticationChallenge(UserAgent: TIdSipAb
                                                              var TryAgain: Boolean);
 begin
   // Unused: do nothing
+end;
+
+procedure TestTIdSipOutboundInvite.OnCallProgress(InviteAgent: TIdSipOutboundInvite;
+                                                  Response: TIdSipResponse);
+begin
+  Self.OnCallProgressFired := true;
 end;
 
 procedure TestTIdSipOutboundInvite.OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
@@ -6943,6 +7022,15 @@ begin
 
   Check(Invite.IsTerminated,
         'OutboundInvite didn''t schedule a TIdSipOutboundInviteTransactionComplete');
+end;
+
+procedure TestTIdSipOutboundInvite.TestReceiveProvisional;
+var
+  StatusCode: Integer;
+begin
+  StatusCode := 100;
+//  for StatusCode := 100 to 199 do
+    Self.CheckReceiveProvisional(StatusCode);
 end;
 
 procedure TestTIdSipOutboundInvite.TestReceiveGlobalFailed;
@@ -8882,11 +8970,12 @@ begin
 
   Self.Session := Self.CreateAction as TIdSipOutboundSession;
 
-  Self.RemoteMimeType         := '';
-  Self.OnDroppedMessage       := false;
-  Self.OnEndedSessionFired    := false;
-  Self.OnModifiedSessionFired := false;
-  Self.RemoteDesc             := '';
+  Self.RemoteMimeType           := '';
+  Self.OnDroppedMessage         := false;
+  Self.OnEndedSessionFired      := false;
+  Self.OnModifiedSessionFired   := false;
+  Self.OnProgressedSessionFired := false;
+  Self.RemoteDesc               := '';
 
   // DNS entries for redirected domains, etc.
   Self.Locator.AddA('bar.org',   '127.0.0.1');
@@ -8930,6 +9019,14 @@ begin
 
   Session.LocalSessionDescription := Self.LocalDescription;
   Session.LocalMimeType           := Self.LocalMimeType;
+end;
+
+procedure TestTIdSipOutboundSession.OnProgressedSession(Session: TIdSipSession;
+                                                        Progress: TIdSipResponse);
+begin
+  inherited OnProgressedSession(Session, Progress);
+
+  Self.OnProgressedSessionFired := true;
 end;
 
 //* TestTIdSipOutboundSession Private methods **********************************
@@ -9617,7 +9714,25 @@ begin
   Check(Assigned(Self.ActionParam), 'OnNetworkFailure didn''t fire');
   Check(Self.ActionParam = Self.Session,
         'Session must signal the network error as _its_ error, not the '
-      + 'Invite''s'); 
+      + 'Invite''s');
+end;
+
+procedure TestTIdSipOutboundSession.TestReceive1xxNotifiesListeners;
+begin
+  Self.ReceiveTrying(Self.LastSentRequest);
+
+  Check(Self.OnProgressedSessionFired,
+        'Listeners not notified of progress for initial INVITE');
+
+  Self.EstablishSession(Self.Session);
+
+  Self.OnProgressedSessionFired := false;
+  Self.Session.Modify('', '');
+
+  Self.ReceiveTrying(Self.LastSentRequest);
+
+  Check(Self.OnProgressedSessionFired,
+        'Listeners not notified of progress for modify INVITE');
 end;
 
 procedure TestTIdSipOutboundSession.TestReceive2xxSendsAck;
@@ -10910,6 +11025,70 @@ begin
 end;
 
 //******************************************************************************
+//* TInviteMethodTestCase                                                      *
+//******************************************************************************
+//* TInviteMethodTestCase Public methods ***************************************
+
+procedure TInviteMethodTestCase.SetUp;
+var
+  Nowhere: TIdSipAddressHeader;
+begin
+  inherited SetUp;
+
+  Nowhere := TIdSipAddressHeader.Create;
+  try
+    Self.Invite := TIdSipOutboundInvite.Create(Self.UA);
+  finally
+    Nowhere.Free;
+  end;
+
+  Self.Listener := TIdSipTestInviteListener.Create;
+end;
+
+procedure TInviteMethodTestCase.TearDown;
+begin
+  Self.Listener.Free;
+  Self.Invite.Free;
+
+  inherited TearDown;
+end;
+
+//******************************************************************************
+//* TestTIdSipInviteCallProgressMethod                                         *
+//******************************************************************************
+//* TestTIdSipInviteCallProgressMethod Public methods **************************
+
+procedure TestTIdSipInviteCallProgressMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Method := TIdSipInviteCallProgressMethod.Create;
+  Self.Method.Invite   := Self.Invite;
+  Self.Method.Response := Self.Response;
+end;
+
+procedure TestTIdSipInviteCallProgressMethod.TearDown;
+begin
+  Self.Method.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipInviteCallProgressMethod Published methods ***********************
+
+procedure TestTIdSipInviteCallProgressMethod.TestRun;
+begin
+  Self.Method.Run(Self.Listener);
+
+  Check(Self.Listener.CallProgress,
+        'Listener not notified');
+  Check(Self.Invite = Self.Listener.InviteAgentParam,
+        'InviteAgent param');
+  Check(Self.Response = Self.Listener.ResponseParam,
+        'Response param');
+end;
+
+//******************************************************************************
 //* TestTIdSipInboundInviteFailureMethod                                       *
 //******************************************************************************
 //* TestTIdSipInboundInviteFailureMethod Public methods ************************
@@ -11603,6 +11782,50 @@ begin
     CheckEquals(Self.Method.RemoteSessionDescription,
                 L.RemoteSessionDescription,
                 'RemoteSessionDescription');
+  finally
+    L.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipProgressedSessionMethod                                          *
+//******************************************************************************
+//* TestTIdSipProgressedSessionMethod Public methods ***************************
+
+procedure TestTIdSipProgressedSessionMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Progress := TIdSipResponse.Create;
+
+  Self.Method := TIdSipProgressedSessionMethod.Create;
+
+  Self.Method.Session := Self.Session;
+  Self.Method.Progress  := Self.Progress;
+end;
+
+procedure TestTIdSipProgressedSessionMethod.TearDown;
+begin
+  Self.Method.Free;
+  Self.Progress.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipProgressedSessionMethod Published methods ************************
+
+procedure TestTIdSipProgressedSessionMethod.TestRun;
+var
+  L: TIdSipTestSessionListener;
+begin
+  L := TIdSipTestSessionListener.Create;
+  try
+    Self.Method.Run(L);
+
+    Check(Self.Method.Progress = L.ProgressParam,
+          'Progress param');
+    Check(Self.Method.Session = L.SessionParam,
+          'Session param');
   finally
     L.Free;
   end;

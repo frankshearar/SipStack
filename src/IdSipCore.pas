@@ -101,6 +101,8 @@ type
 
   IIdSipInviteListener = interface(IIdSipActionListener)
     ['{8694DF86-3012-41AE-9854-A623A486743F}']
+    procedure OnCallProgress(InviteAgent: TIdSipOutboundInvite;
+                        Response: TIdSipResponse);
     procedure OnFailure(InviteAgent: TIdSipOutboundInvite;
                         Response: TIdSipResponse;
                         const Reason: String);
@@ -166,6 +168,9 @@ type
   //   INVITE we sent to modify the session description. In other words, at this
   //   point we know that our requested session modification succeeded or
   //   failed.
+  // * OnProgressedSession tells us of any provisional responses received by
+  //   this session's Invites. This INCLUDES provisional responses to
+  //   ModifyInvites.
   IIdSipSessionListener = interface(IIdSipActionListener)
     ['{59B3C476-D3CA-4C5E-AA2B-2BB587A5A716}']
     procedure OnEndedSession(Session: TIdSipSession;
@@ -178,6 +183,8 @@ type
                               const MimeType: String);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Answer: TIdSipResponse);
+    procedure OnProgressedSession(Session: TIdSipSession;
+                                  Progress: TIdSipResponse);
   end;
 
   TIdSipOutboundSubscribe = class;
@@ -1040,6 +1047,7 @@ type
     HasReceivedProvisionalResponse: Boolean;
     SentCancel:                     Boolean;
 
+    procedure NotifyOfCallProgress(Response: TIdSipResponse);
     procedure NotifyOfDialogEstablished(Response: TIdSipResponse;
                                         UsingSecureTransport: Boolean);
     procedure NotifyOfRedirect(Response: TIdSipResponse);
@@ -1354,6 +1362,8 @@ type
     procedure NotifyOfModifySession(Modify: TIdSipInboundInvite);
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Response: TIdSipResponse); virtual;
+    procedure OnCallProgress(InviteAgent: TIdSipOutboundInvite;
+                             Response: TIdSipResponse); virtual;
     procedure OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
                                   NewDialog: TIdSipDialog); virtual;
     procedure OnNetworkFailure(Action: TIdSipAction;
@@ -1363,7 +1373,6 @@ type
                         Response: TIdSipResponse;
                         const Reason: String); overload; virtual;
     procedure OnFailure(InviteAgent: TIdSipInboundInvite); overload; virtual;
-
     procedure OnRedirect(InviteAgent: TIdSipOutboundInvite;
                          Redirect: TIdSipResponse); virtual;
     procedure OnSuccess(InviteAgent: TIdSipInboundInvite;
@@ -1683,6 +1692,11 @@ type
     property Response: TIdSipResponse read fResponse write fResponse;
   end;
 
+  TIdSipInviteCallProgressMethod = class(TIdSipOutboundInviteMethod)
+  public
+    procedure Run(const Subject: IInterface); override;
+  end;
+
   TIdSipInviteDialogEstablishedMethod = class(TIdSipOutboundInviteMethod)
   private
     fDialog: TIdSipDialog;
@@ -1798,6 +1812,15 @@ type
     procedure Run(const Subject: IInterface); override;
 
     property Answer: TIdSipResponse read fAnswer write fAnswer;
+  end;
+
+  TIdSipProgressedSessionMethod = class(TIdSipSessionMethod)
+  private
+    fProgress: TIdSipResponse;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Progress: TIdSipResponse read fProgress write fProgress;
   end;
 
   // We subclass TIdSipEstablishedSessionMethod solely for reusing
@@ -5522,6 +5545,7 @@ begin
   Result := asSuccess;
 
   Self.HasReceivedProvisionalResponse := true;
+  Self.NotifyOfCallProgress(Response);  
 
   if not Self.DialogEstablished
     and not Response.IsTrying
@@ -5556,6 +5580,21 @@ begin
 end;
 
 //* TIdSipOutboundInvite Private methods ***************************************
+
+procedure TIdSipOutboundInvite.NotifyOfCallProgress(Response: TIdSipResponse);
+var
+  Notification: TIdSipInviteCallProgressMethod;
+begin
+  Notification := TIdSipInviteCallProgressMethod.Create;
+  try
+    Notification.Invite   := Self;
+    Notification.Response := Response;
+
+    Self.Listeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
+end;
 
 procedure TIdSipOutboundInvite.NotifyOfDialogEstablished(Response: TIdSipResponse;
                                                          UsingSecureTransport: Boolean);
@@ -6897,6 +6936,22 @@ procedure TIdSipSession.OnAuthenticationChallenge(Action: TIdSipAction;
                                                   Response: TIdSipResponse);
 begin
   raise Exception.Create('implement TIdSipSession.OnAuthenticationChallenge');
+end;
+
+procedure TIdSipSession.OnCallProgress(InviteAgent: TIdSipOutboundInvite;
+                                       Response: TIdSipResponse);
+var
+  Notification: TIdSipProgressedSessionMethod;
+begin
+  Notification := TIdSipProgressedSessionMethod.Create;
+  try
+    Notification.Progress := Response;
+    Notification.Session  := Self;
+
+    Self.Listeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
 end;
 
 procedure TIdSipSession.OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
@@ -8316,6 +8371,17 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipInviteCallProgressMethod                                             *
+//******************************************************************************
+//* TIdSipInviteCallProgressMethod Public methods ******************************
+
+procedure TIdSipInviteCallProgressMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipInviteListener).OnCallProgress(Self.Invite,
+                                                   Self.Response);
+end;
+
+//******************************************************************************
 //* TIdSipInviteDialogEstablishedMethod                                        *
 //******************************************************************************
 //* TIdSipInviteDialogEstablishedMethod Public methods *************************
@@ -8460,6 +8526,17 @@ begin
   (Subject as IIdSipSessionListener).OnModifySession(Self.Session,
                                                      Self.RemoteSessionDescription,
                                                      Self.MimeType);
+end;
+
+//******************************************************************************
+//* TIdSipProgressedSessionMethod                                              *
+//******************************************************************************
+//* TIdSipProgressedSessionMethod Public methods *******************************
+
+procedure TIdSipProgressedSessionMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipSessionListener).OnProgressedSession(Self.Session,
+                                                         Self.Progress);
 end;
 
 //******************************************************************************

@@ -228,6 +228,7 @@ type
   TIdSipTestInviteListener = class(TIdSipMockListener,
                                    IIdSipInviteListener)
   private
+    fCallProgress:      Boolean;
     fDialogEstablished: Boolean;
     fDialogParam:       TIdSipDialog;
     fFailure:           Boolean;
@@ -237,6 +238,8 @@ type
     fResponseParam:     TIdSipResponse;
     fSuccess:           Boolean;
 
+    procedure OnCallProgress(InviteAgent: TIdSipOutboundInvite;
+                        Response: TIdSipResponse);
     procedure OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
                                   NewDialog: TidSipDialog);
     procedure OnFailure(InviteAgent: TIdSipOutboundInvite;
@@ -249,6 +252,7 @@ type
   public
     constructor Create; override;
 
+    property CallProgress:      Boolean              read fCallProgress;
     property DialogEstablished: Boolean              read fDialogEstablished;
     property DialogParam:       TIdSipDialog         read fDialogParam;
     property Failure:           Boolean              read fFailure;
@@ -331,6 +335,8 @@ type
     fModifiedSession:          Boolean;
     fModifySession:            Boolean;
     fNewSession:               Boolean;
+    fProgressedSession:        Boolean;
+    fProgressParam:            TIdSipResponse;
     fRedirect:                 Boolean;
     fRemoteSessionDescription: String;
     fSessionParam:             TIdSipSession;
@@ -350,6 +356,8 @@ type
                               const RemoteSessionDescription: String;
                               const MimeType: String);
     procedure OnNewSession(Session: TIdSipSession);
+    procedure OnProgressedSession(Session: TIdSipSession;
+                                  Progress: TIdSipResponse);
 
     property AnswerParam:              TIdSipResponse      read fAnswerParam;
     property EndedSession:             Boolean             read fEndedSession;
@@ -359,6 +367,8 @@ type
     property ModifiedSession:          Boolean             read fModifiedSession;
     property ModifySession:            Boolean             read fModifySession;
     property NewSession:               Boolean             read fNewSession;
+    property ProgressParam:            TIdSipResponse      read fProgressParam;
+    property ProgressedSession:        Boolean             read fProgressedSession;
     property Redirect:                 Boolean             read fRedirect;
     property RemoteSessionDescription: String              read fRemoteSessionDescription;
     property SessionParam:             TIdSipSession       read fSessionParam;
@@ -1392,12 +1402,24 @@ constructor TIdSipTestInviteListener.Create;
 begin
   inherited Create;
 
+  Self.fCallProgress      := false;
   Self.fDialogEstablished := false;
   Self.fFailure           := false;
   Self.fSuccess           := false;
 end;
 
 //* TIdSipTestInviteListener Private methods **********************************
+
+procedure TIdSipTestInviteListener.OnCallProgress(InviteAgent: TIdSipOutboundInvite;
+                                                  Response: TIdSipResponse);
+begin
+  Self.fCallProgress     := true;
+  Self.fInviteAgentParam := InviteAgent;
+  Self.fResponseParam    := Response;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create(Self.ClassName + '.OnCallProgress');
+end;
 
 procedure TIdSipTestInviteListener.OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
                                                        NewDialog: TidSipDialog);
@@ -1560,6 +1582,7 @@ begin
   Self.fMimeType                 := '';
   Self.fModifiedSession          := false;
   Self.fNewSession               := false;
+  Self.fProgressedSession        := false;
   Self.fRedirect                 := false;
   Self.fRemoteSessionDescription := '';
 end;
@@ -1628,6 +1651,17 @@ begin
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnNewSession');
+end;
+
+procedure TIdSipTestSessionListener.OnProgressedSession(Session: TIdSipSession;
+                                                        Progress: TIdSipResponse);
+begin
+  Self.fProgressedSession := true;
+  Self.fProgressParam     := Progress;
+  Self.fSessionParam      := Session;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create(Self.ClassName + '.OnProgressedSession');
 end;
 
 //******************************************************************************

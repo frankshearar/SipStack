@@ -160,6 +160,8 @@ type
     procedure OnRTP(Packet: TIdRTPPacket;
                     Binding: TIdConnection);
     procedure OnPlaybackStopped(Origin: TAudioData);
+    procedure OnProgressedSession(Session: TIdSipSession;
+                                  Progress: TIdSipResponse);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -549,6 +551,12 @@ end;
 procedure TrnidSpike.OnPlaybackStopped(Origin: TAudioData);
 begin
   Self.StopEvent.SetEvent;
+end;
+
+procedure TrnidSpike.OnProgressedSession(Session: TIdSipSession;
+                                         Progress: TIdSipResponse);
+begin
+  // Do nothing.
 end;
 
 procedure TrnidSpike.OnReceiveRequest(Request: TIdSipRequest;
