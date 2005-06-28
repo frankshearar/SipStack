@@ -1219,6 +1219,9 @@ begin
                 'Handle');
     Check(Self.Data.Contacts.Equals(Copy.Contacts),
           'Contacts');
+    CheckEquals(Self.Data.ErrorCode,
+                Copy.ErrorCode,
+                'ErrorCode');
     CheckEquals(Self.Data.Reason,
                 Copy.Reason,
                 'Reason');      

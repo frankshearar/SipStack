@@ -571,7 +571,7 @@ type
 
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts;
-                        const Reason: String);
+                        Response: TIdSipResponse);
     procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts);
     procedure ReceiveRemoteIntervalTooBrief;
@@ -7770,7 +7770,7 @@ end;
 
 procedure TestTIdSipOutboundRegistration.OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                                            CurrentBindings: TIdSipContacts;
-                                           const Reason: String);
+                                           Response: TIdSipResponse);
 begin
   Self.ActionFailed := true;
 end;
@@ -11524,7 +11524,7 @@ begin
 
   Self.Method := TIdSipRegistrationFailedMethod.Create;
   Self.Method.CurrentBindings := Self.Bindings;
-  Self.Method.Reason          := 'No good reason';
+  Self.Method.Response        := Self.Response;
   Self.Method.Registration    := Self.Reg;
 end;
 
@@ -11550,8 +11550,8 @@ begin
           'CurrentBindings param');
     Check(Self.Method.Registration = L.RegisterAgentParam,
           'RegisterAgent param');
-    CheckEquals(Self.Method.Reason, L.ReasonParam,
-          'Reason param');
+    Check(Self.Method.Response = L.ResponseParam,
+          'Response param');
   finally
     L.Free;
   end;

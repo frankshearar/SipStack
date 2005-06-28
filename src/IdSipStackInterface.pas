@@ -102,7 +102,7 @@ type
                                    const MimeType: String);
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts;
-                        const Reason: String);
+                        Response: TIdSipResponse);
     procedure OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
                             Session: TIdSipInboundSession);
     procedure OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
@@ -208,13 +208,19 @@ type
     property Contacts: TIdSipContacts read fContacts write SetContacts;
   end;
 
-  TIdFailedRegistrationData = class(TIdRegistrationData)
+  TIdFailedRegistrationData = class(TIdFailData)
   private
-    fReason: String;
+    RegistrationData: TIdRegistrationData;
+
+    function  GetContacts: TIdSipContacts;
+    procedure SetContacts(Value: TIdSipContacts);
   public
+    constructor Create; override;
+    destructor  Destroy; override;
+
     procedure Assign(Src: TPersistent); override;
 
-    property Reason: String read fReason write fReason;
+    property Contacts: TIdSipContacts read GetContacts write SetContacts;
   end;
 
   TIdSessionData = class(TIdEventData)
@@ -694,15 +700,16 @@ end;
 
 procedure TIdSipStackInterface.OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                                          CurrentBindings: TIdSipContacts;
-                                         const Reason: String);
+                                         Response: TIdSipResponse);
 var
   Data: TIdFailedRegistrationData;
 begin
   Data := TIdFailedRegistrationData.Create;
   try
-    Data.Handle   := Self.HandleFor(RegisterAgent);
-    Data.Contacts := CurrentBindings;
-    Data.Reason   := Reason;
+    Data.Handle    := Self.HandleFor(RegisterAgent);
+    Data.Contacts  := CurrentBindings;
+    Data.ErrorCode := Response.StatusCode;
+    Data.Reason    := Response.Description;
 
     Self.NotifyEvent(RegisterAgent, CM_FAIL, Data);
   finally
@@ -999,6 +1006,20 @@ end;
 //******************************************************************************
 //* TIdFailedRegistrationData Public methods ***********************************
 
+constructor TIdFailedRegistrationData.Create;
+begin
+  inherited Create;
+
+  Self.RegistrationData := TIdRegistrationData.Create;
+end;
+
+destructor TIdFailedRegistrationData.Destroy;
+begin
+  Self.RegistrationData.Free;
+
+  inherited Destroy;
+end;
+
 procedure TIdFailedRegistrationData.Assign(Src: TPersistent);
 var
   Other: TIdFailedRegistrationData;
@@ -1008,8 +1029,22 @@ begin
   if (Src is TIdFailedRegistrationData) then begin
     Other := Src as TIdFailedRegistrationData;
 
-    Self.Reason := Other.Reason;
+    Self.Contacts  := Other.Contacts;
+    Self.ErrorCode := Other.ErrorCode;
+    Self.Reason    := Other.Reason;
   end;
+end;
+
+//* TIdFailedRegistrationData Private methods **********************************
+
+function TIdFailedRegistrationData.GetContacts: TIdSipContacts;
+begin
+  Result := Self.RegistrationData.Contacts;
+end;
+
+procedure TIdFailedRegistrationData.SetContacts(Value: TIdSipContacts);
+begin
+  Self.RegistrationData.Contacts := Value;
 end;
 
 //******************************************************************************

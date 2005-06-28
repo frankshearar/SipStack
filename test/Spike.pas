@@ -145,7 +145,7 @@ type
                                const Reason: String);
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts;
-                        const Reason: String);
+                        Response: TIdSipResponse);
     procedure OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
                             Session: TIdSipInboundSession);
     procedure OnModifiedSession(Session: TIdSipSession;
@@ -480,13 +480,13 @@ end;
 
 procedure TrnidSpike.OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                                CurrentBindings: TIdSipContacts;
-                               const Reason: String);
+                               Response: TIdSipResponse);
 begin
   Self.Lock.Acquire;
   try
     Self.Log.Lines.Add('|||| ' + FormatDateTime('yyyy/mm/dd hh:mm:ss.zzz', Now));
 
-    Self.Log.Lines.Add(Reason);
+    Self.Log.Lines.Add(Response.Description);
   finally
     Self.Lock.Release;
   end;

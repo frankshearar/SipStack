@@ -144,7 +144,7 @@ type
     ['{D3FA9A3D-ED8A-48D3-8068-38E8F9EE2140}']
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts;
-                        const Reason: String);
+                        Response: TIdSipResponse);
     procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts);
   end;
@@ -1766,11 +1766,11 @@ type
 
   TIdSipRegistrationFailedMethod = class(TIdSipRegistrationMethod)
   private
-    fReason: String;
+    fResponse: TIdSipResponse;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Reason: String read fReason write fReason;
+    property Response: TIdSipResponse read fResponse write fResponse;
   end;
 
   TIdSipRegistrationSucceededMethod = class(TIdSipRegistrationMethod)
@@ -6384,8 +6384,8 @@ begin
     Notification := TIdSipRegistrationFailedMethod.Create;
     try
       Notification.CurrentBindings := CurrentBindings;
-      Notification.Reason          := Response.Description;
       Notification.Registration    := Self;
+      Notification.Response        := Response;
 
       Self.Listeners.Notify(Notification);
     finally
@@ -8469,7 +8469,7 @@ procedure TIdSipRegistrationFailedMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipRegistrationListener).OnFailure(Self.Registration,
                                                     Self.CurrentBindings,
-                                                    Self.Reason);
+                                                    Self.Response);
 end;
 
 //******************************************************************************

@@ -50,7 +50,7 @@ type
                                const Reason: String);
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts;
-                        const Reason: String);
+                        Response: TIdSipResponse);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -178,9 +178,9 @@ end;
 
 procedure TrnidSpikeRegister.OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                                        CurrentBindings: TIdSipContacts;
-                                       const Reason: String);
+                                       Response: TIdSipResponse);
 begin
-  Self.Log.Lines.Add('---- Registration action failed: ' + Reason + ' ----');
+  Self.Log.Lines.Add('---- Registration action failed: ' + Response.Description + ' ----');
   Self.RefreshContacts(CurrentBindings);
   RegisterAgent.RemoveListener(Self);
 end;

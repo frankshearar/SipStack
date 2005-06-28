@@ -305,7 +305,7 @@ type
   private
     fCurrentBindingsParam: TIdSipContacts;
     fFailure:              Boolean;
-    fReasonParam:          String;
+    fResponseParam:        TIdSipResponse;
     fRegisterAgentParam:   TIdSipOutboundRegistration;
     fSuccess:              Boolean;
   public
@@ -313,13 +313,13 @@ type
 
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts;
-                        const Reason: String);
+                        Response: TIdSipResponse);
     procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts);
 
     property CurrentBindingsParam: TIdSipContacts             read fCurrentBindingsParam;
     property Failure:              Boolean                    read fFailure;
-    property ReasonParam:          String                     read fReasonParam;
+    property ResponseParam:        TIdSipResponse             read fResponseParam;
     property RegisterAgentParam:   TIdSipOutboundRegistration read fRegisterAgentParam;
     property Success:              Boolean                    read fSuccess;
   end;
@@ -1546,12 +1546,12 @@ end;
 
 procedure TIdSipTestRegistrationListener.OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                                                    CurrentBindings: TIdSipContacts;
-                                                   const Reason: String);
+                                                   Response: TIdSipResponse);
 begin
   Self.fCurrentBindingsParam := CurrentBindings;
   Self.fFailure              := true;
   Self.fRegisterAgentParam   := RegisterAgent;
-  Self.fReasonParam          := Reason;
+  Self.fResponseParam        := Response;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnFailure');
