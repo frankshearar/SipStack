@@ -783,13 +783,13 @@ type
     procedure OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
                                     Subscription: TIdSipInboundSubscription);
     procedure ReceiveBusyHere(Invite: TIdSipRequest);
-    procedure ReceiveRemoteDecline;
     procedure ReceiveForbidden;
     procedure ReceiveMovedTemporarily(Invite: TIdSipRequest;
-                                      const Contact: String); overload;
+                                      const Contacts: array of String); overload;
     procedure ReceiveMovedTemporarily(const Contact: String); overload;
     procedure ReceiveMovedTemporarily(const Contacts: array of String); overload;
     procedure ReceiveOKWithRecordRoute;
+    procedure ReceiveRemoteDecline;    
   protected
     MimeType: String;
     SDP:      String;
@@ -811,8 +811,8 @@ type
     procedure TestAckWithAuthorization;
     procedure TestAckWithProxyAuthorization;
     procedure TestCall;
-    procedure TestCallRemoteRefusal;
     procedure TestCallNetworkFailure;
+    procedure TestCallRemoteRefusal;
     procedure TestCallSecure;
     procedure TestCallSipsUriOverTcp;
     procedure TestCallSipUriOverTls;
@@ -1014,7 +1014,16 @@ type
     procedure TestRun;
   end;
 
-  TestTIdSipInviteFailureMethod = class(TActionMethodTestCase)
+  TestInviteMethod = class(TActionMethodTestCase)
+  private
+    Invite:   TIdSipOutboundInvite;
+    Listener: TIdSipTestInviteListener;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSipInviteFailureMethod = class(TestInviteMethod)
   private
     Method: TIdSipInviteFailureMethod;
   public
@@ -1024,7 +1033,7 @@ type
     procedure TestRun;
   end;
 
-  TestTIdSipInviteRedirectMethod = class(TActionMethodTestCase)
+  TestTIdSipInviteRedirectMethod = class(TestInviteMethod)
   private
     Method: TIdSipInviteRedirectMethod;
   public
@@ -1034,7 +1043,7 @@ type
     procedure Run;
   end;
 
-  TestTIdSipInviteSuccessMethod = class(TActionMethodTestCase)
+  TestTIdSipInviteSuccessMethod = class(TestInviteMethod)
   private
     Method: TIdSipInviteSuccessMethod;
   public
@@ -1115,7 +1124,8 @@ type
 
   TestSessionMethod = class(TActionMethodTestCase)
   protected
-    Session: TIdSipSession;
+    Listener: TIdSipTestSessionListener;
+    Session:  TIdSipSession;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -9102,19 +9112,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipOutboundSession.ReceiveRemoteDecline;
-var
-  Decline: TIdSipResponse;
-begin
-  Decline := TIdSipResponse.InResponseTo(Self.LastSentRequest,
-                                         SIPDecline);
-  try
-    Self.ReceiveResponse(Decline);
-  finally
-    Decline.Free;
-  end;
-end;
-
 procedure TestTIdSipOutboundSession.ReceiveForbidden;
 var
   Response: TIdSipResponse;
@@ -9129,31 +9126,12 @@ begin
 end;
 
 procedure TestTIdSipOutboundSession.ReceiveMovedTemporarily(Invite: TIdSipRequest;
-                                                            const Contact: String);
-var
-  Response: TIdSipResponse;
-begin
-  Response := TIdSipResponse.InResponseTo(Invite,
-                                          SIPMovedTemporarily);
-  try
-    Response.AddHeader(ContactHeaderFull).Value := Contact;
-    Self.ReceiveResponse(Response);
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TestTIdSipOutboundSession.ReceiveMovedTemporarily(const Contact: String);
-begin
-  Self.ReceiveMovedTemporarily(Self.LastSentRequest, Contact);
-end;
-
-procedure TestTIdSipOutboundSession.ReceiveMovedTemporarily(const Contacts: array of String);
+                                                            const Contacts: array of String);
 var
   I:        Integer;
   Response: TIdSipResponse;
 begin
-  Response := TIdSipResponse.InResponseTo(Self.LastSentRequest,
+  Response := TIdSipResponse.InResponseTo(Invite,
                                           SIPMovedTemporarily);
   try
     for I := Low(Contacts) to High(Contacts) do
@@ -9163,7 +9141,16 @@ begin
   finally
     Response.Free;
   end;
+end;
 
+procedure TestTIdSipOutboundSession.ReceiveMovedTemporarily(const Contact: String);
+begin
+  Self.ReceiveMovedTemporarily(Self.LastSentRequest, [Contact]);
+end;
+
+procedure TestTIdSipOutboundSession.ReceiveMovedTemporarily(const Contacts: array of String);
+begin
+  Self.ReceiveMovedTemporarily(Self.LastSentRequest, Contacts);
 end;
 
 procedure TestTIdSipOutboundSession.ReceiveOKWithRecordRoute;
@@ -9177,6 +9164,19 @@ begin
     Self.ReceiveResponse(Response);
   finally
     Response.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundSession.ReceiveRemoteDecline;
+var
+  Decline: TIdSipResponse;
+begin
+  Decline := TIdSipResponse.InResponseTo(Self.LastSentRequest,
+                                         SIPDecline);
+  try
+    Self.ReceiveResponse(Decline);
+  finally
+    Decline.Free;
   end;
 end;
 
@@ -9352,13 +9352,6 @@ begin
   Check(not Session.IsEarly, 'Dialog in incorrect state: shouldn''t be early');
 end;
 
-procedure TestTIdSipOutboundSession.TestCallRemoteRefusal;
-begin
-  Self.ReceiveForbidden;
-
-  Check(Self.OnEndedSessionFired, 'OnEndedSession wasn''t triggered');
-end;
-
 procedure TestTIdSipOutboundSession.TestCallNetworkFailure;
 var
   SessionCount: Cardinal;
@@ -9371,6 +9364,13 @@ begin
   CheckEquals(SessionCount,
               Self.Core.SessionCount,
               'Core should have axed the failed session');
+end;
+
+procedure TestTIdSipOutboundSession.TestCallRemoteRefusal;
+begin
+  Self.ReceiveForbidden;
+
+  Check(Self.OnEndedSessionFired, 'OnEndedSession wasn''t triggered');
 end;
 
 procedure TestTIdSipOutboundSession.TestCallSecure;
@@ -11215,26 +11215,41 @@ begin
 end;
 
 //******************************************************************************
+//* TestInviteMethod                                                           *
+//******************************************************************************
+//* TestInviteMethod Public methods ********************************************
+
+procedure TestInviteMethod.SetUp;
+
+begin
+  inherited SetUp;
+
+  Self.Invite   := Self.UA.AddOutboundAction(TIdSipOutboundInitialInvite) as TIdSipOutboundInitialInvite;
+  Self.Listener := TIdSipTestInviteListener.Create;
+end;
+
+procedure TestInviteMethod.TearDown;
+begin
+  Self.Listener.Free;
+  // Self.UA owns Self.Invite!
+
+  inherited TearDown;
+end;
+
+//******************************************************************************
 //* TestTIdSipInviteFailureMethod                                              *
 //******************************************************************************
 //* TestTIdSipInviteFailureMethod Public methods *******************************
 
 procedure TestTIdSipInviteFailureMethod.SetUp;
-var
-  Nowhere: TIdSipAddressHeader;
 begin
   inherited SetUp;
 
   Self.Method := TIdSipInviteFailureMethod.Create;
 
-  Nowhere := TIdSipAddressHeader.Create;
-  try
-    Self.Method.Invite   := Self.UA.AddOutboundAction(TIdSipOutboundInitialInvite) as TIdSipOutboundInitialInvite;
-    Self.Method.Reason   := 'none';
-    Self.Method.Response := Self.Response;
-  finally
-    Nowhere.Free;
-  end;
+  Self.Method.Invite   := Self.Invite;
+  Self.Method.Reason   := 'none';
+  Self.Method.Response := Self.Response;
 end;
 
 procedure TestTIdSipInviteFailureMethod.TearDown;
@@ -11247,24 +11262,17 @@ end;
 //* TestTIdSipInviteFailureMethod Published methods ****************************
 
 procedure TestTIdSipInviteFailureMethod.TestRun;
-var
-  Listener: TIdSipTestInviteListener;
 begin
-  Listener := TIdSipTestInviteListener.Create;
-  try
-    Self.Method.Run(Listener);
+  Self.Method.Run(Self.Listener);
 
-    Check(Listener.Failure, 'Listener not notified');
-    Check(Self.Method.Invite = Listener.InviteAgentParam,
-          'InviteAgent param');
-    Check(Self.Method.Response = Listener.ResponseParam,
-          'Response param');
-    CheckEquals(Self.Method.Reason,
-                Listener.ReasonParam,
-                'Reason param');
-  finally
-    Listener.Free;
-  end;
+  Check(Self.Listener.Failure, 'Listener not notified');
+  Check(Self.Method.Invite = Self.Listener.InviteAgentParam,
+        'InviteAgent param');
+  Check(Self.Method.Response = Self.Listener.ResponseParam,
+        'Response param');
+  CheckEquals(Self.Method.Reason,
+              Self.Listener.ReasonParam,
+              'Reason param');
 end;
 
 //******************************************************************************
@@ -11273,20 +11281,12 @@ end;
 //* TestTIdSipInviteRedirectMethod Public methods ******************************
 
 procedure TestTIdSipInviteRedirectMethod.SetUp;
-var
-  Nowhere: TIdSipAddressHeader;
 begin
   inherited SetUp;
 
   Self.Method := TIdSipInviteRedirectMethod.Create;
 
-  Nowhere := TIdSipAddressHeader.Create;
-  try
-    Self.Method.Invite := TIdSipOutboundInvite.Create(Self.UA);
-  finally
-    Nowhere.Free;
-  end;
-
+  Self.Method.Invite   := Self.Invite;
   Self.Method.Response := Self.Response;
 end;
 
@@ -11300,21 +11300,14 @@ end;
 //* TestTIdSipInviteRedirectMethod Published methods ***************************
 
 procedure TestTIdSipInviteRedirectMethod.Run;
-var
-  Listener: TIdSipTestInviteListener;
 begin
-  Listener := TIdSipTestInviteListener.Create;
-  try
-    Self.Method.Run(Listener);
+  Self.Method.Run(Self.Listener);
 
-    Check(Listener.Redirect, 'Listener not notified');
-    Check(Self.Method.Invite = Listener.InviteAgentParam,
-          'Invite param');
-    Check(Self.Method.Response = Listener.ResponseParam,
-          'Response param');
-  finally
-    Listener.Free;
-  end;
+  Check(Self.Listener.Redirect, 'Listener not notified');
+  Check(Self.Method.Invite = Self.Listener.InviteAgentParam,
+        'Invite param');
+  Check(Self.Method.Response = Self.Listener.ResponseParam,
+        'Response param');
 end;
 
 //******************************************************************************
@@ -11323,20 +11316,13 @@ end;
 //* TestTIdSipInviteSuccessMethod Public methods *******************************
 
 procedure TestTIdSipInviteSuccessMethod.SetUp;
-var
-  Nowhere: TIdSipAddressHeader;
 begin
   inherited SetUp;
 
   Self.Method := TIdSipInviteSuccessMethod.Create;
 
-  Nowhere := TIdSipAddressHeader.Create;
-  try
-    Self.Method.Invite   := TIdSipOutboundInvite.Create(Self.UA);
-    Self.Method.Response := Self.Response;
-  finally
-    Nowhere.Free;
-  end;
+  Self.Method.Invite   := Self.Invite;
+  Self.Method.Response := Self.Response;
 end;
 
 procedure TestTIdSipInviteSuccessMethod.TearDown;
@@ -11349,21 +11335,14 @@ end;
 //* TestTIdSipInviteSuccessMethod Published methods ****************************
 
 procedure TestTIdSipInviteSuccessMethod.TestRun;
-var
-  Listener: TIdSipTestInviteListener;
 begin
-  Listener := TIdSipTestInviteListener.Create;
-  try
-    Self.Method.Run(Listener);
+  Self.Method.Run(Self.Listener);
 
-    Check(Listener.Success, 'Listener not notified');
-    Check(Self.Method.Invite = Listener.InviteAgentParam,
-          'InviteAgent param');
-    Check(Self.Method.Response = Listener.ResponseParam,
-          'Response param');
-  finally
-    Listener.Free;
-  end;
+  Check(Self.Listener.Success, 'Listener not notified');
+  Check(Self.Method.Invite = Self.Listener.InviteAgentParam,
+        'InviteAgent param');
+  Check(Self.Method.Response = Self.Listener.ResponseParam,
+        'Response param');
 end;
 
 //******************************************************************************
@@ -11628,12 +11607,14 @@ procedure TestSessionMethod.SetUp;
 begin
   inherited SetUp;
 
-  Self.Session := TIdSipOutboundSession.Create(Self.UA);
+  Self.Listener := TIdSipTestSessionListener.Create;
+  Self.Session  := TIdSipOutboundSession.Create(Self.UA);
 end;
 
 procedure TestSessionMethod.TearDown;
 begin
   Self.Session.Free;
+  Self.Listener.Free;
 
   inherited TearDown;
 end;
@@ -11665,21 +11646,14 @@ end;
 //* TestTIdSipEndedSessionMethod Published methods *****************************
 
 procedure TestTIdSipEndedSessionMethod.TestRun;
-var
-  L: TIdSipTestSessionListener;
 begin
-  L := TIdSipTestSessionListener.Create;
-  try
-    Self.Method.Run(L);
+  Self.Method.Run(Self.Listener);
 
-    Check(Self.Method.Session = L.SessionParam,
-          'Session param');
-    CheckEquals(Self.Method.ErrorCode,
-                L.ErrorCodeParam,
-                'ErrorCode param');
-  finally
-    L.Free;
-  end;
+  Check(Self.Method.Session = Self.Listener.SessionParam,
+        'Session param');
+  CheckEquals(Self.Method.ErrorCode,
+              Self.Listener.ErrorCodeParam,
+              'ErrorCode param');
 end;
 
 //******************************************************************************
@@ -11708,24 +11682,17 @@ end;
 //* TestTIdSipEstablishedSessionMethod Published methods ***********************
 
 procedure TestTIdSipEstablishedSessionMethod.TestRun;
-var
-  L: TIdSipTestSessionListener;
 begin
-  L := TIdSipTestSessionListener.Create;
-  try
-    Self.Method.Run(L);
+  Self.Method.Run(Self.Listener);
 
-    Check(Self.Method.Session = L.SessionParam,
-          'Session param');
-    CheckEquals(Self.Method.MimeType,
-                L.MimeType,
-                'MimeType param');
-    CheckEquals(Self.Method.RemoteSessionDescription,
-                L.RemoteSessionDescription,
-                'RemoteSessionDescription param');
-  finally
-    L.Free;
-  end;
+  Check(Self.Method.Session = Self.Listener.SessionParam,
+        'Session param');
+  CheckEquals(Self.Method.MimeType,
+              Self.Listener.MimeType,
+              'MimeType param');
+  CheckEquals(Self.Method.RemoteSessionDescription,
+              Self.Listener.RemoteSessionDescription,
+              'RemoteSessionDescription param');
 end;
 
 //******************************************************************************
@@ -11756,20 +11723,13 @@ end;
 //* TestTIdSipModifiedSessionMethod Published methods **************************
 
 procedure TestTIdSipModifiedSessionMethod.TestRun;
-var
-  L: TIdSipTestSessionListener;
 begin
-  L := TIdSipTestSessionListener.Create;
-  try
-    Self.Method.Run(L);
+  Self.Method.Run(Self.Listener);
 
-    Check(Self.Method.Answer = L.AnswerParam,
-          'Answer param');
-    Check(Self.Method.Session = L.SessionParam,
-          'Session param');
-  finally
-    L.Free;
-  end;
+  Check(Self.Method.Answer = Self.Listener.AnswerParam,
+        'Answer param');
+  Check(Self.Method.Session = Self.Listener.SessionParam,
+        'Session param');
 end;
 
 //******************************************************************************
@@ -11800,24 +11760,17 @@ end;
 //* TestTIdSipSessionModifySessionMethod Published methods *********************
 
 procedure TestTIdSipSessionModifySessionMethod.TestRun;
-var
-  L: TIdSipTestSessionListener;
 begin
-  L := TIdSipTestSessionListener.Create;
-  try
-    Self.Method.Run(L);
+  Self.Method.Run(Self.Listener);
 
-    Check(Self.Method.Session = L.SessionParam,
-          'Modify param');
-    CheckEquals(Self.Method.MimeType,
-                L.MimeType,
-                'MimeType');
-    CheckEquals(Self.Method.RemoteSessionDescription,
-                L.RemoteSessionDescription,
-                'RemoteSessionDescription');
-  finally
-    L.Free;
-  end;
+  Check(Self.Method.Session = Self.Listener.SessionParam,
+        'Modify param');
+  CheckEquals(Self.Method.MimeType,
+              Self.Listener.MimeType,
+              'MimeType');
+  CheckEquals(Self.Method.RemoteSessionDescription,
+              Self.Listener.RemoteSessionDescription,
+              'RemoteSessionDescription');
 end;
 
 //******************************************************************************
@@ -11833,8 +11786,8 @@ begin
 
   Self.Method := TIdSipProgressedSessionMethod.Create;
 
-  Self.Method.Session := Self.Session;
-  Self.Method.Progress  := Self.Progress;
+  Self.Method.Progress := Self.Progress;
+  Self.Method.Session  := Self.Session;
 end;
 
 procedure TestTIdSipProgressedSessionMethod.TearDown;
@@ -11848,20 +11801,13 @@ end;
 //* TestTIdSipProgressedSessionMethod Published methods ************************
 
 procedure TestTIdSipProgressedSessionMethod.TestRun;
-var
-  L: TIdSipTestSessionListener;
 begin
-  L := TIdSipTestSessionListener.Create;
-  try
-    Self.Method.Run(L);
+  Self.Method.Run(Self.Listener);
 
-    Check(Self.Method.Progress = L.ProgressParam,
-          'Progress param');
-    Check(Self.Method.Session = L.SessionParam,
-          'Session param');
-  finally
-    L.Free;
-  end;
+  Check(Self.Method.Progress = Self.Listener.ProgressParam,
+        'Progress param');
+  Check(Self.Method.Session = Self.Listener.SessionParam,
+        'Session param');
 end;
 
 //******************************************************************************
