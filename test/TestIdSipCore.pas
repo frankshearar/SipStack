@@ -522,7 +522,10 @@ type
 
   TestTIdSipInboundOptions = class(TestTIdSipAction)
   private
-    procedure ReceiveOptions;
+    Options: TIdSipInboundOptions;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
   published
     procedure TestIsInbound; override;
     procedure TestIsInvite; override;
@@ -562,6 +565,11 @@ type
   end;
 
   TestTIdSipInboundRegistration = class(TestTIdSipRegistration)
+  private
+    RegisterAction: TIdSipInboundRegistration;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
   published
     procedure TestIsInbound; override;
     procedure TestIsInvite; override;
@@ -6226,68 +6234,33 @@ begin
 end;
 
 procedure TestTIdSipInboundInvite.TestIsInbound;
-var
-  Action: TIdSipAction;
 begin
-  Action := TIdSipInboundInvite.Create(Self.Core, Self.Invite);
-  try
-    Check(Action.IsInbound,
-          Action.ClassName + ' not marked as inbound');
-  finally
-    Action.Free;
-  end;
+  Check(Self.InviteAction.IsInbound,
+        Self.InviteAction.ClassName + ' not marked as inbound');
 end;
 
 procedure TestTIdSipInboundInvite.TestIsInvite;
-var
-  Action: TIdSipAction;
 begin
-  Action := TIdSipInboundInvite.Create(Self.Core, Self.Invite);
-  try
-    Check(Action.IsInvite,
-          Action.ClassName + ' not marked as a Invite');
-  finally
-    Action.Free;
-  end;
+  Check(Self.InviteAction.IsInvite,
+        Self.InviteAction.ClassName + ' not marked as a Invite');
 end;
 
 procedure TestTIdSipInboundInvite.TestIsOptions;
-var
-  Action: TIdSipAction;
 begin
-  Action := TIdSipInboundInvite.Create(Self.Core, Self.Invite);
-  try
-    Check(not Action.IsOptions,
-          Action.ClassName + ' marked as an Options');
-  finally
-    Action.Free;
-  end;
+  Check(not Self.InviteAction.IsOptions,
+        Self.InviteAction.ClassName + ' marked as an Options');
 end;
 
 procedure TestTIdSipInboundInvite.TestIsRegistration;
-var
-  Action: TIdSipAction;
 begin
-  Action := TIdSipInboundInvite.Create(Self.Core, Self.Invite);
-  try
-    Check(not Action.IsRegistration,
-          Action.ClassName + ' marked as a Registration');
-  finally
-    Action.Free;
-  end;
+  Check(not Self.InviteAction.IsRegistration,
+        Self.InviteAction.ClassName + ' marked as a Registration');
 end;
 
 procedure TestTIdSipInboundInvite.TestIsSession;
-var
-  Action: TIdSipAction;
 begin
-  Action := TIdSipInboundInvite.Create(Self.Core, Self.Invite);
-  try
-    Check(not Action.IsSession,
-          Action.ClassName + ' marked as a Session');
-  finally
-    Action.Free;
-  end;
+  Check(not Self.InviteAction.IsSession,
+        Self.InviteAction.ClassName + ' marked as a Session');
 end;
 
 procedure TestTIdSipInboundInvite.TestMatchAck;
@@ -7452,102 +7425,61 @@ end;
 //******************************************************************************
 //* TestTIdSipInboundOptions                                                   *
 //******************************************************************************
-//* TestTIdSipInboundOptions Private methods ***********************************
+//* TestTIdSipInboundOptions Public methods ************************************
 
-procedure TestTIdSipInboundOptions.ReceiveOptions;
-var
-  Options: TIdSipRequest;
-  Temp:    String;
+procedure TestTIdSipInboundOptions.SetUp;
 begin
-  Options := Self.Core.CreateOptions(Self.Destination);
-  try
-    // Swop To & From because this comes from the network
-    Temp := Options.From.FullValue;
-    Options.From.Value := Options.ToHeader.FullValue;
-    Options.ToHeader.Value := Temp;
+  inherited SetUp;
 
-    Self.ReceiveRequest(Options);
-  finally
-    Options.Free;
-  end;
+  Self.Invite.Method := MethodOptions;
+  Self.Options := TIdSipInboundOptions.Create(Self.Core, Self.Invite);
+end;
+
+procedure TestTIdSipInboundOptions.TearDown;
+begin
+  Self.Options.Free;
+
+  inherited TearDown;
 end;
 
 //* TestTIdSipInboundOptions Published methods *********************************
 
 procedure TestTIdSipInboundOptions.TestIsInbound;
-var
-  Action: TIdSipAction;
 begin
-  Self.Invite.Method := MethodOptions;
-  Action := TIdSipInboundOptions.Create(Self.Core, Self.Invite);
-  try
-    Check(Action.IsInbound,
-          Action.ClassName + ' not marked as inbound');
-  finally
-    Action.Free;
-  end;
+  Check(Self.Options.IsInbound,
+        Self.Options.ClassName + ' not marked as inbound');
 end;
 
 procedure TestTIdSipInboundOptions.TestIsInvite;
-var
-  Action: TIdSipAction;
 begin
-  Action := TIdSipInboundOptions.Create(Self.Core, Self.Invite);
-  try
-    Check(not Action.IsInvite,
-          Action.ClassName + ' marked as a Invite');
-  finally
-    Action.Free;
-  end;
+  Check(not Self.Options.IsInvite,
+          Self.Options.ClassName + ' marked as a Invite');
 end;
 
 procedure TestTIdSipInboundOptions.TestIsOptions;
-var
-  Action: TIdSipAction;
 begin
-  Action := TIdSipInboundOptions.Create(Self.Core, Self.Invite);
-  try
-    Check(Action.IsOptions,
-          Action.ClassName + ' not marked as an Options');
-  finally
-    Action.Free;
-  end;
+  Check(Self.Options.IsOptions,
+        Self.Options.ClassName + ' not marked as an Options');
 end;
 
 procedure TestTIdSipInboundOptions.TestIsRegistration;
-var
-  Action: TIdSipAction;
 begin
-  Action := TIdSipInboundOptions.Create(Self.Core, Self.Invite);
-  try
-    Check(not Action.IsRegistration,
-          Action.ClassName + ' marked as a Registration');
-  finally
-    Action.Free;
-  end;
+  Check(not Self.Options.IsRegistration,
+        Self.Options.ClassName + ' marked as a Registration');
 end;
 
 procedure TestTIdSipInboundOptions.TestIsSession;
-var
-  Action: TIdSipAction;
 begin
-  Action := TIdSipInboundOptions.Create(Self.Core, Self.Invite);
-  try
-    Check(not Action.IsSession,
-          Action.ClassName + ' marked as a Session');
-  finally
-    Action.Free;
-  end;
+  Check(not Self.Options.IsSession,
+        Self.Options.ClassName + ' marked as a Session');
 end;
 
 procedure TestTIdSipInboundOptions.TestOptions;
 var
   Response: TIdSipResponse;
 begin
-  Self.MarkSentResponseCount;
-  Self.ReceiveOptions;
-
-  CheckResponseSent('No response sent');
+  Check(Self.SentResponseCount > 0,
+        'No response sent');
 
   Response := Self.LastSentResponse;
   Check(Response.HasHeader(AllowHeader),
@@ -7594,19 +7526,24 @@ end;
 
 procedure TestTIdSipInboundOptions.TestOptionsWhenDoNotDisturb;
 var
-  Response: TIdSipResponse;
+  NewOptions: TIdSipInboundOptions;
+  Response:   TIdSipResponse;
 begin
   Self.Core.DoNotDisturb := true;
 
   Self.MarkSentResponseCount;
-  Self.ReceiveOptions;
+  NewOptions := TIdSipInboundOptions.Create(Self.Core,
+                                            Self.Options.InitialRequest);
+  try
+    CheckResponseSent('No response sent');
 
-  CheckResponseSent('No response sent');
-
-  Response := Self.LastSentResponse;
-  CheckEquals(SIPTemporarilyUnavailable,
-              Response.StatusCode,
-              'Do Not Disturb');
+    Response := Self.LastSentResponse;
+    CheckEquals(SIPTemporarilyUnavailable,
+                Response.StatusCode,
+                'Do Not Disturb');
+  finally
+    NewOptions.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -7767,70 +7704,51 @@ end;
 //******************************************************************************
 //*  TestTIdSipInboundRegistration Public methods ******************************
 
-procedure TestTIdSipInboundRegistration.TestIsInbound;
-var
-  Action: TIdSipAction;
+procedure TestTIdSipInboundRegistration.SetUp;
 begin
+  inherited SetUp;
+
   Self.Invite.Method := MethodRegister;
-  Action := TIdSipInboundRegistration.Create(Self.Core, Self.Invite);
-  try
-    Check(Action.IsInbound,
-          Action.ClassName + ' not marked as inbound');
-  finally
-    Action.Free;
-  end;
+  Self.RegisterAction := TIdSipInboundRegistration.Create(Self.Core, Self.Invite);
+end;
+
+procedure TestTIdSipInboundRegistration.TearDown;
+begin
+  Self.RegisterAction.Free;
+
+  inherited TearDown;
+end;
+
+//*  TestTIdSipInboundRegistration Published methods ***************************
+
+procedure TestTIdSipInboundRegistration.TestIsInbound;
+begin
+  Check(Self.RegisterAction.IsInbound,
+        Self.RegisterAction.ClassName + ' not marked as inbound');
 end;
 
 procedure TestTIdSipInboundRegistration.TestIsInvite;
-var
-  Action: TIdSipAction;
 begin
-  Action := TIdSipInboundRegistration.Create(Self.Core, Self.Invite);
-  try
-    Check(not Action.IsInvite,
-          Action.ClassName + ' marked as an Invite');
-  finally
-    Action.Free;
-  end;
+  Check(not Self.RegisterAction.IsInvite,
+        Self.RegisterAction.ClassName + ' marked as an Invite');
 end;
 
 procedure TestTIdSipInboundRegistration.TestIsOptions;
-var
-  Action: TIdSipAction;
 begin
-  Action := TIdSipInboundRegistration.Create(Self.Core, Self.Invite);
-  try
-    Check(not Action.IsOptions,
-          Action.ClassName + ' marked as an Options');
-  finally
-    Action.Free;
-  end;
+  Check(not Self.RegisterAction.IsOptions,
+        Self.RegisterAction.ClassName + ' marked as an Options');
 end;
 
 procedure TestTIdSipInboundRegistration.TestIsRegistration;
-var
-  Action: TIdSipAction;
 begin
-  Action := TIdSipInboundRegistration.Create(Self.Core, Self.Invite);
-  try
-    Check(Action.IsRegistration,
-          Action.ClassName + ' not marked as a Registration');
-  finally
-    Action.Free;
-  end;
+  Check(Self.RegisterAction.IsRegistration,
+        Self.RegisterAction.ClassName + ' not marked as a Registration');
 end;
 
 procedure TestTIdSipInboundRegistration.TestIsSession;
-var
-  Action: TIdSipAction;
 begin
-  Action := TIdSipInboundRegistration.Create(Self.Core, Self.Invite);
-  try
-    Check(not Action.IsSession,
-          Action.ClassName + ' marked as a Session');
-  finally
-    Action.Free;
-  end;
+  Check(not Self.RegisterAction.IsSession,
+        Self.RegisterAction.ClassName + ' marked as a Session');
 end;
 
 //******************************************************************************
@@ -8792,16 +8710,10 @@ begin
 end;
 
 procedure TestTIdSipInboundSession.TestIsInbound;
-var
-  Action: TIdSipAction;
 begin
-  Action := TIdSipInboundSession.Create(Self.Core, Self.Invite, false);
-  try
-    Check(Action.IsInbound,
-          Action.ClassName + ' not marked as inbound');
-  finally
-    Action.Free;
-  end;
+  Self.CreateAction;
+  Check(Self.Session.IsInbound,
+        Self.Session.ClassName + ' not marked as inbound');
 end;
 
 procedure TestTIdSipInboundSession.TestIsOutboundCall;
