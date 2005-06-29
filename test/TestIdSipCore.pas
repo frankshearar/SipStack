@@ -11580,7 +11580,7 @@ procedure TestTIdSipRegistrationSucceededMethod.TestRun;
 begin
   Self.Method.Run(Self.Listener);
 
-  Check(L.Success, 'Listener not notified');
+  Check(Self.Listener.Success, 'Listener not notified');
   Check(Self.Method.CurrentBindings = Self.Listener.CurrentBindingsParam,
         'CurrentBindings param');
   Check(Self.Method.Registration = Self.Listener.RegisterAgentParam,
