@@ -427,6 +427,8 @@ type
   public
     procedure SetUp; override;
   published
+    procedure TestIsDeactivated;
+    procedure TestIsTerminated;
     procedure TestValue; override;
   end;
 
@@ -3716,6 +3718,36 @@ begin
 end;
 
 //* TestTIdSipSubscriptionStateHeader Published methods ************************
+
+procedure TestTIdSipSubscriptionStateHeader.TestIsDeactivated;
+begin
+  Self.SS.SubState := SubscriptionSubstatePending;
+  Check(not Self.SS.IsDeactivated, 'Pending subscription');
+
+  Self.SS.SubState := SubscriptionSubstateActive;
+  Check(not Self.SS.IsDeactivated, 'Active subscription');
+
+  Self.SS.SubState := SubscriptionSubstateTerminated;
+  Check(not Self.SS.IsDeactivated, 'Terminated subscription');
+
+  Self.SS.Reason := EventReasonRejected;
+  Check(not Self.SS.IsDeactivated, 'Terminated subscription; reason: rejected');
+
+  Self.SS.Reason := EventReasonDeactivated;
+  Check(Self.SS.IsDeactivated, 'Terminated subscription; reason: deactivated');
+end;
+
+procedure TestTIdSipSubscriptionStateHeader.TestIsTerminated;
+begin
+  Self.SS.SubState := SubscriptionSubstatePending;
+  Check(not Self.SS.IsTerminated, 'Pending subscription');
+
+  Self.SS.SubState := SubscriptionSubstateActive;
+  Check(not Self.SS.IsTerminated, 'Active subscription');
+
+  Self.SS.SubState := SubscriptionSubstateTerminated;
+  Check(Self.SS.IsTerminated, 'Terminated subscription');
+end;
 
 procedure TestTIdSipSubscriptionStateHeader.TestValue;
 begin

@@ -717,6 +717,9 @@ type
     function GetName: String; override;
     procedure Parse(const Value: String); override;
   public
+    function IsDeactivated: Boolean;
+    function IsTerminated: Boolean;
+
     property Expires:    Cardinal read GetExpires write SetExpires;
     property Reason:     String   read GetReason write SetReason;
     property RetryAfter: Cardinal read GetRetryAfter write SetRetryAfter;
@@ -4762,6 +4765,18 @@ end;
 //******************************************************************************
 //* TIdSipSubscriptionStateHeader                                              *
 //******************************************************************************
+//* TIdSipSubscriptionStateHeader Public methods *******************************
+
+function TIdSipSubscriptionStateHeader.IsDeactivated: Boolean;
+begin
+  Result := false;
+end;
+
+function TIdSipSubscriptionStateHeader.IsTerminated: Boolean;
+begin
+  Result := false;
+end;
+
 //* TIdSipSubscriptionStateHeader Protected methods ****************************
 
 function TIdSipSubscriptionStateHeader.GetName: String;
