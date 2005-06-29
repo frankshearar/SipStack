@@ -8364,7 +8364,7 @@ begin
   Self.Invite.Body := Self.RemoteDesc;
 
   if (Self.Invite.Body <> '') then
-    Self.Invite.ContentType   := Self.RemoteContentType;
+    Self.Invite.ContentType := Self.RemoteContentType;
 
   Self.Invite.ContentLength := Length(Self.RemoteDesc);
 
