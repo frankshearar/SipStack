@@ -218,6 +218,7 @@ type
     procedure TestReceiveByeForDialog;
     procedure TestReceiveByeDestroysTerminatedSession;
     procedure TestReceiveByeWithoutTags;
+    procedure TestReceiveNotifyForUnmatchedDialog;
     procedure TestReceiveOptions;
     procedure TestReceiveResponseWithMultipleVias;
     procedure TestRejectMalformedAuthorizedRequest;
@@ -3596,6 +3597,35 @@ begin
                 'Response Status-Code')
   finally
     Bye.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgent.TestReceiveNotifyForUnmatchedDialog;
+var
+  Notify:   TIdSipRequest;
+  Response: TIdSipResponse;
+begin
+  Self.Core.AddModule(TIdSipSubscribeModule);
+
+  Notify := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+  try
+    Notify.Method          := MethodNotify;
+    Notify.CSeq.SequenceNo := $deadbeef;
+    Notify.CSeq.Method     := Notify.Method;
+    Notify.AddHeader(EventHeaderFull).Value := 'UnsupportedEvent';
+
+    Self.MarkSentResponseCount;
+
+    Self.ReceiveRequest(Notify);
+
+    CheckResponseSent('No response sent');
+    Response := Self.LastSentResponse;
+    CheckEquals(SIPCallLegOrTransactionDoesNotExist,
+                Response.StatusCode,
+                'Response Status-Code')
+
+  finally
+    Notify.Free;
   end;
 end;
 

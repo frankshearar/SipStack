@@ -4586,6 +4586,14 @@ function TIdSipSubscribeModule.Accept(Request: TIdSipRequest;
 var
   Subscription: TIdSipInboundSubscription;
 begin
+  Result := nil;
+
+  // While this module supports SUBSCRIBE and NOTIFY messages, only SUBSCRIBE
+  // messages can set up subscriptions: NOTIFYs always occur within the context
+  // of a subscription.
+  if not Request.IsSubscribe then
+    Exit;
+
   if Self.KnowsEvent(Request.FirstEvent.EventType) then begin
     Subscription := TIdSipInboundSubscription.Create(Self.UserAgent, Request);
     Self.UserAgent.NotifyOfSubscriptionRequest(Subscription);
