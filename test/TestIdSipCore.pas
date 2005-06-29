@@ -252,6 +252,14 @@ type
     procedure TestViaMatchesTransportParameter;
   end;
 
+  TestTIdSipUserAgentWithSubscribeModule = class(TTestCaseTU)
+  private
+    procedure ReceiveOptions;
+  published
+    procedure TestReceiveOptions;
+    procedure TestSendInvite;
+  end;
+
   TestTIdSipStackConfigurator = class(TThreadingTestCase)
   private
     Address:        String;
@@ -460,7 +468,8 @@ type
     procedure OnSuccess(InviteAgent: TIdSipOutboundInvite;
                         Response: TIdSipResponse);
   protected
-    function  CreateAction: TIdSipAction; override;
+    function CreateAction: TIdSipAction; override;
+    function CreateInitialInvite: TIdSipOutboundInitialInvite;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -492,7 +501,6 @@ type
 
   TestTIdSipOutboundRedirectedInvite = class(TestTIdSipOutboundInvite)
   private
-    function CreateInitialInvite: TIdSipOutboundInitialInvite;
     function CreateInvite: TIdSipOutboundRedirectedInvite;
   protected
     function CreateAction: TIdSipAction; override;
@@ -1382,6 +1390,7 @@ begin
   Result.AddTest(TestTIdSipRegistrations.Suite);
   Result.AddTest(TestTIdSipActions.Suite);
   Result.AddTest(TestTIdSipUserAgent.Suite);
+  Result.AddTest(TestTIdSipUserAgentWithSubscribeModule.Suite);
   Result.AddTest(TestTIdSipStackConfigurator.Suite);
   Result.AddTest(TestLocation.Suite);
   Result.AddTest(TestTIdSipInboundInvite.Suite);
@@ -3846,10 +3855,10 @@ begin
   CheckEquals(SIPBadEvent,
               Self.LastSentResponse.StatusCode,
               'Unexpected response');
-//  CheckHasHeader(Self.LastSentResponse, AllowEventsHeaderFull);
-//  CheckEquals(SubModule.AllowedEvents,
-//              Self.LastSentResponse.FirstHeader(AllowEventsHeaderFull).Value,
-//              'Wrong Allow-Events value');
+  CheckHasHeader(Self.LastSentResponse, AllowEventsHeaderFull);
+  CheckEquals(SubModule.AllowedEvents,
+              Self.LastSentResponse.FirstHeader(AllowEventsHeaderFull).Value,
+              'Wrong Allow-Events value');
 
 end;
 
@@ -4360,6 +4369,71 @@ begin
               Self.LastSentRequest.LastHop.Transport,
               'Transport parameter = '
             + Self.Destination.Address.Transport);
+end;
+
+//******************************************************************************
+//* TestTIdSipUserAgentWithSubscribeModule                                     *
+//******************************************************************************
+//* TestTIdSipUserAgentWithSubscribeModule Private methods *********************
+
+procedure TestTIdSipUserAgentWithSubscribeModule.ReceiveOptions;
+var
+  Options: TIdSipRequest;
+  Temp:    String;
+begin
+  Options := Self.Core.CreateOptions(Self.Destination);
+  try
+    // Swop To & From because this comes from the network
+    Temp := Options.From.FullValue;
+    Options.From.Value := Options.ToHeader.FullValue;
+    Options.ToHeader.Value := Temp;
+
+    Self.ReceiveRequest(Options);
+  finally
+    Options.Free;
+  end;
+end;
+
+//* TestTIdSipUserAgentWithSubscribeModule Published methods *******************
+
+procedure TestTIdSipUserAgentWithSubscribeModule.TestReceiveOptions;
+var
+  Response: TIdSipResponse;
+  SubModule: TIdSipSubscribeModule;
+begin
+  SubModule := Self.Core.AddModule(TIdSipSubscribeModule) as TIdSipSubscribeModule;
+  Self.MarkSentResponseCount;
+
+  Self.ReceiveOptions;
+
+  CheckResponseSent('No response sent');
+  Response := Self.LastSentResponse;
+
+  Check(Response.HasHeader(AllowEventsHeaderFull),
+        'No Allow-Events header');
+  CheckEquals(SubModule.AllowedEvents,
+              Response.FirstHeader(AllowEventsHeaderFull).Value,
+              'Allow-Events value');
+end;
+
+procedure TestTIdSipUserAgentWithSubscribeModule.TestSendInvite;
+var
+  Invite:    TIdSipRequest;
+  SubModule: TIdSipSubscribeModule;
+begin
+  SubModule := Self.Core.AddModule(TIdSipSubscribeModule) as TIdSipSubscribeModule;
+
+  Self.MarkSentRequestCount;
+  Self.Core.Call(Self.Destination, '', '').Send;
+
+  CheckRequestSent('No request sent');
+
+  Invite := Self.LastSentRequest;
+  Check(Invite.HasHeader(AllowEventsHeaderFull),
+        'No Allow-Events header');
+  CheckEquals(SubModule.AllowedEvents,
+              Invite.FirstHeader(AllowEventsHeaderFull).Value,
+              'Allow-Events value');
 end;
 
 //******************************************************************************
@@ -6612,6 +6686,15 @@ begin
   Invite.Send;
 end;
 
+function TestTIdSipOutboundInvite.CreateInitialInvite: TIdSipOutboundInitialInvite;
+begin
+  Result := Self.Core.AddOutboundAction(TIdSipOutboundInitialInvite) as TIdSipOutboundInitialInvite;
+  Result.Destination := Self.Destination;
+  Result.MimeType    := Self.InviteMimeType;
+  Result.Offer       := Self.InviteOffer;
+  Result.Send;
+end;
+
 //* TestTIdSipOutboundInvite Private methods ***********************************
 
 procedure TestTIdSipOutboundInvite.CheckReceiveFailed(StatusCode: Cardinal);
@@ -7277,15 +7360,6 @@ begin
 end;
 
 //* TestTIdSipOutboundRedirectedInvite Private methods *************************
-
-function TestTIdSipOutboundRedirectedInvite.CreateInitialInvite: TIdSipOutboundInitialInvite;
-begin
-  Result := Self.Core.AddOutboundAction(TIdSipOutboundInitialInvite) as TIdSipOutboundInitialInvite;
-  Result.Destination := Self.Destination;
-  Result.MimeType    := Self.InviteMimeType;
-  Result.Offer       := Self.InviteOffer;
-  Result.Send;
-end;
 
 function TestTIdSipOutboundRedirectedInvite.CreateInvite: TIdSipOutboundRedirectedInvite;
 begin

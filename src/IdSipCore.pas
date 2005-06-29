@@ -588,6 +588,8 @@ type
                                         Challenge: TIdSipResponse;
                                         ChallengeResponse: TIdSipRequest;
                                         var TryAgain: Boolean); override;
+    procedure PrepareResponse(Response: TIdSipResponse;
+                              Request: TIdSipRequest); override;
     procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
                             Request: TIdSipRequest); override;
     function  ResponseForInvite: Cardinal; virtual;
@@ -857,11 +859,13 @@ type
 
   TIdSipSubscribeModule = class(TIdSipMessageModule)
   private
-    function KnowsEvent(const EventPackage: String): Boolean;
+    function  KnowsEvent(const EventPackage: String): Boolean;
+    procedure RejectUnknownEvent(Request: TIdSipRequest);
   public
     function Accept(Request: TIdSipRequest;
                     UsingSecureTransport: Boolean): TIdSipAction; override;
     function AcceptsMethods: String; override;
+    function AllowedEvents: String;
     function WillAccept(Request: TIdSipRequest): Boolean; override;
   end;
 
@@ -3194,7 +3198,7 @@ begin
   try
     Result.Method      := Method;
     Result.CSeq.Method := Method;
-    
+
     Self.AddLocalHeaders(Result);
   except
     FreeAndNil(Result);
@@ -3525,7 +3529,8 @@ end;
 
 procedure TIdSipAbstractUserAgent.AddLocalHeaders(OutboundRequest: TIdSipRequest);
 var
-  Transport: String;
+  SubscribeModule: TIdSipSubscribeModule;
+  Transport:       String;
 begin
   // TODO: We must discover the transport using RFC 3263
 
@@ -3545,6 +3550,13 @@ begin
 
   if (Self.UserAgentName <> '') then
     OutboundRequest.AddHeader(UserAgentHeader).Value := Self.UserAgentName;
+
+  if OutboundRequest.WantsAllowEventsHeader then begin
+    // RFC 3265, section 3.3.7
+    SubscribeModule := Self.ModuleFor(MethodSubscribe) as TIdSipSubscribeModule;
+    if Assigned(SubscribeModule) then
+      OutboundRequest.AddHeader(AllowEventsHeaderFull).Value := SubscribeModule.AllowedEvents;
+  end;
 
   OutboundRequest.AddHeader(Self.Contact);
 
@@ -3630,6 +3642,21 @@ begin
   finally
     // Write over the buffer that held the password.
     FillChar(Password, Length(Password), 0);
+  end;
+end;
+
+procedure TIdSipAbstractUserAgent.PrepareResponse(Response: TIdSipResponse;
+                                                  Request: TIdSipRequest);
+var
+  SubscribeModule: TIdSipSubscribeModule;
+begin
+  inherited PrepareResponse(Response, Request);
+
+  if Response.WantsAllowEventsHeader then begin
+    // RFC 3265, section 3.3.7
+    SubscribeModule := Self.ModuleFor(MethodSubscribe) as TIdSipSubscribeModule;
+    if Assigned(SubscribeModule) then
+      Response.AddHeader(AllowEventsHeaderFull).Value := SubscribeModule.AllowedEvents;
   end;
 end;
 
@@ -4601,7 +4628,7 @@ begin
   end
   else begin
     Result := nil;
-    Self.UserAgent.ReturnResponse(Request, SIPBadEvent);
+    Self.RejectUnknownEvent(Request);
   end;
 end;
 
@@ -4609,6 +4636,11 @@ function TIdSipSubscribeModule.AcceptsMethods: String;
 begin
   Result := MethodSubscribe + ', '
           + MethodNotify;
+end;
+
+function TIdSipSubscribeModule.AllowedEvents: String;
+begin
+  Result := 'Foo';
 end;
 
 function TIdSipSubscribeModule.WillAccept(Request: TIdSipRequest): Boolean;
@@ -4620,7 +4652,21 @@ end;
 
 function TIdSipSubscribeModule.KnowsEvent(const EventPackage: String): Boolean;
 begin
-  Result := EventPackage = 'Foo';
+  Result := Pos(EventPackage, Self.AllowedEvents) > 0;
+end;
+
+procedure TIdSipSubscribeModule.RejectUnknownEvent(Request: TIdSipRequest);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.UserAgent.CreateResponse(Request, SIPBadEvent);
+  try
+    Response.AddHeader(AllowEventsHeaderFull).Value := Self.AllowedEvents;
+
+    Self.UserAgent.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
 end;
 
 //******************************************************************************

@@ -1193,6 +1193,7 @@ type
     procedure ReadBody(Src: TStream);
     procedure RemoveHeader(Header: TIdSipHeader);
     procedure RemoveAllHeadersNamed(const Name: String);
+    function  WantsAllowEventsHeader: Boolean; virtual;
 
     property Body:               String                         read fBody write fBody;
     property CallID:             String                         read GetCallID write SetCallID;
@@ -1281,6 +1282,7 @@ type
     function  MatchCancel(Cancel: TIdSipRequest): Boolean;
     function  ProxyAuthorizationFor(const Realm: String): TIdSipProxyAuthorizationHeader;
     function  RequiresResponse: Boolean;
+    function  WantsAllowEventsHeader: Boolean; override;
 
     property MaxForwards: Byte            read GetMaxForwards write SetMaxForwards;
     property Method:      String          read fMethod write fMethod;
@@ -1347,6 +1349,7 @@ type
     function  IsRequest: Boolean; override;
     function  IsTrying: Boolean;
     function  MalformedException: EBadMessageClass; override;
+    function  WantsAllowEventsHeader: Boolean; override;
     function  WillEstablishDialog(Request: TIdSipRequest): Boolean; overload;
 
     property RequestRequestUri: TIdSipUri read fRequestRequestUri write SetRequestRequestUri;
@@ -6721,6 +6724,16 @@ begin
   Self.Headers.RemoveAll(Name);
 end;
 
+function TIdSipMessage.WantsAllowEventsHeader: Boolean;
+begin
+  // If the stack supports RFC 3265, section 3.3.7 says that we SHOULD put an
+  // Allow-Events header in requests that can set up dialogs, responses to those
+  // requests, and OPTIONS responses.
+  //
+  // If Self counts as one of these, Result is true. 
+  Result := false;
+end;
+
 //* TIdSipMessage Protected methods ********************************************
 
 procedure TIdSipMessage.FailParse(const Reason: String);
@@ -7421,6 +7434,11 @@ begin
   Result := not Self.IsAck;
 end;
 
+function TIdSipRequest.WantsAllowEventsHeader: Boolean;
+begin
+  Result := Self.IsInvite or Self.IsSubscribe;
+end;
+
 //* TIdSipRequest Protected methods ********************************************
 
 function TIdSipRequest.FirstLine: String;
@@ -7879,6 +7897,13 @@ end;
 function TIdSipResponse.MalformedException: EBadMessageClass;
 begin
   Result := EBadResponse;
+end;
+
+function TIdSipResponse.WantsAllowEventsHeader: Boolean;
+begin
+  Result := (Self.CSeq.Method = MethodInvite)
+         or (Self.CSeq.Method = MethodOptions)
+         or (Self.CSeq.Method = MethodSubscribe);
 end;
 
 function TIdSipResponse.WillEstablishDialog(Request: TIdSipRequest): Boolean;

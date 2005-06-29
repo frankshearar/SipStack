@@ -184,6 +184,7 @@ type
     procedure TestRequiresResponse;
     procedure TestSetMaxForwards;
     procedure TestSetRoute;
+    procedure TestWantsAllowEventsHeader;
   end;
 
   TestTIdSipResponse = class(TestTIdSipMessage)
@@ -254,6 +255,7 @@ type
     procedure TestParseEmptyString;
     procedure TestParseFoldedHeader;
     procedure TestParseLeadingBlankLines;
+    procedure TestWantsAllowEventsHeader;
   end;
 
   TestTIdSipRequestList = class(TTestCase)
@@ -2814,6 +2816,21 @@ begin
   end;
 end;
 
+procedure TestTIdSipRequest.TestWantsAllowEventsHeader;
+begin
+  Self.Request.Method := MethodInvite;
+  Check(Self.Request.WantsAllowEventsHeader,
+        Self.Request.Method + ' method');
+
+  Self.Request.Method := MethodRegister;
+  Check(not Self.Request.WantsAllowEventsHeader,
+        Self.Request.Method + ' method');
+
+  Self.Request.Method := MethodSubscribe;
+  Check(Self.Request.WantsAllowEventsHeader,
+        Self.Request.Method + ' method');
+end;
+
 //******************************************************************************
 //* TestTIdSipResponse                                                         *
 //******************************************************************************
@@ -3868,6 +3885,25 @@ begin
   finally
     Res.Free;
   end;
+end;
+
+procedure TestTIdSipResponse.TestWantsAllowEventsHeader;
+begin
+  Self.Response.CSeq.Method := MethodInvite;
+  Check(Self.Response.WantsAllowEventsHeader,
+        Self.Response.CSeq.Method + ' CSeq method');
+
+  Self.Response.CSeq.Method := MethodRegister;
+  Check(not Self.Response.WantsAllowEventsHeader,
+        Self.Response.CSeq.Method + ' CSeq method');
+
+  Self.Response.CSeq.Method := MethodSubscribe;
+  Check(Self.Response.WantsAllowEventsHeader,
+        Self.Response.CSeq.Method + ' CSeq method');
+
+  Self.Response.CSeq.Method := MethodOptions;
+  Check(Self.Response.WantsAllowEventsHeader,
+        Self.Response.CSeq.Method + ' CSeq method');
 end;
 
 //******************************************************************************

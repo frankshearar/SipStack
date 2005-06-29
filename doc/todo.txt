@@ -9,7 +9,6 @@ RFC 3265 still to do:
    3.3.     General................................................ 18
    3.3.1.   Detecting support for SUBSCRIBE and NOTIFY............. 18
    3.3.3.   Forking................................................ 18
-   3.3.4.   Dialog creation and termination........................ 18
    3.3.5.   State Agents and Notifier Migration.................... 19
    3.3.6.   Polling Resource State................................. 20
    3.3.7.   Allow-Events header usage.............................. 21
