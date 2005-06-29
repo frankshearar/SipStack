@@ -144,6 +144,7 @@ type
     procedure TestFirstProxyRequire;
     procedure TestFirstReplaces;
     procedure TestFirstRoute;
+    procedure TestFirstSubscriptionState;
     procedure TestHasAuthorization;
     procedure TestHasAuthorizationFor;
     procedure TestHasProxyAuthorization;
@@ -1989,6 +1990,21 @@ begin
   Self.Request.AddHeader(RouteHeader);
 
   Check(A = Self.Request.FirstRoute, 'Wrong Route');
+end;
+
+procedure TestTIdSipRequest.TestFirstSubscriptionState;
+var
+  A: TIdSipHeader;
+begin
+  Self.Request.ClearHeaders;
+
+  CheckNotNull(Self.Request.FirstSubscriptionState, 'Subscription-State not present');
+  CheckEquals(1, Self.Request.HeaderCount, 'Subscription-State not auto-added');
+
+  A := Self.Request.FirstHeader(SubscriptionStateHeader);
+  Self.Request.AddHeader(SubscriptionStateHeader);
+
+  Check(A = Self.Request.FirstSubscriptionState, 'Wrong Subscription-State');
 end;
 
 procedure TestTIdSipRequest.TestHasAuthorization;

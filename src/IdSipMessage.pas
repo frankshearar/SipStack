@@ -1259,6 +1259,7 @@ type
     function  FirstProxyRequire: TIdSipCommaSeparatedHeader;
     function  FirstReplaces: TIdSipReplacesHeader;
     function  FirstRoute: TIdSipRouteHeader;
+    function  FirstSubscriptionState: TIdSipSubscriptionStateHeader;
     function  HasAuthorization: Boolean;
     function  HasAuthorizationFor(const Realm: String): Boolean;
     function  HasProxyAuthorization: Boolean;
@@ -7283,6 +7284,11 @@ end;
 function TIdSipRequest.FirstRoute: TIdSipRouteHeader;
 begin
   Result := Self.FirstHeader(RouteHeader) as TIdSipRouteHeader
+end;
+
+function TIdSipRequest.FirstSubscriptionState: TIdSipSubscriptionStateHeader;
+begin
+  Result := Self.FirstHeader(SubscriptionStateHeader) as TIdSipSubscriptionStateHeader
 end;
 
 function TIdSipRequest.HasAuthorization: Boolean;
