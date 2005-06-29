@@ -4769,12 +4769,12 @@ end;
 
 function TIdSipSubscriptionStateHeader.IsDeactivated: Boolean;
 begin
-  Result := false;
+  Result := Self.IsTerminated and IsEqual(Self.Reason, EventReasonDeactivated);
 end;
 
 function TIdSipSubscriptionStateHeader.IsTerminated: Boolean;
 begin
-  Result := false;
+  Result := IsEqual(Self.SubState, SubscriptionSubstateTerminated);
 end;
 
 //* TIdSipSubscriptionStateHeader Protected methods ****************************
