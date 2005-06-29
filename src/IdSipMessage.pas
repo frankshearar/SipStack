@@ -5536,6 +5536,7 @@ begin
     GCanonicalHeaderNames.Add(ServerHeader               + '=' + ServerHeader);
     GCanonicalHeaderNames.Add(SubjectHeaderFull          + '=' + SubjectHeaderFull);
     GCanonicalHeaderNames.Add(SubjectHeaderShort         + '=' + SubjectHeaderFull);
+    GCanonicalHeaderNames.Add(SubscriptionStateHeader    + '=' + SubscriptionStateHeader);
     GCanonicalHeaderNames.Add(SupportedHeaderFull        + '=' + SupportedHeaderFull);
     GCanonicalHeaderNames.Add(SupportedHeaderShort       + '=' + SupportedHeaderFull);
     GCanonicalHeaderNames.Add(TimestampHeader            + '=' + TimestampHeader);
@@ -5705,6 +5706,7 @@ begin
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ReplacesHeader,             TIdSipReplacesHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RetryAfterHeader,           TIdSipRetryAfterHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RouteHeader,                TIdSipRouteHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(SubscriptionStateHeader,    TIdSipSubscriptionStateHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(SupportedHeaderFull,        TIdSipCommaSeparatedHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(SupportedHeaderShort,       TIdSipCommaSeparatedHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(TimestampHeader,            TIdSipTimestampHeader));

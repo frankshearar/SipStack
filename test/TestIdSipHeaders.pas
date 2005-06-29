@@ -5244,6 +5244,7 @@ begin
   CheckType(TIdSipHeader,                       Self.Headers.Add(ServerHeader),               ServerHeader);
   CheckType(TIdSipHeader,                       Self.Headers.Add(SubjectHeaderFull),          SubjectHeaderFull);
   CheckType(TIdSipHeader,                       Self.Headers.Add(SubjectHeaderShort),         SubjectHeaderShort);
+  CheckType(TIdSipSubscriptionStateHeader,      Self.Headers.Add(SubscriptionStateHeader),    SubscriptionStateHeader);
   CheckType(TIdSipCommaSeparatedHeader,         Self.Headers.Add(SupportedHeaderFull),        SupportedHeaderFull);
   CheckType(TIdSipCommaSeparatedHeader,         Self.Headers.Add(SupportedHeaderShort),       SupportedHeaderShort);
   CheckType(TIdSipTimestampHeader,              Self.Headers.Add(TimestampHeader),            TimestampHeader);
