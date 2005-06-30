@@ -44,6 +44,7 @@ uses
   IdSipRegistration in 'src\IdSipRegistration.pas',
   IdSipServerNotifier in 'src\IdSipServerNotifier.pas',
   IdSipStackInterface in 'src\IdSipStackInterface.pas',
+  IdSipSubscribeModule in 'src\IdSipSubscribeModule.pas',
   IdSipTcpClient in 'src\IdSipTcpClient.pas',
   IdSipTcpServer in 'src\IdSipTcpServer.pas',
   IdSipTlsOverSctpTransport in 'src\IdSipTlsOverSctpTransport.pas',
@@ -88,6 +89,7 @@ uses
   TestIdSipRegistration in 'test\TestIdSipRegistration.pas',
   TestIdSipServerNotifier in 'test\TestIdSipServerNotifier.pas',
   TestIdSipStackInterface in 'test\TestIdSipStackInterface.pas',
+  TestIdSipSubscribeModule in 'test\TestIdSipSubscribeModule.pas',
   TestIdSipTcpClient in 'test\TestIdSipTcpClient.pas',
   TestIdSipTcpServer in 'test\TestIdSipTcpServer.pas',
   TestIdSipTransaction in 'test\TestIdSipTransaction.pas',
@@ -102,7 +104,7 @@ uses
   TestIdSipTlsServer in 'test\TestIdSipTlsServer.pas'}
 
 //{$DEFINE SPIKE}
-//{$DEFINE GUI}
+{$DEFINE GUI}
 
 {$IFNDEF GUI}
   {$APPTYPE CONSOLE}

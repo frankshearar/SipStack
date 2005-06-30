@@ -14,8 +14,8 @@ interface
 uses
   Classes, IdInterfacedObject, IdObservable, IdRTP, IdSdp, IdSipMessage,
   IdSipCore, IdSipDialog, IdSipMockLocator, IdSipMockTransactionDispatcher,
-  IdSipTcpClient, IdSipTcpServer, IdSipTransaction, IdSipTransport,
-  IdTimerQueue, SysUtils, TestFrameworkEx;
+  IdSipSubscribeModule, IdSipTcpClient, IdSipTcpServer, IdSipTransaction,
+  IdSipTransport, IdTimerQueue, SysUtils, TestFramework, TestFrameworkEx;
 
 type
   TIdSipTestResources = class(TObject)
@@ -106,6 +106,16 @@ type
     procedure CheckRequestSent(const Msg: String);
     procedure CheckNoResponseSent(const Msg: String);
     procedure CheckResponseSent(const Msg: String);
+  end;
+
+  TActionMethodTestCase = class(TTestCase)
+  protected
+    Dispatcher: TIdSipMockTransactionDispatcher;
+    Response:   TIdSipResponse;
+    UA:         TIdSipUserAgent;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
   end;
 
   TIdSipExceptionRaisingHeader = class(TIdSipHeader)
@@ -1213,6 +1223,31 @@ begin
                                + ' <' + Msg.ToHeader.Address.URI + '>';
   Msg.RemoveAllHeadersNamed(ContentTypeHeaderFull);
   Msg.ContentLength := 0;
+end;
+
+//******************************************************************************
+//* TActionMethodTestCase                                                      *
+//******************************************************************************
+//* TActionMethodTestCase Public methods ***************************************
+
+procedure TActionMethodTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
+
+  Self.UA := TIdSipUserAgent.Create;
+  Self.UA.Dispatcher := Self.Dispatcher;
+
+  Self.Response := TIdSipResponse.Create;
+end;
+
+procedure TActionMethodTestCase.TearDown;
+begin
+  Self.Response.Free;
+  Self.UA.Free;
+
+  inherited TearDown;
 end;
 
 //******************************************************************************
