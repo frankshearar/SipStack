@@ -715,10 +715,10 @@ type
     procedure SetSubState(Value: String);
   protected
     function GetName: String; override;
-    procedure Parse(const Value: String); override;
   public
     function IsDeactivated: Boolean;
     function IsTerminated: Boolean;
+    function IsTimedOut: Boolean;
 
     property Expires:    Cardinal read GetExpires write SetExpires;
     property Reason:     String   read GetReason write SetReason;
@@ -4777,16 +4777,16 @@ begin
   Result := IsEqual(Self.SubState, SubscriptionSubstateTerminated);
 end;
 
+function TIdSipSubscriptionStateHeader.IsTimedOut: Boolean;
+begin
+  Result := Self.IsTerminated and IsEqual(Self.Reason, EventReasonTimeout);
+end;
+
 //* TIdSipSubscriptionStateHeader Protected methods ****************************
 
 function TIdSipSubscriptionStateHeader.GetName: String;
 begin
   Result := SubscriptionStateHeader;
-end;
-
-procedure TIdSipSubscriptionStateHeader.Parse(const Value: String);
-begin
-  inherited Parse(Value);
 end;
 
 //* TIdSipSubscriptionStateHeader Private methods ******************************

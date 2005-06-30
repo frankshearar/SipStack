@@ -429,6 +429,7 @@ type
   published
     procedure TestIsDeactivated;
     procedure TestIsTerminated;
+    procedure TestIsTimedOut;
     procedure TestValue; override;
   end;
 
@@ -3735,6 +3736,24 @@ begin
 
   Self.SS.Reason := EventReasonDeactivated;
   Check(Self.SS.IsDeactivated, 'Terminated subscription; reason: deactivated');
+end;
+
+procedure TestTIdSipSubscriptionStateHeader.TestIsTimedOut;
+begin
+  Self.SS.SubState := SubscriptionSubstatePending;
+  Check(not Self.SS.IsTimedOut, 'Pending subscription');
+
+  Self.SS.SubState := SubscriptionSubstateActive;
+  Check(not Self.SS.IsTimedOut, 'Active subscription');
+
+  Self.SS.SubState := SubscriptionSubstateTerminated;
+  Check(not Self.SS.IsTimedOut, 'Terminated subscription');
+
+  Self.SS.Reason := EventReasonRejected;
+  Check(not Self.SS.IsTimedOut, 'Terminated subscription; reason: rejected');
+
+  Self.SS.Reason := EventReasonTimeout;
+  Check(Self.SS.IsTimedOut, 'Terminated subscription; reason: timeout');
 end;
 
 procedure TestTIdSipSubscriptionStateHeader.TestIsTerminated;
