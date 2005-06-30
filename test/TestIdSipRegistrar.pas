@@ -343,7 +343,7 @@ begin
   Self.Request.CSeq.Method := Self.Request.Method;
   Self.SimulateRemoteRequest;
   
-  Self.CheckServerReturned(SIPMethodNotAllowed,
+  Self.CheckServerReturned(SIPNotImplemented,
                            'INVITE');
 end;
 
