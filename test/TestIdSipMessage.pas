@@ -105,6 +105,7 @@ type
 
     procedure CheckBasicRequest(Msg: TIdSipMessage;
                                 CheckBody: Boolean = true);
+    procedure TurnIntoNotify(Request: TIdSipRequest);
   protected
     function MessageType: TIdSipMessageClass; override;
   public
@@ -162,6 +163,7 @@ type
     procedure TestIsMalformedMethod;
     procedure TestIsMalformedMissingMaxForwards;
     procedure TestIsMalformedMissingVia;
+    procedure TestIsMalformedNotify;
     procedure TestIsMalformedSipVersion;
     procedure TestIsNotify;
     procedure TestIsOptions;
@@ -1364,6 +1366,12 @@ begin
   Self.CheckBasicMessage(Msg, CheckBody);
 end;
 
+procedure TestTIdSipRequest.TurnIntoNotify(Request: TIdSipRequest);
+begin
+  Request.Method := MethodNotify;
+  Request.CSeq.Method := Self.Request.Method;
+end;
+
 //* TestTIdSipRequest Published methods ****************************************
 
 procedure TestTIdSipRequest.TestAckForEstablishingDialog;
@@ -2324,6 +2332,24 @@ begin
   CheckEquals(MissingVia,
               Self.Request.ParseFailReason,
               'ParseFailReason');
+end;
+
+procedure TestTIdSipRequest.TestIsMalformedNotify;
+begin
+  Self.AddRequiredHeaders(Self.Request);
+  Self.TurnIntoNotify(Self.Request);
+  Self.Request.Method := MethodNotify;
+  Self.Request.CSeq.Method := Self.Request.Method;
+
+  Check(Self.Request.IsMalformed, MissingSubscriptionState);
+
+  CheckEquals(MissingSubscriptionState,
+              Self.Request.ParseFailReason,
+              'ParseFailReason');
+
+  Self.Request.AddHeader(SubscriptionStateHeader).Value := SubscriptionSubstateActive;
+  Check(not Self.Request.IsMalformed,
+        SubscriptionStateHeader + ' added: "' + Self.Request.ParseFailReason + '"');
 end;
 
 procedure TestTIdSipRequest.TestIsMalformedSipVersion;

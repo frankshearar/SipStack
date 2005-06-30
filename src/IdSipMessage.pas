@@ -1900,6 +1900,7 @@ const
   MissingFrom                 = 'Missing From header';
   MissingMaxForwards          = 'Missing Max-Forwards header';
   MissingScheme               = 'Missing URI scheme';
+  MissingSubscriptionState    = 'Missing Subscription-State header';
   MissingTo                   = 'Missing To header';
   MissingSipVersion           = 'Missing SIP-Version';
   MissingVia                  = 'Missing Via header';
@@ -7569,6 +7570,12 @@ begin
   if not Self.HasHeader(MaxForwardsHeader) then begin
     Result := true;
     Self.MarkAsInvalid(MissingMaxForwards);
+    Exit;
+  end;
+
+  if (Self.IsNotify and not Self.HasHeader(SubscriptionStateHeader)) then begin
+    Result := true;
+    Self.MarkAsInvalid(MissingSubscriptionState);
     Exit;
   end;
 end;
