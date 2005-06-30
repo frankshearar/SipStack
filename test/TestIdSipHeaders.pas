@@ -422,12 +422,15 @@ type
   TestTIdSipSubscriptionStateHeader = class(THeaderTestCase)
   private
     SS: TIdSipSubscriptionStateHeader;
+
   protected
     function HeaderType: TIdSipHeaderClass; override;
   public
     procedure SetUp; override;
   published
     procedure TestIsDeactivated;
+    procedure TestIsNoResource;
+    procedure TestIsRejected;
     procedure TestIsTerminated;
     procedure TestIsTimedOut;
     procedure TestValue; override;
@@ -3736,6 +3739,42 @@ begin
 
   Self.SS.Reason := EventReasonDeactivated;
   Check(Self.SS.IsDeactivated, 'Terminated subscription; reason: deactivated');
+end;
+
+procedure TestTIdSipSubscriptionStateHeader.TestIsNoResource;
+begin
+  Self.SS.SubState := SubscriptionSubstatePending;
+  Check(not Self.SS.IsNoResource, 'Pending subscription');
+
+  Self.SS.SubState := SubscriptionSubstateActive;
+  Check(not Self.SS.IsNoResource, 'Active subscription');
+
+  Self.SS.SubState := SubscriptionSubstateTerminated;
+  Check(not Self.SS.IsNoResource, 'Terminated subscription');
+
+  Self.SS.Reason := EventReasonTimeout;
+  Check(not Self.SS.IsNoResource, 'Terminated subscription; reason: timeout');
+
+  Self.SS.Reason := EventReasonNoResource;
+  Check(Self.SS.IsNoResource, 'Terminated subscription; reason: noresource');
+end;
+
+procedure TestTIdSipSubscriptionStateHeader.TestIsRejected;
+begin
+  Self.SS.SubState := SubscriptionSubstatePending;
+  Check(not Self.SS.IsRejected, 'Pending subscription');
+
+  Self.SS.SubState := SubscriptionSubstateActive;
+  Check(not Self.SS.IsRejected, 'Active subscription');
+
+  Self.SS.SubState := SubscriptionSubstateTerminated;
+  Check(not Self.SS.IsRejected, 'Terminated subscription');
+
+  Self.SS.Reason := EventReasonTimeout;
+  Check(not Self.SS.IsRejected, 'Terminated subscription; reason: timeout');
+
+  Self.SS.Reason := EventReasonRejected;
+  Check(Self.SS.IsRejected, 'Terminated subscription; reason: rejected');
 end;
 
 procedure TestTIdSipSubscriptionStateHeader.TestIsTimedOut;

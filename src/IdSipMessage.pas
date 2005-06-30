@@ -717,6 +717,8 @@ type
     function GetName: String; override;
   public
     function IsDeactivated: Boolean;
+    function IsNoResource: Boolean;
+    function IsRejected: Boolean;
     function IsTerminated: Boolean;
     function IsTimedOut: Boolean;
 
@@ -4771,6 +4773,16 @@ end;
 function TIdSipSubscriptionStateHeader.IsDeactivated: Boolean;
 begin
   Result := Self.IsTerminated and IsEqual(Self.Reason, EventReasonDeactivated);
+end;
+
+function TIdSipSubscriptionStateHeader.IsNoResource: Boolean;
+begin
+  Result := Self.IsTerminated and IsEqual(Self.Reason, EventReasonNoResource);
+end;
+
+function TIdSipSubscriptionStateHeader.IsRejected: Boolean;
+begin
+  Result := Self.IsTerminated and IsEqual(Self.Reason, EventReasonRejected);
 end;
 
 function TIdSipSubscriptionStateHeader.IsTerminated: Boolean;
