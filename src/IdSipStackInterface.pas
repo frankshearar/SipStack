@@ -355,7 +355,7 @@ begin
   inherited Create(true);
 
   Self.ActionLock := TCriticalSection.Create;
-  Self.Actions   := TObjectList.Create(true);
+  Self.Actions    := TObjectList.Create(true);
 
   Self.fUiHandle := UiHandle;
 
