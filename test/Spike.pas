@@ -174,8 +174,6 @@ type
                             Sender: TIdSipTransport);
     procedure OnSendResponse(Response: TIdSipResponse;
                              Sender: TIdSipTransport);
-    procedure OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
-                                    Subscription: TIdSipInboundSubscription);
     procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts);
     procedure ProcessPCM(Data: TStream);
@@ -607,11 +605,6 @@ procedure TrnidSpike.OnSendResponse(Response: TIdSipResponse;
                                     Sender: TIdSipTransport);
 begin
   Self.LogMessage(Response, false);
-end;
-
-procedure TrnidSpike.OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
-                                           Subscription: TIdSipInboundSubscription);
-begin
 end;
 
 procedure TrnidSpike.OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
