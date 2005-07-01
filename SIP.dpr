@@ -65,6 +65,7 @@ uses
   TestFrameworkEx in 'test\TestFrameworkEx.pas',
   TestFrameworkRtp in 'test\TestFrameworkRtp.pas',
   TestFrameworkSip in 'test\TestFrameworkSip.pas',
+  TestFrameworkSipTU in 'test\TestFrameworkSipTU.pas',
   TestMessages in 'test\TestMessages.pas',
   TestIdNotification in 'test\TestIdNotification.pas',
   TestIdObservable in 'test\TestIdObservable.pas',
@@ -104,7 +105,7 @@ uses
   TestIdSipTlsServer in 'test\TestIdSipTlsServer.pas'}
 
 //{$DEFINE SPIKE}
-{$DEFINE GUI}
+//{$DEFINE GUI}
 
 {$IFNDEF GUI}
   {$APPTYPE CONSOLE}
