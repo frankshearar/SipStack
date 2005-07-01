@@ -716,6 +716,7 @@ type
   protected
     function GetName: String; override;
   public
+    function IsActive: Boolean;
     function IsDeactivated: Boolean;
     function IsNoResource: Boolean;
     function IsRejected: Boolean;
@@ -4769,6 +4770,11 @@ end;
 //* TIdSipSubscriptionStateHeader                                              *
 //******************************************************************************
 //* TIdSipSubscriptionStateHeader Public methods *******************************
+
+function TIdSipSubscriptionStateHeader.IsActive: Boolean;
+begin
+  Result := IsEqual(Self.SubState, SubscriptionSubstateActive);
+end;
 
 function TIdSipSubscriptionStateHeader.IsDeactivated: Boolean;
 begin

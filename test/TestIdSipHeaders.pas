@@ -428,6 +428,7 @@ type
   public
     procedure SetUp; override;
   published
+    procedure TestIsActive;
     procedure TestIsDeactivated;
     procedure TestIsNoResource;
     procedure TestIsRejected;
@@ -3722,6 +3723,18 @@ begin
 end;
 
 //* TestTIdSipSubscriptionStateHeader Published methods ************************
+
+procedure TestTIdSipSubscriptionStateHeader.TestIsActive;
+begin
+  Self.SS.SubState := SubscriptionSubstatePending;
+  Check(not Self.SS.IsActive, 'Pending subscription');
+
+  Self.SS.SubState := SubscriptionSubstateActive;
+  Check(Self.SS.IsActive, 'Active subscription');
+
+  Self.SS.SubState := SubscriptionSubstateTerminated;
+  Check(not Self.SS.IsActive, 'Terminated subscription');
+end;
 
 procedure TestTIdSipSubscriptionStateHeader.TestIsDeactivated;
 begin
