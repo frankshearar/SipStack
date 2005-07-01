@@ -37,7 +37,8 @@ type
 
   TIdSipOutboundSubscription = class;
 
-  // I define the protocol for things that listen for Subscription events.
+  // I define the protocol for things that listen for a particular
+  // Subscription's events.
   // * OnEstablishedSubscription tells you that the target returned a 202
   //   Accepted or a 200 OK. This means that the remote end is prepared to
   //   notify you, or has consulted the user for permission.
@@ -48,24 +49,27 @@ type
   // * OnNotify tells you that the target notified you of some state change.
   //   This event will trigger on ALL notifications, so for instance you'll
   //   see this event fire just before OnExpiredSubscription.
-  // * OnRenewedSubscription fires when the target deactivates the subscription:
-  //   the old subscription will automatically make a new subscription and copy
-  //   the listeners over to the new subscription.
   IIdSipSubscriptionListener = interface(IIdSipActionListener)
     ['{6A6F6A2D-D987-47BE-BC70-83622FF99CDF}']
     procedure OnEstablishedSubscription(Subscription: TIdSipOutboundSubscription;
-                                        Response: TIdSipResponse);
+                                        Notify: TIdSipRequest);
     procedure OnExpiredSubscription(Subscription: TIdSipOutboundSubscription;
                                     Notify: TIdSipRequest);
     procedure OnNotify(Subscription: TIdSipOutboundSubscription;
                        Notify: TIdSipRequest);
-    procedure OnRenewedSubscription(NewSubscription: TIdSipOutboundSubscription);
   end;
 
   TIdSipInboundSubscription = class;
 
+  // I define the protocol for things that are interested in subscriptions.
+  // * OnRenewedSubscription fires whenever something creates a new outbound
+  //   Subscription as part of an automatic process: when the target
+  //   deactivates the subscription, when the retry-after time elapses for some
+  //   scheduled event, etc.
   IIdSipSubscribeModuleListener = interface(IIdSipMessageModuleListener)
     ['{9BF47363-0182-4E6E-88E0-A1898B3B779B}']
+    procedure OnRenewedSubscription(UserAgent: TIdSipAbstractUserAgent;
+                                    Subscription: TIdSipOutboundSubscription);
     procedure OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
                                     Subscription: TIdSipInboundSubscription);
   end;
@@ -79,6 +83,7 @@ type
     Packages:  TObjectList;
 
     function  KnowsEvent(const EventPackage: String): Boolean;
+    procedure NotifyOfRenewedSubscription(NewSub: TIdSipOutboundSubscription);
     procedure NotifyOfSubscriptionRequest(Subscription: TIdSipInboundSubscription);
     function  PackageAt(Index: Integer): TIdSipEventPackage;
     procedure RejectUnknownEvent(Request: TIdSipRequest);
@@ -93,7 +98,10 @@ type
     procedure AddPackage(PackageType: TIdSipEventPackageClass);
     function  AllowedEvents: String;
     procedure RemoveAllPackages;
+    function  Resubscribe(OldSub: TIdSipOutboundSubscription): TIdSipOutboundSubscription;
     procedure RemoveListener(Listener: IIdSipSubscribeModuleListener);
+    function  Subscribe(Target: TIdSipAddressHeader;
+                        const EventPackage: String): TIdSipOutboundSubscription;
     function  WillAccept(Request: TIdSipRequest): Boolean; override;
   end;
 
@@ -179,6 +187,7 @@ type
     fID:           String;
     fTarget:       TIdSipAddressHeader;
     fTerminating:  Boolean;
+    Module:        TIdSipSubscribeModule;
 
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Challenge: TIdSipResponse);
@@ -221,8 +230,7 @@ type
     procedure EstablishDialog(Response: TIdSipResponse);
     procedure NotifyOfExpiredSubscription(Notify: TIdSipRequest);
     procedure NotifyOfReceivedNotify(Notify: TIdSipRequest);
-    procedure NotifyOfRenewedSubscription(NewSub: TIdSipOutboundSubscription);
-    procedure NotifyOfSuccess(Response: TIdSipResponse);
+    procedure NotifyOfSuccess(Notify: TIdSipRequest);
     procedure OnFailure(SubscribeAgent: TIdSipOutboundSubscribe;
                         Response: TIdSipResponse);
     procedure OnSuccess(SubscribeAgent: TIdSipOutboundSubscribe;
@@ -232,8 +240,6 @@ type
   protected
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
     procedure ReceiveNotify(Notify: TIdSipRequest); override;
-    function  ReceiveOKResponse(Response: TIdSipResponse;
-                                UsingSecureTransport: Boolean): TIdSipActionStatus; override;
   public
     constructor Create(UA: TIdSipAbstractUserAgent); override;
     destructor  Destroy; override;
@@ -294,11 +300,11 @@ type
 
   TIdSipEstablishedSubscriptionMethod = class(TIdSipSubscriptionMethod)
   private
-    fResponse: TIdSipResponse;
+    fNotify: TIdSipRequest;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Response: TIdSipResponse read fResponse write fResponse;
+    property Notify: TIdSipRequest read fNotify write fNotify;
   end;
 
   TIdSipExpiredSubscriptionMethod = class(TIdSipSubscriptionMethod)
@@ -310,11 +316,6 @@ type
     property Notify: TIdSipRequest read fNotify write fNotify;
   end;
 
-  TIdSipRenewedSubscriptionMethod = class(TIdSipSubscriptionMethod)
-  public
-    procedure Run(const Subject: IInterface); override;
-  end;
-
   TIdSipSubscriptionNotifyMethod = class(TIdSipSubscriptionMethod)
   private
     fNotify: TIdSipRequest;
@@ -322,6 +323,15 @@ type
     procedure Run(const Subject: IInterface); override;
 
     property Notify: TIdSipRequest read fNotify write fNotify;
+  end;
+
+  TIdSipRenewedSubscriptionMethod = class(TIdSipUserAgentMethod)
+  private
+    fSubscription: TIdSipOutboundSubscription;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Subscription: TIdSipOutboundSubscription read fSubscription write fSubscription;
   end;
 
   TIdSipSubscriptionRequestMethod = class(TIdSipUserAgentMethod)
@@ -418,9 +428,30 @@ begin
   Self.Packages.Clear;
 end;
 
+function TIdSipSubscribeModule.Resubscribe(OldSub: TIdSipOutboundSubscription): TIdSipOutboundSubscription;
+begin
+  Result := Self.Subscribe(OldSub.Target, OldSub.EventPackage);
+  Self.NotifyOfRenewedSubscription(Result);
+  Result.Listeners.Add(OldSub.Listeners);
+  Result.Send;
+end;
+
 procedure TIdSipSubscribeModule.RemoveListener(Listener: IIdSipSubscribeModuleListener);
 begin
   Self.Listeners.RemoveListener(Listener);
+end;
+
+function TIdSipSubscribeModule.Subscribe(Target: TIdSipAddressHeader;
+                                   const EventPackage: String): TIdSipOutboundSubscription;
+var
+  Sub: TIdSipOutboundSubscription;
+begin
+  Sub := Self.UserAgent.AddOutboundAction(TIdSipOutboundSubscription) as TIdSipOutboundSubscription;
+
+  Sub.Target       := Target;
+  Sub.EventPackage := EventPackage;
+
+  Result := Sub;
 end;
 
 function TIdSipSubscribeModule.WillAccept(Request: TIdSipRequest): Boolean;
@@ -433,6 +464,21 @@ end;
 function TIdSipSubscribeModule.KnowsEvent(const EventPackage: String): Boolean;
 begin
   Result := Pos(EventPackage, Self.AllowedEvents) > 0;
+end;
+
+procedure TIdSipSubscribeModule.NotifyOfRenewedSubscription(NewSub: TIdSipOutboundSubscription);
+var
+  Notification: TIdSipRenewedSubscriptionMethod;
+begin
+  Notification := TIdSipRenewedSubscriptionMethod.Create;
+  try
+    Notification.Subscription := NewSub;
+    Notification.UserAgent    := Self.UserAgent;
+
+    Self.Listeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
 end;
 
 procedure TIdSipSubscribeModule.NotifyOfSubscriptionRequest(Subscription: TIdSipInboundSubscription);
@@ -709,6 +755,7 @@ begin
   inherited Create(UA);
 
   Self.fTerminating := false;
+  Self.Module := Self.UA.ModuleFor(Self.Method) as TIdSipSubscribeModule;
 end;
 
 //* TIdSipSubscription Protected methods ***************************************
@@ -873,7 +920,7 @@ begin
   State := Notify.FirstSubscriptionState;
 
   if State.IsActive then begin
-    Self.NotifyOfSuccess(nil);
+    Self.NotifyOfSuccess(Notify);
   end
   else if State.IsTerminated then begin
     if not (State.IsRejected or State.IsNoResource) then begin
@@ -885,12 +932,6 @@ begin
   end;
 
   Self.SendResponseFor(Notify);
-end;
-
-function TIdSipOutboundSubscription.ReceiveOKResponse(Response: TIdSipResponse;
-                                                      UsingSecureTransport: Boolean): TIdSipActionStatus;
-begin
-  Result := asInterim;
 end;
 
 //* TIdSipOutboundSubscription Private methods *********************************
@@ -955,27 +996,14 @@ begin
   end;
 end;
 
-procedure TIdSipOutboundSubscription.NotifyOfRenewedSubscription(NewSub: TIdSipOutboundSubscription);
-var
-  Notification: TIdSipRenewedSubscriptionMethod;
-begin
-  Notification := TIdSipRenewedSubscriptionMethod.Create;
-  try
-    Notification.Subscription := NewSub;
-
-    Self.Listeners.Notify(Notification);
-  finally
-    Notification.Free;
-  end;
-end;
-
-procedure TIdSipOutboundSubscription.NotifyOfSuccess(Response: TIdSipResponse);
+procedure TIdSipOutboundSubscription.NotifyOfSuccess(Notify: TIdSipRequest);
 var
   Notification: TIdSipEstablishedSubscriptionMethod;
 begin
   Notification := TIdSipEstablishedSubscriptionMethod.Create;
   try
     Notification.Subscription := Self;
+    Notification.Notify       := Notify;
 
     Self.Listeners.Notify(Notification);
   finally
@@ -1009,7 +1037,6 @@ begin
   if (Self.InitialSubscribe = SubscribeAgent) then begin
     Self.InitialSubscribe := nil;
     Self.EstablishDialog(Response);
-    Self.NotifyOfSuccess(Response);
 
     // Update expiry time;
     // reschedule a refresh
@@ -1032,15 +1059,8 @@ begin
 end;
 
 procedure TIdSipOutboundSubscription.StartNewSubscription(Notify: TIdSipRequest);
-var
-  NewSub: TIdSipOutboundSubscription;
 begin
-  NewSub := (Self.UA as TIdSipUserAgent).Subscribe(Self.Target, Self.EventPackage) as TIdSipOutboundSubscription;
-  NewSub.Listeners.Add(Self.Listeners);
-
-  Self.NotifyOfRenewedSubscription(NewSub);
-
-  NewSub.Send;
+  Self.Module.Resubscribe(Self);
 end;
 
 //******************************************************************************
@@ -1095,7 +1115,7 @@ end;
 procedure TIdSipEstablishedSubscriptionMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipSubscriptionListener).OnEstablishedSubscription(Self.Subscription,
-                                                                    Self.Response);
+                                                                    Self.Notify);
 end;
 
 //******************************************************************************
@@ -1110,16 +1130,6 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipRenewedSubscriptionMethod                                            *
-//******************************************************************************
-//* TIdSipRenewedSubscriptionMethod Public methods *****************************
-
-procedure TIdSipRenewedSubscriptionMethod.Run(const Subject: IInterface);
-begin
-  (Subject as IIdSipSubscriptionListener).OnRenewedSubscription(Self.Subscription);
-end;
-
-//******************************************************************************
 //* TIdSipSubscriptionNotifyMethod                                             *
 //******************************************************************************
 //* TIdSipSubscriptionNotifyMethod Public methods ******************************
@@ -1128,6 +1138,17 @@ procedure TIdSipSubscriptionNotifyMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipSubscriptionListener).OnNotify(Self.Subscription,
                                                    Self.Notify);
+end;
+
+//******************************************************************************
+//* TIdSipRenewedSubscriptionMethod                                            *
+//******************************************************************************
+//* TIdSipRenewedSubscriptionMethod Public methods *****************************
+
+procedure TIdSipRenewedSubscriptionMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipSubscribeModuleListener).OnRenewedSubscription(Self.UserAgent,
+                                                                   Self.Subscription);
 end;
 
 //******************************************************************************

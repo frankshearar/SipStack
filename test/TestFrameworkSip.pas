@@ -426,12 +426,11 @@ type
     fSubscriptionParam:       TIdSipOutboundSubscription;
 
     procedure OnEstablishedSubscription(Subscription: TIdSipOutboundSubscription;
-                                        Response: TIdSipResponse);
+                                        Notify: TIdSipRequest);
     procedure OnExpiredSubscription(Subscription: TIdSipOutboundSubscription;
                                     Notify: TIdSipRequest);
     procedure OnNotify(Subscription: TIdSipOutboundSubscription;
                        Notify: TIdSipRequest);
-    procedure OnRenewedSubscription(NewSubscription: TIdSipOutboundSubscription);
   public
     constructor Create; override;
 
@@ -627,16 +626,20 @@ type
   TIdSipTestSubscribeModuleListener = class(TIdSipMockListener,
                                             IIdSipSubscribeModuleListener)
   private
-    fSubscriptionParam:   TIdSipInboundSubscription;
+    fRenewedSubscription: Boolean;
+    fSubscriptionParam:   TIdSipSubscription;
     fSubscriptionRequest: Boolean;
     fUserAgentParam:      TIdSipAbstractUserAgent;
 
+    procedure OnRenewedSubscription(UserAgent: TIdSipAbstractUserAgent;
+                                    Subscription: TIdSipOutboundSubscription);
     procedure OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
                                     Subscription: TIdSipInboundSubscription);
   public
     constructor Create; override;
 
-    property SubscriptionParam:   TIdSipInboundSubscription read fSubscriptionParam;
+    property RenewedSubscription: Boolean                   read fRenewedSubscription;
+    property SubscriptionParam:   TIdSipSubscription        read fSubscriptionParam;
     property SubscriptionRequest: Boolean                   read fSubscriptionRequest;
     property UserAgentParam:      TIdSipAbstractUserAgent   read fUserAgentParam;
   end;
@@ -1788,10 +1791,10 @@ end;
 //* TIdSipTestSubscriptionListener Private methods ******************************
 
 procedure TIdSipTestSubscriptionListener.OnEstablishedSubscription(Subscription: TIdSipOutboundSubscription;
-                                                                   Response: TIdSipResponse);
+                                                                   Notify: TIdSipRequest);
 begin
   Self.fEstablishedSubscription := true;
-  Self.fResponseParam           := Response;
+  Self.fNotifyParam             := Notify;
   Self.fSubscriptionParam       := Subscription;
 
   if Assigned(Self.FailWith) then
@@ -1815,15 +1818,6 @@ begin
   Self.fNotify            := true;
   Self.fSubscriptionParam := Subscription;
   Self.fNotifyParam       := Notify;
-
-  if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create(Self.ClassName + '.OnNotify');
-end;
-
-procedure TIdSipTestSubscriptionListener.OnRenewedSubscription(NewSubscription: TIdSipOutboundSubscription);
-begin
-  Self.fRenewedSubscription := true;
-  Self.fSubscriptionParam   := NewSubscription;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnNotify');
@@ -2120,10 +2114,23 @@ constructor TIdSipTestSubscribeModuleListener.Create;
 begin
   inherited Create;
 
+
+  Self.fRenewedSubscription := false;
   Self.fSubscriptionRequest := false;
 end;
 
 //* TIdSipTestSubscribeModuleListener Private methods **************************
+
+procedure TIdSipTestSubscribeModuleListener.OnRenewedSubscription(UserAgent: TIdSipAbstractUserAgent;
+                                                                  Subscription: TIdSipOutboundSubscription);
+begin
+  Self.fRenewedSubscription := true;
+  Self.fSubscriptionParam   := Subscription;
+  Self.fUserAgentParam      := UserAgent;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create(Self.ClassName + '.OnInboundCall');
+end;
 
 procedure TIdSipTestSubscribeModuleListener.OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
                                                                   Subscription: TIdSipInboundSubscription);

@@ -217,7 +217,6 @@ type
     procedure TestReceiveByeForDialog;
     procedure TestReceiveByeDestroysTerminatedSession;
     procedure TestReceiveByeWithoutTags;
-    procedure TestReceiveNotifyForUnmatchedDialog;
     procedure TestReceiveOptions;
     procedure TestReceiveResponseWithMultipleVias;
     procedure TestRejectMalformedAuthorizedRequest;
@@ -227,7 +226,6 @@ type
     procedure TestRejectUnknownContentEncoding;
     procedure TestRejectUnknownContentLanguage;
     procedure TestRejectUnknownContentType;
-    procedure TestRejectUnknownEventSubscriptionRequest;
     procedure TestRejectUnknownExtension;
     procedure TestRejectUnknownScheme;
     procedure TestRejectUnsupportedMethod;
@@ -3329,36 +3327,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgent.TestReceiveNotifyForUnmatchedDialog;
-var
-  Notify:   TIdSipRequest;
-  Response: TIdSipResponse;
-begin
-  Self.Core.AddModule(TIdSipSubscribeModule);
-
-  Notify := Self.Core.CreateRequest(MethodInvite, Self.Destination);
-  try
-    Notify.Method          := MethodNotify;
-    Notify.CSeq.SequenceNo := $deadbeef;
-    Notify.CSeq.Method     := Notify.Method;
-    Notify.AddHeader(EventHeaderFull).Value         := 'UnsupportedEvent';
-    Notify.AddHeader(SubscriptionStateHeader).Value := 'Foo';
-
-    Self.MarkSentResponseCount;
-
-    Self.ReceiveRequest(Notify);
-
-    CheckResponseSent('No response sent');
-    Response := Self.LastSentResponse;
-    CheckEquals(SIPCallLegOrTransactionDoesNotExist,
-                Response.StatusCode,
-                'Response Status-Code')
-
-  finally
-    Notify.Free;
-  end;
-end;
-
 procedure TestTIdSipUserAgent.TestReceiveOptions;
 var
   Options:  TIdSipRequest;
@@ -3560,27 +3528,6 @@ begin
   CheckEquals(SdpMimeType,
               Response.FirstHeader(AcceptHeader).Value,
               'Accept value');
-end;
-
-procedure TestTIdSipUserAgent.TestRejectUnknownEventSubscriptionRequest;
-var
-  SubModule: TIdSipSubscribeModule;
-begin
-  SubModule := Self.Core.AddModule(TIdSipSubscribeModule) as TIdSipSubscribeModule;
-
-  Self.MarkSentResponseCount;
-
-  Self.ReceiveSubscribe('Foo.bar');
-
-  CheckResponseSent('No response sent');
-  CheckEquals(SIPBadEvent,
-              Self.LastSentResponse.StatusCode,
-              'Unexpected response');
-  CheckHasHeader(Self.LastSentResponse, AllowEventsHeaderFull);
-  CheckEquals(SubModule.AllowedEvents,
-              Self.LastSentResponse.FirstHeader(AllowEventsHeaderFull).Value,
-              'Wrong Allow-Events value');
-
 end;
 
 procedure TestTIdSipUserAgent.TestRejectUnknownExtension;

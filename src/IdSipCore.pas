@@ -683,8 +683,6 @@ type
                    const LocalSessionDescription: String;
                    const MimeType: String): TIdSipOutboundSession;
     function  SessionCount: Integer;
-    function  Subscribe(Target: TIdSipAddressHeader;
-                        const EventPackage: String): TIdSipAction;
 
     property DoNotDisturb:           Boolean   read fDoNotDisturb write fDoNotDisturb;
     property DoNotDisturbMessage:    String    read fDoNotDisturbMessage write fDoNotDisturbMessage;
@@ -3830,19 +3828,6 @@ end;
 function TIdSipUserAgent.SessionCount: Integer;
 begin
   Result := Self.Actions.SessionCount;
-end;
-
-function TIdSipUserAgent.Subscribe(Target: TIdSipAddressHeader;
-                                   const EventPackage: String): TIdSipAction;
-var
-  Sub: TIdSipOutboundSubscription;
-begin
-  Sub := Self.AddOutboundAction(TIdSipOutboundSubscription) as TIdSipOutboundSubscription;
-
-  Sub.Target       := Target;
-  Sub.EventPackage := EventPackage;
-
-  Result := Sub;
 end;
 
 //* TIdSipUserAgent Protected methods ******************************************
