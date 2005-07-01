@@ -1105,7 +1105,6 @@ const
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
-{
   Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipRegistrations.Suite);
   Result.AddTest(TestTIdSipActions.Suite);
@@ -1140,7 +1139,6 @@ begin
   Result.AddTest(TestTIdSipUserAgentAuthenticationChallengeMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentDroppedUnmatchedMessageMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentInboundCallMethod.Suite);
-}
 end;
 
 //******************************************************************************
