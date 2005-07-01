@@ -3187,26 +3187,23 @@ procedure TIdSipAbstractUserAgent.ScheduleEvent(BlockType: TIdSipActionClosureCl
 var
   Event: TIdSipActionsWait;
 begin
-  Self.TimerLock.Acquire;
-  try
-    if Assigned(Self.Timer) then begin
-      Event := Self.CreateActionsClosure(TIdSipActionsWait, Copy);
-      Event.BlockType := BlockType;
-      Self.Timer.AddEvent(WaitTime, Event);
-    end;
-  finally
-    Self.TimerLock.Release;
-  end;
+  if not Assigned(Self.Timer) then
+    Exit;
+
+  Event := Self.CreateActionsClosure(TIdSipActionsWait, Copy);
+  Event.BlockType := BlockType;
+  Self.ScheduleEvent(WaitTime, Event);
 end;
 
 procedure TIdSipAbstractUserAgent.ScheduleEvent(WaitTime: Cardinal;
                                                 Wait: TIdWait);
 begin
+  if not Assigned(Self.Timer) then
+    Exit;
+
   Self.TimerLock.Acquire;
   try
-    if Assigned(Self.Timer) then begin
-      Self.Timer.AddEvent(WaitTime, Wait);
-    end;
+    Self.Timer.AddEvent(WaitTime, Wait);
   finally
     Self.TimerLock.Release;
   end;
