@@ -171,6 +171,7 @@ type
                        Event: TIdWait); override;
     function  EventCount: Integer;
     function  FirstEventScheduledFor(Event: Pointer): TIdWait;
+    function  LastEventScheduled: TIdWait;
     function  LastEventScheduledFor(Event: Pointer): TIdWait;
     procedure LockTimer; override;
     function  ScheduledEvent(Event: TObject): Boolean; overload;
@@ -696,6 +697,16 @@ begin
         Result := Self.EventAt(I);
       Inc(I);
     end;
+  finally
+    Self.UnlockTimer;
+  end;
+end;
+
+function TIdDebugTimerQueue.LastEventScheduled: TIdWait;
+begin
+  Self.LockTimer;
+  try
+    Result := Self.EventAt(Self.EventCount - 1);
   finally
     Self.UnlockTimer;
   end;
