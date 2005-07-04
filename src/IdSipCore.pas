@@ -2064,7 +2064,6 @@ procedure TIdSipAbstractCore.SetRealm(const Value: String);
 begin
   Self.fRealm := Value;
 
-
   if Assigned(Self.Authenticator) then
     Self.Authenticator.Realm := Self.Realm;
 end;
