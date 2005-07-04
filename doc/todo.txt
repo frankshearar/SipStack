@@ -5,7 +5,6 @@ RFC 3265 still to do:
    3.2.1.   Identification of Reported Events, Event Classes, and
             Current State.......................................... 13
    3.2.2.   Notifier NOTIFY Behavior............................... 14
-   3.2.4.   Subscriber NOTIFY Behavior............................. 16
    3.3.     General................................................ 18
    3.3.1.   Detecting support for SUBSCRIBE and NOTIFY............. 18
    3.3.3.   Forking................................................ 18

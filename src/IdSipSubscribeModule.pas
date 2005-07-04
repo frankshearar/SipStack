@@ -240,6 +240,8 @@ type
                         Response: TIdSipResponse);
     procedure OnSuccess(SubscribeAgent: TIdSipOutboundSubscribe;
                         Response: TIdSipResponse);
+    procedure RejectUnauthorized(Notify: TIdSipRequest);
+    procedure ScheduleTermination(Expires: Cardinal);
     procedure SendResponseFor(Notify: TIdSipRequest);
     procedure StartNewSubscription(Notify: TIdSipRequest);
   protected
@@ -953,6 +955,11 @@ begin
   // Precondition: Request contains a NOTIFY.
   inherited ReceiveNotify(Notify);
 
+  if not Notify.HasAuthorization then begin
+    Self.RejectUnauthorized(Notify);
+    Exit;
+  end;
+
   // if not authenticated then
   //   issue challenge
   //   exit
@@ -963,7 +970,14 @@ begin
   State := Notify.FirstSubscriptionState;
 
   if State.IsActive then begin
+    if (State.Expires > 0) then
+      Self.ScheduleTermination(State.Expires);
+
     Self.NotifyOfSuccess(Notify);
+  end
+  else if State.IsPending then begin
+    if (State.Expires > 0) then
+      Self.ScheduleTermination(State.Expires);
   end
   else if State.IsTerminated then begin
     if not (State.IsRejected or State.IsNoResource) then begin
@@ -1087,6 +1101,29 @@ begin
   else if (Self.RefreshSubscribe = SubscribeAgent) then begin
     Self.RefreshSubscribe := nil;
   end
+end;
+
+procedure TIdSipOutboundSubscription.RejectUnauthorized(Notify: TIdSipRequest);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.UA.CreateChallengeResponseAsUserAgent(Notify);
+  try
+    Self.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TIdSipOutboundSubscription.ScheduleTermination(Expires: Cardinal);
+var
+  Wait: TIdSipSubscriptionExpiresWait;
+begin
+  Wait := TIdSipSubscriptionExpiresWait.Create;
+  Wait.Subscription := Self;
+
+  // Expires contains a value in seconds
+  Self.UA.ScheduleEvent(Expires*1000, Wait);
 end;
 
 procedure TIdSipOutboundSubscription.SendResponseFor(Notify: TIdSipRequest);
