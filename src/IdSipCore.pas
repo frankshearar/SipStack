@@ -1892,7 +1892,7 @@ end;
 function TIdSipAbstractCore.AuthenticationHeaderValue: String;
 begin
   // TODO: remove hardcoded qop & algorithm
-  Result := Format('realm="%s",algorith="MD5",qop="auth",nonce="%s"',
+  Result := Format('realm="%s",algorithm="MD5",qop="auth",nonce="%s"',
                    [Self.Realm, Self.NextNonce]);
 end;
 
