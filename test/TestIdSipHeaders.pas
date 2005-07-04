@@ -3776,8 +3776,8 @@ end;
 
 procedure TestTIdSipSubscriptionStateHeader.TestIsPending;
 begin
-  Self.SS.SubState := SubscriptionSubstatePending;
-  Check(not Self.SS.IsPending, 'Pending subscription');
+  Self.SS.SubState := SubscriptionSubstateActive;
+  Check(not Self.SS.IsPending, 'Active subscription');
 
   Self.SS.SubState := SubscriptionSubstatePending;
   Check(Self.SS.IsPending, 'Pending subscription');
