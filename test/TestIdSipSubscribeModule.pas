@@ -382,17 +382,14 @@ type
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipSubscribeModule unit tests');
-{
   Result.AddTest(TestTIdSipSubscribeModule.Suite);
   Result.AddTest(TestTIdSipUserAgentWithSubscribeModule.Suite);
   Result.AddTest(TestTIdSipInboundSubscribe.Suite);
   Result.AddTest(TestTIdSipOutboundSubscribe.Suite);
   Result.AddTest(TestTIdSipOutboundUnsubscribe.Suite);
   Result.AddTest(TestTIdSipInboundSubscription.Suite);
-}
   Result.AddTest(TestTIdSipOutboundSubscription.Suite);
   Result.AddTest(TestTIdSipSubscriptionExpiresWait.Suite);
-{
   Result.AddTest(TestTIdSipSubscriptionRetryWait.Suite);
   Result.AddTest(TestTIdSipNotifyFailedMethod.Suite);
   Result.AddTest(TestTIdSipNotifySucceededMethod.Suite);
@@ -403,7 +400,6 @@ begin
   Result.AddTest(TestTIdSipRenewedSubscriptionMethod.Suite);
   Result.AddTest(TestTIdSipOutboundSubscriptionNotifyMethod.Suite);
   Result.AddTest(TestTIdSipSubscriptionRequestMethod.Suite);
-}
 end;
 
 //******************************************************************************
