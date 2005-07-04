@@ -51,6 +51,8 @@ type
     procedure TearDown; override;
   published
     procedure TestAddUser;
+    procedure TestCreateChallengeResponse;
+    procedure TestCreateChallengeResponseAsProxy;
     procedure TestDigest;
     procedure TestDontAuthenticateNormalRequest;
   end;
@@ -411,6 +413,70 @@ begin
   CheckEquals(1,
               Self.Auth.Usercount,
               'New user info not added');
+end;
+
+procedure TestTIdSipAuthenticator.TestCreateChallengeResponse;
+var
+  Challenge: TIdSipResponse;
+  Request:   TIdSipRequest;
+begin
+  Self.Auth.IsProxy := false;
+  Self.Auth.Algorithm := MD5Name;
+  Self.Auth.Qop       := QopAuthInt;
+  Self.Auth.Realm     := 'tessier-ashpool.co.luna';
+
+  Request := TIdSipTestResources.CreateBasicRequest;
+  try
+    Challenge := Self.Auth.CreateChallengeResponse(Request);
+    try
+      CheckEquals(SIPUnauthorized,
+                  Challenge.StatusCode,
+                  'Status-Code');
+      Check(Challenge.HasWWWAuthenticate,
+            'No WWW-Authenticate header');
+      CheckEquals(Self.Auth.Algorithm,
+                  Challenge.FirstWWWAuthenticate.Algorithm,
+                  'Algorithm');
+      CheckNotEquals('',
+                     Challenge.FirstWWWAuthenticate.Nonce,
+                     'Nonce value');
+      CheckEquals(Self.Auth.Qop,
+                  Challenge.FirstWWWAuthenticate.Qop,
+                  'Qop');
+      CheckEquals(Self.Auth.Realm,
+                  Challenge.FirstWWWAuthenticate.Realm,
+                  'Realm');
+    finally
+      Challenge.Free;
+    end;
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TestTIdSipAuthenticator.TestCreateChallengeResponseAsProxy;
+var
+  Challenge: TIdSipResponse;
+  Request:   TIdSipRequest;
+begin
+  Self.Auth.IsProxy := true;
+
+  Request := TIdSipTestResources.CreateBasicRequest;
+  try
+    Challenge := Self.Auth.CreateChallengeResponse(Request);
+    try
+      CheckEquals(SIPProxyAuthenticationRequired,
+                  Challenge.StatusCode,
+                  'Status-Code');
+      Check(Challenge.HasProxyAuthenticate,
+            'No Proxy-Authenticate header');
+
+    finally
+      Challenge.Free;
+    end;
+  finally
+    Request.Free;
+  end;
 end;
 
 procedure TestTIdSipAuthenticator.TestDigest;

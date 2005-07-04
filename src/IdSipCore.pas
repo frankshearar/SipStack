@@ -256,10 +256,6 @@ type
                            Receiver: TIdSipTransport); virtual;
     procedure ActOnResponse(Response: TIdSipResponse;
                             Receiver: TIdSipTransport); virtual;
-    function  AuthenticationHeader: String; virtual;
-    function  AuthenticationHeaderValue: String; virtual;
-    function  AuthenticationStatusCode: Cardinal; virtual;
-    function  HasAuthorization(Request: TIdSipRequest): Boolean; virtual;
     procedure MaybeChangeTransport(Msg: TIdSipMessage);
     procedure NotifyOfChange;
     procedure OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
@@ -277,6 +273,7 @@ type
     procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
                             Request: TIdSipRequest); virtual;
     procedure RejectRequestUnauthorized(Request: TIdSipRequest);
+    procedure SetAuthenticator(Value: TIdSipAbstractAuthenticator); virtual;
     function  WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; virtual;
     function  WillAcceptResponse(Response: TIdSipResponse): TIdSipUserAgentReaction; virtual;
   public
@@ -285,6 +282,8 @@ type
 
     procedure AddObserver(const Listener: IIdObserver);
     procedure AddUserAgentListener(const Listener: IIdSipUserAgentListener);
+    function  Authenticate(Request: TIdSipRequest): Boolean;
+    function  CreateChallengeResponse(Request: TIdSipRequest): TIdSipResponse;
     function  CreateRequest(const Method: String;
                             Dest: TIdSipAddressHeader): TIdSipRequest; overload; virtual; abstract;
     function  CreateRequest(const Method: String;
@@ -303,7 +302,7 @@ type
                           Dest: TIdSipLocation);
     procedure SendResponse(Response: TIdSipResponse);
 
-    property Authenticator:         TIdSipAbstractAuthenticator read fAuthenticator write fAuthenticator;
+    property Authenticator:         TIdSipAbstractAuthenticator read fAuthenticator write SetAuthenticator;
     property Dispatcher:            TIdSipTransactionDispatcher read fDispatcher write SetDispatcher;
     property HostName:              String                      read fHostName write fHostName;
     property Locator:               TIdSipAbstractLocator       read fLocator write fLocator;
@@ -1802,6 +1801,18 @@ begin
   Self.UserAgentListeners.AddListener(Listener);
 end;
 
+function TIdSipAbstractCore.Authenticate(Request: TIdSipRequest): Boolean;
+begin
+  // We should ALWAYS have an authenticator attached: see TIdSipStackConfigurator.
+  Result := Assigned(Self.Authenticator) and Self.Authenticator.Authenticate(Request);
+end;
+
+function TIdSipAbstractCore.CreateChallengeResponse(Request: TIdSipRequest): TIdSipResponse;
+begin
+  Result := Self.Authenticator.CreateChallengeResponse(Request);
+  Self.PrepareResponse(Result, Request); 
+end;
+
 function TIdSipAbstractCore.CreateResponse(Request: TIdSipRequest;
                                            ResponseCode: Cardinal): TIdSipResponse;
 begin
@@ -1882,33 +1893,6 @@ procedure TIdSipAbstractCore.ActOnResponse(Response: TIdSipResponse;
                                            Receiver: TIdSipTransport);
 begin
   // By default do nothing
-end;
-
-function TIdSipAbstractCore.AuthenticationHeader: String;
-begin
-  Result := WWWAuthenticateHeader;
-end;
-
-function TIdSipAbstractCore.AuthenticationHeaderValue: String;
-begin
-  // TODO: remove hardcoded qop & algorithm
-  Result := Format('realm="%s",algorithm="MD5",qop="auth",nonce="%s"',
-                   [Self.Realm, Self.NextNonce]);
-end;
-
-function TIdSipAbstractCore.AuthenticationStatusCode: Cardinal;
-begin
-  // Proxies and User Agent Servers use different Status-Codes to
-  // challenge/authenticate.
-  Result := SIPUnauthorized;
-end;
-
-function TIdSipAbstractCore.HasAuthorization(Request: TIdSipRequest): Boolean;
-begin
-  // Proxies and User Agent Servers use different headers to
-  // challenge/authenticate.
-
-  Result := Request.HasAuthorization;
 end;
 
 procedure TIdSipAbstractCore.MaybeChangeTransport(Msg: TIdSipMessage);
@@ -1996,15 +1980,20 @@ procedure TIdSipAbstractCore.RejectRequestUnauthorized(Request: TIdSipRequest);
 var
   Response: TIdSipResponse;
 begin
-  Response := Self.CreateResponse(Request,
-                                  Self.AuthenticationStatusCode);
+  Response := Self.CreateChallengeResponse(Request);
   try
-    Response.AddHeader(Self.AuthenticationHeader).Value := Self.AuthenticationHeaderValue;
-
     Self.SendResponse(Response);
   finally
     Response.Free;
   end;
+end;
+
+procedure TIdSipAbstractCore.SetAuthenticator(Value: TIdSipAbstractAuthenticator);
+begin
+  Self.fAuthenticator := Value;
+  Self.fAuthenticator.Realm := Self.Realm;
+
+  Self.fAuthenticator.IsProxy := false;
 end;
 
 function TIdSipAbstractCore.WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction;
@@ -2013,8 +2002,7 @@ begin
 
   if Self.RequireAuthentication then begin
     try
-      if not Self.HasAuthorization(Request)
-        or (Assigned(Self.Authenticator) and Self.Authenticator.Authenticate(Request)) then
+      if not Self.Authenticate(Request) then
         Result := uarUnauthorized;
     except
       on EAuthenticate do
@@ -3807,6 +3795,7 @@ begin
   Self.Registrar.Free;
   Self.Proxy.Free;
   Self.Dispatcher.Free;
+  Self.Authenticator.Free;
 
   inherited Destroy;
 end;
@@ -3979,7 +3968,7 @@ begin
   Self.EatDirective(Line);
 
   if IsEqual(Trim(Line), MockKeyword) then
-    UserAgent.Authenticator := TIdSipMockAuthenticator.Create
+    UserAgent.Authenticator := TIdSipMockAuthenticator.Create;
 end;
 
 procedure TIdSipStackConfigurator.AddAutoContact(UserAgent: TIdSipAbstractUserAgent);

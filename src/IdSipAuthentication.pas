@@ -60,11 +60,29 @@ type
 
   TIdSipAbstractAuthenticator = class(TIdSipUserList)
   private
-    fRealm: String;
-  public
-    function Authenticate(Request: TIdSipRequest): Boolean; virtual;
+    fAlgorithm: String;
+    fIsProxy:   Boolean;
+    fQop:       String;
+    fRealm:     String;
 
-    property Realm: String read fRealm write fRealm;
+    function AuthorizationFor(Request: TIdSipRequest;
+                              const Realm: String): TIdSipAuthorizationHeader;
+    function HasAuthorization(Request: TIdSipRequest): Boolean;
+    function HasAuthorizationFor(Request: TIdSipRequest;
+                                 const Realm: String): Boolean;
+    function NextNonce: String;
+    function AuthenticationStatusCode: Cardinal;
+    function AuthenticationHeader: String;
+  public
+    constructor Create; override;
+
+    function  Authenticate(Request: TIdSipRequest): Boolean; virtual;
+    function  CreateChallengeResponse(Request: TIdSipRequest): TIdSipResponse;
+
+    property Algorithm: String  read fAlgorithm write fAlgorithm;
+    property IsProxy:   Boolean read fIsProxy write fIsProxy;
+    property Qop:       String  read fQop write fQop;
+    property Realm:     String  read fRealm write fRealm;
   end;
 
   TIdSipAuthenticator = class(TIdSipAbstractAuthenticator)
@@ -469,6 +487,14 @@ end;
 //*******************************************************************************
 //* TIdSipAbstractAuthenticator Public methods **********************************
 
+constructor TIdSipAbstractAuthenticator.Create;
+begin
+  inherited Create;
+
+  Self.Algorithm := MD5Name;
+  Self.Qop       := QopAuth;
+end;
+
 function TIdSipAbstractAuthenticator.Authenticate(Request: TIdSipRequest): Boolean;
 var
   Auth: TIdSipAuthorizationHeader;
@@ -495,15 +521,81 @@ begin
      difference in usage, see the description in section 3.2.2.2.
 }
 
-  if Request.HasAuthorizationFor(Self.Realm) then begin
-    Auth := Request.AuthorizationFor(Self.Realm);
-    Result := Auth.Response = Self.DigestFor(Auth.Username, Auth.Realm);
-  end
-  else if Request.HasProxyAuthorizationFor(Self.Realm) then begin
+  if not Self.HasAuthorization(Request) then begin
     Result := false;
+    Exit;
+  end;
+
+  if Self.HasAuthorizationFor(Request, Self.Realm) then begin
+    Auth := Self.AuthorizationFor(Request, Self.Realm);
+    Result := Auth.Response = Self.DigestFor(Auth.Username, Auth.Realm);
   end
   else
     Result := false;
+end;
+
+function TIdSipAbstractAuthenticator.CreateChallengeResponse(Request: TIdSipRequest): TIdSipResponse;
+var
+  AuthenticateHeader: TIdSipAuthenticateHeader;
+begin
+  Result := TIdSipResponse.InResponseTo(Request,
+                                        Self.AuthenticationStatusCode);
+
+  AuthenticateHeader := Result.AddHeader(Self.AuthenticationHeader) as TIdSipAuthenticateHeader;
+
+  AuthenticateHeader.Algorithm := Self.Algorithm;
+  AuthenticateHeader.Nonce     := Self.NextNonce;
+  AuthenticateHeader.Qop       := Self.Qop;
+  AuthenticateHeader.Realm     := Self.Realm;
+end;
+
+//* TIdSipAbstractAuthenticator Private methods ********************************
+
+function TIdSipAbstractAuthenticator.AuthorizationFor(Request: TIdSipRequest;
+                                                      const Realm: String): TIdSipAuthorizationHeader;
+begin
+  if Self.IsProxy then
+    Result := Request.ProxyAuthorizationFor(Realm)
+  else
+    Result := Request.AuthorizationFor(Realm);
+end;
+
+function TIdSipAbstractAuthenticator.HasAuthorization(Request: TIdSipRequest): Boolean;
+begin
+  if Self.IsProxy then
+    Result := Request.HasProxyAuthorization
+  else
+    Result := Request.HasAuthorization;
+end;
+
+function TIdSipAbstractAuthenticator.HasAuthorizationFor(Request: TIdSipRequest;
+                                                         const Realm: String): Boolean;
+begin
+  if Self.IsProxy then
+    Result := Request.HasProxyAuthorizationFor(Realm)
+  else
+    Result := Request.HasAuthorizationFor(Realm);
+end;
+
+function TIdSipAbstractAuthenticator.NextNonce: String;
+begin
+  Result := GRandomNumber.NextHexString;
+end;
+
+function TIdSipAbstractAuthenticator.AuthenticationStatusCode: Cardinal;
+begin
+  if Self.IsProxy then
+    Result := SIPProxyAuthenticationRequired
+  else
+    Result := SIPUnauthorized;
+end;
+
+function TIdSipAbstractAuthenticator.AuthenticationHeader: String;
+begin
+  if Self.IsProxy then
+    Result := ProxyAuthenticateHeader
+  else
+    Result := WWWAuthenticateHeader;
 end;
 
 //*******************************************************************************

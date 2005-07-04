@@ -12,14 +12,12 @@ unit IdSipProxy;
 interface
 
 uses
-  IdSipCore, IdSipDialog, IdSipMessage;
+  IdSipAuthentication, IdSipCore, IdSipDialog, IdSipMessage;
 
 type
   TIdSipProxy = class(TIdSipAbstractCore)
   protected
-    function  AuthenticationHeader: String; override;
-    function  AuthenticationStatusCode: Cardinal; override;
-    function  HasAuthorization(Request: TIdSipRequest): Boolean; override;
+    procedure SetAuthenticator(Value: TIdSipAbstractAuthenticator); override;
   public
     function  CreateRequest(const Method: String;
                             Dest: TIdSipAddressHeader): TIdSipRequest; overload; override;
@@ -51,22 +49,11 @@ end;
 
 //* TIdSipProxy Protected methods **********************************************
 
-function TIdSipProxy.AuthenticationHeader: String;
+procedure TIdSipProxy.SetAuthenticator(Value: TIdSipAbstractAuthenticator);
 begin
-  Result := ProxyAuthenticateHeader;
-end;
+  inherited SetAuthenticator(Value);
 
-function TIdSipProxy.AuthenticationStatusCode: Cardinal;
-begin
-  Result := SIPProxyAuthenticationRequired;
-end;
-
-function TIdSipProxy.HasAuthorization(Request: TIdSipRequest): Boolean;
-begin
-  // Proxies and User Agent Servers use different headers to
-  // challenge/authenticate.
-
-  Result := Request.HasProxyAuthorization;
+  Self.Authenticator.IsProxy := true;
 end;
 
 end.

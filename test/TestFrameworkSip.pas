@@ -12,10 +12,11 @@ unit TestFrameworkSip;
 interface
 
 uses
-  Classes, IdInterfacedObject, IdObservable, IdRTP, IdSdp, IdSipMessage,
-  IdSipCore, IdSipDialog, IdSipMockLocator, IdSipMockTransactionDispatcher,
-  IdSipSubscribeModule, IdSipTcpClient, IdSipTcpServer, IdSipTransaction,
-  IdSipTransport, IdTimerQueue, SysUtils, TestFramework, TestFrameworkEx;
+  Classes, IdInterfacedObject, IdObservable, IdRTP, IdSdp, IdSipAuthentication,
+  IdSipMessage, IdSipCore, IdSipDialog, IdSipMockLocator,
+  IdSipMockTransactionDispatcher, IdSipSubscribeModule, IdSipTcpClient,
+  IdSipTcpServer, IdSipTransaction, IdSipTransport, IdTimerQueue, SysUtils,
+  TestFramework, TestFrameworkEx;
 
 type
   TIdSipTestResources = class(TObject)
@@ -50,6 +51,7 @@ type
     procedure RemoveBody(Msg: TIdSipMessage);
   protected
     AckCount:      Cardinal;
+    Authenticator: TIdSipAuthenticator;
     Core:          TIdSipUserAgent;
     DebugTimer:    TIdDebugTimerQueue;
     Destination:   TIdSipToHeader;
@@ -848,14 +850,17 @@ procedure TTestCaseTU.SetUp;
 begin
   inherited SetUp;
 
+  Self.Authenticator := TIdSipAuthenticator.Create;
+
   Self.Destination := TIdSipToHeader.Create;
   Self.Destination.Value := 'sip:franks@localhost';
 
   Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
 
   Self.Core := TIdSipUserAgent.Create;
-  Self.Core.Dispatcher := Self.Dispatcher;
-  Self.Core.Locator    := Self.Locator;
+  Self.Core.Authenticator := Self.Authenticator;
+  Self.Core.Dispatcher    := Self.Dispatcher;
+  Self.Core.Locator       := Self.Locator;
 
   Self.Core.Contact.Value := 'sip:case@localhost';
   Self.Core.From.Value    := 'sip:case@localhost';
@@ -882,6 +887,8 @@ begin
   Self.Invite.Free;
   Self.Core.Free;
   Self.Destination.Free;
+
+  // The UserAgent kills the Dispatcher & Authenticator
 
   inherited TearDown;
 end;

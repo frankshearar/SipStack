@@ -169,7 +169,6 @@ type
     procedure TestAddModule;
     procedure TestAddObserver;
     procedure TestAddUserAgentListener;
-    procedure TestAuthenticateWithNoAttachedAuthenticator;
     procedure TestByeWithAuthentication;
     procedure TestCallUsingProxy;
     procedure TestCancelNotifiesTU;
@@ -1041,7 +1040,7 @@ type
 implementation
 
 uses
-  IdException, IdSipAuthentication, IdSipMockLocator, IdSipDns, IdSipLocator,
+  IdException, IdSipMockLocator, IdSipAuthentication, IdSipDns, IdSipLocator,
   IdSipMockBindingDatabase, IdSipMockTransport, IdSipSubscribeModule, IdSystem,
   IdUnicode, SysUtils;
 
@@ -2214,15 +2213,6 @@ begin
   finally
     L1.Free;
   end;
-end;
-
-procedure TestTIdSipUserAgent.TestAuthenticateWithNoAttachedAuthenticator;
-begin
-  // We make sure that no access violations occur just because we've not
-  // attached an authenticator to the Core.
-  Self.Core.RequireAuthentication := true;
-  Self.Invite.AddHeader(AuthorizationHeader);
-  Self.ReceiveInvite;
 end;
 
 procedure TestTIdSipUserAgent.TestByeWithAuthentication;
@@ -3399,6 +3389,7 @@ begin
                 'Status code');
   finally
     Auth.Free;
+    Self.Core.Authenticator := Self.Authenticator;
   end;
 end;
 
