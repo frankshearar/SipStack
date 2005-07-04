@@ -1058,73 +1058,33 @@ end;
 //* TestTIdSipInboundSubscription Published methods ****************************
 
 procedure TestTIdSipInboundSubscription.TestIsInbound;
-var
-  Action: TIdSipAction;
 begin
-  Self.Invite.Method := MethodSubscribe;
-  Action := TIdSipInboundSubscription.Create(Self.Core, Self.Invite);
-  try
-    Check(Action.IsInbound,
-          Action.ClassName + ' not marked as inbound');
-  finally
-    Action.Free;
-  end;
+  Check(Self.SubscribeAction.IsInbound,
+        Self.SubscribeAction.ClassName + ' not marked as inbound');
 end;
 
 procedure TestTIdSipInboundSubscription.TestIsInvite;
-var
-  Action: TIdSipAction;
 begin
-  Self.Invite.Method := MethodSubscribe;
-  Action := TIdSipInboundSubscription.Create(Self.Core, Self.Invite);
-  try
-    Check(not Action.IsInvite,
-          Action.ClassName + ' marked as an Invite');
-  finally
-    Action.Free;
-  end;
+  Check(not Self.SubscribeAction.IsInvite,
+        Self.SubscribeAction.ClassName + ' marked as an Invite');
 end;
 
 procedure TestTIdSipInboundSubscription.TestIsOptions;
-var
-  Action: TIdSipAction;
 begin
-  Self.Invite.Method := MethodSubscribe;
-  Action := TIdSipInboundSubscription.Create(Self.Core, Self.Invite);
-  try
-    Check(not Action.IsOptions,
-          Action.ClassName + ' marked as an Options');
-  finally
-    Action.Free;
-  end;
+  Check(not Self.SubscribeAction.IsOptions,
+        Self.SubscribeAction.ClassName + ' marked as an Options');
 end;
 
 procedure TestTIdSipInboundSubscription.TestIsRegistration;
-var
-  Action: TIdSipAction;
 begin
-  Self.Invite.Method := MethodSubscribe;
-  Action := TIdSipInboundSubscription.Create(Self.Core, Self.Invite);
-  try
-    Check(not Action.IsRegistration,
-          Action.ClassName + ' marked as a Registration');
-  finally
-    Action.Free;
-  end;
+  Check(not Self.SubscribeAction.IsRegistration,
+        Self.SubscribeAction.ClassName + ' marked as a Registration');
 end;
 
 procedure TestTIdSipInboundSubscription.TestIsSession;
-var
-  Action: TIdSipAction;
 begin
-  Self.Invite.Method := MethodSubscribe;
-  Action := TIdSipInboundSubscription.Create(Self.Core, Self.Invite);
-  try
-    Check(not Action.IsSession,
-          Action.ClassName + ' marked as a Session');
-  finally
-    Action.Free;
-  end;
+  Check(not Self.SubscribeAction.IsSession,
+        Self.SubscribeAction.ClassName + ' marked as a Session');
 end;
 
 //******************************************************************************
@@ -1460,11 +1420,6 @@ begin
   Self.ReceiveNotifyNoAuth(Self.Subscription.InitialRequest,
                            Self.Dispatcher.Transport.LastResponse,
                            SubscriptionSubstateActive);
-
-  Check(Self.SubscriptionNotified,
-        'Subscription didn''t notify listeners of received NOTIFY');
-  Check(Self.ReceivedNotify.Equals(Self.Dispatcher.Transport.LastRequest),
-        'Wrong NOTIFY in the notification');
 
   CheckResponseSent('No response to the NOTIFY sent');
   CheckEquals(SIPUnauthorized,
