@@ -284,6 +284,7 @@ type
     procedure AddUserAgentListener(const Listener: IIdSipUserAgentListener);
     function  Authenticate(Request: TIdSipRequest): Boolean;
     function  CreateChallengeResponse(Request: TIdSipRequest): TIdSipResponse;
+    function  CreateChallengeResponseAsUserAgent(Request: TIdSipRequest): TIdSipResponse;
     function  CreateRequest(const Method: String;
                             Dest: TIdSipAddressHeader): TIdSipRequest; overload; virtual; abstract;
     function  CreateRequest(const Method: String;
@@ -1810,7 +1811,13 @@ end;
 function TIdSipAbstractCore.CreateChallengeResponse(Request: TIdSipRequest): TIdSipResponse;
 begin
   Result := Self.Authenticator.CreateChallengeResponse(Request);
-  Self.PrepareResponse(Result, Request); 
+  Self.PrepareResponse(Result, Request);
+end;
+
+function TIdSipAbstractCore.CreateChallengeResponseAsUserAgent(Request: TIdSipRequest): TIdSipResponse;
+begin
+  Result := Self.Authenticator.CreateChallengeResponseAsUserAgent(Request);
+  Self.PrepareResponse(Result, Request);
 end;
 
 function TIdSipAbstractCore.CreateResponse(Request: TIdSipRequest;

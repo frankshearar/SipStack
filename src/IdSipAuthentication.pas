@@ -66,18 +66,25 @@ type
     fRealm:     String;
 
     function AuthorizationFor(Request: TIdSipRequest;
-                              const Realm: String): TIdSipAuthorizationHeader;
-    function HasAuthorization(Request: TIdSipRequest): Boolean;
+                              const Realm: String;
+                              AsProxy: Boolean): TIdSipAuthorizationHeader;
+    function CreateChallenge(Request: TIdSipRequest;
+                             AsProxy: Boolean): TIdSipResponse;
+    function HasAuthorization(Request: TIdSipRequest;
+                              AsProxy: Boolean): Boolean;
     function HasAuthorizationFor(Request: TIdSipRequest;
-                                 const Realm: String): Boolean;
+                                 const Realm: String;
+                                 AsProxy: Boolean): Boolean;
     function NextNonce: String;
-    function AuthenticationStatusCode: Cardinal;
-    function AuthenticationHeader: String;
+    function AuthenticationStatusCode(AsProxy: Boolean): Cardinal;
+    function AuthenticationHeader(AsProxy: Boolean): String;
   public
     constructor Create; override;
 
     function  Authenticate(Request: TIdSipRequest): Boolean; virtual;
+    function  AuthenticateAsUserAgent(Request: TIdSipRequest): Boolean;
     function  CreateChallengeResponse(Request: TIdSipRequest): TIdSipResponse;
+    function  CreateChallengeResponseAsUserAgent(Request: TIdSipRequest): TIdSipResponse;
 
     property Algorithm: String  read fAlgorithm write fAlgorithm;
     property IsProxy:   Boolean read fIsProxy write fIsProxy;
@@ -521,27 +528,55 @@ begin
      difference in usage, see the description in section 3.2.2.2.
 }
 
-  if not Self.HasAuthorization(Request) then begin
+  if not Self.HasAuthorization(Request, Self.IsProxy) then begin
     Result := false;
     Exit;
   end;
 
-  if Self.HasAuthorizationFor(Request, Self.Realm) then begin
-    Auth := Self.AuthorizationFor(Request, Self.Realm);
+  if Self.HasAuthorizationFor(Request, Self.Realm, Self.IsProxy) then begin
+    Auth := Self.AuthorizationFor(Request, Self.Realm, Self.IsProxy);
     Result := Auth.Response = Self.DigestFor(Auth.Username, Auth.Realm);
   end
   else
     Result := false;
 end;
 
+function TIdSipAbstractAuthenticator.AuthenticateAsUserAgent(Request: TIdSipRequest): Boolean;
+begin
+  Result := false;
+end;
+
 function TIdSipAbstractAuthenticator.CreateChallengeResponse(Request: TIdSipRequest): TIdSipResponse;
+begin
+  Result := Self.CreateChallenge(Request, Self.IsProxy)
+end;
+
+function TIdSipAbstractAuthenticator.CreateChallengeResponseAsUserAgent(Request: TIdSipRequest): TIdSipResponse;
+begin
+  Result := Self.CreateChallenge(Request, false);
+end;
+
+//* TIdSipAbstractAuthenticator Private methods ********************************
+
+function TIdSipAbstractAuthenticator.AuthorizationFor(Request: TIdSipRequest;
+                                                      const Realm: String;
+                                                      AsProxy: Boolean): TIdSipAuthorizationHeader;
+begin
+  if AsProxy then
+    Result := Request.ProxyAuthorizationFor(Realm)
+  else
+    Result := Request.AuthorizationFor(Realm);
+end;
+
+function TIdSipAbstractAuthenticator.CreateChallenge(Request: TIdSipRequest;
+                                                     AsProxy: Boolean): TIdSipResponse;
 var
   AuthenticateHeader: TIdSipAuthenticateHeader;
 begin
   Result := TIdSipResponse.InResponseTo(Request,
-                                        Self.AuthenticationStatusCode);
+                                        Self.AuthenticationStatusCode(AsProxy));
 
-  AuthenticateHeader := Result.AddHeader(Self.AuthenticationHeader) as TIdSipAuthenticateHeader;
+  AuthenticateHeader := Result.AddHeader(Self.AuthenticationHeader(AsProxy)) as TIdSipAuthenticateHeader;
 
   AuthenticateHeader.Algorithm := Self.Algorithm;
   AuthenticateHeader.Nonce     := Self.NextNonce;
@@ -549,29 +584,20 @@ begin
   AuthenticateHeader.Realm     := Self.Realm;
 end;
 
-//* TIdSipAbstractAuthenticator Private methods ********************************
-
-function TIdSipAbstractAuthenticator.AuthorizationFor(Request: TIdSipRequest;
-                                                      const Realm: String): TIdSipAuthorizationHeader;
+function TIdSipAbstractAuthenticator.HasAuthorization(Request: TIdSipRequest;
+                                                      AsProxy: Boolean): Boolean;
 begin
-  if Self.IsProxy then
-    Result := Request.ProxyAuthorizationFor(Realm)
-  else
-    Result := Request.AuthorizationFor(Realm);
-end;
-
-function TIdSipAbstractAuthenticator.HasAuthorization(Request: TIdSipRequest): Boolean;
-begin
-  if Self.IsProxy then
+  if AsProxy then
     Result := Request.HasProxyAuthorization
   else
     Result := Request.HasAuthorization;
 end;
 
 function TIdSipAbstractAuthenticator.HasAuthorizationFor(Request: TIdSipRequest;
-                                                         const Realm: String): Boolean;
+                                                         const Realm: String;
+                                                         AsProxy: Boolean): Boolean;
 begin
-  if Self.IsProxy then
+  if AsProxy then
     Result := Request.HasProxyAuthorizationFor(Realm)
   else
     Result := Request.HasAuthorizationFor(Realm);
@@ -582,17 +608,17 @@ begin
   Result := GRandomNumber.NextHexString;
 end;
 
-function TIdSipAbstractAuthenticator.AuthenticationStatusCode: Cardinal;
+function TIdSipAbstractAuthenticator.AuthenticationStatusCode(AsProxy: Boolean): Cardinal;
 begin
-  if Self.IsProxy then
+  if AsProxy then
     Result := SIPProxyAuthenticationRequired
   else
     Result := SIPUnauthorized;
 end;
 
-function TIdSipAbstractAuthenticator.AuthenticationHeader: String;
+function TIdSipAbstractAuthenticator.AuthenticationHeader(AsProxy: Boolean): String;
 begin
-  if Self.IsProxy then
+  if AsProxy then
     Result := ProxyAuthenticateHeader
   else
     Result := WWWAuthenticateHeader;

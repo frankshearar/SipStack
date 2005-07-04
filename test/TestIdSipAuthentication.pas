@@ -51,8 +51,10 @@ type
     procedure TearDown; override;
   published
     procedure TestAddUser;
+    procedure TestAuthenticateAsUserAgent;
     procedure TestCreateChallengeResponse;
     procedure TestCreateChallengeResponseAsProxy;
+    procedure TestCreateChallengeResponseAsUserAgent;
     procedure TestDigest;
     procedure TestDontAuthenticateNormalRequest;
   end;
@@ -415,6 +417,11 @@ begin
               'New user info not added');
 end;
 
+procedure TestTIdSipAuthenticator.TestAuthenticateAsUserAgent;
+begin
+  Self.Auth.IsProxy := true;
+end;
+
 procedure TestTIdSipAuthenticator.TestCreateChallengeResponse;
 var
   Challenge: TIdSipResponse;
@@ -470,6 +477,33 @@ begin
                   'Status-Code');
       Check(Challenge.HasProxyAuthenticate,
             'No Proxy-Authenticate header');
+
+    finally
+      Challenge.Free;
+    end;
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TestTIdSipAuthenticator.TestCreateChallengeResponseAsUserAgent;
+var
+  Challenge: TIdSipResponse;
+  Request:   TIdSipRequest;
+begin
+  // Proxies behave as User Agents in the context of SIP Events (see RFC 3265).
+
+  Self.Auth.IsProxy := true;
+
+  Request := TIdSipTestResources.CreateBasicRequest;
+  try
+    Challenge := Self.Auth.CreateChallengeResponseAsUserAgent(Request);
+    try
+      CheckEquals(SIPUnauthorized,
+                  Challenge.StatusCode,
+                  'Status-Code');
+      Check(Challenge.HasWWWAuthenticate,
+            'No WWW-Authenticate header');
 
     finally
       Challenge.Free;
