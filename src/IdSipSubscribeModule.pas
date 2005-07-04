@@ -12,7 +12,8 @@ unit IdSipSubscribeModule;
 interface
 
 uses
-  Contnrs, IdNotification, IdSipCore, IdSipDialog, IdSipMessage, SyncObjs;
+  Contnrs, IdNotification, IdSipCore, IdSipDialog, IdSipMessage, IdTimerQueue,
+  SyncObjs;
 
 type
   TIdSipOutboundNotify = class;
@@ -98,7 +99,11 @@ type
     procedure AddPackage(PackageType: TIdSipEventPackageClass);
     function  AllowedEvents: String;
     procedure RemoveAllPackages;
-    function  Resubscribe(OldSub: TIdSipOutboundSubscription): TIdSipOutboundSubscription;
+    procedure RetrySubscriptionAfter(Target: TIdSipAddressHeader;
+                                     const EventPackage: String;
+                                     WaitTime: Cardinal);
+    function  Resubscribe(Target: TIdSipAddressHeader;
+                          const EventPackage: String): TIdSipOutboundSubscription;
     procedure RemoveListener(Listener: IIdSipSubscribeModuleListener);
     function  Subscribe(Target: TIdSipAddressHeader;
                         const EventPackage: String): TIdSipOutboundSubscription;
@@ -251,6 +256,33 @@ type
     procedure Send; override;
     procedure Terminate; override;
     procedure Unsubscribe;
+  end;
+
+  TIdSipSubscriptionExpiresWait = class(TIdWait)
+  private
+    fSubscription: TIdSipOutboundSubscription;
+  public
+    procedure Trigger; override;
+
+    property Subscription: TIdSipOutboundSubscription read fSubscription write fSubscription;
+  end;
+
+  TIdSipSubscriptionRetryWait = class(TIdWait)
+  private
+    fEventPackage: String;
+    fTarget:       TIdSipAddressHeader;
+    fUserAgent:    TIdSipAbstractUserAgent;
+
+    procedure SetTarget(Value: TIdSipAddressHeader);
+  public
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    procedure Trigger; override;
+
+    property EventPackage: String                  read fEventPackage write fEventPackage;
+    property Target:       TIdSipAddressHeader     read fTarget write SetTarget;
+    property UserAgent:    TIdSipAbstractUserAgent read fUserAgent write fUserAgent;
   end;
 
   TIdSipNotifyMethod = class(TIdNotification)
@@ -428,12 +460,23 @@ begin
   Self.Packages.Clear;
 end;
 
-function TIdSipSubscribeModule.Resubscribe(OldSub: TIdSipOutboundSubscription): TIdSipOutboundSubscription;
+procedure TIdSipSubscribeModule.RetrySubscriptionAfter(Target: TIdSipAddressHeader;
+                                                       const EventPackage: String;
+                                                       WaitTime: Cardinal);
+var
+  Wait: TIdSipSubscriptionRetryWait;
 begin
-  Result := Self.Subscribe(OldSub.Target, OldSub.EventPackage);
+  Wait := TIdSipSubscriptionRetryWait.Create;
+  Wait.EventPackage := EventPackage;
+  Wait.Target       := Target;
+  Self.UserAgent.ScheduleEvent(WaitTime, Wait);
+end;
+
+function TIdSipSubscribeModule.Resubscribe(Target: TIdSipAddressHeader;
+                                           const EventPackage: String): TIdSipOutboundSubscription;
+begin
+  Result := Self.Subscribe(Target, EventPackage);
   Self.NotifyOfRenewedSubscription(Result);
-  Result.Listeners.Add(OldSub.Listeners);
-  Result.Send;
 end;
 
 procedure TIdSipSubscribeModule.RemoveListener(Listener: IIdSipSubscribeModuleListener);
@@ -442,7 +485,7 @@ begin
 end;
 
 function TIdSipSubscribeModule.Subscribe(Target: TIdSipAddressHeader;
-                                   const EventPackage: String): TIdSipOutboundSubscription;
+                                         const EventPackage: String): TIdSipOutboundSubscription;
 var
   Sub: TIdSipOutboundSubscription;
 begin
@@ -1059,8 +1102,73 @@ begin
 end;
 
 procedure TIdSipOutboundSubscription.StartNewSubscription(Notify: TIdSipRequest);
+var
+  RetryAfter: Cardinal;
+  State:      TIdSipSubscriptionStateHeader;
+  Wait:       TIdSipSubscriptionRetryWait;
 begin
-  Self.Module.Resubscribe(Self);
+  State := Notify.FirstSubscriptionState;
+
+  // Subscription-State's retry-after is in seconds
+  RetryAfter := State.RetryAfter * 1000;
+
+  if (RetryAfter = 0) then
+    Self.Module.Resubscribe(Self.Target, Self.EventPackage)
+  else begin
+    if not (State.IsDeactivated or State.IsTimedOut) then begin
+      Wait := TIdSipSubscriptionRetryWait.Create;
+      Wait.EventPackage := Self.EventPackage;
+      Wait.Target       := Self.Target;
+      Wait.UserAgent    := Self.UA;
+      Self.UA.ScheduleEvent(RetryAfter, Wait);
+    end;
+  end;
+end;
+
+//******************************************************************************
+//* TIdSipSubscriptionExpiresWait                                              *
+//******************************************************************************
+//* TIdSipSubscriptionExpiresWait Public methods *******************************
+
+procedure TIdSipSubscriptionExpiresWait.Trigger;
+begin
+  Self.Subscription.Terminate;
+end;
+
+//******************************************************************************
+//* TIdSipSubscriptionRetryWait                                                *
+//******************************************************************************
+//* TIdSipSubscriptionRetryWait Public methods *********************************
+
+constructor TIdSipSubscriptionRetryWait.Create;
+begin
+  inherited Create;
+
+  Self.fTarget := TIdSipAddressHeader.Create;
+end;
+
+destructor TIdSipSubscriptionRetryWait.Destroy;
+begin
+  Self.Target.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipSubscriptionRetryWait.Trigger;
+var
+  Module: TIdSipSubscribeModule;
+begin
+  Module := Self.UserAgent.ModuleFor(MethodSubscribe) as TIdSipSubscribeModule;
+
+  if Assigned(Module) then
+    Module.Resubscribe(Self.Target, Self.EventPackage);
+end;
+
+//* TIdSipSubscriptionRetryWait Private methods ********************************
+
+procedure TIdSipSubscriptionRetryWait.SetTarget(Value: TIdSipAddressHeader);
+begin
+  Self.fTarget.Value := Value.FullValue;
 end;
 
 //******************************************************************************

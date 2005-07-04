@@ -431,9 +431,11 @@ type
     procedure TestIsActive;
     procedure TestIsDeactivated;
     procedure TestIsNoResource;
+    procedure TestIsPending;
     procedure TestIsRejected;
     procedure TestIsTerminated;
     procedure TestIsTimedOut;
+    procedure TestRetryAfterHasMeaning;
     procedure TestValue; override;
   end;
 
@@ -3772,6 +3774,18 @@ begin
   Check(Self.SS.IsNoResource, 'Terminated subscription; reason: noresource');
 end;
 
+procedure TestTIdSipSubscriptionStateHeader.TestIsPending;
+begin
+  Self.SS.SubState := SubscriptionSubstatePending;
+  Check(not Self.SS.IsPending, 'Pending subscription');
+
+  Self.SS.SubState := SubscriptionSubstatePending;
+  Check(Self.SS.IsPending, 'Pending subscription');
+
+  Self.SS.SubState := SubscriptionSubstateTerminated;
+  Check(not Self.SS.IsPending, 'Terminated subscription');
+end;
+
 procedure TestTIdSipSubscriptionStateHeader.TestIsRejected;
 begin
   Self.SS.SubState := SubscriptionSubstatePending;
@@ -3806,6 +3820,33 @@ begin
 
   Self.SS.Reason := EventReasonTimeout;
   Check(Self.SS.IsTimedOut, 'Terminated subscription; reason: timeout');
+end;
+
+procedure TestTIdSipSubscriptionStateHeader.TestRetryAfterHasMeaning;
+begin
+  Self.SS.SubState := SubscriptionSubstateTerminated;
+  Check(Self.SS.RetryAfterHasMeaning, 'No reason');
+
+  Self.SS.Reason := 'unknown-reason';
+  Check(Self.SS.RetryAfterHasMeaning, 'Unknown reason');
+
+  Self.SS.Reason := EventReasonDeactivated;
+  Check(not Self.SS.RetryAfterHasMeaning, EventReasonDeactivated);
+
+  Self.SS.Reason := EventReasonProbation;
+  Check(Self.SS.RetryAfterHasMeaning, EventReasonProbation);
+
+  Self.SS.Reason := EventReasonRejected;
+  Check(not Self.SS.RetryAfterHasMeaning, EventReasonRejected);
+
+  Self.SS.Reason := EventReasonTimeout;
+  Check(not Self.SS.RetryAfterHasMeaning, EventReasonTimeout);
+
+  Self.SS.Reason := EventReasonGiveUp;
+  Check(Self.SS.RetryAfterHasMeaning, EventReasonGiveUp);
+
+  Self.SS.Reason := EventReasonNoResource;
+  Check(not Self.SS.RetryAfterHasMeaning, EventReasonNoResource);
 end;
 
 procedure TestTIdSipSubscriptionStateHeader.TestIsTerminated;
