@@ -719,9 +719,11 @@ type
     function IsActive: Boolean;
     function IsDeactivated: Boolean;
     function IsNoResource: Boolean;
+    function IsPending: Boolean;
     function IsRejected: Boolean;
     function IsTerminated: Boolean;
     function IsTimedOut: Boolean;
+    function RetryAfterHasMeaning: Boolean;
 
     property Expires:    Cardinal read GetExpires write SetExpires;
     property Reason:     String   read GetReason write SetReason;
@@ -4786,6 +4788,11 @@ begin
   Result := Self.IsTerminated and IsEqual(Self.Reason, EventReasonNoResource);
 end;
 
+function TIdSipSubscriptionStateHeader.IsPending: Boolean;
+begin
+  Result := IsEqual(Self.SubState, SubscriptionSubstatePending);
+end;
+
 function TIdSipSubscriptionStateHeader.IsRejected: Boolean;
 begin
   Result := Self.IsTerminated and IsEqual(Self.Reason, EventReasonRejected);
@@ -4799,6 +4806,14 @@ end;
 function TIdSipSubscriptionStateHeader.IsTimedOut: Boolean;
 begin
   Result := Self.IsTerminated and IsEqual(Self.Reason, EventReasonTimeout);
+end;
+
+function TIdSipSubscriptionStateHeader.RetryAfterHasMeaning: Boolean;
+begin
+  Result := not Self.IsDeactivated
+        and not Self.IsRejected
+        and not Self.IsTimedOut
+        and not Self.IsNoResource;
 end;
 
 //* TIdSipSubscriptionStateHeader Protected methods ****************************
