@@ -465,8 +465,7 @@ begin
   Self.DB.Authorized := false;
   Check(not Self.DB.IsAuthorized(Self.CaseContact,
                                  Self.CasesAOR.RequestUri),
-
-'not Authorized');
+        'not Authorized');
 end;
 
 
