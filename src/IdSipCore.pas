@@ -4342,7 +4342,7 @@ begin
   else if Request.IsRefer     then Self.ReceiveRefer(Request)
   else if Request.IsRegister  then Self.ReceiveRegister(Request)
   else if Request.IsSubscribe then Self.ReceiveSubscribe(Request)
-  else                            Self.ReceiveOtherRequest(Request);
+  else                             Self.ReceiveOtherRequest(Request);
 end;
 
 procedure TIdSipAction.ReceiveResponse(Response: TIdSipResponse;
