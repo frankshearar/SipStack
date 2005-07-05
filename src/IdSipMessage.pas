@@ -4464,6 +4464,8 @@ end;
 
 procedure TIdSipAuthenticationInfoHeader.CheckDigestResponses(Responses: TStrings);
 begin
+  inherited CheckDigestResponses(Responses);
+
   if (Self.ResponseDigest <> '')
     and not TIdSimpleParser.IsHexNumber(Self.ResponseDigest) then
     Self.FailParse(InvalidDigestResponse);
