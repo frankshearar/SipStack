@@ -85,7 +85,6 @@ type
     procedure ReceiveResponse(Request: TIdSipRequest;
                               StatusCode: Cardinal); overload;
     procedure ReceiveRinging(Invite: TIdSipRequest);
-    procedure ReceiveSubscribe(const EventPackage: String);
     procedure ReceiveTrying(Invite: TIdSipRequest);
     procedure ReceiveTryingFrom(Invite: TIdSipRequest;
                                 const Contact: String);
@@ -1117,18 +1116,6 @@ end;
 procedure TTestCaseTU.ReceiveRinging(Invite: TIdSipRequest);
 begin
   Self.ReceiveResponse(Invite, SIPRinging);
-end;
-
-procedure TTestCaseTU.ReceiveSubscribe(const EventPackage: String);
-var
-  Sub: TIdSipRequest;
-begin
-  Sub := Self.Core.CreateSubscribe(Self.Destination, EventPackage);
-  try
-    Self.ReceiveRequest(Sub);
-  finally
-    Sub.Free;
-  end;
 end;
 
 procedure TTestCaseTU.ReceiveTrying(Invite: TIdSipRequest);

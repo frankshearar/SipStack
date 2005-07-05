@@ -80,9 +80,11 @@ type
 
   TIdSipSubscribeModule = class(TIdSipMessageModule)
   private
-    Listeners: TIdNotificationList;
-    Packages:  TObjectList;
+    fMinimumExpiryTime: Cardinal;
+    Listeners:          TIdNotificationList;
+    Packages:           TObjectList;
 
+    function  DefaultSubscriptionDuration: Cardinal;
     function  KnowsEvent(const EventPackage: String): Boolean;
     procedure NotifyOfRenewedSubscription(NewSub: TIdSipOutboundSubscription);
     procedure NotifyOfSubscriptionRequest(Subscription: TIdSipInboundSubscription);
@@ -98,6 +100,11 @@ type
     procedure AddListener(Listener: IIdSipSubscribeModuleListener);
     procedure AddPackage(PackageType: TIdSipEventPackageClass);
     function  AllowedEvents: String;
+    function  CreateNotify(Dialog: TIdSipDialog;
+                           Subscribe: TIdSipRequest;
+                           const SubscriptionState: String): TIdSipRequest;
+    function  CreateSubscribe(Dest: TIdSipAddressHeader;
+                              const EventPackage: String): TIdSipRequest;
     procedure RemoveAllPackages;
     procedure RetrySubscriptionAfter(Target: TIdSipAddressHeader;
                                      const EventPackage: String;
@@ -108,6 +115,8 @@ type
     function  Subscribe(Target: TIdSipAddressHeader;
                         const EventPackage: String): TIdSipOutboundSubscription;
     function  WillAccept(Request: TIdSipRequest): Boolean; override;
+
+    property MinimumExpiryTime: Cardinal read fMinimumExpiryTime write fMinimumExpiryTime;
   end;
 
   TIdSipEventPackage = class(TObject)
@@ -134,10 +143,13 @@ type
     fDuration:     Cardinal; // in seconds
     fEventPackage: String;
     fID:           String;
+    Module:        TIdSipSubscribeModule;
   protected
     function CreateNewAttempt: TIdSipRequest; override;
   public
     class function Method: String; override;
+
+    constructor Create(UA: TIdSipAbstractUserAgent); override;
 
     property EventPackage: String   read fEventPackage write fEventPackage;
     property Duration:     Cardinal read fDuration write fDuration;
@@ -213,11 +225,16 @@ type
   end;
 
   TIdSipInboundSubscription = class(TIdSipSubscription)
+  private
+    procedure ReturnAccept(Subscribe: TIdSipRequest);
+  protected
+    procedure ReceiveSubscribe(Request: TIdSipRequest); override;
   public
     constructor Create(UA: TIdSipAbstractUserAgent;
                        Subscribe: TIdSipRequest); reintroduce;
 
-    function IsInbound: Boolean; override;
+    procedure Accept;
+    function  IsInbound: Boolean; override;
   end;
 
   TIdSipOutboundSubscription = class(TIdSipSubscription,
@@ -457,6 +474,38 @@ begin
   end;
 end;
 
+function TIdSipSubscribeModule.CreateNotify(Dialog: TIdSipDialog;
+                                            Subscribe: TIdSipRequest;
+                                            const SubscriptionState: String): TIdSipRequest;
+begin
+  Result := Self.UserAgent.CreateRequest(MethodNotify, Dialog);
+  try
+    // cf RFC 3265, section 3.2.2
+
+    Result.AddHeader(Subscribe.FirstEvent);
+    Result.AddHeader(SubscriptionStateHeader).Value := SubscriptionState;
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
+function TIdSipSubscribeModule.CreateSubscribe(Dest: TIdSipAddressHeader;
+                                                 const EventPackage: String): TIdSipRequest;
+begin
+  Result := Self.UserAgent.CreateRequest(MethodSubscribe, Dest);
+  try
+    Result.AddHeader(EventHeaderFull).Value := EventPackage;
+    Result.AddHeader(ExpiresHeader);
+    Result.FirstExpires.NumericValue := Self.DefaultSubscriptionDuration;
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
 procedure TIdSipSubscribeModule.RemoveAllPackages;
 begin
   Self.Packages.Clear;
@@ -505,6 +554,11 @@ begin
 end;
 
 //* TIdSipSubscribeModule Private methods **************************************
+
+function TIdSipSubscribeModule.DefaultSubscriptionDuration: Cardinal;
+begin
+  Result := OneHour;
+end;
 
 function TIdSipSubscribeModule.KnowsEvent(const EventPackage: String): Boolean;
 begin
@@ -596,6 +650,13 @@ begin
   Result := MethodSubscribe;
 end;
 
+constructor TIdSipSubscribe.Create(UA: TIdSipAbstractUserAgent);
+begin
+  inherited Create(UA);
+
+  Self.Module := Self.UA.ModuleFor(Self.Method) as TIdSipSubscribeModule;
+end;
+
 //* TIdSipSubscribe Protected methods ******************************************
 
 function TIdSipSubscribe.CreateNewAttempt: TIdSipRequest;
@@ -606,7 +667,7 @@ begin
   try
     TempTo.Address := Self.InitialRequest.RequestUri;
 
-    Result := Self.UA.CreateSubscribe(TempTo, Self.EventPackage);
+    Result := Self.Module.CreateSubscribe(TempTo, Self.EventPackage);
   finally
     TempTo.Free;
   end;
@@ -702,7 +763,7 @@ var
 begin
   inherited Send;
 
-  Sub := Self.UA.CreateSubscribe(Self.Destination, Self.EventPackage);
+  Sub := Self.Module.CreateSubscribe(Self.Destination, Self.EventPackage);
   try
     if (Self.ID <> '') then
       Sub.FirstHeader(EventHeaderFull).Params[IdParam] := Self.ID;
@@ -774,7 +835,7 @@ var
 begin
   inherited Send;
 
-  Sub := Self.UA.CreateSubscribe(Self.Destination, Self.EventPackage);
+  Sub := Self.Module.CreateSubscribe(Self.Destination, Self.EventPackage);
   try
     Sub.FirstExpires.NumericValue := 0;
     Self.InitialRequest.Assign(Sub);
@@ -838,9 +899,41 @@ begin
   Self.InitialRequest.Assign(Subscribe);
 end;
 
+procedure TIdSipInboundSubscription.Accept;
+var
+  ActiveNotify: TIdSipRequest;
+begin
+end;
+
 function TIdSipInboundSubscription.IsInbound: Boolean;
 begin
   Result := true;
+end;
+
+//* TIdSipInboundSubscription Protected methods ********************************
+
+procedure TIdSipInboundSubscription.ReceiveSubscribe(Request: TIdSipRequest);
+begin
+  // If we get this far then the SubscribeModule's decided that we can
+  // accept the SUBSCRIBE.
+
+  inherited ReceiveSubscribe(Request);
+
+  Self.ReturnAccept(Request);
+end;
+
+//* TIdSipInboundSubscription Private methods **********************************
+
+procedure TIdSipInboundSubscription.ReturnAccept(Subscribe: TIdSipRequest);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.UA.CreateResponse(Subscribe, SIPAccepted);
+  try
+    Self.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
 end;
 
 //******************************************************************************

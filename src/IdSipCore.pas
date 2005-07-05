@@ -504,7 +504,6 @@ type
     function  CreateResponseHandler(Response: TIdSipResponse;
                                     Receiver: TIdSipTransport): TIdSipUserAgentActOnResponse;
     function  DefaultFrom: String;
-    function  DefaultSubscriptionDuration: Cardinal;
     function  DefaultUserAgent: String;
     function  GetContact: TIdSipContactHeader;
     function  GetFrom: TIdSipFromHeader;
@@ -625,17 +624,12 @@ type
     function  CreateInvite(Dest: TIdSipAddressHeader;
                            const Body: String;
                            const MimeType: String): TIdSipRequest;
-    function  CreateNotify(Dialog: TIdSipDialog;
-                           Subscribe: TIdSipRequest;
-                           const SubscriptionState: String): TIdSipRequest;
     function  CreateRefer(Session: TIdSipSession;
                           Target: TIdSipUri): TIdSipRequest;
     function  CreateRegister(Registrar: TIdSipToHeader): TIdSipRequest;
     function  CreateReInvite(Dialog: TIdSipDialog;
                              const Body: String;
                              const MimeType: String): TIdSipRequest;
-    function  CreateSubscribe(Dest: TIdSipAddressHeader;
-                              const EventPackage: String): TIdSipRequest;
     function  CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistrationQuery;
     function  InviteCount: Integer;
     procedure OnReregister(Event: TObject);
@@ -2808,23 +2802,6 @@ begin
   end;
 end;
 
-function TIdSipAbstractUserAgent.CreateNotify(Dialog: TIdSipDialog;
-                                              Subscribe: TIdSipRequest;
-                                              const SubscriptionState: String): TIdSipRequest;
-begin
-  Result := Self.CreateRequest(MethodNotify, Dialog);
-  try
-    // cf RFC 3265, section 3.2.2
-
-    Result.AddHeader(Subscribe.FirstEvent);
-    Result.AddHeader(SubscriptionStateHeader).Value := SubscriptionState;
-  except
-    FreeAndNil(Result);
-
-    raise;
-  end;
-end;
-
 function TIdSipAbstractUserAgent.CreateRefer(Session: TIdSipSession;
                                              Target: TIdSipUri): TIdSipRequest;
 begin
@@ -2879,21 +2856,6 @@ begin
   Result := Self.CreateRequest(MethodInvite, Dialog);
   try
     Self.TurnIntoInvite(Result, Body, MimeType);
-  except
-    FreeAndNil(Result);
-
-    raise;
-  end;
-end;
-
-function TIdSipAbstractUserAgent.CreateSubscribe(Dest: TIdSipAddressHeader;
-                                                 const EventPackage: String): TIdSipRequest;
-begin
-  Result := Self.CreateRequest(MethodSubscribe, Dest);
-  try
-    Result.AddHeader(EventHeaderFull).Value := EventPackage;
-    Result.AddHeader(ExpiresHeader);
-    Result.FirstExpires.NumericValue := Self.DefaultSubscriptionDuration;       
   except
     FreeAndNil(Result);
 
@@ -3509,11 +3471,6 @@ end;
 function TIdSipAbstractUserAgent.DefaultFrom: String;
 begin
   Result := 'unknown <sip:unknown@' + Self.HostName + '>';
-end;
-
-function TIdSipAbstractUserAgent.DefaultSubscriptionDuration: Cardinal;
-begin
-  Result := OneHour;
 end;
 
 function TIdSipAbstractUserAgent.DefaultUserAgent: String;
