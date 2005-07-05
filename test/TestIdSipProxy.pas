@@ -12,12 +12,13 @@ unit TestIdSipProxy;
 interface
 
 uses
-  IdSipCore, IdSipMessage, IdSipMockTransactionDispatcher, IdSipProxy,
-  TestFramework;
+  IdSipAuthentication, IdSipCore, IdSipMessage, IdSipMockTransactionDispatcher,
+  IdSipProxy, TestFramework;
 
 type
   TestTIdSipProxy = class(TTestCase)
   private
+    Authenticator:    TIdSipAuthenticator;
     Client:           TIdSipUserAgent;
     ClientDispatcher: TIdSipMockTransactionDispatcher;
     Dispatcher:       TIdSipMockTransactionDispatcher;
@@ -56,15 +57,18 @@ procedure TestTIdSipProxy.SetUp;
 begin
   inherited SetUp;
 
+  Self.Authenticator := TIdSipAuthenticator.Create;
+
   Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
+  Self.Dispatcher.AddTransactionDispatcherListener(Self.Proxy);
   Self.Dispatcher.TransportType := TcpTransport;
 
   Self.Invite := TIdSipTestResources.CreateBasicRequest;
   Self.RemoveBody(Self.Invite);
 
   Self.Proxy := TIdSipProxy.Create;
-  Self.Proxy.Dispatcher := Self.Dispatcher;
-  Self.Dispatcher.AddTransactionDispatcherListener(Self.Proxy);
+  Self.Proxy.Authenticator := Self.Authenticator;
+  Self.Proxy.Dispatcher    := Self.Dispatcher;
 
   Self.Client := TIdSipUserAgent.Create;
   Self.ClientDispatcher := TIdSipMockTransactionDispatcher.Create;
@@ -78,6 +82,7 @@ begin
   Self.Client.Free;
   Self.Proxy.Free;
   Self.Invite.Free;
+  Self.Authenticator.Free;
 
   inherited TearDown;
 end;
