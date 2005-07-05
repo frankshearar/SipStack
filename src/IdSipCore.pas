@@ -416,7 +416,7 @@ type
   end;
 
   // I represent the (possibly deferred) execution of something my Action needs
-  // done.
+  // done. That is, when you invoke my Trigger, I call Action.Send.
   TIdSipActionSendWait = class(TIdWait)
   private
     fAction: TIdSipAction;
