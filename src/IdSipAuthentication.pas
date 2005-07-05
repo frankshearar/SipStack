@@ -616,7 +616,7 @@ var
   InfoHeader:      TIdSipAuthenticationInfoHeader;
 begin
   Assert(Challenge.HasWWWAuthenticate or Challenge.HasProxyAuthenticate,
-         'You can''t generate an authorized request with no authentication request');
+         'You can''t generate authorization credentials with no authentication request');
 
   if Challenge.HasWWWAuthenticate then
     ChallengeHeader := Challenge.FirstWWWAuthenticate
