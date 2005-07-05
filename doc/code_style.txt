@@ -1,0 +1,80 @@
+NAMING CONVENTIONS
+
+* We use "CamelCase" to capitalise method names, instance variable
+  names, class names, etc.
+* We try, as much as possible, to give short, clear names to
+  entities. Where we can't have both, we emphasise clarity of names
+  over brevity.
+
+INDENTATION AND SPACING
+
+* Two space characters mark each indent level.
+* The code in this stack follows, roughly, the One True Brace Style as
+  laid out by Kernighan & Ritchie in "The C Programming
+  Language". That is,
+
+  if (SomeCondition) then begin
+    SomeObject.SomeMethod;
+  end
+  else begin
+  end;
+
+* Operators (=, <>, :=, etc) have a space character on either side.
+* When lots of assignments happen one after the other, if it's
+  convenient, we line up the assignment operators to ease reading:
+
+  OneAssignment     := 0;
+  AnotherAssignment := 1;
+
+* Many chained if-then-else chains occur in the stack, as a result of
+  not representing certain data as enumerated types. In these, if
+  convenient, we line up the conditions of the if statements to aid
+  reading:
+
+       if Request.IsAck       then Self.ReceiveAck(Request)
+  else if Request.IsBye       then Self.ReceiveBye(Request)
+  else if Request.IsCancel    then Self.ReceiveCancel(Request)
+
+* We use spaces to tabulate property declarations:
+
+    property InitialRequest: TIdSipRequest read fInitialRequest;
+    property IsOwned:        Boolean       read fIsOwned;
+    property IsTerminated:   Boolean       read fIsTerminated;
+    property Username:       String        read GetUsername write SetUsername;
+
+* We try keep lines shorter than 80 characters. Where we cannot
+  shorten a line less than 80 characters, we line up method/function
+  parameters vertically:
+
+  SomeVeryLongNameWeCantShorten.AnotherVeryLongName(OneParameter,
+                                                    AnotherParameter,
+						    AFunctionCall(FirstParam,
+								  SecondParam));
+
+  We do try to avoid these sorts of lines if possible, using Introduce
+  Explaining Variable, for instance.
+
+PATTERNS
+
+* The stack makes extensive use of the Listener/Observer pattern, via
+  the TIdNotificationList class and TIdNotification subclasses.
+* The stack (or at least the Transaction-User layer) also makes
+  extensive use of a translation of closures into Delphi. See
+  TIdSipActionClosure.
+
+COMMENTS
+
+* As much as possible, we write code such that it doesn't need
+  comments. Where code does need a comment (the reasons behind the
+  code are not clear, for instance), we explain WHY the code looks the
+  way it does, or does what it does, rather than meaninglessly
+  parroting the code.
+* We try write meaningful class comments (i.e., comments located with
+  the class declaration indicating usual patterns of usage, purpose,
+  etc.) for most important classes.
+
+REFERENCES
+
+* Beck, Kent, "Smalltalk Best Practice Patterns"
+* Fowler, Martin, "Refactoring: Improving the Design of Existing Code"
+* Kernighan B. and D. Ritchie, "The C Programming Language"
