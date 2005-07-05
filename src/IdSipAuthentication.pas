@@ -506,28 +506,6 @@ function TIdSipAbstractAuthenticator.Authenticate(Request: TIdSipRequest): Boole
 var
   Auth: TIdSipAuthorizationHeader;
 begin
-{
-     In this document the string obtained by applying the digest
-     algorithm to the data "data" with secret "secret" will be denoted
-     by KD(secret, data), and the string obtained by applying the
-     checksum algorithm to the data "data" will be denoted H(data). The
-     notation unq(X) means the value of the quoted-string X without the
-     surrounding quotes.
-
-     For the "MD5" and "MD5-sess" algorithms
-
-         H(data) = MD5(data)
-
-     and
-
-         KD(secret, data) = H(concat(secret, ":", data))
-
-     i.e., the digest is the MD5 of the secret concatenated with a colon
-     concatenated with the data. The "MD5-sess" algorithm is intended to
-     allow efficient 3rd party authentication servers; for the
-     difference in usage, see the description in section 3.2.2.2.
-}
-
   if not Self.HasAuthorization(Request, Self.IsProxy) then begin
     Result := false;
     Exit;
