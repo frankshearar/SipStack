@@ -651,6 +651,9 @@ var
   QopData:     TIdQopFunction;
   UserData:    TIdAlgorithmFunction;
 begin
+  // Given a Challenge and an Info, fill Authorization with the necessary
+  // credentials.
+
   Self.IncNonceCount;
 
   Authorization.Assign(Challenge);
