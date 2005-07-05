@@ -5836,7 +5836,7 @@ begin
   Result := true;
 
   // Step 4
-  if not Self.BindingDB.IsAuthorized(Request.From) then begin
+  if not Self.BindingDB.IsAuthorized(Request.From, Request.RequestUri) then begin
     Self.RejectForbidden(Request);
     Result := false;
     Exit;

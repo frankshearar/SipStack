@@ -74,7 +74,8 @@ type
     constructor Create; override;
 
     function  AddBindings(Request: TIdSipRequest): Boolean;
-    function  IsAuthorized(User: TIdSipAddressHeader): Boolean; virtual; abstract;
+    function  IsAuthorized(User: TIdSipAddressHeader;
+                           AddressOfRecord: TIdSipUri): Boolean; virtual; abstract;
     function  IsValid(Request: TIdSipRequest): Boolean; virtual; abstract;
     function  BindingExpires(const AddressOfRecord: String;
                              const CanonicalUri: String): TDateTime;

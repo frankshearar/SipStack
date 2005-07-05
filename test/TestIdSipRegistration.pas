@@ -459,9 +459,14 @@ end;
 procedure TestTIdSipMockBindingDatabase.TestIsAuthorized;
 begin
   Self.DB.Authorized := true;
-  Check(Self.DB.IsAuthorized(Self.CaseContact), 'Authorized');
+  Check(Self.DB.IsAuthorized(Self.CaseContact,
+                             Self.CasesAOR.RequestUri),
+        'Authorized');
   Self.DB.Authorized := false;
-  Check(not Self.DB.IsAuthorized(Self.CaseContact), 'not Authorized');
+  Check(not Self.DB.IsAuthorized(Self.CaseContact,
+                                 Self.CasesAOR.RequestUri),
+
+'not Authorized');
 end;
 
 

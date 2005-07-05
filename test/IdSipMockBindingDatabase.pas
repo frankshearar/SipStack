@@ -46,7 +46,8 @@ type
     function  BindingCount: Integer;
     function  BindingsFor(Request: TIdSipRequest;
                           Contacts: TIdSipContacts): Boolean; override;
-    function  IsAuthorized(User: TIdSipAddressHeader): Boolean; override;
+    function  IsAuthorized(User: TIdSipAddressHeader;
+                           AddressOfRecord: TIdSipUri): Boolean; override;
     function  IsValid(Request: TIdSipRequest): Boolean; override;
     function  RemoveBinding(Request: TIdSipRequest;
                             Contact: TIdSipContactHeader): Boolean; override;
@@ -124,7 +125,8 @@ begin
   Result := not Self.FailBindingsFor;
 end;
 
-function TIdSipMockBindingDatabase.IsAuthorized(User: TIdSipAddressHeader): Boolean;
+function TIdSipMockBindingDatabase.IsAuthorized(User: TIdSipAddressHeader;
+                                                AddressOfRecord: TIdSipUri): Boolean;
 begin
   Result := Self.Authorized;
 end;
