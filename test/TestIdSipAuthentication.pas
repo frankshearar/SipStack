@@ -420,6 +420,7 @@ end;
 procedure TestTIdSipAuthenticator.TestAuthenticateAsUserAgent;
 begin
   Self.Auth.IsProxy := true;
+  Fail('Not implemented');
 end;
 
 procedure TestTIdSipAuthenticator.TestCreateChallengeResponse;

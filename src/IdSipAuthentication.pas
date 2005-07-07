@@ -58,6 +58,7 @@ type
     function  Usercount: Integer;
   end;
 
+  // I add the protocol necessary for a UAS to authenticate requests.
   TIdSipAbstractAuthenticator = class(TIdSipUserList)
   private
     fAlgorithm: String;
@@ -65,6 +66,8 @@ type
     fQop:       String;
     fRealm:     String;
 
+    function Authenticate(Request: TIdSipRequest;
+                          AsProxy: Boolean): Boolean; overload;
     function AuthorizationFor(Request: TIdSipRequest;
                               const Realm: String;
                               AsProxy: Boolean): TIdSipAuthorizationHeader;
@@ -81,7 +84,7 @@ type
   public
     constructor Create; override;
 
-    function  Authenticate(Request: TIdSipRequest): Boolean; virtual;
+    function  Authenticate(Request: TIdSipRequest): Boolean; overload; virtual;
     function  AuthenticateAsUserAgent(Request: TIdSipRequest): Boolean;
     function  CreateChallengeResponse(Request: TIdSipRequest): TIdSipResponse;
     function  CreateChallengeResponseAsUserAgent(Request: TIdSipRequest): TIdSipResponse;
@@ -506,22 +509,12 @@ function TIdSipAbstractAuthenticator.Authenticate(Request: TIdSipRequest): Boole
 var
   Auth: TIdSipAuthorizationHeader;
 begin
-  if not Self.HasAuthorization(Request, Self.IsProxy) then begin
-    Result := false;
-    Exit;
-  end;
-
-  if Self.HasAuthorizationFor(Request, Self.Realm, Self.IsProxy) then begin
-    Auth := Self.AuthorizationFor(Request, Self.Realm, Self.IsProxy);
-    Result := Auth.Response = Self.DigestFor(Auth.Username, Auth.Realm);
-  end
-  else
-    Result := false;
+  Result := Self.Authenticate(Request, Self.IsProxy);
 end;
 
 function TIdSipAbstractAuthenticator.AuthenticateAsUserAgent(Request: TIdSipRequest): Boolean;
 begin
-  Result := false;
+  Result := Self.Authenticate(Request, false);
 end;
 
 function TIdSipAbstractAuthenticator.CreateChallengeResponse(Request: TIdSipRequest): TIdSipResponse;
@@ -535,6 +528,24 @@ begin
 end;
 
 //* TIdSipAbstractAuthenticator Private methods ********************************
+
+function TIdSipAbstractAuthenticator.Authenticate(Request: TIdSipRequest;
+                                                  AsProxy: Boolean): Boolean;
+var
+  Auth: TIdSipAuthorizationHeader;
+begin
+  if not Self.HasAuthorization(Request, AsProxy) then begin
+    Result := false;
+    Exit;
+  end;
+
+  if Self.HasAuthorizationFor(Request, Self.Realm, AsProxy) then begin
+    Auth := Self.AuthorizationFor(Request, Self.Realm, AsProxy);
+    Result := Auth.Response = Self.DigestFor(Auth.Username, Auth.Realm);
+  end
+  else
+    Result := false;
+end;
 
 function TIdSipAbstractAuthenticator.AuthorizationFor(Request: TIdSipRequest;
                                                       const Realm: String;
