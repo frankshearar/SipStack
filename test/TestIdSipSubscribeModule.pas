@@ -35,10 +35,13 @@ type
   end;
 
   TestTIdSipSubscribeModule = class(TSubscribeTestCase)
+  private
+    procedure CheckNoPackageFound(PackageType: TIdSipEventPackageClass);
+    procedure CheckPackageFound(PackageType: TIdSipEventPackageClass);
   published
     procedure TestAddListener;
     procedure TestAddPackage;
-    procedure TestReceiveExpiresTooShort;
+    procedure TestPackage;
     procedure TestRejectUnknownEventSubscriptionRequest;
     procedure TestRemoveListener;
     procedure TestSubscribe;
@@ -113,10 +116,12 @@ type
     SubscribeAction:  TIdSipInboundSubscription;
     SubscribeRequest: TIdSipRequest;
 
+    procedure CheckExpiresScheduled(ExpectedExpires: Cardinal;
+                                    const Msg: String);
     procedure ReceiveSubscribe(const EventPackage: String;
                                ExpiryTime: Cardinal = 0);
+    procedure ReceiveSubscribeWithoutExpires(const EventPackage: String);
     procedure ReceiveSubscribeWithExpiresInContact(Duration: Cardinal);
-    procedure ReceiveSubscribeWithoutExpires;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -127,7 +132,9 @@ type
     procedure TestIsOptions; override;
     procedure TestIsRegistration; override;
     procedure TestIsSession; override;
-    procedure TestReceiveExpireTooShort;
+    procedure TestReceiveExpiresTooShort;
+    procedure TestReceiveNoExpires;
+    procedure TestReceiveSubscribe;
     procedure TestReceiveSubscribeReturnsAccepted;
   end;
 
@@ -477,6 +484,22 @@ end;
 //******************************************************************************
 //* TestTIdSipSubscribeModule                                                  *
 //******************************************************************************
+
+procedure TestTIdSipSubscribeModule.CheckNoPackageFound(PackageType: TIdSipEventPackageClass);
+begin
+  Check(not Assigned(Self.Module.Package(PackageType.EventPackage)),
+        PackageType.EventPackage + ' found');
+end;
+
+procedure TestTIdSipSubscribeModule.CheckPackageFound(PackageType: TIdSipEventPackageClass);
+begin
+  Check(Assigned(Self.Module.Package(PackageType.EventPackage)),
+        PackageType.EventPackage + ' package not found');
+  CheckEquals(PackageType.ClassName,
+              Self.Module.Package(PackageType.EventPackage).ClassName,
+              'Wrong package found for package ' + PackageType.EventPackage);
+end;
+
 //* TestTIdSipSubscribeModule Published methods ********************************
 
 procedure TestTIdSipSubscribeModule.TestAddListener;
@@ -520,28 +543,15 @@ begin
               'After adding ' + TIdSipReferPackage.EventPackage + ' package');
 end;
 
-procedure TestTIdSipSubscribeModule.TestReceiveExpiresTooShort;
-const
-  MinExpTime = 42;
-var
-  Response: TIdSipResponse;
+procedure TestTIdSipSubscribeModule.TestPackage;
 begin
-  Self.Module.MinimumExpiryTime := MinExpTime;
+  Self.CheckPackageFound(TIdSipTestPackage);
 
-  Self.MarkSentResponseCount;
-  Self.ReceiveSubscribe(TIdSipTestPackage.EventPackage, MinExpTime - 1);
+  Self.CheckNoPackageFound(TIdSipReferPackage);
 
-  CheckResponseSent('No response sent');
+  Self.Module.AddPackage(TIdSipReferPackage);
 
-  Response := Self.LastSentResponse;
-  CheckEquals(SIPIntervalTooBrief,
-              Response.StatusCode,
-              'Unexpected response sent');
-  Check(Response.HasHeader(MinExpiresHeader),
-        'No Min-Expires header');
-  CheckEquals(Self.Module.MinimumExpiryTime,
-              Response.FirstMinExpires.NumericValue,
-              'Min-Expires value');                  
+  Self.CheckPackageFound(TIdSipReferPackage);
 end;
 
 procedure TestTIdSipSubscribeModule.TestRejectUnknownEventSubscriptionRequest;
@@ -570,7 +580,7 @@ begin
     Self.Module.AddListener(L);
     Self.Module.RemoveListener(L);
 
-    Self.ReceiveSubscribe('Foo');
+    Self.ReceiveSubscribe(TIdSipTestPackage.EventPackage);
 
     Check(not L.SubscriptionRequest,
           'Listener notified of subscription request, thus not removed');
@@ -580,12 +590,10 @@ begin
 end;
 
 procedure TestTIdSipSubscribeModule.TestSubscribe;
-const
-  EventPackage = 'Foo';
 var
   Sub: TIdSipOutboundSubscription;
 begin
-  Sub := Self.Module.Subscribe(Self.Destination, EventPackage);
+  Sub := Self.Module.Subscribe(Self.Destination, TIdSipTestPackage.EventPackage);
 
   Self.MarkSentRequestCount;
   Sub.Send;
@@ -594,7 +602,7 @@ begin
               Self.LastSentRequest.Method,
               'Unexpected response sent');
 
-  CheckEquals(EventPackage,
+  CheckEquals(TIdSipTestPackage.EventPackage,
               Self.LastSentRequest.FirstEvent.EventPackage,
               'Event header');
 end;
@@ -726,7 +734,7 @@ procedure TestTIdSipOutboundSubscribe.SetUp;
 begin
   inherited SetUp;
 
-  Self.EventPackage := 'Foo';
+  Self.EventPackage := TIdSipTestPackage.EventPackage;
   Self.Failed       := false;
   Self.ID           := 'id1';
   Self.Succeeded    := false;
@@ -921,7 +929,8 @@ procedure TestTIdSipInboundSubscription.SetUp;
 begin
   inherited SetUp;
 
-  Self.SubscribeRequest := Self.Module.CreateSubscribe(Self.Destination, 'Foo');
+  Self.SubscribeRequest := Self.Module.CreateSubscribe(Self.Destination,
+                                                       TIdSipTestPackage.EventPackage);
   Self.SubscribeAction  := TIdSipInboundSubscription.Create(Self.Core, Self.SubscribeRequest, false);
 end;
 
@@ -934,6 +943,41 @@ begin
 end;
 
 //* TestTIdSipInboundSubscription Private methods ******************************
+
+procedure TestTIdSipInboundSubscription.CheckExpiresScheduled(ExpectedExpires: Cardinal;
+                                                              const Msg: String);
+var
+  ActualExpires: Cardinal;
+begin
+  ActualExpires := Self.DebugTimer.LastEventScheduled.DebugWaitTime;
+  CheckEquals(ExpectedExpires,
+              ActualExpires,
+              Msg + ': Expires wait time');
+
+  Self.MarkSentRequestCount;
+  Self.DebugTimer.TriggerEarliestEvent;
+  CheckRequestSent(Msg + ': No request sent for expired subscription');
+  CheckEquals(MethodNotify,
+              Self.LastSentRequest.Method,
+              Msg + ': Unexpected message sent');
+  CheckEquals(SubscriptionSubstateTerminated,
+              Self.LastSentRequest.FirstSubscriptionState.SubState,
+              Msg + ': Subscription-State value');
+end;
+
+procedure TestTIdSipInboundSubscription.ReceiveSubscribeWithoutExpires(const EventPackage: String);
+var
+  Subscribe: TIdSipRequest;
+begin
+  Subscribe := Self.Module.CreateSubscribe(Self.Destination, EventPackage);
+  try
+    Subscribe.RemoveAllHeadersNamed(ExpiresHeader);
+
+    Self.ReceiveRequest(Subscribe);
+  finally
+    Subscribe.Free;
+  end;
+end;
 
 procedure TestTIdSipInboundSubscription.ReceiveSubscribe(const EventPackage: String;
                                                          ExpiryTime: Cardinal = 0);
@@ -959,20 +1003,6 @@ begin
   try
     Subscribe.RemoveAllHeadersNamed(ExpiresHeader);
     Subscribe.FirstContact.Expires := Duration;
-
-    Self.ReceiveRequest(Subscribe);
-  finally
-    Subscribe.Free;
-  end;
-end;
-
-procedure TestTIdSipInboundSubscription.ReceiveSubscribeWithoutExpires;
-var
-  Subscribe: TIdSipRequest;
-begin
-  Subscribe := Self.Module.CreateSubscribe(Self.Destination, 'Foo');
-  try
-    Subscribe.RemoveAllHeadersNamed(ExpiresHeader);
 
     Self.ReceiveRequest(Subscribe);
   finally
@@ -1036,26 +1066,58 @@ begin
         Self.SubscribeAction.ClassName + ' marked as a Session');
 end;
 
-procedure TestTIdSipInboundSubscription.TestReceiveExpireTooShort;
+procedure TestTIdSipInboundSubscription.TestReceiveExpiresTooShort;
+const
+  MinExpTime = 42;
 var
   Response: TIdSipResponse;
 begin
-  Self.Module.MinimumExpiryTime := OneHour div 2;
+  Self.Module.MinimumExpiryTime := MinExpTime;
 
   Self.MarkSentResponseCount;
-  Self.ReceiveSubscribe(TIdSipTestPackage.EventPackage,
-                        Self.Module.MinimumExpiryTime - 1);
+  Self.ReceiveSubscribe(TIdSipTestPackage.EventPackage, MinExpTime - 1);
 
   CheckResponseSent('No response sent');
+
   Response := Self.LastSentResponse;
   CheckEquals(SIPIntervalTooBrief,
               Response.StatusCode,
-              'Unexpected response sent for Expires header value too low');
+              'Unexpected response sent');
   Check(Response.HasHeader(MinExpiresHeader),
-        MinExpiresHeader + ' missing');
+        'No Min-Expires header');
   CheckEquals(Self.Module.MinimumExpiryTime,
               Response.FirstMinExpires.NumericValue,
-              MinExpiresHeader + ' value');
+              'Min-Expires value');
+end;
+
+procedure TestTIdSipInboundSubscription.TestReceiveNoExpires;
+var
+  Response: TIdSipResponse;
+begin
+  Self.ReceiveSubscribeWithoutExpires(TIdSipTestPackage.EventPackage);
+
+  CheckResponseSent('No response sent');
+
+  Response := Self.LastSentResponse;
+  CheckEquals(SIPAccepted,
+              Response.StatusCode,
+              'Unexpected response sent');
+  Check(Response.HasHeader(ExpiresHeader),
+        'No Expires header');
+  CheckEquals(TIdSipTestPackage.DefaultSubscriptionDuration,
+              Response.FirstExpires.NumericValue,
+              'Wrong Expires value');
+end;
+
+procedure TestTIdSipInboundSubscription.TestReceiveSubscribe;
+begin
+  Self.ReceiveSubscribe(TIdSipTestPackage.EventPackage);
+
+  CheckEquals(TIdSipTestPackage.EventPackage,
+              Self.SubscribeAction.EventPackage,
+              'EventPackage');
+  CheckExpiresScheduled(Self.Dispatcher.Transport.LastResponse.FirstExpires.NumericValue,
+                        'Subscription won''t expire');
 end;
 
 procedure TestTIdSipInboundSubscription.TestReceiveSubscribeReturnsAccepted;
@@ -1214,7 +1276,8 @@ end;
 
 function TestTIdSipOutboundSubscription.CreateSubscription: TIdSipOutboundSubscription;
 begin
-  Result := Self.Module.Subscribe(Self.Destination, 'Foo') as TIdSipOutboundSubscription;
+  Result := Self.Module.Subscribe(Self.Destination,
+                                  TIdSipTestPackage.EventPackage) as TIdSipOutboundSubscription;
   Result.AddListener(Self);
   Result.Send;
 end;

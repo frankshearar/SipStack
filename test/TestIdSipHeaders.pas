@@ -94,7 +94,19 @@ type
     procedure TestValueWithUnquotedNonTokensPlusParam;
   end;
 
-  TestTIdSipAllowEventsHeader = class(THeaderTestCase)
+  TestTIdSipCommaSeparatedHeader = class(THeaderTestCase)
+  private
+    C: TIdSipCommaSeparatedHeader;
+  protected
+    function HeaderType: TIdSipHeaderClass; override;
+  public
+    procedure SetUp; override;
+  published
+    procedure TestRemoveValues;
+    procedure TestValue; override;
+  end;
+
+  TestTIdSipAllowEventsHeader = class(TestTIdSipCommaSeparatedHeader)
   private
     AE: TIdSipAllowEventsHeader;
   protected
@@ -149,18 +161,6 @@ type
     procedure TestEquals;
     procedure TestValue; override;
     procedure TestValueWithParams;
-  end;
-
-  TestTIdSipCommaSeparatedHeader = class(THeaderTestCase)
-  private
-    C: TIdSipCommaSeparatedHeader;
-  protected
-    function HeaderType: TIdSipHeaderClass; override;
-  public
-    procedure SetUp; override;
-  published
-    procedure TestRemoveValues;
-    procedure TestValue; override;
   end;
 
   TestTIdSipContactHeader = class(THeaderTestCase)
@@ -228,7 +228,7 @@ type
     procedure TestValueZeroTime;
   end;
 
-  TestTIdSipEventHeader = class(TestTIdSipAllowEventsHeader)
+  TestTIdSipEventHeader = class(THeaderTestCase)
   private
     E: TIdSipEventHeader;
   protected
@@ -240,6 +240,10 @@ type
     procedure TestEqualsWithID;
     procedure TestEqualsWithNonIDParams;
     procedure TestGetSetID;
+    procedure TestIsEventType;
+    procedure TestIsTokenNoDot;
+    procedure TestMalformedValue;
+    procedure TestValue; override;
     procedure TestValueWithID;
   end;
 
@@ -713,10 +717,10 @@ begin
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSipHeader.Suite);
   Result.AddTest(TestTIdSipAddressHeader.Suite);
+  Result.AddTest(TestTIdSipCommaSeparatedHeader.Suite);
   Result.AddTest(TestTIdSipAllowEventsHeader.Suite);
   Result.AddTest(TestTIdSipAuthorizationHeader.Suite);
   Result.AddTest(TestTIdSipCallIDHeader.Suite);
-  Result.AddTest(TestTIdSipCommaSeparatedHeader.Suite);
   Result.AddTest(TestTIdSipContactHeader.Suite);
   Result.AddTest(TestTIdSipContentDispositionHeader.Suite);
   Result.AddTest(TestTIdSipCSeqHeader.Suite);
@@ -1618,6 +1622,114 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSipCommaSeparatedHeader                                             *
+//******************************************************************************
+//* TestTIdSipCommaSeparatedHeader Public methods ******************************
+
+procedure TestTIdSipCommaSeparatedHeader.SetUp;
+begin
+  inherited SetUp;
+
+  Self.C := Self.Header as TIdSipCommaSeparatedHeader;
+end;
+
+//* TestTIdSipCommaSeparatedHeader Protected methods ***************************
+
+function TestTIdSipCommaSeparatedHeader.HeaderType: TIdSipHeaderClass;
+begin
+  Result := TIdSipCommaSeparatedHeader;
+end;
+
+//* TestTIdSipCommaSeparatedHeader Published methods ***************************
+
+procedure TestTIdSipCommaSeparatedHeader.TestRemoveValues;
+var
+  Keepers: TStrings;
+  I:       Integer;
+  Remove:  TIdSipCommaSeparatedHeader;
+begin
+  Keepers := TStringList.Create;
+  try
+    Keepers.Add('Baz');
+    Keepers.Add('Quaax');
+    Keepers.Add('Qwglm');
+
+    Remove := TIdSipCommaSeparatedHeader.Create;
+    try
+      Remove.Value := 'Foo, Bar';
+
+      Self.C.Values.AddStrings(Keepers);
+      Self.C.Values.AddStrings(Remove.Values);
+
+      Self.C.RemoveValues(Remove);
+
+      for I := 0 to Remove.Values.Count - 1 do
+        CheckEquals(-1,
+                    Self.C.Values.IndexOf(Remove.Values[I]),
+                    '''' + Remove.Values[I] + ''' not removed');
+
+      for I := 0 to Keepers.Count - 1 do
+        CheckNotEquals(-1,
+                       Self.C.Values.IndexOf(Keepers[I]),
+                       '''' + Keepers[I] + ''' removed');
+    finally
+      Remove.Free;
+    end;
+  finally
+    Keepers.Free;
+  end;
+end;
+
+procedure TestTIdSipCommaSeparatedHeader.TestValue;
+begin
+  Self.C.Name := ContentLanguageHeader;
+
+  Self.C.Value := '';
+  CheckEquals(0, Self.C.Values.Count, 'Empty value');
+  CheckEquals(Self.C.Name + ': ',
+              Self.C.AsString,
+              'Empty value AsString');
+
+  Self.C.Value := 'a';
+  CheckEquals(1, Self.C.Values.Count, 'a');
+  CheckEquals('a', Self.C.Values[0], '1: First value');
+  CheckEquals(Self.C.Name + ': a',
+              Self.C.AsString,
+              '''a'' AsString');
+
+  Self.C.Value := 'a b';
+  CheckEquals(1, Self.C.Values.Count, 'a b');
+  CheckEquals('a b', Self.C.Values[0], '2: First value');
+  CheckEquals(Self.C.Name + ': a b',
+              Self.C.AsString,
+              '''a b'' AsString');
+
+  Self.C.Value := 'a,b';
+  CheckEquals(2, Self.C.Values.Count, 'a,b');
+  CheckEquals('a', Self.C.Values[0], '3: First value');
+  CheckEquals('b', Self.C.Values[1], '3: Second value');
+  CheckEquals(Self.C.Name + ': a, b',
+              Self.C.AsString,
+              '''a,b'' AsString');
+
+  Self.C.Value := 'a, b';
+  CheckEquals(2, Self.C.Values.Count, 'a, b');
+  CheckEquals('a', Self.C.Values[0], '4: First value');
+  CheckEquals('b', Self.C.Values[1], '4: Second value');
+  CheckEquals(Self.C.Name + ': a, b',
+              Self.C.AsString,
+              '''a, b'' AsString');
+
+  Self.C.Value := 'a;q=0.1, b;q=1';
+  CheckEquals(2, Self.C.Values.Count, 'a;q=0.1, b;q=1');
+  CheckEquals('a;q=0.1', Self.C.Values[0], '5: First value');
+  CheckEquals('b;q=1', Self.C.Values[1],   '5: Second value');
+  CheckEquals(Self.C.Name + ': a;q=0.1, b;q=1',
+              Self.C.AsString,
+              '''a;q=0.1, b;q=1'' AsString');
+end;
+
+//******************************************************************************
 //* TestTIdSipAllowEventsHeader                                                 *
 //******************************************************************************
 //* TestTIdSipAllowEventsHeader Public methods **********************************
@@ -1640,25 +1752,18 @@ end;
 
 procedure TestTIdSipAllowEventsHeader.TestMalformedValue;
 begin
-  // Too many dot-limited tokens
+  // Too many dot-limited tokens in EventType name
   Self.AE.Value := 'foo.bar.baz';
   Check(Self.AE.IsMalformed, 'Header not marked as malformed');
 end;
 
 procedure TestTIdSipAllowEventsHeader.TestValue;
 begin
-  Self.AE.Value := 'foo';
-
-  CheckEquals('foo', Self.AE.Value,         'foo: Value');
-  CheckEquals('foo', Self.AE.EventType,     'foo: EventType');
-  CheckEquals('foo', Self.AE.EventPackage,  'foo: EventPackage');
-  CheckEquals('',    Self.AE.EventTemplate, 'foo: EventTemplate');
-
-  Self.AE.Value := 'foo.bar';
-  CheckEquals('foo.bar', Self.AE.Value,         'foo.bar: Value');
-  CheckEquals('foo.bar', Self.AE.EventType,     'foo.bar: EventType');
-  CheckEquals('foo',     Self.AE.EventPackage,  'foo.bar: EventPackage');
-  CheckEquals('bar',     Self.AE.EventTemplate, 'foo.bar: EventTemplate');
+  Self.AE.Value := 'foo.bar, foo.baz,foo.quaax';
+  CheckEquals(3, Self.AE.EventTypeCount, 'EventTypeCount');
+  CheckEquals('foo.bar',  Self.AE.EventTypes[0],  'EventTypes[0]');
+  CheckEquals('foo.baz',  Self.AE.EventTypes[1],  'EventTypes[1]');
+  CheckEquals('foo.quaax', Self.AE.EventTypes[2], 'EventTypes[2]');
 end;
 
 //******************************************************************************
@@ -2065,114 +2170,6 @@ begin
   Self.C.Value := 'one@two;tag=f00';
   Check(Self.C.IsMalformed,
         'Failed to bail out with params - semicolon is an invalid character');
-end;
-
-//******************************************************************************
-//* TestTIdSipCommaSeparatedHeader                                             *
-//******************************************************************************
-//* TestTIdSipCommaSeparatedHeader Public methods ******************************
-
-procedure TestTIdSipCommaSeparatedHeader.SetUp;
-begin
-  inherited SetUp;
-
-  Self.C := Self.Header as TIdSipCommaSeparatedHeader;
-end;
-
-//* TestTIdSipCommaSeparatedHeader Protected methods ***************************
-
-function TestTIdSipCommaSeparatedHeader.HeaderType: TIdSipHeaderClass;
-begin
-  Result := TIdSipCommaSeparatedHeader;
-end;
-
-//* TestTIdSipCommaSeparatedHeader Published methods ***************************
-
-procedure TestTIdSipCommaSeparatedHeader.TestRemoveValues;
-var
-  Keepers: TStrings;
-  I:       Integer;
-  Remove:  TIdSipCommaSeparatedHeader;
-begin
-  Keepers := TStringList.Create;
-  try
-    Keepers.Add('Baz');
-    Keepers.Add('Quaax');
-    Keepers.Add('Qwglm');
-
-    Remove := TIdSipCommaSeparatedHeader.Create;
-    try
-      Remove.Value := 'Foo, Bar';
-
-      Self.C.Values.AddStrings(Keepers);
-      Self.C.Values.AddStrings(Remove.Values);
-
-      Self.C.RemoveValues(Remove);
-
-      for I := 0 to Remove.Values.Count - 1 do
-        CheckEquals(-1,
-                    Self.C.Values.IndexOf(Remove.Values[I]),
-                    '''' + Remove.Values[I] + ''' not removed');
-
-      for I := 0 to Keepers.Count - 1 do
-        CheckNotEquals(-1,
-                       Self.C.Values.IndexOf(Keepers[I]),
-                       '''' + Keepers[I] + ''' removed');
-    finally
-      Remove.Free;
-    end;
-  finally
-    Keepers.Free;
-  end;
-end;
-
-procedure TestTIdSipCommaSeparatedHeader.TestValue;
-begin
-  Self.C.Name := ContentLanguageHeader;
-
-  Self.C.Value := '';
-  CheckEquals(0, Self.C.Values.Count, 'Empty value');
-  CheckEquals(Self.C.Name + ': ',
-              Self.C.AsString,
-              'Empty value AsString');
-
-  Self.C.Value := 'a';
-  CheckEquals(1, Self.C.Values.Count, 'a');
-  CheckEquals('a', Self.C.Values[0], '1: First value');
-  CheckEquals(Self.C.Name + ': a',
-              Self.C.AsString,
-              '''a'' AsString');
-
-  Self.C.Value := 'a b';
-  CheckEquals(1, Self.C.Values.Count, 'a b');
-  CheckEquals('a b', Self.C.Values[0], '2: First value');
-  CheckEquals(Self.C.Name + ': a b',
-              Self.C.AsString,
-              '''a b'' AsString');
-
-  Self.C.Value := 'a,b';
-  CheckEquals(2, Self.C.Values.Count, 'a,b');
-  CheckEquals('a', Self.C.Values[0], '3: First value');
-  CheckEquals('b', Self.C.Values[1], '3: Second value');
-  CheckEquals(Self.C.Name + ': a, b',
-              Self.C.AsString,
-              '''a,b'' AsString');
-
-  Self.C.Value := 'a, b';
-  CheckEquals(2, Self.C.Values.Count, 'a, b');
-  CheckEquals('a', Self.C.Values[0], '4: First value');
-  CheckEquals('b', Self.C.Values[1], '4: Second value');
-  CheckEquals(Self.C.Name + ': a, b',
-              Self.C.AsString,
-              '''a, b'' AsString');
-
-  Self.C.Value := 'a;q=0.1, b;q=1';
-  CheckEquals(2, Self.C.Values.Count, 'a;q=0.1, b;q=1');
-  CheckEquals('a;q=0.1', Self.C.Values[0], '5: First value');
-  CheckEquals('b;q=1', Self.C.Values[1],   '5: Second value');
-  CheckEquals(Self.C.Name + ': a;q=0.1, b;q=1',
-              Self.C.AsString,
-              '''a;q=0.1, b;q=1'' AsString');
 end;
 
 //******************************************************************************
@@ -2662,6 +2659,47 @@ begin
 
   Self.E.ID := 'bar';
   CheckEquals('bar', Self.E.ID, 'Second set/get');
+end;
+
+procedure TestTIdSipEventHeader.TestIsEventType;
+begin
+  Check(not TIdSipEventHeader.IsEventType(''),            'Empty string');
+  Check(not TIdSipEventHeader.IsEventType('.'),           '.');
+  Check(not TIdSipEventHeader.IsEventType('token.'),      'token.');
+  Check(not TIdSipEventHeader.IsEventType('.token'),      '.token');
+  Check(    TIdSipEventHeader.IsEventType('token'),       'token');
+  Check(    TIdSipEventHeader.IsEventType('token.token'), 'token.token');
+end;
+
+procedure TestTIdSipEventHeader.TestIsTokenNoDot;
+begin
+  Check(not TIdSipEventHeader.IsTokenNoDot(''),            'Empty string');
+  Check(not TIdSipEventHeader.IsTokenNoDot('.'),           '.');
+  Check(    TIdSipEventHeader.IsTokenNoDot('token-nodot'), 'token-nodot');
+  Check(not TIdSipEventHeader.IsTokenNoDot('token.dot'),   'token.dot');
+end;
+
+procedure TestTIdSipEventHeader.TestMalformedValue;
+begin
+  // Too many dot-limited tokens
+  Self.E.Value := 'foo.bar.baz';
+  Check(Self.E.IsMalformed, 'Header not marked as malformed');
+end;
+
+procedure TestTIdSipEventHeader.TestValue;
+begin
+  Self.E.Value := 'foo';
+
+  CheckEquals('foo', Self.E.Value,         'foo: Value');
+  CheckEquals('foo', Self.E.EventType,     'foo: EventType');
+  CheckEquals('foo', Self.E.EventPackage,  'foo: EventPackage');
+  CheckEquals('',    Self.E.EventTemplate, 'foo: EventTemplate');
+
+  Self.E.Value := 'foo.bar';
+  CheckEquals('foo.bar', Self.E.Value,         'foo.bar: Value');
+  CheckEquals('foo.bar', Self.E.EventType,     'foo.bar: EventType');
+  CheckEquals('foo',     Self.E.EventPackage,  'foo.bar: EventPackage');
+  CheckEquals('bar',     Self.E.EventTemplate, 'foo.bar: EventTemplate');
 end;
 
 procedure TestTIdSipEventHeader.TestValueWithID;

@@ -328,19 +328,33 @@ type
     property DisplayName: String read fDisplayName write fDisplayName;
   end;
 
-  TIdSipAllowEventsHeader = class(TIdSipHeader)
+  TIdSipCommaSeparatedHeader = class(TIdSipHeader)
   private
-    fEventPackage:  String;
-    fEventTemplate: String;
+    fValues: TStrings;
   protected
-    function  GetName: String; override;
     function  GetValue: String; override;
     procedure Parse(const Value: String); override;
   public
-    function EventType: String;
+    constructor Create; override;
+    destructor Destroy; override;
 
-    property EventPackage:  String read fEventPackage write fEventPackage;
-    property EventTemplate: String read fEventTemplate write fEventTemplate;
+    procedure RemoveValues(Header: TIdSipCommaSeparatedHeader);
+
+    property Values: TStrings read fValues;
+  end;
+
+  TIdSipAllowEventsHeader = class(TIdSipCommaSeparatedHeader)
+  private
+    procedure CheckEventTypes(Value: TStrings);
+    function  GetEventTypes(Index: Integer): String;
+    procedure SetEventTypes(Index: Integer; const Value: String);
+  protected
+    function  GetName: String; override;
+    procedure Parse(const Value: String); override;
+  public
+    function EventTypeCount: Integer;
+
+    property EventTypes[Index: Integer]: String read GetEventTypes write SetEventTypes;
   end;
 
   TIdSipHttpAuthHeader = class(TIdSipHeader)
@@ -431,21 +445,6 @@ type
     procedure Parse(const Value: String); override;
   public
     function Equals(Header: TIdSipHeader): Boolean; override;
-  end;
-
-  TIdSipCommaSeparatedHeader = class(TIdSipHeader)
-  private
-    fValues: TStrings;
-  protected
-    function  GetValue: String; override;
-    procedure Parse(const Value: String); override;
-  public
-    constructor Create; override;
-    destructor Destroy; override;
-
-    procedure RemoveValues(Header: TIdSipCommaSeparatedHeader);
-
-    property Values: TStrings read fValues;
   end;
 
   TIdSipWeightedValue = class(TObject)
@@ -554,16 +553,27 @@ type
   end;
 
   // cf. RFC 3265, section 7.2.1
-  TIdSipEventHeader = class(TIdSipAllowEventsHeader)
+  TIdSipEventHeader = class(TIdSipHeader)
   private
+    fEventPackage:  String;
+    fEventTemplate: String;
+
     function  GetID: String;
     procedure SetID(const Value: String);
   protected
-    function GetName: String; override;
+    function  GetName: String; override;
+    function  GetValue: String; override;
+    procedure Parse(const Value: String); override;
   public
-    function Equals(Header: TIdSipHeader): Boolean; override;
+    class function IsEventType(const S: String): Boolean;
+    class function IsTokenNoDot(const Token: String): Boolean;
 
-    property ID: String read GetID write SetID;
+    function Equals(Header: TIdSipHeader): Boolean; override;
+    function EventType: String;
+
+    property EventPackage:  String read fEventPackage write fEventPackage;
+    property EventTemplate: String read fEventTemplate write fEventTemplate;
+    property ID:            String read GetID write SetID;
   end;
 
   TIdSipFromToHeader = class(TIdSipAddressHeader)
@@ -1852,9 +1862,11 @@ const
   CRLF                  = #$D#$A;
   HeaderUnreservedChars = ['[', ']', '/', '?', ':', '+', '$'];
   HeaderChars           = HeaderUnreservedChars + UnreservedChars;
-  LegalTokenChars       = Alphabet + Digits
-                        + ['-', '.', '!', '%', '*', '_',
+  LegalTokenNoDotChars  = Alphabet + Digits
+                        + ['-', '!', '%', '*', '_',
                            '+', '`', '''', '~'];
+  LegalTokenChars       = LegalTokenNoDotChars
+                        + ['.'];
   LegalWordChars        = LegalTokenChars
                         + ['(', ')', '<', '>', ':', '\', '"', '/', '[',
                            ']', '?', '{', '}'];
@@ -2152,9 +2164,9 @@ function StrToQValue(const S: String): TIdSipQValue;
 var
   Fraction, Int: String;
   Malformed:     Boolean;
-  I:             Cardinal;
+  I:             Cardinal; // Integer part of the Q value
   E:             Integer;
-  F:             Cardinal;
+  F:             Cardinal; // Fractional part of the Q value
   Q:             Cardinal;
 begin
   Q         := 0;
@@ -3402,12 +3414,9 @@ end;
 //******************************************************************************
 //* TIdSipAllowEventsHeader Public methods *************************************
 
-function TIdSipAllowEventsHeader.EventType: String;
+function TIdSipAllowEventsHeader.EventTypeCount: Integer;
 begin
-  Result := Self.EventPackage;
-
-  if (Self.EventTemplate <> '') then
-    Result := Result + '.' + Self.EventTemplate;
+  Result := Self.Values.Count;
 end;
 
 //* TIdSipAllowEventsHeader Protected methods **********************************
@@ -3417,28 +3426,88 @@ begin
   Result := AllowEventsHeaderFull;
 end;
 
-function TIdSipAllowEventsHeader.GetValue: String;
+procedure TIdSipAllowEventsHeader.Parse(const Value: String);
 begin
-  Result := Self.EventType;
+  inherited Parse(Value);
+
+  Self.CheckEventTypes(Self.Values);
 end;
 
-procedure TIdSipAllowEventsHeader.Parse(const Value: String);
+//* TIdSipAllowEventsHeader Private methods ************************************
+
+procedure TIdSipAllowEventsHeader.CheckEventTypes(Value: TStrings);
 var
-  EventName: String;
-  S:         String;
+  I: Integer;
+begin
+  for I := 0 to Value.Count - 1 do
+    if not TIdSipEventHeader.IsEventType(Value[I]) then
+      Self.FailParse(InvalidEventType);
+end;
+
+function TIdSipAllowEventsHeader.GetEventTypes(Index: Integer): String;
+begin
+  Result := Self.Values[Index];
+end;
+
+procedure TIdSipAllowEventsHeader.SetEventTypes(Index: Integer; const Value: String);
+begin
+  Self.Values[Index] := Value;
+end;
+
+//******************************************************************************
+//* TIdSipCommaSeparatedHeader                                                 *
+//******************************************************************************
+//* TIdSipCommaSeparatedHeader Public methods **********************************
+
+constructor TIdSipCommaSeparatedHeader.Create;
+begin
+  inherited Create;
+
+  fValues := TStringList.Create;
+end;
+
+destructor TIdSipCommaSeparatedHeader.Destroy;
+begin
+  fValues.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipCommaSeparatedHeader.RemoveValues(Header: TIdSipCommaSeparatedHeader);
+var
+  I: Integer;
+begin
+  // TODO: Find a better way to do this than Schlemiel the Painter!
+  for I := 0 to Header.Values.Count - 1 do
+    Self.Values.Delete(Self.Values.IndexOf(Header.Values[I]));
+end;
+
+//* TIdSipCommaSeparatedHeader Protected methods *******************************
+
+function TIdSipCommaSeparatedHeader.GetValue: String;
+var
+  I: Integer;
+begin
+  Result := '';
+
+  for I := 0 to Self.Values.Count - 2 do
+    Result := Result + Self.Values[I] + ', ';
+
+  if (Self.Values.Count > 0) then
+    Result := Result + Self.Values[Self.Values.Count - 1];
+end;
+
+procedure TIdSipCommaSeparatedHeader.Parse(const Value: String);
+var
+  S: String;
 begin
   S := Value;
 
-  EventName := Fetch(S, ';');
+  Self.Values.Clear;
 
-  Self.EventPackage  := Fetch(EventName, '.');
-  Self.EventTemplate := EventName;
-
-  // Only one dot is allowed in an event-type
-  if (Pos('.', Self.EventTemplate) > 0) then
-    Self.FailParse(InvalidEventType);
-
-  inherited Parse(Value);
+  while (S <> '') do begin
+    Self.Values.Add(Trim(Fetch(S, ',')));
+  end;
 end;
 
 //******************************************************************************
@@ -3793,62 +3862,6 @@ begin
     Self.FailParse(InvalidCallID);
 
   inherited Parse(Value);
-end;
-
-//******************************************************************************
-//* TIdSipCommaSeparatedHeader                                                 *
-//******************************************************************************
-//* TIdSipCommaSeparatedHeader Public methods **********************************
-
-constructor TIdSipCommaSeparatedHeader.Create;
-begin
-  inherited Create;
-
-  fValues := TStringList.Create;
-end;
-
-destructor TIdSipCommaSeparatedHeader.Destroy;
-begin
-  fValues.Free;
-
-  inherited Destroy;
-end;
-
-procedure TIdSipCommaSeparatedHeader.RemoveValues(Header: TIdSipCommaSeparatedHeader);
-var
-  I: Integer;
-begin
-  // TODO: Find a better way to do this than Schlemiel the Painter!
-  for I := 0 to Header.Values.Count - 1 do
-    Self.Values.Delete(Self.Values.IndexOf(Header.Values[I]));
-end;
-
-//* TIdSipCommaSeparatedHeader Protected methods *******************************
-
-function TIdSipCommaSeparatedHeader.GetValue: String;
-var
-  I: Integer;
-begin
-  Result := '';
-
-  for I := 0 to Self.Values.Count - 2 do
-    Result := Result + Self.Values[I] + ', ';
-
-  if (Self.Values.Count > 0) then
-    Result := Result + Self.Values[Self.Values.Count - 1];
-end;
-
-procedure TIdSipCommaSeparatedHeader.Parse(const Value: String);
-var
-  S: String;
-begin
-  S := Value;
-
-  Self.Values.Clear;
-
-  while (S <> '') do begin
-    Self.Values.Add(Trim(Fetch(S, ',')));
-  end;
 end;
 
 //******************************************************************************
@@ -4232,6 +4245,44 @@ end;
 //******************************************************************************
 //* TIdSipEventHeader Public methods *******************************************
 
+class function TIdSipEventHeader.IsEventType(const S: String): Boolean;
+var
+  FirstToken:  String;
+  SecondToken: String;
+begin
+  // token-nodot / token-nodot "." token-nodot
+
+  if (Pos('.', S) > 0) then begin
+    SecondToken := S;
+    FirstToken := Fetch(SecondToken, '.');
+
+    Result := (FirstToken <> '') and (SecondToken <> '');
+
+    if Result then begin
+      Result := Self.IsTokenNoDot(FirstToken)
+            and Self.IsTokenNoDot(SecondToken)
+            and (Pos('.', SecondToken) = 0);
+    end;
+  end
+  else begin
+    Result := Self.IsTokenNoDot(S);
+  end;
+end;
+
+class function TIdSipEventHeader.IsTokenNoDot(const Token: String): Boolean;
+var
+  I: Integer;
+begin
+  // See RFC 3265, section 7.4
+  Result := Token <> '';
+
+  if Result then
+    for I := 1 to Length(Token) do begin
+      Result := Result and (Token[I] in LegalTokenNoDotChars);
+      if not Result then Break;
+    end;
+end;
+
 function TIdSipEventHeader.Equals(Header: TIdSipHeader): Boolean;
 begin
   Result := IsEqual(Header.Name, Self.Name)
@@ -4243,11 +4294,43 @@ begin
           and (Header.Params[IdParam] = Self.ID);
 end;
 
+function TIdSipEventHeader.EventType: String;
+begin
+  Result := Self.EventPackage;
+
+  if (Self.EventTemplate <> '') then
+    Result := Result + '.' + Self.EventTemplate;
+end;
+
 //* TIdSipEventHeader Protected methods ****************************************
 
 function TIdSipEventHeader.GetName: String;
 begin
   Result := EventHeaderFull;
+end;
+
+function TIdSipEventHeader.GetValue: String;
+begin
+  Result := Self.EventType;
+end;
+
+procedure TIdSipEventHeader.Parse(const Value: String);
+var
+  EventName: String;
+  S:         String;
+begin
+  S := Value;
+
+  EventName := Fetch(S, ';');
+
+  Self.EventPackage  := Fetch(EventName, '.');
+  Self.EventTemplate := EventName;
+
+  // Only one dot is allowed in an event-type
+  if (Pos('.', Self.EventTemplate) > 0) then
+    Self.FailParse(InvalidEventType);
+
+  inherited Parse(Value);
 end;
 
 //* TIdSipEventHeader Private methods ****************************************
@@ -4420,7 +4503,8 @@ end;
 
 function TIdSipAuthenticateHeader.GetStale: Boolean;
 begin
-  Result := StrToBoolDef(Self.DigestResponseValue(StaleParam), false);
+  Result := IsEqual(BoolToStr(true, true),
+                    Self.DigestResponseValue(StaleParam));
 end;
 
 procedure TIdSipAuthenticateHeader.SetDomain(const Value: String);
@@ -4430,7 +4514,7 @@ end;
 
 procedure TIdSipAuthenticateHeader.SetStale(const Value: Boolean);
 begin
-    Self.DigestResponses.Values[StaleParam] := Lowercase(BoolToStr(Value));
+  Self.DigestResponses.Values[StaleParam] := Lowercase(BoolToStr(Value, true));
 end;
 
 //******************************************************************************
