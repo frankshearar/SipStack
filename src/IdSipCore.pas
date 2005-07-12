@@ -70,7 +70,7 @@ uses
   IdSipTransport, IdTimerQueue, SyncObjs;
 
 const
-  SipStackVersion = '0.4';
+  SipStackVersion = '0.5';
 
 type
   TIdSipAction = class;
