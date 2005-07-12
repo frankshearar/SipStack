@@ -4342,7 +4342,12 @@ end;
 
 procedure TIdSipEventHeader.SetID(const Value: String);
 begin
-  Self.Params[IdParam] := Value;
+  if (Value = '') then begin
+    if Self.HasParam(IdParam) then
+      Self.Parameters.Delete(Self.IndexOfParam(IdParam))
+  end
+  else
+    Self.Params[IdParam] := Value;
 end;
 
 //******************************************************************************

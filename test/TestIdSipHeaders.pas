@@ -2659,6 +2659,10 @@ begin
 
   Self.E.ID := 'bar';
   CheckEquals('bar', Self.E.ID, 'Second set/get');
+
+  Self.E.ID := '';
+  Check(not Self.E.HasParam(IdParam),
+        'id param not removed when set to the empty string');
 end;
 
 procedure TestTIdSipEventHeader.TestIsEventType;
