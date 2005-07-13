@@ -498,6 +498,7 @@ type
     fAutoReRegister: Boolean;
     KnownRegistrars: TIdSipRegistrations;
 
+    procedure AddModuleSpecificHeaders(OutboundMessage: TIdSipMessage);
     function  ConvertToHeader(ValueList: TStrings): String;
     function  CreateRequestHandler(Request: TIdSipRequest;
                                    Receiver: TIdSipTransport): TIdSipUserAgentActOnRequest;
@@ -507,6 +508,7 @@ type
     function  DefaultUserAgent: String;
     function  GetContact: TIdSipContactHeader;
     function  GetFrom: TIdSipFromHeader;
+    function  ModuleAt(Index: Integer): TIdSipMessageModule;
     procedure NotifyOfAuthenticationChallenge(Response: TIdSipResponse;
                                               var Username: String;
                                               var Password: String;
@@ -772,10 +774,11 @@ type
   public
     constructor Create(UA: TIdSipAbstractUserAgent); virtual;
 
-    function Accept(Request: TIdSipRequest;
-                    UsingSecureTransport: Boolean): TIdSipAction; virtual;
-    function AcceptsMethods: String; virtual;
-    function WillAccept(Request: TIdSipRequest): Boolean; virtual;
+    function  Accept(Request: TIdSipRequest;
+                     UsingSecureTransport: Boolean): TIdSipAction; virtual;
+    procedure AddLocalHeaders(OutboundMessage: TIdSipMessage); virtual;
+    function  AcceptsMethods: String; virtual;
+    function  WillAccept(Request: TIdSipRequest): Boolean; virtual;
 
     property UserAgent: TIdSipAbstractUserAgent read fUserAgent;
   end;
@@ -1716,8 +1719,7 @@ implementation
 
 uses
   IdHashMessageDigest, IdSimpleParser, IdSipConsts, IdSipIndyLocator,
-  IdSipMockLocator, IdSipSubscribeModule, IdRandom, IdSdp, IdSystem, IdUnicode,
-  Math, SysUtils;
+  IdSipMockLocator, IdRandom, IdSdp, IdSystem, IdUnicode, Math, SysUtils;
 
 const
   ItemNotFoundIndex = -1;
@@ -3223,8 +3225,7 @@ end;
 
 procedure TIdSipAbstractUserAgent.AddLocalHeaders(OutboundRequest: TIdSipRequest);
 var
-  SubscribeModule: TIdSipSubscribeModule;
-  Transport:       String;
+  Transport: String;
 begin
   // TODO: We must discover the transport using RFC 3263
 
@@ -3245,17 +3246,12 @@ begin
   if (Self.UserAgentName <> '') then
     OutboundRequest.AddHeader(UserAgentHeader).Value := Self.UserAgentName;
 
-  if OutboundRequest.WantsAllowEventsHeader then begin
-    // RFC 3265, section 3.3.7
-    SubscribeModule := Self.ModuleFor(MethodSubscribe) as TIdSipSubscribeModule;
-    if Assigned(SubscribeModule) then
-      OutboundRequest.AddHeader(AllowEventsHeaderFull).Value := SubscribeModule.AllowedEvents;
-  end;
-
   OutboundRequest.AddHeader(Self.Contact);
 
   if OutboundRequest.HasSipsUri then
     OutboundRequest.FirstContact.Address.Scheme := SipsScheme;
+
+  Self.AddModuleSpecificHeaders(OutboundRequest);    
 end;
 
 function TIdSipAbstractUserAgent.CreateActionsClosure(ClosureType: TIdSipActionsWaitClass;
@@ -3341,17 +3337,10 @@ end;
 
 procedure TIdSipAbstractUserAgent.PrepareResponse(Response: TIdSipResponse;
                                                   Request: TIdSipRequest);
-var
-  SubscribeModule: TIdSipSubscribeModule;
 begin
   inherited PrepareResponse(Response, Request);
 
-  if Response.WantsAllowEventsHeader then begin
-    // RFC 3265, section 3.3.7
-    SubscribeModule := Self.ModuleFor(MethodSubscribe) as TIdSipSubscribeModule;
-    if Assigned(SubscribeModule) then
-      Response.AddHeader(AllowEventsHeaderFull).Value := SubscribeModule.AllowedEvents;
-  end;
+  Self.AddModuleSpecificHeaders(Response);
 end;
 
 procedure TIdSipAbstractUserAgent.RejectRequest(Reaction: TIdSipUserAgentReaction;
@@ -3439,6 +3428,20 @@ end;
 
 //* TIdSipAbstractUserAgent Private methods ************************************
 
+procedure TIdSipAbstractUserAgent.AddModuleSpecificHeaders(OutboundMessage: TIdSipMessage);
+var
+  I:      Integer;
+  Module: TIdSipMessageModule;
+begin
+  Self.ModuleLock.Acquire;
+  try
+    for I := 0 to Self.Modules.Count - 1 do
+      Self.ModuleAt(I).AddLocalHeaders(OutboundMessage);
+  finally
+    Self.ModuleLock.Release;
+  end;
+end;
+
 function TIdSipAbstractUserAgent.ConvertToHeader(ValueList: TStrings): String;
 begin
   Result := StringReplace(ValueList.CommaText, ',', ', ', [rfReplaceAll]);
@@ -3488,6 +3491,11 @@ begin
     fFrom := TIdSipFromHeader.Create;
 
   Result := fFrom;
+end;
+
+function TIdSipAbstractUserAgent.ModuleAt(Index: Integer): TIdSipMessageModule;
+begin
+  Result := Self.Modules[Index] as TIdSipMessageModule;                              
 end;
 
 procedure TIdSipAbstractUserAgent.NotifyOfAuthenticationChallenge(Response: TIdSipResponse;
@@ -4161,6 +4169,10 @@ function TIdSipMessageModule.Accept(Request: TIdSipRequest;
                                     UsingSecureTransport: Boolean): TIdSipAction;
 begin
   Result := nil;
+end;
+
+procedure TIdSipMessageModule.AddLocalHeaders(OutboundMessage: TIdSipMessage);
+begin
 end;
 
 function TIdSipMessageModule.AcceptsMethods: String;
