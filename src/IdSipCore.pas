@@ -404,7 +404,7 @@ type
 
   // I represent an event that will execute a block (BlockType) on an action in
   // a list of actions.
-  TIdSipActionsWait = class(TIdSipMessageNotifyEventWait)
+  TIdSipActionsWait = class(TIdSipMessageWait)
   private
     fActions:   TIdSipActions;
     fBlockType: TIdSipActionClosureClass;
@@ -1458,10 +1458,6 @@ type
     procedure Execute(Action: TIdSipAction); override;
 
     property Invite: TIdSipRequest read fInvite write fInvite;
-  end;
-
-  TIdSipOutboundSubscriptionRefresh = class(TIdSipActionClosure)
-    procedure Execute(Action: TIdSipAction); override;
   end;
 
   TIdSipActionNetworkFailureMethod = class(TIdNotification)
@@ -7485,23 +7481,6 @@ begin
   if not Session.IsTerminated then
     Session.Modify(Invite.Body,
                    Invite.ContentType);
-end;
-
-//******************************************************************************
-//* TIdSipOutboundSubscriptionRefresh                                          *
-//******************************************************************************
-//* TIdSipOutboundSubscriptionRefresh Public methods ***************************
-
-procedure TIdSipOutboundSubscriptionRefresh.Execute(Action: TIdSipAction);
-var
-  Subscription: TIdSipOutboundSubscription;
-begin
-  if not (Action is TIdSipOutboundSubscription) then Exit;
-
-  Subscription := Action as TIdSipOutboundSubscription;
-
-  if not Subscription.IsTerminated then
-    Subscription.Refresh;
 end;
 
 //******************************************************************************
