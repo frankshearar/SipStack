@@ -19,17 +19,18 @@ type
   TSubscribeTestCase = class(TTestCaseTU,
                              IIdSipSubscribeModuleListener)
   private
-    procedure OnRenewedSubscription(UserAgent: TIdSipAbstractUserAgent;
-                                    Subscription: TIdSipOutboundSubscription);
-    procedure OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
-                                    Subscription: TIdSipInboundSubscription);
-    procedure ReceiveSubscribe(const EventPackage: String;
-                               ExpiryTime: Cardinal = 0);
   protected
     Module:                     TIdSipSubscribeModule;
     OnRenewedSubscriptionFired: Boolean;
     OnSubscriptionRequestFired: Boolean;
     UserAgentParam:             TIdSipAbstractUserAgent;
+
+    procedure OnRenewedSubscription(UserAgent: TIdSipAbstractUserAgent;
+                                    Subscription: TIdSipOutboundSubscription); virtual;
+    procedure OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
+                                    Subscription: TIdSipInboundSubscription); virtual;
+    procedure ReceiveSubscribe(const EventPackage: String;
+                               ExpiryTime: Cardinal = 0); virtual;
   public
     procedure SetUp; override;
   end;
@@ -248,13 +249,19 @@ type
 
   TestTIdSipSubscriptionExpires = class(TSubscribeTestCase)
   private
-    Subscription: TIdSipOutboundSubscription;
-    Block:        TIdSipSubscriptionExpires;
+    InSubscription:  TIdSipInboundSubscription;
+    OutSubscription: TIdSipOutboundSubscription;
+    Block:           TIdSipSubscriptionExpires;
+
+  protected
+    procedure OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
+                                    Subscription: TIdSipInboundSubscription); override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestTrigger;
+    procedure TestTriggerInboundSubscription;
+    procedure TestTriggerOutboundSubscription;
   end;
 
   TestTIdSipSubscriptionRetryWait = class(TSubscribeTestCase)
@@ -461,7 +468,7 @@ begin
   Self.OnSubscriptionRequestFired := false;
 end;
 
-//* TSubscribeTestCase Private methods *****************************************
+//* TSubscribeTestCase Protected methods ***************************************
 
 procedure TSubscribeTestCase.OnRenewedSubscription(UserAgent: TIdSipAbstractUserAgent;
                                                    Subscription: TIdSipOutboundSubscription);
@@ -2004,8 +2011,8 @@ procedure TestTIdSipSubscriptionExpires.SetUp;
 begin
   inherited SetUp;
 
-  Self.Subscription := Self.Module.Subscribe(Self.Destination,
-                                             TIdSipTestPackage.EventPackage);
+  Self.OutSubscription := Self.Module.Subscribe(Self.Destination,
+                                                TIdSipTestPackage.EventPackage);
 
   Self.Block := TIdSipSubscriptionExpires.Create;
 end;
@@ -2017,13 +2024,32 @@ begin
   inherited TearDown;
 end;
 
+//* TestTIdSipSubscriptionExpires Protected methods ****************************
+
+procedure TestTIdSipSubscriptionExpires.OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
+                                                              Subscription: TIdSipInboundSubscription);
+begin
+  inherited OnSubscriptionRequest(UserAgent, Subscription);
+
+  Self.InSubscription := Subscription;
+end;
+
 //* TestTIdSipSubscriptionExpires Published methods ****************************
 
-procedure TestTIdSipSubscriptionExpires.TestTrigger;
+procedure TestTIdSipSubscriptionExpires.TestTriggerInboundSubscription;
 begin
-  Self.Block.Execute(Self.Subscription);
+  Self.ReceiveSubscribe(TIdSipTestPackage.EventPackage);
+  Self.Block.Execute(Self.InSubscription);
 
-  Check(Self.Subscription.Terminating,
+  Check(Self.InSubscription.IsTerminated,
+        'Subscription didn''t terminate');
+end;
+
+procedure TestTIdSipSubscriptionExpires.TestTriggerOutboundSubscription;
+begin
+  Self.Block.Execute(Self.OutSubscription);
+
+  Check(Self.OutSubscription.Terminating,
         'Subscription''s not terminating');
 end;
 

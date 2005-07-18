@@ -229,6 +229,7 @@ type
     constructor Create(UA: TIdSipAbstractUserAgent); override;
     destructor  Destroy; override;
 
+    procedure Expire; virtual;
     function  ExpiryTime: TDateTime;
 
     property Duration:     Cardinal            read fDuration write fDuration;
@@ -261,7 +262,7 @@ type
                        UsingSecureTransport: Boolean); reintroduce;
 
     procedure Accept;
-    procedure Expire;
+    procedure Expire; override;
     function  IsInbound: Boolean; override;
     procedure Terminate; override;
   end;
@@ -294,6 +295,7 @@ type
     constructor Create(UA: TIdSipAbstractUserAgent); override;
 
     procedure AddListener(Listener: IIdSipSubscriptionListener);
+    procedure Expire; override;
     function  Match(Msg: TIdSipMessage): Boolean; override;
     procedure Refresh(NewDuration: Cardinal);
     procedure RemoveListener(Listener: IIdSipSubscriptionListener);
@@ -914,6 +916,11 @@ begin
   inherited Destroy;
 end;
 
+procedure TIdSipSubscription.Expire;
+begin
+  // See subclasses' implementations
+end;
+
 function TIdSipSubscription.ExpiryTime: TDateTime;
 begin
   Result := Self.fExpiryTime;
@@ -1169,6 +1176,11 @@ end;
 procedure TIdSipOutboundSubscription.AddListener(Listener: IIdSipSubscriptionListener);
 begin
   Self.Listeners.AddListener(Listener);
+end;
+
+procedure TIdSipOutboundSubscription.Expire;
+begin
+  Self.Terminate;
 end;
 
 function TIdSipOutboundSubscription.Match(Msg: TIdSipMessage): Boolean;
@@ -1473,11 +1485,11 @@ end;
 
 procedure TIdSipSubscriptionExpires.Execute(Action: TIdSipAction); 
 var
-  Sub: TIdSipInboundSubscription;
+  Sub: TIdSipSubscription;
 begin
-  if not (Action is TIdSipInboundSubscription) then Exit;
+  if not (Action is TIdSipSubscription) then Exit;
 
-  Sub := Action as TIdSipInboundSubscription;
+  Sub := Action as TIdSipSubscription;
 
   if not Sub.Terminating then
     Sub.Expire;
