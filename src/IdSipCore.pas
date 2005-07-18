@@ -4218,7 +4218,7 @@ begin
     if Request.HasHeader(ExpiresHeader) then
       Self.UserAgent.ScheduleEvent(TIdSipInboundInviteExpire,
                                    Request.FirstExpires.NumericValue,
-                                   Request.Copy);
+                                   Request);
     Result := Session;
   end;
 end;
@@ -4759,7 +4759,7 @@ begin
 
   Self.UA.ScheduleEvent(TIdSipInboundInviteResendOk,
                         Self.ResendInterval,
-                        Self.InitialRequest.Copy);
+                        Self.InitialRequest);
 end;
 
 procedure TIdSipInboundInvite.AddListener(const Listener: IIdSipInboundInviteListener);
@@ -4829,7 +4829,7 @@ begin
     else
       Self.UA.ScheduleEvent(TIdSipInboundInviteResendOk,
                             Self.ResendInterval,
-                            Self.InitialRequest.Copy);
+                            Self.InitialRequest);
   end;
 end;
 
@@ -4840,7 +4840,7 @@ begin
 
     Self.UA.ScheduleEvent(TIdSipInboundInviteSessionProgress,
                           Self.ProgressResendInterval,
-                          Self.InitialRequest.Copy);
+                          Self.InitialRequest);
   end;
 end;
 
@@ -4851,7 +4851,7 @@ begin
 
     Self.UA.ScheduleEvent(TIdSipInboundInviteSessionProgress,
                           Self.ProgressResendInterval,
-                          Self.InitialRequest.Copy);
+                          Self.InitialRequest);
   end;
 end;
 
@@ -5166,7 +5166,7 @@ begin
       if Response.IsOK then
         Self.UA.ScheduleEvent(TIdSipOutboundInviteTransactionComplete,
                               64*DefaultT1,
-                              Self.InitialRequest.Copy);
+                              Self.InitialRequest);
     end;
 
     if Self.Cancelling then begin
