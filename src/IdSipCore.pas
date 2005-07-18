@@ -879,7 +879,6 @@ type
     procedure SendRequest(Request: TIdSipRequest); virtual;
     procedure SendResponse(Response: TIdSipResponse); virtual;
 
-  protected
     property UA: TIdSipAbstractUserAgent read fUA;
   public
     class function Method: String; virtual; abstract;
