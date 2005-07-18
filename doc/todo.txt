@@ -50,6 +50,11 @@ RFC 3265 still to do:
    this "neutral state" in such a way that makes sense for their
    application (see section 4.4.7.).
 
+3.1.6.1. Initial SUBSCRIBE Transaction Processing
+
+   The notifier SHOULD also perform any necessary authentication and
+   authorization per its local policy.  See section 3.1.6.3.
+
 
 RFC 3515 still to do:
 
