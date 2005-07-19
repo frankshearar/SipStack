@@ -3429,8 +3429,7 @@ end;
 
 procedure TIdSipAbstractUserAgent.AddModuleSpecificHeaders(OutboundMessage: TIdSipMessage);
 var
-  I:      Integer;
-  Module: TIdSipMessageModule;
+  I: Integer;
 begin
   Self.ModuleLock.Acquire;
   try

@@ -506,8 +506,6 @@ begin
 end;
 
 function TIdSipAbstractAuthenticator.Authenticate(Request: TIdSipRequest): Boolean;
-var
-  Auth: TIdSipAuthorizationHeader;
 begin
   Result := Self.Authenticate(Request, Self.IsProxy);
 end;
