@@ -5789,7 +5789,7 @@ begin
         DumpHeaders(OtherHeaders, TheirHeaders);
 
         for I := 0 to OurHeaders.Count - 1 do
-          Result := (OurHeaders[I] = TheirHeaders[I]);
+          Result := Result and (OurHeaders[I] = TheirHeaders[I]);
       finally
         TheirHeaders.Free;
       end;

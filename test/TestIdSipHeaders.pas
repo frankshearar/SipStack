@@ -604,6 +604,7 @@ type
     procedure TestCanonicaliseName;
     procedure TestClear;
     procedure TestDelete;
+    procedure TestEqualsPenultimateHeaderNotEqual;
     procedure TestFirst;
     procedure TestGetAllButFirst;
     procedure TestHasHeader;
@@ -5714,6 +5715,30 @@ begin
 
   Self.Headers.Delete(0);
   CheckEquals(0, Self.Headers.Count, 'Count after 4th Delete');
+end;
+
+procedure TestTIdSipHeaders.TestEqualsPenultimateHeaderNotEqual;
+var
+  OtherHeaders: TIdSipHeaders;
+begin
+  // The trick here is to have a non-equal header before the final header.
+  Self.Headers.Add('foo').Value   := 'foo';
+  Self.Headers.Add('quaax').Value := 'quaax';
+
+  OtherHeaders := TIdSipHeaders.Create;
+  try
+    OtherHeaders.Add(Self.Headers);
+    Self.Headers.First;
+    OtherHeaders.First;
+    OtherHeaders.CurrentHeader.Value := Self.Headers.CurrentHeader.Value + 'X';
+
+    Check(not Self.Headers.Equals(OtherHeaders),
+          'Despite a differing first header, Self.Headers = OtherHeaders');
+    Check(not OtherHeaders.Equals(Self.Headers),
+          'Despite a differing first header, OtherHeaders = Self.Headers');
+  finally
+    OtherHeaders.Free;
+  end;
 end;
 
 procedure TestTIdSipHeaders.TestFirst;
