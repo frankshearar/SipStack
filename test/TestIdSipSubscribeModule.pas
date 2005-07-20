@@ -1438,6 +1438,13 @@ begin
   CheckEquals(MethodNotify,
               Self.LastSentRequest.Method,
               'Unexpected request sent after refreshing subscription');
+
+  // There should be two expiry events scheduled. We trigger the first one,
+  // demonstrating that the second still exists.
+  Self.DebugTimer.TriggerEarliestEvent;
+  Check(not Self.SubscribeAction.IsTerminated,
+        'The Subscription terminated prematurely: check the logic around '
+      + 'OutstandingExpires');
 end;
 
 procedure TestTIdSipInboundSubscription.TestReceiveRefreshingSubscribeIntervalTooBrief;
