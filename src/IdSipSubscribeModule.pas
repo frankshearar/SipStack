@@ -12,8 +12,8 @@ unit IdSipSubscribeModule;
 interface
 
 uses
-  Contnrs, IdNotification, IdSipCore, IdSipDialog, IdSipMessage, IdTimerQueue,
-  SyncObjs;
+  Contnrs, IdNotification, IdSipCore, IdSipDialog, IdSipDialogID, IdSipMessage,
+  IdTimerQueue, SyncObjs;
 
 type
   TIdSipOutboundNotify = class;
@@ -86,7 +86,6 @@ type
     Packages:                     TObjectList;
 
     function  DefaultMinimumExpiryTime: Cardinal;
-    function  DefaultSubscriptionDuration: Cardinal;
     function  KnowsEvent(const EventPackage: String): Boolean;
     procedure NotifyOfRenewedSubscription(NewSub: TIdSipOutboundSubscription);
     procedure NotifyOfSubscriptionRequest(Subscription: TIdSipInboundSubscription);
@@ -107,7 +106,10 @@ type
                            Subscribe: TIdSipRequest;
                            const SubscriptionState: String): TIdSipRequest;
     function  CreateSubscribe(Dest: TIdSipAddressHeader;
-                              const EventPackage: String): TIdSipRequest;
+                              const EventPackage: String): TIdSipRequest; overload;
+    function  CreateSubscribe(Dialog: TIdSipDialog;
+                              const EventPackage: String): TIdSipRequest; overload;
+    function  DefaultSubscriptionDuration: Cardinal;
     function  Package(const EventType: String): TIdSipEventPackage;
     procedure RemoveAllPackages;
     procedure RetrySubscriptionAfter(Target: TIdSipAddressHeader;
@@ -185,9 +187,26 @@ type
     property Target: TIdSipAddressHeader read fTarget write SetTarget;
   end;
 
-  TIdSipOutboundUnsubscribe = class(TIdSipOutboundSubscribe)
+  TIdSipOutboundRefreshSubscribe = class(TIdSipOutboundSubscribe)
+  private
+    fDialog:   TIdSipDialog;
+    fDuration: Cardinal;
   public
     procedure Send; override;
+
+    property Dialog:   TIdSipDialog read fDialog write fDialog;
+    property Duration: Cardinal     read fDuration write fDuration;
+  end;
+
+  TIdSipOutboundUnsubscribe = class(TIdSipOutboundSubscribe)
+  private
+    fCallID:  String;
+    fFromTag: String;
+  public
+    procedure Send; override;
+
+    property CallID: String  read fCallID write fCallID;
+    property FromTag: String read fFromTag write fFromTag;
   end;
 
   TIdSipSubscriptionExpires = class;
@@ -246,16 +265,23 @@ type
     Package:              TIdSipEventPackage;
     UsingSecureTransport: Boolean;
 
+    function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID;
     procedure DecOutstandingExpires;
+    function  DialogMatches(DialogID: TIdSipDialogID): Boolean; overload;
+    function  DialogMatches(Msg: TIdSipMessage): Boolean; overload;
     procedure IncOutstandingExpires;
+    procedure NotifySubscriberOfState;
     procedure RejectExpiresTooBrief(Subscribe: TIdSipRequest);
     procedure ScheduleTermination(Expires: Cardinal);
     procedure SendAccept(Subscribe: TIdSipRequest);
+    procedure SendOk(Subscribe: TIdSipRequest);
     procedure SendTerminatingNotify(Subscribe: TIdSipRequest);
     function  WillAccept(Subscribe: TIdSipRequest): Boolean;
   protected
     function  CreateDialog(Response: TIdSipResponse): TIdSipDialog; override;
+    procedure EstablishDialog(Response: TIdSipResponse); override;
     procedure ReceiveSubscribe(Request: TIdSipRequest); override;
+    procedure SendResponse(Response: TIdSipResponse); override;
   public
     constructor Create(UA: TIdSipAbstractUserAgent;
                        Subscribe: TIdSipRequest;
@@ -264,6 +290,7 @@ type
     procedure Accept;
     procedure Expire; override;
     function  IsInbound: Boolean; override;
+    function  Match(Msg: TIdSipMessage): Boolean; override;
     procedure Terminate; override;
   end;
 
@@ -275,6 +302,8 @@ type
 
     procedure ConfigureRequest(Sub: TIdSipOutboundSubscribe);
     function  CreateOutboundSubscribe: TIdSipOutboundSubscribe;
+    function  CreateRefresh(NewDuration: Cardinal): TIdSipOutboundRefreshSubscribe;
+    function  CreateUnsubscribe: TIdSipOutboundUnsubscribe;
     procedure NotifyOfExpiredSubscription(Notify: TIdSipRequest);
     procedure NotifyOfReceivedNotify(Notify: TIdSipRequest);
     procedure NotifyOfSuccess(Notify: TIdSipRequest);
@@ -548,12 +577,31 @@ begin
   Result := Self.UserAgent.CreateRequest(MethodSubscribe, Dest);
   try
     Result.FirstEvent.EventPackage   := EventPackage;
-    Result.FirstExpires.NumericValue := Self.DefaultSubscriptionDuration;
+    Result.FirstExpires.NumericValue := Self.Package(EventPackage).DefaultSubscriptionDuration
   except
     FreeAndNil(Result);
 
     raise;
   end;
+end;
+
+function TIdSipSubscribeModule.CreateSubscribe(Dialog: TIdSipDialog;
+                                               const EventPackage: String): TIdSipRequest;
+begin
+  Result := Self.UserAgent.CreateRequest(MethodSubscribe, Dialog);
+  try
+    Result.FirstEvent.EventPackage   := EventPackage;
+    Result.FirstExpires.NumericValue := Self.Package(EventPackage).DefaultSubscriptionDuration
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
+function TIdSipSubscribeModule.DefaultSubscriptionDuration: Cardinal;
+begin
+  Result := OneHour;
 end;
 
 function TIdSipSubscribeModule.Package(const EventType: String): TIdSipEventPackage;
@@ -623,11 +671,6 @@ end;
 function TIdSipSubscribeModule.DefaultMinimumExpiryTime: Cardinal;
 begin
   Result := OneMinute;
-end;
-
-function TIdSipSubscribeModule.DefaultSubscriptionDuration: Cardinal;
-begin
-  Result := OneHour;
 end;
 
 function TIdSipSubscribeModule.KnowsEvent(const EventPackage: String): Boolean;
@@ -868,6 +911,27 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipOutboundRefreshSubscribe                                             *
+//******************************************************************************
+//* TIdSipOutboundRefreshSubscribe Public methods ******************************
+
+procedure TIdSipOutboundRefreshSubscribe.Send;
+var
+  Sub: TIdSipRequest;
+begin
+  Sub := Self.Module.CreateSubscribe(Self.Dialog, Self.EventPackage);
+  try
+    Sub.FirstEvent.ID             := Self.ID;
+    Sub.FirstExpires.NumericValue := Self.Duration;
+    Self.InitialRequest.Assign(Sub);
+
+    Self.SendRequest(Sub);
+  finally
+    Sub.Free;
+  end;
+end;
+
+//******************************************************************************
 //* TIdSipOutboundUnSubscribe                                                  *
 //******************************************************************************
 //* TIdSipOutboundUnSubscribe Public methods ***********************************
@@ -880,8 +944,10 @@ begin
 
   Sub := Self.Module.CreateSubscribe(Self.Target, Self.EventPackage);
   try
+    Sub.CallID                    := Self.CallID;
     Sub.FirstEvent.ID             := Self.ID;
     Sub.FirstExpires.NumericValue := 0;
+    Sub.From.Tag                  := Self.FromTag;
     Self.InitialRequest.Assign(Sub);
 
     Self.SendRequest(Sub);
@@ -1024,6 +1090,19 @@ begin
   Result := true;
 end;
 
+function TIdSipInboundSubscription.Match(Msg: TIdSipMessage): Boolean;
+begin
+  if Msg.IsRequest then begin
+    if (Msg as TIdSipRequest).IsSubscribe then
+      Result := Self.DialogMatches(Msg)
+    else
+      Result := false;
+  end
+  else begin
+    Result := inherited Match(Msg);
+  end;
+end;
+
 procedure TIdSipInboundSubscription.Terminate;
 begin
   if Self.DialogEstablished then
@@ -1041,6 +1120,13 @@ begin
                                              false);
 end;
 
+procedure TIdSipInboundSubscription.EstablishDialog(Response: TIdSipResponse);
+begin
+  inherited EstablishDialog(Response);
+
+  Self.InitialRequest.ToHeader.Tag := Self.Dialog.ID.LocalTag;
+end;
+
 procedure TIdSipInboundSubscription.ReceiveSubscribe(Request: TIdSipRequest);
 begin
   // At this stage, we know we've a SUBSCRIBE request for a known event.
@@ -1049,17 +1135,37 @@ begin
 
   if Self.WillAccept(Request) then begin
     if Self.InitialRequest.Equals(Request) then begin
+      Self.SetState(SubscriptionSubstatePending);
       Self.SendAccept(Request);
     end
     else begin
-      // subsequent SUBSCRIBEs
+      // Things like refreshing subscriptions
+      Self.Dialog.ReceiveRequest(Request);
+      Self.SendOk(Request);
     end;
   end
   else
     Self.Terminate;
 end;
 
+procedure TIdSipInboundSubscription.SendResponse(Response: TIdSipResponse);
+begin
+  inherited SendResponse(Response);
+
+  if Response.IsOK then
+    Self.NotifySubscriberOfState;
+end;
+
 //* TIdSipInboundSubscription Private methods **********************************
+
+function TIdSipInboundSubscription.CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID;
+begin
+  // Call-ID, local tag, remote tag. We receive a SUBSCRIBE, so the dialog's an
+  // inbound dialog. See TIdSipDialog.CreateInboundDialog.
+  Result := TIdSipDialogID.Create(Msg.CallID,
+                                  Msg.ToHeader.Tag,
+                                  Msg.From.Tag);
+end;
 
 procedure TIdSipInboundSubscription.DecOutstandingExpires;
 begin
@@ -1067,9 +1173,46 @@ begin
     Dec(Self.fOutstandingExpires);
 end;
 
+function TIdSipInboundSubscription.DialogMatches(DialogID: TIdSipDialogID): Boolean;
+begin
+  if Self.DialogEstablished then
+    Result := Self.Dialog.ID.Equals(DialogID)
+  else
+    Result := false;
+end;
+
+function TIdSipInboundSubscription.DialogMatches(Msg: TIdSipMessage): Boolean;
+var
+  DialogID: TIdSipDialogID;
+begin
+  DialogID := Self.CreateDialogIDFrom(Msg);
+  try
+    Result := Self.DialogMatches(DialogID);
+  finally
+    DialogID.Free;
+  end;
+end;
+
 procedure TIdSipInboundSubscription.IncOutstandingExpires;
 begin
   Inc(Self.fOutstandingExpires);
+end;
+
+procedure TIdSipInboundSubscription.NotifySubscriberOfState;
+var
+  Notify: TIdSipRequest;
+begin
+  Assert(Self.DialogEstablished,
+         'You cannot send a NOTIFY when you''ve no dialog');
+
+  Notify := Self.Module.CreateNotify(Self.Dialog,
+                                     Self.InitialRequest,
+                                     Self.State);
+  try
+    Self.SendRequest(Notify);
+  finally
+    Notify.Free;
+  end;
 end;
 
 procedure TIdSipInboundSubscription.RejectExpiresTooBrief(Subscribe: TIdSipRequest);
@@ -1098,10 +1241,10 @@ end;
 
 procedure TIdSipInboundSubscription.SendAccept(Subscribe: TIdSipRequest);
 var
-  Accepted: TIdSipResponse;
+  Accepted:   TIdSipResponse;
   OurExpires: Cardinal;
 begin
-  Accepted := TIdSipResponse.InResponseTo(Self.InitialRequest, SIPAccepted);
+  Accepted := Self.UA.CreateResponse(Self.InitialRequest, SIPAccepted);
   try
     OurExpires := Self.Module.InboundSubscriptionDuration;
 
@@ -1120,11 +1263,40 @@ begin
 
     Accepted.FirstExpires.NumericValue := OurExpires;
 
-    Self.ScheduleTermination(OurExpires);
     Self.EstablishDialog(Accepted);
+    Self.ScheduleTermination(OurExpires);
     Self.SendResponse(Accepted);
   finally
     Accepted.Free;
+  end;
+end;
+
+procedure TIdSipInboundSubscription.SendOk(Subscribe: TIdSipRequest);
+var
+  Ok:         TIdSipResponse;
+  OurExpires: Cardinal;
+begin
+  Ok := Self.UA.CreateResponse(Self.InitialRequest, SIPOK);
+  try
+    OurExpires := Self.Module.InboundSubscriptionDuration;
+
+    if Self.InitialRequest.HasHeader(ExpiresHeader) then begin
+      if (OurExpires > Self.InitialRequest.FirstExpires.NumericValue) then
+        OurExpires := Self.InitialRequest.FirstExpires.NumericValue;
+    end
+    else begin
+      // SUBSCRIBEs SHOULD have an Expires (RFC 3265 section 3.1.1), but that
+      // means they might not, so we ask the event package for a duration.
+      // Self.Module.Package WILL return something, because the SubscribeModule
+      // rejects all SUBSCRIBEs with unknown Event header values before we get
+      // here.
+      OurExpires := Self.Package.DefaultSubscriptionDuration;
+    end;
+
+    Ok.FirstExpires.NumericValue := OurExpires;
+    Self.SendResponse(Ok);
+  finally
+    Ok.Free;
   end;
 end;
 
@@ -1213,8 +1385,7 @@ var
 begin
   // cf. RFC 3265, section 3.1.4.2.
 
-  RefreshSubscribe := Self.CreateOutboundSubscribe;
-  Self.ConfigureRequest(RefreshSubscribe);
+  RefreshSubscribe := Self.CreateRefresh(NewDuration);
   RefreshSubscribe.Send;
 end;
 
@@ -1235,11 +1406,11 @@ end;
 
 procedure TIdSipOutboundSubscription.Terminate;
 begin
-  Self.Unsubscriber := Self.UA.AddOutboundAction(TIdSipOutboundUnsubscribe) as TIdSipOutboundUnsubscribe;
-  Self.Unsubscriber.AddListener(Self);
-  Self.ConfigureRequest(Self.Unsubscriber);
-  Self.Unsubscriber.Send;
-  Self.fTerminating := true;
+  // Precondition: You've invoked Self.Send.
+
+    Self.Unsubscriber := Self.CreateUnsubscribe;
+    Self.Unsubscriber.Send;
+    Self.fTerminating := true;
 end;
 
 procedure TIdSipOutboundSubscription.Unsubscribe;
@@ -1339,6 +1510,28 @@ begin
   Result.AddListener(Self);
 end;
 
+function TIdSipOutboundSubscription.CreateRefresh(NewDuration: Cardinal): TIdSipOutboundRefreshSubscribe;
+begin
+  Result := Self.UA.AddOutboundAction(TIdSipOutboundRefreshSubscribe) as TIdSipOutboundRefreshSubscribe;
+  Result.Dialog   := Self.Dialog;
+  Result.Duration := NewDuration;
+  Self.ConfigureRequest(Result);
+  Result.AddListener(Self);
+end;
+
+function TIdSipOutboundSubscription.CreateUnsubscribe: TIdSipOutboundUnsubscribe;
+begin
+  Result := Self.UA.AddOutboundAction(TIdSipOutboundUnsubscribe) as TIdSipOutboundUnsubscribe;
+
+  // You'd think we'd ask Self.Dialog. However, we can terminate the
+  // subscription before we receive a response from the notifier - in other
+  // words, before the dialog's established.
+  Result.CallID  := Self.InitialRequest.CallID;
+  Result.FromTag := Self.InitialRequest.From.Tag;
+  Self.ConfigureRequest(Result);
+  Result.AddListener(Self);  
+end;
+
 procedure TIdSipOutboundSubscription.NotifyOfExpiredSubscription(Notify: TIdSipRequest);
 var
   Notification: TIdSipExpiredSubscriptionMethod;
@@ -1417,7 +1610,13 @@ begin
     Self.EstablishDialog(Response);
   end;
 
-  Self.RescheduleRefresh(Response.FirstExpires.NumericValue);
+  if Response.HasHeader(ExpiresHeader) then
+    Self.RescheduleRefresh(Response.FirstExpires.NumericValue)
+  else begin
+    // We shouldn't actually ever reach this: notifiers MUST have an Expires
+    // header.
+    Self.RescheduleRefresh(Self.Duration);
+  end;
 end;
 
 procedure TIdSipOutboundSubscription.RejectUnauthorized(Notify: TIdSipRequest);

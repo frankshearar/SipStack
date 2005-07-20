@@ -55,6 +55,14 @@ RFC 3265 still to do:
    The notifier SHOULD also perform any necessary authentication and
    authorization per its local policy.  See section 3.1.6.3.
 
+3.3.4. Dialog creation and termination
+   Multiple subscriptions can be associated with a single dialog.
+   Subscriptions may also exist in dialogs associated with INVITE-
+   created application state and other application state created by
+   mechanisms defined in other specifications.  These sets of
+   application state do not interact beyond the behavior described for a
+   dialog (e.g., route set handling).
+
 
 RFC 3515 still to do:
 

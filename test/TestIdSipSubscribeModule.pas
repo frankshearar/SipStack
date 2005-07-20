@@ -12,17 +12,19 @@ unit TestIdSipSubscribeModule;
 interface
 
 uses
-  IdSipAuthentication, IdSipCore, IdSipMessage, IdSipSubscribeModule,
-  TestFrameworkSip, TestFrameworkSipTU;
+  IdSipAuthentication, IdSipCore, IdSipDialog, IdSipMessage,
+  IdSipSubscribeModule, TestFrameworkSip, TestFrameworkSipTU;
 
 type
   TSubscribeTestCase = class(TTestCaseTU,
                              IIdSipSubscribeModuleListener)
   private
   protected
+    ExpiryTime:                 Cardinal;
     Module:                     TIdSipSubscribeModule;
     OnRenewedSubscriptionFired: Boolean;
     OnSubscriptionRequestFired: Boolean;
+    Package:                    TIdSipEventPackage;
     UserAgentParam:             TIdSipAbstractUserAgent;
 
     procedure OnRenewedSubscription(UserAgent: TIdSipAbstractUserAgent;
@@ -77,13 +79,12 @@ type
     ID:           String;
     Succeeded:    Boolean;
 
-    function  CreateSubscribe: TIdSipOutboundSubscribe;
     procedure OnFailure(SubscribeAgent: TIdSipOutboundSubscribe;
                         Response: TIdSipResponse);
     procedure OnSuccess(SubscribeAgent: TIdSipOutboundSubscribe;
                         Response: TIdSipResponse);
   protected
-    procedure ConfigureSubscribe(Action: TIdSipOutboundSubscribe);
+    procedure ConfigureSubscribe(Action: TIdSipOutboundSubscribe); virtual;
     function  CreateAction: TIdSipAction; override;
   public
     procedure SetUp; override;
@@ -95,11 +96,33 @@ type
     procedure TestSubscribeRequest;
   end;
 
+  TestTIdSipOutboundRefreshSubscribe = class(TestTIdSipOutboundSubscribe)
+  private
+    Dialog:       TIdSipDialog;
+    ExpiresValue: Cardinal;
+
+    function CreateRefreshSubscribe: TIdSipOutboundRefreshSubscribe;
+  protected
+    procedure ConfigureSubscribe(Action: TIdSipOutboundSubscribe); override;
+    function  CreateAction: TIdSipAction; override;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestSend;
+  end;
+
   TestTIdSipOutboundUnsubscribe = class(TestTIdSipOutboundSubscribe)
   private
+    CallID:  String;
+    FromTag: String;
+
     function CreateUnsubscribe: TIdSipOutboundUnsubscribe;
   protected
-    function CreateAction: TIdSipAction; override;
+    procedure ConfigureSubscribe(Action: TIdSipOutboundSubscribe); override;
+    function  CreateAction: TIdSipAction; override;
+  public
+    procedure SetUp; override;
   published
     procedure TestSend;
   end;
@@ -107,7 +130,8 @@ type
   TSubscribeModuleActionTestCase = class(TestTIdSipAction,
                                          IIdSipSubscribeModuleListener)
   protected
-    Module: TIdSipSubscribeModule;
+    Module:  TIdSipSubscribeModule;
+    Package: TIdSipEventPackage;
 
     procedure OnRenewedSubscription(UserAgent: TIdSipAbstractUserAgent;
                                     Subscription: TIdSipOutboundSubscription); virtual;
@@ -124,6 +148,12 @@ type
 
     procedure CheckExpiresScheduled(ExpectedExpires: Cardinal;
                                     const Msg: String);
+    function  CreateRefresh(Sub: TIdSipInboundSubscription;
+                            Response: TIdSipResponse;
+                            ExpiryTime: Cardinal): TIdSipRequest;
+    procedure ReceiveRefreshingSubscribe(Sub: TIdSipInboundSubscription;
+                                         Response: TIdSipResponse;
+                                         ExpiryTime: Cardinal);
     procedure ReceiveSubscribe(const EventPackage: String;
                                ExpiryTime: Cardinal = 0);
     procedure ReceiveSubscribeWithoutExpires(const EventPackage: String);
@@ -140,10 +170,16 @@ type
     procedure TestIsOptions; override;
     procedure TestIsRegistration; override;
     procedure TestIsSession; override;
+    procedure TestMatchInDialogInvite;
+    procedure TestMatchInDialogSubscribe;
+    procedure TestMatchResponse;
     procedure TestReceiveExpiresTooShort;
+//    procedure TestReceiveOutOfOrderRefresh;
     procedure TestReceiveNoExpires;
+    procedure TestReceiveRefreshingSubscribe;
     procedure TestReceiveSubscribe;
     procedure TestReceiveSubscribeReturnsAccepted;
+    procedure TestReceiveSubscribeSendsNotify;
   end;
 
   TestTIdSipOutboundSubscription = class(TSubscribeModuleActionTestCase,
@@ -212,6 +248,7 @@ type
     procedure TestLongRunningSubscription;
     procedure TestMatchNotify;
     procedure TestReceive2xx;
+    procedure TestReceive2xxWithNoExpires;
     procedure TestReceiveActiveNotify;
     procedure TestReceiveActiveNotifyWithExpires;
     procedure TestReceiveNotify;
@@ -411,7 +448,7 @@ type
 implementation
 
 uses
-  IdSipDialog, IdTimerQueue, SysUtils, TestFramework;
+  IdSipConsts, TestFramework;
 
 type
   TIdSipTestPackage = class(TIdSipEventPackage)
@@ -425,6 +462,7 @@ begin
   Result.AddTest(TestTIdSipSubscribeModule.Suite);
   Result.AddTest(TestTIdSipUserAgentWithSubscribeModule.Suite);
   Result.AddTest(TestTIdSipOutboundSubscribe.Suite);
+  Result.AddTest(TestTIdSipOutboundRefreshSubscribe.Suite);
   Result.AddTest(TestTIdSipOutboundUnsubscribe.Suite);
   Result.AddTest(TestTIdSipInboundSubscription.Suite);
   Result.AddTest(TestTIdSipOutboundSubscription.Suite);
@@ -460,9 +498,12 @@ procedure TSubscribeTestCase.SetUp;
 begin
   inherited SetUp;
 
+  Self.ExpiryTime := 1000;
+
   Self.Module := Self.Core.AddModule(TIdSipSubscribeModule) as TIdSipSubscribeModule;
   Self.Module.AddListener(Self);
   Self.Module.AddPackage(TIdSipTestPackage);
+  Self.Package := Self.Module.Package(TIdSipTestPackage.EventPackage);
 
   Self.OnRenewedSubscriptionFired := false;
   Self.OnSubscriptionRequestFired := false;
@@ -489,10 +530,14 @@ procedure TSubscribeTestCase.ReceiveSubscribe(const EventPackage: String;
 var
   Sub: TIdSipRequest;
 begin
-  Sub := Self.Module.CreateSubscribe(Self.Destination, EventPackage);
+  Sub := Self.Core.CreateRequest(MethodSubscribe, Self.Destination);
   try
+    Sub.FirstEvent.EventPackage   := EventPackage;
+
     if (ExpiryTime > 0) then
-      Sub.FirstExpires.NumericValue := ExpiryTime;
+      Sub.FirstExpires.NumericValue := ExpiryTime
+    else
+      Sub.FirstExpires.NumericValue := Self.Module.DefaultSubscriptionDuration;
 
     Self.ReceiveRequest(Sub);
   finally
@@ -533,7 +578,16 @@ begin
 
     Check(L.SubscriptionRequest,
           'Listener not notified of subscription request');
-    Check(Self.Dispatcher.Transport.LastRequest.Equals(L.SubscriptionParam.InitialRequest),
+
+    // Remember, as soon as we send a 2xx, we must send a NOTIFY. Thus the
+    // LastRequest is a NOTIFY and SecondLastRequest's a SUBSCRIBE.
+    //
+    // Further, this altering of the transport request looks downright wrong,
+    // but remember that we have to alter the subscription's InitialRequest -
+    // adding a To header - because we establish a dialog off the InitialRequest
+    // and the sent 202 Accepted.
+    Self.Dispatcher.Transport.SecondLastRequest.ToHeader.Tag := Self.Dispatcher.Transport.LastResponse.ToHeader.Tag;
+    Check(Self.Dispatcher.Transport.SecondLastRequest.Equals(L.SubscriptionParam.InitialRequest),
           'Subscription param');
     Check(L.UserAgentParam = Self.Core,
           'UserAgent param');
@@ -744,6 +798,7 @@ begin
   inherited SetUp;
 
   Self.Module := Self.Core.AddModule(TIdSipSubscribeModule) as TIdSipSubscribeModule;
+  Self.Module.AddPackage(TIdSipTestPackage);
 end;
 
 //******************************************************************************
@@ -772,18 +827,17 @@ begin
 end;
 
 function TestTIdSipOutboundSubscribe.CreateAction: TIdSipAction;
+var
+  Sub: TIdSipOutboundSubscribe;
 begin
-  Result := Self.CreateSubscribe;
+  Sub := Self.Core.AddOutboundAction(TIdSipOutboundSubscribe) as TIdSipOutboundSubscribe;
+  Self.ConfigureSubscribe(Sub);
+  Sub.Send;
+
+  Result := Sub;
 end;
 
 //* TestTIdSipOutboundSubscribe Private methods ********************************
-
-function TestTIdSipOutboundSubscribe.CreateSubscribe: TIdSipOutboundSubscribe;
-begin
-  Result := Self.Core.AddOutboundAction(TIdSipOutboundSubscribe) as TIdSipOutboundSubscribe;
-  Self.ConfigureSubscribe(Result);
-  Result.Send;
-end;
 
 procedure TestTIdSipOutboundSubscribe.OnFailure(SubscribeAgent: TIdSipOutboundSubscribe;
                                                 Response: TIdSipResponse);
@@ -802,9 +856,9 @@ end;
 procedure TestTIdSipOutboundSubscribe.TestMatchNotify;
 var
   Notify: TIdSipRequest;
-  Sub:    TIdSipOutboundSubscribe;
+  Sub:    TIdSipAction;
 begin
-  Sub := Self.CreateSubscribe;
+  Sub := Self.CreateAction;
 
   Notify := TIdSipRequest.Create;
   try
@@ -823,9 +877,9 @@ end;
 procedure TestTIdSipOutboundSubscribe.TestMatchResponse;
 var
   OK:  TIdSipResponse;
-  Sub: TIdSipOutboundSubscribe;
+  Sub: TIdSipAction;
 begin
-  Sub := Self.CreateSubscribe;
+  Sub := Self.CreateAction;
 
   OK := TIdSipResponse.Create;
   try
@@ -861,9 +915,9 @@ end;
 procedure TestTIdSipOutboundSubscribe.TestSubscribeRequest;
 var
   Events: TIdSipHeadersFilter;
-  Sub: TIdSipOutboundSubscribe;
+  Sub:    TIdSipAction;
 begin
-  Sub := Self.CreateSubscribe;
+  Sub := Self.CreateAction;
   CheckEquals(MethodSubscribe,
               Sub.InitialRequest.Method,
               'Method of request');
@@ -876,7 +930,7 @@ begin
               'Wrong Event header');
   CheckEquals(Self.ID,
               Sub.InitialRequest.FirstEvent.ID,
-              'ID param of Event header');            
+              'ID param of Event header');
 
   Events := TIdSipHeadersFilter.Create(Sub.InitialRequest.Headers, EventHeaderFull);
   try
@@ -887,9 +941,116 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSipOutboundRefreshSubscribe                                         *
+//******************************************************************************
+//* TestTIdSipOutboundRefreshSubscribe Public methods **************************
+
+procedure TestTIdSipOutboundRefreshSubscribe.SetUp;
+var
+  Subscribe: TIdSipRequest;
+  OK:        TIdSipResponse;
+begin
+  inherited SetUp;
+
+  Self.ExpiresValue := 1000;
+
+  Subscribe := Self.Module.CreateSubscribe(Self.Destination, TIdSipTestPackage.EventPackage);
+  try
+    OK := TIdSipResponse.InResponseTo(Subscribe, SIPOK);
+    try
+      // We need a Contact for the dialog's remote-target.
+      OK.AddHeader(ContactHeaderFull).Value := 'sip:wintermute@localhost';
+      Self.Dialog := TIdSipDialog.CreateOutboundDialog(Subscribe,
+                                                       OK,
+                                                       false);
+    finally
+      OK.Free;
+    end;
+  finally
+    Subscribe.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundRefreshSubscribe.TearDown;
+begin
+  Self.Dialog.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipOutboundRefreshSubscribe Protected methods ***********************
+
+procedure TestTIdSipOutboundRefreshSubscribe.ConfigureSubscribe(Action: TIdSipOutboundSubscribe);
+var
+  Refresh: TIdSipOutboundRefreshSubscribe;
+begin
+  inherited ConfigureSubscribe(Action);
+
+  Refresh := Action as TIdSipOutboundRefreshSubscribe;
+
+  Refresh.Dialog   := Self.Dialog;
+  Refresh.Duration := Self.ExpiresValue;
+end;
+
+
+function TestTIdSipOutboundRefreshSubscribe.CreateAction: TIdSipAction;
+begin
+  Result := Self.CreateRefreshSubscribe;
+end;
+
+//* TestTIdSipOutboundRefreshSubscribe Private methods *************************
+
+function TestTIdSipOutboundRefreshSubscribe.CreateRefreshSubscribe: TIdSipOutboundRefreshSubscribe;
+begin
+  Result := Self.Core.AddOutboundAction(TIdSipOutboundRefreshSubscribe) as TIdSipOutboundRefreshSubscribe;
+  Self.ConfigureSubscribe(Result);
+  Result.Send;
+end;
+
+//* TestTIdSipOutboundRefreshSubscribe Published methods ***********************
+
+procedure TestTIdSipOutboundRefreshSubscribe.TestSend;
+begin
+  Self.MarkSentRequestCount;
+  Self.CreateAction;
+  CheckRequestSent('No request sent');
+  CheckEquals(Self.ExpiresValue,
+              Self.LastSentRequest.FirstExpires.NumericValue,
+              'Wrong Expires value');
+  CheckEquals(Self.Dialog.ID.CallID,
+              Self.LastSentRequest.CallID,
+              'Call-ID');
+  CheckEquals(Self.Dialog.ID.LocalTag,
+              Self.LastSentRequest.From.Tag,
+              'From tag');
+end;
+
+//******************************************************************************
 //* TestTIdSipOutboundUnsubscribe                                              *
 //******************************************************************************
+//* TestTIdSipOutboundUnsubscribe Public methods *******************************
+
+procedure TestTIdSipOutboundUnsubscribe.SetUp;
+begin
+  inherited SetUp;
+
+  Self.CallID  := 'random-callid@localhost';
+  Self.FromTag := BranchMagicCookie + 'randomtoken';
+end;
+
 //* TestTIdSipOutboundUnsubscribe Protected methods ****************************
+
+procedure TestTIdSipOutboundUnsubscribe.ConfigureSubscribe(Action: TIdSipOutboundSubscribe);
+var
+  Unsub: TIdSipOutboundUnsubscribe;
+begin
+  inherited ConfigureSubscribe(Action);
+
+  Unsub := Action as TIdSipOutboundUnsubscribe;
+
+  Unsub.CallID  := Self.CallID;
+  Unsub.FromTag := Self.FromTag;
+end;
 
 function TestTIdSipOutboundUnsubscribe.CreateAction: TIdSipAction;
 begin
@@ -930,6 +1091,7 @@ begin
   Self.Module.AddListener(Self);
 
   Self.Module.AddPackage(TIdSipTestPackage);
+  Self.Package := Self.Module.Package(TIdSipTestPackage.EventPackage);
 end;
 
 //* TSubscribeModuleActionTestCase Protected methods ***************************
@@ -952,6 +1114,8 @@ end;
 procedure TestTIdSipInboundSubscription.SetUp;
 begin
   inherited SetUp;
+
+  Self.Dispatcher.Transport.WriteLog := true;
 
   Self.ReceiveSubscribe(TIdSipTestPackage.EventPackage);
 
@@ -986,6 +1150,39 @@ begin
   CheckEquals(SubscriptionSubstateTerminated,
               Self.LastSentRequest.FirstSubscriptionState.SubState,
               Msg + ': Subscription-State value');
+end;
+
+function TestTIdSipInboundSubscription.CreateRefresh(Sub: TIdSipInboundSubscription;
+                                                     Response: TIdSipResponse;
+                                                     ExpiryTime: Cardinal): TIdSipRequest;
+var
+  RemoteDialog: TIdSipDialog;
+begin
+  // Create an OUTbound dialog because the remote send SENDS the request.
+  RemoteDialog := TIdSipDialog.CreateOutboundDialog(Sub.InitialRequest,
+                                                   Response,
+                                                   false);
+  try
+    Result := Self.Module.CreateSubscribe(RemoteDialog, Sub.EventPackage);
+  finally
+    RemoteDialog.Free;
+  end;
+end;
+
+procedure TestTIdSipInboundSubscription.ReceiveRefreshingSubscribe(Sub: TIdSipInboundSubscription;
+                                                                   Response: TIdSipResponse;
+                                                                   ExpiryTime: Cardinal);
+var
+  Refresh: TIdSipRequest;
+begin
+  Refresh := Self.CreateRefresh(Sub, Response, ExpiryTime);
+  try
+    Refresh.FirstExpires.NumericValue := ExpiryTime;
+
+    Self.ReceiveRequest(Refresh);
+  finally
+    Refresh.Free;
+  end;
 end;
 
 procedure TestTIdSipInboundSubscription.ReceiveSubscribeWithoutExpires(const EventPackage: String);
@@ -1048,8 +1245,13 @@ var
   Notify: TIdSipRequest;
 begin
   Self.MarkSentRequestCount;
+  Self.MarkSentResponseCount;
 
   Self.SubscribeAction.Accept;
+
+  CheckEquals(SubscriptionSubstateActive,
+              Self.SubscribeAction.State,
+              'Action state');
 
   CheckRequestSent('No request sent');
 
@@ -1097,6 +1299,55 @@ begin
         Self.SubscribeAction.ClassName + ' marked as a Session');
 end;
 
+procedure TestTIdSipInboundSubscription.TestMatchInDialogInvite;
+var
+  Invite:       TIdSipRequest;
+  RemoteDialog: TIdSipDialog;
+begin
+  RemoteDialog := TIdSipDialog.CreateInboundDialog(Self.SubscribeAction.InitialRequest,
+                                                   Self.Dispatcher.Transport.LastResponse,
+                                                   false);
+  try
+    Invite := Self.Core.CreateReInvite(RemoteDialog, '', '');
+    try
+      Check(not Self.SubscribeAction.Match(Invite),
+            'Matched an in-dialog INVITE');
+    finally
+      Invite.Free;
+    end;
+  finally
+    RemoteDialog.Free;
+  end;
+end;
+
+procedure TestTIdSipInboundSubscription.TestMatchInDialogSubscribe;
+var
+  Refresh: TIdSipRequest;
+begin
+  Refresh := Self.CreateRefresh(Self.SubscribeAction,
+                                Self.Dispatcher.Transport.LastResponse,
+                                1000);
+  try
+    Check(Self.SubscribeAction.Match(Refresh),
+          'Didn''t match an in-dialog SUBSCRIBE');
+  finally
+    Refresh.Free;
+  end;
+end;
+
+procedure TestTIdSipInboundSubscription.TestMatchResponse;
+var
+  OK: TIdSipResponse;
+begin
+  OK := TIdSipResponse.InResponseTo(Self.SubscribeAction.InitialRequest, SIPOK);
+  try
+    Check(Self.SubscribeAction.Match(OK),
+          'Didn''t match the SUBSCRIBE''s response');
+  finally
+    OK.Free;
+  end;
+end;
+
 procedure TestTIdSipInboundSubscription.TestReceiveExpiresTooShort;
 const
   MinExpTime = 42;
@@ -1140,6 +1391,33 @@ begin
               'Wrong Expires value');
 end;
 
+procedure TestTIdSipInboundSubscription.TestReceiveRefreshingSubscribe;
+const
+  ArbExpiresValue = 100;
+begin
+  Self.SubscribeAction.Accept;
+
+  Self.MarkSentRequestCount;
+  Self.MarkSentResponseCount;
+  Self.ReceiveRefreshingSubscribe(Self.SubscribeAction,
+                                  Self.Dispatcher.Transport.LastResponse,
+                                  ArbExpiresValue);
+
+  CheckResponseSent('No response sent');
+  CheckNotEquals(SIPAccepted,
+                 Self.LastSentResponse.StatusCode,
+                 'SUBSCRIBE started a new subscription: it didn''t match the existing one');
+  CheckEquals(SIPOK,
+              Self.LastSentResponse.StatusCode,
+              'Unexpected response sent to refreshing subscription');
+
+  CheckRequestSent('No request sent');
+  CheckEquals(MethodNotify,
+              Self.LastSentRequest.Method,
+              'Unexpected request sent after refreshing subscription');
+
+end;
+
 procedure TestTIdSipInboundSubscription.TestReceiveSubscribe;
 begin
   CheckEquals(Self.SubscribeRequest.FirstEvent.EventPackage,
@@ -1150,6 +1428,10 @@ begin
               Self.SubscribeAction.ID,
               'ID');
 
+  CheckEquals(SubscriptionSubstatePending,
+              Self.SubscribeAction.State,
+              'Action state');
+
   CheckExpiresScheduled(Self.SubscribeRequest.FirstExpires.NumericValue,
                         'Subscription won''t expire');
 end;
@@ -1158,12 +1440,29 @@ procedure TestTIdSipInboundSubscription.TestReceiveSubscribeReturnsAccepted;
 begin
   Self.MarkSentResponseCount;
 
+  // This SUBSCRIBE sets up a new subscription.
   Self.ReceiveSubscribe(TIdSipTestPackage.EventPackage);
 
   CheckResponseSent('No response sent');
   CheckEquals(SIPAccepted,
               Self.LastSentResponse.StatusCode,
               'Unexpected response sent');
+  Check(Self.LastSentResponse.ContactCount > 0,
+        'Response has no Contact header: RFC 3261, section 12.1.1');
+  Check(Self.LastSentResponse.ToHeader.HasTag,
+        'Response''s To header has no tag');
+end;
+
+procedure TestTIdSipInboundSubscription.TestReceiveSubscribeSendsNotify;
+begin
+  Self.MarkSentRequestCount;
+
+  Self.ReceiveSubscribe(TIdSipTestPackage.EventPackage);
+
+  CheckRequestSent('No request sent');
+  CheckEquals(MethodNotify,
+              Self.LastSentRequest.Method,
+              'Unexpected request sent');
 end;
 
 //******************************************************************************
@@ -1574,12 +1873,36 @@ begin
 end;
 
 procedure TestTIdSipOutboundSubscription.TestReceive2xx;
+const
+  ExpireTime = 1000;
 begin
   Self.CreateSubscription;
-  Self.ReceiveResponse(SIPAccepted);
+  Self.ReceiveOkFor(Self.LastSentRequest, ExpireTime);
 
   Check(not Self.SubscriptionEstablished,
         'Subscriptions are only established when we receive a NOTIFY saying so');
+
+  Check(Self.DebugTimer.EventCount > 0,
+        'No refresh scheduled');
+
+  CheckEquals(ExpireTime*1000,
+              Self.DebugTimer.LastEventScheduled.DebugWaitTime,
+              'Refresh''s scheduled time wrong');
+end;
+
+procedure TestTIdSipOutboundSubscription.TestReceive2xxWithNoExpires;
+var
+  Sub: TIdSipOutboundSubscription;
+begin
+  Sub := Self.CreateSubscription;
+  Self.ReceiveResponse(SIPAccepted);
+
+  Check(Self.DebugTimer.EventCount > 0,
+        'No refresh scheduled');
+
+  CheckEquals(Sub.Duration*1000,
+              Self.DebugTimer.LastEventScheduled.DebugWaitTime,
+              'Refresh''s scheduled time wrong');
 end;
 
 procedure TestTIdSipOutboundSubscription.TestReceiveActiveNotify;
@@ -1894,12 +2217,15 @@ begin
   CheckEquals(Self.Subscription.ID,
               Self.LastSentRequest.FirstEvent.ID,
               'Wrong event ID');
-  CheckNotEquals(Self.Subscription.InitialRequest.CallID,
-                 Self.LastSentRequest.CallID,
-                 'Refresh must use a freshly-generated Call-ID');
-  CheckNotEquals(Self.Subscription.InitialRequest.From.Tag,
-                 Self.LastSentRequest.From.Tag,
-                 'Refresh must use a freshly-generated From tag');
+  CheckEquals(Self.Subscription.InitialRequest.CallID,
+              Self.LastSentRequest.CallID,
+              'Refresh must happen in the context of the original dialog: Call-ID');
+  CheckEquals(Self.Subscription.InitialRequest.From.Tag,
+              Self.LastSentRequest.From.Tag,
+              'Refresh must happen in the context of the original dialog: From tag');
+  CheckEquals(Self.Subscription.InitialRequest.ToHeader.Tag,
+              Self.LastSentRequest.ToHeader.Tag,
+              'Refresh must happen in the context of the original dialog: To tag');
 end;
 
 procedure TestTIdSipOutboundSubscription.TestRefreshUpdatesExpiryTime;
@@ -2013,6 +2339,7 @@ begin
 
   Self.OutSubscription := Self.Module.Subscribe(Self.Destination,
                                                 TIdSipTestPackage.EventPackage);
+  Self.OutSubscription.Send;                                              
 
   Self.Block := TIdSipSubscriptionExpires.Create;
 end;
