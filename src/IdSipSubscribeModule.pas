@@ -127,15 +127,25 @@ type
   end;
 
   TIdSipEventPackage = class(TObject)
+  private
+    fInboundSubscriptionDuration: Cardinal;
+    fMinimumExpiryTime:           Cardinal;
+    fModule:                      TIdSipSubscribeModule;
   public
-    class function EventPackage: String; virtual; abstract;
     class function DefaultSubscriptionDuration: Cardinal; virtual;
+    class function EventPackage: String; virtual; abstract;
+
+    constructor Create(Module: TIdSipSubscribeModule);
+
+    property InboundSubscriptionDuration: Cardinal              read fInboundSubscriptionDuration write fInboundSubscriptionDuration;
+    property MinimumExpiryTime:           Cardinal              read fMinimumExpiryTime write fMinimumExpiryTime;
+    property Module:                      TIdSipSubscribeModule read fModule;
   end;
 
   TIdSipReferPackage = class(TIdSipEventPackage)
   public
-    class function EventPackage: String; override;
     class function DefaultSubscriptionDuration: Cardinal; override;
+    class function EventPackage: String; override;
   end;
 
   TIdSipNotify = class(TIdSipAction)
@@ -259,9 +269,14 @@ type
     property Terminating:  Boolean             read fTerminating;
   end;
 
+  // Note that several methods schedule terminations. Since ActionClosures are
+  // stateless, we use (Dec|Inc)OutstandingExpires to keep track of how many
+  // terminations we've scheduled and how many have triggered. When the last
+  // one triggers - when OutstandingExpires = 0 - then we know we've triggered
+  // the termination that will actually kill the subscription.
   TIdSipInboundSubscription = class(TIdSipSubscription)
   private
-    fOutstandingExpires:  Cardinal;
+    OutstandingExpires:   Cardinal;
     Package:              TIdSipEventPackage;
     UsingSecureTransport: Boolean;
 
@@ -269,8 +284,10 @@ type
     procedure DecOutstandingExpires;
     function  DialogMatches(DialogID: TIdSipDialogID): Boolean; overload;
     function  DialogMatches(Msg: TIdSipMessage): Boolean; overload;
+    function  ExecutingLastScheduledExpires: Boolean;
     procedure IncOutstandingExpires;
     procedure NotifySubscriberOfState;
+    function  OurExpires(Subscribe: TIdSipRequest): Cardinal;
     procedure RejectExpiresTooBrief(Subscribe: TIdSipRequest);
     procedure ScheduleTermination(Expires: Cardinal);
     procedure SendAccept(Subscribe: TIdSipRequest);
@@ -537,7 +554,7 @@ end;
 
 procedure TIdSipSubscribeModule.AddPackage(PackageType: TIdSipEventPackageClass);
 begin
-  Self.Packages.Add(PackageType.Create);
+  Self.Packages.Add(PackageType.Create(Self));
 end;
 
 function TIdSipSubscribeModule.AllowedEvents: String;
@@ -738,19 +755,29 @@ begin
   Result := OneHour;
 end;
 
+constructor TIdSipEventPackage.Create(Module: TIdSipSubscribeModule);
+begin
+  inherited Create;
+
+  Self.fModule := Module;
+
+  Self.InboundSubscriptionDuration := Self.Module.InboundSubscriptionDuration;
+  Self.MinimumExpiryTime           := Self.Module.MinimumExpiryTime;
+end;
+
 //******************************************************************************
 //* TIdSipReferPackage                                                         *
 //******************************************************************************
 //* TIdSipReferPackage Public methods ******************************************
 
-class function TIdSipReferPackage.EventPackage: String;
-begin
-  Result := PackageRefer;
-end;
-
 class function TIdSipReferPackage.DefaultSubscriptionDuration: Cardinal;
 begin
   Result := DontExpireEventPackageSubscription;
+end;
+
+class function TIdSipReferPackage.EventPackage: String;
+begin
+  Result := PackageRefer;
 end;
 
 //******************************************************************************
@@ -1055,6 +1082,9 @@ begin
   Self.EventPackage := Self.InitialRequest.FirstEvent.EventType;
   Self.ID           := Self.InitialRequest.FirstEvent.ID;
 
+  // Self.Module.Package WILL return something, because the SubscribeModule
+  // rejects all SUBSCRIBEs with unknown Event header values before we get
+  // here.
   Self.Package := Self.Module.Package(Self.EventPackage);
 
   Self.ReceiveRequest(Subscribe);
@@ -1081,7 +1111,7 @@ procedure TIdSipInboundSubscription.Expire;
 begin
   Self.DecOutstandingExpires;
 
-  if (Self.fOutstandingExpires = 0) then
+  if Self.ExecutingLastScheduledExpires then
     Self.Terminate;
 end;
 
@@ -1133,19 +1163,23 @@ begin
 
   inherited ReceiveSubscribe(Request);
 
-  if Self.WillAccept(Request) then begin
-    if Self.InitialRequest.Equals(Request) then begin
+  if Self.InitialRequest.Equals(Request) then begin
+    if Self.WillAccept(Request) then begin
       Self.SetState(SubscriptionSubstatePending);
       Self.SendAccept(Request);
     end
-    else begin
-      // Things like refreshing subscriptions
+    else
+      Self.Terminate;
+  end
+  else begin
+    if Self.WillAccept(Request) then begin
+      Self.ScheduleTermination(Request.FirstExpires.NumericValue);
       Self.Dialog.ReceiveRequest(Request);
       Self.SendOk(Request);
     end;
-  end
-  else
-    Self.Terminate;
+    // In other words, we don't kill the subscription just because the Refresh's
+    // Expires was too short.
+  end;
 end;
 
 procedure TIdSipInboundSubscription.SendResponse(Response: TIdSipResponse);
@@ -1169,8 +1203,8 @@ end;
 
 procedure TIdSipInboundSubscription.DecOutstandingExpires;
 begin
-  if (Self.fOutstandingExpires > 0) then
-    Dec(Self.fOutstandingExpires);
+  if (Self.OutstandingExpires > 0) then
+    Dec(Self.OutstandingExpires);
 end;
 
 function TIdSipInboundSubscription.DialogMatches(DialogID: TIdSipDialogID): Boolean;
@@ -1193,9 +1227,14 @@ begin
   end;
 end;
 
+function TIdSipInboundSubscription.ExecutingLastScheduledExpires: Boolean;
+begin
+  Result := Self.OutstandingExpires = 0;
+end;
+
 procedure TIdSipInboundSubscription.IncOutstandingExpires;
 begin
-  Inc(Self.fOutstandingExpires);
+  Inc(Self.OutstandingExpires);
 end;
 
 procedure TIdSipInboundSubscription.NotifySubscriberOfState;
@@ -1215,13 +1254,28 @@ begin
   end;
 end;
 
+function TIdSipInboundSubscription.OurExpires(Subscribe: TIdSipRequest): Cardinal;
+begin
+  Result := Self.Package.InboundSubscriptionDuration;
+
+  if Subscribe.HasHeader(ExpiresHeader) then begin
+    if (Result > Subscribe.FirstExpires.NumericValue) then
+      Result := Subscribe.FirstExpires.NumericValue;
+  end
+  else begin
+    // SUBSCRIBEs SHOULD have an Expires (RFC 3265 section 3.1.1), but that
+    // means they might not, so we ask the event package for a duration.
+    Result := Self.Package.DefaultSubscriptionDuration;
+  end;
+end;
+
 procedure TIdSipInboundSubscription.RejectExpiresTooBrief(Subscribe: TIdSipRequest);
 var
   Response: TIdSipResponse;
 begin
   Response := Self.UA.CreateResponse(Subscribe, SIPIntervalTooBrief);
   try
-    Response.FirstMinExpires.NumericValue := Self.Module.MinimumExpiryTime;
+    Response.FirstMinExpires.NumericValue := Self.Package.MinimumExpiryTime;
 
     Self.SendResponse(Response);
   finally
@@ -1241,30 +1295,14 @@ end;
 
 procedure TIdSipInboundSubscription.SendAccept(Subscribe: TIdSipRequest);
 var
-  Accepted:   TIdSipResponse;
-  OurExpires: Cardinal;
+  Accepted: TIdSipResponse;
 begin
-  Accepted := Self.UA.CreateResponse(Self.InitialRequest, SIPAccepted);
+  Accepted := Self.UA.CreateResponse(Subscribe, SIPAccepted);
   try
-    OurExpires := Self.Module.InboundSubscriptionDuration;
-
-    if Self.InitialRequest.HasHeader(ExpiresHeader) then begin
-      if (OurExpires > Self.InitialRequest.FirstExpires.NumericValue) then
-        OurExpires := Self.InitialRequest.FirstExpires.NumericValue;
-    end
-    else begin
-      // SUBSCRIBEs SHOULD have an Expires (RFC 3265 section 3.1.1), but that
-      // means they might not, so we ask the event package for a duration.
-      // Self.Module.Package WILL return something, because the SubscribeModule
-      // rejects all SUBSCRIBEs with unknown Event header values before we get
-      // here.
-      OurExpires := Self.Package.DefaultSubscriptionDuration;
-    end;
-
-    Accepted.FirstExpires.NumericValue := OurExpires;
+    Accepted.FirstExpires.NumericValue := Self.OurExpires(Subscribe);
 
     Self.EstablishDialog(Accepted);
-    Self.ScheduleTermination(OurExpires);
+    Self.ScheduleTermination(Accepted.FirstExpires.NumericValue);
     Self.SendResponse(Accepted);
   finally
     Accepted.Free;
@@ -1273,27 +1311,13 @@ end;
 
 procedure TIdSipInboundSubscription.SendOk(Subscribe: TIdSipRequest);
 var
-  Ok:         TIdSipResponse;
-  OurExpires: Cardinal;
+  Ok: TIdSipResponse;
 begin
-  Ok := Self.UA.CreateResponse(Self.InitialRequest, SIPOK);
+  Ok := Self.UA.CreateResponse(Subscribe, SIPOK);
   try
-    OurExpires := Self.Module.InboundSubscriptionDuration;
+    Ok.FirstExpires.NumericValue := Self.OurExpires(Subscribe);
 
-    if Self.InitialRequest.HasHeader(ExpiresHeader) then begin
-      if (OurExpires > Self.InitialRequest.FirstExpires.NumericValue) then
-        OurExpires := Self.InitialRequest.FirstExpires.NumericValue;
-    end
-    else begin
-      // SUBSCRIBEs SHOULD have an Expires (RFC 3265 section 3.1.1), but that
-      // means they might not, so we ask the event package for a duration.
-      // Self.Module.Package WILL return something, because the SubscribeModule
-      // rejects all SUBSCRIBEs with unknown Event header values before we get
-      // here.
-      OurExpires := Self.Package.DefaultSubscriptionDuration;
-    end;
-
-    Ok.FirstExpires.NumericValue := OurExpires;
+    Self.ScheduleTermination(Ok.FirstExpires.NumericValue);    
     Self.SendResponse(Ok);
   finally
     Ok.Free;
@@ -1323,7 +1347,7 @@ begin
   if Subscribe.HasHeader(ExpiresHeader) then begin
     Expires := Subscribe.FirstExpires.NumericValue;
 
-    if (Expires < OneHour) and (Expires < Self.Module.MinimumExpiryTime) then
+    if (Expires < OneHour) and (Expires < Self.Package.MinimumExpiryTime) then
       Self.RejectExpiresTooBrief(Subscribe)
     else begin
       Result := true;

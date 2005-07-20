@@ -177,6 +177,7 @@ type
 //    procedure TestReceiveOutOfOrderRefresh;
     procedure TestReceiveNoExpires;
     procedure TestReceiveRefreshingSubscribe;
+    procedure TestReceiveRefreshingSubscribeIntervalTooBrief;
     procedure TestReceiveSubscribe;
     procedure TestReceiveSubscribeReturnsAccepted;
     procedure TestReceiveSubscribeSendsNotify;
@@ -1112,8 +1113,12 @@ end;
 //* TestTIdSipInboundSubscription Public methods *******************************
 
 procedure TestTIdSipInboundSubscription.SetUp;
+const
+  MinExpTime = 42;
 begin
   inherited SetUp;
+
+  Self.Package.MinimumExpiryTime := MinExpTime;
 
   Self.Dispatcher.Transport.WriteLog := true;
 
@@ -1349,15 +1354,11 @@ begin
 end;
 
 procedure TestTIdSipInboundSubscription.TestReceiveExpiresTooShort;
-const
-  MinExpTime = 42;
 var
   Response: TIdSipResponse;
 begin
-  Self.Module.MinimumExpiryTime := MinExpTime;
-
   Self.MarkSentResponseCount;
-  Self.ReceiveSubscribe(TIdSipTestPackage.EventPackage, MinExpTime - 1);
+  Self.ReceiveSubscribe(TIdSipTestPackage.EventPackage, Self.Package.MinimumExpiryTime - 1);
 
   CheckResponseSent('No response sent');
 
@@ -1367,7 +1368,7 @@ begin
               'Unexpected response sent');
   Check(Response.HasHeader(MinExpiresHeader),
         'No Min-Expires header');
-  CheckEquals(Self.Module.MinimumExpiryTime,
+  CheckEquals(Self.Package.MinimumExpiryTime,
               Response.FirstMinExpires.NumericValue,
               'Min-Expires value');
 end;
@@ -1415,7 +1416,33 @@ begin
   CheckEquals(MethodNotify,
               Self.LastSentRequest.Method,
               'Unexpected request sent after refreshing subscription');
+end;
 
+procedure TestTIdSipInboundSubscription.TestReceiveRefreshingSubscribeIntervalTooBrief;
+var
+  Response: TIdSipResponse;
+begin
+  Self.SubscribeAction.Accept;
+
+  Self.MarkSentRequestCount;
+
+  Self.ReceiveRefreshingSubscribe(Self.SubscribeAction,
+                                  Self.Dispatcher.Transport.LastResponse,
+                                  Self.Package.MinimumExpiryTime - 1);
+
+  CheckResponseSent('No response sent');
+
+  Response := Self.LastSentResponse;
+  CheckEquals(SIPIntervalTooBrief,
+              Response.StatusCode,
+              'Unexpected response sent');
+  Check(Response.HasHeader(MinExpiresHeader),
+        'No Min-Expires header');
+  CheckEquals(Self.Package.MinimumExpiryTime,
+              Response.FirstMinExpires.NumericValue,
+              'Min-Expires value');
+  Check(not Self.SubscribeAction.IsTerminated,
+        'Rejecting a refreshing subscription shouldn''t kill the subscription');
 end;
 
 procedure TestTIdSipInboundSubscription.TestReceiveSubscribe;
