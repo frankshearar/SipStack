@@ -173,6 +173,7 @@ type
     procedure TestMatchInDialogInvite;
     procedure TestMatchInDialogSubscribe;
     procedure TestMatchResponse;
+    procedure TestReceiveExpiresInContactHeader;
     procedure TestReceiveExpiresTooShort;
 //    procedure TestReceiveOutOfOrderRefresh;
     procedure TestReceiveNoExpires;
@@ -1224,7 +1225,7 @@ procedure TestTIdSipInboundSubscription.ReceiveSubscribeWithExpiresInContact(Dur
 var
   Subscribe: TIdSipRequest;
 begin
-  Subscribe := Self.Module.CreateSubscribe(Self.Destination, 'Foo');
+  Subscribe := Self.Module.CreateSubscribe(Self.Destination, TIdSipTestPackage.EventPackage);
   try
     Subscribe.RemoveAllHeadersNamed(ExpiresHeader);
     Subscribe.FirstContact.Expires := Duration;
@@ -1351,6 +1352,27 @@ begin
   finally
     OK.Free;
   end;
+end;
+
+procedure TestTIdSipInboundSubscription.TestReceiveExpiresInContactHeader;
+var
+  ContactExpiresTime: Cardinal;
+  Response:           TIdSipResponse;
+begin
+  ContactExpiresTime := Self.Package.MinimumExpiryTime;
+
+  Self.MarkSentResponseCount;
+  Self.ReceiveSubscribeWithExpiresInContact(ContactExpiresTime);
+
+  CheckResponseSent('No response sent');
+
+  Response := Self.LastSentResponse;
+  CheckNotEquals(ContactExpiresTime,
+                 Response.FirstExpires.NumericValue,
+                 'We didn''t ignore the Contact expires parameter');
+  CheckEquals(Self.Package.InboundSubscriptionDuration,
+              Response.FirstExpires.NumericValue,
+              'We didn''t use the package''s default expires time');
 end;
 
 procedure TestTIdSipInboundSubscription.TestReceiveExpiresTooShort;
