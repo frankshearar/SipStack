@@ -6552,7 +6552,7 @@ end;
 class function TIdSipMessage.WillEstablishDialog(Request: TIdSipRequest;
                                                  Response: TIdSipResponse): Boolean;
 begin
-  Result := Request.IsInvite and Response.IsOK;
+  Result := (Request.IsInvite or Request.IsSubscribe) and Response.IsOK;
 end;
 
 constructor TIdSipMessage.Create;

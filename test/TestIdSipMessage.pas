@@ -302,11 +302,12 @@ uses
   Classes, IdSimpleParser, IdSipConsts, TestMessages;
 
 const
-  AllMethods: array[1..7] of String = (MethodAck, MethodBye, MethodCancel,
-      MethodInvite, MethodOptions, MethodParam, MethodRegister);
-  AllResponses: array[1..50] of Cardinal = (SIPTrying, SIPRinging,
-      SIPCallIsBeingForwarded, SIPQueued, SIPSessionProgress, SIPOK,
-      SIPMultipleChoices, SIPMovedPermanently, SIPMovedTemporarily,
+  AllMethods: array[1..9] of String = (MethodAck, MethodBye, MethodCancel,
+      MethodInvite, MethodNotify, MethodOptions, MethodParam, MethodRegister,
+      MethodSubscribe);
+  AllResponses: array[1..51] of Cardinal = (SIPTrying, SIPRinging,
+      SIPCallIsBeingForwarded, SIPQueued, SIPSessionProgress, SIPAccepted,
+      SIPOK, SIPMultipleChoices, SIPMovedPermanently, SIPMovedTemporarily,
       SIPUseProxy, SIPAlternativeService, SIPBadRequest, SIPUnauthorized,
       SIPPaymentRequired, SIPForbidden, SIPNotFound, SIPMethodNotAllowed,
       SIPNotAcceptableClient, SIPProxyAuthenticationRequired,
@@ -1303,7 +1304,10 @@ begin
           Request.Method := AllMethods[I];
           Response.StatusCode := AllResponses[J];
 
-          Check((Request.IsInvite and Response.IsOK)
+          // INVITEs and SUBSCRIBEs can start dialogs:
+          // RFC 3261, section 12;
+          // RFC 3265, section 3.1.4.1
+          Check(((Request.IsInvite or Request.IsSubscribe) and Response.IsOK)
               = TIdSipMessage.WillEstablishDialog(Request, Response),
                 AllMethods[I] + ' + ' + Response.StatusText);
         end;
