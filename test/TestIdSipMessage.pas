@@ -1290,8 +1290,8 @@ end;
 
 procedure TestTIdSipMessage.TestWillEstablishDialog;
 var
-  I, J:    Integer;
-  Request: TIdSipRequest;
+  I, J:     Integer;
+  Request:  TIdSipRequest;
   Response: TIdSipResponse;
 begin
   Request := TIdSipRequest.Create;
