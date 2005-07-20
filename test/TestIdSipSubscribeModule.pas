@@ -143,6 +143,7 @@ type
 
   TestTIdSipInboundSubscription = class(TSubscribeModuleActionTestCase)
   private
+    ID:               String;
     SubscribeAction:  TIdSipInboundSubscription;
     SubscribeRequest: TIdSipRequest;
 
@@ -165,6 +166,7 @@ type
     procedure SetUp; override;
   published
     procedure TestAccept;
+    procedure TestExpire;
     procedure TestIsInbound; override;
     procedure TestIsInvite; override;
     procedure TestIsOptions; override;
@@ -1118,6 +1120,7 @@ const
   MinExpTime = 42;
 begin
   inherited SetUp;
+  Self.ID := 'random-id';
 
   Self.Package.MinimumExpiryTime := MinExpTime;
 
@@ -1212,6 +1215,7 @@ var
 begin
   Sub := Self.Module.CreateSubscribe(Self.Destination, EventPackage);
   try
+    Sub.FirstEvent.ID := Self.ID;
     if (ExpiryTime > 0) then
       Sub.FirstExpires.NumericValue := ExpiryTime;
 
@@ -1265,6 +1269,14 @@ begin
   CheckEquals(MethodNotify,
               Notify.Method,
               'Unexpected request sent');
+  Check(Notify.HasHeader(EventHeaderFull),
+        'No Event header');
+  CheckEquals(Self.SubscribeAction.EventPackage,
+              Notify.FirstEvent.EventPackage,
+              'Event value');
+  CheckEquals(Self.SubscribeAction.ID,
+              Notify.FirstEvent.ID,
+              'Event id parameter');
   Check(Notify.HasHeader(SubscriptionStateHeader),
         'No Subscription-State header');
   CheckEquals(SubscriptionSubStateActive,
@@ -1273,6 +1285,35 @@ begin
   CheckEquals(SubscriptionSubStateActive,
               Self.SubscribeAction.State,
               'Subscription state');
+end;
+
+procedure TestTIdSipInboundSubscription.TestExpire;
+var
+  Notify: TIdSipRequest;
+begin
+  Self.SubscribeAction.Accept;
+
+  Self.MarkSentRequestCount;
+  Self.SubscribeAction.Expire;
+
+  CheckRequestSent('No request sent for expiry');
+  Notify := Self.LastSentRequest;
+  CheckEquals(MethodNotify,
+              Notify.Method,
+              'Unexpected request sent');
+  Check(Notify.HasHeader(SubscriptionStateHeader),
+        'No Subscription-State header');
+  CheckEquals(SubscriptionSubStateTerminated,
+              Notify.FirstSubscriptionState.SubState,
+              'Unexpected substate');
+  CheckEquals(EventReasonTimeout,
+              Notify.FirstSubscriptionState.Reason,
+              'Unexpected substate reason');
+  CheckEquals(SubscriptionSubStateTerminated,
+              Self.SubscribeAction.State,
+              'Subscription state');
+  Check(Self.SubscribeAction.IsTerminated,
+        'Subscription not terminated');
 end;
 
 procedure TestTIdSipInboundSubscription.TestIsInbound;

@@ -292,7 +292,8 @@ type
     procedure ScheduleTermination(Expires: Cardinal);
     procedure SendAccept(Subscribe: TIdSipRequest);
     procedure SendOk(Subscribe: TIdSipRequest);
-    procedure SendTerminatingNotify(Subscribe: TIdSipRequest);
+    procedure SendTerminatingNotify(Subscribe: TIdSipRequest;
+                                    Reason: String);
     function  WillAccept(Subscribe: TIdSipRequest): Boolean;
   protected
     function  CreateDialog(Response: TIdSipResponse): TIdSipDialog; override;
@@ -1136,7 +1137,10 @@ end;
 procedure TIdSipInboundSubscription.Terminate;
 begin
   if Self.DialogEstablished then
-    Self.SendTerminatingNotify(Self.InitialRequest);
+    Self.SendTerminatingNotify(Self.InitialRequest,
+                               EventReasonTimeout);
+
+  Self.SetState(SubscriptionSubstateTerminated);                             
 
   inherited Terminate;
 end;
@@ -1324,7 +1328,8 @@ begin
   end;
 end;
 
-procedure TIdSipInboundSubscription.SendTerminatingNotify(Subscribe: TIdSipRequest);
+procedure TIdSipInboundSubscription.SendTerminatingNotify(Subscribe: TIdSipRequest;
+                                                          Reason: String);
 var
   Terminator: TIdSipRequest;
 begin
@@ -1332,6 +1337,7 @@ begin
                                          Subscribe,
                                          SubscriptionSubstateTerminated);
   try
+    Terminator.FirstSubscriptionState.Reason := Reason;
     Self.SendRequest(Terminator);
   finally
     Terminator.Free;

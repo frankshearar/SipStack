@@ -1,6 +1,5 @@
 RFC 3265 still to do:
 
-   3.1.6.   Notifier SUBSCRIBE Behavior............................ 10
    3.2.     Description of NOTIFY Behavior......................... 13
    3.2.1.   Identification of Reported Events, Event Classes, and
             Current State.......................................... 13
@@ -54,6 +53,8 @@ RFC 3265 still to do:
 
    The notifier SHOULD also perform any necessary authentication and
    authorization per its local policy.  See section 3.1.6.3.
+
+3.1.6.3. Authentication/Authorization of SUBSCRIBE requests
 
 3.3.4. Dialog creation and termination
    Multiple subscriptions can be associated with a single dialog.
