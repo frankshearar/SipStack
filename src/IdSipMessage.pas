@@ -1349,6 +1349,7 @@ type
     procedure Accept(Visitor: IIdSipMessageVisitor); override;
     procedure Assign(Src: TPersistent); override;
     function  AuthenticateHeader: TIdSipAuthenticateHeader;
+    function  CanRetryRequest: Boolean;
     function  Description: String;
     function  Equals(Msg: TIdSipMessage): Boolean; override;
     function  FirstAuthenticationInfo: TIdSipAuthenticationInfoHeader;
@@ -7942,6 +7943,16 @@ begin
     Result := Self.FirstWWWAuthenticate
   else
     Result := nil;
+end;
+
+function TIdSipResponse.CanRetryRequest: Boolean;
+begin
+  // Result = true means that the response indicates the UAC can do something
+  // to re-attempt the request. For instance, a 401 Unauthorized means that
+  // while the attempt failed, you can re-issue the request with the correct
+  // authentication credentials.
+  Result := (Self.StatusCode = SIPUnauthorized)
+         or (Self.StatusCode = SIPProxyAuthenticationRequired);
 end;
 
 function TIdSipResponse.Description: String;

@@ -621,6 +621,7 @@ type
 
     // Move to UserAgent:
     function  AddInboundInvite(Request: TIdSipRequest): TIdSipInboundInvite;
+    function  CountOf(const MethodName: String): Integer;
     function  CreateAck(Dialog: TIdSipDialog): TIdSipRequest;
     function  CreateBye(Dialog: TIdSipDialog): TIdSipRequest;
     function  CreateInvite(Dest: TIdSipAddressHeader;
@@ -2694,6 +2695,11 @@ end;
 function TIdSipAbstractUserAgent.AddInboundInvite(Request: TIdSipRequest): TIdSipInboundInvite;
 begin
   Result := Self.Actions.AddInboundInvite(Self, Request);
+end;
+
+function TIdSipAbstractUserAgent.CountOf(const MethodName: String): Integer;
+begin
+  Result := Self.Actions.CountOf(MethodName);
 end;
 
 function TIdSipAbstractUserAgent.AddModule(ModuleType: TIdSipMessageModuleClass): TIdSipMessageModule;
