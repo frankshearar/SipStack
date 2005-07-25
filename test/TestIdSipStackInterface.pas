@@ -228,6 +228,16 @@ type
     procedure TestCopy;
   end;
 
+  TestTIdSessionProgressData = class(TTestCase)
+  private
+    Data: TIdSessionProgressData;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCopy;
+  end;
+
   TestTIdInboundCallData = class(TTestCase)
   private
     Data: TIdInboundCallData;
@@ -1276,6 +1286,67 @@ begin
     CheckEquals(Self.Data.RemoteMimeType,
                 Copy.RemoteMimeType,
                 'RemoteMimeType');
+  finally
+    Copy.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSessionProgressData                                                 *
+//******************************************************************************
+//* TestTIdSessionProgressData Public methods **********************************
+
+procedure TestTIdSessionProgressData.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Data := TIdSessionProgressData.Create;
+
+  Self.Data.Banner                   := 'Fake TextDirect banner';
+  Self.Data.Handle                   := $decafbad;
+  Self.Data.LocalMimeType            := 'text/html';
+  Self.Data.LocalSessionDescription  := '<html />';
+  Self.Data.ProgressCode             := SIPSessionProgress;
+  Self.Data.RemoteMimeType           := 'text/plain';
+  Self.Data.RemoteSessionDescription := 'random data';
+end;
+
+procedure TestTIdSessionProgressData.TearDown;
+begin
+  Self.Data.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSessionProgressData Published methods *******************************
+
+procedure TestTIdSessionProgressData.TestCopy;
+var
+  Copy: TIdSessionProgressData;
+begin
+  Copy := Self.Data.Copy as TIdSessionProgressData;
+  try
+    CheckEquals(Self.Data.Banner,
+                Copy.Banner,
+                'Banner');
+    CheckEquals(IntToHex(Self.Data.Handle, 8),
+                IntToHex(Copy.Handle, 8),
+                'Handle');
+    CheckEquals(Self.Data.LocalMimeType,
+                Copy.LocalMimeType,
+                'LocalMimeType');
+    CheckEquals(Self.Data.LocalSessionDescription,
+                Copy.LocalSessionDescription,
+                'LocalSessionDescription');
+    CheckEquals(Self.Data.ProgressCode,
+                Copy.ProgressCode,
+                'ProgressCode');
+    CheckEquals(Self.Data.RemoteMimeType,
+                Copy.RemoteMimeType,
+                'RemoteMimeType');
+    CheckEquals(Self.Data.RemoteSessionDescription,
+                Copy.RemoteSessionDescription,
+                'RemoteSessionDescription');
   finally
     Copy.Free;
   end;

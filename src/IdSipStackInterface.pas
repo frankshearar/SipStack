@@ -238,8 +238,10 @@ type
 
   TIdSessionProgressData = class(TIdSessionData)
   private
+    fBanner:       String;
     fProgressCode: Cardinal;
   public
+    property Banner:       String   read fBanner write fBanner;
     property ProgressCode: Cardinal read fProgressCode write fProgressCode;
   end;
 
@@ -798,6 +800,7 @@ var
 begin
   Data := TIdSessionProgressData.Create;
   try
+    Data.Banner                   := Progress.StatusText;
     Data.Handle                   := Self.HandleFor(Session);
     Data.LocalSessionDescription  := Session.LocalSessionDescription;
     Data.LocalMimeType            := Session.LocalMimeType;
