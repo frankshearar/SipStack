@@ -175,6 +175,7 @@ type
     procedure TestMatchInDialogInvite;
     procedure TestMatchInDialogSubscribe;
     procedure TestMatchResponse;
+    procedure TestNotify;
     procedure TestReceiveExpiresInContactHeader;
     procedure TestReceiveExpiresTooShort;
 //    procedure TestReceiveOutOfOrderRefresh;
@@ -184,6 +185,8 @@ type
     procedure TestReceiveSubscribe;
     procedure TestReceiveSubscribeReturnsAccepted;
     procedure TestReceiveSubscribeSendsNotify;
+    procedure TestSendNotify;
+    procedure TestSendNotifyFails;
   end;
 
   TestTIdSipOutboundSubscription = class(TSubscribeModuleActionTestCase,
@@ -1395,6 +1398,39 @@ begin
   end;
 end;
 
+procedure TestTIdSipInboundSubscription.TestNotify;
+const
+  Body     = 'random';
+  MimeType = 'text/plain';
+var
+  Notify: TIdSipRequest;
+begin
+  Self.SubscribeAction.Accept;
+
+  Self.MarkSentRequestCount;
+  Self.SubscribeAction.Notify(Body, MimeType);
+
+  CheckRequestSent('No request sent');
+
+  Notify := Self.LastSentRequest;
+  CheckEquals(MethodNotify,
+              Notify.Method,
+              'Unexpected request sent');
+  CheckEquals(Body,
+              Notify.Body,
+              'Notify body');
+  Check(Notify.HasHeader(ContentLengthHeaderFull),
+        'Notify has no Content-Length header');
+  CheckEquals(Notify.ContentLength,
+              Notify.ContentLength,
+              'Notify Content-Length');
+  Check(Notify.HasHeader(ContentTypeHeaderFull),
+        'Notify has no Content-Type header');
+  CheckEquals(Notify.ContentType,
+              Notify.ContentType,
+              'Notify Content-Type');
+end;
+
 procedure TestTIdSipInboundSubscription.TestReceiveExpiresInContactHeader;
 var
   ContactExpiresTime: Cardinal;
@@ -1560,6 +1596,39 @@ begin
   CheckEquals(MethodNotify,
               Self.LastSentRequest.Method,
               'Unexpected request sent');
+end;
+
+procedure TestTIdSipInboundSubscription.TestSendNotify;
+const
+  Body = 'random data';
+  MimeType = 'text/plain';
+var
+  Notify: TIdSipRequest;
+begin
+  Self.SubscribeAction.Accept;
+  Self.MarkSentRequestCount;
+
+  Self.SubscribeAction.SendNotify(Body, MimeType);
+
+  Self.CheckRequestSent('No request sent');
+
+  Notify := Self.LastSentRequest;
+  CheckEquals(MethodNotify,
+              Notify.Method,
+              'Unexpected request sent');
+  CheckEquals(Body,
+              Notify.Body,
+              'Notify body');
+  Check(Notify.HasHeader(ContentTypeHeaderFull),
+        'Notify has no Content-Type header');
+  CheckEquals(MimeType,
+              Notify.ContentType,
+              'Notify has incorrect Content-Type header');
+end;
+
+procedure TestTIdSipInboundSubscription.TestSendNotifyFails;
+begin
+  Fail('implement');
 end;
 
 //******************************************************************************

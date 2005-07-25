@@ -309,6 +309,11 @@ type
     procedure Expire; override;
     function  IsInbound: Boolean; override;
     function  Match(Msg: TIdSipMessage): Boolean; override;
+    procedure Notify(const Body: String;
+                     const MimeType: String);
+    procedure SendNotify(const Body: String;
+                         const MimeType: String;
+                         const NewState: String = '');
     procedure Terminate; override;
   end;
 
@@ -1134,13 +1139,59 @@ begin
   end;
 end;
 
+procedure TIdSipInboundSubscription.Notify(const Body: String;
+                                           const MimeType: String);
+var
+  Notify: TIdSipRequest;
+begin
+  Notify := Self.Module.CreateNotify(Self.Dialog,
+                                     Self.InitialRequest,
+                                     SubscriptionSubstateActive);
+  try
+    Notify.Body          := Body;
+    Notify.ContentLength := Length(Body);
+    Notify.ContentType   := MimeType;
+
+    Self.SendRequest(Notify);
+  finally
+    Notify.Free;
+  end;
+end;
+
+procedure TIdSipInboundSubscription.SendNotify(const Body: String;
+                                               const MimeType: String;
+                                               const NewState: String = '');
+var
+  Notify: TIdSipRequest;
+begin
+  // Don't set NewState to SubscriptionSubstateTerminated. You'll only confuse
+  // everything. If you want to terminate the subscription, use the Terminate
+  // method.
+
+  if (NewState <> '') then
+    Self.SetState(NewState);
+
+  Notify := Self.Module.CreateNotify(Self.Dialog,
+                                     Self.InitialRequest,
+                                     Self.State);
+  try
+    Notify.Body := Body;
+    Notify.ContentLength := Length(Notify.Body);
+    Notify.ContentType := MimeType;
+
+    Self.SendRequest(Notify);
+  finally
+    Notify.Free;
+  end;
+end;
+
 procedure TIdSipInboundSubscription.Terminate;
 begin
   if Self.DialogEstablished then
     Self.SendTerminatingNotify(Self.InitialRequest,
                                EventReasonTimeout);
 
-  Self.SetState(SubscriptionSubstateTerminated);                             
+  Self.SetState(SubscriptionSubstateTerminated);
 
   inherited Terminate;
 end;

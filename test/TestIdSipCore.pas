@@ -810,6 +810,7 @@ type
     procedure TestRedirectWithNoSuccess;
     procedure TestTerminateDuringRedirect;
     procedure TestTerminateEstablishedSession;
+    procedure TestTerminateNetworkFailure;
     procedure TestTerminateUnestablishedSession;
   end;
 
@@ -9589,6 +9590,7 @@ procedure TestTIdSipOutboundSession.TestTerminateEstablishedSession;
 var
   SessionCount: Integer;
 begin
+  Self.Dispatcher.Transport.WriteLog := true;
   Self.ReceiveOk(Self.LastSentRequest);
 
   Self.MarkSentRequestCount;
@@ -9602,6 +9604,24 @@ begin
 
   Check(Self.Core.SessionCount < SessionCount,
         'Session not marked as terminated');
+end;
+
+procedure TestTIdSipOutboundSession.TestTerminateNetworkFailure;
+var
+  SessionCount: Integer;
+begin
+  Self.ReceiveOk(Self.LastSentRequest);
+
+  Self.Dispatcher.Transport.FailWith := EIdConnectTimeout;
+
+  SessionCount := Self.Core.SessionCount;
+  Self.Session.Terminate;
+
+  Check(Self.Core.SessionCount < SessionCount,
+        'Session not marked as terminated');
+  CheckEquals(MethodBye,
+              Self.Dispatcher.Transport.LastRequest.Method,
+              'Last request we attempted to send');
 end;
 
 procedure TestTIdSipOutboundSession.TestTerminateUnestablishedSession;

@@ -845,7 +845,8 @@ type
     function  GetUsername: String;
     procedure SetUsername(const Value: String);
     function  TrySendRequest(Request: TIdSipRequest;
-                             Targets: TIdSipLocations): Boolean;
+                             Targets: TIdSipLocations;
+                             TryAgain: Boolean = true): Boolean;
   protected
     Listeners:       TIdNotificationList;
     TargetLocations: TIdSipLocations;
@@ -876,7 +877,8 @@ type
     procedure ReceiveRegister(Register: TIdSipRequest); virtual;
     procedure ReceiveSubscribe(Subscribe: TIdSipRequest); virtual;
     function  ReceiveServerFailureResponse(Response: TIdSipResponse): TIdSipActionStatus; virtual;
-    procedure SendRequest(Request: TIdSipRequest); virtual;
+    procedure SendRequest(Request: TIdSipRequest;
+                          TryAgain: Boolean = true); virtual;
     procedure SendResponse(Response: TIdSipResponse); virtual;
 
     property UA: TIdSipAbstractUserAgent read fUA;
@@ -1217,7 +1219,8 @@ type
                            Bindings: TIdSipContacts); overload;
     procedure RegisterWith(Registrar: TIdSipUri;
                            Contact: TIdSipContactHeader); overload;
-    procedure SendRequest(Request: TIdSipRequest); overload; override;
+    procedure SendRequest(Request: TIdSipRequest;
+                          TryAgain: Boolean = true); overload; override;
     procedure Unregister(Registrar: TIdSipUri);
   public
     constructor Create(UA: TIdSipAbstractUserAgent); override;
@@ -4557,7 +4560,8 @@ begin
   Result := asFailure;
 end;
 
-procedure TIdSipAction.SendRequest(Request: TIdSipRequest);
+procedure TIdSipAction.SendRequest(Request: TIdSipRequest;
+                                   TryAgain: Boolean = true);
 var
   FailReason:      String;
   TargetLocations: TIdSipLocations;
@@ -4584,7 +4588,7 @@ begin
       Exit;
     end;
 
-    if not Self.TrySendRequest(Request, TargetLocations) then begin
+    if not Self.TrySendRequest(Request, TargetLocations, TryAgain) then begin
       FailReason := Format(RSNoLocationSucceeded, [Request.DestinationUri]);
       Self.NotifyOfNetworkFailure(NoLocationSucceeded,
                                   Format(OutboundActionFailed,
@@ -4620,7 +4624,8 @@ begin
 end;
 
 function TIdSipAction.TrySendRequest(Request: TIdSipRequest;
-                                     Targets: TIdSipLocations): Boolean;
+                                     Targets: TIdSipLocations;
+                                     TryAgain: Boolean = true): Boolean;
 var
   ActualRequest: TIdSipRequest;
   CurrentTarget: Integer;
@@ -4647,6 +4652,13 @@ begin
           Self.InitialRequest.Assign(ActualRequest);
       except
         on E: EIdSipTransport do begin
+          // We don't care about whether some request sends, like BYEs for
+          // INVITEs, actually reach the far side. In the case of a BYE, the
+          // session is terminated as soon as we send the BYE (RFC 3261, section
+          // 15.1.1).
+          if not TryAgain then
+            Break;
+
           // Maybe we should log this?
           NewAttempt := Self.CreateNewAttempt;
           try
@@ -6152,11 +6164,12 @@ begin
   end;
 end;
 
-procedure TIdSipOutboundRegistration.SendRequest(Request: TIdSipRequest);
+procedure TIdSipOutboundRegistration.SendRequest(Request: TIdSipRequest;
+                                                 TryAgain: Boolean = true);
 begin
   Self.InitialRequest.Assign(Request);
 
-  inherited SendRequest(Request);
+  inherited SendRequest(Request, TryAgain);
 end;
 
 procedure TIdSipOutboundRegistration.Unregister(Registrar: TIdSipUri);
@@ -6784,7 +6797,7 @@ begin
 
     // We don't listen to the new transaction because we assume the BYE
     // succeeds immediately.
-    Self.SendRequest(Bye);
+    Self.SendRequest(Bye, false);
   finally
     Bye.Free;
   end;
@@ -7348,7 +7361,7 @@ begin
 
     // We don't listen to the new transaction because we assume the BYE
     // succeeds immediately.
-    Self.SendRequest(Bye);
+    Self.SendRequest(Bye, false);
   finally
     Bye.Free;
   end;
