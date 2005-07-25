@@ -89,7 +89,7 @@ uses
   TestIdSipRegistrar in 'test\TestIdSipRegistrar.pas',
   TestIdSipRegistration in 'test\TestIdSipRegistration.pas',
   TestIdSipServerNotifier in 'test\TestIdSipServerNotifier.pas',
-  TestIdSipStackInterface in 'test\TestIdSipStackInterface.pas,
+  TestIdSipStackInterface in 'test\TestIdSipStackInterface.pas',
   TestIdSipSubscribeModule in 'test\TestIdSipSubscribeModule.pas',
   TestIdSipTcpClient in 'test\TestIdSipTcpClient.pas',
   TestIdSipTcpServer in 'test\TestIdSipTcpServer.pas',
