@@ -3316,6 +3316,12 @@ begin
 
     ChallengeHeader := Challenge.AuthenticateHeader;
 
+    // All challenges MUST have either a Proxy-Authenticate header or a
+    // WWW-Authenticate header. If a response without one of these headers makes
+    // it all the way here, we simply cannot do anything with it.
+    if not Assigned(ChallengeHeader) then
+      Exit;
+
     Self.Keyring.AddKey(ChallengeHeader,
                         ChallengeResponse.RequestUri.AsString,
                         Username);
