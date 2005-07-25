@@ -1,9 +1,5 @@
 RFC 3265 still to do:
 
-   3.2.     Description of NOTIFY Behavior......................... 13
-   3.2.1.   Identification of Reported Events, Event Classes, and
-            Current State.......................................... 13
-   3.2.2.   Notifier NOTIFY Behavior............................... 14
    3.3.     General................................................ 18
    3.3.1.   Detecting support for SUBSCRIBE and NOTIFY............. 18
    3.3.3.   Forking................................................ 18
@@ -55,6 +51,20 @@ RFC 3265 still to do:
    authorization per its local policy.  See section 3.1.6.3.
 
 3.1.6.3. Authentication/Authorization of SUBSCRIBE requests
+
+3.2.1. Identification of Reported Events, Event Classes, and Current
+       State
+
+   Event packages may define semantics associated with the body of their
+   NOTIFY requests; if they do so, those semantics apply.  NOTIFY bodies
+   are expected to provide additional details about the nature of the
+   event which has occurred and the resultant resource state.
+
+   When present, the body of the NOTIFY request MUST be formatted into
+   one of the body formats specified in the "Accept" header of the
+   corresponding SUBSCRIBE request.  This body will contain either the
+   state of the subscribed resource or a pointer to such state in the
+   form of a URI (see section 4.4.13).
 
 3.3.4. Dialog creation and termination
    Multiple subscriptions can be associated with a single dialog.

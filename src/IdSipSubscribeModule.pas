@@ -157,6 +157,7 @@ type
   private
     fBody:              String;
     fDialog:            TIdSipDialog;
+    fExpires:           Cardinal;
     fMimeType:          String;
     fSubscribe:         TIdSipRequest;
     fSubscriptionState: String;
@@ -174,6 +175,7 @@ type
 
     property Body:              String        read fBody write fBody;
     property Dialog:            TIdSipDialog  read fDialog write fDialog;
+    property Expires:           Cardinal      read fExpires write fExpires;
     property MimeType:          String        read fMimeType write fMimeType;
     property Subscribe:         TIdSipRequest read fSubscribe write fSubscribe;
     property SubscriptionState: String        read fSubscriptionState write fSubscriptionState;
@@ -282,6 +284,7 @@ type
 
     procedure Expire; virtual;
     function  ExpiryTime: TDateTime;
+    function  ExpiryTimeInSeconds: Integer;
 
     property Duration:     Cardinal            read fDuration write fDuration;
     property EventPackage: String              read fEventPackage write SetEventPackage;
@@ -870,6 +873,12 @@ begin
   Result := Self.Module.CreateNotify(Self.Dialog,
                                      Self.Subscribe,
                                      Self.SubscriptionState);
+
+  Assert(Expires > 0,
+         'Don''t send a NOTIFY with a zero expires: if you want to terminate a '
+       + 'subscription send something with a Subscription-State of "terminated"');
+  Result.FirstSubscriptionState.Expires := Self.Expires;
+
   Result.Body          := Self.Body;
   Result.ContentLength := Length(Result.Body);
   Result.ContentType   := Self.MimeType;
@@ -1114,6 +1123,11 @@ begin
   Result := Self.fExpiryTime;
 end;
 
+function TIdSipSubscription.ExpiryTimeInSeconds: Integer;
+begin
+  Result := Trunc((Self.ExpiryTime - Now) / OneTDateTimeSecond);
+end;
+
 //* TIdSipSubscription Protected methods ***************************************
 
 function TIdSipSubscription.CreateNewAttempt: TIdSipRequest;
@@ -1247,6 +1261,7 @@ begin
   Notify.MimeType          := MimeType;
   Notify.Subscribe         := Self.InitialRequest;
   Notify.SubscriptionState := Self.State;
+  Notify.Expires           := Self.ExpiryTimeInSeconds;
   Notify.AddListener(Self);
   Notify.Send;
 end;

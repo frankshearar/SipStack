@@ -78,6 +78,7 @@ type
   private
     Body:              String;
     Dialog:            TIdSipDialog;
+    Expires:           Cardinal;
     MimeType:          String;
     Notify:            TIdSipOutboundNotify;
     Subscribe:         TIdSipRequest;
@@ -220,7 +221,8 @@ type
     procedure TestSendNotifyAffectsState;
     procedure TestSendNotifyNetworkFailure;
     procedure TestSendNotifyReceiveFail;
-    procedure TestSendNotifyReceiveFailWithRetryAfter;
+    // TODO: Uncomment and implement once authentication's asynchronous.
+//    procedure TestSendNotifyReceiveFailWithRetryAfter;
   end;
 
   TestTIdSipOutboundSubscription = class(TSubscribeModuleActionTestCase,
@@ -502,18 +504,13 @@ type
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipSubscribeModule unit tests');
-{
   Result.AddTest(TestTIdSipSubscribeModule.Suite);
   Result.AddTest(TestTIdSipUserAgentWithSubscribeModule.Suite);
-}
   Result.AddTest(TestTIdSipOutboundNotify.Suite);
-{
   Result.AddTest(TestTIdSipOutboundSubscribe.Suite);
   Result.AddTest(TestTIdSipOutboundRefreshSubscribe.Suite);
   Result.AddTest(TestTIdSipOutboundUnsubscribe.Suite);
-}
   Result.AddTest(TestTIdSipInboundSubscription.Suite);
-{
   Result.AddTest(TestTIdSipOutboundSubscription.Suite);
   Result.AddTest(TestTIdSipSubscriptionExpires.Suite);
   Result.AddTest(TestTIdSipSubscriptionRetryWait.Suite);
@@ -526,7 +523,6 @@ begin
   Result.AddTest(TestTIdSipRenewedSubscriptionMethod.Suite);
   Result.AddTest(TestTIdSipOutboundSubscriptionNotifyMethod.Suite);
   Result.AddTest(TestTIdSipSubscriptionRequestMethod.Suite);
-}
 end;
 
 //******************************************************************************
@@ -904,6 +900,7 @@ var
 begin
   inherited SetUp;
 
+  Self.Expires           := OneHour;
   Self.Body              := 'random data';
   Self.MimeType          := 'text/plain';
   Self.SubscriptionState := SubscriptionSubstateActive;
@@ -935,6 +932,7 @@ procedure TestTIdSipOutboundNotify.ConfigureNotify(Action: TIdSipOutboundNotify)
 begin
   Action.Body              := Self.Body;
   Action.Dialog            := Self.Dialog;
+  Action.Expires           := Self.Expires;
   Action.MimeType          := Self.MimeType;
   Action.Subscribe         := Self.Subscribe;
   Action.SubscriptionState := Self.SubscriptionState;
@@ -1026,6 +1024,9 @@ begin
   CheckEquals(SubscriptionSubStateActive,
               Notify.FirstSubscriptionState.SubState,
               'Unexpected substate');
+  CheckEquals(Self.Expires,
+              Notify.FirstSubscriptionState.Expires,
+              'Subscription-State expire param');
 
   CheckEquals(Body,
               Notify.Body,
@@ -1422,6 +1423,10 @@ var
 begin
   Response := Self.Core.CreateResponse(Sub, SIPUnauthorized);
   try
+    Response.FirstWWWAuthenticate.Value := 'Digest realm="atlanta.com",'
+                                         + 'domain="sip:boxesbybob.com", qop="auth",'
+                                         + 'nonce="f84f1cec41e6cbe5aea9c8e88d359",'
+                                         + 'opaque="", stale=FALSE, algorithm=MD5';
     Response.FirstRetryAfter.NumericValue := RetryAfter;
     Self.ReceiveResponse(Response);
   finally
@@ -1915,7 +1920,7 @@ begin
   Check(SubCount > Self.Core.CountOf(MethodSubscribe),
         'Subscription not terminated');
 end;
-
+{
 procedure TestTIdSipInboundSubscription.TestSendNotifyReceiveFailWithRetryAfter;
 const
   RetryAfterValue = 60;
@@ -1946,7 +1951,7 @@ begin
               Notify.Method,
               'Unexpected request sent');
 end;
-
+}
 //******************************************************************************
 //* TestTIdSipOutboundSubscription                                             *
 //******************************************************************************
