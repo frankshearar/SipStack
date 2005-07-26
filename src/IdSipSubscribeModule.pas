@@ -83,13 +83,14 @@ type
     fInboundSubscriptionDuration: Cardinal;
     fMinimumExpiryTime:           Cardinal;
     Listeners:                    TIdNotificationList;
-    Packages:                     TObjectList;
+    PackagePrototypes:            TObjectList;
 
     function  DefaultMinimumExpiryTime: Cardinal;
     function  KnowsEvent(const EventPackage: String): Boolean;
     procedure NotifyOfRenewedSubscription(NewSub: TIdSipOutboundSubscription);
     procedure NotifyOfSubscriptionRequest(Subscription: TIdSipInboundSubscription);
     function  PackageAt(Index: Integer): TIdSipEventPackage;
+    procedure RejectForbidden(Request: TIdSipRequest);
     procedure RejectUnknownEvent(Request: TIdSipRequest);
   public
     constructor Create(UA: TIdSipAbstractUserAgent); override;
@@ -105,6 +106,8 @@ type
     function  CreateNotify(Dialog: TIdSipDialog;
                            Subscribe: TIdSipRequest;
                            const SubscriptionState: String): TIdSipRequest;
+    function  CreateRefer(Dest: TIdSipAddressHeader;
+                          ReferTo: TIdSipAddressHeader): TIdSipRequest;
     function  CreateSubscribe(Dest: TIdSipAddressHeader;
                               const EventPackage: String): TIdSipRequest; overload;
     function  CreateSubscribe(Dialog: TIdSipDialog;
@@ -131,21 +134,28 @@ type
     fInboundSubscriptionDuration: Cardinal;
     fMinimumExpiryTime:           Cardinal;
     fModule:                      TIdSipSubscribeModule;
+    fState:                       String;
   public
     class function DefaultSubscriptionDuration: Cardinal; virtual;
     class function EventPackage: String; virtual; abstract;
 
     constructor Create(Module: TIdSipSubscribeModule);
 
+    function Clone: TIdSipEventPackage;
+    function MimeType: String;
+
     property InboundSubscriptionDuration: Cardinal              read fInboundSubscriptionDuration write fInboundSubscriptionDuration;
     property MinimumExpiryTime:           Cardinal              read fMinimumExpiryTime write fMinimumExpiryTime;
     property Module:                      TIdSipSubscribeModule read fModule;
+    property State:                       String                read fState write fState;
   end;
 
   TIdSipReferPackage = class(TIdSipEventPackage)
   public
     class function DefaultSubscriptionDuration: Cardinal; override;
     class function EventPackage: String; override;
+
+    function MimeType: String;
   end;
 
   TIdSipNotify = class(TIdSipAction)
@@ -243,6 +253,38 @@ type
     property FromTag: String read fFromTag write fFromTag;
   end;
 
+  TIdSipRefer = class(TIdSipSubscribe)
+  public
+    class function Method: String; override;
+
+    constructor Create(UA: TIdSipAbstractUserAgent); overload; override;
+  end;
+
+  TIdSipInboundRefer = class(TIdSipRefer)
+  private
+    procedure RejectBadRequest(Refer: TIdSipRequest);
+    function  WrongNumberOfReferTos(Refer: TIdSipRequest): Boolean;
+  protected
+    procedure ReceiveOtherRequest(Request: TIdSipRequest); override;
+  end;
+
+  TIdSipOutboundRefer = class(TIdSipOutboundSubscribe)
+  private
+    fReferTo: TIdSipAddressHeader;
+
+    procedure NotifyOfSuccess(Response: TIdSipResponse);
+    procedure SetReferTo(Value: TIdSipAddressHeader);
+  public
+    class function Method: String; override;
+
+    constructor Create(UA: TIdSipAbstractUserAgent); overload; override;
+    destructor  Destroy; override;
+
+    procedure Send; override;
+
+    property ReferTo: TIdSipAddressHeader read fReferTo write SetReferTo;
+  end;
+
   TIdSipSubscriptionExpires = class;
 
   // I represent a subscription to another entity's state of some kind.
@@ -266,8 +308,9 @@ type
                                ErrorCode: Cardinal;
                                const Reason: String);
   protected
-    Dialog:     TIdSipDialog;
-    Module:     TIdSipSubscribeModule;
+    Dialog:  TIdSipDialog;
+    Module:  TIdSipSubscribeModule;
+    Package: TIdSipEventPackage;
 
     function  CreateDialog(Response: TIdSipResponse): TIdSipDialog; virtual; abstract;
     function  CreateNewAttempt: TIdSipRequest; override;
@@ -303,7 +346,6 @@ type
                                     IIdSipNotifyListener)
   private
     OutstandingExpires:   Cardinal;
-    Package:              TIdSipEventPackage;
     UsingSecureTransport: Boolean;
 
     function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID;
@@ -514,6 +556,9 @@ type
   end;
 
 const
+  SipFragmentMimeType = 'message/sipfrag'; // RFC 3420
+
+const
   DontExpireEventPackageSubscription = 0;
   OneTDateTimeSecond                 = 1/24/60/60;
 
@@ -534,8 +579,8 @@ constructor TIdSipSubscribeModule.Create(UA: TIdSipAbstractUserAgent);
 begin
   inherited Create(UA);
 
-  Self.Listeners := TIdNotificationList.Create;
-  Self.Packages  := TObjectList.Create(true);
+  Self.Listeners         := TIdNotificationList.Create;
+  Self.PackagePrototypes := TObjectList.Create(true);
 
   Self.InboundSubscriptionDuration := Self.DefaultSubscriptionDuration;
   Self.MinimumExpiryTime           := Self.DefaultMinimumExpiryTime;
@@ -543,7 +588,7 @@ end;
 
 destructor TIdSipSubscribeModule.Destroy;
 begin
-  Self.Packages.Free;
+  Self.PackagePrototypes.Free;
   Self.Listeners.Free;
 
   inherited Destroy;
@@ -559,10 +604,22 @@ begin
   // While this module supports SUBSCRIBE and NOTIFY messages, only SUBSCRIBE
   // messages can set up subscriptions: NOTIFYs always occur within the context
   // of a subscription.
-  if not Request.IsSubscribe then
+  if not Request.IsSubscribe and not Request.IsRefer then
     Exit;
-
+{
+  if not Request.HasHeader(EventHeaderFull) then begin
+    Result := nil;
+    Self.RejectUnknownEvent(Request);
+    Exit;
+  end;
+}
   if Self.KnowsEvent(Request.FirstEvent.EventType) then begin
+    // RFC 3515, section 2.4.4.
+    if not Request.IsRefer and IsEqual(Request.FirstEvent.EventPackage, PackageRefer) then begin
+      Self.RejectForbidden(Request);
+      Exit;
+    end;
+
     Subscription := TIdSipInboundSubscription.Create(Self.UserAgent,
                                                      Request,
                                                      UsingSecureTransport);
@@ -595,7 +652,7 @@ end;
 
 procedure TIdSipSubscribeModule.AddPackage(PackageType: TIdSipEventPackageClass);
 begin
-  Self.Packages.Add(PackageType.Create(Self));
+  Self.PackagePrototypes.Add(PackageType.Create(Self));
 end;
 
 function TIdSipSubscribeModule.AllowedEvents: String;
@@ -604,10 +661,10 @@ var
 begin
   Result := '';
 
-  if (Self.Packages.Count > 0) then begin
+  if (Self.PackagePrototypes.Count > 0) then begin
     Result := Self.PackageAt(0).EventPackage;
 
-    for I := 1 to Self.Packages.Count - 1 do
+    for I := 1 to Self.PackagePrototypes.Count - 1 do
       Result := Result + ', ' + Self.PackageAt(I).EventPackage;
   end;
 end;
@@ -627,6 +684,15 @@ begin
 
     raise;
   end;
+end;
+
+function TIdSipSubscribeModule.CreateRefer(Dest: TIdSipAddressHeader;
+                                           ReferTo: TIdSipAddressHeader): TIdSipRequest;
+begin
+  Result := Self.CreateSubscribe(Dest, PackageRefer);
+  Result.Method      := MethodRefer;
+  Result.CSeq.Method := Result.Method;
+  Result.AddHeader(ReferToHeaderFull).Assign(ReferTo);
 end;
 
 function TIdSipSubscribeModule.CreateSubscribe(Dest: TIdSipAddressHeader;
@@ -669,7 +735,7 @@ begin
   I      := 0;
   Result := nil;
 
-  while (I < Self.Packages.Count) and not Assigned(Result) do begin
+  while (I < Self.PackagePrototypes.Count) and not Assigned(Result) do begin
     if (Self.PackageAt(I).EventPackage = EventType) then
       Result := Self.PackageAt(I)
     else
@@ -679,7 +745,7 @@ end;
 
 procedure TIdSipSubscribeModule.RemoveAllPackages;
 begin
-  Self.Packages.Clear;
+  Self.PackagePrototypes.Clear;
 end;
 
 procedure TIdSipSubscribeModule.RetrySubscriptionAfter(Target: TIdSipAddressHeader;
@@ -721,7 +787,7 @@ end;
 
 function TIdSipSubscribeModule.WillAccept(Request: TIdSipRequest): Boolean;
 begin
-  Result := Request.IsSubscribe or Request.IsNotify;
+  Result := Request.IsSubscribe or Request.IsNotify or Request.IsRefer;
 end;
 
 //* TIdSipSubscribeModule Private methods **************************************
@@ -767,7 +833,19 @@ end;
 
 function TIdSipSubscribeModule.PackageAt(Index: Integer): TIdSipEventPackage;
 begin
-  Result := Self.Packages[Index] as TIdSipEventPackage;
+  Result := Self.PackagePrototypes[Index] as TIdSipEventPackage;
+end;
+
+procedure TIdSipSubscribeModule.RejectForbidden(Request: TIdSipRequest);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.UserAgent.CreateResponse(Request, SIPForbidden);
+  try
+    Self.UserAgent.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
 end;
 
 procedure TIdSipSubscribeModule.RejectUnknownEvent(Request: TIdSipRequest);
@@ -806,6 +884,18 @@ begin
   Self.MinimumExpiryTime           := Self.Module.MinimumExpiryTime;
 end;
 
+function TIdSipEventPackage.Clone: TIdSipEventPackage;
+begin
+  Result := TIdSipEventPackageClass(Self.ClassType).Create(Self.Module);
+  Result.InboundSubscriptionDuration := Self.InboundSubscriptionDuration;
+  Result.MinimumExpiryTime           := Self.MinimumExpiryTime;
+end;
+
+function TIdSipEventPackage.MimeType: String;
+begin
+  Result := 'text/plain';
+end;
+
 //******************************************************************************
 //* TIdSipReferPackage                                                         *
 //******************************************************************************
@@ -819,6 +909,11 @@ end;
 class function TIdSipReferPackage.EventPackage: String;
 begin
   Result := PackageRefer;
+end;
+
+function TIdSipReferPackage.MimeType: String;
+begin
+  Result := SipFragmentMimeType;
 end;
 
 //******************************************************************************
@@ -1088,6 +1183,97 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipRefer                                                                *
+//******************************************************************************
+//* TIdSipRefer Public methods *************************************************
+
+class function TIdSipRefer.Method: String;
+begin
+  Result := MethodRefer;
+end;
+
+constructor TIdSipRefer.Create(UA: TIdSipAbstractUserAgent);
+begin
+  inherited Create(UA);
+
+  Self.EventPackage := PackageRefer;
+end;
+
+//******************************************************************************
+//* TIdSipInboundRefer                                                         *
+//******************************************************************************
+//* TIdSipInboundRefer Protected methods ***************************************
+
+procedure TIdSipInboundRefer.ReceiveOtherRequest(Request: TIdSipRequest);
+begin
+  if Self.WrongNumberOfReferTos(Request) then begin
+    Self.RejectBadRequest(Request);
+    Exit;
+  end;
+end;
+
+//* TIdSipInboundRefer Private methods *****************************************
+
+procedure TIdSipInboundRefer.RejectBadRequest(Refer: TIdSipRequest);
+begin
+end;
+
+function TIdSipInboundRefer.WrongNumberOfReferTos(Refer: TIdSipRequest): Boolean;
+begin
+  Result := false;
+end;
+
+//******************************************************************************
+//* TIdSipOutboundRefer                                                        *
+//******************************************************************************
+//* TIdSipOutboundRefer Public methods *****************************************
+
+class function TIdSipOutboundRefer.Method: String;
+begin
+  Result := MethodRefer;
+end;
+
+constructor TIdSipOutboundRefer.Create(UA: TIdSipAbstractUserAgent);
+begin
+  inherited Create(UA);
+
+  Self.fReferTo := TIdSipToHeader.Create;
+end;
+
+destructor TIdSipOutboundRefer.Destroy;
+begin
+  Self.ReferTo.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipOutboundRefer.Send;
+var
+  Refer: TIdSipRequest;
+begin
+  Refer := Self.Module.CreateRefer(Self.Target, Self.ReferTo);
+  try
+    Self.InitialRequest.Assign(Refer);
+
+    Self.SendRequest(Refer);
+  finally
+    Refer.Free;
+  end;
+end;
+
+//* TIdSipOutboundRefer Private methods ****************************************
+
+procedure TIdSipOutboundRefer.NotifyOfSuccess(Response: TIdSipResponse);
+begin
+  raise Exception.Create('Implement TIdSipOutboundRefer.NotifyOfSuccess');
+end;
+
+procedure TIdSipOutboundRefer.SetReferTo(Value: TIdSipAddressHeader);
+begin
+  Self.fReferTo.Assign(Value);
+end;
+
+//******************************************************************************
 //* TIdSipSubscription                                                         *
 //******************************************************************************
 //* TIdSipSubscription Public methods ******************************************
@@ -1108,6 +1294,7 @@ end;
 
 destructor TIdSipSubscription.Destroy;
 begin
+  Self.Package.Free;
   Self.Dialog.Free;
 
   inherited Destroy;
@@ -1194,7 +1381,7 @@ begin
   // Self.Module.Package WILL return something, because the SubscribeModule
   // rejects all SUBSCRIBEs with unknown Event header values before we get
   // here.
-  Self.Package := Self.Module.Package(Self.EventPackage);
+  Self.Package := Self.Module.Package(Self.EventPackage).Clone;
 
   Self.ReceiveRequest(Subscribe);
 end;
@@ -1268,7 +1455,7 @@ end;
 
 procedure TIdSipInboundSubscription.Renotify;
 begin
-  Self.Notify('', '');
+  Self.Notify(Self.Package.State, Self.Package.MimeType);
 end;
 
 procedure TIdSipInboundSubscription.Terminate;
@@ -1586,6 +1773,11 @@ end;
 procedure TIdSipOutboundSubscription.Send;
 begin
   inherited Send;
+
+  // Self.Module.Package WILL return something, because the SubscribeModule
+  // rejects all SUBSCRIBEs with unknown Event header values before we get
+  // here.
+  Self.Package := Self.Module.Package(Self.EventPackage).Clone;
 
   Self.ConfigureRequest(Self.InitialSubscribe);
   Self.InitialSubscribe.Send;
