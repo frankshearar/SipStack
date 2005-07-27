@@ -1816,7 +1816,7 @@ begin
                                                    Self.Dispatcher.Transport.LastResponse,
                                                    false);
   try
-    Invite := Self.Core.CreateReInvite(RemoteDialog, '', '');
+    Invite := Self.Core.InviteModule.CreateReInvite(RemoteDialog, '', '');
     try
       Check(not Self.SubscribeAction.Match(Invite),
             'Matched an in-dialog INVITE');

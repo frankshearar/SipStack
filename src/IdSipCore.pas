@@ -531,9 +531,6 @@ type
     procedure NotifyOfInboundCall(Session: TIdSipInboundSession);
     procedure ResendReInvite(Session: TIdSipSession;
                              Invite: TIdSipRequest);
-    procedure TurnIntoInvite(OutboundRequest: TIdSipRequest;
-                             const Offer: String;
-                             const OfferMimeType: String);
     procedure UpdateAffectedActionWithRequest(FindMsg: TIdSipMessage;
                                               NewRequest: TIdSipRequest);
   protected
@@ -622,17 +619,7 @@ type
     // Move to UserAgent:
     function  AddInboundInvite(Request: TIdSipRequest): TIdSipInboundInvite;
     function  CountOf(const MethodName: String): Integer;
-    function  CreateAck(Dialog: TIdSipDialog): TIdSipRequest;
-    function  CreateBye(Dialog: TIdSipDialog): TIdSipRequest;
-    function  CreateInvite(Dest: TIdSipAddressHeader;
-                           const Body: String;
-                           const MimeType: String): TIdSipRequest;
-    function  CreateRefer(Session: TIdSipSession;
-                          Target: TIdSipUri): TIdSipRequest;
     function  CreateRegister(Registrar: TIdSipToHeader): TIdSipRequest;
-    function  CreateReInvite(Dialog: TIdSipDialog;
-                             const Body: String;
-                             const MimeType: String): TIdSipRequest;
     function  CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistrationQuery;
     function  InviteCount: Integer;
     procedure OnReregister(Event: TObject);
@@ -659,7 +646,7 @@ type
     fHasRegistrar:        Boolean;
     fProxy:               TIdSipUri;
     fRegistrar:           TIdSipUri;
-    InviteModule:         TIdSipInviteModule;
+    fInviteModule:        TIdSipInviteModule;
 
     function  AddOutboundSession: TIdSipOutboundSession;
     function  GetInitialResendInterval: Cardinal;
@@ -681,14 +668,15 @@ type
                    const MimeType: String): TIdSipOutboundSession;
     function  SessionCount: Integer;
 
-    property DoNotDisturb:           Boolean   read fDoNotDisturb write fDoNotDisturb;
-    property DoNotDisturbMessage:    String    read fDoNotDisturbMessage write fDoNotDisturbMessage;
-    property HasProxy:               Boolean   read fHasProxy write fHasProxy;
-    property HasRegistrar:           Boolean   read fHasRegistrar write fHasRegistrar;
-    property InitialResendInterval:  Cardinal  read GetInitialResendInterval write SetInitialResendInterval;
-    property ProgressResendInterval: Cardinal  read GetProgressResendInterval write SetProgressResendInterval;
-    property Proxy:                  TIdSipUri read fProxy write SetProxy;
-    property Registrar:              TIdSipUri read fRegistrar write SetRegistrar;
+    property DoNotDisturb:           Boolean            read fDoNotDisturb write fDoNotDisturb;
+    property DoNotDisturbMessage:    String             read fDoNotDisturbMessage write fDoNotDisturbMessage;
+    property HasProxy:               Boolean            read fHasProxy write fHasProxy;
+    property HasRegistrar:           Boolean            read fHasRegistrar write fHasRegistrar;
+    property InitialResendInterval:  Cardinal           read GetInitialResendInterval write SetInitialResendInterval;
+    property InviteModule:           TIdSipInviteModule read fInviteModule;
+    property ProgressResendInterval: Cardinal           read GetProgressResendInterval write SetProgressResendInterval;
+    property Proxy:                  TIdSipUri          read fProxy write SetProxy;
+    property Registrar:              TIdSipUri          read fRegistrar write SetRegistrar;
   end;
 
   TIdSipRegisterModule = class;
@@ -788,12 +776,24 @@ type
   private
     fInitialResendInterval:  Cardinal; // in milliseconds
     fProgressResendInterval: Cardinal; // in milliseconds
+
+    procedure TurnIntoInvite(OutboundRequest: TIdSipRequest;
+                             const Offer: String;
+                             const OfferMimeType: String);
   public
     constructor Create(UA: TIdSipAbstractUserAgent); override;
 
     function Accept(Request: TIdSipRequest;
                     UsingSecureTransport: Boolean): TIdSipAction; override;
     function AcceptsMethods: String; override;
+    function CreateAck(Dialog: TIdSipDialog): TIdSipRequest;
+    function CreateBye(Dialog: TIdSipDialog): TIdSipRequest;
+    function CreateInvite(Dest: TIdSipAddressHeader;
+                          const Body: String;
+                          const MimeType: String): TIdSipRequest;
+    function  CreateReInvite(Dialog: TIdSipDialog;
+                             const Body: String;
+                             const MimeType: String): TIdSipRequest;
     function WillAccept(Request: TIdSipRequest): Boolean; override;
 
     property InitialResendInterval:  Cardinal read fInitialResendInterval write fInitialResendInterval;
@@ -902,12 +902,16 @@ type
   // I provide basic facilities for all Actions that need to handle INVITEs, BYEs, CANCELs,
   TIdSipInviteBase = class(TIdSipAction)
   protected
+    Module: TIdSipInviteModule;
+
     procedure ReceiveAck(Ack: TIdSipRequest); virtual;
     procedure ReceiveBye(Bye: TIdSipRequest); virtual;
     procedure ReceiveCancel(Cancel: TIdSipRequest); virtual;
     procedure ReceiveInvite(Invite: TIdSipRequest); virtual;
   public
     class function Method: String; override;
+
+    constructor Create(UA: TIdSipAbstractUserAgent); override;
 
     procedure ReceiveRequest(Request: TIdSipRequest); override;
   end;
@@ -2756,56 +2760,6 @@ begin
   Result := Self.ConvertToHeader(Self.AllowedSchemeList);
 end;
 
-function TIdSipAbstractUserAgent.CreateAck(Dialog: TIdSipDialog): TIdSipRequest;
-begin
-  try
-    Result := Dialog.CreateAck;
-    Self.AddLocalHeaders(Result);
-  except
-    FreeAndNil(Result);
-
-    raise;
-  end;
-end;
-
-function TIdSipAbstractUserAgent.CreateBye(Dialog: TIdSipDialog): TIdSipRequest;
-begin
-  try
-    Result := Self.CreateRequest(MethodBye, Dialog);
-  except
-    FreeAndNil(Result);
-
-    raise;
-  end;
-end;
-
-function TIdSipAbstractUserAgent.CreateInvite(Dest: TIdSipAddressHeader;
-                                              const Body: String;
-                                              const MimeType: String): TIdSipRequest;
-begin
-  Result := Self.CreateRequest(MethodInvite, Dest);
-  try
-    Self.TurnIntoInvite(Result, Body, MimeType);
-  except
-    FreeAndNil(Result);
-
-    raise;
-  end;
-end;
-
-function TIdSipAbstractUserAgent.CreateRefer(Session: TIdSipSession;
-                                             Target: TIdSipUri): TIdSipRequest;
-begin
-  Result := Self.CreateRequest(MethodRefer, Session.Dialog);
-  try
-    Result.AddHeader(ReferToHeaderFull).Value := Target.AsString;
-  except
-    FreeAndNil(Result);
-
-    raise;
-  end;
-end;
-
 function TIdSipAbstractUserAgent.CreateOptions(Dest: TIdSipAddressHeader): TIdSipRequest;
 begin
   Result := Self.CreateRequest(MethodOptions, Dest);
@@ -2833,20 +2787,6 @@ begin
 
     Result.ToHeader.Value := Self.Contact.Value;
     Result.From.Value     := Self.Contact.Value;
-  except
-    FreeAndNil(Result);
-
-    raise;
-  end;
-end;
-
-function TIdSipAbstractUserAgent.CreateReInvite(Dialog: TIdSipDialog;
-                                                const Body: String;
-                                                const MimeType: String): TIdSipRequest;
-begin
-  Result := Self.CreateRequest(MethodInvite, Dialog);
-  try
-    Self.TurnIntoInvite(Result, Body, MimeType);
   except
     FreeAndNil(Result);
 
@@ -3698,24 +3638,6 @@ begin
     raise EBadHeader.Create(Self.From.Name);
 end;
 
-procedure TIdSipAbstractUserAgent.TurnIntoInvite(OutboundRequest: TIdSipRequest;
-                                                 const Offer: String;
-                                                 const OfferMimeType: String);
-begin
-  OutboundRequest.Body := Offer;
-  OutboundRequest.ContentLength := Length(Offer);
-
-  if (OutboundRequest.ContentLength > 0) then begin
-    OutboundRequest.ContentDisposition.Value := DispositionSession;
-    OutboundRequest.ContentType              := OfferMimeType;
-  end;
-
-  OutboundRequest.AddHeader(AllowHeader).Value := Self.KnownMethods;
-  // TODO: We need to add a proper extension support thing
-  OutboundRequest.AddHeader(AcceptHeader).Value := Self.AllowedContentTypes;
-  OutboundRequest.AddHeader(SupportedHeaderFull).Value := Self.AllowedExtensions;
-end;
-
 procedure TIdSipAbstractUserAgent.UpdateAffectedActionWithRequest(FindMsg: TIdSipMessage;
                                                                   NewRequest: TIdSipRequest);
 var
@@ -3741,7 +3663,7 @@ constructor TIdSipUserAgent.Create;
 begin
   inherited Create;
 
-  Self.InviteModule := Self.AddModule(TIdSipInviteModule) as TIdSipInviteModule;
+  Self.fInviteModule := Self.AddModule(TIdSipInviteModule) as TIdSipInviteModule;
 
   Self.AutoReRegister         := true;
   Self.DoNotDisturb           := false;
@@ -4229,9 +4151,80 @@ begin
           + MethodInvite;
 end;
 
+function TIdSipInviteModule.CreateAck(Dialog: TIdSipDialog): TIdSipRequest;
+begin
+  try
+    Result := Dialog.CreateAck;
+    Self.UserAgent.AddLocalHeaders(Result); // TODO: this is a PROTECTED METHOD!
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
+function TIdSipInviteModule.CreateBye(Dialog: TIdSipDialog): TIdSipRequest;
+begin
+  try
+    Result := Self.UserAgent.CreateRequest(MethodBye, Dialog);
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
+function TIdSipInviteModule.CreateInvite(Dest: TIdSipAddressHeader;
+                                         const Body: String;
+                                         const MimeType: String): TIdSipRequest;
+begin
+  Result := Self.UserAgent.CreateRequest(MethodInvite, Dest);
+  try
+    Self.TurnIntoInvite(Result, Body, MimeType);
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
+function TIdSipInviteModule.CreateReInvite(Dialog: TIdSipDialog;
+                                           const Body: String;
+                                           const MimeType: String): TIdSipRequest;
+begin
+  Result := Self.UserAgent.CreateRequest(MethodInvite, Dialog);
+  try
+    Self.TurnIntoInvite(Result, Body, MimeType);
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
 function TIdSipInviteModule.WillAccept(Request: TIdSipRequest): Boolean;
 begin
   Result := Request.IsInvite;
+end;
+
+//* TIdSipInviteModule Private methods *****************************************
+
+procedure TIdSipInviteModule.TurnIntoInvite(OutboundRequest: TIdSipRequest;
+                                            const Offer: String;
+                                            const OfferMimeType: String);
+begin
+  OutboundRequest.Body := Offer;
+  OutboundRequest.ContentLength := Length(Offer);
+
+  if (OutboundRequest.ContentLength > 0) then begin
+    OutboundRequest.ContentDisposition.Value := DispositionSession;
+    OutboundRequest.ContentType              := OfferMimeType;
+  end;
+
+  OutboundRequest.AddHeader(AllowHeader).Value := Self.UserAgent.KnownMethods;
+  // TODO: We need to add a proper extension support thing
+  OutboundRequest.AddHeader(AcceptHeader).Value := Self.UserAgent.AllowedContentTypes;
+  OutboundRequest.AddHeader(SupportedHeaderFull).Value := Self.UserAgent.AllowedExtensions;
 end;
 
 //******************************************************************************
@@ -4613,6 +4606,13 @@ begin
   Result := MethodInvite;
 end;
 
+constructor TIdSipInviteBase.Create(UA: TIdSipAbstractUserAgent);
+begin
+  inherited Create(UA);
+
+  Self.Module := Self.UA.ModuleFor(Self.Method) as TIdSipInviteModule;
+end;
+
 procedure TIdSipInviteBase.ReceiveRequest(Request: TIdSipRequest);
 begin
        if Request.IsAck       then Self.ReceiveAck(Request)
@@ -4688,9 +4688,9 @@ begin
   try
     TempTo.Address := Self.InitialRequest.RequestUri;
 
-    Result := Self.UA.CreateInvite(TempTo,
-                                   Self.InitialRequest.Body,
-                                   Self.InitialRequest.ContentType);
+    Result := Self.Module.CreateInvite(TempTo,
+                                       Self.InitialRequest.Body,
+                                       Self.InitialRequest.ContentType);
   finally
     TempTo.Free;
   end;
@@ -5054,7 +5054,7 @@ procedure TIdSipOutboundInvite.SendAck(Dialog: TIdSipDialog;
 var
   Ack: TIdSipRequest;
 begin
-  Ack := Self.UA.CreateAck(Dialog);
+  Ack := Self.Module.CreateAck(Dialog);
   try
     Self.SetAckBody(Ack);
 
@@ -5313,7 +5313,7 @@ begin
                                            Response,
                                            UsingSecureTransport);
   try
-    Ack := Self.UA.CreateAck(Dlg);
+    Ack := Self.Module.CreateAck(Dlg);
     try
       // We're not actually interested in setting up the session media. However,
       // the remote end expects to see an ACK with an offer so that's what we
@@ -5339,7 +5339,7 @@ begin
                                            Response,
                                            UsingSecureTransport);
   try
-    Bye := Self.UA.CreateBye(Dlg);
+    Bye := Self.Module.CreateBye(Dlg);
     try
       Self.SendRequest(Bye);
     finally
@@ -5405,7 +5405,7 @@ end;
 
 function TIdSipOutboundInitialInvite.CreateInvite: TIdSipRequest;
 begin
-  Result := Self.UA.CreateInvite(Self.Destination, Self.Offer, Self.MimeType);
+  Result := Self.Module.CreateInvite(Self.Destination, Self.Offer, Self.MimeType);
 end;
 
 //* TIdSipOutboundInitialInvite Private methods ********************************
@@ -5485,7 +5485,7 @@ end;
 
 function TIdSipOutboundReInvite.CreateInvite: TIdSipRequest;
 begin
-  Result := Self.UA.CreateReInvite(Self.Dialog, Self.Offer, Self.MimeType);
+  Result := Self.Module.CreateReInvite(Self.Dialog, Self.Offer, Self.MimeType);
   // Re-INVITEs use the same credentials as the original INVITE that
   // established the dialog.
   Result.CopyHeaders(Self.OriginalInvite, AuthorizationHeader);
@@ -5506,7 +5506,7 @@ end;
 
 function TIdSipOutboundReplacingInvite.CreateInvite: TIdSipRequest;
 begin
-  Result := Self.UA.CreateInvite(Self.Destination, Self.Offer, Self.MimeType);
+  Result := Self.Module.CreateInvite(Self.Destination, Self.Offer, Self.MimeType);
   Result.AddHeader(ReplacesHeader);
   Result.FirstReplaces.CallID  := Self.CallID;
   Result.FirstReplaces.FromTag := Self.FromTag;
@@ -6456,9 +6456,9 @@ end;
 
 function TIdSipSession.CreateNewAttempt: TIdSipRequest;
 begin
-  Result := Self.UA.CreateInvite(Self.InitialRequest.ToHeader,
-                                 Self.InitialRequest.Body,
-                                 Self.InitialRequest.ContentType);
+  Result := Self.Module.CreateInvite(Self.InitialRequest.ToHeader,
+                                     Self.InitialRequest.Body,
+                                     Self.InitialRequest.ContentType);
 end;
 
 function TIdSipSession.GetDialog: TIdSipDialog;
@@ -6731,7 +6731,7 @@ procedure TIdSipSession.SendBye;
 var
   Bye: TIdSipRequest;
 begin
-  Bye := Self.UA.CreateBye(Self.Dialog);
+  Bye := Self.Module.CreateBye(Self.Dialog);
   try
     // TODO: Verify this as correct behaviour. Otherwise we must use SIP discovery stuff
     Bye.LastHop.Transport := Self.InitialRequest.LastHop.Transport;
@@ -7295,7 +7295,7 @@ procedure TIdSipOutboundSession.SendBye;
 var
   Bye: TIdSipRequest;
 begin
-  Bye := Self.UA.CreateBye(Self.Dialog);
+  Bye := Self.Module.CreateBye(Self.Dialog);
   try
     // TODO: Verify this as correct behaviour. Otherwise we must use SIP discovery stuff
     Bye.LastHop.Transport := Self.InitialRequest.LastHop.Transport;

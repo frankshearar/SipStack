@@ -174,15 +174,9 @@ type
     procedure TestCancelNotifiesTU;
     procedure TestConcurrentCalls;
     procedure TestContentTypeDefault;
-    procedure TestCreateAck;
-    procedure TestCreateBye;
-    procedure TestCreateInvite;
-    procedure TestCreateInviteInsideDialog;
-    procedure TestCreateInviteWithBody;
     procedure TestCreateOptions;
     procedure TestCreateRegister;
     procedure TestCreateRegisterReusesCallIDForSameRegistrar;
-    procedure TestCreateReInvite;
     procedure TestCreateRequest;
     procedure TestCreateRequestSipsRequestUri;
     procedure TestCreateRequestUserAgent;
@@ -332,6 +326,27 @@ type
     procedure TestVeryLargeMessagesUseAReliableTransport;
   end;
 
+  TestTIdSipInviteModule = class(TTestCaseTU)
+  private
+    Dlg:    TIdSipDialog;
+    Module: TIdSipInviteModule;
+  public
+    procedure SetUp; override;
+
+    procedure CheckCommaSeparatedHeaders(const ExpectedValues: String;
+                                         Header: TIdSipHeader;
+                                         const Msg: String);
+    procedure CheckCreateRequest(Dest: TIdSipToHeader;
+                                 Request: TIdSipRequest);
+  published
+    procedure TestCreateAck;
+    procedure TestCreateBye;
+    procedure TestCreateInvite;
+    procedure TestCreateInviteInsideDialog;
+    procedure TestCreateInviteWithBody;
+    procedure TestCreateReInvite;
+  end;
+
   TestTIdSipInboundInvite = class(TestTIdSipAction,
                                   IIdSipInboundInviteListener)
   private
@@ -340,6 +355,7 @@ type
     Dialog:         TIdSipDialog;
     Failed:         Boolean;
     InviteAction:   TIdSipInboundInvite;
+    Module:         TIdSipInviteModule;
     OnSuccessFired: Boolean;
 
     procedure CheckAck(InviteAction: TIdSipInboundInvite);
@@ -610,6 +626,7 @@ type
   protected
     ErrorCode:                 Cardinal;
     MimeType:                  String;
+    Module:                    TIdSipInviteModule;
     MultiStreamSdp:            TIdSdpPayload;
     OnEndedSessionFired:       Boolean;
     OnEstablishedSessionFired: Boolean;
@@ -1111,6 +1128,7 @@ begin
   Result.AddTest(TestTIdSipUserAgent.Suite);
   Result.AddTest(TestTIdSipStackConfigurator.Suite);
   Result.AddTest(TestLocation.Suite);
+  Result.AddTest(TestTIdSipInviteModule.Suite);
   Result.AddTest(TestTIdSipInboundInvite.Suite);
   Result.AddTest(TestTIdSipOutboundInvite.Suite);
   Result.AddTest(TestTIdSipOutboundRedirectedInvite.Suite);
@@ -2409,124 +2427,6 @@ begin
               'AllowedContentTypes');
 end;
 
-procedure TestTIdSipUserAgent.TestCreateAck;
-var
-  Ack: TIdSipRequest;
-begin
-  Ack := Self.Core.CreateAck(Self.Dlg);
-  try
-    CheckEquals(1, Ack.Path.Count, 'Wrong number of Via headers');
-  finally
-    Ack.Free;
-  end;
-end;
-
-procedure TestTIdSipUserAgent.TestCreateBye;
-var
-  Bye: TIdSipRequest;
-begin
-  Bye := Self.Core.CreateBye(Self.Dlg);
-  try
-    CheckEquals(MethodBye, Bye.Method, 'Unexpected method');
-    CheckEquals(Bye.Method,
-                Bye.CSeq.Method,
-                'CSeq method doesn''t match request method');
-  finally
-    Bye.Free;
-  end;
-end;
-
-procedure TestTIdSipUserAgent.TestCreateInvite;
-var
-  Dest:    TIdSipToHeader;
-  Request: TIdSipRequest;
-begin
-  Dest := TIdSipToHeader.Create;
-  try
-    Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna';
-    Request := Self.Core.CreateInvite(Dest, '', '');
-    try
-      Self.CheckCreateRequest(Dest, Request);
-      CheckEquals(MethodInvite, Request.Method, 'Incorrect method');
-
-      Check(not Request.ToHeader.HasTag,
-            'This request is outside of a dialog, hence MUST NOT have a '
-          + 'To tag. See RFC:3261, section 8.1.1.2');
-
-      Check(Request.HasHeader(CSeqHeader), 'No CSeq header');
-      Check(not Request.HasHeader(ContentDispositionHeader),
-            'Needless Content-Disposition header');
-
-      Check(Request.HasHeader(AllowHeader), 'No Allow header');
-      CheckCommaSeparatedHeaders(Self.Core.KnownMethods,
-                                 Request.FirstHeader(AllowHeader),
-                                 'Allow header');
-
-      Check(Request.HasHeader(SupportedHeaderFull), 'No Supported header');
-      CheckEquals(Self.Core.AllowedExtensions,
-                  Request.FirstHeader(SupportedHeaderFull).Value,
-                  'Supported header value');
-    finally
-      Request.Free;
-    end;
-  finally
-    Dest.Free;
-  end;
-end;
-
-procedure TestTIdSipUserAgent.TestCreateInviteInsideDialog;
-var
-  Invite: TIdSipRequest;
-begin
-  Invite := Self.Core.CreateReInvite(Self.Dlg, '', '');
-  try
-      Check(Invite.ToHeader.HasTag,
-            'This request is inside a dialog, hence MUST have a '
-          + 'To tag. See RFC:3261, section 12.2.1.1');
-      CheckEquals(Self.Dlg.ID.RemoteTag,
-                  Invite.ToHeader.Tag,
-                  'To tag');
-
-      Check(Invite.HasHeader(CSeqHeader), 'No CSeq header');
-      Check(not Invite.HasHeader(ContentDispositionHeader),
-            'Needless Content-Disposition header');
-
-    Check(Invite.HasHeader(AllowHeader), 'No Allow header');
-    CheckCommaSeparatedHeaders(Self.Core.KnownMethods,
-                               Invite.FirstHeader(AllowHeader),
-                               'Allow header');
-
-    Check(Invite.HasHeader(SupportedHeaderFull), 'No Supported header');
-    CheckEquals(Self.Core.AllowedExtensions,
-                Invite.FirstHeader(SupportedHeaderFull).Value,
-                'Supported header value');
-  finally
-    Invite.Free;
-  end;
-end;
-
-procedure TestTIdSipUserAgent.TestCreateInviteWithBody;
-var
-  Invite: TIdSipRequest;
-  Body:   String;
-begin
-  Body := 'foo fighters';
-
-  Invite := Self.Core.CreateInvite(Self.Destination, Body, 'text/plain');
-  try
-    CheckEquals(Length(Body), Invite.ContentLength, 'Content-Length');
-    CheckEquals(Body,         Invite.Body,          'Body');
-
-    Check(Invite.HasHeader(ContentDispositionHeader),
-          'Missing Content-Disposition');
-    CheckEquals(DispositionSession,
-                Invite.ContentDisposition.Value,
-                'Content-Disposition value');
-  finally
-    Invite.Free;
-  end;
-end;
-
 procedure TestTIdSipUserAgent.TestCreateOptions;
 var
   Options: TIdSipRequest;
@@ -2601,20 +2501,6 @@ begin
                    'Call-ID SHOULD be different for new registrar');
   finally
     Reg.Free;
-  end;
-end;
-
-procedure TestTIdSipUserAgent.TestCreateReInvite;
-var
-  Invite: TIdSipRequest;
-begin
-  Invite := Self.Core.CreateReInvite(Self.Dlg, 'foo', 'bar');
-  try
-    CheckEquals(MethodInvite, Invite.Method, 'Method');
-    CheckEquals('foo',        Invite.Body, 'Body');
-    CheckEquals('bar',        Invite.ContentType, 'Content-Type');
-  finally
-    Invite.Free;
   end;
 end;
 
@@ -4733,6 +4619,238 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSipInviteModule                                                     *
+//******************************************************************************
+//* TestTIdSipInviteModule Public **********************************************
+
+procedure TestTIdSipInviteModule.SetUp;
+var
+  Invite:   TIdSipRequest;
+  Response: TIdSipResponse;
+begin
+  inherited SetUp;
+
+  Self.Module := Self.Core.ModuleFor(MethodInvite) as TIdSipInviteModule;
+
+  Invite := TIdSipTestResources.CreateBasicRequest;
+  try
+    Response := TIdSipTestResources.CreateBasicResponse;
+    try
+      Self.Dlg := TIdSipDialog.CreateInboundDialog(Invite,
+                                                   Response,
+                                                   false);
+      Self.Dlg.ReceiveRequest(Invite);
+      Self.Dlg.ReceiveResponse(Response)
+    finally
+      Response.Free;
+    end;
+  finally
+    Invite.Free;
+  end;
+end;
+
+procedure TestTIdSipInviteModule.CheckCommaSeparatedHeaders(const ExpectedValues: String;
+                                                            Header: TIdSipHeader;
+                                                            const Msg: String);
+var
+  Hdr:    TIdSipCommaSeparatedHeader;
+  I:      Integer;
+  Values: TStringList;
+begin
+  CheckEquals(TIdSipCommaSeparatedHeader.ClassName,
+              Header.ClassName,
+              Msg + ': Unexpected header type in CheckCommaSeparatedHeaders');
+
+  Hdr := Header as TIdSipCommaSeparatedHeader;
+  Values := TStringList.Create;
+  try
+    Values.CommaText := ExpectedValues;
+
+    for I := 0 to Values.Count - 1 do
+      CheckEquals(Values[I],
+                  Hdr.Values[I],
+                  Msg + ': ' + IntToStr(I + 1) + 'th value');
+  finally
+    Values.Free;
+  end;
+end;
+
+procedure TestTIdSipInviteModule.CheckCreateRequest(Dest: TIdSipToHeader;
+                                                    Request: TIdSipRequest);
+var
+  Contact: TIdSipContactHeader;
+begin
+  CheckEquals(Dest.Address,
+              Request.RequestUri,
+              'Request-URI not properly set');
+
+  Check(Request.HasHeader(CallIDHeaderFull), 'No Call-ID header added');
+  CheckNotEquals('',
+                 (Request.FirstHeader(CallIDHeaderFull) as TIdSipCallIdHeader).Value,
+                 'Call-ID must not be empty');
+
+  Check(Request.HasHeader(ContactHeaderFull), 'No Contact header added');
+  Contact := Request.FirstContact;
+  Check(Contact.Equals(Self.Core.Contact), 'Contact header incorrectly set');
+
+  CheckEquals(Request.From.DisplayName,
+              Self.Core.From.DisplayName,
+              'From.DisplayName');
+  CheckEquals(Request.From.Address,
+              Self.Core.From.Address,
+              'From.Address');
+    Check(Request.From.HasTag,
+          'Requests MUST have a From tag; cf. RFC 3261 section 8.1.1.3');
+
+  CheckEquals(Request.RequestUri,
+              Request.ToHeader.Address,
+              'To header incorrectly set');
+
+  CheckEquals(1,
+              Request.Path.Length,
+              'New requests MUST have a Via header; cf. RFC 3261 section 8.1.1.7');
+  Check(Request.LastHop.HasBranch,
+        'New requests MUST have a branch; cf. RFC 3261 section 8.1.1.7');
+  CheckEquals(UdpTransport,
+              Request.LastHop.Transport,
+              'UDP should be the default transport');
+end;
+
+//* TestTIdSipInviteModule Published *******************************************
+
+procedure TestTIdSipInviteModule.TestCreateAck;
+var
+  Ack: TIdSipRequest;
+begin
+  Ack := Self.Module.CreateAck(Self.Dlg);
+  try
+    CheckEquals(1, Ack.Path.Count, 'Wrong number of Via headers');
+  finally
+    Ack.Free;
+  end;
+end;
+
+procedure TestTIdSipInviteModule.TestCreateBye;
+var
+  Bye: TIdSipRequest;
+begin
+  Bye := Self.Module.CreateBye(Self.Dlg);
+  try
+    CheckEquals(MethodBye, Bye.Method, 'Unexpected method');
+    CheckEquals(Bye.Method,
+                Bye.CSeq.Method,
+                'CSeq method doesn''t match request method');
+  finally
+    Bye.Free;
+  end;
+end;
+
+procedure TestTIdSipInviteModule.TestCreateInvite;
+var
+  Dest:    TIdSipToHeader;
+  Request: TIdSipRequest;
+begin
+  Dest := TIdSipToHeader.Create;
+  try
+    Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna';
+    Request := Self.Module.CreateInvite(Dest, '', '');
+    try
+      Self.CheckCreateRequest(Dest, Request);
+      CheckEquals(MethodInvite, Request.Method, 'Incorrect method');
+
+      Check(not Request.ToHeader.HasTag,
+            'This request is outside of a dialog, hence MUST NOT have a '
+          + 'To tag. See RFC:3261, section 8.1.1.2');
+
+      Check(Request.HasHeader(CSeqHeader), 'No CSeq header');
+      Check(not Request.HasHeader(ContentDispositionHeader),
+            'Needless Content-Disposition header');
+
+      Check(Request.HasHeader(AllowHeader), 'No Allow header');
+      CheckCommaSeparatedHeaders(Self.Core.KnownMethods,
+                                 Request.FirstHeader(AllowHeader),
+                                 'Allow header');
+
+      Check(Request.HasHeader(SupportedHeaderFull), 'No Supported header');
+      CheckEquals(Self.Core.AllowedExtensions,
+                  Request.FirstHeader(SupportedHeaderFull).Value,
+                  'Supported header value');
+    finally
+      Request.Free;
+    end;
+  finally
+    Dest.Free;
+  end;
+end;
+
+procedure TestTIdSipInviteModule.TestCreateInviteInsideDialog;
+var
+  Invite: TIdSipRequest;
+begin
+  Invite := Self.Module.CreateReInvite(Self.Dlg, '', '');
+  try
+      Check(Invite.ToHeader.HasTag,
+            'This request is inside a dialog, hence MUST have a '
+          + 'To tag. See RFC:3261, section 12.2.1.1');
+      CheckEquals(Self.Dlg.ID.RemoteTag,
+                  Invite.ToHeader.Tag,
+                  'To tag');
+
+      Check(Invite.HasHeader(CSeqHeader), 'No CSeq header');
+      Check(not Invite.HasHeader(ContentDispositionHeader),
+            'Needless Content-Disposition header');
+
+    Check(Invite.HasHeader(AllowHeader), 'No Allow header');
+    CheckCommaSeparatedHeaders(Self.Core.KnownMethods,
+                               Invite.FirstHeader(AllowHeader),
+                               'Allow header');
+
+    Check(Invite.HasHeader(SupportedHeaderFull), 'No Supported header');
+    CheckEquals(Self.Core.AllowedExtensions,
+                Invite.FirstHeader(SupportedHeaderFull).Value,
+                'Supported header value');
+  finally
+    Invite.Free;
+  end;
+end;
+
+procedure TestTIdSipInviteModule.TestCreateInviteWithBody;
+var
+  Invite: TIdSipRequest;
+  Body:   String;
+begin
+  Body := 'foo fighters';
+
+  Invite := Self.Module.CreateInvite(Self.Destination, Body, 'text/plain');
+  try
+    CheckEquals(Length(Body), Invite.ContentLength, 'Content-Length');
+    CheckEquals(Body,         Invite.Body,          'Body');
+
+    Check(Invite.HasHeader(ContentDispositionHeader),
+          'Missing Content-Disposition');
+    CheckEquals(DispositionSession,
+                Invite.ContentDisposition.Value,
+                'Content-Disposition value');
+  finally
+    Invite.Free;
+  end;
+end;
+
+procedure TestTIdSipInviteModule.TestCreateReInvite;
+var
+  Invite: TIdSipRequest;
+begin
+  Invite := Self.Module.CreateReInvite(Self.Dlg, 'foo', 'bar');
+  try
+    CheckEquals(MethodInvite, Invite.Method, 'Method');
+    CheckEquals('foo',        Invite.Body, 'Body');
+    CheckEquals('bar',        Invite.ContentType, 'Content-Type');
+  finally
+    Invite.Free;
+  end;
+end;
+
+//******************************************************************************
 //* TestTIdSipSession                                                          *
 //******************************************************************************
 //* TestTIdSipSession Public methods *******************************************
@@ -4740,6 +4858,8 @@ end;
 procedure TestTIdSipSession.SetUp;
 begin
   inherited SetUp;
+
+  Self.Module := Self.Core.ModuleFor(MethodInvite) as TIdSipInviteModule;
 
   Self.MultiStreamSdp := Self.CreateMultiStreamSdp;
   Self.SimpleSdp      := Self.CreateSimpleSdp;
@@ -4816,9 +4936,9 @@ end;
 
 function TestTIdSipSession.CreateRemoteReInvite(LocalDialog: TIdSipDialog): TIdSipRequest;
 begin
-  Result := Self.Core.CreateReInvite(LocalDialog,
-                                     Self.SimpleSdp.AsString,
-                                     Self.SimpleSdp.MimeType);
+  Result := Self.Module.CreateReInvite(LocalDialog,
+                                       Self.SimpleSdp.AsString,
+                                       Self.SimpleSdp.MimeType);
   try
     Result.ToHeader.Tag    := LocalDialog.ID.LocalTag;
     Result.From.Tag        := LocalDialog.ID.RemoteTag;
@@ -5394,6 +5514,8 @@ var
 begin
   inherited SetUp;
 
+  Self.Module := Self.Core.ModuleFor(MethodInvite) as TIdSipInviteModule;
+
   Ok := TIdSipResponse.InResponseTo(Self.Invite, SIPOK);
   try
     Ok.ToHeader.Tag := Self.Core.NextTag;
@@ -5434,7 +5556,7 @@ begin
     RemoteDialog.ReceiveRequest(InviteAction.InitialRequest);
     RemoteDialog.ReceiveResponse(Self.LastSentResponse);
 
-    Ack := Self.Core.CreateAck(RemoteDialog);
+    Ack := Self.Module.CreateAck(RemoteDialog);
     try
       Check(InviteAction.Match(Ack),
             'ACK must match the InviteAction');
@@ -5460,7 +5582,7 @@ begin
     RemoteDialog.ReceiveRequest(InviteAction.InitialRequest);
     RemoteDialog.ReceiveResponse(Self.LastSentResponse);
 
-    Ack := Self.Core.CreateAck(RemoteDialog);
+    Ack := Self.Module.CreateAck(RemoteDialog);
     try
       Ack.CSeq.Increment;
       Check(not InviteAction.Match(Ack),

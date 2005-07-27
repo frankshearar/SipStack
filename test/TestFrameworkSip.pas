@@ -926,7 +926,7 @@ end;
 
 function TTestCaseTU.CreateRemoteBye(LocalDialog: TIdSipDialog): TIdSipRequest;
 begin
-  Result := Self.Core.CreateBye(LocalDialog);
+  Result := Self.Core.InviteModule.CreateBye(LocalDialog);
   try
     Result.ToHeader.Tag := LocalDialog.ID.LocalTag;
     Result.From.Tag     := LocalDialog.ID.RemoteTag;
