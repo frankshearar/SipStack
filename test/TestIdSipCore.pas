@@ -3187,8 +3187,9 @@ begin
   Self.ReceiveOk(Self.LastSentRequest);
 
   Self.Core.TerminateAllCalls;
-  Check(Self.LastSentRequest.IsBye,
-        'Must send a BYE to terminate an established session');
+  CheckEquals(MethodBye,
+              Self.LastSentRequest.Method,
+              'Must send a BYE to terminate an established session');
 end;
 
 procedure TestTIdSipUserAgent.TestOutboundInviteSessionProgressResends;
