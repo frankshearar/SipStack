@@ -191,7 +191,20 @@ type
     property SubscriptionState: String        read fSubscriptionState write fSubscriptionState;
   end;
 
-  TIdSipSubscribe = class(TIdSipAction)
+  // I provide basic facilities for Actions that handle SUBSCRIBE/NOTIFY
+  // messages.
+  TIdSipSubscribeBase = class(TIdSipAction)
+  protected
+    procedure ReceiveNotify(Notify: TIdSipRequest); virtual;
+    procedure ReceiveRefer(Refer: TIdSipRequest); virtual;
+    procedure ReceiveSubscribe(Subscribe: TIdSipRequest); virtual;
+  public
+    class function Method: String; override;
+
+    procedure ReceiveRequest(Request: TIdSipRequest); override;
+  end;
+
+  TIdSipSubscribe = class(TIdSipSubscribeBase)
   private
     fDuration:     Cardinal; // in seconds
     fEventPackage: String;
@@ -200,8 +213,6 @@ type
   protected
     function CreateNewAttempt: TIdSipRequest; override;
   public
-    class function Method: String; override;
-
     constructor Create(UA: TIdSipAbstractUserAgent); override;
 
     property EventPackage: String   read fEventPackage write fEventPackage;
@@ -291,7 +302,7 @@ type
   // The relationship between me, TIdSip(In|Out)boundSubscribe and
   // TIdSip(In|Out)boundNotify resembles that between TIdSipSession,
   // TIdSip(In|Out)boundInvite, etc.
-  TIdSipSubscription = class(TIdSipAction,
+  TIdSipSubscription = class(TIdSipSubscribeBase,
                              IIdSipActionListener)
   private
     fDuration:           Cardinal;
@@ -320,8 +331,6 @@ type
     procedure SetExpiryTime(Value: TDateTime);
     procedure SetState(const Value: String); virtual;
   public
-    class function Method: String; override;
-
     constructor Create(UA: TIdSipAbstractUserAgent); override;
     destructor  Destroy; override;
 
@@ -1001,14 +1010,51 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipSubscribe                                                            *
+//* TIdSipSubscribeBase                                                        *
 //******************************************************************************
-//* TIdSipSubscribe Public methods *********************************************
+//* TIdSipSubscribeBase Public methods *****************************************
 
-class function TIdSipSubscribe.Method: String;
+class function TIdSipSubscribeBase.Method: String;
 begin
   Result := MethodSubscribe;
 end;
+
+procedure TIdSipSubscribeBase.ReceiveRequest(Request: TIdSipRequest);
+begin
+       if Request.IsNotify    then Self.ReceiveNotify(Request)
+  else if Request.IsRefer     then Self.ReceiveRefer(Request)
+  else if Request.IsSubscribe then Self.ReceiveSubscribe(Request)
+  else
+    inherited ReceiveRequest(Request);
+end;
+
+//* TIdSipSubscribeBase Protected methods **************************************
+
+procedure TIdSipSubscribeBase.ReceiveNotify(Notify: TIdSipRequest);
+begin
+  Assert(Notify.IsNotify,
+         'TIdSipSubscribeBase.ReceiveNotify must only receive NOTIFYs');
+  // By default do nothing
+end;
+
+procedure TIdSipSubscribeBase.ReceiveRefer(Refer: TIdSipRequest);
+begin
+  Assert(Refer.IsRefer,
+         'TIdSipSubscribeBase.ReceiveRefer must only receive REFERs');
+  // By default do nothing
+end;
+
+procedure TIdSipSubscribeBase.ReceiveSubscribe(Subscribe: TIdSipRequest);
+begin
+  Assert(Subscribe.IsSubscribe,
+         'TIdSipSubscribeBase.ReceiveSubscribe must only receive SUBSCRIBEs');
+  // By default do nothing
+end;
+
+//******************************************************************************
+//* TIdSipSubscribe                                                            *
+//******************************************************************************
+//* TIdSipSubscribe Public methods *********************************************
 
 constructor TIdSipSubscribe.Create(UA: TIdSipAbstractUserAgent);
 begin
@@ -1281,11 +1327,6 @@ end;
 //* TIdSipSubscription                                                         *
 //******************************************************************************
 //* TIdSipSubscription Public methods ******************************************
-
-class function TIdSipSubscription.Method: String;
-begin
-  Result := MethodSubscribe;
-end;
 
 constructor TIdSipSubscription.Create(UA: TIdSipAbstractUserAgent);
 begin

@@ -859,24 +859,16 @@ type
     procedure NotifyOfFailure(Response: TIdSipResponse); virtual;
     procedure NotifyOfNetworkFailure(ErrorCode: Cardinal;
                                      const Reason: String); virtual;
-    procedure ReceiveAck(Ack: TIdSipRequest); virtual;
-    procedure ReceiveBye(Bye: TIdSipRequest); virtual;
-    procedure ReceiveCancel(Cancel: TIdSipRequest); virtual;
     function  ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionStatus; virtual;
     function  ReceiveGlobalFailureResponse(Response: TIdSipResponse): TIdSipActionStatus; virtual;
-    procedure ReceiveInvite(Invite: TIdSipRequest); virtual;
-    procedure ReceiveNotify(Notify: TIdSipRequest); virtual;
+
     function  ReceiveOKResponse(Response: TIdSipResponse;
                                 UsingSecureTransport: Boolean): TIdSipActionStatus; virtual;
-    procedure ReceiveOptions(Options: TIdSipRequest); virtual;
     procedure ReceiveOtherRequest(Request: TIdSipRequest); virtual;
     function  ReceiveProvisionalResponse(Response: TIdSipResponse;
                                          UsingSecureTransport: Boolean): TIdSipActionStatus; virtual;
-    procedure ReceiveRefer(Refer: TIdSipRequest); virtual;
     function  ReceiveRedirectionResponse(Response: TIdSipResponse;
                                          UsingSecureTransport: Boolean): TIdSipActionStatus; virtual;
-    procedure ReceiveRegister(Register: TIdSipRequest); virtual;
-    procedure ReceiveSubscribe(Subscribe: TIdSipRequest); virtual;
     function  ReceiveServerFailureResponse(Response: TIdSipResponse): TIdSipActionStatus; virtual;
     procedure SendRequest(Request: TIdSipRequest;
                           TryAgain: Boolean = true); virtual;
@@ -907,12 +899,23 @@ type
     property Username:       String        read GetUsername write SetUsername;
   end;
 
-  TIdSipInvite = class(TIdSipAction)
+  // I provide basic facilities for all Actions that need to handle INVITEs, BYEs, CANCELs,
+  TIdSipInviteBase = class(TIdSipAction)
   protected
-    function CreateNewAttempt: TIdSipRequest; override;
+    procedure ReceiveAck(Ack: TIdSipRequest); virtual;
+    procedure ReceiveBye(Bye: TIdSipRequest); virtual;
+    procedure ReceiveCancel(Cancel: TIdSipRequest); virtual;
+    procedure ReceiveInvite(Invite: TIdSipRequest); virtual;
   public
     class function Method: String; override;
 
+    procedure ReceiveRequest(Request: TIdSipRequest); override;
+  end;
+
+  TIdSipInvite = class(TIdSipInviteBase)
+  protected
+    function CreateNewAttempt: TIdSipRequest; override;
+  public
     constructor Create(UA: TIdSipAbstractUserAgent); override;
 
     function IsInvite: Boolean; override;
@@ -1113,13 +1116,12 @@ type
   end;
 
   TIdSipInboundOptions = class(TIdSipOptions)
-  protected
-    procedure ReceiveOptions(Options: TIdSipRequest); override;
   public
     constructor Create(UA: TIdSipAbstractUserAgent;
                        Options: TIdSipRequest); reintroduce;
 
     function  IsInbound: Boolean; override;
+    procedure ReceiveRequest(Options: TIdSipRequest); override;
   end;
 
   TIdSipOutboundOptions = class(TIdSipOptions)
@@ -1140,23 +1142,6 @@ type
     procedure Send; override;
 
     property Server: TIdSipAddressHeader read fServer write SetServer;
-  end;
-
-  // REFERs can occur as part of a Session's dialog, or they can create a
-  // dialog themselves.
-  TIdSipRefer = class(TIdSipAction)
-  protected
-    function CreateNewAttempt: TIdSipRequest; override;
-  public
-    class function Method: String; override;
-  end;
-
-  TIdSipInboundRefer = class(TIdSipRefer)
-  protected
-    procedure ReceiveRefer(Refer: TIdSipRequest); override;
-  public
-    constructor Create(UA: TIdSipAbstractUserAgent;
-                       Refer: TIdSipRequest); reintroduce;
   end;
 
   TIdSipRegistration = class(TIdSipAction)
@@ -1180,13 +1165,14 @@ type
     procedure RejectNotFound(Request: TIdSipRequest);
     procedure RejectRequest(Request: TIdSipRequest;
                             StatusCode: Cardinal);
-  protected
-    procedure ReceiveRegister(Register: TIdSipRequest); override;
+    procedure SendSimpleResponse(Request: TIdSipRequest;
+                                StatusCode: Cardinal);
   public
     constructor Create(UA: TIdSipAbstractUserAgent;
                        Reg: TIdSipRequest); reintroduce;
 
     function IsInbound: Boolean; override;
+    procedure ReceiveRequest(Register: TIdSipRequest); override;
   end;
 
   // I piggyback on a transaction in a blocking I/O fashion to provide a UAC
@@ -1267,7 +1253,7 @@ type
   // destroy me, and your reference to me will no longer be valid. The same
   // thing goes for when I notify you that I have terminated via
   // OnEndedSession.
-  TIdSipSession = class(TIdSipAction,
+  TIdSipSession = class(TIdSipInviteBase,
                         IIdSipActionListener,
                         IIdSipInviteListener,
                         IIdSipInboundInviteListener)
@@ -1325,7 +1311,6 @@ type
     procedure ReceiveBye(Bye: TIdSipRequest); override;
     procedure ReceiveInitialInvite(Invite: TIdSipRequest); virtual;
     procedure ReceiveInvite(Invite: TIdSipRequest); override;
-    procedure ReceiveRefer(Refer: TIdSipRequest); override;
     procedure SendBye; virtual;
   public
     class function Method: String; override;
@@ -4354,16 +4339,7 @@ end;
 
 procedure TIdSipAction.ReceiveRequest(Request: TIdSipRequest);
 begin
-       if Request.IsAck       then Self.ReceiveAck(Request)
-  else if Request.IsBye       then Self.ReceiveBye(Request)
-  else if Request.IsCancel    then Self.ReceiveCancel(Request)
-  else if Request.IsInvite    then Self.ReceiveInvite(Request)
-  else if Request.IsNotify    then Self.ReceiveNotify(Request)
-  else if Request.IsOptions   then Self.ReceiveOptions(Request)
-  else if Request.IsRefer     then Self.ReceiveRefer(Request)
-  else if Request.IsRegister  then Self.ReceiveRegister(Request)
-  else if Request.IsSubscribe then Self.ReceiveSubscribe(Request)
-  else                             Self.ReceiveOtherRequest(Request);
+  Self.ReceiveOtherRequest(Request);
 end;
 
 procedure TIdSipAction.ReceiveResponse(Response: TIdSipResponse;
@@ -4463,32 +4439,6 @@ begin
   Self.MarkAsTerminated;
 end;
 
-procedure TIdSipAction.ReceiveAck(Ack: TIdSipRequest);
-begin
-  Assert(Ack.IsAck, 'TIdSipAction.ReceiveAck must only receive ACKs');
-  // By default do nothing
-end;
-
-procedure TIdSipAction.ReceiveBye(Bye: TIdSipRequest);
-begin
-  Assert(Bye.IsBye, 'TIdSipAction.ReceiveBye must only receive BYEs');
-  // By default do nothing
-end;
-
-procedure TIdSipAction.ReceiveCancel(Cancel: TIdSipRequest);
-var
-  Ok: TIdSipResponse;
-begin
-  Assert(Cancel.IsCancel, 'TIdSipAction.ReceiveCancel must only receive CANCELs');
-
-  Ok := TIdSipResponse.InResponseTo(Cancel, SIPOK);
-  try
-    Self.SendResponse(Ok);
-  finally
-    Ok.Free;
-  end;
-end;
-
 function TIdSipAction.ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionStatus;
 begin
   Result := asFailure;
@@ -4510,27 +4460,10 @@ begin
   Result := asFailure;
 end;
 
-procedure TIdSipAction.ReceiveInvite(Invite: TIdSipRequest);
-begin
-  Assert(Invite.IsInvite, 'TIdSipAction.ReceiveInvite must only receive INVITEs');
-end;
-
-procedure TIdSipAction.ReceiveNotify(Notify: TIdSipRequest);
-begin
-  Assert(Notify.IsNotify, 'TIdSipAction.ReceiveNotify must only receive NOTIFYs');
-  // By default do nothing
-end;
-
 function TIdSipAction.ReceiveOKResponse(Response: TIdSipResponse;
                                         UsingSecureTransport: Boolean): TIdSipActionStatus;
 begin
   Result := asSuccess;
-end;
-
-procedure TIdSipAction.ReceiveOptions(Options: TIdSipRequest);
-begin
-  Assert(Options.IsOptions, 'TIdSipAction.ReceiveOptions must only receive OPTIONSes');
-  // By default do nothing
 end;
 
 procedure TIdSipAction.ReceiveOtherRequest(Request: TIdSipRequest);
@@ -4543,28 +4476,10 @@ begin
   Result := asFailure;
 end;
 
-procedure TIdSipAction.ReceiveRefer(Refer: TIdSipRequest);
-begin
-  Assert(Refer.IsRefer, 'TIdSipAction.ReceiveRefer must only receive REFERs');
-  // By default do nothing
-end;
-
 function TIdSipAction.ReceiveRedirectionResponse(Response: TIdSipResponse;
                                                  UsingSecureTransport: Boolean): TIdSipActionStatus;
 begin
   Result := asFailure;
-end;
-
-procedure TIdSipAction.ReceiveRegister(Register: TIdSipRequest);
-begin
-  Assert(Register.IsRegister, 'TIdSipAction.ReceiveRegister must only receive REGISTERs');
-  // By default do nothing
-end;
-
-procedure TIdSipAction.ReceiveSubscribe(Subscribe: TIdSipRequest);
-begin
-  Assert(Subscribe.IsSubscribe, 'TIdSipAction.ReceiveSubscribe must only receive SUBSCRIBEs');
-  // By default do nothing
 end;
 
 function TIdSipAction.ReceiveServerFailureResponse(Response: TIdSipResponse): TIdSipActionStatus;
@@ -4689,14 +4604,66 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipInvite                                                               *
+//* TIdSipInviteBase                                                           *
 //******************************************************************************
-//* TIdSipInvite Public methods ************************************************
+//* TIdSipInviteBase Public methods ********************************************
 
-class function TIdSipInvite.Method: String;
+class function TIdSipInviteBase.Method: String;
 begin
   Result := MethodInvite;
 end;
+
+procedure TIdSipInviteBase.ReceiveRequest(Request: TIdSipRequest);
+begin
+       if Request.IsAck       then Self.ReceiveAck(Request)
+  else if Request.IsBye       then Self.ReceiveBye(Request)
+  else if Request.IsCancel    then Self.ReceiveCancel(Request)
+  else if Request.IsInvite    then Self.ReceiveInvite(Request)
+  else
+    inherited ReceiveRequest(Request);
+end;
+
+//* TIdSipInviteBase Protected methods *****************************************
+
+procedure TIdSipInviteBase.ReceiveAck(Ack: TIdSipRequest);
+begin
+  Assert(Ack.IsAck,
+         'TIdSipInvite.ReceiveAck must only receive ACKs');
+  // By default do nothing
+end;
+
+procedure TIdSipInviteBase.ReceiveBye(Bye: TIdSipRequest);
+begin
+  Assert(Bye.IsBye,
+         'TIdSipInvite.ReceiveBye must only receive BYEs');
+  // By default do nothing
+end;
+
+procedure TIdSipInviteBase.ReceiveCancel(Cancel: TIdSipRequest);
+var
+  Ok: TIdSipResponse;
+begin
+  Assert(Cancel.IsCancel,
+         'TIdSipInvite.ReceiveCancel must only receive CANCELs');
+
+  Ok := TIdSipResponse.InResponseTo(Cancel, SIPOK);
+  try
+    Self.SendResponse(Ok);
+  finally
+    Ok.Free;
+  end;
+end;
+
+procedure TIdSipInviteBase.ReceiveInvite(Invite: TIdSipRequest);
+begin
+  Assert(Invite.IsInvite,
+         'TIdSipInvite.ReceiveInvite must only receive INVITEs');
+end;
+
+//******************************************************************************
+//* TIdSipInvite                                                               *
+//******************************************************************************
+//* TIdSipInvite Public methods ************************************************
 
 constructor TIdSipInvite.Create(UA: TIdSipAbstractUserAgent);
 begin
@@ -5596,13 +5563,11 @@ begin
   Result := true;
 end;
 
-//* TIdSipInboundOptions Protected methods *************************************
-
-procedure TIdSipInboundOptions.ReceiveOptions(Options: TIdSipRequest);
+procedure TIdSipInboundOptions.ReceiveRequest(Options: TIdSipRequest);
 var
   Response: TIdSipResponse;
 begin
-  inherited ReceiveOptions(Options);
+  Assert(Options.IsOptions, 'TIdSipAction.ReceiveOptions must only receive OPTIONSes');
 
   Response := Self.UA.CreateResponse(Options,
                                      Self.UA.ResponseForInvite);
@@ -5709,44 +5674,6 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipRefer                                                                *
-//******************************************************************************
-//* TIdSipRefer Public methods *************************************************
-
-class function TIdSipRefer.Method: String;
-begin
-  Result := MethodRegister;
-end;
-
-//* TIdSipRefer Protected methods **********************************************
-
-function TIdSipRefer.CreateNewAttempt: TIdSipRequest;
-begin
-  raise Exception.Create('Implement TIdSipRefer.CreateNewAttempt');
-end;
-
-//******************************************************************************
-//* TIdSipInboundRefer                                                         *
-//******************************************************************************
-//* TIdSipInboundRefer Public methods ******************************************
-
-constructor TIdSipInboundRefer.Create(UA: TIdSipAbstractUserAgent;
-                                      Refer: TIdSipRequest);
-begin
-  inherited Create(UA);
-
-  Self.InitialRequest.Assign(Refer);
-  Self.ReceiveRequest(Refer);
-end;
-
-//* TIdSipInboundRefer Protected methods ***************************************
-
-procedure TIdSipInboundRefer.ReceiveRefer(Refer: TIdSipRequest);
-begin
-  raise Exception.Create('Implement TIdSipRefer.ReceiveRefer');
-end;
-
-//******************************************************************************
 //* TIdSipRegistration                                                         *
 //******************************************************************************
 //* TIdSipRegistration Public methods ******************************************
@@ -5800,14 +5727,14 @@ begin
   Result := true;
 end;
 
-//* TIdSipInboundRegistration Protected methods ********************************
-
-procedure TIdSipInboundRegistration.ReceiveRegister(Register: TIdSipRequest);
+procedure TIdSipInboundRegistration.ReceiveRequest(Register: TIdSipRequest);
 var
   Bindings: TIdSipContacts;
   Date:     TIdSipDateHeader;
   Response: TIdSipResponse;
 begin
+  Assert(Register.IsRegister, 'TIdSipAction.ReceiveRegister must only receive REGISTERs');
+
   if not Self.AcceptRequest(Register) then Exit;
 
   if (Register.ContactCount = 1)
@@ -5817,7 +5744,7 @@ begin
     if not Self.BindingDB.RemoveAllBindings(Register) then
       Self.RejectFailedRequest(Register)
     else
-      Self.RejectRequest(Register, SIPOK);
+      Self.SendSimpleResponse(Register, SIPOK);
     Exit;
   end;
 
@@ -5942,6 +5869,12 @@ end;
 
 procedure TIdSipInboundRegistration.RejectRequest(Request: TIdSipRequest;
                                                   StatusCode: Cardinal);
+begin
+  Self.SendSimpleResponse(Request, StatusCode);
+end;
+
+procedure TIdSipInboundRegistration.SendSimpleResponse(Request: TIdSipRequest;
+                                                       StatusCode: Cardinal);
 var
   Response: TIdSipResponse;
 begin
@@ -6792,10 +6725,6 @@ begin
   finally
     Self.DialogLock.Release;
   end;
-end;
-
-procedure TIdSipSession.ReceiveRefer(Refer: TIdSipRequest);
-begin
 end;
 
 procedure TIdSipSession.SendBye;
