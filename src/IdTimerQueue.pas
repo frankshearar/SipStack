@@ -163,7 +163,7 @@ type
   // TimerQueues.
   TIdDebugTimerQueue = class(TIdTimerQueue)
   private
-    fFireImmediateEvents: Boolean;
+    fTriggerImmediateEvents: Boolean;
 
     function HasScheduledEvent(Event: Pointer): Boolean;
   public
@@ -181,7 +181,7 @@ type
     procedure TriggerEarliestEvent; override;
     procedure UnlockTimer; override;
 
-    property FireImmediateEvents: Boolean read fFireImmediateEvents write fFireImmediateEvents;
+    property TriggerImmediateEvents: Boolean read fTriggerImmediateEvents write fTriggerImmediateEvents;
   end;
 
 const
@@ -663,7 +663,7 @@ end;
 procedure TIdDebugTimerQueue.AddEvent(MillisecsWait: Cardinal;
                                       Event: TIdWait);
 begin
-  if Self.FireImmediateEvents
+  if Self.TriggerImmediateEvents
     and (MillisecsWait = TriggerImmediately) then begin
     Event.Trigger;
     Event.Free;

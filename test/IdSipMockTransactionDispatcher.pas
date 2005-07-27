@@ -64,7 +64,7 @@ var
 begin
   inherited Create(TIdDebugTimerQueue.Create(false), TIdSipMockLocator.Create);
 
-  Self.DebugTimer.FireImmediateEvents := true;
+  Self.DebugTimer.TriggerImmediateEvents := true;
 
   TIdSipTransportRegistry.RegisterTransport(TcpTransport, TIdSipMockTcpTransport);
   TIdSipTransportRegistry.RegisterTransport(TlsTransport, TIdSipMockTlsTransport);
