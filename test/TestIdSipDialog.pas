@@ -44,6 +44,7 @@ type
     procedure TestCreateInboundDialog;
     procedure TestCreateOutboundDialog;
     procedure TestCreateRequestInDialog;
+    procedure TestCreateRequestInDialogForInboundDialog;
     procedure TestCreateRequestInDialogRouteSetEmpty;
     procedure TestCreateRequestInDialogRouteSetWithLrParam;
     procedure TestCreateRequestInDialogRouteSetWithoutLrParam;
@@ -493,6 +494,36 @@ begin
     Check(R.HasHeader(MaxForwardsHeader), 'Max-Forwards header missing');
   finally
     R.Free;
+  end;
+end;
+
+procedure TestTIdSipDialog.TestCreateRequestInDialogForInboundDialog;
+var
+  Dialog:  TIdSipDialog;
+  R:       TIdSipRequest;
+  SecondR: TIdSipRequest;
+begin
+  Dialog := TIdSipDialog.CreateInboundDialog(Self.Req, Self.Res, false);
+  try
+    R := Dialog.CreateRequest;
+    try
+      CheckNotEquals(1,
+                     R.CSeq.SequenceNo,
+                     'Dialog didn''t select a proper initial sequence number: it was zero');
+
+      SecondR := Dialog.CreateRequest;
+      try
+        CheckEquals(R.CSeq.SequenceNo + 1,
+                    SecondR.CSeq.SequenceNo,
+                    'Dialog didn''t monotonically increase the local sequence number');
+      finally
+        SecondR.Free;
+      end;
+    finally
+      R.Free;
+    end;
+  finally
+    Dialog.Free;
   end;
 end;
 

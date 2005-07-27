@@ -102,6 +102,7 @@ type
     procedure ReceiveResponse(Response: TIdSipResponse); virtual;
     function  IsNull: Boolean; virtual;
     function  IsOutOfOrder(Request: TIdSipRequest): Boolean;
+    function  NextInitialSequenceNo: Cardinal;
     function  NextLocalSequenceNo: Cardinal;
 
     property ID:               TIdSipDialogID  read fID;
@@ -459,11 +460,22 @@ begin
         and (Request.CSeq.SequenceNo < Self.RemoteSequenceNo);
 end;
 
+function TIdSipDialog.NextInitialSequenceNo: Cardinal;
+begin
+  repeat
+    Result := GRandomNumber.NextCardinal($7FFFFFFF);
+  until (Result > 0);
+end;
+
 function TIdSipDialog.NextLocalSequenceNo: Cardinal;
 begin
   Self.LocalSequenceNoLock.Acquire;
   try
-    Inc(Self.fLocalSequenceNo);
+    if (Self.fLocalSequenceNo = 0) then
+      Self.fLocalSequenceNo := Self.NextInitialSequenceNo
+    else
+      Inc(Self.fLocalSequenceNo);
+
     Result := Self.fLocalSequenceNo;
   finally
     Self.LocalSequenceNoLock.Release;
