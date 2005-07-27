@@ -636,6 +636,10 @@ function TIdSipSubscribeModule.AcceptsMethods: String;
 begin
   Result := MethodSubscribe + ', '
           + MethodNotify;
+
+  if Self.KnowsEvent(PackageRefer) then
+    Result := Result + ', '
+            + MethodRefer;
 end;
 
 procedure TIdSipSubscribeModule.AddListener(Listener: IIdSipSubscribeModuleListener);

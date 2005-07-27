@@ -42,12 +42,15 @@ type
     procedure CheckNoPackageFound(PackageType: TIdSipEventPackageClass);
     procedure CheckBadEventResponseSent(const UnknownEvent: String);
     procedure CheckPackageFound(PackageType: TIdSipEventPackageClass);
+    procedure ReceiveRefer;
     procedure ReceiveNotify(const EventPackage: String);
     procedure ReceiveSubscribeWithNoEventHeader;
   published
+    procedure TestAcceptsMethodsWithReferPackage;
     procedure TestAddListener;
     procedure TestAddPackage;
     procedure TestPackage;
+    procedure TestReferRequestNotifiesListeners;
     procedure TestRejectNewSubscribeForReferPackage;
     procedure TestRejectSubscribeWithNoEventHeader;
     procedure TestRejectUnknownEventSubscriptionRequest;
@@ -684,6 +687,18 @@ begin
   end;
 end;
 
+procedure TestTIdSipSubscribeModule.ReceiveRefer;
+var
+  Refer: TIdSipRequest;
+begin
+  Refer := Self.Module.CreateRefer(Self.Destination, Self.Core.Contact);
+  try
+    Self.ReceiveRequest(Refer);
+  finally
+    Refer.Free;
+  end;
+end;
+
 procedure TestTIdSipSubscribeModule.ReceiveSubscribeWithNoEventHeader;
 var
   MalformedSub: TIdSipRequest;
@@ -700,6 +715,17 @@ begin
 end;
 
 //* TestTIdSipSubscribeModule Published methods ********************************
+
+procedure TestTIdSipSubscribeModule.TestAcceptsMethodsWithReferPackage;
+begin
+  Check(Pos(MethodRefer, Self.Module.AcceptsMethods) = 0,
+        'REFER method supported when the package isn''t');
+
+  Self.Module.AddPackage(TIdSipReferPackage);
+
+  Check(Pos(MethodRefer, Self.Module.AcceptsMethods) > 0,
+        'REFER method not supported when the package is');
+end;
 
 procedure TestTIdSipSubscribeModule.TestAddListener;
 var
@@ -760,6 +786,17 @@ begin
   Self.Module.AddPackage(TIdSipReferPackage);
 
   Self.CheckPackageFound(TIdSipReferPackage);
+end;
+
+procedure TestTIdSipSubscribeModule.TestReferRequestNotifiesListeners;
+begin
+  Self.Module.AddPackage(TIdSipReferPackage);
+
+  Self.ReceiveRefer;
+
+  Check(Self.OnSubscriptionRequestFired, 'OnSubscriptionRequest didn''t fire');
+  Check(Self.Core = Self.UserAgentParam,
+        'UserAgent param of Subscribe''s SubscriptionRequest notification wrong');
 end;
 
 procedure TestTIdSipSubscribeModule.TestRejectNewSubscribeForReferPackage;
