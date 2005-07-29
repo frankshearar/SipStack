@@ -939,10 +939,10 @@ type
   private
     fLocalMimeType:           String;
     fLocalSessionDescription: String;
+    fLocalTag:                String;
     fMaxResendInterval:       Cardinal; // in milliseconds
     InviteModule:             TIdSipInviteModule;
     LastResponse:             TIdSipResponse;
-    LocalTag:                 String;
     ReceivedAck:              Boolean;
     ResendInterval:           Cardinal;
     SentFinalResponse:        Boolean;
@@ -979,6 +979,7 @@ type
 
     property LocalSessionDescription: String   read fLocalSessionDescription;
     property LocalMimeType:           String   read fLocalMimeType;
+    property LocalTag:                String   read fLocalTag write fLocalTag;
     property InitialResendInterval:   Cardinal read GetInitialResendInterval;
     property MaxResendInterval:       Cardinal read fMaxResendInterval write fMaxResendInterval;
     property ProgressResendInterval:  Cardinal read GetProgressResendInterval;
@@ -4740,8 +4741,7 @@ begin
     Ok.Body          := Offer;
     Ok.ContentType   := ContentType;
     Ok.ContentLength := Length(Offer);
-
-    Self.LocalTag := Ok.ToHeader.Tag;
+    Ok.ToHeader.Tag  := Self.LocalTag;
 
     Self.SendResponse(Ok);
   finally
@@ -4974,6 +4974,7 @@ begin
   Response := Self.UA.CreateResponse(Self.InitialRequest,
                                      StatusCode);
   try
+    Response.ToHeader.Tag := Self.LocalTag;
     Self.SendResponse(Response);
   finally
     Response.Free;
@@ -6943,7 +6944,7 @@ begin
     if not Self.DialogEstablished then begin
       Self.fDialog := Self.CreateInboundDialog(Self.UA.NextTag);
       Self.Dialog.ReceiveRequest(Self.InitialRequest);
-      Self.InitialInvite.InitialRequest.ToHeader.Tag := Self.Dialog.ID.LocalTag;
+      Self.InitialInvite.LocalTag := Self.Dialog.ID.LocalTag;
 
       Self.InitialInvite.Ring;
     end;

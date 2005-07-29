@@ -357,6 +357,7 @@ type
     InviteAction:   TIdSipInboundInvite;
     Module:         TIdSipInviteModule;
     OnSuccessFired: Boolean;
+    ToTag:          String;
 
     procedure CheckAck(InviteAction: TIdSipInboundInvite);
     procedure CheckAckWithDifferentCSeq(InviteAction: TIdSipInboundInvite);
@@ -5537,8 +5538,10 @@ begin
   Self.Answer         := '';
   Self.Failed         := false;
   Self.OnSuccessFired := false;
+  Self.ToTag          := 'foo-tag';
 
   Self.InviteAction := TIdSipInboundInvite.Create(Self.Core, Self.Invite);
+  Self.InviteAction.LocalTag := Self.ToTag;
   Self.InviteAction.AddListener(Self);
 end;
 
@@ -5642,6 +5645,9 @@ begin
   Check(Response.ToHeader.HasTag,              'No To tag');
   Check(Response.HasHeader(ContactHeaderFull), 'No Contact header');
 
+  CheckEquals(Self.ToTag,
+              Response.ToHeader.Tag,
+              'To tag');
   CheckEquals(Body,
               Response.Body,
               'Body');
@@ -6090,6 +6096,9 @@ begin
               'Unexpected Status-Code');
   Check(Response.ToHeader.HasTag,
         'To header doesn''t have tag');
+  CheckEquals(Self.ToTag,
+              Response.ToHeader.Tag,
+              'To tag');
 end;
 
 procedure TestTIdSipInboundInvite.TestSendSessionProgress;
