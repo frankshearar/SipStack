@@ -7136,6 +7136,7 @@ begin
   Self.InitialInvite.Offer       := Self.LocalSessionDescription;
   Self.InitialInvite.MimeType    := Self.LocalMimeType;
   Self.InitialInvite.Send;
+  Self.InitialRequest.Assign(Self.InitialInvite.InitialRequest);
 end;
 
 procedure TIdSipOutboundSession.Terminate;

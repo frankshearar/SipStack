@@ -677,6 +677,7 @@ type
     procedure TestReceiveByeWithPendingRequests;
     procedure TestRejectInviteWhenInboundModificationInProgress;
     procedure TestRejectInviteWhenOutboundModificationInProgress;
+    procedure TestSendSetsInitialRequest;
   end;
 
   TestTIdSipInboundSession = class(TestTIdSipSession,
@@ -5501,6 +5502,15 @@ begin
   finally
     FirstInvite.Free;
   end;
+end;
+
+procedure TestTIdSipSession.TestSendSetsInitialRequest;
+var
+  Session: TIdSipAction;
+begin
+  Session := Self.CreateAction;
+  Check(Session.InitialRequest.Equals(Self.LastSentRequest),
+        'Sending the session didn''t set the session''s InitialRequest');
 end;
 
 //******************************************************************************
