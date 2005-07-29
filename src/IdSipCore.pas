@@ -2499,7 +2499,7 @@ begin
     Action := Self.Actions[I] as TIdSipAction;
     if not Action.IsTerminated
       and Action.IsSession
-      and Msg.InSameDialogAs(Action.InitialRequest) then
+      and Action.Match(Msg) then
       Result := Action as TIdSipSession
     else
       Inc(I);
@@ -3137,7 +3137,7 @@ begin
   finally
     Actor.Free;
   end;
-end;  
+end;
 
 function TIdSipAbstractUserAgent.AddInboundAction(Request: TIdSipRequest;
                                                   Receiver: TIdSipTransport): TIdSipAction;
@@ -6905,7 +6905,8 @@ begin
   else if Msg.IsRequest and (Msg as TIdSipRequest).IsCancel then
     Result := Self.InitialRequest.MatchCancel(Msg as TIdSipRequest)
   else
-    Result := Self.DialogMatches(Msg);
+    Result := not Self.InitialRequest.Equals(Msg)
+          and Self.DialogMatches(Msg);
 end;
 
 function TIdSipInboundSession.ModifyWaitTime: Cardinal;
@@ -6947,6 +6948,8 @@ begin
       Self.InitialInvite.LocalTag := Self.Dialog.ID.LocalTag;
 
       Self.InitialInvite.Ring;
+      Self.InitialRequest.Assign(Self.InitialInvite.InitialRequest);
+      Self.InitialRequest.ToHeader.Tag := Self.Dialog.ID.LocalTag;
     end;
   finally
     Self.DialogLock.Release;
@@ -7120,7 +7123,8 @@ begin
   else if MatchesReInvite then
     Result := false
   else
-    Result := Self.DialogMatches(Msg);
+    Result := not Self.InitialRequest.Equals(Msg)
+          and Self.DialogMatches(Msg);
 end;
 
 function TIdSipOutboundSession.ModifyWaitTime: Cardinal;
@@ -7177,8 +7181,10 @@ procedure TIdSipOutboundSession.OnDialogEstablished(InviteAgent: TIdSipOutboundI
 begin
   Self.DialogLock.Acquire;
   try
-    if not Self.DialogEstablished then
+    if not Self.DialogEstablished then begin
       Self.fDialog := NewDialog.Copy;
+      Self.InitialRequest.ToHeader.Tag := Self.Dialog.ID.RemoteTag;
+    end;
   finally
     Self.DialogLock.Release;
   end;
@@ -7275,8 +7281,6 @@ begin
   inherited OnSuccess(InviteAgent, Response);
 
   if not Self.FullyEstablished then begin
-    Self.InitialRequest.Assign(InviteAgent.InitialRequest);
-
     Self.FullyEstablished := true;
 
     Self.RemoveFinishedRedirectedInvite(InviteAgent);

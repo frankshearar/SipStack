@@ -661,13 +661,13 @@ type
     procedure TearDown; override;
   published
     procedure TestAckToInDialogInviteMatchesInvite;
+    procedure TestDontMatchResponseToModify;
+    procedure TestDontMatchResponseToInitialRequest;
     procedure TestInboundModify;
     procedure TestIsSession; override;
     procedure TestMatchBye;
     procedure TestMatchInitialRequest;
-    procedure TestMatchModify;
-    procedure TestMatchResponseToModify;
-    procedure TestMatchResponseToInitialRequest;
+    procedure TestMatchInboundModify;
     procedure TestModify;
     procedure TestModifyBeforeFullyEstablished;
     procedure TestModifyDuringModification;
@@ -808,6 +808,7 @@ type
     procedure TestDialogNotEstablishedOnTryingResponse;
     procedure TestDoubleRedirect;
     procedure TestEmptyTargetSetMeansTerminate;
+    procedure TestEstablishedSessionSetsInitialRequestToTag;
     procedure TestGlobalFailureEndsSession;
     procedure TestHangUp;
     procedure TestIsOutboundCall;
@@ -5064,6 +5065,46 @@ begin
   end;
 end;
 
+procedure TestTIdSipSession.TestDontMatchResponseToModify;
+var
+  Ok:      TIdSipResponse;
+  Session: TIdSipSession;
+begin
+  Session := Self.CreateAction as TIdSipSession;
+  Self.EstablishSession(Session);
+  Check(Session.DialogEstablished,
+        Session.ClassName + ': No dialog established');
+  Session.Modify('', '');
+
+  Ok := TIdSipResponse.InResponseTo(Self.LastSentRequest,
+                                    SIPOK);
+  try
+    Check(not Session.Match(Ok),
+          Session.ClassName + ': Responses to outbound re-INVITEs must only '
+        + 'match the OutboundInvites');
+  finally
+    Ok.Free;
+  end;
+end;
+
+procedure TestTIdSipSession.TestDontMatchResponseToInitialRequest;
+var
+  Ok:      TIdSipResponse;
+  Session: TIdSipSession;
+begin
+  Session := Self.CreateAction as TIdSipSession;
+
+  Ok := TIdSipResponse.InResponseTo(Session.InitialRequest, SIPOK);
+  try
+    Ok.ToHeader.Tag := Self.Core.NextTag; // Just for completeness' sake
+    Check(not Session.Match(Ok),
+          Session.ClassName + ': Responses to the initial INVITE must only '
+        + 'match the (In|Out)boundInvite');
+  finally
+    Ok.Free;
+  end;
+end;
+
 procedure TestTIdSipSession.TestInboundModify;
 var
   LocalSessionDescription: String;
@@ -5140,7 +5181,7 @@ begin
       + '(In|Out)boundInvite');
 end;
 
-procedure TestTIdSipSession.TestMatchModify;
+procedure TestTIdSipSession.TestMatchInboundModify;
 var
   ReInvite: TIdSipRequest;
   Session:  TIdSipSession;
@@ -5156,46 +5197,6 @@ begin
           Session.ClassName + ': In-dialog INVITE must match session');
   finally
     ReInvite.Free;
-  end;
-end;
-
-procedure TestTIdSipSession.TestMatchResponseToModify;
-var
-  Ok:      TIdSipResponse;
-  Session: TIdSipSession;
-begin
-  Session := Self.CreateAction as TIdSipSession;
-  Self.EstablishSession(Session);
-  Check(Session.DialogEstablished,
-        Session.ClassName + ': No dialog established');
-  Session.Modify('', '');
-
-  Ok := TIdSipResponse.InResponseTo(Self.LastSentRequest,
-                                    SIPOK);
-  try
-    Check(not Session.Match(Ok),
-          Session.ClassName + ': Responses to outbound re-INVITEs must only '
-        + 'match the OutboundInvites');
-  finally
-    Ok.Free;
-  end;
-end;
-
-procedure TestTIdSipSession.TestMatchResponseToInitialRequest;
-var
-  Ok:      TIdSipResponse;
-  Session: TIdSipSession;
-begin
-  Session := Self.CreateAction as TIdSipSession;
-
-  Ok := TIdSipResponse.InResponseTo(Session.InitialRequest, SIPOK);
-  try
-    Ok.ToHeader.Tag := Self.Core.NextTag; // Just for completeness' sake
-    Check(not Session.Match(Ok),
-          Session.ClassName + ': Responses to the initial INVITE must only '
-        + 'match the (In|Out)boundInvite');
-  finally
-    Ok.Free;
   end;
 end;
 
@@ -5647,7 +5648,7 @@ begin
 
   CheckEquals(Self.ToTag,
               Response.ToHeader.Tag,
-              'To tag');
+              'To (local) tag');
   CheckEquals(Body,
               Response.Body,
               'Body');
@@ -6098,7 +6099,7 @@ begin
         'To header doesn''t have tag');
   CheckEquals(Self.ToTag,
               Response.ToHeader.Tag,
-              'To tag');
+              'To (local) tag');
 end;
 
 procedure TestTIdSipInboundInvite.TestSendSessionProgress;
@@ -9202,6 +9203,14 @@ begin
   Self.ReceiveMovedTemporarily('sip:foo@bar.org');
   Self.ReceiveForbidden;
   Check(Self.OnEndedSessionFired, 'Session didn''t end: ' + Self.FailReason);
+end;
+
+procedure TestTIdSipOutboundSession.TestEstablishedSessionSetsInitialRequestToTag;
+begin
+  Self.ReceiveRinging(Self.LastSentRequest);
+  CheckEquals(Self.Dispatcher.Transport.LastResponse.ToHeader.Tag,
+              Self.Session.InitialRequest.ToHeader.Tag,
+              'Session.InitialRequest''s To tag not set');
 end;
 
 procedure TestTIdSipOutboundSession.TestGlobalFailureEndsSession;
