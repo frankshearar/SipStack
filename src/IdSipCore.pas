@@ -3160,7 +3160,9 @@ procedure TIdSipAbstractUserAgent.AddLocalHeaders(OutboundRequest: TIdSipRequest
 var
   Transport: String;
 begin
-  // TODO: We must discover the transport using RFC 3263
+  // You might think we need to find out the appropriate transport to use before
+  // we send the message. Yes, we do. We do so when the Action actually sends
+  // the request in Action.Send(Request|Response).
 
   // cf RFC 3263, section 4.1
   if OutboundRequest.ToHeader.Address.HasParameter(TransportParam) then
