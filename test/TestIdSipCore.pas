@@ -77,9 +77,9 @@ type
     procedure TestFindActionAndPerformBlockNoMatch;
     procedure TestFindActionAndPerformOrBlock;
     procedure TestFindActionAndPerformOrBlockNoMatch;
-    procedure TestFindSessionAndPerform;
-    procedure TestFindSessionAndPerformNoMatch;
-    procedure TestFindSessionAndPerformNoSessions;
+//    procedure TestFindSessionAndPerform;
+//    procedure TestFindSessionAndPerformNoMatch;
+//    procedure TestFindSessionAndPerformNoSessions;
     procedure TestInviteCount;
     procedure TestRemoveObserver;
     procedure TestTerminateAllActions;
@@ -678,7 +678,6 @@ type
     procedure TestReceiveByeWithPendingRequests;
     procedure TestRejectInviteWhenInboundModificationInProgress;
     procedure TestRejectInviteWhenOutboundModificationInProgress;
-    procedure TestSendSetsInitialRequest;
   end;
 
   TestTIdSipInboundSession = class(TestTIdSipSession,
@@ -828,6 +827,7 @@ type
     procedure TestRedirectNoMoreTargets;
     procedure TestRedirectWithMultipleContacts;
     procedure TestRedirectWithNoSuccess;
+    procedure TestSendSetsInitialRequest;
     procedure TestTerminateDuringRedirect;
     procedure TestTerminateEstablishedSession;
     procedure TestTerminateNetworkFailure;
@@ -1585,7 +1585,7 @@ begin
     Finder.Free;
   end;
 end;
-
+{
 procedure TestTIdSipActions.TestFindSessionAndPerform;
 var
   S: TIdSipAction;
@@ -1614,7 +1614,7 @@ begin
 
   Check(not Assigned(Self.FoundSession), 'Session found in an empty list');
 end;
-
+}
 procedure TestTIdSipActions.TestInviteCount;
 begin
   CheckEquals(0, Self.Actions.InviteCount, 'No messages received');
@@ -4848,6 +4848,19 @@ begin
     CheckEquals(MethodInvite, Invite.Method, 'Method');
     CheckEquals('foo',        Invite.Body, 'Body');
     CheckEquals('bar',        Invite.ContentType, 'Content-Type');
+
+    CheckEquals(Self.Dlg.ID.CallID,
+                Invite.CallID,
+                'Call-ID');
+    CheckEquals(Self.Dlg.ID.LocalTag,
+                Invite.From.Tag,
+                'From tag');
+    CheckEquals(Self.Dlg.ID.RemoteTag,
+                Invite.ToHeader.Tag,
+                'To tag');
+    CheckEquals(Self.Dlg.LocalSequenceNo,
+                Invite.CSeq.SequenceNo,
+                'CSeq sequence no');
   finally
     Invite.Free;
   end;
@@ -5504,15 +5517,6 @@ begin
   finally
     FirstInvite.Free;
   end;
-end;
-
-procedure TestTIdSipSession.TestSendSetsInitialRequest;
-var
-  Session: TIdSipAction;
-begin
-  Session := Self.CreateAction;
-  Check(Session.InitialRequest.Equals(Self.LastSentRequest),
-        'Sending the session didn''t set the session''s InitialRequest');
 end;
 
 //******************************************************************************
@@ -9684,6 +9688,15 @@ begin
         'Session didn''t notify listeners of ended session');
   CheckEquals(RedirectWithNoSuccess, Self.ErrorCode,
               'Session reported wrong error code for no successful rings');
+end;
+
+procedure TestTIdSipOutboundSession.TestSendSetsInitialRequest;
+var
+  Session: TIdSipAction;
+begin
+  Session := Self.CreateAction;
+  Check(Session.InitialRequest.Equals(Self.LastSentRequest),
+        'Sending the session didn''t set the session''s InitialRequest');
 end;
 
 procedure TestTIdSipOutboundSession.TestTerminateDuringRedirect;

@@ -389,10 +389,12 @@ type
     procedure FindActionAndPerformOr(Msg: TIdSipMessage;
                                      FoundBlock: TIdSipActionClosure;
                                      NotFoundBlock: TIdSipActionClosure);
+{
     procedure FindSessionAndPerform(Msg: TIdSipMessage;
                                     Block: TIdSipActionClosure); overload;
     procedure FindSessionAndPerform(Msg: TIdSipMessage;
                                     Proc: TIdSipSessionProc); overload;
+}
     procedure Perform(Msg: TIdSipMessage; Block: TIdSipActionClosure);
     function  InviteCount: Integer;
     function  OptionsCount: Integer;
@@ -2351,7 +2353,7 @@ begin
 
   Self.CleanOutTerminatedActions;
 end;
-
+{
 procedure TIdSipActions.FindSessionAndPerform(Msg: TIdSipMessage;
                                               Block: TIdSipActionClosure);
 var
@@ -2387,7 +2389,7 @@ begin
 
   Self.CleanOutTerminatedActions;
 end;
-
+}
 procedure TIdSipActions.Perform(Msg: TIdSipMessage; Block: TIdSipActionClosure);
 var
   Action: TIdSipAction;
@@ -2992,8 +2994,8 @@ var
   Msg: TIdSipMessage;
 begin
   Msg := (Event as TIdSipMessageNotifyEventWait).Message;
-  Self.Actions.FindSessionAndPerform(Msg,
-                                     Self.ResendReInvite);
+//  Self.Actions.FindSessionAndPerform(Msg,
+//                                     Self.ResendReInvite);
 end;
 
 function TIdSipAbstractUserAgent.OptionsCount: Integer;
@@ -7282,6 +7284,9 @@ begin
 
   if not Self.FullyEstablished then begin
     Self.FullyEstablished := true;
+    // This lets us store Authorization credentials for future use in things
+    // like modifying INVITEs.
+    Self.InitialRequest.Assign(InviteAgent.InitialRequest);
 
     Self.RemoveFinishedRedirectedInvite(InviteAgent);
     Self.TerminateAllRedirects;
