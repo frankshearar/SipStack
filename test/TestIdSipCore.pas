@@ -4824,697 +4824,6 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipSession                                                          *
-//******************************************************************************
-//* TestTIdSipSession Public methods *******************************************
-
-procedure TestTIdSipSession.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Module := Self.Core.ModuleFor(MethodInvite) as TIdSipInviteModule;
-
-  Self.MultiStreamSdp := Self.CreateMultiStreamSdp;
-  Self.SimpleSdp      := Self.CreateSimpleSdp;
-
-  Self.MimeType                  := '';
-  Self.OnEndedSessionFired       := false;
-  Self.OnEstablishedSessionFired := false;
-  Self.OnModifiedSessionFired    := false;
-  Self.OnModifySessionFired      := false;
-  Self.RemoteSessionDescription  := '';
-end;
-
-procedure TestTIdSipSession.TearDown;
-begin
-  Self.SimpleSdp.Free;
-  Self.MultiStreamSdp.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipSession Protected methods ****************************************
-
-procedure TestTIdSipSession.CheckResendWaitTime(Milliseconds: Cardinal;
-                                                const Msg: String);
-begin
-  Check(Milliseconds mod 10 = 0, Msg);
-end;
-
-function TestTIdSipSession.CreateAndEstablishSession: TIdSipSession;
-var
-  NewSession: TIdSipSession;
-begin
-  NewSession := Self.CreateAction as TIdSipSession;
-  Self.EstablishSession(NewSession);
-
-  Result := NewSession;
-end;
-
-function TestTIdSipSession.CreateMultiStreamSdp: TIdSdpPayload;
-var
-  Connection: TIdSdpConnection;
-  MD:         TIdSdpMediaDescription;
-begin
-  Result := TIdSdpPayload.Create;
-  Result.Version                := 0;
-
-  Result.Origin.Username        := 'wintermute';
-  Result.Origin.SessionID       := '2890844526';
-  Result.Origin.SessionVersion  := '2890842807';
-  Result.Origin.NetType         := Id_SDP_IN;
-  Result.Origin.AddressType     := Id_IPv4;
-  Result.Origin.Address         := '127.0.0.1';
-
-  Result.SessionName            := 'Minimum Session Info';
-
-  Connection := Result.AddConnection;
-  Connection.NetType     := Id_SDP_IN;
-  Connection.AddressType := Id_IPv4;
-  Connection.Address     := '127.0.0.1';
-
-  MD := Result.AddMediaDescription;
-  MD.MediaType := mtAudio;
-  MD.Port      := 10000;
-  MD.Transport := AudioVisualProfile;
-  MD.AddFormat('0');
-
-  MD := Result.AddMediaDescription;
-  MD.MediaType := mtText;
-  MD.Port      := 11000;
-  MD.Transport := AudioVisualProfile;
-  MD.AddFormat('98');
-  MD.AddAttribute(RTPMapAttribute, '98 t140/1000');
-end;
-
-function TestTIdSipSession.CreateRemoteReInvite(LocalDialog: TIdSipDialog): TIdSipRequest;
-begin
-  Result := Self.Module.CreateReInvite(LocalDialog,
-                                       Self.SimpleSdp.AsString,
-                                       Self.SimpleSdp.MimeType);
-  try
-    Result.ToHeader.Tag    := LocalDialog.ID.LocalTag;
-    Result.From.Tag        := LocalDialog.ID.RemoteTag;
-    Result.CSeq.SequenceNo := LocalDialog.RemoteSequenceNo + 1;
-  except
-    FreeAndNil(Result);
-
-    raise;
-  end;
-end;
-
-function TestTIdSipSession.CreateSimpleSdp: TIdSdpPayload;
-var
-  Connection: TIdSdpConnection;
-  MD:         TIdSdpMediaDescription;
-begin
-  Result := TIdSdpPayload.Create;
-  Result.Version               := 0;
-
-  Result.Origin.Username       := 'wintermute';
-  Result.Origin.SessionID      := '2890844526';
-  Result.Origin.SessionVersion := '2890842807';
-  Result.Origin.NetType        := Id_SDP_IN;
-  Result.Origin.AddressType    := Id_IPv4;
-  Result.Origin.Address        := '127.0.0.1';
-
-  Result.SessionName           := 'Minimum Session Info';
-
-  MD := Result.AddMediaDescription;
-  MD.MediaType := mtText;
-  MD.Port      := 11000;
-  MD.Transport := AudioVisualProfile;
-  MD.AddFormat('98');
-  MD.AddAttribute(RTPMapAttribute, '98 t140/1000');
-
-  MD.Connections.Add(TIdSdpConnection.Create);
-  Connection := MD.Connections[0];
-  Connection.NetType     := Id_SDP_IN;
-  Connection.AddressType := Id_IPv4;
-  Connection.Address     := '127.0.0.1';
-end;
-
-procedure TestTIdSipSession.OnEndedSession(Session: TIdSipSession;
-                                           ErrorCode: Cardinal);
-begin
-  Self.OnEndedSessionFired := true;
-  Self.ErrorCode           := ErrorCode;
-end;
-
-procedure TestTIdSipSession.OnEstablishedSession(Session: TIdSipSession;
-                                                 const RemoteSessionDescription: String;
-                                                 const MimeType: String);
-begin
-  Self.OnEstablishedSessionFired := true;
-end;
-
-procedure TestTIdSipSession.OnModifiedSession(Session: TIdSipSession;
-                                              Answer: TIdSipResponse);
-begin
-  Self.OnModifiedSessionFired := true;
-
-  Self.RemoteSessionDescription := Answer.Body;
-  Self.MimeType                 := Answer.ContentType;
-end;
-
-procedure TestTIdSipSession.OnModifySession(Session: TIdSipSession;
-                                            const RemoteSessionDescription: String;
-                                            const MimeType: String);
-begin
-  Self.OnModifySessionFired := true;
-
-  Self.RemoteSessionDescription := RemoteSessionDescription;
-  Self.MimeType                 := MimeType;
-end;
-
-procedure TestTIdSipSession.OnProgressedSession(Session: TIdSipSession;
-                                                Progress: TIdSipResponse);
-begin
-  // Do nothing.
-end;
-
-procedure TestTIdSipSession.ReceiveRemoteReInvite(Session: TIdSipSession);
-begin
-  // At this point Self.Invite represents the INVITE we sent out
-  Self.Invite.LastHop.Branch  := Self.Invite.LastHop.Branch + '1';
-  Self.Invite.CallID          := Session.Dialog.ID.CallID;
-  Self.Invite.From.Tag        := Session.Dialog.ID.RemoteTag;
-  Self.Invite.ToHeader.Tag    := Session.Dialog.ID.LocalTag;
-  Self.Invite.CSeq.SequenceNo := Session.Dialog.RemoteSequenceNo + 1;
-
-  Self.Invite.Body          := Self.RemoteSessionDescription;
-  Self.Invite.ContentType   := Self.MimeType;
-  Self.Invite.ContentLength := Length(Self.Invite.Body);
-
-  // Now it represents an INVITE received from the network
-  Self.ReceiveInvite;
-end;
-
-//* TestTIdSipSession Published methods ****************************************
-
-procedure TestTIdSipSession.TestAckToInDialogInviteMatchesInvite;
-var
-  Ack:     TIdSipRequest;
-  Session: TIdSipSession;
-begin
-  Session := Self.CreateAndEstablishSession;
-  Self.ReceiveRemoteReInvite(Session);
-
-  Check(Self.OnModifySessionFired
-        Session.ClassName + ': OnModifySession didn''t fire');
-
-  Session.AcceptModify('', '');
-
-  // The last request was the inbound re-INVITE.
-  Ack := Self.Dispatcher.Transport.LastRequest.AckFor(Self.LastSentResponse);
-  try
-    Check(not Session.Match(Ack),
-          Session.ClassName + ': ACK mustn''t match the Session');
-  finally
-    Ack.Free;
-  end;
-end;
-
-procedure TestTIdSipSession.TestDontMatchResponseToModify;
-var
-  Ok:      TIdSipResponse;
-  Session: TIdSipSession;
-begin
-  Session := Self.CreateAction as TIdSipSession;
-  Self.EstablishSession(Session);
-  Check(Session.DialogEstablished,
-        Session.ClassName + ': No dialog established');
-  Session.Modify('', '');
-
-  Ok := TIdSipResponse.InResponseTo(Self.LastSentRequest,
-                                    SIPOK);
-  try
-    Check(not Session.Match(Ok),
-          Session.ClassName + ': Responses to outbound re-INVITEs must only '
-        + 'match the OutboundInvites');
-  finally
-    Ok.Free;
-  end;
-end;
-
-procedure TestTIdSipSession.TestDontMatchResponseToInitialRequest;
-var
-  Ok:      TIdSipResponse;
-  Session: TIdSipSession;
-begin
-  Session := Self.CreateAction as TIdSipSession;
-
-  Ok := TIdSipResponse.InResponseTo(Session.InitialRequest, SIPOK);
-  try
-    Ok.ToHeader.Tag := Self.Core.NextTag; // Just for completeness' sake
-    Check(not Session.Match(Ok),
-          Session.ClassName + ': Responses to the initial INVITE must only '
-        + 'match the (In|Out)boundInvite');
-  finally
-    Ok.Free;
-  end;
-end;
-
-procedure TestTIdSipSession.TestInboundModify;
-var
-  LocalSessionDescription: String;
-  LocalMimeType:           String;
-  Session:                 TIdSipSession;
-begin
-  Session := Self.CreateAction as TIdSipSession;
-  Self.EstablishSession(Session);
-
-  LocalMimeType                 := SdpMimeType;
-  LocalSessionDescription       := Format(DummySDP, ['127.0.0.1']);
-  Self.MimeType                 := SdpMimeType;
-  Self.RemoteSessionDescription := Self.SimpleSdp.AsString;
-
-  Self.ReceiveRemoteReInvite(Session);
-  Session.AcceptModify(LocalSessionDescription, LocalMimeType);
-  Self.ReceiveAck;
-
-  Check(Self.OnModifySessionFired,
-        Session.ClassName + ': OnModifySession didn''t fire');
-  CheckEquals(MimeType,
-              Session.LocalMimeType,
-              'Session.LocalMimeType');
-  CheckEquals(LocalSessionDescription,
-              Session.LocalSessionDescription,
-              'Session.LocalSessionDescription');
-  CheckEquals(Self.MimeType,
-              Session.RemoteMimeType,
-              'Session.RemoteMimeType');
-  CheckEquals(Self.RemoteSessionDescription,
-              Session.RemoteSessionDescription,
-              'Session.RemoteSessionDescription');
-end;
-
-procedure TestTIdSipSession.TestIsSession;
-var
-  Action: TIdSipAction;
-begin
-  Action := Self.CreateAction;
-  // Self.UA owns the action!
-  Check(Action.IsSession,
-        Action.ClassName + ' not marked as a Session');
-end;
-
-procedure TestTIdSipSession.TestMatchBye;
-var
-  Bye:     TIdSipRequest;
-  Session: TIdSipSession;
-begin
-  Session := Self.CreateAction as TIdSipSession;
-  Self.EstablishSession(Session);
-  Check(Session.DialogEstablished,
-        Session.ClassName + ': No dialog established');
-
-  Bye := Self.CreateRemoteReInvite(Session.Dialog);
-  try
-    Bye.Method := MethodBye;
-
-    Check(Session.Match(Bye),
-          Session.ClassName + ': BYE must match session');
-  finally
-    Bye.Free;
-  end;
-end;
-
-procedure TestTIdSipSession.TestMatchInitialRequest;
-var
-  Session: TIdSipSession;
-begin
-  Session := Self.CreateAction as TIdSipSession;
-
-  Check(not Session.Match(Session.InitialRequest),
-        Session.ClassName + ': The initial INVITE must only match the '
-      + '(In|Out)boundInvite');
-end;
-
-procedure TestTIdSipSession.TestMatchInboundModify;
-var
-  ReInvite: TIdSipRequest;
-  Session:  TIdSipSession;
-begin
-  Session := Self.CreateAction as TIdSipSession;
-  Self.EstablishSession(Session);
-  Check(Session.DialogEstablished,
-        Session.ClassName + ': No dialog established');
-
-  ReInvite := Self.CreateRemoteReInvite(Session.Dialog);
-  try
-    Check(Session.Match(ReInvite),
-          Session.ClassName + ': In-dialog INVITE must match session');
-  finally
-    ReInvite.Free;
-  end;
-end;
-
-procedure TestTIdSipSession.TestModifyBeforeFullyEstablished;
-var
-  Session: TIdSipSession;
-begin
-  Session := Self.CreateAction as TIdSipSession;
-
-  try
-    Session.Modify('', '');
-    Fail('Failed to bail out starting a modify before session''s established');
-  except
-     on EIdSipTransactionUser do;
-  end;
-end;
-
-procedure TestTIdSipSession.TestModifyDuringModification;
-var
-  Session: TIdSipSession;
-begin
-  Session := Self.CreateAndEstablishSession;
-  Session.Modify('', '');
-
-  try
-    Session.Modify('', '');
-    Fail('Failed to bail out starting a new modify while one''s in progress');
-  except
-    on EIdSipTransactionUser do;
-  end;
-end;
-
-procedure TestTIdSipSession.TestModifyGlareInbound;
-var
-  Session: TIdSipSession;
-begin
-  // Essentially, we and Remote send INVITEs simultaneously.
-  // We send ours, and it arrives after the remote end's sent us its INVITE.
-  // When we receive its INVITE, we reject it with a 491 Request Pending.
-
-  Session := Self.CreateAndEstablishSession;
-  Session.Modify('', '');
-
-  Self.MarkSentResponseCount;
-  Self.ReceiveRemoteReInvite(Session);
-  CheckResponseSent(Session.ClassName + ': No response sent');
-  CheckEquals(SIPRequestPending,
-              Dispatcher.Transport.LastResponse.StatusCode,
-              Session.ClassName + ': Unexpected response');
-end;
-
-procedure TestTIdSipSession.TestModifyGlareOutbound;
-const
-  Body = 'random data';
-var
-  EventCount:  Integer;
-  LatestEvent: TIdWait;
-  Session:     TIdSipSession;
-begin
-  // Essentially, we and Remote send INVITEs simultaneously
-  // We send ours and, because the remote end's sent its before ours arrives,
-  // we receive its 491 Request Pending. We schedule a time to resend our
-  // INVITE.
-
-  Session := Self.CreateAndEstablishSession;
-
-  Self.DebugTimer.TriggerAllEventsOfType(TIdSipActionsWait);
-  Session.Modify(Body, PlainTextMimeType);
-
-  EventCount := Self.DebugTimer.EventCount;
-  Self.ReceiveResponse(SIPRequestPending);
-
-  Self.DebugTimer.LockTimer;
-  try
-    Check(EventCount < Self.DebugTimer.EventCount,
-          Session.ClassName + ': No timer added');
-
-    LatestEvent := Self.DebugTimer.LastEventScheduled;
-
-    Check(Assigned(LatestEvent),
-          Session.ClassName + ': Wrong notify event');
-    Self.CheckResendWaitTime(LatestEvent.DebugWaitTime,
-                             Session.ClassName + ': Bad wait time (was '
-                           + IntToStr(LatestEvent.DebugWaitTime) + ' milliseconds)');
-  finally
-    Self.DebugTimer.UnlockTimer;
-  end;
-
-  Self.MarkSentRequestCount;
-  Self.DebugTimer.TriggerAllEventsOfType(TIdSipActionsWait);
-  CheckRequestSent('No request sent: event not scheduled?');
-  CheckEquals(MethodInvite,
-              Self.LastSentRequest.Method,
-              'Unexpected request');
-  CheckEquals(Body,
-              Self.LastSentRequest.Body,
-              'Wrong message sent?');
-end;
-
-procedure TestTIdSipSession.TestModifyRejectedWithTimeout;
-var
-  ClassName:    String;
-  Session:      TIdSipSession;
-  SessionCount: Integer;
-begin
-  Session := Self.CreateAction as TIdSipSession;
-  Self.EstablishSession(Session);
-  ClassName := Session.ClassName;
-
-  Session.Modify('', '');
-
-  Self.MarkSentRequestCount;
-  SessionCount := Self.Core.SessionCount;
-
-  Self.ReceiveResponse(SIPRequestTimeout);
-
-  CheckRequestSent(ClassName + ': No request sent');
-  CheckEquals(MethodBye,
-              Self.LastSentRequest.Method,
-              ClassName + ': Unexpected request sent');
-  Check(Self.Core.SessionCount < SessionCount,
-        ClassName + ': Session not terminated');
-end;
-
-procedure TestTIdSipSession.TestModifyWaitTime;
-var
-  I:       Integer;
-  Session: TIdSipSession;
-begin
-  Session := Self.CreateAction as TIdSipSession;
-
-  // The modify wait time is random; this test does not guarantee that the wait
-  // time is always correct!
-  for I := 1 to 100 do
-    CheckResendWaitTime(Session.ModifyWaitTime, Session.ClassName);
-end;
-
-procedure TestTIdSipSession.TestReceiveByeWithPendingRequests;
-var
-  Bye:      TIdSipRequest;
-  ReInvite: TIdSipRequest;
-  Session:  TIdSipSession;
-begin
-  // <---         INVITE          ---
-  //  ---         200 OK          --->
-  // <---          ACK            ---
-  // <---         INVITE          ---
-  // <---          BYE            ---
-  //  ---  487 Request Terminated --- (for the re-INVITE)
-  // <---          ACK            ---
-  //  ---         200 OK          ---> (for the BYE)
-  Session := Self.CreateAndEstablishSession;
-
-  Self.ReceiveRemoteReInvite(Session);
-
-  ReInvite := TIdSipRequest.Create;
-  try
-    ReInvite.Assign(Self.Invite);
-
-    Self.MarkSentResponseCount;
-
-    Bye := Self.CreateRemoteBye(Session.Dialog);
-    try
-      Self.ReceiveRequest(Bye);
-
-      Check(Self.ResponseCount + 2 <= Self.SentResponseCount,
-            Self.ClassName + ': No responses to both BYE and re-INVITE');
-
-      Check(Bye.InSameDialogAs(Self.LastSentResponse),
-            Self.ClassName + ': No response for BYE');
-      CheckEquals(SIPOK,
-                  Self.LastSentResponse.StatusCode,
-                  Self.ClassName + ': Wrong response for BYE');
-
-      Check(ReInvite.Match(Self.SecondLastSentResponse),
-            Self.ClassName + ': No response for re-INVITE');
-      CheckEquals(SIPRequestTerminated,
-                  Self.SecondLastSentResponse.StatusCode,
-                  Self.ClassName + ': Wrong response for re-INVITE');
-    finally
-      Bye.Free;
-    end;
-  finally
-    ReInvite.Free;
-  end;
-end;
-
-procedure TestTIdSipSession.TestModify;
-var
-  Session: TIdSipSession;
-begin
-  Session := Self.CreateAction as TIdSipSession;
-  Self.EstablishSession(Session);
-
-  Self.MarkSentRequestCount;
-  Session.Modify(Self.SimpleSdp.AsString, SdpMimeType);
-  CheckRequestSent(Session.ClassName + ': No INVITE sent');
-
-  Self.ReceiveOkWithBody(Self.LastSentRequest,
-                         Format(DummySDP, ['127.0.0.1']),
-                         SdpMimeType);
-  Check(Self.OnModifiedSessionFired,
-        Session.ClassName + ': OnModifiedSession didn''t fire');
-
-  CheckEquals(Self.SimpleSdp.AsString,
-              Session.LocalSessionDescription,
-              'Session.LocalSessionDescription');
-  CheckEquals(SdpMimeType,
-              Session.LocalMimeType,
-              'Session.LocalMimeType');
-  CheckEquals(Format(DummySDP, ['127.0.0.1']),
-              Self.RemoteSessionDescription,
-              'RemoteSessionDescription');
-  CheckEquals(SdpMimeType,
-              Self.MimeType,
-              'MimeType');
-  CheckEquals(Self.RemoteSessionDescription,
-              Session.RemoteSessionDescription,
-              'Session.RemoteSessionDescription');
-  CheckEquals(Self.MimeType,
-              Session.RemoteMimeType,
-              'Session.RemoteMimeType');
-end;
-
-procedure TestTIdSipSession.TestRejectInviteWhenInboundModificationInProgress;
-var
-  FirstInvite: TIdSipRequest;
-  Session:     TIdSipSession;
-begin
-  //           <established session>
-  //  <---           INVITE 1           ---
-  //  <---           INVITE 2           ---
-  //   ---  491 Request Pending (for 2) --->
-  //  <---         ACK (for 2)          ---
-  //   ---        200 OK (for 1)        --->
-  //  <---        ACK (for 1)           ---
-
-  FirstInvite := TIdSipRequest.Create;
-  try
-    Session := Self.CreateAndEstablishSession;
-
-    Self.ReceiveRemoteReInvite(Session);
-    FirstInvite.Assign(Self.Dispatcher.Transport.LastRequest);
-    Check(Self.OnModifySessionFired,
-          Session.ClassName + ': OnModifySession didn''t fire');
-
-    Self.MarkSentResponseCount;
-    Self.OnModifySessionFired := false;
-    Self.ReceiveRemoteReInvite(Session);
-    Check(not Self.OnModifySessionFired,
-          Session.ClassName + ': OnModifySession fired for a 2nd modify');
-    CheckResponseSent(Session.ClassName + ': No 491 response sent');
-    CheckEquals(SIPRequestPending,
-                Self.LastSentResponse.StatusCode,
-                Session.ClassName + ': Unexpected response to 2nd INVITE');
-    Check(Self.Invite.Match(Self.LastSentResponse),
-          Session.ClassName + ': Response doesn''t match 2nd INVITE');
-    Self.ReceiveAck;
-    Check(Session.ModificationInProgress,
-          Session.ClassName + ': Modification should still be ongoing');
-
-    Self.MarkSentResponseCount;
-    Session.AcceptModify('', '');
-
-    CheckResponseSent(Session.ClassName + ': No 200 response sent');
-    CheckEquals(SIPOK,
-                Self.LastSentResponse.StatusCode,
-                Session.ClassName + ': Unexpected response to 1st INVITE');
-    Check(FirstInvite.Match(Self.LastSentResponse),
-          Session.ClassName + ': Response doesn''t match 1st INVITE');
-
-    Self.ReceiveAckFor(FirstInvite,
-                       Self.LastSentResponse);
-    Check(not Session.ModificationInProgress,
-          Session.ClassName + ': Modification should have finished');
-  finally
-    FirstInvite.Free;
-  end;
-end;
-
-procedure TestTIdSipSession.TestRejectInviteWhenOutboundModificationInProgress;
-var
-  FirstInvite: TIdSipRequest;
-  Session:     TIdSipSession;
-begin
-  //          <established session>
-  //   ---           INVITE 1           --->
-  //  <---           INVITE 2           ---
-  //   ---  491 Request Pending (for 2) --->
-  //  <---         ACK (for 2)          ---
-  //  <---        200 OK (for 1)        ---
-  //   ---        ACK (for 1)           --->
-
-  FirstInvite := TIdSipRequest.Create;
-  try
-    Session := Self.CreateAndEstablishSession;
-    Session.AddSessionListener(Self);
-
-    Self.MarkSentRequestCount;
-    Session.Modify('', '');
-    CheckRequestSent('No modifying INVITE sent: ' + Self.FailReason);
-    FirstInvite.Assign(Self.LastSentRequest);
-
-    Self.MarkSentResponseCount;
-    Self.ReceiveRemoteReInvite(Session);
-    CheckResponseSent(Session.ClassName + ': No 491 response sent');
-    CheckEquals(SIPRequestPending,
-                Self.LastSentResponse.StatusCode,
-                Session.ClassName + ': Unexpected response');
-    Self.ReceiveAck;
-
-    Self.MarkSentAckCount;
-    Self.ReceiveOk(FirstInvite);
-    CheckAckSent(Session.ClassName + ': No ACK sent');
-  finally
-    FirstInvite.Free;
-  end;
-end;
-
-procedure TestTIdSipSession.TestRemodify;
-const
-  Body = 'random data';
-var
-  Session: TIdSipSession;
-begin
-  //      <establish session>
-  //  ---       INVITE 1       --->
-  // <---  491 Request Pending ---
-  //  ---         ACK          --->
-  //         <time passes>
-  //  ---       INVITE 2       ---> (with same body as INVITE 1)
-
-  Session := Self.CreateAndEstablishSession;
-  Session.Modify(Body, PlainTextMimeType);
-  Self.ReceiveResponse(Self.LastSentRequest, SIPRequestPending);
-
-  Self.MarkSentRequestCount;
-  Session.Remodify;
-  CheckRequestSent('No request sent');
-  CheckEquals(MethodInvite,
-              Self.LastSentRequest.Method,
-              'Unexpected request sent');
-  CheckEquals(Body,
-              Self.LastSentRequest.Body,
-              'Unexpected body in request');
-end;
-
-//******************************************************************************
 //* TestTIdSipInboundInvite                                                    *
 //******************************************************************************
 //* TestTIdSipInboundInvite Public methods *************************************
@@ -7863,6 +7172,697 @@ begin
 
   CheckEquals(Self.Bindings.Count, Request.Contacts.Count,
              'Contact count');
+end;
+
+//******************************************************************************
+//* TestTIdSipSession                                                          *
+//******************************************************************************
+//* TestTIdSipSession Public methods *******************************************
+
+procedure TestTIdSipSession.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Module := Self.Core.ModuleFor(MethodInvite) as TIdSipInviteModule;
+
+  Self.MultiStreamSdp := Self.CreateMultiStreamSdp;
+  Self.SimpleSdp      := Self.CreateSimpleSdp;
+
+  Self.MimeType                  := '';
+  Self.OnEndedSessionFired       := false;
+  Self.OnEstablishedSessionFired := false;
+  Self.OnModifiedSessionFired    := false;
+  Self.OnModifySessionFired      := false;
+  Self.RemoteSessionDescription  := '';
+end;
+
+procedure TestTIdSipSession.TearDown;
+begin
+  Self.SimpleSdp.Free;
+  Self.MultiStreamSdp.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipSession Protected methods ****************************************
+
+procedure TestTIdSipSession.CheckResendWaitTime(Milliseconds: Cardinal;
+                                                const Msg: String);
+begin
+  Check(Milliseconds mod 10 = 0, Msg);
+end;
+
+function TestTIdSipSession.CreateAndEstablishSession: TIdSipSession;
+var
+  NewSession: TIdSipSession;
+begin
+  NewSession := Self.CreateAction as TIdSipSession;
+  Self.EstablishSession(NewSession);
+
+  Result := NewSession;
+end;
+
+function TestTIdSipSession.CreateMultiStreamSdp: TIdSdpPayload;
+var
+  Connection: TIdSdpConnection;
+  MD:         TIdSdpMediaDescription;
+begin
+  Result := TIdSdpPayload.Create;
+  Result.Version                := 0;
+
+  Result.Origin.Username        := 'wintermute';
+  Result.Origin.SessionID       := '2890844526';
+  Result.Origin.SessionVersion  := '2890842807';
+  Result.Origin.NetType         := Id_SDP_IN;
+  Result.Origin.AddressType     := Id_IPv4;
+  Result.Origin.Address         := '127.0.0.1';
+
+  Result.SessionName            := 'Minimum Session Info';
+
+  Connection := Result.AddConnection;
+  Connection.NetType     := Id_SDP_IN;
+  Connection.AddressType := Id_IPv4;
+  Connection.Address     := '127.0.0.1';
+
+  MD := Result.AddMediaDescription;
+  MD.MediaType := mtAudio;
+  MD.Port      := 10000;
+  MD.Transport := AudioVisualProfile;
+  MD.AddFormat('0');
+
+  MD := Result.AddMediaDescription;
+  MD.MediaType := mtText;
+  MD.Port      := 11000;
+  MD.Transport := AudioVisualProfile;
+  MD.AddFormat('98');
+  MD.AddAttribute(RTPMapAttribute, '98 t140/1000');
+end;
+
+function TestTIdSipSession.CreateRemoteReInvite(LocalDialog: TIdSipDialog): TIdSipRequest;
+begin
+  Result := Self.Module.CreateReInvite(LocalDialog,
+                                       Self.SimpleSdp.AsString,
+                                       Self.SimpleSdp.MimeType);
+  try
+    Result.ToHeader.Tag    := LocalDialog.ID.LocalTag;
+    Result.From.Tag        := LocalDialog.ID.RemoteTag;
+    Result.CSeq.SequenceNo := LocalDialog.RemoteSequenceNo + 1;
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
+function TestTIdSipSession.CreateSimpleSdp: TIdSdpPayload;
+var
+  Connection: TIdSdpConnection;
+  MD:         TIdSdpMediaDescription;
+begin
+  Result := TIdSdpPayload.Create;
+  Result.Version               := 0;
+
+  Result.Origin.Username       := 'wintermute';
+  Result.Origin.SessionID      := '2890844526';
+  Result.Origin.SessionVersion := '2890842807';
+  Result.Origin.NetType        := Id_SDP_IN;
+  Result.Origin.AddressType    := Id_IPv4;
+  Result.Origin.Address        := '127.0.0.1';
+
+  Result.SessionName           := 'Minimum Session Info';
+
+  MD := Result.AddMediaDescription;
+  MD.MediaType := mtText;
+  MD.Port      := 11000;
+  MD.Transport := AudioVisualProfile;
+  MD.AddFormat('98');
+  MD.AddAttribute(RTPMapAttribute, '98 t140/1000');
+
+  MD.Connections.Add(TIdSdpConnection.Create);
+  Connection := MD.Connections[0];
+  Connection.NetType     := Id_SDP_IN;
+  Connection.AddressType := Id_IPv4;
+  Connection.Address     := '127.0.0.1';
+end;
+
+procedure TestTIdSipSession.OnEndedSession(Session: TIdSipSession;
+                                           ErrorCode: Cardinal);
+begin
+  Self.OnEndedSessionFired := true;
+  Self.ErrorCode           := ErrorCode;
+end;
+
+procedure TestTIdSipSession.OnEstablishedSession(Session: TIdSipSession;
+                                                 const RemoteSessionDescription: String;
+                                                 const MimeType: String);
+begin
+  Self.OnEstablishedSessionFired := true;
+end;
+
+procedure TestTIdSipSession.OnModifiedSession(Session: TIdSipSession;
+                                              Answer: TIdSipResponse);
+begin
+  Self.OnModifiedSessionFired := true;
+
+  Self.RemoteSessionDescription := Answer.Body;
+  Self.MimeType                 := Answer.ContentType;
+end;
+
+procedure TestTIdSipSession.OnModifySession(Session: TIdSipSession;
+                                            const RemoteSessionDescription: String;
+                                            const MimeType: String);
+begin
+  Self.OnModifySessionFired := true;
+
+  Self.RemoteSessionDescription := RemoteSessionDescription;
+  Self.MimeType                 := MimeType;
+end;
+
+procedure TestTIdSipSession.OnProgressedSession(Session: TIdSipSession;
+                                                Progress: TIdSipResponse);
+begin
+  // Do nothing.
+end;
+
+procedure TestTIdSipSession.ReceiveRemoteReInvite(Session: TIdSipSession);
+begin
+  // At this point Self.Invite represents the INVITE we sent out
+  Self.Invite.LastHop.Branch  := Self.Invite.LastHop.Branch + '1';
+  Self.Invite.CallID          := Session.Dialog.ID.CallID;
+  Self.Invite.From.Tag        := Session.Dialog.ID.RemoteTag;
+  Self.Invite.ToHeader.Tag    := Session.Dialog.ID.LocalTag;
+  Self.Invite.CSeq.SequenceNo := Session.Dialog.RemoteSequenceNo + 1;
+
+  Self.Invite.Body          := Self.RemoteSessionDescription;
+  Self.Invite.ContentType   := Self.MimeType;
+  Self.Invite.ContentLength := Length(Self.Invite.Body);
+
+  // Now it represents an INVITE received from the network
+  Self.ReceiveInvite;
+end;
+
+//* TestTIdSipSession Published methods ****************************************
+
+procedure TestTIdSipSession.TestAckToInDialogInviteMatchesInvite;
+var
+  Ack:     TIdSipRequest;
+  Session: TIdSipSession;
+begin
+  Session := Self.CreateAndEstablishSession;
+  Self.ReceiveRemoteReInvite(Session);
+
+  Check(Self.OnModifySessionFired
+        Session.ClassName + ': OnModifySession didn''t fire');
+
+  Session.AcceptModify('', '');
+
+  // The last request was the inbound re-INVITE.
+  Ack := Self.Dispatcher.Transport.LastRequest.AckFor(Self.LastSentResponse);
+  try
+    Check(not Session.Match(Ack),
+          Session.ClassName + ': ACK mustn''t match the Session');
+  finally
+    Ack.Free;
+  end;
+end;
+
+procedure TestTIdSipSession.TestDontMatchResponseToModify;
+var
+  Ok:      TIdSipResponse;
+  Session: TIdSipSession;
+begin
+  Session := Self.CreateAction as TIdSipSession;
+  Self.EstablishSession(Session);
+  Check(Session.DialogEstablished,
+        Session.ClassName + ': No dialog established');
+  Session.Modify('', '');
+
+  Ok := TIdSipResponse.InResponseTo(Self.LastSentRequest,
+                                    SIPOK);
+  try
+    Check(not Session.Match(Ok),
+          Session.ClassName + ': Responses to outbound re-INVITEs must only '
+        + 'match the OutboundInvites');
+  finally
+    Ok.Free;
+  end;
+end;
+
+procedure TestTIdSipSession.TestDontMatchResponseToInitialRequest;
+var
+  Ok:      TIdSipResponse;
+  Session: TIdSipSession;
+begin
+  Session := Self.CreateAction as TIdSipSession;
+
+  Ok := TIdSipResponse.InResponseTo(Session.InitialRequest, SIPOK);
+  try
+    Ok.ToHeader.Tag := Self.Core.NextTag; // Just for completeness' sake
+    Check(not Session.Match(Ok),
+          Session.ClassName + ': Responses to the initial INVITE must only '
+        + 'match the (In|Out)boundInvite');
+  finally
+    Ok.Free;
+  end;
+end;
+
+procedure TestTIdSipSession.TestInboundModify;
+var
+  LocalSessionDescription: String;
+  LocalMimeType:           String;
+  Session:                 TIdSipSession;
+begin
+  Session := Self.CreateAction as TIdSipSession;
+  Self.EstablishSession(Session);
+
+  LocalMimeType                 := SdpMimeType;
+  LocalSessionDescription       := Format(DummySDP, ['127.0.0.1']);
+  Self.MimeType                 := SdpMimeType;
+  Self.RemoteSessionDescription := Self.SimpleSdp.AsString;
+
+  Self.ReceiveRemoteReInvite(Session);
+  Session.AcceptModify(LocalSessionDescription, LocalMimeType);
+  Self.ReceiveAck;
+
+  Check(Self.OnModifySessionFired,
+        Session.ClassName + ': OnModifySession didn''t fire');
+  CheckEquals(MimeType,
+              Session.LocalMimeType,
+              'Session.LocalMimeType');
+  CheckEquals(LocalSessionDescription,
+              Session.LocalSessionDescription,
+              'Session.LocalSessionDescription');
+  CheckEquals(Self.MimeType,
+              Session.RemoteMimeType,
+              'Session.RemoteMimeType');
+  CheckEquals(Self.RemoteSessionDescription,
+              Session.RemoteSessionDescription,
+              'Session.RemoteSessionDescription');
+end;
+
+procedure TestTIdSipSession.TestIsSession;
+var
+  Action: TIdSipAction;
+begin
+  Action := Self.CreateAction;
+  // Self.UA owns the action!
+  Check(Action.IsSession,
+        Action.ClassName + ' not marked as a Session');
+end;
+
+procedure TestTIdSipSession.TestMatchBye;
+var
+  Bye:     TIdSipRequest;
+  Session: TIdSipSession;
+begin
+  Session := Self.CreateAction as TIdSipSession;
+  Self.EstablishSession(Session);
+  Check(Session.DialogEstablished,
+        Session.ClassName + ': No dialog established');
+
+  Bye := Self.CreateRemoteReInvite(Session.Dialog);
+  try
+    Bye.Method := MethodBye;
+
+    Check(Session.Match(Bye),
+          Session.ClassName + ': BYE must match session');
+  finally
+    Bye.Free;
+  end;
+end;
+
+procedure TestTIdSipSession.TestMatchInitialRequest;
+var
+  Session: TIdSipSession;
+begin
+  Session := Self.CreateAction as TIdSipSession;
+
+  Check(not Session.Match(Session.InitialRequest),
+        Session.ClassName + ': The initial INVITE must only match the '
+      + '(In|Out)boundInvite');
+end;
+
+procedure TestTIdSipSession.TestMatchInboundModify;
+var
+  ReInvite: TIdSipRequest;
+  Session:  TIdSipSession;
+begin
+  Session := Self.CreateAction as TIdSipSession;
+  Self.EstablishSession(Session);
+  Check(Session.DialogEstablished,
+        Session.ClassName + ': No dialog established');
+
+  ReInvite := Self.CreateRemoteReInvite(Session.Dialog);
+  try
+    Check(Session.Match(ReInvite),
+          Session.ClassName + ': In-dialog INVITE must match session');
+  finally
+    ReInvite.Free;
+  end;
+end;
+
+procedure TestTIdSipSession.TestModifyBeforeFullyEstablished;
+var
+  Session: TIdSipSession;
+begin
+  Session := Self.CreateAction as TIdSipSession;
+
+  try
+    Session.Modify('', '');
+    Fail('Failed to bail out starting a modify before session''s established');
+  except
+     on EIdSipTransactionUser do;
+  end;
+end;
+
+procedure TestTIdSipSession.TestModifyDuringModification;
+var
+  Session: TIdSipSession;
+begin
+  Session := Self.CreateAndEstablishSession;
+  Session.Modify('', '');
+
+  try
+    Session.Modify('', '');
+    Fail('Failed to bail out starting a new modify while one''s in progress');
+  except
+    on EIdSipTransactionUser do;
+  end;
+end;
+
+procedure TestTIdSipSession.TestModifyGlareInbound;
+var
+  Session: TIdSipSession;
+begin
+  // Essentially, we and Remote send INVITEs simultaneously.
+  // We send ours, and it arrives after the remote end's sent us its INVITE.
+  // When we receive its INVITE, we reject it with a 491 Request Pending.
+
+  Session := Self.CreateAndEstablishSession;
+  Session.Modify('', '');
+
+  Self.MarkSentResponseCount;
+  Self.ReceiveRemoteReInvite(Session);
+  CheckResponseSent(Session.ClassName + ': No response sent');
+  CheckEquals(SIPRequestPending,
+              Dispatcher.Transport.LastResponse.StatusCode,
+              Session.ClassName + ': Unexpected response');
+end;
+
+procedure TestTIdSipSession.TestModifyGlareOutbound;
+const
+  Body = 'random data';
+var
+  EventCount:  Integer;
+  LatestEvent: TIdWait;
+  Session:     TIdSipSession;
+begin
+  // Essentially, we and Remote send INVITEs simultaneously
+  // We send ours and, because the remote end's sent its before ours arrives,
+  // we receive its 491 Request Pending. We schedule a time to resend our
+  // INVITE.
+
+  Session := Self.CreateAndEstablishSession;
+
+  Self.DebugTimer.TriggerAllEventsOfType(TIdSipActionsWait);
+  Session.Modify(Body, PlainTextMimeType);
+
+  EventCount := Self.DebugTimer.EventCount;
+  Self.ReceiveResponse(SIPRequestPending);
+
+  Self.DebugTimer.LockTimer;
+  try
+    Check(EventCount < Self.DebugTimer.EventCount,
+          Session.ClassName + ': No timer added');
+
+    LatestEvent := Self.DebugTimer.LastEventScheduled;
+
+    Check(Assigned(LatestEvent),
+          Session.ClassName + ': Wrong notify event');
+    Self.CheckResendWaitTime(LatestEvent.DebugWaitTime,
+                             Session.ClassName + ': Bad wait time (was '
+                           + IntToStr(LatestEvent.DebugWaitTime) + ' milliseconds)');
+  finally
+    Self.DebugTimer.UnlockTimer;
+  end;
+
+  Self.MarkSentRequestCount;
+  Self.DebugTimer.TriggerAllEventsOfType(TIdSipActionsWait);
+  CheckRequestSent('No request sent: event not scheduled?');
+  CheckEquals(MethodInvite,
+              Self.LastSentRequest.Method,
+              'Unexpected request');
+  CheckEquals(Body,
+              Self.LastSentRequest.Body,
+              'Wrong message sent?');
+end;
+
+procedure TestTIdSipSession.TestModifyRejectedWithTimeout;
+var
+  ClassName:    String;
+  Session:      TIdSipSession;
+  SessionCount: Integer;
+begin
+  Session := Self.CreateAction as TIdSipSession;
+  Self.EstablishSession(Session);
+  ClassName := Session.ClassName;
+
+  Session.Modify('', '');
+
+  Self.MarkSentRequestCount;
+  SessionCount := Self.Core.SessionCount;
+
+  Self.ReceiveResponse(SIPRequestTimeout);
+
+  CheckRequestSent(ClassName + ': No request sent');
+  CheckEquals(MethodBye,
+              Self.LastSentRequest.Method,
+              ClassName + ': Unexpected request sent');
+  Check(Self.Core.SessionCount < SessionCount,
+        ClassName + ': Session not terminated');
+end;
+
+procedure TestTIdSipSession.TestModifyWaitTime;
+var
+  I:       Integer;
+  Session: TIdSipSession;
+begin
+  Session := Self.CreateAction as TIdSipSession;
+
+  // The modify wait time is random; this test does not guarantee that the wait
+  // time is always correct!
+  for I := 1 to 100 do
+    CheckResendWaitTime(Session.ModifyWaitTime, Session.ClassName);
+end;
+
+procedure TestTIdSipSession.TestReceiveByeWithPendingRequests;
+var
+  Bye:      TIdSipRequest;
+  ReInvite: TIdSipRequest;
+  Session:  TIdSipSession;
+begin
+  // <---         INVITE          ---
+  //  ---         200 OK          --->
+  // <---          ACK            ---
+  // <---         INVITE          ---
+  // <---          BYE            ---
+  //  ---  487 Request Terminated --- (for the re-INVITE)
+  // <---          ACK            ---
+  //  ---         200 OK          ---> (for the BYE)
+  Session := Self.CreateAndEstablishSession;
+
+  Self.ReceiveRemoteReInvite(Session);
+
+  ReInvite := TIdSipRequest.Create;
+  try
+    ReInvite.Assign(Self.Invite);
+
+    Self.MarkSentResponseCount;
+
+    Bye := Self.CreateRemoteBye(Session.Dialog);
+    try
+      Self.ReceiveRequest(Bye);
+
+      Check(Self.ResponseCount + 2 <= Self.SentResponseCount,
+            Self.ClassName + ': No responses to both BYE and re-INVITE');
+
+      Check(Bye.InSameDialogAs(Self.LastSentResponse),
+            Self.ClassName + ': No response for BYE');
+      CheckEquals(SIPOK,
+                  Self.LastSentResponse.StatusCode,
+                  Self.ClassName + ': Wrong response for BYE');
+
+      Check(ReInvite.Match(Self.SecondLastSentResponse),
+            Self.ClassName + ': No response for re-INVITE');
+      CheckEquals(SIPRequestTerminated,
+                  Self.SecondLastSentResponse.StatusCode,
+                  Self.ClassName + ': Wrong response for re-INVITE');
+    finally
+      Bye.Free;
+    end;
+  finally
+    ReInvite.Free;
+  end;
+end;
+
+procedure TestTIdSipSession.TestModify;
+var
+  Session: TIdSipSession;
+begin
+  Session := Self.CreateAction as TIdSipSession;
+  Self.EstablishSession(Session);
+
+  Self.MarkSentRequestCount;
+  Session.Modify(Self.SimpleSdp.AsString, SdpMimeType);
+  CheckRequestSent(Session.ClassName + ': No INVITE sent');
+
+  Self.ReceiveOkWithBody(Self.LastSentRequest,
+                         Format(DummySDP, ['127.0.0.1']),
+                         SdpMimeType);
+  Check(Self.OnModifiedSessionFired,
+        Session.ClassName + ': OnModifiedSession didn''t fire');
+
+  CheckEquals(Self.SimpleSdp.AsString,
+              Session.LocalSessionDescription,
+              'Session.LocalSessionDescription');
+  CheckEquals(SdpMimeType,
+              Session.LocalMimeType,
+              'Session.LocalMimeType');
+  CheckEquals(Format(DummySDP, ['127.0.0.1']),
+              Self.RemoteSessionDescription,
+              'RemoteSessionDescription');
+  CheckEquals(SdpMimeType,
+              Self.MimeType,
+              'MimeType');
+  CheckEquals(Self.RemoteSessionDescription,
+              Session.RemoteSessionDescription,
+              'Session.RemoteSessionDescription');
+  CheckEquals(Self.MimeType,
+              Session.RemoteMimeType,
+              'Session.RemoteMimeType');
+end;
+
+procedure TestTIdSipSession.TestRejectInviteWhenInboundModificationInProgress;
+var
+  FirstInvite: TIdSipRequest;
+  Session:     TIdSipSession;
+begin
+  //           <established session>
+  //  <---           INVITE 1           ---
+  //  <---           INVITE 2           ---
+  //   ---  491 Request Pending (for 2) --->
+  //  <---         ACK (for 2)          ---
+  //   ---        200 OK (for 1)        --->
+  //  <---        ACK (for 1)           ---
+
+  FirstInvite := TIdSipRequest.Create;
+  try
+    Session := Self.CreateAndEstablishSession;
+
+    Self.ReceiveRemoteReInvite(Session);
+    FirstInvite.Assign(Self.Dispatcher.Transport.LastRequest);
+    Check(Self.OnModifySessionFired,
+          Session.ClassName + ': OnModifySession didn''t fire');
+
+    Self.MarkSentResponseCount;
+    Self.OnModifySessionFired := false;
+    Self.ReceiveRemoteReInvite(Session);
+    Check(not Self.OnModifySessionFired,
+          Session.ClassName + ': OnModifySession fired for a 2nd modify');
+    CheckResponseSent(Session.ClassName + ': No 491 response sent');
+    CheckEquals(SIPRequestPending,
+                Self.LastSentResponse.StatusCode,
+                Session.ClassName + ': Unexpected response to 2nd INVITE');
+    Check(Self.Invite.Match(Self.LastSentResponse),
+          Session.ClassName + ': Response doesn''t match 2nd INVITE');
+    Self.ReceiveAck;
+    Check(Session.ModificationInProgress,
+          Session.ClassName + ': Modification should still be ongoing');
+
+    Self.MarkSentResponseCount;
+    Session.AcceptModify('', '');
+
+    CheckResponseSent(Session.ClassName + ': No 200 response sent');
+    CheckEquals(SIPOK,
+                Self.LastSentResponse.StatusCode,
+                Session.ClassName + ': Unexpected response to 1st INVITE');
+    Check(FirstInvite.Match(Self.LastSentResponse),
+          Session.ClassName + ': Response doesn''t match 1st INVITE');
+
+    Self.ReceiveAckFor(FirstInvite,
+                       Self.LastSentResponse);
+    Check(not Session.ModificationInProgress,
+          Session.ClassName + ': Modification should have finished');
+  finally
+    FirstInvite.Free;
+  end;
+end;
+
+procedure TestTIdSipSession.TestRejectInviteWhenOutboundModificationInProgress;
+var
+  FirstInvite: TIdSipRequest;
+  Session:     TIdSipSession;
+begin
+  //          <established session>
+  //   ---           INVITE 1           --->
+  //  <---           INVITE 2           ---
+  //   ---  491 Request Pending (for 2) --->
+  //  <---         ACK (for 2)          ---
+  //  <---        200 OK (for 1)        ---
+  //   ---        ACK (for 1)           --->
+
+  FirstInvite := TIdSipRequest.Create;
+  try
+    Session := Self.CreateAndEstablishSession;
+    Session.AddSessionListener(Self);
+
+    Self.MarkSentRequestCount;
+    Session.Modify('', '');
+    CheckRequestSent('No modifying INVITE sent: ' + Self.FailReason);
+    FirstInvite.Assign(Self.LastSentRequest);
+
+    Self.MarkSentResponseCount;
+    Self.ReceiveRemoteReInvite(Session);
+    CheckResponseSent(Session.ClassName + ': No 491 response sent');
+    CheckEquals(SIPRequestPending,
+                Self.LastSentResponse.StatusCode,
+                Session.ClassName + ': Unexpected response');
+    Self.ReceiveAck;
+
+    Self.MarkSentAckCount;
+    Self.ReceiveOk(FirstInvite);
+    CheckAckSent(Session.ClassName + ': No ACK sent');
+  finally
+    FirstInvite.Free;
+  end;
+end;
+
+procedure TestTIdSipSession.TestRemodify;
+const
+  Body = 'random data';
+var
+  Session: TIdSipSession;
+begin
+  //      <establish session>
+  //  ---       INVITE 1       --->
+  // <---  491 Request Pending ---
+  //  ---         ACK          --->
+  //         <time passes>
+  //  ---       INVITE 2       ---> (with same body as INVITE 1)
+
+  Session := Self.CreateAndEstablishSession;
+  Session.Modify(Body, PlainTextMimeType);
+  Self.ReceiveResponse(Self.LastSentRequest, SIPRequestPending);
+
+  Self.MarkSentRequestCount;
+  Session.Remodify;
+  CheckRequestSent('No request sent');
+  CheckEquals(MethodInvite,
+              Self.LastSentRequest.Method,
+              'Unexpected request sent');
+  CheckEquals(Body,
+              Self.LastSentRequest.Body,
+              'Unexpected body in request');
 end;
 
 //******************************************************************************
