@@ -382,7 +382,14 @@ type
     procedure TestTrigger;
   end;
 
-  TTestNotifyMethod = class(TActionMethodTestCase)
+  TSubscriptionActionMethodTestCase = class(TActionMethodTestCase)
+  protected
+    Module: TIdSipSubscribeModule;
+  public
+    procedure SetUp; override;
+  end;
+
+  TTestNotifyMethod = class(TSubscriptionActionMethodTestCase)
   protected
     Listener: TIdSipTestNotifyListener;
     Response: TIdSipResponse;
@@ -412,7 +419,7 @@ type
     procedure TestRun;
   end;
 
-  TTestSubscribeMethod = class(TActionMethodTestCase)
+  TTestSubscribeMethod = class(TSubscriptionActionMethodTestCase)
   protected
     Listener:  TIdSipTestSubscribeListener;
     Response:  TIdSipResponse;
@@ -442,7 +449,7 @@ type
     procedure TestRun;
   end;
 
-  TestTIdSipOutboundSubscriptionMethod = class(TActionMethodTestCase)
+  TestTIdSipOutboundSubscriptionMethod = class(TSubscriptionActionMethodTestCase)
   protected
     Listener:     TIdSipTestSubscriptionListener;
     Subscription: TIdSipOutboundSubscription;
@@ -484,10 +491,9 @@ type
     procedure TestRun;
   end;
 
-  TSubscribeModuleTestCase = class(TActionMethodTestCase)
+  TSubscribeModuleTestCase = class(TSubscriptionActionMethodTestCase)
   protected
     Listener: TIdSipTestSubscribeModuleListener;
-    Module:   TIdSipSubscribeModule;
     Request:  TIdSipRequest;
   public
     procedure SetUp; override;
@@ -3111,6 +3117,18 @@ begin
 end;
 
 //******************************************************************************
+//* TSubscriptionActionMethodTestCase                                          *
+//******************************************************************************
+//* TSubscriptionActionMethodTestCase Public methods ***************************
+
+procedure TSubscriptionActionMethodTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Module := Self.UA.AddModule(TIdSipSubscribeModule) as TIdSipSubscribeModule;
+end;
+
+//******************************************************************************
 //* TTestNotifyMethod                                                          *
 //******************************************************************************
 //* TTestNotifyMethod Public methods *******************************************
@@ -3437,7 +3455,6 @@ begin
   Self.Request := TIdSipTestResources.CreateBasicRequest;
   Self.Request.FirstEvent.EventPackage := TIdSipTestPackage.EventPackage;
 
-  Self.Module := Self.UA.AddModule(TIdSipSubscribeModule) as TIdSipSubscribeModule;
   Self.Module.AddPackage(TIdSipTestPackage);
 
   Self.Dispatcher.MockLocator.AddA(Self.Request.LastHop.SentBy, '127.0.0.1');
@@ -3493,7 +3510,7 @@ procedure TestTIdSipSubscriptionRequestMethod.SetUp;
 begin
   inherited SetUp;
 
-  Self.Subscription := TIdSipInboundSubscription.Create(Self.UA, Self.Request, false);
+  Self.Subscription := TIdSipInboundSubscription.CreateInbound(Self.UA, Self.Request, false);
   Self.Method := TIdSipSubscriptionRequestMethod.Create;
   Self.Method.Subscription := Self.Subscription;
 end;

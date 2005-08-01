@@ -175,10 +175,11 @@ type
     Module: TIdSipSubscribeModule;
   protected
     function  CreateNewAttempt: TIdSipRequest; override;
+    procedure Initialise(UA: TIdSipAbstractUserAgent;
+                         Request: TIdSipRequest;
+                         UsingSecureTransport: Boolean); override;
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
   public
-    constructor Create(UA: TIdSipAbstractUserAgent); override;
-
     procedure AddListener(Listener: IIdSipNotifyListener);
     procedure RemoveListener(Listener: IIdSipNotifyListener);
     procedure Send; override;
@@ -212,9 +213,10 @@ type
     Module:        TIdSipSubscribeModule;
   protected
     function CreateNewAttempt: TIdSipRequest; override;
+    procedure Initialise(UA: TIdSipAbstractUserAgent;
+                         Request: TIdSipRequest;
+                         UsingSecureTransport: Boolean); override;
   public
-    constructor Create(UA: TIdSipAbstractUserAgent); override;
-
     property EventPackage: String   read fEventPackage write fEventPackage;
     property Duration:     Cardinal read fDuration write fDuration;
     property ID:           String   read fID write fID;
@@ -227,11 +229,13 @@ type
     procedure NotifyOfSuccess(Response: TIdSipResponse);
     procedure SetTarget(Value: TIdSipAddressHeader);
   protected
+    procedure Initialise(UA: TIdSipAbstractUserAgent;
+                         Request: TIdSipRequest;
+                         UsingSecureTransport: Boolean); override;
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
     function  ReceiveOKResponse(Response: TIdSipResponse;
                                 UsingSecureTransport: Boolean): TIdSipActionStatus; override;
   public
-    constructor Create(UA: TIdSipAbstractUserAgent); overload; override;
     destructor  Destroy; override;
 
     procedure AddListener(Listener: IIdSipSubscribeListener);
@@ -327,11 +331,13 @@ type
     function  CreateNewAttempt: TIdSipRequest; override;
     function  DialogEstablished: Boolean;
     procedure EstablishDialog(Response: TIdSipResponse); virtual;
+    procedure Initialise(UA: TIdSipAbstractUserAgent;
+                         Request: TIdSipRequest;
+                         UsingSecureTransport: Boolean); override;
     procedure SetEventPackage(const Value: String); virtual;
     procedure SetExpiryTime(Value: TDateTime);
     procedure SetState(const Value: String); virtual;
   public
-    constructor Create(UA: TIdSipAbstractUserAgent); override;
     destructor  Destroy; override;
 
     procedure Expire; virtual;
@@ -380,13 +386,12 @@ type
   protected
     function  CreateDialog(Response: TIdSipResponse): TIdSipDialog; override;
     procedure EstablishDialog(Response: TIdSipResponse); override;
+    procedure Initialise(UA: TIdSipAbstractUserAgent;
+                         Request: TIdSipRequest;
+                         UsingSecureTransport: Boolean); override;
     procedure ReceiveSubscribe(Request: TIdSipRequest); override;
     procedure SendResponse(Response: TIdSipResponse); override;
   public
-    constructor Create(UA: TIdSipAbstractUserAgent;
-                       Subscribe: TIdSipRequest;
-                       UsingSecureTransport: Boolean); reintroduce;
-
     procedure Accept;
     procedure Expire; override;
     function  IsInbound: Boolean; override;
@@ -421,12 +426,13 @@ type
     procedure StartNewSubscription(Notify: TIdSipRequest);
   protected
     function  CreateDialog(Response: TIdSipResponse): TIdSipDialog; override;
+    procedure Initialise(UA: TIdSipAbstractUserAgent;
+                         Request: TIdSipRequest;
+                         UsingSecureTransport: Boolean); override;
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
     procedure ReceiveNotify(Notify: TIdSipRequest); override;
     procedure SetEventPackage(const Value: String); override;
   public
-    constructor Create(UA: TIdSipAbstractUserAgent); override;
-
     procedure AddListener(Listener: IIdSipSubscriptionListener);
     procedure Expire; override;
     function  Match(Msg: TIdSipMessage): Boolean; override;
@@ -629,9 +635,9 @@ begin
       Exit;
     end;
 
-    Subscription := TIdSipInboundSubscription.Create(Self.UserAgent,
-                                                     Request,
-                                                     UsingSecureTransport);
+    Subscription := TIdSipInboundSubscription.CreateInbound(Self.UserAgent,
+                                                            Request,
+                                                            UsingSecureTransport);
     Self.NotifyOfSubscriptionRequest(Subscription);
     Result := Subscription;
   end
@@ -944,13 +950,6 @@ end;
 //******************************************************************************
 //* TIdSipOutboundNotify Public methods ****************************************
 
-constructor TIdSipOutboundNotify.Create(UA: TIdSipAbstractUserAgent);
-begin
-  inherited Create(UA);
-
-  Self.Module := Self.UA.ModuleFor(Self.Method) as TIdSipSubscribeModule;
-end;
-
 procedure TIdSipOutboundNotify.AddListener(Listener: IIdSipNotifyListener);
 begin
   Self.Listeners.AddListener(Listener);
@@ -990,6 +989,17 @@ begin
   Result.Body          := Self.Body;
   Result.ContentLength := Length(Result.Body);
   Result.ContentType   := Self.MimeType;
+end;
+
+procedure TIdSipOutboundNotify.Initialise(UA: TIdSipAbstractUserAgent;
+                                          Request: TIdSipRequest;
+                                          UsingSecureTransport: Boolean);
+begin
+  inherited Initialise(UA, Request, UsingSecureTransport);
+
+  Self.Module := Self.UA.ModuleFor(Self.Method) as TIdSipSubscribeModule;
+  Assert(Assigned(Self.Module),
+         'The Transaction-User layer cannot process NOTIFY methods without adding the Subscribe module to it');
 end;
 
 procedure TIdSipOutboundNotify.NotifyOfFailure(Response: TIdSipResponse);
@@ -1054,15 +1064,6 @@ end;
 //******************************************************************************
 //* TIdSipSubscribe                                                            *
 //******************************************************************************
-//* TIdSipSubscribe Public methods *********************************************
-
-constructor TIdSipSubscribe.Create(UA: TIdSipAbstractUserAgent);
-begin
-  inherited Create(UA);
-
-  Self.Module := Self.UA.ModuleFor(Self.Method) as TIdSipSubscribeModule;
-end;
-
 //* TIdSipSubscribe Protected methods ******************************************
 
 function TIdSipSubscribe.CreateNewAttempt: TIdSipRequest;
@@ -1080,17 +1081,21 @@ begin
   end;
 end;
 
+procedure TIdSipSubscribe.Initialise(UA: TIdSipAbstractUserAgent;
+                                     Request: TIdSipRequest;
+                                     UsingSecureTransport: Boolean);
+begin
+  inherited Initialise(UA, Request, UsingSecureTransport);
+
+  Self.Module := Self.UA.ModuleFor(Self.Method) as TIdSipSubscribeModule;
+  Assert(Assigned(Self.Module),
+         'The Transaction-User layer cannot process SUBSCRIBE methods without adding the Subscribe module to it');
+end;
+
 //******************************************************************************
 //* TIdSipOutboundSubscribe                                                    *
 //******************************************************************************
 //* TIdSipOutboundSubscribe Public methods *************************************
-
-constructor TIdSipOutboundSubscribe.Create(UA: TIdSipAbstractUserAgent);
-begin
-  inherited Create(UA);
-
-  Self.fTarget := TIdSipAddressHeader.Create;
-end;
 
 destructor TIdSipOutboundSubscribe.Destroy;
 begin
@@ -1140,6 +1145,15 @@ begin
 end;
 
 //* TIdSipOutboundSubscribe Protected methods **********************************
+
+procedure TIdSipOutboundSubscribe.Initialise(UA: TIdSipAbstractUserAgent;
+                                             Request: TIdSipRequest;
+                                             UsingSecureTransport: Boolean);
+begin
+  inherited Initialise(UA, Request, UsingSecureTransport);
+
+  Self.fTarget := TIdSipAddressHeader.Create;
+end;
 
 procedure TIdSipOutboundSubscribe.NotifyOfFailure(Response: TIdSipResponse);
 var
@@ -1328,15 +1342,6 @@ end;
 //******************************************************************************
 //* TIdSipSubscription Public methods ******************************************
 
-constructor TIdSipSubscription.Create(UA: TIdSipAbstractUserAgent);
-begin
-  inherited Create(UA);
-
-  Self.fTerminating := false;
-
-  Self.Module := Self.UA.ModuleFor(Self.Method) as TIdSipSubscribeModule;
-end;
-
 destructor TIdSipSubscription.Destroy;
 begin
   Self.Package.Free;
@@ -1378,6 +1383,19 @@ begin
     Self.Dialog := Self.CreateDialog(Response);
 end;
 
+procedure TIdSipSubscription.Initialise(UA: TIdSipAbstractUserAgent;
+                                        Request: TIdSipRequest;
+                                        UsingSecureTransport: Boolean);
+begin
+  inherited Initialise(UA, Request, UsingSecureTransport);
+
+  Self.fTerminating := false;
+
+  Self.Module := Self.UA.ModuleFor(Self.Method) as TIdSipSubscribeModule;
+  Assert(Assigned(Self.Module),
+         'The Transaction-User layer cannot process SUBSCRIBE methods without adding the Subscribe module to it');
+end;
+
 procedure TIdSipSubscription.SetEventPackage(const Value: String);
 begin
   Self.fEventPackage := Value;
@@ -1411,25 +1429,6 @@ end;
 //* TIdSipInboundSubscription                                                  *
 //******************************************************************************
 //* TIdSipInboundSubscription Public methods ***********************************
-
-constructor TIdSipInboundSubscription.Create(UA: TIdSipAbstractUserAgent;
-                                             Subscribe: TIdSipRequest;
-                                             UsingSecureTransport: Boolean);
-begin
-  inherited Create(UA);
-
-  Self.UsingSecureTransport := UsingSecureTransport;
-  Self.InitialRequest.Assign(Subscribe);
-  Self.EventPackage := Self.InitialRequest.FirstEvent.EventType;
-  Self.ID           := Self.InitialRequest.FirstEvent.ID;
-
-  // Self.Module.Package WILL return something, because the SubscribeModule
-  // rejects all SUBSCRIBEs with unknown Event header values before we get
-  // here.
-  Self.Package := Self.Module.Package(Self.EventPackage).Clone;
-
-  Self.ReceiveRequest(Subscribe);
-end;
 
 procedure TIdSipInboundSubscription.Accept;
 var
@@ -1528,6 +1527,22 @@ begin
   inherited EstablishDialog(Response);
 
   Self.InitialRequest.ToHeader.Tag := Self.Dialog.ID.LocalTag;
+end;
+
+procedure TIdSipInboundSubscription.Initialise(UA: TIdSipAbstractUserAgent;
+                                               Request: TIdSipRequest;
+                                               UsingSecureTransport: Boolean);
+begin
+  inherited Initialise(UA, Request, UsingSecureTransport);
+
+  Self.UsingSecureTransport := UsingSecureTransport;
+  Self.EventPackage := Self.InitialRequest.FirstEvent.EventType;
+  Self.ID           := Self.InitialRequest.FirstEvent.ID;
+
+  // Self.Module.Package WILL return something, because the SubscribeModule
+  // rejects all SUBSCRIBEs with unknown Event header values before we get
+  // here.
+  Self.Package := Self.Module.Package(Self.EventPackage).Clone;
 end;
 
 procedure TIdSipInboundSubscription.ReceiveSubscribe(Request: TIdSipRequest);
@@ -1759,13 +1774,6 @@ end;
 //******************************************************************************
 //* TIdSipOutboundSubscription Public methods **********************************
 
-constructor TIdSipOutboundSubscription.Create(UA: TIdSipAbstractUserAgent);
-begin
-  inherited Create(UA);
-
-  Self.InitialSubscribe := Self.CreateOutboundSubscribe;
-end;
-
 procedure TIdSipOutboundSubscription.AddListener(Listener: IIdSipSubscriptionListener);
 begin
   Self.Listeners.AddListener(Listener);
@@ -1851,6 +1859,15 @@ begin
   Result := TIdSipDialog.CreateOutboundDialog(Self.InitialRequest,
                                               Response,
                                               false);
+end;
+
+procedure TIdSipOutboundSubscription.Initialise(UA: TIdSipAbstractUserAgent;
+                                                Request: TIdSipRequest;
+                                                UsingSecureTransport: Boolean);
+begin
+  inherited Initialise(UA, Request, UsingSecureTransport);
+
+  Self.InitialSubscribe := Self.CreateOutboundSubscribe;
 end;
 
 procedure TIdSipOutboundSubscription.NotifyOfFailure(Response: TIdSipResponse);

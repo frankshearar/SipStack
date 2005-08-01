@@ -1409,7 +1409,7 @@ begin
   try
     Self.Actions.AddObserver(L1);
 
-    Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
+    Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false));
 
     Check(L1.Changed, 'L1 not notified');
   finally
@@ -1429,7 +1429,7 @@ begin
       Self.Actions.AddObserver(L1);
       Self.Actions.AddObserver(L2);
 
-      Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
+      Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false));
 
       Check(L1.Changed, 'L1 not notified, thus not added');
       Check(L2.Changed, 'L2 not notified, thus not added');
@@ -1475,8 +1475,8 @@ var
   A:      TIdSipAction;
   Finder: TIdSipActionFinder;
 begin
-  Self.Actions.Add(TIdSipInboundOptions.Create(Self.Core, Self.Options));
-  A := Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
+  Self.Actions.Add(TIdSipInboundOptions.CreateInbound(Self.Core, Self.Options, false));
+  A := Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false));
   Self.Actions.Add(TIdSipOutboundOptions.Create(Self.Core));
 
   Finder := TIdSipActionFinder.Create;
@@ -1507,7 +1507,7 @@ procedure TestTIdSipActions.TestFindActionAndPerformBlockNoMatch;
 var
   Finder: TIdSipActionFinder;
 begin
-  Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
+  Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false));
 
   Finder := TIdSipActionFinder.Create;
   try
@@ -1525,8 +1525,8 @@ var
   Finder: TIdSipActionFinder;
   Switch: TIdSipActionSwitch;
 begin
-  Self.Actions.Add(TIdSipInboundOptions.Create(Self.Core, Self.Options));
-  A := Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
+  Self.Actions.Add(TIdSipInboundOptions.CreateInbound(Self.Core, Self.Options, false));
+  A := Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false));
   Self.Actions.Add(TIdSipOutboundOptions.Create(Self.Core));
 
   Finder := TIdSipActionFinder.Create;
@@ -1552,7 +1552,7 @@ var
   Finder: TIdSipActionFinder;
   Switch: TIdSipActionSwitch;
 begin
-  Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
+  Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false));
 
   Finder := TIdSipActionFinder.Create;
   try
@@ -1576,10 +1576,10 @@ procedure TestTIdSipActions.TestInviteCount;
 begin
   CheckEquals(0, Self.Actions.InviteCount, 'No messages received');
 
-  Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
+  Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false));
   CheckEquals(1, Self.Actions.InviteCount, 'One INVITE');
 
-  Self.Actions.Add(TIdSipInboundOptions.Create(Self.Core, Self.Options));
+  Self.Actions.Add(TIdSipInboundOptions.CreateInbound(Self.Core, Self.Options, false));
   CheckEquals(1, Self.Actions.InviteCount, 'One INVITE, one OPTIONS');
 
   Self.Actions.Add(TIdSipOutboundInvite.Create(Self.Core));
@@ -1603,7 +1603,7 @@ begin
       Self.Actions.AddObserver(L2);
       Self.Actions.RemoveObserver(L1);
 
-      Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
+      Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false));
 
       Check(not L1.Changed, 'L1 notified, thus not removed');
       Check(L2.Changed, 'L2 not notified, thus not added');
@@ -1621,7 +1621,7 @@ procedure TestTIdSipActions.TestTerminateAllActions;
 begin
   // We don't add INVITEs here because INVITEs need additional events to
   // properly terminate: an INVITE needs to wait for a final response, etc.
-  Self.Actions.Add(TIdSipInboundOptions.Create(Self.Core, Self.Options));
+  Self.Actions.Add(TIdSipInboundOptions.CreateInbound(Self.Core, Self.Options, false));
   Self.Actions.Add(TIdSipOutboundRegistrationQuery.Create(Self.Core));
   Self.Actions.Add(TIdSipOutboundRegister.Create(Self.Core));
 
@@ -4849,7 +4849,7 @@ begin
   Self.OnSuccessFired := false;
   Self.ToTag          := 'foo-tag';
 
-  Self.InviteAction := TIdSipInboundInvite.Create(Self.Core, Self.Invite);
+  Self.InviteAction := TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false);
   Self.InviteAction.LocalTag := Self.ToTag;
   Self.InviteAction.AddListener(Self);
 end;
@@ -5052,7 +5052,7 @@ begin
   Self.Invite.Body := '';
   Self.Invite.RemoveAllHeadersNamed(ContentTypeHeaderFull);
 
-  Action := TIdSipInboundInvite.Create(Self.Core, Self.Invite);
+  Action := TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false);
   Action.AddListener(Self);
 
   Self.MarkSentResponseCount;
@@ -5134,7 +5134,7 @@ begin
   // We want an in-dialog action
   Self.Invite.ToHeader.Tag := Self.Core.NextTag;
 
-  Action := TIdSipInboundInvite.Create(Self.Core, Self.Invite);
+  Action := TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false);
   try
     Action.Accept('', '');
 
@@ -5151,7 +5151,7 @@ begin
   // We want an in-dialog action
   Self.Invite.ToHeader.Tag := Self.Core.NextTag;
 
-  Action := TIdSipInboundInvite.Create(Self.Core, Self.Invite);
+  Action := TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false);
   try
     Self.CheckAckWithDifferentCSeq(Action);
   finally
@@ -6286,7 +6286,9 @@ begin
   inherited SetUp;
 
   Self.Invite.Method := MethodOptions;
-  Self.Options := TIdSipInboundOptions.Create(Self.Core, Self.Invite);
+  Self.Options := TIdSipInboundOptions.CreateInbound(Self.Core,
+                                                     Self.Invite,
+                                                     false);
 end;
 
 procedure TestTIdSipInboundOptions.TearDown;
@@ -6386,8 +6388,9 @@ begin
   Self.Core.DoNotDisturb := true;
 
   Self.MarkSentResponseCount;
-  NewOptions := TIdSipInboundOptions.Create(Self.Core,
-                                            Self.Options.InitialRequest);
+  NewOptions := TIdSipInboundOptions.CreateInbound(Self.Core,
+                                                   Self.Options.InitialRequest,
+                                                   false);
   try
     CheckResponseSent('No response sent');
 
@@ -6563,7 +6566,7 @@ begin
   inherited SetUp;
 
   Self.Invite.Method := MethodRegister;
-  Self.RegisterAction := TIdSipInboundRegistration.Create(Self.Core, Self.Invite);
+  Self.RegisterAction := TIdSipInboundRegistration.CreateInbound(Self.Core, Self.Invite, false);
 end;
 
 procedure TestTIdSipInboundRegistration.TearDown;
@@ -9905,7 +9908,7 @@ begin
   Self.Invite := TIdSipTestResources.CreateBasicRequest;
 
   Self.Method := TIdSipInboundInviteFailureMethod.Create;
-  Self.Method.Invite := TIdSipInboundInvite.Create(Self.UA, Self.Invite);
+  Self.Method.Invite := TIdSipInboundInvite.CreateInbound(Self.UA, Self.Invite, false);
 end;
 
 procedure TestTIdSipInboundInviteFailureMethod.TearDown;
@@ -10677,9 +10680,9 @@ begin
 
   Self.Dispatcher.MockLocator.AddA(Self.Request.LastHop.SentBy, '127.0.0.1');
 
-  Self.Session := TIdSipInboundSession.Create(Self.UA,
-                                              Self.Request,
-                                              false);
+  Self.Session := TIdSipInboundSession.CreateInbound(Self.UA,
+                                                     Self.Request,
+                                                     false);
   Self.Method := TIdSipUserAgentInboundCallMethod.Create;
   Self.Method.Session := Self.Session;
 end;

@@ -43,11 +43,11 @@ type
   private
     fIsInbound:  Boolean;
     fResponseResent: Boolean;
+  protected
+    procedure Initialise(UA: TIdSipAbstractUserAgent;
+                         Request: TIdSipRequest;
+                         UsingSecureTransport: Boolean); override;
   public
-    constructor Create(UA: TIdSipAbstractUserAgent;
-                       Invite: TIdSipRequest;
-                       UsingSecureTransport: Boolean); override;
-
     function  IsInbound: Boolean; override;
     procedure SetIsInbound(Value: Boolean);
 
@@ -123,16 +123,6 @@ end;
 //******************************************************************************
 //* TIdSipMockSession Public methods *******************************************
 
-constructor TIdSipMockSession.Create(UA: TIdSipAbstractUserAgent;
-                                     Invite: TIdSipRequest;
-                                     UsingSecureTransport: Boolean);
-begin
-  inherited Create(UA, Invite, UsingSecureTransport);
-
-  Self.fResponseResent := false;
-  Self.SetIsInbound(false);
-end;
-
 function TIdSipMockSession.IsInbound: Boolean;
 begin
   Result := Self.fIsInbound;
@@ -141,6 +131,18 @@ end;
 procedure TIdSipMockSession.SetIsInbound(Value: Boolean);
 begin
   Self.fIsInbound := Value;
+end;
+
+//* TIdSipMockSession Protected methods ****************************************
+
+procedure TIdSipMockSession.Initialise(UA: TIdSipAbstractUserAgent;
+                                       Request: TIdSipRequest;
+                                       UsingSecureTransport: Boolean);
+begin
+  inherited Initialise(UA, Request, UsingSecureTransport);
+
+  Self.fResponseResent := false;
+  Self.SetIsInbound(false);
 end;
 
 end.
