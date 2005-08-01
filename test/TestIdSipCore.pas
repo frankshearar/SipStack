@@ -57,13 +57,8 @@ type
     ActionProcUsed:      String;
     Actions:             TIdSipActions;
     DidntFindActionName: String;
-    FoundAction:         TIdSipAction;
     FoundActionName:     String;
-    FoundSession:        TIdSipSession;
     Options:             TIdSipRequest;
-
-    procedure RecordSession(Session: TIdSipSession;
-                            Invite: TIdSipRequest);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -77,9 +72,6 @@ type
     procedure TestFindActionAndPerformBlockNoMatch;
     procedure TestFindActionAndPerformOrBlock;
     procedure TestFindActionAndPerformOrBlockNoMatch;
-//    procedure TestFindSessionAndPerform;
-//    procedure TestFindSessionAndPerformNoMatch;
-//    procedure TestFindSessionAndPerformNoSessions;
     procedure TestInviteCount;
     procedure TestRemoveObserver;
     procedure TestTerminateAllActions;
@@ -678,6 +670,7 @@ type
     procedure TestReceiveByeWithPendingRequests;
     procedure TestRejectInviteWhenInboundModificationInProgress;
     procedure TestRejectInviteWhenOutboundModificationInProgress;
+    procedure TestRemodify;
   end;
 
   TestTIdSipInboundSession = class(TestTIdSipSession,
@@ -1184,6 +1177,7 @@ begin
   Self.NotifyOfChange;
 end;
 
+
 //******************************************************************************
 //* TestTIdSipAbstractCore                                                     *
 //******************************************************************************
@@ -1395,14 +1389,6 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdSipActions Private methods ******************************************
-
-procedure TestTIdSipActions.RecordSession(Session: TIdSipSession;
-                                          Invite: TIdSipRequest);
-begin
-  Self.FoundSession := Session;
-end;
-
 //* TestTIdSipActions Published methods ****************************************
 
 procedure TestTIdSipActions.TestActionCount;
@@ -1585,36 +1571,7 @@ begin
     Finder.Free;
   end;
 end;
-{
-procedure TestTIdSipActions.TestFindSessionAndPerform;
-var
-  S: TIdSipAction;
-begin
-  Self.Actions.Add(TIdSipInboundOptions.Create(Self.Core, Self.Options));
-  S := Self.Actions.Add(TIdSipInboundSession.Create(Self.Core, Self.Invite, false));
-  Self.Actions.Add(TIdSipOutboundOptions.Create(Self.Core));
 
-  Self.Actions.FindSessionAndPerform(S.InitialRequest, Self.RecordSession);
-
-  Check(Self.FoundSession = S, 'Wrong session found');
-end;
-
-procedure TestTIdSipActions.TestFindSessionAndPerformNoMatch;
-begin
-  Self.Actions.Add(TIdSipInboundOptions.Create(Self.Core, Self.Options));
-
-  Self.Actions.FindSessionAndPerform(Self.Invite, Self.RecordSession);
-
-  Check(not Assigned(Self.FoundAction), 'A session found');
-end;
-
-procedure TestTIdSipActions.TestFindSessionAndPerformNoSessions;
-begin
-  Self.Actions.FindSessionAndPerform(Self.Invite, Self.RecordSession);
-
-  Check(not Assigned(Self.FoundSession), 'Session found in an empty list');
-end;
-}
 procedure TestTIdSipActions.TestInviteCount;
 begin
   CheckEquals(0, Self.Actions.InviteCount, 'No messages received');
@@ -5262,8 +5219,9 @@ begin
 end;
 
 procedure TestTIdSipSession.TestModifyGlareOutbound;
+const
+  Body = 'random data';
 var
-  Event:       TNotifyEvent;
   EventCount:  Integer;
   LatestEvent: TIdWait;
   Session:     TIdSipSession;
@@ -5273,11 +5231,10 @@ begin
   // we receive its 491 Request Pending. We schedule a time to resend our
   // INVITE.
 
-  Event := Self.Core.OnResendReInvite;
-
   Session := Self.CreateAndEstablishSession;
 
-  Session.Modify('', '');
+  Self.DebugTimer.TriggerAllEventsOfType(TIdSipActionsWait);
+  Session.Modify(Body, PlainTextMimeType);
 
   EventCount := Self.DebugTimer.EventCount;
   Self.ReceiveResponse(SIPRequestPending);
@@ -5287,7 +5244,7 @@ begin
     Check(EventCount < Self.DebugTimer.EventCount,
           Session.ClassName + ': No timer added');
 
-    LatestEvent := Self.DebugTimer.FirstEventScheduledFor(@Event);
+    LatestEvent := Self.DebugTimer.LastEventScheduled;
 
     Check(Assigned(LatestEvent),
           Session.ClassName + ': Wrong notify event');
@@ -5297,6 +5254,16 @@ begin
   finally
     Self.DebugTimer.UnlockTimer;
   end;
+
+  Self.MarkSentRequestCount;
+  Self.DebugTimer.TriggerAllEventsOfType(TIdSipActionsWait);
+  CheckRequestSent('No request sent: event not scheduled?');
+  CheckEquals(MethodInvite,
+              Self.LastSentRequest.Method,
+              'Unexpected request');
+  CheckEquals(Body,
+              Self.LastSentRequest.Body,
+              'Wrong message sent?');
 end;
 
 procedure TestTIdSipSession.TestModifyRejectedWithTimeout;
@@ -5517,6 +5484,34 @@ begin
   finally
     FirstInvite.Free;
   end;
+end;
+
+procedure TestTIdSipSession.TestRemodify;
+const
+  Body = 'random data';
+var
+  Session: TIdSipSession;
+begin
+  //      <establish session>
+  //  ---       INVITE 1       --->
+  // <---  491 Request Pending ---
+  //  ---         ACK          --->
+  //         <time passes>
+  //  ---       INVITE 2       ---> (with same body as INVITE 1)
+
+  Session := Self.CreateAndEstablishSession;
+  Session.Modify(Body, PlainTextMimeType);
+  Self.ReceiveResponse(Self.LastSentRequest, SIPRequestPending);
+
+  Self.MarkSentRequestCount;
+  Session.Remodify;
+  CheckRequestSent('No request sent');
+  CheckEquals(MethodInvite,
+              Self.LastSentRequest.Method,
+              'Unexpected request sent');
+  CheckEquals(Body,
+              Self.LastSentRequest.Body,
+              'Unexpected body in request');
 end;
 
 //******************************************************************************

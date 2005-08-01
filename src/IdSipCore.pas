@@ -367,8 +367,8 @@ type
     Observed:   TIdObservable;
 
     function  ActionAt(Index: Integer): TIdSipAction;
-    function  FindAction(Msg: TIdSipMessage): TIdSipAction;
-    function  FindSession(Msg: TIdSipMessage): TIdSipSession;
+    function  FindAction(Msg: TIdSipMessage): TIdSipAction; overload;
+    function  FindAction(const ActionID: String): TIdSipAction; overload;
     procedure LockActions;
     procedure UnlockActions;
   public
@@ -384,19 +384,19 @@ type
     procedure CleanOutTerminatedActions;
     function  Count: Integer;
     function  CountOf(const MethodName: String): Integer;
+    procedure FindActionAndPerform(const ID: String;
+                                   Block: TIdSipActionClosure); overload;
     procedure FindActionAndPerform(Msg: TIdSipMessage;
-                                   Block: TIdSipActionClosure);
+                                   Block: TIdSipActionClosure); overload;
+    procedure FindActionAndPerformOr(const ID: String;
+                                     FoundBlock: TIdSipActionClosure;
+                                     NotFoundBlock: TIdSipActionClosure); overload;
     procedure FindActionAndPerformOr(Msg: TIdSipMessage;
                                      FoundBlock: TIdSipActionClosure;
-                                     NotFoundBlock: TIdSipActionClosure);
-{
-    procedure FindSessionAndPerform(Msg: TIdSipMessage;
-                                    Block: TIdSipActionClosure); overload;
-    procedure FindSessionAndPerform(Msg: TIdSipMessage;
-                                    Proc: TIdSipSessionProc); overload;
-}
+                                     NotFoundBlock: TIdSipActionClosure); overload;
     procedure Perform(Msg: TIdSipMessage; Block: TIdSipActionClosure);
     function  InviteCount: Integer;
+    function  NextActionID: String;
     function  OptionsCount: Integer;
     function  RegistrationCount: Integer;
     procedure RemoveObserver(const Listener: IIdObserver);
@@ -415,6 +415,15 @@ type
 
     property Actions:   TIdSipActions            read fActions write fActions;
     property BlockType: TIdSipActionClosureClass read fBlockType write fBlockType;
+  end;
+
+  TIdSipIDActionsWait = class(TIdSipActionsWait)
+  private
+    fActionID: String;
+  public
+    procedure Trigger; override;
+
+    property ActionID: String read fActionID write fActionID;
   end;
 
   // I represent the (possibly deferred) execution of something my Action needs
@@ -531,8 +540,6 @@ type
 
     // Pull these into UserAgent proper:
     procedure NotifyOfInboundCall(Session: TIdSipInboundSession);
-    procedure ResendReInvite(Session: TIdSipSession;
-                             Invite: TIdSipRequest);
     procedure UpdateAffectedActionWithRequest(FindMsg: TIdSipMessage;
                                               NewRequest: TIdSipRequest);
   protected
@@ -602,6 +609,7 @@ type
     function  ModuleFor(Request: TIdSipRequest): TIdSipMessageModule; overload;
     function  ModuleFor(const Method: String): TIdSipMessageModule; overload;
     function  ModuleFor(ModuleType: TIdSipMessageModuleClass): TIdSipMessageModule; overload;
+    function  NextActionID: String;
     function  NextBranch: String;
     function  NextInitialSequenceNo: Cardinal;
     function  OptionsCount: Integer;
@@ -613,6 +621,10 @@ type
     procedure ScheduleEvent(BlockType: TIdSipActionClosureClass;
                             WaitTime: Cardinal;
                             Copy: TIdSipMessage); overload;
+    procedure ScheduleEvent(BlockType: TIdSipActionClosureClass;
+                            WaitTime: Cardinal;
+                            Copy: TIdSipMessage;
+                            const ActionID: String); overload;
     procedure ScheduleEvent(WaitTime: Cardinal;
                             Wait: TIdWait); overload;
     function  Username: String;
@@ -625,7 +637,6 @@ type
     function  CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistrationQuery;
     function  InviteCount: Integer;
     procedure OnReregister(Event: TObject);
-    procedure OnResendReInvite(Event: TObject);
     function  RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegister;
     procedure TerminateAllCalls;
     function  UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundUnregister;
@@ -838,6 +849,7 @@ type
   TIdSipActionStatus = (asSuccess, asFailure, asInterim);
   TIdSipAction = class(TIdInterfacedObject)
   private
+    fID:             String;
     fInitialRequest: TIdSipRequest;
     fIsOwned:        Boolean;
     fIsTerminated:   Boolean;
@@ -895,6 +907,7 @@ type
     procedure Send; virtual;
     procedure Terminate; virtual;
 
+    property ID:             String        read fID;
     property InitialRequest: TIdSipRequest read fInitialRequest;
     property IsOwned:        Boolean       read fIsOwned;
     property IsTerminated:   Boolean       read fIsTerminated;
@@ -1272,6 +1285,8 @@ type
     fReceivedAck:              Boolean;
     fRemoteSessionDescription: String;
     fRemoteMimeType:           String;
+    LastModifyDescription:     String;
+    LastModifyMimeType:        String;
     UsingSecureTransport:      Boolean;
 
     procedure NotifyOfModifiedSession(Answer: TIdSipResponse);
@@ -1338,6 +1353,7 @@ type
     procedure Modify(const Offer, ContentType: String);
     function  ModifyWaitTime: Cardinal; virtual;
     procedure ReceiveRequest(Request: TIdSipRequest); override;
+    procedure Remodify;
     procedure RemoveSessionListener(const Listener: IIdSipSessionListener);
 
     property Dialog:                   TIdSipDialog read GetDialog;
@@ -1451,11 +1467,7 @@ type
 
   TIdSipSessionResendReInvite = class(TIdSipActionClosure)
   public
-    fInvite: TIdSipRequest;
-  public
     procedure Execute(Action: TIdSipAction); override;
-
-    property Invite: TIdSipRequest read fInvite write fInvite;
   end;
 
   TIdSipActionNetworkFailureMethod = class(TIdNotification)
@@ -2320,6 +2332,19 @@ begin
   end;
 end;
 
+procedure TIdSipActions.FindActionAndPerform(const ID: String;
+                                             Block: TIdSipActionClosure);
+var
+  NullBlock: TIdSipActionClosure;
+begin
+  NullBlock := TIdSipActionClosure.Create;
+  try
+    Self.FindActionAndPerformOr(ID, Block, NullBlock);
+  finally
+    NullBlock.Free;
+  end;
+end;
+
 procedure TIdSipActions.FindActionAndPerform(Msg: TIdSipMessage;
                                              Block: TIdSipActionClosure);
 var
@@ -2331,6 +2356,27 @@ begin
   finally
     NullBlock.Free;
   end;
+end;
+
+procedure TIdSipActions.FindActionAndPerformOr(const ID: String;
+                                               FoundBlock: TIdSipActionClosure;
+                                               NotFoundBlock: TIdSipActionClosure);
+var
+  Action: TIdSipAction;
+begin
+  Self.LockActions;
+  try
+    Action := Self.FindAction(ID);
+
+    if Assigned(Action) then
+      FoundBlock.Execute(Action)
+    else
+      NotFoundBlock.Execute(nil);
+  finally
+    Self.UnlockActions;
+  end;
+
+  Self.CleanOutTerminatedActions;
 end;
 
 procedure TIdSipActions.FindActionAndPerformOr(Msg: TIdSipMessage;
@@ -2353,43 +2399,7 @@ begin
 
   Self.CleanOutTerminatedActions;
 end;
-{
-procedure TIdSipActions.FindSessionAndPerform(Msg: TIdSipMessage;
-                                              Block: TIdSipActionClosure);
-var
-  Session: TIdSipSession;
-begin
-  Self.LockActions;
-  try
-    Session := Self.FindSession(Msg);
 
-    if Assigned(Session) then
-      Block.Execute(Session);
-  finally
-    Self.UnlockActions;
-  end;
-
-  Self.CleanOutTerminatedActions;
-end;
-
-procedure TIdSipActions.FindSessionAndPerform(Msg: TIdSipMessage;
-                                              Proc: TIdSipSessionProc);
-var
-  Session: TIdSipSession;
-begin
-  Self.LockActions;
-  try
-    Session := Self.FindSession(Msg);
-
-    if Assigned(Session) then
-      Proc(Session, Msg as TIdSipRequest);
-  finally
-    Self.UnlockActions;
-  end;
-
-  Self.CleanOutTerminatedActions;
-end;
-}
 procedure TIdSipActions.Perform(Msg: TIdSipMessage; Block: TIdSipActionClosure);
 var
   Action: TIdSipAction;
@@ -2412,6 +2422,27 @@ end;
 function TIdSipActions.InviteCount: Integer;
 begin
   Result := Self.CountOf(MethodInvite);
+end;
+
+function TIdSipActions.NextActionID: String;
+var
+  I:             Integer;
+  NoActionHasID: Boolean;
+begin
+  // Produce a token such that no action has that token as an ID.
+
+  Self.ActionLock.Acquire;
+  try
+    repeat
+      Result := GRandomNumber.NextHexString;
+
+      NoActionHasID := true;
+      for I := 0 to Self.Actions.Count - 1 do
+        NoActionHasID := NoActionHasID and (Result <> Self.ActionAt(I).ID);
+    until NoActionHasID;
+  finally
+    Self.ActionLock.Release;
+  end;
 end;
 
 function TIdSipActions.OptionsCount: Integer;
@@ -2488,7 +2519,7 @@ begin
   end;
 end;
 
-function TIdSipActions.FindSession(Msg: TIdSipMessage): TIdSipSession;
+function TIdSipActions.FindAction(const ActionID: String): TIdSipAction;
 var
   Action: TIdSipAction;
   I:      Integer;
@@ -2499,10 +2530,8 @@ begin
   I := 0;
   while (I < Self.Actions.Count) and not Assigned(Result) do begin
     Action := Self.Actions[I] as TIdSipAction;
-    if not Action.IsTerminated
-      and Action.IsSession
-      and Action.Match(Msg) then
-      Result := Action as TIdSipSession
+    if not Action.IsTerminated and (Action.ID = ActionID) then
+      Result := Action
     else
       Inc(I);
   end;
@@ -2530,6 +2559,23 @@ begin
   Block := Self.BlockType.Create;
   try
     Self.Actions.FindActionAndPerform(Self.Message, Block);
+  finally
+    Block.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TIdSipIDActionsWait                                                        *
+//******************************************************************************
+//* TIdSipIDActionsWait Public methods *****************************************
+
+procedure TIdSipIDActionsWait.Trigger;
+var
+  Block: TIdSipActionClosure;
+begin
+  Block := Self.BlockType.Create;
+  try
+    Self.Actions.FindActionAndPerform(Self.ActionID, Block);
   finally
     Block.Free;
   end;
@@ -2971,6 +3017,11 @@ begin
   end;
 end;
 
+function TIdSipAbstractUserAgent.NextActionID: String;
+begin
+  Result := Self.Actions.NextActionID;
+end;
+
 function TIdSipAbstractUserAgent.NextBranch: String;
 begin
   Result := GRandomNumber.NextSipUserAgentBranch;
@@ -2987,15 +3038,6 @@ var
 begin
   Request := (Event as TIdSipMessageNotifyEventWait).Message as TIdSipRequest;
   Self.RegisterWith(Request.RequestUri).Send;
-end;
-
-procedure TIdSipAbstractUserAgent.OnResendReInvite(Event: TObject);
-var
-  Msg: TIdSipMessage;
-begin
-  Msg := (Event as TIdSipMessageNotifyEventWait).Message;
-//  Self.Actions.FindSessionAndPerform(Msg,
-//                                     Self.ResendReInvite);
 end;
 
 function TIdSipAbstractUserAgent.OptionsCount: Integer;
@@ -3082,6 +3124,22 @@ begin
 
   Event := Self.CreateActionsClosure(TIdSipActionsWait, Copy);
   Event.BlockType := BlockType;
+  Self.ScheduleEvent(WaitTime, Event);
+end;
+
+procedure TIdSipAbstractUserAgent.ScheduleEvent(BlockType: TIdSipActionClosureClass;
+                                                WaitTime: Cardinal;
+                                                Copy: TIdSipMessage;
+                                                const ActionID: String);
+var
+  Event: TIdSipIDActionsWait;
+begin
+  if not Assigned(Self.Timer) then
+    Exit;
+
+  Event := Self.CreateActionsClosure(TIdSipIDActionsWait, Copy) as TIdSipIDActionsWait;
+  Event.BlockType := BlockType;
+  Event.ActionID  := ActionID;
   Self.ScheduleEvent(WaitTime, Event);
 end;
 
@@ -3613,14 +3671,6 @@ begin
   finally
     Response.Free;
   end;
-end;
-
-procedure TIdSipAbstractUserAgent.ResendReInvite(Session: TIdSipSession;
-                                                 Invite: TIdSipRequest);
-begin
-  if not Session.IsTerminated then
-    Session.Modify(Invite.Body,
-                   Invite.ContentType);
 end;
 
 procedure TIdSipAbstractUserAgent.SetContact(Value: TIdSipContactHeader);
@@ -4285,6 +4335,7 @@ begin
 
   Self.fUA := UA;
 
+  Self.fID             := Self.UA.NextActionID;
   Self.fInitialRequest := TIdSipRequest.Create;
   Self.fIsOwned        := false;
   Self.fIsTerminated   := false;
@@ -6425,6 +6476,8 @@ begin
     ReInvite.Send;
 
     Self.ModifyAttempt := ReInvite;
+    Self.LastModifyDescription := Offer;
+    Self.LastModifyMimeType    := ContentType;
   finally
     Self.ModifyLock.Release;
   end;
@@ -6444,6 +6497,14 @@ begin
     Exit;
   end
   else inherited ReceiveRequest(Request);
+end;
+
+procedure TIdSipSession.Remodify;
+begin
+  // Reattempt the previously-attempted modify. Don't call this; Notifications
+  // (like TIdSipSessionResendReInvite) call this.
+
+  Self.Modify(Self.LastModifyDescription, Self.LastModifyMimeType);
 end;
 
 procedure TIdSipSession.RemoveSessionListener(const Listener: IIdSipSessionListener);
@@ -6578,6 +6639,7 @@ begin
   Self.ModifyLock.Acquire;
   try
     if (InviteAgent = Self.ModifyAttempt) then begin
+      Self.ModifyAttempt := nil;
       case Response.StatusCode of
         //  We attempted to modify the session. The remote end has also
         // attempted to do so, and sent an INVITE before our INVITE arrived.
@@ -6588,10 +6650,9 @@ begin
        // Does Not Exist from our attempted modify then the remote end's
        // disappeared or our session died. We have no choice but to terminate.
         SIPRequestTimeout,
-        SIPCallLegOrTransactionDoesNotExist: begin
-          Self.ModifyAttempt := nil;
-          Self.Terminate;
-        end;
+        SIPCallLegOrTransactionDoesNotExist: Self.Terminate;
+      else
+        // The modify attempt failed. What should we do? Todo!
       end;
     end;
   finally
@@ -6827,9 +6888,10 @@ end;
 procedure TIdSipSession.RescheduleModify(InviteAgent: TIdSipInvite);
 begin
   // Precondition: You've acquired ModifyLock.
-  Self.UA.ScheduleEvent(Self.UA.OnResendReInvite,
+  Self.UA.ScheduleEvent(TIdSipSessionResendReInvite,
                         Self.ModifyWaitTime,
-                        InviteAgent.InitialRequest.Copy);
+                        InviteAgent.InitialRequest,
+                        Self.ID);
 end;
 
 procedure TIdSipSession.TerminateAnyPendingRequests;
@@ -7456,8 +7518,7 @@ begin
   Session := Action as TIdSipSession;
 
   if not Session.IsTerminated then
-    Session.Modify(Invite.Body,
-                   Invite.ContentType);
+    Session.Remodify;
 end;
 
 //******************************************************************************
