@@ -394,10 +394,10 @@ type
     procedure FindActionAndPerformOr(Msg: TIdSipMessage;
                                      FoundBlock: TIdSipActionClosure;
                                      NotFoundBlock: TIdSipActionClosure); overload;
-    procedure Perform(Msg: TIdSipMessage; Block: TIdSipActionClosure);
     function  InviteCount: Integer;
     function  NextActionID: String;
     function  OptionsCount: Integer;
+    procedure Perform(Msg: TIdSipMessage; Block: TIdSipActionClosure);    
     function  RegistrationCount: Integer;
     procedure RemoveObserver(const Listener: IIdObserver);
     function  SessionCount: Integer;
@@ -2400,25 +2400,6 @@ begin
   Self.CleanOutTerminatedActions;
 end;
 
-procedure TIdSipActions.Perform(Msg: TIdSipMessage; Block: TIdSipActionClosure);
-var
-  Action: TIdSipAction;
-begin
-  // Find the action, and execute Block regardless of whether we found the
-  // action. FindAction returns nil in this case.
-
-  Self.LockActions;
-  try
-    Action := Self.FindAction(Msg);
-
-    Block.Execute(Action);
-  finally
-    Self.UnlockActions;
-  end;
-
-  Self.CleanOutTerminatedActions;
-end;
-
 function TIdSipActions.InviteCount: Integer;
 begin
   Result := Self.CountOf(MethodInvite);
@@ -2448,6 +2429,25 @@ end;
 function TIdSipActions.OptionsCount: Integer;
 begin
   Result := Self.CountOf(MethodOptions);
+end;
+
+procedure TIdSipActions.Perform(Msg: TIdSipMessage; Block: TIdSipActionClosure);
+var
+  Action: TIdSipAction;
+begin
+  // Find the action, and execute Block regardless of whether we found the
+  // action. FindAction returns nil in this case.
+
+  Self.LockActions;
+  try
+    Action := Self.FindAction(Msg);
+
+    Block.Execute(Action);
+  finally
+    Self.UnlockActions;
+  end;
+
+  Self.CleanOutTerminatedActions;
 end;
 
 function TIdSipActions.RegistrationCount: Integer;
