@@ -308,10 +308,11 @@ const
 
 // Constants for TIdCallEndedData
 const
-  CallEndedSuccess    = 0;
-  CallEndedFailure    = 1;
-  CallEndedNoSuchUser = SIPNotFound;
-  CallEndedRejected   = SIPBusyHere;
+  CallEndedSuccess        = 0;
+  CallEndedFailure        = 1;
+  CallEndedNoSuchUser     = SIPNotFound;
+  CallEndedRejected       = SIPBusyHere;
+  CallServiceNotAvailable = SIPServiceUnavailable;
 
 type
   TIdSipEventMessage = packed record
