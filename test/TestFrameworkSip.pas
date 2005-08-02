@@ -349,6 +349,7 @@ type
     fNewSession:               Boolean;
     fProgressedSession:        Boolean;
     fProgressParam:            TIdSipResponse;
+    fReasonParam:              String;
     fRedirect:                 Boolean;
     fRemoteSessionDescription: String;
     fSessionParam:             TIdSipSession;
@@ -358,7 +359,8 @@ type
     procedure OnRedirect(Action: TIdSipAction;
                          Redirect: TIdSipResponse);
     procedure OnEndedSession(Session: TIdSipSession;
-                             ErrorCode: Cardinal); virtual;
+                             ErrorCode: Cardinal;
+                             const Reason: String); virtual;
     procedure OnEstablishedSession(Session: TIdSipSession;
                                    const RemoteSessionDescription: String;
                                    const MimeType: String);
@@ -381,6 +383,7 @@ type
     property NewSession:               Boolean             read fNewSession;
     property ProgressParam:            TIdSipResponse      read fProgressParam;
     property ProgressedSession:        Boolean             read fProgressedSession;
+    property ReasonParam:              String              read fReasonParam;
     property Redirect:                 Boolean             read fRedirect;
     property RemoteSessionDescription: String              read fRemoteSessionDescription;
     property SessionParam:             TIdSipSession       read fSessionParam;
@@ -393,7 +396,8 @@ type
     constructor Create; override;
 
     procedure OnEndedSession(Session: TIdSipSession;
-                             ErrorCode: Cardinal); override;
+                             ErrorCode: Cardinal;
+                             const Reason: String); override;
 
     property EndedNotificationCount: Integer read fEndedNotificationCount;
   end;
@@ -1652,10 +1656,12 @@ begin
 end;
 
 procedure TIdSipTestSessionListener.OnEndedSession(Session: TIdSipSession;
-                                                   ErrorCode: Cardinal);
+                                                   ErrorCode: Cardinal;
+                                                   const Reason: String);
 begin
   Self.fEndedSession   := true;
   Self.fErrorCodeParam := ErrorCode;
+  Self.fReasonParam    := Reason;
   Self.fSessionParam   := Session;
 
   if Assigned(Self.FailWith) then
@@ -1732,9 +1738,10 @@ begin
 end;
 
 procedure TIdSipTestSessionListenerEndedCounter.OnEndedSession(Session: TIdSipSession;
-                                                               ErrorCode: Cardinal);
+                                                               ErrorCode: Cardinal;
+                                                               const Reason: String);
 begin
-  inherited OnEndedSession(Session, ErrorCode);
+  inherited OnEndedSession(Session, ErrorCode, Reason);
 
   Inc(Self.fEndedNotificationCount);
 end;

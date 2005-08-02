@@ -164,7 +164,8 @@ type
   IIdSipSessionListener = interface(IIdSipActionListener)
     ['{59B3C476-D3CA-4C5E-AA2B-2BB587A5A716}']
     procedure OnEndedSession(Session: TIdSipSession;
-                             ErrorCode: Cardinal);
+                             ErrorCode: Cardinal;
+                             const Reason: String);
     procedure OnEstablishedSession(Session: TIdSipSession;
                                    const RemoteSessionDescription: String;
                                    const MimeType: String);
@@ -626,7 +627,6 @@ type
     function  UsesModule(ModuleType: TIdSipMessageModuleClass): Boolean;
 
     // Move to UserAgent:
-    function  InviteCount: Integer; // move to InviteModule
     procedure TerminateAllCalls; // move to InviteModule
     function  UsingDefaultContact: Boolean;
 
@@ -1358,7 +1358,8 @@ type
                          UsingSecureTransport: Boolean); override;
     function  GetDialog: TIdSipDialog; virtual;
     function  GetInvite: TIdSipRequest; virtual;
-    procedure NotifyOfEndedSession(ErrorCode: Cardinal);
+    procedure NotifyOfEndedSession(ErrorCode: Cardinal;
+                                   const Reason: String);
     procedure NotifyOfEstablishedSession(const RemoteSessionDescription: String;
                                          const MimeType: String);
     procedure NotifyOfFailure(Response: TIdSipResponse); overload; override;
@@ -1640,10 +1641,12 @@ type
   TIdSipEndedSessionMethod = class(TIdSipSessionMethod)
   private
     fErrorCode: Cardinal;
+    fReason:    String;
   public
     procedure Run(const Subject: IInterface); override;
 
     property ErrorCode: Cardinal read fErrorCode write fErrorCode;
+    property Reason:    String   read fReason write fReason;
   end;
 
   TIdSipEstablishedSessionMethod = class(TIdSipSessionMethod)
@@ -1788,6 +1791,7 @@ const
   RSInboundActionFailed       = 'For an inbound %s, sending a response failed because: %s';
   RSNoLocationFound           = 'No destination addresses found for URI %s';
   RSNoLocationSucceeded       = 'Attempted message sends to all destination addresses failed for URI %s';
+  RSNoReason                  = '';
   RSRedirectWithNoContacts    = 'Call redirected to nowhere';
   RSRedirectWithNoMoreTargets = 'Call redirected but no more targets';
   RSRedirectWithNoSuccess     = 'Call redirected but no target answered';
@@ -2928,11 +2932,6 @@ begin
   Result := Self.ListHasUnknownValue(Request,
                                      Self.AllowedContentTypeList,
                                      ContentTypeHeaderFull);
-end;
-
-function TIdSipAbstractUserAgent.InviteCount: Integer;
-begin
-  Result := Self.Actions.InviteCount;
 end;
 
 function TIdSipAbstractUserAgent.IsExtensionAllowed(const Extension: String): Boolean;
@@ -6714,13 +6713,15 @@ begin
   Result := Self.InitialRequest;
 end;
 
-procedure TIdSipSession.NotifyOfEndedSession(ErrorCode: Cardinal);
+procedure TIdSipSession.NotifyOfEndedSession(ErrorCode: Cardinal;
+                                             const Reason: String);
 var
   Notification: TIdSipEndedSessionMethod;
 begin
   Notification := TIdSipEndedSessionMethod.Create;
   try
     Notification.ErrorCode := ErrorCode;
+    Notification.Reason    := Reason;
     Notification.Session   := Self;
 
     Self.Listeners.Notify(Notification);
@@ -6749,7 +6750,7 @@ end;
 procedure TIdSipSession.NotifyOfFailure(Response: TIdSipResponse);
 begin
   Self.MarkAsTerminated;
-  Self.NotifyOfEndedSession(Response.StatusCode);
+  Self.NotifyOfEndedSession(Response.StatusCode, Response.StatusText);
 end;
 
 procedure TIdSipSession.NotifyOfModifySession(Modify: TIdSipInboundInvite);
@@ -6918,7 +6919,7 @@ begin
     OK.Free;
   end;
 
-  Self.NotifyOfEndedSession(RemoteHangUp);
+  Self.NotifyOfEndedSession(RemoteHangUp, RSNoReason);
 end;
 
 procedure TIdSipSession.ReceiveInitialInvite(Invite: TIdSipRequest);
@@ -7150,14 +7151,14 @@ begin
     RedirectResponse.Free;
   end;
 
-  Self.NotifyOfEndedSession(CallRedirected);
+  Self.NotifyOfEndedSession(CallRedirected, RSNoReason);
 end;
 
 procedure TIdSipInboundSession.RejectCallBusy;
 begin
   Self.InitialInvite.RejectCallBusy;
 
-  Self.NotifyOfEndedSession(BusyHere);
+  Self.NotifyOfEndedSession(BusyHere, RSNoReason);
 end;
 
 procedure TIdSipInboundSession.Ring;
@@ -7185,7 +7186,7 @@ begin
   else
     Self.InitialInvite.Terminate;
 
-  Self.NotifyOfEndedSession(LocalHangUp);
+  Self.NotifyOfEndedSession(LocalHangUp, RSNoReason);
 
   inherited Terminate;
 end;
@@ -7250,7 +7251,7 @@ begin
 
   if not Self.FullyEstablished then begin
     Self.RejectRequest(Self.InitialRequest);
-    Self.NotifyOfEndedSession(RemoteCancel);
+    Self.NotifyOfEndedSession(RemoteCancel, RSNoReason);
     Self.MarkAsTerminated;
   end;
 end;
@@ -7391,7 +7392,7 @@ begin
   if Self.FullyEstablished then begin
     Self.MarkAsTerminated;
     Self.SendBye;
-    Self.NotifyOfEndedSession(LocalHangUp);
+    Self.NotifyOfEndedSession(LocalHangUp, RSNoReason);
   end
   else
     Self.Cancel;
@@ -7439,7 +7440,8 @@ begin
     if (InviteAgent = Self.InitialInvite) then begin
       Self.InitialInvite := nil;
       Self.MarkAsTerminated;
-      Self.NotifyOfEndedSession(Response.StatusCode);
+      Self.NotifyOfEndedSession(Response.StatusCode,
+                                Response.StatusText);
       Exit;
     end;
 
@@ -7447,7 +7449,8 @@ begin
 
     if Self.NoMoreRedirectedInvites then begin
       Self.MarkAsTerminated;
-      Self.NotifyOfEndedSession(RedirectWithNoSuccess);
+      Self.NotifyOfEndedSession(RedirectWithNoSuccess,
+                                RSRedirectWithNoSuccess);
     end;
   end;
 end;
@@ -7462,7 +7465,8 @@ begin
   if not Self.FullyEstablished then begin
     if Redirect.Contacts.IsEmpty then begin
       Self.MarkAsTerminated;
-      Self.NotifyOfEndedSession(RedirectWithNoContacts);
+      Self.NotifyOfEndedSession(RedirectWithNoContacts,
+                                RSRedirectWithNoContacts);
     end
     else begin
       // Suppose we receive a 180 and then a 302. Then we have an established
@@ -7502,7 +7506,8 @@ begin
 
       if not NewTargetsAdded and Self.NoMoreRedirectedInvites then begin
         Self.MarkAsTerminated;
-        Self.NotifyOfEndedSession(RedirectWithNoMoreTargets);
+        Self.NotifyOfEndedSession(RedirectWithNoMoreTargets,
+                                  RSRedirectWithNoMoreTargets);
       end;
     end;
   end;
@@ -7822,7 +7827,8 @@ end;
 procedure TIdSipEndedSessionMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipSessionListener).OnEndedSession(Self.Session,
-                                                    Self.ErrorCode);
+                                                    Self.ErrorCode,
+                                                    Self.Reason);
 end;
 
 //******************************************************************************

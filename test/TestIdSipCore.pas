@@ -122,7 +122,8 @@ type
                                         Message: TIdSipMessage;
                                         Receiver: TIdSipTransport);
     procedure OnEndedSession(Session: TIdSipSession;
-                             ErrorCode: Cardinal);
+                             ErrorCode: Cardinal;
+                             const Reason: String);
     procedure OnEstablishedSession(Session: TIdSipSession;
                                    const RemoteSessionDescription: String;
                                    const MimeType: String);
@@ -175,7 +176,7 @@ type
     procedure TestCreateResponseUserAgent;
     procedure TestCreateResponseUserAgentBlank;
     procedure TestDeclinedCallNotifiesListeners;
-    procedure TestDestroyUnregisters;
+    procedure TestDestroyCallsModuleCleanups;
     procedure TestDialogLocalSequenceNoMonotonicallyIncreases;
     procedure TestDispatchToCorrectSession;
     procedure TestDoNotDisturb;
@@ -343,6 +344,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestCleanUpUnregisters;
     procedure TestCreateRegister;
     procedure TestCreateRegisterReusesCallIDForSameRegistrar;
     procedure TestReregister;
@@ -635,6 +637,7 @@ type
     OnEstablishedSessionFired: Boolean;
     OnModifiedSessionFired:    Boolean;
     OnModifySessionFired:      Boolean;
+    Reason:                    String;
     RemoteSessionDescription:  String;
     SimpleSdp:                 TIdSdpPayload;
 
@@ -646,7 +649,8 @@ type
     function  CreateSimpleSdp: TIdSdpPayload;
     procedure EstablishSession(Session: TIdSipSession); virtual; abstract;
     procedure OnEndedSession(Session: TIdSipSession;
-                             ErrorCode: Cardinal); virtual;
+                             ErrorCode: Cardinal;
+                             const Reason: String); virtual;
     procedure OnEstablishedSession(Session: TIdSipSession;
                                    const RemoteSessionDescription: String;
                                    const MimeType: String); virtual;
@@ -675,6 +679,7 @@ type
     procedure TestModifyDuringModification;
     procedure TestModifyGlareInbound;
     procedure TestModifyGlareOutbound;
+    procedure TestModifyRejected;
     procedure TestModifyRejectedWithTimeout;
     procedure TestModifyWaitTime;
     procedure TestReceiveByeWithPendingRequests;
@@ -717,7 +722,8 @@ type
     function  CreateAction: TIdSipAction; override;
     procedure EstablishSession(Session: TIdSipSession); override;
     procedure OnEndedSession(Session: TIdSipSession;
-                             ErrorCode: Cardinal); override;
+                             ErrorCode: Cardinal;
+                             const Reason: String); override;
     procedure OnEstablishedSession(Session: TIdSipSession;
                                    const RemoteSessionDescription: String;
                                    const MimeType: String); override;
@@ -824,6 +830,7 @@ type
     procedure TestReceive3xxWithNoContacts;
     procedure TestReceiveFailureResponseAfterSessionEstablished;
     procedure TestReceiveFailureResponseNotifiesOnce;
+    procedure TestReceiveFailureSetsReason;
     procedure TestReceiveFinalResponseSendsAck;
     procedure TestRedirectAndAccept;
     procedure TestRedirectMultipleOks;
@@ -1836,7 +1843,8 @@ begin
 end;
 
 procedure TestTIdSipUserAgent.OnEndedSession(Session: TIdSipSession;
-                                             ErrorCode: Cardinal);
+                                             ErrorCode: Cardinal;
+                                             const Reason: String);
 begin
   Self.OnEndedSessionFired := true;
   Self.ThreadEvent.SetEvent;
@@ -2596,7 +2604,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgent.TestDestroyUnregisters;
+procedure TestTIdSipUserAgent.TestDestroyCallsModuleCleanups;
 var
   Registrar: TIdSipMockUdpTransport;
   UA:        TIdSipUserAgent;
@@ -2616,13 +2624,7 @@ begin
     end;
 
     Check(Registrar.LastRequest <> nil,
-          'No REGISTER sent');
-    CheckEquals(MethodRegister,
-                Registrar.LastRequest.Method,
-                'Unexpected request sent');
-    CheckEquals(0,
-                Registrar.LastRequest.QuickestExpiry,
-                'Expiry time indicates this wasn''t an un-REGISTER');
+          'No REGISTER sent, so Module.Cleanup not called');
   finally
     Registrar.Free;
   end;
@@ -2815,20 +2817,20 @@ end;
 procedure TestTIdSipUserAgent.TestInviteRaceCondition;
 begin
   CheckEquals(0,
-              Self.Core.InviteCount,
+              Self.Core.CountOf(MethodInvite),
               'Sanity check - new test should have no ongoing INVITE actions');
 
   Self.MarkSentResponseCount;
   Self.ReceiveInvite;
   CheckEquals(1,
-              Self.Core.InviteCount,
+              Self.Core.CountOf(MethodInvite),
               'First INVITE didn''t make a new INVITE action');
 
   CheckResponseSent('No response sent');
 
   Self.ReceiveInvite;
   CheckEquals(1,
-              Self.Core.InviteCount,
+              Self.Core.CountOf(MethodInvite),
               'INVITE resend made a new INVITE action');
 end;
 
@@ -3014,11 +3016,11 @@ end;
 procedure TestTIdSipUserAgent.TestOutboundInviteDoesNotTerminateWhenNoResponse;
 begin
   Self.Core.Call(Self.Destination, '', '').Send;
-  CheckEquals(1, Self.Core.InviteCount, 'Calling makes an INVITE');
+  CheckEquals(1, Self.Core.CountOf(MethodInvite), 'Calling makes an INVITE');
 
   Self.DebugTimer.TriggerEarliestEvent;
   CheckEquals(1,
-              Self.Core.InviteCount,
+              Self.Core.CountOf(MethodInvite),
               'If we never get a response then we DO NOT give up');
 end;
 
@@ -4747,6 +4749,23 @@ end;
 
 //* TestTIdSipOutboundRegisterModule Published methods *************************
 
+procedure TestTIdSipOutboundRegisterModule.TestCleanUpUnregisters;
+begin
+  Self.Module.HasRegistrar := true;
+  Self.Module.Registrar := Self.Core.From.Address;
+  Self.MarkSentRequestCount;
+
+  Self.Module.CleanUp;
+
+  CheckRequestSent('No REGISTER sent');
+  CheckEquals(MethodRegister,
+              Self.LastSentRequest.Method,
+              'Unexpected request sent');
+  CheckEquals(0,
+              Self.LastSentRequest.QuickestExpiry,
+              'Expiry time indicates this wasn''t an un-REGISTER');
+end;
+
 procedure TestTIdSipOutboundRegisterModule.TestCreateRegister;
 var
   Reg: TIdSipRequest;
@@ -5575,13 +5594,13 @@ var
 begin
   Self.CreateAction;
 
-  InviteCount := Self.Core.InviteCount;
+  InviteCount := Self.Core.CountOf(MethodInvite);
   Self.ReceiveResponse(StatusCode);
 
   Check(Self.OnFailureFired,
         'OnFailure didn''t fire after receiving a '
       + IntToStr(StatusCode) + ' response');
-  Check(Self.Core.InviteCount < InviteCount,
+  Check(Self.Core.CountOf(MethodInvite) < InviteCount,
         'Invite action not destroyed after receiving a '
       + IntToStr(StatusCode) + ' response');
 end;
@@ -5783,7 +5802,7 @@ begin
   //  ---         INVITE         --->
   OutboundInvite := Self.CreateAction as TIdSipOutboundInvite;
 
-  InviteCount := Self.Core.InviteCount;
+  InviteCount := Self.Core.CountOf(MethodInvite);
   Invite := TIdSipRequest.Create;
   try
     Invite.Assign(Self.LastSentRequest);
@@ -5823,7 +5842,7 @@ begin
 
       CheckAckSent('No ACK sent');
 
-      Check(Self.Core.InviteCount < InviteCount,
+      Check(Self.Core.CountOf(MethodInvite) < InviteCount,
             'Action not terminated');
     finally
       RequestTerminated.Free;
@@ -5852,7 +5871,7 @@ begin
   //  ---         INVITE         --->
   OutboundInvite := Self.CreateAction as TIdSipOutboundInvite;
 
-  InviteCount := Self.Core.InviteCount;
+  InviteCount := Self.Core.CountOf(MethodInvite);
   Invite := TIdSipRequest.Create;
   try
     Invite.Assign(Self.LastSentRequest);
@@ -5891,7 +5910,7 @@ begin
 
       CheckAckSent('No ACK sent');
 
-      Check(Self.Core.InviteCount < InviteCount,
+      Check(Self.Core.CountOf(MethodInvite) < InviteCount,
             'Action not terminated');
     finally
       RequestTerminated.Free;
@@ -7348,10 +7367,12 @@ begin
 end;
 
 procedure TestTIdSipSession.OnEndedSession(Session: TIdSipSession;
-                                           ErrorCode: Cardinal);
+                                           ErrorCode: Cardinal;
+                                           const Reason: String);
 begin
   Self.OnEndedSessionFired := true;
   Self.ErrorCode           := ErrorCode;
+  Self.Reason              := Reason;
 end;
 
 procedure TestTIdSipSession.OnEstablishedSession(Session: TIdSipSession;
@@ -7657,6 +7678,28 @@ begin
   CheckEquals(Body,
               Self.LastSentRequest.Body,
               'Wrong message sent?');
+end;
+
+procedure TestTIdSipSession.TestModifyRejected;
+var
+  OldSessionDescription: String;
+  OldSessionMimeType:    String;
+  Session: TIdSipSession;
+begin
+  Session := Self.CreateAndEstablishSession;
+
+  OldSessionDescription := Session.LocalSessionDescription;
+  OldSessionMimeType    := Session.LocalMimeType;
+
+  Session.Modify('new session desc', PlainTextMimeType);
+  Self.ReceiveServiceUnavailable(Self.LastSentRequest);
+
+  CheckEquals(OldSessionDescription,
+              Session.LocalSessionDescription,
+              'Session description altered');
+  CheckEquals(OldSessionMimeType,
+              Session.LocalMimeType,
+              'Session MIME type altered');
 end;
 
 procedure TestTIdSipSession.TestModifyRejectedWithTimeout;
@@ -7987,9 +8030,10 @@ begin
 end;
 
 procedure TestTIdSipInboundSession.OnEndedSession(Session: TIdSipSession;
-                                                  ErrorCode: Cardinal);
+                                                  ErrorCode: Cardinal;
+                                                  const Reason: String);
 begin
-  inherited OnEndedSession(Session, ErrorCode);
+  inherited OnEndedSession(Session, ErrorCode, Reason);
   Self.ActionFailed := true;
 
   Self.ThreadEvent.SetEvent;
@@ -8167,6 +8211,12 @@ begin
 
   Check(Self.OnEndedSessionFired,
         'Session didn''t notify listeners of ended session');
+  CHeckEquals(NoError,
+              Self.ErrorCode,
+              'A remote cancel''s not an erroneous condition. ErrorCode set.');
+  CheckEquals('',
+              Self.Reason,
+              'Reason param set');
 end;
 
 procedure TestTIdSipInboundSession.TestReceiveOutOfOrderReInvite;
@@ -9434,13 +9484,13 @@ begin
   //  ---          ACK          --->
 
   Contact      := 'sip:foo@bar.org';
-  InviteCount  := Self.Core.InviteCount;
+  InviteCount  := Self.Core.CountOf(MethodInvite);
   Self.MarkSentRequestCount;
   Self.ReceiveMovedTemporarily(Contact);
 
   CheckRequestSent('No new INVITE sent: ' + Self.FailReason);
   CheckEquals(InviteCount,
-              Self.Core.InviteCount,
+              Self.Core.CountOf(MethodInvite),
               'The Core should have one new INVITE and have destroyed one old one');
 
   RequestUri := Self.LastSentRequest.RequestUri;
@@ -9449,7 +9499,7 @@ begin
               'Request-URI');
 
   Self.ReceiveForbidden;
-  Check(Self.Core.InviteCount < InviteCount,
+  Check(Self.Core.CountOf(MethodInvite) < InviteCount,
         'The Core didn''t destroy the second INVITE');
   Check(Self.OnEndedSessionFired,
         'Listeners not notified of failed call');
@@ -9468,6 +9518,9 @@ begin
     Check(Self.OnEndedSessionFired,
           'Session didn''t end despite a redirect with no Contact headers');
     CheckEquals(RedirectWithNoContacts, Self.ErrorCode, 'Stack reports wrong error code');
+    CheckNotEquals('',
+                   Self.Reason,
+                   'Reason param not set');
   finally
     Redirect.Free;
   end;
@@ -9523,6 +9576,18 @@ begin
   end;
 end;
 
+procedure TestTIdSipOutboundSession.TestReceiveFailureSetsReason;
+begin
+  Self.CreateAction;
+  Self.ReceiveBusyHere(Self.LastSentRequest);
+
+  Check(Self.OnEndedSessionFired,
+        'OnEndedSession didn''t fire');
+  CheckNotEquals('',
+                 Self.Reason,
+                 'Reason param not set');
+end;
+
 procedure TestTIdSipOutboundSession.TestReceiveFinalResponseSendsAck;
 var
   I: Integer;
@@ -9554,13 +9619,13 @@ begin
   //  ---          ACK          --->
 
   Contact      := 'sip:foo@bar.org';
-  InviteCount  := Self.Core.InviteCount;
+  InviteCount  := Self.Core.CountOf(MethodInvite);
   Self.MarkSentRequestCount;
   Self.ReceiveMovedTemporarily(Contact);
 
   CheckRequestSent('No new INVITE sent: ' + Self.FailReason);
   CheckEquals(InviteCount,
-              Self.Core.InviteCount,
+              Self.Core.CountOf(MethodInvite),
               'The Core should have one new INVITE and have destroyed one old one');
 
   RequestUri := Self.LastSentRequest.RequestUri;
@@ -9674,6 +9739,9 @@ begin
         'Session didn''t notify listeners of ended session');
   CheckEquals(RedirectWithNoMoreTargets, Self.ErrorCode,
               'Session reported wrong error code for no more redirect targets');
+  CheckNotEquals('',
+                 Self.Reason,
+                 'Reason param not set');
 end;
 
 procedure TestTIdSipOutboundSession.TestRedirectWithMultipleContacts;
@@ -9725,6 +9793,9 @@ begin
         'Session didn''t notify listeners of ended session');
   CheckEquals(RedirectWithNoSuccess, Self.ErrorCode,
               'Session reported wrong error code for no successful rings');
+  CheckNotEquals('',
+                 Self.Reason,
+                 'Reason param not set');
 end;
 
 procedure TestTIdSipOutboundSession.TestSendSetsInitialRequest;
@@ -10345,6 +10416,7 @@ begin
 
   Self.Method.Session   := Self.Session;
   Self.Method.ErrorCode := ArbValue;
+  Self.Method.Reason    := 'arbitrary reason';
 end;
 
 procedure TestTIdSipEndedSessionMethod.TearDown;
@@ -10365,6 +10437,9 @@ begin
   CheckEquals(Self.Method.ErrorCode,
               Self.Listener.ErrorCodeParam,
               'ErrorCode param');
+  CheckEquals(Self.Method.Reason,
+              Self.Listener.ReasonParam,
+              'Reason param');
 end;
 
 //******************************************************************************

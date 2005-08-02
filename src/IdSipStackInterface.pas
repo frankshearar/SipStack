@@ -96,7 +96,8 @@ type
                                         Message: TIdSipMessage;
                                         Receiver: TIdSipTransport);
     procedure OnEndedSession(Session: TIdSipSession;
-                             ErrorCode: Cardinal);
+                             ErrorCode: Cardinal;
+                             const Reason: String);
     procedure OnEstablishedSession(Session: TIdSipSession;
                                    const RemoteSessionDescription: String;
                                    const MimeType: String);
@@ -664,7 +665,8 @@ begin
 end;
 
 procedure TIdSipStackInterface.OnEndedSession(Session: TIdSipSession;
-                                              ErrorCode: Cardinal);
+                                              ErrorCode: Cardinal;
+                                              const Reason: String);
 var
   Data: TIdCallEndedData;
 begin
@@ -672,6 +674,7 @@ begin
   try
     Data.Handle := Self.HandleFor(Session);
     Data.ErrorCode := ErrorCode;
+    Data.Reason    := Reason;
     Self.NotifyEvent(Session, CM_CALL_ENDED, Data);
 
     Self.RemoveAction(Data.Handle);

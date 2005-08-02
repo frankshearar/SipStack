@@ -137,7 +137,8 @@ type
                                    const RemoteSessionDescription: String;
                                    const MimeType: String);
     procedure OnEndedSession(Session: TIdSipSession;
-                             ErrorCode: Cardinal);
+                             ErrorCode: Cardinal;
+                             const Reason: String);
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnNetworkFailure(Action: TIdSipAction;
@@ -429,11 +430,12 @@ begin
 end;
 
 procedure TrnidSpike.OnEndedSession(Session: TIdSipSession;
-                                    ErrorCode: Cardinal);
+                                    ErrorCode: Cardinal;
+                                    const Reason: String);
 begin
   Self.Lock.Acquire;
   try
-    Self.Log.Lines.Add('Session ended: ' + IntToStr(ErrorCode));
+    Self.Log.Lines.Add('Session ended: ' + IntToStr(ErrorCode) + ' ' + Reason);
   finally
     Self.Lock.Release;
   end;
