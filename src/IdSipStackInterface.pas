@@ -241,6 +241,8 @@ type
     fBanner:       String;
     fProgressCode: Cardinal;
   public
+    procedure Assign(Src: TPersistent); override;
+
     property Banner:       String   read fBanner write fBanner;
     property ProgressCode: Cardinal read fProgressCode write fProgressCode;
   end;
@@ -428,7 +430,7 @@ function TIdSipStackInterface.MakeRegistration(Registrar: TIdSipUri): TIdSipHand
 var
   Reg: TIdSipOutboundRegistration;
 begin
-  Reg := Self.UserAgent.RegisterWith(Registrar);
+  Reg := Self.UserAgent.RegisterModule.RegisterWith(Registrar);
   Result := Self.AddAction(Reg);
   Reg.AddListener(Self);
 end;
@@ -1061,6 +1063,25 @@ begin
     Self.LocalSessionDescription  := Other.LocalSessionDescription;
     Self.RemoteMimeType           := Other.RemoteMimeType;
     Self.RemoteSessionDescription := Other.RemoteSessionDescription;
+  end;
+end;
+
+//******************************************************************************
+//* TIdSessionProgressData                                                     *
+//******************************************************************************
+//* TIdSessionProgressData Public methods **************************************
+
+procedure TIdSessionProgressData.Assign(Src: TPersistent);
+var
+  Other: TIdSessionProgressData;
+begin
+  inherited Assign(Src);
+
+  if (Src is TIdSessionProgressData) then begin
+    Other := Src as TIdSessionProgressData;
+
+    Self.Banner       := Other.Banner;
+    Self.ProgressCode := Other.ProgressCode;
   end;
 end;
 

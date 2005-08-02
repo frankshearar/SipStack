@@ -274,6 +274,7 @@ begin
   Result.AddTest(TestTIdCallEndedData.Suite);
   Result.AddTest(TestTIdRegistrationData.Suite);
   Result.AddTest(TestTIdFailedRegistrationData.Suite);
+  Result.AddTest(TestTIdSessionProgressData.Suite);
   Result.AddTest(TestTIdSessionData.Suite);
   Result.AddTest(TestTIdInboundCallData.Suite);
 end;
