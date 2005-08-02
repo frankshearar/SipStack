@@ -430,7 +430,7 @@ function TIdSipStackInterface.MakeRegistration(Registrar: TIdSipUri): TIdSipHand
 var
   Reg: TIdSipOutboundRegistration;
 begin
-  Reg := Self.UserAgent.RegisterModule.RegisterWith(Registrar);
+  Reg := Self.UserAgent.RegisterWith(Registrar);
   Result := Self.AddAction(Reg);
   Reg.AddListener(Self);
 end;
