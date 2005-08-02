@@ -973,6 +973,7 @@ type
     function  GetProgressResendInterval: Cardinal;
     procedure NotifyOfFailure; reintroduce; overload;
     procedure NotifyOfSuccess(Ack: TIdSipRequest);
+    procedure ScheduleResendOk(Interval: Cardinal);
     procedure SendCancelResponse(Cancel: TIdSipRequest);
     procedure SendSimpleResponse(StatusCode: Cardinal);
   protected
@@ -4831,9 +4832,7 @@ begin
     Ok.Free;
   end;
 
-  Self.UA.ScheduleEvent(TIdSipInboundInviteResendOk,
-                        Self.ResendInterval,
-                        Self.InitialRequest);
+  Self.ScheduleResendOk(Self.ResendInterval);
 end;
 
 procedure TIdSipInboundInvite.AddListener(const Listener: IIdSipInboundInviteListener);
@@ -4901,9 +4900,7 @@ begin
     if (Self.ResendInterval > Self.MaxResendInterval) then
       Self.NotifyOfFailure
     else
-      Self.UA.ScheduleEvent(TIdSipInboundInviteResendOk,
-                            Self.ResendInterval,
-                            Self.InitialRequest);
+      Self.ScheduleResendOk(Self.ResendInterval);
   end;
 end;
 
@@ -4914,7 +4911,8 @@ begin
 
     Self.UA.ScheduleEvent(TIdSipInboundInviteSessionProgress,
                           Self.ProgressResendInterval,
-                          Self.InitialRequest);
+                          Self.InitialRequest,
+                          Self.ID);
   end;
 end;
 
@@ -4925,7 +4923,8 @@ begin
 
     Self.UA.ScheduleEvent(TIdSipInboundInviteSessionProgress,
                           Self.ProgressResendInterval,
-                          Self.InitialRequest);
+                          Self.InitialRequest,
+                          Self.ID);
   end;
 end;
 
@@ -5049,6 +5048,14 @@ begin
   finally
     Notification.Free;
   end;
+end;
+
+procedure TIdSipInboundInvite.ScheduleResendOk(Interval: Cardinal);
+begin
+  Self.UA.ScheduleEvent(TIdSipInboundInviteResendOk,
+                        Interval,
+                        Self.InitialRequest,
+                        Self.ID);
 end;
 
 procedure TIdSipInboundInvite.SendCancelResponse(Cancel: TIdSipRequest);
@@ -5256,7 +5263,8 @@ begin
       if Response.IsOK then
         Self.UA.ScheduleEvent(TIdSipOutboundInviteTransactionComplete,
                               64*DefaultT1,
-                              Self.InitialRequest);
+                              Self.InitialRequest,
+                              Self.ID);
     end;
 
     if Self.Cancelling then begin
