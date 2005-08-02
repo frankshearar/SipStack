@@ -987,7 +987,7 @@ var
   Invite:    TIdSipRequest;
 begin
   Self.MarkSentRequestCount;
-  Self.Core.Call(Self.Destination, '', '').Send;
+  Self.Core.InviteModule.Call(Self.Destination, '', '').Send;
 
   CheckRequestSent('No request sent');
 

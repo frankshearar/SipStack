@@ -2228,7 +2228,7 @@ begin
   //  ---        BYE       --->
   // <---      200 OK      --->
 
-  Session := Self.Core.Call(Self.Destination, '', '');
+  Session := Self.Core.InviteModule.Call(Self.Destination, '', '');
   Session.AddSessionListener(Self);
   Session.Send;
 
@@ -2256,7 +2256,7 @@ begin
   Self.Core.HasProxy := true;
 
   Self.MarkSentRequestCount;
-  Self.Core.Call(Self.Destination, '', '').Send;
+  Self.Core.InviteModule.Call(Self.Destination, '', '').Send;
   CheckRequestSent('No request sent');
   CheckEquals(MethodInvite,
               Self.LastSentRequest.Method,
@@ -2589,7 +2589,7 @@ procedure TestTIdSipUserAgent.TestDeclinedCallNotifiesListeners;
 var
   O: TIdObserverListener;
 begin
-  Self.Core.Call(Self.Destination, '', '').Send;
+  Self.Core.InviteModule.Call(Self.Destination, '', '').Send;
 
   O := TIdObserverListener.Create;
   try
@@ -2718,7 +2718,7 @@ procedure TestTIdSipUserAgent.TestDontReAuthenticate;
 begin
   Self.TryAgain := false;
 
-  Self.Core.Call(Self.Destination, '', '').Send;
+  Self.Core.InviteModule.Call(Self.Destination, '', '').Send;
 
   Self.MarkSentRequestCount;
   Self.ReceiveUnauthorized(ProxyAuthenticateHeader, QopAuthInt);
@@ -2961,7 +2961,7 @@ procedure TestTIdSipUserAgent.TestOutboundCallAndByeToXlite;
 var
   Session: TIdSipSession;
 begin
-  Session := Self.Core.Call(Self.Destination, '', '');
+  Session := Self.Core.InviteModule.Call(Self.Destination, '', '');
   Session.AddSessionListener(Self);
   Session.Send;
 
@@ -3015,7 +3015,7 @@ end;
 
 procedure TestTIdSipUserAgent.TestOutboundInviteDoesNotTerminateWhenNoResponse;
 begin
-  Self.Core.Call(Self.Destination, '', '').Send;
+  Self.Core.InviteModule.Call(Self.Destination, '', '').Send;
   CheckEquals(1, Self.Core.CountOf(MethodInvite), 'Calling makes an INVITE');
 
   Self.DebugTimer.TriggerEarliestEvent;
@@ -3156,7 +3156,7 @@ procedure TestTIdSipUserAgent.TestReceiveResponseWithMultipleVias;
 var
   Response: TIdSipResponse;
 begin
-  Self.Core.Call(Self.Destination, '', '');
+  Self.Core.InviteModule.Call(Self.Destination, '', '');
 
   Response := TIdSipResponse.InResponseTo(Self.Invite,
                                           SIPOK,
@@ -3628,7 +3628,7 @@ end;
 
 procedure TestTIdSipUserAgent.TestSimultaneousInAndOutboundCall;
 begin
-  Self.Core.Call(Self.Destination, '', '').Send;
+  Self.Core.InviteModule.Call(Self.Destination, '', '').Send;
   Self.ReceiveTrying(Self.LastSentRequest);
   Self.ReceiveRinging(Self.LastSentRequest);
 
@@ -3663,12 +3663,12 @@ begin
   Self.Invite.From.Tag       := Self.Invite.From.Tag + '1';
   Self.ReceiveInvite;
 
-  Sess := Self.Core.Call(Self.Destination, '', '');
+  Sess := Self.Core.InviteModule.Call(Self.Destination, '', '');
   Sess.AddSessionListener(Self);
   Sess.Send;
   Self.ReceiveTrying(Self.LastSentRequest);
 
-  Sess := Self.Core.Call(Self.Destination, '', '');
+  Sess := Self.Core.InviteModule.Call(Self.Destination, '', '');
   Sess.AddSessionListener(Self);
   Sess.Send;
   Self.ReceiveOk(Self.LastSentRequest);
@@ -3747,7 +3747,7 @@ begin
 
   Self.Dispatcher.TransportType := UdpTransport;
   Self.Destination.Address.Transport := Self.Dispatcher.Transport.GetTransportType;
-  Self.Core.Call(Self.Destination, '', '').Send;
+  Self.Core.InviteModule.Call(Self.Destination, '', '').Send;
 
   CheckEquals(Self.Dispatcher.Transport.GetTransportType,
               Self.LastSentRequest.LastHop.Transport,
@@ -3756,7 +3756,7 @@ begin
 
   Self.Dispatcher.TransportType := TlsTransport;
   Self.Destination.Address.Transport := Self.Dispatcher.Transport.GetTransportType;
-  Self.Core.Call(Self.Destination, '', '').Send;
+  Self.Core.InviteModule.Call(Self.Destination, '', '').Send;
 
   CheckEquals(Self.Dispatcher.Transport.GetTransportType,
               Self.LastSentRequest.LastHop.Transport,
@@ -8688,7 +8688,7 @@ function TestTIdSipOutboundSession.CreateAction: TIdSipAction;
 var
   Session: TIdSipOutboundSession;
 begin
-  Session := Self.Core.Call(Self.Destination, Self.SDP, Self.MimeType);
+  Session := Self.Core.InviteModule.Call(Self.Destination, Self.SDP, Self.MimeType);
   Session.AddSessionListener(Self);
   Session.Send;
 
@@ -9562,7 +9562,7 @@ var
   L:       TIdSipTestSessionListenerEndedCounter;
   Session: TIdSipOutboundSession;
 begin
-  Session := Self.Core.Call(Self.Destination, Self.SDP, SdpMimeType);
+  Session := Self.Core.InviteModule.Call(Self.Destination, Self.SDP, SdpMimeType);
   L := TIdSipTestSessionListenerEndedCounter.Create;
   try
     Session.AddSessionListener(L);
@@ -10533,7 +10533,7 @@ begin
 
   Invite := TIdSipTestResources.CreateBasicRequest;
   try
-    Self.Session := Self.UA.Call(Invite.ToHeader, '', '');
+    Self.Session := Self.UA.InviteModule.Call(Invite.ToHeader, '', '');
 
     Self.Method.RemoteSessionDescription := Invite.Body;
     Self.Method.Session                  := Self.Session;

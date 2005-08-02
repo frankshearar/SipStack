@@ -423,7 +423,7 @@ function TIdSipStackInterface.MakeCall(Dest: TIdSipAddressHeader;
 var
   Sess: TIdSipOutboundSession;
 begin
-  Sess := Self.UserAgent.Call(Dest, LocalSessionDescription, MimeType);
+  Sess := Self.UserAgent.InviteModule.Call(Dest, LocalSessionDescription, MimeType);
   Result := Self.AddAction(Sess);
   Sess.AddSessionListener(Self);
 end;

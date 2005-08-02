@@ -636,7 +636,6 @@ type
   end;
 
   TIdSipInviteModule = class;
-  TIdSipOutboundSession = class;
   TIdSipOutboundRegisterModule = class;
 
   TIdSipUserAgent = class(TIdSipAbstractUserAgent)
@@ -648,7 +647,6 @@ type
     fRegisterModule:      TIdSipOutboundRegisterModule;
     fInviteModule:        TIdSipInviteModule;
 
-    function  AddOutboundSession: TIdSipOutboundSession;
     function  GetInitialResendInterval: Cardinal;
     function  GetProgressResendInterval: Cardinal;
     procedure SetInitialResendInterval(Value: Cardinal);
@@ -662,9 +660,6 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
-    function  Call(Dest: TIdSipAddressHeader;
-                   const LocalSessionDescription: String;
-                   const MimeType: String): TIdSipOutboundSession;
     function  SessionCount: Integer;
 
     property DoNotDisturb:           Boolean                      read fDoNotDisturb write fDoNotDisturb;
@@ -773,6 +768,8 @@ type
     property UserAgent: TIdSipAbstractUserAgent read fUserAgent;
   end;
 
+  TIdSipOutboundSession = class;
+
   TIdSipInviteModule = class(TIdSipMessageModule)
   private
     fInitialResendInterval:  Cardinal; // in milliseconds
@@ -789,6 +786,10 @@ type
     function AcceptsMethods: String; override;
     function AddInboundInvite(Invite: TIdSipRequest;
                               UsingSecureTransport: Boolean): TIdSipInboundInvite;
+    function AddOutboundSession: TIdSipOutboundSession;
+    function Call(Dest: TIdSipAddressHeader;
+                  const LocalSessionDescription: String;
+                  const MimeType: String): TIdSipOutboundSession;
     function CreateAck(Dialog: TIdSipDialog): TIdSipRequest;
     function CreateBye(Dialog: TIdSipDialog): TIdSipRequest;
     function CreateInvite(Dest: TIdSipAddressHeader;
@@ -3742,16 +3743,6 @@ begin
   Self.Authenticator.Free;
 end;
 
-function TIdSipUserAgent.Call(Dest: TIdSipAddressHeader;
-                              const LocalSessionDescription: String;
-                              const MimeType: String): TIdSipOutboundSession;
-begin
-  Result := Self.AddOutboundSession;
-  Result.Destination             := Dest;
-  Result.LocalSessionDescription := LocalSessionDescription;
-  Result.LocalMimeType           := MimeType;
-end;
-
 function TIdSipUserAgent.SessionCount: Integer;
 begin
   Result := Self.Actions.SessionCount;
@@ -3791,11 +3782,6 @@ begin
 end;
 
 //* TIdSipUserAgent Private methods ********************************************
-
-function TIdSipUserAgent.AddOutboundSession: TIdSipOutboundSession;
-begin
-  Result := Self.AddOutboundAction(TIdSipOutboundSession) as TIdSipOutboundSession;
-end;
 
 function TIdSipUserAgent.GetInitialResendInterval: Cardinal;
 begin
@@ -4219,6 +4205,21 @@ function TIdSipInviteModule.AddInboundInvite(Invite: TIdSipRequest;
 begin
   // This accesses the PROTECTED property of the UserAgent.
   Result := Self.UserAgent.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.UserAgent, Invite, UsingSecureTransport)) as TIdSipInboundInvite;
+end;
+
+function TIdSipInviteModule.AddOutboundSession: TIdSipOutboundSession;
+begin
+  Result := Self.UserAgent.AddOutboundAction(TIdSipOutboundSession) as TIdSipOutboundSession;
+end;
+
+function TIdSipInviteModule.Call(Dest: TIdSipAddressHeader;
+                                 const LocalSessionDescription: String;
+                                 const MimeType: String): TIdSipOutboundSession;
+begin
+  Result := Self.AddOutboundSession;
+  Result.Destination             := Dest;
+  Result.LocalSessionDescription := LocalSessionDescription;
+  Result.LocalMimeType           := MimeType;
 end;
 
 function TIdSipInviteModule.CreateAck(Dialog: TIdSipDialog): TIdSipRequest;

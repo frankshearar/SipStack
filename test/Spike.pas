@@ -716,9 +716,9 @@ begin
     if Self.MasqAsNat.Checked then
       SDP := StringReplace(SDP, OurHostName, Self.HostName.Text, [rfReplaceAll, rfIgnoreCase]);
 
-    Self.LatestSession := Self.UA.Call(Target,
-                            SDP,
-                            SdpMimeType);
+    Self.LatestSession := Self.UA.InviteModule.Call(Target,
+                                                    SDP,
+                                                    SdpMimeType);
     Self.LatestSession.AddSessionListener(Self);                        
     Self.LatestSession.Send;
   finally
