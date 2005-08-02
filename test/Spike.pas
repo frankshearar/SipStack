@@ -785,7 +785,7 @@ var
 begin
   Registrar := TIdSipUri.Create(Self.TargetUri.Text);
   try
-    Reg := Self.UA.RegisterWith(Registrar);
+    Reg := Self.UA.RegisterModule.RegisterWith(Registrar);
     Reg.AddListener(Self);
     Reg.Send;
   finally
@@ -805,7 +805,7 @@ var
 begin
   Registrar := TIdSipUri.Create(Self.TargetUri.Text);
   try
-    Unreg := Self.UA.UnregisterFrom(Registrar);
+    Unreg := Self.UA.RegisterModule.UnregisterFrom(Registrar);
     Unreg.AddListener(Self);
     Unreg.Send;
   finally

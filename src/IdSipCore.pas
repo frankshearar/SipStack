@@ -395,8 +395,8 @@ type
     function  InviteCount: Integer;
     function  NextActionID: String;
     function  OptionsCount: Integer;
-    procedure Perform(Msg: TIdSipMessage; Block: TIdSipActionClosure);    
-    function  RegistrationCount: Integer;
+    procedure Perform(Msg: TIdSipMessage; Block: TIdSipActionClosure);
+    function  RegistrationCount: Integer;    
     procedure RemoveObserver(const Listener: IIdObserver);
     function  SessionCount: Integer;
     procedure TerminateAllActions;
@@ -503,10 +503,6 @@ type
     ModuleLock:              TCriticalSection;
     Modules:                 TObjectList;
 
-    // Pull into UserAgent:
-    fAutoReRegister: Boolean;
-    KnownRegistrars: TIdSipRegistrations;
-
     procedure AddModuleSpecificHeaders(OutboundMessage: TIdSipMessage);
     function  ConvertToHeader(ValueList: TStrings): String;
     function  CreateRequestHandler(Request: TIdSipRequest;
@@ -518,6 +514,7 @@ type
     function  GetContact: TIdSipContactHeader;
     function  GetFrom: TIdSipFromHeader;
     function  ModuleAt(Index: Integer): TIdSipMessageModule;
+    procedure NotifyModulesOfFree;
     procedure NotifyOfAuthenticationChallenge(Response: TIdSipResponse;
                                               var Username: String;
                                               var Password: String;
@@ -582,8 +579,8 @@ type
     function  AllowedExtensions: String;
     function  AllowedLanguages: String;
     function  AllowedMethods(RequestUri: TIdSipUri): String;
-    function  KnownMethods: String;
     function  AllowedSchemes: String;
+    function  CountOf(const MethodName: String): Integer;
     function  CreateOptions(Dest: TIdSipAddressHeader): TIdSipRequest;
     function  CreateRequest(const Method: String;
                             Dest: TIdSipAddressHeader): TIdSipRequest; overload; override;
@@ -604,6 +601,7 @@ type
                               const Method: String): Boolean;
     function  IsMethodSupported(const Method: String): Boolean;
     function  IsSchemeAllowed(const Scheme: String): Boolean;
+    function  KnownMethods: String;
     function  ModuleFor(Request: TIdSipRequest): TIdSipMessageModule; overload;
     function  ModuleFor(const Method: String): TIdSipMessageModule; overload;
     function  ModuleFor(ModuleType: TIdSipMessageModuleClass): TIdSipMessageModule; overload;
@@ -612,7 +610,6 @@ type
     function  NextInitialSequenceNo: Cardinal;
     function  OptionsCount: Integer;
     function  QueryOptions(Server: TIdSipAddressHeader): TIdSipOutboundOptions;
-    function  RegistrationCount: Integer;
     procedure RemoveModule(ModuleType: TIdSipMessageModuleClass);
     procedure ReturnResponse(Request: TIdSipRequest;
                              Reason: Cardinal);
@@ -629,33 +626,26 @@ type
     function  UsesModule(ModuleType: TIdSipMessageModuleClass): Boolean;
 
     // Move to UserAgent:
-    function  CountOf(const MethodName: String): Integer;
-    function  CreateRegister(Registrar: TIdSipToHeader): TIdSipRequest;
-    function  CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistrationQuery;
     function  InviteCount: Integer; // move to InviteModule
-    procedure OnReregister(Event: TObject);
-    function  RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegister;
     procedure TerminateAllCalls; // move to InviteModule
-    function  UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundUnregister;
     function  UsingDefaultContact: Boolean;
 
-    property AutoReRegister: Boolean             read fAutoReRegister write fAutoReRegister;
-    property Contact:        TIdSipContactHeader read GetContact write SetContact;
-    property From:           TIdSipFromHeader    read GetFrom write SetFrom;
-    property Keyring:        TIdKeyRing          read fKeyring;
+    property Contact: TIdSipContactHeader read GetContact write SetContact;
+    property From:    TIdSipFromHeader    read GetFrom write SetFrom;
+    property Keyring: TIdKeyRing          read fKeyring;
   end;
 
   TIdSipInviteModule = class;
   TIdSipOutboundSession = class;
+  TIdSipOutboundRegisterModule = class;
 
   TIdSipUserAgent = class(TIdSipAbstractUserAgent)
   private
     fDoNotDisturb:        Boolean;
     fDoNotDisturbMessage: String;
     fHasProxy:            Boolean;
-    fHasRegistrar:        Boolean;
     fProxy:               TIdSipUri;
-    fRegistrar:           TIdSipUri;
+    fRegisterModule:      TIdSipOutboundRegisterModule;
     fInviteModule:        TIdSipInviteModule;
 
     function  AddOutboundSession: TIdSipOutboundSession;
@@ -664,7 +654,6 @@ type
     procedure SetInitialResendInterval(Value: Cardinal);
     procedure SetProgressResendInterval(Value: Cardinal);
     procedure SetProxy(Value: TIdSipUri);
-    procedure SetRegistrar(Value: TIdSipUri);
   protected
     procedure AddLocalHeaders(OutboundRequest: TIdSipRequest); override;
     function  ResponseForInvite: Cardinal; override;
@@ -678,15 +667,14 @@ type
                    const MimeType: String): TIdSipOutboundSession;
     function  SessionCount: Integer;
 
-    property DoNotDisturb:           Boolean            read fDoNotDisturb write fDoNotDisturb;
-    property DoNotDisturbMessage:    String             read fDoNotDisturbMessage write fDoNotDisturbMessage;
-    property HasProxy:               Boolean            read fHasProxy write fHasProxy;
-    property HasRegistrar:           Boolean            read fHasRegistrar write fHasRegistrar;
-    property InitialResendInterval:  Cardinal           read GetInitialResendInterval write SetInitialResendInterval;
-    property InviteModule:           TIdSipInviteModule read fInviteModule;
-    property ProgressResendInterval: Cardinal           read GetProgressResendInterval write SetProgressResendInterval;
-    property Proxy:                  TIdSipUri          read fProxy write SetProxy;
-    property Registrar:              TIdSipUri          read fRegistrar write SetRegistrar;
+    property DoNotDisturb:           Boolean                      read fDoNotDisturb write fDoNotDisturb;
+    property DoNotDisturbMessage:    String                       read fDoNotDisturbMessage write fDoNotDisturbMessage;
+    property HasProxy:               Boolean                      read fHasProxy write fHasProxy;
+    property InitialResendInterval:  Cardinal                     read GetInitialResendInterval write SetInitialResendInterval;
+    property InviteModule:           TIdSipInviteModule           read fInviteModule;
+    property ProgressResendInterval: Cardinal                     read GetProgressResendInterval write SetProgressResendInterval;
+    property Proxy:                  TIdSipUri                    read fProxy write SetProxy;
+    property RegisterModule:         TIdSipOutboundRegisterModule read fRegisterModule;
   end;
 
   TIdSipRegisterModule = class;
@@ -703,6 +691,8 @@ type
     procedure SetMinimumExpiryTime(Value: Cardinal);
   public
     constructor Create; override;
+
+    function RegistrationCount: Integer;
 
     property BindingDB:                     TIdSipAbstractBindingDatabase read GetBindingDB write SetBindingDB;
     property DefaultRegistrationExpiryTime: Cardinal                      read GetDefaultRegistrationExpiryTime write SetDefaultRegistrationExpiryTime;
@@ -777,6 +767,7 @@ type
                      UsingSecureTransport: Boolean): TIdSipAction; virtual;
     procedure AddLocalHeaders(OutboundMessage: TIdSipMessage); virtual;
     function  AcceptsMethods: String; virtual;
+    procedure CleanUp; virtual;
     function  WillAccept(Request: TIdSipRequest): Boolean; virtual;
 
     property UserAgent: TIdSipAbstractUserAgent read fUserAgent;
@@ -820,6 +811,8 @@ type
     function WillAccept(Request: TIdSipRequest): Boolean; override;
   end;
 
+  // I implement that functionality necessary for a User Agent to respond to
+  // REGISTER messages, that is, to act as a registrar.
   TIdSipRegisterModule = class(TIdSipMessageModule)
   private
     fBindingDB:         TIdSipAbstractBindingDatabase;
@@ -832,6 +825,37 @@ type
 
     property BindingDB:         TIdSipAbstractBindingDatabase read fBindingDB write fBindingDB;
     property MinimumExpiryTime: Cardinal                      read fMinimumExpiryTime write fMinimumExpiryTime;
+  end;
+
+  // I implement that functionality necessary for a User Agent to issue REGISTER
+  // messages, that is, to register with a registrar.
+  TIdSipOutboundRegisterModule = class(TIdSipMessageModule)
+  private
+    fAutoReRegister: Boolean;
+    fHasRegistrar:   Boolean;
+    fRegistrar:      TIdSipUri;
+    KnownRegistrars: TIdSipRegistrations;
+
+    procedure SetRegistrar(Value: TIdSipUri);
+  public
+    constructor Create(UA: TIdSipAbstractUserAgent); override;
+    destructor  Destroy; override;
+
+    function  Accept(Request: TIdSipRequest;
+                     UsingSecureTransport: Boolean): TIdSipAction; override;
+    function  AcceptsMethods: String; override;
+    procedure CleanUp; override;
+    function  CreateRegister(Registrar: TIdSipToHeader): TIdSipRequest;
+    function  CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistrationQuery;
+    procedure OnReregister(Event: TObject);
+    function  RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegister;
+    function  RegistrationCount: Integer;
+    function  UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundUnregister;
+    function  WillAccept(Request: TIdSipRequest): Boolean; override;
+
+    property AutoReRegister: Boolean   read fAutoReRegister write fAutoReRegister;
+    property HasRegistrar:   Boolean   read fHasRegistrar write fHasRegistrar;
+    property Registrar:      TIdSipUri read fRegistrar write SetRegistrar;
   end;
 
   // I represent an asynchronous message send between SIP entities - INVITEs,
@@ -1182,7 +1206,12 @@ type
 
   TIdSipRegistration = class(TIdSipAction)
   protected
+    OutModule: TIdSipOutboundRegisterModule;
+
     function CreateNewAttempt: TIdSipRequest; override;
+    procedure Initialise(UA: TIdSipAbstractUserAgent;
+                         Request: TIdSipRequest;
+                         UsingSecureTransport: Boolean); override;
   public
     class function Method: String; override;
 
@@ -2680,7 +2709,6 @@ begin
   Self.fAllowedContentTypeList := TStringList.Create;
   Self.fAllowedLanguageList    := TStringList.Create;
   Self.fKeyring                := TIdKeyRing.Create;
-  Self.KnownRegistrars         := TIdSipRegistrations.Create;
 
   Self.Actions.AddObserver(Self);
 
@@ -2698,10 +2726,11 @@ end;
 
 destructor TIdSipAbstractUserAgent.Destroy;
 begin
+  Self.NotifyModulesOfFree;
+
   Self.Contact.Free;
   Self.From.Free;
 
-  Self.KnownRegistrars.Free;
   Self.Keyring.Free;
   Self.AllowedSchemeList.Free;
   Self.AllowedLanguageList.Free;
@@ -2743,11 +2772,6 @@ begin
 
   if (Self.AllowedSchemeList.IndexOf(Scheme) = ItemNotFoundIndex) then
     Self.AllowedSchemeList.Add(Scheme);
-end;
-
-function TIdSipAbstractUserAgent.CountOf(const MethodName: String): Integer;
-begin
-  Result := Self.Actions.CountOf(MethodName);
 end;
 
 function TIdSipAbstractUserAgent.AddModule(ModuleType: TIdSipMessageModuleClass): TIdSipMessageModule;
@@ -2797,26 +2821,14 @@ begin
   Result := Self.KnownMethods;
 end;
 
-function TIdSipAbstractUserAgent.KnownMethods: String;
-var
-  I: Integer;
-begin
-  Result := '';
-  Self.ModuleLock.Acquire;
-  try
-    for I := 0 to Self.Modules.Count - 1 do
-      Result := Result + (Self.Modules[I] as TIdSipMessageModule).AcceptsMethods + ', ';
-
-    if (Result <> '') then
-      Delete(Result, Length(Result) - 1, 2);
-  finally
-    Self.ModuleLock.Release;
-  end;
-end;
-
 function TIdSipAbstractUserAgent.AllowedSchemes: String;
 begin
   Result := Self.ConvertToHeader(Self.AllowedSchemeList);
+end;
+
+function TIdSipAbstractUserAgent.CountOf(const MethodName: String): Integer;
+begin
+  Result := Self.Actions.CountOf(MethodName);
 end;
 
 function TIdSipAbstractUserAgent.CreateOptions(Dest: TIdSipAddressHeader): TIdSipRequest;
@@ -2824,28 +2836,6 @@ begin
   Result := Self.CreateRequest(MethodOptions, Dest);
   try
     Result.AddHeader(AcceptHeader).Value := Self.AllowedContentTypes;
-  except
-    FreeAndNil(Result);
-
-    raise;
-  end;
-end;
-
-function TIdSipAbstractUserAgent.CreateRegister(Registrar: TIdSipToHeader): TIdSipRequest;
-begin
-  Result := Self.CreateRequest(MethodRegister, Registrar);
-  try
-    Self.KnownRegistrars.AddKnownRegistrar(Registrar.Address,
-                                           Result.CallID,
-                                           Result.CSeq.SequenceNo);
-
-    Result.RequestUri.EraseUserInfo;
-    Result.CSeq.SequenceNo := Self.KnownRegistrars.NextSequenceNoFor(Registrar.Address);
-
-    Result.CallID := Self.KnownRegistrars.CallIDFor(Registrar.Address);
-
-    Result.ToHeader.Value := Self.Contact.Value;
-    Result.From.Value     := Self.Contact.Value;
   except
     FreeAndNil(Result);
 
@@ -2914,11 +2904,6 @@ begin
   Self.Locator.FindServersFor(Response, Result);
 end;
 
-function TIdSipAbstractUserAgent.CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistrationQuery;
-begin
-  Result := Self.AddOutboundAction(TIdSipOutboundRegistrationQuery) as TIdSipOutboundRegistrationQuery;
-end;
-
 function TIdSipAbstractUserAgent.HasUnknownAccept(Request: TIdSipRequest): Boolean;
 begin
   Result := Self.ListHasUnknownValue(Request,
@@ -2973,6 +2958,23 @@ end;
 function TIdSipAbstractUserAgent.IsSchemeAllowed(const Scheme: String): Boolean;
 begin
   Result := Self.AllowedSchemeList.IndexOf(Scheme) >= 0;
+end;
+
+function TIdSipAbstractUserAgent.KnownMethods: String;
+var
+  I: Integer;
+begin
+  Result := '';
+  Self.ModuleLock.Acquire;
+  try
+    for I := 0 to Self.Modules.Count - 1 do
+      Result := Result + (Self.Modules[I] as TIdSipMessageModule).AcceptsMethods + ', ';
+
+    if (Result <> '') then
+      Delete(Result, Length(Result) - 1, 2);
+  finally
+    Self.ModuleLock.Release;
+  end;
 end;
 
 function TIdSipAbstractUserAgent.ModuleFor(Request: TIdSipRequest): TIdSipMessageModule;
@@ -3042,14 +3044,6 @@ begin
   Result := GRandomNumber.NextCardinal($7FFFFFFF);
 end;
 
-procedure TIdSipAbstractUserAgent.OnReregister(Event: TObject);
-var
-  Request: TIdSipRequest;
-begin
-  Request := (Event as TIdSipMessageNotifyEventWait).Message as TIdSipRequest;
-  Self.RegisterWith(Request.RequestUri).Send;
-end;
-
 function TIdSipAbstractUserAgent.OptionsCount: Integer;
 begin
   Result := Self.Actions.OptionsCount;
@@ -3059,18 +3053,6 @@ function TIdSipAbstractUserAgent.QueryOptions(Server: TIdSipAddressHeader): TIdS
 begin
   Result := Self.AddOutboundAction(TIdSipOutboundOptions) as TIdSipOutboundOptions;
   Result.Server := Server;
-end;
-
-function TIdSipAbstractUserAgent.RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegister;
-begin
-  Result := Self.AddOutboundAction(TIdSipOutboundRegister) as TIdSipOutboundRegister;
-  Result.Bindings.Add(Self.Contact);
-  Result.Registrar := Registrar;
-end;
-
-function TIdSipAbstractUserAgent.RegistrationCount: Integer;
-begin
-  Result := Self.Actions.RegistrationCount;
 end;
 
 procedure TIdSipAbstractUserAgent.RemoveModule(ModuleType: TIdSipMessageModuleClass);
@@ -3110,13 +3092,6 @@ procedure TIdSipAbstractUserAgent.TerminateAllCalls;
 begin
   // This is WRONG! It will also terminate subscriptions, which are not calls!
   Self.Actions.TerminateAllActions;
-end;
-
-function TIdSipAbstractUserAgent.UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundUnregister;
-begin
-  Result := Self.AddOutboundAction(TIdSipOutboundUnregister) as TIdSipOutboundUnregister;
-  Result.Bindings.Add(Self.Contact);
-  Result.Registrar := Registrar;
 end;
 
 function TIdSipAbstractUserAgent.UsingDefaultContact: Boolean;
@@ -3507,7 +3482,20 @@ end;
 
 function TIdSipAbstractUserAgent.ModuleAt(Index: Integer): TIdSipMessageModule;
 begin
-  Result := Self.Modules[Index] as TIdSipMessageModule;                              
+  Result := Self.Modules[Index] as TIdSipMessageModule;
+end;
+
+procedure TIdSipAbstractUserAgent.NotifyModulesOfFree;
+var
+  I: Integer;
+begin
+  Self.ModuleLock.Acquire;
+  try
+    for I := 0 to Self.Modules.Count - 1 do
+      Self.ModuleAt(I).CleanUp;
+  finally
+    Self.ModuleLock.Release;
+  end;
 end;
 
 procedure TIdSipAbstractUserAgent.NotifyOfAuthenticationChallenge(Response: TIdSipResponse;
@@ -3729,29 +3717,30 @@ constructor TIdSipUserAgent.Create;
 begin
   inherited Create;
 
-  Self.fInviteModule := Self.AddModule(TIdSipInviteModule) as TIdSipInviteModule;
+  Self.fInviteModule   := Self.AddModule(TIdSipInviteModule) as TIdSipInviteModule;
+  Self.fRegisterModule := Self.AddModule(TIdSipOutboundRegisterModule) as TIdSipOutboundRegisterModule;
 
-  Self.AutoReRegister         := true;
   Self.DoNotDisturb           := false;
   Self.DoNotDisturbMessage    := RSSIPTemporarilyUnavailable;
   Self.fProxy                 := TIdSipUri.Create('');
-  Self.fRegistrar             := TIdSipUri.Create('');
   Self.HasProxy               := false;
-  Self.HasRegistrar           := false;
   Self.InitialResendInterval  := DefaultT1;
 end;
 
 destructor TIdSipUserAgent.Destroy;
 begin
-  if Self.HasRegistrar then
-    Self.UnregisterFrom(Self.Registrar).Send;
+  // Because we create TIdSipUserAgents from a StackConfigurator factory method,
+  // we must clean up certain objects to which we have references, viz.,
+  // Self.Dispatcher and Self.Authenticator.
+  // Thus we destroy these objects AFTER the inherited Destroy, because the base
+  // class could well expect these objects to still exit.
 
-  Self.Registrar.Free;
   Self.Proxy.Free;
-  Self.Dispatcher.Free;
-  Self.Authenticator.Free;
 
   inherited Destroy;
+
+  Self.Dispatcher.Free;
+  Self.Authenticator.Free;
 end;
 
 function TIdSipUserAgent.Call(Dest: TIdSipAddressHeader;
@@ -3834,11 +3823,6 @@ begin
   Self.Proxy.Uri := Value.Uri;
 end;
 
-procedure TIdSipUserAgent.SetRegistrar(Value: TIdSipUri);
-begin
-  Self.Registrar.Uri := Value.Uri;
-end;
-
 //******************************************************************************
 //* TIdSipRegistrar                                                            *
 //******************************************************************************
@@ -3849,6 +3833,11 @@ begin
   inherited Create;
 
   Self.RegisterModule := Self.AddModule(TIdSipRegisterModule) as TIdSipRegisterModule;
+end;
+
+function TIdSipRegistrar.RegistrationCount: Integer;
+begin
+  Result := Self.CountOf(MethodRegister);
 end;
 
 //* TIdSipRegistrar Private methods ********************************************
@@ -4118,6 +4107,7 @@ procedure TIdSipStackConfigurator.RegisterUA(UserAgent: TIdSipUserAgent;
                                              PendingActions: TObjectList);
 var
   Line: String;
+  Reg:  TIdSipOutboundRegisterModule;
 begin
   // See class comment for the format for this directive.
   Line := RegisterLine;
@@ -4125,10 +4115,12 @@ begin
 
   Line := Trim(Line);
 
-  UserAgent.AutoReRegister := true;
-  UserAgent.HasRegistrar := true;
-  UserAgent.Registrar.Uri := Line;
-  PendingActions.Add(UserAgent.RegisterWith(UserAgent.Registrar));
+  Reg := UserAgent.RegisterModule;
+
+  Reg.AutoReRegister := true;
+  Reg.HasRegistrar := true;
+  Reg.Registrar.Uri := Line;
+  PendingActions.Add(Reg.RegisterWith(Reg.Registrar));
 end;
 
 procedure TIdSipStackConfigurator.SendPendingActions(Actions: TObjectList);
@@ -4164,6 +4156,12 @@ end;
 function TIdSipMessageModule.AcceptsMethods: String;
 begin
   Result := '';
+end;
+
+procedure TIdSipMessageModule.CleanUp;
+begin
+  // When the User Agent frees, it calls this method. Put any cleanup stuff
+  // here.
 end;
 
 function TIdSipMessageModule.WillAccept(Request: TIdSipRequest): Boolean;
@@ -4344,6 +4342,116 @@ end;
 function TIdSipRegisterModule.WillAccept(Request: TIdSipRequest): Boolean;
 begin
   Result := Request.IsRegister;
+end;
+
+//******************************************************************************
+//* TIdSipOutboundRegisterModule                                               *
+//******************************************************************************
+//* TIdSipOutboundRegisterModule Public methods ********************************
+
+constructor TIdSipOutboundRegisterModule.Create(UA: TIdSipAbstractUserAgent);
+begin
+  inherited Create(UA);
+
+  Self.KnownRegistrars := TIdSipRegistrations.Create;
+  Self.fRegistrar      := TIdSipUri.Create('');
+
+  Self.AutoReRegister := true;
+  Self.HasRegistrar   := false;
+end;
+
+destructor TIdSipOutboundRegisterModule.Destroy;
+begin
+  Self.Registrar.Free;
+  Self.KnownRegistrars.Free;
+
+  inherited Destroy;
+end;
+
+function TIdSipOutboundRegisterModule.Accept(Request: TIdSipRequest;
+                                             UsingSecureTransport: Boolean): TIdSipAction;
+begin
+  // As a purely UAC module, don't accept ANY requests.
+  Result := nil;
+end;
+
+function TIdSipOutboundRegisterModule.AcceptsMethods: String;
+begin
+  // As a purely UAC module, don't offer to accept ANY requests.
+  Result := '';
+end;
+
+procedure TIdSipOutboundRegisterModule.CleanUp;
+begin
+  if Self.HasRegistrar then
+    Self.UnregisterFrom(Self.Registrar).Send;
+end;
+
+function TIdSipOutboundRegisterModule.CreateRegister(Registrar: TIdSipToHeader): TIdSipRequest;
+begin
+  Result := Self.UserAgent.CreateRequest(MethodRegister, Registrar);
+  try
+    Self.KnownRegistrars.AddKnownRegistrar(Registrar.Address,
+                                           Result.CallID,
+                                           Result.CSeq.SequenceNo);
+
+    Result.RequestUri.EraseUserInfo;
+    Result.CSeq.SequenceNo := Self.KnownRegistrars.NextSequenceNoFor(Registrar.Address);
+
+    Result.CallID := Self.KnownRegistrars.CallIDFor(Registrar.Address);
+
+    Result.ToHeader.Assign(Self.UserAgent.Contact);
+    Result.From.Assign(Self.UserAgent.Contact);
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
+function TIdSipOutboundRegisterModule.CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistrationQuery;
+begin
+  Result := Self.UserAgent.AddOutboundAction(TIdSipOutboundRegistrationQuery) as TIdSipOutboundRegistrationQuery;
+end;
+
+procedure TIdSipOutboundRegisterModule.OnReregister(Event: TObject);
+var
+  Request: TIdSipRequest;
+begin
+  Request := (Event as TIdSipMessageNotifyEventWait).Message as TIdSipRequest;
+  Self.RegisterWith(Request.RequestUri).Send;
+end;
+
+function TIdSipOutboundRegisterModule.RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegister;
+begin
+  Result := Self.UserAgent.AddOutboundAction(TIdSipOutboundRegister) as TIdSipOutboundRegister;
+  Result.Bindings.Add(Self.UserAgent.Contact);
+  Result.Registrar := Registrar;
+end;
+
+function TIdSipOutboundRegisterModule.RegistrationCount: Integer;
+begin
+  Result := Self.UserAgent.CountOf(MethodRegister);
+end;
+
+function TIdSipOutboundRegisterModule.UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundUnregister;
+begin
+  Result := Self.UserAgent.AddOutboundAction(TIdSipOutboundUnregister) as TIdSipOutboundUnregister;
+  Result.Bindings.Add(Self.UserAgent.Contact);
+  Result.Registrar := Registrar;
+end;
+
+function TIdSipOutboundRegisterModule.WillAccept(Request: TIdSipRequest): Boolean;
+begin
+  // As a purely UAC module, don't accept ANY requests.
+  Result := false;
+end;
+
+//* TIdSipOutboundRegisterModule Private methods *******************************
+
+procedure TIdSipOutboundRegisterModule.SetRegistrar(Value: TIdSipUri);
+begin
+  Self.Registrar.Uri := Value.Uri;
 end;
 
 //******************************************************************************
@@ -5806,10 +5914,19 @@ begin
   try
     TempTo.Address := Self.InitialRequest.RequestUri;
 
-    Result := Self.UA.CreateRegister(TempTo);
+    Result := Self.OutModule.CreateRegister(TempTo);
   finally
     TempTo.Free;
   end;
+end;
+
+procedure TIdSipRegistration.Initialise(UA: TIdSipAbstractUserAgent;
+                                        Request: TIdSipRequest;
+                                        UsingSecureTransport: Boolean);
+begin
+  inherited Initialise(UA, Request, UsingSecureTransport);
+
+  Self.OutModule := UA.ModuleFor(TIdSipOutboundRegisterModule) as TIdSipOutboundRegisterModule;
 end;
 
 //******************************************************************************
@@ -6055,7 +6172,7 @@ begin
   try
     ToHeader.Address := Registrar;
 
-    Result := Self.UA.CreateRegister(ToHeader);
+    Result := Self.OutModule.CreateRegister(ToHeader);
 
     // Bindings explicitly carries all Contact information. Thus we must remove
     // any Contact information already in Result.
@@ -6120,7 +6237,7 @@ begin
       Notification.Free;
     end;
 
-    if Self.UA.AutoReRegister then begin
+    if Self.OutModule.AutoReRegister then begin
       // OurContact should always be assigned, because we've supposedly just
       // REGISTERed it. If it's not assigned then the registrar didn't actually
       // save our registration, and still had the cheek to return a 2xx rather
@@ -6140,7 +6257,7 @@ begin
           ExpireTime := Response.FirstExpires.NumericValue;
 
         if (ExpireTime > 0) then
-          Self.UA.ScheduleEvent(Self.UA.OnReregister,
+          Self.UA.ScheduleEvent(Self.OutModule.OnReregister,
                                 Self.ReregisterTime(ExpireTime)*1000, // in milliseconds
                                 Self.InitialRequest.Copy);
       end;
@@ -6185,7 +6302,7 @@ begin
   Result := asFailure;
 
   if Response.HasHeader(ContactHeaderFull) then begin
-    NewAttempt := Self.UA.RegisterWith(Response.FirstContact.Address);
+    NewAttempt := Self.OutModule.RegisterWith(Response.FirstContact.Address);
     NewAttempt.AddListeners(Self.Listeners);
     NewAttempt.Send;
 

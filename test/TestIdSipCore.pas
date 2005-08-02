@@ -167,8 +167,6 @@ type
     procedure TestConcurrentCalls;
     procedure TestContentTypeDefault;
     procedure TestCreateOptions;
-    procedure TestCreateRegister;
-    procedure TestCreateRegisterReusesCallIDForSameRegistrar;
     procedure TestCreateRequest;
     procedure TestCreateRequestSipsRequestUri;
     procedure TestCreateRequestUserAgent;
@@ -217,7 +215,6 @@ type
     procedure TestRejectUnsupportedSipVersion;
     procedure TestRemoveObserver;
     procedure TestRemoveUserAgentListener;
-    procedure TestReregister;
     procedure TestRFC2543InviteCallFlow;
     procedure TestScheduleEventActionClosure;
     procedure TestSetContact;
@@ -229,7 +226,6 @@ type
     procedure TestTerminateAllCalls;
     procedure TestUnknownAcceptValue;
     procedure TestUnmatchedAckGetsDropped;
-    procedure TestUnregisterFrom;
     procedure TestViaMatchesTransportParameter;
   end;
 
@@ -337,6 +333,20 @@ type
     procedure TestCreateInviteInsideDialog;
     procedure TestCreateInviteWithBody;
     procedure TestCreateReInvite;
+  end;
+
+  TestTIdSipOutboundRegisterModule = class(TTestCaseTU)
+  private
+    Module:    TIdSipOutboundRegisterModule;
+    RemoteUri: TIdSipURI;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCreateRegister;
+    procedure TestCreateRegisterReusesCallIDForSameRegistrar;
+    procedure TestReregister;
+    procedure TestUnregisterFrom;
   end;
 
   TestTIdSipInboundInvite = class(TestTIdSipAction,
@@ -1125,6 +1135,7 @@ begin
   Result.AddTest(TestTIdSipStackConfigurator.Suite);
   Result.AddTest(TestLocation.Suite);
   Result.AddTest(TestTIdSipInviteModule.Suite);
+  Result.AddTest(TestTIdSipOutboundRegisterModule.Suite);
   Result.AddTest(TestTIdSipInboundInvite.Suite);
   Result.AddTest(TestTIdSipOutboundInvite.Suite);
   Result.AddTest(TestTIdSipOutboundRedirectedInvite.Suite);
@@ -2404,66 +2415,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgent.TestCreateRegister;
-var
-  Register: TIdSipRequest;
-begin
-  Register := Self.Core.CreateRegister(Self.Destination);
-  try
-    CheckEquals(MethodRegister, Register.Method,      'Incorrect method');
-    CheckEquals(MethodRegister, Register.CSeq.Method, 'Incorrect CSeq method');
-    CheckEquals('', Register.RequestUri.Username, 'Request-URI Username');
-    CheckEquals('', Register.RequestUri.Password, 'Request-URI Password');
-
-    CheckEquals(Self.Core.Contact.Value,
-                Register.FirstHeader(ContactHeaderFull).Value,
-                'Contact');
-    CheckEquals(Self.Core.Contact.Value,
-                Register.ToHeader.Value,
-                'To');
-    CheckEquals(Register.ToHeader.Value,
-                Register.From.Value,
-                'From');
-  finally
-    Register.Free;
-  end;
-end;
-
-procedure TestTIdSipUserAgent.TestCreateRegisterReusesCallIDForSameRegistrar;
-var
-  FirstCallID:  String;
-  Reg:          TIdSipRequest;
-  SecondCallID: String;
-begin
-  Reg := Self.Core.CreateRegister(Self.Destination);
-  try
-    FirstCallID := Reg.CallID;
-  finally
-    Reg.Free;
-  end;
-
-  Reg := Self.Core.CreateRegister(Self.Destination);
-  try
-    SecondCallID := Reg.CallID;
-  finally
-    Reg.Free;
-  end;
-
-  CheckEquals(FirstCallID,
-              SecondCallID,
-              'Call-ID SHOULD be the same for same registrar');
-
-  Self.Destination.Address.Uri := 'sip:enki.org';
-  Reg := Self.Core.CreateRegister(Self.Destination);
-  try
-    CheckNotEquals(FirstCallID,
-                   Reg.CallID,
-                   'Call-ID SHOULD be different for new registrar');
-  finally
-    Reg.Free;
-  end;
-end;
-
 procedure TestTIdSipUserAgent.TestCreateRequest;
 const
   UnknownMethod = 'Foo';
@@ -2648,6 +2599,7 @@ end;
 procedure TestTIdSipUserAgent.TestDestroyUnregisters;
 var
   Registrar: TIdSipMockUdpTransport;
+  UA:        TIdSipUserAgent;
 begin
   Registrar := TIdSipMockUdpTransport.Create;
   try
@@ -2655,10 +2607,13 @@ begin
     Registrar.HostName := '127.0.0.1';
     Registrar.Port     := 25060;
 
-    Self.Core.Registrar.Uri := 'sip:' + Registrar.Address + ':' + IntToStr(Registrar.Port);
-    Self.Core.HasRegistrar  := true;
-
-    FreeAndNil(Self.Core);
+    UA := Self.CreateUserAgent;
+    try
+      UA.RegisterModule.Registrar.Uri := 'sip:' + Registrar.Address + ':' + IntToStr(Registrar.Port);
+      UA.RegisterModule.HasRegistrar  := true;
+    finally
+      UA.Free;
+    end;
 
     Check(Registrar.LastRequest <> nil,
           'No REGISTER sent');
@@ -3494,28 +3449,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgent.TestReregister;
-var
-  Event: TIdSipMessageNotifyEventWait;
-begin
-  Self.Invite.Method := MethodRegister;
-
-  Self.MarkSentRequestCount;
-
-  Event := TIdSipMessageNotifyEventWait.Create;
-  try
-    Event.Message := Self.Invite.Copy;
-    Self.Core.OnReregister(Event);
-  finally
-    Event.Free;
-  end;
-
-  Self.CheckRequestSent('No request resend');
-  CheckEquals(MethodRegister,
-              Self.LastSentRequest.Method,
-              'Unexpected method in resent request');
-end;
-
 procedure TestTIdSipUserAgent.TestRFC2543InviteCallFlow;
 const
   RawSippInvite = 'INVITE sip:service@80.168.137.82:5060 SIP/2.0'#13#10
@@ -3802,39 +3735,6 @@ begin
   finally
     Self.Core.RemoveUserAgentListener(Listener);
     Listener.Free;
-  end;
-end;
-
-procedure TestTIdSipUserAgent.TestUnregisterFrom;
-var
-  OurBindings: TIdSipContacts;
-begin
-  Self.MarkSentRequestCount;
-  Self.Core.UnregisterFrom(Self.RemoteUri).Send;
-  CheckRequestSent('No REGISTER sent');
-  CheckEquals(MethodRegister,
-              Self.LastSentRequest.Method,
-              'Unexpected sent request');
-
-  OurBindings := TIdSipContacts.Create;
-  try
-    OurBindings.Add(Self.Core.Contact);
-
-    OurBindings.First;
-    Self.LastSentRequest.Contacts.First;
-
-    while (OurBindings.HasNext and Self.LastSentRequest.Contacts.HasNext) do begin
-      CheckEquals(OurBindings.CurrentContact.Address.AsString,
-                  Self.LastSentRequest.Contacts.CurrentContact.Address.AsString,
-                  'Incorrect Contact');
-
-      OurBindings.Next;
-      Self.LastSentRequest.Contacts.Next;
-    end;
-    Check(OurBindings.HasNext = Self.LastSentRequest.Contacts.HasNext,
-          'Either not all Contacts in the un-REGISTER, or too many contacts');
-  finally
-    OurBindings.Free;
   end;
 end;
 
@@ -4820,6 +4720,145 @@ begin
                 'CSeq sequence no');
   finally
     Invite.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipOutboundRegisterModule                                           *
+//******************************************************************************
+//* TestTIdSipOutboundRegisterModule Public methods ****************************
+
+procedure TestTIdSipOutboundRegisterModule.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Module    := Self.Core.RegisterModule;
+  Self.RemoteUri := TIdSipURI.Create('sip:wintermute@tessier-ashpool.co.luna');
+
+  Self.Locator.AddA(Self.RemoteUri.Host, '127.0.0.1');
+end;
+
+procedure TestTIdSipOutboundRegisterModule.TearDown;
+begin
+  Self.RemoteUri.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipOutboundRegisterModule Published methods *************************
+
+procedure TestTIdSipOutboundRegisterModule.TestCreateRegister;
+var
+  Reg: TIdSipRequest;
+begin
+  Reg := Self.Module.CreateRegister(Self.Destination);
+  try
+    CheckEquals(MethodRegister, Reg.Method,              'Incorrect method');
+    CheckEquals(MethodRegister, Reg.CSeq.Method,         'Incorrect CSeq method');
+    CheckEquals('',             Reg.RequestUri.Username, 'Request-URI Username');
+    CheckEquals('',             Reg.RequestUri.Password, 'Request-URI Password');
+
+    CheckEquals(Self.Core.Contact.Value,
+                Reg.FirstHeader(ContactHeaderFull).Value,
+                'Contact');
+    CheckEquals(Self.Core.Contact.Value,
+                Reg.ToHeader.Value,
+                'To');
+    CheckEquals(Reg.ToHeader.Value,
+                Reg.From.Value,
+                'From');
+  finally
+    Reg.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundRegisterModule.TestCreateRegisterReusesCallIDForSameRegistrar;
+var
+  FirstCallID:  String;
+  Reg:          TIdSipRequest;
+  SecondCallID: String;
+begin
+  Reg := Self.Module.CreateRegister(Self.Destination);
+  try
+    FirstCallID := Reg.CallID;
+  finally
+    Reg.Free;
+  end;
+
+  Reg := Self.Module.CreateRegister(Self.Destination);
+  try
+    SecondCallID := Reg.CallID;
+  finally
+    Reg.Free;
+  end;
+
+  CheckEquals(FirstCallID,
+              SecondCallID,
+              'Call-ID SHOULD be the same for same registrar');
+
+  Self.Destination.Address.Uri := 'sip:enki.org';
+  Reg := Self.Module.CreateRegister(Self.Destination);
+  try
+    CheckNotEquals(FirstCallID,
+                   Reg.CallID,
+                   'Call-ID SHOULD be different for new registrar');
+  finally
+    Reg.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundRegisterModule.TestReregister;
+var
+  Event: TIdSipMessageNotifyEventWait;
+begin
+  Self.Invite.Method := MethodRegister;
+
+  Self.MarkSentRequestCount;
+
+  Event := TIdSipMessageNotifyEventWait.Create;
+  try
+    Event.Message := Self.Invite.Copy;
+    Self.Module.OnReregister(Event);
+  finally
+    Event.Free;
+  end;
+
+  Self.CheckRequestSent('No request resend');
+  CheckEquals(MethodRegister,
+              Self.LastSentRequest.Method,
+              'Unexpected method in resent request');
+end;
+
+procedure TestTIdSipOutboundRegisterModule.TestUnregisterFrom;
+var
+  OurBindings: TIdSipContacts;
+begin
+  Self.MarkSentRequestCount;
+  Self.Module.UnregisterFrom(Self.RemoteUri).Send;
+  CheckRequestSent('No REGISTER sent');
+  CheckEquals(MethodRegister,
+              Self.LastSentRequest.Method,
+              'Unexpected sent request');
+
+  OurBindings := TIdSipContacts.Create;
+  try
+    OurBindings.Add(Self.Core.Contact);
+
+    OurBindings.First;
+    Self.LastSentRequest.Contacts.First;
+
+    while (OurBindings.HasNext and Self.LastSentRequest.Contacts.HasNext) do begin
+      CheckEquals(OurBindings.CurrentContact.Address.AsString,
+                  Self.LastSentRequest.Contacts.CurrentContact.Address.AsString,
+                  'Incorrect Contact');
+
+      OurBindings.Next;
+      Self.LastSentRequest.Contacts.Next;
+    end;
+    Check(OurBindings.HasNext = Self.LastSentRequest.Contacts.HasNext,
+          'Either not all Contacts in the un-REGISTER, or too many contacts');
+  finally
+    OurBindings.Free;
   end;
 end;
 
@@ -6756,11 +6795,11 @@ var
 begin
   Self.CreateAction;
 
-  RegistrationCount := Self.Core.RegistrationCount;
+  RegistrationCount := Self.Core.RegisterModule.RegistrationCount;
 
   Self.ReceiveOk(Self.LastSentRequest);
   Check(Self.Succeeded, 'Registration failed');
-  Check(Self.Core.RegistrationCount < RegistrationCount,
+  Check(Self.Core.RegisterModule.RegistrationCount < RegistrationCount,
         'REGISTER action not terminated');
 end;
 
@@ -6855,7 +6894,7 @@ function TestTIdSipOutboundRegister.CreateAction: TIdSipAction;
 var
   Reg: TIdSipOutboundRegister;
 begin
-  Result := Self.Core.RegisterWith(Self.RegistrarAddress);
+  Result := Self.Core.RegisterModule.RegisterWith(Self.RegistrarAddress);
 
   Reg := Result as TIdSipOutboundRegister;
   Reg.AddListener(Self);
@@ -6876,7 +6915,7 @@ var
   EventCount:  Integer;
   LatestEvent: TIdWait;
 begin
-  Event := Self.Core.OnReregister;
+  Event := Self.Core.RegisterModule.OnReregister;
 
   Self.CreateAction;
 
@@ -6947,7 +6986,7 @@ end;
 
 procedure TestTIdSipOutboundRegister.TestAutoReregister;
 begin
-  Self.Core.AutoReRegister := true;
+  Self.Core.RegisterModule.AutoReRegister := true;
   Self.CheckAutoReregister(Self.ReceiveOkWithExpiresOf,
                            true,
                            'Expires header');
@@ -6955,7 +6994,7 @@ end;
 
 procedure TestTIdSipOutboundRegister.TestAutoReregisterContactHasExpires;
 begin
-  Self.Core.AutoReRegister := true;
+  Self.Core.RegisterModule.AutoReRegister := true;
   Self.CheckAutoReregister(Self.ReceiveOkWithContactExpiresOf,
                            true,
                            'Contact expires param');
@@ -6963,7 +7002,7 @@ end;
 
 procedure TestTIdSipOutboundRegister.TestAutoReregisterNoExpiresValue;
 begin
-  Self.Core.AutoReRegister := true;
+  Self.Core.RegisterModule.AutoReRegister := true;
   Self.CheckAutoReregister(Self.ReceiveOkWithNoExpires,
                            false,
                            'No Expires header or expires param');
@@ -6971,7 +7010,7 @@ end;
 
 procedure TestTIdSipOutboundRegister.TestAutoReregisterSwitchedOff;
 begin
-  Self.Core.AutoReRegister := false;
+  Self.Core.RegisterModule.AutoReRegister := false;
   Self.CheckAutoReregister(Self.ReceiveOkWithExpiresOf,
                            false,
                            'Expires header; Autoreregister = false');
@@ -7059,7 +7098,7 @@ function TestTIdSipOutboundRegistrationQuery.CreateAction: TIdSipAction;
 var
   Reg: TIdSipOutboundRegistrationQuery;
 begin
-  Result := Self.Core.CurrentRegistrationWith(Self.RegistrarAddress);
+  Result := Self.Core.RegisterModule.CurrentRegistrationWith(Self.RegistrarAddress);
 
   Reg := Result as TIdSipOutboundRegistrationQuery;
   Reg.AddListener(Self);
@@ -7108,7 +7147,7 @@ function TestTIdSipOutboundUnregister.CreateAction: TIdSipAction;
 var
   Reg: TIdSipOutboundUnregister;
 begin
-  Result := Self.Core.UnregisterFrom(Self.RegistrarAddress);
+  Result := Self.Core.RegisterModule.UnregisterFrom(Self.RegistrarAddress);
 
   Reg := Result as TIdSipOutboundUnregister;
   Reg.Bindings   := Self.Bindings;
@@ -10182,7 +10221,7 @@ begin
 
   Registrar := TIdSipUri.Create;
   try
-    Reg := Self.UA.RegisterWith(Registrar);
+    Reg := Self.UA.RegisterModule.RegisterWith(Registrar);
   finally
     Registrar.Free;
   end;

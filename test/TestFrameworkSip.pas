@@ -62,6 +62,7 @@ type
 
     function  CreateRemoteBye(LocalDialog: TIdSipDialog): TIdSipRequest;
     function  CreateRemoteOk(Request: TIdSipRequest): TIdSipResponse;
+    function  CreateUserAgent: TIdSipUserAgent;
     function  LastSentAck: TIdSipRequest;
     function  LastSentRequest: TIdSipRequest;
     function  LastSentResponse: TIdSipResponse;
@@ -849,34 +850,17 @@ procedure TTestCaseTU.SetUp;
 begin
   inherited SetUp;
 
-  Self.Authenticator := TIdSipAuthenticator.Create;
-
   Self.Destination := TIdSipToHeader.Create;
   Self.Destination.Value := 'sip:franks@localhost';
 
-  Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
-
-  Self.Core := TIdSipUserAgent.Create;
-  Self.Core.Authenticator := Self.Authenticator;
-  Self.Core.Dispatcher    := Self.Dispatcher;
-  Self.Core.Locator       := Self.Locator;
-
-  Self.Core.Contact.Value := 'sip:case@localhost';
-  Self.Core.From.Value    := 'sip:case@localhost';
+  Self.Core := Self.CreateUserAgent;
+  Self.Authenticator := Self.Core.Authenticator as TIdSipAuthenticator;
+  Self.DebugTimer    := Self.Core.Timer as TIdDebugTimerQueue;
+  Self.Dispatcher    := Self.Core.Dispatcher as TIdSipMockTransactionDispatcher;
 
   Self.Invite := TIdSipTestResources.CreateBasicRequest;
   Self.RemoveBody(Self.Invite);
-
-  Self.DebugTimer := TIdDebugTimerQueue.Create(false);
-  Self.DebugTimer.TriggerImmediateEvents := true;
-  Self.Core.Timer := DebugTimer;
-
-  // Make sure we have a sane DNS setup so that actions don't terminate
-  // themselves after they try find locations to which to send their messages.
-  Self.Locator.AddA(Self.Destination.Address.Host, '127.0.0.1');
-  Self.Locator.AddA(Self.Core.From.Address.Host,   '127.0.0.1');
-  Self.Locator.AddA('localhost',                   '127.0.0.1');
-  Self.Locator.AddA(Self.Invite.LastHop.SentBy,    '127.0.0.1');
+  Self.Locator.AddA(Self.Invite.LastHop.SentBy, '127.0.0.1');
 end;
 
 procedure TTestCaseTU.TearDown;
@@ -944,6 +928,31 @@ begin
   // WILL have a To tag.
   Result := Self.Core.CreateResponse(Request, SIPOK);
   Result.ToHeader.Tag := Self.Core.NextTag;
+end;
+
+function TTestCaseTU.CreateUserAgent: TIdSipUserAgent;
+var
+  DebugTimer:  TIdDebugTimerQueue;
+  MockLocator: TIdSipMockLocator;
+begin
+  DebugTimer := TIdDebugTimerQueue.Create(false);
+  DebugTimer.TriggerImmediateEvents := true;
+
+  Result := TIdSipUserAgent.Create;
+  Result.Authenticator := TIdSipAuthenticator.Create;
+  Result.Dispatcher    := TIdSipMockTransactionDispatcher.Create;
+  Result.Locator       := Result.Dispatcher.Locator;
+  Result.Timer         := DebugTimer;
+
+  Result.Contact.Value := 'sip:case@localhost';
+  Result.From.Value    := 'sip:case@localhost';
+
+  // Make sure we have a sane DNS setup so that actions don't terminate
+  // themselves after they try find locations to which to send their messages.
+  MockLocator := Result.Locator as TIdSipMockLocator;
+  MockLocator.AddA(Self.Destination.Address.Host, '127.0.0.1');
+  MockLocator.AddA(Result.From.Address.Host,      '127.0.0.1');
+  MockLocator.AddA('localhost',                   '127.0.0.1');
 end;
 
 function TTestCaseTU.LastSentAck: TIdSipRequest;
