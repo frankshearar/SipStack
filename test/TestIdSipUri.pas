@@ -68,6 +68,7 @@ type
     procedure TestAsStringWithSpecialPort;
     procedure TestBasicGetUri;
     procedure TestBasicSetUri;
+    procedure TestCanonicaliseAsAddress;
     procedure TestCanonicaliseAsAddressOfRecord;
     procedure TestCanonicaliseAsAddressOfRecordSips;
     procedure TestClearHeaders;
@@ -612,6 +613,53 @@ begin
   CheckEquals(0,                         Self.Uri.ParamCount,    'Parameters');
   CheckEquals('',                        Self.Uri.Password,      'Password');
   CheckEquals(0,                         Self.Uri.Headers.Count, 'Headers');
+end;
+
+procedure TestTIdSipUri.TestCanonicaliseAsAddress;
+const
+  UnknownParam = 'unknown';
+var
+  AOR: String;
+begin
+  AOR := 'sip:wintermute@tessier-ashpool.co.luna';
+  Self.Uri.Uri := AOR;
+  CheckEquals(AOR,
+              Self.Uri.CanonicaliseAsAddressOfRecord,
+              'Normal URI');
+
+  Self.Uri.Uri  := AOR;
+  Self.Uri.Port := 5060;
+  CheckEquals(AOR,
+              Self.Uri.CanonicaliseAsAddressOfRecord,
+              'URI with port');
+
+  Self.Uri.Uri := AOR;
+  Self.Uri.Password := 'FooingTheBar';
+  CheckEquals(AOR,
+              Self.Uri.CanonicaliseAsAddressOfRecord,
+              'URI with password');
+
+  Self.Uri.Uri := AOR;
+  Self.Uri.AddParameter(MethodParam);
+  Self.Uri.AddParameter(MaddrParam);
+  Self.Uri.AddParameter(TTLParam);
+  Self.Uri.AddParameter(TransportParam);
+  Self.Uri.AddParameter(LooseRoutableParam);
+  Self.Uri.AddParameter(UnknownParam);
+  CheckEquals(AOR + ';' + UnknownParam,
+              Self.Uri.CanonicaliseAsAddressOfRecord,
+              'URI with forbidden params and one unknown param');
+
+  Self.Uri.Headers.Add(ExpiresHeader);
+  CheckEquals(AOR,
+              Self.Uri.CanonicaliseAsAddressOfRecord,
+              'URI with header');
+
+  AOR := 'sip:<wintermute>@tessier-ashpool.co.luna';
+  Self.Uri.Uri := 'sip:%3c%77intermute%3e@tessier-ashpool.co.luna';
+  CheckEquals(AOR,
+              Self.Uri.CanonicaliseAsAddressOfRecord,
+              'URI with escaped characters in user name');
 end;
 
 procedure TestTIdSipUri.TestCanonicaliseAsAddressOfRecord;

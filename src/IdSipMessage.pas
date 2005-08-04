@@ -182,6 +182,7 @@ type
                            const Value: String = '');
     function  AsRouteHeader: TIdSipRouteHeader;
     function  AsString: String; override;
+    function  CanonicaliseAsAddress: String;
     function  CanonicaliseAsAddressOfRecord: String;
     procedure ClearHeaders;
     procedure ClearParameters;
@@ -1342,6 +1343,7 @@ type
     class function InResponseTo(Request: TIdSipRequest;
                                 StatusCode: Cardinal;
                                 Contact: TIdSipContactHeader): TIdSipResponse; overload;
+    class function TextForCode(StatusCode: Cardinal): String;
 
     constructor Create; override;
     destructor  Destroy; override;
@@ -2490,6 +2492,35 @@ end;
 function TIdSipUri.AsString: String;
 begin
   Result := Self.Uri;
+end;
+
+function TIdSipUri.CanonicaliseAsAddress: String;
+var
+  ResultUri: TIdSipUri;
+begin
+  // RFC 3261, section 19, Table 1
+  // This function produces a SIP/SIPS URI suitable for From and To headers.
+
+  ResultUri := TIdSipUri.Create(Self.Uri);
+  try
+    if ResultUri.PortIsSpecified then begin
+      ResultUri.Port                        := ResultUri.DefaultPort;
+      ResultUri.HostAndPort.PortIsSpecified := false;
+    end;
+
+    ResultUri.RemoveParameter(MethodParam);
+    ResultUri.RemoveParameter(MaddrParam);
+    ResultUri.RemoveParameter(TTLParam);
+    ResultUri.RemoveParameter(TransportParam);
+    ResultUri.RemoveParameter(LooseRoutableParam);
+
+    ResultUri.Password := '';
+    ResultUri.Headers.Clear;
+
+    Result := TIdSipUri.Decode(ResultUri.Uri);
+  finally
+    ResultUri.Free;
+  end;
 end;
 
 function TIdSipUri.CanonicaliseAsAddressOfRecord: String;
@@ -7903,6 +7934,66 @@ begin
   end;
 end;
 
+class function TIdSipResponse.TextForCode(StatusCode: Cardinal): String;
+begin
+  case StatusCode of
+    SIPTrying:                           Result := RSSIPTrying;
+    SIPRinging:                          Result := RSSIPRinging;
+    SIPCallIsBeingForwarded:             Result := RSSIPCallIsBeingForwarded;
+    SIPQueued:                           Result := RSSIPQueued;
+    SIPSessionProgress:                  Result := RSSIPSessionProgress;
+    SIPOK:                               Result := RSSIPOK;
+    SIPAccepted:                         Result := RSSIPAccepted;
+    SIPMultipleChoices:                  Result := RSSIPMultipleChoices;
+    SIPMovedPermanently:                 Result := RSSIPMovedPermanently;
+    SIPMovedTemporarily:                 Result := RSSIPMovedTemporarily;
+    SIPUseProxy:                         Result := RSSIPUseProxy;
+    SIPAlternativeService:               Result := RSSIPAlternativeService;
+    SIPBadRequest:                       Result := RSSIPBadRequest;
+    SIPUnauthorized:                     Result := RSSIPUnauthorized;
+    SIPPaymentRequired:                  Result := RSSIPPaymentRequired;
+    SIPForbidden:                        Result := RSSIPForbidden;
+    SIPNotFound:                         Result := RSSIPNotFound;
+    SIPMethodNotAllowed:                 Result := RSSIPMethodNotAllowed;
+    SIPNotAcceptableClient:              Result := RSSIPNotAcceptableClient;
+    SIPProxyAuthenticationRequired:      Result := RSSIPProxyAuthenticationRequired;
+    SIPRequestTimeout:                   Result := RSSIPRequestTimeout;
+    SIPGone:                             Result := RSSIPGone;
+    SIPRequestEntityTooLarge:            Result := RSSIPRequestEntityTooLarge;
+    SIPRequestURITooLarge:               Result := RSSIPRequestURITooLarge;
+    SIPUnsupportedMediaType:             Result := RSSIPUnsupportedMediaType;
+    SIPUnsupportedURIScheme:             Result := RSSIPUnsupportedURIScheme;
+    SIPBadExtension:                     Result := RSSIPBadExtension;
+    SIPExtensionRequired:                Result := RSSIPExtensionRequired;
+    SIPIntervalTooBrief:                 Result := RSSIPIntervalTooBrief;
+    SIPTemporarilyUnavailable:           Result := RSSIPTemporarilyUnavailable;
+    SIPCallLegOrTransactionDoesNotExist: Result := RSSIPCallLegOrTransactionDoesNotExist;
+    SIPLoopDetected:                     Result := RSSIPLoopDetected;
+    SIPTooManyHops:                      Result := RSSIPTooManyHops;
+    SIPAddressIncomplete:                Result := RSSIPAddressIncomplete;
+    SIPAmbiguous:                        Result := RSSIPAmbiguous;
+    SIPBusyHere:                         Result := RSSIPBusyHere;
+    SIPRequestTerminated:                Result := RSSIPRequestTerminated;
+    SIPNotAcceptableHere:                Result := RSSIPNotAcceptableHere;
+    SIPBadEvent:                         Result := RSSIPBadEvent;
+    SIPRequestPending:                   Result := RSSIPRequestPending;
+    SIPUndecipherable:                   Result := RSSIPUndecipherable;
+    SIPInternalServerError:              Result := RSSIPInternalServerError;
+    SIPNotImplemented:                   Result := RSSIPNotImplemented;
+    SIPBadGateway:                       Result := RSSIPBadGateway;
+    SIPServiceUnavailable:               Result := RSSIPServiceUnavailable;
+    SIPServerTimeOut:                    Result := RSSIPServerTimeOut;
+    SIPSIPVersionNotSupported:           Result := RSSIPSIPVersionNotSupported;
+    SIPMessageTooLarge:                  Result := RSSIPMessageTooLarge;
+    SIPBusyEverywhere:                   Result := RSSIPBusyEverywhere;
+    SIPDecline:                          Result := RSSIPDecline;
+    SIPDoesNotExistAnywhere:             Result := RSSIPDoesNotExistAnywhere;
+    SIPNotAcceptableGlobal:              Result := RSSIPNotAcceptableGlobal;
+  else
+    Result := RSSIPUnknownResponseCode;
+  end;
+end;
+
 constructor TIdSipResponse.Create;
 begin
   inherited Create;
@@ -8193,63 +8284,7 @@ end;
 procedure TIdSipResponse.SetStatusCode(Value: Integer);
 begin
   Self.fStatusCode := Value;
-
-  case Self.StatusCode of
-    SIPTrying:                           Self.StatusText := RSSIPTrying;
-    SIPRinging:                          Self.StatusText := RSSIPRinging;
-    SIPCallIsBeingForwarded:             Self.StatusText := RSSIPCallIsBeingForwarded;
-    SIPQueued:                           Self.StatusText := RSSIPQueued;
-    SIPSessionProgress:                  Self.StatusText := RSSIPSessionProgress;
-    SIPOK:                               Self.StatusText := RSSIPOK;
-    SIPAccepted:                         Self.StatusText := RSSIPAccepted;
-    SIPMultipleChoices:                  Self.StatusText := RSSIPMultipleChoices;
-    SIPMovedPermanently:                 Self.StatusText := RSSIPMovedPermanently;
-    SIPMovedTemporarily:                 Self.StatusText := RSSIPMovedTemporarily;
-    SIPUseProxy:                         Self.StatusText := RSSIPUseProxy;
-    SIPAlternativeService:               Self.StatusText := RSSIPAlternativeService;
-    SIPBadRequest:                       Self.StatusText := RSSIPBadRequest;
-    SIPUnauthorized:                     Self.StatusText := RSSIPUnauthorized;
-    SIPPaymentRequired:                  Self.StatusText := RSSIPPaymentRequired;
-    SIPForbidden:                        Self.StatusText := RSSIPForbidden;
-    SIPNotFound:                         Self.StatusText := RSSIPNotFound;
-    SIPMethodNotAllowed:                 Self.StatusText := RSSIPMethodNotAllowed;
-    SIPNotAcceptableClient:              Self.StatusText := RSSIPNotAcceptableClient;
-    SIPProxyAuthenticationRequired:      Self.StatusText := RSSIPProxyAuthenticationRequired;
-    SIPRequestTimeout:                   Self.StatusText := RSSIPRequestTimeout;
-    SIPGone:                             Self.StatusText := RSSIPGone;
-    SIPRequestEntityTooLarge:            Self.StatusText := RSSIPRequestEntityTooLarge;
-    SIPRequestURITooLarge:               Self.StatusText := RSSIPRequestURITooLarge;
-    SIPUnsupportedMediaType:             Self.StatusText := RSSIPUnsupportedMediaType;
-    SIPUnsupportedURIScheme:             Self.StatusText := RSSIPUnsupportedURIScheme;
-    SIPBadExtension:                     Self.StatusText := RSSIPBadExtension;
-    SIPExtensionRequired:                Self.StatusText := RSSIPExtensionRequired;
-    SIPIntervalTooBrief:                 Self.StatusText := RSSIPIntervalTooBrief;
-    SIPTemporarilyUnavailable:           Self.StatusText := RSSIPTemporarilyUnavailable;
-    SIPCallLegOrTransactionDoesNotExist: Self.StatusText := RSSIPCallLegOrTransactionDoesNotExist;
-    SIPLoopDetected:                     Self.StatusText := RSSIPLoopDetected;
-    SIPTooManyHops:                      Self.StatusText := RSSIPTooManyHops;
-    SIPAddressIncomplete:                Self.StatusText := RSSIPAddressIncomplete;
-    SIPAmbiguous:                        Self.StatusText := RSSIPAmbiguous;
-    SIPBusyHere:                         Self.StatusText := RSSIPBusyHere;
-    SIPRequestTerminated:                Self.StatusText := RSSIPRequestTerminated;
-    SIPNotAcceptableHere:                Self.StatusText := RSSIPNotAcceptableHere;
-    SIPBadEvent:                         Self.StatusText := RSSIPBadEvent;
-    SIPRequestPending:                   Self.StatusText := RSSIPRequestPending;
-    SIPUndecipherable:                   Self.StatusText := RSSIPUndecipherable;
-    SIPInternalServerError:              Self.StatusText := RSSIPInternalServerError;
-    SIPNotImplemented:                   Self.StatusText := RSSIPNotImplemented;
-    SIPBadGateway:                       Self.StatusText := RSSIPBadGateway;
-    SIPServiceUnavailable:               Self.StatusText := RSSIPServiceUnavailable;
-    SIPServerTimeOut:                    Self.StatusText := RSSIPServerTimeOut;
-    SIPSIPVersionNotSupported:           Self.StatusText := RSSIPSIPVersionNotSupported;
-    SIPMessageTooLarge:                  Self.StatusText := RSSIPMessageTooLarge;
-    SIPBusyEverywhere:                   Self.StatusText := RSSIPBusyEverywhere;
-    SIPDecline:                          Self.StatusText := RSSIPDecline;
-    SIPDoesNotExistAnywhere:             Self.StatusText := RSSIPDoesNotExistAnywhere;
-    SIPNotAcceptableGlobal:              Self.StatusText := RSSIPNotAcceptableGlobal;
-  else
-    Self.StatusText := RSSIPUnknownResponseCode;
-  end;
+  Self.StatusText  := Self.TextForCode(Value);
 end;
 
 //******************************************************************************
