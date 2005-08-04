@@ -624,19 +624,19 @@ begin
   AOR := 'sip:wintermute@tessier-ashpool.co.luna';
   Self.Uri.Uri := AOR;
   CheckEquals(AOR,
-              Self.Uri.CanonicaliseAsAddressOfRecord,
+              Self.Uri.CanonicaliseAsAddress,
               'Normal URI');
 
   Self.Uri.Uri  := AOR;
   Self.Uri.Port := 5060;
   CheckEquals(AOR,
-              Self.Uri.CanonicaliseAsAddressOfRecord,
+              Self.Uri.CanonicaliseAsAddress,
               'URI with port');
 
   Self.Uri.Uri := AOR;
   Self.Uri.Password := 'FooingTheBar';
   CheckEquals(AOR,
-              Self.Uri.CanonicaliseAsAddressOfRecord,
+              Self.Uri.CanonicaliseAsAddress,
               'URI with password');
 
   Self.Uri.Uri := AOR;
@@ -647,18 +647,19 @@ begin
   Self.Uri.AddParameter(LooseRoutableParam);
   Self.Uri.AddParameter(UnknownParam);
   CheckEquals(AOR + ';' + UnknownParam,
-              Self.Uri.CanonicaliseAsAddressOfRecord,
+              Self.Uri.CanonicaliseAsAddress,
               'URI with forbidden params and one unknown param');
 
+  Self.Uri.Uri := AOR;
   Self.Uri.Headers.Add(ExpiresHeader);
   CheckEquals(AOR,
-              Self.Uri.CanonicaliseAsAddressOfRecord,
+              Self.Uri.CanonicaliseAsAddress,
               'URI with header');
 
   AOR := 'sip:<wintermute>@tessier-ashpool.co.luna';
   Self.Uri.Uri := 'sip:%3c%77intermute%3e@tessier-ashpool.co.luna';
   CheckEquals(AOR,
-              Self.Uri.CanonicaliseAsAddressOfRecord,
+              Self.Uri.CanonicaliseAsAddress,
               'URI with escaped characters in user name');
 end;
 
