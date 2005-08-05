@@ -184,6 +184,7 @@ type
     procedure TestParseMalformedRequestLine;
     procedure TestParseWithRequestUriInAngleBrackets;
     procedure TestProxyAuthorizationFor;
+    procedure TestReferTo;
     procedure TestRequiresResponse;
     procedure TestSetMaxForwards;
     procedure TestSetRoute;
@@ -2793,7 +2794,7 @@ begin
   ProxyAuth1 := Self.Request.AddHeader(ProxyAuthorizationHeader);
   ProxyAuth2 := Self.Request.AddHeader(ProxyAuthorizationHeader);
 
-  Auth.Value       := 'Digest realm="ProxyAuth1"';  
+  Auth.Value       := 'Digest realm="ProxyAuth1"';
   ProxyAuth1.Value := 'Digest realm="ProxyAuth1"';
   ProxyAuth2.Value := 'Digest realm="ProxyAuth2"';
 
@@ -2803,6 +2804,32 @@ begin
         'ProxyAuth1');
   Check(ProxyAuth2 = Self.Request.ProxyAuthorizationFor('ProxyAuth2'),
         'ProxyAuth2');
+end;
+
+procedure TestTIdSipRequest.TestReferTo;
+var
+  ReferTo: TIdSipReferToHeader;
+begin
+  Check(not Self.Request.HasHeader(ReferToHeaderFull),
+        'Sanity check: a new request should have no Refer-To header');
+
+  Self.Request.ReferTo;
+  Check(Assigned(Self.Request.ReferTo),
+        'Getter didn''t instantiate the Refer-To header');
+
+  ReferTo := TIdSipReferToHeader.Create;
+  try
+    // This sneakily checks that (a) the Setter instantiates a Refer-To header,
+    // AND that the setter copies the information for that header properly.
+    Self.Request.RemoveAllHeadersNamed(ReferToHeaderFull);
+    ReferTo.Value := 'sip:case@fried-neurons.org';
+    Self.Request.ReferTo := ReferTo;
+
+    Check(ReferTo.Equals(Self.Request.ReferTo),
+                         'New Refer-To doesn''t equal request''s Refer-To');
+  finally
+    ReferTo.Free;
+  end;
 end;
 
 procedure TestTIdSipRequest.TestRequiresResponse;
