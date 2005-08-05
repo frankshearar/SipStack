@@ -5652,7 +5652,7 @@ end;
 function TIdSipOutboundRedirectedInvite.CreateInvite: TIdSipRequest;
 begin
   // Use this method in the context of a redirect to an INVITE.
-  // cf RFC 3261,  section 8.1.3.4
+  // cf. RFC 3261, section 8.1.3.4
 
   Result := TIdSipRequest.Create;
   Result.Assign(Self.OriginalInvite);
