@@ -166,8 +166,8 @@ type
     class function DefaultSubscriptionDuration: Cardinal; override;
     class function EventPackage: String; override;
 
-    function  Accept(Request: TIdSipRequest;
-                     UsingSecureTransport: Boolean): TIdSipAction; override;
+    function Accept(Request: TIdSipRequest;
+                    UsingSecureTransport: Boolean): TIdSipAction; override;
     function MimeType: String;
   end;
 
