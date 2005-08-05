@@ -84,31 +84,53 @@ type
     procedure SetUp; override;
   end;
 
-  TestTIdSipOutboundNotify = class(TestTIdSipSubscribe,
-                                   IIdSipNotifyListener)
-  private
+  TestTIdSipOutboundNotifyBase = class(TestTIdSipSubscribe,
+                                       IIdSipNotifyListener)
+  protected
     Body:              String;
     Dialog:            TIdSipDialog;
-    Expires:           Cardinal;
     MimeType:          String;
-    Notify:            TIdSipOutboundNotify;
+    Notify:            TIdSipOutboundNotifyBase;
     Subscribe:         TIdSipRequest;
     SubscriptionState: String;
 
+    procedure ConfigureNotify(Action: TIdSipOutboundNotifyBase); virtual;
     procedure OnFailure(NotifyAgent: TIdSipOutboundNotify;
                         Response: TIdSipResponse);
     procedure OnSuccess(NotifyAgent: TIdSipOutboundNotify;
                         Response: TIdSipResponse);
-  protected
-    procedure ConfigureNotify(Action: TIdSipOutboundNotify);
-    function  CreateAction: TIdSipAction; override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestSend; virtual;
+  end;
+
+  TestTIdSipOutboundNotify = class(TestTIdSipOutboundNotifyBase)
+  private
+    Expires: Cardinal;
+
+  protected
+    procedure ConfigureNotify(Action: TIdSipOutboundNotifyBase); override;
+    function  CreateAction: TIdSipAction; override;
+  public
+    procedure SetUp; override;
+  published
     procedure TestAddListener;
     procedure TestRemoveListener;
-    procedure TestSend;
+    procedure TestSend; override;
+  end;
+
+  TestTIdSipOutboundTerminatingNotify = class(TestTIdSipOutboundNotifyBase)
+  private
+    Reason: String;
+  protected
+    procedure ConfigureNotify(Action: TIdSipOutboundNotifyBase); override;
+    function  CreateAction: TIdSipAction; override;
+  public
+    procedure SetUp; override;
+  published
+    procedure TestSend; override;
   end;
 
   TestTIdSipOutboundSubscribe = class(TestTIdSipSubscribe,
@@ -201,6 +223,9 @@ type
     Action:        TIdSipInboundSubscription;
     ActionRequest: TIdSipRequest;
 
+    procedure CheckNotify(Notify: TIdSipRequest;
+                          const Body: String;
+                          const MimeType: String);
     procedure CheckSendNotify(Sub: TIdSipInboundSubscription;
                               const SubscriptionState: String);
     procedure OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
@@ -216,6 +241,7 @@ type
     procedure TestIsOptions; override;
     procedure TestIsRegistration; override;
     procedure TestIsSession; override;
+    procedure TestNotify; virtual;
     procedure TestReceiveRequestSendsNotify;
   end;
 
@@ -247,7 +273,7 @@ type
     procedure TestExpiryTimeInSeconds;
     procedure TestMatchInDialogSubscribe;
     procedure TestMatchResponse;
-    procedure TestNotify;
+    procedure TestNotify; override;
     procedure TestReceiveExpiresInContactHeader;
     procedure TestReceiveExpiresTooShort;
 //    procedure TestReceiveOutOfOrderRefresh;
@@ -375,6 +401,9 @@ type
   protected
     procedure ReceiveSubscribeRequest; override;
   published
+    procedure TestNotify; override;
+    procedure TestNotifyWithInappropriateBody;
+    procedure TestNotifyWithNoBody;
     procedure TestRejectUnsupportedReferToUri;
   end;
 
@@ -562,6 +591,7 @@ begin
   Result.AddTest(TestTIdSipSubscribeModule.Suite);
   Result.AddTest(TestTIdSipUserAgentWithSubscribeModule.Suite);
   Result.AddTest(TestTIdSipOutboundNotify.Suite);
+  Result.AddTest(TestTIdSipOutboundTerminatingNotify.Suite);
   Result.AddTest(TestTIdSipOutboundSubscribe.Suite);
   Result.AddTest(TestTIdSipOutboundRefreshSubscribe.Suite);
   Result.AddTest(TestTIdSipOutboundUnsubscribe.Suite);
@@ -1118,16 +1148,16 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipOutboundNotify                                                   *
+//* TestTIdSipOutboundNotifyBase                                               *
 //******************************************************************************
+//* TestTIdSipOutboundNotifyBase Public methods ********************************
 
-procedure TestTIdSipOutboundNotify.SetUp;
+procedure TestTIdSipOutboundNotifyBase.SetUp;
 var
   Ok: TIdSipResponse;
 begin
   inherited SetUp;
 
-  Self.Expires           := OneHour;
   Self.Body              := 'random data';
   Self.MimeType          := 'text/plain';
   Self.SubscriptionState := SubscriptionSubstateActive;
@@ -1142,10 +1172,10 @@ begin
     Ok.Free;
   end;
 
-  Self.Notify := Self.CreateAction as TIdSipOutboundNotify;
+  Self.Notify := Self.CreateAction as TIdSipOutboundNotifyBase;
 end;
 
-procedure TestTIdSipOutboundNotify.TearDown;
+procedure TestTIdSipOutboundNotifyBase.TearDown;
 begin
   Self.Dialog.Free;
   Self.Subscribe.Free;
@@ -1153,16 +1183,82 @@ begin
   inherited TearDown;
 end;
 
+//* TestTIdSipOutboundNotifyBase Protected methods *****************************
+
+procedure TestTIdSipOutboundNotifyBase.ConfigureNotify(Action: TIdSipOutboundNotifyBase);
+begin
+  Action.Body      := Self.Body;
+  Action.Dialog    := Self.Dialog;
+  Action.MimeType  := Self.MimeType;
+  Action.Subscribe := Self.Subscribe;
+end;
+
+procedure TestTIdSipOutboundNotifyBase.OnFailure(NotifyAgent: TIdSipOutboundNotify;
+                                                 Response: TIdSipResponse);
+begin
+end;
+
+procedure TestTIdSipOutboundNotifyBase.OnSuccess(NotifyAgent: TIdSipOutboundNotify;
+                                                 Response: TIdSipResponse);
+begin
+end;
+
+//* TestTIdSipOutboundNotifyBase Published methods *****************************
+
+procedure TestTIdSipOutboundNotifyBase.TestSend;
+var
+  Notify: TIdSipRequest;
+begin
+  Self.MarkSentRequestCount;
+  Self.Notify.Send;
+
+  CheckRequestSent('No request sent');
+
+  Notify := Self.LastSentRequest;
+  CheckEquals(MethodNotify,
+              Notify.Method,
+              'Unexpected request sent');
+
+  Check(Notify.HasHeader(EventHeaderFull),
+        'No Event header');
+  CheckEquals(Self.Subscribe.FirstEvent.EventPackage,
+              Notify.FirstEvent.EventPackage,
+              'Event value');
+  CheckEquals(Self.Subscribe.FirstEvent.ID,
+              Notify.FirstEvent.ID,
+              'Event id parameter');
+
+  Check(Notify.HasHeader(SubscriptionStateHeader),
+        'No Subscription-State header');
+  CheckEquals(Self.SubscriptionState,
+              Notify.FirstSubscriptionState.SubState,
+              'Unexpected substate');
+end;
+
+//******************************************************************************
+//* TestTIdSipOutboundNotify                                                   *
+//******************************************************************************
+//* TestTIdSipOutboundNotify Public methods ************************************
+
+procedure TestTIdSipOutboundNotify.SetUp;
+begin
+  Self.Expires := OneHour;
+
+  inherited SetUp;
+end;
+
 //* TestTIdSipOutboundNotify Protected methods *********************************
 
-procedure TestTIdSipOutboundNotify.ConfigureNotify(Action: TIdSipOutboundNotify);
+procedure TestTIdSipOutboundNotify.ConfigureNotify(Action: TIdSipOutboundNotifyBase);
+var
+  Notify: TIdSipOutboundNotify;
 begin
-  Action.Body              := Self.Body;
-  Action.Dialog            := Self.Dialog;
-  Action.Expires           := Self.Expires;
-  Action.MimeType          := Self.MimeType;
-  Action.Subscribe         := Self.Subscribe;
-  Action.SubscriptionState := Self.SubscriptionState;
+  inherited ConfigureNotify(Action);
+
+  Notify := Action as TIdSipOutboundNotify;
+
+  Notify.Expires           := Self.Expires;
+  Notify.SubscriptionState := Self.SubscriptionState;
 end;
 
 function TestTIdSipOutboundNotify.CreateAction: TIdSipAction;
@@ -1176,29 +1272,19 @@ begin
   Result := Sub;
 end;
 
-//* TestTIdSipOutboundNotify Private methods ***********************************
-
-procedure TestTIdSipOutboundNotify.OnFailure(NotifyAgent: TIdSipOutboundNotify;
-                                             Response: TIdSipResponse);
-begin
-end;
-
-procedure TestTIdSipOutboundNotify.OnSuccess(NotifyAgent: TIdSipOutboundNotify;
-                                             Response: TIdSipResponse);
-begin
-end;
-
 //* TestTIdSipOutboundNotify Published methods *********************************
 
 procedure TestTIdSipOutboundNotify.TestAddListener;
 var
-  L: TIdSipTestNotifyListener;
+  L:      TIdSipTestNotifyListener;
+  Notify: TIdSipOutboundNotify;
 begin
   L := TIdSipTestNotifyListener.Create;
   try
-    Self.Notify.AddListener(L);
-    Self.Notify.Send;
-    Self.ReceiveServiceUnavailable(Self.LastSentRequest);
+    Notify := Self.CreateAction as TIdSipOutboundNotify;
+    Notify.AddListener(L);
+    Notify.Send;
+    ReceiveServiceUnavailable(Self.LastSentRequest);
 
     Check(L.Failed,
           'Notify didn''t notify listener of failure: Listener not added');
@@ -1210,12 +1296,14 @@ end;
 procedure TestTIdSipOutboundNotify.TestRemoveListener;
 var
   L: TIdSipTestNotifyListener;
+  Notify: TIdSipOutboundNotify;
 begin
   L := TIdSipTestNotifyListener.Create;
   try
-    Self.Notify.AddListener(L);
-    Self.Notify.RemoveListener(L);
-    Self.Notify.Send;
+    Notify := Self.CreateAction as TIdSipOutboundNotify;
+    Notify.AddListener(L);
+    Notify.RemoveListener(L);
+    Notify.Send;
     Self.ReceiveServiceUnavailable(Self.LastSentRequest);
 
     Check(not L.Failed,
@@ -1229,28 +1317,10 @@ procedure TestTIdSipOutboundNotify.TestSend;
 var
   Notify: TIdSipRequest;
 begin
-  Self.MarkSentRequestCount;
-  Self.Notify.Send;
-
-  CheckRequestSent('No request sent');
+  inherited TestSend;
 
   Notify := Self.LastSentRequest;
-  CheckEquals(MethodNotify,
-              Notify.Method,
-              'Unexpected request sent');
-  Check(Notify.HasHeader(EventHeaderFull),
-        'No Event header');
-  CheckEquals(Self.Subscribe.FirstEvent.EventPackage,
-              Notify.FirstEvent.EventPackage,
-              'Event value');
-  CheckEquals(Self.Subscribe.FirstEvent.ID,
-              Notify.FirstEvent.ID,
-              'Event id parameter');
-  Check(Notify.HasHeader(SubscriptionStateHeader),
-        'No Subscription-State header');
-  CheckEquals(SubscriptionSubStateActive,
-              Notify.FirstSubscriptionState.SubState,
-              'Unexpected substate');
+
   CheckEquals(Self.Expires,
               Notify.FirstSubscriptionState.Expires,
               'Subscription-State expire param');
@@ -1267,7 +1337,58 @@ begin
         'Notify has no Content-Type header');
   CheckEquals(Notify.ContentType,
               Notify.ContentType,
-              'Notify Content-Type');              
+              'Notify Content-Type');
+end;
+
+//******************************************************************************
+//* TestTIdSipOutboundTerminatingNotify                                        *
+//******************************************************************************
+//* TestTIdSipOutboundTerminatingNotify Public methods *************************
+
+procedure TestTIdSipOutboundTerminatingNotify.SetUp;
+begin
+  Self.Reason := EventReasonNoResource;
+
+  inherited SetUp;
+
+  Self.SubscriptionState := SubscriptionSubstateTerminated;
+end;
+
+//* TestTIdSipOutboundTerminatingNotify Protected methods **********************
+
+procedure TestTIdSipOutboundTerminatingNotify.ConfigureNotify(Action: TIdSipOutboundNotifyBase);
+var
+  Term: TIdSipOutboundTerminatingNotify;
+begin
+  inherited ConfigureNotify(Action);
+
+  Term := Action as TIdSipOutboundTerminatingNotify;
+  Term.Reason := Self.Reason;
+end;
+
+function TestTIdSipOutboundTerminatingNotify.CreateAction: TIdSipAction;
+var
+  Sub: TIdSipOutboundTerminatingNotify;
+begin
+  Sub := Self.Core.AddOutboundAction(TIdSipOutboundTerminatingNotify) as TIdSipOutboundTerminatingNotify;
+  Self.ConfigureNotify(Sub);
+  Sub.Send;
+
+  Result := Sub;
+end;
+
+//* TestTIdSipOutboundTerminatingNotify Published methods **********************
+
+procedure TestTIdSipOutboundTerminatingNotify.TestSend;
+var
+  Notify: TIdSipRequest;
+begin
+  inherited TestSend;
+
+  Notify := Self.LastSentRequest;
+  CheckEquals(Self.Reason,
+              Notify.FirstSubscriptionState.Reason,
+              'Subscription-State''s reason');
 end;
 
 //******************************************************************************
@@ -1678,6 +1799,28 @@ end;
 
 //* TestTIdSipInboundSubscriptionBase Protected methods ************************
 
+procedure TestTIdSipInboundSubscriptionBase.CheckNotify(Notify: TIdSipRequest;
+                                                        const Body: String;
+                                                        const MimeType: String);
+begin
+  CheckEquals(MethodNotify,
+              Notify.Method,
+              'Unexpected request sent');
+  CheckEquals(Body,
+              Notify.Body,
+              'Notify body');
+  Check(Notify.HasHeader(ContentLengthHeaderFull),
+        'Notify has no Content-Length header');
+  CheckEquals(Notify.ContentLength,
+              Notify.ContentLength,
+              'Notify Content-Length');
+  Check(Notify.HasHeader(ContentTypeHeaderFull),
+        'Notify has no Content-Type header');
+  CheckEquals(Notify.ContentType,
+              Notify.ContentType,
+              'Notify Content-Type');
+end;
+
 procedure TestTIdSipInboundSubscriptionBase.CheckSendNotify(Sub: TIdSipInboundSubscription;
                                                             const SubscriptionState: String);
 var
@@ -1711,8 +1854,6 @@ end;
 //* TestTIdSipInboundSubscriptionBase Published methods ************************
 
 procedure TestTIdSipInboundSubscriptionBase.TestAccept;
-var
-  Notify: TIdSipRequest;
 begin
   Self.MarkSentRequestCount;
   Self.MarkSentResponseCount;
@@ -1771,6 +1912,11 @@ procedure TestTIdSipInboundSubscriptionBase.TestIsSession;
 begin
   Check(not Self.Action.IsSession,
         Self.Action.ClassName + ' marked as a Session');
+end;
+
+procedure TestTIdSipInboundSubscriptionBase.TestNotify;
+begin
+  Fail('Implement ' + Self.ClassName + '.TestNotify');
 end;
 
 procedure TestTIdSipInboundSubscriptionBase.TestReceiveRequestSendsNotify;
@@ -2010,8 +2156,6 @@ procedure TestTIdSipInboundSubscription.TestNotify;
 const
   Body     = 'random';
   MimeType = 'text/plain';
-var
-  Notify: TIdSipRequest;
 begin
   Self.Action.Accept;
 
@@ -2019,24 +2163,7 @@ begin
   Self.Action.Notify(Body, MimeType);
 
   CheckRequestSent('No request sent');
-
-  Notify := Self.LastSentRequest;
-  CheckEquals(MethodNotify,
-              Notify.Method,
-              'Unexpected request sent');
-  CheckEquals(Body,
-              Notify.Body,
-              'Notify body');
-  Check(Notify.HasHeader(ContentLengthHeaderFull),
-        'Notify has no Content-Length header');
-  CheckEquals(Notify.ContentLength,
-              Notify.ContentLength,
-              'Notify Content-Length');
-  Check(Notify.HasHeader(ContentTypeHeaderFull),
-        'Notify has no Content-Type header');
-  CheckEquals(Notify.ContentType,
-              Notify.ContentType,
-              'Notify Content-Type');
+  Self.CheckNotify(Self.LastSentRequest, Body, MimeType);
 end;
 
 procedure TestTIdSipInboundSubscription.TestReceiveExpiresInContactHeader;
@@ -3203,6 +3330,44 @@ begin
 end;
 
 //* TestTIdSipInboundReferral Published methods ********************************
+
+procedure TestTIdSipInboundReferral.TestNotify;
+const
+  Body     = 'SIP/2.0 200 OK';
+  MimeType = SipFragmentMimeType;
+begin
+  Self.Action.Accept;
+
+  Self.MarkSentRequestCount;
+  Self.Action.Notify(Body, MimeType);
+
+  CheckRequestSent('No request sent');
+  Self.CheckNotify(Self.LastSentRequest, Body, MimeType);
+end;
+
+procedure TestTIdSipInboundReferral.TestNotifyWithInappropriateBody;
+const
+  MimeType = 'text/plain';
+begin
+  try
+    Self.Action.Notify('random data', MimeType);
+
+    Fail('Failed to bail out when sending a REFER NOTIFY with a ' + MimeType + ' body');
+  except
+    on EIdSipTransactionUser do;
+  end;
+end;
+
+procedure TestTIdSipInboundReferral.TestNotifyWithNoBody;
+begin
+  try
+    Self.Action.Notify('', SipFragmentMimeType);
+
+    Fail('Failed to bail out when sending a REFER NOTIFY with a missing body');
+  except
+    on EIdSipTransactionUser do;
+  end;
+end;
 
 procedure TestTIdSipInboundReferral.TestRejectUnsupportedReferToUri;
 var

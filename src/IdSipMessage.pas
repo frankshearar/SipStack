@@ -1241,6 +1241,7 @@ type
     function  FindAuthorizationHeader(const Realm: String;
                                       const HeaderType: String): TIdSipHeader;
     function  GetMaxForwards: Byte;
+    function  GetReferTo: TIdSipReferToHeader;
     procedure ParseMethod(Parser: TIdSipParser;
                           var FirstLine: String);
     procedure ParseRequestUri(Parser: TIdSipParser;
@@ -1248,6 +1249,7 @@ type
     procedure ParseSipVersion(Parser: TIdSipParser;
                               var FirstLine: String);
     procedure SetMaxForwards(Value: Byte);
+    procedure SetReferTo(Value: TIdSipReferToHeader);
     procedure SetRequestUri(Value: TIdSipURI);
     procedure SetRoute(Value: TIdSipRoutePath);
   protected
@@ -1304,10 +1306,11 @@ type
     function  RequiresResponse: Boolean;
     function  WantsAllowEventsHeader: Boolean; override;
 
-    property MaxForwards: Byte            read GetMaxForwards write SetMaxForwards;
-    property Method:      String          read fMethod write fMethod;
-    property RequestUri:  TIdSipURI       read fRequestUri write SetRequestUri;
-    property Route:       TIdSipRoutePath read fRoute write SetRoute;
+    property MaxForwards: Byte                read GetMaxForwards write SetMaxForwards;
+    property Method:      String              read fMethod write fMethod;
+    property ReferTo:     TIdSipReferToHeader read GetReferTo write SetReferTo;
+    property RequestUri:  TIdSipURI           read fRequestUri write SetRequestUri;
+    property Route:       TIdSipRoutePath     read fRoute write SetRoute;
   end;
 
   // My RequestRequestUri property deserves some explanation: According to
@@ -1343,7 +1346,7 @@ type
     class function InResponseTo(Request: TIdSipRequest;
                                 StatusCode: Cardinal;
                                 Contact: TIdSipContactHeader): TIdSipResponse; overload;
-    class function TextForCode(StatusCode: Cardinal): String;
+    class function TextForCode(StatusCode: Integer): String;
 
     constructor Create; override;
     destructor  Destroy; override;
@@ -7787,6 +7790,11 @@ begin
   Result := StrToInt(Self.FirstHeader(MaxForwardsHeader).Value);
 end;
 
+function TIdSipRequest.GetReferTo: TIdSipReferToHeader;
+begin
+  Result := Self.FirstHeader(ReferToHeaderFull) as TIdSipReferToHeader;
+end;
+
 procedure TIdSipRequest.ParseMethod(Parser: TIdSipParser;
                                     var FirstLine: String);
 var
@@ -7833,6 +7841,11 @@ end;
 procedure TIdSipRequest.SetMaxForwards(Value: Byte);
 begin
   Self.FirstHeader(MaxForwardsHeader).Value := IntToStr(Value);
+end;
+
+procedure TIdSipRequest.SetReferTo(Value: TIdSipReferToHeader);
+begin
+  Self.FirstHeader(ReferToHeaderFull).Assign(Value);
 end;
 
 procedure TIdSipRequest.SetRequestUri(Value: TIdSipURI);
@@ -7934,7 +7947,7 @@ begin
   end;
 end;
 
-class function TIdSipResponse.TextForCode(StatusCode: Cardinal): String;
+class function TIdSipResponse.TextForCode(StatusCode: Integer): String;
 begin
   case StatusCode of
     SIPTrying:                           Result := RSSIPTrying;
