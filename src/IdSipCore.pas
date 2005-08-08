@@ -199,28 +199,6 @@ type
                             Session: TIdSipInboundSession);
   end;
 
-  TIdSipUserAgentReaction =
-    (uarAccept,
-     uarBadAuthorization,
-     uarBadRequest,
-     uarDoNotDisturb,
-     uarExpireTooBrief,
-     uarForbidden,
-     uarLoopDetected,
-     uarMethodNotAllowed,
-     uarMissingContact,
-     uarNotFound,
-     uarUnsupportedExtension,
-     uarTooManyVias,
-     uarUnauthorized,
-     uarUnsupportedAccept,
-     uarUnsupportedContentEncoding,
-     uarUnsupportedContentLanguage,
-     uarUnsupportedContentType,
-     uarUnsupportedMethod,
-     uarUnsupportedScheme,
-     uarUnsupportedSipVersion);
-
   // I represent a closure that contains some block of code involving an Action.
   // I also represent the null action closure.
   TIdSipActionClosure = class(TObject)
@@ -229,129 +207,6 @@ type
   end;
 
   TIdSipActionClosureClass = class of TIdSipActionClosure;
-
-  // TODO: there's redundance with this Hostname, and the Hostnames of the
-  // transports attached to this core. It's not clear how to set up the
-  // hostnames and bindings of the stack.
-  TIdSipAbstractCore = class(TIdInterfacedObject,
-                             IIdSipTransactionDispatcherListener)
-  private
-    fAuthenticator:         TIdSipAbstractAuthenticator;
-    fDispatcher:            TIdSipTransactionDispatcher;
-    fHostName:              String;
-    fLocator:               TIdSipAbstractLocator;
-    fRealm:                 String;
-    fRequireAuthentication: Boolean;
-    fTimer:                 TIdTimerQueue;
-    fUserAgentName:         String;
-    Observed:               TIdObservable;
-    TimerLock:              TCriticalSection;
-    UserAgentListeners:     TIdNotificationList;
-
-    function  DefaultHostName: String;
-    procedure RejectBadAuthorization(Request: TIdSipRequest);
-    procedure SetDispatcher(Value: TIdSipTransactionDispatcher);
-    procedure SetRealm(const Value: String);
-  protected
-    procedure ActOnRequest(Request: TIdSipRequest;
-                           Receiver: TIdSipTransport); virtual;
-    procedure ActOnResponse(Response: TIdSipResponse;
-                            Receiver: TIdSipTransport); virtual;
-    procedure MaybeChangeTransport(Msg: TIdSipMessage);
-    procedure NotifyOfChange;
-    procedure OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
-                                        Challenge: TIdSipResponse;
-                                        ChallengeResponse: TIdSipRequest;
-                                        var TryAgain: Boolean); virtual;
-    procedure OnReceiveRequest(Request: TIdSipRequest;
-                               Receiver: TIdSipTransport); virtual;
-    procedure OnReceiveResponse(Response: TIdSipResponse;
-                                Receiver: TIdSipTransport); virtual;
-    procedure PrepareResponse(Response: TIdSipResponse;
-                              Request: TIdSipRequest); virtual;
-    procedure RejectBadRequest(Request: TIdSipRequest;
-                               const Reason: String);
-    procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
-                            Request: TIdSipRequest); virtual;
-    procedure RejectRequestUnauthorized(Request: TIdSipRequest);
-    procedure SetAuthenticator(Value: TIdSipAbstractAuthenticator); virtual;
-    function  WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; virtual;
-    function  WillAcceptResponse(Response: TIdSipResponse): TIdSipUserAgentReaction; virtual;
-  public
-    constructor Create; virtual;
-    destructor  Destroy; override;
-
-    procedure AddObserver(const Listener: IIdObserver);
-    procedure AddUserAgentListener(const Listener: IIdSipUserAgentListener);
-    function  Authenticate(Request: TIdSipRequest): Boolean;
-    function  CreateChallengeResponse(Request: TIdSipRequest): TIdSipResponse;
-    function  CreateChallengeResponseAsUserAgent(Request: TIdSipRequest): TIdSipResponse;
-    function  CreateRequest(const Method: String;
-                            Dest: TIdSipAddressHeader): TIdSipRequest; overload; virtual; abstract;
-    function  CreateRequest(const Method: String;
-                            Dialog: TIdSipDialog): TIdSipRequest; overload; virtual; abstract;
-    function  CreateResponse(Request: TIdSipRequest;
-                             ResponseCode: Cardinal): TIdSipResponse; virtual;
-    function  NextCallID: String;
-    function  NextNonce: String;
-    function  NextTag: String;
-    procedure RemoveObserver(const Listener: IIdObserver);
-    procedure RemoveUserAgentListener(const Listener: IIdSipUserAgentListener);
-    procedure ScheduleEvent(Event: TNotifyEvent;
-                            WaitTime: Cardinal;
-                            Msg: TIdSipMessage); overload;
-    procedure SendRequest(Request: TIdSipRequest;
-                          Dest: TIdSipLocation);
-    procedure SendResponse(Response: TIdSipResponse);
-
-    property Authenticator:         TIdSipAbstractAuthenticator read fAuthenticator write SetAuthenticator;
-    property Dispatcher:            TIdSipTransactionDispatcher read fDispatcher write SetDispatcher;
-    property HostName:              String                      read fHostName write fHostName;
-    property Locator:               TIdSipAbstractLocator       read fLocator write fLocator;
-    property Realm:                 String                      read fRealm write SetRealm;
-    property RequireAuthentication: Boolean                     read fRequireAuthentication write fRequireAuthentication;
-    property Timer:                 TIdTimerQueue               read fTimer write fTimer;
-    property UserAgentName:         String                      read fUserAgentName write fUserAgentName;
-  end;
-
-  // I keep track of information a User Agent needs when making a REGISTER to
-  // a particular registrar.
-  TIdSipRegistrationInfo = class(TObject)
-  private
-    fCallID:     String;
-    fRegistrar:  TIdSipUri;
-    fSequenceNo: Cardinal;
-
-    procedure SetRegistrar(Value: TIdSipUri);
-  public
-    constructor Create;
-    destructor  Destroy; override;
-
-    property CallID:     String    read fCallID write fCallID;
-    property Registrar:  TIdSipUri read fRegistrar write SetRegistrar;
-    property SequenceNo: Cardinal  read fSequenceNo write fSequenceNo;
-  end;
-
-  // I store registration information for registrars with which you've
-  // registered. 
-  TIdSipRegistrations = class(TObject)
-  private
-    KnownRegistrars: TObjectList;
-    Lock:            TCriticalSection;
-
-    function IndexOfRegistrar(Registrar: TIdSipUri): Integer;
-    function KnowsRegistrar(Registrar: TIdSipUri): Boolean;
-    function RegistrarAt(Index: Integer): TIdSipRegistrationInfo;
-  public
-    constructor Create;
-    destructor  Destroy; override;
-
-    procedure AddKnownRegistrar(Registrar: TIdSipUri;
-                                const CallID: String;
-                                SequenceNo: Cardinal);
-    function  CallIDFor(Registrar: TIdSipUri): String;
-    function  NextSequenceNoFor(Registrar: TIdSipUri): Cardinal;
-  end;
 
   TIdSipSessionProc = procedure(Session: TIdSipSession;
                                 Invite: TIdSipRequest) of object;
@@ -478,9 +333,28 @@ type
 
   TIdSipMessageModule = class;
   TIdSipMessageModuleClass = class of TIdSipMessageModule;
-  TIdSipOutboundRegister = class;
-  TIdSipOutboundRegistrationQuery = class;
-  TIdSipOutboundUnregister = class;
+
+  TIdSipUserAgentReaction =
+    (uarAccept,
+     uarBadAuthorization,
+     uarBadRequest,
+     uarDoNotDisturb,
+     uarExpireTooBrief,
+     uarForbidden,
+     uarLoopDetected,
+     uarMethodNotAllowed,
+     uarMissingContact,
+     uarNotFound,
+     uarUnsupportedExtension,
+     uarTooManyVias,
+     uarUnauthorized,
+     uarUnsupportedAccept,
+     uarUnsupportedContentEncoding,
+     uarUnsupportedContentLanguage,
+     uarUnsupportedContentType,
+     uarUnsupportedMethod,
+     uarUnsupportedScheme,
+     uarUnsupportedSipVersion);
 
   // I (usually) represent a human being in the SIP network. I:
   // * inform any listeners when new sessions become established, modified or
@@ -491,18 +365,33 @@ type
   // I provide the canonical place to reject messages that have correct syntax
   // but that we don't or can't accept. This includes unsupported SIP versions,
   // unrecognised methods, etc.
-  TIdSipAbstractUserAgent = class(TIdSipAbstractCore,
-                                  IIdObserver)
+  //
+  // TODO: there's redundance with this Hostname, and the Hostnames of the
+  // transports attached to this core. It's not clear how to set up the
+  // hostnames and bindings of the stack.
+  TIdSipAbstractUserAgent = class(TIdInterfacedObject,
+                                  IIdObserver,
+                                  IIdSipTransactionDispatcherListener)
   private
     fActions:                TIdSipActions;
     fAllowedContentTypeList: TStrings;
     fAllowedLanguageList:    TStrings;
     fAllowedSchemeList:      TStrings;
+    fAuthenticator:          TIdSipAbstractAuthenticator;
     fContact:                TIdSipContactHeader;
+    fDispatcher:             TIdSipTransactionDispatcher;
     fFrom:                   TIdSipFromHeader;
+    fHostName:               String;
     fKeyring:                TIdKeyRing;
+    fLocator:                TIdSipAbstractLocator;
+    fRealm:                  String;
+    fRequireAuthentication:  Boolean;
+    fUserAgentName:          String;
     ModuleLock:              TCriticalSection;
     Modules:                 TObjectList;
+    Observed:                TIdObservable;
+    fTimer:                  TIdTimerQueue;
+    UserAgentListeners:      TIdNotificationList;
 
     procedure AddModuleSpecificHeaders(OutboundMessage: TIdSipMessage);
     function  ConvertToHeader(ValueList: TStrings): String;
@@ -511,9 +400,11 @@ type
     function  CreateResponseHandler(Response: TIdSipResponse;
                                     Receiver: TIdSipTransport): TIdSipUserAgentActOnResponse;
     function  DefaultFrom: String;
+    function  DefaultHostName: String;
     function  DefaultUserAgent: String;
     function  GetContact: TIdSipContactHeader;
     function  GetFrom: TIdSipFromHeader;
+    procedure MaybeChangeTransport(Msg: TIdSipMessage);
     function  ModuleAt(Index: Integer): TIdSipMessageModule;
     procedure NotifyModulesOfFree;
     procedure NotifyOfAuthenticationChallenge(Response: TIdSipResponse;
@@ -523,7 +414,14 @@ type
     procedure NotifyOfDroppedMessage(Message: TIdSipMessage;
                                      Receiver: TIdSipTransport);
     procedure OnChanged(Observed: TObject);
-    procedure ReturnMethodNotAllowed(Request: TIdSipRequest);
+    procedure OnReceiveRequest(Request: TIdSipRequest;
+                               Receiver: TIdSipTransport); virtual;
+    procedure OnReceiveResponse(Response: TIdSipResponse;
+                                Receiver: TIdSipTransport); virtual;
+    procedure RejectBadAuthorization(Request: TIdSipRequest);
+    procedure RejectBadRequest(Request: TIdSipRequest;
+                               const Reason: String);
+    procedure RejectMethodNotAllowed(Request: TIdSipRequest);
     procedure RejectRequestBadExtension(Request: TIdSipRequest);
     procedure RejectRequestMethodNotSupported(Request: TIdSipRequest);
     procedure RejectRequestUnknownAccept(Request: TIdSipRequest);
@@ -532,7 +430,9 @@ type
     procedure RejectRequestUnknownContentType(Request: TIdSipRequest);
     procedure RejectUnsupportedSipVersion(Request: TIdSipRequest);
     procedure SetContact(Value: TIdSipContactHeader);
+    procedure SetDispatcher(Value: TIdSipTransactionDispatcher);
     procedure SetFrom(Value: TIdSipFromHeader);
+    procedure SetRealm(const Value: String);
 
     // Pull these into UserAgent proper:
     procedure NotifyOfInboundCall(Session: TIdSipInboundSession);
@@ -540,9 +440,9 @@ type
                                               NewRequest: TIdSipRequest);
   protected
     procedure ActOnRequest(Request: TIdSipRequest;
-                           Receiver: TIdSipTransport); override;
+                           Receiver: TIdSipTransport); virtual;
     procedure ActOnResponse(Response: TIdSipResponse;
-                            Receiver: TIdSipTransport); override;
+                            Receiver: TIdSipTransport); virtual;
     function  AddInboundAction(Request: TIdSipRequest;
                                Receiver: TIdSipTransport): TIdSipAction; overload;
     procedure AddLocalHeaders(OutboundRequest: TIdSipRequest); virtual;
@@ -551,44 +451,53 @@ type
     function  ListHasUnknownValue(Request: TIdSipRequest;
                                   ValueList: TStrings;
                                   const HeaderName: String): Boolean;
+    procedure NotifyOfChange;
     procedure OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
                                         Challenge: TIdSipResponse;
                                         ChallengeResponse: TIdSipRequest;
-                                        var TryAgain: Boolean); override;
+                                        var TryAgain: Boolean);
     procedure PrepareResponse(Response: TIdSipResponse;
-                              Request: TIdSipRequest); override;
+                              Request: TIdSipRequest);
     procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
-                            Request: TIdSipRequest); override;
+                            Request: TIdSipRequest);
+    procedure RejectRequestUnauthorized(Request: TIdSipRequest);
     function  ResponseForInvite: Cardinal; virtual;
-    function  WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; override;
+    procedure SetAuthenticator(Value: TIdSipAbstractAuthenticator); virtual;
+    function  WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; virtual;
+    function  WillAcceptResponse(Response: TIdSipResponse): TIdSipUserAgentReaction; virtual;
 
     property Actions:                TIdSipActions read fActions;
     property AllowedContentTypeList: TStrings      read fAllowedContentTypeList;
     property AllowedLanguageList:    TStrings      read fAllowedLanguageList;
     property AllowedSchemeList:      TStrings      read fAllowedSchemeList;
   public
-    constructor Create; override;
+    constructor Create; virtual;
     destructor  Destroy; override;
 
     procedure AddAllowedContentType(const MimeType: String);
     procedure AddAllowedLanguage(const LanguageID: String);
     procedure AddAllowedScheme(const Scheme: String);
     function  AddModule(ModuleType: TIdSipMessageModuleClass): TIdSipMessageModule;
+    procedure AddObserver(const Listener: IIdObserver);
     function  AddOutboundAction(ActionType: TIdSipActionClass): TIdSipAction;
+    procedure AddUserAgentListener(const Listener: IIdSipUserAgentListener);
     function  AllowedContentTypes: String;
     function  AllowedEncodings: String;
     function  AllowedExtensions: String;
     function  AllowedLanguages: String;
     function  AllowedMethods(RequestUri: TIdSipUri): String;
     function  AllowedSchemes: String;
+    function  Authenticate(Request: TIdSipRequest): Boolean;
     function  CountOf(const MethodName: String): Integer;
+    function  CreateChallengeResponse(Request: TIdSipRequest): TIdSipResponse;
+    function  CreateChallengeResponseAsUserAgent(Request: TIdSipRequest): TIdSipResponse;
     function  CreateOptions(Dest: TIdSipAddressHeader): TIdSipRequest;
     function  CreateRequest(const Method: String;
-                            Dest: TIdSipAddressHeader): TIdSipRequest; overload; override;
+                            Dest: TIdSipAddressHeader): TIdSipRequest; overload;
     function  CreateRequest(const Method: String;
-                            Dialog: TIdSipDialog): TIdSipRequest; overload; override;
+                            Dialog: TIdSipDialog): TIdSipRequest; overload;
     function  CreateResponse(Request: TIdSipRequest;
-                             ResponseCode: Cardinal): TIdSipResponse; override;
+                             ResponseCode: Cardinal): TIdSipResponse;
     procedure FindServersFor(Request: TIdSipRequest;
                              Result: TIdSipLocations); overload;
     procedure FindServersFor(Response: TIdSipResponse;
@@ -608,10 +517,15 @@ type
     function  ModuleFor(ModuleType: TIdSipMessageModuleClass): TIdSipMessageModule; overload;
     function  NextActionID: String;
     function  NextBranch: String;
+    function  NextCallID: String;
     function  NextInitialSequenceNo: Cardinal;
+    function  NextNonce: String;
+    function  NextTag: String;
     function  OptionsCount: Integer;
     function  QueryOptions(Server: TIdSipAddressHeader): TIdSipOutboundOptions;
     procedure RemoveModule(ModuleType: TIdSipMessageModuleClass);
+    procedure RemoveObserver(const Listener: IIdObserver);
+    procedure RemoveUserAgentListener(const Listener: IIdSipUserAgentListener);
     procedure ReturnResponse(Request: TIdSipRequest;
                              Reason: Cardinal);
     procedure ScheduleEvent(BlockType: TIdSipActionClosureClass;
@@ -621,8 +535,14 @@ type
                             WaitTime: Cardinal;
                             Copy: TIdSipMessage;
                             const ActionID: String); overload;
+    procedure ScheduleEvent(Event: TNotifyEvent;
+                            WaitTime: Cardinal;
+                            Msg: TIdSipMessage); overload;
     procedure ScheduleEvent(WaitTime: Cardinal;
                             Wait: TIdWait); overload;
+    procedure SendRequest(Request: TIdSipRequest;
+                          Dest: TIdSipLocation);
+    procedure SendResponse(Response: TIdSipResponse);
     function  Username: String;
     function  UsesModule(ModuleType: TIdSipMessageModuleClass): Boolean;
 
@@ -630,9 +550,17 @@ type
     procedure TerminateAllCalls; // move to InviteModule
     function  UsingDefaultContact: Boolean;
 
-    property Contact: TIdSipContactHeader read GetContact write SetContact;
-    property From:    TIdSipFromHeader    read GetFrom write SetFrom;
-    property Keyring: TIdKeyRing          read fKeyring;
+    property Authenticator:         TIdSipAbstractAuthenticator read fAuthenticator write SetAuthenticator;
+    property Contact:               TIdSipContactHeader         read GetContact write SetContact;
+    property Dispatcher:            TIdSipTransactionDispatcher read fDispatcher write SetDispatcher;
+    property From:                  TIdSipFromHeader            read GetFrom write SetFrom;
+    property HostName:              String                      read fHostName write fHostName;
+    property Keyring:               TIdKeyRing                  read fKeyring;
+    property Locator:               TIdSipAbstractLocator       read fLocator write fLocator;
+    property Realm:                 String                      read fRealm write SetRealm;
+    property RequireAuthentication: Boolean                     read fRequireAuthentication write fRequireAuthentication;
+    property Timer:                 TIdTimerQueue               read fTimer write fTimer;
+    property UserAgentName:         String                      read fUserAgentName write fUserAgentName;
   end;
 
   TIdSipInviteModule = class;
@@ -827,6 +755,10 @@ type
     property BindingDB:         TIdSipAbstractBindingDatabase read fBindingDB write fBindingDB;
     property MinimumExpiryTime: Cardinal                      read fMinimumExpiryTime write fMinimumExpiryTime;
   end;
+
+  TIdSipOutboundRegister = class;
+  TIdSipOutboundRegistrationQuery = class;
+  TIdSipOutboundUnregister = class;
 
   // I implement that functionality necessary for a User Agent to issue REGISTER
   // messages, that is, to register with a registrar.
@@ -1731,10 +1663,6 @@ type
   end;
 
   EIdSipBadSyntax = class(EIdException);
-  EIdSipRegistrarNotFound = class(EIdException)
-  public
-    constructor Create(const Msg: string); reintroduce;
-  end;
   EIdSipTransactionUser = class(EIdException);
 
 // Stack error codes
@@ -1780,7 +1708,8 @@ implementation
 
 uses
   IdHashMessageDigest, IdSimpleParser, IdSipConsts, IdSipIndyLocator,
-  IdSipMockLocator, IdRandom, IdSdp, IdSystem, IdUnicode, Math, SysUtils;
+  IdSipMockLocator, IdRandom, IdSdp, IdSystem, IdUnicode, Math, SysUtils,
+  TypInfo;
 
 const
   ItemNotFoundIndex = -1;
@@ -1804,9 +1733,17 @@ const
   CannotModifyBeforeEstablished  = 'Cannot modify a session before it''s fully established';
   CannotModifyDuringModification = 'Cannot modify a session while a modification is in progress';
   MethodInProgress               = 'A(n) %s is already in progress';
-  NoSuchRegistrar                = 'No such registrar known: %s';
   OutboundActionFailed           = 'An outbound %s failed because: %s';
   PrematureInviteMessage         = 'Don''t attempt to modify the session before it''s fully established';
+
+//******************************************************************************
+//* Unit private functions & procedures                                        *
+//******************************************************************************
+
+function ReactionToStr(Reaction: TIdSipUserAgentReaction): String;
+begin
+  Result := GetEnumName(TypeInfo(TIdSipUserAgentReaction), Integer(Reaction));
+end;
 
 //******************************************************************************
 //* TIdSipActionClosure                                                        *
@@ -1815,443 +1752,6 @@ const
 
 procedure TIdSipActionClosure.Execute(Action: TIdSipAction);
 begin
-end;
-
-//******************************************************************************
-//* TIdSipAbstractCore                                                         *
-//******************************************************************************
-//* TIdSipAbstractCore Public methods ******************************************
-
-constructor TIdSipAbstractCore.Create;
-begin
-  inherited Create;
-
-  Self.Observed  := TIdObservable.Create;
-  Self.TimerLock := TCriticalSection.Create;
-
-  Self.UserAgentListeners := TIdNotificationList.Create;
-  Self.UserAgentListeners.AddExpectedException(EParserError);
-
-  Self.HostName              := Self.DefaultHostName;
-  Self.Realm                 := Self.HostName;
-  Self.RequireAuthentication := false;
-end;
-
-destructor TIdSipAbstractCore.Destroy;
-begin
-  Self.UserAgentListeners.Free;
-  Self.TimerLock.Free;
-  Self.Observed.Free;
-
-  inherited Destroy;
-end;
-
-procedure TIdSipAbstractCore.AddObserver(const Listener: IIdObserver);
-begin
-  Self.Observed.AddObserver(Listener);
-end;
-
-procedure TIdSipAbstractCore.AddUserAgentListener(const Listener: IIdSipUserAgentListener);
-begin
-  Self.UserAgentListeners.AddListener(Listener);
-end;
-
-function TIdSipAbstractCore.Authenticate(Request: TIdSipRequest): Boolean;
-begin
-  // We should ALWAYS have an authenticator attached: see TIdSipStackConfigurator.
-  Result := Assigned(Self.Authenticator) and Self.Authenticator.Authenticate(Request);
-end;
-
-function TIdSipAbstractCore.CreateChallengeResponse(Request: TIdSipRequest): TIdSipResponse;
-begin
-  Result := Self.Authenticator.CreateChallengeResponse(Request);
-  Self.PrepareResponse(Result, Request);
-end;
-
-function TIdSipAbstractCore.CreateChallengeResponseAsUserAgent(Request: TIdSipRequest): TIdSipResponse;
-begin
-  Result := Self.Authenticator.CreateChallengeResponseAsUserAgent(Request);
-  Self.PrepareResponse(Result, Request);
-end;
-
-function TIdSipAbstractCore.CreateResponse(Request: TIdSipRequest;
-                                           ResponseCode: Cardinal): TIdSipResponse;
-begin
-  Result := TIdSipResponse.InResponseTo(Request,
-                                        ResponseCode);
-
-  Self.PrepareResponse(Result, Request);
-end;
-
-function TIdSipAbstractCore.NextCallID: String;
-begin
-  Result := GRandomNumber.NextHexString + '@' + Self.HostName;
-end;
-
-function TIdSipAbstractCore.NextNonce: String;
-begin
-  Result := GRandomNumber.NextHexString;
-end;
-
-function TIdSipAbstractCore.NextTag: String;
-begin
-  Result := GRandomNumber.NextSipUserAgentTag;
-end;
-
-procedure TIdSipAbstractCore.RemoveObserver(const Listener: IIdObserver);
-begin
-  Self.Observed.RemoveObserver(Listener);
-end;
-
-procedure TIdSipAbstractCore.RemoveUserAgentListener(const Listener: IIdSipUserAgentListener);
-begin
-  Self.UserAgentListeners.RemoveListener(Listener);
-end;
-
-procedure TIdSipAbstractCore.ScheduleEvent(Event: TNotifyEvent;
-                                           WaitTime: Cardinal;
-                                           Msg: TIdSipMessage);
-var
-  RequestEvent: TIdSipMessageNotifyEventWait;
-begin
-  Self.TimerLock.Acquire;
-  try
-    if Assigned(Self.Timer) then begin
-      RequestEvent := TIdSipMessageNotifyEventWait.Create;
-      RequestEvent.Message := Msg;
-      RequestEvent.Event   := Event;
-      Self.Timer.AddEvent(WaitTime, RequestEvent);
-    end;
-  finally
-    Self.TimerLock.Release;
-  end;
-end;
-
-procedure TIdSipAbstractCore.SendRequest(Request: TIdSipRequest;
-                                         Dest: TIdSipLocation);
-begin
-  Self.MaybeChangeTransport(Request);
-
-  Self.Dispatcher.SendRequest(Request, Dest);
-end;
-
-procedure TIdSipAbstractCore.SendResponse(Response: TIdSipResponse);
-begin
-  Self.MaybeChangeTransport(Response);
-
-  Self.Dispatcher.SendResponse(Response);
-end;
-
-//* TIdSipAbstractCore Protected methods ***************************************
-
-procedure TIdSipAbstractCore.ActOnRequest(Request: TIdSipRequest;
-                                          Receiver: TIdSipTransport);
-begin
-  // By default do nothing
-end;
-
-procedure TIdSipAbstractCore.ActOnResponse(Response: TIdSipResponse;
-                                           Receiver: TIdSipTransport);
-begin
-  // By default do nothing
-end;
-
-procedure TIdSipAbstractCore.MaybeChangeTransport(Msg: TIdSipMessage);
-var
-  MsgLen:       Cardinal;
-  RewrittenVia: Boolean;
-begin
-  MsgLen := Length(Msg.AsString);
-  RewrittenVia := (MsgLen > MaximumUDPMessageSize)
-              and (Msg.LastHop.Transport = UdpTransport);
-
-  if RewrittenVia then
-    Msg.LastHop.Transport := TcpTransport;
-end;
-
-procedure TIdSipAbstractCore.NotifyOfChange;
-begin
-  Self.Observed.NotifyListenersOfChange(Self);
-end;
-
-procedure TIdSipAbstractCore.OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
-                                                       Challenge: TIdSipResponse;
-                                                       ChallengeResponse: TIdSipRequest;
-                                                       var TryAgain: Boolean);
-begin
-  // Usually we want to re-issue a challenged request.
-
-  TryAgain := true;
-end;
-
-procedure TIdSipAbstractCore.OnReceiveRequest(Request: TIdSipRequest;
-                                              Receiver: TIdSipTransport);
-var
-  Reaction: TIdSipUserAgentReaction;
-begin
-  Reaction := Self.WillAcceptRequest(Request);
-  if (Reaction = uarAccept) then
-    Self.ActOnRequest(Request, Receiver)
-  else
-    Self.RejectRequest(Reaction, Request);
-end;
-
-procedure TIdSipAbstractCore.OnReceiveResponse(Response: TIdSipResponse;
-                                               Receiver: TIdSipTransport);
-begin
-  if (Self.WillAcceptResponse(Response) = uarAccept) then
-    Self.ActOnResponse(Response, Receiver);
-end;
-
-procedure TIdSipAbstractCore.PrepareResponse(Response: TIdSipResponse;
-                                             Request: TIdSipRequest);
-begin
-  if not Request.ToHeader.HasTag then
-    Response.ToHeader.Tag := Self.NextTag;
-
-  if (Self.UserAgentName <> '') then
-    Response.AddHeader(ServerHeader).Value := Self.UserAgentName;
-end;
-
-procedure TIdSipAbstractCore.RejectBadRequest(Request: TIdSipRequest;
-                                              const Reason: String);
-var
-  Response: TIdSipResponse;
-begin
-  Response := Self.CreateResponse(Request, SIPBadRequest);
-  try
-    Response.StatusText := Reason;
-
-    Self.SendResponse(Response);
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TIdSipAbstractCore.RejectRequest(Reaction: TIdSipUserAgentReaction;
-                                           Request: TIdSipRequest);
-begin
- case Reaction of
-   uarUnauthorized:     Self.RejectRequestUnauthorized(Request);
-   uarBadAuthorization: Self.RejectBadAuthorization(Request);
- end;
-end;
-
-procedure TIdSipAbstractCore.RejectRequestUnauthorized(Request: TIdSipRequest);
-var
-  Response: TIdSipResponse;
-begin
-  Response := Self.CreateChallengeResponse(Request);
-  try
-    Self.SendResponse(Response);
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TIdSipAbstractCore.SetAuthenticator(Value: TIdSipAbstractAuthenticator);
-begin
-  Self.fAuthenticator := Value;
-  Self.fAuthenticator.Realm := Self.Realm;
-
-  Self.fAuthenticator.IsProxy := false;
-end;
-
-function TIdSipAbstractCore.WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction;
-begin
-  Result := uarAccept;
-
-  if Self.RequireAuthentication then begin
-    try
-      if not Self.Authenticate(Request) then
-        Result := uarUnauthorized;
-    except
-      on EAuthenticate do
-        Result := uarBadAuthorization;
-    end;
-  end;
-end;
-
-function  TIdSipAbstractCore.WillAcceptResponse(Response: TIdSipResponse): TIdSipUserAgentReaction;
-begin
-  // cf RFC 3261 section 8.1.3.3
-  if (Response.Path.Count > 1) then
-    Result := uarTooManyVias
-  else
-    Result := uarAccept;
-end;
-
-//* TIdSipAbstractCore Private methods *****************************************
-
-function TIdSipAbstractCore.DefaultHostName: String;
-begin
-  Result := 'localhost';
-end;
-
-procedure TIdSipAbstractCore.RejectBadAuthorization(Request: TIdSipRequest);
-var
-  Response: TIdSipResponse;
-begin
-  Response := Self.CreateResponse(Request, SIPBadRequest);
-  try
-    Response.StatusText := BadAuthorizationTokens;
-
-    Self.SendResponse(Response);
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TIdSipAbstractCore.SetDispatcher(Value: TIdSipTransactionDispatcher);
-begin
-  fDispatcher := Value;
-
-  fDispatcher.AddTransactionDispatcherListener(Self);
-end;
-
-procedure TIdSipAbstractCore.SetRealm(const Value: String);
-begin
-  Self.fRealm := Value;
-
-  if Assigned(Self.Authenticator) then
-    Self.Authenticator.Realm := Self.Realm;
-end;
-
-//******************************************************************************
-//* TIdSipRegistrationInfo                                                     *
-//******************************************************************************
-//* TIdSipRegistrationInfo Public methods **************************************
-
-constructor TIdSipRegistrationInfo.Create;
-begin
-  inherited Create;
-
-  Self.fRegistrar := TIdSipUri.Create;
-end;
-
-destructor TIdSipRegistrationInfo.Destroy;
-begin
-  Self.Registrar.Free;
-
-  inherited Destroy;
-end;
-
-//* TIdSipRegistrationInfo Private methods *************************************
-
-procedure TIdSipRegistrationInfo.SetRegistrar(Value: TIdSipUri);
-begin
-  Self.fRegistrar.Uri := Value.Uri;
-end;
-
-//******************************************************************************
-//* TIdSipRegistrations                                                        *
-//******************************************************************************
-//* TIdSipRegistrations Public methods *****************************************
-
-constructor TIdSipRegistrations.Create;
-begin
-  inherited Create;
-
-  Self.Lock            := TCriticalSection.Create;
-  Self.KnownRegistrars := TObjectList.Create(true);
-end;
-
-destructor TIdSipRegistrations.Destroy;
-begin
-  Self.Lock.Acquire;
-  try
-    Self.KnownRegistrars.Free;
-  finally
-    Self.Lock.Release;
-  end;
-  Self.Lock.Free;
-
-  inherited Destroy;
-end;
-
-procedure TIdSipRegistrations.AddKnownRegistrar(Registrar: TIdSipUri;
-                                                const CallID: String;
-                                                SequenceNo: Cardinal);
-var
-  NewReg: TIdSipRegistrationInfo;
-begin
-  Self.Lock.Acquire;
-  try
-    if not Self.KnowsRegistrar(Registrar) then begin
-      NewReg := TIdSipRegistrationInfo.Create;
-      Self.KnownRegistrars.Add(NewReg);
-
-      NewReg.CallID     := CallID;
-      NewReg.Registrar  := Registrar;
-      NewReg.SequenceNo := SequenceNo;
-    end;
-  finally
-    Self.Lock.Release;
-  end;
-end;
-
-function TIdSipRegistrations.CallIDFor(Registrar: TIdSipUri): String;
-var
-  Index: Integer;
-begin
-  Self.Lock.Acquire;
-  try
-    Index := Self.IndexOfRegistrar(Registrar);
-
-    if (Index = ItemNotFoundIndex) then
-      raise EIdSipRegistrarNotFound.Create(Registrar.Uri);
-
-    Result := Self.RegistrarAt(Index).CallID;
-  finally
-    Self.Lock.Release;
-  end;
-end;
-
-function TIdSipRegistrations.NextSequenceNoFor(Registrar: TIdSipUri): Cardinal;
-var
-  Index:   Integer;
-  RegInfo: TIdSipRegistrationInfo;
-begin
-  Result := 0;
-
-  Self.Lock.Acquire;
-  try
-    Index := Self.IndexOfRegistrar(Registrar);
-
-    if (Index = ItemNotFoundIndex) then
-      raise EIdSipRegistrarNotFound.Create(Registrar.Uri);
-
-    RegInfo := Self.RegistrarAt(Index);
-    Result := RegInfo.SequenceNo;
-    RegInfo.SequenceNo := Result + 1;
-  finally
-    Self.Lock.Release;
-  end;
-end;
-
-//* TIdSipRegistrations Private methods ****************************************
-
-function TIdSipRegistrations.IndexOfRegistrar(Registrar: TIdSipUri): Integer;
-begin
-  Result := 0;
-  while (Result < Self.KnownRegistrars.Count) do
-    if Self.RegistrarAt(Result).Registrar.Equals(Registrar) then
-      Break
-    else
-      Inc(Result);
-
-  if (Result >= Self.KnownRegistrars.Count) then
-    Result := ItemNotFoundIndex;
-end;
-
-function TIdSipRegistrations.KnowsRegistrar(Registrar: TIdSipUri): Boolean;
-begin
-  Result := Self.IndexOfRegistrar(Registrar) <> ItemNotFoundIndex;
-end;
-
-function TIdSipRegistrations.RegistrarAt(Index: Integer): TIdSipRegistrationInfo;
-begin
-  Result := Self.KnownRegistrars[Index] as TIdSipRegistrationInfo;
 end;
 
 //******************************************************************************
@@ -2709,6 +2209,7 @@ begin
 
   Self.ModuleLock := TCriticalSection.Create;
   Self.Modules    := TObjectList.Create(true);
+  Self.Observed   := TIdObservable.Create;
 
   Self.fActions                := TIdSipActions.Create;
   Self.fAllowedContentTypeList := TStringList.Create;
@@ -2717,16 +2218,21 @@ begin
 
   Self.Actions.AddObserver(Self);
 
+  Self.UserAgentListeners := TIdNotificationList.Create;
+  Self.UserAgentListeners.AddExpectedException(EParserError);
+
   Self.AddAllowedContentType(SdpMimeType);
 
   Self.AddModule(TIdSipOptionsModule);
 
   Self.AddAllowedScheme(SipScheme);
 
-  Self.Contact.Value := Self.DefaultFrom;
-  Self.From.Value    := Self.DefaultFrom;
-  Self.HostName      := Self.DefaultHostName;
-  Self.UserAgentName := Self.DefaultUserAgent;
+  Self.Contact.Value         := Self.DefaultFrom;
+  Self.From.Value            := Self.DefaultFrom;
+  Self.HostName              := Self.DefaultHostName;
+  Self.Realm                 := Self.HostName;
+  Self.RequireAuthentication := false;
+  Self.UserAgentName         := Self.DefaultUserAgent;
 end;
 
 destructor TIdSipAbstractUserAgent.Destroy;
@@ -2736,12 +2242,14 @@ begin
   Self.Contact.Free;
   Self.From.Free;
 
+  Self.UserAgentListeners.Free;
   Self.Keyring.Free;
   Self.AllowedSchemeList.Free;
   Self.AllowedLanguageList.Free;
   Self.AllowedContentTypeList.Free;
   Self.Actions.Free;
 
+  Self.Observed.Free;
   Self.ModuleLock.Acquire;
   try
     Self.Modules.Free;
@@ -2795,9 +2303,19 @@ begin
   end;
 end;
 
+procedure TIdSipAbstractUserAgent.AddObserver(const Listener: IIdObserver);
+begin
+  Self.Observed.AddObserver(Listener);
+end;
+
 function TIdSipAbstractUserAgent.AddOutboundAction(ActionType: TIdSipActionClass): TIdSipAction;
 begin
   Result := Self.Actions.AddOutboundAction(Self, ActionType);
+end;
+
+procedure TIdSipAbstractUserAgent.AddUserAgentListener(const Listener: IIdSipUserAgentListener);
+begin
+  Self.UserAgentListeners.AddListener(Listener);
 end;
 
 function TIdSipAbstractUserAgent.AllowedContentTypes: String;
@@ -2831,9 +2349,27 @@ begin
   Result := Self.ConvertToHeader(Self.AllowedSchemeList);
 end;
 
+function TIdSipAbstractUserAgent.Authenticate(Request: TIdSipRequest): Boolean;
+begin
+  // We should ALWAYS have an authenticator attached: see TIdSipStackConfigurator.
+  Result := Assigned(Self.Authenticator) and Self.Authenticator.Authenticate(Request);
+end;
+
 function TIdSipAbstractUserAgent.CountOf(const MethodName: String): Integer;
 begin
   Result := Self.Actions.CountOf(MethodName);
+end;
+
+function TIdSipAbstractUserAgent.CreateChallengeResponse(Request: TIdSipRequest): TIdSipResponse;
+begin
+  Result := Self.Authenticator.CreateChallengeResponse(Request);
+  Self.PrepareResponse(Result, Request);
+end;
+
+function TIdSipAbstractUserAgent.CreateChallengeResponseAsUserAgent(Request: TIdSipRequest): TIdSipResponse;
+begin
+  Result := Self.Authenticator.CreateChallengeResponseAsUserAgent(Request);
+  Self.PrepareResponse(Result, Request);
 end;
 
 function TIdSipAbstractUserAgent.CreateOptions(Dest: TIdSipAddressHeader): TIdSipRequest;
@@ -3039,9 +2575,24 @@ begin
   Result := GRandomNumber.NextSipUserAgentBranch;
 end;
 
+function TIdSipAbstractUserAgent.NextCallID: String;
+begin
+  Result := GRandomNumber.NextHexString + '@' + Self.HostName;
+end;
+
 function TIdSipAbstractUserAgent.NextInitialSequenceNo: Cardinal;
 begin
   Result := GRandomNumber.NextCardinal($7FFFFFFF);
+end;
+
+function TIdSipAbstractUserAgent.NextNonce: String;
+begin
+  Result := GRandomNumber.NextHexString;
+end;
+
+function TIdSipAbstractUserAgent.NextTag: String;
+begin
+  Result := GRandomNumber.NextSipUserAgentTag;
 end;
 
 function TIdSipAbstractUserAgent.OptionsCount: Integer;
@@ -3073,6 +2624,16 @@ begin
   finally
     Self.ModuleLock.Release;
   end;
+end;
+
+procedure TIdSipAbstractUserAgent.RemoveObserver(const Listener: IIdObserver);
+begin
+  Self.Observed.RemoveObserver(Listener);
+end;
+
+procedure TIdSipAbstractUserAgent.RemoveUserAgentListener(const Listener: IIdSipUserAgentListener);
+begin
+  Self.UserAgentListeners.RemoveListener(Listener);
 end;
 
 procedure TIdSipAbstractUserAgent.ReturnResponse(Request: TIdSipRequest;
@@ -3129,18 +2690,42 @@ begin
   Self.ScheduleEvent(WaitTime, Event);
 end;
 
+procedure TIdSipAbstractUserAgent.ScheduleEvent(Event: TNotifyEvent;
+                                                WaitTime: Cardinal;
+                                                Msg: TIdSipMessage);
+var
+  RequestEvent: TIdSipMessageNotifyEventWait;
+begin
+  if Assigned(Self.Timer) then begin
+    RequestEvent := TIdSipMessageNotifyEventWait.Create;
+    RequestEvent.Message := Msg;
+    RequestEvent.Event   := Event;
+    Self.Timer.AddEvent(WaitTime, RequestEvent);
+  end;
+end;
+
 procedure TIdSipAbstractUserAgent.ScheduleEvent(WaitTime: Cardinal;
                                                 Wait: TIdWait);
 begin
   if not Assigned(Self.Timer) then
     Exit;
 
-  Self.TimerLock.Acquire;
-  try
-    Self.Timer.AddEvent(WaitTime, Wait);
-  finally
-    Self.TimerLock.Release;
-  end;
+  Self.Timer.AddEvent(WaitTime, Wait);
+end;
+
+procedure TIdSipAbstractUserAgent.SendRequest(Request: TIdSipRequest;
+                                              Dest: TIdSipLocation);
+begin
+  Self.MaybeChangeTransport(Request);
+
+  Self.Dispatcher.SendRequest(Request, Dest);
+end;
+
+procedure TIdSipAbstractUserAgent.SendResponse(Response: TIdSipResponse);
+begin
+  Self.MaybeChangeTransport(Response);
+
+  Self.Dispatcher.SendResponse(Response);
 end;
 
 function TIdSipAbstractUserAgent.Username: String;
@@ -3160,8 +2745,6 @@ procedure TIdSipAbstractUserAgent.ActOnRequest(Request: TIdSipRequest;
 var
   Actor: TIdSipUserAgentActOnRequest;
 begin
-  inherited ActOnRequest(Request, Receiver);
-
   Actor := Self.CreateRequestHandler(Request, Receiver);
   try
     Self.Actions.Perform(Request, Actor);
@@ -3175,8 +2758,6 @@ procedure TIdSipAbstractUserAgent.ActOnResponse(Response: TIdSipResponse;
 var
   Actor: TIdSipUserAgentActOnResponse;
 begin
-  inherited ActOnResponse(Response, Receiver);
-
   Actor := Self.CreateResponseHandler(Response, Receiver);
   try
     Self.Actions.Perform(Response, Actor);
@@ -3252,6 +2833,11 @@ begin
        and (ValueList.IndexOf(Request.FirstHeader(HeaderName).Value) = ItemNotFoundIndex);
 end;
 
+procedure TIdSipAbstractUserAgent.NotifyOfChange;
+begin
+  Self.Observed.NotifyListenersOfChange(Self);
+end;
+
 procedure TIdSipAbstractUserAgent.OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
                                                             Challenge: TIdSipResponse;
                                                             ChallengeResponse: TIdSipRequest;
@@ -3282,8 +2868,10 @@ begin
   // the BYE, it's left the conversation. If it didn't, the UAC will simply
   // drop your challenge.
 
-  inherited OnAuthenticationChallenge(Dispatcher, Challenge, ChallengeResponse, TryAgain);
+  // Usually we want to re-issue a challenged request:
+  TryAgain := true;
 
+  // But listeners can decide not to:
   Self.NotifyOfAuthenticationChallenge(Challenge, Username, Password, TryAgain);
   try
     if not TryAgain then Exit;
@@ -3302,7 +2890,7 @@ begin
 
     // This may look a bit like a time-of-check/time-of-use race condition
     // ("what if something frees the RealmInfo before you use it?") but it's
-    // not - you can't remove realms from the Keyring, only add them.                    
+    // not - you can't remove realms from the Keyring, only add them.
     RealmInfo := Self.Keyring.Find(ChallengeHeader.Realm,
                                    ChallengeResponse.RequestUri.AsString);
 
@@ -3326,7 +2914,11 @@ end;
 procedure TIdSipAbstractUserAgent.PrepareResponse(Response: TIdSipResponse;
                                                   Request: TIdSipRequest);
 begin
-  inherited PrepareResponse(Response, Request);
+  if not Request.ToHeader.HasTag then
+    Response.ToHeader.Tag := Self.NextTag;
+
+  if (Self.UserAgentName <> '') then
+    Response.AddHeader(ServerHeader).Value := Self.UserAgentName;
 
   Self.AddModuleSpecificHeaders(Response);
 end;
@@ -3335,15 +2927,19 @@ procedure TIdSipAbstractUserAgent.RejectRequest(Reaction: TIdSipUserAgentReactio
                                                 Request: TIdSipRequest);
 begin
   case Reaction of
+    uarBadAuthorization:
+      Self.RejectBadAuthorization(Request);
     uarDoNotDisturb:
           Self.ReturnResponse(Request,
                               SIPTemporarilyUnavailable);
     uarLoopDetected:
       Self.ReturnResponse(Request, SIPLoopDetected);
     uarMethodNotAllowed:
-      Self.ReturnMethodNotAllowed(Request);
+      Self.RejectMethodNotAllowed(Request);
     uarMissingContact:
       Self.RejectBadRequest(Request, MissingContactHeader);
+    uarUnauthorized:
+      Self.RejectRequestUnauthorized(Request);
     uarUnsupportedAccept:
       Self.RejectRequestUnknownAccept(Request);
     uarUnsupportedContentEncoding:
@@ -3361,7 +2957,23 @@ begin
     uarUnSupportedSipVersion:
       Self.RejectUnsupportedSipVersion(Request);
   else
-    inherited RejectRequest(Reaction, Request);
+    // What do we do here? We've rejected the request for a good reason, but have
+    // forgotten to implement the bit where we send a reasonable response.
+    raise Exception.Create(Self.ClassName
+                         + '.RejectRequest: Can''t handle a reaction '
+                         + ReactionToStr(Reaction));
+  end;
+end;
+
+procedure TIdSipAbstractUserAgent.RejectRequestUnauthorized(Request: TIdSipRequest);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.CreateChallengeResponse(Request);
+  try
+    Self.SendResponse(Response);
+  finally
+    Response.Free;
   end;
 end;
 
@@ -3375,43 +2987,67 @@ begin
   Result := SIPOK;
 end;
 
+procedure TIdSipAbstractUserAgent.SetAuthenticator(Value: TIdSipAbstractAuthenticator);
+begin
+  Self.fAuthenticator := Value;
+  Self.fAuthenticator.Realm := Self.Realm;
+
+  Self.fAuthenticator.IsProxy := false;
+end;
+
 function TIdSipAbstractUserAgent.WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction;
 begin
-  Result := inherited WillAcceptRequest(Request);
+  Result := uarAccept;
 
   // cf RFC 3261 section 8.2
-  if (Result = uarAccept) then begin
-    if (Request.SIPVersion <> SipVersion) then
-      Result := uarUnsupportedSipVersion
-    // inspect the method - 8.2.1
-    else if not Self.IsMethodSupported(Request.Method) then
-      Result := uarUnsupportedMethod
-    else if not Self.IsMethodAllowed(Request.RequestUri, Request.Method) then
-      Result := uarMethodNotAllowed
-    // inspect the headers - 8.2.2
-    // To & Request-URI - 8.2.2.1
-    else if not Self.IsSchemeAllowed(Request.RequestUri.Scheme) then
-      Result := uarUnsupportedScheme
-    // Merged requests - 8.2.2.2
-    else if not Request.ToHeader.HasTag and Self.Dispatcher.LoopDetected(Request) then
-      Result := uarLoopDetected
-    // Require - 8.2.2.3
-    else if Request.HasHeader(RequireHeader) then
-      Result := uarUnsupportedExtension
-    // Content processing - 8.2.3
-    else if Self.HasUnknownAccept(Request) then
-      Result := uarUnsupportedAccept
-    else if Self.HasUnknownContentEncoding(Request) then
-      Result := uarUnsupportedContentEncoding
-    else if Self.HasUnknownContentLanguage(Request) then
-      Result := uarUnsupportedContentLanguage
-    else if Self.HasUnknownContentType(Request) then
-      Result := uarUnsupportedContentType
-    // Section 8.1.1.8 says that a request that can start a dialog (like an
-    // INVITE), MUST contain a Contact.
-    else if Request.IsInvite and not Request.HasHeader(ContactHeaderFull) then
-      Result := uarMissingContact
-  end;
+  if Self.RequireAuthentication then begin
+    try
+      if not Self.Authenticate(Request) then
+        Result := uarUnauthorized;
+    except
+      on EAuthenticate do
+        Result := uarBadAuthorization;
+    end;
+  end
+  else if (Request.SIPVersion <> SipVersion) then
+    Result := uarUnsupportedSipVersion
+  // inspect the method - 8.2.1
+  else if not Self.IsMethodSupported(Request.Method) then
+    Result := uarUnsupportedMethod
+  else if not Self.IsMethodAllowed(Request.RequestUri, Request.Method) then
+    Result := uarMethodNotAllowed
+  // inspect the headers - 8.2.2
+  // To & Request-URI - 8.2.2.1
+  else if not Self.IsSchemeAllowed(Request.RequestUri.Scheme) then
+    Result := uarUnsupportedScheme
+  // Merged requests - 8.2.2.2
+  else if not Request.ToHeader.HasTag and Self.Dispatcher.LoopDetected(Request) then
+    Result := uarLoopDetected
+  // Require - 8.2.2.3
+  else if Request.HasHeader(RequireHeader) then
+    Result := uarUnsupportedExtension
+  // Content processing - 8.2.3
+  else if Self.HasUnknownAccept(Request) then
+    Result := uarUnsupportedAccept
+  else if Self.HasUnknownContentEncoding(Request) then
+    Result := uarUnsupportedContentEncoding
+  else if Self.HasUnknownContentLanguage(Request) then
+    Result := uarUnsupportedContentLanguage
+  else if Self.HasUnknownContentType(Request) then
+    Result := uarUnsupportedContentType
+  // Section 8.1.1.8 says that a request that can start a dialog (like an
+  // INVITE), MUST contain a Contact.
+  else if Request.IsInvite and not Request.HasHeader(ContactHeaderFull) then
+    Result := uarMissingContact;
+end;
+
+function  TIdSipAbstractUserAgent.WillAcceptResponse(Response: TIdSipResponse): TIdSipUserAgentReaction;
+begin
+  // cf RFC 3261 section 8.1.3.3
+  if (Response.Path.Count > 1) then
+    Result := uarTooManyVias
+  else
+    Result := uarAccept;
 end;
 
 //* TIdSipAbstractUserAgent Private methods ************************************
@@ -3459,6 +3095,11 @@ begin
   Result := 'unknown <sip:unknown@' + Self.HostName + '>';
 end;
 
+function TIdSipAbstractUserAgent.DefaultHostName: String;
+begin
+  Result := 'localhost';
+end;
+
 function TIdSipAbstractUserAgent.DefaultUserAgent: String;
 begin
   Result := 'RNID SipStack v' + SipStackVersion;
@@ -3478,6 +3119,19 @@ begin
     fFrom := TIdSipFromHeader.Create;
 
   Result := fFrom;
+end;
+
+procedure TIdSipAbstractUserAgent.MaybeChangeTransport(Msg: TIdSipMessage);
+var
+  MsgLen:       Cardinal;
+  RewrittenVia: Boolean;
+begin
+  MsgLen := Length(Msg.AsString);
+  RewrittenVia := (MsgLen > MaximumUDPMessageSize)
+              and (Msg.LastHop.Transport = UdpTransport);
+
+  if RewrittenVia then
+    Msg.LastHop.Transport := TcpTransport;
 end;
 
 function TIdSipAbstractUserAgent.ModuleAt(Index: Integer): TIdSipMessageModule;
@@ -3558,7 +3212,55 @@ begin
   Self.NotifyOfChange;
 end;
 
-procedure TIdSipAbstractUserAgent.ReturnMethodNotAllowed(Request: TIdSipRequest);
+procedure TIdSipAbstractUserAgent.OnReceiveRequest(Request: TIdSipRequest;
+                                                   Receiver: TIdSipTransport);
+var
+  Reaction: TIdSipUserAgentReaction;
+begin
+  Reaction := Self.WillAcceptRequest(Request);
+  if (Reaction = uarAccept) then
+    Self.ActOnRequest(Request, Receiver)
+  else
+    Self.RejectRequest(Reaction, Request);
+end;
+
+procedure TIdSipAbstractUserAgent.OnReceiveResponse(Response: TIdSipResponse;
+                                                    Receiver: TIdSipTransport);
+begin
+  if (Self.WillAcceptResponse(Response) = uarAccept) then
+    Self.ActOnResponse(Response, Receiver);
+end;
+
+procedure TIdSipAbstractUserAgent.RejectBadAuthorization(Request: TIdSipRequest);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.CreateResponse(Request, SIPBadRequest);
+  try
+    Response.StatusText := BadAuthorizationTokens;
+
+    Self.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TIdSipAbstractUserAgent.RejectBadRequest(Request: TIdSipRequest;
+                                                   const Reason: String);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.CreateResponse(Request, SIPBadRequest);
+  try
+    Response.StatusText := Reason;
+
+    Self.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TIdSipAbstractUserAgent.RejectMethodNotAllowed(Request: TIdSipRequest);
 var
   Response: TIdSipResponse;
 begin
@@ -3684,12 +3386,27 @@ begin
     raise EBadHeader.Create(Self.Contact.Name);
 end;
 
+procedure TIdSipAbstractUserAgent.SetDispatcher(Value: TIdSipTransactionDispatcher);
+begin
+  fDispatcher := Value;
+
+  fDispatcher.AddTransactionDispatcherListener(Self);
+end;
+
 procedure TIdSipAbstractUserAgent.SetFrom(Value: TIdSipFromHeader);
 begin
   Self.From.Assign(Value);
 
   if Self.From.IsMalformed then
     raise EBadHeader.Create(Self.From.Name);
+end;
+
+procedure TIdSipAbstractUserAgent.SetRealm(const Value: String);
+begin
+  Self.fRealm := Value;
+
+  if Assigned(Self.Authenticator) then
+    Self.Authenticator.Realm := Self.Realm;
 end;
 
 procedure TIdSipAbstractUserAgent.UpdateAffectedActionWithRequest(FindMsg: TIdSipMessage;
@@ -7924,16 +7641,6 @@ procedure TIdSipUserAgentInboundCallMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipUserAgentListener).OnInboundCall(Self.UserAgent,
                                                      Self.Session);
-end;
-
-//******************************************************************************
-//* EIdSipRegistrarNotFound                                                    *
-//******************************************************************************
-//* EIdSipRegistrarNotFound Public methods *************************************
-
-constructor EIdSipRegistrarNotFound.Create(const Msg: string);
-begin
-  inherited Create(Format(NoSuchRegistrar, [Msg]));
 end;
 
 end.

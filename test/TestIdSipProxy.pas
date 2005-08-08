@@ -19,8 +19,6 @@ type
   TestTIdSipProxy = class(TTestCase)
   private
     Authenticator:    TIdSipAuthenticator;
-    Client:           TIdSipUserAgent;
-    ClientDispatcher: TIdSipMockTransactionDispatcher;
     Dispatcher:       TIdSipMockTransactionDispatcher;
     Invite:           TIdSipRequest;
     Proxy:            TIdSipProxy;
@@ -70,19 +68,15 @@ begin
   Self.Proxy.Authenticator := Self.Authenticator;
   Self.Proxy.Dispatcher    := Self.Dispatcher;
 
-  Self.Client := TIdSipUserAgent.Create;
-  Self.ClientDispatcher := TIdSipMockTransactionDispatcher.Create;
-  Self.Client.Dispatcher := Self.ClientDispatcher;
-
   Self.Dispatcher.MockLocator.AddA(Self.Invite.LastHop.SentBy, '127.0.0.1');
 end;
 
 procedure TestTIdSipProxy.TearDown;
 begin
-  Self.Client.Free;
-  Self.Proxy.Free;
-  Self.Invite.Free;
-  Self.Authenticator.Free;
+  FreeAndNil(Self.Proxy);
+  FreeAndNil(Self.Dispatcher);
+  FreeAndNil(Self.Invite);
+  FreeAndNil(Self.Authenticator);
 
   inherited TearDown;
 end;
@@ -93,11 +87,6 @@ function TestTIdSipProxy.CreateAuthorizedRequest(OriginalRequest: TIdSipRequest;
                                                  Challenge: TIdSipResponse): TIdSipRequest;
 begin
   Result := OriginalRequest.Copy as TIdSipRequest;
-  try
-  except
-    FreeAndNil(Result);
-    raise;
-  end;
 end;
 
 procedure TestTIdSipProxy.RemoveBody(Msg: TIdSipMessage);
@@ -133,7 +122,7 @@ begin
 
   Response := Self.Dispatcher.Transport.LastResponse;
 
-  Retry := Self.CreateAuthorizedRequest(Self.Invite, Response);
+  Retry := Self.CreateAuthorizedRequest(Self.Dispatcher.Transport.LastRequest, Response);
   try
     ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
 

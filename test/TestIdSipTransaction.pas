@@ -231,7 +231,7 @@ type
     CheckReceiveRequest:   TTestIdSipRequestEvent;
     CheckReceiveResponse:  TTestIdSipResponseEvent;
     CheckTerminated:       TIdSipTransactionEvent;
-    Core:                  TIdSipAbstractCore;
+    Core:                  TIdSipAbstractUserAgent;
     Destination:           TIdSipLocation;
     FailMsg:               String;
     MockDispatcher:        TIdSipMockTransactionDispatcher;

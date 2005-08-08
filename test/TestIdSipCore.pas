@@ -26,23 +26,7 @@ type
   public
     procedure SetUp; override;
   published
-    procedure TestNextCallID;
-    procedure TestNextTag;
-    procedure TestNotifyOfChange;
     procedure TestScheduleEvent;
-  end;
-
-  TestTIdSipRegistrations = class(TTestCase)
-  private
-    Regs: TIdSipRegistrations;
-    Uri:  TIdSipUri;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestAddKnownRegistrar;
-    procedure TestCallIDFor;
-    procedure TestNextSequenceNoFor;
   end;
 
   TIdSipNullAction = class(TIdSipAction)
@@ -192,8 +176,11 @@ type
     procedure TestLoopDetection;
     procedure TestMergedRequest;
     procedure TestModuleForString;
+    procedure TestNextCallID;
+    procedure TestNextTag;
     procedure TestNotificationOfNewSession;
     procedure TestNotificationOfNewSessionRobust;
+    procedure TestNotifyOfChange;
     procedure TestOutboundCallAndByeToXlite;
     procedure TestOutboundInviteSessionProgressResends;
     procedure TestOutboundInviteDoesNotTerminateWhenNoResponse;
@@ -534,7 +521,7 @@ type
   public
     procedure SetUp; override;
     procedure TearDown; override;
-  published
+  published           
     procedure TestIsRegistration; override;
   end;
 
@@ -1076,12 +1063,8 @@ uses
   IdUnicode, SysUtils;
 
 type
-  TIdSipCoreWithExposedNotify = class(TIdSipAbstractCore)
+  TIdSipCoreWithExposedNotify = class(TIdSipAbstractUserAgent)
   public
-    function  CreateRequest(const Method: String;
-                            Dest: TIdSipAddressHeader): TIdSipRequest; overload; override;
-    function  CreateRequest(const Method: String;
-                            Dialog: TIdSipDialog): TIdSipRequest; overload; override;
     procedure TriggerNotify;
   end;
 
@@ -1136,7 +1119,6 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
   Result.AddTest(TestTIdSipAbstractCore.Suite);
-  Result.AddTest(TestTIdSipRegistrations.Suite);
   Result.AddTest(TestTIdSipActions.Suite);
   Result.AddTest(TestTIdSipUserAgent.Suite);
   Result.AddTest(TestTIdSipStackConfigurator.Suite);
@@ -1178,18 +1160,6 @@ end;
 //******************************************************************************
 //* TIdSipCoreWithExposedNotify Public methods *********************************
 
-function TIdSipCoreWithExposedNotify.CreateRequest(const Method: String;
-                                                   Dest: TIdSipAddressHeader): TIdSipRequest;
-begin
-  Result := nil;
-end;
-
-function TIdSipCoreWithExposedNotify.CreateRequest(const Method: String;
-                                                   Dialog: TIdSipDialog): TIdSipRequest;
-begin
-  Result := nil;
-end;
-
 procedure TIdSipCoreWithExposedNotify.TriggerNotify;
 begin
   Self.NotifyOfChange;
@@ -1219,66 +1189,6 @@ end;
 
 //* TestTIdSipAbstractCore Published methods ***********************************
 
-procedure TestTIdSipAbstractCore.TestNextCallID;
-var
-  CallID: String;
-begin
-  CallID := Self.Core.NextCallID;
-
-  Fetch(CallID, '@');
-
-  CheckEquals(Self.Core.HostName, CallID, 'HostName not used');
-end;
-
-procedure TestTIdSipAbstractCore.TestNextTag;
-var
-  I:    Integer;
-  Tags: TStringList;
-begin
-  // This is a woefully inadequate test. cf. RFC 3261, section 19.3
-
-  Tags := TStringList.Create;
-  try
-    for I := 1 to 100 do
-      Tags.Add(Self.Core.NextTag);
-
-    // Find duplicates
-    Tags.Sort;
-    CheckNotEquals('', Tags[0], 'No null tags may be generated');
-
-    for I := 1 to Tags.Count - 1 do begin
-      CheckNotEquals('', Tags[I], 'No null tags may be generated (Tag #'
-                                + IntToStr(I) + ')');
-
-      CheckNotEquals(Tags[I-1], Tags[I], 'Duplicate tag generated');
-    end;
-  finally
-  end;
-end;
-
-procedure TestTIdSipAbstractCore.TestNotifyOfChange;
-var
-  C: TIdSipCoreWithExposedNotify;
-  O: TIdObserverListener;
-begin
-  C := TIdSipCoreWithExposedNotify.Create;
-  try
-    O := TIdObserverListener.Create;
-    try
-      C.AddObserver(O);
-      C.TriggerNotify;
-      Check(O.Changed,
-            'Observer not notified');
-      Check(O.Data = C,
-           'Core didn''t return itself as parameter in the notify');
-    finally
-      O.Free;
-    end;
-  finally
-    C.Free;
-  end;
-end;
-
 procedure TestTIdSipAbstractCore.TestScheduleEvent;
 var
   EventCount: Integer;
@@ -1287,80 +1197,6 @@ begin
   Self.Core.ScheduleEvent(Self.ScheduledEvent, 50, Self.Invite.Copy);
   Check(EventCount < DebugTimer.EventCount,
         'Event not scheduled');
-end;
-
-//******************************************************************************
-//* TestTIdSipRegistrations                                                    *
-//******************************************************************************
-//* TestTIdSipRegistrations Public methods *************************************
-
-procedure TestTIdSipRegistrations.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Regs := TIdSipRegistrations.Create;
-  Self.Uri  := TIdSipUri.Create('sip:registrar.tessier-ashpool.co.luna');
-end;
-
-procedure TestTIdSipRegistrations.TearDown;
-begin
-  Self.Uri.Free;
-  Self.Regs.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipRegistrations Published methods **********************************
-
-procedure TestTIdSipRegistrations.TestAddKnownRegistrar;
-begin
-  try
-    Self.Regs.CallIDFor(Self.Uri);
-  except
-    on EIdSipRegistrarNotFound do;
-  end;
-
-  Self.Regs.AddKnownRegistrar(Self.Uri, '', 0);
-
-  Self.Regs.CallIDFor(Self.Uri);
-end;
-
-procedure TestTIdSipRegistrations.TestCallIDFor;
-const
-  CallID = '329087234@casephone.fried-neurons.org';
-begin
-  // Registrar not known:
-  try
-    Self.Regs.CallIDFor(Self.Uri);
-  except
-    on EIdSipRegistrarNotFound do;
-  end;
-
-  Self.Regs.AddKnownRegistrar(Self.Uri, CallID, 0);
-  CheckEquals(CallID,
-              Self.Regs.CallIDFor(Self.Uri),
-              'Call-ID');
-end;
-
-procedure TestTIdSipRegistrations.TestNextSequenceNoFor;
-const
-  SequenceNo = $decafbad;
-var
-  I: Cardinal;
-begin
-  // Registrar not known:
-  try
-    Self.Regs.NextSequenceNoFor(Self.Uri);
-  except
-    on EIdSipRegistrarNotFound do;
-  end;
-
-  Self.Regs.AddKnownRegistrar(Self.Uri, '', SequenceNo);
-
-  for I := 0 to 9 do
-  CheckEquals(IntToHex(SequenceNo + I, 8),
-              IntToHex(Self.Regs.NextSequenceNoFor(Self.Uri), 8),
-              'Next sequence number #' + IntToStr(I + 1));
 end;
 
 //******************************************************************************
@@ -2926,6 +2762,43 @@ begin
           + ': RFC 3261 defines REGISTER''s method as "REGISTER"');
 end;
 
+procedure TestTIdSipUserAgent.TestNextCallID;
+var
+  CallID: String;
+begin
+  CallID := Self.Core.NextCallID;
+
+  Fetch(CallID, '@');
+
+  CheckEquals(Self.Core.HostName, CallID, 'HostName not used');
+end;
+
+procedure TestTIdSipUserAgent.TestNextTag;
+var
+  I:    Integer;
+  Tags: TStringList;
+begin
+  // This is a woefully inadequate test. cf. RFC 3261, section 19.3
+
+  Tags := TStringList.Create;
+  try
+    for I := 1 to 100 do
+      Tags.Add(Self.Core.NextTag);
+
+    // Find duplicates
+    Tags.Sort;
+    CheckNotEquals('', Tags[0], 'No null tags may be generated');
+
+    for I := 1 to Tags.Count - 1 do begin
+      CheckNotEquals('', Tags[I], 'No null tags may be generated (Tag #'
+                                + IntToStr(I) + ')');
+
+      CheckNotEquals(Tags[I-1], Tags[I], 'Duplicate tag generated');
+    end;
+  finally
+  end;
+end;
+
 procedure TestTIdSipUserAgent.TestNotificationOfNewSession;
 begin
   Self.ReceiveInvite;
@@ -2954,6 +2827,29 @@ begin
     end;
   finally
     L1.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgent.TestNotifyOfChange;
+var
+  C: TIdSipCoreWithExposedNotify;
+  O: TIdObserverListener;
+begin
+  C := TIdSipCoreWithExposedNotify.Create;
+  try
+    O := TIdObserverListener.Create;
+    try
+      C.AddObserver(O);
+      C.TriggerNotify;
+      Check(O.Changed,
+            'Observer not notified');
+      Check(O.Data = C,
+           'Core didn''t return itself as parameter in the notify');
+    finally
+      O.Free;
+    end;
+  finally
+    C.Free;
   end;
 end;
 

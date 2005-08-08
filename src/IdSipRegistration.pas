@@ -12,9 +12,48 @@ unit IdSipRegistration;
 interface
 
 uses
-  IdObservable, IdSipMessage;
+  Contnrs, IdException, IdObservable, IdSipMessage, SyncObjs;
 
 type
+  TIdSipRegistrationInfo = class(TObject)
+  private
+    fCallID:     String;
+    fRegistrar:  TIdSipUri;
+    fSequenceNo: Cardinal;
+
+    procedure SetRegistrar(Value: TIdSipUri);
+  public
+    constructor Create;
+    destructor  Destroy; override;
+
+    property CallID:     String    read fCallID write fCallID;
+    property Registrar:  TIdSipUri read fRegistrar write SetRegistrar;
+    property SequenceNo: Cardinal  read fSequenceNo write fSequenceNo;
+  end;
+
+  // I keep track of information a User Agent needs when making a REGISTER to
+  // a particular registrar.
+  // I store registration information for registrars with which you've
+  // registered.
+  TIdSipRegistrations = class(TObject)
+  private
+    KnownRegistrars: TObjectList;
+    Lock:            TCriticalSection;
+
+    function IndexOfRegistrar(Registrar: TIdSipUri): Integer;
+    function KnowsRegistrar(Registrar: TIdSipUri): Boolean;
+    function RegistrarAt(Index: Integer): TIdSipRegistrationInfo;
+  public
+    constructor Create;
+    destructor  Destroy; override;
+
+    procedure AddKnownRegistrar(Registrar: TIdSipUri;
+                                const CallID: String;
+                                SequenceNo: Cardinal);
+    function  CallIDFor(Registrar: TIdSipUri): String;
+    function  NextSequenceNoFor(Registrar: TIdSipUri): Cardinal;
+  end;
+
   // I represent a binding between and address-of-record and a URI. A SIP
   // Registrar (via a Binding Database) uses me to keep track of
   // registrations.
@@ -90,13 +129,159 @@ type
     property DefaultExpiryTime: Cardinal read fDefaultExpiryTime write fDefaultExpiryTime;
   end;
 
+  EIdSipRegistrarNotFound = class(EIdException)
+  public
+    constructor Create(const Msg: string); reintroduce;
+  end;
+
 implementation
 
 uses
-  IdSipConsts;
+  IdSipConsts, SysUtils;
 
 const
-  TenMinutes = 600; // seconds
+  ItemNotFoundIndex = -1;
+  TenMinutes        = 600; // seconds
+
+resourcestring
+  NoSuchRegistrar = 'No such registrar known: %s';
+
+//******************************************************************************
+//* TIdSipRegistrationInfo                                                     *
+//******************************************************************************
+//* TIdSipRegistrationInfo Public methods **************************************
+
+constructor TIdSipRegistrationInfo.Create;
+begin
+  inherited Create;
+
+  Self.fRegistrar := TIdSipUri.Create;
+end;
+
+destructor TIdSipRegistrationInfo.Destroy;
+begin
+  Self.Registrar.Free;
+
+  inherited Destroy;
+end;
+
+//* TIdSipRegistrationInfo Private methods *************************************
+
+procedure TIdSipRegistrationInfo.SetRegistrar(Value: TIdSipUri);
+begin
+  Self.fRegistrar.Uri := Value.Uri;
+end;
+
+//******************************************************************************
+//* TIdSipRegistrations                                                        *
+//******************************************************************************
+//* TIdSipRegistrations Public methods *****************************************
+
+constructor TIdSipRegistrations.Create;
+begin
+  inherited Create;
+
+  Self.Lock            := TCriticalSection.Create;
+  Self.KnownRegistrars := TObjectList.Create(true);
+end;
+
+destructor TIdSipRegistrations.Destroy;
+begin
+  Self.Lock.Acquire;
+  try
+    Self.KnownRegistrars.Free;
+  finally
+    Self.Lock.Release;
+  end;
+  Self.Lock.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipRegistrations.AddKnownRegistrar(Registrar: TIdSipUri;
+                                                const CallID: String;
+                                                SequenceNo: Cardinal);
+var
+  NewReg: TIdSipRegistrationInfo;
+begin
+  Self.Lock.Acquire;
+  try
+    if not Self.KnowsRegistrar(Registrar) then begin
+      NewReg := TIdSipRegistrationInfo.Create;
+      Self.KnownRegistrars.Add(NewReg);
+
+      NewReg.CallID     := CallID;
+      NewReg.Registrar  := Registrar;
+      NewReg.SequenceNo := SequenceNo;
+    end;
+  finally
+    Self.Lock.Release;
+  end;
+end;
+
+function TIdSipRegistrations.CallIDFor(Registrar: TIdSipUri): String;
+var
+  Index: Integer;
+begin
+  Self.Lock.Acquire;
+  try
+    Index := Self.IndexOfRegistrar(Registrar);
+
+    if (Index = ItemNotFoundIndex) then
+      raise EIdSipRegistrarNotFound.Create(Registrar.Uri);
+
+    Result := Self.RegistrarAt(Index).CallID;
+  finally
+    Self.Lock.Release;
+  end;
+end;
+
+function TIdSipRegistrations.NextSequenceNoFor(Registrar: TIdSipUri): Cardinal;
+var
+  Index:   Integer;
+  RegInfo: TIdSipRegistrationInfo;
+begin
+  Result := 0;
+
+  Self.Lock.Acquire;
+  try
+    Index := Self.IndexOfRegistrar(Registrar);
+
+    if (Index = ItemNotFoundIndex) then
+      raise EIdSipRegistrarNotFound.Create(Registrar.Uri);
+
+    RegInfo := Self.RegistrarAt(Index);
+    Result := RegInfo.SequenceNo;
+    RegInfo.SequenceNo := Result + 1;
+  finally
+    Self.Lock.Release;
+  end;
+end;
+
+//* TIdSipRegistrations Private methods ****************************************
+
+function TIdSipRegistrations.IndexOfRegistrar(Registrar: TIdSipUri): Integer;
+begin
+  Result := 0;
+  while (Result < Self.KnownRegistrars.Count) do
+    if Self.RegistrarAt(Result).Registrar.Equals(Registrar) then
+      Break
+    else
+      Inc(Result);
+
+  if (Result >= Self.KnownRegistrars.Count) then
+    Result := ItemNotFoundIndex;
+end;
+
+function TIdSipRegistrations.KnowsRegistrar(Registrar: TIdSipUri): Boolean;
+begin
+  Result := Self.IndexOfRegistrar(Registrar) <> ItemNotFoundIndex;
+end;
+
+function TIdSipRegistrations.RegistrarAt(Index: Integer): TIdSipRegistrationInfo;
+begin
+  Result := Self.KnownRegistrars[Index] as TIdSipRegistrationInfo;
+end;
 
 //******************************************************************************
 //* TIdRegistrarBinding                                                        *
@@ -253,6 +438,16 @@ begin
     else
       Result := Self.DefaultExpiryTime;
   end;
+end;
+
+//******************************************************************************
+//* EIdSipRegistrarNotFound                                                    *
+//******************************************************************************
+//* EIdSipRegistrarNotFound Public methods *************************************
+
+constructor EIdSipRegistrarNotFound.Create(const Msg: string);
+begin
+  inherited Create(Format(NoSuchRegistrar, [Msg]));
 end;
 
 end.

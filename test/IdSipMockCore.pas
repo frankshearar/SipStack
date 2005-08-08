@@ -15,7 +15,7 @@ uses
   IdSipCore, IdSipMessage, IdSipTransaction, IdSipTransport;
 
 type
-  TIdSipMockCore = class(TIdSipAbstractCore)
+  TIdSipMockCore = class(TIdSipAbstractUserAgent)
   private
     fReceiveRequestCalled: Boolean;
     fReceiveResponseCalled: Boolean;
@@ -24,15 +24,8 @@ type
                            Receiver: TIdSipTransport); override;
     procedure ActOnResponse(Response: TIdSipResponse;
                             Receiver: TIdSipTransport); override;
-    procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
-                            Request: TIdSipRequest); override;
     function  WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; override;
-    function  WillAcceptResponse(Response: TIdSipResponse): TIdSipUserAgentReaction; override;
   public
-    function  CreateRequest(const Method: String;
-                            Dest: TIdSipAddressHeader): TIdSipRequest; override;
-    function  CreateResponse(Request: TIdSipRequest;
-                             ResponseCode: Cardinal): TIdSipResponse; override;
     procedure Reset;
 
     property ReceiveRequestCalled:  Boolean read fReceiveRequestCalled;
@@ -61,28 +54,6 @@ implementation
 //******************************************************************************
 //* TIdSipMockCore Public methods **********************************************
 
-function TIdSipMockCore.CreateRequest(const Method: String;
-                                      Dest: TIdSipAddressHeader): TIdSipRequest;
-var
-  UA: TIdSipAbstractUserAgent;
-begin
-  UA := TIdSipAbstractUserAgent.Create;
-  try
-    Result := UA.CreateRequest(Method, Dest);
-  finally
-    UA.Free;
-  end;
-end;
-
-function TIdSipMockCore.CreateResponse(Request: TIdSipRequest;
-                                       ResponseCode: Cardinal): TIdSipResponse;
-begin
-  Result := TIdSipResponse.InResponseTo(Request,
-                                        ResponseCode);
-
-  Self.PrepareResponse(Result, Request);
-end;
-
 procedure TIdSipMockCore.Reset;
 begin
   fReceiveRequestCalled  := true;
@@ -103,17 +74,7 @@ begin
   fReceiveResponseCalled := true;
 end;
 
-procedure TIdSipMockCore.RejectRequest(Reaction: TIdSipUserAgentReaction;
-                                       Request: TIdSipRequest);
-begin
-end;
-
 function TIdSipMockCore.WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction;
-begin
-  Result := uarAccept;
-end;
-
-function TIdSipMockCore.WillAcceptResponse(Response: TIdSipResponse): TIdSipUserAgentReaction;
 begin
   Result := uarAccept;
 end;
