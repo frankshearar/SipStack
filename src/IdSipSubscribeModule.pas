@@ -413,7 +413,7 @@ type
     procedure SendAccept(Subscribe: TIdSipRequest);
     procedure SendOk(Subscribe: TIdSipRequest);
     procedure SendTerminatingNotify(Subscribe: TIdSipRequest;
-                                    Reason: String);
+                                    const Reason: String);
   protected
     function  CreateDialog(Response: TIdSipResponse): TIdSipDialog; override;
     procedure EstablishDialog(Response: TIdSipResponse); override;
@@ -1927,7 +1927,7 @@ begin
 end;
 
 procedure TIdSipInboundSubscription.SendTerminatingNotify(Subscribe: TIdSipRequest;
-                                                          Reason: String);
+                                                          const Reason: String);
 var
   Terminator: TIdSipOutboundTerminatingNotify;
 begin
