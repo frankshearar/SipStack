@@ -397,14 +397,23 @@ type
 
   TestTIdSipInboundReferral = class(TestTIdSipInboundSubscriptionBase)
   private
+    Refer: TIdSipInboundReferral;
+
     procedure ReceiveRefer(Target: TIdSipAddressHeader);
   protected
     procedure ReceiveSubscribeRequest; override;
+  public
+    procedure SetUp; override;
   published
     procedure TestNotify; override;
     procedure TestNotifyWithInappropriateBody;
     procedure TestNotifyWithNoBody;
+    procedure TestReceiveRefer;
+    procedure TestReferenceDenied;
+    procedure TestReferenceFailed;
+    procedure TestReferenceSucceeded;
     procedure TestRejectUnsupportedReferToUri;
+    procedure TestRenotifySendsCorrectState;
   end;
 
   TestTIdSipSubscriptionExpires = class(TSubscribeTestCase)
@@ -3306,6 +3315,15 @@ end;
 //******************************************************************************
 //* TestTIdSipInboundReferral                                                  *
 //******************************************************************************
+//* TestTIdSipInboundReferral Public methods ***********************************
+
+procedure TestTIdSipInboundReferral.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Refer := Self.Action as TIdSipInboundReferral;
+end;
+
 //* TestTIdSipInboundReferral Protected methods ********************************
 
 procedure TestTIdSipInboundReferral.ReceiveSubscribeRequest;
@@ -3369,6 +3387,87 @@ begin
   end;
 end;
 
+procedure TestTIdSipInboundReferral.TestReceiveRefer;
+var
+  Notify: TIdSipRequest;
+begin
+  Self.MarkSentRequestCount;
+  Self.ReceiveRefer(Self.Destination);
+
+  CheckRequestSent('No request sent');
+  CheckEquals(MethodNotify,
+              Self.LastSentRequest.Method,
+              'Unexpected request sent');
+
+  Notify := Self.LastSentRequest;
+  CheckNotEquals('',
+                 Notify.Body,
+                 'No body present in the NOTIFY');
+  CheckEquals(SipFragmentMimeType,
+              Notify.ContentType,
+              'Incorrect Content-Type value');
+  CheckEquals(TIdSipInboundReferral.ReferralPendingBody,
+              Notify.Body,
+              'Incorrect body');
+end;
+
+procedure TestTIdSipInboundReferral.TestReferenceDenied;
+var
+  Notify: TIdSipRequest;
+begin
+  Self.Refer.Accept;
+
+  Self.MarkSentRequestCount;
+  Self.Refer.ReferenceDenied;
+  Self.CheckSendNotify(Self.Refer, SubscriptionSubstateActive);
+
+  Notify := Self.LastSentRequest;
+  CheckEquals(SipFragmentMimeType,
+              Notify.ContentType,
+              'NOTIFY Content-Type');
+  CheckEquals(TIdSipInboundReferral.ReferralDeniedBody,
+              Notify.Body,
+              'NOTIFY body');
+end;
+
+procedure TestTIdSipInboundReferral.TestReferenceFailed;
+var
+  Notify: TIdSipRequest;
+begin
+  Self.Refer.Accept;
+
+  Self.MarkSentRequestCount;
+  Self.Refer.ReferenceFailed;
+  Self.CheckSendNotify(Self.Refer, SubscriptionSubstateActive);
+
+  Notify := Self.LastSentRequest;
+  CheckEquals(SipFragmentMimeType,
+              Notify.ContentType,
+              'NOTIFY Content-Type');
+  CheckEquals(TIdSipInboundReferral.ReferralFailedBody,
+              Notify.Body,
+              'NOTIFY body');
+end;
+
+procedure TestTIdSipInboundReferral.TestReferenceSucceeded;
+var
+  Notify: TIdSipRequest;
+begin
+  Self.Refer.Accept;
+
+  Self.MarkSentRequestCount;
+  Self.Refer.ReferenceSucceeded;
+  Self.CheckSendNotify(Self.Refer, SubscriptionSubstateActive);
+
+  Notify := Self.LastSentRequest;
+  CheckEquals(SipFragmentMimeType,
+              Notify.ContentType,
+              'NOTIFY Content-Type');
+  CheckEquals(TIdSipInboundReferral.ReferralSucceededBody,
+              Notify.Body,
+              'NOTIFY body');
+end;
+
 procedure TestTIdSipInboundReferral.TestRejectUnsupportedReferToUri;
 var
   HttpReferTo: TIdSipAddressHeader;
@@ -3381,11 +3480,28 @@ begin
     Self.ReceiveRefer(HttpReferTo);
     CheckResponseSent('No request sent');
     CheckEquals(SIPBadRequest,
-                Self.LastSentResponse.StatusCode         ,
+                Self.LastSentResponse.StatusCode,
                 'Unexpected response');
   finally
     HttpReferTo.Free;
   end;
+end;
+
+procedure TestTIdSipInboundReferral.TestRenotifySendsCorrectState;
+begin
+  Self.Refer.Accept;
+
+  // Make a notify fail
+  Self.Dispatcher.Transport.FailWith := EIdConnectTimeout;
+  Self.Refer.ReferenceSucceeded;
+  Self.Dispatcher.Transport.FailWith := nil;
+
+  Self.MarkSentRequestCount;
+  Self.Refer.Renotify;
+  CheckRequestSent('Renotify didn''t send a request');
+  CheckEquals(TIdSipInboundReferral.ReferralSucceededBody,
+              Self.LastSentRequest.Body,
+              'Unexpected body: the package''s state wasn''t updated');
 end;
 
 //******************************************************************************

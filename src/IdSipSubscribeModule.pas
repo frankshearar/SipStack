@@ -151,7 +151,7 @@ type
     function  Accept(Request: TIdSipRequest;
                      UsingSecureTransport: Boolean): TIdSipAction; virtual;
     function Clone: TIdSipEventPackage;
-    function MimeType: String;
+    function MimeType: String; virtual;
 
     property InboundSubscriptionDuration: Cardinal              read fInboundSubscriptionDuration write fInboundSubscriptionDuration;
     property MinimumExpiryTime:           Cardinal              read fMinimumExpiryTime write fMinimumExpiryTime;
@@ -168,7 +168,7 @@ type
 
     function Accept(Request: TIdSipRequest;
                     UsingSecureTransport: Boolean): TIdSipAction; override;
-    function MimeType: String;
+    function MimeType: String; override;
   end;
 
   TIdSipNotify = class(TIdSipAction)
@@ -489,10 +489,17 @@ type
     function  WillAccept(Refer: TIdSipRequest): Boolean; override;
   public
     class function Method: String; override;
+    class function ReferralDeniedBody: String;
+    class function ReferralFailedBody: String;
+    class function ReferralPendingBody: String;
+    class function ReferralSucceededBody: String;
 
     procedure Notify(const Body: String;
                      const MimeType: String;
                      const NewState: String = ''); override;
+    procedure ReferenceDenied;
+    procedure ReferenceFailed;
+    procedure ReferenceSucceeded;
   end;
 
   TIdSipSubscriptionExpires = class(TIdSipActionClosure)
@@ -738,7 +745,7 @@ function TIdSipSubscribeModule.CreateRefer(Dest: TIdSipAddressHeader;
 begin
   Result := Self.UserAgent.CreateRequest(MethodRefer, Dest);
   try
-    Result.AddHeader(ReferToHeaderFull).Assign(ReferTo);
+    Result.ReferTo.Assign(ReferTo);
   except
     FreeAndNil(Result);
 
@@ -1819,20 +1826,12 @@ begin
 end;
 
 procedure TIdSipInboundSubscription.NotifySubscriberOfState;
-var
-  Notify: TIdSipRequest;
 begin
   Assert(Self.DialogEstablished,
          'You cannot send a NOTIFY when you''ve no dialog');
 
-  Notify := Self.Module.CreateNotify(Self.Dialog,
-                                     Self.InitialRequest,
-                                     Self.State);
-  try
-    Self.SendRequest(Notify);
-  finally
-    Notify.Free;
-  end;
+  Self.Notify(Self.Package.State,
+              Self.Package.MimeType);
 end;
 
 procedure TIdSipInboundSubscription.OnFailure(NotifyAgent: TIdSipOutboundNotify;
@@ -1936,17 +1935,6 @@ begin
   Self.ConfigureNotify(Terminator);
   Terminator.Reason := Reason;
   Terminator.Send;
-{
-  Terminator := Self.Module.CreateNotify(Self.Dialog,
-                                         Subscribe,
-                                         SubscriptionSubstateTerminated);
-  try
-    Terminator.FirstSubscriptionState.Reason := Reason;
-    Self.SendRequest(Terminator);
-  finally
-    Terminator.Free;
-  end;
-}
 end;
 
 //******************************************************************************
@@ -2310,6 +2298,26 @@ begin
   Result := MethodRefer;
 end;
 
+class function TIdSipInboundReferral.ReferralDeniedBody: String;
+begin
+  Result := 'SIP/2.0 603 Declined';
+end;
+
+class function TIdSipInboundReferral.ReferralFailedBody: String;
+begin
+  Result := 'SIP/2.0 503 Service Unavailable';
+end;
+
+class function TIdSipInboundReferral.ReferralPendingBody: String;
+begin
+  Result := 'SIP/2.0 100 Trying';
+end;
+
+class function TIdSipInboundReferral.ReferralSucceededBody: String;
+begin
+  Result := 'SIP/2.0 200 OK';
+end;
+
 procedure TIdSipInboundReferral.Notify(const Body: String;
                                        const MimeType: String;
                                        const NewState: String = '');
@@ -2317,7 +2325,23 @@ begin
   if (MimeType <> SipFragmentMimeType) or (Body = '') then
     raise EIdSipTransactionUser.Create('REFER NOTIFYs MUST have ' + SipFragmentMimeType + ' bodies');
 
+  Self.Package.State := Body;
   inherited Notify(Body, MimeType, NewState);
+end;
+
+procedure TIdSipInboundReferral.ReferenceDenied;
+begin
+  Self.Notify(Self.ReferralDeniedBody, SipFragmentMimeType);
+end;
+
+procedure TIdSipInboundReferral.ReferenceFailed;
+begin
+  Self.Notify(Self.ReferralFailedBody, SipFragmentMimeType);
+end;
+
+procedure TIdSipInboundReferral.ReferenceSucceeded;
+begin
+  Self.Notify(Self.ReferralSucceededBody, SipFragmentMimeType);
 end;
 
 //* TIdSipInboundReferral Protected methods ************************************
@@ -2340,6 +2364,7 @@ begin
 
   if Self.WillAccept(Refer) then begin
     Self.SetState(SubscriptionSubstatePending);
+    Self.Package.State := Self.ReferralPendingBody;
     Self.SendAccept(Refer);
   end;
 end;
@@ -2361,15 +2386,9 @@ end;
 //* TIdSipInboundReferral Private methods **************************************
 
 function TIdSipInboundReferral.HasUnknownUrlScheme(Refer: TIdSipRequest): Boolean;
-var
-  Uri: TIdSipUri;
 begin
-  Uri := TIdSipUri.Create(Refer.FirstHeader(ReferToHeaderFull).Value);
-  try
-    Result := not Uri.IsSipUri and not Uri.IsSipsUri;
-  finally
-    Uri.Free;
-  end;
+  Result := not Refer.ReferTo.Address.IsSipUri
+        and not Refer.ReferTo.Address.IsSipsUri;
 end;
 
 procedure TIdSipInboundReferral.RejectBadRequest(Request: TIdSipRequest);
