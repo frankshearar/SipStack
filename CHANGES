@@ -1,3 +1,8 @@
+v0.5 ()
+* The SIP stack now supports subscriptions (RFC 3265), including the
+  REFER message (RFC 3515). This means that the stack implements call
+  forwarding as per draft-ietf-sipping-cc-transfer-05.
+
 v0.4.1 (2005/05/20)
 * Added those files necessary to patch Indy to support the stack.
 

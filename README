@@ -6,9 +6,9 @@ This library of code consists of three main parts:
 * an RTP stack (RFC 3550), and
 * SDP (RFC 2327) parsing and utilities.
 
-The code currently implements most of SIP, RTP. The stack can make and receive
-calls from/to X-Lite, linphonec. It also connects correctly with ser, the Sip
-Express Router.
+The code currently implements most of SIP, RTP. The stack can make and
+receive calls from/to X-Lite, linphonec. It also connects correctly
+with ser, the Sip Express Router.
 
 The stack uses Indy 9.0.14 (but 9.0.18 should work fine). Find this
 excellent library either in your Delphi\Sources\Indy directory or at
@@ -35,14 +35,15 @@ class in tests\Spike.pas. It does a lot of stuff, and it's definitely
 "alpha" quality, but it's what I use to try out SIP stuff. I plan to
 simplify Spike to ease the reader into the ways of SIP.
 
-Please note that this version, 0.4.1, has a radically different
+Please note that this version, 0.5, has a radically different
 threading architecture to version 0.3 Please read the CHANGES file,
 doc\overview.txt and doc\architecture.txt!
 
 Todo:
-* The User Agent knows about what kinds of actions it supports. We
-  need to pull this knowledge out into separate OutboundModules, much
-  like the existing inbound MessageModules.
+* We need to implement client-side authentication in an asynchronous
+  manner. In particular, we need to make sure that NOTIFYs, INVITEs
+  with a Replaces header, and probably SUBSCRIBE messages need
+  authentication.
 
 Known bugs:
 * TLS tests fail because of something to do with the certificates.
@@ -53,4 +54,4 @@ Known bugs:
 * The TCP transport test TestSendResponsesClosedConnection has a race
   condition somewhere.
 
-Frank Shearar, 2005/05/20
+Frank Shearar, 2005/xx/xx
