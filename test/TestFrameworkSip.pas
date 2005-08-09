@@ -14,9 +14,9 @@ interface
 uses
   Classes, IdInterfacedObject, IdObservable, IdRTP, IdSdp, IdSipAuthentication,
   IdSipMessage, IdSipCore, IdSipDialog, IdSipMockLocator,
-  IdSipMockTransactionDispatcher, IdSipSubscribeModule, IdSipTcpClient,
-  IdSipTcpServer, IdSipTransaction, IdSipTransport, IdTimerQueue, SysUtils,
-  TestFramework, TestFrameworkEx;
+  IdSipMockTransactionDispatcher, IdSipRegistration, IdSipSubscribeModule,
+  IdSipTcpClient, IdSipTcpServer, IdSipTransaction, IdSipTransport,
+  IdTimerQueue, IdSipUserAgent, SysUtils, TestFramework, TestFrameworkEx;
 
 type
   TIdSipTestResources = class(TObject)
@@ -588,19 +588,17 @@ type
     property TryAgain:                  Boolean                     read fTryAgain write fTryAgain;
   end;
 
-  TIdSipTestUserAgentListener = class(TIdSipMockListener,
-                                      IIdSipUserAgentListener)
+  TIdSipTestTransactionUserListener = class(TIdSipMockListener,
+                                            IIdSipTransactionUserListener)
   private
+    fAbstractUserAgentParam:  TIdSipAbstractUserAgent;
     fAuthenticationChallenge: Boolean;
     fDroppedUnmatchedMessage: Boolean;
-    fInboundCall:             Boolean;
+    fMessageParam:            TIdSipMessage;
     fPassword:                String;
     fReceiverParam:           TIdSipTransport;
     fResponseParam:           TIdSipResponse;
-    fMessageParam:            TIdSipMessage;
-    fSessionParam:            TIdSipInboundSession;
     fTryAgain:                Boolean;
-    fUserAgentParam:          TIdSipAbstractUserAgent;
     fUsername:                String;
 
     procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
@@ -611,22 +609,35 @@ type
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractUserAgent;
                                         Message: TIdSipMessage;
                                         Receiver: TIdSipTransport);
-    procedure OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
+  public
+    constructor Create; override;
+
+    property AbstractUserAgentParam:  TIdSipAbstractUserAgent   read fAbstractUserAgentParam;
+    property AuthenticationChallenge: Boolean                   read fAuthenticationChallenge;
+    property DroppedUnmatchedMessage: Boolean                   read fDroppedUnmatchedMessage;
+    property MessageParam:            TIdSipMessage             read fMessageParam;
+    property Password:                String                    read fPassword write fPassword;
+    property ReceiverParam:           TIdSipTransport           read fReceiverParam;
+    property ResponseParam:           TIdSipResponse            read fResponseParam;
+    property TryAgain:                Boolean                   read fTryAgain write fTryAgain;
+    property Username:                String                    read fUsername write fUsername;
+  end;
+
+  TIdSipTestUserAgentListener = class(TIdSipTestTransactionUserListener,
+                                      IIdSipUserAgentListener)
+  private
+    fInboundCall:             Boolean;
+    fSessionParam:            TIdSipInboundSession;
+    fUserAgentParam:          TIdSipUserAgent;
+
+    procedure OnInboundCall(UserAgent: TIdSipUserAgent;
                             Session: TIdSipInboundSession);
   public
     constructor Create; override;
 
-    property AuthenticationChallenge: Boolean                   read fAuthenticationChallenge;
-    property DroppedUnmatchedMessage: Boolean                   read fDroppedUnmatchedMessage;
     property InboundCall:             Boolean                   read fInboundCall;
-    property Password:                String                    read fPassword write fPassword;
-    property ReceiverParam:           TIdSipTransport           read fReceiverParam;
-    property ResponseParam:           TIdSipResponse            read fResponseParam;
-    property MessageParam:            TIdSipMessage             read fMessageParam;
     property SessionParam:            TIdSipInboundSession      read fSessionParam;
-    property TryAgain:                Boolean                   read fTryAgain write fTryAgain;
-    property UserAgentParam:          TIdSipAbstractUserAgent   read fUserAgentParam;
-    property Username:                String                    read fUsername write fUsername;
+    property UserAgentParam:          TIdSipUserAgent           read fUserAgentParam;
   end;
 
   TIdSipTestSubscribeModuleListener = class(TIdSipMockListener,
@@ -2057,28 +2068,27 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipTestUserAgentListener                                                *
+//* TIdSipTestTransactionUserListener
 //******************************************************************************
-//* TIdSipTestUserAgentListener Public methods *********************************
+//* TIdSipTestTransactionUserListener Public methods ***************************
 
-constructor TIdSipTestUserAgentListener.Create;
+constructor TIdSipTestTransactionUserListener.Create;
 begin
   inherited Create;
 
   Self.fAuthenticationChallenge := false;
   Self.fDroppedUnmatchedMessage := false;
-  Self.fInboundCall             := false;
 end;
 
-//* TIdSipTestUserAgentListener Private methods ********************************
+//* TIdSipTestTransactionUserListener Private methods **************************
 
-procedure TIdSipTestUserAgentListener.OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
-                                                                Challenge: TIdSipResponse;
-                                                                var Username: String;
-                                                                var Password: String;
-                                                                var TryAgain: Boolean);
+procedure TIdSipTestTransactionUserListener.OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
+                                                                      Challenge: TIdSipResponse;
+                                                                      var Username: String;
+                                                                      var Password: String;
+                                                                      var TryAgain: Boolean);
 begin
-  Self.fUserAgentParam          := UserAgent;
+  Self.fAbstractUserAgentParam  := UserAgent;
   Self.fAuthenticationChallenge := true;
   Self.fResponseParam           := Challenge;
 
@@ -2091,20 +2101,34 @@ begin
     raise Self.FailWith.Create(Self.ClassName + '.OnAuthenticationChallenge');
 end;
 
-procedure TIdSipTestUserAgentListener.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractUserAgent;
-                                                                Message: TIdSipMessage;
-                                                                Receiver: TIdSipTransport);
+procedure TIdSipTestTransactionUserListener.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractUserAgent;
+                                                                      Message: TIdSipMessage;
+                                                                      Receiver: TIdSipTransport);
 begin
+  Self.fAbstractUserAgentParam  := UserAgent;
   Self.fDroppedUnmatchedMessage := true;
   Self.fReceiverParam           := Receiver;
   Self.fMessageParam            := Message;
-  Self.fUserAgentParam          := UserAgent;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnDroppedUnmatchedMessage');
 end;
 
-procedure TIdSipTestUserAgentListener.OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
+//******************************************************************************
+//* TIdSipTestUserAgentListener                                                *
+//******************************************************************************
+//* TIdSipTestUserAgentListener Public methods *********************************
+
+constructor TIdSipTestUserAgentListener.Create;
+begin
+  inherited Create;
+
+  Self.fInboundCall := false;
+end;
+
+//* TIdSipTestUserAgentListener Private methods ********************************
+
+procedure TIdSipTestUserAgentListener.OnInboundCall(UserAgent: TIdSipUserAgent;
                                                     Session: TIdSipInboundSession);
 begin
   Self.fInboundCall    := true;

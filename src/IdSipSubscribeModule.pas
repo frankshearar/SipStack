@@ -13,7 +13,7 @@ interface
 
 uses
   Contnrs, IdNotification, IdSipCore, IdSipDialog, IdSipDialogID, IdSipMessage,
-  IdTimerQueue, SyncObjs;
+  IdSipUserAgent, IdTimerQueue, SyncObjs;
 
 type
   TIdSipOutboundNotify = class;
@@ -611,7 +611,7 @@ type
     property Notify: TIdSipRequest read fNotify write fNotify;
   end;
 
-  TIdSipRenewedSubscriptionMethod = class(TIdSipUserAgentMethod)
+  TIdSipRenewedSubscriptionMethod = class(TIdSipAbstractUserAgentMethod)
   private
     fSubscription: TIdSipOutboundSubscription;
   public
@@ -620,7 +620,7 @@ type
     property Subscription: TIdSipOutboundSubscription read fSubscription write fSubscription;
   end;
 
-  TIdSipSubscriptionRequestMethod = class(TIdSipUserAgentMethod)
+  TIdSipSubscriptionRequestMethod = class(TIdSipAbstractUserAgentMethod)
   private
     fSubscription: TIdSipInboundSubscription;
   public

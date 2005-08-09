@@ -13,7 +13,8 @@ interface
 
 uses
   Classes, Controls, ExtCtrls, Forms, IdSipCore, IdSipIndyLocator, IdSipMessage,
-  IdSipTransaction, IdSipTransport, IdTimerQueue, StdCtrls, SyncObjs, SysUtils;
+  IdSipRegistration, IdSipTransaction, IdSipTransport, IdSipUserAgent,
+  IdTimerQueue, StdCtrls, SyncObjs, SysUtils;
 
 type
   TrnidSpikeRegister = class(TForm,

@@ -54,6 +54,7 @@ uses
   IdSipTransportLogger in 'src\IdSipTransportLogger.pas',
   IdSipUdpClient in 'src\IdSipUdpClient.pas',
   IdSipUdpServer in 'src\IdSipUdpServer.pas',
+  IdSipUserAgent in 'src\IdSipUserAgent.pas',
   IdSystem in 'src\IdSystem.pas',
   IdTimerQueue in 'src\IdTimerQueue.pas',
   IdUnicode in 'src\IdUnicode.pas',
@@ -99,7 +100,8 @@ uses
   TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas',
   TestIdSipUri in 'test\TestIdSipUri.pas',
   TestIdTimerQueue in 'test\TestIdTimerQueue.pas',
-  TestIdUnicode in 'test\TestIdUnicode.pas';
+  TestIdUnicode in 'test\TestIdUnicode.pas',
+  TestIdSipUserAgent in 'test\TestIdSipUserAgent.pas';
 
 {,
   TestIdSipTlsServer in 'test\TestIdSipTlsServer.pas'}

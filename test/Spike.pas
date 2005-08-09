@@ -24,8 +24,8 @@ interface
 uses
   audioclasses, Classes, Contnrs, Controls, ExtCtrls, Forms, IdDTMFPanel,
   IdObservable, IdRTPDiagnostics, IdRTP, IdSdp, IdSipCore, IdSipIndyLocator,
-  IdSipMessage, IdSipTransaction, IdSipTransport, IdSocketHandle, IdTimerQueue,
-  StdCtrls, SyncObjs, SysUtils;
+  IdSipMessage, IdSipRegistration, IdSipTransaction, IdSipTransport,
+  IdSipUserAgent, IdSocketHandle, IdTimerQueue, StdCtrls, SyncObjs, SysUtils;
 
 type
   TrnidSpike = class(TForm,
@@ -147,7 +147,7 @@ type
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts;
                         Response: TIdSipResponse);
-    procedure OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
+    procedure OnInboundCall(UserAgent: TIdSipUserAgent;
                             Session: TIdSipInboundSession);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Answer: TIdSipResponse);
@@ -492,7 +492,7 @@ begin
   end;
 end;
 
-procedure TrnidSpike.OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
+procedure TrnidSpike.OnInboundCall(UserAgent: TIdSipUserAgent;
                                    Session: TIdSipInboundSession);
 begin
   Session.AddSessionListener(Self);

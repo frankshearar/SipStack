@@ -12,7 +12,8 @@ unit IdSipRegistration;
 interface
 
 uses
-  Contnrs, IdException, IdObservable, IdSipMessage, SyncObjs;
+  Contnrs, IdException, IdObservable, IdSipCore, IdSipMessage, IdNotification,
+  SyncObjs;
 
 type
   TIdSipRegistrationInfo = class(TObject)
@@ -129,6 +130,229 @@ type
     property DefaultExpiryTime: Cardinal read fDefaultExpiryTime write fDefaultExpiryTime;
   end;
 
+  TIdSipOutboundRegistration = class;
+
+  // I provide a protocol for using a registrar. You send a REGISTER, and
+  // listen for the events below.
+  //
+  // OnFailure and OnSuccess, apart from the obvious, tell you that the
+  // registration agent has terminated, and that you should remove all
+  // of your references to it.
+  IIdSipRegistrationListener = interface(IIdSipActionListener)
+    ['{D3FA9A3D-ED8A-48D3-8068-38E8F9EE2140}']
+    procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
+                        CurrentBindings: TIdSipContacts;
+                        Response: TIdSipResponse);
+    procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
+                        CurrentBindings: TIdSipContacts);
+  end;
+
+  TIdSipRegisterModule = class;
+
+  TIdSipRegistrar = class(TIdSipAbstractUserAgent)
+  private
+    RegisterModule: TIdSipRegisterModule;
+
+    function  GetBindingDB: TIdSipAbstractBindingDatabase;
+    function  GetDefaultRegistrationExpiryTime: Cardinal;
+    function  GetMinimumExpiryTime: Cardinal;
+    procedure SetBindingDB(Value: TIdSipAbstractBindingDatabase);
+    procedure SetDefaultRegistrationExpiryTime(Value: Cardinal);
+    procedure SetMinimumExpiryTime(Value: Cardinal);
+  public
+    constructor Create; override;
+
+    function RegistrationCount: Integer;
+
+    property BindingDB:                     TIdSipAbstractBindingDatabase read GetBindingDB write SetBindingDB;
+    property DefaultRegistrationExpiryTime: Cardinal                      read GetDefaultRegistrationExpiryTime write SetDefaultRegistrationExpiryTime;
+    property MinimumExpiryTime:             Cardinal                      read GetMinimumExpiryTime write SetMinimumExpiryTime;
+  end;
+
+  // I implement that functionality necessary for a User Agent to respond to
+  // REGISTER messages, that is, to act as a registrar.
+  TIdSipRegisterModule = class(TIdSipMessageModule)
+  private
+    fBindingDB:         TIdSipAbstractBindingDatabase;
+    fMinimumExpiryTime: Cardinal; // in seconds
+  public
+    function Accept(Request: TIdSipRequest;
+                    UsingSecureTransport: Boolean): TIdSipAction; override;
+    function AcceptsMethods: String; override;
+    function WillAccept(Request: TIdSipRequest): Boolean; override;
+
+    property BindingDB:         TIdSipAbstractBindingDatabase read fBindingDB write fBindingDB;
+    property MinimumExpiryTime: Cardinal                      read fMinimumExpiryTime write fMinimumExpiryTime;
+  end;
+
+  TIdSipOutboundRegistrationQuery = class;
+  TIdSipOutboundRegister = class;
+  TIdSipOutboundUnregister = class;
+
+  // I implement that functionality necessary for a User Agent to issue REGISTER
+  // messages, that is, to register with a registrar.
+  TIdSipOutboundRegisterModule = class(TIdSipMessageModule)
+  private
+    fAutoReRegister: Boolean;
+    fHasRegistrar:   Boolean;
+    fRegistrar:      TIdSipUri;
+    KnownRegistrars: TIdSipRegistrations;
+
+    procedure SetRegistrar(Value: TIdSipUri);
+  public
+    constructor Create(UA: TIdSipAbstractUserAgent); override;
+    destructor  Destroy; override;
+
+    function  Accept(Request: TIdSipRequest;
+                     UsingSecureTransport: Boolean): TIdSipAction; override;
+    function  AcceptsMethods: String; override;
+    procedure CleanUp; override;
+    function  CreateRegister(Registrar: TIdSipToHeader): TIdSipRequest;
+    function  CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistrationQuery;
+    procedure OnReregister(Event: TObject);
+    function  RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegister;
+    function  RegistrationCount: Integer;
+    function  UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundUnregister;
+    function  WillAccept(Request: TIdSipRequest): Boolean; override;
+
+    property AutoReRegister: Boolean   read fAutoReRegister write fAutoReRegister;
+    property HasRegistrar:   Boolean   read fHasRegistrar write fHasRegistrar;
+    property Registrar:      TIdSipUri read fRegistrar write SetRegistrar;
+  end;
+
+  TIdSipRegistration = class(TIdSipAction)
+  protected
+    OutModule: TIdSipOutboundRegisterModule;
+
+    function CreateNewAttempt: TIdSipRequest; override;
+    procedure Initialise(UA: TIdSipAbstractUserAgent;
+                         Request: TIdSipRequest;
+                         UsingSecureTransport: Boolean); override;
+  public
+    class function Method: String; override;
+
+    function IsRegistration: Boolean; override;
+  end;
+
+  TIdSipInboundRegistration = class(TIdSipRegistration)
+  private
+    RegisterModule: TIdSipRegisterModule;
+
+    function  AcceptRequest(Request: TIdSipRequest): Boolean;
+    function  BindingDB: TIdSipAbstractBindingDatabase;
+    procedure RejectExpireTooBrief(Request: TIdSipRequest);
+    procedure RejectFailedRequest(Request: TIdSipRequest);
+    procedure RejectForbidden(Request: TIdSipRequest);
+    procedure RejectNotFound(Request: TIdSipRequest);
+    procedure RejectRequest(Request: TIdSipRequest;
+                            StatusCode: Cardinal);
+    procedure SendSimpleResponse(Request: TIdSipRequest;
+                                StatusCode: Cardinal);
+  protected
+    procedure Initialise(UA: TIdSipAbstractUserAgent;
+                         Request: TIdSipRequest;
+                         UsingSecureTransport: Boolean); override;
+  public
+    function IsInbound: Boolean; override;
+    procedure ReceiveRequest(Register: TIdSipRequest); override;
+  end;
+
+  // I piggyback on a transaction in a blocking I/O fashion to provide a UAC
+  // with a way to register with a registrar. I take care of things like
+  // doing stuff with error responses, asking for authentication, etc.
+  //
+  // It makes no sense to access me once my Transaction has terminated. In
+  // other words once you've received notification of my success or failure,
+  // erase your references to me.
+  TIdSipOutboundRegistration = class(TIdSipRegistration)
+  private
+    fBindings:  TIdSipContacts;
+    fRegistrar: TIdSipUri;
+
+    procedure ReissueRequestWithLongerExpiry(Registrar: TIdSipUri;
+                                             MinimumExpiry: Cardinal);
+    procedure RetryWithoutExtensions(Registrar: TIdSipUri;
+                                     Response: TIdSipResponse);
+    procedure SetBindings(Value: TIdSipContacts);
+    procedure SetRegistrar(Value: TIdSipUri);
+  protected
+    procedure ActionSucceeded(Response: TIdSipResponse); override;
+    function  CreateRegister(Registrar: TIdSipUri;
+                             Bindings: TIdSipContacts): TIdSipRequest; virtual;
+    procedure Initialise(UA: TIdSipAbstractUserAgent;
+                         Request: TIdSipRequest;
+                         UsingSecureTransport: Boolean); override;
+    procedure NotifyOfFailure(Response: TIdSipResponse); override;
+    procedure NotifyOfSuccess(Response: TIdSipResponse); virtual;
+    function  ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionStatus; override;
+    function  ReceiveRedirectionResponse(Response: TIdSipResponse;
+                                         UsingSecureTransport: Boolean): TIdSipActionStatus; override;
+    procedure RegisterWith(Registrar: TIdSipUri;
+                           Bindings: TIdSipContacts); overload;
+    procedure RegisterWith(Registrar: TIdSipUri;
+                           Contact: TIdSipContactHeader); overload;
+    procedure SendRequest(Request: TIdSipRequest;
+                          TryAgain: Boolean = true); overload; override;
+    procedure Unregister(Registrar: TIdSipUri);
+  public
+    destructor Destroy; override;
+
+    procedure AddListener(const Listener: IIdSipRegistrationListener);
+    function  ReregisterTime(Expires: Cardinal): Cardinal;
+    procedure RemoveListener(const Listener: IIdSipRegistrationListener);
+
+    property Bindings:  TIdSipContacts read fBindings write SetBindings;
+    property Registrar: TIdSipUri read fRegistrar write SetRegistrar;
+  end;
+
+  TIdSipOutboundRegistrationQuery = class(TIdSipOutboundRegistration)
+  public
+    procedure Send; override;
+  end;
+
+  TIdSipOutboundRegister = class(TIdSipOutboundRegistration)
+  public
+    procedure Send; override;
+  end;
+
+  TIdSipOutboundUnRegister = class(TIdSipOutboundRegistration)
+  private
+    fIsWildCard: Boolean;
+  protected
+    function  CreateRegister(Registrar: TIdSipUri;
+                             Bindings: TIdSipContacts): TIdSipRequest; override;
+    procedure Initialise(UA: TIdSipAbstractUserAgent;
+                         Request: TIdSipRequest;
+                         UsingSecureTransport: Boolean); override;
+  public
+    procedure Send; override;
+
+    property IsWildCard: Boolean   read fIsWildCard write fIsWildCard;
+  end;
+
+  TIdSipRegistrationMethod = class(TIdNotification)
+  private
+    fCurrentBindings: TIdSipContacts;
+    fRegistration:    TIdSipOutboundRegistration;
+  public
+    property CurrentBindings: TIdSipContacts             read fCurrentBindings write fCurrentBindings;
+    property Registration:    TIdSipOutboundRegistration read fRegistration write fRegistration;
+  end;
+
+  TIdSipRegistrationFailedMethod = class(TIdSipRegistrationMethod)
+  private
+    fResponse: TIdSipResponse;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Response: TIdSipResponse read fResponse write fResponse;
+  end;
+
+  TIdSipRegistrationSucceededMethod = class(TIdSipRegistrationMethod)
+  public
+    procedure Run(const Subject: IInterface); override;
+  end;
+
   EIdSipRegistrarNotFound = class(EIdException)
   public
     constructor Create(const Msg: string); reintroduce;
@@ -137,7 +361,7 @@ type
 implementation
 
 uses
-  IdSipConsts, SysUtils;
+  IdSipConsts, Math, SysUtils;
 
 const
   ItemNotFoundIndex = -1;
@@ -438,6 +662,840 @@ begin
     else
       Result := Self.DefaultExpiryTime;
   end;
+end;
+
+//******************************************************************************
+//* TIdSipRegistrar                                                            *
+//******************************************************************************
+//* TIdSipRegistrar Public methods *********************************************
+
+constructor TIdSipRegistrar.Create;
+begin
+  inherited Create;
+
+  Self.RegisterModule := Self.AddModule(TIdSipRegisterModule) as TIdSipRegisterModule;
+end;
+
+function TIdSipRegistrar.RegistrationCount: Integer;
+begin
+  Result := Self.CountOf(MethodRegister);
+end;
+
+//* TIdSipRegistrar Private methods ********************************************
+
+function TIdSipRegistrar.GetBindingDB: TIdSipAbstractBindingDatabase;
+begin
+  Result := Self.RegisterModule.BindingDB;
+end;
+
+function TIdSipRegistrar.GetDefaultRegistrationExpiryTime: Cardinal;
+begin
+  Result := Self.BindingDB.DefaultExpiryTime;
+end;
+
+function TIdSipRegistrar.GetMinimumExpiryTime: Cardinal;
+begin
+  Result := Self.RegisterModule.MinimumExpiryTime;
+end;
+
+procedure TIdSipRegistrar.SetBindingDB(Value: TIdSipAbstractBindingDatabase);
+begin
+  Self.RegisterModule.BindingDB := Value;
+end;
+
+procedure TIdSipRegistrar.SetDefaultRegistrationExpiryTime(Value: Cardinal);
+begin
+  Self.BindingDB.DefaultExpiryTime := Value;
+end;
+
+procedure TIdSipRegistrar.SetMinimumExpiryTime(Value: Cardinal);
+begin
+  Self.RegisterModule.MinimumExpiryTime := Value;
+end;
+
+//******************************************************************************
+//* TIdSipRegisterModule                                                       *
+//******************************************************************************
+//* TIdSipRegisterModule Public methods ****************************************
+
+function TIdSipRegisterModule.Accept(Request: TIdSipRequest;
+                                     UsingSecureTransport: Boolean): TIdSipAction;
+begin
+  Result := TIdSipInboundRegistration.CreateInbound(Self.UserAgent,
+                                                    Request,
+                                                    UsingSecureTransport);
+end;
+
+function TIdSipRegisterModule.AcceptsMethods: String;
+begin
+  Result := MethodRegister;
+end;
+
+function TIdSipRegisterModule.WillAccept(Request: TIdSipRequest): Boolean;
+begin
+  Result := Request.IsRegister;
+end;
+
+//******************************************************************************
+//* TIdSipOutboundRegisterModule                                               *
+//******************************************************************************
+//* TIdSipOutboundRegisterModule Public methods ********************************
+
+constructor TIdSipOutboundRegisterModule.Create(UA: TIdSipAbstractUserAgent);
+begin
+  inherited Create(UA);
+
+  Self.KnownRegistrars := TIdSipRegistrations.Create;
+  Self.fRegistrar      := TIdSipUri.Create('');
+
+  Self.AutoReRegister := true;
+  Self.HasRegistrar   := false;
+end;
+
+destructor TIdSipOutboundRegisterModule.Destroy;
+begin
+  Self.Registrar.Free;
+  Self.KnownRegistrars.Free;
+
+  inherited Destroy;
+end;
+
+function TIdSipOutboundRegisterModule.Accept(Request: TIdSipRequest;
+                                             UsingSecureTransport: Boolean): TIdSipAction;
+begin
+  // As a purely UAC module, don't accept ANY requests.
+  Result := nil;
+end;
+
+function TIdSipOutboundRegisterModule.AcceptsMethods: String;
+begin
+  // As a purely UAC module, don't offer to accept ANY requests.
+  Result := '';
+end;
+
+procedure TIdSipOutboundRegisterModule.CleanUp;
+begin
+  if Self.HasRegistrar then
+    Self.UnregisterFrom(Self.Registrar).Send;
+end;
+
+function TIdSipOutboundRegisterModule.CreateRegister(Registrar: TIdSipToHeader): TIdSipRequest;
+begin
+  Result := Self.UserAgent.CreateRequest(MethodRegister, Registrar);
+  try
+    Self.KnownRegistrars.AddKnownRegistrar(Registrar.Address,
+                                           Result.CallID,
+                                           Result.CSeq.SequenceNo);
+
+    Result.RequestUri.EraseUserInfo;
+    Result.CSeq.SequenceNo := Self.KnownRegistrars.NextSequenceNoFor(Registrar.Address);
+
+    Result.CallID := Self.KnownRegistrars.CallIDFor(Registrar.Address);
+
+    Result.ToHeader.Assign(Self.UserAgent.Contact);
+    Result.From.Assign(Self.UserAgent.Contact);
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
+function TIdSipOutboundRegisterModule.CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistrationQuery;
+begin
+  Result := Self.UserAgent.AddOutboundAction(TIdSipOutboundRegistrationQuery) as TIdSipOutboundRegistrationQuery;
+end;
+
+procedure TIdSipOutboundRegisterModule.OnReregister(Event: TObject);
+var
+  Request: TIdSipRequest;
+begin
+  Request := (Event as TIdSipMessageNotifyEventWait).Message as TIdSipRequest;
+  Self.RegisterWith(Request.RequestUri).Send;
+end;
+
+function TIdSipOutboundRegisterModule.RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegister;
+begin
+  Result := Self.UserAgent.AddOutboundAction(TIdSipOutboundRegister) as TIdSipOutboundRegister;
+  Result.Bindings.Add(Self.UserAgent.Contact);
+  Result.Registrar := Registrar;
+end;
+
+function TIdSipOutboundRegisterModule.RegistrationCount: Integer;
+begin
+  Result := Self.UserAgent.CountOf(MethodRegister);
+end;
+
+function TIdSipOutboundRegisterModule.UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundUnregister;
+begin
+  Result := Self.UserAgent.AddOutboundAction(TIdSipOutboundUnregister) as TIdSipOutboundUnregister;
+  Result.Bindings.Add(Self.UserAgent.Contact);
+  Result.Registrar := Registrar;
+end;
+
+function TIdSipOutboundRegisterModule.WillAccept(Request: TIdSipRequest): Boolean;
+begin
+  // As a purely UAC module, don't accept ANY requests.
+  Result := false;
+end;
+
+//* TIdSipOutboundRegisterModule Private methods *******************************
+
+procedure TIdSipOutboundRegisterModule.SetRegistrar(Value: TIdSipUri);
+begin
+  Self.Registrar.Uri := Value.Uri;
+end;
+
+//******************************************************************************
+//* TIdSipRegistration                                                         *
+//******************************************************************************
+//* TIdSipRegistration Public methods ******************************************
+
+class function TIdSipRegistration.Method: String;
+begin
+  Result := MethodRegister;
+end;
+
+function TIdSipRegistration.IsRegistration: Boolean;
+begin
+  Result := true;
+end;
+
+//* TIdSipRegistration Protected methods ***************************************
+
+function TIdSipRegistration.CreateNewAttempt: TIdSipRequest;
+var
+  TempTo: TIdSipToHeader;
+begin
+  TempTo := TIdSipToHeader.Create;
+  try
+    TempTo.Address := Self.InitialRequest.RequestUri;
+
+    Result := Self.OutModule.CreateRegister(TempTo);
+  finally
+    TempTo.Free;
+  end;
+end;
+
+procedure TIdSipRegistration.Initialise(UA: TIdSipAbstractUserAgent;
+                                        Request: TIdSipRequest;
+                                        UsingSecureTransport: Boolean);
+begin
+  inherited Initialise(UA, Request, UsingSecureTransport);
+
+  Self.OutModule := UA.ModuleFor(TIdSipOutboundRegisterModule) as TIdSipOutboundRegisterModule;
+end;
+
+//******************************************************************************
+//* TIdSipInboundRegistration                                                  *
+//******************************************************************************
+//* TIdSipInboundRegistration Public methods ***********************************
+
+function TIdSipInboundRegistration.IsInbound: Boolean;
+begin
+  Result := true;
+end;
+
+procedure TIdSipInboundRegistration.ReceiveRequest(Register: TIdSipRequest);
+var
+  Bindings: TIdSipContacts;
+  Date:     TIdSipDateHeader;
+  Response: TIdSipResponse;
+begin
+  Assert(Register.IsRegister, 'TIdSipAction.ReceiveRegister must only receive REGISTERs');
+
+  if not Self.AcceptRequest(Register) then Exit;
+
+  if (Register.ContactCount = 1)
+    and Register.FirstContact.IsWildCard
+    and (Register.QuickestExpiry = 0) then begin
+
+    if not Self.BindingDB.RemoveAllBindings(Register) then
+      Self.RejectFailedRequest(Register)
+    else
+      Self.SendSimpleResponse(Register, SIPOK);
+    Exit;
+  end;
+
+  if not Self.BindingDB.AddBindings(Register) then begin
+    Self.RejectFailedRequest(Register);
+    Exit;
+  end;
+
+  Bindings := TIdSipContacts.Create;
+  try
+    if Self.BindingDB.BindingsFor(Register,
+                                  Bindings) then begin
+      Response := Self.UA.CreateResponse(Register, SIPOK);
+      try
+        Response.AddHeaders(Bindings);
+
+        Date := TIdSipDateHeader.Create;
+        try
+          Date.Time.SetFromTDateTime(Now);
+          Response.AddHeader(Date);
+        finally
+          Date.Free;
+        end;
+
+        Self.SendResponse(Response);
+      finally
+        Response.Free;
+      end;
+    end
+    else begin
+      Self.RejectFailedRequest(Register);
+    end;
+  finally
+    Bindings.Free;
+  end;
+
+  Self.Terminate;
+end;
+
+//* TIdSipInboundRegistration Protected methods ********************************
+
+procedure TIdSipInboundRegistration.Initialise(UA: TIdSipAbstractUserAgent;
+                                               Request: TIdSipRequest;
+                                               UsingSecureTransport: Boolean);
+begin
+  inherited Initialise(UA, Request, UsingSecureTransport);
+
+  Self.InitialRequest.Assign(Request);
+  Self.RegisterModule := Self.UA.ModuleFor(MethodRegister) as TIdSipRegisterModule;
+
+  Assert(Assigned(Self.RegisterModule),
+         'The Transaction-User layer cannot process REGISTER methods without adding the Registration module to it');
+end;
+
+//* TIdSipInboundRegistration Private methods **********************************
+
+function TIdSipInboundRegistration.AcceptRequest(Request: TIdSipRequest): Boolean;
+begin
+  // cf RFC 3261 section 10.3
+  // Steps 1, 2 & 3 - covered by Self.UA
+  Result := true;
+
+  // Step 4
+  if not Self.BindingDB.IsAuthorized(Request.From, Request.RequestUri) then begin
+    Self.RejectForbidden(Request);
+    Result := false;
+    Exit;
+  end;
+
+  // Step 5
+  if not Self.BindingDB.IsValid(Request) then begin
+    Self.RejectNotFound(Request);
+    Result := false;
+    Exit;
+  end;
+
+  // Step 6 (or part thereof)
+  if Request.HasHeader(ContactHeaderFull) then begin
+    if Request.FirstContact.IsWildCard then begin
+      if (Request.ContactCount > 1) then begin
+        Self.RejectRequest(Request, SIPBadRequest);
+        Result := false;
+        Exit;
+      end;
+
+      if Request.FirstContact.WillExpire
+        and (Request.FirstContact.Expires = 0) then
+          Result := true
+      else begin
+        Self.RejectRequest(Request, SIPBadRequest);
+        Result := false;
+        Exit;
+      end;
+    end
+    else if Request.HasExpiry and (Request.QuickestExpiry < Self.RegisterModule.MinimumExpiryTime) then begin
+      Self.RejectExpireTooBrief(Request);
+      Result := false;
+    end;
+  end;
+
+  // Steps 7 & 8 in ReceiveRequest
+end;
+
+function TIdSipInboundRegistration.BindingDB: TIdSipAbstractBindingDatabase;
+begin
+  Result := Self.RegisterModule.BindingDB;
+end;
+
+procedure TIdSipInboundRegistration.RejectExpireTooBrief(Request: TIdSipRequest);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.UA.CreateResponse(Request,
+                                     SIPIntervalTooBrief);
+  try
+    Response.AddHeader(MinExpiresHeader).Value := IntToStr(Self.RegisterModule.MinimumExpiryTime);
+    Self.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TIdSipInboundRegistration.RejectFailedRequest(Request: TIdSipRequest);
+begin
+  Self.RejectRequest(Request, SIPInternalServerError);
+end;
+
+procedure TIdSipInboundRegistration.RejectForbidden(Request: TIdSipRequest);
+begin
+  Self.RejectRequest(Request, SIPForbidden);
+end;
+
+procedure TIdSipInboundRegistration.RejectNotFound(Request: TIdSipRequest);
+begin
+  Self.RejectRequest(Request, SIPNotFound);
+end;
+
+procedure TIdSipInboundRegistration.RejectRequest(Request: TIdSipRequest;
+                                                  StatusCode: Cardinal);
+begin
+  Self.SendSimpleResponse(Request, StatusCode);
+end;
+
+procedure TIdSipInboundRegistration.SendSimpleResponse(Request: TIdSipRequest;
+                                                       StatusCode: Cardinal);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.UA.CreateResponse(Request,
+                                     StatusCode);
+  try
+    Self.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TIdSipOutboundRegistration                                                 *
+//******************************************************************************
+//* TIdSipOutboundRegistration Public methods **********************************
+
+destructor TIdSipOutboundRegistration.Destroy;
+begin
+  Self.fRegistrar.Free;
+  Self.fBindings.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipOutboundRegistration.AddListener(const Listener: IIdSipRegistrationListener);
+begin
+  Self.Listeners.AddListener(Listener);
+end;
+
+function TIdSipOutboundRegistration.ReregisterTime(Expires: Cardinal): Cardinal;
+begin
+  // Expires magnitude:                  Result
+  // Expires >= 20 minutes               Expires - 5 minutes
+  // 1 minute <= Expires < 20 minutes    Expires - 1 minute
+  // Expires < 1 minute                  0.8 * Expires
+
+  // Postcondition: Result > 0
+
+  if (Expires <= 1) then
+    Result := 1
+  else if (Expires < OneMinute) then
+    Result := 4*(Expires div 5)
+  else if (Expires < TwentyMinutes) then
+    Result := Expires - OneMinute
+  else
+    Result := Expires - FiveMinutes;
+end;
+
+procedure TIdSipOutboundRegistration.RemoveListener(const Listener: IIdSipRegistrationListener);
+begin
+  Self.Listeners.RemoveListener(Listener);
+end;
+
+//* TIdSipOutboundRegistration Protected methods *******************************
+
+procedure TIdSipOutboundRegistration.ActionSucceeded(Response: TIdSipResponse);
+begin
+  Self.NotifyOfSuccess(Response);
+end;
+
+function TIdSipOutboundRegistration.CreateRegister(Registrar: TIdSipUri;
+                                                   Bindings: TIdSipContacts): TIdSipRequest;
+var
+  ToHeader: TIdSipToHeader;
+begin
+  ToHeader := TIdSipToHeader.Create;
+  try
+    ToHeader.Address := Registrar;
+
+    Result := Self.OutModule.CreateRegister(ToHeader);
+
+    // Bindings explicitly carries all Contact information. Thus we must remove
+    // any Contact information already in Result.
+    Result.Headers.RemoveAll(ContactHeaderFull);
+
+    Result.AddHeaders(Bindings);
+  finally
+    ToHeader.Free;
+  end;
+end;
+
+procedure TIdSipOutboundRegistration.Initialise(UA: TIdSipAbstractUserAgent;
+                                                Request: TIdSipRequest;
+                                                UsingSecureTransport: Boolean);
+begin
+  inherited Initialise(UA, Request, UsingSecureTransport);
+
+  Self.fBindings := TIdSipContacts.Create;
+  Self.fRegistrar := TIdSipUri.Create('');
+end;
+
+procedure TIdSipOutboundRegistration.NotifyOfFailure(Response: TIdSipResponse);
+var
+  CurrentBindings: TIdSipContacts;
+  Notification:    TIdSipRegistrationFailedMethod;
+begin
+  CurrentBindings := TIdSipContacts.Create(Response.Headers);
+  try
+    Notification := TIdSipRegistrationFailedMethod.Create;
+    try
+      Notification.CurrentBindings := CurrentBindings;
+      Notification.Registration    := Self;
+      Notification.Response        := Response;
+
+      Self.Listeners.Notify(Notification);
+    finally
+      Notification.Free;
+    end;
+  finally
+    CurrentBindings.Free;
+  end;
+
+  Self.Terminate;
+end;
+
+procedure TIdSipOutboundRegistration.NotifyOfSuccess(Response: TIdSipResponse);
+var
+  CurrentBindings: TIdSipContacts;
+  ExpireTime:      Cardinal;
+  Notification:    TIdSipRegistrationSucceededMethod;
+  OurContact:      TIdSipContactHeader;
+begin
+  CurrentBindings := TIdSipContacts.Create(Response.Headers);
+  try
+    Notification := TIdSipRegistrationSucceededMethod.Create;
+    try
+      Notification.CurrentBindings := CurrentBindings;
+      Notification.Registration    := Self;
+
+      Self.Listeners.Notify(Notification);
+    finally
+      Notification.Free;
+    end;
+
+    if Self.OutModule.AutoReRegister then begin
+      // OurContact should always be assigned, because we've supposedly just
+      // REGISTERed it. If it's not assigned then the registrar didn't actually
+      // save our registration, and still had the cheek to return a 2xx rather
+      // than some sort've error response.
+      OurContact := CurrentBindings.ContactFor(Self.InitialRequest.FirstContact);
+      if Assigned(OurContact) then begin
+
+        // ExpireTime represents a seconds value.
+        // Using 0 as a sentinel value works because it means "now" - and
+        // registrars really shouldn't return a 0. Remember, if a UAC sends a
+        // REGISTER with an Expires of 0, the registrar will unregister those
+        // contacts!
+        ExpireTime := 0;
+        if OurContact.WillExpire then
+          ExpireTime := OurContact.Expires
+        else if Response.HasHeader(ExpiresHeader) then
+          ExpireTime := Response.FirstExpires.NumericValue;
+
+        if (ExpireTime > 0) then
+          Self.UA.ScheduleEvent(Self.OutModule.OnReregister,
+                                Self.ReregisterTime(ExpireTime)*1000, // in milliseconds
+                                Self.InitialRequest.Copy);
+      end;
+    end;
+  finally
+    CurrentBindings.Free;
+  end;
+
+  Self.Terminate;
+end;
+
+function TIdSipOutboundRegistration.ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionStatus;
+begin
+  Result := inherited ReceiveFailureResponse(Response);
+
+  if (Result = asFailure) then begin
+    case Response.StatusCode of
+      SIPIntervalTooBrief: begin
+        Self.ReissueRequestWithLongerExpiry(Self.InitialRequest.RequestUri,
+                                            Response.FirstMinExpires.NumericValue);
+        Result := asSuccess;
+      end;
+
+      SIPBadExtension: begin
+        if Self.InitialRequest.HasHeader(RequireHeader) then begin
+          Self.RetryWithoutExtensions(Self.InitialRequest.RequestUri,
+                                      Response);
+          Result := asSuccess;
+        end;
+      end;
+    else
+      Result := asFailure;
+    end;
+  end;
+end;
+
+function TIdSipOutboundRegistration.ReceiveRedirectionResponse(Response: TIdSipResponse;
+                                                               UsingSecureTransport: Boolean): TIdSipActionStatus;
+var
+  NewAttempt: TIdSipOutboundRegister;
+begin
+  Result := asFailure;
+
+  if Response.HasHeader(ContactHeaderFull) then begin
+    NewAttempt := Self.OutModule.RegisterWith(Response.FirstContact.Address);
+    NewAttempt.AddListeners(Self.Listeners);
+    NewAttempt.Send;
+
+    Result := asSuccess;
+  end;
+end;
+
+procedure TIdSipOutboundRegistration.RegisterWith(Registrar: TIdSipUri;
+                                                  Bindings: TIdSipContacts);
+var
+  Request: TIdSipRequest;
+begin
+  Request := Self.CreateRegister(Registrar, Bindings);
+  try
+    Self.SendRequest(Request);
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TIdSipOutboundRegistration.RegisterWith(Registrar: TIdSipUri;
+                                                  Contact: TIdSipContactHeader);
+var
+  Binding: TIdSipContacts;
+begin
+  Binding := TIdSipContacts.Create;
+  try
+    Binding.Add(Contact);
+
+    Self.RegisterWith(Registrar, Binding);
+  finally
+    Binding.Free;
+  end;
+end;
+
+procedure TIdSipOutboundRegistration.SendRequest(Request: TIdSipRequest;
+                                                 TryAgain: Boolean = true);
+begin
+  Self.InitialRequest.Assign(Request);
+
+  inherited SendRequest(Request, TryAgain);
+end;
+
+procedure TIdSipOutboundRegistration.Unregister(Registrar: TIdSipUri);
+var
+  RemovalBindings: TIdSipContacts;
+  Request:         TIdSipRequest;
+begin
+  RemovalBindings := TIdSipContacts.Create;
+  try
+    RemovalBindings.Add(ContactHeaderFull);
+    RemovalBindings.First;
+    RemovalBindings.CurrentContact.IsWildCard := true;
+
+    Request := Self.CreateRegister(Registrar, RemovalBindings);
+    try
+      Request.FirstExpires.NumericValue := 0;
+
+      Self.SendRequest(Request);
+    finally
+      Request.Free;
+    end;
+  finally
+    RemovalBindings.Free;
+  end;
+end;
+
+//* TIdSipOutboundRegistration Private methods *********************************
+
+procedure TIdSipOutboundRegistration.ReissueRequestWithLongerExpiry(Registrar: TIdSipUri;
+                                                                    MinimumExpiry: Cardinal);
+var
+  Bindings: TIdSipContacts;
+  OriginalBindings: TIdSipContacts;
+  Request: TIdSipRequest;
+begin
+  // We received a 423 Interval Too Brief from the registrar. Therefore we
+  // make a new REGISTER request with the registrar's minimum expiry.
+  OriginalBindings := TIdSipContacts.Create(Self.InitialRequest.Headers);
+  try
+    Request := Self.CreateRegister(Registrar, OriginalBindings);
+    try
+      Bindings := TIdSipContacts.Create(Request.Headers);
+      try
+        Bindings.First;
+        while Bindings.HasNext do begin
+          if Bindings.CurrentContact.WillExpire then
+            Bindings.CurrentContact.Expires := Max(Bindings.CurrentContact.Expires,
+                                                   MinimumExpiry);
+          Bindings.Next;
+        end;
+      finally
+        Bindings.Free;
+      end;
+
+      Request.FirstExpires.NumericValue := MinimumExpiry;
+      Self.SendRequest(Request);
+    finally
+      Request.Free;
+    end;
+  finally
+    OriginalBindings.Free;
+  end;
+end;
+
+procedure TIdSipOutboundRegistration.RetryWithoutExtensions(Registrar: TIdSipUri;
+                                                            Response: TIdSipResponse);
+var
+  Bindings: TIdSipContacts;
+  Request: TIdSipRequest;
+begin
+  Bindings := TIdSipContacts.Create;
+  try
+    Bindings.Add(Self.UA.Contact);
+
+    Request := Self.CreateRegister(Registrar, Bindings);
+    try
+      if not Response.HasHeader(UnsupportedHeader) then begin
+        // A 420 Bad Extension MUST have an unsupported header. In the
+        // interests of accepting liberally though, we just drop all
+        // Requires.
+        Request.RemoveAllHeadersNamed(RequireHeader);
+      end
+      else
+        Request.FirstRequire.RemoveValues(Response.FirstUnsupported);
+
+      Self.SendRequest(Request);
+    finally
+      Request.Free;
+    end;
+  finally
+    Bindings.Free;
+  end;
+end;
+
+procedure TIdSipOutboundRegistration.SetBindings(Value: TIdSipContacts);
+begin
+  Self.fBindings.Clear;
+  Self.fBindings.Add(Value);
+end;
+
+procedure TIdSipOutboundRegistration.SetRegistrar(Value: TIdSipUri);
+begin
+  Self.fRegistrar.Uri := Value.Uri;
+end;
+
+//******************************************************************************
+//* TIdSipOutboundRegistrationQuery                                            *
+//******************************************************************************
+//* TIdSipOutboundRegistrationQuery Public methods *****************************
+
+procedure TIdSipOutboundRegistrationQuery.Send;
+begin
+  inherited Send;
+
+  Self.Bindings.Clear;
+  Self.RegisterWith(Self.Registrar, Self.Bindings);
+end;
+
+//******************************************************************************
+//* TIdSipOutboundRegister                                                     *
+//******************************************************************************
+//* TIdSipOutboundRegister Public methods **************************************
+
+procedure TIdSipOutboundRegister.Send;
+begin
+  inherited Send;
+
+  Self.RegisterWith(Self.Registrar, Self.Bindings);
+end;
+
+//******************************************************************************
+//* TIdSipOutboundUnRegister                                                   *
+//******************************************************************************
+//* TIdSipOutboundUnRegister Public methods ************************************
+
+procedure TIdSipOutboundUnRegister.Send;
+begin
+  inherited Send;
+
+  if Self.IsWildCard then begin
+    Self.Bindings.Clear;
+    Self.Bindings.Add(ContactHeaderFull);
+    Self.Bindings.First;
+    Self.Bindings.CurrentContact.IsWildCard := true;
+  end else begin
+    Self.Bindings.First;
+    while Self.Bindings.HasNext do begin
+      Self.Bindings.CurrentContact.Expires := ExpireNow;
+      Self.Bindings.Next;
+    end;
+  end;
+
+  Self.RegisterWith(Self.Registrar, Self.Bindings);
+end;
+
+//* TIdSipOutboundUnRegister Protected methods *********************************
+
+function TIdSipOutboundUnRegister.CreateRegister(Registrar: TIdSipUri;
+                                                 Bindings: TIdSipContacts): TIdSipRequest;
+begin
+  Result := inherited CreateRegister(Registrar, Bindings);
+
+  Result.FirstExpires.NumericValue := ExpireNow;
+end;
+
+procedure TIdSipOutboundUnRegister.Initialise(UA: TIdSipAbstractUserAgent;
+                                              Request: TIdSipRequest;
+                                              UsingSecureTransport: Boolean);
+begin
+  inherited Initialise(UA, Request, UsingSecureTransport);
+
+  Self.IsWildCard := false;
+end;
+
+//******************************************************************************
+//* TIdSipRegistrationFailedMethod                                             *
+//******************************************************************************
+//* TIdSipRegistrationFailedMethod Public methods ******************************
+
+procedure TIdSipRegistrationFailedMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipRegistrationListener).OnFailure(Self.Registration,
+                                                    Self.CurrentBindings,
+                                                    Self.Response);
+end;
+
+//******************************************************************************
+//* TIdSipRegistrationSucceededMethod                                          *
+//******************************************************************************
+//* TIdSipRegistrationSucceededMethod Public methods ***************************
+
+procedure TIdSipRegistrationSucceededMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipRegistrationListener).OnSuccess(Self.Registration,
+                                                    Self.CurrentBindings);
 end;
 
 //******************************************************************************

@@ -13,8 +13,8 @@ interface
 
 uses
   Classes, Contnrs, IdInterfacedObject, IdNotification, IdSipCore, IdSipMessage,
-  IdSipTransaction, IdSipTransport, IdTimerQueue, SyncObjs, SysUtils, Messages,
-  Windows;
+  IdSipRegistration, IdSipTransaction, IdSipTransport, IdSipUserAgent, IdTimerQueue,
+  SyncObjs, SysUtils, Messages, Windows;
 
 type
   TIdSipHandle = Cardinal;
@@ -61,6 +61,7 @@ type
                                IIdSipActionListener,
                                IIdSipRegistrationListener,
                                IIdSipSessionListener,
+                               IIdSipTransactionUserListener,
                                IIdSipTransportSendingListener,
                                IIdSipUserAgentListener)
   private
@@ -104,7 +105,7 @@ type
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts;
                         Response: TIdSipResponse);
-    procedure OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
+    procedure OnInboundCall(UserAgent: TIdSipUserAgent;
                             Session: TIdSipInboundSession);
     procedure OnModifySession(Session: TIdSipSession;
                               const RemoteSessionDescription: String;
@@ -723,7 +724,7 @@ begin
   end;
 end;
 
-procedure TIdSipStackInterface.OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
+procedure TIdSipStackInterface.OnInboundCall(UserAgent: TIdSipUserAgent;
                                              Session: TIdSipInboundSession);
 var
   Data: TIdInboundCallData;
