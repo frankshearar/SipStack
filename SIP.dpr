@@ -98,10 +98,10 @@ uses
   TestIdSipTransport in 'test\TestIdSipTransport.pas',
   TestIdSipTransportLogger in 'test\TestIdSipTransportLogger.pas',
   TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas',
+  TestIdSipUserAgent in 'test\TestIdSipUserAgent.pas',  
   TestIdSipUri in 'test\TestIdSipUri.pas',
   TestIdTimerQueue in 'test\TestIdTimerQueue.pas',
-  TestIdUnicode in 'test\TestIdUnicode.pas',
-  TestIdSipUserAgent in 'test\TestIdSipUserAgent.pas';
+  TestIdUnicode in 'test\TestIdUnicode.pas';
 
 {,
   TestIdSipTlsServer in 'test\TestIdSipTlsServer.pas'}
