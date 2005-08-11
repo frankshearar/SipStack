@@ -322,6 +322,7 @@ type
                                              IIdSipSubscriptionListener)
   protected
     ArbExpiresValue:         Cardinal;
+    ArbRetryAfterValue:      Cardinal;
     ChallengeResponse:       TIdSipResponse;
     Password:                String;
     ReceivedNotify:          TIdSipRequest;
@@ -331,10 +332,13 @@ type
     SubscriptionEstablished: Boolean;
     SubscriptionExpired:     Boolean;
     SubscriptionNotified:    Boolean;
+    UnknownReason:           String;
 
     procedure CheckNoRetryScheduled(const MsgPrefix: String);
+    procedure CheckRetryScheduled(const MsgPrefix: String);
     procedure CheckTerminatedSubscription(Subscription: TIdSipSubscription;
                                           const MsgPrefix: String);
+    procedure CheckTerminatedSubscriptionWithResubscribe(const Reason: String);
     procedure CheckTerminatedSubscriptionWithNoResubscribe(const Reason: String);
     function  CreateAction: TIdSipAction; override;
     function  CreateChallengeResponse: TIdSipResponse;
@@ -370,26 +374,28 @@ type
     procedure TestReceive2xxWithNoExpires;
     procedure TestReceiveActiveNotify;
     procedure TestReceiveNotify;
+    procedure TestReceiveTerminatingNotifyDeactivated; virtual;
+    procedure TestReceiveTerminatingNotifyDeactivatedWithRetryAfter; virtual;
+    procedure TestReceiveTerminatingNotifyGiveUp;
+    procedure TestReceiveTerminatingNotifyGiveUpWithRetryAfter; virtual;
     procedure TestReceiveTerminatingNotifyNoResource;
     procedure TestReceiveTerminatingNotifyNoResourceWithRetryAfter;
+    procedure TestReceiveTerminatingNotifyTimeout;
+    procedure TestReceiveTerminatingNotifyTimeoutWithRetryAfter;
     procedure TestRefresh;
     procedure TestRefreshReceives481;
     procedure TestRefreshReceives4xx;
     procedure TestRemoveListener;
     procedure TestTerminate;
     procedure TestTerminateBeforeEstablished;
+    procedure TestReceiveTimeoutNotify; virtual;
     procedure TestUnsubscribe;
   end;
 
   TestTIdSipOutboundSubscription = class(TestTIdSipOutboundSubscriptionBase,
                                          IIdSipSubscriptionListener)
   private
-    ArbRetryAfterValue: Cardinal;
-    UnknownReason:      String;
-
     procedure CheckExpires(ExpectedRefreshTime: Cardinal);
-    procedure CheckRetryScheduled(const MsgPrefix: String);
-    procedure CheckTerminatedSubscriptionWithResubscribe(const Reason: String);
 {
     procedure ReceiveNotifyNoAuth(Subscribe: TIdSipRequest;
                                   Response: TIdSipResponse;
@@ -401,8 +407,6 @@ type
   protected
     procedure OnRenewedSubscription(UserAgent: TIdSipAbstractUserAgent;
                                     Subscription: TIdSipOutboundSubscription); override;
-  public
-    procedure SetUp; override;
   published
     procedure TestLongRunningSubscription;
     procedure TestReceive2xx;
@@ -410,21 +414,14 @@ type
 //    procedure TestReceiveNotifyNoAuthorization;
 //    procedure TestReceiveNotifyWrongAuthorization;
     procedure TestReceivePendingNotifyWithExpires;
-    procedure TestReceiveTerminatingNotifyDeactivated;
-    procedure TestReceiveTerminatingNotifyDeactivatedWithRetryAfter;
-    procedure TestReceiveTerminatingNotifyGiveUp;
-    procedure TestReceiveTerminatingNotifyGiveUpWithRetryAfter;
     procedure TestReceiveTerminatingNotifyProbation;
     procedure TestReceiveTerminatingNotifyProbationWithRetryAfter;
     procedure TestReceiveTerminatingNotifyRejected;
     procedure TestReceiveTerminatingNotifyRejectedWithRetryAfter;
-    procedure TestReceiveTerminatingNotifyTimeout;
-    procedure TestReceiveTerminatingNotifyTimeoutWithRetryAfter;
     procedure TestReceiveTerminatingNotifyWithNoReason;
     procedure TestReceiveTerminatingNotifyWithNoReasonAndRetryAfter;
     procedure TestReceiveTerminatingNotifyWithUnknownReason;
     procedure TestReceiveTerminatingNotifyWithUnknownReasonAndRetryAfter;
-    procedure TestReceiveTimeoutNotify;
     procedure TestRefreshUpdatesExpiryTime;
     procedure TestSetEventPackage;
     procedure TestSubscribe;
@@ -456,6 +453,10 @@ type
     function CreateReferral: TIdSipOutboundReferral;
   protected
     function CreateSubscription: TIdSipOutboundSubscription; override;
+  published
+    procedure TestReceiveTerminatingNotifyDeactivated; override;
+    procedure TestReceiveTerminatingNotifyGiveUpWithRetryAfter; override;
+    procedure TestReceiveTimeoutNotify; override;
   end;
 
   TestTIdSipSubscriptionExpires = class(TSubscribeTestCase)
@@ -2634,10 +2635,12 @@ begin
 
   Self.Subscription := Self.EstablishSubscription;
 
+  Self.ArbRetryAfterValue      := 42;
   Self.RenewSubscriptionFired  := false;
   Self.SubscriptionEstablished := false;
   Self.SubscriptionExpired     := false;
   Self.SubscriptionNotified    := false;
+  Self.UnknownReason           := 'unknown-reason';
 end;
 
 procedure TestTIdSipOutboundSubscriptionBase.TearDown;
@@ -2668,6 +2671,15 @@ begin
        + TIdSipSubscriptionRetryWait.ClassName + ' was scheduled');
 end;
 
+procedure TestTIdSipOutboundSubscriptionBase.CheckRetryScheduled(const MsgPrefix: String);
+begin
+  Self.DebugTimer.TriggerAllEventsOfType(TIdSipSubscriptionRetryWait);
+
+  Check(Self.RenewSubscriptionFired,
+        'OnRenewSubscription didn''t fire, so no '
+       + TIdSipSubscriptionRetryWait.ClassName + ' scheduled');
+end;
+
 procedure TestTIdSipOutboundSubscriptionBase.CheckTerminatedSubscription(Subscription: TIdSipSubscription;
                                                                          const MsgPrefix: String);
 begin
@@ -2680,6 +2692,15 @@ begin
               MsgPrefix + ': Wrong Expires value');
   Check(Subscription.Terminating,
         MsgPrefix + ': Not marked as terminating');
+end;
+
+procedure TestTIdSipOutboundSubscriptionBase.CheckTerminatedSubscriptionWithResubscribe(const Reason: String);
+begin
+  Check(Self.SubscriptionNotified,
+        Reason + ': Subscription didn''t notify listeners of received NOTIFY');
+
+  Check(Self.RenewSubscriptionFired,
+        Reason + ': Subscription didn''t notify of the new subscription');
 end;
 
 procedure TestTIdSipOutboundSubscriptionBase.CheckTerminatedSubscriptionWithNoResubscribe(const Reason: String);
@@ -2934,6 +2955,47 @@ begin
               'Unexpected response');
 end;
 
+procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyDeactivated;
+begin
+  Self.ReceiveNotify(Self.Subscription.InitialRequest,
+                     Self.Dispatcher.Transport.LastResponse,
+                     SubscriptionSubstateTerminated,
+                     EventReasonDeactivated);
+
+  Self.CheckTerminatedSubscriptionWithResubscribe(EventReasonDeactivated);
+end;
+
+procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyDeactivatedWithRetryAfter;
+begin
+  Self.ReceiveNotify(Self.Subscription.InitialRequest,
+                     Self.Dispatcher.Transport.LastResponse,
+                     SubscriptionSubstateTerminated,
+                     EventReasonDeactivated,
+                     Self.ArbRetryAfterValue);
+
+  Self.CheckNoRetryScheduled(EventReasonDeactivated);
+end;
+
+procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyGiveUp;
+begin
+  Self.ReceiveNotify(Self.Subscription.InitialRequest,
+                     Self.Dispatcher.Transport.LastResponse,
+                     SubscriptionSubstateTerminated,
+                     EventReasonGiveUp);
+
+  Self.CheckTerminatedSubscriptionWithNoResubscribe(EventReasonGiveUp);
+end;
+
+procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyGiveUpWithRetryAfter;
+begin
+  Self.ReceiveNotify(Self.Subscription.InitialRequest,
+                     Self.Dispatcher.Transport.LastResponse,
+                     SubscriptionSubstateTerminated,
+                     EventReasonGiveUp);
+
+  Self.CheckRetryScheduled(EventReasonGiveUp);
+end;
+
 procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyNoResource;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
@@ -2954,7 +3016,27 @@ begin
   Self.CheckNoRetryScheduled(EventReasonNoResource);
 end;
 
+procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyTimeout;
+begin
+  Self.ReceiveNotify(Self.Subscription.InitialRequest,
+                     Self.Dispatcher.Transport.LastResponse,
+                     SubscriptionSubstateTerminated,
+                     EventReasonTimeout);
 
+  Self.CheckTerminatedSubscriptionWithNoResubscribe(EventReasonTimeout);
+  Fail('Compare and contrast with TestReceiveTimeoutNotify: both tests pass, but both declare opposite behaviours!');
+end;
+
+procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyTimeoutWithRetryAfter;
+begin
+  Self.ReceiveNotify(Self.Subscription.InitialRequest,
+                     Self.Dispatcher.Transport.LastResponse,
+                     SubscriptionSubstateTerminated,
+                     EventReasonTimeout,
+                     Self.ArbRetryAfterValue);
+
+  Self.CheckNoRetryScheduled(EventReasonTimeout);
+end;
 
 procedure TestTIdSipOutboundSubscriptionBase.TestRefresh;
 begin
@@ -3057,6 +3139,16 @@ begin
   Self.CheckTerminatedSubscription(Sub, 'Terminate before established');
 end;
 
+procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTimeoutNotify;
+begin
+  Self.ReceiveNotify(Self.Subscription.InitialRequest,
+                     Self.Dispatcher.Transport.LastResponse,
+                     SubscriptionSubstateTerminated,
+                     EventReasonTimeout);
+
+  Self.CheckTerminatedSubscriptionWithResubscribe(EventReasonTimeout);
+end;
+
 procedure TestTIdSipOutboundSubscriptionBase.TestUnsubscribe;
 begin
   Self.MarkSentRequestCount;
@@ -3067,16 +3159,6 @@ end;
 //******************************************************************************
 //* TestTIdSipOutboundSubscription                                             *
 //******************************************************************************
-//* TestTIdSipOutboundSubscription Public methods ******************************
-
-procedure TestTIdSipOutboundSubscription.SetUp;
-begin
-  inherited SetUp;
-
-  Self.ArbRetryAfterValue := 42;
-  Self.UnknownReason      := 'unknown-reason';
-end;
-
 //* TestTIdSipOutboundSubscription Protected methods ***************************
 
 procedure TestTIdSipOutboundSubscription.OnRenewedSubscription(UserAgent: TIdSipAbstractUserAgent;
@@ -3107,24 +3189,6 @@ begin
   Check(not Self.Subscription.IsTerminated,
         'Subscription can''t be terminated, since we''ve not received a '
       + 'terminating NOTIFY');
-end;
-
-procedure TestTIdSipOutboundSubscription.CheckRetryScheduled(const MsgPrefix: String);
-begin
-  Self.DebugTimer.TriggerAllEventsOfType(TIdSipSubscriptionRetryWait);
-
-  Check(Self.RenewSubscriptionFired,
-        'OnRenewSubscription didn''t fire, so no '
-       + TIdSipSubscriptionRetryWait.ClassName + ' scheduled');
-end;
-
-procedure TestTIdSipOutboundSubscription.CheckTerminatedSubscriptionWithResubscribe(const Reason: String);
-begin
-  Check(Self.SubscriptionNotified,
-        Reason + ': Subscription didn''t notify listeners of received NOTIFY');
-
-  Check(Self.RenewSubscriptionFired,
-        Reason + ': Subscription didn''t notify of the new subscription');
 end;
 {
 procedure TestTIdSipOutboundSubscription.ReceiveNotifyNoAuth(Subscribe: TIdSipRequest;
@@ -3286,47 +3350,6 @@ begin
   Self.CheckExpires(Self.ArbExpiresValue);
 end;
 
-procedure TestTIdSipOutboundSubscription.TestReceiveTerminatingNotifyDeactivated;
-begin
-  Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
-                     SubscriptionSubstateTerminated,
-                     EventReasonDeactivated);
-
-  Self.CheckTerminatedSubscriptionWithResubscribe(EventReasonDeactivated);
-end;
-
-procedure TestTIdSipOutboundSubscription.TestReceiveTerminatingNotifyDeactivatedWithRetryAfter;
-begin
-  Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
-                     SubscriptionSubstateTerminated,
-                     EventReasonDeactivated,
-                     Self.ArbRetryAfterValue);
-
-  Self.CheckNoRetryScheduled(EventReasonDeactivated);
-end;
-
-procedure TestTIdSipOutboundSubscription.TestReceiveTerminatingNotifyGiveUp;
-begin
-  Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
-                     SubscriptionSubstateTerminated,
-                     EventReasonGiveUp);
-
-  Self.CheckTerminatedSubscriptionWithNoResubscribe(EventReasonGiveUp);
-end;
-
-procedure TestTIdSipOutboundSubscription.TestReceiveTerminatingNotifyGiveUpWithRetryAfter;
-begin
-  Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
-                     SubscriptionSubstateTerminated,
-                     EventReasonGiveUp);
-
-  Self.CheckRetryScheduled(EventReasonGiveUp);
-end;
-
 procedure TestTIdSipOutboundSubscription.TestReceiveTerminatingNotifyProbation;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
@@ -3368,27 +3391,6 @@ begin
   Self.CheckNoRetryScheduled(EventReasonRejected);
 end;
 
-procedure TestTIdSipOutboundSubscription.TestReceiveTerminatingNotifyTimeout;
-begin
-  Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
-                     SubscriptionSubstateTerminated,
-                     EventReasonTimeout);
-
-  Self.CheckTerminatedSubscriptionWithNoResubscribe(EventReasonTimeout);
-end;
-
-procedure TestTIdSipOutboundSubscription.TestReceiveTerminatingNotifyTimeoutWithRetryAfter;
-begin
-  Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
-                     SubscriptionSubstateTerminated,
-                     EventReasonTimeout,
-                     Self.ArbRetryAfterValue);
-
-  Self.CheckNoRetryScheduled(EventReasonTimeout);
-end;
-
 procedure TestTIdSipOutboundSubscription.TestReceiveTerminatingNotifyWithNoReason;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
@@ -3428,16 +3430,6 @@ begin
                      Self.ArbRetryAfterValue);
 
   Self.CheckRetryScheduled(Self.UnknownReason);
-end;
-
-procedure TestTIdSipOutboundSubscription.TestReceiveTimeoutNotify;
-begin
-  Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
-                     SubscriptionSubstateTerminated,
-                     EventReasonTimeout);
-
-  Self.CheckTerminatedSubscriptionWithResubscribe(EventReasonTimeout);
 end;
 
 procedure TestTIdSipOutboundSubscription.TestRefreshUpdatesExpiryTime;
@@ -3693,6 +3685,38 @@ end;
 //******************************************************************************
 //* TestTIdSipOutboundReferral                                                 *
 //******************************************************************************
+//* TestTIdSipOutboundReferral Public methods **********************************
+
+procedure TestTIdSipOutboundReferral.TestReceiveTerminatingNotifyDeactivated;
+begin
+  Self.ReceiveNotify(Self.Subscription.InitialRequest,
+                     Self.Dispatcher.Transport.LastResponse,
+                     SubscriptionSubstateTerminated,
+                     EventReasonDeactivated);
+
+  Self.CheckTerminatedSubscriptionWithNoResubscribe(EventReasonDeactivated);
+end;
+
+procedure TestTIdSipOutboundReferral.TestReceiveTerminatingNotifyGiveUpWithRetryAfter;
+begin
+  Self.ReceiveNotify(Self.Subscription.InitialRequest,
+                     Self.Dispatcher.Transport.LastResponse,
+                     SubscriptionSubstateTerminated,
+                     EventReasonGiveUp);
+
+  Self.CheckNoRetryScheduled(EventReasonGiveUp);
+end;
+
+procedure TestTIdSipOutboundReferral.TestReceiveTimeoutNotify;
+begin
+  Self.ReceiveNotify(Self.Subscription.InitialRequest,
+                     Self.Dispatcher.Transport.LastResponse,
+                     SubscriptionSubstateTerminated,
+                     EventReasonTimeout);
+
+  Self.CheckTerminatedSubscriptionWithNoResubscribe(EventReasonTimeout);
+end;
+
 //* TestTIdSipOutboundReferral Protected methods *******************************
 
 function TestTIdSipOutboundReferral.CreateSubscription: TIdSipOutboundSubscription;

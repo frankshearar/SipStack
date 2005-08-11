@@ -461,7 +461,6 @@ type
 //    procedure RejectUnauthorized(Notify: TIdSipRequest);
     procedure RescheduleRefresh(NewDuration: Cardinal);
     procedure SendResponseFor(Notify: TIdSipRequest);
-    procedure StartNewSubscription(Notify: TIdSipRequest);
   protected
     procedure ConfigureRequest(Sub: TIdSipOutboundSubscribe); virtual;
     function  CreateDialog(Response: TIdSipResponse): TIdSipDialog; override;
@@ -472,6 +471,7 @@ type
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
     procedure ReceiveNotify(Notify: TIdSipRequest); override;
     procedure SetEventPackage(const Value: String); override;
+    procedure StartNewSubscription(Notify: TIdSipRequest); virtual;
   public
     procedure AddListener(Listener: IIdSipSubscriptionListener);
     procedure Expire; override;
@@ -521,6 +521,7 @@ type
     procedure Initialise(UA: TIdSipAbstractUserAgent;
                          Request: TIdSipRequest;
                          UsingSecureTransport: Boolean); override;
+    procedure StartNewSubscription(Notify: TIdSipRequest); override;
   public
     class function Method: String; override;
 
@@ -2176,6 +2177,30 @@ begin
   Self.Duration := Self.Module.Package(Value).DefaultSubscriptionDuration;
 end;
 
+procedure TIdSipOutboundSubscription.StartNewSubscription(Notify: TIdSipRequest);
+var
+  RetryAfter: Cardinal;
+  State:      TIdSipSubscriptionStateHeader;
+  Wait:       TIdSipSubscriptionRetryWait;
+begin
+  State := Notify.FirstSubscriptionState;
+
+  // Subscription-State's retry-after is in seconds
+  RetryAfter := State.RetryAfter * 1000;
+
+  if (RetryAfter = 0) then
+    Self.Module.Resubscribe(Self.Target, Self.EventPackage)
+  else begin
+    if not (State.IsDeactivated or State.IsTimedOut) then begin
+      Wait := TIdSipSubscriptionRetryWait.Create;
+      Wait.EventPackage := Self.EventPackage;
+      Wait.Target       := Self.Target;
+      Wait.UserAgent    := Self.UA;
+      Self.UA.ScheduleEvent(RetryAfter, Wait);
+    end;
+  end;
+end;
+
 //* TIdSipOutboundSubscription Private methods *********************************
 
 function TIdSipOutboundSubscription.CreateRefresh(NewDuration: Cardinal): TIdSipOutboundRefreshSubscribe;
@@ -2318,30 +2343,6 @@ begin
     Self.SendResponse(Response);
   finally
     Response.Free;
-  end;
-end;
-
-procedure TIdSipOutboundSubscription.StartNewSubscription(Notify: TIdSipRequest);
-var
-  RetryAfter: Cardinal;
-  State:      TIdSipSubscriptionStateHeader;
-  Wait:       TIdSipSubscriptionRetryWait;
-begin
-  State := Notify.FirstSubscriptionState;
-
-  // Subscription-State's retry-after is in seconds
-  RetryAfter := State.RetryAfter * 1000;
-
-  if (RetryAfter = 0) then
-    Self.Module.Resubscribe(Self.Target, Self.EventPackage)
-  else begin
-    if not (State.IsDeactivated or State.IsTimedOut) then begin
-      Wait := TIdSipSubscriptionRetryWait.Create;
-      Wait.EventPackage := Self.EventPackage;
-      Wait.Target       := Self.Target;
-      Wait.UserAgent    := Self.UA;
-      Self.UA.ScheduleEvent(RetryAfter, Wait);
-    end;
   end;
 end;
 
@@ -2547,6 +2548,12 @@ begin
   inherited Initialise(UA, Request, UsingSecureTransport);
 
   Self.fReferredResource := TIdSipAddressHeader.Create;
+end;
+
+procedure TIdSipOutboundReferral.StartNewSubscription(Notify: TIdSipRequest);
+begin
+  // REFERs don't resubscribe: the subscription's terminated, so the REFER
+  // call flow's completed.
 end;
 
 //* TIdSipOutboundReferral Private methods *************************************
