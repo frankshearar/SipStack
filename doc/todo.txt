@@ -57,18 +57,11 @@ RFC 3265 still to do:
 
 RFC 3515 still to do:
 
-            2.4.2 Processing a REFER request. . . . . . . . . . . .  6
-            2.4.3 Accessing the Referred-to Resource. . . . . . . .  6
             2.4.4 Using SIP Events to Report the Results
                   of the Reference. . . . . . . . . . . . . . . . .  7
-            2.4.5 The Body of the NOTIFY. . . . . . . . . . . . . .  8
             2.4.6 Multiple REFER Requests in a Dialog . . . . . . .  9
-            2.4.7 Using the Subscription-State Header
-                  Field with Event Refer. . . . . . . . . . . . . .  9
        2.5  Behavior of SIP Registrars/Redirect Servers . . . . . .  9
        2.6  Behavior of SIP Proxies . . . . . . . . . . . . . . . . 10
-   3.  Package Details: Event refer . . . . . . . . . . . . . . . . 10
-       3.4  Subscription Duration . . . . . . . . . . . . . . . . . 10
    5.  Security Considerations  . . . . . . . . . . . . . . . . . . 16
        5.1  Constructing a Refer-To URI . . . . . . . . . . . . . . 16
        5.2  Authorization Considerations for REFER. . . . . . . . . 17
@@ -77,6 +70,30 @@ RFC 3515 still to do:
             5.3.2 Circumventing Confidentiality . . . . . . . . . . 19
             5.3.3 Limiting the Breach . . . . . . . . . . . . . . . 19
             5.3.4 Cut, Paste and Replay Considerations. . . . . . . 19
+
+2.4.2 Processing a REFER request
+
+   A UA accepting a well-formed REFER request SHOULD request approval
+   from the user to proceed (this request could be satisfied with an
+   interactive query or through accessing configured policy).  If
+   approval is granted, the UA MUST contact the resource identified by
+   the URI in the Refer-To header field value as discussed in Section
+   2.4.3.
+
+   If the approval sought above for a well-formed REFER request is
+   immediately denied, the UA MAY decline the request.
+
+[We already notify the UI of inbound subscriptions:
+OnSubscriptionRequest. The UI in turn accesses the referred resource
+in an appropriate manner.]
+
+2.4.7 Using the Subscription-State Header Field with Event Refer
+
+   In the case where a REFER was accepted with a 202, but approval to
+   follow the reference was subsequently denied, the reason and retry-
+   after elements of the Subscription-State header field can be used to
+   indicate if and when the REFER can be re-attempted (as described for
+   SUBSCRIBE in [2]).
 
 
 RFC 3891 still to do:
