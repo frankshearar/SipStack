@@ -302,6 +302,7 @@ const
   CM_CALL_REMOTE_MODIFY_REQUEST   = CM_BASE + 6;
   CM_CALL_OUTBOUND_MODIFY_SUCCESS = CM_BASE + 7;
   CM_CALL_PROGRESS                = CM_BASE + 8;
+  CM_AUTHENTICATION_CHALLENGE     = CM_BASE + 9;
 
   CM_DEBUG = CM_BASE + 10000;
 
@@ -807,7 +808,7 @@ var
 begin
   Data := TIdSessionProgressData.Create;
   try
-    Data.Banner                   := Progress.StatusText;
+    Data.Banner                   := TIdSipUri.Decode(Progress.StatusText);
     Data.Handle                   := Self.HandleFor(Session);
     Data.LocalSessionDescription  := Session.LocalSessionDescription;
     Data.LocalMimeType            := Session.LocalMimeType;
