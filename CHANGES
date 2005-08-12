@@ -1,7 +1,13 @@
 v0.5 ()
 * The SIP stack now supports subscriptions (RFC 3265), including the
   REFER message (RFC 3515). This means that the stack implements call
-  forwarding as per draft-ietf-sipping-cc-transfer-05.
+  forwarding as per draft-ietf-sipping-cc-transfer-05. Note that some
+  aspects of call transfer are purely UI issues (choosing blind versus
+  attended transfer, for instance). The stack leaves those sorts of
+  questions to the UI. (See RFC 3515 section 2.4.2 for a typical
+  UI-only issue.)
+* Major reshuffling of code in the Transaction-User layer: most of 
+  IdSipCore now sits in IdSipRegistration and IdSipUserAgent.
 
 v0.4.1 (2005/05/20)
 * Added those files necessary to patch Indy to support the stack.
