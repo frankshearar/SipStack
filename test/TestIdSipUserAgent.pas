@@ -5402,7 +5402,7 @@ begin
   Session := Self.CreateAndEstablishSession;
   Self.ReceiveRemoteReInvite(Session);
 
-  Check(Self.OnModifySessionFired
+  Check(Self.OnModifySessionFired,
         Session.ClassName + ': OnModifySession didn''t fire');
 
   Session.AcceptModify('', '');
