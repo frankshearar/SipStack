@@ -792,8 +792,8 @@ begin
 
     Result.CallID := Self.KnownRegistrars.CallIDFor(Registrar.Address);
 
-    Result.ToHeader.Assign(Self.UserAgent.Contact);
-    Result.From.Assign(Self.UserAgent.Contact);
+    Result.From.Value     := Self.UserAgent.From.AsAddressOfRecord;
+    Result.ToHeader.Value := Self.UserAgent.From.AsAddressOfRecord;
   except
     FreeAndNil(Result);
 
