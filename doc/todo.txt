@@ -1,3 +1,11 @@
+* Fold TestBugs in TestIdSipRegistration into the (apparently
+  as-yet-uncommitted) TestIdSipRegistration on wsfrank.
+* TIdSipRequest.IsMalformed knows about module-specific stuff. I'm
+  not sure how to remove that knowledge though...
+* PSTN + call transfer.
+* Henrik Gessen's bug report indicates that a 200 OK to the REGISTER
+  doesn't match the outbound Register!
+
 RFC 3265 still to do:
 
    3.3.     General................................................ 18
