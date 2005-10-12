@@ -40,9 +40,11 @@ type
   IIdSipTransportSendingListener = interface
     ['{2E451F5D-5053-4A2C-BE5F-BB68E5CB3A6D}']
     procedure OnSendRequest(Request: TIdSipRequest;
-                            Sender: TIdSipTransport);
+                            Sender: TIdSipTransport;
+                            Destination: TIdSipLocation);
     procedure OnSendResponse(Response: TIdSipResponse;
-                             Sender: TIdSipTransport);
+                             Sender: TIdSipTransport;
+                             Destination: TIdSipLocation);
   end;
 
   // I provide functionality common to all transports.
@@ -75,8 +77,10 @@ type
                                                   const Reason: String);
     procedure NotifyTransportListenersOfRejectedMessage(const Msg: String;
                                                         const Reason: String);
-    procedure NotifyTransportSendingListeners(Request: TIdSipRequest); overload;
-    procedure NotifyTransportSendingListeners(Response: TIdSipResponse); overload;
+    procedure NotifyTransportSendingListeners(Request: TIdSipRequest;
+                                              Dest: TIdSipLocation); overload;
+    procedure NotifyTransportSendingListeners(Response: TIdSipResponse;
+                                              Dest: TIdSipLocation); overload;
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnMalformedMessage(const Msg: String;
@@ -445,28 +449,33 @@ type
     property Reason: String read fReason write fReason;
   end;
 
-  // Look at IIdSipTransportSendingListener's declaration.
-  TIdSipTransportSendingRequestMethod = class(TIdNotification)
+  TIdSipTransportSendingMethod = class(TIdNotification)
   private
-    fSender:  TIdSipTransport;
+    fDestination: TIdSipLocation;
+    fSender:      TIdSipTransport;
+  public
+    property Destination: TIdSipLocation  read fDestination write fDestination;
+    property Sender:      TIdSipTransport read fSender write fSender;
+  end;
+
+  // Look at IIdSipTransportSendingListener's declaration.
+  TIdSipTransportSendingRequestMethod = class(TIdSipTransportSendingMethod)
+  private
     fRequest: TIdSipRequest;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Sender:  TIdSipTransport read fSender write fSender;
-    property Request: TIdSipRequest   read fRequest write fRequest;
+    property Request: TIdSipRequest read fRequest write fRequest;
   end;
 
   // Look at IIdSipTransportSendingListener's declaration.
-  TIdSipTransportSendingResponseMethod = class(TIdNotification)
+  TIdSipTransportSendingResponseMethod = class(TIdSipTransportSendingMethod)
   private
-    fSender: TIdSipTransport;
     fResponse: TIdSipResponse;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Sender:   TIdSipTransport read fSender write fSender;
-    property Response: TIdSipResponse  read fResponse write fResponse;
+    property Response: TIdSipResponse read fResponse write fResponse;
   end;
 
   EIdSipTransport = class(Exception)
@@ -701,14 +710,16 @@ begin
   end;
 end;
 
-procedure TIdSipTransport.NotifyTransportSendingListeners(Request: TIdSipRequest);
+procedure TIdSipTransport.NotifyTransportSendingListeners(Request: TIdSipRequest;
+                                                          Dest: TIdSipLocation);
 var
   Notification: TIdSipTransportSendingRequestMethod;
 begin
   Notification := TIdSipTransportSendingRequestMethod.Create;
   try
-    Notification.Sender  := Self;
-    Notification.Request := Request;
+    Notification.Destination := Dest;
+    Notification.Sender      := Self;
+    Notification.Request     := Request;
 
     Self.TransportSendingListeners.Notify(Notification);
   finally
@@ -716,14 +727,16 @@ begin
   end;
 end;
 
-procedure TIdSipTransport.NotifyTransportSendingListeners(Response: TIdSipResponse);
+procedure TIdSipTransport.NotifyTransportSendingListeners(Response: TIdSipResponse;
+                                                          Dest: TIdSipLocation);
 var
   Notification: TIdSipTransportSendingResponseMethod;
 begin
   Notification := TIdSipTransportSendingResponseMethod.Create;
   try
-    Notification.Sender   := Self;
-    Notification.Response := Response;
+    Notification.Destination := Dest;
+    Notification.Sender      := Self;
+    Notification.Response    := Response;
 
     Self.TransportSendingListeners.Notify(Notification);
   finally
@@ -811,13 +824,13 @@ procedure TIdSipTransport.SendRequest(R: TIdSipRequest;
                                       Dest: TIdSipLocation);
 begin
   Self.RewriteOwnVia(R);
-  Self.NotifyTransportSendingListeners(R);
+  Self.NotifyTransportSendingListeners(R, Dest);
 end;
 
 procedure TIdSipTransport.SendResponse(R: TIdSipResponse;
                                        Dest: TIdSipLocation);
 begin
-  Self.NotifyTransportSendingListeners(R);
+  Self.NotifyTransportSendingListeners(R, Dest);
 end;
 
 function TIdSipTransport.SentByIsRecognised(Via: TIdSipViaHeader): Boolean;
@@ -930,7 +943,7 @@ begin
   if (Index <> ItemNotFoundIndex) then
     Result := Self.TransportAt(Index)
   else
-    raise EUnknownTransport.Create('TIdSipTransport.TransportFor: ' + Transport);
+    raise EUnknownTransport.Create('TIdSipTransportRegistry.TransportFor: ' + Transport);
 end;
 
 class procedure TIdSipTransportRegistry.UnregisterTransport(const Name: String);
@@ -1802,7 +1815,8 @@ end;
 procedure TIdSipTransportSendingRequestMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipTransportSendingListener).OnSendRequest(Self.Request,
-                                                            Self.Sender);
+                                                            Self.Sender,
+                                                            Self.Destination);
 end;
 
 //******************************************************************************
@@ -1813,7 +1827,8 @@ end;
 procedure TIdSipTransportSendingResponseMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipTransportSendingListener).OnSendResponse(Self.Response,
-                                                             Self.Sender);
+                                                             Self.Sender,
+                                                             Self.Destination);
 end;
 
 //******************************************************************************

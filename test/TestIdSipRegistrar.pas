@@ -57,6 +57,7 @@ type
     procedure TestReceiveWildcardWithNonzeroExpiration;
     procedure TestRegisterAddsBindings;
     procedure TestRegisterAddsMultipleBindings;
+    procedure TestRejectRegisterWithReplacesHeader;
     procedure TestUnauthorizedUser;
   end;
 
@@ -104,7 +105,7 @@ type
   private
     Contacts:   TIdSipContacts;
     MinExpires: Cardinal;
-    Registrar:  TIdSipAbstractUserAgent;
+    Registrar:  TIdSipAbstractCore;
     Succeeded:  Boolean;
 
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
@@ -623,6 +624,14 @@ begin
   finally
     Bindings.Free;
   end;
+end;
+
+procedure TestTIdSipRegistrar.TestRejectRegisterWithReplacesHeader;
+begin
+  Self.Request.AddHeader(ReplacesHeader).Value := '1;from-tag=2;to-tag=3';
+  Self.SimulateRemoteRequest;
+  Self.CheckServerReturned(SIPBadRequest,
+                           'Replaces header in a REGISTER');
 end;
 
 procedure TestTIdSipRegistrar.TestUnauthorizedUser;

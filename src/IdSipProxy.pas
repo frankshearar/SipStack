@@ -15,7 +15,7 @@ uses
   IdSipAuthentication, IdSipCore, IdSipDialog, IdSipMessage;
 
 type
-  TIdSipProxy = class(TIdSipAbstractUserAgent)
+  TIdSipProxy = class(TIdSipAbstractCore)
   protected
     procedure SetAuthenticator(Value: TIdSipAbstractAuthenticator); override;
   end;

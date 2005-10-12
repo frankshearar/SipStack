@@ -433,9 +433,9 @@ type
     function IsBasic: Boolean;
     function IsDigest: Boolean;
 
-    property Response:   String   read GetResponse write SetResponse;
-    property DigestUri:  String   read GetDigestUri write SetDigestUri; // This should be a TIdURI
-    property Username:   String   read GetUsername write SetUsername;
+    property Response:  String read GetResponse write SetResponse;
+    property DigestUri: String read GetDigestUri write SetDigestUri; // This should be a TIdURI
+    property Username:  String read GetUsername write SetUsername;
   end;
 
   TIdSipAuthorizationHeaderClass = class of TIdSipAuthorizationHeader;
@@ -714,21 +714,36 @@ type
   // specify an arbitrarily large positive integer. Delphi doesn't really
   // support large integer values, so if necessary we just cap Expires at
   // Max(Cardinal).
+  TIdSipSubscriptionStateReason = (ssrDeactivated, ssrGiveUp, ssrNoReason,
+                                  ssrNoResource, ssrProbation, ssrRejected,
+                                  ssrTimeout, ssrUnknownReason);
   TIdSipSubscriptionStateHeader = class(TIdSipHeader)
   private
+    fReasonType: TIdSipSubscriptionStateReason;
+
     function  GetExpires: Cardinal;
     function  GetReason: String;
+    function  GetReasonType: TIdSipSubscriptionStateReason;
     function  GetRetryAfter: Cardinal;
     function  GetSubState: String;
     procedure SetExpires(Value: Cardinal);
     procedure SetReason(Value: String);
+    procedure SetReasonType(Value: TIdSipSubscriptionStateReason);
     procedure SetRetryAfter(Value: Cardinal);
     procedure SetSubState(Value: String);
   protected
     function GetName: String; override;
+    procedure Parse(const Value: String); override;
   public
+    class function ReasonTypeToStr(RT: TIdSipSubscriptionStateReason): String;
+    class function StrToReasonType(const S: String): TIdSipSubscriptionStateReason;
+
+    procedure Assign(Src: TPersistent); override;
+    function HasGivenUp: Boolean;
+    function HasRetryAfter: Boolean;
     function IsActive: Boolean;
     function IsDeactivated: Boolean;
+    function IsInProbation: Boolean;
     function IsNoResource: Boolean;
     function IsPending: Boolean;
     function IsRejected: Boolean;
@@ -736,12 +751,14 @@ type
     function IsTimedOut: Boolean;
     function RetryAfterHasMeaning: Boolean;
 
-    property Expires:    Cardinal read GetExpires write SetExpires;
-    property Reason:     String   read GetReason write SetReason;
-    property RetryAfter: Cardinal read GetRetryAfter write SetRetryAfter;
-    property SubState:   String   read GetSubState write SetSubState;
+    property Expires:    Cardinal                      read GetExpires write SetExpires;
+    property Reason:     String                        read GetReason write SetReason;
+    property ReasonType: TIdSipSubscriptionStateReason read GetReasonType write SetReasonType;
+    property RetryAfter: Cardinal                      read GetRetryAfter write SetRetryAfter;
+    property SubState:   String                        read GetSubState write SetSubState;
   end;
 
+  // cf. RFC 3515
   TIdSipReferToHeader = class(TIdSipAddressHeader)
   protected
     function GetName: String; override;
@@ -852,15 +869,15 @@ type
     function  SrvQuery: String;
     function  UsesSecureTransport: Boolean;
 
-    property Branch:     String              read GetBranch write SetBranch;
-    property SentBy:     String              read GetSentBy write SetSentBy;
-    property Maddr:      String              read GetMaddr write SetMaddr;
-    property Port:       Cardinal            read GetPort write SetPort;
-    property Received:   String              read GetReceived write SetReceived;
-    property Rport:      Cardinal            read GetRport write SetRport;
-    property SipVersion: String              read fSipVersion write fSipVersion;
-    property Transport:  String              read fTransport write SetTransport;
-    property TTL:        Byte                read GetTTL write SetTTL;
+    property Branch:     String   read GetBranch write SetBranch;
+    property SentBy:     String   read GetSentBy write SetSentBy;
+    property Maddr:      String   read GetMaddr write SetMaddr;
+    property Port:       Cardinal read GetPort write SetPort;
+    property Received:   String   read GetReceived write SetReceived;
+    property Rport:      Cardinal read GetRport write SetRport;
+    property SipVersion: String   read fSipVersion write fSipVersion;
+    property Transport:  String   read fTransport write SetTransport;
+    property TTL:        Byte     read GetTTL write SetTTL;
   end;
 
   TIdSipWarningHeader = class(TIdSipHeader)
@@ -1240,18 +1257,24 @@ type
     function  CSeqMatchesMethod: Boolean;
     function  FindAuthorizationHeader(const Realm: String;
                                       const HeaderType: String): TIdSipHeader;
+    function  GetEvent: TIdSipEventHeader;
     function  GetMaxForwards: Byte;
     function  GetReferTo: TIdSipReferToHeader;
+    function  GetReplaces: TIdSipReplacesHeader;
+    function  GetSubscriptionState: TIdSipSubscriptionStateHeader;
     procedure ParseMethod(Parser: TIdSipParser;
                           var FirstLine: String);
     procedure ParseRequestUri(Parser: TIdSipParser;
                               var FirstLine: String);
     procedure ParseSipVersion(Parser: TIdSipParser;
                               var FirstLine: String);
+    procedure SetEvent(Value: TIdSipEventHeader);
     procedure SetMaxForwards(Value: Byte);
     procedure SetReferTo(Value: TIdSipReferToHeader);
+    procedure SetReplaces(Value: TIdSipReplacesHeader);
     procedure SetRequestUri(Value: TIdSipURI);
     procedure SetRoute(Value: TIdSipRoutePath);
+    procedure SetSubscriptionState(Value: TIdSipSubscriptionStateHeader);
   protected
     function  FirstLine: String; override;
     function  HasMalformedFirstLine: Boolean; override;
@@ -1275,7 +1298,6 @@ type
     function  DestinationUri: String;
     function  Equals(Msg: TIdSipMessage): Boolean; override;
     function  FirstAuthorization: TIdSipAuthorizationHeader;
-    function  FirstEvent: TIdSipEventHeader;
     function  FirstProxyAuthorization: TIdSipProxyAuthorizationHeader;
     function  FirstProxyRequire: TIdSipCommaSeparatedHeader;
     function  FirstReplaces: TIdSipReplacesHeader;
@@ -1306,11 +1328,14 @@ type
     function  RequiresResponse: Boolean;
     function  WantsAllowEventsHeader: Boolean; override;
 
-    property MaxForwards: Byte                read GetMaxForwards write SetMaxForwards;
-    property Method:      String              read fMethod write fMethod;
-    property ReferTo:     TIdSipReferToHeader read GetReferTo write SetReferTo;
-    property RequestUri:  TIdSipURI           read fRequestUri write SetRequestUri;
-    property Route:       TIdSipRoutePath     read fRoute write SetRoute;
+    property Event:             TIdSipEventHeader             read GetEvent write SetEvent;
+    property MaxForwards:       Byte                          read GetMaxForwards write SetMaxForwards;
+    property Method:            String                        read fMethod write fMethod;
+    property ReferTo:           TIdSipReferToHeader           read GetReferTo write SetReferTo;
+    property Replaces:          TIdSipReplacesHeader          read GetReplaces write SetReplaces;
+    property RequestUri:        TIdSipURI                     read fRequestUri write SetRequestUri;
+    property Route:             TIdSipRoutePath               read fRoute write SetRoute;
+    property SubscriptionState: TIdSipSubscriptionStateHeader read GetSubscriptionState write SetSubscriptionState;
   end;
 
   // My RequestRequestUri property deserves some explanation: According to
@@ -1569,6 +1594,7 @@ const
   ExpireNow                      = 0;
   ExpiresHeader                  = 'Expires';
   ExpiresParam                   = 'expires';
+  ExtensionReplaces              = 'replaces'; // cf. RFC 3891
   FromHeaderFull                 = 'From';
   FromHeaderShort                = 'f';
   FromTagParam                   = 'from-tag'; // cf. RFC 3891
@@ -1600,6 +1626,7 @@ const
   OpaqueParam                    = 'opaque';
   OrganizationHeader             = 'Organization';
   PackageRefer                   = 'refer'; // cf. RFC 3515
+  PackageTargetDialog            = 'target-dialog'; // cf. draft-sparks-sipping-dialogusage-00
   PriorityHeader                 = 'Priority';
   ProxyAuthenticateHeader        = 'Proxy-Authenticate';
   ProxyAuthorizationHeader       = 'Proxy-Authorization';
@@ -4899,6 +4926,64 @@ end;
 //******************************************************************************
 //* TIdSipSubscriptionStateHeader Public methods *******************************
 
+class function TIdSipSubscriptionStateHeader.ReasonTypeToStr(RT: TIdSipSubscriptionStateReason): String;
+begin
+  case RT of
+    ssrDeactivated: Result := EventReasonDeactivated;
+    ssrGiveUp:      Result := EventReasonGiveUp;
+    ssrNoReason:    Result := '';
+    ssrNoResource:  Result := EventReasonNoResource;
+    ssrProbation:   Result := EventReasonProbation;
+    ssrRejected:    Result := EventReasonRejected;
+    ssrTimeout:     Result := EventReasonTimeout;
+  else
+    Result := '';
+  end;
+end;
+
+class function TIdSipSubscriptionStateHeader.StrToReasonType(const S: String): TIdSipSubscriptionStateReason;
+begin
+  if      (S = EventReasonDeactivated) then
+    Result := ssrDeactivated
+  else if (S = EventReasonGiveUp) then
+    Result := ssrGiveUp
+  else if (S = '') then
+    Result := ssrNoReason
+  else if (S = EventReasonNoResource) then
+    Result := ssrNoResource
+  else if (S = EventReasonProbation) then
+    Result := ssrProbation
+  else if (S = EventReasonRejected) then
+    Result := ssrRejected
+  else if (S = EventReasonTimeout) then
+    Result := ssrTimeout
+  else
+    Result := ssrUnknownReason
+end;
+
+procedure TIdSipSubscriptionStateHeader.Assign(Src: TPersistent);
+var
+  Other: TIdSipSubscriptionStateHeader;
+begin
+  inherited Assign(Src);
+
+  if (Src is TIdSipSubscriptionStateHeader) then begin
+    Other := Src as TIdSipSubscriptionStateHeader;
+
+    Self.ReasonType := Other.ReasonType;
+  end;
+end;
+
+function TIdSipSubscriptionStateHeader.HasGivenUp: Boolean;
+begin
+  Result := Self.IsTerminated and IsEqual(Self.Reason, EventReasonGiveUp);
+end;
+
+function TIdSipSubscriptionStateHeader.HasRetryAfter: Boolean;
+begin
+  Result := Self.HasParam(RetryAfterParam);
+end;
+
 function TIdSipSubscriptionStateHeader.IsActive: Boolean;
 begin
   Result := IsEqual(Self.SubState, SubscriptionSubstateActive);
@@ -4907,6 +4992,11 @@ end;
 function TIdSipSubscriptionStateHeader.IsDeactivated: Boolean;
 begin
   Result := Self.IsTerminated and IsEqual(Self.Reason, EventReasonDeactivated);
+end;
+
+function TIdSipSubscriptionStateHeader.IsInProbation: Boolean;
+begin
+  Result := Self.IsTerminated and IsEqual(Self.Reason, EventReasonProbation);
 end;
 
 function TIdSipSubscriptionStateHeader.IsNoResource: Boolean;
@@ -4949,6 +5039,13 @@ begin
   Result := SubscriptionStateHeader;
 end;
 
+procedure TIdSipSubscriptionStateHeader.Parse(const Value: String);
+begin
+  inherited Parse(Value);
+
+  Self.ReasonType := Self.StrToReasonType(Self.Reason);
+end;
+
 //* TIdSipSubscriptionStateHeader Private methods ******************************
 
 function TIdSipSubscriptionStateHeader.GetExpires: Cardinal;
@@ -4959,6 +5056,11 @@ end;
 function TIdSipSubscriptionStateHeader.GetReason: String;
 begin
   Result := Self.Params[ReasonParam];
+end;
+
+function TIdSipSubscriptionStateHeader.GetReasonType: TIdSipSubscriptionStateReason;
+begin
+  Result := Self.fReasonType;
 end;
 
 function TIdSipSubscriptionStateHeader.GetRetryAfter: Cardinal;
@@ -4979,6 +5081,23 @@ end;
 procedure TIdSipSubscriptionStateHeader.SetReason(Value: String);
 begin
   Self.Params[ReasonParam] := Value;
+
+  if (Value = '') then
+    Self.fReasonType := ssrNoReason
+  else
+    Self.fReasonType := Self.StrToReasonType(Value);
+end;
+
+procedure TIdSipSubscriptionStateHeader.SetReasonType(Value: TIdSipSubscriptionStateReason);
+begin
+  Self.fReasonType := Value;
+
+  case Value of
+    ssrNoReason:      Self.RemoveParameter(ReasonParam);
+    ssrUnknownReason: // Leave Self.Reason unchanged;
+  else
+    Self.Params[ReasonParam] := Self.ReasonTypeToStr(Value);
+  end;
 end;
 
 procedure TIdSipSubscriptionStateHeader.SetRetryAfter(Value: Cardinal);
@@ -7436,11 +7555,6 @@ begin
   Result := Self.FirstHeader(AuthorizationHeader) as TIdSipAuthorizationHeader
 end;
 
-function TIdSipRequest.FirstEvent: TIdSipEventHeader;
-begin
-  Result := Self.FirstHeader(EventHeaderFull) as TIdSipEventHeader
-end;
-
 function TIdSipRequest.FirstProxyAuthorization: TIdSipProxyAuthorizationHeader;
 begin
   Result := Self.FirstHeader(ProxyAuthorizationHeader) as TIdSipProxyAuthorizationHeader
@@ -7619,7 +7733,9 @@ end;
 
 function TIdSipRequest.WantsAllowEventsHeader: Boolean;
 begin
-  Result := Self.IsInvite or Self.IsSubscribe;
+  Result := Self.IsInvite
+         or Self.IsOptions
+         or Self.IsSubscribe;
 end;
 
 //* TIdSipRequest Protected methods ********************************************
@@ -7781,6 +7897,11 @@ begin
       Self.Headers.Next;
 end;
 
+function TIdSipRequest.GetEvent: TIdSipEventHeader;
+begin
+  Result := Self.FirstHeader(EventHeaderFull) as TIdSipEventHeader;
+end;
+
 function TIdSipRequest.GetMaxForwards: Byte;
 begin
   if not Self.HasHeader(MaxForwardsHeader)
@@ -7793,6 +7914,16 @@ end;
 function TIdSipRequest.GetReferTo: TIdSipReferToHeader;
 begin
   Result := Self.FirstHeader(ReferToHeaderFull) as TIdSipReferToHeader;
+end;
+
+function TIdSipRequest.GetReplaces: TIdSipReplacesHeader;
+begin
+  Result := Self.FirstHeader(ReplacesHeader) as TIdSipReplacesHeader;
+end;
+
+function TIdSipRequest.GetSubscriptionState: TIdSipSubscriptionStateHeader;
+begin
+  Result := Self.FirstHeader(SubscriptionStateHeader) as TIdSipSubscriptionStateHeader;
 end;
 
 procedure TIdSipRequest.ParseMethod(Parser: TIdSipParser;
@@ -7838,6 +7969,11 @@ begin
     Self.FailParse(Format(InvalidSipVersion, [Self.SIPVersion]));
 end;
 
+procedure TIdSipRequest.SetEvent(Value: TIdSipEventHeader);
+begin
+  Self.FirstHeader(EventHeaderFull).Assign(Value);
+end;
+
 procedure TIdSipRequest.SetMaxForwards(Value: Byte);
 begin
   Self.FirstHeader(MaxForwardsHeader).Value := IntToStr(Value);
@@ -7846,6 +7982,11 @@ end;
 procedure TIdSipRequest.SetReferTo(Value: TIdSipReferToHeader);
 begin
   Self.FirstHeader(ReferToHeaderFull).Assign(Value);
+end;
+
+procedure TIdSipRequest.SetReplaces(Value: TIdSipReplacesHeader);
+begin
+  Self.FirstHeader(ReplacesHeader).Assign(Value);
 end;
 
 procedure TIdSipRequest.SetRequestUri(Value: TIdSipURI);
@@ -7859,6 +8000,11 @@ begin
   Self.Route.Add(Value);
 end;
 
+procedure TIdSipRequest.SetSubscriptionState(Value: TIdSipSubscriptionStateHeader);
+begin
+  Self.FirstHeader(SubscriptionStateHeader).Assign(Value);
+end;
+
 //*******************************************************************************
 //* TIdSipResponse                                                              *
 //*******************************************************************************
@@ -7866,8 +8012,6 @@ end;
 
 class function TIdSipResponse.InResponseTo(Request: TIdSipRequest;
                                            StatusCode: Cardinal): TIdSipResponse;
-var
-  TimestampHeaders: TIdSipHeadersFilter;
 begin
   Result := TIdSipResponse.Create;
   try
@@ -7875,19 +8019,11 @@ begin
     Result.SIPVersion        := IdSipMessage.SIPVersion;
     Result.StatusCode        := StatusCode;
 
-    // cf RFC 3261 section 8.2.6.1
-    if Result.IsTrying then begin
-      TimestampHeaders := TIdSipHeadersFilter.Create(Request.Headers,
-                                                     TimestampHeader);
-      try
-        Result.AddHeaders(TimestampHeaders);
-      finally
-        TimestampHeaders.Free;
-      end;
-    end;
+    // cf. RFC 3261, section 8.2.6.1
+    if Result.IsTrying then
+      Result.CopyHeaders(Request, TimestampHeader);
 
-    // cf RFC 3261 section 8.2.6.2
-
+    // cf. RFC 3261, section 8.2.6.2
     if Request.HasHeader(ViaHeaderFull) then
       Result.Path         := Request.Path;
     if Request.HasHeader(CallIDHeaderFull) then

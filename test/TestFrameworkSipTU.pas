@@ -12,17 +12,29 @@ unit TestFrameworkSipTU;
 interface
 
 uses
-  TestFrameworkSip, IdSipCore, IdSipMessage;
+  TestFrameworkSip, IdSipCore, IdSipMessage, SysUtils;
 
 type
   TestTIdSipAction = class(TTestCaseTU,
                            IIdSipActionListener)
   protected
-    ActionFailed: Boolean;
-    ActionParam:  TIdSipAction;
-    FailReason:   String;
+    ActionFailed:             Boolean;
+    ActionParam:              TIdSipAction;
+    AuthenticationChallenged: Boolean;
+    FailReason:               String;
+    Password:                 String;
 
+    procedure CheckAuthentication(const AuthenticationHeaderName: String;
+                                  const AuthorizationHeaderName: String;
+                                  const QopType: String);
+    procedure CheckAuthenticationReattempt(InitialAttempt,
+                                           ReAttempt: TIdSipRequest;
+                                           const AuthenticationHeaderName: String;
+                                           const AuthorizationHeaderName: String;
+                                           const MsgPrefix: String);
     function  CreateAction: TIdSipAction; virtual;
+    function  CreateAuthorization(Challenge: TIdSipResponse): TIdSipAuthorizationHeader;
+    function  IsInboundTest: Boolean;
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Response: TIdSipResponse);
     procedure OnNetworkFailure(Action: TIdSipAction;
@@ -36,21 +48,30 @@ type
   public
     procedure SetUp; override;
   published
+    procedure TestAbandonAuthentication; virtual;
+    procedure TestAuthentication;
+    procedure TestAuthenticationChallenge;
     procedure TestIsInbound; virtual;
     procedure TestIsInvite; virtual;
     procedure TestIsOptions; virtual;
     procedure TestIsRegistration; virtual;
     procedure TestIsSession; virtual;
+    procedure TestMultipleAuthentication;
+    procedure TestResend;
+    procedure TestResendBeforeSend;
+    procedure TestResendWithProxyAuth;
 {
     procedure TestReceiveResponseBadExtension; // Currently our stack can't sent Requires; ergo we can't test in the usual fashion
     procedure TestReceiveResponseBadExtensionWithoutRequires;
 }
   end;
 
+  EInboundTest = class(Exception);
+
 implementation
 
 uses
-  SysUtils;
+  IdSipAuthentication;
 
 //******************************************************************************
 //* TestTIdSipAction                                                           *
@@ -61,21 +82,169 @@ procedure TestTIdSipAction.SetUp;
 begin
   inherited SetUp;
 
-  Self.ActionFailed := false;
+  Self.ActionFailed             := false;
+  Self.AuthenticationChallenged := true;
+  Self.Password                 := 'mycotoxin';
 end;
 
 //* TestTIdSipAction Protected methods *****************************************
 
+procedure TestTIdSipAction.CheckAuthentication(const AuthenticationHeaderName: String;
+                                               const AuthorizationHeaderName: String;
+                                               const QopType: String);
+var
+  Action:         TIdSipAction;
+  AuthCreds:      TIdSipAuthorizationHeader;
+  InitialRequest: TIdSipRequest;
+  ReAttempt:      TIdSipRequest;
+begin
+  // This check/test is only valid for OUTbound actions.
+  if Self.IsInboundTest then Exit;
+
+  Action := Self.CreateAction;
+
+  InitialRequest := Action.InitialRequest.Copy as TIdSipRequest;
+  try
+    Self.ReceiveUnauthorized(AuthenticationHeaderName, QopType);
+
+    Self.MarkSentRequestCount;
+
+    AuthCreds := Self.CreateAuthorization(Self.Dispatcher.Transport.LastResponse);
+    try
+      Action.Resend(AuthCreds);
+      CheckRequestSent(Self.ClassName + ': qop=' + QopType + ': no re-issue of '
+                     + InitialRequest.Method + ' request');
+
+      ReAttempt := Self.LastSentRequest;
+
+      Self.CheckAuthenticationReattempt(InitialRequest,
+                                        ReAttempt,
+                                        AuthenticationHeaderName,
+                                        AuthorizationHeaderName,
+                                        Self.ClassName + ': qop=' + QopType + ':');
+    finally
+      AuthCreds.Free;
+    end;
+  finally
+    InitialRequest.Free;
+  end;
+end;
+
+procedure TestTIdSipAction.CheckAuthenticationReattempt(InitialAttempt,
+                                                        ReAttempt: TIdSipRequest;
+                                                        const AuthenticationHeaderName: String;
+                                                        const AuthorizationHeaderName: String;
+                                                        const MsgPrefix: String);
+var
+  A1:               String;
+  A2:               String;
+  Algo:             TIdAlgorithmFunction;
+  Auth:             TIdSipAuthorizationHeader;
+  Challenge:        TIdSipAuthenticateHeader;
+  Digest:           TIdRequestDigestFunction;
+  ExpectedResponse: String;
+  Qop:              TIdQopFunction;
+begin
+  Challenge := Self.Dispatcher.Transport.LastResponse.FirstHeader(AuthenticationHeaderName) as TIdSipAuthenticateHeader;
+  Auth      := ReAttempt.FirstHeader(AuthorizationHeaderName) as TIdSipAuthorizationHeader;
+
+  CheckNotEquals(InitialAttempt.LastHop.Branch,
+                 ReAttempt.LastHop.Branch,
+                 'The new transaction used the old transaction''s branch');
+
+  CheckEquals(InitialAttempt.CSeq.SequenceNo + 1,
+              ReAttempt.CSeq.SequenceNo,
+              MsgPrefix + ' Re-' + InitialAttempt.Method + ' CSeq sequence number');
+  CheckEquals(InitialAttempt.Method,
+              ReAttempt.Method,
+              MsgPrefix + ' Method of new attempt');
+  CheckEquals(InitialAttempt.RequestUri.Uri,
+              ReAttempt.RequestUri.Uri,
+              Self.ClassName + ': Re-' + InitialAttempt.Method + ' Request-URI');
+  Check(ReAttempt.HasHeader(AuthorizationHeaderName),
+        MsgPrefix + ' No ' + AuthorizationHeaderName + ' header in re-' + InitialAttempt.Method);
+
+  CheckEquals(Challenge.AuthorizationScheme,
+              Auth.AuthorizationScheme,
+              MsgPrefix + ' No authorization scheme set');
+
+  CheckEquals(Challenge.Nonce,
+              Auth.Nonce,
+              MsgPrefix + ' Nonce');
+
+  CheckEquals(Challenge.Realm,
+              Auth.Realm,
+              MsgPrefix + ' Realm');
+
+  CheckEquals(ReAttempt.RequestUri.AsString,
+              Auth.DigestUri,
+              MsgPrefix + ' URI');
+
+  CheckEquals(Self.Core.Username,
+              Auth.Username,
+              MsgPrefix + ' Username');
+
+  Algo   := A1For(Auth.Algorithm);
+  Digest := RequestDigestFor(Auth.Qop);
+  Qop    := A2For(Auth.Qop);
+
+  A1 := Algo(Auth, Self.Password);
+  A2 := Qop(Auth, ReAttempt.Method, ReAttempt.Body);
+
+  ExpectedResponse := Digest(A1, A2, Auth);
+
+  CheckEquals(ExpectedResponse,
+              Auth.Response,
+              MsgPrefix + ' Response');
+end;
+
 function TestTIdSipAction.CreateAction: TIdSipAction;
 begin
-  raise Exception.Create(Self.ClassName
+  raise EInboundTest.Create(Self.ClassName
                        + ': Don''t call CreateAction on an inbound Action');
+end;
+
+function TestTIdSipAction.CreateAuthorization(Challenge: TIdSipResponse): TIdSipAuthorizationHeader;
+var
+  ChallengeHeader: TIdSipAuthenticateHeader;
+  RealmInfo:       TIdRealmInfo;
+begin
+  ChallengeHeader := Challenge.AuthenticateHeader;
+
+  if not Assigned(ChallengeHeader) then
+    Fail(Self.ClassName + ': Missing a (Proxy|WWW)-Authenticate header');
+
+  Self.Core.Keyring.AddKey(ChallengeHeader,
+                           Self.LastSentRequest.RequestUri.AsString,
+                           Self.Core.Username);
+
+  RealmInfo := Self.Core.Keyring.Find(ChallengeHeader.Realm,
+                                      Self.LastSentRequest.RequestUri.AsString);
+
+  Result := RealmInfo.CreateAuthorization(Challenge,
+                                          Self.LastSentRequest.Method,
+                                          Self.LastSentRequest.Body,
+                                          Self.Password);
+end;
+
+function TestTIdSipAction.IsInboundTest: Boolean;
+var
+  Action: TIdSipAction;
+begin
+  Result := true;
+
+  try
+    Action := Self.CreateAction;
+    Result := Action.IsInbound;
+  except
+    on EInboundTest do;
+  end;
 end;
 
 procedure TestTIdSipAction.OnAuthenticationChallenge(Action: TIdSipAction;
                                                      Response: TIdSipResponse);
 begin
-  raise Exception.Create('TestTIdSipAction.OnAuthenticationChallenge');
+  Self.AuthenticationChallenged := true;
 end;
 
 procedure TestTIdSipAction.OnNetworkFailure(Action: TIdSipAction;
@@ -125,6 +294,52 @@ end;
 
 //* TestTIdSipAction Published methods *****************************************
 
+procedure TestTIdSipAction.TestAbandonAuthentication;
+var
+  Action: TIdSipAction;
+begin
+  // This test only makes sense for OUTbound actions.
+  if Self.IsInboundTest then Exit;
+
+  Action := Self.CreateAction;
+
+  Self.ReceiveUnauthorized(WWWAuthenticateHeader, '');
+
+  Action.Terminate;
+  Check(Action.IsTerminated,
+        Self.ClassName + ': Action not terminated');
+end;
+
+procedure TestTIdSipAction.TestAuthentication;
+begin
+  Self.CheckAuthentication(WWWAuthenticateHeader, AuthorizationHeader, '');
+end;
+
+procedure TestTIdSipAction.TestAuthenticationChallenge;
+var
+  Action:    TIdSipAction;
+  AuthCreds: TIdSipAuthorizationHeader;
+begin
+  // This test only makes sense for OUTbound actions.
+  if Self.IsInboundTest then Exit;
+
+  Action := Self.CreateAction;
+
+  Self.ReceiveUnauthorized(WWWAuthenticateHeader, '');
+
+  AuthCreds := Self.CreateAuthorization(Self.Dispatcher.Transport.LastResponse);
+  try
+    Check(Self.AuthenticationChallenged,
+          Action.ClassName + ' didn''t notify listeners of authentication challenge');
+
+    Self.MarkSentRequestCount;
+    Action.Resend(AuthCreds);
+    CheckRequestSent(Action.ClassName + ': No resend of request sent');
+  finally
+    AuthCreds.Free;
+  end;
+end;
+
 procedure TestTIdSipAction.TestIsInbound;
 var
   Action: TIdSipAction;
@@ -173,6 +388,134 @@ begin
   Action := Self.CreateAction;
   Check(not Action.IsSession,
         Action.ClassName + ' marked as a Session');
+end;
+
+procedure TestTIdSipAction.TestMultipleAuthentication;
+var
+  Action:    TIdSipAction;
+  ProxyAuth: TIdSipAuthorizationHeader;
+  UAAuth:    TIdSipAuthorizationHeader;
+begin
+  //  ---                 OPTIONS                 ---> (for instance)
+  // <---    407 Proxy Authentication Required    ---
+  //  ---    OPTIONS (with proxy credentials)     --->
+  // <---  401 Unauthorized (from the remote UA)  ---
+  //  --- OPTIONS (with proxy and UA credentials) --->
+  // <---                 200 OK                  ---
+
+  // This test only makes sense for OUTbound actions.
+  if Self.IsInboundTest then Exit;
+
+  Action := Self.CreateAction;
+  Self.ReceiveUnauthorized(ProxyAuthenticateHeader, '');
+
+  ProxyAuth := Self.CreateAuthorization(Self.Dispatcher.Transport.LastResponse);
+  try
+    Action.Resend(ProxyAuth);
+    Self.ReceiveUnauthorized(WWWAuthenticateHeader, '');
+
+    UAAuth := Self.CreateAuthorization(Self.Dispatcher.Transport.LastResponse);
+    try
+      Self.MarkSentRequestCount;
+      Action.Resend(UAAuth);
+      CheckRequestSent('No request resent');
+      Check(Self.LastSentRequest.HasProxyAuthorizationFor(ProxyAuth.Realm),
+            'Missing proxy credentials');
+      Check(Self.LastSentRequest.HasAuthorizationFor(UAAuth.Realm),
+            'Missing UA credentials');
+    finally
+      UAAuth.Free;
+    end;
+  finally
+    ProxyAuth.Free;
+  end;
+end;
+
+procedure TestTIdSipAction.TestResend;
+var
+  Action:    TIdSipAction;
+  AuthCreds: TIdSipAuthorizationHeader;
+begin
+  // This test only makes sense for OUTbound actions.
+  if Self.IsInboundTest then Exit;
+
+  Action := Self.CreateAction;
+
+  Self.ReceiveUnauthorized(WWWAuthenticateHeader, '');
+  AuthCreds := Self.CreateAuthorization(Self.Dispatcher.Transport.LastResponse);
+  try
+    Self.MarkSentRequestCount;
+    Action.Resend(AuthCreds);
+    CheckRequestSent(Self.ClassName + ': Resend didn''t send a request');
+
+    Check(Self.LastSentRequest.HasHeader(AuthCreds.Name),
+          Self.ClassName + ': Resent request has no ' + AuthCreds.Name + ' header');
+    Check(Self.LastSentRequest.AuthorizationFor(AuthCreds.Realm).Equals(AuthCreds),
+          Self.ClassName + ': Incorrect Authorization header');
+
+    Check(Action.InitialRequest.HasAuthorizationFor(AuthCreds.Realm),
+          'Action''s InitialRequest has no record of the authentication');      
+  finally
+    AuthCreds.Free;
+  end;
+end;
+
+procedure TestTIdSipAction.TestResendBeforeSend;
+var
+  Action:          TIdSipAction;
+  AuthCreds:       TIdSipAuthorizationHeader;
+  ThrowawayAction: TIdSipAction;
+begin
+  // This test only makes sense for OUTbound actions.
+  if Self.IsInboundTest then Exit;
+
+  // This looks very strange: We create an Action using the polymorphic
+  // CreateAction. No surprise there. But CreateAction calls Send() on its
+  // result, and for this test we don't want that. So we instantiate another
+  // Action using the class type of the result of CreateAction.
+  ThrowawayAction := Self.CreateAction;
+
+  // Normally we wouldn't bother with receiving a response, but it allows us
+  // to call CreateAuthorization later, without messing with junk.
+  Self.ReceiveUnauthorized(WWWAuthenticateHeader, '');
+
+  Action := Self.Core.AddOutboundAction(TIdSipActionClass(ThrowawayAction.ClassType));
+
+  AuthCreds := Self.CreateAuthorization(Self.Dispatcher.Transport.LastResponse);
+  try
+    Action.Resend(AuthCreds);
+    Fail('Failed to reject attempt to Resend(AuthCreds) without having first '
+       + 'invoked Send');
+  except
+    on EIdSipTransactionUser do;
+  end;
+end;
+
+procedure TestTIdSipAction.TestResendWithProxyAuth;
+var
+  Action:    TIdSipAction;
+  ProxyAuth: TIdSipAuthorizationHeader;
+begin
+  // This test only makes sense for OUTbound actions.
+  if Self.IsInboundTest then Exit;
+
+  Action := Self.CreateAction;
+  Self.ReceiveUnauthorized(ProxyAuthenticateHeader, '');
+
+  ProxyAuth := Self.CreateAuthorization(Self.Dispatcher.Transport.LastResponse);
+  try
+    Self.MarkSentRequestCount;
+
+    Action.Resend(ProxyAuth);
+    CheckRequestSent('Resend didn''t send a request');
+
+    Check(Self.LastSentRequest.HasHeader(ProxyAuth.Name),
+          'Resent request has no ' + ProxyAuth.Name + ' header');
+    Check(Self.LastSentRequest.ProxyAuthorizationFor(ProxyAuth.Realm).Equals(ProxyAuth),
+          'Incorrect Proxy-Authorization header');
+  finally
+    ProxyAuth.Free;
+  end;
 end;
 {
 procedure TestTIdSipAction.TestReceiveResponseBadExtension;

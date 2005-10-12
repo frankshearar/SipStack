@@ -432,14 +432,22 @@ type
   public
     procedure SetUp; override;
   published
+    procedure TestAssign;
+    procedure TestGetReasonType;
+    procedure TestHasGivenUp;
+    procedure TestHasRetryAfter;
     procedure TestIsActive;
     procedure TestIsDeactivated;
+    procedure TestIsInProbation;
     procedure TestIsNoResource;
     procedure TestIsPending;
     procedure TestIsRejected;
     procedure TestIsTerminated;
     procedure TestIsTimedOut;
+    procedure TestReasonTypeToStr;
     procedure TestRetryAfterHasMeaning;
+    procedure TestSetReasonType;
+    procedure TestStrToReasonType;
     procedure TestValue; override;
   end;
 
@@ -715,6 +723,7 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipMessage tests (Headers)');
+{
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSipHeader.Suite);
   Result.AddTest(TestTIdSipAddressHeader.Suite);
@@ -738,7 +747,9 @@ begin
   Result.AddTest(TestTIdSipRecordRouteHeader.Suite);
   Result.AddTest(TestTIdSipReferToHeader.Suite);
   Result.AddTest(TestTIdSipReplacesHeader.Suite);
+}
   Result.AddTest(TestTIdSipSubscriptionStateHeader.Suite);
+{
   Result.AddTest(TestTIdSipTimestampHeader.Suite);
   Result.AddTest(TestTIdSipUriHeader.Suite);
   Result.AddTest(TestTIdSipViaHeader.Suite);
@@ -751,6 +762,7 @@ begin
   Result.AddTest(TestTIdSipExpiresHeaders.Suite);
   Result.AddTest(TestTIdSipRoutePath.Suite);
   Result.AddTest(TestTIdSipViaPath.Suite);
+}
 end;
 
 //******************************************************************************
@@ -3769,6 +3781,78 @@ end;
 
 //* TestTIdSipSubscriptionStateHeader Published methods ************************
 
+procedure TestTIdSipSubscriptionStateHeader.TestAssign;
+var
+  Other: TIdSipSubscriptionStateHeader;
+begin
+  Self.SS.Value := 'terminated;reason=noresource';
+
+  Other := TIdSipSubscriptionStateHeader.Create;
+  try
+    Other.Assign(Self.SS);
+    
+    CheckEquals(Self.SS.FullValue,
+                Other.FullValue,
+                'FullValue');
+    CheckEquals(Self.SS.Reason,
+                Other.Reason,
+                'Reason');
+    CheckEquals(TIdSipSubscriptionStateHeader.ReasonTypeToStr(Self.SS.ReasonType),
+                TIdSipSubscriptionStateHeader.ReasonTypeToStr(Other.ReasonType),
+                'ReasonType');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TestTIdSipSubscriptionStateHeader.TestGetReasonType;
+begin
+  CheckEquals(TIdSipSubscriptionStateHeader.ReasonTypeToStr(ssrDeactivated),
+              TIdSipSubscriptionStateHeader.ReasonTypeToStr(Self.SS.ReasonType),
+              'Initial value');
+
+  Self.SS.Reason := 'unknown reason';
+
+  CheckEquals(TIdSipSubscriptionStateHeader.ReasonTypeToStr(ssrUnknownReason),
+              TIdSipSubscriptionStateHeader.ReasonTypeToStr(Self.SS.ReasonType),
+             'ReasonType not set after SetReason');
+
+  Self.SS.Reason := '';
+
+  CheckEquals(TIdSipSubscriptionStateHeader.ReasonTypeToStr(ssrNoReason),
+              TIdSipSubscriptionStateHeader.ReasonTypeToStr(Self.SS.ReasonType),
+             'ReasonType not set after 2nd SetReason');
+end;
+
+procedure TestTIdSipSubscriptionStateHeader.TestHasGivenUp;
+begin
+  Self.SS.SubState := SubscriptionSubstatePending;
+  Check(not Self.SS.HasGivenUp, 'Pending subscription');
+
+  Self.SS.SubState := SubscriptionSubstateActive;
+  Check(not Self.SS.HasGivenUp, 'Active subscription');
+
+  Self.SS.SubState := SubscriptionSubstateTerminated;
+  Check(not Self.SS.HasGivenUp, 'Terminated subscription');
+
+  Self.SS.Reason := EventReasonRejected;
+  Check(not Self.SS.HasGivenUp, 'Terminated subscription; reason: rejected');
+
+  Self.SS.Reason := EventReasonGiveUp;
+  Check(Self.SS.HasGivenUp, 'Terminated subscription; reason: giveup');
+end;
+
+procedure TestTIdSipSubscriptionStateHeader.TestHasRetryAfter;
+begin
+  Self.SS.Value := SubscriptionSubstateTerminated;
+  Check(not Self.SS.HasRetryAfter,
+        'Has no Retry-After: ''' + Self.SS.Value + '''');
+
+  Self.SS.Value := SubscriptionSubstateTerminated + ';' + RetryAfterParam + '=100';
+  Check(Self.SS.HasRetryAfter,
+        'Has no Retry-After: ''' + Self.SS.Value + '''');
+end;
+
 procedure TestTIdSipSubscriptionStateHeader.TestIsActive;
 begin
   Self.SS.SubState := SubscriptionSubstatePending;
@@ -3797,6 +3881,24 @@ begin
 
   Self.SS.Reason := EventReasonDeactivated;
   Check(Self.SS.IsDeactivated, 'Terminated subscription; reason: deactivated');
+end;
+
+procedure TestTIdSipSubscriptionStateHeader.TestIsInProbation;
+begin
+  Self.SS.SubState := SubscriptionSubstatePending;
+  Check(not Self.SS.IsInProbation, 'Pending subscription');
+
+  Self.SS.SubState := SubscriptionSubstateActive;
+  Check(not Self.SS.IsInProbation, 'Active subscription');
+
+  Self.SS.SubState := SubscriptionSubstateTerminated;
+  Check(not Self.SS.IsInProbation, 'Terminated subscription');
+
+  Self.SS.Reason := EventReasonRejected;
+  Check(not Self.SS.IsInProbation, 'Terminated subscription; reason: rejected');
+
+  Self.SS.Reason := EventReasonProbation;
+  Check(Self.SS.IsInProbation, 'Terminated subscription; reason: probation');
 end;
 
 procedure TestTIdSipSubscriptionStateHeader.TestIsNoResource;
@@ -3847,6 +3949,18 @@ begin
   Check(Self.SS.IsRejected, 'Terminated subscription; reason: rejected');
 end;
 
+procedure TestTIdSipSubscriptionStateHeader.TestIsTerminated;
+begin
+  Self.SS.SubState := SubscriptionSubstatePending;
+  Check(not Self.SS.IsTerminated, 'Pending subscription');
+
+  Self.SS.SubState := SubscriptionSubstateActive;
+  Check(not Self.SS.IsTerminated, 'Active subscription');
+
+  Self.SS.SubState := SubscriptionSubstateTerminated;
+  Check(Self.SS.IsTerminated, 'Terminated subscription');
+end;
+
 procedure TestTIdSipSubscriptionStateHeader.TestIsTimedOut;
 begin
   Self.SS.SubState := SubscriptionSubstatePending;
@@ -3863,6 +3977,34 @@ begin
 
   Self.SS.Reason := EventReasonTimeout;
   Check(Self.SS.IsTimedOut, 'Terminated subscription; reason: timeout');
+end;
+
+procedure TestTIdSipSubscriptionStateHeader.TestReasonTypeToStr;
+begin
+  CheckEquals(EventReasonDeactivated,
+              TIdSipSubscriptionStateHeader.ReasonTypeToStr(ssrDeactivated),
+              EventReasonDeactivated);
+  CheckEquals(EventReasonGiveUp,
+              TIdSipSubscriptionStateHeader.ReasonTypeToStr(ssrGiveUp),
+              EventReasonGiveUp);
+  CheckEquals('',
+              TIdSipSubscriptionStateHeader.ReasonTypeToStr(ssrNoReason),
+              'No reason');
+  CheckEquals(EventReasonNoResource,
+              TIdSipSubscriptionStateHeader.ReasonTypeToStr(ssrNoResource),
+              EventReasonNoResource);
+  CheckEquals(EventReasonProbation,
+              TIdSipSubscriptionStateHeader.ReasonTypeToStr(ssrProbation),
+              EventReasonProbation);
+  CheckEquals(EventReasonRejected,
+              TIdSipSubscriptionStateHeader.ReasonTypeToStr(ssrRejected),
+              EventReasonRejected);
+  CheckEquals(EventReasonTimeout,
+              TIdSipSubscriptionStateHeader.ReasonTypeToStr(ssrTimeout),
+              EventReasonTimeout);
+  CheckEquals('',
+              TIdSipSubscriptionStateHeader.ReasonTypeToStr(ssrUnknownReason),
+              'Unknown reason');
 end;
 
 procedure TestTIdSipSubscriptionStateHeader.TestRetryAfterHasMeaning;
@@ -3892,16 +4034,51 @@ begin
   Check(not Self.SS.RetryAfterHasMeaning, EventReasonNoResource);
 end;
 
-procedure TestTIdSipSubscriptionStateHeader.TestIsTerminated;
+procedure TestTIdSipSubscriptionStateHeader.TestSetReasonType;
+const
+  ArbReason = 'arbitrary_reason';
+var
+  RT: TIdSipSubscriptionStateReason;
 begin
-  Self.SS.SubState := SubscriptionSubstatePending;
-  Check(not Self.SS.IsTerminated, 'Pending subscription');
+  for RT := Low(TIdSipSubscriptionStateReason) to High(TIdSipSubscriptionStateReason) do begin
+    Self.SS.ReasonType := RT;
 
-  Self.SS.SubState := SubscriptionSubstateActive;
-  Check(not Self.SS.IsTerminated, 'Active subscription');
+    Check(Self.SS.ReasonType = RT,
+          'ReasonType after setting to ' + TIdSipSubscriptionStateHeader.ReasonTypeToStr(RT));
 
-  Self.SS.SubState := SubscriptionSubstateTerminated;
-  Check(Self.SS.IsTerminated, 'Terminated subscription');
+    if (Self.SS.ReasonType <> ssrUnknownReason) then
+      CheckEquals(TIdSipSubscriptionStateHeader.ReasonTypeToStr(RT),
+                  Self.SS.Reason,
+                  TIdSipSubscriptionStateHeader.ReasonTypeToStr(RT));
+  end;
+
+  Self.SS.Reason := ArbReason;
+  Self.SS.ReasonType := ssrUnknownReason;
+  CheckEquals(ArbReason,
+              Self.SS.Reason,
+              'Setting ReasonType to ssrUnknownReason leaves Reason unaltered');
+end;
+
+procedure TestTIdSipSubscriptionStateHeader.TestStrToReasonType;
+const
+  UnknownReason = 'unknown_reason';
+begin
+  Check(ssrDeactivated = TIdSipSubscriptionStateHeader.StrToReasonType(EventReasonDeactivated),
+        EventReasonDeactivated);
+  Check(ssrGiveUp = TIdSipSubscriptionStateHeader.StrToReasonType(EventReasonGiveUp),
+        EventReasonGiveUp);
+  Check(ssrNoReason = TIdSipSubscriptionStateHeader.StrToReasonType(''),
+        'No reason');
+  Check(ssrNoResource = TIdSipSubscriptionStateHeader.StrToReasonType(EventReasonNoResource),
+        EventReasonNoResource);
+  Check(ssrProbation = TIdSipSubscriptionStateHeader.StrToReasonType(EventReasonProbation),
+        EventReasonProbation);
+  Check(ssrRejected = TIdSipSubscriptionStateHeader.StrToReasonType(EventReasonRejected),
+        EventReasonRejected);
+  Check(ssrTimeout = TIdSipSubscriptionStateHeader.StrToReasonType(EventReasonTimeout),
+        EventReasonTimeout);
+  Check(ssrUnknownReason = TIdSipSubscriptionStateHeader.StrToReasonType(UnknownReason),
+        UnknownReason);
 end;
 
 procedure TestTIdSipSubscriptionStateHeader.TestValue;
@@ -3911,6 +4088,9 @@ begin
   CheckEquals(SubscriptionSubstatePending, Self.SS.SubState,   'SubState');
   CheckEquals(1,                           Self.SS.Expires,    'Expires');
   CheckEquals(EventReasonProbation,        Self.SS.Reason,     'Reason');
+  CheckEquals(TIdSipSubscriptionStateHeader.ReasonTypeToStr(ssrProbation),
+              TIdSipSubscriptionStateHeader.ReasonTypeToStr(Self.SS.ReasonType),
+              'ReasonType');
   CheckEquals(2,                           Self.SS.RetryAfter, 'RetryAfter');
 end;
 

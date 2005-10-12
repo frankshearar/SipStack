@@ -12,8 +12,8 @@ unit SpikeRegistrar;
 interface
 
 uses
-  Classes, Controls, ExtCtrls, Forms, IdObservable, IdSipCore, IdSipMessage,
-  IdSipMockBindingDatabase, IdSipMockLocator,IdSipRegistration,
+  Classes, Controls, ExtCtrls, Forms, IdObservable, IdSipCore, IdSipLocator,
+  IdSipMessage, IdSipMockBindingDatabase, IdSipMockLocator,IdSipRegistration,
   IdSipTransaction, IdSipTransport, IdTimerQueue, StdCtrls, SyncObjs, SysUtils;
 
 type
@@ -48,9 +48,11 @@ type
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure OnSendRequest(Request: TIdSipRequest;
-                            Sender: TIdSipTransport);
+                            Sender: TIdSipTransport;
+                            Destination: TIdSipLocation);
     procedure OnSendResponse(Response: TIdSipResponse;
-                             Sender: TIdSipTransport);
+                             Sender: TIdSipTransport;
+                             Destination: TIdSipLocation);
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
@@ -192,13 +194,15 @@ begin
 end;
 
 procedure TrnidSpikeRegistrar.OnSendRequest(Request: TIdSipRequest;
-                                            Sender: TIdSipTransport);
+                                            Sender: TIdSipTransport;
+                                            Destination: TIdSipLocation);
 begin
   Self.LogMessage(Request);
 end;
 
 procedure TrnidSpikeRegistrar.OnSendResponse(Response: TIdSipResponse;
-                                             Sender: TIdSipTransport);
+                                             Sender: TIdSipTransport;
+                                             Destination: TIdSipLocation);
 begin
   Self.LogMessage(Response);
 end;

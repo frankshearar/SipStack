@@ -13,15 +13,9 @@ interface
 
 uses
   IdSipMessage, IdSipRegistration, IdSipMockBindingDatabase, TestFramework,
-  TestFrameworkSip, TestFrameworkSipTU;
+  TestFrameworkSip;
 
 type
-  // Fold this into TestTIdSipOutboundRegisterModule... when you find it.
-  TestBugs = class(TTestCaseTU)
-  published
-    procedure TestCreateRegister;
-  end;
-
   TestTIdSipRegistrations = class(TTestCase)
   private
     Regs: TIdSipRegistrations;
@@ -95,34 +89,9 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipRegistration unit tests');
-  Result.AddTest(TestBugs.Suite);
   Result.AddTest(TestTIdSipRegistrations.Suite);
   Result.AddTest(TestTIdSipAbstractBindingDatabase.Suite);
   Result.AddTest(TestTIdSipMockBindingDatabase.Suite);
-end;
-
-//******************************************************************************
-//* TestBugs                                                                   *
-//******************************************************************************
-//* TestBugs Published methods *************************************************
-
-procedure TestBugs.TestCreateRegister;
-var
-  Reg: TIdSipRequest;
-begin
-  Self.Core.Contact.Value := 'sip:127.0.0.1';
-
-  Reg := Self.Core.RegisterModule.CreateRegister(Self.Destination);
-  try
-    CheckEquals(Self.Core.From.AsAddressOfRecord,
-                Reg.From.Value,
-                'From must contain the address of record (RFC 3261 section 10.2)');
-    CheckEquals(Self.Core.From.AsAddressOfRecord,
-                Reg.ToHeader.Value,
-                'To must contain the address of record (RFC 3261 section 10.2)');
-  finally
-    Reg.Free;
-  end;
 end;
 
 //******************************************************************************

@@ -528,11 +528,9 @@ procedure TIdSipDialog.CreateInternal(Request: TIdSipRequest;
                                       IsSecure: Boolean;
                                       RouteSet: TIdSipHeaderList);
 begin
-  Self.fInitialRequest  := TIdSipRequest.Create;
-  Self.fInitialRequest.Assign(Request);
+  Self.fInitialRequest  := Request.Copy as TIdSipRequest;
 
-  Self.fInitialResponse := TIdSipResponse.Create;
-  Self.fInitialResponse.Assign(Response);
+  Self.fInitialResponse := Response.Copy as TIdSipResponse;
 
   Self.LocalSequenceNoLock := TCriticalSection.Create;
 

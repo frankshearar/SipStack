@@ -68,8 +68,6 @@ type
     procedure ReceiveOptions;
     procedure SendOkResponse(Sender: TObject;
                              Request: TIdSipRequest);
-    procedure SendOptionsRequest(Sender: TObject;
-                                 Request: TIdSipRequest);
     procedure SendProvisionalAndOkResponse(Sender: TObject;
                                            Request: TIdSipRequest);
     procedure SendResponseReceiveOptions(Sender: TObject;
@@ -362,30 +360,6 @@ begin
       raise Exception.Create('TCP connection disappeared: SendOkResponse');
 
     (TObject(Threads[0]) as TIdPeerThread).Connection.Write(S);
-  finally
-    Self.Server.Threads.UnlockList;
-  end;
-end;
-
-procedure TestTIdSipTcpClient.SendOptionsRequest(Sender: TObject;
-                                                 Request: TIdSipRequest);
-var
-  Connection: TIdTCPConnection;
-  S:          String;
-  Threads:    TList;
-begin
-  S := StringReplace(LocalLoopRequest, MethodInvite, MethodOptions, []);
-
-  Threads := Self.Server.Threads.LockList;
-  try
-    if (Threads.Count = 0) then
-      raise Exception.Create('TCP connection disappeared: SendOptionsRequest');
-
-    Connection := (TObject(Threads[0]) as TIdPeerThread).Connection;
-    if not Connection.Connected then
-      raise Exception.Create('TCP connection closed');
-
-    Connection.Write(S);
   finally
     Self.Server.Threads.UnlockList;
   end;

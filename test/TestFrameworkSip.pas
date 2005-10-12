@@ -13,10 +13,11 @@ interface
 
 uses
   Classes, IdInterfacedObject, IdObservable, IdRTP, IdSdp, IdSipAuthentication,
-  IdSipMessage, IdSipCore, IdSipDialog, IdSipMockLocator,
-  IdSipMockTransactionDispatcher, IdSipRegistration, IdSipSubscribeModule,
-  IdSipTcpClient, IdSipTcpServer, IdSipTransaction, IdSipTransport,
-  IdTimerQueue, IdSipUserAgent, SysUtils, TestFramework, TestFrameworkEx;
+  IdSipInviteModule, IdSipLocator, IdSipMessage, IdSipCore, IdSipDialog,
+  IdSipMockLocator, IdSipMockTransactionDispatcher, IdSipRegistration,
+  IdSipSubscribeModule, IdSipTcpClient, IdSipTcpServer, IdSipTransaction,
+  IdSipTransport, IdTimerQueue, IdSipUserAgent, SysUtils, TestFramework,
+  TestFrameworkEx;
 
 type
   TIdSipTestResources = class(TObject)
@@ -62,7 +63,8 @@ type
 
     function  CreateRemoteBye(LocalDialog: TIdSipDialog): TIdSipRequest;
     function  CreateRemoteOk(Request: TIdSipRequest): TIdSipResponse;
-    function  CreateUserAgent: TIdSipUserAgent;
+    function  CreateUserAgent(Timer: TIdTimerQueue;
+                              const Address: String): TIdSipUserAgent;
     function  LastSentAck: TIdSipRequest;
     function  LastSentRequest: TIdSipRequest;
     function  LastSentResponse: TIdSipResponse;
@@ -145,12 +147,13 @@ type
   public
     constructor Create; virtual;
 
-    property ActionParam:    TIdSipAction   read fActionParam;
-    property ErrorCodeParam: Cardinal       read fErrorCodeParam;
-    property FailWith:       ExceptClass    read fFailWith write fFailWith;
-    property NetworkFailed:  Boolean        read fNetworkFailed;
-    property ReasonParam:    String         read fReasonParam;
-    property ResponseParam:  TIdSipResponse read fResponseParam;
+    property ActionParam:              TIdSipAction   read fActionParam;
+    property AuthenticationChallenged: Boolean        read fAuthenticationChallenged;
+    property ErrorCodeParam:           Cardinal       read fErrorCodeParam;
+    property FailWith:                 ExceptClass    read fFailWith write fFailWith;
+    property NetworkFailed:            Boolean        read fNetworkFailed;
+    property ReasonParam:              String         read fReasonParam;
+    property ResponseParam:            TIdSipResponse read fResponseParam;
   end;
 
   TIdSipTestDataListener = class(TIdSipMockListener,
@@ -273,6 +276,24 @@ type
     property Redirect:          Boolean              read fRedirect;
     property ResponseParam:     TIdSipResponse       read fResponseParam;
     property Success:           Boolean              read fSuccess;
+  end;
+
+  TIdSipTestInviteModuleListener = class(TIdSipMockListener,
+                                         IIdSipMessageModuleListener,
+                                         IIdSipInviteModuleListener)
+  private
+    fInboundCall:    Boolean;
+    fSessionParam:   TIdSipInboundSession;
+    fUserAgentParam: TIdSipAbstractCore;
+
+    procedure OnInboundCall(UserAgent: TIdSipAbstractCore;
+                            Session: TIdSipInboundSession);
+  public
+    constructor Create; override;
+
+    property InboundCall:  Boolean              read fInboundCall;
+    property SessionParam: TIdSipInboundSession read fSessionParam;
+    property UserAgentParam: TIdSipAbstractCore read fUserAgentParam;
   end;
 
   TIdSipTestNotifyListener = class(TIdSipMockListener,
@@ -426,15 +447,19 @@ type
   private
     fEstablishedSubscription: Boolean;
     fExpiredSubscription:     Boolean;
+    fFailedSubscription:      Boolean;
     fNotify:                  Boolean;
     fNotifyParam:             TIdSipRequest;
     fRenewedSubscription:     Boolean;
+    fResponseParam:           TIdSipResponse;
     fSubscriptionParam:       TIdSipOutboundSubscription;
 
     procedure OnEstablishedSubscription(Subscription: TIdSipOutboundSubscription;
                                         Notify: TIdSipRequest);
     procedure OnExpiredSubscription(Subscription: TIdSipOutboundSubscription;
                                     Notify: TIdSipRequest);
+    procedure OnFailure(Subscription: TIdSipOutboundSubscription;
+                        Response: TIdSipResponse);
     procedure OnNotify(Subscription: TIdSipOutboundSubscription;
                        Notify: TIdSipRequest);
   public
@@ -442,9 +467,11 @@ type
 
     property EstablishedSubscription: Boolean                    read fEstablishedSubscription;
     property ExpiredSubscription:     Boolean                    read fExpiredSubscription;
+    property FailedSubscription:      Boolean                    read fFailedSubscription;
     property Notify:                  Boolean                    read fNotify;
     property NotifyParam:             TIdSipRequest              read fNotifyParam;
     property RenewedSubscription:     Boolean                    read fRenewedSubscription;
+    property ResponseParam:           TIdSipResponse             read fResponseParam;
     property SubscriptionParam:       TIdSipOutboundSubscription read fSubscriptionParam;
   end;
 
@@ -526,33 +553,34 @@ type
   TIdSipTestTransportSendingListener = class(TIdSipMockListener,
                                              IIdSipTransportSendingListener)
   private
-    fRequestParam:  TIdSipRequest;
-    fResponseParam: TIdSipResponse;
-    fSenderParam:   TIdSipTransport;
-    fSentRequest:   Boolean;
-    fSentResponse:  Boolean;
+    fDestinationParam: TIdSipLocation;
+    fRequestParam:     TIdSipRequest;
+    fResponseParam:    TIdSipResponse;
+    fSenderParam:      TIdSipTransport;
+    fSentRequest:      Boolean;
+    fSentResponse:     Boolean;
 
     procedure OnSendRequest(Request: TIdSipRequest;
-                            Sender: TIdSipTransport);
+                            Sender: TIdSipTransport;
+                            Destination: TIdSipLocation);
     procedure OnSendResponse(Response: TIdSipResponse;
-                             Sender: TIdSipTransport);
+                             Sender: TIdSipTransport;
+                             Destination: TIdSipLocation);
   public
     constructor Create; override;
 
-    property RequestParam:  TIdSipRequest   read fRequestParam;
-    property ResponseParam: TIdSipResponse  read fResponseParam;
-    property SenderParam:   TIdSipTransport read fSenderParam;
-    property SentRequest:   Boolean         read fSentRequest;
-    property SentResponse:  Boolean         read fSentResponse;
+    property DestinationParam: TIdSipLocation read fDestinationParam;
+    property RequestParam:     TIdSipRequest   read fRequestParam;
+    property ResponseParam:    TIdSipResponse  read fResponseParam;
+    property SenderParam:      TIdSipTransport read fSenderParam;
+    property SentRequest:      Boolean         read fSentRequest;
+    property SentResponse:     Boolean         read fSentResponse;
 
   end;
 
   TIdSipTestTransactionDispatcherListener = class(TIdSipMockListener,
                                                   IIdSipTransactionDispatcherListener)
   private
-    fAuthenticationChallenge:   Boolean;
-    fChallengeParam:            TIdSipResponse;
-    fChallengeResponseBranch:   String;
     fDispatcherParam:           TIdSipTransactionDispatcher;
     fReceivedRequest:           Boolean;
     fReceivedResponse:          Boolean;
@@ -561,12 +589,7 @@ type
     fReceiverParam:             TIdSipTransport;
     fRequestParam:              TIdSipRequest;
     fResponseParam:             TIdSipResponse;
-    fTryAgain:                  Boolean;
 
-    procedure OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
-                                        Challenge: TIdSipResponse;
-                                        ChallengeResponse: TIdSipRequest;
-                                        var TryAgain: Boolean);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -574,9 +597,6 @@ type
   public
     constructor Create; override;
 
-    property AuthenticationChallenge:   Boolean                     read fAuthenticationChallenge;
-    property ChallengeParam:            TIdSipResponse              read fChallengeParam;
-    property ChallengeResponseBranch:   String                      read fChallengeResponseBranch write fChallengeResponseBranch;
     property DispatcherParam:           TIdSipTransactionDispatcher read fDispatcherParam;
     property ReceivedRequest:           Boolean                     read fReceivedRequest;
     property ReceivedResponse:          Boolean                     read fReceivedResponse;
@@ -585,14 +605,14 @@ type
     property ReceiverParam:             TIdSipTransport             read fReceiverParam;
     property RequestParam:              TIdSipRequest               read fRequestParam;
     property ResponseParam:             TIdSipResponse              read fResponseParam;
-    property TryAgain:                  Boolean                     read fTryAgain write fTryAgain;
   end;
 
   TIdSipTestTransactionUserListener = class(TIdSipMockListener,
                                             IIdSipTransactionUserListener)
   private
-    fAbstractUserAgentParam:  TIdSipAbstractUserAgent;
+    fAbstractUserAgentParam:  TIdSipAbstractCore;
     fAuthenticationChallenge: Boolean;
+    fChallengedRequestParam:  TIdSipRequest;
     fDroppedUnmatchedMessage: Boolean;
     fMessageParam:            TIdSipMessage;
     fPassword:                String;
@@ -601,19 +621,23 @@ type
     fTryAgain:                Boolean;
     fUsername:                String;
 
-    procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
+    procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractCore;
                                         Challenge: TIdSipResponse;
                                         var Username: String;
                                         var Password: String;
-                                        var TryAgain: Boolean);
-    procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractUserAgent;
+                                        var TryAgain: Boolean); overload;
+    procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractCore;
+                                        ChallengedRequest: TIdSipRequest;
+                                        Challenge: TIdSipResponse); overload;
+    procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
                                         Receiver: TIdSipTransport);
   public
     constructor Create; override;
 
-    property AbstractUserAgentParam:  TIdSipAbstractUserAgent   read fAbstractUserAgentParam;
+    property AbstractUserAgentParam:  TIdSipAbstractCore   read fAbstractUserAgentParam;
     property AuthenticationChallenge: Boolean                   read fAuthenticationChallenge;
+    property ChallengedRequestParam:  TIdSipRequest             read fChallengedRequestParam;
     property DroppedUnmatchedMessage: Boolean                   read fDroppedUnmatchedMessage;
     property MessageParam:            TIdSipMessage             read fMessageParam;
     property Password:                String                    read fPassword write fPassword;
@@ -626,18 +650,12 @@ type
   TIdSipTestUserAgentListener = class(TIdSipTestTransactionUserListener,
                                       IIdSipUserAgentListener)
   private
-    fInboundCall:             Boolean;
-    fSessionParam:            TIdSipInboundSession;
-    fUserAgentParam:          TIdSipUserAgent;
+    fUserAgentParam: TIdSipUserAgent;
 
-    procedure OnInboundCall(UserAgent: TIdSipUserAgent;
-                            Session: TIdSipInboundSession);
   public
     constructor Create; override;
 
-    property InboundCall:             Boolean                   read fInboundCall;
-    property SessionParam:            TIdSipInboundSession      read fSessionParam;
-    property UserAgentParam:          TIdSipUserAgent           read fUserAgentParam;
+    property UserAgentParam: TIdSipUserAgent read fUserAgentParam;
   end;
 
   TIdSipTestSubscribeModuleListener = class(TIdSipMockListener,
@@ -646,11 +664,11 @@ type
     fRenewedSubscription: Boolean;
     fSubscriptionParam:   TIdSipSubscription;
     fSubscriptionRequest: Boolean;
-    fUserAgentParam:      TIdSipAbstractUserAgent;
+    fUserAgentParam:      TIdSipAbstractCore;
 
-    procedure OnRenewedSubscription(UserAgent: TIdSipAbstractUserAgent;
+    procedure OnRenewedSubscription(UserAgent: TIdSipAbstractCore;
                                     Subscription: TIdSipOutboundSubscription);
-    procedure OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
+    procedure OnSubscriptionRequest(UserAgent: TIdSipAbstractCore;
                                     Subscription: TIdSipInboundSubscription);
   public
     constructor Create; override;
@@ -658,7 +676,7 @@ type
     property RenewedSubscription: Boolean                   read fRenewedSubscription;
     property SubscriptionParam:   TIdSipSubscription        read fSubscriptionParam;
     property SubscriptionRequest: Boolean                   read fSubscriptionRequest;
-    property UserAgentParam:      TIdSipAbstractUserAgent   read fUserAgentParam;
+    property UserAgentParam:      TIdSipAbstractCore   read fUserAgentParam;
   end;
 
   TIdSipActionFinder = class(TIdSipActionClosure)
@@ -868,9 +886,11 @@ begin
   Self.Destination := TIdSipToHeader.Create;
   Self.Destination.Value := 'sip:franks@localhost';
 
-  Self.Core := Self.CreateUserAgent;
+  Self.DebugTimer := TIdDebugTimerQueue.Create(false);
+  Self.DebugTimer.TriggerImmediateEvents := true;
+
+  Self.Core := Self.CreateUserAgent(Self.DebugTimer, 'sip:case@localhost');
   Self.Authenticator := Self.Core.Authenticator as TIdSipAuthenticator;
-  Self.DebugTimer    := Self.Core.Timer as TIdDebugTimerQueue;
   Self.Dispatcher    := Self.Core.Dispatcher as TIdSipMockTransactionDispatcher;
 
   Self.Invite := TIdSipTestResources.CreateBasicRequest;
@@ -945,22 +965,19 @@ begin
   Result.ToHeader.Tag := Self.Core.NextTag;
 end;
 
-function TTestCaseTU.CreateUserAgent: TIdSipUserAgent;
+function TTestCaseTU.CreateUserAgent(Timer: TIdTimerQueue;
+                                     const Address: String): TIdSipUserAgent;
 var
-  DebugTimer:  TIdDebugTimerQueue;
   MockLocator: TIdSipMockLocator;
 begin
-  DebugTimer := TIdDebugTimerQueue.Create(false);
-  DebugTimer.TriggerImmediateEvents := true;
-
   Result := TIdSipUserAgent.Create;
   Result.Authenticator := TIdSipAuthenticator.Create;
   Result.Dispatcher    := TIdSipMockTransactionDispatcher.Create;
   Result.Locator       := Result.Dispatcher.Locator;
-  Result.Timer         := DebugTimer;
+  Result.Timer         := Timer;
 
-  Result.Contact.Value := 'sip:case@localhost';
-  Result.From.Value    := 'sip:case@localhost';
+  Result.Contact.Value := Address;
+  Result.From.Value    := Address;
 
   // Make sure we have a sane DNS setup so that actions don't terminate
   // themselves after they try find locations to which to send their messages.
@@ -1185,6 +1202,10 @@ begin
   Challenge := TIdSipResponse.InResponseTo(Self.LastSentRequest,
                                            SIPUnauthorized);
   try
+    Challenge.ToHeader.Tag := Self.Core.NextTag;
+    if (AuthHeaderName = ProxyAuthorizationHeader) then
+      Challenge.StatusCode := SIPProxyAuthenticationRequired;
+
     Auth := Challenge.AddHeader(AuthHeaderName) as TIdSipAuthenticateHeader;
     Auth.AuthorizationScheme := DigestAuthorizationScheme;
     Auth.Realm               := 'SFTF';
@@ -1538,6 +1559,28 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipTestInviteModuleListener                                             *
+//******************************************************************************
+//* TIdSipTestInviteModuleListener Public methods ******************************
+
+constructor TIdSipTestInviteModuleListener.Create;
+begin
+  inherited Create;
+
+  Self.FInboundCall := false;
+end;
+
+//* TIdSipTestInviteModuleListener Private methods *****************************
+
+procedure TIdSipTestInviteModuleListener.OnInboundCall(UserAgent: TIdSipAbstractCore;
+                                                       Session: TIdSipInboundSession);
+begin
+  Self.fInboundCall    := true;
+  Self.fSessionParam   := Session;
+  Self.fUserAgentParam := UserAgent;
+end;
+
+//******************************************************************************
 //* TIdSipTestNotifyListener                                                   *
 //******************************************************************************
 //* TIdSipTestNotifyListener Public methods ************************************
@@ -1805,6 +1848,7 @@ begin
 
   Self.fEstablishedSubscription := false;
   Self.fExpiredSubscription     := false;
+  Self.fFailedSubscription      := false;
   Self.fNotify                  := false;
   Self.fRenewedSubscription     := false;
 end;
@@ -1831,6 +1875,17 @@ begin
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnExpiredSubscription');
+end;
+
+procedure TIdSipTestSubscriptionListener.OnFailure(Subscription: TIdSipOutboundSubscription;
+                                                   Response: TIdSipResponse);
+begin
+  Self.fFailedSubscription := true;
+  Self.fResponseParam      := Response;
+  Self.fSubscriptionParam  := Subscription;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create(Self.ClassName + '.OnFailedSubscription');
 end;
 
 procedure TIdSipTestSubscriptionListener.OnNotify(Subscription: TIdSipOutboundSubscription;
@@ -1986,22 +2041,26 @@ end;
 
 
 procedure TIdSipTestTransportSendingListener.OnSendRequest(Request: TIdSipRequest;
-                                                           Sender: TIdSipTransport);
+                                                           Sender: TIdSipTransport;
+                                                           Destination: TIdSipLocation);
 begin
-  Self.fRequestParam := Request;
-  Self.fSenderParam  := Sender;
-  Self.fSentRequest  := true;
+  Self.fDestinationParam := Destination;
+  Self.fRequestParam     := Request;
+  Self.fSenderParam      := Sender;
+  Self.fSentRequest      := true;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnSendRequest');
 end;
 
 procedure TIdSipTestTransportSendingListener.OnSendResponse(Response: TIdSipResponse;
-                                                            Sender: TIdSipTransport);
+                                                            Sender: TIdSipTransport;
+                                                            Destination: TIdSipLocation);
 begin
-  Self.fResponseParam := Response;
-  Self.fSenderParam   := Sender;
-  Self.fSentResponse  := true;
+  Self.fDestinationParam := Destination;
+  Self.fResponseParam    := Response;
+  Self.fSenderParam      := Sender;
+  Self.fSentResponse     := true;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnSendResponse');
@@ -2016,34 +2075,13 @@ constructor TIdSipTestTransactionDispatcherListener.Create;
 begin
   inherited Create;
 
-  Self.fAuthenticationChallenge   := false;
   Self.fReceivedRequest           := false;
   Self.fReceivedResponse          := false;
   Self.fReceivedUnhandledRequest  := false;
   Self.fReceivedUnhandledResponse := false;
-
-  // Usually you'd want to re-issue a request that the UAS challenged.
-  Self.TryAgain := true;
 end;
 
 //* TIdSipTestTransactionDispatcherListener Private methods ********************
-
-procedure TIdSipTestTransactionDispatcherListener.OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
-                                                                            Challenge: TIdSipResponse;
-                                                                            ChallengeResponse: TIdSipRequest;
-                                                                            var TryAgain: Boolean);
-begin
-  Self.fAuthenticationChallenge := true;
-  Self.fDispatcherParam         := Dispatcher;
-  Self.fChallengeParam          := Challenge;
-  Self.fChallengeResponseBranch := ChallengeResponse.LastHop.Branch;
-
-  // We set the var parameter, not our instance variable!
-  TryAgain := Self.TryAgain;
-
-  if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create(Self.ClassName + '.OnAuthenticationChallenge');
-end;
 
 procedure TIdSipTestTransactionDispatcherListener.OnReceiveRequest(Request: TIdSipRequest;
                                                               Receiver: TIdSipTransport);
@@ -2082,7 +2120,7 @@ end;
 
 //* TIdSipTestTransactionUserListener Private methods **************************
 
-procedure TIdSipTestTransactionUserListener.OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
+procedure TIdSipTestTransactionUserListener.OnAuthenticationChallenge(UserAgent: TIdSipAbstractCore;
                                                                       Challenge: TIdSipResponse;
                                                                       var Username: String;
                                                                       var Password: String;
@@ -2101,7 +2139,20 @@ begin
     raise Self.FailWith.Create(Self.ClassName + '.OnAuthenticationChallenge');
 end;
 
-procedure TIdSipTestTransactionUserListener.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractUserAgent;
+procedure TIdSipTestTransactionUserListener.OnAuthenticationChallenge(UserAgent: TIdSipAbstractCore;
+                                                                      ChallengedRequest: TIdSipRequest;
+                                                                      Challenge: TIdSipResponse);
+begin
+  Self.fAbstractUserAgentParam  := UserAgent;
+  Self.fAuthenticationChallenge := true;
+  Self.fChallengedRequestParam  := ChallengedRequest;
+  Self.fResponseParam           := Challenge;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create(Self.ClassName + '.OnAuthenticationChallenge');
+end;
+
+procedure TIdSipTestTransactionUserListener.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                                                       Message: TIdSipMessage;
                                                                       Receiver: TIdSipTransport);
 begin
@@ -2122,21 +2173,6 @@ end;
 constructor TIdSipTestUserAgentListener.Create;
 begin
   inherited Create;
-
-  Self.fInboundCall := false;
-end;
-
-//* TIdSipTestUserAgentListener Private methods ********************************
-
-procedure TIdSipTestUserAgentListener.OnInboundCall(UserAgent: TIdSipUserAgent;
-                                                    Session: TIdSipInboundSession);
-begin
-  Self.fInboundCall    := true;
-  Self.fSessionParam   := Session;
-  Self.fUserAgentParam := UserAgent;
-
-  if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create(Self.ClassName + '.OnInboundCall');
 end;
 
 //******************************************************************************
@@ -2155,7 +2191,7 @@ end;
 
 //* TIdSipTestSubscribeModuleListener Private methods **************************
 
-procedure TIdSipTestSubscribeModuleListener.OnRenewedSubscription(UserAgent: TIdSipAbstractUserAgent;
+procedure TIdSipTestSubscribeModuleListener.OnRenewedSubscription(UserAgent: TIdSipAbstractCore;
                                                                   Subscription: TIdSipOutboundSubscription);
 begin
   Self.fRenewedSubscription := true;
@@ -2166,7 +2202,7 @@ begin
     raise Self.FailWith.Create(Self.ClassName + '.OnInboundCall');
 end;
 
-procedure TIdSipTestSubscribeModuleListener.OnSubscriptionRequest(UserAgent: TIdSipAbstractUserAgent;
+procedure TIdSipTestSubscribeModuleListener.OnSubscriptionRequest(UserAgent: TIdSipAbstractCore;
                                                                   Subscription: TIdSipInboundSubscription);
 begin
   Self.fSubscriptionRequest := true;

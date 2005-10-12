@@ -24,8 +24,9 @@ interface
 uses
   audioclasses, Classes, Contnrs, Controls, ExtCtrls, Forms, IdDTMFPanel,
   IdObservable, IdRTPDiagnostics, IdRTP, IdSdp, IdSipCore, IdSipIndyLocator,
-  IdSipMessage, IdSipRegistration, IdSipTransaction, IdSipTransport,
-  IdSipUserAgent, IdSocketHandle, IdTimerQueue, StdCtrls, SyncObjs, SysUtils;
+  IdSipInviteModule, IdSipLocator, IdSipMessage, IdSipRegistration,
+  IdSipTransaction, IdSipTransport, IdSipUserAgent, IdSocketHandle,
+  IdTimerQueue, StdCtrls, SyncObjs, SysUtils;
 
 type
   TrnidSpike = class(TForm,
@@ -33,6 +34,8 @@ type
                      IIdRTPListener,
                      IIdObserver,
                      IIdSipActionListener,
+                     IIdSipInviteModuleListener,
+                     IIdSipMessageModuleListener,
                      IIdSipOptionsListener,
                      IIdSipRegistrationListener,
                      IIdSipSessionListener,
@@ -124,13 +127,16 @@ type
     procedure LogMessage(Msg: TIdSipMessage; Inbound: Boolean);
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Response: TIdSipResponse); overload;
-    procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
+    procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractCore;
                                         Challenge: TIdSipResponse;
                                         var Username: String;
                                         var Password: String;
                                         var TryAgain: Boolean); overload;
+    procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractCore;
+                                        ChallengedRequest: TIdSipRequest;
+                                        Challenge: TIdSipResponse); overload;
     procedure OnChanged(Observed: TObject);
-    procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractUserAgent;
+    procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
                                         Receiver: TIdSipTransport);
     procedure OnEstablishedSession(Session: TIdSipSession;
@@ -147,7 +153,7 @@ type
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts;
                         Response: TIdSipResponse);
-    procedure OnInboundCall(UserAgent: TIdSipUserAgent;
+    procedure OnInboundCall(UserAgent: TIdSipAbstractCore;
                             Session: TIdSipInboundSession);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Answer: TIdSipResponse);
@@ -172,9 +178,11 @@ type
     procedure OnResponse(OptionsAgent: TIdSipOutboundOptions;
                          Response: TIdSipResponse);
     procedure OnSendRequest(Request: TIdSipRequest;
-                            Sender: TIdSipTransport);
+                            Sender: TIdSipTransport;
+                            Destination: TIdSipLocation);
     procedure OnSendResponse(Response: TIdSipResponse;
-                             Sender: TIdSipTransport);
+                             Sender: TIdSipTransport;
+                             Destination: TIdSipLocation);
     procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts);
     procedure ProcessPCM(Data: TStream);
@@ -388,7 +396,7 @@ begin
   raise Exception.Create('TrnidSpike.OnAuthenticationChallenge');
 end;
 
-procedure TrnidSpike.OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
+procedure TrnidSpike.OnAuthenticationChallenge(UserAgent: TIdSipAbstractCore;
                                                Challenge: TIdSipResponse;
                                                var Username: String;
                                                var Password: String;
@@ -399,12 +407,18 @@ begin
   TryAgain := true;
 end;
 
+procedure TrnidSpike.OnAuthenticationChallenge(UserAgent: TIdSipAbstractCore;
+                                               ChallengedRequest: TIdSipRequest;
+                                               Challenge: TIdSipResponse);
+begin
+end;                                               
+
 procedure TrnidSpike.OnChanged(Observed: TObject);
 begin
   Self.SessionCounter.Caption := IntToStr((Observed as TIdSipUserAgent).SessionCount);
 end;
 
-procedure TrnidSpike.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractUserAgent;
+procedure TrnidSpike.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                                Message: TIdSipMessage;
                                                Receiver: TIdSipTransport);
 const
@@ -492,7 +506,7 @@ begin
   end;
 end;
 
-procedure TrnidSpike.OnInboundCall(UserAgent: TIdSipUserAgent;
+procedure TrnidSpike.OnInboundCall(UserAgent: TIdSipAbstractCore;
                                    Session: TIdSipInboundSession);
 begin
   Session.AddSessionListener(Self);
@@ -590,7 +604,8 @@ begin
 end;
 
 procedure TrnidSpike.OnSendRequest(Request: TIdSipRequest;
-                                   Sender: TIdSipTransport);
+                                   Sender: TIdSipTransport;
+                                   Destination: TIdSipLocation);
 begin
   // Don't ever do this: we're on a private LAN accessing the SIP network
   // through a NATting firewall. Doing the below makes us look like the
@@ -604,7 +619,8 @@ begin
 end;
 
 procedure TrnidSpike.OnSendResponse(Response: TIdSipResponse;
-                                    Sender: TIdSipTransport);
+                                    Sender: TIdSipTransport;
+                                    Destination: TIdSipLocation);
 begin
   Self.LogMessage(Response, false);
 end;

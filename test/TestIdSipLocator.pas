@@ -26,6 +26,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAsString;
     procedure TestCopy;
     procedure TestCreate;
     procedure TestCreateFromVia;
@@ -172,6 +173,14 @@ begin
 end;
 
 //* TestTIdSipLocation Published methods ***************************************
+
+procedure TestTIdSipLocation.TestAsString;
+begin
+  CheckEquals(Format(LocationTuple,
+                     [Self.Loc.Transport, Self.Loc.IPAddress, Self.Loc.Port]),
+              Self.Loc.AsString,
+              'AsString');       
+end;
 
 procedure TestTIdSipLocation.TestCopy;
 var

@@ -59,6 +59,7 @@ type
                              Port: Cardinal); overload;
     constructor Create(Via: TIdSipViaHeader); overload;
 
+    function AsString: String;
     function Copy: TIdSipLocation;
 
     property Transport: String   read fTransport;
@@ -151,6 +152,9 @@ type
 
   ESipLocator = class(Exception);
 
+const
+  LocationTuple = '(location transport: %s ip-address: %s port: %d)';
+
 implementation
 
 uses
@@ -187,6 +191,11 @@ begin
   Self.fTransport := Via.Transport;
   Self.fIPAddress := Via.SentBy;
   Self.fPort      := Via.Port;
+end;
+
+function TIdSipLocation.AsString: String;
+begin
+  Result := Format(LocationTuple, [Self.Transport, Self.IPAddress, Self.Port]);
 end;
 
 function TIdSipLocation.Copy: TIdSipLocation;

@@ -32,7 +32,7 @@ type
   end;
 
 const
-  DialogIdStringForm = '(ID callid: %s localtag: %s remotetag: %s)';
+  DialogIdStringForm = '(dialog-id callid: %s localtag: %s remotetag: %s)';
 
 implementation
 

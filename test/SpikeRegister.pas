@@ -12,9 +12,9 @@ unit SpikeRegister;
 interface
 
 uses
-  Classes, Controls, ExtCtrls, Forms, IdSipCore, IdSipIndyLocator, IdSipMessage,
-  IdSipRegistration, IdSipTransaction, IdSipTransport, IdSipUserAgent,
-  IdTimerQueue, StdCtrls, SyncObjs, SysUtils;
+  Classes, Controls, ExtCtrls, Forms, IdSipCore, IdSipIndyLocator, IdSipLocator,
+  IdSipMessage, IdSipRegistration, IdSipTransaction, IdSipTransport,
+  IdSipUserAgent, IdTimerQueue, StdCtrls, SyncObjs, SysUtils;
 
 type
   TrnidSpikeRegister = class(TForm,
@@ -59,9 +59,11 @@ type
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure OnSendRequest(Request: TIdSipRequest;
-                            Sender: TIdSipTransport);
+                            Sender: TIdSipTransport;
+                            Destination: TIdSipLocation);
     procedure OnSendResponse(Response: TIdSipResponse;
-                             Sender: TIdSipTransport);
+                             Sender: TIdSipTransport;
+                             Destination: TIdSipLocation);
     procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts);
     procedure RefreshContacts(Bindings: TIdSipContacts);
@@ -207,13 +209,15 @@ begin
 end;
 
 procedure TrnidSpikeRegister.OnSendRequest(Request: TIdSipRequest;
-                                           Sender: TIdSipTransport);
+                                           Sender: TIdSipTransport;
+                                           Destination: TIdSipLocation);
 begin
   Self.LogMessage(Request);
 end;
 
 procedure TrnidSpikeRegister.OnSendResponse(Response: TIdSipResponse;
-                                            Sender: TIdSipTransport);
+                                            Sender: TIdSipTransport;
+                                            Destination: TIdSipLocation);
 begin
   Self.LogMessage(Response);
 end;

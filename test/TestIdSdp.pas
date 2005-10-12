@@ -567,6 +567,7 @@ type
     procedure TestMimeType;
     procedure TestOnHold;
     procedure TestPutOnHold;
+    procedure TestSessionDescription;
     procedure TestSetRemoteDescription;
     procedure TestSetRemoteDescriptionMalformedSdp;
     procedure TestStartListeningSingleStream;
@@ -596,6 +597,7 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSdpParser unit tests');
+{
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSdpAttribute.Suite);
   Result.AddTest(TestTIdSdpRTPMapAttribute.Suite);
@@ -618,6 +620,7 @@ begin
   Result.AddTest(TestTIdSdpPayload.Suite);
   Result.AddTest(TestTIdSdpPayloadProcessor.Suite);
   Result.AddTest(TestTIdSDPMediaStream.Suite);
+}
   Result.AddTest(TestTIdSDPMultimediaSession.Suite);
 end;
 
@@ -6783,6 +6786,28 @@ begin
         'Stream #0 not put on hold');
   Check(Self.MS.Streams[1].OnHold,
         'Stream #1 not put on hold');
+end;
+
+procedure TestTIdSDPMultimediaSession.TestSessionDescription;
+var
+  EmptyDesc: String;
+  Expected: String;
+begin
+  EmptyDesc := Self.MS.SessionDescription;
+
+  Expected := Self.MultiStreamSDP(8000, 9000);
+  Self.MS.StartListening(Expected);
+  CheckEquals(Expected, Self.MS.SessionDescription, 'After StartListening');
+
+  Self.MS.PutOnHold;
+  CheckNotEquals(Expected,
+                 Self.MS.SessionDescription,
+                 'After PutOnHold: session description not updated');
+
+  Self.MS.StopListening;
+  CheckEquals(EmptyDesc,
+              Self.MS.SessionDescription,
+              'StopListening didn''t clear the session description');
 end;
 
 procedure TestTIdSDPMultimediaSession.TestSetRemoteDescription;

@@ -177,6 +177,36 @@ type
     procedure TestCopy;
   end;
 
+  TestTIdAuthenticationChallengeData = class(TTestCase)
+  private
+    Data: TIdAuthenticationChallengeData;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCopy;
+  end;
+
+  TestTIdDebugMessageData = class(TTestCase)
+  private
+    Data: TIdDebugMessageData;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCopy;
+  end;
+
+  TestTIdDebugSendMessageData = class(TTestCase)
+  private
+    Data: TIdDebugSendMessageData;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCopy;
+  end;
+
   TestTIdFailData = class(TTestCase)
   private
     Data: TIdFailData;
@@ -249,6 +279,26 @@ type
     procedure TestSetFromStripsTagParam;
   end;
 
+  TestTIdSubscriptionRequestData = class(TTestCase)
+  private
+    Data: TIdSubscriptionRequestData;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCopy;
+  end;
+
+  TestTIdSubscriptionData = class(TTestCase)
+  private
+    Data: TIdSubscriptionData;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCopy;
+  end;
+
 const
   DummySdp = 'v=0'#13#10
            + 'o=sc 1105373135 1105373135 IN IP4 %s'#13#10
@@ -270,6 +320,9 @@ begin
 //  Result.AddTest(TestTIdSipStackInterface.Suite);
   Result.AddTest(TestTIdEventData.Suite);
   Result.AddTest(TestTIdInformationalData.Suite);
+  Result.AddTest(TestTIdAuthenticationChallengeData.Suite);
+  Result.AddTest(TestTIdDebugMessageData.Suite);
+  Result.AddTest(TestTIdDebugSendMessageData.Suite);
   Result.AddTest(TestTIdFailData.Suite);
   Result.AddTest(TestTIdCallEndedData.Suite);
   Result.AddTest(TestTIdRegistrationData.Suite);
@@ -277,6 +330,8 @@ begin
   Result.AddTest(TestTIdSessionProgressData.Suite);
   Result.AddTest(TestTIdSessionData.Suite);
   Result.AddTest(TestTIdInboundCallData.Suite);
+  Result.AddTest(TestTIdSubscriptionRequestData.Suite);
+  Result.AddTest(TestTIdSubscriptionData.Suite);
 end;
 
 //******************************************************************************
@@ -1054,6 +1109,134 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdAuthenticationChallengeData                                         *
+//******************************************************************************
+//* TestTIdAuthenticationChallengeData Public methods **************************
+
+procedure TestTIdAuthenticationChallengeData.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Data := TIdAuthenticationChallengeData.Create;
+  Self.Data.ChallengedRequest.Method := MethodInvite;
+  Self.Data.Challenge.StatusCode     := SIPOK;
+  Self.Data.Handle                   := $decafbad;
+end;
+
+procedure TestTIdAuthenticationChallengeData.TearDown;
+begin
+  Self.Data.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdAuthenticationChallengeData Published methods ***********************
+
+procedure TestTIdAuthenticationChallengeData.TestCopy;
+var
+  Copy: TIdAuthenticationChallengeData;
+begin
+  Copy := Self.Data.Copy as TIdAuthenticationChallengeData;
+  try
+    Check(Self.Data.ChallengedRequest.Equals(Copy.ChallengedRequest),
+          'ChallengedRequest');
+    Check(Self.Data.Challenge.Equals(Copy.Challenge),
+          'Challenge');
+    CheckEquals(IntToHex(Self.Data.Handle, 8),
+                IntToHex(Copy.Handle, 8),
+                'Handle');
+  finally
+    Copy.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdDebugMessageData                                                    *
+//******************************************************************************
+//* TestTIdDebugMessageData Public methods *************************************
+
+procedure TestTIdDebugMessageData.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Data := TIdDebugMessageData.Create;
+  Self.Data.Message := TIdSipResponse.Create;
+end;
+
+procedure TestTIdDebugMessageData.TearDown;
+begin
+  Self.Data.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdDebugMessageData Published methods **********************************
+
+procedure TestTIdDebugMessageData.TestCopy;
+var
+  Copy: TIdDebugMessageData;
+begin
+  Copy := Self.Data.Copy as TIdDebugMessageData;
+  try
+    CheckEquals(IntToHex(Self.Data.Handle, 8),
+                IntToHex(Copy.Handle, 8),
+                'Handle');
+    Check(Copy.Message.Equals(Self.Data.Message),
+          'The copy''s message doesn''t contain the original message');
+    Check(Copy.Message <> Self.Data.Message,
+          'The copy contains a reference to the original message, not a copy');
+  finally
+    Copy.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdDebugSendMessageData                                                *
+//******************************************************************************
+//* TestTIdDebugSendMessageData Public methods *********************************
+
+procedure TestTIdDebugSendMessageData.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Data := TIdDebugSendMessageData.Create;
+  Self.Data.Destination := TIdSipLocation.Create('TCP', '127.0.0.1', 5060);
+  Self.Data.Message     := TIdSipRequest.Create;
+end;
+
+procedure TestTIdDebugSendMessageData.TearDown;
+begin
+  Self.Data.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdDebugSendMessageData Published methods ******************************
+
+procedure TestTIdDebugSendMessageData.TestCopy;
+var
+  Copy: TIdDebugSendMessageData;
+begin
+  Copy := Self.Data.Copy as TIdDebugSendMessageData;
+  try
+    CheckEquals(IntToHex(Self.Data.Handle, 8),
+                IntToHex(Copy.Handle, 8),
+                'Handle');
+    CheckEquals(Self.Data.Destination.AsString,
+                Copy.Destination.AsString,
+               'The copy''s Destination doesn''t contain the original Destination');
+    Check(Copy.Destination <> Self.Data.Destination,
+          'The copy contains a reference to the original Destination, not a copy');
+    Check(Copy.Message.Equals(Self.Data.Message),
+          'The copy''s message doesn''t contain the original message');
+    Check(Copy.Message <> Self.Data.Message,
+          'The copy contains a reference to the original message, not a copy');
+  finally
+    Copy.Free;
+  end;
+end;
+
+//******************************************************************************
 //* TestTIdFailData                                                            *
 //******************************************************************************
 //* TestTIdFailData Public methods *********************************************
@@ -1363,7 +1546,9 @@ begin
   inherited SetUp;
 
   Self.Data := TIdInboundCallData.Create;
-  Self.Data.From.Value := 'J. Random Loser <sip:loser@always.a.loser.com>';
+  Self.Data.From.Value    := 'J. Random Loser <sip:loser@always.a.loser.com>';
+  Self.Data.Contact.Value := 'J. Random Loser <sip:loser@[::1]>';
+  Self.Data.Handle                   := $decafbad;
   Self.Data.LocalMimeType            := '1';
   Self.Data.LocalSessionDescription  := '2';
   Self.Data.RemoteMimeType           := '3';
@@ -1385,6 +1570,9 @@ var
 begin
   Copy := Self.Data.Copy as TIdInboundCallData;
   try
+    CheckEquals(Self.Data.Contact.Value,
+                Copy.Contact.Value,
+                'Contact');
     CheckEquals(Self.Data.From.Value,
                 Copy.From.Value,
                 'From');
@@ -1415,6 +1603,96 @@ begin
   try
     Copy.From := Self.Data.From;
     Check(not Copy.From.HasTag, 'Tag param not removed');
+  finally
+    Copy.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSubscriptionData                                                    *
+//******************************************************************************
+//* TestTIdSubscriptionData Public methods *************************************
+
+procedure TestTIdSubscriptionData.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Data := TIdSubscriptionData.Create;
+  Self.Data.Handle := $decafbad;
+  Self.Data.Notify.RequestUri.Uri := 'sip:case@fried-neurons.org';
+end;
+
+procedure TestTIdSubscriptionData.TearDown;
+begin
+  Self.Data.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSubscriptionData Published methods **********************************
+
+procedure TestTIdSubscriptionData.TestCopy;
+var
+  Copy: TIdSubscriptionData;
+begin
+  Copy := Self.Data.Copy as TIdSubscriptionData;
+  try
+    CheckEquals(IntToHex(Self.Data.Handle, 8),
+                IntToHex(Copy.Handle, 8),
+                'Handle');
+    Check(Copy.Notify.Equals(Self.Data.Notify),
+          'NOTIFY messages don''t match');
+  finally
+    Copy.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSubscriptionRequestData                                             *
+//******************************************************************************
+//* TestTIdSubscriptionRequestData Public methods ******************************
+
+procedure TestTIdSubscriptionRequestData.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Data := TIdSubscriptionRequestData.Create;
+  Self.Data.Contact.Value := 'sip:machine-1@internet-cafe.org>';
+  Self.Data.EventPackage  := PackageRefer;
+  Self.Data.From.Value    := 'Case <sip:case@fried-neurons.org>';
+  Self.Data.ReferTo.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna';
+end;
+
+procedure TestTIdSubscriptionRequestData.TearDown;
+begin
+  Self.Data.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSubscriptionRequestData Published methods ***************************
+
+procedure TestTIdSubscriptionRequestData.TestCopy;
+var
+  Copy: TIdSubscriptionRequestData;
+begin
+  Copy := Self.Data.Copy as TIdSubscriptionRequestData;
+  try
+    CheckEquals(IntToHex(Self.Data.Handle, 8),
+                IntToHex(Copy.Handle, 8),
+                'Handle');
+    CheckEquals(Self.Data.Contact.FullValue,
+                Copy.Contact.FullValue,
+                'Contact');
+    CheckEquals(Self.Data.EventPackage,
+                Copy.EventPackage,
+                'EventPackage');
+    CheckEquals(Self.Data.From.FullValue,
+                Copy.From.FullValue,
+                'From');
+    CheckEquals(Self.Data.ReferTo.FullValue,
+                Copy.ReferTo.FullValue,
+                'ReferTo');
   finally
     Copy.Free;
   end;

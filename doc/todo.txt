@@ -1,20 +1,9 @@
-* Fold TestBugs in TestIdSipRegistration into the (apparently
-  as-yet-uncommitted) TestIdSipRegistration on wsfrank.
-* TIdSipRequest.IsMalformed knows about module-specific stuff. I'm
-  not sure how to remove that knowledge though...
-* PSTN + call transfer.
-* Henrik Gessen's bug report indicates that a 200 OK to the REGISTER
-  doesn't match the outbound Register!
-
 RFC 3265 still to do:
 
-   3.3.     General................................................ 18
    3.3.1.   Detecting support for SUBSCRIBE and NOTIFY............. 18
-   3.3.3.   Forking................................................ 18
-   3.3.5.   State Agents and Notifier Migration.................... 19
-   3.3.6.   Polling Resource State................................. 20
-   3.3.7.   Allow-Events header usage.............................. 21
-   3.3.8.   PINT Compatibility..................................... 21
+   3.3.5.   State Agents and Notifier Migration.................... 19  [Unnecessary for CC transfer]
+   3.3.6.   Polling Resource State................................. 20  [Optional behaviour]
+   3.3.8.   PINT Compatibility..................................... 21  [MAY strength; fairly irrelevant]
    5.       Security Considerations................................ 28
    5.1.     Access Control......................................... 28
    5.2.     Notifier Privacy Mechanism............................. 28
@@ -95,6 +84,13 @@ RFC 3515 still to do:
 OnSubscriptionRequest. The UI in turn accesses the referred resource
 in an appropriate manner.]
 
+2.4.4 Using SIP Events to Report the Results of the Reference
+
+   <snip> In particular, an agent acting on a REFER request SHOULD
+   NOT issue a CANCEL to any referenced SIP requests because the agent
+   sending the REFER terminated its subscription to the refer event
+   before the referenced request completes.
+
 2.4.7 Using the Subscription-State Header Field with Event Refer
 
    In the case where a REFER was accepted with a 202, but approval to
@@ -118,4 +114,29 @@ Notes:
 SUBSCRIBE & REFER both act a bit like sessions: different messages, of
 different methods, relate to the same thing.
 
+4.  User Agent Client Behavior: Sending a Replaces Header
 
+   A User Agent that wishes to replace a single existing early or
+   confirmed dialog with a new dialog of its own, MAY send the target
+   User Agent an INVITE request containing a Replaces header field.  The
+   User Agent Client (UAC) places the Call-ID, to-tag, and from-tag
+   information for the target dialog in a single Replaces header field
+   and sends the new INVITE to the target.  If the user agent only
+   wishes to replace an early dialog (as in the Call Pickup example in
+   Section 7.1), the UAC MAY also include the "early-only" parameter in
+   the Replaces header field.  A UAC MUST NOT send an INVITE with a
+   Replaces header field that attempts to replace an early dialog which
+   was not originated by the target of the INVITE with a Replaces header
+   field.
+
+   Note that use of this mechanism does not provide a way to match
+   multiple dialogs, nor does it provide a way to match an entire call,
+   an entire transaction, or to follow a chain of proxy forking logic.
+   For example, if Alice replaces Cathy in an early dialog with Bob, but
+   Bob does not answer, Alice's replacement request will not match other
+   dialogs to which Bob's UA redirects, nor other branches to which his
+   proxy forwards.  Although this specification takes reasonable
+   precautions to prevent unexpected behavior in the face of forking,
+   implementations SHOULD only address replacement requests (i.e., set
+   the Request-URI of the replacement request) to the SIP Contact URI of
+   the target.

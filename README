@@ -30,19 +30,18 @@ The main interface to the stack - the interface you want to use to USE
 the stack, as opposed to extend the stack - is in
 src\IdSipStackInterface.
 
-If you're interested in hacking the stack, take a look at the Spike
-class in tests\Spike.pas. It does a lot of stuff, and it's definitely
-"alpha" quality, but it's what I use to try out SIP stuff. I plan to
-simplify Spike to ease the reader into the ways of SIP.
+If you're interested in hacking the stack, take a look at the
+SingleCoreSpike class in tests\SingleCoreSpike.pas. It illustrates, in
+a basic way, how to use the SIP stack.
 
 Please note that this version, 0.5, has a radically different
 threading architecture to version 0.3 Please read the CHANGES file,
 doc\overview.txt and doc\architecture.txt!
 
 Todo:
-* We need to implement client-side authentication in an asynchronous
-  manner. In particular, we need to make sure that NOTIFYs, INVITEs
-  with a Replaces header, and probably SUBSCRIBE messages need
+* We need to implement client-side authentication for certain classes
+  of message. In particular, we need to make sure that NOTIFYs,
+  INVITEs with a Replaces header, and probably SUBSCRIBE messages need
   authentication.
 
 Known bugs:

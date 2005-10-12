@@ -33,6 +33,7 @@ uses
   IdSipDialogID in 'src\IdSipDialogID.pas',
   IdSipDns in 'src\IdSipDns.pas',
   IdSipIndyLocator in 'src\IdSipIndyLocator.pas',
+  IdSipInviteModule in 'src\IdSipInviteModule.pas',
   IdSipLocator in 'src\IdSipLocator.pas',
   IdSipMessage in 'src\IdSipMessage.pas',
   IdSipMockBindingDatabase in 'test\IdSipMockBindingDatabase.pas',
@@ -58,6 +59,8 @@ uses
   IdSystem in 'src\IdSystem.pas',
   IdTimerQueue in 'src\IdTimerQueue.pas',
   IdUnicode in 'src\IdUnicode.pas',
+  MultipleCoreSpike in 'test\MultipleCoreSpike.pas' {MultiCore},
+  SingleCoreSpike in 'test\SingleCoreSpike.pas' {SingleCore},
   Spike in 'test\Spike.pas' {rnidSpike},
   SpikeRegister in 'test\SpikeRegister.pas' {rnidSpikeRegister},
   SpikeRegistrar in 'test\SpikeRegistrar.pas' {rnidSpikeRegistrar},
@@ -83,6 +86,7 @@ uses
   TestIdSipDns in 'test\TestIdSipDns.pas',
   TestIdSipHeaders in 'test\TestIdSipHeaders.pas',
   TestIdSipIndyLocator in 'test\TestIdSipIndyLocator.pas',
+  TestIdSipInviteModule in 'test\TestIdSipInviteModule.pas',
   TestIdSipLocator in 'test\TestIdSipLocator.pas',
   TestIdSipMessage in 'test\TestIdSipMessage.pas',
   TestIdSipParser in 'test\TestIdSipParser.pas',
@@ -98,7 +102,7 @@ uses
   TestIdSipTransport in 'test\TestIdSipTransport.pas',
   TestIdSipTransportLogger in 'test\TestIdSipTransportLogger.pas',
   TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas',
-  TestIdSipUserAgent in 'test\TestIdSipUserAgent.pas',  
+  TestIdSipUserAgent in 'test\TestIdSipUserAgent.pas',
   TestIdSipUri in 'test\TestIdSipUri.pas',
   TestIdTimerQueue in 'test\TestIdTimerQueue.pas',
   TestIdUnicode in 'test\TestIdUnicode.pas';
@@ -118,7 +122,8 @@ uses
 begin
   {$IFDEF SPIKE}
   Forms.Application.Initialize;
-  Forms.Application.CreateForm(TrnidSpike, rnidSpike);
+//  Forms.Application.CreateForm(TrnidSpike, rnidSpike);
+  Forms.Application.CreateForm(TMultiCore, MultiCore);
   Forms.Application.Run;
   {$ELSE}
     {$IFDEF GUI}

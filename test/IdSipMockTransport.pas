@@ -38,9 +38,11 @@ type
     fSentResponseCount: Cardinal;
     fWriteLog:          Boolean;
 
-    procedure DispatchRequest(R: TidSipRequest);
-    procedure DispatchResponse(R: TidSipResponse);
-    function  FindTransport(const Host: String;
+    procedure DispatchRequest(R: TidSipRequest;
+                              Dest: TIdSipLocation);
+    procedure DispatchResponse(R: TidSipResponse;
+                               Dest: TIdSipLocation);
+    function  FindTransport(const Address: String;
                                   Port: Cardinal): TIdSipMockTransport;
     procedure Log(Msg: String;
                   Direction: TIdMessageDirection);
@@ -349,7 +351,7 @@ end;
 procedure TIdSipMockTransport.SendRequest(R: TIdSipRequest;
                                           Dest: TIdSipLocation);
 begin
-  Self.NotifyTransportSendingListeners(R);
+  Self.NotifyTransportSendingListeners(R, Dest);
 
   Self.Log(R.AsString, dirOut);
 
@@ -368,13 +370,13 @@ begin
                                  'TIdSipMockTransport.SendRequest ('
                                + Self.FailWith.ClassName + ')');
 
-  Self.DispatchRequest(R);
+  Self.DispatchRequest(R, Dest);
 end;
 
 procedure TIdSipMockTransport.SendResponse(R: TIdSipResponse;
                                            Dest: TIdSipLocation);
 begin
-  Self.NotifyTransportSendingListeners(R);
+  Self.NotifyTransportSendingListeners(R, Dest);
 
   Self.Log(R.AsString, dirOut);
   Self.fResponses.AddCopy(R);
@@ -387,7 +389,7 @@ begin
                                  'TIdSipMockTransport.SendResponse ('
                                + Self.FailWith.ClassName + ')');
 
-  Self.DispatchResponse(R);
+  Self.DispatchResponse(R, Dest);
 end;
 
 function TIdSipMockTransport.SentByIsRecognised(Via: TIdSipViaHeader): Boolean;
@@ -397,33 +399,30 @@ end;
 
 //* TIdSipMockTransport Private methods ****************************************
 
-procedure TIdSipMockTransport.DispatchRequest(R: TidSipRequest);
+procedure TIdSipMockTransport.DispatchRequest(R: TidSipRequest;
+                                              Dest: TIdSipLocation);
 var
   T: TIdSipMockTransport;
 begin
-  T := Self.FindTransport(R.RequestUri.Host, R.RequestUri.Port);
+  T := Self.FindTransport(Dest.IPAddress, Dest.Port);
 
   if Assigned(T) then
     T.FireOnRequest(R);
 end;
 
-procedure TIdSipMockTransport.DispatchResponse(R: TidSipResponse);
+procedure TIdSipMockTransport.DispatchResponse(R: TidSipResponse;
+                                               Dest: TIdSipLocation);
 var
   T: TIdSipMockTransport;
 begin
-  T := Self.FindTransport(R.LastHop.SentBy, R.LastHop.Port);
+  T := Self.FindTransport(Dest.IPAddress, Dest.Port);
 
   if Assigned(T) then
     T.FireOnResponse(R);
 end;
 
-function TIdSipMockTransport.FindTransport(const Host: String;
+function TIdSipMockTransport.FindTransport(const Address: String;
                                                  Port: Cardinal): TIdSipMockTransport;
-  function NameMatches(Transport: TIdSipMockTransport; const Host: String): Boolean;
-  begin
-    Result := IsEqual(Transport.HostName, Host)
-           or IsEqual(Transport.Address, Host);
-  end;
 var
   I: Integer;
 begin
@@ -431,7 +430,7 @@ begin
 
   I := 0;
   while (I < GAllTransports.Count) and not Assigned(Result) do
-    if NameMatches(Self.TransportAt(I), Host)
+    if (Self.TransportAt(I).Address = Address)
        and (Self.TransportAt(I).Port = Port) then
       Result := Self.TransportAt(I)
     else

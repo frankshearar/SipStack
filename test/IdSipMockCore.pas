@@ -12,10 +12,11 @@ unit IdSipMockCore;
 interface
 
 uses
-  IdSipCore, IdSipMessage, IdSipTransaction, IdSipTransport, IdSipUserAgent;
+  IdSipCore, IdSipInviteModule, IdSipMessage, IdSipTransaction, IdSipTransport,
+  IdSipUserAgent;
 
 type
-  TIdSipMockCore = class(TIdSipAbstractUserAgent)
+  TIdSipMockCore = class(TIdSipAbstractCore)
   private
     fReceiveRequestCalled: Boolean;
     fReceiveResponseCalled: Boolean;
@@ -37,7 +38,7 @@ type
     fIsInbound:  Boolean;
     fResponseResent: Boolean;
   protected
-    procedure Initialise(UA: TIdSipAbstractUserAgent;
+    procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
                          UsingSecureTransport: Boolean); override;
   public
@@ -96,7 +97,7 @@ end;
 
 //* TIdSipMockSession Protected methods ****************************************
 
-procedure TIdSipMockSession.Initialise(UA: TIdSipAbstractUserAgent;
+procedure TIdSipMockSession.Initialise(UA: TIdSipAbstractCore;
                                        Request: TIdSipRequest;
                                        UsingSecureTransport: Boolean);
 begin

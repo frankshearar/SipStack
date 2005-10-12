@@ -139,8 +139,8 @@ type
     procedure TestEqualsFromAssign;
     procedure TestEqualsResponse;
     procedure TestEqualsTrivial;
+    procedure TestEvent;
     procedure TestFirstAuthorization;
-    procedure TestFirstEvent;
     procedure TestFirstProxyAuthorization;
     procedure TestFirstProxyRequire;
     procedure TestFirstReplaces;
@@ -185,9 +185,11 @@ type
     procedure TestParseWithRequestUriInAngleBrackets;
     procedure TestProxyAuthorizationFor;
     procedure TestReferTo;
+    procedure TestReplaces;
     procedure TestRequiresResponse;
     procedure TestSetMaxForwards;
     procedure TestSetRoute;
+    procedure TestSubscriptionState;
     procedure TestWantsAllowEventsHeader;
   end;
 
@@ -1913,6 +1915,32 @@ begin
   end;
 end;
 
+procedure TestTIdSipRequest.TestEvent;
+var
+  Event: TIdSipEventHeader;
+begin
+  Check(not Self.Request.HasHeader(EventHeaderFull),
+        'Sanity check: a new request should have no Event header');
+
+  Self.Request.Event;
+  Check(Assigned(Self.Request.Event),
+        'Getter didn''t instantiate the Event header');
+
+  Event := TIdSipEventHeader.Create;
+  try
+    // This sneakily checks that (a) the Setter instantiates a Event header,
+    // AND that the setter copies the information for that header properly.
+    Self.Request.RemoveAllHeadersNamed(EventHeaderFull);
+    Event.Value := PackageRefer;
+    Self.Request.Event := Event;
+
+    Check(Event.Equals(Self.Request.Event),
+                         'New Event doesn''t equal request''s Event');
+  finally
+    Event.Free;
+  end;
+end;
+
 procedure TestTIdSipRequest.TestFirstAuthorization;
 var
   A: TIdSipHeader;
@@ -1926,21 +1954,6 @@ begin
   Self.Request.AddHeader(AuthorizationHeader);
 
   Check(A = Self.Request.FirstAuthorization, 'Wrong Authorization');
-end;
-
-procedure TestTIdSipRequest.TestFirstEvent;
-var
-  A: TIdSipHeader;
-begin
-  Self.Request.ClearHeaders;
-
-  CheckNotNull(Self.Request.FirstEvent, 'Event not present');
-  CheckEquals(1, Self.Request.HeaderCount, 'Event not auto-added');
-
-  A := Self.Request.FirstHeader(EventHeaderFull);
-  Self.Request.AddHeader(EventHeaderFull);
-
-  Check(A = Self.Request.FirstEvent, 'Wrong Event');
 end;
 
 procedure TestTIdSipRequest.TestFirstProxyAuthorization;
@@ -2832,6 +2845,32 @@ begin
   end;
 end;
 
+procedure TestTIdSipRequest.TestReplaces;
+var
+  Replaces: TIdSipReplacesHeader;
+begin
+  Check(not Self.Request.HasHeader(ReplacesHeader),
+        'Sanity check: a new request should have no Replaces header');
+
+  Self.Request.Replaces;
+  Check(Assigned(Self.Request.Replaces),
+        'Getter didn''t instantiate the Replaces header');
+
+  Replaces := TIdSipReplacesHeader.Create;
+  try
+    // This sneakily checks that (a) the Setter instantiates a Replaces header,
+    // AND that the setter copies the information for that header properly.
+    Self.Request.RemoveAllHeadersNamed(ReplacesHeader);
+    Replaces.Value := 'zero@jakes;from-tag=31337;to-tag=h4xx0r';
+    Self.Request.Replaces := Replaces;
+
+    Check(Replaces.Equals(Self.Request.Replaces),
+                         'New Replaces doesn''t equal request''s Replaces');
+  finally
+    Replaces.Free;
+  end;
+end;
+
 procedure TestTIdSipRequest.TestRequiresResponse;
 begin
   Self.Request.Method := MethodAck;
@@ -2889,9 +2928,40 @@ begin
   end;
 end;
 
+procedure TestTIdSipRequest.TestSubscriptionState;
+var
+  SubscriptionState: TIdSipSubscriptionStateHeader;
+begin
+  Check(not Self.Request.HasHeader(SubscriptionStateHeader),
+        'Sanity check: a new request should have no Subscription-State header');
+
+  Self.Request.SubscriptionState;
+  Check(Assigned(Self.Request.SubscriptionState),
+        'Getter didn''t instantiate the Subscription-State header');
+
+  SubscriptionState := TIdSipSubscriptionStateHeader.Create;
+  try
+    // This sneakily checks that (a) the Setter instantiates a
+    // Subscription-State header, AND that the setter copies the information for
+    // that header properly.
+    Self.Request.RemoveAllHeadersNamed(SubscriptionStateHeader);
+    SubscriptionState.Value := 'terminated;reason=noresource';
+    Self.Request.SubscriptionState := SubscriptionState;
+
+    Check(SubscriptionState.Equals(Self.Request.SubscriptionState),
+                         'New Subscription-State doesn''t equal request''s Subscription-State');
+  finally
+    SubscriptionState.Free;
+  end;
+end;
+
 procedure TestTIdSipRequest.TestWantsAllowEventsHeader;
 begin
   Self.Request.Method := MethodInvite;
+  Check(Self.Request.WantsAllowEventsHeader,
+        Self.Request.Method + ' method');
+
+  Self.Request.Method := MethodOptions;
   Check(Self.Request.WantsAllowEventsHeader,
         Self.Request.Method + ' method');
 

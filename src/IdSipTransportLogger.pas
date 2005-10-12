@@ -12,7 +12,8 @@ unit IdSipTransportLogger;
 interface
 
 uses
-  Classes, IdInterfacedObject, IdSipMessage, IdSipTransport, SysUtils;
+  Classes, IdInterfacedObject, IdSipLocator, IdSipMessage, IdSipTransport,
+  SysUtils;
 
 type
   TIdMessageDirection = (dirError, dirIn, dirOut);
@@ -35,9 +36,11 @@ type
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure OnSendRequest(Request: TIdSipRequest;
-                            Sender: TIdSipTransport);
+                            Sender: TIdSipTransport;
+                            Destination: TIdSipLocation);
     procedure OnSendResponse(Response: TIdSipResponse;
-                             Sender: TIdSipTransport);
+                             Sender: TIdSipTransport;
+                             Destination: TIdSipLocation);
     function Timestamp(Direction: TIdMessageDirection): String;
   public
     procedure LogTransport(T: TIdSipTransport);
@@ -135,13 +138,15 @@ begin
 end;
 
 procedure TIdSipTransportLogger.OnSendRequest(Request: TIdSipRequest;
-                                              Sender: TIdSipTransport);
+                                              Sender: TIdSipTransport;
+                                              Destination: TIdSipLocation);
 begin
   Self.Log(Request.AsString, dirOut);
 end;
 
 procedure TIdSipTransportLogger.OnSendResponse(Response: TIdSipResponse;
-                                               Sender: TIdSipTransport);
+                                               Sender: TIdSipTransport;
+                                               Destination: TIdSipLocation);
 begin
   Self.Log(Response.AsString, dirOut);
 end;

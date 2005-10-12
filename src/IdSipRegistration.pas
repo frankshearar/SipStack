@@ -149,7 +149,7 @@ type
 
   TIdSipRegisterModule = class;
 
-  TIdSipRegistrar = class(TIdSipAbstractUserAgent)
+  TIdSipRegistrar = class(TIdSipAbstractCore)
   private
     RegisterModule: TIdSipRegisterModule;
 
@@ -176,10 +176,11 @@ type
     fBindingDB:         TIdSipAbstractBindingDatabase;
     fMinimumExpiryTime: Cardinal; // in seconds
   public
+    constructor Create(UA: TIdSipAbstractCore); override;
+
     function Accept(Request: TIdSipRequest;
                     UsingSecureTransport: Boolean): TIdSipAction; override;
     function AcceptsMethods: String; override;
-    function WillAccept(Request: TIdSipRequest): Boolean; override;
 
     property BindingDB:         TIdSipAbstractBindingDatabase read fBindingDB write fBindingDB;
     property MinimumExpiryTime: Cardinal                      read fMinimumExpiryTime write fMinimumExpiryTime;
@@ -200,12 +201,11 @@ type
 
     procedure SetRegistrar(Value: TIdSipUri);
   public
-    constructor Create(UA: TIdSipAbstractUserAgent); override;
+    constructor Create(UA: TIdSipAbstractCore); override;
     destructor  Destroy; override;
 
     function  Accept(Request: TIdSipRequest;
                      UsingSecureTransport: Boolean): TIdSipAction; override;
-    function  AcceptsMethods: String; override;
     procedure CleanUp; override;
     function  CreateRegister(Registrar: TIdSipToHeader): TIdSipRequest;
     function  CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistrationQuery;
@@ -225,7 +225,7 @@ type
     OutModule: TIdSipOutboundRegisterModule;
 
     function CreateNewAttempt: TIdSipRequest; override;
-    procedure Initialise(UA: TIdSipAbstractUserAgent;
+    procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
                          UsingSecureTransport: Boolean); override;
   public
@@ -249,7 +249,7 @@ type
     procedure SendSimpleResponse(Request: TIdSipRequest;
                                 StatusCode: Cardinal);
   protected
-    procedure Initialise(UA: TIdSipAbstractUserAgent;
+    procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
                          UsingSecureTransport: Boolean); override;
   public
@@ -279,14 +279,14 @@ type
     procedure ActionSucceeded(Response: TIdSipResponse); override;
     function  CreateRegister(Registrar: TIdSipUri;
                              Bindings: TIdSipContacts): TIdSipRequest; virtual;
-    procedure Initialise(UA: TIdSipAbstractUserAgent;
+    procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
                          UsingSecureTransport: Boolean); override;
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
     procedure NotifyOfSuccess(Response: TIdSipResponse); virtual;
-    function  ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionStatus; override;
+    function  ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionResult; override;
     function  ReceiveRedirectionResponse(Response: TIdSipResponse;
-                                         UsingSecureTransport: Boolean): TIdSipActionStatus; override;
+                                         UsingSecureTransport: Boolean): TIdSipActionResult; override;
     procedure RegisterWith(Registrar: TIdSipUri;
                            Bindings: TIdSipContacts); overload;
     procedure RegisterWith(Registrar: TIdSipUri;
@@ -321,7 +321,7 @@ type
   protected
     function  CreateRegister(Registrar: TIdSipUri;
                              Bindings: TIdSipContacts): TIdSipRequest; override;
-    procedure Initialise(UA: TIdSipAbstractUserAgent;
+    procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
                          UsingSecureTransport: Boolean); override;
   public
@@ -718,12 +718,22 @@ end;
 //******************************************************************************
 //* TIdSipRegisterModule Public methods ****************************************
 
+constructor TIdSipRegisterModule.Create(UA: TIdSipAbstractCore);
+begin
+  inherited Create(UA);
+
+  Self.AcceptsMethodsList.Add(MethodRegister);
+end;
+
 function TIdSipRegisterModule.Accept(Request: TIdSipRequest;
                                      UsingSecureTransport: Boolean): TIdSipAction;
 begin
-  Result := TIdSipInboundRegistration.CreateInbound(Self.UserAgent,
-                                                    Request,
-                                                    UsingSecureTransport);
+  Result := inherited Accept(Request, UsingSecureTransport);
+
+  if not Assigned(Result) then
+    Result := TIdSipInboundRegistration.CreateInbound(Self.UserAgent,
+                                                      Request,
+                                                      UsingSecureTransport);
 end;
 
 function TIdSipRegisterModule.AcceptsMethods: String;
@@ -731,17 +741,12 @@ begin
   Result := MethodRegister;
 end;
 
-function TIdSipRegisterModule.WillAccept(Request: TIdSipRequest): Boolean;
-begin
-  Result := Request.IsRegister;
-end;
-
 //******************************************************************************
 //* TIdSipOutboundRegisterModule                                               *
 //******************************************************************************
 //* TIdSipOutboundRegisterModule Public methods ********************************
 
-constructor TIdSipOutboundRegisterModule.Create(UA: TIdSipAbstractUserAgent);
+constructor TIdSipOutboundRegisterModule.Create(UA: TIdSipAbstractCore);
 begin
   inherited Create(UA);
 
@@ -767,12 +772,6 @@ begin
   Result := nil;
 end;
 
-function TIdSipOutboundRegisterModule.AcceptsMethods: String;
-begin
-  // As a purely UAC module, don't offer to accept ANY requests.
-  Result := '';
-end;
-
 procedure TIdSipOutboundRegisterModule.CleanUp;
 begin
   if Self.HasRegistrar then
@@ -792,8 +791,8 @@ begin
 
     Result.CallID := Self.KnownRegistrars.CallIDFor(Registrar.Address);
 
-    Result.From.Value     := Self.UserAgent.From.AsAddressOfRecord;
-    Result.ToHeader.Value := Self.UserAgent.From.AsAddressOfRecord;
+    Result.ToHeader.Assign(Self.UserAgent.Contact);
+    Result.From.Assign(Self.UserAgent.Contact);
   except
     FreeAndNil(Result);
 
@@ -877,7 +876,7 @@ begin
   end;
 end;
 
-procedure TIdSipRegistration.Initialise(UA: TIdSipAbstractUserAgent;
+procedure TIdSipRegistration.Initialise(UA: TIdSipAbstractCore;
                                         Request: TIdSipRequest;
                                         UsingSecureTransport: Boolean);
 begin
@@ -955,7 +954,7 @@ end;
 
 //* TIdSipInboundRegistration Protected methods ********************************
 
-procedure TIdSipInboundRegistration.Initialise(UA: TIdSipAbstractUserAgent;
+procedure TIdSipInboundRegistration.Initialise(UA: TIdSipAbstractCore;
                                                Request: TIdSipRequest;
                                                UsingSecureTransport: Boolean);
 begin
@@ -1141,7 +1140,7 @@ begin
   end;
 end;
 
-procedure TIdSipOutboundRegistration.Initialise(UA: TIdSipAbstractUserAgent;
+procedure TIdSipOutboundRegistration.Initialise(UA: TIdSipAbstractCore;
                                                 Request: TIdSipRequest;
                                                 UsingSecureTransport: Boolean);
 begin
@@ -1226,44 +1225,44 @@ begin
   Self.Terminate;
 end;
 
-function TIdSipOutboundRegistration.ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionStatus;
+function TIdSipOutboundRegistration.ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionResult;
 begin
   Result := inherited ReceiveFailureResponse(Response);
 
-  if (Result = asFailure) then begin
+  if (Result = arFailure) then begin
     case Response.StatusCode of
       SIPIntervalTooBrief: begin
         Self.ReissueRequestWithLongerExpiry(Self.InitialRequest.RequestUri,
                                             Response.FirstMinExpires.NumericValue);
-        Result := asSuccess;
+        Result := arSuccess;
       end;
 
       SIPBadExtension: begin
         if Self.InitialRequest.HasHeader(RequireHeader) then begin
           Self.RetryWithoutExtensions(Self.InitialRequest.RequestUri,
                                       Response);
-          Result := asSuccess;
+          Result := arSuccess;
         end;
       end;
     else
-      Result := asFailure;
+      Result := arFailure;
     end;
   end;
 end;
 
 function TIdSipOutboundRegistration.ReceiveRedirectionResponse(Response: TIdSipResponse;
-                                                               UsingSecureTransport: Boolean): TIdSipActionStatus;
+                                                               UsingSecureTransport: Boolean): TIdSipActionResult;
 var
   NewAttempt: TIdSipOutboundRegister;
 begin
-  Result := asFailure;
+  Result := arFailure;
 
   if Response.HasHeader(ContactHeaderFull) then begin
     NewAttempt := Self.OutModule.RegisterWith(Response.FirstContact.Address);
     NewAttempt.AddListeners(Self.Listeners);
     NewAttempt.Send;
 
-    Result := asSuccess;
+    Result := arSuccess;
   end;
 end;
 
@@ -1466,7 +1465,7 @@ begin
   Result.FirstExpires.NumericValue := ExpireNow;
 end;
 
-procedure TIdSipOutboundUnRegister.Initialise(UA: TIdSipAbstractUserAgent;
+procedure TIdSipOutboundUnRegister.Initialise(UA: TIdSipAbstractCore;
                                               Request: TIdSipRequest;
                                               UsingSecureTransport: Boolean);
 begin

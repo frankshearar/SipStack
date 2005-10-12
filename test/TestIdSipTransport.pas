@@ -21,14 +21,17 @@ type
   public
     procedure NotifyTransportListeners(const Request: TIdSipRequest); overload;
     procedure NotifyTransportListeners(const Response: TIdSipResponse); overload;
-    procedure NotifyTransportSendingListeners(const Request: TIdSipRequest); overload;
-    procedure NotifyTransportSendingListeners(const Response: TIdSipResponse); overload;
+    procedure NotifyTransportSendingListeners(const Request: TIdSipRequest;
+                                              Dest: TIdSipLocation); overload;
+    procedure NotifyTransportSendingListeners(const Response: TIdSipResponse;
+                                              Dest: TIdSipLocation); overload;
   end;
 
   TestTIdSipTransportEventNotifications = class(TTestCaseSip,
                                                 IIdSipTransportListener,
                                                 IIdSipTransportSendingListener)
   private
+    Destination:      TIdSipLocation;
     ReceivedRequest:  Boolean;
     ReceivedResponse: Boolean;
     Request:          TIdSipRequest;
@@ -46,9 +49,11 @@ type
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure OnSendRequest(Request: TIdSipRequest;
-                            Sender: TIdSipTransport);
+                            Sender: TIdSipTransport;
+                            Destination: TIdSipLocation);
     procedure OnSendResponse(Response: TIdSipResponse;
-                             Sender: TIdSipTransport);
+                             Sender: TIdSipTransport;
+                             Destination: TIdSipLocation);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -107,9 +112,11 @@ type
     LastSentResponse: TIdSipResponse;
 
     procedure OnSendRequest(Request: TIdSipRequest;
-                            Sender: TIdSipTransport);
+                            Sender: TIdSipTransport;
+                            Destination: TIdSipLocation);
     procedure OnSendResponse(Response: TIdSipResponse;
-                             Sender: TIdSipTransport);
+                             Sender: TIdSipTransport;
+                             Destination: TIdSipLocation);
   protected
     CheckingRequestEvent:  TIdSipRequestEvent;
     CheckingResponseEvent: TIdSipResponseEvent;
@@ -429,8 +436,9 @@ type
 
   TestTIdSipTransportSendingRequestMethod = class(TTransportMethodTestCase)
   private
-    Method:  TIdSipTransportSendingRequestMethod;
-    Request: TIdSipRequest;
+    Destination: TIdSipLocation;
+    Method:      TIdSipTransportSendingRequestMethod;
+    Request:     TIdSipRequest;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -440,8 +448,9 @@ type
 
   TestTIdSipTransportSendingResponseMethod = class(TTransportMethodTestCase)
   private
-    Method:  TIdSipTransportSendingResponseMethod;
-    Response: TIdSipResponse;
+    Destination: TIdSipLocation;
+    Method:      TIdSipTransportSendingResponseMethod;
+    Response:    TIdSipResponse;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -495,14 +504,16 @@ begin
   inherited NotifyTransportListeners(Response);
 end;
 
-procedure TIdSipTransportSubclass.NotifyTransportSendingListeners(const Request: TIdSipRequest);
+procedure TIdSipTransportSubclass.NotifyTransportSendingListeners(const Request: TIdSipRequest;
+                                                                  Dest: TIdSipLocation);
 begin
-  inherited NotifyTransportSendingListeners(Request);
+  inherited NotifyTransportSendingListeners(Request, Dest);
 end;
 
-procedure TIdSipTransportSubclass.NotifyTransportSendingListeners(const Response: TIdSipResponse);
+procedure TIdSipTransportSubclass.NotifyTransportSendingListeners(const Response: TIdSipResponse;
+                                                                  Dest: TIdSipLocation);
 begin
-  inherited NotifyTransportSendingListeners(Response);
+  inherited NotifyTransportSendingListeners(Response, Dest);
 end;
 
 //******************************************************************************
@@ -514,6 +525,7 @@ procedure TestTIdSipTransportEventNotifications.SetUp;
 begin
   inherited SetUp;
 
+  Self.Destination      := TIdSipLocation.Create('TCP', '127.0.0.1', 5060);
   Self.ReceivedRequest  := false;
   Self.ReceivedResponse := false;
   Self.Request          := TIdSipTestResources.CreateLocalLoopRequest;
@@ -526,6 +538,7 @@ begin
   Self.Transport.Free;
   Self.Response.Free;
   Self.Request.Free;
+  Self.Destination.Free;
 
   inherited TearDown;
 end;
@@ -560,7 +573,8 @@ begin
 end;
 
 procedure TestTIdSipTransportEventNotifications.OnSendRequest(Request: TIdSipRequest;
-                                                              Sender: TIdSipTransport);
+                                                              Sender: TIdSipTransport;
+                                                              Destination: TIdSipLocation);
 begin
   Self.SentRequest := true;
   Check(Self.Request = Request,     'Request not correct');
@@ -568,7 +582,8 @@ begin
 end;
 
 procedure TestTIdSipTransportEventNotifications.OnSendResponse(Response: TIdSipResponse;
-                                                               Sender: TIdSipTransport);
+                                                               Sender: TIdSipTransport;
+                                                               Destination: TIdSipLocation);
 begin
   Self.SentResponse := true;
 
@@ -591,7 +606,7 @@ procedure TestTIdSipTransportEventNotifications.TestAddTransportSendingListener;
 begin
   Self.Transport.AddTransportSendingListener(Self);
 
-  Self.Transport.NotifyTransportSendingListeners(Self.Request);
+  Self.Transport.NotifyTransportSendingListeners(Self.Request, Self.Destination);
 
   Check(Self.SentRequest, 'Listener wasn''t added');
 end;
@@ -641,7 +656,8 @@ begin
     Self.Transport.AddTransportSendingListener(Self);
     Self.Transport.AddTransportSendingListener(Listener);
 
-    Self.Transport.NotifyTransportSendingListeners(Self.Request);
+    Self.Transport.NotifyTransportSendingListeners(Self.Request,
+                                                   Self.Destination);
 
     Check(Self.SentRequest and Listener.SentRequest,
           'Not all Listeners Sent the request');
@@ -659,7 +675,8 @@ begin
     Self.Transport.AddTransportSendingListener(Self);
     Self.Transport.AddTransportSendingListener(Listener);
 
-    Self.Transport.NotifyTransportSendingListeners(Self.Response);
+    Self.Transport.NotifyTransportSendingListeners(Self.Response,
+                                                   Self.Destination);
 
     Check(Self.SentResponse and Listener.SentResponse,
           'Not all Listeners Sent the Response');
@@ -683,7 +700,8 @@ begin
   Self.Transport.AddTransportSendingListener(Self);
   Self.Transport.RemoveTransportSendingListener(Self);
 
-  Self.Transport.NotifyTransportSendingListeners(Self.Request);
+  Self.Transport.NotifyTransportSendingListeners(Self.Request,
+                                                 Self.Destination);
 
   Check(not Self.SentRequest, 'Listener wasn''t removed');
 end;
@@ -1333,12 +1351,14 @@ end;
 //* TestTIdSipTransport Private methods ****************************************
 
 procedure TestTIdSipTransport.OnSendRequest(Request: TIdSipRequest;
-                                            Sender: TIdSipTransport);
+                                            Sender: TIdSipTransport;
+                                            Destination: TIdSipLocation);
 begin
 end;
 
 procedure TestTIdSipTransport.OnSendResponse(Response: TIdSipResponse;
-                                             Sender: TIdSipTransport);
+                                             Sender: TIdSipTransport;
+                                             Destination: TIdSipLocation);
 begin
   Self.LastSentResponse.Assign(Response);
   Self.SendEvent.SetEvent;
@@ -2873,17 +2893,20 @@ procedure TestTIdSipTransportSendingRequestMethod.SetUp;
 begin
   inherited SetUp;
 
+  Self.Destination := TIdSipLocation.Create('TCP', '127.0.0.1', 5060);
   Self.Request := TIdSipRequest.Create;
 
   Self.Method := TIdSipTransportSendingRequestMethod.Create;
-  Self.Method.Request := Self.Request;
-  Self.Method.Sender  := Self.Transport;
+  Self.Method.Destination := Self.Destination;
+  Self.Method.Request     := Self.Request;
+  Self.Method.Sender      := Self.Transport;
 end;
 
 procedure TestTIdSipTransportSendingRequestMethod.TearDown;
 begin
   Self.Method.Free;
   Self.Request.Free;
+  Self.Destination.Free;
 
   inherited TearDown;
 end;
@@ -2899,6 +2922,8 @@ begin
     Self.Method.Run(Listener);
 
     Check(Listener.SentRequest, 'Listener not notified');
+    Check(Self.Method.Destination = Listener.DestinationParam,
+          'Destination param');
     Check(Self.Method.Sender = Listener.SenderParam,
           'Sender param');
     Check(Self.Method.Request = Listener.RequestParam,
@@ -2917,17 +2942,20 @@ procedure TestTIdSipTransportSendingResponseMethod.SetUp;
 begin
   inherited SetUp;
 
+  Self.Destination := TIdSipLocation.Create('TCP', '127.0.0.1', 5060);
   Self.Response := TIdSipResponse.Create;
 
   Self.Method := TIdSipTransportSendingResponseMethod.Create;
-  Self.Method.Response := Self.Response;
-  Self.Method.Sender   := Self.Transport;
+  Self.Method.Destination := Self.Destination;
+  Self.Method.Response    := Self.Response;
+  Self.Method.Sender      := Self.Transport;
 end;
 
 procedure TestTIdSipTransportSendingResponseMethod.TearDown;
 begin
   Self.Method.Free;
   Self.Response.Free;
+  Self.Destination.Free;
 
   inherited TearDown;
 end;
@@ -2943,6 +2971,8 @@ begin
     Self.Method.Run(Listener);
 
     Check(Listener.SentResponse, 'Listener not notified');
+    Check(Self.Method.Destination = Listener.DestinationParam,
+          'Destination param');
     Check(Self.Method.Sender = Listener.SenderParam,
           'Sender param');
     Check(Self.Method.Response = Listener.ResponseParam,
