@@ -1,0 +1,728 @@
+
+
+
+Sip                                                            D. Worley
+Internet-Draft                                                   Pingtel
+Expires: April 8, 2006                                   October 5, 2005
+
+
+      Guidelines for Implementing the GRUU Support in User Agents
+                   draft-worley-sip-gruu-implement-00
+
+Status of this Memo
+
+   By submitting this Internet-Draft, each author represents that any
+   applicable patent or other IPR claims of which he or she is aware
+   have been or will be disclosed, and any of which he or she becomes
+   aware will be disclosed, in accordance with Section 6 of BCP 79.
+
+   Internet-Drafts are working documents of the Internet Engineering
+   Task Force (IETF), its areas, and its working groups.  Note that
+   other groups may also distribute working documents as Internet-
+   Drafts.
+
+   Internet-Drafts are draft documents valid for a maximum of six months
+   and may be updated, replaced, or obsoleted by other documents at any
+   time.  It is inappropriate to use Internet-Drafts as reference
+   material or to cite them other than as "work in progress."
+
+   The list of current Internet-Drafts can be accessed at
+   http://www.ietf.org/ietf/1id-abstracts.txt.
+
+   The list of Internet-Draft Shadow Directories can be accessed at
+   http://www.ietf.org/shadow.html.
+
+   This Internet-Draft will expire on April 8, 2006.
+
+Copyright Notice
+
+   Copyright (C) The Internet Society (2005).
+
+Abstract
+
+   Several applications of the Session Initiation Protocol (SIP) require
+   a user agent (A) to construct and distribute a URI which can be used
+   by anyone on the Internet to route a call to that specific UA
+   instance.  A URI which routes to a specific UA instance is called a
+   Globally Routable UA URI (GRUU).  A method [1] has been proposed by
+   which proxies can construct and delver GRUUs to UAs that request
+   them.  This document distills [1] into a guide for UA implementors.
+
+
+
+
+
+Worley                    Expires April 8, 2006                 [Page 1]
+
+Internet-Draft         Guidelines for GRUU Support          October 2005
+
+
+1.  Background
+
+   (This section is largely copied from [1].)
+
+      The Session Initiation Protocol, RFC 3261 is used to establish and
+      maintain a dialog between a pair of user agents in order to manage
+      a communications session.  Messages within the dialog are sent
+      from one user agent to another using a series of proxy hops called
+      the route set, eventually being delivered to the remote target -
+      the user agent on the other side of the dialog.  This remote
+      target is identified by a SIP URI obtained from the value of the
+      Contact header field in INVITE requests and responses.
+
+      RFC 3261 mandates that a user agent populate the Contact header
+      field in INVITE requests and responses with a URI that is global
+      (meaning that it can be used from any element connected to the
+      Internet), and that routes to the user agent which inserted it.
+      RFC 3261 also mandates that this URI be valid for requests sent
+      outside of the dialog in which the Contact URI was inserted.
+
+      In practice, these requirements have proven very difficult to
+      meet.  Few endpoints have a hostname that is is present in DNS.
+      Many endpoints have an IP address that is private because the user
+      agent is behind a NAT.  Techniques like the Simple Traversal of
+      UDP Through NAT (STUN) can be used to obtain IP addresses on the
+      public Internet.  However, many firewalls will prohibit incoming
+      SIP requests from reaching a user agent unless they first pass
+      through a proxy sitting in the DMZ of the network.  Thus URIs
+      using STUN-obtained IP addresses often do not work.
+
+      Because of these difficulties, most UAs have actually been
+      inserting URIs into the Contact header field of requests and
+      responses with the form sip:{IP-address}.  These have the property
+      of routing to the UA, but they are generally only reachable from
+      the proxy to which the user is directly connected.  This
+      limitation does not prevent SIP calls to an Address-of-Record
+      (AOR) from proceeding, since the user's proxy can usually reach
+      these private addresses, and the proxy itself is generally
+      reachable over the public network.  However, this issue has
+      adversely affected several other SIP mechanisms and applications.
+
+   A number of important applications depend on contact URIs being
+   globally routable, including call transfer (via REFER or INVITE with
+   the Replaces header), conferencing, presence applications, and end-
+   point call control (EPCC) features (call pick-up, call park, etc.).
+   All of these applications require the endpoint to be able to
+   construct a URI that not only routes to that user agent, but is
+   usable by other entities anywhere on the Internet as a target for new
+
+
+
+Worley                    Expires April 8, 2006                 [Page 2]
+
+Internet-Draft         Guidelines for GRUU Support          October 2005
+
+
+   SIP requests.
+
+   The GRUU features proposed in [1] alleviate these problems by
+   providing a method for UAs to obtain globally routable URIs from the
+   registrars for the AORs they serve.  At first sight, achieving this
+   seems improbable, but of necessity (1) a proxy is globally routable
+   from the Internet, and (2) a proxy knows how to reach any UA
+   registered for an AOR in its domain.  Together, these facts allow the
+   proxy to construct URIs which globally route to it, and allow the
+   proxy to forward requests to those URIs to the corresponding UAs.
+
+   Because of the importance of the GRUU mechanism for implementing
+   features that are of great practical value, this memo summarizes the
+   requirements for a UA to support and exploit GRUUs as an aid to UA
+   implementers.  This memo is specialized for the commonest case, where
+   a UA with one IP address services one or more AORs, and except for
+   one extension (Section 5), is entirely derived from [1].
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Worley                    Expires April 8, 2006                 [Page 3]
+
+Internet-Draft         Guidelines for GRUU Support          October 2005
+
+
+2.  Terminology
+
+   A URI is said to be "globally routable" if it can be resolved using
+   the standard rules for resolving SIP URIs by any host on the public
+   Internet to reach a proxy that knows how to route requests for that
+   URI to their final destination.
+
+   A URI is a "user agent URI" if it routes to only one user agent, and
+   if it continues to route to that user agent even if the UA changes
+   its contact address.
+
+   A URI is a "GRUU" if it is both globally routable and is a user agent
+   URI.
+
+   "GRUU" also refers to the SIP extension defined in [1], and to the
+   GRUU URIs that UAs obtain via that extension.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Worley                    Expires April 8, 2006                 [Page 4]
+
+Internet-Draft         Guidelines for GRUU Support          October 2005
+
+
+3.  Requesting and Receiving a GRUU
+
+   GRUUs that are issued by proxies represent a combination of a
+   specific user agent and a specific AOR.  A UA can possess one GRUU
+   for each AOR that it services, and each UA that services a particular
+   AOR will have a distinct GRUU for that AOR.
+
+   GRUUs can be constructed by proxies according to any number of
+   methods.  Some of them will be largely opaque to an outside observer,
+   whereas some of them will be more transparent in regard to the AOR or
+   UA to which they refer.  Some examples of possible GRUUs are:
+
+   sip:gruu~456163682055412069@example.com
+   sip:foo@example.com;opaque=RWFjaCBVQSBpbnN sip:foo@
+   example.com;opaque="urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
+
+      Guideline: All GRUUs exist both in the "sip" and the "sips" URI
+      schemes, and UAs must be capable of processing both varieties of
+      their GRUUs.
+
+   Each UA is identified by an "instance ID".
+
+      Guideline: Each UA instance has an "instance ID" which is unique
+      and persists through all space and time.  An instance ID is a URN
+      [2].
+
+      Guideline: It is convenient for hosts that are dedicated UAs ("SIP
+      phones") to use for their instance IDs Version 1 of the UUID URN,
+      which is derived from the MAC address of the UA's network
+      interface [3].  As only one UUID is needed for all time, it can be
+      constructed with fixed "time" and "clock sequence" values.
+
+      Guideline: UAs that are not embodied in dedicated UA devices must
+      generate their instance IDs in a manner that guarantees
+      uniqueness.  (E.g., a more sophisticated use of Version 1 UUIDs, a
+      name-based UUID derived from a suitable identification string, or
+      an object-id assigned administratively [4].)  The "tel" and
+      similar namespaces should not be used, as conceptually they are
+      AORs, not unique identifiers for teeming agents.
+
+   In principle, the registrar should compare an instance ID string with
+   other instance ID strings using the proper comparison method for
+   their URN scheme, but in practice the UA cannot depend on the
+   registrar knowing the proper comparison method for the URN scheme in
+   its instance ID.
+
+
+
+
+
+
+Worley                    Expires April 8, 2006                 [Page 5]
+
+Internet-Draft         Guidelines for GRUU Support          October 2005
+
+
+      Guideline: The UA should always use the same character string to
+      represent its instance ID, even if the URN scheme permits several
+      different character strings to represent the same URN.
+
+      Guideline: A UA requests a GRUU for its instance ID and a
+      particular AOR by extending its ordinary REGISTER requests for
+      that AOR: (1) add a "Supported: gruu" header, and (2) add an
+      "instance" media feature tag to the Contact giving the instance ID
+      as its value.  If the registrar understands the GRUU extension,
+      its response will (3) contain a "Require: gruu" header, and (4)
+      appended to the returned Contact will be the same "instance" media
+      feature tag and a "gruu" field parameter giving the GRUU URI.
+
+   Note that due to the format requirements for media feature tags [5],
+   the syntax of the "instance" tag is a field parameter
+   '+sip.instance="<{instance ID URN}>"'.  As '<' cannot appear in a
+   "token" [6], the value of the '+sip.instance' parameter must be
+   quoted with '"'.  The instance ID value must be contained between '<'
+   and '>' due to the rules of [5].  Due to the syntax of "quoted-
+   string" in [6] and "qdtext-no-abkt" in [5], any occurrence of '"',
+   '<', '>', or '\' in the instance ID must be quoted by preceding it
+   with '\'.
+
+   A typical registration request is:
+
+   REGISTER sip:example.com SIP/2.0
+   Via: SIP/2.0/UDP 192.0.2.1;branch=z9hG4bKnashds7
+   Max-Forwards: 70
+   From: Callee <sip:callee@example.com>;tag=a73kszlfl
+   Supported: gruu
+   To: Callee <sip:callee@example.com>
+   Call-ID: 1j9FpLxk3uxtm8tn@192.0.2.1
+   CSeq: 1 REGISTER
+   Contact: <sip:callee@192.0.2.1>
+       ;+sip.instance="<urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6>"
+   Content-Length: 0
+
+   Figure 1
+
+
+
+
+
+
+
+
+
+
+
+
+
+Worley                    Expires April 8, 2006                 [Page 6]
+
+Internet-Draft         Guidelines for GRUU Support          October 2005
+
+
+   The response would look like:
+
+   SIP/2.0 200 OK
+   Via: SIP/2.0/UDP 192.0.2.1;branch=z9hG4bKnashds7
+   From: Callee <sip:callee@example.com>;tag=a73kszlfl
+   To: Callee <sip:callee@example.com> ;tag=b88sn
+   Require: gruu
+   Call-ID: 1j9FpLxk3uxtm8tn@192.0.2.1
+   CSeq: 1 REGISTER
+   Contact: <sip:callee@192.0.2.1>
+       ;gruu="sip:callee@example.com;opaque=RWFjaCBVQSBpbnN"
+       ;+sip.instance="<urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6>"
+       ;expires=3600
+   Content-Length: 0
+
+   Figure 2
+
+      Guideline: The UA must be prepared to receive responses to
+      REGISTERs that contain "Require: gruu", and not reject them as an
+      unsupported extension.  The UA should accept "Require: gruu" on
+      all requests and responses.
+
+   For obtaining GRUUs, the contact URI is treated opaquely, and so can
+   be any URI that the UA chooses.  The UA should not attempt to
+   recommend a GRUU to the registrar by providing a "gruu" field
+   parameter on the Contact header in the request.  How the GRUU is
+   generated is up to the registrar, and so the GRUU URI should be
+   treated opaquely by the UA, except for the use of the "grid"
+   parameter described below.
+
+   The GRUU will be returned with the "sip" or "sips" scheme as
+   specified in the registered AOR (in the To header).  Nonetheless,
+   both versions of the GRUU are now associated with this contact
+   address and both will route to it appropriately.
+
+   As detailed below, when responding to requests, the UA should use the
+   GRUU associated with the AOR through which the request was routed to
+   the UA.  In order to ensure that the UA can determine this, it should
+   register distinct URIs for each AOR it services.  (The From header
+   may contain a different AOR which was routed to one of the UA's AORs,
+   and so can not be depended on to provide the AOR through which the
+   request was routed to the UA.)
+
+      Guideline: The UA should register distinct URIs for each AOR it
+      services.  (Note that it is not sufficient to generate from each
+      AOR a contact 'sip:{user-part}@{IP-address}', since it is common
+      for a UA to service two AORs with the same user part in different
+      domains.)
+
+
+
+Worley                    Expires April 8, 2006                 [Page 7]
+
+Internet-Draft         Guidelines for GRUU Support          October 2005
+
+
+4.  Using a GRUU
+
+   Since the GRUU is routable by the ordinary SIP mechanisms, the GRUU
+   may be used just like any other SIP URI.  But to gain the benefits of
+   GRUUs, the UA needs to use GRUUs in particular ways.  The base
+   requirement is that the UA must not attempt to resolve the GRUU via
+   DNS and route the request elsewhere:
+
+      Guideline: The UA should recognize the GRUU (in either the
+      request-URI or a Route header) as a "resource that it is
+      responsible for", just as it would one of its contact URIs, and
+      process the request (if it is examining the request-URI) or
+      examine the next element of the route set (if it is examining a
+      Route header).  This recognition should be done by URI equality
+      testing with the GRUUs that have been issued to the UA before any
+      attempt is made to resolve the URI through DNS.
+
+   For ordinary requests and responses, that is, those that would in the
+   absence of GRUUs be made using the pre-existing contact addresses,
+   the rules only involve indentifying the correct GRUU to use in each
+   circumstance:
+
+      Guideline: When making an out-of-dialog request, the UA should (1)
+      use as Contact the GRUU corresponding to the AOR that it places in
+      the To header, and (2) add a "Supported: gruu" header to indicate
+      that the Contact is a GRUU.
+
+      Guideline: When responding to an out-of-dialog request, the UA
+      should (1) determine the AOR through which the request was routed,
+      based on the request-URI, (2) use as Contact the GRUU
+      corresponding to that AOR, and (3) add a "Supported: gruu" header
+      to the response to indicate that the Contact is a GRUU.
+
+      Guideline: When responding to an out-of-dialog request, if the UA
+      cannot determine a GRUU to use as Contact, it should ensure that
+      no "Supported: gruu" header is used in the response.
+
+   In-dialog requests and responses will use the existing route set,
+   which will guarantee that they follow the same rules as for out-of-
+   dialog requests and responses.
+
+   There is an additional mechanism that allows the UA to create from
+   its assigned GRUU an infinite supply of GRUUs: It may attach to the
+   GRUU URI a "grid" ("GRUU identifier") paramater with an arbitrary
+   value.  If the UA passes this derived URI to an agent, the agent may
+   use it to send a request.  (Agents should not add "grid" parameters
+   to GRUUs that they are not registered for, but only copy them from
+   URIs received from other agents.)  When the proxy is resolving the
+
+
+
+Worley                    Expires April 8, 2006                 [Page 8]
+
+Internet-Draft         Guidelines for GRUU Support          October 2005
+
+
+   derived URI, it is required to copy the grid parameter from the GRUU
+   URI to the contact URI.  Thus, the UA can create an infinite number
+   of semantically different URIs, all of which are GRUUs and route to
+   its contact address, and carry the grid parameter to distinguish
+   their meanings.
+
+   Note that in the absence of a grid parameter, if a request was sent
+   to the GRUU, it arrives at the UA with the same request-URI as it
+   would if it were sent to the corresponding AOR.  Thus, it is
+   impossible for the UA to tell the difference between a request that
+   was routed through the AOR and a request that was routed through the
+   GRUU.  But a request that is routed through the GRUU with a grid
+   parameter is distinguishable.
+
+   Conceptually, a request that is sent to a GRUU is intended to be "to
+   the user agent, as an agent for its user", whereas a request to an
+   AOR is intended to be "to the user", and the two may need to be
+   processed differently at times.  (Think of requests to the GRUU as
+   being a conversation with the secretary which is about a conversation
+   that is being contemplated with the boss.)  In order to ensure that
+   this distinction can always be made, the UA when using the GRUU
+   should always add a grid parameter, even if it has just a null value.
+
+      Guideline: When the UA is inserting the GRUU into a Contact field,
+      it should always add a grid parameter.  If the UA has no
+      particular data to specify, it should give the parameter a null
+      value by appending ';grid=""'.
+
+      Guideline: When a UA receives an out-of-dialog request to one of
+      its contact addresses with a grid parameter, it should understand
+      that it is receiving the request in its capacity as an agent
+      (possibly one of many) for its user, and not a request for its
+      user per se.  In such circumstances, call control features may not
+      apply in the same way as for a request for its user.  E.g., call
+      diversion for its AOR to another destination probably should not
+      apply.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Worley                    Expires April 8, 2006                 [Page 9]
+
+Internet-Draft         Guidelines for GRUU Support          October 2005
+
+
+5.  Avoiding routing circularity
+
+   As part of this memo, the author would like to propose a further
+   guideline for using GRUUs that avoids the "edge router" problem
+   described in section 8.4.2 of [1].  The edge router problem arises
+   with any in-dialog request when there is an "edge router" that must
+   Record-Route itself and is placed between the proxy that resolves the
+   GRUU and the UA for that GRUU.  Without some sort of special
+   handling, such a request will traverse the resolving proxy twice and
+   the edge router twice.
+
+   One solution to the problem that is given in [1] is to have the edge
+   router modify the Record-Route headers in the requests and responses
+   to provide a better routing path.  The solution proposed here
+   requires no intelligence in the edge router, at the expense of
+   requiring more (but less intelligent) processing in the UA.  The two
+   mechanisms can also be used together with no additional overhead.
+
+   This solution is based on assessing the edge router problem as
+   stemming from the use of the Contact for two different purposes.  One
+   purpose is providing a global contact address for the UA at one end
+   of the dialog.  The other purpose is providing the final hop in the
+   routing process -- effectively, being the final element of the "route
+   set".  (Although as the term "route set" is defined in [6], the
+   Contact is not part of the route set, but it acts in a similar
+   manner.)  In the case of using a GRUU as a Contact, it is ideal for
+   the first use, but less useful for the second, since as the request
+   nears the UA in the destination network, it does not contain the
+   local routing information need to make the final hop.
+
+   The solution is based on finessing this conflation by adding a
+   Record-Route header to provide the final routing hop to the UA, and
+   using that header to effectively hide the GRUU in the request-URI
+   (which was derived from the opposite end's Contact) from the routing
+   machinery.
+
+   To effect this trick, the UA must follow two additional rules:
+
+      Guideline: When the UA is generating an out-of-dialog request for
+      which it uses a GRUU as the Contact, it also adds a Record-Route
+      header specifying the contact URI that it would have used in the
+      absence of the GRUU.
+
+
+
+
+
+
+
+
+
+Worley                    Expires April 8, 2006                [Page 10]
+
+Internet-Draft         Guidelines for GRUU Support          October 2005
+
+
+   This Record-Route header will generate the last element of the route
+   set for requests sent in the reverse direction.  Such requests will
+   then arrive at the UA with the format:
+
+   METHOD {GRUU} SIP/2.0
+   Route: {contact URI}
+
+   Upon receiving this request, the UA will recognize that {contact URI}
+   refers to itself, and delete the Route header.  It will then
+   recognize that {GRUU} refers to itself, and proceed to process the
+   request.
+
+      Guideline: When the UA is processing an out-of-dialog request that
+      it received for which it uses a GRUU as the Contact in the
+      response, it (effectively) first prepends a Record-Route header
+      specifying the contact URI that corresponds to the GRUU.  (Which
+      contact URI is probably the same as the request-URI of the
+      request.)
+
+   This rule sets up the same processing trick for in-dialog requests
+   that are in the same direction as the initial request.
+
+6.  References
+
+   [1]  Rosenberg, J., "Obtaining and Using Globally Routable User Agent
+        (UA) URIs (GRUU) in the Session Initiation Protocol (SIP)",
+        September 2005.
+
+   [2]  Moats, R., "URN Syntax", May 1997.
+
+   [3]  Leach, P., Mealling, M., and R. Salz, "A Universally Unique
+        IDentifier (UUID) URN Namespace", July 2005.
+
+   [4]  Mealling, M., "A URN Namespace of Object Identifiers",
+        February 2001.
+
+   [5]  Rosenberg, J., Schulzrinne, H., and P. Kyzivat, "Indicating User
+        Agent Capabilities in the Session Initiation Protocol (SIP)",
+        August 2004.
+
+   [6]  Rosenberg, J., Schulzrinne, H., Camarillo, G., Johnston, A.,
+        Peterson, J., Sparks, R., Handley, M., and E. Schooler, "SIP:
+        Session Initiation Protocol", June 2002.
+
+
+
+
+
+
+
+
+Worley                    Expires April 8, 2006                [Page 11]
+
+Internet-Draft         Guidelines for GRUU Support          October 2005
+
+
+Author's Address
+
+   Dale R. Worley
+   Pingtel Corp.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Worley                    Expires April 8, 2006                [Page 12]
+
+Internet-Draft         Guidelines for GRUU Support          October 2005
+
+
+Intellectual Property Statement
+
+   The IETF takes no position regarding the validity or scope of any
+   Intellectual Property Rights or other rights that might be claimed to
+   pertain to the implementation or use of the technology described in
+   this document or the extent to which any license under such rights
+   might or might not be available; nor does it represent that it has
+   made any independent effort to identify any such rights.  Information
+   on the procedures with respect to rights in RFC documents can be
+   found in BCP 78 and BCP 79.
+
+   Copies of IPR disclosures made to the IETF Secretariat and any
+   assurances of licenses to be made available, or the result of an
+   attempt made to obtain a general license or permission for the use of
+   such proprietary rights by implementers or users of this
+   specification can be obtained from the IETF on-line IPR repository at
+   http://www.ietf.org/ipr.
+
+   The IETF invites any interested party to bring to its attention any
+   copyrights, patents or patent applications, or other proprietary
+   rights that may cover technology that may be required to implement
+   this standard.  Please address the information to the IETF at
+   ietf-ipr@ietf.org.
+
+
+Disclaimer of Validity
+
+   This document and the information contained herein are provided on an
+   "AS IS" basis and THE CONTRIBUTOR, THE ORGANIZATION HE/SHE REPRESENTS
+   OR IS SPONSORED BY (IF ANY), THE INTERNET SOCIETY AND THE INTERNET
+   ENGINEERING TASK FORCE DISCLAIM ALL WARRANTIES, EXPRESS OR IMPLIED,
+   INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE
+   INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED
+   WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
+
+
+Copyright Statement
+
+   Copyright (C) The Internet Society (2005).  This document is subject
+   to the rights, licenses and restrictions contained in BCP 78, and
+   except as set forth therein, the authors retain all their rights.
+
+
+Acknowledgment
+
+   Funding for the RFC Editor function is currently provided by the
+   Internet Society.
+
+
+
+
+Worley                    Expires April 8, 2006                [Page 13]
+

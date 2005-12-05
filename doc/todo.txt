@@ -1,3 +1,11 @@
+RFC 3261 still to do:
+
+19.1.5 Forming Requests from a URI
+   An implementation SHOULD verify the accuracy of any requested
+   descriptive header fields, including: Content-Disposition, Content-
+   Encoding, Content-Language, Content-Length, Content-Type, Date,
+   Mime-Version, and Timestamp.
+
 RFC 3265 still to do:
 
    3.3.1.   Detecting support for SUBSCRIBE and NOTIFY............. 18
@@ -114,6 +122,99 @@ Notes:
 SUBSCRIBE & REFER both act a bit like sessions: different messages, of
 different methods, relate to the same thing.
 
+3.  User Agent Server Behavior: Receiving a Replaces Header
+
+;   The Replaces header contains information used to match an existing
+;   SIP dialog (call-id, to-tag, and from-tag).  Upon receiving an INVITE
+;   with a Replaces header, the User Agent (UA) attempts to match this
+;   information with a confirmed or early dialog.  The User Agent Server
+;   (UAS) matches the to-tag and from-tag parameters as if they were tags
+;   present in an incoming request.  In other words, the to-tag parameter
+;   is compared to the local tag, and the from-tag parameter is compared
+;   to the remote tag.
+
+;   If more than one Replaces header field is present in an INVITE, or if
+;   a Replaces header field is present in a request other than INVITE,
+;   the UAS MUST reject the request with a 400 Bad Request response.
+
+;   The Replaces header has specific call control semantics.  If both a
+;   Replaces header field and another header field with contradictory
+;   semantics are present in a request, the request MUST be rejected with
+;   a 400 "Bad Request" response.
+
+   If the Replaces header field matches more than one dialog, the UA
+   MUST act as if no match is found.
+
+;   If no match is found, the UAS rejects the INVITE and returns a 481
+;   Call/Transaction Does Not Exist response.  Likewise, if the Replaces
+;   header field matches a dialog which was not created with an INVITE,
+;   the UAS MUST reject the request with a 481 response.
+
+   If the Replaces header field matches a dialog which has already
+   terminated, the UA SHOULD decline the request with a 603 Declined
+   response.  (If the matched invitation was just terminated, the
+   replacement request should fail as well.  Declining the request with
+   a 600-class response prevents an irritating race-condition where the
+   UA rings or alerts for a replacement call which is not wanted.)
+
+   If the Replaces header field matches an active dialog, the UA MUST
+   verify that the initiator of the new INVITE is authorized to replace
+   the matched dialog.  If the initiator of the new INVITE has been
+   successfully authenticated as equivalent to the user who is being
+   replaced, then the replacement is authorized.  For example, if the
+   user being replaced and the initiator of the replacement dialog share
+   the same credentials for Digest authentication [6], or they sign the
+   replacement request with S/MIME [7] with the same private key and
+   present the (same) corresponding certificate used in the original
+   dialog, then the replacement is authorized.
+
+   Alternatively, the Referred-By mechanism [4] defines a mechanism that
+   the UAS can use to verify that a replacement request was sent on
+   behalf of the other participant in the matched dialog (in this case,
+   triggered by a REFER request).  If the replacement request contains a
+   Referred-By header that corresponds to the user being replaced, the
+   UA SHOULD treat the replacement as if the replacement was authorized
+   by the replaced party.  The Referred-By header SHOULD reference a
+   corresponding, valid Refererred-By Authenticated Identity Body [5].
+
+   The UA MAY apply other local policy to authorize the remainder of the
+   request.  In other words, the UAS may apply a different policy to the
+   replacement dialog than was applied to the replaced dialog.
+
+   In addition, the UA MAY use other authorization mechanisms defined
+   for this purpose in standards track extensions.  Extensions could
+   define other mechanisms for transitively asserting authorization of a
+   replacement.
+
+   If authorization is successful, the UA attempts to accept the new
+   INVITE, reassign the user interface and other resources of the
+   matched dialog to the new INVITE, and shut down the replaced dialog.
+   If the UA cannot accept the new INVITE (for example: it cannot
+   establish required QoS or keying, or it has incompatible media), the
+   UA MUST return an appropriate error response and MUST leave the
+   matched dialog unchanged.
+
+   If the Replaces header field matches a confirmed dialog, it checks
+   for the presence of the "early-only" flag in the Replaces header
+   field.  (This flag allows the UAC to prevent a potentially
+   undesirable race condition described in Section 7.1.) If the flag is
+   present, the UA rejects the request with a 486 Busy response.
+   Otherwise, it accepts the new INVITE by sending a 200-class response,
+   and shuts down the replaced dialog by sending a BYE.  If the Replaces
+   header field matches an early dialog that was initiated by the UA, it
+   accepts the new INVITE by sending a 200-class response, and shuts
+   down the replaced dialog by sending a CANCEL.
+
+   If the Replaces header field matches an early dialog that was not
+   initiated by this UA, it returns a 481 (Call/Transaction Does Not
+   Exist) response to the new INVITE, and leaves the matched dialog
+   unchanged.  Note that since Replaces matches only a single dialog,
+   the replacement dialog will not be retargeted according to the same
+   forking logic as the original request which created the early dialog.
+
+   (Currently, no use cases have been identified for replacing just a
+   single dialog in this circumstance.)
+
 4.  User Agent Client Behavior: Sending a Replaces Header
 
    A User Agent that wishes to replace a single existing early or
@@ -140,3 +241,34 @@ different methods, relate to the same thing.
    implementations SHOULD only address replacement requests (i.e., set
    the Request-URI of the replacement request) to the SIP Contact URI of
    the target.
+
+draft-ietf-sip-target-dialog-01 still to do:
+
+   3.   UAC Behavior . . . . . . . . . . . . . . . . . . . . . . . .   5
+   4.   User Agent Server Behavior . . . . . . . . . . . . . . . . .   7
+   5.   Proxy Behavior . . . . . . . . . . . . . . . . . . . . . . .   8
+   6.   Extensibility Considerations . . . . . . . . . . . . . . . .   8
+   8.   Security Considerations  . . . . . . . . . . . . . . . . . .   9
+
+draft-ietf-sip-gruu-06 still to do:
+
+   7.  Obtaining a GRUU . . . . . . . . . . . . . . . . . . . . . . . 13
+     7.1   Through Registrations  . . . . . . . . . . . . . . . . . . 13
+       7.1.1   User Agent Behavior  . . . . . . . . . . . . . . . . . 13
+       7.1.2   Registrar Behavior . . . . . . . . . . . . . . . . . . 15
+   8.  Using the GRUU . . . . . . . . . . . . . . . . . . . . . . . . 17
+     8.1   Sending a Message Containing a GRUU  . . . . . . . . . . . 17
+     8.2   Sending a Message to a GRUU  . . . . . . . . . . . . . . . 19
+     8.3   Receiving a Request Sent to a GRUU . . . . . . . . . . . . 19
+     8.4   Proxy Behavior . . . . . . . . . . . . . . . . . . . . . . 20
+       8.4.1   Request Targeting  . . . . . . . . . . . . . . . . . . 20
+       8.4.2   Record Routing . . . . . . . . . . . . . . . . . . . . 21
+   13.   Security Considerations  . . . . . . . . . . . . . . . . . . 33
+
+7.1.1.1  Generating a REGISTER Request
+
+   If a UA instance is registering against multiple AORs, it is
+   RECOMMENDED that a UA instance provide a different contact URI for
+   each AOR.  This is needed for the UA to determine which GRUU to use
+   as the remote target in responses to incoming dialog-forming
+   requests, as discussed in Section 8.1.

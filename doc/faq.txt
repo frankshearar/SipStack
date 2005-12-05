@@ -1,0 +1,39 @@
+1. Where do I begin?
+
+2. How do I create a new header type?
+
+3. When my test runs and I expect a message to be sent. It's not. Why?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+1. Read the class comment on TIdSipStackConfigurator. Decide on what
+   configuration you want, put that configuration in a TStrings, and
+   invoke TIdSipStackConfigurator.CreateUserAgent.
+
+2. TIdSipHeader is the base class for all header types. Follow these
+   steps to define a new header type:
+   * find a suitable subclass (e.g., if the header primarily consists
+     of an address, subclass TIdSipAddressHeader);
+   * override GetName;
+   * override GetValue, if necessary;
+   * override Parse, if necessary;
+   * add the header type to TIdSipHeaderList.HeaderTypes;
+   * add the header name (possibly both full and short forms) to
+     TIdSipHeaderList.CanonicaliseName.
+
+3. Your first bet would be to make sure that the Locator can resolve
+   the hostname in the requests's Request-URI or response's top-most
+   Via header. See if the stack signals OnNetworkFailure. If it does,
+   add a new A or AAAA record to the locator by means of AddA/AddAAAA
+   as part of the test setup.
