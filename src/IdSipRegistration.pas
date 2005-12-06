@@ -169,23 +169,6 @@ type
     property MinimumExpiryTime:             Cardinal                      read GetMinimumExpiryTime write SetMinimumExpiryTime;
   end;
 
-  // I implement that functionality necessary for a User Agent to respond to
-  // REGISTER messages, that is, to act as a registrar.
-  TIdSipRegisterModule = class(TIdSipMessageModule)
-  private
-    fBindingDB:         TIdSipAbstractBindingDatabase;
-    fMinimumExpiryTime: Cardinal; // in seconds
-  public
-    constructor Create(UA: TIdSipAbstractCore); override;
-
-    function Accept(Request: TIdSipRequest;
-                    UsingSecureTransport: Boolean): TIdSipAction; override;
-    function AcceptsMethods: String; override;
-
-    property BindingDB:         TIdSipAbstractBindingDatabase read fBindingDB write fBindingDB;
-    property MinimumExpiryTime: Cardinal                      read fMinimumExpiryTime write fMinimumExpiryTime;
-  end;
-
   TIdSipOutboundRegistrationQuery = class;
   TIdSipOutboundRegister = class;
   TIdSipOutboundUnregister = class;
@@ -238,13 +221,6 @@ type
   end;
 
   TIdSipRegistration = class(TIdSipAction)
-  protected
-    OutModule: TIdSipOutboundRegisterModule;
-
-    function CreateNewAttempt: TIdSipRequest; override;
-    procedure Initialise(UA: TIdSipAbstractCore;
-                         Request: TIdSipRequest;
-                         UsingSecureTransport: Boolean); override;
   public
     class function Method: String; override;
 
@@ -266,6 +242,7 @@ type
     procedure SendSimpleResponse(Request: TIdSipRequest;
                                 StatusCode: Cardinal);
   protected
+    function  CreateNewAttempt: TIdSipRequest; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
                          UsingSecureTransport: Boolean); override;
@@ -733,34 +710,6 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipRegisterModule                                                       *
-//******************************************************************************
-//* TIdSipRegisterModule Public methods ****************************************
-
-constructor TIdSipRegisterModule.Create(UA: TIdSipAbstractCore);
-begin
-  inherited Create(UA);
-
-  Self.AcceptsMethodsList.Add(MethodRegister);
-end;
-
-function TIdSipRegisterModule.Accept(Request: TIdSipRequest;
-                                     UsingSecureTransport: Boolean): TIdSipAction;
-begin
-  Result := inherited Accept(Request, UsingSecureTransport);
-
-  if not Assigned(Result) then
-    Result := TIdSipInboundRegistration.CreateInbound(Self.UserAgent,
-                                                      Request,
-                                                      UsingSecureTransport);
-end;
-
-function TIdSipRegisterModule.AcceptsMethods: String;
-begin
-  Result := MethodRegister;
-end;
-
-//******************************************************************************
 //* TIdSipOutboundRegisterModule                                               *
 //******************************************************************************
 //* TIdSipOutboundRegisterModule Public methods ********************************
@@ -902,9 +851,7 @@ begin
   Result := MethodRegister;
 end;
 
-procedure TIdSipRegistration.Initialise(UA: TIdSipAbstractCore;
-                                        Request: TIdSipRequest;
-                                        UsingSecureTransport: Boolean);
+function TIdSipRegistration.IsRegistration: Boolean;
 begin
   Result := true;
 end;
@@ -925,7 +872,8 @@ var
   Date:     TIdSipDateHeader;
   Response: TIdSipResponse;
 begin
-  Assert(Register.IsRegister, 'TIdSipAction.ReceiveRegister must only receive REGISTERs');
+  Assert(Register.IsRegister,
+         'TIdSipAction.ReceiveRegister must only receive REGISTERs');
 
   if not Self.AcceptRequest(Register) then Exit;
 
@@ -977,6 +925,27 @@ begin
 end;
 
 //* TIdSipInboundRegistration Protected methods ********************************
+
+function TIdSipInboundRegistration.CreateNewAttempt: TIdSipRequest;
+var
+  TempTo:    TIdSipToHeader;
+  OutModule: TIdSipOutboundRegisterModule;
+begin
+  TempTo := TIdSipToHeader.Create;
+  try
+    TempTo.Address := Self.InitialRequest.RequestUri;
+
+    // TODO: This is very hacky.
+    OutModule := TIdSipOutboundRegisterModule.Create(Self.UA);
+    try
+      Result := OutModule.CreateRegister(TempTo);
+    finally
+      OutModule.Free;
+    end;
+  finally
+    TempTo.Free;
+  end;
+end;
 
 procedure TIdSipInboundRegistration.Initialise(UA: TIdSipAbstractCore;
                                                Request: TIdSipRequest;
@@ -1245,10 +1214,9 @@ begin
     end;
 
     if Self.OutModule.AutoReRegister then begin
-      // OurContact should always be assigned, because we've supposedly just
-      // REGISTERed it. If it's not assigned then the registrar didn't actually
-      // save our registration, and still had the cheek to return a 2xx rather
-      // than some sort've error response.
+      // OurContact should always be assigned, because we've just REGISTERed it.
+      // If it's not assigned then the registrar didn't save our registration,
+      // and still returned a 2xx rather than an error response.
       OurContact := CurrentBindings.ContactFor(Self.InitialRequest.FirstContact);
       if Assigned(OurContact) then begin
 
@@ -1284,7 +1252,7 @@ begin
     case Response.StatusCode of
       SIPIntervalTooBrief: begin
         Self.ReissueRequestWithLongerExpiry(Self.InitialRequest.RequestUri,
-                                            Response.FirstMinExpires.NumericValue);
+                                            Response.MinExpires.NumericValue);
         Result := arSuccess;
       end;
 

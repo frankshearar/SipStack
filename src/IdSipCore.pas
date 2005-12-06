@@ -1432,6 +1432,10 @@ begin
 end;
 
 function TIdSipAbstractCore.AllowedContentTypes: String;
+var
+  CTs:             TStrings;
+  CurrentMimeType: String;
+  I, J:            Integer;
 begin
   CTs := TStringList.Create;
   try

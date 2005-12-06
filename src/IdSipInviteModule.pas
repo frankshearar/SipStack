@@ -3,8 +3,8 @@ unit IdSipInviteModule;
 interface
 
 uses
-  Contnrs, IdNotification, IdSipCore, IdSipDialog, IdSipDialogID, IdSipMessage,
-  SyncObjs;
+  Classes, Contnrs, IdNotification, IdSipCore, IdSipDialog, IdSipDialogID,
+  IdSipMessage, SyncObjs;
 
 type
   TIdSipInboundInvite = class;
@@ -73,10 +73,11 @@ type
   end;
 
   TIdSipInboundSession = class;
+  TIdSipInviteModule = class;
 
   IIdSipInviteModuleListener = interface(IIdSipMessageModuleListener)
     ['{E9D86376-16A4-4166-885C-03697B121F23}']
-    procedure OnInboundCall(UserAgent: TIdSipAbstractCore;
+    procedure OnInboundCall(UserAgent: TIdSipInviteModule;
                             Session: TIdSipInboundSession);
   end;
 
@@ -84,9 +85,11 @@ type
 
   TIdSipInviteModule = class(TIdSipMessageModule)
   private
+    fDoNotDisturb:           Boolean;
     fInitialResendInterval:  Cardinal; // in milliseconds
     fProgressResendInterval: Cardinal; // in milliseconds
 
+    function  ConvertToHeader(ValueList: TStrings): String;
     function  HasTooManyReplaces(Request: TIdSipRequest): Boolean;
     function  MaybeAcceptReplaces(Request: TIdSipRequest;
                                   UsingSecureTransport: Boolean): TIdSipAction;
@@ -122,6 +125,7 @@ type
                           const LocalSessionDescription: String;
                           const MimeType: String): TIdSipOutboundSession;
 
+    property DoNotDisturb:           Boolean  read fDoNotDisturb write fDoNotDisturb;
     property InitialResendInterval:  Cardinal read fInitialResendInterval write fInitialResendInterval;
     property ProgressResendInterval: Cardinal read fProgressResendInterval write fProgressResendInterval;
   end;
@@ -574,12 +578,12 @@ type
   TIdSipInviteModuleInboundCallMethod = class(TIdNotification)
   private
     fSession:   TIdSipInboundSession;
-    fUserAgent: TIdSipAbstractCore;
+    fUserAgent: TIdSipInviteModule;
   public
     procedure Run(const Subject: IInterface); override;
 
     property Session:   TIdSipInboundSession read fSession write fSession;
-    property UserAgent: TIdSipAbstractCore   read fUserAgent write fUserAgent;
+    property UserAgent: TIdSipInviteModule   read fUserAgent write fUserAgent;
   end;
 
   TIdSipInviteMethod = class(TIdNotification)
@@ -702,7 +706,7 @@ type
 implementation
 
 uses
-  IdRandom, IdSdp, IdSipUserAgent, IdSipTransaction, SysUtils;
+  IdRandom, IdSdp, IdSipSubscribeModule, IdSipUserAgent, IdSipTransaction, SysUtils;
 
 // Exception messages
 const
@@ -768,7 +772,7 @@ begin
 
       if Request.HasHeader(ExpiresHeader) then
         Self.UserAgent.ScheduleEvent(TIdSipInboundInviteExpire,
-                                     Request.FirstExpires.NumericValue,
+                                     Request.Expires.NumericValue,
                                      Request);
       Result := Session;
     end;
@@ -815,7 +819,7 @@ function TIdSipInviteModule.CreateAck(Dialog: TIdSipDialog): TIdSipRequest;
 begin
   try
     Result := Dialog.CreateAck;
-    Self.UserAgent.AddLocalHeaders(Result); // TODO: this is a PROTECTED METHOD!
+    Self.UserAgent.AddLocalHeaders(Result);
   except
     FreeAndNil(Result);
 
@@ -872,6 +876,8 @@ function TIdSipInviteModule.ReplaceCall(Invite: TIdSipRequest;
                                         const LocalSessionDescription: String;
                                         const MimeType: String): TIdSipOutboundSession;
 begin
+  // cf. RFC 3515
+
   Result := Self.AddOutboundSessionReplacer(Invite);
   Result.Destination             := Dest;
   Result.LocalSessionDescription := LocalSessionDescription;
@@ -879,6 +885,11 @@ begin
 end;
 
 //* TIdSipInviteModule Private methods *****************************************
+
+function TIdSipInviteModule.ConvertToHeader(ValueList: TStrings): String;
+begin
+  Result := StringReplace(ValueList.CommaText, ',', ', ', [rfReplaceAll]);
+end;
 
 function TIdSipInviteModule.HasTooManyReplaces(Request: TIdSipRequest): Boolean;
 var
@@ -908,7 +919,7 @@ begin
   Notification := TIdSipInviteModuleInboundCallMethod.Create;
   try
     Notification.Session   := Session;
-    Notification.UserAgent := Self.UserAgent;
+    Notification.UserAgent := Self;
 
     Self.Listeners.Notify(Notification);
   finally
@@ -929,9 +940,8 @@ begin
   end;
 
   OutboundRequest.AddHeader(AllowHeader).Value := Self.UserAgent.KnownMethods;
-  // TODO: We need to add a proper extension support thing
-  OutboundRequest.AddHeader(AcceptHeader).Value := Self.UserAgent.AllowedContentTypes;
-  OutboundRequest.AddHeader(SupportedHeaderFull).Value := Self.UserAgent.AllowedExtensions;
+  OutboundRequest.Accept.Value    := Self.ConvertToHeader(Self.AllowedContentTypes);
+  OutboundRequest.Supported.Value := Self.AllowedExtensions;
 end;
 
 //******************************************************************************
@@ -1882,9 +1892,9 @@ function TIdSipOutboundReplacingInvite.CreateInvite: TIdSipRequest;
 begin
   Result := Self.Module.CreateInvite(Self.Destination, Self.Offer, Self.MimeType);
   Result.AddHeader(ReplacesHeader);
-  Result.FirstReplaces.CallID  := Self.CallID;
-  Result.FirstReplaces.FromTag := Self.FromTag;
-  Result.FirstReplaces.ToTag   := Self.ToTag;
+  Result.Replaces.CallID  := Self.CallID;
+  Result.Replaces.FromTag := Self.FromTag;
+  Result.Replaces.ToTag   := Self.ToTag;
 end;
 
 //******************************************************************************

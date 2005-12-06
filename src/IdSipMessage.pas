@@ -1187,6 +1187,7 @@ type
     function  GetExpires: TIdSipNumericHeader;
     function  GetFrom: TIdSipFromHeader;
     function  GetMinExpires: TIdSipNumericHeader;
+    function  GetRequire: TIdSipCommaSeparatedHeader;
     function  GetRetryAfter: TIdSipRetryAfterHeader;
     function  GetSupported: TIdSipCommaSeparatedHeader;
     function  GetTo: TIdSipToHeader;
@@ -1210,6 +1211,7 @@ type
     procedure SetMinExpires(Value: TIdSipNumericHeader);
     procedure SetPath(Value: TIdSipViaPath);
     procedure SetRecordRoute(Value: TIdSipRecordRoutePath);
+    procedure SetRequire(Value: TIdSipCommaSeparatedHeader);
     procedure SetRetryAfter(Value: TIdSipRetryAfterHeader);
     procedure SetSupported(Value: TIdSipCommaSeparatedHeader);
     procedure SetTo(Value: TIdSipToHeader);
@@ -1295,6 +1297,7 @@ type
     property Path:               TIdSipViaPath                      read fPath write SetPath;
     property RawMessage:         String                             read fRawMessage;
     property RecordRoute:        TIdSipRecordRoutePath              read fRecordRoute write SetRecordRoute;
+    property Require:            TIdSipCommaSeparatedHeader         read GetRequire write SetRequire;
     property RetryAfter:         TIdSipRetryAfterHeader             read GetRetryAfter write SetRetryAfter;
     property SIPVersion:         String                             read fSIPVersion write fSIPVersion;
     property Supported:          TIdSipCommaSeparatedHeader         read GetSupported write SetSupported;
@@ -1328,7 +1331,6 @@ type
     procedure SetReferTo(Value: TIdSipReferToHeader);
     procedure SetReplaces(Value: TIdSipReplacesHeader);
     procedure SetRequestUri(Value: TIdSipURI);
-    procedure SetRequire(Value: TIdSipCommaSeparatedHeader);
     procedure SetRoute(Value: TIdSipRoutePath);
     procedure SetSubscriptionState(Value: TIdSipSubscriptionStateHeader);
   protected
@@ -1504,25 +1506,6 @@ type
 
   TIdSipParserError = procedure(const RawMessage, Reason: String) of object;
 
-  {*
-   * Some implementation principles we follow:
-   *  * The original headers may arrived folded, may contain all manner of guff.
-   *    We make no attempt to store the raw header - we unfold it (storing that
-   *    unparsed), we parse it, and when we write out the headers we write them
-   *    in the simplest possible way. As a result we CANNOT duplicate the exact
-   *    form of the original message, even though the new message remains
-   *    identical, semantically speaking.
-   *  * We do (because we have to) keep the order of headers. We simple append
-   *    any newly created headers.
-   *  * New headers can be created that the original message didn't have.
-   *    These messages will, by default, have the empty string as value. For example,
-   *    querying the value of Content-Type will create a TIdSipHeader with Value ''.
-   *  * We regard each header as using a value from a particular grammar, and the
-   *    header classes each contain parsers for that language (in the SetValue
-   *    method).
-   *  * We always separate compound headers (that is, headers like Contactor Via)
-   *    into separate headers. We do not do this for headers like Accept.
-   *}
   TIdSipParser = class(TIdSimpleParser)
   public
     class function IsIPv6Reference(const Token: String): Boolean;
@@ -2071,7 +2054,7 @@ begin
       Result := false;
 
     // We use "<" and not "<=" because if a \ is the last character we have
-    // a malformed string. Too, this allows use to Dest[I + 1]
+    // a malformed string. Too, this allows us to use Dest[I + 1]
     I := 1;
     while (I < Length(Dest)) and Result do begin
       Result := Dest[I] <> '"';
@@ -7168,6 +7151,26 @@ end;
 
 procedure TIdSipMessage.Parse(Parser: TIdSipParser);
 begin
+  {*
+   * Some implementation principles we follow:
+   *  * The original headers may arrived folded, may contain all manner of guff.
+   *    We make no attempt to store the raw header - we unfold it (storing that
+   *    unparsed), we parse it, and when we write out the headers we write them
+   *    in the simplest possible way. As a result we CANNOT duplicate the exact
+   *    form of the original message, even though the new message remains
+   *    identical, semantically speaking.
+   *  * We do (because we have to) keep the order of headers. We simple append
+   *    any newly created headers.
+   *  * New headers can be created that the original message didn't have.
+   *    These messages will, by default, have the empty string as value. For example,
+   *    querying the value of Content-Type will create a TIdSipHeader with Value ''.
+   *  * We regard each header as using a value from a particular grammar, and the
+   *    header classes each contain parsers for that language (in the SetValue
+   *    method).
+   *  * We always separate compound headers (that is, headers like Contactor Via)
+   *    into separate headers. We do not do this for headers like Accept.
+   *}
+
   Self.Initialize;
 
   Self.fRawMessage := StreamToStr(Parser.Source);
@@ -7470,6 +7473,11 @@ begin
   Result := Self.FirstHeader(MinExpiresHeader) as TIdSipNumericHeader;
 end;
 
+function TIdSipMessage.GetRequire: TIdSipCommaSeparatedHeader;
+begin
+  Result := Self.FirstHeader(RequireHeader) as TIdSipCommaSeparatedHeader;
+end;
+
 function TIdSipMessage.GetRetryAfter: TIdSipRetryAfterHeader;
 begin
   Result := Self.FirstHeader(RetryAfterHeader) as TIdSipRetryAfterHeader;
@@ -7625,6 +7633,11 @@ procedure TIdSipMessage.SetRecordRoute(Value: TIdSipRecordRoutePath);
 begin
   Self.RecordRoute.Clear;
   Self.RecordRoute.Add(Value);
+end;
+
+procedure TIdSipMessage.SetRequire(Value: TIdSipCommaSeparatedHeader);
+begin
+  Self.FirstHeader(RequireHeader).Assign(Value);
 end;
 
 procedure TIdSipMessage.SetRetryAfter(Value: TIdSipRetryAfterHeader);
@@ -8235,11 +8248,6 @@ end;
 procedure TIdSipRequest.SetRequestUri(Value: TIdSipURI);
 begin
   Self.fRequestUri.URI := Value.URI
-end;
-
-procedure TIdSipRequest.SetRequire(Value: TIdSipCommaSeparatedHeader);
-begin
-  Self.FirstHeader(RequireHeader).Assign(Value);
 end;
 
 procedure TIdSipRequest.SetRoute(Value: TIdSipRoutePath);

@@ -145,10 +145,6 @@ type
     function  PackageAt(Index: Integer): TIdSipEventPackage;
     procedure RejectUnknownEvent(Request: TIdSipRequest);
     function  SubscriptionMakingRequests: String;
-  protected
-    function AcceptRequest(Request: TIdSipRequest;
-                           UsingSecureTransport: Boolean): TIdSipAction; override;
-    function WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; override;
   public
     constructor Create(UA: TIdSipAbstractCore); override;
     destructor  Destroy; override;
@@ -171,9 +167,6 @@ type
                               const EventPackage: String): TIdSipRequest; overload;
     function  CreateSubscribe(Dialog: TIdSipDialog;
                               const EventPackage: String): TIdSipRequest; overload;
-    function  CreateTransfer(Session: TIdSipSession;
-                             Dest: TIdSipAddressHeader;
-                             ReferTo: TIdSipAddressHeader): TIdSipRequest;
     function  DefaultSubscriptionDuration: Cardinal;
     function  IsSubscribeMethod(Method: String): Boolean;
     procedure NotifyOfSubscriptionRequest(Subscription: TIdSipInboundSubscription);
@@ -891,7 +884,7 @@ begin
     // cf RFC 3265, section 3.2.2
 
     Result.AddHeader(Subscribe.Event);
-    Result.FirstSubscriptionState.SubState := SubscriptionState;
+    Result.SubscriptionState.SubState := SubscriptionState;
   except
     FreeAndNil(Result);
 
@@ -919,7 +912,7 @@ begin
   Result := Self.UserAgent.CreateRequest(MethodSubscribe, Dest);
   try
     Result.Event.EventPackage   := EventPackage;
-    Result.FirstExpires.NumericValue := Self.Package(EventPackage).DefaultSubscriptionDuration
+    Result.Expires.NumericValue := Self.Package(EventPackage).DefaultSubscriptionDuration
   except
     FreeAndNil(Result);
 
@@ -933,7 +926,7 @@ begin
   Result := Self.UserAgent.CreateRequest(MethodSubscribe, Dialog);
   try
     Result.Event.EventPackage   := EventPackage;
-    Result.FirstExpires.NumericValue := Self.Package(EventPackage).DefaultSubscriptionDuration
+    Result.Expires.NumericValue := Self.Package(EventPackage).DefaultSubscriptionDuration
   except
     FreeAndNil(Result);
 
@@ -1053,34 +1046,6 @@ end;
 function TIdSipSubscribeModule.WillAccept(Request: TIdSipRequest): Boolean;
 begin
   Result := Request.IsSubscribe or Request.IsNotify or Request.IsRefer;
-end;
-
-//* TIdSipSubscribeModule Private methods **************************************
-
-function TIdSipSubscribeModule.AcceptRequest(Request: TIdSipRequest;
-                                             UsingSecureTransport: Boolean): TIdSipAction;
-var
-  Package: TIdSipEventPackage;
-begin
-  Result := nil;
-
-  if not Self.IsSubscribeMethod(Request.Method) then begin
-    Self.UserAgent.ReturnResponse(Request,
-                                  SIPCallLegOrTransactionDoesNotExist);
-    Exit;
-  end;
-
-  Package := Self.PackageFor(Request);
-
-  if Assigned(Package) then
-    Result := Package.Accept(Request, UsingSecureTransport)
-  else
-    Self.RejectUnknownEvent(Request);
-end;
-
-function TIdSipSubscribeModule.WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction;
-begin
-  Result := inherited WillAcceptRequest(Request);
 end;
 
 //* TIdSipSubscribeModule Private methods **************************************
@@ -1576,7 +1541,7 @@ function TIdSipOutboundSubscribe.CreateNewAttempt: TIdSipRequest;
 begin
   Result := Self.Module.CreateSubscribe(Self.Target, Self.EventPackage);
   Result.Event.ID             := Self.ID;
-  Result.FirstExpires.NumericValue := Self.Duration;
+  Result.Expires.NumericValue := Self.Duration;
 end;
 
 procedure TIdSipOutboundSubscribe.Initialise(UA: TIdSipAbstractCore;
@@ -1660,7 +1625,7 @@ function TIdSipOutboundRefreshSubscribe.CreateNewAttempt: TIdSipRequest;
 begin
   Result := Self.Module.CreateSubscribe(Self.Dialog, Self.EventPackage);
   Result.Event.ID             := Self.ID;
-  Result.FirstExpires.NumericValue := Self.Duration;
+  Result.Expires.NumericValue := Self.Duration;
 end;
 
 //******************************************************************************
@@ -1678,7 +1643,7 @@ begin
   try
     Sub.CallID                    := Self.CallID;
     Sub.Event.ID             := Self.ID;
-    Sub.FirstExpires.NumericValue := 0;
+    Sub.Expires.NumericValue := 0;
     Sub.From.Tag                  := Self.FromTag;
     Self.InitialRequest.Assign(Sub);
 
@@ -1759,7 +1724,7 @@ function TIdSipOutboundRefer.CreateNewAttempt: TIdSipRequest;
 begin
   Result := Self.Module.CreateRefer(Self.Target, Self.ReferTo);
   Result.Event.ID             := Self.ID;
-  Result.FirstExpires.NumericValue := Self.Duration;
+  Result.Expires.NumericValue := Self.Duration;
 end;
 
 //* TIdSipOutboundRefer Private methods ****************************************
@@ -1803,7 +1768,7 @@ function TIdSipSubscription.CreateNewAttempt: TIdSipRequest;
 begin
   Result := Self.Module.CreateSubscribe(Self.Target, Self.EventPackage);
   Result.Event.ID             := Self.ID;
-  Result.FirstExpires.NumericValue := Self.Duration;
+  Result.Expires.NumericValue := Self.Duration;
 end;
 
 function TIdSipSubscription.DialogEstablished: Boolean;
@@ -2428,7 +2393,7 @@ procedure TIdSipOutboundSubscription.StartNewSubscription(Notify: TIdSipRequest)
 var
   SubState: TIdSipSubscriptionStateHeader;
 begin
-  SubState := Notify.FirstSubscriptionState;
+  SubState := Notify.SubscriptionState;
 
   case SubState.ReasonType of
     ssrDeactivated, ssrTimeout:
@@ -2801,7 +2766,7 @@ function TIdSipOutboundReferral.CreateNewAttempt: TIdSipRequest;
 begin
   Result := Self.Module.CreateRefer(Self.Target, Self.ReferredResource);
   Result.Event.ID             := Self.ID;
-  Result.FirstExpires.NumericValue := Self.Duration;
+  Result.Expires.NumericValue := Self.Duration;
 end;
 
 function TIdSipOutboundReferral.CreateOutboundSubscribe: TIdSipOutboundSubscribe;
