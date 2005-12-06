@@ -65,12 +65,12 @@ uses
   SpikeRegister in 'test\SpikeRegister.pas' {rnidSpikeRegister},
   SpikeRegistrar in 'test\SpikeRegistrar.pas' {rnidSpikeRegistrar},
   SpikeT140 in 'test\SpikeT140.pas' {IdSpikeT140},
-  StackWindow in 'test\StackWindow.pas' {StackWindow},
+//  StackWindow in 'test\StackWindow.pas' {StackWindow},
   TestFrameworkEx in 'test\TestFrameworkEx.pas',
   TestFrameworkRtp in 'test\TestFrameworkRtp.pas',
   TestFrameworkSip in 'test\TestFrameworkSip.pas',
   TestFrameworkSipTU in 'test\TestFrameworkSipTU.pas',
-  TestMessages in 'test\TestMessages.pas',
+  TestMessages in 'test\TestMessages.pas'{,
   TestIdNotification in 'test\TestIdNotification.pas',
   TestIdObservable in 'test\TestIdObservable.pas',
   TestIdRandom in 'test\TestIdRandom.pas',
@@ -94,8 +94,8 @@ uses
   TestIdSipRegistrar in 'test\TestIdSipRegistrar.pas',
   TestIdSipRegistration in 'test\TestIdSipRegistration.pas',
   TestIdSipServerNotifier in 'test\TestIdSipServerNotifier.pas',
-  TestIdSipStackInterface in 'test\TestIdSipStackInterface.pas',
-  TestIdSipSubscribeModule in 'test\TestIdSipSubscribeModule.pas',
+  TestIdSipStackInterface in 'test\TestIdSipStackInterface.pas'},
+  TestIdSipSubscribeModule in 'test\TestIdSipSubscribeModule.pas'{,
   TestIdSipTcpClient in 'test\TestIdSipTcpClient.pas',
   TestIdSipTcpServer in 'test\TestIdSipTcpServer.pas',
   TestIdSipTransaction in 'test\TestIdSipTransaction.pas',
@@ -105,13 +105,13 @@ uses
   TestIdSipUserAgent in 'test\TestIdSipUserAgent.pas',
   TestIdSipUri in 'test\TestIdSipUri.pas',
   TestIdTimerQueue in 'test\TestIdTimerQueue.pas',
-  TestIdUnicode in 'test\TestIdUnicode.pas';
+  TestIdUnicode in 'test\TestIdUnicode.pas'};
 
 {,
   TestIdSipTlsServer in 'test\TestIdSipTlsServer.pas'}
 
 //{$DEFINE SPIKE}
-//{$DEFINE GUI}
+{$DEFINE GUI}
 
 {$IFNDEF GUI}
   {$APPTYPE CONSOLE}

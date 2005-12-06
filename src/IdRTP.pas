@@ -1115,7 +1115,6 @@ function  EncodeAsString(Value: Cardinal): String; overload;
 function  EncodeAsString(Value: Word): String; overload;
 function  HtoNL(Value: Cardinal): Cardinal;
 function  HtoNS(Value: Word): Word;
-function  MultiplyCardinal(FirstValue, SecondValue: Cardinal): Cardinal;
 function  NowAsNTP: TIdNTPTimestamp;
 function  NtoHL(Value: Cardinal): Cardinal;
 function  NtoHS(Value: Word): Cardinal;
@@ -1392,22 +1391,6 @@ end;
 function HtoNS(Value: Word): Word;
 begin
   Result := ((Value and $00ff) shl 8) or ((Value  and $ff00) shr 8);
-end;
-
-// Delphi 6 & 7 both compile FirstValue*SecondValue as an imul
-// opcode. imul performs a SIGNED integer multiplication, and so if
-// FirstValue * SecondValue > $7fffffff then the overflow flag gets set. If you
-// have overflow checking on, that means that FOR A PERFECTLY VALID
-// multiplication (e.g., $7f000000 * 2) you will get an EIntOverflow.
-function MultiplyCardinal(FirstValue, SecondValue: Cardinal): Cardinal;
-asm
-  // The sole raison d'etre for this method is the broken assembly generated
-  // by Delphi 6 when multiplying cardinals = imul is a SIGNED multiply, so
-  // $40000000 * 2 = $80000000 which is out of range FOR A SIGNED INTEGER. 
-  mul edx
-  jno @end
-  call System.@IntOver
- @end:
 end;
 
 function NowAsNTP: TIdNTPTimestamp;

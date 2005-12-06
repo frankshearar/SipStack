@@ -62,18 +62,23 @@ type
   private
     fAddressOfRecord: String;
     fCallID:          String;
+    fGruu:            String;
+    fInstanceID:      String;
     fSequenceNo:      Cardinal;
     fUri:             String;
     fValidUntil:      TDateTime;
   public
     constructor Create(const AddressOfRecord: String;
                        const CanonicalisedUri: String;
+                       const InstanceID: String;
                        const CallID: String;
                        SequenceNo: Cardinal;
                        AbsoluteTimeout: TDateTime);
 
     property AddressOfRecord: String    read fAddressOfRecord write fAddressOfRecord;
     property CallID:          String    read fCallID write fCallID;
+    property Gruu:            String    read fGruu write fGruu;
+    property InstanceID:      String    read fInstanceID write fInstanceID;
     property SequenceNo:      Cardinal  read fSequenceNo write fSequenceNo;
     property Uri:             String    read fUri write fUri;
     property ValidUntil:      TDateTime read fValidUntil write fValidUntil;
@@ -121,6 +126,8 @@ type
                              const CanonicalUri: String): TDateTime;
     function  BindingsFor(Request: TIdSipRequest;
                           Contacts: TIdSipContacts): Boolean; virtual; abstract;
+    procedure GruusFor(const AOR: String;
+                       Contacts: TIdSipContacts); virtual;
     function  NotOutOfOrder(Request: TIdSipRequest;
                             Contact: TIdSipContactHeader): Boolean;
     function  RemoveAllBindings(Request: TIdSipRequest): Boolean;
@@ -180,6 +187,7 @@ type
     fAutoReRegister: Boolean;
     fHasRegistrar:   Boolean;
     fRegistrar:      TIdSipUri;
+    fRequireGRUU:    Boolean;
     KnownRegistrars: TIdSipRegistrations;
 
     procedure SetRegistrar(Value: TIdSipUri);
@@ -201,6 +209,7 @@ type
     property AutoReRegister: Boolean   read fAutoReRegister write fAutoReRegister;
     property HasRegistrar:   Boolean   read fHasRegistrar write fHasRegistrar;
     property Registrar:      TIdSipUri read fRegistrar write SetRegistrar;
+    property RequireGRUU:    Boolean   read fRequireGRUU write fRequireGRUU;
   end;
 
   // I implement that functionality necessary for a User Agent to respond to
@@ -510,6 +519,7 @@ end;
 
 constructor TIdRegistrarBinding.Create(const AddressOfRecord: String;
                                        const CanonicalisedUri: String;
+                                       const InstanceID: String;
                                        const CallID: String;
                                        SequenceNo: Cardinal;
                                        AbsoluteTimeout: TDateTime);
@@ -518,6 +528,7 @@ begin
 
   Self.fAddressOfRecord := AddressOfRecord;
   Self.fCallID          := CallID;
+  Self.fInstanceID      := InstanceID;
   Self.fSequenceNo      := SequenceNo;
   Self.fUri             := CanonicalisedUri;
   Self.fValidUntil      := AbsoluteTimeout;
@@ -595,6 +606,16 @@ function TIdSipAbstractBindingDatabase.BindingExpires(const AddressOfRecord: Str
                                                       const CanonicalUri: String): TDateTime;
 begin
   Result := Self.Binding(AddressOfRecord, CanonicalUri).ValidUntil;
+end;
+
+procedure TIdSipAbstractBindingDatabase.GruusFor(const AOR: String;
+                                                 Contacts: TIdSipContacts);
+begin
+  // For each Contact in Contacts do find out the GRUU (if it exists) for
+  // the AOR/instance-id pair in Contact.
+
+  // By default, do nothing. BindingDatabases that support GRUU will override
+  // this method.
 end;
 
 function TIdSipAbstractBindingDatabase.NotOutOfOrder(Request: TIdSipRequest;
@@ -761,6 +782,13 @@ begin
 
     Result.ToHeader.Assign(Self.UserAgent.Contact);
     Result.From.Assign(Self.UserAgent.Contact);
+
+    if Self.UserAgent.UseGruu then begin
+      Result.FirstContact.Params[SipInstanceParam] := Self.UserAgent.InstanceID;
+
+      if Self.RequireGRUU then
+        Result.Require.Values.Add(ExtensionGruu);
+    end;
   except
     FreeAndNil(Result);
 
@@ -899,6 +927,20 @@ begin
                                   Bindings) then begin
       Response := Self.UA.CreateResponse(Register, SIPOK);
       try
+        if Register.SupportsExtension(ExtensionGruu) then begin
+          // We obviously support GRUU, because otherwise the Transaction-User core
+          // would have rejected the request.
+
+          // draft-ietf-sip-gruu section 7.1.2.1 says you MUST have this header,
+          // RFC 3261 section 20 says not. The author thinks the draft's
+          // behaviour is unnecessary since the fact that the GRUU's in a
+          // "gruu" parameter indicates that, well, the "gruu" parameter value
+          // is a GRUU!
+          Response.Require.Values.Add(ExtensionGruu);
+
+          Self.BindingDB.GruusFor(Register.AddressOfRecord, Bindings);
+        end;
+
         Response.AddHeaders(Bindings);
 
         Date := TIdSipDateHeader.Create;
@@ -1212,6 +1254,9 @@ begin
     finally
       Notification.Free;
     end;
+
+    if Response.SupportsExtension(ExtensionGruu) and Self.UA.UseGruu then
+      Self.UA.Gruu.Address.Uri := CurrentBindings.GruuFor(Self.UA.Contact);
 
     if Self.OutModule.AutoReRegister then begin
       // OurContact should always be assigned, because we've just REGISTERed it.

@@ -39,6 +39,11 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestExtractAngleQuotedUri;
+    procedure TestExtractAngleQuotedUriMalformed;
+    procedure TestExtractQuotedString;
+    procedure TestExtractQuotedStringMalformed;
+    procedure TestExtractToken;
     procedure TestGetHeaderName;
     procedure TestGetHeaderValue;
 //    procedure TestHasValidSyntax;
@@ -51,6 +56,7 @@ type
     procedure TestIsScheme;
     procedure TestIsToken;
     procedure TestIsTransport;
+    procedure TestIsUuidUrn;
     procedure TestIsWord;
     procedure TestParseAndMakeMessageEmptyStream;
     procedure TestParseAndMakeMessageFromString;
@@ -178,6 +184,131 @@ begin
 end;
 
 //* TestTIdSipParser Published methods *****************************************
+
+procedure TestTIdSipParser.TestExtractAngleQuotedUri;
+  procedure CheckExtractAngleQuotedUri(Source: String;
+                                       const ExpectedAngleQuotedUri: String;
+                                       const ExpectedRemainder: String);
+  var
+    Remainder:    String;
+    AngleQuotedUri: String;
+  begin
+    Remainder := Source;
+    AngleQuotedUri := TIdSipParser.ExtractAngleQuotedUri(Remainder);
+    CheckEquals(ExpectedAngleQuotedUri,
+                AngleQuotedUri,
+                '''' + Source + ''': URI');
+    CheckEquals(ExpectedRemainder,
+                Remainder,
+                '''' + Source + ''': remainder');
+  end;
+begin
+  CheckExtractAngleQuotedUri('', '', '');
+  CheckExtractAngleQuotedUri('<http://foo/>', 'http://foo/', '');
+  CheckExtractAngleQuotedUri('<sip:foo>;+sip.instance="<urn:foo:bar>"',
+                             'sip:foo',
+                             ';+sip.instance="<urn:foo:bar>"');
+end;
+
+procedure TestTIdSipParser.TestExtractAngleQuotedUriMalformed;
+  procedure CheckExtractAngleQuotedUriMalformed(Source: String);
+  var
+    Remainder: String;
+  begin
+    Remainder := Source;
+    try
+      TIdSipParser.ExtractAngleQuotedUri(Remainder);
+      Fail('Failed to bail out parsing ''' + Source + '''');
+    except
+      on EParserError do;
+    end;
+  end;
+begin
+  CheckExtractAngleQuotedUriMalformed('<sip:foo');
+end;
+
+procedure TestTIdSipParser.TestExtractQuotedString;
+  procedure CheckExtractQuotedString(Source: String;
+                                     const ExpectedQuotedString: String;
+                                     const ExpectedRemainder: String);
+  var
+    Remainder:    String;
+    QuotedString: String;
+  begin
+    Remainder := Source;
+    QuotedString := TIdSipParser.ExtractQuotedString(Remainder);
+    CheckEquals(ExpectedQuotedString,
+                QuotedString,
+                '''' + Source + ''': quoted-string');
+    CheckEquals(ExpectedRemainder,
+                Remainder,
+                '''' + Source + ''': remainder');
+  end;
+begin
+  CheckExtractQuotedString('', '', '');
+
+  // Eat whitespace
+  CheckExtractQuotedString('  ', '', '');
+
+  // Return the quoted-string
+  CheckExtractQuotedString('"abc"', 'abc', '');
+
+  // Eat whitespace between quoted-string and remainder
+  CheckExtractQuotedString('"abc" def', 'abc', 'def');
+
+  // Decode the quoted-string returned; leave remainder untouched
+  CheckExtractQuotedString('"\"ac\\dc\"" "\""', '"ac\dc"', '"\""');
+end;
+
+procedure TestTIdSipParser.TestExtractQuotedStringMalformed;
+  procedure CheckExtractQuotedStringMalformed(Source: String);
+  var
+    Remainder: String;
+  begin
+    Remainder := Source;
+    try
+      TIdSipParser.ExtractQuotedString(Remainder);
+      Fail('Failed to bail out parsing ''' + Source + '''');
+    except
+      on EParserError do;
+    end;
+  end;
+begin
+  // Unmatched quotes
+  CheckExtractQuotedStringMalformed('"');
+
+  // Unmatched quotes - \" is an escaped quote
+  CheckExtractQuotedStringMalformed('"\"');
+
+  // Unmatched quotes - torture
+  CheckExtractQuotedStringMalformed('"\\\"');
+end;
+
+procedure TestTIdSipParser.TestExtractToken;
+  procedure CheckExtractToken(Source: String;
+                              const ExpectedToken: String;
+                              const ExpectedRemainder: String);
+  var
+    Remainder: String;
+    Token:     String;
+  begin
+    Remainder := Source;
+    Token := TIdSipParser.ExtractToken(Remainder);
+    CheckEquals(ExpectedToken,     Token,     '''' + Source + ''': token');
+    CheckEquals(ExpectedRemainder, Remainder, '''' + Source + ''': remainder');
+  end;
+begin
+  CheckExtractToken('', '', '');
+  CheckExtractToken('  ', '', '');
+
+  CheckExtractToken('abc', 'abc', '');
+  CheckExtractToken('<sip:foo>', '', '<sip:foo>');
+  CheckExtractToken('"quoted string"', '', '"quoted string"');
+  CheckExtractToken('abc/def', 'abc', '/def');
+
+  CheckExtractToken(' abc', 'abc', '');
+  CheckExtractToken('Bar <sip:foo>', 'Bar', '<sip:foo>');
+end;
 
 procedure TestTIdSipParser.TestGetHeaderName;
 begin
@@ -354,6 +485,32 @@ begin
   Check(    TIdSipParser.IsTransport('SCTP'), 'SCTP');
   Check(    TIdSipParser.IsTransport('tls'),  'tls');
   Check(    TIdSipParser.IsTransport('TLS'),  'TLS');
+end;
+
+procedure TestTIdSipParser.TestIsUuidUrn;
+begin
+  Check(not TIdSipParser.IsUuidUrn(''),
+        'The empty string');
+  Check(not TIdSipParser.IsUuidUrn('00000000-0000-0000-0000-000000000000'),
+        'Just a UUID');
+  Check(not TIdSipParser.IsUuidUrn('uuid:00000000-0000-0000-0000-000000000000'),
+        '"uuid" declaration and a UUID');
+  Check(not TIdSipParser.IsUuidUrn('un:uuid:00000000-0000-0000-0000-000000000000'),
+        '"un" instead of "urn"');
+  Check(not TIdSipParser.IsUuidUrn('urn:uud:00000000-0000-0000-0000-000000000000'),
+        '"uud" instead of "uuid"');
+  Check(TIdSipParser.IsUuidUrn('urn:uuid:00000000-0000-0000-0000-000000000000'),
+        'A proper URN (the zero UUID) -');
+  Check(not TIdSipParser.IsUuidUrn('urn:uuid:00000000-0000-0000-0000-00000000000x'),
+        'A proper declaration with an invalid UUID (last token has invalid character)');
+  Check(not TIdSipParser.IsUuidUrn('urn:uuid:00000000-0000-0000-000-000000000000'),
+        'A proper declaration with an invalid UUID (4th UUID token too short');
+  Check(not TIdSipParser.IsUuidUrn('urn:uuid:00000000-0000-000g-0000-000000000000'),
+        'A proper declaration with an invalid UUID (3rd UUID token has invalid character)');
+  Check(not TIdSipParser.IsUuidUrn('urn:uuid:00000000-000-0000-0000-000000000000'),
+        'A proper declaration with an invalid UUID (2nd UUID token too short)');
+  Check(not TIdSipParser.IsUuidUrn('urn:uuid:0000000--0000-0000-0000-000000000000'),
+        'A proper declaration with an invalid UUID (1st UUID token has invalid character or too short)');
 end;
 
 procedure TestTIdSipParser.TestIsWord;
@@ -565,7 +722,7 @@ begin
                             + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
                             + 'CSeq: 314159 INVITE'#13#10
                             + 'Contact: sip:wintermute@tessier-ashpool.co.luna'#13#10
-                            + 'Via: SIP/3.0/TLS gw5.cust1.leo_ix.org;branch=z9hG4bK776aheh'#13#10
+                            + 'Via: SIP/3.0/TLS gw5.cust1.leo-ix.org;branch=z9hG4bK776aheh'#13#10
                             + 'Content-Type: text/plain'#13#10
                             + 'Content-Length: 4'#13#10
                             + #13#10
@@ -591,13 +748,13 @@ begin
     CheckEquals('Via',                   Via1.Name,             'Via1.Name');
     CheckEquals('SIP/3.0',               Via1.SipVersion,       'Via1.SipVersion');
     CheckEquals(TlsTransport,            Via1.Transport,        'Via1.Transport');
-    CheckEquals('gw5.cust1.leo_ix.org',  Via1.SentBy,           'Via1.SentBy');
+    CheckEquals('gw5.cust1.leo-ix.org',  Via1.SentBy,           'Via1.SentBy');
     CheckEquals(IdPORT_SIPS,             Via1.Port,             'Via1.Port');
     CheckEquals('z9hG4bK776aheh',        Via1.Params['branch'], 'Via1.Params[''branch'']');
-    CheckEquals('SIP/3.0/TLS gw5.cust1.leo_ix.org',
+    CheckEquals('SIP/3.0/TLS gw5.cust1.leo-ix.org',
                 Via1.Value,
                 'Via1.Value');
-    CheckEquals('Via: SIP/3.0/TLS gw5.cust1.leo_ix.org;branch=z9hG4bK776aheh',
+    CheckEquals('Via: SIP/3.0/TLS gw5.cust1.leo-ix.org;branch=z9hG4bK776aheh',
                 Via1.AsString,
                 'Via1.AsString');
   finally
@@ -745,7 +902,7 @@ end;
 
 procedure TestTIdSipParser.TestTortureTest35;
 begin
-  Self.CheckTortureTest(TortureTest35,
+  Self.CheckTortureTest(StringReplace(TortureTest24, '%s', 'company.com', [rfReplaceAll]),
                         Format(MalformedToken, [ExpiresHeader,
                                                 'Expires: 0 0l@company.com']));
 end;

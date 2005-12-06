@@ -48,6 +48,7 @@ type
     procedure TestInvalidAddressOfRecord;
     procedure TestMethod;
     procedure TestOKResponseContainsAllBindings;
+    procedure TestReceiveGruu;
     procedure TestReceiveInvite;
     procedure TestReceiveRegister;
     procedure TestReceiveExpireTooShort;
@@ -58,6 +59,7 @@ type
     procedure TestRegisterAddsBindings;
     procedure TestRegisterAddsMultipleBindings;
     procedure TestRejectRegisterWithReplacesHeader;
+    procedure TestUARequiresGruuRegistrarDoesntSupportGruu;
     procedure TestUnauthorizedUser;
   end;
 
@@ -72,6 +74,8 @@ type
     procedure TestCleanUpUnregisters;
     procedure TestCreateRegister;
     procedure TestCreateRegisterReusesCallIDForSameRegistrar;
+    procedure TestCreateRegisterWithGruu;
+    procedure TestCreateRegisterWithRequiredGruu;
     procedure TestReregister;
     procedure TestUnregisterFrom;
   end;
@@ -149,7 +153,11 @@ type
     procedure TestAutoReregisterContactHasExpires;
     procedure TestAutoReregisterNoExpiresValue;
     procedure TestAutoReregisterSwitchedOff;
+    procedure TestReceiveGruu;
+    procedure TestReceiveGruuRegistrarDoesntSupportGruu;
+    procedure TestReceiveGruuUADoesntSupportGruu;
     procedure TestReceiveIntervalTooBriefForOneContact;
+    procedure TestReceiveMultipleGruus;
     procedure TestRegister;
   end;
 
@@ -487,6 +495,26 @@ begin
         'Registrars SHOULD put a Date header in a 200 OK');
 end;
 
+procedure TestTIdSipRegistrar.TestReceiveGruu;
+const
+  OurUrn = 'urn:uuid:00000000-0000-0000-0000-000000000000';
+var
+  ServerResponse: TIdSipResponse;
+begin
+  Self.Registrar.UseGruu := true;
+  Self.Request.AddHeader(SupportedHeaderFull).Value := ExtensionGruu;
+  Self.Request.FirstContact.SipInstance := OurUrn;
+  Self.SimulateRemoteRequest;
+
+  Self.CheckServerReturned(SIPOK, 'REGISTER with GRUU');
+  ServerResponse := Self.Dispatch.Transport.LastResponse;
+  Check(ServerResponse.HasHeader(RequireHeader),
+        'draft-ietf-sip-gruu says the response MUST have a Require header '
+      + '(section 7.1.2.1); RFC 3261 section 20 says only requests can have '
+      + 'one.');
+  Fail('Finish me: the registrar needs stuff to store sip.instance values');
+end;
+
 procedure TestTIdSipRegistrar.TestReceiveInvite;
 begin
   Self.Request.Method      := MethodInvite;
@@ -634,6 +662,17 @@ begin
                            'Replaces header in a REGISTER');
 end;
 
+procedure TestTIdSipRegistrar.TestUARequiresGruuRegistrarDoesntSupportGruu;
+begin
+  Self.Request.Require.Values.Add(ExtensionGruu);
+  Self.Registrar.UseGruu := false;
+
+  Self.SimulateRemoteRequest;
+  Self.CheckServerReturned(SIPBadExtension       ,
+                           'Registrar doesn''t understand GRUU, but UA '
+                         + 'required it');
+end;
+
 procedure TestTIdSipRegistrar.TestUnauthorizedUser;
 begin
   Self.DB.Authorized := false;
@@ -738,6 +777,56 @@ begin
     CheckNotEquals(FirstCallID,
                    Reg.CallID,
                    'Call-ID SHOULD be different for new registrar');
+  finally
+    Reg.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundRegisterModule.TestCreateRegisterWithGruu;
+const
+  ZeroURN = 'urn:uuid:00000000-0000-0000-0000-000000000000';
+var
+  Reg: TIdSipRequest;
+begin
+  Self.Module.UserAgent.UseGruu := true;
+  Self.Module.UserAgent.InstanceID := ZeroURN;
+
+  // cf. draft-ietf-sip-gruu-06, section 7.1.1.1
+  Reg := Self.Module.CreateRegister(Self.Destination);
+  try
+    Check(Reg.FirstContact.HasParam(SipInstanceParam),
+          'Contact doesn''t have the "' + SipInstanceParam + '" parameter');
+    CheckEquals(ZeroURN,
+                Reg.FirstContact.Params[SipInstanceParam],
+                SipInstanceParam);
+    Check(not Reg.FirstContact.Address.HasParameter(GridParam),
+          'Contact URI SHOULD NOT have the "' + GridParam + '" parameter');
+    Check(not Reg.FirstContact.HasParam(GruuParam),
+          'Contact SHOULD NOT have the "' + GruuParam + '" parameter');
+    Check(Reg.HasHeader(SupportedHeaderFull),
+          'REGISTER lacks a Supported header');
+    CheckNotEquals(ItemNotFoundIndex,
+                   Reg.Supported.Values.IndexOf(ExtensionGruu),
+                   'Supported header doesn''t indicate support of GRUU');
+  finally
+    Reg.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundRegisterModule.TestCreateRegisterWithRequiredGruu;
+var
+  Reg: TIdSipRequest;
+begin
+  Self.Module.UserAgent.UseGruu := true;
+  Self.Module.RequireGRUU       := true;
+
+  Reg := Self.Module.CreateRegister(Self.Destination);
+  try
+    Check(Reg.HasHeader(RequireHeader),
+          'REGISTER lacks a Require header');
+    CheckNotEquals(ItemNotFoundIndex,
+                   Reg.Require.Values.IndexOf(ExtensionGruu),
+                   'Require header doesn''t demand support of GRUU');
   finally
     Reg.Free;
   end;
@@ -1251,6 +1340,80 @@ begin
                            'Expires header; Autoreregister = false');
 end;
 
+procedure TestTIdSipOutboundRegister.TestReceiveGruu;
+var
+  Gruu:       TIdSipContactHeader;
+  OkWithGruu: TIdSipResponse;
+begin
+  Self.Core.UseGruu := true;
+  Self.Contacts.Clear;
+  Self.Contacts.Add(Self.Core.Contact);
+  Self.CreateAction;
+
+  OkWithGruu := TIdSipResponse.InResponseTo(Self.LastSentRequest, SIPOK);
+  try
+    OkWithGruu.Supported.Values.Add(ExtensionGruu);
+    Gruu := OkWithGruu.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
+    Gruu.Value := Self.LastSentRequest.FirstContact.FullValue;
+    Gruu.Gruu := Self.Core.Contact.Address.AsString + ';opaque=foo';
+
+    Self.ReceiveResponse(OkWithGruu);
+
+    CheckEquals(Gruu.Gruu,
+                Self.Core.Gruu.Address.AsString,
+                'Core''s GRUU not set');
+  finally
+    OkWithGruu.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundRegister.TestReceiveGruuRegistrarDoesntSupportGruu;
+var
+  Gruu:       TIdSipContactHeader;
+  OkWithGruu: TIdSipResponse;
+begin
+  Self.Core.UseGruu := true;
+  Self.CreateAction;
+
+  OkWithGruu := TIdSipResponse.InResponseTo(Self.LastSentRequest, SIPOK);
+  try
+    Gruu := OkWithGruu.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
+    Gruu.Gruu := Self.Core.Contact.Address.AsString + ';opaque=foo';
+
+    Self.ReceiveResponse(OkWithGruu);
+
+    CheckEquals('',
+                Self.Core.Gruu.Address.AsString,
+                'Core''s GRUU set when the registrar couldn''t supply a GRUU');
+  finally
+    OkWithGruu.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundRegister.TestReceiveGruuUADoesntSupportGruu;
+var
+  Gruu:       TIdSipContactHeader;
+  OkWithGruu: TIdSipResponse;
+begin
+  Self.Core.UseGruu := false;
+  Self.CreateAction;
+
+  OkWithGruu := TIdSipResponse.InResponseTo(Self.LastSentRequest, SIPOK);
+  try
+    OkWithGruu.Supported.Values.Add(ExtensionGruu);
+    Gruu := OkWithGruu.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
+    Gruu.Gruu := Self.Core.Contact.Address.AsString + ';opaque=foo';
+
+    Self.ReceiveResponse(OkWithGruu);
+
+    CheckEquals('',
+                Self.Core.Gruu.Address.AsString,
+                'Core''s GRUU set when it doesn''t support GRUU');
+  finally
+    OkWithGruu.Free;
+  end;
+end;
+
 procedure TestTIdSipOutboundRegister.TestReceiveIntervalTooBriefForOneContact;
 const
   OneHour = 3600;
@@ -1305,6 +1468,49 @@ begin
 
   Self.ReceiveOk(Self.LastSentRequest);
   Check(Self.Succeeded, '(Re-)Registration failed');
+end;
+
+procedure TestTIdSipOutboundRegister.TestReceiveMultipleGruus;
+const
+  OurUrn   = 'urn:uuid:00000000-0000-0000-0000-000000000000';
+  TheirUrn = 'urn:uuid:11111111-1111-1111-1111-111111111111';
+var
+  GruuOne:    TIdSipContactHeader;
+  GruuTwo:    TidSipContactHeader;
+  OkWithGruu: TIdSipResponse;
+begin
+  // If more than one UA registers for the same Address Of Record, then THIS
+  // UA only wants to know ITS GRUU when it registers.
+
+  Self.Core.Contact.SipInstance := OurUrn;
+  Self.Core.UseGruu := true;
+  Self.Contacts.Clear;
+  Self.Contacts.Add(Self.Core.Contact);
+  Self.CreateAction;
+
+  OkWithGruu := TIdSipResponse.InResponseTo(Self.LastSentRequest, SIPOK);
+  try
+    OkWithGruu.Supported.Values.Add(ExtensionGruu);
+    // The other UA
+    GruuOne := OkWithGruu.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
+    GruuOne.Value       := Self.Core.Contact.FullValue;
+    GruuOne.Gruu        := Self.Core.Contact.Address.AsString + ';opaque=bar';
+    GruuOne.SipInstance := TheirUrn;
+
+    // Our UA
+    GruuTwo := OkWithGruu.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
+    GruuTwo.Value       := Self.Core.Contact.FullValue;
+    GruuTwo.Gruu        := Self.Core.Contact.Address.AsString + ';opaque=foo';
+    GruuTwo.SipInstance := OurUrn;
+
+    Self.ReceiveResponse(OkWithGruu);
+
+    CheckEquals(GruuTwo.Gruu,
+                Self.Core.Gruu.Address.AsString,
+                'Core''s GRUU not set');
+  finally
+    OkWithGruu.Free;
+  end;
 end;
 
 procedure TestTIdSipOutboundRegister.TestRegister;

@@ -22,7 +22,8 @@ type
   TIdSipRequestEvent = procedure(Sender: TObject;
                                  R: TIdSipRequest) of object;
 
-  TestTIdSipTcpServer = class(TTestCaseSip, IIdSipMessageListener)
+  TestTIdSipTcpServer = class(TTestCaseSip,
+                              IIdSipMessageListener)
   private
     EmptyListEvent:           TEvent;
     NotifiedMalformedMessage: Boolean;
@@ -321,7 +322,7 @@ begin
   Self.CheckingRequestEvent := Self.AcknowledgeEvent;
 
   Self.Client.Connect(DefaultTimeout);
-  Self.Client.Write(BasicRequest);
+  Self.Client.Write(Format(BasicRequest, [ViaFQDN]));
 
   Self.WaitForSignaled;
 end;
@@ -374,7 +375,7 @@ begin
     Self.LowPortServer.AddMessageListener(Self);
 
     Self.Client.Connect(DefaultTimeout);
-    Self.Client.Write(BasicRequest);
+    Self.Client.Write(Format(BasicRequest, [ViaFQDN]));
 
     Self.WaitForSignaled;
     Check(Listener.ReceivedRequest, 'Not all listeners received the request');
@@ -441,7 +442,7 @@ begin
     Self.HighPortServer.AddMessageListener(Self);
 
     Self.Client.Connect(DefaultTimeout);
-    Self.Client.Write(BasicRequest);
+    Self.Client.Write(Format(BasicRequest, [ViaFQDN]));
 
     Self.WaitForSignaled;
     Check(not Listener.ReceivedRequest, 'Listener not removed: ' + Self.ClassName);

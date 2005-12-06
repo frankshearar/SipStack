@@ -76,6 +76,7 @@ type
     procedure TestFailAddBinding;
     procedure TestFailBindingsFor;
     procedure TestFailRemoveBinding;
+    procedure TestGruusFor;
     procedure TestRemoveAllBindings;
     procedure TestRemoveBinding;
     procedure TestRemoveBindingWhenNotPresent;
@@ -614,6 +615,31 @@ begin
         'RemoveAllBindings succeeded');
 end;
 
+procedure TestTIdSipMockBindingDatabase.TestGruusFor;
+const
+  ZeroUrn = '<urn:uuid:00000000-0000-0000-0000-000000000000>';
+var
+  Bindings: TIdSipContacts;
+begin
+  Self.CaseContact.SipInstance := ZeroUrn;
+  Self.DB.AddBindings(Self.CasesAOR);
+  Bindings := TIdSipContacts.Create;
+  try
+    Bindings.Add(Self.CaseContact);
+
+    Self.DB.GruusFor(Self.CaseContact.AsAddressOfRecord, Bindings);
+
+    Bindings.First;
+    Check(Bindings.CurrentContact.HasParam(GruuParam),
+          'DB didn''t create and add a GRUU to the binding');
+    CheckNotEquals('',
+                   Bindings.CurrentContact.Gruu,
+                   '"gruu" parameters MUST have a value');
+  finally
+    Bindings.Free;
+  end;
+end;
+
 procedure TestTIdSipMockBindingDatabase.TestRemoveAllBindings;
 begin
   Self.DB.AddBindings(Self.WintermutesAOR);
@@ -640,15 +666,25 @@ begin
     Self.DB.AddBindings(Self.WintermutesAOR);
 
     Self.DB.AddBindings(Self.CasesAOR);
-    Self.CaseContact.Address.Host := 'sip:case@111.public.booth.org';
+    Self.CaseContact.Address.Host := 'case@a111.public.booth.org';
     Self.DB.AddBindings(Self.CasesAOR);
     Self.Wintermute.Address.Host := 'talking-head.tessier-ashpool.co.luna';
     Self.DB.AddBindings(Self.WintermutesAOR);
 
-    Self.DB.RemoveBinding(Self.WintermutesAOR, ToBeDeleted);
-
     Bindings := TIdSipContacts.Create;
     try
+      Self.DB.BindingsFor(Self.WintermutesAOR, Bindings);
+      CheckEquals(2,
+                  Bindings.Count,
+                  'Sanity check: Wintermute should have two bindings');
+
+      Self.DB.BindingsFor(Self.CasesAOR, Bindings);
+      CheckEquals(2,
+                  Bindings.Count,
+                  'Sanity check: Case should have two bindings');
+
+      Self.DB.RemoveBinding(Self.WintermutesAOR, ToBeDeleted);
+
       Self.DB.BindingsFor(Self.WintermutesAOR, Bindings);
       CheckEquals(1,
                   Bindings.Count,

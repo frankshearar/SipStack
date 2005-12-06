@@ -89,6 +89,96 @@ type
     property Value:           String   read GetValue write SetValue;
   end;
 
+  // I represent a parameter in either a header or a URI.
+  TIdSipParameter = class(TObject)
+  private
+    fName:  String;
+    fValue: String;
+  public
+    function AsHeaderParameter: String; virtual;
+    function AsString: String; virtual;
+    function AsUriParameter: String;
+    function Equals(Other: TIdSipParameter): Boolean;
+
+    property Name:  String read fName write fName;
+    property Value: String read fValue write fValue;
+  end;
+
+  TIdSipParameterClass = class of TIdSipParameter;
+
+  // I represent parameters that MUST contain a quoted-string, like gruu, or
+  // +sip.instance.
+  TIdSipQuotedStringParameter = class(TIdSipParameter)
+  public
+    function AsHeaderParameter: String; override;
+    function AsString: String; override;
+  end;
+
+  TIdSipParameters = class(TPersistent)
+  private
+    Parameters:     TObjectList;
+    ParameterTypes: TStrings;
+
+    function  FetchParamName(var Params: String): String;
+    function  FetchQuotedParameter(var Params: String): String;
+    function  FetchUnquotedParameter(var Params: String): String;
+    function  FindParam(const Name: String): TIdSipParameter;
+    function  GetValues(const Name: String): String;
+    procedure InitialiseParameterTypes(List: TStrings);
+    function  ParameterAt(Index: Integer): TIdSipParameter;
+    function  ParameterType(const Name: String): TIdSipParameterClass;
+    function  ParameterTypeAt(Index: Integer): TIdSipParameterClass;
+    procedure SetValues(const Name: String; const Value: String);
+  protected
+    procedure FailParse(const Reason: String); virtual;
+  public
+    constructor Create;
+    destructor  Destroy; override;
+
+    procedure Add(Params: TIdSipParameters);
+    function  AddParam(const Name: String;
+                       const Value: String): TIdSipParameter;
+    procedure Assign(Src: TPersistent); override;
+    function  AsString: String; virtual;
+    procedure Clear;
+    function  Count: Integer;
+    function  Equals(Other: TIdSipParameters): Boolean;
+    function  HasDuplicatedParameter(const Name: String): Boolean;
+    function  HasParam(const Name: String): Boolean;
+    function  IntersectionEquals(OtherParameters: TIdSipParameters): Boolean;
+    function  ParamValue(const Name: String): String;
+    procedure Parse(ParamList: String); virtual;
+    procedure RemoveParameter(const Name: String);
+
+    property Values[const Name: String]: String read GetValues write SetValues; default;
+  end;
+
+  // I represent the parameter list of a SIP header. The primary difference
+  // between me and a TIdSipUriParameters is that if one of my parameters
+  // contains a special character, say a SWS character, I encode it as a header
+  // would: with a \%xx, where %xx represents some (lower, non-CR, non-LF) ASCII
+  // character.
+  TIdSipHeaderParameters = class(TIdSipParameters)
+  protected
+    procedure FailParse(const Reason: String); override;
+  public
+    function  AsString: String; override;
+    procedure Parse(ParamList: String); override;
+  end;
+
+
+  // I represent the parameter list of a URI. The primary difference between me
+  // and a TIdSipHeaderParameters is that if one of my parameters contains a
+  // special character, say a SWS character, I encode it as a URI would: with
+  // a %xx (x is a hexadecimal digit).
+  TIdSipUriParameters = class(TIdSipParameters)
+  protected
+    procedure FailParse(const Reason: String); override;
+  public
+    function  AsString: String; override;
+    procedure Parse(ParamList: String); override;
+  end;
+
   // I represent some sort've URI. My subclasses implement URIs like SIP or SIPS
   //  or TEL URIs. My subclasses do all parsing. My constructor is a Template
   // Method - my subclasses need only override Initialize to instantiate
@@ -137,40 +227,43 @@ type
   // identifier, see ParamToTransport.
   TIdSipUri = class(TIdUri)
   private
-    fHeaders:   TIdSipHeaders;
-    fPassword:  String;
-    fUsername:  String;
-    Parameters: TStrings;
+    fHeaders:         TIdSipHeaders;
+    fIsMalformed:     Boolean;
+    fParseFailReason: String;
+    fPassword:        String;
+    fUnparsedValue:   String;
+    fUsername:        String;
+    Parameters:       TIdSipParameters;
 
     class function IsEscapedOrInSet(const Token: String;
                                     AcceptableChars: TIdSipChars): Boolean;
 
     function  EqualParameters(const Uri: TIdSipUri): Boolean;
+    function  GetGrid: String;
     function  GetMaddr: String;
     function  GetMethod: String;
+    function  GetOpaque: String;
     function  GetTransport: String;
     function  GetTTL: Cardinal;
     function  GetUri: String;
     function  GetUserParameter: String;
-    function  HasValidHostInfo: Boolean;
-    function  HasValidParameters: Boolean;
-    function  HasValidScheme: Boolean;
     function  HasValidUserInfo: Boolean;
     function  HeadersAsString: String;
     function  IsKnownParameter(const Name: String): Boolean;
+    procedure MarkAsInvalid(const Reason: String);
     function  ParamsAsString: String;
     procedure ParseHeaders(HeaderList: String);
     procedure ParseHost(HostAndPort: String);
-    procedure ParseParams(ParamList: String);
     procedure ParseUserInfo(UserInfo: String);
     procedure Reset;
+    procedure SetGrid(const Value: String);
     procedure SetMaddr(const Value: String);
     procedure SetMethod(const Value: String);
+    procedure SetOpaque(const Value: String);
     procedure SetTransport(const Value: String);
     procedure SetTTL(const Value: Cardinal);
     procedure SetUri(const Value: String);
     procedure SetUserParameter(const Value: String);
-    function  UnidirectionalParameterCompare(ThisUri, ThatUri: TIdSipUri): Boolean;
   protected
     procedure Initialize; override;
     procedure Parse(Uri: String); override;
@@ -203,6 +296,7 @@ type
     function  Equals(Uri: TIdSipUri): Boolean;
     procedure EraseUserInfo;
     function  HasValidSyntax: Boolean;
+    function  HasGrid: Boolean;
     function  HasHeaders: Boolean;
     function  HasMaddr: Boolean;
     function  HasMethod: Boolean;
@@ -210,8 +304,6 @@ type
     function  IsLooseRoutable: Boolean;
     function  IsSecure: Boolean; virtual;
     function  ParamCount: Integer;
-    function  ParamName(Index: Cardinal): String;
-    function  ParamValue(Index: Cardinal): String; overload;
     function  ParamValue(const Name: String): String; overload;
     function  PortIsSpecified: Boolean;
     procedure RemoveParameter(const Name: String);
@@ -219,15 +311,20 @@ type
     function  UserIsIp: Boolean;
     function  UserIsPhoneNumber: Boolean;
 
-    property Headers:       TIdSipHeaders read fHeaders;
-    property Maddr:         String        read GetMaddr write SetMaddr;
-    property Method:        String        read GetMethod write SetMethod;
-    property Password:      String        read fPassword write fPassword;
-    property Transport:     String        read GetTransport write SetTransport;
-    property TTL:           Cardinal      read GetTTL write SetTTL;
-    property Uri:           String        read GetUri write SetUri;
-    property Username:      String        read fUsername write fUsername;
-    property UserParameter: String        read GetUserParameter write SetUserParameter;
+    property Grid:            String        read GetGrid write SetGrid;
+    property Headers:         TIdSipHeaders read fHeaders;
+    property IsMalformed:     Boolean       read fIsMalformed;
+    property Maddr:           String        read GetMaddr write SetMaddr;
+    property Method:          String        read GetMethod write SetMethod;
+    property Opaque:          String        read GetOpaque write SetOpaque;
+    property ParseFailReason: String        read fParseFailReason;
+    property Password:        String        read fPassword write fPassword;
+    property Transport:       String        read GetTransport write SetTransport;
+    property TTL:             Cardinal      read GetTTL write SetTTL;
+    property UnparsedValue:   String        read fUnparsedValue;
+    property Uri:             String        read GetUri write SetUri;
+    property Username:        String        read fUsername write fUsername;
+    property UserParameter:   String        read GetUserParameter write SetUserParameter;
   end;
 
   // I represent a header in a SIP message.
@@ -255,17 +352,17 @@ type
   private
     fIsMalformed:     Boolean;
     fName:            String;
-    fParams:          TStrings;
+    fParams:          TIdSipParameters;
     fParseFailReason: String;
     fValue:           String;
     fUnparsedValue:   String;
 
     function  GetParam(const Name: String): String;
-    function  GetParameters: TStrings;
+    function  GetParameters: TIdSipParameters;
     procedure SetParam(const Name, Value: String);
-    procedure SetParameters(Value: TStrings);
+    procedure SetParameters(Value: TIdSipParameters);
 
-    property Parameters: TStrings read GetParameters write SetParameters;
+    property Parameters: TIdSipParameters read GetParameters write SetParameters;
   protected
     procedure FailParse(const Reason: String);
     function  GetCardinalParam(const ParamName: String;
@@ -275,7 +372,7 @@ type
     procedure MarkAsInvalid(const Reason: String);
     procedure Parse(const Value: String); virtual;
     procedure ParseParameters(Value: String;
-                              Parameters: TStrings;
+                              Parameters: TIdSipParameters;
                               Delimiter: String = ';');
     procedure SetCardinalParam(const ParamName: String;
                                Value: Cardinal);
@@ -290,8 +387,7 @@ type
     procedure Assign(Src: TPersistent); override;
     function  AsString: String;
     function  FullValue: String;
-    function  HasParam(Name: String): Boolean;
-    function  IndexOfParam(Name: String): Integer;
+    function  HasParam(const Name: String): Boolean; virtual;
     function  IsContact: Boolean; virtual;
     function  Equals(Header: TIdSipHeader): Boolean; virtual;
     function  ParamCount: Integer;
@@ -314,7 +410,9 @@ type
   private
     fAddress: TIdSipUri;
 
+    function  GetGrid: String;
     procedure SetAddress(Value: TIdSipUri);
+    procedure SetGrid(Value: String);
   protected
     function  GetValue: String; override;
     procedure Parse(const Value: String); override;
@@ -323,6 +421,7 @@ type
     destructor  Destroy; override;
 
     property Address: TIdSipUri read fAddress write SetAddress;
+    property Grid:    String    read GetGrid write SetGrid;
   end;
 
   TIdSipToHeader = class;
@@ -335,11 +434,14 @@ type
     procedure Parse(const Value: String); override;
   public
     function AsAddressOfRecord: String;
+    function AsCanonicalAddress: String;
     function AsToHeader: TIdSipToHeader;
     function HasSipsUri: Boolean;
 
     property DisplayName: String read fDisplayName write fDisplayName;
   end;
+
+  TIdSipAddressHeaderClass = class of TIdSipAddressHeader;
 
   TIdSipCommaSeparatedHeader = class(TIdSipHeader)
   private
@@ -404,6 +506,8 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
+    function  HasParam(const Name: String): Boolean; override;
+
     property Algorithm:           String   read GetAlgorithm write SetAlgorithm;
     property AuthorizationScheme: String   read fAuthorizationScheme write fAuthorizationScheme;
     property Nonce:               String   read GetNonce write SetNonce;
@@ -462,19 +566,19 @@ type
 
   TIdSipWeightedValue = class(TObject)
   private
-    fParameters: TStrings;
+    fParameters: TIdSipParameters;
     fValue:      String;
     fWeight:     TIdSipQValue;
 
-    function GetParameters: TStrings;
+    function GetParameters: TIdSipParameters;
   public
     destructor Destroy; override;
 
     function AsString: String;
 
-    property Parameters: TStrings     read GetParameters;
-    property Value:      String       read fValue write fValue;
-    property Weight:     TIdSipQValue read fWeight write fWeight;
+    property Parameters: TIdSipParameters read GetParameters;
+    property Value:      String           read fValue write fValue;
+    property Weight:     TIdSipQValue     read fWeight write fWeight;
   end;
 
   TIdSipWeightedCommaSeparatedHeader = class(TIdSipHeader)
@@ -501,12 +605,16 @@ type
 
   TIdSipContactHeader = class(TIdSipAddressHeader)
   private
-    fIsWildCard: Boolean;
+    fIsWildCard:  Boolean;
 
     function  GetExpires: Cardinal;
+    function  GetGruu: String;
     function  GetQ: TIdSipQValue;
+    function  GetSipInstance: String;
     procedure SetExpires(Value: Cardinal);
+    procedure SetGruu(const Value: String);
     procedure SetQ(Value: TIdSipQValue);
+    procedure SetSipInstance(const Value: String);
   protected
     function  GetName: String; override;
     function  GetValue: String; override;
@@ -515,9 +623,11 @@ type
     procedure RemoveExpires;
     function  WillExpire: Boolean;
 
-    property Expires:    Cardinal     read GetExpires write SetExpires;
-    property IsWildCard: Boolean      read fIsWildCard write fIsWildCard;
-    property Q:          TIdSipQValue read GetQ write SetQ;
+    property Expires:     Cardinal     read GetExpires write SetExpires;
+    property Gruu:        String       read GetGruu write SetGruu;
+    property IsWildCard:  Boolean      read fIsWildCard write fIsWildCard;
+    property Q:           TIdSipQValue read GetQ write SetQ;
+    property SipInstance: String       read GetSipInstance write SetSipInstance;
   end;
 
   TIdSipContentDispositionHeader = class(TIdSipHeader)
@@ -691,28 +801,16 @@ type
     property Duration: Cardinal   read GetDuration write SetDuration;
   end;
 
-  TIdSipRouteHeader = class(TIdSipHeader)
+  TIdSipRouteHeader = class(TIdSipAddressHeader)
   private
-    fAddress:     TIdSipURI;
-    fDisplayName: String;
-
     function  GetIsLooseRoutable: Boolean;
-    procedure SetAddress(Value: TIdSipURI);
     procedure SetIsLooseRoutable(Value: Boolean);
   protected
     function  GetName: String; override;
     function  GetValue: String; override;
     procedure Parse(const Value: String); override;
   public
-    constructor Create; override;
-    destructor  Destroy; override;
-
-    function EncodeQuotedStr(const S: String): String;
-    function HasSipsUri: Boolean;
-
-    property Address:         TIdSipURI read fAddress write SetAddress;
-    property DisplayName:     String    read fDisplayName write fDisplayName;
-    property IsLooseRoutable: Boolean   read GetIsLooseRoutable write SetIsLooseRoutable;
+    property IsLooseRoutable: Boolean read GetIsLooseRoutable write SetIsLooseRoutable;
   end;
 
   TIdSipRecordRouteHeader = class(TIdSipRouteHeader)
@@ -797,7 +895,7 @@ type
   // cf. RFC 3891
   TIdSipReplacesHeader = class(TIdSipParameteredCallIDHeader)
   private
-    procedure CheckFromToTagCount(Params: TStrings);
+    procedure CheckFromToTagCount(Params: TIdSipParameters);
     function  GetFromTag: String;
     function  GetToTag: String;
     procedure SetFromTag(const Value: String);
@@ -815,7 +913,7 @@ type
   // cf. draft-ietf-sip-target-dialog-01
   TIdSipTargetDialogHeader = class(TIdSipParameteredCallIDHeader)
   private
-    procedure CheckLocalRemoteTagCount(Params: TStrings);
+    procedure CheckLocalRemoteTagCount(Params: TIdSipParameters);
     function  GetLocalTag: String;
     function  GetRemoteTag: String;
     procedure SetLocalTag(const Value: String);
@@ -1097,6 +1195,7 @@ type
 
     function ContactFor(Address: TIdSipAddressHeader): TIdSipContactHeader;
     function CurrentContact: TIdSipContactHeader;
+    function GruuFor(Contact: TIdSipContactHeader): String;
     function HasContact(Address: TIdSipAddressHeader): Boolean;
   end;
 
@@ -1279,6 +1378,7 @@ type
     procedure ReadBody(Src: TStream);
     procedure RemoveHeader(Header: TIdSipHeader);
     procedure RemoveAllHeadersNamed(const Name: String);
+    function  SupportsExtension(const Extension: String): Boolean;
     function  WantsAllowEventsHeader: Boolean; virtual;
 
     property Accept:             TIdSipWeightedCommaSeparatedHeader read GetAccept write SetAccept;
@@ -1318,7 +1418,9 @@ type
     function  GetProxyRequire: TIdSipCommaSeparatedHeader;
     function  GetReferTo: TIdSipReferToHeader;
     function  GetReplaces: TIdSipReplacesHeader;
+    function  GetSubject: TIdSipHeader;
     function  GetSubscriptionState: TIdSipSubscriptionStateHeader;
+    function  GetTargetDialog: TIdSipTargetDialogHeader;
     procedure ParseMethod(Parser: TIdSipParser;
                           var FirstLine: String);
     procedure ParseRequestUri(Parser: TIdSipParser;
@@ -1332,7 +1434,9 @@ type
     procedure SetReplaces(Value: TIdSipReplacesHeader);
     procedure SetRequestUri(Value: TIdSipURI);
     procedure SetRoute(Value: TIdSipRoutePath);
+    procedure SetSubject(Value: TIdSipHeader);
     procedure SetSubscriptionState(Value: TIdSipSubscriptionStateHeader);
+    procedure SetTargetDialog(Value: TIdSipTargetDialogHeader);
   protected
     function  FirstLine: String; override;
     function  HasMalformedFirstLine: Boolean; override;
@@ -1386,11 +1490,14 @@ type
     property Event:             TIdSipEventHeader             read GetEvent write SetEvent;
     property MaxForwards:       Byte                          read GetMaxForwards write SetMaxForwards;
     property Method:            String                        read fMethod write fMethod;
+    property ProxyRequire:      TIdSipCommaSeparatedHeader    read GetProxyRequire write SetProxyRequire;
     property ReferTo:           TIdSipReferToHeader           read GetReferTo write SetReferTo;
     property Replaces:          TIdSipReplacesHeader          read GetReplaces write SetReplaces;
     property RequestUri:        TIdSipURI                     read fRequestUri write SetRequestUri;
     property Route:             TIdSipRoutePath               read fRoute write SetRoute;
+    property Subject:           TIdSipHeader                  read GetSubject write SetSubject;
     property SubscriptionState: TIdSipSubscriptionStateHeader read GetSubscriptionState write SetSubscriptionState;
+    property TargetDialog:      TIdSipTargetDialogHeader      read GetTargetDialog write SetTargetDialog;
   end;
 
   // My RequestRequestUri property deserves some explanation: According to
@@ -1508,8 +1615,12 @@ type
 
   TIdSipParser = class(TIdSimpleParser)
   public
+    class function ExtractAngleQuotedUri(var ParseString: String): String;
+    class function ExtractQuotedString(var ParseString: String): String;
+    class function ExtractToken(var ParseString: String): String;
     class function IsIPv6Reference(const Token: String): Boolean;
     class function IsMethod(Method: String): Boolean;
+    class function IsUuidUrn(const URN: String): Boolean;
     class function IsQuotedString(const Token: String): Boolean;
     class function IsQValue(const Token: String): Boolean;
     class function IsRequest(FirstLine: String): Boolean;
@@ -1631,7 +1742,9 @@ const
   ExpireNow                      = 0;
   ExpiresHeader                  = 'Expires';
   ExpiresParam                   = 'expires';
+  ExtensionGruu                  = 'gruu'; // cf. draft-ietf-sip-gruu-06
   ExtensionReplaces              = 'replaces'; // cf. RFC 3891
+  ExtensionTargetDialog          = 'tdialog'; // cf. draft-ietf-sip-target-dialog-01
   FromHeaderFull                 = 'From';
   FromHeaderShort                = 'f';
   FromTagParam                   = 'from-tag'; // cf. RFC 3891
@@ -1698,6 +1811,7 @@ const
   RouteHeader                    = 'Route';
   RportParam                     = 'rport';
   ServerHeader                   = 'Server';
+  SipInstanceParam               = '+sip.instance'; // cf. draft-ietf-sip-gruu-06
   SipScheme                      = 'sip';
   SipsScheme                     = 'sips';
   StaleParam                     = 'stale';
@@ -1965,8 +2079,10 @@ const
   InvalidDecimal              = 'Invalid decimal value';
   InvalidDelay                = 'Invalid delay value';
   InvalidDigestResponse       = 'Invalid digest-response';
+  InvalidDisplayName          = 'Invalid display-name';
   InvalidEventType            = 'Invalid event-type';
   InvalidExpires              = 'Invalid Expires parameter';
+  InvalidHost                 = 'Invalid host';
   InvalidMaddr                = 'Invalid maddr';
   InvalidMethod               = 'Invalid method';
   InvalidNameAddr             = 'Invalid name-addr';
@@ -1974,13 +2090,17 @@ const
   InvalidQuotedString         = 'Invalid quoted-string';
   InvalidQValue               = 'Invalid q-value';
   InvalidReceived             = 'Invalid received';
+  InvalidScheme               = 'Invalid scheme';
   InvalidSentProtocol         = 'Invalid sent-protocol';
   InvalidSequenceNumber       = 'Invalid sequence number';
+  InvalidSipInstance          = 'Invalid sip.instance';
   InvalidSipVersion           = 'Invalid Sip-Version: ''%s''';
   InvalidStatusCode           = 'Invalid Status-Code: ''%s''';
   InvalidTag                  = 'Invalid tag';
   InvalidTime                 = 'Invalid date/time';
+  InvalidToken                = 'Invalid token';
   InvalidUri                  = 'Invalid URI';
+  InvalidUserInfo             = 'Invalid username or password';
   InvalidWarnAgent            = 'Invalid warn-agent';
   InvalidWarnCode             = 'Invalid warn-code';
   InvalidWarnText             = 'Invalid warn-text';
@@ -1991,6 +2111,7 @@ const
   MissingCSeq                 = 'Missing CSeq header';
   MissingFrom                 = 'Missing From header';
   MissingFromTagParam         = 'Missing from-tag parameter';
+  MissingHost                 = 'Missing host';
   MissingLocalTagParam        = 'Missing local-tag parameter';
   MissingMaxForwards          = 'Missing Max-Forwards header';
   MissingRemoteTagParam       = 'Missing remote-tag parameter';
@@ -1999,6 +2120,7 @@ const
   MissingTo                   = 'Missing To header';
   MissingToTagParam           = 'Missing to-tag parameter';
   MissingSipVersion           = 'Missing SIP-Version';
+  MissingUri                  = 'Missing URI';
   MissingVia                  = 'Missing Via header';
   OnlyCancelInvites           = 'Only INVITE requests may be CANCELled, not "%s" requests';
   RequestLine                 = '%s %s %s' + CRLF;
@@ -2007,6 +2129,7 @@ const
   StatusLine                  = '%s %d %s' + CRLF;
   UnexpectedDisplayName       = 'Unexpected display-name';
   UnexpectedMessageLength     = 'Expected message-body length of %d but was %d';
+  UnmatchedAngleBrackets      = 'Unmatched angle brackets';
   UnmatchedParentheses        = 'Unmatched parentheses';
   UnmatchedQuotes             = 'Unmatched quotes';
   UnmatchedQuotesForParameter = 'Unmatched quotes around a parameter';
@@ -2117,7 +2240,7 @@ begin
   if (Name = '') then
     Result := false
   else begin
-    Result := false;
+    Result := IndyPos(' ', Name) > 0;
 
     while (Name <> '') do begin
       Token := Fetch(Name, ' ');
@@ -2400,6 +2523,14 @@ begin
     Self.Host := Fetch(Value, ':');
   end;
 
+  if (Self.Host = '') then
+    raise EParserError.Create(MissingHost);
+
+  if not (TIdSimpleParser.IsFQDN(Self.Host)
+         or TIdIPAddressParser.IsIPv4Address(Self.Host)
+         or TIdIPAddressParser.IsIPv6Reference(Self.Host)) then
+    raise EParserError.Create(InvalidHost);
+
   // Value now contains either a (possibly malformed) port, or nothing.
   if (Value = '') then begin
     Self.Port := Self.DefaultPort;
@@ -2412,6 +2543,477 @@ begin
     Self.Port := StrToIntDef(Value, Self.DefaultPort);
     Self.PortIsSpecified := true;
   end;
+end;
+
+//******************************************************************************
+//* TIdSipParameter                                                            *
+//******************************************************************************
+//* TIdSipParameter Public methods *********************************************
+
+function TIdSipParameter.AsHeaderParameter: String;
+begin
+  Result := Self.Name;
+
+  if (Self.Value <> '') then
+    Result := Result + '=' + QuoteStringIfNecessary(EncodeQuotedStr(Self.Value));
+end;
+
+function TIdSipParameter.AsString: String;
+begin
+  Result := Self.AsUriParameter;
+end;
+
+function TIdSipParameter.AsUriParameter: String;
+begin
+  Result := Self.Name;
+
+  if (Self.Value <> '') then
+    Result := Result + '=' + TIdSipUri.ParameterEncode(Self.Value);
+end;
+
+function TIdSipParameter.Equals(Other: TIdSipParameter): Boolean;
+begin
+  Result := IsEqual(Self.Name, Other.Name)
+        and IsEqual(Self.Value, Other.Value);
+end;
+
+//******************************************************************************
+//* TIdSipQuotedStringParameter                                                *
+//******************************************************************************
+//* TIdSipQuotedStringParameter Public methods *********************************
+
+function TIdSipQuotedStringParameter.AsHeaderParameter: String;
+begin
+  Result := Self.Name;
+
+  if (Self.Value <> '') then
+    Result := Result + '="' + EncodeQuotedStr(Self.Value) + '"';
+end;
+
+function TIdSipQuotedStringParameter.AsString: String;
+begin
+  Result := Self.Name;
+
+  if (Self.Value <> '') then
+    Result := Result + '="'
+            + TIdSipContactHeader.EncodeQuotedStr(Self.Value) + '"';
+end;
+
+//******************************************************************************
+//* TIdSipParameters                                                           *
+//******************************************************************************
+//* TIdSipParameters Public methods ********************************************
+
+constructor TIdSipParameters.Create;
+begin
+  inherited Create;
+
+  Self.Parameters     := TObjectList.Create(true);
+  Self.ParameterTypes := TStringList.Create;
+  
+  Self.InitialiseParameterTypes(Self.ParameterTypes);
+end;
+
+destructor TIdSipParameters.Destroy;
+begin
+  Self.ParameterTypes.Free;
+  Self.Parameters.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipParameters.Add(Params: TIdSipParameters);
+var
+  I: Integer;
+begin
+  // TODO: this references private data in Params!
+  for I := 0 to Params.Parameters.Count - 1 do
+    Self.AddParam(Params.ParameterAt(I).Name,
+                  Params.ParameterAt(I).Value);
+end;
+
+function TIdSipParameters.AddParam(const Name: String;
+                                   const Value: String): TIdSipParameter;
+begin
+  // Usually you wouldn't want to add a duplicate parameter. In fact, you'd
+  // typically have a malformed header or URI. But it's perfectly possible to
+  // RECEIVE a thusly malformed header/URI, and this class represents both
+  // good parameter lists (the ones you make - yes, YOU must make sure you
+  // don't add duplicate parameters) and bad parameter lists (ones with
+  // duplicate parameters);
+
+  Result := Self.ParameterType(Name).Create;
+  Self.Parameters.Add(Result);
+  Result.Name  := Name;
+  Result.Value := Value;
+end;
+
+procedure TIdSipParameters.Assign(Src: TPersistent);
+var
+  Other: TIdSipParameters;
+begin
+  if (Src is TIdSipParameters) then begin
+    Other := Src as TIdSipParameters;
+
+    Self.Clear;
+    Self.Add(Other);
+  end
+  else
+    inherited Assign(Src);
+end;
+
+function TIdSipParameters.AsString: String;
+var
+  I: Integer;
+begin
+  Result := '';
+
+  for I := 0 to Self.Parameters.Count - 1 do
+    Result := Result + ';' + Self.ParameterAt(I).AsString;
+end;
+
+procedure TIdSipParameters.Clear;
+begin
+  Self.Parameters.Clear;
+end;
+
+function TIdSipParameters.Count: Integer;
+begin
+  Result := Self.Parameters.Count;
+end;
+
+function TIdSipParameters.Equals(Other: TIdSipParameters): Boolean;
+var
+  I:    Integer;
+  Name: String;
+begin
+  Result := true;
+  for I := 0 to Self.Parameters.Count - 1 do begin
+    Name := Self.ParameterAt(I).Name;
+
+    // Avoid a reliance on short-circuited evaluation.
+    Result := Result and Other.HasParam(Name);
+    Result := Result and IsEqual(Self.ParamValue(Name), Other.ParamValue(Name));
+  end;
+
+  Result := Result and (Self.Count = Other.Count);
+end;
+
+function TIdSipParameters.HasDuplicatedParameter(const Name: String): Boolean;
+var
+  Found: Boolean;
+  I:     Integer;
+begin
+  Found  := false;
+  Result := false;
+  I := 0;
+  while (I < Self.Parameters.Count) and not Result do begin
+    if IsEqual(Self.ParameterAt(I).Name, Name) then begin
+      if Found then
+        Result := true
+      else
+        Found := true;
+    end;
+    Inc(I);
+  end;
+end;
+
+function TIdSipParameters.HasParam(const Name: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := false;
+
+  I := 0;
+  while (I < Self.Parameters.Count) and not Result do
+    if IsEqual(Self.ParameterAt(I).Name, Name) then
+      Result := true
+    else
+      Inc(I);
+end;
+
+function TIdSipParameters.IntersectionEquals(OtherParameters: TIdSipParameters): Boolean;
+var
+  I:    Integer;
+  Name: String;
+begin
+  // Return true if each parameter in both this list and OtherParameters have
+  // equal value. In other words, take the intersection of our set of parameter
+  // names and OtherParameters' set of names, and check equality of parameter
+  // values in that set.
+
+  Result := true;
+  for I := 0 to Self.Parameters.Count - 1 do begin
+    Name := Self.ParameterAt(I).Name;
+    if OtherParameters.HasParam(Name) then
+      Result := Result
+            and (Self.ParamValue(Name) = OtherParameters.ParamValue(Name))
+  end;
+end;
+
+function TIdSipParameters.ParamValue(const Name: String): String;
+var
+  Param: TIdSipParameter;
+begin
+  Param := Self.FindParam(Name);
+
+  if Assigned(Param) then
+    Result := Param.Value
+  else
+    Result := '';
+end;
+
+procedure TIdSipParameters.Parse(ParamList: String);
+begin
+end;
+
+procedure TIdSipParameters.RemoveParameter(const Name: String);
+begin
+  Self.Parameters.Remove(Self.FindParam(Name));
+end;
+
+//* TIdSipParameters Private methods *******************************************
+
+procedure TIdSipParameters.FailParse(const Reason: String);
+begin
+end;
+
+//* TIdSipParameters Private methods *******************************************
+
+function TIdSipParameters.FetchParamName(var Params: String): String;
+const
+  Delimiters = [';', '='];
+var
+  I: Integer;
+begin
+  I := 1;
+  while (I <= Length(Params)) and not (Params[I] in Delimiters) do Inc(I);
+  if (I = Length(Params)) then begin
+    if Params[I] in Delimiters then begin
+      Result := Copy(Params, 1, I - 1);
+      Delete(Params, 1, I - 1);
+    end
+    else begin
+      Result := Params;
+      Params := '';
+    end;
+  end
+  else begin
+    Result := Trim(Copy(Params, 1, I - 1));
+
+    // Be sure to leave the first character after the parameter name: it should
+    // be either the end of the string, or an EQ, or a SEMI.
+    Delete(Params, 1, I - 1);
+  end;
+end;
+
+function TIdSipParameters.FetchQuotedParameter(var Params: String): String;
+begin
+  // Precondition: We have a string that starts with a '"' character.
+
+  try
+    Result := TIdSipParser.ExtractQuotedString(Params);
+  except
+    on E: EParserError do
+      Self.FailParse(E.Message);
+  end;
+end;
+
+function TIdSipParameters.FetchUnquotedParameter(var Params: String): String;
+var
+  I: Integer;
+begin
+  I := 1;
+  while (I <= Length(Params)) and (Params[I] <> ';') do Inc(I);
+  if (I = Length(Params)) then begin
+    Result := Params;
+    Params := '';
+  end
+  else begin
+    Result := Copy(Params, 1, I - 1);
+    Delete(Params, 1, I - 1);
+  end;
+
+  Result := Trim(Result);
+end;
+
+function TIdSipParameters.FindParam(const Name: String): TIdSipParameter;
+var
+  I: Integer;
+begin
+  Result := nil;
+
+  I := 0;
+  while (I < Self.Parameters.Count) and not Assigned(Result) do
+    if IsEqual(Self.ParameterAt(I).Name, Name) then
+      Result := Self.ParameterAt(I)
+    else
+      Inc(I);
+end;
+
+function TIdSipParameters.GetValues(const Name: String): String;
+var
+  Param: TIdSipParameter;
+begin
+  Param := Self.FindParam(Name);
+
+  if not Assigned(Param) then
+    Result := ''
+  else
+    Result := Param.Value;
+end;
+
+procedure TIdSipParameters.InitialiseParameterTypes(List: TStrings);
+begin
+  List.AddObject(GruuParam,        TObject(TIdSipQuotedStringParameter));
+  List.AddObject(SipInstanceParam, TObject(TIdSipQuotedStringParameter));
+end;
+
+function TIdSipParameters.ParameterAt(Index: Integer): TIdSipParameter;
+begin
+  Result := Self.Parameters[Index] as TIdSipParameter;
+end;
+
+function TIdSipParameters.ParameterType(const Name: String): TIdSipParameterClass;
+var
+  Index: Integer;
+begin
+  Index := Self.ParameterTypes.IndexOf(Lowercase(Name));
+
+  if (Index = ItemNotFoundIndex) then
+    Result := TIdSipParameter
+  else
+    Result := Self.ParameterTypeAt(Index);
+end;
+
+function TIdSipParameters.ParameterTypeAt(Index: Integer): TIdSipParameterClass;
+begin
+  Result := TIdSipParameterClass(Self.ParameterTypes.Objects[Index]);
+end;
+
+procedure TIdSipParameters.SetValues(const Name: String; const Value: String);
+begin
+  if Self.HasParam(Name) then
+    Self.FindParam(Name).Value := Value
+  else
+    Self.AddParam(Name, Value);
+end;
+
+//******************************************************************************
+//* TIdSipHeaderParameters                                                     *
+//******************************************************************************
+//* TIdSipHeaderParameters Public methods **************************************
+
+function TIdSipHeaderParameters.AsString: String;
+var
+  I: Integer;
+begin
+  Result := '';
+
+  for I := 0 to Self.Parameters.Count - 1 do
+    Result := Result + ';' + Self.ParameterAt(I).AsHeaderParameter;
+end;
+
+procedure TIdSipHeaderParameters.Parse(ParamList: String);
+const
+  Delimiter = ';';
+var
+  ParamName:  String;
+  ParamValue: String;
+begin
+  // Precondition: Params contains either an empty string, or a series of
+  // semicolon-delimited name/value pairs. Thus, the first character must be
+  // a semicolon, if it exists.
+  Self.Clear;
+
+  while (ParamList <> '') do begin
+    // Eat any LWS between name/value pairs
+    ParamList := Trim(ParamList);
+
+    // Eat leading SEMI
+    if (ParamList[1] = Delimiter) then
+      Delete(ParamList, 1, 1);
+
+    // Find the parameter name, store it, and eat the token
+    ParamName := Self.FetchParamName(ParamList);
+
+    // This could happen if ParamList = ';;'
+    if not TIdSipParser.IsToken(ParamName) then
+      Self.FailParse(InvalidToken);
+
+    // Find the parameter value, store it, and eat the token
+    if (ParamList = '') then begin
+      Self.AddParam(ParamName, '');
+      Break;
+    end;
+
+    if (ParamList[1] = Delimiter) then begin
+      // Add the valueless parameter
+      Self.AddParam(ParamName, '');
+    end
+    else begin
+      // Eat the EQ
+      Delete(ParamList, 1, 1);
+
+      // Last parameter, and there's no value after the EQ, e.g., ";q="
+      if (ParamList = '') then
+        Self.FailParse(InvalidToken);
+
+      if (ParamList[1] = '"') then
+        ParamValue := Self.FetchQuotedParameter(ParamList)
+      else
+        ParamValue := Self.FetchUnquotedParameter(ParamList);
+
+      Self.AddParam(ParamName, ParamValue);
+    end;
+  end;
+end;
+
+procedure TIdSipHeaderParameters.FailParse(const Reason: String);
+begin
+  raise EBadHeader.Create(Reason);
+end;
+
+//******************************************************************************
+//* TIdSipUriParameters                                                        *
+//******************************************************************************
+//* TIdSipUriParameters Public methods *****************************************
+
+function TIdSipUriParameters.AsString: String;
+var
+  I: Integer;
+begin
+  Result := '';
+
+  for I := 0 to Self.Parameters.Count - 1 do
+    Result := Result + ';' + Self.ParameterAt(I).AsUriParameter;
+end;
+
+procedure TIdSipUriParameters.Parse(ParamList: String);
+var
+  ParamName:  String;
+  ParamValue: String;
+begin
+  while (ParamList <> '') do begin
+    ParamValue := Fetch(ParamList, ';');
+    ParamName := Fetch(ParamValue, '=');
+
+    if not TIdSipUri.IsParamNameOrValue(ParamName) then
+      Self.FailParse(InvalidToken);
+    if (ParamValue <> '') then begin
+      if not TIdSipUri.IsParamNameOrValue(ParamValue) then
+      Self.FailParse(InvalidToken);
+    end;
+
+    Self.AddParam(ParamName, TIdSipUri.Decode(ParamValue));
+  end;
+end;
+
+//* TIdSipUriParameters Public methods *****************************************
+
+procedure TIdSipUriParameters.FailParse(const Reason: String);
+begin
+  raise EParserError.Create(Reason);
 end;
 
 //******************************************************************************
@@ -2604,7 +3206,7 @@ end;
 procedure TIdSipUri.AddParameter(const Name: String;
                                  const Value: String = '');
 begin
-  Self.Parameters.Add(Name + '=' + Self.Decode(Value));
+  Self.Parameters.AddParam(Name, Self.Decode(Value));
 end;
 
 function TIdSipUri.AsRouteHeader: TIdSipRouteHeader;
@@ -2677,6 +3279,9 @@ function TIdSipUri.CreateRequest: TIdSipRequest;
 begin
   Result := TIdSipRequest.Create;
   Result.RequestUri := Self;
+  Result.RequestUri.Headers.Clear;
+
+  Result.AddHeaders(Self.Headers);
 
   if Result.RequestUri.HasParameter(MethodParam) then begin
     Result.Method := Result.RequestUri.ParamValue(MethodParam);
@@ -2684,7 +3289,29 @@ begin
     Result.RequestUri.RemoveParameter(MethodParam);
   end;
 
-  Result.RequestUri.Headers.Clear;
+  // Remove really dangerous headers
+  Result.RemoveAllHeadersNamed(CallIDHeaderFull);
+  Result.RemoveAllHeadersNamed(CSeqHeader);
+  Result.RemoveAllHeadersNamed(FromHeaderFull);
+  Result.RemoveAllHeadersNamed(RecordRouteHeader);
+  Result.RemoveAllHeadersNamed(RouteHeader);
+  Result.RemoveAllHeadersNamed(ViaHeaderFull);
+
+  // Remove headers that would/might falsely advertise our capabilities
+  Result.RemoveAllHeadersNamed(AcceptHeader);
+  Result.RemoveAllHeadersNamed(AcceptEncodingHeader);
+  Result.RemoveAllHeadersNamed(AcceptLanguageHeader);
+  Result.RemoveAllHeadersNamed(AllowHeader);
+  Result.RemoveAllHeadersNamed(ContactHeaderFull);
+  Result.RemoveAllHeadersNamed(OrganizationHeader);
+  Result.RemoveAllHeadersNamed(SupportedHeaderFull);
+  Result.RemoveAllHeadersNamed(UserAgentHeader);
+
+  // This is a fake header to allow us to hack a body into the header list
+  if Self.Headers.HasHeader(BodyHeaderFake) then begin
+    Result.Body := Self.Headers[BodyHeaderFake].FullValue;
+    Result.RemoveAllHeadersNamed(BodyHeaderFake);
+  end;
 end;
 
 function TIdSipUri.DefaultPort: Cardinal;
@@ -2728,13 +3355,15 @@ end;
 
 function TIdSipUri.HasValidSyntax: Boolean;
 begin
-  Result := Self.HasValidScheme
-        and Self.HasValidHostInfo
-        and Self.HasValidUserInfo
-        and Self.HasValidParameters;
+  Result := Self.HasValidUserInfo;
 
   if Self.IsSecure then
     Result := Result and (Self.Transport = TransportParamTLS);
+end;
+
+function TIdSipUri.HasGrid: Boolean;
+begin
+  Result := Self.HasParameter(GridParam)
 end;
 
 function TIdSipUri.HasHeaders: Boolean;
@@ -2754,7 +3383,7 @@ end;
 
 function TIdSipUri.HasParameter(const Name: String): Boolean;
 begin
-  Result := Self.Parameters.IndexOfName(Name) <> ItemNotFoundIndex;
+  Result := Self.Parameters.HasParam(Name);
 end;
 
 function TIdSipUri.IsLooseRoutable: Boolean;
@@ -2772,19 +3401,9 @@ begin
   Result := Self.Parameters.Count;
 end;
 
-function TIdSipUri.ParamName(Index: Cardinal): String;
-begin
-  Result := Self.Parameters.Names[Index];
-end;
-
-function TIdSipUri.ParamValue(Index: Cardinal): String;
-begin
-  Result := Self.Parameters.Values[Self.ParamName(Index)];
-end;
-
 function TIdSipUri.ParamValue(const Name: String): String;
 begin
-  Result := Self.Parameters.Values[Name];
+  Result := Self.Parameters.ParamValue(Name);
 end;
 
 function TIdSipUri.PortIsSpecified: Boolean;
@@ -2795,7 +3414,7 @@ end;
 procedure TIdSipUri.RemoveParameter(const Name: String);
 begin
   if Self.HasParameter(Name) then
-    Self.Parameters.Delete(Self.Parameters.IndexOfName(Name));
+    Self.Parameters.RemoveParameter(Name);
 end;
 
 function TIdSipUri.TransportIsSpecified: Boolean;
@@ -2819,8 +3438,8 @@ procedure TIdSipUri.Initialize;
 begin
   inherited Initialize;
 
-  Self.fHeaders    := TIdSipHeaders.Create;
-  Self.Parameters  := TStringList.Create;
+  Self.fHeaders   := TIdSipHeaders.Create;
+  Self.Parameters := TIdSipUriParameters.Create;
 end;
 
 procedure TIdSipUri.Parse(Uri: String);
@@ -2829,19 +3448,24 @@ begin
 
   if (Uri <> '') then begin
     Self.Scheme := Fetch(Uri, ':');
+
+    if not TIdSipParser.IsToken(Self.Scheme) then
+//    IsEqual(Self.Scheme, SipScheme) and not IsEqual(Self.Scheme, SipsScheme) then
+      raise EParserError.Create(InvalidScheme);
+
     if (IndyPos('@', Uri) > 0) then
       Self.ParseUserInfo(Fetch(Uri, '@'));
 
     if (IndyPos(';', Uri) > 0) then begin
-      Self.ParseHost(Fetch(Uri, ';'));
-      Self.ParseParams(Fetch(Uri, '?'));
+      Self.HostAndPort.Value := Fetch(Uri, ';');
+      Self.Parameters.Parse(Fetch(Uri, '?'));
 
       if (Uri <> '') then
         Self.ParseHeaders(Uri);
     end
     else begin
       if (IndyPos('?', Uri) > 0) then begin
-        Self.ParseHost(Fetch(Uri, '?'));
+        Self.HostAndPort.Value := Fetch(Uri, '?');
         Self.ParseHeaders(Uri);
       end
       else
@@ -2881,8 +3505,8 @@ begin
     while (I <= EndOfString) and Result do begin
       if (Token[I] = '%') then begin
         Result := Result and ((EndOfString - I) >= 2)
-                         and TIdSimpleParser.IsDigit(Token[I+1])
-                         and TIdSimpleParser.IsDigit(Token[I+2]);
+                         and TIdSimpleParser.IsHexNumber(Token[I+1])
+                         and TIdSimpleParser.IsHexNumber(Token[I+2]);
         Inc(I,2);
       end;
 
@@ -2908,9 +3532,13 @@ begin
   // another. Thus, we compare all the parameters in A.Params against those in
   // B.Params, and then vice versa.
   if Result then
-    Result := Result
-          and Self.UnidirectionalParameterCompare(Self, Uri)
-          and Self.UnidirectionalParameterCompare(Uri, Self);
+    Result := Result and Self.Parameters.IntersectionEquals(Uri.Parameters);
+    // TODO: This references Uri's private data ------------^^^^^^^^^^^^^^
+end;
+
+function TIdSipUri.GetGrid: String;
+begin
+  Result := Self.ParamValue(GridParam);
 end;
 
 function TIdSipUri.GetMaddr: String;
@@ -2921,6 +3549,11 @@ end;
 function TIdSipUri.GetMethod: String;
 begin
   Result := Self.ParamValue(MethodParam);
+end;
+
+function TIdSipUri.GetOpaque: String;
+begin
+  Result := Self.ParamValue(OpaqueParam);
 end;
 
 function TIdSipUri.GetTransport: String;
@@ -2961,31 +3594,6 @@ end;
 function TIdSipUri.GetUserParameter: String;
 begin
   Result := Self.ParamValue(UserParam);
-end;
-
-function TIdSipUri.HasValidHostInfo: Boolean;
-begin
-  Result := TIdSimpleParser.IsFQDN(Self.Host)
-         or TIdIPAddressParser.IsIPv4Address(Self.Host)
-         or TIdIPAddressParser.IsIPv6Address(Self.Host);
-end;
-
-function TIdSipUri.HasValidParameters: Boolean;
-var
-  I: Integer;
-begin
-  Result := true;
-  for I := 0 to Self.ParamCount - 1 do begin
-    Result := Result and Self.IsParamNameOrValue(Self.ParamName(I))
-                     and Self.IsParamNameOrValue(Self.ParamValue(I));
-
-    if not Result then Break;
-  end;
-end;
-
-function TIdSipUri.HasValidScheme: Boolean;
-begin
-  Result := (Self.Scheme = SipScheme) or (Self.Scheme = SipsScheme);
 end;
 
 function TIdSipUri.HasValidUserInfo: Boolean;
@@ -3030,20 +3638,15 @@ begin
          or (CaselessName = MaddrParam)
 end;
 
-function TIdSipUri.ParamsAsString: String;
-var
-  I:     Integer;
-  Param: String;
+procedure TIdSipUri.MarkAsInvalid(const Reason: String);
 begin
-  Result := '';
+  Self.fIsMalformed     := true;
+  Self.fParseFailReason := Reason;
+end;
 
-  for I := 0 to Self.Parameters.Count - 1 do begin
-    Param := Self.ParamName(I);
-    if (Self.ParamValue(I) <> '') then
-      Param := Param + '=' + TIdSipUri.ParameterEncode(Self.ParamValue(I));
-
-    Result := Result + ';' + Param;
-  end;
+function TIdSipUri.ParamsAsString: String;
+begin
+  Result := Self.Parameters.AsString;
 end;
 
 procedure TIdSipUri.ParseHeaders(HeaderList: String);
@@ -3061,26 +3664,30 @@ end;
 
 procedure TIdSipUri.ParseHost(HostAndPort: String);
 begin
-  Self.HostAndPort.Value := HostAndPort;
-end;
-
-procedure TIdSipUri.ParseParams(ParamList: String);
-var
-  ParamName:  String;
-  ParamValue: String;
-begin
-  while (ParamList <> '') do begin
-    ParamValue := Fetch(ParamList, ';');
-    ParamName := Fetch(ParamValue, '=');
-
-    Self.AddParameter(ParamName, ParamValue);
-  end;
+  Self.HostAndPort.Value := Trim(HostAndPort);
 end;
 
 procedure TIdSipUri.ParseUserInfo(UserInfo: String);
+  function ValidUser(Username: String): Boolean;
+  begin
+    Result := (Username = '') or Self.IsUser(Username);
+  end;
+  function ValidPassword(Password: String): Boolean;
+  begin
+    Result := (Password = '') or Self.IsUser(Password);
+  end;
+var
+  User:   String;
+  Passwd: String;
 begin
-  Self.Username := TIdSipURI.Decode(Fetch(UserInfo, ':'));
-  Self.Password := UserInfo;
+  User   := Fetch(UserInfo, ':');
+  Passwd := UserInfo;
+
+  if not ValidUser(User) or not ValidPassword(Passwd) then
+    raise EParserError.Create(InvalidUserInfo);
+
+  Self.Username := TIdSipURI.Decode(User);
+  Self.Password := Passwd;
 end;
 
 procedure TIdSipUri.Reset;
@@ -3096,57 +3703,52 @@ begin
   Self.HostAndPort.PortIsSpecified := false;
 end;
 
+procedure TIdSipUri.SetGrid(const Value: String);
+begin
+  Self.Parameters[GridParam] := Value;
+end;
+
 procedure TIdSipUri.SetMaddr(const Value: String);
 begin
-  Self.Parameters.Values[MaddrParam] := Value;
+  Self.Parameters[MaddrParam] := Value;
 end;
 
 procedure TIdSipUri.SetMethod(const Value: String);
 begin
-  Self.Parameters.Values[MethodParam] := Value;
+  Self.Parameters[MethodParam] := Value;
+end;
+
+procedure TIdSipUri.SetOpaque(const Value: String);
+begin
+  Self.Parameters[OpaqueParam] := Value;
 end;
 
 procedure TIdSipUri.SetTransport(const Value: String);
 begin
-  Self.Parameters.Values[TransportParam] := Value;
+  Self.Parameters[TransportParam] := Value;
 end;
 
 procedure TIdSipUri.SetTTL(const Value: Cardinal);
 begin
-  Self.Parameters.Values[TTLParam] := IntToStr(Value);
+  Self.Parameters[TTLParam] := IntToStr(Value);
 end;
 
 procedure TIdSipUri.SetUri(const Value: String);
 begin
-  Self.Parse(Value);
+  Self.fIsMalformed   := false;
+  Self.fUnparsedValue := Value;
+
+  try
+    Self.Parse(Value);
+  except
+    on E: EParserError do
+      Self.MarkAsInvalid(E.Message);
+  end;
 end;
 
 procedure TIdSipUri.SetUserParameter(const Value: String);
 begin
   Self.Parameters.Values[UserParam] := Value;
-end;
-
-function TIdSipUri.UnidirectionalParameterCompare(ThisUri, ThatUri: TIdSipUri): Boolean;
-var
-  I: Integer;
-  OurName: String;
-begin
-  Result := true;
-
-  for I := 0 to ThisUri.ParamCount - 1 do begin
-    OurName := ThisUri.ParamName(I);
-
-    if ThisUri.IsKnownParameter(OurName) then begin
-      Result := Result
-            and ThatUri.HasParameter(OurName)
-            and (ThisUri.ParamValue(OurName) = ThatUri.ParamValue(OurName));
-    end
-    else begin
-      if ThatUri.HasParameter(OurName) then
-        Result := Result
-              and (ThisUri.ParamValue(OurName) = ThatUri.ParamValue(OurName));
-    end;
-  end;
 end;
 
 //******************************************************************************
@@ -3205,31 +3807,9 @@ begin
   Result := Self.Value + Self.ParamsAsString;
 end;
 
-function TIdSipHeader.HasParam(Name: String): Boolean;
+function TIdSipHeader.HasParam(const Name: String): Boolean;
 begin
-  Result := Self.IndexOfParam(Name) <> ItemNotFoundIndex;
-end;
-
-function TIdSipHeader.IndexOfParam(Name: String): Integer;
-var
-  Found:      Boolean;
-  ParamValue: String;
-  ParamName:  String;
-begin
-  Name := Trim(Name);
-
-  Result := 0;
-  Found  := false;
-  while (Result < Self.Parameters.Count) and not Found do begin
-    ParamValue := Self.Parameters[Result];
-    ParamName := Fetch(ParamValue, '=');
-    Found := IsEqual(Name, ParamName);
-    if not Found then
-      Inc(Result);
-  end;
-
-  if (Result = Self.Parameters.Count) then
-    Result := ItemNotFoundIndex;
+  Result := Self.Parameters.HasParam(Name);
 end;
 
 function TIdSipHeader.IsContact: Boolean;
@@ -3251,33 +3831,13 @@ begin
 end;
 
 function TIdSipHeader.ParamsAsString: String;
-var
-  I:          Integer;
-  ParamName:  String;
-  ParamValue: String;
 begin
-  Result := '';
-  for I := 0 to Self.ParamCount - 1 do begin
-    ParamValue := Self.Parameters[I];
-    ParamName  := Fetch(ParamValue, '=');
-
-    Result := Result + ';' + ParamName;
-
-    ParamValue := QuoteStringIfNecessary(EncodeQuotedStr(ParamValue));
-
-    if (ParamValue <> '') then
-      Result := Result + '=' + ParamValue;
-  end;
+  Result := Self.Parameters.AsString;
 end;
 
 procedure TIdSipHeader.RemoveParameter(const ParamName: String);
-var
-  Index: Integer;
 begin
-  Index := Self.Parameters.IndexOfName(ParamName);
-
-  if (Index <> ItemNotFoundIndex) then
-    Self.Parameters.Delete(Index);
+  Self.Parameters.RemoveParameter(ParamName);
 end;
 
 //* TIdSipHeader Protected methods *********************************************
@@ -3318,46 +3878,32 @@ var
 begin
   S := Value;
 
-  if (IndyPos(';', S) = 0) then
-    fValue := S
-  else
-    fValue := Trim(Fetch(S, ';', false));
+  fValue := Trim(Fetch(S, ';'));
 
   Self.ParseParameters(S, Self.Parameters);
 end;
 
 procedure TIdSipHeader.ParseParameters(Value: String;
-                                       Parameters: TStrings;
+                                       Parameters: TIdSipParameters;
                                        Delimiter: String = ';');
-var
-  ParamName:  String;
-  ParamValue: String;
-  RealValue:  String;
 begin
-  Parameters.Clear;
-  Fetch(Value, Delimiter);
+  // Folded headers can introduce whitespace before the first SEMI
+  Value := Trim(Value);
 
-  while (Value <> '') do begin
-    ParamValue := Fetch(Value, Delimiter);
-    ParamName  := Fetch(ParamValue, '=');
+  // We don't use a "Value = ''" guard clause because if Value contains the
+  // empty string, Parameters will still parse that, clearing any old parameters
+  // in the process.
+  if (Value <> '') then begin
+    // Restore the missing SEMI, if necessary
+    if (Value[1] <> ';') then
+      Value := ';' + Value;
+  end;
 
-    ParamName  := Trim(ParamName);
-    ParamValue := Trim(ParamValue);
-
-    if (ParamValue = '') then
-      if (ParamName = '') then
-        Self.FailParse(Format(MalformedToken, ['parameter', '']))
-      else
-        Parameters.Add(ParamName)
-    else begin
-      if IsQuoted(ParamValue) then begin
-        if not DecodeQuotedStr(WithoutFirstAndLastChars(ParamValue), RealValue) then
-          Self.FailParse(UnmatchedQuotesForParameter);
-        Parameters.Add(ParamName + '=' + RealValue)
-      end
-      else
-        Parameters.Add(ParamName + '=' + ParamValue);
-    end;
+  try
+    Parameters.Parse(Value);
+  except
+    on E: EBadHeader do
+      Self.FailParse(E.Message);
   end;
 end;
 
@@ -3388,42 +3934,24 @@ end;
 //* TIdSipHeader Private methods ***********************************************
 
 function TIdSipHeader.GetParam(const Name: String): String;
-var
-  I: Integer;
 begin
-  I := Self.IndexOfParam(Name);
-
-  if (I > ItemNotFoundIndex) then begin
-    Result := Self.Parameters[I];
-    Fetch(Result, '=');
-    Result := Trim(Result)
-  end
-  else
-    Result := '';
+  Result := Self.Parameters.ParamValue(Name);
 end;
 
-function TIdSipHeader.GetParameters: TStrings;
+function TIdSipHeader.GetParameters: TIdSipParameters;
 begin
   if not Assigned(fParams) then
-    fParams := TStringList.Create;
+    fParams := TIdSipHeaderParameters.Create;
 
   Result := fParams;
 end;
 
 procedure TIdSipHeader.SetParam(const Name, Value: String);
-var
-  I: Integer;
 begin
-  I := Self.IndexOfParam(Name);
-
-
-  if (I = ItemNotFoundIndex) then
-    Self.Parameters.Add(Trim(Name) + '=' + Value)
-  else
-    Self.Parameters[I] := Trim(Name) + '=' + Value;
+  Self.Parameters[Name] := Value
 end;
 
-procedure TIdSipHeader.SetParameters(Value: TStrings);
+procedure TIdSipHeader.SetParameters(Value: TIdSipParameters);
 begin
   Self.Parameters.Assign(Value);
 end;
@@ -3483,9 +4011,19 @@ end;
 
 //* TIdSipUriHeader Private methods ********************************************
 
+function TIdSipUriHeader.GetGrid: String;
+begin
+  Result := Self.Address.Grid;
+end;
+
 procedure TIdSipUriHeader.SetAddress(Value: TIdSipUri);
 begin
   fAddress.URI := Value.URI;
+end;
+
+procedure TIdSipUriHeader.SetGrid(Value: String);
+begin
+  Self.Address.Grid := Value;
 end;
 
 //******************************************************************************
@@ -3496,6 +4034,23 @@ end;
 function TIdSipAddressHeader.AsAddressOfRecord: String;
 begin
   Result := Self.Address.CanonicaliseAsAddressOfRecord;
+end;
+
+function TIdSipAddressHeader.AsCanonicalAddress: String;
+var
+  CanonicalAddress: TIdSipAddressHeader;
+begin
+  CanonicalAddress := TIdSipAddressHeaderClass(Self.ClassType).Create;
+  try
+    CanonicalAddress.Assign(Self);
+    CanonicalAddress.Address.Uri := Self.Address.CanonicaliseAsAddress;
+    if CanonicalAddress.HasParam(ExpiresParam) then
+      CanonicalAddress.RemoveParameter(ExpiresParam);
+
+    Result := CanonicalAddress.FullValue;
+  finally
+    CanonicalAddress.Free;
+  end;
 end;
 
 function TIdSipAddressHeader.AsToHeader: TIdSipToHeader;
@@ -3533,41 +4088,86 @@ end;
 
 procedure TIdSipAddressHeader.Parse(const Value: String);
 var
-  AddrSpec:    String;
-  DisplayName: String;
-  S:           String;
+  LaQuotPos: Integer;
+  S:         String;
+  Token:     String;
 begin
+  // Possible valid values for an address header include:
+  //   sip:foo@bar
+  //   <sip:foo@bar>
+  //   Bar <sip:foo@bar>
+  //   "Bar" <sip:foo@bar>
+  //   <sip:foo@bar;f=1>
+  //   <sip:foo@bar>;f=1
+  //   sip:foo@bar;+sip.instance="<urn:foo:bar>"
+  //   <sip:foo@bar>;+sip.instance="<urn:foo:bar>"
+  // and of course whitespace can occur between most tokens!
+
   Self.DisplayName := '';
   Self.Address.URI := '';
+  Self.Parameters.Clear;
 
   S := Trim(Value);
-  if (IndyPos('<', S) > 0) then begin
-    if not ParseNameAddr(S, DisplayName, AddrSpec) then
-      Self.FailParse(InvalidNameAddr);
 
-    Self.Address.URI := AddrSpec;
+  // 'From:' is an invalid header
+  if (S = '') then
+    Self.FailParse(MissingUri);
 
-    Fetch(S, '>');
+  try
+    Self.DisplayName := TIdSipParser.ExtractQuotedString(S);
+
+    if (Self.DisplayName <> '') then begin
+      // We have a string with a leading display-name
+
+      if (S = '') then
+        Self.FailParse('Missing addr-spec');
+
+      Self.Address.Uri := TIdSipParser.ExtractAngleQuotedUri(S);
+    end
+    else if (S[1] = '<') then begin
+      // A header like '<sip:foo>;bar'
+      Self.Address.Uri := TIdSipParser.ExtractAngleQuotedUri(S);
+    end
+    else begin
+      Token := TIdSipParser.ExtractToken(S);
+
+      // Does the header value consist solely of a single token?
+      if (S = '') then
+        Self.FailParse(InvalidUri);
+
+      if (S[1] = '<') then begin
+        // A header like 'Foo <sip:foo>'
+        Self.DisplayName := Token;
+        Self.Address.Uri := TIdSipParser.ExtractAngleQuotedUri(S);
+      end
+      else if (S[1] = ':') then begin
+        // A header like 'sip:foo;bar'
+
+        // Reinsert the URI scheme
+        S := Token + S;
+        Self.Address.Uri := Fetch(S, ';');
+      end
+      else begin
+        // Possibly a header like 'Foo Bar <sip:foo>'
+
+        // Restart the parsing to avoid mangling 'Foo  Bar <sip:foo>' into
+        // 'Foo Bar <sip:foo>'
+        S := Value;
+        LaQuotPos := IndyPos('<', S);
+        Self.DisplayName := Trim(Copy(S, 1, LaQuotPos - 1));
+        Delete(S, 1, LaQuotPos - 1); // Leave the LAQUOT in S
+        Self.Address.Uri := TIdSipParser.ExtractAngleQuotedUri(S);
+      end;
+    end;
+
+    if Self.Address.IsMalformed then
+      Self.FailParse(InvalidUri);
+
     Self.ParseParameters(S, Self.Parameters);
-  end
-  else begin
-    // Any semicolons in a URI not in angle brackets indicate that the
-    // HEADER has the parameters, not the URI. Hence we separate the
-    // parameters first to prevent the TIdSipUri from adding those
-    // parameters to itself.
-    Self.Address.URI := Trim(Fetch(S, ';'));
-
-    if (S <> '') then
-      S := ';' + S;
-
-    Self.ParseParameters(S, Self.Parameters);
+  except
+    on E: EParserError do
+      Self.FailParse(E.Message);
   end;
-
-  if (Self.Address.Uri <> '')
-    and not Self.Address.IsSipUri then
-    Self.FailParse(UnsupportedScheme);
-
-  Self.DisplayName := DisplayName;
 end;
 
 //******************************************************************************
@@ -3697,6 +4297,12 @@ begin
   Self.DigestResponses.Free;
 
   inherited Destroy;
+end;
+
+function TIdSipHttpAuthHeader.HasParam(const Name: String): Boolean;
+begin
+  Result := (Self.DigestResponses.IndexOfName(Name) <> ItemNotFoundIndex)
+         or (Self.fUnknownResponses.IndexOfName(Name) <> ItemNotFoundIndex)
 end;
 
 //* TIdSipHttpAuthHeader Protected methods *************************************
@@ -4038,24 +4644,21 @@ begin
 end;
 
 function TIdSipWeightedValue.AsString: String;
-var
-  I: Integer;
 begin
   Result := Self.Value;
 
   if (Self.Weight < High(TIdSipQValue)) then
     Result := Result + ';q=' + QValueToStr(Self.Weight);
 
-  for I := 0 to Self.Parameters.Count - 1 do
-    Result := Result + ';' + Self.Parameters[I];
+  Result := Result + Self.Parameters.AsString;
 end;
 
 //* TIdSipWeightedValue Private methods ****************************************
 
-function TIdSipWeightedValue.GetParameters: TStrings;
+function TIdSipWeightedValue.GetParameters: TIdSipParameters;
 begin
   if not Assigned(fParameters) then
-    fParameters := TStringList.Create;
+    fParameters := TIdSipParameters.Create;
 
   Result := fParameters;
 end;
@@ -4128,7 +4731,7 @@ var
   S:          String;
   MediaRange: String;
   Params:     String;
-  NewParams:  TStrings;
+  NewParams:  TIdSipParameters;
   QValue:     String;
 begin
   Self.ClearValues;
@@ -4140,16 +4743,16 @@ begin
 
     if (IndyPos(';', MediaRange) > 0) then begin
       Params     := MediaRange;
-      MediaRange := Fetch(Params, ';', false);
+      MediaRange := Fetch(Params, ';');
     end
     else
       Params := '';
 
-    NewParams := TStringList.Create;
+    NewParams := TIdSipHeaderParameters.Create;
     try
       Self.ParseParameters(Params, NewParams);
 
-      QValue := NewParams.Values[Qparam];
+      QValue := NewParams[Qparam];
 
       if (QValue <> '')
         and not TIdSipParser.IsQValue(QValue) then
@@ -4157,10 +4760,9 @@ begin
 
       Self.AddValue(MediaRange, StrToQValueDef(QValue, High(TIdSipQValue)));
 
-      if (NewParams.IndexOfName(QParam) <> ItemNotFoundIndex) then
-        NewParams.Delete(NewParams.IndexOfName(QParam));
+      NewParams.RemoveParameter(QParam);
 
-      Self.Values[Self.ValueCount - 1].Parameters.AddStrings(NewParams);
+      Self.Values[Self.ValueCount - 1].Parameters.Add(NewParams);
     finally
       NewParams.Free;
     end;
@@ -4219,7 +4821,7 @@ begin
   Self.IsWildCard := Fetch(S, ';') = ContactWildCard;
 
   if Self.IsWildCard then
-    Self.ParseParameters(Value, Self.Parameters)
+    Self.ParseParameters(S, Self.Parameters)
   else
     inherited Parse(Value);
 
@@ -4229,6 +4831,9 @@ begin
   if Self.HasParam(ExpiresParam)
     and not TIdSipParser.IsNumber(Self.Params[ExpiresParam]) then
     Self.FailParse(InvalidExpires);
+  if Self.HasParam(SipInstanceParam)
+    and not TIdSipParser.IsUuidUrn(Self.Params[SipInstanceParam]) then
+    Self.FailParse(InvalidSipInstance);
 end;
 
 //* TIdSipContactHeader Private methods ****************************************
@@ -4238,9 +4843,19 @@ begin
   Result := Self.GetCardinalParam(ExpiresParam);
 end;
 
+function TIdSipContactHeader.GetGruu: String;
+begin
+  Result := Self.Params[GruuParam];
+end;
+
 function TIdSipContactHeader.GetQ: TIdSipQValue;
 begin
   Result := StrToQValue(Self.Params[QParam]);
+end;
+
+function TIdSipContactHeader.GetSipInstance: String;
+begin
+  Result := Self.Params[SipInstanceParam];
 end;
 
 procedure TIdSipContactHeader.SetExpires(Value: Cardinal);
@@ -4248,9 +4863,19 @@ begin
   Self.SetCardinalParam(ExpiresParam, Value);
 end;
 
+procedure TIdSipContactHeader.SetGruu(const Value: String);
+begin
+  Self.Params[GruuParam] := Value;
+end;
+
 procedure TIdSipContactHeader.SetQ(Value: TIdSipQValue);
 begin
   Self.Params[QParam] := QValueToStr(Value);
+end;
+
+procedure TIdSipContactHeader.SetSipInstance(const Value: String);
+begin
+  Self.Params[SipInstanceParam] := Value;
 end;
 
 //******************************************************************************
@@ -4413,7 +5038,7 @@ var
 begin
   // token-nodot / token-nodot "." token-nodot
 
-  if (Pos('.', S) > 0) then begin
+  if (IndyPos('.', S) > 0) then begin
     SecondToken := S;
     FirstToken := Fetch(SecondToken, '.');
 
@@ -4422,7 +5047,7 @@ begin
     if Result then begin
       Result := Self.IsTokenNoDot(FirstToken)
             and Self.IsTokenNoDot(SecondToken)
-            and (Pos('.', SecondToken) = 0);
+            and (IndyPos('.', SecondToken) = 0);
     end;
   end
   else begin
@@ -4488,7 +5113,7 @@ begin
   Self.EventTemplate := EventName;
 
   // Only one dot is allowed in an event-type
-  if (Pos('.', Self.EventTemplate) > 0) then
+  if (IndyPos('.', Self.EventTemplate) > 0) then
     Self.FailParse(InvalidEventType);
 
   inherited Parse(Value);
@@ -4505,7 +5130,7 @@ procedure TIdSipEventHeader.SetID(const Value: String);
 begin
   if (Value = '') then begin
     if Self.HasParam(IdParam) then
-      Self.Parameters.Delete(Self.IndexOfParam(IdParam))
+      Self.Parameters.RemoveParameter(IdParam)
   end
   else
     Self.Params[IdParam] := Value;
@@ -4559,7 +5184,7 @@ procedure TIdSipFromToHeader.SetTag(const Value: String);
 begin
   if (Value = '') then begin
     if Self.HasTag then
-      Self.Parameters.Delete(Self.IndexOfParam(TagParam))
+      Self.Parameters.RemoveParameter(TagParam)
   end
   else begin
     Self.Params[TagParam] := Value;
@@ -4802,8 +5427,9 @@ end;
 
 procedure TIdSipRetryAfterHeader.Parse(const Value: String);
 var
-  Token: String;
-  Raw:   String;
+  Raw:    String;
+  Params: String;
+  Token:  String;
 begin
   // Retry-After  =  "Retry-After" HCOLON delta-seconds
   //                 [ comment ] *( SEMI retry-param )
@@ -4832,8 +5458,11 @@ begin
         Self.FailParse(InvalidComment);
     end;
 
+    Params := Value;
+    Fetch(Params, ';');
+
     // Parsing the parameters
-    Self.ParseParameters(Value, Self.Parameters);
+    Self.ParseParameters(Params, Self.Parameters);
   end;
 end;
 
@@ -4906,40 +5535,12 @@ begin
   if (Value > 0) then
     Self.SetCardinalParam(DurationParam, Value)
   else
-    Self.Parameters.Delete(Self.IndexOfParam(DurationParam));
+    Self.Parameters.RemoveParameter(DurationParam);
 end;
 
 //******************************************************************************
 //* TIdSipRouteHeader                                                          *
 //******************************************************************************
-//* TIdSipRouteHeader Public methods *******************************************
-
-constructor TIdSipRouteHeader.Create;
-begin
-  inherited Create;
-
-  fAddress := TIdSipURI.Create('');
-end;
-
-destructor TIdSipRouteHeader.Destroy;
-begin
-  fAddress.Free;
-
-  inherited Destroy;
-end;
-
-function TIdSipRouteHeader.EncodeQuotedStr(const S: String): String;
-begin
-  Result := S;
-  Result := StringReplace(Result, '\', '\\', [rfReplaceAll, rfIgnoreCase]);
-  Result := StringReplace(Result, '"', '\"', [rfReplaceAll, rfIgnoreCase]);
-end;
-
-function TIdSipRouteHeader.HasSipsUri: Boolean;
-begin
-  Result := Self.Address.Scheme = SipsScheme;
-end;
-
 //* TIdSipRouteHeader Protected methods ****************************************
 
 function TIdSipRouteHeader.GetName: String;
@@ -4953,7 +5554,7 @@ var
 begin
   Result := Self.DisplayName;
   if (IndyPos('"', Result) > 0) or (IndyPos('\', Result) > 0) then
-    Result := Self.EncodeQuotedStr(Result);
+    Result := EncodeQuotedStr(Result);
 
   Result := QuoteStringIfNecessary(Result);
 
@@ -4967,24 +5568,53 @@ end;
 
 procedure TIdSipRouteHeader.Parse(const Value: String);
 var
-  AddrSpec:     String;
-  DisplayName:  String;
-  HeaderParams: String;
+  LaQuotPos: Integer;
+  S:         String;
+  Token:     String;
 begin
-  if not ParseNameAddr(Value, DisplayName, AddrSpec) then
+  S:= Trim(Value);
+
+  if (S = '') then
     Self.FailParse(InvalidUri);
 
-  if (IndyPos(':', AddrSpec) = 0) then
-    Self.FailParse(MissingScheme);
+  Token := TIdSipParser.ExtractQuotedString(S);
 
-  Self.Address.URI := AddrSpec;
-  Self.DisplayName := DisplayName;
+  if (Token <> '') then begin
+    Self.DisplayName := Token;
 
-  // cull the processed name-addr (and its parameters!)
-  HeaderParams := Value;
-  Fetch(HeaderParams, '>');
+    try
+      Self.Address.Uri := TIdSipParser.ExtractAngleQuotedUri(S);
+    except
+      on E: EParserError do
+        Self.FailParse(E.Message);
+    end;
 
-  inherited Parse(HeaderParams);
+    Self.ParseParameters(S, Self.Parameters);
+  end
+  else begin
+    LaQuotPos := IndyPos('<', S);
+
+    if (LaQuotPos = 0) then
+      Self.FailParse(MissingAngleBrackets);
+
+
+    Self.DisplayName := Trim(Copy(S, 1, LaQuotPos - 1));
+    Delete(S, 1, LaQuotPos - 1);
+
+    try
+      Self.Address.Uri := TIdSipParser.ExtractAngleQuotedUri(S);
+    except
+      on E: EParserError do
+        Self.FailParse(E.Message);
+    end;
+
+    Self.ParseParameters(S, Self.Parameters);
+  end;
+
+  if Self.Address.IsMalformed then
+    Self.FailParse(InvalidUri);
+
+//  inherited Parse(HeaderParams);
 end;
 
 //* TIdSipRouteHeader Private methods ******************************************
@@ -4992,11 +5622,6 @@ end;
 function TIdSipRouteHeader.GetIsLooseRoutable: Boolean;
 begin
   Result := IndyPos(LooseRoutableParam, Self.Address.URI) > 0;
-end;
-
-procedure TIdSipRouteHeader.SetAddress(Value: TIdSipURI);
-begin
-  fAddress.URI := Value.URI;
 end;
 
 procedure TIdSipRouteHeader.SetIsLooseRoutable(Value: Boolean);
@@ -5247,10 +5872,7 @@ var
 begin
   S := Value;
 
-  if (IndyPos(';', S) = 0) then
-    Self.CallID := S
-  else
-    Self.CallID := Trim(Fetch(S, ';', false));
+  Self.CallID := Trim(Fetch(S, ';'));
 
   Self.ParseParameters(S, Self.Parameters);
 end;
@@ -5299,20 +5921,13 @@ end;
 
 //* TIdSipReplacesHeader Private methods ***************************************
 
-procedure TIdSipReplacesHeader.CheckFromToTagCount(Params: TStrings);
-var
-  FoundFrom: Boolean;
-  FoundTo:   Boolean;
-  I:         Integer;
+procedure TIdSipReplacesHeader.CheckFromToTagCount(Params: TIdSipParameters);
 begin
-  FoundFrom := false;
-  FoundTo   := false;
-  I := 0;
-  while (I < Params.Count) and not Self.IsMalformed do begin
-    Self.CheckDuplicatedParam(FromTagParam, Params.Names[I], FoundFrom);
-    Self.CheckDuplicatedParam(ToTagParam, Params.Names[I], FoundTo);
-    Inc(I);
-  end;
+  if Self.Parameters.HasDuplicatedParameter(FromTagParam) then
+    Self.FailParse(Format(DuplicatedParam, [FromTagParam]));
+
+  if Self.Parameters.HasDuplicatedParameter(ToTagParam) then
+    Self.FailParse(Format(DuplicatedParam, [ToTagParam]));
 end;
 
 function TIdSipReplacesHeader.GetFromTag: String;
@@ -5368,20 +5983,13 @@ end;
 
 //* TIdSipTargetDialogHeader Private methods ***********************************
 
-procedure TIdSipTargetDialogHeader.CheckLocalRemoteTagCount(Params: TStrings);
-var
-  FoundLocal: Boolean;
-  FoundRemote:   Boolean;
-  I:         Integer;
+procedure TIdSipTargetDialogHeader.CheckLocalRemoteTagCount(Params: TIdSipParameters);
 begin
-  FoundLocal := false;
-  FoundRemote   := false;
-  I := 0;
-  while (I < Params.Count) and not Self.IsMalformed do begin
-    Self.CheckDuplicatedParam(LocalTagParam,  Params.Names[I], FoundLocal);
-    Self.CheckDuplicatedParam(RemoteTagParam, Params.Names[I], FoundRemote);
-    Inc(I);
-  end;
+  if Self.Parameters.HasDuplicatedParameter(LocalTagParam) then
+    Self.FailParse(Format(DuplicatedParam, [LocalTagParam]));
+
+  if Self.Parameters.HasDuplicatedParameter(RemoteTagParam) then
+    Self.FailParse(Format(DuplicatedParam, [RemoteTagParam]));
 end;
 
 function TIdSipTargetDialogHeader.GetLocalTag: String;
@@ -5696,7 +6304,12 @@ begin
 
   Token := Trim(Fetch(S, ';'));
 
-  Self.HostAndPort.Value := Token;
+  try
+    Self.HostAndPort.Value := Token;
+  except
+    on E: EParserError do
+      Self.FailParse(E.Message);
+  end;
 end;
 
 //* TIdSipViaHeader Private methods ********************************************
@@ -6653,6 +7266,20 @@ begin
   Result := Self.CurrentHeader as TIdSipContactHeader;
 end;
 
+function TIdSipContacts.GruuFor(Contact: TIdSipContactHeader): String;
+begin
+  Result := '';
+  Self.First;
+
+  while Self.HasNext and (Result = '') do begin
+    if    (Self.CurrentContact.SipInstance       = Contact.SipInstance)
+      and (Self.CurrentContact.AsAddressOfRecord = Contact.AsAddressOfRecord) then
+      Result := Self.CurrentContact.Gruu;
+
+    Self.Next;
+  end;
+end;
+
 function TIdSipContacts.HasContact(Address: TIdSipAddressHeader): Boolean;
 begin
   Result := false;
@@ -7221,6 +7848,15 @@ end;
 procedure TIdSipMessage.RemoveAllHeadersNamed(const Name: String);
 begin
   Self.Headers.RemoveAll(Name);
+end;
+
+function TIdSipMessage.SupportsExtension(const Extension: String): Boolean;
+begin
+  if Self.HasHeader(SupportedHeaderFull) then begin
+    Result := Self.Supported.Values.IndexOf(Extension) <> ItemNotFoundIndex
+  end
+  else
+    Result := false;
 end;
 
 function TIdSipMessage.WantsAllowEventsHeader: Boolean;
@@ -8172,9 +8808,19 @@ begin
   Result := Self.FirstHeader(ReplacesHeader) as TIdSipReplacesHeader;
 end;
 
+function TIdSipRequest.GetSubject: TIdSipHeader;
+begin
+  Result := Self.FirstHeader(SubjectHeaderFull);
+end;
+
 function TIdSipRequest.GetSubscriptionState: TIdSipSubscriptionStateHeader;
 begin
   Result := Self.FirstHeader(SubscriptionStateHeader) as TIdSipSubscriptionStateHeader;
+end;
+
+function TIdSipRequest.GetTargetDialog: TIdSipTargetDialogHeader;
+begin
+  Result := Self.FirstHeader(TargetDialogHeader) as TIdSipTargetDialogHeader;
 end;
 
 procedure TIdSipRequest.ParseMethod(Parser: TIdSipParser;
@@ -8256,9 +8902,19 @@ begin
   Self.Route.Add(Value);
 end;
 
+procedure TIdSipRequest.SetSubject(Value: TIdSipHeader);
+begin
+  Self.FirstHeader(SubjectHeaderFull).Assign(Value);
+end;
+
 procedure TIdSipRequest.SetSubscriptionState(Value: TIdSipSubscriptionStateHeader);
 begin
   Self.FirstHeader(SubscriptionStateHeader).Assign(Value);
+end;
+
+procedure TIdSipRequest.SetTargetDialog(Value: TIdSipTargetDialogHeader);
+begin
+  Self.FirstHeader(TargetDialogHeader).Assign(Value);
 end;
 
 //*******************************************************************************
@@ -8868,6 +9524,122 @@ end;
 //******************************************************************************
 //* TIdSipParser Public methods ************************************************
 
+class function TIdSipParser.ExtractAngleQuotedUri(var ParseString: String): String;
+var
+  RaQuotPos: Integer;
+begin
+  // 1. Return the left-most angle-quoted URI in ParseString (if extant).
+  // 2. Remove that angle-quoted URI from ParseString, and any surrounding
+  // whitespace.
+
+  Result := '';
+  ParseString := Trim(ParseString);
+  if (ParseString = '') then Exit;
+
+  if (ParseString[1] <> '<') then begin
+    // ParseString doesn't start with a quoted-string.
+    Exit;
+  end;
+
+  // Eat the LAQUOT
+  Delete(ParseString, 1, 1);
+
+  RaQuotPos := IndyPos('>', ParseString);
+
+  if (RaQuotPos = 0) then
+    raise EParserError.Create(UnmatchedAngleBrackets);
+
+  // The URI contains all of ParseString's characters up to just before the
+  // RAQUOT.
+  Result := Copy(ParseString, 1, RaQuotPos - 1);
+
+  // Eat the URI, and the trailing RAQUOT.
+  Delete(ParseString, 1, Length(Result) + 1);
+
+  ParseString := Trim(ParseString);
+end;
+
+class function TIdSipParser.ExtractQuotedString(var ParseString: String): String;
+var
+  I:       Integer;
+  InQuote: Boolean;
+  QS:      String;
+begin
+  // 1. Return the left-most quoted-string in ParseString (if extant).
+  // 2. Remove that quoted-string from ParseString, and any surrounding
+  // whitespace.
+
+  Result := '';
+  ParseString := Trim(ParseString);
+  if (ParseString = '') then Exit;
+
+  if (ParseString[1] <> '"') then begin
+    // ParseString doesn't start with a quoted-string.
+    Exit;
+  end;
+
+  // Eat the DQUOTE
+  Delete(ParseString, 1, 1);
+  InQuote := true;
+
+  QS := '';
+  I := 1;
+  while InQuote and (I <= Length(ParseString)) do begin
+    if (ParseString[I] = '\') then begin
+      if (I < Length(ParseString)) then begin
+        // Read in an escaped character
+        QS := QS + Copy(ParseString, I, 2);
+        Inc(I, 2);
+      end
+      else begin
+        // Malformed: trailing '\'
+        raise EParserError.Create(InvalidQuotedString);
+      end;
+    end
+    else begin
+      InQuote := ParseString[I] <> '"';
+
+      if InQuote then begin
+        QS := QS + ParseString[I];
+        Inc(I);
+      end;
+    end;
+  end;
+
+  if InQuote then
+    raise EParserError.Create(UnmatchedQuotes);
+
+  // Eat the quoted-string, and the trailing DQUOTE.
+  Delete(ParseString, 1, Length(QS) + 1);
+
+  ParseString := Trim(ParseString);
+
+  if not DecodeQuotedStr(QS, Result) then
+    raise EParserError.Create(InvalidQuotedString);
+end;
+
+class function TIdSipParser.ExtractToken(var ParseString: String): String;
+var
+  I: Integer;
+begin
+  // 1. Return the left-most token in ParseString (if extant).
+  // 2. Remove that token from ParseString, and any surrounding whitespace.
+
+  ParseString := Trim(ParseString);
+
+  I := 0;
+  while (I < Length(ParseString)) do begin
+    if (ParseString[I + 1] in LegalTokenChars) then
+      Inc(I)
+    else
+      Break;
+  end;
+
+  Result := Copy(ParseString, 1, I);
+  Delete(ParseString, 1, I);
+  ParseString := Trim(ParseString);
+end;
+
 class function TIdSipParser.IsIPv6Reference(const Token: String): Boolean;
 begin
   Result := (Copy(Token, 1, 1) = '[')
@@ -8878,6 +9650,59 @@ end;
 class function TIdSipParser.IsMethod(Method: String): Boolean;
 begin
   Result := Self.IsToken(Method);
+end;
+
+class function TIdSipParser.IsUuidUrn(const URN: String): Boolean;
+var
+  S:     String;
+  Token: String;
+begin
+  // A URN is a string that looks like this:
+  //            12345678 1234 1234 1234 123456789012
+  //   urn:uuid:xxxxxxxx–xxxx–xxxx–xxxx–xxxxxxxxxxxx
+  // where "x" represents any (lowercase) hexademical digit: 0-9, a-f
+
+  Result := false;
+  S := URN;
+
+  Token := Fetch(S, ':');
+
+  // No "urn" declaration AND no "uuid" declaration
+  if (Token = '') then Exit;
+
+  // No "urn" declaration
+  if (Token <> 'urn') then Exit;
+
+  // No "uuid" declaration
+  Token := Fetch(S, ':');
+  if (Token = '') then Exit;
+  if (Token <> 'uuid') then Exit;
+
+  // First UUID token must be 8 hex digits
+  Token := Fetch(S, '-');
+  if (Length(Token) <> 8) then Exit;
+  if not TIdSimpleParser.IsHexNumber(Token) then Exit;
+
+  // Second UUID token must be 4 hex digits
+  Token := Fetch(S, '-');
+  if (Length(Token) <> 4) then Exit;
+  if not TIdSimpleParser.IsHexNumber(Token) then Exit;
+
+  // Third UUID token must be 4 hex digits
+  Token := Fetch(S, '-');
+  if (Length(Token) <> 4) then Exit;
+  if not TIdSimpleParser.IsHexNumber(Token) then Exit;
+
+  // Fourth UUID token must be 4 hex digits
+  Token := Fetch(S, '-');
+  if (Length(Token) <> 4) then Exit;
+  if not TIdSimpleParser.IsHexNumber(Token) then Exit;
+
+  // Fifth/last UUID token must be 12 hex digits
+  if (Length(S) <> 12) then Exit;
+  if not TIdSimpleParser.IsHexNumber(S) then Exit;
+
+  Result := true;
 end;
 
 class function TIdSipParser.IsQuotedString(const Token: String): Boolean;

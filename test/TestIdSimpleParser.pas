@@ -353,6 +353,7 @@ begin
 
   // IPv4 stuff
   Check(not TIdIPAddressParser.IsIPv6Address('127.0.0.1'),                '127.0.0.1');
+  Check(not TIdIPAddressParser.IsIPv6Address('256.0.0.0'),                '256.0.0.0');
   Check(    TIdIPAddressParser.IsIPv6Address('1080:0:0:0:8:800:1.2.3.4'), '1080:0:0:0:8:800:1.2.3.4');
   Check(    TIdIPAddressParser.IsIPv6Address('::13.1.68.3'),              '::13.1.68.3');
   Check(    TIdIPAddressParser.IsIPv6Address('::FFFF:129.144.52.38'),     '::FFFF:129.144.52.38');

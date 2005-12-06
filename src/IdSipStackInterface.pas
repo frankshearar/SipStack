@@ -148,6 +148,8 @@ type
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Receiver: TIdSipTransport;
                                 Source: TIdSipConnectionBindings);
+    procedure OnReferral(Session: TIdSipSession;
+                         Refer: TIdSipRequest);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure OnRenewedSubscription(UserAgent: TIdSipAbstractCore;
@@ -220,7 +222,7 @@ type
     constructor Create; virtual;
 
     procedure Assign(Src: TPersistent); override;
-    function AsString: String;
+    function  AsString: String;
     function  Copy: TIdEventData; virtual;
 
     property Handle: TIdSipHandle read fHandle write fHandle;
@@ -336,7 +338,23 @@ type
     function Data: String; override;
     function EventName: String; override;
   public
+    procedure Assign(Src: TPersistent); override;
+
     property Error:  String read fError write fError;
+    property Reason: String read fReason write fReason;
+  end;
+
+  TIdDebugTransportRejectedMessageData = class(TIdDebugData)
+  private
+    fMsg:    String;
+    fReason: String;
+  protected
+    function Data: String; override;
+    function EventName: String; override;
+  public
+    procedure Assign(Src: TPersistent); override;
+
+    property Msg:    String read fMsg write fMsg;
     property Reason: String read fReason write fReason;
   end;
 
@@ -531,11 +549,12 @@ const
 
   CM_DEBUG = CM_BASE + 10000;
 
-  CM_DEBUG_DROPPED_MSG         = CM_DEBUG + 0;
-  CM_DEBUG_RECV_MSG            = CM_DEBUG + 1;
-  CM_DEBUG_SEND_MSG            = CM_DEBUG + 2;
-  CM_DEBUG_TRANSPORT_EXCEPTION = CM_DEBUG + 3;
-  CM_LAST                      = CM_DEBUG_DROPPED_MSG;
+  CM_DEBUG_DROPPED_MSG            = CM_DEBUG + 0;
+  CM_DEBUG_RECV_MSG               = CM_DEBUG + 1;
+  CM_DEBUG_SEND_MSG               = CM_DEBUG + 2;
+  CM_DEBUG_TRANSPORT_EXCEPTION    = CM_DEBUG + 3;
+  CM_DEBUG_TRANSPORT_REJECTED_MSG = CM_DEBUG + 4;
+  CM_LAST                         = CM_DEBUG_TRANSPORT_REJECTED_MSG;
 
 // Constants for TIdCallEndedData
 const
@@ -585,7 +604,8 @@ begin
     CM_DEBUG_DROPPED_MSG:            Result := 'CM_DEBUG_DROPPED_MSG';
     CM_DEBUG_RECV_MSG:               Result := 'CM_DEBUG_RECV_MSG';
     CM_DEBUG_SEND_MSG:               Result := 'CM_DEBUG_SEND_MSG';
-    CM_DEBUG_TRANSPORT_EXCEPTION:    Result := 'CM_DEBUG_TRANSPORT_EXCEPTION';   
+    CM_DEBUG_TRANSPORT_EXCEPTION:    Result := 'CM_DEBUG_TRANSPORT_EXCEPTION';
+    CM_DEBUG_TRANSPORT_REJECTED_MSG: Result := 'CM_DEBUG_TRANSPORT_REJECTED_MSG';   
   else
     Result := 'Unknown: ' + IntToStr(Event);
   end;
@@ -1372,10 +1392,26 @@ begin
   end;
 end;
 
+procedure TIdSipStackInterface.OnReferral(Session: TIdSipSession;
+                                          Refer: TIdSipRequest);
+begin
+end;
+
 procedure TIdSipStackInterface.OnRejectedMessage(const Msg: String;
                                                  const Reason: String);
+var
+  Data: TIdDebugTransportRejectedMessageData;
 begin
-  raise Exception.Create('TIdSipStackInterface.OnRejectedMessage');
+  Data := TIdDebugTransportRejectedMessageData.Create;
+  try
+    Data.Handle := InvalidHandle;
+    Data.Msg    := Msg;
+    Data.Reason := Reason;
+
+    Self.NotifyEvent(nil, CM_DEBUG_TRANSPORT_REJECTED_MSG, Data);
+  finally
+    Data.Free;
+  end;
 end;
 
 procedure TIdSipStackInterface.OnRenewedSubscription(UserAgent: TIdSipAbstractCore;
@@ -1398,27 +1434,6 @@ procedure TIdSipStackInterface.OnSendResponse(Response: TIdSipResponse;
                                               Destination: TIdSipLocation);
 begin
   Self.NotifyOfSentMessage(Response, Destination);
-end;
-
-procedure TIdSipStackInterface.OnSubscriptionRequest(UserAgent: TIdSipAbstractCore;
-                                                     Subscription: TIdSipInboundSubscription);
-var
-  Data: TIdSubscriptionRequestData;
-begin
-  Self.AddAction(Subscription);
-
-  Data := TIdSubscriptionRequestData.Create;
-  try
-    Data.Handle       := Self.HandleFor(Subscription);
-    Data.Contact      := Subscription.InitialRequest.FirstContact;
-    Data.EventPackage := Subscription.EventPackage;
-    Data.From         := Subscription.InitialRequest.From;
-    Data.ReferTo      := Subscription.InitialRequest.ReferTo;
-
-    Self.NotifyEvent(Subscription, CM_SUBSCRIPTION_REQUEST_NOTIFY, Data);
-  finally
-    Data.Free;
-  end;
 end;
 
 procedure TIdSipStackInterface.OnSubscriptionRequest(UserAgent: TIdSipAbstractCore;
@@ -1782,6 +1797,57 @@ end;
 function TIdDebugSendMessageData.EventName: String;
 begin
   Result := EventNames(CM_DEBUG_SEND_MSG);
+end;
+
+//******************************************************************************
+//* TIdDebugTransportExceptionData                                             *
+//******************************************************************************
+//* TIdDebugTransportExceptionData Public methods ******************************
+
+procedure TIdDebugTransportExceptionData.Assign(Src: TPersistent);
+var
+  Other: TIdDebugTransportExceptionData;
+begin
+  inherited Assign(Src);
+
+  if (Src is TIdDebugTransportExceptionData) then begin
+    Other := Src as TIdDebugTransportExceptionData;
+
+    Self.Error  := Other.Error;
+    Self.Reason := Other.Reason;
+  end;
+end;
+
+//******************************************************************************
+//* TIdDebugTransportRejectedMessageData                                       *
+//******************************************************************************
+//* TIdDebugTransportRejectedMessageData Public methods ************************
+
+procedure TIdDebugTransportRejectedMessageData.Assign(Src: TPersistent);
+var
+  Other: TIdDebugTransportRejectedMessageData;
+begin
+  inherited Assign(Src);
+
+  if (Src is TIdDebugTransportRejectedMessageData) then begin
+    Other := Src as TIdDebugTransportRejectedMessageData;
+
+    Self.Msg    := Other.Msg;
+    Self.Reason := Other.Reason;
+  end;
+end;
+
+//* TIdDebugTransportRejectedMessageData Protected methods *********************
+
+function TIdDebugTransportRejectedMessageData.Data: String;
+begin
+  Result := Self.Reason + CRLF
+          + Self.Msg;
+end;
+
+function TIdDebugTransportRejectedMessageData.EventName: String;
+begin
+  Result := EventNames(CM_DEBUG_TRANSPORT_REJECTED_MSG);
 end;
 
 //******************************************************************************
@@ -2161,101 +2227,6 @@ end;
 function TIdSubscriptionData.EventName: String;
 begin
   Result := EventNames(Self.Event);
-end;
-
-//* TIdSubscriptionData Private methods ****************************************
-
-procedure TIdSubscriptionData.SetNotify(Value: TIdSipRequest);
-begin
-  Self.fNotify.Assign(Value);
-end;
-
-//******************************************************************************
-//* TIdSubscriptionRequestData                                                 *
-//******************************************************************************
-//* TIdSubscriptionRequestData Public methods **********************************
-
-constructor TIdSubscriptionRequestData.Create;
-begin
-  inherited Create;
-
-  Self.fContact := TIdSipContactHeader.Create;
-  Self.fFrom    := TIdSipFromHeader.Create;
-  Self.fReferTo := TIdSipReferToHeader.Create;
-end;
-
-destructor TIdSubscriptionRequestData.Destroy;
-begin
-  Self.fReferTo.Free;
-  Self.fFrom.Free;
-  Self.fContact.Free;
-
-  inherited Destroy;
-end;
-
-procedure TIdSubscriptionRequestData.Assign(Src: TPersistent);
-var
-  Other: TIdSubscriptionRequestData;
-begin
-  inherited Assign(Src);
-
-  if (Src is TIdSubscriptionRequestData) then begin
-    Other := Src as TIdSubscriptionRequestData;
-
-    Self.Contact      := Other.Contact;
-    Self.EventPackage := Other.EventPackage;
-    Self.From         := Other.From;
-    Self.ReferTo      := Other.ReferTo;
-  end;
-end;
-
-//* TIdSubscriptionRequestData Private methods *********************************
-
-procedure TIdSubscriptionRequestData.SetContact(Value: TIdSipContactHeader);
-begin
-  Self.fContact.Assign(Value);
-end;
-
-procedure TIdSubscriptionRequestData.SetFrom(Value: TIdSipFromHeader);
-begin
-  Self.fFrom.Assign(Value);
-end;
-
-procedure TIdSubscriptionRequestData.SetReferTo(Value: TIdSipReferToHeader);
-begin
-  Self.fReferTo.Assign(Value);
-end;
-
-//******************************************************************************
-//* TIdSubscriptionData                                                        *
-//******************************************************************************
-//* TIdSubscriptionData Public methods *****************************************
-
-constructor TIdSubscriptionData.Create;
-begin
-  inherited Create;
-
-  Self.fNotify := TIdSipRequest.Create;
-end;
-
-destructor TIdSubscriptionData.Destroy;
-begin
-  Self.fNotify.Free;
-
-  inherited Destroy;
-end;
-
-procedure TIdSubscriptionData.Assign(Src: TPersistent);
-var
-  Other: TIdSubscriptionData;
-begin
-  inherited Assign(Src);
-
-  if (Src is TIdSubscriptionData) then begin
-    Other := Src as TIdSubscriptionData;
-
-    Self.Notify := Other.Notify;
-  end;
 end;
 
 //* TIdSubscriptionData Private methods ****************************************

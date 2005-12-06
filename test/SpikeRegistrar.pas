@@ -100,6 +100,7 @@ begin
   Self.Transport.Port    := StrToInt(Self.Port.Text);
   Self.Transport.AddTransportListener(Self);
   Self.Transport.AddTransportSendingListener(Self);
+  Self.Transport.Start;
 
   Self.Dispatcher := TIdSipTransactionDispatcher.Create(Self.Timer, Self.Locator);
   Self.Dispatcher.AddTransport(Self.Transport);

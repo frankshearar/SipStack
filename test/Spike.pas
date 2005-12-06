@@ -153,7 +153,7 @@ type
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts;
                         Response: TIdSipResponse);
-    procedure OnInboundCall(UserAgent: TIdSipAbstractCore;
+    procedure OnInboundCall(UserAgent: TIdSipInviteModule;
                             Session: TIdSipInboundSession);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Answer: TIdSipResponse);
@@ -175,6 +175,8 @@ type
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Receiver: TIdSipTransport;
                                 Source: TIdSipConnectionBindings);
+    procedure OnReferral(Session: TIdSipSession;
+                         Refer: TIdSipRequest);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure OnResponse(OptionsAgent: TIdSipOutboundOptions;
@@ -508,7 +510,7 @@ begin
   end;
 end;
 
-procedure TrnidSpike.OnInboundCall(UserAgent: TIdSipAbstractCore;
+procedure TrnidSpike.OnInboundCall(UserAgent: TIdSipInviteModule;
                                    Session: TIdSipInboundSession);
 begin
   Session.AddSessionListener(Self);
@@ -588,6 +590,11 @@ procedure TrnidSpike.OnReceiveResponse(Response: TIdSipResponse;
 begin
   Self.LogMessage(Response, true);
 end;
+
+procedure TrnidSpike.OnReferral(Session: TIdSipSession;
+                                Refer: TIdSipRequest);
+begin
+end;                                
 
 procedure TrnidSpike.OnRejectedMessage(const Msg: String;
                                        const Reason: String);

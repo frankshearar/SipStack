@@ -97,6 +97,7 @@ type
     procedure TestReadBodyWithZeroContentLength;
     procedure TestRemoveHeader;
     procedure TestRemoveHeaders;
+    procedure TestRequire;
     procedure TestRetryAfter;
     procedure TestSetCallID;
     procedure TestSetContacts;
@@ -110,6 +111,7 @@ type
     procedure TestSetSipVersion;
     procedure TestSetTo;
     procedure TestSupported;
+    procedure TestSupportsExtension;
     procedure TestWillEstablishDialog;
   end;
 
@@ -202,7 +204,9 @@ type
     procedure TestRequiresResponse;
     procedure TestSetMaxForwards;
     procedure TestSetRoute;
+    procedure TestSubject;
     procedure TestSubscriptionState;
+    procedure TestTargetDialog;
     procedure TestWantsAllowEventsHeader;
   end;
 
@@ -1281,6 +1285,34 @@ begin
         'Content-Type wasn''t removeed');
 end;
 
+procedure TestTIdSipMessage.TestRequire;
+var
+  Require: TIdSipCommaSeparatedHeader;
+begin
+  Check(not Self.Msg.HasHeader(RequireHeader),
+        'Sanity check: a new message should have no Require header');
+
+  Self.Msg.Require;
+  Check(Assigned(Self.Msg.Require),
+        'Getter didn''t instantiate the Require header');
+
+  Require := TIdSipCommaSeparatedHeader.Create;
+  try
+    Require.Name  := RequireHeader;
+    Require.Value := PackageRefer;
+
+    // This sneakily checks that (a) the Setter instantiates a Require header,
+    // AND that the setter copies the information for that header properly.
+    Self.Msg.RemoveAllHeadersNamed(RequireHeader);
+    Self.Msg.Require := Require;
+
+    Check(Require.Equals(Self.Msg.Require),
+                         'New Require doesn''t equal message''s Require');
+  finally
+    Require.Free;
+  end;
+end;
+
 procedure TestTIdSipMessage.TestRetryAfter;
 var
   RetryAfter: TIdSipRetryAfterHeader;
@@ -1509,6 +1541,22 @@ begin
   finally
     Supported.Free;
   end;
+end;
+
+procedure TestTIdSipMessage.TestSupportsExtension;
+begin
+  Check(not Self.Msg.SupportsExtension(ExtensionGruu),
+        'There''s no Supported header, so this message doesn''t support anything');
+
+  Self.Msg.Supported.Values.Add(ExtensionTargetDialog);
+
+  Check(not Self.Msg.SupportsExtension(ExtensionGruu),
+        'The message only supports ' + ExtensionTargetDialog);
+
+  Self.Msg.Supported.Values.Add(ExtensionGruu);
+
+  Check(Self.Msg.SupportsExtension(ExtensionGruu),
+        'The message doesn''t know it supports GRUU');
 end;
 
 procedure TestTIdSipMessage.TestWillEstablishDialog;
@@ -3128,6 +3176,34 @@ begin
   end;
 end;
 
+procedure TestTIdSipRequest.TestSubject;
+var
+  Subject: TIdSipHeader;
+begin
+  Check(not Self.Request.HasHeader(SubjectHeaderFull),
+        'Sanity check: a new request should have no Subject header');
+
+  Self.Request.Subject;
+  Check(Assigned(Self.Request.Subject),
+        'Getter didn''t instantiate the Subject header');
+
+  Subject := TIdSipHeader.Create;
+  try
+    // This sneakily checks that (a) the Setter instantiates a
+    // Subject header, AND that the setter copies the information for
+    // that header properly.
+    Self.Request.RemoveAllHeadersNamed(SubjectHeaderFull);
+    Subject.Name := SubjectHeaderFull;
+    Subject.Value := 'No Such Call';
+    Self.Request.Subject := Subject;
+
+    Check(Subject.Equals(Self.Request.Subject),
+                         'New Subject doesn''t equal request''s Subject');
+  finally
+    Subject.Free;
+  end;
+end;
+
 procedure TestTIdSipRequest.TestSubscriptionState;
 var
   SubscriptionState: TIdSipSubscriptionStateHeader;
@@ -3152,6 +3228,33 @@ begin
                          'New Subscription-State doesn''t equal request''s Subscription-State');
   finally
     SubscriptionState.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestTargetDialog;
+var
+  TargetDialog: TIdSipTargetDialogHeader;
+begin
+  Check(not Self.Request.HasHeader(TargetDialogHeader),
+        'Sanity check: a new request should have no Target-Dialog header');
+
+  Self.Request.TargetDialog;
+  Check(Assigned(Self.Request.TargetDialog),
+        'Getter didn''t instantiate the Target-Dialog header');
+
+  TargetDialog := TIdSipTargetDialogHeader.Create;
+  try
+    // This sneakily checks that (a) the Setter instantiates a
+    // Target-Dialog header, AND that the setter copies the information for
+    // that header properly.
+    Self.Request.RemoveAllHeadersNamed(TargetDialogHeader);
+    TargetDialog.Value := '1;local-tag=2;remote-tag=3';
+    Self.Request.TargetDialog := TargetDialog;
+
+    Check(TargetDialog.Equals(Self.Request.TargetDialog),
+                         'New Target-Dialog doesn''t equal request''s Target-Dialog');
+  finally
+    TargetDialog.Free;
   end;
 end;
 

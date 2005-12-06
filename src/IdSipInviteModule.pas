@@ -70,6 +70,8 @@ type
                                 Answer: TIdSipResponse);
     procedure OnProgressedSession(Session: TIdSipSession;
                                   Progress: TIdSipResponse);
+    procedure OnReferral(Session: TIdSipSession;
+                         Refer: TIdSipRequest);
   end;
 
   TIdSipInboundSession = class;
@@ -79,6 +81,7 @@ type
     ['{E9D86376-16A4-4166-885C-03697B121F23}']
     procedure OnInboundCall(UserAgent: TIdSipInviteModule;
                             Session: TIdSipInboundSession);
+//    procedure OnReplacingInboundCall(Agent: TIdSipInviteModule);
   end;
 
   TIdSipOutboundSession = class;
@@ -97,11 +100,13 @@ type
     procedure TurnIntoInvite(OutboundRequest: TIdSipRequest;
                              const Offer: String;
                              const OfferMimeType: String);
+  protected
+    function AcceptRequest(Request: TIdSipRequest;
+                           UsingSecureTransport: Boolean): TIdSipAction; override;
+    function WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; override;
   public
     constructor Create(UA: TIdSipAbstractCore); override;
 
-    function  Accept(Request: TIdSipRequest;
-                     UsingSecureTransport: Boolean): TIdSipAction; override;
     function  AddInboundInvite(Invite: TIdSipRequest;
                                UsingSecureTransport: Boolean): TIdSipInboundInvite;
     procedure AddListener(Listener: IIdSipInviteModuleListener);
@@ -376,11 +381,13 @@ type
   private
     DialogLock:                TCriticalSection;
     fDialog:                   TIdSipDialog;
-    fLocalSessionDescription:  String;
     fLocalMimeType:            String;
+    fLocalSessionDescription:  String;
     fReceivedAck:              Boolean;
-    fRemoteSessionDescription: String;
+    fRemoteContact:            TIdSipContactHeader;
     fRemoteMimeType:           String;
+    fRemoteParty:              TIdSipAddressHeader;
+    fRemoteSessionDescription: String;
     LastModifyDescription:     String;
     LastModifyMimeType:        String;
     UsingSecureTransport:      Boolean;
@@ -391,20 +398,26 @@ type
     procedure RejectReInvite(Invite: TIdSipRequest);
     procedure RejectRequest(Request: TIdSipRequest);
     procedure RescheduleModify(InviteAgent: TIdSipInvite);
+    procedure SetRemoteContact(Value: TIdSipContactHeader);
+    procedure SetRemoteParty(Value: TIdSipAddressHeader);
     procedure TerminateAnyPendingRequests;
   protected
-    FullyEstablished: Boolean;
-    ModifyAttempt:    TIdSipInvite;
-    ModifyLock:       TCriticalSection;
+    FullyEstablished:       Boolean;
+    ModifyAttempt:          TIdSipInvite;
+    ModifyLock:             TCriticalSection;
+    SupportedExtensionList: TStringList;
 
     procedure ActionSucceeded(Response: TIdSipResponse); override;
     function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID; virtual; abstract;
     function  CreateNewAttempt: TIdSipRequest; override;
+    function  GetDialog: TIdSipDialog; virtual;
+    function  GetInvite: TIdSipRequest; virtual;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
                          UsingSecureTransport: Boolean); override;
-    function  GetDialog: TIdSipDialog; virtual;
-    function  GetInvite: TIdSipRequest; virtual;
+    procedure IntersectionOf(Target: TStrings;
+                             const SetOfCommaSeparatedValues: String;
+                             const AnotherSetOfCommaSeparatedValues: String);
     procedure NotifyOfEndedSession(ErrorCode: Cardinal;
                                    const Reason: String);
     procedure NotifyOfEstablishedSession(const RemoteSessionDescription: String;
@@ -433,6 +446,7 @@ type
     procedure ReceiveBye(Bye: TIdSipRequest); override;
     procedure ReceiveInitialInvite(Invite: TIdSipRequest); virtual;
     procedure ReceiveInvite(Invite: TIdSipRequest); override;
+    procedure ReceiveRefer(Refer: TIdSipRequest); virtual;
     procedure SendBye; virtual;
   public
     class function Method: String; override;
@@ -455,13 +469,16 @@ type
     procedure Remodify;
     procedure RemoveSessionListener(const Listener: IIdSipSessionListener);
     procedure Resend(AuthorizationCredentials: TIdSipAuthorizationHeader); override;
+    function  SupportsExtension(const ExtensionName: String): Boolean;
 
-    property Dialog:                   TIdSipDialog read GetDialog;
-    property LocalSessionDescription:  String       read fLocalSessionDescription write fLocalSessionDescription;
-    property LocalMimeType:            String       read fLocalMimeType write fLocalMimeType;
-    property ReceivedAck:              Boolean      read fReceivedAck;
-    property RemoteSessionDescription: String       read fRemoteSessionDescription write fRemoteSessionDescription;
-    property RemoteMimeType:           String       read fRemoteMimeType write fRemoteMimeType;
+    property Dialog:                   TIdSipDialog        read GetDialog;
+    property LocalMimeType:            String              read fLocalMimeType write fLocalMimeType;
+    property LocalSessionDescription:  String              read fLocalSessionDescription write fLocalSessionDescription;
+    property ReceivedAck:              Boolean             read fReceivedAck;
+    property RemoteContact:            TIdSipContactHeader read fRemoteContact write SetRemoteContact;
+    property RemoteMimeType:           String              read fRemoteMimeType write fRemoteMimeType;
+    property RemoteParty:              TIdSipAddressHeader read fRemoteParty write SetRemoteParty;
+    property RemoteSessionDescription: String              read fRemoteSessionDescription write fRemoteSessionDescription;
   end;
 
   TIdSipInboundSession = class(TIdSipSession)
@@ -469,6 +486,7 @@ type
     InitialInvite: TIdSipInboundInvite;
 
     function CreateInboundDialog(const LocalTag: String): TIdSipDialog;
+    function MatchReplaces(Request: TIdSipRequest): Boolean;
   protected
     function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID; override;
     procedure Initialise(UA: TIdSipAbstractCore;
@@ -481,6 +499,7 @@ type
                         Response: TIdSipResponse); override;
     procedure ReceiveCancel(Cancel: TIdSipRequest); override;
     procedure ReceiveInitialInvite(Invite: TIdSipRequest); override;
+    procedure ReceiveInvite(Invite: TIdSipRequest); override;
   public
     function  AcceptCall(const Offer, ContentType: String): String;
     function  IsInbound: Boolean; override;
@@ -696,6 +715,15 @@ type
     property Progress: TIdSipResponse read fProgress write fProgress;
   end;
 
+  TIdSipSessionReferralMethod = class(TIdSipSessionMethod)
+  private
+    fRefer: TIdSipRequest;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Refer: TIdSipRequest read fRefer write fRefer;
+  end;
+
   // We subclass TIdSipEstablishedSessionMethod solely for reusing
   // property declarations.
   TIdSipSessionModifySessionMethod = class(TIdSipEstablishedSessionMethod)
@@ -724,59 +752,13 @@ constructor TIdSipInviteModule.Create(UA: TIdSipAbstractCore);
 begin
   inherited Create(UA);
 
-  Self.AllowedContentTypeList.Add(SdpMimeType);
+  Self.AddAllowedContentType(SdpMimeType);
   Self.AcceptsMethodsList.Add(MethodAck);
   Self.AcceptsMethodsList.Add(MethodBye);
   Self.AcceptsMethodsList.Add(MethodCancel);
   Self.AcceptsMethodsList.Add(MethodInvite);
 
   Self.ProgressResendInterval := OneMinute*1000;
-end;
-
-function TIdSipInviteModule.Accept(Request: TIdSipRequest;
-                                   UsingSecureTransport: Boolean): TIdSipAction;
-var
-  ExpectedStatusCode: Cardinal;
-  Session:            TIdSipInboundSession;
-begin
-  Result := inherited Accept(Request, UsingSecureTransport);
-
-  if Assigned(Result) then Exit;
-
-  // BYEs, CANCELS, ACKS relate to an existing action - a Session - so we don't
-  // make a new action for these types of messages.
-  if not Request.IsInvite then begin
-      if not Request.IsAck then
-        Self.UserAgent.ReturnResponse(Request,
-                                      SIPCallLegOrTransactionDoesNotExist);
-      Exit;
-  end;
-
-  ExpectedStatusCode := Self.UserAgent.ResponseForInvite;
-  if (ExpectedStatusCode <> SIPOK) then begin
-    Result := nil;
-    Self.UserAgent.ReturnResponse(Request, ExpectedStatusCode);
-  end
-  else begin
-    if Request.HasReplaces then begin
-      Result := Self.MaybeAcceptReplaces(Request, UsingSecureTransport);
-    end
-    else begin
-      Session := TIdSipInboundSession.CreateInbound(Self.UserAgent,
-                                                    Request,
-                                                    UsingSecureTransport);
-
-      // TODO: This is oh so wrong! Why? Because the Core knows about inbound
-      // calls, even if the Core's a Registrar. And it shouldn't.
-      Self.NotifyOfInboundCall(Session);
-
-      if Request.HasHeader(ExpiresHeader) then
-        Self.UserAgent.ScheduleEvent(TIdSipInboundInviteExpire,
-                                     Request.Expires.NumericValue,
-                                     Request);
-      Result := Session;
-    end;
-  end;
 end;
 
 function TIdSipInviteModule.AddInboundInvite(Invite: TIdSipRequest;
@@ -802,7 +784,11 @@ end;
 
 function TIdSipInviteModule.AllowedExtensions: String;
 begin
-  Result := ExtensionReplaces;
+  Result := ExtensionReplaces + ', '
+          + ExtensionTargetDialog;
+
+  if Self.UserAgent.UseGruu then
+    Result := ExtensionGruu + ', ' + Result;          
 end;
 
 function TIdSipInviteModule.Call(Dest: TIdSipAddressHeader;
@@ -844,6 +830,10 @@ function TIdSipInviteModule.CreateInvite(Dest: TIdSipAddressHeader;
 begin
   Result := Self.UserAgent.CreateRequest(MethodInvite, Dest);
   try
+    // draft-ietf-sip-gruu, section 8.1
+    if Self.UserAgent.UseGruu then
+      Result.FirstContact.Grid := Self.UserAgent.NextGrid;
+
     Self.TurnIntoInvite(Result, Body, MimeType);
   except
     FreeAndNil(Result);
@@ -882,6 +872,65 @@ begin
   Result.Destination             := Dest;
   Result.LocalSessionDescription := LocalSessionDescription;
   Result.LocalMimeType           := MimeType;
+end;
+
+//* TIdSipInviteModule Protected methods ***************************************
+
+function TIdSipInviteModule.AcceptRequest(Request: TIdSipRequest;
+                                          UsingSecureTransport: Boolean): TIdSipAction;
+var
+  ExpectedStatusCode: Cardinal;
+  Session:            TIdSipInboundSession;
+begin
+  ExpectedStatusCode := Self.UserAgent.ResponseForInvite;
+  if (ExpectedStatusCode <> SIPOK) then begin
+    Result := nil;
+    Self.UserAgent.ReturnResponse(Request, ExpectedStatusCode);
+  end
+  else begin
+    if Request.HasReplaces then begin
+      Result := Self.MaybeAcceptReplaces(Request, UsingSecureTransport);
+    end
+    else begin
+      Session := TIdSipInboundSession.CreateInbound(Self.UserAgent,
+                                                    Request,
+                                                    UsingSecureTransport);
+
+      // TODO: This is oh so wrong! Why? Because the Core knows about inbound
+      // calls, even if the Core's a Registrar. And it shouldn't.
+      Self.NotifyOfInboundCall(Session);
+
+      if Request.HasHeader(ExpiresHeader) then
+        Self.UserAgent.ScheduleEvent(TIdSipInboundInviteExpire,
+                                     Request.Expires.NumericValue,
+                                     Request);
+      Result := Session;
+    end;
+  end;
+end;
+
+function TIdSipInviteModule.WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction;
+begin
+  Result := inherited WillAcceptRequest(Request);
+
+  if (Result = uarAccept) then begin
+    // BYEs, CANCELS, ACKS relate to an existing action - a Session - so we don't
+    // make a new action for these types of messages.
+    if not Request.IsInvite then begin
+        if not Request.IsAck then
+          Result := uarNoSuchCall
+        else
+          Result := uarDoNothing;
+    end
+    else if Request.IsInvite then begin
+      if Self.DoNotDisturb then
+        Result := uarDoNotDisturb
+      // RFC 3261, section 8.1.1.8 says that a request that can start a dialog
+      // (like an INVITE), MUST contain a Contact.
+      else if not Request.HasHeader(ContactHeaderFull) then
+        Result := uarMissingContact;
+    end;
+  end;
 end;
 
 //* TIdSipInviteModule Private methods *****************************************
@@ -1076,6 +1125,10 @@ begin
     Ok.ContentType   := ContentType;
     Ok.ContentLength := Length(Offer);
     Ok.ToHeader.Tag  := Self.LocalTag;
+
+    // This works regardless of whether the UA supports GRUU: if the UA doesn't
+    // then we simply make no USE of LocalGruu.
+    Self.LocalGruu := Ok.FirstContact;
 
     Self.SendResponse(Ok);
   finally
@@ -1391,6 +1444,7 @@ begin
   Invite := Self.CreateInvite;
   try
     Self.InitialRequest.Assign(Invite);
+    Self.LocalGruu := Invite.FirstContact;
     Self.SendRequest(Invite);
   finally
     Invite.Free;
@@ -1909,6 +1963,10 @@ end;
 
 destructor TIdSipSession.Destroy;
 begin
+  Self.SupportedExtensionList.Free;
+  Self.fRemoteParty.Free;
+  Self.fRemoteContact.Free;
+
   Self.ModifyLock.Free;
 
   Self.DialogLock.Acquire;
@@ -2039,7 +2097,12 @@ begin
     Self.RejectRequest(Request);
     Exit;
   end
-  else inherited ReceiveRequest(Request);
+  else begin
+    if Request.IsRefer then
+      Self.ReceiveRefer(Request)
+    else
+      inherited ReceiveRequest(Request);
+  end;
 end;
 
 procedure TIdSipSession.Remodify;
@@ -2068,6 +2131,11 @@ begin
   end;
 end;
 
+function TIdSipSession.SupportsExtension(const ExtensionName: String): Boolean;
+begin
+  Result := Self.SupportedExtensionList.IndexOf(ExtensionName) <> ItemNotFoundIndex;
+end;
+
 //* TIdSipSession Protected methods ********************************************
 
 procedure TIdSipSession.ActionSucceeded(Response: TIdSipResponse);
@@ -2083,6 +2151,16 @@ begin
                                      Self.InitialRequest.ContentType);
 end;
 
+function TIdSipSession.GetDialog: TIdSipDialog;
+begin
+  Result := Self.fDialog;
+end;
+
+function TIdSipSession.GetInvite: TIdSipRequest;
+begin
+  Result := Self.InitialRequest;
+end;
+
 procedure TIdSipSession.Initialise(UA: TIdSipAbstractCore;
                                    Request: TIdSipRequest;
                                    UsingSecureTransport: Boolean);
@@ -2094,16 +2172,36 @@ begin
 
   Self.fReceivedAck     := false;
   Self.FullyEstablished := false;
+
+  Self.fRemoteContact := TIdSipContactHeader.Create;
+  Self.fRemoteParty   := TIdSipAddressHeader.Create;
+
+  Self.SupportedExtensionList := TStringList.Create;
 end;
 
-function TIdSipSession.GetDialog: TIdSipDialog;
+procedure TIdSipSession.IntersectionOf(Target: TStrings;
+                                       const SetOfCommaSeparatedValues: String;
+                                       const AnotherSetOfCommaSeparatedValues: String);
+var
+  OtherSet: TStrings;
+  I:        Integer;
 begin
-  Result := Self.fDialog;
-end;
+  Target.CommaText := SetOfCommaSeparatedValues;
 
-function TIdSipSession.GetInvite: TIdSipRequest;
-begin
-  Result := Self.InitialRequest;
+  OtherSet := TStringList.Create;
+  try
+    OtherSet.CommaText := AnotherSetOfCommaSeparatedValues;
+
+    I := 0;
+    while (I < Target.Count) do begin
+      if (OtherSet.IndexOf(Target[I]) = ItemNotFoundIndex) then
+        Target.Delete(I)
+      else
+        Inc(I);
+    end;
+  finally
+    OtherSet.Free;
+  end;
 end;
 
 procedure TIdSipSession.NotifyOfEndedSession(ErrorCode: Cardinal;
@@ -2351,6 +2449,8 @@ begin
       try
         if not Self.ModificationInProgress then begin
           Modify := Self.Module.AddInboundInvite(Invite, Self.UsingSecureTransport);
+          Modify.LocalTag := Invite.ToHeader.Tag;
+
           Self.ModifyAttempt := Modify;
           Modify.AddListener(Self);
           Self.NotifyOfModifySession(Modify);
@@ -2363,6 +2463,32 @@ begin
     end;
   finally
     Self.DialogLock.Release;
+  end;
+end;
+
+procedure TIdSipSession.ReceiveRefer(Refer: TIdSipRequest);
+var
+  Module:       TIdSipSubscribeModule;
+  Notification: TIdSipSessionReferralMethod;
+begin
+  // This may looks dangerous: what if the UA doesn't support REFER? In that
+  // case, the UA will already have rejected the request, and we wouldn't be
+  // executing this code.
+  Module := Self.UA.ModuleFor(Refer) as TIdSipSubscribeModule;
+  if Module.IsNull then begin
+    // Something serious went wrong here: if there's no module for this message
+    // then the UA should reject it with a 501 Not Implemented!
+  end
+  else begin
+    Notification := TIdSipSessionReferralMethod.Create;
+    try
+      Notification.Refer   := Refer;
+      Notification.Session := Self;
+
+      Self.Listeners.Notify(Notification);
+    finally
+      Notification.Free;
+    end;
   end;
 end;
 
@@ -2425,8 +2551,7 @@ begin
   Response := Self.UA.CreateResponse(Invite,
                                      SIPInternalServerError);
   try
-    Response.AddHeader(RetryAfterHeader);
-    RetryAfter := Response.FirstRetryAfter;
+    RetryAfter := Response.RetryAfter;
 
     RetryAfter.NumericValue := GRandomNumber.NextCardinal(MaxPrematureInviteRetry);
     RetryAfter.Comment      := PrematureInviteMessage;
@@ -2470,6 +2595,19 @@ begin
                         Self.ID);
 end;
 
+procedure TIdSipSession.SetRemoteContact(Value: TIdSipContactHeader);
+begin
+  Self.fRemoteContact.Assign(Value);
+end;
+
+procedure TIdSipSession.SetRemoteParty(Value: TIdSipAddressHeader);
+begin
+  Self.fRemoteParty.Assign(Value);
+
+  if Self.fRemoteParty.HasParam(TagParam) then
+    Self.fRemoteParty.RemoveParameter(TagParam);
+end;
+
 procedure TIdSipSession.TerminateAnyPendingRequests;
 begin
   // cf RFC 3261, section 15.1.2
@@ -2491,10 +2629,14 @@ end;
 
 function TIdSipInboundSession.AcceptCall(const Offer, ContentType: String): String;
 begin
+  if not Assigned(Self.InitialInvite) then
+    raise EIdSipTransactionUser.Create('You have already invoked AcceptCall');
+
   Self.LocalSessionDescription := Offer;
   Self.LocalMimeType           := ContentType;
 
   Self.InitialInvite.Accept(Offer, ContentType);
+  Self.LocalGruu := Self.InitialInvite.LocalGruu;
   Self.FullyEstablished := true;
 end;
 
@@ -2519,15 +2661,23 @@ begin
     Self.ModifyLock.Release;
   end;
 
+  // Never match the ACKs: the InboundInvites will do that.
   if Msg.IsRequest and (Msg as TIdSipRequest).IsAck then
     Result := false
+  // Leave modifying INVITE matches to the modifying Invite.
   else if MatchesReInvite then
     Result := false
+  // Match CANCEL messages.
   else if Msg.IsRequest and (Msg as TIdSipRequest).IsCancel then
     Result := Self.InitialRequest.MatchCancel(Msg as TIdSipRequest)
-  else
+  else if Msg.IsRequest and Msg.HasHeader(ReplacesHeader) then
+    Result := Self.MatchReplaces(Msg as TIdSipRequest)
+  else if Msg.IsRequest and (Msg as TIdSipRequest).RequestUri.HasGrid then
+    Result := Self.LocalGruu.Grid = (Msg as TIdSipRequest).RequestUri.Grid
+  else begin
     Result := not Self.InitialRequest.Equals(Msg)
           and Self.DialogMatches(Msg);
+  end;
 end;
 
 function TIdSipInboundSession.ModifyWaitTime: Cardinal;
@@ -2607,8 +2757,14 @@ begin
   Self.InitialInvite := Self.Module.AddInboundInvite(Request, UsingSecureTransport);
   Self.InitialInvite.AddListener(Self);
 
-  Self.RemoteSessionDescription := Request.Body;
+  Self.RemoteContact            := Request.FirstContact;
   Self.RemoteMimeType           := Request.ContentType;
+  Self.RemoteParty              := Request.From;
+  Self.RemoteSessionDescription := Request.Body;
+
+  Self.IntersectionOf(Self.SupportedExtensionList,
+                      Self.Module.AllowedExtensions,
+                      Request.Supported.Value);
 end;
 
 procedure TIdSipInboundSession.OnFailure(InviteAgent: TIdSipInboundInvite);
@@ -2663,6 +2819,35 @@ begin
   Self.Ring;
 end;
 
+procedure TIdSipInboundSession.ReceiveInvite(Invite: TIdSipRequest);
+begin
+  if Invite.HasReplaces then begin
+    raise Exception.Create('TIdSipInboundSession.ReceiveInvite: Can''t yet challenge an INVITE with a Replaces header');
+    // RFC 3891 section 3:
+    //   If the Replaces header field matches an active dialog, the UA MUST
+    //   verify that the initiator of the new INVITE is authorized to replace
+    //   the matched dialog.  If the initiator of the new INVITE has been
+    //   successfully authenticated as equivalent to the user who is being
+    //   replaced, then the replacement is authorized.  For example, if the
+    //   user being replaced and the initiator of the replacement dialog share
+    //   the same credentials for Digest authentication [6], or they sign the
+    //   replacement request with S/MIME [7] with the same private key and
+    //   present the (same) corresponding certificate used in the original
+    //   dialog, then the replacement is authorized.
+    //
+    //   Alternatively, the Referred-By mechanism [4] defines a mechanism that
+    //   the UAS can use to verify that a replacement request was sent on
+    //   behalf of the other participant in the matched dialog (in this case,
+    //   triggered by a REFER request).  If the replacement request contains a
+    //   Referred-By header that corresponds to the user being replaced, the
+    //   UA SHOULD treat the replacement as if the replacement was authorized
+    //   by the replaced party.  The Referred-By header SHOULD reference a
+    //   corresponding, valid Refererred-By Authenticated Identity Body [5].
+  end
+  else
+    inherited ReceiveInvite(Invite);
+end;
+
 //* TIdSipInboundSession Private methods ***************************************
 
 function TIdSipInboundSession.CreateInboundDialog(const LocalTag: String): TIdSipDialog;
@@ -2679,6 +2864,24 @@ begin
     Result.ReceiveResponse(ArbResponse);
   finally
     ArbResponse.Free;
+  end;
+end;
+
+function TIdSipInboundSession.MatchReplaces(Request: TIdSipRequest): Boolean;
+begin
+  // We don't check for malformed requests like having multiple Replaces
+  // headers and the like, because the InviteModule checks for that.
+
+  Assert(Request.HasReplaces,
+         'Request MUST have a Replaces header');
+
+  Self.DialogLock.Acquire;
+  try
+    Result := (Self.Dialog.ID.CallID    = Request.Replaces.CallID)
+          and (Self.Dialog.ID.LocalTag  = Request.Replaces.ToTag)
+          and (Self.Dialog.ID.RemoteTag = Request.Replaces.FromTag);
+  finally
+    Self.DialogLock.Release;
   end;
 end;
 
@@ -2759,6 +2962,8 @@ begin
     Result := false
   else if MatchesReInvite then
     Result := false
+  else if Msg.IsRequest and (Msg as TIdSipRequest).RequestUri.HasGrid then
+    Result := Self.LocalGruu.Grid = (Msg as TIdSipRequest).RequestUri.Grid
   else
     Result := not Self.InitialRequest.Equals(Msg)
           and Self.DialogMatches(Msg);
@@ -2789,6 +2994,10 @@ begin
   Self.InitialInvite.MimeType    := Self.LocalMimeType;
   Self.InitialInvite.Send;
   Self.InitialRequest.Assign(Self.InitialInvite.InitialRequest);
+  Self.LocalGruu := Self.InitialInvite.LocalGruu;
+
+  Self.RemoteContact := Self.InitialRequest.FirstContact;
+  Self.RemoteParty   := Self.InitialRequest.ToHeader;
 end;
 
 procedure TIdSipOutboundSession.Terminate;
@@ -2968,14 +3177,20 @@ begin
     Self.RemoveFinishedRedirectedInvite(InviteAgent);
     Self.TerminateAllRedirects;
 
-    Self.RemoteSessionDescription := Response.Body;
+    Self.RemoteContact            := Response.FirstContact;
     Self.RemoteMimeType           := Response.ContentType;
+    Self.RemoteParty              := Response.ToHeader;
+    Self.RemoteSessionDescription := Response.Body;
 
     Self.NotifyOfEstablishedSession(Self.RemoteSessionDescription,
                                     Self.RemoteMimeType);
 
     InviteAgent.Offer    := Self.LocalSessionDescription;
     InviteAgent.MimeType := Self.LocalMimeType;
+
+    Self.IntersectionOf(Self.SupportedExtensionList,
+                        Self.InitialRequest.Supported.Value,
+                        Response.Supported.Value);
   end
   else
     Self.NotifyOfModifiedSession(Response);
@@ -3263,6 +3478,17 @@ procedure TIdSipProgressedSessionMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipSessionListener).OnProgressedSession(Self.Session,
                                                          Self.Progress);
+end;
+
+//******************************************************************************
+//* TIdSipSessionReferralMethod                                                *
+//******************************************************************************
+//* TIdSipSessionReferralMethod Public methods *********************************
+
+procedure TIdSipSessionReferralMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipSessionListener).OnReferral(Self.Session,
+                                                Self.Refer);
 end;
 
 end.

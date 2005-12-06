@@ -65,13 +65,12 @@ type
     procedure CMDEBUG_SEND_MSG(var Msg: TIdSipEventMessage); message CM_DEBUG_SEND_MSG;
     procedure CMDEBUG_TRANSPORT_EXCEPTION(var Msg: TIdSipEventMessage); message CM_DEBUG_TRANSPORT_EXCEPTION;
 
-    procedure Log(const Msg: String);
-    procedure LogNotify(Data: TIdSipStackInterfaceEventMethod);
+    procedure Log(Data: TIdEventData);
     procedure NotifyOfCallProgress(Data: TIdSessionProgressData);
     procedure NotifyOfDroppedMessage(Data: TIdDebugMessageData);
     procedure NotifyOfEndedCall(Data: TIdCallEndedData);
     procedure NotifyOfEstablishedCall(Data: TIdSessionData);
-    procedure NotifyOfIncomingCall(Data: TIdInboundCallData);
+    procedure NotifyOfIncomingCall(Data: TIdSessionData);
     procedure NotifyOfNetworkFailure(Data: TIdFailData);
     procedure NotifyOfReceivedMsg(Data: TIdDebugMessageData);
     procedure NotifyOfReceivedNotify(Data: TIdSubscriptionData);
@@ -218,35 +217,23 @@ begin
   Self.ReceiveNotify(Msg.Data);
 end;
 
-procedure TSingleCore.Log(const Msg: String);
+procedure TSingleCore.Log(Data: TIdEventData);
 begin
-  Self.MessageLog.Lines.Add(Msg);
-end;
-
-procedure TSingleCore.LogNotify(Data: TIdSipStackInterfaceEventMethod);
-const
-  Line = '%s on handle %x';
-begin
-  Self.MessageLog.Lines.Add(Format(Line, [EventNames(Data.Event),
-                                          Data.Data.Handle]));
+  Self.MessageLog.Lines.Text := Self.MessageLog.Lines.Text + Data.AsString;
 end;
 
 procedure TSingleCore.NotifyOfCallProgress(Data: TIdSessionProgressData);
 begin
-  Self.Log(Data.Banner);
 end;
 
 procedure TSingleCore.NotifyOfDroppedMessage(Data: TIdDebugMessageData);
 begin
-  Self.Log(Data.Message.AsString);
+  Self.Log(Data);
 end;
 
 procedure TSingleCore.NotifyOfEndedCall(Data: TIdCallEndedData);
 begin
   Self.CallHandle := InvalidHandle;
-
-  if (Data.ErrorCode <> 0) then
-    Self.Log(IntToStr(Data.ErrorCode) + ': ' + Data.Reason);
 end;
 
 procedure TSingleCore.NotifyOfEstablishedCall(Data: TIdSessionData);
@@ -255,31 +242,26 @@ begin
   Self.RemoteSessionDescription.Text := Data.RemoteSessionDescription;
 end;
 
-procedure TSingleCore.NotifyOfIncomingCall(Data: TIdInboundCallData);
+procedure TSingleCore.NotifyOfIncomingCall(Data: TIdSessionData);
 begin
-  Self.Log(Data.RemoteSessionDescription);
   Assert(Self.CallHandle = InvalidHandle,
    'You''re already in a call');
   Self.CallHandle := Data.Handle;
 
-  Self.RemoteParty.Assign(Data.Contact);
+  Self.RemoteParty.Assign(Data.RemoteContact);
+  Self.RemoteSessionDescription.Text := Data.RemoteSessionDescription;
 end;
 
 procedure TSingleCore.NotifyOfNetworkFailure(Data: TIdFailData);
-const
-  FailLine = 'Network failure: %d %s';
 begin
-  Self.Log(Format(FailLine, [Data.ErrorCode, Data.Reason]));
 end;
 
 procedure TSingleCore.NotifyOfReceivedMsg(Data: TIdDebugMessageData);
 begin
-  Self.Log(Data.Message.AsString);
 end;
 
 procedure TSingleCore.NotifyOfReceivedNotify(Data: TIdSubscriptionData);
 begin
-  Self.Log(Data.Notify.AsString);
 end;
 
 procedure TSingleCore.NotifyOfRemoteModifyRequest(Data: TIdSessionData);
@@ -293,18 +275,14 @@ end;
 
 procedure TSingleCore.NotifyOfSentMsg(Data: TIdDebugSendMessageData);
 begin
-  Self.Log(Data.Destination.AsString);
-  Self.Log(Data.Message.AsString);
 end;
 
 procedure TSingleCore.NotifyOfSubscriptionEstablished(Data: TIdSubscriptionData);
 begin
-  Self.Log(Data.Notify.AsString);
 end;
 
 procedure TSingleCore.NotifyOfSubscriptionExpired(Data: TIdSubscriptionData);
 begin
-  Self.Log(Data.Notify.AsString);
 end;
 
 procedure TSingleCore.NotifyOfSubscriptionRequest(Data: TIdSubscriptionRequestData);
@@ -312,14 +290,13 @@ begin
   if (Data.EventPackage = PackageRefer) then begin
     Self.ReferTo.Assign(Data.ReferTo);
     Self.ReferredResourceLabel.Caption := Data.ReferTo.AsString;
-    Self.Log(Data.ReferTo.AsString);
   end;
 end;
 
 procedure TSingleCore.ReceiveNotify(Data: TIdSipStackInterfaceEventMethod);
 begin
   try
-    Self.LogNotify(Data);
+    Self.Log(Data.Data);
 
     case Data.Event of
       CM_CALL_ENDED:          Self.NotifyOfEndedCall(Data.Data as TIdCallEndedData);
@@ -327,7 +304,7 @@ begin
       CM_CALL_PROGRESS:       Self.NotifyOfCallProgress(Data.Data as TIdSessionProgressData);
       CM_CALL_REMOTE_MODIFY_REQUEST:
                               Self.NotifyOfRemoteModifyRequest(Data.Data as TIdSessionData);
-      CM_CALL_REQUEST_NOTIFY: Self.NotifyOfIncomingCall(Data.Data as TIdInboundCallData);
+      CM_CALL_REQUEST_NOTIFY: Self.NotifyOfIncomingCall(Data.Data as TIdSessionData);
       CM_NETWORK_FAILURE:     Self.NotifyOfNetworkFailure(Data.Data as TIdFailData);
       CM_SUBSCRIPTION_ESTABLISHED:
                               Self.NotifyOfSubscriptionEstablished(Data.Data as TIdSubscriptionData);

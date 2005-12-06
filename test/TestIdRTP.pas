@@ -806,7 +806,7 @@ const
 implementation
 
 uses
-  Classes, DateUtils, IdRtpServer, SysUtils, Types;
+  Classes, DateUtils, IdRandom, IdRtpServer, SysUtils, Types;
 
 function Suite: ITestSuite;
 begin

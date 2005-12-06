@@ -47,6 +47,8 @@ type
     procedure ReceiveServiceUnavailable(Invite: TIdSipRequest);
   public
     procedure SetUp; override;
+
+    procedure CheckRequestSent(const Msg: String); override;
   published
     procedure TestAbandonAuthentication; virtual;
     procedure TestAuthentication;
@@ -56,6 +58,7 @@ type
     procedure TestIsOptions; virtual;
     procedure TestIsRegistration; virtual;
     procedure TestIsSession; virtual;
+    procedure TestLocalGruu; virtual;
     procedure TestMultipleAuthentication;
     procedure TestResend;
     procedure TestResendBeforeSend;
@@ -85,6 +88,17 @@ begin
   Self.ActionFailed             := false;
   Self.AuthenticationChallenged := true;
   Self.Password                 := 'mycotoxin';
+end;
+
+procedure TestTIdSipAction.CheckRequestSent(const Msg: String);
+var
+  FailMsg: String;
+begin
+  FailMsg := Msg;
+  if (Self.FailReason <> '') then
+    FailMsg := FailMsg + '(' + Self.FailReason + ')';
+
+  Check(Self.RequestCount < Self.SentRequestCount, FailMsg);
 end;
 
 //* TestTIdSipAction Protected methods *****************************************
@@ -388,6 +402,34 @@ begin
   Action := Self.CreateAction;
   Check(not Action.IsSession,
         Action.ClassName + ' marked as a Session');
+end;
+
+procedure TestTIdSipAction.TestLocalGruu;
+var
+  Action: TIdSipAction;
+  Gruu:   TIdSipContactHeader;
+begin
+  // Really, we only need ONE subclass to run this test as we're just checking
+  // that a property sets correctly. The "not Self.IsInboundTest" doesn't mean
+  // anything special - it's just that most inbound tests don't (can't) call
+  // CreateAction.
+
+  if not Self.IsInboundTest then begin
+    // Self.UA owns the action!
+    Action := Self.CreateAction;
+
+    Gruu := TIdSipContactHeader.Create;
+    try
+      Gruu.Value := 'sip:case@fried-neurons.org;opaque=foo';
+
+      Action.LocalGruu := Gruu;
+      CheckEquals(Gruu.AsString,
+                  Action.LocalGruu.AsString,
+                  'LocalGruu property not assigned to');
+    finally
+      Gruu.Free;
+    end;
+  end;
 end;
 
 procedure TestTIdSipAction.TestMultipleAuthentication;

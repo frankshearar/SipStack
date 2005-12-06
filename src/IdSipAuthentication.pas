@@ -136,6 +136,7 @@ type
     property Username:   String   read fUsername write fUsername;
   end;
 
+  // Use me to store authentication information.
   TIdKeyRing = class(TObject)
   private
     List: TObjectList;

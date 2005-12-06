@@ -63,7 +63,7 @@ type
     procedure OnEstablishedSession(Session: TIdSipSession;
                                    const RemoteSessionDescription: String;
                                    const MimeType: String);
-    procedure OnInboundCall(UserAgent: TIdSipAbstractCore;
+    procedure OnInboundCall(UserAgent: TIdSipInviteModule;
                             Session: TIdSipInboundSession);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Answer: TIdSipResponse);
@@ -75,6 +75,8 @@ type
                                const Reason: String);
     procedure OnProgressedSession(Session: TIdSipSession;
                                   Progress: TIdSipResponse);
+    procedure OnReferral(Session: TIdSipSession;
+                         Refer: TIdSipRequest);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport;
                             Destination: TIdSipLocation);
@@ -111,6 +113,7 @@ type
     procedure TestInviteExpires;
     procedure TestInviteRaceCondition;
     procedure TestMergedRequest;
+    procedure TestNewUAHasSensibleFrom;
     procedure TestNotificationOfNewSession;
     procedure TestNotificationOfNewSessionRobust;
     procedure TestOutboundCallAndByeToXlite;
@@ -118,7 +121,6 @@ type
     procedure TestOutboundInviteDoesNotTerminateWhenNoResponse;
     procedure TestReceiveByeForDialog;
     procedure TestReceiveByeDestroysTerminatedSession;
-    procedure TestReceiveByeWithoutTags;
     procedure TestReceiveResponseWithMultipleVias;
     procedure TestRejectMalformedAuthorizedRequest;
     procedure TestRejectMethodNotAllowed;
@@ -187,13 +189,13 @@ type
     procedure TestCreateUserAgentWithReferSupport;
     procedure TestCreateUserAgentWithRegistrar;
     procedure TestCreateUserAgentWithOneTransport;
-    procedure TestCreateUserAgentTransportHaMalformedPort;
+    procedure TestCreateUserAgentTransportHasMalformedPort;
   end;
 
 implementation
 
 uses
-  IdSdp, IdSipAuthentication, IdSipMockLocator, IdSipMockTransport,
+  IdSdp, IdSipAuthentication, IdSipConsts, IdSipMockLocator, IdSipMockTransport,
   IdSipSubscribeModule, IdSystem, IdUnicode, SysUtils, TestFramework;
 
 const
@@ -421,7 +423,7 @@ begin
   Self.SessionEstablished  := true;
 end;
 
-procedure TestTIdSipUserAgent.OnInboundCall(UserAgent: TIdSipAbstractCore;
+procedure TestTIdSipUserAgent.OnInboundCall(UserAgent: TIdSipInviteModule;
                                             Session: TIdSipInboundSession);
 begin
   Self.InboundCallMimeType := Session.RemoteMimeType;
@@ -454,6 +456,11 @@ end;
 
 procedure TestTIdSipUserAgent.OnProgressedSession(Session: TIdSipSession;
                                                   Progress: TIdSipResponse);
+begin
+end;
+
+procedure TestTIdSipUserAgent.OnReferral(Session: TIdSipSession;
+                                         Refer: TIdSipRequest);
 begin
 end;
 
@@ -1140,6 +1147,26 @@ begin
   end;
 end;
 
+procedure TestTIdSipUserAgent.TestNewUAHasSensibleFrom;
+var
+  UA: TIdSipUserAgent;
+begin
+  UA := TIdSipUserAgent.Create;
+  try
+    Check(UA.HostName <> '',
+          'Sanity check: the HostName property must be non-empty');
+
+    CheckEquals(UA.HostName,
+                UA.From.Address.Host,
+                'From host should default to the UA''s HostName');
+    CheckEquals(UA.HostName,
+                UA.Contact.Address.Host,
+                'Contact host should default to the UA''s HostName');
+  finally
+    UA.Free;
+  end;
+end;
+
 procedure TestTIdSipUserAgent.TestNotificationOfNewSession;
 begin
   Self.ReceiveInvite;
@@ -1278,32 +1305,6 @@ begin
   finally
     Self.Core.RemoveObserver(O);
     O.Free;
-  end;
-end;
-
-procedure TestTIdSipUserAgent.TestReceiveResponseWithMultipleVias;
-var
-  Response: TIdSipResponse;
-begin
-  Bye := Self.Core.CreateRequest(MethodInvite, Self.Destination);
-  try
-    Bye.Method          := MethodBye;
-    Bye.From.Value      := Bye.From.Address.URI;     // strip the tag
-    Bye.ToHeader.Value  := Bye.ToHeader.Address.URI; // strip the tag
-    Bye.CSeq.SequenceNo := $deadbeef;
-    Bye.CSeq.Method     := Bye.Method;
-
-    Self.MarkSentResponseCount;
-
-    Self.ReceiveRequest(Bye);
-
-    CheckResponseSent('No response sent');
-    Response := Self.LastSentResponse;
-    CheckEquals(SIPCallLegOrTransactionDoesNotExist,
-                Response.StatusCode,
-                'Response Status-Code')
-  finally
-    Bye.Free;
   end;
 end;
 

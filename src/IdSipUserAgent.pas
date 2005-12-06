@@ -80,8 +80,6 @@ type
   //   NameServer: MOCK
   //   Register: <SIP/S URI>
   //   Proxy: <SIP/S URI>
-  //   From: "Count Zero" <sip:countzero@jammer.org>
-  //   Contact: sip:wintermute@tessier-ashpool.co.luna
   //   SupportEvent: refer
   TIdSipStackConfigurator = class(TObject)
   private

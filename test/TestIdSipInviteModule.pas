@@ -3,9 +3,9 @@ unit TestIdSipInviteModule;
 interface
 
 uses
-  IdRtp, IdSdp, IdSipCore, IdSipDialog, IdSipInviteModule, IdSipLocator,
-  IdSipMessage, IdSipSubscribeModule, IdSipTransport, IdSipUserAgent,
-  IdTimerQueue, TestFrameworkSip, TestFrameworkSipTU;
+  Classes, IdRtp, IdSdp, IdSipCore, IdSipDialog, IdSipInviteModule,
+  IdSipLocator, IdSipMessage, IdSipSubscribeModule, IdSipTransport,
+  IdSipUserAgent, IdTimerQueue, TestFrameworkSip, TestFrameworkSipTU;
 
 type
   // This class attempts to isolate an intermittent bug that surfaces in the
@@ -35,6 +35,8 @@ type
                                const Reason: String);
     procedure OnProgressedSession(Session: TIdSipSession;
                                   Progress: TIdSipResponse);
+    procedure OnReferral(Session: TIdSipSession;
+                         Refer: TIdSipRequest);
     procedure ReceiveMovedTemporarily(Invite: TIdSipRequest;
                                       const Contacts: array of String); overload;
     procedure ReceiveMovedTemporarily(const Contacts: array of String); overload;
@@ -57,6 +59,7 @@ type
                                          const Msg: String);
     procedure CheckCreateRequest(Dest: TIdSipToHeader;
                                  Request: TIdSipRequest);
+    function  ConvertListToHeader(List: TStrings): String;
   published
     procedure TestAddListener;
     procedure TestCreateAck;
@@ -64,8 +67,14 @@ type
     procedure TestCreateInvite;
     procedure TestCreateInviteInsideDialog;
     procedure TestCreateInviteWithBody;
+    procedure TestCreateInviteWithGruu;
     procedure TestCreateReInvite;
+    procedure TestDoNotDisturb;
+    procedure TestReceiveByeForUnmatchedDialog;
+    procedure TestReceiveByeWithoutTags;
     procedure TestReceiveInviteWithMultipleReplacesHeaders;
+    procedure TestReceiveInviteWithNoContactHeader;
+    procedure TestRejectUnknownContentType;
     procedure TestRemoveListener;
     procedure TestReplaceCall;
   end;
@@ -100,6 +109,7 @@ type
     procedure TestIsOptions; override;
     procedure TestIsRegistration; override;
     procedure TestIsSession; override;
+    procedure TestLocalGruu; override;
     procedure TestMatchAck;
     procedure TestMatchAckToReInvite;
     procedure TestMatchAckToReInviteWithDifferentCSeq;
@@ -121,7 +131,6 @@ type
 
   TestTIdSipOutboundInvite = class(TestTIdSipAction,
                                    IIdSipInviteListener,
-                                   IIdSipInviteModuleListener,
                                    IIdSipMessageModuleListener,
                                    IIdSipTransactionUserListener,
                                    IIdSipUserAgentListener)
@@ -149,8 +158,6 @@ type
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
                                         Receiver: TIdSipTransport);
-    procedure OnInboundCall(UserAgent: TIdSipAbstractCore;
-                            Session: TIdSipInboundSession);
     procedure OnFailure(InviteAgent: TIdSipOutboundInvite;
                         Response: TIdSipResponse;
                         const Reason: String);
@@ -186,6 +193,7 @@ type
     procedure TestReceiveServerFailed;
     procedure TestRemoveListener;
     procedure TestSendTwice;
+    procedure TestSendWithGruu;
     procedure TestTerminateBeforeAccept;
     procedure TestTerminateAfterAccept;
     procedure TestTransactionCompleted;
@@ -230,7 +238,8 @@ type
 
   TestTIdSipSession = class(TestTIdSipAction,
                             IIdSipSessionListener,
-                            IIdSipTransactionUserListener)
+                            IIdSipTransactionUserListener,
+                            IIdSipUserAgentListener)
   protected
     DroppedUnmatchedResponse:  Boolean;
     ErrorCode:                 Cardinal;
@@ -241,6 +250,7 @@ type
     OnEstablishedSessionFired: Boolean;
     OnModifiedSessionFired:    Boolean;
     OnModifySessionFired:      Boolean;
+    OnReferralFired:           Boolean;
     Reason:                    String;
     RemoteSessionDescription:  String;
     SimpleSdp:                 TIdSdpPayload;
@@ -272,6 +282,8 @@ type
                               const MimeType: String); virtual;
     procedure OnProgressedSession(Session: TIdSipSession;
                                   Progress: TIdSipResponse); virtual;
+    procedure OnReferral(Session: TIdSipSession;
+                         Refer: TIdSipRequest);
     procedure ReceiveRemoteReInvite(Session: TIdSipSession);
     procedure ResendWith(Session: TIdSipSession;
                          AuthenticationChallenge: TIdSipResponse);
@@ -288,6 +300,9 @@ type
     procedure TestMatchBye;
     procedure TestMatchInitialRequest;
     procedure TestMatchInboundModify;
+    procedure TestMatchInboundModifyAck;
+    procedure TestMatchReferWithCorrectGridParameter;
+    procedure TestMatchReferWithIncorrectGridParameter;
     procedure TestModify;
     procedure TestModifyBeforeFullyEstablished;
     procedure TestModifyDuringModification;
@@ -297,6 +312,8 @@ type
     procedure TestModifyRejectedWithTimeout;
     procedure TestModifyWaitTime;
     procedure TestReceiveByeWithPendingRequests;
+    procedure TestReceiveInDialogReferWithNoSubscribeModule;
+    procedure TestReceiveInDialogRefer;
     procedure TestRejectInviteWhenInboundModificationInProgress;
     procedure TestRejectInviteWhenOutboundModificationInProgress;
     procedure TestRemodify;
@@ -335,13 +352,14 @@ type
     procedure OnEstablishedSession(Session: TIdSipSession;
                                    const RemoteSessionDescription: String;
                                    const MimeType: String); override;
-    procedure OnInboundCall(UserAgent: TIdSipAbstractCore;
+    procedure OnInboundCall(UserAgent: TIdSipInviteModule;
                             Session: TIdSipInboundSession);
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
     procedure TestAcceptCall;
+    procedure TestAcceptCallWithGruu;
     procedure TestAddSessionListener;
     procedure TestCancelAfterAccept;
     procedure TestCancelBeforeAccept;
@@ -350,9 +368,12 @@ type
     procedure TestInviteHasOffer;
     procedure TestIsInbound; override;
     procedure TestIsOutboundCall;
+    procedure TestInviteWithReplaces;
+    procedure TestLocalGruu; override;
     procedure TestMethod;
     procedure TestNotifyListenersOfEstablishedSession;
     procedure TestNotifyListenersOfEstablishedSessionInviteHasNoBody;
+    procedure TestOkUsesGruuWhenUaDoes;
     procedure TestInboundModifyBeforeFullyEstablished;
     procedure TestInboundModifyReceivesNoAck;
     procedure TestReceiveBye;
@@ -360,6 +381,7 @@ type
     procedure TestRedirectCall;
     procedure TestRejectCallBusy;
     procedure TestRemoveSessionListener;
+    procedure TestSupportsExtension;
     procedure TestTerminate;
     procedure TestTerminateUnestablishedSession;
   end;
@@ -409,6 +431,7 @@ type
     procedure TestCallSecure;
     procedure TestCallSipsUriOverTcp;
     procedure TestCallSipUriOverTls;
+    procedure TestCallWithGruu;
     procedure TestCallWithOffer;
     procedure TestCallWithoutOffer;
     procedure TestCancelReceiveInviteOkBeforeCancelOk;
@@ -438,6 +461,8 @@ type
     procedure TestRedirectWithMultipleContacts;
     procedure TestRedirectWithNoSuccess;
     procedure TestSendSetsInitialRequest;
+    procedure TestSendWithGruu;
+    procedure TestSupportsExtension;
     procedure TestTerminateDuringRedirect;
     procedure TestTerminateEstablishedSession;
     procedure TestTerminateNetworkFailure;
@@ -463,7 +488,7 @@ type
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
                                         Receiver: TIdSipTransport);
-    procedure OnInboundCall(UserAgent: TIdSipAbstractCore;
+    procedure OnInboundCall(UserAgent: TIdSipInviteModule;
                             Session: TIdSipInboundSession);
     procedure OnRenewedSubscription(UserAgent: TIdSipAbstractCore;
                                     Subscription: TIdSipOutboundSubscription);
@@ -630,11 +655,22 @@ type
     procedure TestRun;
   end;
 
+  TestTIdSipSessionReferralMethod = class(TestSessionMethod)
+  private
+    Method: TIdSipSessionReferralMethod;
+    Refer:  TIdSipRequest;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
 implementation
 
 uses
-  Classes, IdException, IdSimpleParser, IdSipMockTransactionDispatcher,
-  SysUtils, TestFramework;
+  IdException, IdSimpleParser, IdSipMockTransactionDispatcher, SysUtils,
+  TestFramework;
 
 function Suite: ITestSuite;
 begin
@@ -660,6 +696,8 @@ begin
   Result.AddTest(TestTIdSipEstablishedSessionMethod.Suite);
   Result.AddTest(TestTIdSipModifiedSessionMethod.Suite);
   Result.AddTest(TestTIdSipSessionModifySessionMethod.Suite);
+  Result.AddTest(TestTIdSipProgressedSessionMethod.Suite);
+  Result.AddTest(TestTIdSipSessionReferralMethod.Suite);
 end;
 
 //******************************************************************************
@@ -697,6 +735,11 @@ end;
 
 procedure TestDebug.OnProgressedSession(Session: TIdSipSession;
                                         Progress: TIdSipResponse);
+begin
+end;
+
+procedure TestDebug.OnReferral(Session: TIdSipSession;
+                               Refer: TIdSipRequest);
 begin
 end;
 
@@ -909,6 +952,11 @@ begin
               'UDP should be the default transport');
 end;
 
+function TestTIdSipInviteModule.ConvertListToHeader(List: TStrings): String;
+begin
+  Result := StringReplace(List.CommaText, ',', ', ', [rfReplaceAll]);
+end;
+
 //* TestTIdSipInviteModule Published *******************************************
 
 procedure TestTIdSipInviteModule.TestAddListener;
@@ -1052,6 +1100,21 @@ begin
   end;
 end;
 
+procedure TestTIdSipInviteModule.TestCreateInviteWithGruu;
+var
+  Invite: TIdSipRequest;
+begin
+  Self.Core.UseGruu := true;
+
+  Invite := Self.Module.CreateInvite(Self.Destination, '', '');
+  try
+    Check(Invite.FirstContact.Address.HasGrid,
+          '"grid" parameter not added to Contact');
+  finally
+    Invite.Free;
+  end;
+end;
+
 procedure TestTIdSipInviteModule.TestCreateReInvite;
 var
   Invite: TIdSipRequest;
@@ -1079,6 +1142,81 @@ begin
   end;
 end;
 
+procedure TestTIdSipInviteModule.TestDoNotDisturb;
+var
+  SessionCount: Cardinal;
+begin
+  Self.Core.DoNotDisturb := true;
+  Self.MarkSentResponseCount;
+  SessionCount  := Self.Core.SessionCount;
+
+  Self.ReceiveInvite;
+  CheckResponseSent('No response sent when UA set to Do Not Disturb');
+
+  CheckEquals(SIPTemporarilyUnavailable,
+              Self.LastSentResponse.StatusCode,
+              'Wrong response sent');
+  CheckEquals(Self.Core.DoNotDisturbMessage,
+              Self.LastSentResponse.StatusText,
+              'Wrong status text');
+  CheckEquals(SessionCount,
+              Self.Core.SessionCount,
+              'New session created despite Do Not Disturb');
+end;
+
+procedure TestTIdSipInviteModule.TestReceiveByeForUnmatchedDialog;
+var
+  Bye:      TIdSipRequest;
+  Response: TIdSipResponse;
+begin
+  Bye := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+  try
+    Bye.Method          := MethodBye;
+    Bye.CSeq.SequenceNo := $deadbeef;
+    Bye.CSeq.Method     := Bye.Method;
+
+    Self.MarkSentResponseCount;
+
+    Self.ReceiveRequest(Bye);
+
+    CheckResponseSent('No response sent');
+    Response := Self.LastSentResponse;
+    CheckEquals(SIPCallLegOrTransactionDoesNotExist,
+                Response.StatusCode,
+                'Response Status-Code')
+
+  finally
+    Bye.Free;
+  end;
+end;
+
+procedure TestTIdSipInviteModule.TestReceiveByeWithoutTags;
+var
+  Bye:      TIdSipRequest;
+  Response: TIdSipResponse;
+begin
+  Bye := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+  try
+    Bye.Method          := MethodBye;
+    Bye.From.Value      := Bye.From.Address.URI;     // strip the tag
+    Bye.ToHeader.Value  := Bye.ToHeader.Address.URI; // strip the tag
+    Bye.CSeq.SequenceNo := $deadbeef;
+    Bye.CSeq.Method     := Bye.Method;
+
+    Self.MarkSentResponseCount;
+
+    Self.ReceiveRequest(Bye);
+
+    CheckResponseSent('No response sent');
+    Response := Self.LastSentResponse;
+    CheckEquals(SIPCallLegOrTransactionDoesNotExist,
+                Response.StatusCode,
+                'Response Status-Code')
+  finally
+    Bye.Free;
+  end;
+end;
+
 procedure TestTIdSipInviteModule.TestReceiveInviteWithMultipleReplacesHeaders;
 var
   BadRequest: TIdSipRequest;
@@ -1099,6 +1237,49 @@ begin
   finally
     BadRequest.Free;
   end;
+end;
+
+procedure TestTIdSipInviteModule.TestReceiveInviteWithNoContactHeader;
+var
+  BadRequest: TIdSipRequest;
+begin
+  BadRequest := Self.Invite.Copy as TIdSipRequest;
+  try
+    BadRequest.RemoveAllHeadersNamed(ContactHeaderFull);
+
+    Self.MarkSentResponseCount;
+    Self.ReceiveRequest(BadRequest);
+
+    CheckResponseSent('No response sent');
+    CheckEquals(SIPBadRequest,
+                Self.LastSentResponse.StatusCode,
+                'Unexpected response');
+    CheckEquals(MissingContactHeader,
+                Self.LastSentResponse.StatusText,
+                'Unexpected response Status-Text');
+  finally
+    BadRequest.Free;
+  end;
+end;
+
+procedure TestTIdSipInviteModule.TestRejectUnknownContentType;
+var
+  Response: TIdSipResponse;
+begin
+  Self.MarkSentResponseCount;
+
+  Self.Invite.ContentType := 'text/xml';
+
+  Self.ReceiveInvite;
+
+  CheckResponseSent('No response sent');
+
+  Response := Self.LastSentResponse;
+  CheckEquals(SIPUnsupportedMediaType, Response.StatusCode, 'Status-Code');
+  Check(Response.HasHeader(AcceptHeader), 'No Accept header');
+  CheckEquals(Self.ConvertListToHeader(Self.Module.AllowedContentTypes),
+              Response.FirstHeader(AcceptHeader).Value,
+              'Accept value');
 end;
 
 procedure TestTIdSipInviteModule.TestRemoveListener;
@@ -1427,6 +1608,24 @@ procedure TestTIdSipInboundInvite.TestIsSession;
 begin
   Check(not Self.InviteAction.IsSession,
         Self.InviteAction.ClassName + ' marked as a Session');
+end;
+
+procedure TestTIdSipInboundInvite.TestLocalGruu;
+begin
+  // Set us up to use GRUU
+  Self.Core.UseGruu := true;
+  Self.Core.Gruu := Self.Core.Contact;
+  Self.Core.Gruu.Address.Host := Self.Core.Gruu.Address.Host + '.com';
+
+  Self.MarkSentResponseCount;
+  Self.InviteAction.Accept('', '');
+  CheckResponseSent('No 200 OK sent');
+
+  Check(Self.LastSentResponse.FirstContact.Address.HasGrid,
+        '200 OK''s Contact address has no "grid" parameter');
+  CheckEquals(Self.LastSentResponse.FirstContact.AsString,
+              Self.InviteAction.LocalGruu.AsString,
+              'InviteAction''s LocalGruu doesn''t match Contact in 200 OK');
 end;
 
 procedure TestTIdSipInboundInvite.TestMatchAck;
@@ -1921,12 +2120,6 @@ procedure TestTIdSipOutboundInvite.OnDroppedUnmatchedMessage(UserAgent: TIdSipAb
                                                              Receiver: TIdSipTransport);
 begin
   Self.DroppedUnmatchedResponse := true;
-end;
-
-procedure TestTIdSipOutboundInvite.OnInboundCall(UserAgent: TIdSipAbstractCore;
-                                                 Session: TIdSipInboundSession);
-begin
-  // Unused.
 end;
 
 procedure TestTIdSipOutboundInvite.OnFailure(InviteAgent: TIdSipOutboundInvite;
@@ -2456,6 +2649,30 @@ begin
   end;
 end;
 
+procedure TestTIdSipOutboundInvite.TestSendWithGruu;
+var
+  Invite: TIdSipOutboundInvite;
+begin
+  // Set us up to use GRUU
+  Self.Core.UseGruu := true;
+  Self.Core.Gruu := Self.Core.Contact;
+  Self.Core.Gruu.Address.Host := Self.Core.Gruu.Address.Host + '.com';
+
+  Self.MarkSentRequestCount;
+  Invite := Self.CreateAction as TIdSipOutboundInvite;
+  CheckRequestSent('No request sent');
+
+  CheckEquals(MethodInvite,
+              Self.LastSentRequest.Method,
+              'Method of sent request');
+
+  CheckEquals(Self.Core.Gruu.Address.Host,
+              Invite.LocalGruu.Address.Host,
+              'LocalGruu not set');
+  Check(Invite.LocalGruu.Address.HasGrid,
+        'Local GRUU doesn''t have a "grid" parameter');
+end;
+
 procedure TestTIdSipOutboundInvite.TestTerminateBeforeAccept;
 var
   OutboundInvite: TIdSipOutboundInvite;
@@ -2703,6 +2920,7 @@ begin
   Self.OnEstablishedSessionFired := false;
   Self.OnModifiedSessionFired    := false;
   Self.OnModifySessionFired      := false;
+  Self.OnReferralFired           := false;
   Self.RemoteSessionDescription  := '';
 end;
 
@@ -2902,9 +3120,15 @@ begin
   // Do nothing.
 end;
 
+procedure TestTIdSipSession.OnReferral(Session: TIdSipSession;
+                                       Refer: TIdSipRequest);
+begin
+  Self.OnReferralFired := true;
+end;
+
 procedure TestTIdSipSession.ReceiveRemoteReInvite(Session: TIdSipSession);
 begin
-  // At this point Self.Invite represents the INVITE we sent out
+  // At this point Invite represents the INVITE we sent out
   Self.Invite.LastHop.Branch  := Self.Invite.LastHop.Branch + '1';
   Self.Invite.CallID          := Session.Dialog.ID.CallID;
   Self.Invite.From.Tag        := Session.Dialog.ID.RemoteTag;
@@ -2916,7 +3140,7 @@ begin
   Self.Invite.ContentLength := Length(Self.Invite.Body);
 
   // Now it represents an INVITE received from the network
-  Self.ReceiveInvite;
+  Self.ReceiveRequest(Self.Invite)
 end;
 
 procedure TestTIdSipSession.ResendWith(Session: TIdSipSession;
@@ -3069,6 +3293,7 @@ procedure TestTIdSipSession.TestInboundModify;
 var
   LocalSessionDescription: String;
   LocalMimeType:           String;
+  OK:                      TIdSipResponse;
   Session:                 TIdSipSession;
 begin
   Session := Self.CreateAction as TIdSipSession;
@@ -3080,7 +3305,16 @@ begin
   Self.RemoteSessionDescription := Self.SimpleSdp.AsString;
 
   Self.ReceiveRemoteReInvite(Session);
+
+  Self.MarkSentResponseCount;
   Session.AcceptModify(LocalSessionDescription, LocalMimeType);
+  CheckResponseSent('No response sent');
+  OK := Self.LastSentResponse;
+  Check(OK.ToHeader.HasTag,
+        'To header of 200 OK lacks a tag');
+  Check(OK.From.HasTag,
+        'From header of 200 OK lacks a tag');
+
   Self.ReceiveAck;
 
   Check(Self.OnModifySessionFired,
@@ -3157,6 +3391,89 @@ begin
           Session.ClassName + ': In-dialog INVITE must match session');
   finally
     ReInvite.Free;
+  end;
+end;
+
+procedure TestTIdSipSession.TestMatchInboundModifyAck;
+var
+  Ack:     TIdSipRequest;
+  Session: TIdSipSession;
+begin
+  Session := Self.CreateAction as TIdSipSession;
+  Self.EstablishSession(Session);
+  Check(Session.DialogEstablished,
+        Session.ClassName + ': No dialog established');
+
+  Self.ReceiveRemoteReInvite(Session);
+  Session.AcceptModify('', '');
+
+  Self.DroppedUnmatchedResponse := false;
+  Ack := Self.Dispatcher.Transport.LastRequest.AckFor(Self.LastSentResponse);
+  try
+    Check(not Session.Match(Ack),
+          Session.ClassName
+        + ': ACK for in-dialog INVITE must not match session');
+
+    Self.ReceiveRequest(Ack);
+    Check(not Self.DroppedUnmatchedResponse,
+          Session.ClassName + ': Dropped ACK for in-dialog INVITE');
+  finally
+    Ack.Free;
+  end;
+end;
+
+procedure TestTIdSipSession.TestMatchReferWithCorrectGridParameter;
+var
+  Refer:   TIdSipRequest;
+  Session: TIdSipSession;
+  SubMod:  TIdSipSubscribeModule;
+begin
+  Self.Dispatcher.Transport.WriteLog := true;
+  Self.Core.UseGruu := true;
+  Self.Core.Gruu := Self.Core.Contact;
+  Self.Core.Gruu.Address.Host := Self.Core.Gruu.Address.Host + '.com';
+  Self.Locator.AddA(Self.Core.Gruu.Address.Host, '127.0.0.1');
+
+  Session := Self.CreateAction as TIdSipSession;
+  Self.EstablishSession(Session);
+
+  SubMod := Self.Core.AddModule(TIdSipSubscribeModule) as TIdSipSubscribeModule;
+  Refer := SubMod.CreateRefer(Self.Destination, Self.Destination);
+  try
+    Refer.RequestUri.Grid := Session.LocalGruu.Grid;
+
+    Check(Session.Match(Refer),
+          'Session should match any request whose "grid" parameter matches that '
+        + 'of the GRUU that the stack sent out in creating this session');
+  finally
+    Refer.Free;
+  end;
+end;
+
+procedure TestTIdSipSession.TestMatchReferWithIncorrectGridParameter;
+var
+  Refer:   TIdSipRequest;
+  Session: TIdSipSession;
+  SubMod:  TIdSipSubscribeModule;
+begin
+  Session := Self.CreateAction as TIdSipSession;
+  Self.EstablishSession(Session);
+
+  SubMod := Self.Core.AddModule(TIdSipSubscribeModule) as TIdSipSubscribeModule;
+  Refer := SubMod.CreateRefer(Self.Destination, Self.Destination);
+  try
+    if Session.IsInbound then
+      Refer.RequestUri := Session.InitialRequest.FirstContact.Address
+    else
+      Refer.RequestUri := Session.RemoteContact.Address;
+
+    Refer.RequestUri.Grid := Refer.RequestUri.Grid + '-x';
+
+    Check(not Session.Match(Refer),
+          'Session mustn''t match any request whose "grid" parameter matches '
+        + 'that of the GRUU that the stack sent out in creating this session');
+  finally
+    Refer.Free;
   end;
 end;
 
@@ -3367,12 +3684,93 @@ begin
   end;
 end;
 
+procedure TestTIdSipSession.TestReceiveInDialogReferWithNoSubscribeModule;
+var
+  Refer:   TIdSipRequest;
+  Session: TIdSipSession;
+  SubMod:  TIdSipSubscribeModule;
+  Us:      TIdSipAddressHeader;
+begin
+  Session := Self.CreateAction as TIdSipSession;
+  Self.EstablishSession(Session);
+
+  if Session.IsOutboundCall then begin
+    Us := Session.InitialRequest.From;
+    Us.Grid := Session.InitialRequest.FirstContact.Grid;
+  end
+  else begin
+    Us := Session.InitialRequest.ToHeader;
+    Us.Grid := Self.LastSentResponse.FirstContact.Grid;
+  end;
+
+  Us.RemoveParameter(TagParam);
+
+  SubMod := TIdSipSubscribeModule.Create(Self.Core);
+  try
+    Refer := SubMod.CreateRefer(Us, Self.Destination);
+    try
+      Refer.CallID       := Session.Dialog.ID.CallID;
+      Refer.From.Tag     := Session.Dialog.ID.RemoteTag;
+      Refer.ToHeader.Tag := Session.Dialog.ID.LocalTag;
+
+      Self.MarkSentResponseCount;
+      Self.ReceiveRequest(Refer);
+      CheckResponseSent('No response sent');
+      CheckEquals(SIPNotImplemented,
+                  Self.LastSentResponse.StatusCode,
+                  'Unexpected response sent');
+    finally
+      Refer.Free;
+    end;
+  finally
+    SubMod.Free;
+  end;
+end;
+
+procedure TestTIdSipSession.TestReceiveInDialogRefer;
+var
+  Refer:   TIdSipRequest;
+  Session: TIdSipSession;
+  SubMod:  TIdSipSubscribeModule;
+  Us:      TIdSipAddressHeader;
+begin
+  Session := Self.CreateAction as TIdSipSession;
+  Self.EstablishSession(Session);
+
+  if Session.IsOutboundCall then begin
+    Us := Session.InitialRequest.From;
+    Us.Grid := Session.InitialRequest.FirstContact.Grid;
+  end
+  else begin
+    Us := Session.InitialRequest.ToHeader;
+    Us.Grid := Self.LastSentResponse.FirstContact.Grid;
+  end;
+
+  Us.RemoveParameter(TagParam);
+
+  SubMod := Self.Core.AddModule(TIdSipSubscribeModule) as TIdSipSubscribeModule;
+  Refer := SubMod.CreateRefer(Us, Self.Destination);
+  try
+    Refer.CallID       := Session.Dialog.ID.CallID;
+    Refer.From.Tag     := Session.Dialog.ID.RemoteTag;
+    Refer.ToHeader.Tag := Session.Dialog.ID.LocalTag;
+
+    Check(Session.Match(Refer),
+          'Session should match the REFER since they both use the same dialog');
+
+    Self.ReceiveRequest(Refer);
+    Check(Self.OnReferralFired,
+          'Session didn''t receive the REFER');
+  finally
+    Refer.Free;
+  end;
+end;
+
 procedure TestTIdSipSession.TestModify;
 var
   Session: TIdSipSession;
 begin
-  Session := Self.CreateAction as TIdSipSession;
-  Self.EstablishSession(Session);
+  Session := Self.CreateAndEstablishSession;
 
   Self.MarkSentRequestCount;
   Session.Modify(Self.SimpleSdp.AsString, SdpMimeType);
@@ -3614,7 +4012,7 @@ begin
   // By default, do nothing.
 end;
 
-procedure TestTIdSipInboundSession.OnInboundCall(UserAgent: TIdSipAbstractCore;
+procedure TestTIdSipInboundSession.OnInboundCall(UserAgent: TIdSipInviteModule;
                                                  Session: TIdSipInboundSession);
 begin
   Self.Session := Session;
@@ -3670,6 +4068,14 @@ begin
   Self.RemoteContentType := SdpMimeType;
   Self.RemoteDesc        := TIdSipTestResources.BasicSDP('proxy.tessier-ashpool.co.luna');
   Self.CreateAction;
+
+  CheckEquals(Self.Dispatcher.Transport.LastRequest.FirstContact.AsString,
+              Self.Session.RemoteContact.AsString,
+              'RemoteContact');
+  CheckEquals(Self.Dispatcher.Transport.LastRequest.From.Value,
+              Self.Session.RemoteParty.Value,
+              'RemoteParty');
+
   CheckEquals(Self.RemoteDesc,
               Self.Session.RemoteSessionDescription,
               'RemoteSessionDescription');
@@ -3688,6 +4094,24 @@ begin
                'Dialog object wasn''t created');
   CheckEquals(Answer,         Self.Session.LocalSessionDescription, 'LocalSessionDescription');
   CheckEquals(AnswerMimeType, Self.Session.LocalMimeType,           'LocalMimeType');
+end;
+
+procedure TestTIdSipInboundSession.TestAcceptCallWithGruu;
+begin
+  // Set us up to use GRUU
+  Self.Core.UseGruu := true;
+  Self.Core.Gruu := Self.Core.Contact;
+  Self.Core.Gruu.Address.Host := Self.Core.Gruu.Address.Host + '.com';
+
+  Self.CreateAction;
+
+  Self.MarkSentResponseCount;
+  Self.Session.AcceptCall('', '');
+  Self.CheckResponseSent('No 200 OK sent');
+
+  // draft-ietf-sip-gruu section 8.1
+  Check(Self.LastSentResponse.FirstContact.Address.HasParameter(GridParam),
+        'GRUUs sent out in 200 OKs to INVITEs should have a "grid" parameter');
 end;
 
 procedure TestTIdSipInboundSession.TestAddSessionListener;
@@ -3928,6 +4352,49 @@ begin
         'Inbound session; IsOutboundCall');
 end;
 
+procedure TestTIdSipInboundSession.TestInviteWithReplaces;
+var
+  Replaces: TIdSipRequest;
+begin
+  Self.CreateAction;
+
+  Replaces := Self.Core.InviteModule.CreateInvite(Self.Destination, '', '');
+  try
+    Replaces.Replaces.CallID  := Self.Session.InitialRequest.CallID;
+    Replaces.Replaces.FromTag := Self.Session.InitialRequest.From.Tag;
+    Replaces.Replaces.ToTag   := Self.Session.InitialRequest.ToHeader.Tag;
+
+    Check(Self.Session.Match(Replaces),
+          'INVITE with Replaces header');
+  finally
+    Replaces.Free;
+  end;
+end;
+
+procedure TestTIdSipInboundSession.TestLocalGruu;
+var
+  Session: TIdSipSession;
+begin
+  // Set us up to use GRUU
+  Self.Core.UseGruu := true;
+  Self.Core.Gruu := Self.Core.Contact;
+  Self.Core.Gruu.Address.Host := Self.Core.Gruu.Address.Host + '.com';
+
+  Self.MarkSentResponseCount;
+  Session := Self.CreateAndEstablishSession;
+  CheckResponseSent('No 200 OK sent');
+
+  Check(Self.LastSentResponse.FirstContact.Address.HasGrid,
+        '200 OK Remote Target has no "grid" parameter');
+
+  CheckEquals(Self.LastSentResponse.FirstContact.Grid,
+              Session.LocalGruu.Grid,
+              'LocalGRUU''s "grid" doesn''t match that in the 200 OK''s Contact');
+  CheckEquals(Self.LastSentResponse.FirstContact.AsString,
+              Session.LocalGruu.AsString,
+              'LocalGRUU doesn''t match the 200 OK''s Contact');
+end;
+
 procedure TestTIdSipInboundSession.TestMethod;
 begin
   CheckEquals(MethodInvite,
@@ -3987,6 +4454,31 @@ begin
   end;
 end;
 
+procedure TestTIdSipInboundSession.TestOkUsesGruuWhenUaDoes;
+var
+  Ok: TIdSipResponse;
+begin
+  // Set up our stack to use GRUUs
+  Self.Core.UseGruu := true;
+  Self.Core.Gruu := Self.Core.Contact;
+  Self.Core.Gruu.Address.Host := Self.Core.Gruu.Address.Host + '.com';
+
+  // Set up the remote stack to use GRUUs
+  Self.Invite.Supported.Values.Add(ExtensionGruu);
+
+  Self.MarkSentResponseCount;
+  Self.CreateAndEstablishSession;
+  Self.CheckResponseSent('No response sent');
+  Ok := Self.LastSentResponse;
+  Check(Ok.HasHeader(SupportedHeaderFull),
+        'OK missing a Supported header');
+  Check(Ok.SupportsExtension(ExtensionGruu),
+        'OK''s Supported header doesn''t indicate support of GRUU');
+  CheckEquals(Self.Core.Gruu.Address.Host,
+              Self.LastSentResponse.FirstContact.Address.Host,
+              'GRUU not used as OK''s Contact');
+end;
+
 procedure TestTIdSipInboundSession.TestInboundModifyBeforeFullyEstablished;
 var
   InternalServerError: TIdSipResponse;
@@ -4034,8 +4526,8 @@ begin
               'Unexpected response');
   Check(InternalServerError.HasHeader(RetryAfterHeader),
         'No Retry-After header');
-  Check(InternalServerError.FirstRetryAfter.NumericValue <= MaxPrematureInviteRetry,
-        'Bad Retry-After value (' + IntToStr(InternalServerError.FirstRetryAfter.NumericValue) + ')');
+  Check(InternalServerError.RetryAfter.NumericValue <= MaxPrematureInviteRetry,
+        'Bad Retry-After value (' + IntToStr(InternalServerError.RetryAfter.NumericValue) + ')');
 
   Self.ReceiveAck;
 end;
@@ -4163,6 +4655,29 @@ begin
     end;
   finally
     L1.Free;
+  end;
+end;
+
+procedure TestTIdSipInboundSession.TestSupportsExtension;
+const
+  ExtensionFoo = 'foo';
+  Extensions   = ExtensionTargetDialog + ', ' + ExtensionFoo;
+var
+  Session: TIdSipSession;
+begin
+  Self.Invite.AddHeader(SupportedHeaderFull).Value := Extensions;
+  Session := TIdSipInboundSession.CreateInbound(Self.Core, Self.Invite, false);
+  try
+    Check(Session.SupportsExtension(ExtensionTargetDialog),
+          Self.ClassName + ': '
+        + ExtensionTargetDialog + ' must be supported, since both we and '
+        + 'the remote party support it');
+    Check(not Session.SupportsExtension(ExtensionFoo),
+          Self.ClassName + ': '
+        + ExtensionFoo + ' must not be supported, since only the remote '
+        + 'party supports it');
+  finally
+    Session.Free;
   end;
 end;
 
@@ -4583,6 +5098,13 @@ begin
               Session.LocalMimeType,
               'LocalMimeType');
 
+  CheckEquals(Self.LastSentRequest.FirstContact.AsString,
+              Session.RemoteContact.AsString,
+              'RemoteContact');
+  CheckEquals(Self.LastSentRequest.ToHeader.Value,
+              Session.RemoteParty.Value,
+              'RemoteParty');
+
   CheckRequestSent('no INVITE sent');
   Invite := Self.LastSentRequest;
 
@@ -4711,6 +5233,30 @@ begin
   finally
     Response.Free;
   end;
+end;
+
+procedure TestTIdSipOutboundSession.TestCallWithGruu;
+var
+  Invite:  TIdSipRequest;
+begin
+  // Set us up to use GRUU
+  Self.Core.UseGruu := true;
+  Self.Core.Gruu := Self.Core.Contact;
+  Self.Core.Gruu.Address.Host := Self.Core.Gruu.Address.Host + '.com';
+  Self.Locator.AddA(Self.Core.Gruu.Address.Host, '127.0.0.1');
+
+  Self.MarkSentRequestCount;
+  Self.CreateAction;
+  CheckRequestSent('no INVITE sent');
+
+  Invite := Self.LastSentRequest;
+
+  // draft-ietf-sip-gruu section 8.1
+  CheckEquals(Self.Core.Gruu.Address.Host,
+              Invite.FirstContact.Address.Host,
+              'INVITE didn''t use UA''s GRUU (' + Self.Core.Gruu.Address.AsString + ')');
+  Check(Invite.FirstContact.Address.HasParameter(GridParam),
+        'GRUUs sent out in INVITEs should have a "grid" parameter');
 end;
 
 procedure TestTIdSipOutboundSession.TestCallWithOffer;
@@ -5451,6 +5997,70 @@ begin
   Session.Terminate;
 end;
 
+procedure TestTIdSipOutboundSession.TestSendWithGruu;
+var
+  Session: TIdSipSession;
+begin
+  // Set us up to support GRUU
+  Self.Core.UseGruu := true;
+  Self.Core.Gruu := Self.Core.Contact;
+  Self.Core.Gruu.Address.Host := Self.Core.Gruu.Address.Host + '.com';
+  Self.Locator.AddA(Self.Core.Gruu.Address.Host, '127.0.0.1');
+
+  Self.MarkSentRequestCount;
+  Session := Self.CreateAndEstablishSession;
+  CheckRequestSent('No INVITE sent');
+
+  CheckEquals(Self.Core.Gruu.Address.Host,
+              Session.LocalGruu.Address.Host,
+              'LocalGruu not set');
+  Check(Session.LocalGruu.Address.HasGrid,
+        'Local GRUU doesn''t have a "grid" parameter');
+end;
+
+procedure TestTIdSipOutboundSession.TestSupportsExtension;
+var
+  MissingExtension: String;
+  OK:               TIdSipResponse;
+  Session:          TIdSipOutboundSession;
+begin
+  // For the ACK's Request-URI
+  Self.Locator.AddA('tessier-ashpool.co.luna', '127.0.0.1');
+
+  CheckNotEquals('',
+                 Self.Module.AllowedExtensions,
+                 Self.ClassName
+               + ': Sanity check: our InviteModule should support at least one '
+               + 'extension');
+
+  Session := Self.Module.Call(Self.Destination, '', '');
+  Session.Send;
+  Check(Session.InitialRequest.HasHeader(SupportedHeaderFull),
+        Self.ClassName
+      + ': Sanity check: the InviteModule MUST insert a Supported header');
+
+  OK := TIdSipResponse.InResponseTo(Session.InitialRequest, SIPOK, Self.Invite.FirstContact);
+  try
+    OK.Supported.Value := Self.Module.AllowedExtensions;
+
+    MissingExtension := OK.Supported.Values[0];
+    OK.Supported.Values.Delete(0);
+    Self.ReceiveResponse(OK);
+
+    Check(Session.SupportsExtension(OK.Supported.Values[0]),
+          Self.ClassName
+        + ': Session MUST support ' + OK.Supported.Values[0] + ' since both we '
+        + 'and the remote party do');
+
+    Check(not Session.SupportsExtension(MissingExtension),
+          Self.ClassName
+        + ': Session MUST NOT support ' + OK.Supported.Values[0] + ' since '
+        + 'only we do');
+  finally
+    OK.Free;
+  end;
+end;
+
 procedure TestTIdSipOutboundSession.TestTerminateDuringRedirect;
 var
   Contacts: array of String;
@@ -5640,11 +6250,11 @@ begin
   // each response, two of the three will drop the response as unmatched.
 end;
 
-procedure TestSessionReplacer.OnInboundCall(UserAgent: TIdSipAbstractCore;
+procedure TestSessionReplacer.OnInboundCall(UserAgent: TIdSipInviteModule;
                                             Session: TIdSipInboundSession);
 begin
   Self.InboundCall := Session;
-  Self.ReceivingUA := UserAgent;
+  Self.ReceivingUA := UserAgent.UserAgent;
 end;
 
 procedure TestSessionReplacer.OnRenewedSubscription(UserAgent: TIdSipAbstractCore;
@@ -5747,7 +6357,7 @@ begin
 
   Self.Method := TIdSipInviteModuleInboundCallMethod.Create;
   Self.Method.Session   := Self.Session;
-  Self.Method.UserAgent := Self.UA;
+  Self.Method.UserAgent := Self.UA.InviteModule;
 end;
 
 procedure TestTIdSipInviteModuleOnInboundCallMethod.TearDown;
@@ -5770,7 +6380,7 @@ begin
         'Listener not notified');
   Check(Self.Session = Self.Listener.SessionParam,
         'Session param');
-  Check(Self.UA = Self.Listener.UserAgentParam,
+  Check(Self.UA.InviteModule = Self.Listener.UserAgentParam,
         'UserAgent param');
 end;
 
@@ -6272,8 +6882,48 @@ procedure TestTIdSipProgressedSessionMethod.TestRun;
 begin
   Self.Method.Run(Self.Listener);
 
+  Check(Self.Listener.ProgressedSession,
+        'Listener not notified');
   Check(Self.Method.Progress = Self.Listener.ProgressParam,
         'Progress param');
+  Check(Self.Method.Session = Self.Listener.SessionParam,
+        'Session param');
+end;
+
+//******************************************************************************
+//* TestTIdSipSessionReferralMethod
+//******************************************************************************
+//* TestTIdSipSessionReferralMethod Public methods *****************************
+
+procedure TestTIdSipSessionReferralMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Method := TIdSipSessionReferralMethod.Create;
+  Self.Refer  :=  TIdSipRequest.Create;
+
+  Self.Method.Refer   := Self.Refer;
+  Self.Method.Session := Self.Session;
+end;
+
+procedure TestTIdSipSessionReferralMethod.TearDown;
+begin
+  Self.Refer.Free;
+  Self.Method.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipSessionReferralMethod Published methods **************************
+
+procedure TestTIdSipSessionReferralMethod.TestRun;
+begin
+  Self.Method.Run(Self.Listener);
+
+  Check(Self.Listener.Referral,
+        'Listener not notified');
+  Check(Self.Method.Refer = Self.Listener.ReferParam,
+        'Refer param');
   Check(Self.Method.Session = Self.Listener.SessionParam,
         'Session param');
 end;

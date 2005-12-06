@@ -107,7 +107,7 @@ type
 
     procedure CheckAckSent(const Msg: String);
     procedure CheckNoRequestSent(const Msg: String);
-    procedure CheckRequestSent(const Msg: String);
+    procedure CheckRequestSent(const Msg: String); virtual;
     procedure CheckNoResponseSent(const Msg: String);
     procedure CheckResponseSent(const Msg: String);
   end;
@@ -284,16 +284,16 @@ type
   private
     fInboundCall:    Boolean;
     fSessionParam:   TIdSipInboundSession;
-    fUserAgentParam: TIdSipAbstractCore;
+    fUserAgentParam: TIdSipInviteModule;
 
-    procedure OnInboundCall(UserAgent: TIdSipAbstractCore;
+    procedure OnInboundCall(UserAgent: TIdSipInviteModule;
                             Session: TIdSipInboundSession);
   public
     constructor Create; override;
 
-    property InboundCall:  Boolean              read fInboundCall;
-    property SessionParam: TIdSipInboundSession read fSessionParam;
-    property UserAgentParam: TIdSipAbstractCore read fUserAgentParam;
+    property InboundCall:    Boolean              read fInboundCall;
+    property SessionParam:   TIdSipInboundSession read fSessionParam;
+    property UserAgentParam: TIdSipInviteModule   read fUserAgentParam;
   end;
 
   TIdSipTestNotifyListener = class(TIdSipMockListener,
@@ -372,6 +372,8 @@ type
     fProgressParam:            TIdSipResponse;
     fReasonParam:              String;
     fRedirect:                 Boolean;
+    fReferParam:               TIdSipRequest;
+    fReferral:                 Boolean;
     fRemoteSessionDescription: String;
     fSessionParam:             TIdSipSession;
   public
@@ -393,6 +395,8 @@ type
     procedure OnNewSession(Session: TIdSipSession);
     procedure OnProgressedSession(Session: TIdSipSession;
                                   Progress: TIdSipResponse);
+    procedure OnReferral(Session: TIdSipSession;
+                         Refer: TIdSipRequest);
 
     property AnswerParam:              TIdSipResponse      read fAnswerParam;
     property EndedSession:             Boolean             read fEndedSession;
@@ -406,6 +410,8 @@ type
     property ProgressedSession:        Boolean             read fProgressedSession;
     property ReasonParam:              String              read fReasonParam;
     property Redirect:                 Boolean             read fRedirect;
+    property ReferParam:               TIdSipRequest       read fReferParam;
+    property Referral:                 Boolean             read fReferral;
     property RemoteSessionDescription: String              read fRemoteSessionDescription;
     property SessionParam:             TIdSipSession       read fSessionParam;
   end;
@@ -1575,7 +1581,7 @@ end;
 
 //* TIdSipTestInviteModuleListener Private methods *****************************
 
-procedure TIdSipTestInviteModuleListener.OnInboundCall(UserAgent: TIdSipAbstractCore;
+procedure TIdSipTestInviteModuleListener.OnInboundCall(UserAgent: TIdSipInviteModule;
                                                        Session: TIdSipInboundSession);
 begin
   Self.fInboundCall    := true;
@@ -1700,6 +1706,7 @@ begin
   Self.fNewSession               := false;
   Self.fProgressedSession        := false;
   Self.fRedirect                 := false;
+  Self.fReferral                 := false;
   Self.fRemoteSessionDescription := '';
 end;
 
@@ -1780,6 +1787,17 @@ begin
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnProgressedSession');
+end;
+
+procedure TIdSipTestSessionListener.OnReferral(Session: TIdSipSession;
+                                               Refer: TIdSipRequest);
+begin
+  Self.fReferral     := true;
+  Self.fReferParam   := Refer;
+  Self.fSessionParam := Session;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create(Self.ClassName + '.OnReferral');
 end;
 
 //******************************************************************************

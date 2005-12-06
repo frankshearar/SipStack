@@ -27,6 +27,93 @@ type
     procedure TestStrToQValueDef;
   end;
 
+  TIdSipParameterTestCase = class(TTestCase)
+  protected
+    P: TIdSipParameter;
+
+    function CreateParameter: TIdSipParameter; virtual; abstract;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAsStringParameterHasNoValue;
+    procedure TestEquals;
+    procedure TestName;
+    procedure TestValue; virtual;
+  end;
+
+  TestTIdSipParameter = class(TIdSipParameterTestCase)
+  protected
+    function CreateParameter: TIdSipParameter; override;
+  published
+    procedure TestAsHeaderParameter;
+    procedure TestAsString;
+    procedure TestAsStringWithEscapedCharacters;
+    procedure TestAsUriParameter;
+    procedure TestValue; override;
+  end;
+
+  TestTIdSipQuotedStringParameter = class(TIdSipParameterTestCase)
+  protected
+    function CreateParameter: TIdSipParameter; override;
+  published
+    procedure TestAsHeaderParameter;
+    procedure TestAsString;
+    procedure TestValue; override;
+  end;
+
+  TIdSipParametersTestCase = class(TTestCase)
+  private
+    Params: TIdSipParameters;
+  protected
+    function CreateParameters: TIdSipParameters; virtual;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAddParamTypeDependsOnNameParameter;
+    procedure TestAddParamAndHasParam;
+    procedure TestAdd;
+    procedure TestAssign;
+    procedure TestAssignToNonEmptyList;
+    procedure TestAsString; virtual;
+    procedure TestClear;
+    procedure TestCount;
+    procedure TestDoubleAdd;
+    procedure TestEquals;
+    procedure TestHasParam;
+    procedure TestParameterTypes;
+    procedure TestParamValue;
+    procedure TestRemoveParameter;
+    procedure TestRemoveParameterParameterMissing;
+    procedure TestIntersectionEquals;
+  end;
+
+  TestTIdSipHeaderParameters = class(TIdSipParametersTestCase)
+  protected
+    function CreateParameters: TIdSipParameters; override;
+  published
+    procedure TestAsString; override;
+    procedure TestParse;
+    procedure TestParseMalformedQuotedString;
+    procedure TestParseMissingValue;
+    procedure TestParseMultipleParameters;
+    procedure TestParseNoNameNoValue;
+    procedure TestParseQuotedString;
+    procedure TestParseQuotedStringContainsSemicolon;
+    procedure TestParseSimple;
+    procedure TestParseTorture;
+    procedure TestParseValuelessParameter;
+    procedure TestParseWithWhitespace;
+  end;
+
+  TestTIdSipUriParameters = class(TIdSipParametersTestCase)
+  protected
+    function CreateParameters: TIdSipParameters; override;
+  published
+     procedure TestAsString; override;
+  end;
+
   THeaderTestCase = class(TTestCaseSip)
   protected
     Header: TIdSipHeader;
@@ -53,7 +140,6 @@ type
     procedure TestFullValue;
     procedure TestGetSetParam;
     procedure TestHasParam;
-    procedure TestIndexOfParam;
     procedure TestEquals;
     procedure TestParamCount;
     procedure TestParamsAsString;
@@ -75,12 +161,15 @@ type
   published
     procedure TestAsAddressOfRecord;
     procedure TestAsString;
+    procedure TestAsCanonicalAddress;
     procedure TestAsToHeader;
+    procedure TestGrid;
     procedure TestHasSipsUri;
     procedure TestSetAddress;
     procedure TestValue; override;
     procedure TestValueEmptyDisplayName;
-    procedure TestValueFolded;
+    procedure TestValueEmptyString;
+    procedure TestValueMissingScheme;
     procedure TestValueWithBlankQuotedName;
     procedure TestValueWithEncodings;
     procedure TestValueWithMalformedQuotedName;
@@ -88,10 +177,11 @@ type
     procedure TestValueWithNoWhitespaceBetweenDisplayNameAndUri;
     procedure TestValueWithParam;
     procedure TestValueWithQuotedName;
-    procedure TestValueWithSpace;
+    procedure TestValueWithSpaceInDisplayName;
     procedure TestValueWithSpecialChars;
     procedure TestValueWithTrailingWhitespacePlusParam;
     procedure TestValueWithUnquotedNonTokensPlusParam;
+    procedure TestValueWithQuotedURN;
   end;
 
   TestTIdSipCommaSeparatedHeader = class(THeaderTestCase)
@@ -131,6 +221,7 @@ type
     procedure TestDigestResponse;
     procedure TestDigestUri;
     procedure TestGetValue;
+    procedure TestHasParam;
     procedure TestIsBasic;
     procedure TestIsDigest;
     procedure TestName; virtual;
@@ -176,10 +267,13 @@ type
     procedure TestGetSetExpires;
     procedure TestGetSetQ;
     procedure TestGetValueWithStar;
+    procedure TestGruu;
     procedure TestRemoveExpires;
     procedure TestValue; override;
     procedure TestValueWithExpires;
+    procedure TestValueInstanceID;
     procedure TestValueWithQ;
+    procedure TestValueWithParams;
     procedure TestValueWithStar;
     procedure TestWillExpire;
   end;
@@ -413,6 +507,7 @@ type
   published
     procedure TestCallID;
     procedure TestSetCallID;
+    procedure TestValue; override;
   end;
 
   TestTIdSipReplacesHeader = class(TestTIdSipParameteredCallIDHeader)
@@ -459,6 +554,21 @@ type
     procedure TestRetryAfterHasMeaning;
     procedure TestSetReasonType;
     procedure TestStrToReasonType;
+    procedure TestValue; override;
+  end;
+
+  TestTIdSipTargetDialogHeader = class(TestTIdSipParameteredCallIDHeader)
+  private
+    T: TIdSipTargetDialogHeader;
+  protected
+    function HeaderType: TIdSipHeaderClass; override;
+  public
+    procedure SetUp; override;
+  published
+    procedure TestHasCompleteDialogID;
+    procedure TestLocalTag;
+    procedure TestName;
+    procedure TestRemoteTag;
     procedure TestValue; override;
     procedure TestValueMissingLocalTag;
     procedure TestValueMissingRemoteTag;
@@ -676,6 +786,7 @@ type
     procedure TestContactFor;
     procedure TestCreateOnEmptySet;
     procedure TestCurrentContact;
+    procedure TestGruuFor;
     procedure TestHasContact;
   end;
 
@@ -733,12 +844,17 @@ type
 implementation
 
 uses
-  Classes, IdSipConsts, IdSipMockTransport, IdSipTransport, IdUnicode, SysUtils;
+  Classes, IdSipConsts, IdSipMockTransport, IdSipTransport, IdSystem, IdUnicode,
+  SysUtils;
 
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipMessage tests (Headers)');
   Result.AddTest(TestFunctions.Suite);
+  Result.AddTest(TestTIdSipParameter.Suite);
+  Result.AddTest(TestTIdSipQuotedStringParameter.Suite);
+  Result.AddTest(TestTIdSipHeaderParameters.Suite);
+  Result.AddTest(TestTIdSipUriParameters.Suite);
   Result.AddTest(TestTIdSipHeader.Suite);
   Result.AddTest(TestTIdSipAddressHeader.Suite);
   Result.AddTest(TestTIdSipCommaSeparatedHeader.Suite);
@@ -762,6 +878,7 @@ begin
   Result.AddTest(TestTIdSipReferToHeader.Suite);
   Result.AddTest(TestTIdSipReplacesHeader.Suite);
   Result.AddTest(TestTIdSipSubscriptionStateHeader.Suite);
+  Result.AddTest(TestTIdSipTargetDialogHeader.Suite);
   Result.AddTest(TestTIdSipTimestampHeader.Suite);
   Result.AddTest(TestTIdSipUriHeader.Suite);
   Result.AddTest(TestTIdSipViaHeader.Suite);
@@ -820,7 +937,7 @@ begin
   Check(    NeedsQuotes('\'),          '\');
   Check(    NeedsQuotes('"hello\"'),   '"hello\"');
   Check(not NeedsQuotes(''),           '''''');
-  Check(not NeedsQuotes('hail eris!'), 'hail eris!');
+  Check(    NeedsQuotes('hail eris!'), 'hail eris!');
 end;
 
 procedure TestFunctions.TestQuoteStringIfNecessary;
@@ -1014,6 +1131,767 @@ end;
 procedure TestFunctions.TestStrToQValueDef;
 begin
   CheckEquals(666, StrToQValueDef('', 666), '''''');
+end;
+
+//******************************************************************************
+//* TIdSipParameterTestCase                                                    *
+//******************************************************************************
+//* TestTIdSipParameter Public methods *****************************************
+
+procedure TIdSipParameterTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  Self.P := Self.CreateParameter;
+end;
+
+procedure TIdSipParameterTestCase.TearDown;
+begin
+  Self.P.Free;
+
+  inherited TearDown;
+end;
+
+//* TIdSipParameterTestCase Published methods **********************************
+
+procedure TIdSipParameterTestCase.TestAsStringParameterHasNoValue;
+const
+  ParamName = 'foo';
+begin
+  Self.P.Name := ParamName;
+
+  CheckEquals(Self.P.Name,
+              Self.P.AsString,
+              'Parameter mustn''t print the equals sign when it has no value');
+end;
+
+procedure TIdSipParameterTestCase.TestEquals;
+const
+  OtherName  = 'baz';
+  OtherValue = 'quaax';
+var
+  Other: TIdSipParameter;
+begin
+  Other := Self.CreateParameter;
+  try
+    Self.P.Name  := 'foo';
+    Self.P.Value := 'bar';
+    Other.Name   := OtherName;
+    Other.Value  := OtherValue;
+
+    Check(not Other.Equals(Self.P), 'Different name and value');
+
+    Other.Value := Self.P.Value;
+    Check(not Other.Equals(Self.P), 'Different name, same value');
+
+    Other.Name := Self.P.Name;
+    Check(Other.Equals(Self.P), 'Same name, same value');
+
+    Other.Name := OtherName;
+    Check(not Other.Equals(Self.P), 'Same name, different value');
+
+    Other.Name := Uppercase(Self.P.Name);
+    Other.Value := Uppercase(Self.P.Value);
+    Check(Other.Equals(Self.P), 'Same name, same value, different case');
+
+    Self.P.Value := '';
+    Other.Value := Self.P.Value;
+    Check(Other.Equals(Self.P), 'Same name, different case, no value');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TIdSipParameterTestCase.TestName;
+const
+  NewName = 'foo';
+begin
+  CheckNotEquals(NewName,
+                 Self.P.Name,
+                 'Sanity check: an uninitialised parameter should a name of '
+               + 'the empty string');
+  Self.P.Name := NewName;
+  CheckEquals(NewName,
+              Self.P.Name,
+              'Name not set');
+end;
+
+procedure TIdSipParameterTestCase.TestValue;
+begin
+  Fail('You must override this method in ' + Self.ClassName);
+end;
+
+//******************************************************************************
+//* TestTIdSipParameter                                                        *
+//******************************************************************************
+//* TestTIdSipParameter Protected methods **************************************
+
+function TestTIdSipParameter.CreateParameter: TIdSipParameter;
+begin
+  Result := TIdSipParameter.Create;
+end;
+
+//* TestTIdSipParameter Published methods **************************************
+
+procedure TestTIdSipParameter.TestAsHeaderParameter;
+const
+  ParamName     = 'foo';
+  ParamValue    = 'bar';
+begin
+  Self.P.Name  := ParamName;
+  Self.P.Value := ParamValue;
+
+  CheckEquals(ParamName + '=' + ParamValue,
+              Self.P.AsHeaderParameter,
+              'Normal parameter');
+
+  Self.P.Value := '\"/';
+  CheckEquals(ParamName + '="\\\"/"',
+              Self.P.AsHeaderParameter,
+              'Parameter with characters needing escaping');
+end;
+
+procedure TestTIdSipParameter.TestAsString;
+const
+  ParamName     = 'foo';
+  ParamValue    = 'bar';
+  ParamAsString = ParamName + '=' + ParamValue;
+begin
+  Self.P.Name  := ParamName;
+  Self.P.Value := ParamValue;
+
+  CheckEquals(ParamAsString,
+              Self.P.AsString,
+              'AsString');
+end;
+
+procedure TestTIdSipParameter.TestAsStringWithEscapedCharacters;
+const
+  EscapedCharValue = 'bar;';
+  ParamFoo         = 'foo';
+begin
+  Self.P.Name  := ParamFoo;
+  Self.P.Value := EscapedCharValue;
+
+  CheckEquals(Self.P.Name + '=' + TIdSipUri.ParameterEncode(Self.P.Value),
+              Self.P.AsString,
+              'Parameter not correctly encoded');
+end;
+
+procedure TestTIdSipParameter.TestAsUriParameter;
+const
+  ParamName     = 'foo';
+  ParamValue    = 'bar';
+begin
+  Self.P.Name  := ParamName;
+  Self.P.Value := ParamValue;
+
+  CheckEquals(ParamName + '=' + ParamValue,
+              Self.P.AsUriParameter,
+              'Normal parameter');
+
+  Self.P.Value := '\"/';
+  CheckEquals(ParamName + '=%5C%22/',
+              Self.P.AsUriParameter,
+              'Parameter with characters needing escaping');
+end;
+
+procedure TestTIdSipParameter.TestValue;
+const
+  NewValue = 'foo';
+begin
+  CheckNotEquals(NewValue,
+                 Self.P.Value,
+                 'Sanity check: an uninitialised parameter should a value of '
+               + 'the empty string');
+  Self.P.Value := NewValue;
+  CheckEquals(NewValue,
+              Self.P.Value,
+              'Value not set');
+end;
+
+//******************************************************************************
+//* TestTIdSipQuotedStringParameter                                            *
+//******************************************************************************
+//* TestTIdSipQuotedStringParameter Protected methods **************************
+
+function TestTIdSipQuotedStringParameter.CreateParameter: TIdSipParameter;
+begin
+  Result := TIdSipQuotedStringParameter.Create;
+end;
+
+//* TestTIdSipQuotedStringParameter Published methods **************************
+
+procedure TestTIdSipQuotedStringParameter.TestAsHeaderParameter;
+const
+  ParamValue = 'bar';
+begin
+  Self.P.Name := 'foo';
+  Self.P.Value := ParamValue;
+
+  CheckEquals(Self.P.Name + '="'
+            + TIdSipContactHeader.EncodeQuotedStr(Self.P.Value) + '"',
+              Self.P.AsHeaderParameter,
+              'quoted-string incorrectly encoded');
+end;
+
+procedure TestTIdSipQuotedStringParameter.TestAsString;
+const
+  ParamValue = '"bar"';
+begin
+  Self.P.Name := 'foo';
+  Self.P.Value := ParamValue;
+
+  CheckEquals(Self.P.Name + '="'
+            + TIdSipContactHeader.EncodeQuotedStr(Self.P.Value) + '"',
+              Self.P.AsString,
+              'quoted-string incorrectly encoded');
+end;
+
+procedure TestTIdSipQuotedStringParameter.TestValue;
+const
+  ParamValue = '"bar"';
+begin
+  Self.P.Name  := 'foo';
+  Self.P.Value := ParamValue;
+
+  CheckEquals(ParamValue,
+              Self.P.Value,
+              'Parameter needs to keep its quotes');
+end;
+
+//******************************************************************************
+//* TIdSipParametersTestCase                                                   *
+//******************************************************************************
+//* TIdSipParametersTestCase Public methods ************************************
+
+procedure TIdSipParametersTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Params := Self.CreateParameters;
+end;
+
+procedure TIdSipParametersTestCase.TearDown;
+begin
+  Self.Params.Free;
+
+  inherited TearDown;
+end;
+
+//* TIdSipParametersTestCase Protected methods *********************************
+
+function TIdSipParametersTestCase.CreateParameters: TIdSipParameters;
+begin
+  Result := nil;
+  Fail(Self.ClassName + ' MUST override CreateParameters');
+end;
+
+//* TIdSipParametersTestCase Published methods *********************************
+
+procedure TIdSipParametersTestCase.TestAddParamTypeDependsOnNameParameter;
+begin
+  CheckEquals(TIdSipParameter.ClassName,
+              Self.Params.AddParam('unknownparam', '').ClassName,
+              'unknownparam type');
+  CheckEquals(TIdSipQuotedStringParameter.ClassName,
+              Self.Params.AddParam(GruuParam, '').ClassName,
+              GruuParam + ' type');
+end;
+
+procedure TIdSipParametersTestCase.TestAddParamAndHasParam;
+begin
+  Check(not Self.Params.HasParam(GruuParam),
+        'Sanity check: an empty parameter list shouldn''t have a "gruu" parameter');
+
+  Self.Params.AddParam(GruuParam, 'sip:wintermute@tessier-ashpool.co.luna;opaque=foofoo');
+
+  Check(Self.Params.HasParam(GruuParam),
+        'Parameter not added');
+end;
+
+procedure TIdSipParametersTestCase.TestAdd;
+const
+  Param1      = 'foo';
+  Param2      = 'bar';
+  ParamValue1 = '1';
+  ParamValue2 = '2';
+var
+  Other: TIdSipParameters;
+begin
+  Self.Params.AddParam(Param1, ParamValue1);
+  Self.Params.AddParam(Param2, ParamValue2);
+
+  Other := TIdSipParameters.Create;
+  try
+    Other.Add(Self.Params);
+
+    Check(Other.Equals(Self.Params),
+          'Add didn''t add all parameters');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TIdSipParametersTestCase.TestAssign;
+const
+  Param1      = 'foo';
+  Param2      = 'bar';
+  ParamValue1 = '1';
+  ParamValue2 = '2';
+var
+  Other: TIdSipParameters;
+begin
+  Self.Params.AddParam(Param1, ParamValue1);
+  Self.Params.AddParam(Param2, ParamValue2);
+
+  Other := TIdSipParameters.Create;
+  try
+    Other.Assign(Self.Params);
+
+    Check(Other.Equals(Self.Params),
+          'Assign didn''t add all parameters');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TIdSipParametersTestCase.TestAssignToNonEmptyList;
+const
+  Param1      = 'foo';
+  Param2      = 'bar';
+  ParamValue1 = '1';
+  ParamValue2 = '2';
+var
+  Other: TIdSipParameters;
+begin
+  Other := TIdSipParameters.Create;
+  try
+    Self.Params.AddParam(Param1, ParamValue1);
+    Other.AddParam(Param2, ParamValue2);
+      
+    Other.Assign(Self.Params);
+
+    Check(not Other.HasParam(Param2),
+          'Assign didn''t clear out existing parameters'); 
+    Check(Other.Equals(Self.Params),
+          'Assign didn''t add all parameters');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TIdSipParametersTestCase.TestAsString;
+begin
+  Fail(Self.ClassName + ' MUST override TestAsString');
+end;
+
+procedure TIdSipParametersTestCase.TestClear;
+begin
+  Self.Params.AddParam(GruuParam, 'sip:wintermute@tessier-ashpool.co.luna;opaque=foofoo');
+  Self.Params.AddParam(SipInstanceParam, '<urn:foo:bar>');
+
+  Self.Params.Clear;
+  Check(not Self.Params.HasParam(GruuParam),
+        'Clear didn''t remove the "' + GruuParam + '" parameter');
+  Check(not Self.Params.HasParam(SipInstanceParam),
+        'Clear didn''t remove the "' + SipInstanceParam + '" parameter');
+end;
+
+procedure TIdSipParametersTestCase.TestCount;
+begin
+  CheckEquals(0, Self.Params.Count, 'Empty list');
+
+  Self.Params.AddParam('foo', '');
+  CheckEquals(1, Self.Params.Count, 'One Add');
+
+  Self.Params.AddParam('bar', '');
+  CheckEquals(2, Self.Params.Count, 'Two Adds');
+end;
+
+procedure TIdSipParametersTestCase.TestDoubleAdd;
+const
+  Param    = 'foo';
+  OldValue = 'bar';
+  NewValue = 'baz';
+begin
+  Self.Params.AddParam(Param, OldValue);
+  Self.Params.AddParam(Param, NewValue);
+
+  CheckEquals(OldValue,
+              Self.Params.ParamValue(Param),
+              'New value overwrite the old value');
+  Check(Self.Params.HasDuplicatedParameter(Param),
+        'Duplicate param not added, even though this typically renders the '
+      + 'parameter list malformed');
+end;
+
+procedure TIdSipParametersTestCase.TestEquals;
+const
+  Param1      = 'foo';
+  Param2      = 'bar';
+  Param3      = 'baz';
+  Param4      = 'quaax';
+  ParamValue1 = '1';
+  ParamValue2 = '2';
+  ParamValue3 = '3';
+  ParamValue4 = '4';
+var
+  Other: TIdSipParameters;
+begin
+  Other := TIdSipParameters.Create;
+  try
+    Check(Self.Params.Equals(Other), 'Params <> Other; empty lists');
+    Check(Other.Equals(Self.Params), 'Other <> Params; empty lists');
+
+    Self.Params.AddParam(Param1, ParamValue1);
+    Self.Params.AddParam(Param2, ParamValue2);
+
+    Other.AddParam(Param1, ParamValue1);
+    Other.AddParam(Param2, ParamValue2);
+
+    Check(Self.Params.Equals(Other), 'Params <> Other; non-empty, identical lists');
+    Check(Other.Equals(Self.Params), 'Other <> Params; non-empty, identical lists');
+
+    Self.Params.AddParam(Param3, ParamValue3);
+    Check(not Self.Params.Equals(Other),
+          'Params = Other; Params has an extra parameter');
+    Check(not Other.Equals(Self.Params),
+          'Other = Params; Params has an extra parameter');
+
+    Other.AddParam(Param3, ParamValue3);
+    Check(Self.Params.Equals(Other),
+          'Params <> Other; Other has the extra parameter too');
+    Check(Other.Equals(Self.Params),
+          'Other <> Params; Other has the extra parameter too');
+
+    Other.AddParam(Param4, ParamValue4);
+    Check(not Self.Params.Equals(Other),
+          'Params = Other; Other has an extra parameter');
+    Check(not Other.Equals(Self.Params),
+          'Other = Params; Other has an extra parameter');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TIdSipParametersTestCase.TestHasParam;
+begin
+  Self.Params.AddParam(GruuParam, 'sip:wintermute@tessier-ashpool.co.luna;opaque=foofoo');
+
+  Check(Self.Params.HasParam(GruuParam),
+        'Actual parameter name');
+  Check(Self.Params.HasParam(Uppercase(GruuParam)),
+        'Uppercased parameter name');
+end;
+
+procedure TIdSipParametersTestCase.TestParameterTypes;
+begin
+  CheckEquals(TIdSipQuotedStringParameter.ClassName,
+              Self.Params.AddParam(GruuParam, '').ClassName,
+              GruuParam);
+  CheckEquals(TIdSipQuotedStringParameter.ClassName,
+              Self.Params.AddParam(SipInstanceParam, '').ClassName,
+              SipInstanceParam);
+end;
+
+procedure TIdSipParametersTestCase.TestParamValue;
+const
+  ParamName  = 'foo';
+  ParamValue = 'bar';
+begin
+  Self.Params.AddParam(ParamName + '1', ParamValue + '1');
+  Self.Params.AddParam(ParamName,       ParamValue);
+  Self.Params.AddParam(ParamName + '2', ParamValue + '2');
+
+  CheckEquals(ParamValue,
+              Self.Params.ParamValue(ParamName),
+              'ParamValue');
+
+  CheckEquals('',
+              Self.Params.ParamValue('unknownparam'),
+              'Non-existent parameter');
+end;
+
+procedure TIdSipParametersTestCase.TestRemoveParameter;
+const
+  ParamName  = 'foo';
+  ParamValue = 'bar';
+begin
+  Self.Params.AddParam(ParamName, ParamValue);
+
+  Self.Params.RemoveParameter(ParamName);
+  Check(not Self.Params.HasParam(ParamName),
+        'Parameter not removed');
+end;
+
+procedure TIdSipParametersTestCase.TestRemoveParameterParameterMissing;
+const
+  ParamName  = 'foo';
+begin
+  Check(not Self.Params.HasParam(ParamName),
+        'Sanity check: the parameter should be empty');
+
+  // Check that trying to remove a non-extant parameter doesn't raise an
+  // exception.
+  Self.Params.RemoveParameter(ParamName);
+end;
+
+procedure TIdSipParametersTestCase.TestIntersectionEquals;
+const
+  Param1 = 'foo'; ParamValue1 = '1';
+  Param2 = 'bar'; ParamValue2 = '2';
+var
+  Other: TIdSipParameters;
+begin
+  Other := TIdSipParameters.Create;
+  try
+    Check(Self.Params.IntersectionEquals(Other), 'Empty lists (Params)');
+    Check(Other.IntersectionEquals(Self.Params), 'Empty lists (Other');
+
+    Self.Params.AddParam(Param1, ParamValue1);
+    Check(Self.Params.IntersectionEquals(Other), 'Other is empty (Params)');
+    Check(Other.IntersectionEquals(Self.Params), 'Other is empty (Other)');
+
+    Other.AddParam(Param2, ParamValue2);
+    Check(Self.Params.IntersectionEquals(Other),
+          'Parameter intersection empty (Params)');
+    Check(Other.IntersectionEquals(Self.Params),
+          'Parameter intersection empty (Other)');
+
+    Other.AddParam(Param1, ParamValue1 + '1');
+    Check(not Self.Params.IntersectionEquals(Other),
+          'Other has a differing param (Params)');
+    Check(not Other.IntersectionEquals(Self.Params),
+          'Other has a differing param (Other)');
+  finally
+    Other.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipHeaderParameters                                                 *
+//******************************************************************************
+//* TestTIdSipHeaderParameters Protected methods *******************************
+
+function TestTIdSipHeaderParameters.CreateParameters: TIdSipParameters;
+begin
+  Result := TIdSipHeaderParameters.Create;
+end;
+
+//* TestTIdSipHeaderParameters Published methods *******************************
+
+procedure TestTIdSipHeaderParameters.TestAsString;
+begin
+  Self.Params['branch'] := 'z9hG4bK776asdhds';
+  Self.Params['ttl']    := '5';
+  Self.Params['foo']    := 'foo bar\';
+
+  CheckEquals(';branch=z9hG4bK776asdhds;ttl=5;foo="foo bar\\"',
+              Self.Params.AsString,
+              'AsString');
+end;
+
+procedure TestTIdSipHeaderParameters.TestParse;
+begin
+  Self.Params.Parse('');
+  CheckEquals(0, Self.Params.Count, 'Empty string means no parameters');
+
+  Self.Params.AddParam('foo', 'bar');
+  Self.Params.Parse('');
+  CheckEquals(0,
+              Self.Params.Count,
+              'Parse removes any old parameters');
+end;
+
+procedure TestTIdSipHeaderParameters.TestParseMalformedQuotedString;
+begin
+  try
+    Self.Params.Parse(';gruu="sip:wintermute@tessier-ashpool.co.luna');
+    Fail('Failed to bail out on parameter list with malformed quoted-string: no closing quote');
+  except
+    on EBadHeader do;
+  end;
+
+  try
+    Self.Params.Parse(';gruu="sip:wintermute@tessier-ashpool.co.luna\"');
+    Fail('Failed to bail out on parameter list with malformed quoted-string: closing quote is escaped');
+  except
+    on EBadHeader do;
+  end;
+end;
+
+procedure TestTIdSipHeaderParameters.TestParseMissingValue;
+begin
+  try
+    Self.Params.Parse(';q=');
+    Fail('Failed to bail out on parameter with missing value');
+  except
+    on EBadHeader do;
+  end;
+end;
+
+procedure TestTIdSipHeaderParameters.TestParseMultipleParameters;
+const
+  Param1 = 'foo'; ParamValue1 = '1';
+  Param2 = 'bar'; ParamValue2 = '2';
+  Param3 = 'baz'; ParamValue3 = '3';
+begin
+  Self.Params.Parse(Param1 + '=' + ParamValue1 + ';'
+                                    + Param2 + '=' + ParamValue2 + ';'
+                                    + Param3 + '=' + ParamValue3);
+
+  CheckEquals(3, Self.Params.Count, 'Number of parameters');
+
+  Check(Self.Params.HasParam(Param1), '"' + Param1 + '" not added');
+  CheckEquals(ParamValue1, Self.Params[Param1], '"' + Param1 + '" value');
+
+  Check(Self.Params.HasParam(Param2), '"' + Param2 + '" not added');
+  CheckEquals(ParamValue2, Self.Params[Param2], '"' + Param2 + '" value');
+
+  Check(Self.Params.HasParam(Param3), '"' + Param3 + '" not added');
+  CheckEquals(ParamValue3, Self.Params[Param3], '"' + Param3 + '" value');
+end;
+
+procedure TestTIdSipHeaderParameters.TestParseNoNameNoValue;
+begin
+  try
+    Self.Params.Parse(';;,;');
+    Fail('Failed to bail out of parsing malformed parameter list');
+  except
+    on EBadHeader do;
+  end;
+end;
+
+procedure TestTIdSipHeaderParameters.TestParseQuotedString;
+const
+  ParamName  = 'foo';
+  ParamValue = '\"<urn:foo:bar>\"';
+var
+  DecodedParamValue: String;
+begin
+  Check(DecodeQuotedStr(ParamValue, DecodedParamValue),
+        'Sanity check: ParamValue must contain a valid quoted-string');
+
+  Self.Params.Parse(';' + ParamName + '="' + ParamValue + '"');
+
+  Check(Self.Params.HasParam(ParamName),
+        '"' + ParamName + '" not added');
+  CheckEquals(DecodedParamValue,
+              Self.Params[ParamName],
+              '"' + ParamName + '" value');
+  CheckEquals(1,
+              Self.Params.Count,
+              'Number of parameters');
+end;
+
+procedure TestTIdSipHeaderParameters.TestParseQuotedStringContainsSemicolon;
+const
+  ParamName  = 'gruu';
+  ParamValue = 'sip:wintermute@tessier-ashpool.co.luna;opaque=foo';
+begin
+  Self.Params.Parse(';' + ParamName + '="' + ParamValue + '"');
+
+  Check(Self.Params.HasParam(ParamName),
+        '"' + ParamName + '" not added');
+  CheckEquals(ParamValue,
+              Self.Params[ParamName],
+              '"' + ParamName + '" value');
+  CheckEquals(1,
+              Self.Params.Count,
+              'Number of parameters');
+end;
+
+procedure TestTIdSipHeaderParameters.TestParseSimple;
+const
+  ParamName  = 'foo';
+  ParamValue = 'bar';
+begin
+  Self.Params.Parse(';' + ParamName + '=' + ParamValue);
+
+  Check(Self.Params.HasParam(ParamName),
+        '"' + ParamName + '" not added');
+  CheckEquals(ParamValue,
+              Self.Params[ParamName],
+              '"' + ParamName + '" value');
+  CheckEquals(1,
+              Self.Params.Count,
+              'Number of parameters');
+end;
+
+procedure TestTIdSipHeaderParameters.TestParseTorture;
+const
+  TortureParams = ';gruu="\"Wintermute\" <sip:wintermute@tessier-ashpool.co.luna";foo;bar="\\;\"";foo';
+begin
+  Self.Params.Parse(TortureParams);
+
+  Check(Self.Params.HasParam('gruu'),
+        '"gruu" parameter not added');
+  CheckEquals('"Wintermute" <sip:wintermute@tessier-ashpool.co.luna',
+              Self.Params['gruu'],
+              '"gruu" parameter value');
+  Check(Self.Params.HasParam('foo'),
+        '"foo" parameter not added');
+  Check(Self.Params.HasDuplicatedParameter('foo'),
+        'Duplicate (and erroneous) "foo" parameter not added');
+  CheckEquals('',
+              Self.Params['foo'],
+              '"foo" parameter value');
+  Check(Self.Params.HasParam('bar'),
+        '"bar" parameter not added');
+   CheckEquals('\;"',
+               Self.Params['bar'],
+               '"bar" parameter');
+end;
+
+procedure TestTIdSipHeaderParameters.TestParseValuelessParameter;
+const
+  ParamName = 'foo';
+begin
+  Self.Params.Parse(';' + ParamName);
+
+  Check(Self.Params.HasParam(ParamName),
+        '"' + ParamName + '" not added');
+  CheckEquals('',
+              Self.Params[ParamName],
+              '"' + ParamName + '" value');
+  CheckEquals(1,
+              Self.Params.Count,
+              'Number of parameters');
+end;
+
+procedure TestTIdSipHeaderParameters.TestParseWithWhitespace;
+begin
+  Self.Params.Parse(' ; foo = bar ');
+
+  Check(Self.Params.HasParam('foo'),
+        '"foo" parameter not added');
+  CheckEquals('bar',
+              Self.Params['foo'],
+              '"foo" parameter value');
+end;
+
+//******************************************************************************
+//* TestTIdSipUriParameters                                                    *
+//******************************************************************************
+//* TestTIdSipUriParameters Protected methods **********************************
+
+function TestTIdSipUriParameters.CreateParameters: TIdSipParameters;
+begin
+  Result := TIdSipUriParameters.Create;
+end;
+
+//* TestTIdSipUriParameters Published methods **********************************
+
+procedure TestTIdSipUriParameters.TestAsString;
+begin
+  Self.Params['branch'] := 'z9hG4bK776asdhds';
+  Self.Params['ttl']    := '5';
+  Self.Params['foo']    := 'foo bar\';
+
+  CheckEquals(';branch=z9hG4bK776asdhds;ttl=5;foo=foo%20bar%5C',
+              Self.Params.AsString,
+              'AsString');
 end;
 
 //******************************************************************************
@@ -1222,18 +2100,6 @@ begin
   Check(Self.H.HasParam('foo'), 'Some non-foo and foo params');
 end;
 
-procedure TestTIdSipHeader.TestIndexOfParam;
-begin
-  CheckEquals(-1, Self.H.IndexOfParam('branch'), 'Index of non-existent param');
-
-  Self.H.Params['branch'] := 'z9hG4bK776asdhds';
-  CheckEquals(0, Self.H.IndexOfParam('branch'), 'Index of 1st param');
-
-  Self.H.Params['ttl']    := '5';
-  CheckEquals(0, Self.H.IndexOfParam('branch'), 'Index of 1st param; paranoia check');
-  CheckEquals(1, Self.H.IndexOfParam('ttl'),    'Index of 2nd param');
-end;
-
 procedure TestTIdSipHeader.TestEquals;
 var
   Header: TIdSipHeader;
@@ -1323,10 +2189,10 @@ end;
 
 procedure TestTIdSipHeader.TestValueWithQuotedParams;
 begin
-  Self.H.Value := 'Fighters;branch="haha"';
-  CheckEquals(';branch=haha',
+  Self.H.Value := 'Fighters;foo="haha"';
+  CheckEquals(';foo=haha',
               Self.H.ParamsAsString,
-              'Parameters not cleared');
+              'Quotes not cleared');
 end;
 
 procedure TestTIdSipHeader.TestUnparsedValue;
@@ -1407,8 +2273,8 @@ begin
               Self.A.AsString,
               'AsString, display-name with quoted-pair + parameters');
 
-  Self.A.Value := 'Count Zero <sip:countzero@jacks-bar.com;paranoid>;very';
-  CheckEquals(Self.A.Name + ': Count Zero <sip:countzero@jacks-bar.com;paranoid>;very',
+  Self.A.Value := '"Count Zero" <sip:countzero@jacks-bar.com;paranoid>;very';
+  CheckEquals(Self.A.Name + ': "Count Zero" <sip:countzero@jacks-bar.com;paranoid>;very',
               Self.A.AsString,
               'AsString, display-name, and URI and header have parameters');
 
@@ -1419,6 +2285,19 @@ begin
   CheckEquals(Self.A.Name + ': "Bell, Alexander" <sip:a.g.bell@bell-tel.com>;tag=43',
               Self.A.AsString,
               'AsString, display-name with comma');
+end;
+
+procedure TestTIdSipAddressHeader.TestAsCanonicalAddress;
+var
+  URN: String;
+begin
+  URN := '<urn:uuid:' + ConstructUUID + '>';
+
+  Self.A.Value := '"Count Zero" <sip:countzero:foo@jacks-bar.com;method=INVITE>;+sip.instance="' + URN + '>";expires=10';
+
+  CheckEquals('"Count Zero" <sip:countzero@jacks-bar.com>;+sip.instance="' + URN + '>"',
+              Self.A.AsCanonicalAddress,
+              'AsCanonicalAddress');
 end;
 
 procedure TestTIdSipAddressHeader.TestAsToHeader;
@@ -1437,6 +2316,21 @@ begin
   finally
     ToHeader.Free;
   end;
+end;
+
+procedure TestTIdSipAddressHeader.TestGrid;
+const
+  GridValue    = '1234';
+  NewGridValue = '5678';
+begin
+  Self.A.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna;grid=' + GridValue + '>';
+  CheckEquals(GridValue, Self.A.Grid, 'Grid set by Value');
+
+  Self.A.Grid := NewGridValue;
+  CheckEquals(NewGridValue, Self.A.Grid, 'Grid property set');
+
+  Self.A.Address.Grid := GridValue;
+  CheckEquals(GridValue, Self.A.Grid, 'Grid property of Address set');
 end;
 
 procedure TestTIdSipAddressHeader.TestHasSipsUri;
@@ -1483,14 +2377,17 @@ begin
   CheckEquals('sip:wintermute@tessier-ashpool.co.luna', Self.A.Value,          'Value');
 end;
 
-procedure TestTIdSipAddressHeader.TestValueFolded;
+procedure TestTIdSipAddressHeader.TestValueEmptyString;
 begin
-  Self.A.Value := 'Wintermute'#13#10' <sip:wintermute@tessier-ashpool.co.luna>';
+  Self.A.Value := '';
+  Check(Self.A.IsMalformed, 'Header not marked as malformed');
+end;
 
-  CheckEquals('sip:wintermute@tessier-ashpool.co.luna',              Self.A.Address.URI,    'Address');
-  CheckEquals('Wintermute',                                        Self.A.DisplayName,    'DisplayName');
-  CheckEquals('',                                                  Self.A.ParamsAsString, 'Params');
-  CheckEquals('Wintermute <sip:wintermute@tessier-ashpool.co.luna>', Self.A.Value,          'Value');
+procedure TestTIdSipAddressHeader.TestValueMissingScheme;
+begin
+  Self.A.Value := 'wintermute@tessier-ashpool.co.luna';
+  Check(Self.A.IsMalformed,
+        'Header not marked as malformed when URI has no scheme');
 end;
 
 procedure TestTIdSipAddressHeader.TestValueWithBlankQuotedName;
@@ -1498,8 +2395,8 @@ begin
   Self.A.Value := '"" <sip:wintermute@tessier-ashpool.co.luna>';
 
   CheckEquals('sip:wintermute@tessier-ashpool.co.luna',  Self.A.Address.URI,    'Address');
-  CheckEquals('',                                      Self.A.DisplayName,    'DisplayName');
-  CheckEquals('',                                      Self.A.ParamsAsString, 'Params');
+  CheckEquals('',                                        Self.A.DisplayName,    'DisplayName');
+  CheckEquals('',                                        Self.A.ParamsAsString, 'Params');
   CheckEquals('sip:wintermute@tessier-ashpool.co.luna',  Self.A.Value,          'Value');
 end;
 
@@ -1577,8 +2474,8 @@ begin
   Self.A.Value := 'sip:wintermute@tessier-ashpool.co.luna;hidden';
 
   CheckEquals('sip:wintermute@tessier-ashpool.co.luna', Self.A.Address.URI,    'Address');
-  CheckEquals('',                                     Self.A.DisplayName,    'Name');
-  CheckEquals(';hidden',                              Self.A.ParamsAsString, 'Params');
+  CheckEquals('',                                       Self.A.DisplayName,    'Name');
+  CheckEquals(';hidden',                                Self.A.ParamsAsString, 'Params');
 end;
 
 procedure TestTIdSipAddressHeader.TestValueWithQuotedName;
@@ -1586,47 +2483,44 @@ begin
   Self.A.Value := '"Wintermute" <sip:wintermute@tessier-ashpool.co.luna>';
 
   CheckEquals('sip:wintermute@tessier-ashpool.co.luna',              Self.A.Address.URI,    '1: Address');
-  CheckEquals('Wintermute',                                        Self.A.DisplayName,    '1: Name');
-  CheckEquals('',                                                  Self.A.ParamsAsString, '1: Params');
+  CheckEquals('Wintermute',                                          Self.A.DisplayName,    '1: Name');
+  CheckEquals('',                                                    Self.A.ParamsAsString, '1: Params');
   CheckEquals('Wintermute <sip:wintermute@tessier-ashpool.co.luna>', Self.A.Value,          '1: Value');
 
   Self.A.Value := '"Count Zero" <sip:countzero@jacks-bar.com>';
 
-  CheckEquals('sip:countzero@jacks-bar.com',                Self.A.Address.URI,    '2: Address');
-  CheckEquals('Count Zero',                                 Self.A.DisplayName,    '2: Name');
-  CheckEquals('',                                           Self.A.ParamsAsString, '2: Params');
-  CheckEquals('Count Zero <sip:countzero@jacks-bar.com>',   Self.A.Value,          '2: Value');
+  CheckEquals('sip:countzero@jacks-bar.com',                  Self.A.Address.URI,    '2: Address');
+  CheckEquals('Count Zero',                                   Self.A.DisplayName,    '2: Name');
+  CheckEquals('',                                             Self.A.ParamsAsString, '2: Params');
+  CheckEquals('"Count Zero" <sip:countzero@jacks-bar.com>',   Self.A.Value,          '2: Value');
 
 end;
 
-procedure TestTIdSipAddressHeader.TestValueWithSpace;
+procedure TestTIdSipAddressHeader.TestValueWithSpaceInDisplayName;
 begin
   Self.A.Value := 'Count Zero <sip:countzero@jacks-bar.com>';
-  CheckEquals('sip:countzero@jacks-bar.com',              Self.A.Address.URI,    'Address');
-  CheckEquals('Count Zero',                               Self.A.DisplayName,    'Name');
-  CheckEquals('',                                         Self.A.ParamsAsString, 'Params');
-  CheckEquals('Count Zero <sip:countzero@jacks-bar.com>', Self.A.Value,          'Value');
+  CheckEquals('sip:countzero@jacks-bar.com',                Self.A.Address.URI,    'Address');
+  CheckEquals('Count Zero',                                 Self.A.DisplayName,    'Name');
+  CheckEquals('',                                           Self.A.ParamsAsString, 'Params');
+  CheckEquals('"Count Zero" <sip:countzero@jacks-bar.com>', Self.A.Value,          'Value');
 end;
 
 procedure TestTIdSipAddressHeader.TestValueWithSpecialChars;
 begin
   Self.A.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna;tag=f00';
   CheckEquals('sip:wintermute@tessier-ashpool.co.luna;tag=f00',   Self.A.Address.URI,    ';:Address');
-  CheckEquals('',                                               Self.A.DisplayName,    ';: Name');
-  CheckEquals('',                                               Self.A.ParamsAsString, ';: Params');
+  CheckEquals('',                                                 Self.A.DisplayName,    ';: Name');
+  CheckEquals('',                                                 Self.A.ParamsAsString, ';: Params');
   CheckEquals('<sip:wintermute@tessier-ashpool.co.luna;tag=f00>', Self.A.Value,          ';: Value');
 
-  Self.A.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna,tag=f00';
-  CheckEquals('sip:wintermute@tessier-ashpool.co.luna,tag=f00',   Self.A.Address.URI,    ',:Address');
-  CheckEquals('',                                               Self.A.DisplayName,    ',: Name');
-  CheckEquals('',                                               Self.A.ParamsAsString, ',: Params');
-  CheckEquals('<sip:wintermute@tessier-ashpool.co.luna,tag=f00>', Self.A.Value,          ',: Value');
-
-  Self.A.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna?tag=f00';
+  Self.A.Value := 'sip:wintermute@tessier-ashpool.co.luna?tag=f00';
   CheckEquals('sip:wintermute@tessier-ashpool.co.luna?tag=f00',   Self.A.Address.URI,    '?:Address');
-  CheckEquals('',                                               Self.A.DisplayName,    '?: Name');
-  CheckEquals('',                                               Self.A.ParamsAsString, '?: Params');
+  CheckEquals('',                                                 Self.A.DisplayName,    '?: Name');
+  CheckEquals('',                                                 Self.A.ParamsAsString, '?: Params');
   CheckEquals('<sip:wintermute@tessier-ashpool.co.luna?tag=f00>', Self.A.Value,          '?: Value');
+
+  Self.A.Value := 'sip:wintermute@tessier-ashpool.co.luna,tag=f00';
+  Check(Self.A.IsMalformed, 'Header not marked as being malformed');
 end;
 
 procedure TestTIdSipAddressHeader.TestValueWithTrailingWhitespacePlusParam;
@@ -1639,10 +2533,37 @@ begin
 end;
 
 procedure TestTIdSipAddressHeader.TestValueWithUnquotedNonTokensPlusParam;
+const
+  DisplayName = 'Bell, Alexander';
+  URI         = 'sip:a.g.bell@bell-tel.com';
 begin
-  Self.A.Value := 'Bell, Alexander <sip:a.g.bell@bell-tel.com>;tag=43';
-  Check(Self.A.IsMalformed,
-        'Failed to bail out with unquoted non-tokens');
+  Self.A.Value := DisplayName + ' <' + URI + '>';
+
+  CheckEquals(DisplayName,
+              Self.A.DisplayName,
+              'display-name');
+  CheckEquals(URI,
+              Self.A.Address.URI,
+              'URI');
+
+  CheckEquals('"' + DisplayName + '" <' + URI + '>',
+              Self.A.Value,
+              'AsString');
+end;
+
+procedure TestTIdSipAddressHeader.TestValueWithQuotedURN;
+const
+  Address    = 'sip:wintermute@tessier-ashpool.co.luna.luna';
+  InstanceID = '<urn:uuid:00000000-0000-0000-0000-000000000000>';
+begin
+  Self.A.Value := Address + ';+sip.instance="' + InstanceID + '"';
+
+  CheckEquals(Address,
+              Self.A.Address.AsString,
+              'Address');
+  CheckEquals(InstanceID,
+              Self.A.Params[SipInstanceParam],
+              '"' + SipInstanceParam + '" value');
 end;
 
 //******************************************************************************
@@ -1875,6 +2796,20 @@ begin
             + 'paranoid="\\very"',
               Self.A.Value,
               'Value');
+end;
+
+procedure TestTIdSipAuthorizationHeader.TestHasParam;
+const
+  UnknownParam = 'foo';
+begin
+  Self.A.Nonce := 'foofoo';
+
+  Check(Self.A.HasParam(NonceParam),
+        'Header thinks it doesn''t have a ' + NonceParam + ' parameter');
+
+  Self.A.UnknownResponses[UnknownParam] := 'foo';
+  Check(Self.A.HasParam(NonceParam),
+        'Header thinks it doesn''t have a ' + UnknownParam + ' parameter');
 end;
 
 procedure TestTIdSipAuthorizationHeader.TestIsBasic;
@@ -2255,6 +3190,31 @@ begin
   CheckEquals(ContactWildCard, Self.C.Value, 'Value with star');
 end;
 
+procedure TestTIdSipContactHeader.TestGruu;
+const
+  FirstGruu  = 'sip:wintermute@tessier-ashpool.co.luna;opaque=foo';
+  SecondGruu = 'sip:wintermute@tessier-ashpool.co.luna;opaque=bar';
+  ThirdGruu  = 'sip:wintermute@tessier-ashpool.co.luna;opaque=baz';
+begin
+  Self.C.Gruu := FirstGruu;
+  CheckEquals(FirstGruu,
+              Self.C.Gruu,
+              FirstGruu);
+  CheckEquals(Self.C.Address.AsString + ';gruu="' + Self.C.Gruu + '"',
+              Self.C.FullValue,
+              'gruu param must be quoted');
+
+  Self.C.Gruu := SecondGruu;
+  CheckEquals(SecondGruu,
+              Self.C.Gruu,
+              SecondGruu);
+
+  Self.C.Value := 'sip:wintermute@tessier-ashpool.co.luna;gruu="' + ThirdGruu + '"';
+  CheckEquals(ThirdGruu,
+              Self.C.Gruu,
+              ThirdGruu);
+end;
+
 procedure TestTIdSipContactHeader.TestRemoveExpires;
 begin
   Self.C.RemoveExpires;
@@ -2313,6 +3273,20 @@ begin
         'Failed to bail out with empty string');
 end;
 
+procedure TestTIdSipContactHeader.TestValueInstanceID;
+const
+  ZeroURN = '<urn:uuid:00000000-0000-0000-0000-000000000000>';
+begin
+  Self.C.Value := '<sip:wintermute@tessier-ashpool.co.luna>;+sip.instance="<malformed-urn>"';
+  Check(Self.C.IsMalformed,
+        'Contact header not marked as malformed with an invalid sip.instance parameter');
+
+  Self.C.Value := '<sip:wintermute@tessier-ashpool.co.luna>;+sip.instance="' + ZeroURN + '"';
+  CheckEquals(ZeroURN,
+              Self.C.SipInstance,
+              'SipInstance');
+end;
+
 procedure TestTIdSipContactHeader.TestValueWithQ;
 begin
   Self.C.Value := 'sip:wintermute@tessier-ashpool.co.luna';
@@ -2361,7 +3335,25 @@ begin
         'Failed to bail out on number too big');
 end;
 
+procedure TestTIdSipContactHeader.TestValueWithParams;
+const
+  Address    = 'sip:wintermute@tessier-ashpool.co.luna';
+  ParamName  = 'foo';
+  ParamValue = 'bar';
+begin
+  Self.C.Value := Address + ';' + ParamName + '=' + ParamValue;
+
+  CheckEquals(Address, Self.C.Address.AsString, 'Address');
+  Check(Self.C.HasParam(ParamName),
+        'Param must belong to the HEADER, not the URI');
+  CheckEquals(ParamValue,
+              Self.C.Params[ParamName],
+              'Value of "' + ParamName + '"');
+end;
+
 procedure TestTIdSipContactHeader.TestValueWithStar;
+const
+  ExpireAllWithQ = '*;q=0.1';
 begin
   Self.C.Value := '*';
   Check(Self.C.IsWildCard, '*');
@@ -2369,9 +3361,12 @@ begin
   Self.C.Value := ContactWildCard;
   Check(Self.C.IsWildCard, 'ContactWildCard');
 
-  Self.C.Value := '*;q=0.1';
-  Check(Self.C.IsWildCard, '*;q=0.1');
-  CheckEquals(100, Self.C.Q, 'QValue');
+  Self.C.Value := ExpireAllWithQ;
+  Check(Self.C.IsWildCard, ExpireAllWithQ);
+  CheckEquals(100, Self.C.Q, 'QValue: ' + ExpireAllWithQ);
+  CheckEquals(ExpireAllWithQ,
+              Self.C.FullValue,
+              'Wildcard + parameters not parsed correctly');
 end;
 
 procedure TestTIdSipContactHeader.TestWillExpire;
@@ -3542,12 +4537,12 @@ end;
 procedure TRouteHeaderTestCase.TestValue;
 begin
   Self.R.Value := '<sip:127.0.0.1>';
-  CheckEquals('sip:127.0.0.1', Self.R.Address.URI, 'Address');
-  CheckEquals('',              Self.R.DisplayName, 'DisplayName');
+  CheckEquals('sip:127.0.0.1', Self.R.Address.URI, 'URI only: Address');
+  CheckEquals('',              Self.R.DisplayName, 'URI only: DisplayName');
 
   Self.R.Value := 'localhost <sip:127.0.0.1>';
-  CheckEquals('sip:127.0.0.1', Self.R.Address.URI, 'Address');
-  CheckEquals('localhost',     Self.R.DisplayName, 'DisplayName');
+  CheckEquals('sip:127.0.0.1', Self.R.Address.URI, 'display-name: Address');
+  CheckEquals('localhost',     Self.R.DisplayName, 'display-name: DisplayName');
 
   Self.R.Value := '';
   Check(Self.R.IsMalformed,
@@ -3693,6 +4688,24 @@ begin
 
   Check(Self.C.HasParam(FromTagParam), FromTagParam + ' removed');
   Check(Self.C.HasParam(ToTagParam),   ToTagParam + ' removed');
+end;
+
+procedure TestTIdSipParameteredCallIDHeader.TestValue;
+begin
+  Self.C.Value := 'foo;from-tag=bar;to-tag=baz';
+
+  CheckEquals('foo', Self.C.CallID, 'Call-ID');
+
+  Check(Self.C.HasParam(FromTagParam), 'No "' + FromTagParam + '"');
+  CheckEquals('bar',
+              Self.C.Params[FromTagParam],
+              '"' + FromTagParam + '" value');
+
+  Check(Self.C.HasParam(ToTagParam), 'No "' + ToTagParam + '"');
+  CheckEquals('bar',
+              Self.C.Params[ToTagParam],
+              '"' + ToTagParam + '" value');
+  CheckEquals(2, Self.C.ParamCount, 'Parameter count (' + Self.C.FullValue + ')');
 end;
 
 //******************************************************************************
@@ -5257,18 +6270,23 @@ begin
   Self.W.Value := 'text/plain;q=0.7;foo=bar';
   CheckEquals(1,            Self.W.ValueCount,                 '3: Count');
   CheckEquals(1,            Self.W.Values[0].Parameters.Count, '3: Parameter count');
-  CheckEquals('foo=bar',    Self.W.Values[0].Parameters[0],    '3: Parameters[0]');
+  Check(Self.W.Values[0].Parameters.HasParam('foo'),           '3: Parameter foo not added');
+  CheckEquals('bar',
+              Self.W.Values[0].Parameters.ParamValue('foo'),   '3: Parameter foo has incorrect value');
   CheckEquals('text/plain', Self.W.Values[0].Value,            '3: Value');
   CheckEquals(700,          Self.W.Values[0].Weight,           '3: Weight');
 
   Self.W.Value := 'text/plain;q=0.7;foo=bar, text/t140';
   CheckEquals(2,            Self.W.ValueCount,                 '4: Count');
   CheckEquals(1,            Self.W.Values[0].Parameters.Count, '4: [0].Parameter count');
-  CheckEquals('foo=bar',    Self.W.Values[0].Parameters[0],    '4: [0].Parameters[0]');
+
+  Check(Self.W.Values[0].Parameters.HasParam('foo'),           '4: [0] Parameter foo not added');
+  CheckEquals('bar',
+              Self.W.Values[0].Parameters.ParamValue('foo'),   '4: [0] Parameter foo has incorrect value');
   CheckEquals('text/plain', Self.W.Values[0].Value,            '4: [0].Value');
   CheckEquals(700,          Self.W.Values[0].Weight,           '4: [0].Weight');
 
-  CheckEquals(0,            Self.W.Values[1].Parameters.Count, '4: [0].Parameter count');
+  CheckEquals(0,            Self.W.Values[1].Parameters.Count, '4: [1].Parameter count');
   CheckEquals('text/t140',  Self.W.Values[1].Value,            '4: [1].Value');
   CheckEquals(1000,         Self.W.Values[1].Weight,           '4: [1].Weight');
 
@@ -5474,16 +6492,16 @@ begin
     try
       Check(Self.Filter.Equals(F), 'Empty path = Empty path');
 
-      H.Add(F.HeaderName).Value := '<127.0.0.1:1>';
+      H.Add(F.HeaderName).Value := '<sip:127.0.0.1:1>';
 
       Check(not Self.Filter.Equals(F), 'Empty path <> non-empty path');
 
-      H.Add(RouteHeader).Value := '<127.0.0.1:2>';
+      H.Add(RouteHeader).Value := '<sip:127.0.0.1:2>';
 
       Self.Filter.Add(F);
       Check(Self.Filter.Equals(F), 'Identical paths');
 
-      Self.Filter.Items[Self.Filter.Count - 1].Value := '<127.0.0.1:1>';
+      Self.Filter.Items[Self.Filter.Count - 1].Value := '<sip:127.0.0.1:1>';
       Check(not Self.Filter.Equals(F), 'Last header differs');
     finally
       F.Free;
@@ -5503,16 +6521,16 @@ begin
   try
     Check(Self.Filter.Equals(H), 'Empty set = Empty set');
 
-    H.Add(RouteHeader).Value := '<127.0.0.1:1>';
+    H.Add(RouteHeader).Value := '<sip:127.0.0.1:1>';
 
     Check(not Self.Filter.Equals(H), 'Empty set <> non-empty set');
 
-    H.Add(RouteHeader).Value := '<127.0.0.1:2>';
+    H.Add(RouteHeader).Value := '<sip:127.0.0.1:2>';
 
     Self.Filter.Add(H);
     Check(Self.Filter.Equals(H), 'Identical sets');
 
-    Self.Filter.Items[Self.Filter.Count - 1].Value := '<127.0.0.1:1>';
+    Self.Filter.Items[Self.Filter.Count - 1].Value := '<sip:127.0.0.1:1>';
     Check(not Self.Filter.Equals(H), 'Last header differs');
   finally
     H.Free;
@@ -5527,8 +6545,8 @@ begin
 
   H := TIdSipHeaders.Create;
   try
-    Self.Headers.Add(RouteHeader).Value := '<127.0.0.1:1>';
-    Self.Headers.Add(RouteHeader).Value := '<127.0.0.1:2>';
+    Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.1:1>';
+    Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.1:2>';
 
     H.AddInReverseOrder(Self.Filter);
 
@@ -6616,6 +7634,46 @@ begin
         'Second Contact');
 end;
 
+procedure TestTIdSipContacts.TestGruuFor;
+const
+  ArbAddress = 'sip:wintermute@tessier-ashpool.co.luna';
+  Gruu       = 'sip:wintermute@tessier-ashpool.co.luna;opaque=13';
+  InstanceID = '<urn:uuid:00000000-0000-0000-0000-000000000000>';
+var
+  Contact: TIdSipContactHeader;
+begin
+  Contact := TIdSipContactHeader.Create;
+  try
+    Contact.Address.Uri := ArbAddress;
+    Contact.SipInstance := InstanceID;
+    CheckEquals('', Self.Contacts.GruuFor(Contact), 'Empty set');
+
+    // A header for some UA other than Self.Core that happens to have the same
+    // +sip.instance value
+    Self.Contacts.Add(ContactHeaderFull).Value := ArbAddress + '.luna'
+                    + ';' + SipInstanceParam + '="' + InstanceID + '"'
+                    + ';' + GruuParam + '="' + Gruu + '1"';
+    CheckEquals('',
+                Self.Contacts.GruuFor(Contact),
+                'No Contact with that ' + SipInstanceParam  + ' found');
+
+    // Another UA for the same AOR as Self.Core, but with a different
+    // +sip.instance value
+    Self.Contacts.Add(ContactHeaderFull).Value := ArbAddress
+                    + ';' + SipInstanceParam + '="' + InstanceID + '1"'
+                    + ';' + GruuParam + '="' + Gruu + '"';
+
+    // Self.Core's binding
+    Self.Contacts.Add(ContactHeaderFull).Value := ArbAddress
+                    + ';' + SipInstanceParam + '="' + InstanceID + '"'
+                    + ';' + GruuParam + '="' + Gruu + '"';
+
+    CheckEquals(Gruu, Self.Contacts.GruuFor(Contact), 'Wrong contact');
+  finally
+    Contact.Free;
+  end;
+end;
+
 procedure TestTIdSipContacts.TestHasContact;
 var
   NewContact: TIdSipContactHeader;
@@ -6977,3 +8035,4 @@ end;
 initialization
   RegisterTest('SIP Message Headers', Suite);
 end.
+

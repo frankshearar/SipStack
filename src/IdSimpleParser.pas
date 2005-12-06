@@ -400,7 +400,7 @@ class procedure TIdIPAddressParser.ParseIPv6Address(const IPv6Address: String;
       W := Fetch(Chunk, IPv6Delim);
 
       if (Length(W) > 4) or not TIdSimpleParser.IsHexNumber(W) then
-        raise EConvertError.Create('');
+        raise EConvertError.Create('Invalid IPv6 double byte');
 
       Address[I] := HexToInt(W);
       Inc(WordCount);
@@ -418,6 +418,9 @@ class procedure TIdIPAddressParser.ParseIPv6Address(const IPv6Address: String;
       end
     end
     else begin
+      if (Length(Chunk) > 4) or not TIdSimpleParser.IsHexNumber(Chunk) then
+        raise EConvertError.Create('Invalid IPv6 double byte');
+
       Address[I] := HexToInt(Chunk);
       Inc(WordCount);
     end;

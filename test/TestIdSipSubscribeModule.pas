@@ -264,7 +264,7 @@ type
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
                                         Receiver: TIdSipTransport);
-    procedure OnInboundCall(UserAgent: TIdSipAbstractCore;
+    procedure OnInboundCall(UserAgent: TIdSipInviteModule;
                             Session: TIdSipInboundSession);
     procedure ReceiveNotify(const EventPackage: String);
     procedure ReceiveReferWithNoReferToHeader;
@@ -479,6 +479,7 @@ type
     procedure OnSubscriptionRequest(UserAgent: TIdSipAbstractCore;
                                     Subscription: TIdSipInboundSubscription); override;
     procedure ReceiveSubscribeRequest; virtual;
+    procedure ReceiveSubscribeRequestWithGruu; virtual;
   public
     procedure SetUp; override;
   published
@@ -490,6 +491,7 @@ type
     procedure TestIsRegistration; override;
     procedure TestIsSession; override;
     procedure TestNotify; virtual;
+    procedure TestNotifyWithGruu; virtual;
     procedure TestReceiveRequestSendsNotify;
   end;
 
@@ -514,6 +516,7 @@ type
 //    procedure RemoveExpiresWait(Timer: TIdDebugTimerQueue);
   protected
     procedure ReceiveSubscribeRequest; override;
+    procedure ReceiveSubscribeRequestWithGruu; override;
   public
     procedure SetUp; override;
   published
@@ -522,6 +525,7 @@ type
     procedure TestMatchInDialogSubscribe;
     procedure TestMatchResponse;
     procedure TestNotify; override;
+    procedure TestNotifyWithGruu; override;
     procedure TestReceiveExpiresInContactHeader;
     procedure TestReceiveExpiresTooShort;
 //    procedure TestReceiveOutOfOrderRefresh;
@@ -664,10 +668,12 @@ type
     procedure ReceiveRefer(Target: TIdSipAddressHeader);
   protected
     procedure ReceiveSubscribeRequest; override;
+    procedure ReceiveSubscribeRequestWithGruu; override;
   public
     procedure SetUp; override;
   published
     procedure TestNotify; override;
+    procedure TestNotifyWithGruu; override;
     procedure TestNotifyWithInappropriateBody;
     procedure TestNotifyWithNoBody;
     procedure TestReceiveRefer;
@@ -1069,7 +1075,7 @@ begin
               'Wrong package found for package ' + PackageType.EventPackage);
 end;
 
-procedure TestTIdSipSubscribeModule.OnInboundCall(UserAgent: TIdSipAbstractCore;
+procedure TestTIdSipSubscribeModule.OnInboundCall(UserAgent: TIdSipInviteModule;
                                                   Session: TIdSipInboundSession);
 begin
   Self.InboundCall := Session;
@@ -1720,7 +1726,7 @@ begin
   Check(Notify.HasHeader(SubscriptionStateHeader),
         Self.ClassName + ': No Subscription-State header');
   CheckEquals(Self.SubscriptionState,
-              Notify.FirstSubscriptionState.SubState,
+              Notify.SubscriptionState.SubState,
               Self.ClassName + ': Unexpected substate');
 end;
 
@@ -1813,7 +1819,7 @@ begin
   Notify := Self.LastSentRequest;
 
   CheckEquals(Self.Expires,
-              Notify.FirstSubscriptionState.Expires,
+              Notify.SubscriptionState.Expires,
               Self.ClassName + ': Subscription-State expire param');
 
   CheckEquals(Body,
@@ -1878,7 +1884,7 @@ begin
 
   Notify := Self.LastSentRequest;
   CheckEquals(Self.Reason,
-              Notify.FirstSubscriptionState.Reason,
+              Notify.SubscriptionState.Reason,
               Self.ClassName + ': Subscription-State''s reason');
 end;
 
@@ -2102,7 +2108,7 @@ begin
   Self.CreateAction;
   CheckRequestSent(Self.ClassName + ': No request sent');
   CheckEquals(Self.ExpiresValue,
-              Self.LastSentRequest.FirstExpires.NumericValue,
+              Self.LastSentRequest.Expires.NumericValue,
               Self.ClassName + ': Wrong Expires value');
   CheckEquals(Self.Dialog.ID.CallID,
               Self.LastSentRequest.CallID,
@@ -2161,7 +2167,7 @@ begin
   Self.CreateAction;
   CheckRequestSent(Self.ClassName + ': No request sent');
   CheckEquals(0,
-              Self.LastSentRequest.FirstExpires.NumericValue,
+              Self.LastSentRequest.Expires.NumericValue,
               Self.ClassName + ': Wrong Expires value');
 end;
 
@@ -2376,7 +2382,7 @@ begin
               Notify.Method,
               'Unexpected request sent');
   CheckEquals(Sub.SubscriptionState,
-              Notify.FirstSubscriptionState.SubState,
+              Notify.SubscriptionState.SubState,
               'Notify state <> subscription''s state');
 end;
 
@@ -2387,6 +2393,10 @@ begin
 end;
 
 procedure TestTIdSipInboundSubscriptionBase.ReceiveSubscribeRequest;
+begin
+end;
+
+procedure TestTIdSipInboundSubscriptionBase.ReceiveSubscribeRequestWithGruu;
 begin
 end;
 
@@ -2456,6 +2466,11 @@ end;
 procedure TestTIdSipInboundSubscriptionBase.TestNotify;
 begin
   Fail('Implement ' + Self.ClassName + '.TestNotify');
+end;
+
+procedure TestTIdSipInboundSubscriptionBase.TestNotifyWithGruu;
+begin
+  Fail('Implement ' + Self.ClassName + '.TestNotifyWithGruu');
 end;
 
 procedure TestTIdSipInboundSubscriptionBase.TestReceiveRequestSendsNotify;
@@ -2620,6 +2635,26 @@ begin
   Self.ReceiveSubscribe(TIdSipTestPackage.EventPackage);
 end;
 
+procedure TestTIdSipInboundSubscription.ReceiveSubscribeRequestWithGruu;
+const
+  MinExpTime = 42;
+var
+  Sub: TIdSipRequest;
+begin
+  Self.Package.MinimumExpiryTime := MinExpTime;
+
+  Sub := Self.Module.CreateSubscribe(Self.Destination, TIdSipTestPackage.EventPackage);
+  try
+    Sub.Event.ID := Self.ID;
+
+    Sub.Supported.Values.Add(ExtensionGruu);
+
+    Self.ReceiveRequest(Sub);
+  finally
+    Sub.Free;
+  end;
+end;
+
 //* TestTIdSipInboundSubscription Published methods ****************************
 
 procedure TestTIdSipInboundSubscription.TestExpire;
@@ -2703,6 +2738,57 @@ begin
 
   CheckRequestSent('No request sent');
   Self.CheckNotify(Self.LastSentRequest, Body, MimeType);
+end;
+
+procedure TestTIdSipInboundSubscription.TestNotifyWithGruu;
+const
+  Body     = 'random';
+  MimeType = 'text/plain';
+var
+  Accepted: TIdSipResponse;
+  Action:   TIdSipInboundSubscription;
+  Sub:      TIdSipRequest;
+begin
+  // Set us up to support GRUU
+  Self.Core.UseGruu := true;
+  Self.Core.Gruu := Self.Core.Contact;
+  Self.Core.Gruu.Address.Host := Self.Core.Gruu.Address.Host + '.com';
+  Self.Locator.AddA(Self.Core.Gruu.Address.Host, '127.0.0.1');
+
+  Sub := Self.Module.CreateSubscribe(Self.Destination, TIdSipTestPackage.EventPackage);
+  try
+    Sub.Event.ID := Self.ID;
+
+    Action := TIdSipInboundSubscription.CreateInbound(Self.Core, Sub, false) as TIdSipInboundSubscription;
+    try
+      Accepted := Self.LastSentResponse;
+
+      Check(Accepted.FirstContact.Address.HasGrid,
+            'Dialog-establishing response should have a "grid" parameter');
+
+      Action.Accept;
+
+      Self.MarkSentRequestCount;
+      Action.Notify(Body, MimeType);
+
+      CheckRequestSent('No request sent');
+      Self.CheckNotify(Self.LastSentRequest, Body, MimeType);
+      Check(Self.LastSentRequest.HasHeader(SupportedHeaderFull),
+            'NOTIFY lacks a Supported header');
+      Check(Self.LastSentRequest.SupportsExtension(ExtensionGruu),
+            'Supported header lacks a "gruu" entry');
+      CheckEquals(Self.Core.Gruu.Address.Host,
+                  Self.LastSentRequest.FirstContact.Address.Host,
+                  'NOTIFY didn''t use UA''s GRUU');
+      CheckEquals(Self.LastSentRequest.FirstContact.Address.Host,
+                  Accepted.FirstContact.Address.Host,
+                  'NOTIFY''s remote target should match that of the 202 Accepted');
+    finally
+      Action.Free;
+    end;
+  finally
+    Sub.Free;
+  end;
 end;
 
 procedure TestTIdSipInboundSubscription.TestReceiveExpiresInContactHeader;
@@ -3083,7 +3169,7 @@ begin
               Self.LastSentRequest.Method,
               Self.ClassName + ': ' + MsgPrefix + ': Unexpected request sent');
   CheckEquals(0,
-              Self.LastSentRequest.FirstExpires.NumericValue,
+              Self.LastSentRequest.Expires.NumericValue,
               Self.ClassName + ': ' + MsgPrefix + ': Wrong Expires value');
   Check(Subscription.Terminating,
         Self.ClassName + ': ' + MsgPrefix + ': Not marked as terminating');
@@ -3576,51 +3662,6 @@ begin
   Self.CheckNoRetryScheduled(EventReasonRejected);
 end;
 
-procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyProbation;
-begin
-  Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
-                     SubscriptionSubstateTerminated,
-                     EventReasonProbation);
-
-  Self.CheckTerminatedSubscriptionWithNoResubscribe(EventReasonProbation);
-  Self.CheckRetryScheduled(EventReasonProbation);
-end;
-
-procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyProbationWithRetryAfter;
-begin
-  Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
-                     SubscriptionSubstateTerminated,
-                     EventReasonProbation,
-                     Self.ArbRetryAfterValue);
-
-  Self.CheckTerminatedSubscriptionWithNoResubscribe(EventReasonProbation);
-  Self.CheckRetryScheduled(EventReasonProbation);
-end;
-
-procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyRejected;
-begin
-  Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
-                     SubscriptionSubstateTerminated,
-                     EventReasonRejected);
-
-  Self.CheckTerminatedSubscriptionWithNoResubscribe(EventReasonRejected);
-  Self.CheckNoRetryScheduled(EventReasonRejected);
-end;
-
-procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyRejectedWithRetryAfter;
-begin
-  Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
-                     SubscriptionSubstateTerminated,
-                     EventReasonRejected);
-
-  Self.CheckTerminatedSubscriptionWithNoResubscribe(EventReasonRejected);
-  Self.CheckNoRetryScheduled(EventReasonRejected);
-end;
-
 procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyTimeout;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
@@ -4046,6 +4087,25 @@ begin
   Self.ReceiveRefer(Self.Core.Contact);
 end;
 
+procedure TestTIdSipInboundReferral.ReceiveSubscribeRequestWithGruu;
+const
+  MinExpTime = 42;
+var
+  Refer: TIdSipRequest;
+begin
+  // cf. TestTIdSipInboundSubscription.ReceiveSubscribeRequestWithGruu.
+  Self.Module.AddPackage(TIdSipReferPackage);
+
+  Refer := Self.Module.CreateRefer(Self.Destination, Self.Core.Contact);
+  try
+    Refer.Supported.Values.Add(ExtensionGruu);
+
+    Self.ReceiveRequest(Refer);
+  finally
+    Refer.Free;
+  end;
+end;
+
 //* TestTIdSipInboundReferral Private methods **********************************
 
 procedure TestTIdSipInboundReferral.ReceiveRefer(Target: TIdSipAddressHeader);
@@ -4074,6 +4134,53 @@ begin
 
   CheckRequestSent('No request sent');
   Self.CheckNotify(Self.LastSentRequest, Body, MimeType);
+end;
+
+procedure TestTIdSipInboundReferral.TestNotifyWithGruu;
+var
+  Accepted: TIdSipResponse;
+  Action:   TIdSipInboundReferral;
+  Refer:    TIdSipRequest;
+begin
+  // Set us up to support GRUU
+  Self.Core.UseGruu := true;
+  Self.Core.Gruu := Self.Core.Contact;
+  Self.Core.Gruu.Address.Host := Self.Core.Gruu.Address.Host + '.com';
+  Self.Locator.AddA(Self.Core.Gruu.Address.Host, '127.0.0.1');
+
+  Refer := Self.Module.CreateRefer(Self.Destination, Self.Core.Gruu);
+  try
+    Action := TIdSipInboundReferral.CreateInbound(Self.Core, Refer, false) as TIdSipInboundReferral;
+    try
+      Accepted := Self.LastSentResponse;
+      Check(Accepted.FirstContact.Address.HasGrid,
+            'Dialog-establishing response should have a "grid" parameter');
+
+      Action.Accept;
+
+      Self.MarkSentRequestCount;
+      Action.ReferenceTrying;
+
+      CheckRequestSent('No request sent');
+      Self.CheckNotify(Self.LastSentRequest,
+                       TIdSipInboundReferral.ReferralTryingBody,
+                       SipFragmentMimeType);
+      Check(Self.LastSentRequest.HasHeader(SupportedHeaderFull),
+            'NOTIFY lacks a Supported header');
+      Check(Self.LastSentRequest.SupportsExtension(ExtensionGruu),
+            'Supported header lacks a "gruu" entry');
+      CheckEquals(Self.Core.Gruu.Address.Host,
+                  Self.LastSentRequest.FirstContact.Address.Host,
+                  'NOTIFY didn''t use UA''s GRUU');
+      CheckEquals(Self.LastSentRequest.FirstContact.Address.Host,
+                  Accepted.FirstContact.Address.Host,
+                  'NOTIFY''s remote target should match that of the 202 Accepted');
+    finally
+      Action.Free;
+    end;
+  finally
+    Refer.Free;
+  end;
 end;
 
 procedure TestTIdSipInboundReferral.TestNotifyWithInappropriateBody;

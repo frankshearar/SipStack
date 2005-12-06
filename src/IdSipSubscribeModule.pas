@@ -145,19 +145,19 @@ type
     function  PackageAt(Index: Integer): TIdSipEventPackage;
     procedure RejectUnknownEvent(Request: TIdSipRequest);
     function  SubscriptionMakingRequests: String;
+  protected
+    function AcceptRequest(Request: TIdSipRequest;
+                           UsingSecureTransport: Boolean): TIdSipAction; override;
+    function WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; override;
   public
     constructor Create(UA: TIdSipAbstractCore); override;
     destructor  Destroy; override;
 
-    function  Accept(Request: TIdSipRequest;
-                     UsingSecureTransport: Boolean): TIdSipAction; override;
     procedure AddListener(Listener: IIdSipSubscribeModuleListener);
     procedure AddLocalHeaders(OutboundMessage: TIdSipMessage); override;
     procedure AddPackage(PackageType: TIdSipEventPackageClass); overload;
     procedure AddPackage(const PackageName: String); overload;
     function  AllowedEvents: String;
-//    function  BlindTransfer(Session: TIdSipSession;
-//                            TransferTarget: TIdSipAddressHeader): TIdSipBlindTransferral;
     function  CreateNotify(Dialog: TIdSipDialog;
                            Subscribe: TIdSipRequest;
                            const SubscriptionState: String): TIdSipRequest;
@@ -785,7 +785,7 @@ constructor TIdSipSubscribeModule.Create(UA: TIdSipAbstractCore);
 begin
   inherited Create(UA);
 
-  Self.AllowedContentTypeList.Add(SipFragmentMimeType);
+  Self.AddAllowedContentType(SipFragmentMimeType);
   Self.AcceptsMethodsList.Add(MethodSubscribe);
   Self.AcceptsMethodsList.Add(MethodNotify);
 
@@ -802,27 +802,6 @@ begin
   Self.Listeners.Free;
 
   inherited Destroy;
-end;
-
-function TIdSipSubscribeModule.Accept(Request: TIdSipRequest;
-                                      UsingSecureTransport: Boolean): TIdSipAction;
-var
-  Package: TIdSipEventPackage;
-begin
-  Result := nil;
-
-  if not Self.IsSubscribeMethod(Request.Method) then begin
-    Self.UserAgent.ReturnResponse(Request,
-                                  SIPCallLegOrTransactionDoesNotExist);
-    Exit;
-  end;
-
-  Package := Self.PackageFor(Request);
-
-  if Assigned(Package) then
-    Result := Package.Accept(Request, UsingSecureTransport)
-  else
-    Self.RejectUnknownEvent(Request);
 end;
 
 procedure TIdSipSubscribeModule.AddListener(Listener: IIdSipSubscribeModuleListener);
@@ -866,15 +845,7 @@ begin
       Result := Result + ', ' + Self.PackageAt(I).EventPackage;
   end;
 end;
-{
-function TIdSipSubscribeModule.BlindTransfer(Session: TIdSipSession;
-                                             TransferTarget: TIdSipAddressHeader): TIdSipBlindTransferral;
-begin
-  Result := Self.UserAgent.Actions.Add(TIdSipBlindTransferral.CreateTransferor(Self.UserAgent,
-                                                                               Session,
-                                                                               TransferTarget)) as TIdSipBlindTransferral;
-end;
-}
+
 function TIdSipSubscribeModule.CreateNotify(Dialog: TIdSipDialog;
                                             Subscribe: TIdSipRequest;
                                             const SubscriptionState: String): TIdSipRequest;
@@ -897,6 +868,10 @@ function TIdSipSubscribeModule.CreateRefer(Dest: TIdSipAddressHeader;
 begin
   Result := Self.UserAgent.CreateRequest(MethodRefer, Dest);
   try
+    // draft-ietf-sip-gruu, section 8.1
+    if Self.UserAgent.UseGruu then
+      Result.FirstContact.Grid := Self.UserAgent.NextGrid;
+
     Result.Event.EventPackage := TIdSipReferPackage.EventPackage;
     Result.ReferTo.Assign(ReferTo);
   except
@@ -911,6 +886,10 @@ function TIdSipSubscribeModule.CreateSubscribe(Dest: TIdSipAddressHeader;
 begin
   Result := Self.UserAgent.CreateRequest(MethodSubscribe, Dest);
   try
+    // draft-ietf-sip-gruu, section 8.1
+    if Self.UserAgent.UseGruu then
+      Result.FirstContact.Grid := Self.UserAgent.NextGrid;
+
     Result.Event.EventPackage   := EventPackage;
     Result.Expires.NumericValue := Self.Package(EventPackage).DefaultSubscriptionDuration
   except
@@ -1046,6 +1025,34 @@ end;
 function TIdSipSubscribeModule.WillAccept(Request: TIdSipRequest): Boolean;
 begin
   Result := Request.IsSubscribe or Request.IsNotify or Request.IsRefer;
+end;
+
+//* TIdSipSubscribeModule Private methods **************************************
+
+function TIdSipSubscribeModule.AcceptRequest(Request: TIdSipRequest;
+                                             UsingSecureTransport: Boolean): TIdSipAction;
+var
+  Package: TIdSipEventPackage;
+begin
+  Result := nil;
+
+  if not Self.IsSubscribeMethod(Request.Method) then begin
+    Self.UserAgent.ReturnResponse(Request,
+                                  SIPCallLegOrTransactionDoesNotExist);
+    Exit;
+  end;
+
+  Package := Self.PackageFor(Request);
+
+  if Assigned(Package) then
+    Result := Package.Accept(Request, UsingSecureTransport)
+  else
+    Self.RejectUnknownEvent(Request);
+end;
+
+function TIdSipSubscribeModule.WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction;
+begin
+  Result := inherited WillAcceptRequest(Request);
 end;
 
 //* TIdSipSubscribeModule Private methods **************************************
@@ -1940,6 +1947,7 @@ begin
   Result := TIdSipDialog.CreateInboundDialog(Self.InitialRequest,
                                              Response,
                                              false);
+  Result.ReceiveResponse(Response);                                           
 end;
 
 procedure TIdSipInboundSubscription.EstablishDialog(Response: TIdSipResponse);

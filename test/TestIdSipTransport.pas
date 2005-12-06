@@ -149,6 +149,9 @@ type
     procedure CheckForBadRequest(Sender: TObject;
                                  R: TIdSipResponse;
                                  ReceivedFrom: TIdSipConnectionBindings);
+    procedure CheckForTrying(Sender: TObject;
+                             R: TIdSipResponse;
+                             ReceivedFrom: TIdSipConnectionBindings);
     procedure CheckForSIPVersionNotSupported(Sender: TObject;
                                              R: TIdSipResponse);
     procedure CheckReceivedParamDifferentIPv4SentBy(Sender: TObject;
@@ -1041,25 +1044,32 @@ begin
   Self.DefaultTimeout := Self.DefaultTimeout * 3 div 2;
 
   Self.Timer.Terminate;
-  Self.WaitForSignaled(Self.EmptyListEvent, 'Waiting for timer to finish processing its events');
-  Self.WaitForSignaled(Self.FinishedTimer, 'Waiting for timer to finish destroying its transports');
+  try
+//    Self.WaitForSignaled(Self.EmptyListEvent, 'Waiting for timer to finish processing its events');
+    Self.WaitForSignaled(Self.FinishedTimer, 'Waiting for timer to finish destroying its transports');
+  finally
+    // We want to TRY wait for the Timer to finish. If it doesn't, though, we
+    // must still try clean up the test, especially when we touch global
+    // structures like TIdSipTransportRegistry.
+    Self.Timer := nil;
 
-  Self.RecvdRequest.Free;
-  Self.Response.Free;
-  Self.Request.Free;
+    Self.RecvdRequest.Free;
+    Self.Response.Free;
+    Self.Request.Free;
 
-  Self.LowPortLocation.Free;
-  Self.HighPortLocation.Free;
+    Self.LowPortLocation.Free;
+    Self.HighPortLocation.Free;
 
-  Self.LastSentResponse.Free;
+    Self.LastSentResponse.Free;
 
-  Self.SendEvent.Free;
-  Self.FinishedTimer.Free;
-  Self.EmptyListEvent.Free;
+    Self.SendEvent.Free;
+    Self.FinishedTimer.Free;
+    Self.EmptyListEvent.Free;
 
-  TIdSipTransportRegistry.UnregisterTransport(Self.TransportType.GetTransportType);
+    TIdSipTransportRegistry.UnregisterTransport(Self.TransportType.GetTransportType);
 
-  inherited TearDown;
+    inherited TearDown;
+  end;
 end;
 
 function TestTIdSipTransport.DefaultPort: Cardinal;
@@ -1114,6 +1124,13 @@ procedure TestTIdSipTransport.CheckForBadRequest(Sender: TObject;
                                                  ReceivedFrom: TIdSipConnectionBindings);
 begin
   Self.CheckResponse(R, SIPBadRequest);
+end;
+
+procedure TestTIdSipTransport.CheckForTrying(Sender: TObject;
+                                             R: TIdSipResponse;
+                                             ReceivedFrom: TIdSipConnectionBindings);
+begin
+  Self.CheckResponse(R, SIPTrying);
 end;
 
 procedure TestTIdSipTransport.CheckForSIPVersionNotSupported(Sender: TObject;
@@ -1487,7 +1504,7 @@ begin
     Self.HighPortTransport.AddTransportListener(Listener);
     MangledSipVersion := 'SIP/;2.0';
     Self.SendMessage('INVITE sip:wintermute@tessier-ashpool.co.luna ' + MangledSipVersion + #13#10
-                   + 'Via: SIP/2.0/TCP %s;branch=z9hG4bK776asdhds'#13#10
+                   + 'Via: SIP/2.0/TCP proxy.tessier-ashpool.co.luna;branch=z9hG4bK776asdhds'#13#10
                    + 'Max-Forwards: 70'#13#10
                    + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
                    + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
@@ -1778,11 +1795,14 @@ end;
 procedure TestTIdSipTransport.TestTortureTest40;
 begin
   // Illegal >1 SP between elements of the Request-Line.
+  Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
 
-  Self.CheckingResponseEvent := Self.CheckForBadRequest;
   Self.SendFromLowTransport(TortureTest40);
 
   Self.WaitForSignaled;
+
+  Check(Self.ReceivedRequest,
+        Self.HighPortTransport.ClassName + ': Request not received');
 end;
 
 procedure TestTIdSipTransport.TestUseRport;
@@ -2376,7 +2396,7 @@ begin
     Client.Port := Self.HighPortTransport.Port;
 
     Client.Send('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
-              + 'Via: SIP/2.0/TCP %s;branch=z9hG4bK776asdhds'#13#10
+              + 'Via: SIP/2.0/TCP proxy.tessier-ashpool.co.luna;branch=z9hG4bK776asdhds'#13#10
               + 'Max-Forwards: 70'#13#10
               + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
               + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
@@ -2405,7 +2425,7 @@ begin
   Self.CheckingRequestEvent := Self.CheckMissingContentLength;
 
   Self.SendMessage('INVITE sip:foo SIP/2.0'#13#10
-                 + 'Via: SIP/2.0/127.0.0.1;branch=' + BranchMagicCookie + 'f00L'#13#10
+                 + 'Via: SIP/2.0/UDP 127.0.0.1;branch=' + BranchMagicCookie + 'f00L'#13#10
                  + 'Call-ID: foo'#13#10
                  + 'CSeq: 1 INVITE'#13#10
                  + 'From: sip:foo'#13#10

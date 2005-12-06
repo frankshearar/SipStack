@@ -16,6 +16,7 @@ interface
   implemented.
 }
 
+function ConstructUUID: String;
 function GetFullUserName: WideString;
 function GetTickCount: Cardinal;
 function GetTickDiff(const OldTickCount, NewTickCount : Cardinal): Cardinal;
@@ -25,7 +26,15 @@ function LocalAddress: String;
 implementation
 
 uses
-  IdStack, IdUDPServer, SysUtils, Windows;
+  IdSimpleParser, IdStack, IdUDPServer, SysUtils, Windows;
+
+function ConstructUUID: String;
+var
+  NewGuid: TGUID;
+begin
+  CreateGUID(NewGuid);
+  Result := Lowercase(WithoutFirstAndLastChars(GUIDToString(NewGuid)));
+end;
 
 function GetFullUserName: WideString;
 begin
