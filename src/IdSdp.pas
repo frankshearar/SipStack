@@ -660,9 +660,9 @@ type
     destructor  Destroy; override;
 
     function  IsListening: Boolean;
+    function  LocalSessionDescription: String;
     function  MimeType: String;
     procedure PutOnHold;
-    function  SessionDescription: String;
     procedure SetRemoteDescription(RemoteSessionDesc: String);
     function  StartListening(LocalSessionDesc: String): String;
     procedure StopListening;
@@ -4064,6 +4064,18 @@ begin
   Result := Self.StreamCount > 0;
 end;
 
+function TIdSDPMultimediaSession.LocalSessionDescription: String;
+var
+  I: Integer;
+begin
+  Result := 'v=0'#13#10
+          + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
+          + 's=-'#13#10;
+
+  for I := 0 to Self.StreamCount - 1 do
+    Result := Result + Self.Streams[I].LocalDescription.AsString;
+end;
+
 function TIdSDPMultimediaSession.MimeType: String;
 begin
   Result := SdpMimeType;
@@ -4079,22 +4091,9 @@ begin
   Self.fOnHold := true;
 end;
 
-function TIdSDPMultimediaSession.SessionDescription: String;
-var
-  I: Integer;
-begin
-  Result := 'v=0'#13#10
-          + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
-          + 's=-'#13#10;
-
-  for I := 0 to Self.StreamCount - 1 do
-    Result := Result + Self.Streams[I].LocalDescription.AsString;
-end;
-
 procedure TIdSDPMultimediaSession.SetRemoteDescription(RemoteSessionDesc: String);
 var
-  I:   Integer;
-  SDP: TIdSdpPayload;
+  I: Integer;
 begin
   // We don't need to know the MIME type: this is an SDP multimedia session,
   // ergo we simply assume that RemoteSessionDesc contains application/sdp.
@@ -4118,6 +4117,40 @@ begin
         Self.Streams[I].RemoteDescription := SDP.MediaDescriptionAt(I);
         Self.Streams[I].Profile.Assign(Self.RemoteProfile);
       end;
+    finally
+      SDP.Free;
+    end;
+  finally
+    Self.StreamLock.Release;
+  end;
+end;
+
+function TIdSDPMultimediaSession.StartListening(LocalSessionDesc: String): String;
+var
+  I:   Integer;
+  SDP: TIdSdpPayload;
+begin
+  // We don't know, until we try, whether the ports in LocalSessionDesc are
+  // free. LocalSessionDesc thus contains info on how many streams to create,
+  // what data those streams will contain, but NOT on what ports they'll run:
+  // the ports are just guidelines as to the lowest acceptable port number, if
+  // you like.
+  //
+  // As an example, if there's one media description with port 8000, and we're
+  // already running servers on ports 8000-8099, we'll start aa server on 8100.
+  // Result contains the ACTUAL port numbers used.
+
+  Self.StreamLock.Acquire;
+  try
+    SDP := TIdSdpPayload.CreateFrom(LocalSessionDesc);
+    try
+      for I := 0 to SDP.MediaDescriptionCount - 1 do begin
+        Self.EstablishStream(SDP.MediaDescriptionAt(I));
+        Self.RegisterEncodingMaps(Self.LocalProfile,
+                                  SDP.MediaDescriptionAt(I).RTPMapAttributes);
+      end;
+
+      Result := SDP.AsString;
     finally
       SDP.Free;
     end;
@@ -4197,7 +4230,7 @@ end;
 
 function TIdSDPMultimediaSession.AllowedPort(Port: Cardinal): Boolean;
 begin
-  Result := (Self.LowestAllowedPort < Port) and (Port < Self.HighestAllowedPort);
+  Result := (Self.LowestAllowedPort <= Port) and (Port < Self.HighestAllowedPort);
 end;
 
 procedure TIdSDPMultimediaSession.EstablishStream(Desc: TIdSdpMediaDescription);

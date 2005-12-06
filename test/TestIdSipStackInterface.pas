@@ -256,6 +256,7 @@ type
     procedure TearDown; override;
   published
     procedure TestCopy;
+    procedure TestSetRemotePartyStripsTagParam;
   end;
 
   TestTIdSessionProgressData = class(TTestCase)
@@ -268,15 +269,24 @@ type
     procedure TestCopy;
   end;
 
-  TestTIdInboundCallData = class(TTestCase)
+  TestTIdSubscriptionRequestData = class(TTestCase)
   private
-    Data: TIdInboundCallData;
+    Data: TIdSubscriptionRequestData;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
     procedure TestCopy;
-    procedure TestSetFromStripsTagParam;
+  end;
+
+  TestTIdSubscriptionData = class(TTestCase)
+  private
+    Data: TIdSubscriptionData;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCopy;
   end;
 
   TestTIdSubscriptionRequestData = class(TTestCase)
@@ -312,7 +322,7 @@ const
 implementation
 
 uses
-  IdRandom, IdSipLocator, StackWindow, SysUtils;
+  Classes, IdRandom, IdSipLocator, StackWindow, SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -1434,10 +1444,12 @@ begin
   inherited SetUp;
 
   Self.Data := TIdSessionData.Create;
-  Self.Data.LocalSessionDescription  := '1';
   Self.Data.LocalMimeType            := '2';
-  Self.Data.RemoteSessionDescription := '3';
+  Self.Data.LocalSessionDescription  := '1';
+  Self.Data.RemoteContact.Value      := 'sip:wintermute@terminalhead.tessier-ashpool.co.luna;transport=sctp';
   Self.Data.RemoteMimeType           := '4';
+  Self.Data.RemoteParty.Value        := 'sip:wintermute@tessier-ashpool.co.luna';
+  Self.Data.RemoteSessionDescription := '3';
 end;
 
 procedure TestTIdSessionData.TearDown;
@@ -1458,18 +1470,39 @@ begin
     CheckEquals(IntToHex(Self.Data.Handle, 8),
                 IntToHex(Copy.Handle, 8),
                 'Handle');
-    CheckEquals(Self.Data.LocalSessionDescription,
-                Copy.LocalSessionDescription,
-                'LocalSessionDescription');
     CheckEquals(Self.Data.LocalMimeType,
                 Copy.LocalMimeType,
                 'LocalMimeType');
-    CheckEquals(Self.Data.RemoteSessionDescription,
-                Copy.RemoteSessionDescription,
-                'RemoteSessionDescription');
+    CheckEquals(Self.Data.LocalSessionDescription,
+                Copy.LocalSessionDescription,
+                'LocalSessionDescription');
+    CheckEquals(Self.Data.RemoteContact.FullValue,
+                Copy.RemoteContact.FullValue,
+                'RemoteContact');
     CheckEquals(Self.Data.RemoteMimeType,
                 Copy.RemoteMimeType,
                 'RemoteMimeType');
+    CheckEquals(Self.Data.RemoteParty.FullValue,
+                Copy.RemoteParty.FullValue,
+                'RemotePartyp');
+    CheckEquals(Self.Data.RemoteSessionDescription,
+                Copy.RemoteSessionDescription,
+                'RemoteSessionDescription');
+  finally
+    Copy.Free;
+  end;
+end;
+
+procedure TestTIdSessionData.TestSetRemotePartyStripsTagParam;
+var
+  Copy: TIdSessionData;
+begin
+  Self.Data.RemoteParty.Params[TagParam] := 'foofoo';
+
+  Copy := TIdSessionData.Create;
+  try
+    Copy.RemoteParty := Self.Data.RemoteParty;
+    Check(not Copy.RemoteParty.HasParam(TagParam), 'Tag param not removed');
   finally
     Copy.Free;
   end;
@@ -1537,11 +1570,11 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdInboundCallData                                                     *
+//* TestTIdSubscriptionData                                                    *
 //******************************************************************************
-//* TestTIdInboundCallData Public methods **************************************
+//* TestTIdSubscriptionData Public methods *************************************
 
-procedure TestTIdInboundCallData.SetUp;
+procedure TestTIdSubscriptionData.SetUp;
 begin
   inherited SetUp;
 
@@ -1555,20 +1588,20 @@ begin
   Self.Data.RemoteSessionDescription := '4';
 end;
 
-procedure TestTIdInboundCallData.TearDown;
+procedure TestTIdSubscriptionData.TearDown;
 begin
   Self.Data.Free;
 
   inherited TearDown;
 end;
 
-//* TestTIdInboundCallData Published methods ***********************************
+//* TestTIdSubscriptionData Published methods **********************************
 
-procedure TestTIdInboundCallData.TestCopy;
+procedure TestTIdSubscriptionData.TestCopy;
 var
-  Copy: TIdInboundCallData;
+  Copy: TIdSubscriptionData;
 begin
-  Copy := Self.Data.Copy as TIdInboundCallData;
+  Copy := Self.Data.Copy as TIdSubscriptionData;
   try
     CheckEquals(Self.Data.Contact.Value,
                 Copy.Contact.Value,
@@ -1593,16 +1626,52 @@ begin
   end;
 end;
 
-procedure TestTIdInboundCallData.TestSetFromStripsTagParam;
-var
-  Copy: TIdInboundCallData;
-begin
-  Self.Data.From.Tag := 'foofoo';
+//******************************************************************************
+//* TestTIdSubscriptionRequestData                                             *
+//******************************************************************************
+//* TestTIdSubscriptionRequestData Public methods ******************************
 
-  Copy := TIdInboundCallData.Create;
+procedure TestTIdSubscriptionRequestData.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Data := TIdSubscriptionRequestData.Create;
+  Self.Data.Contact.Value := 'sip:machine-1@internet-cafe.org>';
+  Self.Data.EventPackage  := PackageRefer;
+  Self.Data.From.Value    := 'Case <sip:case@fried-neurons.org>';
+  Self.Data.ReferTo.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna';
+end;
+
+procedure TestTIdSubscriptionRequestData.TearDown;
+begin
+  Self.Data.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSubscriptionRequestData Published methods ***************************
+
+procedure TestTIdSubscriptionRequestData.TestCopy;
+var
+  Copy: TIdSubscriptionRequestData;
+begin
+  Copy := Self.Data.Copy as TIdSubscriptionRequestData;
   try
-    Copy.From := Self.Data.From;
-    Check(not Copy.From.HasTag, 'Tag param not removed');
+    CheckEquals(IntToHex(Self.Data.Handle, 8),
+                IntToHex(Copy.Handle, 8),
+                'Handle');
+    CheckEquals(Self.Data.Contact.FullValue,
+                Copy.Contact.FullValue,
+                'Contact');
+    CheckEquals(Self.Data.EventPackage,
+                Copy.EventPackage,
+                'EventPackage');
+    CheckEquals(Self.Data.From.FullValue,
+                Copy.From.FullValue,
+                'From');
+    CheckEquals(Self.Data.ReferTo.FullValue,
+                Copy.ReferTo.FullValue,
+                'ReferTo');
   finally
     Copy.Free;
   end;

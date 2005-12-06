@@ -6,6 +6,9 @@ v0.5 ()
   attended transfer, for instance). The stack leaves those sorts of
   questions to the UI. (See RFC 3515 section 2.4.2 for a typical
   UI-only issue.)
+* The stack now handles authentication challenges in an asynchronous
+  manner. That means that the program that uses the stack now uses
+  Action.Resend() to resend an authorised request.
 * Major reshuffling of code in the Transaction-User layer: most of 
   IdSipCore now sits in IdSipRegistration and IdSipUserAgent.
 

@@ -561,11 +561,14 @@ type
     procedure TearDown; override;
   published
     procedure TestDifferentPayloadTypesForSameEncoding;
-    procedure TestHighestAllowedPort;
     procedure TestIsListening;
-    procedure TestLowestAllowedPort;
+    procedure TestLocalSessionDescription;
     procedure TestMimeType;
     procedure TestOnHold;
+    procedure TestPortAboveHighestAllowedPort;
+    procedure TestPortAsHighestAllowedPort;
+    procedure TestPortAsLowestAllowedPort;
+    procedure TestPortBelowLowestAllowedPort;
     procedure TestPutOnHold;
     procedure TestSessionDescription;
     procedure TestSetRemoteDescription;
@@ -6369,6 +6372,8 @@ begin
 end;
 
 procedure TestTIdSDPMediaStream.TestPutOnHoldRecvOnly;
+var
+  LocalMediaType: TIdSdpMediaType;
 begin
   Check(not Self.Media.OnHold,
         'OnHold set before PutOnHold');
@@ -6377,6 +6382,7 @@ begin
                          'm=text 8000 RTP/AVP 96'#13#10
                        + 'a=rtpmap:96 t140/1000'#13#10
                        + 'a=recvonly');
+  LocalMediaType := Self.Media.LocalDescription.MediaType;
   Self.Media.PutOnHold;
 
   CheckEquals(DirectionToStr(sdInactive),
@@ -6384,9 +6390,14 @@ begin
               'Stream not put on hold');
   Check(Self.Media.OnHold,
         'OnHold not set');
+  CheckEquals(MediaTypeToStr(LocalMediaType),
+              MediaTypeToStr(Self.Media.LocalDescription.MediaType),
+        'Stream''s MediaType changed');
 end;
 
 procedure TestTIdSDPMediaStream.TestPutOnHoldSendRecv;
+var
+  LocalMediaType: TIdSdpMediaType;
 begin
   Check(not Self.Media.OnHold,
         'OnHold set before PutOnHold');
@@ -6395,6 +6406,7 @@ begin
                          'm=text 8000 RTP/AVP 96'#13#10
                        + 'a=rtpmap:96 t140/1000'#13#10
                        + 'a=sendrecv');
+  LocalMediaType := Self.Media.LocalDescription.MediaType;
   Self.Media.PutOnHold;
 
   CheckEquals(DirectionToStr(sdSendOnly),
@@ -6402,6 +6414,9 @@ begin
               'Stream not put on hold');
   Check(Self.Media.OnHold,
         'OnHold not set');
+  CheckEquals(MediaTypeToStr(LocalMediaType),
+              MediaTypeToStr(Self.Media.LocalDescription.MediaType),
+        'Stream''s MediaType changed');
 end;
 
 procedure TestTIdSDPMediaStream.TestPutOnHoldWhileOnHold;
@@ -6696,24 +6711,6 @@ begin
               'Remote profile not used to determine payload');
 end;
 
-procedure TestTIdSDPMultimediaSession.TestHighestAllowedPort;
-var
-  ActualSDP: String;
-  Desc:      TIdSdpPayload;
-begin
-  Self.MS.HighestAllowedPort := 9000;
-
-  ActualSDP := Self.MS.StartListening(Self.SingleStreamSDP(Self.MS.HighestAllowedPort + 1));
-
-  Desc := TIdSdpPayload.CreateFrom(ActualSDP);
-  try
-    CheckEquals(1, Desc.MediaDescriptionCount,      'Media description count');
-    CheckEquals(0, Desc.MediaDescriptionAt(0).Port, 'Unexpected port');
-  finally
-    Desc.Free;
-  end;
-end;
-
 procedure TestTIdSDPMultimediaSession.TestIsListening;
 begin
   Check(not Self.MS.IsListening, 'Initial IsListening must be false');
@@ -6727,22 +6724,26 @@ begin
   Check(not Self.MS.IsListening, 'IsListening after StopListening');
 end;
 
-procedure TestTIdSDPMultimediaSession.TestLowestAllowedPort;
+procedure TestTIdSDPMultimediaSession.TestLocalSessionDescription;
 var
-  ActualSDP: String;
-  Desc:      TIdSdpPayload;
+  EmptyDesc: String;
+  Expected: String;
 begin
-  Self.MS.LowestAllowedPort := 9000;
+  EmptyDesc := Self.MS.LocalSessionDescription;
 
-  ActualSDP := Self.MS.StartListening(Self.SingleStreamSDP(Self.MS.LowestAllowedPort - 1));
+  Expected := Self.MultiStreamSDP(8000, 9000);
+  Self.MS.StartListening(Expected);
+  CheckEquals(Expected, Self.MS.LocalSessionDescription, 'After StartListening');
 
-  Desc := TIdSdpPayload.CreateFrom(ActualSDP);
-  try
-    CheckEquals(1, Desc.MediaDescriptionCount,      'Media description count');
-    CheckEquals(0, Desc.MediaDescriptionAt(0).Port, 'Unexpected port');
-  finally
-    Desc.Free;
-  end;
+  Self.MS.PutOnHold;
+  CheckNotEquals(Expected,
+                 Self.MS.LocalSessionDescription,
+                 'After PutOnHold: session description not updated');
+
+  Self.MS.StopListening;
+  CheckEquals(EmptyDesc,
+              Self.MS.LocalSessionDescription,
+              'StopListening didn''t clear the session description');
 end;
 
 procedure TestTIdSDPMultimediaSession.TestMimeType;
@@ -6774,11 +6775,85 @@ begin
         'OnHold after TakeOffHold, having manually taken all streams off hold');
 end;
 
+procedure TestTIdSDPMultimediaSession.TestPortAboveHighestAllowedPort;
+var
+  Desc:        String;
+  HighestPort: Cardinal;
+begin
+  Self.MS.LowestAllowedPort  := 8000;
+  Self.MS.HighestAllowedPort := 8100;
+  HighestPort := Self.MS.HighestAllowedPort + 2;
+  Desc := Self.MS.StartListening(Self.SingleStreamSDP(HighestPort));
+
+  Check(Self.MS.StreamCount > 0,
+        'Not enough streams instantiated');
+  CheckEquals(0,
+              Self.MS.Streams[0].LocalDescription.Port,
+              'Port value');
+end;
+
+procedure TestTIdSDPMultimediaSession.TestPortAsHighestAllowedPort;
+var
+  Desc:        String;
+  HighestPort: Cardinal;
+begin
+  Self.MS.LowestAllowedPort  := 8000;
+  Self.MS.HighestAllowedPort := 8100;
+  HighestPort := Self.MS.HighestAllowedPort;
+  Desc := Self.MS.StartListening(Self.SingleStreamSDP(HighestPort));
+
+  Check(Self.MS.StreamCount > 0,
+        'Not enough streams instantiated');
+  CheckEquals(0,
+              Self.MS.Streams[0].LocalDescription.Port,
+              'Port value');
+end;
+
+procedure TestTIdSDPMultimediaSession.TestPortAsLowestAllowedPort;
+var
+  Desc:        String;
+  LowestPort: Cardinal;
+begin
+  Self.MS.LowestAllowedPort  := 8000;
+  Self.MS.HighestAllowedPort := 8100;
+  LowestPort := Self.MS.LowestAllowedPort;
+  Desc := Self.MS.StartListening(Self.SingleStreamSDP(LowestPort));
+
+  Check(Self.MS.StreamCount > 0,
+        'Not enough streams instantiated');
+  CheckEquals(LowestPort,
+              Self.MS.Streams[0].LocalDescription.Port,
+              'Port value');
+end;
+
+procedure TestTIdSDPMultimediaSession.TestPortBelowLowestAllowedPort;
+var
+  Desc:       String;
+  LowestPort: Cardinal;
+begin
+  Self.MS.LowestAllowedPort  := 8000;
+  Self.MS.HighestAllowedPort := 8100;
+  LowestPort := Self.MS.LowestAllowedPort - 2;
+  Desc := Self.MS.StartListening(Self.SingleStreamSDP(LowestPort));
+
+  Check(Self.MS.StreamCount > 0,
+        'Not enough streams instantiated');
+  CheckEquals(0,
+              Self.MS.Streams[0].LocalDescription.Port,
+              'Port value');
+end;
+
 procedure TestTIdSDPMultimediaSession.TestPutOnHold;
+var
+  Stream1MediaType: TIdSdpMediaType;
+  Stream2MediaType: TIdSdpMediaType;
 begin
   Self.MS.StartListening(Self.MultiStreamSDP(8000, 9000));
   Self.MS.Streams[0].Direction := sdRecvOnly;
   Self.MS.Streams[1].Direction := sdSendRecv;
+
+  Stream1MediaType := Self.MS.Streams[0].LocalDescription.MediaType;
+  Stream2MediaType := Self.MS.Streams[1].LocalDescription.MediaType;
 
   Self.MS.PutOnHold;
 
@@ -6786,6 +6861,13 @@ begin
         'Stream #0 not put on hold');
   Check(Self.MS.Streams[1].OnHold,
         'Stream #1 not put on hold');
+
+  CheckEquals(MediaTypeToStr(Stream1MediaType),
+              MediaTypeToStr(Self.MS.Streams[0].LocalDescription.MediaType),
+              'Stream #1 changed its media type');
+  CheckEquals(MediaTypeToStr(Stream2MediaType),
+              MediaTypeToStr(Self.MS.Streams[1].LocalDescription.MediaType),
+              'Stream #2 changed its media type');
 end;
 
 procedure TestTIdSDPMultimediaSession.TestSessionDescription;

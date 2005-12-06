@@ -43,9 +43,11 @@ type
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               Receiver: TIdSipTransport);
+                               Receiver: TIdSipTransport;
+                               Source: TIdSipConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                Receiver: TIdSipTransport);
+                                Receiver: TIdSipTransport;
+                                Source: TIdSipConnectionBindings);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure OnSendRequest(Request: TIdSipRequest;
@@ -184,9 +186,11 @@ type
                           const Reason: String);
     procedure OnEmpty(Sender: TIdTimerQueue);
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               Receiver: TIdSipTransport);
+                               Receiver: TIdSipTransport;
+                               Source: TIdSipConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                Receiver: TIdSipTransport);
+                                Receiver: TIdSipTransport;
+                                Source: TIdSipConnectionBindings);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure ReturnResponse(Sender: TObject;
@@ -406,6 +410,7 @@ type
   private
     Method:  TIdSipTransportReceiveRequestMethod;
     Request: TIdSipRequest;
+    Source:  TIdSipConnectionBindings;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -417,6 +422,7 @@ type
   private
     Method:   TIdSipTransportReceiveResponseMethod;
     Response: TIdSipResponse;
+    Source:   TIdSipConnectionBindings;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -495,13 +501,27 @@ end;
 //* TIdSipTransportSubclass Public methods *************************************
 
 procedure TIdSipTransportSubclass.NotifyTransportListeners(const Request: TIdSipRequest);
+var
+  FakeBinding: TIdSipConnectionBindings;
 begin
-  inherited NotifyTransportListeners(Request);
+  FakeBinding := TIdSipConnectionBindings.Create;
+  try
+    inherited NotifyTransportListeners(Request, FakeBinding);
+  finally
+    FakeBinding.Free;
+  end;
 end;
 
 procedure TIdSipTransportSubclass.NotifyTransportListeners(const Response: TIdSipResponse);
+var
+  FakeBinding: TIdSipConnectionBindings;
 begin
-  inherited NotifyTransportListeners(Response);
+  FakeBinding := TIdSipConnectionBindings.Create;
+  try
+    inherited NotifyTransportListeners(Response, FakeBinding);
+  finally
+    FakeBinding.Free;
+  end;
 end;
 
 procedure TIdSipTransportSubclass.NotifyTransportSendingListeners(const Request: TIdSipRequest;
@@ -551,7 +571,8 @@ begin
 end;
 
 procedure TestTIdSipTransportEventNotifications.OnReceiveRequest(Request: TIdSipRequest;
-                                                                 Receiver: TIdSipTransport);
+                                                                 Receiver: TIdSipTransport;
+                                                                 Source: TIdSipConnectionBindings);
 begin
   Self.ReceivedRequest := true;
   Check(Self.Request = Request,     'Request not correct');
@@ -559,7 +580,8 @@ begin
 end;
 
 procedure TestTIdSipTransportEventNotifications.OnReceiveResponse(Response: TIdSipResponse;
-                                                                  Receiver: TIdSipTransport);
+                                                                  Receiver: TIdSipTransport;
+                                                                  Source: TIdSipConnectionBindings);
 begin
   Self.ReceivedResponse := true;
 
@@ -954,6 +976,8 @@ begin
   Transport.HostName := HostName;
   Transport.Address  := Address;
   Transport.Port     := Port;
+
+  Transport.Start;
 end;
 
 //******************************************************************************
@@ -1274,23 +1298,21 @@ begin
 end;
 
 procedure TestTIdSipTransport.OnReceiveRequest(Request: TIdSipRequest;
-                                               Receiver: TIdSipTransport);
-var
-  Fake: TIdSipConnectionBindings;
+                                               Receiver: TIdSipTransport;
+                                               Source: TIdSipConnectionBindings);
 begin
   Self.RecvdRequest.Assign(Request);
 
   if Assigned(Self.CheckingRequestEvent) then
-    Self.CheckingRequestEvent(Receiver, Request, Fake);
+    Self.CheckingRequestEvent(Receiver, Request, Source);
 end;
 
 procedure TestTIdSipTransport.OnReceiveResponse(Response: TIdSipResponse;
-                                                Receiver: TIdSipTransport);
-var
-  Fake: TIdSipConnectionBindings;
+                                                Receiver: TIdSipTransport;
+                                                Source: TIdSipConnectionBindings);
 begin
   if Assigned(Self.CheckingResponseEvent) then
-    Self.CheckingResponseEvent(Receiver, Response, Fake);
+    Self.CheckingResponseEvent(Receiver, Response, Source);
 end;
 
 procedure TestTIdSipTransport.OnRejectedMessage(const Msg: String;
@@ -1418,6 +1440,8 @@ begin
                          'Sanity check');
 
   Self.LowPortTransport.Port := OriginalPort + 1;
+  Self.LowPortTransport.Stop;
+  Self.LowPortTransport.Start;
   Self.CheckServerOnPort(Self.LowPortTransport.Address,
                          Self.LowPortTransport.Port,
                          'Port changed');
@@ -2763,15 +2787,18 @@ begin
   inherited SetUp;
 
   Self.Request := TIdSipRequest.Create;
+  Self.Source := TIdSipConnectionBindings.Create;
 
   Self.Method := TIdSipTransportReceiveRequestMethod.Create;
   Self.Method.Receiver := Self.Transport;
   Self.Method.Request  := Self.Request;
+  Self.Method.Source   := Self.Source;
 end;
 
 procedure TestTIdSipTransportReceiveRequestMethod.TearDown;
 begin
   Self.Method.Free;
+  Self.Source.Free;
   Self.Request.Free;
 
   inherited TearDown;
@@ -2792,6 +2819,8 @@ begin
           'Receiver param');
     Check(Self.Method.Request = Listener.RequestParam,
           'Request param');
+    Check(Self.Method.Source = Listener.SourceParam,
+          'Source param');
   finally
     Listener.Free;
   end;
@@ -2807,15 +2836,18 @@ begin
   inherited SetUp;
 
   Self.Response := TIdSipResponse.Create;
+  Self.Source   := TIdSipConnectionBindings.Create;
 
   Self.Method := TIdSipTransportReceiveResponseMethod.Create;
   Self.Method.Receiver := Self.Transport;
   Self.Method.Response := Self.Response;
+  Self.Method.Source   := Self.Source;
 end;
 
 procedure TestTIdSipTransportReceiveResponseMethod.TearDown;
 begin
   Self.Method.Free;
+  Self.Source.Free;
   Self.Response.Free;
 
   inherited TearDown;
@@ -2836,6 +2868,8 @@ begin
           'Receiver param');
     Check(Self.Method.Response = Listener.ResponseParam,
           'Response param');
+    Check(Self.Method.Source = Listener.SourceParam,
+          'Source param');
   finally
     Listener.Free;
   end;

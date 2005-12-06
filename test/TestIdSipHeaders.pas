@@ -405,7 +405,17 @@ type
     procedure SetUp; override;
   end;
 
-  TestTIdSipReplacesHeader = class(THeaderTestCase)
+  TestTIdSipParameteredCallIDHeader = class(THeaderTestCase)
+  private
+    C: TIdSipParameteredCallIDHeader;
+  public
+    procedure SetUp; override;
+  published
+    procedure TestCallID;
+    procedure TestSetCallID;
+  end;
+
+  TestTIdSipReplacesHeader = class(TestTIdSipParameteredCallIDHeader)
   private
     R: TIdSipReplacesHeader;
   protected
@@ -413,12 +423,13 @@ type
   public
     procedure SetUp; override;
   published
-    procedure TestCallID;
     procedure TestFromTag;
     procedure TestIsEarly;
     procedure TestName;
     procedure TestToTag;
     procedure TestValue; override;
+    procedure TestValueMissingFromTag;
+    procedure TestValueMissingToTag;
     procedure TestValueMultipleFromTags;
     procedure TestValueMultipleToTags;
   end;
@@ -449,6 +460,10 @@ type
     procedure TestSetReasonType;
     procedure TestStrToReasonType;
     procedure TestValue; override;
+    procedure TestValueMissingLocalTag;
+    procedure TestValueMissingRemoteTag;
+    procedure TestValueMultipleLocalTags;
+    procedure TestValueMultipleRemoteTags;
   end;
 
   TestTIdSipTimestampHeader = class(THeaderTestCase)
@@ -723,7 +738,6 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipMessage tests (Headers)');
-{
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSipHeader.Suite);
   Result.AddTest(TestTIdSipAddressHeader.Suite);
@@ -747,9 +761,7 @@ begin
   Result.AddTest(TestTIdSipRecordRouteHeader.Suite);
   Result.AddTest(TestTIdSipReferToHeader.Suite);
   Result.AddTest(TestTIdSipReplacesHeader.Suite);
-}
   Result.AddTest(TestTIdSipSubscriptionStateHeader.Suite);
-{
   Result.AddTest(TestTIdSipTimestampHeader.Suite);
   Result.AddTest(TestTIdSipUriHeader.Suite);
   Result.AddTest(TestTIdSipViaHeader.Suite);
@@ -762,7 +774,6 @@ begin
   Result.AddTest(TestTIdSipExpiresHeaders.Suite);
   Result.AddTest(TestTIdSipRoutePath.Suite);
   Result.AddTest(TestTIdSipViaPath.Suite);
-}
 end;
 
 //******************************************************************************
@@ -3650,6 +3661,41 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSipParameteredCallIDHeader                                          *
+//******************************************************************************
+//* TestTIdSipParameteredCallIDHeader Public methods ***************************
+
+procedure TestTIdSipParameteredCallIDHeader.SetUp;
+begin
+  inherited SetUp;
+
+  Self.C := Self.Header as TIdSipParameteredCallIDHeader;
+end;
+
+//* TestTIdSipParameteredCallIDHeader Published methods ************************
+
+procedure TestTIdSipParameteredCallIDHeader.TestCallID;
+const
+  CallID    = 'foo';
+  NewCallID = 'bar';
+begin
+  Self.C.CallID := CallID;
+  CheckEquals(CallID, Self.C.CallID, 'Call-ID not set');
+
+  Self.C.CallID := NewCallID;
+  CheckEquals(NewCallID, Self.C.CallID, 'Call-ID not re-set');
+end;
+
+procedure TestTIdSipParameteredCallIDHeader.TestSetCallID;
+begin
+  Self.C.Value := 'foo;from-tag=bar;to-tag=baz';
+  Self.C.CallID := 'quaax';
+
+  Check(Self.C.HasParam(FromTagParam), FromTagParam + ' removed');
+  Check(Self.C.HasParam(ToTagParam),   ToTagParam + ' removed');
+end;
+
+//******************************************************************************
 //* TestTIdSipReplacesHeader                                                   *
 //******************************************************************************
 //* TestTIdSipReplacesHeader Public methods ************************************
@@ -3669,18 +3715,6 @@ begin
 end;
 
 //* TestTIdSipReplacesHeader Published methods *********************************
-
-procedure TestTIdSipReplacesHeader.TestCallID;
-const
-  CallID    = 'foo';
-  NewCallID = 'bar';
-begin
-  Self.R.CallID := CallID;
-  CheckEquals(CallID, Self.R.CallID, 'Call-ID not set');
-
-  Self.R.CallID := NewCallID;
-  CheckEquals(NewCallID, Self.R.CallID, 'Call-ID not re-set');
-end;
 
 procedure TestTIdSipReplacesHeader.TestFromTag;
 const
@@ -3737,18 +3771,41 @@ begin
   CheckEquals(CallID,  Self.R.CallID,  CallIDHeaderFull);
   CheckEquals(FromTag, Self.R.FromTag, FromTagParam);
   CheckEquals(ToTag,   Self.R.ToTag,   ToTagParam);
+  CheckEquals(Self.R.CallID,
+              Self.R.Value,
+              '"Value" should equal the Call-ID to avoid confusion in, say, FullValue');
 
   Check(not Self.R.IsMalformed,
         'Syntactically correct header claims to be malformed');
 end;
 
+procedure TestTIdSipReplacesHeader.TestValueMissingFromTag;
+begin
+  Self.R.Value := 'arbcallid;to-tag=1';
+
+  Check(Self.R.IsMalformed,
+        'Header with missing from-tag not marked as malformed');
+  Check(Pos(FromTagParam, Self.R.ParseFailReason) > 0,
+        'Insufficiently informative ParseFailReason: ' + Self.R.ParseFailReason);
+end;
+
+procedure TestTIdSipReplacesHeader.TestValueMissingToTag;
+begin
+  Self.R.Value := 'arbcallid;from-tag=1';
+
+  Check(Self.R.IsMalformed,
+        'Header with missing to-tag not marked as malformed');
+  Check(Pos(ToTagParam, Self.R.ParseFailReason) > 0,
+        'Insufficiently informative ParseFailReason: ' + Self.R.ParseFailReason);
+end;
+
 procedure TestTIdSipReplacesHeader.TestValueMultipleFromTags;
 begin
-  Self.R.Value := 'arbcallid;from-tag=1;from-tag=2';
+  Self.R.Value := 'arbcallid;from-tag=1;from-tag=2;to-tag=3';
   Check(Self.R.IsMalformed,
         'Header with two from-tags not marked as malformed');
   Check(Pos(FromTagParam, Self.R.ParseFailReason) > 0,
-        'Insufficiently informative ParseFailReason');
+        'Insufficiently informative ParseFailReason: ' + Self.R.ParseFailReason);
 end;
 
 procedure TestTIdSipReplacesHeader.TestValueMultipleToTags;
@@ -3757,7 +3814,7 @@ begin
   Check(Self.R.IsMalformed,
         'Header with two to-tags not marked as malformed');
   Check(Pos(ToTagParam, Self.R.ParseFailReason) > 0,
-        'Insufficiently informative ParseFailReason');
+        'Insufficiently informative ParseFailReason: ' + Self.R.ParseFailReason);
 end;
 
 //******************************************************************************
@@ -4092,6 +4149,144 @@ begin
               TIdSipSubscriptionStateHeader.ReasonTypeToStr(Self.SS.ReasonType),
               'ReasonType');
   CheckEquals(2,                           Self.SS.RetryAfter, 'RetryAfter');
+end;
+
+//******************************************************************************
+//* TestTIdSipTargetDialogHeader                                               *
+//******************************************************************************
+//* TestTIdSipTargetDialogHeader Public methods ********************************
+
+procedure TestTIdSipTargetDialogHeader.SetUp;
+begin
+  inherited SetUp;
+
+  Self.T := Self.Header as TIdSipTargetDialogHeader;
+end;
+
+//* TestTIdSipTargetDialogHeader Protected methods *****************************
+
+function TestTIdSipTargetDialogHeader.HeaderType: TIdSipHeaderClass;
+begin
+  Result := TIdSipTargetDialogHeader;
+end;
+
+//* TestTIdSipTargetDialogHeader Published methods *****************************
+
+procedure TestTIdSipTargetDialogHeader.TestHasCompleteDialogID;
+begin
+  Check(not Self.T.HasCompleteDialogID,
+        'Blank call-id, no local-tag, no remote-tag');
+
+  Self.T.CallID := 'foo';
+  Check(not Self.T.HasCompleteDialogID,
+        'No local-tag, no remote-tag');
+
+  Self.T.LocalTag := 'bar';
+  Check(not Self.T.HasCompleteDialogID,
+        'No remote-tag');
+
+  Self.T.RemoteTag := 'baz';
+  Check(Self.T.HasCompleteDialogID,
+        'With complete dialog ID');
+
+  Self.T.RemoveParameter(LocalTagParam);
+  Check(not Self.T.HasCompleteDialogID,
+        'No local-tag');
+end;
+
+procedure TestTIdSipTargetDialogHeader.TestLocalTag;
+const
+  NewTag = 'bar';
+  Tag    = 'foo';
+begin
+  Self.T.LocalTag := Tag;
+  CheckEquals(Tag, Self.T.LocalTag, 'Local tag not set');
+
+  Self.T.LocalTag := NewTag;
+  CheckEquals(NewTag, Self.T.LocalTag, 'Local tag not re-set');
+
+  Self.T.Value := 'arbcallid;local-tag=1';
+  Self.T.LocalTag := NewTag;
+  CheckEquals(NewTag, Self.T.LocalTag, 'Local tag not re-set after SetValue');
+end;
+
+procedure TestTIdSipTargetDialogHeader.TestName;
+begin
+  CheckEquals(TargetDialogHeader, Self.T.Name, 'Name');
+
+  Self.T.Name := 'foo';
+  CheckEquals(TargetDialogHeader, Self.T.Name, 'Name after set');
+end;
+
+procedure TestTIdSipTargetDialogHeader.TestRemoteTag;
+const
+  NewTag = 'bar';
+  Tag    = 'foo';
+begin
+  Self.T.RemoteTag := Tag;
+  CheckEquals(Tag, Self.T.RemoteTag, 'Remote tag not set');
+
+  Self.T.RemoteTag := NewTag;
+  CheckEquals(NewTag, Self.T.RemoteTag, 'Remote tag not re-set');
+
+  Self.T.Value := 'arbcallid;Remote-tag=1';
+  Self.T.RemoteTag := NewTag;
+  CheckEquals(NewTag, Self.T.RemoteTag, 'Remote tag not re-set after SetValue');
+end;
+
+procedure TestTIdSipTargetDialogHeader.TestValue;
+const
+  CallID    = 'foo';
+  LocalTag  = 'bar';
+  RemoteTag = 'baz';
+begin
+  Self.T.Value := Format('%s;local-tag=%s;remote-tag=%s', [CallID, LocalTag, RemoteTag]);
+  CheckEquals(CallID,    Self.T.CallID,  CallIDHeaderFull);
+  CheckEquals(LocalTag,  Self.T.LocalTag, LocalTagParam);
+  CheckEquals(RemoteTag, Self.T.RemoteTag,   RemoteTagParam);
+
+  Check(not Self.T.IsMalformed,
+        'Syntactically correct header claims to be malformed');
+end;
+
+procedure TestTIdSipTargetDialogHeader.TestValueMissingLocalTag;
+begin
+  Self.T.Value := 'foo;remote-tag=baz';
+
+  Check(Self.T.IsMalformed,
+        'Header with missing local-tag not marked as malformed');
+  Check(Pos(LocalTagParam, Self.T.ParseFailReason) > 0,
+        'Insufficiently informative ParseFailReason: ' + Self.T.ParseFailReason);
+end;
+
+procedure TestTIdSipTargetDialogHeader.TestValueMissingRemoteTag;
+begin
+  Self.T.Value := 'foo;local-tag=baz';
+
+  Check(Self.T.IsMalformed,
+        'Header with missing Remote-tag not marked as malformed');
+  Check(Pos(RemoteTagParam, Self.T.ParseFailReason) > 0,
+        'Insufficiently informative ParseFailReason: ' + Self.T.ParseFailReason);
+end;
+
+procedure TestTIdSipTargetDialogHeader.TestValueMultipleLocalTags;
+begin
+  Self.T.Value := 'arbcallid;local-tag=1;local-tag=2;remote-tag=3';
+
+  Check(Self.T.IsMalformed,
+        'Header with two local-tags not marked as malformed');
+  Check(Pos(LocalTagParam, Self.T.ParseFailReason) > 0,
+        'Insufficiently informative ParseFailReason: ' + Self.T.ParseFailReason);
+end;
+
+procedure TestTIdSipTargetDialogHeader.TestValueMultipleRemoteTags;
+begin
+  Self.T.Value := 'arbcallid;remote-tag=1;remote-tag=2;local-tag=3';
+
+  Check(Self.T.IsMalformed,
+        'Header with two remote-tags not marked as malformed');
+  Check(Pos(RemoteTagParam, Self.T.ParseFailReason) > 0,
+        'Insufficiently informative ParseFailReason: ' + Self.T.ParseFailReason);
 end;
 
 //******************************************************************************
@@ -5614,6 +5809,7 @@ begin
   CheckType(TIdSipSubscriptionStateHeader,      Self.Headers.Add(SubscriptionStateHeader),    SubscriptionStateHeader);
   CheckType(TIdSipCommaSeparatedHeader,         Self.Headers.Add(SupportedHeaderFull),        SupportedHeaderFull);
   CheckType(TIdSipCommaSeparatedHeader,         Self.Headers.Add(SupportedHeaderShort),       SupportedHeaderShort);
+  CheckType(TIdSipTargetDialogHeader,           Self.Headers.Add(TargetDialogHeader),         TargetDialogHeader);
   CheckType(TIdSipTimestampHeader,              Self.Headers.Add(TimestampHeader),            TimestampHeader);
   CheckType(TIdSipToHeader,                     Self.Headers.Add(ToHeaderFull),               ToHeaderFull);
   CheckType(TIdSipToHeader,                     Self.Headers.Add(ToHeaderShort),              ToHeaderShort);

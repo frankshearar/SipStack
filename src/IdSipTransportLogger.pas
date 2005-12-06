@@ -19,8 +19,8 @@ type
   TIdMessageDirection = (dirError, dirIn, dirOut);
 
   TIdSipTransportLogger = class(TIdInterfacedObject,
-                              IIdSipTransportListener,
-                              IIdSipTransportSendingListener)
+                                IIdSipTransportListener,
+                                IIdSipTransportSendingListener)
   private
     fOutputStream: TStream;
 
@@ -30,9 +30,11 @@ type
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               Receiver: TIdSipTransport);
+                               Receiver: TIdSipTransport;
+                               Source: TIdSipConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                Receiver: TIdSipTransport);
+                                Receiver: TIdSipTransport;
+                                Source: TIdSipConnectionBindings);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure OnSendRequest(Request: TIdSipRequest;
@@ -120,13 +122,15 @@ begin
 end;
 
 procedure TIdSipTransportLogger.OnReceiveRequest(Request: TIdSipRequest;
-                                                 Receiver: TIdSipTransport);
+                                                 Receiver: TIdSipTransport;
+                                                 Source: TIdSipConnectionBindings);
 begin
   Self.Log(Request.AsString, dirIn);
 end;
 
 procedure TIdSipTransportLogger.OnReceiveResponse(Response: TIdSipResponse;
-                                                  Receiver: TIdSipTransport);
+                                                  Receiver: TIdSipTransport;
+                                                  Source: TIdSipConnectionBindings);
 begin
   Self.Log(Response.AsString, dirIn);
 end;

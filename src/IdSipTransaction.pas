@@ -121,9 +121,11 @@ type
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               Receiver: TIdSipTransport); overload;
+                               Receiver: TIdSipTransport;
+                               Source: TIdSipConnectionBindings); overload;
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                Receiver: TIdSipTransport); overload;
+                                Receiver: TIdSipTransport;
+                                Source: TIdSipConnectionBindings); overload;
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure SetLocator(Value: TIdSipAbstractLocator);
@@ -970,13 +972,15 @@ begin
 end;
 
 procedure TIdSipTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
-                                                       Receiver: TIdSipTransport);
+                                                       Receiver: TIdSipTransport;
+                                                       Source: TIdSipConnectionBindings);
 begin
   Self.DeliverToTransaction(Request, Receiver);
 end;
 
 procedure TIdSipTransactionDispatcher.OnReceiveResponse(Response: TIdSipResponse;
-                                                        Receiver: TIdSipTransport);
+                                                        Receiver: TIdSipTransport;
+                                                        Source: TIdSipConnectionBindings);
 begin
   Self.DeliverToTransaction(Response, Receiver);
 end;

@@ -525,29 +525,32 @@ type
     fRejectedMessage:  Boolean;
     fRequestParam:     TIdSipRequest;
     fResponseParam:    TIdSipResponse;
+    fSourceParam:      TIdSipConnectionBindings;
 
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               Receiver: TIdSipTransport);
+                               Receiver: TIdSipTransport;
+                               Source: TIdSipConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                Receiver: TIdSipTransport);
+                                Receiver: TIdSipTransport;
+                                Source: TIdSipConnectionBindings);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
   public
     constructor Create; override;
 
-    property Exception:        Boolean         read fException;
-    property ExceptionParam:   Exception       read fExceptionParam;
-    property MsgParam:         String          read fMsgParam;
-    property ReasonParam:      String          read fReasonParam;
-    property ReceivedRequest:  Boolean         read fReceivedRequest;
-    property ReceivedResponse: Boolean         read fReceivedResponse;
-    property ReceiverParam:    TIdSipTransport read fReceiverParam;
-    property RejectedMessage:  Boolean         read fRejectedMessage;
-    property RequestParam:     TIdSipRequest   read fRequestParam;
-    property ResponseParam:    TIdSipResponse  read fResponseParam;
-
+    property Exception:        Boolean                  read fException;
+    property ExceptionParam:   Exception                read fExceptionParam;
+    property MsgParam:         String                   read fMsgParam;
+    property ReasonParam:      String                   read fReasonParam;
+    property ReceivedRequest:  Boolean                  read fReceivedRequest;
+    property ReceivedResponse: Boolean                  read fReceivedResponse;
+    property ReceiverParam:    TIdSipTransport          read fReceiverParam;
+    property RejectedMessage:  Boolean                  read fRejectedMessage;
+    property RequestParam:     TIdSipRequest            read fRequestParam;
+    property ResponseParam:    TIdSipResponse           read fResponseParam;
+    property SourceParam:      TIdSipConnectionBindings read fSourceParam;
   end;
 
   TIdSipTestTransportSendingListener = class(TIdSipMockListener,
@@ -1991,22 +1994,26 @@ begin
 end;
 
 procedure TIdSipTestTransportListener.OnReceiveRequest(Request: TIdSipRequest;
-                                                       Receiver: TIdSipTransport);
+                                                       Receiver: TIdSipTransport;
+                                                       Source: TIdSipConnectionBindings);
 begin
   Self.fReceiverParam   := Receiver;
   Self.fRequestParam    := Request;
   Self.fReceivedRequest := true;
+  Self.fSourceParam      := Source;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnReceiveRequest');
 end;
 
 procedure TIdSipTestTransportListener.OnReceiveResponse(Response: TIdSipResponse;
-                                                        Receiver: TIdSipTransport);
+                                                        Receiver: TIdSipTransport;
+                                                        Source: TIdSipConnectionBindings);
 begin
   Self.fReceiverParam    := Receiver;
   Self.fResponseParam    := Response;
   Self.fReceivedResponse := true;
+  Self.fSourceParam      := Source;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnReceiveResponse');

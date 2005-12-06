@@ -526,7 +526,7 @@ begin
   Check(Response.HasHeader(MinExpiresHeader),
         MinExpiresHeader + ' missing');
   CheckEquals(Self.Registrar.MinimumExpiryTime,
-              Response.FirstMinExpires.NumericValue,
+              Response.MinExpires.NumericValue,
               MinExpiresHeader + ' value');
 end;
 
@@ -543,7 +543,7 @@ begin
   Check(Response.HasHeader(MinExpiresHeader),
         MinExpiresHeader + ' missing');
   CheckEquals(Self.Registrar.MinimumExpiryTime,
-              Response.FirstMinExpires.NumericValue,
+              Response.MinExpires.NumericValue,
               MinExpiresHeader + ' value');
 end;
 
@@ -1204,7 +1204,7 @@ begin
   Response := Self.CreateRemoteOk(Self.LastSentRequest);
   try
     Response.Contacts := Self.LastSentRequest.Contacts;
-    Response.FirstExpires.NumericValue := ExpiryTime;
+    Response.Expires.NumericValue := ExpiryTime;
 
     Self.ReceiveResponse(Response);
   finally

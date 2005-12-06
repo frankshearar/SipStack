@@ -26,7 +26,6 @@ type
   TIdSipUserAgent = class(TIdSipAbstractCore,
                           IIdSipInviteModuleListener)
   private
-    fDoNotDisturb:        Boolean;
     fDoNotDisturbMessage: String;
     fHasProxy:            Boolean;
     fProxy:               TIdSipUri;
@@ -34,17 +33,18 @@ type
     fInviteModule:        TIdSipInviteModule;
     UserAgentListeners:   TIdNotificationList;
 
+    function  GetDoNotDisturb: Boolean;
     function  GetInitialResendInterval: Cardinal;
     function  GetProgressResendInterval: Cardinal;
-    procedure OnInboundCall(UserAgent: TIdSipAbstractCore;
+    procedure OnInboundCall(UserAgent: TIdSipInviteModule;
                             Session: TIdSipInboundSession);
+    procedure SetDoNotDisturb(Value: Boolean);
     procedure SetInitialResendInterval(Value: Cardinal);
     procedure SetProgressResendInterval(Value: Cardinal);
     procedure SetProxy(Value: TIdSipUri);
   protected
     procedure NotifyOfDroppedMessage(Message: TIdSipMessage;
                                      Receiver: TIdSipTransport); override;
-    function  WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; override;
   public
     constructor Create; override;
     destructor  Destroy; override;
@@ -57,7 +57,7 @@ type
     function  ResponseForInvite: Cardinal; override;
     function  SessionCount: Integer;
 
-    property DoNotDisturb:           Boolean                      read fDoNotDisturb write fDoNotDisturb;
+    property DoNotDisturb:           Boolean                      read GetDoNotDisturb write SetDoNotDisturb;
     property DoNotDisturbMessage:    String                       read fDoNotDisturbMessage write fDoNotDisturbMessage;
     property HasProxy:               Boolean                      read fHasProxy write fHasProxy;
     property InitialResendInterval:  Cardinal                     read GetInitialResendInterval write SetInitialResendInterval;
@@ -72,13 +72,12 @@ type
   // independent setting consisting of a Directive, at least one space, and the
   // settings for that Directive.
   //
-  // Currently we support the following Directives: Listen, NameServer,
-  // Register.
-  //
   // Here's a summary of the formats for each directive:
+  //   Contact: sip:wintermute@tessier-ashpool.co.luna
+  //   From: "Count Zero" <sip:countzero@jammer.org>
+  //   Listen: <transport name><SP><host|IPv4 address|IPv6 reference|AUTO>:<port>
   //   NameServer: <domain name or IP>:<port>
   //   NameServer: MOCK
-  //   Listen: <transport name><SP><host|IPv4 address|IPv6 reference|AUTO>:<port>
   //   Register: <SIP/S URI>
   //   Proxy: <SIP/S URI>
   //   From: "Count Zero" <sip:countzero@jammer.org>
@@ -120,6 +119,20 @@ type
     function CreateUserAgent(Configuration: TStrings;
                              Context: TIdTimerQueue): TIdSipUserAgent; overload;
   end;
+
+// Configuration file constants
+const
+  AuthenticationDirective  = 'Authentication';
+  AutoKeyword              = 'AUTO';
+  ContactDirective         = ContactHeaderFull;
+  DebugMessageLogDirective = 'DebugMessageLog';
+  FromDirective            = FromHeaderFull;
+  ListenDirective          = 'Listen';
+  MockKeyword              = 'MOCK';
+  NameServerDirective      = 'NameServer';
+  ProxyDirective           = 'Proxy';
+  RegisterDirective        = 'Register';
+  SupportEventDirective    = 'SupportEvent';
 
 implementation
 
@@ -232,19 +245,12 @@ begin
   Result := Self.Actions.SessionCount;
 end;
 
-//* TIdSipUserAgent Protected methods ******************************************
-
-function TIdSipUserAgent.WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction;
-begin
-  Result := inherited WillAcceptRequest(Request);
-
-  if (Result = uarAccept) then begin
-    if (Request.IsInvite or Request.IsOptions) and Self.DoNotDisturb then
-      Result := uarDoNotDisturb;
-  end;
-end;
-
 //* TIdSipUserAgent Private methods ********************************************
+
+function TIdSipUserAgent.GetDoNotDisturb: Boolean;
+begin
+  Result := Self.InviteModule.DoNotDisturb;
+end;
 
 function TIdSipUserAgent.GetInitialResendInterval: Cardinal;
 begin
@@ -256,10 +262,15 @@ begin
   Result := Self.InviteModule.ProgressResendInterval;
 end;
 
-procedure TIdSipUserAgent.OnInboundCall(UserAgent: TIdSipAbstractCore;
+procedure TIdSipUserAgent.OnInboundCall(UserAgent: TIdSipInviteModule;
                                         Session: TIdSipInboundSession);
 begin
   // For now, do nothing
+end;
+
+procedure TIdSipUserAgent.SetDoNotDisturb(Value: Boolean);
+begin
+  Self.InviteModule.DoNotDisturb := Value;
 end;
 
 procedure TIdSipUserAgent.SetInitialResendInterval(Value: Cardinal);
@@ -312,6 +323,7 @@ procedure TIdSipStackConfigurator.AddAuthentication(UserAgent: TIdSipAbstractCor
 var
   Line: String;
 begin
+  // See class comment for the format for this directive.
   Line := AuthenticationLine;
   Self.EatDirective(Line);
 
@@ -331,6 +343,7 @@ procedure TIdSipStackConfigurator.AddContact(UserAgent: TIdSipAbstractCore;
 var
   Line: String;
 begin
+  // See class comment for the format for this directive.
   Line := ContactLine;
   Self.EatDirective(Line);
 
@@ -349,6 +362,7 @@ procedure TIdSipStackConfigurator.AddFrom(UserAgent: TIdSipAbstractCore;
 var
   Line: String;
 begin
+  // See class comment for the format for this directive.
   Line := FromLine;
   Self.EatDirective(Line);
 
@@ -394,6 +408,7 @@ procedure TIdSipStackConfigurator.AddProxy(UserAgent: TIdSipUserAgent;
 var
   Line: String;
 begin
+  // See class comment for the format for this directive.
   Line := ProxyLine;
   Self.EatDirective(Line);
 
@@ -412,7 +427,8 @@ var
   Module:   TIdSipSubscribeModule;
   Packages: TStrings;
 begin
-  if UserAgent.ModuleFor(MethodSubscribe).IsNull then
+  // See class comment for the format for this directive.
+  if not UserAgent.UsesModule(TIdSipSubscribeModule) then
     Module := UserAgent.AddModule(TIdSipSubscribeModule) as TIdSipSubscribeModule
   else
     Module := UserAgent.ModuleFor(MethodSubscribe) as TIdSipSubscribeModule;

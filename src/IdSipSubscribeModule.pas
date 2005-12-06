@@ -145,6 +145,10 @@ type
     function  PackageAt(Index: Integer): TIdSipEventPackage;
     procedure RejectUnknownEvent(Request: TIdSipRequest);
     function  SubscriptionMakingRequests: String;
+  protected
+    function AcceptRequest(Request: TIdSipRequest;
+                           UsingSecureTransport: Boolean): TIdSipAction; override;
+    function WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; override;
   public
     constructor Create(UA: TIdSipAbstractCore); override;
     destructor  Destroy; override;
@@ -167,6 +171,9 @@ type
                               const EventPackage: String): TIdSipRequest; overload;
     function  CreateSubscribe(Dialog: TIdSipDialog;
                               const EventPackage: String): TIdSipRequest; overload;
+    function  CreateTransfer(Session: TIdSipSession;
+                             Dest: TIdSipAddressHeader;
+                             ReferTo: TIdSipAddressHeader): TIdSipRequest;
     function  DefaultSubscriptionDuration: Cardinal;
     function  IsSubscribeMethod(Method: String): Boolean;
     procedure NotifyOfSubscriptionRequest(Subscription: TIdSipInboundSubscription);
@@ -1050,6 +1057,34 @@ end;
 
 //* TIdSipSubscribeModule Private methods **************************************
 
+function TIdSipSubscribeModule.AcceptRequest(Request: TIdSipRequest;
+                                             UsingSecureTransport: Boolean): TIdSipAction;
+var
+  Package: TIdSipEventPackage;
+begin
+  Result := nil;
+
+  if not Self.IsSubscribeMethod(Request.Method) then begin
+    Self.UserAgent.ReturnResponse(Request,
+                                  SIPCallLegOrTransactionDoesNotExist);
+    Exit;
+  end;
+
+  Package := Self.PackageFor(Request);
+
+  if Assigned(Package) then
+    Result := Package.Accept(Request, UsingSecureTransport)
+  else
+    Self.RejectUnknownEvent(Request);
+end;
+
+function TIdSipSubscribeModule.WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction;
+begin
+  Result := inherited WillAcceptRequest(Request);
+end;
+
+//* TIdSipSubscribeModule Private methods **************************************
+
 function TIdSipSubscribeModule.DefaultMinimumExpiryTime: Cardinal;
 begin
   Result := OneMinute;
@@ -1379,8 +1414,8 @@ begin
          'Don''t send a NOTIFY with a zero expires: if you want to terminate a '
        + 'subscription send a NOTIFY with a Subscription-State of "terminated"');
 
-  Notify.FirstSubscriptionState.SubState := Self.SubscriptionState;
-  Notify.FirstSubscriptionState.Expires  := Self.Expires;
+  Notify.SubscriptionState.SubState := Self.SubscriptionState;
+  Notify.SubscriptionState.Expires  := Self.Expires;
 end;
 
 procedure TIdSipOutboundNotify.NotifyOfFailure(Response: TIdSipResponse);
@@ -1409,8 +1444,8 @@ procedure TIdSipOutboundTerminatingNotify.ConfigureAttempt(Notify: TIdSipRequest
 begin
   inherited ConfigureAttempt(Notify);
 
-  Notify.FirstSubscriptionState.SubState := SubscriptionSubstateTerminated;
-  Notify.FirstSubscriptionState.Reason   := Self.Reason;
+  Notify.SubscriptionState.SubState := SubscriptionSubstateTerminated;
+  Notify.SubscriptionState.Reason   := Self.Reason;
 end;
 
 //******************************************************************************
@@ -1994,7 +2029,7 @@ begin
   else begin
     // Request is a refresh SUBSCRIBE
     if Self.WillAccept(Request) then begin
-      Self.ScheduleTermination(Request.FirstExpires.NumericValue);
+      Self.ScheduleTermination(Request.Expires.NumericValue);
       Self.Dialog.ReceiveRequest(Request);
       Self.SendOk(Request);
     end;
@@ -2018,7 +2053,7 @@ begin
   Result := false;
 
   if Subscribe.HasHeader(ExpiresHeader) then begin
-    Expires := Subscribe.FirstExpires.NumericValue;
+    Expires := Subscribe.Expires.NumericValue;
 
     if (Expires < OneHour) and (Expires < Self.Package.MinimumExpiryTime) then
       Self.RejectExpiresTooBrief(Subscribe)
@@ -2097,7 +2132,7 @@ procedure TIdSipInboundSubscription.OnFailure(NotifyAgent: TIdSipOutboundNotify;
 begin
   if Response.CanRetryRequest
     and Response.HasHeader(RetryAfterHeader) then
-    Self.ScheduleRenotify(Response.FirstRetryAfter.NumericValue)
+    Self.ScheduleRenotify(Response.RetryAfter.NumericValue)
   else
     Self.MarkAsTerminated;
 end;
@@ -2112,8 +2147,8 @@ begin
   Result := Self.Package.InboundSubscriptionDuration;
 
   if Subscribe.HasHeader(ExpiresHeader) then begin
-    if (Result > Subscribe.FirstExpires.NumericValue) then
-      Result := Subscribe.FirstExpires.NumericValue;
+    if (Result > Subscribe.Expires.NumericValue) then
+      Result := Subscribe.Expires.NumericValue;
   end
   else begin
     // SUBSCRIBEs SHOULD have an Expires (RFC 3265 section 3.1.1), but that
@@ -2128,7 +2163,7 @@ var
 begin
   Response := Self.UA.CreateResponse(Subscribe, SIPIntervalTooBrief);
   try
-    Response.FirstMinExpires.NumericValue := Self.Package.MinimumExpiryTime;
+    Response.MinExpires.NumericValue := Self.Package.MinimumExpiryTime;
 
     Self.SendResponse(Response);
   finally
@@ -2159,10 +2194,10 @@ var
 begin
   Accepted := Self.UA.CreateResponse(Subscribe, SIPAccepted);
   try
-    Accepted.FirstExpires.NumericValue := Self.OurExpires(Subscribe);
+    Accepted.Expires.NumericValue := Self.OurExpires(Subscribe);
 
     Self.EstablishDialog(Accepted);
-    Self.ScheduleTermination(Accepted.FirstExpires.NumericValue);
+    Self.ScheduleTermination(Accepted.Expires.NumericValue);
     Self.SendResponse(Accepted);
   finally
     Accepted.Free;
@@ -2175,9 +2210,9 @@ var
 begin
   Ok := Self.UA.CreateResponse(Subscribe, SIPOK);
   try
-    Ok.FirstExpires.NumericValue := Self.OurExpires(Subscribe);
+    Ok.Expires.NumericValue := Self.OurExpires(Subscribe);
 
-    Self.ScheduleTermination(Ok.FirstExpires.NumericValue);
+    Self.ScheduleTermination(Ok.Expires.NumericValue);
     Self.SendResponse(Ok);
   finally
     Ok.Free;
@@ -2361,7 +2396,7 @@ begin
   // cf. RFC 3265, section 3.2.4
   Self.NotifyOfReceivedNotify(Notify);
 
-  State := Notify.FirstSubscriptionState;
+  State := Notify.SubscriptionState;
 
   if State.IsActive then begin
     if (State.Expires > 0) then
@@ -2518,7 +2553,7 @@ begin
   end;
 
   if Response.HasHeader(ExpiresHeader) then
-    Self.RescheduleRefresh(Response.FirstExpires.NumericValue)
+    Self.RescheduleRefresh(Response.Expires.NumericValue)
   else begin
     // We shouldn't actually ever reach this: notifiers MUST have an Expires
     // header.

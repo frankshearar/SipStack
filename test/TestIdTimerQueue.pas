@@ -111,8 +111,8 @@ type
   end;
 
 const
-  ShortTimeout = 10;
-  LongTimeout  = 10*ShortTimeout;
+  ShortTimeout = 10;              // milliseconds
+  LongTimeout  = 10*ShortTimeout; // milliseconds
 
 implementation
 
@@ -289,7 +289,7 @@ procedure TestTIdThreadedTimerQueue.SetUp;
 begin
   inherited SetUp;
 
-  Self.DefaultTimeout   := 100;
+  Self.DefaultTimeout   := LongTimeout;
   Self.ExceptionMessage := 'The event waited for was never fired';
   Self.Notified         := false;
   Self.OrderOfFire      := '';

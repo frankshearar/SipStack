@@ -70,6 +70,14 @@ type
     procedure TestRejectUnsupportedSipVersion;
     procedure TestRemoveObserver;
     procedure TestScheduleEvent;
+    procedure TestSendRequest;
+    procedure TestSendRequestMalformedRequest;
+    procedure TestSendRequestUnknownMethod;
+    procedure TestSendRequestUnknownRequiredExtension;
+    procedure TestSendRequestUnknownSupportedExtension;
+    procedure TestSendResponse;
+    procedure TestSendResponseMalformedResponse;
+    procedure TestSendResponseUnknownSupportedExtension;
   end;
 
   TIdSipNullAction = class(TIdSipAction)
@@ -355,6 +363,1032 @@ end;
 
 
 //* TestTIdSipAbstractCore Published methods ***********************************
+
+procedure TestTIdSipAbstractCore.TestAddAllowedLanguage;
+var
+  Languages: TStrings;
+begin
+  Languages := TStringList.Create;
+  try
+    Self.Core.AddAllowedLanguage('en');
+    Self.Core.AddAllowedLanguage('af');
+
+    Languages.CommaText := Self.Core.AllowedLanguages;
+
+    CheckEquals(2, Languages.Count, 'Number of allowed Languages');
+
+    CheckEquals('en', Languages[0], 'en first');
+    CheckEquals('af', Languages[1], 'af second');
+  finally
+    Languages.Free;
+  end;
+
+  try
+    Self.Core.AddAllowedLanguage(' ');
+    Fail('Failed to forbid adding a malformed language ID');
+  except
+    on EIdException do;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestAddAllowedLanguageLanguageAlreadyPresent;
+var
+  Languages: TStrings;
+begin
+  Languages := TStringList.Create;
+  try
+    Self.Core.AddAllowedLanguage('en');
+    Self.Core.AddAllowedLanguage('en');
+
+    Languages.CommaText := Self.Core.AllowedLanguages;
+
+    CheckEquals(1, Languages.Count, 'en was re-added');
+  finally
+    Languages.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestAddAllowedMethod;
+var
+  Methods: TStringList;
+begin
+  Methods := TStringList.Create;
+  try
+    Methods.CommaText := Self.Core.KnownMethods;
+    Methods.Sort;
+
+    CheckEquals(MethodAck,     Methods[0], 'ACK first');
+    CheckEquals(MethodBye,     Methods[1], 'BYE second');
+    CheckEquals(MethodCancel,  Methods[2], 'CANCEL third');
+    CheckEquals(MethodInvite,  Methods[3], 'INVITE fourth');
+    CheckEquals(MethodOptions, Methods[4], 'OPTIONS fifth');
+
+    CheckEquals(5, Methods.Count, 'Number of allowed methods');
+  finally
+    Methods.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestAddAllowedMethodMethodAlreadyPresent;
+var
+  Methods: TStrings;
+  MethodCount: Cardinal;
+begin
+  Methods := TStringList.Create;
+  try
+    Self.Core.AddModule(TIdSipInviteModule);
+    Methods.CommaText := Self.Core.KnownMethods;
+    MethodCount := Methods.Count;
+
+    Self.Core.AddModule(TIdSipInviteModule);
+    Methods.CommaText := Self.Core.KnownMethods;
+
+    CheckEquals(MethodCount, Methods.Count, MethodInvite + ' was re-added');
+  finally
+    Methods.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestAddAllowedScheme;
+var
+  Schemes: TStrings;
+begin
+  Schemes := TStringList.Create;
+  try
+    Self.Core.AddAllowedScheme(SipScheme);
+    Self.Core.AddAllowedScheme(SipsScheme);
+
+    Schemes.CommaText := Self.Core.AllowedSchemes;
+
+    CheckEquals(2, Schemes.Count, 'Number of allowed Schemes');
+
+    CheckEquals(SipScheme,  Schemes[0], 'SIP first');
+    CheckEquals(SipsScheme, Schemes[1], 'SIPS second');
+  finally
+    Schemes.Free;
+  end;
+
+  try
+    Self.Core.AddAllowedScheme(' ');
+    Fail('Failed to forbid adding a malformed URI scheme');
+  except
+    on EIdException do;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestAddAllowedSchemeSchemeAlreadyPresent;
+var
+  Schemes: TStrings;
+begin
+  Schemes := TStringList.Create;
+  try
+    Self.Core.AddAllowedScheme(SipScheme);
+
+    Schemes.CommaText := Self.Core.AllowedSchemes;
+
+    CheckEquals(1, Schemes.Count, 'SipScheme was re-added');
+  finally
+    Schemes.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestAddModule;
+var
+  Module:     TIdSipMessageModule;
+  ModuleType: TIdSipMessageModuleClass;
+begin
+  ModuleType := TIdSipSubscribeModule;
+
+  Module := Self.Core.AddModule(ModuleType);
+  Check(Assigned(Module),
+        'AddModule didn''t return anything');
+  CheckEquals(ModuleType.ClassName,
+              Module.ClassName,
+              'AddModule returned an unexpected module');
+
+  Module := Self.Core.AddModule(ModuleType);
+  Check(Assigned(Module),
+        'AddModule didn''t return anything for an already-installed module');
+end;
+
+procedure TestTIdSipAbstractCore.TestAddObserver;
+var
+  L1, L2: TIdObserverListener;
+begin
+  L1 := TIdObserverListener.Create;
+  try
+    L2 := TIdObserverListener.Create;
+    try
+      Self.Core.AddObserver(L1);
+      Self.Core.AddObserver(L2);
+
+      Self.ReceiveInvite;
+
+      Check(L1.Changed and L2.Changed, 'Not all Listeners notified, hence not added');
+    finally
+      L2.Free;
+    end;
+  finally
+    L1.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestAllowedExtensionsCollectsExtensionsFromInstalledModules;
+var
+  I:                  Integer;
+  ExpectedExtensions: TStrings;
+  Mock:               TIdSipMultipleExtensionMessageModule;
+  ReceivedExtensions: TStrings;
+begin
+  Mock := TIdSipMultipleExtensionMessageModule.Create(Self.Core);
+  try
+    ExpectedExtensions := TStringList.Create;
+    try
+      ExpectedExtensions.CommaText := Mock.AllowedExtensions;
+
+      Self.Core.AddModule(TIdSipMessageModuleClass(Mock.ClassType));
+
+      ReceivedExtensions := TStringList.Create;
+      try
+        for I := 0 to ReceivedExtensions.Count - 1 do
+          CheckNotEquals(-1,
+                         ExpectedExtensions.IndexOf(ReceivedExtensions[I]),
+                         'Core doesn''t support extension "' + ReceivedExtensions[I] + '"');
+      finally
+        ReceivedExtensions.Free;
+      end;
+    finally
+      ExpectedExtensions.Free;
+    end;
+  finally
+    Mock.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestAllowedExtensionsRemovesDuplicateExtensions;
+var
+  ExpectedExtensions: TStringList;
+begin
+  ExpectedExtensions := TStringList.Create;
+  try
+    ExpectedExtensions.Duplicates := dupError;
+    ExpectedExtensions.Sorted     := true;
+
+    try
+      ExpectedExtensions.CommaText := Self.Core.AllowedExtensions;
+    except
+      on EStringListError do
+        Fail('AllowedExtensions didn''t remove duplicate extension declarations');
+    end;
+  finally
+    ExpectedExtensions.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestCreateRequestFromUriWithBody;
+const
+  Body = 'I am a plain text body';
+var
+  Invite: TIdSipRequest;
+begin
+  Self.Destination.Value := Self.Destination.Address.Uri + '?'
+                          + BodyHeaderFake + '=' + Body;
+
+  Invite := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+  try
+    CheckEquals(Body,
+                Invite.Body,
+                'Body not set');
+    Check(Invite.IsMalformed,
+          'An INVITE with a body, but no Content-Length or Content-Type '
+        + 'header, must be malformed');
+    Check(not Invite.HasHeader(BodyHeaderFake),
+          'Fake body header included in the request');
+  finally
+    Invite.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestCreateRequestFromUriWithDangerousHeaders;
+const
+  ViaHeader = 'SIP/2.0/TCP nether.hells.com';
+var
+  Invite: TIdSipRequest;
+begin
+  Self.Destination.Value := Self.Destination.Address.Uri + '?'
+                          + 'Record-Route=' + TIdSipUri.ParameterEncode('<sip:127.0.0.1>') + '&'
+                          + 'Via=' + TIdSipUri.ParameterEncode(ViaHeader);
+
+  Invite := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+  try
+    Check(not Invite.HasHeader(RecordRouteHeader),
+          'Record-Route header erroneously added');
+    Check(Invite.Path.Count = 1,
+          'Via header erroneously added');
+    CheckNotEquals(ViaHeader,
+                   Invite.LastHop.Value,
+                   'Via header in URI used, not that of the creating UA');
+  finally
+    Invite.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestCreateRequestFromUriWithDifferentMethod;
+begin
+  Self.Destination.Address.Method := MethodInvite;
+  try
+    Self.Core.CreateRequest(MethodRegister, Self.Destination);
+    Fail('Failed to bail out of a contradictory request');
+  except
+    on EIdSipTransactionUser do;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestCreateRequestFromUriWithFalseAdvertising;
+var
+  Invite: TIdSipRequest;
+begin
+  Self.Destination.Value := Self.Destination.Value + '?'
+                          + 'Accept=' + TIdSipUri.ParameterEncode('text/plain') + '&'
+                          + 'Accept-Encoding=foo' + '&'
+                          + 'Accept-Language=zh' + '&'
+                          + 'Allow=bar' + '&'
+                          + 'Contact=' + TIdSipUri.ParameterEncode('sip:foo@bar.com') + '&'
+                          + 'Organization=orangutan' + '&'
+                          + 'Supported=refer' + '&'
+                          + 'User-Agent=nothing';
+
+  Invite := Self.Core.CreateRequest(MethodOptions, Self.Destination);
+  try
+    Check(not Invite.HasHeader(AcceptHeader),
+          'Accept header erroneously added');
+    Check(not Invite.HasHeader(AcceptEncodingHeader),
+          'Accept-Encoding header erroneously added');
+    Check(not Invite.HasHeader(AcceptLanguageHeader),
+          'Accept-Language header erroneously added');
+    Check(not Invite.HasHeader(AllowHeader),
+          'Allow header erroneously added');
+    Check(Invite.ContactCount = 1,
+          'Contact header erroneously added');
+    CheckEquals(Self.Core.Contact.AsString,
+                Invite.FirstContact.AsString,
+                'URI header used instead of UA''s');
+    Check(not Invite.HasHeader(OrganizationHeader),
+          'Organization header erroneously added');
+    CheckEquals(Self.Core.UserAgentName,
+                Invite.FirstHeader(UserAgentHeader).Value,
+                'User-Agent header added/used instead of UA''s');
+  finally
+    Invite.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestCreateRequestFromUriWithHeaders;
+const
+  Replaces = '1;from-tag=2;to-tag=3';
+  Subject  = 'nothing important';
+var
+  Invite: TIdSipRequest;
+  URI:    String;
+begin
+  URI := Self.Destination.Address.Uri;
+
+  Self.Destination.Value := URI + '?'
+                    + 'Replaces=' + TIdSipUri.ParameterEncode(Replaces) + '&'
+                    + 'Subject=' + TIdSipUri.ParameterEncode(Subject);
+
+  Invite := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+  try
+    CheckEquals(URI,
+                Invite.RequestUri.AsString,
+                'Request-URI');
+    Check(Invite.HasReplaces,
+          'No Replaces header added');
+    CheckEquals(Replaces,
+                Invite.Replaces.FullValue,
+                'Incorrect Replaces header value');
+    Check(Invite.HasHeader(SubjectHeaderFull),
+          'No Subject header added');
+    CheckEquals(Subject,
+                Invite.Subject.FullValue,
+                'Incorrect Subject header value');
+  finally
+    Invite.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestCreateRequestFromUriWithKnownParams;
+const
+  MaddrValue     = '224.0.0.1';
+  TransportValue = 'tcp';
+  TtlValue       = '1';
+  UserValue      = 'foo';
+var
+  Invite: TIdSipRequest;
+begin
+  Self.Destination.Address.Username := '';
+  Self.Destination.Address.AddParameter(MaddrParam, MaddrValue);
+  Self.Destination.Address.AddParameter(TransportParam, TransportValue);
+  Self.Destination.Address.AddParameter(TtlParam, TtlValue);
+  Self.Destination.Address.AddParameter(UserParam, UserValue);
+
+  Invite := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+  try
+    Check(Invite.RequestUri.HasParameter(MaddrParam),
+          'Request-URI''s missing the maddr parameter');
+    CheckEquals(MaddrValue,
+                Invite.RequestUri.ParamValue(MaddrParam),
+                'Request-URI has an incorrect maddr parameter');
+    Check(Invite.RequestUri.HasParameter(TransportParam),
+          'Request-URI''s missing the transport parameter');
+    CheckEquals(TransportValue,
+                Invite.RequestUri.ParamValue(TransportParam),
+                'Request-URI has an incorrect Transport parameter');
+    Check(Invite.RequestUri.HasParameter(TtlParam),
+          'Request-URI''s missing the ttl parameter');
+    CheckEquals(TtlValue,
+                Invite.RequestUri.ParamValue(TtlParam),
+                'Request-URI has an incorrect Ttl parameter');
+    Check(Invite.RequestUri.HasParameter(UserParam),
+          'Request-URI''s missing the user parameter');
+    CheckEquals(UserValue,
+                Invite.RequestUri.ParamValue(UserParam),
+                'Request-URI has an incorrect User parameter');
+  finally
+    Invite.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestCreateRequestFromUriWithMalformedHeader;
+var
+  Invite: TIdSipRequest;
+begin
+  Self.Destination.Address.Headers.Add(ReplacesHeader).Value := '1';
+
+  Invite := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+  try
+    Check(Invite.IsMalformed,
+          'Request not marked as malformed despite a malformed Replaces header');
+  finally
+    Invite.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestCreateRequestFromUriWithMethod;
+var
+  Invite: TIdSipRequest;
+begin
+  Self.Destination.Address.Method := MethodInvite;
+
+  Invite := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+  try
+    CheckEquals(Self.Destination.Address.Method,
+                Invite.Method,
+                'URI''s method parameter not used');
+    Check(not Invite.RequestUri.HasMethod,
+          'Request-URI''s method parameter not removed');
+  finally
+    Invite.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestCreateRequestFromUriWithUnknownParam;
+const
+  FooParam      = 'foo';
+  FooParamValue = 'bar';
+var
+  Invite: TIdSipRequest;
+begin
+  Self.Destination.Address.AddParameter(FooParam, FooParamValue);
+
+  Invite := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+  try
+    Check(Invite.RequestUri.HasParameter(FooParam),
+          'Request-URI doesn''t have the unknown parameter');
+    CheckEquals(FooParamValue,
+                Invite.RequestUri.ParamValue(FooParam),
+                'Request-URI has wrong value for unknown parameter');
+  finally
+    Invite.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestHasUnknownContentEncoding;
+begin
+  Self.Invite.Headers.Remove(Self.Invite.FirstHeader(ContentEncodingHeaderFull));
+
+  Check(not Self.Core.HasUnknownContentEncoding(Self.Invite),
+        'Vacuously true');
+
+  Self.Invite.AddHeader(ContentEncodingHeaderFull);
+  Check(Self.Core.HasUnknownContentEncoding(Self.Invite),
+        'No encodings are supported');
+end;
+
+procedure TestTIdSipAbstractCore.TestHasUnsupportedExtension;
+var
+  InviteExtensions: TStrings;
+begin
+  Check(not Self.Invite.HasHeader(SupportedHeaderFull),
+        'Sanity check: the INVITE shouldn''t have a Require header at the '
+      + 'beginning of the test');
+  Check(not Self.Core.HasUnsupportedExtension(Self.Invite),
+        'Request with no Supported header can''t claim to support an unsupported extension');
+  Check(not Self.Invite.HasHeader(SupportedHeaderFull),
+        'HasUnsupportedExtension added a Supported header to the request');
+
+  Self.Invite.Supported.Value := 'unknown-extension';
+  Check(Self.Core.HasUnsupportedExtension(Self.Invite),
+        'Core somehow supports the "' + Self.Invite.Supported.Value + '" extension');
+
+  InviteExtensions := TStringList.Create;
+  try
+    InviteExtensions.CommaText := Self.Core.InviteModule.AllowedExtensions;
+
+    Check(InviteExtensions.Count > 0,
+          'Sanity check: an InviteModule should support at least one '
+        + 'extension, namely "replaces"');
+    Self.Invite.Supported.Value := InviteExtensions[0];
+  Check(not Self.Core.HasUnsupportedExtension(Self.Invite),
+        'Core somehow doesn''t support the ' + InviteExtensions[0] + ' extension');
+  finally
+    InviteExtensions.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestIsMethodSupported;
+begin
+  Check(not Self.Core.IsMethodSupported(MethodRegister),
+        MethodRegister + ' not allowed');
+
+  Self.Core.AddModule(TIdSipRegisterModule);
+  Check(Self.Core.IsMethodSupported(MethodRegister),
+        MethodRegister + ' not recognised as an allowed method');
+
+  Check(not Self.Core.IsMethodSupported(' '),
+        ''' '' recognised as an allowed method');
+end;
+
+procedure TestTIdSipAbstractCore.TestIsSchemeAllowed;
+begin
+  Check(not Self.Core.IsMethodSupported(SipScheme),
+        SipScheme + ' not allowed');
+
+  Self.Core.AddAllowedScheme(SipScheme);
+  Check(Self.Core.IsSchemeAllowed(SipScheme),
+        SipScheme + ' not recognised as an allowed scheme');
+
+  Check(not Self.Core.IsSchemeAllowed(' '),
+        ''' '' not recognised as an allowed scheme');
+end;
+
+procedure TestTIdSipAbstractCore.TestLoopDetection;
+var
+  Response: TIdSipResponse;
+begin
+  // cf. RFC 3261, section 8.2.2.2
+  Self.Dispatcher.AddServerTransaction(Self.Invite, Self.Dispatcher.Transport);
+
+  // wipe out the tag & give a different branch
+  Self.Invite.ToHeader.Value := Self.Invite.ToHeader.Address.URI;
+  Self.Invite.LastHop.Branch := Self.Invite.LastHop.Branch + '1';
+
+  Self.MarkSentResponseCount;
+
+  Self.ReceiveInvite;
+  CheckResponseSent('No response sent');
+
+  Response := Self.LastSentResponse;
+  CheckEquals(SIPLoopDetected, Response.StatusCode, 'Status-Code');
+end;
+
+procedure TestTIdSipAbstractCore.TestModuleForString;
+begin
+  CheckEquals(TIdSipNullModule.ClassName,
+              Self.Core.ModuleFor('').ClassName,
+              'Empty string');
+  CheckEquals(TIdSipNullModule.ClassName,
+              Self.Core.ModuleFor(MethodRegister).ClassName,
+              MethodRegister + ' but no module added');
+
+  Self.Core.AddModule(TIdSipRegisterModule);
+  CheckNotNull(Self.Core.ModuleFor(MethodRegister),
+               MethodRegister + ' but no module added');
+  CheckEquals(TIdSipRegisterModule.ClassName,
+              Self.Core.ModuleFor(MethodRegister).ClassName,
+              MethodRegister + ' after module added: wrong type');
+  CheckEquals(TIdSipNullModule.ClassName,
+              Self.Core.ModuleFor(Lowercase(MethodRegister)).ClassName,
+              Lowercase(MethodRegister)
+            + ': RFC 3261 defines REGISTER''s method as "REGISTER"');
+end;
+
+procedure TestTIdSipAbstractCore.TestModuleForClassType;
+begin
+  Check(Assigned(Self.Core.ModuleFor(TIdSipDoubleExtensionMessageModule)),
+        'ModuleFor(<uninstalled module>) returned a nil pointer');
+  CheckEquals(TIdSipNullModule.ClassName,
+              Self.Core.ModuleFor(TIdSipDoubleExtensionMessageModule).ClassName,
+              'ModuleFor(<uninstalled module>) didn''t return the null module');
+
+  Self.Core.AddModule(TIdSipDoubleExtensionMessageModule);
+  CheckEquals(TIdSipDoubleExtensionMessageModule.ClassName,
+              Self.Core.ModuleFor(TIdSipDoubleExtensionMessageModule).ClassName,
+              'ModuleFor(<installed module>) didn''t return the installed module');
+end;
+
+procedure TestTIdSipAbstractCore.TestNextCallID;
+var
+  CallID: String;
+begin
+  CallID := Self.Core.NextCallID;
+
+  Fetch(CallID, '@');
+
+  CheckEquals(Self.Core.HostName, CallID, 'HostName not used');
+end;
+
+procedure TestTIdSipAbstractCore.TestNextTag;
+var
+  I:    Integer;
+  Tags: TStringList;
+begin
+  // This is a woefully inadequate test. cf. RFC 3261, section 19.3
+
+  Tags := TStringList.Create;
+  try
+    for I := 1 to 100 do
+      Tags.Add(Self.Core.NextTag);
+
+    // Find duplicates
+    Tags.Sort;
+    CheckNotEquals('', Tags[0], 'No null tags may be generated');
+
+    for I := 1 to Tags.Count - 1 do begin
+      CheckNotEquals('', Tags[I], 'No null tags may be generated (Tag #'
+                                + IntToStr(I) + ')');
+
+      CheckNotEquals(Tags[I-1], Tags[I], 'Duplicate tag generated');
+    end;
+  finally
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestNotifyOfChange;
+var
+  C: TIdSipCoreWithExposedNotify;
+  O: TIdObserverListener;
+begin
+  C := TIdSipCoreWithExposedNotify.Create;
+  try
+    O := TIdObserverListener.Create;
+    try
+      C.AddObserver(O);
+      C.TriggerNotify;
+      Check(O.Changed,
+            'Observer not notified');
+      Check(O.Data = C,
+           'Core didn''t return itself as parameter in the notify');
+    finally
+      O.Free;
+    end;
+  finally
+    C.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestRejectUnknownContentEncoding;
+var
+  Response: TIdSipResponse;
+begin
+  Self.Invite.FirstHeader(ContentTypeHeaderFull).Value := SdpMimeType;
+
+  Self.MarkSentResponseCount;
+
+  Self.Invite.AddHeader(ContentEncodingHeaderFull).Value := 'gzip';
+
+  Self.ReceiveInvite;
+
+  CheckResponseSent('No response sent');
+
+  Response := Self.LastSentResponse;
+  CheckEquals(SIPUnsupportedMediaType, Response.StatusCode, 'Status-Code');
+  Check(Response.HasHeader(AcceptEncodingHeader), 'No Accept-Encoding header');
+  CheckEquals('',
+              Response.FirstHeader(AcceptEncodingHeader).Value,
+              'Accept value');
+end;
+
+procedure TestTIdSipAbstractCore.TestRejectUnknownContentLanguage;
+var
+  Response: TIdSipResponse;
+begin
+  Self.Core.AddAllowedLanguage('fr');
+
+  Self.Invite.AddHeader(ContentLanguageHeader).Value := 'en_GB';
+
+  Self.MarkSentResponseCount;
+
+  Self.ReceiveInvite;
+
+  CheckResponseSent('No response sent');
+
+  Response := Self.LastSentResponse;
+  CheckEquals(SIPUnsupportedMediaType, Response.StatusCode, 'Status-Code');
+  Check(Response.HasHeader(AcceptLanguageHeader), 'No Accept-Language header');
+  CheckEquals(Self.Core.AllowedLanguages,
+              Response.FirstHeader(AcceptLanguageHeader).Value,
+              'Accept-Language value');
+end;
+
+procedure TestTIdSipAbstractCore.TestRejectUnknownExtension;
+var
+  Response: TIdSipResponse;
+begin
+  Self.MarkSentResponseCount;
+
+  Self.Invite.AddHeader(RequireHeader).Value := '100rel';
+
+  Self.ReceiveInvite;
+
+  CheckResponseSent('No response sent');
+
+  Response := Self.LastSentResponse;
+  CheckEquals(SIPBadExtension, Response.StatusCode, 'Status-Code');
+  Check(Response.HasHeader(UnsupportedHeader), 'No Unsupported header');
+  CheckEquals(Self.Invite.FirstHeader(RequireHeader).Value,
+              Response.FirstHeader(UnsupportedHeader).Value,
+              'Unexpected Unsupported header value');
+end;
+
+procedure TestTIdSipAbstractCore.TestRejectUnknownScheme;
+var
+  Response: TIdSipResponse;
+begin
+  Self.MarkSentResponseCount;
+
+  Self.Invite.RequestUri.URI := 'tel://1';
+  Self.ReceiveInvite;
+
+  CheckResponseSent('No response sent');
+
+  Response := Self.LastSentResponse;
+  CheckEquals(SIPUnsupportedURIScheme, Response.StatusCode, 'Status-Code');
+end;
+
+procedure TestTIdSipAbstractCore.TestRejectUnsupportedMethod;
+var
+  Response: TIdSipResponse;
+begin
+  Self.Invite.Method := MethodRegister;
+  Self.Invite.CSeq.Method := Self.Invite.Method;
+
+  Self.MarkSentResponseCount;
+
+  Self.ReceiveInvite;
+
+  CheckResponseSent('No response sent');
+
+  Response := Self.LastSentResponse;
+  CheckEquals(SIPNotImplemented,
+              Response.StatusCode,
+              'Unexpected response');
+  Check(Response.HasHeader(AllowHeader),
+        'Allow header is mandatory. cf. RFC 3261 section 8.2.1');
+
+  CheckCommaSeparatedHeaders(Self.Core.KnownMethods,
+                             Response.FirstHeader(AllowHeader),
+                             'Allow header');
+end;
+
+procedure TestTIdSipAbstractCore.TestRejectUnsupportedSipVersion;
+var
+  Response: TIdSipResponse;
+begin
+  Self.MarkSentResponseCount;
+  Self.Invite.SIPVersion := 'SIP/1.0';
+
+  Self.ReceiveInvite;
+
+  CheckEquals(Self.ResponseCount + 2, // Trying + reject
+              Self.SentResponseCount,
+              'No response sent');
+
+  Response := Self.LastSentResponse;
+  CheckEquals(SIPSIPVersionNotSupported,
+              Response.StatusCode,
+              'Status-Code');
+end;
+
+procedure TestTIdSipAbstractCore.TestRemoveObserver;
+var
+  L1, L2: TIdObserverListener;
+begin
+  L1 := TIdObserverListener.Create;
+  try
+    L2 := TIdObserverListener.Create;
+    try
+      Self.Core.AddObserver(L1);
+      Self.Core.AddObserver(L2);
+      Self.Core.RemoveObserver(L2);
+
+      Self.ReceiveInvite;
+
+      Check(L1.Changed and not L2.Changed,
+            'Listener notified, hence not removed');
+    finally
+      L2.Free
+    end;
+  finally
+    L1.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestRequiresUnsupportedExtension;
+var
+  InviteExtensions: TStrings;
+begin
+  Check(not Self.Invite.HasHeader(RequireHeader),
+        'Sanity check: the INVITE shouldn''t have a Require header at the '
+      + 'beginning of the test');
+  Check(not Self.Core.RequiresUnsupportedExtension(Self.Invite),
+        'Request with no Require header can''t require an unsupported extension');
+  Check(not Self.Invite.HasHeader(RequireHeader),
+        'RequiresUnsupportedExtension added a Require header to the request');
+
+  Self.Invite.Require.Value := 'unknown-extension';
+  Check(Self.Core.RequiresUnsupportedExtension(Self.Invite),
+        'Core somehow supports the ' + Self.Invite.Require.Value + ' extension');
+
+  InviteExtensions := TStringList.Create;
+  try
+    InviteExtensions.CommaText := Self.Core.InviteModule.AllowedExtensions;
+
+    Check(InviteExtensions.Count > 0,
+          'Sanity check: an InviteModule should support at least one '
+        + 'extension, namely "replaces"');
+    Self.Invite.Require.Value := InviteExtensions[0];
+  Check(not Self.Core.RequiresUnsupportedExtension(Self.Invite),
+        'Core somehow doesn''t support the ' + InviteExtensions[0] + ' extension');
+  finally
+    InviteExtensions.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestScheduleEvent;
+var
+  EventCount: Integer;
+begin
+  EventCount := Self.DebugTimer.EventCount;
+  Self.Core.ScheduleEvent(Self.ScheduledEvent, 50, Self.Invite.Copy);
+  Check(EventCount < DebugTimer.EventCount,
+        'Event not scheduled');
+end;
+
+procedure TestTIdSipAbstractCore.TestSendRequest;
+var
+  Dest:   TIdSipLocation;
+  Invite: TIdSipRequest;
+begin
+  Dest := TIdSipLocation.Create('TCP', '127.0.0.1', 5060);
+  try
+    Invite := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+    try
+      Self.MarkSentRequestCount;
+      Self.Core.SendRequest(Invite, Dest);
+      CheckRequestSent('No request sent');
+      Check(Self.LastSentRequest.Equals(Invite),
+            'Sent message differs from the message at the network layer');
+    finally
+      Invite.Free;
+    end;
+  finally
+    Dest.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestSendRequestMalformedRequest;
+var
+  Dest:   TIdSipLocation;
+  Invite: TIdSipRequest;
+begin
+  Dest := TIdSipLocation.Create('TCP', '127.0.0.1', 5060);
+  try
+    Invite := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+    try
+      Invite.CallID := '@@illegal';
+      try
+        Self.Core.SendRequest(Invite, Dest);
+
+        Fail('Failed to bail out on sending a malformed request');
+      except
+        on EIdSipTransactionUser do;
+      end;
+    finally
+      Invite.Free;
+    end;
+  finally
+    Dest.Free;
+  end;
+end;  
+
+procedure TestTIdSipAbstractCore.TestSendRequestUnknownMethod;
+var
+  Dest:   TIdSipLocation;
+  Invite: TIdSipRequest;
+begin
+  Dest := TIdSipLocation.Create('TCP', '127.0.0.1', 5060);
+  try
+    Invite := Self.Core.CreateRequest('UNKNOWN', Self.Destination);
+    try
+      try
+        Self.Core.SendRequest(Invite, Dest);
+
+        Fail('Failed to bail out on sending a request of unknown method');
+      except
+        on EIdSipTransactionUser do;
+      end;
+    finally
+      Invite.Free;
+    end;
+  finally
+    Dest.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestSendRequestUnknownRequiredExtension;
+var
+  Dest:   TIdSipLocation;
+  Invite: TIdSipRequest;
+begin
+  Dest := TIdSipLocation.Create('TCP', '127.0.0.1', 5060);
+  try
+    Invite := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+    try
+      Invite.Require.Value := 'unknown-extension';
+
+      try
+        Self.Core.SendRequest(Invite, Dest);
+
+        Fail('Failed to bail out on sending a request that purports to '
+           + 'require something we don''t support');
+      except
+        on EIdSipTransactionUser do;
+      end;
+    finally
+      Invite.Free;
+    end;
+  finally
+    Dest.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestSendRequestUnknownSupportedExtension;
+var
+  Dest:   TIdSipLocation;
+  Invite: TIdSipRequest;
+begin
+  Dest := TIdSipLocation.Create('TCP', '127.0.0.1', 5060);
+  try
+    Invite := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+    try
+      Invite.Supported.Value := 'unknown-extension';
+
+      try
+        Self.Core.SendRequest(Invite, Dest);
+
+        Fail('Failed to bail out on sending a request that purports to '
+           + 'support something we don''t');
+      except
+        on EIdSipTransactionUser do;
+      end;
+    finally
+      Invite.Free;
+    end;
+  finally
+    Dest.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.CheckCommaSeparatedHeaders(const ExpectedValues: String;
+                                                            Header: TIdSipHeader;
+                                                            const Msg: String);
+var
+  Hdr:    TIdSipCommaSeparatedHeader;
+  I:      Integer;
+  Values: TStringList;
+begin
+  CheckEquals(TIdSipCommaSeparatedHeader.ClassName,
+              Header.ClassName,
+              Msg + ': Unexpected header type in CheckCommaSeparatedHeaders');
+
+  Hdr := Header as TIdSipCommaSeparatedHeader;
+  Values := TStringList.Create;
+  try
+    Values.CommaText := ExpectedValues;
+
+    for I := 0 to Values.Count - 1 do
+      CheckEquals(Values[I],
+                  Hdr.Values[I],
+                  Msg + ': ' + IntToStr(I + 1) + 'th value');
+  finally
+    Values.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.OnAuthenticationChallenge(UserAgent: TIdSipAbstractCore;
+                                                           Challenge: TIdSipResponse;
+                                                           var Username: String;
+                                                           var Password: String;
+                                                           var TryAgain: Boolean);
+begin
+end;
+
+procedure TestTIdSipAbstractCore.OnAuthenticationChallenge(UserAgent: TIdSipAbstractCore;
+                                                           ChallengedRequest: TIdSipRequest;
+                                                           Challenge: TIdSipResponse);
+begin
+end;
+
+
+procedure TestTIdSipAbstractCore.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
+                                                           Message: TIdSipMessage;
+                                                           Receiver: TIdSipTransport);
+begin
+end;
+
+procedure TestTIdSipAbstractCore.ScheduledEvent(Sender: TObject);
+begin
+  OK := TIdSipResponse.InResponseTo(Self.Invite, SIPOK);
+  try
+    Self.MarkSentResponseCount;
+    Self.Core.SendResponse(OK);
+    CheckResponseSent('No response sent');
+    Check(Self.LastSentResponse.Equals(OK),
+          'Sent message differs from the message at the network layer');
+  finally
+    OK.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestSendResponseMalformedResponse;
+var
+  OK: TIdSipResponse;
+begin
+  OK := TIdSipResponse.InResponseTo(Self.Invite, SIPOK);
+  try
+    OK.CallID := '@@illegal';
+
+    try
+      Self.Core.SendResponse(OK);
+      Fail('Failed to bail on sending a malformed response');
+    except
+      on EIdSipTransactionUser do;
+    end;
+  finally
+    OK.Free;
+  end;
+end;
 
 procedure TestTIdSipAbstractCore.TestAddAllowedContentType;
 var
@@ -925,12 +1959,22 @@ end;
 
 procedure TestTIdSipAbstractCore.TestScheduleEvent;
 var
-  EventCount: Integer;
+  OK: TIdSipResponse;
 begin
-  EventCount := Self.DebugTimer.EventCount;
-  Self.Core.ScheduleEvent(Self.ScheduledEvent, 50, Self.Invite.Copy);
-  Check(EventCount < DebugTimer.EventCount,
-        'Event not scheduled');
+  OK := TIdSipResponse.InResponseTo(Self.Invite, SIPOK);
+  try
+    OK.Supported.Value := 'unknown-extension';
+
+    try
+      Self.Core.SendResponse(OK);
+      Fail('Failed to bail on sending a response claiming to support something '
+         + 'we don''t');
+    except
+      on EIdSipTransactionUser do;
+    end;
+  finally
+    OK.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -1439,6 +2483,381 @@ begin
               Self.LastSentRequest.LastHop.Transport,
               'INVITE didn''t use a reliable transport despite the large size '
             + 'of the message');
+end;
+
+//******************************************************************************
+//* TestTIdSipMessageModule                                                    *
+//******************************************************************************
+//* TestTIdSipMessageModule Public methods *************************************
+
+procedure TestTIdSipMessageModule.SetUp;
+begin
+  inherited SetUp;
+
+  // Since we're testing non-virtual methods, it doesn't matter which module
+  // we choose.
+  Self.Module := Self.Core.ModuleFor(MethodOptions);
+end;
+
+//* TestTIdSipMessageModule Published methods **********************************
+
+procedure TestTIdSipMessageModule.TestAddAllowedContentType;
+begin
+  Self.Module.AddAllowedContentType(SdpMimeType);
+  Self.Module.AddAllowedContentType(PlainTextMimeType);
+
+  CheckEquals(2,
+              Self.Module.AllowedContentTypes.Count,
+              'Number of allowed Content-Types');
+
+  CheckEquals(SdpMimeType,
+              Self.Module.AllowedContentTypes[0],
+              SdpMimeType);
+  CheckEquals(PlainTextMimeType,
+              Self.Module.AllowedContentTypes[1],
+              PlainTextMimeType);
+end;
+
+procedure TestTIdSipMessageModule.TestAddAllowedContentTypeMalformed;
+var
+  ContentTypes: TStrings;
+begin
+  ContentTypes := TStringList.Create;
+  try
+    ContentTypes.AddStrings(Self.Module.AllowedContentTypes);
+
+    Self.Module.AddAllowedContentType(' ');
+    CheckEquals(ContentTypes.CommaText,
+                Self.Module.AllowedContentTypes.CommaText,
+                'Malformed Content-Type was allowed');
+  finally
+    ContentTypes.Free;
+  end;
+end;
+
+procedure TestTIdSipMessageModule.TestAddAllowedContentTypes;
+var
+  Actual:   TStrings;
+  Expected: TStrings;
+begin
+  Expected := TStringList.Create;
+  try
+    Expected.Add(SdpMimeType);
+    Expected.Add('message/sipfrag');
+
+    Self.Module.AddAllowedContentTypes(Expected);
+
+    Actual := Self.Module.AllowedContentTypes;
+
+    CheckEquals(Expected.CommaText,
+                Actual.CommaText,
+                'Content types not added');
+  finally
+    Expected.Free;
+  end;
+end;
+
+procedure TestTIdSipMessageModule.TestHasKnownAcceptDoesntAffectRequestParam;
+var
+  Request: TIdSipRequest;
+begin
+  Request := TIdSipRequest.Create;
+  try
+    Check(not Request.HasHeader(AcceptHeader),
+          'A newly-instantiated request shouldn''t have an Accept header');
+
+    Self.Module.HasKnownAccept(Request);
+    Check(not Request.HasHeader(AcceptHeader),
+          'MessageModule.HasKnownAccept() has ADDED an Accept header');
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TestTIdSipMessageModule.TestHasKnownAcceptEmptyAcceptHeader;
+var
+  Request: TIdSipRequest;
+begin
+  Request := Self.Core.CreateRequest(MethodOptions, Self.Destination);
+  try
+    Request.Accept.Value := '';
+
+    // This is OK: a blank Accept header means "don't send me ANY bodies".
+    Check(Self.Module.HasKnownAccept(Request),
+          'A request with a blank Accept header contains, vacuously, no '
+        + 'supported Content-Types');
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TestTIdSipMessageModule.TestHasKnownAcceptNoAcceptableMimeTypes;
+var
+  Request: TIdSipRequest;
+begin
+  Request := Self.Core.CreateRequest(MethodOptions, Self.Destination);
+  try
+    Request.Accept.Value := 'x-application/unknown';
+
+    Check(not Self.Module.HasKnownAccept(Request),
+          'An unsupported MIME type');
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TestTIdSipMessageModule.TestHasKnownAcceptNoAcceptHeader;
+var
+  Request: TIdSipRequest;
+begin
+  Request := Self.Core.CreateRequest(MethodOptions, Self.Destination);
+  try
+    Request.RemoveAllHeadersNamed(AcceptHeader);
+
+    Check(Self.Module.HasKnownAccept(Request),
+          'A request with no Accept header contains, as per RFC 3261 section '
+        + '11.2, a supported Content-Type: ' + SdpMimeType);
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TestTIdSipMessageModule.TestHasKnownAcceptWithKnownMimeType;
+var
+  Request: TIdSipRequest;
+begin
+  Request := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+  try
+    Request.Accept.Value := SdpMimeType;
+
+    Check(Self.Module.HasKnownAccept(Request),
+          'Request with ' + Request.Accept.AsString);
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TestTIdSipMessageModule.TestHasKnownAcceptWithKnownMimeTypeAmongOthers;
+var
+  Request: TIdSipRequest;
+begin
+  Request := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+  try
+    Request.Accept.Value := 'text/plain, ' + SdpMimeType + ', message/sipfrag';
+
+    Check(Self.Module.HasKnownAccept(Request),
+          'Request with ' + Request.Accept.AsString);
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TestTIdSipMessageModule.TestHasUnknownContentType;
+var
+  Request: TIdSipRequest;
+begin
+  Request := Self.Core.CreateRequest(MethodOptions, Self.Destination);
+  try
+    Request.RemoveAllHeadersNamed(ContentTypeHeaderFull);
+
+    Check(not Self.Module.HasUnknownContentType(Request),
+          'Vacuously true');
+
+    Request.AddHeader(ContentTypeHeaderFull).Value := SdpMimeType;
+    Check(not Self.Module.HasUnknownContentType(Request),
+          SdpMimeType + ' MUST supported');
+
+    Request.RemoveHeader(Request.FirstHeader(ContentTypeHeaderFull));
+    Request.AddHeader(ContentTypeHeaderFull);
+    Check(Self.Module.HasUnknownContentType(Request),
+          'Nothing else is supported');
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TestTIdSipMessageModule.TestRejectNonInviteWithReplacesHeader;
+var
+  Request: TIdSipRequest;
+begin
+  Request := Self.Core.CreateRequest(MethodOptions, Self.Destination);
+  try
+    Request.AddHeader(ReplacesHeader).Value := '1;from-tag=2;to-tag=3';
+
+    Self.MarkSentResponseCount;
+    Self.ReceiveRequest(Request);
+    CheckResponseSent('No response sent');
+    CheckEquals(SIPBadRequest,
+                Self.LastSentResponse.StatusCode,
+                'Unexpected response sent');
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TestTIdSipMessageModule.TestRejectNoSupportedMimeTypesInAccept;
+var
+  Request: TIdSipRequest;
+begin
+  Request := Self.Core.CreateRequest(MethodOptions, Self.Destination);
+  try
+    Request.Accept.Value := 'x-application/unknown';
+
+    Self.MarkSentResponseCount;
+    Self.ReceiveRequest(Request);
+    CheckResponseSent('No response sent');
+    CheckEquals(SIPNotAcceptableClient,
+                Self.LastSentResponse.StatusCode,
+                'Unexpected response sent');
+  finally
+    Request.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipNullModule                                                       *
+//******************************************************************************
+//* TestTIdSipNullModule Public methods ****************************************
+
+procedure TestTIdSipNullModule.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Module := Self.Core.ModuleFor('No such method');
+end;
+
+//* TestTIdSipNullModule Published methods *************************************
+
+procedure TestTIdSipNullModule.TestIsNull;
+begin
+  CheckEquals(TIdSipNullModule.ClassName,
+              Self.Module.ClassName,
+              'Wrong module');
+  Check(Self.Module.IsNull,
+        'Null message module not marked as null');
+end;
+
+//******************************************************************************
+//* TestTIdSipOptionsModule                                                    *
+//******************************************************************************
+//* TestTIdSipOptionsModule Public methods *************************************
+
+procedure TestTIdSipOptionsModule.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Module := Self.Core.ModuleFor(MethodOptions) as TIdSipOptionsModule;
+end;
+
+//* TestTIdSipOptionsModule Private methods ************************************
+
+procedure TestTIdSipOptionsModule.ReceiveOptions;
+var
+  Options: TIdSipRequest;
+begin
+  Options := Self.Module.CreateOptions(Self.Core.Contact);
+  try
+    Self.ReceiveRequest(Options);
+  finally
+    Options.Free;
+  end;
+end;
+
+//* TestTIdSipOptionsModule Published methods **********************************
+
+procedure TestTIdSipOptionsModule.TestCreateOptions;
+var
+  Options: TIdSipRequest;
+begin
+  Options := Self.Module.CreateOptions(Self.Destination);
+  try
+    CheckEquals(MethodOptions, Options.Method,      'Incorrect method');
+    CheckEquals(MethodOptions, Options.CSeq.Method, 'Incorrect CSeq method');
+    Check(Options.HasHeader(AcceptHeader),          'Missing Accept header');
+    CheckEquals(Self.Core.AllowedContentTypes,
+                Options.FirstHeader(AcceptHeader).Value,
+                'Accept value');
+  finally
+    Options.Free;
+  end;
+end;
+
+procedure TestTIdSipOptionsModule.TestDoNotDisturb;
+begin
+  Self.Core.DoNotDisturb := true;
+  Self.MarkSentResponseCount;
+
+  Self.ReceiveOptions;
+  CheckResponseSent('No response sent when UA set to Do Not Disturb');
+
+  CheckEquals(SIPTemporarilyUnavailable,
+              Self.LastSentResponse.StatusCode,
+              'Wrong response sent: Do Not Disturb');
+  CheckEquals(Self.Core.DoNotDisturbMessage,
+              Self.LastSentResponse.StatusText,
+              'Wrong status text: Do Not Disturb');
+
+  Self.Core.DoNotDisturb := false;
+
+  Self.MarkSentResponseCount;
+
+  Self.ReceiveOptions;
+  CheckResponseSent('No response sent when UA not set to Do Not Disturb');
+
+  CheckEquals(SIPOK,
+              Self.LastSentResponse.StatusCode,
+              'Wrong response sent: Do Not Disturb set off');
+end;
+
+procedure TestTIdSipOptionsModule.TestReceiveOptions;
+var
+  Options:  TIdSipRequest;
+  Response: TIdSipResponse;
+begin
+  Options := TIdSipRequest.Create;
+  try
+    Options.Method := MethodOptions;
+    Options.RequestUri.Uri := 'sip:franks@192.168.0.254';
+    Options.AddHeader(ViaHeaderFull).Value  := 'SIP/2.0/UDP roke.angband.za.org:3442';
+    Options.From.Value := '<sip:sipsak@roke.angband.za.org:3442>';
+    Options.ToHeader.Value := '<sip:franks@192.168.0.254>';
+    Options.CallID := '1631106896@roke.angband.za.org';
+    Options.CSeq.Value := '1 OPTIONS';
+    Options.AddHeader(ContactHeaderFull).Value := '<sip:sipsak@roke.angband.za.org:3442>';
+    Options.ContentLength := 0;
+    Options.MaxForwards := 0;
+    Options.AddHeader(UserAgentHeader).Value := 'sipsak v0.8.1';
+
+    Self.Locator.AddA(Options.LastHop.SentBy, '127.0.0.1');
+
+    Self.ReceiveRequest(Options);
+
+    Response := Self.LastSentResponse;
+    CheckEquals(SIPOK,
+                Response.StatusCode,
+                'We should accept all OPTIONS');
+  finally
+    Options.Free;
+  end;
+end;
+
+procedure TestTIdSipOptionsModule.TestRejectOptionsWithReplacesHeader;
+var
+  Options: TIdSipRequest;
+begin
+  Options := Self.Module.CreateOptions(Self.Destination);
+  try
+    Options.AddHeader(ReplacesHeader).Value := '1;from-tag=2;to-tag=3';
+
+    Self.MarkSentResponseCount;
+    Self.ReceiveRequest(Options);
+    CheckResponseSent('No response sent');
+    CheckEquals(SIPBadRequest,
+                Self.LastSentResponse.StatusCode,
+                'Unexpected response');
+  finally
+    Options.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -1994,3 +3413,4 @@ end;
 initialization
   RegisterTest('Transaction User Cores', Suite);
 end.
+

@@ -42,9 +42,11 @@ type
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               Receiver: TIdSipTransport);
+                               Receiver: TIdSipTransport;
+                               Source: TIdSipConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                Receiver: TIdSipTransport);
+                                Receiver: TIdSipTransport;
+                                Source: TIdSipConnectionBindings);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure OnSendRequest(Request: TIdSipRequest;
@@ -174,13 +176,15 @@ begin
 end;
 
 procedure TrnidSpikeRegistrar.OnReceiveRequest(Request: TIdSipRequest;
-                                               Receiver: TIdSipTransport);
+                                               Receiver: TIdSipTransport;
+                                               Source: TIdSipConnectionBindings);
 begin
   Self.LogMessage(Request);
 end;
 
 procedure TrnidSpikeRegistrar.OnReceiveResponse(Response: TIdSipResponse;
-                                                Receiver: TIdSipTransport);
+                                                Receiver: TIdSipTransport;
+                                                Source: TIdSipConnectionBindings);
 begin
   Self.LogMessage(Response);
 end;

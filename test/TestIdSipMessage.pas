@@ -40,6 +40,19 @@ type
     function  MalformedException: EBadMessageClass; override;
   end;
 
+  TestTIdSipConnectionBindings = class(TTestCase)
+  private
+    Binding: TIdSipConnectionBindings;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAssign;
+    procedure TestAsString;
+    procedure TestCopy;
+    procedure TestEquals;
+  end;
+
   TestTIdSipMessage = class(TTestCaseSip)
   private
     Msg: TIdSipMessage;
@@ -53,6 +66,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAcceptHeader;
     procedure TestAccessingHeaderDoesntAddHeader;
     procedure TestAddHeader;
     procedure TestAddHeaderName;
@@ -62,11 +76,9 @@ type
     procedure TestClearHeaders;
     procedure TestContactCount;
     procedure TestCopyHeaders;
+    procedure TestExpires;
     procedure TestFirstContact;
-    procedure TestFirstExpires;
     procedure TestFirstHeader;
-    procedure TestFirstMinExpires;
-    procedure TestFirstRequire;
     procedure TestHasBody;
     procedure TestHasExpiry;
     procedure TestIsMalformedContentLength;
@@ -78,12 +90,14 @@ type
     procedure TestIsMalformedMissingTo;
     procedure TestHeaderCount;
     procedure TestLastHop;
+    procedure TestMinExpires;
     procedure TestQuickestExpiry;
     procedure TestQuickestExpiryNoExpires;
     procedure TestReadBody;
     procedure TestReadBodyWithZeroContentLength;
     procedure TestRemoveHeader;
     procedure TestRemoveHeaders;
+    procedure TestRetryAfter;
     procedure TestSetCallID;
     procedure TestSetContacts;
     procedure TestSetContentLanguage;
@@ -95,6 +109,7 @@ type
     procedure TestSetRecordRoute;
     procedure TestSetSipVersion;
     procedure TestSetTo;
+    procedure TestSupported;
     procedure TestWillEstablishDialog;
   end;
 
@@ -142,10 +157,7 @@ type
     procedure TestEvent;
     procedure TestFirstAuthorization;
     procedure TestFirstProxyAuthorization;
-    procedure TestFirstProxyRequire;
-    procedure TestFirstReplaces;
     procedure TestFirstRoute;
-    procedure TestFirstSubscriptionState;
     procedure TestHasAuthorization;
     procedure TestHasAuthorizationFor;
     procedure TestHasProxyAuthorization;
@@ -184,6 +196,7 @@ type
     procedure TestParseMalformedRequestLine;
     procedure TestParseWithRequestUriInAngleBrackets;
     procedure TestProxyAuthorizationFor;
+    procedure TestProxyRequire;
     procedure TestReferTo;
     procedure TestReplaces;
     procedure TestRequiresResponse;
@@ -330,6 +343,7 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipMessage tests (Messages)');
   Result.AddTest(TestFunctions.Suite);
+  Result.AddTest(TestTIdSipConnectionBindings.Suite);
   Result.AddTest(TestTIdSipRequest.Suite);
   Result.AddTest(TestTIdSipResponse.Suite);
   Result.AddTest(TestTIdSipRequestList.Suite);
@@ -472,6 +486,116 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSipConnectionBindings                                               *
+//******************************************************************************
+//* TestTIdSipConnectionBindings Public methods ********************************
+
+procedure TestTIdSipConnectionBindings.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Binding := TIdSipConnectionBindings.Create;
+  Self.Binding.LocalIP   := '127.0.0.1';
+  Self.Binding.LocalPort := 5060;
+  Self.Binding.PeerIP    := '::1';
+  Self.Binding.PeerPort  := 4444;
+end;
+
+procedure TestTIdSipConnectionBindings.TearDown;
+begin
+  Self.Binding.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipConnectionBindings Public methods ********************************
+
+procedure TestTIdSipConnectionBindings.TestAssign;
+var
+  Other: TIdSipConnectionBindings;
+begin
+  Other := TIdSipConnectionBindings.Create;
+  try
+    Other.Assign(Self.Binding);
+    CheckEquals(Self.Binding.LocalIP,
+                Other.LocalIP,
+                'LocalIP');
+    CheckEquals(Self.Binding.LocalPort,
+                Other.LocalPort,
+                'LocalPort');
+    CheckEquals(Self.Binding.PeerIP,
+                Other.PeerIP,
+                'PeerIP');
+    CheckEquals(Self.Binding.PeerPort,
+                Other.PeerPort,
+                'PeerPort');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TestTIdSipConnectionBindings.TestAsString;
+var
+  Expected: String;
+begin
+  Expected := Format(BindingTuple, [Self.Binding.LocalIP,
+                                    Self.Binding.LocalPort,
+                                    Self.Binding.PeerIP,
+                                    Self.Binding.PeerPort]);
+
+  CheckEquals(Expected,
+              Self.Binding.AsString,
+              'AsString');
+end;
+
+procedure TestTIdSipConnectionBindings.TestCopy;
+var
+  Other: TIdSipConnectionBindings;
+begin
+  Other := Self.Binding.Copy;
+  try
+    Check(Other.Equals(Self.Binding),
+          'Copy doesn''t contain a copy of the binding''s values');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TestTIdSipConnectionBindings.TestEquals;
+var
+  Other: TIdSipConnectionBindings;
+begin
+  Other := TIdSipConnectionBindings.Create;
+  try
+    Other.LocalIP   := Self.Binding.LocalIP + '1';
+    Other.LocalPort := Self.Binding.LocalPort + 1;
+    Other.PeerIP    := Self.Binding.PeerIP + '1';
+    Other.PeerPort  := Self.Binding.PeerPort + 1;
+
+    Check(not Other.Equals(Self.Binding),
+          'No values equal');
+
+    Other.LocalIP := Self.Binding.LocalIP;
+    Check(not Other.Equals(Self.Binding),
+          'LocalIP equal');
+
+    Other.LocalPort := Self.Binding.LocalPort;
+    Check(not Other.Equals(Self.Binding),
+          'LocalPort, LocalPort equal');
+
+    Other.PeerIP := Self.Binding.PeerIP;
+    Check(not Other.Equals(Self.Binding),
+          'LocalPort, LocalPort, PeerIP equal');
+
+    Other.PeerPort := Self.Binding.PeerPort;
+    Check(Other.Equals(Self.Binding),
+          'LocalPort, LocalPort, PeerIP, PeerPort equal');
+  finally
+    Other.Free;
+  end;
+end;
+
+//******************************************************************************
 //* TestTIdSipMessage                                                          *
 //******************************************************************************
 //* TestTIdSipMessage Public methods *******************************************
@@ -545,6 +669,34 @@ begin
 end;
 
 //* TestTIdSipMessage Published methods ****************************************
+
+procedure TestTIdSipMessage.TestAcceptHeader;
+var
+  Accept: TIdSipWeightedCommaSeparatedHeader;
+begin
+  Check(not Self.Msg.HasHeader(AcceptHeader),
+        'Sanity check: a new message should have no Accept header');
+
+  Self.Msg.Accept;
+  Check(Assigned(Self.Msg.Accept),
+        'Getter didn''t instantiate the Accept header');
+
+  Accept := TIdSipWeightedCommaSeparatedHeader.Create;
+  try
+    Accept.Name  := AcceptHeader;
+    Accept.Value := PackageRefer;
+
+    // This sneakily checks that (a) the Setter instantiates a Accept header,
+    // AND that the setter copies the information for that header properly.
+    Self.Msg.RemoveAllHeadersNamed(AcceptHeader);
+    Self.Msg.Accept := Accept;
+
+    Check(Accept.Equals(Self.Msg.Accept),
+                         'New Accept doesn''t equal message''s Accept');
+  finally
+    Accept.Free;
+  end;
+end;
 
 procedure TestTIdSipMessage.TestAccessingHeaderDoesntAddHeader;
 begin
@@ -754,6 +906,34 @@ begin
   end;
 end;
 
+procedure TestTIdSipMessage.TestExpires;
+var
+  Expires: TIdSipNumericHeader;
+begin
+  Check(not Self.Msg.HasHeader(ExpiresHeader),
+        'Sanity check: a new message should have no Expires header');
+
+  Self.Msg.Expires;
+  Check(Assigned(Self.Msg.Expires),
+        'Getter didn''t instantiate the Expires header');
+
+  Expires := TIdSipNumericHeader.Create;
+  try
+    Expires.Name  := ExpiresHeader;
+    Expires.Value := PackageRefer;
+
+    // This sneakily checks that (a) the Setter instantiates a Expires header,
+    // AND that the setter copies the information for that header properly.
+    Self.Msg.RemoveAllHeadersNamed(ExpiresHeader);
+    Self.Msg.Expires := Expires;
+
+    Check(Expires.Equals(Self.Msg.Expires),
+                         'New Expires doesn''t equal message''s Expires');
+  finally
+    Expires.Free;
+  end;
+end;
+
 procedure TestTIdSipMessage.TestFirstContact;
 var
   C: TIdSipHeader;
@@ -767,21 +947,6 @@ begin
   Self.Msg.AddHeader(ContactHeaderFull);
 
   Check(C = Self.Msg.FirstContact, 'Wrong Contact');
-end;
-
-procedure TestTIdSipMessage.TestFirstExpires;
-var
-  E: TIdSipHeader;
-begin
-  Self.Msg.ClearHeaders;
-
-  CheckNotNull(Self.Msg.FirstExpires, 'Expires not present');
-  CheckEquals(1, Self.Msg.HeaderCount, 'Expires not auto-added');
-
-  E := Self.Msg.FirstHeader(ExpiresHeader);
-  Self.Msg.AddHeader(ExpiresHeader);
-
-  Check(E = Self.Msg.FirstExpires, 'Wrong Expires');
 end;
 
 procedure TestTIdSipMessage.TestFirstHeader;
@@ -800,36 +965,6 @@ begin
   H := Self.Msg.AddHeader(RouteHeader);
   Check(H <> Self.Msg.FirstHeader(RouteHeader),
         'Wrong result returned for first Route of two');
-end;
-
-procedure TestTIdSipMessage.TestFirstMinExpires;
-var
-  E: TIdSipHeader;
-begin
-  Self.Msg.ClearHeaders;
-
-  CheckNotNull(Self.Msg.FirstMinExpires, 'Min-Expires not present');
-  CheckEquals(1, Self.Msg.HeaderCount, 'Min-Expires not auto-added');
-
-  E := Self.Msg.FirstHeader(MinExpiresHeader);
-  Self.Msg.AddHeader(MinExpiresHeader);
-
-  Check(E = Self.Msg.FirstMinExpires, 'Wrong Min-Expires');
-end;
-
-procedure TestTIdSipMessage.TestFirstRequire;
-var
-  R: TIdSipHeader;
-begin
-  Self.Msg.ClearHeaders;
-
-  CheckNotNull(Self.Msg.FirstRequire, 'Require not present');
-  CheckEquals(1, Self.Msg.HeaderCount, 'Require not auto-added');
-
-  R := Self.Msg.FirstHeader(RequireHeader);
-  Self.Msg.AddHeader(RequireHeader);
-
-  Check(R = Self.Msg.FirstRequire, 'Wrong Require');
 end;
 
 procedure TestTIdSipMessage.TestHasBody;
@@ -1003,6 +1138,34 @@ begin
   Check(Self.Msg.LastHop = Self.Msg.Path.LastHop, 'Unexpected return');
 end;
 
+procedure TestTIdSipMessage.TestMinExpires;
+var
+  MinExpires: TIdSipNumericHeader;
+begin
+  Check(not Self.Msg.HasHeader(MinExpiresHeader),
+        'Sanity check: a new message should have no Min-Expires header');
+
+  Self.Msg.MinExpires;
+  Check(Assigned(Self.Msg.MinExpires),
+        'Getter didn''t instantiate the Min-Expires header');
+
+  MinExpires := TIdSipNumericHeader.Create;
+  try
+    MinExpires.Name  := MinExpiresHeader;
+    MinExpires.Value := PackageRefer;
+
+    // This sneakily checks that (a) the Setter instantiates a Min-Expires header,
+    // AND that the setter copies the information for that header properly.
+    Self.Msg.RemoveAllHeadersNamed(MinExpiresHeader);
+    Self.Msg.MinExpires := MinExpires;
+
+    Check(MinExpires.Equals(Self.Msg.MinExpires),
+                         'New Min-Expires doesn''t equal message''s Min-Expires');
+  finally
+    MinExpires.Free;
+  end;
+end;
+
 procedure TestTIdSipMessage.TestQuickestExpiry;
 begin
   Self.Msg.ClearHeaders;
@@ -1116,6 +1279,34 @@ begin
 
   Check(not Self.Msg.HasHeader(ContentTypeHeaderFull),
         'Content-Type wasn''t removeed');
+end;
+
+procedure TestTIdSipMessage.TestRetryAfter;
+var
+  RetryAfter: TIdSipRetryAfterHeader;
+begin
+  Check(not Self.Msg.HasHeader(RetryAfterHeader),
+        'Sanity check: a new message should have no Retry-After header');
+
+  Self.Msg.RetryAfter;
+  Check(Assigned(Self.Msg.RetryAfter),
+        'Getter didn''t instantiate the Retry-After header');
+
+  RetryAfter := TIdSipRetryAfterHeader.Create;
+  try
+    RetryAfter.Name  := RetryAfterHeader;
+    RetryAfter.Value := PackageRefer;
+
+    // This sneakily checks that (a) the Setter instantiates a Retry-After header,
+    // AND that the setter copies the information for that header properly.
+    Self.Msg.RemoveAllHeadersNamed(RetryAfterHeader);
+    Self.Msg.RetryAfter := RetryAfter;
+
+    Check(RetryAfter.Equals(Self.Msg.RetryAfter),
+                         'New Retry-After doesn''t equal message''s Retry-After');
+  finally
+    RetryAfter.Free;
+  end;
 end;
 
 procedure TestTIdSipMessage.TestSetCallID;
@@ -1289,6 +1480,34 @@ begin
     CheckEquals(ToHeader.Value, Self.Msg.ToHeader.Value, 'To value not set');
   finally
     ToHeader.Free;
+  end;
+end;
+
+procedure TestTIdSipMessage.TestSupported;
+var
+  Supported: TIdSipCommaSeparatedHeader;
+begin
+  Check(not Self.Msg.HasHeader(SupportedHeaderFull),
+        'Sanity check: a new message should have no Supported header');
+
+  Self.Msg.Supported;
+  Check(Assigned(Self.Msg.Supported),
+        'Getter didn''t instantiate the Supported header');
+
+  Supported := TIdSipCommaSeparatedHeader.Create;
+  try
+    Supported.Name  := SupportedHeaderFull;
+    Supported.Value := PackageRefer;
+
+    // This sneakily checks that (a) the Setter instantiates a Supported header,
+    // AND that the setter copies the information for that header properly.
+    Self.Msg.RemoveAllHeadersNamed(SupportedHeaderFull);
+    Self.Msg.Supported := Supported;
+
+    Check(Supported.Equals(Self.Msg.Supported),
+                         'New Supported doesn''t equal message''s Supported');
+  finally
+    Supported.Free;
   end;
 end;
 
@@ -1971,38 +2190,6 @@ begin
   Check(A = Self.Request.FirstProxyAuthorization, 'Wrong Proxy-Authorization');
 end;
 
-procedure TestTIdSipRequest.TestFirstProxyRequire;
-var
-  P: TIdSipHeader;
-begin
-  Self.Request.ClearHeaders;
-
-  CheckNotNull(Self.Request.FirstProxyRequire, 'Proxy-Require not present');
-  CheckEquals(1, Self.Request.HeaderCount, 'Proxy-Require not auto-added');
-
-  P := Self.Request.FirstHeader(ProxyRequireHeader);
-  Self.Request.AddHeader(ProxyRequireHeader);
-
-  Check(P = Self.Request.FirstProxyRequire, 'Wrong Proxy-Require');
-end;
-
-procedure TestTIdSipRequest.TestFirstReplaces;
-var
-  A: TIdSipHeader;
-begin
-  Self.Request.ClearHeaders;
-
-  CheckNotNull(Self.Request.FirstReplaces, 'Replaces not present');
-  CheckEquals(1, Self.Request.HeaderCount, 'Replaces not auto-added');
-
-  A := Self.Request.FirstHeader(ReplacesHeader);
-  Self.Request.AddHeader(ReplacesHeader);
-
-  Check(A = Self.Request.FirstReplaces, 'Wrong Replaces');
-  Check(Self.Request.IsMalformed,
-        'A request with multiple Replaces header should be malformed');
-end;
-
 procedure TestTIdSipRequest.TestFirstRoute;
 var
   A: TIdSipHeader;
@@ -2016,21 +2203,6 @@ begin
   Self.Request.AddHeader(RouteHeader);
 
   Check(A = Self.Request.FirstRoute, 'Wrong Route');
-end;
-
-procedure TestTIdSipRequest.TestFirstSubscriptionState;
-var
-  A: TIdSipHeader;
-begin
-  Self.Request.ClearHeaders;
-
-  CheckNotNull(Self.Request.FirstSubscriptionState, 'Subscription-State not present');
-  CheckEquals(1, Self.Request.HeaderCount, 'Subscription-State not auto-added');
-
-  A := Self.Request.FirstHeader(SubscriptionStateHeader);
-  Self.Request.AddHeader(SubscriptionStateHeader);
-
-  Check(A = Self.Request.FirstSubscriptionState, 'Wrong Subscription-State');
 end;
 
 procedure TestTIdSipRequest.TestHasAuthorization;
@@ -2817,6 +2989,34 @@ begin
         'ProxyAuth1');
   Check(ProxyAuth2 = Self.Request.ProxyAuthorizationFor('ProxyAuth2'),
         'ProxyAuth2');
+end;
+
+procedure TestTIdSipRequest.TestProxyRequire;
+var
+  ProxyRequire: TIdSipCommaSeparatedHeader;
+begin
+  Check(not Self.Request.HasHeader(ProxyRequireHeader),
+        'Sanity check: a new message should have no Proxy-Require header');
+
+  Self.Request.ProxyRequire;
+  Check(Assigned(Self.Request.ProxyRequire),
+        'Getter didn''t instantiate the Proxy-Require header');
+
+  ProxyRequire := TIdSipCommaSeparatedHeader.Create;
+  try
+    ProxyRequire.Name  := ProxyRequireHeader;
+    ProxyRequire.Value := PackageRefer;
+
+    // This sneakily checks that (a) the Setter instantiates a Proxy-Require header,
+    // AND that the setter copies the information for that header properly.
+    Self.Request.RemoveAllHeadersNamed(ProxyRequireHeader);
+    Self.Request.ProxyRequire := ProxyRequire;
+
+    Check(ProxyRequire.Equals(Self.Request.ProxyRequire),
+                         'New Proxy-Require doesn''t equal message''s Proxy-Require');
+  finally
+    ProxyRequire.Free;
+  end;
 end;
 
 procedure TestTIdSipRequest.TestReferTo;

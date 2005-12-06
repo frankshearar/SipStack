@@ -93,6 +93,8 @@ type
     procedure NotifyEvent(Action: TIdSipAction;
                           Event: Cardinal;
                           Data: TIdEventData);
+    procedure NotifyOfSentMessage(Msg: TIdSipMessage;
+                                  Destination: TIdSipLocation);
     procedure NotifySubscriptionEvent(Event: Cardinal;
                                       Subscription: TIdSipSubscription;
                                       Notify: TIdSipRequest);
@@ -126,7 +128,7 @@ type
                         Response: TIdSipResponse); overload;
     procedure OnFailure(Subscription: TIdSipOutboundSubscription;
                         Response: TIdSipResponse); overload;
-    procedure OnInboundCall(UserAgent: TIdSipAbstractCore;
+    procedure OnInboundCall(UserAgent: TIdSipInviteModule;
                             Session: TIdSipInboundSession); overload;
     procedure OnModifySession(Session: TIdSipSession;
                               const RemoteSessionDescription: String;
@@ -141,9 +143,11 @@ type
     procedure OnProgressedSession(Session: TIdSipSession;
                                   Progress: TIdSipResponse);
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               Receiver: TIdSipTransport);
+                               Receiver: TIdSipTransport;
+                               Source: TIdSipConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                Receiver: TIdSipTransport);
+                                Receiver: TIdSipTransport;
+                                Source: TIdSipConnectionBindings);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure OnRenewedSubscription(UserAgent: TIdSipAbstractCore;
@@ -190,6 +194,13 @@ type
     procedure ModifyCall(ActionHandle: TIdSipHandle;
                          const Offer: String;
                          const ContentType: String);
+    procedure NotifyReferralDenied(ActionHandle: TIdSipHandle);
+    procedure NotifyReferralFailed(ActionHandle: TIdSipHandle);
+    procedure NotifyReferralSucceeded(ActionHandle: TIdSipHandle);
+    procedure NotifyReferralTrying(ActionHandle: TIdSipHandle);
+    procedure NotifySubcriber(ActionHandle: TIdSipHandle;
+                              const Notification: String;
+                              const MimeType: String);
     procedure RedirectCall(ActionHandle: TIdSipHandle;
                            NewTarget: TIdSipAddressHeader);
     procedure RejectCall(ActionHandle: TIdSipHandle);
@@ -200,10 +211,16 @@ type
   TIdEventData = class(TPersistent)
   private
     fHandle: TIdSipHandle;
+
+    function TimestampLine: String;
+  protected
+    function Data: String; virtual;
+    function EventName: String; virtual;
   public
     constructor Create; virtual;
 
     procedure Assign(Src: TPersistent); override;
+    function AsString: String;
     function  Copy: TIdEventData; virtual;
 
     property Handle: TIdSipHandle read fHandle write fHandle;
@@ -218,7 +235,9 @@ type
     fErrorCode: Cardinal;
 
     fReason: String;
-    procedure SetErrorCode(Value: Cardinal);  private
+    procedure SetErrorCode(Value: Cardinal);
+  protected
+    function Data: String; override;
   public
     constructor Create; override;
 
@@ -235,6 +254,9 @@ type
 
     procedure SetChallenge(Response: TIdSipResponse);
     procedure SetChallengedRequest(Request: TIdSipRequest);
+  protected
+    function Data: String; override;
+    function EventName: String; override;
   public
     constructor Create; override;
     destructor  Destroy; override;
@@ -246,11 +268,25 @@ type
   end;
 
   TIdFailData = class(TIdInformationalData);
-  TIdCallEndedData = class(TIdInformationalData);
 
-  TIdDebugMessageData = class(TIdEventData)
+  TIdNetworkFailureData = class(TIdFailData)
+  protected
+    function EventName: String; override;
+  end;
+
+  TIdCallEndedData = class(TIdInformationalData)
+  protected
+    function EventName: String; override;
+  end;
+
+  TIdDebugData = class(TIdEventData);
+
+  TIdDebugMessageData = class(TIdDebugData)
   private
     fMessage: TIdSipMessage;
+
+  protected
+    function Data: String; override;
   public
     destructor Destroy; override;
 
@@ -259,9 +295,31 @@ type
     property Message: TIdSipMessage read fMessage write fMessage;
   end;
 
+  TIdDebugDroppedMessageData = class(TIdDebugMessageData)
+  protected
+    function EventName: String; override;
+  end;
+
+  TIdDebugReceiveMessageData = class(TIdDebugMessageData)
+  private
+    fBinding: TIdSipConnectionBindings;
+  protected
+    function Data: String; override;
+    function EventName: String; override;
+  public
+    destructor Destroy; override;
+
+    procedure Assign(Src: TPersistent); override;
+
+    property Binding: TIdSipConnectionBindings read fBinding write fBinding;
+  end;
+
   TIdDebugSendMessageData = class(TIdDebugMessageData)
   private
     fDestination: TIdSipLocation;
+  protected
+    function Data: String; override;
+    function EventName: String; override;
   public
     destructor Destroy; override;
 
@@ -270,11 +328,26 @@ type
     property Destination: TIdSipLocation read fDestination write fDestination;
   end;
 
+  TIdDebugTransportExceptionData = class(TIdDebugData)
+  private
+    fError:  String;
+    fReason: String;
+  protected
+    function Data: String; override;
+    function EventName: String; override;
+  public
+    property Error:  String read fError write fError;
+    property Reason: String read fReason write fReason;
+  end;
+
   TIdRegistrationData = class(TIdEventData)
   private
     fContacts: TIdSipContacts;
 
     procedure SetContacts(Value: TIdSipContacts);
+  protected
+    function Data: String; override;
+    function EventName: String; override;
   public
     constructor Create; override;
     destructor  Destroy; override;
@@ -290,6 +363,9 @@ type
 
     function  GetContacts: TIdSipContacts;
     procedure SetContacts(Value: TIdSipContacts);
+  protected
+    function Data: String; override;
+    function EventName: String; override;
   public
     constructor Create; override;
     destructor  Destroy; override;
@@ -301,45 +377,63 @@ type
 
   TIdSessionData = class(TIdEventData)
   private
-    fLocalSessionDescription:  String;
     fLocalMimeType:            String;
-    fRemoteSessionDescription: String;
+    fLocalSessionDescription:  String;
+    fRemoteContact:            TIdSipContactHeader;
     fRemoteMimeType:           String;
-  public
-    procedure Assign(Src: TPersistent); override;
+    fRemoteParty:              TIdSipAddressHeader;
+    fRemoteSessionDescription: String;
 
-    property LocalSessionDescription:  String read fLocalSessionDescription write fLocalSessionDescription;
-    property LocalMimeType:            String read fLocalMimeType write fLocalMimeType;
-    property RemoteSessionDescription: String read fRemoteSessionDescription write fRemoteSessionDescription;
-    property RemoteMimeType:           String read fRemoteMimeType write fRemoteMimeType;
-  end;
-
-  TIdSessionProgressData = class(TIdSessionData)
-  private
-    fBanner:       String;
-    fProgressCode: Cardinal;
-  public
-    procedure Assign(Src: TPersistent); override;
-
-    property Banner:       String   read fBanner write fBanner;
-    property ProgressCode: Cardinal read fProgressCode write fProgressCode;
-  end;
-
-  TIdInboundCallData = class(TIdSessionData)
-  private
-    fContact: TIdSipContactHeader;
-    fFrom:    TIdSipFromHeader;
-
-    procedure SetContact(Value: TIdSipContactHeader);
-    procedure SetFrom(Value: TIdSipFromHeader);
+    procedure SetRemoteContact(Value: TIdSipContactHeader);
+    procedure SetRemoteParty(Value: TIdSipAddressHeader);
+  protected
+    function Data: String; override;
   public
     constructor Create; override;
     destructor  Destroy; override;
 
     procedure Assign(Src: TPersistent); override;
 
-    property Contact: TIdSipContactHeader read fContact write SetContact;
-    property From:    TIdSipFromHeader    read fFrom write SetFrom;
+    property LocalMimeType:            String              read fLocalMimeType write fLocalMimeType;
+    property LocalSessionDescription:  String              read fLocalSessionDescription write fLocalSessionDescription;
+    property RemoteContact:            TIdSipContactHeader read fRemoteContact write SetRemoteContact;
+    property RemoteMimeType:           String              read fRemoteMimeType write fRemoteMimeType;
+    property RemoteParty:              TIdSipAddressHeader read fRemoteParty write SetRemoteParty;
+    property RemoteSessionDescription: String              read fRemoteSessionDescription write fRemoteSessionDescription;
+  end;
+
+  TIdEstablishedSessionData = class(TIdSessionData)
+  protected
+    function EventName: String; override;
+  end;
+
+  TIdInboundCallData = class(TIdSessionData)
+  protected
+    function EventName: String; override;
+  end;
+
+  TIdModifiedSessionData = class(TIdSessionData)
+  protected
+    function EventName: String; override;
+  end;
+
+  TIdModifySessionData = class(TIdSessionData)
+  protected
+    function EventName: String; override;
+  end;
+
+  TIdSessionProgressData = class(TIdSessionData)
+  private
+    fBanner:       String;
+    fProgressCode: Cardinal;
+  protected
+    function Data: String; override;
+    function EventName: String; override;
+  public
+    procedure Assign(Src: TPersistent); override;
+
+    property Banner:       String   read fBanner write fBanner;
+    property ProgressCode: Cardinal read fProgressCode write fProgressCode;
   end;
 
   TIdSubscriptionRequestData = class(TIdEventData)
@@ -352,6 +446,9 @@ type
     procedure SetContact(Value: TIdSipContactHeader);
     procedure SetFrom(Value: TIdSipFromHeader);
     procedure SetReferTo(Value: TIdSipReferToHeader);
+  protected
+    function Data: String; override;
+    function EventName: String; override;
   public
     constructor Create; override;
     destructor  Destroy; override;
@@ -366,15 +463,20 @@ type
 
   TIdSubscriptionData = class(TIdEventData)
   private
+    fEvent:  Cardinal;
     fNotify: TIdSipRequest;
 
     procedure SetNotify(Value: TIdSipRequest);
+  protected
+    function Data: String; override;
+    function EventName: String; override;
   public
     constructor Create; override;
     destructor  Destroy; override;
 
     procedure Assign(Src: TPersistent); override;
 
+    property Event:  Cardinal      read fEvent write fEvent;
     property Notify: TIdSipRequest read fNotify write SetNotify;
   end;
 
@@ -483,6 +585,7 @@ begin
     CM_DEBUG_DROPPED_MSG:            Result := 'CM_DEBUG_DROPPED_MSG';
     CM_DEBUG_RECV_MSG:               Result := 'CM_DEBUG_RECV_MSG';
     CM_DEBUG_SEND_MSG:               Result := 'CM_DEBUG_SEND_MSG';
+    CM_DEBUG_TRANSPORT_EXCEPTION:    Result := 'CM_DEBUG_TRANSPORT_EXCEPTION';   
   else
     Result := 'Unknown: ' + IntToStr(Event);
   end;
@@ -527,8 +630,10 @@ begin
     Self.UserAgent.InviteModule.AddListener(Self);
 //    Self.UserAgent.AddTransportListener(Self);
 
-    for I := 0 to Self.UserAgent.Dispatcher.TransportCount - 1 do
+    for I := 0 to Self.UserAgent.Dispatcher.TransportCount - 1 do begin
+      Self.UserAgent.Dispatcher.Transports[I].AddTransportListener(Self);
       Self.UserAgent.Dispatcher.Transports[I].AddTransportSendingListener(Self);
+    end;
 
     Self.SubscribeModule := Self.UserAgent.ModuleFor(TIdSipSubscribeModule) as TIdSipSubscribeModule;
 
@@ -683,6 +788,50 @@ begin
     Action := Self.GetAndCheckAction(ActionHandle, TIdSipSession);
 
     (Action as TIdSipSession).Modify(Offer, ContentType);
+  finally
+    Self.ActionLock.Release;
+  end;
+end;
+
+procedure TIdSipStackInterface.NotifyReferralDenied(ActionHandle: TIdSipHandle);
+begin
+  Self.NotifySubcriber(ActionHandle,
+                       TIdSipInboundReferral.ReferralDeniedBody,
+                       SipFragmentMimeType);
+end;
+
+procedure TIdSipStackInterface.NotifyReferralFailed(ActionHandle: TIdSipHandle);
+begin
+  Self.NotifySubcriber(ActionHandle,
+                       TIdSipInboundReferral.ReferralFailedBody,
+                       SipFragmentMimeType);
+end;
+
+procedure TIdSipStackInterface.NotifyReferralSucceeded(ActionHandle: TIdSipHandle);
+begin
+  Self.NotifySubcriber(ActionHandle,
+                       TIdSipInboundReferral.ReferralSucceededBody,
+                       SipFragmentMimeType);
+end;
+
+procedure TIdSipStackInterface.NotifyReferralTrying(ActionHandle: TIdSipHandle);
+begin
+  Self.NotifySubcriber(ActionHandle,
+                       TIdSipInboundReferral.ReferralTryingBody,
+                       SipFragmentMimeType);
+end;
+
+procedure TIdSipStackInterface.NotifySubcriber(ActionHandle: TIdSipHandle;
+                                               const Notification: String;
+                                               const MimeType: String);
+var
+  Action: TIdSipAction;
+begin
+  Self.ActionLock.Acquire;
+  try
+    Action := Self.GetAndCheckAction(ActionHandle, TIdSipInboundSubscription);
+
+    (Action as TIdSipInboundSubscription).Notify(Notification, MimeType);
   finally
     Self.ActionLock.Release;
   end;
@@ -880,6 +1029,24 @@ begin
   end;
 end;
 
+procedure TIdSipStackInterface.NotifyOfSentMessage(Msg: TIdSipMessage;
+                                                   Destination: TIdSipLocation);
+
+var
+  Data: TIdDebugSendMessageData;
+begin
+  Data := TIdDebugSendMessageData.Create;
+  try
+    Data.Handle      := InvalidHandle;
+    Data.Destination := Destination.Copy;
+    Data.Message     := Msg.Copy;
+
+    Self.NotifyEvent(nil, CM_DEBUG_SEND_MSG, Data);
+  finally
+    Data.Free;
+  end;
+end;
+
 procedure TIdSipStackInterface.NotifySubscriptionEvent(Event: Cardinal;
                                                        Subscription: TIdSipSubscription;
                                                        Notify: TIdSipRequest);
@@ -889,6 +1056,7 @@ begin
   Data := TIdSubscriptionData.Create;
   try
     Data.Handle := Self.HandleFor(Subscription);
+    Data.Event  := Event;
 
     if (Notify <> nil) then
       Data.Notify := Notify;
@@ -934,9 +1102,9 @@ procedure TIdSipStackInterface.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstra
                                                          Message: TIdSipMessage;
                                                          Receiver: TIdSipTransport);
 var
-  Data: TIdDebugMessageData;
+  Data: TIdDebugDroppedMessageData;
 begin
-  Data := TIdDebugMessageData.Create;
+  Data := TIdDebugDroppedMessageData.Create;
   try
     Data.Handle := InvalidHandle;
     Data.Message := Message.Copy;
@@ -970,15 +1138,26 @@ procedure TIdSipStackInterface.OnEstablishedSession(Session: TIdSipSession;
                                                     const RemoteSessionDescription: String;
                                                     const MimeType: String);
 var
-  Data: TIdSessionData;
+  Data: TIdEstablishedSessionData;
 begin
-  Data := TIdSessionData.Create;
+  Data := TIdEstablishedSessionData.Create;
   try
     Data.Handle                   := Self.HandleFor(Session);
-    Data.LocalSessionDescription  := Session.LocalSessionDescription;
     Data.LocalMimeType            := Session.LocalMimeType;
-    Data.RemoteSessionDescription := RemoteSessionDescription;
+    Data.LocalSessionDescription  := Session.LocalSessionDescription;
+    Data.RemoteContact            := Session.RemoteContact;
     Data.RemoteMimeType           := MimeType;
+    Data.RemoteParty              := Session.RemoteParty;
+    Data.RemoteSessionDescription := RemoteSessionDescription;
+
+    if Session.IsInbound then begin
+      Data.RemoteContact := Session.InitialRequest.FirstContact;
+      Data.RemoteParty   := Session.InitialRequest.From;
+    end
+    else begin
+      Data.RemoteContact.Value := Session.InitialRequest.ToHeader.FullValue; // This is WRONG. We want the Contact of the 2xx response
+      Data.RemoteParty := Session.InitialRequest.ToHeader;
+    end;
 
     Self.NotifyEvent(Session, CM_CALL_ESTABLISHED, Data);
   finally
@@ -997,13 +1176,13 @@ end;
 procedure TIdSipStackInterface.OnException(E: Exception;
                                            const Reason: String);
 var
-  Data: TIdFailData;
+  Data: TIdDebugTransportExceptionData;
 begin
-  Data := TIdFailData.Create;
+  Data := TIdDebugTransportExceptionData.Create;
   try
-    Data.Handle    := InvalidHandle;
-    Data.ErrorCode := CallEndedFailure; // This value is actually bogus, but it's at least non-zero
-    Data.Reason    := Reason;
+    Data.Handle := InvalidHandle;
+    Data.Error  := E.ClassName;
+    Data.Reason := E.Message;
 
     Self.NotifyEvent(nil, CM_DEBUG_TRANSPORT_EXCEPTION, Data);
   finally
@@ -1044,7 +1223,7 @@ begin
   raise Exception.Create('Implement TIdSipStackInterface.OnFailure');
 end;
 
-procedure TIdSipStackInterface.OnInboundCall(UserAgent: TIdSipAbstractCore;
+procedure TIdSipStackInterface.OnInboundCall(UserAgent: TIdSipInviteModule;
                                              Session: TIdSipInboundSession);
 var
   Data: TIdInboundCallData;
@@ -1055,8 +1234,8 @@ begin
   Data := TIdInboundCallData.Create;
   try
     Data.Handle                   := Self.HandleFor(Session);
-    Data.Contact                  := Session.InitialRequest.FirstContact;
-    Data.From                     := Session.InitialRequest.From;
+    Data.RemoteContact            := Session.RemoteContact;
+    Data.RemoteParty              := Session.RemoteParty;
     Data.RemoteSessionDescription := Session.RemoteSessionDescription;
     Data.RemoteMimeType           := Session.RemoteMimeType;
 
@@ -1070,13 +1249,15 @@ procedure TIdSipStackInterface.OnModifySession(Session: TIdSipSession;
                                                const RemoteSessionDescription: String;
                                                const MimeType: String);
 var
-  Data: TIdSessionData;
+  Data: TIdModifySessionData;
 begin
-  Data := TIdSessionData.Create;
+  Data := TIdModifySessionData.Create;
   try
     Data.Handle := Self.HandleFor(Session);
-    Data.RemoteSessionDescription := RemoteSessionDescription;
+    Data.RemoteContact            := Session.RemoteContact;
     Data.RemoteMimeType           := MimeType;
+    Data.RemoteParty              := Session.RemoteParty;
+    Data.RemoteSessionDescription := RemoteSessionDescription;
 
     Self.NotifyEvent(Session, CM_CALL_REMOTE_MODIFY_REQUEST, Data);
   finally
@@ -1087,14 +1268,16 @@ end;
 procedure TIdSipStackInterface.OnModifiedSession(Session: TIdSipSession;
                                                  Answer: TIdSipResponse);
 var
-  Data: TIdSessionData;
+  Data: TIdModifiedSessionData;
 begin
-  Data := TIdSessionData.Create;
+  Data := TIdModifiedSessionData.Create;
   try
     Data.Handle := Self.HandleFor(Session);
     Data.LocalMimeType            := Session.LocalMimeType;
     Data.LocalSessionDescription  := Session.LocalSessionDescription;
+    Data.RemoteContact            := Session.RemoteContact;
     Data.RemoteMimeType           := Answer.ContentType;
+    Data.RemoteParty              := Session.RemoteParty;
     Data.RemoteSessionDescription := Answer.Body;
 
     Self.NotifyEvent(Session, CM_CALL_OUTBOUND_MODIFY_SUCCESS, Data);
@@ -1107,9 +1290,9 @@ procedure TIdSipStackInterface.OnNetworkFailure(Action: TIdSipAction;
                                                 ErrorCode: Cardinal;
                                                 const Reason: String);
 var
-  Data: TIdFailData;
+  Data: TIdNetworkFailureData;
 begin
-  Data := TIdFailData.Create;
+  Data := TIdNetworkFailureData.Create;
   try
     Data.Handle    := Self.HandleFor(Action);
     Data.ErrorCode := ErrorCode;
@@ -1138,11 +1321,14 @@ begin
   try
     Data.Banner                   := TIdSipUri.Decode(Progress.StatusText);
     Data.Handle                   := Self.HandleFor(Session);
-    Data.LocalSessionDescription  := Session.LocalSessionDescription;
     Data.LocalMimeType            := Session.LocalMimeType;
+    Data.LocalSessionDescription  := Session.LocalSessionDescription;
     Data.ProgressCode             := Progress.StatusCode;
-    Data.RemoteSessionDescription := Progress.Body;
+    Data.RemoteContact            := Session.RemoteContact;
     Data.RemoteMimeType           := Progress.ContentType;
+    Data.RemoteParty              := Session.RemoteParty;
+    Data.RemoteSessionDescription := Progress.Body;
+
 
     Self.NotifyEvent(Session, CM_CALL_PROGRESS, Data);
   finally
@@ -1151,14 +1337,16 @@ begin
 end;
 
 procedure TIdSipStackInterface.OnReceiveRequest(Request: TIdSipRequest;
-                                                Receiver: TIdSipTransport);
+                                                Receiver: TIdSipTransport;
+                                                Source: TIdSipConnectionBindings);
 var
-  Data: TIdDebugMessageData;
+  Data: TIdDebugReceiveMessageData;
 begin
-  Data := TIdDebugMessageData.Create;
+  Data := TIdDebugReceiveMessageData.Create;
   try
     Data.Handle := InvalidHandle;
-    Data.Message := Request;
+    Data.Binding := Source.Copy;
+    Data.Message := Request.Copy;
 
     Self.NotifyEvent(nil, CM_DEBUG_RECV_MSG, Data);
   finally
@@ -1167,14 +1355,16 @@ begin
 end;
 
 procedure TIdSipStackInterface.OnReceiveResponse(Response: TIdSipResponse;
-                                                 Receiver: TIdSipTransport);
+                                                 Receiver: TIdSipTransport;
+                                                 Source: TIdSipConnectionBindings);
 var
-  Data: TIdDebugMessageData;
+  Data: TIdDebugReceiveMessageData;
 begin
-  Data := TIdDebugMessageData.Create;
+  Data := TIdDebugReceiveMessageData.Create;
   try
     Data.Handle := InvalidHandle;
-    Data.Message := Response;
+    Data.Binding := Source.Copy;
+    Data.Message := Response.Copy;
 
     Self.NotifyEvent(nil, CM_DEBUG_RECV_MSG, Data);
   finally
@@ -1199,36 +1389,33 @@ end;
 procedure TIdSipStackInterface.OnSendRequest(Request: TIdSipRequest;
                                              Sender: TIdSipTransport;
                                              Destination: TIdSipLocation);
-var
-  Data: TIdDebugSendMessageData;
 begin
-  Data := TIdDebugSendMessageData.Create;
-  try
-    Data.Handle      := InvalidHandle;
-    Data.Destination := Destination.Copy;
-    Data.Message     := Request.Copy;
-
-    Self.NotifyEvent(nil, CM_DEBUG_SEND_MSG, Data);
-  finally
-    Data.Free;
-  end;
+  Self.NotifyOfSentMessage(Request, Destination);
 end;
 
 procedure TIdSipStackInterface.OnSendResponse(Response: TIdSipResponse;
                                               Sender: TIdSipTransport;
                                               Destination: TIdSipLocation);
-var
-  Data: TIdDebugSendMessageData;
 begin
-  // TODO Refactor this & OnSendRequest into NotifyOfSentMessage
+  Self.NotifyOfSentMessage(Response, Destination);
+end;
 
-  Data := TIdDebugSendMessageData.Create;
+procedure TIdSipStackInterface.OnSubscriptionRequest(UserAgent: TIdSipAbstractCore;
+                                                     Subscription: TIdSipInboundSubscription);
+var
+  Data: TIdSubscriptionRequestData;
+begin
+  Self.AddAction(Subscription);
+
+  Data := TIdSubscriptionRequestData.Create;
   try
-    Data.Handle      := InvalidHandle;
-    Data.Destination := Destination.Copy;
-    Data.Message     := Response.Copy;
+    Data.Handle       := Self.HandleFor(Subscription);
+    Data.Contact      := Subscription.InitialRequest.FirstContact;
+    Data.EventPackage := Subscription.EventPackage;
+    Data.From         := Subscription.InitialRequest.From;
+    Data.ReferTo      := Subscription.InitialRequest.ReferTo;
 
-    Self.NotifyEvent(nil, CM_DEBUG_SEND_MSG, Data);
+    Self.NotifyEvent(Subscription, CM_SUBSCRIPTION_REQUEST_NOTIFY, Data);
   finally
     Data.Free;
   end;
@@ -1322,10 +1509,37 @@ begin
     inherited Assign(Src);
 end;
 
+function TIdEventData.AsString: String;
+begin
+  Result := Self.TimestampLine
+          + Self.EventName + CRLF
+          + Self.Data;
+end;
+
 function TIdEventData.Copy: TIdEventData;
 begin
   Result := TIdEventDataClass(Self.ClassType).Create;
   Result.Assign(Self);
+end;
+
+//* TIdEventData Protected methods *********************************************
+
+function TIdEventData.Data: String;
+begin
+  Result := '';
+end;
+
+function TIdEventData.EventName: String;
+begin
+  Result := '';
+end;
+
+//* TIdEventData Private methods ***********************************************
+
+function TIdEventData.TimestampLine: String;
+begin
+  Result := FormatDateTime('yyyy/mm/dd hh:mm:ss', Now)
+          + ' Handle: ' + IntToStr(Self.Handle) + CRLF;
 end;
 
 //******************************************************************************
@@ -1352,6 +1566,13 @@ begin
     Self.ErrorCode := Other.ErrorCode;
     Self.Reason    := Other.Reason;
   end;
+end;
+
+//* TIdInformationalData Protected methods *************************************
+
+function TIdInformationalData.Data: String;
+begin
+  Result := IntToStr(Self.ErrorCode) + ' ' + Self.Reason + CRLF;
 end;
 
 //* TIdInformationalData Private methods ***************************************
@@ -1398,6 +1619,22 @@ begin
   end;
 end;
 
+//* TIdAuthenticationChallengeData Protected methods ***************************
+
+function TIdAuthenticationChallengeData.Data: String;
+begin
+  Result := 'CHALLENGED REQUEST' + CRLF
+          + Self.ChallengedRequest.AsString
+          + CRLF
+          + 'CHALLENGE' + CRLF
+          + Self.Challenge.AsString;
+end;
+
+function TIdAuthenticationChallengeData.EventName: String;
+begin
+  Result := EventNames(CM_AUTHENTICATION_CHALLENGE);
+end;
+
 //* TIdAuthenticationChallengeData Private methods *****************************
 
 procedure TIdAuthenticationChallengeData.SetChallenge(Response: TIdSipResponse);
@@ -1408,6 +1645,26 @@ end;
 procedure TIdAuthenticationChallengeData.SetChallengedRequest(Request: TIdSipRequest);
 begin
   Self.fChallengedRequest.Assign(Request);
+end;
+
+//******************************************************************************
+//* TIdNetworkFailureData                                                      *
+//******************************************************************************
+//* TIdNetworkFailureData Protected methods ************************************
+
+function TIdNetworkFailureData.EventName: String;
+begin
+  Result := EventNames(CM_NETWORK_FAILURE);
+end;
+
+//******************************************************************************
+//* TIdCallEndedData                                                           *
+//******************************************************************************
+//* TIdCallEndedData Protected methods *****************************************
+
+function TIdCallEndedData.EventName: String;
+begin
+  Result := EventNames(CM_CALL_ENDED);
 end;
 
 //******************************************************************************
@@ -1434,6 +1691,61 @@ begin
   end;
 end;
 
+//* TIdDebugMessageData Protected methods **************************************
+
+function TIdDebugMessageData.Data: String;
+begin
+  Result := Self.Message.AsString;
+end;
+
+//******************************************************************************
+//* TIdDebugDroppedMessageData                                                 *
+//******************************************************************************
+//* TIdDebugDroppedMessageData Protected methods *******************************
+
+function TIdDebugDroppedMessageData.EventName;
+begin
+  Result := EventNames(CM_DEBUG_DROPPED_MSG);
+end;
+
+//******************************************************************************
+//* TIdDebugReceiveMessageData                                                 *
+//******************************************************************************
+//* TIdDebugReceiveMessageData Public methods **********************************
+
+destructor TIdDebugReceiveMessageData.Destroy;
+begin
+  Self.Binding.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdDebugReceiveMessageData.Assign(Src: TPersistent);
+var
+  Other: TIdDebugReceiveMessageData;
+begin
+  inherited Assign(Src);
+
+  if (Src is TIdDebugReceiveMessageData) then begin
+    Other := Src as TIdDebugReceiveMessageData;
+
+    Self.Binding := Other.Binding.Copy;
+  end;
+end;
+
+//* TIdDebugReceiveMessageData Protected methods *******************************
+
+function TIdDebugReceiveMessageData.Data: String;
+begin
+  Result := Self.Binding.AsString + CRLF
+          + inherited Data;
+end;
+
+function TIdDebugReceiveMessageData.EventName: String;
+begin
+  Result := EventNames(CM_DEBUG_RECV_MSG);
+end;
+
 //******************************************************************************
 //* TIdDebugSendMessageData                                                    *
 //******************************************************************************
@@ -1457,6 +1769,34 @@ begin
 
     Self.Destination := Other.Destination.Copy;
   end;
+end;
+
+//* TIdDebugSendMessageData Protected methods **********************************
+
+function TIdDebugSendMessageData.Data: String;
+begin
+  Result := Self.Destination.AsString + CRLF
+          + inherited Data;
+end;
+
+function TIdDebugSendMessageData.EventName: String;
+begin
+  Result := EventNames(CM_DEBUG_SEND_MSG);
+end;
+
+//******************************************************************************
+//* TIdDebugTransportExceptionData                                             *
+//******************************************************************************
+//* TIdDebugTransportExceptionData Protected methods ***************************
+
+function TIdDebugTransportExceptionData.Data: String;
+begin
+  Result := Self.Error + ': ' + Self.Reason;
+end;
+
+function TIdDebugTransportExceptionData.EventName: String;
+begin
+  Result := EventNames(CM_DEBUG_TRANSPORT_EXCEPTION);
 end;
 
 //******************************************************************************
@@ -1489,6 +1829,18 @@ begin
 
     Self.Contacts := Other.Contacts;
   end;
+end;
+
+//* TIdRegistrationData Protected methods **************************************
+
+function TIdRegistrationData.Data: String;
+begin
+  Result := Self.Contacts.AsString;
+end;
+
+function TIdRegistrationData.EventName: String;
+begin
+  Result := EventNames(CM_SUCCESS) + ' Registration';
 end;
 
 //* TIdRegistrationData Private methods ****************************************
@@ -1533,6 +1885,19 @@ begin
   end;
 end;
 
+//* TIdFailedRegistrationData Protected methods ********************************
+
+function TIdFailedRegistrationData.Data: String;
+begin
+  Result := inherited Data
+          + Self.Contacts.AsString;
+end;
+
+function TIdFailedRegistrationData.EventName: String;
+begin
+  Result := EventNames(CM_FAIL) + 'Registration';
+end;
+
 //* TIdFailedRegistrationData Private methods **********************************
 
 function TIdFailedRegistrationData.GetContacts: TIdSipContacts;
@@ -1550,6 +1915,22 @@ end;
 //******************************************************************************
 //* TIdSessionData Public methods **********************************************
 
+constructor TIdSessionData.Create;
+begin
+  inherited Create;
+
+  Self.fRemoteContact := TIdSipContactHeader.Create;
+  Self.fRemoteParty   := TIdSipAddressHeader.Create;
+end;
+
+destructor TIdSessionData.Destroy;
+begin
+  Self.fRemoteParty.Free;
+  Self.fRemoteContact.Free;
+
+ inherited Destroy;
+end;
+
 procedure TIdSessionData.Assign(Src: TPersistent);
 var
   Other: TIdSessionData;
@@ -1561,9 +1942,78 @@ begin
 
     Self.LocalMimeType            := Other.LocalMimeType;
     Self.LocalSessionDescription  := Other.LocalSessionDescription;
+    Self.RemoteContact            := Other.RemoteContact;
     Self.RemoteMimeType           := Other.RemoteMimeType;
+    Self.RemoteParty              := Other.RemoteParty;
     Self.RemoteSessionDescription := Other.RemoteSessionDescription;
   end;
+end;
+
+//* TIdSessionData Protected methods *******************************************
+
+function TIdSessionData.Data: String;
+begin
+  Result := 'Remote party: ' + Self.RemoteParty.FullValue + CRLF
+          + 'Remote contact: ' + Self.RemoteContact.FullValue + CRLF
+          + 'Local session description (' + Self.LocalMimeType + '):' + CRLF
+          + Self.LocalSessionDescription + CRLF
+          + 'Remote session description (' + Self.RemoteMimeType + '):' + CRLF
+          + Self.RemoteSessionDescription + CRLF
+end;
+
+//* TIdSessionData Private methods *********************************************
+
+procedure TIdSessionData.SetRemoteContact(Value: TIdSipContactHeader);
+begin
+  Self.RemoteContact.Assign(Value);
+end;
+
+procedure TIdSessionData.SetRemoteParty(Value: TIdSipAddressHeader);
+begin
+  Self.RemoteParty.Assign(Value);
+
+  if Self.RemoteParty.HasParam(TagParam) then
+    Self.RemoteParty.RemoveParameter(TagParam);
+end;
+
+//******************************************************************************
+//* TIdEstablishedSessionData                                                  *
+//******************************************************************************
+//* TIdEstablishedSessionData Protected methods ********************************
+
+function TIdEstablishedSessionData.EventName: String;
+begin
+  Result := EventNames(CM_CALL_ESTABLISHED);
+end;
+
+//******************************************************************************
+//* TIdInboundCallData                                                         *
+//******************************************************************************
+//* TIdInboundCallData Protected methods ***************************************
+
+function TIdInboundCallData.EventName: String;
+begin
+  Result := EventNames(CM_CALL_REQUEST_NOTIFY);
+end;
+
+//******************************************************************************
+//* TIdModifiedSessionData                                                     *
+//******************************************************************************
+//* TIdModifiedSessionData Protected methods ***********************************
+
+function TIdModifiedSessionData.EventName: String;
+begin
+  Result := EventNames(CM_CALL_OUTBOUND_MODIFY_SUCCESS);
+end;
+
+//******************************************************************************
+//* TIdModifySessionData                                                       *
+//******************************************************************************
+//* TIdModifySessionData Protected methods *************************************
+
+function TIdModifySessionData.EventName: String;
+begin
+  Result := EventNames(CM_CALL_REMOTE_MODIFY_REQUEST);
 end;
 
 //******************************************************************************
@@ -1585,52 +2035,139 @@ begin
   end;
 end;
 
-//******************************************************************************
-//* TIdInboundCallData                                                         *
-//******************************************************************************
-//* TIdInboundCallData Public methods ******************************************
+//* TIdSessionProgressData Protected methods ***********************************
 
-constructor TIdInboundCallData.Create;
+function TIdSessionProgressData.Data: String;
+begin
+  Result := IntToStr(Self.ProgressCode) + ' ' + Self.Banner + CRLF
+          + inherited Data;
+end;
+
+function TIdSessionProgressData.EventName: String;
+begin
+  Result := EventNames(CM_CALL_PROGRESS);
+end;
+
+//******************************************************************************
+//* TIdSubscriptionRequestData                                                 *
+//******************************************************************************
+//* TIdSubscriptionRequestData Public methods **********************************
+
+constructor TIdSubscriptionRequestData.Create;
 begin
   inherited Create;
 
   Self.fContact := TIdSipContactHeader.Create;
   Self.fFrom    := TIdSipFromHeader.Create;
+  Self.fReferTo := TIdSipReferToHeader.Create;
 end;
 
-destructor TIdInboundCallData.Destroy;
+destructor TIdSubscriptionRequestData.Destroy;
 begin
+  Self.fReferTo.Free;
   Self.fFrom.Free;
   Self.fContact.Free;
 
- inherited Destroy;
+  inherited Destroy;
 end;
 
-procedure TIdInboundCallData.Assign(Src: TPersistent);
+procedure TIdSubscriptionRequestData.Assign(Src: TPersistent);
 var
-  Other: TIdInboundCallData;
+  Other: TIdSubscriptionRequestData;
 begin
   inherited Assign(Src);
 
-  if (Src is TIdInboundCallData) then begin
-    Other := Src as TIdInboundCallData;
+  if (Src is TIdSubscriptionRequestData) then begin
+    Other := Src as TIdSubscriptionRequestData;
 
-    Self.Contact := Other.Contact;
-    Self.From    := Other.From;
+    Self.Contact      := Other.Contact;
+    Self.EventPackage := Other.EventPackage;
+    Self.From         := Other.From;
+    Self.ReferTo      := Other.ReferTo;
   end;
 end;
 
-//* TIdInboundCallData Private methods *****************************************
+//* TIdSubscriptionRequestData Protected methods *******************************
 
-procedure TIdInboundCallData.SetContact(Value: TIdSipContactHeader);
+function TIdSubscriptionRequestData.Data: String;
 begin
-  Self.Contact.Assign(Value);
+  Result := Self.ReferTo.AsString + CRLF
+          + 'Event: ' + Self.EventPackage + CRLF
+          + Self.From.AsString + CRLF
+          + Self.Contact.AsString + CRLF; 
 end;
 
-procedure TIdInboundCallData.SetFrom(Value: TIdSipFromHeader);
+function TIdSubscriptionRequestData.EventName: String;
 begin
-  Self.From.Assign(Value);
-  Self.From.RemoveParameter(TagParam);
+  Result := EventNames(CM_SUBSCRIPTION_REQUEST_NOTIFY);
+end;
+
+//* TIdSubscriptionRequestData Private methods *********************************
+
+procedure TIdSubscriptionRequestData.SetContact(Value: TIdSipContactHeader);
+begin
+  Self.fContact.Assign(Value);
+end;
+
+procedure TIdSubscriptionRequestData.SetFrom(Value: TIdSipFromHeader);
+begin
+  Self.fFrom.Assign(Value);
+end;
+
+procedure TIdSubscriptionRequestData.SetReferTo(Value: TIdSipReferToHeader);
+begin
+  Self.fReferTo.Assign(Value);
+end;
+
+//******************************************************************************
+//* TIdSubscriptionData                                                        *
+//******************************************************************************
+//* TIdSubscriptionData Public methods *****************************************
+
+constructor TIdSubscriptionData.Create;
+begin
+  inherited Create;
+
+  Self.fNotify := TIdSipRequest.Create;
+end;
+
+destructor TIdSubscriptionData.Destroy;
+begin
+  Self.fNotify.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSubscriptionData.Assign(Src: TPersistent);
+var
+  Other: TIdSubscriptionData;
+begin
+  inherited Assign(Src);
+
+  if (Src is TIdSubscriptionData) then begin
+    Other := Src as TIdSubscriptionData;
+
+    Self.Notify := Other.Notify;
+  end;
+end;
+
+//* TIdSubscriptionData Protected methods **************************************
+
+function TIdSubscriptionData.Data: String;
+begin
+  Result := Self.Notify.AsString;
+end;
+
+function TIdSubscriptionData.EventName: String;
+begin
+  Result := EventNames(Self.Event);
+end;
+
+//* TIdSubscriptionData Private methods ****************************************
+
+procedure TIdSubscriptionData.SetNotify(Value: TIdSipRequest);
+begin
+  Self.fNotify.Assign(Value);
 end;
 
 //******************************************************************************

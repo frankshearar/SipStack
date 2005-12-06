@@ -52,15 +52,15 @@ procedure TestTIdSipServerNotifier.SetUp;
 begin
   inherited SetUp;
 
-  Self.Notifier := TIdSipServerNotifier.Create;
-  Self.Listener := TIdSipTestMessageListener.Create;
-
-  Self.Notifier.AddMessageListener(Self.Listener);
-
+  Self.Binding := TIdSipConnectionBindings.Create;
   Self.Binding.LocalIP   := '2002:5156:4019:1::1';
   Self.Binding.LocalPort := 5060;
   Self.Binding.PeerIP    := '192.168.0.1';
   Self.Binding.PeerPort  := 15060;
+  Self.Notifier := TIdSipServerNotifier.Create;
+  Self.Listener := TIdSipTestMessageListener.Create;
+
+  Self.Notifier.AddMessageListener(Self.Listener);
 end;
 
 procedure TestTIdSipServerNotifier.TearDown;
@@ -69,6 +69,7 @@ begin
 
   Self.Listener.Free;
   Self.Notifier.Free;
+  Self.Binding.Free;
 
   inherited TearDown;
 end;

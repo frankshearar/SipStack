@@ -28,9 +28,11 @@ type
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               Receiver: TIdSipTransport);
+                               Receiver: TIdSipTransport;
+                               Source: TIdSipConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                Receiver: TIdSipTransport);
+                                Receiver: TIdSipTransport;
+                                Source: TIdSipConnectionBindings);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
   end;
@@ -56,7 +58,9 @@ type
   TIdSipTransport = class(TIdInterfacedObject,
                           IIdSipMessageListener)
   private
+    fAddress:                  String;
     fHostName:                 String;
+    fPort:                     Cardinal;
     fTimeout:                  Cardinal;
     fTimer:                    TIdTimerQueue;
     fUseRport:                 Boolean;
@@ -67,12 +71,14 @@ type
   protected
     procedure ChangeBinding(const Address: String; Port: Cardinal); virtual; abstract;
     procedure DestroyServer; virtual;
-    function  GetAddress: String; virtual; abstract;
+    function  GetAddress: String; virtual;
     function  GetBindings: TIdSocketHandles; virtual; abstract;
-    function  GetPort: Cardinal; virtual; abstract;
+    function  GetPort: Cardinal; virtual;
     procedure InstantiateServer; virtual;
-    procedure NotifyTransportListeners(Request: TIdSipRequest); overload;
-    procedure NotifyTransportListeners(Response: TIdSipResponse); overload;
+    procedure NotifyTransportListeners(Request: TIdSipRequest;
+                                       ReceivedFrom: TIdSipConnectionBindings); overload;
+    procedure NotifyTransportListeners(Response: TIdSipResponse;
+                                       ReceivedFrom: TIdSipConnectionBindings); overload;
     procedure NotifyTransportListenersOfException(E: Exception;
                                                   const Reason: String);
     procedure NotifyTransportListenersOfRejectedMessage(const Msg: String;
@@ -97,7 +103,7 @@ type
                            Dest: TIdSipLocation); virtual;
     function  SentByIsRecognised(Via: TIdSipViaHeader): Boolean; virtual;
     procedure SetAddress(const Value: String); virtual;
-    procedure SetPort(Value: Cardinal);
+    procedure SetPort(Value: Cardinal); virtual;
     procedure SetTimeout(Value: Cardinal); virtual;
     procedure SetTimer(Value: TIdTimerQueue); virtual;
 
@@ -172,9 +178,7 @@ type
     procedure DestroyServer; override;
     procedure DoOnAddConnection(Connection: TIdTCPConnection;
                                 Request: TIdSipRequest);
-    function  GetAddress: String; override;
     function  GetBindings: TIdSocketHandles; override;
-    function  GetPort: Cardinal; override;
     procedure InstantiateServer; override;
     procedure SendRequest(R: TIdSipRequest;
                           Dest: TIdSipLocation); override;
@@ -296,9 +300,7 @@ type
   protected
     procedure ChangeBinding(const Address: String; Port: Cardinal); override;
     procedure DestroyServer; override;
-    function  GetAddress: String; override;
     function  GetBindings: TIdSocketHandles; override;
-    function  GetPort: Cardinal; override;
     procedure InstantiateServer; override;
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                ReceivedFrom: TIdSipConnectionBindings); override;
@@ -413,27 +415,32 @@ type
     property Reason:    String    read fReason write fReason;
   end;
 
-  // Look at IIdSipTransportListener's declaration.
-  TIdSipTransportReceiveRequestMethod = class(TIdNotification)
+  TIdSipTransportReceiveMethod = class(TIdNotification)
   private
     fReceiver: TIdSipTransport;
-    fRequest:  TIdSipRequest;
+    fSource:   TIdSipConnectionBindings;
   public
-    procedure Run(const Subject: IInterface); override;
-
-    property Receiver: TIdSipTransport read fReceiver write fReceiver;
-    property Request:  TIdSipRequest   read fRequest write fRequest;
+    property Receiver: TIdSipTransport          read fReceiver write fReceiver;
+    property Source:   TIdSipConnectionBindings read fSource write fSource;
   end;
 
   // Look at IIdSipTransportListener's declaration.
-  TIdSipTransportReceiveResponseMethod = class(TIdNotification)
+  TIdSipTransportReceiveRequestMethod = class(TIdSipTransportReceiveMethod)
   private
-    fReceiver: TIdSipTransport;
+    fRequest: TIdSipRequest;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Request: TIdSipRequest read fRequest write fRequest;
+  end;
+
+  // Look at IIdSipTransportListener's declaration.
+  TIdSipTransportReceiveResponseMethod = class(TIdSipTransportReceiveMethod)
+  private
     fResponse: TIdSipResponse;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Receiver: TIdSipTransport read fReceiver write fReceiver;
     property Response: TIdSipResponse  read fResponse write fResponse;
   end;
 
@@ -624,6 +631,7 @@ end;
 
 procedure TIdSipTransport.Start;
 begin
+  Self.ChangeBinding(Self.Address, Self.Port);
 end;
 
 procedure TIdSipTransport.Stop;
@@ -636,11 +644,22 @@ procedure TIdSipTransport.DestroyServer;
 begin
 end;
 
+function TIdSipTransport.GetAddress: String;
+begin
+  Result := Self.fAddress;
+end;
+
+function TIdSipTransport.GetPort: Cardinal;
+begin
+  Result := Self.fPort;
+end;
+
 procedure TIdSipTransport.InstantiateServer;
 begin
 end;
 
-procedure TIdSipTransport.NotifyTransportListeners(Request: TIdSipRequest);
+procedure TIdSipTransport.NotifyTransportListeners(Request: TIdSipRequest;
+                                                   ReceivedFrom: TIdSipConnectionBindings);
 var
   Notification: TIdSipTransportReceiveRequestMethod;
 begin
@@ -652,6 +671,7 @@ begin
   try
     Notification.Receiver := Self;
     Notification.Request  := Request;
+    Notification.Source   := ReceivedFrom;
 
     Self.TransportListeners.Notify(Notification);
   finally
@@ -659,7 +679,8 @@ begin
   end;
 end;
 
-procedure TIdSipTransport.NotifyTransportListeners(Response: TIdSipResponse);
+procedure TIdSipTransport.NotifyTransportListeners(Response: TIdSipResponse;
+                                                   ReceivedFrom: TIdSipConnectionBindings);
 var
   Notification: TIdSipTransportReceiveResponseMethod;
 begin
@@ -671,6 +692,7 @@ begin
   try
     Notification.Receiver := Self;
     Notification.Response := Response;
+    Notification.Source   := ReceivedFrom;
 
     Self.TransportListeners.Notify(Notification);
   finally
@@ -774,7 +796,7 @@ begin
   // We let the UA handle rejecting messages because of things like the UA
   // not supporting the SIP version or whatnot. This allows us to centralise
   // response generation.
-  Self.NotifyTransportListeners(Request);
+    Self.NotifyTransportListeners(Request, ReceivedFrom);
 end;
 
 procedure TIdSipTransport.OnReceiveResponse(Response: TIdSipResponse;
@@ -790,7 +812,7 @@ begin
   // cf. RFC 3261 section 18.1.2
 
   if Self.SentByIsRecognised(Response.LastHop) then begin
-    Self.NotifyTransportListeners(Response);
+    Self.NotifyTransportListeners(Response, ReceivedFrom);
   end
   else
     Self.NotifyTransportListenersOfRejectedMessage(Response.AsString,
@@ -852,12 +874,12 @@ end;
 
 procedure TIdSipTransport.SetAddress(const Value: String);
 begin
-  Self.ChangeBinding(Value, Self.Port);
+  Self.fAddress := Value;
 end;
 
 procedure TIdSipTransport.SetPort(Value: Cardinal);
 begin
-  Self.ChangeBinding(Self.Address, Value);
+  Self.fPort := Value;
 end;
 
 procedure TIdSipTransport.SetTimeout(Value: Cardinal);
@@ -1024,6 +1046,8 @@ end;
 
 procedure TIdSipTCPTransport.Start;
 begin
+  inherited Start;
+
   Self.Transport.Active := true;
 end;
 
@@ -1047,8 +1071,6 @@ begin
   Binding := Self.Bindings.Add;
   Binding.IP   := Address;
   Binding.Port := Port;
-
-  Self.Start;
 end;
 
 procedure TIdSipTCPTransport.DestroyServer;
@@ -1069,19 +1091,9 @@ begin
   end;
 end;
 
-function TIdSipTCPTransport.GetAddress: String;
-begin
-  Result := Self.Transport.Bindings[0].IP;
-end;
-
 function TIdSipTCPTransport.GetBindings: TIdSocketHandles;
 begin
   Result := Self.Transport.Bindings;
-end;
-
-function TIdSipTCPTransport.GetPort: Cardinal;
-begin
-  Result := Self.Transport.DefaultPort;
 end;
 
 procedure TIdSipTCPTransport.InstantiateServer;
@@ -1459,6 +1471,8 @@ end;
 
 procedure TIdSipUDPTransport.Start;
 begin
+  inherited Start;
+
   Self.Transport.Active := true;
 end;
 
@@ -1480,8 +1494,6 @@ begin
   Binding := Self.Bindings.Add;
   Binding.IP   := Address;
   Binding.Port := Port;
-
-  Self.Start;
 end;
 
 procedure TIdSipUDPTransport.DestroyServer;
@@ -1489,19 +1501,9 @@ begin
   Self.Transport.Free;
 end;
 
-function TIdSipUDPTransport.GetAddress: String;
-begin
-  Result := Self.Bindings[0].IP;
-end;
-
 function TIdSipUDPTransport.GetBindings: TIdSocketHandles;
 begin
   Result := Self.Transport.Bindings;
-end;
-
-function TIdSipUDPTransport.GetPort: Cardinal;
-begin
-  Result := Self.Transport.DefaultPort;
 end;
 
 procedure TIdSipUDPTransport.InstantiateServer;
@@ -1782,7 +1784,8 @@ end;
 procedure TIdSipTransportReceiveRequestMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipTransportListener).OnReceiveRequest(Self.Request,
-                                                        Self.Receiver);
+                                                        Self.Receiver,
+                                                        Self.Source);
 end;
 
 //******************************************************************************
@@ -1793,7 +1796,8 @@ end;
 procedure TIdSipTransportReceiveResponseMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipTransportListener).OnReceiveResponse(Self.Response,
-                                                         Self.Receiver);
+                                                         Self.Receiver,
+                                                         Self.Source);
 end;
 
 //******************************************************************************

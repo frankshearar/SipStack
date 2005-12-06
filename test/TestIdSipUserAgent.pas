@@ -95,7 +95,6 @@ type
     procedure TestCancelNotifiesTU;
     procedure TestConcurrentCalls;
     procedure TestContentTypeDefault;
-    procedure TestCreateOptions;
     procedure TestCreateRequest;
     procedure TestCreateRequestSipsRequestUri;
     procedure TestCreateRequestUserAgent;
@@ -107,7 +106,6 @@ type
     procedure TestDestroyCallsModuleCleanups;
     procedure TestDialogLocalSequenceNoMonotonicallyIncreases;
     procedure TestDispatchToCorrectSession;
-    procedure TestDoNotDisturb;
     procedure TestDontReAuthenticate;
     procedure TestInboundCall;
     procedure TestInviteExpires;
@@ -118,7 +116,6 @@ type
     procedure TestOutboundCallAndByeToXlite;
     procedure TestOutboundInviteSessionProgressResends;
     procedure TestOutboundInviteDoesNotTerminateWhenNoResponse;
-    procedure TestReceiveByeForUnmatchedDialog;
     procedure TestReceiveByeForDialog;
     procedure TestReceiveByeDestroysTerminatedSession;
     procedure TestReceiveByeWithoutTags;
@@ -169,6 +166,7 @@ type
   published
     procedure TestCreateUserAgentHandlesMultipleSpaces;
     procedure TestCreateUserAgentHandlesTabs;
+    procedure TestCreateUserAgentOnBusyPort;
     procedure TestCreateUserAgentRegisterDirectiveBeforeTransport;
     procedure TestCreateUserAgentReturnsSomething;
     procedure TestCreateUserAgentWithAutoTransport;
@@ -428,7 +426,7 @@ procedure TestTIdSipUserAgent.OnInboundCall(UserAgent: TIdSipAbstractCore;
 begin
   Self.InboundCallMimeType := Session.RemoteMimeType;
   Self.InboundCallOffer    := Session.RemoteSessionDescription;
-  Self.UserAgentParam      := UserAgent;
+  Self.UserAgentParam      := UserAgent.UserAgent;
   Self.OnInboundCallFired := true;
 
   Session.AddSessionListener(Self);
@@ -771,23 +769,6 @@ begin
               'AllowedContentTypes');
 end;
 
-procedure TestTIdSipUserAgent.TestCreateOptions;
-var
-  Options: TIdSipRequest;
-begin
-  Options := Self.Core.CreateOptions(Self.Destination);
-  try
-    CheckEquals(MethodOptions, Options.Method,      'Incorrect method');
-    CheckEquals(MethodOptions, Options.CSeq.Method, 'Incorrect CSeq method');
-    Check(Options.HasHeader(AcceptHeader),          'Missing Accept header');
-    CheckEquals(Self.Core.AllowedContentTypes,
-                Options.FirstHeader(AcceptHeader).Value,
-                'Accept value');
-  finally
-    Options.Free;
-  end;
-end;
-
 procedure TestTIdSipUserAgent.TestCreateRequest;
 const
   UnknownMethod = 'Foo';
@@ -1057,28 +1038,6 @@ begin
               'Number of sessions after one BYE');
 end;
 
-procedure TestTIdSipUserAgent.TestDoNotDisturb;
-var
-  SessionCount: Cardinal;
-begin
-  Self.Core.DoNotDisturb := true;
-  Self.MarkSentResponseCount;
-  SessionCount  := Self.Core.SessionCount;
-
-  Self.ReceiveInvite;
-  CheckResponseSent('No response sent when UA set to Do Not Disturb');
-
-  CheckEquals(SIPTemporarilyUnavailable,
-              Self.LastSentResponse.StatusCode,
-              'Wrong response sent');
-  CheckEquals(Self.Core.DoNotDisturbMessage,
-              Self.LastSentResponse.StatusText,
-              'Wrong status text');
-  CheckEquals(SessionCount,
-              Self.Core.SessionCount,
-              'New session created despite Do Not Disturb');
-end;
-
 procedure TestTIdSipUserAgent.TestDontReAuthenticate;
 begin
   Self.TryAgain := false;
@@ -1118,7 +1077,7 @@ begin
 
   Self.MarkSentResponseCount;
 
-  Self.Invite.FirstExpires.NumericValue := 50;
+  Self.Invite.Expires.NumericValue := 50;
   Self.ReceiveInvite;
 
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
@@ -1279,32 +1238,6 @@ begin
               'If we never get a response then we DO NOT give up');
 end;
 
-procedure TestTIdSipUserAgent.TestReceiveByeForUnmatchedDialog;
-var
-  Bye:      TIdSipRequest;
-  Response: TIdSipResponse;
-begin
-  Bye := Self.Core.CreateRequest(MethodInvite, Self.Destination);
-  try
-    Bye.Method          := MethodBye;
-    Bye.CSeq.SequenceNo := $deadbeef;
-    Bye.CSeq.Method     := Bye.Method;
-
-    Self.MarkSentResponseCount;
-
-    Self.ReceiveRequest(Bye);
-
-    CheckResponseSent('No response sent');
-    Response := Self.LastSentResponse;
-    CheckEquals(SIPCallLegOrTransactionDoesNotExist,
-                Response.StatusCode,
-                'Response Status-Code')
-
-  finally
-    Bye.Free;
-  end;
-end;
-
 procedure TestTIdSipUserAgent.TestReceiveByeForDialog;
 var
   Response: TIdSipResponse;
@@ -1348,9 +1281,8 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgent.TestReceiveByeWithoutTags;
+procedure TestTIdSipUserAgent.TestReceiveResponseWithMultipleVias;
 var
-  Bye:      TIdSipRequest;
   Response: TIdSipResponse;
 begin
   Bye := Self.Core.CreateRequest(MethodInvite, Self.Destination);
@@ -1844,7 +1776,6 @@ begin
   TIdSipTransportRegistry.RegisterTransport(UdpTransport, TIdSipUDPTransport);
 
   Self.ReceivedPacket := false;
-
 end;
 
 procedure TestTIdSipStackConfigurator.TearDown;
@@ -1981,6 +1912,35 @@ begin
                 'Transport type');
   finally
     UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentOnBusyPort;
+var
+  Server: TIdUDPServer;
+  UA:     TIdSipUserAgent;
+begin
+  CheckNotEquals('127.0.0.1',
+                 LocalAddress,
+                 'You MUST have two IPs on this machine to complete this test!');
+
+  Server := TIdUDPServer.Create(nil);
+  try
+    with Server.Bindings.Add do begin
+      Address := LocalAddress;
+      Port    := IdPORT_SIP
+    end;
+    Server.Active := true;
+
+    Self.Configuration.Add(Format('Listen: UDP %s:%d', ['127.0.0.1', Server.Bindings[0].Port]));
+
+    UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+    try
+    finally
+      UA.Free;
+    end;
+  finally
+    Server.Free;
   end;
 end;
 
@@ -2377,9 +2337,11 @@ begin
   end;
 end;
 
-procedure TestTIdSipStackConfigurator.TestCreateUserAgentTransportHaMalformedPort;
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentTransportHasMalformedPort;
+const
+  MalformedPort = 'aa';
 begin
-  Self.Configuration.Add('Listen: TCP ' + Self.Address + ':aa');
+  Self.Configuration.Add('Listen: TCP ' + Self.Address + ':' + MalformedPort);
 
   try
     Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);

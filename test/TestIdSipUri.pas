@@ -111,6 +111,7 @@ type
     procedure TestGetUriWithDefaultPortSpecified;
     procedure TestHasHeaders;
     procedure TestHasMaddr;
+    procedure TestHasMethod;
     procedure TestHasParameter;
     procedure TestHasValidSyntax;
     procedure TestIsLooseRoutable;
@@ -1232,6 +1233,18 @@ begin
 
   Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;transport=udp;maddr=127.0.0.1;lr';
   Check(Uri.HasMaddr, 'maddr parameter amongst others');
+end;
+
+procedure TestTIdSipUri.TestHasMethod;
+begin
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
+  Check(not Self.Uri.Hasmethod, 'no parameters');
+
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;method=INVITE';
+  Check(Uri.Hasmethod, 'method parameter');
+
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;transport=udp;method=INVITE;lr';
+  Check(Uri.Hasmethod, 'method parameter amongst others');
 end;
 
 procedure TestTIdSipUri.TestHasParameter;

@@ -170,9 +170,11 @@ type
     procedure OnProgressedSession(Session: TIdSipSession;
                                   Progress: TIdSipResponse);
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               Receiver: TIdSipTransport);
+                               Receiver: TIdSipTransport;
+                               Source: TIdSipConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                Receiver: TIdSipTransport);
+                                Receiver: TIdSipTransport;
+                                Source: TIdSipConnectionBindings);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure OnResponse(OptionsAgent: TIdSipOutboundOptions;
@@ -574,13 +576,15 @@ begin
 end;
 
 procedure TrnidSpike.OnReceiveRequest(Request: TIdSipRequest;
-                                      Receiver: TIdSipTransport);
+                                      Receiver: TIdSipTransport;
+                                      Source: TIdSipConnectionBindings);
 begin
   Self.LogMessage(Request, true);
 end;
 
 procedure TrnidSpike.OnReceiveResponse(Response: TIdSipResponse;
-                                       Receiver: TIdSipTransport);
+                                       Receiver: TIdSipTransport;
+                                       Source: TIdSipConnectionBindings);
 begin
   Self.LogMessage(Response, true);
 end;

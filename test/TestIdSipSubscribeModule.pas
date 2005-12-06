@@ -987,9 +987,9 @@ begin
     Sub.Event.EventPackage   := EventPackage;
 
     if (ExpiryTime > 0) then
-      Sub.FirstExpires.NumericValue := ExpiryTime
+      Sub.Expires.NumericValue := ExpiryTime
     else
-      Sub.FirstExpires.NumericValue := Self.Module.DefaultSubscriptionDuration;
+      Sub.Expires.NumericValue := Self.Module.DefaultSubscriptionDuration;
 
     Self.ReceiveRequest(Sub);
   finally
@@ -1425,10 +1425,13 @@ end;
 
 procedure TestTIdSipUserAgentWithSubscribeModule.ReceiveOptions;
 var
+  Module:  TIdSipOptionsModule;
   Options: TIdSipRequest;
   Temp:    String;
 begin
-  Options := Self.Core.CreateOptions(Self.Destination);
+  Module := Self.Core.ModuleFor(MethodOptions) as TIdSipOptionsModule;
+
+  Options := Module.CreateOptions(Self.Destination);
   try
     // Swop To & From because this comes from the network
     Temp := Options.From.FullValue;
@@ -2498,7 +2501,7 @@ begin
               Self.LastSentRequest.Method,
               Msg + ': Unexpected message sent');
   CheckEquals(SubscriptionSubstateTerminated,
-              Self.LastSentRequest.FirstSubscriptionState.SubState,
+              Self.LastSentRequest.SubscriptionState.SubState,
               Msg + ': Subscription-State value');
 end;
 
@@ -2545,7 +2548,7 @@ var
 begin
   Refresh := Self.CreateRefresh(Sub, Response, ExpiryTime);
   try
-    Refresh.FirstExpires.NumericValue := ExpiryTime;
+    Refresh.Expires.NumericValue := ExpiryTime;
 
     Self.ReceiveRequest(Refresh);
   finally
@@ -2576,7 +2579,7 @@ begin
   try
     Sub.Event.ID := Self.ID;
     if (ExpiryTime > 0) then
-      Sub.FirstExpires.NumericValue := ExpiryTime;
+      Sub.Expires.NumericValue := ExpiryTime;
 
     Self.ReceiveRequest(Sub);
   finally
@@ -2638,10 +2641,10 @@ begin
   Check(Notify.HasHeader(SubscriptionStateHeader),
         'No Subscription-State header');
   CheckEquals(SubscriptionSubStateTerminated,
-              Notify.FirstSubscriptionState.SubState,
+              Notify.SubscriptionState.SubState,
               'Unexpected substate');
   CheckEquals(EventReasonTimeout,
-              Notify.FirstSubscriptionState.Reason,
+              Notify.SubscriptionState.Reason,
               'Unexpected substate reason');
   CheckEquals(SubscriptionSubStateTerminated,
               Self.Action.SubscriptionState,
@@ -2716,10 +2719,10 @@ begin
 
   Response := Self.LastSentResponse;
   CheckNotEquals(ContactExpiresTime,
-                 Response.FirstExpires.NumericValue,
+                 Response.Expires.NumericValue,
                  'We didn''t ignore the Contact expires parameter');
   CheckEquals(Self.Package.InboundSubscriptionDuration,
-              Response.FirstExpires.NumericValue,
+              Response.Expires.NumericValue,
               'We didn''t use the package''s default expires time');
 end;
 
@@ -2739,7 +2742,7 @@ begin
   Check(Response.HasHeader(MinExpiresHeader),
         'No Min-Expires header');
   CheckEquals(Self.Package.MinimumExpiryTime,
-              Response.FirstMinExpires.NumericValue,
+              Response.MinExpires.NumericValue,
               'Min-Expires value');
 end;
 
@@ -2758,7 +2761,7 @@ begin
   Check(Response.HasHeader(ExpiresHeader),
         'No Expires header');
   CheckEquals(TIdSipTestPackage.DefaultSubscriptionDuration,
-              Response.FirstExpires.NumericValue,
+              Response.Expires.NumericValue,
               'Wrong Expires value');
 end;
 
@@ -2821,7 +2824,7 @@ begin
   Check(Response.HasHeader(MinExpiresHeader),
         'No Min-Expires header');
   CheckEquals(Self.Package.MinimumExpiryTime,
-              Response.FirstMinExpires.NumericValue,
+              Response.MinExpires.NumericValue,
               'Min-Expires value');
   Check(SubCount >= Self.Core.CountOf(MethodSubscribe),
         'Rejecting a refreshing subscription shouldn''t kill the subscription');
@@ -2841,7 +2844,7 @@ begin
               Self.Action.SubscriptionState,
               'Action state');
 
-  CheckExpiresScheduled(Self.ActionRequest.FirstExpires.NumericValue,
+  CheckExpiresScheduled(Self.ActionRequest.Expires.NumericValue,
                         'Subscription won''t expire');
 end;
 
@@ -3220,13 +3223,13 @@ begin
                               State);
   try
     if (Reason <> '') then
-      Notify.FirstSubscriptionState.Reason := Reason;
+      Notify.SubscriptionState.Reason := Reason;
 
     if (Expires > 0) then
-      Notify.FirstSubscriptionState.Expires := Expires;
+      Notify.SubscriptionState.Expires := Expires;
 
     if (RetryAfter > 0) then
-      Notify.FirstSubscriptionState.RetryAfter := RetryAfter;
+      Notify.SubscriptionState.RetryAfter := RetryAfter;
 
     AuthCreds := Self.RemoteRealmInfo.CreateAuthorization(Self.ChallengeResponse,
                                                           MethodNotify,
@@ -3266,7 +3269,7 @@ begin
   Response := TIdSipResponse.InResponseTo(Subscribe, SIPOK);
   try
     Response.FirstContact.Assign(Subscribe.ToHeader);
-    Response.FirstExpires.NumericValue := Expires;
+    Response.Expires.NumericValue := Expires;
 
     Self.ReceiveResponse(Response);
   finally
@@ -3526,6 +3529,51 @@ begin
 
   Self.CheckTerminatedSubscriptionWithNoResubscribe(EventReasonNoResource);
   Self.CheckNoRetryScheduled(EventReasonNoResource);
+end;
+
+procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyProbation;
+begin
+  Self.ReceiveNotify(Self.Subscription.InitialRequest,
+                     Self.Dispatcher.Transport.LastResponse,
+                     SubscriptionSubstateTerminated,
+                     EventReasonProbation);
+
+  Self.CheckTerminatedSubscriptionWithNoResubscribe(EventReasonProbation);
+  Self.CheckRetryScheduled(EventReasonProbation);
+end;
+
+procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyProbationWithRetryAfter;
+begin
+  Self.ReceiveNotify(Self.Subscription.InitialRequest,
+                     Self.Dispatcher.Transport.LastResponse,
+                     SubscriptionSubstateTerminated,
+                     EventReasonProbation,
+                     Self.ArbRetryAfterValue);
+
+  Self.CheckTerminatedSubscriptionWithNoResubscribe(EventReasonProbation);
+  Self.CheckRetryScheduled(EventReasonProbation);
+end;
+
+procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyRejected;
+begin
+  Self.ReceiveNotify(Self.Subscription.InitialRequest,
+                     Self.Dispatcher.Transport.LastResponse,
+                     SubscriptionSubstateTerminated,
+                     EventReasonRejected);
+
+  Self.CheckTerminatedSubscriptionWithNoResubscribe(EventReasonRejected);
+  Self.CheckNoRetryScheduled(EventReasonRejected);
+end;
+
+procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyRejectedWithRetryAfter;
+begin
+  Self.ReceiveNotify(Self.Subscription.InitialRequest,
+                     Self.Dispatcher.Transport.LastResponse,
+                     SubscriptionSubstateTerminated,
+                     EventReasonRejected);
+
+  Self.CheckTerminatedSubscriptionWithNoResubscribe(EventReasonRejected);
+  Self.CheckNoRetryScheduled(EventReasonRejected);
 end;
 
 procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyProbation;
@@ -4094,7 +4142,7 @@ begin
               Notify.Body,
               'NOTIFY body');
   CheckEquals(EventReasonNoResource,
-              Notify.FirstSubscriptionState.Reason,
+              Notify.SubscriptionState.Reason,
               'Subscription-State reason');
   Check(Self.Refer.IsTerminated,
         'Referral didn''t terminate');
@@ -4118,7 +4166,7 @@ begin
               Notify.Body,
               'NOTIFY body');
   CheckEquals(EventReasonNoResource,
-              Notify.FirstSubscriptionState.Reason,
+              Notify.SubscriptionState.Reason,
               'Subscription-State reason');
   Check(Self.Refer.IsTerminated,
         'Referral didn''t terminate');            

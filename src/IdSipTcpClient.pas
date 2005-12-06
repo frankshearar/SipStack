@@ -38,7 +38,7 @@ type
     procedure ReadMessage(Connection: TIdTCPConnection;
                           Dest: TStringStream);
     procedure ReceiveMessageInTimerContext(Msg: TIdSipMessage;
-                                           ReceivedFrom: TIdSipConnectionBindings);
+                                           Binding: TIdSipConnectionBindings);
     procedure ReturnInternalServerError(Connection: TIdTCPConnection;
                                         const Reason: String);
   public
@@ -126,6 +126,8 @@ type
     fListeners:    TIdSipServerNotifier;
     fReceivedFrom: TIdSipConnectionBindings;
   public
+    destructor Destroy; override;
+
     procedure Trigger; override;
 
     property Listeners:    TIdSipServerNotifier     read fListeners write fListeners;
@@ -178,65 +180,70 @@ var
 begin
   ConnClosedOrTimedOut := false;
 
-  ReceivedFrom.LocalIP   := Connection.Socket.Binding.IP;
-  ReceivedFrom.LocalPort := Connection.Socket.Binding.Port;
-  ReceivedFrom.PeerIP    := Connection.Socket.Binding.PeerIP;
-  ReceivedFrom.PeerPort  := Connection.Socket.Binding.PeerPort;
-
   Connection.ReadTimeout := Self.ReadTimeout;
   while Connection.Connected and not ConnClosedOrTimedOut do begin
-    S := TStringStream.Create('');
+    ReceivedFrom := TIdSipConnectionBindings.Create;
     try
-      try
-        Self.ReadMessage(Connection, S);
-      except
-        on EIdReadTimeout do
-          ConnClosedOrTimedOut := true;
-        on EIdConnClosedGracefully do
-          ConnClosedOrTimedOut := true;
-        on EIdClosedSocket do
-          ConnClosedOrTimedOut := true;
-      end;
+      ReceivedFrom.LocalIP   := Connection.Socket.Binding.IP;
+      ReceivedFrom.LocalPort := Connection.Socket.Binding.Port;
+      ReceivedFrom.PeerIP    := Connection.Socket.Binding.PeerIP;
+      ReceivedFrom.PeerPort  := Connection.Socket.Binding.PeerPort;
 
-      if not ConnClosedOrTimedOut then begin
-        Msg := TIdSipMessage.ReadMessageFrom(S);
+      S := TStringStream.Create('');
+      try
         try
+          Self.ReadMessage(Connection, S);
+        except
+          on EIdReadTimeout do
+            ConnClosedOrTimedOut := true;
+          on EIdConnClosedGracefully do
+            ConnClosedOrTimedOut := true;
+          on EIdClosedSocket do
+            ConnClosedOrTimedOut := true;
+        end;
+
+        if not ConnClosedOrTimedOut then begin
+          Msg := TIdSipMessage.ReadMessageFrom(S);
           try
             try
-              Self.ReadBodyInto(Connection, Msg, S);
-              Msg.ReadBody(S);
-            except
-              on EIdReadTimeout do
-                ConnClosedOrTimedOut := true;
-              on EIdConnClosedGracefully do
-                ConnClosedOrTimedOut := true;
-              on EIdClosedSocket do
-                ConnClosedOrTimedOut := true;
-            end;
-
-            // If Self.ReadBody closes the connection, we don't want to AddConnection!
-            if Msg.IsRequest and not ConnClosedOrTimedOut then
-              Self.AddConnection(Connection, Msg as TIdSipRequest);
-
-            Self.ReceiveMessageInTimerContext(Msg, ReceivedFrom);
-          except
-            on E: Exception do begin
-              // This results in returning a 500 Internal Server Error to a response!
-              if Connection.Connected then begin
-                Self.ReturnInternalServerError(Connection, E.Message);
-                Connection.DisconnectSocket;
+              try
+                Self.ReadBodyInto(Connection, Msg, S);
+                Msg.ReadBody(S);
+              except
+                on EIdReadTimeout do
+                  ConnClosedOrTimedOut := true;
+                on EIdConnClosedGracefully do
+                  ConnClosedOrTimedOut := true;
+                on EIdClosedSocket do
+                  ConnClosedOrTimedOut := true;
               end;
 
-              Self.NotifyOfException(ExceptClass(E.ClassType),
-                                                 E.Message);
+              // If Self.ReadBody closes the connection, we don't want to AddConnection!
+              if Msg.IsRequest and not ConnClosedOrTimedOut then
+                Self.AddConnection(Connection, Msg as TIdSipRequest);
+
+              Self.ReceiveMessageInTimerContext(Msg, ReceivedFrom);
+            except
+              on E: Exception do begin
+                // This results in returning a 500 Internal Server Error to a response!
+                if Connection.Connected then begin
+                  Self.ReturnInternalServerError(Connection, E.Message);
+                  Connection.DisconnectSocket;
+                end;
+
+                Self.NotifyOfException(ExceptClass(E.ClassType),
+                                                   E.Message);
+              end;
             end;
+          finally
+            Msg.Free;
           end;
-        finally
-          Msg.Free;
         end;
+      finally
+        S.Free;
       end;
     finally
-      S.Free;
+      ReceivedFrom.Free;
     end;
   end;
 end;
@@ -277,14 +284,14 @@ begin
 end;
 
 procedure TIdSipTcpMessageReader.ReceiveMessageInTimerContext(Msg: TIdSipMessage;
-                                                              ReceivedFrom: TIdSipConnectionBindings);
+                                                              Binding: TIdSipConnectionBindings);
 var
   RecvWait: TIdSipReceiveMessageWait;
 begin
   RecvWait := TIdSipReceiveMessageWait.Create;
   RecvWait.Message      := Msg.Copy;
   RecvWait.Listeners    := Self.Notifier;
-  RecvWait.ReceivedFrom := ReceivedFrom;
+  RecvWait.ReceivedFrom := Binding.Copy;
 
   Self.Timer.AddEvent(TriggerImmediately, RecvWait);
 end;
@@ -454,6 +461,13 @@ end;
 //* TIdSipReceiveMessageWait                                                   *
 //******************************************************************************
 //* TIdSipReceiveMessageWait Public methods ************************************
+
+destructor TIdSipReceiveMessageWait.Destroy;
+begin
+  Self.fReceivedFrom.Free;
+
+  inherited Destroy;
+end;
 
 procedure TIdSipReceiveMessageWait.Trigger;
 begin

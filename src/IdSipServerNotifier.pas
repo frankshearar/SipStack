@@ -58,26 +58,29 @@ type
     property Reason: String read fReason write fReason;
   end;
 
-  TIdSipServerReceiveRequestMethod = class(TIdNotification)
+  TIdSipServerReceiveMethod = class(TIdNotification)
   private
     fReceivedFrom: TIdSipConnectionBindings;
-    fRequest:      TIdSipRequest;
+  public
+    property ReceivedFrom: TIdSipConnectionBindings read fReceivedFrom write fReceivedFrom;
+  end;
+
+  TIdSipServerReceiveRequestMethod = class(TIdSipServerReceiveMethod)
+  private
+    fRequest: TIdSipRequest;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property ReceivedFrom: TIdSipConnectionBindings read fReceivedFrom write fReceivedFrom;
-    property Request:      TIdSipRequest            read fRequest write fRequest;
+    property Request: TIdSipRequest read fRequest write fRequest;
   end;
 
-  TIdSipServerReceiveResponseMethod = class(TIdNotification)
+  TIdSipServerReceiveResponseMethod = class(TIdSipServerReceiveMethod)
   private
-    fReceivedFrom: TIdSipConnectionBindings;
     fResponse:     TIdSipResponse;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property ReceivedFrom: TIdSipConnectionBindings read fReceivedFrom write fReceivedFrom;
-    property Response:     TIdSipResponse           read fResponse write fResponse;
+    property Response: TIdSipResponse read fResponse write fResponse;
   end;
 
 implementation

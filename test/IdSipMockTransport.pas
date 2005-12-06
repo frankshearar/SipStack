@@ -27,13 +27,11 @@ type
   TIdSipMockTransport = class(TIdSipTransport)
   private
     fACKCount:          Cardinal;
-    fAddress:           String;
     fBindings:          TIdSocketHandles;
     fFailWith:          ExceptClass;
     fLastACK:           TIdSipRequest;
     fRequests:          TIdSipRequestList;
     fResponses:         TIdSipResponseList;
-    fPort:              Cardinal;
     fSentRequestCount:  Cardinal;
     fSentResponseCount: Cardinal;
     fWriteLog:          Boolean;
@@ -50,9 +48,7 @@ type
     function  TransportAt(Index: Integer): TIdSipMockTransport;
   protected
     procedure ChangeBinding(const Address: String; Port: Cardinal); override;
-    function  GetAddress: String; override;
     function  GetBindings: TIdSocketHandles; override;
-    function  GetPort: Cardinal; override;
     procedure SendRequest(R: TIdSipRequest;
                           Dest: TIdSipLocation); override;
     procedure SendResponse(R: TIdSipResponse;
@@ -212,6 +208,7 @@ end;
 procedure TIdSipMockTransport.FireOnRequest(R: TIdSipRequest);
 var
   CopyOfMessage: TIdSipRequest;
+  FakeBinding:   TIdSipConnectionBindings;
 begin
   Self.Log(R.AsString, dirIn);
 
@@ -219,7 +216,12 @@ begin
 
   CopyOfMessage := R.Copy as TIdSipRequest;
   try
-    Self.NotifyTransportListeners(CopyOfMessage);
+    FakeBinding := TIdSipConnectionBindings.Create;
+    try
+      Self.NotifyTransportListeners(CopyOfMessage, FakeBinding);
+    finally
+      FakeBinding.Free;
+    end;
   finally
     CopyOfMessage.Free;
   end;
@@ -249,6 +251,7 @@ end;
 procedure TIdSipMockTransport.FireOnResponse(R: TIdSipResponse);
 var
   CopyOfMessage: TIdSipResponse;
+  FakeBinding:   TIdSipConnectionBindings;
 begin
   Self.Log(R.AsString, dirIn);
 
@@ -256,7 +259,12 @@ begin
 
   CopyOfMessage := R.Copy as TIdSipResponse;
   try
-    Self.NotifyTransportListeners(CopyOfMessage);
+    FakeBinding := TIdSipConnectionBindings.Create;
+    try
+      Self.NotifyTransportListeners(CopyOfMessage, FakeBinding);
+    finally
+      FakeBinding.Free;
+    end;
   finally
     CopyOfMessage.Free;
   end;
@@ -329,23 +337,11 @@ end;
 
 procedure TIdSipMockTransport.ChangeBinding(const Address: String; Port: Cardinal);
 begin
-  Self.fAddress := Address;
-  Self.fPort    := Port;
-end;
-
-function TIdSipMockTransport.GetAddress: String;
-begin
-  Result := Self.fAddress;
 end;
 
 function TIdSipMockTransport.GetBindings: TIdSocketHandles;
 begin
   Result := Self.fBindings;
-end;
-
-function TIdSipMockTransport.GetPort: Cardinal;
-begin
-  Result := Self.fPort;
 end;
 
 procedure TIdSipMockTransport.SendRequest(R: TIdSipRequest;

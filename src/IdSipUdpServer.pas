@@ -102,32 +102,37 @@ begin
 
   inherited DoUDPRead(AData, ABinding);
 
-  ReceivedFrom.LocalIP   := ABinding.IP;
-  ReceivedFrom.LocalPort := ABinding.Port;
-  ReceivedFrom.PeerIP    := ABinding.PeerIP;
-  ReceivedFrom.PeerPort  := ABinding.PeerPort;
-
+  ReceivedFrom := TIdSipConnectionBindings.Create;
   try
-    Msg := TIdSipMessage.ReadMessageFrom(AData);
-    try
-      Msg.ReadBody(AData);
+    ReceivedFrom.LocalIP   := ABinding.IP;
+    ReceivedFrom.LocalPort := ABinding.Port;
+    ReceivedFrom.PeerIP    := ABinding.PeerIP;
+    ReceivedFrom.PeerPort  := ABinding.PeerPort;
 
-      RecvWait := TIdSipReceiveUDPMessageWait.Create;
-      RecvWait.Event        := Self.DoOnReceiveMessage;
-      RecvWait.ReceivedFrom := ReceivedFrom;
-      RecvWait.Message      := Msg.Copy;
-      Self.Timer.AddEvent(TriggerImmediately, RecvWait);
-    finally
-      Msg.Free;
+    try
+      Msg := TIdSipMessage.ReadMessageFrom(AData);
+      try
+        Msg.ReadBody(AData);
+
+        RecvWait := TIdSipReceiveUDPMessageWait.Create;
+        RecvWait.Event        := Self.DoOnReceiveMessage;
+        RecvWait.ReceivedFrom := ReceivedFrom.Copy;
+        RecvWait.Message      := Msg.Copy;
+        Self.Timer.AddEvent(TriggerImmediately, RecvWait);
+      finally
+        Msg.Free;
+      end;
+    except
+      on E: Exception do begin
+        Ex := TIdSipExceptionWait.Create;
+        Ex.Event := Self.DoOnException;
+        Ex.ExceptionType := ExceptClass(E.ClassType);
+        Ex.Reason := E.Message;
+        Self.Timer.AddEvent(TriggerImmediately, Ex);
+      end;
     end;
-  except
-    on E: Exception do begin
-      Ex := TIdSipExceptionWait.Create;
-      Ex.Event := Self.DoOnException;
-      Ex.ExceptionType := ExceptClass(E.ClassType);
-      Ex.Reason := E.Message;
-      Self.Timer.AddEvent(TriggerImmediately, Ex);
-    end;
+  finally
+    ReceivedFrom.Free;
   end;
 end;
 

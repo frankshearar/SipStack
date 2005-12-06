@@ -24,11 +24,22 @@ type
   TIdSipRequest = class;
   TIdSipResponse = class;
 
-  TIdSipConnectionBindings = record
-    LocalIP:   String;
-    LocalPort: Integer;
-    PeerIP:    String;
-    PeerPort:  Integer;
+  TIdSipConnectionBindings = class(TPersistent)
+  private
+    fLocalIP:   String;
+    fLocalPort: Integer;
+    fPeerIP:    String;
+    fPeerPort:  Integer;
+  public
+    procedure Assign(Src: TPersistent); override;
+    function  AsString: String;
+    function  Copy: TIdSipConnectionBindings;
+    function  Equals(Other: TIdSipConnectionBindings): Boolean;
+
+    property LocalIP:   String  read fLocalIP write fLocalIP;
+    property LocalPort: Integer read fLocalPort write fLocalPort;
+    property PeerIP:    String  read fPeerIP write fPeerIP;
+    property PeerPort:  Integer read fPeerPort write fPeerPort;
   end;
 
   IIdSipMessageListener = interface
@@ -194,6 +205,7 @@ type
     function  HasValidSyntax: Boolean;
     function  HasHeaders: Boolean;
     function  HasMaddr: Boolean;
+    function  HasMethod: Boolean;
     function  HasParameter(const Name: String): Boolean;
     function  IsLooseRoutable: Boolean;
     function  IsSecure: Boolean; virtual;
@@ -764,17 +776,30 @@ type
     function GetName: String; override;
   end;
 
-  // cf. RFC 3891
-  TIdSipReplacesHeader = class(TIdSipHeader)
+  // I represent a header that follows the grammar
+  // Header = header-name HCOLON call-id *(SEMI generic-param).
+  TIdSipParameteredCallIDHeader = class(TIdSipHeader)
   private
+    fCallID: String;
+
+    function  GetCallID: String;
+    procedure SetCallID(const Value: String);
+  protected
     procedure CheckDuplicatedParam(const ParamName: String;
                                    const CurrentParamName: String;
                                    var FoundFlag: Boolean);
+    function  GetValue: String; override;
+    procedure Parse(const Value: String); override;
+  public
+    property CallID: String read GetCallID write SetCallID;
+  end;
+
+  // cf. RFC 3891
+  TIdSipReplacesHeader = class(TIdSipParameteredCallIDHeader)
+  private
     procedure CheckFromToTagCount(Params: TStrings);
-    function  GetCallID: String;
     function  GetFromTag: String;
     function  GetToTag: String;
-    procedure SetCallID(const Value: String);
     procedure SetFromTag(const Value: String);
     procedure SetToTag(const Value: String);
   protected
@@ -783,9 +808,26 @@ type
   public
     function IsEarly: Boolean;
 
-    property CallID:  String read GetCallID write SetCallID;
     property FromTag: String read GetFromTag write SetFromTag;
     property ToTag:   String read GetToTag write SetToTag;
+  end;
+
+  // cf. draft-ietf-sip-target-dialog-01
+  TIdSipTargetDialogHeader = class(TIdSipParameteredCallIDHeader)
+  private
+    procedure CheckLocalRemoteTagCount(Params: TStrings);
+    function  GetLocalTag: String;
+    function  GetRemoteTag: String;
+    procedure SetLocalTag(const Value: String);
+    procedure SetRemoteTag(const Value: String);
+  protected
+    function  GetName: String; override;
+    procedure Parse(const Value: String); override;
+  public
+    function HasCompleteDialogID: Boolean;
+
+    property LocalTag:  String read GetLocalTag write SetLocalTag;
+    property RemoteTag: String read GetRemoteTag write SetRemoteTag;
   end;
 
   TIdSipTimestamp = class(TObject)
@@ -1135,19 +1177,25 @@ type
     function  ContentLengthEqualsBodyLength: Boolean;
     function  FirstHeaderValue(const HeaderName: String): String;
     function  FirstMalformedHeader: TIdSipHeader;
+    function  GetAccept: TIdSipWeightedCommaSeparatedHeader;
     function  GetCallID: String;
     function  GetContentDisposition: TIdSipContentDispositionHeader;
     function  GetContentLanguage: String;
     function  GetContentLength: Integer;
     function  GetContentType: String;
     function  GetCSeq: TIdSipCSeqHeader;
+    function  GetExpires: TIdSipNumericHeader;
     function  GetFrom: TIdSipFromHeader;
+    function  GetMinExpires: TIdSipNumericHeader;
+    function  GetRetryAfter: TIdSipRetryAfterHeader;
+    function  GetSupported: TIdSipCommaSeparatedHeader;
     function  GetTo: TIdSipToHeader;
     function  HasBodyButMissingContentType: Boolean;
     procedure Initialize;
     function  Minimum(A, B: Cardinal): Cardinal;
     function  QuickestContactExpiry: Cardinal;
     function  QuickestExpiresHeader: Cardinal;
+    procedure SetAccept(Value: TIdSipWeightedCommaSeparatedHeader);
     procedure SetBlankableStringHeader(const HeaderName: String;
                                        const Value: String);
     procedure SetCallID(const Value: String);
@@ -1157,9 +1205,13 @@ type
     procedure SetContentLength(Value: Integer);
     procedure SetContentType(const Value: String);
     procedure SetCSeq(Value: TIdSipCSeqHeader);
+    procedure SetExpires(Value: TIdSipNumericHeader);
     procedure SetFrom(Value: TIdSipFromHeader);
+    procedure SetMinExpires(Value: TIdSipNumericHeader);
     procedure SetPath(Value: TIdSipViaPath);
     procedure SetRecordRoute(Value: TIdSipRecordRoutePath);
+    procedure SetRetryAfter(Value: TIdSipRetryAfterHeader);
+    procedure SetSupported(Value: TIdSipCommaSeparatedHeader);
     procedure SetTo(Value: TIdSipToHeader);
   protected
     procedure FailParse(const Reason: String);
@@ -1194,7 +1246,7 @@ type
     constructor Create; virtual;
     destructor  Destroy; override;
 
-    procedure Accept(Visitor: IIdSipMessageVisitor); virtual;
+    procedure AcceptVisitor(Visitor: IIdSipMessageVisitor); virtual;
     function  AddHeader(const HeaderName: String): TIdSipHeader; overload;
     procedure AddHeader(Copy: TIdSipHeader); overload;
     procedure AddHeaders(Headers: TIdSipHeaderList);
@@ -1206,11 +1258,7 @@ type
     procedure CopyHeaders(Src: TIdSipMessage;
                           const HeaderName: String);
     function  FirstContact: TIdSipContactHeader;
-    function  FirstExpires: TIdSipNumericHeader;
     function  FirstHeader(const HeaderName: String): TIdSipHeader;
-    function  FirstMinExpires: TIdSipNumericHeader;
-    function  FirstRequire: TIdSipCommaSeparatedHeader;
-    function  FirstRetryAfter: TIdSipRetryAfterHeader;
     function  HasBody: Boolean;
     function  HasExpiry: Boolean;
     function  HasHeader(const HeaderName: String): Boolean;
@@ -1231,21 +1279,26 @@ type
     procedure RemoveAllHeadersNamed(const Name: String);
     function  WantsAllowEventsHeader: Boolean; virtual;
 
-    property Body:               String                         read fBody write fBody;
-    property CallID:             String                         read GetCallID write SetCallID;
-    property Contacts:           TIdSipContacts                 read fContacts write SetContacts;
-    property ContentDisposition: TIdSipContentDispositionHeader read GetContentDisposition write SetContentDisposition;
-    property ContentLanguage:    String                         read GetContentLanguage write SetContentLanguage;
-    property ContentLength:      Integer                        read GetContentLength write SetContentLength;
-    property ContentType:        String                         read GetContentType write SetContentType;
-    property CSeq:               TIdSipCSeqHeader               read GetCSeq write SetCSeq;
-    property From:               TIdSipFromHeader               read GetFrom write SetFrom;
-    property Headers:            TIdSipHeaders                  read fHeaders;
-    property Path:               TIdSipViaPath                  read fPath write SetPath;
-    property RawMessage:         String                         read fRawMessage;
-    property RecordRoute:        TIdSipRecordRoutePath          read fRecordRoute write SetRecordRoute;
-    property SIPVersion:         String                         read fSIPVersion write fSIPVersion;
-    property ToHeader:           TIdSipToHeader                 read GetTo write SetTo;
+    property Accept:             TIdSipWeightedCommaSeparatedHeader read GetAccept write SetAccept;
+    property Body:               String                             read fBody write fBody;
+    property CallID:             String                             read GetCallID write SetCallID;
+    property Contacts:           TIdSipContacts                     read fContacts write SetContacts;
+    property ContentDisposition: TIdSipContentDispositionHeader     read GetContentDisposition write SetContentDisposition;
+    property ContentLanguage:    String                             read GetContentLanguage write SetContentLanguage;
+    property ContentLength:      Integer                            read GetContentLength write SetContentLength;
+    property ContentType:        String                             read GetContentType write SetContentType;
+    property CSeq:               TIdSipCSeqHeader                   read GetCSeq write SetCSeq;
+    property Expires:            TIdSipNumericHeader                read GetExpires write SetExpires;
+    property From:               TIdSipFromHeader                   read GetFrom write SetFrom;
+    property Headers:            TIdSipHeaders                      read fHeaders;
+    property MinExpires:         TIdSipNumericHeader                read GetMinExpires write SetMinExpires;
+    property Path:               TIdSipViaPath                      read fPath write SetPath;
+    property RawMessage:         String                             read fRawMessage;
+    property RecordRoute:        TIdSipRecordRoutePath              read fRecordRoute write SetRecordRoute;
+    property RetryAfter:         TIdSipRetryAfterHeader             read GetRetryAfter write SetRetryAfter;
+    property SIPVersion:         String                             read fSIPVersion write fSIPVersion;
+    property Supported:          TIdSipCommaSeparatedHeader         read GetSupported write SetSupported;
+    property ToHeader:           TIdSipToHeader                     read GetTo write SetTo;
   end;
 
   TIdSipRequest = class(TIdSipMessage)
@@ -1259,6 +1312,7 @@ type
                                       const HeaderType: String): TIdSipHeader;
     function  GetEvent: TIdSipEventHeader;
     function  GetMaxForwards: Byte;
+    function  GetProxyRequire: TIdSipCommaSeparatedHeader;
     function  GetReferTo: TIdSipReferToHeader;
     function  GetReplaces: TIdSipReplacesHeader;
     function  GetSubscriptionState: TIdSipSubscriptionStateHeader;
@@ -1270,9 +1324,11 @@ type
                               var FirstLine: String);
     procedure SetEvent(Value: TIdSipEventHeader);
     procedure SetMaxForwards(Value: Byte);
+    procedure SetProxyRequire(Value: TIdSipCommaSeparatedHeader);
     procedure SetReferTo(Value: TIdSipReferToHeader);
     procedure SetReplaces(Value: TIdSipReplacesHeader);
     procedure SetRequestUri(Value: TIdSipURI);
+    procedure SetRequire(Value: TIdSipCommaSeparatedHeader);
     procedure SetRoute(Value: TIdSipRoutePath);
     procedure SetSubscriptionState(Value: TIdSipSubscriptionStateHeader);
   protected
@@ -1288,7 +1344,7 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
-    procedure Accept(Visitor: IIdSipMessageVisitor); override;
+    procedure AcceptVisitor(Visitor: IIdSipMessageVisitor); override;
     function  AckFor(Response: TIdSipResponse): TIdSipRequest;
     function  AddressOfRecord: String;
     procedure Assign(Src: TPersistent); override;
@@ -1299,10 +1355,7 @@ type
     function  Equals(Msg: TIdSipMessage): Boolean; override;
     function  FirstAuthorization: TIdSipAuthorizationHeader;
     function  FirstProxyAuthorization: TIdSipProxyAuthorizationHeader;
-    function  FirstProxyRequire: TIdSipCommaSeparatedHeader;
-    function  FirstReplaces: TIdSipReplacesHeader;
     function  FirstRoute: TIdSipRouteHeader;
-    function  FirstSubscriptionState: TIdSipSubscriptionStateHeader;
     function  HasAuthorization: Boolean;
     function  HasAuthorizationFor(const Realm: String): Boolean;
     function  HasProxyAuthorization: Boolean;
@@ -1376,7 +1429,7 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
-    procedure Accept(Visitor: IIdSipMessageVisitor); override;
+    procedure AcceptVisitor(Visitor: IIdSipMessageVisitor); override;
     procedure Assign(Src: TPersistent); override;
     function  AuthenticateHeader: TIdSipAuthenticateHeader;
     function  CanRetryRequest: Boolean;
@@ -1560,6 +1613,7 @@ const
   AuthenticationInfoHeader       = 'Authentication-Info';
   AuthorizationHeader            = 'Authorization';
   BasicAuthorizationScheme       = 'Basic';
+  BodyHeaderFake                 = 'body'; // cf. RFC 3261, p. 149 under "Headers"
   BranchParam                    = 'branch';
   CallIDHeaderFull               = 'Call-ID';
   CallIDHeaderShort              = 'i';
@@ -1598,16 +1652,19 @@ const
   FromHeaderFull                 = 'From';
   FromHeaderShort                = 'f';
   FromTagParam                   = 'from-tag'; // cf. RFC 3891
+  GridParam                      = 'grid'; // cf. draft-ietf-sip-gruu-06
+  GruuParam                      = 'gruu'; // cf. draft-ietf-sip-gruu-06
   HandlingOptional               = 'optional';
   HandlingParam                  = 'handling';
   HandlingRequired               = 'required';
   IdParam                        = 'id';
   InReplyToHeader                = 'In-Reply-To';
+  LocalTagParam                  = 'local-tag'; // cf. draft-ietf-sip-target-dialog-01
   LooseRoutableParam             = 'lr';
   MaddrParam                     = 'maddr';
   MaxForwardsHeader              = 'Max-Forwards';
-  MD5Name                        = 'MD5';
-  MD5SessionName                 = 'MD5-sess';
+  MD5Name                        = 'MD5';      // cf. RFC 2617
+  MD5SessionName                 = 'MD5-sess'; // cf. RFC 2617
   MethodAck                      = 'ACK';
   MethodBye                      = 'BYE';
   MethodCancel                   = 'CANCEL';
@@ -1648,6 +1705,7 @@ const
   RecordRouteHeader              = 'Record-Route';
   ReferToHeaderFull              = 'Refer-To'; // cf. RFC 3515
   ReferToHeaderShort             = 'r';        // cf. RFC 3515
+  RemoteTagParam                 = 'remote-tag'; // cf. draft-ietf-sip-target-dialog-01
   ReplacesExtension              = 'replaces'; // cf. RFC 3891
   ReplacesHeader                 = 'Replaces'; // cf. RFC 3891
   ReplyToHeader                  = 'Reply-To';
@@ -1669,6 +1727,7 @@ const
   SupportedHeaderFull            = 'Supported';
   SupportedHeaderShort           = 'k';
   TagParam                       = 'tag';
+  TargetDialogHeader             = 'Target-Dialog'; // cf. draft-ietf-sip-target-dialog-01
   TimestampHeader                = 'Timestamp';
   ToHeaderFull                   = 'To';
   ToHeaderShort                  = 't';
@@ -1948,10 +2007,14 @@ const
   MissingContentType          = 'Missing Content-Type header with a non-empty message-body';
   MissingCSeq                 = 'Missing CSeq header';
   MissingFrom                 = 'Missing From header';
+  MissingFromTagParam         = 'Missing from-tag parameter';
+  MissingLocalTagParam        = 'Missing local-tag parameter';
   MissingMaxForwards          = 'Missing Max-Forwards header';
+  MissingRemoteTagParam       = 'Missing remote-tag parameter';
   MissingScheme               = 'Missing URI scheme';
   MissingSubscriptionState    = 'Missing Subscription-State header';
   MissingTo                   = 'Missing To header';
+  MissingToTagParam           = 'Missing to-tag parameter';
   MissingSipVersion           = 'Missing SIP-Version';
   MissingVia                  = 'Missing Via header';
   OnlyCancelInvites           = 'Only INVITE requests may be CANCELled, not "%s" requests';
@@ -1965,6 +2028,10 @@ const
   UnmatchedQuotes             = 'Unmatched quotes';
   UnmatchedQuotesForParameter = 'Unmatched quotes around a parameter';
   UnsupportedScheme           = 'Unsupported URI scheme';
+
+// Miscellaneous constants
+const
+  BindingTuple = '(connection-bindings local-ip: %s local-port %d peer-ip: %s peer-port: %d)';
 
 implementation
 
@@ -2252,15 +2319,59 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipConnectionBindings                                                   *
+//******************************************************************************
+//* TIdSipConnectionBindings Public methods ************************************
+
+procedure TIdSipConnectionBindings.Assign(Src: TPersistent);
+var
+  Other: TIdSipConnectionBindings;
+begin
+  if (Src is TIdSipConnectionBindings) then begin
+    Other := Src as TIdSipConnectionBindings;
+
+    Self.LocalIP   := Other.LocalIP;
+    Self.LocalPort := Other.LocalPort;
+    Self.PeerIP    := Other.PeerIP;
+    Self.PeerPort  := Other.PeerPort;
+  end
+  else
+    inherited Assign(Src);
+end;
+
+function TIdSipConnectionBindings.AsString: String;
+begin
+  Result := Format(BindingTuple, [Self.LocalIP,
+                                  Self.LocalPort,
+                                  Self.PeerIP,
+                                  Self.PeerPort]);
+end;
+
+function TIdSipConnectionBindings.Copy: TIdSipConnectionBindings;
+begin
+  Result := TIdSipConnectionBindings.Create;
+  Result.Assign(Self);
+end;
+
+function TIdSipConnectionBindings.Equals(Other: TIdSipConnectionBindings): Boolean;
+begin
+  Result := (Self.LocalIP = Other.LocalIP)
+        and (Self.LocalPort = Other.LocalPort)
+        and (Self.PeerIP = Other.PeerIP)
+        and (Self.PeerPort = Other.PeerPort);
+end;
+
+//******************************************************************************
 //* TIdSipHostAndPort                                                          *
 //******************************************************************************
+//* TIdSipHostAndPort Public methods *******************************************
 
 class function TIdSipHostAndPort.CouldContainIPv6Reference(const Token: String): Boolean;
 begin
   Result := (Token <> '') and (Token[1] = '[');
 end;
 
-//* TIdSipHostAndPort Private methods TIdSipHostAndPort ************************
+//* TIdSipHostAndPort Private methods ******************************************
 
 function TIdSipHostAndPort.GetValue: String;
 begin
@@ -2651,6 +2762,11 @@ end;
 function TIdSipUri.HasMaddr: Boolean;
 begin
   Result := Self.HasParameter(MaddrParam)
+end;
+
+function TIdSipUri.HasMethod: Boolean;
+begin
+  Result := Self.HasParameter(MethodParam)
 end;
 
 function TIdSipUri.HasParameter(const Name: String): Boolean;
@@ -5121,6 +5237,54 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipParameteredCallIDHeader                                              *
+//******************************************************************************
+//* TIdSipParameteredCallIDHeader Protected methods ****************************
+
+procedure TIdSipParameteredCallIDHeader.CheckDuplicatedParam(const ParamName: String;
+                                                             const CurrentParamName: String;
+                                                             var FoundFlag: Boolean);
+begin
+  if IsEqual(ParamName, CurrentParamName) then begin
+    if FoundFlag then
+      Self.FailParse(Format(DuplicatedParam, [ParamName]))
+    else
+      FoundFlag := true;
+  end;
+end;
+
+function TIdSipParameteredCallIDHeader.GetValue: String;
+begin
+  Result := Self.CallID;
+end;
+
+procedure TIdSipParameteredCallIDHeader.Parse(const Value: String);
+var
+  S: String;
+begin
+  S := Value;
+
+  if (IndyPos(';', S) = 0) then
+    Self.CallID := S
+  else
+    Self.CallID := Trim(Fetch(S, ';', false));
+
+  Self.ParseParameters(S, Self.Parameters);
+end;
+
+//* TIdSipParameteredCallIDHeader Private methods ******************************
+
+function TIdSipParameteredCallIDHeader.GetCallID: String;
+begin
+  Result := Self.fCallID;
+end;
+
+procedure TIdSipParameteredCallIDHeader.SetCallID(const Value: String);
+begin
+  Self.fCallID := Value;
+end;
+
+//******************************************************************************
 //* TIdSipReplacesHeader                                                       *
 //******************************************************************************
 //* TIdSipReplacesHeader Public methods ****************************************
@@ -5141,22 +5305,16 @@ procedure TIdSipReplacesHeader.Parse(const Value: String);
 begin
   inherited Parse(Value);
 
+  if not Self.HasParam(FromTagParam) then
+    Self.FailParse(MissingFromTagParam);
+
+  if not Self.HasParam(ToTagParam) then
+    Self.FailParse(MissingToTagParam);
+
   Self.CheckFromToTagCount(Self.Parameters);
 end;
 
 //* TIdSipReplacesHeader Private methods ***************************************
-
-procedure TIdSipReplacesHeader.CheckDuplicatedParam(const ParamName: String;
-                                                    const CurrentParamName: String;
-                                                    var FoundFlag: Boolean);
-begin
-  if IsEqual(ParamName, CurrentParamName) then begin
-    if FoundFlag then
-      Self.FailParse(Format(DuplicatedParam, [ParamName]))
-    else
-      FoundFlag := true;
-  end;
-end;
 
 procedure TIdSipReplacesHeader.CheckFromToTagCount(Params: TStrings);
 var
@@ -5174,11 +5332,6 @@ begin
   end;
 end;
 
-function TIdSipReplacesHeader.GetCallID: String;
-begin
-  Result := Self.Value;
-end;
-
 function TIdSipReplacesHeader.GetFromTag: String;
 begin
   Result := Self.Params[FromTagParam];
@@ -5189,11 +5342,6 @@ begin
   Result := Self.Params[ToTagParam];
 end;
 
-procedure TIdSipReplacesHeader.SetCallID(const Value: String);
-begin
-  Self.Value := Value;
-end;
-
 procedure TIdSipReplacesHeader.SetFromTag(const Value: String);
 begin
   Self.Params[FromTagParam] := Value;
@@ -5202,6 +5350,75 @@ end;
 procedure TIdSipReplacesHeader.SetToTag(const Value: String);
 begin
   Self.Params[ToTagParam] := Value;
+end;
+
+//******************************************************************************
+//* TIdSipTargetDialogHeader                                                   *
+//******************************************************************************
+
+function TIdSipTargetDialogHeader.HasCompleteDialogID: Boolean;
+begin
+  Result := (Self.CallID <> '')
+        and Self.HasParam(LocalTagParam)
+        and Self.HasParam(RemoteTagParam);
+end;
+
+//* TIdSipTargetDialogHeader Protected methods *********************************
+
+function TIdSipTargetDialogHeader.GetName: String;
+begin
+  Result := TargetDialogHeader;
+end;
+
+procedure TIdSipTargetDialogHeader.Parse(const Value: String);
+begin
+  inherited Parse(Value);
+
+  if not Self.HasParam(LocalTagParam) then
+    Self.FailParse(MissingLocalTagParam);
+
+  if not Self.HasParam(RemoteTagParam) then
+    Self.FailParse(MissingRemoteTagParam);
+
+  Self.CheckLocalRemoteTagCount(Self.Parameters);
+end;
+
+//* TIdSipTargetDialogHeader Private methods ***********************************
+
+procedure TIdSipTargetDialogHeader.CheckLocalRemoteTagCount(Params: TStrings);
+var
+  FoundLocal: Boolean;
+  FoundRemote:   Boolean;
+  I:         Integer;
+begin
+  FoundLocal := false;
+  FoundRemote   := false;
+  I := 0;
+  while (I < Params.Count) and not Self.IsMalformed do begin
+    Self.CheckDuplicatedParam(LocalTagParam,  Params.Names[I], FoundLocal);
+    Self.CheckDuplicatedParam(RemoteTagParam, Params.Names[I], FoundRemote);
+    Inc(I);
+  end;
+end;
+
+function TIdSipTargetDialogHeader.GetLocalTag: String;
+begin
+  Result := Self.Params[LocalTagParam];
+end;
+
+function TIdSipTargetDialogHeader.GetRemoteTag: String;
+begin
+  Result := Self.Params[RemoteTagParam];
+end;
+
+procedure TIdSipTargetDialogHeader.SetLocalTag(const Value: String);
+begin
+  Self.Params[LocalTagParam] := Value;
+end;
+
+procedure TIdSipTargetDialogHeader.SetRemoteTag(const Value: String);
+begin
+  Self.Params[RemoteTagParam] := Value;
 end;
 
 //******************************************************************************
@@ -5834,6 +6051,7 @@ begin
     GCanonicalHeaderNames.Add(SubscriptionStateHeader    + '=' + SubscriptionStateHeader);
     GCanonicalHeaderNames.Add(SupportedHeaderFull        + '=' + SupportedHeaderFull);
     GCanonicalHeaderNames.Add(SupportedHeaderShort       + '=' + SupportedHeaderFull);
+    GCanonicalHeaderNames.Add(TargetDialogHeader         + '=' + TargetDialogHeader);
     GCanonicalHeaderNames.Add(TimestampHeader            + '=' + TimestampHeader);
     GCanonicalHeaderNames.Add(ToHeaderFull               + '=' + ToHeaderFull);
     GCanonicalHeaderNames.Add(ToHeaderShort              + '=' + ToHeaderFull);
@@ -6004,6 +6222,7 @@ begin
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(SubscriptionStateHeader,    TIdSipSubscriptionStateHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(SupportedHeaderFull,        TIdSipCommaSeparatedHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(SupportedHeaderShort,       TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(TargetDialogHeader,         TIdSipTargetDialogHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(TimestampHeader,            TIdSipTimestampHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderFull,               TIdSipToHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderShort,              TIdSipToHeader));
@@ -6735,7 +6954,7 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipMessage.Accept(Visitor: IIdSipMessageVisitor);
+procedure TIdSipMessage.AcceptVisitor(Visitor: IIdSipMessageVisitor);
 begin
 end;
 
@@ -6842,29 +7061,9 @@ begin
   Result := Self.FirstHeader(ContactHeaderFull) as TIdSipContactHeader;
 end;
 
-function TIdSipMessage.FirstExpires: TIdSipNumericHeader;
-begin
-  Result := Self.FirstHeader(ExpiresHeader) as TIdSipNumericHeader;
-end;
-
 function TIdSipMessage.FirstHeader(const HeaderName: String): TIdSipHeader;
 begin
   Result := Self.Headers[HeaderName];
-end;
-
-function TIdSipMessage.FirstMinExpires: TIdSipNumericHeader;
-begin
-  Result := Self.FirstHeader(MinExpiresHeader) as TIdSipNumericHeader;
-end;
-
-function TIdSipMessage.FirstRequire: TIdSipCommaSeparatedHeader;
-begin
-  Result := Self.FirstHeader(RequireHeader) as TIdSipCommaSeparatedHeader;
-end;
-
-function TIdSipMessage.FirstRetryAfter: TIdSipRetryAfterHeader;
-begin
-  Result := Self.FirstHeader(RetryAfterHeader) as TIdSipRetryAfterHeader;
 end;
 
 function TIdSipMessage.HasBody: Boolean;
@@ -7221,6 +7420,11 @@ begin
   end;
 end;
 
+function TIdSipMessage.GetAccept: TIdSipWeightedCommaSeparatedHeader;
+begin
+  Result := Self.FirstHeader(AcceptHeader) as TIdSipWeightedCommaSeparatedHeader;
+end;
+
 function TIdSipMessage.GetCallID: String;
 begin
   Result := Self.FirstHeaderValue(CallIDHeaderFull);
@@ -7251,9 +7455,29 @@ begin
   Result := Self.FirstHeader(CSeqHeader) as TIdSipCSeqHeader;
 end;
 
+function TIdSipMessage.GetExpires: TIdSipNumericHeader;
+begin
+  Result := Self.FirstHeader(ExpiresHeader) as TIdSipNumericHeader;
+end;
+
 function TIdSipMessage.GetFrom: TIdSipFromHeader;
 begin
   Result := Self.FirstHeader(FromHeaderFull) as TIdSipFromHeader;
+end;
+
+function TIdSipMessage.GetMinExpires: TIdSipNumericHeader;
+begin
+  Result := Self.FirstHeader(MinExpiresHeader) as TIdSipNumericHeader;
+end;
+
+function TIdSipMessage.GetRetryAfter: TIdSipRetryAfterHeader;
+begin
+  Result := Self.FirstHeader(RetryAfterHeader) as TIdSipRetryAfterHeader;
+end;
+
+function TIdSipMessage.GetSupported: TIdSipCommaSeparatedHeader;
+begin
+  Result := Self.FirstHeader(SupportedHeaderFull) as TIdSipCommaSeparatedHeader;
 end;
 
 function TIdSipMessage.GetTo: TIdSipToHeader;
@@ -7327,6 +7551,11 @@ begin
   end;
 end;
 
+procedure TIdSipMessage.SetAccept(Value: TIdSipWeightedCommaSeparatedHeader);
+begin
+  Self.FirstHeader(AcceptHeader).Assign(Value);
+end;
+
 procedure TIdSipMessage.SetBlankableStringHeader(const HeaderName: String;
                                                  const Value: String);
 begin
@@ -7372,9 +7601,18 @@ begin
   Self.CSeq.Assign(Value);
 end;
 
+procedure TIdSipMessage.SetExpires(Value: TIdSipNumericHeader);
+begin
+  Self.FirstHeader(ExpiresHeader).Assign(Value);
+end;
+
 procedure TIdSipMessage.SetFrom(Value: TIdSipFromHeader);
 begin
   Self.FirstHeader(FromHeaderFull).Assign(Value);
+end;
+
+procedure TIdSipMessage.SetMinExpires(Value: TIdSipNumericHeader);
+begin
 end;
 
 procedure TIdSipMessage.SetPath(Value: TIdSipViaPath);
@@ -7387,6 +7625,16 @@ procedure TIdSipMessage.SetRecordRoute(Value: TIdSipRecordRoutePath);
 begin
   Self.RecordRoute.Clear;
   Self.RecordRoute.Add(Value);
+end;
+
+procedure TIdSipMessage.SetRetryAfter(Value: TIdSipRetryAfterHeader);
+begin
+  Self.FirstHeader(RetryAfterHeader).Assign(Value);
+end;
+
+procedure TIdSipMessage.SetSupported(Value: TIdSipCommaSeparatedHeader);
+begin
+  Self.FirstHeader(SupportedHeaderFull).Assign(Value);
 end;
 
 procedure TIdSipMessage.SetTo(Value: TIdSipToHeader);
@@ -7418,7 +7666,7 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipRequest.Accept(Visitor: IIdSipMessageVisitor);
+procedure TIdSipRequest.AcceptVisitor(Visitor: IIdSipMessageVisitor);
 begin
   Visitor.VisitRequest(Self);
 end;
@@ -7560,24 +7808,9 @@ begin
   Result := Self.FirstHeader(ProxyAuthorizationHeader) as TIdSipProxyAuthorizationHeader
 end;
 
-function TIdSipRequest.FirstProxyRequire: TIdSipCommaSeparatedHeader;
-begin
-  Result := Self.FirstHeader(ProxyRequireHeader) as TIdSipCommaSeparatedHeader;
-end;
-
-function TIdSipRequest.FirstReplaces: TIdSipReplacesHeader;
-begin
-  Result := Self.FirstHeader(ReplacesHeader) as TIdSipReplacesHeader;
-end;
-
 function TIdSipRequest.FirstRoute: TIdSipRouteHeader;
 begin
   Result := Self.FirstHeader(RouteHeader) as TIdSipRouteHeader
-end;
-
-function TIdSipRequest.FirstSubscriptionState: TIdSipSubscriptionStateHeader;
-begin
-  Result := Self.FirstHeader(SubscriptionStateHeader) as TIdSipSubscriptionStateHeader
 end;
 
 function TIdSipRequest.HasAuthorization: Boolean;
@@ -7911,6 +8144,11 @@ begin
   Result := StrToInt(Self.FirstHeader(MaxForwardsHeader).Value);
 end;
 
+function TIdSipRequest.GetProxyRequire: TIdSipCommaSeparatedHeader;
+begin
+  Result := Self.FirstHeader(ProxyRequireHeader) as TIdSipCommaSeparatedHeader;
+end;
+
 function TIdSipRequest.GetReferTo: TIdSipReferToHeader;
 begin
   Result := Self.FirstHeader(ReferToHeaderFull) as TIdSipReferToHeader;
@@ -7979,6 +8217,11 @@ begin
   Self.FirstHeader(MaxForwardsHeader).Value := IntToStr(Value);
 end;
 
+procedure TIdSipRequest.SetProxyRequire(Value: TIdSipCommaSeparatedHeader);
+begin
+  Self.FirstHeader(ProxyRequireHeader).Assign(Value);
+end;
+
 procedure TIdSipRequest.SetReferTo(Value: TIdSipReferToHeader);
 begin
   Self.FirstHeader(ReferToHeaderFull).Assign(Value);
@@ -7992,6 +8235,11 @@ end;
 procedure TIdSipRequest.SetRequestUri(Value: TIdSipURI);
 begin
   Self.fRequestUri.URI := Value.URI
+end;
+
+procedure TIdSipRequest.SetRequire(Value: TIdSipCommaSeparatedHeader);
+begin
+  Self.FirstHeader(RequireHeader).Assign(Value);
 end;
 
 procedure TIdSipRequest.SetRoute(Value: TIdSipRoutePath);
@@ -8157,7 +8405,7 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipResponse.Accept(Visitor: IIdSipMessageVisitor);
+procedure TIdSipResponse.AcceptVisitor(Visitor: IIdSipMessageVisitor);
 begin
   Visitor.VisitResponse(Self);
 end;

@@ -53,9 +53,11 @@ type
                         CurrentBindings: TIdSipContacts;
                         Response: TIdSipResponse);
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               Receiver: TIdSipTransport);
+                               Receiver: TIdSipTransport;
+                               Source: TIdSipConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                Receiver: TIdSipTransport);
+                                Receiver: TIdSipTransport;
+                                Source: TIdSipConnectionBindings);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure OnSendRequest(Request: TIdSipRequest;
@@ -189,13 +191,15 @@ begin
 end;
 
 procedure TrnidSpikeRegister.OnReceiveRequest(Request: TIdSipRequest;
-                                              Receiver: TIdSipTransport);
+                                              Receiver: TIdSipTransport;
+                                              Source: TIdSipConnectionBindings);
 begin
   Self.LogMessage(Request);
 end;
 
 procedure TrnidSpikeRegister.OnReceiveResponse(Response: TIdSipResponse;
-                                               Receiver: TIdSipTransport);
+                                               Receiver: TIdSipTransport;
+                                               Source: TIdSipConnectionBindings);
 begin
   Self.LogMessage(Response);
 end;
