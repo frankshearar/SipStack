@@ -7535,7 +7535,8 @@ end;
 class function TIdSipMessage.WillEstablishDialog(Request: TIdSipRequest;
                                                  Response: TIdSipResponse): Boolean;
 begin
-  Result := (Request.IsInvite or Request.IsSubscribe) and Response.IsOK;
+  Result := (Request.IsInvite or Request.IsSubscribe or Request.IsRefer)
+            and Response.IsOK;
 end;
 
 constructor TIdSipMessage.Create;
@@ -9225,7 +9226,7 @@ end;
 
 function TIdSipResponse.WillEstablishDialog(Request: TIdSipRequest): Boolean;
 begin
-  Result := TIdSipResponse.WillEstablishDialog(Request, Self);
+  Result := TIdSipMessage.WillEstablishDialog(Request, Self);
 end;
 
 //* TIdSipResponse Protected methods *******************************************

@@ -323,7 +323,7 @@ uses
 
 const
   AllMethods: array[1..9] of String = (MethodAck, MethodBye, MethodCancel,
-      MethodInvite, MethodNotify, MethodOptions, MethodParam, MethodRegister,
+      MethodInvite, MethodNotify, MethodOptions, MethodRefer, MethodRegister,
       MethodSubscribe);
   AllResponses: array[1..51] of Cardinal = (SIPTrying, SIPRinging,
       SIPCallIsBeingForwarded, SIPQueued, SIPSessionProgress, SIPAccepted,
@@ -1577,7 +1577,7 @@ begin
           // INVITEs and SUBSCRIBEs can start dialogs:
           // RFC 3261, section 12;
           // RFC 3265, section 3.1.4.1
-          Check(((Request.IsInvite or Request.IsSubscribe) and Response.IsOK)
+          Check(((Request.IsInvite or Request.IsSubscribe or Request.IsRefer) and Response.IsOK)
               = TIdSipMessage.WillEstablishDialog(Request, Response),
                 AllMethods[I] + ' + ' + Response.StatusText);
         end;
