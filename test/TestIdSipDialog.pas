@@ -12,9 +12,26 @@ unit TestIdSipDialog;
 interface
 
 uses
-  IdSipDialog, IdSipDialogID, IdSipMessage, TestFramework, TestFrameworkSip;
+  Classes, IdSipDialog, IdSipDialogID, IdSipMessage, TestFramework,
+  TestFrameworkSip;
 
 type
+  TestFunctions = class(TTestCase)
+  private
+    Target: TStrings;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestIntersectionOfBothSidesEmpty;
+    procedure TestIntersectionOfBothSidesEmptyTargetNotEmpty;
+    procedure TestIntersectionOfIgnoresWhitespace;
+    procedure TestIntersectionOfLeftSideEmpty;
+    procedure TestIntersectionOfNeitherSideEmpty;
+    procedure TestIntersectionOfNeitherSideEmptyDisjointSets;
+    procedure TestIntersectionOfRightSideEmpty;
+  end;
+
   TestTIdSipDialog = class(TTestCaseSip)
   protected
     Dlg:                TIdSipDialog;
@@ -57,6 +74,7 @@ type
     procedure TestIsSecure;
     procedure TestOnEstablishedFired;
     procedure TestRemoteTarget;
+    procedure TestSupportsExtension;
   end;
 
   TestTIdSipDialogs = class(TTestCase)
@@ -87,7 +105,7 @@ type
 implementation
 
 uses
-  Classes, IdSipConsts, SysUtils, TestMessages, TypInfo;
+  IdSipConsts, SysUtils, TestMessages, TypInfo;
 
 function DialogStateToStr(const S: TIdSipDialogState): String;
 begin
@@ -97,8 +115,106 @@ end;
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipDialog unit tests');
+  Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSipDialog.Suite);
   Result.AddTest(TestTIdSipDialogs.Suite);
+end;
+
+//******************************************************************************
+//* TestFunctions                                                              *
+//******************************************************************************
+//* TestFunctions Public methods ***********************************************
+
+procedure TestFunctions.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Target := TStringList.Create;
+end;
+
+procedure TestFunctions.TearDown;
+begin
+  Self.Target.Free;
+
+  inherited TearDown;
+end;
+
+//* TestFunctions Published methods ********************************************
+
+procedure TestFunctions.TestIntersectionOfBothSidesEmpty;
+begin
+  IntersectionOf(Self.Target, '', '');
+  CheckEquals('',
+              Self.Target.CommaText,
+              'Items added to a list from empty lists');
+end;
+
+procedure TestFunctions.TestIntersectionOfBothSidesEmptyTargetNotEmpty;
+begin
+  Self.Target.Add('foo');
+  Self.Target.Add('bar');
+  Self.Target.Add('baz');
+
+  IntersectionOf(Self.Target, '', '');
+  CheckEquals('',
+              Self.Target.CommaText,
+              'Target list not first cleared');
+end;
+
+procedure TestFunctions.TestIntersectionOfIgnoresWhitespace;
+const
+  Intersection = 'gruu,tdialog';
+  LeftSide     = '  gruu  , tdialog';
+  RightSide    = '100rel, gruu , tdialog ';
+begin
+  IntersectionOf(Self.Target, LeftSide, RightSide);
+
+  CheckEquals(Intersection,
+              Self.Target.CommaText,
+              'Whitespace not ignored?');
+end;
+
+procedure TestFunctions.TestIntersectionOfLeftSideEmpty;
+begin
+  IntersectionOf(Self.Target, '', 'gruu,tdialog');
+
+  CheckEquals('',
+              Self.Target.CommaText,
+              'Right side items added');
+end;
+
+procedure TestFunctions.TestIntersectionOfNeitherSideEmpty;
+const
+  Intersection = 'gruu,tdialog';
+  LeftSide     = Intersection + ',100rel';
+  RightSide    = 'foo,bar,' + Intersection;
+begin
+  IntersectionOf(Self.Target, LeftSide, RightSide);
+
+  CheckEquals(Intersection,
+              Self.Target.CommaText,
+              'Items not added from intersection');
+end;
+
+procedure TestFunctions.TestIntersectionOfNeitherSideEmptyDisjointSets;
+const
+  LeftSide = 'gruu,tdialog';
+  RightSide = 'foo,bar';
+begin
+  IntersectionOf(Self.Target, LeftSide, RightSide);
+
+  CheckEquals('',
+              Self.Target.CommaText,
+              'Items added from disjoint sets');
+end;
+
+procedure TestFunctions.TestIntersectionOfRightSideEmpty;
+begin
+  IntersectionOf(Self.Target, 'gruu,tdialog', '');
+
+  CheckEquals('',
+              Self.Target.CommaText,
+              'Left side items added');
 end;
 
 //******************************************************************************
@@ -837,6 +953,35 @@ begin
   CheckEquals(Self.RemoteTarget,
               Self.Dlg.RemoteTarget,
               'RemoteTarget before response received');
+end;
+
+procedure TestTIdSipDialog.TestSupportsExtension;
+const
+  ExtensionIntersection = ExtensionGruu + ',' + ExtensionTargetDialog;
+  ExtensionUnknown      = 'x-unknown';
+var
+  D: TIdSipDialog;
+begin
+  Self.Req.Supported.Value := ExtensionIntersection;
+  Self.Req.Supported.Values.Add(ExtensionReliableProvisional);
+
+  Self.Res.Supported.Value := ExtensionIntersection;
+  Self.Res.Supported.Values.Add(ExtensionUnknown);
+
+  D := TIdSipDialog.CreateInboundDialog(Self.Req, Self.Res, false);
+  try
+    Check(D.SupportsExtension(ExtensionGruu),
+          'Dialog doesn''t support ' + ExtensionGruu);
+    Check(D.SupportsExtension(ExtensionTargetDialog),
+          'Dialog doesn''t support ' + ExtensionTargetDialog);
+
+    Check(not D.SupportsExtension(ExtensionReliableProvisional),
+          'Dialog supports ' + ExtensionReliableProvisional);
+    Check(not D.SupportsExtension(ExtensionUnknown),
+          'Dialog supports ' + ExtensionUnknown);
+  finally
+    D.Free;
+  end;
 end;
 
 //******************************************************************************

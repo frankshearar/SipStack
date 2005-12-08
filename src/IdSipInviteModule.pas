@@ -415,9 +415,6 @@ type
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
                          UsingSecureTransport: Boolean); override;
-    procedure IntersectionOf(Target: TStrings;
-                             const SetOfCommaSeparatedValues: String;
-                             const AnotherSetOfCommaSeparatedValues: String);
     procedure NotifyOfEndedSession(ErrorCode: Cardinal;
                                    const Reason: String);
     procedure NotifyOfEstablishedSession(const RemoteSessionDescription: String;
@@ -2179,31 +2176,6 @@ begin
   Self.SupportedExtensionList := TStringList.Create;
 end;
 
-procedure TIdSipSession.IntersectionOf(Target: TStrings;
-                                       const SetOfCommaSeparatedValues: String;
-                                       const AnotherSetOfCommaSeparatedValues: String);
-var
-  OtherSet: TStrings;
-  I:        Integer;
-begin
-  Target.CommaText := SetOfCommaSeparatedValues;
-
-  OtherSet := TStringList.Create;
-  try
-    OtherSet.CommaText := AnotherSetOfCommaSeparatedValues;
-
-    I := 0;
-    while (I < Target.Count) do begin
-      if (OtherSet.IndexOf(Target[I]) = ItemNotFoundIndex) then
-        Target.Delete(I)
-      else
-        Inc(I);
-    end;
-  finally
-    OtherSet.Free;
-  end;
-end;
-
 procedure TIdSipSession.NotifyOfEndedSession(ErrorCode: Cardinal;
                                              const Reason: String);
 var
@@ -2762,9 +2734,9 @@ begin
   Self.RemoteParty              := Request.From;
   Self.RemoteSessionDescription := Request.Body;
 
-  Self.IntersectionOf(Self.SupportedExtensionList,
-                      Self.Module.AllowedExtensions,
-                      Request.Supported.Value);
+  IntersectionOf(Self.SupportedExtensionList,
+                 Self.Module.AllowedExtensions,
+                 Request.Supported.Value);
 end;
 
 procedure TIdSipInboundSession.OnFailure(InviteAgent: TIdSipInboundInvite);
@@ -3188,9 +3160,9 @@ begin
     InviteAgent.Offer    := Self.LocalSessionDescription;
     InviteAgent.MimeType := Self.LocalMimeType;
 
-    Self.IntersectionOf(Self.SupportedExtensionList,
-                        Self.InitialRequest.Supported.Value,
-                        Response.Supported.Value);
+    IntersectionOf(Self.SupportedExtensionList,
+                   Self.InitialRequest.Supported.Value,
+                   Response.Supported.Value);
   end
   else
     Self.NotifyOfModifiedSession(Response);

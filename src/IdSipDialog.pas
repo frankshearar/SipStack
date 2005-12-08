@@ -24,20 +24,21 @@ type
   // where the request was INVITE, will establish a dialog.
   TIdSipDialog = class(TPersistent)
   private
-    fCanBeEstablished:   Boolean;
-    fID:                 TIdSipDialogID;
-    fInitialRequest:     TIdSipRequest;
-    fInitialResponse:     TIdSipResponse;
-    fIsSecure:           Boolean;
-    fLocalSequenceNo:    Cardinal;
-    fLocalURI:           TIdSipURI;
-    fOnEstablished:      TIdSipDialogEvent;
-    fRemoteSequenceNo:   Cardinal;
-    fRemoteTarget:       TIdSipURI;
-    fRemoteURI:          TIdSipURI;
-    fRouteSet:           TIdSipRoutePath;
-    fState:              TIdSipDialogState;
-    LocalSequenceNoLock: TCriticalSection;
+    fCanBeEstablished:      Boolean;
+    fID:                    TIdSipDialogID;
+    fInitialRequest:        TIdSipRequest;
+    fInitialResponse:       TIdSipResponse;
+    fIsSecure:              Boolean;
+    fLocalSequenceNo:       Cardinal;
+    fLocalURI:              TIdSipURI;
+    fOnEstablished:         TIdSipDialogEvent;
+    fRemoteSequenceNo:      Cardinal;
+    fRemoteTarget:          TIdSipURI;
+    fRemoteURI:             TIdSipURI;
+    fRouteSet:              TIdSipRoutePath;
+    fState:                 TIdSipDialogState;
+    LocalSequenceNoLock:    TCriticalSection;
+    SupportedExtensionList: TStrings;
 
     function  GetIsEarly: Boolean;
     procedure CreateInternal(Request: TIdSipRequest;
@@ -104,6 +105,7 @@ type
     function  IsOutOfOrder(Request: TIdSipRequest): Boolean;
     function  NextInitialSequenceNo: Cardinal;
     function  NextLocalSequenceNo: Cardinal;
+    function  SupportsExtension(const ExtensionName: String): Boolean;
 
     property ID:               TIdSipDialogID  read fID;
     property IsEarly:          Boolean         read GetIsEarly;
@@ -147,10 +149,43 @@ type
 const
   ItemNotFoundIndex = -1;
 
+procedure IntersectionOf(Target: TStrings;
+                         const SetOfCommaSeparatedValues: String;
+                         const AnotherSetOfCommaSeparatedValues: String);
+
 implementation
 
 uses
   IdSipConsts, IdRandom, SysUtils;
+
+//******************************************************************************
+//* Unit Public procedures & functions                                         *
+//******************************************************************************
+
+procedure IntersectionOf(Target: TStrings;
+                         const SetOfCommaSeparatedValues: String;
+                         const AnotherSetOfCommaSeparatedValues: String);
+var
+  OtherSet: TStrings;
+  I:        Integer;
+begin
+  Target.CommaText := SetOfCommaSeparatedValues;
+
+  OtherSet := TStringList.Create;
+  try
+    OtherSet.CommaText := AnotherSetOfCommaSeparatedValues;
+
+    I := 0;
+    while (I < Target.Count) do begin
+      if (OtherSet.IndexOf(Target[I]) = ItemNotFoundIndex) then
+        Target.Delete(I)
+      else
+        Inc(I);
+    end;
+  finally
+    OtherSet.Free;
+  end;
+end;
 
 //******************************************************************************
 //* TIdSipDialog                                                               *
@@ -289,6 +324,7 @@ end;
 
 destructor TIdSipDialog.Destroy;
 begin
+  Self.SupportedExtensionList.Free;
   Self.RouteSet.Free;
   Self.RemoteTarget.Free;
   Self.RemoteURI.Free;
@@ -482,6 +518,11 @@ begin
   end;
 end;
 
+function TIdSipDialog.SupportsExtension(const ExtensionName: String): Boolean;
+begin
+  Result := false;
+end;
+
 //* TIdSipDialog Protected methods *********************************************
 
 procedure TIdSipDialog.DoOnEstablished;
@@ -529,7 +570,6 @@ procedure TIdSipDialog.CreateInternal(Request: TIdSipRequest;
                                       RouteSet: TIdSipHeaderList);
 begin
   Self.fInitialRequest  := Request.Copy as TIdSipRequest;
-
   Self.fInitialResponse := Response.Copy as TIdSipResponse;
 
   Self.LocalSequenceNoLock := TCriticalSection.Create;
@@ -538,14 +578,14 @@ begin
   Self.SetLocalSequenceNo(LocalSequenceNo);
   Self.SetRemoteSequenceNo(RemoteSequenceNo);
 
-  Self.fLocalUri := TIdSipURI.Create(LocalUri);
-  Self.fRemoteUri := TIdSipURI.Create(RemoteUri);
-
+  Self.fLocalUri     := TIdSipURI.Create(LocalUri);
+  Self.fRemoteUri    := TIdSipURI.Create(RemoteUri);
   Self.fRemoteTarget := TIdSipURI.Create(RemoteTarget);
 
   Self.SetIsSecure(IsSecure);
 
   Self.fRouteSet := TIdSipRoutePath.Create;
+  Self.SupportedExtensionList := TStringList.Create;
 
   // We normalise the RouteSet to contain only Routes. This just makes our
   // lives a bit simpler.
