@@ -1574,10 +1574,14 @@ begin
           Request.Method := AllMethods[I];
           Response.StatusCode := AllResponses[J];
 
-          // INVITEs and SUBSCRIBEs can start dialogs:
+          // INVITEs, SUBSCRIBEs and REFERs can start dialogs:
           // RFC 3261, section 12;
           // RFC 3265, section 3.1.4.1
-          Check(((Request.IsInvite or Request.IsSubscribe or Request.IsRefer) and Response.IsOK)
+          // RFC 3515, section 2
+          // Further, non-100 Trying provisional responses to INVITEs
+          // establish (early) dialogs.
+          Check((Request.IsInvite and (Response.IsOk or (Response.IsProvisional and not Response.IsTrying)))
+                or ((Request.IsSubscribe or Request.IsRefer) and Response.IsOK)
               = TIdSipMessage.WillEstablishDialog(Request, Response),
                 AllMethods[I] + ' + ' + Response.StatusText);
         end;

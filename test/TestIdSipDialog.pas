@@ -971,14 +971,29 @@ begin
   D := TIdSipDialog.CreateInboundDialog(Self.Req, Self.Res, false);
   try
     Check(D.SupportsExtension(ExtensionGruu),
-          'Dialog doesn''t support ' + ExtensionGruu);
+          '(Inbound) Dialog doesn''t support ' + ExtensionGruu);
     Check(D.SupportsExtension(ExtensionTargetDialog),
-          'Dialog doesn''t support ' + ExtensionTargetDialog);
+          '(Inbound) Dialog doesn''t support ' + ExtensionTargetDialog);
 
     Check(not D.SupportsExtension(ExtensionReliableProvisional),
-          'Dialog supports ' + ExtensionReliableProvisional);
+          '(Inbound) Dialog supports ' + ExtensionReliableProvisional);
     Check(not D.SupportsExtension(ExtensionUnknown),
-          'Dialog supports ' + ExtensionUnknown);
+          '(Inbound) Dialog supports ' + ExtensionUnknown);
+  finally
+    D.Free;
+  end;
+
+  D := TIdSipDialog.CreateOutboundDialog(Self.Req, Self.Res, false);
+  try
+    Check(D.SupportsExtension(ExtensionGruu),
+          '(Outbound) Dialog doesn''t support ' + ExtensionGruu);
+    Check(D.SupportsExtension(ExtensionTargetDialog),
+          '(Outbound) Dialog doesn''t support ' + ExtensionTargetDialog);
+
+    Check(not D.SupportsExtension(ExtensionReliableProvisional),
+          '(Outbound) Dialog supports ' + ExtensionReliableProvisional);
+    Check(not D.SupportsExtension(ExtensionUnknown),
+          '(Outbound) Dialog supports ' + ExtensionUnknown);
   finally
     D.Free;
   end;

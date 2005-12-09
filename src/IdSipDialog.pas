@@ -52,6 +52,9 @@ type
                              IsSecure: Boolean;
                              RouteSet: TIdSipHeaderList);
     function  GetLocalSequenceNo: Cardinal;
+    procedure IntersectionOfSupportedExtensions(Target: TStrings;
+                                                Request: TIdSipRequest;
+                                                Response: TIdSipResponse);
     procedure SetCanBeEstablished(Value: Boolean);
     procedure SetIsEarly(Value: Boolean);
     procedure SetIsSecure(Value: Boolean);
@@ -520,7 +523,7 @@ end;
 
 function TIdSipDialog.SupportsExtension(const ExtensionName: String): Boolean;
 begin
-  Result := false;
+  Result := Self.SupportedExtensionList.IndexOf(ExtensionName) <> ItemNotFoundIndex;
 end;
 
 //* TIdSipDialog Protected methods *********************************************
@@ -587,6 +590,10 @@ begin
   Self.fRouteSet := TIdSipRoutePath.Create;
   Self.SupportedExtensionList := TStringList.Create;
 
+  Self.IntersectionOfSupportedExtensions(Self.SupportedExtensionList,
+                                         Request,
+                                         Response);
+
   // We normalise the RouteSet to contain only Routes. This just makes our
   // lives a bit simpler.
   RouteSet.First;
@@ -609,6 +616,26 @@ begin
   finally
     Self.LocalSequenceNoLock.Release;
   end;
+end;
+
+procedure TIdSipDialog.IntersectionOfSupportedExtensions(Target: TStrings;
+                                                         Request: TIdSipRequest;
+                                                         Response: TIdSipResponse);
+var
+  RequestSupports:  String;
+  ResponseSupports: String;
+begin
+  if Request.HasHeader(SupportedHeaderFull) then
+    RequestSupports := Request.Supported.Value
+  else
+    RequestSupports := '';
+
+  if Response.HasHeader(SupportedHeaderFull) then
+    ResponseSupports := Response.Supported.Value
+  else
+    ResponseSupports := '';
+
+  IntersectionOf(Self.SupportedExtensionList, RequestSupports, ResponseSupports);
 end;
 
 procedure TIdSipDialog.SetCanBeEstablished(Value: Boolean);

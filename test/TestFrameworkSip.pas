@@ -110,6 +110,7 @@ type
     procedure CheckRequestSent(const Msg: String); virtual;
     procedure CheckNoResponseSent(const Msg: String);
     procedure CheckResponseSent(const Msg: String);
+    procedure UseGruu;
   end;
 
   TActionMethodTestCase = class(TTestCase)
@@ -948,6 +949,17 @@ end;
 procedure TTestCaseTU.CheckResponseSent(const Msg: String);
 begin
   Check(Self.ResponseCount < Self.SentResponseCount, Msg);
+end;
+
+procedure TTestCaseTU.UseGruu;
+begin
+  // Set up this stack to use the GRUU extension. Make sure that the GRUU
+  // can resolve to an IP.
+
+  Self.Core.UseGruu := true;
+  Self.Core.Gruu := Self.Core.Contact;
+  Self.Core.Gruu.Address.Host := Self.Core.Gruu.Address.Host + '.com';
+  Self.Locator.AddA(Self.Core.Gruu.Address.Host, '127.0.0.1');
 end;
 
 //* TTestCaseTU Protected methods **********************************************

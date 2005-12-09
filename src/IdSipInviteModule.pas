@@ -175,12 +175,13 @@ type
   // listeners) once I receive an ACK to my 2xx response.
   TIdSipInboundInvite = class(TIdSipInvite)
   private
+    fLastResponse:            TIdSipResponse;
     fLocalMimeType:           String;
     fLocalSessionDescription: String;
     fLocalTag:                String;
     fMaxResendInterval:       Cardinal; // in milliseconds
+    Grid:                     String;
     InviteModule:             TIdSipInviteModule;
-    LastResponse:             TIdSipResponse;
     ReceivedAck:              Boolean;
     ResendInterval:           Cardinal;
     SentFinalResponse:        Boolean;
@@ -217,12 +218,13 @@ type
     procedure Terminate; override;
     procedure TimeOut;
 
-    property LocalSessionDescription: String   read fLocalSessionDescription;
-    property LocalMimeType:           String   read fLocalMimeType;
-    property LocalTag:                String   read fLocalTag write fLocalTag;
-    property InitialResendInterval:   Cardinal read GetInitialResendInterval;
-    property MaxResendInterval:       Cardinal read fMaxResendInterval write fMaxResendInterval;
-    property ProgressResendInterval:  Cardinal read GetProgressResendInterval;
+    property LastResponse:            TIdSipResponse read fLastResponse;
+    property LocalSessionDescription: String         read fLocalSessionDescription;
+    property LocalMimeType:           String         read fLocalMimeType;
+    property LocalTag:                String         read fLocalTag write fLocalTag;
+    property InitialResendInterval:   Cardinal       read GetInitialResendInterval;
+    property MaxResendInterval:       Cardinal       read fMaxResendInterval write fMaxResendInterval;
+    property ProgressResendInterval:  Cardinal       read GetProgressResendInterval;
   end;
 
   // I encapsulate the call flows around an outbound INVITE, both in-dialog
@@ -482,7 +484,7 @@ type
   private
     InitialInvite: TIdSipInboundInvite;
 
-    function CreateInboundDialog(const LocalTag: String): TIdSipDialog;
+    function CreateInboundDialog(Response: TIdSipResponse): TIdSipDialog;
     function MatchReplaces(Request: TIdSipRequest): Boolean;
   protected
     function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID; override;
@@ -827,10 +829,6 @@ function TIdSipInviteModule.CreateInvite(Dest: TIdSipAddressHeader;
 begin
   Result := Self.UserAgent.CreateRequest(MethodInvite, Dest);
   try
-    // draft-ietf-sip-gruu, section 8.1
-    if Self.UserAgent.UseGruu then
-      Result.FirstContact.Grid := Self.UserAgent.NextGrid;
-
     Self.TurnIntoInvite(Result, Body, MimeType);
   except
     FreeAndNil(Result);
@@ -1123,6 +1121,9 @@ begin
     Ok.ContentLength := Length(Offer);
     Ok.ToHeader.Tag  := Self.LocalTag;
 
+    if Self.UA.UseGruu then
+      Ok.FirstContact.Grid := Self.Grid;
+
     // This works regardless of whether the UA supports GRUU: if the UA doesn't
     // then we simply make no USE of LocalGruu.
     Self.LocalGruu := Ok.FirstContact;
@@ -1256,9 +1257,14 @@ begin
 
   Self.InviteModule := Self.UA.ModuleFor(MethodInvite) as TIdSipInviteModule;
 
-  Self.LastResponse      := TIdSipResponse.Create;
+  Self.fLastResponse     := TIdSipResponse.Create;
   Self.ReceivedAck       := false;
   Self.ResendInterval    := Self.InitialResendInterval;
+
+  Self.LocalTag := Self.UA.NextTag;
+
+  if Self.UA.UseGruu then
+    Self.Grid := Self.UA.NextGrid;
 end;
 
 procedure TIdSipInboundInvite.ReceiveAck(Ack: TIdSipRequest);
@@ -1377,7 +1383,11 @@ begin
   Response := Self.UA.CreateResponse(Self.InitialRequest,
                                      StatusCode);
   try
+    if Self.UA.UseGruu then
+      Response.FirstContact.Grid := Self.Grid;
+
     Response.ToHeader.Tag := Self.LocalTag;
+
     Self.SendResponse(Response);
   finally
     Response.Free;
@@ -1828,6 +1838,10 @@ end;
 function TIdSipOutboundInitialInvite.CreateInvite: TIdSipRequest;
 begin
   Result := Self.Module.CreateInvite(Self.Destination, Self.Offer, Self.MimeType);
+
+  if Self.UA.UseGruu then begin
+    Result.FirstContact.Grid := Self.UA.NextGrid;
+  end;
 end;
 
 procedure TIdSipOutboundInitialInvite.Initialise(UA: TIdSipAbstractCore;
@@ -2130,7 +2144,15 @@ end;
 
 function TIdSipSession.SupportsExtension(const ExtensionName: String): Boolean;
 begin
-  Result := Self.SupportedExtensionList.IndexOf(ExtensionName) <> ItemNotFoundIndex;
+  Self.DialogLock.Acquire;
+  try
+    if Self.DialogEstablished then
+      Result := Self.Dialog.SupportsExtension(ExtensionName)
+    else
+      Result := false;
+  finally
+    Self.DialogLock.Release;
+  end;
 end;
 
 //* TIdSipSession Protected methods ********************************************
@@ -2686,13 +2708,11 @@ begin
   Self.DialogLock.Acquire;
   try
     if not Self.DialogEstablished then begin
-      Self.fDialog := Self.CreateInboundDialog(Self.UA.NextTag);
-      Self.Dialog.ReceiveRequest(Self.InitialRequest);
-      Self.InitialInvite.LocalTag := Self.Dialog.ID.LocalTag;
-
       Self.InitialInvite.Ring;
+      Self.fDialog := Self.CreateInboundDialog(Self.InitialInvite.LastResponse);
       Self.InitialRequest.Assign(Self.InitialInvite.InitialRequest);
       Self.InitialRequest.ToHeader.Tag := Self.Dialog.ID.LocalTag;
+      Self.LocalGruu                   := Self.InitialInvite.LocalGruu;
     end;
   finally
     Self.DialogLock.Release;
@@ -2822,21 +2842,12 @@ end;
 
 //* TIdSipInboundSession Private methods ***************************************
 
-function TIdSipInboundSession.CreateInboundDialog(const LocalTag: String): TIdSipDialog;
-var
-  ArbResponse: TIdSipResponse;
+function TIdSipInboundSession.CreateInboundDialog(Response: TIdSipResponse): TIdSipDialog;
 begin
-  ArbResponse := TIdSipResponse.InResponseTo(Self.InitialRequest, SIPOK);
-  try
-    ArbResponse.ToHeader.Tag := LocalTag;
-
-    Result := TIdSipDialog.CreateInboundDialog(Self.InitialRequest,
-                                               ArbResponse,
-                                               Self.UsingSecureTransport);
-    Result.ReceiveResponse(ArbResponse);
-  finally
-    ArbResponse.Free;
-  end;
+  Result := TIdSipDialog.CreateInboundDialog(Self.InitialRequest,
+                                             Response,
+                                             Self.UsingSecureTransport);
+  Result.ReceiveResponse(Response);
 end;
 
 function TIdSipInboundSession.MatchReplaces(Request: TIdSipRequest): Boolean;

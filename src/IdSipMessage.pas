@@ -1743,6 +1743,7 @@ const
   ExpiresHeader                  = 'Expires';
   ExpiresParam                   = 'expires';
   ExtensionGruu                  = 'gruu'; // cf. draft-ietf-sip-gruu-06
+  ExtensionReliableProvisional   = '100rel'; // cf. RFC 3262
   ExtensionReplaces              = 'replaces'; // cf. RFC 3891
   ExtensionTargetDialog          = 'tdialog'; // cf. draft-ietf-sip-target-dialog-01
   FromHeaderFull                 = 'From';
@@ -7535,8 +7536,11 @@ end;
 class function TIdSipMessage.WillEstablishDialog(Request: TIdSipRequest;
                                                  Response: TIdSipResponse): Boolean;
 begin
-  Result := (Request.IsInvite or Request.IsSubscribe or Request.IsRefer)
-            and Response.IsOK;
+  // non-100 Trying provisional responses, and all 2xx responses will, with an
+  // INVITE, make a dialog.
+  // Otherwise, SUBSCRIBE and REFER messages create dialogs with 2xx responses.
+  Result := (Request.IsInvite and (Response.IsOk or (Response.IsProvisional and not Response.IsTrying)))
+          or ((Request.IsSubscribe or Request.IsRefer) and Response.IsOK);
 end;
 
 constructor TIdSipMessage.Create;
