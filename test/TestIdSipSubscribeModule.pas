@@ -492,6 +492,8 @@ type
     procedure TestIsSession; override;
     procedure TestNotify; virtual;
     procedure TestNotifyWithGruu; virtual;
+    procedure TestReceiveRequestSendsAccepted;
+    procedure TestReceiveRequestSendsAcceptedWithGruu;
     procedure TestReceiveRequestSendsNotify;
   end;
 
@@ -629,6 +631,7 @@ type
     procedure TestRefreshReceives481;
     procedure TestRefreshReceives4xx;
     procedure TestRemoveListener;
+    procedure TestSendWithGruu;
     procedure TestTerminate;
     procedure TestTerminateBeforeEstablished;
     procedure TestUnsubscribe;
@@ -2473,6 +2476,36 @@ begin
   Fail('Implement ' + Self.ClassName + '.TestNotifyWithGruu');
 end;
 
+procedure TestTIdSipInboundSubscriptionBase.TestReceiveRequestSendsAccepted;
+begin
+  Self.MarkSentResponseCount;
+  Self.ReceiveSubscribeRequestWithGruu;
+  CheckResponseSent('No response sent');
+
+  CheckEquals(SIPAccepted,
+              Self.LastSentResponse.StatusCode,
+              'Unexpected response sent');
+end;
+
+procedure TestTIdSipInboundSubscriptionBase.TestReceiveRequestSendsAcceptedWithGruu;
+begin
+  Self.UseGruu;
+
+  Self.MarkSentResponseCount;
+  Self.ReceiveSubscribeRequestWithGruu;
+  CheckResponseSent('No response sent');
+
+  Check(Self.LastSentResponse.HasHeader(SupportedHeaderFull),
+        'Response missing Supported header');
+  Check(Self.LastSentResponse.SupportsExtension(ExtensionGruu),
+        'Supported header fails to indicate support of "gruu" extension');
+  CheckEquals(Self.Core.Gruu.Address.Host,
+              Self.LastSentResponse.FirstContact.Address.Host,
+              'Response didn''t use GRUU');
+  Check(Self.LastSentResponse.FirstContact.Address.HasGrid,
+        'Response''s GRUU doesn''t have a "grid" parameter');
+end;
+
 procedure TestTIdSipInboundSubscriptionBase.TestReceiveRequestSendsNotify;
 begin
   Self.MarkSentRequestCount;
@@ -2750,10 +2783,7 @@ var
   Sub:      TIdSipRequest;
 begin
   // Set us up to support GRUU
-  Self.Core.UseGruu := true;
-  Self.Core.Gruu := Self.Core.Contact;
-  Self.Core.Gruu.Address.Host := Self.Core.Gruu.Address.Host + '.com';
-  Self.Locator.AddA(Self.Core.Gruu.Address.Host, '127.0.0.1');
+  Self.UseGruu;
 
   Sub := Self.Module.CreateSubscribe(Self.Destination, TIdSipTestPackage.EventPackage);
   try
@@ -3801,6 +3831,29 @@ begin
   end;
 end;
 
+procedure TestTIdSipOutboundSubscriptionBase.TestSendWithGruu;
+var
+  Sub: TIdSipRequest;
+begin
+  Self.UseGruu;
+
+  Self.MarkSentRequestCount;
+  Self.CreateSubscription;
+  CheckRequestSent('No request sent');
+
+  Sub := Self.LastSentRequest;
+
+  Check(Sub.HasHeader(SupportedHeaderFull),
+        'Missing Supported header');
+  Check(Sub.SupportsExtension(ExtensionGruu),
+        'Supported header fails to indicate "gruu" support');
+  CheckEquals(Self.Core.Gruu.Address.Host,
+              Sub.FirstContact.Address.Host,
+              Sub.Method + ' didn''t use GRUU');
+  Check(Sub.FirstContact.Address.HasGrid,
+        Sub.Method + ' doesn''t have a "grid" parameter');
+end;
+
 procedure TestTIdSipOutboundSubscriptionBase.TestTerminate;
 begin
   Self.MarkSentRequestCount;
@@ -4143,10 +4196,7 @@ var
   Refer:    TIdSipRequest;
 begin
   // Set us up to support GRUU
-  Self.Core.UseGruu := true;
-  Self.Core.Gruu := Self.Core.Contact;
-  Self.Core.Gruu.Address.Host := Self.Core.Gruu.Address.Host + '.com';
-  Self.Locator.AddA(Self.Core.Gruu.Address.Host, '127.0.0.1');
+  Self.UseGruu;
 
   Refer := Self.Module.CreateRefer(Self.Destination, Self.Core.Gruu);
   try
