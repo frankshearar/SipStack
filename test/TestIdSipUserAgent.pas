@@ -175,6 +175,7 @@ type
     procedure TestCreateUserAgentWithAutoContact;
     procedure TestCreateUserAgentWithContact;
     procedure TestCreateUserAgentWithFrom;
+    procedure TestCreateUserAgentWithInstanceID;
     procedure TestCreateUserAgentWithLocator;
     procedure TestCreateUserAgentWithMalformedContact;
     procedure TestCreateUserAgentWithMalformedFrom;
@@ -2049,6 +2050,25 @@ begin
   try
     CheckEquals(DisplayName, UA.From.DisplayName,      'From display-name');
     CheckEquals(FromUri,     UA.From.Address.AsString, 'From URI');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithInstanceID;
+const
+  InstanceID = 'urn:uuid:12345678-1234-1234-1234-123456789012';
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('InstanceID: ' + InstanceID);
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(InstanceID, UA.InstanceID, 'Instance-ID');
+    Check(UA.ModuleFor(MethodRefer).IsNull,
+          'Setting the InstanceID doesn''t automatically/implicitly mean '
+        + 'support for GRUU');
   finally
     UA.Free;
   end;

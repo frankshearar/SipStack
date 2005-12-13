@@ -81,6 +81,7 @@ type
   //   Register: <SIP/S URI>
   //   Proxy: <SIP/S URI>
   //   SupportEvent: refer
+  //   InstanceID: 00000000-0000-0000-0000-000000000000
   TIdSipStackConfigurator = class(TObject)
   private
     procedure AddAuthentication(UserAgent: TIdSipAbstractCore;
@@ -113,6 +114,8 @@ type
                          const RegisterLine: String;
                          PendingActions: TObjectList);
     procedure SendPendingActions(Actions: TObjectList);
+    procedure SetInstanceID(UserAgent: TIdSipUserAgent;
+                            const InstanceIDLine: String);
   public
     function CreateUserAgent(Configuration: TStrings;
                              Context: TIdTimerQueue): TIdSipUserAgent; overload;
@@ -125,6 +128,7 @@ const
   ContactDirective         = ContactHeaderFull;
   DebugMessageLogDirective = 'DebugMessageLog';
   FromDirective            = FromHeaderFull;
+  InstanceIDDirective      = 'InstanceID';
   ListenDirective          = 'Listen';
   MockKeyword              = 'MOCK';
   NameServerDirective      = 'NameServer';
@@ -540,6 +544,8 @@ begin
     Self.AddContact(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, FromDirective) then
     Self.AddFrom(UserAgent, ConfigurationLine)
+  else if IsEqual(FirstToken, InstanceIDDirective) then
+    Self.SetInstanceID(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, ListenDirective) then
     Self.AddTransport(UserAgent.Dispatcher, ConfigurationLine)
   else if IsEqual(FirstToken, NameServerDirective) then
@@ -579,6 +585,17 @@ var
 begin
   for I := 0 to Actions.Count - 1 do
     (Actions[I] as TIdSipAction).Send;
+end;
+
+procedure TIdSipStackConfigurator.SetInstanceID(UserAgent: TIdSipUserAgent;
+                                                const InstanceIDLine: String);
+var
+  Line: String;
+begin
+  Line := InstanceIDLine;
+  Self.EatDirective(Line);
+
+  UserAgent.InstanceID := Line;
 end;
 
 end.
