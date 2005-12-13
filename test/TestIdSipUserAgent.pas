@@ -155,6 +155,7 @@ type
     procedure CheckAutoContact(UserAgent: TIdSipAbstractCore);
     procedure CheckEventPackageRegistered(UA: TIdSipUserAgent;
                                           PackageName: String);
+    procedure CheckUseGruuWithValue(const BooleanValue: String);
     procedure NoteReceiptOfPacket(Sender: TObject;
                                   AData: TStream;
                                   ABinding: TIdSocketHandle);
@@ -175,6 +176,8 @@ type
     procedure TestCreateUserAgentWithAutoContact;
     procedure TestCreateUserAgentWithContact;
     procedure TestCreateUserAgentWithFrom;
+    procedure TestCreateUserAgentWithGruuSupport;
+    procedure TestCreateUserAgentWithUseGruu;
     procedure TestCreateUserAgentWithInstanceID;
     procedure TestCreateUserAgentWithLocator;
     procedure TestCreateUserAgentWithMalformedContact;
@@ -1849,6 +1852,22 @@ begin
         '"' + PackageName + '" package not supported by the SubscribeModule');
 end;
 
+procedure TestTIdSipStackConfigurator.CheckUseGruuWithValue(const BooleanValue: String);
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Clear;
+  Self.Configuration.Add('UseGruu: ' + BooleanValue);
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Check(UA.UseGruu,
+          'UseGruu: ' + BooleanValue);
+  finally
+    UA.Free;
+  end;
+end;
+
 procedure TestTIdSipStackConfigurator.NoteReceiptOfPacket(Sender: TObject;
                                                           AData: TStream;
                                                           ABinding: TIdSocketHandle);
@@ -2053,6 +2072,30 @@ begin
   finally
     UA.Free;
   end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithGruuSupport;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('SupportExtension: gruu');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Check(UA.UseGruu, 'SupportExtension directive ignored');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithUseGruu;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.CheckUseGruuWithValue('true');
+  Self.CheckUseGruuWithValue('TRUE');
+  Self.CheckUseGruuWithValue('yes');
+  Self.CheckUseGruuWithValue('1');
 end;
 
 procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithInstanceID;

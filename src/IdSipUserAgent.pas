@@ -116,6 +116,8 @@ type
     procedure SendPendingActions(Actions: TObjectList);
     procedure SetInstanceID(UserAgent: TIdSipUserAgent;
                             const InstanceIDLine: String);
+    procedure SetUseGruu(UserAgent: TIdSipUserAgent;
+                            const UseGruuLine: String);
   public
     function CreateUserAgent(Configuration: TStrings;
                              Context: TIdTimerQueue): TIdSipUserAgent; overload;
@@ -135,6 +137,7 @@ const
   ProxyDirective           = 'Proxy';
   RegisterDirective        = 'Register';
   SupportEventDirective    = 'SupportEvent';
+  UseGruuDirective         = 'UseGruu';
 
 implementation
 
@@ -555,7 +558,9 @@ begin
   else if IsEqual(FirstToken, RegisterDirective) then
     Self.RegisterUA(UserAgent, ConfigurationLine, PendingActions)
   else if IsEqual(FirstToken, SupportEventDirective) then
-    Self.AddSupportForEventPackage(UserAgent, ConfigurationLine);
+    Self.AddSupportForEventPackage(UserAgent, ConfigurationLine)
+  else if IsEqual(FirstToken, UseGruuDirective) then
+    Self.SetUseGruu(UserAgent, ConfigurationLine);
 end;
 
 procedure TIdSipStackConfigurator.RegisterUA(UserAgent: TIdSipUserAgent;
@@ -596,6 +601,19 @@ begin
   Self.EatDirective(Line);
 
   UserAgent.InstanceID := Line;
+end;
+
+procedure TIdSipStackConfigurator.SetUseGruu(UserAgent: TIdSipUserAgent;
+                                             const UseGruuLine: String);
+var
+  Line: String;
+begin
+  Line := UseGruuLine;
+  Self.EatDirective(Line);
+
+  UserAgent.UseGruu := IsEqual(Line, 'true')
+                    or IsEqual(Line, 'yes')
+                    or IsEqual(Line, '1');
 end;
 
 end.
