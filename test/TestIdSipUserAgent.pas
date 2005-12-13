@@ -176,7 +176,6 @@ type
     procedure TestCreateUserAgentWithAutoContact;
     procedure TestCreateUserAgentWithContact;
     procedure TestCreateUserAgentWithFrom;
-    procedure TestCreateUserAgentWithGruuSupport;
     procedure TestCreateUserAgentWithUseGruu;
     procedure TestCreateUserAgentWithInstanceID;
     procedure TestCreateUserAgentWithLocator;
@@ -2069,20 +2068,6 @@ begin
   try
     CheckEquals(DisplayName, UA.From.DisplayName,      'From display-name');
     CheckEquals(FromUri,     UA.From.Address.AsString, 'From URI');
-  finally
-    UA.Free;
-  end;
-end;
-
-procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithGruuSupport;
-var
-  UA: TIdSipUserAgent;
-begin
-  Self.Configuration.Add('SupportExtension: gruu');
-
-  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
-  try
-    Check(UA.UseGruu, 'SupportExtension directive ignored');
   finally
     UA.Free;
   end;
