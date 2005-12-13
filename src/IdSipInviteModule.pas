@@ -404,10 +404,9 @@ type
     procedure SetRemoteParty(Value: TIdSipAddressHeader);
     procedure TerminateAnyPendingRequests;
   protected
-    FullyEstablished:       Boolean;
-    ModifyAttempt:          TIdSipInvite;
-    ModifyLock:             TCriticalSection;
-    SupportedExtensionList: TStringList;
+    FullyEstablished: Boolean;
+    ModifyAttempt:    TIdSipInvite;
+    ModifyLock:       TCriticalSection;
 
     procedure ActionSucceeded(Response: TIdSipResponse); override;
     function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID; virtual; abstract;
@@ -1300,11 +1299,11 @@ end;
 
 procedure TIdSipInboundInvite.SendResponse(Response: TIdSipResponse);
 begin
+  Self.LastResponse.Assign(Response);
+
   if Self.InitialRequest.Match(Response) then begin
-    if not Self.SentFinalResponse then begin
+    if not Self.SentFinalResponse then
       Self.SentFinalResponse := Response.IsFinal;
-      Self.LastResponse.Assign(Response);
-    end;
 
     if not Response.IsOK and Response.IsFinal then
       Self.MarkAsTerminated;
@@ -1974,7 +1973,6 @@ end;
 
 destructor TIdSipSession.Destroy;
 begin
-  Self.SupportedExtensionList.Free;
   Self.fRemoteParty.Free;
   Self.fRemoteContact.Free;
 
@@ -2194,8 +2192,6 @@ begin
 
   Self.fRemoteContact := TIdSipContactHeader.Create;
   Self.fRemoteParty   := TIdSipAddressHeader.Create;
-
-  Self.SupportedExtensionList := TStringList.Create;
 end;
 
 procedure TIdSipSession.NotifyOfEndedSession(ErrorCode: Cardinal;
@@ -2753,10 +2749,6 @@ begin
   Self.RemoteMimeType           := Request.ContentType;
   Self.RemoteParty              := Request.From;
   Self.RemoteSessionDescription := Request.Body;
-
-  IntersectionOf(Self.SupportedExtensionList,
-                 Self.Module.AllowedExtensions,
-                 Request.Supported.Value);
 end;
 
 procedure TIdSipInboundSession.OnFailure(InviteAgent: TIdSipInboundInvite);
@@ -3170,10 +3162,6 @@ begin
 
     InviteAgent.Offer    := Self.LocalSessionDescription;
     InviteAgent.MimeType := Self.LocalMimeType;
-
-    IntersectionOf(Self.SupportedExtensionList,
-                   Self.InitialRequest.Supported.Value,
-                   Response.Supported.Value);
   end
   else
     Self.NotifyOfModifiedSession(Response);

@@ -108,6 +108,7 @@ type
     procedure TestIsOptions; override;
     procedure TestIsRegistration; override;
     procedure TestIsSession; override;
+    procedure TestLastResponse;
     procedure TestLocalGruu; override;
     procedure TestMatchAck;
     procedure TestMatchAckToReInvite;
@@ -390,6 +391,7 @@ type
     procedure TestRedirectCall;
     procedure TestRejectCallBusy;
     procedure TestRemoveSessionListener;
+    procedure TestRing;
     procedure TestRingWithGruu;
     procedure TestSupportsExtension;
     procedure TestTerminate;
@@ -688,6 +690,7 @@ begin
 //  Result.AddTest(TestDebug.Suite);
   Result.AddTest(TestTIdSipInviteModule.Suite);
   Result.AddTest(TestTIdSipInboundInvite.Suite);
+{
   Result.AddTest(TestTIdSipOutboundInitialInvite.Suite);
   Result.AddTest(TestTIdSipOutboundRedirectedInvite.Suite);
   Result.AddTest(TestTIdSipOutboundReInvite.Suite);
@@ -708,6 +711,7 @@ begin
   Result.AddTest(TestTIdSipSessionModifySessionMethod.Suite);
   Result.AddTest(TestTIdSipProgressedSessionMethod.Suite);
   Result.AddTest(TestTIdSipSessionReferralMethod.Suite);
+}  
 end;
 
 //******************************************************************************
@@ -1617,6 +1621,21 @@ begin
         Self.InviteAction.ClassName + ' marked as a Session');
 end;
 
+procedure TestTIdSipInboundInvite.TestLastResponse;
+begin
+  Self.InviteAction.Ring;
+  Check(Self.InviteAction.LastResponse.Equals(Self.LastSentResponse),
+        'Sent 180 Ringing not stored in LastResponse');
+
+  Self.InviteAction.Accept('', '');
+  Check(Self.InviteAction.LastResponse.Equals(Self.LastSentResponse),
+        'Sent 200 OK not stored in LastResponse');
+
+  Self.InviteAction.ResendOk;
+  Check(Self.InviteAction.LastResponse.Equals(Self.LastSentResponse),
+        'Re-sent 200 OK not stored in LastResponse');
+end;
+
 procedure TestTIdSipInboundInvite.TestLocalGruu;
 begin
   Self.UseGruu;
@@ -1861,15 +1880,9 @@ var
   I:          Integer;
   OriginalOk: TIdSipResponse;
 begin
-  // Does nothing if the Invite's not yet sent an OK
-  Self.MarkSentResponseCount;
-  Self.InviteAction.ResendOk;
-  CheckNoResponseSent('The action sent an OK before it accepted the call');
-
-  // Then we send an OK
   Self.InviteAction.Accept('', '');
 
-  // And we make sure that repeated calls to ResendOk, well, resend the OK.
+  // We make sure that repeated calls to ResendOk, well, resend the OK.
   OriginalOk := TIdSipResponse.Create;
   try
     OriginalOk.Assign(Self.LastSentResponse);
@@ -4738,6 +4751,30 @@ begin
   finally
     L1.Free;
   end;
+end;
+
+procedure TestTIdSipInboundSession.TestRing;
+var
+  Ringing: TIdSipResponse;
+begin
+  Self.MarkSentResponseCount;
+  Self.CreateAction; // This sends a 180 Ringing
+  Check(Assigned(Self.Session), 'OnInboundCall not called');
+  CheckResponseSent('No response sent');
+
+  Ringing := Self.LastSentResponse;
+  CheckEquals(Self.Invite.CallID,
+              Ringing.CallID,
+              'Ringing Call-ID doesn''t match INVITE''s Call-ID');
+  CheckEquals(Self.Invite.CallID,
+              Self.Session.Dialog.ID.CallID,
+              'Session''s Call-ID doesn''t match INVITE''s Call-ID');
+  CheckEquals(Self.Invite.ToHeader.Tag,
+              Self.Session.Dialog.ID.RemoteTag,
+              'Session''s remote-tag doesn''t match INVITE''s To tag');
+  CheckEquals(Self.Invite.From.Tag,
+              Self.Session.Dialog.ID.LocalTag,
+              'Session''s local-tag doesn''t match 180''s From tag');
 end;
 
 procedure TestTIdSipInboundSession.TestRingWithGruu;

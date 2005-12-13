@@ -8,97 +8,104 @@
   resources were bound to the produced executable.
 */
 
-#define IdResourceStrings_RSSSLCreatingContextError 65184
-#define IdResourceStrings_RSSSLLoadingRootCertError 65185
-#define IdResourceStrings_RSSSLLoadingCertError 65186
-#define IdResourceStrings_RSSSLLoadingKeyError 65187
-#define IdResourceStrings_RSSSLGetMethodError 65188
-#define IdResourceStrings_RSSSLDataBindingError 65189
-#define IdResourceStrings_RSOSSLModeNotSet 65190
-#define IdResourceStrings_RSOSSLCouldNotLoadSSLLibrary 65191
-#define IdResourceStrings_RSOSSLStatusString 65192
-#define IdResourceStrings_RSThreadTerminateAndWaitFor 65193
-#define IdSipRegistration_NoSuchRegistrar 65194
-#define IdResourceStrings_RSSocksRequestIdentFailed 65200
-#define IdResourceStrings_RSSocksUnknownError 65201
-#define IdResourceStrings_RSSocksServerRespondError 65202
-#define IdResourceStrings_RSSocksAuthMethodError 65203
-#define IdResourceStrings_RSSocksAuthError 65204
-#define IdResourceStrings_RSSocksServerGeneralError 65205
-#define IdResourceStrings_RSSocksServerPermissionError 65206
-#define IdResourceStrings_RSSocksServerNetUnreachableError 65207
-#define IdResourceStrings_RSSocksServerHostUnreachableError 65208
-#define IdResourceStrings_RSSocksServerConnectionRefusedError 65209
-#define IdResourceStrings_RSSocksServerTTLExpiredError 65210
-#define IdResourceStrings_RSSocksServerCommandError 65211
-#define IdResourceStrings_RSSocksServerAddressError 65212
-#define IdResourceStrings_RSSSLAcceptError 65213
-#define IdResourceStrings_RSSSLConnectError 65214
-#define IdResourceStrings_RSSSLSettingCipherError 65215
-#define IdResourceStrings_RSStackETIMEDOUT 65216
-#define IdResourceStrings_RSStackECONNREFUSED 65217
-#define IdResourceStrings_RSStackELOOP 65218
-#define IdResourceStrings_RSStackENAMETOOLONG 65219
-#define IdResourceStrings_RSStackEHOSTDOWN 65220
-#define IdResourceStrings_RSStackEHOSTUNREACH 65221
-#define IdResourceStrings_RSStackENOTEMPTY 65222
-#define IdResourceStrings_RSStackHOST_NOT_FOUND 65223
-#define IdResourceStrings_RSCodeNoError 65224
-#define IdResourceStrings_RSCodeQueryFormat 65225
-#define IdResourceStrings_RSCodeQueryServer 65226
-#define IdResourceStrings_RSCodeQueryName 65227
-#define IdResourceStrings_RSCodeQueryNotImplemented 65228
-#define IdResourceStrings_RSCodeQueryQueryRefused 65229
-#define IdResourceStrings_RSSocksRequestFailed 65230
-#define IdResourceStrings_RSSocksRequestServerFailed 65231
-#define IdResourceStrings_RSStackESOCKTNOSUPPORT 65232
-#define IdResourceStrings_RSStackEOPNOTSUPP 65233
-#define IdResourceStrings_RSStackEPFNOSUPPORT 65234
-#define IdResourceStrings_RSStackEAFNOSUPPORT 65235
-#define IdResourceStrings_RSStackEADDRINUSE 65236
-#define IdResourceStrings_RSStackEADDRNOTAVAIL 65237
-#define IdResourceStrings_RSStackENETDOWN 65238
-#define IdResourceStrings_RSStackENETUNREACH 65239
-#define IdResourceStrings_RSStackENETRESET 65240
-#define IdResourceStrings_RSStackECONNABORTED 65241
-#define IdResourceStrings_RSStackECONNRESET 65242
-#define IdResourceStrings_RSStackENOBUFS 65243
-#define IdResourceStrings_RSStackEISCONN 65244
-#define IdResourceStrings_RSStackENOTCONN 65245
-#define IdResourceStrings_RSStackESHUTDOWN 65246
-#define IdResourceStrings_RSStackETOOMANYREFS 65247
-#define IdResourceStrings_RSStackInvalidIP 65248
-#define IdResourceStrings_RSStackEINTR 65249
-#define IdResourceStrings_RSStackEBADF 65250
-#define IdResourceStrings_RSStackEACCES 65251
-#define IdResourceStrings_RSStackEFAULT 65252
-#define IdResourceStrings_RSStackEINVAL 65253
-#define IdResourceStrings_RSStackEMFILE 65254
-#define IdResourceStrings_RSStackEWOULDBLOCK 65255
-#define IdResourceStrings_RSStackEINPROGRESS 65256
-#define IdResourceStrings_RSStackEALREADY 65257
-#define IdResourceStrings_RSStackENOTSOCK 65258
-#define IdResourceStrings_RSStackEDESTADDRREQ 65259
-#define IdResourceStrings_RSStackEMSGSIZE 65260
-#define IdResourceStrings_RSStackEPROTOTYPE 65261
-#define IdResourceStrings_RSStackENOPROTOOPT 65262
-#define IdResourceStrings_RSStackEPROTONOSUPPORT 65263
+#define IdResourceStrings_RSThreadTerminateAndWaitFor 65168
+#define IdSipRegistration_NoSuchRegistrar 65169
+#define IdResourceStrings_RSSocksServerConnectionRefusedError 65184
+#define IdResourceStrings_RSSocksServerTTLExpiredError 65185
+#define IdResourceStrings_RSSocksServerCommandError 65186
+#define IdResourceStrings_RSSocksServerAddressError 65187
+#define IdResourceStrings_RSSSLAcceptError 65188
+#define IdResourceStrings_RSSSLConnectError 65189
+#define IdResourceStrings_RSSSLSettingCipherError 65190
+#define IdResourceStrings_RSSSLCreatingContextError 65191
+#define IdResourceStrings_RSSSLLoadingRootCertError 65192
+#define IdResourceStrings_RSSSLLoadingCertError 65193
+#define IdResourceStrings_RSSSLLoadingKeyError 65194
+#define IdResourceStrings_RSSSLGetMethodError 65195
+#define IdResourceStrings_RSSSLDataBindingError 65196
+#define IdResourceStrings_RSOSSLModeNotSet 65197
+#define IdResourceStrings_RSOSSLCouldNotLoadSSLLibrary 65198
+#define IdResourceStrings_RSOSSLStatusString 65199
+#define IdResourceStrings_RSQueryInvalidPacketSize 65200
+#define IdResourceStrings_RSQueryLessThanFour 65201
+#define IdResourceStrings_RSQueryInvalidHeaderID 65202
+#define IdResourceStrings_RSQueryLessThanTwelve 65203
+#define IdResourceStrings_RSQueryPackReceivedTooSmall 65204
+#define IdResourceStrings_RSSocksRequestFailed 65205
+#define IdResourceStrings_RSSocksRequestServerFailed 65206
+#define IdResourceStrings_RSSocksRequestIdentFailed 65207
+#define IdResourceStrings_RSSocksUnknownError 65208
+#define IdResourceStrings_RSSocksServerRespondError 65209
+#define IdResourceStrings_RSSocksAuthMethodError 65210
+#define IdResourceStrings_RSSocksAuthError 65211
+#define IdResourceStrings_RSSocksServerGeneralError 65212
+#define IdResourceStrings_RSSocksServerPermissionError 65213
+#define IdResourceStrings_RSSocksServerNetUnreachableError 65214
+#define IdResourceStrings_RSSocksServerHostUnreachableError 65215
+#define IdResourceStrings_RSStackECONNREFUSED 65216
+#define IdResourceStrings_RSStackELOOP 65217
+#define IdResourceStrings_RSStackENAMETOOLONG 65218
+#define IdResourceStrings_RSStackEHOSTDOWN 65219
+#define IdResourceStrings_RSStackEHOSTUNREACH 65220
+#define IdResourceStrings_RSStackENOTEMPTY 65221
+#define IdResourceStrings_RSStackHOST_NOT_FOUND 65222
+#define IdResourceStrings_RSCodeNoError 65223
+#define IdResourceStrings_RSCodeQueryFormat 65224
+#define IdResourceStrings_RSCodeQueryServer 65225
+#define IdResourceStrings_RSCodeQueryName 65226
+#define IdResourceStrings_RSCodeQueryNotImplemented 65227
+#define IdResourceStrings_RSCodeQueryQueryRefused 65228
+#define IdResourceStrings_RSCodeQueryUnknownError 65229
+#define IdResourceStrings_RSDNSTimeout 65230
+#define IdResourceStrings_RSQueryInvalidQueryCount 65231
+#define IdResourceStrings_RSStackEOPNOTSUPP 65232
+#define IdResourceStrings_RSStackEPFNOSUPPORT 65233
+#define IdResourceStrings_RSStackEAFNOSUPPORT 65234
+#define IdResourceStrings_RSStackEADDRINUSE 65235
+#define IdResourceStrings_RSStackEADDRNOTAVAIL 65236
+#define IdResourceStrings_RSStackENETDOWN 65237
+#define IdResourceStrings_RSStackENETUNREACH 65238
+#define IdResourceStrings_RSStackENETRESET 65239
+#define IdResourceStrings_RSStackECONNABORTED 65240
+#define IdResourceStrings_RSStackECONNRESET 65241
+#define IdResourceStrings_RSStackENOBUFS 65242
+#define IdResourceStrings_RSStackEISCONN 65243
+#define IdResourceStrings_RSStackENOTCONN 65244
+#define IdResourceStrings_RSStackESHUTDOWN 65245
+#define IdResourceStrings_RSStackETOOMANYREFS 65246
+#define IdResourceStrings_RSStackETIMEDOUT 65247
+#define IdResourceStrings_RSStackEINTR 65248
+#define IdResourceStrings_RSStackEBADF 65249
+#define IdResourceStrings_RSStackEACCES 65250
+#define IdResourceStrings_RSStackEFAULT 65251
+#define IdResourceStrings_RSStackEINVAL 65252
+#define IdResourceStrings_RSStackEMFILE 65253
+#define IdResourceStrings_RSStackEWOULDBLOCK 65254
+#define IdResourceStrings_RSStackEINPROGRESS 65255
+#define IdResourceStrings_RSStackEALREADY 65256
+#define IdResourceStrings_RSStackENOTSOCK 65257
+#define IdResourceStrings_RSStackEDESTADDRREQ 65258
+#define IdResourceStrings_RSStackEMSGSIZE 65259
+#define IdResourceStrings_RSStackEPROTOTYPE 65260
+#define IdResourceStrings_RSStackENOPROTOOPT 65261
+#define IdResourceStrings_RSStackEPROTONOSUPPORT 65262
+#define IdResourceStrings_RSStackESOCKTNOSUPPORT 65263
 #define IdResourceStrings_RSInvalidPortRange 65264
 #define IdResourceStrings_RSReadTimeout 65265
 #define IdResourceStrings_RSReadLnMaxLineLengthExceeded 65266
 #define IdResourceStrings_RSNoCommandHandlerFound 65267
-#define IdResourceStrings_RSEMailSymbolOutsideAddress 65268
-#define IdResourceStrings_RSWS2CallError 65269
-#define IdResourceStrings_RSWS2LoadError 65270
-#define IdResourceStrings_RSStatusResolving 65271
-#define IdResourceStrings_RSStatusConnecting 65272
-#define IdResourceStrings_RSStatusConnected 65273
-#define IdResourceStrings_RSStatusDisconnecting 65274
-#define IdResourceStrings_RSStatusDisconnected 65275
-#define IdResourceStrings_RSStatusText 65276
-#define IdResourceStrings_RSConnectTimeout 65277
-#define IdResourceStrings_RSInvalidServiceName 65278
-#define IdResourceStrings_RSStackError 65279
+#define IdResourceStrings_RSWS2CallError 65268
+#define IdResourceStrings_RSWS2LoadError 65269
+#define IdResourceStrings_RSStatusResolving 65270
+#define IdResourceStrings_RSStatusConnecting 65271
+#define IdResourceStrings_RSStatusConnected 65272
+#define IdResourceStrings_RSStatusDisconnecting 65273
+#define IdResourceStrings_RSStatusDisconnected 65274
+#define IdResourceStrings_RSStatusText 65275
+#define IdResourceStrings_RSConnectTimeout 65276
+#define IdResourceStrings_RSInvalidServiceName 65277
+#define IdResourceStrings_RSStackError 65278
+#define IdResourceStrings_RSStackInvalidIP 65279
 #define IdResourceStrings_RSConnectionClosedGracefully 65280
 #define IdResourceStrings_RSCouldNotBindSocket 65281
 #define IdResourceStrings_RSNotAllBytesSent 65282
@@ -357,6 +364,15 @@
 #define SysConst_SAccessDenied 65535
 STRINGTABLE
 BEGIN
+	IdResourceStrings_RSThreadTerminateAndWaitFor,	"Cannot call TerminateAndWaitFor on FreeAndTerminate threads"
+	IdSipRegistration_NoSuchRegistrar,	"No such registrar known: %s"
+	IdResourceStrings_RSSocksServerConnectionRefusedError,	"Connection refused."
+	IdResourceStrings_RSSocksServerTTLExpiredError,	"TTL expired."
+	IdResourceStrings_RSSocksServerCommandError,	"Command not supported."
+	IdResourceStrings_RSSocksServerAddressError,	"Address type not supported."
+	IdResourceStrings_RSSSLAcceptError,	"Error accepting connection with SSL."
+	IdResourceStrings_RSSSLConnectError,	"Error connecting with SSL."
+	IdResourceStrings_RSSSLSettingCipherError,	"SetCipher failed."
 	IdResourceStrings_RSSSLCreatingContextError,	"Error creating SSL context."
 	IdResourceStrings_RSSSLLoadingRootCertError,	"Could not load root certificate."
 	IdResourceStrings_RSSSLLoadingCertError,	"Could not load certificate."
@@ -366,8 +382,13 @@ BEGIN
 	IdResourceStrings_RSOSSLModeNotSet,	"Mode has not been set."
 	IdResourceStrings_RSOSSLCouldNotLoadSSLLibrary,	"Could not load SSL library."
 	IdResourceStrings_RSOSSLStatusString,	"SSL status: \"%s\""
-	IdResourceStrings_RSThreadTerminateAndWaitFor,	"Cannot call TerminateAndWaitFor on FreeAndTerminate threads"
-	IdSipRegistration_NoSuchRegistrar,	"No such registrar known: %s"
+	IdResourceStrings_RSQueryInvalidPacketSize,	"Invalid Packet Size %d"
+	IdResourceStrings_RSQueryLessThanFour,	"Received Packet is too small. Less than 4 bytes %d"
+	IdResourceStrings_RSQueryInvalidHeaderID,	"Invalid Header Id %d"
+	IdResourceStrings_RSQueryLessThanTwelve,	"Received Packet is too small. Less than 12 bytes %d"
+	IdResourceStrings_RSQueryPackReceivedTooSmall,	"Received Packet is too small. %d"
+	IdResourceStrings_RSSocksRequestFailed,	"Request rejected or failed."
+	IdResourceStrings_RSSocksRequestServerFailed,	"Request rejected because SOCKS server cannot connect."
 	IdResourceStrings_RSSocksRequestIdentFailed,	"Request rejected because the client program and identd report different user-ids."
 	IdResourceStrings_RSSocksUnknownError,	"Unknown socks error."
 	IdResourceStrings_RSSocksServerRespondError,	"Socks server did not respond."
@@ -377,14 +398,6 @@ BEGIN
 	IdResourceStrings_RSSocksServerPermissionError,	"Connection not allowed by ruleset."
 	IdResourceStrings_RSSocksServerNetUnreachableError,	"Network unreachable."
 	IdResourceStrings_RSSocksServerHostUnreachableError,	"Host unreachable."
-	IdResourceStrings_RSSocksServerConnectionRefusedError,	"Connection refused."
-	IdResourceStrings_RSSocksServerTTLExpiredError,	"TTL expired."
-	IdResourceStrings_RSSocksServerCommandError,	"Command not supported."
-	IdResourceStrings_RSSocksServerAddressError,	"Address type not supported."
-	IdResourceStrings_RSSSLAcceptError,	"Error accepting connection with SSL."
-	IdResourceStrings_RSSSLConnectError,	"Error connecting with SSL."
-	IdResourceStrings_RSSSLSettingCipherError,	"SetCipher failed."
-	IdResourceStrings_RSStackETIMEDOUT,	"Connection timed out."
 	IdResourceStrings_RSStackECONNREFUSED,	"Connection refused."
 	IdResourceStrings_RSStackELOOP,	"Too many levels of symbolic links."
 	IdResourceStrings_RSStackENAMETOOLONG,	"File name too long."
@@ -398,9 +411,9 @@ BEGIN
 	IdResourceStrings_RSCodeQueryName,	"DNS Server Reports Query Name Error"
 	IdResourceStrings_RSCodeQueryNotImplemented,	"DNS Server Reports Query Not Implemented Error"
 	IdResourceStrings_RSCodeQueryQueryRefused,	"DNS Server Reports Query Refused Error"
-	IdResourceStrings_RSSocksRequestFailed,	"Request rejected or failed."
-	IdResourceStrings_RSSocksRequestServerFailed,	"Request rejected because SOCKS server cannot connect."
-	IdResourceStrings_RSStackESOCKTNOSUPPORT,	"Socket type not supported."
+	IdResourceStrings_RSCodeQueryUnknownError,	"Server Returned Unknown Error"
+	IdResourceStrings_RSDNSTimeout,	"TimedOut"
+	IdResourceStrings_RSQueryInvalidQueryCount,	"Invalid Query Count %d"
 	IdResourceStrings_RSStackEOPNOTSUPP,	"Operation not supported on socket."
 	IdResourceStrings_RSStackEPFNOSUPPORT,	"Protocol family not supported."
 	IdResourceStrings_RSStackEAFNOSUPPORT,	"Address family not supported by protocol family."
@@ -416,7 +429,7 @@ BEGIN
 	IdResourceStrings_RSStackENOTCONN,	"Socket is not connected."
 	IdResourceStrings_RSStackESHUTDOWN,	"Cannot send or receive after socket is closed."
 	IdResourceStrings_RSStackETOOMANYREFS,	"Too many references, cannot splice."
-	IdResourceStrings_RSStackInvalidIP,	"%s is not a valid IP address."
+	IdResourceStrings_RSStackETIMEDOUT,	"Connection timed out."
 	IdResourceStrings_RSStackEINTR,	"Interrupted system call."
 	IdResourceStrings_RSStackEBADF,	"Bad file number."
 	IdResourceStrings_RSStackEACCES,	"Access denied."
@@ -432,11 +445,11 @@ BEGIN
 	IdResourceStrings_RSStackEPROTOTYPE,	"Protocol wrong type for socket."
 	IdResourceStrings_RSStackENOPROTOOPT,	"Bad protocol option."
 	IdResourceStrings_RSStackEPROTONOSUPPORT,	"Protocol not supported."
+	IdResourceStrings_RSStackESOCKTNOSUPPORT,	"Socket type not supported."
 	IdResourceStrings_RSInvalidPortRange,	"Invalid Port Range (%d - %d)"
 	IdResourceStrings_RSReadTimeout,	"Read Timeout"
 	IdResourceStrings_RSReadLnMaxLineLengthExceeded,	"Max line length exceeded."
 	IdResourceStrings_RSNoCommandHandlerFound,	"No command handler found."
-	IdResourceStrings_RSEMailSymbolOutsideAddress,	"@ Outside address"
 	IdResourceStrings_RSWS2CallError,	"Error on call Winsock2 library function %s"
 	IdResourceStrings_RSWS2LoadError,	"Error on loading Winsock2 library (%s)"
 	IdResourceStrings_RSStatusResolving,	"Resolving hostname %s."
@@ -448,6 +461,7 @@ BEGIN
 	IdResourceStrings_RSConnectTimeout,	"Connect timed out."
 	IdResourceStrings_RSInvalidServiceName,	"%s is not a valid service."
 	IdResourceStrings_RSStackError,	"Socket Error # %d\r\n%s"
+	IdResourceStrings_RSStackInvalidIP,	"%s is not a valid IP address."
 	IdResourceStrings_RSConnectionClosedGracefully,	"Connection Closed Gracefully."
 	IdResourceStrings_RSCouldNotBindSocket,	"Could not bind socket. Address and port are already in use."
 	IdResourceStrings_RSNotAllBytesSent,	"Not all bytes sent."
