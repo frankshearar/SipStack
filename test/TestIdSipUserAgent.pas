@@ -76,7 +76,8 @@ type
     procedure OnProgressedSession(Session: TIdSipSession;
                                   Progress: TIdSipResponse);
     procedure OnReferral(Session: TIdSipSession;
-                         Refer: TIdSipRequest);
+                         Refer: TIdSipRequest;
+                         Receiver: TIdSipTransport);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport;
                             Destination: TIdSipLocation);
@@ -463,7 +464,8 @@ begin
 end;
 
 procedure TestTIdSipUserAgent.OnReferral(Session: TIdSipSession;
-                                         Refer: TIdSipRequest);
+                                         Refer: TIdSipRequest;
+                                         Receiver: TIdSipTransport);
 begin
 end;
 
@@ -2074,8 +2076,6 @@ begin
 end;
 
 procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithUseGruu;
-var
-  UA: TIdSipUserAgent;
 begin
   Self.CheckUseGruuWithValue('true');
   Self.CheckUseGruuWithValue('TRUE');
