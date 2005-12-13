@@ -7592,6 +7592,9 @@ procedure TIdSipMessage.Assign(Src: TPersistent);
 var
   S: TIdSipMessage;
 begin
+  // Foo.Assign(Foo) should do nothing.
+  if (Self = Src) then Exit;
+
   if (Src is TIdSipMessage) then begin
     S := Src as TIdSipMessage;
 

@@ -73,6 +73,7 @@ type
     procedure TestAddHeaders;
     procedure TestAssignCopiesBody;
     procedure TestAssignCopiesParseInfo;
+    procedure TestAssignToSelfDoesNothing;
     procedure TestClearHeaders;
     procedure TestContactCount;
     procedure TestCopyHeaders;
@@ -846,6 +847,22 @@ begin
   finally
     S.Free;
   end;
+end;
+
+procedure TestTIdSipMessage.TestAssignToSelfDoesNothing;
+var
+  OriginalAsString: String;
+begin
+  // This adds a header, exposing an old bug where Foo.Assign(Foo) would erase
+  // all headers in Foo instead of the expected no-op.
+  Self.Msg.CallID := 'a-call-id';
+
+  OriginalAsString := Self.Msg.AsString;
+  Self.Msg.Assign(Self.Msg);
+
+  CheckEquals(OriginalAsString,
+              Self.Msg.AsString,
+              'Self-assigning ruined message');
 end;
 
 procedure TestTIdSipMessage.TestClearHeaders;
