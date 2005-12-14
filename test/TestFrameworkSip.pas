@@ -372,6 +372,7 @@ type
     fProgressedSession:        Boolean;
     fProgressParam:            TIdSipResponse;
     fReasonParam:              String;
+    fReceiverParam:            TIdSipTransport;
     fRedirect:                 Boolean;
     fReferParam:               TIdSipRequest;
     fReferral:                 Boolean;
@@ -397,7 +398,8 @@ type
     procedure OnProgressedSession(Session: TIdSipSession;
                                   Progress: TIdSipResponse);
     procedure OnReferral(Session: TIdSipSession;
-                         Refer: TIdSipRequest);
+                         Refer: TIdSipRequest;
+                         Receiver: TIdSipTransport);
 
     property AnswerParam:              TIdSipResponse      read fAnswerParam;
     property EndedSession:             Boolean             read fEndedSession;
@@ -410,6 +412,7 @@ type
     property ProgressParam:            TIdSipResponse      read fProgressParam;
     property ProgressedSession:        Boolean             read fProgressedSession;
     property ReasonParam:              String              read fReasonParam;
+    property ReceiverParam:            TIdSipTransport     read fReceiverParam;
     property Redirect:                 Boolean             read fRedirect;
     property ReferParam:               TIdSipRequest       read fReferParam;
     property Referral:                 Boolean             read fReferral;
@@ -1802,11 +1805,13 @@ begin
 end;
 
 procedure TIdSipTestSessionListener.OnReferral(Session: TIdSipSession;
-                                               Refer: TIdSipRequest);
+                                               Refer: TIdSipRequest;
+                                               Receiver: TIdSipTransport);
 begin
-  Self.fReferral     := true;
-  Self.fReferParam   := Refer;
-  Self.fSessionParam := Session;
+  Self.fReferral      := true;
+  Self.fReferParam    := Refer;
+  Self.fSessionParam  := Session;
+  Self.fReceiverParam := Receiver;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnReferral');

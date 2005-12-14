@@ -36,7 +36,8 @@ type
     procedure OnProgressedSession(Session: TIdSipSession;
                                   Progress: TIdSipResponse);
     procedure OnReferral(Session: TIdSipSession;
-                         Refer: TIdSipRequest);
+                         Refer: TIdSipRequest;
+                         Receiver: TIdSipTransport);
     procedure ReceiveMovedTemporarily(Invite: TIdSipRequest;
                                       const Contacts: array of String); overload;
     procedure ReceiveMovedTemporarily(const Contacts: array of String); overload;
@@ -293,7 +294,8 @@ type
     procedure OnProgressedSession(Session: TIdSipSession;
                                   Progress: TIdSipResponse); virtual;
     procedure OnReferral(Session: TIdSipSession;
-                         Refer: TIdSipRequest);
+                         Refer: TIdSipRequest;
+                         Receiver: TIdSipTransport);
     procedure ReceiveRemoteReInvite(Session: TIdSipSession);
     procedure ResendWith(Session: TIdSipSession;
                          AuthenticationChallenge: TIdSipResponse);
@@ -753,7 +755,8 @@ begin
 end;
 
 procedure TestDebug.OnReferral(Session: TIdSipSession;
-                               Refer: TIdSipRequest);
+                               Refer: TIdSipRequest;
+                               Receiver: TIdSipTransport);
 begin
 end;
 
@@ -3229,7 +3232,8 @@ begin
 end;
 
 procedure TestTIdSipSession.OnReferral(Session: TIdSipSession;
-                                       Refer: TIdSipRequest);
+                                       Refer: TIdSipRequest;
+                                       Receiver: TIdSipTransport);
 begin
   Self.OnReferralFired := true;
 end;
@@ -7025,8 +7029,9 @@ begin
   Self.Method := TIdSipSessionReferralMethod.Create;
   Self.Refer  :=  TIdSipRequest.Create;
 
-  Self.Method.Refer   := Self.Refer;
-  Self.Method.Session := Self.Session;
+  Self.Method.Refer     := Self.Refer;
+  Self.Method.Session   := Self.Session;
+  Self.Method.Transport := Self.UA.Dispatcher.Transports[0];
 end;
 
 procedure TestTIdSipSessionReferralMethod.TearDown;
@@ -7049,6 +7054,8 @@ begin
         'Refer param');
   Check(Self.Method.Session = Self.Listener.SessionParam,
         'Session param');
+  Check(Self.Method.Transport = Self.UA.Dispatcher.Transports[0],
+        'Receiver param');      
 end;
 
 initialization

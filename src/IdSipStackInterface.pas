@@ -149,7 +149,8 @@ type
                                 Receiver: TIdSipTransport;
                                 Source: TIdSipConnectionBindings);
     procedure OnReferral(Session: TIdSipSession;
-                         Refer: TIdSipRequest);
+                         Refer: TIdSipRequest;
+                         Receiver: TIdSipTransport);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure OnRenewedSubscription(UserAgent: TIdSipAbstractCore;
@@ -184,6 +185,7 @@ type
                          const ContentType: String);
     procedure Authenticate(ActionHandle: TIdSipHandle;
                            Credentials: TIdSipAuthorizationHeader);
+    function  GruuOf(ActionHandle: TIdSipHandle): String;
     procedure HangUp(ActionHandle: TIdSipHandle);
 //    function  MakeBlindTransfer(Call: TIdSipHandle;
 //                                NewTarget: TIdSipAddressHeader): TIdSipHandle;
@@ -235,8 +237,8 @@ type
   TIdInformationalData = class(TIdEventData)
   private
     fErrorCode: Cardinal;
-
-    fReason: String;
+    fReason:    String;
+    
     procedure SetErrorCode(Value: Cardinal);
   protected
     function Data: String; override;
@@ -456,14 +458,14 @@ type
 
   TIdSubscriptionRequestData = class(TIdEventData)
   private
-    fContact:      TIdSipContactHeader;
-    fEventPackage: String;
-    fFrom:         TIdSipFromHeader;
-    fReferTo:      TIdSipReferToHeader;
+    fEventPackage:  String;
+    fFrom:          TIdSipFromHeader;
+    fReferTo:       TIdSipReferToHeader;
+    fRemoteContact: TIdSipContactHeader;
 
-    procedure SetContact(Value: TIdSipContactHeader);
     procedure SetFrom(Value: TIdSipFromHeader);
     procedure SetReferTo(Value: TIdSipReferToHeader);
+    procedure SetRemoteContact(Value: TIdSipContactHeader);
   protected
     function Data: String; override;
     function EventName: String; override;
@@ -473,10 +475,21 @@ type
 
     procedure Assign(Src: TPersistent); override;
 
-    property Contact:      TIdSipContactHeader read fContact write SetContact;
-    property EventPackage: String              read fEventPackage write fEventPackage;
-    property From:         TIdSipFromHeader    read fFrom write SetFrom;
-    property ReferTo:      TIdSipReferToHeader read fReferTo write SetReferTo;
+    property EventPackage:  String              read fEventPackage write fEventPackage;
+    property From:          TIdSipFromHeader    read fFrom write SetFrom;
+    property ReferTo:       TIdSipReferToHeader read fReferTo write SetReferTo;
+    property RemoteContact: TIdSipContactHeader read fRemoteContact write SetRemoteContact;
+  end;
+
+  // ReferAction contains the handle of the TIdSipInboundReferral that the stack
+  // has allocated to handling this request.
+  TIdSessionReferralData = class(TIdSubscriptionRequestData)
+  private
+    fReferAction: TIdSipHandle;
+  public
+    procedure Assign(Src: TPersistent); override;
+
+    property ReferAction: TIdSipHandle read fReferAction write fReferAction;
   end;
 
   TIdSubscriptionData = class(TIdEventData)
@@ -541,11 +554,12 @@ const
   CM_CALL_REMOTE_MODIFY_REQUEST   = CM_BASE + 6;
   CM_CALL_OUTBOUND_MODIFY_SUCCESS = CM_BASE + 7;
   CM_CALL_PROGRESS                = CM_BASE + 8;
-  CM_AUTHENTICATION_CHALLENGE     = CM_BASE + 9;
-  CM_SUBSCRIPTION_ESTABLISHED     = CM_BASE + 10;
-  CM_SUBSCRIPTION_RECV_NOTIFY     = CM_BASE + 11;
-  CM_SUBSCRIPTION_EXPIRED         = CM_BASE + 12;
-  CM_SUBSCRIPTION_REQUEST_NOTIFY  = CM_BASE + 13;
+  CM_CALL_REFERRAL                = CM_BASE + 9;
+  CM_AUTHENTICATION_CHALLENGE     = CM_BASE + 10;
+  CM_SUBSCRIPTION_ESTABLISHED     = CM_BASE + 11;
+  CM_SUBSCRIPTION_RECV_NOTIFY     = CM_BASE + 12;
+  CM_SUBSCRIPTION_EXPIRED         = CM_BASE + 13;
+  CM_SUBSCRIPTION_REQUEST_NOTIFY  = CM_BASE + 14;
 
   CM_DEBUG = CM_BASE + 10000;
 
@@ -718,6 +732,20 @@ begin
     Action := Self.GetAndCheckAction(ActionHandle, TIdSipAction);
 
     Action.Resend(Credentials);
+  finally
+    Self.ActionLock.Release;
+  end;
+end;
+
+function TIdSipStackInterface.GruuOf(ActionHandle: TIdSipHandle): String;
+var
+  Action: TIdSipAction;
+begin
+  Self.ActionLock.Acquire;
+  try
+    Action := Self.GetAndCheckAction(ActionHandle, TIdSipSession);
+
+    Result := Action.LocalGruu.FullValue;
   finally
     Self.ActionLock.Release;
   end;
@@ -1393,8 +1421,27 @@ begin
 end;
 
 procedure TIdSipStackInterface.OnReferral(Session: TIdSipSession;
-                                          Refer: TIdSipRequest);
+                                          Refer: TIdSipRequest;
+                                          Receiver: TIdSipTransport);
+var
+  Data:     TIdSessionReferralData;
+  Referral: TIdSipAction;
 begin
+  Data := TIdSessionReferralData.Create;
+  try
+    Referral := Self.UserAgent.AddInboundAction(Refer, Receiver);
+
+    Data.Handle        := Self.HandleFor(Session);
+    Data.EventPackage  := Refer.Event.EventType;
+    Data.From          := Refer.From;
+    Data.ReferTo       := Refer.ReferTo;
+    Data.ReferAction   := Self.HandleFor(Referral);
+    Data.RemoteContact := Refer.FirstContact;
+
+    Self.NotifyEvent(Session, CM_CALL_REFERRAL, Data);
+  finally
+    Data.Free;
+  end;
 end;
 
 procedure TIdSipStackInterface.OnRejectedMessage(const Msg: String;
@@ -1445,11 +1492,11 @@ begin
 
   Data := TIdSubscriptionRequestData.Create;
   try
-    Data.Handle       := Self.HandleFor(Subscription);
-    Data.Contact      := Subscription.InitialRequest.FirstContact;
-    Data.EventPackage := Subscription.EventPackage;
-    Data.From         := Subscription.InitialRequest.From;
-    Data.ReferTo      := Subscription.InitialRequest.ReferTo;
+    Data.Handle        := Self.HandleFor(Subscription);
+    Data.EventPackage  := Subscription.EventPackage;
+    Data.From          := Subscription.InitialRequest.From;
+    Data.ReferTo       := Subscription.InitialRequest.ReferTo;
+    Data.RemoteContact := Subscription.InitialRequest.FirstContact;
 
     Self.NotifyEvent(Subscription, CM_SUBSCRIPTION_REQUEST_NOTIFY, Data);
   finally
@@ -2123,16 +2170,16 @@ constructor TIdSubscriptionRequestData.Create;
 begin
   inherited Create;
 
-  Self.fContact := TIdSipContactHeader.Create;
-  Self.fFrom    := TIdSipFromHeader.Create;
-  Self.fReferTo := TIdSipReferToHeader.Create;
+  Self.fFrom          := TIdSipFromHeader.Create;
+  Self.fReferTo       := TIdSipReferToHeader.Create;
+  Self.fRemoteContact := TIdSipContactHeader.Create;
 end;
 
 destructor TIdSubscriptionRequestData.Destroy;
 begin
+  Self.fRemoteContact.Free;
   Self.fReferTo.Free;
   Self.fFrom.Free;
-  Self.fContact.Free;
 
   inherited Destroy;
 end;
@@ -2146,10 +2193,10 @@ begin
   if (Src is TIdSubscriptionRequestData) then begin
     Other := Src as TIdSubscriptionRequestData;
 
-    Self.Contact      := Other.Contact;
-    Self.EventPackage := Other.EventPackage;
-    Self.From         := Other.From;
-    Self.ReferTo      := Other.ReferTo;
+    Self.EventPackage  := Other.EventPackage;
+    Self.From          := Other.From;
+    Self.ReferTo       := Other.ReferTo;
+    Self.RemoteContact := Other.RemoteContact;
   end;
 end;
 
@@ -2160,7 +2207,7 @@ begin
   Result := Self.ReferTo.AsString + CRLF
           + 'Event: ' + Self.EventPackage + CRLF
           + Self.From.AsString + CRLF
-          + Self.Contact.AsString + CRLF; 
+          + Self.RemoteContact.AsString + CRLF;
 end;
 
 function TIdSubscriptionRequestData.EventName: String;
@@ -2170,11 +2217,6 @@ end;
 
 //* TIdSubscriptionRequestData Private methods *********************************
 
-procedure TIdSubscriptionRequestData.SetContact(Value: TIdSipContactHeader);
-begin
-  Self.fContact.Assign(Value);
-end;
-
 procedure TIdSubscriptionRequestData.SetFrom(Value: TIdSipFromHeader);
 begin
   Self.fFrom.Assign(Value);
@@ -2183,6 +2225,28 @@ end;
 procedure TIdSubscriptionRequestData.SetReferTo(Value: TIdSipReferToHeader);
 begin
   Self.fReferTo.Assign(Value);
+end;
+
+procedure TIdSubscriptionRequestData.SetRemoteContact(Value: TIdSipContactHeader);
+begin
+  Self.fRemoteContact.Assign(Value);
+end;
+
+//******************************************************************************
+//* TIdSessionReferralData                                                     *
+//******************************************************************************
+//* TIdSessionReferralData Public methods **************************************
+
+procedure TIdSessionReferralData.Assign(Src: TPersistent);
+var
+  Other: TIdSessionReferralData;
+begin
+  inherited Assign(Src);
+
+  if (Src is TIdSessionReferralData) then begin
+    Other := Src as TIdSessionReferralData;
+    Self.ReferAction := Other.ReferAction;
+  end;
 end;
 
 //******************************************************************************

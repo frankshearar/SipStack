@@ -143,6 +143,7 @@ object SingleCore: TSingleCore
       Height = 25
       Action = RefreshConfigAction
       TabOrder = 6
+      OnClick = RefreshConfigClick
     end
     object Answer: TButton
       Left = 75

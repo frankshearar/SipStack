@@ -54,6 +54,7 @@ type
     procedure CMCALL_ENDED(var Msg: TIdSipEventMessage); message CM_CALL_ENDED;
     procedure CMCALL_ESTABLISHED(var Msg: TIdSipEventMessage); message CM_CALL_ESTABLISHED;
     procedure CMCALL_PROGRESS(var Msg: TIdSipEventMessage); message CM_CALL_PROGRESS;
+    procedure CMCALL_REFERRAL(var Msg: TIdSipEventMessage); message CM_CALL_REFERRAL;
     procedure CMCALL_REMOTE_MODIFY_REQUEST(var Msg: TIdSipEventMessage); message CM_CALL_REMOTE_MODIFY_REQUEST;
     procedure CMCALL_OUTBOUND_MODIFY_SUCCESS(var Msg: TIdSipEventMessage); message CM_CALL_OUTBOUND_MODIFY_SUCCESS;
     procedure CMSUBSCRIPTION_ESTABLISHED(var Msg: TIdSipEventMessage); message CM_SUBSCRIPTION_ESTABLISHED;
@@ -66,7 +67,9 @@ type
     procedure CMDEBUG_TRANSPORT_EXCEPTION(var Msg: TIdSipEventMessage); message CM_DEBUG_TRANSPORT_EXCEPTION;
 
     procedure Log(Data: TIdEventData);
+    procedure MarkReferral(Data: TIdSubscriptionRequestData);
     procedure NotifyOfCallProgress(Data: TIdSessionProgressData);
+    procedure NotifyOfCallReferral(Data: TIdSessionReferralData);
     procedure NotifyOfDroppedMessage(Data: TIdDebugMessageData);
     procedure NotifyOfEndedCall(Data: TIdCallEndedData);
     procedure NotifyOfEstablishedCall(Data: TIdSessionData);
@@ -167,6 +170,11 @@ begin
   Self.ReceiveNotify(Msg.Data);
 end;
 
+procedure TSingleCore.CMCALL_REFERRAL(var Msg: TIdSipEventMessage);
+begin
+  Self.ReceiveNotify(Msg.Data);
+end;
+
 procedure TSingleCore.CMCALL_REMOTE_MODIFY_REQUEST(var Msg: TIdSipEventMessage);
 begin
   Self.ReceiveNotify(Msg.Data);
@@ -222,8 +230,21 @@ begin
   Self.MessageLog.Lines.Text := Self.MessageLog.Lines.Text + Data.AsString;
 end;
 
+procedure TSingleCore.MarkReferral(Data: TIdSubscriptionRequestData);
+begin
+  if (Data.EventPackage = PackageRefer) then begin
+    Self.ReferTo.Assign(Data.ReferTo);
+    Self.ReferredResourceLabel.Caption := Data.ReferTo.AsString;
+  end;
+end;
+
 procedure TSingleCore.NotifyOfCallProgress(Data: TIdSessionProgressData);
 begin
+end;
+
+procedure TSingleCore.NotifyOfCallReferral(Data: TIdSessionReferralData);
+begin
+  Self.MarkReferral(Data);
 end;
 
 procedure TSingleCore.NotifyOfDroppedMessage(Data: TIdDebugMessageData);
@@ -287,10 +308,7 @@ end;
 
 procedure TSingleCore.NotifyOfSubscriptionRequest(Data: TIdSubscriptionRequestData);
 begin
-  if (Data.EventPackage = PackageRefer) then begin
-    Self.ReferTo.Assign(Data.ReferTo);
-    Self.ReferredResourceLabel.Caption := Data.ReferTo.AsString;
-  end;
+  Self.MarkReferral(Data);
 end;
 
 procedure TSingleCore.ReceiveNotify(Data: TIdSipStackInterfaceEventMethod);
@@ -302,6 +320,7 @@ begin
       CM_CALL_ENDED:          Self.NotifyOfEndedCall(Data.Data as TIdCallEndedData);
       CM_CALL_ESTABLISHED:    Self.NotifyOfEstablishedCall(Data.Data as TIdSessionData);
       CM_CALL_PROGRESS:       Self.NotifyOfCallProgress(Data.Data as TIdSessionProgressData);
+      CM_CALL_REFERRAL:       Self.NotifyOfCallReferral(Data.Data as TIdSessionReferralData);
       CM_CALL_REMOTE_MODIFY_REQUEST:
                               Self.NotifyOfRemoteModifyRequest(Data.Data as TIdSessionData);
       CM_CALL_REQUEST_NOTIFY: Self.NotifyOfIncomingCall(Data.Data as TIdSessionData);

@@ -4,7 +4,7 @@ interface
 
 uses
   Classes, Contnrs, IdNotification, IdSipCore, IdSipDialog, IdSipDialogID,
-  IdSipMessage, SyncObjs;
+  IdSipMessage, IdSipTransport, SyncObjs;
 
 type
   TIdSipInboundInvite = class;
@@ -55,6 +55,7 @@ type
   // * OnProgressedSession tells us of any provisional responses received by
   //   this session's Invites. This INCLUDES provisional responses to
   //   ModifyInvites.
+  // * OnReferral indicates I've received an in-dialog REFER.
   IIdSipSessionListener = interface(IIdSipActionListener)
     ['{59B3C476-D3CA-4C5E-AA2B-2BB587A5A716}']
     procedure OnEndedSession(Session: TIdSipSession;
@@ -71,7 +72,8 @@ type
     procedure OnProgressedSession(Session: TIdSipSession;
                                   Progress: TIdSipResponse);
     procedure OnReferral(Session: TIdSipSession;
-                         Refer: TIdSipRequest);
+                         Refer: TIdSipRequest;
+                         Receiver: TIdSipTransport);
   end;
 
   TIdSipInboundSession = class;
@@ -484,6 +486,7 @@ type
     InitialInvite: TIdSipInboundInvite;
 
     function CreateInboundDialog(Response: TIdSipResponse): TIdSipDialog;
+    function MatchesLocalGruu(Msg: TIdSipMessage): Boolean;
     function MatchReplaces(Request: TIdSipRequest): Boolean;
   protected
     function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID; override;
@@ -715,11 +718,13 @@ type
 
   TIdSipSessionReferralMethod = class(TIdSipSessionMethod)
   private
-    fRefer: TIdSipRequest;
+    fRefer:     TIdSipRequest;
+    fTransport: TIdSipTransport;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Refer: TIdSipRequest read fRefer write fRefer;
+    property Refer:     TIdSipRequest   read fRefer write fRefer;
+    property Transport: TIdSipTransport read fTransport write fTransport;
   end;
 
   // We subclass TIdSipEstablishedSessionMethod solely for reusing
@@ -2662,11 +2667,11 @@ begin
     Result := Self.InitialRequest.MatchCancel(Msg as TIdSipRequest)
   else if Msg.IsRequest and Msg.HasHeader(ReplacesHeader) then
     Result := Self.MatchReplaces(Msg as TIdSipRequest)
-  else if Msg.IsRequest and (Msg as TIdSipRequest).RequestUri.HasGrid then
-    Result := Self.LocalGruu.Grid = (Msg as TIdSipRequest).RequestUri.Grid
   else begin
-    Result := not Self.InitialRequest.Equals(Msg)
-          and Self.DialogMatches(Msg);
+    // Match anything directed at our LocalGRUU or shares our dialog
+    Result := Self.MatchesLocalGruu(Msg)
+          or (not Self.InitialRequest.Equals(Msg)
+              and Self.DialogMatches(Msg));
   end;
 end;
 
@@ -2840,6 +2845,21 @@ begin
                                              Response,
                                              Self.UsingSecureTransport);
   Result.ReceiveResponse(Response);
+end;
+
+function TIdSipInboundSession.MatchesLocalGruu(Msg: TIdSipMessage): Boolean;
+begin
+  Result := Msg.IsRequest;
+
+  if Result then begin
+    Result := Result
+          and (Msg as TIdSipRequest).RequestUri.HasGrid;
+
+    if Result then begin
+      Result := Result
+          and (Self.LocalGruu.Grid = (Msg as TIdSipRequest).RequestUri.Grid);
+    end;
+  end;
 end;
 
 function TIdSipInboundSession.MatchReplaces(Request: TIdSipRequest): Boolean;
@@ -3459,7 +3479,8 @@ end;
 procedure TIdSipSessionReferralMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipSessionListener).OnReferral(Self.Session,
-                                                Self.Refer);
+                                                Self.Refer,
+                                                Self.Transport);
 end;
 
 end.

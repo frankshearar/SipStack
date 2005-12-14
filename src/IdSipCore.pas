@@ -311,8 +311,6 @@ type
                            Receiver: TIdSipTransport); virtual;
     procedure ActOnResponse(Response: TIdSipResponse;
                             Receiver: TIdSipTransport); virtual;
-    function  AddInboundAction(Request: TIdSipRequest;
-                               Receiver: TIdSipTransport): TIdSipAction; overload;
     function  CreateActionsClosure(ClosureType: TIdSipActionsWaitClass;
                                    Msg: TIdSipMessage): TIdSipActionsWait;
     function  ListHasUnknownValue(Request: TIdSipRequest;
@@ -339,6 +337,8 @@ type
 
     procedure AddAllowedLanguage(const LanguageID: String);
     procedure AddAllowedScheme(const Scheme: String);
+    function  AddInboundAction(Request: TIdSipRequest;
+                               Receiver: TIdSipTransport): TIdSipAction; 
     procedure AddLocalHeaders(OutboundRequest: TIdSipRequest); virtual;
     function  AddModule(ModuleType: TIdSipMessageModuleClass): TIdSipMessageModule;
     procedure AddObserver(const Listener: IIdObserver);
@@ -1371,6 +1371,24 @@ begin
     Self.AllowedSchemeList.Add(Scheme);
 end;
 
+function TIdSipAbstractCore.AddInboundAction(Request: TIdSipRequest;
+                                             Receiver: TIdSipTransport): TIdSipAction;
+var
+  Module: TIdSipMessageModule;
+begin
+  Module := Self.ModuleFor(Request);
+
+  if Assigned(Module) then begin
+    Result := Module.Accept(Request, Receiver.IsSecure);
+
+    if Assigned(Result) then begin
+      Self.Actions.Add(Result);
+    end;
+  end
+  else
+    Result := nil;
+end;
+
 procedure TIdSipAbstractCore.AddLocalHeaders(OutboundRequest: TIdSipRequest);
 var
   Transport: String;
@@ -1982,24 +2000,6 @@ begin
   finally
     Actor.Free;
   end;
-end;
-
-function TIdSipAbstractCore.AddInboundAction(Request: TIdSipRequest;
-                                             Receiver: TIdSipTransport): TIdSipAction;
-var
-  Module: TIdSipMessageModule;
-begin
-  Module := Self.ModuleFor(Request);
-
-  if Assigned(Module) then begin
-    Result := Module.Accept(Request, Receiver.IsSecure);
-
-    if Assigned(Result) then begin
-      Self.Actions.Add(Result);
-    end;
-  end
-  else
-    Result := nil;
 end;
 
 function TIdSipAbstractCore.CreateActionsClosure(ClosureType: TIdSipActionsWaitClass;

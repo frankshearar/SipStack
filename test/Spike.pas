@@ -176,7 +176,8 @@ type
                                 Receiver: TIdSipTransport;
                                 Source: TIdSipConnectionBindings);
     procedure OnReferral(Session: TIdSipSession;
-                         Refer: TIdSipRequest);
+                         Refer: TIdSipRequest;
+                         Receiver: TIdSipTransport);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure OnResponse(OptionsAgent: TIdSipOutboundOptions;
@@ -592,9 +593,10 @@ begin
 end;
 
 procedure TrnidSpike.OnReferral(Session: TIdSipSession;
-                                Refer: TIdSipRequest);
+                                Refer: TIdSipRequest;
+                                Receiver: TIdSipTransport);
 begin
-end;                                
+end;
 
 procedure TrnidSpike.OnRejectedMessage(const Msg: String;
                                        const Reason: String);

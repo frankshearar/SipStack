@@ -311,6 +311,16 @@ type
     procedure TestCopy;
   end;
 
+  TestTIdSessionReferralData = class(TTestCase)
+  private
+    Data: TIdSessionReferralData;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCopy;
+  end;
+
   TestTIdSubscriptionData = class(TTestCase)
   private
     Data: TIdSubscriptionData;
@@ -355,6 +365,7 @@ begin
   Result.AddTest(TestTIdSessionProgressData.Suite);
   Result.AddTest(TestTIdSessionData.Suite);
   Result.AddTest(TestTIdSubscriptionRequestData.Suite);
+  Result.AddTest(TestTIdSessionReferralData.Suite);
   Result.AddTest(TestTIdSubscriptionData.Suite);
 end;
 
@@ -1778,6 +1789,112 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSubscriptionRequestData                                             *
+//******************************************************************************
+//* TestTIdSubscriptionRequestData Public methods ******************************
+
+procedure TestTIdSubscriptionRequestData.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Data := TIdSubscriptionRequestData.Create;
+  Self.Data.EventPackage        := PackageRefer;
+  Self.Data.From.Value          := 'Case <sip:case@fried-neurons.org>';
+  Self.Data.ReferTo.Value       := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna';
+  Self.Data.RemoteContact.Value := 'sip:machine-1@internet-cafe.org>';
+end;
+
+procedure TestTIdSubscriptionRequestData.TearDown;
+begin
+  Self.Data.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSubscriptionRequestData Published methods ***************************
+
+procedure TestTIdSubscriptionRequestData.TestCopy;
+var
+  Copy: TIdSubscriptionRequestData;
+begin
+  Copy := Self.Data.Copy as TIdSubscriptionRequestData;
+  try
+    CheckEquals(IntToHex(Self.Data.Handle, 8),
+                IntToHex(Copy.Handle, 8),
+                'Handle');
+    CheckEquals(Self.Data.EventPackage,
+                Copy.EventPackage,
+                'EventPackage');
+    CheckEquals(Self.Data.From.FullValue,
+                Copy.From.FullValue,
+                'From');
+    CheckEquals(Self.Data.ReferTo.FullValue,
+                Copy.ReferTo.FullValue,
+                'ReferTo');
+    CheckEquals(Self.Data.RemoteContact.FullValue,
+                Copy.RemoteContact.FullValue,
+                'RemoteContact');
+  finally
+    Copy.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSessionReferralData                                                 *
+//******************************************************************************
+//* TestTIdSessionReferralData Public methods **********************************
+
+procedure TestTIdSessionReferralData.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Data := TIdSessionReferralData.Create;
+  Self.Data.EventPackage        := PackageRefer;
+  Self.Data.From.Value          := 'Case <sip:case@fried-neurons.org>';
+  Self.Data.ReferTo.Value       := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna';
+  Self.Data.ReferAction         := $decafbad;
+  Self.Data.RemoteContact.Value := 'sip:machine-1@internet-cafe.org>';
+end;
+
+procedure TestTIdSessionReferralData.TearDown;
+begin
+  Self.Data.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSessionReferralData Published methods *******************************
+
+procedure TestTIdSessionReferralData.TestCopy;
+var
+  Copy: TIdSessionReferralData;
+begin
+  Copy := Self.Data.Copy as TIdSessionReferralData;
+  try
+    CheckEquals(IntToHex(Self.Data.Handle, 8),
+                IntToHex(Copy.Handle, 8),
+                'Handle');
+    CheckEquals(Self.Data.EventPackage,
+                Copy.EventPackage,
+                'EventPackage');
+    CheckEquals(Self.Data.From.FullValue,
+                Copy.From.FullValue,
+                'From');
+    CheckEquals(Self.Data.ReferTo.FullValue,
+                Copy.ReferTo.FullValue,
+                'ReferTo');
+    CheckEquals(IntToHex(Self.Data.ReferAction, 8),
+                IntToHex(Copy.ReferAction, 8),
+                'ReferAction');
+    CheckEquals(Self.Data.RemoteContact.FullValue,
+                Copy.RemoteContact.FullValue,
+                'RemoteContact');
+  finally
+    Copy.Free;
+  end;
+end;
+
+//******************************************************************************
 //* TestTIdSubscriptionData                                                    *
 //******************************************************************************
 //* TestTIdSubscriptionData Public methods *************************************
@@ -1811,57 +1928,6 @@ begin
                 'Handle');
     Check(Copy.Notify.Equals(Self.Data.Notify),
           'NOTIFY messages don''t match');
-  finally
-    Copy.Free;
-  end;
-end;
-
-//******************************************************************************
-//* TestTIdSubscriptionRequestData                                             *
-//******************************************************************************
-//* TestTIdSubscriptionRequestData Public methods ******************************
-
-procedure TestTIdSubscriptionRequestData.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Data := TIdSubscriptionRequestData.Create;
-  Self.Data.Contact.Value := 'sip:machine-1@internet-cafe.org>';
-  Self.Data.EventPackage  := PackageRefer;
-  Self.Data.From.Value    := 'Case <sip:case@fried-neurons.org>';
-  Self.Data.ReferTo.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna';
-end;
-
-procedure TestTIdSubscriptionRequestData.TearDown;
-begin
-  Self.Data.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSubscriptionRequestData Published methods ***************************
-
-procedure TestTIdSubscriptionRequestData.TestCopy;
-var
-  Copy: TIdSubscriptionRequestData;
-begin
-  Copy := Self.Data.Copy as TIdSubscriptionRequestData;
-  try
-    CheckEquals(IntToHex(Self.Data.Handle, 8),
-                IntToHex(Copy.Handle, 8),
-                'Handle');
-    CheckEquals(Self.Data.Contact.FullValue,
-                Copy.Contact.FullValue,
-                'Contact');
-    CheckEquals(Self.Data.EventPackage,
-                Copy.EventPackage,
-                'EventPackage');
-    CheckEquals(Self.Data.From.FullValue,
-                Copy.From.FullValue,
-                'From');
-    CheckEquals(Self.Data.ReferTo.FullValue,
-                Copy.ReferTo.FullValue,
-                'ReferTo');
   finally
     Copy.Free;
   end;
