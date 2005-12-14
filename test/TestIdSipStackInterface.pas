@@ -1802,6 +1802,7 @@ begin
   Self.Data.From.Value          := 'Case <sip:case@fried-neurons.org>';
   Self.Data.ReferTo.Value       := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna';
   Self.Data.RemoteContact.Value := 'sip:machine-1@internet-cafe.org>';
+  Self.Data.Target.Uri          := 'sip:case@fried-neurons.org;grid="foo"';
 end;
 
 procedure TestTIdSubscriptionRequestData.TearDown;
@@ -1834,6 +1835,9 @@ begin
     CheckEquals(Self.Data.RemoteContact.FullValue,
                 Copy.RemoteContact.FullValue,
                 'RemoteContact');
+    CheckEquals(Self.Data.Target.Uri,
+                Copy.Target.Uri,
+                'Target');
   finally
     Copy.Free;
   end;
@@ -1854,6 +1858,7 @@ begin
   Self.Data.ReferTo.Value       := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna';
   Self.Data.ReferAction         := $decafbad;
   Self.Data.RemoteContact.Value := 'sip:machine-1@internet-cafe.org>';
+  Self.Data.Target.Uri          := 'sip:case@fried-neurons.org;grid="foo"';
 end;
 
 procedure TestTIdSessionReferralData.TearDown;
@@ -1889,6 +1894,9 @@ begin
     CheckEquals(Self.Data.RemoteContact.FullValue,
                 Copy.RemoteContact.FullValue,
                 'RemoteContact');
+    CheckEquals(Self.Data.Target.Uri,
+                Copy.Target.Uri,
+                'Target');
   finally
     Copy.Free;
   end;

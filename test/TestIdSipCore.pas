@@ -214,6 +214,7 @@ type
     procedure TestIsInbound; override;
     procedure TestIsInvite; override;
     procedure TestIsOptions; override;
+    procedure TestIsOwned; override;
     procedure TestIsRegistration; override;
     procedure TestIsSession; override;
     procedure TestOptions;
@@ -2382,6 +2383,12 @@ procedure TestTIdSipInboundOptions.TestIsOptions;
 begin
   Check(Self.Options.IsOptions,
         Self.Options.ClassName + ' not marked as an Options');
+end;
+
+procedure TestTIdSipInboundOptions.TestIsOwned;
+begin
+  Check(not Self.Options.IsOwned,
+        Self.Options.ClassName + ' marked as being owned');
 end;
 
 procedure TestTIdSipInboundOptions.TestIsRegistration;

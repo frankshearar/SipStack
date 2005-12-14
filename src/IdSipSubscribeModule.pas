@@ -1356,6 +1356,9 @@ procedure TIdSipOutboundNotifyBase.Initialise(UA: TIdSipAbstractCore;
 begin
   inherited Initialise(UA, Request, UsingSecureTransport);
 
+  // NOTIFYs are always owned by a Subscription or Referral
+  Self.fIsOwned := true;
+
   Self.Module := Self.UA.ModuleFor(Self.Method) as TIdSipSubscribeModule;
   Assert(Assigned(Self.Module),
          'The Transaction-User layer cannot process NOTIFY methods without adding the Subscribe module to it');
@@ -1487,6 +1490,9 @@ procedure TIdSipSubscribe.Initialise(UA: TIdSipAbstractCore;
                                      UsingSecureTransport: Boolean);
 begin
   inherited Initialise(UA, Request, UsingSecureTransport);
+
+  // I am always owned by a Subscription or Referral.
+  Self.fIsOwned := true;
 
   Self.Module := Self.UA.ModuleFor(Self.Method) as TIdSipSubscribeModule;
   Assert(Assigned(Self.Module),

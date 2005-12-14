@@ -56,6 +56,7 @@ type
     procedure TestIsInbound; virtual;
     procedure TestIsInvite; virtual;
     procedure TestIsOptions; virtual;
+    procedure TestIsOwned; virtual;
     procedure TestIsRegistration; virtual;
     procedure TestIsSession; virtual;
     procedure TestLocalGruu; virtual;
@@ -382,6 +383,16 @@ begin
   Action := Self.CreateAction;
   Check(not Action.IsOptions,
         Action.ClassName + ' marked as an Options');
+end;
+
+procedure TestTIdSipAction.TestIsOwned;
+var
+  Action: TIdSipAction;
+begin
+  // Self.UA owns the action!
+  Action := Self.CreateAction;
+  Check(not Action.IsOwned,
+        Action.ClassName + ' marked as being owned');
 end;
 
 procedure TestTIdSipAction.TestIsRegistration;

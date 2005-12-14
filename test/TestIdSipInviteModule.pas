@@ -107,6 +107,7 @@ type
     procedure TestIsInbound; override;
     procedure TestIsInvite; override;
     procedure TestIsOptions; override;
+    procedure TestIsOwned; override;
     procedure TestIsRegistration; override;
     procedure TestIsSession; override;
     procedure TestLastResponse;
@@ -184,6 +185,7 @@ type
     procedure TestCancelReceiveInviteOkBeforeCancelOk;
     procedure TestInviteTwice;
     procedure TestIsInvite; override;
+    procedure TestIsOwned; override;
     procedure TestMethod;
     procedure TestOfferInInvite;
     procedure TestReceive2xxSchedulesTransactionCompleted;
@@ -692,7 +694,6 @@ begin
 //  Result.AddTest(TestDebug.Suite);
   Result.AddTest(TestTIdSipInviteModule.Suite);
   Result.AddTest(TestTIdSipInboundInvite.Suite);
-{
   Result.AddTest(TestTIdSipOutboundInitialInvite.Suite);
   Result.AddTest(TestTIdSipOutboundRedirectedInvite.Suite);
   Result.AddTest(TestTIdSipOutboundReInvite.Suite);
@@ -712,8 +713,7 @@ begin
   Result.AddTest(TestTIdSipModifiedSessionMethod.Suite);
   Result.AddTest(TestTIdSipSessionModifySessionMethod.Suite);
   Result.AddTest(TestTIdSipProgressedSessionMethod.Suite);
-  Result.AddTest(TestTIdSipSessionReferralMethod.Suite);
-}  
+  Result.AddTest(TestTIdSipSessionReferralMethod.Suite); 
 end;
 
 //******************************************************************************
@@ -1610,6 +1610,12 @@ procedure TestTIdSipInboundInvite.TestIsOptions;
 begin
   Check(not Self.InviteAction.IsOptions,
         Self.InviteAction.ClassName + ' marked as an Options');
+end;
+
+procedure TestTIdSipInboundInvite.TestIsOwned;
+begin
+  Check(Self.InviteAction.IsOwned,
+        Self.InviteAction.ClassName + ' not marked as being owned');
 end;
 
 procedure TestTIdSipInboundInvite.TestIsRegistration;
@@ -2523,6 +2529,16 @@ end;
 procedure TestTIdSipOutboundInvite.TestIsInvite;
 begin
   Check(Self.CreateAction.IsInvite, 'INVITE action not marked as such');
+end;
+
+procedure TestTIdSipOutboundInvite.TestIsOwned;
+var
+  Invite: TIdSipAction;
+begin
+  Invite := Self.CreateAction;
+
+  Check(Invite.IsOwned,
+        Invite.ClassName + ' not marked as being owned');
 end;
 
 procedure TestTIdSipOutboundInvite.TestMethod;
@@ -4773,12 +4789,12 @@ begin
   CheckEquals(Self.Invite.CallID,
               Self.Session.Dialog.ID.CallID,
               'Session''s Call-ID doesn''t match INVITE''s Call-ID');
-  CheckEquals(Self.Invite.ToHeader.Tag,
-              Self.Session.Dialog.ID.RemoteTag,
-              'Session''s remote-tag doesn''t match INVITE''s To tag');
-  CheckEquals(Self.Invite.From.Tag,
+  CheckEquals(Ringing.ToHeader.Tag,
               Self.Session.Dialog.ID.LocalTag,
-              'Session''s local-tag doesn''t match 180''s From tag');
+              'Session''s remote-tag doesn''t match 180''s To tag');
+  CheckEquals(Self.Invite.From.Tag,
+              Self.Session.Dialog.ID.RemoteTag,
+              'Session''s local-tag doesn''t match INVITE''s From tag');
 end;
 
 procedure TestTIdSipInboundSession.TestRingWithGruu;

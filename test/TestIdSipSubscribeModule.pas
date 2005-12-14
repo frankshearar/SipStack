@@ -349,6 +349,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestIsOwned; override;
     procedure TestSend; virtual;
   end;
 
@@ -397,6 +398,7 @@ type
   public
     procedure SetUp; override;
   published
+    procedure TestIsOwned; override;
     procedure TestMatchNotify;
     procedure TestMatchResponse;
     procedure TestReceive2xx;
@@ -488,6 +490,7 @@ type
     procedure TestIsInbound; override;
     procedure TestIsInvite; override;
     procedure TestIsOptions; override;
+    procedure TestIsOwned; override;
     procedure TestIsRegistration; override;
     procedure TestIsSession; override;
     procedure TestNotify; virtual;
@@ -1705,6 +1708,12 @@ end;
 
 //* TestTIdSipOutboundNotifyBase Published methods *****************************
 
+procedure TestTIdSipOutboundNotifyBase.TestIsOwned;
+begin
+  Check(Self.Notify.IsOwned,
+        Self.Notify.ClassName + ' isn''t Owned');
+end;
+
 procedure TestTIdSipOutboundNotifyBase.TestSend;
 var
   Notify: TIdSipRequest;
@@ -1946,6 +1955,16 @@ begin
 end;
 
 //* TestTIdSipOutboundSubscribe Published methods ******************************
+
+procedure TestTIdSipOutboundSubscribe.TestIsOwned; 
+var
+  Sub: TIdSipAction;
+begin
+  Sub := Self.CreateAction;
+
+  Check(Sub.IsOwned,
+        Sub.ClassName + ' not marked as being owned');
+end;
 
 procedure TestTIdSipOutboundSubscribe.TestMatchNotify;
 var
@@ -2452,6 +2471,12 @@ procedure TestTIdSipInboundSubscriptionBase.TestIsOptions;
 begin
   Check(not Self.Action.IsOptions,
         Self.Action.ClassName + ' marked as an Options');
+end;
+
+procedure TestTIdSipInboundSubscriptionBase.TestIsOwned;
+begin
+  Check(not Self.Action.IsOwned,
+        Self.Action.ClassName + ' marked as being owned');
 end;
 
 procedure TestTIdSipInboundSubscriptionBase.TestIsRegistration;

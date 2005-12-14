@@ -186,6 +186,7 @@ type
     procedure Authenticate(ActionHandle: TIdSipHandle;
                            Credentials: TIdSipAuthorizationHeader);
     function  GruuOf(ActionHandle: TIdSipHandle): String;
+    function  HandleOf(const LocalGruu: String): TIdSipHandle;
     procedure HangUp(ActionHandle: TIdSipHandle);
 //    function  MakeBlindTransfer(Call: TIdSipHandle;
 //                                NewTarget: TIdSipAddressHeader): TIdSipHandle;
@@ -462,10 +463,12 @@ type
     fFrom:          TIdSipFromHeader;
     fReferTo:       TIdSipReferToHeader;
     fRemoteContact: TIdSipContactHeader;
+    fTarget:        TIdSipUri;
 
     procedure SetFrom(Value: TIdSipFromHeader);
     procedure SetReferTo(Value: TIdSipReferToHeader);
     procedure SetRemoteContact(Value: TIdSipContactHeader);
+    procedure SetTarget(Value: TIdSipUri);
   protected
     function Data: String; override;
     function EventName: String; override;
@@ -479,6 +482,7 @@ type
     property From:          TIdSipFromHeader    read fFrom write SetFrom;
     property ReferTo:       TIdSipReferToHeader read fReferTo write SetReferTo;
     property RemoteContact: TIdSipContactHeader read fRemoteContact write SetRemoteContact;
+    property Target:        TIdSipUri           read fTarget write SetTarget;
   end;
 
   // ReferAction contains the handle of the TIdSipInboundReferral that the stack
@@ -741,11 +745,39 @@ function TIdSipStackInterface.GruuOf(ActionHandle: TIdSipHandle): String;
 var
   Action: TIdSipAction;
 begin
+  // Return the GRUU of the action referenced by ActionHandle. This can be the
+  // empty string - typically if the stack doesn't support GRUU.
+
   Self.ActionLock.Acquire;
   try
     Action := Self.GetAndCheckAction(ActionHandle, TIdSipSession);
 
     Result := Action.LocalGruu.FullValue;
+  finally
+    Self.ActionLock.Release;
+  end;
+end;
+
+function TIdSipStackInterface.HandleOf(const LocalGruu: String): TIdSipHandle;
+var
+  Action: TIdSipAction;
+  I:      Integer;
+begin
+  // Find the handle of the action that uses LocalGruu as a Contact (typically
+  // either a Session or a Subscription/Referral).
+  Self.ActionLock.Acquire;
+  try
+    Result := InvalidHandle;
+
+    I := 0;
+    while (I < Self.Actions.Count) and (Result = InvalidHandle) do begin
+      Action := Self.AssociationAt(I).Action;
+
+      if not Action.IsOwned and (Action.LocalGruu.FullValue = LocalGruu) then
+        Result := Self.AssociationAt(I).Handle
+      else
+        Inc(I);
+    end;
   finally
     Self.ActionLock.Release;
   end;
@@ -1437,6 +1469,7 @@ begin
     Data.ReferTo       := Refer.ReferTo;
     Data.ReferAction   := Self.HandleFor(Referral);
     Data.RemoteContact := Refer.FirstContact;
+    Data.Target        := Refer.RequestUri;
 
     Self.NotifyEvent(Session, CM_CALL_REFERRAL, Data);
   finally
@@ -1497,6 +1530,7 @@ begin
     Data.From          := Subscription.InitialRequest.From;
     Data.ReferTo       := Subscription.InitialRequest.ReferTo;
     Data.RemoteContact := Subscription.InitialRequest.FirstContact;
+    Data.Target        := Subscription.InitialRequest.RequestUri;
 
     Self.NotifyEvent(Subscription, CM_SUBSCRIPTION_REQUEST_NOTIFY, Data);
   finally
@@ -2173,10 +2207,12 @@ begin
   Self.fFrom          := TIdSipFromHeader.Create;
   Self.fReferTo       := TIdSipReferToHeader.Create;
   Self.fRemoteContact := TIdSipContactHeader.Create;
+  Self.fTarget        := TIdSipUri.Create;
 end;
 
 destructor TIdSubscriptionRequestData.Destroy;
 begin
+  Self.fTarget.Free;
   Self.fRemoteContact.Free;
   Self.fReferTo.Free;
   Self.fFrom.Free;
@@ -2197,6 +2233,7 @@ begin
     Self.From          := Other.From;
     Self.ReferTo       := Other.ReferTo;
     Self.RemoteContact := Other.RemoteContact;
+    Self.Target        := Other.Target;                        
   end;
 end;
 
@@ -2230,6 +2267,11 @@ end;
 procedure TIdSubscriptionRequestData.SetRemoteContact(Value: TIdSipContactHeader);
 begin
   Self.fRemoteContact.Assign(Value);
+end;
+
+procedure TIdSubscriptionRequestData.SetTarget(Value: TIdSipUri);
+begin
+  Self.fTarget.Uri := Value.Uri;
 end;
 
 //******************************************************************************
