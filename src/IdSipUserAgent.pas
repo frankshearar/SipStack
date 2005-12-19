@@ -75,22 +75,29 @@ type
   // Here's a summary of the formats for each directive:
   //   Contact: sip:wintermute@tessier-ashpool.co.luna
   //   From: "Count Zero" <sip:countzero@jammer.org>
+  //   Gruu: "Count Zero" <sip:countzero@jammer.org;opaque=foo>
   //   Listen: <transport name><SP><host|IPv4 address|IPv6 reference|AUTO>:<port>
   //   NameServer: <domain name or IP>:<port>
   //   NameServer: MOCK
   //   Register: <SIP/S URI>
   //   Proxy: <SIP/S URI>
   //   SupportEvent: refer
-  //   InstanceID: 00000000-0000-0000-0000-000000000000
+  //   InstanceID: urn:uuid:00000000-0000-0000-0000-000000000000
   TIdSipStackConfigurator = class(TObject)
   private
+    procedure AddAddress(UserAgent: TIdSipAbstractCore;
+                         AddressHeader: TIdSipAddressHeader;
+                         const AddressLine: String);
     procedure AddAuthentication(UserAgent: TIdSipAbstractCore;
                                 const AuthenticationLine: String);
-    procedure AddAutoContact(UserAgent: TIdSipAbstractCore);
+    procedure AddAutoAddress(UserAgent: TIdSipAbstractCore;
+                             AddressHeader: TIdSipAddressHeader);
     procedure AddContact(UserAgent: TIdSipAbstractCore;
                       const ContactLine: String);
     procedure AddFrom(UserAgent: TIdSipAbstractCore;
                       const FromLine: String);
+    procedure AddGruu(UserAgent: TIdSipAbstractCore;
+                      const GruuLine: String);
     procedure AddLocator(UserAgent: TIdSipAbstractCore;
                          const NameServerLine: String);
     procedure AddProxy(UserAgent: TIdSipUserAgent;
@@ -130,6 +137,7 @@ const
   ContactDirective         = ContactHeaderFull;
   DebugMessageLogDirective = 'DebugMessageLog';
   FromDirective            = FromHeaderFull;
+  GruuDirective            = 'GRUU';
   InstanceIDDirective      = 'InstanceID';
   ListenDirective          = 'Listen';
   MockKeyword              = 'MOCK';
@@ -323,6 +331,25 @@ end;
 
 //* TIdSipStackConfigurator Private methods ************************************
 
+procedure TIdSipStackConfigurator.AddAddress(UserAgent: TIdSipAbstractCore;
+                                             AddressHeader: TIdSipAddressHeader;
+                                             const AddressLine: String);
+var
+  Line: String;
+begin
+  Line := AddressLine;
+  Self.EatDirective(Line);
+
+  if (Trim(Line) = AutoKeyword) then
+    Self.AddAutoAddress(UserAgent, AddressHeader)
+  else begin
+    AddressHeader.Value := Line;
+
+    if AddressHeader.IsMalformed then
+      raise EParserError.Create(Format(MalformedConfigurationLine, [AddressLine]));
+  end;
+end;
+
 procedure TIdSipStackConfigurator.AddAuthentication(UserAgent: TIdSipAbstractCore;
                                                     const AuthenticationLine: String);
 var
@@ -336,45 +363,33 @@ begin
     UserAgent.Authenticator := TIdSipMockAuthenticator.Create;
 end;
 
-procedure TIdSipStackConfigurator.AddAutoContact(UserAgent: TIdSipAbstractCore);
+procedure TIdSipStackConfigurator.AddAutoAddress(UserAgent: TIdSipAbstractCore;
+                                                 AddressHeader: TIdSipAddressHeader);
 begin
-  UserAgent.Contact.DisplayName      := UTF16LEToUTF8(GetFullUserName);
-  UserAgent.Contact.Address.Username := UTF16LEToUTF8(GetUserName);
-  UserAgent.Contact.Address.Host     := LocalAddress;
+  AddressHeader.DisplayName      := UTF16LEToUTF8(GetFullUserName);
+  AddressHeader.Address.Username := UTF16LEToUTF8(GetUserName);
+  AddressHeader.Address.Host     := LocalAddress;
 end;
 
 procedure TIdSipStackConfigurator.AddContact(UserAgent: TIdSipAbstractCore;
                                              const ContactLine: String);
-var
-  Line: String;
 begin
   // See class comment for the format for this directive.
-  Line := ContactLine;
-  Self.EatDirective(Line);
-
-  if (Trim(Line) = AutoKeyword) then
-    Self.AddAutoContact(UserAgent)
-  else begin
-    UserAgent.Contact.Value := Line;
-
-    if UserAgent.Contact.IsMalformed then
-      raise EParserError.Create(Format(MalformedConfigurationLine, [ContactLine]));
-  end;
+  Self.AddAddress(UserAgent, UserAgent.Contact, ContactLine);
 end;
 
 procedure TIdSipStackConfigurator.AddFrom(UserAgent: TIdSipAbstractCore;
                                           const FromLine: String);
-var
-  Line: String;
 begin
   // See class comment for the format for this directive.
-  Line := FromLine;
-  Self.EatDirective(Line);
+  Self.AddAddress(UserAgent, UserAgent.From, FromLine);
+end;
 
-  UserAgent.From.Value := Line;
-
-  if UserAgent.From.IsMalformed then
-    raise EParserError.Create(Format(MalformedConfigurationLine, [FromLine]));
+procedure TIdSipStackConfigurator.AddGruu(UserAgent: TIdSipAbstractCore;
+                                          const GruuLine: String);
+begin
+  // See class comment for the format for this directive.
+  Self.AddAddress(UserAgent, UserAgent.Gruu, GruuLine);
 end;
 
 procedure TIdSipStackConfigurator.AddLocator(UserAgent: TIdSipAbstractCore;
@@ -518,7 +533,10 @@ begin
     UserAgent.Locator := TIdSipIndyLocator.Create;
 
   if UserAgent.UsingDefaultContact then
-    Self.AddAutoContact(UserAgent);
+    Self.AddAutoAddress(UserAgent, UserAgent.Contact);
+
+  if UserAgent.UsingDefaultFrom then
+    Self.AddAutoAddress(UserAgent, UserAgent.From);
 end;
 
 procedure TIdSipStackConfigurator.ParseFile(UserAgent: TIdSipUserAgent;
@@ -547,6 +565,8 @@ begin
     Self.AddContact(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, FromDirective) then
     Self.AddFrom(UserAgent, ConfigurationLine)
+  else if IsEqual(FirstToken, GruuDirective) then
+    Self.AddGruu(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, InstanceIDDirective) then
     Self.SetInstanceID(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, ListenDirective) then

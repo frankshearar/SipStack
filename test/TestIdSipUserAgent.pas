@@ -153,7 +153,9 @@ type
     Server:         TIdUdpServer;
 
     function  ARecords: String;
+    procedure CheckAutoAddress(Address: TIdSipAddressHeader);
     procedure CheckAutoContact(UserAgent: TIdSipAbstractCore);
+    procedure CheckAutoFrom(UserAgent: TIdSipAbstractCore);
     procedure CheckEventPackageRegistered(UA: TIdSipUserAgent;
                                           PackageName: String);
     procedure CheckUseGruuWithValue(const BooleanValue: String);
@@ -173,11 +175,13 @@ type
     procedure TestCreateUserAgentOnBusyPort;
     procedure TestCreateUserAgentRegisterDirectiveBeforeTransport;
     procedure TestCreateUserAgentReturnsSomething;
-    procedure TestCreateUserAgentWithAutoTransport;
+    procedure TestCreateUserAgentTransportHasMalformedPort;
     procedure TestCreateUserAgentWithAutoContact;
+    procedure TestCreateUserAgentWithAutoFrom;
+    procedure TestCreateUserAgentWithAutoTransport;
     procedure TestCreateUserAgentWithContact;
     procedure TestCreateUserAgentWithFrom;
-    procedure TestCreateUserAgentWithUseGruu;
+    procedure TestCreateUserAgentWithGruu;
     procedure TestCreateUserAgentWithInstanceID;
     procedure TestCreateUserAgentWithLocator;
     procedure TestCreateUserAgentWithMalformedContact;
@@ -189,11 +193,11 @@ type
     procedure TestCreateUserAgentWithMultipleEventPackageSupport;
     procedure TestCreateUserAgentWithNoContact;
     procedure TestCreateUserAgentWithNoFrom;
+    procedure TestCreateUserAgentWithOneTransport;
     procedure TestCreateUserAgentWithProxy;
     procedure TestCreateUserAgentWithReferSupport;
     procedure TestCreateUserAgentWithRegistrar;
-    procedure TestCreateUserAgentWithOneTransport;
-    procedure TestCreateUserAgentTransportHasMalformedPort;
+    procedure TestCreateUserAgentWithUseGruu;
   end;
 
 implementation
@@ -250,7 +254,7 @@ const
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipUserAgent unit tests');
-  Result.AddTest(TestTIdSipUserAgent.Suite);
+//  Result.AddTest(TestTIdSipUserAgent.Suite);
   Result.AddTest(TestTIdSipStackConfigurator.Suite);
 end;
 
@@ -1826,17 +1830,27 @@ begin
   + #$10#$00#$04#$7F#$00#$00#$01;
 end;
 
-procedure TestTIdSipStackConfigurator.CheckAutoContact(UserAgent: TIdSipAbstractCore);
+procedure TestTIdSipStackConfigurator.CheckAutoAddress(Address: TIdSipAddressHeader);
 begin
   CheckEquals(UTF16LEToUTF8(GetFullUserName),
-              UserAgent.Contact.DisplayName,
-              'display-name');
+              Address.DisplayName,
+              Address.Name + ': display-name');
   CheckEquals(UTF16LEToUTF8(GetUserName),
-              UserAgent.Contact.Address.Username,
-              'user-info');
+              Address.Address.Username,
+              Address.Name + ': user-info');
   CheckEquals(LocalAddress,
-              UserAgent.Contact.Address.Host,
-              'host-info');
+              Address.Address.Host,
+              Address.Name + ': host-info');
+end;
+
+procedure TestTIdSipStackConfigurator.CheckAutoContact(UserAgent: TIdSipAbstractCore);
+begin
+  Self.CheckAutoAddress(UserAgent.Contact);
+end;
+
+procedure TestTIdSipStackConfigurator.CheckAutoFrom(UserAgent: TIdSipAbstractCore);
+begin
+  Self.CheckAutoAddress(UserAgent.From);
 end;
 
 procedure TestTIdSipStackConfigurator.CheckEventPackageRegistered(UA: TIdSipUserAgent;
@@ -2007,19 +2021,17 @@ begin
   end;
 end;
 
-procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithAutoTransport;
-var
-  UA: TIdSipUserAgent;
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentTransportHasMalformedPort;
+const
+  MalformedPort = 'aa';
 begin
-  Self.Configuration.Add('Listen: UDP AUTO:5060');
+  Self.Configuration.Add('Listen: TCP ' + Self.Address + ':' + MalformedPort);
 
-  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
-    CheckEquals(LocalAddress,
-                UA.Dispatcher.Transports[0].Address,
-                'Local NIC (or loopback) address not used');
-  finally
-    UA.Free;
+    Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+    Fail('Failed to bail out from a malformed port configuration');
+  except
+    on EParserError do;
   end;
 end;
 
@@ -2032,6 +2044,36 @@ begin
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
     Self.CheckAutoContact(UA);
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithAutoFrom;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('From: AUTO');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Self.CheckAutoFrom(UA);
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithAutoTransport;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP AUTO:5060');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(LocalAddress,
+                UA.Dispatcher.Transports[0].Address,
+                'Local NIC (or loopback) address not used');
   finally
     UA.Free;
   end;
@@ -2075,12 +2117,23 @@ begin
   end;
 end;
 
-procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithUseGruu;
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithGruu;
+const
+  DisplayName = 'Count Zero';
+  GruuUri     = 'sip:countzero@jammer.org';
+  Gruu        = '"' + DisplayName + '" <' + GruuUri + '>';
+var
+  UA: TIdSipUserAgent;
 begin
-  Self.CheckUseGruuWithValue('true');
-  Self.CheckUseGruuWithValue('TRUE');
-  Self.CheckUseGruuWithValue('yes');
-  Self.CheckUseGruuWithValue('1');
+  Self.Configuration.Add('Gruu: ' + Gruu);
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(DisplayName, UA.Gruu.DisplayName,      'Gruu display-name');
+    CheckEquals(GruuUri,     UA.Gruu.Address.AsString, 'Gruu URI');
+  finally
+    UA.Free;
+  end;
 end;
 
 procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithInstanceID;
@@ -2284,10 +2337,37 @@ begin
 
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
-    Check(Assigned(UA.From),
-          'UserAgent has no From at all');
-    CheckNotEquals('', UA.From.Address.AsString,
-                   'No From address');
+    Self.CheckAutoFrom(UA);
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithOneTransport;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: TCP ' + Self.Address + ':' + IntToStr(Self.Port));
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(1, UA.Dispatcher.TransportCount, 'Number of transports');
+    CheckEquals(TIdSipTCPTransport.ClassName,
+                UA.Dispatcher.Transports[0].ClassName,
+                'Transport type');
+    CheckEquals(Port,
+                UA.Dispatcher.Transports[0].Port,
+                'Transport port');
+    CheckEquals(Self.Address,
+                UA.Dispatcher.Transports[0].Address,
+                'Transport address');
+    CheckEquals(Self.Address,
+                UA.Dispatcher.Transports[0].HostName,
+                'Transport hostname');
+    Check(Assigned(UA.Dispatcher.Transports[0].Timer),
+          'Transport has no timer');
+    Check(UA.Dispatcher.Timer = UA.Dispatcher.Transports[0].Timer,
+          'Transport and Transaction layers have different timers');
   finally
     UA.Free;
   end;
@@ -2356,48 +2436,12 @@ begin
   end;
 end;
 
-procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithOneTransport;
-var
-  UA: TIdSipUserAgent;
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithUseGruu;
 begin
-  Self.Configuration.Add('Listen: TCP ' + Self.Address + ':' + IntToStr(Self.Port));
-
-  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
-  try
-    CheckEquals(1, UA.Dispatcher.TransportCount, 'Number of transports');
-    CheckEquals(TIdSipTCPTransport.ClassName,
-                UA.Dispatcher.Transports[0].ClassName,
-                'Transport type');
-    CheckEquals(Port,
-                UA.Dispatcher.Transports[0].Port,
-                'Transport port');
-    CheckEquals(Self.Address,
-                UA.Dispatcher.Transports[0].Address,
-                'Transport address');
-    CheckEquals(Self.Address,
-                UA.Dispatcher.Transports[0].HostName,
-                'Transport hostname');
-    Check(Assigned(UA.Dispatcher.Transports[0].Timer),
-          'Transport has no timer');
-    Check(UA.Dispatcher.Timer = UA.Dispatcher.Transports[0].Timer,
-          'Transport and Transaction layers have different timers');
-  finally
-    UA.Free;
-  end;
-end;
-
-procedure TestTIdSipStackConfigurator.TestCreateUserAgentTransportHasMalformedPort;
-const
-  MalformedPort = 'aa';
-begin
-  Self.Configuration.Add('Listen: TCP ' + Self.Address + ':' + MalformedPort);
-
-  try
-    Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
-    Fail('Failed to bail out from a malformed port configuration');
-  except
-    on EParserError do;
-  end;
+  Self.CheckUseGruuWithValue('true');
+  Self.CheckUseGruuWithValue('TRUE');
+  Self.CheckUseGruuWithValue('yes');
+  Self.CheckUseGruuWithValue('1');
 end;
 
 initialization
