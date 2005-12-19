@@ -254,7 +254,7 @@ const
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipUserAgent unit tests');
-//  Result.AddTest(TestTIdSipUserAgent.Suite);
+  Result.AddTest(TestTIdSipUserAgent.Suite);
   Result.AddTest(TestTIdSipStackConfigurator.Suite);
 end;
 
