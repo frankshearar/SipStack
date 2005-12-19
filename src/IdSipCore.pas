@@ -411,6 +411,7 @@ type
     // Move to UserAgent:
     procedure TerminateAllCalls; // move to InviteModule
     function  UsingDefaultContact: Boolean;
+    function  UsingDefaultFrom: Boolean;
 
     property Actions:               TIdSipActions               read fActions;
     property Authenticator:         TIdSipAbstractAuthenticator read fAuthenticator write SetAuthenticator;
@@ -1868,6 +1869,11 @@ end;
 function TIdSipAbstractCore.UsingDefaultContact: Boolean;
 begin
   Result := Pos(Self.Contact.Address.Uri, Self.DefaultFrom) > 0;
+end;
+
+function TIdSipAbstractCore.UsingDefaultFrom: Boolean;
+begin
+  Result := Pos(Self.From.Address.Uri, Self.DefaultFrom) > 0;
 end;
 
 procedure TIdSipAbstractCore.ScheduleEvent(BlockType: TIdSipActionClosureClass;
