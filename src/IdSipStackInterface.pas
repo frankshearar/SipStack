@@ -209,6 +209,7 @@ type
     procedure RedirectCall(ActionHandle: TIdSipHandle;
                            NewTarget: TIdSipAddressHeader);
     procedure RejectCall(ActionHandle: TIdSipHandle);
+    procedure Resume; override;
     procedure Send(ActionHandle: TIdSipHandle);
   end;
 
@@ -944,6 +945,18 @@ begin
   finally
     Self.ActionLock.Release;
   end;
+end;
+
+procedure TIdSipStackInterface.Resume;
+var
+  I: Integer;
+begin
+  // Start me first (since I'm the "heartbeat" thread).
+  inherited Resume;
+
+  // THEN start my transport threads.
+  for I := 0 to Self.UserAgent.Dispatcher.TransportCount - 1 do
+    Self.UserAgent.Dispatcher.Transports[I].Start;
 end;
 
 procedure TIdSipStackInterface.Send(ActionHandle: TIdSipHandle);
