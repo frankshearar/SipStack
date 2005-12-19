@@ -278,7 +278,7 @@ type
                          UsingSecureTransport: Boolean); override;
   public
     procedure Send; override;
-      
+
     property Body:              String        read fBody write fBody;
     property Dialog:            TIdSipDialog  read fDialog write fDialog;
     property MimeType:          String        read fMimeType write fMimeType;
@@ -480,6 +480,7 @@ type
   TIdSipInboundSubscription = class(TIdSipSubscription,
                                     IIdSipNotifyListener)
   private
+    Grid:                 String;
     OutstandingExpires:   Cardinal;
     UsingSecureTransport: Boolean;
 
@@ -500,6 +501,8 @@ type
     procedure ScheduleRenotify(Seconds: Cardinal);
     procedure ScheduleTermination(Expires: Cardinal);
     procedure SendAccept(Subscribe: TIdSipRequest);
+    procedure SendAcceptingResponse(Subscribe: TIdSipRequest;
+                                    StatusCode: Cardinal);
     procedure SendOk(Subscribe: TIdSipRequest);
     procedure SendTerminatingNotify(const Body: String;
                                     const MimeType: String;
@@ -1348,6 +1351,9 @@ begin
                                      Self.Subscribe,
                                      '');
   Self.ConfigureAttempt(Result);
+
+  if Self.UA.UseGruu then
+    Result.FirstContact.Assign(Self.LocalGruu);
 end;
 
 procedure TIdSipOutboundNotifyBase.Initialise(UA: TIdSipAbstractCore;
@@ -1929,6 +1935,7 @@ begin
     Self.ConfigureNotify(Notify);
     Notify.Body              := Body;
     Notify.Expires           := Self.ExpiryTimeInSeconds;
+    Notify.LocalGruu         := Self.LocalGruu;
     Notify.MimeType          := MimeType;
     Notify.SubscriptionState := Self.SubscriptionState;
     Notify.AddListener(Self);
@@ -1989,6 +1996,9 @@ begin
   // rejects all SUBSCRIBEs with unknown Event header values before we get
   // here.
 //  Self.Package := Self.Module.Package(Self.EventPackage).Clone;
+
+  if Self.UA.UseGruu then
+    Self.Grid := Self.UA.NextGrid;
 end;
 
 procedure TIdSipInboundSubscription.ReceiveSubscribe(Request: TIdSipRequest);
@@ -2168,34 +2178,35 @@ begin
 end;
 
 procedure TIdSipInboundSubscription.SendAccept(Subscribe: TIdSipRequest);
-var
-  Accepted: TIdSipResponse;
 begin
-  Accepted := Self.UA.CreateResponse(Subscribe, SIPAccepted);
-  try
-    Accepted.Expires.NumericValue := Self.OurExpires(Subscribe);
+  Self.SendAcceptingResponse(Subscribe, SIPAccepted);
+end;
 
-    Self.EstablishDialog(Accepted);
-    Self.ScheduleTermination(Accepted.Expires.NumericValue);
-    Self.SendResponse(Accepted);
+procedure TIdSipInboundSubscription.SendAcceptingResponse(Subscribe: TIdSipRequest;
+                                                          StatusCode: Cardinal);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.UA.CreateResponse(Subscribe, StatusCode);
+  try
+    Response.Expires.NumericValue := Self.OurExpires(Subscribe);
+
+    if Self.UA.UseGruu then begin
+      Response.FirstContact.Grid := Self.Grid;
+      Self.LocalGruu := Response.FirstContact;
+    end;
+
+    Self.EstablishDialog(Response);
+    Self.ScheduleTermination(Response.Expires.NumericValue);
+    Self.SendResponse(Response);
   finally
-    Accepted.Free;
+    Response.Free;
   end;
 end;
 
 procedure TIdSipInboundSubscription.SendOk(Subscribe: TIdSipRequest);
-var
-  Ok: TIdSipResponse;
 begin
-  Ok := Self.UA.CreateResponse(Subscribe, SIPOK);
-  try
-    Ok.Expires.NumericValue := Self.OurExpires(Subscribe);
-
-    Self.ScheduleTermination(Ok.Expires.NumericValue);
-    Self.SendResponse(Ok);
-  finally
-    Ok.Free;
-  end;
+  Self.SendAcceptingResponse(Subscribe, SIPOK);
 end;
 
 procedure TIdSipInboundSubscription.SendTerminatingNotify(const Body: String;
@@ -2633,7 +2644,7 @@ begin
     raise EIdSipTransactionUser.Create(BadReferNotifyBody);
 
   Self.Package.State := Body;
-  
+
   inherited Notify(Body, MimeType, NewState, Reason);
 end;
 
@@ -2665,7 +2676,7 @@ procedure TIdSipInboundReferral.ReferenceTrying;
 begin
   Self.Notify(Self.ReferralTryingBody,
               SipFragmentMimeType,
-              SubscriptionSubstateTerminated,
+              SubscriptionSubstateActive,
               EventReasonNoResource);
 end;
 

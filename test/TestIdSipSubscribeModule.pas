@@ -498,6 +498,7 @@ type
     procedure TestReceiveRequestSendsAccepted;
     procedure TestReceiveRequestSendsAcceptedWithGruu;
     procedure TestReceiveRequestSendsNotify;
+    procedure TestReceiveRequestWithGruu;
   end;
 
   TestTIdSipInboundSubscription = class(TestTIdSipInboundSubscriptionBase)
@@ -686,6 +687,7 @@ type
     procedure TestReferenceDenied;
     procedure TestReferenceFailed;
     procedure TestReferenceSucceeded;
+    procedure TestReferenceTrying;
     procedure TestRejectUnsupportedReferToUri;
     procedure TestRenotifySendsCorrectState;
   end;
@@ -2539,6 +2541,25 @@ begin
   Self.CheckSendNotify(Self.Action, SubscriptionSubstatePending);
 end;
 
+procedure TestTIdSipInboundSubscriptionBase.TestReceiveRequestWithGruu;
+begin
+  Self.UseGruu;
+
+  Self.MarkSentResponseCount;
+  Self.ReceiveSubscribeRequestWithGruu;
+  Check(Assigned(Self.Action),
+        'No subscribing request with GRUU received');
+
+  CheckResponseSent(Self.Action.ClassName + ': No response to the '
+                  + Self.Action.Method + ' sent');
+
+  Check(Self.LastSentResponse.FirstContact.Address.HasGrid,
+        Self.Action.ClassName + ': 202 Accepted''s Contact address has no "grid" parameter');
+  CheckEquals(Self.LastSentResponse.FirstContact.AsString,
+              Self.Action.LocalGruu.AsString,
+              Self.Action.ClassName + '''s LocalGruu doesn''t match Contact in 202 Accepted');
+end;
+
 //******************************************************************************
 //* TestTIdSipInboundSubscription                                              *
 //******************************************************************************
@@ -2817,7 +2838,6 @@ begin
     Action := TIdSipInboundSubscription.CreateInbound(Self.Core, Sub, false) as TIdSipInboundSubscription;
     try
       Accepted := Self.LastSentResponse;
-
       Check(Accepted.FirstContact.Address.HasGrid,
             'Dialog-establishing response should have a "grid" parameter');
 
@@ -2827,14 +2847,16 @@ begin
       Action.Notify(Body, MimeType);
 
       CheckRequestSent('No request sent');
-      Self.CheckNotify(Self.LastSentRequest, Body, MimeType);
+      Self.CheckNotify(Self.LastSentRequest,
+                       Body,
+                       MimeType);
       Check(Self.LastSentRequest.HasHeader(SupportedHeaderFull),
             'NOTIFY lacks a Supported header');
       Check(Self.LastSentRequest.SupportsExtension(ExtensionGruu),
             'Supported header lacks a "gruu" entry');
-      CheckEquals(Self.Core.Gruu.Address.Host,
-                  Self.LastSentRequest.FirstContact.Address.Host,
-                  'NOTIFY didn''t use UA''s GRUU');
+      CheckEquals(Action.LocalGruu.AsString,
+                  Self.LastSentRequest.FirstContact.AsString,
+                  'NOTIFY didn''t use ' + Action.Method + '''s GRUU');
       CheckEquals(Self.LastSentRequest.FirstContact.Address.Host,
                   Accepted.FirstContact.Address.Host,
                   'NOTIFY''s remote target should match that of the 202 Accepted');
@@ -4244,9 +4266,9 @@ begin
             'NOTIFY lacks a Supported header');
       Check(Self.LastSentRequest.SupportsExtension(ExtensionGruu),
             'Supported header lacks a "gruu" entry');
-      CheckEquals(Self.Core.Gruu.Address.Host,
-                  Self.LastSentRequest.FirstContact.Address.Host,
-                  'NOTIFY didn''t use UA''s GRUU');
+      CheckEquals(Action.LocalGruu.AsString,
+                  Self.LastSentRequest.FirstContact.AsString,
+                  'NOTIFY didn''t use ' + Action.Method + '''s GRUU');
       CheckEquals(Self.LastSentRequest.FirstContact.Address.Host,
                   Accepted.FirstContact.Address.Host,
                   'NOTIFY''s remote target should match that of the 202 Accepted');
@@ -4373,6 +4395,27 @@ begin
               'NOTIFY body');
   Check(Self.Refer.IsTerminated,
         'Referral didn''t terminate');
+end;
+
+procedure TestTIdSipInboundReferral.TestReferenceTrying;
+var
+  Notify: TIdSipRequest;
+begin
+  Self.Refer.Accept;
+
+  Self.MarkSentRequestCount;
+  Self.Refer.ReferenceTrying;
+  Self.CheckSendNotify(Self.Refer, SubscriptionSubstateActive);
+
+  Notify := Self.LastSentRequest;
+  CheckEquals(SipFragmentMimeType,
+              Notify.ContentType,
+              'NOTIFY Content-Type');
+  CheckEquals(TIdSipInboundReferral.ReferralTryingBody,
+              Notify.Body,
+              'NOTIFY body');
+  Check(not Self.Refer.IsTerminated,
+        'Referral terminated');
 end;
 
 procedure TestTIdSipInboundReferral.TestRejectUnsupportedReferToUri;

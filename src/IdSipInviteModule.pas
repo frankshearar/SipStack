@@ -1387,8 +1387,10 @@ begin
   Response := Self.UA.CreateResponse(Self.InitialRequest,
                                      StatusCode);
   try
-    if Self.UA.UseGruu then
+    if Self.UA.UseGruu then begin
       Response.FirstContact.Grid := Self.Grid;
+      Self.LocalGruu := Response.FirstContact;
+    end;
 
     Response.ToHeader.Tag := Self.LocalTag;
 

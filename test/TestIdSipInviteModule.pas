@@ -700,7 +700,7 @@ begin
   Result.AddTest(TestTIdSipOutboundReplacingInvite.Suite);
   Result.AddTest(TestTIdSipInboundSession.Suite);
   Result.AddTest(TestTIdSipOutboundSession.Suite);
-  Result.AddTest(TestSessionReplacer.Suite);
+//  Result.AddTest(TestSessionReplacer.Suite);
   Result.AddTest(TestTIdSipInviteModuleOnInboundCallMethod.Suite);
   Result.AddTest(TestTIdSipInviteCallProgressMethod.Suite);
   Result.AddTest(TestTIdSipInboundInviteFailureMethod.Suite);
@@ -713,7 +713,7 @@ begin
   Result.AddTest(TestTIdSipModifiedSessionMethod.Suite);
   Result.AddTest(TestTIdSipSessionModifySessionMethod.Suite);
   Result.AddTest(TestTIdSipProgressedSessionMethod.Suite);
-  Result.AddTest(TestTIdSipSessionReferralMethod.Suite); 
+  Result.AddTest(TestTIdSipSessionReferralMethod.Suite);
 end;
 
 //******************************************************************************
@@ -1646,8 +1646,22 @@ begin
 end;
 
 procedure TestTIdSipInboundInvite.TestLocalGruu;
+var
+  OkGrid:   String;
+  RingGrid: String;
 begin
   Self.UseGruu;
+
+  Self.MarkSentResponseCount;
+  Self.InviteAction.Ring;
+  CheckResponseSent('No 180 Ringing sent');
+
+  Check(Self.LastSentResponse.FirstContact.Address.HasGrid,
+        '180 Ringing''s Contact address has no "grid" parameter');
+  CheckEquals(Self.LastSentResponse.FirstContact.AsString,
+              Self.InviteAction.LocalGruu.AsString,
+              'InviteAction''s LocalGruu doesn''t match Contact in 180 Ringing');
+  RingGrid := Self.LastSentResponse.FirstContact.Address.Grid;
 
   Self.MarkSentResponseCount;
   Self.InviteAction.Accept('', '');
@@ -1658,6 +1672,9 @@ begin
   CheckEquals(Self.LastSentResponse.FirstContact.AsString,
               Self.InviteAction.LocalGruu.AsString,
               'InviteAction''s LocalGruu doesn''t match Contact in 200 OK');
+  OkGrid := Self.LastSentResponse.FirstContact.Address.Grid;
+
+  CheckEquals(OkGrid, RingGrid, 'Two responses, with different GRUUs');
 end;
 
 procedure TestTIdSipInboundInvite.TestMatchAck;
