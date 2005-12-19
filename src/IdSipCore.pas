@@ -552,7 +552,7 @@ type
 
     function  CreateResend(AuthorizationCredentials: TIdSipAuthorizationHeader): TIdSipRequest;
     function  GetUsername: String;
-    procedure SetSetLocalGruu(Value: TIdSipContactHeader);
+    procedure SetLocalGruu(Value: TIdSipContactHeader);
     procedure SetUsername(const Value: String);
     function  TrySendRequest(Request: TIdSipRequest;
                              Targets: TIdSipLocations;
@@ -617,7 +617,7 @@ type
     property InitialRequest: TIdSipRequest       read fInitialRequest;
     property IsOwned:        Boolean             read fIsOwned;
     property IsTerminated:   Boolean             read fIsTerminated;
-    property LocalGruu:      TIdSipContactHeader read fLocalGruu write SetSetLocalGruu;
+    property LocalGruu:      TIdSipContactHeader read fLocalGruu write SetLocalGruu;
     property Result:         TIdSipActionResult  read fResult;
     property Username:       String              read GetUsername write SetUsername;
   end;
@@ -3188,7 +3188,7 @@ begin
   Result := Self.UA.Username;
 end;
 
-procedure TIdSipAction.SetSetLocalGruu(Value: TIdSipContactHeader);
+procedure TIdSipAction.SetLocalGruu(Value: TIdSipContactHeader);
 begin
   Self.fLocalGruu.Assign(Value);
 end;
