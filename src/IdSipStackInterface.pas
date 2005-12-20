@@ -491,6 +491,9 @@ type
   TIdSessionReferralData = class(TIdSubscriptionRequestData)
   private
     fReferAction: TIdSipHandle;
+  protected
+    function Data: String; override;
+    function EventName: String; override;
   public
     procedure Assign(Src: TPersistent); override;
 
@@ -2302,6 +2305,22 @@ begin
     Other := Src as TIdSessionReferralData;
     Self.ReferAction := Other.ReferAction;
   end;
+end;
+
+//******************************************************************************
+//* TIdSessionReferralData
+//******************************************************************************
+//* TIdSessionReferralData Protected methods ***********************************
+
+function TIdSessionReferralData.Data: String;
+begin
+  Result := inherited Data
+          + 'Refer action: ' + IntToStr(Self.ReferAction) + CRLF;
+end;
+
+function TIdSessionReferralData.EventName: String;
+begin
+  Result := EventNames(CM_CALL_REFERRAL);
 end;
 
 //******************************************************************************
