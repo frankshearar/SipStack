@@ -102,12 +102,12 @@ type
     function  Copy: TIdSipDialog;
     function  CreateAck: TIdSipRequest;
     function  CreateRequest: TIdSipRequest;
-    procedure ReceiveRequest(Request: TIdSipRequest); virtual;
-    procedure ReceiveResponse(Response: TIdSipResponse); virtual;
     function  IsNull: Boolean; virtual;
     function  IsOutOfOrder(Request: TIdSipRequest): Boolean;
     function  NextInitialSequenceNo: Cardinal;
     function  NextLocalSequenceNo: Cardinal;
+    procedure ReceiveRequest(Request: TIdSipRequest); virtual;
+    procedure ReceiveResponse(Response: TIdSipResponse); virtual;
     function  SupportsExtension(const ExtensionName: String): Boolean;
 
     property ID:               TIdSipDialogID  read fID;
@@ -463,31 +463,6 @@ begin
   end;
 end;
 
-procedure TIdSipDialog.ReceiveRequest(Request: TIdSipRequest);
-begin
-  if Request.IsInvite then
-    Self.SetCanBeEstablished(true);
-end;
-
-procedure TIdSipDialog.ReceiveResponse(Response: TIdSipResponse);
-begin
-  if (Self.RemoteTarget.Uri = '') then
-    Self.RemoteTarget := Response.FirstContact.Address;
-
-  if (Self.RemoteSequenceNo = 0) then
-    Self.SetRemoteSequenceNo(Response.CSeq.SequenceNo);
-
-  if Response.IsFinal then begin
-    Self.SetIsEarly(false);
-
-    if Self.CanBeEstablished and (Response.StatusCode = SIPOK) then
-      Self.DoOnEstablished;
-  end;
-
-  if Response.IsProvisional then
-    Self.SetIsEarly(true);
-end;
-
 function TIdSipDialog.IsNull: Boolean;
 begin
   Result := false;
@@ -519,6 +494,31 @@ begin
   finally
     Self.LocalSequenceNoLock.Release;
   end;
+end;
+
+procedure TIdSipDialog.ReceiveRequest(Request: TIdSipRequest);
+begin
+  if Request.IsInvite then
+    Self.SetCanBeEstablished(true);
+end;
+
+procedure TIdSipDialog.ReceiveResponse(Response: TIdSipResponse);
+begin
+  if (Self.RemoteTarget.Uri = '') then
+    Self.RemoteTarget := Response.FirstContact.Address;
+
+  if (Self.RemoteSequenceNo = 0) then
+    Self.SetRemoteSequenceNo(Response.CSeq.SequenceNo);
+
+  if Response.IsFinal then begin
+    Self.SetIsEarly(false);
+
+    if Self.CanBeEstablished and (Response.StatusCode = SIPOK) then
+      Self.DoOnEstablished;
+  end;
+
+  if Response.IsProvisional then
+    Self.SetIsEarly(true);
 end;
 
 function TIdSipDialog.SupportsExtension(const ExtensionName: String): Boolean;
