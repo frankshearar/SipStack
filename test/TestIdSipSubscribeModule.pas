@@ -287,6 +287,7 @@ type
     procedure TestRemoveListener;
     procedure TestSubscribe;
     procedure TestSubscriptionRequest;
+    procedure TestTransfer;
     procedure TestUAAllowedContentTypes;
   end;
 
@@ -698,6 +699,7 @@ type
     function CreateSubscription: TIdSipOutboundSubscription; override;
   published
     procedure TestEventPackage;
+    procedure TestTargetDialog;
     procedure TestReceiveTerminatingNotifyDeactivated; override;
     procedure TestReceiveTerminatingNotifyGiveUp; override;
     procedure TestReceiveTerminatingNotifyGiveUpWithRetryAfter; override;
@@ -709,6 +711,7 @@ type
     procedure TestReceiveTerminatingNotifyTimeoutWithRetryAfter; override;
     procedure TestReceiveTerminatingNotifyWithUnknownReason; override;
     procedure TestReceiveTerminatingNotifyWithUnknownReasonAndRetryAfter; override;
+    procedure TestSendWithTargetDialog;
   end;
 
   TestTIdSipSubscriptionExpires = class(TSubscribeTestCase)
@@ -892,7 +895,7 @@ type
 implementation
 
 uses
-  IdException, IdSipConsts, SysUtils, TestFramework;
+  IdException, IdSipConsts, IdSipDialogID, SysUtils, TestFramework;
 
 type
   TIdSipTestPackage = class(TIdSipEventPackage)
@@ -1414,6 +1417,45 @@ begin
   Check(Self.OnSubscriptionRequestFired, 'OnSubscriptionRequest didn''t fire');
   Check(Self.Core = Self.UserAgentParam,
         'UserAgent param of Subscribe''s SubscriptionRequest notification wrong');
+end;
+
+procedure TestTIdSipSubscribeModule.TestTransfer;
+var
+  Session:      TIdSipSession;
+  TargetDialog: TIdSipDialogID;
+begin
+  // Make sure we support the "refer" package.
+  Self.Module.AddPackage(TIdSipReferPackage);
+
+  // Establish a session
+  Session := Self.Core.InviteModule.Call(Self.Destination, '', '');
+  Session.Send;
+  Self.ReceiveOk(Session.InitialRequest);
+
+  // Now transfer the call to someone else
+  TargetDialog := Session.Dialog.ID.GetRemoteID;
+  try
+    Self.MarkSentRequestCount;
+    Self.Module.Transfer(Self.Destination, Self.Destination, TargetDialog).Send;
+    CheckRequestSent('No request sent');
+
+    CheckEquals(MethodRefer,
+                Self.LastSentRequest.Method,
+                'Unexpected request sent');
+    Check(Self.LastSentRequest.HasHeader(TargetDialogHeader),
+          'REFER''s missing a Target-Dialog header');
+    CheckEquals(Session.Dialog.ID.CallID,
+                Self.LastSentRequest.TargetDialog.CallID,
+                'Target-Dialog call-id');
+    CheckEquals(Session.Dialog.ID.LocalTag,
+                Self.LastSentRequest.TargetDialog.RemoteTag,
+                'Target-Dialog remote-tag');
+    CheckEquals(Session.Dialog.ID.RemoteTag,
+                Self.LastSentRequest.TargetDialog.LocalTag,
+                'Target-Dialog local-tag');
+  finally
+    TargetDialog.Free;
+  end;
 end;
 
 procedure TestTIdSipSubscribeModule.TestUAAllowedContentTypes;
@@ -4466,6 +4508,36 @@ begin
               'Event header of REFER MUST contain ONLY "refer"');
 end;
 
+procedure TestTIdSipOutboundReferral.TestTargetDialog;
+var
+  NewID: TIdSipDialogID;
+  OldID: TIdSipDialogID;
+  Ref:   TIdSipOutboundReferral;
+begin
+  NewID := TIdSipDialogID.Create('new-id', '1', '1');
+  try
+    OldID := TIdSipDialogID.Create('old-id', '1', '1');
+    try
+      Ref := TIdSipOutboundReferral.Create(Self.Core);
+      try
+        Ref.TargetDialog := OldID;
+        Check(Ref.TargetDialog.Equals(OldID),
+              'TargetDialog not assigned');
+
+        Ref.TargetDialog := NewID;
+        Check(Ref.TargetDialog.Equals(NewID),
+              'TargetDialog not reassigned');
+      finally
+        Ref.Free;
+      end;
+    finally
+      OldID.Free;
+    end;
+  finally
+    NewID.Free;
+  end;
+end;
+
 procedure TestTIdSipOutboundReferral.TestReceiveTerminatingNotifyDeactivated;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
@@ -4588,6 +4660,43 @@ begin
 
   Self.CheckTerminatedSubscriptionWithNoResubscribe(Self.UnknownReason);
   Self.CheckNoRetryScheduled(Self.UnknownReason);
+end;
+
+procedure TestTIdSipOutboundReferral.TestSendWithTargetDialog;
+var
+  ID:  TIdSipDialogID;
+  Ref: TIdSipOutboundReferral;
+begin
+  ID := TIdSipDialogID.Create('call-id', 'local-tag', 'remote-tag');
+  try
+    Ref := TIdSipOutboundReferral.Create(Self.Core);
+    try
+      // Supply some necessary, though arbitrary, details.
+      Ref.ReferredResource := Self.Destination;
+      Ref.Target           := Self.Destination;
+
+      Ref.TargetDialog := ID;
+
+      Self.MarkSentRequestCount;
+      Ref.Send;
+      CheckRequestSent('No request sent');
+      Check(Self.LastSentRequest.HasHeader(TargetDialogHeader),
+            'Request missing a Target-Dialog header');
+      CheckEquals(ID.CallID,
+                  Self.LastSentRequest.TargetDialog.CallID,
+                  'Target-Dialog''s call-id');
+      CheckEquals(ID.LocalTag,
+                  Self.LastSentRequest.TargetDialog.LocalTag,
+                  'Target-Dialog''s local-tag');
+      CheckEquals(ID.RemoteTag,
+                  Self.LastSentRequest.TargetDialog.RemoteTag,
+                  'Target-Dialog''s remote-tag');
+    finally
+      Ref.Free;
+    end;
+  finally
+    ID.Free;
+  end;
 end;
 
 //* TestTIdSipOutboundReferral Protected methods *******************************

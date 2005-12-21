@@ -13,9 +13,9 @@ interface
 
 uses
   Classes, Contnrs, IdInterfacedObject, IdNotification, IdSipCore,
-  IdSipInviteModule, IdSipLocator, IdSipMessage, IdSipRegistration,
-  IdSipSubscribeModule, IdSipTransaction, IdSipTransport,  IdSipUserAgent,
-  IdTimerQueue, SyncObjs, SysUtils, Messages, Windows;
+  IdSipDialogID, IdSipInviteModule, IdSipLocator, IdSipMessage,
+  IdSipRegistration, IdSipSubscribeModule, IdSipTransaction, IdSipTransport,
+  IdSipUserAgent, IdTimerQueue, SyncObjs, SysUtils, Messages, Windows;
 
 type
   TIdSipHandle = Cardinal;
@@ -196,6 +196,9 @@ type
     function  MakeRefer(Target: TIdSipAddressHeader;
                         Resource: TIdSipAddressHeader): TIdSipHandle;
     function  MakeRegistration(Registrar: TIdSipUri): TIdSipHandle;
+    function  MakeTransfer(Transferee: TIdSipAddressHeader;
+                           TransferTarget: TIdSipAddressHeader;
+                           Call: TIdSipHandle): TIdSipHandle;
     procedure ModifyCall(ActionHandle: TIdSipHandle;
                          const Offer: String;
                          const ContentType: String);
@@ -840,8 +843,7 @@ function TIdSipStackInterface.MakeRefer(Target: TIdSipAddressHeader;
 var
   Ref: TIdSipOutboundReferral;
 begin
-  // Transfer a call (for instance) to someone else (Resource) by sending a
-  // REFER message to the caller (Target).
+  // Refer Target to the Resource by sending a REFER message to Target.
 
   // Check that the UA even supports REFER!
   if not Assigned(Self.SubscribeModule) then
@@ -859,6 +861,43 @@ begin
   Reg := Self.UserAgent.RegisterModule.RegisterWith(Registrar);
   Result := Self.AddAction(Reg);
   Reg.AddListener(Self);
+end;
+
+function TIdSipStackInterface.MakeTransfer(Transferee: TIdSipAddressHeader;
+                                           TransferTarget: TIdSipAddressHeader;
+                                           Call: TIdSipHandle): TIdSipHandle;
+var
+  Action:       TIdSipAction;
+  Ref:          TIdSipOutboundReferral;
+  Session:      TIdSipSession;
+  TargetDialog: TIdSipDialogID;
+begin
+  // Transfer Transferee to TranserTarget using the (remote party's) dialog
+  // ID of Call as authorization.
+
+  // Check that the UA even supports REFER!
+  if not Assigned(Self.SubscribeModule) then
+    raise ENotSupported.Create(MethodRefer);
+
+  Self.ActionLock.Acquire;
+  try
+    Action := Self.GetAndCheckAction(Call, TIdSipSession);
+
+    Session := Action as TIdSipSession;
+
+    TargetDialog := Session.Dialog.ID.GetRemoteID;
+    try
+      Ref := Self.SubscribeModule.Transfer(Transferee,
+                                           TransferTarget,
+                                           TargetDialog);
+      Result := Self.AddAction(Ref);
+      Ref.AddListener(Self);
+    finally
+      TargetDialog.Free;
+    end;
+  finally
+    Self.ActionLock.Release;
+  end;
 end;
 
 procedure TIdSipStackInterface.ModifyCall(ActionHandle: TIdSipHandle;

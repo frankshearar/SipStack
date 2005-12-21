@@ -183,6 +183,9 @@ type
     procedure RemoveListener(Listener: IIdSipSubscribeModuleListener);
     function  Subscribe(Target: TIdSipAddressHeader;
                         const EventPackage: String): TIdSipOutboundSubscription;
+    function  Transfer(Transferee: TIdSipAddressHeader;
+                       TransferTarget: TIdSipAddressHeader;
+                       TargetDialog: TIdSipDialogID): TIdSipOutboundReferral;
     function  WillAccept(Request: TIdSipRequest): Boolean; override;
 
     property MinimumExpiryTime:           Cardinal read fMinimumExpiryTime write fMinimumExpiryTime;
@@ -405,18 +408,21 @@ type
 
   TIdSipOutboundRefer = class(TIdSipOutboundSubscribe)
   private
-    fReferTo: TIdSipAddressHeader;
+    fReferTo:      TIdSipAddressHeader;
+    fTargetDialog: TIdSipDialogID;
 
     procedure SetReferTo(Value: TIdSipAddressHeader);
+    procedure SetTargetDialog(Value: TIdSipDialogID);
   protected
-    function  CreateNewAttempt: TIdSipRequest; override;
+    function CreateNewAttempt: TIdSipRequest; override;
   public
     class function Method: String; override;
 
     constructor Create(UA: TIdSipAbstractCore); overload; override;
     destructor  Destroy; override;
 
-    property ReferTo: TIdSipAddressHeader read fReferTo write SetReferTo;
+    property ReferTo:      TIdSipAddressHeader read fReferTo write SetReferTo;
+    property TargetDialog: TIdSipDialogID      read fTargetDialog write SetTargetDialog;
   end;
 
   TIdSipSubscriptionExpires = class;
@@ -605,8 +611,10 @@ type
   TIdSipOutboundReferral = class(TIdSipOutboundSubscription)
   private
     fReferredResource: TIdSipAddressHeader;
+    fTargetDialog:     TIdSipDialogID;
 
     procedure SetReferredResource(Value: TIdSipAddressHeader);
+    procedure SetTargetDialog(Value: TIdSipDialogID);
   protected
     procedure ConfigureRequest(Sub: TIdSipOutboundSubscribe); override;
     function  CreateNewAttempt: TIdSipRequest; override;
@@ -621,6 +629,7 @@ type
     procedure Send; override;
 
     property ReferredResource: TIdSipAddressHeader read fReferredResource write SetReferredResource;
+    property TargetDialog:     TIdSipDialogID      read fTargetDialog write SetTargetDialog;
   end;
 
   TIdSipSubscriptionExpires = class(TIdSipActionClosure)
@@ -1023,6 +1032,20 @@ begin
   Sub.EventPackage := EventPackage;
 
   Result := Sub;
+end;
+
+function TIdSipSubscribeModule.Transfer(Transferee: TIdSipAddressHeader;
+                                        TransferTarget: TIdSipAddressHeader;
+                                        TargetDialog: TIdSipDialogID): TIdSipOutboundReferral;
+var
+  Refer: TIdSipOutboundReferral;
+begin
+  Refer := Self.UserAgent.AddOutboundAction(TIdSipOutboundReferral) as TIdSipOutboundReferral;
+  Refer.ReferredResource := TransferTarget;
+  Refer.Target := Transferee;
+  raise Exception.Create('TIdSipSubscribeModule.Transfer');
+
+  Result := Refer;
 end;
 
 function TIdSipSubscribeModule.WillAccept(Request: TIdSipRequest): Boolean;
@@ -1744,6 +1767,12 @@ begin
   Result := Self.Module.CreateRefer(Self.Target, Self.ReferTo);
   Result.Event.ID             := Self.ID;
   Result.Expires.NumericValue := Self.Duration;
+
+  if Assigned(Self.TargetDialog) then begin
+    Result.TargetDialog.CallID    := Self.TargetDialog.CallID;
+    Result.TargetDialog.LocalTag  := Self.TargetDialog.LocalTag;
+    Result.TargetDialog.RemoteTag := Self.TargetDialog.RemoteTag;
+  end;
 end;
 
 //* TIdSipOutboundRefer Private methods ****************************************
@@ -1751,6 +1780,15 @@ end;
 procedure TIdSipOutboundRefer.SetReferTo(Value: TIdSipAddressHeader);
 begin
   Self.fReferTo.Assign(Value);
+end;
+
+procedure TIdSipOutboundRefer.SetTargetDialog(Value: TIdSipDialogID);
+begin
+  if Assigned(Self.fTargetDialog) then
+    FreeAndNil(Self.fTargetDialog);
+
+  if Assigned(Value) then
+    Self.fTargetDialog := TIdSipDialogID.Create(Value);
 end;
 
 //******************************************************************************
@@ -2783,7 +2821,8 @@ begin
   // However, an initial OutboundSubscribe will actually be an OutboundRefer:
   if (Sub is TIdSipOutboundRefer) then begin
     Refer := Sub as TIdSipOutboundRefer;
-    Refer.ReferTo := Self.ReferredResource;
+    Refer.ReferTo      := Self.ReferredResource;
+    Refer.TargetDialog := Self.TargetDialog;
   end;
 end;
 
@@ -2792,6 +2831,12 @@ begin
   Result := Self.Module.CreateRefer(Self.Target, Self.ReferredResource);
   Result.Event.ID             := Self.ID;
   Result.Expires.NumericValue := Self.Duration;
+
+  if Assigned(Self.TargetDialog) then begin
+    Result.TargetDialog.CallID    := Self.TargetDialog.CallID;
+    Result.TargetDialog.LocalTag  := Self.TargetDialog.LocalTag;
+    Result.TargetDialog.RemoteTag := Self.TargetDialog.RemoteTag;
+  end;
 end;
 
 function TIdSipOutboundReferral.CreateOutboundSubscribe: TIdSipOutboundSubscribe;
@@ -2824,6 +2869,15 @@ end;
 procedure TIdSipOutboundReferral.SetReferredResource(Value: TIdSipAddressHeader);
 begin
   Self.fReferredResource.Assign(Value);
+end;
+
+procedure TIdSipOutboundReferral.SetTargetDialog(Value: TIdSipDialogID);
+begin
+  if Assigned(Self.fTargetDialog) then
+    FreeAndNil(Self.fTargetDialog);
+
+  if Assigned(Value) then
+    Self.fTargetDialog := TIdSipDialogID.Create(Value);
 end;
 
 //******************************************************************************
