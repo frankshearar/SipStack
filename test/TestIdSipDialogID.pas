@@ -29,6 +29,7 @@ type
     procedure TestEqualsDifferentCallID;
     procedure TestEqualsDifferentLocalTag;
     procedure TestEqualsDifferentRemoteTag;
+    procedure TestGetRemoteID;
   end;
 
 implementation
@@ -143,6 +144,26 @@ begin
     Check(not D.Equals(Self.ID), 'Different Remote Tag');
   finally
     D.Free;
+  end;
+end;
+
+procedure TestTIdSipDialogID.TestGetRemoteID;
+var
+  Remote: TIdSipDialogID;
+begin
+  Remote := Self.ID.GetRemoteID;
+  try
+    CheckEquals(Self.ID.CallID,
+                Remote.CallID,
+                'Call-ID');
+    CheckEquals(Self.ID.RemoteTag,
+                Remote.LocalTag,
+                'Remote party''s local tag');
+    CheckEquals(Self.ID.LocalTag,
+                Remote.RemoteTag,
+                'Remote party''s remote tag');
+  finally
+    Remote.Free
   end;
 end;
 

@@ -25,6 +25,7 @@ type
 
     function AsString: String;
     function Equals(ID: TIdSipDialogID): Boolean;
+    function GetRemoteID: TIdSipDialogID;
 
     property CallID:    String read fCallID;
     property LocalTag:  String read fLocalTag;
@@ -75,6 +76,11 @@ begin
   Result := (Self.CallID    = ID.CallID)
         and (Self.LocalTag  = ID.LocalTag)
         and (Self.RemoteTag = ID.RemoteTag);
+end;
+
+function TIdSipDialogID.GetRemoteID: TIdSipDialogID;
+begin
+  Result := TIdSipDialogID.Create(Self.CallID, Self.RemoteTag, Self.LocalTag);
 end;
 
 end.
