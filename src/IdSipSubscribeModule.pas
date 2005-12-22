@@ -987,7 +987,7 @@ var
 begin
   Refer := Self.UserAgent.AddOutboundAction(TIdSipOutboundReferral) as TIdSipOutboundReferral;
   Refer.ReferredResource := Resource;
-  Refer.Target := Target;
+  Refer.Target           := Target;
 
   Result := Refer;
 end;
@@ -1042,8 +1042,8 @@ var
 begin
   Refer := Self.UserAgent.AddOutboundAction(TIdSipOutboundReferral) as TIdSipOutboundReferral;
   Refer.ReferredResource := TransferTarget;
-  Refer.Target := Transferee;
-  raise Exception.Create('TIdSipSubscribeModule.Transfer');
+  Refer.Target           := Transferee;
+  Refer.TargetDialog     := TargetDialog;
 
   Result := Refer;
 end;
