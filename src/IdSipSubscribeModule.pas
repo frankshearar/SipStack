@@ -62,7 +62,7 @@ end;
 
 uses
   Classes, Contnrs, IdNotification, IdSipCore, IdSipDialog, IdSipDialogID,
-  IdSipInviteModule, IdSipMessage, IdTimerQueue, SyncObjs, SysUtils;
+  IdSipMessage, IdTimerQueue, SyncObjs, SysUtils;
 
 type
   TIdSipOutboundNotify = class;
