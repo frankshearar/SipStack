@@ -73,7 +73,7 @@ type
                                   Progress: TIdSipResponse);
     procedure OnReferral(Session: TIdSipSession;
                          Refer: TIdSipRequest;
-                         Receiver: TIdSipTransport);
+                         UsingSecureTransport: Boolean);
   end;
 
   TIdSipInboundSession = class;
@@ -718,13 +718,13 @@ type
 
   TIdSipSessionReferralMethod = class(TIdSipSessionMethod)
   private
-    fRefer:     TIdSipRequest;
-    fTransport: TIdSipTransport;
+    fRefer:                TIdSipRequest;
+    fUsingSecureTransport: Boolean;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Refer:     TIdSipRequest   read fRefer write fRefer;
-    property Transport: TIdSipTransport read fTransport write fTransport;
+    property Refer:                TIdSipRequest read fRefer write fRefer;
+    property UsingSecureTransport: Boolean       read fUsingSecureTransport write fUsingSecureTransport;
   end;
 
   // We subclass TIdSipEstablishedSessionMethod solely for reusing
@@ -3481,7 +3481,7 @@ procedure TIdSipSessionReferralMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipSessionListener).OnReferral(Self.Session,
                                                 Self.Refer,
-                                                Self.Transport);
+                                                Self.UsingSecureTransport);
 end;
 
 end.

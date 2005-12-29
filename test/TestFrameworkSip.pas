@@ -378,6 +378,7 @@ type
     fReferral:                 Boolean;
     fRemoteSessionDescription: String;
     fSessionParam:             TIdSipSession;
+    fUsingSecureTransport:     Boolean;
   public
     constructor Create; override;
 
@@ -399,7 +400,7 @@ type
                                   Progress: TIdSipResponse);
     procedure OnReferral(Session: TIdSipSession;
                          Refer: TIdSipRequest;
-                         Receiver: TIdSipTransport);
+                         UsingSecureTransport: Boolean);
 
     property AnswerParam:              TIdSipResponse      read fAnswerParam;
     property EndedSession:             Boolean             read fEndedSession;
@@ -418,6 +419,7 @@ type
     property Referral:                 Boolean             read fReferral;
     property RemoteSessionDescription: String              read fRemoteSessionDescription;
     property SessionParam:             TIdSipSession       read fSessionParam;
+    property UsingSecureTransport:     Boolean             read fUsingSecureTransport;
   end;
 
   TIdSipTestSessionListenerEndedCounter = class(TIdSipTestSessionListener)
@@ -1806,12 +1808,12 @@ end;
 
 procedure TIdSipTestSessionListener.OnReferral(Session: TIdSipSession;
                                                Refer: TIdSipRequest;
-                                               Receiver: TIdSipTransport);
+                                               UsingSecureTransport: Boolean);
 begin
-  Self.fReferral      := true;
-  Self.fReferParam    := Refer;
-  Self.fSessionParam  := Session;
-  Self.fReceiverParam := Receiver;
+  Self.fReferral             := true;
+  Self.fReferParam           := Refer;
+  Self.fSessionParam         := Session;
+  Self.fUsingSecureTransport := UsingSecureTransport;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnReferral');

@@ -177,7 +177,7 @@ type
                                 Source: TIdSipConnectionBindings);
     procedure OnReferral(Session: TIdSipSession;
                          Refer: TIdSipRequest;
-                         Receiver: TIdSipTransport);
+                         UsingSecureTransport: Boolean);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure OnResponse(OptionsAgent: TIdSipOutboundOptions;
@@ -594,7 +594,7 @@ end;
 
 procedure TrnidSpike.OnReferral(Session: TIdSipSession;
                                 Refer: TIdSipRequest;
-                                Receiver: TIdSipTransport);
+                                UsingSecureTransport: Boolean);
 begin
 end;
 

@@ -77,7 +77,7 @@ type
                                   Progress: TIdSipResponse);
     procedure OnReferral(Session: TIdSipSession;
                          Refer: TIdSipRequest;
-                         Receiver: TIdSipTransport);
+                         UsingSecureTransport: Boolean);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport;
                             Destination: TIdSipLocation);
@@ -469,7 +469,7 @@ end;
 
 procedure TestTIdSipUserAgent.OnReferral(Session: TIdSipSession;
                                          Refer: TIdSipRequest;
-                                         Receiver: TIdSipTransport);
+                                         UsingSecureTransport: Boolean);
 begin
 end;
 

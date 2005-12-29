@@ -37,7 +37,7 @@ type
                                   Progress: TIdSipResponse);
     procedure OnReferral(Session: TIdSipSession;
                          Refer: TIdSipRequest;
-                         Receiver: TIdSipTransport);
+                         UsingSecureTransport: Boolean);
     procedure ReceiveMovedTemporarily(Invite: TIdSipRequest;
                                       const Contacts: array of String); overload;
     procedure ReceiveMovedTemporarily(const Contacts: array of String); overload;
@@ -297,7 +297,7 @@ type
                                   Progress: TIdSipResponse); virtual;
     procedure OnReferral(Session: TIdSipSession;
                          Refer: TIdSipRequest;
-                         Receiver: TIdSipTransport);
+                         UsingSecureTransport: Boolean);
     procedure ReceiveRemoteReInvite(Session: TIdSipSession);
     procedure ResendWith(Session: TIdSipSession;
                          AuthenticationChallenge: TIdSipResponse);
@@ -756,7 +756,7 @@ end;
 
 procedure TestDebug.OnReferral(Session: TIdSipSession;
                                Refer: TIdSipRequest;
-                               Receiver: TIdSipTransport);
+                               UsingSecureTransport: Boolean);
 begin
 end;
 
@@ -3266,7 +3266,7 @@ end;
 
 procedure TestTIdSipSession.OnReferral(Session: TIdSipSession;
                                        Refer: TIdSipRequest;
-                                       Receiver: TIdSipTransport);
+                                       UsingSecureTransport: Boolean);
 begin
   Self.OnReferralFired := true;
 end;
@@ -7061,9 +7061,9 @@ begin
   Self.Method := TIdSipSessionReferralMethod.Create;
   Self.Refer  :=  TIdSipRequest.Create;
 
-  Self.Method.Refer     := Self.Refer;
-  Self.Method.Session   := Self.Session;
-  Self.Method.Transport := Self.UA.Dispatcher.Transports[0];
+  Self.Method.Refer                := Self.Refer;
+  Self.Method.Session              := Self.Session;
+  Self.Method.UsingSecureTransport := Self.UA.Dispatcher.Transports[0].IsSecure;
 end;
 
 procedure TestTIdSipSessionReferralMethod.TearDown;
@@ -7086,8 +7086,8 @@ begin
         'Refer param');
   Check(Self.Method.Session = Self.Listener.SessionParam,
         'Session param');
-  Check(Self.Method.Transport = Self.UA.Dispatcher.Transports[0],
-        'Receiver param');      
+  Check(Self.Method.UsingSecureTransport = Self.UA.Dispatcher.Transports[0].IsSecure,
+        'UsingSecureTransport param');
 end;
 
 initialization

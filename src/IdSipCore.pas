@@ -340,7 +340,7 @@ type
     procedure AddAllowedLanguage(const LanguageID: String);
     procedure AddAllowedScheme(const Scheme: String);
     function  AddInboundAction(Request: TIdSipRequest;
-                               Receiver: TIdSipTransport): TIdSipAction;
+                               UsingSecureTransport: Boolean): TIdSipAction;
     procedure AddLocalHeaders(OutboundRequest: TIdSipRequest); virtual;
     function  AddModule(ModuleType: TIdSipMessageModuleClass): TIdSipMessageModule;
     procedure AddObserver(const Listener: IIdObserver);
@@ -1291,7 +1291,7 @@ begin
     Action.ReceiveRequest(Request);
 
   if not Assigned(Action) then
-    Action := Self.UserAgent.AddInboundAction(Self.Request, Self.Receiver);
+    Action := Self.UserAgent.AddInboundAction(Self.Request, Self.Receiver.IsSecure);
 
   if not Assigned(Action) then begin
     if Request.IsAck then
@@ -1410,14 +1410,14 @@ begin
 end;
 
 function TIdSipAbstractCore.AddInboundAction(Request: TIdSipRequest;
-                                             Receiver: TIdSipTransport): TIdSipAction;
+                                             UsingSecureTransport: Boolean): TIdSipAction;
 var
   Module: TIdSipMessageModule;
 begin
   Module := Self.ModuleFor(Request);
 
   if Assigned(Module) then begin
-    Result := Module.Accept(Request, Receiver.IsSecure);
+    Result := Module.Accept(Request, UsingSecureTransport);
 
     if Assigned(Result) then begin
       Self.Actions.Add(Result);

@@ -150,7 +150,7 @@ type
                                 Source: TIdSipConnectionBindings);
     procedure OnReferral(Session: TIdSipSession;
                          Refer: TIdSipRequest;
-                         Receiver: TIdSipTransport);
+                         UsingSecureTransport: Boolean);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure OnRenewedSubscription(UserAgent: TIdSipAbstractCore;
@@ -1462,14 +1462,14 @@ end;
 
 procedure TIdSipStackInterface.OnReferral(Session: TIdSipSession;
                                           Refer: TIdSipRequest;
-                                          Receiver: TIdSipTransport);
+                                          UsingSecureTransport: Boolean);
 var
   Data:     TIdSessionReferralData;
   Referral: TIdSipAction;
 begin
   Data := TIdSessionReferralData.Create;
   try
-    Referral := Self.UserAgent.AddInboundAction(Refer, Receiver);
+    Referral := Self.UserAgent.AddInboundAction(Refer, UsingSecureTransport);
 
     Data.Handle        := Self.HandleFor(Session);
     Data.EventPackage  := Refer.Event.EventType;
