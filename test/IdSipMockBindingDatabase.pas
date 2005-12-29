@@ -150,9 +150,11 @@ begin
     if C.HasParam(SipInstanceParam) then begin
       Gruu := Self.GruuFor(C.AsAddressOfRecord, C.SipInstance);
 
-      if Gruu = '' then begin
+      // If there's no GRUU for the AOR+instance-id then find the binding for the AOR
+      if (Gruu = '') then begin
         Binding := Self.Binding(AOR, C.AsAddressOfRecord);
 
+        // If there's a binding (and there should be), make a new GRUU
         if Assigned(Binding) then
           Binding.Gruu := Self.ConstructNewGruu(Binding.AddressOfRecord, C.SipInstance)
       end;

@@ -460,14 +460,14 @@ begin
   Self.CasesAOR.ToHeader.Value := 'sip:case@fried.neurons.org';
   Self.CasesAOR.RequestUri.Uri := 'sip:fried.neurons.org';
   Self.CaseContact := Self.CasesAOR.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
-  Self.CaseContact.Value := 'Case <' + Self.CasesAOR.RequestUri.Uri + '>';
+  Self.CaseContact.Value := 'Case <sip:terminal1>';
 
   Self.WintermutesAOR := TIdSipRequest.Create;
   Self.WintermutesAOR.Method         := MethodRegister;
   Self.WintermutesAOR.ToHeader.Value := 'sip:wintermute@tessier-ashpool.co.luna';
   Self.WintermutesAOR.RequestUri.Uri := 'sip:tessier-ashpool.co.luna';
   Self.Wintermute := Self.WintermutesAOR.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
-  Self.Wintermute.Value := 'Wintermute <' + Self.WintermutesAOR.RequestUri.Uri + '>';
+  Self.Wintermute.Value := 'Wintermute <sip:talking-head.tessier-ashpool.co.luna>';
 end;
 
 procedure TestTIdSipMockBindingDatabase.TearDown;
@@ -627,7 +627,7 @@ begin
   try
     Bindings.Add(Self.CaseContact);
 
-    Self.DB.GruusFor(Self.CaseContact.AsAddressOfRecord, Bindings);
+    Self.DB.GruusFor(Self.CasesAOR.From.AsCanonicalAddress, Bindings);
 
     Bindings.First;
     Check(Bindings.CurrentContact.HasParam(GruuParam),
@@ -668,7 +668,7 @@ begin
     Self.DB.AddBindings(Self.CasesAOR);
     Self.CaseContact.Address.Host := 'case@a111.public.booth.org';
     Self.DB.AddBindings(Self.CasesAOR);
-    Self.Wintermute.Address.Host := 'talking-head.tessier-ashpool.co.luna';
+    Self.Wintermute.Address.Host := 'silver-head.tessier-ashpool.co.luna';
     Self.DB.AddBindings(Self.WintermutesAOR);
 
     Bindings := TIdSipContacts.Create;
