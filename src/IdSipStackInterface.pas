@@ -1247,15 +1247,6 @@ begin
     Data.RemoteParty              := Session.RemoteParty;
     Data.RemoteSessionDescription := RemoteSessionDescription;
 
-    if Session.IsInbound then begin
-      Data.RemoteContact := Session.InitialRequest.FirstContact;
-      Data.RemoteParty   := Session.InitialRequest.From;
-    end
-    else begin
-      Data.RemoteContact.Value := Session.InitialRequest.ToHeader.FullValue; // This is WRONG. We want the Contact of the 2xx response
-      Data.RemoteParty := Session.InitialRequest.ToHeader;
-    end;
-
     Self.NotifyEvent(Session, CM_CALL_ESTABLISHED, Data);
   finally
     Data.Free;
