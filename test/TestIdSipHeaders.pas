@@ -565,6 +565,7 @@ type
   public
     procedure SetUp; override;
   published
+    procedure TestAssignDoesntNormallyRaiseAnException;
     procedure TestHasCompleteDialogID;
     procedure TestLocalTag;
     procedure TestName;
@@ -5184,6 +5185,27 @@ begin
 end;
 
 //* TestTIdSipTargetDialogHeader Published methods *****************************
+
+procedure TestTIdSipTargetDialogHeader.TestAssignDoesntNormallyRaiseAnException;
+var
+  Other: TIdSipTargetDialogHeader;
+begin
+  Other := TIdSipTargetDialogHeader.Create;
+  try
+    Other.Value := '1;local-tag=2;remote-tag=3';
+
+    Self.T.Assign(Other);
+    Check(not Self.T.IsMalformed,
+          'Header marked as malformed; the Assign() didn''t work properly');
+    Check(Self.T.Equals(Other), 'T <> Other; Assign() didn''t');
+    CheckEquals(Other.AsString,
+                Self.T.AsString,
+                'Header claims to be well-formed but Assign() didn''t copy '
+              + 'everything');
+  finally
+    Other.Free;
+  end;
+end;
 
 procedure TestTIdSipTargetDialogHeader.TestHasCompleteDialogID;
 begin

@@ -3787,9 +3787,8 @@ var
 begin
   if Src is TIdSipHeader then begin
     H := Src as TIdSipHeader;
-    Self.Name       := H.Name;
-    Self.Value      := H.Value;
-    Self.Parameters := H.Parameters;
+    Self.Name  := H.Name;
+    Self.Value := H.FullValue;
 
     Self.fIsMalformed     := H.fIsMalformed;
     Self.fParseFailReason := H.fParseFailReason;
