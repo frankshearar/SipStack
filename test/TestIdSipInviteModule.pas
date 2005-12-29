@@ -5266,13 +5266,6 @@ begin
               Session.LocalMimeType,
               'LocalMimeType');
 
-  CheckEquals(Self.LastSentRequest.FirstContact.AsString,
-              Session.RemoteContact.AsString,
-              'RemoteContact');
-  CheckEquals(Self.LastSentRequest.ToHeader.Value,
-              Session.RemoteParty.Value,
-              'RemoteParty');
-
   CheckRequestSent('no INVITE sent');
   Invite := Self.LastSentRequest;
 
@@ -5307,6 +5300,12 @@ begin
   AnswerType := SdpMimeType;
   Self.ReceiveOkWithBody(Invite, Answer, AnswerType);
 
+  CheckEquals(Self.Dispatcher.Transport.LastResponse.FirstContact.AsString,
+              Session.RemoteContact.AsString,
+              'RemoteContact');
+  CheckEquals(Self.LastSentRequest.ToHeader.Value,
+              Session.RemoteParty.Value,
+              'RemoteParty');
   CheckEquals(Answer,
               Session.RemoteSessionDescription,
               'RemoteSessionDescription');
