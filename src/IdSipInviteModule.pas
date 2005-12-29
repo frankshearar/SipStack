@@ -767,7 +767,7 @@ end;
 function TIdSipInviteModule.AddInboundInvite(Invite: TIdSipRequest;
                                              UsingSecureTransport: Boolean): TIdSipInboundInvite;
 begin
-  Result := Self.UserAgent.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.UserAgent, Invite, UsingSecureTransport)) as TIdSipInboundInvite;
+  Result := Self.UserAgent.AddAction(TIdSipInboundInvite.CreateInbound(Self.UserAgent, Invite, UsingSecureTransport)) as TIdSipInboundInvite;
 end;
 
 procedure TIdSipInviteModule.AddListener(Listener: IIdSipInviteModuleListener);
@@ -2993,8 +2993,7 @@ begin
   Self.InitialRequest.Assign(Self.InitialInvite.InitialRequest);
   Self.LocalGruu := Self.InitialInvite.LocalGruu;
 
-  Self.RemoteContact := Self.InitialRequest.FirstContact;
-  Self.RemoteParty   := Self.InitialRequest.ToHeader;
+  Self.RemoteParty := Self.InitialRequest.ToHeader;
 end;
 
 procedure TIdSipOutboundSession.Terminate;
