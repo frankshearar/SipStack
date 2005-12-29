@@ -112,6 +112,9 @@ type
     procedure TestAddActionNotifiesObservers;
     procedure TestAddObserver;
     procedure TestCleanOutTerminatedActions;
+    procedure TestFindActionForGruu;
+    procedure TestFindActionForGruuNoActions;
+    procedure TestFindActionForGruuWithOwnedActions;
     procedure TestFindActionAndPerformBlock;
     procedure TestFindActionAndPerformBlockNoActions;
     procedure TestFindActionAndPerformBlockNoMatch;
@@ -315,8 +318,9 @@ type
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
-  Result.AddTest(TestTIdSipAbstractCore.Suite);
+//  Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipActions.Suite);
+{
   Result.AddTest(TestLocation.Suite);
   Result.AddTest(TestTIdSipMessageModule.Suite);
   Result.AddTest(TestTIdSipNullModule.Suite);
@@ -327,6 +331,7 @@ begin
   Result.AddTest(TestTIdSipActionNetworkFailureMethod.Suite);
   Result.AddTest(TestTIdSipOptionsResponseMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentDroppedUnmatchedMessageMethod.Suite);
+}
 end;
 
 //******************************************************************************
@@ -1583,6 +1588,64 @@ begin
     Self.Actions.RemoveObserver(O);
     O.Free;
   end;
+end;
+
+procedure TestTIdSipActions.TestFindActionForGruu;
+const
+  LocalGruuOne = 'sip:127.0.0.1;grid=gruu-one';
+  LocalGruuTwo = 'sip:127.0.0.1;grid=gruu-two';
+var
+  A: TIdSipAction;
+  B: TIdSipAction;
+begin
+  // Set us up to use GRUU
+  Self.Core.UseGruu := true;
+  Self.Invite.Supported.Values.Add(ExtensionGruu);
+
+  // Create two actions (which will use different LocalGruus
+  A := Self.Actions.Add(TIdSipInboundSession.CreateInbound(Self.Core, Self.Invite, false));
+  A.LocalGruu.Value := '<' + LocalGruuOne + '>';
+  B := Self.Actions.Add(TIdSipOutboundSession.Create(Self.Core));
+  B.LocalGruu.Value := '<' + LocalGruuTwo + '>';
+
+  CheckEquals(LocalGruuOne,
+              Self.Actions.FindActionForGruu(LocalGruuOne).LocalGruu.Address.AsString,
+             'LocalGruuOne');
+  CheckEquals(LocalGruuTwo,
+              Self.Actions.FindActionForGruu(LocalGruuTwo).LocalGruu.Address.AsString,
+              'LocalGruuTwo');
+end;
+
+procedure TestTIdSipActions.TestFindActionForGruuNoActions;
+begin
+  Check(not Assigned(Self.Actions.FindActionForGruu('sip:127.0.0.1')),
+        'Action found despite there being no actions');
+
+  Self.Actions.Add(TIdSipInboundSession.CreateInbound(Self.Core, Self.Invite, false));
+  Check(not Assigned(Self.Actions.FindActionForGruu('sip:127.0.0.1')),
+        'Action found despite there being no matching action');
+end;
+
+procedure TestTIdSipActions.TestFindActionForGruuWithOwnedActions;
+const
+  LocalGruu = 'sip:127.0.0.1;grid=gruu';
+var
+  A:      TIdSipAction;
+  Action: TIdSipAction;
+  B:      TIdSipAction;
+begin
+  // Set us up to use GRUU
+  Self.Core.UseGruu := true;
+  Self.Invite.Supported.Values.Add(ExtensionGruu);
+
+  // Create two actions (which will use different LocalGruus
+  A := Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false));
+  A.LocalGruu.Value := '<' + LocalGruu + '>';
+  B := Self.Actions.Add(TIdSipInboundSession.CreateInbound(Self.Core, Self.Invite, false));
+  B.LocalGruu.Value := '<' + LocalGruu + '>';
+
+  Check(B = Self.Actions.FindActionForGruu(LocalGruu),
+        'LocalGruu');
 end;
 
 procedure TestTIdSipActions.TestFindActionAndPerformBlock;

@@ -156,6 +156,7 @@ type
     procedure FindActionAndPerformOr(Msg: TIdSipMessage;
                                      FoundBlock: TIdSipActionClosure;
                                      NotFoundBlock: TIdSipActionClosure); overload;
+    function  FindActionForGruu(const LocalGruu: String): TIdSipAction;
     function  InviteCount: Integer;
     function  NextActionID: String;
     function  OptionsCount: Integer;
@@ -335,10 +336,11 @@ type
     constructor Create; virtual;
     destructor  Destroy; override;
 
+    function  AddAction(Action: TIdSipAction): TIdSipAction;
     procedure AddAllowedLanguage(const LanguageID: String);
     procedure AddAllowedScheme(const Scheme: String);
     function  AddInboundAction(Request: TIdSipRequest;
-                               Receiver: TIdSipTransport): TIdSipAction; 
+                               Receiver: TIdSipTransport): TIdSipAction;
     procedure AddLocalHeaders(OutboundRequest: TIdSipRequest); virtual;
     function  AddModule(ModuleType: TIdSipMessageModuleClass): TIdSipMessageModule;
     procedure AddObserver(const Listener: IIdObserver);
@@ -359,6 +361,7 @@ type
                             Dialog: TIdSipDialog): TIdSipRequest; overload;
     function  CreateResponse(Request: TIdSipRequest;
                              ResponseCode: Cardinal): TIdSipResponse;
+    function  FindActionForGruu(const LocalGruu: String): TIdSipAction;
     procedure FindServersFor(Request: TIdSipRequest;
                              Result: TIdSipLocations); overload;
     procedure FindServersFor(Response: TIdSipResponse;
@@ -1054,6 +1057,35 @@ begin
   Self.CleanOutTerminatedActions;
 end;
 
+function TIdSipActions.FindActionForGruu(const LocalGruu: String): TIdSipAction;
+var
+  Action: TIdSipAction;
+  Gruu:   TIdSipUri;
+  I:      Integer;
+begin
+  // Return the non-Owned action that uses LocalGruu as its Contact.
+
+  Self.LockActions;
+  try
+    Gruu := TIdSipUri.Create(LocalGruu);
+    try
+      Result := nil;
+      I      := 0;
+      while (I < Self.Count) and not Assigned(Result) do begin
+        Action := Self.ActionAt(I);
+        if not Action.IsOwned and Action.LocalGruu.Address.Equals(Gruu) then
+          Result := Action
+        else
+          Inc(I);
+      end;
+    finally
+      Gruu.Free;
+    end;
+  finally
+    Self.UnlockActions;
+  end;
+end;
+
 function TIdSipActions.InviteCount: Integer;
 begin
   Result := Self.CountOf(MethodInvite);
@@ -1354,6 +1386,11 @@ begin
   inherited Destroy;
 end;
 
+function TIdSipAbstractCore.AddAction(Action: TIdSipAction): TIdSipAction;
+begin
+  Result := Self.Actions.Add(Action);
+end;
+
 procedure TIdSipAbstractCore.AddAllowedLanguage(const LanguageID: String);
 begin
   if (Trim(LanguageID) = '') then
@@ -1606,6 +1643,11 @@ begin
                                         ActualContact);
 
   Self.PrepareResponse(Result, Request);
+end;
+
+function TIdSipAbstractCore.FindActionForGruu(const LocalGruu: String): TIdSipAction;
+begin
+  Result := Self.Actions.FindActionForGruu(LocalGruu);
 end;
 
 procedure TIdSipAbstractCore.FindServersFor(Request: TIdSipRequest;
