@@ -188,8 +188,6 @@ type
     function  GruuOf(ActionHandle: TIdSipHandle): String;
     function  HandleOf(const LocalGruu: String): TIdSipHandle;
     procedure HangUp(ActionHandle: TIdSipHandle);
-//    function  MakeBlindTransfer(Call: TIdSipHandle;
-//                                NewTarget: TIdSipAddressHeader): TIdSipHandle;
     function  MakeCall(Dest: TIdSipAddressHeader;
                        const LocalSessionDescription: String;
                        const MimeType: String): TIdSipHandle;
@@ -766,25 +764,12 @@ begin
 end;
 
 function TIdSipStackInterface.HandleOf(const LocalGruu: String): TIdSipHandle;
-var
-  Action: TIdSipAction;
-  I:      Integer;
 begin
   // Find the handle of the action that uses LocalGruu as a Contact (typically
   // either a Session or a Subscription/Referral).
   Self.ActionLock.Acquire;
   try
-    Result := InvalidHandle;
-
-    I := 0;
-    while (I < Self.Actions.Count) and (Result = InvalidHandle) do begin
-      Action := Self.AssociationAt(I).Action;
-
-      if not Action.IsOwned and (Action.LocalGruu.FullValue = LocalGruu) then
-        Result := Self.AssociationAt(I).Handle
-      else
-        Inc(I);
-    end;
+    Result := Self.HandleFor(Self.UserAgent.FindActionForGruu(LocalGruu));
   finally
     Self.ActionLock.Release;
   end;
@@ -803,30 +788,7 @@ begin
     Self.ActionLock.Release;
   end;
 end;
-{
-function TIdSipStackInterface.MakeBlindTransfer(Call: TIdSipHandle;
-                                                NewTarget: TIdSipAddressHeader): TIdSipHandle;
-var
-  Action:   TIdSipAction;
-  Session:  TIdSipSession;
-  Transfer: TIdSipBlindTransferral;
-begin
-  // Remember, usually you want to put Call on hold before you invoke this
-  // procedure.
 
-  Self.ActionLock.Acquire;
-  try
-    Action := Self.GetAndCheckAction(Call, TIdSipSession);
-    Session := Action as TIdSipSession;
-
-    Transfer := Self.SubscribeModule.BlindTransfer(Session, NewTarget);
-    Result := Self.AddAction(Transfer);
-    Transfer.AddListener(Self);
-  finally
-    Self.ActionLock.Release;
-  end;
-end;
-}
 function TIdSipStackInterface.MakeCall(Dest: TIdSipAddressHeader;
                                        const LocalSessionDescription: String;
                                        const MimeType: String): TIdSipHandle;
