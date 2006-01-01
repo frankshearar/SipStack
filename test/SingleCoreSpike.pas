@@ -34,12 +34,15 @@ type
     FollowRefer: TButton;
     FollowReferAction: TAction;
     ReferredResourceLabel: TLabel;
+    Reject: TButton;
+    RejectAction: TAction;
     procedure CallActionExecute(Sender: TObject);
     procedure HangUpActionExecute(Sender: TObject);
     procedure RefreshConfigClick(Sender: TObject);
     procedure AnswerActionExecute(Sender: TObject);
     procedure TransferActionExecute(Sender: TObject);
     procedure FollowReferActionExecute(Sender: TObject);
+    procedure RejectActionExecute(Sender: TObject);
   private
     CallHandle:  TIdSipHandle;
     ReferTo:     TIdSipAddressHeader;
@@ -407,6 +410,11 @@ begin
                                            SdpMimeType);
     Self.Stack.Send(Self.CallHandle);
   end;
+end;
+
+procedure TSingleCore.RejectActionExecute(Sender: TObject);
+begin
+  Self.Stack.RejectCall(Self.CallHandle);
 end;
 
 end.

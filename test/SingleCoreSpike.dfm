@@ -143,7 +143,6 @@ object SingleCore: TSingleCore
       Height = 25
       Action = RefreshConfigAction
       TabOrder = 6
-      OnClick = RefreshConfigClick
     end
     object Answer: TButton
       Left = 75
@@ -176,6 +175,14 @@ object SingleCore: TSingleCore
       Action = FollowReferAction
       TabOrder = 10
     end
+    object Reject: TButton
+      Left = 150
+      Top = 24
+      Width = 75
+      Height = 25
+      Action = RejectAction
+      TabOrder = 11
+    end
   end
   object ActionManager: TActionManager
     Left = 248
@@ -202,6 +209,10 @@ object SingleCore: TSingleCore
     object FollowReferAction: TAction
       Caption = 'Follow Refer'
       OnExecute = FollowReferActionExecute
+    end
+    object RejectAction: TAction
+      Caption = 'Reject'
+      OnExecute = RejectActionExecute
     end
   end
 end
