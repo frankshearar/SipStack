@@ -877,31 +877,59 @@ begin
 end;
 
 procedure TIdSipStackInterface.NotifyReferralDenied(ActionHandle: TIdSipHandle);
+var
+  Action: TIdSipAction;
 begin
-  Self.NotifySubcriber(ActionHandle,
-                       TIdSipInboundReferral.ReferralDeniedBody,
-                       SipFragmentMimeType);
+  Self.ActionLock.Acquire;
+  try
+    Action := Self.GetAndCheckAction(ActionHandle, TIdSipInboundReferral);
+
+    (Action as TIdSipInboundReferral).ReferenceDenied;
+  finally
+    Self.ActionLock.Release;
+  end;
 end;
 
 procedure TIdSipStackInterface.NotifyReferralFailed(ActionHandle: TIdSipHandle);
+var
+  Action: TIdSipAction;
 begin
-  Self.NotifySubcriber(ActionHandle,
-                       TIdSipInboundReferral.ReferralFailedBody,
-                       SipFragmentMimeType);
+  Self.ActionLock.Acquire;
+  try
+    Action := Self.GetAndCheckAction(ActionHandle, TIdSipInboundReferral);
+
+    (Action as TIdSipInboundReferral).ReferenceFailed;
+  finally
+    Self.ActionLock.Release;
+  end;
 end;
 
 procedure TIdSipStackInterface.NotifyReferralSucceeded(ActionHandle: TIdSipHandle);
+var
+  Action: TIdSipAction;
 begin
-  Self.NotifySubcriber(ActionHandle,
-                       TIdSipInboundReferral.ReferralSucceededBody,
-                       SipFragmentMimeType);
+  Self.ActionLock.Acquire;
+  try
+    Action := Self.GetAndCheckAction(ActionHandle, TIdSipInboundReferral);
+
+    (Action as TIdSipInboundReferral).ReferenceSucceeded;
+  finally
+    Self.ActionLock.Release;
+  end;
 end;
 
 procedure TIdSipStackInterface.NotifyReferralTrying(ActionHandle: TIdSipHandle);
+var
+  Action: TIdSipAction;
 begin
-  Self.NotifySubcriber(ActionHandle,
-                       TIdSipInboundReferral.ReferralTryingBody,
-                       SipFragmentMimeType);
+  Self.ActionLock.Acquire;
+  try
+    Action := Self.GetAndCheckAction(ActionHandle, TIdSipInboundReferral);
+
+    (Action as TIdSipInboundReferral).ReferenceTrying;
+  finally
+    Self.ActionLock.Release;
+  end;
 end;
 
 procedure TIdSipStackInterface.NotifySubcriber(ActionHandle: TIdSipHandle;
