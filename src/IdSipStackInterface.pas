@@ -425,6 +425,8 @@ type
     property RemoteSessionDescription: String              read fRemoteSessionDescription write fRemoteSessionDescription;
   end;
 
+  TIdSessionDataClass = class of TIdSessionData;
+
   TIdEstablishedSessionData = class(TIdSessionData)
   protected
     function EventName: String; override;
@@ -537,11 +539,7 @@ type
     property Stack:  TIdSipStackInterface read fStack write fStack;
   end;
 
-  EInvalidHandle = class(Exception)
-  public
-    constructor Create(const Reason: String;
-                       Handle: TIdSipHandle);
-  end;
+  EInvalidHandle = class(Exception);
 
   // Raise me when the UserAgent doesn't support an action (e.g., it doesn't use
   // the SubscribeModule and the caller tried to MakeRefer).
@@ -603,7 +601,7 @@ uses
   IdSipMockLocator, IdStack, IdUDPServer;
 
 const
-  ActionNotAllowedForHandle = 'You cannot perform that action on this handle (%d)';
+  ActionNotAllowedForHandle = 'You cannot perform a %s action on a %s handle (%d)';
   NoSuchHandle              = 'No such handle (%d)';
 
 function EventNames(Event: Cardinal): String;
@@ -1041,10 +1039,10 @@ begin
   Result := Self.ActionFor(Handle);
 
   if not Assigned(Result) then
-    raise EInvalidHandle.Create(NoSuchHandle, Handle);
+    raise EInvalidHandle.Create(Format(NoSuchHandle, [Handle]));
 
   if not (Result is ExpectedType) then
-    raise EInvalidHandle.Create(ActionNotAllowedForHandle, Handle);
+    raise EInvalidHandle.Create(Format(ActionNotAllowedForHandle, [Result.ClassName, ExpectedType.ClassName, Handle]));
 end;
 
 function TIdSipStackInterface.HandleFor(Action: TIdSipAction): TIdSipHandle;
@@ -1467,15 +1465,17 @@ var
   Data:     TIdSessionReferralData;
   Referral: TIdSipAction;
 begin
+{
   Data := TIdSessionReferralData.Create;
   try
+}
     Referral := Self.UserAgent.AddInboundAction(Refer, UsingSecureTransport);
-
+{
     Data.Handle        := Self.HandleFor(Session);
     Data.EventPackage  := Refer.Event.EventType;
     Data.From          := Refer.From;
     Data.ReferTo       := Refer.ReferTo;
-    Data.ReferAction   := Self.HandleFor(Referral);
+    Data.ReferAction   := Self.AddAction(Referral);
     Data.RemoteContact := Refer.FirstContact;
     Data.Target        := Refer.RequestUri;
 
@@ -1483,6 +1483,7 @@ begin
   finally
     Data.Free;
   end;
+}
 end;
 
 procedure TIdSipStackInterface.OnRejectedMessage(const Msg: String;
@@ -2376,17 +2377,6 @@ begin
   (Subject as IIdSipStackListener).OnEvent(Self.Stack,
                                            Self.Event,
                                            Self.Data);
-end;
-
-//******************************************************************************
-//* EInvalidHandle                                                             *
-//******************************************************************************
-//* EInvalidHandle Public methods **********************************************
-
-constructor EInvalidHandle.Create(const Reason: String;
-                                  Handle: TIdSipHandle);
-begin
-  inherited Create(Format(Reason, [Handle]));
 end;
 
 end.
