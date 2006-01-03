@@ -1630,9 +1630,8 @@ procedure TestTIdSipActions.TestFindActionForGruuWithOwnedActions;
 const
   LocalGruu = 'sip:127.0.0.1;grid=gruu';
 var
-  A:      TIdSipAction;
-  Action: TIdSipAction;
-  B:      TIdSipAction;
+  A: TIdSipAction;
+  B: TIdSipAction;
 begin
   // Set us up to use GRUU
   Self.Core.UseGruu := true;
