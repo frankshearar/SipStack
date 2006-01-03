@@ -53,4 +53,4 @@ Known bugs:
 * The TCP transport test TestSendResponsesClosedConnection has a race
   condition somewhere.
 
-Frank Shearar, 2005/xx/xx
+Frank Shearar, 2006/01/03
