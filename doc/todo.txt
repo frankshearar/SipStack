@@ -113,9 +113,6 @@ RFC 3891 still to do:
    3.  User Agent Server Behavior: Receiving a Replaces Header . . .   4
    4.  User Agent Client Behavior: Sending a Replaces Header . . . .   6
    5.  Proxy Behavior. . . . . . . . . . . . . . . . . . . . . . . .   7
-   6.  Syntax. . . . . . . . . . . . . . . . . . . . . . . . . . . .   7
-       6.1.  The Replaces Header . . . . . . . . . . . . . . . . . .   7
-       6.2.  New Option Tag for Require and Supported Headers. . . .   8
 
 
 Notes:
