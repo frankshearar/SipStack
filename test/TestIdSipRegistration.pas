@@ -76,7 +76,6 @@ type
     procedure TestFailAddBinding;
     procedure TestFailBindingsFor;
     procedure TestFailRemoveBinding;
-    procedure TestGruusFor;
     procedure TestRemoveAllBindings;
     procedure TestRemoveBinding;
     procedure TestRemoveBindingWhenNotPresent;
@@ -613,31 +612,6 @@ begin
   Self.DB.FailRemoveBinding := true;
   Check(not Self.DB.RemoveAllBindings(Self.WintermutesAOR),
         'RemoveAllBindings succeeded');
-end;
-
-procedure TestTIdSipMockBindingDatabase.TestGruusFor;
-const
-  ZeroUrn = '<urn:uuid:00000000-0000-0000-0000-000000000000>';
-var
-  Bindings: TIdSipContacts;
-begin
-  Self.CaseContact.SipInstance := ZeroUrn;
-  Self.DB.AddBindings(Self.CasesAOR);
-  Bindings := TIdSipContacts.Create;
-  try
-    Bindings.Add(Self.CaseContact);
-
-    Self.DB.GruusFor(Self.CasesAOR.From.AsCanonicalAddress, Bindings);
-
-    Bindings.First;
-    Check(Bindings.CurrentContact.HasParam(GruuParam),
-          'DB didn''t create and add a GRUU to the binding');
-    CheckNotEquals('',
-                   Bindings.CurrentContact.Gruu,
-                   '"gruu" parameters MUST have a value');
-  finally
-    Bindings.Free;
-  end;
 end;
 
 procedure TestTIdSipMockBindingDatabase.TestRemoveAllBindings;

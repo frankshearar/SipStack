@@ -55,8 +55,6 @@ type
     function  BindingCount: Integer;
     function  BindingsFor(Request: TIdSipRequest;
                           Contacts: TIdSipContacts): Boolean; override;
-    procedure GruusFor(const AOR: String;
-                       Contacts: TIdSipContacts); override;
     function  IsAuthorized(User: TIdSipAddressHeader;
                            AddressOfRecord: TIdSipUri): Boolean; override;
     function  IsValid(Request: TIdSipRequest): Boolean; override;
@@ -134,36 +132,6 @@ begin
     end;
 
   Result := not Self.FailBindingsFor;
-end;
-
-procedure TIdSipMockBindingDatabase.GruusFor(const AOR: String;
-                                             Contacts: TIdSipContacts);
-var
-  Binding: TIdRegistrarBinding;
-  C:       TIdSipContactHeader;
-  Gruu:    String;
-begin
-  Contacts.First;
-
-  while Contacts.HasNext do begin
-    C := Contacts.CurrentContact;
-    if C.HasParam(SipInstanceParam) then begin
-      Gruu := Self.GruuFor(C.AsAddressOfRecord, C.SipInstance);
-
-      // If there's no GRUU for the AOR+instance-id then find the binding for the AOR
-      if (Gruu = '') then begin
-        Binding := Self.Binding(AOR, C.AsAddressOfRecord);
-
-        // If there's a binding (and there should be), make a new GRUU
-        if Assigned(Binding) then
-          Binding.Gruu := Self.ConstructNewGruu(Binding.AddressOfRecord, C.SipInstance)
-      end;
-
-        C.Gruu := Gruu;
-    end;
-
-    Contacts.Next;
-  end;
 end;
 
 function TIdSipMockBindingDatabase.IsAuthorized(User: TIdSipAddressHeader;

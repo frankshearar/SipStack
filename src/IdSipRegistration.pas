@@ -101,6 +101,7 @@ type
   TIdSipAbstractBindingDatabase = class(TIdObservable)
   private
     fDefaultExpiryTime: Cardinal;
+    fUseGruu:           Boolean;
 
     function CorrectExpiry(Request: TIdSipRequest;
                            Contact: TIdSipContactHeader): Cardinal;
@@ -126,8 +127,6 @@ type
                              const CanonicalUri: String): TDateTime;
     function  BindingsFor(Request: TIdSipRequest;
                           Contacts: TIdSipContacts): Boolean; virtual; abstract;
-    procedure GruusFor(const AOR: String;
-                       Contacts: TIdSipContacts); virtual;
     function  NotOutOfOrder(Request: TIdSipRequest;
                             Contact: TIdSipContactHeader): Boolean;
     function  RemoveAllBindings(Request: TIdSipRequest): Boolean;
@@ -135,6 +134,7 @@ type
                             Contact: TIdSipContactHeader): Boolean; virtual; abstract;
 
     property DefaultExpiryTime: Cardinal read fDefaultExpiryTime write fDefaultExpiryTime;
+    property UseGruu:           Boolean  read fUseGruu write fUseGruu;
   end;
 
   TIdSipOutboundRegistration = class;
@@ -248,8 +248,11 @@ type
     procedure RejectNotFound(Request: TIdSipRequest);
     procedure RejectRequest(Request: TIdSipRequest;
                             StatusCode: Cardinal);
+    procedure ReturnCurrentBindings(Request: TIdSipRequest);
     procedure SendSimpleResponse(Request: TIdSipRequest;
                                 StatusCode: Cardinal);
+    procedure TryRemoveAllBindings(Request: TIdSipRequest);
+    function  WillRemoveAllBindings(Request: TIdSipRequest): Boolean;
   protected
     function  CreateNewAttempt: TIdSipRequest; override;
     procedure Initialise(UA: TIdSipAbstractCore;
@@ -608,16 +611,6 @@ begin
   Result := Self.Binding(AddressOfRecord, CanonicalUri).ValidUntil;
 end;
 
-procedure TIdSipAbstractBindingDatabase.GruusFor(const AOR: String;
-                                                 Contacts: TIdSipContacts);
-begin
-  // For each Contact in Contacts do find out the GRUU (if it exists) for
-  // the AOR/instance-id pair in Contact.
-
-  // By default, do nothing. BindingDatabases that support GRUU will override
-  // this method.
-end;
-
 function TIdSipAbstractBindingDatabase.NotOutOfOrder(Request: TIdSipRequest;
                                                      Contact: TIdSipContactHeader): Boolean;
 var
@@ -895,24 +888,14 @@ begin
 end;
 
 procedure TIdSipInboundRegistration.ReceiveRequest(Register: TIdSipRequest);
-var
-  Bindings: TIdSipContacts;
-  Date:     TIdSipDateHeader;
-  Response: TIdSipResponse;
 begin
   Assert(Register.IsRegister,
          'TIdSipAction.ReceiveRegister must only receive REGISTERs');
 
   if not Self.AcceptRequest(Register) then Exit;
 
-  if (Register.ContactCount = 1)
-    and Register.FirstContact.IsWildCard
-    and (Register.QuickestExpiry = 0) then begin
-
-    if not Self.BindingDB.RemoveAllBindings(Register) then
-      Self.RejectFailedRequest(Register)
-    else
-      Self.SendSimpleResponse(Register, SIPOK);
+  if Self.WillRemoveAllBindings(Register) then begin
+    Self.TryRemoveAllBindings(Register);
     Exit;
   end;
 
@@ -921,47 +904,7 @@ begin
     Exit;
   end;
 
-  Bindings := TIdSipContacts.Create;
-  try
-    if Self.BindingDB.BindingsFor(Register,
-                                  Bindings) then begin
-      Response := Self.UA.CreateResponse(Register, SIPOK);
-      try
-        if Register.SupportsExtension(ExtensionGruu) then begin
-          // We obviously support GRUU, because otherwise the Transaction-User core
-          // would have rejected the request.
-
-          // draft-ietf-sip-gruu section 7.1.2.1 says you MUST have this header,
-          // RFC 3261 section 20 says not. The author thinks the draft's
-          // behaviour is unnecessary since the fact that the GRUU's in a
-          // "gruu" parameter indicates that, well, the "gruu" parameter value
-          // is a GRUU!
-          Response.Require.Values.Add(ExtensionGruu);
-
-          Self.BindingDB.GruusFor(Register.AddressOfRecord, Bindings);
-        end;
-
-        Response.AddHeaders(Bindings);
-
-        Date := TIdSipDateHeader.Create;
-        try
-          Date.Time.SetFromTDateTime(Now);
-          Response.AddHeader(Date);
-        finally
-          Date.Free;
-        end;
-
-        Self.SendResponse(Response);
-      finally
-        Response.Free;
-      end;
-    end
-    else begin
-      Self.RejectFailedRequest(Register);
-    end;
-  finally
-    Bindings.Free;
-  end;
+  Self.ReturnCurrentBindings(Register);
 
   Self.Terminate;
 end;
@@ -1095,6 +1038,55 @@ begin
   Self.SendSimpleResponse(Request, StatusCode);
 end;
 
+procedure TIdSipInboundRegistration.ReturnCurrentBindings(Request: TIdSipRequest);
+var
+  Bindings: TIdSipContacts;
+  Date:     TIdSipDateHeader;
+  Response: TIdSipResponse;
+begin
+  Bindings := TIdSipContacts.Create;
+  try
+    if Self.BindingDB.BindingsFor(Request,
+                                  Bindings) then begin
+      Response := Self.UA.CreateResponse(Request, SIPOK);
+      try
+        if Request.SupportsExtension(ExtensionGruu) then begin
+          // We obviously support GRUU, because otherwise the Transaction-User core
+          // would have rejected the request.
+
+          // draft-ietf-sip-gruu section 7.1.2.1 says you MUST have this header,
+          // RFC 3261 section 20 says not. The author thinks the draft's
+          // behaviour is unnecessary since the fact that the GRUU's in a
+          // "gruu" parameter indicates that, well, the "gruu" parameter value
+          // is a GRUU!
+          Response.Require.Values.Add(ExtensionGruu);
+        end;
+
+        Response.AddHeaders(Bindings);
+
+        Date := TIdSipDateHeader.Create;
+        try
+          Date.Time.SetFromTDateTime(Now);
+          Response.AddHeader(Date);
+        finally
+          Date.Free;
+        end;
+
+        Self.SendResponse(Response);
+      finally
+        Response.Free;
+      end;
+    end
+    else begin
+      // An error occured during the BindingDB finding all current contacts for
+      // the address of record.
+      Self.RejectFailedRequest(Request);
+    end;
+  finally
+    Bindings.Free;
+  end;
+end;
+
 procedure TIdSipInboundRegistration.SendSimpleResponse(Request: TIdSipRequest;
                                                        StatusCode: Cardinal);
 var
@@ -1107,6 +1099,21 @@ begin
   finally
     Response.Free;
   end;
+end;
+
+procedure TIdSipInboundRegistration.TryRemoveAllBindings(Request: TIdSipRequest);
+begin
+  if not Self.BindingDB.RemoveAllBindings(Request) then
+    Self.RejectFailedRequest(Request)
+  else
+    Self.SendSimpleResponse(Request, SIPOK);
+end;
+
+function TIdSipInboundRegistration.WillRemoveAllBindings(Request: TIdSipRequest): Boolean;
+begin
+  Result := (Request.ContactCount = 1)
+         and Request.FirstContact.IsWildCard
+         and (Request.QuickestExpiry = 0);
 end;
 
 //******************************************************************************
