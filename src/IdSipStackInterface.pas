@@ -90,8 +90,7 @@ type
     function  IndexOf(H: TIdSipHandle): Integer;
     function  HasHandle(H: TIdSipHandle): Boolean;
     function  NewHandle: TIdSipHandle;
-    procedure NotifyEvent(Action: TIdSipAction;
-                          Event: Cardinal;
+    procedure NotifyEvent(Event: Cardinal;
                           Data: TIdEventData);
     procedure NotifyOfSentMessage(Msg: TIdSipMessage;
                                   Destination: TIdSipLocation);
@@ -1154,8 +1153,7 @@ begin
   until not Self.HasHandle(Result);
 end;
 
-procedure TIdSipStackInterface.NotifyEvent(Action: TIdSipAction;
-                                           Event: Cardinal;
+procedure TIdSipStackInterface.NotifyEvent(Event: Cardinal;
                                            Data: TIdEventData);
 var
   Notification: TIdSipStackInterfaceEventMethod;
@@ -1181,7 +1179,7 @@ begin
     Data.Destination := Destination.Copy;
     Data.Message     := Msg.Copy;
 
-    Self.NotifyEvent(nil, CM_DEBUG_SEND_MSG, Data);
+    Self.NotifyEvent(CM_DEBUG_SEND_MSG, Data);
   finally
     Data.Free;
   end;
@@ -1196,7 +1194,7 @@ begin
     Data.Handle := InvalidHandle;
     Data.Event  := CM_DEBUG_STACK_STOPPED;
 
-    Self.NotifyEvent(nil, CM_DEBUG_STACK_STOPPED, Data);
+    Self.NotifyEvent(CM_DEBUG_STACK_STOPPED, Data);
   finally
     Data.Free;
   end;
@@ -1211,7 +1209,7 @@ begin
     Data.Handle := InvalidHandle;
     Data.Event  := CM_DEBUG_STACK_STARTED;
 
-    Self.NotifyEvent(nil, CM_DEBUG_STACK_STARTED, Data);
+    Self.NotifyEvent(CM_DEBUG_STACK_STARTED, Data);
   finally
     Data.Free;
   end;
@@ -1231,7 +1229,7 @@ begin
     if (Notify <> nil) then
       Data.Notify := Notify;
 
-    Self.NotifyEvent(Subscription, Event, Data);
+    Self.NotifyEvent(Event, Data);
   finally
     Data.Free;
   end;
@@ -1248,7 +1246,7 @@ begin
     Data.ChallengedRequest := Action.InitialRequest;
     Data.Handle            := Self.HandleFor(Action);
 
-    Self.NotifyEvent(Action, CM_AUTHENTICATION_CHALLENGE, Data);
+    Self.NotifyEvent(CM_AUTHENTICATION_CHALLENGE, Data);
   finally
     Data.Free;
   end;
@@ -1279,7 +1277,7 @@ begin
     Data.Handle := InvalidHandle;
     Data.Message := Message.Copy;
 
-    Self.NotifyEvent(nil, CM_DEBUG_DROPPED_MSG, Data);
+    Self.NotifyEvent(CM_DEBUG_DROPPED_MSG, Data);
   finally
     Data.Free;
   end;
@@ -1296,7 +1294,7 @@ begin
     Data.Handle := Self.HandleFor(Session);
     Data.ErrorCode := ErrorCode;
     Data.Reason    := Reason;
-    Self.NotifyEvent(Session, CM_CALL_ENDED, Data);
+    Self.NotifyEvent(CM_CALL_ENDED, Data);
 
     Self.RemoveAction(Data.Handle);
   finally
@@ -1320,7 +1318,7 @@ begin
     Data.RemoteParty              := Session.RemoteParty;
     Data.RemoteSessionDescription := RemoteSessionDescription;
 
-    Self.NotifyEvent(Session, CM_CALL_ESTABLISHED, Data);
+    Self.NotifyEvent(CM_CALL_ESTABLISHED, Data);
   finally
     Data.Free;
   end;
@@ -1345,7 +1343,7 @@ begin
     Data.Error  := E.ClassName;
     Data.Reason := E.Message;
 
-    Self.NotifyEvent(nil, CM_DEBUG_TRANSPORT_EXCEPTION, Data);
+    Self.NotifyEvent(CM_DEBUG_TRANSPORT_EXCEPTION, Data);
   finally
     Data.Free;
   end;
@@ -1372,7 +1370,7 @@ begin
     Data.ErrorCode := Response.StatusCode;
     Data.Reason    := Response.Description;
 
-    Self.NotifyEvent(RegisterAgent, CM_FAIL, Data);
+    Self.NotifyEvent(CM_FAIL, Data);
   finally
     Data.Free;
   end;
@@ -1400,7 +1398,7 @@ begin
     Data.RemoteSessionDescription := Session.RemoteSessionDescription;
     Data.RemoteMimeType           := Session.RemoteMimeType;
 
-    Self.NotifyEvent(Session, CM_CALL_REQUEST_NOTIFY, Data);
+    Self.NotifyEvent(CM_CALL_REQUEST_NOTIFY, Data);
   finally
     Data.Free;
   end;
@@ -1420,7 +1418,7 @@ begin
     Data.RemoteParty              := Session.RemoteParty;
     Data.RemoteSessionDescription := RemoteSessionDescription;
 
-    Self.NotifyEvent(Session, CM_CALL_REMOTE_MODIFY_REQUEST, Data);
+    Self.NotifyEvent(CM_CALL_REMOTE_MODIFY_REQUEST, Data);
   finally
     Data.Free;
   end;
@@ -1441,7 +1439,7 @@ begin
     Data.RemoteParty              := Session.RemoteParty;
     Data.RemoteSessionDescription := Answer.Body;
 
-    Self.NotifyEvent(Session, CM_CALL_OUTBOUND_MODIFY_SUCCESS, Data);
+    Self.NotifyEvent(CM_CALL_OUTBOUND_MODIFY_SUCCESS, Data);
   finally
     Data.Free;
   end;
@@ -1459,7 +1457,7 @@ begin
     Data.ErrorCode := ErrorCode;
     Data.Reason    := Reason;
 
-    Self.NotifyEvent(Action, CM_NETWORK_FAILURE, Data);
+    Self.NotifyEvent(CM_NETWORK_FAILURE, Data);
   finally
     Data.Free;
   end;
@@ -1491,7 +1489,7 @@ begin
     Data.RemoteSessionDescription := Progress.Body;
 
 
-    Self.NotifyEvent(Session, CM_CALL_PROGRESS, Data);
+    Self.NotifyEvent(CM_CALL_PROGRESS, Data);
   finally
     Data.Free;
   end;
@@ -1509,7 +1507,7 @@ begin
     Data.Binding := Source.Copy;
     Data.Message := Request.Copy;
 
-    Self.NotifyEvent(nil, CM_DEBUG_RECV_MSG, Data);
+    Self.NotifyEvent(CM_DEBUG_RECV_MSG, Data);
   finally
     Data.Free;
   end;
@@ -1527,7 +1525,7 @@ begin
     Data.Binding := Source.Copy;
     Data.Message := Response.Copy;
 
-    Self.NotifyEvent(nil, CM_DEBUG_RECV_MSG, Data);
+    Self.NotifyEvent(CM_DEBUG_RECV_MSG, Data);
   finally
     Data.Free;
   end;
@@ -1554,7 +1552,7 @@ begin
     Data.RemoteContact := Refer.FirstContact;
     Data.Target        := Refer.RequestUri;
 
-    Self.NotifyEvent(Session, CM_CALL_REFERRAL, Data);
+    Self.NotifyEvent(CM_CALL_REFERRAL, Data);
   finally
     Data.Free;
   end;
@@ -1572,7 +1570,7 @@ begin
     Data.Msg    := Msg;
     Data.Reason := Reason;
 
-    Self.NotifyEvent(nil, CM_DEBUG_TRANSPORT_REJECTED_MSG, Data);
+    Self.NotifyEvent(CM_DEBUG_TRANSPORT_REJECTED_MSG, Data);
   finally
     Data.Free;
   end;
@@ -1616,7 +1614,7 @@ begin
     Data.RemoteContact := Subscription.InitialRequest.FirstContact;
     Data.Target        := Subscription.InitialRequest.RequestUri;
 
-    Self.NotifyEvent(Subscription, CM_SUBSCRIPTION_REQUEST_NOTIFY, Data);
+    Self.NotifyEvent(CM_SUBSCRIPTION_REQUEST_NOTIFY, Data);
   finally
     Data.Free;
   end;
@@ -1632,7 +1630,7 @@ begin
     Data.Handle   := Self.HandleFor(RegisterAgent);
     Data.Contacts := CurrentBindings;
 
-    Self.NotifyEvent(RegisterAgent, CM_SUCCESS, Data);
+    Self.NotifyEvent(CM_SUCCESS, Data);
   finally
     Data.Free;
   end;
