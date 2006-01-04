@@ -2631,8 +2631,6 @@ begin
   Self.LocalMimeType           := ContentType;
 
   Self.InitialInvite.Accept(Offer, ContentType);
-  Self.LocalGruu := Self.InitialInvite.LocalGruu;
-  Self.FullyEstablished := true;
 end;
 
 function TIdSipInboundSession.IsInbound: Boolean;
@@ -2775,6 +2773,7 @@ begin
       Self.RemoteMimeType           := Ack.ContentType;
     end;
 
+    Self.FullyEstablished := true;
     Self.NotifyOfEstablishedSession(Self.InitialInvite.InitialRequest.Body,
                                     Self.InitialInvite.InitialRequest.ContentType);
     Self.InitialInvite := nil;
