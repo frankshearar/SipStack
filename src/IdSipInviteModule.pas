@@ -895,8 +895,6 @@ begin
                                                     Request,
                                                     UsingSecureTransport);
 
-      // TODO: This is oh so wrong! Why? Because the Core knows about inbound
-      // calls, even if the Core's a Registrar. And it shouldn't.
       Self.NotifyOfInboundCall(Session);
 
       if Request.HasHeader(ExpiresHeader) then
