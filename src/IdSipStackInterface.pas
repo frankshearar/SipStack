@@ -95,6 +95,8 @@ type
                           Data: TIdEventData);
     procedure NotifyOfSentMessage(Msg: TIdSipMessage;
                                   Destination: TIdSipLocation);
+    procedure NotifyOfStackShutdown;
+    procedure NotifyOfStackStartup;
     procedure NotifySubscriptionEvent(Event: Cardinal;
                                       Subscription: TIdSipSubscription;
                                       Notify: TIdSipRequest);
@@ -168,7 +170,6 @@ type
 
     procedure RemoveAction(Handle: TIdSipHandle);
     procedure SendAction(Action: TIdSipAction);
-    procedure SynchronizedNotify(Notification: TIdSipStackInterfaceEventMethod);
 
     property UiHandle:  HWnd            read fUiHandle;
     property UserAgent: TIdSipUserAgent read fUserAgent;
@@ -212,6 +213,7 @@ type
     procedure RejectCall(ActionHandle: TIdSipHandle);
     procedure Resume; override;
     procedure Send(ActionHandle: TIdSipHandle);
+    procedure Terminate; override;
   end;
 
   // I contain data relating to a particular event.
@@ -286,7 +288,16 @@ type
     function EventName: String; override;
   end;
 
-  TIdDebugData = class(TIdEventData);
+  TIdDebugData = class(TIdEventData)
+  private
+    fEvent: Cardinal;
+  protected
+    function EventName: String; override;
+  public
+    procedure Assign(Src: TPersistent); override;
+
+    property Event: Cardinal read fEvent write fEvent;
+  end;
 
   TIdDebugMessageData = class(TIdDebugData)
   private
@@ -575,7 +586,9 @@ const
   CM_DEBUG_SEND_MSG               = CM_DEBUG + 2;
   CM_DEBUG_TRANSPORT_EXCEPTION    = CM_DEBUG + 3;
   CM_DEBUG_TRANSPORT_REJECTED_MSG = CM_DEBUG + 4;
-  CM_LAST                         = CM_DEBUG_TRANSPORT_REJECTED_MSG;
+  CM_DEBUG_STACK_STARTED          = CM_DEBUG + 5;
+  CM_DEBUG_STACK_STOPPED          = CM_DEBUG + 6;
+  CM_LAST                         = CM_DEBUG_STACK_STOPPED;
 
 // Constants for TIdCallEndedData
 const
@@ -626,7 +639,9 @@ begin
     CM_DEBUG_RECV_MSG:               Result := 'CM_DEBUG_RECV_MSG';
     CM_DEBUG_SEND_MSG:               Result := 'CM_DEBUG_SEND_MSG';
     CM_DEBUG_TRANSPORT_EXCEPTION:    Result := 'CM_DEBUG_TRANSPORT_EXCEPTION';
-    CM_DEBUG_TRANSPORT_REJECTED_MSG: Result := 'CM_DEBUG_TRANSPORT_REJECTED_MSG';   
+    CM_DEBUG_TRANSPORT_REJECTED_MSG: Result := 'CM_DEBUG_TRANSPORT_REJECTED_MSG';
+    CM_DEBUG_STACK_STARTED:          Result := 'CM_DEBUG_STACK_STARTED';
+    CM_DEBUG_STACK_STOPPED:          Result := 'CM_DEBUG_STACK_STOPPED';
   else
     Result := 'Unknown: ' + IntToStr(Event);
   end;
@@ -987,6 +1002,8 @@ begin
   // THEN start my transport threads.
   for I := 0 to Self.UserAgent.Dispatcher.TransportCount - 1 do
     Self.UserAgent.Dispatcher.Transports[I].Start;
+
+  Self.NotifyOfStackStartup;  
 end;
 
 procedure TIdSipStackInterface.Send(ActionHandle: TIdSipHandle);
@@ -1001,6 +1018,13 @@ begin
   finally
     Self.ActionLock.Release;
   end;
+end;
+
+procedure TIdSipStackInterface.Terminate;
+begin
+  Self.NotifyOfStackShutdown;
+
+  inherited Terminate;
 end;
 
 //* TIdSipStackInterface Private methods ***************************************
@@ -1136,20 +1160,13 @@ procedure TIdSipStackInterface.NotifyEvent(Action: TIdSipAction;
 var
   Notification: TIdSipStackInterfaceEventMethod;
 begin
-  // We lock Actions before we notify so that we can guarantee that the handle
-  // will be valid for the duration of the notification.
-  Self.ActionLock.Acquire;
-  try
-    Notification := TIdSipStackInterfaceEventMethod.Create;
-    Notification.Data   := Data.Copy;
-    Notification.Event  := Event;
-    Notification.Stack  := Self;
+  Notification := TIdSipStackInterfaceEventMethod.Create;
+  Notification.Data   := Data.Copy;
+  Notification.Event  := Event;
+  Notification.Stack  := Self;
 
-    // The receiver of this message must free the Notification.
-    Self.SynchronizedNotify(Notification);
-  finally
-    Self.ActionLock.Release;
-  end;
+  // The receiver of this message must free the Notification.
+  PostMessage(Self.UiHandle, UINT(Notification.Event), WPARAM(Notification), 0)
 end;
 
 procedure TIdSipStackInterface.NotifyOfSentMessage(Msg: TIdSipMessage;
@@ -1165,6 +1182,36 @@ begin
     Data.Message     := Msg.Copy;
 
     Self.NotifyEvent(nil, CM_DEBUG_SEND_MSG, Data);
+  finally
+    Data.Free;
+  end;
+end;
+
+procedure TIdSipStackInterface.NotifyOfStackShutdown;
+var
+  Data: TIdDebugData;
+begin
+  Data := TIdDebugData.Create;
+  try
+    Data.Handle := InvalidHandle;
+    Data.Event  := CM_DEBUG_STACK_STOPPED;
+
+    Self.NotifyEvent(nil, CM_DEBUG_STACK_STOPPED, Data);
+  finally
+    Data.Free;
+  end;
+end;
+
+procedure TIdSipStackInterface.NotifyOfStackStartup;
+var
+  Data: TIdDebugData;
+begin
+  Data := TIdDebugData.Create;
+  try
+    Data.Handle := InvalidHandle;
+    Data.Event  := CM_DEBUG_STACK_STARTED;
+
+    Self.NotifyEvent(nil, CM_DEBUG_STACK_STARTED, Data);
   finally
     Data.Free;
   end;
@@ -1615,11 +1662,6 @@ begin
   Self.UserAgent.ScheduleEvent(TriggerImmediately, Wait);
 end;
 
-procedure TIdSipStackInterface.SynchronizedNotify(Notification: TIdSipStackInterfaceEventMethod);
-begin
-  PostMessage(Self.UiHandle, UINT(Notification.Event), WPARAM(Notification), 0)
-end;
-
 //******************************************************************************
 //* TIdEventData                                                               *
 //******************************************************************************
@@ -1801,6 +1843,31 @@ begin
 end;
 
 //******************************************************************************
+//* TIdDebugData                                                               *
+//******************************************************************************
+//* TIdDebugData Public methods ************************************************
+
+procedure TIdDebugData.Assign(Src: TPersistent);
+var
+  Other: TIdDebugData;
+begin
+  inherited Assign(Src);
+
+  if (Src is TIdDebugData) then begin
+    Other := Src as TIdDebugData;
+
+    Self.Event := Other.Event;
+  end;
+end;
+
+//* TIdDebugData Protected methods *********************************************
+
+function TIdDebugData.EventName: String;
+begin
+  Result := EventNames(Self.Event);
+end;
+
+//******************************************************************************
 //* TIdDebugMessageData                                                        *
 //******************************************************************************
 //* TIdDebugMessageData Public methods *****************************************
@@ -1820,6 +1887,7 @@ begin
 
   if (Src is TIdDebugMessageData) then begin
     Other := Src as TIdDebugMessageData;
+    
     Self.Message := Other.Message.Copy;
   end;
 end;

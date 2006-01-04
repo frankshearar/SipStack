@@ -187,6 +187,16 @@ type
     procedure TestCopy;
   end;
 
+  TestTIdDebugData = class(TTestCase)
+  private
+    Data: TIdDebugData;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCopy;
+  end;
+
   TestTIdDebugMessageData = class(TTestCase)
   private
     Data: TIdDebugMessageData;
@@ -353,6 +363,7 @@ begin
   Result.AddTest(TestTIdEventData.Suite);
   Result.AddTest(TestTIdInformationalData.Suite);
   Result.AddTest(TestTIdAuthenticationChallengeData.Suite);
+  Result.AddTest(TestTIdDebugData.Suite);
   Result.AddTest(TestTIdDebugMessageData.Suite);
   Result.AddTest(TestTIdDebugReceiveMessageData.Suite);
   Result.AddTest(TestTIdDebugSendMessageData.Suite);
@@ -1186,6 +1197,46 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdDebugData                                                           *
+//******************************************************************************
+//* TestTIdDebugData Public methods ********************************************
+
+procedure TestTIdDebugData.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Data := TIdDebugData.Create;
+  Self.Data.Event  := CM_DEBUG_STACK_STARTED;
+  Self.Data.Handle := $decafbad;
+end;
+
+procedure TestTIdDebugData.TearDown;
+begin
+  inherited TearDown;
+
+  Self.Data.Free;
+end;
+
+//* TestTIdDebugData Published methods *****************************************
+
+procedure TestTIdDebugData.TestCopy;
+var
+  Copy: TIdDebugData;
+begin
+  Copy := Self.Data.Copy as TIdDebugData;
+  try
+    CheckEquals(IntToHex(Self.Data.Handle, 8),
+                IntToHex(Copy.Handle, 8),
+                'Handle');
+    CheckEquals(IntToHex(Self.Data.Event, 8),
+                IntToHex(Copy.Event, 8),
+                'Event');
+  finally
+    Copy.Free;
+  end;
+end;
+
+//******************************************************************************
 //* TestTIdDebugMessageData                                                    *
 //******************************************************************************
 //* TestTIdDebugMessageData Public methods *************************************
@@ -1236,13 +1287,14 @@ begin
     try
       Expected.Text := Self.Data.Message.AsString;
       Expected.Insert(0, ''); // Timestamp + Handle
-      Expected.Insert(0, ''); // blank line
+      Expected.Insert(0, ''); // Event name
 
       Received.Text := Self.Data.AsString;
 
-      // We ignore the first line of the debug data (it's a timestamp & a
-      // handle)
+      // We ignore the first two line of the debug data (timestamp & handle,
+      // and event name)
       Received[0] := '';
+      Received[1] := '';
 
       CheckEquals(Expected.Text,
                   Received.Text,
