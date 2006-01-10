@@ -14,8 +14,9 @@ interface
 uses
   Classes, Contnrs, IdInterfacedObject, IdNotification, IdSipCore,
   IdSipDialogID, IdSipInviteModule, IdSipLocator, IdSipMessage,
-  IdSipRegistration, IdSipSubscribeModule, IdSipTransaction, IdSipTransport,
-  IdSipUserAgent, IdTimerQueue, SyncObjs, SysUtils, Messages, Windows;
+  IdSipNatMasquerader, IdSipRegistration, IdSipSubscribeModule,
+  IdSipTransaction, IdSipTransport, IdSipUserAgent, IdTimerQueue, SyncObjs,
+  SysUtils, Messages, Windows;
 
 type
   TIdSipHandle = Cardinal;
@@ -58,6 +59,10 @@ type
   //
   // My current implementation is Windows-specific. Ultimately, of course, we
   // want to be OS-agnostic (at least, as much as we can be).
+  //
+  // I use certain lines in the Configuration you give me, and the formats of
+  // these lines are:
+  //   MasqueradeAs: <IPv4 address|IPv6 reference>
   TIdSipStackInterface = class(TIdThreadedTimerQueue,
                                IIdSipActionListener,
                                IIdSipInviteModuleListener,
@@ -73,6 +78,7 @@ type
   private
     ActionLock:      TCriticalSection;
     Actions:         TObjectList;
+    Masquerader:     TIdSipNatMasquerader;
     fUiHandle:       HWnd;
     fUserAgent:      TIdSipUserAgent;
     SubscribeModule: TIdSipSubscribeModule;
@@ -83,7 +89,11 @@ type
 
     function  ActionFor(Handle: TIdSipHandle): TIdSipAction;
     function  AddAction(Action: TIdSipAction): TIdSipHandle;
+    procedure AddListenerToAllTransports(Listener: IIdSipTransportSendingListener);
+    procedure AddMasquerader(UserAgent: TIdSipAbstractCore;
+                             const MasqueradeAsLine: String);
     function  AssociationAt(Index: Integer): TIdActionAssociation;
+    procedure Configure(Configuration: TStrings);
     function  GetAndCheckAction(Handle: TIdSipHandle;
                                 ExpectedType: TIdSipActionClass): TIdSipAction;
     function  HandleFor(Action: TIdSipAction): TIdSipHandle;
@@ -604,6 +614,10 @@ type
     Reserved: DWord;
   end;
 
+// Configuration file constants
+const
+  MasqueradeAsDirective = 'MasqueradeAs';
+
 function EventNames(Event: Cardinal): String;
 
 implementation
@@ -681,6 +695,7 @@ begin
   Configurator := TIdSipStackConfigurator.Create;
   try
     Self.fUserAgent := Configurator.CreateUserAgent(Configuration, Self);
+    Self.Configure(Configuration);
     Self.UserAgent.AddUserAgentListener(Self);
     Self.UserAgent.InviteModule.AddListener(Self);
 //    Self.UserAgent.AddTransportListener(Self);
@@ -702,6 +717,9 @@ end;
 destructor TIdSipStackInterface.Destroy;
 begin
 //  Self.DebugUnregister;
+
+  if Assigned(Self.Masquerader) then
+    Self.Masquerader.Free;
 
   Self.UserAgent.Free;
 
@@ -1079,9 +1097,59 @@ begin
   end;
 end;
 
+procedure TIdSipStackInterface.AddListenerToAllTransports(Listener: IIdSipTransportSendingListener);
+var
+  I: Integer;
+begin
+  for I := 0 to Self.UserAgent.Dispatcher.TransportCount - 1 do
+    Self.UserAgent.Dispatcher.Transports[I].AddTransportSendingListener(Listener);
+end;
+
+procedure TIdSipStackInterface.AddMasquerader(UserAgent: TIdSipAbstractCore;
+                                              const MasqueradeAsLine: String);
+var
+  Address: String;
+begin
+  // PRECONDITION: UserAgent's fully configured (specifically, UserAgent has a
+  // Dispatcher, and that Dispatcher has been given all the transports you
+  // wanted.
+
+  // See class comment for the format for this directive.
+  Address := MasqueradeAsLine;
+  EatDirective(Address);
+
+  if not TIdIPAddressParser.IsIPv4Address(Address)
+    and not TIdIPAddressParser.IsIPv6Reference(Address) then
+    raise EParserError.Create('MasqueradeAs: "' + Address + '" is neither an IPv4 address or an IPv6 reference');
+
+  Self.Masquerader := TIdSipNatMasquerader.Create;
+
+  if TIdIPAddressParser.IsIPv6Reference(Address) then
+    Self.Masquerader.AddressType := Id_IPv6;
+
+  Self.Masquerader.NatAddress := Address;
+
+  Self.AddListenerToAllTransports(Self.Masquerader);
+end;
+
 function TIdSipStackInterface.AssociationAt(Index: Integer): TIdActionAssociation;
 begin
   Result := Self.Actions[Index] as TIdActionAssociation;
+end;
+
+procedure TIdSipStackInterface.Configure(Configuration: TStrings);
+var
+  FirstToken: String;
+  I:          Integer;
+  Line:       String;
+begin
+  for I := 0 to Configuration.Count - 1 do begin
+    Line := Configuration[I];
+    FirstToken := Trim(Fetch(Line, ':', false));
+
+    if IsEqual(FirstToken, MasqueradeAsDirective) then
+      Self.AddMasquerader(UserAgent, Configuration[I]);
+  end;
 end;
 
 function TIdSipStackInterface.GetAndCheckAction(Handle: TIdSipHandle;
