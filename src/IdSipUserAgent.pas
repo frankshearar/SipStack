@@ -109,7 +109,6 @@ type
     procedure CheckUri(Uri: TIdSipUri;
                        const FailMsg: String);
     function  CreateLayers(Context: TIdTimerQueue): TIdSipUserAgent;
-    procedure EatDirective(var Line: String);
     procedure InstantiateMissingObjectsAsDefaults(UserAgent: TIdSipAbstractCore);
     procedure ParseFile(UserAgent: TIdSipUserAgent;
                         Configuration: TStrings;
@@ -147,11 +146,23 @@ const
   SupportEventDirective    = 'SupportEvent';
   UseGruuDirective         = 'UseGruu';
 
+procedure EatDirective(var Line: String);
+
 implementation
 
 uses
   IdSimpleParser, IdSipIndyLocator, IdSipMockLocator,
   IdSipSubscribeModule, IdSystem, IdUnicode, SysUtils;
+
+//******************************************************************************
+//* Unit Public functions & procedures                                         *
+//******************************************************************************
+
+procedure EatDirective(var Line: String);
+begin
+  Fetch(Line, ':');
+  Line := Trim(Line);
+end;
 
 //******************************************************************************
 //* TIdSipUserAgent                                                            *
@@ -338,7 +349,7 @@ var
   Line: String;
 begin
   Line := AddressLine;
-  Self.EatDirective(Line);
+  EatDirective(Line);
 
   if (Trim(Line) = AutoKeyword) then
     Self.AddAutoAddress(UserAgent, AddressHeader)
@@ -357,7 +368,7 @@ var
 begin
   // See class comment for the format for this directive.
   Line := AuthenticationLine;
-  Self.EatDirective(Line);
+  EatDirective(Line);
 
   if IsEqual(Trim(Line), MockKeyword) then
     UserAgent.Authenticator := TIdSipMockAuthenticator.Create;
@@ -402,7 +413,7 @@ var
 begin
   // See class comment for the format for this directive.
   Line := NameServerLine;
-  Self.EatDirective(Line);
+  EatDirective(Line);
 
   Host := Fetch(Line, ':');
   Port := Fetch(Line, ' ');
@@ -430,7 +441,7 @@ var
 begin
   // See class comment for the format for this directive.
   Line := ProxyLine;
-  Self.EatDirective(Line);
+  EatDirective(Line);
 
   UserAgent.HasProxy := true;
 
@@ -454,7 +465,7 @@ begin
     Module := UserAgent.ModuleFor(MethodSubscribe) as TIdSipSubscribeModule;
 
   Line := SupportEventLine;
-  Self.EatDirective(Line);
+  EatDirective(Line);
 
   Packages := TStringList.Create;
   try
@@ -478,7 +489,7 @@ begin
   // See class comment for the format for this directive.
   Line := TransportLine;
 
-  Self.EatDirective(Line);
+  EatDirective(Line);
   Transport := Fetch(Line, ' ');
 
   NewTransport := TIdSipTransportRegistry.TransportFor(Transport).Create;
@@ -516,12 +527,6 @@ begin
   Result := TIdSipUserAgent.Create;
   Result.Timer := Context;
   Result.Dispatcher := TIdSipTransactionDispatcher.Create(Result.Timer, nil);
-end;
-
-procedure TIdSipStackConfigurator.EatDirective(var Line: String);
-begin
-  Fetch(Line, ':');
-  Line := Trim(Line);
 end;
 
 procedure TIdSipStackConfigurator.InstantiateMissingObjectsAsDefaults(UserAgent: TIdSipAbstractCore);
@@ -592,7 +597,7 @@ var
 begin
   // See class comment for the format for this directive.
   Line := RegisterLine;
-  Self.EatDirective(Line);
+  EatDirective(Line);
 
   Line := Trim(Line);
 
@@ -618,7 +623,7 @@ var
   Line: String;
 begin
   Line := InstanceIDLine;
-  Self.EatDirective(Line);
+  EatDirective(Line);
 
   UserAgent.InstanceID := Line;
 end;
@@ -629,7 +634,7 @@ var
   Line: String;
 begin
   Line := UseGruuLine;
-  Self.EatDirective(Line);
+  EatDirective(Line);
 
   UserAgent.UseGruu := IsEqual(Line, 'true')
                     or IsEqual(Line, 'yes')
