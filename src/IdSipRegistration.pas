@@ -62,7 +62,6 @@ type
   private
     fAddressOfRecord: String;
     fCallID:          String;
-    fGruu:            String;
     fInstanceID:      String;
     fSequenceNo:      Cardinal;
     fUri:             String;
@@ -77,7 +76,6 @@ type
 
     property AddressOfRecord: String    read fAddressOfRecord write fAddressOfRecord;
     property CallID:          String    read fCallID write fCallID;
-    property Gruu:            String    read fGruu write fGruu;
     property InstanceID:      String    read fInstanceID write fInstanceID;
     property SequenceNo:      Cardinal  read fSequenceNo write fSequenceNo;
     property Uri:             String    read fUri write fUri;
@@ -111,8 +109,14 @@ type
                          const CallID: String;
                          SequenceNo: Cardinal;
                          ExpiryTime: TDateTime): Boolean; virtual; abstract;
+    function  AddGruus(Request: TIdSipRequest;
+                       Bindings: TIdSipContacts): Boolean; virtual;
     function  Binding(const AddressOfRecord: String;
                       const CanonicalUri: String): TIdRegistrarBinding; virtual; abstract;
+    function  CollectBindingsFor(const AddressOfRecord: String;
+                                 Bindings: TIdSipContacts): Boolean; virtual;
+    function  CreateGruu(const AddressOfRecord: String;
+                         const SipInstance: String): String; virtual;
     procedure Commit; virtual; abstract;
     procedure Rollback; virtual; abstract;
     procedure StartTransaction; virtual; abstract;
@@ -122,11 +126,11 @@ type
     function  AddBindings(Request: TIdSipRequest): Boolean;
     function  IsAuthorized(User: TIdSipAddressHeader;
                            AddressOfRecord: TIdSipUri): Boolean; virtual; abstract;
-    function  IsValid(Request: TIdSipRequest): Boolean; virtual; abstract;
+    function  IsValid(Request: TIdSipRequest): Boolean; virtual;
     function  BindingExpires(const AddressOfRecord: String;
                              const CanonicalUri: String): TDateTime;
     function  BindingsFor(Request: TIdSipRequest;
-                          Contacts: TIdSipContacts): Boolean; virtual; abstract;
+                          Contacts: TIdSipContacts): Boolean; virtual;
     function  NotOutOfOrder(Request: TIdSipRequest;
                             Contact: TIdSipContactHeader): Boolean;
     function  RemoveAllBindings(Request: TIdSipRequest): Boolean;
@@ -369,7 +373,7 @@ type
 implementation
 
 uses
-  IdSipConsts, Math, SysUtils;
+  IdSipAuthentication, IdSipConsts, Math, SysUtils;
 
 const
   ItemNotFoundIndex = -1;
@@ -561,36 +565,33 @@ begin
   Self.StartTransaction;
   try
     Result := true;
-    Contacts := TIdSipContacts.Create(Request.Headers);
-    try
-      Contacts.First;
-      while Contacts.HasNext do begin
-        Binding := Self.Binding(AddressOfRecord,
-                                Contacts.CurrentContact.AsAddressOfRecord);
-        Expiry := Self.CorrectExpiry(Request,
+    Contacts := Request.Contacts;
+
+    Contacts.First;
+    while Contacts.HasNext do begin
+      Binding := Self.Binding(AddressOfRecord,
+                              Contacts.CurrentContact.AsCanonicalAddress);
+      Expiry := Self.CorrectExpiry(Request,
+                                   Contacts.CurrentContact);
+
+      if Assigned(Binding) then begin
+        Result := Result
+              and Self.NotOutOfOrder(Request,
                                      Contacts.CurrentContact);
-
-        if Assigned(Binding) then begin
-          Result := Result
-                and Self.NotOutOfOrder(Request,
-                                       Contacts.CurrentContact);
-          if Result and (Expiry = 0) then begin
-            Result := Result and Self.RemoveBinding(Request,
-                                                    Contacts.CurrentContact);
-          end;
-        end
-        else begin
-          Result := Result and Self.AddBinding(AddressOfRecord,
-                                               Contacts.CurrentContact,
-                                               Request.CallID,
-                                               Request.CSeq.SequenceNo,
-                                               Expiry);
+        if Result and (Expiry = 0) then begin
+          Result := Result and Self.RemoveBinding(Request,
+                                                  Contacts.CurrentContact);
         end;
-
-        Contacts.Next;
+      end
+      else begin
+        Result := Result and Self.AddBinding(AddressOfRecord,
+                                             Contacts.CurrentContact,
+                                             Request.CallID,
+                                             Request.CSeq.SequenceNo,
+                                             Expiry);
       end;
-    finally
-      Contacts.Free;
+
+      Contacts.Next;
     end;
 
     if Result then
@@ -605,10 +606,28 @@ begin
   Self.NotifyListenersOfChange;
 end;
 
+function TIdSipAbstractBindingDatabase.IsValid(Request: TIdSipRequest): Boolean;
+begin
+  // Return true if the address-of-record in Request's To header is valid for
+  // this database's domain.
+
+  Result := true;
+end;
+
 function TIdSipAbstractBindingDatabase.BindingExpires(const AddressOfRecord: String;
                                                       const CanonicalUri: String): TDateTime;
 begin
   Result := Self.Binding(AddressOfRecord, CanonicalUri).ValidUntil;
+end;
+
+function TIdSipAbstractBindingDatabase.BindingsFor(Request: TIdSipRequest;
+                                                   Contacts: TIdSipContacts): Boolean;
+begin
+  Contacts.Clear;
+  Result := Self.CollectBindingsFor(Request.AddressOfRecord, Contacts);
+
+  if Request.SupportsExtension(ExtensionGruu) and Self.UseGruu then
+    Result := Result and Self.AddGruus(Request, Contacts);
 end;
 
 function TIdSipAbstractBindingDatabase.NotOutOfOrder(Request: TIdSipRequest;
@@ -660,6 +679,43 @@ begin
 
   Self.NotifyListenersOfChange;
 end;
+
+//* TIdSipAbstractBindingDatabase Protected methods ****************************
+
+function TIdSipAbstractBindingDatabase.AddGruus(Request: TIdSipRequest;
+                                                Bindings: TIdSipContacts): Boolean;
+begin
+  // Add as a "gruu" parameter the GRUU of each Contact in Bindings, if that
+  // Contact has a "+sip.instance" parameter.
+
+  Result := true;
+end;
+
+function TIdSipAbstractBindingDatabase.CollectBindingsFor(const AddressOfRecord: String;
+                                                          Bindings: TIdSipContacts): Boolean;
+begin
+  // Return, in Bindings, all Contact URIs associated with AddressOfRecord.
+
+  Result := true;
+end;
+
+function TIdSipAbstractBindingDatabase.CreateGruu(const AddressOfRecord: String;
+                                                  const SipInstance: String): String;
+begin
+  // Return a newly-minted GRUU for the (AddressOfRecord, SipInstance) pair.
+  //
+  // As a basic way of creating a GRUU, just take the MD5 hash of the
+  // concatenation of the address of record and the "+sip.instance" parameter,
+  // and add that hash as the "opaque" parameter to the address of record.
+  //
+  // Other possibilities include using a better hash function (like SHA-1 or
+  // SHA-512), adding Now to the hash input, and so on.
+
+  Result := AddressOfRecord
+          + ';opaque="' + MD5(AddressOfRecord + SipInstance) + '"';
+end;
+
+//* TIdSipAbstractBindingDatabase Private methods ******************************
 
 function TIdSipAbstractBindingDatabase.CorrectExpiry(Request: TIdSipRequest;
                                                      Contact: TIdSipContactHeader): Cardinal;

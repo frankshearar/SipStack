@@ -36,16 +36,9 @@ type
                          ExpiryTime: TDateTime): Boolean; override;
     function  Binding(const AddressOfRecord: String;
                       const CanonicalUri: String): TIdRegistrarBinding; override;
+    function  CollectBindingsFor(const AddressOfRecord: String;
+                                 Bindings: TIdSipContacts): Boolean; override;
     procedure Commit; override;
-    function  ConstructNewGruu(const AOR: String;
-                               const InstanceID: String): String;
-    function  FindGruu(const AOR: String;
-                       const InstanceID: String): TIdRegistrarBinding;
-    function  GruuFor(const AOR: String;
-                      const InstanceID: String): String;
-    procedure RegisterNewGruu(const AOR: String;
-                              const CanonicalContact: String;
-                              const Gruu: String);
     procedure Rollback; override;
     procedure StartTransaction; override;
   public
@@ -53,8 +46,6 @@ type
     destructor  Destroy; override;
 
     function  BindingCount: Integer;
-    function  BindingsFor(Request: TIdSipRequest;
-                          Contacts: TIdSipContacts): Boolean; override;
     function  IsAuthorized(User: TIdSipAddressHeader;
                            AddressOfRecord: TIdSipUri): Boolean; override;
     function  IsValid(Request: TIdSipRequest): Boolean; override;
@@ -107,33 +98,6 @@ begin
   Result := Self.BindingStore.Count;
 end;
 
-function TIdSipMockBindingDatabase.BindingsFor(Request: TIdSipRequest;
-                                               Contacts: TIdSipContacts): Boolean;
-var
-  AddressOfRecord: String;
-  ContactValue:    String;
-  I:               Integer;
-begin
-  Contacts.Clear;
-
-  AddressOfRecord := Request.AddressOfRecord;
-
-  for I := 0 to Self.BindingStore.Count - 1 do
-    if (Self.Bindings[I].AddressOfRecord = AddressOfRecord) then begin
-      ContactValue := Self.Bindings[I].Uri
-                    + ';' + ExpiresParam + '=';
-
-      if (Now > Self.Bindings[I].ValidUntil) then
-        ContactValue := ContactValue + '0'
-      else
-        ContactValue := ContactValue + IntToStr(SecondsBetween(Self.Bindings[I].ValidUntil, Now));
-
-      Contacts.Add(ContactHeaderFull).Value := ContactValue;
-    end;
-
-  Result := not Self.FailBindingsFor;
-end;
-
 function TIdSipMockBindingDatabase.IsAuthorized(User: TIdSipAddressHeader;
                                                 AddressOfRecord: TIdSipUri): Boolean;
 begin
@@ -167,6 +131,9 @@ var
   Index:      Integer;
   NewBinding: TIdRegistrarBinding;
 begin
+  // If there's no GRUU associated with (AddressOfRecord, SipInstance) then
+  // we must create one.
+
   NewBinding := TIdRegistrarBinding.Create(AddressOfRecord,
                                            Contact.AsAddressOfRecord,
                                            Contact.SipInstance,
@@ -205,58 +172,32 @@ begin
   end;
 end;
 
+function TIdSipMockBindingDatabase.CollectBindingsFor(const AddressOfRecord: String;
+                                                      Bindings: TIdSipContacts): Boolean;
+var
+  ContactValue: String;
+  I:            Integer;
+begin
+  Bindings.Clear;
+
+  for I := 0 to Self.BindingStore.Count - 1 do
+    if (Self.Bindings[I].AddressOfRecord = AddressOfRecord) then begin
+      ContactValue := Self.Bindings[I].Uri
+                    + ';' + ExpiresParam + '=';
+
+      if (Now > Self.Bindings[I].ValidUntil) then
+        ContactValue := ContactValue + '0'
+      else
+        ContactValue := ContactValue + IntToStr(SecondsBetween(Self.Bindings[I].ValidUntil, Now));
+
+      Bindings.Add(ContactHeaderFull).Value := ContactValue;
+    end;
+
+  Result := not Self.FailBindingsFor;
+end;
+
 procedure TIdSipMockBindingDatabase.Commit;
 begin
-end;
-
-function TIdSipMockBindingDatabase.ConstructNewGruu(const AOR: String;
-                                                    const InstanceID: String): String;
-begin
-  Result := AOR
-          + '+sip.instance="<' + InstanceID + '>";'
-          + 'opaque="' + ConstructUUID + '"';
-end;
-
-function TIdSipMockBindingDatabase.FindGruu(const AOR: String;
-                                            const InstanceID: String): TIdRegistrarBinding;
-var
-  I: Integer;
-begin
-  Result := nil;
-  I := 0;
-  while (I < Self.BindingCount) and not Assigned(Result) do begin
-    if    (Self.Bindings[I].AddressOfRecord = AOR)
-      and (Self.Bindings[I].InstanceID = InstanceID) then
-      Result := Self.Bindings[I]
-    else
-      Inc(I);
-  end;
-end;
-
-function TIdSipMockBindingDatabase.GruuFor(const AOR: String;
-                                           const InstanceID: String): String;
-var
-  Binding: TIdRegistrarBinding;
-begin
-  Result := '';
-  Binding := Self.FindGruu(AOR, InstanceID);
-
-  if Assigned(Binding) then
-    Result := Binding.Gruu;
-end;
-
-procedure TIdSipMockBindingDatabase.RegisterNewGruu(const AOR: String;
-                                                    const CanonicalContact: String;
-                                                    const Gruu: String);
-var
-  Binding: TIdRegistrarBinding;
-begin
-  Binding := Self.Binding(AOR, CanonicalContact);
-
-  Assert(Assigned(Binding),
-         'RegisterNewGruu requires there be a binding for the AOR/InstanceID pair');
-
-  Binding.Gruu := Gruu;
 end;
 
 procedure TIdSipMockBindingDatabase.Rollback;
