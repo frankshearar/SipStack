@@ -3962,6 +3962,8 @@ begin
 end;
 
 procedure TestTIdSdpParser.TestIsMulticastAddress;
+var
+  I: Integer;
 begin
   // ipv4
   Check(not TIdSdpParser.IsMulticastAddress(Id_IPv4, ''),                'IPv4: ''''');
@@ -3973,6 +3975,11 @@ begin
   Check(    TIdSdpParser.IsMulticastAddress(Id_IPv4, '224.0.0.0'),       'IPv4: 224.0.0.0');
   Check(    TIdSdpParser.IsMulticastAddress(Id_IPv4, '224.255.255.255'), 'IPv4: 224.255.255.255');
   Check(not TIdSdpParser.IsMulticastAddress(Id_IPv4, '224.255.255.256'), 'IPv4: 224.255.255.256');
+
+  // 224.0.0.0 to 239.255.255.255 are all valid multicast addresses
+  for I := 224 to 239 do
+    Check(TIdSdpParser.IsMulticastAddress(Id_IPv4, IntToStr(I) + '.255.255.255'),
+          'IPv4: ' + IntToStr(I) + '.255.255.255');
 
   // ipv6
   Check(not TIdSdpParser.IsMulticastAddress(Id_IPv6, ''), 'IPv6: ''''');

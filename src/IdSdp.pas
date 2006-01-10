@@ -2552,16 +2552,21 @@ end;
 class function TIdSdpParser.IsMulticastAddress(IpVersion: TIdIPVersion;
                                                const Token: String): Boolean;
 var
-  Address: String;
-  N:       String;
+  Address:   String;
+  N:         String;
+  FirstByte: Integer;
 begin
   Address := Token;
 
   case IpVersion of
     Id_IPv4: begin
       Result := TIdIPAddressParser.IsIPv4Address(Address);
-      N := Fetch(Address, '.');
-      Result := Result and (StrToInt(N) = 224);
+
+      if Result then begin
+        N := Fetch(Address, '.');
+        FirstByte := StrToInt(N);
+        Result := Result and (FirstByte >= 224) and (FirstByte <= 239);
+      end;
     end;
     Id_IPv6: begin
       Result := TIdIPAddressParser.IsIPv6Address(Address);
