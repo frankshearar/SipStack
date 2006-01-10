@@ -11,17 +11,21 @@ unit IdSystem;
 
 interface
 
+uses
+  Classes;
+
 { This unit contains all platform-specific (i.e., OS calls) that you might need
   to call. Currently only the Windows (2000 and more recent) platform is
   implemented.
 }
 
-function ConstructUUID: String;
-function GetFullUserName: WideString;
-function GetTickCount: Cardinal;
-function GetTickDiff(const OldTickCount, NewTickCount : Cardinal): Cardinal;
-function GetUserName: WideString;
-function LocalAddress: String;
+function  ConstructUUID: String;
+function  GetFullUserName: WideString;
+function  GetTickCount: Cardinal;
+function  GetTickDiff(const OldTickCount, NewTickCount : Cardinal): Cardinal;
+function  GetUserName: WideString;
+function  LocalAddress: String;
+procedure LocalAddresses(IPs: TStrings);
 
 implementation
 
@@ -105,6 +109,24 @@ begin
   end
   else
     Result := GStack.LocalAddress;
+end;
+
+procedure LocalAddresses(IPs: TStrings);
+var
+  UnusedServer: TIdUDPServer;
+begin
+  IPs.Clear;
+
+  if not Assigned(GStack) then begin
+    UnusedServer := TIdUDPServer.Create(nil);
+    try
+      IPs.AddStrings(GStack.LocalAddresses);
+    finally
+      UnusedServer.Free;
+    end;
+  end
+  else
+    IPs.AddStrings(GStack.LocalAddresses);
 end;
 
 end.
