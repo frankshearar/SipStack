@@ -12,7 +12,7 @@ unit IdSipMockBindingDatabase;
 interface
 
 uses
- Contnrs, IdSipMessage, IdSipRegistration;
+ Classes, Contnrs, IdSipMessage, IdSipRegistration;
 
 type
   TIdSipMockBindingDatabase = class(TIdSipAbstractBindingDatabase)
@@ -36,8 +36,9 @@ type
                          ExpiryTime: TDateTime): Boolean; override;
     function  Binding(const AddressOfRecord: String;
                       const CanonicalUri: String): TIdRegistrarBinding; override;
-    function  CollectBindingsFor(const AddressOfRecord: String;
-                                 Bindings: TIdSipContacts): Boolean; override;
+    function CollectBindingsFor(const AddressOfRecord: String;
+                                Bindings: TIdSipContacts;
+                                CollectGruus: Boolean): Boolean; override;
     procedure Commit; override;
     procedure Rollback; override;
     procedure StartTransaction; override;
@@ -131,9 +132,6 @@ var
   Index:      Integer;
   NewBinding: TIdRegistrarBinding;
 begin
-  // If there's no GRUU associated with (AddressOfRecord, SipInstance) then
-  // we must create one.
-
   NewBinding := TIdRegistrarBinding.Create(AddressOfRecord,
                                            Contact.AsAddressOfRecord,
                                            Contact.SipInstance,
@@ -173,10 +171,12 @@ begin
 end;
 
 function TIdSipMockBindingDatabase.CollectBindingsFor(const AddressOfRecord: String;
-                                                      Bindings: TIdSipContacts): Boolean;
+                                                      Bindings: TIdSipContacts;
+                                                      CollectGruus: Boolean): Boolean;
 var
   ContactValue: String;
   I:            Integer;
+  Gruu:         String;
 begin
   Bindings.Clear;
 
@@ -189,6 +189,11 @@ begin
         ContactValue := ContactValue + '0'
       else
         ContactValue := ContactValue + IntToStr(SecondsBetween(Self.Bindings[I].ValidUntil, Now));
+
+      if CollectGruus then begin
+        Gruu := Self.CreateGruu(Self.Bindings[I].Uri, Self.Bindings[I].InstanceID);
+        ContactValue := ContactValue + ';' + GruuParam + '="' + Gruu + '"';
+      end;
 
       Bindings.Add(ContactHeaderFull).Value := ContactValue;
     end;

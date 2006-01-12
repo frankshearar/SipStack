@@ -49,6 +49,7 @@ type
     procedure TestMethod;
     procedure TestOKResponseContainsAllBindings;
     procedure TestReceiveGruu;
+    procedure TestReceiveGruuSips;
     procedure TestReceiveInvite;
     procedure TestReceiveRegister;
     procedure TestReceiveExpireTooShort;
@@ -110,7 +111,7 @@ type
   private
     Contacts:   TIdSipContacts;
     MinExpires: Cardinal;
-    Registrar:  TIdSipAbstractCore;
+    Registrar:  TIdSipRegistrar;
     Succeeded:  Boolean;
 
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
@@ -502,6 +503,9 @@ const
 var
   ServerResponse: TIdSipResponse;
 begin
+  // Does the GRUU-supporting registrar actually return GRUUs for each Contact
+  // in a REGISTER?
+
   Self.Registrar.UseGruu := true;
   Self.Request.AddHeader(SupportedHeaderFull).Value := ExtensionGruu;
   Self.Request.FirstContact.SipInstance := OurUrn;
@@ -513,7 +517,45 @@ begin
         'draft-ietf-sip-gruu says the response MUST have a Require header '
       + '(section 7.1.2.1); RFC 3261 section 20 says only requests can have '
       + 'one.');
-  Fail('Finish me: the registrar needs stuff to store sip.instance values');
+
+  ServerResponse.Contacts.First;
+  while ServerResponse.Contacts.HasNext do begin
+    Check(ServerResponse.Contacts.CurrentContact.HasParam(GruuParam),
+          'Binding ' + ServerResponse.Contacts.CurrentContact.FullValue
+        + ' has no "gruu" param');
+
+    ServerResponse.Contacts.Next;
+  end;
+end;
+
+procedure TestTIdSipRegistrar.TestReceiveGruuSips;
+const
+  OurUrn = 'urn:uuid:00000000-0000-0000-0000-000000000000';
+var
+  ServerResponse: TIdSipResponse;
+begin
+  // Does the GRUU-supporting registrar actually return SIPS GRUUs for each SIPS
+  // Contact in a REGISTER?
+
+  Self.Registrar.UseGruu := true;
+  Self.Request.AddHeader(SupportedHeaderFull).Value := ExtensionGruu;
+  Self.Request.FirstContact.Address.Scheme := SipsScheme;
+  Self.Request.FirstContact.SipInstance := OurUrn;
+  Self.SimulateRemoteRequest;
+
+  Self.CheckServerReturned(SIPOK, 'REGISTER with SIPS GRUU');
+  ServerResponse := Self.Dispatch.Transport.LastResponse;
+  ServerResponse.Contacts.First;
+  while ServerResponse.Contacts.HasNext do begin
+    Check(ServerResponse.Contacts.CurrentContact.HasParam(GruuParam),
+          'Binding ' + ServerResponse.Contacts.CurrentContact.FullValue
+        + ' has no "gruu" param');
+    Check(ServerResponse.Contacts.CurrentContact.Address.IsSipsUri,
+          'Binding ' + ServerResponse.Contacts.CurrentContact.FullValue
+        + ' is not a SIPS URI');
+
+    ServerResponse.Contacts.Next;
+  end;
 end;
 
 procedure TestTIdSipRegistrar.TestReceiveInvite;
@@ -521,7 +563,7 @@ begin
   Self.Request.Method      := MethodInvite;
   Self.Request.CSeq.Method := Self.Request.Method;
   Self.SimulateRemoteRequest;
-  
+
   Self.CheckServerReturned(SIPNotImplemented,
                            'INVITE');
 end;
@@ -991,6 +1033,7 @@ begin
 
   Self.Registrar := TIdSipRegistrar.Create;
   Self.Registrar.From.Address.Uri := 'sip:talking-head.tessier-ashpool.co.luna';
+  Self.Registrar.BindingDB := TIdSipMockBindingDatabase.Create;
 
   Self.Contacts := TIdSipContacts.Create;
   Self.Contacts.Add(ContactHeaderFull).Value := 'sip:wintermute@talking-head.tessier-ashpool.co.luna';
@@ -1002,6 +1045,7 @@ end;
 procedure TestTIdSipOutboundRegistration.TearDown;
 begin
   Self.Contacts.Free;
+  Self.Registrar.BindingDB.Free;
   Self.Registrar.Free;
 
   inherited TearDown;

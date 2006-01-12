@@ -12,8 +12,8 @@ unit IdSipRegistration;
 interface
 
 uses
-  Contnrs, IdException, IdObservable, IdSipCore, IdSipMessage, IdNotification,
-  SyncObjs;
+  Classes, Contnrs, IdException, IdObservable, IdSipCore, IdSipMessage,
+  IdNotification, SyncObjs;
 
 type
   TIdSipRegistrationInfo = class(TObject)
@@ -82,6 +82,24 @@ type
     property ValidUntil:      TDateTime read fValidUntil write fValidUntil;
   end;
 
+  // I represent the relationship between an address-of-record, an instance-id,
+  // and a GRUU: there is a one-to-many relationship between (address-of-record,
+  // instance-id) ordered pairs and GRUUs.
+  TIdGruuBinding = class(TObject)
+  private
+    fBinding:    String;
+    fGruu:       String;
+    fInstanceID: String;
+  public
+    constructor Create(const Binding: String;
+                       const InstanceID: String;
+                       const Gruu: String);
+
+    property Binding:    String read fBinding write fBinding;
+    property Gruu:       String read fGruu write fGruu;
+    property InstanceID: String read fInstanceID write fInstanceID;
+  end;
+
   // I provide a database that matches a SIP Address-of-record (a SIP or SIPS
   // URI) with one or more "bindings" (usually SIP/SIPS URIs, but they can
   // follow any URI scheme).
@@ -109,12 +127,11 @@ type
                          const CallID: String;
                          SequenceNo: Cardinal;
                          ExpiryTime: TDateTime): Boolean; virtual; abstract;
-    function  AddGruus(Request: TIdSipRequest;
-                       Bindings: TIdSipContacts): Boolean; virtual;
     function  Binding(const AddressOfRecord: String;
                       const CanonicalUri: String): TIdRegistrarBinding; virtual; abstract;
     function  CollectBindingsFor(const AddressOfRecord: String;
-                                 Bindings: TIdSipContacts): Boolean; virtual;
+                                 Bindings: TIdSipContacts;
+                                 CollectGruus: Boolean): Boolean; virtual;
     function  CreateGruu(const AddressOfRecord: String;
                          const SipInstance: String): String; virtual;
     procedure Commit; virtual; abstract;
@@ -170,6 +187,9 @@ type
     procedure SetBindingDB(Value: TIdSipAbstractBindingDatabase);
     procedure SetDefaultRegistrationExpiryTime(Value: Cardinal);
     procedure SetMinimumExpiryTime(Value: Cardinal);
+  protected
+    function  GetUseGruu: Boolean; override;
+    procedure SetUseGruu(Value: Boolean); override;
   public
     constructor Create; override;
 
@@ -365,6 +385,17 @@ type
     procedure Run(const Subject: IInterface); override;
   end;
 
+  // I contain a bunch of GRUUs. My subclasses implement things like enforcing
+  // the relationship between GRUUs, instance-IDs and addresses-of-record (see
+  // TIdSipGruuBinding's class comment).
+  TIdSipGruuBindings = class(TObject)
+  public
+    procedure AddBinding(const Contact, InstanceID, GRUU: String); virtual;
+    procedure RemoveBinding(const Contact, InstanceID, GRUU: String); virtual;
+    function  GetAnyGruuFor(const Contact, InstanceID: String): String; virtual;
+    procedure GetGruusFor(const Contact, InstanceID: String; Gruus: TStrings); virtual;
+  end;
+
   EIdSipRegistrarNotFound = class(EIdException)
   public
     constructor Create(const Msg: string); reintroduce;
@@ -542,6 +573,22 @@ begin
 end;
 
 //******************************************************************************
+//* TIdGruuBinding                                                             *
+//******************************************************************************
+//* TIdGruuBinding Publuic methods *********************************************
+
+constructor TIdGruuBinding.Create(const Binding: String;
+                                  const InstanceID: String;
+                                  const Gruu: String);
+begin
+  inherited Create;
+
+  Self.Binding    := Binding;
+  Self.Gruu       := Gruu;
+  Self.InstanceID := InstanceID;
+end;
+
+//******************************************************************************
 //* TIdSipAbstractBindingDatabase                                              *
 //******************************************************************************
 //* TIdSipAbstractBindingDatabase Public methods *******************************
@@ -624,10 +671,9 @@ function TIdSipAbstractBindingDatabase.BindingsFor(Request: TIdSipRequest;
                                                    Contacts: TIdSipContacts): Boolean;
 begin
   Contacts.Clear;
-  Result := Self.CollectBindingsFor(Request.AddressOfRecord, Contacts);
-
-  if Request.SupportsExtension(ExtensionGruu) and Self.UseGruu then
-    Result := Result and Self.AddGruus(Request, Contacts);
+  Result := Self.CollectBindingsFor(Request.AddressOfRecord,
+                                    Contacts,
+                                    Request.SupportsExtension(ExtensionGruu) and Self.UseGruu);
 end;
 
 function TIdSipAbstractBindingDatabase.NotOutOfOrder(Request: TIdSipRequest;
@@ -682,19 +728,13 @@ end;
 
 //* TIdSipAbstractBindingDatabase Protected methods ****************************
 
-function TIdSipAbstractBindingDatabase.AddGruus(Request: TIdSipRequest;
-                                                Bindings: TIdSipContacts): Boolean;
-begin
-  // Add as a "gruu" parameter the GRUU of each Contact in Bindings, if that
-  // Contact has a "+sip.instance" parameter.
-
-  Result := true;
-end;
-
 function TIdSipAbstractBindingDatabase.CollectBindingsFor(const AddressOfRecord: String;
-                                                          Bindings: TIdSipContacts): Boolean;
+                                                          Bindings: TIdSipContacts;
+                                                          CollectGruus: Boolean): Boolean;
 begin
-  // Return, in Bindings, all Contact URIs associated with AddressOfRecord.
+  // Return, in Bindings, all Contact URIs associated with AddressOfRecord. If
+  // CollectGruus is true, add as a "gruu" parameter the GRUU of each Contact in
+  // Bindings, if that Contact has a "+sip.instance" parameter.
 
   Result := true;
 end;
@@ -712,7 +752,7 @@ begin
   // SHA-512), adding Now to the hash input, and so on.
 
   Result := AddressOfRecord
-          + ';opaque="' + MD5(AddressOfRecord + SipInstance) + '"';
+          + ';opaque=' + MD5(AddressOfRecord + SipInstance);
 end;
 
 //* TIdSipAbstractBindingDatabase Private methods ******************************
@@ -745,6 +785,18 @@ end;
 function TIdSipRegistrar.RegistrationCount: Integer;
 begin
   Result := Self.CountOf(MethodRegister);
+end;
+
+//* TIdSipRegistrar Protected methods ******************************************
+
+function TIdSipRegistrar.GetUseGruu: Boolean;
+begin
+  Result := Self.BindingDB.UseGruu;
+end;
+
+procedure TIdSipRegistrar.SetUseGruu(Value: Boolean);
+begin
+  Self.BindingDB.UseGruu := Value;
 end;
 
 //* TIdSipRegistrar Private methods ********************************************
@@ -1622,6 +1674,40 @@ procedure TIdSipRegistrationSucceededMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipRegistrationListener).OnSuccess(Self.Registration,
                                                     Self.CurrentBindings);
+end;
+
+//******************************************************************************
+//* TIdSipGruuBindings                                                         *
+//******************************************************************************
+//* TIdSipGruuBindings Public methods ******************************************
+
+procedure TIdSipGruuBindings.AddBinding(const Contact, InstanceID, GRUU: String);
+begin
+end;
+
+procedure TIdSipGruuBindings.RemoveBinding(const Contact, InstanceID, GRUU: String);
+begin
+end;
+
+function TIdSipGruuBindings.GetAnyGruuFor(const Contact, InstanceID: String): String;
+var
+  Gruus: TStrings;
+begin
+  Gruus := TStringList.Create;
+  try
+    Self.GetGruusFor(Contact, InstanceID, Gruus);
+
+    if (Gruus.Count = 0) then
+      Result := ''
+    else
+      Result := Gruus[0];
+  finally
+    Gruus.Free;
+  end;
+end;
+
+procedure TIdSipGruuBindings.GetGruusFor(const Contact, InstanceID: String; Gruus: TStrings);
+begin
 end;
 
 //******************************************************************************
