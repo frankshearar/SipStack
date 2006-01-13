@@ -314,6 +314,7 @@ type
                             Receiver: TIdSipTransport); virtual;
     function  CreateActionsClosure(ClosureType: TIdSipActionsWaitClass;
                                    Msg: TIdSipMessage): TIdSipActionsWait;
+    function  GetUseGruu: Boolean; virtual;
     function  ListHasUnknownValue(Request: TIdSipRequest;
                                   ValueList: TStrings;
                                   const HeaderName: String): Boolean;
@@ -326,6 +327,7 @@ type
                             Request: TIdSipRequest);
     procedure RejectRequestUnauthorized(Request: TIdSipRequest);
     procedure SetAuthenticator(Value: TIdSipAbstractAuthenticator); virtual;
+    procedure SetUseGruu(Value: Boolean); virtual;
     function  WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; virtual;
     function  WillAcceptResponse(Response: TIdSipResponse): TIdSipUserAgentReaction; virtual;
 
@@ -429,7 +431,7 @@ type
     property Realm:                 String                      read fRealm write SetRealm;
     property RequireAuthentication: Boolean                     read fRequireAuthentication write fRequireAuthentication;
     property Timer:                 TIdTimerQueue               read fTimer write fTimer;
-    property UseGruu:               Boolean                     read fUseGruu write fUseGruu;
+    property UseGruu:               Boolean                     read GetUseGruu write SetUseGruu;
     property UserAgentName:         String                      read fUserAgentName write fUserAgentName;
   end;
 
@@ -2058,6 +2060,11 @@ begin
   Result.Message := Msg.Copy;
 end;
 
+function TIdSipAbstractCore.GetUseGruu: Boolean;
+begin
+  Result := Self.fUseGruu;
+end;
+
 function TIdSipAbstractCore.ListHasUnknownValue(Request: TIdSipRequest;
                                                 ValueList: TStrings;
                                                 const HeaderName: String): Boolean;
@@ -2209,6 +2216,11 @@ begin
   Self.fAuthenticator.Realm := Self.Realm;
 
   Self.fAuthenticator.IsProxy := false;
+end;
+
+procedure TIdSipAbstractCore.SetUseGruu(Value: Boolean);
+begin
+  Self.fUseGruu := Value;
 end;
 
 function TIdSipAbstractCore.WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction;
