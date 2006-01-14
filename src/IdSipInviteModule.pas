@@ -187,6 +187,7 @@ type
     ReceivedAck:              Boolean;
     ResendInterval:           Cardinal;
     SentFinalResponse:        Boolean;
+    Terminating:              Boolean;
 
     function  GetInitialResendInterval: Cardinal;
     function  GetProgressResendInterval: Cardinal;
@@ -484,6 +485,7 @@ type
   TIdSipInboundSession = class(TIdSipSession)
   private
     InitialInvite: TIdSipInboundInvite;
+    Terminating:   Boolean;
 
     function CreateInboundDialog(Response: TIdSipResponse): TIdSipDialog;
     function MatchesLocalGruu(Msg: TIdSipMessage): Boolean;
@@ -498,7 +500,6 @@ type
                         Ack: TIdSipRequest); override;
     procedure OnSuccess(InviteAgent: TIdSipOutboundInvite;
                         Response: TIdSipResponse); override;
-    procedure ReceiveCancel(Cancel: TIdSipRequest); override;
     procedure ReceiveInitialInvite(Invite: TIdSipRequest); override;
     procedure ReceiveInvite(Invite: TIdSipRequest); override;
   public
@@ -1042,7 +1043,7 @@ begin
   Assert(Cancel.IsCancel,
          'TIdSipInvite.ReceiveCancel must only receive CANCELs');
 
-  Ok := TIdSipResponse.InResponseTo(Cancel, SIPOK);
+  Ok := Self.UA.CreateResponse(Cancel, SIPOK);
   try
     Self.SendResponse(Ok);
   finally
@@ -1233,10 +1234,21 @@ end;
 
 procedure TIdSipInboundInvite.Terminate;
 begin
-  if not Self.SentFinalResponse then
+  if not Self.SentFinalResponse then begin
     Self.SendSimpleResponse(SIPRequestTerminated);
-
-  inherited Terminate;
+    inherited Terminate;
+  end
+  else begin
+    if not Self.ReceivedAck then begin
+      // We sent a final response (say, 200) and we terminate the INVITE before
+      // we receive the ACK. We need to wait until we receive the ACK and THEN
+      // Terminate.
+      Self.Terminating := true;
+    end
+    else begin
+      // We can't reach here because the owning session's already killed Self.
+    end;
+  end;
 end;
 
 procedure TIdSipInboundInvite.TimeOut;
@@ -1275,16 +1287,25 @@ begin
 
   if not Self.ReceivedAck then begin
     Self.ReceivedAck := true;
+
+    // We always notify our listeners when we receive the ACK to our INVITE even
+    // while terminating so that, for instance, our owning Session can terminate
+    // correctly.
     Self.NotifyOfSuccess(Ack);
+
+    if Self.Terminating then
+      Self.MarkAsTerminated;
   end;
 end;
 
 procedure TIdSipInboundInvite.ReceiveCancel(Cancel: TIdSipRequest);
 begin
+  // This sends the 200 OK to the CANCEL.
   inherited ReceiveCancel(Cancel);
 
+  // This tells the listeners we've failed. The owning InboundSession will
+  // trigger sending the 487 Request Terminated.
   if not Self.SentFinalResponse then begin
-    Self.SendCancelResponse(Cancel);
     Self.NotifyOfFailure;
   end;
 end;
@@ -2720,14 +2741,35 @@ end;
 
 procedure TIdSipInboundSession.Terminate;
 begin
-  if Self.FullyEstablished then
-    Self.SendBye
-  else
+  if Self.FullyEstablished then begin
+    Self.SendBye;
+
+    Self.NotifyOfEndedSession(LocalHangUp, RSNoReason);
+
+    inherited Terminate;
+  end
+  else begin
+    if Self.Terminating then begin
+      // We shouldn't reach this point because we've already executed this
+      // method. At any rate, it's senseless to continue, so just exit.     
+      Exit;
+    end;
+
     Self.InitialInvite.Terminate;
 
-  Self.NotifyOfEndedSession(LocalHangUp, RSNoReason);
+    Self.NotifyOfEndedSession(LocalHangUp, RSNoReason);
 
-  inherited Terminate;
+    if Self.InitialInvite.IsTerminated then begin
+      // For instance, we received a CANCEL, so the InitialInvite sent the 487.
+      Self.MarkAsTerminated
+    end
+    else begin
+      // We issued the request to terminate, after we'd sent our 200 OK
+      // accepting the call, but before we received the remote party's ACK.
+      // We're waiting for that ACK before we terminate.
+      Self.Terminating := true;
+    end;
+  end;
 end;
 
 //* TIdSipInboundSession Protected methods *************************************
@@ -2768,15 +2810,23 @@ begin
   inherited OnSuccess(InviteAgent, Ack);
 
   if (InviteAgent = Self.InitialInvite) then begin
-    if (Self.RemoteSessionDescription = '') then begin
-      Self.RemoteSessionDescription := Ack.Body;
-      Self.RemoteMimeType           := Ack.ContentType;
-    end;
+    if Self.Terminating then begin
+      // See the comment in Terminate.
+      Self.SendBye;
+      Self.MarkAsTerminated;
+    end
+    else begin
+      if (Self.RemoteSessionDescription = '') then begin
+        Self.RemoteSessionDescription := Ack.Body;
+        Self.RemoteMimeType           := Ack.ContentType;
+      end;
 
-    Self.FullyEstablished := true;
-    Self.NotifyOfEstablishedSession(Self.InitialInvite.InitialRequest.Body,
-                                    Self.InitialInvite.InitialRequest.ContentType);
-    Self.InitialInvite := nil;
+      Self.FullyEstablished := true;
+      Self.NotifyOfEstablishedSession(Self.InitialInvite.InitialRequest.Body,
+                                      Self.InitialInvite.InitialRequest.ContentType);
+
+      Self.InitialInvite := nil;
+    end;
   end;
 end;
 
@@ -2786,17 +2836,6 @@ begin
   inherited OnSuccess(InviteAgent, Response);
 
   Self.NotifyOfModifiedSession(Response);
-end;
-
-procedure TIdSipInboundSession.ReceiveCancel(Cancel: TIdSipRequest);
-begin
-  inherited ReceiveCancel(Cancel);
-
-  if not Self.FullyEstablished then begin
-    Self.RejectRequest(Self.InitialRequest);
-    Self.NotifyOfEndedSession(RemoteCancel, RSNoReason);
-    Self.MarkAsTerminated;
-  end;
 end;
 
 procedure TIdSipInboundSession.ReceiveInitialInvite(Invite: TIdSipRequest);

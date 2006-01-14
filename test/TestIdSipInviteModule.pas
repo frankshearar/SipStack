@@ -399,6 +399,7 @@ type
     procedure TestRingWithGruu;
     procedure TestSupportsExtension;
     procedure TestTerminate;
+    procedure TestTerminateAlmostEstablishedSession;
     procedure TestTerminateUnestablishedSession;
   end;
 
@@ -1534,9 +1535,9 @@ begin
   end;
 
   Check(Self.InviteAction.IsTerminated,
-        'Action not marked as terminated');
+        Self.ClassName + ': Action not marked as terminated');
   Check(Self.Failed,
-        'Listeners not notified of failure');
+        Self.ClassName + ': Listeners not notified of failure');
 end;
 
 procedure TestTIdSipInboundInvite.TestInviteWithNoOffer;
@@ -2026,11 +2027,17 @@ begin
 end;
 
 procedure TestTIdSipInboundInvite.TestTerminateAfterAccept;
+var
+  Ack: TIdSipRequest;
 begin
-  // This should never happen, really. If you accept a call then InviteAction
-  // terminates. Thus by calling Terminate you try to terminate an
-  // already-terminated action - which should do nothing. In fact, the UA should
-  // have already destroyed the action.
+  // This is a bit of an odd case. You receive an INVITE, and accept it,
+  // sending a 200 OK. Then, before you receive the ACK from the remote party,
+  // you change your mind and terminate the session. Since you've not received
+  // the ACK, you can't send a BYE - the session's not established - and you
+  // can't send a CANCEL - you've already sent a final response. The answer?
+  // Wait until you do receive the ACK, and send a BYE immediately. Actually,
+  // the owning session will send the BYE - the InboundInvite need do nothing
+  // but report when the ACK arrives.
 
   Self.InviteAction.Accept('', '');
 
@@ -2038,8 +2045,18 @@ begin
   Self.InviteAction.Terminate;
 
   CheckNoResponseSent('Response sent');
+  Check(not Self.InviteAction.IsTerminated,
+        'Action marked as terminated when it''s just terminatING');
+
+  Ack := Self.InviteAction.InitialRequest.AckFor(Self.LastSentResponse);
+  try
+    Self.InviteAction.ReceiveRequest(Ack);
+  finally
+    Ack.Free;
+  end;
+
   Check(Self.InviteAction.IsTerminated,
-        'Action not marked as terminated');
+        'Action not marked as terminated after receiving the ACK.');
 end;
 
 procedure TestTIdSipInboundInvite.TestTerminateBeforeAccept;
@@ -2369,7 +2386,7 @@ begin
       Self.ReceiveRinging(Invite);
 
       Check(Self.OnDialogEstablishedFired,
-            'No dialog established');
+            Self.ClassName + ': No dialog established');
 
       // Now that we have established a dialog, the Request Terminated response
       // will contain that dialog ID.
@@ -2380,12 +2397,12 @@ begin
       //  ---         CANCEL         --->
       OutboundInvite.Cancel;
 
-      CheckRequestSent('No CANCEL sent');
+      CheckRequestSent(Self.ClassName + ': No CANCEL sent');
       CheckEquals(MethodCancel,
                   Self.LastSentRequest.Method,
-                  'The request sent wasn''t a CANCEL');
+                  Self.ClassName + ': The request sent wasn''t a CANCEL');
       Check(not OutboundInvite.IsTerminated,
-            'No Request Terminated received means no termination');
+            Self.ClassName + ': No Request Terminated received means no termination');
 
       // <---         200 OK         ---  (for the CANCEL)
       Self.ReceiveOk(Self.LastSentRequest);
@@ -2395,10 +2412,10 @@ begin
       Self.MarkSentACKCount;
       Self.ReceiveResponse(RequestTerminated);
 
-      CheckAckSent('No ACK sent');
+      CheckAckSent(Self.ClassName + ': No ACK sent');
 
       Check(Self.Core.CountOf(MethodInvite) < InviteCount,
-            'Action not terminated');
+            Self.ClassName + ': Action not terminated');
     finally
       RequestTerminated.Free;
     end;
@@ -2801,12 +2818,12 @@ begin
 
   CheckRequestSent(Self.ClassName + ': Action didn''t send a CANCEL');
   Check(not OutboundInvite.IsTerminated,
-        'The Action can''t terminate until it receives the 487 Request '
-      + 'Terminated response');
+        Self.ClassName + ': The Action can''t terminate until it receives the '
+      + '487 Request Terminated response');
 
   Self.ReceiveResponse(OutboundInvite.InitialRequest, SIPRequestTerminated);
   Check(OutboundInvite.IsTerminated,
-        'The 487 arrived but the Action didn''t terminate');
+        Self.ClassName + ': The 487 arrived but the Action didn''t terminate');
 end;
 
 procedure TestTIdSipOutboundInvite.TestTerminateAfterAccept;
@@ -2826,7 +2843,8 @@ begin
 
   OutboundInvite.Terminate;
 
-  CheckNoRequestSent('Action sent a CANCEL for a fully established call');
+  CheckNoRequestSent(Self.ClassName
+                   + ': Action sent a CANCEL for a fully established call');
 end;
 
 procedure TestTIdSipOutboundInvite.TestTransactionCompleted;
@@ -2835,7 +2853,8 @@ var
 begin
   Invite := Self.CreateAction as TIdSipOutboundInvite;
   Invite.TransactionCompleted;
-  Check(Invite.IsTerminated, 'Outbound INVITE not marked as terminated');
+  Check(Invite.IsTerminated,
+        Self.ClassName + ': Outbound INVITE not marked as terminated');
 end;
 
 //******************************************************************************
@@ -4342,16 +4361,16 @@ begin
   // The UA clears out terminated sessions as soon as it finishes handling
   // a message, so the session should have terminated.
   Check(Self.Core.SessionCount < SessionCount,
-        'Session didn''t terminate');
+        Self.ClassName + ': Session didn''t terminate');
 
   Check(Self.OnEndedSessionFired,
-        'Session didn''t notify listeners of ended session');
+        Self.ClassName + ': Session didn''t notify listeners of ended session');
   CHeckEquals(NoError,
               Self.ErrorCode,
-              'A remote cancel''s not an erroneous condition. ErrorCode set.');
+              Self.ClassName + ': A remote cancel''s not an erroneous condition. ErrorCode set.');
   CheckEquals('',
               Self.Reason,
-              'Reason param set');
+              Self.ClassName + ': Reason param set');
 end;
 
 procedure TestTIdSipInboundSession.TestReceiveOutOfOrderReInvite;
@@ -4399,10 +4418,10 @@ begin
   Self.ReceiveCancel;
 
   Check(Self.OnEndedSessionFired,
-        'No notification of ended session');
+        Self.ClassName + ': No notification of ended session');
 
   Check(Self.Core.SessionCount < SessionCount,
-        'Session not marked as terminated');
+        Self.ClassName + ': Session not marked as terminated');
 end;
 
 procedure TestTIdSipInboundSession.TestInviteHasNoOffer;
@@ -4854,14 +4873,36 @@ var
   Request:      TIdSipRequest;
   SessionCount: Integer;
 begin
-  Self.CreateAction;
-  Check(Assigned(Self.Session), 'OnInboundCall not called');
-
-  Self.MarkSentRequestCount;
-  Self.Session.AcceptCall('', '');
+  Self.CreateAndEstablishSession;
 
   SessionCount := Self.Core.SessionCount;
   Self.Session.Terminate;
+
+  CheckRequestSent('No BYE sent');
+
+  Request := Self.LastSentRequest;
+  Check(Request.IsBye, 'Unexpected last request');
+
+  Check(Self.Core.SessionCount < SessionCount,
+        'Session not marked as terminated');
+end;
+
+procedure TestTIdSipInboundSession.TestTerminateAlmostEstablishedSession;
+var
+  Request:      TIdSipRequest;
+  SessionCount: Integer;
+begin
+  Self.CreateAction;
+  Check(Assigned(Self.Session), 'OnInboundCall not called');
+  Self.Session.AcceptCall('', '');
+  SessionCount := Self.Core.SessionCount;
+
+  // Until we receive an ACK to our INVITE, our session has not fully established.
+  Self.Session.Terminate;
+
+  CheckNoRequestSent('BYE sent prematurely');
+
+  Self.ReceiveAck;
 
   CheckRequestSent('No BYE sent');
 
@@ -4878,22 +4919,22 @@ var
   SessionCount: Integer;
 begin
   Self.CreateAction;
-  Check(Assigned(Self.Session), 'OnInboundCall not called');
+  Check(Assigned(Self.Session), Self.ClassName + ': OnInboundCall not called');
 
   Self.MarkSentResponseCount;
   SessionCount  := Self.Core.SessionCount;
 
   Self.Session.Terminate;
 
-  CheckResponseSent('no response sent');
+  CheckResponseSent(Self.ClassName + ': No response sent');
 
   Response := Self.LastSentResponse;
   CheckEquals(SIPRequestTerminated,
               Response.StatusCode,
-              'Unexpected last response');
+              Self.ClassName + ': Unexpected last response');
 
   Check(Self.Core.SessionCount < SessionCount,
-        'Session not marked as terminated');
+        Self.ClassName + ': Session not marked as terminated');
 end;
 
 //******************************************************************************
