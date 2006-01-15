@@ -194,7 +194,6 @@ type
     procedure NotifyOfFailure; reintroduce; overload;
     procedure NotifyOfSuccess(Ack: TIdSipRequest);
     procedure ScheduleResendOk(Interval: Cardinal);
-    procedure SendCancelResponse(Cancel: TIdSipRequest);
     procedure SendSimpleResponse(StatusCode: Cardinal);
   protected
     procedure Initialise(UA: TIdSipAbstractCore;
@@ -1385,18 +1384,6 @@ begin
                         Interval,
                         Self.InitialRequest,
                         Self.ID);
-end;
-
-procedure TIdSipInboundInvite.SendCancelResponse(Cancel: TIdSipRequest);
-var
-  Ok: TIdSipResponse;
-begin
-  Ok := Self.UA.CreateResponse(Cancel, SIPOK);
-  try
-    Self.SendResponse(Ok);
-  finally
-    Ok.Free;
-  end;
 end;
 
 procedure TIdSipInboundInvite.SendSimpleResponse(StatusCode: Cardinal);
