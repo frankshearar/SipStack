@@ -1,3 +1,14 @@
+v0.5 (2006/01/15)
+* Completed GRUU (draft-ietf-sip-gruu-06) support (except for
+  proxy-related sections).
+* Added the MasqueradeAs directive to the stack configuration,
+  allowing a UA to pretend to be another machine (usually a NATting
+  firewall) by rewriting certain headers.
+* Bugfixes: we now properly handle terminating a session when we've
+  accepted the INVITE but attempted to terminate the session before we
+  received the remote party's ACK: we wait for the ACK and then
+  immediately send a BYE
+
 v0.5pre (2006/01/03)
 * The SIP stack now supports subscriptions (RFC 3265), including the
   REFER message (RFC 3515). This means that the stack implements call
