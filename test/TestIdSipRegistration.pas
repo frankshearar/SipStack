@@ -73,6 +73,7 @@ type
     procedure TestBindingsForClearsListParam;
     procedure TestBindingsForWithGruus;
     procedure TestBindingsForWithGruusReusesCreatedGruus;
+    procedure TestBindingsForWithGruusSips;
     procedure TestIsAuthorized;
     procedure TestIsValid;
     procedure TestFailAddBinding;
@@ -618,6 +619,40 @@ begin
     Bindings.First;
     CheckEquals(Gruu, Bindings.CurrentContact.Gruu, 'DB created an all-new GRUU');
 
+  finally
+    Bindings.Free;
+  end;
+end;
+
+procedure TestTIdSipMockBindingDatabase.TestBindingsForWithGruusSips;
+var
+  Bindings: TIdSipContacts;
+begin
+  // If the REGISTER used a SIPS URI in the To header, then all the GRUUs
+  // returned must also be SIPS URIs.
+
+  Self.DB.UseGruu := true;
+  Self.WintermutesAOR.Supported.Values.Add(ExtensionGruu);
+  Self.WintermutesAOR.ToHeader.Address.Scheme := SipsScheme;
+  Self.WintermutesAOR.FirstContact.Address.Scheme := SipsScheme;
+
+  Self.DB.AddBindings(Self.WintermutesAOR);
+  Self.Wintermute.Value := 'Wintermute <sips:wintermute@talking-head.tessier-ashpool.co.luna>';
+  Self.DB.AddBindings(Self.WintermutesAOR);
+
+  Bindings := TIdSipContacts.Create;
+  try
+    Self.DB.BindingsFor(Self.WintermutesAOR, Bindings);
+
+    Check(not Bindings.IsEmpty, 'BindingsFor returned no bindings');
+
+    Bindings.First;
+    while Bindings.HasNext do begin
+      Check(Bindings.CurrentContact.Address.IsSipsUri,
+            'Not a SIPS URI: ' + Bindings.CurrentContact.FullValue);
+
+      Bindings.Next;
+    end;
   finally
     Bindings.Free;
   end;
