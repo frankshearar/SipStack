@@ -1602,29 +1602,13 @@ end;
 procedure TIdSipStackInterface.OnReferral(Session: TIdSipSession;
                                           Refer: TIdSipRequest;
                                           UsingSecureTransport: Boolean);
-var
-  Data:     TIdSessionReferralData;
-  Referral: TIdSipAction;
 begin
-{
-  Data := TIdSessionReferralData.Create;
-  try
-}
-    Referral := Self.UserAgent.AddInboundAction(Refer, UsingSecureTransport);
-{
-    Data.Handle        := Self.HandleFor(Session);
-    Data.EventPackage  := Refer.Event.EventType;
-    Data.From          := Refer.From;
-    Data.ReferTo       := Refer.ReferTo;
-    Data.ReferAction   := Self.AddAction(Referral);
-    Data.RemoteContact := Refer.FirstContact;
-    Data.Target        := Refer.RequestUri;
-
-    Self.NotifyEvent(CM_CALL_REFERRAL, Data);
-  finally
-    Data.Free;
-  end;
-}
+  // We receive notifications of REFER messages sent to Session's GRUU through
+  // Session. Specifically, REFERs outside of Session's dialog will end up here.
+  // Since we're notified that a message has arrived, the stack doesn't know of
+  // the message as a call flow (a TIdSipAction, in other words). Thus, we
+  // inform the stack to keep track of the call flow around this message. 
+  Self.UserAgent.AddInboundAction(Refer, UsingSecureTransport);
 end;
 
 procedure TIdSipStackInterface.OnRejectedMessage(const Msg: String;
