@@ -1593,7 +1593,6 @@ end;
 
 procedure TestCallFlows.TestCallTransferred;
 var
-  Call:  TIdSipOutboundSession;
   Refer: TIdSipInboundReferral;
 begin
   //  ---        INVITE       --->
@@ -1609,7 +1608,7 @@ begin
   // <---        200 OK       ---
   // ?????????????????????????????
 
-  Call := Self.CreateAndEstablishInboundCall;
+  Self.CreateAndEstablishInboundCall;
 
   Self.ReceiveRefer(Self.Core.Contact);
   Check(Assigned(Self.Subscription), 'No REFER/SUBSCRIBE received');
