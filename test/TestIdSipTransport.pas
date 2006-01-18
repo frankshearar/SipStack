@@ -1411,7 +1411,7 @@ begin
   // We check that HighPortTransport did actually get it.
   Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
 
-  Self.LowPortTransport.Send(Self.Request, Self.HighPortLocation);
+  Self.SendMessage(Self.Request.AsString);
 
   Self.WaitForSignaled;
 
@@ -1483,7 +1483,7 @@ begin
   // in production, because it's wilfully wrong.
   Self.Response.LastHop.SentBy := 'unknown.host';
   Self.Response.LastHop.Received := Self.LowPortTransport.Address;
-  Self.LowPortTransport.Send(Self.Response, Self.HighPortLocation);
+  Self.SendMessage(Self.Response.AsString);
 
   Self.WaitForSignaled;
   Check(not Self.ReceivedResponse,
@@ -1561,7 +1561,7 @@ begin
   Self.CheckingRequestEvent := Self.CheckReceivedParamDifferentIPv4SentBy;
 
   Self.Request.LastHop.SentBy := '127.0.0.3';
-  Self.LowPortTransport.Send(Self.Request, Self.HighPortLocation);
+  Self.SendMessage(Self.Request.AsString);
 
   Self.WaitForSignaled;
 end;
@@ -1571,7 +1571,7 @@ begin
   Self.CheckingRequestEvent := Self.CheckReceivedParamFQDNSentBy;
 
   Self.Request.LastHop.SentBy := 'localhost';
-  Self.LowPortTransport.Send(Self.Request, Self.HighPortLocation);
+  Self.SendMessage(Self.Request.AsString);
 
   Self.WaitForSignaled;
 end;
@@ -1649,6 +1649,9 @@ end;
 
 procedure TestTIdSipTransport.TestSendResponseUsesDestinationLocation;
 begin
+  // We mutate Self.Response to contain an unused port in the topmost Via. Then
+  // we check that the transport uses the Location parameter for routing
+  // information (ignoring the Via header). 
   Self.CheckingResponseEvent := Self.CheckCanReceiveResponse;
 
   Self.Response.LastHop.Port := Self.Response.LastHop.Port + 1;
