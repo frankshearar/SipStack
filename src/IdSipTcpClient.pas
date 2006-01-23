@@ -58,6 +58,8 @@ type
 
   // Note that the Timeout property determines the maximum length of time to
   // wait for the next line of data to arrive.
+  // Through my MessageReader, I read messages from the network and feed them to
+  // a TimerQueue. That, and I send messages to the network.
   TIdSipTcpClient = class(TIdTCPClient,
                           IIdSipMessageListener)
   private
