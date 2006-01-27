@@ -62,8 +62,6 @@ uses
   IdUnicode in 'src\IdUnicode.pas',
   MultipleCoreSpike in 'test\MultipleCoreSpike.pas' {MultiCore},
   SingleCoreSpike in 'test\SingleCoreSpike.pas' {SingleCore},
-  Spike in 'test\Spike.pas' {rnidSpike},
-  SpikeRegister in 'test\SpikeRegister.pas' {rnidSpikeRegister},
   SpikeRegistrar in 'test\SpikeRegistrar.pas' {rnidSpikeRegistrar},
   SpikeT140 in 'test\SpikeT140.pas' {IdSpikeT140},
   StackWindow in 'test\StackWindow.pas' {StackWindow},
