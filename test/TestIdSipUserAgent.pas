@@ -158,6 +158,9 @@ type
     procedure CheckAutoFrom(UserAgent: TIdSipAbstractCore);
     procedure CheckEventPackageRegistered(UA: TIdSipUserAgent;
                                           PackageName: String);
+    procedure CheckTCPServerNotOnPort(const Host: String;
+                                      Port: Cardinal;
+                                      const Msg: String);
     procedure CheckUseGruuWithValue(const BooleanValue: String);
     procedure NoteReceiptOfPacket(Sender: TObject;
                                   AData: TStream;
@@ -191,6 +194,7 @@ type
     procedure TestCreateUserAgentWithMockAuthenticator;
     procedure TestCreateUserAgentWithMockLocator;
     procedure TestCreateUserAgentWithMultipleEventPackageSupport;
+    procedure TestCreateUserAgentWithMultipleTransports;
     procedure TestCreateUserAgentWithNoContact;
     procedure TestCreateUserAgentWithNoFrom;
     procedure TestCreateUserAgentWithOneTransport;
@@ -203,8 +207,9 @@ type
 implementation
 
 uses
-  IdSdp, IdSipAuthentication, IdSipConsts, IdSipMockLocator, IdSipMockTransport,
-  IdSipSubscribeModule, IdSystem, IdUnicode, SysUtils, TestFramework;
+  IdException, IdSdp, IdSipAuthentication, IdSipConsts, IdSipMockLocator,
+  IdSipMockTransport, IdSipSubscribeModule, IdSystem, IdTcpClient, IdUnicode,
+  SysUtils, TestFramework;
 
 const
   // SFTF: Sip Foundry Test Framework. cf. http://www.sipfoundry.org/sftf/
@@ -973,13 +978,12 @@ var
 begin
   Registrar := TIdSipMockUdpTransport.Create;
   try
-    Registrar.Address  := '127.0.0.1';
-    Registrar.HostName := '127.0.0.1';
-    Registrar.Port     := 25060;
+    Registrar.Bindings[0].IP   := '127.0.0.1';
+    Registrar.Bindings[0].Port := 25060;
 
     UA := Self.CreateUserAgent(Self.DebugTimer, 'sip:case@localhost');
     try
-      UA.RegisterModule.Registrar.Uri := 'sip:' + Registrar.Address + ':' + IntToStr(Registrar.Port);
+      UA.RegisterModule.Registrar.Uri := 'sip:' + Registrar.Bindings[0].IP + ':' + IntToStr(Registrar.Bindings[0].Port);
       UA.RegisterModule.HasRegistrar  := true;
     finally
       UA.Free;
@@ -1867,6 +1871,31 @@ begin
         '"' + PackageName + '" package not supported by the SubscribeModule');
 end;
 
+procedure TestTIdSipStackConfigurator.CheckTCPServerNotOnPort(const Host: String;
+                                                              Port: Cardinal;
+                                                              const Msg: String);
+var
+  Client: TIdTcpClient;
+begin
+  try
+    Client := TIdTcpClient.Create(nil);
+    try
+      Client.Host := Host;
+      Client.Port := Port;
+      Client.Connect;
+      try
+        Fail(Msg + ': Server running on ' + Host + ':' + IntToStr(Port));
+      finally
+        Client.Disconnect;
+      end;
+    finally
+      Client.Free;
+    end;
+  except
+    on EIdSocketError do;
+  end;
+end;
+
 procedure TestTIdSipStackConfigurator.CheckUseGruuWithValue(const BooleanValue: String);
 var
   UA: TIdSipUserAgent;
@@ -2071,9 +2100,14 @@ begin
 
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
-    CheckEquals(LocalAddress,
-                UA.Dispatcher.Transports[0].Address,
-                'Local NIC (or loopback) address not used');
+    UA.Dispatcher.Transports[0].Start;
+    try
+      CheckEquals(LocalAddress,
+                  UA.Dispatcher.Transports[0].Bindings[0].IP,
+                  'Local NIC (or loopback) address not used');
+    finally
+      UA.Dispatcher.Transports[0].Stop;
+    end;
   finally
     UA.Free;
   end;
@@ -2315,6 +2349,23 @@ begin
   end;
 end;
 
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithMultipleTransports;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port + 1));
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(1,
+                UA.Dispatcher.TransportCount,
+                'Dispatcher didn''t use one transport with multiple bindings');
+  finally
+    UA.Free;
+  end;
+end;
+
 procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithNoContact;
 var
   UA: TIdSipUserAgent;
@@ -2347,6 +2398,7 @@ procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithOneTransport;
 var
   UA: TIdSipUserAgent;
 begin
+  Self.Port := 15060;
   Self.Configuration.Add('Listen: TCP ' + Self.Address + ':' + IntToStr(Self.Port));
 
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
@@ -2356,10 +2408,10 @@ begin
                 UA.Dispatcher.Transports[0].ClassName,
                 'Transport type');
     CheckEquals(Port,
-                UA.Dispatcher.Transports[0].Port,
+                UA.Dispatcher.Transports[0].Bindings[0].Port,
                 'Transport port');
     CheckEquals(Self.Address,
-                UA.Dispatcher.Transports[0].Address,
+                UA.Dispatcher.Transports[0].Bindings[0].IP,
                 'Transport address');
     CheckEquals(Self.Address,
                 UA.Dispatcher.Transports[0].HostName,
@@ -2368,6 +2420,11 @@ begin
           'Transport has no timer');
     Check(UA.Dispatcher.Timer = UA.Dispatcher.Transports[0].Timer,
           'Transport and Transaction layers have different timers');
+
+    CheckTcpServerNotOnPort(UA.Dispatcher.Transports[0].Bindings[0].IP,
+                            IdPort_SIP,
+                            'With only one listener (on a non-standard port) '
+                          + 'there should be no server on the standard port');
   finally
     UA.Free;
   end;

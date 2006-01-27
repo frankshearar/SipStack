@@ -96,8 +96,7 @@ begin
     Self.Transport.HostName := GStack.LocalAddress
   else
     Self.Transport.HostName := LocalHostName;
-  Self.Transport.Address := Self.Transport.HostName;
-  Self.Transport.Port    := StrToInt(Self.Port.Text);
+  Self.Transport.AddBinding(Self.Transport.HostName, StrToInt(Self.Port.Text));
   Self.Transport.AddTransportListener(Self);
   Self.Transport.AddTransportSendingListener(Self);
   Self.Transport.Start;
@@ -115,7 +114,7 @@ begin
   try
     Contact.Value := 'sip:franks@'
                    + Self.Transport.HostName + ':'
-                   + IntToStr(Self.Transport.Port);
+                   + Self.Port.Text;
     Self.UA.Contact := Contact;
   finally
     Contact.Free;
@@ -217,7 +216,8 @@ end;
 procedure TrnidSpikeRegistrar.PortChange(Sender: TObject);
 begin
   Self.Transport.Stop;
-  Self.Transport.Port := StrToInt(Self.Port.Text);
+  Self.Transport.ClearBindings;
+  Self.Transport.AddBinding(Self.Transport.HostName, StrToInt(Self.Port.Text));
   Self.Transport.Start;
 end;
 

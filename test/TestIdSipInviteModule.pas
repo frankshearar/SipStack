@@ -6434,8 +6434,8 @@ begin
   Result := Self.CreateUserAgent(Timer, Address);
   Result.InviteModule.AddListener(Self);
 
-  (Result.Dispatcher as TIdSipMockTransactionDispatcher).Transport.Address := Result.Contact.Address.Host;
-  (Result.Dispatcher as TIdSipMockTransactionDispatcher).Transport.Port    := Result.Contact.Address.Port;
+  (Result.Dispatcher as TIdSipMockTransactionDispatcher).Transport.AddBinding(Result.Contact.Address.Host,
+                                                                              Result.Contact.Address.Port);
 
   SubMod := Result.AddModule(TIdSipSubscribeModule) as TIdSipSubscribeModule;
   SubMod.AddPackage(TIdSipReferPackage);

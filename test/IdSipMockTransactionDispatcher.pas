@@ -152,7 +152,12 @@ end;
 
 function TIdSipMockTransactionDispatcher.TransportAt(Index: Integer): TIdSipMockTransport;
 begin
-  Result := Self.MockTransports.Objects[Index] as TIdSipMockTransport
+  try
+    Result := Self.MockTransports.Objects[Index] as TIdSipMockTransport
+  except
+    on EInvalidCast do
+      raise;
+  end;
 end;
 
 end.

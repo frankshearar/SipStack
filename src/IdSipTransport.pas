@@ -67,13 +67,17 @@ type
     TransportListeners:        TIdNotificationList;
     TransportSendingListeners: TIdNotificationList;
 
-    procedure RewriteOwnVia(Msg: TIdSipMessage);
+    procedure RewriteOwnVia(Msg: TIdSipMessage;
+                            const SentBy: String); overload;
+    procedure RewriteOwnVia(Msg: TIdSipMessage;
+                            const SentBy: String;
+                            Port: Cardinal); overload;
   protected
-    procedure ChangeBinding(const Address: String; Port: Cardinal); virtual; abstract;
     procedure DestroyServer; virtual;
     function  GetAddress: String; virtual;
     function  GetBindings: TIdSocketHandles; virtual; abstract;
     function  GetPort: Cardinal; virtual;
+    function  IndexOfBinding(const Address: String; Port: Cardinal): Integer;
     procedure InstantiateServer; virtual;
     procedure NotifyTransportListeners(Request: TIdSipRequest;
                                        ReceivedFrom: TIdSipConnectionBindings); overload;
@@ -102,12 +106,8 @@ type
     procedure SendResponse(R: TIdSipResponse;
                            Dest: TIdSipLocation); virtual;
     function  SentByIsRecognised(Via: TIdSipViaHeader): Boolean; virtual;
-    procedure SetAddress(const Value: String); virtual;
-    procedure SetPort(Value: Cardinal); virtual;
     procedure SetTimeout(Value: Cardinal); virtual;
     procedure SetTimer(Value: TIdTimerQueue); virtual;
-
-    property Bindings: TIdSocketHandles read GetBindings;
   public
     class function  DefaultPort: Cardinal; virtual;
     class function  GetTransportType: String; virtual; abstract;
@@ -119,11 +119,16 @@ type
     constructor Create; virtual;
     destructor  Destroy; override;
 
+    procedure AddBinding(const Address: String; Port: Cardinal); virtual;
     procedure AddTransportListener(const Listener: IIdSipTransportListener);
     procedure AddTransportSendingListener(const Listener: IIdSipTransportSendingListener);
+    procedure ClearBindings;
     function  DefaultTimeout: Cardinal; virtual;
+    function  HasBinding(const Address: String; Port: Cardinal): Boolean;
     function  IsNull: Boolean; virtual;
     function  IsReliable: Boolean; virtual;
+    function  IsRunning: Boolean; virtual;
+    procedure RemoveBinding(const Address: String; Port: Cardinal);
     procedure RemoveTransportListener(const Listener: IIdSipTransportListener);
     procedure RemoveTransportSendingListener(const Listener: IIdSipTransportSendingListener);
     procedure Send(Msg: TIdSipMessage;
@@ -131,12 +136,11 @@ type
     procedure Start; virtual;
     procedure Stop; virtual;
 
-    property Address:  String        read GetAddress write SetAddress;
-    property HostName: String        read fHostName write fHostName;
-    property Port:     Cardinal      read GetPort write SetPort;
-    property Timeout:  Cardinal      read fTimeout write SetTimeout;
-    property Timer:    TIdTimerQueue read fTimer write SetTimer;
-    property UseRport: Boolean       read fUseRport write fUseRport;
+    property Bindings: TIdSocketHandles read GetBindings;
+    property HostName: String           read fHostName write fHostName;
+    property Timeout:  Cardinal         read fTimeout write SetTimeout;
+    property Timer:    TIdTimerQueue    read fTimer write SetTimer;
+    property UseRport: Boolean          read fUseRport write fUseRport;
   end;
 
   // I supply methods for objects to find out what transports the stack knows
@@ -174,7 +178,6 @@ type
     ConnectionMap: TIdSipConnectionTableLock;
     Transport:     TIdSipTcpServer;
 
-    procedure ChangeBinding(const Address: String; Port: Cardinal); override;
     procedure DestroyServer; override;
     procedure DoOnAddConnection(Connection: TIdTCPConnection;
                                 Request: TIdSipRequest);
@@ -194,9 +197,12 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
+    function  IsRunning: Boolean; override;
     procedure RemoveClient(ClientThread: TObject);
     procedure Start; override;
     procedure Stop; override;
+    procedure WriteMessageTo(Msg: TIdSipMessage;
+                             Connection: TIdTCPConnection);
   end;
 
   // I allow the sending of TCP requests to happen asynchronously: in my
@@ -298,7 +304,6 @@ type
     Transport: TIdSipUdpServer;
 
   protected
-    procedure ChangeBinding(const Address: String; Port: Cardinal); override;
     procedure DestroyServer; override;
     function  GetBindings: TIdSocketHandles; override;
     procedure InstantiateServer; override;
@@ -316,6 +321,7 @@ type
     constructor Create; override;
 
     function  IsReliable: Boolean; override;
+    function  IsRunning: Boolean; override;
     procedure Start; override;
     procedure Stop; override;
   end;
@@ -511,12 +517,12 @@ const
                           + 'received a %s message.';
 
 const
-  ItemNotFoundIndex = -1;                          
+  ItemNotFoundIndex = -1;
 
 implementation
 
 uses
-  IdSipConsts, IdSipDns, IdTCPServer;
+  IdSipConsts, IdSipDns, IdTCPServer, IdIOHandlerSocket;
 
 var
   GTransportTypes: TStrings;
@@ -577,6 +583,22 @@ begin
   inherited Destroy;
 end;
 
+procedure TIdSipTransport.AddBinding(const Address: String; Port: Cardinal);
+var
+  Handle:     TIdSocketHandle;
+  WasRunning: Boolean;
+begin
+  WasRunning := Self.IsRunning;
+  Self.Stop;
+
+  Handle := Self.Bindings.Add;
+  Handle.IP   := Address;
+  Handle.Port := Port;
+
+  if WasRunning then
+    Self.Start;
+end;
+
 procedure TIdSipTransport.AddTransportListener(const Listener: IIdSipTransportListener);
 begin
   Self.TransportListeners.AddListener(Listener);
@@ -587,9 +609,32 @@ begin
   Self.TransportSendingListeners.AddListener(Listener);
 end;
 
+procedure TIdSipTransport.ClearBindings;
+var
+  WasRunning: Boolean;
+begin
+  // We DON'T use a try/finally block here because there's no sense in
+  // restarting the stack if something went wrong clearing the bindings.
+
+  WasRunning := Self.IsRunning;
+  Self.Stop;
+
+  Self.Bindings.Clear;
+
+  if WasRunning then
+    Self.Start;
+end;
+
 function TIdSipTransport.DefaultTimeout: Cardinal;
 begin
+  // 5 seconds seems reasonable.
+
   Result := 5000;
+end;
+
+function TIdSipTransport.HasBinding(const Address: String; Port: Cardinal): Boolean;
+begin
+  Result := Self.IndexOfBinding(Address, Port) <> ItemNotFoundIndex;
 end;
 
 function TIdSipTransport.IsNull: Boolean;
@@ -600,6 +645,28 @@ end;
 function TIdSipTransport.IsReliable: Boolean;
 begin
   Result := true;
+end;
+
+function TIdSipTransport.IsRunning: Boolean;
+begin
+  Result := false;
+end;
+
+procedure TIdSipTransport.RemoveBinding(const Address: String; Port: Cardinal);
+var
+  Index:      Integer;
+  WasRunning: Boolean;
+begin
+  WasRunning := Self.IsRunning;
+  Self.Stop;
+
+  Index := Self.IndexOfBinding(Address, Port);
+
+  if (Index <> ItemNotFoundIndex) then
+    Self.Bindings.Delete(Index);
+
+  if WasRunning then
+    Self.Start;  
 end;
 
 procedure TIdSipTransport.RemoveTransportListener(const Listener: IIdSipTransportListener);
@@ -631,7 +698,6 @@ end;
 
 procedure TIdSipTransport.Start;
 begin
-  Self.ChangeBinding(Self.Address, Self.Port);
 end;
 
 procedure TIdSipTransport.Stop;
@@ -652,6 +718,23 @@ end;
 function TIdSipTransport.GetPort: Cardinal;
 begin
   Result := Self.fPort;
+end;
+
+function TIdSipTransport.IndexOfBinding(const Address: String; Port: Cardinal): Integer;
+begin
+  Result := 0;
+
+  // Indy uses an Integer to represent an unsigned value. We don't. Thus the
+  // unnecessary typecast.
+  while (Result < Self.Bindings.Count) do begin
+    if (Self.Bindings[Result].IP = Address) and (Self.Bindings[Result].Port = Integer(Port)) then
+      Break
+    else
+      Inc(Result);
+  end;
+
+  if (Result = Self.Bindings.Count) then
+    Result := ItemNotFoundIndex;
 end;
 
 procedure TIdSipTransport.InstantiateServer;
@@ -845,7 +928,7 @@ end;
 procedure TIdSipTransport.SendRequest(R: TIdSipRequest;
                                       Dest: TIdSipLocation);
 begin
-  Self.RewriteOwnVia(R);
+  Self.RewriteOwnVia(R, Self.Bindings[0].IP, Self.Bindings[0].Port);
   Self.NotifyTransportSendingListeners(R, Dest);
 end;
 
@@ -872,16 +955,6 @@ begin
   end;
 end;
 
-procedure TIdSipTransport.SetAddress(const Value: String);
-begin
-  Self.fAddress := Value;
-end;
-
-procedure TIdSipTransport.SetPort(Value: Cardinal);
-begin
-  Self.fPort := Value;
-end;
-
 procedure TIdSipTransport.SetTimeout(Value: Cardinal);
 begin
   Self.fTimeout := Value;
@@ -894,19 +967,37 @@ end;
 
 //* TIdSipTransport Private methods ********************************************
 
-procedure TIdSipTransport.RewriteOwnVia(Msg: TIdSipMessage);
+procedure TIdSipTransport.RewriteOwnVia(Msg: TIdSipMessage;
+                                        const SentBy: String);
 begin
+  // We have two separate RewriteOwnVias because there is a difference between
+  // "Via: SIP/2.0/TCP foo:5060" and "Via: SIP/2.0/TCP foo" - the latter uses
+  // SRV lookups to determine the actual address/port while the former uses only
+  // A/AAAA lookups. See RFC 3263 for more detail. This method sets up a Via
+  // without an explicit port:
+  // Via: SIP/2.0/<this transport> <SentBy>
   Assert(Msg.Path.Length > 0,
          MustHaveAtLeastOneVia);
 
   Assert(Msg.LastHop.Transport = Self.GetTransportType,
          Format(WrongTransport, [Self.GetTransportType, Msg.LastHop.Transport]));
 
-  Msg.LastHop.SentBy := Self.HostName;
-  Msg.LastHop.Port   := Self.Port;
+  Msg.LastHop.SentBy := SentBy;
 
   if Self.UseRport then
     Msg.LastHop.Params[RportParam] := '';
+end;
+
+procedure TIdSipTransport.RewriteOwnVia(Msg: TIdSipMessage;
+                                        const SentBy: String;
+                                        Port: Cardinal);
+begin
+  // This method rewrites a Via header in the form
+  // Via: SIP/2.0/<this transport> <SentBy>:<Port>
+
+  Self.RewriteOwnVia(Msg, SentBy);
+
+  Msg.LastHop.Port := Port;
 end;
 
 //******************************************************************************
@@ -1032,6 +1123,11 @@ begin
   inherited Destroy;
 end;
 
+function TIdSipTCPTransport.IsRunning: Boolean;
+begin
+  Result := Self.Transport.Active;
+end;
+
 procedure TIdSipTCPTransport.RemoveClient(ClientThread: TObject);
 var
   Clients: TList;
@@ -1058,20 +1154,16 @@ begin
   Self.StopAllClientConnections;
 end;
 
-//* TIdSipTCPTransport Protected methods ***************************************
-
-procedure TIdSipTCPTransport.ChangeBinding(const Address: String; Port: Cardinal);
-var
-  Binding: TIdSocketHandle;
+procedure TIdSipTCPTransport.WriteMessageTo(Msg: TIdSipMessage;
+                                            Connection: TIdTCPConnection);
 begin
-  Self.Stop;
+  if Msg.IsRequest then
+    Msg.LastHop.SentBy := Connection.Socket.Binding.IP;
 
-  Self.Transport.Bindings.Clear;
-  Self.Bindings.DefaultPort := Port;
-  Binding := Self.Bindings.Add;
-  Binding.IP   := Address;
-  Binding.Port := Port;
+  Connection.Write(Msg.AsString);
 end;
+
+//* TIdSipTCPTransport Protected methods ***************************************
 
 procedure TIdSipTCPTransport.DestroyServer;
 begin
@@ -1156,20 +1248,19 @@ var
 begin
   Table := Self.ConnectionMap.LockList;
   try
-    // Try send the response down the same connection we received the request on.
+    // Try send the response down the same connection on which we received the
+    // request.
     Connection := Table.ConnectionFor(Msg);
 
-    if Assigned(Connection) and Connection.Connected then
-      Connection.Write(Msg.AsString)
-    else begin
+    // Otherwise, try find an existing connection to Dest.
+    if not Assigned(Connection) then
       Connection := Table.ConnectionFor(Dest);
 
-      // Otherwise, try find an existing connection to Dest.
-      if Assigned(Connection) and Connection.Connected then
-        Connection.Write(Msg.AsString)
-      else
-        // Last resort: make a new connection to Dest.
-        Self.SendMessageTo(Msg, Dest);
+    if Assigned(Connection) and Connection.Connected then
+      Self.WriteMessageTo(Msg, Connection)
+    else begin
+      // Last resort: make a new connection to Dest.
+      Self.SendMessageTo(Msg, Dest);
     end;
   finally
     Self.ConnectionMap.UnlockList;
@@ -1264,6 +1355,7 @@ end;
 procedure TIdSipTcpClientThread.AddConnection(Connection: TIdTCPConnection;
                                               Request: TIdSipRequest);
 begin
+  // TOD: This is accessing the PROTECTED method of the transport!
   Self.Transport.DoOnAddConnection(Connection, Request);
 end;
 
@@ -1469,6 +1561,11 @@ begin
   Result := false;
 end;
 
+function TIdSipUDPTransport.IsRunning: Boolean;
+begin
+  Result := Self.Transport.Active;
+end;
+
 procedure TIdSipUDPTransport.Start;
 begin
   inherited Start;
@@ -1482,19 +1579,6 @@ begin
 end;
 
 //* TIdSipUDPTransport Protected methods ***************************************
-
-procedure TIdSipUDPTransport.ChangeBinding(const Address: String; Port: Cardinal);
-var
-  Binding: TIdSocketHandle;
-begin
-  Self.Stop;
-
-  Self.Transport.Bindings.Clear;
-  Self.Bindings.DefaultPort := Port;
-  Binding := Self.Bindings.Add;
-  Binding.IP   := Address;
-  Binding.Port := Port;
-end;
 
 procedure TIdSipUDPTransport.DestroyServer;
 begin

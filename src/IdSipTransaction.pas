@@ -137,6 +137,9 @@ type
 
     procedure AddTransactionDispatcherListener(const Listener: IIdSipTransactionDispatcherListener);
     procedure AddTransport(Transport: TIdSipTransport);
+    procedure AddTransportBinding(const Transport: String;
+                                  const Address: String;
+                                  Port: Cardinal);
     procedure AddTransportListener(Listener: IIdSipTransportListener);
     function  AddClientTransaction(InitialRequest: TIdSipRequest): TIdSipTransaction;
     function  AddServerTransaction(InitialRequest: TIdSipRequest;
@@ -561,6 +564,42 @@ begin
   try
     Self.Transports.Add(Transport);
     Transport.AddTransportListener(Self);
+  finally
+    Self.TransportLock.Release;
+  end;
+end;
+
+procedure TIdSipTransactionDispatcher.AddTransportBinding(const Transport: String;
+                                                          const Address: String;
+                                                          Port: Cardinal);
+var
+  I: Integer;
+  T: TIdSipTransport;
+begin
+  Self.TransportLock.Acquire;
+  try
+    T := nil;
+    I := 0;
+    while (I < Self.Transports.Count) and not Assigned(T) do begin
+      if IsEqual(Transport, Self.Transports[I].GetTransportType) then
+        T := Self.Transports[I]
+      else
+        Inc(I);
+    end;
+
+    if (I < Self.Transports.Count) then
+      T.AddBinding(Address, Port)
+    else begin
+      T := TIdSipTransportRegistry.TransportFor(Transport).Create;
+      T.HostName := Address;
+      T.Timer    := Self.Timer;
+
+      // Indy servers instantiate with one binding.
+      T.Bindings[0].IP   := Address;
+      T.Bindings[0].Port := Port;
+
+      Self.Transports.Add(T);
+    end;
   finally
     Self.TransportLock.Release;
   end;

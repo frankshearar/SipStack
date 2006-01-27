@@ -33,6 +33,9 @@ type
   end;
 
   TTestCaseSip = class(TThreadingTestCase)
+  private
+    procedure RegisterMockTransports;
+    procedure UnregisterAllTransports;
   public
     procedure CheckEquals(Expected,
                           Received: TIdSipURI;
@@ -871,22 +874,40 @@ end;
 
 procedure TTestCaseSip.SetUp;
 begin
-  inherited SetUp;
+  try
+    // Exceptions could occur in the descendant SetUp, and we don't want that
+    // messing up our transport registrations: we're affecting a global
+    // structure.
+    inherited SetUp;
+  finally
+    Self.UnregisterAllTransports;
+    Self.RegisterMockTransports;
+  end;
+end;
 
+procedure TTestCaseSip.TearDown;
+begin
+  Self.UnregisterAllTransports;
+
+  inherited TearDown;
+end;
+
+//* TTestCaseSip Private methods ***********************************************
+
+procedure TTestCaseSip.RegisterMockTransports;
+begin
   TIdSipTransportRegistry.RegisterTransport(SctpTransport, TIdSipMockSctpTransport);
   TIdSipTransportRegistry.RegisterTransport(TcpTransport,  TIdSipMockTcpTransport);
   TIdSipTransportRegistry.RegisterTransport(TlsTransport,  TIdSipMockTlsTransport);
   TIdSipTransportRegistry.RegisterTransport(UdpTransport,  TIdSipMockUdpTransport);
 end;
 
-procedure TTestCaseSip.TearDown;
+procedure TTestCaseSip.UnregisterAllTransports;
 begin
   TIdSipTransportRegistry.UnregisterTransport(UdpTransport);
   TIdSipTransportRegistry.UnregisterTransport(TlsTransport);
   TIdSipTransportRegistry.UnregisterTransport(TcpTransport);
   TIdSipTransportRegistry.UnregisterTransport(SctpTransport);
-
-  inherited TearDown;
 end;
 
 //******************************************************************************

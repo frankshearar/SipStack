@@ -100,6 +100,8 @@ type
     procedure TestAddAndCountTransport;
     procedure TestAddClientTransaction;
     procedure TestAddServerTransaction;
+    procedure TestAddTransportBinding;
+    procedure TestAddTransportBindingAddsTimerToTransport;
     procedure TestClearTransports;
     procedure TestCreateNewTransaction;
     procedure TestDispatchToCorrectTransaction;
@@ -926,6 +928,45 @@ begin
   CheckEquals(TranCount + 1,
               Self.D.TransactionCount,
               'Transaction wasn''t added');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestAddTransportBinding;
+var
+  OriginalCount: Cardinal;
+begin
+  // Let's start with a clean slate, as far as transports are concerned.
+  Self.D.Transports.Clear;
+  OriginalCount := Self.D.TransportCount;
+
+  Self.D.AddTransportBinding(TcpTransport, '127.0.0.1', 1);
+  CheckEquals(OriginalCount + 1,
+              Self.D.TransportCount,
+              'New transport not added');
+
+  Self.D.AddTransportBinding(TcpTransport, '127.0.0.1', 2);
+  CheckEquals(OriginalCount + 1,
+              Self.D.TransportCount,
+              'Binding not added to existing TCP transport');
+
+  Self.D.AddTransportBinding(TcpTransport, '127.0.0.2', 3);
+  CheckEquals(OriginalCount + 1,
+              Self.D.TransportCount,
+              'Binding on different address not added to existing TCP transport');
+
+  Self.D.AddTransportBinding(UdpTransport, '127.0.0.1', 1);
+  CheckEquals(OriginalCount + 2,
+              Self.D.TransportCount,
+              'Binding on different transport not added to a new transport');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestAddTransportBindingAddsTimerToTransport;
+begin
+  // Let's start with a clean slate, as far as transports are concerned.
+  Self.D.Transports.Clear;
+
+  Self.D.AddTransportBinding(TcpTransport, '127.0.0.1', 1);
+  Check(Self.D.Timer = Self.D.Transports[0].Timer,
+        'Newly-added transport doesn''t use the dispatcher''s timer');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestClearTransports;

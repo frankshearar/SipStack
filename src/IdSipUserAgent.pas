@@ -481,10 +481,9 @@ end;
 procedure TIdSipStackConfigurator.AddTransport(Dispatcher: TIdSipTransactionDispatcher;
                                                const TransportLine: String);
 var
-  HostAndPort:  TIdSipHostAndPort;
-  Line:         String;
-  NewTransport: TIdSipTransport;
-  Transport:    String;
+  HostAndPort: TIdSipHostAndPort;
+  Line:        String;
+  Transport:   String;
 begin
   // See class comment for the format for this directive.
   Line := TransportLine;
@@ -492,22 +491,14 @@ begin
   EatDirective(Line);
   Transport := Fetch(Line, ' ');
 
-  NewTransport := TIdSipTransportRegistry.TransportFor(Transport).Create;
-  Dispatcher.AddTransport(NewTransport);
-  NewTransport.Timer := Dispatcher.Timer;
-
   HostAndPort := TIdSipHostAndPort.Create;
   try
     HostAndPort.Value := Line;
-    
-    NewTransport.Port := HostAndPort.Port;
 
     if (HostAndPort.Host = AutoKeyword) then
-      NewTransport.Address := LocalAddress
-    else
-      NewTransport.Address := HostAndPort.Host;
+      HostAndPort.Host := LocalAddress;
 
-    NewTransport.HostName := NewTransport.Address;
+    Dispatcher.AddTransportBinding(Transport, HostAndPort.Host, HostAndPort.Port);
   finally
     HostAndPort.Free;
   end;

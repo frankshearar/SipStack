@@ -47,7 +47,6 @@ type
     procedure SetWriteLog(const Value: Boolean);
     function  TransportAt(Index: Integer): TIdSipMockTransport;
   protected
-    procedure ChangeBinding(const Address: String; Port: Cardinal); override;
     function  GetBindings: TIdSocketHandles; override;
     procedure SendRequest(R: TIdSipRequest;
                           Dest: TIdSipLocation); override;
@@ -175,6 +174,9 @@ begin
   Self.fLastACK   := TIdSipRequest.Create;
   Self.fRequests  := TIdSipRequestList.Create;
   Self.fResponses := TIdSipResponseList.Create;
+
+  // All Indy servers instantiate with one binding.
+  Self.Bindings.Add;
 
   GAllTransports.Add(Self);
 end;
@@ -335,10 +337,6 @@ end;
 
 //* TIdSipMockTransport Protected methods **************************************
 
-procedure TIdSipMockTransport.ChangeBinding(const Address: String; Port: Cardinal);
-begin
-end;
-
 function TIdSipMockTransport.GetBindings: TIdSocketHandles;
 begin
   Result := Self.fBindings;
@@ -425,9 +423,9 @@ begin
   Result := nil;
 
   I := 0;
+
   while (I < GAllTransports.Count) and not Assigned(Result) do
-    if (Self.TransportAt(I).Address = Address)
-       and (Self.TransportAt(I).Port = Port) then
+    if Self.TransportAt(I).HasBinding(Address, Port) then
       Result := Self.TransportAt(I)
     else
       Inc(I);
