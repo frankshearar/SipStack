@@ -252,8 +252,8 @@ type
   // transports attached to this core. It's not clear how to set up the
   // hostnames and bindings of the stack.
   TIdSipAbstractCore = class(TIdInterfacedObject,
-                                  IIdObserver,
-                                  IIdSipTransactionDispatcherListener)
+                             IIdObserver,
+                             IIdSipTransactionDispatcherListener)
   private
     fActions:                TIdSipActions;
     fAllowedContentTypeList: TStrings;
