@@ -16,6 +16,11 @@ uses
 
 type
   TestFunctions = class(TTestRTP)
+  private
+    OldShortDateFormat: String;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
   published
     procedure TestDateTimeToNTPFractionsOfASecond;
     procedure TestDateTimeToNTPSeconds;
@@ -867,6 +872,24 @@ end;
 //******************************************************************************
 //* TestFunctions                                                              *
 //******************************************************************************
+//* TestFunctions Public methods ***********************************************
+
+procedure TestFunctions.SetUp;
+begin
+  inherited SetUp;
+
+  Self.OldShortDateFormat := ShortDateFormat;
+
+  ShortDateFormat := 'yyyy/mm/dd hh:mm:ss';
+end;
+
+procedure TestFunctions.TearDown;
+begin
+  ShortDateFormat := Self.OldShortDateFormat;
+
+  inherited TearDown;
+end;
+
 //* TestFunctions Published methods ********************************************
 
 procedure TestFunctions.TestDateTimeToNTPFractionsOfASecond;
@@ -951,6 +974,7 @@ procedure TestFunctions.TestDateTimeToNTPTimestampFractionalValues;
 var
   JanOne1900: TDateTime;
 begin
+
   JanOne1900 := 2;
 
   CheckEquals(IntToHex($80000000, 8),
@@ -961,7 +985,7 @@ begin
               '1900/01/01 00:00:00.25, FractionalPart');
 
   CheckEquals(IntToHex($ffbe76c8, 8),
-              IntToHex(DateTimeToNTPTimestamp(StrToDateTime('12/04/2002 14:59:59.999')).FractionalPart, 8),
+              IntToHex(DateTimeToNTPTimestamp(StrToDateTime('2002/04/12 14:59:59.999')).FractionalPart, 8),
               '2002/04/12 14:59:59.999, FractionalPart');
 end;
 
@@ -982,14 +1006,14 @@ begin
               DateTimeToNTPTimestamp(JanOne1900 + OneSecond).IntegerPart,
               '1900/01/01 00:00:01, IntegerPart');
   CheckEquals(4*SecsPerDay + 3600 + 120 + 1,
-              DateTimeToNTPTimestamp(StrToDateTime('05/01/1900 01:02:01')).IntegerPart,
+              DateTimeToNTPTimestamp(StrToDateTime('1900/01/05 01:02:01')).IntegerPart,
               '1900/01/05 01:02:01, IntegerPart');
   CheckEquals(0,
-              DateTimeToNTPTimestamp(StrToDateTime('05/01/1900 01:02:01')).FractionalPart,
+              DateTimeToNTPTimestamp(StrToDateTime('1900/01/05 01:02:01')).FractionalPart,
               '1900/01/05 01:02:01, FractionalPart');
 
   ExpectedTime := MultiplyCardinal(AprTwelve2002, SecsPerDay) + 14*3600 + 59*60 + 59;
-  ReceivedTime := DateTimeToNTPTimestamp(StrToDateTime('12/04/2002 14:59:59.999')).IntegerPart;
+  ReceivedTime := DateTimeToNTPTimestamp(StrToDateTime('2002/04/12 14:59:59.999')).IntegerPart;
   CheckEquals(IntToHex(ExpectedTime, 8),
               IntToHex(ReceivedTime, 8),
               '2002/04/12 14:59:59.999, IntegerPart');
