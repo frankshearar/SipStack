@@ -128,6 +128,7 @@ type
   // These tests exercise the SIP discovery algorithms as defined in RFC 3263.
   TestLocation = class(TTestCaseTU,
                        IIdSipActionListener,
+                       IIdSipOwnedActionListener,
                        IIdSipInviteListener)
   private
     InviteOffer:    String;
@@ -140,7 +141,7 @@ type
                                         Response: TIdSipResponse);
     procedure OnCallProgress(InviteAgent: TIdSipOutboundInvite;
                         Response: TIdSipResponse);
-    procedure OnFailure(InviteAgent: TIdSipOutboundInvite;
+    procedure OnFailure(Action: TIdSipAction;
                         Response: TIdSipResponse;
                         const Reason: String);
     procedure OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
@@ -148,10 +149,10 @@ type
     procedure OnNetworkFailure(Action: TIdSipAction;
                                ErrorCode: Cardinal;
                                const Reason: String);
-    procedure OnRedirect(InviteAgent: TIdSipOutboundInvite;
+    procedure OnRedirect(Action: TIdSipAction;
                          Redirect: TIdSipResponse);
-    procedure OnSuccess(InviteAgent: TIdSipOutboundInvite;
-                        Response: TIdSipResponse);
+    procedure OnSuccess(Action: TIdSipAction;
+                        Msg: TIdSipMessage);
   public
     procedure SetUp; override;
   published
@@ -268,6 +269,45 @@ type
     procedure TestRun;
   end;
 
+  TOwnedActionMethodTestCase = class(TActionMethodTestCase)
+  protected
+    Action:   TIdSipAction;
+    Listener: TIdSipOwnedActionListener;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSipOwnedActionFailureMethod = class(TOwnedActionMethodTestCase)
+  private
+    Method: TIdSipOwnedActionFailureMethod;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TestTIdSipOwnedActionRedirectMethod = class(TOwnedActionMethodTestCase)
+  private
+    Method: TIdSipOwnedActionRedirectMethod;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure Run;
+  end;
+
+  TestTIdSipOwnedActionSuccessMethod = class(TOwnedActionMethodTestCase)
+  private
+    Method: TIdSipOwnedActionSuccessMethod;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
   TestTIdSipOptionsResponseMethod = class(TActionMethodTestCase)
   private
     Method: TIdSipOptionsResponseMethod;
@@ -320,7 +360,6 @@ begin
   Result := TTestSuite.Create('IdSipCore unit tests');
 //  Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipActions.Suite);
-{
   Result.AddTest(TestLocation.Suite);
   Result.AddTest(TestTIdSipMessageModule.Suite);
   Result.AddTest(TestTIdSipNullModule.Suite);
@@ -329,9 +368,11 @@ begin
   Result.AddTest(TestTIdSipOutboundOptions.Suite);
   Result.AddTest(TestTIdSipActionAuthenticationChallengeMethod.Suite);
   Result.AddTest(TestTIdSipActionNetworkFailureMethod.Suite);
+  Result.AddTest(TestTIdSipOwnedActionFailureMethod.Suite);
+  Result.AddTest(TestTIdSipOwnedActionRedirectMethod.Suite);
+  Result.AddTest(TestTIdSipOwnedActionSuccessMethod.Suite);
   Result.AddTest(TestTIdSipOptionsResponseMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentDroppedUnmatchedMessageMethod.Suite);
-}
 end;
 
 //******************************************************************************
@@ -1846,7 +1887,7 @@ procedure TestLocation.OnCallProgress(InviteAgent: TIdSipOutboundInvite;
 begin
 end;
 
-procedure TestLocation.OnFailure(InviteAgent: TIdSipOutboundInvite;
+procedure TestLocation.OnFailure(Action: TIdSipAction;
                                  Response: TIdSipResponse;
                                  const Reason: String);
 begin
@@ -1864,13 +1905,13 @@ begin
   Self.NetworkFailure := true;
 end;
 
-procedure TestLocation.OnRedirect(InviteAgent: TIdSipOutboundInvite;
+procedure TestLocation.OnRedirect(Action: TIdSipAction;
                                   Redirect: TIdSipResponse);
 begin
 end;
 
-procedure TestLocation.OnSuccess(InviteAgent: TIdSipOutboundInvite;
-                                 Response: TIdSipResponse);
+procedure TestLocation.OnSuccess(Action: TIdSipAction;
+                                 Msg: TIdSipMessage);
 begin
 end;
 
@@ -2759,6 +2800,144 @@ begin
   CheckEquals(Self.Reason,
               Self.Listener.ReasonParam,
             'Reason');
+end;
+
+//******************************************************************************
+//* TOwnedActionMethodTestCase                                                 *
+//******************************************************************************
+//* TOwnedActionMethodTestCase Public methods **********************************
+
+procedure TOwnedActionMethodTestCase.SetUp;
+var
+  Nowhere: TIdSipAddressHeader;
+begin
+  inherited SetUp;
+
+  Nowhere := TIdSipAddressHeader.Create;
+  try
+    Self.Action := TIdSipOutboundInvite.Create(Self.UA);
+  finally
+    Nowhere.Free;
+  end;
+
+  Self.Listener := TIdSipOwnedActionListener.Create;
+end;
+
+procedure TOwnedActionMethodTestCase.TearDown;
+begin
+  Self.Listener.Free;
+
+  inherited TearDown;
+end;
+
+//******************************************************************************
+//* TestTIdSipOwnedActionFailureMethod                                         *
+//******************************************************************************
+//* TestTIdSipOwnedActionFailureMethod Public methods **************************
+
+procedure TestTIdSipOwnedActionFailureMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Method := TIdSipOwnedActionFailureMethod.Create;
+
+  Self.Method.ActionAgent := Self.Action;
+  Self.Method.Reason      := 'none';
+  Self.Method.Response    := Self.Response;
+end;
+
+procedure TestTIdSipOwnedActionFailureMethod.TearDown;
+begin
+  Self.Method.Free;
+  Self.Action.Free; // We created the action, so the UA doesn't own it.
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipOwnedActionFailureMethod Published methods ***********************
+
+procedure TestTIdSipOwnedActionFailureMethod.TestRun;
+begin
+  Self.Method.Run(Self.Listener);
+
+  Check(Self.Listener.Failure, 'Listener not notified');
+  Check(Self.Method.ActionAgent = Self.Listener.ActionParam,
+        'InviteAgent param');
+  Check(Self.Method.Response = Self.Listener.ResponseParam,
+        'Response param');
+  CheckEquals(Self.Method.Reason,
+              Self.Listener.ReasonParam,
+              'Reason param');
+end;
+
+//******************************************************************************
+//* TestTIdSipOwnedActionRedirectMethod                                        *
+//******************************************************************************
+//* TestTIdSipOwnedActionRedirectMethod Public methods *************************
+
+procedure TestTIdSipOwnedActionRedirectMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Method := TIdSipOwnedActionRedirectMethod.Create;
+
+  Self.Method.ActionAgent := Self.Action;
+  Self.Method.Response    := Self.Response;
+end;
+
+procedure TestTIdSipOwnedActionRedirectMethod.TearDown;
+begin
+  Self.Method.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipOwnedActionRedirectMethod Published methods **********************
+
+procedure TestTIdSipOwnedActionRedirectMethod.Run;
+begin
+  Self.Method.Run(Self.Listener);
+
+  Check(Self.Listener.Redirected, 'Listener not notified');
+  Check(Self.Method.ActionAgent = Self.Listener.ActionParam,
+        'Action param');
+  Check(Self.Method.Response = Self.Listener.RedirectParam,
+        'Response param');
+end;
+
+//******************************************************************************
+//* TestTIdSipOwnedActionSuccessMethod                                         *
+//******************************************************************************
+//* TestTIdSipOwnedActionSuccessMethod Public methods **************************
+
+procedure TestTIdSipOwnedActionSuccessMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Method := TIdSipOwnedActionSuccessMethod.Create;
+
+  Self.Method.ActionAgent := Self.Action;
+  Self.Method.Msg         := Self.Response;
+end;
+
+procedure TestTIdSipOwnedActionSuccessMethod.TearDown;
+begin
+  Self.Method.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipOwnedActionSuccessMethod Published methods ***********************
+
+procedure TestTIdSipOwnedActionSuccessMethod.TestRun;
+begin
+  Self.Method.Run(Self.Listener);
+
+  Check(Self.Listener.Success, 'Listener not notified');
+  Check(Self.Method.ActionAgent = Self.Listener.ActionParam,
+        'Action param');
+  Check(Self.Method.Msg = Self.Listener.MsgParam,
+        'Response param');
 end;
 
 //******************************************************************************

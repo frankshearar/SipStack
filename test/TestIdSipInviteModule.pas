@@ -104,7 +104,7 @@ type
     procedure CheckAckWithDifferentCSeq(InviteAction: TIdSipInboundInvite);
     procedure OnFailure(InviteAgent: TIdSipInboundInvite);
     procedure OnSuccess(InviteAgent: TIdSipInboundInvite;
-                        Ack: TIdSipRequest);
+                        Ack: TIdSipMessage);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -143,6 +143,7 @@ type
   end;
 
   TestTIdSipOutboundInvite = class(TestTIdSipAction,
+                                   IIdSipOwnedActionListener,
                                    IIdSipInviteListener,
                                    IIdSipMessageModuleListener,
                                    IIdSipTransactionUserListener,
@@ -171,16 +172,16 @@ type
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
                                         Receiver: TIdSipTransport);
-    procedure OnFailure(InviteAgent: TIdSipOutboundInvite;
+    procedure OnFailure(Action: TIdSipAction;
                         Response: TIdSipResponse;
                         const Reason: String);
-    procedure OnRedirect(Invite: TIdSipOutboundInvite;
+    procedure OnRedirect(Action: TIdSipAction;
                          Response: TIdSipResponse);
-    procedure OnSuccess(InviteAgent: TIdSipOutboundInvite;
-                        Response: TIdSipResponse);
+    procedure OnSuccess(Action: TIdSipAction;
+                        Msg: TIdSipMessage);
   protected
     procedure CheckSendDialogEstablishingRequestWithGruu;
-    function CreateInitialInvite: TIdSipOutboundInitialInvite;
+    function  CreateInitialInvite: TIdSipOutboundInitialInvite;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -541,6 +542,28 @@ type
     procedure TestRun;
   end;
 
+  TestTIdSipInboundInviteFailureMethod = class(TActionMethodTestCase)
+  private
+    Invite: TIdSipRequest;
+    Method: TIdSipInboundInviteFailureMethod;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TestTIdSipInboundInviteSuccessMethod = class(TActionMethodTestCase)
+  private
+    Invite: TIdSipRequest;
+    Method: TIdSipInboundInviteSuccessMethod;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
   TInviteMethodTestCase = class(TActionMethodTestCase)
   private
     Invite:   TIdSipOutboundInvite;
@@ -560,10 +583,9 @@ type
     procedure TestRun;
   end;
 
-  TestTIdSipInboundInviteFailureMethod = class(TActionMethodTestCase)
+  TestTIdSipInviteDialogEstablishedMethod = class(TActionMethodTestCase)
   private
-    Invite: TIdSipRequest;
-    Method: TIdSipInboundInviteFailureMethod;
+    Method: TIdSipInviteDialogEstablishedMethod;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -571,9 +593,42 @@ type
     procedure TestRun;
   end;
 
-  TestTIdSipInviteDialogEstablishedMethod = class(TActionMethodTestCase)
+  TestTIdSipActionRedirectorMethod = class(TActionMethodTestCase)
   private
-    Method: TIdSipInviteDialogEstablishedMethod;
+    Listener:   TIdSipMockActionRedirectorListener;
+    Redirector: TIdSipActionRedirector;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSipRedirectorFailureMethod = class(TestTIdSipActionRedirectorMethod)
+  private
+    ErrorCode:  Cardinal;
+    Method:     TIdSipRedirectorFailureMethod;
+    Reason:     String;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TestTIdSipRedirectorNewActionMethod = class(TestTIdSipActionRedirectorMethod)
+  private
+    Method:    TIdSipRedirectorNewActionMethod;
+    NewAction: TIdSipAction;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TestTIdSipRedirectorSuccessMethod = class(TestTIdSipActionRedirectorMethod)
+  private
+    Method:   TIdSipRedirectorSuccessMethod;
+    Response: TIdSipResponse;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -588,36 +643,6 @@ type
   public
     procedure SetUp; override;
     procedure TearDown; override;
-  end;
-
-  TestTIdSipInviteFailureMethod = class(TestInviteMethod)
-  private
-    Method: TIdSipInviteFailureMethod;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestRun;
-  end;
-
-  TestTIdSipInviteRedirectMethod = class(TestInviteMethod)
-  private
-    Method: TIdSipInviteRedirectMethod;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure Run;
-  end;
-
-  TestTIdSipInviteSuccessMethod = class(TestInviteMethod)
-  private
-    Method: TIdSipInviteSuccessMethod;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestRun;
   end;
 
   TestSessionMethod = class(TActionMethodTestCase)
@@ -712,12 +737,13 @@ begin
   Result.AddTest(TestTIdSipOutboundSession.Suite);
 //  Result.AddTest(TestSessionReplacer.Suite);
   Result.AddTest(TestTIdSipInviteModuleOnInboundCallMethod.Suite);
-  Result.AddTest(TestTIdSipInviteCallProgressMethod.Suite);
   Result.AddTest(TestTIdSipInboundInviteFailureMethod.Suite);
+  Result.AddTest(TestTIdSipInboundInviteSuccessMethod.Suite);
+  Result.AddTest(TestTIdSipInviteCallProgressMethod.Suite);
   Result.AddTest(TestTIdSipInviteDialogEstablishedMethod.Suite);
-  Result.AddTest(TestTIdSipInviteFailureMethod.Suite);
-  Result.AddTest(TestTIdSipInviteRedirectMethod.Suite);
-  Result.AddTest(TestTIdSipInviteSuccessMethod.Suite);
+  Result.AddTest(TestTIdSipRedirectorFailureMethod.Suite);
+  Result.AddTest(TestTIdSipRedirectorNewActionMethod.Suite);
+  Result.AddTest(TestTIdSipRedirectorSuccessMethod.Suite);
   Result.AddTest(TestTIdSipEndedSessionMethod.Suite);
   Result.AddTest(TestTIdSipEstablishedSessionMethod.Suite);
   Result.AddTest(TestTIdSipModifiedSessionMethod.Suite);
@@ -1438,7 +1464,7 @@ begin
 end;
 
 procedure TestTIdSipInboundInvite.OnSuccess(InviteAgent: TIdSipInboundInvite;
-                                            Ack: TIdSipRequest);
+                                            Ack: TIdSipMessage);
 begin
   Self.Answer         := Ack.Body;
   Self.AnswerMimeType := Ack.ContentType;
@@ -2250,21 +2276,21 @@ begin
   Self.DroppedUnmatchedResponse := true;
 end;
 
-procedure TestTIdSipOutboundInvite.OnFailure(InviteAgent: TIdSipOutboundInvite;
+procedure TestTIdSipOutboundInvite.OnFailure(Action: TIdSipAction;
                                              Response: TIdSipResponse;
                                              const Reason: String);
 begin
   Self.OnFailureFired := true;
 end;
 
-procedure TestTIdSipOutboundInvite.OnRedirect(Invite: TIdSipOutboundInvite;
+procedure TestTIdSipOutboundInvite.OnRedirect(Action: TIdSipAction;
                                               Response: TIdSipResponse);
 begin
   Self.OnRedirectFired := true;
 end;
 
-procedure TestTIdSipOutboundInvite.OnSuccess(InviteAgent: TIdSipOutboundInvite;
-                                             Response: TIdSipResponse);
+procedure TestTIdSipOutboundInvite.OnSuccess(Action: TIdSipAction;
+                                             Msg: TIdSipMessage);
 begin
   Self.OnSuccessFired := true;
 end;
@@ -2305,10 +2331,10 @@ begin
       Invite.AddListener(L1);
       Invite.AddListener(L2);
 
-      Self.ReceiveOk(Self.LastSentRequest);
+      Self.ReceiveRinging(Self.LastSentRequest);
 
-      Check(L1.Success, 'L1 not informed of success');
-      Check(L2.Success, 'L2 not informed of success');
+      Check(L1.CallProgress, 'L1 not informed of call progress');
+      Check(L2.CallProgress, 'L2 not informed of call progress');
     finally
       L2.Free;
     end;
@@ -2760,11 +2786,11 @@ begin
       Invite.AddListener(L2);
       Invite.RemoveListener(L2);
 
-      Self.ReceiveOk(Self.LastSentRequest);
+      Self.ReceiveRinging(Self.LastSentRequest);
 
-      Check(L1.Success,
+      Check(L1.CallProgress,
             'First listener not notified');
-      Check(not L2.Success,
+      Check(not L2.CallProgress,
             'Second listener erroneously notified, ergo not removed');
     finally
       L2.Free
@@ -2882,6 +2908,7 @@ begin
   Invite.MimeType    := Self.InviteMimeType;
   Invite.Offer       := Self.InviteOffer;
   Invite.AddListener(Self);
+  Invite.AddOwnedActionListener(Self);
   Invite.Send;
 end;
 
@@ -2898,12 +2925,21 @@ end;
 //* TestTIdSipOutboundRedirectedInvite Protected methods ***********************
 
 function TestTIdSipOutboundRedirectedInvite.CreateAction: TIdSipAction;
+var
+  Redirect: TIdSipOutboundRedirectedInvite;
 begin
   // We do this to send the initial INVITE
   Self.CreateInitialInvite;
 
   // Then we send the redirected INVITE
-  Result := Self.CreateInvite;
+  Redirect := Self.CreateInvite;
+  Redirect.Contact         := Self.Destination;
+  Redirect.OriginalRequest := Self.LastSentRequest;
+  Redirect.AddListener(Self);
+  Redirect.AddOwnedActionListener(Self);
+  Redirect.Send;
+
+  Result := Redirect;
 end;
 
 //* TestTIdSipOutboundRedirectedInvite Private methods *************************
@@ -2911,44 +2947,26 @@ end;
 function TestTIdSipOutboundRedirectedInvite.CreateInvite: TIdSipOutboundRedirectedInvite;
 begin
   Result := Self.Core.AddOutboundAction(TIdSipOutboundRedirectedInvite) as TIdSipOutboundRedirectedInvite;
-  Result.Contact        := Self.Destination;
-  Result.OriginalInvite := Self.LastSentRequest;
-  Result.AddListener(Self);
-  Result.Send;
 end;
 
 //* TestTIdSipOutboundRedirectedInvite Published methods ***********************
 
 procedure TestTIdSipOutboundRedirectedInvite.TestRedirectedInvite;
 var
-  Invite:         TIdSipOutboundRedirectedInvite;
-  NewInvite:      TIdSipRequest;
-  OriginalInvite: TIdSipRequest;
+  Invite: TIdSipOutboundRedirectedInvite;
 begin
-  OriginalInvite := TIdSipRequest.Create;
-  try
-    Self.CreateInitialInvite;
-    OriginalInvite.Assign(Self.LastSentRequest);
+  Self.MarkSentRequestCount;
+  Invite := Self.CreateAction as TIdSipOutboundRedirectedInvite;
+  CheckRequestSent('No INVITE sent');
 
-    Self.MarkSentRequestCount;
-
-    Invite := Self.CreateInvite;
-
-    CheckRequestSent('No INVITE sent');
-
-    NewInvite := Invite.InitialRequest;
-
-    CheckEquals(OriginalInvite.CallID,
-                NewInvite.CallID,
-                'Call-ID mismatch between original and new INVITEs');
-    CheckEquals(OriginalInvite.From.Tag,
-                NewInvite.From.Tag,
-                'From tag mismatch between original and new INVITEs');
-    Check(not NewInvite.ToHeader.HasTag,
-          'New INVITE mustn''t have a To tag');
-  finally
-    OriginalInvite.Free;
-  end;
+  CheckEquals(Invite.OriginalRequest.CallID,
+              Invite.InitialRequest.CallID,
+              'Call-ID mismatch between original and new INVITEs');
+  CheckEquals(Invite.OriginalRequest.From.Tag,
+              Invite.InitialRequest.From.Tag,
+              'From tag mismatch between original and new INVITEs');
+  Check(not Invite.InitialRequest.ToHeader.HasTag,
+        'New INVITE mustn''t have a To tag');
 end;
 
 procedure TestTIdSipOutboundRedirectedInvite.TestSendWithGruu;
@@ -2989,6 +3007,7 @@ begin
   Invite.Offer          := Self.InviteOffer;
   Invite.OriginalInvite := Self.Invite;
   Invite.AddListener(Self);
+  Invite.AddOwnedActionListener(Self);
   Invite.Send;
 
   Result := Invite;
@@ -3036,6 +3055,7 @@ begin
   Invite.MimeType    := Self.InviteMimeType;
   Invite.Offer       := Self.InviteOffer;
   Invite.AddListener(Self);
+  Invite.AddOwnedActionListener(Self);
   Invite.Send;
 
   Result := Invite;
@@ -4962,7 +4982,9 @@ begin
            + 'c=IN IP4 127.0.0.1'#13#10
            + 'm=audio 8000 RTP/AVP 0'#13#10;
 
+  Self.MarkSentRequestCount;
   Self.Session := Self.CreateAction as TIdSipOutboundSession;
+  CheckRequestSent(Self.ClassName + ': No INVITE sent');
 
   Self.RemoteMimeType           := '';
   Self.OnEndedSessionFired      := false;
@@ -5833,6 +5855,8 @@ begin
 
     Self.MarkSentAckCount;
     Self.ReceiveResponse(Ok);
+    Check(not Self.DroppedUnmatchedResponse,
+          'Dropped the retransmitted OK');
     CheckAckSent('Retransmission');
 
     Ack := Self.LastSentAck;
@@ -6594,6 +6618,90 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSipInboundInviteFailureMethod                                       *
+//******************************************************************************
+//* TestTIdSipInboundInviteFailureMethod Public methods ************************
+
+procedure TestTIdSipInboundInviteFailureMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Invite := TIdSipTestResources.CreateBasicRequest;
+
+  Self.Method := TIdSipInboundInviteFailureMethod.Create;
+  Self.Method.Invite := TIdSipInboundInvite.CreateInbound(Self.UA, Self.Invite, false);
+end;
+
+procedure TestTIdSipInboundInviteFailureMethod.TearDown;
+begin
+  Self.Method.Invite.Free;
+  Self.Method.Free;
+  Self.Invite.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipInboundInviteFailureMethod Published methods *********************
+
+procedure TestTIdSipInboundInviteFailureMethod.TestRun;
+var
+  Listener: TIdSipTestInboundInviteListener;
+begin
+  Listener := TIdSipTestInboundInviteListener.Create;
+  try
+    Self.Method.Run(Listener);
+
+    Check(Listener.Failed, 'Listener not notified');
+    Check(Self.Method.Invite = Listener.InviteAgentParam,
+          'InviteAgent param');
+  finally
+    Listener.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipInboundInviteSuccessMethod                                       *
+//******************************************************************************
+//* TestTIdSipInboundInviteSuccessMethod Public methods ************************
+
+procedure TestTIdSipInboundInviteSuccessMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Invite := TIdSipTestResources.CreateBasicRequest;
+
+  Self.Method := TIdSipInboundInviteSuccessMethod.Create;
+  Self.Method.Invite := TIdSipInboundInvite.CreateInbound(Self.UA, Self.Invite, false);
+end;
+
+procedure TestTIdSipInboundInviteSuccessMethod.TearDown;
+begin
+  Self.Method.Invite.Free;
+  Self.Method.Free;
+  Self.Invite.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipInboundInviteSuccessMethod Published methods *********************
+
+procedure TestTIdSipInboundInviteSuccessMethod.TestRun;
+var
+  Listener: TIdSipTestInboundInviteListener;
+begin
+  Listener := TIdSipTestInboundInviteListener.Create;
+  try
+    Self.Method.Run(Listener);
+
+    Check(Listener.Succeeded, 'Listener not notified');
+    Check(Self.Method.Invite = Listener.InviteAgentParam,
+          'InviteAgent param');
+  finally
+    Listener.Free;
+  end;
+end;
+
+//******************************************************************************
 //* TInviteMethodTestCase                                                      *
 //******************************************************************************
 //* TInviteMethodTestCase Public methods ***************************************
@@ -6658,48 +6766,6 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipInboundInviteFailureMethod                                       *
-//******************************************************************************
-//* TestTIdSipInboundInviteFailureMethod Public methods ************************
-
-procedure TestTIdSipInboundInviteFailureMethod.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Invite := TIdSipTestResources.CreateBasicRequest;
-
-  Self.Method := TIdSipInboundInviteFailureMethod.Create;
-  Self.Method.Invite := TIdSipInboundInvite.CreateInbound(Self.UA, Self.Invite, false);
-end;
-
-procedure TestTIdSipInboundInviteFailureMethod.TearDown;
-begin
-  Self.Method.Invite.Free;
-  Self.Method.Free;
-  Self.Invite.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipInboundInviteFailureMethod Published methods *********************
-
-procedure TestTIdSipInboundInviteFailureMethod.TestRun;
-var
-  Listener: TIdSipTestInboundInviteListener;
-begin
-  Listener := TIdSipTestInboundInviteListener.Create;
-  try
-    Self.Method.Run(Listener);
-
-    Check(Listener.Failed, 'Listener not notified');
-    Check(Self.Method.Invite = Listener.InviteAgentParam,
-          'InviteAgent param');
-  finally
-    Listener.Free;
-  end;
-end;
-
-//******************************************************************************
 //* TestTIdSipInviteDialogEstablishedMethod                                    *
 //******************************************************************************
 //* TestTIdSipInviteDialogEstablishedMethod Public methods *********************
@@ -6751,6 +6817,146 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSipActionRedirectorMethod                                           *
+//******************************************************************************
+//* TestTIdSipActionRedirectorMethod Public methods ****************************
+
+procedure TestTIdSipActionRedirectorMethod.SetUp;
+var
+  ArbitraryAction: TIdSipOutboundSession;
+begin
+  inherited SetUp;
+
+  Self.Listener   := TIdSipMockActionRedirectorListener.Create;
+  ArbitraryAction := Self.UA.InviteModule.Call(Self.UA.Contact, '', '');
+  Self.Redirector := TIdSipActionRedirector.Create(ArbitraryAction);
+end;
+
+procedure TestTIdSipActionRedirectorMethod.TearDown;
+begin
+  Self.Redirector.Free;
+  
+  inherited TearDown;
+end;
+
+//******************************************************************************
+//* TestTIdSipRedirectorFailureMethod                                          *
+//******************************************************************************
+//* TestTIdSipRedirectorFailureMethod Public methods ***************************
+
+procedure TestTIdSipRedirectorFailureMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.ErrorCode  := RedirectWithNoContacts;
+  Self.Reason     := RSRedirectWithNoContacts;
+
+  Self.Method := TIdSipRedirectorFailureMethod.Create;
+  Self.Method.ErrorCode  := Self.ErrorCode;
+  Self.Method.Reason     := Self.Reason;
+  Self.Method.Redirector := Self.Redirector;
+end;
+
+procedure TestTIdSipRedirectorFailureMethod.TearDown;
+begin
+  Self.Method.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipRedirectorFailureMethod Published methods ************************
+
+procedure TestTIdSipRedirectorFailureMethod.TestRun;
+begin
+  Self.Method.Run(Self.Listener);
+
+  Check(Self.Listener.Failed, 'Listener not notified');
+  Check(Self.Method.Redirector = Self.Listener.RedirectorParam,
+        'Redirector param');
+   CheckEquals(Self.Method.ErrorCode,
+               Self.Listener.ErrorCodeParam,
+               'ErrorCode param');
+   CheckEquals(Self.Method.Reason,
+               Self.Listener.ReasonParam,
+               'Reason param');
+end;
+
+//******************************************************************************
+//* TestTIdSipRedirectorNewActionMethod                                        *
+//******************************************************************************
+//* TestTIdSipRedirectorNewActionMethod Public methods *************************
+
+procedure TestTIdSipRedirectorNewActionMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.NewAction := Self.UA.QueryOptions(Self.UA.Contact);
+
+  Self.Method := TIdSipRedirectorNewActionMethod.Create;
+  Self.Method.NewAction  := Self.NewAction;
+  Self.Method.Redirector := Self.Redirector;
+end;
+
+procedure TestTIdSipRedirectorNewActionMethod.TearDown;
+begin
+  Self.Method.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipRedirectorNewActionMethod Published methods **********************
+
+procedure TestTIdSipRedirectorNewActionMethod.TestRun;
+begin
+  Self.Method.Run(Self.Listener);
+
+  Check(Self.Listener.NewAction, 'Listener not notified');
+  Check(Self.Method.Redirector = Self.Listener.RedirectorParam,
+        'Redirector param');
+  Check(Self.Method.NewAction = Self.Listener.NewActionParam,
+        'NewAction param');
+end;
+
+//******************************************************************************
+//* TestTIdSipRedirectorSuccessMethod                                          *
+//******************************************************************************
+//* TestTIdSipRedirectorSuccessMethod Public methods ***************************
+
+procedure TestTIdSipRedirectorSuccessMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Response := TIdSipResponse.Create;
+  Self.Method   := TIdSipRedirectorSuccessMethod.Create;
+
+  Self.Method.Redirector := Self.Redirector;
+  Self.Method.Response   := Self.Response;
+end;
+
+procedure TestTIdSipRedirectorSuccessMethod.TearDown;
+begin
+  Self.Method.Free;
+  Self.Response.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipRedirectorSuccessMethod Published methods ************************
+
+procedure TestTIdSipRedirectorSuccessMethod.TestRun;
+begin
+  Self.Method.Run(Self.Listener);
+
+  Check(Self.Listener.Succeeded, 'Listener not notified');
+  Check(Self.Method.Redirector = Self.Listener.RedirectorParam,
+        'Redirector param');
+  Check(Self.Method.Response = Self.Listener.ResponseParam,
+        'Response param');
+  Check(Self.Method.SuccessfulAction = Self.Listener.SuccessfulActionParam,
+        'SuccessfulAction param');
+end;
+
+//******************************************************************************
 //* TestInviteMethod                                                           *
 //******************************************************************************
 //* TestInviteMethod Public methods ********************************************
@@ -6770,115 +6976,6 @@ begin
   // Self.UA owns Self.Invite!
 
   inherited TearDown;
-end;
-
-//******************************************************************************
-//* TestTIdSipInviteFailureMethod                                              *
-//******************************************************************************
-//* TestTIdSipInviteFailureMethod Public methods *******************************
-
-procedure TestTIdSipInviteFailureMethod.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Method := TIdSipInviteFailureMethod.Create;
-
-  Self.Method.Invite   := Self.Invite;
-  Self.Method.Reason   := 'none';
-  Self.Method.Response := Self.Response;
-end;
-
-procedure TestTIdSipInviteFailureMethod.TearDown;
-begin
-  Self.Method.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipInviteFailureMethod Published methods ****************************
-
-procedure TestTIdSipInviteFailureMethod.TestRun;
-begin
-  Self.Method.Run(Self.Listener);
-
-  Check(Self.Listener.Failure, 'Listener not notified');
-  Check(Self.Method.Invite = Self.Listener.InviteAgentParam,
-        'InviteAgent param');
-  Check(Self.Method.Response = Self.Listener.ResponseParam,
-        'Response param');
-  CheckEquals(Self.Method.Reason,
-              Self.Listener.ReasonParam,
-              'Reason param');
-end;
-
-//******************************************************************************
-//* TestTIdSipInviteRedirectMethod                                             *
-//******************************************************************************
-//* TestTIdSipInviteRedirectMethod Public methods ******************************
-
-procedure TestTIdSipInviteRedirectMethod.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Method := TIdSipInviteRedirectMethod.Create;
-
-  Self.Method.Invite   := Self.Invite;
-  Self.Method.Response := Self.Response;
-end;
-
-procedure TestTIdSipInviteRedirectMethod.TearDown;
-begin
-  Self.Method.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipInviteRedirectMethod Published methods ***************************
-
-procedure TestTIdSipInviteRedirectMethod.Run;
-begin
-  Self.Method.Run(Self.Listener);
-
-  Check(Self.Listener.Redirect, 'Listener not notified');
-  Check(Self.Method.Invite = Self.Listener.InviteAgentParam,
-        'Invite param');
-  Check(Self.Method.Response = Self.Listener.ResponseParam,
-        'Response param');
-end;
-
-//******************************************************************************
-//* TestTIdSipInviteSuccessMethod                                              *
-//******************************************************************************
-//* TestTIdSipInviteSuccessMethod Public methods *******************************
-
-procedure TestTIdSipInviteSuccessMethod.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Method := TIdSipInviteSuccessMethod.Create;
-
-  Self.Method.Invite   := Self.Invite;
-  Self.Method.Response := Self.Response;
-end;
-
-procedure TestTIdSipInviteSuccessMethod.TearDown;
-begin
-  Self.Method.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipInviteSuccessMethod Published methods ****************************
-
-procedure TestTIdSipInviteSuccessMethod.TestRun;
-begin
-  Self.Method.Run(Self.Listener);
-
-  Check(Self.Listener.Success, 'Listener not notified');
-  Check(Self.Method.Invite = Self.Listener.InviteAgentParam,
-        'InviteAgent param');
-  Check(Self.Method.Response = Self.Listener.ResponseParam,
-        'Response param');
 end;
 
 //******************************************************************************

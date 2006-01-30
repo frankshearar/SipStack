@@ -93,6 +93,32 @@ type
                                const Reason: String);
   end;
 
+  // In OnSuccess we use a TIdSipMessage because, for instance,
+  // TIdSipInboundInvite succeeds when it receives an ACK.
+  IIdSipOwnedActionListener = interface(IIdSipActionListener)
+    ['{801E7678-473F-4904-8BEE-C1B7D603D2CA}']
+    procedure OnFailure(Action: TIdSipAction;
+                        Response: TIdSipResponse;
+                        const Reason: String);
+    procedure OnRedirect(Action: TIdSipAction;
+                         Redirect: TIdSipResponse);
+    procedure OnSuccess(Action: TIdSipAction;
+                        Msg: TIdSipMessage);
+  end;
+
+  // Some Actions will fail because the remote party took too long to respond.
+  // In these cases the Response parameter will be nil.
+  // Some Actions (currently only INVITEs) will succeed upon receipt of a
+  // request (an ACK); hence, OnSuccess contains a TIdSipMessage parameter
+  // instead of the expected TIdSipResponse parameter.
+  IIdSipOutboundActionListener = interface(IIdSipOwnedActionListener)
+    ['{7A285B4A-FC96-467C-A1C9-B95DCCD61101}']
+    procedure OnFailure(Action: TIdSipAction;
+                        Response: TIdSipResponse);
+    procedure OnSuccess(Action: TIdSipAction;
+                        Msg: TIdSipMessage);
+  end;
+
   TIdSipOutboundOptions = class;
 
   IIdSipOptionsListener = interface(IIdSipActionListener)
@@ -569,7 +595,6 @@ type
     TargetLocations: TIdSipLocations;
 
     procedure ActionSucceeded(Response: TIdSipResponse); virtual;
-    procedure AddListeners(Listeners: TIdNotificationList);
     function  CreateNewAttempt: TIdSipRequest; virtual; abstract;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
@@ -594,8 +619,6 @@ type
                           TryAgain: Boolean = true); virtual;
     procedure SendResponse(Response: TIdSipResponse); virtual;
     procedure SetResult(Value: TIdSipActionResult);
-
-    property UA: TIdSipAbstractCore read fUA;
   public
     class function Method: String; virtual; abstract;
 
@@ -624,7 +647,38 @@ type
     property IsTerminated:   Boolean             read fIsTerminated;
     property LocalGruu:      TIdSipContactHeader read fLocalGruu write SetLocalGruu;
     property Result:         TIdSipActionResult  read fResult;
+    property UA:             TIdSipAbstractCore  read fUA;
     property Username:       String              read GetUsername write SetUsername;
+  end;
+
+  // I encapsulate the call flow around a single request send and response.
+  TIdSipOwnedAction = class(TIdSipAction)
+  private
+    OwningActionListeners: TIdNotificationList;
+  protected
+    procedure Initialise(UA: TIdSipAbstractCore;
+                         Request: TIdSipRequest;
+                         UsingSecureTransport: Boolean); override;
+    procedure NotifyOfFailure(Response: TIdSipResponse); override;
+    procedure NotifyOfRedirect(Response: TIdSipResponse);
+    procedure NotifyOfSuccess(Msg: TIdSipMessage); virtual;
+  public
+    destructor Destroy; override;
+
+    procedure AddOwnedActionListener(Listener: IIdSipOwnedActionListener);
+    procedure Cancel; virtual;
+    procedure RemoveOwnedActionListener(Listener: IIdSipOwnedActionListener);
+  end;
+
+  // I represent an action that uses owned actions to accomplish something. My
+  // subclasses, for instance, use owned actions to handle redirection
+  // responses.
+  TIdSipOwningAction = class(TIdSipAction)
+  public
+    function CreateInitialAction: TIdSipOwnedAction; virtual;
+    function CreateRedirectedAction(OriginalRequest: TIdSipRequest;
+                                    Contact: TIdSipContactHeader): TIdSipOwnedAction; virtual;
+    function InitialActionType: TIdSipActionClass; virtual;
   end;
 
   TIdSipOptions = class(TIdSipAction)
@@ -670,6 +724,75 @@ type
     property Server: TIdSipAddressHeader read fServer write SetServer;
   end;
 
+  TIdSipActionRedirector = class;
+  IIdSipActionRedirectorListener = interface
+    ['{A538DE4D-DC73-44D2-A888-E7B7B5FA2BF0}']
+    procedure OnFailure(Redirector: TIdSipActionRedirector;
+                        ErrorCode: Cardinal;
+                        const Reason: String);
+    procedure OnNewAction(Redirector: TIdSipActionRedirector;
+                          NewAction: TIdSipAction);
+    procedure OnSuccess(Redirector: TIdSipActionRedirector;
+                        SuccessfulAction: TIdSipAction;
+                        Response: TIdSipResponse);
+  end;
+
+  // I encapsulate the logic surrounding receiving 3xx class responses to a
+  // request and sending out new, redirected, requests. When I complete then
+  // either I have received a 2xx class response for one of the (sub)actions,
+  // indicating the success of the action, or some failure response (4xx, 5xx,
+  // 6xx).
+  TIdSipActionRedirector = class(TIdInterfacedObject,
+                                 IIdSipActionListener,
+                                 IIdSipOwnedActionListener)
+  private
+    fCancelling:          Boolean;
+    fFullyEstablished:    Boolean;
+    fInitialAction:       TIdSipOwnedAction;
+    Listeners:            TIdNotificationList;
+    OwningAction:         TIdSipOwningAction;
+    RedirectedActions:    TObjectList;
+    RedirectedActionLock: TCriticalSection;
+    TargetUriSet:         TIdSipContacts;
+    UA:                   TIdSipAbstractCore;
+
+    procedure AddNewRedirect(OriginalRequest: TIdSipRequest;
+                             Contact: TIdSipContactHeader);
+    function  HasOutstandingRedirects: Boolean;
+    procedure NotifyOfFailure(ErrorCode: Cardinal;
+                              const Reason: String);
+    procedure NotifyOfNewAction(Action: TIdSipAction);
+    procedure NotifyOfSuccess(Action: TIdSipAction;
+                              Response: TIdSipResponse);
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Challenge: TIdSipResponse);
+    procedure OnFailure(Action: TIdSipAction;
+                        Response: TIdSipResponse;
+                        const Reason: String);
+    procedure OnNetworkFailure(Action: TIdSipAction;
+                               ErrorCode: Cardinal;
+                               const Reason: String);
+    procedure OnRedirect(Action: TIdSipAction;
+                         Redirect: TIdSipResponse);
+    procedure OnSuccess(Action: TIdSipAction;
+                        Response: TIdSipMessage);
+    procedure RemoveFinishedRedirectedInvite(Agent: TIdSipAction);
+    procedure TerminateAllRedirects;
+  public
+    constructor Create(OwningAction: TIdSipOwningAction);
+    destructor  Destroy; override;
+
+    procedure AddListener(const Listener: IIdSipActionRedirectorListener);
+    procedure Cancel;
+    procedure RemoveListener(const Listener: IIdSipActionRedirectorListener);
+    procedure Send;
+    procedure Terminate;
+
+    property Cancelling:       Boolean           read fCancelling write fCancelling;
+    property FullyEstablished: Boolean           read fFullyEstablished write fFullyEstablished;
+    property InitialAction:    TIdSipOwnedAction read fInitialAction;
+  end;
+
   TIdSipActionMethod = class(TIdNotification)
   private
     fActionAgent: TIdSipAction;
@@ -695,6 +818,38 @@ type
 
     property ErrorCode: Cardinal read fErrorCode write fErrorCode;
     property Reason:    String   read fReason write fReason;
+  end;
+
+  TIdSipOwnedActionMethod = class(TIdSipActionMethod)
+  end;
+
+  TIdSipOwnedActionFailureMethod = class(TIdSipOwnedActionMethod)
+  private
+    fReason: String;
+    fResponse: TIdSipResponse;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Reason:   String         read fReason write fReason;
+    property Response: TIdSipResponse read fResponse write fResponse;
+  end;
+
+  TIdSipOwnedActionRedirectMethod = class(TIdSipOwnedActionMethod)
+  private
+    fResponse: TIdSipResponse;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Response: TIdSipResponse read fResponse write fResponse;
+  end;
+
+  TIdSipOwnedActionSuccessMethod = class(TIdSipOwnedActionMethod)
+  private
+    fMsg: TIdSipMessage;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Msg: TIdSipMessage read fMsg write fMsg;
   end;
 
   TIdSipOptionsResponseMethod = class(TIdNotification)
@@ -3041,16 +3196,6 @@ begin
   Self.State := asFinished;
 end;
 
-procedure TIdSipAction.AddListeners(Listeners: TIdNotificationList);
-begin
-  // WARNING: This will add all the listeners in Listeners to Self.Listeners.
-  // You expect that. Note, though, that YOU must make sure Listeners contains
-  // listeners of a type that Self expects.
-
-  if Assigned(Listeners) then
-    Self.Listeners.Add(Listeners);
-end;
-
 procedure TIdSipAction.Initialise(UA: TIdSipAbstractCore;
                                   Request: TIdSipRequest;
                                   UsingSecureTransport: Boolean);
@@ -3306,6 +3451,117 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipOwnedAction                                                          *
+//******************************************************************************
+//* TIdSipOwnedAction Public methods *******************************************
+
+destructor TIdSipOwnedAction.Destroy;
+begin
+  Self.OwningActionListeners.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipOwnedAction.AddOwnedActionListener(Listener: IIdSipOwnedActionListener);
+begin
+  Self.OwningActionListeners.AddListener(Listener);
+end;
+
+procedure TIdSipOwnedAction.Cancel;
+begin
+  // You can't cancel most actions: as of now (2006/01/30) you can only cancel
+  // INVITE transactions. Thus, by default, we do nothing.
+end;
+
+procedure TIdSipOwnedAction.RemoveOwnedActionListener(Listener: IIdSipOwnedActionListener);
+begin
+  Self.OwningActionListeners.RemoveListener(Listener);
+end;
+
+//* TIdSipOwnedAction Protected methods ****************************************
+
+procedure TIdSipOwnedAction.NotifyOfFailure(Response: TIdSipResponse);
+var
+  Notification: TIdSipOwnedActionFailureMethod;
+begin
+  Notification := TIdSipOwnedActionFailureMethod.Create;
+  try
+    Notification.ActionAgent := Self;
+    Notification.Reason      := Response.Description;
+    Notification.Response    := Response;
+
+    Self.OwningActionListeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
+
+  Self.MarkAsTerminated;
+end;
+
+procedure TIdSipOwnedAction.NotifyOfRedirect(Response: TIdSipResponse);
+var
+  Notification: TIdSipOwnedActionRedirectMethod;
+begin
+  Notification := TIdSipOwnedActionRedirectMethod.Create;
+  try
+    Notification.ActionAgent := Self;
+    Notification.Response    := Response;
+
+    Self.OwningActionListeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
+end;
+
+procedure TIdSipOwnedAction.NotifyOfSuccess(Msg: TIdSipMessage);
+var
+  Notification: TIdSipOwnedActionSuccessMethod;
+begin
+  Notification := TIdSipOwnedActionSuccessMethod.Create;
+  try
+    Notification.ActionAgent := Self;
+    Notification.Msg         := Msg;
+
+    Self.OwningActionListeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
+end;
+
+procedure TIdSipOwnedAction.Initialise(UA: TIdSipAbstractCore;
+                                       Request: TIdSipRequest;
+                                       UsingSecureTransport: Boolean);
+begin
+  inherited Initialise(UA, Request, UsingSecureTransport);
+
+  Self.OwningActionListeners := TIdNotificationList.Create;
+end;
+
+//******************************************************************************
+//* TIdSipOwningAction                                                         *
+//******************************************************************************
+//* TIdSipOwningAction Public methods ******************************************
+
+function TIdSipOwningAction.CreateInitialAction: TIdSipOwnedAction;
+begin
+  raise Exception.Create(Self.ClassName
+                       + ' must override TIdSipOwningAction.CreateInitialAction');
+end;
+
+function TIdSipOwningAction.CreateRedirectedAction(OriginalRequest: TIdSipRequest;
+                                                   Contact: TIdSipContactHeader): TIdSipOwnedAction;
+begin
+  raise Exception.Create(Self.ClassName
+                       + ' must override TIdSipOwningAction.CreateRedirectedAction');
+end;
+
+function TIdSipOwningAction.InitialActionType: TIdSipActionClass;
+begin
+  raise Exception.Create(Self.ClassName
+                       + ' must override TIdSipOwningAction.InitialActionType');
+end;
+
+//******************************************************************************
 //* TIdSipOptions                                                              *
 //******************************************************************************
 //* TIdSipOptions Public methods ***********************************************
@@ -3473,6 +3729,289 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipActionRedirector                                                     *
+//******************************************************************************
+//* TIdSipActionRedirector Public methods **************************************
+
+constructor TIdSipActionRedirector.Create(OwningAction: TIdSipOwningAction);
+begin
+  inherited Create;
+
+  Self.OwningAction := OwningAction;
+  Self.UA           := OwningAction.UA;
+
+  Self.Listeners := TIdNotificationList.Create;
+
+  // The UA manages the lifetimes of all outbound INVITEs!
+  Self.RedirectedActions    := TObjectList.Create(false);
+  Self.RedirectedActionLock := TCriticalSection.Create;
+  Self.TargetUriSet := TIdSipContacts.Create;
+end;
+
+destructor TIdSipActionRedirector.Destroy;
+begin
+  Self.TargetUriSet.Free;
+
+  Self.RedirectedActionLock.Acquire;
+  try
+    Self.RedirectedActions.Free;
+  finally
+    Self.RedirectedActionLock.Release;
+  end;
+  Self.RedirectedActionLock.Free;
+
+  Self.Listeners.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipActionRedirector.AddListener(const Listener: IIdSipActionRedirectorListener);
+begin
+  Self.Listeners.AddListener(Listener);
+end;
+
+procedure TIdSipActionRedirector.Cancel;
+begin
+  if Self.FullyEstablished then Exit;
+  if Self.Cancelling then Exit;
+
+  if Assigned(Self.InitialAction) then 
+    Self.InitialAction.Terminate;
+
+  Self.TerminateAllRedirects;
+
+  Self.Cancelling := true;
+end;
+
+procedure TIdSipActionRedirector.RemoveListener(const Listener: IIdSipActionRedirectorListener);
+begin
+  Self.Listeners.RemoveListener(Listener);
+end;
+
+procedure TIdSipActionRedirector.Send;
+begin
+  Self.fInitialAction := Self.OwningAction.CreateInitialAction;
+  Self.InitialAction.AddOwnedActionListener(Self);
+
+  Self.NotifyOfNewAction(Self.InitialAction);
+  Self.InitialAction.Send;
+end;
+
+procedure TIdSipActionRedirector.Terminate;
+begin
+  if Assigned(Self.InitialAction) and (Self.InitialAction.Result = arInterim) then begin
+    Self.InitialAction.Terminate;
+  end
+  else
+    Self.Cancel;
+end;
+
+//* TIdSipActionRedirector Private methods *************************************
+
+procedure TIdSipActionRedirector.AddNewRedirect(OriginalRequest: TIdSipRequest;
+                                                Contact: TIdSipContactHeader);
+var
+  Redirect: TIdSipOwnedAction;
+begin
+  Redirect := Self.OwningAction.CreateRedirectedAction(OriginalRequest, Contact);
+
+  Self.RedirectedActionLock.Acquire;
+  try
+    Self.RedirectedActions.Add(Redirect);
+  finally
+    Self.RedirectedActionLock.Release;
+  end;
+
+  Redirect.AddOwnedActionListener(Self);
+  Self.NotifyOfNewAction(Redirect);
+  Redirect.Send;
+end;
+
+function TIdSipActionRedirector.HasOutstandingRedirects: Boolean;
+begin
+  Self.RedirectedActionLock.Acquire;
+  try
+    Result := Self.RedirectedActions.Count <> 0;
+  finally
+    Self.RedirectedActionLock.Release;
+  end;
+end;
+
+procedure TIdSipActionRedirector.NotifyOfFailure(ErrorCode: Cardinal;
+                                                 const Reason: String);
+var
+  Notification: TIdSipRedirectorFailureMethod;
+begin
+  Notification := TIdSipRedirectorFailureMethod.Create;
+  try
+    Notification.ErrorCode  := ErrorCode;
+    Notification.Reason     := Reason;
+    Notification.Redirector := Self;
+
+    Self.Listeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
+end;
+
+procedure TIdSipActionRedirector.NotifyOfNewAction(Action: TIdSipAction);
+var
+  Notification: TIdSipRedirectorNewActionMethod;
+begin
+  Notification := TIdSipRedirectorNewActionMethod.Create;
+  try
+    Notification.NewAction  := Action;
+    Notification.Redirector := Self;
+
+    Self.Listeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
+end;
+
+procedure TIdSipActionRedirector.NotifyOfSuccess(Action: TIdSipAction;
+                                                 Response: TIdSipResponse);
+var
+  Notification: TIdSipRedirectorSuccessMethod;
+begin
+  Notification := TIdSipRedirectorSuccessMethod.Create;
+  try
+    Notification.Redirector       := Self;
+    Notification.Response         := Response;
+    Notification.SuccessfulAction := Action;
+
+    Self.Listeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
+end;
+
+procedure TIdSipActionRedirector.OnAuthenticationChallenge(Action: TIdSipAction;
+                                                           Challenge: TIdSipResponse);
+begin
+  // Do nothing.
+end;
+
+procedure TIdSipActionRedirector.OnFailure(Action: TIdSipAction;
+                                           Response: TIdSipResponse;
+                                           const Reason: String);
+begin
+  if Response.IsRedirect then
+    Self.RemoveFinishedRedirectedInvite(Action)
+  else begin
+    if (Action = Self.InitialAction) then begin
+      Self.fInitialAction := nil;
+      Self.NotifyOfFailure(Response.StatusCode,
+                           Response.StatusText);
+      Exit;
+    end;
+
+    Self.RemoveFinishedRedirectedInvite(Action);
+
+    if not Self.HasOutstandingRedirects then begin
+      Self.NotifyOfFailure(RedirectWithNoSuccess,
+                           RSRedirectWithNoSuccess);
+    end;
+  end;
+end;
+
+procedure TIdSipActionRedirector.OnNetworkFailure(Action: TIdSipAction;
+                                                  ErrorCode: Cardinal;
+                                                  const Reason: String);
+begin
+  // Do nothing.
+end;
+
+procedure TIdSipActionRedirector.OnRedirect(Action: TIdSipAction;
+                                            Redirect: TIdSipResponse);
+var
+  NewTargetsAdded: Boolean;
+begin
+  // cf RFC 3261, section 8.1.3.4.
+
+  if not Self.FullyEstablished then begin
+    if Redirect.Contacts.IsEmpty then begin
+      Self.NotifyOfFailure(RedirectWithNoContacts, RSRedirectWithNoContacts);
+    end
+    else begin
+      // Of course, if we receive a 3xx then that INVITE's over.
+      Self.RemoveFinishedRedirectedInvite(Action);
+
+      // We receive 3xxs with Contacts. We add these to our target URI set. We
+      // send INVITEs to these URIs in some order. If we get 3xxs back from
+      // these new targets we add the new Contacts to the target set. We of
+      // course don't reattempt to INVITE a target that we've already contacted!
+      // Sooner or later we'll either exhaust all the target URIs and report a
+      // failed call, or a target will send a 2xx and fully establish a call, in
+      // which case we simply do nothing with any other (redirect or failure)
+      // responses.
+      NewTargetsAdded := false;
+      Redirect.Contacts.First;
+      while Redirect.Contacts.HasNext do begin
+        if not Self.TargetUriSet.HasContact(Redirect.Contacts.CurrentContact) then begin
+          Self.AddNewRedirect(Action.InitialRequest,
+                              Redirect.Contacts.CurrentContact);
+          NewTargetsAdded := true;
+        end;
+        Redirect.Contacts.Next;
+      end;
+
+      Self.TargetUriSet.Add(Redirect.Contacts);
+
+      if not NewTargetsAdded and not Self.HasOutstandingRedirects then
+        Self.NotifyOfFailure(RedirectWithNoMoreTargets,
+                             RSRedirectWithNoMoreTargets);
+    end;
+  end;
+
+  Self.RemoveFinishedRedirectedInvite(Action);
+
+  if (Action = Self.InitialAction) then
+    Self.fInitialAction := nil;
+end;
+
+procedure TIdSipActionRedirector.OnSuccess(Action: TIdSipAction;
+                                           Response: TIdSipMessage);
+begin
+  if not Self.FullyEstablished then begin
+    Self.FullyEstablished := true;
+
+    Self.RemoveFinishedRedirectedInvite(Action);
+    Self.TerminateAllRedirects;
+    Self.NotifyOfSuccess(Action, Response as TIdSipResponse);
+
+    if (Action = Self.InitialAction) then
+      Self.fInitialAction := nil;
+  end;
+end;
+
+procedure TIdSipActionRedirector.RemoveFinishedRedirectedInvite(Agent: TIdSipAction);
+begin
+  Self.RedirectedActionLock.Acquire;
+  try
+    Self.RedirectedActions.Remove(Agent);
+  finally
+    Self.RedirectedActionLock.Release;
+  end;
+
+  if Self.Cancelling and not Self.HasOutstandingRedirects then
+    Self.NotifyOfFailure(NoError, '');
+end;
+
+procedure TIdSipActionRedirector.TerminateAllRedirects;
+var
+  I: Integer;
+begin
+  Self.RedirectedActionLock.Acquire;
+  try
+    for I := 0 to Self.RedirectedActions.Count - 1 do
+      (Self.RedirectedActions[I] as TIdSipOutboundRedirectedInvite).Terminate;
+  finally
+    Self.RedirectedActionLock.Release;
+  end;
+end;
+
+//******************************************************************************
 //* TIdSipActionAuthenticationChallengeMethod                                  *
 //******************************************************************************
 //* TIdSipActionAuthenticationChallengeMethod Public methods *******************
@@ -3493,6 +4032,40 @@ begin
   (Subject as IIdSipActionListener).OnNetworkFailure(Self.ActionAgent,
                                                      Self.ErrorCode,
                                                      Self.Reason);
+end;
+
+//******************************************************************************
+//* TIdSipOwnedActionFailureMethod                                             *
+//******************************************************************************
+//* TIdSipOwnedActionFailureMethod Public methods ******************************
+
+procedure TIdSipOwnedActionFailureMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipOwnedActionListener).OnFailure(Self.ActionAgent,
+                                                   Self.Response,
+                                                   Self.Reason);
+end;
+
+//******************************************************************************
+//* TIdSipOwnedActionRedirectMethod                                            *
+//******************************************************************************
+//* TIdSipOwnedActionRedirectMethod Public methods *****************************
+
+procedure TIdSipOwnedActionRedirectMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipOwnedActionListener).OnRedirect(Self.ActionAgent,
+                                                    Self.Response);
+end;
+
+//******************************************************************************
+//* TIdSipOwnedActionSuccessMethod                                             *
+//******************************************************************************
+//* TIdSipOwnedActionSuccessMethod Public methods ******************************
+
+procedure TIdSipOwnedActionSuccessMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipOwnedActionListener).OnSuccess(Self.ActionAgent,
+                                                   Self.Msg);
 end;
 
 //******************************************************************************

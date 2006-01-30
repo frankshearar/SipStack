@@ -226,60 +226,72 @@ type
   TIdSipTestInboundInviteListener = class(TIdSipMockListener,
                                           IIdSipInboundInviteListener)
   private
-    fAckParam:          TIdSipRequest;
+    fAckParam:          TIdSipMessage;
     fFailed:            Boolean;
     fInviteAgentParam:  TIdSipInboundInvite;
     fSucceeded:         Boolean;
 
     procedure OnFailure(InviteAgent: TIdSipInboundInvite);
     procedure OnSuccess(InviteAgent: TIdSipInboundInvite;
-                        Ack: TIdSipRequest);
+                        Ack: TIdSipMessage);
   public
     constructor Create; override;
 
-    property AckParam:         TIdSipRequest       read fAckParam;
+    property AckParam:         TIdSipMessage       read fAckParam;
     property Failed:           Boolean             read fFailed;
     property InviteAgentParam: TIdSipInboundInvite read fInviteAgentParam;
     property Succeeded:        Boolean             read fSucceeded;
   end;
 
+  TIdSipOwnedActionListener = class(TIdSipMockListener,
+                                    IIdSipOwnedActionListener)
+  private
+    fFailure:       Boolean;
+    fMsgParam:      TIdSipMessage;
+    fRedirected:    Boolean;
+    fRedirectParam: TIdSipResponse;
+    fSuccess:       Boolean;
 
-  TIdSipTestInviteListener = class(TIdSipMockListener,
+    procedure OnFailure(Action: TIdSipAction;
+                        Response: TIdSipResponse;
+                        const Reason: String);
+    procedure OnRedirect(Action: TIdSipAction;
+                         Redirect: TIdSipResponse);
+    procedure OnSuccess(Action: TIdSipAction;
+                        Msg: TIdSipMessage);
+  public
+    constructor Create; override;
+
+    property Failure:       Boolean        read fFailure;
+    property MsgParam:      TIdSipMessage  read fMsgParam;
+    property Redirected:    Boolean        read fRedirected;
+    property RedirectParam: TIdSipResponse read fRedirectParam;
+    property Success:       Boolean        read fSuccess;
+  end;
+
+  TIdSipTestInviteListener = class(TIdSipOwnedActionListener,
                                    IIdSipInviteListener)
   private
     fCallProgress:      Boolean;
     fDialogEstablished: Boolean;
     fDialogParam:       TIdSipDialog;
-    fFailure:           Boolean;
     fInviteAgentParam:  TIdSipOutboundInvite;
     fReasonParam:       String;
-    fRedirect:          Boolean;
     fResponseParam:     TIdSipResponse;
-    fSuccess:           Boolean;
 
     procedure OnCallProgress(InviteAgent: TIdSipOutboundInvite;
                         Response: TIdSipResponse);
     procedure OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
                                   NewDialog: TidSipDialog);
-    procedure OnFailure(InviteAgent: TIdSipOutboundInvite;
-                        Response: TIdSipResponse;
-                        const Reason: String);
-    procedure OnRedirect(InviteAgent: TIdSipOutboundInvite;
-                         Redirect: TIdSipResponse);
-    procedure OnSuccess(InviteAgent: TIdSipOutboundInvite;
-                        Response: TIdSipResponse);
   public
     constructor Create; override;
 
     property CallProgress:      Boolean              read fCallProgress;
     property DialogEstablished: Boolean              read fDialogEstablished;
     property DialogParam:       TIdSipDialog         read fDialogParam;
-    property Failure:           Boolean              read fFailure;
     property InviteAgentParam:  TIdSipOutboundInvite read fInviteAgentParam;
     property ReasonParam:       String               read fReasonParam;
-    property Redirect:          Boolean              read fRedirect;
     property ResponseParam:     TIdSipResponse       read fResponseParam;
-    property Success:           Boolean              read fSuccess;
   end;
 
   TIdSipTestInviteModuleListener = class(TIdSipMockListener,
@@ -359,6 +371,41 @@ type
     property ResponseParam:        TIdSipResponse             read fResponseParam;
     property RegisterAgentParam:   TIdSipOutboundRegistration read fRegisterAgentParam;
     property Success:              Boolean                    read fSuccess;
+  end;
+
+  TIdSipMockActionRedirectorListener = class(TIdSipMockListener,
+                                             IIdSipActionRedirectorListener)
+  private
+    fErrorCodeParam:        Cardinal;
+    fFailed:                Boolean;
+    fNewAction:             Boolean;
+    fNewActionParam:        TIdSipAction;
+    fReasonParam:           String;
+    fRedirectorParam:       TIdSipActionRedirector;
+    fResponseParam:         TIdSipResponse;
+    fSucceeded:             Boolean;
+    fSuccessfulActionParam: TIdSipAction;
+
+    procedure OnFailure(Redirector: TIdSipActionRedirector;
+                        ErrorCode: Cardinal;
+                        const Reason: String);
+    procedure OnNewAction(Redirector: TIdSipActionRedirector;
+                          NewAction: TIdSipAction);
+    procedure OnSuccess(Redirector: TIdSipActionRedirector;
+                        SuccessfulAction: TIdSipAction;
+                        Response: TIdSipResponse);
+  public
+    constructor Create; override;
+
+    property ErrorCodeParam:        Cardinal               read fErrorCodeParam;
+    property Failed:                Boolean                read fFailed;
+    property NewAction:             Boolean                read fNewAction;
+    property NewActionParam:        TIdSipAction           read fNewActionParam;
+    property ReasonParam:           String                 read fReasonParam;
+    property RedirectorParam:       TIdSipActionRedirector read fRedirectorParam;
+    property ResponseParam:         TIdSipResponse         read fResponseParam;
+    property Succeeded:             Boolean                read fSucceeded;
+    property SuccessfulActionParam: TIdSipAction           read fSuccessfulActionParam;
   end;
 
   TIdSipTestSessionListener = class(TIdSipMockListener,
@@ -1524,11 +1571,62 @@ begin
 end;
 
 procedure TIdSipTestInboundInviteListener.OnSuccess(InviteAgent: TIdSipInboundInvite;
-                                                    Ack: TIdSipRequest);
+                                                    Ack: TIdSipMessage);
 begin
   Self.fAckParam         := Ack;
   Self.fInviteAgentParam := InviteAgent;
   Self.fSucceeded        := true;
+end;
+
+//******************************************************************************
+//* TIdSipOwnedActionListener                                                  *
+//******************************************************************************
+//* TIdSipOwnedActionListener Public methods ***********************************
+
+constructor TIdSipOwnedActionListener.Create;
+begin
+  inherited Create;
+
+  Self.fFailure    := false;
+  Self.fRedirected := false;
+  Self.fSuccess    := false;
+end;
+
+//* TIdSipOwnedActionListener Private methods **********************************
+
+procedure TIdSipOwnedActionListener.OnFailure(Action: TIdSipAction;
+                                              Response: TIdSipResponse;
+                                              const Reason: String);
+begin
+  Self.fFailure       := true;
+  Self.fActionParam   := Action;
+  Self.fResponseParam := Response;
+  Self.fReasonParam   := Reason;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create(Self.ClassName + '.OnFailure');
+end;
+
+procedure TIdSipOwnedActionListener.OnRedirect(Action: TIdSipAction;
+                                               Redirect: TIdSipResponse);
+begin
+  Self.fRedirected    := true;
+  Self.fActionParam   := Action;
+  Self.fRedirectParam := Redirect;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create(Self.ClassName + '.OnRedirect');
+end;
+
+procedure TIdSipOwnedActionListener.OnSuccess(Action: TIdSipAction;
+                                              Msg: TIdSipMessage);
+begin
+  Self.fActionParam := Action;
+  Self.fMsgParam    := Msg;
+  Self.fSuccess     := true;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create(Self.ClassName + '.OnSuccess');
 end;
 
 //******************************************************************************
@@ -1542,8 +1640,6 @@ begin
 
   Self.fCallProgress      := false;
   Self.fDialogEstablished := false;
-  Self.fFailure           := false;
-  Self.fSuccess           := false;
 end;
 
 //* TIdSipTestInviteListener Private methods **********************************
@@ -1570,41 +1666,6 @@ begin
     raise Self.FailWith.Create(Self.ClassName + '.OnDialogEstablished');
 end;
 
-procedure TIdSipTestInviteListener.OnFailure(InviteAgent: TIdSipOutboundInvite;
-                                             Response: TIdSipResponse;
-                                             const Reason: String);
-begin
-  Self.fFailure          := true;
-  Self.fInviteAgentParam := InviteAgent;
-  Self.fResponseParam    := Response;
-  Self.fReasonParam      := Reason;
-
-  if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create(Self.ClassName + '.OnFailure');
-end;
-
-procedure TIdSipTestInviteListener.OnRedirect(InviteAgent: TIdSipOutboundInvite;
-                                              Redirect: TIdSipResponse);
-begin
-  Self.fInviteAgentParam := InviteAgent;
-  Self.fRedirect         := true;
-  Self.fResponseParam    := Redirect;
-
-  if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create(Self.ClassName + '.OnRedirect');
-end;
-
-procedure TIdSipTestInviteListener.OnSuccess(InviteAgent: TIdSipOutboundInvite;
-                                             Response: TIdSipResponse);
-begin
-  Self.fInviteAgentParam := InviteAgent;
-  Self.fResponseParam     := Response;
-  Self.fSuccess           := true;
-
-  if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create(Self.ClassName + '.OnSuccess');
-end;
-
 //******************************************************************************
 //* TIdSipTestInviteModuleListener                                             *
 //******************************************************************************
@@ -1614,7 +1675,7 @@ constructor TIdSipTestInviteModuleListener.Create;
 begin
   inherited Create;
 
-  Self.FInboundCall := false;
+  Self.fInboundCall := false;
 end;
 
 //* TIdSipTestInviteModuleListener Private methods *****************************
@@ -1723,6 +1784,56 @@ begin
   Self.fCurrentBindingsParam := CurrentBindings;
   Self.fRegisterAgentParam   := RegisterAgent;
   Self.fSuccess              := true;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create(Self.ClassName + '.OnSuccess');
+end;
+
+//******************************************************************************
+//* TIdSipMockActionRedirectorListener                                         *
+//******************************************************************************
+//* TIdSipMockActionRedirectorListener Public methods **************************
+
+constructor TIdSipMockActionRedirectorListener.Create;
+begin
+  inherited Create;
+
+  Self.fFailed    := false;
+  Self.fNewAction := false;
+  Self.fSucceeded := false;
+end;
+
+//* TIdSipMockActionRedirectorListener Private methods *************************
+
+procedure TIdSipMockActionRedirectorListener.OnFailure(Redirector: TIdSipActionRedirector;
+                                                       ErrorCode: Cardinal;
+                                                       const Reason: String);
+begin
+  Self.fErrorCodeParam  := ErrorCode;
+  Self.fFailed          := true;
+  Self.fReasonParam     := Reason;
+  Self.fRedirectorParam := Redirector;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create(Self.ClassName + '.OnFailed');
+end;
+
+procedure TIdSipMockActionRedirectorListener.OnNewAction(Redirector: TIdSipActionRedirector;
+                                                         NewAction: TIdSipAction);
+begin
+  Self.fNewAction       := true;
+  Self.fNewActionParam  := NewAction;
+  Self.fRedirectorParam := Redirector;
+end;
+
+procedure TIdSipMockActionRedirectorListener.OnSuccess(Redirector: TIdSipActionRedirector;
+                                                       SuccessfulAction: TIdSipAction;
+                                                       Response: TIdSipResponse);
+begin
+  Self.fSucceeded             := true;
+  Self.fRedirectorParam       := Redirector;
+  Self.fResponseParam         := Response;
+  Self.fSuccessfulActionParam := SuccessfulAction;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnSuccess');

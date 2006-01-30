@@ -300,6 +300,7 @@ type
     fRegistrar: TIdSipUri;
     OutModule:  TIdSipOutboundRegisterModule;
 
+    procedure AddListeners(Listeners: TIdNotificationList);
     procedure ReissueRequestWithLongerExpiry(Registrar: TIdSipUri;
                                              MinimumExpiry: Cardinal);
     procedure RetryWithoutExtensions(Registrar: TIdSipUri;
@@ -1506,6 +1507,16 @@ begin
 end;
 
 //* TIdSipOutboundRegistration Private methods *********************************
+
+procedure TIdSipOutboundRegistration.AddListeners(Listeners: TIdNotificationList);
+begin
+  // WARNING: This will add all the listeners in Listeners to Self.Listeners.
+  // You expect that. Note, though, that YOU must make sure Listeners contains
+  // listeners of a type that Self expects.
+
+  if Assigned(Listeners) then
+    Self.Listeners.Add(Listeners);
+end;
 
 procedure TIdSipOutboundRegistration.ReissueRequestWithLongerExpiry(Registrar: TIdSipUri;
                                                                     MinimumExpiry: Cardinal);
