@@ -283,7 +283,7 @@ type
                          Request: TIdSipRequest;
                          UsingSecureTransport: Boolean); override;
   public
-    function IsInbound: Boolean; override;
+    function  IsInbound: Boolean; override;
     procedure ReceiveRequest(Register: TIdSipRequest); override;
   end;
 
