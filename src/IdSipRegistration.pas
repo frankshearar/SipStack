@@ -360,7 +360,7 @@ type
   public
     procedure Send; override;
 
-    property IsWildCard: Boolean   read fIsWildCard write fIsWildCard;
+    property IsWildCard: Boolean read fIsWildCard write fIsWildCard;
   end;
 
   TIdSipRegistrationMethod = class(TIdNotification)
