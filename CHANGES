@@ -1,3 +1,15 @@
+v0.5.1 (2006/01/31)
+* The stack now supports basic multihoming: having more than one
+  non-local IP on the machine running the UA. This code has not been
+  widely tested, so may fail! However, "single-homed" machines will
+  still run as normal.
+* Missing copyright boilerplate added.
+* TIdSipActionRedirector encapsulates the logic around issuing
+  multiple requests in response to redirection responses. Currently
+  only TIdSipOutboundSession uses the logic, but we hope to have
+  TIdSipOutboundRegistration, TIdSipOutboundSubscription and
+  TIdSipOutboundReferral using the logic too.
+
 v0.5 (2006/01/15)
 * Completed GRUU (draft-ietf-sip-gruu-06) support (except for
   proxy-related sections).

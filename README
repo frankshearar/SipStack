@@ -68,23 +68,13 @@ Todo:
   authentication. These issues can be summed up as: we need a
   user-defined set of authentication profiles.
 * Finish support of the Target-Dialog and Replaces extensions.
-* Support multi-homed machines.
 
 Known bugs:
 * TLS tests fail because of something to do with the certificates.
 * There are still some subtle race conditions in the transport. When
   they occur, they're quite uncomfortable because the
   TId(TCP|UDP)Servers then don't deactivate, and the program appears
-  to hang after you close it.
-* The TCP transport test TestSendResponsesClosedConnection has a race
-  condition somewhere.
-* There's a race condition in the cleanup of the TestIdSipTransport
-  tests that occasionally pops up. The symptom is that you get a
-  "Teardown FAILED" on a nil pointer, and then every test after that
-  fails to set up correctly (SetUp FAILED: Access violation blah blah
-  read of address 00000000), so you have a cascade of failing tests. I
-  suspect that the race condition is in the clearing down of the test
-  infrastructure as opposed to a race condition in the transports
-  themselves.
+  to hang after you close it. These race conditions typically only
+  manifest in the tests, which work the code very hard.
 
-Frank Shearar, 2006/01/15
+Frank Shearar, 2006/01/31
