@@ -399,9 +399,10 @@ type
     procedure SetRemoteParty(Value: TIdSipAddressHeader);
     procedure TerminateAnyPendingRequests;
   protected
-    ModifyAttempt: TIdSipInvite;
-    ModifyLock:    TCriticalSection;
-    Module:        TIdSipInviteModule;
+    ChallengedAction: TIdSipAction;
+    ModifyAttempt:    TIdSipInvite;
+    ModifyLock:       TCriticalSection;
+    Module:           TIdSipInviteModule;
 
     procedure ActionSucceeded(Response: TIdSipResponse); override;
     function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID; virtual; abstract;
@@ -1535,8 +1536,10 @@ procedure TIdSipOutboundInvite.Terminate;
 begin
   if not Self.ReceivedFinalResponse then
     Self.Cancel
-  else
+  else begin
     Self.MarkAsTerminated;
+    Self.NotifyOfFailure(Self.AnswerResponse);
+  end;
 end;
 
 //* TIdSipOutboundInvite Protected methods *************************************
@@ -1579,10 +1582,7 @@ function TIdSipOutboundInvite.ReceiveFailureResponse(Response: TIdSipResponse): 
 begin
   Result := inherited ReceiveFailureResponse(Response);
 
-  if not Self.ReceivedFinalResponse then begin
-    Self.ReceivedFinalResponse := true;
-    Self.AnswerResponse.Assign(Response);
-  end;
+  Self.RegisterFinalResponse(Response);
 end;
 
 function TIdSipOutboundInvite.ReceiveGlobalFailureResponse(Response: TIdSipResponse): TIdSipActionResult;
@@ -1608,8 +1608,7 @@ begin
     // thus must match the INVITE.
 
     if not Self.ReceivedFinalResponse then begin
-      Self.ReceivedFinalResponse := true;
-      Self.AnswerResponse.Assign(Response);
+      Self.RegisterFinalResponse(Response);
 
       // cf. RFC 3261, section 13.2.2.4 (last two paragraphs)
       if Response.IsOK then
@@ -2137,7 +2136,8 @@ begin
 
   Self.ModifyLock.Acquire;
   try
-    if Assigned(Self.ModifyAttempt) then begin
+    if Assigned(Self.ModifyAttempt)
+      and (Self.ChallengedAction = Self.ModifyAttempt) then begin
       Self.ModifyAttempt.Resend(AuthorizationCredentials);
       Self.InitialRequest.Assign(Self.ModifyAttempt.InitialRequest);
     end;
@@ -2265,6 +2265,7 @@ end;
 procedure TIdSipSession.OnAuthenticationChallenge(Action: TIdSipAction;
                                                   Response: TIdSipResponse);
 begin
+  Self.ChallengedAction := Action;
   // INVITEs that get challenged aren't visible outside this session, so we
   // re-notify of the authentication challenge.
   Self.NotifyOfAuthenticationChallenge(Response);
@@ -3026,9 +3027,9 @@ begin
     raise EIdSipTransactionUser.Create('You cannot REsend if you didn''t send'
                                      + ' in the first place');
 
-  if Assigned(Self.Redirector.InitialAction) then begin
-    Self.Redirector.InitialAction.Resend(AuthorizationCredentials);
-    Self.InitialRequest.Assign(Self.Redirector.InitialAction.InitialRequest);
+  if Self.Redirector.Contains(Self.ChallengedAction) then begin
+    Self.Redirector.Resend(Self.ChallengedAction, AuthorizationCredentials);
+    Self.InitialRequest.Assign(Self.ChallengedAction.InitialRequest);
   end
   else
     inherited Resend(AuthorizationCredentials);
@@ -3054,7 +3055,8 @@ begin
   // If we send an INVITE we MUST NOT send a CANCEL until we've received at
   // least one response from the remote end. That means that while we have
   // started terminating, we have not finished, and cannot until we've
-  // received a response.
+  // received a response. When Redirector returns OnSuccess or OnFailure we will
+  // act appropriately, terminating or sending a CANCEL and then terminating.
   //
   // If we've sent an INVITE, the called party challenges our INVITE, and we
   // give up the attempt, we tell the initial INVITE to terminate, and terminate
@@ -3066,7 +3068,6 @@ begin
   end
   else begin
     Self.Redirector.Terminate;
-    Self.MarkAsTerminated;
   end;
 end;
 

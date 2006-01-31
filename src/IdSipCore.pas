@@ -784,7 +784,10 @@ type
 
     procedure AddListener(const Listener: IIdSipActionRedirectorListener);
     procedure Cancel;
+    function  Contains(OwnedAction: TIdSipAction): Boolean;
     procedure RemoveListener(const Listener: IIdSipActionRedirectorListener);
+    procedure Resend(ChallengedAction: TIdSipAction;
+                     AuthorizationCredentials: TIdSipAuthorizationHeader);
     procedure Send;
     procedure Terminate;
 
@@ -3534,6 +3537,8 @@ procedure TIdSipOwnedAction.Initialise(UA: TIdSipAbstractCore;
 begin
   inherited Initialise(UA, Request, UsingSecureTransport);
 
+  Self.fIsOwned := true;
+  
   Self.OwningActionListeners := TIdNotificationList.Create;
 end;
 
@@ -3775,7 +3780,7 @@ begin
   if Self.FullyEstablished then Exit;
   if Self.Cancelling then Exit;
 
-  if Assigned(Self.InitialAction) then 
+  if Assigned(Self.InitialAction) then
     Self.InitialAction.Terminate;
 
   Self.TerminateAllRedirects;
@@ -3783,9 +3788,26 @@ begin
   Self.Cancelling := true;
 end;
 
+function TIdSipActionRedirector.Contains(OwnedAction: TIdSipAction): Boolean;
+begin
+  Self.RedirectedActionLock.Acquire;
+  try
+    Result := (Self.InitialAction = OwnedAction)
+           or (Self.RedirectedActions.IndexOf(OwnedAction) <> ItemNotFoundIndex);
+  finally
+    Self.RedirectedActionLock.Release;
+  end;
+end;
+
 procedure TIdSipActionRedirector.RemoveListener(const Listener: IIdSipActionRedirectorListener);
 begin
   Self.Listeners.RemoveListener(Listener);
+end;
+
+procedure TIdSipActionRedirector.Resend(ChallengedAction: TIdSipAction;
+                                        AuthorizationCredentials: TIdSipAuthorizationHeader);
+begin
+  ChallengedAction.Resend(AuthorizationCredentials);
 end;
 
 procedure TIdSipActionRedirector.Send;

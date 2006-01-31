@@ -1652,6 +1652,7 @@ begin
   // When we terminate everything, we expect only the unestablished outbound
   // call to remain, because it can only terminate according to RFC 3261 section 9.1
 
+  // Set up the established inbound call (#1)
   Self.ReceiveInvite;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire, first INVITE');
   InboundSession := Self.Session;
@@ -1659,15 +1660,18 @@ begin
   InboundSession.AcceptCall('', '');
   Self.ReceiveAck;
 
+  // Set up the unestablished inbound call (#2)
   Self.Invite.LastHop.Branch := Self.Invite.LastHop.Branch + '1';
   Self.Invite.From.Tag       := Self.Invite.From.Tag + '1';
   Self.ReceiveInvite;
 
+  // Set up the unestablished outbound call (#3)
   Sess := Self.Core.InviteModule.Call(Self.Destination, '', '');
   Sess.AddSessionListener(Self);
   Sess.Send;
   Self.ReceiveTrying(Self.LastSentRequest);
 
+  // Set up the established outbound call (#4)
   Sess := Self.Core.InviteModule.Call(Self.Destination, '', '');
   Sess.AddSessionListener(Self);
   Sess.Send;

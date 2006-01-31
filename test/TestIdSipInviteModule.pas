@@ -6401,11 +6401,11 @@ begin
 
     // We don't actually send CANCELs when we've not received a provisional
     // response.
-    Self.ReceiveRinging(Invite);
+    Self.ReceiveTrying(Invite);
 
     RequestTerminated := TIdSipResponse.InResponseTo(Invite, SIPRequestTerminated);
     try
-      RequestTerminated.ToHeader.Tag := Self.Session.Dialog.ID.RemoteTag;
+      RequestTerminated.ToHeader.Tag := 'something-arbitrary';
 
       SessionCount := Self.Core.SessionCount;
       Self.Session.Terminate;
