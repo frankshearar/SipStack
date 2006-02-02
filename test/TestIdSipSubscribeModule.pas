@@ -1737,6 +1737,9 @@ begin
   Action.Dialog    := Self.Dialog;
   Action.MimeType  := Self.MimeType;
   Action.Subscribe := Self.Subscribe;
+
+  Action.AddActionListener(Self);
+  Action.AddNotifyListener(Self);
 end;
 
 procedure TestTIdSipOutboundNotifyBase.OnFailure(NotifyAgent: TIdSipOutboundNotify;
@@ -1833,9 +1836,9 @@ begin
   try
     Notify := Self.Core.AddOutboundAction(TIdSipOutboundNotify) as TIdSipOutboundNotify;
     Self.ConfigureNotify(Notify);
-    Notify.AddListener(L);
+    Notify.AddNotifyListener(L);
     Notify.Send;
-    ReceiveServiceUnavailable(Self.LastSentRequest);
+    Self.ReceiveServiceUnavailable(Self.LastSentRequest);
 
     Check(L.Failed,
           'Notify didn''t notify listener of failure: Listener not added');
@@ -1846,15 +1849,15 @@ end;
 
 procedure TestTIdSipOutboundNotify.TestRemoveListener;
 var
-  L: TIdSipTestNotifyListener;
+  L:      TIdSipTestNotifyListener;
   Notify: TIdSipOutboundNotify;
 begin
   L := TIdSipTestNotifyListener.Create;
   try
     Notify := Self.Core.AddOutboundAction(TIdSipOutboundNotify) as TIdSipOutboundNotify;
     Self.ConfigureNotify(Notify);
-    Notify.AddListener(L);
-    Notify.RemoveListener(L);
+    Notify.AddNotifyListener(L);
+    Notify.RemoveNotifyListener(L);
     Notify.Send;
     Self.ReceiveServiceUnavailable(Self.LastSentRequest);
 
@@ -3235,6 +3238,7 @@ function TestTIdSipOutboundSubscriptionBase.CreateSubscription: TIdSipOutboundSu
 begin
   Result := Self.Module.Subscribe(Self.Destination,
                                   TIdSipTestPackage.EventPackage) as TIdSipOutboundSubscription;
+  Result.AddActionListener(Self);
   Result.AddListener(Self);
   Result.Send;
 end;
@@ -3263,10 +3267,10 @@ begin
         Self.ClassName + ': Subscription didn''t terminate after failure '
      + '(Status-Code = ' + IntToStr(StatusCode) + ')');
   Check(not Self.SubscriptionExpired,
-        Self.ClassName + ': The subscription mustn''t EXPIRE, it must FAIL'
+        Self.ClassName + ': The subscription mustn''t EXPIRE, it must FAIL '
      + '(Status-Code = ' + IntToStr(StatusCode) + ')');
   Check(Self.SubscriptionFailed,
-        Self.ClassName + ': The subscription didn''t tell its listeners of its failure'
+        Self.ClassName + ': The subscription didn''t tell its listeners of its failure '
      + '(Status-Code = ' + IntToStr(StatusCode) + ')');
 end;
 
@@ -4705,6 +4709,7 @@ begin
   Self.Module.AddPackage(TIdSipReferPackage);
 
   Result := Self.Module.Refer(Self.Core.Contact, Self.Destination);
+  Result.AddActionListener(Self);
   Result.AddListener(Self);
   Result.Send;
 end;

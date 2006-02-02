@@ -589,8 +589,8 @@ type
                              Targets: TIdSipLocations;
                              TryAgain: Boolean = true): Boolean;
   protected
+    ActionListeners: TIdNotificationList;
     fIsOwned:        Boolean;
-    Listeners:       TIdNotificationList;
     State:           TIdSipActionState;
     TargetLocations: TIdSipLocations;
 
@@ -628,6 +628,7 @@ type
                               UsingSecureTransport: Boolean); virtual;
     destructor  Destroy; override;
 
+    procedure AddActionListener(Listener: IIdSipActionListener);
     function  IsInbound: Boolean; virtual;
     function  IsInvite: Boolean; virtual;
     function  IsOptions: Boolean; virtual;
@@ -637,6 +638,7 @@ type
     procedure ReceiveRequest(Request: TIdSipRequest); virtual;
     procedure ReceiveResponse(Response: TIdSipResponse;
                               UsingSecureTransport: Boolean); virtual;
+    procedure RemoveActionListener(Listener: IIdSipActionListener);
     procedure Resend(AuthorizationCredentials: TIdSipAuthorizationHeader); virtual;
     procedure Send; virtual;
     procedure Terminate; virtual;
@@ -656,6 +658,7 @@ type
   private
     OwningActionListeners: TIdNotificationList;
   protected
+    procedure ActionSucceeded(Response: TIdSipResponse); override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
                          UsingSecureTransport: Boolean); override;
@@ -3072,11 +3075,16 @@ end;
 destructor TIdSipAction.Destroy;
 begin
   Self.TargetLocations.Free;
-  Self.Listeners.Free;
   Self.LocalGruu.Free;
   Self.InitialRequest.Free;
+  Self.ActionListeners.Free;
 
   inherited Destroy;
+end;
+
+procedure TIdSipAction.AddActionListener(Listener: IIdSipActionListener);
+begin
+  Self.ActionListeners.AddListener(Listener);
 end;
 
 function TIdSipAction.IsInbound: Boolean;
@@ -3159,6 +3167,11 @@ begin
   end;
 end;
 
+procedure TIdSipAction.RemoveActionListener(Listener: IIdSipActionListener);
+begin
+  Self.ActionListeners.RemoveListener(Listener);
+end;
+
 procedure TIdSipAction.Resend(AuthorizationCredentials: TIdSipAuthorizationHeader);
 var
   AuthedRequest: TIdSipRequest;
@@ -3205,12 +3218,12 @@ procedure TIdSipAction.Initialise(UA: TIdSipAbstractCore;
 begin
   Self.fUA := UA;
 
+  Self.ActionListeners := TIdNotificationList.Create;
   Self.fID             := Self.UA.NextActionID;
   Self.fInitialRequest := TIdSipRequest.Create;
   Self.fIsOwned        := false;
   Self.fIsTerminated   := false;
   Self.fLocalGruu      := TIdSipContactHeader.Create;
-  Self.Listeners       := TIdNotificationList.Create;
   Self.NonceCount      := 0;
   Self.State           := asInitialised;
 
@@ -3234,7 +3247,7 @@ begin
     Notification.ActionAgent := Self;
     Notification.Challenge   := Challenge;
 
-    Self.Listeners.Notify(Notification);
+    Self.ActionListeners.Notify(Notification);
   finally
     Notification.Free;
   end;
@@ -3257,7 +3270,7 @@ begin
     Notification.ErrorCode   := ErrorCode;
     Notification.Reason      := Reason;
 
-    Self.Listeners.Notify(Notification);
+    Self.ActionListeners.Notify(Notification);
   finally
     Notification.Free;
   end;
@@ -3483,6 +3496,22 @@ end;
 
 //* TIdSipOwnedAction Protected methods ****************************************
 
+procedure TIdSipOwnedAction.ActionSucceeded(Response: TIdSipResponse);
+begin
+  Self.NotifyOfSuccess(Response);
+end;
+
+procedure TIdSipOwnedAction.Initialise(UA: TIdSipAbstractCore;
+                                       Request: TIdSipRequest;
+                                       UsingSecureTransport: Boolean);
+begin
+  inherited Initialise(UA, Request, UsingSecureTransport);
+
+  Self.fIsOwned := true;
+
+  Self.OwningActionListeners := TIdNotificationList.Create;
+end;
+
 procedure TIdSipOwnedAction.NotifyOfFailure(Response: TIdSipResponse);
 var
   Notification: TIdSipOwnedActionFailureMethod;
@@ -3529,17 +3558,6 @@ begin
   finally
     Notification.Free;
   end;
-end;
-
-procedure TIdSipOwnedAction.Initialise(UA: TIdSipAbstractCore;
-                                       Request: TIdSipRequest;
-                                       UsingSecureTransport: Boolean);
-begin
-  inherited Initialise(UA, Request, UsingSecureTransport);
-
-  Self.fIsOwned := true;
-  
-  Self.OwningActionListeners := TIdNotificationList.Create;
 end;
 
 //******************************************************************************
@@ -3660,12 +3678,12 @@ end;
 
 procedure TIdSipOutboundOptions.AddListener(const Listener: IIdSipOptionsListener);
 begin
-  Self.Listeners.AddListener(Listener);
+  Self.ActionListeners.AddListener(Listener);
 end;
 
 procedure TIdSipOutboundOptions.RemoveListener(const Listener: IIdSipOptionsListener);
 begin
-  Self.Listeners.RemoveListener(Listener);
+  Self.ActionListeners.RemoveListener(Listener);
 end;
 
 procedure TIdSipOutboundOptions.Send;
@@ -3720,7 +3738,7 @@ begin
     Notification.Options  := Self;
     Notification.Response := Response;
 
-    Self.Listeners.Notify(Notification);
+    Self.ActionListeners.Notify(Notification);
   finally
     Notification.Free;
   end;

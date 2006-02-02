@@ -1840,8 +1840,7 @@ begin
   // We don't add INVITEs here because INVITEs need additional events to
   // properly terminate: an INVITE needs to wait for a final response, etc.
   Self.Actions.Add(TIdSipInboundOptions.CreateInbound(Self.Core, Self.Options, false));
-  Self.Actions.Add(TIdSipOutboundRegistrationQuery.Create(Self.Core));
-  Self.Actions.Add(TIdSipOutboundRegister.Create(Self.Core));
+  Self.Actions.Add(TIdSipOutboundRegistration.Create(Self.Core));
 
   Self.Actions.TerminateAllActions;
   Self.Actions.CleanOutTerminatedActions;
@@ -1873,7 +1872,8 @@ begin
   Result.Destination := Self.Destination;
   Result.MimeType    := Self.InviteMimeType;
   Result.Offer       := Self.InviteOffer;
-  Result.AddListener(Self);
+  Result.AddActionListener(Self);
+  Result.AddInviteListener(Self);
   Result.Send;
 end;
 
@@ -1921,7 +1921,7 @@ procedure TestLocation.TestAllLocationsFail;
 var
   Locations: TIdSipLocations;
 begin
-  // SRV records point to Self.Destination.Address.Host;
+       // SRV records point to Self.Destination.Address.Host;
   // Self.Destination.Address.Host resolves to two A records.
 
   Self.Locator.AddSRV(Self.Destination.Address.Host,

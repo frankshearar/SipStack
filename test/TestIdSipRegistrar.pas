@@ -106,19 +106,22 @@ type
     procedure TestIsSession; override;
   end;
 
-  TestTIdSipOutboundRegistration = class(TestTIdSipRegistration,
-                                         IIdSipRegistrationListener)
+  TestTIdSipOutboundRegisterBase = class(TestTIdSipRegistration,
+                                         IIdSipOwnedActionListener)
   private
     Contacts:   TIdSipContacts;
     MinExpires: Cardinal;
+    Redirected: Boolean;
     Registrar:  TIdSipRegistrar;
     Succeeded:  Boolean;
 
-    procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
-                        CurrentBindings: TIdSipContacts;
-                        Response: TIdSipResponse);
-    procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
-                        CurrentBindings: TIdSipContacts);
+    procedure OnFailure(Action: TIdSipAction;
+                        Response: TIdSipResponse;
+                        const Reason: String);
+    procedure OnRedirect(Action: TIdSipAction;
+                         Redirect: TIdSipResponse);
+    procedure OnSuccess(Action: TIdSipAction;
+                        Msg: TIdSipMessage);
     procedure ReceiveRemoteIntervalTooBrief;
   protected
     function RegistrarAddress: TIdSipUri;
@@ -126,51 +129,34 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestAddListener;
+    procedure TestIsOwned; override;
     procedure TestMethod;
     procedure TestReceiveFail;
     procedure TestReceiveIntervalTooBrief;
     procedure TestReceiveMovedPermanently;
     procedure TestReceiveOK;
-    procedure TestRemoveListener;
-    procedure TestReregisterTime;
     procedure TestSequenceNumberIncrements;
     procedure TestUsername;
   end;
 
   TExpiryProc = procedure(ExpiryTime: Cardinal) of object;
 
-  TestTIdSipOutboundRegister = class(TestTIdSipOutboundRegistration)
-  private
-    procedure CheckAutoReregister(ReceiveResponse: TExpiryProc;
-                                  EventIsScheduled: Boolean;
-                                  const MsgPrefix: String);
-    procedure ReceiveOkWithContactExpiresOf(ExpiryTime: Cardinal);
-    procedure ReceiveOkWithExpiresOf(ExpiryTime: Cardinal);
-    procedure ReceiveOkWithNoExpires(ExpiryTime: Cardinal);
+  TestTIdSipOutboundRegister = class(TestTIdSipOutboundRegisterBase)
   protected
     function  CreateAction: TIdSipAction; override;
   published
-    procedure TestAutoReregister;
-    procedure TestAutoReregisterContactHasExpires;
-    procedure TestAutoReregisterNoExpiresValue;
-    procedure TestAutoReregisterSwitchedOff;
-    procedure TestReceiveGruu;
-    procedure TestReceiveGruuRegistrarDoesntSupportGruu;
-    procedure TestReceiveGruuUADoesntSupportGruu;
     procedure TestReceiveIntervalTooBriefForOneContact;
-    procedure TestReceiveMultipleGruus;
     procedure TestRegister;
   end;
 
-  TestTIdSipOutboundRegistrationQuery = class(TestTIdSipOutboundRegistration)
+  TestTIdSipOutboundRegisterQuery = class(TestTIdSipOutboundRegisterBase)
   protected
     function CreateAction: TIdSipAction; override;
   published
     procedure TestFindCurrentBindings;
   end;
 
-  TestTIdSipOutboundUnregister = class(TestTIdSipOutboundRegistration)
+  TestTIdSipOutboundUnregister = class(TestTIdSipOutboundRegisterBase)
   private
     Bindings: TIdSipContacts;
     WildCard: Boolean;
@@ -182,6 +168,43 @@ type
   published
     procedure TestUnregisterAll;
     procedure TestUnregisterSeveralContacts;
+  end;
+
+  TestTIdSipOutboundRegistration = class(TestTIdSipRegistration,
+                                         IIdSipRegistrationListener)
+  private
+    Contacts:  TIdSipContacts;
+    Registrar: TIdSipRegistrar;
+
+    procedure CheckAutoReregister(ReceiveResponse: TExpiryProc;
+                                  EventIsScheduled: Boolean;
+                                  const MsgPrefix: String);
+    procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
+                        CurrentBindings: TIdSipContacts;
+                        Response: TIdSipResponse);
+    procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
+                        CurrentBindings: TIdSipContacts);
+    procedure ReceiveOkWithContactExpiresOf(ExpiryTime: Cardinal);
+    procedure ReceiveOkWithExpiresOf(ExpiryTime: Cardinal);
+    procedure ReceiveOkWithNoExpires(ExpiryTime: Cardinal);
+    function  RegistrarAddress: TIdSipUri;
+  protected
+    function CreateAction: TIdSipAction; override;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAddListener;
+    procedure TestAutoReregister;
+    procedure TestAutoReregisterContactHasExpires;
+    procedure TestAutoReregisterNoExpiresValue;
+    procedure TestAutoReregisterSwitchedOff;
+    procedure TestReceiveGruu;
+    procedure TestReceiveGruuRegistrarDoesntSupportGruu;
+    procedure TestReceiveGruuUADoesntSupportGruu;
+    procedure TestReceiveMultipleGruus;
+    procedure TestRemoveListener;
+    procedure TestReregisterTime;
   end;
 
   TestRegistrationMethod = class(TActionMethodTestCase)
@@ -226,8 +249,9 @@ begin
   Result.AddTest(TestTIdSipOutboundRegisterModule.Suite);
   Result.AddTest(TestTIdSipInboundRegistration.Suite);
   Result.AddTest(TestTIdSipOutboundRegister.Suite);
-  Result.AddTest(TestTIdSipOutboundRegistrationQuery.Suite);
+  Result.AddTest(TestTIdSipOutboundRegisterQuery.Suite);
   Result.AddTest(TestTIdSipOutboundUnregister.Suite);
+  Result.AddTest(TestTIdSipOutboundRegistration.Suite);
   Result.AddTest(TestTIdSipRegistrationFailedMethod.Suite);
   Result.AddTest(TestTIdSipRegistrationSucceededMethod.Suite);
 end;
@@ -1004,8 +1028,8 @@ end;
 
 procedure TestTIdSipInboundRegistration.TestIsOwned;
 begin
-  Check(not Self.RegisterAction.IsOptions,
-        Self.RegisterAction.ClassName + ' marked as being owned');
+  Check(not Self.RegisterAction.IsOwned,
+        Self.RegisterAction.ClassName + ' not marked as being owned');
 end;
 
 procedure TestTIdSipInboundRegistration.TestIsRegistration;
@@ -1021,11 +1045,11 @@ begin
 end;
 
 //******************************************************************************
-//*  TestTIdSipOutboundRegistration                                            *
+//*  TestTIdSipOutboundRegisterBase                                            *
 //******************************************************************************
-//*  TestTIdSipOutboundRegistration Public methods *****************************
+//*  TestTIdSipOutboundRegisterBase Public methods *****************************
 
-procedure TestTIdSipOutboundRegistration.SetUp;
+procedure TestTIdSipOutboundRegisterBase.SetUp;
 const
   TwoHours = 7200;
 begin
@@ -1038,11 +1062,12 @@ begin
   Self.Contacts := TIdSipContacts.Create;
   Self.Contacts.Add(ContactHeaderFull).Value := 'sip:wintermute@talking-head.tessier-ashpool.co.luna';
 
+  Self.Redirected := false;
   Self.Succeeded  := false;
   Self.MinExpires := TwoHours;
 end;
 
-procedure TestTIdSipOutboundRegistration.TearDown;
+procedure TestTIdSipOutboundRegisterBase.TearDown;
 begin
   Self.Contacts.Free;
   Self.Registrar.BindingDB.Free;
@@ -1051,31 +1076,37 @@ begin
   inherited TearDown;
 end;
 
-//*  TestTIdSipOutboundRegistration Protected methods **************************
+//*  TestTIdSipOutboundRegisterBase Protected methods **************************
 
-function TestTIdSipOutboundRegistration.RegistrarAddress: TIdSipUri;
+function TestTIdSipOutboundRegisterBase.RegistrarAddress: TIdSipUri;
 begin
   Self.Registrar.From.Address.Uri      := Self.Destination.Address.Uri;
   Self.Registrar.From.Address.Username := '';
   Result := Self.Registrar.From.Address;
 end;
 
-//*  TestTIdSipOutboundRegistration Private methods ****************************
+//*  TestTIdSipOutboundRegisterBase Private methods ****************************
 
-procedure TestTIdSipOutboundRegistration.OnFailure(RegisterAgent: TIdSipOutboundRegistration;
-                                           CurrentBindings: TIdSipContacts;
-                                           Response: TIdSipResponse);
+procedure TestTIdSipOutboundRegisterBase.OnFailure(Action: TIdSipAction;
+                                               Response: TIdSipResponse;
+                                               const Reason: String);
 begin
   Self.ActionFailed := true;
 end;
 
-procedure TestTIdSipOutboundRegistration.OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
-                                           CurrentBindings: TIdSipContacts);
+procedure TestTIdSipOutboundRegisterBase.OnRedirect(Action: TIdSipAction;
+                                                Redirect: TIdSipResponse);
+begin
+  Self.Redirected := true;
+end;
+
+procedure TestTIdSipOutboundRegisterBase.OnSuccess(Action: TIdSipAction;
+                                               Msg: TIdSipMessage);
 begin
   Self.Succeeded := true;
 end;
 
-procedure TestTIdSipOutboundRegistration.ReceiveRemoteIntervalTooBrief;
+procedure TestTIdSipOutboundRegisterBase.ReceiveRemoteIntervalTooBrief;
 var
   Response: TIdSipResponse;
 begin
@@ -1090,49 +1121,33 @@ begin
   end;
 end;
 
-//*  TestTIdSipOutboundRegistration Published methods **************************
+//*  TestTIdSipOutboundRegisterBase Published methods **************************
 
-procedure TestTIdSipOutboundRegistration.TestAddListener;
+procedure TestTIdSipOutboundRegisterBase.TestIsOwned;
 var
-  L1, L2:       TIdSipTestRegistrationListener;
-  Registration: TIdSipOutboundRegistration;
+  Reg: TIdSipAction;
 begin
-  Registration := Self.CreateAction as TIdSipOutboundRegistration;
+  Reg := Self.CreateAction;
 
-  L1 := TIdSipTestRegistrationListener.Create;
-  try
-    L2 := TIdSipTestRegistrationListener.Create;
-    try
-      Registration.AddListener(L1);
-      Registration.AddListener(L2);
-
-      Self.ReceiveOk(Self.LastSentRequest);
-
-      Check(L1.Success, 'L1 not informed of success');
-      Check(L2.Success, 'L2 not informed of success');
-    finally
-      L2.Free;
-    end;
-  finally
-    L1.Free;
-  end;
+  Check(Reg.IsOwned,
+        Reg.ClassName + ' not marked as being owned');
 end;
 
-procedure TestTIdSipOutboundRegistration.TestMethod;
+procedure TestTIdSipOutboundRegisterBase.TestMethod;
 begin
   CheckEquals(MethodRegister,
-              TIdSipOutboundRegistration.Method,
+              TIdSipOutboundRegisterBase.Method,
               'Outbound registration; Method');
 end;
 
-procedure TestTIdSipOutboundRegistration.TestReceiveFail;
+procedure TestTIdSipOutboundRegisterBase.TestReceiveFail;
 begin
   Self.CreateAction;
   Self.ReceiveResponse(SIPInternalServerError);
   Check(Self.ActionFailed, 'Registration succeeded');
 end;
 
-procedure TestTIdSipOutboundRegistration.TestReceiveIntervalTooBrief;
+procedure TestTIdSipOutboundRegisterBase.TestReceiveIntervalTooBrief;
 const
   OneHour = 3600;
 begin
@@ -1154,17 +1169,17 @@ begin
   Check(Self.Succeeded, '(Re-)Registration failed');
 end;
 
-procedure TestTIdSipOutboundRegistration.TestReceiveMovedPermanently;
+procedure TestTIdSipOutboundRegisterBase.TestReceiveMovedPermanently;
 begin
   Self.Locator.AddAAAA('fried.neurons.org', '::1');
 
   Self.CreateAction;
   Self.MarkSentRequestCount;
   Self.ReceiveMovedPermanently('sip:case@fried.neurons.org');
-  CheckRequestSent('No request re-issued for REGISTER');
+  Check(Self.Redirected, 'OnRedirect didn''t fire');
 end;
 
-procedure TestTIdSipOutboundRegistration.TestReceiveOK;
+procedure TestTIdSipOutboundRegisterBase.TestReceiveOK;
 var
   RegistrationCount: Integer;
 begin
@@ -1178,61 +1193,7 @@ begin
         'REGISTER action not terminated');
 end;
 
-procedure TestTIdSipOutboundRegistration.TestRemoveListener;
-var
-  L1, L2:       TIdSipTestRegistrationListener;
-  Registration: TIdSipOutboundRegistration;
-begin
-  Registration := Self.CreateAction as TIdSipOutboundRegistration;
-  L1 := TIdSipTestRegistrationListener.Create;
-  try
-    L2 := TIdSipTestRegistrationListener.Create;
-    try
-      Registration.AddListener(L1);
-      Registration.AddListener(L2);
-      Registration.RemoveListener(L2);
-
-      Self.ReceiveOk(Self.LastSentRequest);
-
-      Check(L1.Success,
-            'First listener not notified');
-      Check(not L2.Success,
-            'Second listener erroneously notified, ergo not removed');
-    finally
-      L2.Free
-    end;
-  finally
-    L1.Free;
-  end;
-end;
-
-procedure TestTIdSipOutboundRegistration.TestReregisterTime;
-const
-  OneMinute     = 60;
-  OneHour       = 60*OneMinute;
-  OneDay        = 24*OneHour; // Seconds in a day
-  FiveMinutes   = 5*OneMinute;
-  TwentyMinutes = 20*OneMinute;
-var
-  Reg: TIdSipOutboundRegistration;
-begin
-  Reg := Self.CreateAction as TIdSipOutboundRegistration;
-
-  CheckEquals(OneDay - FiveMinutes, Reg.ReregisterTime(OneDay), 'One day');
-  CheckEquals(OneHour - FiveMinutes, Reg.ReregisterTime(OneHour), 'One hour');
-  CheckEquals(TwentyMinutes - FiveMinutes,
-              Reg.ReregisterTime(TwentyMinutes), '20 minutes');
-
-  CheckEquals(FiveMinutes - OneMinute,
-              Reg.ReregisterTime(FiveMinutes),
-              '5 minutes');
-
-  CheckEquals(4*30 div 5, Reg.ReregisterTime(30), '30 seconds');
-  CheckEquals(1,          Reg.ReregisterTime(1), '1 second');
-  CheckEquals(1,          Reg.ReregisterTime(0), 'Zero');
-end;
-
-procedure TestTIdSipOutboundRegistration.TestSequenceNumberIncrements;
+procedure TestTIdSipOutboundRegisterBase.TestSequenceNumberIncrements;
 var
   SeqNo: Cardinal;
 begin
@@ -1243,11 +1204,11 @@ begin
         'CSeq sequence number didn''t increment');
 end;
 
-procedure TestTIdSipOutboundRegistration.TestUsername;
+procedure TestTIdSipOutboundRegisterBase.TestUsername;
 var
-  Registration: TIdSipOutboundRegistration;
+  Registration: TIdSipOutboundRegisterBase;
 begin
-  Registration := Self.CreateAction as TIdSipOutboundRegistration;
+  Registration := Self.CreateAction as TIdSipOutboundRegisterBase;
 
   Self.Core.From.DisplayName := 'foo';
   CheckEquals(Self.Core.Username,
@@ -1269,201 +1230,17 @@ function TestTIdSipOutboundRegister.CreateAction: TIdSipAction;
 var
   Reg: TIdSipOutboundRegister;
 begin
-  Result := Self.Core.RegisterModule.RegisterWith(Self.RegistrarAddress);
-
-  Reg := Result as TIdSipOutboundRegister;
-  Reg.AddListener(Self);
+  Reg := Self.Core.AddOutboundAction(TIdSipOutboundRegister) as TIdSipOutboundRegister;
+  Reg.AddActionListener(Self);
+  Reg.AddOwnedActionListener(Self);
   Reg.Bindings  := Self.Contacts;
   Reg.Registrar := Self.RegistrarAddress;
-  Result.Send;
-end;
+  Reg.Send;
 
-//* TestTIdSipOutboundRegister Private methods *********************************
-
-procedure TestTIdSipOutboundRegister.CheckAutoReregister(ReceiveResponse: TExpiryProc;
-                                                         EventIsScheduled: Boolean;
-                                                         const MsgPrefix: String);
-const
-  ExpiryTime = 42;
-var
-  Event:       TNotifyEvent;
-  EventCount:  Integer;
-  LatestEvent: TIdWait;
-begin
-  Event := Self.Core.RegisterModule.OnReregister;
-
-  Self.CreateAction;
-
-  EventCount := DebugTimer.EventCount;
-  ReceiveResponse(ExpiryTime);
-
-  Self.DebugTimer.LockTimer;
-  try
-    if EventIsScheduled then begin
-      Check(EventCount < Self.DebugTimer.EventCount,
-            MsgPrefix + ': No timer added');
-
-      LatestEvent := Self.DebugTimer.FirstEventScheduledFor(@Event);
-
-      Check(Assigned(LatestEvent),
-            MsgPrefix + ': Wrong notify event');
-      Check(LatestEvent.DebugWaitTime > 0,
-            MsgPrefix + ': Bad wait time (' + IntToStr(LatestEvent.DebugWaitTime) + ')');
-    end
-    else
-      CheckEquals(EventCount,
-                  Self.DebugTimer.EventCount,
-                  MsgPrefix + ': Timer erroneously added');
-  finally
-    Self.DebugTimer.UnlockTimer;
-  end;
-end;
-
-procedure TestTIdSipOutboundRegister.ReceiveOkWithContactExpiresOf(ExpiryTime: Cardinal);
-var
-  Response: TIdSipResponse;
-begin
-  Response := Self.CreateRemoteOk(Self.LastSentRequest);
-  try
-    Response.Contacts := Self.LastSentRequest.Contacts;
-    Response.FirstContact.Expires := ExpiryTime;
-
-    Response.AddHeader(ContactHeaderFull).Value := Response.FirstContact.AsAddressOfRecord
-                                                 + '1;expires=' + IntToStr(ExpiryTime + 1);
-
-    Self.ReceiveResponse(Response);
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TestTIdSipOutboundRegister.ReceiveOkWithExpiresOf(ExpiryTime: Cardinal);
-var
-  Response: TIdSipResponse;
-begin
-  Response := Self.CreateRemoteOk(Self.LastSentRequest);
-  try
-    Response.Contacts := Self.LastSentRequest.Contacts;
-    Response.Expires.NumericValue := ExpiryTime;
-
-    Self.ReceiveResponse(Response);
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TestTIdSipOutboundRegister.ReceiveOkWithNoExpires(ExpiryTime: Cardinal);
-begin
-  Self.ReceiveOk(Self.LastSentRequest);
+  Result := Reg;
 end;
 
 //* TestTIdSipOutboundRegister Published methods *******************************
-
-procedure TestTIdSipOutboundRegister.TestAutoReregister;
-begin
-  Self.Core.RegisterModule.AutoReRegister := true;
-  Self.CheckAutoReregister(Self.ReceiveOkWithExpiresOf,
-                           true,
-                           'Expires header');
-end;
-
-procedure TestTIdSipOutboundRegister.TestAutoReregisterContactHasExpires;
-begin
-  Self.Core.RegisterModule.AutoReRegister := true;
-  Self.CheckAutoReregister(Self.ReceiveOkWithContactExpiresOf,
-                           true,
-                           'Contact expires param');
-end;
-
-procedure TestTIdSipOutboundRegister.TestAutoReregisterNoExpiresValue;
-begin
-  Self.Core.RegisterModule.AutoReRegister := true;
-  Self.CheckAutoReregister(Self.ReceiveOkWithNoExpires,
-                           false,
-                           'No Expires header or expires param');
-end;
-
-procedure TestTIdSipOutboundRegister.TestAutoReregisterSwitchedOff;
-begin
-  Self.Core.RegisterModule.AutoReRegister := false;
-  Self.CheckAutoReregister(Self.ReceiveOkWithExpiresOf,
-                           false,
-                           'Expires header; Autoreregister = false');
-end;
-
-procedure TestTIdSipOutboundRegister.TestReceiveGruu;
-var
-  Gruu:       TIdSipContactHeader;
-  OkWithGruu: TIdSipResponse;
-begin
-  Self.Core.UseGruu := true;
-  Self.Contacts.Clear;
-  Self.Contacts.Add(Self.Core.Contact);
-  Self.CreateAction;
-
-  OkWithGruu := TIdSipResponse.InResponseTo(Self.LastSentRequest, SIPOK);
-  try
-    OkWithGruu.Supported.Values.Add(ExtensionGruu);
-    Gruu := OkWithGruu.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
-    Gruu.Value := Self.LastSentRequest.FirstContact.FullValue;
-    Gruu.Gruu := Self.Core.Contact.Address.AsString + ';opaque=foo';
-
-    Self.ReceiveResponse(OkWithGruu);
-
-    CheckEquals(Gruu.Gruu,
-                Self.Core.Gruu.Address.AsString,
-                'Core''s GRUU not set');
-  finally
-    OkWithGruu.Free;
-  end;
-end;
-
-procedure TestTIdSipOutboundRegister.TestReceiveGruuRegistrarDoesntSupportGruu;
-var
-  Gruu:       TIdSipContactHeader;
-  OkWithGruu: TIdSipResponse;
-begin
-  Self.Core.UseGruu := true;
-  Self.CreateAction;
-
-  OkWithGruu := TIdSipResponse.InResponseTo(Self.LastSentRequest, SIPOK);
-  try
-    Gruu := OkWithGruu.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
-    Gruu.Gruu := Self.Core.Contact.Address.AsString + ';opaque=foo';
-
-    Self.ReceiveResponse(OkWithGruu);
-
-    CheckEquals('',
-                Self.Core.Gruu.Address.AsString,
-                'Core''s GRUU set when the registrar couldn''t supply a GRUU');
-  finally
-    OkWithGruu.Free;
-  end;
-end;
-
-procedure TestTIdSipOutboundRegister.TestReceiveGruuUADoesntSupportGruu;
-var
-  Gruu:       TIdSipContactHeader;
-  OkWithGruu: TIdSipResponse;
-begin
-  Self.Core.UseGruu := false;
-  Self.CreateAction;
-
-  OkWithGruu := TIdSipResponse.InResponseTo(Self.LastSentRequest, SIPOK);
-  try
-    OkWithGruu.Supported.Values.Add(ExtensionGruu);
-    Gruu := OkWithGruu.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
-    Gruu.Gruu := Self.Core.Contact.Address.AsString + ';opaque=foo';
-
-    Self.ReceiveResponse(OkWithGruu);
-
-    CheckEquals('',
-                Self.Core.Gruu.Address.AsString,
-                'Core''s GRUU set when it doesn''t support GRUU');
-  finally
-    OkWithGruu.Free;
-  end;
-end;
 
 procedure TestTIdSipOutboundRegister.TestReceiveIntervalTooBriefForOneContact;
 const
@@ -1521,49 +1298,6 @@ begin
   Check(Self.Succeeded, '(Re-)Registration failed');
 end;
 
-procedure TestTIdSipOutboundRegister.TestReceiveMultipleGruus;
-const
-  OurUrn   = 'urn:uuid:00000000-0000-0000-0000-000000000000';
-  TheirUrn = 'urn:uuid:11111111-1111-1111-1111-111111111111';
-var
-  GruuOne:    TIdSipContactHeader;
-  GruuTwo:    TidSipContactHeader;
-  OkWithGruu: TIdSipResponse;
-begin
-  // If more than one UA registers for the same Address Of Record, then THIS
-  // UA only wants to know ITS GRUU when it registers.
-
-  Self.Core.Contact.SipInstance := OurUrn;
-  Self.Core.UseGruu := true;
-  Self.Contacts.Clear;
-  Self.Contacts.Add(Self.Core.Contact);
-  Self.CreateAction;
-
-  OkWithGruu := TIdSipResponse.InResponseTo(Self.LastSentRequest, SIPOK);
-  try
-    OkWithGruu.Supported.Values.Add(ExtensionGruu);
-    // The other UA
-    GruuOne := OkWithGruu.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
-    GruuOne.Value       := Self.Core.Contact.FullValue;
-    GruuOne.Gruu        := Self.Core.Contact.Address.AsString + ';opaque=bar';
-    GruuOne.SipInstance := TheirUrn;
-
-    // Our UA
-    GruuTwo := OkWithGruu.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
-    GruuTwo.Value       := Self.Core.Contact.FullValue;
-    GruuTwo.Gruu        := Self.Core.Contact.Address.AsString + ';opaque=foo';
-    GruuTwo.SipInstance := OurUrn;
-
-    Self.ReceiveResponse(OkWithGruu);
-
-    CheckEquals(GruuTwo.Gruu,
-                Self.Core.Gruu.Address.AsString,
-                'Core''s GRUU not set');
-  finally
-    OkWithGruu.Free;
-  end;
-end;
-
 procedure TestTIdSipOutboundRegister.TestRegister;
 var
   Request: TIdSipRequest;
@@ -1582,25 +1316,26 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipOutboundRegistrationQuery                                        *
+//* TestTIdSipOutboundRegisterQuery                                            *
 //******************************************************************************
-//* TestTIdSipOutboundRegistrationQuery Protected methods **********************
+//* TestTIdSipOutboundRegisterQuery Protected methods **************************
 
-function TestTIdSipOutboundRegistrationQuery.CreateAction: TIdSipAction;
+function TestTIdSipOutboundRegisterQuery.CreateAction: TIdSipAction;
 var
-  Reg: TIdSipOutboundRegistrationQuery;
+  Reg: TIdSipOutboundRegisterQuery;
 begin
-  Result := Self.Core.RegisterModule.CurrentRegistrationWith(Self.RegistrarAddress);
-
-  Reg := Result as TIdSipOutboundRegistrationQuery;
-  Reg.AddListener(Self);
+  Reg := Self.Core.AddOutboundAction(TIdSipOutboundRegisterQuery) as TIdSipOutboundRegisterQuery;
+  Reg.AddActionListener(Self);
+  Reg.AddOwnedActionListener(Self);
   Reg.Registrar := Self.RegistrarAddress;
-  Result.Send;
+  Reg.Send;
+
+  Result := Reg;
 end;
 
-//* TestTIdSipOutboundRegistrationQuery Published methods **********************
+//* TestTIdSipOutboundRegisterQuery Published methods **************************
 
-procedure TestTIdSipOutboundRegistrationQuery.TestFindCurrentBindings;
+procedure TestTIdSipOutboundRegisterQuery.TestFindCurrentBindings;
 var
   Request: TIdSipRequest;
 begin
@@ -1639,13 +1374,16 @@ function TestTIdSipOutboundUnregister.CreateAction: TIdSipAction;
 var
   Reg: TIdSipOutboundUnregister;
 begin
-  Result := Self.Core.RegisterModule.UnregisterFrom(Self.RegistrarAddress);
+  Reg := Self.Core.AddOutboundAction(TIdSipOutboundUnregister) as TIdSipOutboundUnregister;
 
-  Reg := Result as TIdSipOutboundUnregister;
   Reg.Bindings   := Self.Bindings;
   Reg.IsWildCard := Self.WildCard;
-  Reg.AddListener(Self);
-  Result.Send;
+  Reg.Registrar  := Self.RegistrarAddress;
+  Reg.AddActionListener(Self);
+  Reg.AddOwnedActionListener(Self);
+  Reg.Send;
+
+  Result := Reg;
 end;
 
 //* TestTIdSipOutboundUnregister Published methods *****************************
@@ -1706,6 +1444,374 @@ begin
 
   CheckEquals(Self.Bindings.Count, Request.Contacts.Count,
              'Contact count');
+end;
+
+//******************************************************************************
+//* TestTIdSipOutboundRegistration                                             *
+//******************************************************************************
+
+procedure TestTIdSipOutboundRegistration.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Registrar := TIdSipRegistrar.Create;
+  Self.Registrar.From.Address.Uri := 'sip:talking-head.tessier-ashpool.co.luna';
+  Self.Registrar.BindingDB := TIdSipMockBindingDatabase.Create;
+
+  Self.Contacts := TIdSipContacts.Create;
+  Self.Contacts.Add(ContactHeaderFull).Value := 'sip:wintermute@talking-head.tessier-ashpool.co.luna';
+end;
+
+procedure TestTIdSipOutboundRegistration.TearDown;
+begin
+  Self.Contacts.Free;
+  Self.Registrar.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipOutboundRegistration Protected methods ***************************
+
+function TestTIdSipOutboundRegistration.CreateAction: TIdSipAction;
+var
+  Reg: TIdSipOutboundRegistration;
+begin
+  Result := Self.Core.RegisterModule.RegisterWith(Self.RegistrarAddress);
+
+  Reg := Result as TIdSipOutboundRegistration;
+  Reg.AddActionListener(Self);
+  Reg.AddListener(Self);
+  Reg.Bindings  := Self.Contacts;
+  Reg.Registrar := Self.RegistrarAddress;
+  Result.Send;
+end;
+
+//* TestTIdSipOutboundRegistration Private methods *****************************
+
+procedure TestTIdSipOutboundRegistration.CheckAutoReregister(ReceiveResponse: TExpiryProc;
+                                                             EventIsScheduled: Boolean;
+                                                             const MsgPrefix: String);
+const
+  ExpiryTime = 42;
+var
+  Event:       TNotifyEvent;
+  EventCount:  Integer;
+  LatestEvent: TIdWait;
+begin
+  Event := Self.Core.RegisterModule.OnReregister;
+
+  Self.CreateAction;
+
+  EventCount := DebugTimer.EventCount;
+  ReceiveResponse(ExpiryTime);
+
+  Self.DebugTimer.LockTimer;
+  try
+    if EventIsScheduled then begin
+      Check(EventCount < Self.DebugTimer.EventCount,
+            MsgPrefix + ': No timer added');
+
+      LatestEvent := Self.DebugTimer.FirstEventScheduledFor(@Event);
+
+      Check(Assigned(LatestEvent),
+            MsgPrefix + ': Wrong notify event');
+      Check(LatestEvent.DebugWaitTime > 0,
+            MsgPrefix + ': Bad wait time (' + IntToStr(LatestEvent.DebugWaitTime) + ')');
+    end
+    else
+      CheckEquals(EventCount,
+                  Self.DebugTimer.EventCount,
+                  MsgPrefix + ': Timer erroneously added');
+  finally
+    Self.DebugTimer.UnlockTimer;
+  end;
+end;
+
+procedure TestTIdSipOutboundRegistration.OnFailure(RegisterAgent: TIdSipOutboundRegistration;
+                                                   CurrentBindings: TIdSipContacts;
+                                                   Response: TIdSipResponse);
+begin
+end;
+
+procedure TestTIdSipOutboundRegistration.OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
+                                                   CurrentBindings: TIdSipContacts);
+begin
+end;
+
+procedure TestTIdSipOutboundRegistration.ReceiveOkWithContactExpiresOf(ExpiryTime: Cardinal);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.CreateRemoteOk(Self.LastSentRequest);
+  try
+    Response.Contacts := Self.LastSentRequest.Contacts;
+    Response.FirstContact.Expires := ExpiryTime;
+
+    Response.AddHeader(ContactHeaderFull).Value := Response.FirstContact.AsAddressOfRecord
+                                                 + '1;expires=' + IntToStr(ExpiryTime + 1);
+
+    Self.ReceiveResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundRegistration.ReceiveOkWithExpiresOf(ExpiryTime: Cardinal);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.CreateRemoteOk(Self.LastSentRequest);
+  try
+    Response.Contacts := Self.LastSentRequest.Contacts;
+    Response.Expires.NumericValue := ExpiryTime;
+
+    Self.ReceiveResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundRegistration.ReceiveOkWithNoExpires(ExpiryTime: Cardinal);
+begin
+  Self.ReceiveOk(Self.LastSentRequest);
+end;
+
+function TestTIdSipOutboundRegistration.RegistrarAddress: TIdSipUri;
+begin
+  Self.Registrar.From.Address.Uri      := Self.Destination.Address.Uri;
+  Self.Registrar.From.Address.Username := '';
+  Result := Self.Registrar.From.Address;
+end;
+
+//* TestTIdSipOutboundRegistration Published methods ***************************
+
+procedure TestTIdSipOutboundRegistration.TestAddListener;
+var
+  L1, L2:       TIdSipTestRegistrationListener;
+  Registration: TIdSipOutboundRegistration;
+begin
+  Registration := Self.CreateAction as TIdSipOutboundRegistration;
+
+  L1 := TIdSipTestRegistrationListener.Create;
+  try
+    L2 := TIdSipTestRegistrationListener.Create;
+    try
+      Registration.AddListener(L1);
+      Registration.AddListener(L2);
+
+      Self.ReceiveOk(Self.LastSentRequest);
+
+      Check(L1.Success, 'L1 not informed of success');
+      Check(L2.Success, 'L2 not informed of success');
+    finally
+      L2.Free;
+    end;
+  finally
+    L1.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundRegistration.TestAutoReregister;
+begin
+  Self.Core.RegisterModule.AutoReRegister := true;
+  Self.CheckAutoReregister(Self.ReceiveOkWithExpiresOf,
+                           true,
+                           'Expires header');
+end;
+
+procedure TestTIdSipOutboundRegistration.TestAutoReregisterContactHasExpires;
+begin
+  Self.Core.RegisterModule.AutoReRegister := true;
+  Self.CheckAutoReregister(Self.ReceiveOkWithContactExpiresOf,
+                           true,
+                           'Contact expires param');
+end;
+
+procedure TestTIdSipOutboundRegistration.TestAutoReregisterNoExpiresValue;
+begin
+  Self.Core.RegisterModule.AutoReRegister := true;
+  Self.CheckAutoReregister(Self.ReceiveOkWithNoExpires,
+                           false,
+                           'No Expires header or expires param');
+end;
+
+procedure TestTIdSipOutboundRegistration.TestAutoReregisterSwitchedOff;
+begin
+  Self.Core.RegisterModule.AutoReRegister := false;
+  Self.CheckAutoReregister(Self.ReceiveOkWithExpiresOf,
+                           false,
+                           'Expires header; Autoreregister = false');
+end;
+
+procedure TestTIdSipOutboundRegistration.TestReceiveGruu;
+var
+  Gruu:       TIdSipContactHeader;
+  OkWithGruu: TIdSipResponse;
+begin
+  Self.Core.UseGruu := true;
+  Self.Contacts.Clear;
+  Self.Contacts.Add(Self.Core.Contact);
+  Self.CreateAction;
+
+  OkWithGruu := TIdSipResponse.InResponseTo(Self.LastSentRequest, SIPOK);
+  try
+    OkWithGruu.Supported.Values.Add(ExtensionGruu);
+    Gruu := OkWithGruu.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
+    Gruu.Value := Self.LastSentRequest.FirstContact.FullValue;
+    Gruu.Gruu := Self.Core.Contact.Address.AsString + ';opaque=foo';
+
+    Self.ReceiveResponse(OkWithGruu);
+
+    CheckEquals(Gruu.Gruu,
+                Self.Core.Gruu.Address.AsString,
+                'Core''s GRUU not set');
+  finally
+    OkWithGruu.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundRegistration.TestReceiveGruuRegistrarDoesntSupportGruu;
+var
+  Gruu:       TIdSipContactHeader;
+  OkWithGruu: TIdSipResponse;
+begin
+  Self.Core.UseGruu := true;
+  Self.CreateAction;
+
+  OkWithGruu := TIdSipResponse.InResponseTo(Self.LastSentRequest, SIPOK);
+  try
+    Gruu := OkWithGruu.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
+    Gruu.Gruu := Self.Core.Contact.Address.AsString + ';opaque=foo';
+
+    Self.ReceiveResponse(OkWithGruu);
+
+    CheckEquals('',
+                Self.Core.Gruu.Address.AsString,
+                'Core''s GRUU set when the registrar couldn''t supply a GRUU');
+  finally
+    OkWithGruu.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundRegistration.TestReceiveGruuUADoesntSupportGruu;
+var
+  Gruu:       TIdSipContactHeader;
+  OkWithGruu: TIdSipResponse;
+begin
+  Self.Core.UseGruu := false;
+  Self.CreateAction;
+
+  OkWithGruu := TIdSipResponse.InResponseTo(Self.LastSentRequest, SIPOK);
+  try
+    OkWithGruu.Supported.Values.Add(ExtensionGruu);
+    Gruu := OkWithGruu.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
+    Gruu.Gruu := Self.Core.Contact.Address.AsString + ';opaque=foo';
+
+    Self.ReceiveResponse(OkWithGruu);
+
+    CheckEquals('',
+                Self.Core.Gruu.Address.AsString,
+                'Core''s GRUU set when it doesn''t support GRUU');
+  finally
+    OkWithGruu.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundRegistration.TestReceiveMultipleGruus;
+const
+  OurUrn   = 'urn:uuid:00000000-0000-0000-0000-000000000000';
+  TheirUrn = 'urn:uuid:11111111-1111-1111-1111-111111111111';
+var
+  GruuOne:    TIdSipContactHeader;
+  GruuTwo:    TidSipContactHeader;
+  OkWithGruu: TIdSipResponse;
+begin
+  // If more than one UA registers for the same Address Of Record, then THIS
+  // UA only wants to know ITS GRUU when it registers.
+
+  Self.Core.Contact.SipInstance := OurUrn;
+  Self.Core.UseGruu := true;
+  Self.Contacts.Clear;
+  Self.Contacts.Add(Self.Core.Contact);
+  Self.CreateAction;
+
+  OkWithGruu := TIdSipResponse.InResponseTo(Self.LastSentRequest, SIPOK);
+  try
+    OkWithGruu.Supported.Values.Add(ExtensionGruu);
+    // The other UA
+    GruuOne := OkWithGruu.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
+    GruuOne.Value       := Self.Core.Contact.FullValue;
+    GruuOne.Gruu        := Self.Core.Contact.Address.AsString + ';opaque=bar';
+    GruuOne.SipInstance := TheirUrn;
+
+    // Our UA
+    GruuTwo := OkWithGruu.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
+    GruuTwo.Value       := Self.Core.Contact.FullValue;
+    GruuTwo.Gruu        := Self.Core.Contact.Address.AsString + ';opaque=foo';
+    GruuTwo.SipInstance := OurUrn;
+
+    Self.ReceiveResponse(OkWithGruu);
+
+    CheckEquals(GruuTwo.Gruu,
+                Self.Core.Gruu.Address.AsString,
+                'Core''s GRUU not set');
+  finally
+    OkWithGruu.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundRegistration.TestRemoveListener;
+var
+  L1, L2:       TIdSipTestRegistrationListener;
+  Registration: TIdSipOutboundRegistration;
+begin
+  Registration := Self.CreateAction as TIdSipOutboundRegistration;
+  L1 := TIdSipTestRegistrationListener.Create;
+  try
+    L2 := TIdSipTestRegistrationListener.Create;
+    try
+      Registration.AddListener(L1);
+      Registration.AddListener(L2);
+      Registration.RemoveListener(L2);
+
+      Self.ReceiveOk(Self.LastSentRequest);
+
+      Check(L1.Success,
+            'First listener not notified');
+      Check(not L2.Success,
+            'Second listener erroneously notified, ergo not removed');
+    finally
+      L2.Free
+    end;
+  finally
+    L1.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundRegistration.TestReregisterTime;
+const
+  OneMinute     = 60;
+  OneHour       = 60*OneMinute;
+  OneDay        = 24*OneHour; // Seconds in a day
+  FiveMinutes   = 5*OneMinute;
+  TwentyMinutes = 20*OneMinute;
+var
+  Reg: TIdSipOutboundRegistration;
+begin
+  Reg := Self.CreateAction as TIdSipOutboundRegistration;
+
+  CheckEquals(OneDay - FiveMinutes, Reg.ReregisterTime(OneDay), 'One day');
+  CheckEquals(OneHour - FiveMinutes, Reg.ReregisterTime(OneHour), 'One hour');
+  CheckEquals(TwentyMinutes - FiveMinutes,
+              Reg.ReregisterTime(TwentyMinutes), '20 minutes');
+
+  CheckEquals(FiveMinutes - OneMinute,
+              Reg.ReregisterTime(FiveMinutes),
+              '5 minutes');
+
+  CheckEquals(4*30 div 5, Reg.ReregisterTime(30), '30 seconds');
+  CheckEquals(1,          Reg.ReregisterTime(1), '1 second');
+  CheckEquals(1,          Reg.ReregisterTime(0), 'Zero');
 end;
 
 //******************************************************************************

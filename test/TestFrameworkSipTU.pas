@@ -87,7 +87,7 @@ begin
   inherited SetUp;
 
   Self.ActionFailed             := false;
-  Self.AuthenticationChallenged := true;
+  Self.AuthenticationChallenged := false;
   Self.Password                 := 'mycotoxin';
 end;
 
@@ -342,17 +342,19 @@ begin
 
   Self.ReceiveUnauthorized(WWWAuthenticateHeader, '');
 
+  Check(Self.AuthenticationChallenged,
+        Action.ClassName + ' didn''t notify listeners of authentication challenge');
+
+  Self.MarkSentRequestCount;
+
   AuthCreds := Self.CreateAuthorization(Self.Dispatcher.Transport.LastResponse);
   try
-    Check(Self.AuthenticationChallenged,
-          Action.ClassName + ' didn''t notify listeners of authentication challenge');
-
-    Self.MarkSentRequestCount;
     Action.Resend(AuthCreds);
-    CheckRequestSent(Action.ClassName + ': No resend of request sent');
   finally
     AuthCreds.Free;
   end;
+
+  CheckRequestSent(Action.ClassName + ': No resend of request sent');
 end;
 
 procedure TestTIdSipAction.TestIsInbound;

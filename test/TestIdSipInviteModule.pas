@@ -316,7 +316,6 @@ type
     procedure TearDown; override;
   published
     procedure TestAckToInDialogInviteMatchesInvite;
-    procedure TestByeCarriesInviteAuthorization;
     procedure TestDontMatchResponseToModify;
     procedure TestDontMatchResponseToInitialRequest;
     procedure TestInboundModify;
@@ -452,6 +451,7 @@ type
     procedure TestAckWithAuthorization;
     procedure TestAckWithMultipleAuthorization;
     procedure TestAckWithProxyAuthorization;
+    procedure TestByeCarriesInviteAuthorization;
     procedure TestCall;
     procedure TestCallNetworkFailure;
     procedure TestCallRemoteRefusal;
@@ -1772,8 +1772,8 @@ begin
   try
     L2 := TIdSipTestInboundInviteListener.Create;
     try
-      Self.InviteAction.AddListener(L1);
-      Self.InviteAction.AddListener(L2);
+      Self.InviteAction.AddActionListener(L1);
+      Self.InviteAction.AddActionListener(L2);
 
       Self.Dispatcher.Transport.FailWith := EIdConnectTimeout;
 
@@ -2328,8 +2328,8 @@ begin
   try
     L2 := TIdSipTestInviteListener.Create;
     try
-      Invite.AddListener(L1);
-      Invite.AddListener(L2);
+      Invite.AddInviteListener(L1);
+      Invite.AddInviteListener(L2);
 
       Self.ReceiveRinging(Self.LastSentRequest);
 
@@ -2782,9 +2782,9 @@ begin
   try
     L2 := TIdSipTestInviteListener.Create;
     try
-      Invite.AddListener(L1);
-      Invite.AddListener(L2);
-      Invite.RemoveListener(L2);
+      Invite.AddInviteListener(L1);
+      Invite.AddInviteListener(L2);
+      Invite.RemoveInviteListener(L2);
 
       Self.ReceiveRinging(Self.LastSentRequest);
 
@@ -2907,8 +2907,9 @@ begin
   Invite.Destination := Self.Destination;
   Invite.MimeType    := Self.InviteMimeType;
   Invite.Offer       := Self.InviteOffer;
-  Invite.AddListener(Self);
+  Invite.AddActionListener(Self);
   Invite.AddOwnedActionListener(Self);
+  Invite.AddInviteListener(Self);  
   Invite.Send;
 end;
 
@@ -2935,8 +2936,9 @@ begin
   Redirect := Self.CreateInvite;
   Redirect.Contact         := Self.Destination;
   Redirect.OriginalRequest := Self.LastSentRequest;
-  Redirect.AddListener(Self);
+  Redirect.AddActionListener(Self);
   Redirect.AddOwnedActionListener(Self);
+  Redirect.AddInviteListener(Self);
   Redirect.Send;
 
   Result := Redirect;
@@ -3006,8 +3008,9 @@ begin
   Invite.MimeType       := Self.InviteMimeType;
   Invite.Offer          := Self.InviteOffer;
   Invite.OriginalInvite := Self.Invite;
-  Invite.AddListener(Self);
+  Invite.AddActionListener(Self);
   Invite.AddOwnedActionListener(Self);
+  Invite.AddInviteListener(Self);
   Invite.Send;
 
   Result := Invite;
@@ -3054,8 +3057,9 @@ begin
   Invite.Dialog      := Self.Dialog;
   Invite.MimeType    := Self.InviteMimeType;
   Invite.Offer       := Self.InviteOffer;
-  Invite.AddListener(Self);
+  Invite.AddActionListener(Self);
   Invite.AddOwnedActionListener(Self);
+  Invite.AddInviteListener(Self);
   Invite.Send;
 
   Result := Invite;
@@ -3371,74 +3375,6 @@ begin
           Session.ClassName + ': ACK mustn''t match the Session');
   finally
     Ack.Free;
-  end;
-end;
-
-procedure TestTIdSipSession.TestByeCarriesInviteAuthorization;
-var
-  Invite:  TIdSipRequest;
-  Session: TIdSipOutboundSession;
-begin
-  //  ---              INVITE               --->
-  // <--- 407 Proxy Authentication Required ---
-  //  ---               ACK                 --->
-  //  ---              INVITE               ---> (with proxy credentials)
-  // <--- 407 Proxy Authentication Required ---
-  //  ---               ACK                 --->
-  //  ---              INVITE               ---> (with 2x proxy credentials)
-  // <---         401 Unauthorized          ---
-  //  ---               ACK                 --->
-  //  ---              INVITE               ---> (with 2x proxy, UA credentials)
-  // <---              200 OK               ---
-  //  ---               ACK                 --->
-  // ===========================================
-  //                Media streams
-  // ===========================================
-  //  ---               BYE                 ---> (with 2x proxy, UA credentials)
-
-  Session := Self.Module.Call(Self.Destination, '', '');
-
-  // 1st proxy challenge
-  Session.Send;
-  Self.ReceiveUnauthorized(ProxyAuthenticateHeader, '');
-  Check(not Self.DroppedUnmatchedResponse,
-        'First 407 Proxy Authentication Required dropped');
-
-  // 2nd proxy challenge
-  Self.ResendWith(Session, Self.Dispatcher.Transport.LastResponse);
-  Self.ReceiveUnauthorized(ProxyAuthenticateHeader, QopAuthInt);
-  Check(not Self.DroppedUnmatchedResponse,
-        'Second 407 Proxy Authentication Required dropped');
-
-  // UA challenge
-  Self.ResendWith(Session, Self.Dispatcher.Transport.LastResponse);
-  Self.ReceiveUnauthorized(WWWAuthenticateHeader, '');
-  Check(not Self.DroppedUnmatchedResponse,
-        '401 Unauthorized dropped');
-
-  Self.ResendWith(Session, Self.Dispatcher.Transport.LastResponse);
-  Self.ReceiveOk(Self.LastSentRequest);
-  Check(not Self.DroppedUnmatchedResponse,
-        '200 OK dropped');
-
-  Invite := Self.LastSentRequest.Copy as TIdSipRequest;
-  try
-    Check(Session.DialogEstablished,
-          'Dialog not established: did something drop a message? '
-        + 'DroppedUnmatchedResponse = ' + Self.BoolToStr(Self.DroppedUnmatchedResponse));
-
-    Self.MarkSentRequestCount;
-    Session.Terminate;
-    CheckRequestSent('No BYE sent');
-    CheckEquals(MethodBye,
-                Self.LastSentRequest.Method,
-                'Unexpected message sent to terminate a session');
-    Check(Self.LastSentRequest.HasAuthorizationFor(Invite.FirstAuthorization.Realm),
-          'BYE''s missing INVITE''s credentials: Authorization');
-    CheckHeadersEqual(Invite, Self.LastSentRequest, ProxyAuthorizationHeader,
-                      'BYE''s Proxy-Authorization');
-  finally
-    Invite.Free;
   end;
 end;
 
@@ -5012,6 +4948,7 @@ var
   Session: TIdSipOutboundSession;
 begin
   Session := Self.Core.InviteModule.Call(Self.Destination, Self.SDP, Self.MimeType);
+  Session.AddActionListener(Self);
   Session.AddSessionListener(Self);
   Session.Send;
 
@@ -5308,6 +5245,74 @@ begin
     CheckEquals(Invite.FirstProxyAuthorization.FullValue,
                 Ack.FirstProxyAuthorization.FullValue,
                 'Proxy-Authorization');
+  finally
+    Invite.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundSession.TestByeCarriesInviteAuthorization;
+var
+  Invite:  TIdSipRequest;
+  Session: TIdSipOutboundSession;
+begin
+  //  ---              INVITE               --->
+  // <--- 407 Proxy Authentication Required ---
+  //  ---               ACK                 --->
+  //  ---              INVITE               ---> (with proxy credentials)
+  // <--- 407 Proxy Authentication Required ---
+  //  ---               ACK                 --->
+  //  ---              INVITE               ---> (with 2x proxy credentials)
+  // <---         401 Unauthorized          ---
+  //  ---               ACK                 --->
+  //  ---              INVITE               ---> (with 2x proxy, UA credentials)
+  // <---              200 OK               ---
+  //  ---               ACK                 --->
+  // ===========================================
+  //                Media streams
+  // ===========================================
+  //  ---               BYE                 ---> (with 2x proxy, UA credentials)
+
+  Session := Self.Module.Call(Self.Destination, '', '');
+
+  // 1st proxy challenge
+  Session.Send;
+  Self.ReceiveUnauthorized(ProxyAuthenticateHeader, '');
+  Check(not Self.DroppedUnmatchedResponse,
+        'First 407 Proxy Authentication Required dropped');
+
+  // 2nd proxy challenge
+  Self.ResendWith(Session, Self.Dispatcher.Transport.LastResponse);
+  Self.ReceiveUnauthorized(ProxyAuthenticateHeader, QopAuthInt);
+  Check(not Self.DroppedUnmatchedResponse,
+        'Second 407 Proxy Authentication Required dropped');
+
+  // UA challenge
+  Self.ResendWith(Session, Self.Dispatcher.Transport.LastResponse);
+  Self.ReceiveUnauthorized(WWWAuthenticateHeader, '');
+  Check(not Self.DroppedUnmatchedResponse,
+        '401 Unauthorized dropped');
+
+  Self.ResendWith(Session, Self.Dispatcher.Transport.LastResponse);
+  Self.ReceiveOk(Self.LastSentRequest);
+  Check(not Self.DroppedUnmatchedResponse,
+        '200 OK dropped');
+
+  Invite := Self.LastSentRequest.Copy as TIdSipRequest;
+  try
+    Check(Session.DialogEstablished,
+          'Dialog not established: did something drop a message? '
+        + 'DroppedUnmatchedResponse = ' + Self.BoolToStr(Self.DroppedUnmatchedResponse));
+
+    Self.MarkSentRequestCount;
+    Session.Terminate;
+    CheckRequestSent('No BYE sent');
+    CheckEquals(MethodBye,
+                Self.LastSentRequest.Method,
+                'Unexpected message sent to terminate a session');
+    Check(Self.LastSentRequest.HasAuthorizationFor(Invite.FirstAuthorization.Realm),
+          'BYE''s missing INVITE''s credentials: Authorization');
+    CheckHeadersEqual(Invite, Self.LastSentRequest, ProxyAuthorizationHeader,
+                      'BYE''s Proxy-Authorization');
   finally
     Invite.Free;
   end;

@@ -99,7 +99,7 @@ type
   // * OnNotify tells you that the target notified you of some state change.
   //   This event will trigger on ALL notifications, so for instance you'll
   //   see this event fire just before OnExpiredSubscription.
-  IIdSipSubscriptionListener = interface(IIdSipActionListener)
+  IIdSipSubscriptionListener = interface
     ['{6A6F6A2D-D987-47BE-BC70-83622FF99CDF}']
     procedure OnEstablishedSubscription(Subscription: TIdSipOutboundSubscription;
                                         Notify: TIdSipRequest);
@@ -267,10 +267,11 @@ type
 
   TIdSipOutboundNotifyBase = class(TIdSipNotify)
   private
-    fBody:      String;
-    fDialog:    TIdSipDialog;
-    fMimeType:  String;
-    fSubscribe: TIdSipRequest;
+    fBody:           String;
+    fDialog:         TIdSipDialog;
+    fMimeType:       String;
+    fSubscribe:      TIdSipRequest;
+    NotifyListeners: TIdNotificationList;
   protected
     Module: TIdSipSubscribeModule;
 
@@ -280,12 +281,16 @@ type
                          Request: TIdSipRequest;
                          UsingSecureTransport: Boolean); override;
   public
+    destructor Destroy; override;
+
+    procedure AddNotifyListener(Listener: IIdSipNotifyListener);
+    procedure RemoveNotifyListener(Listener: IIdSipNotifyListener);
     procedure Send; override;
 
-    property Body:              String        read fBody write fBody;
-    property Dialog:            TIdSipDialog  read fDialog write fDialog;
-    property MimeType:          String        read fMimeType write fMimeType;
-    property Subscribe:         TIdSipRequest read fSubscribe write fSubscribe;
+    property Body:      String        read fBody write fBody;
+    property Dialog:    TIdSipDialog  read fDialog write fDialog;
+    property MimeType:  String        read fMimeType write fMimeType;
+    property Subscribe: TIdSipRequest read fSubscribe write fSubscribe;
   end;
 
   TIdSipOutboundNotify = class(TIdSipOutboundNotifyBase)
@@ -295,10 +300,8 @@ type
   protected
     procedure ConfigureAttempt(Notify: TIdSipRequest); override;
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
+    procedure NotifyOfSuccess(Response: TIdSipResponse);
   public
-    procedure AddListener(Listener: IIdSipNotifyListener);
-    procedure RemoveListener(Listener: IIdSipNotifyListener);
-
     property Expires:           Cardinal read fExpires write fExpires;
     property SubscriptionState: String   read fSubscriptionState write fSubscriptionState;
   end;
@@ -560,6 +563,8 @@ type
                                      DefaultSeconds: Cardinal);
     procedure SendResponseFor(Notify: TIdSipRequest);
   protected
+    SubscriptionListeners: TIdNotificationList;
+
     procedure ConfigureRequest(Sub: TIdSipOutboundSubscribe); virtual;
     function  CreateDialog(Response: TIdSipResponse): TIdSipDialog; override;
     function  CreateOutboundSubscribe: TIdSipOutboundSubscribe; virtual;
@@ -571,6 +576,8 @@ type
     procedure SetEventPackage(const Value: String); override;
     procedure StartNewSubscription(Notify: TIdSipRequest); virtual;
   public
+    destructor Destroy; override;
+
     procedure AddListener(Listener: IIdSipSubscriptionListener);
     procedure Expire; override;
     function  Match(Msg: TIdSipMessage): Boolean; override;
@@ -1344,6 +1351,23 @@ end;
 //******************************************************************************
 //* TIdSipOutboundNotifyBase Public methods ************************************
 
+destructor TIdSipOutboundNotifyBase.Destroy;
+begin
+  Self.NotifyListeners.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipOutboundNotifyBase.AddNotifyListener(Listener: IIdSipNotifyListener);
+begin
+  Self.NotifyListeners.AddListener(Listener);
+end;
+
+procedure TIdSipOutboundNotifyBase.RemoveNotifyListener(Listener: IIdSipNotifyListener);
+begin
+  Self.NotifyListeners.RemoveListener(Listener);
+end;
+
 procedure TIdSipOutboundNotifyBase.Send;
 var
   Notify: TIdSipRequest;
@@ -1391,23 +1415,13 @@ begin
   Self.Module := Self.UA.ModuleFor(Self.Method) as TIdSipSubscribeModule;
   Assert(Assigned(Self.Module),
          'The Transaction-User layer cannot process NOTIFY methods without adding the Subscribe module to it');
+
+  Self.NotifyListeners := TIdNotificationList.Create;
 end;
 
 //******************************************************************************
 //* TIdSipOutboundNotify                                                       *
 //******************************************************************************
-//* TIdSipOutboundNotify Public methods ****************************************
-
-procedure TIdSipOutboundNotify.AddListener(Listener: IIdSipNotifyListener);
-begin
-  Self.Listeners.AddListener(Listener);
-end;
-
-procedure TIdSipOutboundNotify.RemoveListener(Listener: IIdSipNotifyListener);
-begin
-  Self.Listeners.RemoveListener(Listener);
-end;
-
 //* TIdSipOutboundNotify Protected methods *************************************
 
 procedure TIdSipOutboundNotify.ConfigureAttempt(Notify: TIdSipRequest);
@@ -1431,7 +1445,24 @@ begin
     Notification.Notify   := Self;
     Notification.Response := Response;
 
-    Self.Listeners.Notify(Notification);
+    Self.NotifyListeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
+
+  Self.MarkAsTerminated;
+end;
+
+procedure TIdSipOutboundNotify.NotifyOfSuccess(Response: TIdSipResponse);
+var
+  Notification: TIdSipNotifySucceededMethod;
+begin
+  Notification := TIdSipNotifySucceededMethod.Create;
+  try
+    Notification.Notify   := Self;
+    Notification.Response := Response;
+
+//    Self.NotifyListeners.Notify(Notification);
   finally
     Notification.Free;
   end;
@@ -1542,7 +1573,7 @@ end;
 
 procedure TIdSipOutboundSubscribe.AddListener(Listener: IIdSipSubscribeListener);
 begin
-  Self.Listeners.AddListener(Listener);
+  Self.ActionListeners.AddListener(Listener);
 end;
 
 function TIdSipOutboundSubscribe.Match(Msg: TIdSipMessage): Boolean;
@@ -1558,7 +1589,7 @@ end;
 
 procedure TIdSipOutboundSubscribe.RemoveListener(Listener: IIdSipSubscribeListener);
 begin
-  Self.Listeners.RemoveListener(Listener);
+  Self.ActionListeners.RemoveListener(Listener);
 end;
 
 procedure TIdSipOutboundSubscribe.Send;
@@ -1604,7 +1635,7 @@ begin
     Notification.Response  := Response;
     Notification.Subscribe := Self;
 
-    Self.Listeners.Notify(Notification);
+    Self.ActionListeners.Notify(Notification);
   finally
     Notification.Free;
   end;
@@ -1629,7 +1660,7 @@ begin
     Notification.Response  := Response;
     Notification.Subscribe := Self;
 
-    Self.Listeners.Notify(Notification);
+    Self.ActionListeners.Notify(Notification);
   finally
     Notification.Free;
   end;
@@ -1976,7 +2007,8 @@ begin
     Notify.LocalGruu         := Self.LocalGruu;
     Notify.MimeType          := MimeType;
     Notify.SubscriptionState := Self.SubscriptionState;
-    Notify.AddListener(Self);
+    Notify.AddActionListener(Self);
+    Notify.AddNotifyListener(Self);
     Notify.Send;
   end;
 end;
@@ -2167,6 +2199,7 @@ end;
 procedure TIdSipInboundSubscription.OnSuccess(NotifyAgent: TIdSipOutboundNotify;
                                               Response: TIdSipResponse);
 begin
+  // Right now, we don't care if the NOTIFY succeeded, only that it didn't fail.
 end;
 
 function TIdSipInboundSubscription.OurExpires(Subscribe: TIdSipRequest): Cardinal;
@@ -2280,9 +2313,16 @@ end;
 //******************************************************************************
 //* TIdSipOutboundSubscription Public methods **********************************
 
+destructor TIdSipOutboundSubscription.Destroy;
+begin
+  Self.SubscriptionListeners.Free;
+
+  inherited Destroy;
+end;
+
 procedure TIdSipOutboundSubscription.AddListener(Listener: IIdSipSubscriptionListener);
 begin
-  Self.Listeners.AddListener(Listener);
+  Self.SubscriptionListeners.AddListener(Listener);
 end;
 
 procedure TIdSipOutboundSubscription.Expire;
@@ -2326,7 +2366,7 @@ end;
 
 procedure TIdSipOutboundSubscription.RemoveListener(Listener: IIdSipSubscriptionListener);
 begin
-  Self.Listeners.RemoveListener(Listener);
+  Self.SubscriptionListeners.RemoveListener(Listener);
 end;
 
 procedure TIdSipOutboundSubscription.Send;
@@ -2384,6 +2424,8 @@ procedure TIdSipOutboundSubscription.Initialise(UA: TIdSipAbstractCore;
 begin
   inherited Initialise(UA, Request, UsingSecureTransport);
 
+  Self.SubscriptionListeners := TIdNotificationList.Create;
+
   Self.InitialSubscribe := Self.CreateOutboundSubscribe;
 end;
 
@@ -2396,7 +2438,7 @@ begin
     Notification.Subscription := Self;
     Notification.Response     := Response;
 
-    Self.Listeners.Notify(Notification);
+    Self.SubscriptionListeners.Notify(Notification);
   finally
     Notification.Free;
   end;
@@ -2512,7 +2554,7 @@ begin
     Notification.Notify       := Notify;
     Notification.Subscription := Self;
 
-    Self.Listeners.Notify(Notification);
+    Self.SubscriptionListeners.Notify(Notification);
   finally
     Notification.Free;
   end;
@@ -2527,7 +2569,7 @@ begin
     Notification.Notify       := Notify;
     Notification.Subscription := Self;
 
-    Self.Listeners.Notify(Notification);
+    Self.SubscriptionListeners.Notify(Notification);
   finally
     Notification.Free;
   end;
@@ -2542,7 +2584,7 @@ begin
     Notification.Subscription := Self;
     Notification.Notify       := Notify;
 
-    Self.Listeners.Notify(Notification);
+    Self.SubscriptionListeners.Notify(Notification);
   finally
     Notification.Free;
   end;

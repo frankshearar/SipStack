@@ -178,6 +178,7 @@ type
     fLocalTag:                String;
     fMaxResendInterval:       Cardinal; // in milliseconds
     Grid:                     String;
+    InviteListeners:          TIdNotificationList;
     InviteModule:             TIdSipInviteModule;
     ReceivedAck:              Boolean;
     ResendInterval:           Cardinal;
@@ -241,8 +242,9 @@ type
     fInOutboundSession:             Boolean;
     fMimeType:                      String;
     fOffer:                         String;
-    ReceivedFinalResponse:          Boolean;
     HasReceivedProvisionalResponse: Boolean;
+    InviteListeners:                TIdNotificationList;
+    ReceivedFinalResponse:          Boolean;
     SentCancel:                     Boolean;
 
     procedure NotifyOfCallProgress(Response: TIdSipResponse);
@@ -273,10 +275,10 @@ type
   public
     destructor Destroy; override;
 
-    procedure AddListener(const Listener: IIdSipInviteListener);
+    procedure AddInviteListener(const Listener: IIdSipInviteListener);
     procedure Cancel; override;
     function  Match(Msg: TIdSipMessage): Boolean; override;
-    procedure RemoveListener(const Listener: IIdSipInviteListener);
+    procedure RemoveInviteListener(const Listener: IIdSipInviteListener);
     procedure Resend(AuthorizationCredentials: TIdSipAuthorizationHeader); override;
     procedure Send; override;
     procedure SendAck(Dialog: TIdSipDialog;
@@ -1138,6 +1140,7 @@ end;
 destructor TIdSipInboundInvite.Destroy;
 begin
   Self.LastResponse.Free;
+  Self.InviteListeners.Free;
 
   inherited Destroy;
 end;
@@ -1176,7 +1179,7 @@ end;
 
 procedure TIdSipInboundInvite.AddListener(const Listener: IIdSipInboundInviteListener);
 begin
-  Self.Listeners.AddListener(Listener);
+  Self.InviteListeners.AddListener(Listener);
 end;
 
 function TIdSipInboundInvite.IsInbound: Boolean;
@@ -1227,7 +1230,7 @@ end;
 
 procedure TIdSipInboundInvite.RemoveListener(const Listener: IIdSipInboundInviteListener);
 begin
-  Self.Listeners.RemoveListener(Listener);
+  Self.ActionListeners.RemoveListener(Listener);
 end;
 
 procedure TIdSipInboundInvite.ResendOk;
@@ -1304,7 +1307,8 @@ procedure TIdSipInboundInvite.Initialise(UA: TIdSipAbstractCore;
 begin
   inherited Initialise(UA, Request, UsingSecureTransport);
 
-  Self.InviteModule := Self.UA.ModuleFor(MethodInvite) as TIdSipInviteModule;
+  Self.InviteListeners := TIdNotificationList.Create;
+  Self.InviteModule    := Self.UA.ModuleFor(MethodInvite) as TIdSipInviteModule;
 
   Self.fLastResponse     := TIdSipResponse.Create;
   Self.ReceivedAck       := false;
@@ -1325,7 +1329,7 @@ begin
     Notification.Ack    := Ack;
     Notification.Invite := Self;
 
-    Self.Listeners.Notify(Notification);
+    Self.InviteListeners.Notify(Notification);
   finally
     Notification.Free;
   end;
@@ -1406,7 +1410,7 @@ begin
   try
     Notification.Invite := Self;
 
-    Self.Listeners.Notify(Notification);
+    Self.InviteListeners.Notify(Notification);
   finally
     Notification.Free;
   end;
@@ -1449,15 +1453,16 @@ end;
 
 destructor TIdSipOutboundInvite.Destroy;
 begin
+  Self.InviteListeners.Free;
   Self.CancelRequest.Free;
   Self.AnswerResponse.Free;
 
   inherited Destroy;
 end;
 
-procedure TIdSipOutboundInvite.AddListener(const Listener: IIdSipInviteListener);
+procedure TIdSipOutboundInvite.AddInviteListener(const Listener: IIdSipInviteListener);
 begin
-  Self.Listeners.AddListener(Listener);
+  Self.InviteListeners.AddListener(Listener);
 end;
 
 procedure TIdSipOutboundInvite.Cancel;
@@ -1478,9 +1483,9 @@ begin
     Result := inherited Match(Msg);
 end;
 
-procedure TIdSipOutboundInvite.RemoveListener(const Listener: IIdSipInviteListener);
+procedure TIdSipOutboundInvite.RemoveInviteListener(const Listener: IIdSipInviteListener);
 begin
-  Self.Listeners.RemoveListener(Listener);
+  Self.InviteListeners.RemoveListener(Listener);
 end;
 
 procedure TIdSipOutboundInvite.Resend(AuthorizationCredentials: TIdSipAuthorizationHeader);
@@ -1546,7 +1551,7 @@ end;
 
 procedure TIdSipOutboundInvite.ActionSucceeded(Response: TIdSipResponse);
 begin
-  Self.NotifyOfSuccess(Response);
+  inherited ActionSucceeded(Response);
 
   // We only call SendAck here because we need to give the listeners (especially
   // the Session that created this Invite) time to process the message. The
@@ -1567,15 +1572,13 @@ procedure TIdSipOutboundInvite.Initialise(UA: TIdSipAbstractCore;
 begin
   inherited Initialise(UA, Request, UsingSecureTransport);
 
-  // We only instantiate CancelRequest when we actually send a Cancel.
-  // See SendCancel.
   Self.AnswerResponse                 := TIdSipResponse.Create;
   Self.Cancelling                     := false;
+  Self.CancelRequest                  := TIdSipRequest.Create;
   Self.HasReceivedProvisionalResponse := false;
+  Self.InviteListeners                := TIdNotificationList.Create;
   Self.ReceivedFinalResponse          := false;
   Self.SentCancel                     := false;
-
-  Self.CancelRequest := TIdSipRequest.Create;
 end;
 
 function TIdSipOutboundInvite.ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionResult;
@@ -1687,7 +1690,7 @@ begin
     Notification.Invite   := Self;
     Notification.Response := Response;
 
-    Self.Listeners.Notify(Notification);
+    Self.InviteListeners.Notify(Notification);
   finally
     Notification.Free;
   end;
@@ -1714,7 +1717,7 @@ begin
         Notification.Invite   := Self;
         Notification.Dialog := Dialog;
 
-        Self.Listeners.Notify(Notification);
+        Self.InviteListeners.Notify(Notification);
       finally
         Notification.Free;
       end;
@@ -2003,7 +2006,7 @@ end;
 
 procedure TIdSipSession.AddSessionListener(const Listener: IIdSipSessionListener);
 begin
-  Self.Listeners.AddListener(Listener);
+  Self.ActionListeners.AddListener(Listener);
 end;
 
 function TIdSipSession.IsEarly: Boolean;
@@ -2081,7 +2084,7 @@ begin
     ReInvite.Offer             := Offer;
     ReInvite.OriginalInvite    := Self.InitialRequest;
     ReInvite.AddOwnedActionListener(Self);
-    ReInvite.AddListener(Self);
+    ReInvite.AddInviteListener(Self);
     ReInvite.Send;
 
     Self.ModifyAttempt := ReInvite;
@@ -2125,7 +2128,7 @@ end;
 
 procedure TIdSipSession.RemoveSessionListener(const Listener: IIdSipSessionListener);
 begin
-  Self.Listeners.RemoveListener(Listener);
+  Self.ActionListeners.RemoveListener(Listener);
 end;
 
 procedure TIdSipSession.Resend(AuthorizationCredentials: TIdSipAuthorizationHeader);
@@ -2217,7 +2220,7 @@ begin
     Notification.Reason    := Reason;
     Notification.Session   := Self;
 
-    Self.Listeners.Notify(Notification);
+    Self.ActionListeners.Notify(Notification);
   finally
     Notification.Free;
   end;
@@ -2234,7 +2237,7 @@ begin
     Notification.RemoteSessionDescription := RemoteSessionDescription;
     Notification.MimeType                 := MimeType;
 
-    Self.Listeners.Notify(Notification);
+    Self.ActionListeners.Notify(Notification);
   finally
     Notification.Free;
   end;
@@ -2256,7 +2259,7 @@ begin
     Notification.RemoteSessionDescription := Modify.InitialRequest.Body;
     Notification.Session                  := Self;
 
-    Self.Listeners.Notify(Notification);
+    Self.ActionListeners.Notify(Notification);
   finally
     Notification.Free;
   end;
@@ -2281,7 +2284,7 @@ begin
     Notification.Progress := Response;
     Notification.Session  := Self;
 
-    Self.Listeners.Notify(Notification);
+    Self.ActionListeners.Notify(Notification);
   finally
     Notification.Free;
   end;
@@ -2512,7 +2515,7 @@ begin
       Notification.Refer   := Refer;
       Notification.Session := Self;
 
-      Self.Listeners.Notify(Notification);
+      Self.ActionListeners.Notify(Notification);
     finally
       Notification.Free;
     end;
@@ -2555,7 +2558,7 @@ begin
     Notification.Session := Self;
     Notification.Answer  := Answer;
 
-    Self.Listeners.Notify(Notification);
+    Self.ActionListeners.Notify(Notification);
   finally
     Notification.Free;
   end;
@@ -3182,7 +3185,8 @@ end;
 procedure TIdSipOutboundSession.OnNewAction(Redirector: TIdSipActionRedirector;
                                             NewAction: TIdSipAction);
 begin
-  (NewAction as TIdSipOutboundInvite).AddListener(Self);
+  NewAction.AddActionListener(Self);
+  (NewAction as TIdSipOutboundInvite).AddInviteListener(Self);
 end;
 
 procedure TIdSipOutboundSession.OnSuccess(Redirector: TIdSipActionRedirector;
