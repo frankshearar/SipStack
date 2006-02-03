@@ -1880,11 +1880,8 @@ begin
   // Use this method in the context of a redirect to an INVITE.
   // cf. RFC 3261, section 8.1.3.4
 
-  Result := TIdSipRequest.Create;
-  Result.Assign(Self.OriginalRequest);
-  Result.CSeq.SequenceNo := Self.UA.NextInitialSequenceNo;
-  Result.LastHop.Branch := Self.UA.NextBranch;
-  Result.RequestUri := Self.Contact.Address;
+  Result := Self.UA.CreateRedirectedRequest(Self.OriginalRequest,
+                                            Self.Contact);
 end;
 
 procedure TIdSipOutboundRedirectedInvite.Initialise(UA: TIdSipAbstractCore;
