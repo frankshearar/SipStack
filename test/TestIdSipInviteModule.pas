@@ -423,10 +423,6 @@ type
 
     procedure ReceiveBusyHere(Invite: TIdSipRequest);
     procedure ReceiveForbidden;
-    procedure ReceiveMovedTemporarily(Invite: TIdSipRequest;
-                                      const Contacts: array of String); overload;
-    procedure ReceiveMovedTemporarily(const Contact: String); overload;
-    procedure ReceiveMovedTemporarily(const Contacts: array of String); overload;
     procedure ReceiveOKWithRecordRoute;
     procedure ReceiveRemoteDecline;
   protected
@@ -5007,34 +5003,6 @@ begin
   finally
     Response.Free;
   end;
-end;
-
-procedure TestTIdSipOutboundSession.ReceiveMovedTemporarily(Invite: TIdSipRequest;
-                                                            const Contacts: array of String);
-var
-  I:        Integer;
-  Response: TIdSipResponse;
-begin
-  Response := TIdSipResponse.InResponseTo(Invite,
-                                          SIPMovedTemporarily);
-  try
-    for I := Low(Contacts) to High(Contacts) do
-      Response.AddHeader(ContactHeaderFull).Value := Contacts[I];
-
-    Self.ReceiveResponse(Response);
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TestTIdSipOutboundSession.ReceiveMovedTemporarily(const Contact: String);
-begin
-  Self.ReceiveMovedTemporarily(Self.LastSentRequest, [Contact]);
-end;
-
-procedure TestTIdSipOutboundSession.ReceiveMovedTemporarily(const Contacts: array of String);
-begin
-  Self.ReceiveMovedTemporarily(Self.LastSentRequest, Contacts);
 end;
 
 procedure TestTIdSipOutboundSession.ReceiveOKWithRecordRoute;

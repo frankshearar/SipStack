@@ -41,6 +41,10 @@ type
                                ErrorCode: Cardinal;
                                const Reason: String);
     procedure ReceiveBadExtensionResponse;
+    procedure ReceiveMovedTemporarily(Invite: TIdSipRequest;
+                                      const Contacts: array of String); overload;
+    procedure ReceiveMovedTemporarily(const Contact: String); overload;
+    procedure ReceiveMovedTemporarily(const Contacts: array of String); overload;
     procedure ReceiveOkWithBody(Invite: TIdSipRequest;
                                 const Body: String;
                                 const ContentType: String);
@@ -273,6 +277,34 @@ end;
 procedure TestTIdSipAction.ReceiveBadExtensionResponse;
 begin
   Self.ReceiveResponse(SIPBadExtension);
+end;
+
+procedure TestTIdSipAction.ReceiveMovedTemporarily(Invite: TIdSipRequest;
+                                                   const Contacts: array of String);
+var
+  I:        Integer;
+  Response: TIdSipResponse;
+begin
+  Response := TIdSipResponse.InResponseTo(Invite,
+                                          SIPMovedTemporarily);
+  try
+    for I := Low(Contacts) to High(Contacts) do
+      Response.AddHeader(ContactHeaderFull).Value := Contacts[I];
+
+    Self.ReceiveResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipAction.ReceiveMovedTemporarily(const Contact: String);
+begin
+  Self.ReceiveMovedTemporarily(Self.LastSentRequest, [Contact]);
+end;
+
+procedure TestTIdSipAction.ReceiveMovedTemporarily(const Contacts: array of String);
+begin
+  Self.ReceiveMovedTemporarily(Self.LastSentRequest, Contacts);
 end;
 
 procedure TestTIdSipAction.ReceiveOkWithBody(Invite: TIdSipRequest;
