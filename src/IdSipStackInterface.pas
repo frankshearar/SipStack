@@ -134,7 +134,7 @@ type
                           const Reason: String);
     procedure OnExpiredSubscription(Subscription: TIdSipOutboundSubscription;
                                     Notify: TIdSipRequest);
-    procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
+    procedure OnFailure(RegisterAgent: TIdSipOutboundRegistrationBase;
                         CurrentBindings: TIdSipContacts;
                         Response: TIdSipResponse); overload;
     procedure OnFailure(Subscription: TIdSipOutboundSubscription;
@@ -174,7 +174,7 @@ type
                              Destination: TIdSipLocation);
     procedure OnSubscriptionRequest(UserAgent: TIdSipAbstractCore;
                                     Subscription: TIdSipInboundSubscription);
-    procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
+    procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistrationBase;
                         CurrentBindings: TIdSipContacts);
 
     procedure RemoveAction(Handle: TIdSipHandle);
@@ -848,7 +848,7 @@ end;
 
 function TIdSipStackInterface.MakeRegistration(Registrar: TIdSipUri): TIdSipHandle;
 var
-  Reg: TIdSipOutboundRegistration;
+  Reg: TIdSipOutboundRegistrationBase;
 begin
   Reg := Self.UserAgent.RegisterModule.RegisterWith(Registrar);
   Result := Self.AddAction(Reg);
@@ -1425,7 +1425,7 @@ begin
                                Notify);
 end;
 
-procedure TIdSipStackInterface.OnFailure(RegisterAgent: TIdSipOutboundRegistration;
+procedure TIdSipStackInterface.OnFailure(RegisterAgent: TIdSipOutboundRegistrationBase;
                                          CurrentBindings: TIdSipContacts;
                                          Response: TIdSipResponse);
 var
@@ -1672,7 +1672,7 @@ begin
   end;
 end;
 
-procedure TIdSipStackInterface.OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
+procedure TIdSipStackInterface.OnSuccess(RegisterAgent: TIdSipOutboundRegistrationBase;
                                          CurrentBindings: TIdSipContacts);
 var
   Data: TIdRegistrationData;

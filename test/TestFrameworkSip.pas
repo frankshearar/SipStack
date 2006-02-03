@@ -355,21 +355,21 @@ type
     fCurrentBindingsParam: TIdSipContacts;
     fFailure:              Boolean;
     fResponseParam:        TIdSipResponse;
-    fRegisterAgentParam:   TIdSipOutboundRegistration;
+    fRegisterAgentParam:   TIdSipOutboundRegistrationBase;
     fSuccess:              Boolean;
   public
     constructor Create; override;
 
-    procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
+    procedure OnFailure(RegisterAgent: TIdSipOutboundRegistrationBase;
                         CurrentBindings: TIdSipContacts;
                         Response: TIdSipResponse);
-    procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
+    procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistrationBase;
                         CurrentBindings: TIdSipContacts);
 
     property CurrentBindingsParam: TIdSipContacts             read fCurrentBindingsParam;
     property Failure:              Boolean                    read fFailure;
     property ResponseParam:        TIdSipResponse             read fResponseParam;
-    property RegisterAgentParam:   TIdSipOutboundRegistration read fRegisterAgentParam;
+    property RegisterAgentParam:   TIdSipOutboundRegistrationBase read fRegisterAgentParam;
     property Success:              Boolean                    read fSuccess;
   end;
 
@@ -1765,7 +1765,7 @@ end;
 
 //* TIdSipRegistrationListener Private methods *********************************
 
-procedure TIdSipTestRegistrationListener.OnFailure(RegisterAgent: TIdSipOutboundRegistration;
+procedure TIdSipTestRegistrationListener.OnFailure(RegisterAgent: TIdSipOutboundRegistrationBase;
                                                    CurrentBindings: TIdSipContacts;
                                                    Response: TIdSipResponse);
 begin
@@ -1778,7 +1778,7 @@ begin
     raise Self.FailWith.Create(Self.ClassName + '.OnFailure');
 end;
 
-procedure TIdSipTestRegistrationListener.OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
+procedure TIdSipTestRegistrationListener.OnSuccess(RegisterAgent: TIdSipOutboundRegistrationBase;
                                                    CurrentBindings: TIdSipContacts);
 begin
   Self.fCurrentBindingsParam := CurrentBindings;
