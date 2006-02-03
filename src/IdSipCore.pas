@@ -383,6 +383,8 @@ type
     function  CountOf(const MethodName: String): Integer;
     function  CreateChallengeResponse(Request: TIdSipRequest): TIdSipResponse;
     function  CreateChallengeResponseAsUserAgent(Request: TIdSipRequest): TIdSipResponse;
+    function  CreateRedirectedRequest(OriginalRequest: TIdSipRequest;
+                                      Contact: TIdSipAddressHeader): TIdSipRequest;
     function  CreateRequest(const Method: String;
                             Dest: TIdSipAddressHeader): TIdSipRequest; overload;
     function  CreateRequest(const Method: String;
@@ -1745,6 +1747,16 @@ function TIdSipAbstractCore.CreateChallengeResponseAsUserAgent(Request: TIdSipRe
 begin
   Result := Self.Authenticator.CreateChallengeResponseAsUserAgent(Request);
   Self.PrepareResponse(Result, Request);
+end;
+
+function TIdSipAbstractCore.CreateRedirectedRequest(OriginalRequest: TIdSipRequest;
+                                                    Contact: TIdSipAddressHeader): TIdSipRequest;
+begin
+  Result := TIdSipRequest.Create;
+  Result.Assign(OriginalRequest);
+  Result.CSeq.SequenceNo := Self.NextInitialSequenceNo;
+  Result.LastHop.Branch  := Self.NextBranch;
+  Result.RequestUri      := Contact.Address;
 end;
 
 function TIdSipAbstractCore.CreateRequest(const Method: String;
