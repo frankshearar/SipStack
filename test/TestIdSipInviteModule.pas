@@ -5603,6 +5603,9 @@ begin
 end;
 
 procedure TestTIdSipOutboundSession.TestCircularRedirect;
+var
+  Action:    TIdSipAction;
+  ClassName: String;
 begin
   //  ---   INVITE (original)   --->
   // <--- 302 Moved Temporarily ---
@@ -5617,12 +5620,14 @@ begin
   // <--- 302 Moved Temporarily ---
   //  ---          ACK          --->
 
+  Action := Self.CreateAction;
+  ClassName := Action.ClassName;
   Self.ReceiveMovedTemporarily('sip:foo@bar.org');
   Self.ReceiveMovedTemporarily('sip:bar@bar.org');
 
   Self.MarkSentRequestCount;
   Self.ReceiveMovedTemporarily('sip:foo@bar.org');
-  CheckNoRequestSent('The session accepted the run-around');
+  CheckNoRequestSent('The ' + ClassName + ' accepted the run-around');
 end;
 
 procedure TestTIdSipOutboundSession.TestDialogNotEstablishedOnTryingResponse;
@@ -5648,6 +5653,9 @@ begin
 end;
 
 procedure TestTIdSipOutboundSession.TestDoubleRedirect;
+var
+  Action: TIdSipAction;
+  Method: String;
 begin
   //  ---   INVITE (original)   --->
   // <--- 302 Moved Temporarily ---
@@ -5659,16 +5667,18 @@ begin
   // <--- 302 Moved Temporarily ---
   //  ---          ACK          --->
 
+  Action := Self.CreateAction;
+  Method := Action.Method;
   Self.MarkSentRequestCount;
   Self.ReceiveMovedTemporarily('sip:foo@bar.org');
-  CheckRequestSent('No redirected INVITE #1 sent: ' + Self.FailReason);
+  CheckRequestSent('No redirected ' + Method + ' #1 sent: ' + Self.FailReason);
   CheckEquals('sip:foo@bar.org',
               Self.LastSentRequest.RequestUri.Uri,
               'Request-URI of redirect #1');
 
   Self.MarkSentRequestCount;
   Self.ReceiveMovedTemporarily('sip:baz@quaax.org');
-  CheckRequestSent('No redirected INVITE #2 sent: ' + Self.FailReason);
+  CheckRequestSent('No redirected ' + Method + ' #2 sent: ' + Self.FailReason);
   CheckEquals('sip:baz@quaax.org',
               Self.LastSentRequest.RequestUri.Uri,
               'Request-URI of redirect #2');
