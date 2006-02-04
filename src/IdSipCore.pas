@@ -732,9 +732,9 @@ type
   TIdSipActionRedirector = class;
   IIdSipActionRedirectorListener = interface
     ['{A538DE4D-DC73-44D2-A888-E7B7B5FA2BF0}']
-    procedure OnFailure(Redirector: TIdSipActionRedirector;
-                        ErrorCode: Cardinal;
-                        const Reason: String);
+    procedure OnRedirectFailure(Redirector: TIdSipActionRedirector;
+                                ErrorCode: Cardinal;
+                                const Reason: String);
     procedure OnNewAction(Redirector: TIdSipActionRedirector;
                           NewAction: TIdSipAction);
     procedure OnSuccess(Redirector: TIdSipActionRedirector;
@@ -869,6 +869,45 @@ type
 
     property Options:  TIdSipOutboundOptions read fOptions write fOptions;
     property Response: TIdSipResponse        read fResponse write fResponse;
+  end;
+
+  TIdSipActionRedirectorMethod = class(TIdNotification)
+  private
+    fRedirector: TIdSipActionRedirector;
+  public
+    property Redirector: TIdSipActionRedirector read fRedirector write fRedirector;
+  end;
+
+  TIdSipRedirectorRedirectFailureMethod = class(TIdSipActionRedirectorMethod)
+  private
+    fErrorCode: Cardinal;
+    fReason:    String;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property ErrorCode: Cardinal read fErrorCode write fErrorCode;
+    property Reason:    String   read fReason write fReason;
+  end;
+
+  TIdSipRedirectorNewActionMethod = class(TIdSipActionRedirectorMethod)
+  private
+    fNewAction: TIdSipAction;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property NewAction: TIdSipAction read fNewAction write fNewAction;
+  end;
+
+  TIdSipRedirectorSuccessMethod = class(TIdSipActionRedirectorMethod)
+  private
+    fResponse:         TIdSipResponse;
+    fSuccessfulAction: TIdSipAction;
+
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Response:         TIdSipResponse read fResponse write fResponse;
+    property SuccessfulAction: TIdSipAction   read fSuccessfulAction write fSuccessfulAction;
   end;
 
   TIdSipAbstractCoreMethod = class(TIdNotification)
@@ -3892,9 +3931,9 @@ end;
 procedure TIdSipActionRedirector.NotifyOfFailure(ErrorCode: Cardinal;
                                                  const Reason: String);
 var
-  Notification: TIdSipRedirectorFailureMethod;
+  Notification: TIdSipRedirectorRedirectFailureMethod;
 begin
-  Notification := TIdSipRedirectorFailureMethod.Create;
+  Notification := TIdSipRedirectorRedirectFailureMethod.Create;
   try
     Notification.ErrorCode  := ErrorCode;
     Notification.Reason     := Reason;
@@ -4129,6 +4168,41 @@ procedure TIdSipOptionsResponseMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipOptionsListener).OnResponse(Self.Options,
                                                Self.Response);
+end;
+
+//******************************************************************************
+//* TIdSipRedirectorRedirectFailureMethod                                      *
+//******************************************************************************
+//* TIdSipRedirectorRedirectFailureMethod Public methods ***********************
+
+procedure TIdSipRedirectorRedirectFailureMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipActionRedirectorListener).OnRedirectFailure(Self.Redirector,
+                                                                Self.ErrorCode,
+                                                                Self.Reason);
+end;
+
+//******************************************************************************
+//* TIdSipRedirectorNewActionMethod                                            *
+//******************************************************************************
+//* TIdSipRedirectorNewActionMethod Public methods *****************************
+
+procedure TIdSipRedirectorNewActionMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipActionRedirectorListener).OnNewAction(Self.Redirector,
+                                                          Self.NewAction);
+end;
+
+//******************************************************************************
+//* TIdSipRedirectorSuccessMethod                                              *
+//******************************************************************************
+//* TIdSipRedirectorSuccessMethod Public methods *******************************
+
+procedure TIdSipRedirectorSuccessMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipActionRedirectorListener).OnSuccess(Self.Redirector,
+                                                        Self.SuccessfulAction,
+                                                        Self.Response);
 end;
 
 //******************************************************************************

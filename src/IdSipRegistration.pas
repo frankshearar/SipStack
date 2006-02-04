@@ -401,16 +401,16 @@ type
     procedure OnFailure(Action: TIdSipAction;
                         Response: TIdSipResponse;
                         const Reason: String); overload;
-    procedure OnFailure(Redirector: TIdSipActionRedirector;
-                        ErrorCode: Cardinal;
-                        const Reason: String); overload;
     procedure OnNetworkFailure(Action: TIdSipAction;
                                ErrorCode: Cardinal;
-                               const Reason: String);
+                               const Reason: String); overload;
     procedure OnNewAction(Redirector: TIdSipActionRedirector;
                           NewAction: TIdSipAction);
     procedure OnRedirect(Action: TIdSipAction;
                          Redirect: TIdSipResponse);
+    procedure OnRedirectFailure(Redirector: TIdSipActionRedirector;
+                                ErrorCode: Cardinal;
+                                const Reason: String); overload;
     procedure OnSuccess(Action: TIdSipAction;
                         Msg: TIdSipMessage); overload;
     procedure OnSuccess(Redirector: TIdSipActionRedirector;
@@ -1868,19 +1868,18 @@ begin
   // Do nothing. The Redirector handles this stuff.
 end;
 
-procedure TIdSipOutboundRegistrationBase.OnFailure(Redirector: TIdSipActionRedirector;
-                                                   ErrorCode: Cardinal;
-                                                   const Reason: String);
-begin
-  raise Exception.Create('Unfinished code');
-  Self.NotifyOfFailure(nil);
-end;
-
 procedure TIdSipOutboundRegistrationBase.OnNetworkFailure(Action: TIdSipAction;
                                                           ErrorCode: Cardinal;
                                                           const Reason: String);
 begin
   Self.NotifyOfNetworkFailure(ErrorCode, Reason);
+end;
+
+procedure TIdSipOutboundRegistrationBase.OnNewAction(Redirector: TIdSipActionRedirector;
+                                                     NewAction: TIdSipAction);
+begin
+  NewAction.AddActionListener(Self);
+  (NewAction as TIdSipOwnedAction).AddOwnedActionListener(Self);
 end;
 
 procedure TIdSipOutboundRegistrationBase.OnRedirect(Action: TIdSipAction;
@@ -1895,11 +1894,12 @@ begin
   // Do nothing. The Redirector handles this stuff.
 end;
 
-procedure TIdSipOutboundRegistrationBase.OnNewAction(Redirector: TIdSipActionRedirector;
-                                                     NewAction: TIdSipAction);
+procedure TIdSipOutboundRegistrationBase.OnRedirectFailure(Redirector: TIdSipActionRedirector;
+                                                           ErrorCode: Cardinal;
+                                                           const Reason: String);
 begin
-  NewAction.AddActionListener(Self);
-  (NewAction as TIdSipOwnedAction).AddOwnedActionListener(Self);
+  raise Exception.Create('Unfinished code');
+  Self.NotifyOfFailure(nil);
 end;
 
 procedure TIdSipOutboundRegistrationBase.OnSuccess(Redirector: TIdSipActionRedirector;

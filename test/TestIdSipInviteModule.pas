@@ -589,49 +589,6 @@ type
     procedure TestRun;
   end;
 
-  TestTIdSipActionRedirectorMethod = class(TActionMethodTestCase)
-  private
-    Listener:   TIdSipMockActionRedirectorListener;
-    Redirector: TIdSipActionRedirector;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  end;
-
-  TestTIdSipRedirectorFailureMethod = class(TestTIdSipActionRedirectorMethod)
-  private
-    ErrorCode:  Cardinal;
-    Method:     TIdSipRedirectorFailureMethod;
-    Reason:     String;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestRun;
-  end;
-
-  TestTIdSipRedirectorNewActionMethod = class(TestTIdSipActionRedirectorMethod)
-  private
-    Method:    TIdSipRedirectorNewActionMethod;
-    NewAction: TIdSipAction;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestRun;
-  end;
-
-  TestTIdSipRedirectorSuccessMethod = class(TestTIdSipActionRedirectorMethod)
-  private
-    Method:   TIdSipRedirectorSuccessMethod;
-    Response: TIdSipResponse;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestRun;
-  end;
-
   TestInviteMethod = class(TActionMethodTestCase)
   private
     Invite:   TIdSipOutboundInvite;
@@ -737,9 +694,6 @@ begin
   Result.AddTest(TestTIdSipInboundInviteSuccessMethod.Suite);
   Result.AddTest(TestTIdSipInviteCallProgressMethod.Suite);
   Result.AddTest(TestTIdSipInviteDialogEstablishedMethod.Suite);
-  Result.AddTest(TestTIdSipRedirectorFailureMethod.Suite);
-  Result.AddTest(TestTIdSipRedirectorNewActionMethod.Suite);
-  Result.AddTest(TestTIdSipRedirectorSuccessMethod.Suite);
   Result.AddTest(TestTIdSipEndedSessionMethod.Suite);
   Result.AddTest(TestTIdSipEstablishedSessionMethod.Suite);
   Result.AddTest(TestTIdSipModifiedSessionMethod.Suite);
@@ -1776,8 +1730,8 @@ begin
       Self.InviteAction.Accept('', '');
 
       Check(Self.InviteAction.IsTerminated, 'Action not marked as terminated');
-      Check(L1.NetworkFailed, 'L1 not notified');
-      Check(L2.NetworkFailed, 'L2 not notified');
+      Check(L1.NetworkFailed, 'TIdSipInboundInvite didn''t notify L1');
+      Check(L2.NetworkFailed, 'TIdSipInboundInvite didn''t notify L2');
     finally
        Self.InviteAction.RemoveListener(L2);
        L2.Free;
@@ -1809,8 +1763,8 @@ begin
         Ack.Free;
       end;
 
-      Check(L1.Succeeded, 'L1 not notified of action success');
-      Check(L2.Succeeded, 'L2 not notified of action success');
+      Check(L1.Succeeded, 'TIdSipInboundInvite didn''t notify L1 of action success');
+      Check(L2.Succeeded, 'TIdSipInboundInvite didn''t notify L2 of action success');
     finally
        Self.InviteAction.RemoveListener(L2);
        L2.Free;
@@ -6797,146 +6751,6 @@ begin
   finally
     Listener.Free;
   end;
-end;
-
-//******************************************************************************
-//* TestTIdSipActionRedirectorMethod                                           *
-//******************************************************************************
-//* TestTIdSipActionRedirectorMethod Public methods ****************************
-
-procedure TestTIdSipActionRedirectorMethod.SetUp;
-var
-  ArbitraryAction: TIdSipOutboundSession;
-begin
-  inherited SetUp;
-
-  Self.Listener   := TIdSipMockActionRedirectorListener.Create;
-  ArbitraryAction := Self.UA.InviteModule.Call(Self.UA.Contact, '', '');
-  Self.Redirector := TIdSipActionRedirector.Create(ArbitraryAction);
-end;
-
-procedure TestTIdSipActionRedirectorMethod.TearDown;
-begin
-  Self.Redirector.Free;
-  
-  inherited TearDown;
-end;
-
-//******************************************************************************
-//* TestTIdSipRedirectorFailureMethod                                          *
-//******************************************************************************
-//* TestTIdSipRedirectorFailureMethod Public methods ***************************
-
-procedure TestTIdSipRedirectorFailureMethod.SetUp;
-begin
-  inherited SetUp;
-
-  Self.ErrorCode  := RedirectWithNoContacts;
-  Self.Reason     := RSRedirectWithNoContacts;
-
-  Self.Method := TIdSipRedirectorFailureMethod.Create;
-  Self.Method.ErrorCode  := Self.ErrorCode;
-  Self.Method.Reason     := Self.Reason;
-  Self.Method.Redirector := Self.Redirector;
-end;
-
-procedure TestTIdSipRedirectorFailureMethod.TearDown;
-begin
-  Self.Method.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipRedirectorFailureMethod Published methods ************************
-
-procedure TestTIdSipRedirectorFailureMethod.TestRun;
-begin
-  Self.Method.Run(Self.Listener);
-
-  Check(Self.Listener.Failed, 'Listener not notified');
-  Check(Self.Method.Redirector = Self.Listener.RedirectorParam,
-        'Redirector param');
-   CheckEquals(Self.Method.ErrorCode,
-               Self.Listener.ErrorCodeParam,
-               'ErrorCode param');
-   CheckEquals(Self.Method.Reason,
-               Self.Listener.ReasonParam,
-               'Reason param');
-end;
-
-//******************************************************************************
-//* TestTIdSipRedirectorNewActionMethod                                        *
-//******************************************************************************
-//* TestTIdSipRedirectorNewActionMethod Public methods *************************
-
-procedure TestTIdSipRedirectorNewActionMethod.SetUp;
-begin
-  inherited SetUp;
-
-  Self.NewAction := Self.UA.QueryOptions(Self.UA.Contact);
-
-  Self.Method := TIdSipRedirectorNewActionMethod.Create;
-  Self.Method.NewAction  := Self.NewAction;
-  Self.Method.Redirector := Self.Redirector;
-end;
-
-procedure TestTIdSipRedirectorNewActionMethod.TearDown;
-begin
-  Self.Method.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipRedirectorNewActionMethod Published methods **********************
-
-procedure TestTIdSipRedirectorNewActionMethod.TestRun;
-begin
-  Self.Method.Run(Self.Listener);
-
-  Check(Self.Listener.NewAction, 'Listener not notified');
-  Check(Self.Method.Redirector = Self.Listener.RedirectorParam,
-        'Redirector param');
-  Check(Self.Method.NewAction = Self.Listener.NewActionParam,
-        'NewAction param');
-end;
-
-//******************************************************************************
-//* TestTIdSipRedirectorSuccessMethod                                          *
-//******************************************************************************
-//* TestTIdSipRedirectorSuccessMethod Public methods ***************************
-
-procedure TestTIdSipRedirectorSuccessMethod.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Response := TIdSipResponse.Create;
-  Self.Method   := TIdSipRedirectorSuccessMethod.Create;
-
-  Self.Method.Redirector := Self.Redirector;
-  Self.Method.Response   := Self.Response;
-end;
-
-procedure TestTIdSipRedirectorSuccessMethod.TearDown;
-begin
-  Self.Method.Free;
-  Self.Response.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipRedirectorSuccessMethod Published methods ************************
-
-procedure TestTIdSipRedirectorSuccessMethod.TestRun;
-begin
-  Self.Method.Run(Self.Listener);
-
-  Check(Self.Listener.Succeeded, 'Listener not notified');
-  Check(Self.Method.Redirector = Self.Listener.RedirectorParam,
-        'Redirector param');
-  Check(Self.Method.Response = Self.Listener.ResponseParam,
-        'Response param');
-  Check(Self.Method.SuccessfulAction = Self.Listener.SuccessfulActionParam,
-        'SuccessfulAction param');
 end;
 
 //******************************************************************************
