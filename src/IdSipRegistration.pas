@@ -401,6 +401,8 @@ type
     procedure OnFailure(Action: TIdSipAction;
                         Response: TIdSipResponse;
                         const Reason: String); overload;
+    procedure OnFailure(Redirector: TIdSipActionRedirector;
+                        Response: TIdSipResponse); overload;
     procedure OnNetworkFailure(Action: TIdSipAction;
                                ErrorCode: Cardinal;
                                const Reason: String); overload;
@@ -1868,6 +1870,12 @@ begin
   // Do nothing. The Redirector handles this stuff.
 end;
 
+procedure TIdSipOutboundRegistrationBase.OnFailure(Redirector: TIdSipActionRedirector;
+                                                   Response: TIdSipResponse);
+begin
+  raise Exception.Create('Implement TIdSipOutboundRegistrationBase.OnFailure');
+end;
+
 procedure TIdSipOutboundRegistrationBase.OnNetworkFailure(Action: TIdSipAction;
                                                           ErrorCode: Cardinal;
                                                           const Reason: String);
@@ -1888,18 +1896,17 @@ begin
   // Do nothing. The Redirector handles this stuff.
 end;
 
-procedure TIdSipOutboundRegistrationBase.OnSuccess(Action: TIdSipAction;
-                                                   Msg: TIdSipMessage);
-begin
-  // Do nothing. The Redirector handles this stuff.
-end;
-
 procedure TIdSipOutboundRegistrationBase.OnRedirectFailure(Redirector: TIdSipActionRedirector;
                                                            ErrorCode: Cardinal;
                                                            const Reason: String);
 begin
-  raise Exception.Create('Unfinished code');
-  Self.NotifyOfFailure(nil);
+  Self.NotifyOfNetworkFailure(ErrorCode, Reason);
+end;
+
+procedure TIdSipOutboundRegistrationBase.OnSuccess(Action: TIdSipAction;
+                                                   Msg: TIdSipMessage);
+begin
+  // Do nothing. The Redirector handles this stuff.
 end;
 
 procedure TIdSipOutboundRegistrationBase.OnSuccess(Redirector: TIdSipActionRedirector;

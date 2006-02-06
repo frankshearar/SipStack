@@ -530,11 +530,13 @@ type
     Redirector:   TIdSipActionRedirector;
 
     function  GetCancelling: Boolean;
+    procedure OnFailure(Redirector: TIdSipActionRedirector;
+                        Response: TIdSipResponse); overload;
+    procedure OnNewAction(Redirector: TIdSipActionRedirector;
+                          NewAction: TIdSipAction);
     procedure OnRedirectFailure(Redirector: TIdSipActionRedirector;
                                 ErrorCode: Cardinal;
                                 const Reason: String); overload;
-    procedure OnNewAction(Redirector: TIdSipActionRedirector;
-                          NewAction: TIdSipAction);
     procedure OnSuccess(Redirector: TIdSipActionRedirector;
                         SuccessfulAction: TIdSipAction;
                         Response: TIdSipResponse); overload;
@@ -3126,6 +3128,19 @@ begin
   Result := Self.Redirector.Cancelling;
 end;
 
+procedure TIdSipOutboundSession.OnFailure(Redirector: TIdSipActionRedirector;
+                                          Response: TIdSipResponse);
+begin
+  Self.NotifyOfFailure(Response);
+end;
+
+procedure TIdSipOutboundSession.OnNewAction(Redirector: TIdSipActionRedirector;
+                                            NewAction: TIdSipAction);
+begin
+  NewAction.AddActionListener(Self);
+  (NewAction as TIdSipOutboundInvite).AddInviteListener(Self);
+end;
+
 procedure TIdSipOutboundSession.OnRedirectFailure(Redirector: TIdSipActionRedirector;
                                                   ErrorCode: Cardinal;
                                                   const Reason: String);
@@ -3138,13 +3153,6 @@ begin
     Self.NotifyOfEndedSession(ErrorCode, Reason);
 
   Self.MarkAsTerminated;
-end;
-
-procedure TIdSipOutboundSession.OnNewAction(Redirector: TIdSipActionRedirector;
-                                            NewAction: TIdSipAction);
-begin
-  NewAction.AddActionListener(Self);
-  (NewAction as TIdSipOutboundInvite).AddInviteListener(Self);
 end;
 
 procedure TIdSipOutboundSession.OnSuccess(Redirector: TIdSipActionRedirector;

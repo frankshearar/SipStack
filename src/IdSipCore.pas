@@ -730,13 +730,26 @@ type
   end;
 
   TIdSipActionRedirector = class;
+  // * OnNewAction allows you to manipulate the new attempt to send a message.
+  //   For instance, it allows you to listen for OnDialogEstablished
+  //   notifications from an OutboundInvite.
+  // * OnFaliure returns the failure response to the last attempt to send the
+  //   message. No more notifications will occur after this.
+  // * OnRedirectFailure tells you that, for instance, there were no locations
+  //   returned by the redirecting response, or that no locations could be
+  //   reached (because of a series of network failures, say). Like OnFailure,
+  //   this is a "final" notification.
+  // * OnSuccess does just what it says: it returns the first successful action
+  //   (and response). 
   IIdSipActionRedirectorListener = interface
     ['{A538DE4D-DC73-44D2-A888-E7B7B5FA2BF0}']
+    procedure OnFailure(Redirector: TIdSipActionRedirector;
+                        Response: TIdSipResponse);
+    procedure OnNewAction(Redirector: TIdSipActionRedirector;
+                          NewAction: TIdSipAction);
     procedure OnRedirectFailure(Redirector: TIdSipActionRedirector;
                                 ErrorCode: Cardinal;
                                 const Reason: String);
-    procedure OnNewAction(Redirector: TIdSipActionRedirector;
-                          NewAction: TIdSipAction);
     procedure OnSuccess(Redirector: TIdSipActionRedirector;
                         SuccessfulAction: TIdSipAction;
                         Response: TIdSipResponse);
@@ -878,6 +891,15 @@ type
     property Redirector: TIdSipActionRedirector read fRedirector write fRedirector;
   end;
 
+  TIdSipRedirectorNewActionMethod = class(TIdSipActionRedirectorMethod)
+  private
+    fNewAction: TIdSipAction;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property NewAction: TIdSipAction read fNewAction write fNewAction;
+  end;
+
   TIdSipRedirectorRedirectFailureMethod = class(TIdSipActionRedirectorMethod)
   private
     fErrorCode: Cardinal;
@@ -887,16 +909,7 @@ type
 
     property ErrorCode: Cardinal read fErrorCode write fErrorCode;
     property Reason:    String   read fReason write fReason;
-  end;
-
-  TIdSipRedirectorNewActionMethod = class(TIdSipActionRedirectorMethod)
-  private
-    fNewAction: TIdSipAction;
-  public
-    procedure Run(const Subject: IInterface); override;
-
-    property NewAction: TIdSipAction read fNewAction write fNewAction;
-  end;
+  end;  
 
   TIdSipRedirectorSuccessMethod = class(TIdSipActionRedirectorMethod)
   private
@@ -4171,6 +4184,17 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipRedirectorNewActionMethod                                            *
+//******************************************************************************
+//* TIdSipRedirectorNewActionMethod Public methods *****************************
+
+procedure TIdSipRedirectorNewActionMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipActionRedirectorListener).OnNewAction(Self.Redirector,
+                                                          Self.NewAction);
+end;
+
+//******************************************************************************
 //* TIdSipRedirectorRedirectFailureMethod                                      *
 //******************************************************************************
 //* TIdSipRedirectorRedirectFailureMethod Public methods ***********************
@@ -4180,17 +4204,6 @@ begin
   (Subject as IIdSipActionRedirectorListener).OnRedirectFailure(Self.Redirector,
                                                                 Self.ErrorCode,
                                                                 Self.Reason);
-end;
-
-//******************************************************************************
-//* TIdSipRedirectorNewActionMethod                                            *
-//******************************************************************************
-//* TIdSipRedirectorNewActionMethod Public methods *****************************
-
-procedure TIdSipRedirectorNewActionMethod.Run(const Subject: IInterface);
-begin
-  (Subject as IIdSipActionRedirectorListener).OnNewAction(Self.Redirector,
-                                                          Self.NewAction);
 end;
 
 //******************************************************************************

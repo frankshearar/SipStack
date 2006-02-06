@@ -377,7 +377,8 @@ type
                                              IIdSipActionRedirectorListener)
   private
     fErrorCodeParam:        Cardinal;
-    fRedirectFailed:         Boolean;
+    fFailed:                Boolean;
+    fRedirectFailed:        Boolean;
     fNewAction:             Boolean;
     fNewActionParam:        TIdSipAction;
     fReasonParam:           String;
@@ -386,11 +387,13 @@ type
     fSucceeded:             Boolean;
     fSuccessfulActionParam: TIdSipAction;
 
+    procedure OnFailure(Redirector: TIdSipActionRedirector;
+                        Response: TIdSipResponse);
+    procedure OnNewAction(Redirector: TIdSipActionRedirector;
+                          NewAction: TIdSipAction);
     procedure OnRedirectFailure(Redirector: TIdSipActionRedirector;
                                 ErrorCode: Cardinal;
                                 const Reason: String);
-    procedure OnNewAction(Redirector: TIdSipActionRedirector;
-                          NewAction: TIdSipAction);
     procedure OnSuccess(Redirector: TIdSipActionRedirector;
                         SuccessfulAction: TIdSipAction;
                         Response: TIdSipResponse);
@@ -398,7 +401,8 @@ type
     constructor Create; override;
 
     property ErrorCodeParam:        Cardinal               read fErrorCodeParam;
-    property RedirectFailed:         Boolean                read fRedirectFailed;
+    property Failed:                Boolean                read fFailed;
+    property RedirectFailed:        Boolean                read fRedirectFailed;
     property NewAction:             Boolean                read fNewAction;
     property NewActionParam:        TIdSipAction           read fNewActionParam;
     property ReasonParam:           String                 read fReasonParam;
@@ -1798,12 +1802,35 @@ constructor TIdSipMockActionRedirectorListener.Create;
 begin
   inherited Create;
 
+  Self.fFailed         := false;
   Self.fRedirectFailed := false;
-  Self.fNewAction     := false;
-  Self.fSucceeded     := false;
+  Self.fNewAction      := false;
+  Self.fSucceeded      := false;
 end;
 
 //* TIdSipMockActionRedirectorListener Private methods *************************
+
+procedure TIdSipMockActionRedirectorListener.OnFailure(Redirector: TIdSipActionRedirector;
+                                                       Response: TIdSipResponse);
+begin
+  Self.fFailed          := true;
+  Self.fRedirectorParam := Redirector;
+  Self.fResponseParam   := Response;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create(Self.ClassName + '.OnFailure');
+end;
+
+procedure TIdSipMockActionRedirectorListener.OnNewAction(Redirector: TIdSipActionRedirector;
+                                                         NewAction: TIdSipAction);
+begin
+  Self.fNewAction       := true;
+  Self.fNewActionParam  := NewAction;
+  Self.fRedirectorParam := Redirector;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create(Self.ClassName + '.OnNewAction');
+end;
 
 procedure TIdSipMockActionRedirectorListener.OnRedirectFailure(Redirector: TIdSipActionRedirector;
                                                                ErrorCode: Cardinal;
@@ -1815,15 +1842,7 @@ begin
   Self.fRedirectorParam := Redirector;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create(Self.ClassName + '.OnFailed');
-end;
-
-procedure TIdSipMockActionRedirectorListener.OnNewAction(Redirector: TIdSipActionRedirector;
-                                                         NewAction: TIdSipAction);
-begin
-  Self.fNewAction       := true;
-  Self.fNewActionParam  := NewAction;
-  Self.fRedirectorParam := Redirector;
+    raise Self.FailWith.Create(Self.ClassName + '.OnRedirectFailure');
 end;
 
 procedure TIdSipMockActionRedirectorListener.OnSuccess(Redirector: TIdSipActionRedirector;
