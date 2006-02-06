@@ -412,8 +412,10 @@ type
     procedure TestTerminateUnestablishedSession;
   end;
 
-  TestTIdSipOutboundSession = class(TestTIdSipSession)
+  TestTIdSipOutboundSession = class(TestTIdSipSession,
+                                    IIdSipTransportSendingListener)
   private
+    FailFirstInviteSend:      Boolean;
     LocalMimeType:            String;
     LocalDescription:         String;
     OnProgressedSessionFired: Boolean;
@@ -421,6 +423,12 @@ type
     RemoteMimeType:           String;
     Session:                  TIdSipOutboundSession;
 
+    procedure OnSendRequest(Request: TIdSipRequest;
+                            Sender: TIdSipTransport;
+                            Destination: TIdSipLocation);
+    procedure OnSendResponse(Response: TIdSipResponse;
+                             Sender: TIdSipTransport;
+                             Destination: TIdSipLocation);
     procedure ReceiveBusyHere(Invite: TIdSipRequest);
     procedure ReceiveForbidden;
     procedure ReceiveOKWithRecordRoute;
@@ -469,6 +477,7 @@ type
     procedure TestMethod;
     procedure TestModifyUsesAuthentication;
     procedure TestNetworkFailuresLookLikeSessionFailures;
+    procedure TestOneNetworkFailureDoesntFailWholeRedirection;
     procedure TestReceive1xxNotifiesListeners;
     procedure TestReceive2xxSendsAck;
     procedure TestReceive3xxSendsNewInvite;
@@ -4881,6 +4890,8 @@ begin
   // DNS entries for redirected domains, etc.
   Self.Locator.AddA('bar.org',   '127.0.0.1');
   Self.Locator.AddA('quaax.org', '127.0.0.1');
+
+  Self.FailFirstInviteSend := false;
 end;
 
 //* TestTIdSipOutboundSession Protectedivate methods ***************************
@@ -4932,6 +4943,25 @@ begin
 end;
 
 //* TestTIdSipOutboundSession Private methods **********************************
+
+procedure TestTIdSipOutboundSession.OnSendRequest(Request: TIdSipRequest;
+                                                  Sender: TIdSipTransport;
+                                                  Destination: TIdSipLocation);
+begin
+  if Request.IsInvite then begin
+    if Self.FailFirstInviteSend then begin
+      Self.FailFirstInviteSend := false;
+
+      raise EIdConnectTimeout.Create('TestTIdSipOutboundSession.OnSendRequest');
+    end;
+  end;
+end;
+
+procedure TestTIdSipOutboundSession.OnSendResponse(Response: TIdSipResponse;
+                                                   Sender: TIdSipTransport;
+                                                   Destination: TIdSipLocation);
+begin
+end;
 
 procedure TestTIdSipOutboundSession.ReceiveBusyHere(Invite: TIdSipRequest);
 var
@@ -5759,6 +5789,30 @@ begin
       + 'Invite''s');
 end;
 
+procedure TestTIdSipOutboundSession.TestOneNetworkFailureDoesntFailWholeRedirection;
+var
+  Contacts: array of String;
+begin
+  SetLength(Contacts, 2);
+  Contacts[0] := 'sip:foo@bar.org';
+  Contacts[1] := 'sip:bar@bar.org';
+
+  Self.MarkSentRequestCount;
+
+  Self.ReceiveMovedTemporarily(Contacts);
+
+  // ARG! Why do they make Length return an INTEGER? And WHY Abs() too?
+  CheckEquals(Self.RequestCount + Cardinal(Length(Contacts)),
+              Self.Dispatcher.Transport.SentRequestCount,
+              'Session didn''t attempt to contact all Contacts: ' + Self.FailReason);
+
+  // Receive a 200 OK to the 2nd, successfully sent, INVITE.
+  Self.ReceiveOk(Self.LastSentRequest);
+
+  Check(Self.OnEstablishedSessionFired,
+        'The session didn''t receive the 200 OK, or has a confused state');
+end;
+
 procedure TestTIdSipOutboundSession.TestReceive1xxNotifiesListeners;
 begin
   Self.ReceiveTrying(Self.LastSentRequest);
@@ -6025,6 +6079,14 @@ begin
   // <---      100 (baz)      ---
   //  ---       CANCEL        ---> #5
   // <---  200 (baz,CANCEL)   ---
+  //
+  // In summary, we send an INVITE. The redirect server (or whatever) redirects
+  // us to foo, bar and baz. The INVITE to bar succeeds first, so we try
+  // cancel/terminate the other INVITEs. Since we've by now received a 200 OK
+  // for foo, we send foo a BYE. With no response (other than a provisional
+  // one) from baz, we send a CANCEL. Of course, if baz hadn't already sent us
+  // a provisional response, we would only send a CANCEL once we received a
+  // response from baz.
 
   SetLength(Contacts, 3);
   Contacts[0] := 'sip:foo@bar.org';
