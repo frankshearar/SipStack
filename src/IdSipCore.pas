@@ -733,7 +733,7 @@ type
   // * OnNewAction allows you to manipulate the new attempt to send a message.
   //   For instance, it allows you to listen for OnDialogEstablished
   //   notifications from an OutboundInvite.
-  // * OnFaliure returns the failure response to the last attempt to send the
+  // * OnFailure returns the failure response to the last attempt to send the
   //   message. No more notifications will occur after this.
   // * OnRedirectFailure tells you that, for instance, there were no locations
   //   returned by the redirecting response, or that no locations could be
@@ -4023,7 +4023,7 @@ procedure TIdSipActionRedirector.OnNetworkFailure(Action: TIdSipAction;
                                                   ErrorCode: Cardinal;
                                                   const Reason: String);
 begin
-  // Do nothing.
+//  Self.RemoveFinishedRedirectedInvite(Action);
 end;
 
 procedure TIdSipActionRedirector.OnRedirect(Action: TIdSipAction;
@@ -4109,7 +4109,7 @@ begin
   Self.RedirectedActionLock.Acquire;
   try
     for I := 0 to Self.RedirectedActions.Count - 1 do
-      (Self.RedirectedActions[I] as TIdSipOutboundRedirectedInvite).Terminate;
+      (Self.RedirectedActions[I] as TIdSipAction).Terminate;
   finally
     Self.RedirectedActionLock.Release;
   end;
