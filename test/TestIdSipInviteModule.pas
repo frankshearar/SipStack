@@ -429,7 +429,6 @@ type
     procedure OnSendResponse(Response: TIdSipResponse;
                              Sender: TIdSipTransport;
                              Destination: TIdSipLocation);
-    procedure ReceiveBusyHere(Invite: TIdSipRequest);
     procedure ReceiveForbidden;
     procedure ReceiveOKWithRecordRoute;
     procedure ReceiveRemoteDecline;
@@ -4963,30 +4962,9 @@ procedure TestTIdSipOutboundSession.OnSendResponse(Response: TIdSipResponse;
 begin
 end;
 
-procedure TestTIdSipOutboundSession.ReceiveBusyHere(Invite: TIdSipRequest);
-var
-  BusyHere: TIdSipResponse;
-begin
-  BusyHere := TIdSipResponse.InResponseTo(Invite,
-                                          SIPBusyHere);
-  try
-    Self.ReceiveResponse(BusyHere);
-  finally
-    BusyHere.Free;
-  end;
-end;
-
 procedure TestTIdSipOutboundSession.ReceiveForbidden;
-var
-  Response: TIdSipResponse;
 begin
-  Response := Self.Core.CreateResponse(Self.LastSentRequest,
-                                       SIPForbidden);
-  try
-    Self.ReceiveResponse(Response);
-  finally
-    Response.Free;
-  end;
+  Self.ReceiveResponse(Self.LastSentRequest, SIPForbidden);
 end;
 
 procedure TestTIdSipOutboundSession.ReceiveOKWithRecordRoute;
@@ -5004,16 +4982,8 @@ begin
 end;
 
 procedure TestTIdSipOutboundSession.ReceiveRemoteDecline;
-var
-  Decline: TIdSipResponse;
 begin
-  Decline := TIdSipResponse.InResponseTo(Self.LastSentRequest,
-                                         SIPDecline);
-  try
-    Self.ReceiveResponse(Decline);
-  finally
-    Decline.Free;
-  end;
+  Self.ReceiveResponse(Self.LastSentRequest, SIPDecline);
 end;
 
 //* TestTIdSipOutboundSession Published methods ********************************

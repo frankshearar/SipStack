@@ -41,6 +41,7 @@ type
                                ErrorCode: Cardinal;
                                const Reason: String);
     procedure ReceiveBadExtensionResponse;
+    procedure ReceiveBusyHere(Invite: TIdSipRequest);
     procedure ReceiveMovedTemporarily(Invite: TIdSipRequest;
                                       const Contacts: array of String); overload;
     procedure ReceiveMovedTemporarily(const Contact: String); overload;
@@ -65,6 +66,7 @@ type
     procedure TestIsSession; virtual;
     procedure TestLocalGruu; virtual;
     procedure TestMultipleAuthentication;
+    procedure TestNetworkFailureTerminatesAction; virtual;
     procedure TestResend;
     procedure TestResendBeforeSend;
     procedure TestResendWithProxyAuth;
@@ -79,7 +81,7 @@ type
 implementation
 
 uses
-  IdSipAuthentication;
+  IdException, IdSipAuthentication;
 
 //******************************************************************************
 //* TestTIdSipAction                                                           *
@@ -277,6 +279,11 @@ end;
 procedure TestTIdSipAction.ReceiveBadExtensionResponse;
 begin
   Self.ReceiveResponse(SIPBadExtension);
+end;
+
+procedure TestTIdSipAction.ReceiveBusyHere(Invite: TIdSipRequest);
+begin
+  Self.ReceiveResponse(Invite, SIPBusyHere);
 end;
 
 procedure TestTIdSipAction.ReceiveMovedTemporarily(Invite: TIdSipRequest;
@@ -516,6 +523,18 @@ begin
   finally
     ProxyAuth.Free;
   end;
+end;
+
+procedure TestTIdSipAction.TestNetworkFailureTerminatesAction;
+var
+  Action: TIdSipAction;
+begin
+  if Self.IsInboundTest then Exit;
+
+  Self.Dispatcher.Transport.FailWith := EIdConnectTimeout;
+  Action := Self.CreateAction;
+  Check(Action.IsTerminated,
+        Action.ClassName + ' didn''t terminate after a network failure');
 end;
 
 procedure TestTIdSipAction.TestResend;

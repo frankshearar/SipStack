@@ -174,11 +174,14 @@ type
                                             IIdSipRegistrationListener)
   protected
     Contacts:  TIdSipContacts;
+    ErrorCode: Cardinal;
+    Failed:    Boolean;
+    Reason:    String;
     Registrar: TIdSipRegistrar;
 
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistrationBase;
-                        CurrentBindings: TIdSipContacts;
-                        Response: TIdSipResponse);
+                        ErrorCode: Cardinal;
+                        const Reason: String);
     procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistrationBase;
                         CurrentBindings: TIdSipContacts);
     function  RegistrarAddress: TIdSipUri;
@@ -189,6 +192,10 @@ type
     procedure TestAddListener;
     procedure TestCircularRedirect;
     procedure TestDoubleRedirect;
+    procedure TestRedirectMultipleOks;
+    procedure TestRedirectNoMoreTargets;
+    procedure TestRedirectWithMultipleContacts;
+    procedure TestRedirectWithNoSuccess;
     procedure TestRemoveListener;
   end;
 
@@ -1478,6 +1485,8 @@ begin
   // DNS entries for redirected domains, etc.
   Self.Locator.AddA('bar.org',   '127.0.0.1');
   Self.Locator.AddA('quaax.org', '127.0.0.1');
+
+  Self.Failed := false;
 end;
 
 procedure TOutboundRegistrationBaseTestCase.TearDown;
@@ -1491,14 +1500,19 @@ end;
 //* TOutboundRegistrationBaseTestCase Protected methods ************************
 
 procedure TOutboundRegistrationBaseTestCase.OnFailure(RegisterAgent: TIdSipOutboundRegistrationBase;
-                                                      CurrentBindings: TIdSipContacts;
-                                                      Response: TIdSipResponse);
+                                                      ErrorCode: Cardinal;
+                                                      const Reason: String);
 begin
+  Self.ErrorCode := ErrorCode;
+  Self.Failed    := true;
+  Self.Reason    := Reason;
 end;
 
 procedure TOutboundRegistrationBaseTestCase.OnSuccess(RegisterAgent: TIdSipOutboundRegistrationBase;
                                                       CurrentBindings: TIdSipContacts);
 begin
+  Self.Contacts.Clear;
+  Self.Contacts.Add(CurrentBindings);
 end;
 
 function TOutboundRegistrationBaseTestCase.RegistrarAddress: TIdSipUri;
@@ -1587,6 +1601,166 @@ begin
   CheckEquals('sip:baz@quaax.org',
               Self.LastSentRequest.RequestUri.Uri,
               'Request-URI of redirect #2');
+end;
+
+procedure TOutboundRegistrationBaseTestCase.TestRedirectMultipleOks;
+const
+  FirstRegister  = 0;
+  FirstRedirect  = 1;
+  SecondRedirect = 2;
+  ThirdRedirect  = 3;
+var
+  Action:           TIdSipAction;
+  ClassName:        String;
+  Contacts:         array of String;
+  ExpectedResponse: TIdSipResponse;
+begin
+  //                               Request number:
+  //  ---      REGISTER       ---> #0
+  // <---   302 (foo,bar,baz) ---
+  //  ---    REGISTER(foo)    ---> #1
+  //  ---    REGISTER(bar)    ---> #2
+  //  ---    REGISTER(baz)    ---> #3
+  // <---      200 (bar)      ---
+  // <---      200 (foo)      ---
+
+  //
+  // In summary, we send an INVITE. The redirect server (or whatever) redirects
+  // us to foo, bar and baz. The INVITE to bar succeeds first, so we try
+  // cancel/terminate the other INVITEs. Since we've by now received a 200 OK
+  // for foo, we send foo a BYE. With no response (other than a provisional
+  // one) from baz, we send a CANCEL. Of course, if baz hadn't already sent us
+  // a provisional response, we would only send a CANCEL once we received a
+  // response from baz.
+
+  SetLength(Contacts, 3);
+  Contacts[0] := 'sip:foo@bar.org';
+  Contacts[1] := 'sip:bar@bar.org';
+  Contacts[2] := 'sip:baz@bar.org';
+
+  Action := Self.CreateAction;
+  ClassName := Action.ClassName;
+  Self.MarkSentRequestCount;
+  Self.ReceiveMovedTemporarily(Contacts);
+
+  // ARG! Why do they make Length return an INTEGER? And WHY Abs() too?
+  CheckEquals(Self.RequestCount + Cardinal(Length(Contacts)),
+              Self.Dispatcher.Transport.SentRequestCount,
+              ClassName + ' didn''t attempt to contact all Contacts: ' + Self.FailReason);
+
+  Self.MarkSentRequestCount;
+  Self.ReceiveOkFrom(Self.SentRequestAt(SecondRedirect), Contacts[1]);
+
+  ExpectedResponse := TIdSipResponse.Create;
+  try
+    ExpectedResponse.Assign(Self.Dispatcher.Transport.LastResponse);
+
+    Self.ReceiveOkFrom(Self.SentRequestAt(FirstRedirect),  Contacts[0]);
+
+    Self.Contacts.First;
+    CheckEquals(Contacts[1],
+                Self.Contacts.CurrentContact.Address.AsString,
+                'Unexpected contact returned for first successful response');
+  finally
+    ExpectedResponse.Free;
+  end;
+end;
+
+procedure TOutboundRegistrationBaseTestCase.TestRedirectNoMoreTargets;
+var
+  Action:    TIdSipAction;
+  ClassName: String;
+  Contacts:  array of String;
+  Method:    String;
+begin
+  //                                           Request number:
+  //  ---             REGISTER            ---> #0
+  // <---          302 (foo,bar)          ---
+  //  ---          REGISTER(foo)          ---> #1
+  //  ---          REGISTER(bar)          ---> #2
+  // <--- 302 (from foo, referencing bar) ---
+  // <--- 302 (from bar, referencing foo) ---
+
+  SetLength(Contacts, 2);
+  Contacts[0] := 'sip:foo@bar.org';
+  Contacts[1] := 'sip:bar@bar.org';
+
+  Action := Self.CreateAction;
+  ClassName := Action.ClassName;
+  Method    := Action.Method;
+  Self.ReceiveMovedTemporarily(Contacts);
+
+  Check(Self.SentRequestCount >= 3,
+        'Not enough requests sent: 1 + 2 ' + Method + 's: ' + Self.FailReason);
+
+  Self.ReceiveMovedTemporarily(Self.SentRequestAt(1), Contacts[1]);
+  Self.ReceiveMovedTemporarily(Self.SentRequestAt(2), Contacts[0]);
+
+  Check(Self.Failed,
+        ClassName + ' didn''t notify listeners of ended redirection');
+  CheckEquals(RedirectWithNoMoreTargets, Self.ErrorCode,
+              ClassName + ' reported wrong error code for no more redirect targets');
+  CheckNotEquals('',
+                 Self.Reason,
+                 'Reason param not set');
+end;
+
+procedure TOutboundRegistrationBaseTestCase.TestRedirectWithMultipleContacts;
+var
+  Contacts: array of String;
+begin
+  SetLength(Contacts, 2);
+  Contacts[0] := 'sip:foo@bar.org';
+  Contacts[1] := 'sip:bar@bar.org';
+
+  Self.CreateAction;
+  Self.MarkSentRequestCount;
+
+  Self.ReceiveMovedTemporarily(Contacts);
+
+  // ARG! Why do they make Length return an INTEGER? And WHY Abs() too?
+  CheckEquals(Self.RequestCount + Cardinal(Length(Contacts)),
+              Self.Dispatcher.Transport.SentRequestCount,
+              'Session didn''t attempt to contact all Contacts: ' + Self.FailReason);
+end;
+
+procedure TOutboundRegistrationBaseTestCase.TestRedirectWithNoSuccess;
+var
+  Action:    TIdSipAction;
+  Contacts:  array of String;
+  ClassName: String;
+  Method:    String;
+begin
+  //                             Request number:
+  //  ---      REGISTER     ---> #0
+  // <---   302 (foo,bar)   ---
+  //  ---   REGISTER (foo)  ---> #1
+  //  ---   REGISTER (bar)  ---> #2
+  // <---     486 (foo)     ---
+  // <---     486 (bar)     ---
+
+  SetLength(Contacts, 2);
+  Contacts[0] := 'sip:foo@bar.org';
+  Contacts[1] := 'sip:bar@bar.org';
+
+  Action := Self.CreateAction;
+  ClassName := Action.ClassName;
+  Method    := Action.Method;
+  Self.ReceiveMovedTemporarily(Contacts);
+
+  Check(Self.SentRequestCount >= 3,
+        'Not enough requests sent: 1 + 2 ' + Method + 's: ' + Self.FailReason);
+
+  Self.ReceiveBusyHere(Self.SentRequestAt(1));
+  Self.ReceiveBusyHere(Self.SentRequestAt(2));
+
+  Check(Self.Failed,
+        ClassName + ' didn''t notify listeners of ended attempt');
+  CheckEquals(RedirectWithNoSuccess, Self.ErrorCode,
+              ClassName + ' reported wrong error code for no successful rings');
+  CheckNotEquals('',
+                 Self.Reason,
+                 'Reason param not set');
 end;
 
 procedure TOutboundRegistrationBaseTestCase.TestRemoveListener;
@@ -1953,9 +2127,9 @@ begin
   inherited SetUp;
 
   Self.Method := TIdSipRegistrationFailedMethod.Create;
-  Self.Method.CurrentBindings := Self.Bindings;
-  Self.Method.Response        := Self.Response;
-  Self.Method.Registration    := Self.Reg;
+  Self.Method.ErrorCode    := SIPBadExtension;
+  Self.Method.Reason       := RSSIPBadExtension;
+  Self.Method.Registration := Self.Reg;
 end;
 
 procedure TestTIdSipRegistrationFailedMethod.TearDown;
@@ -1972,12 +2146,14 @@ begin
   Self.Method.Run(Self.Listener);
 
   Check(Self.Listener.Failure, 'Listener not notified');
-  Check(Self.Method.CurrentBindings = Self.Listener.CurrentBindingsParam,
-        'CurrentBindings param');
+  CheckEquals(Self.Method.ErrorCode,
+              Self.Listener.ErrorCodeParam,
+              'ErrorCode param');
+  CheckEquals(Self.Method.Reason,
+              Self.Listener.ReasonParam,
+              'Reason param');
   Check(Self.Method.Registration = Self.Listener.RegisterAgentParam,
         'RegisterAgent param');
-  Check(Self.Method.Response = Self.Listener.ResponseParam,
-        'Response param');
 end;
 
 //******************************************************************************

@@ -353,7 +353,9 @@ type
                                          IIdSipRegistrationListener)
   private
     fCurrentBindingsParam: TIdSipContacts;
+    fErrorCode:            Cardinal;
     fFailure:              Boolean;
+    fReasonParam:          String;
     fResponseParam:        TIdSipResponse;
     fRegisterAgentParam:   TIdSipOutboundRegistrationBase;
     fSuccess:              Boolean;
@@ -361,16 +363,18 @@ type
     constructor Create; override;
 
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistrationBase;
-                        CurrentBindings: TIdSipContacts;
-                        Response: TIdSipResponse);
+                        ErrorCode: Cardinal;
+                        const Reason: String);
     procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistrationBase;
                         CurrentBindings: TIdSipContacts);
 
-    property CurrentBindingsParam: TIdSipContacts             read fCurrentBindingsParam;
-    property Failure:              Boolean                    read fFailure;
-    property ResponseParam:        TIdSipResponse             read fResponseParam;
+    property CurrentBindingsParam: TIdSipContacts                 read fCurrentBindingsParam;
+    property ErrorCode:            Cardinal                       read fErrorCode;
+    property Failure:              Boolean                        read fFailure;
+    property ReasonParam:          String                         read fReasonParam;
+    property ResponseParam:        TIdSipResponse                 read fResponseParam;
     property RegisterAgentParam:   TIdSipOutboundRegistrationBase read fRegisterAgentParam;
-    property Success:              Boolean                    read fSuccess;
+    property Success:              Boolean                        read fSuccess;
   end;
 
   TIdSipMockActionRedirectorListener = class(TIdSipMockListener,
@@ -1770,13 +1774,13 @@ end;
 //* TIdSipRegistrationListener Private methods *********************************
 
 procedure TIdSipTestRegistrationListener.OnFailure(RegisterAgent: TIdSipOutboundRegistrationBase;
-                                                   CurrentBindings: TIdSipContacts;
-                                                   Response: TIdSipResponse);
+                                                   ErrorCode: Cardinal;
+                                                   const Reason: String);
 begin
-  Self.fCurrentBindingsParam := CurrentBindings;
+  Self.fErrorCodeParam       := ErrorCode;
   Self.fFailure              := true;
+  Self.fReasonParam          := Reason;
   Self.fRegisterAgentParam   := RegisterAgent;
-  Self.fResponseParam        := Response;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnFailure');

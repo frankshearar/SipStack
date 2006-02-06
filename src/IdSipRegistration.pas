@@ -169,8 +169,8 @@ type
   IIdSipRegistrationListener = interface(IIdSipActionListener)
     ['{D3FA9A3D-ED8A-48D3-8068-38E8F9EE2140}']
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistrationBase;
-                        CurrentBindings: TIdSipContacts;
-                        Response: TIdSipResponse);
+                        ErrorCode: Cardinal;
+                        const Reason: String);
     procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistrationBase;
                         CurrentBindings: TIdSipContacts);
   end;
@@ -425,7 +425,8 @@ type
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
                          UsingSecureTransport: Boolean); override;
-    procedure NotifyOfFailure(Response: TIdSipResponse); override;
+    procedure NotifyOfFailure(ErrorCode: Cardinal;
+                              const Reason: String); reintroduce; // TODO: Not all Actions will fail from a Response
     procedure NotifyOfSuccess(Response: TIdSipMessage); virtual;
   public
     destructor Destroy; override;
@@ -469,17 +470,19 @@ type
     fCurrentBindings: TIdSipContacts;
     fRegistration:    TIdSipOutboundRegistrationBase;
   public
-    property CurrentBindings: TIdSipContacts             read fCurrentBindings write fCurrentBindings;
+    property CurrentBindings: TIdSipContacts                 read fCurrentBindings write fCurrentBindings;
     property Registration:    TIdSipOutboundRegistrationBase read fRegistration write fRegistration;
   end;
 
   TIdSipRegistrationFailedMethod = class(TIdSipRegistrationMethod)
   private
-    fResponse: TIdSipResponse;
+    fErrorCode: Cardinal;
+    fReason:    String;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Response: TIdSipResponse read fResponse write fResponse;
+    property ErrorCode: Cardinal read fErrorCode write fErrorCode;
+    property Reason:    String   read fReason write fReason;
   end;
 
   TIdSipRegistrationSucceededMethod = class(TIdSipRegistrationMethod)
@@ -1804,25 +1807,20 @@ begin
   Self.RegistrationListeners := TIdNotificationList.Create;
 end;
 
-procedure TIdSipOutboundRegistrationBase.NotifyOfFailure(Response: TIdSipResponse);
+procedure TIdSipOutboundRegistrationBase.NotifyOfFailure(ErrorCode: Cardinal;
+                                                         const Reason: String);
 var
-  CurrentBindings: TIdSipContacts;
-  Notification:    TIdSipRegistrationFailedMethod;
+  Notification: TIdSipRegistrationFailedMethod;
 begin
-  CurrentBindings := TIdSipContacts.Create(Response.Headers);
+  Notification := TIdSipRegistrationFailedMethod.Create;
   try
-    Notification := TIdSipRegistrationFailedMethod.Create;
-    try
-      Notification.CurrentBindings := CurrentBindings;
-      Notification.Registration    := Self;
-      Notification.Response        := Response;
+    Notification.ErrorCode    := ErrorCode;
+    Notification.Registration := Self;
+    Notification.Reason       := Reason;
 
-      Self.RegistrationListeners.Notify(Notification);
-    finally
-      Notification.Free;
-    end;
+    Self.RegistrationListeners.Notify(Notification);
   finally
-    CurrentBindings.Free;
+    Notification.Free;
   end;
 
   Self.Terminate;
@@ -1873,7 +1871,7 @@ end;
 procedure TIdSipOutboundRegistrationBase.OnFailure(Redirector: TIdSipActionRedirector;
                                                    Response: TIdSipResponse);
 begin
-  raise Exception.Create('Implement TIdSipOutboundRegistrationBase.OnFailure');
+  Self.NotifyOfFailure(Response.StatusCode, Response.StatusText);
 end;
 
 procedure TIdSipOutboundRegistrationBase.OnNetworkFailure(Action: TIdSipAction;
@@ -1900,7 +1898,7 @@ procedure TIdSipOutboundRegistrationBase.OnRedirectFailure(Redirector: TIdSipAct
                                                            ErrorCode: Cardinal;
                                                            const Reason: String);
 begin
-  Self.NotifyOfNetworkFailure(ErrorCode, Reason);
+  Self.NotifyOfFailure(ErrorCode, Reason);
 end;
 
 procedure TIdSipOutboundRegistrationBase.OnSuccess(Action: TIdSipAction;
@@ -2043,8 +2041,8 @@ end;
 procedure TIdSipRegistrationFailedMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipRegistrationListener).OnFailure(Self.Registration,
-                                                    Self.CurrentBindings,
-                                                    Self.Response);
+                                                    Self.ErrorCode,
+                                                    Self.Reason);
 end;
 
 //******************************************************************************

@@ -1669,9 +1669,8 @@ begin
   inherited SetUp;
 
   Self.Data := TIdFailedRegistrationData.Create;
-  Self.Data.Contacts.Add(ContactHeaderFull).Value := 'sip:case@fried.neurons.org';
-  Self.Data.Contacts.Add(ContactHeaderFull).Value := 'sip:wintermute@tessier-ashpool.co.luna';
-  Self.Data.Reason := 'For no good reason';
+  Self.Data.ErrorCode := 42;
+  Self.Data.Reason    := 'For no good reason';
 end;
 
 procedure TestTIdFailedRegistrationData.TearDown;
@@ -1692,14 +1691,12 @@ begin
     CheckEquals(IntToHex(Self.Data.Handle, 8),
                 IntToHex(Copy.Handle, 8),
                 'Handle');
-    Check(Self.Data.Contacts.Equals(Copy.Contacts),
-          'Contacts');
     CheckEquals(Self.Data.ErrorCode,
                 Copy.ErrorCode,
                 'ErrorCode');
     CheckEquals(Self.Data.Reason,
                 Copy.Reason,
-                'Reason');      
+                'Reason');
   finally
     Copy.Free;
   end;
