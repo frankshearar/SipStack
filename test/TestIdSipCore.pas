@@ -1967,7 +1967,7 @@ procedure TestLocation.TestAllLocationsFail;
 var
   Locations: TIdSipLocations;
 begin
-       // SRV records point to Self.Destination.Address.Host;
+  // SRV records point to Self.Destination.Address.Host;
   // Self.Destination.Address.Host resolves to two A records.
 
   Self.Locator.AddSRV(Self.Destination.Address.Host,
