@@ -347,7 +347,8 @@ type
 
   TIdSipOutboundSubscribe = class(TIdSipSubscribe)
   private
-    fTarget: TIdSipAddressHeader;
+    fTarget:            TIdSipAddressHeader;
+    SubscribeListeners: TIdNotificationList;
 
     procedure NotifyOfSuccess(Response: TIdSipResponse);
     procedure SetTarget(Value: TIdSipAddressHeader);
@@ -1566,6 +1567,7 @@ end;
 
 destructor TIdSipOutboundSubscribe.Destroy;
 begin
+  Self.SubscribeListeners.Free;
   Self.fTarget.Free;
 
   inherited Destroy;
@@ -1573,7 +1575,7 @@ end;
 
 procedure TIdSipOutboundSubscribe.AddListener(Listener: IIdSipSubscribeListener);
 begin
-  Self.ActionListeners.AddListener(Listener);
+  Self.SubscribeListeners.AddListener(Listener);
 end;
 
 function TIdSipOutboundSubscribe.Match(Msg: TIdSipMessage): Boolean;
@@ -1589,7 +1591,7 @@ end;
 
 procedure TIdSipOutboundSubscribe.RemoveListener(Listener: IIdSipSubscribeListener);
 begin
-  Self.ActionListeners.RemoveListener(Listener);
+  Self.SubscribeListeners.RemoveListener(Listener);
 end;
 
 procedure TIdSipOutboundSubscribe.Send;
@@ -1624,6 +1626,7 @@ begin
   inherited Initialise(UA, Request, UsingSecureTransport);
 
   Self.fTarget := TIdSipAddressHeader.Create;
+  Self.SubscribeListeners := TIdNotificationList.Create;
 end;
 
 procedure TIdSipOutboundSubscribe.NotifyOfFailure(Response: TIdSipResponse);
@@ -1635,7 +1638,7 @@ begin
     Notification.Response  := Response;
     Notification.Subscribe := Self;
 
-    Self.ActionListeners.Notify(Notification);
+    Self.SubscribeListeners.Notify(Notification);
   finally
     Notification.Free;
   end;
@@ -1660,7 +1663,7 @@ begin
     Notification.Response  := Response;
     Notification.Subscribe := Self;
 
-    Self.ActionListeners.Notify(Notification);
+    Self.SubscribeListeners.Notify(Notification);
   finally
     Notification.Free;
   end;
@@ -2415,6 +2418,7 @@ end;
 function TIdSipOutboundSubscription.CreateOutboundSubscribe: TIdSipOutboundSubscribe;
 begin
   Result := Self.UA.AddOutboundAction(TIdSipOutboundSubscribe) as TIdSipOutboundSubscribe;
+  Result.AddActionListener(Self);
   Result.AddListener(Self);
 end;
 
