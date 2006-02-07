@@ -75,16 +75,6 @@ type
                         Response: TIdSipResponse);
   end;
 
-  TIdSipOutboundSubscribe = class;
-
-  IIdSipSubscribeListener = interface(IIdSipActionListener)
-    ['{15BEA69F-16D0-46C8-BB60-75F1CD3EC4CC}']
-    procedure OnFailure(SubscribeAgent: TIdSipOutboundSubscribe;
-                        Response: TIdSipResponse);
-    procedure OnSuccess(SubscribeAgent: TIdSipOutboundSubscribe;
-                        Response: TIdSipResponse);
-  end;
-
   TIdSipOutboundSubscription = class;
 
   // I define the protocol for things that listen for a particular
@@ -315,20 +305,7 @@ type
     property Reason: String read fReason write fReason;
   end;
 
-  // I provide basic facilities for Actions that handle SUBSCRIBE/NOTIFY
-  // messages.
-  TIdSipSubscribeBase = class(TIdSipAction)
-  protected
-    procedure ReceiveNotify(Notify: TIdSipRequest); virtual;
-    procedure ReceiveRefer(Refer: TIdSipRequest); virtual;
-    procedure ReceiveSubscribe(Subscribe: TIdSipRequest); virtual;
-  public
-    class function Method: String; override;
-
-    procedure ReceiveRequest(Request: TIdSipRequest); override;
-  end;
-
-  TIdSipSubscribe = class(TIdSipSubscribeBase)
+  TIdSipSubscribe = class(TIdSipOwnedAction)
   private
     fDuration:     Cardinal; // in seconds
     fEventPackage: String;
@@ -339,7 +316,14 @@ type
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
                          UsingSecureTransport: Boolean); override;
+    procedure ReceiveNotify(Notify: TIdSipRequest); virtual;
+    procedure ReceiveRefer(Refer: TIdSipRequest); virtual;
+    procedure ReceiveSubscribe(Subscribe: TIdSipRequest); virtual;
   public
+    class function Method: String; override;
+
+    procedure ReceiveRequest(Request: TIdSipRequest); override;
+
     property EventPackage: String   read fEventPackage write fEventPackage;
     property Duration:     Cardinal read fDuration write fDuration;
     property ID:           String   read fID write fID;
@@ -347,28 +331,42 @@ type
 
   TIdSipOutboundSubscribe = class(TIdSipSubscribe)
   private
-    fTarget:            TIdSipAddressHeader;
-    SubscribeListeners: TIdNotificationList;
+    fTarget: TIdSipAddressHeader;
 
-    procedure NotifyOfSuccess(Response: TIdSipResponse);
     procedure SetTarget(Value: TIdSipAddressHeader);
   protected
     function  CreateNewAttempt: TIdSipRequest; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
                          UsingSecureTransport: Boolean); override;
-    procedure NotifyOfFailure(Response: TIdSipResponse); override;
     function  ReceiveOKResponse(Response: TIdSipResponse;
                                 UsingSecureTransport: Boolean): TIdSipActionResult; override;
   public
     destructor  Destroy; override;
 
-    procedure AddListener(Listener: IIdSipSubscribeListener);
     function  Match(Msg: TIdSipMessage): Boolean; override;
-    procedure RemoveListener(Listener: IIdSipSubscribeListener);
     procedure Send; override;
 
     property Target: TIdSipAddressHeader read fTarget write SetTarget;
+  end;
+
+  TIdSipOutboundRedirectedSubscribe = class(TIdSipOutboundSubscribe)
+  private
+    fContact:         TIdSipAddressHeader;
+    fOriginalRequest: TIdSipRequest;
+
+    procedure SetContact(Value: TIdSipAddressHeader);
+    procedure SetOriginalRequest(Value: TIdSipRequest);
+  protected
+    function  CreateNewAttempt: TIdSipRequest; override;
+    procedure Initialise(UA: TIdSipAbstractCore;
+                         Request: TIdSipRequest;
+                         UsingSecureTransport: Boolean); override;
+  public
+    destructor Destroy; override;
+
+    property Contact:         TIdSipAddressHeader read fContact write SetContact;
+    property OriginalRequest: TIdSipRequest       read fOriginalRequest write SetOriginalRequest;
   end;
 
   TIdSipOutboundRefreshSubscribe = class(TIdSipOutboundSubscribe)
@@ -429,13 +427,32 @@ type
     property TargetDialog: TIdSipDialogID      read fTargetDialog write SetTargetDialog;
   end;
 
+  TIdSipOutboundRedirectedRefer = class(TIdSipOutboundRefer)
+  private
+    fContact:         TIdSipAddressHeader;
+    fOriginalRequest: TIdSipRequest;
+
+    procedure SetContact(Value: TIdSipAddressHeader);
+    procedure SetOriginalRequest(Value: TIdSipRequest);
+  protected
+    function  CreateNewAttempt: TIdSipRequest; override;
+    procedure Initialise(UA: TIdSipAbstractCore;
+                         Request: TIdSipRequest;
+                         UsingSecureTransport: Boolean); override;
+  public
+    destructor Destroy; override;
+
+    property Contact:         TIdSipAddressHeader read fContact write SetContact;
+    property OriginalRequest: TIdSipRequest       read fOriginalRequest write SetOriginalRequest;
+  end;
+
   TIdSipSubscriptionExpires = class;
 
   // I represent a subscription to another entity's state of some kind.
   // The relationship between me, TIdSip(In|Out)boundSubscribe and
   // TIdSip(In|Out)boundNotify resembles that between TIdSipSession,
   // TIdSip(In|Out)boundInvite, etc.
-  TIdSipSubscription = class(TIdSipSubscribeBase,
+  TIdSipSubscription = class(TIdSipOwningAction,
                              IIdSipActionListener)
   private
     fDuration:           Cardinal;
@@ -463,16 +480,22 @@ type
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
                          UsingSecureTransport: Boolean); override;
+    procedure ReceiveNotify(Notify: TIdSipRequest); virtual;
+    procedure ReceiveRefer(Refer: TIdSipRequest); virtual;
+    procedure ReceiveSubscribe(Subscribe: TIdSipRequest); virtual;
     procedure SetEventPackage(const Value: String); virtual;
     procedure SetExpiryTime(Value: TDateTime);
     procedure SetSubscriptionState(const Value: String); virtual;
     procedure SetTerminating(Value: Boolean);
   public
+    class function Method: String; override;
+
     destructor Destroy; override;
 
     procedure Expire; virtual;
     function  ExpiryTime: TDateTime;
     function  ExpiryTimeInSeconds: Integer;
+    procedure ReceiveRequest(Request: TIdSipRequest); override;
 
     property Duration:          Cardinal            read fDuration write fDuration;
     property EventPackage:      String              read fEventPackage write SetEventPackage;
@@ -543,20 +566,34 @@ type
   end;
 
   TIdSipOutboundSubscription = class(TIdSipSubscription,
-                                     IIdSipSubscribeListener)
+                                     IIdSipOwnedActionListener,
+                                     IIdSipActionRedirectorListener)
   private
-    InitialSubscribe: TIdSipOutboundSubscribe;
-    Unsubscriber:     TIdSipOutboundUnsubscribe;
+    Redirector:   TIdSipActionRedirector;
+    Unsubscriber: TIdSipOutboundUnsubscribe;
 
     function  CreateRefresh(NewDuration: Cardinal): TIdSipOutboundRefreshSubscribe;
     function  CreateUnsubscribe: TIdSipOutboundUnsubscribe;
     procedure NotifyOfExpiredSubscription(Notify: TIdSipRequest);
     procedure NotifyOfReceivedNotify(Notify: TIdSipRequest);
     procedure NotifyOfSuccess(Notify: TIdSipRequest);
-    procedure OnFailure(SubscribeAgent: TIdSipOutboundSubscribe;
-                        Response: TIdSipResponse);
-    procedure OnSuccess(SubscribeAgent: TIdSipOutboundSubscribe;
-                        Response: TIdSipResponse);
+    procedure OnFailure(Redirector: TIdSipActionRedirector;
+                        Response: TIdSipResponse); overload;
+    procedure OnFailure(Action: TIdSipAction;
+                        Response: TIdSipResponse;
+                        const Reason: String); overload;
+    procedure OnNewAction(Redirector: TIdSipActionRedirector;
+                          NewAction: TIdSipAction);
+    procedure OnRedirect(Action: TIdSipAction;
+                         Redirect: TIdSipResponse);
+    procedure OnRedirectFailure(Redirector: TIdSipActionRedirector;
+                                ErrorCode: Cardinal;
+                                const Reason: String);
+    procedure OnSuccess(Redirector: TIdSipActionRedirector;
+                        SuccessfulAction: TIdSipAction;
+                        Response: TIdSipResponse); overload;
+    procedure OnSuccess(Action: TIdSipAction;
+                        Msg: TIdSipMessage); overload;
 //    procedure RejectUnauthorized(Notify: TIdSipRequest);
     procedure RescheduleRefresh(NewDuration: Cardinal);
     procedure ScheduleNewSubscription(Seconds: Cardinal);
@@ -580,6 +617,9 @@ type
     destructor Destroy; override;
 
     procedure AddListener(Listener: IIdSipSubscriptionListener);
+    function  CreateInitialAction: TIdSipOwnedAction; override;
+    function  CreateRedirectedAction(OriginalRequest: TIdSipRequest;
+                                     Contact: TIdSipContactHeader): TIdSipOwnedAction; override;
     procedure Expire; override;
     function  Match(Msg: TIdSipMessage): Boolean; override;
     procedure Refresh(NewDuration: Cardinal);
@@ -634,6 +674,9 @@ type
   public
     class function Method: String; override;
 
+    function  CreateInitialAction: TIdSipOwnedAction; override;
+    function  CreateRedirectedAction(OriginalRequest: TIdSipRequest;
+                                     Contact: TIdSipContactHeader): TIdSipOwnedAction; override;
     procedure Send; override;
 
     property ReferredResource: TIdSipAddressHeader read fReferredResource write SetReferredResource;
@@ -692,25 +735,6 @@ type
   end;
 
   TIdSipNotifySucceededMethod = class(TIdSipNotifyMethod)
-  public
-    procedure Run(const Subject: IInterface); override;
-  end;
-
-  TIdSipOutboundSubscribeMethod = class(TIdNotification)
-  private
-    fResponse:  TIdSipResponse;
-    fSubscribe: TIdSipOutboundSubscribe;
-  public
-    property Response:  TIdSipResponse          read fResponse write fResponse;
-    property Subscribe: TIdSipOutboundSubscribe read fSubscribe write fSubscribe;
-  end;
-
-  TIdSipOutboundSubscribeFailedMethod = class(TIdSipOutboundSubscribeMethod)
-  public
-    procedure Run(const Subject: IInterface); override;
-  end;
-
-  TIdSipOutboundSubscribeSucceededMethod = class(TIdSipOutboundSubscribeMethod)
   public
     procedure Run(const Subject: IInterface); override;
   end;
@@ -1485,16 +1509,16 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipSubscribeBase                                                        *
+//* TIdSipSubscribe                                                            *
 //******************************************************************************
-//* TIdSipSubscribeBase Public methods *****************************************
+//* TIdSipSubscribe Public methods *********************************************
 
-class function TIdSipSubscribeBase.Method: String;
+class function TIdSipSubscribe.Method: String;
 begin
   Result := MethodSubscribe;
 end;
 
-procedure TIdSipSubscribeBase.ReceiveRequest(Request: TIdSipRequest);
+procedure TIdSipSubscribe.ReceiveRequest(Request: TIdSipRequest);
 begin
        if Request.IsNotify    then Self.ReceiveNotify(Request)
   else if Request.IsRefer     then Self.ReceiveRefer(Request)
@@ -1503,32 +1527,6 @@ begin
     inherited ReceiveRequest(Request);
 end;
 
-//* TIdSipSubscribeBase Protected methods **************************************
-
-procedure TIdSipSubscribeBase.ReceiveNotify(Notify: TIdSipRequest);
-begin
-  Assert(Notify.IsNotify,
-         'TIdSipSubscribeBase.ReceiveNotify must only receive NOTIFYs');
-  // By default do nothing
-end;
-
-procedure TIdSipSubscribeBase.ReceiveRefer(Refer: TIdSipRequest);
-begin
-  Assert(Refer.IsRefer,
-         'TIdSipSubscribeBase.ReceiveRefer must only receive REFERs');
-  // By default do nothing
-end;
-
-procedure TIdSipSubscribeBase.ReceiveSubscribe(Subscribe: TIdSipRequest);
-begin
-  Assert(Subscribe.IsSubscribe,
-         'TIdSipSubscribeBase.ReceiveSubscribe must only receive SUBSCRIBEs');
-  // By default do nothing
-end;
-
-//******************************************************************************
-//* TIdSipSubscribe                                                            *
-//******************************************************************************
 //* TIdSipSubscribe Protected methods ******************************************
 
 function TIdSipSubscribe.CreateNewAttempt: TIdSipRequest;
@@ -1560,6 +1558,27 @@ begin
          'The Transaction-User layer cannot process SUBSCRIBE methods without adding the Subscribe module to it');
 end;
 
+procedure TIdSipSubscribe.ReceiveNotify(Notify: TIdSipRequest);
+begin
+  Assert(Notify.IsNotify,
+         'TIdSipSubscribe.ReceiveNotify must only receive NOTIFYs');
+  // By default do nothing
+end;
+
+procedure TIdSipSubscribe.ReceiveRefer(Refer: TIdSipRequest);
+begin
+  Assert(Refer.IsRefer,
+         'TIdSipSubscribe.ReceiveRefer must only receive REFERs');
+  // By default do nothing
+end;
+
+procedure TIdSipSubscribe.ReceiveSubscribe(Subscribe: TIdSipRequest);
+begin
+  Assert(Subscribe.IsSubscribe,
+         'TIdSipSubscribe.ReceiveSubscribe must only receive SUBSCRIBEs');
+  // By default do nothing
+end;
+
 //******************************************************************************
 //* TIdSipOutboundSubscribe                                                    *
 //******************************************************************************
@@ -1567,15 +1586,9 @@ end;
 
 destructor TIdSipOutboundSubscribe.Destroy;
 begin
-  Self.SubscribeListeners.Free;
   Self.fTarget.Free;
 
   inherited Destroy;
-end;
-
-procedure TIdSipOutboundSubscribe.AddListener(Listener: IIdSipSubscribeListener);
-begin
-  Self.SubscribeListeners.AddListener(Listener);
 end;
 
 function TIdSipOutboundSubscribe.Match(Msg: TIdSipMessage): Boolean;
@@ -1587,11 +1600,6 @@ begin
           and (Self.InitialRequest.CallID = Msg.CallID)
           and (Self.InitialRequest.From.Tag = Msg.From.Tag);
   end;
-end;
-
-procedure TIdSipOutboundSubscribe.RemoveListener(Listener: IIdSipSubscribeListener);
-begin
-  Self.SubscribeListeners.RemoveListener(Listener);
 end;
 
 procedure TIdSipOutboundSubscribe.Send;
@@ -1626,22 +1634,6 @@ begin
   inherited Initialise(UA, Request, UsingSecureTransport);
 
   Self.fTarget := TIdSipAddressHeader.Create;
-  Self.SubscribeListeners := TIdNotificationList.Create;
-end;
-
-procedure TIdSipOutboundSubscribe.NotifyOfFailure(Response: TIdSipResponse);
-var
-  Notification: TIdSipOutboundSubscribeFailedMethod;
-begin
-  Notification := TIdSipOutboundSubscribeFailedMethod.Create;
-  try
-    Notification.Response  := Response;
-    Notification.Subscribe := Self;
-
-    Self.SubscribeListeners.Notify(Notification);
-  finally
-    Notification.Free;
-  end;
 end;
 
 function TIdSipOutboundSubscribe.ReceiveOKResponse(Response: TIdSipResponse;
@@ -1654,24 +1646,55 @@ end;
 
 //* TIdSipOutboundSubscribe Private methods ************************************
 
-procedure TIdSipOutboundSubscribe.NotifyOfSuccess(Response: TIdSipResponse);
-var
-  Notification: TIdSipOutboundSubscribeSucceededMethod;
-begin
-  Notification := TIdSipOutboundSubscribeSucceededMethod.Create;
-  try
-    Notification.Response  := Response;
-    Notification.Subscribe := Self;
-
-    Self.SubscribeListeners.Notify(Notification);
-  finally
-    Notification.Free;
-  end;
-end;
-
 procedure TIdSipOutboundSubscribe.SetTarget(Value: TIdSipAddressHeader);
 begin
   Self.Target.Assign(Value);
+end;
+
+//******************************************************************************
+//* TIdSipOutboundRedirectedSubscribe                                          *
+//******************************************************************************
+//* TIdSipOutboundRedirectedSubscribe Public methods ***************************
+
+destructor TIdSipOutboundRedirectedSubscribe.Destroy;
+begin
+  Self.fOriginalRequest.Free;
+  Self.fContact.Free;
+
+  inherited Destroy;
+end;
+
+//* TIdSipOutboundRedirectedSubscribe Protected methods ************************
+
+function TIdSipOutboundRedirectedSubscribe.CreateNewAttempt: TIdSipRequest;
+begin
+  // Use this method in the context of a redirect to a SUBSCRIBE.
+  // cf. RFC 3261, section 8.1.3.4
+
+  Result := Self.UA.CreateRedirectedRequest(Self.OriginalRequest,
+                                            Self.Contact);
+end;
+
+procedure TIdSipOutboundRedirectedSubscribe.Initialise(UA: TIdSipAbstractCore;
+                                                       Request: TIdSipRequest;
+                                                       UsingSecureTransport: Boolean);
+begin
+  inherited Initialise(UA, Request, UsingSecureTransport);
+
+  Self.fContact         := TIdSipAddressHeader.Create;
+  Self.fOriginalRequest := TIdSipRequest.Create;
+end;
+
+//* TIdSipOutboundRedirectedSubscribe Private methods **************************
+
+procedure TIdSipOutboundRedirectedSubscribe.SetContact(Value: TIdSipAddressHeader);
+begin
+  Self.fContact.Assign(Value);
+end;
+
+procedure TIdSipOutboundRedirectedSubscribe.SetOriginalRequest(Value: TIdSipRequest);
+begin
+  Self.OriginalRequest.Assign(Value);
 end;
 
 //******************************************************************************
@@ -1826,9 +1849,60 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipOutboundRedirectedRefer                                              *
+//******************************************************************************
+//* TIdSipOutboundRedirectedRefer Public methods *******************************
+
+destructor TIdSipOutboundRedirectedRefer.Destroy;
+begin
+  Self.fOriginalRequest.Free;
+  Self.fContact.Free;
+
+  inherited Destroy;
+end;
+
+//* TIdSipOutboundRedirectedRefer Protected methods ****************************
+
+function TIdSipOutboundRedirectedRefer.CreateNewAttempt: TIdSipRequest;
+begin
+  // Use this method in the context of a redirect to a Refer.
+  // cf. RFC 3261, section 8.1.3.4
+
+  Result := Self.UA.CreateRedirectedRequest(Self.OriginalRequest,
+                                            Self.Contact);
+end;
+
+procedure TIdSipOutboundRedirectedRefer.Initialise(UA: TIdSipAbstractCore;
+                                                       Request: TIdSipRequest;
+                                                       UsingSecureTransport: Boolean);
+begin
+  inherited Initialise(UA, Request, UsingSecureTransport);
+
+  Self.fContact         := TIdSipAddressHeader.Create;
+  Self.fOriginalRequest := TIdSipRequest.Create;
+end;
+
+//* TIdSipOutboundRedirectedRefer Private methods ******************************
+
+procedure TIdSipOutboundRedirectedRefer.SetContact(Value: TIdSipAddressHeader);
+begin
+  Self.fContact.Assign(Value);
+end;
+
+procedure TIdSipOutboundRedirectedRefer.SetOriginalRequest(Value: TIdSipRequest);
+begin
+  Self.OriginalRequest.Assign(Value);
+end;
+
+//******************************************************************************
 //* TIdSipSubscription                                                         *
 //******************************************************************************
 //* TIdSipSubscription Public methods ******************************************
+
+class function TIdSipSubscription.Method: String;
+begin
+  Result := MethodSubscribe;
+end;
 
 destructor TIdSipSubscription.Destroy;
 begin
@@ -1851,6 +1925,15 @@ end;
 function TIdSipSubscription.ExpiryTimeInSeconds: Integer;
 begin
   Result := Trunc((Self.ExpiryTime - Now) / OneTDateTimeSecond);
+end;
+
+procedure TIdSipSubscription.ReceiveRequest(Request: TIdSipRequest);
+begin
+       if Request.IsNotify    then Self.ReceiveNotify(Request)
+  else if Request.IsRefer     then Self.ReceiveRefer(Request)
+  else if Request.IsSubscribe then Self.ReceiveSubscribe(Request)
+  else
+    inherited ReceiveRequest(Request);
 end;
 
 //* TIdSipSubscription Protected methods ***************************************
@@ -1884,6 +1967,27 @@ begin
   Self.Module := Self.UA.ModuleFor(Self.Method) as TIdSipSubscribeModule;
   Assert(Assigned(Self.Module),
          'The Transaction-User layer cannot process SUBSCRIBE methods without adding the Subscribe module to it');
+end;
+
+procedure TIdSipSubscription.ReceiveNotify(Notify: TIdSipRequest);
+begin
+  Assert(Notify.IsNotify,
+         'TIdSipSubscription.ReceiveNotify must only receive NOTIFYs');
+  // By default do nothing
+end;
+
+procedure TIdSipSubscription.ReceiveRefer(Refer: TIdSipRequest);
+begin
+  Assert(Refer.IsRefer,
+         'TIdSipSubscription.ReceiveRefer must only receive REFERs');
+  // By default do nothing
+end;
+
+procedure TIdSipSubscription.ReceiveSubscribe(Subscribe: TIdSipRequest);
+begin
+  Assert(Subscribe.IsSubscribe,
+         'TIdSipSubscription.ReceiveSubscribe must only receive SUBSCRIBEs');
+  // By default do nothing
 end;
 
 procedure TIdSipSubscription.SetEventPackage(const Value: String);
@@ -2319,6 +2423,7 @@ end;
 destructor TIdSipOutboundSubscription.Destroy;
 begin
   Self.SubscriptionListeners.Free;
+  Self.Redirector.Free;
 
   inherited Destroy;
 end;
@@ -2326,6 +2431,28 @@ end;
 procedure TIdSipOutboundSubscription.AddListener(Listener: IIdSipSubscriptionListener);
 begin
   Self.SubscriptionListeners.AddListener(Listener);
+end;
+
+function TIdSipOutboundSubscription.CreateInitialAction: TIdSipOwnedAction;
+var
+  Sub: TIdSipOutboundSubscribe;
+begin
+  Sub := Self.UA.AddOutboundAction(TIdSipOutboundSubscribe) as TIdSipOutboundSubscribe;
+  Self.ConfigureRequest(Sub);
+
+  Result := Sub;
+end;
+
+function TIdSipOutboundSubscription.CreateRedirectedAction(OriginalRequest: TIdSipRequest;
+                                                           Contact: TIdSipContactHeader): TIdSipOwnedAction;
+var
+  Sub: TIdSipOutboundRedirectedSubscribe;
+begin
+  Sub := Self.UA.AddOutboundAction(TIdSipOutboundRedirectedSubscribe) as TIdSipOutboundRedirectedSubscribe;
+  Sub.Contact         := Contact;
+  Sub.OriginalRequest := OriginalRequest;
+
+  Result := Sub;
 end;
 
 procedure TIdSipOutboundSubscription.Expire;
@@ -2350,11 +2477,14 @@ begin
             and Req.HasHeader(EventHeaderFull)
             and (Self.InitialRequest.Event.Equals(Req.Event));
     end
-    else if Req.IsSubscribe then
+    else if Req.IsSubscribe then begin
+      // This lets action closures like TIdSipOutboundSubscriptionRefresh find
+      // this action.
       Result := inherited Match(Msg);
-  end
-    else
-      Result := inherited Match(Msg);
+    end;
+  end;
+  // Don't match responses to the SUBSCRIBEs: the TIdSipOutboundSubscribes will
+  // handle them.
 end;
 
 procedure TIdSipOutboundSubscription.Refresh(NewDuration: Cardinal);
@@ -2376,10 +2506,9 @@ procedure TIdSipOutboundSubscription.Send;
 begin
   inherited Send;
 
-  Self.ConfigureRequest(Self.InitialSubscribe);
-  Self.InitialSubscribe.Send;
-  Self.InitialRequest.Assign(Self.InitialSubscribe.InitialRequest);
-  Self.ID := Self.InitialSubscribe.ID;
+  Self.Redirector.Send;
+  Self.InitialRequest.Assign(Self.Redirector.InitialAction.InitialRequest);
+  Self.ID := (Self.Redirector.InitialAction as TIdSipOutboundSubscribe).ID;
 end;
 
 procedure TIdSipOutboundSubscription.Terminate;
@@ -2419,7 +2548,7 @@ function TIdSipOutboundSubscription.CreateOutboundSubscribe: TIdSipOutboundSubsc
 begin
   Result := Self.UA.AddOutboundAction(TIdSipOutboundSubscribe) as TIdSipOutboundSubscribe;
   Result.AddActionListener(Self);
-  Result.AddListener(Self);
+  Result.AddOwnedActionListener(Self);
 end;
 
 procedure TIdSipOutboundSubscription.Initialise(UA: TIdSipAbstractCore;
@@ -2428,9 +2557,9 @@ procedure TIdSipOutboundSubscription.Initialise(UA: TIdSipAbstractCore;
 begin
   inherited Initialise(UA, Request, UsingSecureTransport);
 
+  Self.Redirector            := TIdSipActionRedirector.Create(Self);
   Self.SubscriptionListeners := TIdNotificationList.Create;
-
-  Self.InitialSubscribe := Self.CreateOutboundSubscribe;
+  Self.Redirector.AddListener(Self);
 end;
 
 procedure TIdSipOutboundSubscription.NotifyOfFailure(Response: TIdSipResponse);
@@ -2533,7 +2662,7 @@ begin
   Result.Dialog   := Self.Dialog;
   Result.Duration := NewDuration;
   Self.ConfigureRequest(Result);
-  Result.AddListener(Self);
+  Result.AddOwnedActionListener(Self);
 end;
 
 function TIdSipOutboundSubscription.CreateUnsubscribe: TIdSipOutboundUnsubscribe;
@@ -2546,7 +2675,7 @@ begin
   Result.CallID  := Self.InitialRequest.CallID;
   Result.FromTag := Self.InitialRequest.From.Tag;
   Self.ConfigureRequest(Result);
-  Result.AddListener(Self);  
+  Result.AddOwnedActionListener(Self);
 end;
 
 procedure TIdSipOutboundSubscription.NotifyOfExpiredSubscription(Notify: TIdSipRequest);
@@ -2594,14 +2723,17 @@ begin
   end;
 end;
 
-procedure TIdSipOutboundSubscription.OnFailure(SubscribeAgent: TIdSipOutboundSubscribe;
+
+procedure TIdSipOutboundSubscription.OnFailure(Redirector: TIdSipActionRedirector;
                                                Response: TIdSipResponse);
 begin
-  if (Self.InitialSubscribe = SubscribeAgent) then begin
-    Self.NotifyOfFailure(Response);
-    Self.MarkAsTerminated;
-  end
-  else if (Self.Unsubscriber = SubscribeAgent) then begin
+end;
+
+procedure TIdSipOutboundSubscription.OnFailure(Action: TIdSipAction;
+                                               Response: TIdSipResponse;
+                                               const Reason: String);
+begin
+  if (Self.Unsubscriber = Action) then begin
     Assert(Self.Terminating,
            'Not flagged as Terminating but the Unsubscriber just failed.');
     Self.Unsubscriber := nil;
@@ -2615,19 +2747,61 @@ begin
   end
 end;
 
-procedure TIdSipOutboundSubscription.OnSuccess(SubscribeAgent: TIdSipOutboundSubscribe;
-                                               Response: TIdSipResponse);
+procedure TIdSipOutboundSubscription.OnNewAction(Redirector: TIdSipActionRedirector;
+                                                 NewAction: TIdSipAction);
 begin
-  if (Self.Unsubscriber = SubscribeAgent) then
-    Exit;
+  NewAction.AddActionListener(Self);
+end;
 
-  if (Self.InitialSubscribe = SubscribeAgent) then begin
-    Self.InitialRequest.Assign(SubscribeAgent.InitialRequest);
-    Self.EstablishDialog(Response);
+procedure TIdSipOutboundSubscription.OnRedirect(Action: TIdSipAction;
+                                                Redirect: TIdSipResponse);
+begin
+end;
+
+procedure TIdSipOutboundSubscription.OnRedirectFailure(Redirector: TIdSipActionRedirector;
+                                                       ErrorCode: Cardinal;
+                                                       const Reason: String);
+var
+  FakeResponse: TIdSipResponse;
+begin
+  FakeResponse := TIdSipResponse.Create;
+  try
+    FakeResponse.StatusCode := ErrorCode;
+    FakeResponse.StatusText := Reason;
+
+    Self.NotifyOfFailure(FakeResponse);
+  finally
+    FakeResponse.Free;
   end;
+
+  Self.MarkAsTerminated;
+end;
+
+procedure TIdSipOutboundSubscription.OnSuccess(Redirector: TIdSipActionRedirector;
+                                               SuccessfulAction: TIdSipAction;
+                                               Response: TIdSipResponse);
+
+begin
+  Self.InitialRequest.Assign(SuccessfulAction.InitialRequest);
+  Self.EstablishDialog(Response);
 
   if Response.HasHeader(ExpiresHeader) then
     Self.RescheduleRefresh(Response.Expires.NumericValue)
+  else begin
+    // We shouldn't actually ever reach this: notifiers MUST have an Expires
+    // header.
+    Self.RescheduleRefresh(Self.Duration);
+  end;
+end;
+
+procedure TIdSipOutboundSubscription.OnSuccess(Action: TIdSipAction;
+                                               Msg: TIdSipMessage);
+begin
+  if (Self.Unsubscriber = Action) then
+    Exit;
+
+  if Msg.HasHeader(ExpiresHeader) then
+    Self.RescheduleRefresh(Msg.Expires.NumericValue)
   else begin
     // We shouldn't actually ever reach this: notifiers MUST have an Expires
     // header.
@@ -2845,6 +3019,28 @@ begin
   Result := MethodRefer;
 end;
 
+function TIdSipOutboundReferral.CreateInitialAction: TIdSipOwnedAction;
+var
+  Refer: TIdSipOutboundRefer;
+begin
+  Refer := Self.UA.AddOutboundAction(TIdSipOutboundRefer) as TIdSipOutboundRefer;
+  Self.ConfigureRequest(Refer);
+
+  Result := Refer;
+end;
+
+function TIdSipOutboundReferral.CreateRedirectedAction(OriginalRequest: TIdSipRequest;
+                                                       Contact: TIdSipContactHeader): TIdSipOwnedAction;
+var
+  Refer: TIdSipOutboundRedirectedRefer;
+begin
+  Refer := Self.UA.AddOutboundAction(TIdSipOutboundRedirectedRefer) as TIdSipOutboundRedirectedRefer;
+  Refer.Contact         := Contact;
+  Refer.OriginalRequest := OriginalRequest;
+
+  Result := Refer;
+end;
+
 procedure TIdSipOutboundReferral.Send;
 begin
   Self.EventPackage := PackageRefer;
@@ -2889,7 +3085,7 @@ function TIdSipOutboundReferral.CreateOutboundSubscribe: TIdSipOutboundSubscribe
 begin
   Result := Self.UA.AddOutboundAction(TIdSipOutboundRefer) as TIdSipOutboundRefer;
   Result.AddActionListener(Self);
-  Result.AddListener(Self);
+  Result.AddOwnedActionListener(Self);
 end;
 
 procedure TIdSipOutboundReferral.Initialise(UA: TIdSipAbstractCore;
@@ -3033,28 +3229,6 @@ procedure TIdSipNotifySucceededMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipNotifyListener).OnSuccess(Self.Notify,
                                               Self.Response);
-end;
-
-//******************************************************************************
-//* TIdSipOutboundSubscribeFailedMethod                                        *
-//******************************************************************************
-//* TIdSipOutboundSubscribeFailedMethod Public methods *************************
-
-procedure TIdSipOutboundSubscribeFailedMethod.Run(const Subject: IInterface);
-begin
-  (Subject as IIdSipSubscribeListener).OnFailure(Self.Subscribe,
-                                                 Self.Response);
-end;
-
-//******************************************************************************
-//* TIdSipOutboundSubscribeSucceededMethod                                     *
-//******************************************************************************
-//* TIdSipOutboundSubscribeSucceededMethod Public methods **********************
-
-procedure TIdSipOutboundSubscribeSucceededMethod.Run(const Subject: IInterface);
-begin
-  (Subject as IIdSipSubscribeListener).OnSuccess(Self.Subscribe,
-                                                 Self.Response);
 end;
 
 //******************************************************************************

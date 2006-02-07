@@ -382,17 +382,20 @@ type
   end;
 
   TestTIdSipOutboundSubscribe = class(TestTIdSipSubscribe,
-                                      IIdSipSubscribeListener)
+                                      IIdSipOwnedActionListener)
   private
     EventPackage: String;
     Failed:       Boolean;
     ID:           String;
     Succeeded:    Boolean;
 
-    procedure OnFailure(SubscribeAgent: TIdSipOutboundSubscribe;
-                        Response: TIdSipResponse);
-    procedure OnSuccess(SubscribeAgent: TIdSipOutboundSubscribe;
-                        Response: TIdSipResponse);
+    procedure OnFailure(Action: TIdSipAction;
+                        Response: TIdSipResponse;
+                        const Reason: String);
+    procedure OnRedirect(Action: TIdSipAction;
+                         Redirect: TIdSipResponse);
+    procedure OnSuccess(Action: TIdSipAction;
+                        Msg: TIdSipMessage);
   protected
     procedure ConfigureAction(Action: TIdSipAction); virtual;
     function  CreateAction: TIdSipAction; override;
@@ -778,36 +781,6 @@ type
     procedure TestRun;
   end;
 
-  TTestSubscribeMethod = class(TSubscriptionActionMethodTestCase)
-  protected
-    Listener:  TIdSipTestSubscribeListener;
-    Response:  TIdSipResponse;
-    Subscribe: TIdSipOutboundSubscribe;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  end;
-
-  TestTIdSipOutboundSubscribeFailedMethod = class(TTestSubscribeMethod)
-  private
-    Method: TIdSipOutboundSubscribeFailedMethod;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestRun;
-  end;
-
-  TestTIdSipOutboundSubscribeSucceededMethod = class(TTestSubscribeMethod)
-  private
-    Method: TIdSipOutboundSubscribeSucceededMethod;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestRun;
-  end;
-
   TestTIdSipOutboundSubscriptionMethod = class(TSubscriptionActionMethodTestCase)
   protected
     Listener:     TIdSipTestSubscriptionListener;
@@ -925,8 +898,6 @@ begin
   Result.AddTest(TestTIdSipSubscriptionRetryWait.Suite);
   Result.AddTest(TestTIdSipNotifyFailedMethod.Suite);
   Result.AddTest(TestTIdSipNotifySucceededMethod.Suite);
-  Result.AddTest(TestTIdSipOutboundSubscribeFailedMethod.Suite);
-  Result.AddTest(TestTIdSipOutboundSubscribeSucceededMethod.Suite);
   Result.AddTest(TestTIdSipEstablishedSubscriptionMethod.Suite);
   Result.AddTest(TestTIdSipExpiredSubscriptionMethod.Suite);
   Result.AddTest(TestTIdSipFailedSubscriptionMethod.Suite);
@@ -1972,7 +1943,8 @@ begin
   Sub.Target       := Self.Destination;
   Sub.EventPackage := Self.EventPackage;
   Sub.ID           := Self.ID;
-  Sub.AddListener(Self);
+  Sub.AddActionListener(Self);
+  Sub.AddOwnedActionListener(Self);
 end;
 
 function TestTIdSipOutboundSubscribe.CreateAction: TIdSipAction;
@@ -1988,14 +1960,20 @@ end;
 
 //* TestTIdSipOutboundSubscribe Private methods ********************************
 
-procedure TestTIdSipOutboundSubscribe.OnFailure(SubscribeAgent: TIdSipOutboundSubscribe;
-                                                Response: TIdSipResponse);
+procedure TestTIdSipOutboundSubscribe.OnFailure(Action: TIdSipAction;
+                                                Response: TIdSipResponse;
+                                                const Reason: String);
 begin
   Self.Failed := true;
 end;
 
-procedure TestTIdSipOutboundSubscribe.OnSuccess(SubscribeAgent: TIdSipOutboundSubscribe;
-                                                Response: TIdSipResponse);
+procedure TestTIdSipOutboundSubscribe.OnRedirect(Action: TIdSipAction;
+                                                 Redirect: TIdSipResponse);
+begin
+end;
+
+procedure TestTIdSipOutboundSubscribe.OnSuccess(Action: TIdSipAction;
+                                                Msg: TIdSipMessage);
 begin
   Self.Succeeded := true;
 end;
@@ -4904,94 +4882,6 @@ begin
         'NotifyAgent param');
   Check(Self.Response = Self.Listener.ResponseParam,
         'Response param');
-end;
-
-//******************************************************************************
-//* TTestSubscribeMethod                                                       *
-//******************************************************************************
-//* TTestSubscribeMethod Public methods ****************************************
-
-procedure TTestSubscribeMethod.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Listener  := TIdSipTestSubscribeListener.Create;
-  Self.Response  := TIdSipResponse.Create;
-  Self.Subscribe := TIdSipOutboundSubscribe.Create(Self.UA);
-end;
-
-procedure TTestSubscribeMethod.TearDown;
-begin
-  Self.Subscribe.Free;
-  Self.Response.Free;
-  Self.Listener.Free;
-
-  inherited TearDown;
-end;
-
-//******************************************************************************
-//* TestTIdSipOutboundSubscribeFailedMethod                                    *
-//******************************************************************************
-//* TestTIdSipOutboundSubscribeFailedMethod Public methods *********************
-
-procedure TestTIdSipOutboundSubscribeFailedMethod.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Method := TIdSipOutboundSubscribeFailedMethod.Create;
-  Self.Method.Response  := Self.Response;
-  Self.Method.Subscribe := Self.Subscribe;
-end;
-
-procedure TestTIdSipOutboundSubscribeFailedMethod.TearDown;
-begin
-  Self.Method.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipOutboundSubscribeFailedMethod Published methods ******************
-
-procedure TestTIdSipOutboundSubscribeFailedMethod.TestRun;
-begin
-  Self.Method.Run(Self.Listener);
-
-  Check(Self.Listener.Failed, 'Listener not notified of failure');
-  Check(Self.Response = Self.Listener.ResponseParam,
-        'Response param');
-  Check(Self.Subscribe = Self.Listener.SubscribeAgentParam,
-        'SubscribeAgent param');
-end;
-
-//******************************************************************************
-//* TestTIdSipOutboundSubscribeSucceededMethod                                 *
-//******************************************************************************
-//* TestTIdSipOutboundSubscribeSucceededMethod Public methods ******************
-
-procedure TestTIdSipOutboundSubscribeSucceededMethod.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Method := TIdSipOutboundSubscribeSucceededMethod.Create;
-  Self.Method.Subscribe := Self.Subscribe;
-end;
-
-procedure TestTIdSipOutboundSubscribeSucceededMethod.TearDown;
-begin
-  Self.Method.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipOutboundSubscribeSucceededMethod Published methods ***************
-
-procedure TestTIdSipOutboundSubscribeSucceededMethod.TestRun;
-begin
-  Self.Method.Run(Self.Listener);
-
-  Check(Self.Listener.Succeeded, 'Listener not notified of Succeedure');
-  Check(Self.Subscribe = Self.Listener.SubscribeAgentParam,
-        'SubscribeAgent param');
 end;
 
 //******************************************************************************

@@ -493,25 +493,6 @@ type
     property EndedNotificationCount: Integer read fEndedNotificationCount;
   end;
 
-  TIdSipTestSubscribeListener = class(TIdSipMockListener,
-                                      IIdSipSubscribeListener)
-  private
-    fFailed:              Boolean;
-    fSubscribeAgentParam: TIdSipOutboundSubscribe;
-    fSucceeded:           Boolean;
-
-    procedure OnFailure(SubscribeAgent: TIdSipOutboundSubscribe;
-                        Response: TIdSipResponse);
-    procedure OnSuccess(SubscribeAgent: TIdSipOutboundSubscribe;
-                        Response: TIdSipResponse);
-  public
-    constructor Create; override;
-
-    property Failed:              Boolean                 read fFailed;
-    property SubscribeAgentParam: TIdSipOutboundSubscribe read fSubscribeAgentParam;
-    property Succeeded:           Boolean                 read fSucceeded;
-  end;
-
   TIdSipTestSubscriptionListener = class(TIdSipMockListener,
                                          IIdSipSubscriptionListener)
   private
@@ -1993,43 +1974,6 @@ begin
   inherited OnEndedSession(Session, ErrorCode, Reason);
 
   Inc(Self.fEndedNotificationCount);
-end;
-
-//******************************************************************************
-//* TIdSipTestSubscribeListener                                                *
-//******************************************************************************
-//* TIdSipTestSubscribeListener Public methods *********************************
-
-constructor TIdSipTestSubscribeListener.Create;
-begin
-  inherited Create;
-
-  Self.fFailed    := false;
-  Self.fSucceeded := false;
-end;
-
-//* TIdSipTestSubscribeListener Private methods ********************************
-
-procedure TIdSipTestSubscribeListener.OnFailure(SubscribeAgent: TIdSipOutboundSubscribe;
-                                                Response: TIdSipResponse);
-begin
-  Self.fFailed              := true;
-  Self.fSubscribeAgentParam := SubscribeAgent;
-  Self.fResponseParam       := Response;
-
-  if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create(Self.ClassName + '.OnFailure');
-end;
-
-procedure TIdSipTestSubscribeListener.OnSuccess(SubscribeAgent: TIdSipOutboundSubscribe;
-                                                Response: TIdSipResponse);
-begin
-  Self.fResponseParam       := Response;
-  Self.fSubscribeAgentParam := SubscribeAgent;
-  Self.fSucceeded           := true;
-
-  if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create(Self.ClassName + '.OnSuccess');
 end;
 
 //******************************************************************************
