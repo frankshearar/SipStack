@@ -2888,6 +2888,7 @@ end;
 function TIdSipOutboundReferral.CreateOutboundSubscribe: TIdSipOutboundSubscribe;
 begin
   Result := Self.UA.AddOutboundAction(TIdSipOutboundRefer) as TIdSipOutboundRefer;
+  Result.AddActionListener(Self);
   Result.AddListener(Self);
 end;
 
