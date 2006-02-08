@@ -1624,14 +1624,10 @@ begin
   // <---      200 (bar)      ---
   // <---      200 (foo)      ---
 
-  //
-  // In summary, we send an INVITE. The redirect server (or whatever) redirects
-  // us to foo, bar and baz. The INVITE to bar succeeds first, so we try
-  // cancel/terminate the other INVITEs. Since we've by now received a 200 OK
-  // for foo, we send foo a BYE. With no response (other than a provisional
-  // one) from baz, we send a CANCEL. Of course, if baz hadn't already sent us
-  // a provisional response, we would only send a CANCEL once we received a
-  // response from baz.
+  // In summary, we send an REGISTER. The redirect server (or whatever)
+  // redirects us to foo, bar and baz. The REGISTER to bar succeeds first, so
+  // we make sure that the first 200 OK is the message reported as succeeding:
+  // we don't care about any further 2xx responses.
 
   SetLength(Contacts, 3);
   Contacts[0] := 'sip:foo@bar.org';
