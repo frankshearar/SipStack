@@ -611,6 +611,8 @@ type
   published
     procedure TestAbandonAuthentication; override;
     procedure TestAddListener;
+    procedure TestCircularRedirect;
+    procedure TestDoubleRedirect;
     procedure TestMatchForkedNotify;
     procedure TestMatchNotify;
     procedure TestReceive2xxWithNoExpires;
@@ -635,6 +637,7 @@ type
     procedure TestReceiveTerminatingNotifyTimeoutWithRetryAfter; virtual;
     procedure TestReceiveTerminatingNotifyWithUnknownReason; virtual;
     procedure TestReceiveTerminatingNotifyWithUnknownReasonAndRetryAfter; virtual;
+    procedure TestRedirectWithMultipleContacts;
     procedure TestRefresh;
     procedure TestRefreshReceives481;
     procedure TestRefreshReceives4xx;
@@ -879,6 +882,7 @@ type
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipSubscribeModule unit tests');
+{
   Result.AddTest(TestTIdSipSubscribeModule.Suite);
   Result.AddTest(TestTIdSipUserAgentWithSubscribeModule.Suite);
   Result.AddTest(TestCallFlows.Suite);
@@ -891,7 +895,9 @@ begin
   Result.AddTest(TestTIdSipOutboundUnsubscribe.Suite);
   Result.AddTest(TestTIdSipOutboundRefer.Suite);
   Result.AddTest(TestTIdSipInboundSubscription.Suite);
+}
   Result.AddTest(TestTIdSipOutboundSubscription.Suite);
+{
   Result.AddTest(TestTIdSipInboundReferral.Suite);
   Result.AddTest(TestTIdSipOutboundReferral.Suite);
   Result.AddTest(TestTIdSipSubscriptionExpires.Suite);
@@ -904,6 +910,7 @@ begin
   Result.AddTest(TestTIdSipRenewedSubscriptionMethod.Suite);
   Result.AddTest(TestTIdSipOutboundSubscriptionNotifyMethod.Suite);
   Result.AddTest(TestTIdSipSubscriptionRequestMethod.Suite);
+}
 end;
 
 //******************************************************************************
@@ -3190,6 +3197,10 @@ begin
   // with a zero wait time immediately, which isn't what we want.
   Self.ArbExpiresValue := 22;
 
+  // DNS entries for redirected domains, etc.
+  Self.Locator.AddA('bar.org',   '127.0.0.1');
+  Self.Locator.AddA('quaax.org', '127.0.0.1');
+
   Self.Subscription := Self.EstablishSubscription;
 
   Self.ArbRetryAfterValue      := 42;
@@ -3499,6 +3510,59 @@ begin
   end;
 end;
 
+procedure TestTIdSipOutboundSubscriptionBase.TestCircularRedirect;
+var
+  Action:    TIdSipAction;
+  ClassName: String;
+begin
+  //  ---   SUBSCRIBE (original)   --->
+  // <---   302 Moved Temporarily  ---
+  //  --- SUBSCRIBE (redirect #1)  --->
+  // <---   302 Moved Temporarily  ---
+  //  --- SUBSCRIBE (redirect #2)  --->
+  // <---   302 Moved Temporarily  ---
+  //  --- SUBSCRIBE (redirect #1)  ---> again!
+  // <---   302 Moved Temporarily  ---
+
+  Action := Self.CreateAction;
+  ClassName := Action.ClassName;
+  Self.ReceiveMovedTemporarily('sip:foo@bar.org');
+  Self.ReceiveMovedTemporarily('sip:bar@bar.org');
+
+  Self.MarkSentRequestCount;
+  Self.ReceiveMovedTemporarily('sip:foo@bar.org');
+  CheckNoRequestSent('The ' + ClassName + ' accepted the run-around');
+end;
+
+procedure TestTIdSipOutboundSubscriptionBase.TestDoubleRedirect;
+var
+  Action: TIdSipAction;
+  Method: String;
+begin
+  //  ---   SUBSCRIBE (original)   --->
+  // <---   302 Moved Temporarily  ---
+  //  --- SUBSCRIBE (redirect #1)  --->
+  // <---   302 Moved Temporarily  ---
+  //  --- SUBSCRIBE (redirect #2)  --->
+  // <---   302 Moved Temporarily  ---
+
+  Action := Self.CreateAction;
+  Method := Action.Method;
+  Self.MarkSentRequestCount;
+  Self.ReceiveMovedTemporarily('sip:foo@bar.org');
+  CheckRequestSent('No redirected ' + Method + ' #1 sent: ' + Self.FailReason);
+  CheckEquals('sip:foo@bar.org',
+              Self.LastSentRequest.RequestUri.Uri,
+              'Request-URI of redirect #1');
+
+  Self.MarkSentRequestCount;
+  Self.ReceiveMovedTemporarily('sip:baz@quaax.org');
+  CheckRequestSent('No redirected ' + Method + ' #2 sent: ' + Self.FailReason);
+  CheckEquals('sip:baz@quaax.org',
+              Self.LastSentRequest.RequestUri.Uri,
+              'Request-URI of redirect #2');
+end;
+
 procedure TestTIdSipOutboundSubscriptionBase.TestMatchForkedNotify;
 var
   Notify: TIdSipRequest;
@@ -3805,6 +3869,25 @@ begin
 
   Self.CheckTerminatedSubscriptionWithNoResubscribe(Self.UnknownReason);
   Self.CheckRetryScheduled(Self.UnknownReason);
+end;
+
+procedure TestTIdSipOutboundSubscriptionBase.TestRedirectWithMultipleContacts;
+var
+  Contacts: array of String;
+begin
+  SetLength(Contacts, 2);
+  Contacts[0] := 'sip:foo@bar.org';
+  Contacts[1] := 'sip:bar@bar.org';
+
+  Self.CreateAction;
+  Self.MarkSentRequestCount;
+
+  Self.ReceiveMovedTemporarily(Contacts);
+
+  // ARG! Why do they make Length return an INTEGER? And WHY Abs() too?
+  CheckEquals(Self.RequestCount + Cardinal(Length(Contacts)),
+              Self.Dispatcher.Transport.SentRequestCount,
+              'Session didn''t attempt to contact all Contacts: ' + Self.FailReason);
 end;
 
 procedure TestTIdSipOutboundSubscriptionBase.TestRefresh;

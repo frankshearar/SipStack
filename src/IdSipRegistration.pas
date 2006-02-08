@@ -323,8 +323,6 @@ type
     function  ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionResult; override;
     function  ReceiveOKResponse(Response: TIdSipResponse;
                                 UsingSecureTransport: Boolean): TIdSipActionResult; override;
-    function  ReceiveRedirectionResponse(Response: TIdSipResponse;
-                                         UsingSecureTransport: Boolean): TIdSipActionResult; override;
     procedure RegisterWith(Registrar: TIdSipUri;
                            Bindings: TIdSipContacts); overload;
     procedure RegisterWith(Registrar: TIdSipUri;
@@ -1446,14 +1444,6 @@ begin
 
   Self.NotifyOfSuccess(Response);
   Self.Terminate;
-end;
-
-function TIdSipOutboundRegisterBase.ReceiveRedirectionResponse(Response: TIdSipResponse;
-                                                               UsingSecureTransport: Boolean): TIdSipActionResult;
-begin
-  Result := inherited ReceiveRedirectionResponse(Response, UsingSecureTransport);
-
-  Self.NotifyOfRedirect(Response);
 end;
 
 procedure TIdSipOutboundRegisterBase.RegisterWith(Registrar: TIdSipUri;

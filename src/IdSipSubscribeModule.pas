@@ -339,8 +339,6 @@ type
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
                          UsingSecureTransport: Boolean); override;
-    function  ReceiveOKResponse(Response: TIdSipResponse;
-                                UsingSecureTransport: Boolean): TIdSipActionResult; override;
   public
     destructor  Destroy; override;
 
@@ -1634,14 +1632,6 @@ begin
   inherited Initialise(UA, Request, UsingSecureTransport);
 
   Self.fTarget := TIdSipAddressHeader.Create;
-end;
-
-function TIdSipOutboundSubscribe.ReceiveOKResponse(Response: TIdSipResponse;
-                                                   UsingSecureTransport: Boolean): TIdSipActionResult;
-begin
-  Result := inherited ReceiveOKResponse(Response, UsingSecureTransport);
-
-  Self.NotifyOfSuccess(Response);
 end;
 
 //* TIdSipOutboundSubscribe Private methods ************************************
