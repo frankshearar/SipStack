@@ -882,7 +882,6 @@ type
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipSubscribeModule unit tests');
-{
   Result.AddTest(TestTIdSipSubscribeModule.Suite);
   Result.AddTest(TestTIdSipUserAgentWithSubscribeModule.Suite);
   Result.AddTest(TestCallFlows.Suite);
@@ -895,9 +894,7 @@ begin
   Result.AddTest(TestTIdSipOutboundUnsubscribe.Suite);
   Result.AddTest(TestTIdSipOutboundRefer.Suite);
   Result.AddTest(TestTIdSipInboundSubscription.Suite);
-}
   Result.AddTest(TestTIdSipOutboundSubscription.Suite);
-{
   Result.AddTest(TestTIdSipInboundReferral.Suite);
   Result.AddTest(TestTIdSipOutboundReferral.Suite);
   Result.AddTest(TestTIdSipSubscriptionExpires.Suite);
@@ -910,7 +907,6 @@ begin
   Result.AddTest(TestTIdSipRenewedSubscriptionMethod.Suite);
   Result.AddTest(TestTIdSipOutboundSubscriptionNotifyMethod.Suite);
   Result.AddTest(TestTIdSipSubscriptionRequestMethod.Suite);
-}
 end;
 
 //******************************************************************************
