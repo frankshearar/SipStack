@@ -351,6 +351,7 @@ type
     procedure TearDown; override;
   published
     procedure TestIsOwned; override;
+    procedure TestMethod;
     procedure TestSend; virtual;
   end;
 
@@ -405,6 +406,7 @@ type
     procedure TestIsOwned; override;
     procedure TestMatchNotify;
     procedure TestMatchResponse;
+    procedure TestMethod; virtual;
     procedure TestReceive2xx;
     procedure TestReceiveFailure;
     procedure TestSend; virtual;
@@ -453,6 +455,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestMethod; override;
     procedure TestSend; override;
     procedure TestSendAlwaysUsesReferEvent;
     procedure TestSendDoesntSendTwoRequests;
@@ -615,6 +618,7 @@ type
     procedure TestDoubleRedirect;
     procedure TestMatchForkedNotify;
     procedure TestMatchNotify;
+    procedure TestMethod; virtual;
     procedure TestReceive2xxWithNoExpires;
     procedure TestReceiveActiveNotify;
     procedure TestReceiveFailureResponse;
@@ -665,6 +669,7 @@ type
                                     Subscription: TIdSipOutboundSubscription); override;
   published
     procedure TestLongRunningSubscription;
+    procedure TestMethod; override;
     procedure TestReceive2xx;
     procedure TestReceiveActiveNotifyWithExpires;
 //    procedure TestReceiveNotifyNoAuthorization;
@@ -705,7 +710,7 @@ type
     function CreateSubscription: TIdSipOutboundSubscription; override;
   published
     procedure TestEventPackage;
-    procedure TestTargetDialog;
+    procedure TestMethod; override;
     procedure TestReceiveTerminatingNotifyDeactivated; override;
     procedure TestReceiveTerminatingNotifyGiveUp; override;
     procedure TestReceiveTerminatingNotifyGiveUpWithRetryAfter; override;
@@ -718,6 +723,7 @@ type
     procedure TestReceiveTerminatingNotifyWithUnknownReason; override;
     procedure TestReceiveTerminatingNotifyWithUnknownReasonAndRetryAfter; override;
     procedure TestSendWithTargetDialog;
+    procedure TestTargetDialog;    
   end;
 
   TestTIdSipSubscriptionExpires = class(TSubscribeTestCase)
@@ -1734,6 +1740,13 @@ begin
         Self.Notify.ClassName + ' isn''t Owned');
 end;
 
+procedure TestTIdSipOutboundNotifyBase.TestMethod;
+begin
+  CheckEquals(MethodNotify,
+              Self.Notify.Method,
+              Self.Notify.ClassName + '; Method');
+end;
+
 procedure TestTIdSipOutboundNotifyBase.TestSend;
 var
   Notify: TIdSipRequest;
@@ -2036,6 +2049,17 @@ begin
   end;
 end;
 
+procedure TestTIdSipOutboundSubscribe.TestMethod;
+var
+  Action: TIdSipAction;
+begin
+  Action := Self.CreateAction;
+
+  CheckEquals(MethodSubscribe,
+              Action.Method,
+              Action.ClassName + '; Method');
+end;
+
 procedure TestTIdSipOutboundSubscribe.TestReceive2xx;
 begin
   Self.CreateAction;
@@ -2270,6 +2294,17 @@ begin
 end;
 
 //* TestTIdSipOutboundRefer Published methods **********************************
+
+procedure TestTIdSipOutboundRefer.TestMethod;
+var
+  Action: TIdSipAction;
+begin
+  Action := Self.CreateAction;
+
+  CheckEquals(MethodRefer,
+              Action.Method,
+              Action.ClassName + '; Method');
+end;
 
 procedure TestTIdSipOutboundRefer.TestSend;
 var
@@ -3623,6 +3658,11 @@ begin
   end;
 end;
 
+procedure TestTIdSipOutboundSubscriptionBase.TestMethod;
+begin
+  Fail(Self.ClassName + ' must override TestTIdSipOutboundSubscriptionBase.TestMethod');
+end;
+
 procedure TestTIdSipOutboundSubscriptionBase.TestReceive2xxWithNoExpires;
 var
   Sub: TIdSipOutboundSubscription;
@@ -3869,13 +3909,16 @@ end;
 
 procedure TestTIdSipOutboundSubscriptionBase.TestRedirectWithMultipleContacts;
 var
-  Contacts: array of String;
+  Action:    TIdSipAction;
+  ClassName: String;
+  Contacts:  array of String;
 begin
   SetLength(Contacts, 2);
   Contacts[0] := 'sip:foo@bar.org';
   Contacts[1] := 'sip:bar@bar.org';
 
-  Self.CreateAction;
+  Action := Self.CreateAction;
+  ClassName := Action.ClassName;
   Self.MarkSentRequestCount;
 
   Self.ReceiveMovedTemporarily(Contacts);
@@ -3883,7 +3926,7 @@ begin
   // ARG! Why do they make Length return an INTEGER? And WHY Abs() too?
   CheckEquals(Self.RequestCount + Cardinal(Length(Contacts)),
               Self.Dispatcher.Transport.SentRequestCount,
-              'Session didn''t attempt to contact all Contacts: ' + Self.FailReason);
+              ClassName + ' didn''t attempt to contact all Contacts: ' + Self.FailReason);
 end;
 
 procedure TestTIdSipOutboundSubscriptionBase.TestRefresh;
@@ -4144,6 +4187,17 @@ begin
   Check(not Self.Subscription.IsTerminated,
         'Subscription terminated after the second re-SUBSCRIBE');
   CheckRequestSent('No request sent: no second re-SUBSCRIBE');
+end;
+
+procedure TestTIdSipOutboundSubscription.TestMethod;
+var
+  Action: TIdSipAction;
+begin
+  Action := Self.CreateAction;
+
+  CheckEquals(MethodSubscribe,
+              Action.Method,
+              Action.ClassName + '; Method');
 end;
 
 procedure TestTIdSipOutboundSubscription.TestReceive2xx;
@@ -4568,34 +4622,15 @@ begin
               'Event header of REFER MUST contain ONLY "refer"');
 end;
 
-procedure TestTIdSipOutboundReferral.TestTargetDialog;
+procedure TestTIdSipOutboundReferral.TestMethod;
 var
-  NewID: TIdSipDialogID;
-  OldID: TIdSipDialogID;
-  Ref:   TIdSipOutboundReferral;
+  Action: TIdSipAction;
 begin
-  NewID := TIdSipDialogID.Create('new-id', '1', '1');
-  try
-    OldID := TIdSipDialogID.Create('old-id', '1', '1');
-    try
-      Ref := TIdSipOutboundReferral.Create(Self.Core);
-      try
-        Ref.TargetDialog := OldID;
-        Check(Ref.TargetDialog.Equals(OldID),
-              'TargetDialog not assigned');
+  Action := Self.CreateAction;
 
-        Ref.TargetDialog := NewID;
-        Check(Ref.TargetDialog.Equals(NewID),
-              'TargetDialog not reassigned');
-      finally
-        Ref.Free;
-      end;
-    finally
-      OldID.Free;
-    end;
-  finally
-    NewID.Free;
-  end;
+  CheckEquals(MethodRefer,
+              Action.Method,
+              Action.ClassName + '; Method');
 end;
 
 procedure TestTIdSipOutboundReferral.TestReceiveTerminatingNotifyDeactivated;
@@ -4756,6 +4791,36 @@ begin
     end;
   finally
     ID.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundReferral.TestTargetDialog;
+var
+  NewID: TIdSipDialogID;
+  OldID: TIdSipDialogID;
+  Ref:   TIdSipOutboundReferral;
+begin
+  NewID := TIdSipDialogID.Create('new-id', '1', '1');
+  try
+    OldID := TIdSipDialogID.Create('old-id', '1', '1');
+    try
+      Ref := TIdSipOutboundReferral.Create(Self.Core);
+      try
+        Ref.TargetDialog := OldID;
+        Check(Ref.TargetDialog.Equals(OldID),
+              'TargetDialog not assigned');
+
+        Ref.TargetDialog := NewID;
+        Check(Ref.TargetDialog.Equals(NewID),
+              'TargetDialog not reassigned');
+      finally
+        Ref.Free;
+      end;
+    finally
+      OldID.Free;
+    end;
+  finally
+    NewID.Free;
   end;
 end;
 

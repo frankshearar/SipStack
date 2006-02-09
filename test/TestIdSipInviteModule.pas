@@ -1718,7 +1718,7 @@ end;
 procedure TestTIdSipInboundInvite.TestMethod;
 begin
   CheckEquals(MethodInvite,
-              TIdSipInboundInvite.Method,
+              Self.InviteAction.Method,
               'Inbound INVITE Method');
 end;
 
@@ -2571,7 +2571,7 @@ end;
 procedure TestTIdSipOutboundInvite.TestMethod;
 begin
   CheckEquals(MethodInvite,
-              TIdSipOutboundInvite.Method,
+              Self.CreateAction.Method,
               'Outbound INVITE Method');
 end;
 
@@ -4475,7 +4475,7 @@ end;
 procedure TestTIdSipInboundSession.TestMethod;
 begin
   CheckEquals(MethodInvite,
-              TIdSipInboundSession.Method,
+              Self.CreateAction.Method,
               'Inbound session; Method');
 end;
 
@@ -5691,7 +5691,7 @@ end;
 procedure TestTIdSipOutboundSession.TestMethod;
 begin
   CheckEquals(MethodInvite,
-              TIdSipOutboundSession.Method,
+              Self.CreateAction.Method,
               'Outbound session; Method');
 end;
 

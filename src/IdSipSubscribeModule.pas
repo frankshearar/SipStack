@@ -252,7 +252,7 @@ type
 
   TIdSipNotify = class(TIdSipAction)
   public
-    class function Method: String; override;
+    function Method: String; override;
   end;
 
   TIdSipOutboundNotifyBase = class(TIdSipNotify)
@@ -320,8 +320,7 @@ type
     procedure ReceiveRefer(Refer: TIdSipRequest); virtual;
     procedure ReceiveSubscribe(Subscribe: TIdSipRequest); virtual;
   public
-    class function Method: String; override;
-
+    function Method: String; override;
     procedure ReceiveRequest(Request: TIdSipRequest); override;
 
     property EventPackage: String   read fEventPackage write fEventPackage;
@@ -346,25 +345,6 @@ type
     procedure Send; override;
 
     property Target: TIdSipAddressHeader read fTarget write SetTarget;
-  end;
-
-  TIdSipOutboundRedirectedSubscribe = class(TIdSipOutboundSubscribe)
-  private
-    fContact:         TIdSipAddressHeader;
-    fOriginalRequest: TIdSipRequest;
-
-    procedure SetContact(Value: TIdSipAddressHeader);
-    procedure SetOriginalRequest(Value: TIdSipRequest);
-  protected
-    function  CreateNewAttempt: TIdSipRequest; override;
-    procedure Initialise(UA: TIdSipAbstractCore;
-                         Request: TIdSipRequest;
-                         UsingSecureTransport: Boolean); override;
-  public
-    destructor Destroy; override;
-
-    property Contact:         TIdSipAddressHeader read fContact write SetContact;
-    property OriginalRequest: TIdSipRequest       read fOriginalRequest write SetOriginalRequest;
   end;
 
   TIdSipOutboundRefreshSubscribe = class(TIdSipOutboundSubscribe)
@@ -393,9 +373,9 @@ type
 
   TIdSipRefer = class(TIdSipSubscribe)
   public
-    class function Method: String; override;
-
     constructor Create(UA: TIdSipAbstractCore); overload; override;
+
+    function Method: String; override;
   end;
 
   TIdSipInboundRefer = class(TIdSipRefer)
@@ -416,10 +396,10 @@ type
   protected
     function CreateNewAttempt: TIdSipRequest; override;
   public
-    class function Method: String; override;
-
     constructor Create(UA: TIdSipAbstractCore); overload; override;
     destructor  Destroy; override;
+
+    function Method: String; override;
 
     property ReferTo:      TIdSipAddressHeader read fReferTo write SetReferTo;
     property TargetDialog: TIdSipDialogID      read fTargetDialog write SetTargetDialog;
@@ -486,13 +466,12 @@ type
     procedure SetSubscriptionState(const Value: String); virtual;
     procedure SetTerminating(Value: Boolean);
   public
-    class function Method: String; override;
-
     destructor Destroy; override;
 
     procedure Expire; virtual;
     function  ExpiryTime: TDateTime;
     function  ExpiryTimeInSeconds: Integer;
+    function  Method: String; override;
     procedure ReceiveRequest(Request: TIdSipRequest); override;
 
     property Duration:          Cardinal            read fDuration write fDuration;
@@ -616,8 +595,6 @@ type
 
     procedure AddListener(Listener: IIdSipSubscriptionListener);
     function  CreateInitialAction: TIdSipOwnedAction; override;
-    function  CreateRedirectedAction(OriginalRequest: TIdSipRequest;
-                                     Contact: TIdSipContactHeader): TIdSipOwnedAction; override;
     procedure Expire; override;
     function  Match(Msg: TIdSipMessage): Boolean; override;
     procedure Refresh(NewDuration: Cardinal);
@@ -638,12 +615,12 @@ type
     procedure ReceiveRefer(Refer: TIdSipRequest); override;
     function  WillAccept(Refer: TIdSipRequest): Boolean; override;
   public
-    class function Method: String; override;
     class function ReferralDeniedBody: String;
     class function ReferralFailedBody: String;
     class function ReferralSucceededBody: String;
     class function ReferralTryingBody: String;
 
+    function Method: String; override;
     procedure Notify(const Body: String;
                      const MimeType: String;
                      const NewState: String = '';
@@ -670,11 +647,10 @@ type
                          UsingSecureTransport: Boolean); override;
     procedure StartNewSubscription(Notify: TIdSipRequest); override;
   public
-    class function Method: String; override;
-
     function  CreateInitialAction: TIdSipOwnedAction; override;
     function  CreateRedirectedAction(OriginalRequest: TIdSipRequest;
                                      Contact: TIdSipContactHeader): TIdSipOwnedAction; override;
+    function  Method: String; override;
     procedure Send; override;
 
     property ReferredResource: TIdSipAddressHeader read fReferredResource write SetReferredResource;
@@ -1364,7 +1340,7 @@ end;
 //******************************************************************************
 //* TIdSipNotify Public methods ************************************************
 
-class function TIdSipNotify.Method: String;
+function TIdSipNotify.Method: String;
 begin
   Result := MethodNotify;
 end;
@@ -1511,7 +1487,7 @@ end;
 //******************************************************************************
 //* TIdSipSubscribe Public methods *********************************************
 
-class function TIdSipSubscribe.Method: String;
+function TIdSipSubscribe.Method: String;
 begin
   Result := MethodSubscribe;
 end;
@@ -1642,52 +1618,6 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipOutboundRedirectedSubscribe                                          *
-//******************************************************************************
-//* TIdSipOutboundRedirectedSubscribe Public methods ***************************
-
-destructor TIdSipOutboundRedirectedSubscribe.Destroy;
-begin
-  Self.fOriginalRequest.Free;
-  Self.fContact.Free;
-
-  inherited Destroy;
-end;
-
-//* TIdSipOutboundRedirectedSubscribe Protected methods ************************
-
-function TIdSipOutboundRedirectedSubscribe.CreateNewAttempt: TIdSipRequest;
-begin
-  // Use this method in the context of a redirect to a SUBSCRIBE.
-  // cf. RFC 3261, section 8.1.3.4
-
-  Result := Self.UA.CreateRedirectedRequest(Self.OriginalRequest,
-                                            Self.Contact);
-end;
-
-procedure TIdSipOutboundRedirectedSubscribe.Initialise(UA: TIdSipAbstractCore;
-                                                       Request: TIdSipRequest;
-                                                       UsingSecureTransport: Boolean);
-begin
-  inherited Initialise(UA, Request, UsingSecureTransport);
-
-  Self.fContact         := TIdSipAddressHeader.Create;
-  Self.fOriginalRequest := TIdSipRequest.Create;
-end;
-
-//* TIdSipOutboundRedirectedSubscribe Private methods **************************
-
-procedure TIdSipOutboundRedirectedSubscribe.SetContact(Value: TIdSipAddressHeader);
-begin
-  Self.fContact.Assign(Value);
-end;
-
-procedure TIdSipOutboundRedirectedSubscribe.SetOriginalRequest(Value: TIdSipRequest);
-begin
-  Self.OriginalRequest.Assign(Value);
-end;
-
-//******************************************************************************
 //* TIdSipOutboundRefreshSubscribe                                             *
 //******************************************************************************
 //* TIdSipOutboundRefreshSubscribe Public methods ******************************
@@ -1747,16 +1677,16 @@ end;
 //******************************************************************************
 //* TIdSipRefer Public methods *************************************************
 
-class function TIdSipRefer.Method: String;
-begin
-  Result := MethodRefer;
-end;
-
 constructor TIdSipRefer.Create(UA: TIdSipAbstractCore);
 begin
   inherited Create(UA);
 
   Self.EventPackage := PackageRefer;
+end;
+
+function TIdSipRefer.Method: String;
+begin
+  Result := MethodRefer;
 end;
 
 //******************************************************************************
@@ -1788,11 +1718,6 @@ end;
 //******************************************************************************
 //* TIdSipOutboundRefer Public methods *****************************************
 
-class function TIdSipOutboundRefer.Method: String;
-begin
-  Result := MethodRefer;
-end;
-
 constructor TIdSipOutboundRefer.Create(UA: TIdSipAbstractCore);
 begin
   inherited Create(UA);
@@ -1805,6 +1730,11 @@ begin
   Self.ReferTo.Free;
 
   inherited Destroy;
+end;
+
+function TIdSipOutboundRefer.Method: String;
+begin
+  Result := MethodRefer;
 end;
 
 //* TIdSipOutboundRefer Protected methods **************************************
@@ -1889,11 +1819,6 @@ end;
 //******************************************************************************
 //* TIdSipSubscription Public methods ******************************************
 
-class function TIdSipSubscription.Method: String;
-begin
-  Result := MethodSubscribe;
-end;
-
 destructor TIdSipSubscription.Destroy;
 begin
   Self.Package.Free;
@@ -1915,6 +1840,11 @@ end;
 function TIdSipSubscription.ExpiryTimeInSeconds: Integer;
 begin
   Result := Trunc((Self.ExpiryTime - Now) / OneTDateTimeSecond);
+end;
+
+function TIdSipSubscription.Method: String;
+begin
+  Result := MethodSubscribe;
 end;
 
 procedure TIdSipSubscription.ReceiveRequest(Request: TIdSipRequest);
@@ -2433,18 +2363,6 @@ begin
   Result := Sub;
 end;
 
-function TIdSipOutboundSubscription.CreateRedirectedAction(OriginalRequest: TIdSipRequest;
-                                                           Contact: TIdSipContactHeader): TIdSipOwnedAction;
-var
-  Sub: TIdSipOutboundRedirectedSubscribe;
-begin
-  Sub := Self.UA.AddOutboundAction(TIdSipOutboundRedirectedSubscribe) as TIdSipOutboundRedirectedSubscribe;
-  Sub.Contact         := Contact;
-  Sub.OriginalRequest := OriginalRequest;
-
-  Result := Sub;
-end;
-
 procedure TIdSipOutboundSubscription.Expire;
 begin
   Self.Terminate;
@@ -2858,11 +2776,6 @@ end;
 //******************************************************************************
 //* TIdSipInboundReferral Public methods ***************************************
 
-class function TIdSipInboundReferral.Method: String;
-begin
-  Result := MethodRefer;
-end;
-
 class function TIdSipInboundReferral.ReferralDeniedBody: String;
 begin
   Result := 'SIP/2.0 603 Declined';
@@ -2881,6 +2794,11 @@ end;
 class function TIdSipInboundReferral.ReferralTryingBody: String;
 begin
   Result := 'SIP/2.0 100 Trying';
+end;
+
+function TIdSipInboundReferral.Method: String;
+begin
+  Result := MethodRefer;
 end;
 
 procedure TIdSipInboundReferral.Notify(const Body: String;
@@ -3004,11 +2922,6 @@ end;
 //******************************************************************************
 //* TIdSipOutboundReferral Public methods **************************************
 
-class function TIdSipOutboundReferral.Method: String;
-begin
-  Result := MethodRefer;
-end;
-
 function TIdSipOutboundReferral.CreateInitialAction: TIdSipOwnedAction;
 var
   Refer: TIdSipOutboundRefer;
@@ -3029,6 +2942,11 @@ begin
   Refer.OriginalRequest := OriginalRequest;
 
   Result := Refer;
+end;
+
+function TIdSipOutboundReferral.Method: String;
+begin
+  Result := MethodRefer;
 end;
 
 procedure TIdSipOutboundReferral.Send;

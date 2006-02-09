@@ -622,8 +622,6 @@ type
     procedure SendResponse(Response: TIdSipResponse); virtual;
     procedure SetResult(Value: TIdSipActionResult);
   public
-    class function Method: String; virtual; abstract;
-
     constructor Create(UA: TIdSipAbstractCore); virtual;
     constructor CreateInbound(UA: TIdSipAbstractCore;
                               Request: TIdSipRequest;
@@ -637,6 +635,7 @@ type
     function  IsRegistration: Boolean; virtual;
     function  IsSession: Boolean; virtual;
     function  Match(Msg: TIdSipMessage): Boolean; virtual;
+    function  Method: String; virtual; abstract;
     procedure ReceiveRequest(Request: TIdSipRequest); virtual;
     procedure ReceiveResponse(Response: TIdSipResponse;
                               UsingSecureTransport: Boolean); virtual;
@@ -679,6 +678,30 @@ type
     procedure RemoveOwnedActionListener(Listener: IIdSipOwnedActionListener);
   end;
 
+  TIdSipRedirectedAction = class(TIdSipOwnedAction)
+  private
+    fContact:         TIdSipAddressHeader;
+    fMethod:          String;
+    fOriginalRequest: TIdSipRequest;
+
+    procedure SetContact(Value: TIdSipAddressHeader);
+    procedure SetOriginalRequest(Value: TIdSipRequest);
+  protected
+    function  CreateNewAttempt: TIdSipRequest; override;
+    procedure Initialise(UA: TIdSipAbstractCore;
+                         Request: TIdSipRequest;
+                         UsingSecureTransport: Boolean); override;
+  public
+    destructor Destroy; override;
+
+    function  Method: String; override;
+    procedure SetMethod(const Method: String);
+    procedure Send; override;
+
+    property Contact:         TIdSipAddressHeader read fContact write SetContact;
+    property OriginalRequest: TIdSipRequest       read fOriginalRequest write SetOriginalRequest;
+  end;
+
   // I represent an action that uses owned actions to accomplish something. My
   // subclasses, for instance, use owned actions to handle redirection
   // responses.
@@ -687,7 +710,6 @@ type
     function CreateInitialAction: TIdSipOwnedAction; virtual;
     function CreateRedirectedAction(OriginalRequest: TIdSipRequest;
                                     Contact: TIdSipContactHeader): TIdSipOwnedAction; virtual;
-    function InitialActionType: TIdSipActionClass; virtual;
   end;
 
   TIdSipOptions = class(TIdSipAction)
@@ -699,9 +721,8 @@ type
                          Request: TIdSipRequest;
                          UsingSecureTransport: Boolean); override;
   public
-    class function Method: String; override;
-
     function IsOptions: Boolean; override;
+    function Method: String; override;
   end;
 
   TIdSipInboundOptions = class(TIdSipOptions)
@@ -3645,6 +3666,78 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipRedirectedAction                                                     *
+//******************************************************************************
+//* TIdSipRedirectedAction Public methods **************************************
+
+destructor TIdSipRedirectedAction.Destroy;
+begin
+  Self.fOriginalRequest.Free;
+  Self.fContact.Free;
+
+  inherited Destroy;
+end;
+
+function TIdSipRedirectedAction.Method: String;
+begin
+  Result := Self.fMethod;
+end;
+
+procedure TIdSipRedirectedAction.SetMethod(const Method: String);
+begin
+  Self.fMethod := Method;
+end;
+
+procedure TIdSipRedirectedAction.Send;
+var
+  Sub: TIdSipRequest;
+begin
+  inherited Send;
+
+  Sub := Self.CreateNewAttempt;
+  try
+    Self.InitialRequest.Assign(Sub);
+
+    Self.SendRequest(Sub);
+  finally
+    Sub.Free;
+  end;
+end;
+
+//* TIdSipRedirectedAction Protected methods ***************************
+
+function TIdSipRedirectedAction.CreateNewAttempt: TIdSipRequest;
+begin
+  // Use this method in the context of a redirect to a Action.
+  // cf. RFC 3261, section 8.1.3.4
+
+  Result := Self.UA.CreateRedirectedRequest(Self.OriginalRequest,
+                                            Self.Contact);
+end;
+
+procedure TIdSipRedirectedAction.Initialise(UA: TIdSipAbstractCore;
+                                                       Request: TIdSipRequest;
+                                                       UsingSecureTransport: Boolean);
+begin
+  inherited Initialise(UA, Request, UsingSecureTransport);
+
+  Self.fContact         := TIdSipAddressHeader.Create;
+  Self.fOriginalRequest := TIdSipRequest.Create;
+end;
+
+//* TIdSipRedirectedAction Private methods *************************************
+
+procedure TIdSipRedirectedAction.SetContact(Value: TIdSipAddressHeader);
+begin
+  Self.fContact.Assign(Value);
+end;
+
+procedure TIdSipRedirectedAction.SetOriginalRequest(Value: TIdSipRequest);
+begin
+  Self.OriginalRequest.Assign(Value);
+end;
+
+//******************************************************************************
 //* TIdSipOwningAction                                                         *
 //******************************************************************************
 //* TIdSipOwningAction Public methods ******************************************
@@ -3657,15 +3750,15 @@ end;
 
 function TIdSipOwningAction.CreateRedirectedAction(OriginalRequest: TIdSipRequest;
                                                    Contact: TIdSipContactHeader): TIdSipOwnedAction;
+var
+  Redir: TIdSipRedirectedAction;
 begin
-  raise Exception.Create(Self.ClassName
-                       + ' must override TIdSipOwningAction.CreateRedirectedAction');
-end;
+  Redir := Self.UA.AddOutboundAction(TIdSipRedirectedAction) as TIdSipRedirectedAction;
+  Redir.Contact         := Contact;
+  Redir.OriginalRequest := OriginalRequest;
+  Redir.SetMethod(Self.Method);
 
-function TIdSipOwningAction.InitialActionType: TIdSipActionClass;
-begin
-  raise Exception.Create(Self.ClassName
-                       + ' must override TIdSipOwningAction.InitialActionType');
+  Result := Redir;
 end;
 
 //******************************************************************************
@@ -3673,14 +3766,14 @@ end;
 //******************************************************************************
 //* TIdSipOptions Public methods ***********************************************
 
-class function TIdSipOptions.Method: String;
-begin
-  Result := MethodOptions;
-end;
-
 function TIdSipOptions.IsOptions: Boolean;
 begin
   Result := true;
+end;
+
+function TIdSipOptions.Method: String;
+begin
+  Result := MethodOptions;
 end;
 
 //* TIdSipOptions Protected methods ********************************************

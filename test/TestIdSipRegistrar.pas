@@ -46,7 +46,6 @@ type
     procedure TestFailedBindingsFor;
     procedure TestFailedRemoveAll;
     procedure TestInvalidAddressOfRecord;
-    procedure TestMethod;
     procedure TestOKResponseContainsAllBindings;
     procedure TestReceiveGruu;
     procedure TestReceiveGruuSips;
@@ -104,6 +103,7 @@ type
     procedure TestIsOwned; override;
     procedure TestIsRegistration; override;
     procedure TestIsSession; override;
+    procedure TestMethod;
   end;
 
   TestTIdSipOutboundRegisterBase = class(TestTIdSipRegistration,
@@ -512,13 +512,6 @@ begin
   Self.SimulateRemoteRequest;
   Self.CheckServerReturned(SIPNotFound,
                            'Invalid address-of-record');
-end;
-
-procedure TestTIdSipRegistrar.TestMethod;
-begin
-  CheckEquals(MethodRegister,
-              TIdSipInboundRegistration.Method,
-              'Inbound registration; Method');
 end;
 
 procedure TestTIdSipRegistrar.TestOKResponseContainsAllBindings;
@@ -1064,6 +1057,13 @@ begin
         Self.RegisterAction.ClassName + ' marked as a Session');
 end;
 
+procedure TestTIdSipInboundRegistration.TestMethod;
+begin
+  CheckEquals(MethodRegister,
+              Self.RegisterAction.Method,
+              'Inbound registration; Method');
+end;
+
 //******************************************************************************
 //*  TestTIdSipOutboundRegisterBase                                            *
 //******************************************************************************
@@ -1156,7 +1156,7 @@ end;
 procedure TestTIdSipOutboundRegisterBase.TestMethod;
 begin
   CheckEquals(MethodRegister,
-              TIdSipOutboundRegisterBase.Method,
+              Self.CreateAction.Method,
               'Outbound registration; Method');
 end;
 
@@ -1703,13 +1703,16 @@ end;
 
 procedure TOutboundRegistrationBaseTestCase.TestRedirectWithMultipleContacts;
 var
-  Contacts: array of String;
+  Action:    TIdSipAction;
+  ClassName: String;
+  Contacts:  array of String;
 begin
   SetLength(Contacts, 2);
   Contacts[0] := 'sip:foo@bar.org';
   Contacts[1] := 'sip:bar@bar.org';
 
-  Self.CreateAction;
+  Action := Self.CreateAction;
+  ClassName := Action.ClassName;
   Self.MarkSentRequestCount;
 
   Self.ReceiveMovedTemporarily(Contacts);
@@ -1717,7 +1720,7 @@ begin
   // ARG! Why do they make Length return an INTEGER? And WHY Abs() too?
   CheckEquals(Self.RequestCount + Cardinal(Length(Contacts)),
               Self.Dispatcher.Transport.SentRequestCount,
-              'Session didn''t attempt to contact all Contacts: ' + Self.FailReason);
+              ClassName + ' didn''t attempt to contact all Contacts: ' + Self.FailReason);
 end;
 
 procedure TOutboundRegistrationBaseTestCase.TestRedirectWithNoSuccess;

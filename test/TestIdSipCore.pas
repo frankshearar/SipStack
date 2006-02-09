@@ -94,7 +94,7 @@ type
   protected
     function CreateNewAttempt: TIdSipRequest; override;
   public
-    class function Method: String; override;
+    function Method: String; override;
   end;
 
   TestTIdSipActions = class(TTestCaseTU)
@@ -192,6 +192,16 @@ type
     procedure SetUp; override;
   published
     procedure TestIsNull;
+  end;
+
+  TestTIdSipRedirectedAction = class(TTestCaseTU)
+  private
+    Action: TIdSipRedirectedAction;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestMethodSetMethod;
   end;
 
   TestTIdSipOptionsModule = class(TTestCaseTU)
@@ -406,6 +416,7 @@ begin
   Result.AddTest(TestLocation.Suite);
   Result.AddTest(TestTIdSipMessageModule.Suite);
   Result.AddTest(TestTIdSipNullModule.Suite);
+  Result.AddTest(TestTIdSipRedirectedAction.Suite);
   Result.AddTest(TestTIdSipOptionsModule.Suite);
   Result.AddTest(TestTIdSipInboundOptions.Suite);
   Result.AddTest(TestTIdSipOutboundOptions.Suite);
@@ -1557,7 +1568,7 @@ end;
 //******************************************************************************
 //* TIdSipNullAction Public methods ********************************************
 
-class function TIdSipNullAction.Method: String;
+function TIdSipNullAction.Method: String;
 begin
   Result := '';
 end;
@@ -2367,6 +2378,43 @@ begin
               'Wrong module');
   Check(Self.Module.IsNull,
         'Null message module not marked as null');
+end;
+
+//******************************************************************************
+//* TestTIdSipRedirectedAction                                                 *
+//******************************************************************************
+//* TestTIdSipRedirectedAction Public methods **********************************
+
+procedure TestTIdSipRedirectedAction.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Action := TIdSipRedirectedAction.Create(Self.Core);
+end;
+
+procedure TestTIdSipRedirectedAction.TearDown;
+begin
+  Self.Action.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipRedirectedAction Published methods *******************************
+
+procedure TestTIdSipRedirectedAction.TestMethodSetMethod;
+const
+  NewMethod = MethodInvite;
+  OldMethod = MethodRegister;
+begin
+  Self.Action.SetMethod(OldMethod);
+  CheckEquals(OldMethod,
+              Self.Action.Method,
+              'Action.Method not set');
+
+  Self.Action.SetMethod(NewMethod);
+  CheckEquals(NewMethod,
+              Self.Action.Method,
+              'Action.Method not reset');
 end;
 
 //******************************************************************************

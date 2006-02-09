@@ -255,16 +255,14 @@ type
 
   TIdSipRegister = class(TIdSipOwnedAction)
   public
-    class function Method: String; override;
-
     function IsRegistration: Boolean; override;
+    function Method: String; override;
   end;
 
   TIdSipRegistration = class(TIdSipOwningAction)
   public
-    class function Method: String; override;
-
     function IsRegistration: Boolean; override;
+    function Method: String; override;
   end;
 
   TIdSipInboundRegistration = class(TIdSipRegistration)
@@ -347,26 +345,6 @@ type
     procedure Send; override;
   end;
 
-  TIdSipOutboundRedirectedRegister = class(TIdSipOutboundRegisterBase)
-  private
-    fContact:         TIdSipAddressHeader;
-    fOriginalRequest: TIdSipRequest;
-
-    procedure SetContact(Value: TIdSipAddressHeader);
-    procedure SetOriginalRequest(Value: TIdSipRequest);
-  protected
-  protected
-    function  CreateNewAttempt: TIdSipRequest; override;
-    procedure Initialise(UA: TIdSipAbstractCore;
-                         Request: TIdSipRequest;
-                         UsingSecureTransport: Boolean); override;
-  public
-    procedure Send; override;
-
-    property Contact:         TIdSipAddressHeader read fContact write SetContact;
-    property OriginalRequest: TIdSipRequest       read fOriginalRequest write SetOriginalRequest;
-  end;
-
   TIdSipOutboundUnregister = class(TIdSipOutboundRegisterBase)
   private
     fIsWildCard: Boolean;
@@ -383,9 +361,9 @@ type
   end;
 
   TIdSipOutboundRegistrationBase = class(TIdSipRegistration,
-                                     IIdSipActionListener,
-                                     IIdSipOwnedActionListener,
-                                     IIdSipActionRedirectorListener)
+                                         IIdSipActionListener,
+                                         IIdSipOwnedActionListener,
+                                         IIdSipActionRedirectorListener)
   private
     ChallengedAction:      TIdSipAction;
     fBindings:             TIdSipContacts;
@@ -430,8 +408,6 @@ type
     destructor Destroy; override;
 
     procedure AddListener(const Listener: IIdSipRegistrationListener);
-    function  CreateRedirectedAction(OriginalRequest: TIdSipRequest;
-                                     Contact: TIdSipContactHeader): TIdSipOwnedAction; override;
     function  Match(Msg: TIdSipMessage): Boolean; override;
     procedure RemoveListener(const Listener: IIdSipRegistrationListener);
     procedure Resend(AuthorizationCredentials: TIdSipAuthorizationHeader); override;
@@ -1079,14 +1055,14 @@ end;
 //******************************************************************************
 //* TIdSipRegister Public methods **********************************************
 
-class function TIdSipRegister.Method: String;
-begin
-  Result := MethodRegister;
-end;
-
 function TIdSipRegister.IsRegistration: Boolean;
 begin
   Result := true;
+end;
+
+function TIdSipRegister.Method: String;
+begin
+  Result := MethodRegister;
 end;
 
 //******************************************************************************
@@ -1094,14 +1070,14 @@ end;
 //******************************************************************************
 //* TIdSipRegistration Public methods ******************************************
 
-class function TIdSipRegistration.Method: String;
-begin
-  Result := MethodRegister;
-end;
-
 function TIdSipRegistration.IsRegistration: Boolean;
 begin
   Result := true;
+end;
+
+function TIdSipRegistration.Method: String;
+begin
+  Result := MethodRegister;
 end;
 
 //******************************************************************************
@@ -1611,58 +1587,6 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipOutboundRedirectedRegister                                           *
-//******************************************************************************
-//* TIdSipOutboundRedirectedRegister Public methods ****************************
-
-procedure TIdSipOutboundRedirectedRegister.Send;
-var
-  Reg: TIdSipRequest;
-begin
-  inherited Send;
-
-  Reg := Self.CreateNewAttempt;
-  try
-    Self.SendRequest(Reg);
-  finally
-    Reg.Free;
-  end;
-end;
-
-//* TIdSipOutboundRedirectedRegister Protected methods *************************
-
-function TIdSipOutboundRedirectedRegister.CreateNewAttempt: TIdSipRequest;
-begin
-  // Use this method in the context of a redirect to an INVITE.
-  // cf. RFC 3261, section 8.1.3.4
-
-  Result := Self.UA.CreateRedirectedRequest(Self.OriginalRequest,
-                                            Self.Contact);
-end;
-
-procedure TIdSipOutboundRedirectedRegister.Initialise(UA: TIdSipAbstractCore;
-                                                      Request: TIdSipRequest;
-                                                      UsingSecureTransport: Boolean);
-begin
-  inherited Initialise(UA, Request, UsingSecureTransport);
-
-  Self.fContact         := TIdSipAddressHeader.Create;
-  Self.fOriginalRequest := TIdSipRequest.Create;
-end;
-
-//* TIdSipOutboundRedirectedRegister Private methods ***************************
-
-procedure TIdSipOutboundRedirectedRegister.SetContact(Value: TIdSipAddressHeader);
-begin
-  Self.fContact.Assign(Value);
-end;
-
-procedure TIdSipOutboundRedirectedRegister.SetOriginalRequest(Value: TIdSipRequest);
-begin
-  Self.fOriginalRequest.Assign(Value);
-end;
-
-//******************************************************************************
 //* TIdSipOutboundUnregister                                                   *
 //******************************************************************************
 //* TIdSipOutboundUnregister Public methods ************************************
@@ -1724,18 +1648,6 @@ end;
 procedure TIdSipOutboundRegistrationBase.AddListener(const Listener: IIdSipRegistrationListener);
 begin
   Self.RegistrationListeners.AddListener(Listener);
-end;
-
-function TIdSipOutboundRegistrationBase.CreateRedirectedAction(OriginalRequest: TIdSipRequest;
-                                                               Contact: TIdSipContactHeader): TIdSipOwnedAction;
-var
-  Reg: TIdSipOutboundRedirectedRegister;
-begin
-  Reg := Self.UA.AddOutboundAction(TIdSipOutboundRedirectedRegister) as TIdSipOutboundRedirectedRegister;
-  Reg.Contact         := Contact;
-  Reg.OriginalRequest := OriginalRequest;
-
-  Result := Reg;
 end;
 
 function TIdSipOutboundRegistrationBase.Match(Msg: TIdSipMessage): Boolean;

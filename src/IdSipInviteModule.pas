@@ -154,9 +154,8 @@ type
     procedure ReceiveCancel(Cancel: TIdSipRequest); virtual;
     procedure ReceiveInvite(Invite: TIdSipRequest); virtual;
   public
-    class function Method: String; override;
-
-    function IsInvite: Boolean; override;
+    function  IsInvite: Boolean; override;
+    function  Method: String; override;
     procedure ReceiveRequest(Request: TIdSipRequest); override;
   end;
 
@@ -451,8 +450,6 @@ type
 
     property FullyEstablished: Boolean read GetFullyEstablished write SetFullyEstablished;
   public
-    class function Method: String; override;
-
     destructor Destroy; override;
 
     procedure AcceptModify(const LocalSessionDescription: String;
@@ -464,6 +461,7 @@ type
     function  DialogMatches(Msg: TIdSipMessage): Boolean; overload;
     function  IsOutboundCall: Boolean;
     function  IsSession: Boolean; override;
+    function  Method: String; override;
     function  ModificationInProgress: Boolean;
     procedure Modify(const Offer, ContentType: String);
     function  ModifyWaitTime: Cardinal; virtual;
@@ -1010,14 +1008,14 @@ end;
 //******************************************************************************
 //* TIdSipInvite Public methods ************************************************
 
-class function TIdSipInvite.Method: String;
-begin
-  Result := MethodInvite;
-end;
-
 function TIdSipInvite.IsInvite: Boolean;
 begin
   Result := true;
+end;
+
+function TIdSipInvite.Method: String;
+begin
+  Result := MethodInvite;
 end;
 
 procedure TIdSipInvite.ReceiveRequest(Request: TIdSipRequest);
@@ -1927,11 +1925,6 @@ end;
 //******************************************************************************
 //* TIdSipSession Public methods ***********************************************
 
-class function TIdSipSession.Method: String;
-begin
-  Result := MethodInvite;
-end;
-
 destructor TIdSipSession.Destroy;
 begin
   Self.fRemoteParty.Free;
@@ -2018,6 +2011,11 @@ end;
 function TIdSipSession.IsSession: Boolean;
 begin
   Result := true;
+end;
+
+function TIdSipSession.Method: String;
+begin
+  Result := MethodInvite;
 end;
 
 function TIdSipSession.ModificationInProgress: Boolean;
