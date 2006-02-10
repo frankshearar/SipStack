@@ -16,6 +16,7 @@ uses
   IdSocketHandle, IdUDPServer, IdTimerQueue, SysUtils;
 
 type
+  TIdSipReceiveUDPMessageWait = class;
   TIdSipUdpServer = class(TIdUDPServer)
   private
     fTimer:   TIdTimerQueue;
@@ -27,6 +28,9 @@ type
     procedure DoUDPRead(AData: TStream; ABinding: TIdSocketHandle); override;
     procedure NotifyListenersOfResponse(Response: TIdSipResponse;
                                         ReceivedFrom: TIdSipConnectionBindings); overload; virtual;
+    procedure NotifyOfException(E: Exception);
+    procedure ReceiveMessageInTimerContext(Msg: TIdSipMessage;
+                                           Binding: TIdSocketHandle);
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
@@ -38,10 +42,13 @@ type
   end;
 
   // I represent a (possibly) deferred receipt of a message.
+  // Give me a COPY of a binding in ReceivedFrom, and I'll free it.
   TIdSipReceiveUDPMessageWait = class(TIdSipMessageNotifyEventWait)
   private
     fReceivedFrom: TIdSipConnectionBindings;
   public
+    destructor Destroy; override;
+
     property ReceivedFrom: TIdSipConnectionBindings read fReceivedFrom write fReceivedFrom;
   end;
 
@@ -85,10 +92,7 @@ end;
 
 procedure TIdSipUdpServer.DoUDPRead(AData: TStream; ABinding: TIdSocketHandle);
 var
-  Ex:           TIdSipExceptionWait;
-  Msg:          TIdSipMessage;
-  ReceivedFrom: TIdSipConnectionBindings;
-  RecvWait:     TIdSipReceiveUDPMessageWait;
+  Msg: TIdSipMessage;
 begin
   // Note that if AData contains a fragment of a message we don't care to
   // reassemble the packet. RFC 3261 section 18.3 tells us:
@@ -102,37 +106,19 @@ begin
 
   inherited DoUDPRead(AData, ABinding);
 
-  ReceivedFrom := TIdSipConnectionBindings.Create;
   try
-    ReceivedFrom.LocalIP   := ABinding.IP;
-    ReceivedFrom.LocalPort := ABinding.Port;
-    ReceivedFrom.PeerIP    := ABinding.PeerIP;
-    ReceivedFrom.PeerPort  := ABinding.PeerPort;
-
+    Msg := TIdSipMessage.ReadMessageFrom(AData);
     try
-      Msg := TIdSipMessage.ReadMessageFrom(AData);
-      try
-        Msg.ReadBody(AData);
+      Msg.ReadBody(AData);
 
-        RecvWait := TIdSipReceiveUDPMessageWait.Create;
-        RecvWait.Event        := Self.DoOnReceiveMessage;
-        RecvWait.ReceivedFrom := ReceivedFrom.Copy;
-        RecvWait.Message      := Msg.Copy;
-        Self.Timer.AddEvent(TriggerImmediately, RecvWait);
-      finally
-        Msg.Free;
-      end;
-    except
-      on E: Exception do begin
-        Ex := TIdSipExceptionWait.Create;
-        Ex.Event := Self.DoOnException;
-        Ex.ExceptionType := ExceptClass(E.ClassType);
-        Ex.Reason := E.Message;
-        Self.Timer.AddEvent(TriggerImmediately, Ex);
-      end;
+      Self.ReceiveMessageInTimerContext(Msg, ABinding);
+    finally
+      Msg.Free;
     end;
-  finally
-    ReceivedFrom.Free;
+  except
+    on E: Exception do begin
+      Self.NotifyOfException(E);
+    end;
   end;
 end;
 
@@ -140,6 +126,35 @@ procedure TIdSipUdpServer.NotifyListenersOfResponse(Response: TIdSipResponse;
                                                     ReceivedFrom: TIdSipConnectionBindings);
 begin
   Self.Notifier.NotifyListenersOfResponse(Response, ReceivedFrom);
+end;
+
+procedure TIdSipUdpServer.NotifyOfException(E: Exception);
+var
+  Ex: TIdSipExceptionWait;
+begin
+  Ex := TIdSipExceptionWait.Create;
+  Ex.Event := Self.DoOnException;
+  Ex.ExceptionType := ExceptClass(E.ClassType);
+  Ex.Reason := E.Message;
+  Self.Timer.AddEvent(TriggerImmediately, Ex);
+end;
+
+procedure TIdSipUdpServer.ReceiveMessageInTimerContext(Msg: TIdSipMessage;
+                                                       Binding: TIdSocketHandle);
+var
+  Wait: TIdSipReceiveUDPMessageWait;
+begin
+  Wait := TIdSipReceiveUDPMessageWait.Create;
+  Wait.Event        := Self.DoOnReceiveMessage;
+  Wait.Message      := Msg.Copy;
+
+  Wait.ReceivedFrom := TIdSipConnectionBindings.Create;
+  Wait.ReceivedFrom.LocalIP   := Binding.IP;
+  Wait.ReceivedFrom.LocalPort := Binding.Port;
+  Wait.ReceivedFrom.PeerIP    := Binding.PeerIP;
+  Wait.ReceivedFrom.PeerPort  := Binding.PeerPort;
+
+  Self.Timer.AddEvent(TriggerImmediately, Wait);
 end;
 
 //* TIdSipUdpServer Private methods ********************************************
@@ -172,6 +187,18 @@ begin
   else
     Self.Notifier.NotifyListenersOfResponse(Wait.Message as TIdSipResponse,
                                             Wait.ReceivedFrom);
+end;
+
+//******************************************************************************
+//* TIdSipReceiveUDPMessageWait                                                *
+//******************************************************************************
+//* TIdSipReceiveUDPMessageWait Public methods *********************************
+
+destructor TIdSipReceiveUDPMessageWait.Destroy;
+begin
+  Self.ReceivedFrom.Free;
+
+  inherited Destroy;
 end;
 
 end.
