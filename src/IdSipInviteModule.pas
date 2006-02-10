@@ -2203,8 +2203,9 @@ end;
 
 procedure TIdSipSession.NotifyOfFailure(Response: TIdSipResponse);
 begin
-  Self.MarkAsTerminated;
   Self.NotifyOfEndedSession(Response.StatusCode, Response.StatusText);
+
+  Self.MarkAsTerminated;  
 end;
 
 procedure TIdSipSession.NotifyOfModifySession(Modify: TIdSipInboundInvite);
