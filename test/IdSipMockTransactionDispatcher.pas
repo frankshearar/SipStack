@@ -19,12 +19,10 @@ type
   TIdSipMockTransactionDispatcher = class(TIdSipTransactionDispatcher)
   private
     fTransportType: String;
-    MockTransports: TStrings;
 
     function GetDebugTimer: TIdDebugTimerQueue;
     function GetMockLocator: TIdSipMockLocator;
     function GetTransport: TIdSipMockTransport;
-    function TransportAt(Index: Integer): TIdSipMockTransport;
   public
     constructor Create; reintroduce;
     destructor  Destroy; override;
@@ -60,7 +58,6 @@ constructor TIdSipMockTransactionDispatcher.Create;
 var
   I:              Integer;
   SupportedTrans: TStrings;
-  Tran:           TIdSipTransport;
 begin
   inherited Create(TIdDebugTimerQueue.Create(false), TIdSipMockLocator.Create);
 
@@ -70,7 +67,6 @@ begin
   TIdSipTransportRegistry.RegisterTransport(TlsTransport, TIdSipMockTlsTransport);
   TIdSipTransportRegistry.RegisterTransport(UdpTransport, TIdSipMockUdpTransport);
 
-  Self.MockTransports := TStringList.Create;
   Self.TransportType := UdpTransport;
 
   SupportedTrans := TStringList.Create;
@@ -79,10 +75,9 @@ begin
     TIdSipTransportRegistry.InSecureTransports(SupportedTrans);
 
     for I := 0 to SupportedTrans.Count - 1 do begin
-      Tran := TIdSipTransportRegistry.TransportFor(SupportedTrans[I]).Create;
-      Self.AddTransport(Tran);
-      Self.MockTransports.AddObject(SupportedTrans[I],
-                                Tran);
+      Self.AddTransportBinding(SupportedTrans[I],
+                               '127.0.0.1',
+                               TIdSipTransportRegistry.TransportFor(SupportedTrans[I]).DefaultPort);
     end;
   finally
     SupportedTrans.Free;
@@ -91,7 +86,6 @@ end;
 
 destructor TIdSipMockTransactionDispatcher.Destroy;
 begin
-  Self.MockTransports.Free;
   Self.Timer.Terminate;
   Self.Locator.Free;
 
@@ -106,8 +100,8 @@ procedure TIdSipMockTransactionDispatcher.AddTransportSendingListener(Listener: 
 var
   I: Integer;
 begin
-  for I := 0 to Self.MockTransports.Count - 1 do
-    Self.TransportAt(I).AddTransportSendingListener(Listener);
+  for I := 0 to Self.Transports.Count - 1 do
+    Self.Transports[I].AddTransportSendingListener(Listener);
 end;
 
 procedure TIdSipMockTransactionDispatcher.SendToTransport(Request: TIdSipRequest;
@@ -141,23 +135,16 @@ function TIdSipMockTransactionDispatcher.GetTransport: TIdSipMockTransport;
 var
   Index: Integer;
 begin
-  Index := Self.MockTransports.IndexOf(Self.TransportType);
+  Index := 0;
+  while (Index < Self.TransportCount)
+    and (Self.Transports[Index].GetTransportType <> Self.TransportType) do
+    Inc(Index);
 
-  if (Index <> -1) then
-     Result := Self.TransportAt(Index)
+  if (Index < Self.TransportCount) then
+     Result := Self.Transports[Index] as TIdSipMockTransport
   else
     raise Exception.Create('TIdSipMockTransactionDispatcher doesn''t know '
                          + 'about transport ''' + Self.TransportType + '''');
-end;
-
-function TIdSipMockTransactionDispatcher.TransportAt(Index: Integer): TIdSipMockTransport;
-begin
-  try
-    Result := Self.MockTransports.Objects[Index] as TIdSipMockTransport
-  except
-    on EInvalidCast do
-      raise;
-  end;
 end;
 
 end.

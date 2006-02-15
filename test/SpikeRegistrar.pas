@@ -80,8 +80,9 @@ const
 
 constructor TrnidSpikeRegistrar.Create(AOwner: TComponent);
 var
-  Contact: TIdSipContactHeader;
-  From:    TIdSipFromHeader;
+  Contact:  TIdSipContactHeader;
+  From:     TIdSipFromHeader;
+  HostName: String;
 begin
   inherited Create(AOwner);
 
@@ -93,16 +94,15 @@ begin
 
   Self.Transport := TIdSipUDPTransport.Create;
   if (GStack.LocalAddress <> LocalHostName) then
-    Self.Transport.HostName := GStack.LocalAddress
+    HostName := GStack.LocalAddress
   else
-    Self.Transport.HostName := LocalHostName;
-  Self.Transport.AddBinding(Self.Transport.HostName, StrToInt(Self.Port.Text));
-  Self.Transport.AddTransportListener(Self);
-  Self.Transport.AddTransportSendingListener(Self);
-  Self.Transport.Start;
+    HostName := LocalHostName;
 
   Self.Dispatcher := TIdSipTransactionDispatcher.Create(Self.Timer, Self.Locator);
-  Self.Dispatcher.AddTransport(Self.Transport);
+  Self.Dispatcher.AddTransportBinding(UdpTransport, HostName, StrToInt(Self.Port.Text));
+  Self.Dispatcher.Transports[0].AddTransportListener(Self);
+  Self.Dispatcher.Transports[0].AddTransportSendingListener(Self);
+
   Self.UA := TIdSipRegistrar.Create;
   Self.UA.Dispatcher    := Self.Dispatcher;
   Self.UA.BindingDB     := Self.DB;

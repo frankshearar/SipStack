@@ -136,7 +136,6 @@ type
     destructor  Destroy; override;
 
     procedure AddTransactionDispatcherListener(const Listener: IIdSipTransactionDispatcherListener);
-    procedure AddTransport(Transport: TIdSipTransport);
     procedure AddTransportBinding(const Transport: String;
                                   const Address: String;
                                   Port: Cardinal);
@@ -558,17 +557,6 @@ begin
   Self.MsgListeners.AddListener(Listener);
 end;
 
-procedure TIdSipTransactionDispatcher.AddTransport(Transport: TIdSipTransport);
-begin
-  Self.TransportLock.Acquire;
-  try
-    Self.Transports.Add(Transport);
-    Transport.AddTransportListener(Self);
-  finally
-    Self.TransportLock.Release;
-  end;
-end;
-
 procedure TIdSipTransactionDispatcher.AddTransportBinding(const Transport: String;
                                                           const Address: String;
                                                           Port: Cardinal);
@@ -599,6 +587,7 @@ begin
       T.Bindings[0].Port := Port;
 
       Self.Transports.Add(T);
+      T.AddTransportListener(Self);
     end;
   finally
     Self.TransportLock.Release;

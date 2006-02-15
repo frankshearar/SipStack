@@ -97,12 +97,11 @@ type
     procedure TestAckDoesntCreateATransaction;
     procedure TestAckForInviteWontCreateTransaction;
     procedure TestAckHandedUpToTU;
-    procedure TestAddAndCountTransport;
     procedure TestAddClientTransaction;
     procedure TestAddServerTransaction;
     procedure TestAddTransportBinding;
     procedure TestAddTransportBindingAddsTimerToTransport;
-    procedure TestClearTransports;
+    procedure TestClearAddAndCountTransports;
     procedure TestCreateNewTransaction;
     procedure TestDispatchToCorrectTransaction;
     procedure TestDispatcherDoesntGetTransactionRequests;
@@ -631,19 +630,23 @@ begin
   Self.Locator := TIdSipMockLocator.Create;
   Self.Timer   := TIdDebugTimerQueue.Create(false);
 
-  Self.MockTcpTransport := TIdSipMockTcpTransport.Create;
-  Self.MockUdpTransport := TIdSipMockUdpTransport.Create;
-  Self.MockTransport    := Self.MockTcpTransport;
-
   Self.D := TIdSipTransactionDispatcher.Create(Self.Timer, Self.Locator);
   Self.D.AddTransactionDispatcherListener(Self);
 
   Self.Core.Dispatcher := Self.D;
 
-  Self.D.AddTransport(Self.MockTcpTransport);
-  Self.D.AddTransport(Self.MockUdpTransport);
+  // Remember, Self's subclass has registered mock transports for these symbols.
+  Self.D.AddTransportBinding(TcpTransport, '127.0.0.1', IdPORT_SIP);
+  Self.D.AddTransportBinding(UdpTransport, '127.0.0.1', IdPORT_SIP);
 
-  Self.Destination := TIdSipLocation.Create(TcpTransport, '127.0.0.1', IdPORT_SIP);
+  Self.MockTcpTransport := Self.D.Transports[0] as TIdSipMockTransport;
+  Self.MockUdpTransport := Self.D.Transports[1] as TIdSipMockTransport;
+  Self.MockTransport    := Self.MockTcpTransport;
+
+  // This must differ from Self.D's bindings, or we will make hairpin calls
+  // when we send INVITEs. That in itself isn't a problem, but for most tests
+  // that's not what we want!
+  Self.Destination := TIdSipLocation.Create(TcpTransport, '127.0.0.2', IdPORT_SIP);
 
   Self.ReceivedRequest  := TIdSipTestResources.CreateLocalLoopRequest;
   Self.TranRequest      := TIdSipTestResources.CreateLocalLoopRequest;
@@ -889,19 +892,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipTransactionDispatcher.TestAddAndCountTransport;
-var
-  OriginalCount: Cardinal;
-begin
-  OriginalCount := Self.D.TransportCount;
-
-  Self.D.AddTransport(TIdSipMockUdpTransport.Create);
-  CheckEquals(OriginalCount + 1, Self.D.TransportCount, 'After one AddTransport');
-
-  Self.D.AddTransport(TIdSipMockTcpTransport.Create);
-  CheckEquals(OriginalCount + 2, Self.D.TransportCount, 'After two AddTransports');
-end;
-
 procedure TestTIdSipTransactionDispatcher.TestAddClientTransaction;
 var
   Tran:      TIdSipTransaction;
@@ -969,13 +959,22 @@ begin
         'Newly-added transport doesn''t use the dispatcher''s timer');
 end;
 
-procedure TestTIdSipTransactionDispatcher.TestClearTransports;
+procedure TestTIdSipTransactionDispatcher.TestClearAddAndCountTransports;
 begin
-  Self.D.AddTransport(TIdSipMockUdpTransport.Create);
-  Self.D.AddTransport(TIdSipMockUdpTransport.Create);
+  CheckNotEquals(0, Self.D.TransportCount, 'Precondition: SetUp didn''t add transports');
 
   Self.D.ClearTransports;
   CheckEquals(0, Self.D.TransportCount, 'After Clear');
+
+  Self.D.AddTransportBinding(UdpTransport,
+                             '127.0.0.1',
+                             IdPORT_SIP);
+  CheckEquals(1, Self.D.TransportCount, 'After one AddTransport');
+
+  Self.D.AddTransportBinding(TcpTransport,
+                             '127.0.0.1',
+                             IdPORT_SIP);
+  CheckEquals(2, Self.D.TransportCount, 'After two AddTransports');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestCreateNewTransaction;
@@ -1636,14 +1635,14 @@ begin
   Self.L     := TIdSipMockLocator.Create;
   Self.Timer := TIdDebugTimerQueue.Create(false);
 
-  Self.TcpTransport := TIdSipMockTcpTransport.Create;
-  Self.UdpTransport := TIdSipMockUdpTransport.Create;
-
-  Self.MockTransport := Self.UdpTransport;
-
+  // Remember, Self's subclass has registered mock transports for these symbols.
   Self.D := TIdSipTransactionDispatcher.Create(Self.Timer, Self.L);
-  Self.D.AddTransport(Self.TcpTransport);
-  Self.D.AddTransport(Self.UdpTransport);
+  Self.D.AddTransportBinding(IdSipMessage.TcpTransport, '127.0.0.1', 5060);
+  Self.D.AddTransportBinding(IdSipMessage.UdpTransport, '127.0.0.1', 5060);
+
+  Self.TcpTransport := Self.D.Transports[0] as TIdSipMockTransport;
+  Self.UdpTransport := Self.D.Transports[1] as TIdSipMockTransport;
+  Self.MockTransport := Self.UdpTransport;
 
   Self.Request  := TIdSipTestResources.CreateBasicRequest;
   Self.Response := TIdSipResponse.InResponseTo(Self.Request, SIPNotFound);
@@ -2314,7 +2313,10 @@ begin
   Self.Tran := Self.TransactionType.Create(Self.MockDispatcher, Self.Request);
   Self.Tran.AddTransactionListener(Self);
 
-  Self.Destination := TIdSipLocation.Create(TcpTransport, '127.0.0.1', IdPORT_SIP);
+  // This must differ from the dispatcher's bindings, or we will make hairpin
+  // calls when we send INVITEs. That in itself isn't a problem, but for most
+  // tests that's not what we want!
+  Self.Destination := TIdSipLocation.Create(TcpTransport, '127.0.0.2', IdPORT_SIP);
 
   Self.TransactionCompleted  := false;
   Self.TransactionFailed     := false;
@@ -4139,8 +4141,8 @@ begin
 
   TranCount := Self.MockDispatcher.TransactionCount;
 
-  // Until timeout occurs, there should be 7 requests sent (at times t=0, 0.5,
-  // 1.5, 3.5, 7.5, 15.5, 31.5).
+  // Until timeout occurs, there should be 7 requests sent (every time Timer A
+  // fires, at times t=0, 0.5, 1.5, 3.5, 7.5, 15.5, 31.5).
   for I := 1 to 6 do
     Self.DebugTimer.TriggerEarliestEvent;
 
@@ -4148,6 +4150,7 @@ begin
               Transaction(Tran.State),
               'After 6 resends');
 
+  // Then Timer B should be scheduled, which this next line should do.
   Self.DebugTimer.TriggerEarliestEvent;
 
   Check(Self.MockDispatcher.TransactionCount < TranCount,
