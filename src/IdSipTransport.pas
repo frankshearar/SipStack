@@ -90,13 +90,13 @@ type
     procedure NotifyOfSentRequest(Request: TIdSipRequest;
                                   Dest: TIdSipLocation);
     procedure NotifyOfSentResponse(Response: TIdSipResponse;
-                                   Dest: TIdSipLocation); 
+                                   Dest: TIdSipLocation);
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnMalformedMessage(const Msg: String;
                                  const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               ReceivedFrom: TIdSipConnectionBindings); virtual;
+                               ReceivedFrom: TIdSipConnectionBindings); 
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 ReceivedFrom: TIdSipConnectionBindings);
     procedure ReturnBadRequest(Request: TIdSipRequest;
@@ -128,6 +128,10 @@ type
     function  IsNull: Boolean; virtual;
     function  IsReliable: Boolean; virtual;
     function  IsRunning: Boolean; virtual;
+    procedure ReceiveRequest(Request: TIdSipRequest;
+                             ReceivedFrom: TIdSipConnectionBindings); virtual;
+    procedure ReceiveResponse(Response: TIdSipResponse;
+                              ReceivedFrom: TIdSipConnectionBindings);
     procedure RemoveBinding(const Address: String; Port: Cardinal);
     procedure RemoveTransportListener(const Listener: IIdSipTransportListener);
     procedure RemoveTransportSendingListener(const Listener: IIdSipTransportSendingListener);
@@ -307,8 +311,6 @@ type
     procedure DestroyServer; override;
     function  GetBindings: TIdSocketHandles; override;
     procedure InstantiateServer; override;
-    procedure OnReceiveRequest(Request: TIdSipRequest;
-                               ReceivedFrom: TIdSipConnectionBindings); override;
     procedure SendRequest(R: TIdSipRequest;
                           Dest: TIdSipLocation); override;
     procedure SendResponse(R: TIdSipResponse;
@@ -322,6 +324,8 @@ type
 
     function  IsReliable: Boolean; override;
     function  IsRunning: Boolean; override;
+    procedure ReceiveRequest(Request: TIdSipRequest;
+                             ReceivedFrom: TIdSipConnectionBindings); override;
     procedure Start; override;
     procedure Stop; override;
   end;
@@ -652,6 +656,48 @@ begin
   Result := false;
 end;
 
+procedure TIdSipTransport.ReceiveRequest(Request: TIdSipRequest;
+                                         ReceivedFrom: TIdSipConnectionBindings);
+begin
+  if Request.IsMalformed then begin
+    Self.NotifyOfRejectedMessage(Request.AsString,
+                                 Request.ParseFailReason);
+    Self.ReturnBadRequest(Request, ReceivedFrom);
+    Exit;
+  end;
+
+  // cf. RFC 3261 section 18.2.1
+  if TIdSipParser.IsFQDN(Request.LastHop.SentBy)
+    or (Request.LastHop.SentBy <> ReceivedFrom.PeerIP) then
+    Request.LastHop.Received := ReceivedFrom.PeerIP;
+
+  // We let the UA handle rejecting messages because of things like the UA
+  // not supporting the SIP version or whatnot. This allows us to centralise
+  // response generation.
+    Self.NotifyOfReceivedRequest(Request, ReceivedFrom);
+end;
+
+procedure TIdSipTransport.ReceiveResponse(Response: TIdSipResponse;
+                                          ReceivedFrom: TIdSipConnectionBindings);
+begin
+  if Response.IsMalformed then begin
+    Self.NotifyOfRejectedMessage(Response.AsString,
+                                 Response.ParseFailReason);
+    // Drop the malformed response.
+    Exit;
+  end;
+
+  // cf. RFC 3261 section 18.1.2
+
+  if Self.SentByIsRecognised(Response.LastHop) then begin
+    Self.NotifyOfReceivedResponse(Response, ReceivedFrom);
+  end
+  else
+    Self.NotifyOfRejectedMessage(Response.AsString,
+                                 RequestNotSentFromHere);
+end;
+
+
 procedure TIdSipTransport.RemoveBinding(const Address: String; Port: Cardinal);
 var
   Index:      Integer;
@@ -864,42 +910,13 @@ end;
 procedure TIdSipTransport.OnReceiveRequest(Request: TIdSipRequest;
                                            ReceivedFrom: TIdSipConnectionBindings);
 begin
-  if Request.IsMalformed then begin
-    Self.NotifyOfRejectedMessage(Request.AsString,
-                                 Request.ParseFailReason);
-    Self.ReturnBadRequest(Request, ReceivedFrom);
-    Exit;
-  end;
-
-  // cf. RFC 3261 section 18.2.1
-  if TIdSipParser.IsFQDN(Request.LastHop.SentBy)
-    or (Request.LastHop.SentBy <> ReceivedFrom.PeerIP) then
-    Request.LastHop.Received := ReceivedFrom.PeerIP;
-
-  // We let the UA handle rejecting messages because of things like the UA
-  // not supporting the SIP version or whatnot. This allows us to centralise
-  // response generation.
-    Self.NotifyOfReceivedRequest(Request, ReceivedFrom);
+  Self.ReceiveRequest(Request, ReceivedFrom);
 end;
 
 procedure TIdSipTransport.OnReceiveResponse(Response: TIdSipResponse;
                                             ReceivedFrom: TIdSipConnectionBindings);
 begin
-  if Response.IsMalformed then begin
-    Self.NotifyOfRejectedMessage(Response.AsString,
-                                 Response.ParseFailReason);
-    // Drop the malformed response.
-    Exit;
-  end;
-
-  // cf. RFC 3261 section 18.1.2
-
-  if Self.SentByIsRecognised(Response.LastHop) then begin
-    Self.NotifyOfReceivedResponse(Response, ReceivedFrom);
-  end
-  else
-    Self.NotifyOfRejectedMessage(Response.AsString,
-                                 RequestNotSentFromHere);
+  Self.ReceiveResponse(Response, ReceivedFrom);
 end;
 
 procedure TIdSipTransport.ReturnBadRequest(Request: TIdSipRequest;
@@ -1566,6 +1583,20 @@ begin
   Result := Self.Transport.Active;
 end;
 
+procedure TIdSipUDPTransport.ReceiveRequest(Request: TIdSipRequest;
+                                            ReceivedFrom: TIdSipConnectionBindings);
+begin
+  // RFC 3581 section 4
+  if Request.LastHop.HasRPort then begin
+    if not Request.LastHop.HasReceived then
+      Request.LastHop.Received := ReceivedFrom.PeerIP;
+
+    Request.LastHop.RPort := ReceivedFrom.PeerPort;
+  end;
+
+  inherited ReceiveRequest(Request, ReceivedFrom);
+end;
+
 procedure TIdSipUDPTransport.Start;
 begin
   inherited Start;
@@ -1595,20 +1626,6 @@ begin
   Self.Transport := TIdSipUdpServer.Create(nil);
   Self.Transport.AddMessageListener(Self);
   Self.Transport.ThreadedEvent := true;
-end;
-
-procedure TIdSipUDPTransport.OnReceiveRequest(Request: TIdSipRequest;
-                                              ReceivedFrom: TIdSipConnectionBindings);
-begin
-  // RFC 3581 section 4
-  if Request.LastHop.HasRPort then begin
-    if not Request.LastHop.HasReceived then
-      Request.LastHop.Received := ReceivedFrom.PeerIP;
-
-    Request.LastHop.RPort := ReceivedFrom.PeerPort;
-  end;
-
-  inherited OnReceiveRequest(Request, ReceivedFrom);
 end;
 
 procedure TIdSipUDPTransport.SendRequest(R: TIdSipRequest;
