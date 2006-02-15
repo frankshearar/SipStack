@@ -79,18 +79,18 @@ type
     function  GetPort: Cardinal; virtual;
     function  IndexOfBinding(const Address: String; Port: Cardinal): Integer;
     procedure InstantiateServer; virtual;
-    procedure NotifyTransportListeners(Request: TIdSipRequest;
-                                       ReceivedFrom: TIdSipConnectionBindings); overload;
-    procedure NotifyTransportListeners(Response: TIdSipResponse;
-                                       ReceivedFrom: TIdSipConnectionBindings); overload;
-    procedure NotifyTransportListenersOfException(E: Exception;
-                                                  const Reason: String);
-    procedure NotifyTransportListenersOfRejectedMessage(const Msg: String;
-                                                        const Reason: String);
-    procedure NotifyTransportSendingListeners(Request: TIdSipRequest;
-                                              Dest: TIdSipLocation); overload;
-    procedure NotifyTransportSendingListeners(Response: TIdSipResponse;
-                                              Dest: TIdSipLocation); overload;
+    procedure NotifyOfReceivedRequest(Request: TIdSipRequest;
+                                      ReceivedFrom: TIdSipConnectionBindings);
+    procedure NotifyOfReceivedResponse(Response: TIdSipResponse;
+                                       ReceivedFrom: TIdSipConnectionBindings);
+    procedure NotifyOfException(E: Exception;
+                                const Reason: String);
+    procedure NotifyOfRejectedMessage(const Msg: String;
+                                      const Reason: String);
+    procedure NotifyOfSentRequest(Request: TIdSipRequest;
+                                  Dest: TIdSipLocation);
+    procedure NotifyOfSentResponse(Response: TIdSipResponse;
+                                   Dest: TIdSipLocation); 
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnMalformedMessage(const Msg: String;
@@ -741,8 +741,8 @@ procedure TIdSipTransport.InstantiateServer;
 begin
 end;
 
-procedure TIdSipTransport.NotifyTransportListeners(Request: TIdSipRequest;
-                                                   ReceivedFrom: TIdSipConnectionBindings);
+procedure TIdSipTransport.NotifyOfReceivedRequest(Request: TIdSipRequest;
+                                                  ReceivedFrom: TIdSipConnectionBindings);
 var
   Notification: TIdSipTransportReceiveRequestMethod;
 begin
@@ -762,7 +762,7 @@ begin
   end;
 end;
 
-procedure TIdSipTransport.NotifyTransportListeners(Response: TIdSipResponse;
+procedure TIdSipTransport.NotifyOfReceivedResponse(Response: TIdSipResponse;
                                                    ReceivedFrom: TIdSipConnectionBindings);
 var
   Notification: TIdSipTransportReceiveResponseMethod;
@@ -783,8 +783,8 @@ begin
   end;
 end;
 
-procedure TIdSipTransport.NotifyTransportListenersOfException(E: Exception;
-                                                              const Reason: String);
+procedure TIdSipTransport.NotifyOfException(E: Exception;
+                                            const Reason: String);
 var
   Notification: TIdSipTransportExceptionMethod;
 begin
@@ -799,8 +799,8 @@ begin
   end;
 end;
 
-procedure TIdSipTransport.NotifyTransportListenersOfRejectedMessage(const Msg: String;
-                                                                    const Reason: String);
+procedure TIdSipTransport.NotifyOfRejectedMessage(const Msg: String;
+                                                  const Reason: String);
 var
   Notification: TIdSipTransportRejectedMessageMethod;
 begin
@@ -815,8 +815,8 @@ begin
   end;
 end;
 
-procedure TIdSipTransport.NotifyTransportSendingListeners(Request: TIdSipRequest;
-                                                          Dest: TIdSipLocation);
+procedure TIdSipTransport.NotifyOfSentRequest(Request: TIdSipRequest;
+                                              Dest: TIdSipLocation);
 var
   Notification: TIdSipTransportSendingRequestMethod;
 begin
@@ -832,8 +832,8 @@ begin
   end;
 end;
 
-procedure TIdSipTransport.NotifyTransportSendingListeners(Response: TIdSipResponse;
-                                                          Dest: TIdSipLocation);
+procedure TIdSipTransport.NotifyOfSentResponse(Response: TIdSipResponse;
+                                               Dest: TIdSipLocation);
 var
   Notification: TIdSipTransportSendingResponseMethod;
 begin
@@ -852,21 +852,21 @@ end;
 procedure TIdSipTransport.OnException(E: Exception;
                                       const Reason: String);
 begin
-  Self.NotifyTransportListenersOfException(E, Reason);
+  Self.NotifyOfException(E, Reason);
 end;
 
 procedure TIdSipTransport.OnMalformedMessage(const Msg: String;
                                              const Reason: String);
 begin
-  Self.NotifyTransportListenersOfRejectedMessage(Msg, Reason);
+  Self.NotifyOfRejectedMessage(Msg, Reason);
 end;
 
 procedure TIdSipTransport.OnReceiveRequest(Request: TIdSipRequest;
                                            ReceivedFrom: TIdSipConnectionBindings);
 begin
   if Request.IsMalformed then begin
-    Self.NotifyTransportListenersOfRejectedMessage(Request.AsString,
-                                                   Request.ParseFailReason);
+    Self.NotifyOfRejectedMessage(Request.AsString,
+                                 Request.ParseFailReason);
     Self.ReturnBadRequest(Request, ReceivedFrom);
     Exit;
   end;
@@ -879,15 +879,15 @@ begin
   // We let the UA handle rejecting messages because of things like the UA
   // not supporting the SIP version or whatnot. This allows us to centralise
   // response generation.
-    Self.NotifyTransportListeners(Request, ReceivedFrom);
+    Self.NotifyOfReceivedRequest(Request, ReceivedFrom);
 end;
 
 procedure TIdSipTransport.OnReceiveResponse(Response: TIdSipResponse;
                                             ReceivedFrom: TIdSipConnectionBindings);
 begin
   if Response.IsMalformed then begin
-    Self.NotifyTransportListenersOfRejectedMessage(Response.AsString,
-                                                   Response.ParseFailReason);
+    Self.NotifyOfRejectedMessage(Response.AsString,
+                                 Response.ParseFailReason);
     // Drop the malformed response.
     Exit;
   end;
@@ -895,11 +895,11 @@ begin
   // cf. RFC 3261 section 18.1.2
 
   if Self.SentByIsRecognised(Response.LastHop) then begin
-    Self.NotifyTransportListeners(Response, ReceivedFrom);
+    Self.NotifyOfReceivedResponse(Response, ReceivedFrom);
   end
   else
-    Self.NotifyTransportListenersOfRejectedMessage(Response.AsString,
-                                                   RequestNotSentFromHere);
+    Self.NotifyOfRejectedMessage(Response.AsString,
+                                 RequestNotSentFromHere);
 end;
 
 procedure TIdSipTransport.ReturnBadRequest(Request: TIdSipRequest;
@@ -929,13 +929,13 @@ procedure TIdSipTransport.SendRequest(R: TIdSipRequest;
                                       Dest: TIdSipLocation);
 begin
   Self.RewriteOwnVia(R, Self.Bindings[0].IP, Self.Bindings[0].Port);
-  Self.NotifyTransportSendingListeners(R, Dest);
+  Self.NotifyOfSentRequest(R, Dest);
 end;
 
 procedure TIdSipTransport.SendResponse(R: TIdSipResponse;
                                        Dest: TIdSipLocation);
 begin
-  Self.NotifyTransportSendingListeners(R, Dest);
+  Self.NotifyOfSentResponse(R, Dest);
 end;
 
 function TIdSipTransport.SentByIsRecognised(Via: TIdSipViaHeader): Boolean;
