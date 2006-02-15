@@ -23,7 +23,6 @@ type
     Notifier: TIdSipServerNotifier;
 
     procedure DoOnException(Sender: TObject);
-    procedure DoOnReceiveMessage(Sender: TObject);
   protected
     procedure DoUDPRead(AData: TStream; ABinding: TIdSocketHandle); override;
     procedure NotifyListenersOfResponse(Response: TIdSipResponse;
@@ -43,12 +42,16 @@ type
 
   // I represent a (possibly) deferred receipt of a message.
   // Give me a COPY of a binding in ReceivedFrom, and I'll free it.
-  TIdSipReceiveUDPMessageWait = class(TIdSipMessageNotifyEventWait)
+  TIdSipReceiveUDPMessageWait = class(TIdSipMessageWait)
   private
+    fNotifier:     TIdSipServerNotifier;
     fReceivedFrom: TIdSipConnectionBindings;
   public
     destructor Destroy; override;
 
+    procedure Trigger; override;
+
+    property Notifier:     TIdSipServerNotifier     read fNotifier write fNotifier;
     property ReceivedFrom: TIdSipConnectionBindings read fReceivedFrom write fReceivedFrom;
   end;
 
@@ -145,8 +148,8 @@ var
   Wait: TIdSipReceiveUDPMessageWait;
 begin
   Wait := TIdSipReceiveUDPMessageWait.Create;
-  Wait.Event        := Self.DoOnReceiveMessage;
-  Wait.Message      := Msg.Copy;
+  Wait.Notifier := Self.Notifier;
+  Wait.Message  := Msg.Copy;
 
   Wait.ReceivedFrom := TIdSipConnectionBindings.Create;
   Wait.ReceivedFrom.LocalIP   := Binding.IP;
@@ -175,20 +178,6 @@ begin
   end;
 end;
 
-procedure TIdSipUdpServer.DoOnReceiveMessage(Sender: TObject);
-var
-  Wait: TIdSipReceiveUDPMessageWait;
-begin
-  Wait := Sender as TIdSipReceiveUDPMessageWait;
-
-  if Wait.Message.IsRequest then
-    Self.Notifier.NotifyListenersOfRequest(Wait.Message as TIdSipRequest,
-                                           Wait.ReceivedFrom)
-  else
-    Self.Notifier.NotifyListenersOfResponse(Wait.Message as TIdSipResponse,
-                                            Wait.ReceivedFrom);
-end;
-
 //******************************************************************************
 //* TIdSipReceiveUDPMessageWait                                                *
 //******************************************************************************
@@ -199,6 +188,16 @@ begin
   Self.ReceivedFrom.Free;
 
   inherited Destroy;
+end;
+
+procedure TIdSipReceiveUDPMessageWait.Trigger;
+begin
+  if Self.Message.IsRequest then
+    Self.Notifier.NotifyListenersOfRequest(Self.Message as TIdSipRequest,
+                                           Self.ReceivedFrom)
+  else
+    Self.Notifier.NotifyListenersOfResponse(Self.Message as TIdSipResponse,
+                                            Self.ReceivedFrom);
 end;
 
 end.
