@@ -201,7 +201,7 @@ var
 begin
   Ex := E.Create(ExceptionMessage);
   try
-    Self.NotifyTransportListenersOfException(Ex, Reason);
+    Self.NotifyOfException(Ex, Reason);
   finally
     Ex.Free;
   end;
@@ -220,7 +220,7 @@ begin
   try
     FakeBinding := TIdSipConnectionBindings.Create;
     try
-      Self.NotifyTransportListeners(CopyOfMessage, FakeBinding);
+      Self.NotifyOfReceivedRequest(CopyOfMessage, FakeBinding);
     finally
       FakeBinding.Free;
     end;
@@ -243,8 +243,8 @@ begin
 
   CopyOfMessage := Msg.Copy;
   try
-    Self.NotifyTransportListenersOfRejectedMessage(CopyOfMessage.AsString,
-                                                   Reason);
+    Self.NotifyOfRejectedMessage(CopyOfMessage.AsString,
+                                 Reason);
   finally
     CopyOfMessage.Free;
   end;
@@ -263,7 +263,7 @@ begin
   try
     FakeBinding := TIdSipConnectionBindings.Create;
     try
-      Self.NotifyTransportListeners(CopyOfMessage, FakeBinding);
+      Self.NotifyOfReceivedResponse(CopyOfMessage, FakeBinding);
     finally
       FakeBinding.Free;
     end;
@@ -345,7 +345,7 @@ end;
 procedure TIdSipMockTransport.SendRequest(R: TIdSipRequest;
                                           Dest: TIdSipLocation);
 begin
-  Self.NotifyTransportSendingListeners(R, Dest);
+  Self.NotifyOfSentRequest(R, Dest);
 
   Self.Log(R.AsString, dirOut);
 
@@ -370,7 +370,7 @@ end;
 procedure TIdSipMockTransport.SendResponse(R: TIdSipResponse;
                                            Dest: TIdSipLocation);
 begin
-  Self.NotifyTransportSendingListeners(R, Dest);
+  Self.NotifyOfSentResponse(R, Dest);
 
   Self.Log(R.AsString, dirOut);
   Self.fResponses.AddCopy(R);

@@ -60,24 +60,13 @@ type
   // wait for the next line of data to arrive.
   // Through my MessageReader, I read messages from the network and feed them to
   // a TimerQueue. That, and I send messages to the network.
-  TIdSipTcpClient = class(TIdTCPClient,
-                          IIdSipMessageListener)
+  TIdSipTcpClient = class(TIdTCPClient)
   private
-    fOnRequest:    TIdSipRequestEvent;
-    fOnResponse:   TIdSipResponseEvent;
     fTerminated:   Boolean;
     MessageReader: TIdSipTcpMessageReader;
 
     function  GetTimer: TIdTimerQueue;
     procedure MarkAsTerminated(Sender: TObject);
-    procedure OnException(E: Exception;
-                          const Reason: String);
-    procedure OnMalformedMessage(const Msg: String;
-                                 const Reason: String);
-    procedure OnReceiveRequest(Request: TIdSipRequest;
-                               ReceivedFrom: TIdSipConnectionBindings);
-    procedure OnReceiveResponse(Response: TIdSipResponse;
-                                ReceivedFrom: TIdSipConnectionBindings);
     procedure SetTerminated(Value: Boolean);
     procedure SetTimer(Value: TIdTimerQueue);
   protected
@@ -91,10 +80,8 @@ type
     procedure RemoveMessageListener(Listener: IIdSipMessageListener);
     procedure Send(Msg: TIdSipMessage);
 
-    property OnRequest:  TIdSipRequestEvent  read fOnRequest write fOnRequest;
-    property OnResponse: TIdSipResponseEvent read fOnResponse write fOnResponse;
-    property Terminated: Boolean             read fTerminated write SetTerminated;
-    property Timer:      TIdTimerQueue       read GetTimer write SetTimer;
+    property Terminated: Boolean       read fTerminated write SetTerminated;
+    property Timer:      TIdTimerQueue read GetTimer write SetTimer;
   end;
 
   TIdSipTcpClientClass = class of TIdSipTcpClient;
@@ -329,7 +316,6 @@ begin
   Self.ReadTimeout    := Self.DefaultTimeout;
 
   Self.MessageReader := TIdSipTcpMessageReader.Create;
-  Self.MessageReader.Notifier.AddMessageListener(Self);
 
   Self.Terminated  := false;
 end;
@@ -379,34 +365,6 @@ end;
 procedure TIdSipTcpClient.MarkAsTerminated(Sender: TObject);
 begin
   Self.Terminated := true;
-end;
-
-procedure TIdSipTcpClient.OnException(E: Exception;
-                                      const Reason: String);
-begin
-  // Do nothing.
-end;
-
-procedure TIdSipTcpClient.OnMalformedMessage(const Msg: String;
-                                             const Reason: String);
-begin
-  // Do nothing.
-end;
-
-procedure TIdSipTcpClient.OnReceiveRequest(Request: TIdSipRequest;
-                                           ReceivedFrom: TIdSipConnectionBindings);
-begin
-  // This executes in the Timer context
-  if Assigned(Self.OnRequest) then
-    Self.OnRequest(Self, Request, ReceivedFrom);
-end;
-
-procedure TIdSipTcpClient.OnReceiveResponse(Response: TIdSipResponse;
-                                            ReceivedFrom: TIdSipConnectionBindings);
-begin
-  // This executes in the Timer context
-  if Assigned(Self.OnResponse) then
-    Self.OnResponse(Self, Response, ReceivedFrom);
 end;
 
 procedure TIdSipTcpClient.SetTerminated(Value: Boolean);

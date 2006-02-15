@@ -21,7 +21,8 @@ type
   TIdSipResponseEvent = procedure(Sender: TObject;
                                   R: TIdSipResponse) of object;
 
-  TestTIdSipTcpClient = class(TTestCaseSip, IIdSipMessageListener)
+  TestTIdSipTcpClient = class(TTestCaseSip,
+                              IIdSipMessageListener)
   private
     CheckingRequestEvent:  TIdSipRequestEvent;
     CheckingResponseEvent: TIdSipResponseEvent;
@@ -37,21 +38,17 @@ type
     Timer:                 TIdThreadedTimerQueue;
 
     procedure CheckReceiveOkResponse(Sender: TObject;
-                                     Response: TIdSipResponse;
-                                     ReceivedFrom: TIdSipConnectionBindings);
+                                     Response: TIdSipResponse);
     procedure CheckReceiveOptions(Sender: TObject;
-                                  Request: TIdSipRequest;
-                                  ReceivedFrom: TIdSipConnectionBindings);
+                                  Request: TIdSipRequest);
     procedure CheckReceiveProvisionalAndOkResponse(Sender: TObject;
-                                                   Response: TIdSipResponse;
-                                                   ReceivedFrom: TIdSipConnectionBindings);
+                                                   Response: TIdSipResponse);
     procedure CheckSendInvite(Sender: TObject;
                               Request: TIdSipRequest);
     procedure CheckSendTwoInvites(Sender: TObject;
                                   Request: TIdSipRequest);
     procedure ClientReceivedRequest(Sender: TObject;
-                                    R: TIdSipRequest;
-                                    ReceivedFrom: TIdSipConnectionBindings);
+                                    R: TIdSipRequest);
     procedure CutConnection(Sender: TObject;
                             R: TIdSipRequest);
     procedure OnEmpty(Sender: TIdTimerQueue);
@@ -127,6 +124,7 @@ begin
   Self.Client.Port        := Self.Server.DefaultPort;
   Self.Client.ReadTimeout := 1000;
   Self.Client.Timer       := Self.Timer;
+  Self.Client.AddMessageListener(Self);
 
   Self.Invite := TIdSipTestResources.CreateLocalLoopRequest;
 
@@ -160,8 +158,7 @@ end;
 //* TestTIdSipTcpClient Private methods ****************************************
 
 procedure TestTIdSipTcpClient.CheckReceiveOkResponse(Sender: TObject;
-                                                     Response: TIdSipResponse;
-                                                     ReceivedFrom: TIdSipConnectionBindings);
+                                                     Response: TIdSipResponse);
 begin
   try
     CheckEquals(SIPOK, Response.StatusCode, 'Unexpected response');
@@ -175,8 +172,7 @@ begin
 end;
 
 procedure TestTIdSipTcpClient.CheckReceiveOptions(Sender: TObject;
-                                                  Request: TIdSipRequest;
-                                                  ReceivedFrom: TIdSipConnectionBindings);
+                                                  Request: TIdSipRequest);
 begin
   try
     CheckEquals(MethodOptions, Request.Method, 'Unexpected request');
@@ -190,8 +186,7 @@ begin
 end;
 
 procedure TestTIdSipTcpClient.CheckReceiveProvisionalAndOkResponse(Sender: TObject;
-                                                                   Response: TIdSipResponse;
-                                                                   ReceivedFrom: TIdSipConnectionBindings);
+                                                                   Response: TIdSipResponse);
 begin
   try
     Inc(Self.ReceivedResponseCount);
@@ -249,8 +244,7 @@ begin
 end;
 
 procedure TestTIdSipTcpClient.ClientReceivedRequest(Sender: TObject;
-                                                    R: TIdSipRequest;
-                                                    ReceivedFrom: TIdSipConnectionBindings);
+                                                    R: TIdSipRequest);
 begin
   Self.ReceivedRequestMethod := R.Method;
   Self.ThreadEvent.SetEvent;
@@ -417,7 +411,7 @@ end;
 
 procedure TestTIdSipTcpClient.TestCanReceiveRequest;
 begin
-  Self.Client.OnRequest := Self.ClientReceivedRequest;
+  Self.CheckingRequestEvent := Self.ClientReceivedRequest;
   Self.Client.Connect(DefaultTimeout);
   Self.ReceiveOptions;
   Self.Client.ReceiveMessages;
@@ -470,8 +464,8 @@ end;
 
 procedure TestTIdSipTcpClient.TestReceiveOkResponse;
 begin
-  Self.CheckingRequestEvent := Self.SendOkResponse;
-  Self.Client.OnResponse    := Self.CheckReceiveOkResponse;
+  Self.CheckingRequestEvent  := Self.SendOkResponse;
+  Self.CheckingResponseEvent := Self.CheckReceiveOkResponse;
 
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Send(Self.Invite);
@@ -481,8 +475,8 @@ end;
 
 procedure TestTIdSipTcpClient.TestReceiveOkResponseWithPause;
 begin
-  Self.CheckingRequestEvent := Self.PauseAndSendOkResponse;
-  Self.Client.OnResponse    := Self.CheckReceiveOkResponse;
+  Self.CheckingRequestEvent  := Self.PauseAndSendOkResponse;
+  Self.CheckingResponseEvent := Self.CheckReceiveOkResponse;
 
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Send(Self.Invite);
@@ -492,8 +486,8 @@ end;
 
 procedure TestTIdSipTcpClient.TestReceiveProvisionalAndOkResponse;
 begin
-  Self.CheckingRequestEvent := Self.SendProvisionalAndOkResponse;
-  Self.Client.OnResponse    := Self.CheckReceiveProvisionalAndOkResponse;
+  Self.CheckingRequestEvent  := Self.SendProvisionalAndOkResponse;
+  Self.CheckingResponseEvent := Self.CheckReceiveProvisionalAndOkResponse;
 
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Send(Self.Invite);
@@ -519,7 +513,7 @@ var
   OK: TIdSipResponse;
 begin
   Self.CheckingResponseEvent := Self.SendResponseReceiveOptions;
-  Self.Client.OnRequest      := Self.CheckReceiveOptions;
+  Self.CheckingRequestEvent  := Self.CheckReceiveOptions;
 
   OK := TIdSipResponse.InResponseTo(Self.Invite, SIPOK);
   try

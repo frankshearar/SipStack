@@ -19,12 +19,12 @@ uses
 type
   TIdSipTransportSubclass = class(TIdSipTcpTransport)
   public
-    procedure NotifyTransportListeners(const Request: TIdSipRequest); overload;
-    procedure NotifyTransportListeners(const Response: TIdSipResponse); overload;
-    procedure NotifyTransportSendingListeners(const Request: TIdSipRequest;
-                                              Dest: TIdSipLocation); overload;
-    procedure NotifyTransportSendingListeners(const Response: TIdSipResponse;
-                                              Dest: TIdSipLocation); overload;
+    procedure NotifyOfReceivedRequest(Request: TIdSipRequest);
+    procedure NotifyOfReceivedResponse(Response: TIdSipResponse);
+    procedure NotifyOfSentRequest(Request: TIdSipRequest;
+                                  Dest: TIdSipLocation);
+    procedure NotifyOfSentResponse(Response: TIdSipResponse;
+                                   Dest: TIdSipLocation); 
   end;
 
   TestTIdSipTransportEventNotifications = class(TTestCaseSip,
@@ -257,11 +257,14 @@ type
     procedure TestUseRport;
   end;
 
-  TestTIdSipTCPTransport = class(TestTIdSipTransport)
+  TestTIdSipTCPTransport = class(TestTIdSipTransport,
+                                 IIdSipMessageListener)
   private
-    ClientReceivedResponse: Boolean;
-    ServerReceivedResponse: Boolean;
-    SipClient:              TIdSipTcpClient;
+    ClientReceiveRequestEvent:  TIdSipRequestEvent;
+    ClientReceiveResponseEvent: TIdSipResponseEvent;
+    ClientReceivedResponse:     Boolean;
+    ServerReceivedResponse:     Boolean;
+    SipClient:                  TIdSipTcpClient;
 
     procedure AcknowledgeEvent(Sender: TObject;
                                Response: TIdSipResponse;
@@ -275,6 +278,14 @@ type
     procedure CheckSendResponsesDownClosedConnection(Sender: TObject;
                                                      Response: TIdSipResponse;
                                                      ReceivedFrom: TIdSipConnectionBindings);
+    procedure OnException(E: Exception;
+                          const Reason: String);
+    procedure OnMalformedMessage(const Msg: String;
+                                 const Reason: String);
+    procedure OnReceiveRequest(Request: TIdSipRequest;
+                               ReceivedFrom: TIdSipConnectionBindings);
+    procedure OnReceiveResponse(Response: TIdSipResponse;
+                                ReceivedFrom: TIdSipConnectionBindings);
     procedure Send200OK(Sender: TObject;
                         Request: TIdSipRequest;
                         ReceivedFrom: TIdSipConnectionBindings);
@@ -495,12 +506,9 @@ var
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipTransport unit tests');
-{
   Result.AddTest(TestTIdSipTransportEventNotifications.Suite);
   Result.AddTest(TestTransportRegistry.Suite);
-}
   Result.AddTest(TestTIdSipTCPTransport.Suite);
-{
 //  Result.AddTest(TestTIdSipTLSTransport.Suite);
   Result.AddTest(TestTIdSipUDPTransport.Suite);
 //  Result.AddTest(TestTIdSipSCTPTransport.Suite);
@@ -514,7 +522,6 @@ begin
   Result.AddTest(TestTIdSipTransportRejectedMessageMethod.Suite);
   Result.AddTest(TestTIdSipTransportSendingRequestMethod.Suite);
   Result.AddTest(TestTIdSipTransportSendingResponseMethod.Suite);
-}
 end;
 
 //******************************************************************************
@@ -522,40 +529,40 @@ end;
 //******************************************************************************
 //* TIdSipTransportSubclass Public methods *************************************
 
-procedure TIdSipTransportSubclass.NotifyTransportListeners(const Request: TIdSipRequest);
+procedure TIdSipTransportSubclass.NotifyOfReceivedRequest(Request: TIdSipRequest);
 var
   FakeBinding: TIdSipConnectionBindings;
 begin
   FakeBinding := TIdSipConnectionBindings.Create;
   try
-    inherited NotifyTransportListeners(Request, FakeBinding);
+    inherited NotifyOfReceivedRequest(Request, FakeBinding);
   finally
     FakeBinding.Free;
   end;
 end;
 
-procedure TIdSipTransportSubclass.NotifyTransportListeners(const Response: TIdSipResponse);
+procedure TIdSipTransportSubclass.NotifyOfReceivedResponse(Response: TIdSipResponse);
 var
   FakeBinding: TIdSipConnectionBindings;
 begin
   FakeBinding := TIdSipConnectionBindings.Create;
   try
-    inherited NotifyTransportListeners(Response, FakeBinding);
+    inherited NotifyOfReceivedResponse(Response, FakeBinding);
   finally
     FakeBinding.Free;
   end;
 end;
 
-procedure TIdSipTransportSubclass.NotifyTransportSendingListeners(const Request: TIdSipRequest;
-                                                                  Dest: TIdSipLocation);
+procedure TIdSipTransportSubclass.NotifyOfSentRequest(Request: TIdSipRequest;
+                                                      Dest: TIdSipLocation);
 begin
-  inherited NotifyTransportSendingListeners(Request, Dest);
+  inherited NotifyOfSentRequest(Request, Dest);
 end;
 
-procedure TIdSipTransportSubclass.NotifyTransportSendingListeners(const Response: TIdSipResponse;
-                                                                  Dest: TIdSipLocation);
+procedure TIdSipTransportSubclass.NotifyOfSentResponse(Response: TIdSipResponse;
+                                                       Dest: TIdSipLocation);
 begin
-  inherited NotifyTransportSendingListeners(Response, Dest);
+  inherited NotifyOfSentResponse(Response, Dest);
 end;
 
 //******************************************************************************
@@ -641,7 +648,7 @@ procedure TestTIdSipTransportEventNotifications.TestAddTransportListener;
 begin
   Self.Transport.AddTransportListener(Self);
 
-  Self.Transport.NotifyTransportListeners(Self.Request);
+  Self.Transport.NotifyOfReceivedRequest(Self.Request);
 
   Check(Self.ReceivedRequest, 'Listener wasn''t added');
 end;
@@ -650,7 +657,7 @@ procedure TestTIdSipTransportEventNotifications.TestAddTransportSendingListener;
 begin
   Self.Transport.AddTransportSendingListener(Self);
 
-  Self.Transport.NotifyTransportSendingListeners(Self.Request, Self.Destination);
+  Self.Transport.NotifyOfSentRequest(Self.Request, Self.Destination);
 
   Check(Self.SentRequest, 'Listener wasn''t added');
 end;
@@ -664,7 +671,7 @@ begin
     Self.Transport.AddTransportListener(Self);
     Self.Transport.AddTransportListener(Listener);
 
-    Self.Transport.NotifyTransportListeners(Self.Request);
+    Self.Transport.NotifyOfReceivedRequest(Self.Request);
 
     Check(Self.ReceivedRequest and Listener.ReceivedRequest,
           'Not all Listeners received the request');
@@ -682,7 +689,7 @@ begin
     Self.Transport.AddTransportListener(Self);
     Self.Transport.AddTransportListener(Listener);
 
-    Self.Transport.NotifyTransportListeners(Self.Response);
+    Self.Transport.NotifyOfReceivedResponse(Self.Response);
 
     Check(Self.ReceivedResponse and Listener.ReceivedResponse,
           'Not all Listeners received the Response');
@@ -700,8 +707,8 @@ begin
     Self.Transport.AddTransportSendingListener(Self);
     Self.Transport.AddTransportSendingListener(Listener);
 
-    Self.Transport.NotifyTransportSendingListeners(Self.Request,
-                                                   Self.Destination);
+    Self.Transport.NotifyOfSentRequest(Self.Request,
+                                       Self.Destination);
 
     Check(Self.SentRequest and Listener.SentRequest,
           'Not all Listeners Sent the request');
@@ -719,8 +726,8 @@ begin
     Self.Transport.AddTransportSendingListener(Self);
     Self.Transport.AddTransportSendingListener(Listener);
 
-    Self.Transport.NotifyTransportSendingListeners(Self.Response,
-                                                   Self.Destination);
+    Self.Transport.NotifyOfSentResponse(Self.Response,
+                                        Self.Destination);
 
     Check(Self.SentResponse and Listener.SentResponse,
           'Not all Listeners Sent the Response');
@@ -734,7 +741,7 @@ begin
   Self.Transport.AddTransportListener(Self);
   Self.Transport.RemoveTransportListener(Self);
 
-  Self.Transport.NotifyTransportListeners(Self.Request);
+  Self.Transport.NotifyOfReceivedRequest(Self.Request);
 
   Check(not Self.ReceivedRequest, 'Listener wasn''t removed');
 end;
@@ -744,8 +751,8 @@ begin
   Self.Transport.AddTransportSendingListener(Self);
   Self.Transport.RemoveTransportSendingListener(Self);
 
-  Self.Transport.NotifyTransportSendingListeners(Self.Request,
-                                                 Self.Destination);
+  Self.Transport.NotifyOfSentRequest(Self.Request,
+                                     Self.Destination);
 
   Check(not Self.SentRequest, 'Listener wasn''t removed');
 end;
@@ -2075,6 +2082,7 @@ end;
 function TestTIdSipTCPTransport.CreateClient: TIdSipTcpClient;
 begin
   Result := TIdSipTcpClient.Create(nil);
+  Result.AddMessageListener(Self);
 end;
 
 procedure TestTIdSipTCPTransport.CheckServerOnPort(const Host: String;
@@ -2182,6 +2190,30 @@ begin
   end;
 end;
 
+procedure TestTIdSipTCPTransport.OnException(E: Exception;
+                                             const Reason: String);
+begin
+end;
+
+procedure TestTIdSipTCPTransport.OnMalformedMessage(const Msg: String;
+                                                    const Reason: String);
+begin
+end;
+
+procedure TestTIdSipTCPTransport.OnReceiveRequest(Request: TIdSipRequest;
+                                                  ReceivedFrom: TIdSipConnectionBindings);
+begin
+  if Assigned(Self.ClientReceiveRequestEvent) then
+    Self.ClientReceiveRequestEvent(Self, Request, ReceivedFrom);
+end;
+
+procedure TestTIdSipTCPTransport.OnReceiveResponse(Response: TIdSipResponse;
+                                                   ReceivedFrom: TIdSipConnectionBindings);
+begin
+  if Assigned(Self.ClientReceiveResponseEvent) then
+    Self.ClientReceiveResponseEvent(Self, Response, ReceivedFrom);
+end;
+
 procedure TestTIdSipTCPTransport.Send200OK(Sender: TObject;
                                            Request: TIdSipRequest;
                                            ReceivedFrom: TIdSipConnectionBindings);
@@ -2227,11 +2259,11 @@ begin
   // connection. In this case the transport will make a connection to itself
   // (since it runs on the default transport port).
 
-  Self.CheckingResponseEvent := Self.CheckSendResponsesDownClosedConnection;
+  Self.CheckingResponseEvent      := Self.CheckSendResponsesDownClosedConnection;
+  Self.ClientReceiveResponseEvent := Self.ClientOnResponseDownClosedConnection;
 
   Request := TIdSipMessage.ReadRequestFrom(LocalLoopRequest);
   try
-    Self.SipClient.OnResponse  := Self.ClientOnResponseDownClosedConnection;
     Self.SipClient.Host        := Self.LowPortTransport.Bindings[0].IP;
     Self.SipClient.Port        := Self.LowPortTransport.Bindings[0].Port;
     Self.SipClient.ReadTimeout := 100;
@@ -2282,10 +2314,10 @@ begin
     try
       Request := TIdSipMessage.ReadRequestFrom(LocalLoopRequest);
       try
-        Self.SipClient.OnResponse  := Self.ClientOnResponseDownClosedConnection;
-        Self.SipClient.Host        := Self.HighPortTransport.Bindings[0].IP;
-        Self.SipClient.Port        := Self.HighPortTransport.Bindings[0].Port;
-        Self.SipClient.ReadTimeout := 100;
+        Self.ClientReceiveResponseEvent := Self.ClientOnResponseDownClosedConnection;
+        Self.SipClient.Host             := Self.HighPortTransport.Bindings[0].IP;
+        Self.SipClient.Port             := Self.HighPortTransport.Bindings[0].Port;
+        Self.SipClient.ReadTimeout      := 100;
 
         Self.SipClient.Connect;
         try
@@ -2336,7 +2368,8 @@ begin
   try
     SipClient := Self.CreateClient;
     try
-      SipClient.OnResponse  := Self.ClientOnResponse;
+      Self.ClientReceiveResponseEvent := Self.ClientOnResponse;
+
       SipClient.Host        := Self.LowPortTransport.Bindings[0].IP;
       SipClient.Port        := Self.LowPortTransport.Bindings[0].Port;
       SipClient.ReadTimeout := 1000;
