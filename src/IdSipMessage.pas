@@ -30,6 +30,7 @@ type
     fLocalPort: Integer;
     fPeerIP:    String;
     fPeerPort:  Integer;
+    fTransport: String;
   public
     procedure Assign(Src: TPersistent); override;
     function  AsString: String;
@@ -40,6 +41,7 @@ type
     property LocalPort: Integer read fLocalPort write fLocalPort;
     property PeerIP:    String  read fPeerIP write fPeerIP;
     property PeerPort:  Integer read fPeerPort write fPeerPort;
+    property Transport: String  read fTransport write fTransport;
   end;
 
   IIdSipMessageListener = interface
@@ -2441,6 +2443,7 @@ begin
     Self.LocalPort := Other.LocalPort;
     Self.PeerIP    := Other.PeerIP;
     Self.PeerPort  := Other.PeerPort;
+    Self.Transport := Other.Transport;
   end
   else
     inherited Assign(Src);

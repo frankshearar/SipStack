@@ -504,6 +504,7 @@ begin
   Self.Binding.LocalPort := 5060;
   Self.Binding.PeerIP    := '::1';
   Self.Binding.PeerPort  := 4444;
+  Self.Binding.Transport := TransportParamTLS_SCTP;
 end;
 
 procedure TestTIdSipConnectionBindings.TearDown;
@@ -534,6 +535,9 @@ begin
     CheckEquals(Self.Binding.PeerPort,
                 Other.PeerPort,
                 'PeerPort');
+    CheckEquals(Self.Binding.Transport,
+                Other.Transport,
+                'Transport');
   finally
     Other.Free;
   end;
@@ -593,8 +597,12 @@ begin
           'LocalPort, LocalPort, PeerIP equal');
 
     Other.PeerPort := Self.Binding.PeerPort;
+    Check(not Other.Equals(Self.Binding),
+          'LocalPort, LocalPort, PeerIP, PeerPort equal, transports not equal');
+
+    Other.Transport := Self.Binding.Transport;
     Check(Other.Equals(Self.Binding),
-          'LocalPort, LocalPort, PeerIP, PeerPort equal');
+          'LocalPort, LocalPort, PeerIP, PeerPort, Transport equal');
   finally
     Other.Free;
   end;
