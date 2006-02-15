@@ -129,6 +129,7 @@ begin
   Self.HighPortServer := Self.ServerType.Create(nil);
   Self.LowPortServer  := Self.ServerType.Create(nil);
   Self.SipClient      := Self.HighPortServer.CreateClient;
+  Self.SipClient.AddMessageListener(Self);
 
   Self.Client.Host := LocalHost;
   Self.Client.Port := LowPortServer.DefaultPort;
@@ -331,11 +332,11 @@ procedure TestTIdSipTcpServer.TestInternalServerError;
 var
   Request: TIdSipRequest;
 begin
-  Self.CheckingRequestEvent := Self.RaiseException;
+  Self.CheckingRequestEvent  := Self.RaiseException;
+  Self.CheckingResponseEvent := Self.CheckInternalServerError;
 
   Request := TIdSipMessage.ReadRequestFrom(LocalLoopRequest);
   try
-    SipClient.OnResponse  := Self.CheckInternalServerError;
     SipClient.Host        := '127.0.0.1';
     SipClient.Port        := LowPortServer.DefaultPort;
     SipClient.ReadTimeout := 1000;
