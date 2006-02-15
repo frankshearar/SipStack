@@ -504,7 +504,7 @@ begin
   Self.Binding.LocalPort := 5060;
   Self.Binding.PeerIP    := '::1';
   Self.Binding.PeerPort  := 4444;
-  Self.Binding.Transport := TransportParamTLS_SCTP;
+  Self.Binding.Transport := TlsOverSctpTransport;
 end;
 
 procedure TestTIdSipConnectionBindings.TearDown;
