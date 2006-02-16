@@ -334,6 +334,7 @@ type
     procedure TestModifyRejected;
     procedure TestModifyRejectedWithTimeout;
     procedure TestModifyWaitTime;
+    procedure TestReceiveBye;
     procedure TestReceiveByeWithPendingRequests;
     procedure TestReceiveInDialogReferWithNoSubscribeModule;
     procedure TestReceiveInDialogRefer;
@@ -399,7 +400,6 @@ type
     procedure TestOkUsesGruuWhenUaDoes;
     procedure TestInboundModifyBeforeFullyEstablished;
     procedure TestInboundModifyReceivesNoAck;
-    procedure TestReceiveBye;
     procedure TestReceiveOutOfOrderReInvite;
     procedure TestRedirectCall;
     procedure TestRejectCallBusy;
@@ -793,10 +793,6 @@ begin
   Self.Session := Self.Core.InviteModule.Call(Self.Destination, '', '');
   Self.Session.AddSessionListener(Self);
   Self.Session.Send;
-
-  // DNS entries for redirected domains, etc.
-  Self.Locator.AddA('bar.org',   '127.0.0.1');
-  Self.Locator.AddA('quaax.org', '127.0.0.1');
 end;
 
 //* TestDebug Published methods ************************************************
@@ -2316,7 +2312,7 @@ begin
   // Sanity check
   CheckEquals('',
               Self.LastSentRequest.Body,
-              'You just sent an INVITE with a body!');
+              Invite.ClassName + ': You just sent an INVITE with a body!');
 
   Invite.Offer    := TIdSipTestResources.BasicSDP('1.2.3.4');
   Invite.MimeType := SdpMimeType;
@@ -2326,13 +2322,13 @@ begin
                          TIdSipTestResources.BasicSDP('4.3.2.1'),
                          Invite.MimeType);
 
-  CheckAckSent('No ACK sent');
+  CheckAckSent(Invite.ClassName + ': No ACK sent');
   CheckEquals(Invite.Offer,
               Self.LastSentAck.Body,
-              'Incorrect answer');
+              Invite.ClassName + ': Incorrect answer');
   CheckEquals(Invite.MimeType,
               Self.LastSentAck.ContentType,
-              'Incorrect answer type');
+              Invite.ClassName + ': Incorrect answer type');
 end;
 
 procedure TestTIdSipOutboundInvite.TestCancelAfterAccept;
@@ -2576,34 +2572,38 @@ begin
 end;
 
 procedure TestTIdSipOutboundInvite.TestOfferInInvite;
+var
+  Action:    TIdSipAction;
+  ClassName: String;
 begin
   //  ---    INVITE (with offer)   --->
   // <---   200 OK (with answer)   ---
   //  --- ACK (with copy of offer) --->
 
   Self.MarkSentRequestCount;
-  Self.CreateAction;
-  CheckRequestSent('No initial INVITE sent');
+  Action := Self.CreateAction;
+  ClassName := Action.ClassName;
+  CheckRequestSent(ClassName + ': No initial INVITE sent');
 
   CheckEquals(Self.InviteOffer,
               Self.LastSentRequest.Body,
-              'Body of INVITE');
+              ClassName + ': Body of INVITE');
   CheckEquals(Self.InviteMimeType,
               Self.LastSentRequest.ContentType,
-              'Content-Type of INVITE');
+              ClassName + ': Content-Type of INVITE');
 
   Self.MarkSentAckCount;
   Self.ReceiveOkWithBody(Self.LastSentRequest,
                          TIdSipTestResources.BasicSDP('4.3.2.1'),
                          SdpMimeType);
 
-  CheckAckSent('No ACK sent');
+  CheckAckSent(ClassName + ': No ACK sent');
   CheckEquals(Self.LastSentRequest.Body,
               Self.LastSentAck.Body,
-              'Body of ACK doesn''t match INVITE');
+              ClassName + ': Body of ACK doesn''t match INVITE');
   CheckEquals(Self.LastSentRequest.ContentType,
               Self.LastSentAck.ContentType,
-              'Content-Type of ACK doesn''t match INVITE');
+              ClassName + ': Content-Type of ACK doesn''t match INVITE');
 end;
 
 procedure TestTIdSipOutboundInvite.TestReceive2xxSchedulesTransactionCompleted;
@@ -3717,6 +3717,22 @@ begin
     CheckResendWaitTime(Session.ModifyWaitTime, Session.ClassName);
 end;
 
+procedure TestTIdSipSession.TestReceiveBye;
+var
+  Session:  TIdSipSession;
+begin
+  Self.Dispatcher.Transport.WriteLog := true;
+  try
+    Session := Self.CreateAndEstablishSession;
+
+    Self.ReceiveBye(Session.Dialog);
+
+    Check(Self.OnEndedSessionFired, 'OnEndedSession didn''t fire');
+  finally
+    Self.Dispatcher.Transport.WriteLog := false;
+  end;
+end;
+
 procedure TestTIdSipSession.TestReceiveByeWithPendingRequests;
 var
   Bye:      TIdSipRequest;
@@ -4033,8 +4049,6 @@ begin
   Self.Invite.ContentType   := SdpMimeType;
   Self.Invite.Body          := Self.SimpleSdp.AsString;
   Self.Invite.ContentLength := Length(Self.SimpleSdp.AsString);
-
-  Self.Locator.AddA(Self.Invite.RequestUri.Host, '127.0.0.1');
 end;
 
 procedure TestTIdSipInboundSession.TearDown;
@@ -4639,17 +4653,6 @@ begin
               'Unexpected request sent');
 end;
 
-procedure TestTIdSipInboundSession.TestReceiveBye;
-begin
-  Self.CreateAction;
-  Check(Assigned(Self.Session), 'OnInboundCall not called');
-  Self.Session.AcceptCall('', '');
-
-  Self.ReceiveBye(Self.Session.Dialog);
-
-  Check(Self.OnEndedSessionFired, 'OnEndedSession didn''t fire');
-end;
-
 procedure TestTIdSipInboundSession.TestRedirectCall;
 var
   Dest:         TIdSipAddressHeader;
@@ -4885,10 +4888,6 @@ begin
   Self.OnModifiedSessionFired   := false;
   Self.OnProgressedSessionFired := false;
   Self.RemoteDesc               := '';
-
-  // DNS entries for redirected domains, etc.
-  Self.Locator.AddA('bar.org',   '127.0.0.1');
-  Self.Locator.AddA('quaax.org', '127.0.0.1');
 
   Self.FailFirstInviteSend := false;
 end;
@@ -6226,9 +6225,6 @@ var
   OK:               TIdSipResponse;
   Session:          TIdSipOutboundSession;
 begin
-  // For the ACK's Request-URI
-  Self.Locator.AddA('tessier-ashpool.co.luna', '127.0.0.1');
-
   CheckNotEquals('',
                  Self.Module.AllowedExtensions,
                  Self.ClassName
@@ -6552,7 +6548,6 @@ begin
   inherited SetUp;
 
   Self.Invite   := TIdSipTestResources.CreateBasicRequest;
-  Self.Dispatcher.MockLocator.AddA(Self.Invite.LastHop.SentBy, '127.0.0.1');
 
   Self.Listener := TIdSipTestInviteModuleListener.Create;
   Self.Session  := TIdSipInboundSession.CreateInbound(Self.UA, Self.Invite, false);
