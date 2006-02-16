@@ -108,11 +108,11 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
 
-    procedure CheckAckSent(const Msg: String);
+    procedure CheckAckSent(const Msg: String); virtual;
     procedure CheckNoRequestSent(const Msg: String);
     procedure CheckRequestSent(const Msg: String); virtual;
     procedure CheckNoResponseSent(const Msg: String);
-    procedure CheckResponseSent(const Msg: String);
+    procedure CheckResponseSent(const Msg: String); virtual;
     procedure UseGruu;
   end;
 
