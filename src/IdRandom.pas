@@ -128,6 +128,8 @@ end;
 
 function TIdRandomNumber.NextRandomBits(NumBits: Cardinal): Cardinal;
 begin
+  // Return a random Cardinal in the range 0 <= Result < 2^NumBits.
+
   // TODO: Delphi's RNG is not sufficient. When we have time we shall implement
   // Ferguson/Schneier's Fortuna PRNG, as described in "Practical
   // Cryptography". If peer review shows it to be decent, that is. Or we trust
