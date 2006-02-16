@@ -24,6 +24,7 @@ type
     FailReason:               String;
     Password:                 String;
 
+    function  AddFailReason(const Msg: String): String;
     procedure CheckAuthentication(const AuthenticationHeaderName: String;
                                   const AuthorizationHeaderName: String;
                                   const QopType: String);
@@ -53,7 +54,9 @@ type
   public
     procedure SetUp; override;
 
+    procedure CheckAckSent(const Msg: String); override;
     procedure CheckRequestSent(const Msg: String); override;
+    procedure CheckResponseSent(const Msg: String); override;
   published
     procedure TestAbandonAuthentication; virtual;
     procedure TestAuthentication;
@@ -97,18 +100,29 @@ begin
   Self.Password                 := 'mycotoxin';
 end;
 
-procedure TestTIdSipAction.CheckRequestSent(const Msg: String);
-var
-  FailMsg: String;
+procedure TestTIdSipAction.CheckAckSent(const Msg: String);
 begin
-  FailMsg := Msg;
-  if (Self.FailReason <> '') then
-    FailMsg := FailMsg + '(' + Self.FailReason + ')';
+  inherited CheckAckSent(Self.AddFailReason(Msg));
+end;
 
-  Check(Self.RequestCount < Self.SentRequestCount, FailMsg);
+procedure TestTIdSipAction.CheckRequestSent(const Msg: String);
+begin
+  inherited CheckRequestSent(Self.AddFailReason(Msg));
+end;
+
+procedure TestTIdSipAction.CheckResponseSent(const Msg: String);
+begin
+  inherited CheckResponseSent(Self.AddFailReason(Msg));
 end;
 
 //* TestTIdSipAction Protected methods *****************************************
+
+function TestTIdSipAction.AddFailReason(const Msg: String): String;
+begin
+  Result := Msg;
+  if (Self.FailReason <> '') then
+    Result := Result + '(' + Self.FailReason + ')';
+end;
 
 procedure TestTIdSipAction.CheckAuthentication(const AuthenticationHeaderName: String;
                                                const AuthorizationHeaderName: String;
