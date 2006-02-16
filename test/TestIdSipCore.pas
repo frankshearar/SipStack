@@ -1698,9 +1698,12 @@ var
 begin
   // Set us up to use GRUU
   Self.Core.UseGruu := true;
+  // We have to set this because the InboundSession will Ring, which creates a
+  // response with a Contact defined by Self.Core.Gruu.
+  Self.Core.Gruu.Value := 'sip:some.gruu';
   Self.Invite.Supported.Values.Add(ExtensionGruu);
 
-  // Create two actions (which will use different LocalGruus
+  // Create two actions (which will use different LocalGruus)
   A := Self.Actions.Add(TIdSipInboundSession.CreateInbound(Self.Core, Self.Invite, false));
   A.LocalGruu.Value := '<' + LocalGruuOne + '>';
   B := Self.Actions.Add(TIdSipOutboundSession.Create(Self.Core));
@@ -1979,7 +1982,7 @@ var
   Locations: TIdSipLocations;
 begin
   // SRV records point to Self.Destination.Address.Host;
-  // Self.Destination.Address.Host resolves to two A records.
+  // Self.Destination.Address.Host resolves to two name records.
 
   Self.Locator.AddSRV(Self.Destination.Address.Host,
                       SrvTcpPrefix,
@@ -1987,8 +1990,8 @@ begin
                       0,
                       5060,
                       Self.Destination.Address.Host);
-  Self.Locator.AddA   (Self.Destination.Address.Host, '127.0.0.1');
-  Self.Locator.AddAAAA(Self.Destination.Address.Host, '::1');
+  Self.Locator.AddA   (Self.Destination.Address.Host, '127.0.0.2');
+  Self.Locator.AddAAAA(Self.Destination.Address.Host, '::2');
 
   Self.Dispatcher.Transport.FailWith := EIdConnectTimeout;
   Self.MarkSentRequestCount;
@@ -2507,8 +2510,6 @@ begin
     Options.ContentLength := 0;
     Options.MaxForwards := 0;
     Options.AddHeader(UserAgentHeader).Value := 'sipsak v0.8.1';
-
-    Self.Locator.AddA(Options.LastHop.SentBy, '127.0.0.1');
 
     Self.ReceiveRequest(Options);
 
