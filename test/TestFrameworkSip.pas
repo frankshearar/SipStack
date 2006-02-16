@@ -956,7 +956,7 @@ begin
   inherited SetUp;
 
   Self.Destination := TIdSipToHeader.Create;
-  Self.Destination.Value := 'sip:franks@localhost';
+  Self.Destination.Value := 'sip:franks@remotehost';
 
   Self.DebugTimer := TIdDebugTimerQueue.Create(false);
   Self.DebugTimer.TriggerImmediateEvents := true;
@@ -967,7 +967,9 @@ begin
 
   Self.Invite := TIdSipTestResources.CreateBasicRequest;
   Self.RemoveBody(Self.Invite);
-  Self.Locator.AddA(Self.Invite.LastHop.SentBy, '127.0.0.1');
+  // The address differs from the transports attached to Self.Core so we
+  // don't construct hairpin calls.
+  Self.Locator.AddA(Self.Invite.LastHop.SentBy, '127.0.0.2');
 end;
 
 procedure TTestCaseTU.TearDown;
@@ -1030,8 +1032,10 @@ function TTestCaseTU.CreateRemoteBye(LocalDialog: TIdSipDialog): TIdSipRequest;
 begin
   Result := Self.Core.InviteModule.CreateBye(LocalDialog);
   try
-    Result.ToHeader.Tag := LocalDialog.ID.LocalTag;
-    Result.From.Tag     := LocalDialog.ID.RemoteTag;
+    Result.RequestUri           := LocalDialog.LocalURI;
+    Result.FirstContact.Address := LocalDialog.RemoteTarget;
+    Result.ToHeader.Tag         := LocalDialog.ID.LocalTag;
+    Result.From.Tag             := LocalDialog.ID.RemoteTag;
   except
     FreeAndNil(Result);
 
@@ -1045,6 +1049,7 @@ begin
   // us so presumably has no To tag. Having come from the network, the response
   // WILL have a To tag.
   Result := Self.Core.CreateResponse(Request, SIPOK);
+  Result.FirstContact.Value := Request.ToHeader.Address.AsString;
   Result.ToHeader.Tag := Self.Core.NextTag;
 end;
 
@@ -1065,7 +1070,7 @@ begin
   // Make sure we have a sane DNS setup so that actions don't terminate
   // themselves after they try find locations to which to send their messages.
   MockLocator := Result.Locator as TIdSipMockLocator;
-  MockLocator.AddA(Self.Destination.Address.Host, '127.0.0.1');
+  MockLocator.AddA(Self.Destination.Address.Host, '127.0.0.2');
   MockLocator.AddA(Result.From.Address.Host,      '127.0.0.1');
   MockLocator.AddA('localhost',                   '127.0.0.1');
 end;
