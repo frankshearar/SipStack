@@ -15,12 +15,21 @@ uses
   Classes, Contnrs, IdSipDns, IdSipLocator, IdSipMessage;
 
 type
+  // I represent a version of a Locator used in tests. You can use me to set up
+  // arbitrary DNS environments, determining NAPTR, SRV, A, AAAA records at
+  // will.
+  //
+  // If you look up a name record (A, AAAA), I will create a random address on
+  // the fly. This means you can specify the A/AAAA records you want, without
+  // forcing you to do this for every hostname in your test.
   TIdSipMockLocator = class(TIdSipAbstractLocator)
   private
     fLookupCount: Cardinal;
     fNAPTR:       TIdNaptrRecords;
     fNameRecords: TIdDomainNameRecords;
     fSRV:         TIdSrvRecords;
+
+    function AddRandomNameRecord(const DomainName: String): TIdDomainNameRecord;
   protected
     procedure PerformNameLookup(const DomainName: String;
                                 Result: TIdDomainNameRecords); override;
@@ -59,6 +68,9 @@ type
   end;
 
 implementation
+
+uses
+  IdRandom, SysUtils;
 
 //******************************************************************************
 //* TIdSipMockLocator                                                          *
@@ -163,6 +175,9 @@ begin
     if (Self.NameRecords[I].Domain = DomainName) then
       Result.Add(Self.NameRecords[I]);
   end;
+
+  if Result.IsEmpty then
+    Result.Add(Self.AddRandomNameRecord(DomainName));
 end;
 
 procedure TIdSipMockLocator.PerformNAPTRLookup(TargetUri: TIdUri;
@@ -202,6 +217,23 @@ end;
 procedure TIdSipMockLocator.PostFindServersFor(Response: TIdSipResponse);
 begin
   Inc(Self.fLookupCount);
+end;
+
+//* TIdSipMockLocator Private methods ******************************************
+
+function TIdSipMockLocator.AddRandomNameRecord(const DomainName: String): TIdDomainNameRecord;
+var
+  RandomAddress: String;
+begin
+  RandomAddress := IntToStr(GRandomNumber.NextRandomBits(8)) + '.'
+                 + IntToStr(GRandomNumber.NextRandomBits(8)) + '.'
+                 + IntToStr(GRandomNumber.NextRandomBits(8)) + '.'
+                 + IntToStr(GRandomNumber.NextRandomBits(8));
+
+  Result := TIdDomainNameRecord.Create(DnsARecord,
+                                       DomainName,
+                                       RandomAddress);
+  Self.NameRecords.Add(Result);
 end;
 
 end.
