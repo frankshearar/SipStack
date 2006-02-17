@@ -772,8 +772,6 @@ begin
 
   Self.Module    := Self.Core.RegisterModule;
   Self.RemoteUri := TIdSipURI.Create('sip:wintermute@tessier-ashpool.co.luna');
-
-  Self.Locator.AddA(Self.RemoteUri.Host, '127.0.0.1');
 end;
 
 procedure TestTIdSipOutboundRegisterModule.TearDown;
@@ -788,7 +786,7 @@ end;
 procedure TestTIdSipOutboundRegisterModule.TestCleanUpUnregisters;
 begin
   Self.Module.HasRegistrar := true;
-  Self.Module.Registrar := Self.Core.From.Address;
+  Self.Module.Registrar.Uri := 'sip:remotehost';
   Self.MarkSentRequestCount;
 
   Self.Module.CleanUp;
