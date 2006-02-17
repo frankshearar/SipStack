@@ -2375,7 +2375,6 @@ begin
 
   Self.TerminateAnyPendingRequests;
 
-  Self.MarkAsTerminated;
   Self.Dialog.ReceiveRequest(Bye);
 
   OK := Self.UA.CreateResponse(Bye, SIPOK);
@@ -2386,6 +2385,7 @@ begin
   end;
 
   Self.NotifyOfEndedSession(RemoteHangUp, RSNoReason);
+  Self.MarkAsTerminated;
 end;
 
 procedure TIdSipSession.ReceiveCancel(Cancel: TIdSipRequest);
