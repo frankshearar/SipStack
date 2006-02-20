@@ -1287,7 +1287,7 @@ var
 begin
   Self.Module.AddPackage(TIdSipReferPackage);
 
-  Refer := Self.Module.Refer(Self.Core.Contact, Self.Destination);
+  Refer := Self.Module.Refer(Self.Destination, Self.Core.Contact);
   Check(Assigned(Refer),
         'Result not assigned');
 
@@ -2125,7 +2125,7 @@ begin
     OK := TIdSipResponse.InResponseTo(Subscribe, SIPOK);
     try
       // We need a Contact for the dialog's remote-target.
-      OK.AddHeader(ContactHeaderFull).Value := 'sip:wintermute@localhost';
+      OK.AddHeader(ContactHeaderFull).Value := 'sip:wintermute@remotehost';
       Self.Dialog := TIdSipDialog.CreateOutboundDialog(Subscribe,
                                                        OK,
                                                        false);
@@ -2729,8 +2729,11 @@ procedure TestTIdSipInboundSubscription.ReceiveSubscribe(const EventPackage: Str
 var
   Sub: TIdSipRequest;
 begin
-  Sub := Self.Module.CreateSubscribe(Self.Destination, EventPackage);
+  Sub := Self.Module.CreateSubscribe(Self.Core.Contact, EventPackage);
   try
+    Sub.From.Address         := Self.Destination.Address;
+    Sub.FirstContact.Address := Self.Destination.Address;
+
     Sub.Event.ID := Self.ID;
     if (ExpiryTime > 0) then
       Sub.Expires.NumericValue := ExpiryTime;
@@ -3229,8 +3232,8 @@ begin
   Self.ArbExpiresValue := 22;
 
   // DNS entries for redirected domains, etc.
-  Self.Locator.AddA('bar.org',   '127.0.0.1');
-  Self.Locator.AddA('quaax.org', '127.0.0.1');
+  Self.Locator.AddA('bar.org',   '127.0.0.2');
+  Self.Locator.AddA('quaax.org', '127.0.0.2');
 
   Self.Subscription := Self.EstablishSubscription;
 
@@ -4368,8 +4371,11 @@ procedure TestTIdSipInboundReferral.ReceiveRefer(Target: TIdSipAddressHeader);
 var
   Refer: TIdSipRequest;
 begin
-  Refer := Self.Module.CreateRefer(Self.Destination, Target);
+  Refer := Self.Module.CreateRefer(Self.Core.Contact, Target);
   try
+    Refer.From.Address         := Self.Destination.Address;
+    Refer.FirstContact.Address := Self.Destination.Address;
+
     Self.ReceiveRequest(Refer);
   finally
     Refer.Free;
@@ -4830,7 +4836,7 @@ function TestTIdSipOutboundReferral.CreateReferral: TIdSipOutboundReferral;
 begin
   Self.Module.AddPackage(TIdSipReferPackage);
 
-  Result := Self.Module.Refer(Self.Core.Contact, Self.Destination);
+  Result := Self.Module.Refer(Self.Destination, Self.Core.Contact);
   Result.AddActionListener(Self);
   Result.AddListener(Self);
   Result.Send;
