@@ -1556,7 +1556,7 @@ begin
     Action.ReceiveResponse(Self.Response, Self.Receiver.IsSecure)
   else
 
-    Self.UserAgent.NotifyOfDroppedMessage(Self.Response, Self.Receiver);
+  Self.UserAgent.NotifyOfDroppedMessage(Self.Response, Self.Receiver);
 end;
 
 //******************************************************************************
