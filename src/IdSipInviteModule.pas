@@ -3024,8 +3024,8 @@ begin
   // give up the attempt, we tell the initial INVITE to terminate, and terminate
   // ourselves, without sending any messages.
   if Self.FullyEstablished then begin
-    Self.MarkAsTerminated;
     Self.SendBye;
+    Self.MarkAsTerminated;
     Self.NotifyOfEndedSession(LocalHangUp, RSNoReason);
   end
   else begin
