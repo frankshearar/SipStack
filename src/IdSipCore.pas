@@ -75,7 +75,7 @@ uses
   SyncObjs, SysUtils;
 
 const
-  SipStackVersion = '0.5.1';
+  SipStackVersion = '0.5.2';
 
 type
   TIdSipAction = class;
