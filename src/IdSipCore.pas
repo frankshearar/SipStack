@@ -666,8 +666,6 @@ type
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
     procedure NotifyOfRedirect(Response: TIdSipResponse);
     procedure NotifyOfSuccess(Msg: TIdSipMessage); virtual;
-    function  ReceiveOKResponse(Response: TIdSipResponse;
-                                UsingSecureTransport: Boolean): TIdSipActionResult; override;
     function  ReceiveRedirectionResponse(Response: TIdSipResponse;
                                          UsingSecureTransport: Boolean): TIdSipActionResult; override;
   public
@@ -3647,14 +3645,6 @@ begin
   finally
     Notification.Free;
   end;
-end;
-
-function TIdSipOwnedAction.ReceiveOKResponse(Response: TIdSipResponse;
-                                             UsingSecureTransport: Boolean): TIdSipActionResult;
-begin
-  Result := inherited ReceiveOKResponse(Response, UsingSecureTransport);
-
-  Self.NotifyOfSuccess(Response);
 end;
 
 function TIdSipOwnedAction.ReceiveRedirectionResponse(Response: TIdSipResponse;
