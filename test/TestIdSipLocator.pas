@@ -129,6 +129,8 @@ type
   published
     procedure TestLookupCount;
     procedure TestResolveNameRecords;
+    procedure TestResolveNameRecordsWithAutomagicNameRecords;
+    procedure TestResolveNameRecordsWithoutAutomagicNameRecords;
     procedure TestResolveNAPTRSip;
     procedure TestResolveNAPTRSips;
     procedure TestResolveSRV;
@@ -1132,6 +1134,8 @@ end;
 
 procedure TestTIdSipAbstractLocator.TestFindServersForSrvNoNameRecords;
 begin
+  Self.Loc.ReturnOnlySpecifiedRecords := true;
+
   Self.Target.Uri :='sip:' + Self.Domain;
 
   Self.Loc.AddSRV(Self.Domain, SrvTcpPrefix,  0, 0, 0, Self.Domain);
@@ -1259,6 +1263,54 @@ begin
     CheckEquals('::1',       Results[1].IPAddress, '2nd record');
     CheckEquals('::2',       Results[2].IPAddress, '3rd record');
     CheckEquals('127.0.0.2', Results[3].IPAddress, '4th record');
+  finally
+    Results.Free;
+  end;
+end;
+
+procedure TestTIdSipMockLocator.TestResolveNameRecordsWithAutomagicNameRecords;
+var
+  NameRecord: String;
+  Results:    TIdDomainNameRecords;
+begin
+  Results := TIdDomainNameRecords.Create;
+  try
+    Self.Loc.ResolveNameRecords(Self.AOR.Host, Results);
+
+    CheckEquals(1,
+                Results.Count,
+                'MockLocator didn''t return a randomly-created name record');
+
+    NameRecord := Results[0].IPAddress;
+
+    Results.Clear;
+
+    Self.Loc.ResolveNameRecords(Self.AOR.Host, Results);
+    CheckEquals(1,
+                Results.Count,
+                'MockLocator didn''t return the previously-created name record, '
+              + ' or created yet another address');
+    CheckEquals(NameRecord,
+                Results[0].IPAddress,
+                'MockLocator didn''t persist the randomly-created name record');
+  finally
+    Results.Free;
+  end;
+end;
+
+procedure TestTIdSipMockLocator.TestResolveNameRecordsWithoutAutomagicNameRecords;
+var
+  Results: TIdDomainNameRecords;
+begin
+  Self.Loc.ReturnOnlySpecifiedRecords := true;
+
+  Results := TIdDomainNameRecords.Create;
+  try
+    Self.Loc.ResolveNameRecords(Self.AOR.Host, Results);
+      
+    CheckEquals(0, Results.Count, 'MockLocator created a name record for the domain');
+
+    Self.Loc.ResolveNameRecords(Self.AOR.Host, Results);
   finally
     Results.Free;
   end;

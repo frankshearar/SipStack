@@ -19,15 +19,20 @@ type
   // arbitrary DNS environments, determining NAPTR, SRV, A, AAAA records at
   // will.
   //
-  // If you look up a name record (A, AAAA), I will create a random address on
-  // the fly. This means you can specify the A/AAAA records you want, without
-  // forcing you to do this for every hostname in your test.
+  // If ReturnOnlySpecifiedRecords = false (the default value) and you look up a
+  // name record (A, AAAA), I will create a random address on the fly. This
+  // means you can specify the A/AAAA records you want, without forcing you to
+  // do this for every hostname in your test. If you want a particular DNS setup
+  // that, for instance, relies on no A/AAAA records, set
+  // ReturnOnlySpecifiedRecords to true to return only those entries you specify
+  // manually.
   TIdSipMockLocator = class(TIdSipAbstractLocator)
   private
-    fLookupCount: Cardinal;
-    fNAPTR:       TIdNaptrRecords;
-    fNameRecords: TIdDomainNameRecords;
-    fSRV:         TIdSrvRecords;
+    fLookupCount:                Cardinal;
+    fNAPTR:                      TIdNaptrRecords;
+    fNameRecords:                TIdDomainNameRecords;
+    fReturnOnlySpecifiedRecords: Boolean;
+    fSRV:                        TIdSrvRecords;
 
     function AddRandomNameRecord(const DomainName: String): TIdDomainNameRecord;
   protected
@@ -61,10 +66,11 @@ type
                      const Target: String);
     procedure ResetLookupCount;
 
-    property LookupCount: Cardinal             read fLookupCount;
-    property NameRecords: TIdDomainNameRecords read fNameRecords;
-    property NAPTR:       TIdNaptrRecords      read fNAPTR;
-    property SRV:          TIdSrvRecords       read fSRV;
+    property LookupCount:                Cardinal             read fLookupCount;
+    property NameRecords:                TIdDomainNameRecords read fNameRecords;
+    property NAPTR:                      TIdNaptrRecords      read fNAPTR;
+    property SRV:                        TIdSrvRecords        read fSRV;
+    property ReturnOnlySpecifiedRecords: Boolean              read fReturnOnlySpecifiedRecords write fReturnOnlySpecifiedRecords;
   end;
 
 implementation
@@ -85,6 +91,8 @@ begin
   Self.fNameRecords := TIdDomainNameRecords.Create;
   Self.fNAPTR       := TIdNaptrRecords.Create;
   Self.fSRV         := TIdSrvRecords.Create;
+
+  Self.ReturnOnlySpecifiedRecords := false;
 end;
 
 destructor TIdSipMockLocator.Destroy;
@@ -176,7 +184,7 @@ begin
       Result.Add(Self.NameRecords[I]);
   end;
 
-  if Result.IsEmpty then
+  if Result.IsEmpty and not Self.ReturnOnlySpecifiedRecords then
     Result.Add(Self.AddRandomNameRecord(DomainName));
 end;
 
