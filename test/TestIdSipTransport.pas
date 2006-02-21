@@ -12,9 +12,9 @@ unit TestIdSipTransport;
 interface
 
 uses
-  Classes, IdSipLocator, IdSipMessage, IdSipTcpClient, IdSipTcpServer,
-  IdSipTransport, IdSocketHandle, IdTcpConnection, IdTcpServer, IdTimerQueue,
-  SyncObjs, SysUtils, TestFramework, TestFrameworkEx, TestFrameworkSip;
+  Classes, IdSipLocator, IdSipMessage, IdSipTransport, IdSipTcpTransport,
+  IdSocketHandle, IdTcpConnection, IdTcpServer, IdTimerQueue, SyncObjs,
+  SysUtils, TestFramework, TestFrameworkEx, TestFrameworkSip;
 
 type
   TIdSipTransportSubclass = class(TIdSipTcpTransport)
@@ -497,8 +497,8 @@ implementation
 
 uses
   IdException, IdGlobal, IdSimpleParser, IdSipConsts, IdSipMockTransport,
-  IdSipUdpServer, IdSSLOpenSSL, IdStack, IdSystem, IdTcpClient, IdUdpClient,
-  IdUDPServer, TestMessages;
+  IdSipTlsTransport, IdSipUdpTransport, IdSSLOpenSSL, IdStack, IdSystem,
+  IdTcpClient, IdUdpClient, IdUDPServer, TestMessages;
 
 var
   ServerThatInstantiatesGStack: TIdTcpServer;

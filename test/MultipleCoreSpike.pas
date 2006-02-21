@@ -45,7 +45,8 @@ implementation
 {$R *.dfm}
 
 uses
- IdSipSubscribeModule, IdSipTransport, SingleCoreSpike, SysUtils;
+ IdSipSubscribeModule, IdSipTcpTransport, IdSipTransport, IdSipUdpTransport,
+ SingleCoreSpike, SysUtils;
 
 //******************************************************************************
 //* TMultiCore                                                                 *

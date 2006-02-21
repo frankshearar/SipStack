@@ -15,9 +15,8 @@ uses
   Classes, IdInterfacedObject, IdObservable, IdRTP, IdSdp, IdSipAuthentication,
   IdSipInviteModule, IdSipLocator, IdSipMessage, IdSipCore, IdSipDialog,
   IdSipMockLocator, IdSipMockTransactionDispatcher, IdSipRegistration,
-  IdSipSubscribeModule, IdSipTcpClient, IdSipTcpServer, IdSipTransaction,
-  IdSipTransport, IdTimerQueue, IdSipUserAgent, SysUtils, TestFramework,
-  TestFrameworkEx;
+  IdSipSubscribeModule, IdSipTransaction, IdSipTransport, IdTimerQueue,
+  IdSipUserAgent, SysUtils, TestFramework, TestFrameworkEx;
 
 type
   TIdSipTestResources = class(TObject)

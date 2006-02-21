@@ -12,8 +12,8 @@ unit TestIdSipUdpServer;
 interface
 
 uses
-  Classes, IdSipMessage, IdSipTcpServer, IdSipUdpServer, IdTimerQueue, IdUDPClient,
-  SyncObjs, SysUtils, TestFrameworkSip;
+  Classes, IdSipMessage, IdSipUdpTransport, IdTimerQueue, IdUDPClient, SyncObjs,
+  SysUtils, TestFrameworkSip;
 
 type
   TestTIdSipUdpServer = class(TTestCaseSip,
@@ -90,7 +90,7 @@ uses
 
 function Suite: ITestSuite;
 begin
-  Result := TTestSuite.Create('IdSipUdpServer unit tests');
+  Result := TTestSuite.Create('TIdSipUdpServer unit test');
   Result.AddTest(TestTIdSipUdpServer.Suite);
 end;
 

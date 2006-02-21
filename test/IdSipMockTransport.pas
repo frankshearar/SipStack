@@ -128,7 +128,8 @@ const
 implementation
 
 uses
-  Classes, Contnrs, IdRTP, IdSipTlsOverSctpTransport;
+  Classes, Contnrs, IdRTP, IdSipSctpTransport, IdSipTcpTransport,
+  IdSipTlsTransport, IdSipUdpTransport, IdSipTlsOverSctpTransport;
 
 var
   GAllTransports: TObjectList;

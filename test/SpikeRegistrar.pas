@@ -68,7 +68,7 @@ implementation
 {$R *.dfm}
 
 uses
-  IdStack, IdSipConsts, IdSocketHandle;
+  IdStack, IdSipConsts, IdSocketHandle, IdSipUDPTransport;
 
 const
   LocalHostName = '127.0.0.1';

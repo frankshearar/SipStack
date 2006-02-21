@@ -12,8 +12,8 @@ unit TestIdSipTcpClient;
 interface
 
 uses
-  IdSipMessage, IdSipTcpClient, IdSipTcpServer, IdTimerQueue, IdTCPServer,
-  SyncObjs, SysUtils, TestFrameworkSip;
+  IdSipMessage, IdSipTcpTransport, IdTimerQueue, IdTCPServer, SyncObjs,
+  SysUtils, TestFrameworkSip;
 
 type
   TIdSipRequestEvent = procedure(Sender: TObject;
@@ -97,7 +97,7 @@ uses
 
 function Suite: ITestSuite;
 begin
-  Result := TTestSuite.Create('IdSipTcpClient unit tests');
+  Result := TTestSuite.Create('TIdSipTcpClient unit test');
   Result.AddTest(TestTIdSipTcpClient.Suite);
 end;
 
@@ -547,5 +547,5 @@ begin
 end;
 
 initialization
-  RegisterTest('IdSipTcpClient', Suite);
+  RegisterTest('TCP client', Suite);
 end.

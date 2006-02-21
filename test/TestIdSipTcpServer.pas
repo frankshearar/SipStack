@@ -12,8 +12,8 @@ unit TestIdSipTcpServer;
 interface
 
 uses
-  IdSipLocator, IdSipMessage, IdSipTcpClient, IdSipTcpServer, IdTCPClient,
-  IdTCPConnection, IdTCPServer, IdTimerQueue, SyncObjs, SysUtils, TestFramework,
+  IdSipLocator, IdSipMessage, IdSipTcpTransport, IdTCPClient, IdTCPConnection,
+  IdTCPServer, IdTimerQueue, SyncObjs, SysUtils, TestFramework,
   TestFrameworkSip;
 
 type
@@ -106,7 +106,7 @@ uses
 
 function Suite: ITestSuite;
 begin
-  Result := TTestSuite.Create('IdSipTcpServer unit tests');
+  Result := TTestSuite.Create('TIdSipTcpServer unit tests');
   Result.AddSuite(TestTIdSipTcpServer.Suite);
 end;
 

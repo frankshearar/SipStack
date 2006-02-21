@@ -2468,7 +2468,8 @@ begin
   Result := (Self.LocalIP = Other.LocalIP)
         and (Self.LocalPort = Other.LocalPort)
         and (Self.PeerIP = Other.PeerIP)
-        and (Self.PeerPort = Other.PeerPort);
+        and (Self.PeerPort = Other.PeerPort)
+        and (Self.Transport = Other.Transport);
 end;
 
 //******************************************************************************

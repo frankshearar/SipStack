@@ -208,8 +208,8 @@ implementation
 
 uses
   IdException, IdSdp, IdSipAuthentication, IdSipConsts, IdSipMockLocator,
-  IdSipMockTransport, IdSipSubscribeModule, IdSystem, IdTcpClient, IdUnicode,
-  SysUtils, TestFramework;
+  IdSipMockTransport, IdSipSubscribeModule, IdSipTCPTransport,
+  IdSipUDPTransport, IdSystem, IdTcpClient, IdUnicode, SysUtils, TestFramework;
 
 const
   // SFTF: Sip Foundry Test Framework. cf. http://www.sipfoundry.org/sftf/
