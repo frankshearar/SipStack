@@ -12,7 +12,7 @@ unit IdSipTlsOverSctpTransport;
 interface
 
 uses
-  IdSipMessage, IdSipTransport;
+  IdSipMessage, IdSipSctpTransport;
 
 type
   // RFC 3436
