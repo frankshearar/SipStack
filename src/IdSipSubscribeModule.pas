@@ -320,7 +320,7 @@ type
     procedure ReceiveRefer(Refer: TIdSipRequest); virtual;
     procedure ReceiveSubscribe(Subscribe: TIdSipRequest); virtual;
   public
-    function Method: String; override;
+    function  Method: String; override;
     procedure ReceiveRequest(Request: TIdSipRequest); override;
 
     property EventPackage: String   read fEventPackage write fEventPackage;
@@ -352,10 +352,8 @@ type
     fDialog:   TIdSipDialog;
     fDuration: Cardinal;
   protected
-    function  CreateNewAttempt: TIdSipRequest; override;
+    function CreateNewAttempt: TIdSipRequest; override;
   public
-    procedure Send; override;
-
     property Dialog:   TIdSipDialog read fDialog write fDialog;
     property Duration: Cardinal     read fDuration write fDuration;
   end;
@@ -1620,24 +1618,6 @@ end;
 //******************************************************************************
 //* TIdSipOutboundRefreshSubscribe                                             *
 //******************************************************************************
-//* TIdSipOutboundRefreshSubscribe Public methods ******************************
-
-procedure TIdSipOutboundRefreshSubscribe.Send;
-var
-  Sub: TIdSipRequest;
-begin
-  inherited Send;
-
-  Sub := Self.CreateNewAttempt;
-  try
-    Self.InitialRequest.Assign(Sub);
-
-    Self.SendRequest(Sub);
-  finally
-    Sub.Free;
-  end;
-end;
-
 //* TIdSipOutboundRefreshSubscribe Protected methods ***************************
 
 function TIdSipOutboundRefreshSubscribe.CreateNewAttempt: TIdSipRequest;
