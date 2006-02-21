@@ -44,7 +44,7 @@ uses
   IdSipNatMasquerader in 'src\IdSipNatMasquerader.pas',
   IdSipProxy in 'src\IdSipProxy.pas',
   IdSipRegistration in 'src\IdSipRegistration.pas',
-  IdSipSctpTransport in 'src\IdSipSctpTransport.pas'
+  IdSipSctpTransport in 'src\IdSipSctpTransport.pas',
   IdSipServerNotifier in 'src\IdSipServerNotifier.pas',
   IdSipStackInterface in 'src\IdSipStackInterface.pas',
   IdSipSubscribeModule in 'src\IdSipSubscribeModule.pas',
