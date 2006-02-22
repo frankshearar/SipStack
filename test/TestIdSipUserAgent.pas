@@ -1798,8 +1798,8 @@ end;
 
 procedure TestTIdSipStackConfigurator.TearDown;
 begin
-  TIdSipTransportRegistry.UnregisterTransportTypeType(UdpTransport);
-  TIdSipTransportRegistry.UnregisterTransportTypeType(TcpTransport);
+  TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
+  TIdSipTransportRegistry.UnregisterTransportType(TcpTransport);
 
   Self.Server.Free;
   Self.Timer.Terminate;

@@ -6258,7 +6258,7 @@ begin
   // Return the query name to use in an SRV (RFC 2782) lookup, as part of the
   // SIP server location algorithms of RFC 3263.
 
-  Result := TIdSipTransportRegistry.TransportFor(Self.Transport).SrvQuery(Self.SentBy);
+  Result := TIdSipTransportRegistry.TransportTypeFor(Self.Transport).SrvQuery(Self.SentBy);
 end;
 
 function TIdSipViaHeader.UsesSecureTransport: Boolean;

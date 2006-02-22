@@ -77,13 +77,13 @@ type
                                   const MsgPrefix: String);
   published
     procedure TestSrvTarget;
-    procedure TestTransportFor;
-    procedure TestTransportForNameAndExplicitPort;
-    procedure TestTransportForNumericIPv4;
-    procedure TestTransportForNumericIPv6;
-    procedure TestTransportForWithNaptr;
-    procedure TestTransportForWithoutNaptrAndNoSrv;
-    procedure TestTransportForWithoutNaptrWithSrv;
+    procedure TestTransportTypeFor;
+    procedure TestTransportTypeForNameAndExplicitPort;
+    procedure TestTransportTypeForNumericIPv4;
+    procedure TestTransportTypeForNumericIPv6;
+    procedure TestTransportTypeForWithNaptr;
+    procedure TestTransportTypeForWithoutNaptrAndNoSrv;
+    procedure TestTransportTypeForWithoutNaptrWithSrv;
     procedure TestFindServersForNameNaptrNoSrv;
     procedure TestFindServersForNameNaptrSomeSrv;
     procedure TestFindServersForNameNaptrSrv;
@@ -339,7 +339,7 @@ end;
 
 procedure TLocatorTest.TearDown;
 begin
-  TIdSipTransportRegistry.UnregisterTransportTypeType(TlsOverSctpTransport);
+  TIdSipTransportRegistry.UnregisterTransportType(TlsOverSctpTransport);
 
   inherited TearDown;
 end;
@@ -436,25 +436,25 @@ begin
               'SIP/TLS lookup');
 end;
 
-procedure TestTIdSipAbstractLocator.TestTransportFor;
+procedure TestTIdSipAbstractLocator.TestTransportTypeFor;
 begin
   Self.TransportParam := TransportParamSCTP;
   Self.Target.Uri := 'sip:foo.com;transport=' + Self.TransportParam;
 
   CheckEquals(ParamToTransport(Self.TransportParam),
-              Self.Loc.TransportFor(Self.Target,
+              Self.Loc.TransportTypeFor(Self.Target,
                                     Self.Naptr,
                                     Self.Srv,
                                     Self.NameRecs),
               'Transport parameter must take precedence');
 end;
 
-procedure TestTIdSipAbstractLocator.TestTransportForNameAndExplicitPort;
+procedure TestTIdSipAbstractLocator.TestTransportTypeForNameAndExplicitPort;
 begin
   Self.Target.Uri := 'sip:' + Self.Domain + ':' + IntToStr(Self.Port);
 
   CheckEquals(UdpTransport,
-              Self.Loc.TransportFor(Self.Target,
+              Self.Loc.TransportTypeFor(Self.Target,
                                     Self.Naptr,
                                     Self.Srv,
                                     Self.NameRecs),
@@ -463,19 +463,19 @@ begin
   Self.Target.Uri := 'sips:' + Self.Domain + ':' + IntToStr(Self.Port);
 
   CheckEquals(TlsTransport,
-              Self.Loc.TransportFor(Self.Target,
+              Self.Loc.TransportTypeFor(Self.Target,
                                     Self.Naptr,
                                     Self.Srv,
                                     Self.NameRecs),
               'SIPS, Name, explicit port');
 end;
 
-procedure TestTIdSipAbstractLocator.TestTransportForNumericIPv4;
+procedure TestTIdSipAbstractLocator.TestTransportTypeForNumericIPv4;
 begin
   Self.Target.Uri := 'sip:' + Self.IP;
 
   CheckEquals(UdpTransport,
-              Self.Loc.TransportFor(Self.Target,
+              Self.Loc.TransportTypeFor(Self.Target,
                                     Self.Naptr,
                                     Self.Srv,
                                     Self.NameRecs),
@@ -483,7 +483,7 @@ begin
 
   Self.Target.Uri := 'sip:' + Self.IP + ':' + IntToStr(Self.Port);
   CheckEquals(UdpTransport,
-              Self.Loc.TransportFor(Self.Target,
+              Self.Loc.TransportTypeFor(Self.Target,
                                     Self.Naptr,
                                     Self.Srv,
                                     Self.NameRecs),
@@ -491,7 +491,7 @@ begin
 
   Self.Target.Scheme := SipsScheme;
   CheckEquals(TlsTransport,
-              Self.Loc.TransportFor(Self.Target,
+              Self.Loc.TransportTypeFor(Self.Target,
                                     Self.Naptr,
                                     Self.Srv,
                                     Self.NameRecs),
@@ -499,20 +499,20 @@ begin
 
   Self.Target.Uri := 'sips:' + Self.IP + ':' + IntToStr(Self.Port);
   CheckEquals(TlsTransport,
-              Self.Loc.TransportFor(Self.Target,
+              Self.Loc.TransportTypeFor(Self.Target,
                                     Self.Naptr,
                                     Self.Srv,
                                     Self.NameRecs),
               'SIPS, Numeric IPv4 address, explicit port');
 end;
 
-procedure TestTIdSipAbstractLocator.TestTransportForNumericIPv6;
+procedure TestTIdSipAbstractLocator.TestTransportTypeForNumericIPv6;
 begin
   Self.IP := '[::1]';
   Self.Target.Uri := 'sip:' + Self.IP;
 
   CheckEquals(UdpTransport,
-              Self.Loc.TransportFor(Self.Target,
+              Self.Loc.TransportTypeFor(Self.Target,
                                     Self.Naptr,
                                     Self.Srv,
                                     Self.NameRecs),
@@ -520,7 +520,7 @@ begin
 
   Self.Target.Uri := 'sip:' + Self.IP + ':' + IntToStr(Self.Port);
   CheckEquals(UdpTransport,
-              Self.Loc.TransportFor(Self.Target,
+              Self.Loc.TransportTypeFor(Self.Target,
                                     Self.Naptr,
                                     Self.Srv,
                                     Self.NameRecs),
@@ -528,7 +528,7 @@ begin
 
   Self.Target.Scheme := SipsScheme;
   CheckEquals(TlsTransport,
-              Self.Loc.TransportFor(Self.Target,
+              Self.Loc.TransportTypeFor(Self.Target,
                                     Self.Naptr,
                                     Self.Srv,
                                     Self.NameRecs),
@@ -536,14 +536,14 @@ begin
 
   Self.Target.Uri := 'sips:' + Self.IP + ':' + IntToStr(Self.Port);
   CheckEquals(TlsTransport,
-              Self.Loc.TransportFor(Self.Target,
+              Self.Loc.TransportTypeFor(Self.Target,
                                     Self.Naptr,
                                     Self.Srv,
                                     Self.NameRecs),
               'SIPS, Numeric IPv6 address, explicit port');
 end;
 
-procedure TestTIdSipAbstractLocator.TestTransportForWithNaptr;
+procedure TestTIdSipAbstractLocator.TestTransportTypeForWithNaptr;
 begin
   Self.IP         := 'example.com';
   Self.Target.Uri := 'sip:' + Self.IP;
@@ -558,20 +558,20 @@ begin
   Self.Loc.AddNAPTR(Self.IP, 100, 50, 's', NaptrUdpService, '_sip._udp.example.com');
 
   CheckEquals(Self.Loc.NAPTR[0].AsSipTransport,
-              Self.Loc.TransportFor(Self.Target,
+              Self.Loc.TransportTypeFor(Self.Target,
                                     Self.Naptr,
                                     Self.Srv,
                                     Self.NameRecs),
               'Name, NAPTR records');
 end;
 
-procedure TestTIdSipAbstractLocator.TestTransportForWithoutNaptrAndNoSrv;
+procedure TestTIdSipAbstractLocator.TestTransportTypeForWithoutNaptrAndNoSrv;
 begin
   Self.IP         := 'example.com';
   Self.Target.Uri := 'sip:' + Self.IP;
 
   CheckEquals(UdpTransport,
-              Self.Loc.TransportFor(Self.Target,
+              Self.Loc.TransportTypeFor(Self.Target,
                                     Self.Naptr,
                                     Self.Srv,
                                     Self.NameRecs),
@@ -580,14 +580,14 @@ begin
   Self.Target.Scheme := SipsScheme;
 
   CheckEquals(TlsTransport,
-              Self.Loc.TransportFor(Self.Target,
+              Self.Loc.TransportTypeFor(Self.Target,
                                     Self.Naptr,
                                     Self.Srv,
                                     Self.NameRecs),
               'SIPS, Name, no NAPTR records, no SRV records');
 end;
 
-procedure TestTIdSipAbstractLocator.TestTransportForWithoutNaptrWithSrv;
+procedure TestTIdSipAbstractLocator.TestTransportTypeForWithoutNaptrWithSrv;
 begin
   Self.IP         := 'example.com';
   Self.Target.Uri := 'sip:' + Self.IP;
@@ -600,7 +600,7 @@ begin
   Self.Loc.AddSRV('example.com', '_sip._tcp', 0, 2, 5060, 'server2.example.com');
 
   CheckEquals(TcpTransport,
-              Self.Loc.TransportFor(Self.Target,
+              Self.Loc.TransportTypeFor(Self.Target,
                                     Self.Naptr,
                                     Self.Srv,
                                     Self.NameRecs),
@@ -608,7 +608,7 @@ begin
 
   Self.Target.Scheme := SipsScheme;
   CheckEquals(TcpTransport,
-              Self.Loc.TransportFor(Self.Target,
+              Self.Loc.TransportTypeFor(Self.Target,
                                     Self.Naptr,
                                     Self.Srv,
                                     Self.NameRecs),

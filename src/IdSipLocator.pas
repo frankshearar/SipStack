@@ -144,7 +144,7 @@ type
                           Result: TIdSrvRecords); overload;
     function  SrvTarget(Target: TIdUri;
                         const Protocol: String): String;
-    function  TransportFor(AddressOfRecord: TIdSipUri;
+    function  TransportTypeFor(AddressOfRecord: TIdSipUri;
                            NAPTR: TIdNaptrRecords;
                            SRV: TIdSrvRecords;
                            NameRecords: TIdDomainNameRecords): String;
@@ -282,7 +282,7 @@ begin
           ARecords := TIdDomainNameRecords.Create;
           try
             Target.Uri := AddressOfRecord.Uri;
-            Target.Transport := Self.TransportFor(AddressOfRecord, Naptr, Srv, ARecords);
+            Target.Transport := Self.TransportTypeFor(AddressOfRecord, Naptr, Srv, ARecords);
 
             if AddressOfRecord.HasMaddr then
               Target.Host := AddressOfRecord.Maddr
@@ -515,10 +515,10 @@ end;
 function TIdSipAbstractLocator.SrvTarget(Target: TIdUri;
                                          const Protocol: String): String;
 begin
-  Result := TIdSipTransportRegistry.TransportFor(Protocol).SrvQuery(Target.Host);
+  Result := TIdSipTransportRegistry.TransportTypeFor(Protocol).SrvQuery(Target.Host);
 end;
 
-function TIdSipAbstractLocator.TransportFor(AddressOfRecord: TIdSipUri;
+function TIdSipAbstractLocator.TransportTypeFor(AddressOfRecord: TIdSipUri;
                                             NAPTR: TIdNaptrRecords;
                                             SRV: TIdSrvRecords;
                                             NameRecords: TIdDomainNameRecords): String;
@@ -768,7 +768,7 @@ var
   Index: Integer;
 begin
   // Sometimes we'll have resolved some SRV records as a result of determining
-  // a destination transport (in TransportFor) but we want to look up the other
+  // a destination transport (in TransportTypeFor) but we want to look up the other
   // SRVs. It would waste time and bandwidth re-resolving the SRV RRs currently
   // in the SRV parameter, so we remove the already-resolved transports from
   // the SupportedTrasnports parameter.

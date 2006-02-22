@@ -939,10 +939,10 @@ end;
 
 procedure TTestCaseSip.UnregisterAllTransports;
 begin
-  TIdSipTransportRegistry.UnregisterTransportTypeType(UdpTransport);
-  TIdSipTransportRegistry.UnregisterTransportTypeType(TlsTransport);
-  TIdSipTransportRegistry.UnregisterTransportTypeType(TcpTransport);
-  TIdSipTransportRegistry.UnregisterTransportTypeType(SctpTransport);
+  TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
+  TIdSipTransportRegistry.UnregisterTransportType(TlsTransport);
+  TIdSipTransportRegistry.UnregisterTransportType(TcpTransport);
+  TIdSipTransportRegistry.UnregisterTransportType(SctpTransport);
 end;
 
 //******************************************************************************

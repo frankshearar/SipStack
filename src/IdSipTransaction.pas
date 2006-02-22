@@ -578,7 +578,7 @@ begin
     if (I < Self.Transports.Count) then
       T.AddBinding(Address, Port)
     else begin
-      T := TIdSipTransportRegistry.TransportFor(Transport).Create;
+      T := TIdSipTransportRegistry.TransportTypeFor(Transport).Create;
       T.HostName := Address;
       T.Timer    := Self.Timer;
 

@@ -5550,7 +5550,7 @@ end;
 
 procedure TestTIdSipViaHeader.TearDown;
 begin
-  TIdSipTransportRegistry.UnregisterTransportTypeType(TlsOverSctpTransport);
+  TIdSipTransportRegistry.UnregisterTransportType(TlsOverSctpTransport);
 
   inherited TearDown;
 end;

@@ -77,7 +77,7 @@ begin
     for I := 0 to SupportedTrans.Count - 1 do begin
       Self.AddTransportBinding(SupportedTrans[I],
                                '127.0.0.1',
-                               TIdSipTransportRegistry.TransportFor(SupportedTrans[I]).DefaultPort);
+                               TIdSipTransportRegistry.TransportTypeFor(SupportedTrans[I]).DefaultPort);
     end;
   finally
     SupportedTrans.Free;
@@ -89,9 +89,9 @@ begin
   Self.Timer.Terminate;
   Self.Locator.Free;
 
-  TIdSipTransportRegistry.UnregisterTransportTypeType(TcpTransport);
-  TIdSipTransportRegistry.UnregisterTransportTypeType(TlsTransport);
-  TIdSipTransportRegistry.UnregisterTransportTypeType(UdpTransport);
+  TIdSipTransportRegistry.UnregisterTransportType(TcpTransport);
+  TIdSipTransportRegistry.UnregisterTransportType(TlsTransport);
+  TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
 
   inherited Destroy;
 end;

@@ -84,8 +84,8 @@ end;
 
 destructor TMultiCore.Destroy;
 begin
-  TIdSipTransportRegistry.UnregisterTransportTypeType(TcpTransport);
-  TIdSipTransportRegistry.UnregisterTransportTypeType(UdpTransport);
+  TIdSipTransportRegistry.UnregisterTransportType(TcpTransport);
+  TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
 
   TIdSipEventPackageRegistry.UnregisterEvent(TIdSipReferPackage);
 

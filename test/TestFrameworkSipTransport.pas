@@ -157,7 +157,9 @@ type
     procedure TestClearBindingsDoesntStartStoppedTransport;
     procedure TestClearBindingLeavesOneBindingBehind;
     procedure TestClearBindingRestartsStartedTransport;
+    procedure TestDestructionUnregistersTransport;
     procedure TestHasBinding;
+    procedure TestInstantiationRegistersTransport;
     procedure TestIsNull; virtual;
     procedure TestIsRunning;
     procedure TestDiscardResponseWithUnknownSentBy;
@@ -374,7 +376,7 @@ begin
 
     Self.FinishedTimer.Free;
 
-    TIdSipTransportRegistry.UnregisterTransportTypeType(Self.TransportType.GetTransportType);
+    TIdSipTransportRegistry.UnregisterTransportType(Self.TransportType.GetTransportType);
 
     inherited TearDown;
   end;
@@ -860,6 +862,22 @@ begin
         'ClearBindings didn''t restart the transport');
 end;
 
+procedure TestTIdSipTransport.TestDestructionUnregistersTransport;
+var
+  ID: String;
+  T:  TIdSipTransport;
+begin
+  T := Self.TransportType.Create;
+  try
+    ID := T.ID;
+  finally
+    T.Free;
+  end;
+
+  Check(nil = TIdSipTransportRegistry.TransportFor(ID),
+        Self.HighPortTransport.ClassName + ' didn''t unregister when Freed');
+end;
+
 procedure TestTIdSipTransport.TestHasBinding;
 var
   Address: String;
@@ -879,6 +897,19 @@ begin
         Self.LowPortTransport.ClassName
      +  ': The server doesn''t have, but should, a binding on '
      + Address + ':' + IntToStr(Port));
+end;
+
+procedure TestTIdSipTransport.TestInstantiationRegistersTransport;
+begin
+  CheckNotEquals('',
+                 Self.HighPortTransport.ID,
+                 'HighPortTransport not registered');
+  CheckNotEquals('',
+                 Self.LowPortTransport.ID,
+                 'LowPortTransport not registered');
+  CheckNotEquals(Self.HighPortTransport.ID,
+                 Self.LowPortTransport.ID,
+                 'HighPortTransport and LowPortTransport have same ID');
 end;
 
 procedure TestTIdSipTransport.TestIsNull;

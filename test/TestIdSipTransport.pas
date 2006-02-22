@@ -82,6 +82,8 @@ type
     procedure TestRegisterTransportType;
     procedure TestSecureTransports;
     procedure TestTransportFor;
+    procedure TestTransportTypeFor;
+    procedure TestUnregisterTransport;
     procedure TestUriSchemeFor;
   end;
 
@@ -449,8 +451,8 @@ end;
 
 procedure TestTransportRegistry.TearDown;
 begin
-  TIdSipTransportRegistry.UnregisterTransportTypeType(TlsTransport);
-  TIdSipTransportRegistry.UnregisterTransportTypeType(UdpTransport);
+  TIdSipTransportRegistry.UnregisterTransportType(TlsTransport);
+  TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
 
   inherited TearDown;
 end;
@@ -498,7 +500,7 @@ begin
                 Transports[1],
                 'Second transport after new register');
 
-    TIdSipTransportRegistry.UnregisterTransportTypeType(TcpTransport);
+    TIdSipTransportRegistry.UnregisterTransportType(TcpTransport);
     Transports.Clear;
 
     TIdSipTransportRegistry.InsecureTransports(Transports);
@@ -531,7 +533,7 @@ const
   TransportType: TIdSipTransportClass = TIdSipUDPTransport;
 begin
   try
-    TIdSipTransportRegistry.TransportFor(Foo);
+    TIdSipTransportRegistry.TransportTypeFor(Foo);
     Fail('Didn''t blow up on an unknown transport ' + Foo);
   except
     on EUnknownTransport do;
@@ -539,14 +541,14 @@ begin
 
   TIdSipTransportRegistry.RegisterTransportType(Foo, TransportType);
   try
-    Check(TransportType = TIdSipTransportRegistry.TransportFor(Foo),
+    Check(TransportType = TIdSipTransportRegistry.TransportTypeFor(Foo),
           Foo + ' transport type not registered');
   finally
-    TIdSipTransportRegistry.UnregisterTransportTypeType(Foo);
+    TIdSipTransportRegistry.UnregisterTransportType(Foo);
   end;
 
   try
-    TIdSipTransportRegistry.TransportFor(Foo);
+    TIdSipTransportRegistry.TransportTypeFor(Foo);
     Fail('Didn''t unregister transport ' + Foo);
   except
     on EUnknownTransport do;
@@ -579,7 +581,7 @@ begin
                 Transports[1],
                 'Second transport after new register');
 
-    TIdSipTransportRegistry.UnregisterTransportTypeType(TlsOverSctpTransport);
+    TIdSipTransportRegistry.UnregisterTransportType(TlsOverSctpTransport);
     Transports.Clear;
 
     TIdSipTransportRegistry.SecureTransports(Transports);
@@ -596,16 +598,64 @@ begin
 end;
 
 procedure TestTransportRegistry.TestTransportFor;
+var
+  ID1, ID2: String;
+  T1, T2:   TIdSipTransport;
+begin
+  Check(nil = TIdSipTransportRegistry.TransportFor('non-existent transport ID'),
+        'TransportFor returned a transport for a non-existent transport ID');
+
+  T1 := TIdSipMockTcpTransport.Create;
+  try
+    T2 := TIdSipMockTcpTransport.Create;
+    try
+      ID1 := T1.ID;
+      ID2 := T2.ID;
+
+      Check(T1 = TIdSipTransportRegistry.TransportFor(ID1),
+            'TransportFor returned an unexpected transport');
+    finally
+      T2.Free;
+    end;
+  finally
+    T1.Free;
+  end;
+end;
+
+procedure TestTransportRegistry.TestTransportTypeFor;
 const
   NewTransport = 'UNKNOWN-TRANSPORT';
 begin
   TIdSipTransportRegistry.RegisterTransportType(NewTransport, TIdSipSCTPTransport);
   try
     CheckEquals(TIdSipSCTPTransport,
-                TIdSipTransportRegistry.TransportFor(NewTransport),
+                TIdSipTransportRegistry.TransportTypeFor(NewTransport),
                 NewTransport);
   finally
-    TIdSipTransportRegistry.UnregisterTransportTypeType(NewTransport);
+    TIdSipTransportRegistry.UnregisterTransportType(NewTransport);
+  end;
+end;
+
+procedure TestTransportRegistry.TestUnregisterTransport;
+var
+  ID:            String;
+  MockTransport: TIdSipTransport;
+begin
+  MockTransport := TIdSipMockTcpTransport.Create;
+  try
+    ID := MockTransport.ID;
+    TIdSipTransportRegistry.UnregisterTransport(ID);
+    Check(nil = TIdSipTransportRegistry.TransportFor(ID),
+          'Registry didn''t unregister transport');
+
+    try
+      TIdSipTransportRegistry.UnregisterTransport(ID);
+    except
+      on E: Exception do
+        Fail('Double-unregister blew up: ' + E.ClassName + ': ' + E.Message);
+    end;
+  finally
+    MockTransport.Free;
   end;
 end;
 

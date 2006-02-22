@@ -98,7 +98,7 @@ begin
   Self.WaitForSignaled(Self.EmptyListEvent,
                        'Stack took too long to finish handling outstanding events');
 
-  TIdSipTransportRegistry.UnregisterTransportTypeType(UdpTransport);
+  TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
 
   Self.EmptyListEvent.Free;
 
