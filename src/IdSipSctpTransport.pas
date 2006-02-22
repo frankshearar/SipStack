@@ -15,6 +15,8 @@ uses
   IdSipTransport;
 
 type
+  // I implement the Stream Control Transmission Protocol (RFC 3286) connections
+  // for the SIP stack.
   TIdSipSCTPTransport = class(TIdSipTransport)
   public
     class function GetTransportType: String; override;

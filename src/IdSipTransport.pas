@@ -221,16 +221,6 @@ type
     property Transport: TIdSipTransport read fTransport write SetTransport;
   end;
 
-  // I implement the Stream Control Transmission Protocol (RFC 3286) connections
-  // for the SIP stack.
-  TIdSipSCTPTransport = class(TIdSipTransport)
-  public
-    class function GetTransportType: String; override;
-    class function SrvPrefix: String; override;
-  end;
-
-  // I implement the User Datagram Protocol (RFC 768) connections for the SIP
-  // stack.
   // I represent a collection of Transports. I own, and hence manage the
   // lifetimes of, all transports given to me via Add.
   TIdSipTransports = class(TObject)
@@ -1054,21 +1044,6 @@ begin
   Self.Listeners.RemoveMessageListener(Self.fTransport);
   Self.fTransport := Value;
   Self.Listeners.AddMessageListener(Value);
-end;
-
-//******************************************************************************
-//* TIdSipSCTPTransport                                                        *
-//******************************************************************************
-//* TIdSipSCTPTransport Public methods *****************************************
-
-class function TIdSipSCTPTransport.GetTransportType: String;
-begin
-  Result := SctpTransport;
-end;
-
-class function TIdSipSCTPTransport.SrvPrefix: String;
-begin
-  Result := SrvSctpPrefix;
 end;
 
 //******************************************************************************

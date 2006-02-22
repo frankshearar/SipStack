@@ -18,6 +18,8 @@ uses
 type
   TIdSipUdpServer = class;
 
+  // I implement the User Datagram Protocol (RFC 768) connections for the SIP
+  // stack.
   TIdSipUDPTransport = class(TIdSipTransport)
   private
     Transport: TIdSipUdpServer;
