@@ -79,7 +79,7 @@ type
     procedure TestDefaultPortFor;
     procedure TestInsecureTransports;
     procedure TestIsSecure;
-    procedure TestRegisterTransport;
+    procedure TestRegisterTransportType;
     procedure TestSecureTransports;
     procedure TestTransportFor;
     procedure TestUriSchemeFor;
@@ -443,14 +443,14 @@ procedure TestTransportRegistry.SetUp;
 begin
   inherited SetUp;
 
-  TIdSipTransportRegistry.RegisterTransport(UdpTransport, TIdSipUdpTransport);
-  TIdSipTransportRegistry.RegisterTransport(TlsTransport, TIdSipTlsTransport);
+  TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipUdpTransport);
+  TIdSipTransportRegistry.RegisterTransportType(TlsTransport, TIdSipTlsTransport);
 end;
 
 procedure TestTransportRegistry.TearDown;
 begin
-  TIdSipTransportRegistry.UnregisterTransport(TlsTransport);
-  TIdSipTransportRegistry.UnregisterTransport(UdpTransport);
+  TIdSipTransportRegistry.UnregisterTransportTypeType(TlsTransport);
+  TIdSipTransportRegistry.UnregisterTransportTypeType(UdpTransport);
 
   inherited TearDown;
 end;
@@ -483,7 +483,7 @@ begin
     CheckEquals(1, Transports.Count, 'Count');
     CheckEquals(UdpTransport, Transports[0], 'First transport');
 
-    TIdSipTransportRegistry.RegisterTransport(TcpTransport, TIdSipMockTcpTransport);
+    TIdSipTransportRegistry.RegisterTransportType(TcpTransport, TIdSipMockTcpTransport);
     Transports.Clear;
 
     TIdSipTransportRegistry.InsecureTransports(Transports);
@@ -498,7 +498,7 @@ begin
                 Transports[1],
                 'Second transport after new register');
 
-    TIdSipTransportRegistry.UnregisterTransport(TcpTransport);
+    TIdSipTransportRegistry.UnregisterTransportTypeType(TcpTransport);
     Transports.Clear;
 
     TIdSipTransportRegistry.InsecureTransports(Transports);
@@ -525,7 +525,7 @@ begin
         TIdSipTLSTransport.GetTransportType);
 end;
 
-procedure TestTransportRegistry.TestRegisterTransport;
+procedure TestTransportRegistry.TestRegisterTransportType;
 const
   Foo = 'foo';
   TransportType: TIdSipTransportClass = TIdSipUDPTransport;
@@ -537,12 +537,12 @@ begin
     on EUnknownTransport do;
   end;
 
-  TIdSipTransportRegistry.RegisterTransport(Foo, TransportType);
+  TIdSipTransportRegistry.RegisterTransportType(Foo, TransportType);
   try
     Check(TransportType = TIdSipTransportRegistry.TransportFor(Foo),
           Foo + ' transport type not registered');
   finally
-    TIdSipTransportRegistry.UnregisterTransport(Foo);
+    TIdSipTransportRegistry.UnregisterTransportTypeType(Foo);
   end;
 
   try
@@ -564,7 +564,7 @@ begin
     CheckEquals(1,            Transports.Count, 'Count');
     CheckEquals(TlsTransport, Transports[0],    'First transport');
 
-    TIdSipTransportRegistry.RegisterTransport(TlsOverSctpTransport, TIdSipMockTlsOverSctpTransport);
+    TIdSipTransportRegistry.RegisterTransportType(TlsOverSctpTransport, TIdSipMockTlsOverSctpTransport);
     Transports.Clear;
 
     TIdSipTransportRegistry.SecureTransports(Transports);
@@ -579,7 +579,7 @@ begin
                 Transports[1],
                 'Second transport after new register');
 
-    TIdSipTransportRegistry.UnregisterTransport(TlsOverSctpTransport);
+    TIdSipTransportRegistry.UnregisterTransportTypeType(TlsOverSctpTransport);
     Transports.Clear;
 
     TIdSipTransportRegistry.SecureTransports(Transports);
@@ -599,13 +599,13 @@ procedure TestTransportRegistry.TestTransportFor;
 const
   NewTransport = 'UNKNOWN-TRANSPORT';
 begin
-  TIdSipTransportRegistry.RegisterTransport(NewTransport, TIdSipSCTPTransport);
+  TIdSipTransportRegistry.RegisterTransportType(NewTransport, TIdSipSCTPTransport);
   try
     CheckEquals(TIdSipSCTPTransport,
                 TIdSipTransportRegistry.TransportFor(NewTransport),
                 NewTransport);
   finally
-    TIdSipTransportRegistry.UnregisterTransport(NewTransport);
+    TIdSipTransportRegistry.UnregisterTransportTypeType(NewTransport);
   end;
 end;
 

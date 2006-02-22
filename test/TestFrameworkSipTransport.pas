@@ -296,7 +296,7 @@ begin
     raise Exception.Create('GStack isn''t instantiated - you need something '
                          + 'that opens a socket');
 
-  TIdSipTransportRegistry.RegisterTransport(Self.TransportType.GetTransportType,
+  TIdSipTransportRegistry.RegisterTransportType(Self.TransportType.GetTransportType,
                                               Self.TransportType);
 
   Self.ExceptionMessage := Self.TransportType.ClassName + ': ' + Self.ExceptionMessage;
@@ -374,7 +374,7 @@ begin
 
     Self.FinishedTimer.Free;
 
-    TIdSipTransportRegistry.UnregisterTransport(Self.TransportType.GetTransportType);
+    TIdSipTransportRegistry.UnregisterTransportTypeType(Self.TransportType.GetTransportType);
 
     inherited TearDown;
   end;

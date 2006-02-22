@@ -156,11 +156,11 @@ type
     class function  DefaultPortFor(const Transport: String): Cardinal;
     class procedure InsecureTransports(Result: TStrings);
     class function  IsSecure(const Transport: String): Boolean;
-    class procedure RegisterTransport(const Name: String;
+    class procedure RegisterTransportType(const Name: String;
                                       const TransportType: TIdSipTransportClass);
     class procedure SecureTransports(Result: TStrings);
     class function  TransportFor(const Transport: String): TIdSipTransportClass;
-    class procedure UnregisterTransport(const Name: String);
+    class procedure UnregisterTransportTypeType(const Name: String);
     class function  UriSchemeFor(const Transport: String): String;
   end;
 
@@ -890,7 +890,7 @@ begin
   Result := Self.TransportFor(Transport).IsSecure;
 end;
 
-class procedure TIdSipTransportRegistry.RegisterTransport(const Name: String;
+class procedure TIdSipTransportRegistry.RegisterTransportType(const Name: String;
                                                           const TransportType: TIdSipTransportClass);
 begin
   if (Self.TransportRegistry.IndexOf(Name) = ItemNotFoundIndex) then
@@ -919,7 +919,7 @@ begin
     raise EUnknownTransport.Create('TIdSipTransportRegistry.TransportFor: ' + Transport);
 end;
 
-class procedure TIdSipTransportRegistry.UnregisterTransport(const Name: String);
+class procedure TIdSipTransportRegistry.UnregisterTransportTypeType(const Name: String);
 var
   Index: Integer;
 begin

@@ -71,7 +71,7 @@ begin
   Self.ExceptionType  := Exception;
   Self.fTestCase      := TestCase;
 
-  TIdSipTransportRegistry.RegisterTransport(UdpTransport, TIdSipMockUDPTransport);
+  TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipMockUDPTransport);
 
   BasicConf := TStringList.Create;
   try
@@ -98,7 +98,7 @@ begin
   Self.WaitForSignaled(Self.EmptyListEvent,
                        'Stack took too long to finish handling outstanding events');
 
-  TIdSipTransportRegistry.UnregisterTransport(UdpTransport);
+  TIdSipTransportRegistry.UnregisterTransportTypeType(UdpTransport);
 
   Self.EmptyListEvent.Free;
 

@@ -61,8 +61,8 @@ begin
 
   TIdSipEventPackageRegistry.RegisterEvent(TIdSipReferPackage);
 
-  TIdSipTransportRegistry.RegisterTransport(TcpTransport, TIdSipTcpTransport);
-  TIdSipTransportRegistry.RegisterTransport(UdpTransport, TIdSipUdpTransport);
+  TIdSipTransportRegistry.RegisterTransportType(TcpTransport, TIdSipTcpTransport);
+  TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipUdpTransport);
 
   Self.UAConfig1 := TStringList.Create;
   Self.UAConfig2 := TStringList.Create;
@@ -84,8 +84,8 @@ end;
 
 destructor TMultiCore.Destroy;
 begin
-  TIdSipTransportRegistry.UnregisterTransport(TcpTransport);
-  TIdSipTransportRegistry.UnregisterTransport(UdpTransport);
+  TIdSipTransportRegistry.UnregisterTransportTypeType(TcpTransport);
+  TIdSipTransportRegistry.UnregisterTransportTypeType(UdpTransport);
 
   TIdSipEventPackageRegistry.UnregisterEvent(TIdSipReferPackage);
 

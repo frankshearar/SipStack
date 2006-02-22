@@ -1790,16 +1790,16 @@ begin
   Self.Server.ThreadedEvent := true;
   Self.Server.Active        := true;
 
-  TIdSipTransportRegistry.RegisterTransport(TcpTransport, TIdSipTCPTransport);
-  TIdSipTransportRegistry.RegisterTransport(UdpTransport, TIdSipUDPTransport);
+  TIdSipTransportRegistry.RegisterTransportType(TcpTransport, TIdSipTCPTransport);
+  TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipUDPTransport);
 
   Self.ReceivedPacket := false;
 end;
 
 procedure TestTIdSipStackConfigurator.TearDown;
 begin
-  TIdSipTransportRegistry.UnregisterTransport(UdpTransport);
-  TIdSipTransportRegistry.UnregisterTransport(TcpTransport);
+  TIdSipTransportRegistry.UnregisterTransportTypeType(UdpTransport);
+  TIdSipTransportRegistry.UnregisterTransportTypeType(TcpTransport);
 
   Self.Server.Free;
   Self.Timer.Terminate;

@@ -5545,12 +5545,12 @@ begin
 
   Self.V := TIdSipViaHeader.Create;
 
-  TIdSipTransportRegistry.RegisterTransport(TlsOverSctpTransport, TIdSipMockTlsOverSctpTransport);
+  TIdSipTransportRegistry.RegisterTransportType(TlsOverSctpTransport, TIdSipMockTlsOverSctpTransport);
 end;
 
 procedure TestTIdSipViaHeader.TearDown;
 begin
-  TIdSipTransportRegistry.UnregisterTransport(TlsOverSctpTransport);
+  TIdSipTransportRegistry.UnregisterTransportTypeType(TlsOverSctpTransport);
 
   inherited TearDown;
 end;

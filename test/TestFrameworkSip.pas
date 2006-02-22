@@ -931,18 +931,18 @@ end;
 
 procedure TTestCaseSip.RegisterMockTransports;
 begin
-  TIdSipTransportRegistry.RegisterTransport(SctpTransport, TIdSipMockSctpTransport);
-  TIdSipTransportRegistry.RegisterTransport(TcpTransport,  TIdSipMockTcpTransport);
-  TIdSipTransportRegistry.RegisterTransport(TlsTransport,  TIdSipMockTlsTransport);
-  TIdSipTransportRegistry.RegisterTransport(UdpTransport,  TIdSipMockUdpTransport);
+  TIdSipTransportRegistry.RegisterTransportType(SctpTransport, TIdSipMockSctpTransport);
+  TIdSipTransportRegistry.RegisterTransportType(TcpTransport,  TIdSipMockTcpTransport);
+  TIdSipTransportRegistry.RegisterTransportType(TlsTransport,  TIdSipMockTlsTransport);
+  TIdSipTransportRegistry.RegisterTransportType(UdpTransport,  TIdSipMockUdpTransport);
 end;
 
 procedure TTestCaseSip.UnregisterAllTransports;
 begin
-  TIdSipTransportRegistry.UnregisterTransport(UdpTransport);
-  TIdSipTransportRegistry.UnregisterTransport(TlsTransport);
-  TIdSipTransportRegistry.UnregisterTransport(TcpTransport);
-  TIdSipTransportRegistry.UnregisterTransport(SctpTransport);
+  TIdSipTransportRegistry.UnregisterTransportTypeType(UdpTransport);
+  TIdSipTransportRegistry.UnregisterTransportTypeType(TlsTransport);
+  TIdSipTransportRegistry.UnregisterTransportTypeType(TcpTransport);
+  TIdSipTransportRegistry.UnregisterTransportTypeType(SctpTransport);
 end;
 
 //******************************************************************************

@@ -63,9 +63,9 @@ begin
 
   Self.DebugTimer.TriggerImmediateEvents := true;
 
-  TIdSipTransportRegistry.RegisterTransport(TcpTransport, TIdSipMockTcpTransport);
-  TIdSipTransportRegistry.RegisterTransport(TlsTransport, TIdSipMockTlsTransport);
-  TIdSipTransportRegistry.RegisterTransport(UdpTransport, TIdSipMockUdpTransport);
+  TIdSipTransportRegistry.RegisterTransportType(TcpTransport, TIdSipMockTcpTransport);
+  TIdSipTransportRegistry.RegisterTransportType(TlsTransport, TIdSipMockTlsTransport);
+  TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipMockUdpTransport);
 
   Self.TransportType := UdpTransport;
 
@@ -89,9 +89,9 @@ begin
   Self.Timer.Terminate;
   Self.Locator.Free;
 
-  TIdSipTransportRegistry.UnregisterTransport(TcpTransport);
-  TIdSipTransportRegistry.UnregisterTransport(TlsTransport);
-  TIdSipTransportRegistry.UnregisterTransport(UdpTransport);
+  TIdSipTransportRegistry.UnregisterTransportTypeType(TcpTransport);
+  TIdSipTransportRegistry.UnregisterTransportTypeType(TlsTransport);
+  TIdSipTransportRegistry.UnregisterTransportTypeType(UdpTransport);
 
   inherited Destroy;
 end;
