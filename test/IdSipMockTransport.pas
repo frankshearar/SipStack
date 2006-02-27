@@ -74,6 +74,10 @@ type
     function  LastRequest: TIdSipRequest;
     function  LastResponse: TIdSipResponse;
     procedure RaiseException(E: ExceptClass);
+    procedure ReceiveRequest(Request: TIdSipRequest;
+                             ReceivedFrom: TIdSipConnectionBindings); override;
+    procedure ReceiveResponse(Response: TIdSipResponse;
+                              ReceivedFrom: TIdSipConnectionBindings); override;
     function  RequestAt(Index: Integer): TIdSipRequest;
     procedure ResetACKCount;
     procedure ResetSentRequestCount;
@@ -213,15 +217,11 @@ var
   CopyOfMessage: TIdSipRequest;
   FakeBinding:   TIdSipConnectionBindings;
 begin
-  Self.Log(R.AsString, dirIn);
-
-  Self.fRequests.AddCopy(R);
-
   CopyOfMessage := R.Copy as TIdSipRequest;
   try
     FakeBinding := TIdSipConnectionBindings.Create;
     try
-      Self.NotifyOfReceivedRequest(CopyOfMessage, FakeBinding);
+      Self.ReceiveRequest(CopyOfMessage, FakeBinding);
     finally
       FakeBinding.Free;
     end;
@@ -256,15 +256,11 @@ var
   CopyOfMessage: TIdSipResponse;
   FakeBinding:   TIdSipConnectionBindings;
 begin
-  Self.Log(R.AsString, dirIn);
-
-  Self.fResponses.AddCopy(R);
-
   CopyOfMessage := R.Copy as TIdSipResponse;
   try
     FakeBinding := TIdSipConnectionBindings.Create;
     try
-      Self.NotifyOfReceivedResponse(CopyOfMessage, FakeBinding);
+      Self.ReceiveResponse(CopyOfMessage, FakeBinding);
     finally
       FakeBinding.Free;
     end;
@@ -291,6 +287,24 @@ end;
 procedure TIdSipMockTransport.RaiseException(E: ExceptClass);
 begin
   raise E.Create('TIdSipMockTransport');
+end;
+
+procedure TIdSipMockTransport.ReceiveRequest(Request: TIdSipRequest;
+                                             ReceivedFrom: TIdSipConnectionBindings);
+begin
+  Self.Log(Request.AsString, dirIn);
+  Self.fRequests.AddCopy(Request);
+
+  inherited ReceiveRequest(Request, ReceivedFrom);
+end;
+
+procedure TIdSipMockTransport.ReceiveResponse(Response: TIdSipResponse;
+                                              ReceivedFrom: TIdSipConnectionBindings);
+begin
+  Self.Log(Response.AsString, dirIn);
+  Self.fResponses.AddCopy(Response);
+
+  inherited ReceiveResponse(Response, ReceivedFrom);
 end;
 
 function TIdSipMockTransport.RequestAt(Index: Integer): TIdSipRequest;
