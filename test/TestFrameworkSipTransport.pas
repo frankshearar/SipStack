@@ -46,13 +46,6 @@ type
                               IIdSipTransportSendingListener)
   private
     LastSentResponse: TIdSipResponse;
-
-    procedure OnSendRequest(Request: TIdSipRequest;
-                            Sender: TIdSipTransport;
-                            Destination: TIdSipLocation);
-    procedure OnSendResponse(Response: TIdSipResponse;
-                             Sender: TIdSipTransport;
-                             Destination: TIdSipLocation);
   protected
     CheckingRequestEvent:  TIdSipRequestEvent;
     CheckingResponseEvent: TIdSipResponseEvent;
@@ -125,12 +118,18 @@ type
     procedure OnEmpty(Sender: TIdTimerQueue);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport;
-                               Source: TIdSipConnectionBindings);
+                               Source: TIdSipConnectionBindings); virtual;
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Receiver: TIdSipTransport;
-                                Source: TIdSipConnectionBindings);
+                                Source: TIdSipConnectionBindings); virtual;
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
+    procedure OnSendRequest(Request: TIdSipRequest;
+                            Sender: TIdSipTransport;
+                            Destination: TIdSipLocation); virtual;
+    procedure OnSendResponse(Response: TIdSipResponse;
+                             Sender: TIdSipTransport;
+                             Destination: TIdSipLocation); virtual;
     procedure ReturnResponse(Sender: TObject;
                              R: TIdSipRequest;
                              ReceivedFrom: TIdSipConnectionBindings);
@@ -227,15 +226,7 @@ begin
                           TestCase.DefaultPort,
                           TestCase);
 
-  try
-    Self.HighPortTransport.Start;
-  except
-    on E: Exception do begin
-      Writeln('Starting high port transport: ' + E.ClassName);
-      raise;
-    end;
-  end;
-
+  Self.HighPortTransport.Start;
   Self.LowPortTransport.Start;
 end;
 
@@ -253,15 +244,8 @@ end;
 
 procedure TTransportTestTimerQueue.Terminate;
 begin
-  try
-    Self.LowPortTransport.Stop;
-    Self.HighPortTransport.Stop;
-  except
-    on E: Exception do begin
-      Writeln('TTransportTestTimerQueue.Terminate: ' + E.ClassName);
-      raise;
-    end;
-  end;
+  Self.LowPortTransport.Stop;
+  Self.HighPortTransport.Stop;
 
   inherited Terminate;
 end;
@@ -349,8 +333,10 @@ begin
 
   Self.Timer.Terminate;
   try
-//    Self.WaitForSignaled(Self.EmptyListEvent, 'Waiting for timer to finish processing its events');
-    Self.WaitForSignaled(Self.FinishedTimer, 'Waiting for timer to finish destroying its transports');
+//    Self.WaitForSignaled(Self.EmptyListEvent,
+//                         'Waiting for timer to finish processing its events (' + Self.ClassName + ')');
+    Self.WaitForSignaled(Self.FinishedTimer,
+                         'Waiting for timer to finish destroying its transports (' + Self.ClassName + ')');
   finally
     // We want to TRY wait for the Timer to finish. If it doesn't, though, we
     // must still try clean up the test, especially when we touch global
@@ -656,6 +642,27 @@ begin
   Self.ThreadEvent.SetEvent;
 end;
 
+procedure TestTIdSipTransport.OnSendRequest(Request: TIdSipRequest;
+                                            Sender: TIdSipTransport;
+                                            Destination: TIdSipLocation);
+begin
+end;
+
+procedure TestTIdSipTransport.OnSendResponse(Response: TIdSipResponse;
+                                             Sender: TIdSipTransport;
+                                             Destination: TIdSipLocation);
+begin
+  Self.Lock.Acquire;
+  try
+    if Assigned(Self.LastSentResponse) then begin
+      Self.LastSentResponse.Assign(Response);
+      Self.SendEvent.SetEvent;
+    end;
+  finally
+    Self.Lock.Release;
+  end;
+end;
+
 procedure TestTIdSipTransport.ReturnResponse(Sender: TObject;
                                              R: TIdSipRequest;
                                              ReceivedFrom: TIdSipConnectionBindings);
@@ -701,29 +708,6 @@ begin
   raise Exception.Create('TestTIdSipTransport.TransportType: override for '
                        + Self.ClassName + '!');
   Result := nil;
-end;
-
-//* TestTIdSipTransport Private methods ****************************************
-
-procedure TestTIdSipTransport.OnSendRequest(Request: TIdSipRequest;
-                                            Sender: TIdSipTransport;
-                                            Destination: TIdSipLocation);
-begin
-end;
-
-procedure TestTIdSipTransport.OnSendResponse(Response: TIdSipResponse;
-                                             Sender: TIdSipTransport;
-                                             Destination: TIdSipLocation);
-begin
-  Self.Lock.Acquire;
-  try
-    if Assigned(Self.LastSentResponse) then begin
-      Self.LastSentResponse.Assign(Response);
-      Self.SendEvent.SetEvent;
-    end;
-  finally
-    Self.Lock.Release;
-  end;
 end;
 
 //* TestTIdSipTransport Published methods **************************************
@@ -1339,7 +1323,6 @@ end;
 
 initialization
   ServerThatInstantiatesGStack := TIdTCPServer.Create(nil);
-//  RegisterTest('IdSipTransport', Suite);
 finalization
   ServerThatInstantiatesGStack.Free;
 end.
