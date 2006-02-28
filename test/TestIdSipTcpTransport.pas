@@ -12,40 +12,30 @@ unit TestIdSipTcpTransport;
 interface
 
 uses
-  IdSipLocator, IdSipMessage, IdSipTcpTransport, IdSipTransport, IdTimerQueue,
-  IdTCPClient, IdTCPConnection, IdTCPServer, SyncObjs, SysUtils, TestFramework,
-  TestFrameworkSip, TestFrameworkSipTransport;
+  IdSipLocator, IdSipMessage, IdSipMockTransport, IdSipTcpTransport,
+  IdSipTransport, IdTimerQueue, IdTCPClient, IdTCPConnection, IdTCPServer,
+  SyncObjs, SysUtils, TestFramework, TestFrameworkSip,
+  TestFrameworkSipTransport;
 
 type
-  TestTIdSipTCPTransport = class(TestTIdSipTransport,
-                                 IIdSipMessageListener)
+  TestTIdSipTCPTransport = class(TestTIdSipTransport)
   private
-    ClientReceiveRequestEvent:  TIdSipRequestEvent;
-    ClientReceiveResponseEvent: TIdSipResponseEvent;
-    ClientReceivedResponse:     Boolean;
-    ServerReceivedResponse:     Boolean;
-    SipClient:                  TIdSipTcpClient;
+    ClientReceivedResponse: Boolean;
+    MockTransport:          TIdSipMockTcpTransport;
+    RequestConnection:      TIdSipConnectionBindings;
+    ResponseConnection:     TIdSipConnectionBindings;
+    ServerReceivedResponse: Boolean;
+    SipClient:              TIdSipTcpClient;
 
     procedure AcknowledgeEvent(Sender: TObject;
                                Response: TIdSipResponse;
                                ReceivedFrom: TIdSipConnectionBindings);
-    procedure ClientOnResponse(Sender: TObject;
-                               Response: TIdSipResponse;
-                               ReceivedFrom: TIdSipConnectionBindings);
-    procedure ClientOnResponseDownClosedConnection(Sender: TObject;
-                                                   Response: TIdSipResponse;
-                                                   ReceivedFrom: TIdSipConnectionBindings);
+    procedure CheckSendResponsesOpenConnection(Sender: TObject;
+                                               Response: TIdSipResponse;
+                                               ReceivedFrom: TIdSipConnectionBindings);
     procedure CheckSendResponsesDownClosedConnection(Sender: TObject;
                                                      Response: TIdSipResponse;
                                                      ReceivedFrom: TIdSipConnectionBindings);
-    procedure OnException(E: Exception;
-                          const Reason: String);
-    procedure OnMalformedMessage(const Msg: String;
-                                 const Reason: String);
-    procedure OnReceiveRequest(Request: TIdSipRequest;
-                               ReceivedFrom: TIdSipConnectionBindings);
-    procedure OnReceiveResponse(Response: TIdSipResponse;
-                                ReceivedFrom: TIdSipConnectionBindings);
     procedure Send200OK(Sender: TObject;
                         Request: TIdSipRequest;
                         ReceivedFrom: TIdSipConnectionBindings);
@@ -55,6 +45,12 @@ type
                                 Port: Cardinal;
                                 const Msg: String); override;
     procedure DestroyClient(Client: TIdSipTcpClient); virtual;
+    procedure OnReceiveRequest(Request: TIdSipRequest;
+                               Receiver: TIdSipTransport;
+                               Source: TIdSipConnectionBindings); override;
+    procedure OnReceiveResponse(Response: TIdSipResponse;
+                                Receiver: TIdSipTransport;
+                                Source: TIdSipConnectionBindings); override;
     procedure SendMessage(Msg: String); override;
     function  TransportType: TIdSipTransportClass; override;
   public
@@ -77,10 +73,11 @@ type
   TIdTcpClientClass = class of TIdTcpClient;
 
   TestTIdSipTcpServer = class(TTestCaseSip,
-                              IIdSipMessageListener)
+                              IIdSipTransportListener)
   private
     EmptyListEvent:           TEvent;
     NotifiedMalformedMessage: Boolean;
+    Transport:                TIdSipMockTransport;
 
     procedure AcknowledgeEvent(Sender: TObject;
                                Request: TIdSipRequest); overload;
@@ -95,12 +92,14 @@ type
     procedure OnEmpty(Sender: TIdTimerQueue);
     procedure OnException(E: Exception;
                           const Reason: String);
-    procedure OnMalformedMessage(const Msg: String;
-                                 const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               ReceivedFrom: TIdSipConnectionBindings);
+                               Receiver: TIdSipTransport;
+                               Source: TIdSipConnectionBindings); overload;
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                ReceivedFrom: TIdSipConnectionBindings);
+                                Receiver: TIdSipTransport;
+                                Source: TIdSipConnectionBindings); overload;
+    procedure OnRejectedMessage(const Msg: String;
+                                const Reason: String);
     procedure RaiseException(Sender: TObject;
                              Request: TIdSipRequest);
   protected
@@ -121,18 +120,16 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestAddMessageListener;
     procedure TestInternalServerError;
     procedure TestLeadingEmptyLines;
-    procedure TestListenerReceiveRequest;
-    procedure TestListenerReceiveResponse;
     procedure TestMethodEvent;
     procedure TestMultipleMessages;
-    procedure TestRemoveMessageListener;
+    procedure TestReceiveRequest;
+    procedure TestReceiveResponse;
   end;
 
   TestTIdSipTcpClient = class(TTestCaseSip,
-                              IIdSipMessageListener)
+                              IIdSipTransportListener)
   private
     CheckingRequestEvent:  TIdSipRequestEvent;
     CheckingResponseEvent: TIdSipResponseEvent;
@@ -146,6 +143,7 @@ type
     ReceivedResponseCount: Cardinal;
     Server:                TIdSipTcpServer;
     Timer:                 TIdThreadedTimerQueue;
+    Transport:             TIdSipMockTransport;
 
     procedure CheckReceiveOkResponse(Sender: TObject;
                                      Response: TIdSipResponse);
@@ -164,12 +162,14 @@ type
     procedure OnEmpty(Sender: TIdTimerQueue);
     procedure OnException(E: Exception;
                           const Reason: String);
-    procedure OnMalformedMessage(const Msg: String;
-                                 const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               ReceivedFrom: TIdSipConnectionBindings);
+                               Receiver: TIdSipTransport;
+                               Source: TIdSipConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                ReceivedFrom: TIdSipConnectionBindings);
+                                Receiver: TIdSipTransport;
+                                Source: TIdSipConnectionBindings);
+    procedure OnRejectedMessage(const Msg: String;
+                                const Reason: String);
     procedure PauseAndSendOkResponse(Sender: TObject;
                                      Request: TIdSipRequest);
     procedure ReceiveOptions;
@@ -267,7 +267,13 @@ procedure TestTIdSipTCPTransport.SetUp;
 begin
   inherited SetUp;
 
+  Self.MockTransport := TIdSipMockTcpTransport.Create;
+  Self.MockTransport.AddTransportListener(Self);
+
   Self.SipClient := Self.CreateClient;
+
+  Self.RequestConnection  := TIdSipConnectionBindings.Create;
+  Self.ResponseConnection := TIdSipConnectionBindings.Create;
 
   Self.ClientReceivedResponse := false;
   Self.ServerReceivedResponse := false;
@@ -275,9 +281,17 @@ end;
 
 procedure TestTIdSipTCPTransport.TearDown;
 begin
-  Self.DestroyClient(Self.SipClient);
+  // Usually we'd clean up our stuff before invoking the superclass's TearDown.
+  // We don't here because TearDown protects us from destroying our resources
+  // before Self.Timer has finished doing its thing (causing access violations
+  // in the process).
 
   inherited TearDown;
+
+  Self.DestroyClient(Self.SipClient);
+  Self.MockTransport.Free;
+  Self.ResponseConnection.Free;
+  Self.RequestConnection.Free;
 end;
 
 //* TestTIdSipTCPTransport Protected methods ***********************************
@@ -285,7 +299,7 @@ end;
 function TestTIdSipTCPTransport.CreateClient: TIdSipTcpClient;
 begin
   Result := TIdSipTcpClient.Create(nil);
-  Result.AddMessageListener(Self);
+  Result.TransportID := Self.MockTransport.ID;
 end;
 
 procedure TestTIdSipTCPTransport.CheckServerOnPort(const Host: String;
@@ -317,6 +331,24 @@ end;
 procedure TestTIdSipTCPTransport.DestroyClient(Client: TIdSipTcpClient);
 begin
   Client.Free;
+end;
+
+procedure TestTIdSipTCPTransport.OnReceiveRequest(Request: TIdSipRequest;
+                                                  Receiver: TIdSipTransport;
+                                                  Source: TIdSipConnectionBindings);
+begin
+  Self.RequestConnection.Assign(Source);
+
+  inherited OnReceiveRequest(Request, Receiver, Source);
+end;
+
+procedure TestTIdSipTCPTransport.OnReceiveResponse(Response: TIdSipResponse;
+                                                   Receiver: TIdSipTransport;
+                                                   Source: TIdSipConnectionBindings);
+begin
+  Self.ResponseConnection.Assign(Source);
+
+  inherited OnReceiveResponse(Response, Receiver, Source);
 end;
 
 procedure TestTIdSipTCPTransport.SendMessage(Msg: String);
@@ -352,13 +384,27 @@ begin
   Self.ThreadEvent.SetEvent;
 end;
 
-procedure TestTIdSipTCPTransport.ClientOnResponse(Sender: TObject;
-                                                  Response: TIdSipResponse;
-                                                  ReceivedFrom: TIdSipConnectionBindings);
+procedure TestTIdSipTCPTransport.CheckSendResponsesOpenConnection(Sender: TObject;
+                                                                  Response: TIdSipResponse;
+                                                                  ReceivedFrom: TIdSipConnectionBindings);
 begin
   try
-    CheckEquals(SIPOK, Response.StatusCode, 'Status-Code');
     Self.ClientReceivedResponse := true;
+
+    // These tests check that the connection on which the UAS received the
+    // request is the connection on which the UAC received the response.
+    CheckEquals(Self.RequestConnection.LocalIP,
+                Self.ResponseConnection.PeerIP,
+                'RequestConnection.LocalIP/ResponseConnection.PeerIP');
+    CheckEquals(Self.RequestConnection.PeerIP,
+                Self.ResponseConnection.LocalIP,
+                'RequestConnection.PeerIP/ResponseConnection.LocalIP');
+    CheckEquals(Self.RequestConnection.LocalPort,
+                Self.ResponseConnection.PeerPort,
+                'RequestConnection.LocalPort/ResponseConnection.PeerPort');
+    CheckEquals(Self.RequestConnection.PeerPort,
+                Self.ResponseConnection.LocalPort,
+                'RequestConnection.PeerPort/ResponseConnection.LocalPort');
 
     Self.ThreadEvent.SetEvent;
   except
@@ -367,13 +413,6 @@ begin
       Self.ExceptionMessage := E.Message;
     end;
   end;
-end;
-
-procedure TestTIdSipTCPTransport.ClientOnResponseDownClosedConnection(Sender: TObject;
-                                                                      Response: TIdSipResponse;
-                                                                      ReceivedFrom: TIdSipConnectionBindings);
-begin
-  Fail('The connection is closed. The client should not receive a response');
 end;
 
 procedure TestTIdSipTCPTransport.CheckSendResponsesDownClosedConnection(Sender: TObject;
@@ -383,6 +422,9 @@ begin
   try
     CheckEquals(SIPOK, Response.StatusCode, 'Status-Code');
     Self.ServerReceivedResponse := true;
+    CheckNotEquals(Self.RequestConnection.AsString,
+                   Self.ResponseConnection.AsString,
+                   'RequestConnection matches ResponseConnection');
 
     Self.ThreadEvent.SetEvent;
   except
@@ -391,30 +433,6 @@ begin
       Self.ExceptionMessage := E.Message;
     end;
   end;
-end;
-
-procedure TestTIdSipTCPTransport.OnException(E: Exception;
-                                             const Reason: String);
-begin
-end;
-
-procedure TestTIdSipTCPTransport.OnMalformedMessage(const Msg: String;
-                                                    const Reason: String);
-begin
-end;
-
-procedure TestTIdSipTCPTransport.OnReceiveRequest(Request: TIdSipRequest;
-                                                  ReceivedFrom: TIdSipConnectionBindings);
-begin
-  if Assigned(Self.ClientReceiveRequestEvent) then
-    Self.ClientReceiveRequestEvent(Self, Request, ReceivedFrom);
-end;
-
-procedure TestTIdSipTCPTransport.OnReceiveResponse(Response: TIdSipResponse;
-                                                   ReceivedFrom: TIdSipConnectionBindings);
-begin
-  if Assigned(Self.ClientReceiveResponseEvent) then
-    Self.ClientReceiveResponseEvent(Self, Response, ReceivedFrom);
 end;
 
 procedure TestTIdSipTCPTransport.Send200OK(Sender: TObject;
@@ -462,8 +480,7 @@ begin
   // connection. In this case the transport will make a connection to itself
   // (since it runs on the default transport port).
 
-  Self.CheckingResponseEvent      := Self.CheckSendResponsesDownClosedConnection;
-  Self.ClientReceiveResponseEvent := Self.ClientOnResponseDownClosedConnection;
+  Self.CheckingResponseEvent := Self.CheckSendResponsesDownClosedConnection;
 
   Request := TIdSipMessage.ReadRequestFrom(LocalLoopRequest);
   try
@@ -484,6 +501,8 @@ begin
     // ConnectionMap.
     Sleep(500);
 
+    // Then the LowPortTransport sends the response. This should result in a
+    // new TCP connection.
     Response := TIdSipMessage.ReadResponseFrom(LocalLoopResponse);
     try
       Response.StatusCode := SIPOK;
@@ -517,7 +536,6 @@ begin
     try
       Request := TIdSipMessage.ReadRequestFrom(LocalLoopRequest);
       try
-        Self.ClientReceiveResponseEvent := Self.ClientOnResponseDownClosedConnection;
         Self.SipClient.Host             := Self.HighPortTransport.Bindings[0].IP;
         Self.SipClient.Port             := Self.HighPortTransport.Bindings[0].Port;
         Self.SipClient.ReadTimeout      := 100;
@@ -566,17 +584,16 @@ begin
   Self.LowPortTransport.Timeout := 1000;
   Self.HighPortTransport.Timeout := 1000;
   Self.CheckingRequestEvent := Self.Send200OK;
+  Self.CheckingResponseEvent := Self.CheckSendResponsesOpenConnection;
 
   Request := TIdSipMessage.ReadRequestFrom(LocalLoopRequest);
   try
     SipClient := Self.CreateClient;
     try
-      Self.ClientReceiveResponseEvent := Self.ClientOnResponse;
-
       SipClient.Host        := Self.LowPortTransport.Bindings[0].IP;
       SipClient.Port        := Self.LowPortTransport.Bindings[0].Port;
       SipClient.ReadTimeout := 1000;
-      SipClient.Timer       := Self.Timer;         
+      SipClient.Timer       := Self.Timer;
 
       SipClient.Connect;
       try
@@ -613,11 +630,14 @@ begin
   Self.Timer := TIdThreadedTimerQueue.Create(false);
   Self.Timer.OnEmpty := Self.OnEmpty;
 
+  Self.Transport := TIdSipMockTcpTransport.Create;
+  Self.Transport.AddTransportListener(Self);
+
   Self.Client         := TIdTcpClient.Create(nil);
   Self.HighPortServer := Self.ServerType.Create(nil);
   Self.LowPortServer  := Self.ServerType.Create(nil);
   Self.SipClient      := Self.HighPortServer.CreateClient;
-  Self.SipClient.AddMessageListener(Self);
+  Self.SipClient.TransportID := Self.Transport.ID;
 
   Self.Client.Host := LocalHost;
   Self.Client.Port := LowPortServer.DefaultPort;
@@ -627,12 +647,14 @@ begin
   Self.ServerReceivedResponse := false;
 
   Self.LowPortServer.Timer := Self.Timer;
+  Self.LowPortServer.TransportID := Self.Transport.ID;
   Self.LowPortServer.Bindings.Clear;
   Binding := LowPortServer.Bindings.Add;
   Binding.IP   := LocalHost;
   Binding.Port := IdPORT_SIP;
 
   Self.HighPortServer.Timer := Self.Timer;
+  Self.HighPortServer.TransportID := Self.Transport.ID;
   Self.HighPortServer.Bindings.Clear;
   Binding := Self.HighPortServer.Bindings.Add;
   Binding.IP   := GStack.LocalAddress;
@@ -644,9 +666,6 @@ begin
 
   Self.LowPortServer.Active  := true;
   Self.HighPortServer.Active := true;
-
-  Self.LowPortServer.AddMessageListener(Self);
-  Self.HighPortServer.AddMessageListener(Self);
 
   Self.NotifiedMalformedMessage := false;
 end;
@@ -661,9 +680,6 @@ begin
   Self.Timer.Terminate;
   Self.EmptyListEvent.WaitFor(WaitTime);
 
-  Self.HighPortServer.RemoveMessageListener(Self);
-  Self.LowPortServer.RemoveMessageListener(Self);
-
   Self.HighPortServer.Active := false;
   Self.LowPortServer.Active := false;
 
@@ -673,6 +689,7 @@ begin
   Self.HighPortServer.Free;
   Self.Client.Free;
 
+  Self.Transport.Free;
   Self.EmptyListEvent.Free;
 
   inherited TearDown;
@@ -748,6 +765,9 @@ begin
       Expected.Add(ContentTypeHeaderFull).Value   := 'text/plain';
       Expected.Add(ContentLengthHeaderFull).Value := '29';
 
+      // The transport will add a received tag to the Via:
+      Expected[ViaHeaderFull].Params[ReceivedParam] := Request.LastHop.Received;
+
       Check(Expected.Equals(Request.Headers), 'Headers');
     finally
       Expected.Free;
@@ -775,24 +795,26 @@ begin
   Self.ExceptionMessage := E.Message + ' caused by ''' + Reason + '''';
 end;
 
-procedure TestTIdSipTcpServer.OnMalformedMessage(const Msg: String;
-                                                 const Reason: String);
-begin
-  Self.NotifiedMalformedMessage := true;
-end;
-
 procedure TestTIdSipTcpServer.OnReceiveRequest(Request: TIdSipRequest;
-                                               ReceivedFrom: TIdSipConnectionBindings);
+                                               Receiver: TIdSipTransport;
+                                               Source: TIdSipConnectionBindings);
 begin
   if Assigned(Self.CheckingRequestEvent) then
     Self.CheckingRequestEvent(Self, Request);
 end;
 
 procedure TestTIdSipTcpServer.OnReceiveResponse(Response: TIdSipResponse;
-                                                ReceivedFrom: TIdSipConnectionBindings);
+                                                Receiver: TIdSipTransport;
+                                                Source: TIdSipConnectionBindings);
 begin
   if Assigned(Self.CheckingResponseEvent) then
     Self.CheckingResponseEvent(Self, Response);
+end;
+
+procedure TestTIdSipTcpServer.OnRejectedMessage(const Msg: String;
+                                                const Reason: String);
+begin
+  Self.NotifiedMalformedMessage := true;
 end;
 
 procedure TestTIdSipTcpServer.RaiseException(Sender: TObject;
@@ -802,17 +824,6 @@ begin
 end;
 
 //* TestTIdSipTcpServer Published methods **************************************
-
-procedure TestTIdSipTcpServer.TestAddMessageListener;
-begin
-  // SetUp already adds Self as a listener to LowPortServer
-  Self.CheckingRequestEvent := Self.AcknowledgeEvent;
-
-  Self.Client.Connect(DefaultTimeout);
-  Self.Client.Write(Format(BasicRequest, [ViaFQDN]));
-
-  Self.WaitForSignaled;
-end;
 
 procedure TestTIdSipTcpServer.TestInternalServerError;
 var
@@ -849,49 +860,6 @@ begin
   Self.WaitForSignaled;
 end;
 
-procedure TestTIdSipTcpServer.TestListenerReceiveRequest;
-var
-  Listener: TIdSipTestMessageListener;
-begin
-  Self.LowPortServer.RemoveMessageListener(Self);
-  Self.CheckingRequestEvent := Self.AcknowledgeEvent;
-
-  Listener := TIdSipTestMessageListener.Create;
-  try
-    Self.LowPortServer.AddMessageListener(Listener);
-    Self.LowPortServer.AddMessageListener(Self);
-
-    Self.Client.Connect(DefaultTimeout);
-    Self.Client.Write(Format(BasicRequest, [ViaFQDN]));
-
-    Self.WaitForSignaled;
-    Check(Listener.ReceivedRequest, 'Not all listeners received the request');
-  finally
-    Listener.Free;
-  end;
-end;
-
-procedure TestTIdSipTcpServer.TestListenerReceiveResponse;
-var
-  Listener: TIdSipTestMessageListener;
-begin
-  Self.CheckingResponseEvent := Self.AcknowledgeEvent;
-
-  Listener := TIdSipTestMessageListener.Create;
-  try
-    Self.LowPortServer.AddMessageListener(Listener);
-    Self.LowPortServer.AddMessageListener(Self);
-
-    Self.Client.Connect(DefaultTimeout);
-    Self.Client.Write(BasicResponse);
-
-    Self.WaitForSignaled;
-    Check(Listener.ReceivedResponse, 'Not all listeners received the Response');
-  finally
-    Listener.Free;
-  end;
-end;
-
 procedure TestTIdSipTcpServer.TestMethodEvent;
 begin
   Self.CheckingRequestEvent := Self.CheckMethodEvent;
@@ -914,28 +882,28 @@ begin
   CheckEquals(2, Self.MethodCallCount, 'Method call count')
 end;
 
-procedure TestTIdSipTcpServer.TestRemoveMessageListener;
-var
-  Listener: TIdSipTestMessageListener;
+procedure TestTIdSipTcpServer.TestReceiveRequest;
 begin
   Self.CheckingRequestEvent := Self.AcknowledgeEvent;
 
-  Listener := TIdSipTestMessageListener.Create;
-  try
-    // This juggle ensures that the Listener gets the notification first.
-    Self.HighPortServer.RemoveMessageListener(Self);
-    Self.HighPortServer.AddMessageListener(Listener);
-    Self.HighPortServer.RemoveMessageListener(Listener);
-    Self.HighPortServer.AddMessageListener(Self);
+  Self.Client.Connect(DefaultTimeout);
+  Self.Client.Write(Format(BasicRequest, [ViaFQDN]));
 
-    Self.Client.Connect(DefaultTimeout);
-    Self.Client.Write(Format(BasicRequest, [ViaFQDN]));
+  Self.WaitForSignaled;
+  Check(nil <> Self.Transport.LastRequest,
+        'Transport didn''t receive request');
+end;
 
-    Self.WaitForSignaled;
-    Check(not Listener.ReceivedRequest, 'Listener not removed: ' + Self.ClassName);
-  finally
-    Listener.Free;
-  end;
+procedure TestTIdSipTcpServer.TestReceiveResponse;
+begin
+  Self.CheckingResponseEvent := Self.AcknowledgeEvent;
+
+  Self.Client.Connect(DefaultTimeout);
+  Self.Client.Write(Format(BasicResponse, [ViaFQDN]));
+
+  Self.WaitForSignaled;
+  Check(nil <> Self.Transport.LastResponse,
+          'Transport didn''t receive Response');
 end;
 
 //******************************************************************************
@@ -952,16 +920,19 @@ begin
   Self.Timer := TIdThreadedTimerQueue.Create(false);
   Self.Timer.OnEmpty := Self.OnEmpty;
 
+  Self.Transport := TIdSipMockTcpTransport.Create;
+  Self.Transport.AddTransportListener(Self);
+
   Self.Client := TIdSipTcpClient.Create(nil);
+  Self.Client.TransportID := Self.Transport.ID;
   Self.Server := TIdSipTcpServer.Create(nil);
-  Self.Server.AddMessageListener(Self);
   Self.Server.Timer := Self.Timer;
+  Self.Server.TransportID := Self.Transport.ID;
 
   Self.Client.Host        := '127.0.0.1';
   Self.Client.Port        := Self.Server.DefaultPort;
   Self.Client.ReadTimeout := 1000;
   Self.Client.Timer       := Self.Timer;
-  Self.Client.AddMessageListener(Self);
 
   Self.Invite := TIdSipTestResources.CreateLocalLoopRequest;
 
@@ -986,6 +957,7 @@ begin
   Self.Server.Free;
   Self.Client.Free;
 
+  Self.Transport.Free;
   Self.ClientEvent.Free;
   Self.EmptyListEvent.Free;
 
@@ -1124,13 +1096,9 @@ begin
   Self.ExceptionMessage := E.Message + ' caused by ''' + Reason + '''';
 end;
 
-procedure TestTIdSipTcpClient.OnMalformedMessage(const Msg: String;
-                                                 const Reason: String);
-begin
-end;
-
 procedure TestTIdSipTcpClient.OnReceiveRequest(Request: TIdSipRequest;
-                                               ReceivedFrom: TIdSipConnectionBindings);
+                                               Receiver: TIdSipTransport;
+                                               Source: TIdSipConnectionBindings);
 begin
   if Assigned(Self.CheckingRequestEvent) then
     Self.CheckingRequestEvent(Self, Request);
@@ -1139,12 +1107,18 @@ begin
 end;
 
 procedure TestTIdSipTcpClient.OnReceiveResponse(Response: TIdSipResponse;
-                                                ReceivedFrom: TIdSipConnectionBindings);
+                                                Receiver: TIdSipTransport;
+                                                Source: TIdSipConnectionBindings);
 begin
   if Assigned(Self.CheckingResponseEvent) then
     Self.CheckingResponseEvent(Self, Response);
 
   Self.ThreadEvent.SetEvent;
+end;
+
+procedure TestTIdSipTcpClient.OnRejectedMessage(const Msg: String;
+                                                const Reason: String);
+begin
 end;
 
 procedure TestTIdSipTcpClient.PauseAndSendOkResponse(Sender: TObject;
@@ -1160,7 +1134,7 @@ var
   S:          String;
   Threads:    TList;
 begin
-  S := StringReplace(LocalLoopRequest, MethodInvite, MethodOptions, []);
+  S := StringReplace(LocalLoopRequest, MethodInvite, MethodOptions, [rfReplaceAll]);
 
   Threads := Self.Server.Threads.LockList;
   try
@@ -1249,6 +1223,7 @@ end;
 procedure TestTIdSipTcpClient.TestCanReceiveRequest;
 begin
   Self.CheckingRequestEvent := Self.ClientReceivedRequest;
+
   Self.Client.Connect(DefaultTimeout);
   Self.ReceiveOptions;
   Self.Client.ReceiveMessages;

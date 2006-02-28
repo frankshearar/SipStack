@@ -12,8 +12,9 @@ unit TestIdSipUdpTransport;
 interface
 
 uses
-  IdSipMessage, IdSipTransport, IdSipUdpTransport, IdTimerQueue, IdUdpClient,
-  SyncObjs, SysUtils, TestFrameworkSip, TestFrameworkSipTransport;
+  IdSipMessage, IdSipMockTransport, IdSipTransport, IdSipUdpTransport,
+  IdTimerQueue, IdUdpClient, SyncObjs, SysUtils, TestFrameworkSip,
+  TestFrameworkSipTransport;
 
 type
   TestTIdSipUDPTransport = class(TestTIdSipTransport)
@@ -53,7 +54,7 @@ type
   end;
 
   TestTIdSipUdpServer = class(TTestCaseSip,
-                              IIdSipMessageListener)
+                              IIdSipTransportListener)
   private
     CheckReceivedRequest:     TIdSipRequestEvent;
     CheckReceivedResponse:    TIdSipResponseEvent;
@@ -64,6 +65,7 @@ type
     ReceivedResponse:         Boolean;
     Server:                   TIdSipUdpServer;
     Timer:                    TIdThreadedTimerQueue;
+    Transport:                TIdSipMockTransport;
 
     procedure AcknowledgeEvent(Sender: TObject;
                                Request: TIdSipRequest;
@@ -82,23 +84,23 @@ type
                            ReceivedFrom: TIdSipConnectionBindings);
     procedure OnEmpty(Sender: TIdTimerQueue);
     procedure OnException(E: Exception;
-                          const Reason: String);
-    procedure OnMalformedMessage(const Msg: String;
-                                 const Reason: String);
+                          const Reason: String); overload;
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               ReceivedFrom: TIdSipConnectionBindings);
+                               Receiver: TIdSipTransport;
+                               Source: TIdSipConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                ReceivedFrom: TIdSipConnectionBindings);
+                                Receiver: TIdSipTransport;
+                                Source: TIdSipConnectionBindings);
+    procedure OnRejectedMessage(const Msg: String;
+                                const Reason: String);
+
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestAddMessageListener;
-    procedure TestListenerReceiveRequest;
-    procedure TestListenerReceiveResponse;
     procedure TestNotifyFragmentedRequestProperly;
-    procedure TestRemoveMessageListener;
-    procedure TestRequest;
+    procedure TestReceiveRequest;
+    procedure TestReceiveResponse;
   end;
 
 const
@@ -397,15 +399,18 @@ begin
   Self.Timer := TIdThreadedTimerQueue.Create(false);
   Self.Timer.OnEmpty := Self.OnEmpty;
 
+  Self.Transport := TIdSipMockUdpTransport.Create;
+  Self.Transport.AddTransportListener(Self);
+
   Self.Client := TIdUDPClient.Create(nil);
   Self.Server := TIdSipUdpServer.Create(nil);
   Self.Server.Timer := Self.Timer;
+  Self.Server.TransportID := Self.Transport.ID;
   Self.Server.Bindings.Clear;
   Binding := Self.Server.Bindings.Add;
   Binding.IP := '127.0.0.1';
   Binding.Port := Server.DefaultPort;
 
-  Self.Server.AddMessageListener(Self);
   Self.Server.Active := true;
   Self.Client.Host := '127.0.0.1';
   Self.Client.Port := Server.DefaultPort;
@@ -433,6 +438,7 @@ begin
   Self.Client.Free;
   
   Self.EmptyListEvent.Free;
+  Self.Transport.Free;
 
   inherited TearDown;
 end;
@@ -518,97 +524,46 @@ procedure TestTIdSipUdpServer.OnException(E: Exception;
 begin
 end;
 
-procedure TestTIdSipUdpServer.OnMalformedMessage(const Msg: String;
-                                                 const Reason: String);
-begin
-  Self.NotifiedMalformedMessage := true;
-  Self.ThreadEvent.SetEvent;
-end;
-
 procedure TestTIdSipUdpServer.OnReceiveRequest(Request: TIdSipRequest;
-                                               ReceivedFrom: TIdSipConnectionBindings);
+                                               Receiver: TIdSipTransport;
+                                               Source: TIdSipConnectionBindings);
 begin
   if Assigned(Self.CheckReceivedRequest) then
-    Self.CheckReceivedRequest(Self, Request, ReceivedFrom);
+    Self.CheckReceivedRequest(Self, Request, Source);
 end;
 
 procedure TestTIdSipUdpServer.OnReceiveResponse(Response: TIdSipResponse;
-                                                ReceivedFrom: TIdSipConnectionBindings);
+                                                Receiver: TIdSipTransport;
+                                                Source: TIdSipConnectionBindings);
 begin
   if Assigned(Self.CheckReceivedResponse) then
-    Self.CheckReceivedResponse(Self, Response, ReceivedFrom);
+    Self.CheckReceivedResponse(Self, Response, Source);
   Self.ReceivedResponse := true;
 
   Self.ThreadEvent.SetEvent;
 end;
 
+procedure TestTIdSipUdpServer.OnRejectedMessage(const Msg: String;
+                                                const Reason: String);
+begin
+  Self.NotifiedMalformedMessage := true;
+  Self.ThreadEvent.SetEvent;
+end;
+
 //* TestTIdSipUdpServer Published methods ***************************************
-
-procedure TestTIdSipUdpServer.TestAddMessageListener;
-begin
-  Self.CheckReceivedRequest := Self.AcknowledgeEvent;
-
-  // We don't need to add the listener because that's done in the SetUp method
-
-  Self.Client.Send(BasicRequest);
-
-  Self.WaitForSignaled;
-end;
-
-procedure TestTIdSipUdpServer.TestListenerReceiveRequest;
-var
-  Listener: TIdSipTestMessageListener;
-begin
-  Self.Server.RemoveMessageListener(Self);
-  Self.CheckReceivedRequest := Self.AcknowledgeEvent;
-
-  Listener := TIdSipTestMessageListener.Create;
-  try
-    Self.Server.AddMessageListener(Listener);
-    Self.Server.AddMessageListener(Self);
-
-    Self.Client.Send(BasicRequest);
-
-    Self.WaitForSignaled;
-
-    Check(Listener.ReceivedRequest, 'Not all listeners received the Request');
-  finally
-    Listener.Free;
-  end;
-end;
-
-procedure TestTIdSipUdpServer.TestListenerReceiveResponse;
-var
-  Listener: TIdSipTestMessageListener;
-begin
-  Self.Server.RemoveMessageListener(Self);
-  Self.CheckReceivedResponse := Self.AcknowledgeEvent;
-
-  Listener := TIdSipTestMessageListener.Create;
-  try
-    Self.Server.AddMessageListener(Listener);
-    Self.Server.AddMessageListener(Self);
-
-    Self.Client.Send(BasicResponse);
-
-    Self.WaitForSignaled;
-    Check(Listener.ReceivedResponse, 'Not all listeners received the Response');
-  finally
-    Listener.Free;
-  end;
-end;
 
 procedure TestTIdSipUdpServer.TestNotifyFragmentedRequestProperly;
 var
   Divider: Integer;
-  Msg: String;
+  Msg:     String;
 begin
-  Self.CheckReceivedRequest := Self.CheckRejectFragmentedRequestProperly;
+  Self.CheckReceivedRequest  := Self.CheckRejectFragmentedRequestProperly;
   Self.CheckReceivedResponse := Self.CheckRejectFragmentedResponseProperly;
 
   Msg := Format(BasicRequest, [Self.Server.Bindings[0].IP]);
 
   Divider := Length(Msg) div 2;
+
   Self.Client.Send(Copy(Msg, 1, Divider));
 
   Self.WaitForSignaled;
@@ -618,36 +573,46 @@ begin
   Self.WaitForSignaled;
 end;
 
-procedure TestTIdSipUdpServer.TestRemoveMessageListener;
+procedure TestTIdSipUdpServer.TestReceiveRequest;
 var
-  Listener: TIdSipTestMessageListener;
+  SentRequest: TIdSipRequest;
 begin
   Self.CheckReceivedRequest := Self.AcknowledgeEvent;
 
-  Listener := TIdSipTestMessageListener.Create;
+  Self.Client.Send(BasicRequest);
+  Self.WaitForSignaled;
+
+  Check(nil <> Self.Transport.LastRequest,
+        'Transport didn''t receive a request');
+
+  SentRequest := TIdSipRequest.ReadRequestFrom(BasicRequest);
   try
-    // This juggle ensures that the Listener gets the notification first.
-    Self.Server.RemoveMessageListener(Self);
-    Self.Server.AddMessageListener(Listener);
-    Self.Server.RemoveMessageListener(Listener);
-    Self.Server.AddMessageListener(Self);
-
-    Self.Client.Send(BasicRequest);
-
-    Self.WaitForSignaled;
-    Check(not Listener.ReceivedRequest, 'Listener not removed: ' + Self.ClassName);
+    Check(SentRequest.Equals(Self.Transport.LastRequest),
+          'What the client sent isn''t what the transport received');
   finally
-    Listener.Free;
+    SentRequest.Free;
   end;
 end;
 
-procedure TestTIdSipUdpServer.TestRequest;
+procedure TestTIdSipUdpServer.TestReceiveResponse;
+var
+  SentResponse: TIdSipResponse;
 begin
-  Self.CheckReceivedRequest := Self.CheckRequest;
+  Self.CheckReceivedResponse := Self.AcknowledgeEvent;
 
-  Self.Client.Send(Format(BasicRequest, [ViaFQDN]));
-
+  Self.Client.Send(BasicResponse);
   Self.WaitForSignaled;
+
+  Check(nil <> Self.Transport.LastResponse,
+        'Transport didn''t receive a Response');
+
+  SentResponse := TIdSipResponse.ReadResponseFrom(BasicResponse);
+  try
+    Check(SentResponse.Equals(Self.Transport.LastResponse),
+          'What the client sent isn''t what the transport received');
+  finally
+    SentResponse.Free;
+  end;
 end;
 
 initialization

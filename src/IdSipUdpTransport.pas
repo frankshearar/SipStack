@@ -23,7 +23,6 @@ type
   TIdSipUDPTransport = class(TIdSipTransport)
   private
     Transport: TIdSipUdpServer;
-
   protected
     procedure DestroyServer; override;
     function  GetBindings: TIdSocketHandles; override;
@@ -49,25 +48,18 @@ type
 
   TIdSipUdpServer = class(TIdUDPServer)
   private
-    fTimer:   TIdTimerQueue;
-    Notifier: TIdSipServerNotifier;
-
-    procedure DoOnException(Sender: TObject);
+    fTransportID: String;
+    fTimer:       TIdTimerQueue;
   protected
     procedure DoUDPRead(AData: TStream; ABinding: TIdSocketHandle); override;
-    procedure NotifyListenersOfResponse(Response: TIdSipResponse;
-                                        ReceivedFrom: TIdSipConnectionBindings); overload; virtual;
     procedure NotifyOfException(E: Exception);
     procedure ReceiveMessageInTimerContext(Msg: TIdSipMessage;
-                                           Binding: TIdSocketHandle);
+                                           Binding: TIdSocketHandle); virtual;
   public
     constructor Create(AOwner: TComponent); override;
-    destructor  Destroy; override;
 
-    procedure AddMessageListener(const Listener: IIdSipMessageListener);
-    procedure RemoveMessageListener(const Listener: IIdSipMessageListener);
-
-    property Timer: TIdTimerQueue read fTimer write fTimer;
+    property Timer:       TIdTimerQueue read fTimer write fTimer;
+    property TransportID: String        read fTransportID write fTransportID;
   end;
 
   TIdSipUdpClient = class(TIdSipUdpServer)
@@ -76,8 +68,8 @@ type
 
     procedure DoOnFinished;
   protected
-    procedure NotifyListenersOfResponse(Response: TIdSipResponse;
-                                        ReceivedFrom: TIdSipConnectionBindings); overload; override;
+    procedure ReceiveMessageInTimerContext(Msg: TIdSipMessage;
+                                           Binding: TIdSocketHandle); override;
   public
     property OnFinished: TNotifyEvent read fOnFinished write fOnFinished;
   end;
@@ -160,8 +152,8 @@ end;
 procedure TIdSipUDPTransport.InstantiateServer;
 begin
   Self.Transport := TIdSipUdpServer.Create(nil);
-  Self.Transport.AddMessageListener(Self);
   Self.Transport.ThreadedEvent := true;
+  Self.Transport.TransportID := Self.ID;
 end;
 
 procedure TIdSipUDPTransport.SendRequest(R: TIdSipRequest;
@@ -205,25 +197,7 @@ begin
   inherited Create(AOwner);
 
   Self.DefaultPort   := TIdSipTransportRegistry.DefaultPortFor(UdpTransport);
-  Self.Notifier      := TIdSipServerNotifier.Create;
   Self.ThreadedEvent := true;
-end;
-
-destructor TIdSipUdpServer.Destroy;
-begin
-  Self.Notifier.Free;
-
-  inherited Destroy;
-end;
-
-procedure TIdSipUdpServer.AddMessageListener(const Listener: IIdSipMessageListener);
-begin
-  Self.Notifier.AddMessageListener(Listener);
-end;
-
-procedure TIdSipUdpServer.RemoveMessageListener(const Listener: IIdSipMessageListener);
-begin
-  Self.Notifier.RemoveMessageListener(Listener);
 end;
 
 //* TIdSipUdpServer Protected methods ******************************************
@@ -260,20 +234,15 @@ begin
   end;
 end;
 
-procedure TIdSipUdpServer.NotifyListenersOfResponse(Response: TIdSipResponse;
-                                                    ReceivedFrom: TIdSipConnectionBindings);
-begin
-  Self.Notifier.NotifyListenersOfResponse(Response, ReceivedFrom);
-end;
-
 procedure TIdSipUdpServer.NotifyOfException(E: Exception);
 var
-  Ex: TIdSipExceptionWait;
+  Ex: TIdSipMessageExceptionWait;
 begin
-  Ex := TIdSipExceptionWait.Create;
-  Ex.Event := Self.DoOnException;
-  Ex.ExceptionType := ExceptClass(E.ClassType);
-  Ex.Reason := E.Message;
+  Ex := TIdSipMessageExceptionWait.Create;
+  Ex.ExceptionMessage := E.Message;
+  Ex.Reason           := E.Message;
+  Ex.TransportID      := Self.TransportID;
+
   Self.Timer.AddEvent(TriggerImmediately, Ex);
 end;
 
@@ -283,7 +252,6 @@ var
   Wait: TIdSipReceiveMessageWait;
 begin
   Wait := TIdSipReceiveMessageWait.Create;
-  Wait.Listeners := Self.Notifier;
   Wait.Message   := Msg.Copy;
 
   Wait.ReceivedFrom := TIdSipConnectionBindings.Create;
@@ -291,26 +259,9 @@ begin
   Wait.ReceivedFrom.LocalPort := Binding.Port;
   Wait.ReceivedFrom.PeerIP    := Binding.PeerIP;
   Wait.ReceivedFrom.PeerPort  := Binding.PeerPort;
+  Wait.TransportID            := Self.TransportID;
 
   Self.Timer.AddEvent(TriggerImmediately, Wait);
-end;
-
-//* TIdSipUdpServer Private methods ********************************************
-
-procedure TIdSipUdpServer.DoOnException(Sender: TObject);
-var
-  FakeException: Exception;
-  Wait:          TIdSipExceptionWait;
-begin
-  Wait := Sender as TIdSipExceptionWait;
-
-  FakeException := Wait.ExceptionType.Create(Wait.ExceptionMsg);
-  try
-    Self.Notifier.NotifyListenersOfException(FakeException,
-                                             Wait.Reason);
-  finally
-    FakeException.Free;
-  end;
 end;
 
 //******************************************************************************
@@ -318,12 +269,12 @@ end;
 //******************************************************************************
 //* TIdSipUdpClient Protected methods ******************************************
 
-procedure TIdSipUdpClient.NotifyListenersOfResponse(Response: TIdSipResponse;
-                                                    ReceivedFrom: TIdSipConnectionBindings);
+procedure TIdSipUdpClient.ReceiveMessageInTimerContext(Msg: TIdSipMessage;
+                                                       Binding: TIdSocketHandle);
 begin
-  inherited NotifyListenersOfResponse(Response, ReceivedFrom);
+  inherited ReceiveMessageInTimerContext(Msg, Binding);
 
-  if Response.IsFinal then Self.DoOnFinished;
+  if Msg.IsResponse and (Msg as TIdSipResponse).IsFinal then Self.DoOnFinished;
 end;
 
 //* TIdSipUdpClient Private methods ********************************************

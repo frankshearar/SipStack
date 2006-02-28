@@ -13,9 +13,8 @@ interface
 
 uses
   Classes, Contnrs, IdBaseThread, IdException, IdInterfacedObject,
-  IdNotification, IdSipLocator, IdSipMessage, IdSipServerNotifier,
-  IdSocketHandle, IdSSLOpenSSL, IdTCPConnection, IdTimerQueue, SyncObjs,
-  SysUtils;
+  IdNotification, IdSipLocator, IdSipMessage, IdSocketHandle, IdSSLOpenSSL,
+  IdTCPConnection, IdTimerQueue, SyncObjs, SysUtils;
 
 type
   TIdSipTransport = class;
@@ -96,7 +95,7 @@ type
     procedure OnMalformedMessage(const Msg: String;
                                  const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               ReceivedFrom: TIdSipConnectionBindings); 
+                               ReceivedFrom: TIdSipConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 ReceivedFrom: TIdSipConnectionBindings);
     procedure ReturnBadRequest(Request: TIdSipRequest;
@@ -128,10 +127,12 @@ type
     function  IsNull: Boolean; virtual;
     function  IsReliable: Boolean; virtual;
     function  IsRunning: Boolean; virtual;
+    procedure ReceiveException(E: Exception;
+                               const Reason: String); virtual;
     procedure ReceiveRequest(Request: TIdSipRequest;
                              ReceivedFrom: TIdSipConnectionBindings); virtual;
     procedure ReceiveResponse(Response: TIdSipResponse;
-                              ReceivedFrom: TIdSipConnectionBindings);
+                              ReceivedFrom: TIdSipConnectionBindings); virtual;
     procedure RemoveBinding(const Address: String; Port: Cardinal);
     procedure RemoveTransportListener(const Listener: IIdSipTransportListener);
     procedure RemoveTransportSendingListener(const Listener: IIdSipTransportSendingListener);
@@ -177,55 +178,29 @@ type
   private
     fExceptionMessage: String;
     fExceptionType:    ExceptClass;
-    fListeners:        TIdSipServerNotifier;
     fReason:           String;
+    fTransportID:      String;
   public
     procedure Trigger; override;
 
-    property ExceptionType:    ExceptClass          read fExceptionType write fExceptionType;
-    property ExceptionMessage: String               read fExceptionMessage write fExceptionMessage;
-    property Listeners:        TIdSipServerNotifier read fListeners write fListeners;
-    property Reason:           String               read fReason write fReason;
+    property ExceptionType:    ExceptClass read fExceptionType write fExceptionType;
+    property ExceptionMessage: String      read fExceptionMessage write fExceptionMessage;
+    property Reason:           String      read fReason write fReason;
+    property TransportID:      String      read fTransportID write fTransportID;
   end;
 
   // I represent the (possibly) deferred handling of an inbound message.
   TIdSipReceiveMessageWait = class(TIdSipMessageWait)
   private
-    fListeners:    TIdSipServerNotifier;
     fReceivedFrom: TIdSipConnectionBindings;
+    fTransportID:  String;
   public
     destructor Destroy; override;
 
     procedure Trigger; override;
 
-    property Listeners:    TIdSipServerNotifier     read fListeners write fListeners;
     property ReceivedFrom: TIdSipConnectionBindings read fReceivedFrom write fReceivedFrom;
-  end;
-
-  // I represent the (possibly) deferred handling of an exception raised in the
-  // process of sending or receiving a message.
-  TIdSipMessageTransportExceptionWait = class(TIdSipMessageExceptionWait)
-  private
-    fTransport: TIdSipTransport;
-
-    procedure SetTransport(Value: TIdSipTransport);
-  public
-    constructor Create; override;
-    destructor  Destroy; override;
-
-    property Transport: TIdSipTransport read fTransport write SetTransport;
-  end;
-
-  TIdSipReceiveTransportMessageWait = class(TIdSipReceiveMessageWait)
-  private
-    fTransport: TIdSipTransport;
-
-    procedure SetTransport(Value: TIdSipTransport);
-  public
-    constructor Create; override;
-    destructor  Destroy; override;
-
-    property Transport: TIdSipTransport read fTransport write SetTransport;
+    property TransportID:  String                   read fTransportID write fTransportID;
   end;
 
   // I represent a collection of Transports. I own, and hence manage the
@@ -244,23 +219,6 @@ type
     function  Count: Integer;
 
     property Transports[Index: Integer]: TIdSipTransport read GetTransports; default;
-  end;
-
-  // I relate a request with a TCP connection. I store a COPY of a request
-  // while storing a REFERENCE to a connection. Transports construct requests
-  // and so bear responsibility for destroying them, and I need to remember
-  // these requests.
-  // I represent a (possibly) deferred handling of an exception by using a
-  // TNotifyEvent.
-  TIdSipExceptionWait = class(TIdNotifyEventWait)
-  private
-    fExceptionMsg:  String;
-    fExceptionType: ExceptClass;
-    fReason:        String;
-  public
-    property ExceptionMsg:  String      read fExceptionMsg write fExceptionMsg;
-    property ExceptionType: ExceptClass read fExceptionType write fExceptionType;
-    property Reason:        String      read fReason write fReason;
   end;
 
   // Look at IIdSipTransportListener's declaration.
@@ -422,9 +380,10 @@ begin
   Self.TransportListeners        := TIdNotificationList.Create;
   Self.TransportSendingListeners := TIdNotificationList.Create;
 
-  Self.InstantiateServer;
+  Self.fID := TIdSipTransportRegistry.RegisterTransport(Self);
 
-  Self.fID      := TIdSipTransportRegistry.RegisterTransport(Self);
+  Self.InstantiateServer;
+    
   Self.Timeout  := Self.DefaultTimeout;
   Self.UseRport := false;
 end;
@@ -508,6 +467,12 @@ end;
 function TIdSipTransport.IsRunning: Boolean;
 begin
   Result := false;
+end;
+
+procedure TIdSipTransport.ReceiveException(E: Exception;
+                                           const Reason: String);
+begin
+  Self.NotifyOfException(E, Reason);
 end;
 
 procedure TIdSipTransport.ReceiveRequest(Request: TIdSipRequest;
@@ -752,7 +717,7 @@ end;
 procedure TIdSipTransport.OnException(E: Exception;
                                       const Reason: String);
 begin
-  Self.NotifyOfException(E, Reason);
+  Self.ReceiveException(E, Reason);
 end;
 
 procedure TIdSipTransport.OnMalformedMessage(const Msg: String;
@@ -1011,11 +976,14 @@ end;
 procedure TIdSipMessageExceptionWait.Trigger;
 var
   FakeException: Exception;
+  Receiver:      TIdSipTransport;
 begin
   FakeException := Self.ExceptionType.Create(Self.ExceptionMessage);
   try
-    Self.Listeners.NotifyListenersOfException(FakeException,
-                                              Self.Reason);
+    Receiver := TIdSipTransportRegistry.TransportFor(Self.TransportID);
+
+    if Assigned(Receiver) then
+      Receiver.ReceiveException(FakeException, Self.Reason);
   finally
     FakeException.Free;
   end;
@@ -1034,69 +1002,19 @@ begin
 end;
 
 procedure TIdSipReceiveMessageWait.Trigger;
+var
+  Receiver: TIdSipTransport;
 begin
-  if Self.Message.IsRequest then
-    Self.Listeners.NotifyListenersOfRequest(Self.Message as TIdSipRequest,
-                                            Self.ReceivedFrom)
-  else
-    Self.Listeners.NotifyListenersOfResponse(Self.Message as TIdSipResponse,
-                                             Self.ReceivedFrom);
-end;
+  Receiver := TIdSipTransportRegistry.TransportFor(Self.TransportID);
 
-//******************************************************************************
-//* TIdSipMessageTransportExceptionWait                                        *
-//******************************************************************************
-//* TIdSipMessageTransportExceptionWait Public methods *************************
-
-constructor TIdSipMessageTransportExceptionWait.Create;
-begin
-  inherited Create;
-
-  Self.Listeners := TIdSipServerNotifier.Create;
-end;
-
-destructor TIdSipMessageTransportExceptionWait.Destroy;
-begin
-  Self.Listeners.Free;
-
-  inherited Destroy;
-end;
-
-//* TIdSipMessageTransportExceptionWait Private methods ************************
-
-procedure TIdSipMessageTransportExceptionWait.SetTransport(Value: TIdSipTransport);
-begin
-  Self.Listeners.RemoveMessageListener(Self.fTransport);
-  Self.fTransport := Value;
-  Self.Listeners.AddMessageListener(Value);
-end;
-
-//******************************************************************************
-//* TIdSipReceiveTransportMessageWait                                          *
-//******************************************************************************
-//* TIdSipReceiveTransportMessageWait Public methods ***************************
-
-constructor TIdSipReceiveTransportMessageWait.Create;
-begin
-  inherited Create;
-
-  Self.Listeners := TIdSipServerNotifier.Create;
-end;
-
-destructor TIdSipReceiveTransportMessageWait.Destroy;
-begin
-  Self.Listeners.Free;
-
-  inherited Destroy;
-end;
-
-//* TIdSipReceiveTransportMessageWait Private methods **************************
-
-procedure TIdSipReceiveTransportMessageWait.SetTransport(Value: TIdSipTransport);
-begin
-  Self.Listeners.RemoveMessageListener(Self.fTransport);
-  Self.fTransport := Value;
-  Self.Listeners.AddMessageListener(Value);
+  if Assigned(Receiver) then begin
+    if Self.Message.IsRequest then
+      Receiver.ReceiveRequest(Self.Message as TIdSipRequest,
+                              Self.ReceivedFrom)
+    else
+      Receiver.ReceiveResponse(Self.Message as TIdSipResponse,
+                               Self.ReceivedFrom);
+  end;
 end;
 
 //******************************************************************************

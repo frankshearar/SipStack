@@ -105,6 +105,7 @@ type
     fOnRemoveConnection: TIdSipRemoveConnectionEvent;
     fReadTimeout:        Integer;
     fTimer:              TIdTimerQueue;
+    fTransportID:        String;
 
     procedure AddConnection(Connection: TIdTCPConnection;
                             Request: TIdSipRequest);
@@ -130,6 +131,7 @@ type
     property OnRemoveConnection: TIdSipRemoveConnectionEvent read fOnRemoveConnection write fOnRemoveConnection;
     property ReadTimeout:        Integer                     read fReadTimeout write fReadTimeout;
     property Timer:              TIdTimerQueue               read fTimer write fTimer;
+    property TransportID:        String                      read fTransportID write fTransportID;
   end;
 
   // ReadTimeout = -1 implies that we never timeout the body wait. We do not
@@ -147,10 +149,12 @@ type
     function  GetOnRemoveConnection: TIdSipRemoveConnectionEvent;
     function  GetReadTimeout: Integer;
     function  GetTimer: TIdTimerQueue;
+    function  GetTransportID: String;
     procedure SetOnAddConnection(Value: TIdSipAddConnectionEvent);
     procedure SetOnRemoveConnection(Value: TIdSipRemoveConnectionEvent);
     procedure SetReadTimeout(Value: Integer);
     procedure SetTimer(Value: TIdTimerQueue);
+    procedure SetTransportID(const Value: String);
   protected
     procedure DoDisconnect(Thread: TIdPeerThread); override;
     procedure DoOnExecute(Thread: TIdPeerThread);
@@ -158,17 +162,16 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
 
-    procedure AddMessageListener(const Listener: IIdSipMessageListener);
     function  CreateClient: TIdSipTcpClient; virtual;
     function  DefaultTimeout: Cardinal; virtual;
     procedure DestroyClient(Client: TIdSipTcpClient); virtual;
-    procedure RemoveMessageListener(const Listener: IIdSipMessageListener);
   published
     property ConnectionTimeout:  Integer                     read fConnectionTimeout write fConnectionTimeout;
     property OnAddConnection:    TIdSipAddConnectionEvent    read GetOnAddConnection write SetOnAddConnection;
     property OnRemoveConnection: TIdSipRemoveConnectionEvent read GetOnRemoveConnection write SetOnRemoveConnection;
     property ReadTimeout:        Integer                     read GetReadTimeout write SetReadTimeout;
     property Timer:              TIdTimerQueue               read GetTimer write SetTimer;
+    property TransportID:        String                      read GetTransportID write SetTransportID;
   end;
 
   // Note that the Timeout property determines the maximum length of time to
@@ -181,24 +184,31 @@ type
     MessageReader: TIdSipTcpMessageReader;
 
     function  GetTimer: TIdTimerQueue;
+    function  GetTransportID: String;
     procedure MarkAsTerminated(Sender: TObject);
     procedure SetTerminated(Value: Boolean);
     procedure SetTimer(Value: TIdTimerQueue);
+    procedure SetTransportID(const Value: String);
   protected
     function DefaultTimeout: Cardinal; virtual;
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
 
-    procedure AddMessageListener(Listener: IIdSipMessageListener);
     procedure ReceiveMessages;
-    procedure RemoveMessageListener(Listener: IIdSipMessageListener);
     procedure Send(Msg: TIdSipMessage);
 
-    property Terminated: Boolean       read fTerminated write SetTerminated;
-    property Timer:      TIdTimerQueue read GetTimer write SetTimer;
+    property Terminated:  Boolean       read fTerminated write SetTerminated;
+    property Timer:       TIdTimerQueue read GetTimer write SetTimer;
+    property TransportID: String        read GetTransportID write SetTransportID;
   end;
 
+  // I relate a request with a TCP connection. I store a COPY of a request
+  // while storing a REFERENCE to a connection. Transports construct requests
+  // and so bear responsibility for destroying them, and I need to remember
+  // these requests.
+  // I represent a (possibly) deferred handling of an exception by using a
+  // TNotifyEvent.  
   TIdSipConnectionTableEntry = class(TObject)
   private
     fConnection: TIdTCPConnection;
@@ -353,7 +363,7 @@ end;
 procedure TIdSipTCPTransport.InstantiateServer;
 begin
   Self.Transport := Self.ServerType.Create(nil);
-  Self.Transport.AddMessageListener(Self);
+  Self.Transport.TransportID := Self.ID;
 
   Self.Transport.OnAddConnection := Self.DoOnAddConnection;
 end;
@@ -456,10 +466,10 @@ begin
   Self.FreeOnTerminate := true;
 
   Self.Client := Self.ClientType.Create(nil);
-  Self.Client.AddMessageListener(Transport);
-  Self.Client.Host  := Host;
-  Self.Client.Port  := Port;
-  Self.Client.Timer := Transport.Timer;
+  Self.Client.Host        := Host;
+  Self.Client.Port        := Port;
+  Self.Client.Timer       := Transport.Timer;
+  Self.Client.TransportID := Transport.ID;
 
   Self.FirstMsg  := Msg.Copy;
   Self.Transport := Transport;
@@ -523,15 +533,15 @@ end;
 
 procedure TIdSipTcpClientThread.NotifyOfException(E: Exception);
 var
-  Wait: TIdSipMessageTransportExceptionWait;
+  Wait: TIdSipMessageExceptionWait;
 begin
   if Self.Terminated then Exit;
 
-  Wait := TIdSipMessageTransportExceptionWait.Create;
+  Wait := TIdSipMessageExceptionWait.Create;
   Wait.ExceptionType    := ExceptClass(E.ClassType);
   Wait.ExceptionMessage := E.Message;
   Wait.Reason           := ExceptionDuringTcpClientRequestSend;
-  Wait.Transport        := Self.Transport;
+  Wait.TransportID      := Self.Transport.ID;
 
   Self.Transport.Timer.AddEvent(TriggerImmediately, Wait);
 end;
@@ -687,8 +697,8 @@ var
 begin
   RecvWait := TIdSipReceiveMessageWait.Create;
   RecvWait.Message      := Msg.Copy;
-  RecvWait.Listeners    := Self.Notifier;
   RecvWait.ReceivedFrom := Binding.Copy;
+  RecvWait.TransportID  := Self.TransportID;
 
   Self.Timer.AddEvent(TriggerImmediately, RecvWait);
 end;
@@ -737,11 +747,6 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipTcpServer.AddMessageListener(const Listener: IIdSipMessageListener);
-begin
-  Self.MessageReader.Notifier.AddMessageListener(Listener);
-end;
-
 function TIdSipTcpServer.CreateClient: TIdSipTcpClient;
 begin
   Result := TIdSipTcpClient.Create(nil);
@@ -755,11 +760,6 @@ end;
 procedure TIdSipTcpServer.DestroyClient(Client: TIdSipTcpClient);
 begin
   Client.Free;
-end;
-
-procedure TIdSipTcpServer.RemoveMessageListener(const Listener: IIdSipMessageListener);
-begin
-  Self.MessageReader.Notifier.RemoveMessageListener(Listener);
 end;
 
 //* TIdSipTcpServer Protected methods ******************************************
@@ -807,6 +807,11 @@ begin
   Result := Self.MessageReader.Timer;
 end;
 
+function TIdSipTcpServer.GetTransportID: String;
+begin
+  Result := Self.MessageReader.TransportID;
+end;
+
 procedure TIdSipTcpServer.SetOnAddConnection(Value: TIdSipAddConnectionEvent);
 begin
   Self.MessageReader.OnAddConnection := Value;
@@ -825,6 +830,11 @@ end;
 procedure TIdSipTcpServer.SetTimer(Value: TIdTimerQueue);
 begin
   Self.MessageReader.Timer := Value;
+end;
+
+procedure TIdSipTcpServer.SetTransportID(const Value: String);
+begin
+  Self.MessageReader.TransportID := Value;
 end;
 
 //******************************************************************************
@@ -851,20 +861,10 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipTcpClient.AddMessageListener(Listener: IIdSipMessageListener);
-begin
-  Self.MessageReader.Notifier.AddMessageListener(Listener);
-end;
-
 procedure TIdSipTcpClient.ReceiveMessages;
 begin
   Self.MessageReader.ReadTimeout := Self.ReadTimeout;
   Self.MessageReader.ReadMessages(Self);
-end;
-
-procedure TIdSipTcpClient.RemoveMessageListener(Listener: IIdSipMessageListener);
-begin
-  Self.MessageReader.Notifier.RemoveMessageListener(Listener);
 end;
 
 procedure TIdSipTcpClient.Send(Msg: TIdSipMessage);
@@ -886,6 +886,11 @@ begin
   Result := Self.MessageReader.Timer;
 end;
 
+function TIdSipTcpClient.GetTransportID: String;
+begin
+  Result := Self.MessageReader.TransportID;
+end;
+
 procedure TIdSipTcpClient.MarkAsTerminated(Sender: TObject);
 begin
   Self.Terminated := true;
@@ -902,6 +907,11 @@ end;
 procedure TIdSipTcpClient.SetTimer(Value: TIdTimerQueue);
 begin
   Self.MessageReader.Timer := Value;
+end;
+
+procedure TIdSipTcpClient.SetTransportID(const Value: String);
+begin
+  Self.MessageReader.TransportID := Value;
 end;
 
 //******************************************************************************

@@ -174,7 +174,6 @@ type
     procedure TestSendRequest;
     procedure TestSendRequestFromNonStandardPort;
     procedure TestSendRequestTopVia;
-    procedure TestSendRequestUsesDestinationLocation;
     procedure TestSendResponse;
     procedure TestSendResponseFromNonStandardPort;
     procedure TestSendResponseUsesDestinationLocation;
@@ -1098,7 +1097,8 @@ begin
   Self.WaitForSignaled;
 
   Check(Self.ReceivedRequest,
-        Self.HighPortTransport.ClassName + ': Request not received');
+        Self.HighPortTransport.ClassName + ': Request not received: SendRequest '
+      + 'didn''t use the DestinationLocation or something bad happened');
 end;
 
 procedure TestTIdSipTransport.TestSendRequestFromNonStandardPort;
@@ -1114,16 +1114,6 @@ end;
 procedure TestTIdSipTransport.TestSendRequestTopVia;
 begin
   Self.CheckingRequestEvent := Self.CheckSendRequestTopVia;
-  Self.LowPortTransport.Send(Self.Request, Self.HighPortLocation);
-
-  Self.WaitForSignaled;
-end;
-
-procedure TestTIdSipTransport.TestSendRequestUsesDestinationLocation;
-begin
-  Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
-
-  Self.Request.RequestUri.Port := Self.Request.RequestUri.Port + 1;
   Self.LowPortTransport.Send(Self.Request, Self.HighPortLocation);
 
   Self.WaitForSignaled;
