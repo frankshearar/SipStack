@@ -12,9 +12,9 @@ unit IdSipTcpTransport;
 interface
 
 uses
-  Classes, Contnrs, IdBaseThread, IdSipLocator, IdSipMessage,
-  IdSipServerNotifier, IdSipTransport, IdSocketHandle, IdTCPConnection,
-  IdTCPClient, IdTCPServer, IdTimerQueue, SyncObjs, SysUtils;
+  Classes, Contnrs, IdBaseThread, IdSipLocator, IdSipMessage, IdSipTransport,
+  IdSocketHandle, IdTCPConnection, IdTCPClient, IdTCPServer, IdTimerQueue,
+  SyncObjs, SysUtils;
 
 type
   TIdSipConnectionTableLock = class;
@@ -100,7 +100,6 @@ type
   // them to a TimerQueue until I die or something severs the connection.
   TIdSipTcpMessageReader = class(TObject)
   private
-    fNotifier:           TIdSipServerNotifier;
     fOnAddConnection:    TIdSipAddConnectionEvent;
     fOnRemoveConnection: TIdSipRemoveConnectionEvent;
     fReadTimeout:        Integer;
@@ -119,14 +118,10 @@ type
     procedure ReturnInternalServerError(Connection: TIdTCPConnection;
                                         const Reason: String);
   public
-    constructor Create;
-    destructor  Destroy; override;
-
     procedure NotifyOfException(ExceptionType: ExceptClass;
                                 const Reason: String);
     procedure ReadMessages(Connection: TIdTCPConnection);
 
-    property Notifier:           TIdSipServerNotifier        read fNotifier;
     property OnAddConnection:    TIdSipAddConnectionEvent    read fOnAddConnection write fOnAddConnection;
     property OnRemoveConnection: TIdSipRemoveConnectionEvent read fOnRemoveConnection write fOnRemoveConnection;
     property ReadTimeout:        Integer                     read fReadTimeout write fReadTimeout;
@@ -550,20 +545,6 @@ end;
 //* TIdSipTcpMessageReader                                                     *
 //******************************************************************************
 //* TIdSipTcpMessageReader Public methods **************************************
-
-constructor TIdSipTcpMessageReader.Create;
-begin
-  inherited Create;
-
-  Self.fNotifier := TIdSipServerNotifier.Create;
-end;
-
-destructor TIdSipTcpMessageReader.Destroy;
-begin
-  Self.fNotifier.Free;
-
-  inherited Destroy;
-end;
 
 procedure TIdSipTcpMessageReader.NotifyOfException(ExceptionType: ExceptClass;
                                                    const Reason: String);
