@@ -36,6 +36,7 @@ type
     fSentResponseCount: Cardinal;
     fWriteLog:          Boolean;
 
+    function  CreateFakeBinding: TIdSipConnectionBindings;
     procedure DispatchRequest(R: TidSipRequest;
                               Dest: TIdSipLocation);
     procedure DispatchResponse(R: TidSipResponse;
@@ -219,7 +220,7 @@ var
 begin
   CopyOfMessage := R.Copy as TIdSipRequest;
   try
-    FakeBinding := TIdSipConnectionBindings.Create;
+    FakeBinding := Self.CreateFakeBinding;
     try
       Self.ReceiveRequest(CopyOfMessage, FakeBinding);
     finally
@@ -258,7 +259,7 @@ var
 begin
   CopyOfMessage := R.Copy as TIdSipResponse;
   try
-    FakeBinding := TIdSipConnectionBindings.Create;
+    FakeBinding := Self.CreateFakeBinding;
     try
       Self.ReceiveResponse(CopyOfMessage, FakeBinding);
     finally
@@ -407,6 +408,14 @@ begin
 end;
 
 //* TIdSipMockTransport Private methods ****************************************
+
+function TIdSipMockTransport.CreateFakeBinding: TIdSipConnectionBindings;
+begin
+  Result := TIdSipConnectionBindings.Create;
+  
+  Result.PeerIP   := '192.168.255.254';
+  Result.PeerPort := 5060;
+end;
 
 procedure TIdSipMockTransport.DispatchRequest(R: TidSipRequest;
                                               Dest: TIdSipLocation);
