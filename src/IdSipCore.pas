@@ -236,8 +236,8 @@ type
     fRequest:   TIdSipRequest;
     fUserAgent: TIdSipAbstractCore;
   public
-    property Receiver:  TIdSipTransport         read fReceiver write fReceiver;
-    property Request:   TIdSipRequest           read fRequest write fRequest;
+    property Receiver:  TIdSipTransport    read fReceiver write fReceiver;
+    property Request:   TIdSipRequest      read fRequest write fRequest;
     property UserAgent: TIdSipAbstractCore read fUserAgent write fUserAgent;
   end;
 
