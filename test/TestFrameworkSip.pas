@@ -622,7 +622,7 @@ type
   public
     constructor Create; override;
 
-    property DestinationParam: TIdSipLocation read fDestinationParam;
+    property DestinationParam: TIdSipLocation  read fDestinationParam;
     property RequestParam:     TIdSipRequest   read fRequestParam;
     property ResponseParam:    TIdSipResponse  read fResponseParam;
     property SenderParam:      TIdSipTransport read fSenderParam;
@@ -689,15 +689,15 @@ type
     constructor Create; override;
 
     property AbstractUserAgentParam:  TIdSipAbstractCore   read fAbstractUserAgentParam;
-    property AuthenticationChallenge: Boolean                   read fAuthenticationChallenge;
-    property ChallengedRequestParam:  TIdSipRequest             read fChallengedRequestParam;
-    property DroppedUnmatchedMessage: Boolean                   read fDroppedUnmatchedMessage;
-    property MessageParam:            TIdSipMessage             read fMessageParam;
-    property Password:                String                    read fPassword write fPassword;
-    property ReceiverParam:           TIdSipTransport           read fReceiverParam;
-    property ResponseParam:           TIdSipResponse            read fResponseParam;
-    property TryAgain:                Boolean                   read fTryAgain write fTryAgain;
-    property Username:                String                    read fUsername write fUsername;
+    property AuthenticationChallenge: Boolean              read fAuthenticationChallenge;
+    property ChallengedRequestParam:  TIdSipRequest        read fChallengedRequestParam;
+    property DroppedUnmatchedMessage: Boolean              read fDroppedUnmatchedMessage;
+    property MessageParam:            TIdSipMessage        read fMessageParam;
+    property Password:                String               read fPassword write fPassword;
+    property ReceiverParam:           TIdSipTransport      read fReceiverParam;
+    property ResponseParam:           TIdSipResponse       read fResponseParam;
+    property TryAgain:                Boolean              read fTryAgain write fTryAgain;
+    property Username:                String               read fUsername write fUsername;
   end;
 
   TIdSipTestUserAgentListener = class(TIdSipTestTransactionUserListener,
@@ -726,9 +726,9 @@ type
   public
     constructor Create; override;
 
-    property RenewedSubscription: Boolean                   read fRenewedSubscription;
-    property SubscriptionParam:   TIdSipSubscription        read fSubscriptionParam;
-    property SubscriptionRequest: Boolean                   read fSubscriptionRequest;
+    property RenewedSubscription: Boolean              read fRenewedSubscription;
+    property SubscriptionParam:   TIdSipSubscription   read fSubscriptionParam;
+    property SubscriptionRequest: Boolean              read fSubscriptionRequest;
     property UserAgentParam:      TIdSipAbstractCore   read fUserAgentParam;
   end;
 
@@ -1733,7 +1733,7 @@ end;
 //* TIdSipTestOptionsListener Private methods **********************************
 
 procedure TIdSipTestOptionsListener.OnResponse(OptionsAgent: TIdSipOutboundOptions;
-                                              Response: TIdSipResponse);
+                                               Response: TIdSipResponse);
 begin
   Self.fOptionsAgentParam := OptionsAgent;
   Self.fResponseParam     := Response;
@@ -2231,7 +2231,7 @@ end;
 //* TIdSipTestTransactionDispatcherListener Private methods ********************
 
 procedure TIdSipTestTransactionDispatcherListener.OnReceiveRequest(Request: TIdSipRequest;
-                                                              Receiver: TIdSipTransport);
+                                                                   Receiver: TIdSipTransport);
 begin
   Self.fReceivedRequest := true;
   Self.fReceiverParam   := Receiver;
@@ -2242,7 +2242,7 @@ begin
 end;
 
 procedure TIdSipTestTransactionDispatcherListener.OnReceiveResponse(Response: TIdSipResponse;
-                                                               Receiver: TIdSipTransport);
+                                                                    Receiver: TIdSipTransport);
 begin
   Self.fReceivedResponse := true;
   Self.fReceiverParam    := Receiver;
