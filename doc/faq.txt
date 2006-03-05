@@ -1,10 +1,14 @@
-1. Where do I begin?
+1. The project won't compile!
 
-2. How do I create a new header type?
+2. The project's broken! It raises exceptions all over the place!
 
-3. When my test runs and I expect a message to be sent. It's not. Why?
+3. Where do I begin?
 
-4. The tests take too long to run. I only want to test this little
+4. How do I create a new header type?
+
+5. When my test runs and I expect a message to be sent. It's not. Why?
+
+6. The tests take too long to run. I only want to test this little
    test unit. What do I do?
 
 
@@ -14,15 +18,21 @@
 
 
 
+1. Check that you've installed DUnit (http://dunit.sourceforge.net/),
+   and, if you're running Indy 9, that you've installed the patch in
+   the indy-patches directory to Indy 9.
 
+2. If you're running the test suite or demo in the IDE, then you'll
+   find exceptions (like EParserError, EBadHeader) being raised. This
+   is normal. If you look further in the call stack you'll see those
+   exceptions being caught. If they bug you, just turn off the "Stop
+   on Delphi Exceptions" when running the tests.
 
-
-
-1. Read the class comment on TIdSipStackConfigurator. Decide on what
+3. Read the class comment on TIdSipStackConfigurator. Decide on what
    configuration you want, put that configuration in a TStrings, and
    invoke TIdSipStackConfigurator.CreateUserAgent.
 
-2. TIdSipHeader is the base class for all header types. Follow these
+4. TIdSipHeader is the base class for all header types. Follow these
    steps to define a new header type:
    * find a suitable subclass (e.g., if the header primarily consists
      of an address, subclass TIdSipAddressHeader);
@@ -33,13 +43,13 @@
    * add the header name (possibly both full and short forms) to
      TIdSipHeaderList.CanonicaliseName.
 
-3. Your first bet would be to make sure that the Locator can resolve
+5. Your first bet would be to make sure that the Locator can resolve
    the hostname in the requests's Request-URI or response's top-most
    Via header. See if the stack signals OnNetworkFailure. If it does,
    add a new A or AAAA record to the locator by means of AddA/AddAAAA
    as part of the test setup.
 
-4. Comment out the unwanted test units. Unfortunately, up to at least
+6. Comment out the unwanted test units. Unfortunately, up to at least
    version 0.5.2, TestIdSipStackInterface depends on the StackWindow
    unit. If you comment out TestIdSipStackInterface be sure to comment
    out StackWindow. Conversely, if you want to test
