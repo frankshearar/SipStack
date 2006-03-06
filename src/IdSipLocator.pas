@@ -79,6 +79,7 @@ type
                           const Address: String;
                           Port: Cardinal);
     function  First: TIdSipLocation;
+    procedure RemoveFirst;
 
     property Items[Index: Integer]: TIdSipLocation read GetLocation; default;
   end;
@@ -242,6 +243,11 @@ end;
 function TIdSipLocations.First: TIdSipLocation;
 begin
   Result := Self.Items[0];
+end;
+
+procedure TIdSipLocations.RemoveFirst;
+begin
+  Self.Delete(0);
 end;
 
 //* TIdSipLocations Private methods ********************************************
