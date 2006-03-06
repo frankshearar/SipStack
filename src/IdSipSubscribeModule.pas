@@ -362,6 +362,8 @@ type
   private
     fCallID:  String;
     fFromTag: String;
+  protected
+    function CreateNewAttempt: TIdSipRequest; override;
   public
     procedure Send; override;
 
@@ -1565,13 +1567,16 @@ end;
 
 function TIdSipOutboundSubscribe.Match(Msg: TIdSipMessage): Boolean;
 begin
-  Result := false;
+  // We match responses to our SUBSCRIBE (or REFER) or the SUBSCRIBE/REFER we
+  // sent.
 
   if Msg.IsResponse then begin
     Result := Self.InitialRequest.CSeq.Equals(Msg.CSeq)
           and (Self.InitialRequest.CallID = Msg.CallID)
           and (Self.InitialRequest.From.Tag = Msg.From.Tag);
-  end;
+  end
+  else
+    Result := Self.InitialRequest.Equals(Msg);
 end;
 
 procedure TIdSipOutboundSubscribe.Send;
@@ -1632,24 +1637,13 @@ end;
 //******************************************************************************
 //* TIdSipOutboundUnSubscribe Public methods ***********************************
 
-procedure TIdSipOutboundUnsubscribe.Send;
-var
-  Sub: TIdSipRequest;
+function TIdSipOutboundUnsubscribe.CreateNewAttempt: TIdSipRequest;
 begin
-  inherited Send;
-
-  Sub := Self.Module.CreateSubscribe(Self.Target, Self.EventPackage);
-  try
-    Sub.CallID               := Self.CallID;
-    Sub.Event.ID             := Self.ID;
-    Sub.Expires.NumericValue := 0;
-    Sub.From.Tag             := Self.FromTag;
-    Self.InitialRequest.Assign(Sub);
-
-    Self.SendRequest(Sub);
-  finally
-    Sub.Free;
-  end;
+  Result := Self.Module.CreateSubscribe(Self.Target, Self.EventPackage);
+  Result.CallID               := Self.CallID;
+  Result.Event.ID             := Self.ID;
+  Result.Expires.NumericValue := 0;
+  Result.From.Tag             := Self.FromTag;
 end;
 
 //******************************************************************************
