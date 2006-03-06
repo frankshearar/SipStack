@@ -565,19 +565,21 @@ type
   TIdSipTestTransportListener = class(TIdSipMockListener,
                                       IIdSipTransportListener)
   private
-    fException:        Boolean;
-    fExceptionParam:   Exception;
-    fMsgParam:         String;
-    fReasonParam:      String;
-    fReceivedRequest:  Boolean;
-    fReceivedResponse: Boolean;
-    fReceiverParam:    TIdSipTransport;
-    fRejectedMessage:  Boolean;
-    fRequestParam:     TIdSipRequest;
-    fResponseParam:    TIdSipResponse;
-    fSourceParam:      TIdSipConnectionBindings;
+    fException:          Boolean;
+    fExceptionParam:     Exception;
+    fFailedMessageParam: TIdSipMessage;
+    fMsgParam:           String;
+    fReasonParam:        String;
+    fReceivedRequest:    Boolean;
+    fReceivedResponse:   Boolean;
+    fReceiverParam:      TIdSipTransport;
+    fRejectedMessage:    Boolean;
+    fRequestParam:       TIdSipRequest;
+    fResponseParam:      TIdSipResponse;
+    fSourceParam:        TIdSipConnectionBindings;
 
-    procedure OnException(E: Exception;
+    procedure OnException(FailedMessage: TIdSipMessage;
+                          E: Exception;
                           const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport;
@@ -590,17 +592,18 @@ type
   public
     constructor Create; override;
 
-    property Exception:        Boolean                  read fException;
-    property ExceptionParam:   Exception                read fExceptionParam;
-    property MsgParam:         String                   read fMsgParam;
-    property ReasonParam:      String                   read fReasonParam;
-    property ReceivedRequest:  Boolean                  read fReceivedRequest;
-    property ReceivedResponse: Boolean                  read fReceivedResponse;
-    property ReceiverParam:    TIdSipTransport          read fReceiverParam;
-    property RejectedMessage:  Boolean                  read fRejectedMessage;
-    property RequestParam:     TIdSipRequest            read fRequestParam;
-    property ResponseParam:    TIdSipResponse           read fResponseParam;
-    property SourceParam:      TIdSipConnectionBindings read fSourceParam;
+    property Exception:          Boolean                  read fException;
+    property ExceptionParam:     Exception                read fExceptionParam;
+    property FailedMessageParam: TIdSipMessage            read fFailedMessageParam;
+    property MsgParam:           String                   read fMsgParam;
+    property ReasonParam:        String                   read fReasonParam;
+    property ReceivedRequest:    Boolean                  read fReceivedRequest;
+    property ReceivedResponse:   Boolean                  read fReceivedResponse;
+    property ReceiverParam:      TIdSipTransport          read fReceiverParam;
+    property RejectedMessage:    Boolean                  read fRejectedMessage;
+    property RequestParam:       TIdSipRequest            read fRequestParam;
+    property ResponseParam:      TIdSipResponse           read fResponseParam;
+    property SourceParam:        TIdSipConnectionBindings read fSourceParam;
   end;
 
   TIdSipTestTransportSendingListener = class(TIdSipMockListener,
@@ -635,6 +638,10 @@ type
                                                   IIdSipTransactionDispatcherListener)
   private
     fDispatcherParam:           TIdSipTransactionDispatcher;
+    fExceptionParam:            Exception;
+    fFailedMessageParam:        TIdSipMessage;
+    fRaisedException:           Boolean;
+    fReasonParam:               String;
     fReceivedRequest:           Boolean;
     fReceivedResponse:          Boolean;
     fReceivedUnhandledRequest:  Boolean;
@@ -647,10 +654,15 @@ type
                                Receiver: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Receiver: TIdSipTransport);
+    procedure OnTransportException(FailedMessage: TIdSipMessage;
+                                   Error: Exception;
+                                   const Reason: String);
   public
     constructor Create; override;
 
     property DispatcherParam:           TIdSipTransactionDispatcher read fDispatcherParam;
+    property FailedMessageParam:        TIdSipMessage               read fFailedMessageParam;
+    property RaisedException:           Boolean                     read fRaisedException;
     property ReceivedRequest:           Boolean                     read fReceivedRequest;
     property ReceivedResponse:          Boolean                     read fReceivedResponse;
     property ReceivedUnhandledRequest:  Boolean                     read fReceivedUnhandledRequest;
@@ -2122,12 +2134,14 @@ end;
 
 //* TIdSipTestTransportListener Private methods ********************************
 
-procedure TIdSipTestTransportListener.OnException(E: Exception;
+procedure TIdSipTestTransportListener.OnException(FailedMessage: TIdSipMessage;
+                                                  E: Exception;
                                                   const Reason: String);
 begin
-  Self.fException      := true;
-  Self.fExceptionParam := E;
-  Self.fReasonParam    := Reason;
+  Self.fException          := true;
+  Self.fExceptionParam     := E;
+  Self.fFailedMessageParam := FailedMessage;
+  Self.fReasonParam        := Reason;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnException');
@@ -2222,6 +2236,7 @@ constructor TIdSipTestTransactionDispatcherListener.Create;
 begin
   inherited Create;
 
+  Self.fRaisedException           := false;
   Self.fReceivedRequest           := false;
   Self.fReceivedResponse          := false;
   Self.fReceivedUnhandledRequest  := false;
@@ -2250,6 +2265,19 @@ begin
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnReceiveResponse');
+end;
+
+procedure TIdSipTestTransactionDispatcherListener.OnTransportException(FailedMessage: TIdSipMessage;
+                                                                       Error: Exception;
+                                                                       const Reason: String);
+begin
+  Self.fExceptionParam     := Error;
+  Self.fFailedMessageParam := FailedMessage;
+  Self.fRaisedException    := true;
+  Self.fReasonParam        := Reason;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create(Self.ClassName + '.OnTransportException');
 end;
 
 //******************************************************************************

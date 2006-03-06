@@ -46,6 +46,9 @@ type
   // match any current transactions.
   IIdSipTransactionDispatcherListener = interface
     ['{0CB5037D-B9B3-4FB6-9201-80A0F10DB23A}']
+    procedure OnTransportException(FailedMessage: TIdSipMessage;
+                                   Error: Exception;
+                                   const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -101,6 +104,9 @@ type
     function  TransportAt(Index: Cardinal): TIdSipTransport;
   protected
     function  FindAppropriateTransport(Dest: TIdSipLocation): TIdSipTransport;
+    procedure NotifyListenersOfException(FailedMessage: TIdSipMessage;
+                                         E: Exception;
+                                         const Reason: String);
     procedure NotifyListenersOfRequest(Request: TIdSipRequest;
                                        Receiver: TIdSipTransport);
     procedure NotifyListenersOfResponse(Response: TIdSipResponse;
@@ -118,7 +124,8 @@ type
     procedure OnTerminated(Transaction: TIdSipTransaction);
 
     // IIdSipTransportListener
-    procedure OnException(E: Exception;
+    procedure OnException(FailedMessage: TIdSipMessage;
+                          E: Exception;
                           const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport;
@@ -413,6 +420,19 @@ type
     fReceiver: TIdSipTransport;
   public
     property Receiver: TIdSipTransport read fReceiver write fReceiver;
+  end;
+
+  TIdSipTransactionDispatcherListenerFailedSendMethod = class(TIdSipTransactionDispatcherMethod)
+  private
+    fException:     Exception;
+    fFailedMessage: TIdSipMessage;
+    fReason:        String;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Exception:     Exception     read fException write fException;
+    property FailedMessage: TIdSipMessage read fFailedMessage write fFailedMessage;
+    property Reason:        String        read fReason write fReason;
   end;
 
   TIdSipTransactionDispatcherListenerReceiveRequestMethod = class(TIdSipTransactionDispatcherMethod)
@@ -938,6 +958,24 @@ begin
   end;
 end;
 
+procedure TIdSipTransactionDispatcher.NotifyListenersOfException(FailedMessage: TIdSipMessage;
+                                                                 E: Exception;
+                                                                 const Reason: String);
+var
+  Notification: TIdSipTransactionDispatcherListenerFailedSendMethod;
+begin
+  Notification := TIdSipTransactionDispatcherListenerFailedSendMethod.Create;
+  try
+    Notification.Exception     := E;
+    Notification.FailedMessage := FailedMessage;
+    Notification.Reason        := Reason;
+
+    Self.MsgListeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
+end;
+
 procedure TIdSipTransactionDispatcher.NotifyListenersOfRequest(Request: TIdSipRequest;
                                                                Receiver: TIdSipTransport);
 var
@@ -994,9 +1032,11 @@ procedure TIdSipTransactionDispatcher.OnTerminated(Transaction: TIdSipTransactio
 begin
 end;
 
-procedure TIdSipTransactionDispatcher.OnException(E: Exception;
+procedure TIdSipTransactionDispatcher.OnException(FailedMessage: TIdSipMessage;
+                                                  E: Exception;
                                                   const Reason: String);
 begin
+  Self.NotifyListenersOfException(FailedMessage, E, Reason);
 end;
 
 procedure TIdSipTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
@@ -2214,6 +2254,18 @@ end;
 function TIdSipNullTransaction.IsNull: Boolean;
 begin
   Result := true;
+end;
+
+//******************************************************************************
+//* TIdSipTransactionDispatcherListenerFailedSendMethod                        *
+//******************************************************************************
+//* TIdSipTransactionDispatcherListenerFailedSendMethod Public methods *********
+
+procedure TIdSipTransactionDispatcherListenerFailedSendMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipTransactionDispatcherListener).OnTransportException(Self.FailedMessage,
+                                                                        Self.Exception,
+                                                                        Self.Reason);
 end;
 
 //******************************************************************************

@@ -41,7 +41,8 @@ type
     SentResponse:     Boolean;
     Transport:        TIdSipTransportSubclass;
 
-    procedure OnException(E: Exception;
+    procedure OnException(FailedMessage: TIdSipMessage;
+                          E: Exception;
                           const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport;
@@ -114,8 +115,9 @@ type
 
   TestTIdSipTransportExceptionMethod = class(TTransportMethodTestCase)
   private
-    Exception: Exception;
-    Method:    TIdSipTransportExceptionMethod;
+    Exception:     Exception;
+    FailedMessage: TIdSipMessage;
+    Method:        TIdSipTransportExceptionMethod;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -273,7 +275,8 @@ end;
 
 //* TestTIdSipTransportEventNotifications Private methods **********************
 
-procedure TestTIdSipTransportEventNotifications.OnException(E: Exception;
+procedure TestTIdSipTransportEventNotifications.OnException(FailedMessage: TIdSipMessage;
+                                                            E: Exception;
                                                             const Reason: String);
 begin
 end;
@@ -775,7 +778,8 @@ procedure TestTIdSipTransportExceptionMethod.SetUp;
 begin
   inherited SetUp;
 
-  Self.Exception := EUnknownTransport.Create('');
+  Self.Exception     := EUnknownTransport.Create('');
+  Self.FailedMessage := TIdSipResponse.Create;
 
   Self.Method := TIdSipTransportExceptionMethod.Create;
   Self.Method.Exception := Self.Exception;
@@ -785,6 +789,7 @@ end;
 procedure TestTIdSipTransportExceptionMethod.TearDown;
 begin
   Self.Method.Free;
+  Self.FailedMessage.Free;
   Self.Exception.Free;
 
   inherited TearDown;
@@ -803,6 +808,8 @@ begin
     Check(Listener.Exception, 'Listener not notified');
     Check(Self.Method.Exception = Listener.ExceptionParam,
           'Exception param');
+    Check(Self.Method.FailedMessage = Listener.FailedMessageParam,
+          'FailedMessage param');
     CheckEquals(Self.Method.Reason,
                 Listener.ReasonParam,
                 'Reason param');

@@ -83,7 +83,8 @@ type
                            Request: TIdSipRequest;
                            ReceivedFrom: TIdSipConnectionBindings);
     procedure OnEmpty(Sender: TIdTimerQueue);
-    procedure OnException(E: Exception;
+    procedure OnException(FailedMessage: TIdSipMessage;
+                          E: Exception;
                           const Reason: String); overload;
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport;
@@ -519,7 +520,8 @@ begin
   Self.EmptyListEvent.SetEvent;
 end;
 
-procedure TestTIdSipUdpServer.OnException(E: Exception;
+procedure TestTIdSipUdpServer.OnException(FailedMessage: TIdSipMessage;
+                                          E: Exception;
                                           const Reason: String);
 begin
 end;

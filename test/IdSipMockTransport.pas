@@ -64,7 +64,8 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
-    procedure FireOnException(E: ExceptClass;
+    procedure FireOnException(M: TIdSipMessage;
+                              E: ExceptClass;
                               const ExceptionMessage: String;
                               const Reason: String);
     procedure FireOnRequest(R: TIdSipRequest);
@@ -74,6 +75,8 @@ type
     function  IsReliable: Boolean; override;
     function  LastRequest: TIdSipRequest;
     function  LastResponse: TIdSipResponse;
+    function  PeerIP: String;
+    function  PeerPort: Integer;
     procedure RaiseException(E: ExceptClass);
     procedure ReceiveRequest(Request: TIdSipRequest;
                              ReceivedFrom: TIdSipConnectionBindings); override;
@@ -199,7 +202,8 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipMockTransport.FireOnException(E: ExceptClass;
+procedure TIdSipMockTransport.FireOnException(M: TIdSipMessage;
+                                              E: ExceptClass;
                                               const ExceptionMessage: String;
                                               const Reason: String);
 var
@@ -207,7 +211,7 @@ var
 begin
   Ex := E.Create(ExceptionMessage);
   try
-    Self.NotifyOfException(Ex, Reason);
+    Self.NotifyOfException(M, Ex, Reason);
   finally
     Ex.Free;
   end;
@@ -283,6 +287,16 @@ end;
 function TIdSipMockTransport.LastResponse: TIdSipResponse;
 begin
   Result := Self.fResponses.Last;
+end;
+
+function TIdSipMockTransport.PeerIP: String;
+begin
+  Result := '192.168.255.254';
+end;
+
+function TIdSipMockTransport.PeerPort: Integer;
+begin
+  Result := 5060;
 end;
 
 procedure TIdSipMockTransport.RaiseException(E: ExceptClass);
@@ -413,8 +427,8 @@ function TIdSipMockTransport.CreateFakeBinding: TIdSipConnectionBindings;
 begin
   Result := TIdSipConnectionBindings.Create;
   
-  Result.PeerIP   := '192.168.255.254';
-  Result.PeerPort := 5060;
+  Result.PeerIP   := Self.PeerIP;
+  Result.PeerPort := Self.PeerPort;
 end;
 
 procedure TIdSipMockTransport.DispatchRequest(R: TidSipRequest;

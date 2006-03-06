@@ -143,12 +143,14 @@ type
   // INVITEs, BYEs, CANCELs.
   TIdSipInvite = class(TIdSipOwnedAction)
   protected
-    Module: TIdSipInviteModule;
+    fLocalTag: String;
+    Module:    TIdSipInviteModule;
 
     function  CreateNewAttempt: TIdSipRequest; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
                          UsingSecureTransport: Boolean); override;
+    function  AckMatchesInvite(Msg: TIdSipMessage): Boolean;
     procedure ReceiveAck(Ack: TIdSipRequest); virtual;
     procedure ReceiveBye(Bye: TIdSipRequest); virtual;
     procedure ReceiveCancel(Cancel: TIdSipRequest); virtual;
@@ -157,6 +159,8 @@ type
     function  IsInvite: Boolean; override;
     function  Method: String; override;
     procedure ReceiveRequest(Request: TIdSipRequest); override;
+
+    property LocalTag: String read fLocalTag write fLocalTag;
   end;
 
   // I encapsulate the call flows around an inbound INVITE, both in-dialog and
@@ -174,7 +178,6 @@ type
     fLastResponse:            TIdSipResponse;
     fLocalMimeType:           String;
     fLocalSessionDescription: String;
-    fLocalTag:                String;
     fMaxResendInterval:       Cardinal; // in milliseconds
     Grid:                     String;
     InviteListeners:          TIdNotificationList;
@@ -218,7 +221,6 @@ type
     property LastResponse:            TIdSipResponse read fLastResponse;
     property LocalSessionDescription: String         read fLocalSessionDescription;
     property LocalMimeType:           String         read fLocalMimeType;
-    property LocalTag:                String         read fLocalTag write fLocalTag;
     property InitialResendInterval:   Cardinal       read GetInitialResendInterval;
     property MaxResendInterval:       Cardinal       read fMaxResendInterval write fMaxResendInterval;
     property ProgressResendInterval:  Cardinal       read GetProgressResendInterval;
@@ -1058,6 +1060,21 @@ begin
   Self.fIsOwned := true;
 end;
 
+function TIdSipInvite.AckMatchesInvite(Msg: TIdSipMessage): Boolean;
+var
+  Ack: TIdSipRequest;
+begin
+  Result := false;
+
+  if Msg.IsRequest and (Msg as TIdSipRequest).IsAck then begin
+    Ack := Msg as TIdSipRequest;
+    Result := (Self.InitialRequest.From.Tag = Ack.From.Tag)
+          and (Self.InitialRequest.CallID = Ack.CallID)
+          and (Self.LocalTag = Ack.ToHeader.Tag)
+          and (Self.InitialRequest.CSeq.SequenceNo = Ack.CSeq.SequenceNo);
+  end
+end;
+
 procedure TIdSipInvite.ReceiveAck(Ack: TIdSipRequest);
 begin
   Assert(Ack.IsAck,
@@ -1149,17 +1166,10 @@ begin
 end;
 
 function TIdSipInboundInvite.Match(Msg: TIdSipMessage): Boolean;
-var
-  Ack: TIdSipRequest;
 begin
-  if Msg.IsRequest and (Msg as TIdSipRequest).IsAck then begin
-    Ack := Msg as TIdSipRequest;
-    Result := (Self.InitialRequest.From.Tag = Ack.From.Tag)
-          and (Self.InitialRequest.CallID = Ack.CallID)
-          and (Self.LocalTag = Ack.ToHeader.Tag)
-          and (Self.InitialRequest.CSeq.SequenceNo = Ack.CSeq.SequenceNo);
-  end
-  else
+  Result := Self.AckMatchesInvite(Msg);
+
+  if not Result then
     Result := inherited Match(Msg);
 end;
 
@@ -1440,8 +1450,12 @@ function TIdSipOutboundInvite.Match(Msg: TIdSipMessage): Boolean;
 begin
   if Self.ReceivedFinalResponse and Msg.IsResponse then
     Result := Self.AnswerResponse.Equals(Msg)
-  else
-    Result := inherited Match(Msg);
+  else begin
+    Result := Self.AckMatchesInvite(Msg);
+
+    if not Result then
+      Result := inherited Match(Msg);
+  end;
 end;
 
 procedure TIdSipOutboundInvite.RemoveInviteListener(const Listener: IIdSipInviteListener);
@@ -1520,6 +1534,9 @@ begin
   // the Dialog, otherwise the ACK will not be well formed.
   if Response.IsOK then
     Self.SendAck(Self.Dialog, Response);
+
+  // Note that we don't Terminate at this point: the remote end might have sent
+  // another 200 OK our way before we had a chance
 end;
 
 function TIdSipOutboundInvite.CreateNewAttempt: TIdSipRequest;
@@ -1593,6 +1610,8 @@ begin
       Result := arSuccess;
 
       if not Self.DialogEstablished then begin
+        Self.LocalTag := Response.ToHeader.Tag;
+
         Self.NotifyOfDialogEstablished(Response, UsingSecureTransport);
 
         Assert(Assigned(Self.Dialog),

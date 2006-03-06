@@ -90,7 +90,8 @@ type
     procedure CheckMethodEvent(Sender: TObject;
                                Request: TIdSipRequest);
     procedure OnEmpty(Sender: TIdTimerQueue);
-    procedure OnException(E: Exception;
+    procedure OnException(FailedMessage: TIdSipMessage;
+                          E: Exception;
                           const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport;
@@ -160,7 +161,8 @@ type
     procedure CutConnection(Sender: TObject;
                             R: TIdSipRequest);
     procedure OnEmpty(Sender: TIdTimerQueue);
-    procedure OnException(E: Exception;
+    procedure OnException(FailedMessage: TIdSipMessage;
+                          E: Exception;
                           const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport;
@@ -788,7 +790,8 @@ begin
   Self.EmptyListEvent.SetEvent;
 end;
 
-procedure TestTIdSipTcpServer.OnException(E: Exception;
+procedure TestTIdSipTcpServer.OnException(FailedMessage: TIdSipMessage;
+                                          E: Exception;
                                           const Reason: String);
 begin
   Self.ExceptionType    := ExceptClass(E.ClassType);
@@ -1089,7 +1092,8 @@ begin
   Self.EmptyListEvent.SetEvent;
 end;
 
-procedure TestTIdSipTcpClient.OnException(E: Exception;
+procedure TestTIdSipTcpClient.OnException(FailedMessage: TIdSipMessage;
+                                          E: Exception;
                                           const Reason: String);
 begin
   Self.ExceptionType    := ExceptClass(E.ClassType);

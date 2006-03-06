@@ -27,7 +27,8 @@ type
     procedure Log(const Msg: String;
                   Direction: TIdMessageDirection);
     procedure LogString(const Value: String);
-    procedure OnException(E: Exception;
+    procedure OnException(FailedMessage: TIdSipMessage;
+                          E: Exception;
                           const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport;
@@ -113,11 +114,13 @@ begin
     Self.OutputStream.Write(Value[1], Length(Value));
 end;
 
-procedure TIdSipTransportLogger.OnException(E: Exception;
+procedure TIdSipTransportLogger.OnException(FailedMessage: TIdSipMessage;
+                                            E: Exception;
                                             const Reason: String);
 begin
   Self.Log('Exception ' + E.ClassName + ': ' + E.Message
-         + ' raised because: ''' + Reason + '''',
+         + ' raised because: ''' + Reason + ''' while processing/sending '
+         + FailedMessage.AsString,
            dirError);
 end;
 

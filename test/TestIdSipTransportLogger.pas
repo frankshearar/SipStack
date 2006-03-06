@@ -178,24 +178,32 @@ var
   ExType:    ExceptClass;
   ExMsg:     String;
   FirstLine: String;
+  Msg:       TIdSipMessage;
   Reason:    String;
 begin
   ExType := EConvertError;
   ExMsg  := 'Access violation at f00L reading $decafbad';
   Reason := 'Just for kicks';
 
-  Self.Transport.FireOnException(ExType, ExMsg, Reason);
+  Msg := TIdSipTestResources.CreateBasicRequest;
+  try
+    Self.Transport.FireOnException(Msg, ExType, ExMsg, Reason);
 
-  FirstLine := Self.FirstLineOfLog;
-  CheckDirection(FirstLine, dirError);
-  CheckContainsDate(FirstLine, dirError);
-  CheckContains(FirstLine, ExType.ClassName);
-  CheckContains(FirstLine, ExMsg);
-  CheckContains(FirstLine, Reason);
+    FirstLine := Self.FirstLineOfLog;
+    CheckDirection(FirstLine, dirError);
+    CheckContainsDate(FirstLine, dirError);
+    CheckContains(FirstLine, ExType.ClassName);
+    CheckContains(FirstLine, ExMsg);
+    CheckContains(FirstLine, Reason);
+  finally
+    Msg.Free;
+  end;
 end;
 
 procedure TestTIdSipTransportLogger.TestLogReceiveRequest;
 begin
+  // What the MockTransport adds.
+  Self.Request.LastHop.Received := Self.Transport.PeerIP;
   Self.Transport.FireOnRequest(Self.Request);
 
   Self.CheckMessageLogged(Self.Request, dirIn);

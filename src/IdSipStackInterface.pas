@@ -130,7 +130,8 @@ type
                                    const MimeType: String);
     procedure OnEstablishedSubscription(Subscription: TIdSipOutboundSubscription;
                                         Notify: TIdSipRequest);
-    procedure OnException(E: Exception;
+    procedure OnException(FailedMessage: TIdSipMessage;
+                          E: Exception;
                           const Reason: String);
     procedure OnExpiredSubscription(Subscription: TIdSipOutboundSubscription;
                                     Notify: TIdSipRequest);
@@ -1395,7 +1396,8 @@ begin
                                Notify);
 end;
 
-procedure TIdSipStackInterface.OnException(E: Exception;
+procedure TIdSipStackInterface.OnException(FailedMessage: TIdSipMessage;
+                                           E: Exception;
                                            const Reason: String);
 var
   Data: TIdDebugTransportExceptionData;

@@ -14,7 +14,7 @@ interface
 uses
   IdSipAuthentication, IdSipCore, IdSipDialog, IdSipDns, IdSipLocator,
   IdSipMessage, IdSipMockCore, IdSipMockLocator, IdSipMockTransactionDispatcher,
-  IdSipMockTransport, IdSipTransaction, IdSipTransport, IdTimerQueue,
+  IdSipMockTransport, IdSipTransaction, IdSipTransport, IdTimerQueue, SysUtils,
   TestFramework, TestFrameworkSip;
 
 type
@@ -87,6 +87,9 @@ type
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Receiver: TIdSipTransport); overload;
     procedure OnTerminated(Transaction: TIdSipTransaction);
+    procedure OnTransportException(FailedMessage: TIdSipMessage;
+                                   Error: Exception;
+                                   const Reason: String);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -106,6 +109,7 @@ type
     procedure TestDispatchToCorrectTransaction;
     procedure TestDispatcherDoesntGetTransactionRequests;
     procedure TestDispatcherDoesntGetTransactionResponses;
+    procedure TestFailedMessageSendNotifiesListeners;
     procedure TestHandUnmatchedRequestToCore;
     procedure TestHandUnmatchedResponseToCore;
     procedure TestInviteYieldsTrying;
@@ -503,7 +507,7 @@ type
 implementation
 
 uses
-  Classes, IdException, IdRandom, IdSdp, IdSipConsts, Math, SysUtils, TypInfo;
+  Classes, IdException, IdRandom, IdSdp, IdSipConsts, Math, TypInfo;
 
 function Suite: ITestSuite;
 begin
@@ -815,6 +819,13 @@ begin
   Self.OnTerminatedFired := true;
 end;
 
+procedure TestTIdSipTransactionDispatcher.OnTransportException(FailedMessage: TIdSipMessage;
+                                                               Error: Exception;
+                                                               const Reason: String);
+begin
+  // Do nothing.
+end;
+
 //* TestTIdSipTransactionDispatcher Published methods **************************
 
 procedure TestTIdSipTransactionDispatcher.TestAckDoesntCreateATransaction;
@@ -1065,6 +1076,29 @@ begin
     Check(not Listener.ReceivedUnhandledResponse,
           'Dispatcher said it got an unhandled response');
   finally
+    Self.D.RemoveTransactionDispatcherListener(Listener);
+    Listener.Free;
+  end;
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestFailedMessageSendNotifiesListeners;
+var
+  Listener: TIdSipTestTransactionDispatcherListener;
+begin
+  Listener := TIdSipTestTransactionDispatcherListener.Create;
+  try
+    Self.D.AddTransactionDispatcherListener(Listener);
+
+    // Self.Destination uses TCP.
+    Self.MockTcpTransport.FireOnException(Self.Invite,
+                                          EIdConnectException,
+                                          'Connection refused',
+                                          'Connection refused');
+
+    Check(Listener.RaisedException,
+          'Listener not informed of raised exception');
+  finally
+    Self.D.RemoveTransactionDispatcherListener(Listener);
     Listener.Free;
   end;
 end;

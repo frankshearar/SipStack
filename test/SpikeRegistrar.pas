@@ -39,7 +39,8 @@ type
 
     procedure LogMessage(Msg: TIdSipMessage);
     procedure OnChanged(Observed: TObject);
-    procedure OnException(E: Exception;
+    procedure OnException(FailedMessage: TIdSipMessage;
+                          E: Exception;
                           const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport;
@@ -167,8 +168,9 @@ begin
   end;
 end;
 
-procedure TrnidSpikeRegistrar.OnException(E: Exception;
-                                         const Reason: String);
+procedure TrnidSpikeRegistrar.OnException(FailedMessage: TIdSipMessage;
+                                          E: Exception;
+                                          const Reason: String);
 begin
   Self.Log.Lines.Add('---- Exception ' + E.ClassName
                    + ' raised: ' + E.Message

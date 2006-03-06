@@ -113,7 +113,8 @@ type
                             ReceivedFrom: TIdSipConnectionBindings);
     function  HighPortTransport: TIdSipTransport;
     function  LowPortTransport: TIdSipTransport;
-    procedure OnException(E: Exception;
+    procedure OnException(FailedMessage: TIdSipMessage;
+                          E: Exception;
                           const Reason: String);
     procedure OnEmpty(Sender: TIdTimerQueue);
     procedure OnReceiveRequest(Request: TIdSipRequest;
@@ -597,7 +598,8 @@ begin
   Result := Self.Timer.LowPortTransport;
 end;
 
-procedure TestTIdSipTransport.OnException(E: Exception;
+procedure TestTIdSipTransport.OnException(FailedMessage: TIdSipMessage;
+                                          E: Exception;
                                           const Reason: String);
 begin
   Self.ExceptionType := ExceptClass(E.ClassType);

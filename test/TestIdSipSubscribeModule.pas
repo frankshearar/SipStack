@@ -1165,8 +1165,11 @@ begin
     // but remember that we have to alter the subscription's InitialRequest -
     // adding a To header - because we establish a dialog off the InitialRequest
     // and the sent 202 Accepted.
+    //
+    // We also use .Match() instead of .Equals() because the transport layer can
+    // add a received param to the topmost Via.
     Self.Dispatcher.Transport.SecondLastRequest.ToHeader.Tag := Self.Dispatcher.Transport.LastResponse.ToHeader.Tag;
-    Check(Self.Dispatcher.Transport.SecondLastRequest.Equals(L.SubscriptionParam.InitialRequest),
+    Check(Self.Dispatcher.Transport.SecondLastRequest.Match(L.SubscriptionParam.InitialRequest),
           'Subscription param');
     Check(L.UserAgentParam = Self.Core,
           'UserAgent param');
@@ -1688,8 +1691,16 @@ begin
   Self.MimeType          := 'text/plain';
   Self.SubscriptionState := SubscriptionSubstateActive;
 
+  // Self.Subscribe contains a SUBSCRIBE we receive from sip:case@remotehost.
+  // CreateSubscribe creates a SUBSCRIBE that WE SEND, so we alter the request
+  // by hand to make it look like it comes from the network.
   Self.Subscribe := Self.Module.CreateSubscribe(Self.Destination,
                                                 TIdSipTestPackage.EventPackage);
+  Self.Subscribe.RequestUri           := Self.Core.From.Address;
+  Self.Subscribe.From.Address         := Self.Destination.Address;
+  Self.Subscribe.ToHeader.Address     := Self.Core.From.Address;
+  Self.Subscribe.FirstContact.Address := Self.Destination.Address;
+  Self.Subscribe.LastHop.SentBy       := Self.Destination.Address.Host;
 
   Ok := Self.Core.CreateResponse(Self.Subscribe, SIPOK);
   try
@@ -3152,8 +3163,11 @@ begin
 
   SubCount := Self.Core.CountOf(MethodSubscribe);
 
-  Self.Dispatcher.Transport.FailWith := EIdConnectTimeout;
   Self.Action.Notify('', '');
+  Self.Dispatcher.Transport.FireOnException(Self.LastSentRequest,
+                                            EIdConnectException,
+                                            '10061',
+                                            'Connection refused');
 
   Check(SubCount > Self.Core.CountOf(MethodSubscribe),
         'Subscription not terminated');
@@ -3230,10 +3244,6 @@ begin
   // Subscribe will refresh after 0 seconds, and the DebugTimer will fire Waits
   // with a zero wait time immediately, which isn't what we want.
   Self.ArbExpiresValue := 22;
-
-  // DNS entries for redirected domains, etc.
-  Self.Locator.AddA('bar.org',   '127.0.0.2');
-  Self.Locator.AddA('quaax.org', '127.0.0.2');
 
   Self.Subscription := Self.EstablishSubscription;
 
@@ -3726,7 +3736,10 @@ begin
 
   Check(Self.SubscriptionNotified,
         Self.ClassName + ': Subscription didn''t notify listeners of received NOTIFY');
-  Check(Self.ReceivedNotify.Equals(Self.Dispatcher.Transport.LastRequest),
+
+  // We would use .Equals() here, but remember that the transport could alter
+  // the message, putting a received param on the topmost Via header.      
+  Check(Self.ReceivedNotify.Match(Self.Dispatcher.Transport.LastRequest),
         Self.ClassName + ': Wrong NOTIFY in the notification');
 
   CheckResponseSent(Self.ClassName + ': No response to the NOTIFY sent');
@@ -4600,18 +4613,24 @@ begin
 end;
 
 procedure TestTIdSipInboundReferral.TestRenotifySendsCorrectState;
+var
+  ExpectedBody: String;
 begin
+  // Make the notify fail. Since this response indicates that we can retry the
+  // NOTIFY, we check that the resending of the NOTIFY uses the right body,
+  // and indicates the correct subscription state.
+
   Self.Refer.Accept;
 
-  // Make a notify fail
-  Self.Dispatcher.Transport.FailWith := EIdConnectTimeout;
-  Self.Refer.ReferenceSucceeded;
-  Self.Dispatcher.Transport.FailWith := nil;
+  Self.Refer.ReferenceTrying;
+  ExpectedBody := Self.LastSentRequest.Body;
+
+  Self.ReceiveUnauthorized(WWWAuthenticateHeader, QopAuth);
 
   Self.MarkSentRequestCount;
   Self.Refer.Renotify;
   CheckRequestSent('Renotify didn''t send a request');
-  CheckEquals(TIdSipInboundReferral.ReferralSucceededBody,
+  CheckEquals(ExpectedBody,
               Self.LastSentRequest.Body,
               'Unexpected body: the package''s state wasn''t updated');
 end;
@@ -5221,8 +5240,6 @@ begin
   Self.Request.Event.EventPackage := TIdSipTestPackage.EventPackage;
 
   Self.Module.AddPackage(TIdSipTestPackage);
-
-  Self.Dispatcher.MockLocator.AddA(Self.Request.LastHop.SentBy, '127.0.0.1');
 end;
 
 procedure TSubscribeModuleTestCase.TearDown;

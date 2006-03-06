@@ -196,6 +196,7 @@ type
     procedure TestInviteTwice;
     procedure TestIsInvite; override;
     procedure TestIsOwned; override;
+    procedure TestMatchOwnAck;
     procedure TestMethod;
     procedure TestOfferInInvite;
     procedure TestReceive2xxSchedulesTransactionCompleted;
@@ -2562,6 +2563,19 @@ begin
 
   Check(Invite.IsOwned,
         Invite.ClassName + ' not marked as being owned');
+end;
+
+procedure TestTIdSipOutboundInvite.TestMatchOwnAck;
+var
+  Action:    TIdSipAction;
+  ClassName: String;
+begin
+  Action := Self.CreateAction;
+  ClassName := Action.ClassName;
+
+  Self.MarkSentAckCount;
+  Self.ReceiveOk(Self.LastSentRequest);
+  CheckAckSent(ClassName + ': No ACK sent');
 end;
 
 procedure TestTIdSipOutboundInvite.TestMethod;
@@ -5319,9 +5333,12 @@ var
   SessionCount: Cardinal;
 begin
   SessionCount := Self.Core.SessionCount;
-  Self.Dispatcher.Transport.FailWith := EIdConnectTimeout;
 
   Self.CreateAction;
+  Self.Dispatcher.Transport.FireOnException(Self.LastSentRequest,
+                                            EIdConnectException,
+                                            '10061',
+                                            'Connection refused');
 
   CheckEquals(SessionCount,
               Self.Core.SessionCount,
@@ -5749,8 +5766,12 @@ end;
 
 procedure TestTIdSipOutboundSession.TestNetworkFailuresLookLikeSessionFailures;
 begin
-  Self.Dispatcher.Transport.FailWith := Exception;
+  // We'd sent an INVITE. We receive a 200 OK, but our ACK fails.
   Self.ReceiveOk(Self.LastSentRequest);
+  Self.Dispatcher.Transport.FireOnException(Self.LastSentAck,
+                                            EIdConnectException,
+                                            '10061',
+                                            'Connection refused');
 
   Check(Assigned(Self.ActionParam), 'OnNetworkFailure didn''t fire');
   Check(Self.ActionParam = Self.Session,
@@ -6336,10 +6357,14 @@ var
 begin
   Self.ReceiveOk(Self.LastSentRequest);
 
-  Self.Dispatcher.Transport.FailWith := EIdConnectTimeout;
-
+  // Send a BYE, only the attempt fails in the network.
   SessionCount := Self.Core.SessionCount;
   Self.Session.Terminate;
+
+  Self.Dispatcher.Transport.FireOnException(Self.LastSentRequest,
+                                            EIdConnectException,
+                                            '10061',
+                                            'Connection refused');
 
   Check(Self.Core.SessionCount < SessionCount,
         'Session not marked as terminated');
@@ -6356,7 +6381,14 @@ var
   SessionCount:      Integer;
 begin
   // When you Terminate a Session, the Session should attempt to CANCEL its
-  // initial INVITE (if it hasn't yet received a final response).
+  // initial INVITE (if it hasn't yet received a final response):
+  //
+  //  ---                INVITE               --->
+  // <---              100 Trying             ---
+  // <----------user terminates session---------->
+  //  ---                CANCEL               --->
+  // <---         200 OK (for CANCEL)         ---
+  // <--- 481 Request Terminated (for INVITE) ---
 
   Self.MarkSentRequestCount;
 
@@ -6375,17 +6407,17 @@ begin
       SessionCount := Self.Core.SessionCount;
       Self.Session.Terminate;
 
-      CheckRequestSent('no CANCEL sent');
+      CheckRequestSent(Self.ClassName + ': no CANCEL sent');
 
       Request := Self.LastSentRequest;
       CheckEquals(MethodCancel,
                   Request.Method,
-                  'Session didn''t terminate with a CANCEL');
+                  Self.ClassName + ': Session didn''t terminate with a CANCEL');
 
       Self.ReceiveResponse(RequestTerminated);
 
       Check(Self.Core.SessionCount < SessionCount,
-            'Session not marked as terminated');
+            Self.ClassName + ': Session not marked as terminated');
     finally
       RequestTerminated.Free;
     end;

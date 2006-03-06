@@ -541,14 +541,27 @@ end;
 
 procedure TestTIdSipAction.TestNetworkFailureTerminatesAction;
 var
-  Action: TIdSipAction;
+  Action:            TIdSipAction;
+  ClassName:         String;
+  Method:            String;
+  PreExceptionCount: Integer;
 begin
   if Self.IsInboundTest then Exit;
 
-  Self.Dispatcher.Transport.FailWith := EIdConnectTimeout;
-  Action := Self.CreateAction;
-  Check(Action.IsTerminated,
-        Action.ClassName + ' didn''t terminate after a network failure');
+  // Try send a message to a machine that's not running a SIP entity.
+  // This test relies on the message being sent to only one location. 
+  Action    := Self.CreateAction;
+  ClassName := Action.ClassName;
+  Method    := Action.Method;
+
+  PreExceptionCount := Self.Core.CountOf(Method);
+  Self.Dispatcher.Transport.FireOnException(Self.LastSentRequest,
+                                            EIdConnectException,
+                                            '10061',
+                                            'Connection refused');
+
+  Check(Self.Core.CountOf(Method) < PreExceptionCount,
+        ClassName + ' didn''t terminate after a network failure');
 end;
 
 procedure TestTIdSipAction.TestResend;

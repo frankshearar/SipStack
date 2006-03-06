@@ -1979,6 +1979,8 @@ end;
 
 procedure TestLocation.TestAllLocationsFail;
 var
+  Action:    TIdSipAction;
+  I:         Integer;
   Locations: TIdSipLocations;
 begin
   // SRV records point to Self.Destination.Address.Host;
@@ -1993,13 +1995,19 @@ begin
   Self.Locator.AddA   (Self.Destination.Address.Host, '127.0.0.2');
   Self.Locator.AddAAAA(Self.Destination.Address.Host, '::2');
 
-  Self.Dispatcher.Transport.FailWith := EIdConnectTimeout;
-  Self.MarkSentRequestCount;
-  Self.CreateAction;
-
   Locations := TIdSipLocations.Create;
   try
     Self.Locator.FindServersFor(Self.Destination.Address, Locations);
+
+    Self.MarkSentRequestCount;
+    Action := Self.CreateAction;
+    for I := 0 to Locations.Count - 1 do begin
+      // This should trigger a resend of the message to a new location.
+      Self.Dispatcher.Transport.FireOnException(Self.LastSentRequest,
+                                                EIdConnectException,
+                                                '10061',
+                                                'Connection refused');
+    end;
 
     // Locations.Count >= 0, so the typecast is safe.
     CheckEquals(Self.RequestCount + Cardinal(Locations.Count),

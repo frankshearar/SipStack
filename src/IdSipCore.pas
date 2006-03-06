@@ -187,7 +187,7 @@ type
     function  NextActionID: String;
     function  OptionsCount: Integer;
     procedure Perform(Msg: TIdSipMessage; Block: TIdSipActionClosure);
-    function  RegistrationCount: Integer;    
+    function  RegistrationCount: Integer;
     procedure RemoveObserver(const Listener: IIdObserver);
     function  SessionCount: Integer;
     procedure TerminateAllActions;
@@ -227,6 +227,22 @@ type
   end;
 
   TIdSipActionsWaitClass = class of TIdSipActionsWait;
+
+  // I represent a closure that takes a message that we couldn't send, and
+  // matches it to the Action that sent it. That Action can then try resend
+  // the message, if appropriate.
+  TIdSipActionNetworkFailure = class(TIdSipActionClosure)
+  private
+    fError:         Exception;
+    fFailedMessage: TIdSipMessage;
+    fReason:        String;
+  public
+    procedure Execute(Action: TIdSipAction); override;
+
+    property FailedMessage: TIdSipMessage read fFailedMessage write fFailedMessage;
+    property Error:         Exception     read fError write fError;
+    property Reason:        String        read fReason write fReason;
+  end;
 
   // I represent a closure that a UserAgent uses to, for instance, process a
   // request or response.
@@ -322,6 +338,9 @@ type
                                Receiver: TIdSipTransport); virtual;
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Receiver: TIdSipTransport); virtual;
+    procedure OnTransportException(FailedMessage: TIdSipMessage;
+                                   Error: Exception;
+                                   const Reason: String); virtual;
     procedure RejectBadAuthorization(Request: TIdSipRequest);
     procedure RejectMethodNotAllowed(Request: TIdSipRequest);
     procedure RejectRequestBadExtension(Request: TIdSipRequest);
@@ -588,7 +607,7 @@ type
     procedure SetLocalGruu(Value: TIdSipContactHeader);
     procedure SetUsername(const Value: String);
     function  TrySendRequest(Request: TIdSipRequest;
-                             Targets: TIdSipLocations;
+                             Target: TIdSipLocation;
                              TryAgain: Boolean = true): Boolean;
   protected
     ActionListeners: TIdNotificationList;
@@ -636,6 +655,7 @@ type
     function  IsSession: Boolean; virtual;
     function  Match(Msg: TIdSipMessage): Boolean; virtual;
     function  Method: String; virtual; abstract;
+    procedure NetworkFailureSending(Msg: TIdSipMessage); virtual;
     procedure ReceiveRequest(Request: TIdSipRequest); virtual;
     procedure ReceiveResponse(Response: TIdSipResponse;
                               UsingSecureTransport: Boolean); virtual;
@@ -1555,6 +1575,17 @@ begin
   else
 
   Self.UserAgent.NotifyOfDroppedMessage(Self.Response, Self.Receiver);
+end;
+
+//******************************************************************************
+//* TIdSipActionNetworkFailure                                                 *
+//******************************************************************************
+//* TIdSipActionNetworkFailure Public methods **********************************
+
+procedure TIdSipActionNetworkFailure.Execute(Action: TIdSipAction);
+begin
+  if Assigned(Action) then
+    Action.NetworkFailureSending(Self.FailedMessage);
 end;
 
 //******************************************************************************
@@ -2642,6 +2673,24 @@ begin
     Self.ActOnResponse(Response, Receiver);
 end;
 
+procedure TIdSipAbstractCore.OnTransportException(FailedMessage: TIdSipMessage;
+                                                  Error: Exception;
+                                                  const Reason: String);
+var
+  SendFailed: TIdSipActionNetworkFailure;
+begin
+  SendFailed := TIdSipActionNetworkFailure.Create;
+  try
+    SendFailed.Error         := Error;
+    SendFailed.FailedMessage := FailedMessage;
+    SendFailed.Reason        := Reason;
+
+    Self.Actions.Perform(FailedMessage, SendFailed);
+  finally
+    SendFailed.Free;
+  end;
+end;
+
 procedure TIdSipAbstractCore.RejectBadAuthorization(Request: TIdSipRequest);
 var
   Response: TIdSipResponse;
@@ -3207,6 +3256,40 @@ begin
     Result := Self.InitialRequest.Match(Msg);
 end;
 
+procedure TIdSipAction.NetworkFailureSending(Msg: TIdSipMessage);
+var
+  FailReason: String;
+  NewAttempt: TIdSipRequest;
+begin
+  if Msg.IsRequest then begin
+    if (Msg as TIdSipRequest).IsAck then begin
+      FailReason := Format(RSNoLocationSucceeded, [(Msg as TIdSipRequest).DestinationUri]);
+      Self.NotifyOfNetworkFailure(NoLocationSucceeded,
+                                  Format(OutboundActionFailed,
+                                         [Self.Method, FailReason]));
+    end
+    else begin
+      if not Self.TargetLocations.IsEmpty then
+        Self.TargetLocations.RemoveFirst;
+
+      if not Self.TargetLocations.IsEmpty then begin
+        NewAttempt := Self.CreateNewAttempt;
+        try
+          Self.TrySendRequest(NewAttempt, Self.TargetLocations.First, true)
+        finally
+          NewAttempt.Free;
+        end;
+      end
+      else begin
+        FailReason := Format(RSNoLocationSucceeded, [(Msg as TIdSipRequest).DestinationUri]);
+        Self.NotifyOfNetworkFailure(NoLocationSucceeded,
+                                  Format(OutboundActionFailed,
+                                         [Self.Method, FailReason]));
+      end;
+    end;
+  end;
+end;
+
 procedure TIdSipAction.ReceiveRequest(Request: TIdSipRequest);
 begin
   Self.ReceiveOtherRequest(Request);
@@ -3313,6 +3396,7 @@ begin
   Self.fLocalGruu      := TIdSipContactHeader.Create;
   Self.NonceCount      := 0;
   Self.State           := asInitialised;
+  Self.TargetLocations := TIdSipLocations.Create;
 
   Self.SetResult(arUnknown);
 
@@ -3414,37 +3498,25 @@ procedure TIdSipAction.SendRequest(Request: TIdSipRequest;
                                    TryAgain: Boolean = true);
 var
   FailReason:      String;
-  TargetLocations: TIdSipLocations;
 begin
   if (Self.NonceCount = 0) then
     Inc(Self.NonceCount);
 
   // cf RFC 3263, section 4.3
-  TargetLocations := TIdSipLocations.Create;
-  try
-    Self.UA.FindServersFor(Request, TargetLocations);
+  Self.UA.FindServersFor(Request, Self.TargetLocations);
 
-    if TargetLocations.IsEmpty then begin
-      // The Locator should at the least return a location based on the
-      // Request-URI. Thus this clause should never execute. Still, this
-      // clause protects the code that follows.
+  if Self.TargetLocations.IsEmpty then begin
+    // The Locator should at the least return a location based on the
+    // Request-URI. Thus this clause should never execute. Still, this
+    // clause protects the code that follows.
 
-      FailReason := Format(RSNoLocationFound, [Request.DestinationUri]);
-      Self.NotifyOfNetworkFailure(NoLocationFound,
-                                  Format(OutboundActionFailed,
-                                         [Self.Method, FailReason]));
-      Exit;
-    end;
-
-    if not Self.TrySendRequest(Request, TargetLocations, TryAgain) then begin
-      FailReason := Format(RSNoLocationSucceeded, [Request.DestinationUri]);
-      Self.NotifyOfNetworkFailure(NoLocationSucceeded,
-                                  Format(OutboundActionFailed,
-                                         [Self.Method, FailReason]));
-    end;
-  finally
-    TargetLocations.Free;
-  end;
+    FailReason := Format(RSNoLocationFound, [Request.DestinationUri]);
+    Self.NotifyOfNetworkFailure(NoLocationFound,
+                                Format(OutboundActionFailed,
+                                       [Self.Method, FailReason]));
+  end
+  else
+    Self.TrySendRequest(Request, Self.TargetLocations.First, true);
 end;
 
 procedure TIdSipAction.SendResponse(Response: TIdSipResponse);
@@ -3501,7 +3573,7 @@ begin
 end;
 
 function TIdSipAction.TrySendRequest(Request: TIdSipRequest;
-                                     Targets: TIdSipLocations;
+                                     Target: TIdSipLocation;
                                      TryAgain: Boolean = true): Boolean;
 var
   ActualRequest: TIdSipRequest;
@@ -3517,37 +3589,19 @@ begin
   try
     ActualRequest.Assign(Request);
 
-    while not Result and (CurrentTarget < Targets.Count) do begin
-      ActualRequest.LastHop.Transport := Targets[CurrentTarget].Transport;
+    // This means that a message that travels to the Target using SCTP will have
+    // SIP/2.0/SCTP in its topmost Via. Remember, we try to avoid having the
+    // transport layer change the message.
+    ActualRequest.LastHop.Transport := Target.Transport;
 
-      try
-        Self.UA.SendRequest(ActualRequest, Targets[CurrentTarget]);
-        Result := true;
+    // Synchronise our state to what actually went down to the network.
+    // The condition means that an INVITE won't set its InitialRequest to a
+    // CANCEL or BYE it's just sent. Perhaps we could eliminate this condition
+    // by using TIdSipOutboundBye/Cancel objects. TODO.
+    if (ActualRequest.Method = Self.InitialRequest.Method) then
+      Self.InitialRequest.Assign(ActualRequest);
 
-        // Synchronise our state to what actually went down to the network.
-        if Request.Match(Self.InitialRequest) then
-          Self.InitialRequest.Assign(ActualRequest);
-      except
-        on E: EIdSipTransport do begin
-          // We don't care about whether some request sends, like BYEs for
-          // INVITEs, actually reach the far side. In the case of a BYE, the
-          // session is terminated as soon as we send the BYE (RFC 3261, section
-          // 15.1.1).
-          if not TryAgain then
-            Break;
-
-          // Maybe we should log this?
-          NewAttempt := Self.CreateNewAttempt;
-          try
-            ActualRequest.Assign(NewAttempt);
-          finally
-            NewAttempt.Free;
-          end;
-        end;
-      end;
-
-      Inc(CurrentTarget);
-    end;
+    Self.UA.SendRequest(ActualRequest, Target);
   finally
     ActualRequest.Free;
   end;
