@@ -185,6 +185,7 @@ type
     procedure TestCreateUserAgentWithContact;
     procedure TestCreateUserAgentWithFrom;
     procedure TestCreateUserAgentWithGruu;
+    procedure TestCreateUserAgentWithHostName;
     procedure TestCreateUserAgentWithInstanceID;
     procedure TestCreateUserAgentWithLocator;
     procedure TestCreateUserAgentWithMalformedContact;
@@ -2169,6 +2170,22 @@ begin
   try
     CheckEquals(DisplayName, UA.Gruu.DisplayName,      'Gruu display-name');
     CheckEquals(GruuUri,     UA.Gruu.Address.AsString, 'Gruu URI');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithHostName;
+const
+  HostName = 'talking-head1.tessier-ashpool.co.luna';
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('HostName: ' + HostName);
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(HostName, UA.HostName, 'HostName');
   finally
     UA.Free;
   end;

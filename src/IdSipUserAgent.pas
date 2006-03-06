@@ -76,6 +76,8 @@ type
   //   Contact: sip:wintermute@tessier-ashpool.co.luna
   //   From: "Count Zero" <sip:countzero@jammer.org>
   //   Gruu: "Count Zero" <sip:countzero@jammer.org;opaque=foo>
+  //   HostName: talkinghead1.tessier-ashpool.co.luna
+  //   HostName: 192.168.1.1
   //   Listen: <transport name><SP><host|IPv4 address|IPv6 reference|AUTO>:<port>
   //   NameServer: <domain name or IP>:<port>
   //   NameServer: MOCK
@@ -98,6 +100,8 @@ type
                       const FromLine: String);
     procedure AddGruu(UserAgent: TIdSipAbstractCore;
                       const GruuLine: String);
+    procedure AddHostName(UserAgent: TIdSipAbstractCore;
+                      const HostNameLine: String);
     procedure AddLocator(UserAgent: TIdSipAbstractCore;
                          const NameServerLine: String);
     procedure AddProxy(UserAgent: TIdSipUserAgent;
@@ -137,6 +141,7 @@ const
   DebugMessageLogDirective = 'DebugMessageLog';
   FromDirective            = FromHeaderFull;
   GruuDirective            = 'GRUU';
+  HostNameDirective        = 'HostName';
   InstanceIDDirective      = 'InstanceID';
   ListenDirective          = 'Listen';
   MockKeyword              = 'MOCK';
@@ -403,6 +408,19 @@ begin
   Self.AddAddress(UserAgent, UserAgent.Gruu, GruuLine);
 end;
 
+procedure TIdSipStackConfigurator.AddHostName(UserAgent: TIdSipAbstractCore;
+                                              const HostNameLine: String);
+var
+  Line: String;
+begin
+  // See class comment for the format for this directive.
+
+  Line := HostNameLine;
+  EatDirective(Line);
+
+  UserAgent.HostName := Line;
+end;
+
 procedure TIdSipStackConfigurator.AddLocator(UserAgent: TIdSipAbstractCore;
                                              const NameServerLine: String);
 var
@@ -563,6 +581,8 @@ begin
     Self.AddFrom(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, GruuDirective) then
     Self.AddGruu(UserAgent, ConfigurationLine)
+  else if IsEqual(FirstToken, HostNameDirective) then
+    Self.AddHostName(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, InstanceIDDirective) then
     Self.SetInstanceID(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, ListenDirective) then
