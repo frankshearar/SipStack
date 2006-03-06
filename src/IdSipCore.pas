@@ -607,8 +607,7 @@ type
     procedure SetLocalGruu(Value: TIdSipContactHeader);
     procedure SetUsername(const Value: String);
     function  TrySendRequest(Request: TIdSipRequest;
-                             Target: TIdSipLocation;
-                             TryAgain: Boolean = true): Boolean;
+                             Target: TIdSipLocation): Boolean;
   protected
     ActionListeners: TIdNotificationList;
     fIsOwned:        Boolean;
@@ -3272,7 +3271,7 @@ begin
       if not Self.TargetLocations.IsEmpty then begin
         NewAttempt := Self.CreateNewAttempt;
         try
-          Self.TrySendRequest(NewAttempt, Self.TargetLocations.First, true)
+          Self.TrySendRequest(NewAttempt, Self.TargetLocations.First)
         finally
           NewAttempt.Free;
         end;
@@ -3513,7 +3512,7 @@ begin
                                        [Self.Method, FailReason]));
   end
   else
-    Self.TrySendRequest(Request, Self.TargetLocations.First, true);
+    Self.TrySendRequest(Request, Self.TargetLocations.First);
 end;
 
 procedure TIdSipAction.SendResponse(Response: TIdSipResponse);
@@ -3570,8 +3569,7 @@ begin
 end;
 
 function TIdSipAction.TrySendRequest(Request: TIdSipRequest;
-                                     Target: TIdSipLocation;
-                                     TryAgain: Boolean = true): Boolean;
+                                     Target: TIdSipLocation): Boolean;
 var
   ActualRequest: TIdSipRequest;
   CurrentTarget: Integer;
