@@ -3269,9 +3269,6 @@ begin
                                          [Self.Method, FailReason]));
     end
     else begin
-      if not Self.TargetLocations.IsEmpty then
-        Self.TargetLocations.RemoveFirst;
-
       if not Self.TargetLocations.IsEmpty then begin
         NewAttempt := Self.CreateNewAttempt;
         try
@@ -3602,6 +3599,9 @@ begin
       Self.InitialRequest.Assign(ActualRequest);
 
     Self.UA.SendRequest(ActualRequest, Target);
+
+    if not Self.TargetLocations.IsEmpty then
+      Self.TargetLocations.RemoveFirst;
   finally
     ActualRequest.Free;
   end;
