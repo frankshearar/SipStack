@@ -535,6 +535,7 @@ begin
   Wait := TIdSipMessageExceptionWait.Create;
   Wait.ExceptionType    := ExceptClass(E.ClassType);
   Wait.ExceptionMessage := E.Message;
+  Wait.FailedMessage    := Self.FirstMsg.Copy;
   Wait.Reason           := ExceptionDuringTcpClientRequestSend;
   Wait.TransportID      := Self.Transport.ID;
 
