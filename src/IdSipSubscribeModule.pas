@@ -1640,10 +1640,10 @@ begin
 
   Sub := Self.Module.CreateSubscribe(Self.Target, Self.EventPackage);
   try
-    Sub.CallID                    := Self.CallID;
+    Sub.CallID               := Self.CallID;
     Sub.Event.ID             := Self.ID;
     Sub.Expires.NumericValue := 0;
-    Sub.From.Tag                  := Self.FromTag;
+    Sub.From.Tag             := Self.FromTag;
     Self.InitialRequest.Assign(Sub);
 
     Self.SendRequest(Sub);
