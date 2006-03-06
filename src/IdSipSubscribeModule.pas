@@ -365,7 +365,7 @@ type
   public
     procedure Send; override;
 
-    property CallID: String  read fCallID write fCallID;
+    property CallID:  String read fCallID write fCallID;
     property FromTag: String read fFromTag write fFromTag;
   end;
 
