@@ -43,6 +43,7 @@ type
     procedure TestAddLocationsFromNames;
     procedure TestCount;
     procedure TestIsEmpty;
+    procedure TestRemoveFirst;
   end;
 
   TLocatorTest = class(TTestCaseSip)
@@ -323,6 +324,18 @@ begin
     Check(not Self.Locs.IsEmpty,
           'IsEmpty after ' + IntToStr(I) + ' item(s)');
   end;
+end;
+
+procedure TestTIdSipLocations.TestRemoveFirst;
+const
+  FirstAddress  = '0.0.0.1';
+  SecondAddress = '0.0.0.2';
+begin
+  Self.Locs.AddLocation(TcpTransport, FirstAddress,  5060);
+  Self.Locs.AddLocation(TcpTransport, SecondAddress, 5060);
+
+  Self.Locs.RemoveFirst;
+  CheckEquals(SecondAddress, Self.Locs.First.IPAddress, 'Wrong location removed');
 end;
 
 //******************************************************************************
