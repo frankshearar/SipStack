@@ -104,13 +104,13 @@ type
     function  TransportAt(Index: Cardinal): TIdSipTransport;
   protected
     function  FindAppropriateTransport(Dest: TIdSipLocation): TIdSipTransport;
-    procedure NotifyListenersOfException(FailedMessage: TIdSipMessage;
-                                         E: Exception;
-                                         const Reason: String);
-    procedure NotifyListenersOfRequest(Request: TIdSipRequest;
-                                       Receiver: TIdSipTransport);
-    procedure NotifyListenersOfResponse(Response: TIdSipResponse;
-                                        Receiver: TIdSipTransport);
+    procedure NotifyOfException(FailedMessage: TIdSipMessage;
+                                E: Exception;
+                                const Reason: String);
+    procedure NotifyOfRequest(Request: TIdSipRequest;
+                              Receiver: TIdSipTransport);
+    procedure NotifyOfResponse(Response: TIdSipResponse;
+                               Receiver: TIdSipTransport);
 
     // IIdSipTransactionListener
     procedure OnFail(Transaction: TIdSipTransaction;
@@ -958,9 +958,9 @@ begin
   end;
 end;
 
-procedure TIdSipTransactionDispatcher.NotifyListenersOfException(FailedMessage: TIdSipMessage;
-                                                                 E: Exception;
-                                                                 const Reason: String);
+procedure TIdSipTransactionDispatcher.NotifyOfException(FailedMessage: TIdSipMessage;
+                                                        E: Exception;
+                                                        const Reason: String);
 var
   Notification: TIdSipTransactionDispatcherListenerFailedSendMethod;
 begin
@@ -976,8 +976,8 @@ begin
   end;
 end;
 
-procedure TIdSipTransactionDispatcher.NotifyListenersOfRequest(Request: TIdSipRequest;
-                                                               Receiver: TIdSipTransport);
+procedure TIdSipTransactionDispatcher.NotifyOfRequest(Request: TIdSipRequest;
+                                                      Receiver: TIdSipTransport);
 var
   Notification: TIdSipTransactionDispatcherListenerReceiveRequestMethod;
 begin
@@ -992,8 +992,8 @@ begin
   end;
 end;
 
-procedure TIdSipTransactionDispatcher.NotifyListenersOfResponse(Response: TIdSipResponse;
-                                                                Receiver: TIdSipTransport);
+procedure TIdSipTransactionDispatcher.NotifyOfResponse(Response: TIdSipResponse;
+                                                       Receiver: TIdSipTransport);
 var
   Notification: TIdSipTransactionDispatcherListenerReceiveResponseMethod;
 begin
@@ -1018,14 +1018,14 @@ procedure TIdSipTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
                                                        Transaction: TIdSipTransaction;
                                                        Receiver: TIdSipTransport);
 begin
-  Self.NotifyListenersOfRequest(Request, Receiver);
+  Self.NotifyOfRequest(Request, Receiver);
 end;
 
 procedure TIdSipTransactionDispatcher.OnReceiveResponse(Response: TIdSipResponse;
                                                         Transaction: TIdSipTransaction;
                                                         Receiver: TIdSipTransport);
 begin
-  Self.NotifyListenersOfResponse(Response, Receiver);
+  Self.NotifyOfResponse(Response, Receiver);
 end;
 
 procedure TIdSipTransactionDispatcher.OnTerminated(Transaction: TIdSipTransaction);
@@ -1036,7 +1036,7 @@ procedure TIdSipTransactionDispatcher.OnException(FailedMessage: TIdSipMessage;
                                                   E: Exception;
                                                   const Reason: String);
 begin
-  Self.NotifyListenersOfException(FailedMessage, E, Reason);
+  Self.NotifyOfException(FailedMessage, E, Reason);
 end;
 
 procedure TIdSipTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
@@ -1144,7 +1144,7 @@ begin
     // An ACK does not belong inside a transaction when a UAS sends a 2xx in
     // response to an INVITE
     if Request.IsAck then begin
-      Self.NotifyListenersOfRequest(Request, Receiver);
+      Self.NotifyOfRequest(Request, Receiver);
     end
     else begin
       Tran := Self.AddServerTransaction(Request, Receiver);
@@ -1173,7 +1173,7 @@ begin
     // 200. That arrives here, in this clause - even though the 200 doesn't
     // match a transaction, we most definitely do want the Transaction-User
     // layer to see this message!
-    Self.NotifyListenersOfResponse(Response, Receiver);
+    Self.NotifyOfResponse(Response, Receiver);
   end;
 end;
 
