@@ -365,8 +365,6 @@ type
   protected
     function CreateNewAttempt: TIdSipRequest; override;
   public
-    procedure Send; override;
-
     property CallID:  String read fCallID write fCallID;
     property FromTag: String read fFromTag write fFromTag;
   end;
