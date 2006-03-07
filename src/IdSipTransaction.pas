@@ -1663,7 +1663,7 @@ begin
   if Self.FirstTime then begin
     Self.FirstTime := false;
 
-    Self.TrySendTryingResponse(Self.InitialRequest);
+//    Self.TrySendTryingResponse(Self.InitialRequest);
 
     Self.ChangeToProceeding(R, T);
   end else begin

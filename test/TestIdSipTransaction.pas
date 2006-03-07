@@ -112,7 +112,7 @@ type
     procedure TestFailedMessageSendNotifiesListeners;
     procedure TestHandUnmatchedRequestToCore;
     procedure TestHandUnmatchedResponseToCore;
-    procedure TestInviteYieldsTrying;
+    procedure TestInviteDoesntSendTrying;
     procedure TestLoopDetected;
     procedure TestLoopDetectedRFC2543RequestWithNoBranch;
     procedure TestOnClientInviteTransactionTimerA;
@@ -277,7 +277,6 @@ type
     procedure TestReliableTransportNoFinalResponseRetransmissions;
     procedure TestReReceiveInitialRequestInCompletedState;
     procedure TestResponseRetransmissionInCompletedState;
-    procedure TestSending100;
     procedure TestTimerGEventScheduled;
     procedure TestTimerGIntervalIncreases;
     procedure TestTimerGOnlyFiresInCompletedState;
@@ -1117,15 +1116,14 @@ begin
         'Unmatched Response not handed to Core');
 end;
 
-procedure TestTIdSipTransactionDispatcher.TestInviteYieldsTrying;
+procedure TestTIdSipTransactionDispatcher.TestInviteDoesntSendTrying;
 begin
+  // The Transaction-User layer (and specifically classes in the InviteModule)
+  // bears responsibility for sending a 100 Trying response to an INVITE.
+
   Self.MarkSentResponseCount;
   Self.MockTransport.FireOnRequest(Self.ReceivedRequest);
-  CheckResponseSent('No response sent');
-
-  CheckEquals(SIPTrying,
-              Self.LastSentResponse.StatusCode,
-              'First response');
+  CheckNoResponseSent('Response sent by the transaction');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestLoopDetected;
@@ -2677,7 +2675,17 @@ begin
 end;
 
 procedure TestTIdSipServerInviteTransaction.TestReceiveInviteInProceedingState;
+var
+  Trying: TIdSipResponse;
 begin
+  // The Transaction-User layer sends a 100 Trying
+  Trying := TIdSipResponse.InResponseTo(Self.Request, SIPTrying);
+  try
+    Tran.SendResponse(Trying);
+  finally
+    Trying.Free;
+  end;
+
   Self.CheckReceiveResponse := Self.Proceeding;
   Self.ReceiveInvite;
 
@@ -2830,45 +2838,6 @@ begin
   CheckEquals(1,
               Self.MockTransport.SentResponseCount,
               'Insufficient or too many responses sent');
-end;
-
-procedure TestTIdSipServerInviteTransaction.TestSending100;
-var
-  R:    TIdSipResponse;
-  Tran: TIdSipTransaction;
-begin
-  Self.Request.AddHeader(TimestampHeader).Value := '100';
-
-  Tran := Self.TransactionType.Create(Self.MockDispatcher,
-                                      Self.Request);
-  try
-    Self.MarkSentResponseCount;
-
-    Tran.ReceiveRequest(Self.Request,
-                             Self.MockTransport);
-
-    CheckResponseSent('No response sent');
-
-    R := Self.MockTransport.LastResponse;
-
-    CheckEquals(SipVersion,  R.SipVersion, 'SIP-Version');
-    CheckEquals(SIPTrying,   R.StatusCode, 'Status-Code');
-    CheckEquals(RSSIPTrying, R.StatusText, 'Status-Text');
-
-    CheckEquals(R.CallID,
-                Self.Request.CallID,
-                'Call-ID headers must match');
-    Check(R.CSeq.Equals(Self.Request.CSeq),
-                'CSeq headers must match');
-    Check(R.From.Equals(Self.Request.From),
-                'From headers must match');
-    Check(R.ToHeader.Equals(Self.Request.ToHeader),
-                'To headers must match');
-    Check(R.Path.Equals(Self.Request.Path),
-                'Via headers must match and have identical order');
-  finally
-    Tran.Free;
-  end;
 end;
 
 procedure TestTIdSipServerInviteTransaction.TestTimerGEventScheduled;
@@ -3077,11 +3046,18 @@ begin
 end;
 
 procedure TestTIdSipServerInviteTransaction.TestTimerIFired;
+var
+  Trying: TIdSipResponse;
 begin
-  Self.CheckTerminated := Self.Terminated;
+  // The Transaction-User layer sends a 100 Trying
+  Trying := TIdSipResponse.InResponseTo(Self.Request, SIPTrying);
+  try
+    Tran.SendResponse(Trying);
+  finally
+    Trying.Free;
+  end;
 
-  Self.ServerTran.ReceiveRequest(Self.Request,
-                                 Self.MockTransport);
+  Self.CheckTerminated := Self.Terminated;
 
   Self.MoveToCompletedState;
   Self.MoveToConfirmedState;

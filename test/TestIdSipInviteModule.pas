@@ -137,6 +137,7 @@ type
     procedure TestRingWithGruu;
     procedure TestSendSessionProgress;
     procedure TestSendSessionProgressWithGruu;
+    procedure TestSendTrying;
     procedure TestTerminateAfterAccept;
     procedure TestTerminateBeforeAccept;
     procedure TestTimeOut;
@@ -401,6 +402,7 @@ type
     procedure TestOkUsesGruuWhenUaDoes;
     procedure TestInboundModifyBeforeFullyEstablished;
     procedure TestInboundModifyReceivesNoAck;
+    procedure TestReceiveCallSendsTrying;
     procedure TestReceiveOutOfOrderReInvite;
     procedure TestRedirectCall;
     procedure TestRejectCallBusy;
@@ -414,9 +416,11 @@ type
   end;
 
   TestTIdSipOutboundSession = class(TestTIdSipSession,
+                                    IIdSipInviteModuleListener,
                                     IIdSipTransportSendingListener)
   private
     FailFirstInviteSend:      Boolean;
+    HairpinCall:              TIdSipInboundSession;
     LocalMimeType:            String;
     LocalDescription:         String;
     OnProgressedSessionFired: Boolean;
@@ -424,6 +428,8 @@ type
     RemoteMimeType:           String;
     Session:                  TIdSipOutboundSession;
 
+    procedure OnInboundCall(UserAgent: TIdSipInviteModule;
+                            Session: TIdSipInboundSession);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport;
                             Destination: TIdSipLocation);
@@ -472,6 +478,7 @@ type
     procedure TestEmptyTargetSetMeansTerminate;
     procedure TestEstablishedSessionSetsInitialRequestToTag;
     procedure TestGlobalFailureEndsSession;
+    procedure TestHairpinCall;
     procedure TestHangUp;
     procedure TestIsOutboundCall;
     procedure TestMethod;
@@ -689,13 +696,18 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipInviteModule unit tests');
 //  Result.AddTest(TestDebug.Suite);
+{
   Result.AddTest(TestTIdSipInviteModule.Suite);
+}
   Result.AddTest(TestTIdSipInboundInvite.Suite);
+{
   Result.AddTest(TestTIdSipOutboundInitialInvite.Suite);
   Result.AddTest(TestTIdSipOutboundRedirectedInvite.Suite);
   Result.AddTest(TestTIdSipOutboundReInvite.Suite);
   Result.AddTest(TestTIdSipOutboundReplacingInvite.Suite);
+}
   Result.AddTest(TestTIdSipInboundSession.Suite);
+{
   Result.AddTest(TestTIdSipOutboundSession.Suite);
 //  Result.AddTest(TestSessionReplacer.Suite);
   Result.AddTest(TestTIdSipInviteModuleOnInboundCallMethod.Suite);
@@ -709,6 +721,7 @@ begin
   Result.AddTest(TestTIdSipSessionModifySessionMethod.Suite);
   Result.AddTest(TestTIdSipProgressedSessionMethod.Suite);
   Result.AddTest(TestTIdSipSessionReferralMethod.Suite);
+}
 end;
 
 //******************************************************************************
@@ -2014,6 +2027,18 @@ begin
   finally
     Action.Free;
   end;
+end;
+
+procedure TestTIdSipInboundInvite.TestSendTrying;
+begin
+  Self.MarkSentResponseCount;
+  Self.InviteAction.SendTrying;
+
+  CheckResponseSent('No trying response sent');
+
+  CheckEquals(SIPTrying,
+              Self.LastSentResponse.StatusCode,
+              'Unexpected Status-Code');
 end;
 
 procedure TestTIdSipInboundInvite.TestTerminateAfterAccept;
@@ -4667,6 +4692,21 @@ begin
               'Unexpected request sent');
 end;
 
+procedure TestTIdSipInboundSession.TestReceiveCallSendsTrying;
+begin
+  Self.MarkSentRequestCount;
+  Self.CreateAction;
+  CheckEquals(Self.ResponseCount + 2,
+              Self.SentResponseCount,
+              'Session should have sent a 100 Trying and a 180 Ringing');
+  CheckEquals(SIPTrying,
+              Self.Dispatcher.Transport.SecondLastResponse.StatusCode,
+              'First response should be a 100 Trying');
+  CheckEquals(SIPRinging,
+              Self.Dispatcher.Transport.LastResponse.StatusCode,
+              'Second response should be a 180 Ringing');
+end;
+
 procedure TestTIdSipInboundSession.TestRedirectCall;
 var
   Dest:         TIdSipAddressHeader;
@@ -4955,6 +4995,12 @@ begin
 end;
 
 //* TestTIdSipOutboundSession Private methods **********************************
+
+procedure TestTIdSipOutboundSession.OnInboundCall(UserAgent: TIdSipInviteModule;
+                                                  Session: TIdSipInboundSession);
+begin
+  Self.HairpinCall := Session;
+end;
 
 procedure TestTIdSipOutboundSession.OnSendRequest(Request: TIdSipRequest;
                                                   Sender: TIdSipTransport;
@@ -5682,6 +5728,19 @@ begin
 
   Check(Self.Core.SessionCount < SessionCount,
         'Session not torn down because of a global failure');
+end;
+
+procedure TestTIdSipOutboundSession.TestHairpinCall;
+var
+  Session: TIdSipSession;
+begin
+//  Self.Dispatcher.Transport.PeerIP := Self.Dispatcher.Transport.Bindings[0].IP;
+
+  Session := Self.Module.Call(Self.Core.From, '', '');
+//  Session.AddSessionListener(Self);
+//  Session.AddActionListener(Self);
+  Session.Send;
+  Check(Assigned(Self.HairpinCall), 'We didn''t receive the INVITE');
 end;
 
 procedure TestTIdSipOutboundSession.TestHangUp;

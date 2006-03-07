@@ -215,6 +215,7 @@ type
     procedure ResendOk;
     procedure Ring;
     procedure SendSessionProgress;
+    procedure SendTrying;
     procedure Terminate; override;
     procedure TimeOut;
 
@@ -1239,6 +1240,12 @@ begin
                           Self.InitialRequest,
                           Self.ID);
   end;
+end;
+
+procedure TIdSipInboundInvite.SendTrying;
+begin
+  if not Self.SentFinalResponse then 
+    Self.SendSimpleResponse(SIPTrying);
 end;
 
 procedure TIdSipInboundInvite.Terminate;
@@ -2788,6 +2795,7 @@ begin
 
   Self.InitialInvite := Self.Module.AddInboundInvite(Request, UsingSecureTransport);
   Self.InitialInvite.AddListener(Self);
+  Self.InitialInvite.SendTrying;
 
   Self.RemoteContact            := Request.FirstContact;
   Self.RemoteMimeType           := Request.ContentType;
