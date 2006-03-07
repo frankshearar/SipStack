@@ -68,10 +68,14 @@ type
                               E: ExceptClass;
                               const ExceptionMessage: String;
                               const Reason: String);
-    procedure FireOnRequest(R: TIdSipRequest);
+    procedure FireOnRequest(R: TIdSipRequest); overload;
+    procedure FireOnRequest(R: TIdSipRequest;
+                            Peer: TIdSipConnectionBindings); overload;
     procedure FireOnRejectedMessage(Msg: TIdSipMessage;
                                     const Reason: String);
-    procedure FireOnResponse(R: TIdSipResponse);
+    procedure FireOnResponse(R: TIdSipResponse); overload;
+    procedure FireOnResponse(R: TIdSipResponse;
+                             Peer: TIdSipConnectionBindings); overload;
     function  IsReliable: Boolean; override;
     function  LastRequest: TIdSipRequest;
     function  LastResponse: TIdSipResponse;
@@ -219,17 +223,24 @@ end;
 
 procedure TIdSipMockTransport.FireOnRequest(R: TIdSipRequest);
 var
+  FakeBinding: TIdSipConnectionBindings;
+begin
+  FakeBinding := Self.CreateFakeBinding;
+  try
+    Self.ReceiveRequest(R, FakeBinding);
+  finally
+    FakeBinding.Free;
+  end;
+end;
+
+procedure TIdSipMockTransport.FireOnRequest(R: TIdSipRequest;
+                                            Peer: TIdSipConnectionBindings);
+var
   CopyOfMessage: TIdSipRequest;
-  FakeBinding:   TIdSipConnectionBindings;
 begin
   CopyOfMessage := R.Copy as TIdSipRequest;
   try
-    FakeBinding := Self.CreateFakeBinding;
-    try
-      Self.ReceiveRequest(CopyOfMessage, FakeBinding);
-    finally
-      FakeBinding.Free;
-    end;
+    Self.ReceiveRequest(CopyOfMessage, Peer);
   finally
     CopyOfMessage.Free;
   end;
@@ -258,17 +269,24 @@ end;
 
 procedure TIdSipMockTransport.FireOnResponse(R: TIdSipResponse);
 var
+  FakeBinding: TIdSipConnectionBindings;
+begin
+  FakeBinding := Self.CreateFakeBinding;
+  try
+    Self.FireOnResponse(R, FakeBinding);
+  finally
+    FakeBinding.Free;
+  end;
+end;
+
+procedure TIdSipMockTransport.FireOnResponse(R: TIdSipResponse;
+                                             Peer: TIdSipConnectionBindings);
+var
   CopyOfMessage: TIdSipResponse;
-  FakeBinding:   TIdSipConnectionBindings;
 begin
   CopyOfMessage := R.Copy as TIdSipResponse;
   try
-    FakeBinding := Self.CreateFakeBinding;
-    try
-      Self.ReceiveResponse(CopyOfMessage, FakeBinding);
-    finally
-      FakeBinding.Free;
-    end;
+    Self.ReceiveResponse(CopyOfMessage, Peer);
   finally
     CopyOfMessage.Free;
   end;
@@ -434,23 +452,53 @@ end;
 procedure TIdSipMockTransport.DispatchRequest(R: TidSipRequest;
                                               Dest: TIdSipLocation);
 var
-  T: TIdSipMockTransport;
+  FakeBinding: TIdSipConnectionBindings;
+  T:           TIdSipMockTransport;
 begin
   T := Self.FindTransport(Dest.IPAddress, Dest.Port);
 
-  if Assigned(T) then
-    T.FireOnRequest(R);
+  if Assigned(T) then begin
+    // FakeBinding represents the socket binding information that the remote
+    // transport sees.
+    FakeBinding := TIdSipConnectionBindings.Create;
+    try
+      FakeBinding.LocalIP   := T.Bindings[0].IP;
+      FakeBinding.LocalPort := T.Bindings[0].Port;
+      FakeBinding.PeerIP    := Self.Bindings[0].IP;
+      FakeBinding.PeerPort  := Self.Bindings[0].Port;
+      FakeBinding.Transport := T.GetTransportType;
+
+      T.FireOnRequest(R, FakeBinding);
+    finally
+      FakeBinding.Free;
+    end;
+  end;
 end;
 
 procedure TIdSipMockTransport.DispatchResponse(R: TidSipResponse;
                                                Dest: TIdSipLocation);
 var
-  T: TIdSipMockTransport;
+  FakeBinding: TIdSipConnectionBindings;
+  T:           TIdSipMockTransport;
 begin
   T := Self.FindTransport(Dest.IPAddress, Dest.Port);
 
-  if Assigned(T) then
-    T.FireOnResponse(R);
+  if Assigned(T) then begin
+    // FakeBinding represents the socket binding information that the remote
+    // transport sees.
+    FakeBinding := TIdSipConnectionBindings.Create;
+    try
+      FakeBinding.LocalIP   := T.Bindings[0].IP;
+      FakeBinding.LocalPort := T.Bindings[0].Port;
+      FakeBinding.PeerIP    := Self.Bindings[0].IP;
+      FakeBinding.PeerPort  := Self.Bindings[0].Port;
+      FakeBinding.Transport := T.GetTransportType;
+
+      T.FireOnResponse(R, FakeBinding);
+    finally
+      FakeBinding.Free;
+    end;
+  end;
 end;
 
 function TIdSipMockTransport.FindTransport(const Address: String;
