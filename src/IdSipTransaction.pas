@@ -300,11 +300,9 @@ type
 
     procedure ChangeToConfirmed(R: TIdSipRequest;
                                 T: TIdSipTransport);
-    function  CreateTryingResponse(R: TIdSipRequest): TIdSipResponse;
     procedure ScheduleTimerG;
     procedure ScheduleTimerH;
     procedure ScheduleTimerI;
-    procedure TrySendTryingResponse(R: TIdSipRequest);
     procedure TrySendLastResponse(R: TIdSipRequest);
   protected
     procedure ChangeToCompleted; override;
@@ -1663,8 +1661,6 @@ begin
   if Self.FirstTime then begin
     Self.FirstTime := false;
 
-//    Self.TrySendTryingResponse(Self.InitialRequest);
-
     Self.ChangeToProceeding(R, T);
   end else begin
     case Self.State of
@@ -1729,26 +1725,6 @@ begin
   Self.ScheduleTimerI;
 end;
 
-function TIdSipServerInviteTransaction.CreateTryingResponse(R: TIdSipRequest): TIdSipResponse;
-begin
-  Result := TIdSipResponse.Create;
-  try
-    Result.StatusCode := SIPTrying;
-    Result.SIPVersion := SIPVersion;
-
-    Result.From     := R.From;
-    Result.ToHeader := R.ToHeader;
-    Result.CallID   := R.CallID;
-    Result.CSeq     := R.CSeq;
-
-    Result.AddHeaders(Self.InitialRequest.Path);
-  except
-    Result.Free;
-
-    raise;
-  end;
-end;
-
 procedure TIdSipServerInviteTransaction.ScheduleTimerG;
 begin
   Self.Dispatcher.ScheduleEvent(Self.Dispatcher.OnServerInviteTransactionTimerG,
@@ -1768,18 +1744,6 @@ begin
   Self.Dispatcher.ScheduleEvent(Self.Dispatcher.OnServerInviteTransactionTimerI,
                                 Self.TimerIInterval,
                                 Self.InitialRequest.Copy);
-end;
-
-procedure TIdSipServerInviteTransaction.TrySendTryingResponse(R: TIdSipRequest);
-var
-  Response: TIdSipResponse;
-begin
-  Response := Self.CreateTryingResponse(Self.InitialRequest);
-  try
-    Self.TrySendResponse(Response);
-  finally
-    Response.Free;
-  end;
 end;
 
 procedure TIdSipServerInviteTransaction.TrySendLastResponse(R: TIdSipRequest);
