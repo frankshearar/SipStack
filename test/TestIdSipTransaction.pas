@@ -3725,11 +3725,14 @@ end;
 
 procedure TestTIdSipClientInviteTransaction.TestFireTimerBInCallingState;
 begin
+  Self.MarkSentACKCount;
   Self.ClientTran.FireTimerB;
 
   CheckEquals(Transaction(itsTerminated),
               Transaction(Self.Tran.State),
               'Timer B didn''t fire in Calling state');
+  CheckNoACKSent('RFC 3261 section 17.1.1.2: MUST NOT generate an ACK if Timer '
+               + 'B fires in the Calling state.')
 end;
 
 procedure TestTIdSipClientInviteTransaction.TestFireTimerBInCompletedState;
