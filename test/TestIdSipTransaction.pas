@@ -75,6 +75,7 @@ type
     procedure MoveTranToCompleted(Tran: TIdSipServerTransaction); overload;
     procedure MoveTranToConfirmed(Tran: TIdSipServerInviteTransaction);
     procedure OnFail(Transaction: TIdSipTransaction;
+                     FailedMessage: TIdSipMessage;
                      const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transaction: TIdSipTransaction;
@@ -222,6 +223,7 @@ type
                         R: TIdSipResponse);
     function  DebugTimer: TIdDebugTimerQueue;
     procedure OnFail(Transaction: TIdSipTransaction;
+                     FailedMessage: TIdSipMessage;
                      const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transaction: TIdSipTransaction;
@@ -465,6 +467,7 @@ type
   TestTIdSipTransactionListenerFailMethod = class(TTransactionListenerMethodTestCase)
   private
     Method: TIdSipTransactionListenerFailMethod;
+    Msg:    TIdSipMessage;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -780,6 +783,7 @@ begin
 end;
 
 procedure TestTIdSipTransactionDispatcher.OnFail(Transaction: TIdSipTransaction;
+                                                 FailedMessage: TIdSipMessage;
                                                  const Reason: String);
 begin
   // Do nothing
@@ -1087,6 +1091,8 @@ begin
   Listener := TIdSipTestTransactionDispatcherListener.Create;
   try
     Self.D.AddTransactionDispatcherListener(Listener);
+
+    Self.D.SendRequest(Self.Invite, Self.Destination);
 
     // Self.Destination uses TCP.
     Self.MockTcpTransport.FireOnException(Self.Invite,
@@ -2387,6 +2393,7 @@ begin
 end;
 
 procedure TTestTransaction.OnFail(Transaction: TIdSipTransaction;
+                                  FailedMessage: TIdSipMessage;
                                   const Reason: String);
 begin
   Self.FailMsg           := Reason;
@@ -5044,13 +5051,17 @@ procedure TestTIdSipTransactionListenerFailMethod.SetUp;
 begin
   inherited SetUp;
 
+  Self.Msg := TIdSipTestResources.CreateBasicRequest;
+
   Self.Method := TIdSipTransactionListenerFailMethod.Create;
-  Self.Method.Reason      := 'Foo';
-  Self.Method.Transaction := Self.Transaction;
+  Self.Method.FailedMessage := Self.Msg;
+  Self.Method.Reason        := 'Foo';
+  Self.Method.Transaction   := Self.Transaction;
 end;
 
 procedure TestTIdSipTransactionListenerFailMethod.TearDown;
 begin
+  Self.Msg.Free;
   Self.Method.Free;
 
   inherited TearDown;
@@ -5068,6 +5079,8 @@ begin
 
     Check(Listener.Failed,
           Self.ClassName + ': Listener not notified');
+    Check(Self.Method.FailedMessage = Listener.FailedMessageParam,
+          Self.ClassName + ': FailedMessage param');
     Check(Self.Method.Transaction = Listener.TransactionParam,
           Self.ClassName + ': Transaction param');
     CheckEquals(Self.Method.Reason,

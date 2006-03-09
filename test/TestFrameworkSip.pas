@@ -529,6 +529,7 @@ type
                                         IIdSipTransactionListener)
   private
     fFailed:                  Boolean;
+    fFailedMessageParam:      TIdSipMessage;
     fReasonParam:             String;
     fReceivedRequest:         Boolean;
     fReceivedResponse:        Boolean;
@@ -539,6 +540,7 @@ type
     fTransactionParam:        TIdSipTransaction;
 
     procedure OnFail(Transaction: TIdSipTransaction;
+                     FailedMessage: TIdSipMessage;
                      const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transaction: TIdSipTransaction;
@@ -551,6 +553,7 @@ type
     constructor Create; override;
 
     property Failed:                  Boolean           read fFailed;
+    property FailedMessageParam:      TIdSipMessage     read fFailedMessageParam;
     property ReasonParam:             String            read fReasonParam;
     property ReceivedRequest:         Boolean           read fReceivedRequest;
     property ReceivedResponse:        Boolean           read fReceivedResponse;
@@ -2072,11 +2075,13 @@ end;
 //* TIdSipTestTransactionListener Private methods ******************************
 
 procedure TIdSipTestTransactionListener.OnFail(Transaction: TIdSipTransaction;
+                                               FailedMessage: TIdSipMessage;
                                                const Reason: String);
 begin
-  Self.fFailed           := true;
-  Self.fReasonParam      := Reason;
-  Self.fTransactionParam := Transaction;
+  Self.fFailed             := true;
+  Self.fFailedMessageParam := FailedMessage;
+  Self.fReasonParam        := Reason;
+  Self.fTransactionParam   := Transaction;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnFail');

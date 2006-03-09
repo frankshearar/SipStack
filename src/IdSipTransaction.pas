@@ -31,6 +31,7 @@ type
   IIdSipTransactionListener = interface
     ['{77B97FA0-7073-40BC-B3F0-7E53ED02213F}']
     procedure OnFail(Transaction: TIdSipTransaction;
+                     FailedMessage: TIdSipMessage;
                      const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transaction: TIdSipTransaction;
@@ -104,6 +105,9 @@ type
     function  TransportAt(Index: Cardinal): TIdSipTransport;
   protected
     function  FindAppropriateTransport(Dest: TIdSipLocation): TIdSipTransport;
+    procedure NotifyTransportOfException(FailedMessage: TIdSipMessage;
+                                         E: Exception;
+                                         const Reason: String);
     procedure NotifyOfException(FailedMessage: TIdSipMessage;
                                 E: Exception;
                                 const Reason: String);
@@ -114,6 +118,7 @@ type
 
     // IIdSipTransactionListener
     procedure OnFail(Transaction: TIdSipTransaction;
+                     FailedMessage: TIdSipMessage;
                      const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transaction: TIdSipTransaction;
@@ -228,13 +233,9 @@ type
                                  T: TIdSipTransport); overload; virtual;
     procedure DoOnTimeout(Request: TIdSipRequest;
                           const Reason: String);
-    procedure DoOnTransportError(Transport: TIdSipTransport;
-                                 Request: TIdSipRequest;
-                                 const Reason: String); overload;
-    procedure DoOnTransportError(Transport: TIdSipTransport;
-                                 Response: TIdSipResponse;
-                                 const Reason: String); overload;
-    procedure NotifyOfFailure(const Reason: String);
+    procedure NotifyOfFailure(const Reason: String); overload; virtual; abstract;
+    procedure NotifyOfFailure(FailedMessage: TIdSipMessage;
+                              const Reason: String); overload;
     procedure NotifyOfRequest(R: TIdSipRequest;
                               T: TIdSipTransport);
     procedure NotifyOfResponse(R: TIdSipResponse;
@@ -255,13 +256,15 @@ type
     destructor  Destroy; override;
 
     procedure AddTransactionListener(const Listener: IIdSipTransactionListener);
+    procedure DoOnTransportError(Msg: TIdSipMessage;
+                                 const Reason: String);
     procedure ExceptionRaised(E: Exception);
     function  IsClient: Boolean; virtual; abstract;
     function  IsInvite: Boolean; virtual; abstract;
     function  IsNull: Boolean; virtual; abstract;
     function  IsServer: Boolean;
     function  IsTerminated: Boolean;
-    function  Match(Msg: TIdSipMessage): Boolean;
+    function  Match(Msg: TIdSipMessage): Boolean; virtual;
     function  LoopDetected(Request: TIdSipRequest): Boolean;
     procedure ReceiveRequest(R: TIdSipRequest;
                              T: TIdSipTransport); virtual;
@@ -292,6 +295,8 @@ type
     destructor  Destroy; override;
 
     function  IsClient: Boolean; override;
+    function  Match(Msg: TIdSipMessage): Boolean; override;
+    procedure NotifyOfFailure(const Reason: String); overload; override;
   end;
 
   TIdSipServerInviteTransaction = class(TIdSipServerTransaction)
@@ -344,7 +349,8 @@ type
 
   TIdSipClientTransaction = class(TIdSipTransaction)
   public
-    function IsClient: Boolean; override;
+    function  IsClient: Boolean; override;
+    procedure NotifyOfFailure(const Reason: String); overload; override;
   end;
 
   TIdSipClientInviteTransaction = class(TIdSipClientTransaction)
@@ -460,11 +466,13 @@ type
 
   TIdSipTransactionListenerFailMethod = class(TIdSipTransactionMethod)
   private
-    fReason: String;
+    fFailedMessage: TIdSipMessage;
+    fReason:        String;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Reason: String read fReason write fReason;
+    property FailedMessage: TIdSipMessage read fFailedMessage write fFailedMessage;
+    property Reason:        String        read fReason write fReason;
   end;
 
   TIdSipTransactionListenerReceiveRequestMethod = class(TIdSipTransactionMethod)
@@ -950,6 +958,18 @@ begin
   end;
 end;
 
+procedure TIdSipTransactionDispatcher.NotifyTransportOfException(FailedMessage: TIdSipMessage;
+                                                                 E: Exception;
+                                                                 const Reason: String);
+var
+  Tran: TIdSipTransaction;
+begin
+  Tran := Self.FindTransaction(FailedMessage, FailedMessage.IsRequest);
+
+  if Assigned(Tran) then
+    Tran.DoOnTransportError(FailedMessage, Reason)
+end;
+
 procedure TIdSipTransactionDispatcher.NotifyOfException(FailedMessage: TIdSipMessage;
                                                         E: Exception;
                                                         const Reason: String);
@@ -1001,9 +1021,10 @@ begin
 end;
 
 procedure TIdSipTransactionDispatcher.OnFail(Transaction: TIdSipTransaction;
+                                             FailedMessage: TIdSipMessage;
                                              const Reason: String);
 begin
-  // Do nothing?
+  Self.NotifyOfException(FailedMessage, nil, Reason);
 end;
 
 procedure TIdSipTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
@@ -1028,7 +1049,7 @@ procedure TIdSipTransactionDispatcher.OnException(FailedMessage: TIdSipMessage;
                                                   E: Exception;
                                                   const Reason: String);
 begin
-  Self.NotifyOfException(FailedMessage, E, Reason);
+  Self.NotifyTransportOfException(FailedMessage, E, Reason);
 end;
 
 procedure TIdSipTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
@@ -1299,6 +1320,13 @@ begin
   Self.TranListeners.AddListener(Listener);
 end;
 
+procedure TIdSipTransaction.DoOnTransportError(Msg: TIdSipMessage;
+                                               const Reason: String);
+begin
+  Self.NotifyOfFailure(Msg, Reason);
+  Self.ChangeToTerminated(false);
+end;
+
 procedure TIdSipTransaction.ExceptionRaised(E: Exception);
 begin
   Self.NotifyOfFailure(Format(IdSipTransaction.ExceptionRaised,
@@ -1318,12 +1346,6 @@ end;
 function TIdSipTransaction.Match(Msg: TIdSipMessage): Boolean;
 begin
   Result := Self.InitialRequest.Match(Msg);
-
-  if not Msg.LastHop.IsRFC3261Branch
-     and Msg.IsRequest
-     and (Msg as TIdSipRequest).IsAck then
-    Result := Result
-          and (Msg.ToHeader.Tag = Self.LastResponse.ToHeader.Tag)
 end;
 
 function TIdSipTransaction.LoopDetected(Request: TIdSipRequest): Boolean;
@@ -1443,36 +1465,23 @@ begin
   Self.ChangeToTerminated(false);
 end;
 
-procedure TIdSipTransaction.DoOnTransportError(Transport: TIdSipTransport;
-                                               Request: TIdSipRequest;
-                                               const Reason: String);
-begin
-  Self.NotifyOfFailure(Reason);
-  Self.ChangeToTerminated(false);
-end;
-
-procedure TIdSipTransaction.DoOnTransportError(Transport: TIdSipTransport;
-                                               Response: TIdSipResponse;
-                                               const Reason: String);
-begin
-  Self.NotifyOfFailure(Reason);
-  Self.ChangeToTerminated(false);
-end;
-
-procedure TIdSipTransaction.NotifyOfFailure(const Reason: String);
+procedure TIdSipTransaction.NotifyOfFailure(FailedMessage: TIdSipMessage;
+                                            const Reason: String);
 var
   Notification: TIdSipTransactionListenerFailMethod;
 begin
   Notification := TIdSipTransactionListenerFailMethod.Create;
   try
-    Notification.Reason      := Reason;
-    Notification.Transaction := Self;
+    Notification.FailedMessage := FailedMessage;
+    Notification.Reason        := Reason;
+    Notification.Transaction   := Self;
 
     Self.TranListeners.Notify(Notification);
   finally
     Notification.Free;
   end;
 end;
+
 
 procedure TIdSipTransaction.NotifyOfRequest(R: TIdSipRequest;
                                             T: TIdSipTransport);
@@ -1540,8 +1549,7 @@ begin
     Self.Dispatcher.SendToTransport(R, Dest);
   except
     on E: EIdSipTransport do begin
-      Self.DoOnTransportError(E.Transport,
-                              E.SipMessage as TIdSipRequest,
+      Self.DoOnTransportError(E.SipMessage,
                               E.Message);
       raise;
     end;
@@ -1574,6 +1582,21 @@ begin
   Result := false;
 end;
 
+function TIdSipServerTransaction.Match(Msg: TIdSipMessage): Boolean;
+begin
+  Result := inherited Match(Msg);
+
+  // cf. RFC 3261, section 17.2.3, and TIdSipRequest.MatchRFC2543Request
+  if not Msg.LastHop.IsRFC3261Branch and Msg.IsAck then
+    Result := Result
+          and (Msg.ToHeader.Tag = Self.LastResponse.ToHeader.Tag)
+end;
+
+procedure TIdSipServerTransaction.NotifyOfFailure(const Reason: String);
+begin
+  Self.NotifyOfFailure(Self.LastResponseSent, Reason);
+end;
+
 //* TIdSipServerTransaction Public methods *************************************
 
 procedure TIdSipServerTransaction.TrySendResponse(R: TIdSipResponse);
@@ -1585,8 +1608,7 @@ begin
     Self.Dispatcher.SendToTransport(R, Self.ResponseLocations);
   except
     on E: EIdSipTransport do begin
-      Self.DoOnTransportError(E.Transport,
-                              E.SipMessage as TIdSipResponse,
+      Self.DoOnTransportError(E.SipMessage,
                               E.Message);
       raise;
     end;
@@ -1863,6 +1885,11 @@ end;
 function TIdSipClientTransaction.IsClient: Boolean;
 begin
   Result := true;
+end;
+
+procedure TIdSipClientTransaction.NotifyOfFailure(const Reason: String);
+begin
+  Self.NotifyOfFailure(Self.InitialRequest, Reason);
 end;
 
 //******************************************************************************
@@ -2256,6 +2283,7 @@ end;
 procedure TIdSipTransactionListenerFailMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipTransactionListener).OnFail(Self.Transaction,
+                                                Self.FailedMessage,
                                                 Self.Reason);
 end;
 
