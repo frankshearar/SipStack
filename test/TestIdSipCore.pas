@@ -1979,7 +1979,6 @@ end;
 
 procedure TestLocation.TestAllLocationsFail;
 var
-  Action:    TIdSipAction;
   I:         Integer;
   Locations: TIdSipLocations;
 begin
@@ -2000,7 +1999,7 @@ begin
     Self.Locator.FindServersFor(Self.Destination.Address, Locations);
 
     Self.MarkSentRequestCount;
-    Action := Self.CreateAction;
+    Self.CreateAction;
     for I := 0 to Locations.Count - 1 do begin
       // This should trigger a resend of the message to a new location.
       Self.Dispatcher.Transport.FireOnException(Self.LastSentRequest,

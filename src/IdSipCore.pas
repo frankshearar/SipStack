@@ -606,8 +606,8 @@ type
     function  GetUsername: String;
     procedure SetLocalGruu(Value: TIdSipContactHeader);
     procedure SetUsername(const Value: String);
-    function  TrySendRequest(Request: TIdSipRequest;
-                             Target: TIdSipLocation): Boolean;
+    procedure TrySendRequest(Request: TIdSipRequest;
+                             Target: TIdSipLocation);
   protected
     ActionListeners: TIdNotificationList;
     fIsOwned:        Boolean;
@@ -3568,18 +3568,11 @@ begin
   Self.UA.From.DisplayName := Value;
 end;
 
-function TIdSipAction.TrySendRequest(Request: TIdSipRequest;
-                                     Target: TIdSipLocation): Boolean;
+procedure TIdSipAction.TrySendRequest(Request: TIdSipRequest;
+                                      Target: TIdSipLocation);
 var
   ActualRequest: TIdSipRequest;
-  CurrentTarget: Integer;
-  NewAttempt:    TIdSipRequest;
 begin
-  // Result indicates success.
-
-  CurrentTarget := 0;
-  Result        := false;
-
   ActualRequest := TIdSipRequest.Create;
   try
     ActualRequest.Assign(Request);
