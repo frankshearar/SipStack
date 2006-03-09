@@ -30,7 +30,11 @@
 
 3. Read the class comment on TIdSipStackConfigurator. Decide on what
    configuration you want, put that configuration in a TStrings, and
-   invoke TIdSipStackConfigurator.CreateUserAgent.
+   invoke TIdSipStackInterface.Create with that TStrings. The UiHandle
+   contains the HWND of the window to which the TIdSipStackInterface
+   will post messages. These messages will be things like "you've
+   received an inbound INVITE" and the like. Look for CM_SUCCESS to
+   find the list of possible messages.
 
 4. TIdSipHeader is the base class for all header types. Follow these
    steps to define a new header type:
