@@ -258,6 +258,7 @@ type
     procedure TestInResponseToWithContact;
     procedure TestInSameDialogAsRequest;
     procedure TestInSameDialogAsResponse;
+    procedure TestIsAck;
     procedure TestIsAuthenticationChallenge;
     procedure TestIsMalformedStatusCode;
     procedure TestIsFinal;
@@ -3974,6 +3975,17 @@ begin
           'To tag differs');
   finally
     Res.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestIsAck;
+var
+  I: Integer;
+begin
+  for I := 100 to 699 do begin
+    Self.Response.StatusCode := I;
+    Check(not Self.Response.IsAck,
+          'Response ' + IntToStr(I) + ' thinks it''s an ACK');
   end;
 end;
 

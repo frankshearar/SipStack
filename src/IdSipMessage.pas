@@ -1370,6 +1370,7 @@ type
     function  HeaderCount: Integer;
     function  QuickestExpiry: Cardinal;
     function  Equals(Msg: TIdSipMessage): Boolean; virtual; abstract;
+    function  IsAck: Boolean; virtual;
     function  IsRequest: Boolean; virtual; abstract;
     function  IsResponse: Boolean;
     function  LastHop: TIdSipViaHeader;
@@ -1471,7 +1472,7 @@ type
     function  HasReplaces: Boolean;
     function  HasRoute: Boolean;
     function  HasSipsUri: Boolean;
-    function  IsAck: Boolean;
+    function  IsAck: Boolean; override;
     function  IsBye: Boolean;
     function  IsCancel: Boolean;
     function  IsInvite: Boolean;
@@ -7748,6 +7749,11 @@ begin
     Result := Self.Minimum(Self.QuickestContactExpiry,
                            Self.QuickestExpiresHeader)
   end;
+end;
+
+function TIdSipMessage.IsAck: Boolean;
+begin
+  Result := false;
 end;
 
 function TIdSipMessage.IsResponse: Boolean;
