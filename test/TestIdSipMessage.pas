@@ -260,8 +260,8 @@ type
     procedure TestInSameDialogAsResponse;
     procedure TestIsAck;
     procedure TestIsAuthenticationChallenge;
-    procedure TestIsMalformedStatusCode;
     procedure TestIsFinal;
+    procedure TestIsMalformedStatusCode;
     procedure TestIsOK;
     procedure TestIsProvisional;
     procedure TestIsRedirect;
@@ -4025,22 +4025,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipResponse.TestIsMalformedStatusCode;
-var
-  Res: TIdSipResponse;
-begin
-  Res := TIdSipMessage.ReadResponseFrom('SIP/2.0 Aheh OK'#13#10);
-  try
-    Check(Res.IsMalformed,
-          'Failed to reject a non-numeric Status-Code');
-    CheckEquals(Format(InvalidStatusCode, ['Aheh']),
-                Res.ParseFailReason,
-                'Unexpected parse fail reason');
-  finally
-    Res.Free;
-  end;
-end;
-
 procedure TestTIdSipResponse.TestIsFinal;
 var
   I: Integer;
@@ -4057,6 +4041,22 @@ begin
     Check(Self.Response.IsFinal,
           IntToStr(Self.Response.StatusCode)
         + ' ' + Self.Response.StatusText);
+  end;
+end;
+
+procedure TestTIdSipResponse.TestIsMalformedStatusCode;
+var
+  Res: TIdSipResponse;
+begin
+  Res := TIdSipMessage.ReadResponseFrom('SIP/2.0 Aheh OK'#13#10);
+  try
+    Check(Res.IsMalformed,
+          'Failed to reject a non-numeric Status-Code');
+    CheckEquals(Format(InvalidStatusCode, ['Aheh']),
+                Res.ParseFailReason,
+                'Unexpected parse fail reason');
+  finally
+    Res.Free;
   end;
 end;
 
