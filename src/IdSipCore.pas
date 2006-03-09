@@ -3260,6 +3260,9 @@ var
   FailReason: String;
   NewAttempt: TIdSipRequest;
 begin
+  // You tried to send a request. If failed. The UA core invokes this method to
+  // try the next possible location.
+
   if Msg.IsRequest then begin
     if (Msg as TIdSipRequest).IsAck then begin
       FailReason := Format(RSNoLocationSucceeded, [(Msg as TIdSipRequest).DestinationUri]);
