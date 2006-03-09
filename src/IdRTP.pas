@@ -4527,8 +4527,6 @@ function TIdRTPSenderTable.Count: Cardinal;
 var
   I: Cardinal;
 begin
-  //  In Smalltalk:
-  // ^(self members select: [ :each | each isSender ]) size
   Result := 0;
 
   if (Self.Members.Count > 0) then
@@ -4541,10 +4539,6 @@ function TIdRTPSenderTable.Find(SSRC: Cardinal): TIdRTPMember;
 var
   I: Cardinal;
 begin
-  // in Smalltalk:
-  // ^self members
-  //         detect: [ :each | each isSender and: [ each ssrc = ssrc ]]
-  //         ifNone: [ nil ]
   Result := nil;
 
   if (Self.Members.Count > 0) then
@@ -4633,11 +4627,6 @@ procedure TIdBaseRTPAbstractPeer.NotifyListenersOfRTCP(Packet: TIdRTCPPacket;
 var
   Notification: TIdRTPListenerReceiveRTCPMethod;
 begin
-  // In Smalltalk:
-  // self listenerLock critical:
-  //     [self listeners do:
-  //         [ :each | each receiveRTCP: packet on: binding ]]
-
   Notification := TIdRTPListenerReceiveRTCPMethod.Create;
   try
     Notification.Binding := Binding;
@@ -4654,11 +4643,6 @@ procedure TIdBaseRTPAbstractPeer.NotifyListenersOfRTP(Packet: TIdRTPPacket;
 var
   Notification: TIdRTPListenerReceiveRTPMethod;
 begin
-  // In Smalltalk:
-  // self listenerLock critical:
-  //     [self listeners do:
-  //         [ :each | each receiveRTP: packet on: binding ]]
-
   Notification := TIdRTPListenerReceiveRTPMethod.Create;
   try
     Notification.Binding := Binding;
