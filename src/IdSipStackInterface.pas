@@ -60,6 +60,9 @@ type
   // My current implementation is Windows-specific. Ultimately, of course, we
   // want to be OS-agnostic (at least, as much as we can be).
   //
+  // Find the details on what to put in the Configuration TStrings by reading
+  // the class comment of TIdSipStackConfigurator.
+  //
   // I use certain lines in the Configuration you give me, and the formats of
   // these lines are:
   //   MasqueradeAs: <IPv4 address|IPv6 reference>
