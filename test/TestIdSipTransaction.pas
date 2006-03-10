@@ -428,6 +428,20 @@ type
     procedure TestTransportErrorInTryingState;
   end;
 
+  TestTIdSipResponseLocationList = class(TTestCase)
+  private
+    List:      TIdSipResponseLocationList;
+    Locations: TIdSipLocations;
+    Response:  TIdSipResponse;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAddAndLocationsFor;
+    procedure TestContains;
+    procedure TestLocationsForReturnsMutableList;
+  end;
+
   TTransactionDispatcherListenerMethodTestCase = class(TTestCase)
   protected
     Receiver: TIdSipTransport;
@@ -524,6 +538,7 @@ begin
   Result.AddTest(TestTIdSipServerNonInviteTransaction.Suite);
   Result.AddTest(TestTIdSipClientInviteTransaction.Suite);
   Result.AddTest(TestTIdSipClientNonInviteTransaction.Suite);
+  Result.AddTest(TestTIdSipResponseLocationList.Suite);
   Result.AddTest(TestTIdSipTransactionDispatcherListenerReceiveRequestMethod.Suite);
   Result.AddTest(TestTIdSipTransactionDispatcherListenerReceiveResponseMethod.Suite);
   Result.AddTest(TestTIdSipTransactionListenerFailMethod.Suite);
@@ -4903,6 +4918,84 @@ begin
   finally
     Tran.Free;
   end;
+end;
+
+//******************************************************************************
+//* TestTIdSipResponseLocationList                                             *
+//******************************************************************************
+//* TestTIdSipResponseLocationList Public methods ******************************
+
+procedure TestTIdSipResponseLocationList.SetUp;
+begin
+  inherited SetUp;
+
+  Self.List      := TIdSipResponseLocationList.Create;
+  Self.Locations := TIdSipLocations.Create;
+  Self.Response  := TIdSipTestResources.CreateBasicResponse;
+
+  Self.Locations.AddLocation('UDP', '127.0.0.1', 5060);
+  Self.Locations.AddLocation('TCP', '127.0.0.1', 5060);
+end;
+
+procedure TestTIdSipResponseLocationList.TearDown;
+begin
+  Self.List.Free;
+  Self.Locations.Free;
+  Self.Response.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipResponseLocationList Published methods ***************************
+
+procedure TestTIdSipResponseLocationList.TestAddAndLocationsFor;
+var
+  I:      Integer;
+  RepLoc: TIdSipLocations;
+begin
+  Self.List.Add(Self.Response, Self.Locations);
+
+  RepLoc := Self.List.LocationsFor(Response);
+
+  Check(Assigned(RepLoc),
+        'LocationsFor returned nil');
+  Check(RepLoc <> Self.Locations,
+        'Add didn''t add a COPY of the locations, but stored a reference '
+      + 'instead');
+  CheckEquals(Self.Locations.Count,
+              RepLoc.Count,
+              'Response/Locations not added');
+
+  for I := 0 to Self.Locations.Count - 1 do
+    CheckEquals(Self.Locations[I].AsString,
+                RepLoc[I].AsString,
+                IntToStr(I) + 'th location differs');
+end;
+
+procedure TestTIdSipResponseLocationList.TestContains;
+begin
+  Check(not Self.List.Contains(Self.Response),
+        'Empty list');
+
+  Self.List.Add(Self.Response, Self.Locations);
+  Check(Self.List.Contains(Self.Response),
+        'But we added the Response');
+end;
+
+procedure TestTIdSipResponseLocationList.TestLocationsForReturnsMutableList;
+var
+  OldCount: Integer;
+  RepLoc:   TIdSipLocations;
+begin
+  Self.List.Add(Self.Response, Self.Locations);
+
+  RepLoc := Self.List.LocationsFor(Response);
+
+  OldCount := RepLoc.Count;
+  RepLoc.AddLocation(RepLoc.First);
+  CheckEquals(OldCount + 1,
+              RepLoc.Count,
+              'LocationsFor returned an immutable list');
 end;
 
 //******************************************************************************

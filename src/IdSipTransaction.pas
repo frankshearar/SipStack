@@ -419,6 +419,20 @@ type
     function IsNull: Boolean; override;
   end;
 
+  TIdSipResponseLocationList = class(TObject)
+  private
+    Responses: TIdSipResponseList;
+    Locations: TObjectList;
+  public
+    constructor Create;
+    destructor  Destroy; override;
+
+    procedure Add(Response: TIdSipResponse;
+                  Locations: TIdSipLocations);
+    function  Contains(Response: TIdSipResponse): Boolean;
+    function  LocationsFor(Response: TIdSipResponse): TIdSipLocations;
+  end;
+
   TIdSipTransactionDispatcherMethod = class(TIdNotification)
   private
     fReceiver: TIdSipTransport;
@@ -2234,6 +2248,60 @@ end;
 function TIdSipNullTransaction.IsNull: Boolean;
 begin
   Result := true;
+end;
+
+//******************************************************************************
+//* TIdSipResponseLocationList                                                 *
+//******************************************************************************
+//* TIdSipResponseLocationList Public methods **********************************
+
+constructor TIdSipResponseLocationList.Create;
+begin
+  inherited Create;
+
+  Self.Locations := TObjectList.Create(true);
+  Self.Responses := TIdSipResponseList.Create;
+end;
+
+destructor TIdSipResponseLocationList.Destroy;
+begin
+  Self.Responses.Free;
+  Self.Locations.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipResponseLocationList.Add(Response: TIdSipResponse;
+                                         Locations: TIdSipLocations);
+var
+  I:            Integer;
+  NewLocations: TIdSipLocations;
+begin
+  try
+    Self.Responses.AddCopy(Response);
+
+    NewLocations := TIdSipLocations.Create;
+    Self.Locations.Add(NewLocations);
+
+    for I := 0 to Locations.Count - 1 do
+      NewLocations.AddLocation(Locations[I]);
+  except
+    raise;
+  end;
+end;
+
+function TIdSipResponseLocationList.Contains(Response: TIdSipResponse): Boolean;
+begin
+  Result := Self.Responses.Contains(Response);
+end;
+
+function TIdSipResponseLocationList.LocationsFor(Response: TIdSipResponse): TIdSipLocations;
+var
+  Index: Integer;
+begin
+  Index := Self.Responses.IndexOf(Response);
+
+  Result := Self.Locations[Index] as TIdSipLocations;
 end;
 
 //******************************************************************************
