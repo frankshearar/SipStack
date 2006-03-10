@@ -313,6 +313,7 @@ type
     procedure TestDefaultProperty;
     procedure TestDelete;
     procedure TestFirst;
+    procedure TestIndexOf;
     procedure TestIsEmpty;
     procedure TestLast;
     procedure TestListStoresCopiesNotReferences;
@@ -4793,6 +4794,42 @@ begin
     CheckEquals(SIPOK,
                 Self.List.First.StatusCode,
                 'List with multiple responses');
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipResponseList.TestIndexOf;
+var
+  AnotherResponse: TIdSipResponse;
+  Response:        TIdSipResponse;
+begin
+  Response := TIdSipResponse.Create;
+  try
+    AnotherResponse := TIdSipResponse.Create;
+    try
+      // The messages contained in Response and AnotherResponse have to differ
+      // in some way for the test to work, because otherwise the list will
+      // regard the messages as the same message: equality, not identity!
+      Response.StatusCode := SIPTrying;
+      AnotherResponse.StatusCode := SIPSessionProgress;
+
+      CheckEquals(ItemNotFoundIndex,
+                  Self.List.IndexOf(Response),
+                  'Empty list seems to contain the response');
+
+      Self.List.AddCopy(Response);
+      CheckEquals(0,
+                  Self.List.IndexOf(Response),
+                  'Response not the first response in the list');
+
+      Self.List.AddCopy(AnotherResponse);
+      CheckEquals(1,
+                  Self.List.IndexOf(AnotherResponse),
+                  'AnotherResponse not the second response in the list');
+    finally
+      AnotherResponse.Free;
+    end;
   finally
     Response.Free;
   end;

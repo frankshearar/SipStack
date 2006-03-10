@@ -1608,6 +1608,7 @@ type
     function  Count: Integer;
     procedure Delete(Index: Integer);
     function  First: TIdSipResponse;
+    function  IndexOf(Response: TIdSipResponse): Integer;
     function  IsEmpty: Boolean;
     function  Last: TIdSipResponse;
     function  SecondLast: TIdSipResponse;
@@ -2109,6 +2110,7 @@ const
   InvalidWarnAgent            = 'Invalid warn-agent';
   InvalidWarnCode             = 'Invalid warn-code';
   InvalidWarnText             = 'Invalid warn-text';
+  ItemNotFoundIndex           = -1;
   MethodToken                 = 'Method';
   MissingAngleBrackets        = 'Missing angle brackets';
   MissingCallID               = 'Missing Call-ID header';
@@ -9516,6 +9518,16 @@ begin
     Result := nil
   else
     Result := Self.List[0] as TIdSipResponse;
+end;
+
+function TIdSipResponseList.IndexOf(Response: TIdSipResponse): Integer;
+begin
+  Result := 0;
+  while (Result < Self.Count) and not Self[Result].Equals(Response) do
+    Inc(Result);
+
+  if (Result = Self.Count) then
+    Result := ItemNotFoundIndex;
 end;
 
 function TIdSipResponseList.IsEmpty: Boolean;
