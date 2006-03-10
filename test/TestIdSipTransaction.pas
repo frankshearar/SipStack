@@ -2568,13 +2568,8 @@ end;
 
 procedure TestTIdSipServerInviteTransaction.Terminate(Tran: TIdSipTransaction);
 begin
-  Self.MockTransport.FailWith := EIdConnectTimeout;
-  try
-    Tran.SendResponse(Self.Response);
-  except
-    on EIdSipTransport do;
-  end;
-  Self.MockTransport.FailWith := nil;
+  Tran.SendResponse(Self.Response);
+  Tran.DoOnTransportError(Self.Tran.LastResponse, 'Connection refused');
 end;
 
 //* TestTIdSipServerInviteTransaction Published methods ************************
@@ -2727,16 +2722,10 @@ end;
 
 procedure TestTIdSipServerInviteTransaction.TestReceiveInviteInTerminatedState;
 begin
-  Self.MockTransport.FailWith := EIdConnectTimeout;
-
   Self.Response.StatusCode := SIPRinging;
 
-  try
-    Self.Tran.SendResponse(Self.Response);
-    Fail('No exception raised');
-  except
-    on EIdSipTransport do;
-  end;
+  Self.Tran.SendResponse(Self.Response);
+  Self.Tran.DoOnTransportError(Self.Tran.LastResponse, 'Connection refused');
 
   CheckEquals(Transaction(itsTerminated),
               Transaction(Self.Tran.State),
@@ -3105,16 +3094,10 @@ procedure TestTIdSipServerInviteTransaction.TestTransportErrorInCompletedState;
 begin
   Self.MoveToCompletedState;
 
-  Self.MockTransport.FailWith := EIdConnectTimeout;
-
   Self.Response.StatusCode := SIPRinging;
 
-  try
-    Self.Tran.SendResponse(Self.Response);
-    Fail('No exception raised');
-  except
-    on EIdSipTransport do;
-  end;
+  Self.Tran.SendResponse(Self.Response);
+  Self.Tran.DoOnTransportError(Self.Tran.LastResponse, 'Connection refused');
 
   CheckEquals(Transaction(itsTerminated),
               Transaction(Self.Tran.State),
@@ -3126,16 +3109,10 @@ end;
 
 procedure TestTIdSipServerInviteTransaction.TestTransportErrorInProceedingState;
 begin
-  Self.MockTransport.FailWith := EIdConnectTimeout;
-
   Self.Response.StatusCode := SIPRinging;
 
-  try
-    Self.Tran.SendResponse(Self.Response);
-    Fail('No exception raised');
-  except
-    on EIdSipTransport do;
-  end;
+  Self.Tran.SendResponse(Self.Response);
+  Self.Tran.DoOnTransportError(Self.Tran.LastResponse, 'Connection refused');
 
   CheckEquals(Transaction(itsTerminated),
               Transaction(Self.Tran.State),
@@ -3274,7 +3251,8 @@ begin
   Self.MarkSentResponseCount;
 
   Self.Response.StatusCode := SIPMultipleChoices;
-  Self.MockTransport.FailWith := EIdConnectTimeout;
+
+  Self.MockTransport.FailWith := EIdConnectException;
   Self.Tran.SendResponse(Self.Response);
 
   CheckEquals(Transaction(itsCompleted),
@@ -3337,8 +3315,9 @@ begin
     Self.MarkSentResponseCount;
 
     Self.Response.StatusCode := SIPMultipleChoices;
-    Self.MockTransport.FailWith := EIdConnectTimeout;
+
     Tran.SendResponse(Self.Response);
+    Tran.DoOnTransportError(Self.Tran.LastResponse, 'Connection refused');
 
     CheckEquals(Transaction(itsTerminated),
                 Transaction(Tran.State),
@@ -3542,14 +3521,8 @@ begin
   Self.MoveToProceedingState(Self.Tran);
   Self.MoveToCompletedState(Self.Tran);
 
-  Self.MockTransport.FailWith := EIdConnectTimeout;
-
-  try
-    Self.Tran.ReceiveRequest(Self.Request, Self.MockTransport);
-    Fail('No exception raised');
-  except
-    on EIdSipTransport do;
-  end;
+  Self.Tran.ReceiveRequest(Self.Request, Self.MockTransport);
+  Self.Tran.DoOnTransportError(Self.Tran.LastResponse, 'Connection refused');
 
   CheckEquals(Transaction(itsTerminated),
               Transaction(Self.Tran.State),
@@ -3562,15 +3535,10 @@ procedure TestTIdSipServerNonInviteTransaction.TestTransportErrorInProceedingSta
 begin
   Self.MoveToProceedingState(Self.Tran);
 
-  Self.MockTransport.FailWith := EIdConnectTimeout;
   Self.Response.StatusCode := SIPTrying;
 
-  try
-    Self.Tran.SendResponse(Self.Response);
-    Fail('No exception raised');
-  except
-    on EIdSipTransport do;
-  end;
+  Self.Tran.SendResponse(Self.Response);
+  Self.Tran.DoOnTransportError(Self.Tran.LastResponse, 'Connection refused');
 
   CheckEquals(Transaction(itsTerminated),
               Transaction(Self.Tran.State),

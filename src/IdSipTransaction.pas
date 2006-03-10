@@ -282,13 +282,15 @@ type
     property State:              TIdSipTransactionState      read fState;
   end;
 
+  TIdSipResponseLocationsList = class;
+
   TIdSipServerTransaction = class(TIdSipTransaction)
   private
     ResponseLocations: TIdSipLocations;
 
     procedure TrySendResponse(R: TIdSipResponse); virtual;
   protected
-    LastResponseSent:  TIdSipResponse;
+    LastResponseSent: TIdSipResponse;
   public
     constructor Create(Dispatcher: TIdSipTransactionDispatcher;
                        InitialRequest: TIdSipRequest); override;
@@ -297,6 +299,7 @@ type
     function  IsClient: Boolean; override;
     function  Match(Msg: TIdSipMessage): Boolean; override;
     procedure NotifyOfFailure(const Reason: String); overload; override;
+    procedure SendResponse(R: TIdSipResponse); override;
   end;
 
   TIdSipServerInviteTransaction = class(TIdSipServerTransaction)
@@ -419,7 +422,7 @@ type
     function IsNull: Boolean; override;
   end;
 
-  TIdSipResponseLocationList = class(TObject)
+  TIdSipResponseLocationsList = class(TObject)
   private
     Responses: TIdSipResponseList;
     Locations: TObjectList;
@@ -1603,6 +1606,11 @@ begin
   Self.NotifyOfFailure(Self.LastResponseSent, Reason);
 end;
 
+procedure TIdSipServerTransaction.SendResponse(R: TIdSipResponse);
+begin
+  inherited SendResponse(R);
+end;
+
 //* TIdSipServerTransaction Public methods *************************************
 
 procedure TIdSipServerTransaction.TrySendResponse(R: TIdSipResponse);
@@ -1700,6 +1708,8 @@ end;
 
 procedure TIdSipServerInviteTransaction.SendResponse(R: TIdSipResponse);
 begin
+  inherited SendResponse(R);
+
   if (Self.State = itsProceeding) then begin
     Self.TrySendResponse(R);
 
@@ -1828,6 +1838,8 @@ end;
 
 procedure TIdSipServerNonInviteTransaction.SendResponse(R: TIdSipResponse);
 begin
+  inherited SendResponse(R);
+
   if (Self.State in [itsTrying, itsProceeding]) then begin
     Self.TrySendResponse(R);
       
@@ -2252,11 +2264,11 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipResponseLocationList                                                 *
+//* TIdSipResponseLocationsList                                                *
 //******************************************************************************
-//* TIdSipResponseLocationList Public methods **********************************
+//* TIdSipResponseLocationsList Public methods *********************************
 
-constructor TIdSipResponseLocationList.Create;
+constructor TIdSipResponseLocationsList.Create;
 begin
   inherited Create;
 
@@ -2264,7 +2276,7 @@ begin
   Self.Responses := TIdSipResponseList.Create;
 end;
 
-destructor TIdSipResponseLocationList.Destroy;
+destructor TIdSipResponseLocationsList.Destroy;
 begin
   Self.Responses.Free;
   Self.Locations.Free;
@@ -2272,7 +2284,7 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipResponseLocationList.Add(Response: TIdSipResponse;
+procedure TIdSipResponseLocationsList.Add(Response: TIdSipResponse;
                                          Locations: TIdSipLocations);
 var
   I:            Integer;
@@ -2291,12 +2303,12 @@ begin
   end;
 end;
 
-function TIdSipResponseLocationList.Contains(Response: TIdSipResponse): Boolean;
+function TIdSipResponseLocationsList.Contains(Response: TIdSipResponse): Boolean;
 begin
   Result := Self.Responses.Contains(Response);
 end;
 
-function TIdSipResponseLocationList.LocationsFor(Response: TIdSipResponse): TIdSipLocations;
+function TIdSipResponseLocationsList.LocationsFor(Response: TIdSipResponse): TIdSipLocations;
 var
   Index: Integer;
 begin
