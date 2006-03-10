@@ -81,6 +81,7 @@ type
     procedure AddLocationsFromSRVs(SRV: TIdSrvRecords);
     function  First: TIdSipLocation;
     procedure RemoveFirst;
+    procedure Remove(Location: TIdSipLocation);
 
     property Items[Index: Integer]: TIdSipLocation read GetLocation; default;
   end;
@@ -254,6 +255,11 @@ end;
 procedure TIdSipLocations.RemoveFirst;
 begin
   Self.Delete(0);
+end;
+
+procedure TIdSipLocations.Remove(Location: TIdSipLocation);
+begin
+  Self.List.Remove(Location);
 end;
 
 //* TIdSipLocations Private methods ********************************************

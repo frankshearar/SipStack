@@ -44,6 +44,8 @@ type
     procedure TestCount;
     procedure TestIsEmpty;
     procedure TestRemoveFirst;
+    procedure TestRemove;
+    procedure TestRemoveNonExtantLocationDoesNothing;
   end;
 
   TLocatorTest = class(TTestCaseSip)
@@ -344,7 +346,56 @@ begin
   Self.Locs.AddLocation(TcpTransport, SecondAddress, 5060);
 
   Self.Locs.RemoveFirst;
+
+  CheckEquals(1, Self.Locs.Count, 'No location removed');
   CheckEquals(SecondAddress, Self.Locs.First.IPAddress, 'Wrong location removed');
+end;
+
+procedure TestTIdSipLocations.TestRemove;
+const
+  FirstAddress  = '0.0.0.1';
+  SecondAddress = '0.0.0.2';
+begin
+  Self.Locs.AddLocation(TcpTransport, FirstAddress,  5060);
+  Self.Locs.AddLocation(TcpTransport, SecondAddress, 5060);
+
+  Self.Locs.Remove(Self.Locs[1]);
+
+  CheckEquals(1, Self.Locs.Count, 'No location removed');
+  CheckEquals(FirstAddress, Self.Locs.First.IPAddress, 'Wrong location removed');
+
+  Self.Locs.AddLocation(TcpTransport, SecondAddress, 5060);
+  Self.Locs.Remove(Self.Locs.First);
+
+  CheckEquals(1, Self.Locs.Count, 'No location removed (#2)');
+  CheckEquals(SecondAddress, Self.Locs.First.IPAddress, 'Wrong location removed (#2)');
+end;
+
+procedure TestTIdSipLocations.TestRemoveNonExtantLocationDoesNothing;
+const
+  FirstAddress  = '0.0.0.1';
+  SecondAddress = '0.0.0.2';
+var
+  Location:      TIdSipLocation;
+  OriginalCount: Integer;
+begin
+  Self.Locs.AddLocation(TcpTransport, FirstAddress,  5060);
+  Self.Locs.AddLocation(TcpTransport, SecondAddress, 5060);
+  OriginalCount := Self.Locs.Count;
+
+  Location := TIdSipLocation.Create('TCP', '127.0.0.1', 5060);
+  try
+    // Show that trying to remove a location not in the list of locations does
+    // nothing.
+
+    Self.Locs.Remove(Location);
+
+    CheckEquals(OriginalCount, Self.Locs.Count, 'A location was removed');
+    CheckEquals(FirstAddress,  Self.Locs.First.IPAddress, '1st location removed');
+    CheckEquals(SecondAddress, Self.Locs[1].IPAddress, '2nd location removed');
+  finally
+    Location.Free;
+  end;
 end;
 
 //******************************************************************************
