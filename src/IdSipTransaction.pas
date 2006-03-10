@@ -1700,8 +1700,9 @@ end;
 
 procedure TIdSipServerInviteTransaction.SendResponse(R: TIdSipResponse);
 begin
-  Self.TrySendResponse(R);
   if (Self.State = itsProceeding) then begin
+    Self.TrySendResponse(R);
+
     case (R.StatusCode div 100) of
       1:    Self.ChangeToProceeding;
       2:    Self.ChangeToTerminated(false);
@@ -1828,14 +1829,14 @@ end;
 procedure TIdSipServerNonInviteTransaction.SendResponse(R: TIdSipResponse);
 begin
   if (Self.State in [itsTrying, itsProceeding]) then begin
+    Self.TrySendResponse(R);
+      
     if R.IsFinal then
       Self.ChangeToCompleted
     else begin
       Self.LastResponseSent.Assign(R);
       Self.ChangeToProceeding;
     end;
-
-    Self.TrySendResponse(R);
   end;
 end;
 
