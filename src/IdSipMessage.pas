@@ -9491,15 +9491,8 @@ begin
 end;
 
 function TIdSipResponseList.Contains(Response: TIdSipResponse): Boolean;
-var
-  I: Integer;
 begin
-  Result := false;
-  I := 0;
-  while not Result and (I < Self.Count) do begin
-    Result := Self[I].Equals(Response);
-    Inc(I);
-  end;
+  Result := Self.IndexOf(Response) <> ItemNotFoundIndex;
 end;
 
 function TIdSipResponseList.Count: Integer;
