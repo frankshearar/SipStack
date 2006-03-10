@@ -428,9 +428,9 @@ type
     procedure TestTransportErrorInTryingState;
   end;
 
-  TestTIdSipResponseLocationList = class(TTestCase)
+  TestTIdSipResponseLocationsList = class(TTestCase)
   private
-    List:      TIdSipResponseLocationList;
+    List:      TIdSipResponseLocationsList;
     Locations: TIdSipLocations;
     Response:  TIdSipResponse;
   public
@@ -538,7 +538,7 @@ begin
   Result.AddTest(TestTIdSipServerNonInviteTransaction.Suite);
   Result.AddTest(TestTIdSipClientInviteTransaction.Suite);
   Result.AddTest(TestTIdSipClientNonInviteTransaction.Suite);
-  Result.AddTest(TestTIdSipResponseLocationList.Suite);
+  Result.AddTest(TestTIdSipResponseLocationsList.Suite);
   Result.AddTest(TestTIdSipTransactionDispatcherListenerReceiveRequestMethod.Suite);
   Result.AddTest(TestTIdSipTransactionDispatcherListenerReceiveResponseMethod.Suite);
   Result.AddTest(TestTIdSipTransactionListenerFailMethod.Suite);
@@ -4889,15 +4889,15 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipResponseLocationList                                             *
+//* TestTIdSipResponseLocationsList                                             *
 //******************************************************************************
-//* TestTIdSipResponseLocationList Public methods ******************************
+//* TestTIdSipResponseLocationsList Public methods ******************************
 
-procedure TestTIdSipResponseLocationList.SetUp;
+procedure TestTIdSipResponseLocationsList.SetUp;
 begin
   inherited SetUp;
 
-  Self.List      := TIdSipResponseLocationList.Create;
+  Self.List      := TIdSipResponseLocationsList.Create;
   Self.Locations := TIdSipLocations.Create;
   Self.Response  := TIdSipTestResources.CreateBasicResponse;
 
@@ -4905,7 +4905,7 @@ begin
   Self.Locations.AddLocation('TCP', '127.0.0.1', 5060);
 end;
 
-procedure TestTIdSipResponseLocationList.TearDown;
+procedure TestTIdSipResponseLocationsList.TearDown;
 begin
   Self.List.Free;
   Self.Locations.Free;
@@ -4914,9 +4914,9 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdSipResponseLocationList Published methods ***************************
+//* TestTIdSipResponseLocationsList Published methods ***************************
 
-procedure TestTIdSipResponseLocationList.TestAddAndLocationsFor;
+procedure TestTIdSipResponseLocationsList.TestAddAndLocationsFor;
 var
   I:      Integer;
   RepLoc: TIdSipLocations;
@@ -4940,7 +4940,7 @@ begin
                 IntToStr(I) + 'th location differs');
 end;
 
-procedure TestTIdSipResponseLocationList.TestContains;
+procedure TestTIdSipResponseLocationsList.TestContains;
 begin
   Check(not Self.List.Contains(Self.Response),
         'Empty list');
@@ -4950,7 +4950,7 @@ begin
         'But we added the Response');
 end;
 
-procedure TestTIdSipResponseLocationList.TestLocationsForReturnsMutableList;
+procedure TestTIdSipResponseLocationsList.TestLocationsForReturnsMutableList;
 var
   OldCount: Integer;
   RepLoc:   TIdSipLocations;
