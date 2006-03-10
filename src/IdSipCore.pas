@@ -3595,7 +3595,7 @@ begin
     Self.UA.SendRequest(ActualRequest, Target);
 
     if not Self.TargetLocations.IsEmpty then
-      Self.TargetLocations.RemoveFirst;
+      Self.TargetLocations.Remove(Target);
   finally
     ActualRequest.Free;
   end;
