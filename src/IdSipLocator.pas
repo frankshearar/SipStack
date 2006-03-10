@@ -71,14 +71,14 @@ type
   private
     function GetLocation(Index: Integer): TIdSipLocation;
   public
-    procedure AddLocationsFromNames(const Transport: String;
-                                    Port: Cardinal;
-                                    Names: TIdDomainNameRecords);
-    procedure AddLocationsFromSRVs(SRV: TIdSrvRecords);
     procedure AddLocation(Location: TIdSipLocation); overload;
     procedure AddLocation(const Transport: String;
                           const Address: String;
                           Port: Cardinal); overload;
+    procedure AddLocationsFromNames(const Transport: String;
+                                    Port: Cardinal;
+                                    Names: TIdDomainNameRecords);
+    procedure AddLocationsFromSRVs(SRV: TIdSrvRecords);
     function  First: TIdSipLocation;
     procedure RemoveFirst;
 
@@ -210,6 +210,21 @@ end;
 //******************************************************************************
 //* TIdSipLocations Public methods *********************************************
 
+procedure TIdSipLocations.AddLocation(Location: TIdSipLocation);
+begin
+  Self.List.Add(Location.Copy);
+end;
+
+procedure TIdSipLocations.AddLocation(const Transport: String;
+                                      const Address: String;
+                                      Port: Cardinal);
+var
+  NewLocation: TIdSipLocation;
+begin
+  NewLocation := TIdSipLocation.Create(Transport, Address, Port);
+  Self.List.Add(NewLocation);
+end;
+
 procedure TIdSipLocations.AddLocationsFromNames(const Transport: String;
                                                 Port: Cardinal;
                                                 Names: TIdDomainNameRecords);
@@ -229,21 +244,6 @@ begin
       Self.AddLocation(Srv[I].SipTransport,
                        Srv[I].NameRecords[J].IPAddress,
                        Srv[I].Port);
-end;
-
-procedure TIdSipLocations.AddLocation(Location: TIdSipLocation);
-begin
-  Self.List.Add(Location.Copy);
-end;
-
-procedure TIdSipLocations.AddLocation(const Transport: String;
-                                      const Address: String;
-                                      Port: Cardinal);
-var
-  NewLocation: TIdSipLocation;
-begin
-  NewLocation := TIdSipLocation.Create(Transport, Address, Port);
-  Self.List.Add(NewLocation);
 end;
 
 function TIdSipLocations.First: TIdSipLocation;
