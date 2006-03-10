@@ -75,9 +75,10 @@ type
                                     Port: Cardinal;
                                     Names: TIdDomainNameRecords);
     procedure AddLocationsFromSRVs(SRV: TIdSrvRecords);
+    procedure AddLocation(Location: TIdSipLocation); overload;
     procedure AddLocation(const Transport: String;
                           const Address: String;
-                          Port: Cardinal);
+                          Port: Cardinal); overload;
     function  First: TIdSipLocation;
     procedure RemoveFirst;
 
@@ -228,6 +229,11 @@ begin
       Self.AddLocation(Srv[I].SipTransport,
                        Srv[I].NameRecords[J].IPAddress,
                        Srv[I].Port);
+end;
+
+procedure TIdSipLocations.AddLocation(Location: TIdSipLocation);
+begin
+  Self.List.Add(Location.Copy);
 end;
 
 procedure TIdSipLocations.AddLocation(const Transport: String;

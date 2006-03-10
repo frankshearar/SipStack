@@ -262,6 +262,15 @@ begin
   CheckEquals(Address,   Self.Locs.First.IPAddress, 'IPAddress');
   CheckEquals(Port,      Self.Locs.First.Port,      'Port');
   CheckEquals(Transport, Self.Locs.First.Transport, 'Transport');
+
+  Self.Locs.AddLocation(Self.Locs[0]);
+  CheckEquals(2, Self.Locs.Count, 'Location not added');
+  CheckEquals(Address,   Self.Locs[1].IPAddress, 'IPAddress of 2nd location');
+  CheckEquals(Port,      Self.Locs[1].Port,      'Port of 2nd location');
+  CheckEquals(Transport, Self.Locs[1].Transport, 'Transport of 2nd location');
+
+  Check(Self.Locs[0] <> Self.Locs[1],
+        'Locations added the location, not a COPY of the location');
 end;
 
 procedure TestTIdSipLocations.TestAddLocationsFromNames;
