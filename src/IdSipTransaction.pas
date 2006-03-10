@@ -1545,15 +1545,7 @@ end;
 procedure TIdSipTransaction.TrySendRequest(R: TIdSipRequest;
                                            Dest: TIdSipLocation);
 begin
-  try
-    Self.Dispatcher.SendToTransport(R, Dest);
-  except
-    on E: EIdSipTransport do begin
-      Self.DoOnTransportError(E.SipMessage,
-                              E.Message);
-      raise;
-    end;
-  end;
+  Self.Dispatcher.SendToTransport(R, Dest);
 end;
 
 //******************************************************************************
@@ -2117,6 +2109,9 @@ end;
 procedure TIdSipClientNonInviteTransaction.ReceiveResponse(R: TIdSipResponse;
                                                            T: TIdSipTransport);
 begin
+  if (Self.State = itsTerminated) then
+    Exit;
+
   if (Self.State in [itsTrying, itsProceeding]) then begin
     if R.IsFinal then
       Self.ChangeToCompleted(R, T)
