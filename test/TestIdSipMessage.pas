@@ -309,6 +309,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAddAndCount;
+    procedure TestContains;
     procedure TestDefaultProperty;
     procedure TestDelete;
     procedure TestFirst;
@@ -4691,6 +4692,32 @@ begin
 
     Self.List.AddCopy(Response);
     CheckEquals(3, Self.List.Count, 'Three responses');
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipResponseList.TestContains;
+var
+  Copy:     TIdSipResponse;
+  Response: TIdSipResponse;
+begin
+  Response := TIdSipResponse.Create;
+  try
+    Check(not Self.List.Contains(Response),
+          'Empty list should contain no responses');
+
+    Self.List.AddCopy(Response);
+    Check(Self.List.Contains(Response),
+          'After adding the response to the list');
+
+    Copy := Response.Copy as TIdSipResponse;
+    try
+      Check(Self.List.Contains(Copy),
+            'The list should use equality, not identity');
+    finally
+      Copy.Free;
+    end;
   finally
     Response.Free;
   end;

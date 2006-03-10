@@ -1604,6 +1604,7 @@ type
     destructor  Destroy; override;
 
     procedure AddCopy(Response: TIdSipResponse);
+    function  Contains(Response: TIdSipResponse): Boolean;
     function  Count: Integer;
     procedure Delete(Index: Integer);
     function  First: TIdSipResponse;
@@ -9484,6 +9485,18 @@ begin
       Self.List.Remove(Copy)
     else
       Copy.Free;
+  end;
+end;
+
+function TIdSipResponseList.Contains(Response: TIdSipResponse): Boolean;
+var
+  I: Integer;
+begin
+  Result := false;
+  I := 0;
+  while not Result and (I < Self.Count) do begin
+    Result := Self[I].Equals(Response);
+    Inc(I);
   end;
 end;
 
