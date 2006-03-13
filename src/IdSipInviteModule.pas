@@ -2521,7 +2521,7 @@ begin
 
     // We don't listen to the new transaction because we assume the BYE
     // succeeds immediately.
-    Self.SendRequest(Bye, false);
+    Self.SendRequest(Bye);
   finally
     Bye.Free;
   end;

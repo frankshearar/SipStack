@@ -635,8 +635,7 @@ type
     function  ReceiveRedirectionResponse(Response: TIdSipResponse;
                                          UsingSecureTransport: Boolean): TIdSipActionResult; virtual;
     function  ReceiveServerFailureResponse(Response: TIdSipResponse): TIdSipActionResult; virtual;
-    procedure SendRequest(Request: TIdSipRequest;
-                          TryAgain: Boolean = true); virtual;
+    procedure SendRequest(Request: TIdSipRequest); virtual;
     procedure SendResponse(Response: TIdSipResponse); virtual;
     procedure SetResult(Value: TIdSipActionResult);
   public
@@ -3260,7 +3259,7 @@ var
   FailReason: String;
   NewAttempt: TIdSipRequest;
 begin
-  // You tried to send a request. If failed. The UA core invokes this method to
+  // You tried to send a request. It failed. The UA core invokes this method to
   // try the next possible location.
 
   if Msg.IsRequest then begin
@@ -3493,10 +3492,9 @@ begin
   Result := arFailure;
 end;
 
-procedure TIdSipAction.SendRequest(Request: TIdSipRequest;
-                                   TryAgain: Boolean = true);
+procedure TIdSipAction.SendRequest(Request: TIdSipRequest);
 var
-  FailReason:      String;
+  FailReason: String;
 begin
   if (Self.NonceCount = 0) then
     Inc(Self.NonceCount);

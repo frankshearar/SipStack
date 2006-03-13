@@ -325,8 +325,7 @@ type
                            Bindings: TIdSipContacts); overload;
     procedure RegisterWith(Registrar: TIdSipUri;
                            Contact: TIdSipContactHeader); overload;
-    procedure SendRequest(Request: TIdSipRequest;
-                          TryAgain: Boolean = true); overload; override;
+    procedure SendRequest(Request: TIdSipRequest); overload; override;
     procedure Unregister(Registrar: TIdSipUri);
   public
     destructor Destroy; override;
@@ -1450,12 +1449,11 @@ begin
   end;
 end;
 
-procedure TIdSipOutboundRegisterBase.SendRequest(Request: TIdSipRequest;
-                                                 TryAgain: Boolean = true);
+procedure TIdSipOutboundRegisterBase.SendRequest(Request: TIdSipRequest);
 begin
   Self.InitialRequest.Assign(Request);
 
-  inherited SendRequest(Request, TryAgain);
+  inherited SendRequest(Request);
 end;
 
 procedure TIdSipOutboundRegisterBase.Unregister(Registrar: TIdSipUri);
