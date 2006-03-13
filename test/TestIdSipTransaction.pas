@@ -3282,10 +3282,6 @@ begin
   Self.Response.StatusCode := SIPMultipleChoices;
 
   Self.Tran.SendResponse(Self.Response);
-  Self.MockTransport.FireOnException(Self.LastSentResponse,
-                                     EIdConnectException,
-                                     '10061',
-                                     'Connection refused');
 
   CheckEquals(Transaction(itsCompleted),
               Transaction(Self.Tran.State),
