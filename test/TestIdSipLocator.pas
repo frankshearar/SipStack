@@ -40,6 +40,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAddLocation;
+    procedure TestAddLocations;
     procedure TestAddLocationsFromNames;
     procedure TestCount;
     procedure TestIsEmpty;
@@ -273,6 +274,31 @@ begin
 
   Check(Self.Locs[0] <> Self.Locs[1],
         'Locations added the location, not a COPY of the location');
+end;
+
+procedure TestTIdSipLocations.TestAddLocations;
+var
+  I:              Integer;
+  OtherLocations: TIdSipLocations;
+begin
+  OtherLocations := TIdSipLocations.Create;
+  try
+    OtherLocations.AddLocation('UDP',  '127.0.0.1', 5060);
+    OtherLocations.AddLocation('TCP',  '127.0.0.1', 5060);
+    OtherLocations.AddLocation('SCTP', '127.0.0.1', 5060);
+
+    Self.Locs.AddLocations(OtherLocations);
+    CheckEquals(OtherLocations.Count,
+                Self.Locs.Count,
+                'Not all locations added');
+
+    for I := 0 to OtherLocations.Count - 1 do
+      CheckEquals(OtherLocations[I].AsString,
+                  Self.Locs[I].AsString,
+                  IntToStr(I) + 'th location');            
+  finally
+    OtherLocations.Free;
+  end;
 end;
 
 procedure TestTIdSipLocations.TestAddLocationsFromNames;

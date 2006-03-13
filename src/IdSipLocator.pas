@@ -75,6 +75,7 @@ type
     procedure AddLocation(const Transport: String;
                           const Address: String;
                           Port: Cardinal); overload;
+    procedure AddLocations(Locations: TIdSipLocations);
     procedure AddLocationsFromNames(const Transport: String;
                                     Port: Cardinal;
                                     Names: TIdDomainNameRecords);
@@ -224,6 +225,14 @@ var
 begin
   NewLocation := TIdSipLocation.Create(Transport, Address, Port);
   Self.List.Add(NewLocation);
+end;
+
+procedure TIdSipLocations.AddLocations(Locations: TIdSipLocations);
+var
+  I: Integer;
+begin
+  for I := 0 to Locations.Count - 1 do
+    Self.AddLocation(Locations[I]);
 end;
 
 procedure TIdSipLocations.AddLocationsFromNames(const Transport: String;
