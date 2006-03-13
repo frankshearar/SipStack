@@ -154,6 +154,7 @@ type
     procedure TestCompleteNetworkFailure;
     procedure TestNetworkFailureTriesAlternateDestinations;
     procedure TestNormalOperation;
+    procedure TestTransactionsWontRelookupDnsForRetransmittedResponses;
     procedure TestTransactionsWontRelookupDns;
   end;
 
@@ -211,6 +212,7 @@ type
     Destination:           TIdSipLocation;
     FailMsg:               String;
     MockDispatcher:        TIdSipMockTransactionDispatcher;
+    MockLocator:           TIdSipMockLocator;
     Request:               TIdSipRequest;
     Response:              TIdSipResponse;
     Tran:                  TIdSipTransaction;
@@ -1735,6 +1737,7 @@ end;
 procedure TestLocation.TestNetworkFailureTriesAlternateDestinations;
 var
   DnsLookupCount: Cardinal;
+  I:              Integer;
   Tran:           TIdSipTransaction;
 begin
   // The transaction should try send the response to all the IPs returned by
@@ -1742,14 +1745,15 @@ begin
 
   Self.L.AddA('localhost', '127.0.0.2');
 
-  Self.TcpTransport.FailWith := EIdSipTransport;
-
   Tran := Self.D.AddServerTransaction(Self.Request, Self.TcpTransport);
 
   DnsLookupCount := Self.L.LookupCount;
   Self.MarkSentResponseCount;
 
-  Tran.SendResponse(Self.Response);
+  for I := 0 to Self.L.NameRecords.Count - 1 do begin
+    Tran.SendResponse(Self.Response);
+    Tran.DoOnTransportError(Self.Response, 'Connection refused');
+  end;
 
   CheckEquals(Self.RequestCount + Cardinal(Self.L.NameRecords.Count),
               Self.TcpTransport.SentResponseCount,
@@ -1776,21 +1780,45 @@ begin
   CheckEquals(DnsLookupCount + 1, Self.L.LookupCount, 'DNS lookups');
 end;
 
-procedure TestLocation.TestTransactionsWontRelookupDns;
+procedure TestLocation.TestTransactionsWontRelookupDnsForRetransmittedResponses;
 var
   DnsLookupCount: Cardinal;
   Tran:           TIdSipTransaction;
 begin
+  // When a transaction retransmits a response, don't issue a fresh DNS query,
+  // in the interests of reducing network congestion.
   Tran := Self.D.AddServerTransaction(Self.Request, Self.MockTransport);
 
   DnsLookupCount := Self.L.LookupCount;
 
   Self.Response.StatusCode := SIPTrying;
   Tran.SendResponse(Self.Response);
+  Tran.SendResponse(Self.Response);
+
+  CheckEquals(DnsLookupCount + 1,
+              Self.L.LookupCount,
+              'Transaction used fresh DNS queries for retransmitted response');
+end;
+
+procedure TestLocation.TestTransactionsWontRelookupDns;
+var
+  DnsLookupCount: Cardinal;
+  Tran:           TIdSipTransaction;
+begin
+  // When a transaction sends a new response, it must make a fresh DNS query.
+  Tran := Self.D.AddServerTransaction(Self.Request, Self.MockTransport);
+
+  DnsLookupCount := Self.L.LookupCount;
+
+  Self.Response.StatusCode := SIPTrying;
+  Tran.SendResponse(Self.Response);
+
   Self.Response.StatusCode := SIPNotFound;
   Tran.SendResponse(Self.Response);
 
-  CheckEquals(DnsLookupCount + 1, Self.L.LookupCount, 'DNS lookups');
+  CheckEquals(DnsLookupCount + 1,
+              Self.L.LookupCount,
+              'Transaction used fresh DNS queries for each response');
 end;
 
 //******************************************************************************
@@ -2366,6 +2394,7 @@ begin
   Self.Response := TIdSipResponse.InResponseTo(Self.Request, SIPOK);
 
   Self.MockDispatcher := TIdSipMockTransactionDispatcher.Create;
+  Self.MockLocator := Self.MockDispatcher.MockLocator;
 
   Self.MockTransport := Self.MockDispatcher.Transport;
   Self.MockTransport.HostName := 'gw1.leo-ix.org';
@@ -2383,7 +2412,7 @@ begin
   Self.TransactionProceeding := false;
   Self.TransactionTerminated := false;
 
-  Self.MockDispatcher.MockLocator.AddA(Self.MockTransport.HostName, '127.0.0.1');
+  Self.MockLocator.AddA(Self.MockTransport.HostName, '127.0.0.1');
 
   Self.FailMsg  := '';
 end;
@@ -3252,14 +3281,17 @@ begin
 
   Self.Response.StatusCode := SIPMultipleChoices;
 
-  Self.MockTransport.FailWith := EIdConnectException;
   Self.Tran.SendResponse(Self.Response);
+  Self.MockTransport.FireOnException(Self.LastSentResponse,
+                                     EIdConnectException,
+                                     '10061',
+                                     'Connection refused');
 
   CheckEquals(Transaction(itsCompleted),
               Transaction(Self.Tran.State),
-              'State - response not simply ignored');
+              'State - response from the TU not simply ignored');
 
-  CheckNoResponseSent('SentResponseCount - response not simply ignored');
+  CheckNoResponseSent('SentResponseCount - response from the TU not simply ignored');
 end;
 
 procedure TestTIdSipServerNonInviteTransaction.TestReceiveFinalResponseFromTUInProceedingState;
@@ -3365,7 +3397,9 @@ begin
   Self.MoveToProceedingState(Self.Tran);
 
   Self.MockTransport.ResetSentResponseCount;
-  Self.Response.StatusCode := SIPTrying;
+  // A different Status-Code to the response in MoveToProceedingState so that
+  // the response isn't merely a retransmission.
+  Self.Response.StatusCode := SIPSessionProgress;
   Self.Tran.SendResponse(Self.Response);
 
   CheckEquals(Transaction(itsProceeding),

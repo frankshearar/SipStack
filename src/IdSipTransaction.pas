@@ -177,7 +177,7 @@ type
     procedure ScheduleEvent(Event: TNotifyEvent;
                             WaitTime: Cardinal;
                             Request: TIdSipMessage);
-    procedure SendToTransport(Request: TIdSipRequest;
+    procedure SendToTransport(Msg: TIdSipMessage;
                               Dest: TIdSipLocation); overload; virtual;
     procedure SendToTransport(Response: TIdSipResponse;
                               Dests: TIdSipLocations); overload; virtual;
@@ -257,7 +257,7 @@ type
 
     procedure AddTransactionListener(const Listener: IIdSipTransactionListener);
     procedure DoOnTransportError(Msg: TIdSipMessage;
-                                 const Reason: String);
+                                 const Reason: String); virtual;
     procedure ExceptionRaised(E: Exception);
     function  IsClient: Boolean; virtual; abstract;
     function  IsInvite: Boolean; virtual; abstract;
@@ -284,13 +284,36 @@ type
 
   TIdSipResponseLocationsList = class;
 
+  // Some notes on sending responses: According to RFC 3261 section 18.2.2 and
+  // RFC 3263 section 5, a response can be sent to several possible locations,
+  // depending on its topmost Via's sent-by.
+  //
+  // TrySendResponse, TrySendResponseTo and DoOnTransportError implement an
+  // asynchronous algorithm to send these responses:
+  // First we store the DNS query results from RFC 3261/3263's algorithms in
+  // TargetLocations. Then when the Transaction-User layer sends a response, we
+  // copy this set of locations to an entry in SentResponses. SentResponses
+  // stores those locations, per response, that have not yet been attempted.
+  // TrySendResponse sends the response to the first location in
+  // TargetLocations, using TrySendResponseTo. Should that attempt fail, the
+  // TransactionDispatcher will try the next location, again using
+  // TrySendResponseTo. If no locations succeed, the transaction fails, and is
+  // terminated.
+  //
+  // This algorithm is the same algorithm as the Transaction-User TIdSipAction
+  // uses to send requests.
   TIdSipServerTransaction = class(TIdSipTransaction)
   private
-    ResponseLocations: TIdSipLocations;
-
-    procedure TrySendResponse(R: TIdSipResponse); virtual;
+    procedure StoreResponseLocations(R: TIdSipResponse);
   protected
+    TargetLocations:  TIdSipLocations;
     LastResponseSent: TIdSipResponse;
+    SentResponses:    TIdSipResponseLocationsList;
+
+    procedure TrySendLastResponse;
+    procedure TrySendResponse(R: TIdSipResponse); virtual;
+    procedure TrySendResponseTo(R: TIdSipResponse;
+                                Dest: TIdSipLocation); virtual;
   public
     constructor Create(Dispatcher: TIdSipTransactionDispatcher;
                        InitialRequest: TIdSipRequest); override;
@@ -311,14 +334,16 @@ type
     procedure ScheduleTimerG;
     procedure ScheduleTimerH;
     procedure ScheduleTimerI;
-    procedure TrySendLastResponse(R: TIdSipRequest);
   protected
     procedure ChangeToCompleted; override;
-    procedure TrySendResponse(R: TIdSipResponse); override;
+    procedure TrySendResponseTo(R: TIdSipResponse;
+                                Dest: TIdSipLocation); override;
   public
     constructor Create(Dispatcher: TIdSipTransactionDispatcher;
                        InitialRequest: TIdSipRequest); override;
 
+    procedure DoOnTransportError(Msg: TIdSipMessage;
+                                 const Reason: String); override;
     procedure FireTimerG;
     procedure FireTimerH;
     procedure FireTimerI;
@@ -334,10 +359,10 @@ type
   TIdSipServerNonInviteTransaction = class(TIdSipServerTransaction)
   private
     procedure ChangeToTrying;
-    procedure TrySendLastResponse(R: TIdSipRequest);
   protected
     procedure ChangeToCompleted; override;
-    procedure TrySendResponse(R: TIdSipResponse); override;
+    procedure TrySendResponseTo(R: TIdSipResponse;
+                                Dest: TIdSipLocation); override;
   public
     constructor Create(Dispatcher: TIdSipTransactionDispatcher;
                        InitialRequest: TIdSipRequest); override;
@@ -832,7 +857,7 @@ begin
     Self.Timer.AddEvent(WaitTime, Event, Request);
 end;
 
-procedure TIdSipTransactionDispatcher.SendToTransport(Request: TIdSipRequest;
+procedure TIdSipTransactionDispatcher.SendToTransport(Msg: TIdSipMessage;
                                                       Dest: TIdSipLocation);
 var
   T: TIdSipTransport;
@@ -840,7 +865,7 @@ begin
   T := Self.FindAppropriateTransport(Dest);
 
   if Assigned(T) then
-    T.Send(Request, Dest)
+    T.Send(Msg, Dest)
   else
     raise Exception.Create('What do we do when the dispatcher can''t find a Transport?');
 end;
@@ -1576,12 +1601,14 @@ begin
   inherited Create(Dispatcher, InitialRequest);
 
   Self.LastResponseSent  := Self.LastResponse;
-  Self.ResponseLocations := TIdSipLocations.Create;
+  Self.SentResponses     := TIdSipResponseLocationsList.Create;
+  Self.TargetLocations   := TIdSipLocations.Create;
 end;
 
 destructor TIdSipServerTransaction.Destroy;
 begin
-  Self.ResponseLocations.Free;
+  Self.TargetLocations.Free;
+  Self.SentResponses.Free;
 
   inherited Destroy;
 end;
@@ -1608,25 +1635,64 @@ end;
 
 procedure TIdSipServerTransaction.SendResponse(R: TIdSipResponse);
 begin
-  inherited SendResponse(R);
 end;
 
-//* TIdSipServerTransaction Public methods *************************************
+//* TIdSipServerTransaction Protected methods **********************************
+
+procedure TIdSipServerTransaction.TrySendLastResponse;
+begin
+  // Since we're effectively retransmitting a response, we need to try send the
+  // response to the locations we'd previously attempted.
+  Self.StoreResponseLocations(Self.LastResponseSent);
+
+  Self.TrySendResponse(Self.LastResponseSent);
+end;
 
 procedure TIdSipServerTransaction.TrySendResponse(R: TIdSipResponse);
+var
+  PossibleLocations: TIdSipLocations;
 begin
-  if Self.ResponseLocations.IsEmpty then
-    Self.Dispatcher.FindServersFor(R, Self.ResponseLocations);
+  if Self.TargetLocations.IsEmpty then
+    Self.Dispatcher.FindServersFor(R, Self.TargetLocations);
 
-  try
-    Self.Dispatcher.SendToTransport(R, Self.ResponseLocations);
-  except
-    on E: EIdSipTransport do begin
-      Self.DoOnTransportError(E.SipMessage,
-                              E.Message);
-      raise;
-    end;
-  end;
+  Self.StoreResponseLocations(R);
+
+  PossibleLocations := Self.SentResponses.LocationsFor(R);
+
+  if PossibleLocations.IsEmpty then begin
+    // The Locator should at the least return a location based on the
+    // Request-URI. Thus this clause should never execute. Still, this
+    // clause protects the code that follows.
+
+    Self.NotifyOfFailure(R, 'No locations for response');
+  end
+  else
+    Self.TrySendResponseTo(R, PossibleLocations.First);
+end;
+
+procedure TIdSipServerTransaction.TrySendResponseTo(R: TIdSipResponse;
+                                                    Dest: TIdSipLocation);
+var
+  Locations: TIdSipLocations;
+begin
+  Self.Dispatcher.SendToTransport(R, Dest);
+
+  Locations := Self.SentResponses.LocationsFor(R);
+
+  if not Locations.IsEmpty then
+    Locations.Remove(Dest);
+end;
+
+//* TIdSipServerTransaction Private methods ************************************
+
+procedure TIdSipServerTransaction.StoreResponseLocations(R: TIdSipResponse);
+var
+  NewLocations: TIdSipLocations;
+begin
+  if Self.SentResponses.Contains(R) then
+    Self.SentResponses.LocationsFor(R).AddLocations(Self.TargetLocations)
+  else
+    Self.SentResponses.Add(R, Self.TargetLocations);
 end;
 
 //******************************************************************************
@@ -1642,6 +1708,27 @@ begin
   Self.ChangeToProceeding;
 end;
 
+procedure TIdSipServerInviteTransaction.DoOnTransportError(Msg: TIdSipMessage;
+                                                           const Reason: String);
+var
+  ResponseLocations: TIdSipLocations;
+begin
+  // You tried to send a response. It failed. The TransactionDispatcher invokes
+  // this method to try the next possible location.
+
+  // A request should NEVER end up here.
+  if Msg.IsRequest then Exit;
+
+  ResponseLocations := Self.SentResponses.LocationsFor(Msg as TIdSipResponse);
+  if not ResponseLocations.IsEmpty then begin
+    Self.TrySendResponseTo(Msg as TIdSipResponse, ResponseLocations.First);
+  end
+  else begin
+    Self.NotifyOfFailure(Msg, 'No location succeeded for response');
+    Self.Terminate(true);
+  end;
+end;
+
 procedure TIdSipServerInviteTransaction.FireTimerG;
 begin
   if not (Self.State = itsCompleted) then Exit;
@@ -1654,7 +1741,7 @@ begin
 
   if (Self.State = itsCompleted)
     and not Self.Dispatcher.WillUseReliableTranport(Self.InitialRequest) then
-    Self.TrySendLastResponse(Self.InitialRequest);
+    Self.TrySendLastResponse;
 
   if (Self.TimerGInterval < Self.Dispatcher.T2Interval) then
     Self.TimerGInterval := 2*Self.TimerGInterval
@@ -1694,11 +1781,11 @@ begin
     Self.ChangeToProceeding(R, T);
   end else begin
     case Self.State of
-      itsProceeding: Self.TrySendLastResponse(R);
+      itsProceeding: Self.TrySendLastResponse;
 
       itsCompleted: begin
         if R.IsInvite then
-          Self.TrySendLastResponse(R)
+          Self.TrySendLastResponse
         else if R.IsAck then
           Self.ChangeToConfirmed(R, T);
       end;
@@ -1708,8 +1795,6 @@ end;
 
 procedure TIdSipServerInviteTransaction.SendResponse(R: TIdSipResponse);
 begin
-  inherited SendResponse(R);
-
   if (Self.State = itsProceeding) then begin
     Self.TrySendResponse(R);
 
@@ -1744,8 +1829,17 @@ begin
   // See the comment in FireTimerG.
   if not Self.LastResponseSent.IsAuthenticationChallenge then
     Self.ScheduleTimerG;
-    
+
   Self.ScheduleTimerH;
+end;
+
+procedure TIdSipServerInviteTransaction.TrySendResponseTo(R: TIdSipResponse;
+                                                          Dest: TIdSipLocation);
+begin
+  if (not R.Equals(Self.LastResponseSent)) then
+    Self.LastResponseSent.Assign(R);
+
+  inherited TrySendResponseTo(R, Dest);
 end;
 
 //* TIdSipServerInviteTransaction Private methods ******************************
@@ -1777,19 +1871,6 @@ begin
   Self.Dispatcher.ScheduleEvent(Self.Dispatcher.OnServerInviteTransactionTimerI,
                                 Self.TimerIInterval,
                                 Self.InitialRequest.Copy);
-end;
-
-procedure TIdSipServerInviteTransaction.TrySendLastResponse(R: TIdSipRequest);
-begin
-  Self.TrySendResponse(Self.LastResponseSent);
-end;
-
-procedure TIdSipServerInviteTransaction.TrySendResponse(R: TIdSipResponse);
-begin
-  if (not R.Equals(Self.LastResponseSent)) then
-    Self.LastResponseSent.Assign(R);
-
-  inherited TrySendResponse(R);
 end;
 
 //******************************************************************************
@@ -1832,17 +1913,15 @@ begin
   end
   else begin
     if (Self.State in [itsCompleted, itsProceeding]) then
-      Self.TrySendLastResponse(R);
+      Self.TrySendLastResponse;
   end;
 end;
 
 procedure TIdSipServerNonInviteTransaction.SendResponse(R: TIdSipResponse);
 begin
-  inherited SendResponse(R);
-
   if (Self.State in [itsTrying, itsProceeding]) then begin
     Self.TrySendResponse(R);
-      
+
     if R.IsFinal then
       Self.ChangeToCompleted
     else begin
@@ -1869,11 +1948,12 @@ begin
                                 Self.InitialRequest.Copy);
 end;
 
-procedure TIdSipServerNonInviteTransaction.TrySendResponse(R: TIdSipResponse);
+procedure TIdSipServerNonInviteTransaction.TrySendResponseTo(R: TIdSipResponse;
+                                                             Dest: TIdSipLocation);
 begin
   Self.LastResponseSent.Assign(R);
 
-  inherited TrySendResponse(R);
+  inherited TrySendResponseTo(R, Dest);
 end;
 
 //* TIdSipServerNonInviteTransaction Private methods ***************************
@@ -1881,19 +1961,6 @@ end;
 procedure TIdSipServerNonInviteTransaction.ChangeToTrying;
 begin
   Self.SetState(itsTrying);
-end;
-
-procedure TIdSipServerNonInviteTransaction.TrySendLastResponse(R: TIdSipRequest);
-var
-  Response: TIdSipResponse;
-begin
-  Response := TIdSipResponse.Create;
-  try
-    Response.Assign(Self.LastResponseSent);
-    Self.TrySendResponse(Response);
-  finally
-    Response.Free;
-  end;
 end;
 
 //******************************************************************************
@@ -2294,10 +2361,9 @@ begin
     Self.Responses.AddCopy(Response);
 
     NewLocations := TIdSipLocations.Create;
-    Self.Locations.Add(NewLocations);
+    NewLocations.AddLocations(Locations);
 
-    for I := 0 to Locations.Count - 1 do
-      NewLocations.AddLocation(Locations[I]);
+    Self.Locations.Add(NewLocations);
   except
     raise;
   end;
