@@ -1727,8 +1727,6 @@ end;
 //* TIdSipServerTransaction Private methods ************************************
 
 procedure TIdSipServerTransaction.StoreResponseLocations(R: TIdSipResponse);
-var
-  NewLocations: TIdSipLocations;
 begin
   if Self.SentResponses.Contains(R) then
     Self.SentResponses.LocationsFor(R).AddLocations(Self.TargetLocations)
@@ -2396,7 +2394,6 @@ end;
 procedure TIdSipResponseLocationsList.Add(Response: TIdSipResponse;
                                          Locations: TIdSipLocations);
 var
-  I:            Integer;
   NewLocations: TIdSipLocations;
 begin
   try
