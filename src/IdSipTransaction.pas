@@ -57,6 +57,7 @@ type
   end;
 
   TIdSipTransactionProc = procedure(Tran: TIdSipTransaction) of object;
+  TIdSipResponseLocationsList = class;
 
   // I represent the single connection point between the transport layer and the
   // transaction layer. I manage transactions, dispatch messages to the
@@ -70,16 +71,17 @@ type
                                       IIdSipTransactionListener,
                                       IIdSipTransportListener)
   private
-    fLocator:        TIdSipAbstractLocator;
-    fT1Interval:     Cardinal;
-    fT2Interval:     Cardinal;
-    fT4Interval:     Cardinal;
-    fTimer:          TIdTimerQueue;
-    MsgListeners:    TIdNotificationList;
-    fTransports:     TIdSipTransports;
-    TransportLock:   TCriticalSection;
-    Transactions:    TObjectList;
-    TransactionLock: TCriticalSection;
+    fLocator:                 TIdSipAbstractLocator;
+    fT1Interval:              Cardinal;
+    fT2Interval:              Cardinal;
+    fT4Interval:              Cardinal;
+    fTimer:                   TIdTimerQueue;
+    MsgListeners:             TIdNotificationList;
+    fTransports:              TIdSipTransports;
+    TransportLock:            TCriticalSection;
+    TransactionlessResponses: TIdSipResponseLocationsList;
+    Transactions:             TObjectList;
+    TransactionLock:          TCriticalSection;
 
     procedure ClientInviteTransactionTimerA(Tran: TIdSipTransaction);
     procedure ClientInviteTransactionTimerB(Tran: TIdSipTransaction);
@@ -105,7 +107,7 @@ type
     function  TransportAt(Index: Cardinal): TIdSipTransport;
   protected
     function  FindAppropriateTransport(Dest: TIdSipLocation): TIdSipTransport;
-    procedure NotifyTransportOfException(FailedMessage: TIdSipMessage;
+    procedure NotifyOfTransportException(FailedMessage: TIdSipMessage;
                                          E: Exception;
                                          const Reason: String);
     procedure NotifyOfException(FailedMessage: TIdSipMessage;
@@ -281,8 +283,6 @@ type
     property LastResponse:       TIdSipResponse              read fLastResponse;
     property State:              TIdSipTransactionState      read fState;
   end;
-
-  TIdSipResponseLocationsList = class;
 
   // Some notes on sending responses: According to RFC 3261 section 18.2.2 and
   // RFC 3263 section 5, a response can be sent to several possible locations,
@@ -589,6 +589,10 @@ begin
   Self.fTransports   := TIdSipTransports.Create;
   Self.TransportLock := TCriticalSection.Create;
 
+  // To hold state on those responses that do not attach to transactions (i.e.,
+  // retransmissions of 200 OKs to INVITEs).
+  Self.TransactionlessResponses := TIdSipResponseLocationsList.Create;
+
   Self.Transactions    := TObjectList.Create(true);
   Self.TransactionLock := TCriticalSection.Create;
 
@@ -606,6 +610,8 @@ begin
     Self.TransactionLock.Release;
   end;
   Self.TransactionLock.Free;
+
+  Self.TransactionlessResponses.Free;
 
   Self.TransportLock.Acquire;
   try
@@ -923,8 +929,9 @@ end;
 
 procedure TIdSipTransactionDispatcher.SendResponse(Response: TIdSipResponse);
 var
-  Destinations: TIdSipLocations;
-  Tran:         TIdSipTransaction;
+  Destinations:       TIdSipLocations;
+  Tran:               TIdSipTransaction;
+  RemainingLocations: TIdSipLocations;
 begin
   Tran := Self.FindTransaction(Response, false);
 
@@ -939,12 +946,24 @@ begin
     // transaction, but the Transaction-User layer resend the OKs until we
     // receive an ACK (cf. RFC 3261, section 13.3.1.4).
 
-    Destinations := TIdSipLocations.Create;
-    try
-      Self.Locator.FindServersFor(Response, Destinations);
-      Self.SendToTransport(Response, Destinations);
-    finally
-      Destinations.Free;
+    if not Self.TransactionlessResponses.Contains(Response) then begin
+      Destinations := TIdSipLocations.Create;
+      try
+        Self.Locator.FindServersFor(Response, Destinations);
+        Self.TransactionlessResponses.Add(Response, Destinations);
+      finally
+        Destinations.Free;
+      end;
+    end;
+
+    RemainingLocations := Self.TransactionlessResponses.LocationsFor(Response);
+
+    if RemainingLocations.IsEmpty then begin
+      Self.NotifyOfException(Response, nil, '');
+    end
+    else begin
+      Self.SendToTransport(Response, RemainingLocations.First);
+      RemainingLocations.RemoveFirst;
     end;
   end;
 end;
@@ -1000,16 +1019,30 @@ begin
   end;
 end;
 
-procedure TIdSipTransactionDispatcher.NotifyTransportOfException(FailedMessage: TIdSipMessage;
+procedure TIdSipTransactionDispatcher.NotifyOfTransportException(FailedMessage: TIdSipMessage;
                                                                  E: Exception;
                                                                  const Reason: String);
 var
-  Tran: TIdSipTransaction;
+  RemainingLocations: TIdSipLocations;
+  Tran:               TIdSipTransaction;
 begin
   Tran := Self.FindTransaction(FailedMessage, FailedMessage.IsRequest);
 
   if Assigned(Tran) then
     Tran.DoOnTransportError(FailedMessage, Reason)
+  else begin
+    if FailedMessage.IsResponse then begin
+      RemainingLocations := Self.TransactionlessResponses.LocationsFor(FailedMessage as TIdSipResponse);
+
+      if RemainingLocations.IsEmpty then begin
+        Self.NotifyOfException(FailedMessage, E, Reason);
+      end
+      else begin
+        Self.SendToTransport(FailedMessage, RemainingLocations.First);
+        RemainingLocations.RemoveFirst;
+      end;
+    end;
+  end;
 end;
 
 procedure TIdSipTransactionDispatcher.NotifyOfException(FailedMessage: TIdSipMessage;
@@ -1091,7 +1124,7 @@ procedure TIdSipTransactionDispatcher.OnException(FailedMessage: TIdSipMessage;
                                                   E: Exception;
                                                   const Reason: String);
 begin
-  Self.NotifyTransportOfException(FailedMessage, E, Reason);
+  Self.NotifyOfTransportException(FailedMessage, E, Reason);
 end;
 
 procedure TIdSipTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
