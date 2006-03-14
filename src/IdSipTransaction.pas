@@ -1043,7 +1043,7 @@ begin
       if RemainingLocations.IsEmpty then begin
         Self.NotifyOfException(FailedMessage,
                                E,
-                               Format(RSNoLocationSucceeded, [Response.LastHop.SentBy]));
+                               Format(RSNoLocationSucceeded, [FailedMessage.LastHop.SentBy]));
       end
       else begin
         Self.SendToTransport(FailedMessage, RemainingLocations.First);
@@ -1705,7 +1705,7 @@ begin
     // Request-URI. Thus this clause should never execute. Still, this
     // clause protects the code that follows.
 
-    Self.NotifyOfFailure(R, Format(RSNoLocationFound, [Response.LastHop.SentBy]));
+    Self.NotifyOfFailure(R, Format(RSNoLocationFound, [R.LastHop.SentBy]));
   end
   else
     Self.TrySendResponseTo(R, PossibleLocations.First);
@@ -1766,7 +1766,7 @@ begin
   end
   else begin
     Self.NotifyOfFailure(Msg,
-                         Format(RSNoLocationSucceeded, [Response.LastHop.SentBy]));
+                         Format(RSNoLocationSucceeded, [Msg.LastHop.SentBy]));
     Self.Terminate(true);
   end;
 end;
