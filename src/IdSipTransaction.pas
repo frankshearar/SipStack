@@ -571,6 +571,10 @@ const
                         = 'Transactions must only be removed when they''re '
                         + 'terminated';
 
+const
+  RSNoLocationFound     = 'No destination addresses found for URI %s';
+  RSNoLocationSucceeded = 'Attempted message sends to all destination addresses failed for URI %s';
+
 //******************************************************************************
 //* TIdSipTransactionDispatcher                                                *
 //******************************************************************************
@@ -959,7 +963,9 @@ begin
     RemainingLocations := Self.TransactionlessResponses.LocationsFor(Response);
 
     if RemainingLocations.IsEmpty then begin
-      Self.NotifyOfException(Response, nil, '');
+      Self.NotifyOfException(Response,
+                             nil,
+                             Format(RSNoLocationSucceeded, [Response.LastHop.SentBy]));
     end
     else begin
       Self.SendToTransport(Response, RemainingLocations.First);
@@ -1035,7 +1041,9 @@ begin
       RemainingLocations := Self.TransactionlessResponses.LocationsFor(FailedMessage as TIdSipResponse);
 
       if RemainingLocations.IsEmpty then begin
-        Self.NotifyOfException(FailedMessage, E, Reason);
+        Self.NotifyOfException(FailedMessage,
+                               E,
+                               Format(RSNoLocationSucceeded, [Response.LastHop.SentBy]));
       end
       else begin
         Self.SendToTransport(FailedMessage, RemainingLocations.First);
@@ -1697,7 +1705,7 @@ begin
     // Request-URI. Thus this clause should never execute. Still, this
     // clause protects the code that follows.
 
-    Self.NotifyOfFailure(R, 'No locations for response');
+    Self.NotifyOfFailure(R, Format(RSNoLocationFound, [Response.LastHop.SentBy]));
   end
   else
     Self.TrySendResponseTo(R, PossibleLocations.First);
@@ -1757,7 +1765,8 @@ begin
     Self.TrySendResponseTo(Msg as TIdSipResponse, ResponseLocations.First);
   end
   else begin
-    Self.NotifyOfFailure(Msg, 'No location succeeded for response');
+    Self.NotifyOfFailure(Msg,
+                         Format(RSNoLocationSucceeded, [Response.LastHop.SentBy]));
     Self.Terminate(true);
   end;
 end;
