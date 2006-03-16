@@ -1360,6 +1360,16 @@ var
   RemainingLocations: TIdSipLocations;
 begin
   if FailedMessage.IsResponse then begin
+    if not Self.TransactionlessResponses.Contains(FailedMessage as TIdSipResponse) then begin
+      // A response for which the transaction no longer exists. For instance, we
+      // receive an INVITE, send a 180 Ringing, send a 200 OK. The 200 OK send
+      // succeeds, and then the 180 Ringing send fails. By this time the
+      // transaction has terminated. In this case, just forget about the message
+      // send, since the response has no effect on the transaction at this
+      // point.
+      Exit;
+    end;
+
     RemainingLocations := Self.TransactionlessResponses.LocationsFor(FailedMessage as TIdSipResponse);
 
     if RemainingLocations.IsEmpty then begin
