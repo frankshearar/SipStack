@@ -69,7 +69,9 @@ type
     TransportException:     Boolean;
     Username:               String;
 
-    function  CreateAck(Response: TIdSipResponse): TIdSipRequest;
+    function  CreateAck(Response: TIdSipResponse): TIdSipRequest; overload;
+    function  CreateAck(Request: TIdSipRequest;
+                        Response: TIdSipResponse): TIdSipRequest; overload;
     function  CreateMultipleChoices(Request: TIdSipRequest): TIdSipResponse;
     procedure MarkSentRequestCount;
     procedure MoveTranToCompleted(Tran: TIdSipClientTransaction); overload;
@@ -745,6 +747,22 @@ begin
   Result := Self.Invite.AckFor(Response);
 end;
 
+function TestTIdSipTransactionDispatcher.CreateAck(Request: TIdSipRequest;
+                                                   Response: TIdSipResponse): TIdSipRequest;
+var
+  Dlg: TIdSipDialog;
+begin
+  Dlg := TIdSipDialog.CreateInboundDialog(Request, Response, false);
+  try
+    Dlg.ReceiveRequest(Request);
+    Dlg.ReceiveResponse(Response);
+
+    Result := Dlg.CreateAck;
+  finally
+    Dlg.Free;
+  end;
+end;
+
 function TestTIdSipTransactionDispatcher.CreateMultipleChoices(Request: TIdSipRequest): TIdSipResponse;
 var
   UA: TIdSipAbstractCore;
@@ -1146,36 +1164,28 @@ begin
   try
     Self.D.SendResponse(OK);
 
-    Dlg := TIdSipDialog.CreateInboundDialog(Self.Invite, OK, false);
+    Ack := Self.CreateAck(Self.Invite, OK);
     try
-      Dlg.ReceiveRequest(Self.Invite);
-      Dlg.ReceiveResponse(OK);
+      Self.D.SendRequest(Ack, Self.Destination);
 
-      Ack := Dlg.CreateAck;
+      Listener := TIdSipTestTransactionDispatcherListener.Create;
       try
-        Self.D.SendRequest(Ack, Self.Destination);
+        Self.D.AddTransactionDispatcherListener(Listener);
 
-        Listener := TIdSipTestTransactionDispatcherListener.Create;
-        try
-          Self.D.AddTransactionDispatcherListener(Listener);
+        Self.MockTransport.FireOnException(Ack,
+                                           EIdConnectException,
+                                           '10061',
+                                           'Connection refused');
 
-          Self.MockTransport.FireOnException(Ack,
-                                             EIdConnectException,
-                                             '10061',
-                                             'Connection refused');
-
-          Check(Listener.RaisedException,
-                'Dispatcher didn''t pass on up a request sent outside a '
-              + 'transaction');
-        finally
-          Self.D.RemoveTransactionDispatcherListener(Listener);
-          Listener.Free;
-        end;
+        Check(Listener.RaisedException,
+              'Dispatcher didn''t pass on up a request sent outside a '
+            + 'transaction');
       finally
-        Ack.Free;
+        Self.D.RemoveTransactionDispatcherListener(Listener);
+        Listener.Free;
       end;
     finally
-      Dlg.Free;
+      Ack.Free;
     end;
   finally
     OK.Free;
