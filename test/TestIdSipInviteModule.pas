@@ -375,9 +375,6 @@ type
     procedure OnEndedSession(Session: TIdSipSession;
                              ErrorCode: Cardinal;
                              const Reason: String); override;
-    procedure OnEstablishedSession(Session: TIdSipSession;
-                                   const RemoteSessionDescription: String;
-                                   const MimeType: String); override;
     procedure OnInboundCall(UserAgent: TIdSipInviteModule;
                             Session: TIdSipInboundSession);
   public
@@ -390,6 +387,7 @@ type
     procedure TestCancelAfterAccept;
     procedure TestCancelBeforeAccept;
     procedure TestCancelNotifiesSession;
+    procedure TestInterleavedResponseSendTimingFailure;
     procedure TestInviteHasNoOffer;
     procedure TestInviteHasOffer;
     procedure TestIsInbound; override;
@@ -4136,13 +4134,6 @@ begin
   Self.ThreadEvent.SetEvent;
 end;
 
-procedure TestTIdSipInboundSession.OnEstablishedSession(Session: TIdSipSession;
-                                                        const RemoteSessionDescription: String;
-                                                        const MimeType: String);
-begin
-  // By default, do nothing.
-end;
-
 procedure TestTIdSipInboundSession.OnInboundCall(UserAgent: TIdSipInviteModule;
                                                  Session: TIdSipInboundSession);
 begin
@@ -4393,6 +4384,36 @@ begin
 
   Check(Self.Core.SessionCount < SessionCount,
         Self.ClassName + ': Session not marked as terminated');
+end;
+
+procedure TestTIdSipInboundSession.TestInterleavedResponseSendTimingFailure;
+var
+  Ack:     TIdSipRequest;
+  OK:      TIdSipResponse;
+  Trying:  TIdSipResponse;
+begin
+  // 1. We receive an INVITE, and automatically send a 100 Trying and a 180
+  //    Ringing. There're two possible locations for the responses.
+  // 2. We accept the call, sending a 200 OK.
+  // 3. The first location fails for the 180 Ringing.
+  // 4. The first 200 OK succeeds, because we receive an ACK.
+  // 5. Result: a successfully established session.
+
+  Self.CreateAction;
+
+  // Set up two destinations for the responses.
+  Self.Locator.NameRecords.Clear;
+  Self.Locator.AddA(Self.Session.InitialRequest.LastHop.SentBy, '127.0.0.1');
+  Self.Locator.AddA(Self.Session.InitialRequest.LastHop.SentBy, '127.0.0.2');
+
+  Self.Session.AcceptCall('', '');
+
+  // Failed 180 Ringing
+  Self.Dispatcher.Transport.FireOnException(Self.SecondLastSentResponse, EIdConnectTimeout, '10051', 'Host not found');
+
+  Self.ReceiveAckWithBody('', '');
+
+  Check(Self.OnEstablishedSessionFired, 'No session established');
 end;
 
 procedure TestTIdSipInboundSession.TestInviteHasNoOffer;
