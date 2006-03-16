@@ -71,6 +71,8 @@ begin
   Self.Masq := TIdSipNatMasquerader.Create;
   Self.Masq.NatAddress := '1.2.3.4';
 
+  Self.Dispatcher.TransportType := UdpTransport;
+
   for I := 0 to Self.Core.Dispatcher.TransportCount - 1 do
     Self.Core.Dispatcher.Transports[I].AddTransportSendingListener(Self.Masq);
 
@@ -239,6 +241,14 @@ end;
 
 procedure TestTIdSipNatMasquerader.TestSentResponseContactHeaders;
 begin
+  // We do this to ensure that the right mock transport gets the message.
+  // See TIdSipMockTransactionDispatcher and note that it has several transports,
+  // and that the result of Transport (and hence of Self.SentResponseCount)
+  // depends on the value of the TransportType property. That's set to UDP in
+  // all the tests, but Self.Invite usually has a TCP transport specified in
+  // its topmost Via header.
+  Self.Invite.LastHop.Transport := Self.Dispatcher.TransportType;
+
   Self.MarkSentResponseCount;
   Self.ReceiveInvite;
 

@@ -466,8 +466,7 @@ type
     procedure TestCallNetworkFailure;
     procedure TestCallRemoteRefusal;
     procedure TestCallSecure;
-    procedure TestCallSipsUriOverTcp;
-    procedure TestCallSipUriOverTls;
+    procedure TestCallSipsUriUsesTls;
     procedure TestCallWithGruu;
     procedure TestCallWithOffer;
     procedure TestCallWithoutOffer;
@@ -696,18 +695,13 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipInviteModule unit tests');
 //  Result.AddTest(TestDebug.Suite);
-{
   Result.AddTest(TestTIdSipInviteModule.Suite);
-}
   Result.AddTest(TestTIdSipInboundInvite.Suite);
-{
   Result.AddTest(TestTIdSipOutboundInitialInvite.Suite);
   Result.AddTest(TestTIdSipOutboundRedirectedInvite.Suite);
   Result.AddTest(TestTIdSipOutboundReInvite.Suite);
   Result.AddTest(TestTIdSipOutboundReplacingInvite.Suite);
-}
   Result.AddTest(TestTIdSipInboundSession.Suite);
-{
   Result.AddTest(TestTIdSipOutboundSession.Suite);
 //  Result.AddTest(TestSessionReplacer.Suite);
   Result.AddTest(TestTIdSipInviteModuleOnInboundCallMethod.Suite);
@@ -721,7 +715,6 @@ begin
   Result.AddTest(TestTIdSipSessionModifySessionMethod.Suite);
   Result.AddTest(TestTIdSipProgressedSessionMethod.Suite);
   Result.AddTest(TestTIdSipSessionReferralMethod.Suite);
-}
 end;
 
 //******************************************************************************
@@ -1347,6 +1340,8 @@ begin
 
   Self.Module := Self.Core.ModuleFor(MethodInvite) as TIdSipInviteModule;
 
+  Self.Dispatcher.TransportType := UdpTransport;
+  Self.Invite.LastHop.Transport := Self.Dispatcher.TransportType;
   Ok := TIdSipResponse.InResponseTo(Self.Invite, SIPOK);
   try
     Ok.ToHeader.Tag := Self.Core.NextTag;
@@ -5420,47 +5415,19 @@ begin
   end;
 end;
 
-procedure TestTIdSipOutboundSession.TestCallSipsUriOverTcp;
+procedure TestTIdSipOutboundSession.TestCallSipsUriUsesTls;
 var
   SentInvite: TIdSipRequest;
   Session:    TIdSipSession;
 begin
-  Self.Dispatcher.TransportType := TcpTransport;
+  Self.Dispatcher.TransportType := TlsTransport;
   Self.Destination.Address.Scheme := SipsScheme;
 
   Self.MarkSentRequestCount;
 
   Session := Self.CreateAction as TIdSipSession;
 
-  CheckRequestSent('INVITE wasn''t sent');
-  SentInvite := Self.LastSentRequest;
-
-  Self.ReceiveRinging(SentInvite);
-
-  Check(not Session.Dialog.IsSecure, 'Dialog secure when TCP used');
-end;
-
-procedure TestTIdSipOutboundSession.TestCallSipUriOverTls;
-var
-  Response: TIdSipResponse;
-  Session:  TIdSipSession;
-begin
-  Self.Dispatcher.TransportType := TcpTransport;
-
-  Session := Self.CreateAction as TIdSipSession;
-
-  Response := Self.Core.CreateResponse(Self.LastSentRequest,
-                                       SIPOK);
-  try
-    Response.FirstContact.Address.Scheme := SipsScheme;
-    Self.MarkSentAckCount;
-    Self.ReceiveResponse(Response);
-    CheckAckSent('No ACK sent: ' + Self.FailReason);
-
-    Check(not Session.Dialog.IsSecure, 'Dialog secure when TLS used with a SIP URI');
-  finally
-    Response.Free;
-  end;
+  CheckRequestSent('INVITE wasn''t sent over TLS');
 end;
 
 procedure TestTIdSipOutboundSession.TestCallWithGruu;

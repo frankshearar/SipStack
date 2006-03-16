@@ -796,7 +796,7 @@ class function TIdSipTestResources.CreateBasicRequest: TIdSipRequest;
 begin
   Result := Self.CreateCommonRequest;
   Result.RequestUri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
-  Result.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+  Result.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/UDP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
   Result.ToHeader.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna>;tag=1928301775';
   Result.From.Value := 'Case <sip:case@fried.neurons.org>;tag=1928301774';
   Result.AddHeader(ContactHeaderFull).Value := 'sip:wintermute@tessier-ashpool.co.luna';

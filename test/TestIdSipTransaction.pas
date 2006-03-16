@@ -40,9 +40,9 @@ type
     procedure MarkSentACKCount;
     procedure MarkSentRequestCount;
     procedure MarkSentResponseCount;
-    function  SentAckCount: Cardinal;
-    function  SentRequestCount: Cardinal;
-    function  SentResponseCount: Cardinal;
+    function  SentAckCount: Cardinal; virtual;
+    function  SentRequestCount: Cardinal; virtual;
+    function  SentResponseCount: Cardinal; virtual;
   end;
 
   TestTIdSipTransactionDispatcher = class(TMessageCountingTestCase,
@@ -66,6 +66,7 @@ type
     Response200:            TIdSipResponse;
     Timer:                  TIdDebugTimerQueue;
     TranRequest:            TIdSipRequest;
+    TransportException:     Boolean;
     Username:               String;
 
     function  CreateAck(Response: TIdSipResponse): TIdSipRequest;
@@ -111,6 +112,7 @@ type
     procedure TestDispatcherDoesntGetTransactionRequests;
     procedure TestDispatcherDoesntGetTransactionResponses;
     procedure TestFailedMessageSendNotifiesListeners;
+    procedure TestFailedAckNotifiesListeners;
     procedure TestHandUnmatchedRequestToCore;
     procedure TestHandUnmatchedResponseToCore;
     procedure TestInviteDoesntSendTrying;
@@ -133,6 +135,7 @@ type
     procedure TestSendMessageButNoAppropriateTransport;
     procedure TestSendMessageWithAppropriateTransport;
     procedure TestServerInviteTransactionGetsAck;
+    procedure TestTransactionlessResponseRetransmissionsTryAlternateLocations;
     procedure TestTransactionsCleanedUp;
     procedure TestWillUseReliableTransport;
   end;
@@ -700,6 +703,7 @@ begin
 
   Self.OnReceiveResponseFired := false;
   Self.OnTerminatedFired      := false;
+  Self.TransportException     := false;
   Self.Username               := 'case';
 end;
 
@@ -846,7 +850,7 @@ procedure TestTIdSipTransactionDispatcher.OnTransportException(FailedMessage: TI
                                                                Error: Exception;
                                                                const Reason: String);
 begin
-  // Do nothing.
+  Self.TransportException := true;
 end;
 
 //* TestTIdSipTransactionDispatcher Published methods **************************
@@ -1126,6 +1130,55 @@ begin
   finally
     Self.D.RemoveTransactionDispatcherListener(Listener);
     Listener.Free;
+  end;
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestFailedAckNotifiesListeners;
+var
+  Ack:      TIdSipRequest;
+  Dlg:      TIdSipDialog;
+  Listener: TIdSipTestTransactionDispatcherListener;
+  OK:       TIdSipResponse;
+begin
+  Self.D.AddClientTransaction(Self.Invite);
+
+  OK := TIdSipResponse.InResponseTo(Self.Invite, SIPOK);
+  try
+    Self.D.SendResponse(OK);
+
+    Dlg := TIdSipDialog.CreateInboundDialog(Self.Invite, OK, false);
+    try
+      Dlg.ReceiveRequest(Self.Invite);
+      Dlg.ReceiveResponse(OK);
+
+      Ack := Dlg.CreateAck;
+      try
+        Self.D.SendRequest(Ack, Self.Destination);
+
+        Listener := TIdSipTestTransactionDispatcherListener.Create;
+        try
+          Self.D.AddTransactionDispatcherListener(Listener);
+
+          Self.MockTransport.FireOnException(Ack,
+                                             EIdConnectException,
+                                             '10061',
+                                             'Connection refused');
+
+          Check(Listener.RaisedException,
+                'Dispatcher didn''t pass on up a request sent outside a '
+              + 'transaction');
+        finally
+          Self.D.RemoveTransactionDispatcherListener(Listener);
+          Listener.Free;
+        end;
+      finally
+        Ack.Free;
+      end;
+    finally
+      Dlg.Free;
+    end;
+  finally
+    OK.Free;
   end;
 end;
 
@@ -1642,6 +1695,43 @@ begin
   end;
 end;
 
+procedure TestTIdSipTransactionDispatcher.TestTransactionlessResponseRetransmissionsTryAlternateLocations;
+var
+  I:    Integer;
+  OK:   TIdSipResponse;
+  Tran: TIdSipTransaction;
+begin
+  Tran := Self.D.AddServerTransaction(Self.Invite, Self.MockTransport);
+
+  OK := TIdSipResponse.InResponseTo(Tran.InitialRequest, SIPOK);
+  try
+    OK.LastHop.SentBy := 'some.random.FQDN';
+    Self.Locator.NameRecords.Clear;
+    Self.Locator.AddA(OK.LastHop.SentBy, '127.0.0.1');
+    Self.Locator.AddA(OK.LastHop.SentBy, '127.0.0.2');
+    Self.Locator.AddA(OK.LastHop.SentBy, '127.0.0.3');
+
+    // This terminates the transaction.
+    Self.D.SendResponse(OK);
+
+    Self.MarkSentResponseCount;
+    Self.D.SendResponse(OK);
+    for I := 0 to Self.Locator.NameRecords.Count - 1 do begin
+      Self.MockTransport.FireOnException(OK,
+                                         EIdConnectException,
+                                         '10051',
+                                         'Host not found');
+    end;
+    CheckEquals(Self.ResponseCount + Cardinal(Self.Locator.NameRecords.Count),
+                Self.MockTransport.SentResponseCount,
+                'Number of locations tried');
+    Check(Self.TransportException,
+          'Dispatcher didn''t notify that all locations failed');
+  finally
+    OK.Free;
+  end;
+end;
+
 procedure TestTIdSipTransactionDispatcher.TestTransactionsCleanedUp;
 var
   TranCount: Integer;
@@ -1706,7 +1796,7 @@ begin
   Self.Request  := TIdSipTestResources.CreateBasicRequest;
   Self.Response := TIdSipResponse.InResponseTo(Self.Request, SIPNotFound);
 
-  Self.L.AddSRV(Self.Response.LastHop.SentBy, SrvTcpPrefix,  0, 0, IdPORT_SIP, 'localhost');
+  Self.L.AddSRV(Self.Response.LastHop.SentBy, SrvUdpPrefix,  0, 0, IdPORT_SIP, 'localhost');
   Self.L.AddA('localhost', '127.0.0.1');
 end;
 
@@ -1755,8 +1845,8 @@ begin
     Tran.DoOnTransportError(Self.Response, 'Connection refused');
   end;
 
-  CheckEquals(Self.RequestCount + Cardinal(Self.L.NameRecords.Count),
-              Self.TcpTransport.SentResponseCount,
+  CheckEquals(Self.ResponseCount + Cardinal(Self.L.NameRecords.Count),
+              Self.UdpTransport.SentResponseCount,
               'Number of locations tried');
   CheckEquals(DnsLookupCount + 1,
               Self.L.LookupCount,
@@ -1775,7 +1865,7 @@ begin
 
   Tran.SendResponse(Self.Response);
 
-  Check(Self.ResponseCount < Self.TcpTransport.SentResponseCount,
+  Check(Self.ResponseCount < Self.UdpTransport.SentResponseCount,
         'No response sent');
   CheckEquals(DnsLookupCount + 1, Self.L.LookupCount, 'DNS lookups');
 end;
@@ -2405,7 +2495,7 @@ begin
   // This must differ from the dispatcher's bindings, or we will make hairpin
   // calls when we send INVITEs. That in itself isn't a problem, but for most
   // tests that's not what we want!
-  Self.Destination := TIdSipLocation.Create(TcpTransport, '127.0.0.2', IdPORT_SIP);
+  Self.Destination := TIdSipLocation.Create(UdpTransport, '127.0.0.2', IdPORT_SIP);
 
   Self.TransactionCompleted  := false;
   Self.TransactionFailed     := false;

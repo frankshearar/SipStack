@@ -300,7 +300,7 @@ begin
   Self.Request := TIdSipRequest.Create;
   Self.Request.Method := MethodRegister;
   Self.Request.RequestUri.Uri := 'sip:tessier-ashpool.co.luna';
-  Self.Request.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/TCP proxy.tessier-ashpool.co.luna;branch='
+  Self.Request.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/UDP proxy.tessier-ashpool.co.luna;branch='
                                                + BranchMagicCookie + 'f00L';
   Self.Request.ToHeader.Address.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
   Self.Request.AddHeader(ContactHeaderFull).Value := 'sip:wintermute@talking-head.tessier-ashpool.co.luna';

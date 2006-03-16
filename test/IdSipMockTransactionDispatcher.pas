@@ -28,8 +28,6 @@ type
     destructor  Destroy; override;
 
     procedure AddTransportSendingListener(Listener: IIdSipTransportSendingListener);
-    procedure SendToTransport(Msg: TIdSipMessage;
-                              Dest: TIdSipLocation); override;
     procedure SendToTransport(Response: TIdSipResponse;
                               Dests: TIdSipLocations); override;
 
@@ -102,12 +100,6 @@ var
 begin
   for I := 0 to Self.Transports.Count - 1 do
     Self.Transports[I].AddTransportSendingListener(Listener);
-end;
-
-procedure TIdSipMockTransactionDispatcher.SendToTransport(Msg: TIdSipMessage;
-                                                          Dest: TIdSipLocation);
-begin
-  Self.Transport.Send(Msg, Dest);
 end;
 
 procedure TIdSipMockTransactionDispatcher.SendToTransport(Response: TIdSipResponse;

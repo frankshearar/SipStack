@@ -105,6 +105,9 @@ type
     procedure RemoveTransaction(TerminatedTransaction: TIdSipTransaction);
     function  TransactionAt(Index: Cardinal): TIdSipTransaction;
     function  TransportAt(Index: Cardinal): TIdSipTransport;
+    procedure TryResendMessage(FailedMessage: TIdSipMessage;
+                               E: Exception;
+                               const Reason: String);
   protected
     function  FindAppropriateTransport(Dest: TIdSipLocation): TIdSipTransport;
     procedure NotifyOfTransportException(FailedMessage: TIdSipMessage;
@@ -870,12 +873,21 @@ end;
 procedure TIdSipTransactionDispatcher.SendToTransport(Msg: TIdSipMessage;
                                                       Dest: TIdSipLocation);
 var
-  T: TIdSipTransport;
+  Copy: TIdSipMessage;
+  T:    TIdSipTransport;
 begin
   T := Self.FindAppropriateTransport(Dest);
 
-  if Assigned(T) then
-    T.Send(Msg, Dest)
+  if Assigned(T) then begin
+    // We shield the transaction layer from possible alterations made in the
+    // transport layer (for instance by a TIdSipNatMasquerader).
+    Copy := Msg.Copy;
+    try
+      T.Send(Copy, Dest);
+    finally
+      Copy.Free;
+    end;
+  end
   else
     raise Exception.Create('What do we do when the dispatcher can''t find a Transport?');
 end;
@@ -950,7 +962,13 @@ begin
     // transaction, but the Transaction-User layer resend the OKs until we
     // receive an ACK (cf. RFC 3261, section 13.3.1.4).
 
-    if not Self.TransactionlessResponses.Contains(Response) then begin
+    if Self.TransactionlessResponses.Contains(Response) then begin
+      // We're being asked to resend a response, for instance as part of the
+      // 200 OK retransmissions of a TIdSipInboundInvite.
+      Self.Locator.FindServersFor(Response,
+                                  Self.TransactionlessResponses.LocationsFor(Response));
+    end
+    else begin
       Destinations := TIdSipLocations.Create;
       try
         Self.Locator.FindServersFor(Response, Destinations);
@@ -1029,28 +1047,14 @@ procedure TIdSipTransactionDispatcher.NotifyOfTransportException(FailedMessage: 
                                                                  E: Exception;
                                                                  const Reason: String);
 var
-  RemainingLocations: TIdSipLocations;
-  Tran:               TIdSipTransaction;
+  Tran: TIdSipTransaction;
 begin
   Tran := Self.FindTransaction(FailedMessage, FailedMessage.IsRequest);
 
   if Assigned(Tran) then
     Tran.DoOnTransportError(FailedMessage, Reason)
-  else begin
-    if FailedMessage.IsResponse then begin
-      RemainingLocations := Self.TransactionlessResponses.LocationsFor(FailedMessage as TIdSipResponse);
-
-      if RemainingLocations.IsEmpty then begin
-        Self.NotifyOfException(FailedMessage,
-                               E,
-                               Format(RSNoLocationSucceeded, [FailedMessage.LastHop.SentBy]));
-      end
-      else begin
-        Self.SendToTransport(FailedMessage, RemainingLocations.First);
-        RemainingLocations.RemoveFirst;
-      end;
-    end;
-  end;
+  else
+    Self.TryResendMessage(FailedMessage, E, Reason);
 end;
 
 procedure TIdSipTransactionDispatcher.NotifyOfException(FailedMessage: TIdSipMessage;
@@ -1347,6 +1351,32 @@ end;
 function TIdSipTransactionDispatcher.TransportAt(Index: Cardinal): TIdSipTransport;
 begin
   Result := Self.Transports[Index] as TIdSipTransport;
+end;
+
+procedure TIdSipTransactionDispatcher.TryResendMessage(FailedMessage: TIdSipMessage;
+                                                       E: Exception;
+                                                       const Reason: String);
+var
+  RemainingLocations: TIdSipLocations;
+begin
+  if FailedMessage.IsResponse then begin
+    RemainingLocations := Self.TransactionlessResponses.LocationsFor(FailedMessage as TIdSipResponse);
+
+    if RemainingLocations.IsEmpty then begin
+      Self.NotifyOfException(FailedMessage,
+                             E,
+                             Format(RSNoLocationSucceeded, [FailedMessage.LastHop.SentBy]));
+    end
+    else begin
+      Self.SendToTransport(FailedMessage, RemainingLocations.First);
+      RemainingLocations.RemoveFirst;
+    end;
+  end
+  else begin
+    // A request, like an ACK to a 200 OK we've earlier received. Sending an
+    // ACK happens outside of a transaction!
+    Self.NotifyOfException(FailedMessage, E, Reason);
+  end;
 end;
 
 //******************************************************************************
