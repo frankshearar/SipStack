@@ -912,11 +912,6 @@ begin
                                                     UsingSecureTransport);
 
       Self.NotifyOfInboundCall(Session);
-
-      if Request.HasHeader(ExpiresHeader) then
-        Self.UserAgent.ScheduleEvent(TIdSipInboundInviteExpire,
-                                     Request.Expires.NumericValue,
-                                     Request);
       Result := Session;
     end;
   end;
@@ -2801,6 +2796,13 @@ begin
   Self.RemoteMimeType           := Request.ContentType;
   Self.RemoteParty              := Request.From;
   Self.RemoteSessionDescription := Request.Body;
+
+
+  if Request.HasHeader(ExpiresHeader) then
+    Self.UA.ScheduleEvent(TIdSipInboundInviteExpire,
+                          Request.Expires.NumericValue,
+                          Request,
+                          Self.ID);
 end;
 
 procedure TIdSipInboundSession.OnFailure(InviteAgent: TIdSipInboundInvite);
