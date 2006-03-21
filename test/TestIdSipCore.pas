@@ -411,7 +411,7 @@ type
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
-//  Result.AddTest(TestTIdSipAbstractCore.Suite);
+  Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipActions.Suite);
   Result.AddTest(TestLocation.Suite);
   Result.AddTest(TestTIdSipMessageModule.Suite);
@@ -1281,9 +1281,11 @@ begin
 
   Self.ReceiveInvite;
 
-  CheckEquals(Self.ResponseCount + 2, // Trying + reject
-              Self.SentResponseCount,
-              'No response sent');
+  // You would think that we would check that both a 100 Trying and an error
+  // response would be sent. However, 100 Tryings are sent by
+  // TIdSipInboundInvites, and the UA core rejects the message before that
+  // response would be generated.
+  CheckResponseSent('No response sent');
 
   Response := Self.LastSentResponse;
   CheckEquals(SIPSIPVersionNotSupported,
@@ -1361,7 +1363,7 @@ var
   Dest:   TIdSipLocation;
   Invite: TIdSipRequest;
 begin
-  Dest := TIdSipLocation.Create('TCP', '127.0.0.1', 5060);
+  Dest := TIdSipLocation.Create('TCP', '127.0.0.2', 5060);
   try
     Invite := Self.Core.CreateRequest(MethodInvite, Self.Destination);
     try
@@ -1383,7 +1385,7 @@ var
   Dest:   TIdSipLocation;
   Invite: TIdSipRequest;
 begin
-  Dest := TIdSipLocation.Create('TCP', '127.0.0.1', 5060);
+  Dest := TIdSipLocation.Create('TCP', '127.0.0.2', 5060);
   try
     Invite := Self.Core.CreateRequest(MethodInvite, Self.Destination);
     try
@@ -1401,14 +1403,14 @@ begin
   finally
     Dest.Free;
   end;
-end;  
+end;
 
 procedure TestTIdSipAbstractCore.TestSendRequestUnknownMethod;
 var
   Dest:   TIdSipLocation;
   Invite: TIdSipRequest;
 begin
-  Dest := TIdSipLocation.Create('TCP', '127.0.0.1', 5060);
+  Dest := TIdSipLocation.Create('TCP', '127.0.0.2', 5060);
   try
     Invite := Self.Core.CreateRequest('UNKNOWN', Self.Destination);
     try
@@ -1432,7 +1434,7 @@ var
   Dest:   TIdSipLocation;
   Invite: TIdSipRequest;
 begin
-  Dest := TIdSipLocation.Create('TCP', '127.0.0.1', 5060);
+  Dest := TIdSipLocation.Create('TCP', '127.0.0.2', 5060);
   try
     Invite := Self.Core.CreateRequest(MethodInvite, Self.Destination);
     try
@@ -1459,7 +1461,7 @@ var
   Dest:   TIdSipLocation;
   Invite: TIdSipRequest;
 begin
-  Dest := TIdSipLocation.Create('TCP', '127.0.0.1', 5060);
+  Dest := TIdSipLocation.Create('TCP', '127.0.0.2', 5060);
   try
     Invite := Self.Core.CreateRequest(MethodInvite, Self.Destination);
     try
@@ -1986,7 +1988,7 @@ begin
   // Self.Destination.Address.Host resolves to two name records.
 
   Self.Locator.AddSRV(Self.Destination.Address.Host,
-                      SrvTcpPrefix,
+                      SrvUdpPrefix,
                       0,
                       0,
                       5060,
@@ -2000,6 +2002,7 @@ begin
 
     Self.MarkSentRequestCount;
     Self.CreateAction;
+    CheckRequestSent('No request sent');
     for I := 0 to Locations.Count - 1 do begin
       // This should trigger a resend of the message to a new location.
       Self.Dispatcher.Transport.FireOnException(Self.LastSentRequest,
@@ -2034,6 +2037,9 @@ begin
   Self.Core.Proxy.Uri := ProxyUri;
   Self.Core.HasProxy  := true;
 
+  // Set so LastSentRequest uses the correct transport
+  Self.Dispatcher.TransportType := ProxyTransport;
+
   Self.Locator.AddSRV(ProxyHost, SrvSctpPrefix, 0, 0, 5060, ProxyHost);
   Self.Locator.AddAAAA(ProxyHost, ProxyAAAARecord);
 
@@ -2057,12 +2063,15 @@ const
 var
   RequestUriTransport: String;
 begin
-  RequestUriTransport := Self.Invite.LastHop.Transport;
+  // The transport specified in the INVITE's Request-URI differs from that in
+  // the Route header. We check that the message goes over the transport
+  // specified in the Request-URI header, as per RFC 3261, section 8.1.2
+
+  Self.Destination.Address.Transport := TransportParamTCP;
+  RequestUriTransport                := TcpTransport;  
 
   Self.Core.Proxy.Uri := ProxyUri;
   Self.Core.HasProxy  := true;
-
-  Self.Destination.Address.Transport := TransportParamTCP;
 
   Self.MarkSentRequestCount;
   Self.CreateAction;
@@ -2082,6 +2091,7 @@ var
 begin
   Domain := Self.Destination.Address.Host;
 
+  Self.Dispatcher.TransportType := SctpTransport;  
   // NAPTR record points to SCTP SRV record whose target resolves to the A
   // record.
   Self.Locator.AddNAPTR(Domain, 0, 0, NaptrDefaultFlags, NaptrSctpService, SrvSctpPrefix + Domain);
@@ -2101,6 +2111,7 @@ end;
 
 procedure TestLocation.TestUseTransportParam;
 begin
+  Self.Dispatcher.TransportType := Self.TransportParam;
   Self.Destination.Address.Transport := Self.TransportParam;
 
   Self.MarkSentRequestCount;
