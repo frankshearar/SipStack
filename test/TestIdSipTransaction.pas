@@ -1154,7 +1154,6 @@ end;
 procedure TestTIdSipTransactionDispatcher.TestFailedAckNotifiesListeners;
 var
   Ack:      TIdSipRequest;
-  Dlg:      TIdSipDialog;
   Listener: TIdSipTestTransactionDispatcherListener;
   OK:       TIdSipResponse;
 begin
