@@ -47,7 +47,7 @@ type
 implementation
 
 uses
-  IdSipMessage, SysUtils, TestFramework;
+  IdSipMessage, SysUtils, TestFramework, IdSipCore;
 
 function Suite: ITestSuite;
 begin
@@ -137,15 +137,12 @@ var
   Invite: TIdSipRequest;
   Sdp: TIdSdpPayload;
 begin
-  Self.MarkSentRequestCount;
-  Self.Core.InviteModule.Call(Self.Destination,
-                              Self.DummySdp('127.0.0.1'),
-                              SdpMimeType).Send;
-  Invite := Self.LastSentRequest;
+  Self.Invite.Body := Self.DummySdp('127.0.0.1');
+  Self.Invite.ContentType := SdpMimeType;
 
-  CheckRequestSent('No INVITE sent');
+  Self.Masq.RewriteRequest(Self.Invite);
 
-  Sdp := TIdSdpPayload.CreateFrom(Invite.Body);
+  Sdp := TIdSdpPayload.CreateFrom(Self.Invite.Body);
   try
     Self.CheckAddress(Self.Masq.NatAddress, Sdp);
     Self.CheckAddressType(Self.Masq.AddressType, Sdp);
@@ -153,8 +150,8 @@ begin
     Sdp.Free;
   end;
 
-  CheckEquals(Invite.ContentLength,
-              Length(Invite.Body),
+  CheckEquals(Self.Invite.ContentLength,
+              Length(Self.Invite.Body),
               'Content-Length isn''t correct');
 end;
 
@@ -188,12 +185,10 @@ end;
 
 procedure TestTIdSipNatMasquerader.TestSentRequestContactHeaders;
 begin
-  Self.MarkSentRequestCount;
-  Self.Core.InviteModule.Call(Self.Destination, '', '').Send;
+  Self.Masq.RewriteRequest(Self.Invite);
 
-  CheckRequestSent('No INVITE sent');
   CheckEquals(Self.Masq.NatAddress,
-              Self.LastSentRequest.FirstContact.Address.Host,
+              Self.Invite.FirstContact.Address.Host,
               'Contact''s host not set to the NAT''s address');
 end;
 
@@ -230,16 +225,16 @@ end;
 
 procedure TestTIdSipNatMasquerader.TestSentRequestViaHeader;
 begin
-  Self.MarkSentRequestCount;
-  Self.Core.InviteModule.Call(Self.Destination, '', '').Send;
+  Self.Masq.RewriteRequest(Self.Invite);
 
-  CheckRequestSent('No INVITE sent');
   CheckEquals(Self.Masq.NatAddress,
-              Self.LastSentRequest.LastHop.SentBy,
-              'Via sent-by not sent');
+              Self.Invite.LastHop.SentBy,
+              'Via sent-by not set');
 end;
 
 procedure TestTIdSipNatMasquerader.TestSentResponseContactHeaders;
+var
+  OK: TIdSipResponse;
 begin
   // We do this to ensure that the right mock transport gets the message.
   // See TIdSipMockTransactionDispatcher and note that it has several transports,
@@ -247,15 +242,19 @@ begin
   // depends on the value of the TransportType property. That's set to UDP in
   // all the tests, but Self.Invite usually has a TCP transport specified in
   // its topmost Via header.
+
   Self.Invite.LastHop.Transport := Self.Dispatcher.TransportType;
 
-  Self.MarkSentResponseCount;
-  Self.ReceiveInvite;
+  OK := Self.Core.CreateResponse(Self.Invite, SIPOK);
+  try
+    Self.Masq.RewriteResponse(OK);
 
-  CheckResponseSent('No Trying or Ringing sent');
-  CheckEquals(Self.Masq.NatAddress,
-              Self.LastSentResponse.FirstContact.Address.Host,
-              'Contact''s host not set to the NAT''s address');
+    CheckEquals(Self.Masq.NatAddress,
+                OK.FirstContact.Address.Host,
+                'Contact''s host not set to the NAT''s address');
+  finally
+    OK.Free;
+  end;
 end;
 
 procedure TestTIdSipNatMasquerader.TestSentResponseSdp;
