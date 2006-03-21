@@ -111,7 +111,6 @@ type
     procedure TestDispatchToCorrectSession;
     procedure TestDontReAuthenticate;
     procedure TestInboundCall;
-    procedure TestInviteExpires;
     procedure TestInviteRaceCondition;
     procedure TestMergedRequest;
     procedure TestNewUAHasSensibleFrom;
@@ -1090,27 +1089,6 @@ begin
               'Offer MIME type');
   Check(Self.Core = Self.UserAgentParam,
         'UserAgent param of Session''s InboundCall notification wrong');
-end;
-
-procedure TestTIdSipUserAgent.TestInviteExpires;
-begin
-  Self.Core.AddObserver(Self);
-
-  Self.MarkSentResponseCount;
-
-  Self.Invite.Expires.NumericValue := 50;
-  Self.ReceiveInvite;
-
-  Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
-
-  Self.DebugTimer.TriggerEarliestEvent;
-
-  CheckResponseSent('No response sent');
-  CheckEquals(SIPRequestTerminated,
-              Self.LastSentResponse.StatusCode,
-              'Unexpected response sent');
-
-  CheckEquals(0, Self.Core.SessionCount, 'Expired session not cleaned up');
 end;
 
 procedure TestTIdSipUserAgent.TestInviteRaceCondition;

@@ -388,6 +388,7 @@ type
     procedure TestCancelBeforeAccept;
     procedure TestCancelNotifiesSession;
     procedure TestInterleavedResponseSendTimingFailure;
+    procedure TestInviteExpires;
     procedure TestInviteHasNoOffer;
     procedure TestInviteHasOffer;
     procedure TestIsInbound; override;
@@ -4410,6 +4411,23 @@ begin
   Self.ReceiveAckWithBody('', '');
 
   Check(Self.OnEstablishedSessionFired, 'No session established');
+end;
+
+procedure TestTIdSipInboundSession.TestInviteExpires;
+begin
+  Self.MarkSentResponseCount;
+
+  Self.Invite.Expires.NumericValue := 50;
+  Self.CreateAction;
+
+  Self.DebugTimer.TriggerEarliestEvent;
+
+  CheckResponseSent('No response sent');
+  CheckEquals(SIPRequestTerminated,
+              Self.LastSentResponse.StatusCode,
+              'Unexpected response sent');
+
+  CheckEquals(0, Self.Core.SessionCount, 'Expired session not cleaned up');
 end;
 
 procedure TestTIdSipInboundSession.TestInviteHasNoOffer;
