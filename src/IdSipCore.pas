@@ -1710,7 +1710,7 @@ begin
   else
     Transport := TransportParamUDP;
 
-  if not OutboundRequest.IsAck then begin
+  if not OutboundRequest.IsAck and OutboundRequest.Path.IsEmpty then begin
     OutboundRequest.AddHeader(ViaHeaderFull);
     OutboundRequest.LastHop.SipVersion := SipVersion;
     OutboundRequest.LastHop.Transport  := ParamToTransport(Transport);
