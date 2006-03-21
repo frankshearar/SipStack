@@ -4387,10 +4387,6 @@ begin
 end;
 
 procedure TestTIdSipInboundSession.TestInterleavedResponseSendTimingFailure;
-var
-  Ack:     TIdSipRequest;
-  OK:      TIdSipResponse;
-  Trying:  TIdSipResponse;
 begin
   // 1. We receive an INVITE, and automatically send a 100 Trying and a 180
   //    Ringing. There're two possible locations for the responses.
@@ -5437,16 +5433,13 @@ begin
 end;
 
 procedure TestTIdSipOutboundSession.TestCallSipsUriUsesTls;
-var
-  SentInvite: TIdSipRequest;
-  Session:    TIdSipSession;
 begin
   Self.Dispatcher.TransportType := TlsTransport;
   Self.Destination.Address.Scheme := SipsScheme;
 
   Self.MarkSentRequestCount;
 
-  Session := Self.CreateAction as TIdSipSession;
+  Self.CreateAction;
 
   CheckRequestSent('INVITE wasn''t sent over TLS');
 end;
