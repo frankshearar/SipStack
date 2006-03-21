@@ -18,18 +18,36 @@ uses
 type
   TIdSipMockTransactionDispatcher = class(TIdSipTransactionDispatcher)
   private
+    SentAcks:      TIdSipRequestList;
+    SentRequests:  TIdSipRequestList;
+    SentResponses: TIdSipResponseList;
     fTransportType: String;
 
     function GetDebugTimer: TIdDebugTimerQueue;
     function GetMockLocator: TIdSipMockLocator;
     function GetTransport: TIdSipMockTransport;
+  protected
+    procedure OnReceiveRequest(Request: TIdSipRequest;
+                               Receiver: TIdSipTransport;
+                               Source: TIdSipConnectionBindings); overload; override;
+    procedure OnReceiveResponse(Response: TIdSipResponse;
+                                Receiver: TIdSipTransport;
+                                Source: TIdSipConnectionBindings); overload; override;
   public
     constructor Create; reintroduce;
     destructor  Destroy; override;
 
     procedure AddTransportSendingListener(Listener: IIdSipTransportSendingListener);
+    function  LastAck: TIdSipRequest;
+    function  LastRequest: TIdSipRequest;
+    function  LastResponse: TIdSipResponse;
+    procedure SendToTransport(Msg: TIdSipMessage;
+                              Dest: TIdSipLocation); overload; override;
     procedure SendToTransport(Response: TIdSipResponse;
                               Dests: TIdSipLocations); override;
+    function  SentAckCount: Cardinal;
+    function  SentRequestCount:  Cardinal;
+    function  SentResponseCount: Cardinal;
 
     property DebugTimer:    TIdDebugTimerQueue  read GetDebugTimer;
     property MockLocator:   TIdSipMockLocator   read GetMockLocator;
@@ -58,6 +76,10 @@ var
   SupportedTrans: TStrings;
 begin
   inherited Create(TIdDebugTimerQueue.Create(false), TIdSipMockLocator.Create);
+
+  Self.SentAcks      := TIdSipRequestList.Create;
+  Self.SentRequests  := TIdSipRequestList.Create;
+  Self.SentResponses := TIdSipResponseList.Create;
 
   Self.DebugTimer.TriggerImmediateEvents := true;
 
@@ -91,6 +113,10 @@ begin
   TIdSipTransportRegistry.UnregisterTransportType(TlsTransport);
   TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
 
+  Self.SentResponses.Free;
+  Self.SentRequests.Free;
+  Self.SentAcks.Free;
+
   inherited Destroy;
 end;
 
@@ -102,6 +128,37 @@ begin
     Self.Transports[I].AddTransportSendingListener(Listener);
 end;
 
+function TIdSipMockTransactionDispatcher.LastAck: TIdSipRequest;
+begin
+  Result := Self.SentAcks.Last;
+end;
+
+function TIdSipMockTransactionDispatcher.LastRequest: TIdSipRequest;
+begin
+  Result := Self.SentRequests.Last;
+end;
+
+function TIdSipMockTransactionDispatcher.LastResponse: TIdSipResponse;
+begin
+  Result := Self.SentResponses.Last;
+end;
+
+procedure TIdSipMockTransactionDispatcher.SendToTransport(Msg: TIdSipMessage;
+                                                          Dest: TIdSipLocation);
+begin
+  if Msg.IsResponse then begin
+    Self.SentResponses.AddCopy(Msg as TIdSipResponse);
+  end
+  else begin
+    if Msg.IsAck then
+      Self.SentAcks.AddCopy(Msg as TIdSipRequest)
+    else
+      Self.SentRequests.AddCopy(Msg as TIdSipRequest);
+  end;
+
+  inherited SendToTransport(Msg, Dest);
+end;
+
 procedure TIdSipMockTransactionDispatcher.SendToTransport(Response: TIdSipResponse;
                                                           Dests: TIdSipLocations);
 begin
@@ -109,6 +166,54 @@ begin
     raise Exception.Create(Format(NoDestinationsForResponse, [Response.LastHop.SentBy]));
 
   Self.Transport.Send(Response, Dests[0]);
+end;
+
+function TIdSipMockTransactionDispatcher.SentAckCount: Cardinal;
+var
+  I: Integer;
+begin
+  Result := 0;
+  for I := 0 to Self.TransportCount - 1 do
+    Result := Result + (Self.Transports[I] as TIdSipMockTransport).ACKCount;
+end;
+
+function TIdSipMockTransactionDispatcher.SentRequestCount:  Cardinal;
+var
+  I: Integer;
+begin
+  Result := 0;
+  for I := 0 to Self.TransportCount - 1 do
+    Result := Result + (Self.Transports[I] as TIdSipMockTransport).SentRequestCount;
+end;
+
+function TIdSipMockTransactionDispatcher.SentResponseCount: Cardinal;
+var
+  I: Integer;
+begin
+  Result := 0;
+  for I := 0 to Self.TransportCount - 1 do
+    Result := Result + (Self.Transports[I] as TIdSipMockTransport).SentResponseCount;
+end;
+
+procedure TIdSipMockTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
+                                                           Receiver: TIdSipTransport;
+                                                           Source: TIdSipConnectionBindings);
+begin
+  if Request.IsAck then
+    Self.SentAcks.AddCopy(Request)
+  else
+    Self.SentRequests.AddCopy(Request);
+
+  inherited OnReceiveRequest(Request, Receiver, Source);
+end;
+
+procedure TIdSipMockTransactionDispatcher.OnReceiveResponse(Response: TIdSipResponse;
+                                                            Receiver: TIdSipTransport;
+                                                            Source: TIdSipConnectionBindings);
+begin
+  Self.SentResponses.AddCopy(Response);
+
+  inherited OnReceiveResponse(Response, Receiver, Source);
 end;
 
 //* TIdSipMockTransactionDispatcher Private methods ****************************

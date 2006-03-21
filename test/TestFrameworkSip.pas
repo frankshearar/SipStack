@@ -1091,17 +1091,17 @@ end;
 
 function TTestCaseTU.LastSentAck: TIdSipRequest;
 begin
-  Result := Self.Dispatcher.Transport.LastACK;
+  Result := Self.Dispatcher.LastACK;
 end;
 
 function TTestCaseTU.LastSentRequest: TIdSipRequest;
 begin
-  Result := Self.Dispatcher.Transport.LastRequest;
+  Result := Self.Dispatcher.LastRequest;
 end;
 
 function TTestCaseTU.LastSentResponse: TIdSipResponse;
 begin
-  Result := Self.Dispatcher.Transport.LastResponse;
+  Result := Self.Dispatcher.LastResponse;
 end;
 
 function TTestCaseTU.Locator: TIdSipMockLocator;
@@ -1334,17 +1334,17 @@ end;
 
 function TTestCaseTU.SentAckCount: Cardinal;
 begin
-  Result := Self.Dispatcher.Transport.ACKCount;
+  Result := Self.Dispatcher.SentAckCount;
 end;
 
 function TTestCaseTU.SentRequestCount: Cardinal;
 begin
-  Result := Self.Dispatcher.Transport.SentRequestCount;
+  Result := Self.Dispatcher.SentRequestCount;
 end;
 
 function TTestCaseTU.SentResponseCount: Cardinal;
 begin
-  Result := Self.Dispatcher.Transport.SentResponseCount;
+  Result := Self.Dispatcher.SentResponseCount;
 end;
 
 function TTestCaseTU.SentRequestAt(Index: Integer): TIdSipRequest;
