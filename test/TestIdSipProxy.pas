@@ -22,6 +22,7 @@ type
     Dispatcher:       TIdSipMockTransactionDispatcher;
     Invite:           TIdSipRequest;
     Proxy:            TIdSipProxy;
+    ResponseCount:    Cardinal;
 
     function  CreateAuthorizedRequest(OriginalRequest: TIdSipRequest;
                                       Challenge: TIdSipResponse): TIdSipRequest;
@@ -30,6 +31,9 @@ type
   public
     procedure SetUp; override;
     procedure TearDown; override;
+
+    procedure CheckResponseSent(const Msg: String);
+    procedure MarkSentResponseCount;
   published
     procedure TestAuthorization;
     procedure TestRejectUnauthorizedRequest;
@@ -81,6 +85,16 @@ begin
   inherited TearDown;
 end;
 
+procedure TestTIdSipProxy.CheckResponseSent(const Msg: String);
+begin
+  Check(Self.ResponseCount < Self.Dispatcher.SentResponseCount, Msg);
+end;
+
+procedure TestTIdSipProxy.MarkSentResponseCount;
+begin
+  Self.ResponseCount := Self.Dispatcher.SentResponseCount
+end;
+
 //* TestTIdSipProxy Private methods ********************************************
 
 function TestTIdSipProxy.CreateAuthorizedRequest(OriginalRequest: TIdSipRequest;
@@ -108,28 +122,22 @@ end;
 
 procedure TestTIdSipProxy.TestAuthorization;
 var
-  Response:      TIdSipResponse;
-  ResponseCount: Cardinal;
-  Retry:         TIdSipRequest;
+  Response: TIdSipResponse;
+  Retry:    TIdSipRequest;
 begin
   Self.Proxy.RequireAuthentication := true;
 
-  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+  Self.MarkSentResponseCount;
   Self.SimulateRemoteInvite;
-
-  Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
-        'No response sent');
+  Self.CheckResponseSent('No response sent');
 
   Response := Self.Dispatcher.Transport.LastResponse;
 
   Retry := Self.CreateAuthorizedRequest(Self.Dispatcher.Transport.LastRequest, Response);
   try
-    ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
-
+    Self.MarkSentResponseCount;
     Self.Dispatcher.Transport.FireOnRequest(Retry);
-
-    Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
-          'No response sent after re-attempt');
+    Self.CheckResponseSent('No response sent after re-attempt');
   finally
     Retry.Free;
   end;
@@ -137,18 +145,15 @@ end;
 
 procedure TestTIdSipProxy.TestRejectUnauthorizedRequest;
 var
-  Response:      TIdSipResponse;
-  ResponseCount: Cardinal;
+  Response: TIdSipResponse;
 begin
   Self.Proxy.RequireAuthentication := true;
 
-  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+  Self.MarkSentResponseCount;
   Self.SimulateRemoteInvite;
+  Self.CheckResponseSent('No response sent');
 
-  Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
-        'No response sent');
-
-  Response := Self.Dispatcher.Transport.LastResponse;
+  Response := Self.Dispatcher.LastResponse;
   CheckEquals(SIPProxyAuthenticationRequired,
               Response.StatusCode,
               'Unexpected response');
