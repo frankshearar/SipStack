@@ -139,10 +139,10 @@ type
                           const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport;
-                               Source: TIdSipConnectionBindings); overload;
+                               Source: TIdSipConnectionBindings); overload; virtual;
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Receiver: TIdSipTransport;
-                                Source: TIdSipConnectionBindings); overload;
+                                Source: TIdSipConnectionBindings); overload; virtual;
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure SetLocator(Value: TIdSipAbstractLocator);
