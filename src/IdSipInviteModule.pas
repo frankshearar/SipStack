@@ -122,6 +122,7 @@ type
                    const MimeType: String): TIdSipOutboundSession;
     function  CreateAck(Dialog: TIdSipDialog): TIdSipRequest;
     function  CreateBye(Dialog: TIdSipDialog): TIdSipRequest;
+    function  CreateCancel(Invite: TIdSipRequest): TIdSipRequest;
     function  CreateInvite(Dest: TIdSipAddressHeader;
                            const Body: String;
                            const MimeType: String): TIdSipRequest;
@@ -841,6 +842,12 @@ begin
 
     raise;
   end;
+end;
+
+function TIdSipInviteModule.CreateCancel(Invite: TIdSipRequest): TIdSipRequest;
+begin
+  Result := Invite.CreateCancel;
+  Self.UserAgent.AddLocalHeaders(Invite);
 end;
 
 function TIdSipInviteModule.CreateInvite(Dest: TIdSipAddressHeader;
@@ -1778,7 +1785,7 @@ begin
   Assert(not Self.SentCancel, DoubleCancelSend);
   Self.SentCancel := true;
 
-  Cancel := Self.InitialRequest.CreateCancel;
+  Cancel := Self.Module.CreateCancel(Self.InitialRequest);
   try
     Self.CancelRequest.Assign(Cancel);
   finally
