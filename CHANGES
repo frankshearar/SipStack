@@ -1,3 +1,27 @@
+v0.5.2 (2006/xx/yy)
+* The receipt of messages is now threadsafe. Previously,
+  TIdSipMessageWait objects held references to TIdSipTransports. Now,
+  they hold a copy of the message and a Transport ID (a String), which
+  the TIdSipMessageWait uses to find the appropriate Transport. It
+  does this by consulting a well-known registry -
+  TIdSipTransportRegistry - which now not only tracks what types of
+  transports you may use, but also stores references to all created
+  TIdSipTransports. (The addition and deletion of these references is
+  all accomplished in TIdSipTransport.Create and Destroy.)
+* The Transaction-User and Transaction layers now use asynchronous
+  algorithms to send messages.
+* A failing test (purposefully) added, showing that the stack doesn't
+  currently support hairpinned calls.
+* In the test infrastructure, you no longer have to specify A/AAAA
+  records for hosts used in tests. You can if you want, setting the
+  TIdSipMockLocator's ReturnOnlySpecifiedRecords to true.
+* A major reshuffling of Transport classes: all TCP classes are now in
+  IdSipTcpTransport.pas, UDP classes in IdSipUdpTransport.pas, and so
+  on, and common classes remain in IdSipTransport. That means that
+  units like IdSipTcpClient.pas have been deleted.
+* All appropriate call flow classes (those for INVITE, REGISTER,
+  SUBSCRIBE, REFER) now support redirection.
+
 v0.5.1 (2006/01/31)
 * The stack now supports basic multihoming: having more than one
   non-local IP on the machine running the UA. This code has not been
