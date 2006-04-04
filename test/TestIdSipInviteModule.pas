@@ -125,6 +125,7 @@ type
     procedure TestMatchAckToReInvite;
     procedure TestMatchAckToReInviteWithDifferentCSeq;
     procedure TestMatchAckWithDifferentCSeq;
+    procedure TestMatchInitialInvite;
     procedure TestMethod;
     procedure TestNotifyOfNetworkFailure;
     procedure TestNotifyOfSuccess;
@@ -1717,6 +1718,12 @@ end;
 procedure TestTIdSipInboundInvite.TestMatchAckWithDifferentCSeq;
 begin
   Self.CheckAckWithDifferentCSeq(Self.InviteAction);
+end;
+
+procedure TestTIdSipInboundInvite.TestMatchInitialInvite;
+begin
+  Check(Self.InviteAction.Match(Self.InviteAction.InitialRequest),
+        'InviteAction doesn''t match INVITE');
 end;
 
 procedure TestTIdSipInboundInvite.TestMethod;
@@ -3354,7 +3361,7 @@ begin
   Session := Self.CreateAndEstablishSession;
   Self.ReceiveRemoteReInvite(Session);
 
-  Check(Self.OnModifySessionFired
+  Check(Self.OnModifySessionFired,
         Session.ClassName + ': OnModifySession didn''t fire');
 
   Session.AcceptModify('', '');
