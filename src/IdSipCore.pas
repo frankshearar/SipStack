@@ -215,15 +215,23 @@ type
     property ActionID: String read fActionID write fActionID;
   end;
 
-  // I represent the (possibly deferred) execution of something my Action needs
-  // done. That is, when you invoke my Trigger, I call Action.Send.
-  TIdSipActionSendWait = class(TIdWait)
+  TIdActionWait = class(TIdWait)
   private
     fAction: TIdSipAction;
   public
-    procedure Trigger; override;
-
     property Action: TIdSipAction read fAction write fAction;
+  end;
+
+  // I represent the (possibly deferred) execution of something my Action needs
+  // done. That is, when you invoke my Trigger, I call Action.Send.
+  TIdSipActionSendWait = class(TIdActionWait)
+  public
+    procedure Trigger; override;
+  end;
+
+  TIdSipActionTerminateWait = class(TIdActionWait)
+  public
+    procedure Trigger; override;
   end;
 
   TIdSipActionsWaitClass = class of TIdSipActionsWait;
@@ -1533,6 +1541,16 @@ end;
 procedure TIdSipActionSendWait.Trigger;
 begin
   Self.Action.Send;
+end;
+
+//******************************************************************************
+//* TIdSipActionTerminateWait                                                  *
+//******************************************************************************
+//* TIdSipActionTerminateWait **************************************************
+
+procedure TIdSipActionTerminateWait.Trigger;
+begin
+  Self.Action.Terminate;
 end;
 
 //******************************************************************************

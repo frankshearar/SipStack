@@ -674,6 +674,50 @@ type
     property NewDuration: Cardinal read fNewDuration write fNewDuration;
   end;
 
+  TIdSipInboundSubscriptionNotifyWait = class(TIdWait)
+  private
+    fMimeType:     String;
+    fNotification: String;
+    fSubscription: TIdSipInboundSubscription;
+  public
+    procedure Trigger; override;
+
+    property MimeType:     String                    read fMimeType write fMimeType;
+    property Notification: String                    read fNotification write fNotification;
+    property Subscription: TIdSipInboundSubscription read fSubscription write fSubscription;
+  end;
+
+  // My subclasses represent the deferred notification of a referral: trying,
+  // succeeded, etc.
+  TIdSipInboundReferralWait = class(TIdWait)
+  private
+    fReferral: TIdSipInboundReferral;
+  public
+    property Referral: TIdSipInboundReferral read fReferral write fReferral;
+  end;
+
+  TIdSipInboundReferralWaitClass = class of TIdSipInboundReferralWait;
+
+  TIdSipNotifyReferralDeniedWait = class(TIdSipInboundReferralWait)
+  public
+    procedure Trigger; override;
+  end;
+
+  TIdSipNotifyReferralFailedWait = class(TIdSipInboundReferralWait)
+  public
+    procedure Trigger; override;
+  end;
+
+  TIdSipNotifyReferralSucceededWait = class(TIdSipInboundReferralWait)
+  public
+    procedure Trigger; override;
+  end;
+
+  TIdSipNotifyReferralTryingWait = class(TIdSipInboundReferralWait)
+  public
+    procedure Trigger; override;
+  end;
+
   TIdSipSubscriptionRetryWait = class(TIdWait)
   private
     fEventPackage: String;
@@ -3051,6 +3095,56 @@ begin
 
   if not Subscription.IsTerminated then
     Subscription.Refresh(Self.NewDuration);
+end;
+
+//******************************************************************************
+//* TIdSipInboundSubscriptionNotifyWait                                        *
+//******************************************************************************
+//* TIdSipInboundSubscriptionNotifyWait Public methods *************************
+
+procedure TIdSipInboundSubscriptionNotifyWait.Trigger;
+begin
+  Self.Subscription.Notify(Self.Notification, Self.MimeType);
+end;
+
+//******************************************************************************
+//* TIdSipNotifyReferralDeniedWait                                             *
+//******************************************************************************
+//* TIdSipNotifyReferralDeniedWait Public methods ******************************
+
+procedure TIdSipNotifyReferralDeniedWait.Trigger;
+begin
+  Self.Referral.ReferenceDenied;
+end;
+
+//******************************************************************************
+//* TIdSipNotifyReferralFailedWait                                             *
+//******************************************************************************
+//* TIdSipNotifyReferralFailedWait Public methods ******************************
+
+procedure TIdSipNotifyReferralFailedWait.Trigger;
+begin
+  Self.Referral.ReferenceFailed;
+end;
+
+//******************************************************************************
+//* TIdSipNotifyReferralSucceededWait                                          *
+//******************************************************************************
+//* TIdSipNotifyReferralSucceededWait Public methods ***************************
+
+procedure TIdSipNotifyReferralSucceededWait.Trigger;
+begin
+  Self.Referral.ReferenceSucceeded;
+end;
+
+//******************************************************************************
+//* TIdSipNotifyReferralTryingWait                                             *
+//******************************************************************************
+//* TIdSipNotifyReferralTryingWait Public methods ******************************
+
+procedure TIdSipNotifyReferralTryingWait.Trigger;
+begin
+  Self.Referral.ReferenceTrying;
 end;
 
 //******************************************************************************

@@ -114,6 +114,8 @@ type
                                   Destination: TIdSipLocation);
     procedure NotifyOfStackShutdown;
     procedure NotifyOfStackStartup;
+    procedure NotifyReferral(ActionHandle: TIdSipHandle;
+                             NotifyType: TIdSipInboundReferralWaitClass);
     procedure NotifySubscriptionEvent(Event: Cardinal;
                                       Subscription: TIdSipSubscription;
                                       Notify: TIdSipRequest);
@@ -738,12 +740,17 @@ procedure TIdSipStackInterface.AcceptCallModify(ActionHandle: TIdSipHandle;
                                                 const ContentType: String);
 var
   Action: TIdSipAction;
+  Wait:   TIdSipSessionAcceptCallModify;
 begin
   Self.ActionLock.Acquire;
   try
     Action := Self.GetAndCheckAction(ActionHandle, TIdSipSession);
+    Wait   := TIdSipSessionAcceptCallModify.Create;
+    Wait.ContentType := ContentType;
+    Wait.Offer       := LocalSessionDescription;
+    Wait.Session     := Action as TIdSipSession;
 
-    (Action as TIdSipSession).AcceptModify(LocalSessionDescription, ContentType);
+   Self.AddEvent(TriggerImmediately, Wait);
   finally
     Self.ActionLock.Release;
   end;
@@ -754,12 +761,18 @@ procedure TIdSipStackInterface.AnswerCall(ActionHandle: TIdSipHandle;
                                           const ContentType: String);
 var
   Action: TIdSipAction;
+  Wait:   TIdSipSessionAcceptWait;
 begin
   Self.ActionLock.Acquire;
   try
     Action := Self.GetAndCheckAction(ActionHandle, TIdSipInboundSession);
 
-    (Action as TIdSipInboundSession).AcceptCall(Offer, ContentType)
+    Wait := TIdSipSessionAcceptWait.Create;
+    Wait.ContentType := ContentType;
+    Wait.Offer       := Offer;
+    Wait.Session     := Action as TIdSipInboundSession;
+
+    Self.AddEvent(TriggerImmediately, Wait);
   finally
     Self.ActionLock.Release;
   end;
@@ -812,12 +825,16 @@ end;
 procedure TIdSipStackInterface.HangUp(ActionHandle: TIdSipHandle);
 var
   Action: TIdSipAction;
+  TerminateWait: TIdSipActionTerminateWait;
 begin
   Self.ActionLock.Acquire;
   try
     Action := Self.GetAndCheckAction(ActionHandle, TIdSipSession);
 
-    Action.Terminate;
+    TerminateWait := TIdSipActionTerminateWait.Create;
+    TerminateWait.Action := Action;
+
+    Self.AddEvent(TriggerImmediately, TerminateWait);
   finally
     Self.ActionLock.Release;
   end;
@@ -901,71 +918,41 @@ procedure TIdSipStackInterface.ModifyCall(ActionHandle: TIdSipHandle;
                                           const ContentType: String);
 var
   Action: TIdSipAction;
+  Wait:   TIdSipSessionModifyWait;
 begin
   Self.ActionLock.Acquire;
   try
     Action := Self.GetAndCheckAction(ActionHandle, TIdSipSession);
 
-    (Action as TIdSipSession).Modify(Offer, ContentType);
+    Wait := TIdSipSessionModifyWait.Create;
+    Wait.Session := Action as TIdSipSession;
+    Wait.ContentType := ContentType;
+    Wait.Offer := Offer;
+
+    Self.AddEvent(TriggerImmediately, Wait);
   finally
     Self.ActionLock.Release;
   end;
 end;
 
 procedure TIdSipStackInterface.NotifyReferralDenied(ActionHandle: TIdSipHandle);
-var
-  Action: TIdSipAction;
 begin
-  Self.ActionLock.Acquire;
-  try
-    Action := Self.GetAndCheckAction(ActionHandle, TIdSipInboundReferral);
-
-    (Action as TIdSipInboundReferral).ReferenceDenied;
-  finally
-    Self.ActionLock.Release;
-  end;
+  Self.NotifyReferral(ActionHandle, TIdSipNotifyReferralDeniedWait);
 end;
 
 procedure TIdSipStackInterface.NotifyReferralFailed(ActionHandle: TIdSipHandle);
-var
-  Action: TIdSipAction;
 begin
-  Self.ActionLock.Acquire;
-  try
-    Action := Self.GetAndCheckAction(ActionHandle, TIdSipInboundReferral);
-
-    (Action as TIdSipInboundReferral).ReferenceFailed;
-  finally
-    Self.ActionLock.Release;
-  end;
+  Self.NotifyReferral(ActionHandle, TIdSipNotifyReferralFailedWait);
 end;
 
 procedure TIdSipStackInterface.NotifyReferralSucceeded(ActionHandle: TIdSipHandle);
-var
-  Action: TIdSipAction;
 begin
-  Self.ActionLock.Acquire;
-  try
-    Action := Self.GetAndCheckAction(ActionHandle, TIdSipInboundReferral);
-
-    (Action as TIdSipInboundReferral).ReferenceSucceeded;
-  finally
-    Self.ActionLock.Release;
-  end;
+  Self.NotifyReferral(ActionHandle, TIdSipNotifyReferralSucceededWait);
 end;
 
 procedure TIdSipStackInterface.NotifyReferralTrying(ActionHandle: TIdSipHandle);
-var
-  Action: TIdSipAction;
 begin
-  Self.ActionLock.Acquire;
-  try
-    Action := Self.GetAndCheckAction(ActionHandle, TIdSipInboundReferral);
-
-    (Action as TIdSipInboundReferral).ReferenceTrying;
-  finally
-    Self.ActionLock.Release;
-  end;
+  Self.NotifyReferral(ActionHandle, TIdSipNotifyReferralTryingWait);
 end;
 
 procedure TIdSipStackInterface.NotifySubcriber(ActionHandle: TIdSipHandle;
@@ -973,12 +960,18 @@ procedure TIdSipStackInterface.NotifySubcriber(ActionHandle: TIdSipHandle;
                                                const MimeType: String);
 var
   Action: TIdSipAction;
+  Wait:   TIdSipInboundSubscriptionNotifyWait;
 begin
   Self.ActionLock.Acquire;
   try
     Action := Self.GetAndCheckAction(ActionHandle, TIdSipInboundSubscription);
 
-    (Action as TIdSipInboundSubscription).Notify(Notification, MimeType);
+    Wait := TIdSipInboundSubscriptionNotifyWait.Create;
+    Wait.MimeType     := MimeType;
+    Wait.Notification := Notification;
+    Wait.Subscription := Action as TIdSipInboundSubscription;
+
+    Self.AddEvent(TriggerImmediately, Wait);
   finally
     Self.ActionLock.Release;
   end;
@@ -988,12 +981,17 @@ procedure TIdSipStackInterface.RedirectCall(ActionHandle: TIdSipHandle;
                                             NewTarget: TIdSipAddressHeader);
 var
   Action: TIdSipAction;
+  Wait:   TIdSipSessionRedirectWait;
 begin
   Self.ActionLock.Acquire;
   try
     Action := Self.GetAndCheckAction(ActionHandle, TIdSipInboundSession);
 
-    (Action as TIdSipInboundSession).RedirectCall(NewTarget);
+    Wait := TIdSipSessionRedirectWait.Create;
+    Wait.NewTarget := NewTarget;
+    Wait.Session   := Action as TIdSipInboundSession;
+
+    Self.AddEvent(TriggerImmediately, Wait);
   finally
     Self.ActionLock.Release;
   end;
@@ -1002,12 +1000,16 @@ end;
 procedure TIdSipStackInterface.RejectCall(ActionHandle: TIdSipHandle);
 var
   Action: TIdSipAction;
+  Wait:   TIdSipSessionRejectWait;
 begin
   Self.ActionLock.Acquire;
   try
     Action := Self.GetAndCheckAction(ActionHandle, TIdSipInboundSession);
 
-    (Action as TIdSipInboundSession).RejectCallBusy;
+    Wait := TIdSipSessionRejectWait.Create;
+    Wait.Session := Action as TIdSipInboundSession;
+
+    Self.AddEvent(TriggerImmediately, Wait);
   finally
     Self.ActionLock.Release;
   end;
@@ -1284,6 +1286,25 @@ begin
     Self.NotifyEvent(CM_DEBUG_STACK_STARTED, Data);
   finally
     Data.Free;
+  end;
+end;
+
+procedure TIdSipStackInterface.NotifyReferral(ActionHandle: TIdSipHandle;
+                                              NotifyType: TIdSipInboundReferralWaitClass);
+var
+  Action: TIdSipAction;
+  Wait:   TIdSipInboundReferralWait;
+begin
+  Self.ActionLock.Acquire;
+  try
+    Action := Self.GetAndCheckAction(ActionHandle, TIdSipInboundReferral);
+
+    Wait := NotifyType.Create;
+    Wait.Referral := Action as TIdSipInboundReferral;
+
+    Self.AddEvent(TriggerImmediately, Wait);
+  finally
+    Self.ActionLock.Release;
   end;
 end;
 

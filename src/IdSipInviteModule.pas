@@ -13,7 +13,7 @@ interface
 
 uses
   Classes, Contnrs, IdInterfacedObject, IdNotification, IdSipCore, IdSipDialog,
-  IdSipDialogID, IdSipMessage, IdSipTransport, SyncObjs;
+  IdSipDialogID, IdSipMessage, IdSipTransport, IdTimerQueue, SyncObjs;
 
 type
   TIdSipInboundInvite = class;
@@ -622,6 +622,71 @@ type
   TIdSipSessionResendReInvite = class(TIdSipActionClosure)
   public
     procedure Execute(Action: TIdSipAction); override;
+  end;
+
+  TIdSipSessionWait = class(TIdWait)
+  private
+    fSession: TIdSipSession;
+  public
+    property Session: TIdSipSession read fSession write fSession;
+  end;
+
+  // My subclasses represent a (possibly deferred) event that affects the
+  // session description.
+  TIdSipSessionModifyingWait = class(TIdSipSessionWait)
+  private
+    fContentType: String;
+    fOffer:       String;
+  public
+    property ContentType: String read fContentType write fContentType;
+    property Offer:       String read fOffer write fOffer;
+  end;
+
+  TIdSipSessionAcceptCallModify = class(TIdSipSessionModifyingWait)
+  public
+    procedure Trigger; override;
+  end;
+
+  TIdSipSessionModifyWait = class(TIdSipSessionModifyingWait)
+  public
+    procedure Trigger; override;
+  end;
+
+  TIdSipInboundSessionWait = class(TIdWait)
+  private
+    fSession: TIdSipInboundSession;
+  public
+    property Session: TIdSipInboundSession read fSession write fSession;
+  end;
+
+  TIdSipSessionAcceptWait = class(TIdSipInboundSessionWait)
+  private
+    fContentType: String;
+    fOffer:       String;
+  public
+    procedure Trigger; override;
+
+    property ContentType: String read fContentType write fContentType;
+    property Offer:       String read fOffer write fOffer;
+  end;
+
+  TIdSipSessionRedirectWait = class(TIdSipInboundSessionWait)
+  private
+    fNewTarget: TIdSipAddressHeader;
+
+    procedure SetNewTarget(Value: TIdSipAddressHeader);
+  public
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    procedure Trigger; override;
+
+    property NewTarget: TIdSipAddressHeader read fNewTarget write SetNewTarget;
+  end;
+
+  TIdSipSessionRejectWait = class(TIdSipInboundSessionWait)
+  public
+    procedure Trigger; override;
   end;
 
   TIdSipInviteModuleInboundCallMethod = class(TIdNotification)
@@ -3329,6 +3394,77 @@ begin
 
   if not Session.IsTerminated then
     Session.Remodify;
+end;
+
+//******************************************************************************
+//* TIdSipSessionAcceptCallModify                                              *
+//******************************************************************************
+//* TIdSipSessionAcceptCallModify Public methods *******************************
+
+procedure TIdSipSessionAcceptCallModify.Trigger;
+begin
+  Self.Session.AcceptModify(Self.Offer, Self.ContentType);
+end;
+
+//******************************************************************************
+//* TIdSipSessionModifyWait                                                    *
+//******************************************************************************
+//* TIdSipSessionModifyWait Public methods *************************************
+
+procedure TIdSipSessionModifyWait.Trigger;
+begin
+  Self.Session.Modify(Self.Offer, Self.ContentType);
+end;
+
+//******************************************************************************
+//* TIdSipSessionAcceptWait                                                    *
+//******************************************************************************
+//* TIdSipSessionAcceptWait Public methods *************************************
+
+procedure TIdSipSessionAcceptWait.Trigger;
+begin
+  Self.Session.AcceptCall(Self.Offer, Self.ContentType);
+end;
+
+//******************************************************************************
+//* TIdSipSessionRedirectWait                                                  *
+//******************************************************************************
+//* TIdSipSessionRedirectWait Public methods ***********************************
+
+constructor TIdSipSessionRedirectWait.Create;
+begin
+  inherited Create;
+
+  Self.fNewTarget := TIdSipAddressHeader.Create;
+end;
+
+destructor TIdSipSessionRedirectWait.Destroy;
+begin
+  Self.NewTarget.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipSessionRedirectWait.Trigger;
+begin
+  Self.Session.RedirectCall(Self.NewTarget);
+end;
+
+//* TIdSipSessionRedirectWait Private methods **********************************
+
+procedure TIdSipSessionRedirectWait.SetNewTarget(Value: TIdSipAddressHeader);
+begin
+  Self.fNewTarget.Assign(Value);
+end;
+
+//******************************************************************************
+//* TIdSipSessionRejectWait                                                    *
+//******************************************************************************
+//* TIdSipSessionRejectWait Public methods *************************************
+
+procedure TIdSipSessionRejectWait.Trigger;
+begin
+  Self.Session.RejectCallBusy;
 end;
 
 //******************************************************************************
