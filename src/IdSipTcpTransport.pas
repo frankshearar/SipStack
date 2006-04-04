@@ -981,9 +981,10 @@ begin
   Count := Self.List.Count;
   Found := false;
   while (I < Count) and not Found do begin
-    Found := (Destination.Transport = TcpTransport)
-         and (Destination.IPAddress = Self.EntryAt(I).Connection.Socket.Binding.PeerIP)
-         and (Integer(Destination.Port) = Self.EntryAt(I).Connection.Socket.Binding.PeerPort);
+    if Self.EntryAt(I).Connection.Connected then
+      Found := (Destination.Transport = TcpTransport)
+           and (Destination.IPAddress = Self.EntryAt(I).Connection.Socket.Binding.PeerIP)
+           and (Integer(Destination.Port) = Self.EntryAt(I).Connection.Socket.Binding.PeerPort);
 
     if not Found then
       Inc(I);
