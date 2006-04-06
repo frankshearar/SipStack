@@ -89,6 +89,7 @@ type
     procedure TestIsMalformedMissingCseq;
     procedure TestIsMalformedMissingFrom;
     procedure TestIsMalformedMissingTo;
+    procedure TestIsOK;
     procedure TestHeaderCount;
     procedure TestLastHop;
     procedure TestMinExpires;
@@ -181,6 +182,7 @@ type
     procedure TestIsMalformedNotify;
     procedure TestIsMalformedSipVersion;
     procedure TestIsNotify;
+    procedure TestIsOK;
     procedure TestIsOptions;
     procedure TestIsRefer;
     procedure TestIsRegister;
@@ -1151,6 +1153,23 @@ begin
   CheckEquals(MissingTo,
               Self.Msg.ParseFailReason,
               'ParseFailReason');
+end;
+
+procedure TestTIdSipMessage.TestIsOK;
+const
+  InviteFragment = 'INVITE sip:foo SIP/2.0';
+  OKFragment     = 'SIP/2.0 200 OK';
+  TryingFragment = 'SIP/2.0 100 Trying';
+var
+  SipFragment: String;
+begin
+  Check(not TIdSipMessage.IsOK(InviteFragment),
+        '"' + InviteFragment + '" marked as being an OK fragment');
+  Check(not TIdSipMessage.IsOK(TryingFragment),
+        '"' + TryingFragment + '" marked as being an OK fragment');
+
+  Check(not TIdSipMessage.IsOK(OKFragment),
+        '"' + OKFragment + '" not marked as being an OK fragment');
 end;
 
 procedure TestTIdSipMessage.TestHeaderCount;
@@ -2664,6 +2683,12 @@ begin
 
   Self.Request.Method := MethodNotify;
   Check(Self.Request.IsNotify, MethodNotify);
+end;
+
+procedure TestTIdSipRequest.TestIsOK;
+begin
+  Check(not Self.Request.IsOK,
+        'No request is an OK response');
 end;
 
 procedure TestTIdSipRequest.TestIsOptions;

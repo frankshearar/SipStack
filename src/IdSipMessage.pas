@@ -1338,6 +1338,7 @@ type
 
     property RawFirstLine: String read fRawFirstLine;
   public
+    class function IsOK(const MessageFragment: String): Boolean; overload;
     class function MessageType(const FirstLine: String): TIdSipMessageClass;
     class function ReadMessageFrom(const RawData: String): TIdSipMessage; overload;
     class function ReadMessageFrom(RawData: TStream): TIdSipMessage; overload; virtual;
@@ -1371,6 +1372,7 @@ type
     function  QuickestExpiry: Cardinal;
     function  Equals(Msg: TIdSipMessage): Boolean; virtual; abstract;
     function  IsAck: Boolean; virtual;
+    function  IsOK: Boolean; overload; virtual;
     function  IsRequest: Boolean; virtual; abstract;
     function  IsResponse: Boolean;
     function  LastHop: TIdSipViaHeader;
@@ -1558,7 +1560,7 @@ type
     function  HasWWWAuthenticate: Boolean;
     function  IsAuthenticationChallenge: Boolean;
     function  IsFinal: Boolean;
-    function  IsOK: Boolean;
+    function  IsOK: Boolean; override;
     function  IsProvisional: Boolean;
     function  IsRedirect: Boolean;
     function  IsRequest: Boolean; override;
@@ -7475,6 +7477,18 @@ end;
 //******************************************************************************
 //* TIdSipMessage Public methods ***********************************************
 
+class function TIdSipMessage.IsOK(const MessageFragment: String): Boolean;
+var
+  Msg: TIdSipMessage;
+begin
+  Msg := Self.ReadMessageFrom(MessageFragment);
+  try
+    Result := Msg.IsOK;
+  finally
+    Msg.Free;
+  end;
+end;
+
 class function TIdSipMessage.MessageType(const FirstLine: String): TIdSipMessageClass;
 begin
   if TIdSipParser.IsRequest(FirstLine) then
@@ -7755,6 +7769,11 @@ begin
 end;
 
 function TIdSipMessage.IsAck: Boolean;
+begin
+  Result := false;
+end;
+
+function TIdSipMessage.IsOK: Boolean;
 begin
   Result := false;
 end;
