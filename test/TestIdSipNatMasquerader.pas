@@ -134,7 +134,6 @@ end;
 
 procedure TestTIdSipNatMasquerader.CheckSdpModified;
 var
-  Invite: TIdSipRequest;
   Sdp: TIdSdpPayload;
 begin
   Self.Invite.Body := Self.DummySdp('127.0.0.1');

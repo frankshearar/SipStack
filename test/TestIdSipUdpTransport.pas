@@ -79,9 +79,6 @@ type
     procedure CheckRejectFragmentedResponseProperly(Sender: TObject;
                                                     Response: TIdSipResponse;
                                                     ReceivedFrom: TIdSipConnectionBindings);
-    procedure CheckRequest(Sender: TObject;
-                           Request: TIdSipRequest;
-                           ReceivedFrom: TIdSipConnectionBindings);
     procedure OnEmpty(Sender: TIdTimerQueue);
     procedure OnException(FailedMessage: TIdSipMessage;
                           E: Exception;
@@ -484,27 +481,6 @@ begin
   try
     Check(Response.IsMalformed,
           'Fragment (that by default looks like a response) not marked as malformed');
-
-    Self.ThreadEvent.SetEvent;
-  except
-    on E: Exception do begin
-      Self.ExceptionType    := ExceptClass(E.ClassType);
-      Self.ExceptionMessage := E.Message;
-    end;
-  end;
-end;
-
-procedure TestTIdSipUdpServer.CheckRequest(Sender: TObject;
-                                           Request: TIdSipRequest;
-                                           ReceivedFrom: TIdSipConnectionBindings);
-begin
-  try
-    CheckEquals(MethodInvite, Request.Method,        'Method');
-    CheckEquals('SIP/2.0',    Request.SipVersion,    'SipVersion');
-    CheckEquals(29,           Request.ContentLength, 'ContentLength');
-    CheckEquals(70,           Request.MaxForwards,   'Max-Forwards');
-
-    CheckEquals('I am a message. Hear me roar!', Request.Body, 'Body');
 
     Self.ThreadEvent.SetEvent;
   except
