@@ -609,7 +609,7 @@ const
 const
   CallEndedSuccess        = 0;
   CallEndedFailure        = 1;
-  CallEndedNoSuchUser     = SIPNotFound;
+  CallEndedNotFound       = SIPNotFound;
   CallEndedRejected       = SIPBusyHere;
   CallServiceNotAvailable = SIPServiceUnavailable;
 
