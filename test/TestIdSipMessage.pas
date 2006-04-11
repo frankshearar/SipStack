@@ -1160,8 +1160,6 @@ const
   InviteFragment = 'INVITE sip:foo SIP/2.0';
   OKFragment     = 'SIP/2.0 200 OK';
   TryingFragment = 'SIP/2.0 100 Trying';
-var
-  SipFragment: String;
 begin
   Check(not TIdSipMessage.IsOK(InviteFragment),
         '"' + InviteFragment + '" marked as being an OK fragment');
