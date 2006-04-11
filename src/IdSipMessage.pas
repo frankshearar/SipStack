@@ -6428,8 +6428,15 @@ begin
 end;
 
 procedure TIdSipViaHeader.SetReceived(const Value: String);
+var
+  Val: String;
 begin
-  Self.Params[ReceivedParam] := Value;
+  if TIdSipParser.IsIPv6Reference(Value) then
+    Val := WithoutFirstAndLastChars(Value)
+  else
+    Val := Value;
+
+  Self.Params[ReceivedParam] := Val;
 
   Self.AssertReceivedWellFormed;
 end;
