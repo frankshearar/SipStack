@@ -2874,7 +2874,7 @@ begin
     Self.UA.ScheduleEvent(TIdSipInboundInviteExpire,
                           Request.Expires.NumericValue,
                           Request,
-                          Self.ID);
+                          Self.InitialInvite.ID);
 end;
 
 procedure TIdSipInboundSession.OnFailure(InviteAgent: TIdSipInboundInvite);
