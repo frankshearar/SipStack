@@ -1202,6 +1202,9 @@ begin
 
   // Invites are always owned by a Session
   Self.fIsOwned := true;
+
+  Assert(Assigned(Self.Module),
+         'The Transaction-User layer cannot process INVITE methods without adding the Invite module to it');
 end;
 
 function TIdSipInvite.AckMatchesInvite(Msg: TIdSipMessage): Boolean;
