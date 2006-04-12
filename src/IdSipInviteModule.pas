@@ -140,6 +140,31 @@ type
     property ProgressResendInterval: Cardinal read fProgressResendInterval write fProgressResendInterval;
   end;
 
+  // I encapsulate the call flow around a BYE request. BYEs always occur in the
+  // context of a dialog, so you MUST set the Dialog property before invoking
+  // Send!
+  // OriginalInvite contains a reference to the INVITE that originally created
+  // the dialog that we're now terminating. We need this reference to provide
+  // the correct authentication headers (Authorization, Proxy-Authorization,
+  // etc.)
+  TIdSipOutboundBye = class(TIdSipAction)
+  private
+    fDialog:         TIdSipDialog;
+    fOriginalInvite: TIdSipRequest;
+    Module:          TIdSipInviteModule;
+  protected
+    function  CreateNewAttempt: TIdSipRequest; override;
+    procedure Initialise(UA: TIdSipAbstractCore;
+                         Request: TIdSipRequest;
+                         UsingSecureTransport: Boolean); override;
+  public
+    function  Method: String; override;
+    procedure Send; override;
+
+    property Dialog:         TIdSipDialog  read fDialog write fDialog;
+    property OriginalInvite: TIdSipRequest read fOriginalInvite write fOriginalInvite;
+  end;
+
   // I provide basic facilities for all (owned) Actions that need to handle
   // INVITEs, BYEs, CANCELs.
   TIdSipInvite = class(TIdSipOwnedAction)
@@ -1074,6 +1099,57 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipOutboundBye                                                          *
+//******************************************************************************
+//* TIdSipOutboundBye Public methods *******************************************
+
+function TIdSipOutboundBye.Method: String;
+begin
+  Result := MethodBye;
+end;
+
+procedure TIdSipOutboundBye.Send;
+var
+  Bye: TIdSipRequest;
+begin
+  inherited Send;
+
+  Bye := Self.CreateNewAttempt;
+  try
+    Self.InitialRequest.Assign(Bye);
+
+    Self.SendRequest(Bye);
+  finally
+    Bye.Free;
+  end;
+end;
+
+//* TIdSipOutboundBye Protected methods ****************************************
+
+function TIdSipOutboundBye.CreateNewAttempt: TIdSipRequest;
+begin
+  Result := Self.Module.CreateBye(Self.Dialog);
+  Result.CopyHeaders(Self.OriginalInvite, AuthorizationHeader);
+  Result.CopyHeaders(Self.OriginalInvite, ProxyAuthorizationHeader);
+
+  // TODO: Verify this as correct behaviour. Otherwise we must use SIP discovery stuff
+  Result.LastHop.Transport := Self.OriginalInvite.LastHop.Transport;
+end;
+
+procedure TIdSipOutboundBye.Initialise(UA: TIdSipAbstractCore;
+                                       Request: TIdSipRequest;
+                                       UsingSecureTransport: Boolean);
+begin
+  inherited Initialise(UA, Request, UsingSecureTransport);
+
+  Self.fIsOwned := true;
+  Self.Module := Self.UA.ModuleFor(Self.Method) as TIdSipInviteModule;
+
+  Assert(Assigned(Self.Module),
+         'The Transaction-User layer cannot send BYE methods without adding the Invite module to it');
+end;
+
+//******************************************************************************
 //* TIdSipInvite                                                               *
 //******************************************************************************
 //* TIdSipInvite Public methods ************************************************
@@ -1122,7 +1198,7 @@ procedure TIdSipInvite.Initialise(UA: TIdSipAbstractCore;
 begin
   inherited Initialise(UA, Request, UsingSecureTransport);
 
-  Self.Module := Self.UA.ModuleFor(Self.Method) as TIdSipInviteModule;  
+  Self.Module := Self.UA.ModuleFor(Self.Method) as TIdSipInviteModule;
 
   // Invites are always owned by a Session
   Self.fIsOwned := true;
@@ -2576,22 +2652,13 @@ end;
 
 procedure TIdSipSession.SendBye;
 var
-  Bye: TIdSipRequest;
+  Bye: TIdSipOutboundBye;
 begin
-  Bye := Self.Module.CreateBye(Self.Dialog);
-  try
-    Bye.CopyHeaders(Self.InitialRequest, AuthorizationHeader);
-    Bye.CopyHeaders(Self.InitialRequest, ProxyAuthorizationHeader);
-
-    // TODO: Verify this as correct behaviour. Otherwise we must use SIP discovery stuff
-    Bye.LastHop.Transport := Self.InitialRequest.LastHop.Transport;
-
-    // We don't listen to the new transaction because we assume the BYE
-    // succeeds immediately.
-    Self.SendRequest(Bye);
-  finally
-    Bye.Free;
-  end;
+  Bye := Self.UA.AddOutboundAction(TIdSipOutboundBye) as TIdSipOutboundBye;
+  Bye.Dialog := Self.Dialog;
+  Bye.OriginalInvite := Self.InitialRequest;
+  Bye.AddActionListener(Self);
+  Bye.Send;
 end;
 
 procedure TIdSipSession.SetFullyEstablished(Value: Boolean);
@@ -2816,8 +2883,7 @@ begin
     Self.SendBye;
 
     Self.NotifyOfEndedSession(LocalHangUp, RSNoReason);
-
-    inherited Terminate;
+    Self.MarkAsTerminated;
   end
   else begin
     if Self.Terminating then begin

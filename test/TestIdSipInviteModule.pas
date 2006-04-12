@@ -89,6 +89,23 @@ type
     procedure TestReplaceCall;
   end;
 
+  TestTIdSipOutboundBye = class(TestTIdSipAction)
+  private
+    Dialog: TIdSipDialog;
+  protected
+    function CreateAction: TIdSipAction; override;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestIsInbound; override;
+    procedure TestIsInvite; override;
+    procedure TestIsOptions; override;
+    procedure TestIsOwned; override;
+    procedure TestIsRegistration; override;
+    procedure TestIsSession; override;
+  end;
+
   TestTIdSipInboundInvite = class(TestTIdSipAction,
                                   IIdSipInboundInviteListener)
   private
@@ -1325,6 +1342,91 @@ begin
   CheckRequestSent('No request sent');
   Check(Self.LastSentRequest.HasHeader(ReplacesHeader),
         'No Replaces header, hence the session''s not a dialog replacer');
+end;
+
+//******************************************************************************
+//* TestTIdSipOutboundBye                                                      *
+//******************************************************************************
+//* TestTIdSipOutboundBye Public methods ***************************************
+
+procedure TestTIdSipOutboundBye.SetUp;
+var
+  OK: TIdSipResponse;
+begin
+  inherited SetUp;
+
+  // For the purposes of this test, it doesn't matter whether the dialog is an
+  // inbound or outbound dialog, nor does the particular value of the remote
+  // end's Contact - as long as there IS a Contact. Obviously, the test uses
+  // the local Contact, which in the field is completely wrong (except for
+  // hairpinned calls), but it doesn't matter here.
+  OK := TIdSipResponse.InResponseTo(Self.Invite, SIPOK, Self.Invite.FirstContact);
+  try
+    Self.Dialog := TIdSipDialog.CreateOutboundDialog(Self.Invite, OK, false);
+  finally
+    OK.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundBye.TearDown;
+begin
+  Self.Dialog.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipOutboundBye Protected methods ************************************
+
+function TestTIdSipOutboundBye.CreateAction: TIdSipAction;
+var
+  Bye: TIdSipOutboundBye;
+begin
+  Bye := Self.Core.AddOutboundAction(TIdSipOutboundBye) as TIdSipOutboundBye;
+//  Bye := TIdSipOutboundBye.Create(Self.Core);
+  Bye.Dialog         := Self.Dialog;
+  Bye.OriginalInvite := Self.Invite;
+  Bye.AddActionListener(Self);
+  Bye.Send;
+
+  Result := Bye;
+end;
+
+//* TestTIdSipOutboundBye Published methods ************************************
+
+procedure TestTIdSipOutboundBye.TestIsInbound;
+begin
+  Check(not Self.CreateAction.IsInbound,
+        'Outbound BYE marked as an inbound action');
+end;
+
+procedure TestTIdSipOutboundBye.TestIsInvite;
+begin
+  Check(not Self.CreateAction.IsInvite,
+        'Outbound BYE marked as an INVITE');
+end;
+
+procedure TestTIdSipOutboundBye.TestIsOptions;
+begin
+  Check(not Self.CreateAction.IsOptions,
+        'Outbound BYE marked as an OPTIONS');
+end;
+
+procedure TestTIdSipOutboundBye.TestIsOwned;
+begin
+  Check(Self.CreateAction.IsOwned,
+        'Outbound BYE not marked as an owned action');
+end;
+
+procedure TestTIdSipOutboundBye.TestIsRegistration;
+begin
+  Check(not Self.CreateAction.IsInbound,
+        'Outbound BYE marked as a REGISTER');
+end;
+
+procedure TestTIdSipOutboundBye.TestIsSession;
+begin
+  Check(not Self.CreateAction.IsInbound,
+        'Outbound BYE marked as a Session');
 end;
 
 //******************************************************************************
