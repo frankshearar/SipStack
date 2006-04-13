@@ -65,6 +65,9 @@ type
 
     function  CreateRemoteBye(LocalDialog: TIdSipDialog): TIdSipRequest;
     function  CreateRemoteOk(Request: TIdSipRequest): TIdSipResponse;
+    function  CreateRemoteUnauthorized(Request: TIdSipRequest;
+                                       const AuthHeaderName: String;
+                                       const Qop: String): TIdSipResponse;
     function  CreateUserAgent(Timer: TIdTimerQueue;
                               const Address: String): TIdSipUserAgent;
     function  LastSentAck: TIdSipRequest;
@@ -1067,6 +1070,28 @@ begin
   Result.ToHeader.Tag := Self.Core.NextTag;
 end;
 
+function TTestCaseTU.CreateRemoteUnauthorized(Request: TIdSipRequest;
+                                              const AuthHeaderName: String;
+                                              const Qop: String): TIdSipResponse;
+var
+  Auth: TIdSipAuthenticateHeader;
+begin
+  Result := TIdSipResponse.InResponseTo(Request,
+                                        SIPUnauthorized);
+
+  Result.ToHeader.Tag := Self.Core.NextTag;
+  if (AuthHeaderName = ProxyAuthorizationHeader) then
+    Result.StatusCode := SIPProxyAuthenticationRequired;
+
+  Auth := Result.AddHeader(AuthHeaderName) as TIdSipAuthenticateHeader;
+  Auth.AuthorizationScheme := DigestAuthorizationScheme;
+  Auth.Realm               := 'SFTF';
+  Auth.Nonce               := '5369704365727434313433';
+  Auth.Qop                 := Qop;
+
+  Result.AddHeader(AuthenticationInfoHeader);
+end;
+
 function TTestCaseTU.CreateUserAgent(Timer: TIdTimerQueue;
                                      const Address: String): TIdSipUserAgent;
 var
@@ -1298,24 +1323,12 @@ end;
 procedure TTestCaseTU.ReceiveUnauthorized(const AuthHeaderName: String;
                                           const Qop: String);
 var
-  Auth:      TIdSipAuthenticateHeader;
   Challenge: TIdSipResponse;
 begin
-  Challenge := TIdSipResponse.InResponseTo(Self.LastSentRequest,
-                                           SIPUnauthorized);
+  Challenge := Self.CreateRemoteUnauthorized(Self.LastSentRequest,
+                                             AuthHeaderName,
+                                             Qop);
   try
-    Challenge.ToHeader.Tag := Self.Core.NextTag;
-    if (AuthHeaderName = ProxyAuthorizationHeader) then
-      Challenge.StatusCode := SIPProxyAuthenticationRequired;
-
-    Auth := Challenge.AddHeader(AuthHeaderName) as TIdSipAuthenticateHeader;
-    Auth.AuthorizationScheme := DigestAuthorizationScheme;
-    Auth.Realm               := 'SFTF';
-    Auth.Nonce               := '5369704365727434313433';
-    Auth.Qop                 := Qop;
-
-    Challenge.AddHeader(AuthenticationInfoHeader);
-
     Self.ReceiveResponse(Challenge);
   finally
     Challenge.Free;
