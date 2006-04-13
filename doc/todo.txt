@@ -1,6 +1,7 @@
 Possible future work:
 * SRTP (RFC 3711)
 * ZRTP (draft-zimmermann-avt-zrtp)
+* S/MIME (RFC 3851)
 
 
 RFC 3261 still to do:
