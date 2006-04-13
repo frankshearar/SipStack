@@ -238,6 +238,10 @@ procedure TIdSipMockTransport.FireOnRequest(R: TIdSipRequest;
 var
   CopyOfMessage: TIdSipRequest;
 begin
+  // Simulate receiving a request from the network. Since we make no assumptions
+  // about the code that invokes this method, we create a copy of the message to
+  // pass up the stack to isolate the two chunks of code.
+
   CopyOfMessage := R.Copy as TIdSipRequest;
   try
     Self.ReceiveRequest(CopyOfMessage, Peer);
@@ -284,6 +288,10 @@ procedure TIdSipMockTransport.FireOnResponse(R: TIdSipResponse;
 var
   CopyOfMessage: TIdSipResponse;
 begin
+  // Simulate receiving a response from the network. Since we make no
+  // assumptions about the code that invokes this method, we create a copy of
+  // the message to pass up the stack to isolate the two chunks of code.
+
   CopyOfMessage := R.Copy as TIdSipResponse;
   try
     Self.ReceiveResponse(CopyOfMessage, Peer);
