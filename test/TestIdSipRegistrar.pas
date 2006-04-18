@@ -76,7 +76,6 @@ type
     procedure TestCreateRegisterReusesCallIDForSameRegistrar;
     procedure TestCreateRegisterWithGruu;
     procedure TestCreateRegisterWithRequiredGruu;
-    procedure TestReregister;
     procedure TestUnregisterFrom;
   end;
 
@@ -908,28 +907,6 @@ begin
   finally
     Reg.Free;
   end;
-end;
-
-procedure TestTIdSipOutboundRegisterModule.TestReregister;
-var
-  Event: TIdSipMessageNotifyEventWait;
-begin
-  Self.Invite.Method := MethodRegister;
-
-  Self.MarkSentRequestCount;
-
-  Event := TIdSipMessageNotifyEventWait.Create;
-  try
-    Event.Message := Self.Invite.Copy;
-    Self.Module.OnReregister(Event);
-  finally
-    Event.Free;
-  end;
-
-  Self.CheckRequestSent('No request resend');
-  CheckEquals(MethodRegister,
-              Self.LastSentRequest.Method,
-              'Unexpected method in resent request');
 end;
 
 procedure TestTIdSipOutboundRegisterModule.TestUnregisterFrom;
@@ -1816,13 +1793,12 @@ procedure TestTIdSipOutboundRegistration.CheckAutoReregister(ReceiveResponse: TE
 const
   ExpiryTime = 42;
 var
-  Event:       TNotifyEvent;
   EventCount:  Integer;
   LatestEvent: TIdWait;
+  Registrar:   String;
 begin
-  Event := Self.Core.RegisterModule.OnReregister;
-
   Self.CreateAction;
+  Registrar := Self.LastSentRequest.RequestUri.Uri;
 
   EventCount := DebugTimer.EventCount;
   ReceiveResponse(ExpiryTime);
@@ -1833,12 +1809,19 @@ begin
       Check(EventCount < Self.DebugTimer.EventCount,
             MsgPrefix + ': No timer added');
 
-      LatestEvent := Self.DebugTimer.FirstEventScheduledFor(@Event);
+      LatestEvent := Self.DebugTimer.LastEventScheduled;
 
       Check(Assigned(LatestEvent),
             MsgPrefix + ': Wrong notify event');
       Check(LatestEvent.DebugWaitTime > 0,
             MsgPrefix + ': Bad wait time (' + IntToStr(LatestEvent.DebugWaitTime) + ')');
+
+      Self.MarkSentRequestCount;
+      Self.DebugTimer.TriggerAllEventsOfType(TIdSipReregisterWait);
+      CheckRequestSent('No REGISTER sent');
+      CheckEquals(Registrar,
+                  Self.LastSentRequest.RequestUri.Uri,
+                  'REGISTER re-registering to a different registrar');
     end
     else
       CheckEquals(EventCount,

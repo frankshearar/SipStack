@@ -13,7 +13,7 @@ interface
 
 uses
   Classes, Contnrs, IdException, IdObservable, IdSipCore, IdSipMessage,
-  IdNotification, SyncObjs;
+  IdNotification, IdTimerQueue, SyncObjs;
 
 type
   TIdSipRegistrationInfo = class(TObject)
@@ -224,7 +224,6 @@ type
     procedure CleanUp; override;
     function  CreateRegister(Registrar: TIdSipToHeader): TIdSipRequest;
     function  CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistrationQuery;
-    procedure OnReregister(Event: TObject);
     function  RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
     function  RegistrationCount: Integer;
     function  UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundUnregistration;
@@ -417,6 +416,8 @@ type
   end;
 
   TIdSipOutboundRegistration = class(TIdSipOutboundRegistrationBase)
+  private
+    procedure ScheduleReregistration(MillisecondsToWait: Cardinal);
   protected
     procedure NotifyOfSuccess(Response: TIdSipMessage); override;
   public
@@ -436,6 +437,22 @@ type
     function CreateInitialAction: TIdSipOwnedAction; override;
 
     property IsWildCard: Boolean read fIsWildCard write fIsWildCard;
+  end;
+
+  TIdSipReregisterWait = class(TIdWait)
+  private
+    fRegisterModule: TIdSipOutboundRegisterModule;
+    fRegistrar:      TIdSipUri;
+
+    procedure SetRegistrar(Value: TIdSipUri);
+  public
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    procedure Trigger; override;
+
+    property RegisterModule: TIdSipOutboundRegisterModule read fRegisterModule write fRegisterModule;
+    property Registrar:      TIdSipUri                    read fRegistrar write SetRegistrar;
   end;
 
   TIdSipRegistrationMethod = class(TIdNotification)
@@ -979,14 +996,6 @@ function TIdSipOutboundRegisterModule.CurrentRegistrationWith(Registrar: TIdSipU
 begin
   Result := Self.UserAgent.AddOutboundAction(TIdSipOutboundRegistrationQuery) as TIdSipOutboundRegistrationQuery;
   Result.Registrar := Registrar;
-end;
-
-procedure TIdSipOutboundRegisterModule.OnReregister(Event: TObject);
-var
-  Request: TIdSipRequest;
-begin
-  Request := (Event as TIdSipMessageNotifyEventWait).Message as TIdSipRequest;
-  Self.RegisterWith(Request.RequestUri).Send;
 end;
 
 function TIdSipOutboundRegisterModule.RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
@@ -1893,11 +1902,21 @@ begin
         ExpireTime := Response.Expires.NumericValue;
 
       if (ExpireTime > 0) then
-        Self.UA.ScheduleEvent(Self.OutModule.OnReregister,
-                              Self.ReregisterTime(ExpireTime)*1000, // in milliseconds
-                              Self.InitialRequest.Copy);
+        Self.ScheduleReregistration(Self.ReregisterTime(ExpireTime)*1000);
     end;
   end;
+end;
+
+//* TIdSipOutboundRegistration Private methods *********************************
+
+procedure TIdSipOutboundRegistration.ScheduleReregistration(MillisecondsToWait: Cardinal);
+var
+  Reregister: TIdSipReregisterWait;
+begin
+  Reregister := TIdSipReregisterWait.Create;
+  Reregister.RegisterModule := Self.OutModule;
+  Reregister.Registrar      := Self.Registrar;
+  Self.UA.ScheduleEvent(MillisecondsToWait, Reregister);
 end;
 
 //******************************************************************************
@@ -1931,6 +1950,37 @@ begin
   Reg.Registrar  := Self.Registrar;
 
   Result := Reg;
+end;
+
+//******************************************************************************
+//* TIdSipReregisterWait                                                       *
+//******************************************************************************
+//* TIdSipReregisterWait Public methods ****************************************
+
+constructor TIdSipReregisterWait.Create;
+begin
+  inherited Create;
+
+  Self.fRegistrar := TIdSipUri.Create('');
+end;
+
+destructor TIdSipReregisterWait.Destroy;
+begin
+  Self.fRegistrar.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipReregisterWait.Trigger;
+begin
+  Self.RegisterModule.RegisterWith(Self.Registrar).Send;
+end;
+
+//* TIdSipReregisterWait Private methods ***************************************
+
+procedure TIdSipReregisterWait.SetRegistrar(Value: TIdSipUri);
+begin
+  Self.fRegistrar.Uri := Value.Uri;
 end;
 
 //******************************************************************************
