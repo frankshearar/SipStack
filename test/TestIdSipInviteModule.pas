@@ -419,6 +419,8 @@ type
     procedure TestOkUsesGruuWhenUaDoes;
     procedure TestInboundModifyBeforeFullyEstablished;
     procedure TestInboundModifyReceivesNoAck;
+    procedure TestRaceConditionAckLost;
+    procedure TestRaceConditionRetransmittedInitialInviteIgnored;
     procedure TestReceiveCallSendsTrying;
     procedure TestReceiveOutOfOrderReInvite;
     procedure TestRedirectCall;
@@ -501,6 +503,7 @@ type
     procedure TestModifyUsesAuthentication;
     procedure TestNetworkFailuresLookLikeSessionFailures;
     procedure TestOneNetworkFailureDoesntFailWholeRedirection;
+    procedure TestRaceConditionCrossoverOfCancelAndInvites200OK;
     procedure TestReceive1xxNotifiesListeners;
     procedure TestReceive2xxSendsAck;
     procedure TestReceive3xxSendsNewInvite;
@@ -4832,6 +4835,99 @@ begin
               'Unexpected request sent');
 end;
 
+procedure TestTIdSipInboundSession.TestRaceConditionAckLost;
+var
+  AlicesDialog: TIdSipDialog;
+  BobsSession:  TIdSipInboundSession;
+begin
+  // from draft-hasebe-sipping-race-examples-00.txt, section 3.1.6:
+  //   Alice                     Bob
+  //     |                        |
+  //     |       INVITE F1        |
+  //     |----------------------->|
+  //     |    180 Ringing F2      |
+  //     |<-----------------------|
+  //     |                        |
+  //     |       200 OK F3        |
+  //     |<-----------------------|
+  //     |   ACK F4(packet loss)  |
+  //     |-------------->X        |
+  //     |   Both Way RTP Media   |
+  //     |<======================>|
+  //     | BYE F6         200 F5  |
+  //     |---------     ----------|
+  //     |          \ /           |
+  //     |           X            |
+  //     |          / \           |
+  //     |<--------     --------->|
+  //     |       200 OK F7        |
+  //     |<-----------------------|
+  //     |                        |
+  //     |                        |
+
+  BobsSession := Self.CreateAction as TIdSipInboundSession;
+  BobsSession.AcceptCall('', '');
+
+  // Trigger the scheduled 200 OK resend.
+  Self.DebugTimer.TriggerAllEventsOfType(TIdSipActionsWait);
+
+  Self.MarkSentResponseCount;
+  AlicesDialog := TIdSipDialog.CreateInboundDialog(BobsSession.InitialRequest,
+                                                   Self.Dispatcher.Transport.LastResponse,
+                                                   false);
+  try
+    Self.ReceiveBye(AlicesDialog);
+  finally
+    AlicesDialog.Free;
+  end;
+
+  CheckResponseSent('No response sent to the BYE');
+  CheckEquals(MethodBye,
+              Self.LastSentResponse.CSeq.Method,
+              'Response not sent in response to BYE');
+  Check(BobsSession.IsTerminated,
+        'Bob''s session isn''t terminated');
+end;
+
+procedure TestTIdSipInboundSession.TestRaceConditionRetransmittedInitialInviteIgnored;
+var
+  BobsSession:  TIdSipInboundSession;
+  SessionCount: Integer;
+begin
+  // from draft-hasebe-sipping-race-examples-00.txt, section 3.1.1:
+  //   Alice                             Bob
+  //     |                                |
+  //     |         ini-INVITE F1          |
+  //     |------------------------------->|
+  //     |      180 F2(Packet loss)       |
+  //     |         X<---------------------|
+  //     |                                |
+  //     | ini-INVITE F4           200 F3 |
+  //     |-------------     --------------| Terminate(ServerTransaction)
+  //     |              \ /               |
+  //     |               X                |
+  //     |              / \               |
+  //     |<------------     ------------->|
+  //     |             ACK F5             |
+  //     |------------------------------->|
+  //     |                                |
+  //     |                                |
+
+  // Bob's provisional responses are lost in the network, so Alice retransmits
+  // the ini-INVITE. Despite the retransmitted ini-INVITE not having a To tag,
+  // Bob's UA must recognise the retransmitted ini-INVITE as a retransmission
+  // and ignore it.
+
+  BobsSession := Self.CreateAction as TIdSipInboundSession;
+  BobsSession.AcceptCall('', '');
+
+  SessionCount := Self.Core.SessionCount;
+  Self.ReceiveInvite;
+  Check(SessionCount = Self.Core.SessionCount,
+        'Retransmitted ini-INVITE started a new dialog '
+      + '(draft-hasebe-sipping-race-examples-00, section 3.1.1');
+end;
+
 procedure TestTIdSipInboundSession.TestReceiveCallSendsTrying;
 begin
   Self.MarkSentRequestCount;
@@ -5969,6 +6065,69 @@ begin
 
   Check(Self.OnEstablishedSessionFired,
         'The session didn''t receive the 200 OK, or has a confused state');
+end;
+
+procedure TestTIdSipOutboundSession.TestRaceConditionCrossoverOfCancelAndInvites200OK;
+var
+  AlicesSession: TIdSipOutboundSession;
+  Cancel:        TIdSipRequest;
+begin
+  // from draft-hasebe-sipping-race-examples-00.txt, section 3.1.2:
+  //   Alice                     Bob
+  //     |                        |
+  //     |       INVITE F1        |
+  //     |----------------------->|
+  //     |    180 Ringing F2      |
+  //     |<-----------------------|
+  //     |                        |
+  //     |CANCEL F3     200 OK F4 |
+  //     |---------     ----------|
+  //     |          \ /           |
+  //     |           X            |
+  //     |          / \           |
+  //     |<--------     --------->|
+  //     |                        |
+  //     | ACK F6         481 F5  |
+  //     |---------     ----------|
+  //     |          \ /           |
+  //     |           X            |
+  //     |          / \           |
+  //     |<--------     --------->|
+  //     |                        |
+  //     |   Both Way RTP Media   |
+  //     |<======================>|
+  //     |         BYE F7         |
+  //     |----------------------->|
+  //     |         200 F8         |
+  //     |<-----------------------|
+  //     |                        |
+  //     |                        |
+
+  Cancel := TIdSipRequest.Create;
+  try
+    AlicesSession := Self.CreateAction as TIdSipOutboundSession;
+
+    Self.ReceiveRinging(AlicesSession.InitialRequest);
+
+    AlicesSession.Cancel;
+    Cancel.Assign(Self.LastSentRequest);
+
+    Self.MarkSentAckCount;
+    Self.MarkSentRequestCount;
+
+    Self.ReceiveOk(AlicesSession.InitialRequest);
+    Self.ReceiveResponse(Cancel, SIPCallLegOrTransactionDoesNotExist);
+    CheckAckSent('No ACK to the 200 OK sent');
+    CheckRequestSent('No BYE sent');
+
+    CheckEquals(MethodBye,
+                Self.LastSentRequest.Method,
+                'Unexpected request sent');
+    Check(AlicesSession.IsTerminated,
+          'Session not terminated');
+  finally
+    Cancel.Free;
+  end;
 end;
 
 procedure TestTIdSipOutboundSession.TestReceive1xxNotifiesListeners;
