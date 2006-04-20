@@ -176,6 +176,7 @@ type
     procedure LockTimer; override;
     function  ScheduledEvent(Event: TObject): Boolean; overload;
     function  ScheduledEvent(Event: TNotifyEvent): Boolean; overload;
+    function  SecondLastEventScheduled: TIdWait;
     procedure Terminate; override;
     procedure TriggerAllEventsOfType(WaitType: TIdWaitClass);
     procedure TriggerEarliestEvent; override;
@@ -746,6 +747,21 @@ end;
 function TIdDebugTimerQueue.ScheduledEvent(Event: TNotifyEvent): Boolean;
 begin
   Result := Self.HasScheduledEvent(@Event);
+end;
+
+function TIdDebugTimerQueue.SecondLastEventScheduled: TIdWait;
+begin
+  Self.LockTimer;
+  try
+    if (Self.EventCount < 2) then begin
+      Result := nil;
+      Exit;
+    end;
+
+    Result := Self.EventAt(Self.EventCount - 2);
+  finally
+    Self.UnlockTimer;
+  end;
 end;
 
 procedure TIdDebugTimerQueue.Terminate;
