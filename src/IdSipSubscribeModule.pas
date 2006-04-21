@@ -308,8 +308,8 @@ type
   TIdSipSubscribe = class(TIdSipOwnedAction)
   private
     fDuration:     Cardinal; // in seconds
+    fEventID:      String;
     fEventPackage: String;
-    fID:           String;
     Module:        TIdSipSubscribeModule;
   protected
     function  CreateNewAttempt: TIdSipRequest; override;
@@ -325,7 +325,7 @@ type
 
     property EventPackage: String   read fEventPackage write fEventPackage;
     property Duration:     Cardinal read fDuration write fDuration;
-    property ID:           String   read fID write fID;
+    property EventID:      String   read fEventID write fEventID;
   end;
 
   TIdSipOutboundSubscribe = class(TIdSipSubscribe)
@@ -434,7 +434,7 @@ type
     fDuration:           Cardinal;
     fEventPackage:       String;
     fExpiryTime:         TDateTime; // Absolute-time expiry
-    fID:                 String;
+    fEventID:            String;
     fSubscriptionState:  String;
     fTarget:             TIdSipAddressHeader;
     fTerminating:        Boolean;
@@ -474,7 +474,7 @@ type
 
     property Duration:          Cardinal            read fDuration write fDuration;
     property EventPackage:      String              read fEventPackage write SetEventPackage;
-    property ID:                String              read fID write fID;
+    property EventID:           String              read fEventID write fEventID;
     property SubscriptionState: String              read fSubscriptionState;
     property Target:            TIdSipAddressHeader read fTarget write fTarget;
     property Terminating:       Boolean             read fTerminating;
@@ -1554,7 +1554,7 @@ begin
     TempTo.Address := Self.InitialRequest.RequestUri;
 
     Result := Self.Module.CreateSubscribe(TempTo, Self.EventPackage);
-    Result.Event.ID := Self.ID;
+    Result.Event.ID := Self.EventID;
   finally
     TempTo.Free;
   end;
@@ -1642,7 +1642,7 @@ end;
 function TIdSipOutboundSubscribe.CreateNewAttempt: TIdSipRequest;
 begin
   Result := Self.Module.CreateSubscribe(Self.Target, Self.EventPackage);
-  Result.Event.ID             := Self.ID;
+  Result.Event.ID             := Self.EventID;
   Result.Expires.NumericValue := Self.Duration;
 end;
 
@@ -1670,7 +1670,7 @@ end;
 function TIdSipOutboundRefreshSubscribe.CreateNewAttempt: TIdSipRequest;
 begin
   Result := Self.Module.CreateSubscribe(Self.Dialog, Self.EventPackage);
-  Result.Event.ID             := Self.ID;
+  Result.Event.ID             := Self.EventID;
   Result.Expires.NumericValue := Self.Duration;
 end;
 
@@ -1683,7 +1683,7 @@ function TIdSipOutboundUnsubscribe.CreateNewAttempt: TIdSipRequest;
 begin
   Result := Self.Module.CreateSubscribe(Self.Target, Self.EventPackage);
   Result.CallID               := Self.CallID;
-  Result.Event.ID             := Self.ID;
+  Result.Event.ID             := Self.EventID;
   Result.Expires.NumericValue := 0;
   Result.From.Tag             := Self.FromTag;
 end;
@@ -1758,7 +1758,7 @@ end;
 function TIdSipOutboundRefer.CreateNewAttempt: TIdSipRequest;
 begin
   Result := Self.Module.CreateRefer(Self.Target, Self.ReferTo);
-  Result.Event.ID             := Self.ID;
+  Result.Event.ID             := Self.EventID;
   Result.Expires.NumericValue := Self.Duration;
 
   if Assigned(Self.TargetDialog) then begin
@@ -1877,7 +1877,7 @@ end;
 function TIdSipSubscription.CreateNewAttempt: TIdSipRequest;
 begin
   Result := Self.Module.CreateSubscribe(Self.Target, Self.EventPackage);
-  Result.Event.ID             := Self.ID;
+  Result.Event.ID             := Self.EventID;
   Result.Expires.NumericValue := Self.Duration;
 end;
 
@@ -2103,7 +2103,7 @@ begin
 
   Self.UsingSecureTransport := UsingSecureTransport;
   Self.EventPackage := Self.GetEventPackage(Self.InitialRequest);
-  Self.ID           := Self.GetID(Self.InitialRequest);
+  Self.EventID      := Self.GetID(Self.InitialRequest);
 
   // Self.Module.Package WILL return something, because the SubscribeModule
   // rejects all SUBSCRIBEs with unknown Event header values before we get
@@ -2278,7 +2278,8 @@ procedure TIdSipInboundSubscription.ScheduleRenotify(Seconds: Cardinal);
 begin
   Self.UA.ScheduleEvent(TIdSipSubscriptionRenotify,
                         Seconds*1000,
-                        Self.InitialRequest);
+                        Self.InitialRequest,
+                        Self.ID);
 end;
 
 procedure TIdSipInboundSubscription.ScheduleTermination(Expires: Cardinal);
@@ -2288,7 +2289,8 @@ begin
   // Expires contains a value in seconds
   Self.UA.ScheduleEvent(TIdSipSubscriptionExpires,
                         Expires*1000,
-                        Self.InitialRequest);
+                        Self.InitialRequest,
+                        Self.ID);
 end;
 
 procedure TIdSipInboundSubscription.SendAccept(Subscribe: TIdSipRequest);
@@ -2432,7 +2434,7 @@ begin
 
   Self.Redirector.Send;
   Self.InitialRequest.Assign(Self.Redirector.InitialAction.InitialRequest);
-  Self.ID := (Self.Redirector.InitialAction as TIdSipOutboundSubscribe).ID;
+//  Self.ID := (Self.Redirector.InitialAction as TIdSipOutboundSubscribe).ID;
 end;
 
 procedure TIdSipOutboundSubscription.Terminate;
@@ -2457,7 +2459,7 @@ procedure TIdSipOutboundSubscription.ConfigureRequest(Sub: TIdSipOutboundSubscri
 begin
   Sub.Duration     := Self.Duration;
   Sub.EventPackage := Self.EventPackage;
-  Sub.ID           := Self.ID;
+  Sub.EventID      := Self.EventID;
   Sub.Target       := Self.Target;
 end;
 
@@ -2752,7 +2754,8 @@ begin
   // NewDuration is in seconds
   Self.UA.ScheduleEvent(TIdSipOutboundSubscriptionRefresh,
                         NewDuration*1000,
-                        Self.InitialRequest);
+                        Self.InitialRequest,
+                        Self.ID);
 end;
 
 procedure TIdSipOutboundSubscription.ScheduleNewSubscription(Seconds: Cardinal);
@@ -2995,7 +2998,7 @@ end;
 function TIdSipOutboundReferral.CreateNewAttempt: TIdSipRequest;
 begin
   Result := Self.Module.CreateRefer(Self.Target, Self.ReferredResource);
-  Result.Event.ID             := Self.ID;
+  Result.Event.ID             := Self.EventID;
   Result.Expires.NumericValue := Self.Duration;
 
   if Assigned(Self.TargetDialog) then begin

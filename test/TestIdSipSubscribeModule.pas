@@ -385,9 +385,9 @@ type
   TestTIdSipOutboundSubscribe = class(TestTIdSipSubscribe,
                                       IIdSipOwnedActionListener)
   private
+    EventID:      String;
     EventPackage: String;
     Failed:       Boolean;
-    ID:           String;
     Succeeded:    Boolean;
 
     procedure OnFailure(Action: TIdSipAction;
@@ -510,7 +510,7 @@ type
 
   TestTIdSipInboundSubscription = class(TestTIdSipInboundSubscriptionBase)
   private
-    ID: String;
+    EventID: String;
 
     procedure CheckExpiresScheduled(ExpectedExpires: Cardinal;
                                     const Msg: String);
@@ -1953,9 +1953,9 @@ procedure TestTIdSipOutboundSubscribe.SetUp;
 begin
   inherited SetUp;
 
+  Self.EventID      := 'id1';
   Self.EventPackage := TIdSipTestPackage.EventPackage;
   Self.Failed       := false;
-  Self.ID           := 'id1';
   Self.Succeeded    := false;
 end;
 
@@ -1969,7 +1969,7 @@ begin
 
   Sub.Target       := Self.Destination;
   Sub.EventPackage := Self.EventPackage;
-  Sub.ID           := Self.ID;
+  Sub.EventID      := Self.EventID;
   Sub.AddActionListener(Self);
   Sub.AddOwnedActionListener(Self);
 end;
@@ -2103,7 +2103,7 @@ begin
   CheckEquals(Self.EventPackage,
               Sub.InitialRequest.Event.Value,
               Self.ClassName + ': Wrong Event header');
-  CheckEquals(Self.ID,
+  CheckEquals(Self.EventID,
               Sub.InitialRequest.Event.ID,
               Self.ClassName + ': ID param of Event header');
 
@@ -2638,7 +2638,7 @@ end;
 
 procedure TestTIdSipInboundSubscription.SetUp;
 begin
-  Self.ID := 'random-id';
+  Self.EventID := 'random-id';
 
   inherited SetUp;
 end;
@@ -2745,7 +2745,7 @@ begin
     Sub.From.Address         := Self.Destination.Address;
     Sub.FirstContact.Address := Self.Destination.Address;
 
-    Sub.Event.ID := Self.ID;
+    Sub.Event.ID := Self.EventID;
     if (ExpiryTime > 0) then
       Sub.Expires.NumericValue := ExpiryTime;
 
@@ -2798,7 +2798,7 @@ begin
 
   Sub := Self.Module.CreateSubscribe(Self.Destination, TIdSipTestPackage.EventPackage);
   try
-    Sub.Event.ID := Self.ID;
+    Sub.Event.ID := Self.EventID;
 
     Sub.Supported.Values.Add(ExtensionGruu);
 
@@ -2907,7 +2907,7 @@ begin
 
   Sub := Self.Module.CreateSubscribe(Self.Destination, TIdSipTestPackage.EventPackage);
   try
-    Sub.Event.ID := Self.ID;
+    Sub.Event.ID := Self.EventID;
 
     Action := TIdSipInboundSubscription.CreateInbound(Self.Core, Sub, false) as TIdSipInboundSubscription;
     try
@@ -3074,7 +3074,7 @@ begin
               'EventPackage');
 
   CheckEquals(Self.ActionRequest.Event.ID,
-              Self.Action.ID,
+              Self.Action.EventID,
               'ID');
 
   CheckEquals(SubscriptionSubstatePending,
@@ -3966,7 +3966,7 @@ begin
               Self.LastSentRequest.Event.Value,
               Self.ClassName
             + ': Wrong Event header');
-  CheckEquals(Self.Subscription.ID,
+  CheckEquals(Self.Subscription.EventID,
               Self.LastSentRequest.Event.ID,
               Self.ClassName
             + ': Wrong event ID');
