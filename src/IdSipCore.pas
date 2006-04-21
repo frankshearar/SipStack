@@ -173,15 +173,10 @@ type
     function  Count: Integer;
     function  CountOf(const MethodName: String): Integer;
     procedure FindActionAndPerform(const ID: String;
-                                   Block: TIdSipActionClosure); overload;
-    procedure FindActionAndPerform(Msg: TIdSipMessage;
-                                   Block: TIdSipActionClosure); overload;
+                                   Block: TIdSipActionClosure);
     procedure FindActionAndPerformOr(const ID: String;
                                      FoundBlock: TIdSipActionClosure;
-                                     NotFoundBlock: TIdSipActionClosure); overload;
-    procedure FindActionAndPerformOr(Msg: TIdSipMessage;
-                                     FoundBlock: TIdSipActionClosure;
-                                     NotFoundBlock: TIdSipActionClosure); overload;
+                                     NotFoundBlock: TIdSipActionClosure);
     function  FindActionForGruu(const LocalGruu: String): TIdSipAction;
     function  InviteCount: Integer;
     function  NextActionID: String;
@@ -197,6 +192,7 @@ type
   // a list of actions.
   TIdSipActionsWait = class(TIdSipMessageWait)
   private
+    fActionID:  String;
     fActions:   TIdSipActions;
     fBlockType: TIdSipActionClosureClass;
   public
@@ -204,14 +200,6 @@ type
 
     property Actions:   TIdSipActions            read fActions write fActions;
     property BlockType: TIdSipActionClosureClass read fBlockType write fBlockType;
-  end;
-
-  TIdSipIDActionsWait = class(TIdSipActionsWait)
-  private
-    fActionID: String;
-  public
-    procedure Trigger; override;
-
     property ActionID: String read fActionID write fActionID;
   end;
 
@@ -450,9 +438,6 @@ type
     function  ResponseForInvite: Cardinal; virtual;
     procedure ReturnResponse(Request: TIdSipRequest;
                              Reason: Cardinal);
-    procedure ScheduleEvent(BlockType: TIdSipActionClosureClass;
-                            WaitTime: Cardinal;
-                            Copy: TIdSipMessage); overload;
     procedure ScheduleEvent(BlockType: TIdSipActionClosureClass;
                             WaitTime: Cardinal;
                             Copy: TIdSipMessage;
@@ -1268,19 +1253,6 @@ begin
   end;
 end;
 
-procedure TIdSipActions.FindActionAndPerform(Msg: TIdSipMessage;
-                                             Block: TIdSipActionClosure);
-var
-  NullBlock: TIdSipActionClosure;
-begin
-  NullBlock := TIdSipActionClosure.Create;
-  try
-    Self.FindActionAndPerformOr(Msg, Block, NullBlock);
-  finally
-    NullBlock.Free;
-  end;
-end;
-
 procedure TIdSipActions.FindActionAndPerformOr(const ID: String;
                                                FoundBlock: TIdSipActionClosure;
                                                NotFoundBlock: TIdSipActionClosure);
@@ -1290,27 +1262,6 @@ begin
   Self.LockActions;
   try
     Action := Self.FindAction(ID);
-
-    if Assigned(Action) then
-      FoundBlock.Execute(Action)
-    else
-      NotFoundBlock.Execute(nil);
-  finally
-    Self.UnlockActions;
-  end;
-
-  Self.CleanOutTerminatedActions;
-end;
-
-procedure TIdSipActions.FindActionAndPerformOr(Msg: TIdSipMessage;
-                                               FoundBlock: TIdSipActionClosure;
-                                               NotFoundBlock: TIdSipActionClosure);
-var
-  Action: TIdSipAction;
-begin
-  Self.LockActions;
-  try
-    Action := Self.FindAction(Msg);
 
     if Assigned(Action) then
       FoundBlock.Execute(Action)
@@ -1505,23 +1456,6 @@ end;
 //* TIdSipActionsWait Public methods *******************************************
 
 procedure TIdSipActionsWait.Trigger;
-var
-  Block: TIdSipActionClosure;
-begin
-  Block := Self.BlockType.Create;
-  try
-    Self.Actions.FindActionAndPerform(Self.Message, Block);
-  finally
-    Block.Free;
-  end;
-end;
-
-//******************************************************************************
-//* TIdSipIDActionsWait                                                        *
-//******************************************************************************
-//* TIdSipIDActionsWait Public methods *****************************************
-
-procedure TIdSipIDActionsWait.Trigger;
 var
   Block: TIdSipActionClosure;
 begin
@@ -2217,29 +2151,15 @@ end;
 
 procedure TIdSipAbstractCore.ScheduleEvent(BlockType: TIdSipActionClosureClass;
                                            WaitTime: Cardinal;
-                                           Copy: TIdSipMessage);
+                                           Copy: TIdSipMessage;
+                                           const ActionID: String);
 var
   Event: TIdSipActionsWait;
 begin
   if not Assigned(Self.Timer) then
     Exit;
 
-  Event := Self.CreateActionsClosure(TIdSipActionsWait, Copy);
-  Event.BlockType := BlockType;
-  Self.ScheduleEvent(WaitTime, Event);
-end;
-
-procedure TIdSipAbstractCore.ScheduleEvent(BlockType: TIdSipActionClosureClass;
-                                           WaitTime: Cardinal;
-                                           Copy: TIdSipMessage;
-                                           const ActionID: String);
-var
-  Event: TIdSipIDActionsWait;
-begin
-  if not Assigned(Self.Timer) then
-    Exit;
-
-  Event := Self.CreateActionsClosure(TIdSipIDActionsWait, Copy) as TIdSipIDActionsWait;
+  Event := Self.CreateActionsClosure(TIdSipActionsWait, Copy) as TIdSipActionsWait;
   Event.BlockType := BlockType;
   Event.ActionID  := ActionID;
   Self.ScheduleEvent(WaitTime, Event);

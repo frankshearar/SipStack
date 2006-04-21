@@ -1761,7 +1761,7 @@ begin
 
   Finder := TIdSipActionFinder.Create;
   try
-    Self.Actions.FindActionAndPerform(A.InitialRequest, Finder);
+    Self.Actions.FindActionAndPerform(A.ID, Finder);
 
     Check(Finder.Action = A, 'Wrong action found');
   finally
@@ -1775,7 +1775,7 @@ var
 begin
   Finder := TIdSipActionFinder.Create;
   try
-    Self.Actions.FindActionAndPerform(Self.Options, Finder);
+    Self.Actions.FindActionAndPerform('', Finder);
 
     Check(not Assigned(Finder.Action), 'An action found in an empty list');
   finally
@@ -1785,13 +1785,18 @@ end;
 
 procedure TestTIdSipActions.TestFindActionAndPerformBlockNoMatch;
 var
-  Finder: TIdSipActionFinder;
+  Action:    TIdSipAction;
+  AnotherID: String;
+  Finder:    TIdSipActionFinder;
 begin
-  Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false));
+  Action := TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false);
+  Self.Actions.Add(Action);
+
+  AnotherID := Action.ID + '1';
 
   Finder := TIdSipActionFinder.Create;
   try
-    Self.Actions.FindActionAndPerform(Self.Options, Finder);
+    Self.Actions.FindActionAndPerform(AnotherID, Finder);
 
     Check(not Assigned(Finder.Action), 'An action found');
   finally
@@ -1813,7 +1818,7 @@ begin
   try
     Switch := TIdSipActionSwitch.Create;
     try
-      Self.Actions.FindActionAndPerformOr(A.InitialRequest,
+      Self.Actions.FindActionAndPerformOr(A.ID,
                                           Finder,
                                           Switch);
 
@@ -1829,16 +1834,21 @@ end;
 
 procedure TestTIdSipActions.TestFindActionAndPerformOrBlockNoMatch;
 var
-  Finder: TIdSipActionFinder;
-  Switch: TIdSipActionSwitch;
+  Action:    TIdSipAction;
+  AnotherID: String;
+  Finder:    TIdSipActionFinder;
+  Switch:    TIdSipActionSwitch;
 begin
-  Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false));
+  Action := TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false);
+  Self.Actions.Add(Action);
+
+  AnotherID := Action.ID + '1';
 
   Finder := TIdSipActionFinder.Create;
   try
     Switch := TIdSipActionSwitch.Create;
     try
-      Self.Actions.FindActionAndPerformOr(Self.Options,
+      Self.Actions.FindActionAndPerformOr(AnotherID,
                                           Finder,
                                           Switch);
 
