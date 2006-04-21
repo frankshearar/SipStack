@@ -1850,9 +1850,8 @@ begin
       Self.InviteAction.AddActionListener(L1);
       Self.InviteAction.AddActionListener(L2);
 
-      Self.Dispatcher.Transport.FailWith := EIdConnectTimeout;
-
       Self.InviteAction.Accept('', '');
+      Self.InviteAction.NetworkFailureSending(Self.InviteAction.InitialRequest);
 
       Check(Self.InviteAction.IsTerminated, 'Action not marked as terminated');
       Check(L1.NetworkFailed, 'TIdSipInboundInvite didn''t notify L1');
