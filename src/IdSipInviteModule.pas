@@ -1902,6 +1902,11 @@ var
   Bye: TIdSipRequest;
   Dlg: TIdSipDialog;
 begin
+  // You might think we'd need to terminate Self here. We don't want to do that
+  // because Self.SentCancel = false if we've received a 200 OK to a
+  // _redirected_ INVITE. In this case, we want to keep our established session,
+  // but terminate the other dialogs.
+
   Dlg := TIdSipDialog.CreateOutboundDialog(Self.InitialRequest,
                                            Response,
                                            UsingSecureTransport);
