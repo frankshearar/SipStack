@@ -6070,6 +6070,7 @@ procedure TestTIdSipOutboundSession.TestRaceConditionCrossoverOfCancelAndInvites
 var
   AlicesSession: TIdSipOutboundSession;
   Cancel:        TIdSipRequest;
+  SessionCount:  Integer;
 begin
   // from draft-hasebe-sipping-race-examples-00.txt, section 3.1.2:
   //   Alice                     Bob
@@ -6105,6 +6106,7 @@ begin
   Cancel := TIdSipRequest.Create;
   try
     AlicesSession := Self.CreateAction as TIdSipOutboundSession;
+    SessionCount := Self.Core.CountOf(MethodInvite);
 
     Self.ReceiveRinging(AlicesSession.InitialRequest);
 
@@ -6122,7 +6124,7 @@ begin
     CheckEquals(MethodBye,
                 Self.LastSentRequest.Method,
                 'Unexpected request sent');
-    Check(AlicesSession.IsTerminated,
+    Check(Self.Core.CountOf(MethodInvite) < SessionCount,
           'Session not terminated');
   finally
     Cancel.Free;
