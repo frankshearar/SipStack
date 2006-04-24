@@ -4745,9 +4745,9 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipResponseLocationsList                                             *
+//* TestTIdSipResponseLocationsList                                            *
 //******************************************************************************
-//* TestTIdSipResponseLocationsList Public methods ******************************
+//* TestTIdSipResponseLocationsList Public methods *****************************
 
 procedure TestTIdSipResponseLocationsList.SetUp;
 begin
@@ -4770,7 +4770,7 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdSipResponseLocationsList Published methods ***************************
+//* TestTIdSipResponseLocationsList Published methods **************************
 
 procedure TestTIdSipResponseLocationsList.TestAddAndLocationsFor;
 var
