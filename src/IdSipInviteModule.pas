@@ -484,10 +484,10 @@ type
     procedure AcceptModify(const LocalSessionDescription: String;
                            const MimeType: String);
     procedure AddSessionListener(const Listener: IIdSipSessionListener);
-    function  IsEarly: Boolean;
     function  DialogEstablished: Boolean;
     function  DialogMatches(DialogID: TIdSipDialogID): Boolean; overload;
     function  DialogMatches(Msg: TIdSipMessage): Boolean; overload;
+    function  IsEarly: Boolean;
     function  IsOutboundCall: Boolean;
     function  IsSession: Boolean; override;
     function  Method: String; override;
@@ -2139,12 +2139,6 @@ begin
   Self.ActionListeners.AddListener(Listener);
 end;
 
-function TIdSipSession.IsEarly: Boolean;
-begin
-  // This relies on short-circuited boolean expression evaluation
-  Result := not Self.DialogEstablished or Self.Dialog.IsEarly;
-end;
-
 function TIdSipSession.DialogEstablished: Boolean;
 begin
   Self.DialogLock.Acquire;
@@ -2178,6 +2172,12 @@ begin
   finally
     DialogID.Free;
   end;
+end;
+
+function TIdSipSession.IsEarly: Boolean;
+begin
+  // This relies on short-circuited boolean expression evaluation
+  Result := not Self.DialogEstablished or Self.Dialog.IsEarly;
 end;
 
 function TIdSipSession.IsOutboundCall: Boolean;
