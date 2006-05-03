@@ -5938,11 +5938,9 @@ procedure TestTIdSipOutboundSession.TestHairpinCall;
 var
   Session: TIdSipSession;
 begin
-//  Self.Dispatcher.Transport.PeerIP := Self.Dispatcher.Transport.Bindings[0].IP;
+  Self.Core.InviteModule.AddListener(Self);
 
   Session := Self.Module.Call(Self.Core.From, '', '');
-//  Session.AddSessionListener(Self);
-//  Session.AddActionListener(Self);
   Session.Send;
   Check(Assigned(Self.HairpinCall), 'We didn''t receive the INVITE');
 end;
