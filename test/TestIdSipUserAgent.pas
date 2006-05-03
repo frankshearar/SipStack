@@ -1512,7 +1512,7 @@ var
   EventCount: Integer;
 begin
   EventCount := Self.DebugTimer.EventCount;
-  Self.Core.ScheduleEvent(TIdSipInboundInviteExpire, 50, Self.Invite.Copy);
+  Self.Core.ScheduleEvent(TIdSipInboundInviteExpire, 50, Self.Invite.Copy, '');
   Check(EventCount < DebugTimer.EventCount,
         'Event not scheduled');
 end;
