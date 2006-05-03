@@ -253,6 +253,19 @@ type
     procedure TestRemoveListener;
   end;
 
+  TestTIdSipActionRegistry = class(TTestCase)
+  private
+    Core:    TIdSipUserAgent;
+    Request: TIdSipRequest;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestActionsAddToRegistryAutomatically;
+    procedure TestActionsGetUniqueIDs;
+    procedure TestActionsAutomaticallyUnregister;
+  end;
+
   TestTIdSipActionAuthenticationChallengeMethod = class(TActionMethodTestCase)
   private
     Action:   TIdSipAction;
@@ -420,6 +433,7 @@ begin
   Result.AddTest(TestTIdSipOptionsModule.Suite);
   Result.AddTest(TestTIdSipInboundOptions.Suite);
   Result.AddTest(TestTIdSipOutboundOptions.Suite);
+  Result.AddTest(TestTIdSipActionRegistry.Suite);
   Result.AddTest(TestTIdSipActionAuthenticationChallengeMethod.Suite);
   Result.AddTest(TestTIdSipActionNetworkFailureMethod.Suite);
   Result.AddTest(TestTIdSipOwnedActionFailureMethod.Suite);
@@ -2821,6 +2835,84 @@ begin
   finally
     L1.Free;
   end;
+end;
+
+//******************************************************************************
+//* TestTIdSipActionRegistry                                                   *
+//******************************************************************************
+//* TestTIdSipActionRegistry Public methods ************************************
+
+procedure TestTIdSipActionRegistry.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Core    := TIdSipUserAgent.Create;
+  Self.Request := TIdSipTestResources.CreateBasicRequest;
+end;
+
+procedure TestTIdSipActionRegistry.TearDown;
+begin
+  Self.Request.Free;
+  Self.Core.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipActionRegistry Published methods *********************************
+
+procedure TestTIdSipActionRegistry.TestActionsAddToRegistryAutomatically;
+var
+  InviteAction: TIdSipAction;
+begin
+  InviteAction := TIdSipOutboundInitialInvite.Create(Self.Core);
+  try
+    CheckNotEquals('', InviteAction.ID, 'Action has no ID');
+    Check(nil <> TIdSipActionRegistry.FindAction(InviteAction.ID),
+          'Action not added to registry');
+  finally
+    InviteAction.Free;
+  end;
+end;
+
+procedure TestTIdSipActionRegistry.TestActionsGetUniqueIDs;
+var
+  InviteAction:  TIdSipAction;
+  OptionsAction: TIdSipAction;
+begin
+  // This test isn't exactly thorough: it's not possible to write a test that
+  // proves the registry will never duplicate an existing Action's ID,
+  // but this at least demonstrates that the registry won't return the same
+  // ID twice in a row.
+
+  InviteAction := TIdSipOutboundInitialInvite.Create(Self.Core);
+  try
+    OptionsAction := TIdSipOutboundOptions.Create(Self.Core);
+    try
+      CheckNotEquals(InviteAction.ID,
+                     OptionsAction.ID,
+                     'The registry gave two Actions the same ID');
+    finally
+      OptionsAction.Free;
+    end;
+  finally
+    InviteAction.Free;
+  end;
+end;
+
+procedure TestTIdSipActionRegistry.TestActionsAutomaticallyUnregister;
+var
+  InviteAction: TIdSipAction;
+  ActionID:     String;
+begin
+  InviteAction := TIdSipOutboundInitialInvite.Create(Self.Core);
+  try
+    ActionID := InviteAction.ID;
+  finally
+    InviteAction.Free;
+  end;
+
+  Check(nil = TIdSipActionRegistry.FindAction(ActionID),
+        'Action not removed from registry');
 end;
 
 //******************************************************************************

@@ -157,7 +157,7 @@ type
     Observed:   TIdObservable;
 
     function  ActionAt(Index: Integer): TIdSipAction;
-    function  FindAction(Msg: TIdSipMessage): TIdSipAction; overload;
+    function  FindAction(Msg: TIdSipMessage; ClientAction: Boolean): TIdSipAction; overload;
     function  FindAction(const ActionID: String): TIdSipAction; overload;
     procedure LockActions;
     procedure UnlockActions;
@@ -179,9 +179,8 @@ type
                                      NotFoundBlock: TIdSipActionClosure);
     function  FindActionForGruu(const LocalGruu: String): TIdSipAction;
     function  InviteCount: Integer;
-    function  NextActionID: String;
     function  OptionsCount: Integer;
-    procedure Perform(Msg: TIdSipMessage; Block: TIdSipActionClosure);
+    procedure Perform(Msg: TIdSipMessage; Block: TIdSipActionClosure; ClientAction: Boolean);
     function  RegistrationCount: Integer;
     procedure RemoveObserver(const Listener: IIdObserver);
     function  SessionCount: Integer;
@@ -423,7 +422,6 @@ type
     function  ModuleFor(Request: TIdSipRequest): TIdSipMessageModule; overload;
     function  ModuleFor(const Method: String): TIdSipMessageModule; overload;
     function  ModuleFor(ModuleType: TIdSipMessageModuleClass): TIdSipMessageModule; overload;
-    function  NextActionID: String;
     function  NextBranch: String;
     function  NextCallID: String;
     function  NextGrid: String;
@@ -848,6 +846,19 @@ type
     property InitialAction:    TIdSipOwnedAction read fInitialAction;
   end;
 
+  // I provide facilities to unambiguously locate any action resident in
+  // memory, and to allow actions to register and unregister from me as
+  // they instantiate and free.
+  TIdSipActionRegistry = class(TObject)
+  private
+    class function ActionAt(Index: Integer): TIdSipAction;
+    class function ActionRegistry: TStrings;
+  public
+    class function  RegisterAction(Instance: TIdSipAction): String;
+    class function  FindAction(const ActionID: String): TIdSipAction;
+    class procedure UnregisterAction(const ActionID: String);
+  end;
+
   TIdSipActionMethod = class(TIdNotification)
   private
     fActionAgent: TIdSipAction;
@@ -1052,6 +1063,10 @@ implementation
 uses
   IdHashMessageDigest, IdRandom, IdSdp, IdSimpleParser, IdSipConsts,
   IdSipIndyLocator, IdSipInviteModule, IdSipRegistration, Math;
+
+// Used by the ActionRegistry.
+var
+  GActions: TStrings;
 
 const
   ItemNotFoundIndex = -1;
@@ -1308,33 +1323,12 @@ begin
   Result := Self.CountOf(MethodInvite);
 end;
 
-function TIdSipActions.NextActionID: String;
-var
-  I:             Integer;
-  NoActionHasID: Boolean;
-begin
-  // Produce a token such that no action has that token as an ID.
-
-  Self.ActionLock.Acquire;
-  try
-    repeat
-      Result := GRandomNumber.NextHexString;
-
-      NoActionHasID := true;
-      for I := 0 to Self.Actions.Count - 1 do
-        NoActionHasID := NoActionHasID and (Result <> Self.ActionAt(I).ID);
-    until NoActionHasID;
-  finally
-    Self.ActionLock.Release;
-  end;
-end;
-
 function TIdSipActions.OptionsCount: Integer;
 begin
   Result := Self.CountOf(MethodOptions);
 end;
 
-procedure TIdSipActions.Perform(Msg: TIdSipMessage; Block: TIdSipActionClosure);
+procedure TIdSipActions.Perform(Msg: TIdSipMessage; Block: TIdSipActionClosure; ClientAction: Boolean);
 var
   Action: TIdSipAction;
 begin
@@ -1343,7 +1337,7 @@ begin
 
   Self.LockActions;
   try
-    Action := Self.FindAction(Msg);
+    Action := Self.FindAction(Msg, ClientAction);
 
     Block.Execute(Action);
   finally
@@ -1404,7 +1398,7 @@ begin
   Result := Self.Actions[Index] as TIdSipAction;
 end;
 
-function TIdSipActions.FindAction(Msg: TIdSipMessage): TIdSipAction;
+function TIdSipActions.FindAction(Msg: TIdSipMessage; ClientAction: Boolean): TIdSipAction;
 var
   Action: TIdSipAction;
   I:      Integer;
@@ -1415,29 +1409,33 @@ begin
   I := 0;
   while (I < Self.Actions.Count) and not Assigned(Result) do begin
     Action := Self.Actions[I] as TIdSipAction;
-    if not Action.IsTerminated and Action.Match(Msg) then
-      Result := Action
-    else
+
+    // First, if an Action's Terminated we're not interested in dispatching to it.
+    // Second, the message has to match the Action (as defined per the type of Action).
+    // Third, OwningActions don't typically handle messages directly: Sessions use
+    // Invites, for instance.
+    // Fourth, do we match the message against the UAC actions (actions we
+    // initiated) or against the UAS actions?
+    if not Action.IsTerminated
+      and Action.Match(Msg) then begin
+
+      if Action.IsOwned then begin
+        if (Action.IsInbound = not ClientAction) then
+          Result := Action;
+      end
+      else begin
+        Result := Action;
+      end;
+    end;
+
+    if not Assigned(Result) then
       Inc(I);
   end;
 end;
 
 function TIdSipActions.FindAction(const ActionID: String): TIdSipAction;
-var
-  Action: TIdSipAction;
-  I:      Integer;
 begin
-  // Precondition: You've locked Self.ActionLock.
-  Result := nil;
-
-  I := 0;
-  while (I < Self.Actions.Count) and not Assigned(Result) do begin
-    Action := Self.Actions[I] as TIdSipAction;
-    if not Action.IsTerminated and (Action.ID = ActionID) then
-      Result := Action
-    else
-      Inc(I);
-  end;
+  Result := TIdSipActionRegistry.FindAction(ActionID);
 end;
 
 procedure TIdSipActions.LockActions;
@@ -2023,11 +2021,6 @@ begin
   end;
 end;
 
-function TIdSipAbstractCore.NextActionID: String;
-begin
-  Result := Self.Actions.NextActionID;
-end;
-
 function TIdSipAbstractCore.NextBranch: String;
 begin
   Result := GRandomNumber.NextSipUserAgentBranch;
@@ -2248,7 +2241,7 @@ var
 begin
   Actor := Self.CreateRequestHandler(Request, Receiver);
   try
-    Self.Actions.Perform(Request, Actor);
+    Self.Actions.Perform(Request, Actor, false);
   finally
     Actor.Free;
   end;
@@ -2261,7 +2254,7 @@ var
 begin
   Actor := Self.CreateResponseHandler(Response, Receiver);
   try
-    Self.Actions.Perform(Response, Actor);
+    Self.Actions.Perform(Response, Actor, true);
   finally
     Actor.Free;
   end;
@@ -2621,7 +2614,8 @@ begin
     SendFailed.FailedMessage := FailedMessage;
     SendFailed.Reason        := Reason;
 
-    Self.Actions.Perform(FailedMessage, SendFailed);
+    // Failing to send a Request means a UAC action's Send failed.
+    Self.Actions.Perform(FailedMessage, SendFailed, FailedMessage.IsRequest);
   finally
     SendFailed.Free;
   end;
@@ -3146,6 +3140,8 @@ end;
 
 destructor TIdSipAction.Destroy;
 begin
+  TIdSipActionRegistry.UnregisterAction(Self.ID);
+
   Self.TargetLocations.Free;
   Self.LocalGruu.Free;
   Self.InitialRequest.Free;
@@ -3325,7 +3321,7 @@ begin
   Self.fUA := UA;
 
   Self.ActionListeners := TIdNotificationList.Create;
-  Self.fID             := Self.UA.NextActionID;
+  Self.fID             := TIdSipActionRegistry.RegisterAction(Self);
   Self.fInitialRequest := TIdSipRequest.Create;
   Self.fIsOwned        := false;
   Self.fIsTerminated   := false;
@@ -4203,6 +4199,53 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipActionRegistry                                                       *
+//******************************************************************************
+//* TIdSipActionRegistry Public methods ****************************************
+
+class function TIdSipActionRegistry.RegisterAction(Instance: TIdSipAction): String;
+begin
+  repeat
+    Result := GRandomNumber.NextHexString;
+  until (Self.ActionRegistry.IndexOf(Result) = ItemNotFoundIndex);
+
+  Self.ActionRegistry.AddObject(Result, Instance);
+end;
+
+class function TIdSipActionRegistry.FindAction(const ActionID: String): TIdSipAction;
+var
+  Index: Integer;
+begin
+  Index := Self.ActionRegistry.IndexOf(ActionID);
+
+  if (Index = ItemNotFoundIndex) then
+    Result := nil
+  else
+    Result := Self.ActionAt(Index);
+end;
+
+class procedure TIdSipActionRegistry.UnregisterAction(const ActionID: String);
+var
+  Index: Integer;
+begin
+  Index := Self.ActionRegistry.IndexOf(ActionID);
+  if (Index <> ItemNotFoundIndex) then
+    Self.ActionRegistry.Delete(Index);
+end;
+
+//* TIdSipActionRegistry Private methods ***************************************
+
+class function TIdSipActionRegistry.ActionAt(Index: Integer): TIdSipAction;
+begin
+  Result := TIdSipAction(Self.ActionRegistry.Objects[Index]);
+end;
+
+class function TIdSipActionRegistry.ActionRegistry: TStrings;
+begin
+  Result := GActions;
+end;
+
+//******************************************************************************
 //* TIdSipActionAuthenticationChallengeMethod                                  *
 //******************************************************************************
 //* TIdSipActionAuthenticationChallengeMethod Public methods *******************
@@ -4317,4 +4360,11 @@ begin
                                                                        Self.Receiver);
 end;
 
+initialization
+  GActions := TStringList.Create;
+finalization
+// These objects are purely memory-based, so it's safe not to free them here.
+// Still, perhaps we need to review this methodology. How else do we get
+// something like class variables?
+//  GActions.Free;
 end.

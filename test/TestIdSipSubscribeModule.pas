@@ -968,6 +968,8 @@ var
 begin
   Refer := Self.Module.CreateRefer(Self.Destination, Target);
   try
+    // See the comment in TSubscribeTestCase.ReceiveSubscribe.
+    Refer.FirstContact.Address := Self.Destination.Address;
     Self.ReceiveRequest(Refer);
   finally
     Refer.Free;
@@ -981,6 +983,25 @@ var
 begin
   Sub := Self.Core.CreateRequest(MethodSubscribe, Self.Destination);
   try
+    // Self.Core will use "localhost" here, and as a result of the mock
+    // infrastructure this will access violate - the stack assumes that
+    // processing the received request will complete before the response, which
+    // arrives at the same stack, is processed.
+
+    // In hideous detail, the SUBSCRIBE/REFER arrives at the stack. The core
+    // creates an InboundSubscription/Referral, which sends a NOTIFY. That
+    // NOTIFY arrives at the same stack. The stack tries to match that NOTIFY
+    // against an OutboundSubscription/Referral. It can't, and sends a 481
+    // response. That response arrives at the same stack again, is matched
+    // against the outbound NOTIFY action, and terminates it. That
+    // OutboundNotify notifies its OutboundSubscription/Referral of its failure,
+    // and the OutboundSubscription/Referral terminates. Thus, the outbound
+    // action terminates before it's even added to the stack's Actions list!
+    // Remember, this can only happen when we allow processing of a response
+    // halfway through the processing of a (hairpinned) request, and in a real
+    // stack (i.e., one that doesn't use a MockTransport) that can't happen.
+
+    Sub.FirstContact.Address := Self.Destination.Address;
     Sub.Event.EventPackage   := EventPackage;
 
     if (ExpiryTime > 0) then
@@ -1110,6 +1131,8 @@ var
 begin
   Refer := Self.Module.CreateRefer(Self.Destination, Self.Core.Contact);
   try
+    // See the comment in TSubscribeTestCase.ReceiveSubscribe.
+    Refer.FirstContact.Address := Self.Destination.Address;
     Refer.RemoveAllHeadersNamed(ReferToHeaderFull);
     Self.ReceiveRequest(Refer);
   finally
@@ -2727,6 +2750,8 @@ var
 begin
   Subscribe := Self.Module.CreateSubscribe(Self.Destination, EventPackage);
   try
+    // See the comment in TSubscribeTestCase.ReceiveSubscribe.
+    Subscribe.FirstContact.Address := Self.Destination.Address;
     Subscribe.RemoveAllHeadersNamed(ExpiresHeader);
 
     Self.ReceiveRequest(Subscribe);
@@ -2761,6 +2786,8 @@ var
 begin
   Subscribe := Self.Module.CreateSubscribe(Self.Destination, TIdSipTestPackage.EventPackage);
   try
+    // See the comment in TSubscribeTestCase.ReceiveSubscribe.
+    Subscribe.FirstContact.Address := Self.Destination.Address;
     Subscribe.RemoveAllHeadersNamed(ExpiresHeader);
     Subscribe.FirstContact.Expires := Duration;
 
@@ -2798,6 +2825,8 @@ begin
 
   Sub := Self.Module.CreateSubscribe(Self.Destination, TIdSipTestPackage.EventPackage);
   try
+    // See the comment in TSubscribeTestCase.ReceiveSubscribe.
+    Sub.FirstContact.Address := Self.Destination.Address;
     Sub.Event.ID := Self.EventID;
 
     Sub.Supported.Values.Add(ExtensionGruu);
@@ -2899,7 +2928,6 @@ const
   MimeType = 'text/plain';
 var
   Accepted: TIdSipResponse;
-  Action:   TIdSipInboundSubscription;
   Sub:      TIdSipRequest;
 begin
   // Set us up to support GRUU
@@ -2907,36 +2935,37 @@ begin
 
   Sub := Self.Module.CreateSubscribe(Self.Destination, TIdSipTestPackage.EventPackage);
   try
+    // See the comment in TSubscribeTestCase.ReceiveSubscribe.
+    Sub.FirstContact.Address := Self.Destination.Address;
     Sub.Event.ID := Self.EventID;
 
-    Action := TIdSipInboundSubscription.CreateInbound(Self.Core, Sub, false) as TIdSipInboundSubscription;
-    try
-      Accepted := Self.LastSentResponse;
-      Check(Accepted.FirstContact.Address.HasGrid,
-            'Dialog-establishing response should have a "grid" parameter');
+    Self.ReceiveRequest(Sub);
+    Check(Assigned(Self.Action),
+          'No subscribing request received');
 
-      Action.Accept;
+    Accepted := Self.LastSentResponse;
+    Check(Accepted.FirstContact.Address.HasGrid,
+          'Dialog-establishing response should have a "grid" parameter');
 
-      Self.MarkSentRequestCount;
-      Action.Notify(Body, MimeType);
+    Self.Action.Accept;
 
-      CheckRequestSent('No request sent');
-      Self.CheckNotify(Self.LastSentRequest,
-                       Body,
-                       MimeType);
-      Check(Self.LastSentRequest.HasHeader(SupportedHeaderFull),
-            'NOTIFY lacks a Supported header');
-      Check(Self.LastSentRequest.SupportsExtension(ExtensionGruu),
-            'Supported header lacks a "gruu" entry');
-      CheckEquals(Action.LocalGruu.AsString,
-                  Self.LastSentRequest.FirstContact.AsString,
-                  'NOTIFY didn''t use ' + Action.Method + '''s GRUU');
-      CheckEquals(Self.LastSentRequest.FirstContact.Address.Host,
-                  Accepted.FirstContact.Address.Host,
-                  'NOTIFY''s remote target should match that of the 202 Accepted');
-    finally
-      Action.Free;
-    end;
+    Self.MarkSentRequestCount;
+    Self.Action.Notify(Body, MimeType);
+
+    CheckRequestSent('No request sent');
+    Self.CheckNotify(Self.LastSentRequest,
+                     Body,
+                     MimeType);
+    Check(Self.LastSentRequest.HasHeader(SupportedHeaderFull),
+          'NOTIFY lacks a Supported header');
+    Check(Self.LastSentRequest.SupportsExtension(ExtensionGruu),
+          'Supported header lacks a "gruu" entry');
+    CheckEquals(Self.Action.LocalGruu.AsString,
+                Self.LastSentRequest.FirstContact.AsString,
+                'NOTIFY didn''t use ' + Self.Action.Method + '''s GRUU');
+    CheckEquals(Self.LastSentRequest.FirstContact.Address.Host,
+                Accepted.FirstContact.Address.Host,
+                'NOTIFY''s remote target should match that of the 202 Accepted');
   finally
     Sub.Free;
   end;
@@ -4370,6 +4399,8 @@ begin
 
   Refer := Self.Module.CreateRefer(Self.Destination, Self.Core.Contact);
   try
+    // See the comment in TSubscribeTestCase.ReceiveSubscribe.
+    Refer.FirstContact.Address := Self.Destination.Address;
     Refer.Supported.Values.Add(ExtensionGruu);
 
     Self.ReceiveRequest(Refer);
@@ -4414,42 +4445,45 @@ end;
 procedure TestTIdSipInboundReferral.TestNotifyWithGruu;
 var
   Accepted: TIdSipResponse;
-  Action:   TIdSipInboundReferral;
   Refer:    TIdSipRequest;
+  Referral: TIdSipInboundReferral;
 begin
   // Set us up to support GRUU
   Self.UseGruu;
 
   Refer := Self.Module.CreateRefer(Self.Destination, Self.Core.Gruu);
   try
-    Action := TIdSipInboundReferral.CreateInbound(Self.Core, Refer, false) as TIdSipInboundReferral;
-    try
-      Accepted := Self.LastSentResponse;
-      Check(Accepted.FirstContact.Address.HasGrid,
-            'Dialog-establishing response should have a "grid" parameter');
+    // See the comment in TSubscribeTestCase.ReceiveSubscribe.
+    Refer.FirstContact.Address := Self.Destination.Address;
 
-      Action.Accept;
+    Self.ReceiveRequest(Refer);
+    Check(Assigned(Self.Action),
+          'No subscribing request received');
+    Referral := Self.Action as TIdSipInboundReferral;
 
-      Self.MarkSentRequestCount;
-      Action.ReferenceTrying;
+    Accepted := Self.LastSentResponse;
+    Check(Accepted.FirstContact.Address.HasGrid,
+          'Dialog-establishing response should have a "grid" parameter');
 
-      CheckRequestSent('No request sent');
-      Self.CheckNotify(Self.LastSentRequest,
-                       TIdSipInboundReferral.ReferralTryingBody,
-                       SipFragmentMimeType);
-      Check(Self.LastSentRequest.HasHeader(SupportedHeaderFull),
-            'NOTIFY lacks a Supported header');
-      Check(Self.LastSentRequest.SupportsExtension(ExtensionGruu),
-            'Supported header lacks a "gruu" entry');
-      CheckEquals(Action.LocalGruu.AsString,
-                  Self.LastSentRequest.FirstContact.AsString,
-                  'NOTIFY didn''t use ' + Action.Method + '''s GRUU');
-      CheckEquals(Self.LastSentRequest.FirstContact.Address.Host,
-                  Accepted.FirstContact.Address.Host,
-                  'NOTIFY''s remote target should match that of the 202 Accepted');
-    finally
-      Action.Free;
-    end;
+    Referral.Accept;
+
+    Self.MarkSentRequestCount;
+    Referral.ReferenceTrying;
+
+    CheckRequestSent('No request sent');
+    Self.CheckNotify(Self.LastSentRequest,
+                     TIdSipInboundReferral.ReferralTryingBody,
+                     SipFragmentMimeType);
+    Check(Self.LastSentRequest.HasHeader(SupportedHeaderFull),
+          'NOTIFY lacks a Supported header');
+    Check(Self.LastSentRequest.SupportsExtension(ExtensionGruu),
+          'Supported header lacks a "gruu" entry');
+    CheckEquals(Referral.LocalGruu.AsString,
+                Self.LastSentRequest.FirstContact.AsString,
+                'NOTIFY didn''t use ' + Referral.Method + '''s GRUU');
+    CheckEquals(Self.LastSentRequest.FirstContact.Address.Host,
+                Accepted.FirstContact.Address.Host,
+                'NOTIFY''s remote target should match that of the 202 Accepted');
   finally
     Refer.Free;
   end;
