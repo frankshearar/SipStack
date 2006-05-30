@@ -226,7 +226,7 @@ procedure TestTIdSipUDPTransport.CheckMissingContentLength(Sender: TObject;
                                                            ReceivedFrom: TIdSipConnectionBindings);
 begin
   try
-    Check(R.HasHeader(ContactHeaderFull),
+    Check(R.HasHeader(ContentLengthHeaderFull),
           'Content-Length not added');
     CheckEquals('foofoo',
                 R.Body,
@@ -326,6 +326,8 @@ end;
 
 procedure TestTIdSipUDPTransport.TestMissingContentLength;
 begin
+  // No Content-Length header? Assume that the entire rest of the UDP packet is
+  // the body.
   Self.CheckingRequestEvent := Self.CheckMissingContentLength;
 
   Self.SendMessage('INVITE sip:foo SIP/2.0'#13#10
@@ -334,6 +336,7 @@ begin
                  + 'CSeq: 1 INVITE'#13#10
                  + 'From: sip:foo'#13#10
                  + 'To: sip:foo'#13#10
+                 + 'Max-Forwards: 70'#13#10
                  + #13#10
                  + 'foofoo');
 
