@@ -162,8 +162,8 @@ type
     procedure TestInstantiationRegistersTransport;
     procedure TestIsNull; virtual;
     procedure TestIsRunning;
-    procedure TestDiscardResponseWithUnknownSentBy;
     procedure TestDiscardMalformedMessage;
+    procedure TestDiscardResponseWithUnknownSentBy;
     procedure TestDontDiscardUnknownSipVersion;
     procedure TestReceivedParamDifferentIPv4SentBy;
     procedure TestReceivedParamFQDNSentBy;
@@ -919,26 +919,6 @@ begin
         'Transport didn''t stop');
 end;
 
-procedure TestTIdSipTransport.TestDiscardResponseWithUnknownSentBy;
-begin
-  Self.CheckingResponseEvent := Self.CheckDiscardResponseWithUnknownSentBy;
-
-  // If we don't set the received param we won't be able to send
-  // the message to the right SIP server. No, you'd never do this
-  // in production, because it's wilfully wrong.
-  Self.Response.LastHop.SentBy := 'unknown.host';
-  Self.Response.LastHop.Received := Self.LowPortTransport.Bindings[0].IP;
-  Self.SendMessage(Self.Response.AsString);
-
-  Self.WaitForSignaled;
-  Check(not Self.ReceivedResponse,
-        Self.HighPortTransport.ClassName
-      + ': Response not silently discarded');
-  Check(Self.RejectedMessage,
-        Self.HighPortTransport.ClassName
-      + ': Rejected message event didn''t fire');
-end;
-
 procedure TestTIdSipTransport.TestDiscardMalformedMessage;
 var
   Listener:          TIdSipTestTransportListener;
@@ -988,6 +968,26 @@ begin
     Self.HighPortTransport.RemoveTransportListener(Listener);
     Listener.Free;
   end;
+end;
+
+procedure TestTIdSipTransport.TestDiscardResponseWithUnknownSentBy;
+begin
+  Self.CheckingResponseEvent := Self.CheckDiscardResponseWithUnknownSentBy;
+
+  // If we don't set the received param we won't be able to send
+  // the message to the right SIP server. No, you'd never do this
+  // in production, because it's wilfully wrong.
+  Self.Response.LastHop.SentBy := 'unknown.host';
+  Self.Response.LastHop.Received := Self.LowPortTransport.Bindings[0].IP;
+  Self.SendMessage(Self.Response.AsString);
+
+  Self.WaitForSignaled;
+  Check(not Self.ReceivedResponse,
+        Self.HighPortTransport.ClassName
+      + ': Response not silently discarded');
+  Check(Self.RejectedMessage,
+        Self.HighPortTransport.ClassName
+      + ': Rejected message event didn''t fire');
 end;
 
 procedure TestTIdSipTransport.TestDontDiscardUnknownSipVersion;
