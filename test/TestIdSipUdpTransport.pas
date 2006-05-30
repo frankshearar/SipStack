@@ -126,7 +126,7 @@ uses
 
 function Suite: ITestSuite;
 begin
-  Result := TTestSuite.Create('IdSipTcpTransport unit tests');
+  Result := TTestSuite.Create('IdSipUdpTransport unit tests');
   Result.AddTest(TestTIdSipUDPTransport.Suite);
   Result.AddTest(TestTIdSipUdpServer.Suite);
 end;
