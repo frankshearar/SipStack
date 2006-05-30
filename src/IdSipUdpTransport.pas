@@ -203,8 +203,11 @@ end;
 //* TIdSipUdpServer Protected methods ******************************************
 
 procedure TIdSipUdpServer.DoUDPRead(AData: TStream; ABinding: TIdSocketHandle);
+const
+  MaxUdpPacketSize = 64*1024;
 var
-  Msg: TIdSipMessage;
+  Msg:             TIdSipMessage;
+  NoContentLength: Boolean;
 begin
   // Note that if AData contains a fragment of a message we don't care to
   // reassemble the packet. RFC 3261 section 18.3 tells us:
@@ -221,7 +224,27 @@ begin
   try
     Msg := TIdSipMessage.ReadMessageFrom(AData);
     try
+      // Msg might not have a Content-Length header. Cf. RFC 3261, section 18.3:
+      //
+      //   If the message [using a message-oriented transport] has no
+      //   Content-Length header field, the message body is assumed to end at
+      //   the end of the transport packet.
+
+      // If Msg doesn't have a Content-Length header, we have to calculate the
+      // message body length ourselves, and set Msg.ContentLength so that
+      // Msg.ReadBody() knows how much data to read. The only data we have is
+      // the unparsed message (in AData and in Msg.RawMessage), so the simplest,
+      // reliable, way of reading the body is telling ReadBody "read as much as
+      // you can".
+      NoContentLength := not Msg.HasHeader(ContentLengthHeaderFull);
+
+      if NoContentLength then
+        Msg.ContentLength := MaxUdpPacketSize;
+
       Msg.ReadBody(AData);
+
+      if NoContentLength then
+        Msg.ContentLength := Length(Msg.Body);
 
       Self.ReceiveMessageInTimerContext(Msg, ABinding);
     finally
