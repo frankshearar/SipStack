@@ -1108,7 +1108,7 @@ begin
   Self.Response.LastHop.Received := Self.LowPortTransport.Bindings[0].IP;
   Self.SendMessage(Self.Response.AsString);
 
-  Self.WaitForSignaled;
+  Self.WaitForSignaled(Self.RejectedMessageEvent);
   Check(not Self.ReceivedResponse,
         Self.HighPortTransport.ClassName
       + ': Response not silently discarded');
@@ -1119,7 +1119,8 @@ end;
 
 procedure TestTIdSipTransport.TestDontDiscardUnknownSipVersion;
 var
-  Destination: String;
+  Destination:   String;
+  TortureTest41: String;
 begin
   // The Transaction-User level handles rejecting these messages.
   Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
@@ -1127,7 +1128,16 @@ begin
   Self.ExceptionMessage := 'Waiting for request to arrive';
 
   Destination := Self.HighPortTransport.Bindings[0].IP + ':' + IntToStr(Self.HighPortTransport.Bindings[0].Port);
-  Self.SendMessage(StringReplace(TortureTest41, '%s', Destination, [rfReplaceAll]));
+
+  TortureTest41 := 'INVITE sip:t.watson@' + Destination + ' SIP/7.0'#13#10
+                 + 'Via:     SIP/2.0/' + Self.HighPortTransport.GetTransportType + ' c.bell-tel.com;branch=z9hG4bKkdjuw'#13#10
+                 + 'Max-Forwards:     70'#13#10
+                 + 'From:    A. Bell <sip:a.g.bell@bell-tel.com>;tag=qweoiqpe'#13#10
+                 + 'To:      T. Watson <sip:t.watson@' + Destination + '>'#13#10
+                 + 'Call-ID: 31417@c.bell-tel.com'#13#10
+                 + 'CSeq:    1 INVITE'#13#10
+                 + #13#10;
+  Self.SendMessage(TortureTest41);
 
   Self.WaitForSignaled(Self.ClassName
                     + ': Didn''t receive a message with an unknown SIP-Version (timeout)');
@@ -1341,88 +1351,291 @@ begin
 end;
 
 procedure TestTIdSipTransport.TestTortureTest16;
+var
+  Destination:   String;
+  TortureTest16: String;
 begin
-  // Content-Length much larger than message body
+  //   This is a request message with a Content Length that is much larger
+  //   than the length of the body.
+  //
+  //   When sent UDP, the server should respond with an error. With TCP,
+  //   there's not much you can do but wait...
 
   Self.DefaultTimeout := Self.HighPortTransport.Timeout * 2;
-
   Self.CheckingResponseEvent := Self.CheckForBadRequest;
-  Self.SendFromLowTransport(TortureTest16);
 
-  Self.WaitForSignaled;
+  Destination := Self.HighPortTransport.Bindings[0].IP + ':' + IntToStr(Self.HighPortTransport.Bindings[0].Port);
+  TortureTest16 := 'INVITE sip:user@%s SIP/2.0'#13#10
+                 + 'Max-Forwards: 80'#13#10
+                 + 'To: sip:j.user@%s'#13#10
+                 + 'From: sip:caller@university.edu;tag=93942939o2'#13#10
+                 + 'Call-ID: 0ha0isndaksdj@10.0.0.1'#13#10
+                 + 'CSeq: 8 INVITE'#13#10
+                 + 'Via: SIP/2.0/' + Self.HighPortTransport.GetTransportType + ' 135.180.130.133'#13#10
+                 + 'Content-Type: application/sdp'#13#10
+                 + 'Content-Length: 9999'#13#10
+                 + #13#10
+                 + 'v=0'#13#10
+                 + 'o=mhandley 29739 7272939 IN IP4 126.5.4.3'#13#10
+                 + 's=-'#13#10
+                 + 'c=IN IP4 135.180.130.88'#13#10
+                 + 't=0 0'#13#10
+                 + 'm=audio 492170 RTP/AVP 0 12'#13#10
+                 + 'm=video 3227 RTP/AVP 31'#13#10
+                 + 'a=rtpmap:31 LPC';
+
+  Self.SendFromLowTransport(StringReplace(TortureTest16, '%s', Destination, [rfReplaceAll]));
+
+  Self.WaitForSignaled(Self.RejectedMessageEvent);
 end;
 
 procedure TestTIdSipTransport.TestTortureTest17;
+var
+  Destination:   String;
+  TortureTest17: String;
 begin
-  // Negative Content-Length
+  //   This is a request message with a negative value for Content-Length.
+  //
+  //   The server should respond with an error.
+
+  Destination := Self.HighPortTransport.Bindings[0].IP + ':' + IntToStr(Self.HighPortTransport.Bindings[0].Port);
+
+  TortureTest17 := 'INVITE sip:user@%s SIP/2.0'#13#10
+                 + 'Max-Forwards: 254'#13#10
+                 + 'To: sip:j.user@%s'#13#10
+                 + 'From: sip:caller@university.edu;tag=3'#13#10
+                 + 'Call-ID: 0ha0isndaksdj@10.0.0.1'#13#10
+                 + 'CSeq: 8 INVITE'#13#10
+                 + 'Via: SIP/2.0/' + Self.HighPortTransport.GetTransportType + ' 135.180.130.133;branch=z9hG4bKkdjuw'#13#10
+                 + 'Content-Type: application/sdp'#13#10
+                 + 'Content-Length: -999'#13#10
+                 + #13#10
+                 + 'v=0'#13#10
+                 + 'o=mhandley 29739 7272939 IN IP4 126.5.4.3'#13#10
+                 + 's=-'#13#10
+                 + 'c=IN IP4 135.180.130.88'#13#10
+                 + 't=0 0'#13#10;
 
   Self.CheckingResponseEvent := Self.CheckForBadRequest;
-  Self.SendFromLowTransport(TortureTest17);
 
-  Self.WaitForSignaled;
+  Self.SendFromLowTransport(StringReplace(TortureTest17, '%s', Destination, [rfReplaceAll]));
+
+  Self.WaitForSignaled(Self.RejectedMessageEvent);
 end;
 
 procedure TestTIdSipTransport.TestTortureTest19;
+var
+  Destination:   String;
+  TortureTest19: String;
 begin
-  // Unterminated quote in To
+  //   This is a request with an unterminated quote in the display name of
+  //   the To field.
+  //
+  //   The server can either return an error, or proxy it if it is
+  //   successful parsing without the terminating quote.
+
+  Destination := Self.HighPortTransport.Bindings[0].IP + ':' + IntToStr(Self.HighPortTransport.Bindings[0].Port);
+
+  TortureTest19 := 'INVITE sip:user@%s SIP/2.0'#13#10
+                 + 'To: "Mr. J. User <sip:j.user@%s>'#13#10
+                 + 'From: sip:caller@university.edu;tag=93334'#13#10
+                 + 'Max-Forwards: 10'#13#10
+                 + 'Call-ID: 0ha0isndaksdj@10.0.0.1'#13#10
+                 + 'CSeq: 8 INVITE'#13#10
+                 + 'Via: SIP/2.0/' + Self.HighPortTransport.GetTransportType + ' 135.180.130.133:5050;branch=z9hG4bKkdjuw'#13#10
+                 + 'Content-Type: application/sdp'#13#10
+                 + 'Content-Length: 138'#13#10
+                 + #13#10
+                 + 'v=0'#13#10
+                 + 'o=mhandley 29739 7272939 IN IP4 126.5.4.3'#13#10
+                 + 's=-'#13#10
+                 + 'c=IN IP4 135.180.130.88'#13#10
+                 + 't=0 0'#13#10
+                 + 'm=audio 492170 RTP/AVP 0 12'#13#10
+                 + 'm=video 3227 RTP/AVP 31'#13#10
+                 + 'a=rtpmap:31 LPC';
 
   Self.CheckingResponseEvent := Self.CheckForBadRequest;
-  Self.SendFromLowTransport(TortureTest19);
+  Self.SendFromLowTransport(StringReplace(TortureTest19, '%s', Destination, [rfReplaceAll]));
 
-  Self.WaitForSignaled;
+  Self.WaitForSignaled(Self.RejectedMessageEvent);
 end;
 
 procedure TestTIdSipTransport.TestTortureTest21;
+var
+  Destination:   String;
+  TortureTest21: String;
 begin
-  // Request-URI in <>
+  //   This INVITE is illegal because the Request-URI has been enclosed
+  //   within in "<>".
+  //   An intelligent server may be able to deal with this and fix up
+  //   athe Request-URI if acting as a Proxy. If not it should respond 400
+  //   with an appropriate reason phrase.
+
+  Destination := Self.HighPortTransport.Bindings[0].IP + ':' + IntToStr(Self.HighPortTransport.Bindings[0].Port);
+
+  TortureTest21 := 'INVITE <sip:user@%s> SIP/2.0'#13#10
+                 + 'To: sip:user@%s'#13#10
+                 + 'From: sip:caller@university.edu;tag=39291'#13#10
+                 + 'Max-Forwards: 23'#13#10
+                 + 'Call-ID: 1@10.0.0.1'#13#10
+                 + 'CSeq: 1 INVITE'#13#10
+                 + 'Via: SIP/2.0/' + Self.HighPortTransport.GetTransportType + ' 135.180.130.133'#13#10
+                 + 'Content-Type: application/sdp'#13#10
+                 + 'Content-Length: 174'#13#10
+                 + #13#10
+                 + 'v=0'#13#10
+                 + 'o=mhandley 29739 7272939 IN IP4 126.5.4.3'#13#10
+                 + 's=-'#13#10
+                 + 'c=IN IP4 135.180.130.88'#13#10
+                 + 't=3149328700 0'#13#10
+                 + 'm=audio 492170 RTP/AVP 0 12'#13#10
+                 + 'm=video 3227 RTP/AVP 31'#13#10
+                 + 'a=rtpmap:31 LPC';
 
   Self.CheckingResponseEvent := Self.CheckForBadRequest;
-  Self.SendFromLowTransport(TortureTest21);
+  Self.SendFromLowTransport(StringReplace(TortureTest21, '%s', Destination, [rfReplaceAll]));
 
-  Self.WaitForSignaled;
+  Self.WaitForSignaled(Self.RejectedMessageEvent);
 end;
 
 procedure TestTIdSipTransport.TestTortureTest22;
+var
+  Destination:   String;
+  TortureTest22: String;
 begin
-  // Illegal LWS within the Request-URI.
+  //   This INVITE has illegal LWS within the SIP URI.
+  //
+  //   An intelligent server may be able to deal with this and fix up
+  //   the Request-URI if acting as a Proxy. If not it should respond 400
+  //   with an appropriate reason phrase.
+
+  Destination := Self.HighPortTransport.Bindings[0].IP + ':' + IntToStr(Self.HighPortTransport.Bindings[0].Port);
+
+  TortureTest22 := 'INVITE sip:user@%s; transport=udp SIP/2.0'#13#10
+                 + 'To: sip:user@%s'#13#10
+                 + 'From: sip:caller@university.edu;tag=231413434'#13#10
+                 + 'Max-Forwards: 5'#13#10
+                 + 'Call-ID: 2@10.0.0.1'#13#10
+                 + 'CSeq: 1 INVITE'#13#10
+                 + 'Via: SIP/2.0/' + Self.HighPortTransport.GetTransportType + ' 135.180.130.133:5060;branch=z9hG4bKkdjuw'#13#10
+                 + 'Content-Type: application/sdp'#13#10
+                 + 'Content-Length: 174'#13#10
+                 + #13#10
+                 + 'v=0'#13#10
+                 + 'o=mhandley 29739 7272939 IN IP4 126.5.4.3'#13#10
+                 + 's=-'#13#10
+                 + 'c=IN IP4 135.180.130.88'#13#10
+                 + 't=3149328700 0'#13#10
+                 + 'm=audio 492170 RTP/AVP 0 12'#13#10
+                 + 'm=video 3227 RTP/AVP 31'#13#10
+                 + 'a=rtpmap:31 LPC';
 
   Self.CheckingResponseEvent := Self.CheckForBadRequest;
-  Self.SendFromLowTransport(TortureTest22);
+  Self.SendFromLowTransport(StringReplace(TortureTest22, '%s', Destination, [rfReplaceAll]));
 
-  Self.WaitForSignaled;
+  Self.WaitForSignaled(Self.RejectedMessageEvent);
 end;
 
 procedure TestTIdSipTransport.TestTortureTest23;
+var
+  Destination:   String;
+  TortureTest23: String;
 begin
-  // Illegal >1 SP between elements of the Request-Line.
+  //   This INVITE has illegal >1 SP between elements of the Request-Line.
+  //
+  //   An intelligent server may be able to deal with this and fix up
+  //   the Request-URI if acting as a Proxy. If not it should respond 400
+  //   with an appropriate reason phrase.
+
+  TortureTest23 := 'INVITE sip:user@%s  SIP/2.0'#13#10
+                 + 'Max-Forwards: 8'#13#10
+                 + 'To: sip:user@%s'#13#10
+                 + 'From: sip:caller@university.edu;tag=8814'#13#10
+                 + 'Call-ID: 3@10.0.0.1'#13#10
+                 + 'CSeq: 1 INVITE'#13#10
+                 + 'Via: SIP/2.0/' + Self.HighPortTransport.GetTransportType + ' 135.180.130.133:5060;branch=z9hG4bKkdjuw'#13#10
+                 + 'Content-Type: application/sdp'#13#10
+                 + 'Content-Length: 174'#13#10
+                 + #13#10
+                 + 'v=0'#13#10
+                 + 'o=mhandley 29739 7272939 IN IP4 126.5.4.3'#13#10
+                 + 's=-'#13#10
+                 + 'c=IN IP4 135.180.130.88'#13#10
+                 + 't=0 0'#13#10
+                 + 'm=audio 492170 RTP/AVP 0 12'#13#10
+                 + 'm=video 3227 RTP/AVP 31'#13#10
+                 + 'a=rtpmap:31 LPC';
 
   Self.CheckingResponseEvent := Self.CheckForBadRequest;
-  Self.SendFromLowTransport(TortureTest23);
 
-  Self.WaitForSignaled;
+  Destination := Self.HighPortTransport.Bindings[0].IP + ':' + IntToStr(Self.HighPortTransport.Bindings[0].Port);
+  Self.SendFromLowTransport(StringReplace(TortureTest23, '%s', Destination, [rfReplaceAll]));
+
+  Self.WaitForSignaled(Self.RejectedMessageEvent);
 end;
 
 procedure TestTIdSipTransport.TestTortureTest35;
 var
-  Destination: String;
+  Destination:   String;
+  TortureTest35: String;
 begin
-  // Badly mangled message: two mangled Expires, duplicated To, Call-ID,
-  // Cseq headers.
+  //   This is an illegal and badly mangled message.
+  //
+  //   A server should respond 400 with an appropriate reason phrase if it
+  //   can. It may just drop this message.
 
   Destination := Self.HighPortTransport.Bindings[0].IP + ':' + IntToStr(Self.HighPortTransport.Bindings[0].Port);
+
+  TortureTest35 := 'OPTIONS sip:%s SIP/2.0'#13#10
+                 + 'Via: SIP/2.0/' + Self.HighPortTransport.GetTransportType + ' %s'#13#10
+                 + 'Max-Forwards: 70'#13#10
+                 + 'From: sip:iuser@company.com;tag=74345345'#13#10
+                 + 'To: sip:user@135.180.130.133'#13#10
+                 + 'Call-ID: 1804928587@company.com'#13#10
+                 + 'CSeq: 1 OPTIONS'#13#10
+                 + 'Expires: 0 0l@company.com'#13#10               // mangled
+                 + 'To: sip:user@135.180.130.133'#13#10            // 2nd To header
+                 + 'Call-ID: 1804928587@company.com'#13#10         // 2nd Call-ID
+                 + 'CSeq: 1 OPTIONS'#13#10                         // 2nd CSeq
+                 + 'Contact: sip:host.company.com'#13#10
+                 + 'Expires: 0xpires: 0sip:host.company.com'#13#10 // mangled
+                 + 'Expires: 0'#13#10
+                 + 'Contact: sip:host.company.com'#13#10
+                 + #13#10;
 
   Self.CheckingResponseEvent := Self.CheckForBadRequest;
   Self.SendFromLowTransport(StringReplace(TortureTest35, '%s', Destination, [rfReplaceAll]));
 
-  Self.WaitForSignaled;
+  Self.WaitForSignaled(Self.RejectedMessageEvent);
 end;
 
 procedure TestTIdSipTransport.TestTortureTest40;
+var
+  Destination:   String;
+  TortureTest40: String;
 begin
-  // Illegal >1 SP between elements of the Request-Line.
+  //   This is an illegal invite as the display names in the To and From
+  //   headers contain non-token characters but are unquoted.
+  //
+  //   A server may be intelligent enough to cope with this but may also
+  //   return a 400 response with an appropriate reason phrase.
+
+  // We accept these messages since they're easy to safely fudge.
+
   Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
 
-  Self.SendFromLowTransport(TortureTest40);
+  Destination := Self.HighPortTransport.Bindings[0].IP + ':' + IntToStr(Self.HighPortTransport.Bindings[0].Port);
+  TortureTest40 := 'INVITE sip:t.watson@%s SIP/2.0'#13#10
+                + 'Via:     SIP/2.0/' + Self.HighPortTransport.GetTransportType + ' c.bell-tel.com:5060;branch=z9hG4bKkdjuw'#13#10
+                + 'Max-Forwards:      70'#13#10
+                + 'From:    Bell, Alexander <sip:a.g.bell@bell-tel.com>;tag=43'#13#10
+                + 'To:      Watson, Thomas <sip:t.watson@%s>'#13#10
+                + 'Call-ID: 31415@c.bell-tel.com'#13#10
+                + 'CSeq:    1 INVITE'#13#10
+                + #13#10;
+
+  Self.SendFromLowTransport(StringReplace(TortureTest40, '%s', Destination, [rfReplaceAll]));
 
   Self.WaitForSignaled;
 
