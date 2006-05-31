@@ -59,6 +59,8 @@ type
     ReceivedResponse:      Boolean;
     RecvdRequest:          TIdSipRequest;
     RejectedMessage:       Boolean;
+    RejectedMessageEvent:  TEvent;
+    RejectedMessageReason: String;
     Request:               TIdSipRequest;
     Response:              TIdSipResponse;
     SendEvent:             TEvent;
@@ -163,6 +165,8 @@ type
     procedure TestIsNull; virtual;
     procedure TestIsRunning;
     procedure TestDiscardMalformedMessage;
+    procedure TestDiscardRequestWithInconsistentTransport;
+    procedure TestDiscardResponseWithInconsistentTransport;
     procedure TestDiscardResponseWithUnknownSentBy;
     procedure TestDontDiscardUnknownSipVersion;
     procedure TestReceivedParamDifferentIPv4SentBy;
@@ -287,9 +291,10 @@ begin
 
   Self.ExceptionMessage := Self.TransportType.ClassName + ': ' + Self.ExceptionMessage;
 
-  Self.EmptyListEvent := TSimpleEvent.Create;
-  Self.FinishedTimer  := TSimpleEvent.Create;
-  Self.SendEvent := TSimpleEvent.Create;
+  Self.EmptyListEvent       := TSimpleEvent.Create;
+  Self.FinishedTimer        := TSimpleEvent.Create;
+  Self.RejectedMessageEvent := TSimpleEvent.Create;
+  Self.SendEvent            := TSimpleEvent.Create;
 
   Self.Timer := TTransportTestTimerQueue.Create(Self.TransportType, Self, Self.FinishedTimer);
   Check(Self.Timer <> nil,
@@ -324,6 +329,7 @@ begin
   Self.ReceivedRequest  := false;
   Self.ReceivedResponse := false;
   Self.RejectedMessage  := false;
+  RejectedMessageReason := '';
   Self.WrongServer      := false;
 end;
 
@@ -353,7 +359,8 @@ begin
     Self.Lock.Acquire;
     try
       FreeAndNil(Self.LastSentResponse);
-      FreeAndNil(SendEvent);
+      FreeAndNil(Self.SendEvent);
+      FreeAndNil(Self.RejectedMessageEvent);
       FreeAndNil(Self.EmptyListEvent);
     finally
       Self.Lock.Release;
@@ -638,9 +645,10 @@ end;
 procedure TestTIdSipTransport.OnRejectedMessage(const Msg: String;
                                                 const Reason: String);
 begin
-  Self.RejectedMessage := true;
-  Self.ExceptionMessage := Reason;
-  Self.ThreadEvent.SetEvent;
+  Self.RejectedMessage       := true;
+  Self.RejectedMessageReason := Reason;
+  Self.ExceptionMessage      := Reason;
+  Self.RejectedMessageEvent.SetEvent;
 end;
 
 procedure TestTIdSipTransport.OnSendRequest(Request: TIdSipRequest;
@@ -964,6 +972,121 @@ begin
     Check(not Listener.ReceivedRequest,
           Self.HighPortTransport.ClassName
         + ': Transport passed malformed request up the stack');
+  finally
+    Self.HighPortTransport.RemoveTransportListener(Listener);
+    Listener.Free;
+  end;
+end;
+
+procedure TestTIdSipTransport.TestDiscardRequestWithInconsistentTransport;
+var
+  InconsistentTransport: String;
+  Listener:              TIdSipTestTransportListener;
+begin
+  // InconsistentTransport will now not match the transport type of the socket
+  // from which the Transport will receive the message. In other words, a UDP
+  // socket will now "receive" a message with transport type UDP-Foo. We then
+  // return a 400 Bad Request.
+  InconsistentTransport := Self.HighPortTransport.GetTransportType + '-Foo';
+
+  Listener := TIdSipTestTransportListener.Create;
+  try
+    Self.HighPortTransport.AddTransportListener(Listener);
+    Self.SendMessage('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
+                   + 'Via: SIP/2.0/' + InconsistentTransport + ' proxy.tessier-ashpool.co.luna;branch=z9hG4bK776asdhds'#13#10
+                   + 'Max-Forwards: 70'#13#10
+                   + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
+                   + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
+                   + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
+                   + 'CSeq: 314159 INVITE'#13#10
+                   + 'Contact: <sip:wintermute@tessier-ashpool.co.luna>'#13#10
+                   + 'Content-Type: text/plain'#13#10
+                   + 'Content-Length: 29'#13#10
+                   + #13#10
+                   + 'I am a message. Hear me roar!');
+
+    // Self.SendEvent is set by OnSendResponse: that is, it is set after
+    // HighPortTransport has received the request and rejected it.               
+    Self.WaitForSignaled(Self.SendEvent);
+
+    Check(not Self.ReceivedRequest,
+          Self.HighPortTransport.ClassName
+        + ': Somehow we received a "malformed" message');
+    Check(Self.RejectedMessage,
+          Self.HighPortTransport.ClassName
+        + ': Notification of message rejection not received');
+   CheckEquals(ViaTransportMismatch,
+               Self.RejectedMessageReason,
+                Self.HighPortTransport.ClassName
+              + ': Rejection reason');
+
+    CheckNotEquals(0,
+                   Self.LastSentResponse.StatusCode,
+                   'We didn''t receive the "Bad Request" response');
+
+    // Check that the transport sends the 400 Bad Request.
+    CheckEquals(SIPBadRequest,
+                Self.LastSentResponse.StatusCode,
+                Self.HighPortTransport.ClassName
+              + ': "Bad Request" response');
+    CheckEquals(ViaTransportMismatch,
+                Self.LastSentResponse.StatusText,
+                Self.HighPortTransport.ClassName
+              + ': Unexpected Status-Text in the response');
+
+    // Check that the transport didn't send the malformed request up the stack
+    Check(not Listener.ReceivedRequest,
+          Self.HighPortTransport.ClassName
+        + ': Transport passed malformed request up the stack');
+  finally
+    Self.HighPortTransport.RemoveTransportListener(Listener);
+    Listener.Free;
+  end;
+end;
+
+procedure TestTIdSipTransport.TestDiscardResponseWithInconsistentTransport;
+var
+  InconsistentTransport: String;
+  Listener:              TIdSipTestTransportListener;
+begin
+  // InconsistentTransport will now not match the transport type of the socket
+  // from which the Transport will receive the message. In other words, a UDP
+  // socket will now "receive" a message with transport type UDP-Foo. We then
+  // return a 400 Bad Request.
+  InconsistentTransport := Self.HighPortTransport.GetTransportType + '-Foo';
+
+  Listener := TIdSipTestTransportListener.Create;
+  try
+    Self.HighPortTransport.AddTransportListener(Listener);
+    Self.SendMessage('SIP/2.0 200 OK'#13#10
+                   + 'Via: SIP/2.0/' + InconsistentTransport + ' ' + Self.HighPortTransport.HostName + ';branch=z9hG4bK776asdhds'#13#10
+                   + 'Max-Forwards: 70'#13#10
+                   + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
+                   + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
+                   + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
+                   + 'CSeq: 314159 INVITE'#13#10
+                   + 'Contact: <sip:wintermute@tessier-ashpool.co.luna>'#13#10
+                   + 'Content-Type: text/plain'#13#10
+                   + 'Content-Length: 29'#13#10
+                   + #13#10
+                   + 'I am a message. Hear me roar!');
+
+    Self.WaitForSignaled(Self.RejectedMessageEvent);
+
+    Check(not Self.ReceivedResponse,
+          Self.HighPortTransport.ClassName
+        + ': Somehow we received a "malformed" message');
+    Check(Self.RejectedMessage,
+          Self.HighPortTransport.ClassName
+        + ': Notification of message rejection not received');
+   CheckEquals(ViaTransportMismatch,
+               Self.RejectedMessageReason,
+                Self.HighPortTransport.ClassName
+              + ': Rejection reason');
+
+    Check(not Listener.ReceivedResponse,
+          Self.HighPortTransport.ClassName
+        + ': Transport passed "malformed" request up the stack');
   finally
     Self.HighPortTransport.RemoveTransportListener(Listener);
     Listener.Free;

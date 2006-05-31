@@ -101,7 +101,8 @@ type
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 ReceivedFrom: TIdSipConnectionBindings);
     procedure ReturnBadRequest(Request: TIdSipRequest;
-                               Target: TIdSipConnectionBindings);
+                               Target: TIdSipConnectionBindings;
+                               const StatusText: String);
     procedure SendRequest(R: TIdSipRequest;
                           Dest: TIdSipLocation); virtual;
     procedure SendResponse(R: TIdSipResponse;
@@ -343,6 +344,7 @@ const
                           + 'Via, namely, this stack.';
   RequestNotSentFromHere  = 'The request to which this response replies could '
                           + 'not have been sent from here.';
+  ViaTransportMismatch    = 'Via transport mismatch';
   WrongTransport          = 'This transport only supports %s  messages but '
                           + 'received a %s message.';
 
@@ -500,7 +502,14 @@ begin
   if Request.IsMalformed then begin
     Self.NotifyOfRejectedMessage(Request.AsString,
                                  Request.ParseFailReason);
-    Self.ReturnBadRequest(Request, ReceivedFrom);
+    Self.ReturnBadRequest(Request, ReceivedFrom, Request.ParseFailReason);
+    Exit;
+  end;
+
+  if (Request.LastHop.Transport <> Self.GetTransportType) then begin
+    Self.NotifyOfRejectedMessage(Request.AsString,
+                                 ViaTransportMismatch);
+    Self.ReturnBadRequest(Request, ReceivedFrom, ViaTransportMismatch);
     Exit;
   end;
 
@@ -521,6 +530,14 @@ begin
   if Response.IsMalformed then begin
     Self.NotifyOfRejectedMessage(Response.AsString,
                                  Response.ParseFailReason);
+    // Drop the malformed response.
+    Exit;
+  end;
+
+  if (Response.LastHop.Transport <> Self.GetTransportType) then begin
+    Self.NotifyOfRejectedMessage(Response.AsString,
+                                 ViaTransportMismatch);
+
     // Drop the malformed response.
     Exit;
   end;
@@ -760,14 +777,15 @@ begin
 end;
 
 procedure TIdSipTransport.ReturnBadRequest(Request: TIdSipRequest;
-                                           Target: TIdSipConnectionBindings);
+                                           Target: TIdSipConnectionBindings;
+                                           const StatusText: String);
 var
   Destination: TIdSipLocation;
   Res:         TIdSipResponse;
 begin
   Res := TIdSipResponse.InResponseTo(Request, SIPBadRequest);
   try
-    Res.StatusText := Request.ParseFailReason;
+    Res.StatusText := StatusText;
 
     Destination := TIdSipLocation.Create(Self.GetTransportType,
                                          Target.PeerIP,
