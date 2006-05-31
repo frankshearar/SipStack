@@ -949,6 +949,10 @@ begin
                    + #13#10
                    + 'I am a message. Hear me roar!');
 
+    // We wait for the SendEvent event, because we always notify of a rejected
+    // message before we send the response. Thus, the test could fail because
+    // we didn't have enough time to register the sending of the 400 Bad
+    // Request.               
     Self.WaitForSignaled(Self.SendEvent);
 
     Check(not Self.ReceivedRequest,
