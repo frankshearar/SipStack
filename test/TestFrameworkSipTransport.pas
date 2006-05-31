@@ -937,7 +937,7 @@ begin
     Self.HighPortTransport.AddTransportListener(Listener);
     MangledSipVersion := 'SIP/;2.0';
     Self.SendMessage('INVITE sip:wintermute@tessier-ashpool.co.luna ' + MangledSipVersion + #13#10
-                   + 'Via: SIP/2.0/TCP proxy.tessier-ashpool.co.luna;branch=z9hG4bK776asdhds'#13#10
+                   + 'Via: SIP/2.0/' + Self.HighPortTransport.GetTransportType + ' proxy.tessier-ashpool.co.luna;branch=z9hG4bK776asdhds'#13#10
                    + 'Max-Forwards: 70'#13#10
                    + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
                    + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
