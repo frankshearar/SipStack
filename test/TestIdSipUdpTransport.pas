@@ -30,9 +30,6 @@ type
     procedure CheckLeaveNonRportRequestsUntouched(Sender: TObject;
                                                   R: TIdSipRequest;
                                                   ReceivedFrom: TIdSipConnectionBindings);
-    procedure CheckMissingContentLength(Sender: TObject;
-                                        R: TIdSipRequest;
-                                        ReceivedFrom: TIdSipConnectionBindings);
     procedure NoteSourcePort(Sender: TObject;
                              R: TIdSipRequest;
                              ReceivedFrom: TIdSipConnectionBindings);
@@ -221,25 +218,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipUDPTransport.CheckMissingContentLength(Sender: TObject;
-                                                           R: TIdSipRequest;
-                                                           ReceivedFrom: TIdSipConnectionBindings);
-begin
-  try
-    Check(R.HasHeader(ContentLengthHeaderFull),
-          'Content-Length not added');
-    CheckEquals('foofoo',
-                R.Body,
-                'Body');
-    Self.ThreadEvent.SetEvent;
-  except
-    on E: Exception do begin
-      Self.ExceptionType    := ExceptClass(E.ClassType);
-      Self.ExceptionMessage := E.Message;
-    end;
-  end;
-end;
-
 procedure TestTIdSipUDPTransport.NoteSourcePort(Sender: TObject;
                                                 R: TIdSipRequest;
                                                 ReceivedFrom: TIdSipConnectionBindings);
@@ -325,10 +303,14 @@ begin
 end;
 
 procedure TestTIdSipUDPTransport.TestMissingContentLength;
+var
+  Body: String;
 begin
   // No Content-Length header? Assume that the entire rest of the UDP packet is
   // the body.
-  Self.CheckingRequestEvent := Self.CheckMissingContentLength;
+  Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
+
+  Body := 'I am a message. Hear me roar!';
 
   Self.SendMessage('INVITE sip:foo SIP/2.0'#13#10
                  + 'Via: SIP/2.0/UDP 127.0.0.1;branch=' + BranchMagicCookie + 'f00L'#13#10
@@ -337,10 +319,18 @@ begin
                  + 'From: sip:foo'#13#10
                  + 'To: sip:foo'#13#10
                  + 'Max-Forwards: 70'#13#10
+                 + 'Content-Type: text/plain'#13#10
                  + #13#10
-                 + 'foofoo');
+                 + Body);
 
   Self.WaitForSignaled;
+  Check(Self.RecvdRequest.HasHeader(ContentLengthHeaderFull),
+        'Content-Length not added');
+  CheckEquals(Body,
+              Self.RecvdRequest.Body,
+              'The transport MUST treat the rest of the packet as the body. '
+            + 'cf. RFC 3261, section 18.3');
+              
 end;
 
 procedure TestTIdSipUDPTransport.TestRportParamFilledIn;
