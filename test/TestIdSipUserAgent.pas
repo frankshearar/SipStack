@@ -301,16 +301,7 @@ begin
   try
     Response := TIdSipTestResources.CreateBasicResponse;
     try
-      Self.Dlg := TIdSipDialog.Create(Invite,
-                                      Response,
-                                      Self.ID,
-                                      Self.LocalSequenceNo,
-                                      Self.RemoteSequenceNo,
-                                      Self.LocalUri,
-                                      Self.RemoteUri,
-                                      Self.RemoteTarget,
-                                      false,
-                                      Self.RouteSet);
+      Self.Dlg := TIdSipDialog.CreateOutboundDialog(Invite, Response, false);
     finally
       Response.Free;
     end;

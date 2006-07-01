@@ -67,15 +67,24 @@ type
     procedure TestCreateRequestInDialogRouteSetWithLrParam;
     procedure TestCreateRequestInDialogRouteSetWithoutLrParam;
     procedure TestCreateRequestInDialogTopRouteHasForbiddenParameters;
-    procedure TestCreateWithStrings;
     procedure TestDialogID;
     procedure TestEarlyState;
     procedure TestEmptyRemoteTargetAfterResponse;
-    procedure TestIsOutOfOrder;
+    procedure TestIsOutOfOrder; virtual;
     procedure TestIsSecure;
     procedure TestOnEstablishedFired;
     procedure TestRemoteTarget;
     procedure TestSupportsExtension;
+  end;
+
+  TestTIdSipOutboundDialog = class(TestTIdSipDialog)
+  private
+    OutboundDlg: TIdSipOutboundDialog;
+  public
+    procedure SetUp; override;
+  published
+    procedure TestIsOutOfOrder; override;
+    procedure TestReceiveRequestSetsRemoteSequenceNo;
   end;
 
   TestTIdSipDialogs = class(TTestCase)
@@ -90,7 +99,7 @@ type
     RemoteUri:        TIdSipURI;
     Req:              TIdSipRequest;
     Res:              TIdSipResponse;
-    RouteSet:         TIdSipHeaders;
+    RouteSet:         TIdSipHeadersFilter;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -118,6 +127,7 @@ begin
   Result := TTestSuite.Create('IdSipDialog unit tests');
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSipDialog.Suite);
+  Result.AddTest(TestTIdSipOutboundDialog.Suite);
   Result.AddTest(TestTIdSipDialogs.Suite);
 end;
 
@@ -236,7 +246,7 @@ begin
   Self.ID := TIdSipDialogID.Create(Self.Req.CallID, Self.Req.From.Tag, Self.Res.ToHeader.Tag);
 
   Self.LocalSequenceNo  := Self.Req.CSeq.SequenceNo;
-  Self.LocalUri         := Self.Req.FirstContact.Address;
+  Self.LocalUri         := Self.Req.From.Address;
   Self.RemoteSequenceNo := 0;
   Self.RemoteTarget     := Self.Res.FirstContact.Address;
   Self.RemoteUri        := Self.Res.ToHeader.Address;
@@ -244,16 +254,7 @@ begin
   Self.RouteSet := TIdSipHeaders.Create;
   Self.RouteSet.AddInReverseOrder(Self.Res.RecordRoute);
 
-  Self.Dlg := TIdSipDialog.Create(Self.Req,
-                                  Self.Res,
-                                  Self.ID,
-                                  Self.LocalSequenceNo,
-                                  Self.RemoteSequenceNo,
-                                  Self.LocalUri,
-                                  Self.RemoteUri,
-                                  Self.RemoteTarget,
-                                  false,
-                                  Self.RouteSet);
+  Self.Dlg := TIdSipDialog.CreateOutboundDialog(Self.Req, Self.Res, false);
 
   Self.OnEstablishedFired := false;
 end;
@@ -573,6 +574,13 @@ begin
 
     OutDlg := TIdSipDialog.CreateOutboundDialog(Self.Req, Self.Res, false);
     try
+      CheckNotEquals(Self.Req.CSeq.SequenceNo,
+                     OutDlg.RemoteSequenceNo,
+                     'The dialog CANNOT set the remote sequence number, since '
+                   + 'it has yet to receive an in-dialog request. RFC 3261, '
+                   + 'section 12.1.2. In particular, the remote sequence number '
+                   + 'mustn''t be set to the local sequence number. ');
+
       Check(not OutDlg.RouteSet.IsEmpty,
             'No Record-Routes added from Response');
 
@@ -756,35 +764,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipDialog.TestCreateWithStrings;
-var
-  D: TIdSipDialog;
-begin
-  D := TIdSipDialog.Create(Self.Req,
-                           Self.Res,
-                           Self.ID,
-                           Self.LocalSequenceNo,
-                           Self.RemoteSequenceNo,
-                           Self.LocalURI,
-                           Self.RemoteURI,
-                           Self.RemoteTarget,
-                           false,
-                           Self.RouteSet);
-  try
-    CheckEquals(Self.LocalUri,
-                D.LocalURI,
-                'LocalURI');
-    CheckEquals(Self.RemoteUri,
-                D.RemoteURI,
-                'RemoteURI');
-    CheckEquals(Self.RemoteTarget,
-                D.RemoteTarget,
-                'RemoteTarget');
-  finally
-    D.Free;
-  end;
-end;
-
 procedure TestTIdSipDialog.TestDialogID;
 begin
   Check(Self.Dlg.ID.Equals(Self.ID), 'Dialog ID not set');
@@ -835,24 +814,28 @@ end;
 
 procedure TestTIdSipDialog.TestEmptyRemoteTargetAfterResponse;
 var
+  Contact:  String;
   D:        TIdSipDialog;
   EmptyUri: TIdSipURI;
 begin
+  // If we receive a(n early) dialog-establishing response with no Contact
+  // header we have no RemoteTarget value. If then we receive a 200 OK (or other
+  // confirmed-dialog-establishing response WITH a Contact header, we want to
+  // store that as the RemoteTarget.
+
+  Contact := Self.Res.FirstContact.Address.Uri;
+  Self.Res.RemoveAllHeadersNamed(ContactHeaderFull);
+  Self.Res.StatusCode := SIPRinging;
+
   EmptyUri := TIdSipURI.Create('');
   try
-    D := TIdSipDialog.Create(Self.Req,
-                             Self.Res,
-                             Self.ID,
-                             Self.LocalSequenceNo,
-                             Self.RemoteSequenceNo,
-                             Self.LocalUri,
-                             Self.RemoteUri,
-                             EmptyUri,
-                             false,
-                             Self.RouteSet);
+    D := TIdSipDialog.CreateOutboundDialog(Self.Req, Self.Res, false);
     try
+      Self.Res.StatusCode := SIPOK;
+      Self.Res.AddHeader(ContactHeaderFull).Value := Contact;
+
       D.ReceiveResponse(Self.Res);
-      CheckEquals((Self.Res.Headers[ContactHeaderFull] as TIdSipContactHeader).Address,
+      CheckEquals(Self.Res.FirstContact.Address,
                   D.RemoteTarget,
                   'RemoteTarget after response received');
     finally
@@ -865,49 +848,34 @@ end;
 
 procedure TestTIdSipDialog.TestIsOutOfOrder;
 begin
-  Self.Req.CSeq.SequenceNo := Self.RemoteSequenceNo + 1;
-  Check(not Self.Dlg.IsOutOfOrder(Self.Req),
-        'SequenceNo > RemoteSequenceNo');
+  Self.Dlg.ReceiveRequest(Self.Req);
 
-  Self.Req.CSeq.SequenceNo := Self.RemoteSequenceNo;
+  Self.Req.CSeq.SequenceNo := Self.Dlg.RemoteSequenceNo + 1;
   Check(not Self.Dlg.IsOutOfOrder(Self.Req),
-        'SequenceNo = RemoteSequenceNo');
+        'Request''s SequenceNo > RemoteSequenceNo but dialog think it''s out of order');
 
-  Self.Req.CSeq.SequenceNo := Self.RemoteSequenceNo - 1;
+  Self.Req.CSeq.SequenceNo := Self.Dlg.RemoteSequenceNo;
   Check(Self.Dlg.IsOutOfOrder(Self.Req),
-        'SequenceNo < RemoteSequenceNo');
+        'Request''s SequenceNo = RemoteSequenceNo but dialog think it''s out of order');
+
+  Self.Req.CSeq.SequenceNo := Self.Dlg.RemoteSequenceNo - 1;
+  Check(Self.Dlg.IsOutOfOrder(Self.Req),
+        'Request''s SequenceNo < RemoteSequenceNo but dialog think it''s not out of order');
 end;
 
 procedure TestTIdSipDialog.TestIsSecure;
 var
   D: TIdSipDialog;
 begin
-  D := TIdSipDialog.Create(Self.Req,
-                           Self.Res,
-                           Self.ID,
-                           Self.LocalSequenceNo,
-                           Self.RemoteSequenceNo,
-                           Self.LocalUri,
-                           Self.RemoteUri,
-                           Self.RemoteTarget,
-                           true,
-                           Self.RouteSet);
+  Self.Req.FirstContact.Address.Scheme := SipsScheme;
+  D := TIdSipDialog.CreateOutboundDialog(Self.Req, Self.Res, true);
   try
     Check(D.IsSecure, 'Set secure');
   finally
     D.Free;
   end;
 
-  D := TIdSipDialog.Create(Self.Req,
-                           Self.Res,
-                           Self.ID,
-                           Self.LocalSequenceNo,
-                           Self.RemoteSequenceNo,
-                           Self.LocalUri,
-                           Self.RemoteUri,
-                           Self.RemoteTarget,
-                           false,
-                           Self.RouteSet);
+  D := TIdSipDialog.CreateInboundDialog(Self.Req, Self.Res, false);
   try
     Check(not D.IsSecure, 'Not set secure');
   finally
@@ -998,6 +966,38 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSipOutboundDialog                                                   *
+//******************************************************************************
+//* TestTIdSipOutboundDialog Public methods ************************************
+
+procedure TestTIdSipOutboundDialog.SetUp;
+begin
+  inherited SetUp;
+
+  Self.OutboundDlg := Self.Dlg as TIdSipOutboundDialog;
+end;
+
+procedure TestTIdSipOutboundDialog.TestIsOutOfOrder;
+begin
+  Self.Req.CSeq.SequenceNo := Self.OutboundDlg.LocalSequenceNo - 1;
+  Check(not Self.OutboundDlg.IsOutOfOrder(Self.Req),
+        'The first-received request cannot be out of order');
+
+  inherited TestIsOutOfOrder;
+end;
+
+procedure TestTIdSipOutboundDialog.TestReceiveRequestSetsRemoteSequenceNo;
+begin
+  Self.Req.CSeq.SequenceNo := 42;
+  Self.OutboundDlg.ReceiveRequest(Self.Req);
+  Check(Self.OutboundDlg.HasReceivedRemoteRequest,
+        'Dialog thinks it hasn''t received a request');
+  CheckEquals(Self.Req.CSeq.SequenceNo,
+              Self.OutboundDlg.RemoteSequenceNo,
+              'Dialog stored the incorrect value for the remote sequence number');
+end;
+
+//******************************************************************************
 //* TestTIdSipDialogs                                                          *
 //******************************************************************************
 //* TestTIdSipDialogs Public methods *******************************************
@@ -1008,43 +1008,30 @@ begin
 
   Self.D := TIdSipDialogs.Create;
 
-  Self.ID := TIdSipDialogID.Create('1', '2', '3');
+  Self.Req := TIdSipTestResources.CreateBasicRequest;
+  Self.Req.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1>';
+  Self.Req.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:6000>';
+  Self.Req.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:8000>';
 
-  Self.LocalSequenceNo := 13;
-  Self.LocalUri        := TIdSipURI.Create('sip:case@fried.neurons.org');
-  Self.LocalSequenceNo := 42;
-  Self.RemoteTarget    := TIdSipURI.Create('sip:sip-proxy1.tessier-ashpool.co.lu');
-  Self.RemoteUri       := TIdSipURI.Create('sip:wintermute@tessier-ashpool.co.luna');
+  Self.Res := TIdSipTestResources.CreateBasicResponse;
+  Self.Dlg := TIdSipDialog.CreateInboundDialog(Self.Req, Self.Res, false);
+  Self.ID := TIdSipDialogID.Create(Self.Dlg.ID);
 
-  Self.RouteSet := TIdSipHeaders.Create;
-  Self.RouteSet.Add(RecordRouteHeader).Value := '<sip:127.0.0.1>';
-  Self.RouteSet.Add(RecordRouteHeader).Value := '<sip:127.0.0.1:6000>';
-  Self.RouteSet.Add(RecordRouteHeader).Value := '<sip:127.0.0.1:8000>';
-
-  Self.Req := TIdSipRequest.Create;
-  Self.Res := TIdSipResponse.Create;
-  Self.Dlg := TIdSipDialog.Create(Self.Req,
-                                  Self.Res,
-                                  Self.ID,
-                                  Self.LocalSequenceNo,
-                                  Self.RemoteSequenceNo,
-                                  Self.LocalUri,
-                                  Self.RemoteUri,
-                                  Self.RemoteTarget,
-                                  false,
-                                  Self.RouteSet);
+  Self.LocalSequenceNo  := Self.Res.CSeq.SequenceNo;
+  Self.LocalUri         := Self.Req.ToHeader.Address;
+  Self.RemoteSequenceNo := Self.Req.CSeq.SequenceNo;
+  Self.RemoteTarget     := Self.Req.FirstContact.Address;
+  Self.RemoteUri        := Self.Req.From.Address;
+  Self.RouteSet         := TIdSipHeadersFilter.Create(Self.Req.Headers, RecordRouteHeader);
 end;
 
 procedure TestTIdSipDialogs.TearDown;
 begin
-  Self.Dlg.Free;
-  Req.Free;
-  Res.Free;
   Self.RouteSet.Free;
-  Self.RemoteTarget.Free;
-  Self.RemoteUri.Free;
-  Self.LocalUri.Free;
   Self.ID.Free;
+  Self.Dlg.Free;
+  Self.Res.Free;
+  Self.Req.Free;
   Self.D.Free;
 
   inherited TearDown;
@@ -1055,128 +1042,81 @@ end;
 procedure TestTIdSipDialogs.TestAddAndCount;
 var
   Dlg:           TIdSipDialog;
-  ID:            TIdSipDialogID;
   OriginalCount: Integer;
   RouteSet:      TIdSipHeaders;
 begin
   OriginalCount := Self.D.Count;
 
-  ID := TIdSipDialogID.Create('1', '2', '3');
+  RouteSet := TIdSipHeaders.Create;
   try
-    RouteSet := TIdSipHeaders.Create;
+    Dlg := TIdSipDialog.CreateOutboundDialog(Self.Req, Self.Res, false);
     try
-      Dlg := TIdSipDialog.Create(Self.Req,
-                                 Self.Res,
-                                 ID,
-                                 1,
-                                 2,
-                                 'sip:localhost',
-                                 'sip:remote.org',
-                                 'sips:target.remote.net',
-                                 false,
-                                 RouteSet);
-      try
-        Self.D.Add(Dlg);
-        CheckEquals(OriginalCount + 1, Self.D.Count, 'After one Add');
-      finally
-        Dlg.Free;
-      end;
+      Self.D.Add(Dlg);
+      CheckEquals(OriginalCount + 1, Self.D.Count, 'After one Add');
     finally
-      RouteSet.Free;
+      Dlg.Free;
     end;
   finally
-    ID.Free;
+    RouteSet.Free;
   end;
 end;
 
 procedure TestTIdSipDialogs.TestAddCopiesDialog;
 var
   Dlg:      TIdSipDialog;
-  ID:       TIdSipDialogID;
   RouteSet: TIdSipHeaders;
 begin
-  ID := TIdSipDialogID.Create('1', '2', '3');
+  RouteSet := TIdSipHeaders.Create;
   try
-    RouteSet := TIdSipHeaders.Create;
+    Dlg := TIdSipDialog.CreateOutboundDialog(Self.Req, Self.Res, false);
     try
-      Dlg := TIdSipDialog.Create(Self.Req,
-                                 Self.Res,
-                                 ID,
-                                 1,
-                                 2,
-                                 'sip:localhost',
-                                 'sip:remote.org',
-                                 'sips:target.remote.net',
-                                 false,
-                                 RouteSet);
-      try
-        Self.D.Add(Dlg);
-      finally
-        Dlg.Free;
-      end;
+      Self.D.Add(Dlg);
 
-      // This is a sneaky test - we're implicitly testing that the list
-      // COPIED Dlg. If a reference to Dlg was stored then this would
-      // access violate because we'd have a dangling pointer.
-      Check(ID.Equals(Self.D.Items[0].ID), 'IDs not equal');
+      Check(Self.D.Items[0] <> Dlg, 'Reference to dialog stored, not a copy');
     finally
-      RouteSet.Free;
+      Dlg.Free;
     end;
   finally
-    ID.Free;
+    RouteSet.Free;
   end;
 end;
 
 procedure TestTIdSipDialogs.TestDialogAt;
 var
-  ID2:  TIdSipDialogID;
   Dlg2: TIdSipDialog;
+  ID2:  TIdSipDialogID;
 begin
-  ID2 := TIdSipDialogID.Create('a', 'b', 'c');
+  Self.Req.CallID := '1' + Self.Req.CallID;
+  Self.Res.CallID := Self.Req.CallID;
+  Dlg2 := TIdSipDialog.CreateOutboundDialog(Self.Req, Self.Res, false);
   try
-    Dlg2 := TIdSipDialog.Create(Self.Req,
-                                Self.Res,
-                                ID2,
-                                Self.LocalSequenceNo,
-                                Self.RemoteSequenceNo,
-                                Self.LocalUri,
-                                Self.RemoteUri,
-                                Self.RemoteTarget,
-                                false,
-                                Self.RouteSet);
+    ID2 := TIdSipDialogID.Create(Dlg2.ID);
     try
       Self.D.Add(Dlg);
       Self.D.Add(Dlg2);
 
-      Check(Dlg.ID.Equals(Self.D.DialogAt(Self.ID).ID),
-            'Returned dialog is not Dlg');
-      Check(Dlg2.ID.Equals(Self.D.DialogAt(ID2).ID),
-            'Returned dialog is not Dlg2');
+        Check(Dlg.ID.Equals(Self.D.DialogAt(Self.ID).ID),
+              'Returned dialog is not Dlg');
+        Check(Dlg2.ID.Equals(Self.D.DialogAt(ID2).ID),
+              'Returned dialog is not Dlg2');
     finally
-      Dlg2.Free;
+      ID2.Free;
     end;
   finally
-    ID2.Free;
+    Dlg2.Free;
   end;
 end;
 
 procedure TestTIdSipDialogs.TestDialogAtString;
 var
-  ID2:  TIdSipDialogID;
   Dlg2: TIdSipDialog;
+  ID2:  TIdSipDialogID;
 begin
-  ID2 := TIdSipDialogID.Create('a', 'b', 'c');
+  Self.Req.CallID := '1' + Self.Req.CallID;
+  Self.Res.CallID := Self.Req.CallID;
+  Dlg2 := TIdSipDialog.CreateOutboundDialog(Self.Req, Self.Res, false);
   try
-    Dlg2 := TIdSipDialog.Create(Self.Req,
-                                Self.Res,
-                                ID2,
-                                Self.LocalSequenceNo,
-                                Self.RemoteSequenceNo,
-                                Self.LocalUri,
-                                Self.RemoteUri,
-                                Self.RemoteTarget,
-                                false,
-                                Self.RouteSet);
+    ID2 := TIdSipDialogID.Create(Dlg2.ID);
     try
       Self.D.Add(Dlg);
       Self.D.Add(Dlg2);
@@ -1190,10 +1130,10 @@ begin
                                            ID2.RemoteTag).ID),
             'Returned dialog is not Dlg2');
     finally
-      Dlg2.Free;
+      ID2.Free;
     end;
   finally
-    ID2.Free;
+    Dlg2.Free;
   end;
 end;
 

@@ -12,7 +12,7 @@ unit IdSipDialog;
 interface
 
 uses
-  Classes, Contnrs, IdSipDialogID, IdSipMessage, SyncObjs;
+  Classes, Contnrs, IdSipDialogID, IdSipMessage;
 
 type
   TIdSipDialog = class;
@@ -37,10 +37,17 @@ type
     fRemoteURI:             TIdSipURI;
     fRouteSet:              TIdSipRoutePath;
     fState:                 TIdSipDialogState;
-    LocalSequenceNoLock:    TCriticalSection;
     SupportedExtensionList: TStrings;
 
     function  GetIsEarly: Boolean;
+    function  GetLocalSequenceNo: Cardinal;
+    procedure IntersectionOfSupportedExtensions(Target: TStrings;
+                                                Request: TIdSipRequest;
+                                                Response: TIdSipResponse);
+    procedure SetCanBeEstablished(Value: Boolean);
+    procedure SetIsEarly(Value: Boolean);
+    procedure SetIsSecure(Value: Boolean);
+  protected
     procedure CreateInternal(Request: TIdSipRequest;
                              Response: TIdSipResponse;
                              DialogID: TIdSipDialogID;
@@ -50,15 +57,7 @@ type
                              const RemoteUri: String;
                              const RemoteTarget: String;
                              IsSecure: Boolean;
-                             RouteSet: TIdSipHeaderList);
-    function  GetLocalSequenceNo: Cardinal;
-    procedure IntersectionOfSupportedExtensions(Target: TStrings;
-                                                Request: TIdSipRequest;
-                                                Response: TIdSipResponse);
-    procedure SetCanBeEstablished(Value: Boolean);
-    procedure SetIsEarly(Value: Boolean);
-    procedure SetIsSecure(Value: Boolean);
-  protected
+                             RouteSet: TIdSipHeaderList); virtual;
     procedure DoOnEstablished;
     procedure SetLocalSequenceNo(Value: Cardinal);
     procedure SetRemoteSequenceNo(Value: Cardinal);
@@ -76,26 +75,6 @@ type
                                         Response: TIdSipResponse;
                                         UsingSecureTransport: Boolean): TIdSipDialog;
 
-    constructor Create(Request: TIdSipRequest;
-                       Response: TIdSipResponse;
-                       DialogID: TIdSipDialogID;
-                       LocalSequenceNo: Cardinal;
-                       RemoteSequenceNo: Cardinal;
-                       LocalUri,
-                       RemoteUri: TIdSipURI;
-                       RemoteTarget: TIdSipURI;
-                       IsSecure: Boolean;
-                       RouteSet: TIdSipHeaderList); overload;
-    constructor Create(Request: TIdSipRequest;
-                       Response: TIdSipResponse;
-                       DialogID: TIdSipDialogID;
-                       LocalSequenceNo: Cardinal;
-                       RemoteSequenceNo: Cardinal;
-                       const LocalUri: String;
-                       const RemoteUri: String;
-                       const RemoteTarget: String;
-                       IsSecure: Boolean;
-                       RouteSet: TIdSipHeaderList); overload;
     constructor Create(Dialog: TIdSipDialog); overload;
     destructor  Destroy; override;
 
@@ -103,7 +82,7 @@ type
     function  CreateAck: TIdSipRequest;
     function  CreateRequest: TIdSipRequest;
     function  IsNull: Boolean; virtual;
-    function  IsOutOfOrder(Request: TIdSipRequest): Boolean;
+    function  IsOutOfOrder(Request: TIdSipRequest): Boolean; virtual;
     function  NextInitialSequenceNo: Cardinal;
     function  NextLocalSequenceNo: Cardinal;
     procedure ReceiveRequest(Request: TIdSipRequest); virtual;
@@ -123,6 +102,27 @@ type
     property OnEstablished: TIdSipDialogEvent read fOnEstablished write fOnEstablished;
   end;
 
+  TIdSipOutboundDialog = class(TIdSipDialog)
+  private
+    fHasReceivedRemoteRequest: Boolean;
+  protected
+    procedure CreateInternal(Request: TIdSipRequest;
+                             Response: TIdSipResponse;
+                             DialogID: TIdSipDialogID;
+                             LocalSequenceNo: Cardinal;
+                             RemoteSequenceNo: Cardinal;
+                             const LocalUri: String;
+                             const RemoteUri: String;
+                             const RemoteTarget: String;
+                             IsSecure: Boolean;
+                             RouteSet: TIdSipHeaderList); override;
+  public
+    function  IsOutOfOrder(Request: TIdSipRequest): Boolean; override;
+    procedure ReceiveRequest(Request: TIdSipRequest); override;
+
+    property HasReceivedRemoteRequest: Boolean read fHasReceivedRemoteRequest;
+  end;
+
   TIdSipNullDialog = class(TIdSipDialog)
   public
     function IsNull: Boolean; override;
@@ -131,7 +131,6 @@ type
   TIdSipDialogs = class(TObject)
   private
     List:    TObjectList;
-    Lock:    TCriticalSection;
     NullDlg: TIdSipNullDialog;
 
     function GetItem(Index: Integer): TIdSipDialog;
@@ -206,16 +205,17 @@ begin
                                 Response.ToHeader.Tag,
                                 Request.From.Tag);
     try
-      Result := TIdSipDialog.Create(Request,
-                                    Response,
-                                    ID,
-                                    0,
-                                    Request.CSeq.SequenceNo,
-                                    Request.ToHeader.Address,
-                                    Request.From.Address,
-                                    Request.FirstContact.Address,
-                                    UsingSecureTransport and (Request.HasSipsUri),
-                                    Request.RecordRoute);
+      Result := TIdSipDialog.Create;
+      Result.CreateInternal(Request,
+                            Response,
+                            ID,
+                            0,
+                            Request.CSeq.SequenceNo,
+                            Request.ToHeader.Address.Uri,
+                            Request.From.Address.Uri,
+                            Request.FirstContact.Address.Uri,
+                            UsingSecureTransport and (Request.HasSipsUri),
+                            Request.RecordRoute);
     finally
       ID.Free;
     end;
@@ -241,72 +241,23 @@ begin
     try
       RouteSet.AddInReverseOrder(Response.RecordRoute);
 
-      Result := TIdSipDialog.Create(Request,
-                                    Response,
-                                    ID,
-                                    Request.CSeq.SequenceNo,
-                                    0,
-                                    Request.From.Address,
-                                    Request.ToHeader.Address,
-                                    Response.FirstContact.Address,
-                                    UsingSecureTransport and Request.FirstContact.HasSipsUri,
-                                    RouteSet);
+      Result := TIdSipOutboundDialog.Create;
+      Result.CreateInternal(Request,
+                            Response,
+                            ID,
+                            Request.CSeq.SequenceNo,
+                            0,
+                            Request.From.Address.Uri,
+                            Request.ToHeader.Address.Uri,
+                            Response.FirstContact.Address.Uri,
+                            UsingSecureTransport and Request.FirstContact.HasSipsUri,
+                            RouteSet);
     finally
       RouteSet.Free;
     end;
   finally
     ID.Free;
   end;
-end;
-
-constructor TIdSipDialog.Create(Request: TIdSipRequest;
-                                Response: TIdSipResponse;
-                                DialogID: TIdSipDialogID;
-                                LocalSequenceNo: Cardinal;
-                                RemoteSequenceNo: Cardinal;
-                                LocalUri,
-                                RemoteUri: TIdSipURI;
-                                RemoteTarget: TIdSipURI;
-                                IsSecure: Boolean;
-                                RouteSet: TIdSipHeaderList);
-begin
-  inherited Create;
-
-  Self.CreateInternal(Request,
-                      Response,
-                      DialogID,
-                      LocalSequenceNo,
-                      RemoteSequenceNo,
-                      LocalUri.URI,
-                      RemoteUri.URI,
-                      RemoteTarget.URI,
-                      IsSecure,
-                      RouteSet);
-end;
-
-constructor TIdSipDialog.Create(Request: TIdSipRequest;
-                                Response: TIdSipResponse;
-                                DialogID: TIdSipDialogID;
-                                LocalSequenceNo: Cardinal;
-                                RemoteSequenceNo: Cardinal;
-                                const LocalUri: String;
-                                const RemoteUri: String;
-                                const RemoteTarget: String;
-                                IsSecure: Boolean;
-                                RouteSet: TIdSipHeaderList);
-begin
-  inherited Create;
-
-  Self.CreateInternal(Request,
-                      Response,
-                      DialogID,
-                      LocalSequenceNo,
-                      RemoteSequenceNo,
-                      LocalUri,
-                      RemoteUri,
-                      RemoteTarget,
-                      IsSecure,
-                      RouteSet);
 end;
 
 constructor TIdSipDialog.Create(Dialog: TIdSipDialog);
@@ -333,7 +284,6 @@ begin
   Self.RemoteURI.Free;
   Self.LocalUri.Free;
   Self.ID.Free;
-  Self.LocalSequenceNoLock.Free;
   Self.InitialResponse.Free;
   Self.InitialRequest.Free;
 
@@ -470,8 +420,7 @@ end;
 
 function TIdSipDialog.IsOutOfOrder(Request: TIdSipRequest): Boolean;
 begin
-  Result := (Self.RemoteSequenceNo > 0)
-        and (Request.CSeq.SequenceNo < Self.RemoteSequenceNo);
+  Result := Request.CSeq.SequenceNo <= Self.RemoteSequenceNo;
 end;
 
 function TIdSipDialog.NextInitialSequenceNo: Cardinal;
@@ -483,17 +432,12 @@ end;
 
 function TIdSipDialog.NextLocalSequenceNo: Cardinal;
 begin
-  Self.LocalSequenceNoLock.Acquire;
-  try
-    if (Self.fLocalSequenceNo = 0) then
-      Self.fLocalSequenceNo := Self.NextInitialSequenceNo
-    else
-      Inc(Self.fLocalSequenceNo);
+  if (Self.fLocalSequenceNo = 0) then
+    Self.fLocalSequenceNo := Self.NextInitialSequenceNo
+  else
+    Inc(Self.fLocalSequenceNo);
 
-    Result := Self.fLocalSequenceNo;
-  finally
-    Self.LocalSequenceNoLock.Release;
-  end;
+  Result := Self.fLocalSequenceNo;
 end;
 
 procedure TIdSipDialog.ReceiveRequest(Request: TIdSipRequest);
@@ -528,39 +472,6 @@ end;
 
 //* TIdSipDialog Protected methods *********************************************
 
-procedure TIdSipDialog.DoOnEstablished;
-begin
-  if Assigned(Self.OnEstablished) then
-    Self.OnEstablished(Self);
-end;
-
-procedure TIdSipDialog.SetLocalSequenceNo(Value: Cardinal);
-begin
-  Self.LocalSequenceNoLock.Acquire;
-  try
-    Self.fLocalSequenceNo := Value;
-  finally
-  Self.LocalSequenceNoLock.Release;
-  end;
-end;
-
-procedure TIdSipDialog.SetRemoteSequenceNo(Value: Cardinal);
-begin
-  Self.fRemoteSequenceNo := Value;
-end;
-
-procedure TIdSipDialog.SetRemoteTarget(Value: TIdSipURI);
-begin
-  Self.RemoteTarget.Uri := Value.Uri;
-end;
-
-procedure TIdSipDialog.SetState(Value: TIdSipDialogState);
-begin
-  Self.fState := Value;
-end;
-
-//* TIdSipDialog Private methods ***********************************************
-
 procedure TIdSipDialog.CreateInternal(Request: TIdSipRequest;
                                       Response: TIdSipResponse;
                                       DialogID: TIdSipDialogID;
@@ -574,8 +485,6 @@ procedure TIdSipDialog.CreateInternal(Request: TIdSipRequest;
 begin
   Self.fInitialRequest  := Request.Copy as TIdSipRequest;
   Self.fInitialResponse := Response.Copy as TIdSipResponse;
-
-  Self.LocalSequenceNoLock := TCriticalSection.Create;
 
   Self.fID := TIdSipDialogID.Create(DialogID);
   Self.SetLocalSequenceNo(LocalSequenceNo);
@@ -603,6 +512,34 @@ begin
   end;
 end;
 
+procedure TIdSipDialog.DoOnEstablished;
+begin
+  if Assigned(Self.OnEstablished) then
+    Self.OnEstablished(Self);
+end;
+
+procedure TIdSipDialog.SetLocalSequenceNo(Value: Cardinal);
+begin
+  Self.fLocalSequenceNo := Value;
+end;
+
+procedure TIdSipDialog.SetRemoteSequenceNo(Value: Cardinal);
+begin
+  Self.fRemoteSequenceNo := Value;
+end;
+
+procedure TIdSipDialog.SetRemoteTarget(Value: TIdSipURI);
+begin
+  Self.RemoteTarget.Uri := Value.Uri;
+end;
+
+procedure TIdSipDialog.SetState(Value: TIdSipDialogState);
+begin
+  Self.fState := Value;
+end;
+
+//* TIdSipDialog Private methods ***********************************************
+
 function TIdSipDialog.GetIsEarly: Boolean;
 begin
   Result := Self.fState = sdsEarly;
@@ -610,12 +547,7 @@ end;
 
 function TIdSipDialog.GetLocalSequenceNo: Cardinal;
 begin
-  Self.LocalSequenceNoLock.Acquire;
-  try
-    Result := Self.fLocalSequenceNo;
-  finally
-    Self.LocalSequenceNoLock.Release;
-  end;
+  Result := Self.fLocalSequenceNo;
 end;
 
 procedure TIdSipDialog.IntersectionOfSupportedExtensions(Target: TStrings;
@@ -657,6 +589,46 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipOutboundDialog                                                       *
+//******************************************************************************
+//* TIdSipOutboundDialog Public  methods ***************************************
+
+function TIdSipOutboundDialog.IsOutOfOrder(Request: TIdSipRequest): Boolean;
+begin
+  Result := Self.HasReceivedRemoteRequest;
+
+  // If we HAVE received a remote request, process as normal.
+  if Result then
+    Result := inherited IsOutOfOrder(Request);
+end;
+
+procedure TIdSipOutboundDialog.ReceiveRequest(Request: TIdSipRequest);
+begin
+  inherited ReceiveRequest(Request);
+
+  Self.fHasReceivedRemoteRequest := true;
+  Self.SetRemoteSequenceNo(Request.CSeq.SequenceNo);
+end;
+
+//* TIdSipOutboundDialog Protected methods *************************************
+
+procedure TIdSipOutboundDialog.CreateInternal(Request: TIdSipRequest;
+                                              Response: TIdSipResponse;
+                                              DialogID: TIdSipDialogID;
+                                              LocalSequenceNo: Cardinal;
+                                              RemoteSequenceNo: Cardinal;
+                                              const LocalUri: String;
+                                              const RemoteUri: String;
+                                              const RemoteTarget: String;
+                                              IsSecure: Boolean;
+                                              RouteSet: TIdSipHeaderList);
+begin
+  inherited;
+
+  Self.fHasReceivedRemoteRequest := false;
+end;
+
+//******************************************************************************
 //* TIdSipNullDialog                                                           *
 //******************************************************************************
 //* TIdSipNullDialog Public methods ********************************************
@@ -676,14 +648,12 @@ begin
   inherited Create;
 
   Self.List    := TObjectList.Create(true);
-  Self.Lock    := TCriticalSection.Create;
   Self.NullDlg := TIdSipNullDialog.Create;
 end;
 
 destructor TIdSipDialogs.Destroy;
 begin
   Self.NullDlg.Free;
-  Self.Lock.Free;
   Self.List.Free;
 
   inherited Destroy;
@@ -693,53 +663,38 @@ procedure TIdSipDialogs.Add(NewDialog: TIdSipDialog);
 var
   D: TIdSipDialog;
 begin
-  Self.Lock.Acquire;
+  D := TIdSipDialog.Create(NewDialog);
   try
-    D := TIdSipDialog.Create(NewDialog);
-    try
-      Self.List.Add(D);
-    except
-      if (Self.List.IndexOf(D) <> ItemNotFoundIndex) then
-        Self.List.Remove(D)
-      else
-        D.Free;
+    Self.List.Add(D);
+  except
+    if (Self.List.IndexOf(D) <> ItemNotFoundIndex) then
+      Self.List.Remove(D)
+    else
+      D.Free;
 
-      raise;
-    end;
-  finally
-    Self.Lock.Release;
+    raise;
   end;
 end;
 
 function TIdSipDialogs.Count: Integer;
 begin
-  Self.Lock.Acquire;
-  try
-    Result := Self.List.Count;
-  finally
-    Self.Lock.Release;
-  end;
+  Result := Self.List.Count;
 end;
 
 function TIdSipDialogs.DialogAt(ID: TIdSipDialogID): TIdSipDialog;
 var
   I: Integer;
 begin
-  Self.Lock.Acquire;
-  try
-    Result := nil;
-    I := 0;
-    while (I < Self.List.Count) and not Assigned(Result) do
-      if Self.Items[I].ID.Equals(ID) then
-        Result := Self.Items[I]
-      else
-        Inc(I);
+  Result := nil;
+  I := 0;
+  while (I < Self.List.Count) and not Assigned(Result) do
+    if Self.Items[I].ID.Equals(ID) then
+      Result := Self.Items[I]
+    else
+      Inc(I);
 
-    if not Assigned(Result) then
-      Result := Self.NullDlg;
-  finally
-    Self.Lock.Release;
-  end;
+  if not Assigned(Result) then
+    Result := Self.NullDlg;
 end;
 
 function TIdSipDialogs.DialogAt(const CallID: String;
