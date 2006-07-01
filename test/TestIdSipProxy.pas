@@ -63,7 +63,7 @@ begin
 
   Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
   Self.Dispatcher.AddTransactionDispatcherListener(Self.Proxy);
-  Self.Dispatcher.TransportType := TcpTransport;
+  Self.Dispatcher.TransportType := UdpTransport;
 
   Self.Invite := TIdSipTestResources.CreateBasicRequest;
   Self.RemoveBody(Self.Invite);

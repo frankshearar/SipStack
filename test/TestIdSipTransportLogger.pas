@@ -73,7 +73,7 @@ begin
   Self.LogStream := TStringStream.Create('');
   Self.Request   := TIdSipTestResources.CreateBasicRequest;
   Self.Response  := TIdSipTestResources.CreateBasicResponse;
-  Self.Transport := TIdSipMockTransport.Create;
+  Self.Transport := TIdSipMockUdpTransport.Create;
 
   Self.Logger := TIdSipTransportLogger.Create;
   Self.Logger.OutputStream := Self.LogStream;

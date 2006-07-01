@@ -230,9 +230,16 @@ end;
 //* TIdSipMockLocator Private methods ******************************************
 
 function TIdSipMockLocator.AddRandomNameRecord(const DomainName: String): TIdDomainNameRecord;
+const
+  LocalHost = $7f000001;
 var
   RandomAddress: String;
+  IPAddress:     Cardinal;
 begin
+  repeat
+    IPAddress := GRandomNumber.NextCardinal;
+  until (IPAddress <> LocalHost);
+
   RandomAddress := IntToStr(GRandomNumber.NextRandomBits(8)) + '.'
                  + IntToStr(GRandomNumber.NextRandomBits(8)) + '.'
                  + IntToStr(GRandomNumber.NextRandomBits(8)) + '.'

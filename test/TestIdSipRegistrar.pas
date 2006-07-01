@@ -1457,10 +1457,6 @@ begin
   Self.Contacts := TIdSipContacts.Create;
   Self.Contacts.Add(ContactHeaderFull).Value := 'sip:wintermute@talking-head.tessier-ashpool.co.luna';
 
-  // DNS entries for redirected domains, etc.
-  Self.Locator.AddA('bar.org',   '127.0.0.1');
-  Self.Locator.AddA('quaax.org', '127.0.0.1');
-
   Self.Failed := false;
 end;
 

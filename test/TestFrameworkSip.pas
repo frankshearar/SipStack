@@ -811,7 +811,7 @@ var
 begin
   Request := Self.CreateBasicRequest;
   try
-    Result := TIdSipResponse.InResponseTo(Request, SIPBusyHere);
+    Result := TIdSipResponse.InResponseTo(Request, SIPOK);
     Result.AddHeader(ContactHeaderFull).Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna>';
   finally
     Request.Free;

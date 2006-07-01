@@ -2871,10 +2871,8 @@ begin
   try
     Cancel := Self.Request.CreateCancel;
     try
-      Check(Ack.MatchCancel(Cancel), '"Matching" CANCEL');
-
-      Cancel.LastHop.Branch := Cancel.LastHop.Branch + '1';
-      Check(not Ack.MatchCancel(Cancel), 'Non-"matching" CANCEL');
+      Check(not Ack.MatchCancel(Cancel), 'CANCELs can never match ACKs because '
+          + 'ACKs have different branches to their INVITEs');
     finally
       Cancel.Free;
     end;

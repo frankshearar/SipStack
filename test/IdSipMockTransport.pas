@@ -41,7 +41,8 @@ type
                               Dest: TIdSipLocation);
     procedure DispatchResponse(R: TidSipResponse;
                                Dest: TIdSipLocation);
-    function  FindTransport(const Address: String;
+    function  FindTransport(const TransportType: String;
+                            const Address: String;
                                   Port: Cardinal): TIdSipMockTransport;
     procedure Log(Msg: String;
                   Direction: TIdMessageDirection);
@@ -463,7 +464,7 @@ var
   FakeBinding: TIdSipConnectionBindings;
   T:           TIdSipMockTransport;
 begin
-  T := Self.FindTransport(Dest.IPAddress, Dest.Port);
+  T := Self.FindTransport(Dest.Transport, Dest.IPAddress, Dest.Port);
 
   if Assigned(T) then begin
     // FakeBinding represents the socket binding information that the remote
@@ -489,7 +490,7 @@ var
   FakeBinding: TIdSipConnectionBindings;
   T:           TIdSipMockTransport;
 begin
-  T := Self.FindTransport(Dest.IPAddress, Dest.Port);
+  T := Self.FindTransport(Dest.Transport, Dest.IPAddress, Dest.Port);
 
   if Assigned(T) then begin
     // FakeBinding represents the socket binding information that the remote
@@ -509,7 +510,8 @@ begin
   end;
 end;
 
-function TIdSipMockTransport.FindTransport(const Address: String;
+function TIdSipMockTransport.FindTransport(const TransportType: String;
+                                           const Address: String;
                                                  Port: Cardinal): TIdSipMockTransport;
 var
   I: Integer;
@@ -519,7 +521,8 @@ begin
   I := 0;
 
   while (I < GAllTransports.Count) and not Assigned(Result) do
-    if Self.TransportAt(I).HasBinding(Address, Port) then
+    if (Self.TransportAt(I).GetTransportType = TransportType)
+      and Self.TransportAt(I).HasBinding(Address, Port) then
       Result := Self.TransportAt(I)
     else
       Inc(I);
