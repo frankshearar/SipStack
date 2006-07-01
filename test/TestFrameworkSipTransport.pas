@@ -191,14 +191,15 @@ type
     procedure TestTortureTest23;
     procedure TestTortureTest35;
     procedure TestTortureTest40;
+    procedure TestTortureTest41;
     procedure TestUseRport;
   end;
 
 implementation
 
 uses
-  IdStack, IdSipConsts, IdTcpServer, TestFramework, TestFrameworkSip,
-  TestMessages;
+  IdSimpleParser, IdSipConsts, IdStack, IdTcpServer, TestFramework,
+  TestFrameworkSip, TestMessages;
 
 var
   ServerThatInstantiatesGStack: TIdTcpServer;
@@ -1426,6 +1427,7 @@ end;
 procedure TestTIdSipTransport.TestTortureTest19;
 var
   Destination:   String;
+  MalformedTo:   String;
   TortureTest19: String;
 begin
   //   This is a request with an unterminated quote in the display name of
@@ -1435,9 +1437,10 @@ begin
   //   successful parsing without the terminating quote.
 
   Destination := Self.HighPortTransport.Bindings[0].IP + ':' + IntToStr(Self.HighPortTransport.Bindings[0].Port);
+  MalformedTo := '"Mr. J. User <sip:j.user@%s>';
 
   TortureTest19 := 'INVITE sip:user@%s SIP/2.0'#13#10
-                 + 'To: "Mr. J. User <sip:j.user@%s>'#13#10
+                 + 'To: ' + MalformedTo + #13#10
                  + 'From: sip:caller@university.edu;tag=93334'#13#10
                  + 'Max-Forwards: 10'#13#10
                  + 'Call-ID: 0ha0isndaksdj@10.0.0.1'#13#10
@@ -1459,6 +1462,9 @@ begin
   Self.SendFromLowTransport(StringReplace(TortureTest19, '%s', Destination, [rfReplaceAll]));
 
   Self.WaitForSignaled(Self.RejectedMessageEvent);
+  CheckEquals(Format(MalformedToken, [ToHeaderFull, StringReplace(MalformedTo, '%s', Destination, [rfReplaceAll])]),
+              Self.RejectedMessageReason,
+              'Message rejected for the wrong reason');
 end;
 
 procedure TestTIdSipTransport.TestTortureTest21;
@@ -1636,6 +1642,40 @@ begin
                 + #13#10;
 
   Self.SendFromLowTransport(StringReplace(TortureTest40, '%s', Destination, [rfReplaceAll]));
+
+  Self.WaitForSignaled;
+
+  Check(Self.ReceivedRequest,
+        Self.HighPortTransport.ClassName + ': Request not received');
+end;
+
+procedure TestTIdSipTransport.TestTortureTest41;
+var
+  Destination:   String;
+  TortureTest41: String;
+begin
+  Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
+
+  Destination := Self.HighPortTransport.Bindings[0].IP + ':' + IntToStr(Self.HighPortTransport.Bindings[0].Port);
+
+  //   This is an illegal INVITE as the SIP Protocol version is unknown.
+  //
+  //   The server should respond to the request with a bad version error.
+
+  // However, we let the transports pass up this message so that the
+  // Transaction-User layer can reject this message in a centralised fashion.
+  // The message is syntactically valid, after all, if semantically invalid.
+
+  TortureTest41 := 'INVITE sip:t.watson@%s SIP/7.0'#13#10
+                 + 'Via:     SIP/2.0/' + Self.HighPortTransport.GetTransportType + ' c.bell-tel.com;branch=z9hG4bKkdjuw'#13#10
+                 + 'Max-Forwards:     70'#13#10
+                 + 'From:    A. Bell <sip:a.g.bell@bell-tel.com>;tag=qweoiqpe'#13#10
+                 + 'To:      T. Watson <sip:t.watson@%s>'#13#10
+                 + 'Call-ID: 31417@c.bell-tel.com'#13#10
+                 + 'CSeq:    1 INVITE'#13#10
+                 + #13#10;
+
+  Self.SendFromLowTransport(StringReplace(TortureTest41, '%s', Destination, [rfReplaceAll]));
 
   Self.WaitForSignaled;
 
