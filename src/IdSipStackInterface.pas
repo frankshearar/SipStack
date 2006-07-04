@@ -690,6 +690,7 @@ constructor TIdSipStackInterface.Create(UiHandle: HWnd;
 var
   Configurator: TIdSipStackConfigurator;
   I:            Integer;
+  Module:       TIdSipMessageModule;
 begin
   inherited Create(true);
 
@@ -711,10 +712,12 @@ begin
       Self.UserAgent.Dispatcher.Transports[I].AddTransportSendingListener(Self);
     end;
 
-    Self.SubscribeModule := Self.UserAgent.ModuleFor(TIdSipSubscribeModule) as TIdSipSubscribeModule;
+    Module := Self.UserAgent.ModuleFor(TIdSipSubscribeModule);
 
-    if Assigned(Self.SubscribeModule) then
+    if not Module.IsNull then begin
+      Self.SubscribeModule := Module as TIdSipSubscribeModule;
       Self.SubscribeModule.AddListener(Self);
+    end;
   finally
     Configurator.Free;
   end;

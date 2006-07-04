@@ -38,6 +38,11 @@ type
                              Event: Cardinal;
                              Data: TIdEventData) of object;
 
+  TestTIdSipStackInterfaceCreation = class(TTestCase)
+  published
+    procedure TestCreateStackWithNoSubscribeSupport;
+  end;
+
   TestTIdSipStackInterface = class(TThreadingTestCase)
   private
     CheckDataProc:  TDataCheckProc;
@@ -359,6 +364,7 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipStackInterface unit tests');
+  Result.AddTest(TestTIdSipStackInterfaceCreation.Suite);
 //  Result.AddTest(TestTIdSipStackInterface.Suite);
   Result.AddTest(TestTIdEventData.Suite);
   Result.AddTest(TestTIdInformationalData.Suite);
@@ -378,6 +384,30 @@ begin
   Result.AddTest(TestTIdSubscriptionRequestData.Suite);
   Result.AddTest(TestTIdSessionReferralData.Suite);
   Result.AddTest(TestTIdSubscriptionData.Suite);
+end;
+
+//******************************************************************************
+//* TestTIdSipStackInterfaceCreation                                           *
+//******************************************************************************
+//* TestTIdSipStackInterfaceCreation Public methods ****************************
+
+procedure TestTIdSipStackInterfaceCreation.TestCreateStackWithNoSubscribeSupport;
+var
+  EmptyConf: TStrings;
+  Stack:     TIdSipStackInterface;
+begin
+  EmptyConf := TStringList.Create;
+  try
+    Stack := TIdSipStackInterface.Create(0, EmptyConf);
+    try
+      // This test tries catches a (now squashed) bug: when no subscribe module
+      // was attached to the stack we'd get an Invalid Cast exception.
+    finally
+      Stack.Free;
+    end;
+  finally
+    EmptyConf.Free;
+  end;
 end;
 
 //******************************************************************************
