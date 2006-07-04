@@ -1549,8 +1549,9 @@ begin
     Data.Handle    := Self.HandleFor(Action);
     Data.ErrorCode := ErrorCode;
     Data.Reason    := Reason;
-
     Self.NotifyEvent(CM_NETWORK_FAILURE, Data);
+
+    Self.RemoveAction(Data.Handle);
   finally
     Data.Free;
   end;
