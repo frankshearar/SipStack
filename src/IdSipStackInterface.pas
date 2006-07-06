@@ -303,6 +303,10 @@ type
     function EventName: String; override;
   end;
 
+  // You might think that we should have a Response property to indicate why a
+  // call ended (due to a failure). You'd be wrong. A call COULD end because
+  // the UAS returned 486 Busy Here. A call could also end because we sent or
+  // received a BYE, in which case a Response field would be misleading.
   TIdCallEndedData = class(TIdInformationalData)
   protected
     function EventName: String; override;
