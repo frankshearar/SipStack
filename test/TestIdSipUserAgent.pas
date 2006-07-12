@@ -39,7 +39,6 @@ type
     OnEndedSessionFired: Boolean;
     OnInboundCallFired:  Boolean;
     Password:            String;
-    RemoteSequenceNo:    Cardinal;
     RemoteTarget:        TIdSipURI;
     RemoteUri:           TIdSipURI;
     RouteSet:            TIdSipHeaders;
