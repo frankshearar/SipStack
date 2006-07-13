@@ -5070,9 +5070,10 @@ begin
   Members := Self.LockMembers;
   try
     for I := 0 to Members.Count - 1 do
-      Agent.SendPacket(Members.MemberAt(I).ControlAddress,
-                       Members.MemberAt(I).ControlPort,
-                       Packet);
+      if (Members.MemberAt(I).SyncSrcID <> Self.SyncSrcID) then
+        Agent.SendPacket(Members.MemberAt(I).ControlAddress,
+                         Members.MemberAt(I).ControlPort,
+                         Packet);
   finally
     Self.UnlockMembers;
   end;

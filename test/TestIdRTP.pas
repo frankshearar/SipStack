@@ -726,6 +726,7 @@ type
     procedure TestDeterministicSendInterval10MembersAndSender;
     procedure TestDeterministicSendIntervalMinimumInterval;
     procedure TestDeterministicSendIntervalWithZeroBandwidth;
+    procedure TestSendControlDoesntSendToSelf;
   end;
 
   TestTIdRTPPacketBuffer = class(TTestCase)
@@ -816,6 +817,7 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdRTP unit tests');
+{
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdNullPayload.Suite);
   Result.AddTest(TestTIdRTPReservedPayload.Suite);
@@ -852,11 +854,14 @@ begin
   Result.AddTest(TestSessionSequenceNumberRules.Suite);
   Result.AddTest(TestTIdRTPSession.Suite);
   Result.AddTest(TestSessionReportRules.Suite);
+}
   Result.AddTest(TestSessionSendReceiveRules.Suite);
+{
   Result.AddTest(TestTIdRTPPacketBuffer.Suite);
   Result.AddTest(TestTIdRTPListenerReceiveRTCPMethod.Suite);
   Result.AddTest(TestTIdRTPListenerReceiveRTPMethod.Suite);
   Result.AddTest(TestTIdRTPDataListenerNewDataMethod.Suite);
+}
 end;
 
 function ShowEncoded(S: String): String;
@@ -7995,6 +8000,19 @@ begin
               Self.Session.DeterministicSendInterval(Self.Session.IsSender),
               OneMillisecond,
               'Zero bandwidth');
+end;
+
+procedure TestSessionSendReceiveRules.TestSendControlDoesntSendToSelf;
+var
+  RTCPCount: Cardinal;
+begin
+  // At SetUp, there's only one member in the session, namely Self.Session.
+  // Thus, if any RTCP messages make it onto the network (as revealed by
+  // Agent.RTCPCount), then Self.Session send RTCP data to itself.
+
+  RTCPCount := Self.Agent.RTCPCount;
+  Self.Session.SendControl(Self.SR);
+  CheckEquals(RTCPCount, Self.Agent.RTCPCount, 'Session sent RTCP to itself');
 end;
 
 //******************************************************************************
