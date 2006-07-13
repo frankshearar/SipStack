@@ -817,7 +817,6 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdRTP unit tests');
-{
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdNullPayload.Suite);
   Result.AddTest(TestTIdRTPReservedPayload.Suite);
@@ -854,14 +853,11 @@ begin
   Result.AddTest(TestSessionSequenceNumberRules.Suite);
   Result.AddTest(TestTIdRTPSession.Suite);
   Result.AddTest(TestSessionReportRules.Suite);
-}
   Result.AddTest(TestSessionSendReceiveRules.Suite);
-{
   Result.AddTest(TestTIdRTPPacketBuffer.Suite);
   Result.AddTest(TestTIdRTPListenerReceiveRTCPMethod.Suite);
   Result.AddTest(TestTIdRTPListenerReceiveRTPMethod.Suite);
   Result.AddTest(TestTIdRTPDataListenerNewDataMethod.Suite);
-}
 end;
 
 function ShowEncoded(S: String): String;
