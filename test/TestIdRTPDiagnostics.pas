@@ -144,25 +144,23 @@ begin
 
   Self.Profile := TIdAudioVisualProfile.Create;
 
-  Self.Receiver := TIdRTPServer.Create(nil);
+  Self.Receiver := TIdRTPServer.Create;
+  Self.Receiver.Address := '127.0.0.1';
   Self.Receiver.Profile := Self.Profile;
-  Binding := Self.Receiver.Bindings.Add;
-  Binding.IP := '127.0.0.1';
-  Binding.Port := 58000;
+  Self.Receiver.RTPPort := 58000;
   Self.Receiver.Active := true;
 
-  Self.Sender   := TIdRTPServer.Create(nil);
+  Self.Sender   := TIdRTPServer.Create;
+  Self.Sender.Address := '127.0.0.1';
   Self.Sender.Profile := Self.Profile;
-  Binding := Self.Sender.Bindings.Add;
-  Binding.IP := Self.Receiver.Bindings[0].IP;
-  Binding.Port := Self.Receiver.Bindings[0].Port + 2;
+  Self.Sender.RTPPort := Self.Receiver.RTPPort + 2;
   Self.Sender.Active := true;
 
   Self.Hist := TIdRTPPayloadHistogram.Create;
   Self.Receiver.AddListener(Self.Hist);
 
-  Self.Sender.Session.AddReceiver(Self.Receiver.Bindings[0].IP,
-                                  Self.Receiver.Bindings[0].Port)
+  Self.Sender.Session.AddReceiver(Self.Receiver.Address,
+                                  Self.Receiver.RTPPort)
 end;
 
 procedure TestTIdRTPPayloadHistogram.TearDown;

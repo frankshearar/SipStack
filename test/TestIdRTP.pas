@@ -722,6 +722,8 @@ type
     procedure TestReceiveRTCPAffectsAvgRTCPSize;
     procedure TestReceiveSrcDescAddsAllSources;
     procedure TestRTCPDoesntAddSender;
+    procedure TestSendDataWhenOtherMembersHaventSentData;
+    procedure TestSendDataWhenNoOtherMembersHaveJoined;
     procedure TestDeterministicSendInterval10MembersAndNotSender;
     procedure TestDeterministicSendInterval10MembersAndSender;
     procedure TestDeterministicSendIntervalMinimumInterval;
@@ -3031,9 +3033,8 @@ end;
 
 procedure TestTIdRTPPacket.TestPrintOn;
 var
-  P:   TIdRTPPacket;
-  S:   TStringStream;
-  Srv: TIdRTPServer;
+  P: TIdRTPPacket;
+  S: TStringStream;
 begin
   Self.Packet.Version      := 2;
   Self.Packet.HasPadding   := true;
@@ -3050,20 +3051,15 @@ begin
 
   S := TStringStream.Create('');
   try
-    Srv := TIdRTPServer.Create(nil);
-    try
-      Self.Packet.PrintOn(S);
-      S.Seek(0, soFromBeginning);
+    Self.Packet.PrintOn(S);
+    S.Seek(0, soFromBeginning);
 
-      P := TIdRTPPacket.Create(Self.AVP);
-      try
-        P.ReadFrom(S);
-        Self.CheckHasEqualHeaders(Self.Packet, P);
-      finally
-        P.Free;
-      end;
+    P := TIdRTPPacket.Create(Self.AVP);
+    try
+      P.ReadFrom(S);
+      Self.CheckHasEqualHeaders(Self.Packet, P);
     finally
-      Srv.Free;
+      P.Free;
     end;
   finally
     S.Free;
@@ -7932,6 +7928,58 @@ procedure TestSessionSendReceiveRules.TestRTCPDoesntAddSender;
 begin
   Self.Session.ReceiveControl(Self.SR, Self.Binding);
   CheckEquals(0, Self.Session.SenderCount, 'Sender added');
+end;
+
+procedure TestSessionSendReceiveRules.TestSendDataWhenOtherMembersHaventSentData;
+var
+  OldRTPCount:    Cardinal;
+  Payload:        TIdRTPT140Payload;
+  SingleMemberSR: TIdRTCPSenderReport;
+begin
+  SingleMemberSR := TIdRTCPSenderReport.Create;
+  try
+    SingleMemberSR.SyncSrcID := Self.Data.SyncSrcID;
+    Self.Session.ReceiveControl(SingleMemberSR, Self.Binding);
+
+    OldRTPCount := Agent.RTPCount;
+
+    // Note that we have to send data to those members from whom we've not
+    // received data. Otherwise we find ourselves in a chicken-and-egg problem,
+    // because they won't send data to US (because we've not sent data to them).
+    // This implies that when you add a member you know their data port from
+    // _somewhere_ (like, say, an SDP message).
+
+    Payload := TIdRTPT140Payload.Create;
+    try
+      Payload.Block := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
+
+      Self.Session.SendData(Payload);
+      CheckEquals(OldRTPCount + 1,
+                  Self.Agent.RTPCount,
+                  'Data sent despite not knowing remote member''s data port');
+    finally
+      Payload.Free;
+    end;
+  finally
+    SingleMemberSR.Free;
+  end;
+end;
+
+procedure TestSessionSendReceiveRules.TestSendDataWhenNoOtherMembersHaveJoined;
+var
+  Payload: TIdRTPT140Payload;
+begin
+  Payload := TIdRTPT140Payload.Create;
+  try
+    Payload.Block := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
+
+    Self.Session.SendData(Payload);
+    CheckEquals(0,
+                Self.Agent.RTPCount,
+                'RTP sent to ' + Self.Agent.LastPacketHostTarget + ':' + IntToStr(Self.Agent.LastPacketPortTarget));
+  finally
+    Payload.Free;
+  end;
 end;
 
 procedure TestSessionSendReceiveRules.TestDeterministicSendInterval10MembersAndNotSender;

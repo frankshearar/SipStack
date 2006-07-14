@@ -532,8 +532,9 @@ type
     fProfile:           TIdRTPProfile;
     PreHoldDirection:   TIdSdpDirection;
     RTPListeners:       TIdNotificationList;
-    Server:             TIdRTPServer;
+    Servers:            TObjectList;
 
+    function  CreateServer: TIdRTPServer;
     function  GetDirection: TIdSdpDirection;
     procedure OnNewData(Data: TIdRTPPayload;
                         Binding: TIdConnection);
@@ -541,6 +542,7 @@ type
                      Binding: TIdConnection);
     procedure OnRTP(Packet: TIdRTPPacket;
                     Binding: TIdConnection);
+    function  ServerAt(Index: Integer): TIdRTPServer;
     procedure SetDirection(Value: TIdSdpDirection);
     procedure SetLocalDescription(const Value: TIdSdpMediaDescription);
     procedure SetRemoteDescription(const Value: TIdSdpMediaDescription);
@@ -550,6 +552,7 @@ type
 
     procedure AddDataListener(const Listener: IIdRTPDataListener);
     procedure AddRTPListener(const Listener: IIdRTPListener);
+    function  IsListening: Boolean;
     function  IsReceiver: Boolean;
     function  IsSender: Boolean;
     procedure PutOnHold;
@@ -3359,18 +3362,14 @@ begin
 
   Self.DataListeners := TIdNotificationList.Create;
   Self.RTPListeners  := TIdNotificationList.Create;
-  Self.Server        := TIdRTPServer.Create(nil);
-
-  Self.Server.Profile := Profile;
-  Self.Server.Session.AddListener(Self);
-  Self.Server.AddListener(Self);
+  Self.Servers       := TObjectList.Create(true);
 end;
 
 destructor TIdSDPMediaStream.Destroy;
 begin
   Self.StopListening;
 
-  Self.Server.Free;
+  Self.Servers.Free;
   Self.RTPListeners.Free;
   Self.DataListeners.Free;
 
@@ -3385,6 +3384,11 @@ end;
 procedure TIdSDPMediaStream.AddRTPListener(const Listener: IIdRTPListener);
 begin
   Self.RTPListeners.AddListener(Listener);
+end;
+
+function TIdSDPMediaStream.IsListening: Boolean;
+begin
+  Result := (Self.Servers.Count > 0) and Self.ServerAt(0).Active;
 end;
 
 function TIdSDPMediaStream.IsReceiver: Boolean;
@@ -3422,20 +3426,26 @@ end;
 procedure TIdSDPMediaStream.SendData(Payload: TIdRTPPayload);
 begin
   if Self.IsSender and not Self.OnHold then
-    Self.Server.Session.SendData(Payload);
+    Self.ServerAt(0).Session.SendData(Payload);
 end;
 
 procedure TIdSDPMediaStream.StartListening;
+var
+  I: Integer;
 begin
-  Self.Server.Active := true;
+  for I := 0 to Self.Servers.Count - 1 do
+    Self.ServerAt(I).Active := true;
 end;
 
 procedure TIdSDPMediaStream.StopListening;
+var
+  I: Integer;
 begin
-  if Self.Server.Active then begin
-    Self.Server.Session.LeaveSession('Goodbye');
-    Self.Server.Active := false;
-  end;
+  for I := 0 to Self.Servers.Count - 1 do
+    if Self.ServerAt(I).Active then begin
+      Self.ServerAt(I).Session.LeaveSession('Goodbye');
+      Self.ServerAt(I).Active := false;
+    end;
 end;
 
 procedure TIdSDPMediaStream.TakeOffHold;
@@ -3447,6 +3457,16 @@ begin
 end;
 
 //* TIdSDPMediaStream Private methods ******************************************
+
+function TIdSDPMediaStream.CreateServer: TIdRTPServer;
+begin
+  Result := TIdRTPServer.Create;
+  Self.Servers.Add(Result);
+
+  Result.Profile := Profile;
+  Result.Session.AddListener(Self);
+  Result.AddListener(Self);
+end;
 
 function TIdSDPMediaStream.GetDirection: TIdSdpDirection;
 begin
@@ -3503,6 +3523,11 @@ begin
   end;
 end;
 
+function TIdSDPMediaStream.ServerAt(Index: Integer): TIdRTPServer;
+begin
+  Result := Self.Servers[Index] as TIdRTPServer;
+end;
+
 procedure TIdSDPMediaStream.SetDirection(Value: TIdSdpDirection);
 begin
   Self.LocalDescription.Attributes.Direction := Value;
@@ -3512,25 +3537,19 @@ procedure TIdSDPMediaStream.SetLocalDescription(const Value: TIdSdpMediaDescript
 var
   AlreadyRunning: Boolean;
   I:              Integer;
-  RTCPBinding:    TIdSocketHandle;
-  RTPBinding:     TIdSocketHandle;
+  Server:         TIdRTPServer;
 begin
   Self.fLocalDescription.Assign(Value);
 
-  AlreadyRunning := Self.Server.Active;
+  AlreadyRunning := Self.IsListening;
   Self.StopListening;
 
-  Self.Server.Bindings.Clear;
+  Self.Servers.Clear;
   for I := 0 to Value.PortCount - 1 do begin
-    RTPBinding := Self.Server.Bindings.Add;
-
-    RTPBinding.IP   := Value.Connections[I].Address;
-    RTPBinding.Port := Value.Port;
-
-    RTCPBinding := Self.Server.Bindings.Add;
-
-    RTCPBinding.IP   := Value.Connections[I].Address;
-    RTCPBinding.Port := Value.Port + 1;
+    Server := Self.CreateServer;
+    Server.Address  := Value.Connections[I].Address;
+    Server.RTPPort  := Value.Port;
+    Server.RTCPPort := Value.Port + 1;
   end;
 
   if AlreadyRunning then
@@ -3543,9 +3562,12 @@ var
 begin
   Self.fRemoteDescription.Assign(Value);
 
+  // We ASSUME that the local & remote descriptions are symmetrical: that, for
+  // this stream, both ports have the same port count.
+  // THIS IS NOT SUCH A GREAT IDEA. TODO.
   for I := 0 to Value.PortCount - 1 do
-    Self.Server.Session.AddReceiver(Value.Connections[I].Address,
-                                    Value.Port);
+    Self.ServerAt(I).Session.AddReceiver(Value.Connections[I].Address,
+                                         Value.Port);
 end;
 
 //******************************************************************************

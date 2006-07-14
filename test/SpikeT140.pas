@@ -76,14 +76,14 @@ begin
   inherited Create(AOwner);
 
   Self.Profile := TIdAudioVisualProfile.Create;
-  Self.Server := TIdRTPServer.Create(nil);
+  Self.Server := TIdRTPServer.Create;
   Self.Server.DefaultPort := 8002;
   Self.Server.Profile     := Self.Profile;
   Self.Server.Active      := true;
 
   Self.Session := Self.Server.Session;
 
-  Self.Client := TIdRTPServer.Create(nil);
+  Self.Client := TIdRTPServer.Create;
   Self.Client.DefaultPort := Self.Server.DefaultPort + 2;
   Self.Client.OnRTPRead   := Self.ReadRTP;
   Self.Client.OnUDPRead   := Self.CountUDP;
@@ -99,7 +99,7 @@ begin
   Self.SendBuffer := '';
 
   Self.Session.AddReceiver(IndyGetHostName,
-                                  Self.Client.Bindings[0].Port);
+                                  Self.Client.RTPPort);
   Self.Reset;
 end;
 

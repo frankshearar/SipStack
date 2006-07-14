@@ -18,11 +18,13 @@ uses
 type
   TestTIdRTPServer = class(TTestRTP)
   private
-    Client:   TIdRTPServer;
-    Packet:   TIdRTPPacket;
-    Profile:  TIdRTPProfile;
-    Server:   TIdRTPServer;
-    Session:  TIdRTPSession;
+    Client:           TIdRTPServer;
+    Packet:           TIdRTPPacket;
+    Profile:          TIdRTPProfile;
+    ReceivingBinding: TIdConnection;
+    Server:           TIdRTPServer;
+    Session:          TIdRTPSession;
+
     procedure CheckReceivePacket(Sender: TObject;
                                  AData: TStream;
                                  ABinding: TIdSocketHandle);
@@ -38,13 +40,24 @@ type
   public
     procedure SetUp; override;
     procedure TearDown; override;
+
+    procedure CheckNoServerOnPort(const Host: String;
+                                  Port: Cardinal;
+                                  const Msg: String);
+    procedure CheckServerOnPort(const Host: String;
+                                Port: Cardinal;
+                                const Msg: String);
   published
+    procedure TestActiveStartsServers;
     procedure TestAddListener;
     procedure TestRemoveListener;
     procedure TestOnRTCPRead;
     procedure TestOnRTPRead;
     procedure TestOnUDPRead;
     procedure TestSessionGetsPackets;
+    procedure TestSetRTCPPortOverridesDefaultSet;
+    procedure TestSetRTPPortDefaultsRTCPPort;
+    procedure TestSetRTPPortDoesntOverrideRTCPPort;
   end;
 
   TestT140 = class(TThreadingTestCase)
@@ -88,17 +101,16 @@ end;
 
 procedure TestTIdRTPServer.SetUp;
 var
-  Binding:      TIdSocketHandle;
-  NoEncoding:   TIdRTPPayload;
-  T140:         TIdRTPPayload;
-  PT:           TIdRTPPayloadType;
+  NoEncoding: TIdRTPPayload;
+  T140:       TIdRTPPayload;
+  PT:         TIdRTPPayloadType;
 begin
   inherited SetUp;
 
   PT := 96;
 
   Self.Profile := TIdAudioVisualProfile.Create;
-  Self.Server  := TIdRTPServer.Create(nil);
+  Self.Server  := TIdRTPServer.Create;
   Self.Server.OnRTCPRead := Self.CheckOnRTCPRead;
   Self.Server.OnRTPRead := Self.CheckOnRTPRead;
   Self.Session := Self.Server.Session;
@@ -118,15 +130,13 @@ begin
   end;
 
   Self.Server.Profile := Self.Profile;
-  Binding := Self.Server.Bindings.Add;
-  Binding.IP   := '127.0.0.1';
-  Binding.Port := 5004;
+  Self.Server.RTPPort := 5004;
+  Self.Server.RTCPPort := Self.Server.RTPPort + 1;
 
-  Self.Client := TIdRTPServer.Create(nil);
+  Self.Client := TIdRTPServer.Create;
   Self.Client.Profile := Self.Profile;
-  Binding := Self.Client.Bindings.Add;
-  Binding.IP   := '127.0.0.1';
-  Binding.Port := 6543; // arbitrary value
+  Self.Server.RTPPort := 6543; // arbitrary value
+  Self.Server.RTCPPort := Self.Server.RTPPort + 1;
 
   Self.Packet := TIdRTPPacket.Create(Self.Profile);
   Self.Packet.Version      := 2;
@@ -155,6 +165,58 @@ begin
   Self.Profile.Free;
 
   inherited TearDown;
+end;
+
+procedure TestTIdRTPServer.CheckNoServerOnPort(const Host: String;
+                                               Port: Cardinal;
+                                               const Msg: String);
+var
+  Binding: TIdSocketHandle;
+  Server:  TIdUdpServer;
+begin
+  Server := TIdUdpServer.Create(nil);
+  try
+    Binding := Server.Bindings.Add;
+    Binding.IP    := Host;
+    Binding.Port  := Port;
+
+    try
+      Server.Active := true;
+    except
+      on EIdCouldNotBindSocket do
+        Fail('Server running on ' + Host + ': ' + IntToStr(Port) + '; ' + Msg);
+    end;
+  finally
+    Server.Free;
+  end;
+end;
+
+procedure TestTIdRTPServer.CheckServerOnPort(const Host: String;
+                                             Port: Cardinal;
+                                             const Msg: String);
+var
+  Binding: TIdSocketHandle;
+  Server:  TIdUdpServer;
+begin
+  try
+    Server := TIdUdpServer.Create(nil);
+    try
+      Binding := Server.Bindings.Add;
+      Binding.IP    := Host;
+      Binding.Port  := Port;
+      Server.Active := true;
+      try
+        // Do nothing
+      finally
+        Server.Active := false;
+      end;
+    finally
+      Server.Free;
+    end;
+    Fail('No server running on ' + Host + ': ' + IntToStr(Port) + '; ' + Msg);
+  except
+    on EIdCouldNotBindSocket do;
+  end;
 end;
 
 //* TestTIdRTPServer Private methods *******************************************
@@ -208,8 +270,8 @@ begin
     try
       RTCP.PrintOn(S);
 
-      Self.Client.Send(Self.Server.Bindings[0].IP,
-                       Self.Server.Bindings[0].Port,
+      Self.Client.Send(Self.Server.Address,
+                       Self.Server.RTCPPort,
                        S.DataString);
     finally
       RTCP.Free;
@@ -227,8 +289,8 @@ begin
   try
     Self.Packet.PrintOn(S);
 
-    Self.Client.Send(Self.Server.Bindings[0].IP,
-                     Self.Server.Bindings[0].Port,
+    Self.Client.Send(Self.Server.Address,
+                     Self.Server.RTPPort,
                      S.DataString);
   finally
     S.Free;
@@ -248,6 +310,18 @@ begin
 end;
 
 //* TestTIdRTPServer Published methods *****************************************
+
+procedure TestTIdRTPServer.TestActiveStartsServers;
+var
+  RTCPPort: Cardinal;
+  RTPPort:  Cardinal;
+begin
+  RTPPort  := Self.Server.RTPPort;
+  RTCPPort := RTPPort + 1;
+
+  CheckServerOnPort('127.0.0.1', RTPPort,  'No RTP server running');
+  CheckServerOnPort('127.0.0.1', RTCPPort, 'No RTCP server running');
+end;
 
 procedure TestTIdRTPServer.TestAddListener;
 var
@@ -324,8 +398,8 @@ begin
     try
       Self.Packet.PrintOn(S);
 
-      Self.Client.Send(Self.Server.Bindings[0].IP,
-                       Self.Server.Bindings[0].Port,
+      Self.Client.Send(Self.Server.Address,
+                       Self.Server.RTPPort,
                        S.DataString);
 
       Self.WaitForSignaled;
@@ -346,10 +420,84 @@ begin
 
   Self.SendRTCPToServer;
   Self.WaitForSignaled;
-  
+
   CheckEquals(OriginalMemberCount + 1,
               Self.Server.Session.MemberCount,
               'Session didn''t get RTCP');
+end;
+
+procedure TestTIdRTPServer.TestSetRTCPPortOverridesDefaultSet;
+const
+  Localhost = '127.0.0.1';
+  Port      = 9000;
+  RTCPPort  = Port + 5;
+var
+  Srv: TIdRTPServer;
+begin
+  // If you want a specific RTCP port, you can just set it after setting the RTP
+  // port.
+
+  Srv := TIdRTPServer.Create;
+  try
+    Srv.Address  := Localhost;
+    Srv.RTPPort  := Port;
+    Srv.RTCPPort := RTCPPort;
+
+    Srv.Active := true;
+    CheckServerOnPort(Localhost, Port,     'RTP not running');
+    CheckServerOnPort(Localhost, RTCPPort, 'RTCP not running');
+    CheckNoServerOnPort(Localhost, Port + 1, 'RTCP running on "default" port');
+  finally
+    Srv.Free;
+  end;
+end;
+
+procedure TestTIdRTPServer.TestSetRTPPortDefaultsRTCPPort;
+const
+  Localhost = '127.0.0.1';
+  Port      = 9000;
+var
+  Srv: TIdRTPServer;
+begin
+  // Setting just the RTP port sets the RTCP port to the next-port-up.
+
+  Srv := TIdRTPServer.Create;
+  try
+    Srv.Address := Localhost;
+    Srv.RTPPort := Port;
+
+    Srv.Active := true;
+    CheckServerOnPort(Localhost, Port,     'RTP not running');
+    CheckServerOnPort(Localhost, Port + 1, 'RTCP not running');
+  finally
+    Srv.Free;
+  end;
+end;
+
+procedure TestTIdRTPServer.TestSetRTPPortDoesntOverrideRTCPPort;
+const
+  Localhost = '127.0.0.1';
+  Port      = 9000;
+  RTCPPort  = Port + 5;
+var
+  Srv: TIdRTPServer;
+begin
+  // Setting the RTP port after you've set the RTCP port doesn't overwrite
+  // the RTCP port value.
+
+  Srv := TIdRTPServer.Create;
+  try
+    Srv.Address := Localhost;
+    Srv.RTCPPort := RTCPPort;
+    Srv.RTPPort  := Port;
+
+    Srv.Active := true;
+    CheckServerOnPort(Localhost, Port,     'RTP not running');
+    CheckServerOnPort(Localhost, RTCPPort, 'RTCP not running');
+    CheckNoServerOnPort(Localhost, Port + 1, 'RTCP running on "default" port');
+  finally
+    Srv.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -359,8 +507,7 @@ end;
 
 procedure TestT140.SetUp;
 var
-  Binding: TIdSocketHandle;
-  T140:    TIdRTPPayload;
+  T140: TIdRTPPayload;
 begin
   inherited SetUp;
 
@@ -372,17 +519,15 @@ begin
   Self.Msg := 'Goodbye, cruel world';
   Self.T140PT := 96;
 
-  Self.Server := TIdRTPServer.Create(nil);
-  Self.Server.Profile := Self.Profile;
-  Binding      := Self.Server.Bindings.Add;
-  Binding.IP   := '127.0.0.1';
-  Binding.Port := 5004;
+  Self.Server := TIdRTPServer.Create;
+  Self.Server.Profile  := Self.Profile;
+  Self.Server.RTPPort  := 5004;
+  Self.Server.RTCPPort := Self.Server.RTPPort + 1;
 
-  Self.Client  := TIdRTPServer.Create(nil);
-  Self.Client.Profile := Self.Profile;
-  Binding      := Self.Client.Bindings.Add;
-  Binding.IP   := '127.0.0.1';
-  Binding.Port := Self.Server.DefaultPort + 2;
+  Self.Client  := TIdRTPServer.Create;
+  Self.Client.Profile  := Self.Profile;
+  Self.Client.RTPPort  := Self.Server.RTPPort + 2;
+  Self.Client.RTCPPort := Self.Server.RTPPort + 3;
 
   T140 := TIdRTPT140Payload.CreatePayload(T140Encoding + '/' + IntToStr(T140ClockRate));
   try
@@ -450,8 +595,8 @@ begin
   Self.Server.OnRTPRead := Self.StoreT140Data;
 
   Session := Self.Client.Session;
-  Session.AddReceiver(Self.Server.Bindings[0].IP,
-                      Self.Server.Bindings[0].Port);
+  Session.AddReceiver(Self.Server.Address,
+                      Self.Server.RTPPort);
 
   Self.ExceptionMessage := 'Waiting for RFC 4103 data';
   Payload := Self.Client.Profile.EncodingFor(Self.T140PT).Clone as TIdRTPT140Payload;

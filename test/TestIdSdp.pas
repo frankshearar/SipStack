@@ -6272,9 +6272,9 @@ var
   Client: TIdRTPServer;
   NoData: TIdRTPPacket;
 begin
-  Client := TIdRTPServer.Create(nil);
+  Client := TIdRTPServer.Create;
   try
-    Client.DefaultPort := Self.RemotePort + 1000;
+    Client.RTPPort := Self.RemotePort + 1000;
     NoData := TIdRTPPacket.Create(Client.Profile);
     try
       NoData.PayloadType := PayloadType;

@@ -24,14 +24,19 @@ type
   TIdMockRTPPeer = class(TIdInterfacedObject,
                          IIdAbstractRTPPeer)
   private
-    Listeners:    TIdNotificationList;
-    fLastRTP:     TIdRTPPacket;
-    fProfile:     TIdRTPProfile;
-    fRTCPCount:   Cardinal;
-    RTCPBuffer:   TObjectList;
+    Listeners:             TIdNotificationList;
+    fLastPacketHostTarget: String;
+    fLastPacketPortTarget: Cardinal;
+    fProfile:              TIdRTPProfile;
+    fRTCPCount:            Cardinal;
+    fRTPCount:             Cardinal;
+    RTCPBuffer:            TObjectList;
+    RTPBuffer:             TObjectList;
 
     function  GetLastRTCP: TIdRTCPPacket;
+    function  GetLastRTP: TIdRTPPacket;
     function  GetRTCPCount: Cardinal;
+    function  GetRTPCount: Cardinal;
     function  GetSecondLastRTCP: TIdRTCPPacket;
     procedure SetProfile(Value: TIdRTPProfile);
   public
@@ -48,11 +53,14 @@ type
                          Port: Cardinal;
                          Packet: TIdRTPBasePacket);
 
-    property LastRTCP:       TIdRTCPPacket read GetLastRTCP;
-    property LastRTP:        TIdRTPPacket  read fLastRTP;
-    property Profile:        TIdRTPProfile read fProfile write SetProfile;
-    property RTCPCount:      Cardinal      read GetRTCPCount;
-    property SecondLastRTCP: TIdRTCPPacket read GetSecondLastRTCP;
+    property LastPacketHostTarget: String        read fLastPacketHostTarget;
+    property LastPacketPortTarget: Cardinal      read fLastPacketPortTarget;
+    property LastRTCP:             TIdRTCPPacket read GetLastRTCP;
+    property LastRTP:              TIdRTPPacket  read GetLastRTP;
+    property Profile:              TIdRTPProfile read fProfile write SetProfile;
+    property RTCPCount:            Cardinal      read GetRTCPCount;
+    property RTPCount:             Cardinal      read GetRTPCount;
+    property SecondLastRTCP:       TIdRTCPPacket read GetSecondLastRTCP;
   end;
 
   TIdMockPayload = class(TIdRTPPayload)
@@ -164,12 +172,18 @@ begin
 
   Self.fRTCPCount := 0;
   Self.RTCPBuffer := TObjectList.Create(true);
+  Self.fRTPCount  := 0;
+  Self.RTPBuffer  := TObjectList.Create(true);
+
+  // Set these values to something that will look like an uninitialised value.
+  Self.fLastPacketHostTarget := 'uninitialised LastPacketHostTarget';
+  Self.fLastPacketPortTarget := 31337;
 end;
 
 destructor TIdMockRTPPeer.Destroy;
 begin
+  Self.RTPBuffer.Free;
   Self.RTCPBuffer.Free;
-  Self.LastRTP.Free;
   Self.Listeners.Free;
 
   inherited Destroy;
@@ -225,12 +239,16 @@ begin
     if not Assigned(Self.Profile) then
       raise Exception.Create('You didn''t set TIdMockRTPPeer.Profile');
 
-    Self.fLastRTP.Assign(Packet)
+    Self.RTPBuffer.Add(Packet.Clone);
+    Inc(Self.fRTPCount);
   end
   else if Packet.IsRTCP then begin
     Self.RTCPBuffer.Add(Packet.Clone);
     Inc(Self.fRTCPCount);
   end;
+
+  Self.fLastPacketHostTarget := Host;
+  Self.fLastPacketPortTarget := Port;
 end;
 
 //* TIdMockRTPPeer Private methods *********************************************
@@ -240,9 +258,19 @@ begin
   Result := Self.RTCPBuffer[Self.RTCPBuffer.Count - 1] as TIdRTCPPacket;
 end;
 
+function TIdMockRTPPeer.GetLastRTP: TIdRTPPacket;
+begin
+  Result := Self.RTPBuffer[Self.RTPBuffer.Count - 1] as TIdRTPPacket;
+end;
+
 function TIdMockRTPPeer.GetRTCPCount: Cardinal;
 begin
   Result := Self.RTCPBuffer.Count;
+end;
+
+function TIdMockRTPPeer.GetRTPCount: Cardinal;
+begin
+  Result := Self.RTPBuffer.Count;
 end;
 
 function TIdMockRTPPeer.GetSecondLastRTCP: TIdRTCPPacket;
@@ -255,7 +283,6 @@ end;
 
 procedure TIdMockRTPPeer.SetProfile(Value: TIdRTPProfile);
 begin
-  Self.fLastRTP := TIdRTPPacket.Create(Value);
   Self.fProfile := Value;
 end;
 
