@@ -6954,6 +6954,7 @@ begin
   Self.Session.Free;
   Self.Agent.Free;
   Self.Profile.Free;
+  Self.Timer.Terminate;
 
   inherited TearDown;
 end;
