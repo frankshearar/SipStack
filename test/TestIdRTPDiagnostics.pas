@@ -137,8 +137,6 @@ end;
 //* TestTIdRTPPayloadHistogram Public methods **********************************
 
 procedure TestTIdRTPPayloadHistogram.SetUp;
-var
-  Binding: TIdSocketHandle;
 begin
   inherited SetUp;
 
