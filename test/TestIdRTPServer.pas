@@ -51,6 +51,7 @@ type
     procedure TestActiveStartsServers;
     procedure TestAddListener;
     procedure TestRemoveListener;
+    procedure TestRTCPComesFromRTCPPort;
     procedure TestOnRTCPRead;
     procedure TestOnRTPRead;
     procedure TestOnUDPRead;
@@ -249,6 +250,11 @@ procedure TestTIdRTPServer.CheckOnRTCPRead(Sender: TObject;
                                            APacket: TIdRTCPPacket;
                                            ABinding: TIdConnection);
 begin
+  Self.ReceivingBinding.LocalIP   := ABinding.LocalIP;
+  Self.ReceivingBinding.LocalPort := ABinding.LocalPort;
+  Self.ReceivingBinding.PeerIP    := ABinding.PeerIP;
+  Self.ReceivingBinding.PeerPort  := ABinding.PeerPort;
+
   Self.SetEvent;
 end;
 
@@ -370,6 +376,22 @@ begin
           'Listener received RTCP');
   finally
     Listener.Free;
+  end;
+end;
+
+procedure TestTIdRTPServer.TestRTCPComesFromRTCPPort;
+var
+  Bye: TIdRTCPBye;
+begin
+  Bye := TIdRTCPBye.Create;
+  try
+    Bye.PrepareForTransmission(Self.Client.Session);
+    Self.Client.SendPacket(Self.Server.Address, Self.Server.RTCPPort, Bye);
+    Self.WaitForSignaled;
+    CheckEquals(Self.Client.Address,  Self.ReceivingBinding.PeerIP,   'IP of RTCP sender');
+    CheckEquals(Self.Client.RTCPPort, Self.ReceivingBinding.PeerPort, 'port of RTCP sender');
+  finally
+    Bye.Free;
   end;
 end;
 

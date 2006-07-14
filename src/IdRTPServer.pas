@@ -159,7 +159,11 @@ begin
   S := TStringStream.Create('');
   try
     Packet.PrintOn(S);
-    Self.Send(Host, Port, S.DataString);
+
+    if Packet.IsRTCP then
+      Self.RTCP.Send(Host, Port, S.DataString)
+    else
+      Self.RTP.Send(Host, Port, S.DataString);
   finally
     S.Free;
   end;
