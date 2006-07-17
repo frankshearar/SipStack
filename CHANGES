@@ -10,8 +10,7 @@ v0.5.2 (2006/xx/yy)
   all accomplished in TIdSipTransport.Create and Destroy.)
 * The Transaction-User and Transaction layers now use asynchronous
   algorithms to send messages.
-* A failing test (purposefully) added, showing that the stack doesn't
-  currently support hairpinned calls.
+* The stack now supports hairpinned requests.
 * In the test infrastructure, you no longer have to specify A/AAAA
   records for hosts used in tests. You can if you want, setting the
   TIdSipMockLocator's ReturnOnlySpecifiedRecords to true.
@@ -22,7 +21,15 @@ v0.5.2 (2006/xx/yy)
 * All appropriate call flow classes (those for INVITE, REGISTER,
   SUBSCRIBE, REFER) now support redirection.
 * Removed TIdSDPPayloadProcessor: use TIdSDPMultimediaSession.
-* RTP bugfixes: sessions no longer send RTCP to themselves.
+* Bugfixes:
+** RTP sessions send control data to themselves.
+** RTCP packets sent from RTP port.
+** RTP stack attempts to send media to port 0.
+** Creating a StackInterface without a "Supports:" line causes an
+   Invalid Cast exception.
+** OnNetworkFailure causes access violation/dangling pointer
+** Outbound dialogs incorrectly set remote sequence number to local
+   sequence number.
 
 v0.5.1 (2006/01/31)
 * The stack now supports basic multihoming: having more than one
