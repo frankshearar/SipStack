@@ -11,7 +11,8 @@
 6. The tests take too long to run. I only want to test this little
    test unit. What do I do?
 
-
+7. My test blows up with an access violation in IdSipCore.pas
+   immediately after the TIdSipAction sends a message.
 
 
 
@@ -59,3 +60,19 @@
    out StackWindow. Conversely, if you want to test
    TestIdSipStackInterface, be sure to uncomment the StackWindow line
    in SIP.dpr's uses clause.
+
+7. Solution: send the message to a real address by specifying an
+   A/AAAA record in the MockLocator that doesn't match the address of
+   the stack under test.
+
+   Why? Your request is being hairpinned (it's being sent to the stack
+   that sent the request). Under production conditions that's not a
+   problem. In a test environment that means that your Action is being
+   terminated before it's finished sending the request. Example: You
+   send an OPTIONS from your stack S. Then S receives your OPTIONS,
+   sends a 200 OK, which S receives. That response terminates the
+   OPTIONS... and yet you've not finished sending the request! This
+   violates one of the core assumptions of the stack architecture,
+   which is that receiving or sending a message is a single,
+   uninterruptable event. This seems terrible. It's OK: this can only
+   occur in a test environment, and only when you hairpin requests.
