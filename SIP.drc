@@ -17,7 +17,6 @@
 #define IdResourceStrings_RSOSSLCouldNotLoadSSLLibrary 65190
 #define IdResourceStrings_RSOSSLStatusString 65191
 #define IdResourceStrings_RSThreadTerminateAndWaitFor 65192
-#define IdSipRegistration_NoSuchRegistrar 65193
 #define IdResourceStrings_RSSocksUnknownError 65200
 #define IdResourceStrings_RSSocksServerRespondError 65201
 #define IdResourceStrings_RSSocksAuthMethodError 65202
@@ -365,7 +364,6 @@ BEGIN
 	IdResourceStrings_RSOSSLCouldNotLoadSSLLibrary,	"Could not load SSL library."
 	IdResourceStrings_RSOSSLStatusString,	"SSL status: \"%s\""
 	IdResourceStrings_RSThreadTerminateAndWaitFor,	"Cannot call TerminateAndWaitFor on FreeAndTerminate threads"
-	IdSipRegistration_NoSuchRegistrar,	"No such registrar known: %s"
 	IdResourceStrings_RSSocksUnknownError,	"Unknown socks error."
 	IdResourceStrings_RSSocksServerRespondError,	"Socks server did not respond."
 	IdResourceStrings_RSSocksAuthMethodError,	"Invalid socks authentication method."
