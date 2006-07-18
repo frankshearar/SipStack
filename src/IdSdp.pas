@@ -521,6 +521,11 @@ type
 
   // I manage the sending and receiving of one media stream, as set out by an
   // offer and answer (RFC 3264) of SDP payloads (RFC 2327).
+  //
+  // My support for hierarchically encoded streams is minimal. You have to
+  // figure out what layer a packet belongs to (by using the Binding property
+  // of the Notification), and you have to specify what layer to use when
+  // sending data by setting the LayerID parameter to the port that layer uses.
   TIdSDPMediaStream = class(TIdInterfacedObject,
                             IIdRTPDataListener,
                             IIdRTPListener)
@@ -535,6 +540,7 @@ type
     Servers:            TObjectList;
 
     function  CreateServer: TIdRTPServer;
+    function  FindServer(LayerID: Integer): TIdRTPServer;
     function  GetDirection: TIdSdpDirection;
     procedure OnNewData(Data: TIdRTPPayload;
                         Binding: TIdConnection);
@@ -558,7 +564,7 @@ type
     procedure PutOnHold;
     procedure RemoveDataListener(const Listener: IIdRTPDataListener);
     procedure RemoveRTPListener(const Listener: IIdRTPListener);
-    procedure SendData(Payload: TIdRTPPayload);
+    procedure SendData(Payload: TIdRTPPayload; LayerID: Integer = 0);
     procedure StartListening;
     procedure StopListening;
     procedure TakeOffHold;
@@ -3423,10 +3429,10 @@ begin
   Self.RTPListeners.RemoveListener(Listener);
 end;
 
-procedure TIdSDPMediaStream.SendData(Payload: TIdRTPPayload);
+procedure TIdSDPMediaStream.SendData(Payload: TIdRTPPayload; LayerID: Integer = 0);
 begin
   if Self.IsSender and not Self.OnHold then
-    Self.ServerAt(0).Session.SendData(Payload);
+    Self.FindServer(LayerID).Session.SendData(Payload);
 end;
 
 procedure TIdSDPMediaStream.StartListening;
@@ -3466,6 +3472,23 @@ begin
   Result.Profile := Profile;
   Result.Session.AddListener(Self);
   Result.AddListener(Self);
+end;
+
+function TIdSDPMediaStream.FindServer(LayerID: Integer): TIdRTPServer;
+var
+  I: Integer;
+begin
+  // LayerID denotes a layer in an hierarchically encoded stream.
+  Result := nil;
+  I      := 0;
+  while (Result = nil) and (I < Self.Servers.Count) do begin
+    if (Self.ServerAt(I).RTPPort = LayerID) then
+      Result := Self.ServerAt(I);
+    Inc(I);
+  end;
+
+  if (Result = nil) then
+    Result := Self.ServerAt(0);
 end;
 
 function TIdSDPMediaStream.GetDirection: TIdSdpDirection;
@@ -3536,9 +3559,11 @@ end;
 procedure TIdSDPMediaStream.SetLocalDescription(const Value: TIdSdpMediaDescription);
 var
   AlreadyRunning: Boolean;
-  I:              Integer;
+  I:              Cardinal;
   Server:         TIdRTPServer;
 begin
+  Assert(Value.PortCount > 0, 'You have to have a PortCount of at least 1.');
+
   Self.fLocalDescription.Assign(Value);
 
   AlreadyRunning := Self.IsListening;
@@ -3547,9 +3572,9 @@ begin
   Self.Servers.Clear;
   for I := 0 to Value.PortCount - 1 do begin
     Server := Self.CreateServer;
-    Server.Address  := Value.Connections[I].Address;
-    Server.RTPPort  := Value.Port;
-    Server.RTCPPort := Value.Port + 1;
+    Server.Address  := Value.Connections[0].Address;
+    Server.RTPPort  := Value.Port + 2*I;
+    Server.RTCPPort := Server.RTPPort + 1;
   end;
 
   if AlreadyRunning then

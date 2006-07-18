@@ -455,16 +455,27 @@ type
     procedure TestParseVersionMultipleHeaders;
   end;
 
-  TestTIdSDPMediaStream = class(TThreadingTestCase,
+  TIdSdpTestCase = class(TThreadingTestCase)
+  public
+    procedure CheckPortActive(Address: String;
+                              Port: Cardinal;
+                              Msg: String);
+    procedure CheckPortFree(Address: String;
+                              Port: Cardinal;
+                              Msg: String);
+  end;
+
+  TestTIdSDPMediaStream = class(TIdSdpTestCase,
                                 IIdRTPDataListener,
                                 IIdRTPListener)
   private
-    AVP:       TIdRTPProfile;
-    Media:     TIdSDPMediaStream;
-    RTCPEvent: TEvent;
-    RTPEvent:  TEvent;
-    Sender:    TIdSDPMediaStream;
-    SentBye:   Boolean;
+    AVP:              TIdRTPProfile;
+    Media:            TIdSDPMediaStream;
+    ReceivingBinding: TIdConnection;
+    RTCPEvent:        TEvent;
+    RTPEvent:         TEvent;
+    Sender:           TIdSDPMediaStream;
+    SentBye:          Boolean;
 
     procedure OnNewData(Data: TIdRTPPayload;
                         Binding: TIdConnection);
@@ -473,16 +484,17 @@ type
     procedure OnRTP(Packet: TIdRTPPacket;
                     Binding: TIdConnection);
     procedure SendRTCP;
-    procedure SendRTP;
+    procedure SendRTP(LayerID: Cardinal = 0);
     procedure SetLocalMediaDesc(Stream: TIdSDPMediaStream;
                                 const MediaDesc: String);
-    procedure ValidateSender;
+    procedure ValidateSender(LayerID: Cardinal = 0);
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
     procedure TestAddDataListener;
     procedure TestAddRTPListener;
+    procedure TestHierarchicallyEncodedStream;
     procedure TestIsReceiver;
     procedure TestIsSender;
     procedure TestPutOnHoldRecvOnly;
@@ -497,7 +509,7 @@ type
     procedure TestTakeOffHold;
   end;
 
-  TestTIdSDPMultimediaSession = class(TThreadingTestCase,
+  TestTIdSDPMultimediaSession = class(TIdSdpTestCase,
                                       IIdRTPListener)
   private
     Payload:    TClass;
@@ -507,12 +519,6 @@ type
     RemotePort: Cardinal;
     Server:     TIdUDPServer;
 
-    procedure CheckPortActive(Address: String;
-                              Port: Cardinal;
-                              Msg: String);
-    procedure CheckPortFree(Address: String;
-                              Port: Cardinal;
-                              Msg: String);
     function  MultiStreamSDP(LowPort, HighPort: Cardinal): String;
     procedure OnRTCP(Packet: TIdRTCPPacket;
                      Binding: TIdConnection);
@@ -5713,16 +5719,72 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSdpTestCase                                                             *
+//******************************************************************************
+//* TIdSdpTestCase Public methods **********************************************
+
+procedure TIdSdpTestCase.CheckPortActive(Address: String;
+                                         Port: Cardinal;
+                                         Msg: String);
+var
+  Binding: TIdSocketHandle;
+  Server:  TIdUDPServer;
+begin
+  Server := TIdUDPServer.Create(nil);
+  try
+    Binding := Server.Bindings.Add;
+    Binding.IP   := Address;
+    Binding.Port := Port;
+    try
+      Server.Active := true;
+      Fail(Msg);
+    except
+      on EIdCouldNotBindSocket do;
+    end;
+  finally
+    Server.Free;
+  end;
+end;
+
+procedure TIdSdpTestCase.CheckPortFree(Address: String;
+                                       Port: Cardinal;
+                                       Msg: String);
+var
+  Binding: TIdSocketHandle;
+  Server:  TIdUDPServer;
+begin
+  Server := TIdUDPServer.Create(nil);
+  try
+    Binding := Server.Bindings.Add;
+    Binding.IP   := Address;
+    Binding.Port := Port;
+
+    try
+      Server.Active := true;
+    except
+      on EIdCouldNotBindSocket do
+        Fail('Port ' + Address + ':' + IntToStr(Port) + ' is not free');
+    end;
+  finally
+    Server.Free;
+  end;
+end;
+
+//******************************************************************************
 //* TestTIdSDPMediaStream                                                      *
 //******************************************************************************
 //* TestTIdSDPMediaStream Public methods ***************************************
 
 procedure TestTIdSDPMediaStream.SetUp;
+const
+  OneSecond = 1000; // milliseconds
 var
   SDP:    TIdSDPPayload;
   T140PT: TIdRTPPayloadType;
 begin
   inherited SetUp;
+
+  Self.DefaultTimeout := OneSecond;
 
   T140PT := 96;
 
@@ -5734,20 +5796,22 @@ begin
   Self.RTPEvent  := TSimpleEvent.Create;
   Self.Sender    := TIdSDPMediaStream.Create(Self.AVP);
 
+  // Sender has a nice high port number because some tests use ports just above
+  // Self.Media's port (8000).
   SDP := TIdSdpPayload.CreateFrom('v=0'#13#10
                                 + 'o=foo 1 2 IN IP4 127.0.0.1'#13#10
                                 + 's=-'#13#10
                                 + 'c=IN IP4 127.0.0.1'#13#10
                                 + 'm=text 8000 RTP/AVP 96'#13#10
                                 + 'a=rtpmap:' + IntToStr(T140PT) + ' T140/8000'#13#10
-                                + 'm=text 8002 RTP/AVP 96'#13#10
+                                + 'm=text 9000 RTP/AVP 96'#13#10
                                 + 'a=rtpmap:' + IntToStr(T140PT) + ' T140/8000'#13#10);
   try
     Self.Media.LocalDescription  := SDP.MediaDescriptionAt(0);
-    Self.Media.RemoteDescription := SDP.MediaDescriptionAt(1);
+    Self.Sender.LocalDescription := SDP.MediaDescriptionAt(1);
 
-    Self.Sender.LocalDescription  := SDP.MediaDescriptionAt(1);
-    Self.Sender.RemoteDescription := SDP.MediaDescriptionAt(0);
+    Self.Media.RemoteDescription  := Self.Sender.LocalDescription;
+    Self.Sender.RemoteDescription := Self.Media.LocalDescription;
   finally
     SDP.Free;
   end;
@@ -5776,6 +5840,11 @@ end;
 procedure TestTIdSDPMediaStream.OnNewData(Data: TIdRTPPayload;
                                           Binding: TIdConnection);
 begin
+  Self.ReceivingBinding.LocalIP   := Binding.LocalIP;
+  Self.ReceivingBinding.LocalPort := Binding.LocalPort;
+  Self.ReceivingBinding.PeerIP    := Binding.PeerIP;
+  Self.ReceivingBinding.PeerPort  := Binding.PeerPort;
+
   Self.ThreadEvent.SetEvent;
 end;
 
@@ -5823,14 +5892,14 @@ begin
   end;
 end;
 
-procedure TestTIdSDPMediaStream.SendRTP;
+procedure TestTIdSDPMediaStream.SendRTP(LayerID: Cardinal = 0);
 var
   Text: TIdRTPT140Payload;
 begin
   Text := TIdRTPT140Payload.Create;
   try
     Text.Block := '1234';
-    Self.Sender.SendData(Text);
+    Self.Sender.SendData(Text, LayerID);
   finally
     Text.Free;
   end;
@@ -5853,13 +5922,16 @@ begin
   end;
 end;
 
-procedure TestTIdSDPMediaStream.ValidateSender;
+procedure TestTIdSDPMediaStream.ValidateSender(LayerID: Cardinal = 0);
 begin
   Self.Media.AddRTPListener(Self);
-  // To authenticate Self.Sender as a real RTP member
-  Self.SendRTP;
-  Self.WaitForSignaled(Self.RTPEvent, 'Waiting to validate sender');
-  Self.Media.RemoveRTPListener(Self);
+  try
+    // To authenticate Self.Sender as a real RTP member
+    Self.SendRTP(LayerID);
+    Self.WaitForSignaled(Self.RTPEvent, 'Waiting to validate sender');
+  finally
+    Self.Media.RemoveRTPListener(Self);
+  end;
   Self.RTPEvent.ResetEvent;
 end;
 
@@ -5916,6 +5988,45 @@ begin
     end;
   finally
     L1.Free;
+  end;
+end;
+
+procedure TestTIdSDPMediaStream.TestHierarchicallyEncodedStream;
+const
+  PortCount = 1;
+var
+  Offset:          Cardinal;
+  ReceiverLayerID: Cardinal;
+  SenderLayerID:   Cardinal;
+begin
+  // We change Self.Sender's description because both ends must have the same
+  // number of ports open.
+  Self.SetLocalMediaDesc(Self.Sender,
+                         'm=audio 9000/' + IntToStr(PortCount) + ' RTP/AVP 0'#13#10);
+  Self.SetLocalMediaDesc(Self.Media,
+                         'm=audio 8000/' + IntToStr(PortCount) + ' RTP/AVP 0'#13#10);
+  Self.Sender.RemoteDescription := Self.Media.LocalDescription;
+  Self.Media.RemoteDescription  := Self.Sender.LocalDescription;
+
+  Self.Media.AddDataListener(Self);
+
+  for Offset := 0 to PortCount - 1 do begin
+    ReceiverLayerID := Self.Media.LocalDescription.Port + 2*Offset;
+    SenderLayerID   := Self.Sender.LocalDescription.Port + 2*Offset;
+    CheckPortActive(Self.Media.LocalDescription.Connections[0].Address,
+                    ReceiverLayerID,
+                    IntToStr(Offset + 1) + 'th port not active');
+
+    Self.ValidateSender(SenderLayerID);
+    Self.SendRTP(SenderLayerID);
+    Self.WaitForSignaled(IntToStr(Offset + 1) + 'th port of sender didn''t send data');
+
+    CheckEquals(ReceiverLayerID,
+                Self.ReceivingBinding.LocalPort,
+                'Wrong layer received the data');
+    CheckEquals(SenderLayerID,
+                Self.ReceivingBinding.PeerPort,
+                'Sender used wrong port (hence layer) to send data');            
   end;
 end;
 
@@ -6193,53 +6304,6 @@ begin
 end;
 
 //* TestTIdSDPMultimediaSession Private methods ********************************
-
-procedure TestTIdSDPMultimediaSession.CheckPortActive(Address: String;
-                                                      Port: Cardinal;
-                                                      Msg: String);
-var
-  Binding: TIdSocketHandle;
-  Server:  TIdUDPServer;
-begin
-  Server := TIdUDPServer.Create(nil);
-  try
-    Binding := Server.Bindings.Add;
-    Binding.IP   := Address;
-    Binding.Port := Port;
-    try
-      Server.Active := true;
-      Fail(Msg);
-    except
-      on EIdCouldNotBindSocket do;
-    end;
-  finally
-    Server.Free;
-  end;
-end;
-
-procedure TestTIdSDPMultimediaSession.CheckPortFree(Address: String;
-                                                    Port: Cardinal;
-                                                    Msg: String);
-var
-  Binding: TIdSocketHandle;
-  Server:  TIdUDPServer;
-begin
-  Server := TIdUDPServer.Create(nil);
-  try
-    Binding := Server.Bindings.Add;
-    Binding.IP   := Address;
-    Binding.Port := Port;
-
-    try
-      Server.Active := true;
-    except
-      on EIdCouldNotBindSocket do
-        Fail('Port ' + Address + ':' + IntToStr(Port) + ' is not free');
-    end;
-  finally
-    Server.Free;
-  end;
-end;
 
 function TestTIdSDPMultimediaSession.MultiStreamSDP(LowPort, HighPort: Cardinal): String;
 begin
