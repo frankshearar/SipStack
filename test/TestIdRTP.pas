@@ -615,7 +615,7 @@ type
     Session: TIdRTPSession;
     Profile: TIdRTPProfile;
     T140PT:  Cardinal;
-    Timer:   TIdThreadedTimerQueue;
+    Timer:   TIdDebugTimerQueue;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -644,8 +644,10 @@ type
 
   TSessionDataTestCase = class(TRTPSessionTestCase)
   protected
-    Binding: TIdConnection;
-    Data:    TIdRTPPacket;
+    Binding:     TIdConnection;
+    Data:        TIdRTPPacket;
+    RTCPBinding: TIdConnection;
+    RR:          TIdRTCPReceiverReport;
 
     procedure ValidateSource(Member: TIdRTPMember);
   public
@@ -665,6 +667,7 @@ type
     procedure SetUp; override;
   published
     procedure TestAddListener;
+    procedure TestJoinSendsSenderReport;
     procedure TestReceiveRTPFromValidatedSourceNotifiesListeners;
     procedure TestRemoveListener;
   end;
@@ -790,6 +793,19 @@ type
     procedure TestRun;
   end;
 
+  TestTIdRTPSenderReportWait = class(TTestCase)
+  private
+    Agent:   TIdMockRTPPeer;
+    Profile: TIdRTPProfile;
+    Session: TIdRTPSession;
+    Wait:    TIdRTPSenderReportWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTrigger;
+  end;
+
 // Most of the values are thumb-sucked.
 // We calculate Length by hand, and RFC3550 gives us the value for packet type
 const
@@ -860,6 +876,7 @@ begin
   Result.AddTest(TestTIdRTPListenerReceiveRTCPMethod.Suite);
   Result.AddTest(TestTIdRTPListenerReceiveRTPMethod.Suite);
   Result.AddTest(TestTIdRTPDataListenerNewDataMethod.Suite);
+  Result.AddTest(TestTIdRTPSenderReportWait.Suite);
 end;
 
 function ShowEncoded(S: String): String;
@@ -6945,7 +6962,7 @@ begin
 
   Self.Session := TIdRTPSession.Create(Self.Agent);
   Self.Session.Profile := Self.Profile;
-  Self.Timer := TIdThreadedTimerQueue.Create(false);
+  Self.Timer := TIdDebugTimerQueue.Create(false);
   Self.Session.Timer := Self.Timer;
 end;
 
@@ -7217,13 +7234,23 @@ begin
   Self.Binding.PeerIP    := '1.2.3.4';
   Self.Binding.PeerPort  := 4321;
 
+  Self.RTCPBinding.LocalIP   := Self.Binding.LocalIP;
+  Self.RTCPBinding.LocalPort := Self.Binding.LocalPort + 1;
+  Self.RTCPBinding.PeerIP    := Self.Binding.PeerIP;
+  Self.RTCPBinding.PeerPort  := Self.Binding.PeerPort + 1;
+
   Self.Data := TIdRTPPacket.Create(Self.Profile);
   Self.Data.SequenceNo := $f00d;
   Self.Data.SyncSrcID  := $decafbad;
+
+  Self.RR := TIdRTCPReceiverReport.Create;
+  Self.RR.SyncSrcID := Self.Data.SyncSrcID;
+  Self.RR.ReceptionReportCount := 1;
 end;
 
 procedure TSessionDataTestCase.TearDown;
 begin
+  Self.RR.Free;
   Self.Data.Free;
 
   inherited TearDown;
@@ -7250,7 +7277,9 @@ procedure TestTIdRTPSession.SetUp;
 begin
   inherited SetUp;
 
+  // Receive an RTP packet from the remote party
   Self.Session.ReceiveData(Self.Data, Self.Binding);
+  Self.Session.ReceiveControl(Self.RR, Self.Binding);
 
   Self.Member := Self.Session.Member(Self.Data.SyncSrcID);
   Self.ValidateSource(Self.Member);
@@ -7287,6 +7316,16 @@ begin
   finally
     L1.Free;
   end;
+end;
+
+procedure TestTIdRTPSession.TestJoinSendsSenderReport;
+var
+  OldRTCPCount: Cardinal;
+begin
+  OldRTCPCount := Self.Agent.RTCPCount;
+  Self.Session.JoinSession;
+  Self.Timer.TriggerEarliestEvent;
+  Check(OldRTCPCount < Self.Agent.RTCPCount, 'No RTCP sent; no event scheduled');
 end;
 
 procedure TestTIdRTPSession.TestReceiveRTPFromValidatedSourceNotifiesListeners;
@@ -8289,6 +8328,49 @@ begin
   end;
 end;
 
+//******************************************************************************
+//* TestTIdRTPSenderReportWait                                                 *
+//******************************************************************************
+//* TestTIdRTPSenderReportWait Public methods **********************************
+
+procedure TestTIdRTPSenderReportWait.SetUp;
+const
+  ArbitraryHost = '127.0.0.1';
+  ArbitraryPort = 9000;
+begin
+  inherited SetUp;
+
+  Self.Profile := TIdAudioVisualProfile.Create;
+
+  Self.Agent := TIdMockRTPPeer.Create;
+  Self.Agent.Profile := Self.Profile;
+
+  Self.Session := TIdRTPSession.Create(Self.Agent);
+  Self.Session.AddReceiver(ArbitraryHost, ArbitraryPort);
+
+  Self.Wait := TIdRTPSenderReportWait.Create;
+  Self.Wait.Session := Self.Session;
+end;
+
+procedure TestTIdRTPSenderReportWait.TearDown;
+begin
+  Self.Session.Free;
+  Self.Agent.Free;
+  Self.Profile.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdRTPSenderReportWait Published methods *******************************
+
+procedure TestTIdRTPSenderReportWait.TestTrigger;
+begin
+  CheckEquals(0, Self.Agent.RTCPCount, 'Sanity check: RTCP sent before it should have');
+
+  Self.Wait.Trigger;
+
+  Check(Self.Agent.RTCPCount > 0, 'No RTCP sent, ergo Trigger didn''t happen');
+end;
 
 initialization
   RegisterTest('RTP', Suite);

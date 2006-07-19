@@ -1002,6 +1002,7 @@ type
                        Port: Cardinal): Boolean; overload;
     function  IsSender: Boolean; overload;
     function  IsSender(SSRC: Cardinal): Boolean; overload;
+    procedure JoinSession;
     procedure LeaveSession(const Reason: String = '');
     function  LockMembers: TIdRTPMemberTable;
     function  Member(SSRC: Cardinal): TIdRTPMember; overload;
@@ -1098,6 +1099,18 @@ type
     procedure Run(const Subject: IInterface); override;
 
     property Data: TIdRTPPayload read fData write fData;
+  end;
+
+  TIdRTPWait = class(TIdWait)
+  private
+    fSession: TIdRTPSession;
+  public
+    property Session: TIdRTPSession read fSession write fSession;
+  end;
+
+  TIdRTPSenderReportWait = class(TIdRTPWait)
+  public
+    procedure Trigger; override;
   end;
 
   EBadEncodingName = class(Exception);
@@ -4833,6 +4846,12 @@ begin
   end;
 end;
 
+procedure TIdRTPSession.JoinSession;
+begin
+  Self.Timer.AddEvent(MilliSecondOfTheDay(Members.SendInterval(Self) / 2),
+                      Self.TransmissionTimeExpire);
+end;
+
 procedure TIdRTPSession.LeaveSession(const Reason: String = '');
 var
   Bye: TIdRTCPBye;
@@ -5517,6 +5536,16 @@ end;
 procedure TIdRTPDataListenerNewDataMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdRTPDataListener).OnNewData(Self.Data, Self.Binding);
+end;
+
+//******************************************************************************
+//* TIdRTPSenderReportWait                                                     *
+//******************************************************************************
+//* TIdRTPSenderReportWait Public methods **************************************
+
+procedure TIdRTPSenderReportWait.Trigger;
+begin
+  Self.Session.SendReport;
 end;
 
 end.
