@@ -4848,7 +4848,7 @@ end;
 
 procedure TIdRTPSession.JoinSession;
 begin
-  Self.Timer.AddEvent(MilliSecondOfTheDay(Members.SendInterval(Self) / 2),
+  Self.Timer.AddEvent(MilliSecondOfTheDay(Members.SendInterval(Self)),
                       Self.TransmissionTimeExpire);
 end;
 
