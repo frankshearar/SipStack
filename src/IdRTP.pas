@@ -1117,7 +1117,7 @@ type
   EStreamTooShort = class(Exception);
   EUnknownSDES = class(Exception);
 
-// Vonversion functions  
+// Conversion functions  
 function  DateTimeToNTPFractionsOfASecond(DT: TDateTime): Cardinal;
 function  DateTimeToNTPSeconds(DT: TDateTime): Cardinal;
 function  DateTimeToNTPTimestamp(DT: TDateTime): TIdNTPTimestamp;
