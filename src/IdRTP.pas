@@ -4366,6 +4366,13 @@ end;
 
 procedure TIdRTPMemberTable.Remove(SSRC: Cardinal);
 begin
+  // Note that if you try to remove an SSRC that is not in this session, nothing
+  // happens. If you're looping over the members to remove some of them, use
+  // Remove(Member: TIdRTPMember) instead.
+  //
+  // POSTCONDITION: if a member with the SSRC is in this session,
+  // Self.List.Count decrements.
+
   Self.List.Remove(Self.Find(SSRC));
 end;
 
@@ -4399,7 +4406,7 @@ begin
   while (I < Self.Count) do begin
     if (Self.MemberAt(I).SyncSrcID <> SessionSSRC)
       and (Self.MemberAt(I).LastRTCPReceiptTime < CutoffTime) then
-      Self.Remove(Self.MemberAt(I).SyncSrcID)
+      Self.Remove(Self.MemberAt(I))
     else
       Inc(I)
   end;
@@ -4413,7 +4420,7 @@ begin
   while (I < Self.Count) do begin
     if Self.MemberAt(I).IsSender
       and (Self.MemberAt(I).LastRTCPReceiptTime < CutoffTime) then
-      Self.Remove(Self.MemberAt(I).SyncSrcID)
+      Self.Remove(Self.MemberAt(I))
     else
       Inc(I);
   end;
@@ -4607,7 +4614,7 @@ begin
   if (Self.Members.Count > 0) then
     while (I < Self.Members.Count) do
      if Self.Members.MemberAt(I).IsSender then
-       Self.Members.Remove(Self.Members.MemberAt(I).SyncSrcID)
+       Self.Members.Remove(Self.Members.MemberAt(I))
      else
        Inc(I);
 end;
@@ -5217,7 +5224,7 @@ begin
     try
       I      := 0;
       Report := Self.AddAppropriateReportTo(Packet);
-      
+
       while (I < Senders.Count) do begin
 
         J := 0;
