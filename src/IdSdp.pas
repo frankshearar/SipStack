@@ -3583,16 +3583,22 @@ end;
 
 procedure TIdSDPMediaStream.SetRemoteDescription(const Value: TIdSdpMediaDescription);
 var
-  I: Integer;
+  I:    Integer;
+  Peer: TIdRTPMember;
 begin
   Self.fRemoteDescription.Assign(Value);
 
   // We ASSUME that the local & remote descriptions are symmetrical: that, for
   // this stream, both ports have the same port count.
   // THIS IS NOT SUCH A GREAT IDEA. TODO.
-  for I := 0 to Value.PortCount - 1 do
-    Self.ServerAt(I).Session.AddReceiver(Value.Connections[I].Address,
-                                         Value.Port);
+  for I := 0 to Value.PortCount - 1 do begin
+    Peer := Self.ServerAt(I).Session.AddReceiver(Value.Connections[I].Address,
+                                                 Value.Port);
+    Peer.ControlAddress := Value.Connections[I].Address;
+    Peer.ControlPort    := Value.Port + 1;
+    
+    Self.ServerAt(I).Session.JoinSession;
+  end;
 end;
 
 //******************************************************************************

@@ -12,8 +12,8 @@ unit TestIdSdp;
 interface
 
 uses
-  Classes, IdRTP, IdRTPServer, IdSdp, IdUDPServer, SyncObjs, TestFramework,
-  TestFrameworkEx, TestFrameworkRtp;
+  Classes, IdRTP, IdRTPServer, IdSdp, IdTimerQueue, IdUDPServer, SyncObjs,
+  TestFramework, TestFrameworkEx, TestFrameworkRtp;
 
 type
   TestFunctions = class(TTestCase)
@@ -476,6 +476,7 @@ type
     RTPEvent:         TEvent;
     Sender:           TIdSDPMediaStream;
     SentBye:          Boolean;
+    Timer:            TIdDebugTimerQueue;
 
     procedure OnNewData(Data: TIdRTPPayload;
                         Binding: TIdConnection);
@@ -501,6 +502,7 @@ type
     procedure TestPutOnHoldSendRecv;
     procedure TestPutOnHoldWhileOnHold;
     procedure TestReceiveDataWhenNotReceiver;
+    procedure TestRemoteMembersControlAddressAndPortSet;
     procedure TestRTPListenersGetRTCP;
     procedure TestRTPListenersGetRTP;
     procedure TestSendData;
@@ -5791,10 +5793,14 @@ begin
   Self.AVP := TIdRTPProfile.Create;
   Self.AVP.AddEncoding(T140EncodingName, T140ClockRate, '', T140PT);
 
-  Self.Media     := TIdSDPMediaStream.Create(Self.AVP);
   Self.RTCPEvent := TSimpleEvent.Create;
   Self.RTPEvent  := TSimpleEvent.Create;
+  Self.Timer     := TIdDebugTimerQueue.Create(false);
+
+  Self.Media     := TIdSDPMediaStream.Create(Self.AVP);
+  Self.Media.Timer  := Self.Timer;
   Self.Sender    := TIdSDPMediaStream.Create(Self.AVP);
+  Self.Sender.Timer := Self.Timer;
 
   // Sender has a nice high port number because some tests use ports just above
   // Self.Media's port (8000).
@@ -5827,10 +5833,12 @@ end;
 procedure TestTIdSDPMediaStream.TearDown;
 begin
   Self.Sender.Free;
+  Self.Media.Free;
   Self.RTPEvent.Free;
   Self.RTCPEvent.Free;
-  Self.Media.Free;
   Self.AVP.Free;
+
+  Self.Timer.Terminate;
 
   inherited TearDown;
 end;
@@ -5852,6 +5860,11 @@ procedure TestTIdSDPMediaStream.OnRTCP(Packet: TIdRTCPPacket;
                                        Binding: TIdConnection);
 begin
   Self.SentBye := Packet.IsBye;
+
+  Self.ReceivingBinding.LocalIP   := Binding.LocalIP;
+  Self.ReceivingBinding.LocalPort := Binding.LocalPort;
+  Self.ReceivingBinding.PeerIP    := Binding.PeerIP;
+  Self.ReceivingBinding.PeerPort  := Binding.PeerPort;  
 
   Self.RTCPEvent.SetEvent;
 end;
@@ -6161,6 +6174,25 @@ begin
   Self.SendRTP;
 
   Self.WaitForTimeout(Self.ThreadEvent, 'Received data when not a receiver');
+end;
+
+procedure TestTIdSDPMediaStream.TestRemoteMembersControlAddressAndPortSet;
+begin
+  Self.Media.StopListening;
+
+  Self.Sender.AddRTPListener(Self);
+  // We check that the SDP sets the RTCP address/port of the remote party
+  // by "joining a session" - that will send a Receiver Report.
+
+  Self.Media.StartListening;
+
+  // We use a debug timer, so we trigger the event manually.
+  Self.Timer.TriggerAllEventsOfType(TIdNotifyEventWait);
+
+  Self.WaitForSignaled(Self.RTCPEvent, 'No RTCP sent');
+
+  CheckEquals(Self.Media.LocalDescription.Port + 1, Self.ReceivingBinding.PeerPort, 'The RTCP came from an unexpected port');
+  CheckEquals(Self.Sender.LocalDescription.Port + 1, Self.ReceivingBinding.LocalPort, 'The RTCP arrived at an unexpected port');
 end;
 
 procedure TestTIdSDPMediaStream.TestRTPListenersGetRTCP;
