@@ -17,7 +17,7 @@ interface
 
 uses
   Classes, Contnrs, IdEmailAddress, IdInterfacedObject, IdNotification, IdRTP,
-  IdRTPServer, IdSimpleParser, SyncObjs;
+  IdRTPServer, IdSimpleParser, IdTimerQueue, SyncObjs;
 
 type
   TIdNtpTimestamp     = Int64;
@@ -535,6 +535,7 @@ type
     fOnHold:            Boolean;
     fRemoteDescription: TIdSdpMediaDescription;
     fProfile:           TIdRTPProfile;
+    fTimer:             TIdTimerQueue;
     PreHoldDirection:   TIdSdpDirection;
     RTPListeners:       TIdNotificationList;
     Servers:            TObjectList;
@@ -574,6 +575,7 @@ type
     property OnHold:            Boolean                read fOnHold;
     property Profile:           TIdRTPProfile          read fProfile;
     property RemoteDescription: TIdSdpMediaDescription read fRemoteDescription write SetRemoteDescription;
+    property Timer:             TIdTimerQueue          read fTimer write fTimer;
   end;
 
   // I process SDP (RFC 2327) payloads. This means that I instantiate (RTP)
@@ -589,6 +591,7 @@ type
     fLocalProfile:       TIdRTPProfile;
     fRemoteProfile:      TIdRTPProfile;
     StreamLock:          TCriticalSection;
+    Timer:               TIdThreadedTimerQueue;
 
     function  AllowedPort(Port: Cardinal): Boolean;
     procedure EstablishStream(Desc: TIdSdpMediaDescription);
@@ -3439,7 +3442,7 @@ procedure TIdSDPMediaStream.StartListening;
 var
   I: Integer;
 begin
-  for I := 0 to Self.Servers.Count - 1 do
+  for I := 0 to Self.Servers.Count - 1 do 
     Self.ServerAt(I).Active := true;
 end;
 
@@ -3469,9 +3472,10 @@ begin
   Result := TIdRTPServer.Create;
   Self.Servers.Add(Result);
 
+  Result.AddListener(Self);
   Result.Profile := Profile;
   Result.Session.AddListener(Self);
-  Result.AddListener(Self);
+  Result.Timer := Self.Timer;
 end;
 
 function TIdSDPMediaStream.FindServer(LayerID: Integer): TIdRTPServer;
@@ -3619,6 +3623,8 @@ begin
   Self.fStreams := TObjectList.Create;
   Self.StreamLock := TCriticalSection.Create;
 
+  Self.Timer := TIdThreadedTimerQueue.Create(false);
+
   Self.LowestAllowedPort  := LowestPossiblePort;
   Self.HighestAllowedPort := HighestPossiblePort;
 end;
@@ -3635,6 +3641,8 @@ begin
 
   Self.fRemoteProfile.Free;
   Self.fLocalProfile.Free;
+
+  Self.Timer.Terminate;
 
   inherited Destroy;
 end;
@@ -3787,6 +3795,7 @@ var
 begin
   NewStream := TIdSDPMediaStream.Create(Self.RemoteProfile);
   try
+    NewStream.Timer := Self.Timer;
     Self.fStreams.Add(NewStream);
 
     SocketBound := false;
