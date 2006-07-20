@@ -1018,8 +1018,6 @@ type
                           Binding: TIdConnection);
     function  ReceiverCount: Cardinal;
     procedure RemoveListener(const Listener: IIdRTPDataListener);
-    procedure RemoveMember(SSRC: Cardinal);
-    procedure RemoveSender(SSRC: Cardinal);
     procedure RemoveTimedOutMembers;
     procedure RemoveTimedOutSenders;
     procedure ResolveSSRCCollision;
@@ -5023,25 +5021,6 @@ end;
 procedure TIdRTPSession.RemoveListener(const Listener: IIdRTPDataListener);
 begin
   Self.Listeners.RemoveListener(Listener);
-end;
-
-procedure TIdRTPSession.RemoveMember(SSRC: Cardinal);
-begin
-  // We can't remove ourselves from a session - it makes no sense!
-  if (SSRC <> Self.SyncSrcID) then
-    Self.Members.Remove(SSRC);
-end;
-
-procedure TIdRTPSession.RemoveSender(SSRC: Cardinal);
-var
-  Members: TIdRTPMemberTable;
-begin
-  Members := Self.LockMembers;
-  try
-    Members.Remove(SSRC);
-  finally
-    Self.UnlockMembers;
-  end;
 end;
 
 procedure TIdRTPSession.RemoveTimedOutMembers;

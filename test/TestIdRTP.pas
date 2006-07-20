@@ -632,14 +632,11 @@ type
     procedure TestAddReceiver;
     procedure TestAddSender;
     procedure TestAddSenderAddsMember;
-    procedure TestCantRemoveSelfFromSession;
     procedure TestIsMember;
     procedure TestIsSender;
     procedure TestIsSenderSelf;
     procedure TestPrepareRTP;
     procedure TestPrepareSR;
-    procedure TestRemoveMember;
-    procedure TestRemoveSender;
   end;
 
   TSessionDataTestCase = class(TRTPSessionTestCase)
@@ -7088,13 +7085,6 @@ begin
               'SSRC not added to Members');
 end;
 
-procedure TestSessionDelegationMethods.TestCantRemoveSelfFromSession;
-begin
-  CheckEquals(1, Self.Session.MemberCount, 'Initially only self in session');
-  Self.Session.RemoveMember(Self.Session.SyncSrcID);
-  CheckEquals(1, Self.Session.MemberCount, 'Self was removed from session');
-end;
-
 procedure TestSessionDelegationMethods.TestIsMember;
 begin
   Check(not Self.Session.IsMember(Self.SSRC), 'Empty table');
@@ -7213,22 +7203,6 @@ begin
   finally
     SR.Free;
   end;
-end;
-
-procedure TestSessionDelegationMethods.TestRemoveMember;
-begin
-  Self.Session.AddMember(Self.SSRC);
-  Check(Self.Session.IsMember(Self.SSRC), 'SSRC not added');
-  Self.Session.RemoveMember(Self.SSRC);
-  Check(not Self.Session.IsMember(Self.SSRC), 'SSRC not removed');
-end;
-
-procedure TestSessionDelegationMethods.TestRemoveSender;
-begin
-  Self.Session.AddSender(Self.SSRC);
-  Check(Self.Session.IsSender(Self.SSRC), 'SSRC not added');
-  Self.Session.RemoveSender(Self.SSRC);
-  Check(not Self.Session.IsSender(Self.SSRC), 'SSRC not removed');
 end;
 
 //******************************************************************************
