@@ -571,6 +571,7 @@ type
     procedure TestFind;
     procedure TestFindReceiver;
     procedure TestRemove;
+    procedure TestRemoveNonMember;
     procedure TestRemoveAll;
     procedure TestReceiverCount;
     procedure TestRemoveTimedOutMembers;
@@ -6628,6 +6629,16 @@ begin
   Check(Self.Members.Contains(Self.SSRC), 'Member not added');
   Self.Members.Remove(Member);
   Check(not Self.Members.Contains(Self.SSRC), 'Member not removed');
+end;
+
+procedure TestTIdRTPMemberTable.TestRemoveNonMember;
+var
+  MemberCount: Cardinal;
+begin
+  Self.Members.Add(Self.SSRC);
+  MemberCount := Self.Members.Count;
+  Self.Members.Remove($deadbeef);
+  CheckEquals(MemberCount, Self.Members.Count, 'Some member was removed');
 end;
 
 procedure TestTIdRTPMemberTable.TestRemoveAll;
