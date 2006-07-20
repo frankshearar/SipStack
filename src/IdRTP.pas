@@ -4234,6 +4234,9 @@ begin
 
     Result.SourceAddress  := Host;
     Result.SourcePort     := Port;
+
+    Result.LastRTCPReceiptTime := Now;
+    Result.LastRTPReceiptTime  := Now;
   except
     if (Self.List.IndexOf(Result) <> ItemNotFoundIndex) then
       Self.List.Remove(Result)

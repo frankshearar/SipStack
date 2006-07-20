@@ -6560,6 +6560,17 @@ begin
   CheckEquals(Host, Member.SourceAddress, 'SourceAddress');
   CheckEquals(Port, Member.SourcePort,    'SourcePort');
 
+  // A bug didn't initialise these two values, with the result that the first
+  // time we checked for timed out SSRCs (pretty soon after the session is
+  // first established - about 500ms or so - we removed the remote parties.
+  // Now we set the time to Now. We don't _check_ that because checking against
+  // Now introduces transient failures during testing. (Consider if we had a
+  // delta of OneSecond, and you took longer than that to step through the code.
+  // While the code might be correct, you'd see a failure that you wouldn't see
+  // if you just let the test run.)
+  CheckNotEquals(0, Member.LastRTCPReceiptTime, OneSecond, 'LastRTCPReceiptTime not initialised');
+  CheckNotEquals(0, Member.LastRTPReceiptTime,  OneSecond, 'LastRTPReceiptTime not initialised');
+
   Self.Members.AddReceiver(Host, Port);
   CheckEquals(1, Self.Members.Count, 'Receiver erroneously re-added');
 end;
