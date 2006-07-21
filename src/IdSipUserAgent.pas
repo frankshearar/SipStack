@@ -76,6 +76,7 @@ type
   //   Contact: sip:wintermute@tessier-ashpool.co.luna
   //   From: "Count Zero" <sip:countzero@jammer.org>
   //   Gruu: "Count Zero" <sip:countzero@jammer.org;opaque=foo>
+  //   UseGruu: "yes"|"no"|"true"|"false"|"1"|"0" (case insensitive)
   //   HostName: talkinghead1.tessier-ashpool.co.luna
   //   HostName: 192.168.1.1
   //   Listen: <transport name><SP><host|IPv4 address|IPv6 reference|AUTO>:<port>
