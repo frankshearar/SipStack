@@ -644,16 +644,18 @@ end;
 
 procedure TIdThreadedTimerQueue.Run;
 begin
-  while not Self.Terminated do begin
-    Self.WaitEvent.WaitFor(Self.ShortestWait);
+  try
+    while not Self.Terminated do begin
+      Self.WaitEvent.WaitFor(Self.ShortestWait);
 
-    if not Self.Terminated then
-      Self.TriggerEarliestEvent;
+      if not Self.Terminated then
+        Self.TriggerEarliestEvent;
 
-    Self.PossiblyNotifyOfEmpty;
+      Self.PossiblyNotifyOfEmpty;
+    end;
+  finally
+    Self.Free;
   end;
-
-  Self.Free;
 end;
 
 //******************************************************************************
