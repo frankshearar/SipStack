@@ -228,6 +228,7 @@ type
     procedure NotifySubcriber(ActionHandle: TIdSipHandle;
                               const Notification: String;
                               const MimeType: String);
+    procedure ReconfigureStack(NewConfiguration: TStrings);
     procedure RedirectCall(ActionHandle: TIdSipHandle;
                            NewTarget: TIdSipAddressHeader);
     procedure RejectCall(ActionHandle: TIdSipHandle);
@@ -982,6 +983,17 @@ begin
   finally
     Self.ActionLock.Release;
   end;
+end;
+
+procedure TIdSipStackInterface.ReconfigureStack(NewConfiguration: TStrings);
+var
+  Wait: TIdSipReconfigureStackWait;
+begin
+  Wait := TIdSipReconfigureStackWait.Create;
+  Wait.Configuration := NewConfiguration;
+  Wait.Stack         := Self.UserAgent;
+  
+  Self.AddEvent(TriggerImmediately, Wait);
 end;
 
 procedure TIdSipStackInterface.RedirectCall(ActionHandle: TIdSipHandle;

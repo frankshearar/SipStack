@@ -15,7 +15,7 @@ uses
   Classes, IdObservable, IdSipCore, IdSipDialog, IdSipDialogID,
   IdSipInviteModule, IdSipLocator, IdSipMessage, IdSipTransport, IdSocketHandle,
   IdUdpServer, IdSipUserAgent, IdTimerQueue, SyncObjs, TestFrameworkEx,
-  TestFrameworkSip, TestFrameworkSipTU;
+  TestFramework, TestFrameworkSip, TestFrameworkSipTU;
 
 type
   TestTIdSipUserAgent = class(TTestCaseTU,
@@ -142,13 +142,16 @@ type
 
   TestTIdSipStackConfigurator = class(TThreadingTestCase)
   private
-    Address:        String;
-    Conf:           TIdSipStackConfigurator;
-    Configuration:  TStrings;
-    Port:           Cardinal;
-    ReceivedPacket: Boolean;
-    Timer:          TIdTimerQueue;
-    Server:         TIdUdpServer;
+    Address:                    String;
+    Conf:                       TIdSipStackConfigurator;
+    Configuration:              TStrings;
+    NewRegistrar:               TIdUdpServer;
+    NewRegistrarReceivedPacket: Boolean;
+    NewRegistrarEvent:          TEvent;
+    Port:                       Cardinal;
+    ReceivedPacket:             Boolean;
+    Timer:                      TIdTimerQueue;
+    Server:                     TIdUdpServer;
 
     function  ARecords: String;
     procedure CheckAutoAddress(Address: TIdSipAddressHeader);
@@ -163,9 +166,13 @@ type
     procedure NoteReceiptOfPacket(Sender: TObject;
                                   AData: TStream;
                                   ABinding: TIdSocketHandle);
+    procedure NoteReceiptOfPacketOldRegistrar(Sender: TObject;
+                                              AData: TStream;
+                                              ABinding: TIdSocketHandle);
     procedure ProvideAnswer(Sender: TObject;
                             AData: TStream;
                             ABinding: TIdSocketHandle);
+    procedure SetBasicConfiguration(Configuration: TStrings);
 
   public
     procedure SetUp; override;
@@ -201,14 +208,38 @@ type
     procedure TestCreateUserAgentWithReferSupport;
     procedure TestCreateUserAgentWithRegistrar;
     procedure TestCreateUserAgentWithUseGruu;
+    procedure TestUpdateConfigurationWithContact;
+    procedure TestUpdateConfigurationWithGruu;
+    procedure TestUpdateConfigurationWithFrom;
+    procedure TestUpdateConfigurationWithLocator;
+    procedure TestUpdateConfigurationWithNewGruu;
+    procedure TestUpdateConfigurationWithNewRegistrar;
+    procedure TestUpdateConfigurationWithProxy;
+    procedure TestUpdateConfigurationWithRegistrar;
+    procedure TestUpdateConfigurationWithTransport;
+    procedure TestUpdateConfigurationWithUseGruu;
+  end;
+
+  TestTIdSipReconfigureStackWait = class(TTestCase)
+  private
+    Configuration: TStrings;
+    NewProxy:      String;
+    OldProxy:      String;
+    Stack:         TIdSipUserAgent;
+    Wait:          TIdSipReconfigureStackWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTrigger;
   end;
 
 implementation
 
 uses
-  IdException, IdSdp, IdSipAuthentication, IdSipConsts, IdSipMockLocator,
-  IdSipMockTransport, IdSipSubscribeModule, IdSipTCPTransport,
-  IdSipUDPTransport, IdSystem, IdTcpClient, IdUnicode, SysUtils, TestFramework;
+  IdException, IdSdp, IdSipAuthentication, IdSipConsts, IdSipIndyLocator,
+  IdSipMockLocator, IdSipMockTransport, IdSipSubscribeModule, IdSipTCPTransport,
+  IdSipUDPTransport, IdSystem, IdTcpClient, IdUnicode, SysUtils;
 
 const
   // SFTF: Sip Foundry Test Framework. cf. http://www.sipfoundry.org/sftf/
@@ -260,6 +291,7 @@ begin
   Result := TTestSuite.Create('IdSipUserAgent unit tests');
   Result.AddTest(TestTIdSipUserAgent.Suite);
   Result.AddTest(TestTIdSipStackConfigurator.Suite);
+  Result.AddTest(TestTIdSipReconfigureStackWait.Suite);
 end;
 
 //******************************************************************************
@@ -1748,11 +1780,19 @@ procedure TestTIdSipStackConfigurator.SetUp;
 begin
   inherited SetUp;
 
-  Self.Address       := '127.0.0.1';
-  Self.Conf          := TIdSipStackConfigurator.Create;
-  Self.Configuration := TStringList.Create;
-  Self.Port          := 15060;
-  Self.Timer         := TIdTimerQueue.Create(true);
+  Self.Address           := '127.0.0.1';
+  Self.Conf              := TIdSipStackConfigurator.Create;
+  Self.Configuration     := TStringList.Create;
+  Self.NewRegistrarEvent := TSimpleEvent.Create;
+  Self.Port              := 15060;
+  Self.Timer             := TIdTimerQueue.Create(true);
+
+  Self.NewRegistrar  := TIdUDPServer.Create(nil);
+  Self.NewRegistrar.DefaultPort   := Self.Port + 11000;
+  Self.NewRegistrar.OnUDPRead     := Self.NoteReceiptOfPacketOldRegistrar;
+  Self.NewRegistrar.ThreadedEvent := true;
+  Self.NewRegistrar.Active        := true;
+
   Self.Server        := TIdUDPServer.Create(nil);
   Self.Server.DefaultPort   := Self.Port + 10000;
   Self.Server.OnUDPRead     := Self.NoteReceiptOfPacket;
@@ -1762,7 +1802,8 @@ begin
   TIdSipTransportRegistry.RegisterTransportType(TcpTransport, TIdSipTCPTransport);
   TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipUDPTransport);
 
-  Self.ReceivedPacket := false;
+  Self.NewRegistrarReceivedPacket := false;
+  Self.ReceivedPacket             := false;
 end;
 
 procedure TestTIdSipStackConfigurator.TearDown;
@@ -1771,7 +1812,9 @@ begin
   TIdSipTransportRegistry.UnregisterTransportType(TcpTransport);
 
   Self.Server.Free;
+  Self.NewRegistrar.Free;
   Self.Timer.Terminate;
+  Self.NewRegistrarEvent.Free;
   Self.Configuration.Free;
   Self.Conf.Free;
 
@@ -1893,6 +1936,14 @@ begin
   Self.ThreadEvent.SetEvent;
 end;
 
+procedure TestTIdSipStackConfigurator.NoteReceiptOfPacketOldRegistrar(Sender: TObject;
+                                                                      AData: TStream;
+                                                                      ABinding: TIdSocketHandle);
+begin
+  Self.NewRegistrarReceivedPacket := true;
+  Self.NewRegistrarEvent.SetEvent;
+end;
+
 procedure TestTIdSipStackConfigurator.ProvideAnswer(Sender: TObject;
                                                     AData: TStream;
                                                     ABinding: TIdSocketHandle);
@@ -1917,6 +1968,16 @@ begin
                    Answer);
 
   Self.NoteReceiptOfPacket(Sender, AData, ABinding);
+end;
+
+procedure TestTIdSipStackConfigurator.SetBasicConfiguration(Configuration: TStrings);
+begin
+  Configuration.Clear;
+  Configuration.Add('Contact: sip:unit121@anon.org');
+  Configuration.Add('From: sip:case@fried-neurons.org');
+  Configuration.Add('HostName: unit121.anon.org');
+  Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Configuration.Add('Listen: TCP ' + Self.Address + ':' + IntToStr(Self.Port));
 end;
 
 //* TestTIdSipStackConfigurator Published methods ******************************
@@ -2410,10 +2471,15 @@ begin
     Check(UA.Dispatcher.Timer = UA.Dispatcher.Transports[0].Timer,
           'Transport and Transaction layers have different timers');
 
-    CheckTcpServerNotOnPort(UA.Dispatcher.Transports[0].Bindings[0].IP,
-                            IdPort_SIP,
-                            'With only one listener (on a non-standard port) '
-                          + 'there should be no server on the standard port');
+    UA.Dispatcher.Transports[0].Start;
+    try
+      CheckTcpServerNotOnPort(UA.Dispatcher.Transports[0].Bindings[0].IP,
+                              IdPort_SIP,
+                              'With only one listener (on a non-standard port) '
+                            + 'there should be no server on the standard port');
+    finally
+      UA.Dispatcher.Transports[0].Stop;
+    end;
   finally
     UA.Free;
   end;
@@ -2488,6 +2554,370 @@ begin
   Self.CheckUseGruuWithValue('TRUE');
   Self.CheckUseGruuWithValue('yes');
   Self.CheckUseGruuWithValue('1');
+end;
+
+procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithContact;
+var
+  NewConfig:  TStrings;
+  NewContact: String;
+  OldContact: String;
+  UA:         TIdSipUserAgent;
+begin
+  NewContact := 'sip:unit253@jammers.org';
+
+  Self.SetBasicConfiguration(Self.Configuration);
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    OldContact := UA.Contact.FullValue;
+    CheckNotEquals(NewContact,
+                   OldContact,
+                   'NewContact contains the same Contact header as the original '
+                 + 'configuration');
+
+    NewConfig := TStringList.Create;
+    try
+      NewConfig.Add('Contact: ' + NewContact);
+
+      Self.Conf.UpdateConfiguration(UA, NewConfig);
+      CheckEquals(NewContact, UA.Contact.FullValue, 'UA''s Contact property not updated');
+    finally
+      NewConfig.Free;
+    end;
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithGruu;
+var
+  NewConfig: TStrings;
+  NewGruu:   String;
+  OldGruu:   String;
+  UA:        TIdSipUserAgent;
+begin
+  // Update an existing GRUU property.
+
+  Self.SetBasicConfiguration(Self.Configuration);
+
+  OldGruu := 'sip:case@jammers.org;opaque=123';
+  Self.Configuration.Add(OldGruu);
+
+  NewGruu := 'sip:case@jammers.org;opaque=456';
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckNotEquals(NewGruu,
+                   OldGruu,
+                   'NewGruu contains the same Gruu header as the original '
+                 + 'configuration');
+
+    NewConfig := TStringList.Create;
+    try
+      NewConfig.Add('Gruu: ' + NewGruu);
+
+      Self.Conf.UpdateConfiguration(UA, NewConfig);
+      CheckEquals(NewGruu, UA.Gruu.FullValue, 'UA''s Gruu property not updated');
+    finally
+      NewConfig.Free;
+    end;
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithFrom;
+var
+  NewConfig: TStrings;
+  NewFrom:   String;
+  OldFrom:   String;
+  UA:        TIdSipUserAgent;
+begin
+  NewFrom := 'sip:case@jammers.org';
+
+  Self.SetBasicConfiguration(Self.Configuration);
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    OldFrom := UA.From.FullValue;
+    CheckNotEquals(NewFrom,
+                   OldFrom,
+                   'NewFrom contains the same From header as the original '
+                 + 'configuration');
+
+    NewConfig := TStringList.Create;
+    try
+      NewConfig.Add('From: ' + NewFrom);
+
+      Self.Conf.UpdateConfiguration(UA, NewConfig);
+      CheckEquals(NewFrom, UA.From.FullValue, 'UA''s From property not updated');
+    finally
+      NewConfig.Free;
+    end;
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithLocator;
+var
+  NewConfig: TStrings;
+  UA:        TIdSipUserAgent;
+begin
+  Self.SetBasicConfiguration(Self.Configuration);
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(TIdSipIndyLocator.ClassName,
+                UA.Locator.ClassName,
+                'Sanity check: default locator type');
+
+    NewConfig := TStringList.Create;
+    try
+      NewConfig.Add(NameServerDirective + ': ' + MockKeyword);
+
+      Self.Conf.UpdateConfiguration(UA, NewConfig);
+      CheckEquals(TIdSipMockLocator.ClassName,
+                  UA.Locator.ClassName,
+                  'Locator property not updated');
+      Check(UA.Locator = UA.Dispatcher.Locator,
+            'Transaction layer''s locator not updated');
+    finally
+      NewConfig.Free;
+    end;
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithNewGruu;
+var
+  NewConfig: TStrings;
+  NewGruu:   String;
+  UA:        TIdSipUserAgent;
+begin
+  // Add a GRUU setting to a UA that didn't have one before.
+
+  NewGruu := 'sip:case@jammers.org;opaque=456';
+
+  Self.SetBasicConfiguration(Self.Configuration);
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    NewConfig := TStringList.Create;
+    try
+      NewConfig.Add('Gruu: ' + NewGruu);
+
+      Self.Conf.UpdateConfiguration(UA, NewConfig);
+      CheckEquals(NewGruu, UA.Gruu.FullValue, 'UA''s Gruu property not updated');
+      Check(not UA.UseGruu, 'UA set to use GRUU, but we didn''t ask it');
+    finally
+      NewConfig.Free;
+    end;
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithNewRegistrar;
+var
+  NewConfig: TStrings;
+  Registrar: String;
+  UA:        TIdSipUserAgent;
+begin
+  // Add a registrar setting to a UA that didn't have one before.
+
+  Registrar := 'sip:127.0.0.1:' + IntToStr(Self.Server.DefaultPort);
+
+  Self.SetBasicConfiguration(Self.Configuration);
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    NewConfig := TStringList.Create;
+    try
+      NewConfig.Add(RegisterDirective + ': ' + Registrar);
+
+      Self.Conf.UpdateConfiguration(UA, NewConfig);
+
+      Self.WaitForSignaled('Waiting for REGISTER');
+      Check(Self.ReceivedPacket, 'No REGISTER sent to registrar');
+      CheckEquals(Registrar, UA.RegisterModule.Registrar.AsString, 'Registrar not set');
+    finally
+      NewConfig.Free;
+    end;
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithProxy;
+var
+  NewConfig: TStrings;
+  NewProxy:  String;
+  UA:        TIdSipUserAgent;
+begin
+  NewProxy := 'sip:proxy.leo-ix.net';
+
+  Self.SetBasicConfiguration(Self.Configuration);
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    NewConfig := TStringList.Create;
+    try
+      NewConfig.Add('Proxy: ' + NewProxy);
+
+      Self.Conf.UpdateConfiguration(UA, NewConfig);
+      CheckEquals(NewProxy, UA.Proxy.AsString, 'Proxy not updated');
+    finally
+      NewConfig.Free;
+    end;
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithRegistrar;
+var
+  NewConfig:    TStrings;
+  OldRegistrar: String;
+  NewRegistrar: String;
+  UA:           TIdSipUserAgent;
+begin
+  // Update an existing Registrar property.
+
+  OldRegistrar := 'sip:127.0.0.1:' + IntToStr(Self.Server.DefaultPort);
+  Self.SetBasicConfiguration(Self.Configuration);
+  Self.Configuration.Add(RegisterDirective + ': ' + OldRegistrar);
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    // This has the side effect of resetting ThreadEvent.
+    Self.WaitForSignaled('Waiting for REGISTER to old registrar');
+
+    NewConfig := TStringList.Create;
+    try
+      NewRegistrar := 'sip:127.0.0.1:' + IntToStr(Self.NewRegistrar.DefaultPort);
+      NewConfig.Add(RegisterDirective + ': ' + NewRegistrar);
+
+      Self.Conf.UpdateConfiguration(UA, NewConfig);
+
+      Self.WaitForSignaled('Waiting for unREGISTER to old registrar');
+      Check(Self.ReceivedPacket, 'No unREGISTER sent to old registrar');
+
+      CheckEquals(NewRegistrar, UA.RegisterModule.Registrar.AsString, 'Registrar not set');
+
+      Self.WaitForSignaled(Self.NewRegistrarEvent, 'Waiting for REGISTER to new registrar');
+      Check(Self.NewRegistrarReceivedPacket, 'No REGISTER sent to new registrar');
+    finally
+      NewConfig.Free;
+    end;
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithTransport;
+var
+  NewConfig: TStrings;
+  NewPort:   Cardinal;
+  UA:        TIdSipUserAgent;
+begin
+  NewPort := Self.Port + 1;
+
+  Self.SetBasicConfiguration(Self.Configuration);
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    NewConfig := TStringList.Create;
+    try
+      NewConfig.Add('Listen: TCP ' + Self.Address + ':' + IntToStr(NewPort));
+
+      Self.Conf.UpdateConfiguration(UA, NewConfig);
+      CheckEquals(1,
+                  UA.Dispatcher.TransportCount,
+                  'Too many transports: old Listen directives still in force');
+      CheckEquals(TIdSipTCPTransport.ClassName,
+                  UA.Dispatcher.Transports[0].ClassName,
+                  'New transport type');
+      CheckEquals(NewPort,
+                  UA.Dispatcher.Transports[0].Bindings[0].Port,
+                  'New transport port');
+      CheckEquals(Self.Address,
+                  UA.Dispatcher.Transports[0].Bindings[0].IP,
+                  'New transport address');
+      CheckEquals(Self.Address,
+                  UA.Dispatcher.Transports[0].HostName,
+                  'New transport hostname');
+      Check(Assigned(UA.Dispatcher.Transports[0].Timer),
+            'New transport has no timer');
+      Check(UA.Dispatcher.Timer = UA.Dispatcher.Transports[0].Timer,
+            'New transport and Transaction layers have different timers');
+      CheckTCPServerNotOnPort(Self.Address, Self.Port, 'Old TCP transport still running');
+    finally
+      NewConfig.Free;
+    end;
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithUseGruu;
+var
+  NewConfig: TStrings;
+  UA:        TIdSipUserAgent;
+begin
+  Self.SetBasicConfiguration(Self.Configuration);
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Check(not UA.UseGruu, 'UA set to use GRUU with no GRUU in the configuration');
+
+    NewConfig := TStringList.Create;
+    try
+      NewConfig.Add('UseGruu: yes');
+
+      Self.Conf.UpdateConfiguration(UA, NewConfig);
+      Check(UA.UseGruu, 'UA set to not use GRUU, but we asked it to');
+    finally
+      NewConfig.Free;
+    end;
+  finally
+    UA.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipReconfigureStackWait                                             *
+//******************************************************************************
+//* TestTIdSipReconfigureStackWait Public methods ******************************
+
+procedure TestTIdSipReconfigureStackWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.NewProxy := 'sip:gw1.leo-ix.net';
+  Self.OldProxy := 'sip:proxy.tessier-ashpool.co.luna';
+
+  Self.Configuration := TStringList.Create;
+  Self.Configuration.Add(ProxyDirective + ': ' + Self.NewProxy);
+  Self.Stack := TIdSipUserAgent.Create;
+  Self.Stack.Proxy.Uri := Self.OldProxy;
+
+  Self.Wait := TIdSipReconfigureStackWait.Create;
+  Self.Wait.Configuration := Self.Configuration;
+  Self.Wait.Stack         := Self.Stack;
+end;
+
+procedure TestTIdSipReconfigureStackWait.TearDown;
+begin
+  Self.Wait.Free;
+  Self.Stack.Free;
+  Self.Configuration.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipReconfigureStackWait Published methods ***************************
+
+procedure TestTIdSipReconfigureStackWait.TestTrigger;
+begin
+  Self.Wait.Trigger;
+
+  CheckEquals(Self.NewProxy,
+              Self.Stack.Proxy.Uri,
+              'Proxy not set, ergo Wait didn''t trigger');
 end;
 
 initialization

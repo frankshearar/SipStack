@@ -88,6 +88,8 @@ type
   //   InstanceID: urn:uuid:00000000-0000-0000-0000-000000000000
   TIdSipStackConfigurator = class(TObject)
   private
+    FirstTransportDirective: Boolean;
+
     procedure AddAddress(UserAgent: TIdSipAbstractCore;
                          AddressHeader: TIdSipAddressHeader;
                          const AddressLine: String);
@@ -132,6 +134,24 @@ type
   public
     function CreateUserAgent(Configuration: TStrings;
                              Context: TIdTimerQueue): TIdSipUserAgent; overload;
+    procedure UpdateConfiguration(UserAgent: TIdSipUserAgent;
+                                  Configuration: TStrings);
+  end;
+
+  TIdSipReconfigureStackWait = class(TIdWait)
+  private
+    fConfiguration: TStrings;
+    fStack:         TIdSipUserAgent;
+
+    procedure SetConfiguration(Value: TStrings);
+  public
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    procedure Trigger; override;
+
+    property Configuration: TStrings        read fConfiguration write SetConfiguration;
+    property Stack:         TIdSipUserAgent read fStack write fStack;
   end;
 
 // Configuration file constants
@@ -325,24 +345,40 @@ end;
 
 function TIdSipStackConfigurator.CreateUserAgent(Configuration: TStrings;
                                                  Context: TIdTimerQueue): TIdSipUserAgent;
-var
-  PendingActions: TObjectList;
 begin
   try
     Result := Self.CreateLayers(Context);
-
-    PendingActions := TObjectList.Create(false);
-    try
-      Self.ParseFile(Result, Configuration, PendingActions);
-      Self.InstantiateMissingObjectsAsDefaults(Result);
-      Self.SendPendingActions(PendingActions);
-    finally
-      PendingActions.Free;
-    end;
+    Self.UpdateConfiguration(Result, Configuration);
   except
     FreeAndNil(Result);
 
     raise;
+  end;
+end;
+
+procedure TIdSipStackConfigurator.UpdateConfiguration(UserAgent: TIdSipUserAgent;
+                                                      Configuration: TStrings);
+var
+  PendingActions: TObjectList;
+begin
+  // Unregister if necessary (we've got a Registrar, and there's a different one in Configuration)
+  // Update any settings in Configuration
+  // Register to a new registrar if necessary
+
+  Self.FirstTransportDirective := true;
+
+  if UserAgent.RegisterModule.HasRegistrar and UserAgent.RegisterModule.Registrar.HasValidSyntax then
+    UserAgent.RegisterModule.UnregisterFrom(UserAgent.RegisterModule.Registrar).Send;
+
+//  UserAgent.Dispatcher.ClearTransports;
+
+  PendingActions := TObjectList.Create(false);
+  try
+    Self.ParseFile(UserAgent, Configuration, PendingActions);
+    Self.InstantiateMissingObjectsAsDefaults(UserAgent);
+    Self.SendPendingActions(PendingActions);
+  finally
+    PendingActions.Free;
   end;
 end;
 
@@ -437,6 +473,12 @@ begin
   Host := Fetch(Line, ':');
   Port := Fetch(Line, ' ');
 
+  if Assigned(UserAgent.Locator) then begin
+    UserAgent.Locator.Free;
+    UserAgent.Locator := nil;
+    UserAgent.Dispatcher.Locator := nil;
+  end;
+
   if IsEqual(Host, MockKeyword) then
     UserAgent.Locator := TIdSipMockLocator.Create
   else begin
@@ -506,6 +548,14 @@ var
 begin
   // See class comment for the format for this directive.
   Line := TransportLine;
+
+  // If the configuration file contains any Listen directives, make sure we
+  // clear all existing transports.
+  if Self.FirstTransportDirective then begin
+    Dispatcher.StopAllTransports;
+    Dispatcher.ClearTransports;
+    Self.FirstTransportDirective := false;
+  end;
 
   EatDirective(Line);
   Transport := Fetch(Line, ' ');
@@ -651,6 +701,44 @@ begin
   UserAgent.UseGruu := IsEqual(Line, 'true')
                     or IsEqual(Line, 'yes')
                     or IsEqual(Line, '1');
+end;
+
+//******************************************************************************
+//* TIdSipReconfigureStackWait                                                 *
+//******************************************************************************
+//* TIdSipReconfigureStackWait Public methods **********************************
+
+constructor TIdSipReconfigureStackWait.Create;
+begin
+  inherited Create;
+
+  Self.fConfiguration := TStringList.Create;
+end;
+
+destructor TIdSipReconfigureStackWait.Destroy;
+begin
+  Self.fConfiguration.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipReconfigureStackWait.Trigger;
+var
+  Configurator: TIdSipStackConfigurator;
+begin
+  Configurator := TIdSipStackConfigurator.Create;
+  try
+    Configurator.UpdateConfiguration(Self.Stack, Self.Configuration);
+  finally
+    Configurator.Free;
+  end;
+end;
+
+//* TIdSipReconfigureStackWait Private methods *********************************
+
+procedure TIdSipReconfigureStackWait.SetConfiguration(Value: TStrings);
+begin
+  Self.fConfiguration.Assign(Value);
 end;
 
 end.
