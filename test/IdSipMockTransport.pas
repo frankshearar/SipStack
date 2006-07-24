@@ -29,6 +29,7 @@ type
     fACKCount:          Cardinal;
     fBindings:          TIdSocketHandles;
     fFailWith:          ExceptClass;
+    fIsRunning:         Boolean;
     fLastACK:           TIdSipRequest;
     fRequests:          TIdSipRequestList;
     fResponses:         TIdSipResponseList;
@@ -78,6 +79,7 @@ type
     procedure FireOnResponse(R: TIdSipResponse;
                              Peer: TIdSipConnectionBindings); overload;
     function  IsReliable: Boolean; override;
+    function  IsRunning: Boolean; override;
     function  LastRequest: TIdSipRequest;
     function  LastResponse: TIdSipResponse;
     function  PeerIP: String;
@@ -306,6 +308,11 @@ begin
   Result := Self.GetTransportType <> UdpTransport;
 end;
 
+function TIdSipMockTransport.IsRunning: Boolean;
+begin
+  Result := Self.fIsRunning;
+end;
+
 function TIdSipMockTransport.LastRequest: TIdSipRequest;
 begin
   Result := Self.fRequests.Last;
@@ -381,10 +388,12 @@ end;
 
 procedure TIdSipMockTransport.Start;
 begin
+  Self.fIsRunning := true;
 end;
 
 procedure TIdSipMockTransport.Stop;
 begin
+  Self.fIsRunning := false;
 end;
 
 function TIdSipMockTransport.ThirdLastRequest: TIdSipRequest;

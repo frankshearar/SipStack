@@ -165,6 +165,8 @@ type
     procedure SendRequest(Request: TIdSipRequest;
                           Dest: TIdSipLocation); virtual;
     procedure SendResponse(Response: TIdSipResponse); virtual;
+    procedure StartAllTransports;
+    procedure StopAllTransports;
     function  TransactionCount: Integer;
     function  TransportCount: Integer;
     function  WillUseReliableTranport(R: TIdSipMessage): Boolean;
@@ -993,6 +995,22 @@ begin
       RemainingLocations.RemoveFirst;
     end;
   end;
+end;
+
+procedure TIdSipTransactionDispatcher.StartAllTransports;
+var
+  I: Integer;
+begin
+  for I := 0 to Self.TransportCount - 1 do
+    Self.Transports[I].Start;
+end;
+
+procedure TIdSipTransactionDispatcher.StopAllTransports;
+var
+  I: Integer;
+begin
+  for I := 0 to Self.TransportCount - 1 do
+    Self.Transports[I].Stop;
 end;
 
 function TIdSipTransactionDispatcher.TransactionCount: Integer;

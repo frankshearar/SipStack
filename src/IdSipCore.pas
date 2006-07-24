@@ -448,6 +448,8 @@ type
     procedure SendRequest(Request: TIdSipRequest;
                           Dest: TIdSipLocation);
     procedure SendResponse(Response: TIdSipResponse);
+    procedure StartAllTransports;
+    procedure StopAllTransports;
     function  Username: String;
     function  UsesModule(ModuleType: TIdSipMessageModuleClass): Boolean;
 
@@ -2220,6 +2222,16 @@ begin
                                               [Response.ParseFailReason]));
 
   Self.Dispatcher.SendResponse(Response);
+end;
+
+procedure TIdSipAbstractCore.StartAllTransports;
+begin
+  Self.Dispatcher.StartAllTransports;
+end;
+
+procedure TIdSipAbstractCore.StopAllTransports;
+begin
+  Self.Dispatcher.StopAllTransports;
 end;
 
 function TIdSipAbstractCore.Username: String;

@@ -126,6 +126,8 @@ type
     procedure TestSendMessageButNoAppropriateTransport;
     procedure TestSendMessageWithAppropriateTransport;
     procedure TestServerInviteTransactionGetsAck;
+    procedure TestStartAllTranspors;
+    procedure TestStopAllTranspors;
     procedure TestTransactionlessResponseRetransmissionsTryAlternateLocations;
     procedure TestTransactionsCleanedUp;
     procedure TestWillUseReliableTransport;
@@ -1387,6 +1389,32 @@ begin
   finally
     Listener.Free;
   end;
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestStartAllTranspors;
+var
+  I: Integer;
+begin
+  for I := 0 to Self.D.TransportCount - 1 do
+    Self.D.Transports[I].Stop;
+
+  Self.D.StartAllTransports;
+
+  for I := 0 to Self.D.TransportCount - 1 do
+    Check(Self.D.Transports[I].IsRunning, IntToStr(I) + 'th transport isn''t running');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestStopAllTranspors;
+var
+  I: Integer;
+begin
+  for I := 0 to Self.D.TransportCount - 1 do
+    Self.D.Transports[I].Start;
+
+  Self.D.StopAllTransports;
+
+  for I := 0 to Self.D.TransportCount - 1 do
+    Check(not Self.D.Transports[I].IsRunning, IntToStr(I) + 'th transport is running');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestTransactionlessResponseRetransmissionsTryAlternateLocations;
