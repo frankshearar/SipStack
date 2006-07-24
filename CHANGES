@@ -1,4 +1,4 @@
-v0.5.2 (2006/07/18)
+v0.5.2 (2006/07/24)
 * The receipt of messages is now threadsafe. Previously,
   TIdSipMessageWait objects held references to TIdSipTransports. Now,
   they hold a copy of the message and a Transport ID (a String), which
@@ -30,6 +30,18 @@ v0.5.2 (2006/07/18)
 ** OnNetworkFailure causes access violation/dangling pointer
 ** Outbound dialogs incorrectly set remote sequence number to local
    sequence number.
+** The RTP stack now actually starts up. The SDP classes create a
+   TIdTimerQueue to control the scheduling of events. (Note: the RTP
+   stuff still needs work in thread isolation, a la
+   TIdSipStackInterface.)
+** An RTP session used to enter an infinite loop when trying to remove
+   a member with SSRC of 0 (like when trying to remove a session
+   member who had never sent any RTP/RTCP to us).
+** TIdThreadedTimerQueue will now shut down cleanly should an access
+   violation propogate all the way to the queue's Run method.
+* You can use TIdSipStackInterface.ReconfigureStack to change the
+  configuration of the stack without having to recreate the entire
+  stack.
 
 v0.5.1 (2006/01/31)
 * The stack now supports basic multihoming: having more than one
