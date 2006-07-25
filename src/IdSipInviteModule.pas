@@ -13,7 +13,7 @@ interface
 
 uses
   Classes, Contnrs, IdInterfacedObject, IdNotification, IdSipCore, IdSipDialog,
-  IdSipDialogID, IdSipMessage, IdSipTransport, IdTimerQueue, SyncObjs;
+  IdSipDialogID, IdSipMessage, IdSipTransport, IdTimerQueue;
 
 type
   TIdSipInboundInvite = class;
@@ -405,7 +405,6 @@ type
                         IIdSipInviteListener,
                         IIdSipInboundInviteListener)
   private
-    DialogLock:                TCriticalSection;
     fDialog:                   TIdSipDialog;
     fFullyEstablished:         Boolean;
     fLocalMimeType:            String;
@@ -431,7 +430,6 @@ type
   protected
     ChallengedAction: TIdSipAction;
     ModifyAttempt:    TIdSipInvite;
-    ModifyLock:       TCriticalSection;
     Module:           TIdSipInviteModule;
 
     procedure ActionSucceeded(Response: TIdSipResponse); override;
@@ -2106,16 +2104,7 @@ destructor TIdSipSession.Destroy;
 begin
   Self.fRemoteParty.Free;
   Self.fRemoteContact.Free;
-
-  Self.ModifyLock.Free;
-
-  Self.DialogLock.Acquire;
-  try
-    Self.fDialog.Free;
-  finally
-    Self.DialogLock.Release;
-  end;
-  Self.DialogLock.Free;
+  Self.fDialog.Free;
 
   inherited Destroy;
 end;
@@ -2123,14 +2112,9 @@ end;
 procedure TIdSipSession.AcceptModify(const LocalSessionDescription: String;
                                      const MimeType: String);
 begin
-  Self.ModifyLock.Acquire;
-  try
-    if Self.ModificationInProgress then begin
-      (Self.ModifyAttempt as TIdSipInboundInvite).Accept(LocalSessionDescription,
-                                                         MimeType);
-    end;
-  finally
-    Self.ModifyLock.Release;
+  if Self.ModificationInProgress then begin
+    (Self.ModifyAttempt as TIdSipInboundInvite).Accept(LocalSessionDescription,
+                                                       MimeType);
   end;
 end;
 
@@ -2141,25 +2125,15 @@ end;
 
 function TIdSipSession.DialogEstablished: Boolean;
 begin
-  Self.DialogLock.Acquire;
-  try
-    Result := Self.Dialog <> nil;
-  finally
-    Self.DialogLock.Release;
-  end;
+  Result := Self.Dialog <> nil;
 end;
 
 function TIdSipSession.DialogMatches(DialogID: TIdSipDialogID): Boolean;
 begin
-  Self.DialogLock.Acquire;
-  try
-    if Self.DialogEstablished then
-      Result := Self.Dialog.ID.Equals(DialogID)
-    else
-      Result := false;
-  finally
-    Self.DialogLock.Release;
-  end;
+  if Self.DialogEstablished then
+    Result := Self.Dialog.ID.Equals(DialogID)
+  else
+    Result := false;
 end;
 
 function TIdSipSession.DialogMatches(Msg: TIdSipMessage): Boolean;
@@ -2207,27 +2181,22 @@ begin
   if not Self.FullyEstablished then
     raise EIdSipTransactionUser.Create(CannotModifyBeforeEstablished);
 
-  Self.ModifyLock.Acquire;
-  try
-    if Self.ModificationInProgress then
-      raise EIdSipTransactionUser.Create(CannotModifyDuringModification);
+  if Self.ModificationInProgress then
+    raise EIdSipTransactionUser.Create(CannotModifyDuringModification);
 
-    ReInvite := Self.UA.AddOutboundAction(TIdSipOutboundReInvite) as TIdSipOutboundReInvite;
-    ReInvite.MimeType          := ContentType;
-    ReInvite.Dialog            := Self.Dialog;
-    ReInvite.InOutboundSession := Self.IsOutboundCall;
-    ReInvite.Offer             := Offer;
-    ReInvite.OriginalInvite    := Self.InitialRequest;
-    ReInvite.AddOwnedActionListener(Self);
-    ReInvite.AddInviteListener(Self);
-    ReInvite.Send;
+  ReInvite := Self.UA.AddOutboundAction(TIdSipOutboundReInvite) as TIdSipOutboundReInvite;
+  ReInvite.MimeType          := ContentType;
+  ReInvite.Dialog            := Self.Dialog;
+  ReInvite.InOutboundSession := Self.IsOutboundCall;
+  ReInvite.Offer             := Offer;
+  ReInvite.OriginalInvite    := Self.InitialRequest;
+  ReInvite.AddOwnedActionListener(Self);
+  ReInvite.AddInviteListener(Self);
+  ReInvite.Send;
 
-    Self.ModifyAttempt := ReInvite;
-    Self.LastModifyDescription := Offer;
-    Self.LastModifyMimeType    := ContentType;
-  finally
-    Self.ModifyLock.Release;
-  end;
+  Self.ModifyAttempt := ReInvite;
+  Self.LastModifyDescription := Offer;
+  Self.LastModifyMimeType    := ContentType;
 end;
 
 function TIdSipSession.ModifyWaitTime: Cardinal;
@@ -2272,29 +2241,19 @@ begin
     raise EIdSipTransactionUser.Create('You cannot REsend if you didn''t send'
                                      + ' in the first place');
 
-  Self.ModifyLock.Acquire;
-  try
-    if Assigned(Self.ModifyAttempt)
-      and (Self.ChallengedAction = Self.ModifyAttempt) then begin
-      Self.ModifyAttempt.Resend(AuthorizationCredentials);
-      Self.InitialRequest.Assign(Self.ModifyAttempt.InitialRequest);
-    end;
-  finally
-    Self.ModifyLock.Release;
+  if Assigned(Self.ModifyAttempt)
+    and (Self.ChallengedAction = Self.ModifyAttempt) then begin
+    Self.ModifyAttempt.Resend(AuthorizationCredentials);
+    Self.InitialRequest.Assign(Self.ModifyAttempt.InitialRequest);
   end;
 end;
 
 function TIdSipSession.SupportsExtension(const ExtensionName: String): Boolean;
 begin
-  Self.DialogLock.Acquire;
-  try
-    if Self.DialogEstablished then
-      Result := Self.Dialog.SupportsExtension(ExtensionName)
-    else
-      Result := false;
-  finally
-    Self.DialogLock.Release;
-  end;
+  if Self.DialogEstablished then
+    Result := Self.Dialog.SupportsExtension(ExtensionName)
+  else
+    Result := false;
 end;
 
 //* TIdSipSession Protected methods ********************************************
@@ -2334,9 +2293,6 @@ begin
   inherited Initialise(UA, Request, UsingSecureTransport);
 
   Self.Module := Self.UA.ModuleFor(Self.Method) as TIdSipInviteModule;
-
-  Self.DialogLock := TCriticalSection.Create;
-  Self.ModifyLock := TCriticalSection.Create;
 
   Self.fReceivedAck := false;
 
@@ -2429,13 +2385,8 @@ end;
 procedure TIdSipSession.OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
                                             NewDialog: TIdSipDialog);
 begin
-  Self.DialogLock.Acquire;
-  try
-    if Self.DialogEstablished then
-      InviteAgent.Dialog := Self.Dialog;
-  finally
-    Self.DialogLock.Release;
-  end;
+  if Self.DialogEstablished then
+    InviteAgent.Dialog := Self.Dialog;
 end;
 
 procedure TIdSipSession.OnNetworkFailure(Action: TIdSipAction;
@@ -2449,41 +2400,31 @@ procedure TIdSipSession.OnFailure(Action: TIdSipAction;
                                   Response: TIdSipResponse;
                                   const Reason: String);
 begin
-  Self.ModifyLock.Acquire;
-  try
-    if (Action = Self.ModifyAttempt) then begin
-      Self.ModifyAttempt := nil;
-      case Response.StatusCode of
-        //  We attempted to modify the session. The remote end has also
-        // attempted to do so, and sent an INVITE before our INVITE arrived.
-        // Thus it rejects our attempt with a 491 Request Pending.
-        SIPRequestPending: Self.RescheduleModify(Action);
+  if (Action = Self.ModifyAttempt) then begin
+    Self.ModifyAttempt := nil;
+    case Response.StatusCode of
+      //  We attempted to modify the session. The remote end has also
+      // attempted to do so, and sent an INVITE before our INVITE arrived.
+      // Thus it rejects our attempt with a 491 Request Pending.
+      SIPRequestPending: Self.RescheduleModify(Action);
 
-       // If we receive a 408 Request Timeout or a 481 Call Leg Or Transaction
-       // Does Not Exist from our attempted modify then the remote end's
-       // disappeared or our session died. We have no choice but to terminate.
-        SIPRequestTimeout,
-        SIPCallLegOrTransactionDoesNotExist: Self.Terminate;
-      else
-        // The modify attempt failed. What should we do? Todo!
-      end;
+     // If we receive a 408 Request Timeout or a 481 Call Leg Or Transaction
+     // Does Not Exist from our attempted modify then the remote end's
+     // disappeared or our session died. We have no choice but to terminate.
+      SIPRequestTimeout,
+      SIPCallLegOrTransactionDoesNotExist: Self.Terminate;
+    else
+      // The modify attempt failed. What should we do? Todo!
     end;
-  finally
-    Self.ModifyLock.Release;
   end;
 end;
 
 procedure TIdSipSession.OnFailure(InviteAgent: TIdSipInboundInvite);
 begin
-  Self.ModifyLock.Acquire;
-  try
-    if (InviteAgent = Self.ModifyAttempt) then
-      Self.ModifyAttempt := nil;
+  if (InviteAgent = Self.ModifyAttempt) then
+    Self.ModifyAttempt := nil;
 
-    Self.Terminate;
-  finally
-    Self.ModifyLock.Release;
-  end;
+  Self.Terminate;
 end;
 
 procedure TIdSipSession.OnRedirect(Action: TIdSipAction;
@@ -2495,44 +2436,29 @@ procedure TIdSipSession.OnSuccess(InviteAgent: TIdSipInboundInvite;
                                   Ack: TIdSipMessage);
 begin
   // TODO: Notify listeners of modification, possibly
-  Self.ModifyLock.Acquire;
-  try
-    if (InviteAgent = Self.ModifyAttempt) then begin
-      Self.ModifyAttempt := nil;
+  if (InviteAgent = Self.ModifyAttempt) then begin
+    Self.ModifyAttempt := nil;
 
-      Self.LocalSessionDescription  := InviteAgent.LocalSessionDescription;
-      Self.LocalMimeType            := InviteAgent.LocalMimeType;
-      Self.RemoteSessionDescription := Ack.Body;
-      Self.RemoteMimeType           := Ack.ContentType;
-    end;
-  finally
-    Self.ModifyLock.Release;
+    Self.LocalSessionDescription  := InviteAgent.LocalSessionDescription;
+    Self.LocalMimeType            := InviteAgent.LocalMimeType;
+    Self.RemoteSessionDescription := Ack.Body;
+    Self.RemoteMimeType           := Ack.ContentType;
   end;
 end;
 
 procedure TIdSipSession.OnSuccess(Action: TIdSipAction;
                                   Response: TIdSipMessage);
 begin
-  Self.DialogLock.Acquire;
-  try
-    if Self.DialogEstablished then
-      Self.Dialog.ReceiveResponse(Response as TIdSipResponse);
-  finally
-    Self.DialogLock.Release;
-  end;
+  if Self.DialogEstablished then
+    Self.Dialog.ReceiveResponse(Response as TIdSipResponse);
 
-  Self.ModifyLock.Acquire;
-  try
-    if (Action = Self.ModifyAttempt) then begin
-      Self.ModifyAttempt := nil;
+  if (Action = Self.ModifyAttempt) then begin
+    Self.ModifyAttempt := nil;
 
-      Self.LocalSessionDescription  := Action.InitialRequest.Body;
-      Self.LocalMimeType            := Action.InitialRequest.ContentType;
-      Self.RemoteSessionDescription := Response.Body;
-      Self.RemoteMimeType           := Response.ContentType;
-    end;
-  finally
-    Self.ModifyLock.Release;
+    Self.LocalSessionDescription  := Action.InitialRequest.Body;
+    Self.LocalMimeType            := Action.InitialRequest.ContentType;
+    Self.RemoteSessionDescription := Response.Body;
+    Self.RemoteMimeType           := Response.ContentType;
   end;
 end;
 
@@ -2593,42 +2519,32 @@ begin
   Assert(Invite.IsInvite,
          'TIdSipSession.ReceiveInvite must only receive INVITEs');
 
-  Self.DialogLock.Acquire;
-  try
-    if not Self.DialogEstablished then
-      // No dialog? For an inbound call? Then Invite represents the initial
-      // request that caused the creation of this session.
-      Self.ReceiveInitialInvite(Invite)
-    else begin
-      if Self.Dialog.IsOutOfOrder(Invite) then begin
-        Self.RejectOutOfOrderRequest(Invite);
-        Exit;
-      end;
-
-      // If we've not sent a final response, reject with 500 + Retry-After.
-      if not Self.FullyEstablished then begin
-        Self.RejectPrematureInvite(Invite);
-        Exit;
-      end;
-
-      Self.ModifyLock.Acquire;
-      try
-        if not Self.ModificationInProgress then begin
-          Modify := Self.Module.AddInboundInvite(Invite, Self.UsingSecureTransport);
-          Modify.LocalTag := Invite.ToHeader.Tag;
-
-          Self.ModifyAttempt := Modify;
-          Modify.AddListener(Self);
-          Self.NotifyOfModifySession(Modify);
-        end
-        else
-          Self.RejectReInvite(Invite);
-      finally
-        Self.ModifyLock.Release;
-      end;
+  if not Self.DialogEstablished then
+    // No dialog? For an inbound call? Then Invite represents the initial
+    // request that caused the creation of this session.
+    Self.ReceiveInitialInvite(Invite)
+  else begin
+    if Self.Dialog.IsOutOfOrder(Invite) then begin
+      Self.RejectOutOfOrderRequest(Invite);
+      Exit;
     end;
-  finally
-    Self.DialogLock.Release;
+
+    // If we've not sent a final response, reject with 500 + Retry-After.
+    if not Self.FullyEstablished then begin
+      Self.RejectPrematureInvite(Invite);
+      Exit;
+    end;
+
+    if not Self.ModificationInProgress then begin
+      Modify := Self.Module.AddInboundInvite(Invite, Self.UsingSecureTransport);
+      Modify.LocalTag := Invite.ToHeader.Tag;
+
+      Self.ModifyAttempt := Modify;
+      Modify.AddListener(Self);
+      Self.NotifyOfModifySession(Modify);
+    end
+    else
+      Self.RejectReInvite(Invite);
   end;
 end;
 
@@ -2773,15 +2689,10 @@ end;
 procedure TIdSipSession.TerminateAnyPendingRequests;
 begin
   // cf RFC 3261, section 15.1.2
-  Self.ModifyLock.Acquire;
-  try
-    if Assigned(Self.ModifyAttempt) and Self.ModifyAttempt.IsInbound then
-      Self.ModifyAttempt.Terminate;
-      
-    Self.ModifyAttempt := nil;
-  finally
-    Self.ModifyLock.Release;
-  end;
+  if Assigned(Self.ModifyAttempt) and Self.ModifyAttempt.IsInbound then
+    Self.ModifyAttempt.Terminate;
+
+  Self.ModifyAttempt := nil;
 end;
 
 //******************************************************************************
@@ -2813,13 +2724,8 @@ begin
   // Otherwise, check against the dialog. Yes, that's "response" because
   // Waits use messages to find actions for things like
   // TIdSipInboundInvite.ResendOK.
-  Self.ModifyLock.Acquire;
-  try
-    MatchesReInvite := Self.ModificationInProgress
-                   and Self.ModifyAttempt.Match(Msg);
-  finally
-    Self.ModifyLock.Release;
-  end;
+  MatchesReInvite := Self.ModificationInProgress
+                 and Self.ModifyAttempt.Match(Msg);
 
   // Never match the ACKs: the InboundInvites will do that.
   if Msg.IsRequest and (Msg as TIdSipRequest).IsAck then
@@ -2871,17 +2777,12 @@ end;
 
 procedure TIdSipInboundSession.Ring;
 begin
-  Self.DialogLock.Acquire;
-  try
-    if not Self.DialogEstablished then begin
-      Self.InitialInvite.Ring;
-      Self.fDialog := Self.CreateInboundDialog(Self.InitialInvite.LastResponse);
-      Self.InitialRequest.Assign(Self.InitialInvite.InitialRequest);
-      Self.InitialRequest.ToHeader.Tag := Self.Dialog.ID.LocalTag;
-      Self.LocalGruu                   := Self.InitialInvite.LocalGruu;
-    end;
-  finally
-    Self.DialogLock.Release;
+  if not Self.DialogEstablished then begin
+    Self.InitialInvite.Ring;
+    Self.fDialog := Self.CreateInboundDialog(Self.InitialInvite.LastResponse);
+    Self.InitialRequest.Assign(Self.InitialInvite.InitialRequest);
+    Self.InitialRequest.ToHeader.Tag := Self.Dialog.ID.LocalTag;
+    Self.LocalGruu                   := Self.InitialInvite.LocalGruu;
   end;
 end;
 
@@ -3064,14 +2965,9 @@ begin
   Assert(Request.HasReplaces,
          'Request MUST have a Replaces header');
 
-  Self.DialogLock.Acquire;
-  try
-    Result := (Self.Dialog.ID.CallID    = Request.Replaces.CallID)
-          and (Self.Dialog.ID.LocalTag  = Request.Replaces.ToTag)
-          and (Self.Dialog.ID.RemoteTag = Request.Replaces.FromTag);
-  finally
-    Self.DialogLock.Release;
-  end;
+  Result := (Self.Dialog.ID.CallID    = Request.Replaces.CallID)
+        and (Self.Dialog.ID.LocalTag  = Request.Replaces.ToTag)
+        and (Self.Dialog.ID.RemoteTag = Request.Replaces.FromTag);
 end;
 
 //******************************************************************************
@@ -3129,13 +3025,8 @@ var
 begin
   // If the response matches the reinvite, DON'T match the response.
   // Otherwise, check against the dialog.
-  Self.ModifyLock.Acquire;
-  try
-    MatchesReInvite := Self.ModificationInProgress
-                   and Self.ModifyAttempt.Match(Msg);
-  finally
-    Self.ModifyLock.Release;
-  end;
+  MatchesReInvite := Self.ModificationInProgress
+                 and Self.ModifyAttempt.Match(Msg);
 
   if Msg.IsRequest and (Msg as TIdSipRequest).IsAck then
     Result := false
@@ -3254,14 +3145,9 @@ end;
 procedure TIdSipOutboundSession.OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
                                                     NewDialog: TIdSipDialog);
 begin
-  Self.DialogLock.Acquire;
-  try
-    if not Self.DialogEstablished then begin
-      Self.fDialog := NewDialog.Copy;
-      Self.InitialRequest.ToHeader.Tag := Self.Dialog.ID.RemoteTag;
-    end;
-  finally
-    Self.DialogLock.Release;
+  if not Self.DialogEstablished then begin
+    Self.fDialog := NewDialog.Copy;
+    Self.InitialRequest.ToHeader.Tag := Self.Dialog.ID.RemoteTag;
   end;
 
   inherited OnDialogEstablished(InviteAgent, NewDialog);
@@ -3333,13 +3219,8 @@ procedure TIdSipOutboundSession.OnSuccess(Redirector: TIdSipActionRedirector;
                                           SuccessfulAction: TIdSipAction;
                                           Response: TIdSipResponse);
 begin
-  Self.DialogLock.Acquire;
-  try
-    if Self.DialogEstablished then
-      Self.Dialog.ReceiveResponse(Response);
-  finally
-    Self.DialogLock.Release;
-  end;
+  if Self.DialogEstablished then
+    Self.Dialog.ReceiveResponse(Response);
 
   // This lets us store Authorization credentials for future use in things
   // like modifying INVITEs.

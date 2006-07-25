@@ -72,7 +72,7 @@ uses
   Classes, Contnrs, IdBaseThread, IdSipDialog, IdSipDialogID, IdException,
   IdInterfacedObject, IdNotification, IdObservable, IdSipAuthentication,
   IdSipLocator, IdSipMessage, IdSipTransaction, IdSipTransport, IdTimerQueue,
-  SyncObjs, SysUtils;
+  SysUtils;
 
 const
   SipStackVersion = '0.5.2';
@@ -152,15 +152,12 @@ type
   // FindFooAndPerform will destroy the Request.
   TIdSipActions = class(TObject)
   private
-    ActionLock: TCriticalSection;
-    Actions:    TObjectList;
-    Observed:   TIdObservable;
+    Actions:  TObjectList;
+    Observed: TIdObservable;
 
     function  ActionAt(Index: Integer): TIdSipAction;
     function  FindAction(Msg: TIdSipMessage; ClientAction: Boolean): TIdSipAction; overload;
     function  FindAction(const ActionID: String): TIdSipAction; overload;
-    procedure LockActions;
-    procedure UnlockActions;
   public
     constructor Create;
     destructor  Destroy; override;
@@ -310,7 +307,6 @@ type
     fTimer:                  TIdTimerQueue;
     fUseGruu:                Boolean;
     fUserAgentName:          String;
-    ModuleLock:              TCriticalSection;
     Modules:                 TObjectList;
     NullModule:              TIdSipMessageModule;
     Observed:                TIdObservable;
@@ -804,7 +800,6 @@ type
     Listeners:            TIdNotificationList;
     OwningAction:         TIdSipOwningAction;
     RedirectedActions:    TObjectList;
-    RedirectedActionLock: TCriticalSection;
     TargetUriSet:         TIdSipContacts;
     UA:                   TIdSipAbstractCore;
 
@@ -1139,23 +1134,14 @@ constructor TIdSipActions.Create;
 begin
   inherited Create;
 
-  Self.ActionLock := TCriticalSection.Create;
-  Self.Actions    := TObjectList.Create;
-
+  Self.Actions  := TObjectList.Create;
   Self.Observed := TIdObservable.Create;
 end;
 
 destructor TIdSipActions.Destroy;
 begin
   Self.Observed.Free;
-
-  Self.LockActions;
-  try
-    Self.Actions.Free;
-  finally
-    Self.UnlockActions;
-  end;
-  Self.ActionLock.Free;
+  Self.Actions.Free;
 
   inherited Destroy;
 end;
@@ -1164,21 +1150,16 @@ function TIdSipActions.Add(Action: TIdSipAction): TIdSipAction;
 begin
   Result := Action;
 
-  Self.LockActions;
   try
-    try
-      Self.Actions.Add(Action);
-    except
-      if (Self.Actions.IndexOf(Action) <> ItemNotFoundIndex) then
-        Self.Actions.Remove(Action)
-      else
-        Action.Free;
+    Self.Actions.Add(Action);
+  except
+    if (Self.Actions.IndexOf(Action) <> ItemNotFoundIndex) then
+      Self.Actions.Remove(Action)
+    else
+      Action.Free;
 
-        Result := nil;
-      raise;
-    end;
-  finally
-    Self.UnlockActions;
+      Result := nil;
+    raise;
   end;
 
   Self.Observed.NotifyListenersOfChange;
@@ -1192,12 +1173,7 @@ end;
 function TIdSipActions.AddOutboundAction(UserAgent: TIdSipAbstractCore;
                                          ActionType: TIdSipActionClass): TIdSipAction;
 begin
-  Self.LockActions;
-  try
-    Result := Self.Add(ActionType.Create(UserAgent));
-  finally
-    Self.UnlockActions;
-  end;
+  Result := Self.Add(ActionType.Create(UserAgent));
 end;
 
 procedure TIdSipActions.CleanOutTerminatedActions;
@@ -1206,21 +1182,16 @@ var
   I:            Integer;
   InitialCount: Integer;
 begin
-  Self.LockActions;
-  try
-    InitialCount := Self.Actions.Count;
+  InitialCount := Self.Actions.Count;
 
-    I := 0;
-    while (I < Self.Actions.Count) do
-      if Self.ActionAt(I).IsTerminated then
-        Self.Actions.Delete(I)
-      else
-        Inc(I);
+  I := 0;
+  while (I < Self.Actions.Count) do
+    if Self.ActionAt(I).IsTerminated then
+      Self.Actions.Delete(I)
+    else
+      Inc(I);
 
-    Changed := InitialCount <> Self.Actions.Count;
-  finally
-    Self.UnlockActions;
-  end;
+  Changed := InitialCount <> Self.Actions.Count;
 
   if Changed then
     Self.Observed.NotifyListenersOfChange;
@@ -1229,12 +1200,7 @@ end;
 function TIdSipActions.Count: Integer;
 begin
   // Return the number of actions, both terminated and ongoing.
-  Self.LockActions;
-  try
-    Result := Self.Actions.Count;
-  finally
-    Self.UnlockActions;
-  end;
+  Result := Self.Actions.Count;
 end;
 
 function TIdSipActions.CountOf(const MethodName: String): Integer;
@@ -1242,19 +1208,14 @@ var
   I: Integer;
 begin
   // Return the number of ongoing (non-session) actions of type MethodName.
-  Self.LockActions;
-  try
-    Result := 0;
+  Result := 0;
 
-    // We don't count Sessions because Sessions contain other Actions - they
-    // look and act more like containers of Actions than Actions themselves.
-    for I := 0 to Self.Actions.Count - 1 do
-      if not Self.ActionAt(I).IsSession
-        and (Self.ActionAt(I).Method = MethodName)
-        and not Self.ActionAt(I).IsTerminated then Inc(Result);
-  finally
-    Self.UnlockActions;
-  end;
+  // We don't count Sessions because Sessions contain other Actions - they
+  // look and act more like containers of Actions than Actions themselves.
+  for I := 0 to Self.Actions.Count - 1 do
+    if not Self.ActionAt(I).IsSession
+      and (Self.ActionAt(I).Method = MethodName)
+      and not Self.ActionAt(I).IsTerminated then Inc(Result);
 end;
 
 procedure TIdSipActions.FindActionAndPerform(const ID: String;
@@ -1276,17 +1237,12 @@ procedure TIdSipActions.FindActionAndPerformOr(const ID: String;
 var
   Action: TIdSipAction;
 begin
-  Self.LockActions;
-  try
-    Action := Self.FindAction(ID);
+  Action := Self.FindAction(ID);
 
-    if Assigned(Action) then
-      FoundBlock.Execute(Action)
-    else
-      NotFoundBlock.Execute(nil);
-  finally
-    Self.UnlockActions;
-  end;
+  if Assigned(Action) then
+    FoundBlock.Execute(Action)
+  else
+    NotFoundBlock.Execute(nil);
 
   Self.CleanOutTerminatedActions;
 end;
@@ -1299,24 +1255,19 @@ var
 begin
   // Return the non-Owned action that uses LocalGruu as its Contact.
 
-  Self.LockActions;
+  Gruu := TIdSipUri.Create(LocalGruu);
   try
-    Gruu := TIdSipUri.Create(LocalGruu);
-    try
-      Result := nil;
-      I      := 0;
-      while (I < Self.Count) and not Assigned(Result) do begin
-        Action := Self.ActionAt(I);
-        if not Action.IsOwned and Action.LocalGruu.Address.Equals(Gruu) then
-          Result := Action
-        else
-          Inc(I);
-      end;
-    finally
-      Gruu.Free;
+    Result := nil;
+    I      := 0;
+    while (I < Self.Count) and not Assigned(Result) do begin
+      Action := Self.ActionAt(I);
+      if not Action.IsOwned and Action.LocalGruu.Address.Equals(Gruu) then
+        Result := Action
+      else
+        Inc(I);
     end;
   finally
-    Self.UnlockActions;
+    Gruu.Free;
   end;
 end;
 
@@ -1337,14 +1288,9 @@ begin
   // Find the action, and execute Block regardless of whether we found the
   // action. FindAction returns nil in this case.
 
-  Self.LockActions;
-  try
-    Action := Self.FindAction(Msg, ClientAction);
+  Action := Self.FindAction(Msg, ClientAction);
 
-    Block.Execute(Action);
-  finally
-    Self.UnlockActions;
-  end;
+  Block.Execute(Action);
 
   Self.CleanOutTerminatedActions;
 end;
@@ -1364,32 +1310,22 @@ var
   I: Integer;
 begin
   // Return the number of ongoing Sessions
-  Self.LockActions;
-  try
-    Result := 0;
+  Result := 0;
 
-    for I := 0 to Self.Actions.Count - 1 do
-      if Self.ActionAt(I).IsSession
-        and not Self.ActionAt(I).IsTerminated then
-        Inc(Result);
-  finally
-    Self.UnlockActions;
-  end;
+  for I := 0 to Self.Actions.Count - 1 do
+    if Self.ActionAt(I).IsSession
+      and not Self.ActionAt(I).IsTerminated then
+      Inc(Result);
 end;
 
 procedure TIdSipActions.TerminateAllActions;
 var
   I: Integer;
 begin
-  Self.LockActions;
-  try
-    for I := 0 to Self.Actions.Count - 1 do
-      if not Self.ActionAt(I).IsOwned
-        and not Self.ActionAt(I).IsTerminated then
-        Self.ActionAt(I).Terminate;
-  finally
-    Self.UnlockActions;
-  end;
+  for I := 0 to Self.Actions.Count - 1 do
+    if not Self.ActionAt(I).IsOwned
+      and not Self.ActionAt(I).IsTerminated then
+      Self.ActionAt(I).Terminate;
 end;
 
 //* TIdSipActions Private methods **********************************************
@@ -1438,16 +1374,6 @@ end;
 function TIdSipActions.FindAction(const ActionID: String): TIdSipAction;
 begin
   Result := TIdSipActionRegistry.FindAction(ActionID);
-end;
-
-procedure TIdSipActions.LockActions;
-begin
-  Self.ActionLock.Acquire;
-end;
-
-procedure TIdSipActions.UnlockActions;
-begin
-  Self.ActionLock.Release;
 end;
 
 //******************************************************************************
@@ -1551,7 +1477,6 @@ begin
   Self.fAllowedLanguageList    := TStringList.Create;
   Self.fAllowedSchemeList      := TStringList.Create;
 
-  Self.ModuleLock := TCriticalSection.Create;
   Self.Modules    := TObjectList.Create(true);
   Self.NullModule := TIdSipNullModule.Create(Self);
   Self.Observed   := TIdObservable.Create;
@@ -1596,13 +1521,7 @@ begin
 
   Self.Observed.Free;
   Self.NullModule.Free;
-  Self.ModuleLock.Acquire;
-  try
-    Self.Modules.Free;
-  finally
-    Self.ModuleLock.Release;
-  end;
-  Self.ModuleLock.Free;
+  Self.Modules.Free;
 
   inherited Destroy;
 end;
@@ -1688,17 +1607,12 @@ end;
 
 function TIdSipAbstractCore.AddModule(ModuleType: TIdSipMessageModuleClass): TIdSipMessageModule;
 begin
-  Self.ModuleLock.Acquire;
-  try
-    if not Self.UsesModule(ModuleType) then begin
-      Result := ModuleType.Create(Self);
-      Self.Modules.Add(Result);
-    end
-    else begin
-      Result := Self.ModuleFor(ModuleType);
-    end;
-  finally
-    Self.ModuleLock.Release;
+  if not Self.UsesModule(ModuleType) then begin
+    Result := ModuleType.Create(Self);
+    Self.Modules.Add(Result);
+  end
+  else begin
+    Result := Self.ModuleFor(ModuleType);
   end;
 end;
 
@@ -1720,19 +1634,14 @@ var
 begin
   CTs := TStringList.Create;
   try
-    Self.ModuleLock.Acquire;
-    try
-      // Collect a list of all known MIME types from the modules, and ensure
-      // there're no duplicates.
-      for I := 0 to Self.Modules.Count - 1 do begin
-        for J := 0 to Self.ModuleAt(I).AllowedContentTypeList.Count - 1 do begin
-          CurrentMimeType := Self.ModuleAt(I).AllowedContentTypeList[J];
-          if (CTs.IndexOf(CurrentMimeType) = ItemNotFoundIndex) then
-            CTs.Add(CurrentMimeType);
-        end;
+    // Collect a list of all known MIME types from the modules, and ensure
+    // there're no duplicates.
+    for I := 0 to Self.Modules.Count - 1 do begin
+      for J := 0 to Self.ModuleAt(I).AllowedContentTypeList.Count - 1 do begin
+        CurrentMimeType := Self.ModuleAt(I).AllowedContentTypeList[J];
+        if (CTs.IndexOf(CurrentMimeType) = ItemNotFoundIndex) then
+          CTs.Add(CurrentMimeType);
       end;
-    finally
-      Self.ModuleLock.Release;
     end;
 
     Result := Self.ConvertToHeader(CTs);
@@ -1953,19 +1862,14 @@ var
   ModulesMethods: String;
 begin
   Result := '';
-  Self.ModuleLock.Acquire;
-  try
-    for I := 0 to Self.Modules.Count - 1 do begin
-      ModulesMethods := (Self.Modules[I] as TIdSipMessageModule).AcceptsMethods;
-      if (ModulesMethods <> '') then
-        Result := Result + ModulesMethods + Delimiter;
-    end;
-
-    if (Result <> '') then
-      Delete(Result, Length(Result) - 1, Length(Delimiter));
-  finally
-    Self.ModuleLock.Release;
+  for I := 0 to Self.Modules.Count - 1 do begin
+    ModulesMethods := (Self.Modules[I] as TIdSipMessageModule).AcceptsMethods;
+    if (ModulesMethods <> '') then
+      Result := Result + ModulesMethods + Delimiter;
   end;
+
+  if (Result <> '') then
+    Delete(Result, Length(Result) - 1, Length(Delimiter));
 end;
 
 function TIdSipAbstractCore.ModuleFor(Request: TIdSipRequest): TIdSipMessageModule;
@@ -1975,16 +1879,11 @@ begin
   Result := Self.NullModule;
 
   I := 0;
-  Self.ModuleLock.Acquire;
-  try
-    while (I < Self.Modules.Count) and Result.IsNull do
-      if (Self.Modules[I] as TIdSipMessageModule).WillAccept(Request) then
-        Result := Self.Modules[I] as TIdSipMessageModule
-      else
-        Inc(I);
-  finally
-    Self.ModuleLock.Release;
-  end;
+  while (I < Self.Modules.Count) and Result.IsNull do
+    if (Self.Modules[I] as TIdSipMessageModule).WillAccept(Request) then
+      Result := Self.Modules[I] as TIdSipMessageModule
+    else
+      Inc(I);
 
   if (Result = nil) then
     Result := Self.NullModule;
@@ -2011,15 +1910,10 @@ begin
   I := 0;
   Result := Self.NullModule;
 
-  Self.ModuleLock.Acquire;
-  try
-    while (I < Self.Modules.Count) and Result.IsNull do begin
-      if (Self.Modules[I] is ModuleType) then
-        Result := Self.Modules[I] as TIdSipMessageModule
-      else Inc(I);
-    end;
-  finally
-    Self.ModuleLock.Release;
+  while (I < Self.Modules.Count) and Result.IsNull do begin
+    if (Self.Modules[I] is ModuleType) then
+      Result := Self.Modules[I] as TIdSipMessageModule
+    else Inc(I);
   end;
 end;
 
@@ -2068,19 +1962,14 @@ procedure TIdSipAbstractCore.RemoveModule(ModuleType: TIdSipMessageModuleClass);
 var
   I: Integer;
 begin
-  Self.ModuleLock.Acquire;
-  try
-    I := 0;
-    while (I < Self.Modules.Count) do begin
-      if ((Self.Modules[I] as TIdSipMessageModule).ClassType = ModuleType) then begin
-        Self.Modules.Delete(I);
-        Break;
-      end
-      else
-        Inc(I);
-    end;
-  finally
-    Self.ModuleLock.Release;
+  I := 0;
+  while (I < Self.Modules.Count) do begin
+    if ((Self.Modules[I] as TIdSipMessageModule).ClassType = ModuleType) then begin
+      Self.Modules.Delete(I);
+      Break;
+    end
+    else
+      Inc(I);
   end;
 end;
 
@@ -2487,13 +2376,8 @@ procedure TIdSipAbstractCore.AddModuleSpecificHeaders(OutboundMessage: TIdSipMes
 var
   I: Integer;
 begin
-  Self.ModuleLock.Acquire;
-  try
-    for I := 0 to Self.Modules.Count - 1 do
-      Self.ModuleAt(I).AddLocalHeaders(OutboundMessage);
-  finally
-    Self.ModuleLock.Release;
-  end;
+  for I := 0 to Self.Modules.Count - 1 do
+    Self.ModuleAt(I).AddLocalHeaders(OutboundMessage);
 end;
 
 procedure TIdSipAbstractCore.CollectAllowedExtensions(ExtensionList: TStrings);
@@ -2505,14 +2389,9 @@ begin
 
   ModuleExtensions := TStringList.Create;
   try
-    Self.ModuleLock.Acquire;
-    try
-      for I := 0 to Self.Modules.Count - 1 do begin
-        ModuleExtensions.CommaText := Self.ModuleAt(I).AllowedExtensions;
-        ExtensionList.AddStrings(ModuleExtensions);
-      end;
-    finally
-      Self.ModuleLock.Release;
+    for I := 0 to Self.Modules.Count - 1 do begin
+      ModuleExtensions.CommaText := Self.ModuleAt(I).AllowedExtensions;
+      ExtensionList.AddStrings(ModuleExtensions);
     end;
   finally
     ModuleExtensions.Free;
@@ -2581,13 +2460,8 @@ procedure TIdSipAbstractCore.NotifyModulesOfFree;
 var
   I: Integer;
 begin
-  Self.ModuleLock.Acquire;
-  try
-    for I := 0 to Self.Modules.Count - 1 do
-      Self.ModuleAt(I).CleanUp;
-  finally
-    Self.ModuleLock.Release;
-  end;
+  for I := 0 to Self.Modules.Count - 1 do
+    Self.ModuleAt(I).CleanUp;
 end;
 
 procedure TIdSipAbstractCore.OnChanged(Observed: TObject);
@@ -3926,7 +3800,6 @@ begin
 
   // The UA manages the lifetimes of all outbound INVITEs!
   Self.RedirectedActions    := TObjectList.Create(false);
-  Self.RedirectedActionLock := TCriticalSection.Create;
   Self.TargetUriSet := TIdSipContacts.Create;
 end;
 
@@ -3934,13 +3807,7 @@ destructor TIdSipActionRedirector.Destroy;
 begin
   Self.TargetUriSet.Free;
 
-  Self.RedirectedActionLock.Acquire;
-  try
-    Self.RedirectedActions.Free;
-  finally
-    Self.RedirectedActionLock.Release;
-  end;
-  Self.RedirectedActionLock.Free;
+  Self.RedirectedActions.Free;
 
   Self.Listeners.Free;
 
@@ -3967,13 +3834,8 @@ end;
 
 function TIdSipActionRedirector.Contains(OwnedAction: TIdSipAction): Boolean;
 begin
-  Self.RedirectedActionLock.Acquire;
-  try
-    Result := (Self.InitialAction = OwnedAction)
-           or (Self.RedirectedActions.IndexOf(OwnedAction) <> ItemNotFoundIndex);
-  finally
-    Self.RedirectedActionLock.Release;
-  end;
+  Result := (Self.InitialAction = OwnedAction)
+         or (Self.RedirectedActions.IndexOf(OwnedAction) <> ItemNotFoundIndex);
 end;
 
 procedure TIdSipActionRedirector.RemoveListener(const Listener: IIdSipActionRedirectorListener);
@@ -4014,12 +3876,7 @@ var
 begin
   Redirect := Self.OwningAction.CreateRedirectedAction(OriginalRequest, Contact);
 
-  Self.RedirectedActionLock.Acquire;
-  try
-    Self.RedirectedActions.Add(Redirect);
-  finally
-    Self.RedirectedActionLock.Release;
-  end;
+  Self.RedirectedActions.Add(Redirect);
 
   Redirect.AddOwnedActionListener(Self);
   Self.NotifyOfNewAction(Redirect);
@@ -4028,12 +3885,7 @@ end;
 
 function TIdSipActionRedirector.HasOutstandingRedirects: Boolean;
 begin
-  Self.RedirectedActionLock.Acquire;
-  try
-    Result := Self.RedirectedActions.Count <> 0;
-  finally
-    Self.RedirectedActionLock.Release;
-  end;
+  Result := Self.RedirectedActions.Count <> 0;
 end;
 
 procedure TIdSipActionRedirector.NotifyOfFailure(ErrorCode: Cardinal;
@@ -4186,12 +4038,7 @@ end;
 
 procedure TIdSipActionRedirector.RemoveFinishedRedirectedInvite(Agent: TIdSipAction);
 begin
-  Self.RedirectedActionLock.Acquire;
-  try
-    Self.RedirectedActions.Remove(Agent);
-  finally
-    Self.RedirectedActionLock.Release;
-  end;
+  Self.RedirectedActions.Remove(Agent);
 
   if Self.Cancelling and not Self.HasOutstandingRedirects then
     Self.NotifyOfFailure(NoError, '');
@@ -4201,13 +4048,8 @@ procedure TIdSipActionRedirector.TerminateAllRedirects;
 var
   I: Integer;
 begin
-  Self.RedirectedActionLock.Acquire;
-  try
-    for I := 0 to Self.RedirectedActions.Count - 1 do
-      (Self.RedirectedActions[I] as TIdSipAction).Terminate;
-  finally
-    Self.RedirectedActionLock.Release;
-  end;
+  for I := 0 to Self.RedirectedActions.Count - 1 do
+    (Self.RedirectedActions[I] as TIdSipAction).Terminate;
 end;
 
 //******************************************************************************

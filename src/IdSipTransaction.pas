@@ -14,7 +14,7 @@ interface
 uses
   Classes, Contnrs, IdBaseThread, IdInterfacedObject, IdNotification,
   IdSipAuthentication, IdSipLocator, IdSipMessage, IdSipTransport, IdTimerQueue,
-  SyncObjs, SysUtils;
+  SysUtils;
 
 type
   // This covers all states - INVITE, non-INVITE, client, server.
@@ -78,10 +78,8 @@ type
     fTimer:                   TIdTimerQueue;
     MsgListeners:             TIdNotificationList;
     fTransports:              TIdSipTransports;
-    TransportLock:            TCriticalSection;
     TransactionlessResponses: TIdSipResponseLocationsList;
     Transactions:             TObjectList;
-    TransactionLock:          TCriticalSection;
 
     procedure DeliverToTransaction(Request: TIdSipRequest;
                                    Receiver: TIdSipTransport); overload;
@@ -649,15 +647,13 @@ begin
 
   Self.MsgListeners := TIdNotificationList.Create;
 
-  Self.fTransports   := TIdSipTransports.Create;
-  Self.TransportLock := TCriticalSection.Create;
+  Self.fTransports := TIdSipTransports.Create;
 
   // To hold state on those responses that do not attach to transactions (i.e.,
   // retransmissions of 200 OKs to INVITEs).
   Self.TransactionlessResponses := TIdSipResponseLocationsList.Create;
 
-  Self.Transactions    := TObjectList.Create(true);
-  Self.TransactionLock := TCriticalSection.Create;
+  Self.Transactions := TObjectList.Create(true);
 
   Self.T1Interval := DefaultT1;
   Self.T2Interval := DefaultT2;
@@ -666,23 +662,9 @@ end;
 
 destructor TIdSipTransactionDispatcher.Destroy;
 begin
-  Self.TransactionLock.Acquire;
-  try
-    Self.Transactions.Free;
-  finally
-    Self.TransactionLock.Release;
-  end;
-  Self.TransactionLock.Free;
-
+  Self.Transactions.Free;
   Self.TransactionlessResponses.Free;
-
-  Self.TransportLock.Acquire;
-  try
-    Self.Transports.Free;
-  finally
-    Self.TransportLock.Release;
-  end;
-  Self.TransportLock.Free;
+  Self.Transports.Free;
 
   Self.MsgListeners.Free;
 
@@ -701,33 +683,28 @@ var
   I: Integer;
   T: TIdSipTransport;
 begin
-  Self.TransportLock.Acquire;
-  try
-    T := nil;
-    I := 0;
-    while (I < Self.Transports.Count) and not Assigned(T) do begin
-      if IsEqual(Transport, Self.Transports[I].GetTransportType) then
-        T := Self.Transports[I]
-      else
-        Inc(I);
-    end;
+  T := nil;
+  I := 0;
+  while (I < Self.Transports.Count) and not Assigned(T) do begin
+    if IsEqual(Transport, Self.Transports[I].GetTransportType) then
+      T := Self.Transports[I]
+    else
+      Inc(I);
+  end;
 
-    if (I < Self.Transports.Count) then
-      T.AddBinding(Address, Port)
-    else begin
-      T := TIdSipTransportRegistry.TransportTypeFor(Transport).Create;
-      T.HostName := Address;
-      T.Timer    := Self.Timer;
+  if (I < Self.Transports.Count) then
+    T.AddBinding(Address, Port)
+  else begin
+    T := TIdSipTransportRegistry.TransportTypeFor(Transport).Create;
+    T.HostName := Address;
+    T.Timer    := Self.Timer;
 
-      // Indy servers instantiate with one binding.
-      T.Bindings[0].IP   := Address;
-      T.Bindings[0].Port := Port;
+    // Indy servers instantiate with one binding.
+    T.Bindings[0].IP   := Address;
+    T.Bindings[0].Port := Port;
 
-      Self.Transports.Add(T);
-      T.AddTransportListener(Self);
-    end;
-  finally
-    Self.TransportLock.Release;
+    Self.Transports.Add(T);
+    T.AddTransportListener(Self);
   end;
 end;
 
@@ -735,35 +712,25 @@ procedure TIdSipTransactionDispatcher.AddTransportListener(Listener: IIdSipTrans
 var
   I: Integer;
 begin
-  Self.TransportLock.Acquire;
-  try
-    for I := 0 to Self.Transports.Count - 1 do
-      Self.Transports[I].AddTransportListener(Listener);
-  finally
-    Self.TransportLock.Release;
-  end;
+  for I := 0 to Self.Transports.Count - 1 do
+    Self.Transports[I].AddTransportListener(Listener);
 end;
 
 function TIdSipTransactionDispatcher.AddClientTransaction(InitialRequest: TIdSipRequest): TIdSipTransaction;
 begin
   Result := nil;
 
-  Self.TransactionLock.Acquire;
   try
-    try
-      Result := TIdSipTransaction.CreateClientTransactionType(Self, InitialRequest);
-      Result.AddTransactionListener(Self);
-      Self.Transactions.Add(Result);
-    except
-      if (Self.Transactions.IndexOf(Result) <> ItemNotFoundIndex) then
-        Self.Transactions.Remove(Result)
-      else
-        Result.Free;
+    Result := TIdSipTransaction.CreateClientTransactionType(Self, InitialRequest);
+    Result.AddTransactionListener(Self);
+    Self.Transactions.Add(Result);
+  except
+    if (Self.Transactions.IndexOf(Result) <> ItemNotFoundIndex) then
+      Self.Transactions.Remove(Result)
+    else
+      Result.Free;
 
-      raise;
-    end;
-  finally
-    Self.TransactionLock.Release;
+    raise;
   end;
 end;
 
@@ -772,33 +739,23 @@ function TIdSipTransactionDispatcher.AddServerTransaction(InitialRequest: TIdSip
 begin
   Result := nil;
 
-  Self.TransactionLock.Acquire;
   try
-    try
-      Result := TIdSipTransaction.CreateServerTransactionType(Self, InitialRequest);
-      Result.AddTransactionListener(Self);
-      Self.Transactions.Add(Result);
-    except
-      if (Self.Transactions.IndexOf(Result) <> ItemNotFoundIndex) then
-        Self.Transactions.Remove(Result)
-      else
-        Result.Free;
+    Result := TIdSipTransaction.CreateServerTransactionType(Self, InitialRequest);
+    Result.AddTransactionListener(Self);
+    Self.Transactions.Add(Result);
+  except
+    if (Self.Transactions.IndexOf(Result) <> ItemNotFoundIndex) then
+      Self.Transactions.Remove(Result)
+    else
+      Result.Free;
 
-      raise;
-    end;
-  finally
-    Self.TransactionLock.Release;
+    raise;
   end;
 end;
 
 procedure TIdSipTransactionDispatcher.ClearTransports;
 begin
-  Self.TransportLock.Acquire;
-  try
-    Self.Transports.Clear;
-  finally
-    Self.TransportLock.Release;
-  end;
+  Self.Transports.Clear;
 end;
 
 procedure TIdSipTransactionDispatcher.FindServersFor(Response: TIdSipResponse;
@@ -817,18 +774,13 @@ var
 begin
   Result := nil;
 
-  Self.TransactionLock.Acquire;
-  try
-    I := 0;
-    while (I < Self.Transactions.Count) and not Assigned(Result) do
-      if (Self.TransactionAt(I).IsClient = ClientTran)
-        and Self.TransactionAt(I).Match(R) then
-        Result := Self.TransactionAt(I)
-      else
-       Inc(I);
-  finally
-    Self.TransactionLock.Release;
-  end;
+  I := 0;
+  while (I < Self.Transactions.Count) and not Assigned(Result) do
+    if (Self.TransactionAt(I).IsClient = ClientTran)
+      and Self.TransactionAt(I).Match(R) then
+      Result := Self.TransactionAt(I)
+    else
+     Inc(I);
 end;
 
 function TIdSipTransactionDispatcher.LoopDetected(Request: TIdSipRequest): Boolean;
@@ -838,16 +790,11 @@ begin
   // cf. RFC 3261 section 8.2.2.2
   Result := false;
 
-  Self.TransactionLock.Acquire;
-  try
-    I := 0;
-    while (I < Self.Transactions.Count) and not Result do begin
-      if Self.TransactionAt(I).IsServer then
-        Result := Self.TransactionAt(I).LoopDetected(Request);
-      Inc(I);
-    end;
-  finally
-    Self.TransactionLock.Release;
+  I := 0;
+  while (I < Self.Transactions.Count) and not Result do begin
+    if Self.TransactionAt(I).IsServer then
+      Result := Self.TransactionAt(I).LoopDetected(Request);
+    Inc(I);
   end;
 end;
 
@@ -860,13 +807,8 @@ procedure TIdSipTransactionDispatcher.RemoveTransportListener(Listener: IIdSipTr
 var
   I: Integer;
 begin
-  Self.TransportLock.Acquire;
-  try
-    for I := 0 to Self.Transports.Count - 1 do
-      Self.Transports[I].RemoveTransportListener(Listener);
-  finally
-    Self.TransportLock.Release;
-  end;
+  for I := 0 to Self.Transports.Count - 1 do
+    Self.Transports[I].RemoveTransportListener(Listener);
 end;
 
 procedure TIdSipTransactionDispatcher.ScheduleEvent(Event: TNotifyEvent;
@@ -1015,12 +957,7 @@ end;
 
 function TIdSipTransactionDispatcher.TransactionCount: Integer;
 begin
-  Self.TransactionLock.Acquire;
-  try
-    Result := Self.Transactions.Count;
-  finally
-    Self.TransactionLock.Release;
-  end;
+  Result := Self.Transactions.Count;
 end;
 
 function TIdSipTransactionDispatcher.TransportCount: Integer;
@@ -1041,27 +978,20 @@ function TIdSipTransactionDispatcher.FindAppropriateTransport(Dest: TIdSipLocati
 var
   I: Integer;
 begin
-  Result := nil;
+  I := 0;
 
-  Self.TransportLock.Acquire;
-  try
-    I := 0;
+  while (I < Self.Transports.Count)
+    and (Self.TransportAt(I).GetTransportType <> Dest.Transport) do
+    Inc(I);
 
-    while (I < Self.Transports.Count)
-      and (Self.TransportAt(I).GetTransportType <> Dest.Transport) do
-      Inc(I);
-
-    // What should we do if there are no appropriate transports to use?
-    // It means that someone didn't configure the dispatcher properly,
-    // most likely.
-    if (I < Self.Transports.Count) then
-      Result := Self.TransportAt(I)
-    else
-      raise EUnknownTransport.Create(Format(CantFindTransport,
-                                            [Dest.Transport]));
-  finally
-    Self.TransportLock.Release;
-  end;
+  // What should we do if there are no appropriate transports to use?
+  // It means that someone didn't configure the dispatcher properly,
+  // most likely.
+  if (I < Self.Transports.Count) then
+    Result := Self.TransportAt(I)
+  else
+    raise EUnknownTransport.Create(Format(CantFindTransport,
+                                          [Dest.Transport]));
 end;
 
 procedure TIdSipTransactionDispatcher.NotifyOfTransportException(FailedMessage: TIdSipMessage;
@@ -1252,12 +1182,7 @@ begin
   Assert(TerminatedTransaction.IsTerminated,
          OnlyRemoveTranWhenTerminated);
 
-  Self.TransactionLock.Acquire;
-  try
-    Self.Transactions.Remove(TerminatedTransaction);
-  finally
-    Self.TransactionLock.Release;
-  end;
+   Self.Transactions.Remove(TerminatedTransaction);
 end;
 
 function TIdSipTransactionDispatcher.TransactionAt(Index: Cardinal): TIdSipTransaction;
