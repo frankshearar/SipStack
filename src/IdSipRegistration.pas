@@ -13,7 +13,7 @@ interface
 
 uses
   Classes, Contnrs, IdException, IdObservable, IdSipCore, IdSipMessage,
-  IdNotification, IdTimerQueue, SyncObjs;
+  IdNotification, IdTimerQueue;
 
 type
   TIdSipRegistrationInfo = class(TObject)
@@ -39,7 +39,6 @@ type
   TIdSipRegistrations = class(TObject)
   private
     KnownRegistrars: TObjectList;
-    Lock:            TCriticalSection;
 
     function IndexOfRegistrar(Registrar: TIdSipUri): Integer;
     function KnowsRegistrar(Registrar: TIdSipUri): Boolean;
@@ -543,19 +542,12 @@ constructor TIdSipRegistrations.Create;
 begin
   inherited Create;
 
-  Self.Lock            := TCriticalSection.Create;
   Self.KnownRegistrars := TObjectList.Create(true);
 end;
 
 destructor TIdSipRegistrations.Destroy;
 begin
-  Self.Lock.Acquire;
-  try
-    Self.KnownRegistrars.Free;
-  finally
-    Self.Lock.Release;
-  end;
-  Self.Lock.Free;
+  Self.KnownRegistrars.Free;
 
   inherited Destroy;
 end;
@@ -566,18 +558,13 @@ procedure TIdSipRegistrations.AddKnownRegistrar(Registrar: TIdSipUri;
 var
   NewReg: TIdSipRegistrationInfo;
 begin
-  Self.Lock.Acquire;
-  try
-    if not Self.KnowsRegistrar(Registrar) then begin
-      NewReg := TIdSipRegistrationInfo.Create;
-      Self.KnownRegistrars.Add(NewReg);
+  if not Self.KnowsRegistrar(Registrar) then begin
+    NewReg := TIdSipRegistrationInfo.Create;
+    Self.KnownRegistrars.Add(NewReg);
 
-      NewReg.CallID     := CallID;
-      NewReg.Registrar  := Registrar;
-      NewReg.SequenceNo := SequenceNo;
-    end;
-  finally
-    Self.Lock.Release;
+    NewReg.CallID     := CallID;
+    NewReg.Registrar  := Registrar;
+    NewReg.SequenceNo := SequenceNo;
   end;
 end;
 
@@ -585,17 +572,12 @@ function TIdSipRegistrations.CallIDFor(Registrar: TIdSipUri): String;
 var
   Index: Integer;
 begin
-  Self.Lock.Acquire;
-  try
-    Index := Self.IndexOfRegistrar(Registrar);
+  Index := Self.IndexOfRegistrar(Registrar);
 
-    if (Index = ItemNotFoundIndex) then
-      raise EIdSipRegistrarNotFound.Create(Registrar.Uri);
+  if (Index = ItemNotFoundIndex) then
+    raise EIdSipRegistrarNotFound.Create(Registrar.Uri);
 
-    Result := Self.RegistrarAt(Index).CallID;
-  finally
-    Self.Lock.Release;
-  end;
+  Result := Self.RegistrarAt(Index).CallID;
 end;
 
 function TIdSipRegistrations.NextSequenceNoFor(Registrar: TIdSipUri): Cardinal;
@@ -605,19 +587,14 @@ var
 begin
   Result := 0;
 
-  Self.Lock.Acquire;
-  try
-    Index := Self.IndexOfRegistrar(Registrar);
+  Index := Self.IndexOfRegistrar(Registrar);
 
-    if (Index = ItemNotFoundIndex) then
-      raise EIdSipRegistrarNotFound.Create(Registrar.Uri);
+  if (Index = ItemNotFoundIndex) then
+    raise EIdSipRegistrarNotFound.Create(Registrar.Uri);
 
-    RegInfo := Self.RegistrarAt(Index);
-    Result := RegInfo.SequenceNo;
-    RegInfo.SequenceNo := Result + 1;
-  finally
-    Self.Lock.Release;
-  end;
+  RegInfo := Self.RegistrarAt(Index);
+  Result := RegInfo.SequenceNo;
+  RegInfo.SequenceNo := Result + 1;
 end;
 
 //* TIdSipRegistrations Private methods ****************************************
