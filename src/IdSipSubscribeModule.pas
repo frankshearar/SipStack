@@ -605,6 +605,7 @@ type
   TIdSipInboundReferral = class(TIdSipInboundSubscription)
   private
     function  HasUnknownUrlScheme(Refer: TIdSipRequest): Boolean;
+    function  IsRefreshingSubscribe(Refer: TIdSipRequest): Boolean;
     procedure RejectBadRequest(Request: TIdSipRequest);
     function  WrongNumberOfReferTos(Refer: TIdSipRequest): Boolean;
   protected
@@ -2895,12 +2896,16 @@ begin
   Result := inherited WillAccept(Refer);
 
   if Result then begin
-    if Self.WrongNumberOfReferTos(Refer) then
-      Self.RejectBadRequest(Refer)
-    else if Self.HasUnknownUrlScheme(Refer) then
-      Self.RejectBadRequest(Refer)
-    else
-      Result := true;
+    Result := Self.IsRefreshingSubscribe(Refer);
+
+    if not Result then begin
+      if Self.WrongNumberOfReferTos(Refer) then
+        Self.RejectBadRequest(Refer)
+      else if Self.HasUnknownUrlScheme(Refer) then
+        Self.RejectBadRequest(Refer)
+      else
+        Result := true;
+    end;
   end;
 end;
 
@@ -2910,6 +2915,14 @@ function TIdSipInboundReferral.HasUnknownUrlScheme(Refer: TIdSipRequest): Boolea
 begin
   Result := not Refer.ReferTo.Address.IsSipUri
         and not Refer.ReferTo.Address.IsSipsUri;
+end;
+
+function TIdSipInboundReferral.IsRefreshingSubscribe(Refer: TIdSipRequest): Boolean;
+begin
+  // A SUBSCRIBE that matches the existing implicit subscription of a REFER is a
+  // refreshing SUBSCRIBE.
+
+  Result := Refer.IsSubscribe;
 end;
 
 procedure TIdSipInboundReferral.RejectBadRequest(Request: TIdSipRequest);

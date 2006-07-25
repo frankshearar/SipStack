@@ -485,8 +485,14 @@ type
                           const MimeType: String);
     procedure CheckSendNotify(Sub: TIdSipInboundSubscription;
                               const SubscriptionState: String);
+    function  CreateRefresh(Sub: TIdSipInboundSubscription;
+                            Response: TIdSipResponse;
+                            ExpiryTime: Cardinal): TIdSipRequest;
     procedure OnSubscriptionRequest(UserAgent: TIdSipAbstractCore;
                                     Subscription: TIdSipInboundSubscription); override;
+    procedure ReceiveRefreshingSubscribe(Sub: TIdSipInboundSubscription;
+                                         Response: TIdSipResponse;
+                                         ExpiryTime: Cardinal);
     procedure ReceiveSubscribeRequest; virtual;
     procedure ReceiveSubscribeRequestWithGruu; virtual;
   public
@@ -502,6 +508,7 @@ type
     procedure TestIsSession; override;
     procedure TestNotify; virtual;
     procedure TestNotifyWithGruu; virtual;
+    procedure TestReceiveRefreshingSubscribe;
     procedure TestReceiveRequestSendsAccepted;
     procedure TestReceiveRequestSendsAcceptedWithGruu;
     procedure TestReceiveRequestSendsNotify;
@@ -514,14 +521,8 @@ type
 
     procedure CheckExpiresScheduled(ExpectedExpires: Cardinal;
                                     const Msg: String);
-    function  CreateRefresh(Sub: TIdSipInboundSubscription;
-                            Response: TIdSipResponse;
-                            ExpiryTime: Cardinal): TIdSipRequest;
 //    procedure ReceiveAuthChallengeWithRetryAfter(Sub: TIdSipRequest;
 //                                                 RetryAfter: Cardinal);
-    procedure ReceiveRefreshingSubscribe(Sub: TIdSipInboundSubscription;
-                                         Response: TIdSipResponse;
-                                         ExpiryTime: Cardinal);
     procedure ReceiveSubscribe(const EventPackage: String;
                                ExpiryTime: Cardinal = 0);
     procedure ReceiveSubscribeWithoutExpires(const EventPackage: String);
@@ -543,7 +544,6 @@ type
     procedure TestReceiveExpiresTooShort;
 //    procedure TestReceiveOutOfOrderRefresh;
     procedure TestReceiveNoExpires;
-    procedure TestReceiveRefreshingSubscribe;
     procedure TestReceiveRefreshingSubscribeIntervalTooBrief;
     procedure TestReceiveSubscribe;
     procedure TestReceiveSubscribeReturnsAccepted;
@@ -645,6 +645,7 @@ type
     procedure TestRefresh;
     procedure TestRefreshReceives481;
     procedure TestRefreshReceives4xx;
+    procedure TestRefreshUpdatesExpiryTime;
     procedure TestRemoveListener;
     procedure TestSendWithGruu;
     procedure TestTerminate;
@@ -675,7 +676,6 @@ type
 //    procedure TestReceiveNotifyNoAuthorization;
 //    procedure TestReceiveNotifyWrongAuthorization;
     procedure TestReceivePendingNotifyWithExpires;
-    procedure TestRefreshUpdatesExpiryTime;
     procedure TestSetEventPackage;
     procedure TestSubscribe;
   end;
@@ -2504,10 +2504,43 @@ begin
               'Notify state <> subscription''s state');
 end;
 
+function TestTIdSipInboundSubscriptionBase.CreateRefresh(Sub: TIdSipInboundSubscription;
+                                                         Response: TIdSipResponse;
+                                                         ExpiryTime: Cardinal): TIdSipRequest;
+var
+  RemoteDialog: TIdSipDialog;
+begin
+  // Create an OUTbound dialog because the remote send SENDS the request.
+  RemoteDialog := TIdSipDialog.CreateOutboundDialog(Sub.InitialRequest,
+                                                   Response,
+                                                   false);
+  try
+    Result := Self.Module.CreateSubscribe(RemoteDialog, Sub.EventPackage);
+  finally
+    RemoteDialog.Free;
+  end;
+end;
+
 procedure TestTIdSipInboundSubscriptionBase.OnSubscriptionRequest(UserAgent: TIdSipAbstractCore;
                                                                   Subscription: TIdSipInboundSubscription);
 begin
   Self.Action := Subscription;
+end;
+
+procedure TestTIdSipInboundSubscriptionBase.ReceiveRefreshingSubscribe(Sub: TIdSipInboundSubscription;
+                                                                       Response: TIdSipResponse;
+                                                                       ExpiryTime: Cardinal);
+var
+  Refresh: TIdSipRequest;
+begin
+  Refresh := Self.CreateRefresh(Sub, Response, ExpiryTime);
+  try
+    Refresh.Expires.NumericValue := ExpiryTime;
+
+    Self.ReceiveRequest(Refresh);
+  finally
+    Refresh.Free;
+  end;
 end;
 
 procedure TestTIdSipInboundSubscriptionBase.ReceiveSubscribeRequest;
@@ -2595,6 +2628,42 @@ end;
 procedure TestTIdSipInboundSubscriptionBase.TestNotifyWithGruu;
 begin
   Fail('Implement ' + Self.ClassName + '.TestNotifyWithGruu');
+end;
+
+procedure TestTIdSipInboundSubscriptionBase.TestReceiveRefreshingSubscribe;
+const
+  ArbExpiresValue = 100;
+var
+  SubCount: Integer;
+begin
+  Self.Action.Accept;
+
+  SubCount := Self.Core.CountOf(MethodSubscribe);
+  Self.MarkSentRequestCount;
+  Self.MarkSentResponseCount;
+  Self.ReceiveRefreshingSubscribe(Self.Action,
+                                  Self.Dispatcher.Transport.LastResponse,
+                                  ArbExpiresValue);
+
+  CheckResponseSent('No response sent');
+  CheckNotEquals(SIPAccepted,
+                 Self.LastSentResponse.StatusCode,
+                 Self.Action.Method + ' started a new subscription: it didn''t match the existing one');
+  CheckEquals(SIPOK,
+              Self.LastSentResponse.StatusCode,
+              'Unexpected response sent to refreshing subscription');
+
+  CheckRequestSent('No request sent');
+  CheckEquals(MethodNotify,
+              Self.LastSentRequest.Method,
+              'Unexpected request sent after refreshing subscription');
+
+  // There should be two expiry events scheduled. We trigger the first one,
+  // demonstrating that the second still exists.
+  Self.DebugTimer.TriggerEarliestEvent;
+  Check(SubCount >= Self.Core.CountOf(MethodSubscribe),
+        'The Subscription terminated prematurely: check the logic around '
+      + 'OutstandingExpires');
 end;
 
 procedure TestTIdSipInboundSubscriptionBase.TestReceiveRequestSendsAccepted;
@@ -2692,23 +2761,6 @@ begin
               Self.LastSentRequest.SubscriptionState.SubState,
               Msg + ': Subscription-State value');
 end;
-
-function TestTIdSipInboundSubscription.CreateRefresh(Sub: TIdSipInboundSubscription;
-                                                     Response: TIdSipResponse;
-                                                     ExpiryTime: Cardinal): TIdSipRequest;
-var
-  RemoteDialog: TIdSipDialog;
-begin
-  // Create an OUTbound dialog because the remote send SENDS the request.
-  RemoteDialog := TIdSipDialog.CreateOutboundDialog(Sub.InitialRequest,
-                                                   Response,
-                                                   false);
-  try
-    Result := Self.Module.CreateSubscribe(RemoteDialog, Sub.EventPackage);
-  finally
-    RemoteDialog.Free;
-  end;
-end;
 {
 procedure TestTIdSipInboundSubscription.ReceiveAuthChallengeWithRetryAfter(Sub: TIdSipRequest;
                                                                            RetryAfter: Cardinal);
@@ -2728,22 +2780,6 @@ begin
   end;
 end;
 }
-procedure TestTIdSipInboundSubscription.ReceiveRefreshingSubscribe(Sub: TIdSipInboundSubscription;
-                                                                   Response: TIdSipResponse;
-                                                                   ExpiryTime: Cardinal);
-var
-  Refresh: TIdSipRequest;
-begin
-  Refresh := Self.CreateRefresh(Sub, Response, ExpiryTime);
-  try
-    Refresh.Expires.NumericValue := ExpiryTime;
-
-    Self.ReceiveRequest(Refresh);
-  finally
-    Refresh.Free;
-  end;
-end;
-
 procedure TestTIdSipInboundSubscription.ReceiveSubscribeWithoutExpires(const EventPackage: String);
 var
   Subscribe: TIdSipRequest;
@@ -3029,42 +3065,6 @@ begin
   CheckEquals(TIdSipTestPackage.DefaultSubscriptionDuration,
               Response.Expires.NumericValue,
               'Wrong Expires value');
-end;
-
-procedure TestTIdSipInboundSubscription.TestReceiveRefreshingSubscribe;
-const
-  ArbExpiresValue = 100;
-var
-  SubCount: Integer;
-begin
-  Self.Action.Accept;
-
-  SubCount := Self.Core.CountOf(MethodSubscribe);
-  Self.MarkSentRequestCount;
-  Self.MarkSentResponseCount;
-  Self.ReceiveRefreshingSubscribe(Self.Action,
-                                  Self.Dispatcher.Transport.LastResponse,
-                                  ArbExpiresValue);
-
-  CheckResponseSent('No response sent');
-  CheckNotEquals(SIPAccepted,
-                 Self.LastSentResponse.StatusCode,
-                 Self.Action.Method + ' started a new subscription: it didn''t match the existing one');
-  CheckEquals(SIPOK,
-              Self.LastSentResponse.StatusCode,
-              'Unexpected response sent to refreshing subscription');
-
-  CheckRequestSent('No request sent');
-  CheckEquals(MethodNotify,
-              Self.LastSentRequest.Method,
-              'Unexpected request sent after refreshing subscription');
-
-  // There should be two expiry events scheduled. We trigger the first one,
-  // demonstrating that the second still exists.
-  Self.DebugTimer.TriggerEarliestEvent;
-  Check(SubCount >= Self.Core.CountOf(MethodSubscribe),
-        'The Subscription terminated prematurely: check the logic around '
-      + 'OutstandingExpires');
 end;
 
 procedure TestTIdSipInboundSubscription.TestReceiveRefreshingSubscribeIntervalTooBrief;
@@ -4047,6 +4047,30 @@ begin
       + ': mustn''t fail, but still exist until its Duration runs out');
 end;
 
+procedure TestTIdSipOutboundSubscriptionBase.TestRefreshUpdatesExpiryTime;
+
+
+var
+  NewExpiryTime: Cardinal;
+  OldExpiry:     TDateTime;
+begin
+  OldExpiry     := Self.Subscription.ExpiryTime;
+  NewExpiryTime := TIdSipTestPackage.DefaultSubscriptionDuration * 2;
+
+  Self.Subscription.Refresh(NewExpiryTime);
+  Self.ReceiveOkFor(Self.LastSentRequest,
+                    NewExpiryTime);
+
+  // WARNING: this test can fail if you're debugging before this line.
+  Check(OldExpiry < Self.Subscription.ExpiryTime,
+        'Refresh didn''t reschedule expiration');
+
+  Self.DebugTimer.TriggerEarliestEvent;
+
+  Check(not Self.Subscription.IsTerminated,
+        'Subscription terminated on the old expiry time');
+end;
+
 procedure TestTIdSipOutboundSubscriptionBase.TestRemoveListener;
 var
   Listener: TIdSipTestSubscriptionListener;
@@ -4319,30 +4343,6 @@ begin
                      Self.ArbExpiresValue);
 
   Self.CheckExpires(Self.ArbExpiresValue);
-end;
-
-procedure TestTIdSipOutboundSubscription.TestRefreshUpdatesExpiryTime;
-
-
-var
-  NewExpiryTime: Cardinal;
-  OldExpiry:     TDateTime;
-begin
-  OldExpiry     := Self.Subscription.ExpiryTime;
-  NewExpiryTime := TIdSipTestPackage.DefaultSubscriptionDuration * 2;
-
-  Self.Subscription.Refresh(NewExpiryTime);
-  Self.ReceiveOkFor(Self.LastSentRequest,
-                    NewExpiryTime);
-
-  // WARNING: this test can fail if you're debugging before this line.
-  Check(OldExpiry < Self.Subscription.ExpiryTime,
-        'Refresh didn''t reschedule expiration');
-
-  Self.DebugTimer.TriggerEarliestEvent;
-
-  Check(not Self.Subscription.IsTerminated,
-        'Subscription terminated on the old expiry time');
 end;
 
 procedure TestTIdSipOutboundSubscription.TestSetEventPackage;
