@@ -585,8 +585,6 @@ var
   Index:   Integer;
   RegInfo: TIdSipRegistrationInfo;
 begin
-  Result := 0;
-
   Index := Self.IndexOfRegistrar(Registrar);
 
   if (Index = ItemNotFoundIndex) then
