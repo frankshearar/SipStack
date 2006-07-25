@@ -1156,9 +1156,7 @@ begin
     if (Self.Actions.IndexOf(Action) <> ItemNotFoundIndex) then
       Self.Actions.Remove(Action)
     else
-      Action.Free;
-
-      Result := nil;
+      FreeAndNil(Result);
     raise;
   end;
 
