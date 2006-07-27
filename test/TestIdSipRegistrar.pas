@@ -1306,6 +1306,12 @@ begin
               Request.RequestUri.Uri,
               'Request-URI');
   CheckEquals(MethodRegister, Request.Method, 'Method');
+  CheckEquals(Self.Core.From.Address.AsString,
+              Request.From.Address.AsString,
+              'REGISTER''s From header doesn''t match our Address of Record');
+  CheckEquals(Self.Core.From.Address.AsString,
+              Request.ToHeader.Address.AsString,
+              'REGISTER''s To header doesn''t match our Address of Record');
   Check(Request.Contacts.Equals(Self.Contacts),
         'Bindings');
 end;

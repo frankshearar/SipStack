@@ -951,8 +951,7 @@ begin
 
     Result.CallID := Self.KnownRegistrars.CallIDFor(Registrar.Address);
 
-    Result.ToHeader.Assign(Self.UserAgent.Contact);
-    Result.From.Assign(Self.UserAgent.Contact);
+    Result.ToHeader.Assign(Self.UserAgent.From);
 
     if Self.UserAgent.UseGruu then begin
       Result.FirstContact.Params[SipInstanceParam] := Self.UserAgent.InstanceID;
