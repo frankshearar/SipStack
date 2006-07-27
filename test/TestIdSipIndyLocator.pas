@@ -21,12 +21,13 @@ type
   // parse and present the answer.
   TestTIdSipIndyLocator = class(TTestCase)
   private
-    Answer:     String;
-    Loc:        TIdSipIndyLocator;
-    NameRecs:   TIdDomainNameRecords;
-    NameServer: TIdUdpServer;
-    NaptrRecs:  TIdNaptrRecords;
-    SrvRecs:    TIdSrvRecords;
+    AnswerIndex: Integer;
+    Answers:     TStrings;
+    Loc:         TIdSipIndyLocator;
+    NameRecs:    TIdDomainNameRecords;
+    NameServer:  TIdUdpServer;
+    NaptrRecs:   TIdNaptrRecords;
+    SrvRecs:     TIdSrvRecords;
 
     function  ARecords: String;
     function  NaptrRecords: String;
@@ -73,6 +74,9 @@ var
 begin
   inherited SetUp;
 
+  Self.Answers := TStringList.Create;
+  Self.AnswerIndex := 0;
+
   Self.Loc := TIdSipIndyLocator.Create;
   Self.Loc.NameServer := '127.0.0.1';
 
@@ -100,6 +104,7 @@ begin
   Self.NameServer.Active := false;
   Self.NameServer.Free;
   Self.Loc.Free;
+  Self.Answers.Free;
 
   inherited TearDown;
 end;
@@ -226,6 +231,7 @@ procedure TestTIdSipIndyLocator.ProvideAnswer(Sender: TObject;
                                               AData: TStream;
                                               ABinding: TIdSocketHandle);
 var
+  Answer:  String;
   ReplyID: String;
   S:       TStringStream;
 begin
@@ -238,11 +244,12 @@ begin
     S.Free;
   end;
 
-  Self.Answer := ReplyID + Self.Answer;
+  Answer := ReplyID + Self.Answers[Self.AnswerIndex];
 
   Self.NameServer.Send(ABinding.PeerIP,
                        ABinding.PeerPort,
-                       Self.Answer);
+                       Answer);
+  Inc(Self.AnswerIndex);                     
 end;
 
 function TestTIdSipIndyLocator.SrvRecords: String;
@@ -286,7 +293,7 @@ end;
 
 procedure TestTIdSipIndyLocator.TestResolveNameRecords;
 begin
-  Self.Answer := Self.ARecords;
+  Self.Answers.Add(Self.ARecords);
 
   Self.Loc.ResolveNameRecords('paranoid.leo-ix.net', Self.NameRecs);
 
@@ -315,7 +322,7 @@ end;
 
 procedure TestTIdSipIndyLocator.TestResolveNameRecordsOnNonexistentDomain;
 begin
-  Self.Answer := Self.NoSuchRecord;
+  Self.Answers.Add(Self.NoSuchRecord);
 
   Self.Loc.ResolveNameRecords('foo.bar', Self.NameRecs);
 
@@ -326,7 +333,7 @@ procedure TestTIdSipIndyLocator.TestResolveNAPTR;
 var
   Uri: TIdSipUri;
 begin
-  Self.Answer := Self.NaptrRecords;
+  Self.Answers.Add(Self.NaptrRecords);
 
   Uri := TIdSipUri.Create('sip:leo-ix.net');
   try
@@ -384,7 +391,7 @@ procedure TestTIdSipIndyLocator.TestResolveNAPTROnNonexistentDomain;
 var
   Uri: TIdSipUri;
 begin
-  Self.Answer := Self.NoSuchRecord;
+  Self.Answers.Add(Self.NoSuchRecord);
 
   Uri := TIdSipUri.Create('sip:foo.bar');
   try
@@ -398,7 +405,7 @@ end;
 
 procedure TestTIdSipIndyLocator.TestResolveSRV;
 begin
-  Self.Answer := Self.SrvRecords;
+  Self.Answers.Add(Self.SrvRecords);
 
   Self.Loc.ResolveSRV('_sip._tcp.leo-ix.net', Self.SrvRecs);
 
@@ -465,7 +472,7 @@ end;
 
 procedure TestTIdSipIndyLocator.TestResolveSRVOnNonexistentDomain;
 begin
-  Self.Answer := Self.NoSuchRecord;
+  Self.Answers.Add(Self.NoSuchRecord);
 
   Self.Loc.ResolveSRV('foo.bar', Self.SrvRecs);
 
