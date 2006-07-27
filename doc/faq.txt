@@ -14,6 +14,8 @@
 7. My test blows up with an access violation in IdSipCore.pas
    immediately after the TIdSipAction sends a message.
 
+8. But how do I make a call?
+
 
 
 
@@ -76,3 +78,17 @@
    which is that receiving or sending a message is a single,
    uninterruptable event. This seems terrible. It's OK: this can only
    occur in a test environment, and only when you hairpin requests.
+
+8. Let's suppose you've instantiated a stack (let's call it
+   Stack). Making a call to someone is as simple as this:
+
+     CallHandle := Stack.MakeCall(<destination>, <offer>, <description type>);
+     Stack.Send(CallHandle);
+
+   Typically, <descriptiontype> will be SdpMimeType, in
+   IdSdp.pas. Don't forget, though, that SIP doesn't know anything
+   about media. If you want to place, say, a real-time text call to
+   someone, instantiate your TIdSdpMultimediaSession, set it up how
+   you want, start it listening, and then pass in its
+   LocalSessionDescription to MakeCall. Then, wait for your
+   CM_CALL_ESTABLISHED notification.
