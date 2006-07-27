@@ -75,7 +75,7 @@ uses
   SysUtils;
 
 const
-  SipStackVersion = '0.5.2';
+  SipStackVersion = '0.5.3';
 
 type
   TIdSipAction = class;
