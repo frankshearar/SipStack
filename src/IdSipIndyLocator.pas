@@ -26,6 +26,9 @@ type
     function  GetNameServer: String;
     function  GetPort: Integer;
     function  GetTimeout: Integer;
+    procedure ProcessNameRecords(Data: TQueryResult;
+                                 const DomainName: String;
+                                 Result: TIdDomainNameRecords);
     procedure SetNameServer(const Value: String);
     procedure SetPort(Value: Integer);
     procedure SetTimeout(Value: Integer);
@@ -78,69 +81,15 @@ end;
 
 procedure TIdSipIndyLocator.PerformNameLookup(const DomainName: String;
                                               Result: TIdDomainNameRecords);
-var
-  I:          Integer;
-  A:          TARecord;
-  CNAME:      TNAMERecord;
-  CNAMEIndex: Integer;
-  CNAMEs:     TStrings;
 begin
   // We can only do A records for now.
-  CNAMEs := TStringList.Create;
-  try
   Self.Resolver.QueryRecords := [qtA];
 
   try
     Self.Resolver.Resolve(DomainName);
-
-    // We loop over all records in the Answer, Authoritative Nameservers and
-    // Additional sections. Indy doesn't differentiate between them. If we
-    // find a CNAME record, we add a placeholder record, storing only the
-    // DomainName. If we find an A/AAAA record we check whether we have a
-    // placeholder record. If we do, we record the type & address of the record.
-    // Otherwise we add a complete record to the Result.
-
-    // Right now, we ignore CNAMEs that have no matching A records. RFC 1034
-    // says that if you query for A records you'll get a pair of CNAME+A records
-    // returned. It doesn't say you won't get just a CNAME. To be safe, you'd
-    // really want to recurse over those CNAMEs (watching out for loops).
-
-    // Assumptions: Say A is an alias that points to B, which points to C. We
-    // assume that the A CNAME B record comes first, then B CNAME C and finally
-    // the A/AAAA record/s for C.
-
-    for I := 0 to Self.Resolver.QueryResult.Count - 1 do begin
-      if (Self.Resolver.QueryResult[I] is TNAMERecord) then begin
-        CNAME := Self.Resolver.QueryResult[I] as TNAMERecord;
-
-        CNAMEIndex := CNAMEs.IndexOfName(CNAME.Name);
-        if (CNAMEIndex <> -1) then begin
-          // Found a link in the CNAME chain.
-          // Replace name->CNAME->CNAME2 with name->CNAME2.
-          Self.CollapseChain(CNAMEs, CNAMEIndex, CNAME.HostName);
-        end
-        else begin
-          if (CNAME.RecType = qtName) then
-            CNAMEs.Add(CNAME.HostName + '=' + CNAME.Name);
-        end;
-      end
-      else if (Self.Resolver.QueryResult[I] is TARecord) then begin
-        A := Self.Resolver.QueryResult[I] as TARecord;
-
-        if (CNAMEs.IndexOfName(A.Name) <> -1) then begin
-          Result.Add(DnsARecord, CNAMEs.Values[A.Name], A.IPAddress)
-        end
-        else begin
-          if (A.Name = DomainName) then
-            Result.Add(DnsARecord, DomainName, A.IPAddress);
-        end;
-      end;
-    end;
-    except
-      on EIdException do;
-    end;
-  finally
-    CNAMEs.Free;
+    ProcessNameRecords(Self.Resolver.QueryResult, DomainName, Result);
+  except
+    on EIdException do;
   end;
 end;
 
@@ -176,7 +125,6 @@ end;
 procedure TIdSipIndyLocator.PerformSRVLookup(const ServiceAndDomain: String;
                                              Result: TIdSrvRecords);
 var
-  A:   TARecord;
   I:   Integer;
   SRV: TSRVRecord;
 begin
@@ -184,11 +132,6 @@ begin
 
   try
     Self.Resolver.Resolve(ServiceAndDomain);
-
-    // It seems stupid to iterate over the result set twice. However, we can only
-    // add A/AAAA records to SRV records that exist. Thus, the first iteration
-    // collects all the SRV records, and the second adds A/AAAA records to the SRV
-    // records.
 
     for I := 0 to Self.Resolver.QueryResult.Count - 1 do begin
       if (Self.Resolver.QueryResult[I] is TSRVRecord) then begin
@@ -200,15 +143,10 @@ begin
                    SRV.Weight,
                    SRV.Port,
                    SRV.Target);
-      end;
-    end;
 
-    for I := 0 to Self.Resolver.QueryResult.Count - 1 do begin
-      // NOTA BENE: We need support for AAAA records!
-
-      if (Self.Resolver.QueryResult[I] is TARecord) then begin
-        A := Self.Resolver.QueryResult[I] as TARecord;
-        Result.AddNameRecord(DnsARecord, A.Name, A.IPAddress);
+        Self.ProcessNameRecords(Self.Resolver.QueryResult,
+                                SRV.Target,
+                                Result[Result.Count - 1].NameRecords);
       end;
     end;
   except
@@ -240,6 +178,66 @@ end;
 function TIdSipIndyLocator.GetTimeout: Integer;
 begin
   Result := Self.Resolver.ReceiveTimeout;
+end;
+
+procedure TIdSipIndyLocator.ProcessNameRecords(Data: TQueryResult;
+                                               const DomainName: String;
+                                               Result: TIdDomainNameRecords);
+var
+  I:          Integer;
+  A:          TARecord;
+  CNAME:      TNAMERecord;
+  CNAMEIndex: Integer;
+  CNAMEs:     TStrings;
+begin
+  // We loop over all records in the Answer, Authoritative Nameservers and
+  // Additional sections. Indy doesn't differentiate between them. If we
+  // find a CNAME record, we add a placeholder record, storing only the
+  // DomainName. If we find an A/AAAA record we check whether we have a
+  // placeholder record. If we do, we record the type & address of the record.
+  // Otherwise we add a complete record to the Result.
+
+  // Right now, we ignore CNAMEs that have no matching A records. RFC 1034
+  // says that if you query for A records you'll get a pair of CNAME+A records
+  // returned. It doesn't say you won't get just a CNAME. To be safe, you'd
+  // really want to recurse over those CNAMEs (watching out for loops).
+
+  // Assumptions: Say A is an alias that points to B, which points to C. We
+  // assume that the A CNAME B record comes first, then B CNAME C and finally
+  // the A/AAAA record/s for C.
+
+  CNAMEs := TStringList.Create;
+  try
+    for I := 0 to Self.Resolver.QueryResult.Count - 1 do begin
+      if (Self.Resolver.QueryResult[I] is TNAMERecord) then begin
+        CNAME := Self.Resolver.QueryResult[I] as TNAMERecord;
+
+        CNAMEIndex := CNAMEs.IndexOfName(CNAME.Name);
+        if (CNAMEIndex <> -1) then begin
+          // Found a link in the CNAME chain.
+          // Replace name->CNAME->CNAME2 with name->CNAME2.
+          Self.CollapseChain(CNAMEs, CNAMEIndex, CNAME.HostName);
+        end
+        else begin
+          if (CNAME.RecType = qtName) then
+            CNAMEs.Add(CNAME.HostName + '=' + CNAME.Name);
+        end;
+      end
+      else if (Self.Resolver.QueryResult[I] is TARecord) then begin
+        A := Self.Resolver.QueryResult[I] as TARecord;
+
+        if (CNAMEs.IndexOfName(A.Name) <> -1) then begin
+          Result.Add(DnsARecord, CNAMEs.Values[A.Name], A.IPAddress)
+        end
+        else begin
+          if (A.Name = DomainName) then
+            Result.Add(DnsARecord, DomainName, A.IPAddress);
+        end;
+      end;
+    end;
+  finally
+    CNAMEs.Free;
+  end;
 end;
 
 procedure TIdSipIndyLocator.SetNameServer(const Value: String);
