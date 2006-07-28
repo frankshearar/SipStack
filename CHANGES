@@ -1,3 +1,6 @@
+v0.5.3 (2006/xx/yy)
+* 
+
 v0.5.2 (2006/07/24)
 * The receipt of messages is now threadsafe. Previously,
   TIdSipMessageWait objects held references to TIdSipTransports. Now,
