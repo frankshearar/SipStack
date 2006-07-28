@@ -426,9 +426,9 @@ begin
   CheckEquals(DnsARecord,        Self.NameRecs[0].RecordType, '1st record record type');
   CheckEquals('www.borland.com', Self.NameRecs[0].Domain,     '1st record domain');
   CheckEquals('196.33.166.208',  Self.NameRecs[0].IPAddress,  '1st record IP address');
-  CheckEquals(DnsARecord,        Self.NameRecs[0].RecordType, '2nd record record type');
-  CheckEquals('www.borland.com', Self.NameRecs[0].Domain,     '2nd record domain');
-  CheckEquals('196.33.166.210',  Self.NameRecs[0].IPAddress,  '2nd record IP address');
+  CheckEquals(DnsARecord,        Self.NameRecs[1].RecordType, '2nd record record type');
+  CheckEquals('www.borland.com', Self.NameRecs[1].Domain,     '2nd record domain');
+  CheckEquals('196.33.166.210',  Self.NameRecs[1].IPAddress,  '2nd record IP address');
 end;
 
 procedure TestTIdSipIndyLocator.TestResolveNameRecordsWithCNAMEsAndNameRecords;
