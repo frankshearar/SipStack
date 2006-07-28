@@ -29,7 +29,6 @@ type
     procedure SetNameServer(const Value: String);
     procedure SetPort(Value: Integer);
     procedure SetTimeout(Value: Integer);
-    function  ValueIndex(List: TStrings; Value: String): Integer;
   protected
     procedure PerformNameLookup(const DomainName: String;
                                 Result: TIdDomainNameRecords); override;
@@ -105,6 +104,10 @@ begin
     // says that if you query for A records you'll get a pair of CNAME+A records
     // returned. It doesn't say you won't get just a CNAME. To be safe, you'd
     // really want to recurse over those CNAMEs (watching out for loops).
+
+    // Assumptions: Say A is an alias that points to B, which points to C. We
+    // assume that the A CNAME B record comes first, then B CNAME C and finally
+    // the A/AAAA record/s for C.
 
     for I := 0 to Self.Resolver.QueryResult.Count - 1 do begin
       if (Self.Resolver.QueryResult[I] is TNAMERecord) then begin
@@ -252,26 +255,6 @@ end;
 procedure TIdSipIndyLocator.SetTimeout(Value: Integer);
 begin
   Self.Resolver.ReceiveTimeout := Value;
-end;
-
-function TIdSipIndyLocator.ValueIndex(List: TStrings; Value: String): Integer;
-var
-  I:                 Integer;
-  Name, Association: String;
-begin
-  // Return the index of the first found occurence of the value Value.
-
-  I := 0;
-  Result := -1;
-  while (I < List.Count) and (Result = -1) do begin
-    Association := List[I];
-    Name := Fetch(Association, '=');
-
-    if (Association = Value) then
-      Result := I;
-
-    Inc(I);
-  end;
 end;
 
 end.
