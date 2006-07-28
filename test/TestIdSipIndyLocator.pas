@@ -30,6 +30,10 @@ type
     SrvRecs:     TIdSrvRecords;
 
     function  ARecords: String;
+    function  ARecordProxy: String;
+    function  ARecordsWithCNAME: String;
+    function  ARecordsWithCNAMEOnly: String;
+    function  CNAMEChain: String;
     function  NaptrRecords: String;
     function  NoSuchRecord: String;
 
@@ -44,6 +48,9 @@ type
     procedure TestResolveNameRecords;
     procedure TestResolveNameRecordsNetworkFailure;
     procedure TestResolveNameRecordsOnNonexistentDomain;
+    procedure TestResolveNameRecordsWithCNAMEChain;
+    procedure TestResolveNameRecordsWithCNAMEsAndNameRecords;
+    procedure TestResolveNameRecordsWithCNAMEsOnly;
     procedure TestResolveNAPTR;
     procedure TestResolveNAPTRNetworkFailure;
     procedure TestResolveNAPTROnNonexistentDomain;
@@ -113,7 +120,6 @@ end;
 
 function TestTIdSipIndyLocator.ARecords: String;
 begin
-
   // Dig would translate this data as
   // ;; QUERY SECTION:
   // ;;      paranoid.leo-ix.net, type = A, class = IN
@@ -136,6 +142,86 @@ begin
   + #$04#$7F#$00#$00#$02#$C0#$15#$00#$02#$00#$01#$00#$00#$0E#$10#$00
   + #$06#$03#$6E#$73#$31#$C0#$15#$C0#$51#$00#$01#$00#$01#$00#$00#$0E
   + #$10#$00#$04#$7F#$00#$00#$01;
+end;
+
+function TestTIdSipIndyLocator.ARecordProxy: String;
+begin
+  // Dig would translate this data as
+end;
+
+function TestTIdSipIndyLocator.ARecordsWithCNAME: String;
+begin
+  // Dig would translate this data as
+  // ;; QUESTION SECTION:
+  // ;proxy.leo-ix.net.              IN      A
+  //
+  // ;; ANSWER SECTION:
+  // proxy.leo-ix.net.       3600    IN      CNAME   gw1.leo-ix.net.
+  // gw1.leo-ix.net.         3600    IN      A       127.0.0.1
+  //
+  // ;; AUTHORITY SECTION:
+  // leo-ix.net.             3600    IN      NS      ns1.leo-ix.net.
+  //
+  // ;; ADDITIONAL SECTION:
+  // ns1.leo-ix.net.         3600    IN      A       127.0.0.1
+
+  Result :=
+  { hdr id }#$85#$80#$00#$01#$00#$02#$00#$01#$00#$01#$05#$70#$72#$6f
+  + #$78#$79#$06#$6c#$65#$6f#$2d#$69#$78#$03#$6e#$65#$74#$00#$00#$01
+  + #$00#$01#$c0#$0c#$00#$05#$00#$01#$00#$00#$0e#$10#$00#$06#$03#$67
+  + #$77#$31#$c0#$12#$c0#$2e#$00#$01#$00#$01#$00#$00#$0e#$10#$00#$04
+  + #$7f#$00#$00#$01#$c0#$12#$00#$02#$00#$01#$00#$00#$0e#$10#$00#$06
+  + #$03#$6e#$73#$31#$c0#$12#$c0#$50#$00#$01#$00#$01#$00#$00#$0e#$10
+  + #$00#$04#$7f#$00#$00#$01;
+end;
+
+function TestTIdSipIndyLocator.ARecordsWithCNAMEOnly: String;
+begin
+  // Dig would translate this data as
+  // ;; QUERY SECTION:
+  // ;;      proxy.leo-ix.net, type = A, class = IN
+  //
+  // ;; ANSWER SECTION:
+  // proxy.leo-ix.net.       3600    IN      CNAME   gw1.leo-ix.net.
+  //
+  // ;; AUTHORITY SECTION:
+  // leo-ix.net.             3600    IN      NS      ns1.leo-ix.net.
+  //
+  // ;; ADDITIONAL SECTION:
+  // ns1.leo-ix.net.         3600    IN      A       127.0.0.1
+  Result := '';
+  Result :=
+  { hdr id }#$85#$80#$00#$01#$00#$02#$00#$01#$00#$01#$05#$70#$72#$6f
+  + #$78#$79#$06#$6c#$65#$6f#$2d#$69#$78#$03#$6e#$65#$74#$00#$00#$01
+  + #$00#$01#$c0#$0c#$00#$05#$00#$01#$00#$00#$0e#$10#$00#$06#$03#$67
+  + #$77#$31#$c0#$12#$c0#$2e#$00#$01#$00#$01#$00#$00#$0e#$10#$00#$04
+  + #$7f#$00#$00#$01#$c0#$12#$00#$02#$00#$01#$00#$00#$0e#$10#$00#$06
+  + #$03#$6e#$73#$31#$c0#$12#$c0#$50#$00#$01#$00#$01#$00#$00#$0e#$10
+  + #$00#$04#$7f#$00#$00#$01;
+end;
+
+function TestTIdSipIndyLocator.CNAMEChain: String;
+begin
+  // Dig would translate this data as
+  // ;; QUESTION SECTION:
+  // ;www.borland.com.               IN      A
+  //
+  // ;; ANSWER SECTION:
+  // www.borland.com.        1148    IN      CNAME   www.borland.com.edgesuite.net.
+  // www.borland.com.edgesuite.net. 2359 IN  CNAME   a1207.g.akamai.net.
+  // a1207.g.akamai.net.     20      IN      A       196.33.166.210
+  // a1207.g.akamai.net.     20      IN      A       196.33.166.208
+
+  Result :=
+  { hdr id }#$81#$80#$00#$01#$00#$04#$00#$00#$00#$00#$03#$77#$77#$77
+  + #$07#$62#$6f#$72#$6c#$61#$6e#$64#$03#$63#$6f#$6d#$00#$00#$01#$00
+  + #$01#$c0#$0c#$00#$05#$00#$01#$00#$00#$04#$99#$00#$1f#$03#$77#$77
+  + #$77#$07#$62#$6f#$72#$6c#$61#$6e#$64#$03#$63#$6f#$6d#$09#$65#$64
+  + #$67#$65#$73#$75#$69#$74#$65#$03#$6e#$65#$74#$00#$c0#$2d#$00#$05
+  + #$00#$01#$00#$00#$09#$54#$00#$11#$05#$61#$31#$32#$30#$37#$01#$67
+  + #$06#$61#$6b#$61#$6d#$61#$69#$c0#$47#$c0#$58#$00#$01#$00#$01#$00
+  + #$00#$00#$14#$00#$04#$c4#$21#$a6#$d0#$c0#$58#$00#$01#$00#$01#$00
+  + #$00#$00#$14#$00#$04#$c4#$21#$a6#$d2;
 end;
 
 function TestTIdSipIndyLocator.NaptrRecords: String;
@@ -327,6 +413,51 @@ begin
   Self.Loc.ResolveNameRecords('foo.bar', Self.NameRecs);
 
   CheckEquals(0, Self.NameRecs.Count, 'Record count');
+end;
+
+procedure TestTIdSipIndyLocator.TestResolveNameRecordsWithCNAMEChain;
+begin
+  Self.Answers.Add(Self.CNAMEChain);
+
+  Self.Loc.ResolveNameRecords('www.borland.com', Self.NameRecs);
+
+  CheckEquals(2, Self.NameRecs.Count, 'Record count');
+
+  CheckEquals(DnsARecord,        Self.NameRecs[0].RecordType, '1st record record type');
+  CheckEquals('www.borland.com', Self.NameRecs[0].Domain,     '1st record domain');
+  CheckEquals('196.33.166.210',  Self.NameRecs[0].IPAddress,  '1st record IP address');
+  CheckEquals(DnsARecord,        Self.NameRecs[0].RecordType, '2nd record record type');
+  CheckEquals('www.borland.com', Self.NameRecs[0].Domain,     '2nd record domain');
+  CheckEquals('196.33.166.208',  Self.NameRecs[0].IPAddress,  '2nd record IP address');
+end;
+
+procedure TestTIdSipIndyLocator.TestResolveNameRecordsWithCNAMEsAndNameRecords;
+begin
+  Self.Answers.Add(Self.ARecordsWithCNAME);
+
+  Self.Loc.ResolveNameRecords('proxy.leo-ix.net', Self.NameRecs);
+
+  // See the comment in Self.ARecordsWithCNAME.
+  CheckEquals(1, Self.NameRecs.Count, 'Record count');
+
+  CheckEquals(DnsARecord,         Self.NameRecs[0].RecordType, 'Record type');
+  CheckEquals('proxy.leo-ix.net', Self.NameRecs[0].Domain,     'Domain');
+  CheckEquals('127.0.0.1',        Self.NameRecs[0].IPAddress,  'IP address');
+end;
+
+procedure TestTIdSipIndyLocator.TestResolveNameRecordsWithCNAMEsOnly;
+begin
+  Self.Answers.Add(Self.ARecordsWithCNAMEOnly);
+  Self.Answers.Add(Self.ARecordProxy);
+
+  Self.Loc.ResolveNameRecords('proxy.leo-ix.net', Self.NameRecs);
+
+  // See the comment in Self.ARecordsWithCNAME.
+  CheckEquals(1, Self.NameRecs.Count, 'Record count');
+
+  CheckEquals(DnsARecord,         Self.NameRecs[0].RecordType, 'Record type');
+  CheckEquals('proxy.leo-ix.net', Self.NameRecs[0].Domain,     'Domain');
+  CheckEquals('127.0.0.1',        Self.NameRecs[0].IPAddress,  'IP address');
 end;
 
 procedure TestTIdSipIndyLocator.TestResolveNAPTR;

@@ -12,7 +12,7 @@ unit IdSipIndyLocator;
 interface
 
 uses
-  IdDNSResolver, IdSipDns, IdSipLocator, IdSipMessage;
+  Classes, IdDNSResolver, IdSipDns, IdSipLocator, IdSipMessage;
 
 type
   // I try resolve names using the Indy stack. I try resolve names and regard
@@ -22,12 +22,14 @@ type
   private
     Resolver: TIdDNSResolver;
 
+    procedure CollapseChain(List: TStrings; Index: Integer; NewCanonicalName: String);
     function  GetNameServer: String;
     function  GetPort: Integer;
     function  GetTimeout: Integer;
     procedure SetNameServer(const Value: String);
     procedure SetPort(Value: Integer);
     procedure SetTimeout(Value: Integer);
+    function  ValueIndex(List: TStrings; Value: String): Integer;
   protected
     procedure PerformNameLookup(const DomainName: String;
                                 Result: TIdDomainNameRecords); override;
@@ -50,7 +52,7 @@ const
 implementation
 
 uses
-  IdException, SysUtils;
+  IdException, IdSimpleParser, SysUtils;
 
 //******************************************************************************
 //* TIdSipIndyLocator                                                          *
@@ -78,26 +80,64 @@ end;
 procedure TIdSipIndyLocator.PerformNameLookup(const DomainName: String;
                                               Result: TIdDomainNameRecords);
 var
-  I: Integer;
-  A: TARecord;
+  I:          Integer;
+  A:          TARecord;
+  CNAME:      TNAMERecord;
+  CNAMEIndex: Integer;
+  CNAMEs:     TStrings;
 begin
   // We can only do A records for now.
-
+  CNAMEs := TStringList.Create;
+  try
   Self.Resolver.QueryRecords := [qtA];
 
   try
     Self.Resolver.Resolve(DomainName);
 
+    // We loop over all records in the Answer, Authoritative Nameservers and
+    // Additional sections. Indy doesn't differentiate between them. If we
+    // find a CNAME record, we add a placeholder record, storing only the
+    // DomainName. If we find an A/AAAA record we check whether we have a
+    // placeholder record. If we do, we record the type & address of the record.
+    // Otherwise we add a complete record to the Result.
+
+    // Right now, we ignore CNAMEs that have no matching A records. RFC 1034
+    // says that if you query for A records you'll get a pair of CNAME+A records
+    // returned. It doesn't say you won't get just a CNAME. To be safe, you'd
+    // really want to recurse over those CNAMEs (watching out for loops).
+
     for I := 0 to Self.Resolver.QueryResult.Count - 1 do begin
-      if (Self.Resolver.QueryResult[I] is TARecord) then begin
+      if (Self.Resolver.QueryResult[I] is TNAMERecord) then begin
+        CNAME := Self.Resolver.QueryResult[I] as TNAMERecord;
+
+        CNAMEIndex := CNAMEs.IndexOfName(CNAME.Name);
+        if (CNAMEIndex <> -1) then begin
+          // Found a link in the CNAME chain.
+          // Replace name->CNAME->CNAME2 with name->CNAME2.
+          Self.CollapseChain(CNAMEs, CNAMEIndex, CNAME.HostName);
+        end
+        else begin
+          if (CNAME.RecType = qtName) then
+            CNAMEs.Add(CNAME.HostName + '=' + CNAME.Name);
+        end;
+      end
+      else if (Self.Resolver.QueryResult[I] is TARecord) then begin
         A := Self.Resolver.QueryResult[I] as TARecord;
 
-        if (A.Name = DomainName) then
-          Result.Add(DnsARecord, DomainName, A.IPAddress);
+        if (CNAMEs.IndexOfName(A.Name) <> -1) then begin
+          Result.Add(DnsARecord, CNAMEs.Values[A.Name], A.IPAddress)
+        end
+        else begin
+          if (A.Name = DomainName) then
+            Result.Add(DnsARecord, DomainName, A.IPAddress);
+        end;
       end;
     end;
-  except
-    on EIdException do;
+    except
+      on EIdException do;
+    end;
+  finally
+    CNAMEs.Free;
   end;
 end;
 
@@ -175,6 +215,15 @@ end;
 
 //* TIdSipIndyLocator Private methods ******************************************
 
+procedure TIdSipIndyLocator.CollapseChain(List: TStrings; Index: Integer; NewCanonicalName: String);
+var
+  Name, Alias: String;
+begin
+  Alias := List[Index];
+  Name := Fetch(Alias, '=');
+  List[Index] := NewCanonicalName + '=' + Alias;
+end;
+
 function TIdSipIndyLocator.GetNameServer: String;
 begin
   Result := Self.Resolver.Host;
@@ -203,6 +252,26 @@ end;
 procedure TIdSipIndyLocator.SetTimeout(Value: Integer);
 begin
   Self.Resolver.ReceiveTimeout := Value;
+end;
+
+function TIdSipIndyLocator.ValueIndex(List: TStrings; Value: String): Integer;
+var
+  I:                 Integer;
+  Name, Association: String;
+begin
+  // Return the index of the first found occurence of the value Value.
+
+  I := 0;
+  Result := -1;
+  while (I < List.Count) and (Result = -1) do begin
+    Association := List[I];
+    Name := Fetch(Association, '=');
+
+    if (Association = Value) then
+      Result := I;
+
+    Inc(I);
+  end;
 end;
 
 end.
