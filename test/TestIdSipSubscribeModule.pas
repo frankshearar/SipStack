@@ -3975,6 +3975,8 @@ begin
 end;
 
 procedure TestTIdSipOutboundSubscriptionBase.TestRefresh;
+const
+  ExpiryTime = 1000;
 begin
   //  --- SUBSCRIBE --->
   // <---  200 OK   ---
@@ -3984,7 +3986,7 @@ begin
 
   Self.MarkSentRequestCount;
 
-  Self.Subscription.Refresh(1000);
+  Self.Subscription.Refresh(ExpiryTime);
 
   CheckRequestSent(Self.ClassName + ': No request sent');
   CheckEquals(MethodSubscribe,
@@ -4011,6 +4013,13 @@ begin
               Self.LastSentRequest.ToHeader.Tag,
               Self.ClassName
             + ': Refresh must happen in the context of the original dialog: To tag');
+  Check(Self.LastSentRequest.HasHeader(ExpiresHeader),
+        Self.ClassName
+      + ': Refresh has no Expires header');          
+  CheckEquals(ExpiryTime,
+              Self.LastSentRequest.Expires.NumericValue,
+              Self.ClassName
+            + ': Refresh sent incorrect Expires time');
 end;
 
 procedure TestTIdSipOutboundSubscriptionBase.TestRefreshReceives481;
