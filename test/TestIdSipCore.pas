@@ -266,6 +266,33 @@ type
     procedure TestActionsAutomaticallyUnregister;
   end;
 
+  TIdSipActionWaitTestCase = class(TTestCaseTU)
+  end;
+
+  TestTIdSipActionSendWait = class(TTestCaseTU)
+  private
+    Action: TIdSipAction;
+    Wait:   TIdSipActionSendWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTrigger;
+    procedure TestTriggerOnNonExistentAction;
+  end;
+
+  TestTIdSipActionTerminateWait = class(TTestCaseTU)
+  private
+    Action: TIdSipAction;
+    Wait:   TIdSipActionTerminateWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTrigger;
+    procedure TestTriggerOnNonExistentAction;
+  end;
+
   TestTIdSipActionAuthenticationChallengeMethod = class(TActionMethodTestCase)
   private
     Action:   TIdSipAction;
@@ -434,6 +461,8 @@ begin
   Result.AddTest(TestTIdSipInboundOptions.Suite);
   Result.AddTest(TestTIdSipOutboundOptions.Suite);
   Result.AddTest(TestTIdSipActionRegistry.Suite);
+  Result.AddTest(TestTIdSipActionSendWait.Suite);
+  Result.AddTest(TestTIdSipActionTerminateWait.Suite);
   Result.AddTest(TestTIdSipActionAuthenticationChallengeMethod.Suite);
   Result.AddTest(TestTIdSipActionNetworkFailureMethod.Suite);
   Result.AddTest(TestTIdSipOwnedActionFailureMethod.Suite);
@@ -2913,6 +2942,94 @@ begin
 
   Check(nil = TIdSipActionRegistry.FindAction(ActionID),
         'Action not removed from registry');
+end;
+
+//******************************************************************************
+//* TestTIdSipActionSendWait                                                   *
+//******************************************************************************
+//* TestTIdSipActionSendWait Public methods ************************************
+
+procedure TestTIdSipActionSendWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Action := Self.Core.RegisterModule.RegisterWith(Self.Destination.Address);
+  Self.Wait := TIdSipActionSendWait.Create;
+  Self.Wait.ActionID := Self.Action.ID;
+end;
+
+procedure TestTIdSipActionSendWait.TearDown;
+begin
+  Self.Wait.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipActionSendWait Published methods *********************************
+
+procedure TestTIdSipActionSendWait.TestTrigger;
+begin
+  Self.MarkSentRequestCount;
+  Self.Wait.Trigger;
+  CheckRequestSent('No request sent, so Wait didn''t Trigger');
+end;
+
+procedure TestTIdSipActionSendWait.TestTriggerOnNonExistentAction;
+begin
+  Self.Wait.ActionID := '';
+
+  Self.MarkSentRequestCount;
+  Self.Wait.Trigger;
+  CheckNoRequestSent('A request sent, so something mapped the Wait to an '
+                   + 'unexpected Action');
+end;
+
+//******************************************************************************
+//* TestTIdSipActionTerminateWait                                              *
+//******************************************************************************
+//* TestTIdSipActionTerminateWait Public methods *******************************
+
+procedure TestTIdSipActionTerminateWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Action := Self.Core.InviteModule.Call(Self.Destination, '', '');
+  Self.Wait   := TIdSipActionTerminateWait.Create;
+  Self.Wait.ActionID := Self.Action.ID;
+end;
+
+procedure TestTIdSipActionTerminateWait.TearDown;
+begin
+  Self.Wait.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipActionTerminateWait Published methods ****************************
+
+procedure TestTIdSipActionTerminateWait.TestTrigger;
+begin
+  // When we Trigger the Wait, the Action, having received at least one response
+  // from the remote party, will send a CANCEL.
+
+  Self.Action.Send;
+  Self.ReceiveRinging(Self.LastSentRequest);
+
+  Self.MarkSentRequestCount;
+  Self.Wait.Trigger;
+  CheckRequestSent('No request sent, so Action didn''t Trigger');
+  CheckEquals(MethodCancel,
+              Self.LastSentRequest.Method,
+              'Unexpected message sent');
+end;
+
+procedure TestTIdSipActionTerminateWait.TestTriggerOnNonExistentAction;
+begin
+  Self.Wait.ActionID := '';
+
+  // This test just makes sure the Trigger doesn't blow up when called on a
+  // non-existent action ID.
+  Self.Wait.Trigger;
 end;
 
 //******************************************************************************

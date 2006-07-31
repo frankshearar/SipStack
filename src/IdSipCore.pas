@@ -199,21 +199,21 @@ type
     property BlockType: TIdSipActionClosureClass read fBlockType write fBlockType;
   end;
 
-  TIdActionWait = class(TIdWait)
+  TIdSipActionWait = class(TIdWait)
   private
-    fAction: TIdSipAction;
+    fActionID: String;
   public
-    property Action: TIdSipAction read fAction write fAction;
+    property ActionID: String read fActionID write fActionID;
   end;
 
   // I represent the (possibly deferred) execution of something my Action needs
   // done. That is, when you invoke my Trigger, I call Action.Send.
-  TIdSipActionSendWait = class(TIdActionWait)
+  TIdSipActionSendWait = class(TIdSipActionWait)
   public
     procedure Trigger; override;
   end;
 
-  TIdSipActionTerminateWait = class(TIdActionWait)
+  TIdSipActionTerminateWait = class(TIdSipActionWait)
   public
     procedure Trigger; override;
   end;
@@ -1397,8 +1397,13 @@ end;
 //* TIdSipActionSendWait Public methods ****************************************
 
 procedure TIdSipActionSendWait.Trigger;
+var
+  Action: TIdSipAction;
 begin
-  Self.Action.Send;
+  Action := TIdSipActionRegistry.FindAction(Self.ActionID);
+
+  if Assigned(Action) then
+    Action.Send;
 end;
 
 //******************************************************************************
@@ -1407,8 +1412,13 @@ end;
 //* TIdSipActionTerminateWait **************************************************
 
 procedure TIdSipActionTerminateWait.Trigger;
+var
+  Action: TIdSipAction;
 begin
-  Self.Action.Terminate;
+  Action := TIdSipActionRegistry.FindAction(Self.ActionID);
+
+  if Assigned(Action) then
+    Action.Terminate;
 end;
 
 //******************************************************************************

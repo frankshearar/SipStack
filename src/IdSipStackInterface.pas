@@ -840,7 +840,7 @@ begin
     Action := Self.GetAndCheckAction(ActionHandle, TIdSipSession);
 
     TerminateWait := TIdSipActionTerminateWait.Create;
-    TerminateWait.Action := Action;
+    TerminateWait.ActionID := Action.ID;
 
     Self.AddEvent(TriggerImmediately, TerminateWait);
   finally
@@ -1753,7 +1753,7 @@ var
   Wait: TIdSipActionSendWait;
 begin
   Wait := TIdSipActionSendWait.Create;
-  Wait.Action := Action;
+  Wait.ActionID := Action.ID;
   Self.UserAgent.ScheduleEvent(TriggerImmediately, Wait);
 end;
 
