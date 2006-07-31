@@ -194,9 +194,9 @@ type
   public
     procedure Trigger; override;
 
+    property ActionID:  String                   read fActionID write fActionID;
     property Actions:   TIdSipActions            read fActions write fActions;
     property BlockType: TIdSipActionClosureClass read fBlockType write fBlockType;
-    property ActionID: String read fActionID write fActionID;
   end;
 
   TIdActionWait = class(TIdWait)
