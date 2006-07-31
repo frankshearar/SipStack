@@ -723,7 +723,7 @@ type
     procedure TestReceiveTerminatingNotifyWithUnknownReason; override;
     procedure TestReceiveTerminatingNotifyWithUnknownReasonAndRetryAfter; override;
     procedure TestSendWithTargetDialog;
-    procedure TestTargetDialog;    
+    procedure TestTargetDialog;
   end;
 
   TestTIdSipSubscriptionExpires = class(TSubscribeTestCase)
@@ -746,6 +746,17 @@ type
   TestTIdSipSubscriptionRetryWait = class(TSubscribeTestCase)
   private
     Wait: TIdSipSubscriptionRetryWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTrigger;
+  end;
+
+  TestTIdSipOutboundSubscriptionRefreshWait = class(TSubscribeTestCase)
+  private
+    NewDuration: Cardinal;
+    Wait:        TIdSipOutboundSubscriptionRefreshWait;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -4174,7 +4185,7 @@ begin
               'Wrong Expiry time');
 
   Self.MarkSentRequestCount;
-  Self.DebugTimer.TriggerAllEventsOfType(TIdSipActionsWait);
+  Self.DebugTimer.TriggerAllEventsOfType(TIdSipActionWait);
   Self.CheckRequestSent('No request sent, thus no refresh was scheduled');
 
   Check(not Self.Subscription.Terminating,
@@ -4251,7 +4262,7 @@ begin
   //  ---  200 OK   --->
 
   Self.MarkSentRequestCount;
-  Self.DebugTimer.TriggerAllEventsOfType(TIdSipActionsWait);
+  Self.DebugTimer.TriggerAllEventsOfType(TIdSipActionWait);
   Check(not Self.Subscription.IsTerminated,
         'Subscription terminated after the first re-SUBSCRIBE');
   CheckRequestSent('No request sent: no re-SUBSCRIBE');
@@ -4261,7 +4272,7 @@ begin
                     TIdSipTestPackage.DefaultSubscriptionDuration);
 
   Self.MarkSentRequestCount;
-  Self.DebugTimer.TriggerAllEventsOfType(TIdSipActionsWait);
+  Self.DebugTimer.TriggerAllEventsOfType(TIdSipActionWait);
   Check(not Self.Subscription.IsTerminated,
         'Subscription terminated after the second re-SUBSCRIBE');
   CheckRequestSent('No request sent: no second re-SUBSCRIBE');
@@ -4991,6 +5002,48 @@ begin
 
   Check(Self.OnRenewedSubscriptionFired,
         'OnRenewedSubscription didn''t fire');
+end;
+
+//******************************************************************************
+//* TestTIdSipOutboundSubscriptionRefreshWait                                  *
+//******************************************************************************
+//* TestTIdSipOutboundSubscriptionRefreshWait Public methods *******************
+
+procedure TestTIdSipOutboundSubscriptionRefreshWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.NewDuration := 3600;
+
+  Self.Wait := TIdSipOutboundSubscriptionRefreshWait.Create;
+  Self.Wait.ActionID := Self.Subscription.ID;
+  Self.Wait.NewDuration := Self.NewDuration;
+end;
+
+procedure TestTIdSipOutboundSubscriptionRefreshWait.TearDown;
+begin
+  Self.Wait.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipOutboundSubscriptionRefreshWait Published methods ****************
+
+procedure TestTIdSipOutboundSubscriptionRefreshWait.TestTrigger;
+var
+  Sub: TIdSipRequest;
+begin
+  Self.MarkSentRequestCount;
+  Self.Wait.Trigger;
+  CheckRequestSent('Wait didn''t trigger');
+
+  Sub := Self.LastSentRequest;
+  Check(Sub.HasHeader(ExpiresHeader),
+        'Refreshing SUBSCRIBE missing Expires header');
+  CheckEquals(Self.Wait.NewDuration,
+              Sub.Expires.NumericValue,
+              'Refreshing SUBSCRIBE has incorrect duration');
+
 end;
 
 //******************************************************************************

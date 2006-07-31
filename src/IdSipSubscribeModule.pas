@@ -666,11 +666,11 @@ type
     procedure Execute(Action: TIdSipAction); override;
   end;
 
-  TIdSipOutboundSubscriptionRefresh = class(TIdSipActionClosure)
+  TIdSipOutboundSubscriptionRefreshWait = class(TIdSipActionWait)
   private
     fNewDuration: Cardinal; // in seconds
   public
-    procedure Execute(Action: TIdSipAction); override;
+    procedure Trigger; override;
 
     property NewDuration: Cardinal read fNewDuration write fNewDuration;
   end;
@@ -2405,7 +2405,7 @@ begin
             and (Self.InitialRequest.Event.Equals(Req.Event));
     end
     else if Req.IsSubscribe then begin
-      // This lets action closures like TIdSipOutboundSubscriptionRefresh find
+      // This lets action closures like TIdSipOutboundSubscriptionRefreshWait find
       // this action.
       Result := inherited Match(Msg);
     end;
@@ -2749,14 +2749,18 @@ begin
 end;
 }
 procedure TIdSipOutboundSubscription.RescheduleRefresh(NewDuration: Cardinal);
+var
+  Refresh: TIdSipOutboundSubscriptionRefreshWait;
 begin
   Self.SetExpiryTime(Now + NewDuration*OneTDateTimeSecond);
 
+  Refresh := TIdSipOutboundSubscriptionRefreshWait.Create;
+  Refresh.ActionID    := Self.ID;
+  Refresh.NewDuration := NewDuration;
+
   // NewDuration is in seconds
-  Self.UA.ScheduleEvent(TIdSipOutboundSubscriptionRefresh,
-                        NewDuration*1000,
-                        Self.InitialRequest,
-                        Self.ID);
+  Self.UA.ScheduleEvent(NewDuration*1000,
+                        Refresh);
 end;
 
 procedure TIdSipOutboundSubscription.ScheduleNewSubscription(Seconds: Cardinal);
@@ -3097,20 +3101,23 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipOutboundSubscriptionRefresh                                          *
+//* TIdSipOutboundSubscriptionRefreshWait                                      *
 //******************************************************************************
-//* TIdSipOutboundSubscriptionRefresh Public methods ***************************
+//* TIdSipOutboundSubscriptionRefreshWait Public methods ***********************
 
-procedure TIdSipOutboundSubscriptionRefresh.Execute(Action: TIdSipAction);
+procedure TIdSipOutboundSubscriptionRefreshWait.Trigger;
 var
+  Action:       TIdSipAction;
   Subscription: TIdSipOutboundSubscription;
 begin
-  if not (Action is TIdSipOutboundSubscription) then Exit;
+  Action := TIdSipActionRegistry.FindAction(Self.ActionID);
 
-  Subscription := Action as TIdSipOutboundSubscription;
+  if Assigned(Action) then begin
+    Subscription := Action as TIdSipOutboundSubscription;
 
-  if not Subscription.IsTerminated then
-    Subscription.Refresh(Self.NewDuration);
+    if not Subscription.IsTerminated then
+      Subscription.Refresh(Self.NewDuration);
+  end;
 end;
 
 //******************************************************************************
