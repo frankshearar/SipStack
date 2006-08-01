@@ -2134,12 +2134,16 @@ begin
   else begin
     // Request is a refresh SUBSCRIBE
     if Self.WillAccept(Request) then begin
-      Self.ScheduleTermination(Request.Expires.NumericValue);
       Self.Dialog.ReceiveRequest(Request);
       Self.SendOk(Request);
+
+      if (Request.Expires.NumericValue = 0) then begin
+        Self.SetSubscriptionState(SubscriptionSubstateTerminated);
+        Self.TerminateSubscription(EventReasonTimeout);
+      end
+      else
+        Self.ScheduleTermination(Request.Expires.NumericValue);
     end;
-    // In other words, we don't kill the subscription just because the Refresh's
-    // Expires was too short.
   end;
 end;
 
@@ -2160,7 +2164,14 @@ begin
   if Subscribe.HasHeader(ExpiresHeader) then begin
     Expires := Subscribe.Expires.NumericValue;
 
-    if (Expires < OneHour) and (Expires < Self.Package.MinimumExpiryTime) then
+    // It's perfectly legitimate to send a refreshing SUBSCRIBE with an Expires
+    // of zero. Doing so means that the remote party wishes to immediately
+    // terminate the subscription. Since WillAccept covers sending the 423
+    // Interval Too Brief logic, we let the caller of this method handle
+    // terminating the subscription.
+    if (Expires > 0)
+      and (Expires < OneHour)
+      and (Expires < Self.Package.MinimumExpiryTime) then
       Self.RejectExpiresTooBrief(Subscribe)
     else begin
       Result := true;
@@ -2316,7 +2327,10 @@ begin
     end;
 
     Self.EstablishDialog(Response);
-    Self.ScheduleTermination(Response.Expires.NumericValue);
+
+    if (Response.Expires.NumericValue > 0) then
+      Self.ScheduleTermination(Response.Expires.NumericValue);
+
     Self.SendResponse(Response);
   finally
     Response.Free;

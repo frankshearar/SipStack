@@ -513,6 +513,7 @@ type
     procedure TestReceiveRequestSendsAcceptedWithGruu;
     procedure TestReceiveRequestSendsNotify;
     procedure TestReceiveRequestWithGruu;
+    procedure TestReceiveSubscribeWithZeroExpires;
   end;
 
   TestTIdSipInboundSubscription = class(TestTIdSipInboundSubscriptionBase)
@@ -2732,6 +2733,44 @@ begin
   CheckEquals(Self.LastSentResponse.FirstContact.AsString,
               Self.Action.LocalGruu.AsString,
               Self.Action.ClassName + '''s LocalGruu doesn''t match Contact in 202 Accepted');
+end;
+
+procedure TestTIdSipInboundSubscriptionBase.TestReceiveSubscribeWithZeroExpires;
+var
+  SubCount: Integer;
+begin
+  //                     <existing subscription>
+  // <---                 SUBSCRIBE (Expires: 0)                ---
+  //  ---                        200 OK                         --->
+  //  --- NOTIFY (Subscription-State: terminated;reason=timeout --->
+  // <---                        200 OK                         ---
+
+  SubCount := Self.Core.CountOf(MethodSubscribe);
+  Self.MarkSentRequestCount;
+  Self.MarkSentResponseCount;
+  Self.ReceiveRefreshingSubscribe(Self.Action,
+                                  Self.Dispatcher.Transport.LastResponse,
+                                  0);
+  CheckResponseSent('No response sent');
+  CheckEquals(SIPOK,
+              Self.LastSentResponse.StatusCode,
+              'Unexpected response sent');
+  CheckRequestSent('No request sent');
+  CheckEquals(MethodNotify,
+              Self.LastSentRequest.Method,
+              'No NOTIFY sent');
+  CheckEquals(SubscriptionSubstateTerminated,
+              Self.LastSentRequest.SubscriptionState.SubState,
+              'Incorrect subscription state');
+  CheckEquals(EventReasonTimeout,
+              Self.LastSentRequest.SubscriptionState.Reason,
+              'Incorrect termination reason');
+
+  // Receive the 200 OK for the terminating NOTIFY
+  Self.ReceiveOk(Self.LastSentRequest);
+
+  Check(Self.Core.CountOf(MethodSubscribe) < SubCount,
+        'Subscription not terminated');
 end;
 
 //******************************************************************************
