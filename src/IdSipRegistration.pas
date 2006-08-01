@@ -1468,9 +1468,9 @@ end;
 procedure TIdSipOutboundRegisterBase.ReissueRequestWithLongerExpiry(Registrar: TIdSipUri;
                                                                     MinimumExpiry: Cardinal);
 var
-  Bindings: TIdSipContacts;
+  Bindings:         TIdSipContacts;
   OriginalBindings: TIdSipContacts;
-  Request: TIdSipRequest;
+  Request:          TIdSipRequest;
 begin
   // We received a 423 Interval Too Brief from the registrar. Therefore we
   // make a new REGISTER request with the registrar's minimum expiry.
@@ -1505,7 +1505,7 @@ procedure TIdSipOutboundRegisterBase.RetryWithoutExtensions(Registrar: TIdSipUri
                                                             Response: TIdSipResponse);
 var
   Bindings: TIdSipContacts;
-  Request: TIdSipRequest;
+  Request:  TIdSipRequest;
 begin
   Bindings := TIdSipContacts.Create;
   try
