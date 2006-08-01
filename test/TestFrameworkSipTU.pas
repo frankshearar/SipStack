@@ -43,6 +43,8 @@ type
                                const Reason: String);
     procedure ReceiveBadExtensionResponse;
     procedure ReceiveBusyHere(Invite: TIdSipRequest);
+    procedure ReceiveIntervalTooBrief(Subscribe: TIdSipRequest;
+                                      Expiry: Cardinal);
     procedure ReceiveMovedTemporarily(Invite: TIdSipRequest;
                                       const Contacts: array of String); overload;
     procedure ReceiveMovedTemporarily(const Contact: String); overload;
@@ -298,6 +300,20 @@ end;
 procedure TestTIdSipAction.ReceiveBusyHere(Invite: TIdSipRequest);
 begin
   Self.ReceiveResponse(Invite, SIPBusyHere);
+end;
+
+procedure TestTIdSipAction.ReceiveIntervalTooBrief(Subscribe: TIdSipRequest;
+                                                   Expiry: Cardinal);
+var
+  Response: TIdSipResponse;
+begin
+  Response := TIdSipResponse.InResponseTo(Subscribe, SIPIntervalTooBrief);
+  try
+    Response.MinExpires.NumericValue := Expiry;
+    Self.ReceiveResponse(Response);
+  finally
+    Response.Free;
+  end;
 end;
 
 procedure TestTIdSipAction.ReceiveMovedTemporarily(Invite: TIdSipRequest;

@@ -351,8 +351,11 @@ type
   private
     fDialog:   TIdSipDialog;
     fDuration: Cardinal;
+
+    procedure ReissueRequestWithLongerExpiry(MinExpires: Cardinal);
   protected
     function CreateNewAttempt: TIdSipRequest; override;
+    function ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionResult; override;
   public
     property Dialog:   TIdSipDialog read fDialog write fDialog;
     property Duration: Cardinal     read fDuration write fDuration;
@@ -1673,6 +1676,40 @@ begin
   Result := Self.Module.CreateSubscribe(Self.Dialog, Self.EventPackage);
   Result.Event.ID             := Self.EventID;
   Result.Expires.NumericValue := Self.Duration;
+end;
+
+function TIdSipOutboundRefreshSubscribe.ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionResult;
+begin
+  Result := inherited ReceiveFailureResponse(Response);
+
+  if (Result = arFailure) then begin
+    case Response.StatusCode of
+      SIPIntervalTooBrief: begin
+        Self.ReissueRequestWithLongerExpiry(Response.MinExpires.NumericValue);
+        Result := arSuccess;
+      end;
+    else
+      Result := arFailure;
+    end;
+  end;
+end;
+
+//* TIdSipOutboundRefreshSubscribe Private methods *****************************
+
+procedure TIdSipOutboundRefreshSubscribe.ReissueRequestWithLongerExpiry(MinExpires: Cardinal);
+var
+  Sub: TIdSipRequest;
+begin
+  Self.Duration := MinExpires;
+
+  Sub := Self.CreateNewAttempt;
+  try
+    Self.InitialRequest.Assign(Sub);
+
+    Self.SendRequest(Sub);
+  finally
+    Sub.Free;
+  end;
 end;
 
 //******************************************************************************

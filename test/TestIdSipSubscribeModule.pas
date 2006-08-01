@@ -425,6 +425,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestReceive423;
     procedure TestSend; override;
   end;
 
@@ -644,6 +645,7 @@ type
     procedure TestReceiveTerminatingNotifyWithUnknownReasonAndRetryAfter; virtual;
     procedure TestRedirectWithMultipleContacts;
     procedure TestRefresh;
+    procedure TestRefreshReceives423;
     procedure TestRefreshReceives481;
     procedure TestRefreshReceives4xx;
     procedure TestRefreshUpdatesExpiryTime;
@@ -2221,6 +2223,32 @@ end;
 
 //* TestTIdSipOutboundRefreshSubscribe Published methods ***********************
 
+procedure TestTIdSipOutboundRefreshSubscribe.TestReceive423;
+var
+  MinExpires: Cardinal;
+  Refresh:    TIdSipAction;
+  SubCount:   Cardinal;
+begin
+  Refresh := Self.CreateAction;
+  SubCount := Self.Core.CountOf(Refresh.Method);
+
+  MinExpires := 2*Self.ExpiresValue;
+  Self.MarkSentRequestCount;
+  Self.ReceiveIntervalTooBrief(Refresh.InitialRequest, MinExpires);
+  CheckRequestSent(Self.ClassName + ': No new attempt sent');
+  CheckEquals(MethodSubscribe,
+              Self.LastSentRequest.Method,
+              'Unexpected request sent');
+  Check(Self.LastSentRequest.HasHeader(ExpiresHeader),
+        'Refreshing SUBSCRIBE missing an Expires header');
+  CheckEquals(MinExpires,
+              Self.LastSentRequest.Expires.NumericValue,
+              'Wrong Expires value sent; Min-Expires value not honoured');
+  CheckEquals(SubCount,
+              Self.Core.CountOf(MethodSubscribe),
+              'Action was erroneously terminated');
+end;
+
 procedure TestTIdSipOutboundRefreshSubscribe.TestSend;
 begin
   Self.MarkSentRequestCount;
@@ -2737,6 +2765,7 @@ end;
 
 procedure TestTIdSipInboundSubscriptionBase.TestReceiveSubscribeWithZeroExpires;
 var
+  Method:   String;
   SubCount: Integer;
 begin
   //                     <existing subscription>
@@ -2745,7 +2774,8 @@ begin
   //  --- NOTIFY (Subscription-State: terminated;reason=timeout --->
   // <---                        200 OK                         ---
 
-  SubCount := Self.Core.CountOf(MethodSubscribe);
+  Method   := Self.Action.Method;
+  SubCount := Self.Core.CountOf(Method);
   Self.MarkSentRequestCount;
   Self.MarkSentResponseCount;
   Self.ReceiveRefreshingSubscribe(Self.Action,
@@ -2769,7 +2799,7 @@ begin
   // Receive the 200 OK for the terminating NOTIFY
   Self.ReceiveOk(Self.LastSentRequest);
 
-  Check(Self.Core.CountOf(MethodSubscribe) < SubCount,
+  Check(Self.Core.CountOf(Method) < SubCount,
         'Subscription not terminated');
 end;
 
@@ -4065,11 +4095,36 @@ begin
             + ': Refresh must happen in the context of the original dialog: To tag');
   Check(Self.LastSentRequest.HasHeader(ExpiresHeader),
         Self.ClassName
-      + ': Refresh has no Expires header');          
+      + ': Refresh has no Expires header');
   CheckEquals(ExpiryTime,
               Self.LastSentRequest.Expires.NumericValue,
               Self.ClassName
             + ': Refresh sent incorrect Expires time');
+end;
+
+procedure TestTIdSipOutboundSubscriptionBase.TestRefreshReceives423;
+const
+  AttemptedExpiry = 1000;
+  NewExpiry       = 2*AttemptedExpiry;
+begin
+  //  ---          SUBSCRIBE         --->
+  // <---            200 OK          ---
+  //             <time passes>
+  //  ---          SUBSCRIBE         --->
+  // <---   423 Interval Too Brief   ---
+  //  --- SUBSCRIBE with new Expires --->
+
+  Self.Subscription.Refresh(AttemptedExpiry);
+
+  Self.MarkSentRequestCount;
+  Self.ReceiveIntervalTooBrief(Self.LastSentRequest, NewExpiry);
+  CheckRequestSent('No request sent, so no re-attempted SUBSCRIBE refresh');
+  CheckEquals(MethodSubscribe,
+              Self.LastSentRequest.Method,
+              'Wrong request sent');
+  CheckEquals(NewExpiry,
+              Self.LastSentRequest.Expires.NumericValue,
+              'Wrong expiry time attempted');
 end;
 
 procedure TestTIdSipOutboundSubscriptionBase.TestRefreshReceives481;
