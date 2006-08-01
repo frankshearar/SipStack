@@ -2079,9 +2079,11 @@ end;
 
 procedure TIdSipInboundSubscription.EstablishDialog(Response: TIdSipResponse);
 begin
-  inherited EstablishDialog(Response);
+  if not Self.DialogEstablished then begin
+    inherited EstablishDialog(Response);
 
-  Self.InitialRequest.ToHeader.Tag := Self.Dialog.ID.LocalTag;
+    Self.InitialRequest.ToHeader.Tag := Self.Dialog.ID.LocalTag;
+  end;
 end;
 
 function TIdSipInboundSubscription.GetEventPackage(Request: TIdSipRequest): String;
