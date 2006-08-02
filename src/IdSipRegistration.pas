@@ -1331,7 +1331,7 @@ begin
 end;
 
 function TIdSipOutboundRegisterBase.CreateRegister(Registrar: TIdSipUri;
-                                               Bindings: TIdSipContacts): TIdSipRequest;
+                                                   Bindings: TIdSipContacts): TIdSipRequest;
 var
   ToHeader: TIdSipToHeader;
 begin
