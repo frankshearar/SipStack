@@ -570,6 +570,22 @@ type
     property Stack:  TIdSipStackInterface read fStack write fStack;
   end;
 
+  TIdSipStackReconfigureStackInterfaceWait = class(TIdWait)
+  private
+    fConfiguration: TStrings;
+    fStack:         TIdSipStackInterface;
+
+    procedure SetConfiguration(Value: TStrings);
+  public
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    procedure Trigger; override;
+
+    property Configuration: TStrings             read fConfiguration write SetConfiguration;
+    property Stack:         TIdSipStackInterface read fStack write fStack;
+  end;
+
   EInvalidHandle = class(Exception);
 
   // Raise me when the UserAgent doesn't support an action (e.g., it doesn't use
@@ -987,11 +1003,11 @@ end;
 
 procedure TIdSipStackInterface.ReconfigureStack(NewConfiguration: TStrings);
 var
-  Wait: TIdSipReconfigureStackWait;
+  Wait: TIdSipStackReconfigureStackInterfaceWait;
 begin
-  Wait := TIdSipReconfigureStackWait.Create;
+  Wait := TIdSipStackReconfigureStackInterfaceWait.Create;
   Wait.Configuration := NewConfiguration;
-  Wait.Stack         := Self.UserAgent;
+  Wait.Stack         := Self;
   
   Self.AddEvent(TriggerImmediately, Wait);
 end;
@@ -2549,6 +2565,45 @@ begin
   (Subject as IIdSipStackListener).OnEvent(Self.Stack,
                                            Self.Event,
                                            Self.Data);
+end;
+
+//******************************************************************************
+//* TIdSipStackReconfigureStackInterfaceWait                                   *
+//******************************************************************************
+//* TIdSipStackReconfigureStackInterfaceWait Public methods ********************
+
+constructor TIdSipStackReconfigureStackInterfaceWait.Create;
+begin
+  inherited Create;
+
+  Self.fConfiguration := TStringList.Create;
+end;
+
+destructor TIdSipStackReconfigureStackInterfaceWait.Destroy;
+begin
+  Self.Configuration.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipStackReconfigureStackInterfaceWait.Trigger;
+var
+  Configurator: TIdSipStackConfigurator;
+begin
+  Self.Stack.Configure(Self.Configuration);
+
+  Configurator := TIdSipStackConfigurator.Create;
+  try
+    Configurator.UpdateConfiguration(Self.Stack.UserAgent, Self.Configuration);
+  finally
+    Configurator.Free;
+  end;
+end;
+
+//* TIdSipStackReconfigureStackInterfaceWait Private methods *******************
+
+procedure TIdSipStackReconfigureStackInterfaceWait.SetConfiguration(Value: TStrings);
+begin
 end;
 
 end.
