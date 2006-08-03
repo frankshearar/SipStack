@@ -242,6 +242,7 @@ type
 
     function  EqualParameters(const Uri: TIdSipUri): Boolean;
     function  GetGrid: String;
+    function  GetIsGruu: Boolean;
     function  GetMaddr: String;
     function  GetMethod: String;
     function  GetOpaque: String;
@@ -259,6 +260,7 @@ type
     procedure ParseUserInfo(UserInfo: String);
     procedure Reset;
     procedure SetGrid(const Value: String);
+    procedure SetIsGruu(const Value: Boolean);
     procedure SetMaddr(const Value: String);
     procedure SetMethod(const Value: String);
     procedure SetOpaque(const Value: String);
@@ -315,6 +317,7 @@ type
 
     property Grid:            String        read GetGrid write SetGrid;
     property Headers:         TIdSipHeaders read fHeaders;
+    property IsGruu:          Boolean       read GetIsGruu write SetIsGruu;
     property IsMalformed:     Boolean       read fIsMalformed;
     property Maddr:           String        read GetMaddr write SetMaddr;
     property Method:          String        read GetMethod write SetMethod;
@@ -408,12 +411,19 @@ type
 
   // I have an important limitation: my Address property can only contain a SIP
   // or SIPS URI, but according to RFC 3261, I should be able to accept ANY URI.
+  //
+  // A subtle point: IsGruu tells you whether the URI in the header is a GRUU or
+  // not. The Contact header also has a "gruu" parameter. A header's "gruu"
+  // parameter is a valued parameter _containing_ a GRUU, whereas a URI's "gruu"
+  // parameter is a valueless flag indicating that the URI _is_ a GRUU.
   TIdSipUriHeader = class(TIdSipHeader)
   private
     fAddress: TIdSipUri;
 
     function  GetGrid: String;
+    function  GetIsGruu: Boolean;
     procedure SetAddress(Value: TIdSipUri);
+    procedure SetIsGruu(Value: Boolean);
     procedure SetGrid(Value: String);
   protected
     function  GetValue: String; override;
@@ -423,6 +433,7 @@ type
     destructor  Destroy; override;
 
     property Address: TIdSipUri read fAddress write SetAddress;
+    property IsGruu:  Boolean   read GetIsGruu write SetIsGruu;
     property Grid:    String    read GetGrid write SetGrid;
   end;
 
@@ -605,6 +616,12 @@ type
     property Values[Index: Integer]: TIdSipWeightedValue read GetValues write SetValues;
   end;
 
+  // Note that I have a "gruu" parameter, and so does the URI I contain. These
+  // parameters are very different! My "gruu" parameter contains a GRUU, while
+  // my URI's "gruu" parameter is a valueless parameter - a flag - whose
+  // presence indicates that it's a GRUU. Thus:
+  //   Contact: sip:case@fried-neurons.org;gruu="sip:foo;opaque="bar";gruu>
+  // is a Contact containing a GRUU.
   TIdSipContactHeader = class(TIdSipAddressHeader)
   private
     fIsWildCard:  Boolean;
@@ -1749,15 +1766,15 @@ const
   ExpireNow                      = 0;
   ExpiresHeader                  = 'Expires';
   ExpiresParam                   = 'expires';
-  ExtensionGruu                  = 'gruu'; // cf. draft-ietf-sip-gruu-06
+  ExtensionGruu                  = 'gruu'; // cf. draft-ietf-sip-gruu-10
   ExtensionReliableProvisional   = '100rel'; // cf. RFC 3262
   ExtensionReplaces              = 'replaces'; // cf. RFC 3891
   ExtensionTargetDialog          = 'tdialog'; // cf. draft-ietf-sip-target-dialog-01
   FromHeaderFull                 = 'From';
   FromHeaderShort                = 'f';
   FromTagParam                   = 'from-tag'; // cf. RFC 3891
-  GridParam                      = 'grid'; // cf. draft-ietf-sip-gruu-06
-  GruuParam                      = 'gruu'; // cf. draft-ietf-sip-gruu-06
+  GridParam                      = 'grid'; // cf. draft-ietf-sip-gruu-10
+  GruuParam                      = 'gruu'; // cf. draft-ietf-sip-gruu-10
   HandlingOptional               = 'optional';
   HandlingParam                  = 'handling';
   HandlingRequired               = 'required';
@@ -1819,7 +1836,7 @@ const
   RouteHeader                    = 'Route';
   RportParam                     = 'rport';
   ServerHeader                   = 'Server';
-  SipInstanceParam               = '+sip.instance'; // cf. draft-ietf-sip-gruu-06
+  SipInstanceParam               = '+sip.instance'; // cf. draft-ietf-sip-outbound-04
   SipScheme                      = 'sip';
   SipsScheme                     = 'sips';
   StaleParam                     = 'stale';
@@ -3552,6 +3569,11 @@ begin
   Result := Self.ParamValue(GridParam);
 end;
 
+function TIdSipUri.GetIsGruu: Boolean;
+begin
+  Result := Self.HasParameter(GruuParam);
+end;
+
 function TIdSipUri.GetMaddr: String;
 begin
   Result := Self.ParamValue(MaddrParam);
@@ -3717,6 +3739,17 @@ end;
 procedure TIdSipUri.SetGrid(const Value: String);
 begin
   Self.Parameters[GridParam] := Value;
+end;
+
+procedure TIdSipUri.SetIsGruu(const Value: Boolean);
+begin
+  if Value then begin
+    if not Self.HasParameter(GruuParam) then
+      Self.AddParameter(GruuParam);
+  end
+  else begin
+    Self.RemoveParameter(GruuParam);
+  end;
 end;
 
 procedure TIdSipUri.SetMaddr(const Value: String);
@@ -4026,9 +4059,19 @@ begin
   Result := Self.Address.Grid;
 end;
 
+function TIdSipUriHeader.GetIsGruu: Boolean;
+begin
+  Result := Self.Address.IsGruu;
+end;
+
 procedure TIdSipUriHeader.SetAddress(Value: TIdSipUri);
 begin
   fAddress.URI := Value.URI;
+end;
+
+procedure TIdSipUriHeader.SetIsGruu(Value: Boolean);
+begin
+  Self.Address.IsGruu := Value;
 end;
 
 procedure TIdSipUriHeader.SetGrid(Value: String);

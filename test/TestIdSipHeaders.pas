@@ -601,6 +601,7 @@ type
   public
     procedure SetUp; override;
   published
+    procedure TestIsGruu;
     procedure TestValue; override;
     procedure TestValueWithParams;
     procedure TestValueWithUriParams;
@@ -5497,6 +5498,30 @@ begin
 end;
 
 //* TestTIdSipUriHeader Published methods **************************************
+
+procedure TestTIdSipUriHeader.TestIsGruu;
+const
+  BaseUri = 'sip:wintermute@tessier-ashpool.co.luna';
+begin
+  Self.U.Address.Uri := BaseUri;
+  Check(not Self.U.IsGruu, 'Looks like a GRUU, but no "gruu" parameter');
+
+  Self.U.IsGruu := true;
+  Check(Self.U.IsGruu, 'IsGruu not set');
+  CheckEquals(BaseUri + ';' + GruuParam,
+              Self.U.Address.Uri,
+              '"gruu" parameter doesn''t show up in the URI');
+
+  Self.U.IsGruu := false;
+  Check(not Self.U.IsGruu, 'IsGruu not unset');
+  CheckEquals(BaseUri,
+              Self.U.Address.Uri,
+              '"gruu" parameter not removed');
+
+  Self.U.Address.Uri := BaseUri + ';' + GruuParam;
+  Check(Self.U.IsGruu,
+        'IsGruu not set after setting Uri with a GRUU');
+end;
 
 procedure TestTIdSipUriHeader.TestValue;
 begin
