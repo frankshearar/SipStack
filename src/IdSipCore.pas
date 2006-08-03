@@ -1601,7 +1601,7 @@ begin
     OutboundRequest.AddHeader(UserAgentHeader).Value := Self.UserAgentName;
 
   if Self.UseGruu then 
-    // draft-ietf-sip-gruu, section 8.1
+    // draft-ietf-sip-gruu-10, section 8.1
     OutboundRequest.AddHeader(Self.Gruu)
   else
     OutboundRequest.AddHeader(Self.Contact);

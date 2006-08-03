@@ -116,6 +116,7 @@ type
     procedure TestHasMaddr;
     procedure TestHasMethod;
     procedure TestHasParameter;
+    procedure TestIsGruu;
     procedure TestIsLooseRoutable;
     procedure TestIsPassword;
     procedure TestIsParamNameOrValue;
@@ -1314,6 +1315,30 @@ begin
 
   Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;transport=udp;foo=bar;lr';
   Check(Uri.HasParameter('foo'), 'parameter amongst others');
+end;
+
+procedure TestTIdSipUri.TestIsGruu;
+const
+  BaseUri = 'sip:wintermute@tessier-ashpool.co.luna';
+begin
+  Self.Uri.Uri := BaseUri;
+  Check(not Self.Uri.IsGruu, 'Looks like a GRUU, but no "gruu" parameter');
+
+  Self.Uri.IsGruu := true;
+  Check(Self.Uri.IsGruu, 'IsGruu not set');
+  CheckEquals(BaseUri + ';' + GruuParam,
+              Self.Uri.Uri,
+              '"gruu" parameter doesn''t show up in the URI');
+
+  Self.Uri.IsGruu := false;
+  Check(not Self.Uri.IsGruu, 'IsGruu not unset');
+  CheckEquals(BaseUri,
+              Self.Uri.Uri,
+              '"gruu" parameter not removed');
+
+  Self.Uri.Uri := BaseUri + ';' + GruuParam;
+  Check(Self.Uri.IsGruu,
+        'IsGruu not set after setting Uri with a GRUU');
 end;
 
 procedure TestTIdSipUri.TestIsLooseRoutable;
