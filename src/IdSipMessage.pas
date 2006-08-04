@@ -1296,6 +1296,7 @@ type
     function  FirstHeaderValue(const HeaderName: String): String;
     function  FirstMalformedHeader: TIdSipHeader;
     function  GetAccept: TIdSipWeightedCommaSeparatedHeader;
+    function  GetAllow: TIdSipCommaSeparatedHeader;
     function  GetCallID: String;
     function  GetContentDisposition: TIdSipContentDispositionHeader;
     function  GetContentLanguage: String;
@@ -1315,6 +1316,7 @@ type
     function  QuickestContactExpiry: Cardinal;
     function  QuickestExpiresHeader: Cardinal;
     procedure SetAccept(Value: TIdSipWeightedCommaSeparatedHeader);
+    procedure SetAllow(Value: TIdSipCommaSeparatedHeader);
     procedure SetBlankableStringHeader(const HeaderName: String;
                                        const Value: String);
     procedure SetCallID(const Value: String);
@@ -1404,6 +1406,7 @@ type
     function  WantsAllowEventsHeader: Boolean; virtual;
 
     property Accept:             TIdSipWeightedCommaSeparatedHeader read GetAccept write SetAccept;
+    property Allow:              TIdSipCommaSeparatedHeader         read GetAllow write SetAllow;
     property Body:               String                             read fBody write fBody;
     property CallID:             String                             read GetCallID write SetCallID;
     property Contacts:           TIdSipContacts                     read fContacts write SetContacts;
@@ -8153,6 +8156,11 @@ begin
   Result := Self.FirstHeader(AcceptHeader) as TIdSipWeightedCommaSeparatedHeader;
 end;
 
+function TIdSipMessage.GetAllow: TIdSipCommaSeparatedHeader;
+begin
+  Result := Self.FirstHeader(AllowHeader) as TIdSipCommaSeparatedHeader;
+end;
+
 function TIdSipMessage.GetCallID: String;
 begin
   Result := Self.FirstHeaderValue(CallIDHeaderFull);
@@ -8287,6 +8295,11 @@ end;
 procedure TIdSipMessage.SetAccept(Value: TIdSipWeightedCommaSeparatedHeader);
 begin
   Self.FirstHeader(AcceptHeader).Assign(Value);
+end;
+
+procedure TIdSipMessage.SetAllow(Value: TIdSipCommaSeparatedHeader);
+begin
+  Self.FirstHeader(AllowHeader).Assign(Value);
 end;
 
 procedure TIdSipMessage.SetBlankableStringHeader(const HeaderName: String;

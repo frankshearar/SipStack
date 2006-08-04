@@ -67,6 +67,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAcceptHeader;
+    procedure TestAllowHeader;
     procedure TestAccessingHeaderDoesntAddHeader;
     procedure TestAddHeader;
     procedure TestAddHeaderName;
@@ -713,6 +714,34 @@ begin
                          'New Accept doesn''t equal message''s Accept');
   finally
     Accept.Free;
+  end;
+end;
+
+procedure TestTIdSipMessage.TestAllowHeader;
+var
+  Allow: TIdSipCommaSeparatedHeader;
+begin
+  Check(not Self.Msg.HasHeader(AllowHeader),
+        'Sanity check: a new message should have no Allow header');
+
+  Self.Msg.Allow;
+  Check(Assigned(Self.Msg.Allow),
+        'Getter didn''t instantiate the Allow header');
+
+  Allow := TIdSipCommaSeparatedHeader.Create;
+  try
+    Allow.Name  := AllowHeader;
+    Allow.Value := MethodInvite;
+
+    // This sneakily checks that (a) the Setter instantiates a Allow header,
+    // AND that the setter copies the information for that header properly.
+    Self.Msg.RemoveAllHeadersNamed(AllowHeader);
+    Self.Msg.Allow := Allow;
+
+    Check(Allow.Equals(Self.Msg.Allow),
+                         'New Allow doesn''t equal message''s Allow');
+  finally
+    Allow.Free;
   end;
 end;
 
