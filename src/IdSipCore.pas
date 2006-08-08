@@ -3684,12 +3684,16 @@ begin
   Response := Self.UA.CreateResponse(Options,
                                      Self.UA.ResponseForInvite);
   try
-    Response.AddHeader(AcceptHeader).Value := Self.UA.AllowedContentTypes;
-    Response.AddHeader(AllowHeader).Value  := Self.UA.KnownMethods;
-    Response.AddHeader(AcceptEncodingHeader).Value := Self.UA.AllowedEncodings;
-    Response.AddHeader(AcceptLanguageHeader).Value := Self.UA.AllowedLanguages;
-    Response.AddHeader(SupportedHeaderFull).Value := Self.UA.AllowedExtensions;
-    Response.AddHeader(ContactHeaderFull).Assign(Self.UA.Contact);
+    Response.Accept.Value := Self.UA.AllowedContentTypes;
+    Response.Allow.Value  := Self.UA.KnownMethods;
+
+    if not Response.HasHeader(AcceptEncodingHeader) then
+      Response.AddHeader(AcceptEncodingHeader).Value := Self.UA.AllowedEncodings;
+    if not Response.HasHeader(AcceptLanguageHeader) then
+      Response.AddHeader(AcceptLanguageHeader).Value := Self.UA.AllowedLanguages;
+
+    Response.Supported.Value := Self.UA.AllowedExtensions;
+    Response.FirstContact.Assign(Self.UA.Contact);
 
     // For OPTIONS "traceroute"-like functionality. cf RFC 3261, section 11.2
     Response.FirstWarning.Code  := WarningMisc;
