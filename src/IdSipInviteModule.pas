@@ -1090,7 +1090,6 @@ begin
 
   OutboundRequest.AddHeader(AllowHeader).Value := Self.UserAgent.KnownMethods;
   OutboundRequest.Accept.Value    := Self.ConvertToHeader(Self.AllowedContentTypes);
-  OutboundRequest.Supported.Value := Self.AllowedExtensions;
 end;
 
 //******************************************************************************
