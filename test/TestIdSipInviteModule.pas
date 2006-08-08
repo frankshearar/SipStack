@@ -457,6 +457,7 @@ type
                              Destination: TIdSipLocation);
     procedure ReceiveForbidden;
     procedure ReceiveOKWithRecordRoute;
+    procedure ReceiveProvisionalResponse(StatusCode: Cardinal; SDP: String);
     procedure ReceiveRemoteDecline;
   protected
     MimeType: String;
@@ -482,6 +483,7 @@ type
     procedure TestAckWithProxyAuthorization;
     procedure TestByeCarriesInviteAuthorization;
     procedure TestCall;
+    procedure TestCallFlowToGateway;
     procedure TestCallNetworkFailure;
     procedure TestCallRemoteRefusal;
     procedure TestCallSecure;
@@ -5275,6 +5277,24 @@ begin
   end;
 end;
 
+procedure TestTIdSipOutboundSession.ReceiveProvisionalResponse(StatusCode: Cardinal; SDP: String);
+var
+  Response: TIdSipResponse;
+begin
+  Response := TIdSipResponse.InResponseTo(Self.LastSentRequest, StatusCode);
+  try
+    if (SDP <> '') then begin
+      Response.Body := SDP;
+      Response.ContentType := SdpMimeType;
+      Response.ContentLength := Length(Response.Body);
+    end;
+
+    Self.ReceiveResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
 procedure TestTIdSipOutboundSession.ReceiveRemoteDecline;
 begin
   Self.ReceiveResponse(Self.LastSentRequest, SIPDecline);
@@ -5607,6 +5627,43 @@ begin
               'RemoteMimeType');
 
   Check(not Session.IsEarly, 'Dialog in incorrect state: shouldn''t be early');
+end;
+
+procedure TestTIdSipOutboundSession.TestCallFlowToGateway;
+var
+  Session: TIdSipOutboundSession;
+begin
+  // This test simulates a call to the RNID PSTN textphone gateway.
+  //  ---           INVITE            --->
+  // <---     183 Session Progress    ---
+  // <---         180 Ringing         ---
+  // <---           200 OK            ---
+  //  ---            ACK              --->
+
+  Session := Self.CreateAction as TIdSipOutboundSession;
+  Self.ReceiveProvisionalResponse(SIPSessionProgress, '');
+
+  CheckEquals('',
+              Session.RemoteSessionDescription,
+              'Session''s remote description wrong after Session Progress');
+
+  Self.ReceiveProvisionalResponse(SIPRinging, '');
+
+  CheckEquals('',
+              Session.RemoteSessionDescription,
+              'Session''s remote description wrong after Ringing');
+
+  Self.ReceiveOk(Session.InitialRequest, Self.SDP);
+
+  CheckEquals(Self.SDP,
+              Session.RemoteSessionDescription,
+              'Session''s remote description wrong after OK');
+  CheckEquals(Self.SDP,
+              Self.RemoteDesc,
+              'Notifiers given wrong remote description');
+  CheckEquals(SdpMimeType,
+              Self.RemoteMimeType,
+              'Notifiers given wrong remote description');
 end;
 
 procedure TestTIdSipOutboundSession.TestCallNetworkFailure;
