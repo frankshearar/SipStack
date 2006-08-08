@@ -894,9 +894,6 @@ function TIdSipInviteModule.AllowedExtensions: String;
 begin
   Result := ExtensionReplaces + ', '
           + ExtensionTargetDialog;
-
-  if Self.UserAgent.UseGruu then
-    Result := ExtensionGruu + ', ' + Result;          
 end;
 
 function TIdSipInviteModule.Call(Dest: TIdSipAddressHeader;
