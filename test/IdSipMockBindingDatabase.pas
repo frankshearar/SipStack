@@ -15,6 +15,9 @@ uses
  Classes, Contnrs, IdSipMessage, IdSipRegistration;
 
 type
+  // I am a proper BindingDatabase. I just store my data in memory, and provide
+  // no persistence. Oh, and I allow you to cause operations to fail by setting
+  // any of the Fail* properties.
   TIdSipMockBindingDatabase = class(TIdSipAbstractBindingDatabase)
   private
     BindingStore:       TObjectList;
