@@ -2749,23 +2749,20 @@ begin
 end;
 
 procedure TIdSipInboundSession.RedirectCall(NewDestination: TIdSipAddressHeader);
-var
-  RedirectResponse: TIdSipResponse;
 begin
-  RedirectResponse := Self.UA.CreateResponse(Self.InitialRequest,
-                                             SIPMovedTemporarily);
-  try
-    RedirectResponse.AddHeader(ContactHeaderFull).Value := NewDestination.FullValue;
-    Self.SendResponse(RedirectResponse);
-  finally
-    RedirectResponse.Free;
-  end;
+  if not Assigned(Self.InitialInvite) then
+    raise EIdSipTransactionUser.Create('You have already accepted the call');
+
+  Self.InitialInvite.Redirect(NewDestination);
 
   Self.NotifyOfEndedSession(CallRedirected, RSNoReason);
 end;
 
 procedure TIdSipInboundSession.RejectCallBusy;
 begin
+  if not Assigned(Self.InitialInvite) then
+    raise EIdSipTransactionUser.Create('You have already accepted the call');
+
   Self.InitialInvite.RejectCallBusy;
 
   Self.NotifyOfEndedSession(BusyHere, RSNoReason);
