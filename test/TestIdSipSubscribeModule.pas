@@ -2729,7 +2729,7 @@ begin
         'Response missing Supported header');
   Check(Self.LastSentResponse.SupportsExtension(ExtensionGruu),
         'Supported header fails to indicate support of "gruu" extension');
-  CheckEquals(Self.Core.Gruu.Address.Host,
+  CheckEquals(Self.Core.Contact.Address.Host,
               Self.LastSentResponse.FirstContact.Address.Host,
               'Response didn''t use GRUU');
   Check(Self.LastSentResponse.FirstContact.Address.HasGrid,
@@ -4222,7 +4222,7 @@ begin
         'Missing Supported header');
   Check(Sub.SupportsExtension(ExtensionGruu),
         'Supported header fails to indicate "gruu" support');
-  CheckEquals(Self.Core.Gruu.Address.Host,
+  CheckEquals(Self.Core.Contact.Address.Host,
               Sub.FirstContact.Address.Host,
               Sub.Method + ' didn''t use GRUU');
   Check(Sub.FirstContact.Address.HasGrid,
@@ -4565,7 +4565,7 @@ begin
   // Set us up to support GRUU
   Self.UseGruu;
 
-  Refer := Self.Module.CreateRefer(Self.Destination, Self.Core.Gruu);
+  Refer := Self.Module.CreateRefer(Self.Destination, Self.Core.Contact);
   try
     // See the comment in TSubscribeTestCase.ReceiveSubscribe.
     Refer.FirstContact.Address := Self.Destination.Address;

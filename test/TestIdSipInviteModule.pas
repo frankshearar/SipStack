@@ -2262,7 +2262,7 @@ begin
               Self.LastSentRequest.Method,
               'Method of sent request');
 
-  CheckEquals(Self.Core.Gruu.Address.Host,
+  CheckEquals(Self.Core.Contact.Address.Host,
               Invite.LocalGruu.Address.Host,
               'LocalGruu not set');
   Check(Invite.LocalGruu.Address.HasGrid,
@@ -2932,7 +2932,7 @@ begin
               Self.LastSentRequest.Method,
               Self.ClassName + ': Method of sent request');
 
-  CheckEquals(Self.Core.Gruu.Address.Host,
+  CheckEquals(Self.Core.Contact.Address.Host,
               Invite.LocalGruu.Address.Host,
               Self.ClassName + ': LocalGruu not set');
   Check(not Invite.LocalGruu.Address.HasGrid,
@@ -4745,7 +4745,7 @@ begin
         'OK missing a Supported header');
   Check(Ok.SupportsExtension(ExtensionGruu),
         'OK''s Supported header doesn''t indicate support of GRUU');
-  CheckEquals(Self.Core.Gruu.Address.Host,
+  CheckEquals(Self.Core.Contact.Address.Host,
               Self.LastSentResponse.FirstContact.Address.Host,
               'GRUU not used as OK''s Contact');
 end;
@@ -5059,7 +5059,7 @@ begin
   Check(Assigned(Self.Session), 'OnInboundCall not called');
   CheckResponseSent('No response sent');
 
-  CheckEquals(Self.Core.Gruu.Address.Host,
+  CheckEquals(Self.Core.Contact.Address.Host,
               Self.LastSentResponse.FirstContact.Address.Host,
               'Response didn''t use GRUU as Contact');
   Check(Self.LastSentResponse.FirstContact.Address.HasGrid,
@@ -5737,9 +5737,9 @@ begin
   Invite := Self.LastSentRequest;
 
   // draft-ietf-sip-gruu section 8.1
-  CheckEquals(Self.Core.Gruu.Address.Host,
+  CheckEquals(Self.Core.Contact.Address.Host,
               Invite.FirstContact.Address.Host,
-              'INVITE didn''t use UA''s GRUU (' + Self.Core.Gruu.Address.AsString + ')');
+              'INVITE didn''t use UA''s GRUU (' + Self.Core.Contact.Address.AsString + ')');
   Check(Invite.FirstContact.Address.HasParameter(GridParam),
         'GRUUs sent out in INVITEs should have a "grid" parameter');
 end;
@@ -6616,7 +6616,7 @@ begin
   Session := Self.CreateAndEstablishSession;
   CheckRequestSent('No INVITE sent');
 
-  CheckEquals(Self.Core.Gruu.Address.Host,
+  CheckEquals(Self.Core.Contact.Address.Host,
               Session.LocalGruu.Address.Host,
               'LocalGruu not set');
   Check(Session.LocalGruu.Address.HasGrid,

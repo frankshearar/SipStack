@@ -620,6 +620,16 @@ type
     property Streams[Index: Integer]: TIdSDPMediaStream read GetStreams;
   end;
 
+  TIdSdpNatMasquerader = class(TObject)
+  private
+    fExternalIP: String;
+  public
+//    procedure DeNatify(Payload: TIdSdpPayload);
+//    procedure Natify(Payload: TIdSdpPayload);
+
+    property ExternalIP: String read fExternalIP write fExternalIP;
+  end;
+
 const
   BlankSession = '-';
 

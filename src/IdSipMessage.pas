@@ -9075,16 +9075,16 @@ var
 begin
   Result := Self.InResponseTo(Request, StatusCode);
 
-  if Result.WillEstablishDialog(Request) then begin
-    // cf RFC 3261 section 12.1.1
-    ReqRecordRoutes := TIdSipHeadersFilter.Create(Request.Headers,
-                                                  RecordRouteHeader);
-    try
-      Result.AddHeaders(ReqRecordRoutes);
+  NewContact := TIdSipContactHeader.Create;
+  try
+    NewContact.Assign(Contact);
 
-      NewContact := TIdSipContactHeader.Create;
+    if Result.WillEstablishDialog(Request) then begin
+      // cf RFC 3261 section 12.1.1
+      ReqRecordRoutes := TIdSipHeadersFilter.Create(Request.Headers,
+                                                    RecordRouteHeader);
       try
-        NewContact.Assign(Contact);
+        Result.AddHeaders(ReqRecordRoutes);
 
         if not ReqRecordRoutes.IsEmpty then begin
           ReqRecordRoutes.First;
@@ -9096,14 +9096,14 @@ begin
 
         if Request.HasSipsUri then
           NewContact.Address.Scheme := SipsScheme;
-
-        Result.AddHeader(NewContact);
       finally
-        NewContact.Free;
+        ReqRecordRoutes.Free;
       end;
-    finally
-      ReqRecordRoutes.Free;
     end;
+
+    Result.AddHeader(NewContact);
+  finally
+    NewContact.Free;
   end;
 end;
 

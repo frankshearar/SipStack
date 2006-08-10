@@ -75,8 +75,6 @@ type
   // Here's a summary of the formats for each directive:
   //   Contact: sip:wintermute@tessier-ashpool.co.luna
   //   From: "Count Zero" <sip:countzero@jammer.org>
-  //   Gruu: "Count Zero" <sip:countzero@jammer.org;opaque=foo>
-  //   UseGruu: "yes"|"no"|"true"|"false"|"1"|"0" (case insensitive)
   //   HostName: talkinghead1.tessier-ashpool.co.luna
   //   HostName: 192.168.1.1
   //   Listen: <transport name><SP><host|IPv4 address|IPv6 reference|AUTO>:<port>
@@ -101,8 +99,6 @@ type
                       const ContactLine: String);
     procedure AddFrom(UserAgent: TIdSipAbstractCore;
                       const FromLine: String);
-    procedure AddGruu(UserAgent: TIdSipAbstractCore;
-                      const GruuLine: String);
     procedure AddHostName(UserAgent: TIdSipAbstractCore;
                       const HostNameLine: String);
     procedure AddLocator(UserAgent: TIdSipAbstractCore;
@@ -129,8 +125,6 @@ type
     procedure SendPendingActions(Actions: TObjectList);
     procedure SetInstanceID(UserAgent: TIdSipUserAgent;
                             const InstanceIDLine: String);
-    procedure SetUseGruu(UserAgent: TIdSipUserAgent;
-                            const UseGruuLine: String);
   public
     function CreateUserAgent(Configuration: TStrings;
                              Context: TIdTimerQueue): TIdSipUserAgent; overload;
@@ -161,7 +155,6 @@ const
   ContactDirective         = ContactHeaderFull;
   DebugMessageLogDirective = 'DebugMessageLog';
   FromDirective            = FromHeaderFull;
-  GruuDirective            = 'GRUU';
   HostNameDirective        = 'HostName';
   InstanceIDDirective      = 'InstanceID';
   ListenDirective          = 'Listen';
@@ -170,7 +163,6 @@ const
   ProxyDirective           = 'Proxy';
   RegisterDirective        = 'Register';
   SupportEventDirective    = 'SupportEvent';
-  UseGruuDirective         = 'UseGruu';
 
 procedure EatDirective(var Line: String);
 
@@ -437,13 +429,6 @@ begin
   Self.AddAddress(UserAgent, UserAgent.From, FromLine);
 end;
 
-procedure TIdSipStackConfigurator.AddGruu(UserAgent: TIdSipAbstractCore;
-                                          const GruuLine: String);
-begin
-  // See class comment for the format for this directive.
-  Self.AddAddress(UserAgent, UserAgent.Gruu, GruuLine);
-end;
-
 procedure TIdSipStackConfigurator.AddHostName(UserAgent: TIdSipAbstractCore;
                                               const HostNameLine: String);
 var
@@ -629,8 +614,6 @@ begin
     Self.AddContact(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, FromDirective) then
     Self.AddFrom(UserAgent, ConfigurationLine)
-  else if IsEqual(FirstToken, GruuDirective) then
-    Self.AddGruu(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, HostNameDirective) then
     Self.AddHostName(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, InstanceIDDirective) then
@@ -644,9 +627,7 @@ begin
   else if IsEqual(FirstToken, RegisterDirective) then
     Self.RegisterUA(UserAgent, ConfigurationLine, PendingActions)
   else if IsEqual(FirstToken, SupportEventDirective) then
-    Self.AddSupportForEventPackage(UserAgent, ConfigurationLine)
-  else if IsEqual(FirstToken, UseGruuDirective) then
-    Self.SetUseGruu(UserAgent, ConfigurationLine);
+    Self.AddSupportForEventPackage(UserAgent, ConfigurationLine);
 end;
 
 procedure TIdSipStackConfigurator.RegisterUA(UserAgent: TIdSipUserAgent;
@@ -687,19 +668,6 @@ begin
   EatDirective(Line);
 
   UserAgent.InstanceID := Line;
-end;
-
-procedure TIdSipStackConfigurator.SetUseGruu(UserAgent: TIdSipUserAgent;
-                                             const UseGruuLine: String);
-var
-  Line: String;
-begin
-  Line := UseGruuLine;
-  EatDirective(Line);
-
-  UserAgent.UseGruu := IsEqual(Line, 'true')
-                    or IsEqual(Line, 'yes')
-                    or IsEqual(Line, '1');
 end;
 
 //******************************************************************************

@@ -1281,7 +1281,7 @@ begin
     Ok.ContentLength := Length(Offer);
     Ok.ToHeader.Tag  := Self.LocalTag;
 
-    if Self.UA.UseGruu then
+    if Ok.FirstContact.IsGruu then
       Ok.FirstContact.Grid := Self.Grid;
 
     // This works regardless of whether the UA supports GRUU: if the UA doesn't
@@ -1328,7 +1328,7 @@ begin
   RedirectResponse := Self.UA.CreateResponse(Self.InitialRequest,
                                              RedirectType);
   try
-    RedirectResponse.AddHeader(ContactHeaderFull).Value := NewDestination.FullValue;
+    RedirectResponse.FirstContact.Value := NewDestination.FullValue;
     Self.SendResponse(RedirectResponse);
   finally
     RedirectResponse.Free;
@@ -1434,7 +1434,7 @@ begin
 
   Self.LocalTag := Self.UA.NextTag;
 
-  if Self.UA.UseGruu then
+  if Self.UA.Contact.IsGruu then
     Self.Grid := Self.UA.NextGrid;
 end;
 
@@ -1551,7 +1551,7 @@ begin
   Response := Self.UA.CreateResponse(Self.InitialRequest,
                                      StatusCode);
   try
-    if Self.UA.UseGruu then begin
+    if Self.UA.Contact.IsGruu then begin
       Response.FirstContact.Grid := Self.Grid;
       Self.LocalGruu := Response.FirstContact;
     end;
@@ -1971,7 +1971,7 @@ function TIdSipOutboundInitialInvite.CreateNewAttempt: TIdSipRequest;
 begin
   Result := Self.Module.CreateInvite(Self.Destination, Self.Offer, Self.MimeType);
 
-  if Self.UA.UseGruu then begin
+  if Result.FirstContact.IsGruu then begin
     Result.FirstContact.Grid := Self.UA.NextGrid;
   end;
 end;

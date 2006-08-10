@@ -183,12 +183,11 @@ type
     function  GetBindingDB: TIdSipAbstractBindingDatabase;
     function  GetDefaultRegistrationExpiryTime: Cardinal;
     function  GetMinimumExpiryTime: Cardinal;
+    function  GetUseGruu: Boolean;
     procedure SetBindingDB(Value: TIdSipAbstractBindingDatabase);
     procedure SetDefaultRegistrationExpiryTime(Value: Cardinal);
     procedure SetMinimumExpiryTime(Value: Cardinal);
-  protected
-    function  GetUseGruu: Boolean; override;
-    procedure SetUseGruu(Value: Boolean); override;
+    procedure SetUseGruu(Value: Boolean);
   public
     constructor Create; override;
 
@@ -197,6 +196,7 @@ type
     property BindingDB:                     TIdSipAbstractBindingDatabase read GetBindingDB write SetBindingDB;
     property DefaultRegistrationExpiryTime: Cardinal                      read GetDefaultRegistrationExpiryTime write SetDefaultRegistrationExpiryTime;
     property MinimumExpiryTime:             Cardinal                      read GetMinimumExpiryTime write SetMinimumExpiryTime;
+    property UseGruu:                       Boolean                       read GetUseGruu write SetUseGruu;
   end;
 
   TIdSipOutboundRegistration = class;
@@ -240,6 +240,13 @@ type
   private
     fBindingDB:         TIdSipAbstractBindingDatabase;
     fMinimumExpiryTime: Cardinal; // in seconds
+    fUseGruu:           Boolean;
+
+    function  GetUseGruu: Boolean;
+    procedure SetBindingDB(Value: TIdSipAbstractBindingDatabase);
+    procedure SetUseGruu(Value: Boolean);
+  protected
+    function WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; override;
   public
     constructor Create(UA: TIdSipAbstractCore); override;
 
@@ -247,8 +254,9 @@ type
                     UsingSecureTransport: Boolean): TIdSipAction; override;
     function AcceptsMethods: String; override;
 
-    property BindingDB:         TIdSipAbstractBindingDatabase read fBindingDB write fBindingDB;
+    property BindingDB:         TIdSipAbstractBindingDatabase read fBindingDB write SetBindingDB;
     property MinimumExpiryTime: Cardinal                      read fMinimumExpiryTime write fMinimumExpiryTime;
+    property UseGruu:           Boolean                       read GetUseGruu write SetUseGruu;
   end;
 
   TIdSipRegister = class(TIdSipOwnedAction)
@@ -307,6 +315,7 @@ type
                                              MinimumExpiry: Cardinal);
     procedure RetryWithoutExtensions(Registrar: TIdSipUri;
                                      Response: TIdSipResponse);
+    procedure SanitiseBindings(Bindings: TIdSipContacts);
     procedure SetBindings(Value: TIdSipContacts);
     procedure SetRegistrar(Value: TIdSipUri);
   protected
@@ -393,7 +402,6 @@ type
                         Response: TIdSipResponse); overload;
     procedure SetBindings(Value: TIdSipContacts);
     procedure SetRegistrar(Value: TIdSipUri);
-    procedure SetUaGruu(const GRUU: String);
   protected
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
@@ -857,18 +865,6 @@ begin
   Result := Self.CountOf(MethodRegister);
 end;
 
-//* TIdSipRegistrar Protected methods ******************************************
-
-function TIdSipRegistrar.GetUseGruu: Boolean;
-begin
-  Result := Self.BindingDB.UseGruu;
-end;
-
-procedure TIdSipRegistrar.SetUseGruu(Value: Boolean);
-begin
-  Self.BindingDB.UseGruu := Value;
-end;
-
 //* TIdSipRegistrar Private methods ********************************************
 
 function TIdSipRegistrar.GetBindingDB: TIdSipAbstractBindingDatabase;
@@ -886,6 +882,11 @@ begin
   Result := Self.RegisterModule.MinimumExpiryTime;
 end;
 
+function TIdSipRegistrar.GetUseGruu: Boolean;
+begin
+  Result := Self.RegisterModule.UseGruu;
+end;
+
 procedure TIdSipRegistrar.SetBindingDB(Value: TIdSipAbstractBindingDatabase);
 begin
   Self.RegisterModule.BindingDB := Value;
@@ -899,6 +900,11 @@ end;
 procedure TIdSipRegistrar.SetMinimumExpiryTime(Value: Cardinal);
 begin
   Self.RegisterModule.MinimumExpiryTime := Value;
+end;
+
+procedure TIdSipRegistrar.SetUseGruu(Value: Boolean);
+begin
+  Self.RegisterModule.UseGruu := Value;
 end;
 
 //******************************************************************************
@@ -953,7 +959,7 @@ begin
 
     Result.ToHeader.Assign(Self.UserAgent.From);
 
-    if Self.UserAgent.UseGruu then begin
+    if Result.FirstContact.IsGruu then begin
       Result.FirstContact.Params[SipInstanceParam] := Self.UserAgent.InstanceID;
 
       if Self.RequireGRUU then
@@ -1030,6 +1036,44 @@ end;
 function TIdSipRegisterModule.AcceptsMethods: String;
 begin
   Result := MethodRegister;
+end;
+
+//* TIdSipRegisterModule Protected methods *************************************
+
+function TIdSipRegisterModule.WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction;
+begin
+  Result := inherited WillAcceptRequest(Request);
+
+  if (Result = uarAccept) then begin
+    // If the request requires GRUU and we don't support it then we must reject
+    // the request.
+    if Request.RequiresExtension(ExtensionGruu) and not Self.UseGruu then
+      Result := uarUnsupportedExtension;
+  end;
+end;
+
+//* TIdSipRegisterModule Private methods ***************************************
+
+function TIdSipRegisterModule.GetUseGruu: Boolean;
+begin
+  if Assigned(Self.BindingDB) then
+    Result := Self.BindingDB.UseGruu
+  else
+    Result := Self.fUseGruu;
+end;
+
+procedure TIdSipRegisterModule.SetBindingDB(Value: TIdSipAbstractBindingDatabase);
+begin
+  Self.fBindingDB := Value;
+  Self.fBindingDB.UseGruu := Self.fUseGruu;
+end;
+
+procedure TIdSipRegisterModule.SetUseGruu(Value: Boolean);
+begin
+  Self.fUseGruu := Value;
+
+  if Assigned(Self.BindingDB) then
+    Self.BindingDB.UseGruu := Value;
 end;
 
 //******************************************************************************
@@ -1239,7 +1283,7 @@ begin
           // We obviously support GRUU, because otherwise the Transaction-User core
           // would have rejected the request.
 
-          // draft-ietf-sip-gruu section 7.1.2.1 says you MUST have this header,
+          // draft-ietf-sip-gruu-10 section 7.1.2.1 says you MUST have this header,
           // RFC 3261 section 20 says not. The author thinks the draft's
           // behaviour is unnecessary since the fact that the GRUU's in a
           // "gruu" parameter indicates that, well, the "gruu" parameter value
@@ -1247,6 +1291,10 @@ begin
           Response.Require.Values.Add(ExtensionGruu);
         end;
 
+        // The UA adds a Contact when it creates a response. Since we're a
+        // registrar returning bindings, _our_ Contact has no business in the
+        // response.
+        Response.RemoveAllHeadersNamed(ContactHeaderFull);
         Response.AddHeaders(Bindings);
 
         Date := TIdSipDateHeader.Create;
@@ -1345,6 +1393,7 @@ begin
     // any Contact information already in Result.
     Result.Headers.RemoveAll(ContactHeaderFull);
 
+    Self.SanitiseBindings(Bindings);
     Result.AddHeaders(Bindings);
   finally
     ToHeader.Free;
@@ -1528,6 +1577,20 @@ begin
     end;
   finally
     Bindings.Free;
+  end;
+end;
+
+procedure TIdSipOutboundRegisterBase.SanitiseBindings(Bindings: TIdSipContacts);
+begin
+  Bindings.First;
+
+  // cf. draft-ietf-sip-gruu-10.txt section 7.1.1.1
+  while Bindings.HasNext do begin
+    Bindings.CurrentContact.RemoveParameter(GruuParam);
+    Bindings.CurrentContact.Address.RemoveParameter(GridParam);
+    Bindings.CurrentContact.Address.RemoveParameter(GruuParam);
+
+    Bindings.Next;
   end;
 end;
 
@@ -1726,8 +1789,8 @@ begin
       Notification.Free;
     end;
 
-    if Response.SupportsExtension(ExtensionGruu) and Self.UA.UseGruu then
-      Self.SetUaGruu(CurrentBindings.GruuFor(Self.UA.Contact));
+    if Response.SupportsExtension(ExtensionGruu) and Self.UA.Contact.IsGruu then
+      Self.UA.Contact.Address.Uri := CurrentBindings.GruuFor(Self.UA.Contact);
   finally
     CurrentBindings.Free;
   end;
@@ -1806,11 +1869,6 @@ end;
 procedure TIdSipOutboundRegistrationBase.SetRegistrar(Value: TIdSipUri);
 begin
   Self.Registrar.Uri := Value.Uri;
-end;
-
-procedure TIdSipOutboundRegistrationBase.SetUaGruu(const GRUU: String);
-begin
-  Self.UA.Gruu.Address.Uri := GRUU;
 end;
 
 //******************************************************************************

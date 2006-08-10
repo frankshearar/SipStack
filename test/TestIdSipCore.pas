@@ -87,7 +87,6 @@ type
     procedure TestSendResponseMalformedResponse;
     procedure TestSendResponseUnknownSupportedExtension;
     procedure TestSetInstanceID;
-    procedure TestUseGruuAffectsAllowedExtensions;
   end;
 
   TIdSipNullAction = class(TIdSipAction)
@@ -1009,9 +1008,7 @@ procedure TestTIdSipAbstractCore.TestCreateRequestWithGruu;
 var
   Request: TIdSipRequest;
 begin
-  Self.Core.UseGruu := true;
-  Self.Core.Gruu := Self.Core.Contact;
-  Self.Core.Gruu.Address.Host := Self.Core.Gruu.Address.Host + '.com';
+  Self.Core.Contact.IsGruu := true;
 
   Request := Self.Core.CreateRequest(MethodInvite, Self.Destination);
   try
@@ -1019,8 +1016,8 @@ begin
           'Request has no Supported header');
     Check(Request.SupportsExtension(ExtensionGruu),
           'Supported header doesn''t indicate that the UA supports "gruu"');
-    CheckEquals(Self.Core.Gruu.Address.Host,
-                Request.FirstContact.Address.Host,
+    CheckEquals(Self.Core.Contact.AsString,
+                Request.FirstContact.AsString,
                 'Contact MUST contain GRUU');
   finally
     Request.Free;
@@ -1598,16 +1595,6 @@ begin
               'InstanceID');
 end;
 
-procedure TestTIdSipAbstractCore.TestUseGruuAffectsAllowedExtensions;
-begin
-  Check(Pos(ExtensionGruu, Self.Core.AllowedExtensions) = 0,
-        'By default, the UA shouldn''t support GRUU');
-
-  Self.Core.UseGruu := true;
-  Check(Pos(ExtensionGruu, Self.Core.AllowedExtensions) > 0,
-        'Setting UseGruu didn''t affect AllowedExtensions');
-end;
-
 //******************************************************************************
 //* TIdSipNullAction                                                           *
 //******************************************************************************
@@ -1742,10 +1729,7 @@ var
   B: TIdSipAction;
 begin
   // Set us up to use GRUU
-  Self.Core.UseGruu := true;
-  // We have to set this because the InboundSession will Ring, which creates a
-  // response with a Contact defined by Self.Core.Gruu.
-  Self.Core.Gruu.Value := 'sip:some.gruu';
+  Self.Core.Contact.IsGruu := true;
   Self.Invite.Supported.Values.Add(ExtensionGruu);
 
   // Create two actions (which will use different LocalGruus)
@@ -1780,8 +1764,7 @@ var
   B: TIdSipAction;
 begin
   // Set us up to use GRUU
-  Self.Core.UseGruu := true;
-  Self.Invite.Supported.Values.Add(ExtensionGruu);
+  Self.Core.Contact.IsGruu := true;
 
   // Create two actions (which will use different LocalGruus
   A := Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false));

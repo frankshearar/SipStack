@@ -163,7 +163,6 @@ type
     procedure CheckTCPServerNotOnPort(const Host: String;
                                       Port: Cardinal;
                                       const Msg: String);
-    procedure CheckUseGruuWithValue(const BooleanValue: String);
     procedure NoteReceiptOfPacket(Sender: TObject;
                                   AData: TStream;
                                   ABinding: TIdSocketHandle);
@@ -190,7 +189,6 @@ type
     procedure TestCreateUserAgentWithAutoTransport;
     procedure TestCreateUserAgentWithContact;
     procedure TestCreateUserAgentWithFrom;
-    procedure TestCreateUserAgentWithGruu;
     procedure TestCreateUserAgentWithHostName;
     procedure TestCreateUserAgentWithInstanceID;
     procedure TestCreateUserAgentWithLocator;
@@ -208,17 +206,13 @@ type
     procedure TestCreateUserAgentWithProxy;
     procedure TestCreateUserAgentWithReferSupport;
     procedure TestCreateUserAgentWithRegistrar;
-    procedure TestCreateUserAgentWithUseGruu;
     procedure TestUpdateConfigurationWithContact;
-    procedure TestUpdateConfigurationWithGruu;
     procedure TestUpdateConfigurationWithFrom;
     procedure TestUpdateConfigurationWithLocator;
-    procedure TestUpdateConfigurationWithNewGruu;
     procedure TestUpdateConfigurationWithNewRegistrar;
     procedure TestUpdateConfigurationWithProxy;
     procedure TestUpdateConfigurationWithRegistrar;
     procedure TestUpdateConfigurationWithTransport;
-    procedure TestUpdateConfigurationWithUseGruu;
   end;
 
   TestTIdSipReconfigureStackWait = class(TTestCase)
@@ -1935,22 +1929,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipStackConfigurator.CheckUseGruuWithValue(const BooleanValue: String);
-var
-  UA: TIdSipUserAgent;
-begin
-  Self.Configuration.Clear;
-  Self.Configuration.Add('UseGruu: ' + BooleanValue);
-
-  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
-  try
-    Check(UA.UseGruu,
-          'UseGruu: ' + BooleanValue);
-  finally
-    UA.Free;
-  end;
-end;
-
 procedure TestTIdSipStackConfigurator.NoteReceiptOfPacket(Sender: TObject;
                                                           AData: TStream;
                                                           ABinding: TIdSocketHandle);
@@ -2203,25 +2181,6 @@ begin
   try
     CheckEquals(DisplayName, UA.From.DisplayName,      'From display-name');
     CheckEquals(FromUri,     UA.From.Address.AsString, 'From URI');
-  finally
-    UA.Free;
-  end;
-end;
-
-procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithGruu;
-const
-  DisplayName = 'Count Zero';
-  GruuUri     = 'sip:countzero@jammer.org';
-  Gruu        = '"' + DisplayName + '" <' + GruuUri + '>';
-var
-  UA: TIdSipUserAgent;
-begin
-  Self.Configuration.Add('Gruu: ' + Gruu);
-
-  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
-  try
-    CheckEquals(DisplayName, UA.Gruu.DisplayName,      'Gruu display-name');
-    CheckEquals(GruuUri,     UA.Gruu.Address.AsString, 'Gruu URI');
   finally
     UA.Free;
   end;
@@ -2571,14 +2530,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithUseGruu;
-begin
-  Self.CheckUseGruuWithValue('true');
-  Self.CheckUseGruuWithValue('TRUE');
-  Self.CheckUseGruuWithValue('yes');
-  Self.CheckUseGruuWithValue('1');
-end;
-
 procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithContact;
 var
   NewConfig:  TStrings;
@@ -2603,43 +2554,6 @@ begin
 
       Self.Conf.UpdateConfiguration(UA, NewConfig);
       CheckEquals(NewContact, UA.Contact.FullValue, 'UA''s Contact property not updated');
-    finally
-      NewConfig.Free;
-    end;
-  finally
-    UA.Free;
-  end;
-end;
-
-procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithGruu;
-var
-  NewConfig: TStrings;
-  NewGruu:   String;
-  OldGruu:   String;
-  UA:        TIdSipUserAgent;
-begin
-  // Update an existing GRUU property.
-
-  Self.SetBasicConfiguration(Self.Configuration);
-
-  OldGruu := 'sip:case@jammers.org;opaque=123';
-  Self.Configuration.Add(OldGruu);
-
-  NewGruu := 'sip:case@jammers.org;opaque=456';
-
-  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
-  try
-    CheckNotEquals(NewGruu,
-                   OldGruu,
-                   'NewGruu contains the same Gruu header as the original '
-                 + 'configuration');
-
-    NewConfig := TStringList.Create;
-    try
-      NewConfig.Add('Gruu: ' + NewGruu);
-
-      Self.Conf.UpdateConfiguration(UA, NewConfig);
-      CheckEquals(NewGruu, UA.Gruu.FullValue, 'UA''s Gruu property not updated');
     finally
       NewConfig.Free;
     end;
@@ -2702,34 +2616,6 @@ begin
                   'Locator property not updated');
       Check(UA.Locator = UA.Dispatcher.Locator,
             'Transaction layer''s locator not updated');
-    finally
-      NewConfig.Free;
-    end;
-  finally
-    UA.Free;
-  end;
-end;
-
-procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithNewGruu;
-var
-  NewConfig: TStrings;
-  NewGruu:   String;
-  UA:        TIdSipUserAgent;
-begin
-  // Add a GRUU setting to a UA that didn't have one before.
-
-  NewGruu := 'sip:case@jammers.org;opaque=456';
-
-  Self.SetBasicConfiguration(Self.Configuration);
-  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
-  try
-    NewConfig := TStringList.Create;
-    try
-      NewConfig.Add('Gruu: ' + NewGruu);
-
-      Self.Conf.UpdateConfiguration(UA, NewConfig);
-      CheckEquals(NewGruu, UA.Gruu.FullValue, 'UA''s Gruu property not updated');
-      Check(not UA.UseGruu, 'UA set to use GRUU, but we didn''t ask it');
     finally
       NewConfig.Free;
     end;
@@ -2869,30 +2755,6 @@ begin
       Check(UA.Dispatcher.Timer = UA.Dispatcher.Transports[0].Timer,
             'New transport and Transaction layers have different timers');
       CheckTCPServerNotOnPort(Self.Address, Self.Port, 'Old TCP transport still running');
-    finally
-      NewConfig.Free;
-    end;
-  finally
-    UA.Free;
-  end;
-end;
-
-procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithUseGruu;
-var
-  NewConfig: TStrings;
-  UA:        TIdSipUserAgent;
-begin
-  Self.SetBasicConfiguration(Self.Configuration);
-  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
-  try
-    Check(not UA.UseGruu, 'UA set to use GRUU with no GRUU in the configuration');
-
-    NewConfig := TStringList.Create;
-    try
-      NewConfig.Add('UseGruu: yes');
-
-      Self.Conf.UpdateConfiguration(UA, NewConfig);
-      Check(UA.UseGruu, 'UA set to not use GRUU, but we asked it to');
     finally
       NewConfig.Free;
     end;

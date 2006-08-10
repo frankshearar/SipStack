@@ -932,8 +932,8 @@ function TIdSipSubscribeModule.CreateRefer(Dest: TIdSipAddressHeader;
 begin
   Result := Self.UserAgent.CreateRequest(MethodRefer, Dest);
   try
-    // draft-ietf-sip-gruu, section 8.1
-    if Self.UserAgent.UseGruu then
+    // draft-ietf-sip-gruu-10, section 8.1
+    if Result.FirstContact.IsGruu then
       Result.FirstContact.Grid := Self.UserAgent.NextGrid;
 
     Result.Event.EventPackage := TIdSipReferPackage.EventPackage;
@@ -950,8 +950,8 @@ function TIdSipSubscribeModule.CreateSubscribe(Dest: TIdSipAddressHeader;
 begin
   Result := Self.UserAgent.CreateRequest(MethodSubscribe, Dest);
   try
-    // draft-ietf-sip-gruu, section 8.1
-    if Self.UserAgent.UseGruu then
+    // draft-ietf-sip-gruu-10, section 8.1
+    if Result.FirstContact.IsGruu then
       Result.FirstContact.Grid := Self.UserAgent.NextGrid;
 
     Result.Event.EventPackage   := EventPackage;
@@ -1444,8 +1444,7 @@ begin
                                      '');
   Self.ConfigureAttempt(Result);
 
-  if Self.UA.UseGruu then
-    Result.FirstContact.Assign(Self.LocalGruu);
+  Result.FirstContact.Assign(Self.LocalGruu);
 end;
 
 procedure TIdSipOutboundNotifyBase.Initialise(UA: TIdSipAbstractCore;
@@ -2150,7 +2149,7 @@ begin
   // here.
 //  Self.Package := Self.Module.Package(Self.EventPackage).Clone;
 
-  if Self.UA.UseGruu then
+  if Self.UA.Contact.IsGruu then
     Self.Grid := Self.UA.NextGrid;
 end;
 
@@ -2358,7 +2357,7 @@ begin
   try
     Response.Expires.NumericValue := Self.OurExpires(Subscribe);
 
-    if Self.UA.UseGruu then begin
+    if Response.FirstContact.IsGruu then begin
       Response.FirstContact.Grid := Self.Grid;
       Self.LocalGruu := Response.FirstContact;
     end;

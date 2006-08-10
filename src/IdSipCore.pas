@@ -297,7 +297,6 @@ type
     fContact:                TIdSipContactHeader;
     fDispatcher:             TIdSipTransactionDispatcher;
     fFrom:                   TIdSipFromHeader;
-    fGruu:                   TIdSipContactHeader;
     fHostName:               String;
     fInstanceID:             String;
     fKeyring:                TIdKeyRing;
@@ -305,7 +304,6 @@ type
     fRealm:                  String;
     fRequireAuthentication:  Boolean;
     fTimer:                  TIdTimerQueue;
-    fUseGruu:                Boolean;
     fUserAgentName:          String;
     Modules:                 TObjectList;
     NullModule:              TIdSipMessageModule;
@@ -340,7 +338,6 @@ type
     procedure SetContact(Value: TIdSipContactHeader);
     procedure SetDispatcher(Value: TIdSipTransactionDispatcher);
     procedure SetFrom(Value: TIdSipFromHeader);
-    procedure SetGruu(Value: TIdSipContactHeader);
     procedure SetInstanceID(Value: String);
     procedure SetRealm(const Value: String);
   protected
@@ -350,7 +347,6 @@ type
                             Receiver: TIdSipTransport); virtual;
     function  CreateActionsClosure(ClosureType: TIdSipActionsWaitClass;
                                    Msg: TIdSipMessage): TIdSipActionsWait;
-    function  GetUseGruu: Boolean; virtual;
     function  ListHasUnknownValue(Request: TIdSipRequest;
                                   ValueList: TStrings;
                                   const HeaderName: String): Boolean;
@@ -363,7 +359,6 @@ type
                             Request: TIdSipRequest);
     procedure RejectRequestUnauthorized(Request: TIdSipRequest);
     procedure SetAuthenticator(Value: TIdSipAbstractAuthenticator); virtual;
-    procedure SetUseGruu(Value: Boolean); virtual;
     function  WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; virtual;
     function  WillAcceptResponse(Response: TIdSipResponse): TIdSipUserAgentReaction; virtual;
 
@@ -459,7 +454,6 @@ type
     property Contact:               TIdSipContactHeader         read fContact write SetContact;
     property Dispatcher:            TIdSipTransactionDispatcher read fDispatcher write SetDispatcher;
     property From:                  TIdSipFromHeader            read fFrom write SetFrom;
-    property Gruu:                  TIdSipContactHeader         read fGruu write SetGruu;
     property HostName:              String                      read fHostName write fHostName;
     property InstanceID:            String                      read fInstanceID write SetInstanceID;
     property Keyring:               TIdKeyRing                  read fKeyring;
@@ -467,7 +461,6 @@ type
     property Realm:                 String                      read fRealm write SetRealm;
     property RequireAuthentication: Boolean                     read fRequireAuthentication write fRequireAuthentication;
     property Timer:                 TIdTimerQueue               read fTimer write fTimer;
-    property UseGruu:               Boolean                     read GetUseGruu write SetUseGruu;
     property UserAgentName:         String                      read fUserAgentName write fUserAgentName;
   end;
 
@@ -487,6 +480,7 @@ type
     procedure RejectRequestUnknownContentEncoding(Request: TIdSipRequest);
     procedure RejectRequestUnknownContentLanguage(Request: TIdSipRequest);
     procedure RejectRequestUnknownContentType(Request: TIdSipRequest);
+    procedure RejectRequestUnsupportedExtension(Request: TIdSipRequest);
   protected
     AcceptsMethodsList:     TStringList;
     AllowedContentTypeList: TStrings;
@@ -1494,7 +1488,6 @@ begin
   Self.fAllowedLanguageList    := TStringList.Create;
   Self.fContact                := TIdSipContactHeader.Create;
   Self.fFrom                   := TIdSipFromHeader.Create;
-  Self.fGruu                   := TIdSipContactHeader.Create;
   Self.fKeyring                := TIdKeyRing.Create;
 
   Self.Actions.AddObserver(Self);
@@ -1518,7 +1511,6 @@ begin
   Self.NotifyModulesOfFree;
 
   Self.Keyring.Free;
-  Self.Gruu.Free;
   Self.From.Free;
   Self.Contact.Free;
   Self.AllowedSchemeList.Free;
@@ -1600,11 +1592,8 @@ begin
   if (Self.UserAgentName <> '') then
     OutboundRequest.AddHeader(UserAgentHeader).Value := Self.UserAgentName;
 
-  if Self.UseGruu then 
-    // draft-ietf-sip-gruu-10, section 8.1
-    OutboundRequest.AddHeader(Self.Gruu)
-  else
-    OutboundRequest.AddHeader(Self.Contact);
+  // draft-ietf-sip-gruu-10, section 8.1
+  OutboundRequest.AddHeader(Self.Contact);
 
   if OutboundRequest.HasSipsUri then
     OutboundRequest.FirstContact.Address.Scheme := SipsScheme;
@@ -1673,9 +1662,7 @@ begin
     Extensions.Sorted     := true;
     Self.CollectAllowedExtensions(Extensions);
 
-    // Remember, we ignore duplicates!
-    if Self.UseGruu then
-      Extensions.Add(ExtensionGruu);
+    Extensions.Add(ExtensionGruu);
 
     Result := Self.ConvertToHeader(Extensions);
   finally
@@ -1778,17 +1765,10 @@ end;
 
 function TIdSipAbstractCore.CreateResponse(Request: TIdSipRequest;
                                            ResponseCode: Cardinal): TIdSipResponse;
-var
-  ActualContact: TIdSipContactHeader;
 begin
-  if Self.UseGruu then
-    ActualContact := Self.Gruu
-  else
-    ActualContact := Self.Contact;
-
   Result := TIdSipResponse.InResponseTo(Request,
                                         ResponseCode,
-                                        ActualContact);
+                                        Self.Contact);
 
   Self.PrepareResponse(Result, Request);
 end;
@@ -2177,11 +2157,6 @@ begin
   Result.Message := Msg.Copy;
 end;
 
-function TIdSipAbstractCore.GetUseGruu: Boolean;
-begin
-  Result := Self.fUseGruu;
-end;
-
 function TIdSipAbstractCore.ListHasUnknownValue(Request: TIdSipRequest;
                                                 ValueList: TStrings;
                                                 const HeaderName: String): Boolean;
@@ -2286,7 +2261,9 @@ begin
   Response.AddHeader(SupportedHeaderFull).Value := Self.AllowedExtensions;
 
   // There's a nasty assumption here: that there's only one Contact in the Response.
-  if Self.UseGruu and TIdSipMessage.WillEstablishDialog(Request, Response) then
+  if Response.HasHeader(ContactHeaderFull)
+    and Response.FirstContact.IsGruu
+    and TIdSipMessage.WillEstablishDialog(Request, Response) then
     Response.FirstContact.Grid := Self.NextGrid;
 
   Self.AddModuleSpecificHeaders(Response);
@@ -2333,11 +2310,6 @@ begin
   Self.fAuthenticator.Realm := Self.Realm;
 
   Self.fAuthenticator.IsProxy := false;
-end;
-
-procedure TIdSipAbstractCore.SetUseGruu(Value: Boolean);
-begin
-  Self.fUseGruu := Value;
 end;
 
 function TIdSipAbstractCore.WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction;
@@ -2618,11 +2590,6 @@ begin
     raise EBadHeader.Create(Self.From.Name + ': MUST be a SIP/SIPS URI');
 end;
 
-procedure TIdSipAbstractCore.SetGruu(Value: TIdSipContactHeader);
-begin
-  Self.Gruu.Assign(Value);
-end;
-
 procedure TIdSipAbstractCore.SetInstanceID(Value: String);
 begin
   if not TIdSipParser.IsUuidUrn(Value) then
@@ -2820,6 +2787,8 @@ begin
       Self.RejectRequestUnknownContentLanguage(Request);
     uarUnsupportedContentType:
       Self.RejectRequestUnknownContentType(Request);
+    uarUnsupportedExtension:
+      Self.RejectRequestUnsupportedExtension(Request);
     uarUnsupportedScheme:
       Self.ReturnResponse(Request, SIPUnsupportedURIScheme);
     uarUnSupportedSipVersion:
@@ -2925,6 +2894,20 @@ begin
   Response := Self.UserAgent.CreateResponse(Request, SIPUnsupportedMediaType);
   try
     Response.Accept.Value := Self.ConvertToHeader(Self.AllowedContentTypes);
+
+    Self.UserAgent.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TIdSipMessageModule.RejectRequestUnsupportedExtension(Request: TIdSipRequest);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.UserAgent.CreateResponse(Request, SIPBadExtension);
+  try
+    Response.AddHeader(UnsupportedHeader).Value := Request.FirstHeader(RequireHeader).Value;
 
     Self.UserAgent.SendResponse(Response);
   finally

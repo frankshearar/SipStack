@@ -83,7 +83,8 @@ type
     procedure ReceiveBye(LocalDialog: TIdSipDialog);
     procedure ReceiveCancel;
     procedure ReceiveInvite;
-    procedure ReceiveOk(Invite: TIdSipRequest);
+    procedure ReceiveOk(Invite: TIdSipRequest;
+                        const SDP: String = '');
     procedure ReceiveOkFrom(Invite: TIdSipRequest;
                             const Contact: String);
     procedure ReceiveMovedPermanently(const SipUrl: String);
@@ -1037,10 +1038,8 @@ begin
   // Set up this stack to use the GRUU extension. Make sure that the GRUU
   // can resolve to an IP.
 
-  Self.Core.UseGruu := true;
-  Self.Core.Gruu := Self.Core.Contact;
-  Self.Core.Gruu.Address.Host := Self.Core.Gruu.Address.Host + '.com';
-  Self.Locator.AddA(Self.Core.Gruu.Address.Host, '127.0.0.1');
+  Self.Core.Contact.IsGruu := true;
+  Self.Locator.AddA(Self.Core.Contact.Address.Host, '127.0.0.2');
 end;
 
 //* TTestCaseTU Protected methods **********************************************
@@ -1177,7 +1176,8 @@ begin
   end;
 end;
 
-procedure TTestCaseTU.ReceiveOk(Invite: TIdSipRequest);
+procedure TTestCaseTU.ReceiveOk(Invite: TIdSipRequest;
+                                const SDP: String = '');
 var
   Response: TIdSipResponse;
 begin
@@ -1186,6 +1186,12 @@ begin
   // WILL have a To tag.
   Response := Self.CreateRemoteOk(Invite);
   try
+    if (SDP <> '') then begin
+      Response.Body := SDP;
+      Response.ContentType := SdpMimeType;
+      Response.ContentLength := Length(Response.Body);
+    end;
+
     Self.ReceiveResponse(Response);
   finally
     Response.Free;
