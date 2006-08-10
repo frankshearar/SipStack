@@ -1402,6 +1402,7 @@ type
     procedure ReadBody(Src: TStream);
     procedure RemoveHeader(Header: TIdSipHeader);
     procedure RemoveAllHeadersNamed(const Name: String);
+    function  RequiresExtension(const Extension: String): Boolean;
     function  SupportsExtension(const Extension: String): Boolean;
     function  WantsAllowEventsHeader: Boolean; virtual;
 
@@ -7940,6 +7941,15 @@ end;
 procedure TIdSipMessage.RemoveAllHeadersNamed(const Name: String);
 begin
   Self.Headers.RemoveAll(Name);
+end;
+
+function TIdSipMessage.RequiresExtension(const Extension: String): Boolean;
+begin
+  if Self.HasHeader(RequireHeader) then begin
+    Result := Self.Require.Values.IndexOf(Extension) <> ItemNotFoundIndex
+  end
+  else
+    Result := false;
 end;
 
 function TIdSipMessage.SupportsExtension(const Extension: String): Boolean;

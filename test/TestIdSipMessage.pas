@@ -101,6 +101,7 @@ type
     procedure TestRemoveHeader;
     procedure TestRemoveHeaders;
     procedure TestRequire;
+    procedure TestRequiresExtension;
     procedure TestRetryAfter;
     procedure TestSetCallID;
     procedure TestSetContacts;
@@ -1385,6 +1386,22 @@ begin
   finally
     Require.Free;
   end;
+end;
+
+procedure TestTIdSipMessage.TestRequiresExtension;
+begin
+  Check(not Self.Msg.RequiresExtension(ExtensionGruu),
+        'There''s no Require header, so this message doesn''t support anything');
+
+  Self.Msg.Require.Values.Add(ExtensionTargetDialog);
+
+  Check(not Self.Msg.RequiresExtension(ExtensionGruu),
+        'The message only requires ' + ExtensionTargetDialog);
+
+  Self.Msg.Require.Values.Add(ExtensionGruu);
+
+  Check(Self.Msg.RequiresExtension(ExtensionGruu),
+        'The message doesn''t know it requires GRUU');
 end;
 
 procedure TestTIdSipMessage.TestRetryAfter;
