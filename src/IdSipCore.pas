@@ -2761,6 +2761,8 @@ end;
 
 function TIdSipMessageModule.WillAccept(Request: TIdSipRequest): Boolean;
 begin
+  // Return true if we're the kind of module that can process this request.
+
   Result := Self.AcceptsMethodsList.IndexOf(Request.Method) <> ItemNotFoundIndex;
 end;
 
