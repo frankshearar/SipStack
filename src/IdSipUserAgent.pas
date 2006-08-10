@@ -223,11 +223,10 @@ begin
   // Thus we destroy these objects AFTER the inherited Destroy, because the base
   // class could well expect these objects to still exit.
 
-  Self.Proxy.Free;
-  Self.UserAgentListeners.Free;
-
   inherited Destroy;
 
+  Self.Proxy.Free;
+  Self.UserAgentListeners.Free;
   Self.Dispatcher.Free;
   Self.Authenticator.Free;
 end;

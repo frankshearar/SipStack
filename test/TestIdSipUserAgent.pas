@@ -106,6 +106,7 @@ type
     procedure TestCreateResponseUserAgentBlank;
     procedure TestDeclinedCallNotifiesListeners;
     procedure TestDestroyCallsModuleCleanups;
+    procedure TestDestroyWithProxyAndAutoReregister;
     procedure TestDialogLocalSequenceNoMonotonicallyIncreases;
     procedure TestDispatchToCorrectSession;
     procedure TestDontReAuthenticate;
@@ -1015,6 +1016,28 @@ begin
           'No REGISTER sent, so Module.Cleanup not called');
   finally
     Registrar.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgent.TestDestroyWithProxyAndAutoReregister;
+const
+  ProxyUri = 'sip:127.0.0.2';
+var
+  UA: TIdSipUserAgent;
+begin
+  // This bug catches a dangling pointer bug when you destroy a UA that uses a
+  // proxy and unregisters automatically from a registrar.
+
+  UA := Self.CreateUserAgent(Self.DebugTimer, 'sip:case@localhost');
+  try
+    UA.Proxy.Uri := ProxyUri;
+    UA.HasProxy  := true;
+
+    UA.RegisterModule.Registrar.Uri  := ProxyUri;
+    UA.RegisterModule.HasRegistrar   := true;
+    UA.RegisterModule.AutoReRegister := true;
+  finally
+    UA.Free;
   end;
 end;
 
