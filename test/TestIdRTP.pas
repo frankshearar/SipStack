@@ -723,6 +723,7 @@ type
     procedure TestReceiveRTCPAffectsAvgRTCPSize;
     procedure TestReceiveSrcDescAddsAllSources;
     procedure TestRTCPDoesntAddSender;
+    procedure TestSendDataToInvalidSender;
     procedure TestSendDataWhenOtherMembersHaventSentData;
     procedure TestSendDataWhenNoOtherMembersHaveJoined;
     procedure TestDeterministicSendInterval10MembersAndNotSender;
@@ -833,6 +834,7 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdRTP unit tests');
+{
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdNullPayload.Suite);
   Result.AddTest(TestTIdRTPReservedPayload.Suite);
@@ -869,12 +871,15 @@ begin
   Result.AddTest(TestSessionSequenceNumberRules.Suite);
   Result.AddTest(TestTIdRTPSession.Suite);
   Result.AddTest(TestSessionReportRules.Suite);
+}
   Result.AddTest(TestSessionSendReceiveRules.Suite);
+{
   Result.AddTest(TestTIdRTPPacketBuffer.Suite);
   Result.AddTest(TestTIdRTPListenerReceiveRTCPMethod.Suite);
   Result.AddTest(TestTIdRTPListenerReceiveRTPMethod.Suite);
   Result.AddTest(TestTIdRTPDataListenerNewDataMethod.Suite);
   Result.AddTest(TestTIdRTPSenderReportWait.Suite);
+}
 end;
 
 function ShowEncoded(S: String): String;
@@ -7964,6 +7969,41 @@ procedure TestSessionSendReceiveRules.TestRTCPDoesntAddSender;
 begin
   Self.Session.ReceiveControl(Self.SR, Self.Binding);
   CheckEquals(0, Self.Session.SenderCount, 'Sender added');
+end;
+
+procedure TestSessionSendReceiveRules.TestSendDataToInvalidSender;
+var
+  L:        TIdRTPTestRTPDataListener;
+  Member:   TIdRTPMember;
+  OldCount: Cardinal;
+begin
+  Self.Data.SequenceNo := 0;
+  Self.Data.Timestamp  := 0;
+  Self.Data.CsrcCount  := 0;
+
+  L := TIdRTPTestRTPDataListener.Create;
+  try
+    Self.Session.AddListener(L);
+
+    Self.Session.ReceiveData(Self.Data, Self.Binding);
+    Check(L.NewData, 'Listener didn''t receive data');
+
+    // Receive some more (invalid) data from the network - the sequence number
+    // isn't incrementing!
+    Self.Session.ReceiveData(Self.Data, Self.Binding);
+    Self.Session.ReceiveData(Self.Data, Self.Binding);
+
+    Member := Self.Session.Member(Self.Data.SyncSrcID);
+    Check(Assigned(Member), 'Member not added');
+    Check(Member.IsUnderProbation, 'Member not under probation');
+
+    OldCount := Self.Agent.RTPCount;
+    Self.Session.SendData(Self.Data.Payload);
+    Check(OldCount < Self.Agent.RTPCount, 'No data sent');
+  finally
+    Self.Session.RemoveListener(L);
+    L.Free;
+  end;
 end;
 
 procedure TestSessionSendReceiveRules.TestSendDataWhenOtherMembersHaventSentData;
