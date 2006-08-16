@@ -6189,16 +6189,16 @@ end;
 
 procedure TestTIdSDPMediaStream.TestRemoteMembersControlAddressAndPortSet;
 begin
-  Self.Media.StopListening;
-
-  Self.Sender.AddRTPListener(Self);
   // We check that the SDP sets the RTCP address/port of the remote party
-  // by "joining a session" - that will send a Receiver Report.
+  // by "joining a session" - that will send a Receiver Report to the
+  // control port of the remote party.
 
+  Self.Media.StopListening;
+  Self.Sender.AddRTPListener(Self);
   Self.Media.StartListening;
 
   // We use a debug timer, so we trigger the event manually.
-  Self.Timer.TriggerAllEventsOfType(TIdNotifyEventWait);
+  Self.Timer.TriggerAllEventsOfType(TIdWait);
 
   Self.WaitForSignaled(Self.RTCPEvent, 'No RTCP sent');
 
