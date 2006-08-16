@@ -734,6 +734,18 @@ type
     procedure TestSendControlDoesntSendToSelf;
   end;
 
+  TestTIdSipSessionRegistry = class(TTestCase)
+  private
+    Agent: TIdMockRTPPeer;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestSessionsAddToRegistryAutomatically;
+    procedure TestSessionsGetUniqueIDs;
+    procedure TestSessionsAutomaticallyUnregister;
+  end;
+
   TestTIdRTPPacketBuffer = class(TTestCase)
   private
     Profile: TIdRTPProfile;
@@ -872,6 +884,7 @@ begin
   Result.AddTest(TestTIdRTPSession.Suite);
   Result.AddTest(TestSessionReportRules.Suite);
   Result.AddTest(TestSessionSendReceiveRules.Suite);
+  Result.AddTest(TestTIdSipSessionRegistry.Suite);
   Result.AddTest(TestTIdRTPPacketBuffer.Suite);
   Result.AddTest(TestTIdRTPListenerReceiveRTCPMethod.Suite);
   Result.AddTest(TestTIdRTPListenerReceiveRTPMethod.Suite);
@@ -8145,6 +8158,82 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSipSessionRegistry
+//******************************************************************************
+//* TestTIdSipSessionRegistry Public methods ***********************************
+
+procedure TestTIdSipSessionRegistry.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Agent := TIdMockRTPPeer.Create;
+end;
+
+procedure TestTIdSipSessionRegistry.TearDown;
+begin
+  Self.Agent.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipSessionRegistry Published methods ********************************
+
+procedure TestTIdSipSessionRegistry.TestSessionsAddToRegistryAutomatically;
+var
+  Session: TIdRTPSession;
+begin
+  Session := TIdRTPSession.Create(Self.Agent);
+  try
+    CheckNotEquals('', Session.ID, 'Session has no ID');
+    Check(nil <> TIdRTPSessionRegistry.FindSession(Session.ID),
+          'Session not added to registry');
+  finally
+    Session.Free;
+  end;
+end;
+
+procedure TestTIdSipSessionRegistry.TestSessionsGetUniqueIDs;
+var
+  SessionOne: TIdRTPSession;
+  SessionTwo: TIdRTPSession;
+begin
+  // This test isn't exactly thorough: it's not possible to write a test that
+  // proves the registry will never duplicate an existing transaction's ID,
+  // but this at least demonstrates that the registry won't return the same
+  // ID twice in a row.
+
+  SessionOne := TIdRTPSession.Create(Self.Agent);
+  try
+    SessionTwo := TIdRTPSession.Create(Self.Agent);
+    try
+      CheckNotEquals(SessionOne.ID,
+                     SessionTwo.ID,
+                     'The registry gave two transactions the same ID');
+    finally
+      SessionTwo.Free;
+    end;
+  finally
+    SessionOne.Free;
+  end;
+end;
+
+procedure TestTIdSipSessionRegistry.TestSessionsAutomaticallyUnregister;
+var
+  Session:   TIdRTPSession;
+  SessionID: String;
+begin
+  Session := TIdRTPSession.Create(Self.Agent);
+  try
+    SessionID := Session.ID;
+  finally
+    Session.Free;
+  end;
+
+  Check(nil = TIdRTPSessionRegistry.FindSession(SessionID),
+        'Session not removed from registry');
+end;
+
+//******************************************************************************
 //* TestTIdRTPPacketBuffer                                                     *
 //******************************************************************************
 //* TestTIdRTPPacketBuffer Public methods **************************************
@@ -8394,7 +8483,7 @@ begin
   Self.Session.AddReceiver(ArbitraryHost, ArbitraryPort);
 
   Self.Wait := TIdRTPSenderReportWait.Create;
-  Self.Wait.Session := Self.Session;
+  Self.Wait.SessionID := Self.Session.ID;
 end;
 
 procedure TestTIdRTPSenderReportWait.TearDown;

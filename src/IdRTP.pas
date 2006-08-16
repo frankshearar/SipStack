@@ -15,6 +15,10 @@ uses
   Classes, Contnrs, IdInterfacedObject, IdNotification, IdTimerQueue, SyncObjs,
   SysUtils, Types;
 
+// Used by the SessionRegistry.
+var
+  GSessions: TStrings;
+
 type
   TIdCardinalArray        = array of Cardinal;
   TIdTelephoneEventVolume = 0..63;
@@ -935,6 +939,7 @@ type
     fAssumedMTU:                Cardinal;
     fAvgRTCPSize:               Cardinal;
     fCanonicalName:             String;
+    fID:                        String;
     fNoControlSent:             Boolean;
     fMaxRTCPBandwidth:          Cardinal; // octets per second
     fMinimumRTCPSendInterval:   TDateTime; // in seconds
@@ -1032,6 +1037,7 @@ type
     property AssumedMTU:                Cardinal      read fAssumedMTU write fAssumedMTU;
     property AvgRTCPSize:               Cardinal      read fAvgRTCPSize;
     property CanonicalName:             String        read fCanonicalName write fCanonicalName;
+    property ID:                        String        read fID;
     property NoControlSent:             Boolean       read fNoControlSent;
     property MaxRTCPBandwidth:          Cardinal      read fMaxRTCPBandwidth write fMaxRTCPBandwidth;
     property MinimumRTCPSendInterval:   TDateTime     read fMinimumRTCPSendInterval write fMinimumRTCPSendInterval;
@@ -1045,6 +1051,16 @@ type
     property SessionBandwith:           Cardinal      read fSessionBandwidth write fSessionBandwidth;
     property SyncSrcID:                 Cardinal      read fSyncSrcID;
     property Timer:                     TIdTimerQueue read fTimer write fTimer;
+  end;
+
+  TIdRTPSessionRegistry = class(TObject)
+  private
+    class function SessionAt(Index: Integer): TIdRTPSession;
+    class function SessionRegistry: TStrings;
+  public
+    class function  RegisterSession(Instance: TIdRTPSession): String;
+    class function  FindSession(const SessionID: String): TIdRTPSession;
+    class procedure UnregisterSession(const SessionID: String);
   end;
 
   // I provide a buffer to objects that receive RTP packets. I assemble these
@@ -1101,9 +1117,9 @@ type
 
   TIdRTPWait = class(TIdWait)
   private
-    fSession: TIdRTPSession;
+    fSessionID: String;
   public
-    property Session: TIdRTPSession read fSession write fSession;
+    property SessionID: String read fSessionID write fSessionID;
   end;
 
   TIdRTPTransmissionTimeExpire = class(TIdRTPWait)
@@ -4716,10 +4732,14 @@ begin
   Self.MissedReportTolerance := Self.DefaultMissedReportTolerance;
 
   Self.Initialize;
+
+  Self.fID := TIdRTPSessionRegistry.RegisterSession(Self);
 end;
 
 destructor TIdRTPSession.Destroy;
 begin
+  TIdRTPSessionRegistry.UnregisterSession(Self.ID);
+
   Self.TransmissionLock.Free;
 
   Self.MemberLock.Acquire;
@@ -4864,7 +4884,7 @@ var
   Wait: TIdRTPTransmissionTimeExpire;
 begin
   Wait := TIdRTPTransmissionTimeExpire.Create;
-  Wait.Session := Self;
+  Wait.SessionID := Self.ID;
 
   Self.Timer.AddEvent(MilliSecondOfTheDay(Members.SendInterval(Self)),
                       Wait);
@@ -5178,7 +5198,7 @@ begin
 
         // Schedule the next RTCP send time.
         Wait := TIdRTPTransmissionTimeExpire.Create;
-        Wait.Session := Self;
+        Wait.SessionID := Self.ID;
         Self.Timer.AddEvent(MilliSecondOfTheDay(Now - PresumedNextTransmissionTime),
                             Wait);
       end
@@ -5190,7 +5210,7 @@ begin
         // on it being small enough to cause a packet to
         // be sent.
         Wait := TIdRTPTransmissionTimeExpire.Create;
-        Wait.Session := Self;
+        Wait.SessionID := Self.ID;
         Self.Timer.AddEvent(MilliSecondOfTheDay(Members.SendInterval(Self)),
                             Wait);
       end;
@@ -5466,6 +5486,53 @@ begin
 end;
 
 //******************************************************************************
+//* TIdRTPSessionRegistry                                                      *
+//******************************************************************************
+//* TIdRTPSessionRegistry Public methods ***************************************
+
+class function TIdRTPSessionRegistry.RegisterSession(Instance: TIdRTPSession): String;
+begin
+  repeat
+    Result := GRandomNumber.NextHexString;
+  until (Self.SessionRegistry.IndexOf(Result) = ItemNotFoundIndex);
+
+  Self.SessionRegistry.AddObject(Result, Instance);
+end;
+
+class function TIdRTPSessionRegistry.FindSession(const SessionID: String): TIdRTPSession;
+var
+  Index: Integer;
+begin
+  Index := Self.SessionRegistry.IndexOf(SessionID);
+
+  if (Index = ItemNotFoundIndex) then
+    Result := nil
+  else
+    Result := Self.SessionAt(Index);
+end;
+
+class procedure TIdRTPSessionRegistry.UnregisterSession(const SessionID: String);
+var
+  Index: Integer;
+begin
+  Index := Self.SessionRegistry.IndexOf(SessionID);
+  if (Index <> ItemNotFoundIndex) then
+    Self.SessionRegistry.Delete(Index);
+end;
+
+//* TIdRTPSessionRegistry Private methods **************************************
+
+class function TIdRTPSessionRegistry.SessionAt(Index: Integer): TIdRTPSession;
+begin
+  Result := TIdRTPSession(Self.SessionRegistry.Objects[Index]);
+end;
+
+class function TIdRTPSessionRegistry.SessionRegistry: TStrings;
+begin
+  Result := GSessions;
+end;
+
+//******************************************************************************
 //* TIdRTPPacketBuffer                                                         *
 //******************************************************************************
 //* TIdRTPPacketBuffer Public methods ******************************************
@@ -5556,8 +5623,13 @@ end;
 //* TIdRTPTransmissionTimeExpire Public methods ********************************
 
 procedure TIdRTPTransmissionTimeExpire.Trigger;
+var
+  Session: TIdRTPSession;
 begin
-  Self.Session.TransmissionTimeExpire;
+  Session := TIdRTPSessionRegistry.FindSession(Self.SessionID);
+
+  if Assigned(Session) then
+    Session.TransmissionTimeExpire;
 end;
 
 //******************************************************************************
@@ -5566,8 +5638,20 @@ end;
 //* TIdRTPSenderReportWait Public methods **************************************
 
 procedure TIdRTPSenderReportWait.Trigger;
+var
+  Session: TIdRTPSession;
 begin
-  Self.Session.SendReport;
+  Session := TIdRTPSessionRegistry.FindSession(Self.SessionID);
+
+  if Assigned(Session) then
+    Session.SendReport;
 end;
 
+initialization
+  GSessions := TStringList.Create;
+finalization
+// These objects are purely memory-based, so it's safe not to free them here.
+// Still, perhaps we need to review this methodology. How else do we get
+// something like class variables?
+//  GSessions.Free;
 end.
