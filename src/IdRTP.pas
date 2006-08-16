@@ -984,7 +984,6 @@ type
     procedure ResetSentPacketCount;
     procedure SendDataToTable(Data: TIdRTPPayload; Table: TIdRTPMemberTable);
     procedure SetSyncSrcId(Value: Cardinal);
-    procedure TransmissionTimeExpire(Sender: TObject);
   public
     constructor Create(Agent: IIdAbstractRTPPeer);
     destructor  Destroy; override;
@@ -1027,6 +1026,7 @@ type
     function  SenderCount: Cardinal;
     procedure SendReport;
     function  TimeOffsetFromStart(WallclockTime: TDateTime): TDateTime;
+    procedure TransmissionTimeExpire;
     procedure UnlockMembers;
 
     property AssumedMTU:                Cardinal      read fAssumedMTU write fAssumedMTU;
@@ -1104,6 +1104,11 @@ type
     fSession: TIdRTPSession;
   public
     property Session: TIdRTPSession read fSession write fSession;
+  end;
+
+  TIdRTPTransmissionTimeExpire = class(TIdRTPWait)
+  public
+    procedure Trigger; override;
   end;
 
   TIdRTPSenderReportWait = class(TIdRTPWait)
@@ -4855,9 +4860,14 @@ begin
 end;
 
 procedure TIdRTPSession.JoinSession;
+var
+  Wait: TIdRTPTransmissionTimeExpire;
 begin
+  Wait := TIdRTPTransmissionTimeExpire.Create;
+  Wait.Session := Self;
+
   Self.Timer.AddEvent(MilliSecondOfTheDay(Members.SendInterval(Self)),
-                      Self.TransmissionTimeExpire);
+                      Wait);
 end;
 
 procedure TIdRTPSession.LeaveSession(const Reason: String = '');
@@ -5143,6 +5153,56 @@ begin
   Result := WallclockTime - Self.BaseTime;
 end;
 
+procedure TIdRTPSession.TransmissionTimeExpire;
+var
+  Members:                      TIdRTPMemberTable;
+  PresumedNextTransmissionTime: TDateTime;
+  Wait:                         TIdRTPTransmissionTimeExpire;
+begin
+  // It's time to send an RTCP SR/RR.
+
+  Self.TransmissionLock.Acquire;
+  try
+    Members := Self.LockMembers;
+    try
+      Members.RemoveTimedOutSenders(Members.SenderTimeout(Self));
+      Members.RemoveTimedOutMembersExceptFor(Members.MemberTimeout(Self),
+                                             Self.SyncSrcID);
+      Self.AdjustTransmissionTime(Members);
+
+      PresumedNextTransmissionTime := Self.PreviousTransmissionTime
+                                    + OneMillisecond*Members.SendInterval(Self);
+
+      if (PresumedNextTransmissionTime < Now) then begin
+        Self.SendReport;
+
+        // Schedule the next RTCP send time.
+        Wait := TIdRTPTransmissionTimeExpire.Create;
+        Wait.Session := Self;
+        Self.Timer.AddEvent(MilliSecondOfTheDay(Now - PresumedNextTransmissionTime),
+                            Wait);
+      end
+      else begin
+        // cf RFC 3550 Appendix A.7
+        // We must redraw the interval.  Don't reuse the
+        // one computed above, since it's not actually
+        // distributed the same, as we are conditioned
+        // on it being small enough to cause a packet to
+        // be sent.
+        Wait := TIdRTPTransmissionTimeExpire.Create;
+        Wait.Session := Self;
+        Self.Timer.AddEvent(MilliSecondOfTheDay(Members.SendInterval(Self)),
+                            Wait);
+      end;
+    finally
+      Self.UnlockMembers;
+    end;
+  finally
+    Self.TransmissionLock.Release
+  end;
+end;
+
+
 procedure TIdRTPSession.UnlockMembers;
 begin
   Self.MemberLock.Release;
@@ -5405,43 +5465,6 @@ begin
   Self.ResetSentPacketCount;
 end;
 
-procedure TIdRTPSession.TransmissionTimeExpire(Sender: TObject);
-var
-  Members:                      TIdRTPMemberTable;
-  PresumedNextTransmissionTime: TDateTime;
-begin
-  Self.TransmissionLock.Acquire;
-  try
-    Members := Self.LockMembers;
-    try
-      Members.RemoveTimedOutSenders(Members.SenderTimeout(Self));
-      Members.RemoveTimedOutMembersExceptFor(Members.MemberTimeout(Self),
-                                             Self.SyncSrcID);
-      Self.AdjustTransmissionTime(Members);
-
-      PresumedNextTransmissionTime := Self.PreviousTransmissionTime
-                                    + OneMillisecond*Members.SendInterval(Self);
-
-      if (PresumedNextTransmissionTime < Now) then
-        Self.SendReport
-      else begin
-        // cf RFC 3550 Appendix A.7
-        // We must redraw the interval.  Don't reuse the
-        // one computed above, since it's not actually
-        // distributed the same, as we are conditioned
-        // on it being small enough to cause a packet to
-        // be sent.
-        Self.Timer.AddEvent(MilliSecondOfTheDay(Members.SendInterval(Self)),
-                            Self.TransmissionTimeExpire);
-      end;
-    finally
-      Self.UnlockMembers;
-    end;
-  finally
-    Self.TransmissionLock.Release
-  end;
-end;
-
 //******************************************************************************
 //* TIdRTPPacketBuffer                                                         *
 //******************************************************************************
@@ -5525,6 +5548,16 @@ end;
 procedure TIdRTPDataListenerNewDataMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdRTPDataListener).OnNewData(Self.Data, Self.Binding);
+end;
+
+//******************************************************************************
+//* TIdRTPTransmissionTimeExpire                                               *
+//******************************************************************************
+//* TIdRTPTransmissionTimeExpire Public methods ********************************
+
+procedure TIdRTPTransmissionTimeExpire.Trigger;
+begin
+  Self.Session.TransmissionTimeExpire;
 end;
 
 //******************************************************************************

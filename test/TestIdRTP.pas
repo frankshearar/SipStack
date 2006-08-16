@@ -668,6 +668,7 @@ type
     procedure TestJoinSendsSenderReport;
     procedure TestReceiveRTPFromValidatedSourceNotifiesListeners;
     procedure TestRemoveListener;
+    procedure TestSendReportSchedulesNextSend;
   end;
 
   TestSessionSequenceNumberRules = class(TSessionDataTestCase)
@@ -7354,6 +7355,18 @@ begin
   finally
     L1.Free;
   end;
+end;
+
+procedure TestTIdRTPSession.TestSendReportSchedulesNextSend;
+var
+  OldRTCPCount: Cardinal;
+begin
+  Self.Session.JoinSession;
+  Self.Timer.TriggerEarliestEvent;
+
+  OldRTCPCount := Self.Agent.RTCPCount;
+  Self.Timer.TriggerEarliestEvent;
+  Check(OldRTCPCount < Self.Agent.RTCPCount, 'No RTCP sent; no event scheduled');
 end;
 
 //******************************************************************************
