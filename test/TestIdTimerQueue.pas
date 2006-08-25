@@ -106,6 +106,7 @@ type
     procedure TestAddEventWithZeroTimeToSuspendedTimer;
     procedure TestCount;
     procedure TestDebugWaitTime;
+    procedure TestRemoveAllEvents;
     procedure TestScheduledEvent;
     procedure TestTriggerEarliestEvent;
   end;
@@ -695,6 +696,16 @@ begin
   Self.Timer.AddEvent(ArbValue, Event, nil);
   CheckEquals(ArbValue, Self.Timer.FirstEventScheduledFor(@Event).DebugWaitTime,
               'DebugWaitTime not set');
+end;
+
+procedure TestTIdDebugTimerQueue.TestRemoveAllEvents;
+begin
+  Self.Timer.AddEvent(1000, Self.WaitEvent);
+  Self.Timer.AddEvent(2000, Self.OnTimer);
+
+  Self.Timer.RemoveAllEvents;
+
+  CheckEquals(0, Self.Timer.EventCount, 'Not all events removed');
 end;
 
 procedure TestTIdDebugTimerQueue.TestScheduledEvent;

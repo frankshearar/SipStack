@@ -174,6 +174,7 @@ type
     function  LastEventScheduled: TIdWait;
     function  LastEventScheduledFor(Event: Pointer): TIdWait;
     procedure LockTimer; override;
+    procedure RemoveAllEvents;
     function  ScheduledEvent(Event: TObject): Boolean; overload;
     function  ScheduledEvent(Event: TNotifyEvent): Boolean; overload;
     function  SecondLastEventScheduled: TIdWait;
@@ -539,10 +540,12 @@ begin
   try
     I := 0;
     while (I < Self.EventList.Count) do
-      if Self.EventAt(I).MatchEvent(Event) then
-          Self.EventList.Delete(I)
-        else
-          Inc(I);
+      if Self.EventAt(I).MatchEvent(Event) then begin
+        Self.EventAt(I).Free;
+        Self.EventList.Delete(I);
+      end
+      else
+        Inc(I);
 
     Self.WaitEvent.SetEvent;
   finally
@@ -739,6 +742,19 @@ begin
   // Expose for debugging purposes.
 
   inherited LockTimer;
+end;
+
+procedure TIdDebugTimerQueue.RemoveAllEvents;
+begin
+  Self.LockTimer;
+  try
+    while (Self.EventCount > 0) do begin
+      Self.EventAt(0).Free;
+      Self.EventList.Delete(0);
+    end;
+  finally
+    Self.UnlockTimer;
+  end;
 end;
 
 function TIdDebugTimerQueue.ScheduledEvent(Event: TObject): Boolean;
