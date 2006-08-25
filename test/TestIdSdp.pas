@@ -508,6 +508,8 @@ type
     procedure TestRTPListenersGetRTP;
     procedure TestSendData;
     procedure TestSendDataWhenNotSender;
+    procedure TestSetRemoteDescriptionSendsNoPackets;
+    procedure TestStartListening;
     procedure TestStopListeningStopsListening;
     procedure TestTakeOffHold;
   end;
@@ -5834,6 +5836,9 @@ begin
     SDP.Free;
   end;
 
+  Self.Media.Initialize;
+  Self.Sender.Initialize;
+
   Self.Media.StartListening;
   Self.Sender.StartListening;
 
@@ -6033,6 +6038,9 @@ begin
   Self.Sender.RemoteDescription := Self.Media.LocalDescription;
   Self.Media.RemoteDescription  := Self.Sender.LocalDescription;
 
+  Self.Media.Initialize;
+  Self.Sender.Initialize;
+
   Self.Media.AddDataListener(Self);
 
   for Offset := 0 to PortCount - 1 do begin
@@ -6051,7 +6059,7 @@ begin
                 'Wrong layer received the data');
     CheckEquals(SenderLayerID,
                 Self.ReceivingBinding.PeerPort,
-                'Sender used wrong port (hence layer) to send data');            
+                'Sender used wrong port (hence layer) to send data');
   end;
 end;
 
@@ -6139,6 +6147,9 @@ begin
                          'm=text 9000/2 RTP/AVP 96'#13#10
                        + 'a=rtpmap:96 t140/1000'#13#10);
   Self.Media.RemoteDescription := Self.Sender.LocalDescription;
+  Self.Sender.RemoteDescription := Self.Media.LocalDescription;
+
+  Self.Media.Initialize;
 
   // Self.Sender sends off two RTCP packets to Self.Media (one per layer).
   // We don't care about those two sending events, so we just trigger them
@@ -6148,7 +6159,7 @@ begin
 
   // Self.Sender schedules the sending of RTCP messages, presumably to all
   // layers.
-  Self.Sender.RemoteDescription := Self.Media.LocalDescription;
+  Self.Sender.Initialize;
 
   Self.Media.AddRTPListener(Self);
   Self.Sender.StartListening;
@@ -6267,12 +6278,14 @@ begin
   // by "joining a session" - that will send a Receiver Report to the
   // control port of the remote party.
 
-  Self.Media.StopListening;
+  Self.Timer.RemoveAllEvents;
+
+  // This schedules the joining of the RTP session.
+  Self.Media.Initialize;
   Self.Sender.AddRTPListener(Self);
-  Self.Media.StartListening;
 
   // We use a debug timer, so we trigger the event manually.
-  Self.Timer.TriggerAllEventsOfType(TIdWait);
+  Self.Timer.TriggerEarliestEvent;
 
   Self.WaitForSignaled(Self.RTCPEvent, 'No RTCP sent');
 
@@ -6354,6 +6367,56 @@ begin
 
   Self.WaitForTimeout(Self.RTPEvent,
                       'Server sent data when not a sender');
+end;
+
+procedure TestTIdSDPMediaStream.TestSetRemoteDescriptionSendsNoPackets;
+begin
+  Self.Media.AddRTPListener(Self);
+  Self.Media.RemoteDescription := Self.Media.RemoteDescription;
+
+  Self.WaitForTimeout(Self.RTCPEvent,  'SetRemoteDescription sent RTCP packets');
+end;
+
+procedure TestTIdSDPMediaStream.TestStartListening;
+begin
+  Self.Media.StopListening;
+  Self.Sender.StopListening;
+
+  Self.SetLocalMediaDesc(Self.Sender,
+                         'm=audio 9000 RTP/AVP 0'#13#10);
+  Self.SetLocalMediaDesc(Self.Media,
+                         'm=audio 8000 RTP/AVP 0'#13#10);
+  Self.Sender.RemoteDescription := Self.Media.LocalDescription;
+  Self.Media.RemoteDescription  := Self.Sender.LocalDescription;
+
+  CheckPortFree(Self.Sender.LocalDescription.Connections[0].Address,
+                Self.Sender.LocalDescription.Port,
+                'Local port active before Initialize');
+
+  Self.Media.AddRTPListener(Self);
+  Self.Media.StartListening;
+
+  Self.Sender.Initialize;
+
+  CheckPortFree(Self.Sender.LocalDescription.Connections[0].Address,
+                Self.Sender.LocalDescription.Port,
+                'Local port active after Initialize, before StartListening');
+
+  Self.Timer.RemoveAllEvents;
+  Self.Sender.StartListening;
+
+  CheckPortActive(Self.Sender.LocalDescription.Connections[0].Address,
+                  Self.Sender.LocalDescription.Port,
+                  'Local port not active after StartListening');
+
+  // We#re using a debug timer, so we fire the event manually.
+  Self.Timer.TriggerEarliestEvent;
+
+  Self.WaitForSignaled(Self.RTCPEvent, 'No RTCP sent');
+
+  Self.SendRTP;
+
+  Self.WaitForSignaled(Self.RTPEvent, 'No RTP sent');
 end;
 
 procedure TestTIdSDPMediaStream.TestStopListeningStopsListening;

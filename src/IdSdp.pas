@@ -543,6 +543,8 @@ type
     function  CreateServer: TIdRTPServer;
     function  FindServer(LayerID: Integer): TIdRTPServer;
     function  GetDirection: TIdSdpDirection;
+    procedure InitializeLocalRTPServers;
+    procedure InitializeRemoteRTPServers;
     procedure OnNewData(Data: TIdRTPPayload;
                         Binding: TIdConnection);
     procedure OnRTCP(Packet: TIdRTCPPacket;
@@ -559,6 +561,7 @@ type
 
     procedure AddDataListener(const Listener: IIdRTPDataListener);
     procedure AddRTPListener(const Listener: IIdRTPListener);
+    procedure Initialize;
     function  IsListening: Boolean;
     function  IsReceiver: Boolean;
     function  IsSender: Boolean;
@@ -3405,6 +3408,12 @@ begin
   Self.RTPListeners.AddListener(Listener);
 end;
 
+procedure TIdSDPMediaStream.Initialize;
+begin
+  Self.InitializeLocalRTPServers;
+  Self.InitializeRemoteRTPServers;
+end;
+
 function TIdSDPMediaStream.IsListening: Boolean;
 begin
   Result := (Self.Servers.Count > 0) and Self.ServerAt(0).Active;
@@ -3452,8 +3461,10 @@ procedure TIdSDPMediaStream.StartListening;
 var
   I: Integer;
 begin
-  for I := 0 to Self.Servers.Count - 1 do 
+  for I := 0 to Self.Servers.Count - 1 do begin
     Self.ServerAt(I).Active := true;
+    Self.ServerAt(I).Session.JoinSession;
+  end;
 end;
 
 procedure TIdSDPMediaStream.StopListening;
@@ -3508,6 +3519,50 @@ end;
 function TIdSDPMediaStream.GetDirection: TIdSdpDirection;
 begin
   Result := Self.LocalDescription.Attributes.Direction;
+end;
+
+procedure TIdSDPMediaStream.InitializeLocalRTPServers;
+var
+  AlreadyRunning: Boolean;
+  I:              Cardinal;
+  Server:         TIdRTPServer;
+begin
+  // Given our local session description, instantiate the RTP servers we need.
+
+  AlreadyRunning := Self.IsListening;
+  Self.StopListening;
+
+  Self.Servers.Clear;
+  for I := 0 to Self.LocalDescription.PortCount - 1 do begin
+    Server := Self.CreateServer;
+    Server.Address  := Self.LocalDescription.Connections[0].Address;
+    Server.RTPPort  := Self.LocalDescription.Port + 2*I;
+    Server.RTCPPort := Server.RTPPort + 1;
+  end;
+
+  if AlreadyRunning then
+    Self.StartListening;
+end;
+
+procedure TIdSDPMediaStream.InitializeRemoteRTPServers;
+var
+  I:           Cardinal;
+  NextRTPPort: Cardinal;
+  Peer:        TIdRTPMember;
+begin
+  if (Self.RemoteDescription.PortCount = 0) then Exit;
+
+  // We ASSUME that the local & remote descriptions are symmetrical: that, for
+  // this stream, both ports have the same port count.
+  // THIS IS NOT SUCH A GREAT IDEA. TODO.
+  for I := 0 to Self.RemoteDescription.PortCount - 1 do begin
+    NextRTPPort := Self.RemoteDescription.Port + 2*I;
+
+    Peer := Self.ServerAt(I).Session.AddReceiver(Self.RemoteDescription.Connections[0].Address,
+                                                 NextRTPPort);
+    Peer.ControlAddress := Self.RemoteDescription.Connections[0].Address;
+    Peer.ControlPort    := NextRTPPort + 1;
+  end;
 end;
 
 procedure TIdSDPMediaStream.OnNewData(Data: TIdRTPPayload;
@@ -3571,48 +3626,17 @@ begin
 end;
 
 procedure TIdSDPMediaStream.SetLocalDescription(const Value: TIdSdpMediaDescription);
-var
-  AlreadyRunning: Boolean;
-  I:              Cardinal;
-  Server:         TIdRTPServer;
 begin
   Assert(Value.PortCount > 0, 'You have to have a PortCount of at least 1.');
 
   Self.fLocalDescription.Assign(Value);
 
-  AlreadyRunning := Self.IsListening;
-  Self.StopListening;
-
-  Self.Servers.Clear;
-  for I := 0 to Value.PortCount - 1 do begin
-    Server := Self.CreateServer;
-    Server.Address  := Value.Connections[0].Address;
-    Server.RTPPort  := Value.Port + 2*I;
-    Server.RTCPPort := Server.RTPPort + 1;
-  end;
-
-  if AlreadyRunning then
-    Self.StartListening;
+  Self.InitializeLocalRTPServers;
 end;
 
 procedure TIdSDPMediaStream.SetRemoteDescription(const Value: TIdSdpMediaDescription);
-var
-  I:    Integer;
-  Peer: TIdRTPMember;
 begin
   Self.fRemoteDescription.Assign(Value);
-
-  // We ASSUME that the local & remote descriptions are symmetrical: that, for
-  // this stream, both ports have the same port count.
-  // THIS IS NOT SUCH A GREAT IDEA. TODO.
-  for I := 0 to Value.PortCount - 1 do begin
-    Peer := Self.ServerAt(I).Session.AddReceiver(Value.Connections[I].Address,
-                                                 Value.Port);
-    Peer.ControlAddress := Value.Connections[I].Address;
-    Peer.ControlPort    := Value.Port + 1;
-    
-    Self.ServerAt(I).Session.JoinSession;
-  end;
 end;
 
 //******************************************************************************
