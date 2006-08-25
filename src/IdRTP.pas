@@ -40,9 +40,9 @@ type
 
   TIdConnection = record
     LocalIP:   String;
-    LocalPort: Integer;
+    LocalPort: Cardinal;
     PeerIP:    String;
-    PeerPort:  Integer;
+    PeerPort:  Cardinal;
   end;
 
   TIdRTPPayload = class;
