@@ -498,6 +498,7 @@ type
     procedure TestHierarchicallyEncodedStream;
     procedure TestIsReceiver;
     procedure TestIsSender;
+    procedure TestLayeredCodecAddressesAndPorts;
     procedure TestPutOnHoldRecvOnly;
     procedure TestPutOnHoldSendRecv;
     procedure TestPutOnHoldWhileOnHold;
@@ -6116,6 +6117,79 @@ begin
                   + 'a=inactive');
   Check(not Self.Media.IsSender,
         'Sender when inactive');
+end;
+
+procedure TestTIdSDPMediaStream.TestLayeredCodecAddressesAndPorts;
+var
+  FirstPort:               Cardinal;
+  SecondExpectedLocalPort: Cardinal;
+  SecondExpectedPeerPort:  Cardinal;
+begin
+  // We check that the SDP sets the RTCP address/ports of the remote party's
+  // various layers by "joining a session" - that will send a Receiver Report to
+  // the control ports of the remote party's different layers.
+
+  Self.Media.StopListening;
+  Self.Sender.StopListening;
+
+  Self.SetLocalMediaDesc(Self.Media,
+                         'm=text 8000/2 RTP/AVP 96'#13#10
+                       + 'a=rtpmap:96 t140/1000'#13#10);
+  Self.SetLocalMediaDesc(Self.Sender,
+                         'm=text 9000/2 RTP/AVP 96'#13#10
+                       + 'a=rtpmap:96 t140/1000'#13#10);
+  Self.Media.RemoteDescription := Self.Sender.LocalDescription;
+
+  // Self.Sender sends off two RTCP packets to Self.Media (one per layer).
+  // We don't care about those two sending events, so we just trigger them
+  // to get them unqueued.
+  Self.Media.StartListening;
+  Self.Timer.RemoveAllEvents;
+
+  // Self.Sender schedules the sending of RTCP messages, presumably to all
+  // layers.
+  Self.Sender.RemoteDescription := Self.Media.LocalDescription;
+
+  Self.Media.AddRTPListener(Self);
+  Self.Sender.StartListening;
+
+  // We use a debug timer, so we trigger the event manually.
+  Self.Timer.TriggerEarliestEvent;
+
+  // Now we check that we received two RTCP packets. We don't necessarily know
+  // the order in which the packets will be sent.
+
+  // Check the first: it could come from one of two ports, and could arrive at
+  // one of two ports.
+  Self.WaitForSignaled(Self.RTCPEvent, 'No RTCP sent');
+  Check((Self.ReceivingBinding.PeerPort = Self.Sender.LocalDescription.Port + 1)
+     or (Self.ReceivingBinding.PeerPort = Self.Sender.LocalDescription.Port + 3),
+        'The RTCP came from an unexpected port: ' + IntToStr(Self.ReceivingBinding.PeerPort));
+  Check((Self.ReceivingBinding.LocalPort = Self.Sender.RemoteDescription.Port + 1)
+     or (Self.ReceivingBinding.LocalPort = Self.Sender.RemoteDescription.Port + 3),
+        'The RTCP arrived at an unexpected port: ' + IntToStr(Self.ReceivingBinding.LocalPort));
+
+  // Obviously, the second packet must come from the OTHER source and arrive at
+  // the OTHER destination.
+  FirstPort := Self.ReceivingBinding.PeerPort;
+  if (FirstPort = Self.Sender.LocalDescription.Port + 1) then begin
+    SecondExpectedLocalPort := Self.Sender.RemoteDescription.Port + 3;
+    SecondExpectedPeerPort  := Self.Sender.LocalDescription.Port + 3;
+  end
+  else begin
+    SecondExpectedLocalPort := Self.Sender.RemoteDescription.Port + 1;
+    SecondExpectedPeerPort  := Self.Sender.LocalDescription.Port + 1;
+  end;
+
+  Self.Timer.TriggerEarliestEvent;
+  Self.WaitForSignaled(Self.RTCPEvent, 'No RTCP sent; second packet');
+
+  CheckEquals(SecondExpectedPeerPort,
+              Self.ReceivingBinding.PeerPort,
+              'The RTCP came from an unexpected port');
+  CheckEquals(SecondExpectedLocalPort,
+              Self.ReceivingBinding.LocalPort,
+              'The RTCP arrived at an unexpected port');
 end;
 
 procedure TestTIdSDPMediaStream.TestPutOnHoldRecvOnly;
