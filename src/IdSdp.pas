@@ -616,6 +616,7 @@ type
     function  LocalSessionDescription: String;
     function  MimeType: String;
     procedure PutOnHold;
+    function  SessionVersion: Cardinal;
     procedure SetRemoteDescription(RemoteSessionDesc: String); overload;
     procedure SetRemoteDescription(RemoteSessionDesc: TIdSdpPayload); overload;
     function  StartListening(LocalSessionDesc: String): String;
@@ -3742,13 +3743,24 @@ end;
 function TIdSDPMultimediaSession.LocalSessionDescription: String;
 var
   I: Integer;
+  SDP: TIdSdpPayload;
 begin
-  Result := 'v=0'#13#10
-          + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
-          + 's=-'#13#10;
+  SDP := TIdSdpPayload.Create;
+  try
+    SDP.Origin.Address        := '127.0.0.1';
+    SDP.Origin.AddressType    := Id_IPv4;
+    SDP.Origin.NetType        := Id_SDP_IN;
+    SDP.Origin.Username       := 'local';
+    SDP.Origin.SessionID      := '0';
+    SDP.Origin.SessionVersion := '0';
 
-  for I := 0 to Self.StreamCount - 1 do
-    Result := Result + Self.Streams[I].LocalDescription.AsString;
+    for I := 0 to Self.StreamCount - 1 do
+      SDP.MediaDescriptions.Add(Self.Streams[I].LocalDescription);
+
+    Result := SDP.AsString;
+  finally
+    SDP.Free;
+  end;
 end;
 
 function TIdSDPMultimediaSession.MimeType: String;
@@ -3764,6 +3776,11 @@ begin
     Self.Streams[I].PutOnHold;
 
   Self.fOnHold := true;
+end;
+
+function TIdSDPMultimediaSession.SessionVersion: Cardinal;
+begin
+  Result := 0;
 end;
 
 procedure TIdSDPMultimediaSession.SetRemoteDescription(RemoteSessionDesc: String);
