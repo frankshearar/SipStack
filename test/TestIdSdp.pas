@@ -6162,14 +6162,14 @@ begin
   // We don't care about those two sending events, so we just trigger them
   // to get them unqueued.
   Self.Media.StartListening;
+  Self.Media.JoinSession;
   Self.Timer.RemoveAllEvents;
 
-  // Self.Sender schedules the sending of RTCP messages, presumably to all
-  // layers.
   Self.Sender.Initialize;
 
   Self.Media.AddRTPListener(Self);
   Self.Sender.StartListening;
+  Self.Sender.JoinSession;
 
   // We use a debug timer, so we trigger the event manually.
   Self.Timer.TriggerEarliestEvent;
@@ -6284,11 +6284,11 @@ begin
   // We check that the SDP sets the RTCP address/port of the remote party
   // by "joining a session" - that will send a Receiver Report to the
   // control port of the remote party.
-
+  Self.Media.Initialize;
   Self.Timer.RemoveAllEvents;
 
   // This schedules the joining of the RTP session.
-  Self.Media.Initialize;
+  Self.Media.JoinSession;
   Self.Sender.AddRTPListener(Self);
 
   // We use a debug timer, so we trigger the event manually.
@@ -6415,6 +6415,8 @@ begin
   CheckPortActive(Self.Sender.LocalDescription.Connections[0].Address,
                   Self.Sender.LocalDescription.Port,
                   'Local port not active after StartListening');
+
+  Self.Sender.JoinSession;                
 
   // We#re using a debug timer, so we fire the event manually.
   Self.Timer.TriggerEarliestEvent;
