@@ -143,16 +143,18 @@ begin
   Self.Profile := TIdAudioVisualProfile.Create;
 
   Self.Receiver := TIdRTPServer.Create;
-  Self.Receiver.Address := '127.0.0.1';
-  Self.Receiver.Profile := Self.Profile;
-  Self.Receiver.RTPPort := 58000;
-  Self.Receiver.Active := true;
+  Self.Receiver.Address       := '127.0.0.1';
+  Self.Receiver.LocalProfile  := Self.Profile;
+  Self.Receiver.RemoteProfile := Self.Profile;
+  Self.Receiver.RTPPort       := 58000;
+  Self.Receiver.Active        := true;
 
-  Self.Sender   := TIdRTPServer.Create;
-  Self.Sender.Address := '127.0.0.1';
-  Self.Sender.Profile := Self.Profile;
-  Self.Sender.RTPPort := Self.Receiver.RTPPort + 2;
-  Self.Sender.Active := true;
+  Self.Sender := TIdRTPServer.Create;
+  Self.Sender.Address       := '127.0.0.1';
+  Self.Sender.LocalProfile  := Self.Profile;
+  Self.Sender.RemoteProfile := Self.Profile;
+  Self.Sender.RTPPort       := Self.Receiver.RTPPort + 2;
+  Self.Sender.Active        := true;
 
   Self.Hist := TIdRTPPayloadHistogram.Create;
   Self.Receiver.AddListener(Self.Hist);
@@ -182,7 +184,7 @@ procedure TestTIdRTPPayloadHistogram.SendData(PayloadType: TIdRTPPayloadType);
 var
   Data: TIdRTPPayload;
 begin
-  Data := Self.Sender.Profile.EncodingFor(PayloadType).Clone;
+  Data := Self.Sender.LocalProfile.EncodingFor(PayloadType).Clone;
   try
     Data.StartTime := Now;
 

@@ -537,6 +537,7 @@ type
     procedure TearDown; override;
   published
     procedure TestDifferentPayloadTypesForSameEncoding;
+    procedure TestInitialize;
     procedure TestIsListening;
     procedure TestLocalSessionDescription;
     procedure TestMimeType;
@@ -548,6 +549,7 @@ type
     procedure TestPutOnHold;
     procedure TestSetRemoteDescription;
     procedure TestSetRemoteDescriptionMalformedSdp;
+    procedure TestSetRemoteDescriptionWithSdpPayload;
     procedure TestStartListeningSingleStream;
     procedure TestStartListeningMalformedSdp;
     procedure TestStartListeningMultipleStreams;
@@ -5811,10 +5813,15 @@ begin
   Self.RTPEvent  := TSimpleEvent.Create;
   Self.Timer     := TIdDebugTimerQueue.Create(false);
 
-  Self.Media     := TIdSDPMediaStream.Create(Self.AVP);
-  Self.Media.Timer  := Self.Timer;
-  Self.Sender    := TIdSDPMediaStream.Create(Self.AVP);
-  Self.Sender.Timer := Self.Timer;
+  Self.Media := TIdSDPMediaStream.Create;
+  Self.Media.LocalProfile  := Self.AVP;
+  Self.Media.RemoteProfile := Self.AVP;
+  Self.Media.Timer         := Self.Timer;
+
+  Self.Sender := TIdSDPMediaStream.Create;
+  Self.Sender.LocalProfile  := Self.AVP;
+  Self.Sender.RemoteProfile := Self.AVP;
+  Self.Sender.Timer         := Self.Timer;
 
   // Sender has a nice high port number because some tests use ports just above
   // Self.Media's port (8000).
@@ -6518,8 +6525,11 @@ var
 begin
   Client := TIdRTPServer.Create;
   try
-    Client.RTPPort := Self.RemotePort + 1000;
-    NoData := TIdRTPPacket.Create(Client.Profile);
+    Client.LocalProfile  := Self.Profile;
+    Client.RemoteProfile := Self.Profile;
+    Client.RTPPort       := Self.RemotePort + 1000;
+    
+    NoData := TIdRTPPacket.Create(Client.RemoteProfile);
     try
       NoData.PayloadType := PayloadType;
       Client.SendPacket('127.0.0.1', Self.LocalPort, NoData);
@@ -6565,6 +6575,10 @@ begin
   CheckEquals(TIdRTPT140Payload.ClassName,
               Self.Payload.ClassName,
               'Remote profile not used to determine payload');
+end;
+
+procedure TestTIdSDPMultimediaSession.TestInitialize;
+begin
 end;
 
 procedure TestTIdSDPMultimediaSession.TestIsListening;
@@ -6744,6 +6758,33 @@ begin
   CheckEquals(HighPort,
               Self.MS.Streams[1].RemoteDescription.Port,
               'Remote description of second stream not set');
+end;
+
+procedure TestTIdSDPMultimediaSession.TestSetRemoteDescriptionWithSdpPayload;
+var
+  LowPort:  Cardinal;
+  HighPort: Cardinal;
+  SDP:      TIdSdpPayload;
+begin
+  LowPort  := 8900;
+  HighPort := 9900;
+
+  Self.MS.StartListening(Self.MultiStreamSDP(8000, 9000));
+
+  SDP := TIdSdpPayload.CreateFrom(Self.MultiStreamSDP(LowPort, HighPort));
+  try
+    Self.MS.StartListening(SDP.AsString);
+    Self.MS.SetRemoteDescription(SDP);
+
+    CheckEquals(LowPort,
+                Self.MS.Streams[0].RemoteDescription.Port,
+                'Remote description of first stream not set');
+    CheckEquals(HighPort,
+                Self.MS.Streams[1].RemoteDescription.Port,
+                'Remote description of second stream not set');
+  finally
+    SDP.Free;
+  end;
 end;
 
 procedure TestTIdSDPMultimediaSession.TestSetRemoteDescriptionMalformedSdp;

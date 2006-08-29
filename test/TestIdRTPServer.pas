@@ -130,14 +130,16 @@ begin
     T140.Free;
   end;
 
-  Self.Server.Profile := Self.Profile;
-  Self.Server.RTPPort := 5004;
-  Self.Server.RTCPPort := Self.Server.RTPPort + 1;
+  Self.Server.LocalProfile  := Self.Profile;
+  Self.Server.RemoteProfile := Self.Profile;
+  Self.Server.RTPPort       := 5004;
+  Self.Server.RTCPPort      := Self.Server.RTPPort + 1;
 
   Self.Client := TIdRTPServer.Create;
-  Self.Client.Profile := Self.Profile;
-  Self.Server.RTPPort := 6543; // arbitrary value
-  Self.Server.RTCPPort := Self.Server.RTPPort + 1;
+  Self.Client.LocalProfile  := Self.Profile;
+  Self.Client.RemoteProfile := Self.Profile;
+  Self.Server.RTPPort       := 6543; // arbitrary value
+  Self.Server.RTCPPort      := Self.Server.RTPPort + 1;
 
   Self.Packet := TIdRTPPacket.Create(Self.Profile);
   Self.Packet.Version      := 2;
@@ -542,14 +544,16 @@ begin
   Self.T140PT := 96;
 
   Self.Server := TIdRTPServer.Create;
-  Self.Server.Profile  := Self.Profile;
-  Self.Server.RTPPort  := 5004;
-  Self.Server.RTCPPort := Self.Server.RTPPort + 1;
+  Self.Server.LocalProfile  := Self.Profile;
+  Self.Server.RemoteProfile := Self.Profile;
+  Self.Server.RTPPort       := 5004;
+  Self.Server.RTCPPort      := Self.Server.RTPPort + 1;
 
   Self.Client  := TIdRTPServer.Create;
-  Self.Client.Profile  := Self.Profile;
-  Self.Client.RTPPort  := Self.Server.RTPPort + 2;
-  Self.Client.RTCPPort := Self.Server.RTPPort + 3;
+  Self.Client.LocalProfile  := Self.Profile;
+  Self.Server.RemoteProfile := Self.Profile;
+  Self.Client.RTPPort       := Self.Server.RTPPort + 2;
+  Self.Client.RTCPPort      := Self.Server.RTPPort + 3;
 
   T140 := TIdRTPT140Payload.CreatePayload(T140Encoding + '/' + IntToStr(T140ClockRate));
   try
@@ -621,7 +625,7 @@ begin
                       Self.Server.RTPPort);
 
   Self.ExceptionMessage := 'Waiting for RFC 4103 data';
-  Payload := Self.Client.Profile.EncodingFor(Self.T140PT).Clone as TIdRTPT140Payload;
+  Payload := Self.Client.LocalProfile.EncodingFor(Self.T140PT).Clone as TIdRTPT140Payload;
   try
     Payload.Block := Self.Msg;
     Payload.StartTime := Now;

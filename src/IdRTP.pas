@@ -903,8 +903,9 @@ type
   TIdBaseRTPAbstractPeer = class(TIdInterfacedObject,
                                  IIdAbstractRTPPeer)
   private
-    fProfile:     TIdRTPProfile;
-    Listeners:    TIdNotificationList;
+    fLocalProfile:  TIdRTPProfile;
+    fRemoteProfile: TIdRTPProfile;
+    Listeners:      TIdNotificationList;
   public
     constructor Create; virtual;
     destructor  Destroy; override;
@@ -919,7 +920,8 @@ type
                          Port: Cardinal;
                          Packet: TIdRTPBasePacket); virtual;
 
-    property Profile: TIdRTPProfile read fProfile write fProfile;
+    property LocalProfile: TIdRTPProfile  read fLocalProfile write fLocalProfile;
+    property RemoteProfile: TIdRTPProfile read fRemoteProfile write fRemoteProfile;
   end;
 
   // I provide a self-contained SSRC space.
@@ -940,13 +942,14 @@ type
     fAvgRTCPSize:               Cardinal;
     fCanonicalName:             String;
     fID:                        String;
+    fLocalProfile:              TIdRTPProfile;
     fNoControlSent:             Boolean;
     fMaxRTCPBandwidth:          Cardinal; // octets per second
     fMinimumRTCPSendInterval:   TDateTime; // in seconds
     fPreviousMemberCount:       Cardinal; // member count at last transmission time
     fReceiverBandwidthFraction: Double;
+    fRemoteProfile:             TIdRTPProfile;
     fMissedReportTolerance:     Cardinal;
-    fProfile:                   TIdRTPProfile;
     fSenderBandwidthFraction:   Double;
     fSentOctetCount:            Cardinal;
     fSentPacketCount:           Cardinal;
@@ -1039,13 +1042,14 @@ type
     property AvgRTCPSize:               Cardinal      read fAvgRTCPSize;
     property CanonicalName:             String        read fCanonicalName write fCanonicalName;
     property ID:                        String        read fID;
+    property LocalProfile:              TIdRTPProfile read fLocalProfile write fLocalProfile;
     property NoControlSent:             Boolean       read fNoControlSent;
     property MaxRTCPBandwidth:          Cardinal      read fMaxRTCPBandwidth write fMaxRTCPBandwidth;
     property MinimumRTCPSendInterval:   TDateTime     read fMinimumRTCPSendInterval write fMinimumRTCPSendInterval;
     property PreviousMemberCount:       Cardinal      read fPreviousMemberCount;
     property MissedReportTolerance:     Cardinal      read fMissedReportTolerance write fMissedReportTolerance;
-    property Profile:                   TIdRTPProfile read fProfile write fProfile;
     property ReceiverBandwidthFraction: Double        read fReceiverBandwidthFraction write fReceiverBandwidthFraction;
+    property RemoteProfile:             TIdRTPProfile read fRemoteProfile write fRemoteProfile;
     property SenderBandwidthFraction:   Double        read fSenderBandwidthFraction write fSenderBandwidthFraction;
     property SentOctetCount:            Cardinal      read fSentOctetCount;
     property SentPacketCount:           Cardinal      read fSentPacketCount;
@@ -5453,7 +5457,7 @@ var
   Packet: TIdRTPPacket;
 begin
   // Precondition: You've locked Table
-  Packet := TIdRTPPacket.Create(Self.Profile);
+  Packet := TIdRTPPacket.Create(Self.LocalProfile);
   try
     Packet.ReadPayload(Data);
 

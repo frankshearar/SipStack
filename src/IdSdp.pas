@@ -532,9 +532,10 @@ type
   private
     DataListeners:      TIdNotificationList;
     fLocalDescription:  TIdSdpMediaDescription;
+    fLocalProfile:      TIdRTPProfile;
     fOnHold:            Boolean;
     fRemoteDescription: TIdSdpMediaDescription;
-    fProfile:           TIdRTPProfile;
+    fRemoteProfile:     TIdRTPProfile;
     fTimer:             TIdTimerQueue;
     PreHoldDirection:   TIdSdpDirection;
     RTPListeners:       TIdNotificationList;
@@ -554,9 +555,11 @@ type
     function  ServerAt(Index: Integer): TIdRTPServer;
     procedure SetDirection(Value: TIdSdpDirection);
     procedure SetLocalDescription(const Value: TIdSdpMediaDescription);
+    procedure SetLocalProfile(Value: TIdRTPProfile);
     procedure SetRemoteDescription(const Value: TIdSdpMediaDescription);
+    procedure SetRemoteProfile(Value: TIdRTPProfile);
   public
-    constructor Create(Profile: TIdRTPProfile);
+    constructor Create;
     destructor  Destroy; override;
 
     procedure AddDataListener(const Listener: IIdRTPDataListener);
@@ -565,6 +568,7 @@ type
     function  IsListening: Boolean;
     function  IsReceiver: Boolean;
     function  IsSender: Boolean;
+    procedure JoinSession;
     procedure PutOnHold;
     procedure RemoveDataListener(const Listener: IIdRTPDataListener);
     procedure RemoveRTPListener(const Listener: IIdRTPListener);
@@ -575,9 +579,10 @@ type
 
     property Direction:         TIdSdpDirection        read GetDirection write SetDirection;
     property LocalDescription:  TIdSdpMediaDescription read fLocalDescription write SetLocalDescription;
+    property LocalProfile:      TIdRTPProfile          read fLocalProfile write SetLocalProfile;
     property OnHold:            Boolean                read fOnHold;
-    property Profile:           TIdRTPProfile          read fProfile;
     property RemoteDescription: TIdSdpMediaDescription read fRemoteDescription write SetRemoteDescription;
+    property RemoteProfile:     TIdRTPProfile          read fRemoteProfile write SetRemoteProfile;
     property Timer:             TIdTimerQueue          read fTimer write fTimer;
   end;
 
@@ -589,10 +594,10 @@ type
   private
     fHighestAllowedPort: Cardinal;
     fLowestAllowedPort:  Cardinal;
-    fOnHold:             Boolean;
-    fStreams:            TObjectList;
     fLocalProfile:       TIdRTPProfile;
+    fOnHold:             Boolean;
     fRemoteProfile:      TIdRTPProfile;
+    fStreams:            TObjectList;
     StreamLock:          TCriticalSection;
     Timer:               TIdThreadedTimerQueue;
 
@@ -605,11 +610,14 @@ type
     constructor Create(Profile: TIdRTPProfile);
     destructor  Destroy; override;
 
+    procedure Initialize;
     function  IsListening: Boolean;
+    procedure JoinSession;
     function  LocalSessionDescription: String;
     function  MimeType: String;
     procedure PutOnHold;
-    procedure SetRemoteDescription(RemoteSessionDesc: String);
+    procedure SetRemoteDescription(RemoteSessionDesc: String); overload;
+    procedure SetRemoteDescription(RemoteSessionDesc: TIdSdpPayload); overload;
     function  StartListening(LocalSessionDesc: String): String;
     procedure StopListening;
     function  StreamCount: Integer;
@@ -3372,15 +3380,16 @@ end;
 //******************************************************************************
 //* TIdSDPMediaStream Public methods *******************************************
 
-constructor TIdSDPMediaStream.Create(Profile: TIdRTPProfile);
+constructor TIdSDPMediaStream.Create;
 begin
   inherited Create;
 
-  Self.fOnHold  := false;
-  Self.fProfile := Profile;
+  Self.fOnHold := false;
 
   Self.fLocalDescription  := TIdSdpMediaDescription.Create;
+  Self.fLocalProfile      := TIdRTPProfile.Create;
   Self.fRemoteDescription := TIdSdpMediaDescription.Create;
+  Self.fRemoteProfile     := TIdRTPProfile.Create;
 
   Self.DataListeners := TIdNotificationList.Create;
   Self.RTPListeners  := TIdNotificationList.Create;
@@ -3394,6 +3403,11 @@ begin
   Self.Servers.Free;
   Self.RTPListeners.Free;
   Self.DataListeners.Free;
+
+  Self.RemoteProfile.Free;
+  Self.RemoteDescription.Free;
+  Self.LocalProfile.Free;
+  Self.LocalDescription.Free;
 
   inherited Destroy;
 end;
@@ -3410,6 +3424,9 @@ end;
 
 procedure TIdSDPMediaStream.Initialize;
 begin
+  // Initialize prepares the RTP session/s, binding sockets and such. It DOES
+  // NOT send any media or control packets. 
+
   Self.InitializeLocalRTPServers;
   Self.InitializeRemoteRTPServers;
 end;
@@ -3427,6 +3444,14 @@ end;
 function TIdSDPMediaStream.IsSender: Boolean;
 begin
   Result := Self.LocalDescription.Attributes.Direction in [sdSendOnly, sdSendRecv];
+end;
+
+procedure TIdSDPMediaStream.JoinSession;
+var
+  I: Integer;
+begin
+  for I := 0 to Self.Servers.Count - 1 do
+    Self.ServerAt(I).Session.JoinSession;
 end;
 
 procedure TIdSDPMediaStream.PutOnHold;
@@ -3461,10 +3486,8 @@ procedure TIdSDPMediaStream.StartListening;
 var
   I: Integer;
 begin
-  for I := 0 to Self.Servers.Count - 1 do begin
+  for I := 0 to Self.Servers.Count - 1 do
     Self.ServerAt(I).Active := true;
-    Self.ServerAt(I).Session.JoinSession;
-  end;
 end;
 
 procedure TIdSDPMediaStream.StopListening;
@@ -3494,7 +3517,8 @@ begin
   Self.Servers.Add(Result);
 
   Result.AddListener(Self);
-  Result.Profile := Profile;
+  Result.LocalProfile  := Self.LocalProfile;
+  Result.RemoteProfile := Self.RemoteProfile;
   Result.Session.AddListener(Self);
   Result.Timer := Self.Timer;
 end;
@@ -3634,9 +3658,19 @@ begin
   Self.InitializeLocalRTPServers;
 end;
 
+procedure TIdSDPMediaStream.SetLocalProfile(Value: TIdRTPProfile);
+begin
+  Self.LocalProfile.Assign(Value);
+end;
+
 procedure TIdSDPMediaStream.SetRemoteDescription(const Value: TIdSdpMediaDescription);
 begin
   Self.fRemoteDescription.Assign(Value);
+end;
+
+procedure TIdSDPMediaStream.SetRemoteProfile(Value: TIdRTPProfile);
+begin
+  Self.RemoteProfile.Assign(Value);
 end;
 
 //******************************************************************************
@@ -3681,9 +3715,28 @@ begin
   inherited Destroy;
 end;
 
+procedure TIdSDPMultimediaSession.Initialize;
+var
+  I: Integer;
+begin
+  for I := 0 to Self.StreamCount - 1 do
+    Self.Streams[I].Initialize;
+end;
+
 function TIdSDPMultimediaSession.IsListening: Boolean;
 begin
   Result := Self.StreamCount > 0;
+end;
+
+procedure TIdSDPMultimediaSession.JoinSession;
+var
+  I: Integer;
+begin
+  // Once you know both the local session description and the remote session
+  // description, you may join the session.
+
+  for I := 0 to Self.StreamCount - 1 do
+    Self.Streams[I].JoinSession;
 end;
 
 function TIdSDPMultimediaSession.LocalSessionDescription: String;
@@ -3715,12 +3768,28 @@ end;
 
 procedure TIdSDPMultimediaSession.SetRemoteDescription(RemoteSessionDesc: String);
 var
-  I:   Integer;
   SDP: TIdSdpPayload;
 begin
   // We don't need to know the MIME type: this is an SDP multimedia session,
   // ergo we simply assume that RemoteSessionDesc contains application/sdp.
 
+  Self.StreamLock.Acquire;
+  try
+    SDP := TIdSdpPayload.CreateFrom(RemoteSessionDesc);
+    try
+      Self.SetRemoteDescription(SDP);
+    finally
+      SDP.Free;
+    end;
+  finally
+    Self.StreamLock.Release;
+  end;
+end;
+
+procedure TIdSDPMultimediaSession.SetRemoteDescription(RemoteSessionDesc: TIdSdpPayload);
+var
+  I: Integer;
+begin
   // According to RFC 3264, the answer must have the same number of media
   // descriptions as an offer. Thus, (regardless of whether RemoteSessionDesc
   // contains an offer or an answer), RemoteSessionDesc must contain the same
@@ -3729,22 +3798,13 @@ begin
   // which number of media descriptions to follow. Thus we do nothing, and
   // let you, the user of this class, decide.
 
-  Self.StreamLock.Acquire;
-  try
-    SDP := TIdSdpPayload.CreateFrom(RemoteSessionDesc);
-    try
-      for I := 0 to SDP.MediaDescriptionCount - 1 do begin
-        Self.RegisterEncodingMaps(Self.RemoteProfile,
-                                  SDP.MediaDescriptionAt(I).RTPMapAttributes);
+  for I := 0 to RemoteSessionDesc.MediaDescriptionCount - 1 do begin
+    Self.RegisterEncodingMaps(Self.RemoteProfile,
+                              RemoteSessionDesc.MediaDescriptionAt(I).RTPMapAttributes);
 
-        Self.Streams[I].RemoteDescription := SDP.MediaDescriptionAt(I);
-        Self.Streams[I].Profile.Assign(Self.RemoteProfile);
-      end;
-    finally
-      SDP.Free;
-    end;
-  finally
-    Self.StreamLock.Release;
+    Self.Streams[I].LocalProfile.Assign(Self.LocalProfile);
+    Self.Streams[I].RemoteProfile.Assign(Self.RemoteProfile);
+    Self.Streams[I].RemoteDescription := RemoteSessionDesc.MediaDescriptionAt(I);
   end;
 end;
 
@@ -3760,7 +3820,7 @@ begin
   // you like.
   //
   // As an example, if there's one media description with port 8000, and we're
-  // already running servers on ports 8000-8099, we'll start aa server on 8100.
+  // already running servers on ports 8000-8099, we'll start a server on 8100.
   // Result contains the ACTUAL port numbers used.
 
   Self.StreamLock.Acquire;
@@ -3827,7 +3887,7 @@ var
   NewStream:   TIdSDPMediaStream;
   SocketBound: Boolean;
 begin
-  NewStream := TIdSDPMediaStream.Create(Self.RemoteProfile);
+  NewStream := TIdSDPMediaStream.Create;
   try
     NewStream.Timer := Self.Timer;
     Self.fStreams.Add(NewStream);

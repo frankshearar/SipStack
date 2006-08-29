@@ -5548,7 +5548,7 @@ begin
     try
       Session := TIdRTPSession.Create(MockAgent);
       try
-        Session.Profile := Profile;
+        Session.LocalProfile := Profile;
         Session.Timer   := Self.Timer;
         Self.Bye.PrepareForTransmission(Session);
         Check(Self.Bye.SourceCount > 0,
@@ -6995,7 +6995,8 @@ begin
   Self.Agent.Profile := Self.Profile;
 
   Self.Session := TIdRTPSession.Create(Self.Agent);
-  Self.Session.Profile := Self.Profile;
+  Self.Session.LocalProfile  := Self.Profile;
+  Self.Session.RemoteProfile := Self.Profile;
   Self.Timer := TIdDebugTimerQueue.Create(false);
   Self.Session.Timer := Self.Timer;
 end;

@@ -77,23 +77,25 @@ begin
 
   Self.Profile := TIdAudioVisualProfile.Create;
   Self.Server := TIdRTPServer.Create;
-  Self.Server.DefaultPort := 8002;
-  Self.Server.Profile     := Self.Profile;
-  Self.Server.Active      := true;
+  Self.Server.DefaultPort   := 8002;
+  Self.Server.LocalProfile  := Self.Profile;
+  Self.Server.RemoteProfile := Self.Profile;
+  Self.Server.Active        := true;
 
   Self.Session := Self.Server.Session;
 
   Self.Client := TIdRTPServer.Create;
-  Self.Client.DefaultPort := Self.Server.DefaultPort + 2;
-  Self.Client.OnRTPRead   := Self.ReadRTP;
-  Self.Client.OnUDPRead   := Self.CountUDP;
-  Self.Client.Profile     := Self.Profile;
-  Self.Client.Active      := true;
+  Self.Client.DefaultPort   := Self.Server.DefaultPort + 2;
+  Self.Client.OnRTPRead     := Self.ReadRTP;
+  Self.Client.OnUDPRead     := Self.CountUDP;
+  Self.Client.LocalProfile  := Self.Profile;
+  Self.Client.RemoteProfile := Self.Profile;
+  Self.Client.Active        := true;
 
   Self.T140   := TIdRTPT140Payload.Create;
-  Self.T140PT := Self.Server.Profile.FirstFreePayloadType;
-  Self.Server.Profile.AddEncoding(Self.T140, Self.T140PT);
-  Self.Client.Profile.AddEncoding(Self.T140, Self.T140PT);
+  Self.T140PT := Self.Server.LocalProfile.FirstFreePayloadType;
+  Self.Server.LocalProfile.AddEncoding(Self.T140, Self.T140PT);
+  Self.Client.LocalProfile.AddEncoding(Self.T140, Self.T140PT);
 
   Self.Lock := TCriticalSection.Create;
   Self.SendBuffer := '';

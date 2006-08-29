@@ -43,7 +43,7 @@ type
     Buttons:          TIdDTMFButtonArray;
     ButtonHeight:     Integer;
     CurrentRowHeight: Integer;
-    fPreferredHeight: Integer;  
+    fPreferredHeight: Integer;
     fProcessor:       TIdSDPMediaStream;
     Timer:            TIdTimerQueue;
 
@@ -288,7 +288,7 @@ var
   TE: TIdRTPTelephoneEventPayload;
 begin
   if Assigned(Self.Processor) then begin
-    TE := Self.Processor.Profile.EncodingFor(TelephoneEventEncoding).Clone as TIdRTPTelephoneEventPayload;
+    TE := Self.Processor.LocalProfile.EncodingFor(TelephoneEventEncoding).Clone as TIdRTPTelephoneEventPayload;
     try
       TE.Event     := Event;
       TE.Duration  := 100;

@@ -52,8 +52,9 @@ type
     function  GetActive: Boolean;
     function  GetAddress: String;
     function  GetDefaultPort: Integer;
+    function  GetLocalProfile: TIdRTPProfile;
     function  GetOnUDPRead: TUDPReadEvent;
-    function  GetProfile: TIdRTPProfile;
+    function  GetRemoteProfile: TIdRTPProfile;
     function  GetRTCPPort: Integer;
     function  GetRTPPort: Integer;
     function  GetTimer: TIdTimerQueue;
@@ -64,8 +65,9 @@ type
     procedure SetActive(Value: Boolean);
     procedure SetAddress(Value: String);
     procedure SetDefaultPort(Value: Integer);
+    procedure SetLocalProfile(Value: TIdRTPProfile);
     procedure SetOnUDPRead(Value: TUDPReadEvent);
-    procedure SetProfile(Value: TIdRTPProfile);
+    procedure SetRemoteProfile(Value: TIdRTPProfile);
     procedure SetRTCPPort(Value: Integer);
     procedure SetRTPPort(Value: Integer);
     procedure SetTimer(Value: TIdTimerQueue);
@@ -86,17 +88,18 @@ type
                          Port: Cardinal;
                          Packet: TIdRTPBasePacket);
   published
-    property Active:      Boolean          read GetActive write SetActive;
-    property Address:     String           read GetAddress write SetAddress;
-    property DefaultPort: Integer          read GetDefaultPort write SetDefaultPort;
-    property OnRTCPRead:  TIdRTCPReadEvent read fOnRTCPRead write fOnRTCPRead;
-    property OnRTPRead:   TIdRTPReadEvent  read fOnRTPRead write fOnRTPRead;
-    property OnUDPRead:   TUDPReadEvent    read GetOnUDPRead write SetOnUDPRead;
-    property Profile:     TIdRTPProfile    read GetProfile write SetProfile;
-    property RTCPPort:    Integer          read GetRTCPPort write SetRTCPPort;
-    property RTPPort:     Integer          read GetRTPPort write SetRTPPort;
-    property Session:     TIdRTPSession    read fSession;
-    property Timer:       TIdTimerQueue    read GetTimer write SetTimer;
+    property Active:        Boolean          read GetActive write SetActive;
+    property Address:       String           read GetAddress write SetAddress;
+    property DefaultPort:   Integer          read GetDefaultPort write SetDefaultPort;
+    property LocalProfile:  TIdRTPProfile    read GetLocalProfile write SetLocalProfile;
+    property OnRTCPRead:    TIdRTCPReadEvent read fOnRTCPRead write fOnRTCPRead;
+    property OnRTPRead:     TIdRTPReadEvent  read fOnRTPRead write fOnRTPRead;
+    property OnUDPRead:     TUDPReadEvent    read GetOnUDPRead write SetOnUDPRead;
+    property RemoteProfile: TIdRTPProfile    read GetRemoteProfile write SetRemoteProfile;
+    property RTCPPort:      Integer          read GetRTCPPort write SetRTCPPort;
+    property RTPPort:       Integer          read GetRTPPort write SetRTPPort;
+    property Session:       TIdRTPSession    read fSession;
+    property Timer:         TIdTimerQueue    read GetTimer write SetTimer;
   end;
 
 implementation
@@ -185,7 +188,7 @@ begin
   Binding.PeerIP    := ABinding.PeerIP;
   Binding.PeerPort  := ABinding.PeerPort;
 
-  Pkt := Self.Profile.CreatePacket(AData);
+  Pkt := Self.RemoteProfile.CreatePacket(AData);
   try
     Pkt.ReadFrom(AData);
 
@@ -229,14 +232,19 @@ begin
   Result := Self.RTP.DefaultPort;
 end;
 
+function TIdRTPServer.GetLocalProfile: TIdRTPProfile;
+begin
+  Result := Self.Peer.LocalProfile;
+end;
+
 function TIdRTPServer.GetOnUDPRead: TUDPReadEvent;
 begin
   Result := Self.RTP.OnUDPRead;
 end;
 
-function TIdRTPServer.GetProfile: TIdRTPProfile;
+function TIdRTPServer.GetRemoteProfile: TIdRTPProfile;
 begin
-  Result := Self.Peer.Profile;
+  Result := Self.Peer.RemoteProfile;
 end;
 
 function TIdRTPServer.GetRTCPPort: Integer;
@@ -304,15 +312,21 @@ begin
   Self.RTP.DefaultPort := Value;
 end;
 
+procedure TIdRTPServer.SetLocalProfile(Value: TIdRTPProfile);
+begin
+  Self.Session.LocalProfile := Value;
+  Self.Peer.LocalProfile    := Self.Session.LocalProfile;
+end;
+
 procedure TIdRTPServer.SetOnUDPRead(Value: TUDPReadEvent);
 begin
   Self.RTP.OnUDPRead := Value;
 end;
 
-procedure TIdRTPServer.SetProfile(Value: TIdRTPProfile);
+procedure TIdRTPServer.SetRemoteProfile(Value: TIdRTPProfile);
 begin
-  Self.Session.Profile := Value;
-  Self.Peer.Profile    := Self.Session.Profile;
+  Self.Session.RemoteProfile := Value;
+  Self.Peer.RemoteProfile    := Self.Session.RemoteProfile;
 end;
 
 procedure TIdRTPServer.SetRTCPPort(Value: Integer);
