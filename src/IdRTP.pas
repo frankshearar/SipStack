@@ -987,6 +987,7 @@ type
     procedure RemoveSources(Bye: TIdRTCPBye);
     procedure ResetSentOctetCount;
     procedure ResetSentPacketCount;
+    procedure ScheduleReport(Milliseconds: Cardinal);
     procedure SendDataToTable(Data: TIdRTPPayload; Table: TIdRTPMemberTable);
     procedure SetSyncSrcId(Value: Cardinal);
   public
@@ -4880,14 +4881,8 @@ begin
 end;
 
 procedure TIdRTPSession.JoinSession;
-var
-  Wait: TIdRTPTransmissionTimeExpire;
 begin
-  Wait := TIdRTPTransmissionTimeExpire.Create;
-  Wait.SessionID := Self.ID;
-
-  Self.Timer.AddEvent(MilliSecondOfTheDay(Members.SendInterval(Self)),
-                      Wait);
+  Self.ScheduleReport(MilliSecondOfTheDay(Members.SendInterval(Self)));
 end;
 
 procedure TIdRTPSession.LeaveSession(const Reason: String = '');
@@ -5196,11 +5191,7 @@ begin
       if (PresumedNextTransmissionTime < Now) then begin
         Self.SendReport;
 
-        // Schedule the next RTCP send time.
-        Wait := TIdRTPTransmissionTimeExpire.Create;
-        Wait.SessionID := Self.ID;
-        Self.Timer.AddEvent(MilliSecondOfTheDay(Now - PresumedNextTransmissionTime),
-                            Wait);
+        Self.ScheduleReport(MilliSecondOfTheDay(Now - PresumedNextTransmissionTime));
       end
       else begin
         // cf RFC 3550 Appendix A.7
@@ -5209,10 +5200,7 @@ begin
         // distributed the same, as we are conditioned
         // on it being small enough to cause a packet to
         // be sent.
-        Wait := TIdRTPTransmissionTimeExpire.Create;
-        Wait.SessionID := Self.ID;
-        Self.Timer.AddEvent(MilliSecondOfTheDay(Members.SendInterval(Self)),
-                            Wait);
+        Self.ScheduleReport(MilliSecondOfTheDay(Members.SendInterval(Self)));
       end;
     finally
       Self.UnlockMembers;
@@ -5447,6 +5435,16 @@ end;
 procedure TIdRTPSession.ResetSentPacketCount;
 begin
   Self.fSentPacketCount := 0;
+end;
+
+procedure TIdRTPSession.ScheduleReport(Milliseconds: Cardinal);
+var
+  Wait: TIdRTPTransmissionTimeExpire;
+begin
+  // Schedule the next RTCP send time.
+  Wait := TIdRTPTransmissionTimeExpire.Create;
+  Wait.SessionID := Self.ID;
+  Self.Timer.AddEvent(Milliseconds, Wait);
 end;
 
 procedure TIdRTPSession.SendDataToTable(Data: TIdRTPPayload; Table: TIdRTPMemberTable);
