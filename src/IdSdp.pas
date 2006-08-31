@@ -592,44 +592,59 @@ type
   // use me to send (RTP) data to the remote peer.
   TIdSDPMultimediaSession = class(TObject)
   private
-    fHighestAllowedPort: Cardinal;
-    fLowestAllowedPort:  Cardinal;
-    fLocalProfile:       TIdRTPProfile;
-    fOnHold:             Boolean;
-    fRemoteProfile:      TIdRTPProfile;
-    fStreams:            TObjectList;
-    StreamLock:          TCriticalSection;
-    Timer:               TIdThreadedTimerQueue;
+    fHighestAllowedPort:  Cardinal;
+    FirstLocalSessDesc:   Boolean;
+    fLocalMachineName:      String;
+    fLowestAllowedPort:   Cardinal;
+    fLocalProfile:        TIdRTPProfile;
+    fLocalSessionID:      String;
+    fLocalSessionName:    String;
+    fLocalSessionVersion: Int64;
+    fOnHold:              Boolean;
+    fRemoteProfile:       TIdRTPProfile;
+    fStreams:             TObjectList;
+    fUsername:            String;
+    StreamLock:           TCriticalSection;
+    Timer:                TIdThreadedTimerQueue;
 
     function  AllowedPort(Port: Cardinal): Boolean;
     procedure EstablishStream(Desc: TIdSdpMediaDescription);
     function  GetStreams(Index: Integer): TIdSDPMediaStream;
     procedure RegisterEncodingMaps(Profile: TIdRTPProfile;
                                    Maps: TIdSdpRTPMapAttributes); overload;
+    procedure SetLocalMachineName(Value: String);
+    procedure UpdateSessionVersion;
   public
     constructor Create(Profile: TIdRTPProfile);
     destructor  Destroy; override;
 
+    function  AddressTypeFor(Address: String): TIdIPVersion;
     procedure Initialize;
     function  IsListening: Boolean;
     procedure JoinSession;
     function  LocalSessionDescription: String;
+    function  LocalSessionVersion: Int64;
     function  MimeType: String;
+    function  NetTypeFor(Address: String): String;
     procedure PutOnHold;
-    function  SessionVersion: Cardinal;
     procedure SetRemoteDescription(RemoteSessionDesc: String); overload;
     procedure SetRemoteDescription(RemoteSessionDesc: TIdSdpPayload); overload;
-    function  StartListening(LocalSessionDesc: String): String;
+    function  StartListening(LocalSessionDesc: String): String; overload;
+    function  StartListening(LocalSessionDesc: TIdSdpPayload): String; overload;
     procedure StopListening;
     function  StreamCount: Integer;
     procedure TakeOffHold;
 
     property HighestAllowedPort:      Cardinal          read fHighestAllowedPort write fHighestAllowedPort;
+    property LocalMachineName:        String            read fLocalMachineName write SetLocalMachineName;
     property LocalProfile:            TIdRTPProfile     read fLocalProfile;
+    property LocalSessionID:          String            read fLocalSessionID write fLocalSessionID;
     property LowestAllowedPort:       Cardinal          read fLowestAllowedPort write fLowestAllowedPort;
     property OnHold:                  Boolean           read fOnHold;
     property RemoteProfile:           TIdRTPProfile     read fRemoteProfile;
+    property LocalSessionName:        String            read fLocalSessionName write fLocalSessionName;
     property Streams[Index: Integer]: TIdSDPMediaStream read GetStreams;
+    property Username:                String            read fUsername write fUsername;
   end;
 
   TIdSdpNatMasquerader = class(TObject)
@@ -726,6 +741,8 @@ const
   RSSDPDirectionSendRecv = 'sendrecv';
 
 const
+  BlankSessionName    = '-';
+  BlankUsername       = '-';
   HighestPossiblePort = 65535;
   ItemNotFoundIndex   = -1;
   LowestPossiblePort  = 0;
@@ -744,7 +761,7 @@ function StrToMediaType(const S: String): TIdSDPMediaType;
 implementation
 
 uses
-  IdSocketHandle, SysUtils;
+  IdRandom, IdSocketHandle, SysUtils;
 
 const
   SessionHeaderOrder = 'vosiuepcbtka';
@@ -3064,11 +3081,11 @@ begin
 
   Payload.Origin.Username := Fetch(Value, ' ');
 
-  // Cf RFC 2327 Appendix A and meditate on the production "username = safe".
-  // Note, please, that the SDP examples clearly show that username has more
-  // than one character, normally, so username SHOULD be either 1*(safe) or
+  // Cf RFC 2327 Appendix A and meditate on the production "Username = safe".
+  // Note, please, that the SDP examples clearly show that Username has more
+  // than one character, normally, so Username SHOULD be either 1*(safe) or
   // *(safe). We don't know, ergo 'o= 467752 467752 IN IP4 192.168.1.41' might
-  // be legal (meaning username = '').
+  // be legal (meaning Username = '').
 //  if (Payload.Origin.Username = '') then
 //    raise EParserError.Create(Format(MalformedToken,
 //                                     [RSSDPOriginName,
@@ -3694,8 +3711,14 @@ begin
 
   Self.Timer := TIdThreadedTimerQueue.Create(false);
 
-  Self.LowestAllowedPort  := LowestPossiblePort;
-  Self.HighestAllowedPort := HighestPossiblePort;
+  Self.FirstLocalSessDesc   := true;
+  Self.fLocalSessionVersion := 0;
+  Self.LocalMachineName     := '127.0.0.1';
+  Self.LocalSessionID       := IntToStr(GRandomNumber.NextCardinal);
+  Self.LocalSessionName     := BlankSessionName;
+  Self.LowestAllowedPort    := LowestPossiblePort;
+  Self.HighestAllowedPort   := HighestPossiblePort;
+  Self.Username             := BlankUsername;
 end;
 
 destructor TIdSDPMultimediaSession.Destroy;
@@ -3714,6 +3737,16 @@ begin
   Self.Timer.Terminate;
 
   inherited Destroy;
+end;
+
+function TIdSDPMultimediaSession.AddressTypeFor(Address: String): TIdIPVersion;
+begin
+  if TIdIPAddressParser.IsIPv4Address(Address) then
+    Result := Id_IPv4
+  else if TIdIPAddressParser.IsIPv6Address(Address) then
+    Result := Id_IPv6
+  else
+    Result := Id_IPUnknown;
 end;
 
 procedure TIdSDPMultimediaSession.Initialize;
@@ -3747,12 +3780,13 @@ var
 begin
   SDP := TIdSdpPayload.Create;
   try
-    SDP.Origin.Address        := '127.0.0.1';
-    SDP.Origin.AddressType    := Id_IPv4;
-    SDP.Origin.NetType        := Id_SDP_IN;
-    SDP.Origin.Username       := 'local';
-    SDP.Origin.SessionID      := '0';
-    SDP.Origin.SessionVersion := '0';
+    SDP.Origin.Address        := Self.LocalMachineName;
+    SDP.Origin.AddressType    := Self.AddressTypeFor(Self.LocalMachineName);
+    SDP.Origin.NetType        := Self.NetTypeFor(Self.LocalMachineName);
+    SDP.Origin.Username       := Self.Username;
+    SDP.Origin.SessionID      := Self.LocalSessionID;
+    SDP.Origin.SessionVersion := IntToStr(Self.LocalSessionVersion);
+    SDP.SessionName := Self.LocalSessionName;
 
     for I := 0 to Self.StreamCount - 1 do
       SDP.MediaDescriptions.Add(Self.Streams[I].LocalDescription);
@@ -3763,9 +3797,22 @@ begin
   end;
 end;
 
+function TIdSDPMultimediaSession.LocalSessionVersion: Int64;
+begin
+  Result := Self.fLocalSessionVersion;
+end;
+
 function TIdSDPMultimediaSession.MimeType: String;
 begin
   Result := SdpMimeType;
+end;
+
+function TIdSDPMultimediaSession.NetTypeFor(Address: String): String;
+begin
+  if TIdIPAddressParser.IsIPv4Address(Address) or TIdIPAddressParser.IsIPv6Address(Address) then
+    Result := Id_SDP_IN
+  else
+    Result := 'UNKNOWN'; 
 end;
 
 procedure TIdSDPMultimediaSession.PutOnHold;
@@ -3776,11 +3823,7 @@ begin
     Self.Streams[I].PutOnHold;
 
   Self.fOnHold := true;
-end;
-
-function TIdSDPMultimediaSession.SessionVersion: Cardinal;
-begin
-  Result := 0;
+  Self.UpdateSessionVersion;
 end;
 
 procedure TIdSDPMultimediaSession.SetRemoteDescription(RemoteSessionDesc: String);
@@ -3844,16 +3887,36 @@ begin
   try
     SDP := TIdSdpPayload.CreateFrom(LocalSessionDesc);
     try
-      for I := 0 to SDP.MediaDescriptionCount - 1 do begin
-        Self.EstablishStream(SDP.MediaDescriptionAt(I));
-        Self.RegisterEncodingMaps(Self.LocalProfile,
-                                  SDP.MediaDescriptionAt(I).RTPMapAttributes);
-      end;
-
-      Result := SDP.AsString;
+      Result := Self.StartListening(SDP);
     finally
       SDP.Free;
     end;
+  finally
+    Self.StreamLock.Release;
+  end;
+end;
+
+function TIdSDPMultimediaSession.StartListening(LocalSessionDesc: TIdSdpPayload): String;
+var
+  I:              Integer;
+  AlreadyRunning: Boolean;
+begin
+  // Note: We ignore fluff like session name, origin user name, origin sess-id,
+  // sess-version and all that. For the purpose of setting up media streams we
+  // only care about media descriptions. Besides, this class will take care of
+  // sess-version and similar session descriptors.
+
+  Self.StreamLock.Acquire;
+  try
+    for I := 0 to LocalSessionDesc.MediaDescriptionCount - 1 do begin
+      Self.EstablishStream(LocalSessionDesc.MediaDescriptionAt(I));
+      Self.RegisterEncodingMaps(Self.LocalProfile,
+                                LocalSessionDesc.MediaDescriptionAt(I).RTPMapAttributes);
+    end;
+
+    Self.UpdateSessionVersion;
+
+    Result := Self.LocalSessionDescription;
   finally
     Self.StreamLock.Release;
   end;
@@ -3892,6 +3955,7 @@ begin
     Self.Streams[I].TakeOffHold;
 
   Self.fOnHold := false;
+  Self.UpdateSessionVersion;
 end;
 
 function TIdSDPMultimediaSession.AllowedPort(Port: Cardinal): Boolean;
@@ -3944,6 +4008,20 @@ begin
     Result := Self.fStreams[Index] as TIdSDPMediaStream;
   finally
     Self.StreamLock.Release;
+  end;
+end;
+
+procedure TIdSDPMultimediaSession.SetLocalMachineName(Value: String);
+begin
+  Self.fLocalMachineName := Value;
+end;
+
+procedure TIdSDPMultimediaSession.UpdateSessionVersion;
+begin
+  if Self.FirstLocalSessDesc then
+    Self.FirstLocalSessDesc := false
+  else begin
+    Inc(Self.fLocalSessionVersion);
   end;
 end;
 

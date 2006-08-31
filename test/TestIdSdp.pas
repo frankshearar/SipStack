@@ -12,8 +12,8 @@ unit TestIdSdp;
 interface
 
 uses
-  Classes, IdRTP, IdRTPServer, IdSdp, IdTimerQueue, IdUDPServer, SyncObjs,
-  TestFramework, TestFrameworkEx, TestFrameworkRtp;
+  Classes, IdRTP, IdRTPServer, IdSdp, IdSimpleParser, IdTimerQueue, IdUDPServer,
+  SyncObjs, TestFramework, TestFrameworkEx, TestFrameworkRtp;
 
 type
   TestFunctions = class(TTestCase)
@@ -427,7 +427,7 @@ type
     procedure TestParseMissingVersion;
     procedure TestParseOriginIPv6Address;
     procedure TestParseOriginMalformed;
-    procedure TestParseOriginMalformedUserName;
+    procedure TestParseOriginMalformedUsername;
     procedure TestParseOriginMalformedSessionID;
     procedure TestParseOriginMalformedSessionVersion;
     procedure TestParseOriginMalformedNetType;
@@ -524,6 +524,15 @@ type
     RemotePort: Cardinal;
     Server:     TIdUDPServer;
 
+    procedure CheckOrigin(ExpectedNetType: String;
+                          ExpectedAddressType: TIdIPVersion;
+                          ExpectedAddress: String;
+                          ExpectedSessionDescription: String);
+    procedure CheckSessionName(ExpectedName: String;
+                               SessionDescription: String;
+                               Msg: String);
+    procedure CheckOriginUsername(ExpectedUsername: String;
+                                  SessionDescription: String);
     function  MultiStreamSDP(LowPort, HighPort: Cardinal): String;
     procedure OnRTCP(Packet: TIdRTCPPacket;
                      Binding: TIdConnection);
@@ -536,20 +545,26 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAddressTypeFor;
     procedure TestDifferentPayloadTypesForSameEncoding;
     procedure TestInitialize;
     procedure TestIsListening;
     procedure TestLocalSessionDescription;
+    procedure TestLocalSessionVersionIncrements;
     procedure TestMimeType;
+    procedure TestNetTypeFor;
     procedure TestOnHold;
     procedure TestPortAboveHighestAllowedPort;
     procedure TestPortAsHighestAllowedPort;
     procedure TestPortAsLowestAllowedPort;
     procedure TestPortBelowLowestAllowedPort;
     procedure TestPutOnHold;
+    procedure TestSetLocalMachineName;
+    procedure TestSetLocalSessionName;
     procedure TestSetRemoteDescription;
     procedure TestSetRemoteDescriptionMalformedSdp;
     procedure TestSetRemoteDescriptionWithSdpPayload;
+    procedure TestSetUsername;
     procedure TestStartListeningSingleStream;
     procedure TestStartListeningMalformedSdp;
     procedure TestStartListeningMultipleStreams;
@@ -582,11 +597,12 @@ const
 implementation
 
 uses
-  IdSimpleParser, IdSocketHandle, IdStack, SysUtils;
+  IdSocketHandle, IdStack, SysUtils;
 
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSdpParser unit tests');
+{
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSdpAttribute.Suite);
   Result.AddTest(TestTIdSdpRTPMapAttribute.Suite);
@@ -608,9 +624,15 @@ begin
   Result.AddTest(TestTIdSdpParser.Suite);
   Result.AddTest(TestTIdSdpPayload.Suite);
   Result.AddTest(TestTIdSDPMediaStream.Suite);
+}
   Result.AddTest(TestTIdSDPMultimediaSession.Suite);
-  Result.AddTest(TestTIdSdpNatMasquerader.Suite);
+//  Result.AddTest(TestTIdSdpNatMasquerader.Suite);
 end;
+
+const
+  ArbitraryPort = 8000;
+  IPv4LocalHost = '127.0.0.1';
+  IPv6LocalHost = '::1';
 
 //******************************************************************************
 //* TestFunctions                                                              *
@@ -1673,7 +1695,7 @@ begin
   Self.O.NetType        := Id_SDP_IN;
   Self.O.SessionID      := 'side0f';
   Self.O.SessionVersion := 'beef';
-  Self.O.UserName       := 'Holy_Cow';
+  Self.O.Username       := 'Holy_Cow';
 
   Self.O.PrintOn(S);
 
@@ -5134,7 +5156,7 @@ begin
     CheckEquals(0,                      Self.Payload.Version,     'Version');
     CheckEquals('Minimum Session Info', Self.Payload.SessionName, 'SessionName');
 
-    CheckEquals('mhandley',    Self.Payload.Origin.UserName,       'Origin.Username');
+    CheckEquals('mhandley',    Self.Payload.Origin.Username,       'Origin.Username');
     CheckEquals('2890844526',  Self.Payload.Origin.SessionID,      'Origin.SessionID');
     CheckEquals('2890842807',  Self.Payload.Origin.SessionVersion, 'Origin.SessionVersion');
     CheckEquals('IN',          Self.Payload.Origin.NetType,        'Origin.NetType');
@@ -5263,7 +5285,7 @@ begin
   Self.CheckMalformedOrigin('mhandley');
 end;
 
-procedure TestTIdSdpParser.TestParseOriginMalformedUserName;
+procedure TestTIdSdpParser.TestParseOriginMalformedUsername;
 begin
   Self.CheckMalformedOrigin('mhand ley 2890844526 2890842807 IN IP4 126.16.64.4');
 end;
@@ -6494,6 +6516,58 @@ end;
 
 //* TestTIdSDPMultimediaSession Private methods ********************************
 
+procedure TestTIdSDPMultimediaSession.CheckOrigin(ExpectedNetType: String;
+                                                  ExpectedAddressType: TIdIPVersion;
+                                                  ExpectedAddress: String;
+                                                  ExpectedSessionDescription: String);
+var
+  SDP: TIdSDPPayload;
+begin
+  SDP := TIdSdpPayload.CreateFrom(Self.MS.LocalSessionDescription);
+  try
+    CheckEquals(ExpectedNetType,
+                SDP.Origin.NetType,
+                ExpectedAddress + ': Setting local address didn''t set the NetType');
+    CheckEquals(AddressTypeToStr(ExpectedAddressType),
+                AddressTypeToStr(SDP.Origin.AddressType),
+                ExpectedAddress + ': Setting local address didn''t set the AddressType');
+    CheckEquals(ExpectedAddress,
+                SDP.Origin.Address,
+                ExpectedAddress + ': Setting local address didn''t set the Address');
+  finally
+    SDP.Free;
+  end;
+end;
+
+procedure TestTIdSDPMultimediaSession.CheckSessionName(ExpectedName: String;
+                                                       SessionDescription: String;
+                                                       Msg: String);
+var
+  SDP: TIdSDPPayload;
+begin
+  SDP := TIdSdpPayload.CreateFrom(Self.MS.LocalSessionDescription);
+  try
+    CheckEquals(ExpectedName,
+                SDP.SessionName,
+                Msg);
+  finally
+    SDP.Free;
+  end;
+end;
+
+procedure TestTIdSDPMultimediaSession.CheckOriginUsername(ExpectedUsername: String;
+                                                          SessionDescription: String);
+var
+  SDP: TIdSdpPayload;
+begin
+  SDP := TIdSdpPayload.CreateFrom(SessionDescription);
+  try
+    CheckEquals(ExpectedUsername, SDP.Origin.Username, 'Username not set');
+  finally
+    SDP.Free;
+  end;
+end;
+
 function TestTIdSDPMultimediaSession.MultiStreamSDP(LowPort, HighPort: Cardinal): String;
 begin
   // One stream on loopback:LowPort; one stream on NIC:HighPort
@@ -6556,6 +6630,20 @@ end;
 
 //* TestTIdSDPMultimediaSession Published methods ******************************
 
+procedure TestTIdSDPMultimediaSession.TestAddressTypeFor;
+begin
+  CheckEquals(AddressTypeToStr(Id_IPv4),
+              AddressTypeToStr(Self.MS.AddressTypeFor(IPv4LocalHost)),
+              IPv4LocalHost);
+
+  CheckEquals(AddressTypeToStr(Id_IPv6),
+              AddressTypeToStr(Self.MS.AddressTypeFor(IPv6LocalHost)),
+              IPv6LocalHost);
+
+  Check(Id_IPUnknown = Self.MS.AddressTypeFor(''),
+        'Unknown address (the empty string)');
+end;
+
 procedure TestTIdSDPMultimediaSession.TestDifferentPayloadTypesForSameEncoding;
 const
   LocalPT  = 96;
@@ -6598,29 +6686,53 @@ end;
 
 procedure TestTIdSDPMultimediaSession.TestLocalSessionDescription;
 var
-  EmptyDesc: String;
-  Expected: String;
+  CurrentDesc: String;
 begin
-  EmptyDesc := Self.MS.LocalSessionDescription;
+  CurrentDesc := Self.MS.LocalSessionDescription;
+  Self.MS.StartListening(Self.MultiStreamSDP(8000, 9000));
+  CheckNotEquals(CurrentDesc,
+                 Self.MS.LocalSessionDescription,
+                 'After StartListening: session description not updated');
 
-  Expected := Self.MultiStreamSDP(8000, 9000);
-  Self.MS.StartListening(Expected);
-  CheckEquals(Expected, Self.MS.LocalSessionDescription, 'After StartListening');
-
+  CurrentDesc := Self.MS.LocalSessionDescription;
   Self.MS.PutOnHold;
-  CheckNotEquals(Expected,
+  CheckNotEquals(CurrentDesc,
                  Self.MS.LocalSessionDescription,
                  'After PutOnHold: session description not updated');
 
+  CurrentDesc := Self.MS.LocalSessionDescription;
   Self.MS.StopListening;
-  CheckEquals(EmptyDesc,
-              Self.MS.LocalSessionDescription,
-              'StopListening didn''t clear the session description');
+  CheckNotEquals(CurrentDesc,
+                 Self.MS.LocalSessionDescription,
+              'After StopListening: session description not updated');
+end;
+
+procedure TestTIdSDPMultimediaSession.TestLocalSessionVersionIncrements;
+begin
+  CheckEquals(0, Self.MS.LocalSessionVersion, 'Before setting the local description');
+
+  Self.MS.StartListening(Self.SingleStreamSDP(ArbitraryPort));
+  CheckEquals(0, Self.MS.LocalSessionVersion, 'First sess-version');
+
+  Self.MS.StopListening;
+  Self.MS.StartListening(Self.SingleStreamSDP(ArbitraryPort));
+  CheckEquals(1, Self.MS.LocalSessionVersion, 'Second sess-version');
+
+  Self.MS.StopListening;
+  Self.MS.StartListening(Self.SingleStreamSDP(ArbitraryPort));
+  CheckEquals(2, Self.MS.LocalSessionVersion, 'Third sess-version');
 end;
 
 procedure TestTIdSDPMultimediaSession.TestMimeType;
 begin
   CheckEquals(SdpMimeType, Self.MS.MimeType, 'SDP MIME type');
+end;
+
+procedure TestTIdSDPMultimediaSession.TestNetTypeFor;
+begin
+  CheckEquals(Id_SDP_IN, Self.MS.NetTypeFor(IPv4LocalHost), 'IPv4 address (' + IPv4LocalHost + ')');
+  CheckEquals(Id_SDP_IN, Self.MS.NetTypeFor(IPv6LocalHost), 'IPv6 address (' + IPv6LocalHost + ')');
+  CheckEquals('UNKNOWN', Self.MS.NetTypeFor(''), 'Unknown net type (the empty string)');
 end;
 
 procedure TestTIdSDPMultimediaSession.TestOnHold;
@@ -6717,8 +6829,9 @@ end;
 
 procedure TestTIdSDPMultimediaSession.TestPutOnHold;
 var
-  Stream1MediaType: TIdSdpMediaType;
-  Stream2MediaType: TIdSdpMediaType;
+  Stream1MediaType:  TIdSdpMediaType;
+  Stream2MediaType:  TIdSdpMediaType;
+  OldSessionVersion: Int64;
 begin
   Self.MS.StartListening(Self.MultiStreamSDP(8000, 9000));
   Self.MS.Streams[0].Direction := sdRecvOnly;
@@ -6727,6 +6840,7 @@ begin
   Stream1MediaType := Self.MS.Streams[0].LocalDescription.MediaType;
   Stream2MediaType := Self.MS.Streams[1].LocalDescription.MediaType;
 
+  OldSessionVersion := Self.MS.LocalSessionVersion;
   Self.MS.PutOnHold;
 
   Check(Self.MS.Streams[0].OnHold,
@@ -6740,6 +6854,49 @@ begin
   CheckEquals(MediaTypeToStr(Stream2MediaType),
               MediaTypeToStr(Self.MS.Streams[1].LocalDescription.MediaType),
               'Stream #2 changed its media type');
+
+  CheckEquals(OldSessionVersion + 1, Self.MS.LocalSessionVersion, 'sess-version not incremented');
+end;
+
+procedure TestTIdSDPMultimediaSession.TestSetLocalMachineName;
+begin
+  Self.MS.StartListening(Self.SingleStreamSDP(ArbitraryPort));
+  Self.MS.LocalMachineName := IPv4LocalHost;
+
+  CheckOrigin(Id_SDP_IN,
+              Id_IPv4,
+              IPv4LocalHost,
+              Self.MS.LocalSessionDescription);
+
+  Self.MS.LocalMachineName := IPv6LocalHost;
+
+  CheckOrigin(Id_SDP_IN,
+              Id_IPv6,
+              IPv6LocalHost,
+              Self.MS.LocalSessionDescription);
+end;
+
+procedure TestTIdSDPMultimediaSession.TestSetLocalSessionName;
+const
+  OldSessionName = 'old';
+  NewSessionName = 'new';
+begin
+  Self.MS.StartListening(Self.SingleStreamSDP(ArbitraryPort));
+
+  CheckSessionName(BlankSessionName,
+                   Self.MS.LocalSessionDescription,
+                   'Default SessionName value');
+
+  Self.MS.LocalSessionName := OldSessionName;
+
+  CheckSessionName(OldSessionName,
+                   Self.MS.LocalSessionDescription,
+                  'SessionName not set');
+
+  Self.MS.LocalSessionName := NewSessionName;
+  CheckSessionName(NewSessionName,
+                   Self.MS.LocalSessionDescription,
+                   'SessionName not reset');
 end;
 
 procedure TestTIdSDPMultimediaSession.TestSetRemoteDescription;
@@ -6787,6 +6944,24 @@ begin
   finally
     SDP.Free;
   end;
+end;
+
+procedure TestTIdSDPMultimediaSession.TestSetUsername;
+const
+  UsernameCase       = 'Case';
+  UsernameWintermute = 'Wintermute';
+var
+  SDP: TIdSdpPayload;
+begin
+  CheckEquals(BlankUsername, Self.MS.Username, 'Default Username value');
+
+  Self.MS.StartListening(Self.SingleStreamSDP(ArbitraryPort));
+
+  Self.MS.Username := UsernameCase;
+  CheckOriginUsername(Self.MS.Username, Self.MS.LocalSessionDescription);
+
+  Self.MS.Username := UsernameWintermute;
+  CheckOriginUsername(Self.MS.Username, Self.MS.LocalSessionDescription);
 end;
 
 procedure TestTIdSDPMultimediaSession.TestSetRemoteDescriptionMalformedSdp;
@@ -6969,18 +7144,24 @@ begin
 end;
 
 procedure TestTIdSDPMultimediaSession.TestTakeOffHold;
+var
+  OldSessionVersion: Int64;
 begin
   Self.MS.StartListening(Self.MultiStreamSDP(8000, 9000));
   Self.MS.Streams[0].Direction := sdRecvOnly;
   Self.MS.Streams[1].Direction := sdSendRecv;
 
   Self.MS.PutOnHold;
+
+  OldSessionVersion := Self.MS.LocalSessionVersion;
   Self.MS.TakeOffHold;
 
   Check(not Self.MS.Streams[0].OnHold,
         'Stream #0 not taken off hold');
   Check(not Self.MS.Streams[1].OnHold,
         'Stream #1 not taken off hold');
+
+  CheckEquals(OldSessionVersion + 1, Self.MS.LocalSessionVersion, 'sess-version not incremented');
 end;
 
 //******************************************************************************
