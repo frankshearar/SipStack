@@ -15,10 +15,6 @@ uses
   Classes, Contnrs, IdInterfacedObject, IdNotification, IdTimerQueue, SyncObjs,
   SysUtils, Types;
 
-// Used by the SessionRegistry.
-var
-  GSessions: TStrings;
-
 type
   TIdCardinalArray        = array of Cardinal;
   TIdTelephoneEventVolume = 0..63;
@@ -1330,6 +1326,10 @@ const
   NTPNegativeTimeError = 'DT < 1900/01/01';
   RTPNegativeTimeError = 'DateTimeToRTPTimestamp doesn''t support negative timestamps';
   RTPLoopDetected      = 'RTP loop detected';
+
+// Used by the SessionRegistry.
+var
+  GSessions: TStrings;
 
 //******************************************************************************
 //* Unit public functions & procedures                                         *
