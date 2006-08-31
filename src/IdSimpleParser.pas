@@ -16,7 +16,7 @@ uses
 
 type
   // for IdCore or whatever. Indy10 defines these but Indy9 doesn't
-  TIdIPVersion = (Id_IPv4, Id_IPv6);
+  TIdIPVersion = (Id_IPv4, Id_IPv6, Id_IPUnknown);
 
   // Indy10 defines this in IdStackBSDBase
   TIdIPv6AddressRec = packed array[0..7] of Word;
@@ -98,6 +98,7 @@ function Fetch(var Source: String;
                Delete: Boolean = FetchDefaultDelete): String;
 function HexDigitToInt(Digit: Char): Cardinal;
 function HexToInt(const HexValue: String): Cardinal;
+function Localhost(IPType: TIdIPVersion): String;
 function WithoutFirstAndLastChars(const S: String): String;
 
 implementation
@@ -175,6 +176,17 @@ begin
   except
     on EConvertError do
       raise EConvertError.Create(Format(HexToIntError, [HexValue]));
+  end;
+end;
+
+function Localhost(IPType: TIdIPVersion): String;
+begin
+  case IPType of
+    Id_IPv4: Result := '127.0.0.1';
+    Id_IPv6: Result := '::1';
+  else
+    Result := '';
+    raise Exception.Create('Unknown TIdIPVersion');
   end;
 end;
 
