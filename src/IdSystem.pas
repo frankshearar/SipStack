@@ -20,17 +20,22 @@ uses
 }
 
 function  ConstructUUID: String;
+function  GetCurrentProcessId: Cardinal;
 function  GetFullUserName: WideString;
+function  GetHostName: String;
 function  GetTickCount: Cardinal;
 function  GetTickDiff(const OldTickCount, NewTickCount : Cardinal): Cardinal;
 function  GetUserName: WideString;
 function  LocalAddress: String;
 procedure LocalAddresses(IPs: TStrings);
 
+// Hiding IdGlobal
+function  Min(AValueOne, AValueTwo: Integer): Integer;
+
 implementation
 
 uses
-  IdSimpleParser, IdStack, IdUDPServer, SysUtils, Windows;
+  IdSimpleParser, IdGlobal, IdStack, IdUDPServer, SysUtils, Windows;
 
 function ConstructUUID: String;
 var
@@ -40,11 +45,22 @@ begin
   Result := Lowercase(WithoutFirstAndLastChars(GUIDToString(NewGuid)));
 end;
 
+function GetCurrentProcessId: Cardinal;
+begin
+  Result := Windows.GetCurrentProcessId;
+end;
+
 function GetFullUserName: WideString;
 begin
   // Really, we want to get something like "John Random" rather than "JohnR" or
   // "JRandom".
   Result := GetUserName;
+end;
+
+function GetHostName: String;
+begin
+  // Return the full name of this machine.
+  Result := IdGlobal.IndyGetHostName;
 end;
 
 function GetTickCount: Cardinal;
@@ -127,6 +143,11 @@ begin
   end
   else
     IPs.AddStrings(GStack.LocalAddresses);
+end;
+
+function Min(AValueOne, AValueTwo: Integer): Integer;
+begin
+  Result := IdGlobal.Min(AValueOne, AValueTwo);
 end;
 
 end.
