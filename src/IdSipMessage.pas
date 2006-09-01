@@ -5679,7 +5679,7 @@ end;
 
 function TIdSipRouteHeader.GetIsLooseRoutable: Boolean;
 begin
-  Result := IndyPos(LooseRoutableParam, Self.Address.URI) > 0;
+  Result := Self.Address.HasParameter(LooseRoutableParam);
 end;
 
 procedure TIdSipRouteHeader.SetIsLooseRoutable(Value: Boolean);
