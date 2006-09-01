@@ -2173,7 +2173,7 @@ const
 implementation
 
 uses
-  IdSipDialog, IdSipLocator, IdSipTransport, IdSystem, IdUnicode;
+  IdSipDialog, IdSipLocator, IdSipTransport, IdUnicode, Math;
 
 const
   OffsetMustBeNonNegative = 'Offset must be greater or equal to zero';
