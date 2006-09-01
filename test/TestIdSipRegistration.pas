@@ -570,7 +570,7 @@ begin
 
       Bindings.First;
       while Bindings.HasNext do begin
-        Check(Bindings.CurrentContact.HasParam(GruuParam),
+        Check(Bindings.CurrentContact.HasParameter(GruuParam),
               'No "gruu" parameter: ' + Bindings.CurrentContact.FullValue);
         CheckNotEquals('',
                        Bindings.CurrentContact.Gruu,

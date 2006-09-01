@@ -565,7 +565,7 @@ begin
 
   ServerResponse.Contacts.First;
   while ServerResponse.Contacts.HasNext do begin
-    Check(ServerResponse.Contacts.CurrentContact.HasParam(GruuParam),
+    Check(ServerResponse.Contacts.CurrentContact.HasParameter(GruuParam),
           'Binding ' + ServerResponse.Contacts.CurrentContact.FullValue
         + ' has no "gruu" param');
 
@@ -592,7 +592,7 @@ begin
   ServerResponse := Self.Dispatch.Transport.LastResponse;
   ServerResponse.Contacts.First;
   while ServerResponse.Contacts.HasNext do begin
-    Check(ServerResponse.Contacts.CurrentContact.HasParam(GruuParam),
+    Check(ServerResponse.Contacts.CurrentContact.HasParameter(GruuParam),
           'Binding ' + ServerResponse.Contacts.CurrentContact.FullValue
         + ' has no "gruu" param');
     Check(ServerResponse.Contacts.CurrentContact.Address.IsSipsUri,
@@ -880,14 +880,14 @@ begin
   // cf. draft-ietf-sip-gruu-10, section 7.1.1.1
   Reg := Self.Module.CreateRegister(Self.Destination);
   try
-    Check(Reg.FirstContact.HasParam(SipInstanceParam),
+    Check(Reg.FirstContact.HasParameter(SipInstanceParam),
           'Contact doesn''t have the "' + SipInstanceParam + '" parameter');
     CheckEquals(ZeroURN,
                 Reg.FirstContact.Params[SipInstanceParam],
                 SipInstanceParam);
     Check(not Reg.FirstContact.Address.HasParameter(GridParam),
           'Contact URI SHOULD NOT have the "' + GridParam + '" parameter');
-    Check(not Reg.FirstContact.HasParam(GruuParam),
+    Check(not Reg.FirstContact.HasParameter(GruuParam),
           'Contact SHOULD NOT have the "' + GruuParam + '" parameter');
     Check(Reg.HasHeader(SupportedHeaderFull),
           'REGISTER lacks a Supported header');
@@ -1342,7 +1342,7 @@ begin
   CheckRequestSent('No request sent');
 
   Request := Self.LastSentRequest;
-  Check(not Request.FirstContact.HasParam(GruuParam),
+  Check(not Request.FirstContact.HasParameter(GruuParam),
         '"gruu" parameter not removed from 1st Contact');
   Check(not Request.FirstContact.Address.HasParameter(GridParam),
         '"grid" parameter not removed from 1st Contact URI');
@@ -1351,7 +1351,7 @@ begin
 
   Request.Contacts.First;
   Request.Contacts.Next;
-  Check(not Request.Contacts.CurrentContact.HasParam(GruuParam),
+  Check(not Request.Contacts.CurrentContact.HasParameter(GruuParam),
         '"gruu" parameter not removed from 2nd Contact');
   Check(not Request.Contacts.CurrentContact.Address.HasParameter(GridParam),
         '"grid" parameter not removed from 2nd Contact URI');

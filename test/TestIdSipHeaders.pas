@@ -1403,12 +1403,12 @@ end;
 
 procedure TIdSipParametersTestCase.TestAddParamAndHasParam;
 begin
-  Check(not Self.Params.HasParam(GruuParam),
+  Check(not Self.Params.HasParameter(GruuParam),
         'Sanity check: an empty parameter list shouldn''t have a "gruu" parameter');
 
   Self.Params.AddParam(GruuParam, 'sip:wintermute@tessier-ashpool.co.luna;opaque=foofoo');
 
-  Check(Self.Params.HasParam(GruuParam),
+  Check(Self.Params.HasParameter(GruuParam),
         'Parameter not added');
 end;
 
@@ -1474,7 +1474,7 @@ begin
       
     Other.Assign(Self.Params);
 
-    Check(not Other.HasParam(Param2),
+    Check(not Other.HasParameter(Param2),
           'Assign didn''t clear out existing parameters'); 
     Check(Other.Equals(Self.Params),
           'Assign didn''t add all parameters');
@@ -1494,9 +1494,9 @@ begin
   Self.Params.AddParam(SipInstanceParam, '<urn:foo:bar>');
 
   Self.Params.Clear;
-  Check(not Self.Params.HasParam(GruuParam),
+  Check(not Self.Params.HasParameter(GruuParam),
         'Clear didn''t remove the "' + GruuParam + '" parameter');
-  Check(not Self.Params.HasParam(SipInstanceParam),
+  Check(not Self.Params.HasParameter(SipInstanceParam),
         'Clear didn''t remove the "' + SipInstanceParam + '" parameter');
 end;
 
@@ -1581,9 +1581,9 @@ procedure TIdSipParametersTestCase.TestHasParam;
 begin
   Self.Params.AddParam(GruuParam, 'sip:wintermute@tessier-ashpool.co.luna;opaque=foofoo');
 
-  Check(Self.Params.HasParam(GruuParam),
+  Check(Self.Params.HasParameter(GruuParam),
         'Actual parameter name');
-  Check(Self.Params.HasParam(Uppercase(GruuParam)),
+  Check(Self.Params.HasParameter(Uppercase(GruuParam)),
         'Uppercased parameter name');
 end;
 
@@ -1623,7 +1623,7 @@ begin
   Self.Params.AddParam(ParamName, ParamValue);
 
   Self.Params.RemoveParameter(ParamName);
-  Check(not Self.Params.HasParam(ParamName),
+  Check(not Self.Params.HasParameter(ParamName),
         'Parameter not removed');
 end;
 
@@ -1631,7 +1631,7 @@ procedure TIdSipParametersTestCase.TestRemoveParameterParameterMissing;
 const
   ParamName  = 'foo';
 begin
-  Check(not Self.Params.HasParam(ParamName),
+  Check(not Self.Params.HasParameter(ParamName),
         'Sanity check: the parameter should be empty');
 
   // Check that trying to remove a non-extant parameter doesn't raise an
@@ -1745,13 +1745,13 @@ begin
 
   CheckEquals(3, Self.Params.Count, 'Number of parameters');
 
-  Check(Self.Params.HasParam(Param1), '"' + Param1 + '" not added');
+  Check(Self.Params.HasParameter(Param1), '"' + Param1 + '" not added');
   CheckEquals(ParamValue1, Self.Params[Param1], '"' + Param1 + '" value');
 
-  Check(Self.Params.HasParam(Param2), '"' + Param2 + '" not added');
+  Check(Self.Params.HasParameter(Param2), '"' + Param2 + '" not added');
   CheckEquals(ParamValue2, Self.Params[Param2], '"' + Param2 + '" value');
 
-  Check(Self.Params.HasParam(Param3), '"' + Param3 + '" not added');
+  Check(Self.Params.HasParameter(Param3), '"' + Param3 + '" not added');
   CheckEquals(ParamValue3, Self.Params[Param3], '"' + Param3 + '" value');
 end;
 
@@ -1777,7 +1777,7 @@ begin
 
   Self.Params.Parse(';' + ParamName + '="' + ParamValue + '"');
 
-  Check(Self.Params.HasParam(ParamName),
+  Check(Self.Params.HasParameter(ParamName),
         '"' + ParamName + '" not added');
   CheckEquals(DecodedParamValue,
               Self.Params[ParamName],
@@ -1794,7 +1794,7 @@ const
 begin
   Self.Params.Parse(';' + ParamName + '="' + ParamValue + '"');
 
-  Check(Self.Params.HasParam(ParamName),
+  Check(Self.Params.HasParameter(ParamName),
         '"' + ParamName + '" not added');
   CheckEquals(ParamValue,
               Self.Params[ParamName],
@@ -1811,7 +1811,7 @@ const
 begin
   Self.Params.Parse(';' + ParamName + '=' + ParamValue);
 
-  Check(Self.Params.HasParam(ParamName),
+  Check(Self.Params.HasParameter(ParamName),
         '"' + ParamName + '" not added');
   CheckEquals(ParamValue,
               Self.Params[ParamName],
@@ -1827,19 +1827,19 @@ const
 begin
   Self.Params.Parse(TortureParams);
 
-  Check(Self.Params.HasParam('gruu'),
+  Check(Self.Params.HasParameter('gruu'),
         '"gruu" parameter not added');
   CheckEquals('"Wintermute" <sip:wintermute@tessier-ashpool.co.luna',
               Self.Params['gruu'],
               '"gruu" parameter value');
-  Check(Self.Params.HasParam('foo'),
+  Check(Self.Params.HasParameter('foo'),
         '"foo" parameter not added');
   Check(Self.Params.HasDuplicatedParameter('foo'),
         'Duplicate (and erroneous) "foo" parameter not added');
   CheckEquals('',
               Self.Params['foo'],
               '"foo" parameter value');
-  Check(Self.Params.HasParam('bar'),
+  Check(Self.Params.HasParameter('bar'),
         '"bar" parameter not added');
    CheckEquals('\;"',
                Self.Params['bar'],
@@ -1852,7 +1852,7 @@ const
 begin
   Self.Params.Parse(';' + ParamName);
 
-  Check(Self.Params.HasParam(ParamName),
+  Check(Self.Params.HasParameter(ParamName),
         '"' + ParamName + '" not added');
   CheckEquals('',
               Self.Params[ParamName],
@@ -1866,7 +1866,7 @@ procedure TestTIdSipHeaderParameters.TestParseWithWhitespace;
 begin
   Self.Params.Parse(' ; foo = bar ');
 
-  Check(Self.Params.HasParam('foo'),
+  Check(Self.Params.HasParameter('foo'),
         '"foo" parameter not added');
   CheckEquals('bar',
               Self.Params['foo'],
@@ -2093,13 +2093,13 @@ end;
 
 procedure TestTIdSipHeader.TestHasParam;
 begin
-  Check(not Self.H.HasParam('foo'), 'New header, no params');
+  Check(not Self.H.HasParameter('foo'), 'New header, no params');
 
   Self.H.Params['branch'] := 'z9hG4bK776asdhds';
-  Check(not Self.H.HasParam('foo'), 'Some non-foo params');
+  Check(not Self.H.HasParameter('foo'), 'Some non-foo params');
 
   Self.H.Params['foo'] := 'bar';
-  Check(Self.H.HasParam('foo'), 'Some non-foo and foo params');
+  Check(Self.H.HasParameter('foo'), 'Some non-foo and foo params');
 end;
 
 procedure TestTIdSipHeader.TestEquals;
@@ -2161,7 +2161,7 @@ const
   Param = 'branch';
 begin
   Self.H.RemoveParameter(Param);
-  Check(not Self.H.HasParam(Param),
+  Check(not Self.H.HasParameter(Param),
         'Parameter somehow added during RemoveParameter');
 end;
 
@@ -2171,7 +2171,7 @@ const
 begin
   Self.H.Params[Param] := 'z9hG4bK776asdhds';
   Self.H.RemoveParameter(Param);
-  Check(not Self.H.HasParam(Param),
+  Check(not Self.H.HasParameter(Param),
         'Parameter not removed');
 end;
 
@@ -2806,11 +2806,11 @@ const
 begin
   Self.A.Nonce := 'foofoo';
 
-  Check(Self.A.HasParam(NonceParam),
+  Check(Self.A.HasParameter(NonceParam),
         'Header thinks it doesn''t have a ' + NonceParam + ' parameter');
 
   Self.A.UnknownResponses[UnknownParam] := 'foo';
-  Check(Self.A.HasParam(NonceParam),
+  Check(Self.A.HasParameter(NonceParam),
         'Header thinks it doesn''t have a ' + UnknownParam + ' parameter');
 end;
 
@@ -3346,7 +3346,7 @@ begin
   Self.C.Value := Address + ';' + ParamName + '=' + ParamValue;
 
   CheckEquals(Address, Self.C.Address.AsString, 'Address');
-  Check(Self.C.HasParam(ParamName),
+  Check(Self.C.HasParameter(ParamName),
         'Param must belong to the HEADER, not the URI');
   CheckEquals(ParamValue,
               Self.C.Params[ParamName],
@@ -3682,7 +3682,7 @@ begin
   CheckEquals('bar', Self.E.ID, 'Second set/get');
 
   Self.E.ID := '';
-  Check(not Self.E.HasParam(IdParam),
+  Check(not Self.E.HasParameter(IdParam),
         'id param not removed when set to the empty string');
 end;
 
@@ -4565,7 +4565,7 @@ begin
   CheckEquals('sip:127.0.0.1',
               Self.R.Address.URI,
               'Address');
-  Check(Self.R.HasParam('unknownParameterWithLeadingLWS'),
+  Check(Self.R.HasParameter('unknownParameterWithLeadingLWS'),
         'Parameter not added');
   CheckEquals('unknownValueWithLeadingLWS',
               Self.R.Params['unknownParameterWithLeadingLWS'],
@@ -4688,8 +4688,8 @@ begin
   Self.C.Value := 'foo;from-tag=bar;to-tag=baz';
   Self.C.CallID := 'quaax';
 
-  Check(Self.C.HasParam(FromTagParam), FromTagParam + ' removed');
-  Check(Self.C.HasParam(ToTagParam),   ToTagParam + ' removed');
+  Check(Self.C.HasParameter(FromTagParam), FromTagParam + ' removed');
+  Check(Self.C.HasParameter(ToTagParam),   ToTagParam + ' removed');
 end;
 
 procedure TestTIdSipParameteredCallIDHeader.TestValue;
@@ -4698,12 +4698,12 @@ begin
 
   CheckEquals('foo', Self.C.CallID, 'Call-ID');
 
-  Check(Self.C.HasParam(FromTagParam), 'No "' + FromTagParam + '"');
+  Check(Self.C.HasParameter(FromTagParam), 'No "' + FromTagParam + '"');
   CheckEquals('bar',
               Self.C.Params[FromTagParam],
               '"' + FromTagParam + '" value');
 
-  Check(Self.C.HasParam(ToTagParam), 'No "' + ToTagParam + '"');
+  Check(Self.C.HasParameter(ToTagParam), 'No "' + ToTagParam + '"');
   CheckEquals('bar',
               Self.C.Params[ToTagParam],
               '"' + ToTagParam + '" value');
@@ -6320,7 +6320,7 @@ begin
   Self.W.Value := 'text/plain;q=0.7;foo=bar';
   CheckEquals(1,            Self.W.ValueCount,                 '3: Count');
   CheckEquals(1,            Self.W.Values[0].Parameters.Count, '3: Parameter count');
-  Check(Self.W.Values[0].Parameters.HasParam('foo'),           '3: Parameter foo not added');
+  Check(Self.W.Values[0].Parameters.HasParameter('foo'),       '3: Parameter foo not added');
   CheckEquals('bar',
               Self.W.Values[0].Parameters.ParamValue('foo'),   '3: Parameter foo has incorrect value');
   CheckEquals('text/plain', Self.W.Values[0].Value,            '3: Value');
@@ -6330,7 +6330,7 @@ begin
   CheckEquals(2,            Self.W.ValueCount,                 '4: Count');
   CheckEquals(1,            Self.W.Values[0].Parameters.Count, '4: [0].Parameter count');
 
-  Check(Self.W.Values[0].Parameters.HasParam('foo'),           '4: [0] Parameter foo not added');
+  Check(Self.W.Values[0].Parameters.HasParameter('foo'),       '4: [0] Parameter foo not added');
   CheckEquals('bar',
               Self.W.Values[0].Parameters.ParamValue('foo'),   '4: [0] Parameter foo has incorrect value');
   CheckEquals('text/plain', Self.W.Values[0].Value,            '4: [0].Value');

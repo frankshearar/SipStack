@@ -1800,7 +1800,7 @@ begin
   Copy := TIdSessionData.Create;
   try
     Copy.RemoteParty := Self.Data.RemoteParty;
-    Check(not Copy.RemoteParty.HasParam(TagParam), 'Tag param not removed');
+    Check(not Copy.RemoteParty.HasParameter(TagParam), 'Tag param not removed');
   finally
     Copy.Free;
   end;

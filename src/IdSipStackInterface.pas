@@ -2316,7 +2316,7 @@ procedure TIdSessionData.SetRemoteParty(Value: TIdSipAddressHeader);
 begin
   Self.RemoteParty.Assign(Value);
 
-  if Self.RemoteParty.HasParam(TagParam) then
+  if Self.RemoteParty.HasParameter(TagParam) then
     Self.RemoteParty.RemoveParameter(TagParam);
 end;
 

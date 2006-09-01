@@ -124,7 +124,7 @@ type
     function  FetchParamName(var Params: String): String;
     function  FetchQuotedParameter(var Params: String): String;
     function  FetchUnquotedParameter(var Params: String): String;
-    function  FindParam(const Name: String): TIdSipParameter;
+    function  FindParameter(const Name: String): TIdSipParameter;
     function  GetValues(const Name: String): String;
     procedure InitialiseParameterTypes(List: TStrings);
     function  ParameterAt(Index: Integer): TIdSipParameter;
@@ -146,7 +146,7 @@ type
     function  Count: Integer;
     function  Equals(Other: TIdSipParameters): Boolean;
     function  HasDuplicatedParameter(const Name: String): Boolean;
-    function  HasParam(const Name: String): Boolean;
+    function  HasParameter(const Name: String): Boolean;
     function  IntersectionEquals(OtherParameters: TIdSipParameters): Boolean;
     function  ParamValue(const Name: String): String;
     procedure Parse(ParamList: String); virtual;
@@ -392,7 +392,7 @@ type
     procedure Assign(Src: TPersistent); override;
     function  AsString: String;
     function  FullValue: String;
-    function  HasParam(const Name: String): Boolean; virtual;
+    function  HasParameter(const Name: String): Boolean; virtual;
     function  IsContact: Boolean; virtual;
     function  Equals(Header: TIdSipHeader): Boolean; virtual;
     function  ParamCount: Integer;
@@ -519,7 +519,7 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
-    function  HasParam(const Name: String): Boolean; override;
+    function  HasParameter(const Name: String): Boolean; override;
 
     property Algorithm:           String   read GetAlgorithm write SetAlgorithm;
     property AuthorizationScheme: String   read fAuthorizationScheme write fAuthorizationScheme;
@@ -2725,7 +2725,7 @@ begin
     Name := Self.ParameterAt(I).Name;
 
     // Avoid a reliance on short-circuited evaluation.
-    Result := Result and Other.HasParam(Name);
+    Result := Result and Other.HasParameter(Name);
     Result := Result and IsEqual(Self.ParamValue(Name), Other.ParamValue(Name));
   end;
 
@@ -2751,7 +2751,7 @@ begin
   end;
 end;
 
-function TIdSipParameters.HasParam(const Name: String): Boolean;
+function TIdSipParameters.HasParameter(const Name: String): Boolean;
 var
   I: Integer;
 begin
@@ -2778,7 +2778,7 @@ begin
   Result := true;
   for I := 0 to Self.Parameters.Count - 1 do begin
     Name := Self.ParameterAt(I).Name;
-    if OtherParameters.HasParam(Name) then
+    if OtherParameters.HasParameter(Name) then
       Result := Result
             and (Self.ParamValue(Name) = OtherParameters.ParamValue(Name))
   end;
@@ -2788,7 +2788,7 @@ function TIdSipParameters.ParamValue(const Name: String): String;
 var
   Param: TIdSipParameter;
 begin
-  Param := Self.FindParam(Name);
+  Param := Self.FindParameter(Name);
 
   if Assigned(Param) then
     Result := Param.Value
@@ -2802,7 +2802,7 @@ end;
 
 procedure TIdSipParameters.RemoveParameter(const Name: String);
 begin
-  Self.Parameters.Remove(Self.FindParam(Name));
+  Self.Parameters.Remove(Self.FindParameter(Name));
 end;
 
 //* TIdSipParameters Private methods *******************************************
@@ -2870,7 +2870,7 @@ begin
   Result := Trim(Result);
 end;
 
-function TIdSipParameters.FindParam(const Name: String): TIdSipParameter;
+function TIdSipParameters.FindParameter(const Name: String): TIdSipParameter;
 var
   I: Integer;
 begin
@@ -2888,7 +2888,7 @@ function TIdSipParameters.GetValues(const Name: String): String;
 var
   Param: TIdSipParameter;
 begin
-  Param := Self.FindParam(Name);
+  Param := Self.FindParameter(Name);
 
   if not Assigned(Param) then
     Result := ''
@@ -2926,8 +2926,8 @@ end;
 
 procedure TIdSipParameters.SetValues(const Name: String; const Value: String);
 begin
-  if Self.HasParam(Name) then
-    Self.FindParam(Name).Value := Value
+  if Self.HasParameter(Name) then
+    Self.FindParameter(Name).Value := Value
   else
     Self.AddParam(Name, Value);
 end;
@@ -3416,7 +3416,7 @@ end;
 
 function TIdSipUri.HasParameter(const Name: String): Boolean;
 begin
-  Result := Self.Parameters.HasParam(Name);
+  Result := Self.Parameters.HasParameter(Name);
 end;
 
 function TIdSipUri.IsLooseRoutable: Boolean;
@@ -3855,9 +3855,9 @@ begin
   Result := Self.Value + Self.ParamsAsString;
 end;
 
-function TIdSipHeader.HasParam(const Name: String): Boolean;
+function TIdSipHeader.HasParameter(const Name: String): Boolean;
 begin
-  Result := Self.Parameters.HasParam(Name);
+  Result := Self.Parameters.HasParameter(Name);
 end;
 
 function TIdSipHeader.IsContact: Boolean;
@@ -3898,7 +3898,7 @@ end;
 function TIdSipHeader.GetCardinalParam(const ParamName: String;
                                        ValueIfNotPresent: Cardinal = 0): Cardinal;
 begin
-  if Self.HasParam(ParamName) then
+  if Self.HasParameter(ParamName) then
     Result := StrToInt(Self.Params[ParamName])
   else
     Result := ValueIfNotPresent;
@@ -4102,7 +4102,7 @@ begin
   try
     CanonicalAddress.Assign(Self);
     CanonicalAddress.Address.Uri := Self.Address.CanonicaliseAsAddress;
-    if CanonicalAddress.HasParam(ExpiresParam) then
+    if CanonicalAddress.HasParameter(ExpiresParam) then
       CanonicalAddress.RemoveParameter(ExpiresParam);
 
     Result := CanonicalAddress.FullValue;
@@ -4357,7 +4357,7 @@ begin
   inherited Destroy;
 end;
 
-function TIdSipHttpAuthHeader.HasParam(const Name: String): Boolean;
+function TIdSipHttpAuthHeader.HasParameter(const Name: String): Boolean;
 begin
   Result := (Self.DigestResponses.IndexOfName(Name) <> ItemNotFoundIndex)
          or (Self.fUnknownResponses.IndexOfName(Name) <> ItemNotFoundIndex)
@@ -4853,7 +4853,7 @@ end;
 
 function TIdSipContactHeader.WillExpire: Boolean;
 begin
-  Result := Self.HasParam(ExpiresParam);
+  Result := Self.HasParameter(ExpiresParam);
 end;
 
 //* TIdSipContactHeader Protected methods **************************************
@@ -4883,13 +4883,13 @@ begin
   else
     inherited Parse(Value);
 
-  if Self.HasParam(QParam)
+  if Self.HasParameter(QParam)
     and not TIdSipParser.IsQValue(Self.Params[QParam]) then
     Self.FailParse(InvalidQValue);
-  if Self.HasParam(ExpiresParam)
+  if Self.HasParameter(ExpiresParam)
     and not TIdSipParser.IsNumber(Self.Params[ExpiresParam]) then
     Self.FailParse(InvalidExpires);
-  if Self.HasParam(SipInstanceParam)
+  if Self.HasParameter(SipInstanceParam)
     and not TIdSipParser.IsUuidUrn(Self.Params[SipInstanceParam]) then
     Self.FailParse(InvalidSipInstance);
 end;
@@ -5131,9 +5131,9 @@ function TIdSipEventHeader.Equals(Header: TIdSipHeader): Boolean;
 begin
   Result := IsEqual(Header.Name, Self.Name)
         and (Header.Value = Self.Value)
-        and (Header.HasParam(IdParam) = Self.HasParam(IdParam));
+        and (Header.HasParameter(IdParam) = Self.HasParameter(IdParam));
 
-  if (Self.HasParam(IdParam) or Header.HasParam(IdParam)) then
+  if (Self.HasParameter(IdParam) or Header.HasParameter(IdParam)) then
     Result := Result
           and (Header.Params[IdParam] = Self.ID);
 end;
@@ -5187,7 +5187,7 @@ end;
 procedure TIdSipEventHeader.SetID(const Value: String);
 begin
   if (Value = '') then begin
-    if Self.HasParam(IdParam) then
+    if Self.HasParameter(IdParam) then
       Self.Parameters.RemoveParameter(IdParam)
   end
   else
@@ -5201,7 +5201,7 @@ end;
 
 function TIdSipFromToHeader.HasTag: Boolean;
 begin
-  Result := Self.HasParam(TagParam);
+  Result := Self.HasParameter(TagParam);
 end;
 
 function TIdSipFromToHeader.Equals(Header: TIdSipHeader): Boolean;
@@ -5225,7 +5225,7 @@ procedure TIdSipFromToHeader.Parse(const Value: String);
 begin
   inherited Parse(Value);
 
-  if Self.HasParam(TagParam)
+  if Self.HasParameter(TagParam)
     and not TIdSipParser.IsToken(Self.Params[TagParam]) then
     Self.FailParse(InvalidTag);
 end;
@@ -5463,7 +5463,7 @@ end;
 
 function TIdSipRetryAfterHeader.HasDuration: Boolean;
 begin
-  Result := Self.HasParam(DurationParam);
+  Result := Self.HasParameter(DurationParam);
 end;
 
 //* TIdSipRetryAfterHeader Protected methods ***********************************
@@ -5763,7 +5763,7 @@ end;
 
 function TIdSipSubscriptionStateHeader.HasRetryAfter: Boolean;
 begin
-  Result := Self.HasParam(RetryAfterParam);
+  Result := Self.HasParameter(RetryAfterParam);
 end;
 
 function TIdSipSubscriptionStateHeader.IsActive: Boolean;
@@ -5954,7 +5954,7 @@ end;
 
 function TIdSipReplacesHeader.IsEarly: Boolean;
 begin
-  Result := Self.HasParam(EarlyOnlyParam)
+  Result := Self.HasParameter(EarlyOnlyParam)
 end;
 
 //* TIdSipReplacesHeader Protected methods *************************************
@@ -5968,10 +5968,10 @@ procedure TIdSipReplacesHeader.Parse(const Value: String);
 begin
   inherited Parse(Value);
 
-  if not Self.HasParam(FromTagParam) then
+  if not Self.HasParameter(FromTagParam) then
     Self.FailParse(MissingFromTagParam);
 
-  if not Self.HasParam(ToTagParam) then
+  if not Self.HasParameter(ToTagParam) then
     Self.FailParse(MissingToTagParam);
 
   Self.CheckFromToTagCount(Self.Parameters);
@@ -6015,8 +6015,8 @@ end;
 function TIdSipTargetDialogHeader.HasCompleteDialogID: Boolean;
 begin
   Result := (Self.CallID <> '')
-        and Self.HasParam(LocalTagParam)
-        and Self.HasParam(RemoteTagParam);
+        and Self.HasParameter(LocalTagParam)
+        and Self.HasParameter(RemoteTagParam);
 end;
 
 //* TIdSipTargetDialogHeader Protected methods *********************************
@@ -6030,10 +6030,10 @@ procedure TIdSipTargetDialogHeader.Parse(const Value: String);
 begin
   inherited Parse(Value);
 
-  if not Self.HasParam(LocalTagParam) then
+  if not Self.HasParameter(LocalTagParam) then
     Self.FailParse(MissingLocalTagParam);
 
-  if not Self.HasParam(RemoteTagParam) then
+  if not Self.HasParameter(RemoteTagParam) then
     Self.FailParse(MissingRemoteTagParam);
 
   Self.CheckLocalRemoteTagCount(Self.Parameters);
@@ -6267,7 +6267,7 @@ end;
 
 function TIdSipViaHeader.HasRport: Boolean;
 begin
-  Result := Self.HasParam(RPortParam);
+  Result := Self.HasParameter(RPortParam);
 end;
 
 function TIdSipViaHeader.IsDefaultPortForTransport(Port: Cardinal;
@@ -6374,7 +6374,7 @@ end;
 
 procedure TIdSipViaHeader.AssertBranchWellFormed;
 begin
-  if Self.HasParam(BranchParam)
+  if Self.HasParameter(BranchParam)
      and not TIdSipParser.IsToken(Self.Params[BranchParam]) then
     Self.FailParse(InvalidBranchId);
 end;
@@ -6383,7 +6383,7 @@ procedure TIdSipViaHeader.AssertMaddrWellFormed;
 var
   Maddr: String;
 begin
-  if Self.HasParam(MaddrParam) then begin
+  if Self.HasParameter(MaddrParam) then begin
     Maddr := Self.Parameters.Values[MaddrParam];
     if    not TIdSipParser.IsFQDN(Maddr)
       and not TIdIPAddressParser.IsIPv4Address(Maddr)
@@ -6396,7 +6396,7 @@ procedure TIdSipViaHeader.AssertReceivedWellFormed;
 var
   Received: String;
 begin
-  if Self.HasParam(ReceivedParam) then begin
+  if Self.HasParameter(ReceivedParam) then begin
     Received := Self.Params[ReceivedParam];
 
     if    not TIdIPAddressParser.IsIPv4Address(Received)
@@ -6407,14 +6407,14 @@ end;
 
 procedure TIdSipViaHeader.AssertTTLWellFormed;
 begin
-  if Self.HasParam(TTLParam)
+  if Self.HasParameter(TTLParam)
     and not TIdSipParser.IsByte(Self.Parameters.Values[TTLParam]) then
     Self.FailParse(InvalidNumber);
 end;
 
 function TIdSipViaHeader.GetBranch: String;
 begin
-  if Self.HasParam(BranchParam) then
+  if Self.HasParameter(BranchParam) then
     Result := Self.Params[BranchParam]
   else
     Result := '';
@@ -6422,7 +6422,7 @@ end;
 
 function TIdSipViaHeader.GetMaddr: String;
 begin
-  if Self.HasParam(MaddrParam) then
+  if Self.HasParameter(MaddrParam) then
     Result := Self.Params[MaddrParam]
   else
     Result := '';
@@ -6435,7 +6435,7 @@ end;
 
 function TIdSipViaHeader.GetReceived: String;
 begin
-  if Self.HasParam(ReceivedParam) then
+  if Self.HasParameter(ReceivedParam) then
     Result := Self.Params[ReceivedParam]
   else
     Result := '';
@@ -7776,7 +7776,7 @@ begin
     try
       Contacts.First;
       while Contacts.HasNext and not Result do begin
-        Result := Result or Contacts.CurrentHeader.HasParam(ExpiresParam);
+        Result := Result or Contacts.CurrentHeader.HasParameter(ExpiresParam);
         Contacts.Next;
       end;
     finally

@@ -584,7 +584,7 @@ procedure TestTIdSipTransport.CheckUseRport(Sender: TObject;
                                             ReceivedFrom: TIdSipConnectionBindings);
 begin
   try
-    Check(R.LastHop.HasParam(RportParam),
+    Check(R.LastHop.HasParameter(RportParam),
           'No rport param');
 
     Self.ThreadEvent.SetEvent;
