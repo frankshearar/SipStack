@@ -29,9 +29,6 @@ function  GetUserName: WideString;
 function  LocalAddress: String;
 procedure LocalAddresses(IPs: TStrings);
 
-// Hiding IdGlobal
-function  Min(AValueOne, AValueTwo: Integer): Integer;
-
 implementation
 
 uses
@@ -143,11 +140,6 @@ begin
   end
   else
     IPs.AddStrings(GStack.LocalAddresses);
-end;
-
-function Min(AValueOne, AValueTwo: Integer): Integer;
-begin
-  Result := IdGlobal.Min(AValueOne, AValueTwo);
 end;
 
 end.
