@@ -199,6 +199,16 @@ begin
   Result := Copy(S, 2, Length(S) - 2);
 end;
 
+function IndyPos(const Substr, S: string): Integer;
+begin
+  Result := IdGlobal.IndyPos(Substr, S);
+end;
+
+function RPos(const ASub, AIn: String; AStart: Integer = -1): Integer;
+begin
+  Result := IdGlobal.RPos(ASub, AIn, AStart);
+end;
+
 //******************************************************************************
 //* TIdIPAddressParser                                                         *
 //******************************************************************************
