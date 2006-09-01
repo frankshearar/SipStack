@@ -3870,7 +3870,6 @@ end;
 
 function TIdSDPMultimediaSession.StartListening(LocalSessionDesc: String): String;
 var
-  I:   Integer;
   SDP: TIdSdpPayload;
 begin
   // We don't know, until we try, whether the ports in LocalSessionDesc are
@@ -3898,8 +3897,7 @@ end;
 
 function TIdSDPMultimediaSession.StartListening(LocalSessionDesc: TIdSdpPayload): String;
 var
-  I:              Integer;
-  AlreadyRunning: Boolean;
+  I: Integer;
 begin
   // Note: We ignore fluff like session name, origin user name, origin sess-id,
   // sess-version and all that. For the purpose of setting up media streams we
