@@ -12,7 +12,7 @@ unit TestIdRTP;
 interface
 
 uses
-  IdGlobal, IdRTP, IdTimerQueue, TestFramework, TestFrameworkRtp;
+  IdRTP, IdTimerQueue, TestFramework, TestFrameworkRtp;
 
 type
   TestFunctions = class(TTestRTP)
@@ -842,7 +842,7 @@ const
 implementation
 
 uses
-  Classes, DateUtils, IdRandom, IdRtpServer, SysUtils, Types;
+  Classes, DateUtils, IdRandom, IdRtpServer, IdSystem, SysUtils, Types;
 
 function Suite: ITestSuite;
 begin

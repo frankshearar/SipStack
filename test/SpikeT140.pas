@@ -64,7 +64,7 @@ implementation
 {$R *.dfm}
 
 uses
-  IdGlobal, IdSipConsts, SysUtils;
+  IdSimpleParser, IdSipConsts, IdSystem, SysUtils;
 
 //******************************************************************************
 //* TIdSpikeT140                                                               *
@@ -100,8 +100,8 @@ begin
   Self.Lock := TCriticalSection.Create;
   Self.SendBuffer := '';
 
-  Self.Session.AddReceiver(IndyGetHostName,
-                                  Self.Client.RTPPort);
+  Self.Session.AddReceiver(GetHostName,
+                           Self.Client.RTPPort);
   Self.Reset;
 end;
 

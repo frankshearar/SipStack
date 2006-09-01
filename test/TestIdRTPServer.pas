@@ -86,7 +86,7 @@ type
 implementation
 
 uses
-  DateUtils, IdGlobal, SysUtils;
+  DateUtils, SysUtils;
 
 function Suite: ITestSuite;
 begin

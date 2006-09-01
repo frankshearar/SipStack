@@ -1764,6 +1764,7 @@ const
   DomainParam                    = 'domain';
   DurationParam                  = 'duration';
   EarlyOnlyParam                 = 'early-only';
+  EOL                            = #$D#$A;
   ErrorInfoHeader                = 'Error-Info';
   EventHeaderFull                = 'Event'; // cf. RFC 3265
   EventHeaderShort               = 'o';     // cf. RFC 3265
@@ -2172,7 +2173,7 @@ const
 implementation
 
 uses
-  IdGlobal, IdSipDialog, IdSipLocator, IdSipTransport, IdUnicode;
+  IdSipDialog, IdSipLocator, IdSipTransport, IdSystem, IdUnicode;
 
 const
   OffsetMustBeNonNegative = 'Offset must be greater or equal to zero';

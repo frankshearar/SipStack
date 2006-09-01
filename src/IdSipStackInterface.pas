@@ -650,7 +650,7 @@ function EventNames(Event: Cardinal): String;
 implementation
 
 uses
-  IdGlobal, IdRandom, IdSimpleParser, IdSipAuthentication, IdSipIndyLocator,
+  IdRandom, IdSimpleParser, IdSipAuthentication, IdSipIndyLocator,
   IdSipMockLocator, IdStack, IdUDPServer;
 
 const

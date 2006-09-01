@@ -1319,7 +1319,8 @@ const
 implementation
 
 uses
-  DateUtils, IdGlobal, IdHash, IdHashMessageDigest, IdRandom, IdUnicode, Math;
+  DateUtils, IdHash, IdHashMessageDigest, IdRandom, IdSimpleParser, IdSystem,
+  IdUnicode, Math;
 
 const
   JanOne1900           = 2;
@@ -4966,8 +4967,8 @@ begin
       // uses: pid, uid, gid and hostid (but hostid is deprecated according to
       // FreeBSD's gethostid(3) manpage).
       Hash := Hasher.HashValue(DateTimeToStr(Now)
-                             + IndyGetHostName
-                             + IntToHex(CurrentProcessId, 8)
+                             + GetHostName
+                             + IntToHex(GetCurrentProcessId, 8)
                              + IntToHex(GRandomNumber.NextCardinal, 8));
 
       Result := 0;
