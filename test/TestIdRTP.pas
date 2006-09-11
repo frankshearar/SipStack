@@ -550,6 +550,8 @@ type
     procedure TestLastSenderReport;
     procedure TestPacketLossCount;
     procedure TestPacketLossFraction;
+    procedure TestSetControlBinding;
+    procedure TestSetDataBinding;
     procedure TestUpdateJitter;
   end;
 
@@ -6465,6 +6467,40 @@ begin
   CheckEquals($86, Self.Member.PacketLossFraction, '11/21');
 end;
 
+procedure TestTIdRTPMember.TestSetControlBinding;
+var
+  Binding: TIdConnection;
+begin
+  Self.Member.SentControl := false;
+
+  Binding.LocalIP   := '127.0.0.1';
+  Binding.LocalPort := 8001;
+  Binding.PeerIP    := '127.0.0.2';
+  Binding.PeerPort  := 9001;
+
+  Self.Member.SetControlBinding(Binding);
+  CheckEquals(Binding.PeerPort, Self.Member.ControlPort,    'ControlPort');
+  CheckEquals(Binding.PeerIP,   Self.Member.ControlAddress, 'ControlAddress');
+  Check(Self.Member.SentControl, 'SentControl');
+end;
+
+procedure TestTIdRTPMember.TestSetDataBinding;
+var
+  Binding: TIdConnection;
+begin
+  Self.Member.SentData := false;
+
+  Binding.LocalIP   := '127.0.0.1';
+  Binding.LocalPort := 8001;
+  Binding.PeerIP    := '127.0.0.2';
+  Binding.PeerPort  := 9001;
+
+  Self.Member.SetDataBinding(Binding);
+  CheckEquals(Binding.PeerPort, Self.Member.SourcePort,    'SourcePort');
+  CheckEquals(Binding.PeerIP,   Self.Member.SourceAddress, 'SourceAddress');
+  Check(Self.Member.IsSender, 'IsSender');
+end;
+
 procedure TestTIdRTPMember.TestUpdateJitter;
   function CurrentTime(Timestamp, Transit: Cardinal): Cardinal;
   begin
@@ -7907,12 +7943,19 @@ begin
 end;
 
 procedure TestSessionSendReceiveRules.TestInitialDeterministicSendInterval;
+var
+  Table: TIdRTPMemberTable;
 begin
-  Self.Session.MaxRTCPBandwidth := 100; // bytes per second
-  CheckEquals(Self.Session.MinimumRTCPSendInterval / 2,
-              Self.Session.DeterministicSendInterval(Self.Session.IsSender),
-              OneMillisecond,
-              'Initial send interval should be half the minimum');
+  Table := Self.Session.LockMembers;
+  try
+    Self.Session.MaxRTCPBandwidth := 100; // bytes per second
+    CheckEquals(Self.Session.MinimumRTCPSendInterval / 2,
+                Self.Session.DeterministicSendInterval(Self.Session.IsSender, Table),
+                OneMillisecond,
+                'Initial send interval should be half the minimum');
+  finally
+    Self.Session.UnlockMembers;
+  end;
 end;
 
 procedure TestSessionSendReceiveRules.TestReceiveRTPAddsMembers;
@@ -8083,7 +8126,8 @@ end;
 
 procedure TestSessionSendReceiveRules.TestDeterministicSendInterval10MembersAndNotSender;
 var
-  I: Integer;
+  I:     Integer;
+  Table: TIdRTPMemberTable;
 begin
   // See RFC 3550 section 6.2, 6.3, Appendix A.7 for details
 
@@ -8091,15 +8135,21 @@ begin
   for I := 1 to 9 do
     Self.Session.AddMember(I);
 
-  CheckEquals(2666*OneMillisecond,
-              Self.Session.DeterministicSendInterval(Self.Session.IsSender),
-              OneMillisecond,
-              '10 members, session''s not a sender');
+  Table := Self.Session.LockMembers;
+  try
+    CheckEquals(2666*OneMillisecond,
+                Self.Session.DeterministicSendInterval(Self.Session.IsSender, Table),
+                OneMillisecond,
+                '10 members, session''s not a sender');
+  finally
+    Self.Session.UnlockMembers;
+  end;
 end;
 
 procedure TestSessionSendReceiveRules.TestDeterministicSendInterval10MembersAndSender;
 var
-  Data: TIdRTPPayload;
+  Data:  TIdRTPPayload;
+  Table: TIdRTPMemberTable;
 begin
   // See RFC 3550 section 6.2, 6.3, Appendix A.7 for details
 
@@ -8113,16 +8163,22 @@ begin
   finally
     Data.Free;
   end;
-  
-  CheckEquals(Self.Session.MinimumRTCPSendInterval / 2,
-              Self.Session.DeterministicSendInterval(Self.Session.IsSender),
-              OneMillisecond,
-              '10 members, session''s a sender');
+
+  Table := Self.Session.LockMembers;
+  try
+    CheckEquals(Self.Session.MinimumRTCPSendInterval / 2,
+                Self.Session.DeterministicSendInterval(Self.Session.IsSender, Table),
+                OneMillisecond,
+                '10 members, session''s a sender');
+  finally
+    Self.Session.UnlockMembers;
+  end;
 end;
 
 procedure TestSessionSendReceiveRules.TestDeterministicSendIntervalMinimumInterval;
 var
-  I: Integer;
+  I:     Integer;
+  Table: TIdRTPMemberTable;
 begin
   // See RFC 3550 section 6.2, 6.3, Appendix A.7 for details
 
@@ -8130,19 +8186,31 @@ begin
   for I := 1 to 4 do
     Self.Session.AddMember(I);
 
-  // Calculated interval is 1333ms, and 1333ms < minimum RTCP interval
-  CheckEquals(Self.Session.MinimumRTCPSendInterval / 2,
-              Self.Session.DeterministicSendInterval(Self.Session.IsSender),
-              OneMillisecond,
-              '5 members, session''s not a sender');
+  Table := Self.Session.LockMembers;
+  try
+    // Calculated interval is 1333ms, and 1333ms < minimum RTCP interval
+    CheckEquals(Self.Session.MinimumRTCPSendInterval / 2,
+                Self.Session.DeterministicSendInterval(Self.Session.IsSender, Table),
+                OneMillisecond,
+                '5 members, session''s not a sender');
+  finally
+    Self.Session.UnlockMembers;
+  end;
 end;
 
 procedure TestSessionSendReceiveRules.TestDeterministicSendIntervalWithZeroBandwidth;
+var
+  Table: TIdRTPMemberTable;
 begin
-  CheckEquals(Self.Session.MinimumRTCPSendInterval / 2,
-              Self.Session.DeterministicSendInterval(Self.Session.IsSender),
-              OneMillisecond,
-              'Zero bandwidth');
+  Table := Self.Session.LockMembers;
+  try
+    CheckEquals(Self.Session.MinimumRTCPSendInterval / 2,
+                Self.Session.DeterministicSendInterval(Self.Session.IsSender, Table),
+                OneMillisecond,
+                'Zero bandwidth');
+  finally
+    Self.Session.UnlockMembers;
+  end;
 end;
 
 procedure TestSessionSendReceiveRules.TestSendControlDoesntSendToSelf;

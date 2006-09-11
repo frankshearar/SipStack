@@ -757,6 +757,8 @@ type
     function  PacketLossCount: Cardinal;
     function  PacketLossFraction: Byte;
     function  SequenceNumberRange: Cardinal;
+    procedure SetControlBinding(Binding: TIdConnection);
+    procedure SetDataBinding(Binding: TIdConnection);
     function  UpdateStatistics(Data:  TIdRTPPacket;
                                CurrentTime: TIdRTPTimestamp): Boolean; overload;
     procedure UpdateStatistics(Stats: TIdRTCPPacket); overload;
@@ -999,7 +1001,8 @@ type
     function  AddReceiver(Host: String; Port: Cardinal): TIdRTPMember;
     function  AddSender(SSRC: Cardinal): TIdRTPMember;
     function  CreateNextReport: TIdCompoundRTCPPacket;
-    function  DeterministicSendInterval(ForSender: Boolean): TDateTime;
+    function  DeterministicSendInterval(ForSender: Boolean;
+                                        Table: TIdRTPMemberTable): TDateTime;
     procedure Initialize;
     function  IsMember(SSRC: Cardinal): Boolean; overload;
     function  IsMember(const Host: String;
@@ -4067,6 +4070,26 @@ begin
   Result := High(Self.BaseSeqNo) + 1; // 1 shl 16
 end;
 
+procedure TIdRTPMember.SetControlBinding(Binding: TIdConnection);
+begin
+  if not Self.SentControl then begin
+    Self.ControlAddress := Binding.PeerIP;
+    Self.ControlPort    := Binding.PeerPort;
+    Self.SentControl    := true;
+  end;
+end;
+
+procedure TIdRTPMember.SetDataBinding(Binding: TIdConnection);
+begin
+  Self.IsSender := true;
+
+  if not Self.SentData then begin
+    Self.SourceAddress := Binding.PeerIP;
+    Self.SourcePort    := Binding.PeerPort;
+    Self.SentData      := true;
+  end;
+end;
+
 function TIdRTPMember.UpdateStatistics(Data: TIdRTPPacket;
                                        CurrentTime: TIdRTPTimestamp): Boolean;
 begin
@@ -4310,39 +4333,8 @@ end;
 
 function TIdRTPMemberTable.DeterministicSendInterval(ForSender: Boolean;
                                                      Session: TIdRTPSession): TDateTime;
-var
-  MinInterval:         TDateTime;
-  N:                   Cardinal;
-  NewMaxRTCPBandwidth: Cardinal;
 begin
-  MinInterval := Session.MinimumRTCPSendInterval;
-
-  if (Session.NoControlSent) then
-    MinInterval := MinInterval / 2;
-
-  NewMaxRTCPBandwidth := Session.MaxRTCPBandwidth;
-  N := Self.Count;
-  if (Self.SenderCount <= Round(Self.Count * Session.SenderBandwidthFraction)) then begin
-    if ForSender then begin
-      NewMaxRTCPBandwidth := Round(NewMaxRTCPBandwidth * Session.SenderBandwidthFraction);
-      N := Self.SenderCount;
-    end
-    else begin
-      NewMaxRTCPBandwidth := Round(NewMaxRTCPBandwidth * Session.ReceiverBandwidthFraction);
-      N := Self.ReceiverCount;
-    end;
-  end;
-
-  if (NewMaxRTCPBandwidth > 0) then begin
-    Result := OneSecond * Session.AvgRTCPSize * N / NewMaxRTCPBandwidth;
-
-    if (Result < MinInterval) then
-      Result := MinInterval;
-  end
-  else
-    Result := MinInterval;
-
-  Session.MaxRTCPBandwidth := NewMaxRTCPBandwidth;
+  Result := Session.DeterministicSendInterval(ForSender, Self);
 end;
 
 function TIdRTPMemberTable.Find(SSRC: Cardinal): TIdRTPMember;
@@ -4498,15 +4490,11 @@ var
 begin
   for I := Low(SSRCs) to High(SSRCs) do begin
     Member := Self.Find(SSRCs[I]);
-    
+
     if not Assigned(Member) then
       Member := Self.Add(SSRCs[I]);
 
-    if not Member.SentControl then begin
-      Member.ControlAddress := Binding.PeerIP;
-      Member.ControlPort    := Binding.PeerPort;
-      Member.SentControl    := true;
-    end;
+    Member.SetControlBinding(Binding);
   end;
 end;
 
@@ -4516,16 +4504,11 @@ var
   Member: TIdRTPMember;
 begin
   Member := Self.Find(SSRC);
-  if not Assigned(Member) then
-    Member := Self.AddSender(SSRC)
-  else
-    Member.IsSender := true;
 
-  if not Member.SentData then begin
-    Member.SourceAddress := Binding.PeerIP;
-    Member.SourcePort    := Binding.PeerPort;
-    Member.SentData      := true;
-  end;
+  if not Assigned(Member) then
+    Member := Self.AddSender(SSRC);
+
+  Member.SetDataBinding(Binding);
 end;
 
 //* TIdRTPMemberTable Private methods ******************************************
@@ -4827,9 +4810,41 @@ begin
   end;
 end;
 
-function TIdRTPSession.DeterministicSendInterval(ForSender: Boolean): TDateTime;
+function TIdRTPSession.DeterministicSendInterval(ForSender: Boolean;
+                                                 Table: TIdRTPMemberTable): TDateTime;
+var
+  MinInterval:         TDateTime;
+  N:                   Cardinal;
+  NewMaxRTCPBandwidth: Cardinal;
 begin
-  Result := Self.Members.DeterministicSendInterval(ForSender, Self);
+  MinInterval := Self.MinimumRTCPSendInterval;
+
+  if (Self.NoControlSent) then
+    MinInterval := MinInterval / 2;
+
+  NewMaxRTCPBandwidth := Self.MaxRTCPBandwidth;
+  N := Table.Count;
+  if (Table.SenderCount <= Round(Table.Count * Self.SenderBandwidthFraction)) then begin
+    if ForSender then begin
+      NewMaxRTCPBandwidth := Round(NewMaxRTCPBandwidth * Self.SenderBandwidthFraction);
+      N := Table.SenderCount;
+    end
+    else begin
+      NewMaxRTCPBandwidth := Round(NewMaxRTCPBandwidth * Self.ReceiverBandwidthFraction);
+      N := Table.ReceiverCount;
+    end;
+  end;
+
+  if (NewMaxRTCPBandwidth > 0) then begin
+    Result := OneSecond * Self.AvgRTCPSize * N / NewMaxRTCPBandwidth;
+
+    if (Result < MinInterval) then
+      Result := MinInterval;
+  end
+  else
+    Result := MinInterval;
+
+  Self.MaxRTCPBandwidth := NewMaxRTCPBandwidth;
 end;
 
 procedure TIdRTPSession.Initialize;
@@ -5177,7 +5192,6 @@ procedure TIdRTPSession.TransmissionTimeExpire;
 var
   Members:                      TIdRTPMemberTable;
   PresumedNextTransmissionTime: TDateTime;
-  Wait:                         TIdRTPTransmissionTimeExpire;
 begin
   // It's time to send an RTCP SR/RR.
 
