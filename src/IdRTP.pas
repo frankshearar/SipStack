@@ -4757,11 +4757,11 @@ end;
 
 function TIdRTPSession.AddMember(SSRC: Cardinal): TIdRTPMember;
 var
-  Members: TIdRTPMemberTable;
+  Table: TIdRTPMemberTable;
 begin
-  Members := Self.LockMembers;
+  Table := Self.LockMembers;
   try
-    Result := Members.Add(SSRC);
+    Result := Table.Add(SSRC);
   finally
     Self.UnlockMembers
   end;
@@ -4769,7 +4769,7 @@ end;
 
 function TIdRTPSession.AddReceiver(Host: String; Port: Cardinal): TIdRTPMember;
 var
-  Members: TIdRTPMemberTable;
+  Table: TIdRTPMemberTable;
 begin
   // When we start up a session with the intention of sending data to someone
   // (as opposed to solely listening), we need to send data to that person
@@ -4777,9 +4777,9 @@ begin
   // know their SSRC. Therefore we add them as a receiver, and note the first
   // SSRC we get from that address. From then on we act as normal.
 
-  Members := Self.LockMembers;
+  Table := Self.LockMembers;
   try
-    Result := Members.AddReceiver(Host, Port);
+    Result := Table.AddReceiver(Host, Port);
   finally
     Self.UnlockMembers;
   end;
@@ -4787,11 +4787,11 @@ end;
 
 function TIdRTPSession.AddSender(SSRC: Cardinal): TIdRTPMember;
 var
-  Members: TIdRTPMemberTable;
+  Table: TIdRTPMemberTable;
 begin
-  Members := Self.LockMembers;
+  Table := Self.LockMembers;
   try
-    Result := Members.AddSender(SSRC);
+    Result := Table.AddSender(SSRC);
   finally
     Self.UnlockMembers;
   end;
@@ -4888,12 +4888,12 @@ end;
 
 function TIdRTPSession.IsSender(SSRC: Cardinal): Boolean;
 var
-  Member:  TIdRTPMember;
-  Members: TIdRTPMemberTable;
+  Member: TIdRTPMember;
+  Table:  TIdRTPMemberTable;
 begin
-  Members := Self.LockMembers;
+  Table := Self.LockMembers;
   try
-    Member := Members.Find(SSRC);
+    Member := Table.Find(SSRC);
     Result := Assigned(Member) and Member.IsSender;
   finally
     Self.UnlockMembers;
@@ -4932,11 +4932,11 @@ end;
 
 function TIdRTPSession.Member(SSRC: Cardinal): TIdRTPMember;
 var
-  Members: TIdRTPMemberTable;
+  Table: TIdRTPMemberTable;
 begin
-  Members := Self.LockMembers;
+  Table := Self.LockMembers;
   try
-    Result := Members.Find(SSRC);
+    Result := Table.Find(SSRC);
   finally
     Self.UnlockMembers;
   end;
@@ -4945,11 +4945,11 @@ end;
 function TIdRTPSession.Member(const Host: String;
                               Port: Cardinal): TIdRTPMember;
 var
-  Members: TIdRTPMemberTable;
+  Table: TIdRTPMemberTable;
 begin
-  Members := Self.LockMembers;
+  Table := Self.LockMembers;
   try
-    Result := Members.FindReceiver(Host, Port);
+    Result := Table.FindReceiver(Host, Port);
   finally
     Self.UnlockMembers;
   end;
@@ -4957,11 +4957,11 @@ end;
 
 function TIdRTPSession.MemberCount: Cardinal;
 var
-  Members: TIdRTPMemberTable;
+  Table: TIdRTPMemberTable;
 begin
-  Members := Self.LockMembers;
+  Table := Self.LockMembers;
   try
-    Result := Members.Count;
+    Result := Table.Count;
   finally
     Self.UnlockMembers;
   end;
@@ -5060,11 +5060,11 @@ end;
 
 function TIdRTPSession.ReceiverCount: Cardinal;
 var
-  Members: TIdRTPMemberTable;
+  Table: TIdRTPMemberTable;
 begin
-  Members := Self.LockMembers;
+  Table := Self.LockMembers;
   try
-    Result := Members.ReceiverCount;
+    Result := Table.ReceiverCount;
   finally
     Members.Free;
   end;
@@ -5077,12 +5077,12 @@ end;
 
 procedure TIdRTPSession.RemoveTimedOutMembers;
 var
-  Members: TIdRTPMemberTable;
+  Table: TIdRTPMemberTable;
 begin
-  Members := Self.LockMembers;
+  Table := Self.LockMembers;
   try
-    Members.RemoveTimedOutMembersExceptFor(Members.MemberTimeout(Self),
-                                           Self.SyncSrcID);
+    Table.RemoveTimedOutMembersExceptFor(Members.MemberTimeout(Self),
+                                         Self.SyncSrcID);
   finally
     Self.UnlockMembers;
   end;
@@ -5090,12 +5090,12 @@ end;
 
 procedure TIdRTPSession.RemoveTimedOutSenders;
 var
-  Members: TIdRTPMemberTable;
+  Table: TIdRTPMemberTable;
 begin
   // Self can itself be timed out as a sender. That's fine.
-  Members := Self.LockMembers;
+  Table := Self.LockMembers;
   try
-    Members.RemoveTimedOutSenders(Members.SenderTimeout(Self));
+    Table.RemoveTimedOutSenders(Table.SenderTimeout(Self));
   finally
     Self.UnlockMembers;
   end;
@@ -5112,20 +5112,20 @@ end;
 
 procedure TIdRTPSession.SendControl(Packet: TIdRTCPPacket);
 var
-  I:       Integer;
-  Members: TIdRTPMemberTable;
+  I:     Integer;
+  Table: TIdRTPMemberTable;
 begin
   Packet.PrepareForTransmission(Self);
 
   if Packet.IsRTCP then
     Self.fNoControlSent := false;
 
-  Members := Self.LockMembers;
+  Table := Self.LockMembers;
   try
-    for I := 0 to Members.Count - 1 do
-      if (Members.MemberAt(I).SyncSrcID <> Self.SyncSrcID) then
-        Agent.SendPacket(Members.MemberAt(I).ControlAddress,
-                         Members.MemberAt(I).ControlPort,
+    for I := 0 to Table.Count - 1 do
+      if (Table.MemberAt(I).SyncSrcID <> Self.SyncSrcID) then
+        Agent.SendPacket(Table.MemberAt(I).ControlAddress,
+                         Table.MemberAt(I).ControlPort,
                          Packet);
   finally
     Self.UnlockMembers;
@@ -5134,11 +5134,11 @@ end;
 
 procedure TIdRTPSession.SendData(Data: TIdRTPPayload);
 var
-  Members: TIdRTPMemberTable;
+  Table: TIdRTPMemberTable;
 begin
-  Members := Self.LockMembers;
+  Table := Self.LockMembers;
   try
-    Self.SendDataToTable(Data, Members);
+    Self.SendDataToTable(Data, Table);
   finally
     Self.UnlockMembers;
   end;
@@ -5146,11 +5146,11 @@ end;
 
 function TIdRTPSession.Sender(SSRC: Cardinal): TIdRTPMember;
 var
-  Members: TIdRTPMemberTable;
+  Table: TIdRTPMemberTable;
 begin
-  Members := Self.LockMembers;
+  Table := Self.LockMembers;
   try
-    Result := Members.Find(SSRC);
+    Result := Table.Find(SSRC);
 
     if not Result.IsSender then
       Result := nil;
@@ -5161,11 +5161,11 @@ end;
 
 function TIdRTPSession.SenderCount: Cardinal;
 var
-  Members: TIdRTPMemberTable;
+  Table: TIdRTPMemberTable;
 begin
-  Members := Self.LockMembers;
+  Table := Self.LockMembers;
   try
-    Result := Members.SenderCount;
+    Result := Table.SenderCount;
   finally
     Self.UnlockMembers;
   end;
@@ -5190,19 +5190,19 @@ end;
 
 procedure TIdRTPSession.TransmissionTimeExpire;
 var
-  Members:                      TIdRTPMemberTable;
+  Table:                        TIdRTPMemberTable;
   PresumedNextTransmissionTime: TDateTime;
 begin
   // It's time to send an RTCP SR/RR.
 
   Self.TransmissionLock.Acquire;
   try
-    Members := Self.LockMembers;
+    Table := Self.LockMembers;
     try
-      Members.RemoveTimedOutSenders(Members.SenderTimeout(Self));
-      Members.RemoveTimedOutMembersExceptFor(Members.MemberTimeout(Self),
+      Table.RemoveTimedOutSenders(Members.SenderTimeout(Self));
+      Table.RemoveTimedOutMembersExceptFor(Members.MemberTimeout(Self),
                                              Self.SyncSrcID);
-      Self.AdjustTransmissionTime(Members);
+      Self.AdjustTransmissionTime(Table);
 
       PresumedNextTransmissionTime := Self.PreviousTransmissionTime
                                     + OneMillisecond*Members.SendInterval(Self);
@@ -5219,7 +5219,7 @@ begin
         // distributed the same, as we are conditioned
         // on it being small enough to cause a packet to
         // be sent.
-        Self.ScheduleReport(MilliSecondOfTheDay(Members.SendInterval(Self)));
+        Self.ScheduleReport(MilliSecondOfTheDay(Table.SendInterval(Self)));
       end;
     finally
       Self.UnlockMembers;
@@ -5247,11 +5247,11 @@ end;
 
 procedure TIdRTPSession.AddControlSource(ID: Cardinal; Binding: TIdConnection);
 var
-  Members: TIdRTPMemberTable;
+  Table: TIdRTPMemberTable;
 begin
-  Members := Self.LockMembers;
+  Table := Self.LockMembers;
   try
-    Members.SetControlBinding(ID, Binding);
+    Table.SetControlBinding(ID, Binding);
   finally
     Self.UnlockMembers;
   end;
@@ -5260,14 +5260,14 @@ end;
 procedure TIdRTPSession.AddControlSources(RTCP: TIdRTCPMultiSSRCPacket;
                                           Binding: TIdConnection);
 var
-  IDs:     TCardinalDynArray;
-  Members: TIdRTPMemberTable;
+  IDs:   TCardinalDynArray;
+  Table: TIdRTPMemberTable;
 begin
   IDs := RTCP.GetAllSrcIDs;
 
-  Members := Self.LockMembers;
+  Table := Self.LockMembers;
   try
-    Members.SetControlBindings(IDs, Binding);
+    Table.SetControlBindings(IDs, Binding);
   finally
     Self.UnlockMembers;
   end;
@@ -5275,11 +5275,11 @@ end;
 
 procedure TIdRTPSession.AddDataSource(ID: Cardinal; Binding: TIdConnection);
 var
-  Members: TIdRTPMemberTable;
+  Table: TIdRTPMemberTable;
 begin
-  Members := Self.LockMembers;
+  Table := Self.LockMembers;
   try
-    Members.SetDataBinding(ID, Binding);
+    Table.SetDataBinding(ID, Binding);
   finally
     Self.UnlockMembers;
   end;
@@ -5288,7 +5288,7 @@ end;
 procedure TIdRTPSession.AddReports(Packet: TIdCompoundRTCPPacket);
 var
   I, J:    Cardinal;
-  Members: TIdRTPMemberTable;
+  Table:   TIdRTPMemberTable;
   NumSrcs: Cardinal;
   Report:  TIdRTCPReceiverReport;
   Senders: TIdRTPSenderTable;
@@ -5305,9 +5305,9 @@ begin
   // transport) we should send several sets of RRs/SRs covering (more or
   // less disjoint) subsets of the session members.
 
-  Members := Self.LockMembers;
+  Table := Self.LockMembers;
   try
-    Senders := TIdRTPSenderTable.Create(Members);
+    Senders := TIdRTPSenderTable.Create(Table);
     try
       I      := 0;
       Report := Self.AddAppropriateReportTo(Packet);
@@ -5435,12 +5435,12 @@ end;
 
 procedure TIdRTPSession.RemoveSources(Bye: TIdRTCPBye);
 var
-  Members: TIdRTPMemberTable;
+  Table: TIdRTPMemberTable;
 begin
-  Members := Self.LockMembers;
+  Table := Self.LockMembers;
   try
-    Members.RemoveSources(Bye);
-    Self.AdjustTransmissionTime(Members);
+    Table.RemoveSources(Bye);
+    Self.AdjustTransmissionTime(Table);
   finally
     Self.UnlockMembers;
   end;
