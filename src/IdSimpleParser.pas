@@ -47,6 +47,7 @@ type
     fSource:      TStream;
     procedure IncCurrentLine;
   protected
+    procedure Assert(Condition: Boolean; Msg: String);
     procedure ResetCurrentLine;
   public
     class function IsAlphaNumeric(const Token: String): Boolean;
@@ -665,15 +666,15 @@ begin
 
   if (not Self.Eof) then begin
     C := Self.ReadOctet;
-    Assert(C = #13, Format(DamagedLineEnd,
-                           [Self.CurrentLine,
-                            '#$0D',
-                            '#$' + IntToHex(Ord(C), 2)]));
+    Self.Assert(C = #13, Format(DamagedLineEnd,
+                                [Self.CurrentLine,
+                                 '#$0D',
+                                 '#$' + IntToHex(Ord(C), 2)]));
     C := Self.ReadOctet;
-    Assert(C = #10, Format(DamagedLineEnd,
-                           [Self.CurrentLine,
-                            '#$0A',
-                            '#$' + IntToHex(Ord(C), 2)]));
+    Self.Assert(C = #10, Format(DamagedLineEnd,
+                                [Self.CurrentLine,
+                                 '#$0A',
+                                 '#$' + IntToHex(Ord(C), 2)]));
   end;
 
   Self.IncCurrentLine;
@@ -692,6 +693,12 @@ begin
 end;
 
 //* TIdSimpleParser Protected methods ******************************************
+
+procedure TIdSimpleParser.Assert(Condition: Boolean; Msg: String);
+begin
+  if not Condition then
+    raise EParserError.Create(Msg);
+end;
 
 procedure TIdSimpleParser.ResetCurrentLine;
 begin

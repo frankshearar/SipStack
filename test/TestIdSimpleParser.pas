@@ -58,6 +58,7 @@ type
     procedure TestIsNumber;
     procedure TestPeek;
     procedure TestPeekLine;
+    procedure TestParseFailuresRaiseParserErrors;
     procedure TestReadOctet;
     procedure TestReadOctets;
     procedure TestReadln;
@@ -719,6 +720,28 @@ begin
     CheckEquals('Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds', Self.P.PeekLine, 'PeekLine 2nd line');
     Self.P.ReadLn;
     CheckEquals('', Self.P.PeekLine, 'PeekLine past the EOF');
+  finally
+    Str.Free;
+  end;
+end;
+
+procedure TestTIdSimpleParser.TestParseFailuresRaiseParserErrors;
+const
+  MalformedLineEnd = 'foo'#$D;
+var
+  Line: String;
+  Str:  TStringStream;
+begin
+  Str := TStringStream.Create(MalformedLineEnd);
+  try
+    Self.P.Source := Str;
+
+    try
+      Line := Self.P.ReadLn;
+      Fail('Failed to raise exception reading a malformed line end. Read "' + Line + '"');
+    except
+      on EParserError do;
+    end;
   finally
     Str.Free;
   end;
