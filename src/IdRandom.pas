@@ -20,8 +20,8 @@ type
     constructor Create; virtual;
 
     function NextCardinal: Cardinal; overload; virtual;
-    function NextDouble: Double; virtual;
     function NextCardinal(Max: Cardinal): Cardinal; overload;
+    function NextDouble: Double; virtual;
     function NextHexString: String;
     function NextHighestPowerOf2(N: Cardinal): Cardinal;
     function NextRandomBits(NumBits: Cardinal): Cardinal;
@@ -92,12 +92,6 @@ begin
   Result := Self.NextRandomBits(Self.NumBitsNeeded(High(Cardinal)));
 end;
 
-function TIdRandomNumber.NextDouble: Double;
-begin
-  // Return a random double in the range 0 <= Result <= 1.
-  Result := Self.NextCardinal / High(Cardinal);
-end;
-
 function TIdRandomNumber.NextCardinal(Max: Cardinal): Cardinal;
 var
   NumBits: Byte;
@@ -108,6 +102,12 @@ begin
   until Result <= Max;
 
   Assert(Result <= Max, 'Result > Max');
+end;
+
+function TIdRandomNumber.NextDouble: Double;
+begin
+  // Return a random double in the range 0 <= Result <= 1.
+  Result := Self.NextCardinal / High(Cardinal);
 end;
 
 function TIdRandomNumber.NextHexString: String;
