@@ -686,6 +686,7 @@ type
     function  Clone: TIdRTPBasePacket; override;
     function  FirstPacket: TIdRTCPPacket;
     function  HasBye: Boolean;
+    function  HasReceiverReport: Boolean;
     function  HasSourceDescription: Boolean;
     function  IsRTCP: Boolean; override;
     function  IsRTP: Boolean; override;
@@ -3844,6 +3845,20 @@ begin
     Inc(I);
   end;
 end;
+
+function TIdCompoundRTCPPacket.HasReceiverReport: Boolean;
+var
+  I: Cardinal;
+begin
+  Result := false;
+
+  I := 0;
+  while (I < Self.PacketCount) and not Result do begin
+    if Self.PacketAt(I).IsReceiverReport then
+      Result := true;
+    Inc(I);
+  end;
+end;  
 
 function TIdCompoundRTCPPacket.HasSourceDescription: Boolean;
 var

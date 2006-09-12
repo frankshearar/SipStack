@@ -521,6 +521,7 @@ type
     procedure TestClone;
     procedure TestFirstPacket;
     procedure TestHasBye;
+    procedure TestHasReceiverReport;
     procedure TestHasSourceDescription;
     procedure TestIsBye;
     procedure TestIsRTCP;
@@ -6156,6 +6157,15 @@ begin
   Check(not Self.Packet.HasBye, 'One SR');
   Self.Packet.AddBye;
   Check(Self.Packet.HasBye, 'One SR, one BYE');
+end;
+
+procedure TestTIdCompoundRTCPPacket.TestHasReceiverReport;
+begin
+  Check(not Self.Packet.HasReceiverReport, 'Empty packet');
+  Self.Packet.AddBye;
+  Check(not Self.Packet.HasReceiverReport, 'One BYE');
+  Self.Packet.AddReceiverReport;
+  Check(Self.Packet.HasReceiverReport, 'One BYE, one RR');
 end;
 
 procedure TestTIdCompoundRTCPPacket.TestHasSourceDescription;
