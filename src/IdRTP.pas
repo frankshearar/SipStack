@@ -5234,7 +5234,7 @@ begin
     try
       Table.RemoveTimedOutSenders(Members.SenderTimeout(Self));
       Table.RemoveTimedOutMembersExceptFor(Members.MemberTimeout(Self),
-                                             Self.SyncSrcID);
+                                           Self.SyncSrcID);
       Self.AdjustTransmissionTime(Table);
 
       PresumedNextTransmissionTime := Self.PreviousTransmissionTime
