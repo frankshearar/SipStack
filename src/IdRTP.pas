@@ -5082,7 +5082,7 @@ begin
   MemberTable := Self.LockMembers;
   try
     MemberTable.RemoveTimedOutMembersExceptFor(MemberTable.MemberTimeout(Self),
-                                         Self.SyncSrcID);
+                                               Self.SyncSrcID);
   finally
     Self.UnlockMembers;
   end;
