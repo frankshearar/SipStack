@@ -7929,16 +7929,27 @@ begin
 
   // We need at least one other person in the session
   Self.Session.ReceiveData(Self.Data,  Self.Binding);
-  Self.Session.ReceiveControl(Self.SR, Self.Binding);
+  Self.Session.ReceiveControl(Self.SR, Self.RTCPBinding);
 
+  // We induce an SSRC collision: the remote party changes its SSRC to our SSRC.
   Self.Data.CsrcCount  := 1;
   Self.Data.CsrcIDs[0] := Self.Session.SyncSrcID;
   Self.Session.ReceiveData(Self.Data, Self.Binding);
 
-  Check(Self.Agent.RTCPCount > 0,
-        'No control stuff sent');
-  Check(Self.Agent.LastRTCP.IsBye,
+  // And then we make sure that we've sent an RTCP BYE and an RR (to indicate
+  // that we've rejoined the session, and advertise our new SSRC).
+  Self.Timer.TriggerEarliestEvent;
+
+  Check(Self.Agent.RTCPCount > 1,
+        'Not enough control stuff sent');
+
+  Check(Self.Agent.SecondLastRTCP.IsBye,
         'No BYE sent');
+  CheckEquals(TIdCompoundRTCPPacket.ClassName,
+              Self.Agent.LastRTCP.ClassName,
+             'No RR sent, so we didn''t rejoin session');
+  Check(TIdCompoundRTCPPacket(Self.Agent.LastRTCP).HasReceiverReport,
+        'No RR sent in the compound packet');
 end;
 
 procedure TestSessionSendReceiveRules.TestInitialState;

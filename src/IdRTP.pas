@@ -5156,6 +5156,7 @@ begin
   // 3. Rejoin
   Self.LeaveSession(RTPLoopDetected);
   Self.SetSyncSrcId(Self.NewSSRC);
+  Self.JoinSession;
 end;
 
 procedure TIdRTPSession.SendControl(Packet: TIdRTCPPacket);
