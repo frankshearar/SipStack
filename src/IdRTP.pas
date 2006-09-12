@@ -754,6 +754,7 @@ type
     function  IsInSequence(Data: TIdRTPPacket): Boolean;
     function  IsUnderProbation: Boolean;
     function  LastSenderReport: Cardinal;
+    procedure MarkAsSender(SSRC: Cardinal);
     function  PacketLossCount: Cardinal;
     function  PacketLossFraction: Byte;
     function  SequenceNumberRange: Cardinal;
@@ -837,7 +838,10 @@ type
                                 Binding: TIdConnection);
     procedure SetControlBindings(SSRCs: TCardinalDynArray;
                                  Binding: TIdConnection);
-    procedure SetDataBinding(SSRC: Cardinal; Binding: TIdConnection);
+    function  SetDataBinding(SSRC: Cardinal; Binding: TIdConnection): TIdRTPMember;
+    procedure UpdateStatistics(CurrentRTPTime: Cardinal;
+                               RTP: TIdRTPPacket;
+                               Binding: TIdConnection);
 
     property Members[Index: Cardinal]: TIdRTPMember read MemberAt;
   end;
@@ -966,7 +970,6 @@ type
     procedure AddControlSource(ID: Cardinal; Binding: TIdConnection);
     procedure AddControlSources(RTCP: TIdRTCPMultiSSRCPacket;
                                 Binding: TIdConnection);
-    procedure AddDataSource(ID: Cardinal; Binding: TIdConnection);
     procedure AddReports(Packet: TIdCompoundRTCPPacket);
     procedure AddSourceDesc(Packet: TIdCompoundRTCPPacket);
     procedure AdjustAvgRTCPSize(Control: TIdRTCPPacket);
@@ -4021,6 +4024,13 @@ begin
         or ((NTP.FractionalPart and $ffff0000) shr 16);
 end;
 
+procedure TIdRTPMember.MarkAsSender(SSRC: Cardinal);
+begin
+  Self.HasSyncSrcID := true;
+  Self.IsSender     := true;
+  Self.SyncSrcID    := SSRC;
+end;
+
 function TIdRTPMember.PacketLossCount: Cardinal;
 const
   MaxPacketLoss = $7fffff;
@@ -4498,17 +4508,51 @@ begin
   end;
 end;
 
-procedure TIdRTPMemberTable.SetDataBinding(SSRC: Cardinal;
-                                           Binding: TIdConnection);
-var
-  Member: TIdRTPMember;
+function TIdRTPMemberTable.SetDataBinding(SSRC: Cardinal;
+                                          Binding: TIdConnection): TIdRTPMember;
 begin
-  Member := Self.Find(SSRC);
+  Result := Self.Find(SSRC);
 
-  if not Assigned(Member) then
-    Member := Self.AddSender(SSRC);
+  if not Assigned(Result) then
+    Result := Self.AddSender(SSRC);
 
-  Member.SetDataBinding(Binding);
+  Result.SetDataBinding(Binding);
+end;
+
+procedure TIdRTPMemberTable.UpdateStatistics(CurrentRTPTime: Cardinal;
+                                             RTP: TIdRTPPacket;
+                                             Binding: TIdConnection);
+var
+  I:     Integer;
+  SSRC:  TIdRTPMember;
+begin
+  // We cheat a bit: If we have a member that has a known IP/port,
+  // Contains(SSRC) tells us if we know that member's SSRC.
+  if Self.ContainsReceiver(Binding.PeerIP, Binding.PeerPort)
+    and not Self.Contains(RTP.SyncSrcID) then begin
+    SSRC := Self.FindReceiver(Binding.PeerIP, Binding.PeerPort);
+
+    // If we do have such a member, mark it as a sender.
+    SSRC.MarkAsSender(RTP.SyncSrcID);
+  end;
+
+  if not Self.Contains(RTP.SyncSrcID) then begin
+    // We don't know the SSRC, and we don't know the binding. Thus we just add
+    // the member.
+    SSRC := Self.SetDataBinding(RTP.SyncSrcID, Binding);
+  end
+  else
+    SSRC := Self.Find(RTP.SyncSrcID);
+
+  for I := 0 to RTP.CsrcCount - 1 do
+    Self.SetDataBinding(RTP.CsrcIDs[I], Binding);
+
+  if not Assigned(SSRC) then begin
+    // We shouldn't enter here, but just in case...
+    SSRC := Self.Find(RTP.SyncSrcID);
+  end;
+
+  SSRC.UpdateStatistics(RTP, CurrentRTPTime);
 end;
 
 //* TIdRTPMemberTable Private methods ******************************************
@@ -5027,33 +5071,22 @@ end;
 procedure TIdRTPSession.ReceiveData(RTP: TIdRTPPacket;
                                     Binding: TIdConnection);
 var
-  I:    Integer;
-  SSRC: TIdRTPMember;
+  CurrentRTPTime: Cardinal;
+  MemberTable:    TIdRTPMemberTable;
 begin
   if RTP.CollidesWith(Self.SyncSrcID) then
     Self.ResolveSSRCCollision;
 
-  // We cheat a bit: If we have a member that has a known IP/port,
-  // IsMember(SSRC) tells us if we know that member's SSRC.
-  if Self.IsMember(Binding.PeerIP, Binding.PeerPort)
-    and not Self.IsMember(RTP.SyncSrcID) then begin
-    SSRC := Self.Member(Binding.PeerIP, Binding.PeerPort);
-    SSRC.HasSyncSrcID := true;
-    SSRC.IsSender     := true;
-    SSRC.SyncSrcID    := RTP.SyncSrcID;
+  CurrentRTPTime := DateTimeToRTPTimestamp(Self.TimeOffsetFromStart(Now),
+                                           RTP.Payload.ClockRate);
+
+  MemberTable := Self.LockMembers;
+  try
+    MemberTable.UpdateStatistics(CurrentRTPTime, RTP, Binding);
+  finally
+    Self.UnlockMembers;
   end;
 
-  if not Self.IsMember(RTP.SyncSrcID) then
-    Self.AddDataSource(RTP.SyncSrcID, Binding);
-
-  for I := 0 to RTP.CsrcCount - 1 do
-    Self.AddDataSource(RTP.CsrcIDs[I], Binding);
-
-  SSRC := Self.Member(RTP.SyncSrcID);
-
-  SSRC.UpdateStatistics(RTP,
-                        DateTimeToRTPTimestamp(Self.TimeOffsetFromStart(Now),
-                                               RTP.Payload.ClockRate));
   // We send RTP (not necessarily valid, in-sequence RTP) up the stack
   Self.NotifyListenersOfData(RTP.Payload, Binding);
 end;
@@ -5268,18 +5301,6 @@ begin
   MemberTable := Self.LockMembers;
   try
     MemberTable.SetControlBindings(IDs, Binding);
-  finally
-    Self.UnlockMembers;
-  end;
-end;
-
-procedure TIdRTPSession.AddDataSource(ID: Cardinal; Binding: TIdConnection);
-var
-  MemberTable: TIdRTPMemberTable;
-begin
-  MemberTable := Self.LockMembers;
-  try
-    MemberTable.SetDataBinding(ID, Binding);
   finally
     Self.UnlockMembers;
   end;
