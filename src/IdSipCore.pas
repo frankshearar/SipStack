@@ -1051,8 +1051,7 @@ const
 implementation
 
 uses
-  IdHashMessageDigest, IdRandom, IdSdp, IdSimpleParser, IdSipConsts,
-  IdSipIndyLocator, IdSipInviteModule, IdSipRegistration, Math;
+  IdRandom, IdSdp, IdSipInviteModule, IdSipRegistration;
 
 // Used by the ActionRegistry.
 var
