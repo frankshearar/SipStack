@@ -69,10 +69,9 @@ end;
 interface
 
 uses
-  Classes, Contnrs, IdBaseThread, IdSipDialog, IdSipDialogID, IdException,
-  IdInterfacedObject, IdNotification, IdObservable, IdSipAuthentication,
-  IdSipLocator, IdSipMessage, IdSipTransaction, IdSipTransport, IdTimerQueue,
-  SysUtils;
+  Classes, Contnrs, IdSipDialog, IdException, IdInterfacedObject,
+  IdNotification, IdObservable, IdSipAuthentication, IdSipLocator, IdSipMessage,
+  IdSipTransaction, IdSipTransport, IdTimerQueue, SysUtils;
 
 const
   SipStackVersion = '0.5.3';
