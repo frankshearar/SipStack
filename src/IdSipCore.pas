@@ -2985,6 +2985,8 @@ begin
   Result := inherited WillAcceptRequest(Request);
 
   if (Result = uarAccept) then begin
+    // It's safe to typecast here because we know that a module is prepared to
+    // accept this request - and that module is a TIdSipInviteModule.
     InviteModule := Self.UserAgent.ModuleFor(MethodInvite) as TIdSipInviteModule;
     if Assigned(InviteModule) then begin
       if InviteModule.DoNotDisturb then
