@@ -1373,6 +1373,7 @@ begin
                  + 'Call-ID: 0ha0isndaksdj@10.0.0.1'#13#10
                  + 'CSeq: 8 INVITE'#13#10
                  + 'Via: SIP/2.0/' + Self.HighPortTransport.GetTransportType + ' 135.180.130.133'#13#10
+                 + 'Contact: sip:' + Self.LowPortLocation.IPAddress + ':' + IntToStr(Self.LowPortLocation.Port) +  #13#10
                  + 'Content-Type: application/sdp'#13#10
                  + 'Content-Length: 9999'#13#10
                  + #13#10
