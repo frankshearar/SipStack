@@ -169,6 +169,7 @@ type
     procedure TestDiscardResponseWithInconsistentTransport;
     procedure TestDiscardResponseWithUnknownSentBy;
     procedure TestDontDiscardUnknownSipVersion;
+    procedure TestMalformedCallID;
     procedure TestReceivedParamDifferentIPv4SentBy;
     procedure TestReceivedParamFQDNSentBy;
     procedure TestReceivedParamIPv4SentBy;
@@ -1142,6 +1143,34 @@ begin
 
   Self.WaitForSignaled(Self.ClassName
                     + ': Didn''t receive a message with an unknown SIP-Version (timeout)');
+end;
+
+procedure TestTIdSipTransport.TestMalformedCallID;
+var
+  MalformedCallID: String;
+begin
+  MalformedCallID := 'INVITE sip:lukec@%s:5060 SIP/2.0'#13#10
+                   + 'Via: SIP/2.0/' + Self.HighPortTransport.GetTransportType + ' 192.168.102.34:5060;branch=z9hG4bK0f9df2b95'#13#10
+                   + 'To: "lukec" <sip:lukec@%s>'#13#10
+                   + 'From: "" <sip:@192.168.102.34:5061>;tag=-6649039992220922599'#13#10
+                   + 'CSeq: 190744561 INVITE'#13#10
+                   + 'Call-ID: 1158167609796[B@dd20f6@192.168.102.34'#13#10
+                   + 'Content-Type: application/sdp'#13#10
+                   + 'Contact: "PSTN In" <sip:192.168.102.34:5061>'#13#10
+                   + 'Max-Forwards: 68'#13#10
+                   + 'Content-Length: 115'#13#10
+                   + #13#10
+                   + 'v=0'#13#10
+                   + 'o=none 0 0 IN IP4 0.0.0.0'#13#10
+                   + 's=session'#13#10
+                   + 'c=IN IP4 192.168.102.34'#13#10
+                   + 'm=text 1308 RTP/AVP 98'#13#10
+                   + 'a=rtpmap:98 t140/1000'#13#10;
+
+
+  Self.SendFromLowTransport(StringReplace(MalformedCallID, '%s', Self.HighPortLocation.IPAddress, [rfReplaceAll]));
+
+  Self.WaitForSignaled(Self.RejectedMessageEvent);
 end;
 
 procedure TestTIdSipTransport.TestReceivedParamDifferentIPv4SentBy;
