@@ -6950,8 +6950,6 @@ procedure TestTIdSDPMultimediaSession.TestSetUsername;
 const
   UsernameCase       = 'Case';
   UsernameWintermute = 'Wintermute';
-var
-  SDP: TIdSdpPayload;
 begin
   CheckEquals(BlankUsername, Self.MS.Username, 'Default Username value');
 
