@@ -5225,8 +5225,8 @@ procedure TIdSipFromToHeader.Parse(const Value: String);
 begin
   inherited Parse(Value);
 
-  if Self.HasParameter(TagParam)
-    and not TIdSipParser.IsToken(Self.Params[TagParam]) then
+  if Self.HasTag
+    and not TIdSipParser.IsToken(Self.Tag) then
     Self.FailParse(InvalidTag);
 end;
 
