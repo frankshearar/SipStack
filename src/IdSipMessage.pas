@@ -2271,7 +2271,7 @@ begin
   if (Name = '') then
     Result := false
   else begin
-    Result := IndyPos(' ', Name) > 0;
+    Result := Pos(' ', Name) > 0;
 
     while (Name <> '') do begin
       Token := Fetch(Name, ' ');
@@ -2294,14 +2294,14 @@ begin
 
   NameAddr := Trim(NameAddr);
 
-  Result := IndyPos('<', NameAddr) > 0;
+  Result := Pos('<', NameAddr) > 0;
 
   if Result then begin
     if (NameAddr[1] = '"') then begin
       Name := Trim(Fetch(NameAddr, '<'));
       Delete(Name, 1, 1);
 
-      Result := Result and (IndyPos('"', Name) <> 0);
+      Result := Result and (Pos('"', Name) <> 0);
 
       Name := Copy(Name, 1, RPos('"', Name, -1) - 1);
 
@@ -2409,10 +2409,10 @@ begin
   Q         := 0;
   F         := 0;
   Fraction  := S;
-  Malformed := (Fraction = '') or (IndyPos(' ', S) > 0);
+  Malformed := (Fraction = '') or (Pos(' ', S) > 0);
 
   if not Malformed then begin
-    Malformed := (IndyPos('.', Fraction) > 0) and (Fraction[Length(Fraction)] = '.');
+    Malformed := (Pos('.', Fraction) > 0) and (Fraction[Length(Fraction)] = '.');
 
     Int := Fetch(Fraction, '.');
 
@@ -3486,10 +3486,10 @@ begin
 //    IsEqual(Self.Scheme, SipScheme) and not IsEqual(Self.Scheme, SipsScheme) then
       raise EParserError.Create(InvalidScheme);
 
-    if (IndyPos('@', Uri) > 0) then
+    if (Pos('@', Uri) > 0) then
       Self.ParseUserInfo(Fetch(Uri, '@'));
 
-    if (IndyPos(';', Uri) > 0) then begin
+    if (Pos(';', Uri) > 0) then begin
       Self.HostAndPort.Value := Fetch(Uri, ';');
       Self.Parameters.Parse(Fetch(Uri, '?'));
 
@@ -3497,7 +3497,7 @@ begin
         Self.ParseHeaders(Uri);
     end
     else begin
-      if (IndyPos('?', Uri) > 0) then begin
+      if (Pos('?', Uri) > 0) then begin
         Self.HostAndPort.Value := Fetch(Uri, '?');
         Self.ParseHeaders(Uri);
       end
@@ -4027,9 +4027,9 @@ function TIdSipUriHeader.GetValue: String;
 begin
   Result := Self.Address.URI;
 
-  if   (IndyPos(';', Result) > 0)
-    or (IndyPos(',', Result) > 0)
-    or (IndyPos('?', Result) > 0)
+  if   (Pos(';', Result) > 0)
+    or (Pos(',', Result) > 0)
+    or (Pos('?', Result) > 0)
     or (Result <> '') then
     Result := '<' + Result + '>';
 end;
@@ -4043,7 +4043,7 @@ begin
   Self.Address.URI := '';
 
   S := Trim(Value);
-  if (IndyPos('<', Value) = 0) then
+  if (Pos('<', Value) = 0) then
     Self.FailParse(MissingAngleBrackets);
 
   if not ParseNameAddr(Value, DisplayName, AddrSpec) then
@@ -4129,13 +4129,13 @@ var
   URI: String;
 begin
   Result := Self.DisplayName;
-  if (IndyPos('"', Result) > 0) or (IndyPos('\', Result) > 0) then
+  if (Pos('"', Result) > 0) or (Pos('\', Result) > 0) then
     Result := Self.EncodeQuotedStr(Result);
 
   Result := QuoteStringIfNecessary(Result);
 
   URI := Self.Address.URI;
-  if (IndyPos(';', URI) > 0) or (IndyPos(',', URI) > 0) or (IndyPos('?', URI) > 0) or (Result <> '') then
+  if (Pos(';', URI) > 0) or (Pos(',', URI) > 0) or (Pos('?', URI) > 0) or (Result <> '') then
     URI := '<' + URI + '>';
 
   if (Result = '') then
@@ -4211,7 +4211,7 @@ begin
         // Restart the parsing to avoid mangling 'Foo  Bar <sip:foo>' into
         // 'Foo Bar <sip:foo>'
         S := Value;
-        LaQuotPos := IndyPos('<', S);
+        LaQuotPos := Pos('<', S);
         Self.DisplayName := Trim(Copy(S, 1, LaQuotPos - 1));
         Delete(S, 1, LaQuotPos - 1); // Leave the LAQUOT in S
         Self.Address.Uri := TIdSipParser.ExtractAngleQuotedUri(S);
@@ -4677,7 +4677,7 @@ var
   Val: String;
   Token: String;
 begin
-  if (IndyPos('@', Value) > 0) then begin
+  if (Pos('@', Value) > 0) then begin
     Val := Value;
     Token := Fetch(Val, '@');
     if not TIdSipParser.IsWord(Val) or not TIdSipParser.IsWord(Token) then
@@ -4799,7 +4799,7 @@ begin
   while (S <> '') do begin
     MediaRange := Trim(Fetch(S, ','));
 
-    if (IndyPos(';', MediaRange) > 0) then begin
+    if (Pos(';', MediaRange) > 0) then begin
       Params     := MediaRange;
       MediaRange := Fetch(Params, ';');
     end
@@ -5076,10 +5076,10 @@ begin
   // Therefore we try inspect the string manually. Yes, this method can be
   // fooled - "00:00:00 GMT hahahahahaha 1899-30Dec" will not raise a parse
   // error.
-  if ((IndyPos('Dec', Value) = 0)
-      or (IndyPos('30', Value) = 0)
-      or (IndyPos('1899', Value) = 0)
-      or (IndyPos('00:00:00 GMT', Value) = 0))
+  if ((Pos('Dec', Value) = 0)
+      or (Pos('30', Value) = 0)
+      or (Pos('1899', Value) = 0)
+      or (Pos('00:00:00 GMT', Value) = 0))
     and (Self.Time.AsTDateTime = 0) then
     Self.FailParse(InvalidTime);
 end;
@@ -5096,7 +5096,7 @@ var
 begin
   // token-nodot / token-nodot "." token-nodot
 
-  if (IndyPos('.', S) > 0) then begin
+  if (Pos('.', S) > 0) then begin
     SecondToken := S;
     FirstToken := Fetch(SecondToken, '.');
 
@@ -5105,7 +5105,7 @@ begin
     if Result then begin
       Result := Self.IsTokenNoDot(FirstToken)
             and Self.IsTokenNoDot(SecondToken)
-            and (IndyPos('.', SecondToken) = 0);
+            and (Pos('.', SecondToken) = 0);
     end;
   end
   else begin
@@ -5171,7 +5171,7 @@ begin
   Self.EventTemplate := EventName;
 
   // Only one dot is allowed in an event-type
-  if (IndyPos('.', Self.EventTemplate) > 0) then
+  if (Pos('.', Self.EventTemplate) > 0) then
     Self.FailParse(InvalidEventType);
 
   inherited Parse(Value);
@@ -5503,7 +5503,7 @@ begin
   end;
 
   if (Raw <> '') then begin
-    if (IndyPos('(', Raw) > 0) then begin
+    if (Pos('(', Raw) > 0) then begin
       Self.ParseComment(UTF8Decode(Raw));
     end
     else begin
@@ -5611,7 +5611,7 @@ var
   URI: String;
 begin
   Result := Self.DisplayName;
-  if (IndyPos('"', Result) > 0) or (IndyPos('\', Result) > 0) then
+  if (Pos('"', Result) > 0) or (Pos('\', Result) > 0) then
     Result := EncodeQuotedStr(Result);
 
   Result := QuoteStringIfNecessary(Result);
@@ -5650,7 +5650,7 @@ begin
     Self.ParseParameters(S, Self.Parameters);
   end
   else begin
-    LaQuotPos := IndyPos('<', S);
+    LaQuotPos := Pos('<', S);
 
     if (LaQuotPos = 0) then
       Self.FailParse(MissingAngleBrackets);
@@ -8886,7 +8886,7 @@ begin
 
   while Self.Headers.HasNext and not Assigned(Result) do
     if    IsEqual(Self.Headers.CurrentHeader.Name, HeaderType)
-      and (IndyPos(RealmString, Lowercase(Self.Headers.CurrentHeader.Value)) > 0) then
+      and (Pos(RealmString, Lowercase(Self.Headers.CurrentHeader.Value)) > 0) then
       Result := Self.Headers.CurrentHeader as TIdSipAuthorizationHeader
     else
       Self.Headers.Next;
@@ -9672,7 +9672,7 @@ begin
   // Eat the LAQUOT
   Delete(ParseString, 1, 1);
 
-  RaQuotPos := IndyPos('>', ParseString);
+  RaQuotPos := Pos('>', ParseString);
 
   if (RaQuotPos = 0) then
     raise EParserError.Create(UnmatchedAngleBrackets);
@@ -9938,7 +9938,7 @@ end;
 
 function TIdSipParser.GetHeaderValue(Header: String): String;
 begin
-  if (IndyPos(':', Header) = 0) then
+  if (Pos(':', Header) = 0) then
     Result := ''
   else begin
     Result := Header;
