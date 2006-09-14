@@ -103,7 +103,6 @@ function Localhost(IPType: TIdIPVersion): String;
 function WithoutFirstAndLastChars(const S: String): String;
 
 // Hiding IdGlobal
-function IndyPos(const Substr, S: string): Integer;
 function RPos(const ASub, AIn: String; AStart: Integer = -1): Integer;
 
 implementation
@@ -198,11 +197,6 @@ end;
 function WithoutFirstAndLastChars(const S: String): String;
 begin
   Result := Copy(S, 2, Length(S) - 2);
-end;
-
-function IndyPos(const Substr, S: string): Integer;
-begin
-  Result := IdGlobal.IndyPos(Substr, S);
 end;
 
 function RPos(const ASub, AIn: String; AStart: Integer = -1): Integer;
