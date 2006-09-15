@@ -4571,31 +4571,32 @@ var
   I:     Integer;
   SSRC:  TIdRTPMember;
 begin
-  // We cheat a bit: If we have a member that has a known IP/port,
-  // Contains(SSRC) tells us if we know that member's SSRC.
-  if Self.ContainsReceiver(Binding.PeerIP, Binding.PeerPort)
-    and not Self.Contains(RTP.SyncSrcID) then begin
-    SSRC := Self.FindReceiver(Binding.PeerIP, Binding.PeerPort);
+  SSRC := Self.Find(RTP.SyncSrcID);
 
-    // If we do have such a member, mark it as a sender.
-    SSRC.MarkAsSender(RTP.SyncSrcID);
+  if not Assigned(SSRC) then begin
+    // We don't know the sender by his SSRC.
+
+    if Self.ContainsReceiver(Binding.PeerIP, Binding.PeerPort) then begin
+      // We don't know the sender by his SSRC, but we are expecting data from
+      // this Binding.
+
+      SSRC := Self.FindReceiver(Binding.PeerIP, Binding.PeerPort);
+      SSRC.MarkAsSender(RTP.SyncSrcID);
+    end
+    else begin
+      // We don't know the sender by his SSRC, nor were we told to expect data
+      // from this Binding. In the interests of being nice, we add this new,
+      // unexpected, friend to our party.
+
+      SSRC := Self.AddSender(RTP.SyncSrcID);
+      SSRC.SetDataBinding(Binding);
+    end;
   end;
-
-  if not Self.Contains(RTP.SyncSrcID) then begin
-    // We don't know the SSRC, and we don't know the binding. Thus we just add
-    // the member.
-    SSRC := Self.SetDataBinding(RTP.SyncSrcID, Binding);
-  end
-  else
-    SSRC := Self.Find(RTP.SyncSrcID);
 
   for I := 0 to RTP.CsrcCount - 1 do
     Self.SetDataBinding(RTP.CsrcIDs[I], Binding);
 
-  if not Assigned(SSRC) then begin
-    // We shouldn't enter here, but just in case...
-    SSRC := Self.Find(RTP.SyncSrcID);
-  end;
+  Assert(Assigned(SSRC), 'SSRC is not known and was not added');
 
   SSRC.UpdateStatistics(RTP, CurrentRTPTime);
 end;
