@@ -799,6 +799,8 @@ type
     property MaxMisOrder:              Word read fMaxMisOrder write fMaxMisOrder;
   end;
 
+  IIdAbstractRTPPeer = interface;
+
   TIdRTPMemberTable = class(TObject)
   private
     function CompensationFactor: Double;
@@ -832,6 +834,10 @@ type
     procedure RemoveTimedOutMembersExceptFor(CutoffTime: TDateTime;
                                              SessionSSRC: Cardinal);
     procedure RemoveTimedOutSenders(CutoffTime: TDateTime);
+    procedure SendControl(Packet: TIdRTCPPacket;
+                          Agent: IIdAbstractRTPPeer);
+    procedure SendData(Packet: TIdRTPPacket;
+                       Agent: IIdAbstractRTPPeer);
     function  SenderCount: Cardinal;
     function  SenderTimeout(Session: TIdRTPSession): TDateTime;
     function  SendInterval(Session: TIdRTPSession): TDateTime;
@@ -993,7 +999,6 @@ type
     procedure ResetSentOctetCount;
     procedure ResetSentPacketCount;
     procedure ScheduleReport(Milliseconds: Cardinal);
-    procedure SendDataToTable(Data: TIdRTPPayload; Table: TIdRTPMemberTable);
     procedure SetSyncSrcId(Value: Cardinal);
   public
     constructor Create(Agent: IIdAbstractRTPPeer);
@@ -4470,6 +4475,31 @@ begin
   end;
 end;
 
+procedure TIdRTPMemberTable.SendControl(Packet: TIdRTCPPacket;
+                                        Agent: IIdAbstractRTPPeer);
+var
+  I: Integer;
+begin
+  for I := 0 to Self.Count - 1 do
+    if (Self.MemberAt(I).SyncSrcID <> Packet.SyncSrcID) then
+      Agent.SendPacket(Self.MemberAt(I).ControlAddress,
+                       Self.MemberAt(I).ControlPort,
+                       Packet);
+end;
+
+procedure TIdRTPMemberTable.SendData(Packet: TIdRTPPacket;
+                                     Agent: IIdAbstractRTPPeer);
+var
+  I: Cardinal;
+begin
+  if (Self.Count > 0) then
+    for I := 0 to Self.Count - 1 do
+      if (Self.MemberAt(I).SyncSrcID <> Packet.SyncSrcID) then
+        Agent.SendPacket(Self.MemberAt(I).SourceAddress,
+                         Self.MemberAt(I).SourcePort,
+                         Packet);
+end;
+
 function TIdRTPMemberTable.SenderCount: Cardinal;
 var
   I: Cardinal;
@@ -5161,7 +5191,6 @@ end;
 
 procedure TIdRTPSession.SendControl(Packet: TIdRTCPPacket);
 var
-  I:           Integer;
   MemberTable: TIdRTPMemberTable;
 begin
   Packet.PrepareForTransmission(Self);
@@ -5171,11 +5200,7 @@ begin
 
   MemberTable := Self.LockMembers;
   try
-    for I := 0 to MemberTable.Count - 1 do
-      if (MemberTable.MemberAt(I).SyncSrcID <> Self.SyncSrcID) then
-        Agent.SendPacket(MemberTable.MemberAt(I).ControlAddress,
-                         MemberTable.MemberAt(I).ControlPort,
-                         Packet);
+    MemberTable.SendControl(Packet, Self.Agent);
   finally
     Self.UnlockMembers;
   end;
@@ -5184,12 +5209,28 @@ end;
 procedure TIdRTPSession.SendData(Data: TIdRTPPayload);
 var
   MemberTable: TIdRTPMemberTable;
+  Packet:      TIdRTPPacket;
 begin
-  MemberTable := Self.LockMembers;
+  Packet := TIdRTPPacket.Create(Self.LocalProfile);
   try
-    Self.SendDataToTable(Data, MemberTable);
+    Packet.ReadPayload(Data);
+
+    if not Self.IsSender(Self.SyncSrcID) then
+      Self.AddSender(Self.SyncSrcID);
+
+    Packet.PrepareForTransmission(Self);
+
+    Self.IncSentOctetCount(Data.Length);
+    Self.IncSentPacketCount;
+
+    MemberTable := Self.LockMembers;
+    try
+      MemberTable.SendData(Packet, Self.Agent);
+    finally
+      Self.UnlockMembers;
+    end;
   finally
-    Self.UnlockMembers;
+    Packet.Free;
   end;
 end;
 
@@ -5501,35 +5542,6 @@ begin
   Wait := TIdRTPTransmissionTimeExpire.Create;
   Wait.SessionID := Self.ID;
   Self.Timer.AddEvent(Milliseconds, Wait);
-end;
-
-procedure TIdRTPSession.SendDataToTable(Data: TIdRTPPayload; Table: TIdRTPMemberTable);
-var
-  I:      Cardinal;
-  Packet: TIdRTPPacket;
-begin
-  // Precondition: You've locked Table
-  Packet := TIdRTPPacket.Create(Self.LocalProfile);
-  try
-    Packet.ReadPayload(Data);
-
-    if not Self.IsSender(Self.SyncSrcID) then
-      Self.AddSender(Self.SyncSrcID);
-
-    Packet.PrepareForTransmission(Self);
-
-    Self.IncSentOctetCount(Data.Length);
-    Self.IncSentPacketCount;
-
-    if (Table.Count > 0) then
-      for I := 0 to Table.Count - 1 do
-        if (Table.MemberAt(I).SyncSrcID <> Self.SyncSrcID) then
-          Agent.SendPacket(Table.MemberAt(I).SourceAddress,
-                           Table.MemberAt(I).SourcePort,
-                           Packet);
-  finally
-    Packet.Free;
-  end;
 end;
 
 procedure TIdRTPSession.SetSyncSrcId(Value: Cardinal);
