@@ -1162,7 +1162,7 @@ function  HtoNL(Value: Cardinal): Cardinal;
 function  HtoNS(Value: Word): Word;
 function  NowAsNTP: TIdNTPTimestamp;
 function  NtoHL(Value: Cardinal): Cardinal;
-function  NtoHS(Value: Word): Cardinal;
+function  NtoHS(Value: Word): Word;
 
 // Stream functions
 function  Eof(Src: TStream): Boolean;
@@ -1454,7 +1454,7 @@ begin
   Result := HtoNL(Value);
 end;
 
-function NtoHS(Value: Word): Cardinal;
+function NtoHS(Value: Word): Word;
 begin
   Result := HtoNS(Value);
 end;
