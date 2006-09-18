@@ -354,7 +354,6 @@ type
     function  GetCsrcCount: TIdRTPCsrcCount;
     function  GetCsrcID(Index: TIdRTPCsrcCount): Cardinal;
     procedure ReadPayloadAndPadding(Src: TStream);
-    procedure ReplacePayload(Payload: TIdRTPPayload);
     procedure SetCsrcCount(Value: TIdRTPCsrcCount);
     procedure SetCsrcID(Index: TIdRTPCsrcCount;
                         Value: Cardinal);
@@ -586,6 +585,7 @@ type
 
     function  GetChunks(Index: Integer): TIdRTCPSrcDescChunk;
     procedure ReadChunk(Src: TStream);
+    function  TooManyChunks: Boolean;
   protected
     function  GetPacketType: Byte; override;
     function  GetSyncSrcID: Cardinal; override;
@@ -2651,7 +2651,11 @@ end;
 procedure TIdRTPPacket.ReadPayload(Src: TStream;
                                    Profile: TIdRTPProfile);
 begin
-  Self.ReplacePayload(Profile.EncodingFor(Self.PayloadType));
+  // This looks weird. What's happening is that the SetPayload recreates Self.
+  // Payload with a TIdRTPPayload of the appropriate type, and then Self.Payload
+  // will know how to read itself from Src.
+  Self.Payload := Profile.EncodingFor(Self.PayloadType);
+
   Self.Payload.ReadFrom(Src);
 end;
 
@@ -2671,7 +2675,7 @@ end;
 procedure TIdRTPPacket.ReadPayload(Data: TIdRTPPayload);
 begin
   Self.PayloadType := Self.Profile.PayloadTypeFor(Data.EncodingName);
-  Self.ReplacePayload(Data);
+  Self.Payload := Data;
 end;
 
 function TIdRTPPacket.RealLength: Word;
@@ -2728,13 +2732,6 @@ begin
   end;
 end;
 
-procedure TIdRTPPacket.ReplacePayload(Payload: TIdRTPPayload);
-begin
-  fPayload.Free;
-
-  fPayload := Payload.Clone;
-end;
-
 procedure TIdRTPPacket.SetCsrcCount(Value: TIdRTPCsrcCount);
 begin
   fCsrcCount := Value;
@@ -2751,8 +2748,10 @@ end;
 procedure TIdRTPPacket.SetPayload(Value: TIdRTPPayload);
 begin
   // Make sure you set Self.PayloadType! Otherwise you'll run into problems
-  // because the payload type doesn't match the type of the payload! 
-  Self.ReplacePayload(Value);
+  // because the payload type doesn't match the type of the payload!
+  fPayload.Free;
+
+  fPayload := Value.Clone;
 end;
 
 //******************************************************************************
@@ -3375,7 +3374,7 @@ end;
 
 function TIdRTCPSourceDescription.AddChunk: TIdRTCPSrcDescChunk;
 begin
-  if (Self.ChunkCount = High(Self.ChunkCount)) then begin
+  if Self.TooManyChunks then begin
     Result := nil;
     Exit;
   end;
@@ -3498,6 +3497,11 @@ end;
 procedure TIdRTCPSourceDescription.ReadChunk(Src: TStream);
 begin
   Self.AddChunk.ReadFrom(Src);
+end;
+
+function TIdRTCPSourceDescription.TooManyChunks: Boolean;
+begin
+  Result := Self.ChunkCount = High(Self.ChunkCount);
 end;
 
 //******************************************************************************
