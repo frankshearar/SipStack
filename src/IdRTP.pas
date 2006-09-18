@@ -353,8 +353,7 @@ type
     function  DefaultVersion: TIdRTPVersion;
     function  GetCsrcCount: TIdRTPCsrcCount;
     function  GetCsrcID(Index: TIdRTPCsrcCount): Cardinal;
-    procedure ReadPayloadAndPadding(Src: TStream;
-                                    Profile: TIdRTPProfile);
+    procedure ReadPayloadAndPadding(Src: TStream);
     procedure ReplacePayload(Payload: TIdRTPPayload);
     procedure SetCsrcCount(Value: TIdRTPCsrcCount);
     procedure SetCsrcID(Index: TIdRTPCsrcCount;
@@ -2644,7 +2643,7 @@ begin
     Self.HeaderExtension.ReadFrom(Src);
 
   if Self.HasPadding then
-    Self.ReadPayloadAndPadding(Src, Self.Profile)
+    Self.ReadPayloadAndPadding(Src)
   else
     Self.ReadPayload(Src, Self.Profile);
 end;
@@ -2708,8 +2707,7 @@ begin
   Result := fCsrcIDs[Index];
 end;
 
-procedure TIdRTPPacket.ReadPayloadAndPadding(Src: TStream;
-                                             Profile: TIdRTPProfile);
+procedure TIdRTPPacket.ReadPayloadAndPadding(Src: TStream);
 var
   CurrentPos:    Int64;
   Padding:       Byte;
