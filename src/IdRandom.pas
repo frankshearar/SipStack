@@ -27,6 +27,7 @@ type
     function NextRandomBits(NumBits: Cardinal): Cardinal;
     function NextSipUserAgentBranch: String; virtual; abstract;
     function NextSipUserAgentTag: String; virtual; abstract;
+    function NextWord: Word;
     function NumBitsNeeded(N: Cardinal): Cardinal;
   end;
 
@@ -147,6 +148,11 @@ begin
     Result := Cardinal(Random(High(Cardinal)))
   else
     Result := Random(1 shl NumBits);
+end;
+
+function TIdRandomNumber.NextWord: Word;
+begin
+  Result := Self.NextRandomBits(Self.NumBitsNeeded(High(Word)));
 end;
 
 function TIdRandomNumber.NumBitsNeeded(N: Cardinal): Cardinal;
