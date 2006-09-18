@@ -399,7 +399,7 @@ type
   TIdRTCPPacket = class(TIdRTPBasePacket)
   protected
     procedure AssertPacketType(PT: Byte);
-    function  GetPacketType: Cardinal; virtual; abstract;
+    function  GetPacketType: Byte; virtual; abstract;
   public
     class function RTCPType(PacketType: Byte): TIdRTCPPacketClass;
 
@@ -414,7 +414,7 @@ type
     function IsSourceDescription: Boolean; virtual;
     function IsValid: Boolean; override;
 
-    property PacketType: Cardinal read GetPacketType;
+    property PacketType: Byte read GetPacketType;
   end;
 
   TIdRTCPMultiSSRCPacket = class(TIdRTCPPacket)
@@ -436,7 +436,7 @@ type
     procedure SetReceptionReportCount(Value: TIdRTCPReceptionCount);
   protected
     function  FixedHeaderByteLength: Word; virtual;
-    function  GetPacketType: Cardinal; override;
+    function  GetPacketType: Byte; override;
     procedure PrintFixedHeadersOn(Dest: TStream); virtual;
     procedure ReadFixedHeadersFrom(Src: TStream); virtual;
   public
@@ -466,7 +466,7 @@ type
 
   protected
     function  FixedHeaderByteLength: Word; override;
-    function  GetPacketType: Cardinal; override;
+    function  GetPacketType: Byte; override;
     procedure PrintFixedHeadersOn(Dest: TStream); override;
     procedure ReadFixedHeadersFrom(Src: TStream); override;
   public
@@ -588,7 +588,7 @@ type
     function  GetChunks(Index: Integer): TIdRTCPSrcDescChunk;
     procedure ReadChunk(Src: TStream);
   protected
-    function  GetPacketType: Cardinal; override;
+    function  GetPacketType: Byte; override;
     function  GetSyncSrcID: Cardinal; override;
     procedure SetSyncSrcID(Value: Cardinal); override;
   public
@@ -625,7 +625,7 @@ type
     procedure SetSourceCount(Value: TIdRTCPSourceCount);
     function  StreamHasReason: Boolean;
   protected
-    function  GetPacketType: Cardinal; override;
+    function  GetPacketType: Byte; override;
     function  GetSyncSrcID: Cardinal; override;
     procedure SetSyncSrcID(Value: Cardinal); override;
   public
@@ -653,7 +653,7 @@ type
     procedure SetData(const Value: String);
     procedure SetName(const Value: String);
   protected
-    function GetPacketType: Cardinal; override;
+    function GetPacketType: Byte; override;
   public
     constructor Create; override;
 
@@ -672,7 +672,7 @@ type
 
     function Add(PacketType: TIdRTCPPacketClass): TIdRTCPPacket;
   protected
-    function GetPacketType: Cardinal; override;
+    function GetPacketType: Byte; override;
   public
     constructor Create; override;
     destructor  Destroy; override;
@@ -740,9 +740,9 @@ type
     fSourcePort:                  Cardinal;
     fSyncSrcID:                   Cardinal;
 
-    function  DefaultMaxDropout: Cardinal;
+    function  DefaultMaxDropout: Word;
     function  DefaultMaxMisOrder: Word;
-    function  DefaultMinimumSequentialPackets: Cardinal;
+    function  DefaultMinimumSequentialPackets: Word;
     function  ExpectedPacketCount: Cardinal;
     procedure UpdateJitter(Data: TIdRTPPacket; CurrentTime: Cardinal);
     procedure UpdatePrior;
@@ -2033,11 +2033,14 @@ end;
 
 procedure TIdRTPProfile.Clear;
 var
-  I: TIdRTPPayloadType;
+  Encoding: TIdRTPPayload;
+  I:        TIdRTPPayloadType;
 begin
-  for I := Low(TIdRTPPayloadType) to High(TIdRTPPayloadType) do
-    if not Self.EncodingFor(I).IsNull and not Self.EncodingFor(I).IsReserved then
+  for I := Low(TIdRTPPayloadType) to High(TIdRTPPayloadType) do begin
+    Encoding := Self.EncodingFor(I);
+    if not Encoding.IsNull and not Encoding.IsReserved then
       Self.RemoveEncoding(I);
+  end;
 end;
 
 function TIdRTPProfile.Count: Integer;
@@ -2063,7 +2066,7 @@ end;
 
 function TIdRTPProfile.EncodingFor(PayloadType: TIdRTPPayloadType): TIdRTPPayload;
 begin
-  Result := Self.Encodings[PayloadType] as TIdRTPPayload;
+  Result := Self.Encodings[PayloadType];
 end;
 
 function TIdRTPProfile.EncodingFor(EncodingName: String): TIdRTPPayload;
@@ -2088,7 +2091,7 @@ begin
   while (I <= High(TIdRTPPayloadType)) and not Self.EncodingFor(I).IsNull do
     Inc(I);
 
-  Result := TIdRTPPayloadType(I);
+  Result := I and $FF;
 end;
 
 function TIdRTPProfile.HasEncoding(Encoding: TIdRTPPayload): Boolean;
@@ -2673,13 +2676,19 @@ begin
 end;
 
 function TIdRTPPacket.RealLength: Word;
+const
+  MandatoryHeaderSize = 12;
+var
+  OctetCount: Cardinal;
 begin
-  Result := 12
-          + Self.CsrcCount*4
-          + Self.Payload.Length;
+  OctetCount := MandatoryHeaderSize
+              + Self.CsrcCount*4
+              + Self.Payload.Length;
 
   if Self.HasExtension then
-    Result := Result + Self.HeaderExtension.OctetCount;
+    OctetCount := OctetCount + Self.HeaderExtension.OctetCount;
+
+  Result := OctetCount and $FFFF;
 end;
 
 //* TIdRTPPacket Private methods ***********************************************
@@ -2878,7 +2887,7 @@ begin
   Result := 2*4;
 end;
 
-function TIdRTCPReceiverReport.GetPacketType: Cardinal;
+function TIdRTCPReceiverReport.GetPacketType: Byte;
 begin
   Result := RTCPReceiverReport;
 end;
@@ -3002,7 +3011,7 @@ begin
   Result := 7*4;
 end;
 
-function TIdRTCPSenderReport.GetPacketType: Cardinal;
+function TIdRTCPSenderReport.GetPacketType: Byte;
 begin
   Result := RTCPSenderReport;
 end;
@@ -3460,7 +3469,7 @@ end;
 
 //* TIdRTCPSourceDescription Protected methods *********************************
 
-function TIdRTCPSourceDescription.GetPacketType: Cardinal;
+function TIdRTCPSourceDescription.GetPacketType: Byte;
 begin
   Result := RTCPSourceDescription;
 end;
@@ -3551,7 +3560,7 @@ var
   I: Integer;
 begin
   B := ReadByte(Src);
-  Self.Version     := B and $C0 shr 6;
+  Self.Version     := (B and $C0) shr 6;
   Self.HasPadding  := (B and $20) <> 0;
   Self.SourceCount := B and $1F;
 
@@ -3580,7 +3589,7 @@ end;
 
 //* TIdRTCPBye Protected methods ***********************************************
 
-function TIdRTCPBye.GetPacketType: Cardinal;
+function TIdRTCPBye.GetPacketType: Byte;
 begin
   Result := RTCPGoodbye;
 end;
@@ -3703,7 +3712,7 @@ var
   Name: array[0..3] of Char;
 begin
   B := ReadByte(Src);
-  Self.Version    := B and $C0 shr 6;
+  Self.Version    := (B and $C0) shr 6;
   Self.HasPadding := (B and $20) <> 0;
 
   Self.AssertPacketType(ReadByte(Src));
@@ -3727,7 +3736,7 @@ end;
 
 //* TIdRTCPApplicationDefined Protected methods ********************************
 
-function TIdRTCPApplicationDefined.GetPacketType: Cardinal;
+function TIdRTCPApplicationDefined.GetPacketType: Byte;
 begin
   Result := RTCPApplicationDefined;
 end;
@@ -3890,11 +3899,15 @@ begin
 end;
 
 function TIdCompoundRTCPPacket.IsValid: Boolean;
+var
+  FirstReport: TIdRTCPPacket;
 begin
+  FirstReport := Self.FirstPacket;
+
   Result := inherited IsValid
         and (Self.PacketCount > 0)
-        and (Self.FirstPacket.IsSenderReport or Self.FirstPacket.IsReceiverReport)
-        and not Self.FirstPacket.HasPadding;
+        and (FirstReport.IsSenderReport or FirstReport.IsReceiverReport)
+        and not FirstReport.HasPadding;
 end;
 
 function TIdCompoundRTCPPacket.PacketAt(Index: Cardinal): TIdRTCPPacket;
@@ -3943,7 +3956,7 @@ end;
 
 //* TIdCompoundRTCPPacket Protected methods ************************************
 
-function TIdCompoundRTCPPacket.GetPacketType: Cardinal;
+function TIdCompoundRTCPPacket.GetPacketType: Byte;
 begin
   if (Self.PacketCount > 0) then
     Result := Self.PacketAt(0).PacketType
@@ -4140,7 +4153,7 @@ end;
 
 //* TIdRTPMember Private methods ***********************************************
 
-function TIdRTPMember.DefaultMaxDropout: Cardinal;
+function TIdRTPMember.DefaultMaxDropout: Word;
 begin
   // This tells us how big a gap in the sequence numbers we will
   // accept before invalidating the source.
@@ -4154,7 +4167,7 @@ begin
   Result := 100;
 end;
 
-function TIdRTPMember.DefaultMinimumSequentialPackets: Cardinal;
+function TIdRTPMember.DefaultMinimumSequentialPackets: Word;
 begin
   // This tells us how many packets we must receive, _in_order_, before
   // we validate a source.
@@ -4369,31 +4382,37 @@ end;
 
 function TIdRTPMemberTable.Find(SSRC: Cardinal): TIdRTPMember;
 var
-  I: Cardinal;
+  I:      Cardinal;
+  Member: TIdRTPMember;
 begin
   Result := nil;
   I := 0;
 
-  while (I < Self.Count) and not Assigned(Result) do
-    if Self.MemberAt(I).HasSyncSrcID and (Self.MemberAt(I).SyncSrcID = SSRC) then
-      Result := Self.MemberAt(I)
+  while (I < Self.Count) and not Assigned(Result) do begin
+    Member := Self.MemberAt(I);
+    if Member.HasSyncSrcID and (Member.SyncSrcID = SSRC) then
+      Result := Member
     else
       Inc(I);
+  end;
 end;
 
 function TIdRTPMemberTable.FindReceiver(Host: String; Port: Cardinal): TIdRTPMember;
 var
-  I: Cardinal;
+  I:      Cardinal;
+  Member: TIdRTPMember;
 begin
   Result := nil;
   I := 0;
 
-  while (I < Self.Count) and not Assigned(Result) do
-    if (Self.MemberAt(I).SourceAddress = Host)
-      and (Self.MemberAt(I).SourcePort = Port) then
-      Result := Self.MemberAt(I)
+  while (I < Self.Count) and not Assigned(Result) do begin
+    Member := Self.MemberAt(I);
+    if (Member.SourceAddress = Host)
+      and (Member.SourcePort = Port) then
+      Result := Member
     else
       Inc(I);
+  end;
 end;
 
 function TIdRTPMemberTable.MemberAt(Index: Cardinal): TIdRTPMember;
@@ -4449,13 +4468,15 @@ end;
 procedure TIdRTPMemberTable.RemoveTimedOutMembersExceptFor(CutoffTime: TDateTime;
                                                            SessionSSRC: Cardinal);
 var
-  I: Cardinal;
+  I:      Cardinal;
+  Member: TIdRTPMember;
 begin
   I := 0;
   while (I < Self.Count) do begin
-    if (Self.MemberAt(I).SyncSrcID <> SessionSSRC)
-      and (Self.MemberAt(I).LastRTCPReceiptTime < CutoffTime) then
-      Self.Remove(Self.MemberAt(I))
+    Member := Self.MemberAt(I);
+    if (Member.SyncSrcID <> SessionSSRC)
+      and (Member.LastRTCPReceiptTime < CutoffTime) then
+      Self.Remove(Member)
     else
       Inc(I)
   end;
@@ -4463,13 +4484,15 @@ end;
 
 procedure TIdRTPMemberTable.RemoveTimedOutSenders(CutoffTime: TDateTime);
 var
-  I: Cardinal;
+  I:      Cardinal;
+  Member: TIdRTPMember;
 begin
   I := 0;
   while (I < Self.Count) do begin
-    if Self.MemberAt(I).IsSender
-      and (Self.MemberAt(I).LastRTCPReceiptTime < CutoffTime) then
-      Self.Remove(Self.MemberAt(I))
+    Member := Self.MemberAt(I);
+    if Member.IsSender
+      and (Member.LastRTCPReceiptTime < CutoffTime) then
+      Self.Remove(Member)
     else
       Inc(I);
   end;
@@ -4478,26 +4501,31 @@ end;
 procedure TIdRTPMemberTable.SendControl(Packet: TIdRTCPPacket;
                                         Agent: IIdAbstractRTPPeer);
 var
-  I: Integer;
+  I:      Integer;
+  Member: TIdRTPMember;
 begin
-  for I := 0 to Self.Count - 1 do
-    if (Self.MemberAt(I).SyncSrcID <> Packet.SyncSrcID) then
-      Agent.SendPacket(Self.MemberAt(I).ControlAddress,
-                       Self.MemberAt(I).ControlPort,
+  for I := 0 to Self.Count - 1 do begin
+    Member := Self.MemberAt(I);
+    if (Member.SyncSrcID <> Packet.SyncSrcID) then
+      Agent.SendPacket(Member.ControlAddress,
+                       Member.ControlPort,
                        Packet);
+  end;
 end;
 
 procedure TIdRTPMemberTable.SendData(Packet: TIdRTPPacket;
                                      Agent: IIdAbstractRTPPeer);
 var
-  I: Cardinal;
+  I:      Integer;
+  Member: TIdRTPMember;
 begin
-  if (Self.Count > 0) then
-    for I := 0 to Self.Count - 1 do
-      if (Self.MemberAt(I).SyncSrcID <> Packet.SyncSrcID) then
-        Agent.SendPacket(Self.MemberAt(I).SourceAddress,
-                         Self.MemberAt(I).SourcePort,
-                         Packet);
+  for I := 0 to Self.Count - 1 do begin
+    Member := Self.MemberAt(I);
+    if (Member.SyncSrcID <> Packet.SyncSrcID) then
+      Agent.SendPacket(Member.SourceAddress,
+                       Member.SourcePort,
+                       Packet);
+  end;
 end;
 
 function TIdRTPMemberTable.SenderCount: Cardinal;
@@ -4658,17 +4686,21 @@ end;
 
 function TIdRTPSenderTable.Find(SSRC: Cardinal): TIdRTPMember;
 var
-  I: Cardinal;
+  I:      Cardinal;
+  Member: TIdRTPMember;
 begin
   Result := nil;
 
-  if (Self.Members.Count > 0) then
-    for I := 0 to Self.Members.Count - 1 do
-      if Self.Members.MemberAt(I).IsSender
-        and (Self.Members.MemberAt(I).SyncSrcID = SSRC) then begin
-        Result := Self.Members.MemberAt(I);
+  if (Self.Members.Count > 0) then begin
+    for I := 0 to Self.Members.Count - 1 do begin
+      Member := Self.Members.MemberAt(I);
+      if Member.IsSender
+        and (Member.SyncSrcID = SSRC) then begin
+        Result := Member;
         Break;
       end;
+    end;
+  end;
 end;
 
 function TIdRTPSenderTable.SenderAt(Index: Cardinal): TIdRTPMember;
@@ -4939,7 +4971,7 @@ end;
 
 procedure TIdRTPSession.Initialize;
 begin
-  Self.SequenceNo    := GRandomNumber.NextCardinal(High(Self.SequenceNo));
+  Self.SequenceNo    := GRandomNumber.NextWord;
   Self.BaseTimestamp := GRandomNumber.NextCardinal;
   Self.BaseTime      := Now;
 
