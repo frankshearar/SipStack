@@ -20,6 +20,7 @@ type
     procedure TestEncodeNonLineUnprintableChars;
     procedure TestHexDigitToInt;
     procedure TestHexToInt;
+    procedure TestLastPos;
     procedure TestWithoutFirstAndLastChars;
   end;
 
@@ -180,6 +181,49 @@ begin
   except
     on EConvertError do;
   end;
+end;
+
+procedure TestFunctions.TestLastPos;
+var
+  Needle, Haystack: String;
+begin
+  Needle := 'abc';
+
+  CheckEquals(0, LastPos(Needle, Haystack), 'Empty string');
+
+  Haystack := 'xxx';
+  CheckEquals(0, LastPos(Needle, Haystack), 'No Needle in the Haystack');
+
+  Haystack := 'abc';
+  CheckEquals(1, LastPos(Needle, Haystack), 'Needle = Haystack');
+  CheckEquals(1,
+              LastPos(Needle, Haystack, Length(Haystack) + 1),
+              'Needle = Haystack, starting beyond end of Haystack');
+  CheckEquals(1,
+              LastPos(Needle, Haystack, -Length(Haystack)),
+              'Needle = Haystack, starting before beginning of Haystack');
+
+  Haystack := 'abcdef';
+  CheckEquals(1, LastPos(Needle, Haystack), 'Needle at beginning of Haystack');
+
+  Haystack := 'defabc';
+  CheckEquals(4, LastPos(Needle, Haystack), 'Needle at end of Haystack');
+
+  Haystack := 'defabcghi';
+  CheckEquals(4, LastPos(Needle, Haystack), 'Needle inside Haystack');
+
+  Haystack := 'abcabc';
+  CheckEquals(4, LastPos(Needle, Haystack), 'Haystack = 2xNeedle');
+
+  Haystack := 'abcabc';
+  CheckEquals(4, LastPos(Needle, Haystack, 4), 'Haystack = 2xNeedle, starting in the middle');
+
+  Haystack := 'abcabcabc';
+  CheckEquals(1, LastPos(Needle, Haystack, 3), 'Haystack = 3xNeedle, starting at 3');
+  CheckEquals(4, LastPos(Needle, Haystack, 4), 'Haystack = 3xNeedle, starting at 4');
+  CheckEquals(4, LastPos(Needle, Haystack, 5), 'Haystack = 3xNeedle, starting at 5');
+  CheckEquals(7, LastPos(Needle, Haystack, 7), 'Haystack = 3xNeedle, starting at 7');
+  CheckEquals(7, LastPos(Needle, Haystack),    'Haystack = 3xNeedle');
 end;
 
 procedure TestFunctions.TestWithoutFirstAndLastChars;

@@ -103,12 +103,12 @@ function Localhost(IPType: TIdIPVersion): String;
 function WithoutFirstAndLastChars(const S: String): String;
 
 // Hiding IdGlobal
-function RPos(const ASub, AIn: String; AStart: Integer = -1): Integer;
+function LastPos(const Needle, Haystack: String; Start: Integer = -1): Integer;
 
 implementation
 
 uses
-  IdGlobal;
+  IdGlobal, StrUtils;
 
 //******************************************************************************
 //* Unit Public Functions and Procedures                                       *
@@ -199,9 +199,39 @@ begin
   Result := Copy(S, 2, Length(S) - 2);
 end;
 
-function RPos(const ASub, AIn: String; AStart: Integer = -1): Integer;
+function LastPos(const Needle, Haystack: String; Start: Integer = -1): Integer;
+var
+  I:        Integer;
+  StartPos: Integer;
+  TokenLen: Integer;
 begin
-  Result := IdGlobal.RPos(ASub, AIn, AStart);
+  // Consider the substring of Haystack from the Start'th index to the right.
+  // What is the rightmost occurence of Needle?
+
+  // This function uses the exact same algorithm as IdUnicode's LastPosW. The
+  // sole difference between the two is that LastPosW uses WideStrings and this
+  // uses Strings. It would be nice to be able to pull the algorithm out, but
+  // I don't think that's possible with Strings and WideStrings not being
+  // objects.
+
+  Result := 0;
+  TokenLen := Length(Needle);
+
+  // Get starting position
+  if Start < 0 then
+    Start := Length(Haystack);
+
+  StartPos := Length(Haystack) - TokenLen + 1;
+  if (Start < StartPos) then
+    StartPos := Start;
+
+  // Search for the string
+  for I := StartPos downto 1 do begin
+    if (Copy(Haystack, I, TokenLen) = Needle) then begin
+      Result := I;
+      Break;
+    end;
+  end;
 end;
 
 //******************************************************************************

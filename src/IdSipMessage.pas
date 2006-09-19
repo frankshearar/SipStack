@@ -2303,7 +2303,7 @@ begin
 
       Result := Result and (Pos('"', Name) <> 0);
 
-      Name := Copy(Name, 1, RPos('"', Name, -1) - 1);
+      Name := Copy(Name, 1, LastPos('"', Name) - 1);
 
       // There was an encoded ", which MUST NOT match the opening "
       Result := Result and not ((Name <> '') and (Name[Length(Name)] = '\'));
@@ -5568,7 +5568,7 @@ begin
 
   Self.EatLeadingWhitespace(CommentString);
 
-  CommentString := Copy(CommentString, 1, RPosW(')', CommentString));
+  CommentString := Copy(CommentString, 1, LastPosW(')', CommentString));
   CommentString := WithoutFirstAndLastCharsW(CommentString);
 
   I := 1;
@@ -6283,7 +6283,7 @@ end;
 
 procedure TIdSipViaHeader.RemoveBranch;
 begin
-  // Really, this method just serves a debugging purpose, allowing us to turn
+  // Really, this method just serves a debugging puLastPose, allowing us to turn
   // good, healthy RFC 3261 Via headers into twisted, perverted RFC 2543 Via
   // headers.
   Self.RemoveParameter(BranchParam);

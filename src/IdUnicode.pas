@@ -36,7 +36,7 @@ function SurrogateToCodePoint(HighSurrogate, LowSurrogate: Word): DWord;
 function UTF16LEToUTF8(const W: WideString): String;
 function UTF8ToUTF16LE(const S: String): WideString;
 
-function RPosW(const Needle, Haystack: WideString; Start: Integer = -1): Integer;
+function LastPosW(const Needle, Haystack: WideString; Start: Integer = -1): Integer;
 
 implementation
 
@@ -236,7 +236,7 @@ begin
   end;
 end;
 
-function RPosW(const Needle, Haystack: WideString; Start: Integer = -1): Integer;
+function LastPosW(const Needle, Haystack: WideString; Start: Integer = -1): Integer;
 var
   I:        Integer;
   StartPos: Integer;
