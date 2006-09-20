@@ -99,11 +99,9 @@ function Fetch(var Source: String;
                Delete: Boolean = FetchDefaultDelete): String;
 function HexDigitToInt(Digit: Char): Cardinal;
 function HexToInt(const HexValue: String): Cardinal;
+function LastPos(const Needle, Haystack: String; Start: Integer = -1): Integer;
 function Localhost(IPType: TIdIPVersion): String;
 function WithoutFirstAndLastChars(const S: String): String;
-
-// Hiding IdGlobal
-function LastPos(const Needle, Haystack: String; Start: Integer = -1): Integer;
 
 implementation
 
@@ -183,22 +181,6 @@ begin
   end;
 end;
 
-function Localhost(IPType: TIdIPVersion): String;
-begin
-  case IPType of
-    Id_IPv4: Result := '127.0.0.1';
-    Id_IPv6: Result := '::1';
-  else
-    Result := '';
-    raise Exception.Create('Unknown TIdIPVersion');
-  end;
-end;
-
-function WithoutFirstAndLastChars(const S: String): String;
-begin
-  Result := Copy(S, 2, Length(S) - 2);
-end;
-
 function LastPos(const Needle, Haystack: String; Start: Integer = -1): Integer;
 var
   I:        Integer;
@@ -232,6 +214,22 @@ begin
       Break;
     end;
   end;
+end;
+
+function Localhost(IPType: TIdIPVersion): String;
+begin
+  case IPType of
+    Id_IPv4: Result := '127.0.0.1';
+    Id_IPv6: Result := '::1';
+  else
+    Result := '';
+    raise Exception.Create('Unknown TIdIPVersion');
+  end;
+end;
+
+function WithoutFirstAndLastChars(const S: String): String;
+begin
+  Result := Copy(S, 2, Length(S) - 2);
 end;
 
 //******************************************************************************
