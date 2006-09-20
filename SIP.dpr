@@ -103,6 +103,7 @@ uses
   TestIdSipUdpTransport in 'test\TestIdSipUdpTransport.pas',
   TestIdSipUserAgent in 'test\TestIdSipUserAgent.pas',
   TestIdSipUri in 'test\TestIdSipUri.pas',
+  TestIdSystem in 'test\TestIdSystem.pas',
   TestIdTimerQueue in 'test\TestIdTimerQueue.pas',
   TestIdUnicode in 'test\TestIdUnicode.pas';
 

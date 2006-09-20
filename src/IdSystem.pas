@@ -32,7 +32,7 @@ procedure LocalAddresses(IPs: TStrings);
 implementation
 
 uses
-  IdSimpleParser, IdGlobal, IdStack, IdUDPServer, SysUtils, Windows;
+  IdSimpleParser, IdGlobal, IdStack, IdUDPServer, SysUtils, Windows, Winsock;
 
 function ConstructUUID: String;
 var
@@ -55,9 +55,29 @@ begin
 end;
 
 function GetHostName: String;
+var
+  Buf:       PAnsiChar;
+  ErrorCode: Integer;
+  Len:       Integer;
+  RC:        Integer;
+  Unused:    TWSAData;
 begin
   // Return the full name of this machine.
-  Result := IdGlobal.IndyGetHostName;
+
+  Len := 1000;
+  GetMem(Buf, Len*Sizeof(AnsiChar));
+  try
+    RC := Winsock.gethostname(Buf, Len);
+
+    if (RC = 0) then
+      Result := Buf
+    else begin
+      ErrorCode := WSAGetLastError;
+      raise Exception.Create('GetHostName: ' + IntToStr(ErrorCode) + '(' + SysErrorMessage(ErrorCode) + ')');
+    end;
+  finally
+    FreeMem(Buf);
+  end;
 end;
 
 function GetTickCount: Cardinal;

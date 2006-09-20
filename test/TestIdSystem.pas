@@ -11,6 +11,61 @@ unit TestIdSystem;
 
 interface
 
+uses
+  IdSystem, TestFramework;
+
+type
+  // This suite currently only supports Windows (2000).
+  TestFunctions = class(TTestCase)
+  published
+    procedure TestGetCurrentProcessId;
+    procedure TestGetHostNameNoWinsock;
+  end;
+
 implementation
 
+uses
+  SysUtils, Windows, Winsock;
+
+function Suite: ITestSuite;
+begin
+  Result := TTestSuite.Create('IdSystem unit tests');
+  Result.AddTest(TestFunctions.Suite);
+end;
+
+//* TestFunctions Published methods ********************************************
+
+procedure TestFunctions.TestGetCurrentProcessId;
+begin
+  CheckEquals(Windows.GetCurrentProcessId,
+              IdSystem.GetCurrentProcessId,
+              'GetCurrentProcessId');
+end;
+
+procedure TestFunctions.TestGetHostNameNoWinsock;
+var
+  Buf:       PAnsiChar;
+  ErrorCode: Integer;
+  Len:       Integer;
+  RC:        Integer;
+begin
+  Len := 1000;
+  GetMem(Buf, Len*Sizeof(AnsiChar));
+  try
+    RC := Winsock.gethostname(Buf, Len);
+
+    if (RC <> 0) then begin
+      ErrorCode := WSAGetLastError;
+      Fail('gethostname failed: '
+         + IntToStr(ErrorCode) + '(' + SysErrorMessage(ErrorCode) + ')');
+    end;
+
+    CheckEquals(Buf, IdSystem.GetHostName, 'GetHostName');
+  finally
+    FreeMem(Buf);
+  end;
+end;
+
+initialization
+  RegisterTest('System-specific functions', Suite);
 end.
