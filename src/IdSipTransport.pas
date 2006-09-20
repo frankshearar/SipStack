@@ -12,7 +12,7 @@ unit IdSipTransport;
 interface
 
 uses
-  Classes, Contnrs, IdBaseThread, IdException, IdInterfacedObject,
+  Classes, Contnrs, IdException, IdInterfacedObject,
   IdNotification, IdSipLocator, IdSipMessage, IdSocketHandle, IdSSLOpenSSL,
   IdTCPConnection, IdTimerQueue, SyncObjs, SysUtils;
 
@@ -354,7 +354,7 @@ const
 implementation
 
 uses
-  IdRandom, IdSipConsts, IdSipDns, IdTCPServer, IdIOHandlerSocket;
+  IdRandom, IdSipConsts, IdTCPServer, IdIOHandlerSocket;
 
 var
   GTransports:     TStrings;
