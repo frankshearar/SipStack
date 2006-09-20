@@ -18,6 +18,14 @@ type
   TestFunctions = class(TTestCase)
   published
     procedure TestEncodeNonLineUnprintableChars;
+    procedure TestFetch;
+    procedure TestFetchDefaultParameters;
+    procedure TestFetchDelimiterNotPresent;
+    procedure TestFetchDelimiterTheEmptyString;
+    procedure TestFetchDontDelete;
+    procedure TestFetchEmptyString;
+    procedure TestFetchMulticharDelimiter;
+    procedure TestFetchNullCharDelimiter;
     procedure TestHexDigitToInt;
     procedure TestHexToInt;
     procedure TestLastPos;
@@ -79,8 +87,8 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSimpleParser unit tests');
   Result.AddTest(TestFunctions.Suite);
-  Result.AddTest(TestTIdIPAddressParser.Suite);
-  Result.AddTest(TestTIdSimpleParser.Suite);
+//  Result.AddTest(TestTIdIPAddressParser.Suite);
+//  Result.AddTest(TestTIdSimpleParser.Suite);
 end;
 
 //******************************************************************************
@@ -116,6 +124,133 @@ begin
   CheckEquals('abc#7F#7F#7F',
               EncodeNonLineUnprintableChars('abc'#$7f#$7f#$7f),
               '''abc''#$7f#$7f#$7f');
+end;
+
+procedure TestFunctions.TestFetch;
+const
+  FirstWord  = 'abc';
+  SecondWord = 'def';
+  ThirdWord  = 'ghi';
+var
+  Source: String;
+  Token:  String;
+begin
+  Source := FirstWord + ' ' + SecondWord + ' ' + ThirdWord;
+
+  Token := Fetch(Source, ' ', true);
+  CheckEquals(FirstWord, Token, 'First token');
+
+  Token := Fetch(Source, ' ', true);
+  CheckEquals(SecondWord, Token, 'Second token');
+
+  Token := Fetch(Source, ' ', true);
+  CheckEquals(ThirdWord, Token, 'Third token');
+
+  CheckEquals('', Source, 'Still data left in Source');
+end;
+
+procedure TestFunctions.TestFetchDefaultParameters;
+const
+  FirstWord  = 'abc';
+  SecondWord = 'def';
+var
+  Source: String;
+  Token:  String;
+begin
+  Source := FirstWord + ' ' + SecondWord;
+  Token := Fetch(Source);
+
+  CheckEquals(FirstWord, Token, 'Delimiter didn''t default to " "');
+  CheckEquals(SecondWord, Source, 'Delete didn''t default to true');
+end;
+
+procedure TestFunctions.TestFetchDelimiterNotPresent;
+const
+  NoDelimiterPresent = 'abc def';
+var
+  Source: String;
+  Token:  String;
+begin
+  Source := NoDelimiterPresent;
+  Token := Fetch(Source, '|');
+  CheckEquals(NoDelimiterPresent, Token, 'Fetch didn''t fetch all it should have');
+  CheckEquals('', Source, 'Data still left in Source');
+end;
+
+procedure TestFunctions.TestFetchDelimiterTheEmptyString;
+const
+  OriginalSource = 'abc def';
+var
+  Source: String;
+  Token:  String;
+begin
+  Source := OriginalSource;
+  Token := Fetch(Source, '');
+  CheckEquals(OriginalSource, Token, 'Fetch didn''t fetch all it should have');
+  CheckEquals('', Source, 'Data still left in Source');
+end;
+
+procedure TestFunctions.TestFetchDontDelete;
+const
+  FirstToken     = 'abc';
+  SecondToken    = 'def';
+  OriginalSource = FirstToken + ' ' + SecondToken;
+var
+  Source: String;
+  Token:  String;
+begin
+  Source := OriginalSource;
+  Token := Fetch(Source, ' ', false);
+  CheckEquals(FirstToken, Token, 'Fetch didn''t return the first token');
+  CheckEquals(OriginalSource, Source, 'Fetch deleted the first token');
+end;
+
+procedure TestFunctions.TestFetchEmptyString;
+var
+  Source: String;
+begin
+  Source := '';
+  CheckEquals('', Fetch(Source, ' '), 'Fetch('''', '' '')');
+  CheckEquals('', Source, 'Sanity check; space delimiter');
+
+  Source := '';
+  CheckEquals('', Fetch(Source, ''), 'Fetch('''', '''')');
+  CheckEquals('', Source, 'Sanity check; empty string delimiter');
+end;
+
+procedure TestFunctions.TestFetchMulticharDelimiter;
+const
+  LineOne       = 'abc';
+  LineSeparator = #$D#$A;
+  LineTwo       = 'def';
+var
+  Source: String;
+  Token:  String;
+begin
+  Source := LineOne + LineSeparator + LineTwo;
+  Token := Fetch(Source, LineSeparator);
+
+  CheckEquals(LineOne, Token, 'Token not fetched correctly');
+  CheckEquals(LineTwo, Source, 'Token and delimiter not removed');
+end;
+
+procedure TestFunctions.TestFetchNullCharDelimiter;
+const
+  OriginalSource = 'abcdef';
+var
+  Source: String;
+begin
+  Source := OriginalSource;
+  CheckEquals(OriginalSource, Fetch(Source, #0), 'Fetch with (no) NUL delimiter');
+  CheckEquals('', Source, 'Fetch didn''t eat the whole string; no delimiter present');
+
+  Source := #0 + OriginalSource;
+  CheckEquals('', Fetch(Source, #0), 'Fetch with leading NUL');
+  CheckEquals(OriginalSource, Source, 'Fetch ate more than it should have; leading delimiter');
+
+  Source := 'abc'#0'def';
+  CheckEquals('abc', Fetch(Source, #0), 'Fetch with NUL delimiter');
+  CheckEquals('def', Source, 'Fetch didn''t alter source properly; NUL delimiter in the middle of the string');
 end;
 
 procedure TestFunctions.TestHexDigitToInt;

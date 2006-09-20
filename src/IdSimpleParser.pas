@@ -106,7 +106,7 @@ function WithoutFirstAndLastChars(const S: String): String;
 implementation
 
 uses
-  IdGlobal, StrUtils;
+  StrUtils;
 
 //******************************************************************************
 //* Unit Public Functions and Procedures                                       *
@@ -131,8 +131,23 @@ end;
 function Fetch(var Source: String;
                const Delimiter: String = FetchDefaultDelimiter;
                Delete: Boolean = FetchDefaultDelete): String;
+var
+  StartPos: Integer;
 begin
-  Result := IdGlobal.Fetch(Source, Delimiter, Delete);
+  StartPos := Pos(Delimiter, Source);
+
+  if (StartPos = 0) then begin
+    Result := Source;
+
+    if Delete then
+      Source := '';
+  end
+  else begin
+    Result := Copy(Source, 1, StartPos - 1);
+
+    if Delete then
+      Source := Copy(Source, StartPos + Length(Delimiter), Length(Source));
+  end;
 end;
 
 function HexDigitToInt(Digit: Char): Cardinal;
