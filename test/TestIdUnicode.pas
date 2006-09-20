@@ -22,7 +22,7 @@ type
     procedure TestIsHighSurrogate;
     procedure TestIsLowSurrogate;
     procedure TestLowSurrogate;
-    procedure TestRPosW;
+    procedure TestLastPosW;
     procedure TestSurrogateToCodePoint;
     procedure TestUTF16LEToUTF8;
     procedure TestUTF8ToUTF16LE;
@@ -150,47 +150,47 @@ begin
               '$00064321');
 end;
 
-procedure TestUnicodeFunctions.TestRPosW;
+procedure TestUnicodeFunctions.TestLastPosW;
 var
   Needle, Haystack: WideString;
 begin
   Needle := 'abc';
 
-  CheckEquals(0, RPosW(Needle, Haystack), 'Empty string');
+  CheckEquals(0, LastPosW(Needle, Haystack), 'Empty string');
 
   Haystack := 'xxx';
-  CheckEquals(0, RPosW(Needle, Haystack), 'No Needle in the Haystack');
+  CheckEquals(0, LastPosW(Needle, Haystack), 'No Needle in the Haystack');
 
   Haystack := 'abc';
-  CheckEquals(1, RPosW(Needle, Haystack), 'Needle = Haystack');
+  CheckEquals(1, LastPosW(Needle, Haystack), 'Needle = Haystack');
   CheckEquals(1,
-              RPosW(Needle, Haystack, Length(Haystack) + 1),
+              LastPosW(Needle, Haystack, Length(Haystack) + 1),
               'Needle = Haystack, starting beyond end of Haystack');
   CheckEquals(1,
-              RPosW(Needle, Haystack, -Length(Haystack)),
+              LastPosW(Needle, Haystack, -Length(Haystack)),
               'Needle = Haystack, starting before beginning of Haystack');
 
   Haystack := 'abcdef';
-  CheckEquals(1, RPosW(Needle, Haystack), 'Needle at beginning of Haystack');
+  CheckEquals(1, LastPosW(Needle, Haystack), 'Needle at beginning of Haystack');
 
   Haystack := 'defabc';
-  CheckEquals(4, RPosW(Needle, Haystack), 'Needle at end of Haystack');
+  CheckEquals(4, LastPosW(Needle, Haystack), 'Needle at end of Haystack');
 
   Haystack := 'defabcghi';
-  CheckEquals(4, RPosW(Needle, Haystack), 'Needle inside Haystack');
+  CheckEquals(4, LastPosW(Needle, Haystack), 'Needle inside Haystack');
 
   Haystack := 'abcabc';
-  CheckEquals(4, RPosW(Needle, Haystack), 'Haystack = 2xNeedle');
+  CheckEquals(4, LastPosW(Needle, Haystack), 'Haystack = 2xNeedle');
 
   Haystack := 'abcabc';
-  CheckEquals(4, RPosW(Needle, Haystack, 4), 'Haystack = 2xNeedle, starting in the middle');
+  CheckEquals(4, LastPosW(Needle, Haystack, 4), 'Haystack = 2xNeedle, starting in the middle');
 
   Haystack := 'abcabcabc';
-  CheckEquals(1, RPosW(Needle, Haystack, 3), 'Haystack = 3xNeedle, starting at 3');
-  CheckEquals(4, RPosW(Needle, Haystack, 4), 'Haystack = 3xNeedle, starting at 4');
-  CheckEquals(4, RPosW(Needle, Haystack, 5), 'Haystack = 3xNeedle, starting at 5');
-  CheckEquals(7, RPosW(Needle, Haystack, 7), 'Haystack = 3xNeedle, starting at 7');
-  CheckEquals(7, RPosW(Needle, Haystack),    'Haystack = 3xNeedle');
+  CheckEquals(1, LastPosW(Needle, Haystack, 3), 'Haystack = 3xNeedle, starting at 3');
+  CheckEquals(4, LastPosW(Needle, Haystack, 4), 'Haystack = 3xNeedle, starting at 4');
+  CheckEquals(4, LastPosW(Needle, Haystack, 5), 'Haystack = 3xNeedle, starting at 5');
+  CheckEquals(7, LastPosW(Needle, Haystack, 7), 'Haystack = 3xNeedle, starting at 7');
+  CheckEquals(7, LastPosW(Needle, Haystack),    'Haystack = 3xNeedle');
 
   // _aa_aa ( "_" = ZeroWidthNonBreakingSpaceChar)
   Needle := ZeroWidthNonBreakingSpaceChar;
@@ -198,10 +198,10 @@ begin
   Haystack := Haystack + 'aa';
   Haystack := Haystack + ZeroWidthNonBreakingSpaceChar; // Character 4
   Haystack := Haystack + 'aa';
-  CheckEquals(1, RPosW(Needle, Haystack, 3), 'UCS-2, starting at 3');
-  CheckEquals(4, RPosW(Needle, Haystack, 4), 'UCS-2, starting at 4');
-  CheckEquals(4, RPosW(Needle, Haystack, 5), 'UCS-2, starting at 5');
-  CheckEquals(4, RPosW(Needle, Haystack),    'UCS-2, starting at left');
+  CheckEquals(1, LastPosW(Needle, Haystack, 3), 'UCS-2, starting at 3');
+  CheckEquals(4, LastPosW(Needle, Haystack, 4), 'UCS-2, starting at 4');
+  CheckEquals(4, LastPosW(Needle, Haystack, 5), 'UCS-2, starting at 5');
+  CheckEquals(4, LastPosW(Needle, Haystack),    'UCS-2, starting at left');
 end;
 
 procedure TestUnicodeFunctions.TestSurrogateToCodePoint;
