@@ -12,8 +12,8 @@ unit IdSipMessage;
 interface
 
 uses
-  Classes, Contnrs, IdDateTimeStamp, IdInterfacedObject,
-  IdSimpleParser, IdSipConsts, IdTimerQueue, SyncObjs, SysUtils;
+  Classes, Contnrs, IdDateTimeStamp, IdSimpleParser, IdSipConsts, IdTimerQueue,
+  SysUtils;
 
 type
   TIdSipQValue = 0..1000;
@@ -2173,7 +2173,7 @@ const
 implementation
 
 uses
-  IdSipDialog, IdSipLocator, IdSipTransport, IdUnicode, Math;
+  IdSipDialog, IdSipTransport, IdUnicode, Math;
 
 const
   OffsetMustBeNonNegative = 'Offset must be greater or equal to zero';
