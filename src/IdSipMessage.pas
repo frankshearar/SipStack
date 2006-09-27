@@ -70,6 +70,11 @@ type
     procedure VisitResponse(Response: TIdSipResponse);
   end;
 
+  // My Host property can contain a FQDN, an IPv4 address or an IPv6 REFERENCE.
+  // My Host property must not contain an IPv6 address because a colon delimits
+  // the tokens of an IPv6 address and also marks the boundary between the host
+  // portion and port portion of a URI. (As an example, is "::1:8000" the local
+  // host (::1) and port 8000, or the address [::1:8000]?) 
   TIdSipHostAndPort = class(TObject)
   private
     fDefaultPort:     Cardinal;
@@ -250,6 +255,10 @@ type
     function  GetTTL: Cardinal;
     function  GetUri: String;
     function  GetUserParameter: String;
+    function  HasAcceptableScheme: Boolean;
+    function  HasValidHost: Boolean;
+    function  HasValidPassword: Boolean;
+    function  HasValidUser: Boolean;
     function  HasValidUserInfo: Boolean;
     function  HeadersAsString: String;
     function  IsKnownParameter(const Name: String): Boolean;
@@ -268,6 +277,8 @@ type
     procedure SetTTL(const Value: Cardinal);
     procedure SetUri(const Value: String);
     procedure SetUserParameter(const Value: String);
+    function ValidUser(Username: String): Boolean;
+    function ValidPassword(Password: String): Boolean;
   protected
     procedure Initialize; override;
     procedure Parse(Uri: String); override;
@@ -277,6 +288,7 @@ type
     class function Decode(const Src: String): String;
     class function Encode(const Src: String;
                           const SafeChars: TIdSipChars): String;
+    class function HasValidSyntax(URI: String): Boolean; overload;
     class function HeaderEncode(const NameOrValue: String): String;
     class function IsParamNameOrValue(const Token: String): Boolean;
     class function IsPassword(const Token: String): Boolean;
@@ -299,7 +311,7 @@ type
     function  DefaultTransport: String; virtual;
     function  Equals(Uri: TIdSipUri): Boolean;
     procedure EraseUserInfo;
-    function  HasValidSyntax: Boolean;
+    function  HasValidSyntax: Boolean; overload;
     function  HasGrid: Boolean;
     function  HasHeaders: Boolean;
     function  HasMaddr: Boolean;
@@ -3198,6 +3210,24 @@ begin
   end;
 end;
 
+class function TIdSipUri.HasValidSyntax(URI: String): Boolean;
+var
+  U: TIdSipUri;
+begin
+  if (URI = '') then begin
+    Result := false;
+    Exit;
+  end;
+
+  U := TIdSipUri.Create('');
+  try
+    U.Uri := URI;
+    Result := not U.IsMalformed;
+  finally
+    U.Free;
+  end;
+end;
+
 class function TIdSipUri.HeaderEncode(const NameOrValue: String): String;
 begin
   Result := Self.Encode(NameOrValue, HeaderChars);
@@ -3388,10 +3418,12 @@ end;
 
 function TIdSipUri.HasValidSyntax: Boolean;
 begin
-  Result := Self.HasValidUserInfo;
+  Result := Self.HasAcceptableScheme
+        and Self.HasValidHost
+        and Self.HasValidUserInfo;
 
-  if Self.IsSecure then
-    Result := Result and (Self.Transport = TransportParamTLS);
+  if Self.IsSecure and Result then
+    Result := Self.Transport = TransportParamTLS;
 end;
 
 function TIdSipUri.HasGrid: Boolean;
@@ -3482,8 +3514,8 @@ begin
   if (Uri <> '') then begin
     Self.Scheme := Fetch(Uri, ':');
 
-    if not TIdSipParser.IsToken(Self.Scheme) then
-//    IsEqual(Self.Scheme, SipScheme) and not IsEqual(Self.Scheme, SipsScheme) then
+    if not TIdSipParser.IsToken(Self.Scheme)
+      or not Self.HasAcceptableScheme then
       raise EParserError.Create(InvalidScheme);
 
     if (Pos('@', Uri) > 0) then
@@ -3634,10 +3666,35 @@ begin
   Result := Self.ParamValue(UserParam);
 end;
 
+function TIdSipUri.HasAcceptableScheme: Boolean;
+begin
+  Result := IsEqual(Self.Scheme, SipScheme)
+         or IsEqual(Self.Scheme, SipsScheme);
+end;
+
+function TIdSipUri.HasValidHost: Boolean;
+begin
+  Result := Self.Host <> '';
+
+  if Result then
+    Result := TIdSimpleParser.IsFQDN(Self.Host)
+           or TIdIPAddressParser.IsIPv4Address(Self.Host)
+           or TIdIPAddressParser.IsIPv6Reference(Self.Host)
+end;
+
+function TIdSipUri.HasValidPassword: Boolean;
+begin
+  Result := Self.ValidPassword(Self.Password);
+end;
+
+function TIdSipUri.HasValidUser: Boolean;
+begin
+  Result := Self.ValidUser(Self.Username);
+end;
+
 function TIdSipUri.HasValidUserInfo: Boolean;
 begin
-  Result := ((Self.Username = '') or Self.IsUser(Self.Username))
-        and ((Self.Password = '') or Self.IsPassword(Self.Password))
+  Result := Self.HasValidUser and Self.HasValidPassword;
 end;
 
 function TIdSipUri.HeadersAsString: String;
@@ -3706,14 +3763,6 @@ begin
 end;
 
 procedure TIdSipUri.ParseUserInfo(UserInfo: String);
-  function ValidUser(Username: String): Boolean;
-  begin
-    Result := (Username = '') or Self.IsUser(Username);
-  end;
-  function ValidPassword(Password: String): Boolean;
-  begin
-    Result := (Password = '') or Self.IsUser(Password);
-  end;
 var
   User:   String;
   Passwd: String;
@@ -3721,7 +3770,7 @@ begin
   User   := Fetch(UserInfo, ':');
   Passwd := UserInfo;
 
-  if not ValidUser(User) or not ValidPassword(Passwd) then
+  if not Self.ValidUser(User) or not Self.ValidPassword(Passwd) then
     raise EParserError.Create(InvalidUserInfo);
 
   Self.Username := TIdSipURI.Decode(User);
@@ -3798,6 +3847,16 @@ end;
 procedure TIdSipUri.SetUserParameter(const Value: String);
 begin
   Self.Parameters.Values[UserParam] := Value;
+end;
+
+function TIdSipUri.ValidUser(Username: String): Boolean;
+begin
+  Result := (Username = '') or Self.IsUser(Username);
+end;
+
+function TIdSipUri.ValidPassword(Password: String): Boolean;
+begin
+  Result := (Password = '') or Self.IsUser(Password);
 end;
 
 //******************************************************************************

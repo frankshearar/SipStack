@@ -116,6 +116,10 @@ type
     procedure TestHasMaddr;
     procedure TestHasMethod;
     procedure TestHasParameter;
+    procedure TestHasValidSyntax;
+    procedure TestHasValidSyntaxAddressChecks;
+    procedure TestHasValidSyntaxSchemeChecks;
+    procedure TestHasValidSyntaxUserPasswordChecks;
     procedure TestIsGruu;
     procedure TestIsLooseRoutable;
     procedure TestIsPassword;
@@ -1315,6 +1319,58 @@ begin
 
   Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;transport=udp;foo=bar;lr';
   Check(Uri.HasParameter('foo'), 'parameter amongst others');
+end;
+
+procedure TestTIdSipUri.TestHasValidSyntax;
+begin
+  Check(not TIdSipUri.HasValidSyntax(''), 'The empty string is not a URI');
+end;
+
+procedure TestTIdSipUri.TestHasValidSyntaxAddressChecks;
+begin
+  Check(TIdSipUri.HasValidSyntax('sip:127.0.0.1'), 'IPv4 address');
+  Check(TIdSipUri.HasValidSyntax('sip:[::1]'), 'IPv6 reference');
+  Check(TIdSipUri.HasValidSyntax('sip:example.com'), 'Fully qualified domain name');
+
+  Check(not TIdSipUri.HasValidSyntax('sip:::1'),
+        'Only IPv6 REFERENCES are valid as a host.');
+
+  Check(not TIdSipUri.HasValidSyntax('foo.1example.com'),
+        Self.Uri.Uri + ': Tokens in a FQDN may not start with a digit.');
+end;
+
+procedure TestTIdSipUri.TestHasValidSyntaxSchemeChecks;
+begin
+  Check(TIdSipUri.HasValidSyntax('sip:127.0.0.1'), 'SIP scheme');
+  Check(TIdSipUri.HasValidSyntax('sips:127.0.0.1'), 'SIPS scheme');
+
+  Check(not TIdSipUri.HasValidSyntax('sipp:127.0.0.1'), 'Invalid scheme: "sipp"');
+  Check(not TIdSipUri.HasValidSyntax('http:127.0.0.1'), 'HTTP scheme');
+
+  Check(not TIdSipUri.HasValidSyntax('sip127.0.0.1'),
+        'The user likely left out the colon terminating the '
+      + 'scheme.');
+end;
+
+procedure TestTIdSipUri.TestHasValidSyntaxUserPasswordChecks;
+begin
+  Check(TIdSipUri.HasValidSyntax('sip:foo@bar'), 'Well-formed URI');
+
+  Check(not TIdSipUri.HasValidSyntax('sip:foo@@bar'),
+        'User token cannot contain an @');
+
+  Check(not TIdSipUri.HasValidSyntax('sip:localhostjoe127.0.0.1'),
+        'The user likely left out an @. The remaining URI is invalid because '
+      + 'some of the FQDN''s labels start with digits.');
+
+  Check(TIdSipUri.HasValidSyntax('sip:b:@bar'),
+        'A colon indicates the presence of a password, and it''s the empty password');
+
+  Check(not TIdSipUri.HasValidSyntax('sip:b"@bar'),
+        'DQUOT is an illegal character in a user token.');
+
+  Check(not TIdSipUri.HasValidSyntax('sip:b:"@bar'),
+        'A DQUOT is an illegal character in a password token.');
 end;
 
 procedure TestTIdSipUri.TestIsGruu;
