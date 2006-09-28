@@ -870,6 +870,11 @@ function TIdSipStackInterface.MakeCall(Dest: TIdSipAddressHeader;
 var
   Sess: TIdSipOutboundSession;
 begin
+  if Dest.IsMalformed then begin
+    Result := InvalidHandle;
+    Exit;
+  end;
+
   Sess := Self.UserAgent.InviteModule.Call(Dest, LocalSessionDescription, MimeType);
   Result := Self.AddAction(Sess);
   Sess.AddSessionListener(Self);
@@ -880,6 +885,11 @@ function TIdSipStackInterface.MakeRefer(Target: TIdSipAddressHeader;
 var
   Ref: TIdSipOutboundReferral;
 begin
+  if Target.IsMalformed then begin
+    Result := InvalidHandle;
+    Exit;
+  end;
+
   // Refer Target to the Resource by sending a REFER message to Target.
 
   // Check that the UA even supports REFER!
@@ -895,6 +905,11 @@ function TIdSipStackInterface.MakeRegistration(Registrar: TIdSipUri): TIdSipHand
 var
   Reg: TIdSipOutboundRegistrationBase;
 begin
+  if Registrar.IsMalformed then begin
+    Result := InvalidHandle;
+    Exit;
+  end;
+
   Reg := Self.UserAgent.RegisterModule.RegisterWith(Registrar);
   Result := Self.AddAction(Reg);
   Reg.AddListener(Self);
@@ -911,6 +926,12 @@ var
 begin
   // Transfer Transferee to TranserTarget using the (remote party's) dialog
   // ID of Call as authorization.
+
+  if Transferee.IsMalformed
+    or TransferTarget.IsMalformed then begin
+    Result := InvalidHandle;
+    Exit;
+  end;
 
   // Check that the UA even supports REFER!
   if not Assigned(Self.SubscribeModule) then
