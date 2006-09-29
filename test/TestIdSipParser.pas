@@ -647,9 +647,6 @@ begin
     CheckEquals('Date: Thu, 1 Jan 1970 00:00:00 +0000',
                 Req.FirstHeader(DateHeader).AsString,
                 'Date');
-    CheckEquals('Error-Info: <http://www.error.com/info/bloop.wav>',
-                Req.FirstHeader(ErrorInfoHeader).AsString,
-                'Error-Info');
     CheckEquals('Expires: 1000',
                 Req.FirstHeader(ExpiresHeader).AsString,
                 'Expires');

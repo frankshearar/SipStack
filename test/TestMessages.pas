@@ -53,7 +53,6 @@ const
                    + 'Content-Type: text/plain'#13#10
                    + 'CSeq: 314159 INVITE'#13#10
                    + 'Date: Thu, 1 Jan 1970 00:00:00 GMT'#13#10
-                   + 'Error-Info: <http://www.error.com/info/bloop.wav>'#13#10
                    + 'Expires: 1000'#13#10
                    + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
                    + 'Max-Forwards: 70'#13#10
