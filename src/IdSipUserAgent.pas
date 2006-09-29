@@ -358,7 +358,7 @@ begin
 
   Self.FirstTransportDirective := true;
 
-  if UserAgent.RegisterModule.HasRegistrar and UserAgent.RegisterModule.Registrar.HasValidSyntax then
+  if UserAgent.RegisterModule.HasRegistrar and not UserAgent.RegisterModule.Registrar.IsMalformed then
     UserAgent.RegisterModule.UnregisterFrom(UserAgent.RegisterModule.Registrar).Send;
 
 //  UserAgent.Dispatcher.ClearTransports;

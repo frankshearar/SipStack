@@ -94,6 +94,7 @@ type
     function CreateParameters: TIdSipParameters; override;
   published
     procedure TestAsString; override;
+    procedure TestIsMalformed;
     procedure TestParse;
     procedure TestParseMalformedQuotedString;
     procedure TestParseMissingValue;
@@ -112,6 +113,7 @@ type
     function CreateParameters: TIdSipParameters; override;
   published
      procedure TestAsString; override;
+     procedure TestIsMalformed;
   end;
 
   THeaderTestCase = class(TTestCaseSip)
@@ -165,6 +167,9 @@ type
     procedure TestAsToHeader;
     procedure TestGrid;
     procedure TestHasSipsUri;
+    procedure TestIsMalformed;
+    procedure TestIsMalformedAfterSettingProperties;
+    procedure TestIsMalformedWithParsingAndManipulation;
     procedure TestSetAddress;
     procedure TestValue; override;
     procedure TestValueEmptyDisplayName;
@@ -204,7 +209,7 @@ type
   public
     procedure SetUp; override;
   published
-    procedure TestMalformedValue;
+    procedure TestIsMalformed;
     procedure TestValue; override;
   end;
 
@@ -263,6 +268,7 @@ type
     procedure SetUp; override;
   published
     procedure TestIsContact; override;
+    procedure TestIsMalformedWildCardUri;
     procedure TestName;
     procedure TestGetSetExpires;
     procedure TestGetSetQ;
@@ -1694,6 +1700,24 @@ begin
               'AsString');
 end;
 
+procedure TestTIdSipHeaderParameters.TestIsMalformed;
+begin
+  Check(not Self.Params.IsMalformed, 'The empty set of headers is well-formed');
+
+  Self.Params[SubjectHeaderFull] := 'This is a subject';
+  Check(not Self.Params.IsMalformed, 'One well-formed header');
+
+  Self.Params[AllowHeader] := '';
+  Check(not Self.Params.IsMalformed, 'One well-formed header, one valueless header');
+
+  // An invalid URI.
+  Self.Params[ContactHeaderFull] := 'sipp:127.0.0.1';
+  Check(Self.Params.IsMalformed, 'One well-formed header, one valueless header, one malformed header');
+
+  Self.Params[ContactHeaderFull] := 'sip:127.0.0.1';
+  Check(not Self.Params.IsMalformed, 'Two well-formed headers, one valueless header');
+end;
+
 procedure TestTIdSipHeaderParameters.TestParse;
 begin
   Self.Params.Parse('');
@@ -1894,6 +1918,22 @@ begin
   CheckEquals(';branch=z9hG4bK776asdhds;ttl=5;foo=foo%20bar%5C',
               Self.Params.AsString,
               'AsString');
+end;
+
+procedure TestTIdSipUriParameters.TestIsMalformed;
+begin
+  Check(not Self.Params.IsMalformed, 'The empty set of parameters is not malformed');
+  Self.Params['foo'] := 'bar';
+  Check(not Self.Params.IsMalformed, 'One well-formed parameter');
+
+  Self.Params['baz'] := ';';
+  Check(Self.Params.IsMalformed, 'One well-formed parameter, one malformed parameter');
+
+  Self.Params['baz'] := 'quaax';
+  Check(not Self.Params.IsMalformed, 'Two well-formed parameters');
+
+  Self.Params['empty'] := '';
+  Check(not Self.Params.IsMalformed, 'Two well-formed parameters; a valueless parameter');
 end;
 
 //******************************************************************************
@@ -2344,6 +2384,46 @@ begin
   Check(Self.A.HasSipsUri, 'SIPS');
 end;
 
+procedure TestTIdSipAddressHeader.TestIsMalformed;
+const
+  FQDNLabelsCantStartWithDigits = 'sip:foo@1bar';
+begin
+  Self.A.Value := FQDNLabelsCantStartWithDigits;
+  Check(Self.A.IsMalformed, 'Header not marked as malformed');
+end;
+
+procedure TestTIdSipAddressHeader.TestIsMalformedAfterSettingProperties;
+const
+  FQDNLabelsCantStartWithDigits = 'sip:foo@1bar';
+begin
+  Self.A.DisplayName := 'Foo Bar';
+  Self.A.Address.Uri := FQDNLabelsCantStartWithDigits;
+
+  Check(Self.A.IsMalformed,
+        'Header thinks it''s well-formed, but the URI is malformed');
+end;
+
+procedure TestTIdSipAddressHeader.TestIsMalformedWithParsingAndManipulation;
+const
+  MalformedUri  = 'sip:127.0.0.1a';
+  WellFormedUri = 'sip:127.0.0.1';
+begin
+  Self.A.Value := WellFormedUri;
+  Check(not Self.A.IsMalformed, 'Malformed after setting Value');
+
+  Self.A.Address.Scheme := 'sipp';
+  Check(Self.A.IsMalformed, 'Well-formed after setting scheme');
+
+  Self.A.Value := WellFormedUri;
+  Check(not Self.A.IsMalformed, 'Malformed after resetting Value');
+
+  Self.A.Address.Uri := MalformedUri;
+  Check(Self.A.IsMalformed, 'Well-formed after setting address''s URI');
+
+  Self.A.Address.Host := '127.0.0.1';
+  Check(not Self.A.IsMalformed, 'Malformed after correcting host');
+end;
+
 procedure TestTIdSipAddressHeader.TestSetAddress;
 var
   Addy: TIdSipAddressHeader;
@@ -2697,11 +2777,14 @@ end;
 
 //* TestTIdSipAllowEventsHeader Published methods *******************************
 
-procedure TestTIdSipAllowEventsHeader.TestMalformedValue;
+procedure TestTIdSipAllowEventsHeader.TestIsMalformed;
 begin
   // Too many dot-limited tokens in EventType name
   Self.AE.Value := 'foo.bar.baz';
   Check(Self.AE.IsMalformed, 'Header not marked as malformed');
+
+  Self.AE.EventTypes[0] := 'foo.bar';
+  Check(not Self.AE.IsMalformed, 'Header still marked as malformed');
 end;
 
 procedure TestTIdSipAllowEventsHeader.TestValue;
@@ -3158,6 +3241,14 @@ procedure TestTIdSipContactHeader.TestIsContact;
 begin
   Check(Self.C.IsContact,
         Self.C.ClassName + ' doesn''t think it''s a Contact header');
+end;
+
+procedure TestTIdSipContactHeader.TestIsMalformedWildCardUri;
+begin
+  Self.C.IsWildCard := true;
+
+  Check(not Self.C.IsMalformed,
+        'The wild card "URI", while unusual, is still a valid Contact header');
 end;
 
 procedure TestTIdSipContactHeader.TestName;

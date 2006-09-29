@@ -153,6 +153,7 @@ type
     function  HasDuplicatedParameter(const Name: String): Boolean;
     function  HasParameter(const Name: String): Boolean;
     function  IntersectionEquals(OtherParameters: TIdSipParameters): Boolean;
+    function  IsMalformed: Boolean; virtual;
     function  ParamValue(const Name: String): String;
     procedure Parse(ParamList: String); virtual;
     procedure RemoveParameter(const Name: String);
@@ -170,6 +171,7 @@ type
     procedure FailParse(const Reason: String); override;
   public
     function  AsString: String; override;
+    function  IsMalformed: Boolean; override;
     procedure Parse(ParamList: String); override;
   end;
 
@@ -183,6 +185,7 @@ type
     procedure FailParse(const Reason: String); override;
   public
     function  AsString: String; override;
+    function  IsMalformed: Boolean; override;
     procedure Parse(ParamList: String); override;
   end;
 
@@ -277,8 +280,8 @@ type
     procedure SetTTL(const Value: Cardinal);
     procedure SetUri(const Value: String);
     procedure SetUserParameter(const Value: String);
-    function ValidUser(Username: String): Boolean;
-    function ValidPassword(Password: String): Boolean;
+    function  ValidUser(Username: String): Boolean;
+    function  ValidPassword(Password: String): Boolean;
   protected
     procedure Initialize; override;
     procedure Parse(Uri: String); override;
@@ -288,7 +291,7 @@ type
     class function Decode(const Src: String): String;
     class function Encode(const Src: String;
                           const SafeChars: TIdSipChars): String;
-    class function HasValidSyntax(URI: String): Boolean; overload;
+    class function HasValidSyntax(URI: String): Boolean; 
     class function HeaderEncode(const NameOrValue: String): String;
     class function IsParamNameOrValue(const Token: String): Boolean;
     class function IsPassword(const Token: String): Boolean;
@@ -311,13 +314,13 @@ type
     function  DefaultTransport: String; virtual;
     function  Equals(Uri: TIdSipUri): Boolean;
     procedure EraseUserInfo;
-    function  HasValidSyntax: Boolean; overload;
     function  HasGrid: Boolean;
     function  HasHeaders: Boolean;
     function  HasMaddr: Boolean;
     function  HasMethod: Boolean;
     function  HasParameter(const Name: String): Boolean;
     function  IsLooseRoutable: Boolean;
+    function  IsMalformed: Boolean;
     function  IsSecure: Boolean; virtual;
     function  ParamCount: Integer;
     function  ParamValue(const Name: String): String; overload;
@@ -330,7 +333,6 @@ type
     property Grid:            String        read GetGrid write SetGrid;
     property Headers:         TIdSipHeaders read fHeaders;
     property IsGruu:          Boolean       read GetIsGruu write SetIsGruu;
-    property IsMalformed:     Boolean       read fIsMalformed;
     property Maddr:           String        read GetMaddr write SetMaddr;
     property Method:          String        read GetMethod write SetMethod;
     property Opaque:          String        read GetOpaque write SetOpaque;
@@ -405,17 +407,17 @@ type
     function  AsString: String;
     function  FullValue: String;
     function  HasParameter(const Name: String): Boolean; virtual;
+    function  IsMalformed: Boolean; virtual;
     function  IsContact: Boolean; virtual;
     function  Equals(Header: TIdSipHeader): Boolean; virtual;
     function  ParamCount: Integer;
     function  ParamsAsString: String; virtual;
+    function  ParseFailReason: String; virtual;
     procedure RemoveParameter(const ParamName: String);
 
-    property IsMalformed:                Boolean read fIsMalformed;
     property Name:                       String  read GetName write SetName;
     property Value:                      String  read GetValue write SetValue;
     property Params[const Name: String]: String  read GetParam write SetParam;
-    property ParseFailReason:            String  read fParseFailReason;
     property UnparsedValue:              String  read fUnparsedValue;
   end;
 
@@ -462,6 +464,7 @@ type
     function AsCanonicalAddress: String;
     function AsToHeader: TIdSipToHeader;
     function HasSipsUri: Boolean;
+    function IsMalformed: Boolean; override;
 
     property DisplayName: String read fDisplayName write fDisplayName;
   end;
@@ -493,6 +496,7 @@ type
     procedure Parse(const Value: String); override;
   public
     function EventTypeCount: Integer;
+    function IsMalformed: Boolean; override;
 
     property EventTypes[Index: Integer]: String read GetEventTypes write SetEventTypes;
   end;
@@ -651,6 +655,7 @@ type
     function  GetValue: String; override;
     procedure Parse(const Value: String); override;
   public
+    function  IsMalformed: Boolean; override;
     procedure RemoveExpires;
     function  WillExpire: Boolean;
 
@@ -2796,6 +2801,11 @@ begin
   end;
 end;
 
+function TIdSipParameters.IsMalformed: Boolean;
+begin
+  Result := true;
+end;
+
 function TIdSipParameters.ParamValue(const Name: String): String;
 var
   Param: TIdSipParameter;
@@ -2959,6 +2969,22 @@ begin
     Result := Result + ';' + Self.ParameterAt(I).AsHeaderParameter;
 end;
 
+function TIdSipHeaderParameters.IsMalformed: Boolean;
+var
+  H: TIdSipHeaders;
+  I: Integer;
+begin
+  H := TIdSipHeaders.Create;
+  try
+    for I := 0 to Self.Parameters.Count - 1 do
+      H.Add(Self.ParameterAt(I).Name).Value := Self.ParameterAt(I).Value;
+
+    Result := H.IsMalformed;
+  finally
+    H.Free;
+  end;
+end;
+
 procedure TIdSipHeaderParameters.Parse(ParamList: String);
 const
   Delimiter = ';';
@@ -3034,6 +3060,31 @@ begin
     Result := Result + ';' + Self.ParameterAt(I).AsUriParameter;
 end;
 
+function TIdSipUriParameters.IsMalformed: Boolean;
+var
+  I:          Integer;
+  ParamName:  String;
+  ParamValue: String;
+  WellFormed: Boolean;
+begin
+  WellFormed := true;
+  I := 0;
+  while WellFormed and (I < Self.Parameters.Count) do begin
+    ParamName := Self.ParameterAt(I).Name;
+    ParamValue := Self.ParameterAt(I).Value;
+
+    WellFormed := WellFormed
+              and TIdSipUri.IsParamNameOrValue(ParamName);
+
+    if (ParamValue <> '') then
+      WellFormed := WellFormed
+                and TIdSipUri.IsParamNameOrValue(ParamValue);
+    Inc(I);
+  end;
+
+  Result := not WellFormed;
+end;
+
 procedure TIdSipUriParameters.Parse(ParamList: String);
 var
   ParamName:  String;
@@ -3042,14 +3093,14 @@ begin
   while (ParamList <> '') do begin
     ParamValue := Fetch(ParamList, ';');
     ParamName := Fetch(ParamValue, '=');
-
+{
     if not TIdSipUri.IsParamNameOrValue(ParamName) then
       Self.FailParse(InvalidToken);
     if (ParamValue <> '') then begin
       if not TIdSipUri.IsParamNameOrValue(ParamValue) then
       Self.FailParse(InvalidToken);
     end;
-
+}
     Self.AddParam(ParamName, TIdSipUri.Decode(ParamValue));
   end;
 end;
@@ -3416,16 +3467,6 @@ begin
   Self.Password := '';
 end;
 
-function TIdSipUri.HasValidSyntax: Boolean;
-begin
-  Result := Self.HasAcceptableScheme
-        and Self.HasValidHost
-        and Self.HasValidUserInfo;
-
-  if Self.IsSecure and Result then
-    Result := Self.Transport = TransportParamTLS;
-end;
-
 function TIdSipUri.HasGrid: Boolean;
 begin
   Result := Self.HasParameter(GridParam)
@@ -3454,6 +3495,22 @@ end;
 function TIdSipUri.IsLooseRoutable: Boolean;
 begin
   Result := Self.HasParameter(LooseRoutableParam);
+end;
+
+function TIdSipUri.IsMalformed: Boolean;
+var
+  WellFormed: Boolean;
+begin
+  WellFormed := Self.HasAcceptableScheme
+        and Self.HasValidUserInfo
+        and Self.HasValidHost
+        and not Self.Parameters.IsMalformed
+        and not Self.Headers.IsMalformed;
+
+  if Self.IsSecure and WellFormed then
+    WellFormed := Self.Transport = TransportParamTLS;
+
+  Result := not WellFormed;
 end;
 
 function TIdSipUri.IsSecure: Boolean;
@@ -3919,6 +3976,11 @@ begin
   Result := Self.Parameters.HasParameter(Name);
 end;
 
+function TIdSipHeader.IsMalformed: Boolean;
+begin
+  Result := Self.fIsMalformed;
+end;
+
 function TIdSipHeader.IsContact: Boolean;
 begin
   Result := TIdSipHeaders.IsContact(Self.Name);
@@ -3940,6 +4002,16 @@ end;
 function TIdSipHeader.ParamsAsString: String;
 begin
   Result := Self.Parameters.AsString;
+end;
+
+function TIdSipHeader.ParseFailReason: String;
+begin
+  if not Self.IsMalformed then begin
+    Result := '';
+    Exit;
+  end;
+
+  Result := Self.fParseFailReason;
 end;
 
 procedure TIdSipHeader.RemoveParameter(const ParamName: String);
@@ -4033,7 +4105,7 @@ begin
   try
     Self.Parse(Value);
   except
-    on E: EBadHeader do
+     on E: EBadHeader do
       Self.MarkAsInvalid(E.Message);
   end;
 end;
@@ -4181,6 +4253,14 @@ begin
   Result := Self.Address.IsSecure;
 end;
 
+function TIdSipAddressHeader.IsMalformed: Boolean;
+begin
+  Result := inherited IsMalformed;
+
+  if not Result then
+    Result := Self.Address.IsMalformed;
+end;
+
 //* TIdSipAddressHeader Protected methods **************************************
 
 function TIdSipAddressHeader.GetValue: String;
@@ -4295,6 +4375,23 @@ end;
 function TIdSipAllowEventsHeader.EventTypeCount: Integer;
 begin
   Result := Self.Values.Count;
+end;
+
+function TIdSipAllowEventsHeader.IsMalformed: Boolean;
+var
+  I:          Integer;
+  WellFormed: Boolean;
+begin
+ I := 0;
+ WellFormed := true;
+
+  while WellFormed and (I < Self.Values.Count) do begin
+    WellFormed := WellFormed
+              and TIdSipEventHeader.IsEventType(Self.Values[I]);
+    Inc(I);          
+  end;
+
+  Result := not WellFormed;
 end;
 
 //* TIdSipAllowEventsHeader Protected methods **********************************
@@ -4904,6 +5001,14 @@ end;
 //* TIdSipContactHeader                                                        *
 //******************************************************************************
 //* TIdSipContactHeader Public methods *****************************************
+
+function TIdSipContactHeader.IsMalformed: Boolean;
+begin
+  Result := not Self.IsWildCard;
+
+  if Result then
+    Result := inherited IsMalformed;
+end;
 
 procedure TIdSipContactHeader.RemoveExpires;
 begin

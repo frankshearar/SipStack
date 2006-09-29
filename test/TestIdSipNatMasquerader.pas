@@ -197,6 +197,7 @@ const
 var
   NonSipContact: TIdSipContactHeader;
 begin
+  Fail('TIdSipUriHeaders do not yet support any URIs other than those from RFC 3261.');
   NonSipContact := Self.Invite.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
   NonSipContact.Value := OriginalContact;
 

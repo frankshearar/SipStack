@@ -122,6 +122,7 @@ type
     procedure TestHasValidSyntaxUserPasswordChecks;
     procedure TestIsGruu;
     procedure TestIsLooseRoutable;
+    procedure TestIsMalformedBadHeader;
     procedure TestIsPassword;
     procedure TestIsParamNameOrValue;
     procedure TestIsUser;
@@ -1404,6 +1405,23 @@ begin
 
   Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;lr';
   Check(Uri.IsLooseRoutable, 'Loose routable URI not marked as loose routable');
+end;
+
+procedure TestTIdSipUri.TestIsMalformedBadHeader;
+begin
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
+  Self.Uri.Headers.Add(ContactHeaderFull).Value := 'sipp:127.0.0.1';
+
+  Self.Uri.Headers.First;
+  Check(Self.Uri.Headers.CurrentHeader.IsMalformed, 'Sanity check: the first header''s not malformed!');
+
+  Check(Self.Uri.IsMalformed, 'The URI contains a malformed header, but thinks it''s well-formed');
+
+  Self.Uri.Headers.First;
+  Self.Uri.Headers.CurrentHeader.Value := 'sip:127.0.0.1';
+  Check(not Self.Uri.Headers.CurrentHeader.IsMalformed, 'Sanity check: the first header''s not well-formed!');
+
+  Check(not Self.Uri.IsMalformed, 'The URI contains only well-formed headers, but thinks it''s malformed');
 end;
 
 procedure TestTIdSipUri.TestIsPassword;
