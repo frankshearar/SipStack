@@ -2084,7 +2084,6 @@ begin
     Self.ConfigureNotify(Notify);
     Notify.Body              := Body;
     Notify.Expires           := Self.ExpiryTimeInSeconds;
-    Notify.LocalGruu         := Self.LocalGruu;
     Notify.MimeType          := MimeType;
     Notify.SubscriptionState := Self.SubscriptionState;
     Notify.AddActionListener(Self);
@@ -2223,6 +2222,7 @@ procedure TIdSipInboundSubscription.ConfigureNotify(Notify: TIdSipOutboundNotify
 begin
   Notify.Dialog    := Self.Dialog;
   Notify.Subscribe := Self.InitialRequest;
+  Notify.LocalGruu := Self.LocalGruu;
 end;
 
 function TIdSipInboundSubscription.CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID;
