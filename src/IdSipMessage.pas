@@ -364,9 +364,9 @@ type
   // * override GetName;
   // * override GetValue, if necessary;
   // * override Parse, if necessary;
-  // * add the header type to TIdSipHeaderList.HeaderTypes;
+  // * add the header type to TIdSipHeader.HeaderTypes;
   // * add the header name (possibly both full and short forms) to
-  //   TIdSipHeaderList.CanonicaliseName.
+  //   TIdSipHeader.CanonicaliseName.
   TIdSipHeader = class(TPersistent)
   private
     fIsMalformed:     Boolean;
@@ -398,7 +398,13 @@ type
     procedure SetName(const Value: String); virtual;
     procedure SetValue(const Value: String);
   public
+    class function CanonicaliseName(HeaderName: String): String;
+    class function ConstructHeader(HeaderName: String): TIdSipHeader;
     class function EncodeQuotedStr(const S: String): String;
+    class function GetHeaderName(Header: String): String;
+    class function HeaderTypes: TObjectList;
+    class function IsHeader(const Header,
+                            ExpectedHeaderName: String): Boolean;
 
     constructor Create; virtual;
     destructor  Destroy; override;
@@ -1103,16 +1109,8 @@ type
   // External Iterator methods.
   TIdSipHeaderList = class(TObject)
   protected
-    class function HeaderTypes: TObjectList;
-    class function IsHeader(const Header,
-                            ExpectedHeaderName: String): Boolean;
-
-    function ConstructHeader(HeaderName: String): TIdSipHeader;
     function GetItems(I: Integer): TIdSipHeader; virtual; abstract;
   public
-    class function CanonicaliseName(HeaderName: String): String;
-    class function GetHeaderName(Header: String): String;
-
     function  Add(const HeaderName: String): TIdSipHeader; overload; virtual; abstract;
     procedure Add(Copy: TIdSipHeader); overload; virtual; abstract;
     procedure Add(Headers: TIdSipHeaderList); overload; virtual; abstract;
@@ -3921,10 +3919,185 @@ end;
 //******************************************************************************
 //* TIdSipHeader Public methods ************************************************
 
+class function TIdSipHeader.CanonicaliseName(HeaderName: String): String;
+begin
+  Result := '';
+
+  if not Assigned(GCanonicalHeaderNames) then begin
+    GCanonicalHeaderNames := TStringList.Create;
+    GCanonicalHeaderNames.Add(AcceptHeader               + '=' + AcceptHeader);
+    GCanonicalHeaderNames.Add(AcceptEncodingHeader       + '=' + AcceptEncodingHeader);
+    GCanonicalHeaderNames.Add(AcceptLanguageHeader       + '=' + AcceptLanguageHeader);
+    GCanonicalHeaderNames.Add(AlertInfoHeader            + '=' + AlertInfoHeader);
+    GCanonicalHeaderNames.Add(AllowHeader                + '=' + AllowHeader);
+    GCanonicalHeaderNames.Add(AllowEventsHeaderFull      + '=' + AllowEventsHeaderFull);
+    GCanonicalHeaderNames.Add(AllowEventsHeaderShort     + '=' + AllowEventsHeaderFull);
+    GCanonicalHeaderNames.Add(AuthenticationInfoHeader   + '=' + AuthenticationInfoHeader);
+    GCanonicalHeaderNames.Add(AuthorizationHeader        + '=' + AuthorizationHeader);
+    GCanonicalHeaderNames.Add(CallIDHeaderFull           + '=' + CallIDHeaderFull);
+    GCanonicalHeaderNames.Add(CallIDHeaderShort          + '=' + CallIDHeaderFull);
+    GCanonicalHeaderNames.Add(CallInfoHeader             + '=' + CallInfoHeader);
+    GCanonicalHeaderNames.Add(ContactHeaderFull          + '=' + ContactHeaderFull);
+    GCanonicalHeaderNames.Add(ContactHeaderShort         + '=' + ContactHeaderFull);
+    GCanonicalHeaderNames.Add(ContentDispositionHeader   + '=' + ContentDispositionHeader);
+    GCanonicalHeaderNames.Add(ContentEncodingHeaderFull  + '=' + ContentEncodingHeaderFull);
+    GCanonicalHeaderNames.Add(ContentEncodingHeaderShort + '=' + ContentEncodingHeaderFull);
+    GCanonicalHeaderNames.Add(ContentLanguageHeader      + '=' + ContentLanguageHeader);
+    GCanonicalHeaderNames.Add(ContentLengthHeaderFull    + '=' + ContentLengthHeaderFull);
+    GCanonicalHeaderNames.Add(ContentLengthHeaderShort   + '=' + ContentLengthHeaderFull);
+    GCanonicalHeaderNames.Add(ContentTypeHeaderFull      + '=' + ContentTypeHeaderFull);
+    GCanonicalHeaderNames.Add(ContentTypeHeaderShort     + '=' + ContentTypeHeaderFull);
+    GCanonicalHeaderNames.Add(CSeqHeader                 + '=' + CSeqHeader);
+    GCanonicalHeaderNames.Add(DateHeader                 + '=' + DateHeader);
+    GCanonicalHeaderNames.Add(EventHeaderFull            + '=' + EventHeaderFull);
+    GCanonicalHeaderNames.Add(EventHeaderShort           + '=' + EventHeaderFull);
+    GCanonicalHeaderNames.Add(ErrorInfoHeader            + '=' + ErrorInfoHeader);
+    GCanonicalHeaderNames.Add(ExpiresHeader              + '=' + ExpiresHeader);
+    GCanonicalHeaderNames.Add(FromHeaderFull             + '=' + FromHeaderFull);
+    GCanonicalHeaderNames.Add(FromHeaderShort            + '=' + FromHeaderFull);
+    GCanonicalHeaderNames.Add(InReplyToHeader            + '=' + InReplyToHeader);
+    GCanonicalHeaderNames.Add(MaxForwardsHeader          + '=' + MaxForwardsHeader);
+    GCanonicalHeaderNames.Add(MIMEVersionHeader          + '=' + MIMEVersionHeader);
+    GCanonicalHeaderNames.Add(MinExpiresHeader           + '=' + MinExpiresHeader);
+    GCanonicalHeaderNames.Add(OrganizationHeader         + '=' + OrganizationHeader);
+    GCanonicalHeaderNames.Add(PriorityHeader             + '=' + PriorityHeader);
+    GCanonicalHeaderNames.Add(ProxyAuthenticateHeader    + '=' + ProxyAuthenticateHeader);
+    GCanonicalHeaderNames.Add(ProxyAuthorizationHeader   + '=' + ProxyAuthorizationHeader);
+    GCanonicalHeaderNames.Add(ProxyRequireHeader         + '=' + ProxyRequireHeader);
+    GCanonicalHeaderNames.Add(RecordRouteHeader          + '=' + RecordRouteHeader);
+    GCanonicalHeaderNames.Add(ReferToHeaderFull          + '=' + ReferToHeaderFull);
+    GCanonicalHeaderNames.Add(ReferToHeaderShort         + '=' + ReferToHeaderFull);
+    GCanonicalHeaderNames.Add(ReplacesHeader             + '=' + ReplacesHeader);
+    GCanonicalHeaderNames.Add(ReplyToHeader              + '=' + ReplyToHeader);
+    GCanonicalHeaderNames.Add(RequireHeader              + '=' + RequireHeader);
+    GCanonicalHeaderNames.Add(RetryAfterHeader           + '=' + RetryAfterHeader);
+    GCanonicalHeaderNames.Add(RouteHeader                + '=' + RouteHeader);
+    GCanonicalHeaderNames.Add(ServerHeader               + '=' + ServerHeader);
+    GCanonicalHeaderNames.Add(SubjectHeaderFull          + '=' + SubjectHeaderFull);
+    GCanonicalHeaderNames.Add(SubjectHeaderShort         + '=' + SubjectHeaderFull);
+    GCanonicalHeaderNames.Add(SubscriptionStateHeader    + '=' + SubscriptionStateHeader);
+    GCanonicalHeaderNames.Add(SupportedHeaderFull        + '=' + SupportedHeaderFull);
+    GCanonicalHeaderNames.Add(SupportedHeaderShort       + '=' + SupportedHeaderFull);
+    GCanonicalHeaderNames.Add(TargetDialogHeader         + '=' + TargetDialogHeader);
+    GCanonicalHeaderNames.Add(TimestampHeader            + '=' + TimestampHeader);
+    GCanonicalHeaderNames.Add(ToHeaderFull               + '=' + ToHeaderFull);
+    GCanonicalHeaderNames.Add(ToHeaderShort              + '=' + ToHeaderFull);
+    GCanonicalHeaderNames.Add(UnsupportedHeader          + '=' + UnsupportedHeader);
+    GCanonicalHeaderNames.Add(UserAgentHeader            + '=' + UserAgentHeader);
+    GCanonicalHeaderNames.Add(ViaHeaderFull              + '=' + ViaHeaderFull);
+    GCanonicalHeaderNames.Add(ViaHeaderShort             + '=' + ViaHeaderFull);
+    GCanonicalHeaderNames.Add(WarningHeader              + '=' + WarningHeader);
+    GCanonicalHeaderNames.Add(WWWAuthenticateHeader      + '=' + WWWAuthenticateHeader);
+  end;
+
+  Result := GCanonicalHeaderNames.Values[HeaderName];
+
+  if (Result = '') then begin
+      Result := HeaderName;
+  end;
+end;
+
+class function TIdSipHeader.ConstructHeader(HeaderName: String): TIdSipHeader;
+var
+  I: Integer;
+begin
+  HeaderName := Self.CanonicaliseName(HeaderName);
+
+  Result := nil;
+  I := 0;
+  while (I < TIdSipHeader.HeaderTypes.Count) and not Assigned(Result) do
+    if Self.IsHeader(TIdSipHeaderMap(TIdSipHeader.HeaderTypes[I]).HeaderName, HeaderName) then
+      Result := TIdSipHeaderMap(TIdSipHeader.HeaderTypes[I]).HeaderClass.Create
+    else
+      Inc(I);
+
+  if not Assigned(Result) then
+    Result := TIdSipHeader.Create;
+end;
+
 class function TIdSipHeader.EncodeQuotedStr(const S: String): String;
 begin
   Result := StringReplace(S,      '\', '\\', [rfReplaceAll, rfIgnoreCase]);
   Result := StringReplace(Result, '"', '\"', [rfReplaceAll, rfIgnoreCase]);
+end;
+
+class function TIdSipHeader.GetHeaderName(Header: String): String;
+var
+  P: TIdSipParser;
+begin
+  P := TIdSipParser.Create;
+  try
+    Result := P.GetHeaderName(Header);
+  finally
+    P.Free;
+  end;
+end;
+
+class function TIdSipHeader.HeaderTypes: TObjectList;
+begin
+  if not Assigned(GIdSipHeadersMap) then begin
+    GIdSipHeadersMap := TObjectList.Create(true);
+
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AcceptHeader,               TIdSipWeightedCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AcceptEncodingHeader,       TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AlertInfoHeader,            TIdSipUriHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AllowHeader,                TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AllowEventsHeaderFull,      TIdSipAllowEventsHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AuthenticationInfoHeader,   TIdSipAuthenticationInfoHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AuthorizationHeader,        TIdSipAuthorizationHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CallIDHeaderFull,           TIdSipCallIDHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CallIDHeaderShort,          TIdSipCallIDHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContactHeaderFull,          TIdSipContactHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContactHeaderShort,         TIdSipContactHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentDispositionHeader,   TIdSipContentDispositionHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentEncodingHeaderFull,  TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentEncodingHeaderShort, TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentLanguageHeader,      TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentLengthHeaderFull,    TIdSipNumericHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CSeqHeader,                 TIdSipCSeqHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(DateHeader,                 TIdSipDateHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(EventHeaderFull,            TIdSipEventHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(EventHeaderShort,           TIdSipEventHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ErrorInfoHeader,            TIdSipUriHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ExpiresHeader,              TIdSipNumericHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderFull,             TIdSipFromHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderShort,            TIdSipFromHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(InReplyToHeader,            TIdSipCallIdHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(MaxForwardsHeader,          TIdSipMaxForwardsHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(MinExpiresHeader,           TIdSipNumericHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ProxyAuthenticateHeader,    TIdSipProxyAuthenticateHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ProxyAuthorizationHeader,   TIdSipProxyAuthorizationHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ProxyRequireHeader,         TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RecordRouteHeader,          TIdSipRecordRouteHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ReferToHeaderFull,          TIdSipReferToHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RequireHeader,              TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ReplacesHeader,             TIdSipReplacesHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RetryAfterHeader,           TIdSipRetryAfterHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RouteHeader,                TIdSipRouteHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(SubscriptionStateHeader,    TIdSipSubscriptionStateHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(SupportedHeaderFull,        TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(SupportedHeaderShort,       TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(TargetDialogHeader,         TIdSipTargetDialogHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(TimestampHeader,            TIdSipTimestampHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderFull,               TIdSipToHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderShort,              TIdSipToHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(UnsupportedHeader,          TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderFull,              TIdSipViaHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderShort,             TIdSipViaHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(WarningHeader,              TIdSipWarningHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(WWWAuthenticateHeader,      TIdSipWWWAuthenticateHeader));
+  end;
+
+  Result := GIdSipHeadersMap;
+end;
+
+class function TIdSipHeader.IsHeader(const Header,
+                                     ExpectedHeaderName: String): Boolean;
+var
+  Name: String;
+begin
+  Name := Self.GetHeaderName(Header);
+  Result := IsEqual(Self.CanonicaliseName(Name), ExpectedHeaderName);
 end;
 
 constructor TIdSipHeader.Create;
@@ -6817,89 +6990,6 @@ end;
 //******************************************************************************
 //* TIdSipHeaderList Public methods ********************************************
 
-class function TIdSipHeaderList.CanonicaliseName(HeaderName: String): String;
-begin
-  Result := '';
-
-  if not Assigned(GCanonicalHeaderNames) then begin
-    GCanonicalHeaderNames := TStringList.Create;
-    GCanonicalHeaderNames.Add(AcceptHeader               + '=' + AcceptHeader);
-    GCanonicalHeaderNames.Add(AcceptEncodingHeader       + '=' + AcceptEncodingHeader);
-    GCanonicalHeaderNames.Add(AcceptLanguageHeader       + '=' + AcceptLanguageHeader);
-    GCanonicalHeaderNames.Add(AlertInfoHeader            + '=' + AlertInfoHeader);
-    GCanonicalHeaderNames.Add(AllowHeader                + '=' + AllowHeader);
-    GCanonicalHeaderNames.Add(AllowEventsHeaderFull      + '=' + AllowEventsHeaderFull);
-    GCanonicalHeaderNames.Add(AllowEventsHeaderShort     + '=' + AllowEventsHeaderFull);
-    GCanonicalHeaderNames.Add(AuthenticationInfoHeader   + '=' + AuthenticationInfoHeader);
-    GCanonicalHeaderNames.Add(AuthorizationHeader        + '=' + AuthorizationHeader);
-    GCanonicalHeaderNames.Add(CallIDHeaderFull           + '=' + CallIDHeaderFull);
-    GCanonicalHeaderNames.Add(CallIDHeaderShort          + '=' + CallIDHeaderFull);
-    GCanonicalHeaderNames.Add(CallInfoHeader             + '=' + CallInfoHeader);
-    GCanonicalHeaderNames.Add(ContactHeaderFull          + '=' + ContactHeaderFull);
-    GCanonicalHeaderNames.Add(ContactHeaderShort         + '=' + ContactHeaderFull);
-    GCanonicalHeaderNames.Add(ContentDispositionHeader   + '=' + ContentDispositionHeader);
-    GCanonicalHeaderNames.Add(ContentEncodingHeaderFull  + '=' + ContentEncodingHeaderFull);
-    GCanonicalHeaderNames.Add(ContentEncodingHeaderShort + '=' + ContentEncodingHeaderFull);
-    GCanonicalHeaderNames.Add(ContentLanguageHeader      + '=' + ContentLanguageHeader);
-    GCanonicalHeaderNames.Add(ContentLengthHeaderFull    + '=' + ContentLengthHeaderFull);
-    GCanonicalHeaderNames.Add(ContentLengthHeaderShort   + '=' + ContentLengthHeaderFull);
-    GCanonicalHeaderNames.Add(ContentTypeHeaderFull      + '=' + ContentTypeHeaderFull);
-    GCanonicalHeaderNames.Add(ContentTypeHeaderShort     + '=' + ContentTypeHeaderFull);
-    GCanonicalHeaderNames.Add(CSeqHeader                 + '=' + CSeqHeader);
-    GCanonicalHeaderNames.Add(DateHeader                 + '=' + DateHeader);
-    GCanonicalHeaderNames.Add(EventHeaderFull            + '=' + EventHeaderFull);
-    GCanonicalHeaderNames.Add(EventHeaderShort           + '=' + EventHeaderFull);
-    GCanonicalHeaderNames.Add(ErrorInfoHeader            + '=' + ErrorInfoHeader);
-    GCanonicalHeaderNames.Add(ExpiresHeader              + '=' + ExpiresHeader);
-    GCanonicalHeaderNames.Add(FromHeaderFull             + '=' + FromHeaderFull);
-    GCanonicalHeaderNames.Add(FromHeaderShort            + '=' + FromHeaderFull);
-    GCanonicalHeaderNames.Add(InReplyToHeader            + '=' + InReplyToHeader);
-    GCanonicalHeaderNames.Add(MaxForwardsHeader          + '=' + MaxForwardsHeader);
-    GCanonicalHeaderNames.Add(MIMEVersionHeader          + '=' + MIMEVersionHeader);
-    GCanonicalHeaderNames.Add(MinExpiresHeader           + '=' + MinExpiresHeader);
-    GCanonicalHeaderNames.Add(OrganizationHeader         + '=' + OrganizationHeader);
-    GCanonicalHeaderNames.Add(PriorityHeader             + '=' + PriorityHeader);
-    GCanonicalHeaderNames.Add(ProxyAuthenticateHeader    + '=' + ProxyAuthenticateHeader);
-    GCanonicalHeaderNames.Add(ProxyAuthorizationHeader   + '=' + ProxyAuthorizationHeader);
-    GCanonicalHeaderNames.Add(ProxyRequireHeader         + '=' + ProxyRequireHeader);
-    GCanonicalHeaderNames.Add(RecordRouteHeader          + '=' + RecordRouteHeader);
-    GCanonicalHeaderNames.Add(ReferToHeaderFull          + '=' + ReferToHeaderFull);
-    GCanonicalHeaderNames.Add(ReferToHeaderShort         + '=' + ReferToHeaderFull);
-    GCanonicalHeaderNames.Add(ReplacesHeader             + '=' + ReplacesHeader);    
-    GCanonicalHeaderNames.Add(ReplyToHeader              + '=' + ReplyToHeader);
-    GCanonicalHeaderNames.Add(RequireHeader              + '=' + RequireHeader);
-    GCanonicalHeaderNames.Add(RetryAfterHeader           + '=' + RetryAfterHeader);
-    GCanonicalHeaderNames.Add(RouteHeader                + '=' + RouteHeader);
-    GCanonicalHeaderNames.Add(ServerHeader               + '=' + ServerHeader);
-    GCanonicalHeaderNames.Add(SubjectHeaderFull          + '=' + SubjectHeaderFull);
-    GCanonicalHeaderNames.Add(SubjectHeaderShort         + '=' + SubjectHeaderFull);
-    GCanonicalHeaderNames.Add(SubscriptionStateHeader    + '=' + SubscriptionStateHeader);
-    GCanonicalHeaderNames.Add(SupportedHeaderFull        + '=' + SupportedHeaderFull);
-    GCanonicalHeaderNames.Add(SupportedHeaderShort       + '=' + SupportedHeaderFull);
-    GCanonicalHeaderNames.Add(TargetDialogHeader         + '=' + TargetDialogHeader);
-    GCanonicalHeaderNames.Add(TimestampHeader            + '=' + TimestampHeader);
-    GCanonicalHeaderNames.Add(ToHeaderFull               + '=' + ToHeaderFull);
-    GCanonicalHeaderNames.Add(ToHeaderShort              + '=' + ToHeaderFull);
-    GCanonicalHeaderNames.Add(UnsupportedHeader          + '=' + UnsupportedHeader);
-    GCanonicalHeaderNames.Add(UserAgentHeader            + '=' + UserAgentHeader);
-    GCanonicalHeaderNames.Add(ViaHeaderFull              + '=' + ViaHeaderFull);
-    GCanonicalHeaderNames.Add(ViaHeaderShort             + '=' + ViaHeaderFull);
-    GCanonicalHeaderNames.Add(WarningHeader              + '=' + WarningHeader);
-    GCanonicalHeaderNames.Add(WWWAuthenticateHeader      + '=' + WWWAuthenticateHeader);
-  end;
-
-  Result := GCanonicalHeaderNames.Values[HeaderName];
-
-  if (Result = '') then begin
-      Result := HeaderName;
-  end;
-end;
-
-class function TIdSipHeaderList.GetHeaderName(Header: String): String;
-begin
-  Result := Trim(Fetch(Header, ':'));
-end;
-
 procedure TIdSipHeaderList.AddInReverseOrder(Headers: TIdSipHeaderList);
 var
   I: Integer;
@@ -6999,93 +7089,6 @@ end;
 function TIdSipHeaderList.IsEmpty: Boolean;
 begin
   Result := Self.Count = 0;
-end;
-
-//* TIdSipHeaderList Protected methods *****************************************
-
-class function TIdSipHeaderList.HeaderTypes: TObjectList;
-begin
-  if not Assigned(GIdSipHeadersMap) then begin
-    GIdSipHeadersMap := TObjectList.Create(true);
-
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AcceptHeader,               TIdSipWeightedCommaSeparatedHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AcceptEncodingHeader,       TIdSipCommaSeparatedHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AlertInfoHeader,            TIdSipUriHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AllowHeader,                TIdSipCommaSeparatedHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AllowEventsHeaderFull,      TIdSipAllowEventsHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AuthenticationInfoHeader,   TIdSipAuthenticationInfoHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AuthorizationHeader,        TIdSipAuthorizationHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CallIDHeaderFull,           TIdSipCallIDHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CallIDHeaderShort,          TIdSipCallIDHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContactHeaderFull,          TIdSipContactHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContactHeaderShort,         TIdSipContactHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentDispositionHeader,   TIdSipContentDispositionHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentEncodingHeaderFull,  TIdSipCommaSeparatedHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentEncodingHeaderShort, TIdSipCommaSeparatedHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentLanguageHeader,      TIdSipCommaSeparatedHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentLengthHeaderFull,    TIdSipNumericHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CSeqHeader,                 TIdSipCSeqHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(DateHeader,                 TIdSipDateHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(EventHeaderFull,            TIdSipEventHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(EventHeaderShort,           TIdSipEventHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ErrorInfoHeader,            TIdSipUriHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ExpiresHeader,              TIdSipNumericHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderFull,             TIdSipFromHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderShort,            TIdSipFromHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(InReplyToHeader,            TIdSipCallIdHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(MaxForwardsHeader,          TIdSipMaxForwardsHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(MinExpiresHeader,           TIdSipNumericHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ProxyAuthenticateHeader,    TIdSipProxyAuthenticateHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ProxyAuthorizationHeader,   TIdSipProxyAuthorizationHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ProxyRequireHeader,         TIdSipCommaSeparatedHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RecordRouteHeader,          TIdSipRecordRouteHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ReferToHeaderFull,          TIdSipReferToHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RequireHeader,              TIdSipCommaSeparatedHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ReplacesHeader,             TIdSipReplacesHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RetryAfterHeader,           TIdSipRetryAfterHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RouteHeader,                TIdSipRouteHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(SubscriptionStateHeader,    TIdSipSubscriptionStateHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(SupportedHeaderFull,        TIdSipCommaSeparatedHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(SupportedHeaderShort,       TIdSipCommaSeparatedHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(TargetDialogHeader,         TIdSipTargetDialogHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(TimestampHeader,            TIdSipTimestampHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderFull,               TIdSipToHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderShort,              TIdSipToHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(UnsupportedHeader,          TIdSipCommaSeparatedHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderFull,              TIdSipViaHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderShort,             TIdSipViaHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(WarningHeader,              TIdSipWarningHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(WWWAuthenticateHeader,      TIdSipWWWAuthenticateHeader));
-  end;
-
-  Result := GIdSipHeadersMap;
-end;
-
-class function TIdSipHeaderList.IsHeader(const Header,
-                                         ExpectedHeaderName: String): Boolean;
-var
-  Name: String;
-begin
-  Name := Self.GetHeaderName(Header);
-  Result := IsEqual(Self.CanonicaliseName(Name), ExpectedHeaderName);
-end;
-
-function TIdSipHeaderList.ConstructHeader(HeaderName: String): TIdSipHeader;
-var
-  I: Integer;
-begin
-  HeaderName := Self.CanonicaliseName(HeaderName);
-
-  Result := nil;
-  I := 0;
-  while (I < Self.HeaderTypes.Count) and not Assigned(Result) do
-    if Self.IsHeader(TIdSipHeaderMap(Self.HeaderTypes[I]).HeaderName, HeaderName) then
-      Result := TIdSipHeaderMap(Self.HeaderTypes[I]).HeaderClass.Create
-    else
-      Inc(I);
-
-  if not Assigned(Result) then
-    Result := TIdSipHeader.Create;
 end;
 
 //******************************************************************************
@@ -7193,7 +7196,7 @@ end;
 
 class function TIdSipHeaders.IsCallID(const Header: String): Boolean;
 begin
-  Result := Self.IsHeader(Header, CallIDHeaderFull);
+  Result := TIdSipHeader.IsHeader(Header, CallIDHeaderFull);
 end;
 
 class function TIdSipHeaders.IsCompoundHeader(const Header: String): Boolean;
@@ -7208,57 +7211,57 @@ end;
 
 class function TIdSipHeaders.IsContact(const Header: String): Boolean;
 begin
-  Result := Self.IsHeader(Header, ContactHeaderFull);
+  Result := TIdSipHeader.IsHeader(Header, ContactHeaderFull);
 end;
 
 class function TIdSipHeaders.IsContentLength(const Header: String): Boolean;
 begin
-  Result := Self.IsHeader(Header, ContentLengthHeaderFull);
+  Result := TIdSipHeader.IsHeader(Header, ContentLengthHeaderFull);
 end;
 
 class function TIdSipHeaders.IsCSeq(const Header: String): Boolean;
 begin
-  Result := Self.IsHeader(Header, CseqHeader);
+  Result := TIdSipHeader.IsHeader(Header, CseqHeader);
 end;
 
 class function TIdSipHeaders.IsErrorInfo(const Header: String): Boolean;
 begin
-  Result := Self.IsHeader(Header, ErrorInfoHeader);
+  Result := TIdSipHeader.IsHeader(Header, ErrorInfoHeader);
 end;
 
 class function TIdSipHeaders.IsFrom(const Header: String): Boolean;
 begin
-  Result := Self.IsHeader(Header, FromHeaderFull);
+  Result := TIdSipHeader.IsHeader(Header, FromHeaderFull);
 end;
 
 class function TIdSipHeaders.IsMaxForwards(const Header: String): Boolean;
 begin
-  Result := Self.IsHeader(Header, MaxForwardsHeader);
+  Result := TIdSipHeader.IsHeader(Header, MaxForwardsHeader);
 end;
 
 class function TIdSipHeaders.IsRecordRoute(const Header: String): Boolean;
 begin
-  Result := Self.IsHeader(Header, RecordRouteHeader);
+  Result := TIdSipHeader.IsHeader(Header, RecordRouteHeader);
 end;
 
 class function TIdSipHeaders.IsRoute(const Header: String): Boolean;
 begin
-  Result := Self.IsHeader(Header, RouteHeader);
+  Result := TIdSipHeader.IsHeader(Header, RouteHeader);
 end;
 
 class function TIdSipHeaders.IsTo(const Header: String): Boolean;
 begin
-  Result := Self.IsHeader(Header, ToHeaderFull);
+  Result := TIdSipHeader.IsHeader(Header, ToHeaderFull);
 end;
 
 class function TIdSipHeaders.IsVia(const Header: String): Boolean;
 begin
-  Result := Self.IsHeader(Header, ViaHeaderFull);
+  Result := TIdSipHeader.IsHeader(Header, ViaHeaderFull);
 end;
 
 class function TIdSipHeaders.IsWarning(const Header: String): Boolean;
 begin
-  Result := Self.IsHeader(Header, WarningHeader);
+  Result := TIdSipHeader.IsHeader(Header, WarningHeader);
 end;
 
 constructor TIdSipHeaders.Create;
@@ -7277,7 +7280,7 @@ end;
 
 function TIdSipHeaders.Add(const HeaderName: String): TIdSipHeader;
 begin
-  Result := Self.ConstructHeader(HeaderName);
+  Result := TIdSipHeader.ConstructHeader(HeaderName);
   try
     Self.List.Add(Result);
     Result.Name := HeaderName;
@@ -8234,7 +8237,7 @@ var
   Value: String;
 begin
   Name := Parser.GetHeaderName(RawHeader);
-  Name := TIdSipHeaders.CanonicaliseName(Name);
+  Name := TIdSipHeader.CanonicaliseName(Name);
 
   Value := Parser.GetHeaderValue(RawHeader);
 

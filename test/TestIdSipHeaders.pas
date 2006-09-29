@@ -138,6 +138,7 @@ type
   published
     procedure TestAsString;
     procedure TestAssignCopiesParseInfo;
+    procedure TestCanonicaliseName;
     procedure TestEncodeQuotedStr;
     procedure TestFullValue;
     procedure TestGetSetParam;
@@ -742,7 +743,6 @@ type
     procedure TestAddInReverseOrder; override;
     procedure TestAddResultTypes;
     procedure TestAsString;
-    procedure TestCanonicaliseName;
     procedure TestClear;
     procedure TestDelete;
     procedure TestEqualsPenultimateHeaderNotEqual;
@@ -2075,6 +2075,219 @@ begin
   finally
     C.Free;
   end;
+end;
+
+procedure TestTIdSipHeader.TestCanonicaliseName;
+begin
+  CheckEquals('', TIdSipHeader.CanonicaliseName(''), 'Empty string');
+  CheckEquals('New-Header', TIdSipHeader.CanonicaliseName('New-Header'), 'New-Header');
+  CheckEquals('new-header', TIdSipHeader.CanonicaliseName('new-header'), 'new-header');
+
+  CheckEquals(AcceptHeader, TIdSipHeader.CanonicaliseName('accept'),     'accept');
+  CheckEquals(AcceptHeader, TIdSipHeader.CanonicaliseName('Accept'),     'Accept');
+  CheckEquals(AcceptHeader, TIdSipHeader.CanonicaliseName(AcceptHeader), 'AcceptHeader constant');
+
+  CheckEquals(AcceptEncodingHeader, TIdSipHeader.CanonicaliseName('accept-encoding'),    'accept-encoding');
+  CheckEquals(AcceptEncodingHeader, TIdSipHeader.CanonicaliseName('Accept-Encoding'),    'Accept-Encoding');
+  CheckEquals(AcceptEncodingHeader, TIdSipHeader.CanonicaliseName(AcceptEncodingHeader), 'AcceptEncodingHeader constant');
+
+  CheckEquals(AcceptLanguageHeader, TIdSipHeader.CanonicaliseName('accept-language'),    'accept-language');
+  CheckEquals(AcceptLanguageHeader, TIdSipHeader.CanonicaliseName('Accept-Language'),    'Accept-Language');
+  CheckEquals(AcceptLanguageHeader, TIdSipHeader.CanonicaliseName(AcceptLanguageHeader), 'AcceptLanguageHeader constant');
+
+  CheckEquals(AlertInfoHeader, TIdSipHeader.CanonicaliseName('alert-info'),    'alert-info');
+  CheckEquals(AlertInfoHeader, TIdSipHeader.CanonicaliseName('Alert-Info'),    'Alert-Info');
+  CheckEquals(AlertInfoHeader, TIdSipHeader.CanonicaliseName(AlertInfoHeader), 'AlertInfoHeader constant');
+
+  CheckEquals(AllowHeader, TIdSipHeader.CanonicaliseName('allow'),     'allow');
+  CheckEquals(AllowHeader, TIdSipHeader.CanonicaliseName('Allow'),     'Allow');
+  CheckEquals(AllowHeader, TIdSipHeader.CanonicaliseName(AllowHeader), 'AllowHeader constant');
+
+  CheckEquals(AuthenticationInfoHeader, TIdSipHeader.CanonicaliseName('authentication-info'),    'authentication-info');
+  CheckEquals(AuthenticationInfoHeader, TIdSipHeader.CanonicaliseName('Authentication-Info'),    'Authentication-Info');
+  CheckEquals(AuthenticationInfoHeader, TIdSipHeader.CanonicaliseName(AuthenticationInfoHeader), 'AuthenticationInfoHeader constant');
+
+  CheckEquals(AuthorizationHeader, TIdSipHeader.CanonicaliseName('authorization'),     'authorization');
+  CheckEquals(AuthorizationHeader, TIdSipHeader.CanonicaliseName('Authorization'),     'Authorization');
+  CheckEquals(AuthorizationHeader, TIdSipHeader.CanonicaliseName(AuthorizationHeader), 'AuthorizationHeader constant');
+
+  CheckEquals(CallIDHeaderFull, TIdSipHeader.CanonicaliseName('call-ID'),         'call-ID');
+  CheckEquals(CallIDHeaderFull, TIdSipHeader.CanonicaliseName('Call-ID'),         'Call-ID');
+  CheckEquals(CallIDHeaderFull, TIdSipHeader.CanonicaliseName('i'),               'i');
+  CheckEquals(CallIDHeaderFull, TIdSipHeader.CanonicaliseName('I'),               'I');
+  CheckEquals(CallIDHeaderFull, TIdSipHeader.CanonicaliseName(CallIDHeaderFull),  'CallIDHeaderFull constant');
+  CheckEquals(CallIDHeaderFull, TIdSipHeader.CanonicaliseName(CallIDHeaderShort), 'CallIDHeaderShort constant');
+
+  CheckEquals(CallInfoHeader, TIdSipHeader.CanonicaliseName('call-info'),     'call-info');
+  CheckEquals(CallInfoHeader, TIdSipHeader.CanonicaliseName('Call-Info'),     'Call-Info');
+  CheckEquals(CallInfoHeader, TIdSipHeader.CanonicaliseName(CallInfoHeader), 'CallInfoHeader constant');
+
+  CheckEquals(ContactHeaderFull, TIdSipHeader.CanonicaliseName('contact'),          'contact');
+  CheckEquals(ContactHeaderFull, TIdSipHeader.CanonicaliseName('Contact'),          'Contact');
+  CheckEquals(ContactHeaderFull, TIdSipHeader.CanonicaliseName('m'),                'm');
+  CheckEquals(ContactHeaderFull, TIdSipHeader.CanonicaliseName('M'),                'M');
+  CheckEquals(ContactHeaderFull, TIdSipHeader.CanonicaliseName(ContactHeaderFull),  'ContactHeaderFull constant');
+  CheckEquals(ContactHeaderFull, TIdSipHeader.CanonicaliseName(ContactHeaderShort), 'ContactHeaderShort constant');
+
+  CheckEquals(ContentDispositionHeader, TIdSipHeader.CanonicaliseName('content-disposition'),    'content-disposition');
+  CheckEquals(ContentDispositionHeader, TIdSipHeader.CanonicaliseName('Content-Disposition'),    'Content-Disposition');
+  CheckEquals(ContentDispositionHeader, TIdSipHeader.CanonicaliseName(ContentDispositionHeader), 'ContentDispositionHeader constant');
+
+  CheckEquals(ContentEncodingHeaderFull, TIdSipHeader.CanonicaliseName('content-encoding'),         'content-encoding');
+  CheckEquals(ContentEncodingHeaderFull, TIdSipHeader.CanonicaliseName('Content-Encoding'),         'Content-Encoding');
+  CheckEquals(ContentEncodingHeaderFull, TIdSipHeader.CanonicaliseName('e'),                        'e');
+  CheckEquals(ContentEncodingHeaderFull, TIdSipHeader.CanonicaliseName('E'),                        'E');
+  CheckEquals(ContentEncodingHeaderFull, TIdSipHeader.CanonicaliseName(ContentEncodingHeaderFull),  'ContentEncodingHeaderFull constant');
+  CheckEquals(ContentEncodingHeaderFull, TIdSipHeader.CanonicaliseName(ContentEncodingHeaderShort), 'ContentEncodingHeaderShort constant');
+
+  CheckEquals(ContentLanguageHeader, TIdSipHeader.CanonicaliseName('content-language'),    'content-language');
+  CheckEquals(ContentLanguageHeader, TIdSipHeader.CanonicaliseName('Content-Language'),    'Content-Language');
+  CheckEquals(ContentLanguageHeader, TIdSipHeader.CanonicaliseName(ContentLanguageHeader), 'ContentLanguageHeader constant');
+
+  CheckEquals(ContentLengthHeaderFull, TIdSipHeader.CanonicaliseName('Content-Length'),         'Content-Length');
+  CheckEquals(ContentLengthHeaderFull, TIdSipHeader.CanonicaliseName('Content-Length'),         'Content-Length');
+  CheckEquals(ContentLengthHeaderFull, TIdSipHeader.CanonicaliseName('l'),                      'l');
+  CheckEquals(ContentLengthHeaderFull, TIdSipHeader.CanonicaliseName('L'),                      'L');
+  CheckEquals(ContentLengthHeaderFull, TIdSipHeader.CanonicaliseName(ContentLengthHeaderFull),  'ContentLengthHeaderFull constant');
+  CheckEquals(ContentLengthHeaderFull, TIdSipHeader.CanonicaliseName(ContentLengthHeaderShort), 'ContentLengthHeaderShort constant');
+
+  CheckEquals(ContentTypeHeaderFull, TIdSipHeader.CanonicaliseName('content-type'),         'content-type');
+  CheckEquals(ContentTypeHeaderFull, TIdSipHeader.CanonicaliseName('Content-Type'),         'Content-Type');
+  CheckEquals(ContentTypeHeaderFull, TIdSipHeader.CanonicaliseName('c'),                    'c');
+  CheckEquals(ContentTypeHeaderFull, TIdSipHeader.CanonicaliseName('C'),                    'C');
+  CheckEquals(ContentTypeHeaderFull, TIdSipHeader.CanonicaliseName(ContentTypeHeaderFull),  'ContentTypeHeaderFull constant');
+  CheckEquals(ContentTypeHeaderFull, TIdSipHeader.CanonicaliseName(ContentTypeHeaderShort), 'ContentTypeHeaderShort constant');
+
+  CheckEquals(CSeqHeader, TIdSipHeader.CanonicaliseName('cseq'),     'cseq');
+  CheckEquals(CSeqHeader, TIdSipHeader.CanonicaliseName('CSeq'),     'CSeq');
+  CheckEquals(CSeqHeader, TIdSipHeader.CanonicaliseName(CSeqHeader), 'CSeqHeader constant');
+
+  CheckEquals(DateHeader, TIdSipHeader.CanonicaliseName('date'),     'date');
+  CheckEquals(DateHeader, TIdSipHeader.CanonicaliseName('Date'),     'Date');
+  CheckEquals(DateHeader, TIdSipHeader.CanonicaliseName(DateHeader), 'DateHeader constant');
+
+  CheckEquals(ErrorInfoHeader, TIdSipHeader.CanonicaliseName('error-info'),     'irror-info');
+  CheckEquals(ErrorInfoHeader, TIdSipHeader.CanonicaliseName('Error-Info'),     'Error-Info');
+  CheckEquals(ErrorInfoHeader, TIdSipHeader.CanonicaliseName(ErrorInfoHeader), 'ErrorInfoHeader constant');
+
+  CheckEquals(ExpiresHeader, TIdSipHeader.CanonicaliseName('expires'),     'expires');
+  CheckEquals(ExpiresHeader, TIdSipHeader.CanonicaliseName('Expires'),     'Expires');
+  CheckEquals(ExpiresHeader, TIdSipHeader.CanonicaliseName(ExpiresHeader), 'ExpiresHeader constant');
+
+  CheckEquals(FromHeaderFull, TIdSipHeader.CanonicaliseName('from'),          'from');
+  CheckEquals(FromHeaderFull, TIdSipHeader.CanonicaliseName('From'),          'From');
+  CheckEquals(FromHeaderFull, TIdSipHeader.CanonicaliseName('f'),             'f');
+  CheckEquals(FromHeaderFull, TIdSipHeader.CanonicaliseName('F'),             'F');
+  CheckEquals(FromHeaderFull, TIdSipHeader.CanonicaliseName(FromHeaderFull),  'FromHeaderFull constant');
+  CheckEquals(FromHeaderFull, TIdSipHeader.CanonicaliseName(FromHeaderShort), 'FromHeaderShort constant');
+
+  CheckEquals(InReplyToHeader, TIdSipHeader.CanonicaliseName('in-reply-to'),   'in-reply-to');
+  CheckEquals(InReplyToHeader, TIdSipHeader.CanonicaliseName('In-Reply-To'),   'In-Reply-To');
+  CheckEquals(InReplyToHeader, TIdSipHeader.CanonicaliseName(InReplyToHeader), 'InReplyToHeader constant');
+
+  CheckEquals(MaxForwardsHeader, TIdSipHeader.CanonicaliseName('max-forwards'),    'max-forwards');
+  CheckEquals(MaxForwardsHeader, TIdSipHeader.CanonicaliseName('Max-Forwards'),    'Max-Forwards');
+  CheckEquals(MaxForwardsHeader, TIdSipHeader.CanonicaliseName(MaxForwardsHeader), 'MaxForwardsHeader constant');
+
+  CheckEquals(MIMEVersionHeader, TIdSipHeader.CanonicaliseName('mime-version'),    'mime-version');
+  CheckEquals(MIMEVersionHeader, TIdSipHeader.CanonicaliseName('MIME-Version'),    'MIME-Version');
+  CheckEquals(MIMEVersionHeader, TIdSipHeader.CanonicaliseName(MIMEVersionHeader), 'MIMEVersionHeader constant');
+
+  CheckEquals(MinExpiresHeader, TIdSipHeader.CanonicaliseName('min-expires'),    'min-expires');
+  CheckEquals(MinExpiresHeader, TIdSipHeader.CanonicaliseName('Min-Expires'),    'Min-Expires');
+  CheckEquals(MinExpiresHeader, TIdSipHeader.CanonicaliseName(MinExpiresHeader), 'MinExpiresHeader constant');
+
+  CheckEquals(OrganizationHeader, TIdSipHeader.CanonicaliseName('organization'),     'organization');
+  CheckEquals(OrganizationHeader, TIdSipHeader.CanonicaliseName('Organization'),     'Organization');
+  CheckEquals(OrganizationHeader, TIdSipHeader.CanonicaliseName(OrganizationHeader), 'OrganizationHeader constant');
+
+  CheckEquals(PriorityHeader, TIdSipHeader.CanonicaliseName('priority'),     'priority');
+  CheckEquals(PriorityHeader, TIdSipHeader.CanonicaliseName('Priority'),     'Priority');
+  CheckEquals(PriorityHeader, TIdSipHeader.CanonicaliseName(PriorityHeader), 'PriorityHeader constant');
+
+  CheckEquals(ProxyAuthenticateHeader, TIdSipHeader.CanonicaliseName('proxy-authenticate'),    'proxy-authenticate');
+  CheckEquals(ProxyAuthenticateHeader, TIdSipHeader.CanonicaliseName('Proxy-Authenticate'),    'Proxy-Authenticate');
+  CheckEquals(ProxyAuthenticateHeader, TIdSipHeader.CanonicaliseName(ProxyAuthenticateHeader), 'ProxyAuthenticateHeader constant');
+
+  CheckEquals(ProxyAuthorizationHeader, TIdSipHeader.CanonicaliseName('proxy-authorization'),    'proxy-authorization');
+  CheckEquals(ProxyAuthorizationHeader, TIdSipHeader.CanonicaliseName('Proxy-Authorization'),    'Proxy-Authorization');
+  CheckEquals(ProxyAuthorizationHeader, TIdSipHeader.CanonicaliseName(ProxyAuthorizationHeader), 'ProxyAuthorizationHeader constant');
+
+  CheckEquals(ProxyRequireHeader, TIdSipHeader.CanonicaliseName('proxy-require'),    'proxy-require');
+  CheckEquals(ProxyRequireHeader, TIdSipHeader.CanonicaliseName('Proxy-Require'),    'Proxy-Require');
+  CheckEquals(ProxyRequireHeader, TIdSipHeader.CanonicaliseName(ProxyRequireHeader), 'ProxyRequireHeader constant');
+
+  CheckEquals(RecordRouteHeader, TIdSipHeader.CanonicaliseName('record-route'),    'record-route');
+  CheckEquals(RecordRouteHeader, TIdSipHeader.CanonicaliseName('Record-Route'),    'Record-Route');
+  CheckEquals(RecordRouteHeader, TIdSipHeader.CanonicaliseName(RecordRouteHeader), 'RecordRouteHeader constant');
+
+  CheckEquals(ReplyToHeader, TIdSipHeader.CanonicaliseName('reply-to'),    'reply-to');
+  CheckEquals(ReplyToHeader, TIdSipHeader.CanonicaliseName('Reply-To'),    'Reply-To');
+  CheckEquals(ReplyToHeader, TIdSipHeader.CanonicaliseName(ReplyToHeader), 'ReplyToHeader constant');
+
+  CheckEquals(RequireHeader, TIdSipHeader.CanonicaliseName('require'),     'require');
+  CheckEquals(RequireHeader, TIdSipHeader.CanonicaliseName('Require'),     'Require');
+  CheckEquals(RequireHeader, TIdSipHeader.CanonicaliseName(RequireHeader), 'RequireHeader constant');
+
+  CheckEquals(RetryAfterHeader, TIdSipHeader.CanonicaliseName('retry-after'),    'retry-after');
+  CheckEquals(RetryAfterHeader, TIdSipHeader.CanonicaliseName('Retry-After'),    'Retry-After');
+  CheckEquals(RetryAfterHeader, TIdSipHeader.CanonicaliseName(RetryAfterHeader), 'RetryAfterHeader constant');
+
+  CheckEquals(RouteHeader, TIdSipHeader.CanonicaliseName('route'),     'route');
+  CheckEquals(RouteHeader, TIdSipHeader.CanonicaliseName('Route'),     'Route');
+  CheckEquals(RouteHeader, TIdSipHeader.CanonicaliseName(RouteHeader), 'RouteHeader constant');
+
+  CheckEquals(ServerHeader, TIdSipHeader.CanonicaliseName('server'),     'server');
+  CheckEquals(ServerHeader, TIdSipHeader.CanonicaliseName('Server'),     'Server');
+  CheckEquals(ServerHeader, TIdSipHeader.CanonicaliseName(ServerHeader), 'ServerHeader constant');
+
+  CheckEquals(SubjectHeaderFull, TIdSipHeader.CanonicaliseName('subject'),          'subject');
+  CheckEquals(SubjectHeaderFull, TIdSipHeader.CanonicaliseName('Subject'),          'Subject');
+  CheckEquals(SubjectHeaderFull, TIdSipHeader.CanonicaliseName('s'),                's');
+  CheckEquals(SubjectHeaderFull, TIdSipHeader.CanonicaliseName('S'),                'S');
+  CheckEquals(SubjectHeaderFull, TIdSipHeader.CanonicaliseName(SubjectHeaderFull),  'SubjectHeaderFull constant');
+  CheckEquals(SubjectHeaderFull, TIdSipHeader.CanonicaliseName(SubjectHeaderShort), 'SubjectHeaderShort constant');
+
+  CheckEquals(SupportedHeaderFull, TIdSipHeader.CanonicaliseName('supported'),          'supported');
+  CheckEquals(SupportedHeaderFull, TIdSipHeader.CanonicaliseName('Supported'),          'Supported');
+  CheckEquals(SupportedHeaderFull, TIdSipHeader.CanonicaliseName('k'),                  'k');
+  CheckEquals(SupportedHeaderFull, TIdSipHeader.CanonicaliseName('K'),                  'K');
+  CheckEquals(SupportedHeaderFull, TIdSipHeader.CanonicaliseName(SupportedHeaderFull),  'SupportedHeaderFull constant');
+  CheckEquals(SupportedHeaderFull, TIdSipHeader.CanonicaliseName(SupportedHeaderShort), 'SupportedHeaderShort constant');
+
+  CheckEquals(TimestampHeader, TIdSipHeader.CanonicaliseName('timestamp'),     'timestamp');
+  CheckEquals(TimestampHeader, TIdSipHeader.CanonicaliseName('Timestamp'),     'Timestamp');
+  CheckEquals(TimestampHeader, TIdSipHeader.CanonicaliseName(TimestampHeader), 'TimestampHeader constant');
+
+  CheckEquals(ToHeaderFull, TIdSipHeader.CanonicaliseName('to'),          'to');
+  CheckEquals(ToHeaderFull, TIdSipHeader.CanonicaliseName('To'),          'To');
+  CheckEquals(ToHeaderFull, TIdSipHeader.CanonicaliseName('t'),           't');
+  CheckEquals(ToHeaderFull, TIdSipHeader.CanonicaliseName('T'),           'T');
+  CheckEquals(ToHeaderFull, TIdSipHeader.CanonicaliseName(ToHeaderFull),  'ToHeaderFull constant');
+  CheckEquals(ToHeaderFull, TIdSipHeader.CanonicaliseName(ToHeaderShort), 'ToHeaderShort constant');
+
+  CheckEquals(UnsupportedHeader, TIdSipHeader.CanonicaliseName('unsupported'),     'unsupported');
+  CheckEquals(UnsupportedHeader, TIdSipHeader.CanonicaliseName('Unsupported'),     'Unsupported');
+  CheckEquals(UnsupportedHeader, TIdSipHeader.CanonicaliseName(UnsupportedHeader), 'UnsupportedHeader constant');
+
+  CheckEquals(UserAgentHeader, TIdSipHeader.CanonicaliseName('user-agent'),    'user-agent');
+  CheckEquals(UserAgentHeader, TIdSipHeader.CanonicaliseName('User-Agent'),    'User-Agent');
+  CheckEquals(UserAgentHeader, TIdSipHeader.CanonicaliseName(UserAgentHeader), 'UserAgentHeader constant');
+
+  CheckEquals(ViaHeaderFull, TIdSipHeader.CanonicaliseName('via'),          'via');
+  CheckEquals(ViaHeaderFull, TIdSipHeader.CanonicaliseName('Via'),          'Via');
+  CheckEquals(ViaHeaderFull, TIdSipHeader.CanonicaliseName('v'),            'v');
+  CheckEquals(ViaHeaderFull, TIdSipHeader.CanonicaliseName('V'),            'V');
+  CheckEquals(ViaHeaderFull, TIdSipHeader.CanonicaliseName(ViaHeaderFull),  'ViaHeaderFull constant');
+  CheckEquals(ViaHeaderFull, TIdSipHeader.CanonicaliseName(ViaHeaderShort), 'ViaHeaderShort constant');
+
+  CheckEquals(WarningHeader, TIdSipHeader.CanonicaliseName('warning'),     'warning');
+  CheckEquals(WarningHeader, TIdSipHeader.CanonicaliseName('Warning'),     'Warning');
+  CheckEquals(WarningHeader, TIdSipHeader.CanonicaliseName(WarningHeader), 'WarningHeader constant');
+
+  CheckEquals(WWWAuthenticateHeader, TIdSipHeader.CanonicaliseName('www-authenticate'),    'www-authenticate');
+  CheckEquals(WWWAuthenticateHeader, TIdSipHeader.CanonicaliseName('WWW-Authenticate'),    'WWW-Authenticate');
+  CheckEquals(WWWAuthenticateHeader, TIdSipHeader.CanonicaliseName(WWWAuthenticateHeader), 'WWWAuthenticateHeader constant');
 end;
 
 procedure TestTIdSipHeader.TestEncodeQuotedStr;
@@ -7000,219 +7213,6 @@ begin
             + 'Content-Type: text/xml;kallisti=eris'#13#10,
               Self.Headers.AsString,
               'AsString with two headers');
-end;
-
-procedure TestTIdSipHeaders.TestCanonicaliseName;
-begin
-  CheckEquals('', TIdSipHeaders.CanonicaliseName(''), 'Empty string');
-  CheckEquals('New-Header', TIdSipHeaders.CanonicaliseName('New-Header'), 'New-Header');
-  CheckEquals('new-header', TIdSipHeaders.CanonicaliseName('new-header'), 'new-header');
-
-  CheckEquals(AcceptHeader, TIdSipHeaders.CanonicaliseName('accept'),     'accept');
-  CheckEquals(AcceptHeader, TIdSipHeaders.CanonicaliseName('Accept'),     'Accept');
-  CheckEquals(AcceptHeader, TIdSipHeaders.CanonicaliseName(AcceptHeader), 'AcceptHeader constant');
-
-  CheckEquals(AcceptEncodingHeader, TIdSipHeaders.CanonicaliseName('accept-encoding'),    'accept-encoding');
-  CheckEquals(AcceptEncodingHeader, TIdSipHeaders.CanonicaliseName('Accept-Encoding'),    'Accept-Encoding');
-  CheckEquals(AcceptEncodingHeader, TIdSipHeaders.CanonicaliseName(AcceptEncodingHeader), 'AcceptEncodingHeader constant');
-
-  CheckEquals(AcceptLanguageHeader, TIdSipHeaders.CanonicaliseName('accept-language'),    'accept-language');
-  CheckEquals(AcceptLanguageHeader, TIdSipHeaders.CanonicaliseName('Accept-Language'),    'Accept-Language');
-  CheckEquals(AcceptLanguageHeader, TIdSipHeaders.CanonicaliseName(AcceptLanguageHeader), 'AcceptLanguageHeader constant');
-
-  CheckEquals(AlertInfoHeader, TIdSipHeaders.CanonicaliseName('alert-info'),    'alert-info');
-  CheckEquals(AlertInfoHeader, TIdSipHeaders.CanonicaliseName('Alert-Info'),    'Alert-Info');
-  CheckEquals(AlertInfoHeader, TIdSipHeaders.CanonicaliseName(AlertInfoHeader), 'AlertInfoHeader constant');
-
-  CheckEquals(AllowHeader, TIdSipHeaders.CanonicaliseName('allow'),     'allow');
-  CheckEquals(AllowHeader, TIdSipHeaders.CanonicaliseName('Allow'),     'Allow');
-  CheckEquals(AllowHeader, TIdSipHeaders.CanonicaliseName(AllowHeader), 'AllowHeader constant');
-
-  CheckEquals(AuthenticationInfoHeader, TIdSipHeaders.CanonicaliseName('authentication-info'),    'authentication-info');
-  CheckEquals(AuthenticationInfoHeader, TIdSipHeaders.CanonicaliseName('Authentication-Info'),    'Authentication-Info');
-  CheckEquals(AuthenticationInfoHeader, TIdSipHeaders.CanonicaliseName(AuthenticationInfoHeader), 'AuthenticationInfoHeader constant');
-
-  CheckEquals(AuthorizationHeader, TIdSipHeaders.CanonicaliseName('authorization'),     'authorization');
-  CheckEquals(AuthorizationHeader, TIdSipHeaders.CanonicaliseName('Authorization'),     'Authorization');
-  CheckEquals(AuthorizationHeader, TIdSipHeaders.CanonicaliseName(AuthorizationHeader), 'AuthorizationHeader constant');
-
-  CheckEquals(CallIDHeaderFull, TIdSipHeaders.CanonicaliseName('call-ID'),         'call-ID');
-  CheckEquals(CallIDHeaderFull, TIdSipHeaders.CanonicaliseName('Call-ID'),         'Call-ID');
-  CheckEquals(CallIDHeaderFull, TIdSipHeaders.CanonicaliseName('i'),               'i');
-  CheckEquals(CallIDHeaderFull, TIdSipHeaders.CanonicaliseName('I'),               'I');
-  CheckEquals(CallIDHeaderFull, TIdSipHeaders.CanonicaliseName(CallIDHeaderFull),  'CallIDHeaderFull constant');
-  CheckEquals(CallIDHeaderFull, TIdSipHeaders.CanonicaliseName(CallIDHeaderShort), 'CallIDHeaderShort constant');
-
-  CheckEquals(CallInfoHeader, TIdSipHeaders.CanonicaliseName('call-info'),     'call-info');
-  CheckEquals(CallInfoHeader, TIdSipHeaders.CanonicaliseName('Call-Info'),     'Call-Info');
-  CheckEquals(CallInfoHeader, TIdSipHeaders.CanonicaliseName(CallInfoHeader), 'CallInfoHeader constant');
-
-  CheckEquals(ContactHeaderFull, TIdSipHeaders.CanonicaliseName('contact'),          'contact');
-  CheckEquals(ContactHeaderFull, TIdSipHeaders.CanonicaliseName('Contact'),          'Contact');
-  CheckEquals(ContactHeaderFull, TIdSipHeaders.CanonicaliseName('m'),                'm');
-  CheckEquals(ContactHeaderFull, TIdSipHeaders.CanonicaliseName('M'),                'M');
-  CheckEquals(ContactHeaderFull, TIdSipHeaders.CanonicaliseName(ContactHeaderFull),  'ContactHeaderFull constant');
-  CheckEquals(ContactHeaderFull, TIdSipHeaders.CanonicaliseName(ContactHeaderShort), 'ContactHeaderShort constant');
-
-  CheckEquals(ContentDispositionHeader, TIdSipHeaders.CanonicaliseName('content-disposition'),    'content-disposition');
-  CheckEquals(ContentDispositionHeader, TIdSipHeaders.CanonicaliseName('Content-Disposition'),    'Content-Disposition');
-  CheckEquals(ContentDispositionHeader, TIdSipHeaders.CanonicaliseName(ContentDispositionHeader), 'ContentDispositionHeader constant');
-
-  CheckEquals(ContentEncodingHeaderFull, TIdSipHeaders.CanonicaliseName('content-encoding'),         'content-encoding');
-  CheckEquals(ContentEncodingHeaderFull, TIdSipHeaders.CanonicaliseName('Content-Encoding'),         'Content-Encoding');
-  CheckEquals(ContentEncodingHeaderFull, TIdSipHeaders.CanonicaliseName('e'),                        'e');
-  CheckEquals(ContentEncodingHeaderFull, TIdSipHeaders.CanonicaliseName('E'),                        'E');
-  CheckEquals(ContentEncodingHeaderFull, TIdSipHeaders.CanonicaliseName(ContentEncodingHeaderFull),  'ContentEncodingHeaderFull constant');
-  CheckEquals(ContentEncodingHeaderFull, TIdSipHeaders.CanonicaliseName(ContentEncodingHeaderShort), 'ContentEncodingHeaderShort constant');
-
-  CheckEquals(ContentLanguageHeader, TIdSipHeaders.CanonicaliseName('content-language'),    'content-language');
-  CheckEquals(ContentLanguageHeader, TIdSipHeaders.CanonicaliseName('Content-Language'),    'Content-Language');
-  CheckEquals(ContentLanguageHeader, TIdSipHeaders.CanonicaliseName(ContentLanguageHeader), 'ContentLanguageHeader constant');
-
-  CheckEquals(ContentLengthHeaderFull, TIdSipHeaders.CanonicaliseName('Content-Length'),         'Content-Length');
-  CheckEquals(ContentLengthHeaderFull, TIdSipHeaders.CanonicaliseName('Content-Length'),         'Content-Length');
-  CheckEquals(ContentLengthHeaderFull, TIdSipHeaders.CanonicaliseName('l'),                      'l');
-  CheckEquals(ContentLengthHeaderFull, TIdSipHeaders.CanonicaliseName('L'),                      'L');
-  CheckEquals(ContentLengthHeaderFull, TIdSipHeaders.CanonicaliseName(ContentLengthHeaderFull),  'ContentLengthHeaderFull constant');
-  CheckEquals(ContentLengthHeaderFull, TIdSipHeaders.CanonicaliseName(ContentLengthHeaderShort), 'ContentLengthHeaderShort constant');
-
-  CheckEquals(ContentTypeHeaderFull, TIdSipHeaders.CanonicaliseName('content-type'),         'content-type');
-  CheckEquals(ContentTypeHeaderFull, TIdSipHeaders.CanonicaliseName('Content-Type'),         'Content-Type');
-  CheckEquals(ContentTypeHeaderFull, TIdSipHeaders.CanonicaliseName('c'),                    'c');
-  CheckEquals(ContentTypeHeaderFull, TIdSipHeaders.CanonicaliseName('C'),                    'C');
-  CheckEquals(ContentTypeHeaderFull, TIdSipHeaders.CanonicaliseName(ContentTypeHeaderFull),  'ContentTypeHeaderFull constant');
-  CheckEquals(ContentTypeHeaderFull, TIdSipHeaders.CanonicaliseName(ContentTypeHeaderShort), 'ContentTypeHeaderShort constant');
-
-  CheckEquals(CSeqHeader, TIdSipHeaders.CanonicaliseName('cseq'),     'cseq');
-  CheckEquals(CSeqHeader, TIdSipHeaders.CanonicaliseName('CSeq'),     'CSeq');
-  CheckEquals(CSeqHeader, TIdSipHeaders.CanonicaliseName(CSeqHeader), 'CSeqHeader constant');
-
-  CheckEquals(DateHeader, TIdSipHeaders.CanonicaliseName('date'),     'date');
-  CheckEquals(DateHeader, TIdSipHeaders.CanonicaliseName('Date'),     'Date');
-  CheckEquals(DateHeader, TIdSipHeaders.CanonicaliseName(DateHeader), 'DateHeader constant');
-
-  CheckEquals(ErrorInfoHeader, TIdSipHeaders.CanonicaliseName('error-info'),     'irror-info');
-  CheckEquals(ErrorInfoHeader, TIdSipHeaders.CanonicaliseName('Error-Info'),     'Error-Info');
-  CheckEquals(ErrorInfoHeader, TIdSipHeaders.CanonicaliseName(ErrorInfoHeader), 'ErrorInfoHeader constant');
-
-  CheckEquals(ExpiresHeader, TIdSipHeaders.CanonicaliseName('expires'),     'expires');
-  CheckEquals(ExpiresHeader, TIdSipHeaders.CanonicaliseName('Expires'),     'Expires');
-  CheckEquals(ExpiresHeader, TIdSipHeaders.CanonicaliseName(ExpiresHeader), 'ExpiresHeader constant');
-
-  CheckEquals(FromHeaderFull, TIdSipHeaders.CanonicaliseName('from'),          'from');
-  CheckEquals(FromHeaderFull, TIdSipHeaders.CanonicaliseName('From'),          'From');
-  CheckEquals(FromHeaderFull, TIdSipHeaders.CanonicaliseName('f'),             'f');
-  CheckEquals(FromHeaderFull, TIdSipHeaders.CanonicaliseName('F'),             'F');
-  CheckEquals(FromHeaderFull, TIdSipHeaders.CanonicaliseName(FromHeaderFull),  'FromHeaderFull constant');
-  CheckEquals(FromHeaderFull, TIdSipHeaders.CanonicaliseName(FromHeaderShort), 'FromHeaderShort constant');
-
-  CheckEquals(InReplyToHeader, TIdSipHeaders.CanonicaliseName('in-reply-to'),   'in-reply-to');
-  CheckEquals(InReplyToHeader, TIdSipHeaders.CanonicaliseName('In-Reply-To'),   'In-Reply-To');
-  CheckEquals(InReplyToHeader, TIdSipHeaders.CanonicaliseName(InReplyToHeader), 'InReplyToHeader constant');
-
-  CheckEquals(MaxForwardsHeader, TIdSipHeaders.CanonicaliseName('max-forwards'),    'max-forwards');
-  CheckEquals(MaxForwardsHeader, TIdSipHeaders.CanonicaliseName('Max-Forwards'),    'Max-Forwards');
-  CheckEquals(MaxForwardsHeader, TIdSipHeaders.CanonicaliseName(MaxForwardsHeader), 'MaxForwardsHeader constant');
-
-  CheckEquals(MIMEVersionHeader, TIdSipHeaders.CanonicaliseName('mime-version'),    'mime-version');
-  CheckEquals(MIMEVersionHeader, TIdSipHeaders.CanonicaliseName('MIME-Version'),    'MIME-Version');
-  CheckEquals(MIMEVersionHeader, TIdSipHeaders.CanonicaliseName(MIMEVersionHeader), 'MIMEVersionHeader constant');
-
-  CheckEquals(MinExpiresHeader, TIdSipHeaders.CanonicaliseName('min-expires'),    'min-expires');
-  CheckEquals(MinExpiresHeader, TIdSipHeaders.CanonicaliseName('Min-Expires'),    'Min-Expires');
-  CheckEquals(MinExpiresHeader, TIdSipHeaders.CanonicaliseName(MinExpiresHeader), 'MinExpiresHeader constant');
-
-  CheckEquals(OrganizationHeader, TIdSipHeaders.CanonicaliseName('organization'),     'organization');
-  CheckEquals(OrganizationHeader, TIdSipHeaders.CanonicaliseName('Organization'),     'Organization');
-  CheckEquals(OrganizationHeader, TIdSipHeaders.CanonicaliseName(OrganizationHeader), 'OrganizationHeader constant');
-
-  CheckEquals(PriorityHeader, TIdSipHeaders.CanonicaliseName('priority'),     'priority');
-  CheckEquals(PriorityHeader, TIdSipHeaders.CanonicaliseName('Priority'),     'Priority');
-  CheckEquals(PriorityHeader, TIdSipHeaders.CanonicaliseName(PriorityHeader), 'PriorityHeader constant');
-
-  CheckEquals(ProxyAuthenticateHeader, TIdSipHeaders.CanonicaliseName('proxy-authenticate'),    'proxy-authenticate');
-  CheckEquals(ProxyAuthenticateHeader, TIdSipHeaders.CanonicaliseName('Proxy-Authenticate'),    'Proxy-Authenticate');
-  CheckEquals(ProxyAuthenticateHeader, TIdSipHeaders.CanonicaliseName(ProxyAuthenticateHeader), 'ProxyAuthenticateHeader constant');
-
-  CheckEquals(ProxyAuthorizationHeader, TIdSipHeaders.CanonicaliseName('proxy-authorization'),    'proxy-authorization');
-  CheckEquals(ProxyAuthorizationHeader, TIdSipHeaders.CanonicaliseName('Proxy-Authorization'),    'Proxy-Authorization');
-  CheckEquals(ProxyAuthorizationHeader, TIdSipHeaders.CanonicaliseName(ProxyAuthorizationHeader), 'ProxyAuthorizationHeader constant');
-
-  CheckEquals(ProxyRequireHeader, TIdSipHeaders.CanonicaliseName('proxy-require'),    'proxy-require');
-  CheckEquals(ProxyRequireHeader, TIdSipHeaders.CanonicaliseName('Proxy-Require'),    'Proxy-Require');
-  CheckEquals(ProxyRequireHeader, TIdSipHeaders.CanonicaliseName(ProxyRequireHeader), 'ProxyRequireHeader constant');
-
-  CheckEquals(RecordRouteHeader, TIdSipHeaders.CanonicaliseName('record-route'),    'record-route');
-  CheckEquals(RecordRouteHeader, TIdSipHeaders.CanonicaliseName('Record-Route'),    'Record-Route');
-  CheckEquals(RecordRouteHeader, TIdSipHeaders.CanonicaliseName(RecordRouteHeader), 'RecordRouteHeader constant');
-
-  CheckEquals(ReplyToHeader, TIdSipHeaders.CanonicaliseName('reply-to'),    'reply-to');
-  CheckEquals(ReplyToHeader, TIdSipHeaders.CanonicaliseName('Reply-To'),    'Reply-To');
-  CheckEquals(ReplyToHeader, TIdSipHeaders.CanonicaliseName(ReplyToHeader), 'ReplyToHeader constant');
-
-  CheckEquals(RequireHeader, TIdSipHeaders.CanonicaliseName('require'),     'require');
-  CheckEquals(RequireHeader, TIdSipHeaders.CanonicaliseName('Require'),     'Require');
-  CheckEquals(RequireHeader, TIdSipHeaders.CanonicaliseName(RequireHeader), 'RequireHeader constant');
-
-  CheckEquals(RetryAfterHeader, TIdSipHeaders.CanonicaliseName('retry-after'),    'retry-after');
-  CheckEquals(RetryAfterHeader, TIdSipHeaders.CanonicaliseName('Retry-After'),    'Retry-After');
-  CheckEquals(RetryAfterHeader, TIdSipHeaders.CanonicaliseName(RetryAfterHeader), 'RetryAfterHeader constant');
-
-  CheckEquals(RouteHeader, TIdSipHeaders.CanonicaliseName('route'),     'route');
-  CheckEquals(RouteHeader, TIdSipHeaders.CanonicaliseName('Route'),     'Route');
-  CheckEquals(RouteHeader, TIdSipHeaders.CanonicaliseName(RouteHeader), 'RouteHeader constant');
-
-  CheckEquals(ServerHeader, TIdSipHeaders.CanonicaliseName('server'),     'server');
-  CheckEquals(ServerHeader, TIdSipHeaders.CanonicaliseName('Server'),     'Server');
-  CheckEquals(ServerHeader, TIdSipHeaders.CanonicaliseName(ServerHeader), 'ServerHeader constant');
-
-  CheckEquals(SubjectHeaderFull, TIdSipHeaders.CanonicaliseName('subject'),          'subject');
-  CheckEquals(SubjectHeaderFull, TIdSipHeaders.CanonicaliseName('Subject'),          'Subject');
-  CheckEquals(SubjectHeaderFull, TIdSipHeaders.CanonicaliseName('s'),                's');
-  CheckEquals(SubjectHeaderFull, TIdSipHeaders.CanonicaliseName('S'),                'S');
-  CheckEquals(SubjectHeaderFull, TIdSipHeaders.CanonicaliseName(SubjectHeaderFull),  'SubjectHeaderFull constant');
-  CheckEquals(SubjectHeaderFull, TIdSipHeaders.CanonicaliseName(SubjectHeaderShort), 'SubjectHeaderShort constant');
-
-  CheckEquals(SupportedHeaderFull, TIdSipHeaders.CanonicaliseName('supported'),          'supported');
-  CheckEquals(SupportedHeaderFull, TIdSipHeaders.CanonicaliseName('Supported'),          'Supported');
-  CheckEquals(SupportedHeaderFull, TIdSipHeaders.CanonicaliseName('k'),                  'k');
-  CheckEquals(SupportedHeaderFull, TIdSipHeaders.CanonicaliseName('K'),                  'K');
-  CheckEquals(SupportedHeaderFull, TIdSipHeaders.CanonicaliseName(SupportedHeaderFull),  'SupportedHeaderFull constant');
-  CheckEquals(SupportedHeaderFull, TIdSipHeaders.CanonicaliseName(SupportedHeaderShort), 'SupportedHeaderShort constant');
-
-  CheckEquals(TimestampHeader, TIdSipHeaders.CanonicaliseName('timestamp'),     'timestamp');
-  CheckEquals(TimestampHeader, TIdSipHeaders.CanonicaliseName('Timestamp'),     'Timestamp');
-  CheckEquals(TimestampHeader, TIdSipHeaders.CanonicaliseName(TimestampHeader), 'TimestampHeader constant');
-
-  CheckEquals(ToHeaderFull, TIdSipHeaders.CanonicaliseName('to'),          'to');
-  CheckEquals(ToHeaderFull, TIdSipHeaders.CanonicaliseName('To'),          'To');
-  CheckEquals(ToHeaderFull, TIdSipHeaders.CanonicaliseName('t'),           't');
-  CheckEquals(ToHeaderFull, TIdSipHeaders.CanonicaliseName('T'),           'T');
-  CheckEquals(ToHeaderFull, TIdSipHeaders.CanonicaliseName(ToHeaderFull),  'ToHeaderFull constant');
-  CheckEquals(ToHeaderFull, TIdSipHeaders.CanonicaliseName(ToHeaderShort), 'ToHeaderShort constant');
-
-  CheckEquals(UnsupportedHeader, TIdSipHeaders.CanonicaliseName('unsupported'),     'unsupported');
-  CheckEquals(UnsupportedHeader, TIdSipHeaders.CanonicaliseName('Unsupported'),     'Unsupported');
-  CheckEquals(UnsupportedHeader, TIdSipHeaders.CanonicaliseName(UnsupportedHeader), 'UnsupportedHeader constant');
-
-  CheckEquals(UserAgentHeader, TIdSipHeaders.CanonicaliseName('user-agent'),    'user-agent');
-  CheckEquals(UserAgentHeader, TIdSipHeaders.CanonicaliseName('User-Agent'),    'User-Agent');
-  CheckEquals(UserAgentHeader, TIdSipHeaders.CanonicaliseName(UserAgentHeader), 'UserAgentHeader constant');
-
-  CheckEquals(ViaHeaderFull, TIdSipHeaders.CanonicaliseName('via'),          'via');
-  CheckEquals(ViaHeaderFull, TIdSipHeaders.CanonicaliseName('Via'),          'Via');
-  CheckEquals(ViaHeaderFull, TIdSipHeaders.CanonicaliseName('v'),            'v');
-  CheckEquals(ViaHeaderFull, TIdSipHeaders.CanonicaliseName('V'),            'V');
-  CheckEquals(ViaHeaderFull, TIdSipHeaders.CanonicaliseName(ViaHeaderFull),  'ViaHeaderFull constant');
-  CheckEquals(ViaHeaderFull, TIdSipHeaders.CanonicaliseName(ViaHeaderShort), 'ViaHeaderShort constant');
-
-  CheckEquals(WarningHeader, TIdSipHeaders.CanonicaliseName('warning'),     'warning');
-  CheckEquals(WarningHeader, TIdSipHeaders.CanonicaliseName('Warning'),     'Warning');
-  CheckEquals(WarningHeader, TIdSipHeaders.CanonicaliseName(WarningHeader), 'WarningHeader constant');
-
-  CheckEquals(WWWAuthenticateHeader, TIdSipHeaders.CanonicaliseName('www-authenticate'),    'www-authenticate');
-  CheckEquals(WWWAuthenticateHeader, TIdSipHeaders.CanonicaliseName('WWW-Authenticate'),    'WWW-Authenticate');
-  CheckEquals(WWWAuthenticateHeader, TIdSipHeaders.CanonicaliseName(WWWAuthenticateHeader), 'WWWAuthenticateHeader constant');
 end;
 
 procedure TestTIdSipHeaders.TestClear;
