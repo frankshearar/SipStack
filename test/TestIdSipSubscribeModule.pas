@@ -1765,6 +1765,7 @@ begin
   Action.Dialog    := Self.Dialog;
   Action.MimeType  := Self.MimeType;
   Action.Subscribe := Self.Subscribe;
+  Action.LocalGruu := Self.Subscribe.FirstContact;
 
   Action.AddActionListener(Self);
   Action.AddNotifyListener(Self);
@@ -4745,6 +4746,7 @@ procedure TestTIdSipInboundReferral.TestRejectUnsupportedReferToUri;
 var
   HttpReferTo: TIdSipAddressHeader;
 begin
+  Fail('This test cannot work until TIdSipUriHeaders can properly support non-SIP URIs');
   HttpReferTo := TIdSipFromHeader.Create;
   try
     HttpReferTo.Address.Uri := 'http://www.example.com/';
