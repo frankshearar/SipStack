@@ -2837,7 +2837,6 @@ begin
   Self.RemoteParty              := Request.From;
   Self.RemoteSessionDescription := Request.Body;
 
-
   if Request.HasHeader(ExpiresHeader) then
     Self.UA.ScheduleEvent(TIdSipInboundInviteExpire,
                           Request.Expires.NumericValue,
