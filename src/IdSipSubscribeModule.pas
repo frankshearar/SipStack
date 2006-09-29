@@ -2367,6 +2367,10 @@ begin
     if (Response.Expires.NumericValue > 0) then
       Self.ScheduleTermination(Response.Expires.NumericValue);
 
+    // This works regardless of whether the UA supports GRUU: if the UA doesn't
+    // then we simply make no USE of LocalGruu.
+    Self.LocalGruu := Response.FirstContact;
+
     Self.SendResponse(Response);
   finally
     Response.Free;
