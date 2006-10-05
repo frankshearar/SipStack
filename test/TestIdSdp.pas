@@ -125,6 +125,7 @@ type
     procedure TestHasFormat;
     procedure TestGetFormat;
     procedure TestInitialState;
+    procedure TestIsText;
     procedure TestPrintOnBasic;
     procedure TestPrintOnFull;
     procedure TestPrintOnWithPortCount;
@@ -510,6 +511,7 @@ type
     procedure TestSendDataWhenNotSender;
     procedure TestSetRemoteDescriptionSendsNoPackets;
     procedure TestStartListening;
+    procedure TestStartListeningOnRefusedStream;
     procedure TestStopListeningStopsListening;
     procedure TestTakeOffHold;
   end;
@@ -1546,6 +1548,20 @@ end;
 procedure TestTIdSdpMediaDescription.TestInitialState;
 begin
   CheckEquals(1, Self.M.PortCount, 'PortCount');
+end;
+
+procedure TestTIdSdpMediaDescription.TestIsText;
+var
+  MT: TIdSdpMediaType;
+begin
+  for MT := Low(TIdSdpMediaType) to High(TIdSdpMediaType) do begin
+    Self.M.MediaType := MT;
+
+    if (Self.M.MediaType = mtText) then
+      Check(Self.M.IsText, 'Not marked as text when media type is ' + MediaTypeToStr(MT))
+    else
+      Check(not Self.M.IsText, 'Marked as text when media type is ' + MediaTypeToStr(MT))
+  end;
 end;
 
 procedure TestTIdSdpMediaDescription.TestPrintOnBasic;
@@ -6442,7 +6458,7 @@ begin
                   Self.Sender.LocalDescription.Port,
                   'Local port not active after StartListening');
 
-  Self.Sender.JoinSession;                
+  Self.Sender.JoinSession;
 
   // We're using a debug timer, so we fire the event manually.
   Self.Timer.TriggerEarliestEvent;
@@ -6452,6 +6468,23 @@ begin
   Self.SendRTP;
 
   Self.WaitForSignaled(Self.RTPEvent, 'No RTP sent');
+end;
+
+procedure TestTIdSDPMediaStream.TestStartListeningOnRefusedStream;
+begin
+  Self.Sender.StopListening;
+
+  Self.SetLocalMediaDesc(Self.Sender, 'm=audio 0 RTP/AVP 0');
+
+  // Make sure we don't simply blow up
+  Self.Media.StartListening;
+
+  Self.Sender.JoinSession;
+
+  // We're using a debug timer, so we fire the event manually.
+  Self.Timer.TriggerEarliestEvent;
+
+  Self.WaitForTimeout(Self.RTCPEvent, 'RTCP sent');
 end;
 
 procedure TestTIdSDPMediaStream.TestStopListeningStopsListening;

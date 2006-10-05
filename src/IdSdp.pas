@@ -174,6 +174,7 @@ type
     function  HasConnection: Boolean;
     function  HasFormat(Fmt: String): Boolean;
     function  HasKey: Boolean;
+    function  IsText: Boolean;
     procedure PrintOn(Dest: TStream); override;
 
     property Attributes:              TIdSdpAttributes       read GetAttributes;
@@ -1323,6 +1324,11 @@ end;
 function TIdSdpMediaDescription.HasKey: Boolean;
 begin
   Result := Assigned(fKey);
+end;
+
+function TIdSdpMediaDescription.IsText: Boolean;
+begin
+  Result := Self.MediaType = mtText;
 end;
 
 procedure TIdSdpMediaDescription.PrintOn(Dest: TStream);
