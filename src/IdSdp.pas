@@ -697,6 +697,7 @@ const
   // IANA assigned addrtype
   Id_SDP_IP4 = 'IP4';
   Id_SDP_IP6 = 'IP6';
+  Id_SDP_IPUnknown = 'UNKNOWN_IP_VERSION'; // NOT IANA assigned!
   // IANA assigned keytype
   Id_SDP_Clear  = 'clear';
   Id_SDP_Base64 = 'base64';
@@ -774,8 +775,9 @@ const
 function AddressTypeToStr(Version: TIdIPVersion): String;
 begin
   case Version of
-    Id_IPv4: Result := Id_SDP_IP4;
-    Id_IPv6: Result := Id_SDP_IP6;
+    Id_IPv4:      Result := Id_SDP_IP4;
+    Id_IPv6:      Result := Id_SDP_IP6;
+    Id_IPUnknown: Result := Id_SDP_IPUnknown;
   else
     raise EConvertError.Create(Format(ConvertEnumErrorMsg,
                                       ['TIdIPVersion',
@@ -848,8 +850,9 @@ end;
 
 function StrToAddressType(const S: String): TIdIPVersion;
 begin
-       if (S = Id_SDP_IP4) then Result := Id_IPv4
-  else if (S = Id_SDP_IP6) then Result := Id_IPv6
+       if (S = Id_SDP_IP4)       then Result := Id_IPv4
+  else if (S = Id_SDP_IP6)       then Result := Id_IPv6
+  else if (S = Id_SDP_IPUnknown) then Result := Id_IPUnknown
   else
     raise EConvertError.Create(Format(ConvertStrErrorMsg,
                                       [S, 'TIdIPVersion']));
