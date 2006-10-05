@@ -6041,9 +6041,11 @@ begin
       Check(L1.ReceivedRTP, 'L1 not notified');
       Check(L2.ReceivedRTP, 'L2 not notified');
     finally
+      Self.Media.RemoveRTPListener(L2);
       L2.Free;
     end;
   finally
+    Self.Media.RemoveRTPListener(L1);
     L1.Free;
   end;
 end;
@@ -6340,9 +6342,11 @@ begin
       Check(L1.ReceivedRTCP, 'L1 not notified');
       Check(L2.ReceivedRTCP, 'L2 not notified');
     finally
+      Self.Media.RemoveRTPListener(L2);
       L2.Free;
     end;
   finally
+    Self.Media.RemoveRTPListener(L1);
     L1.Free;
   end;
 end;
@@ -6367,9 +6371,11 @@ begin
       Check(L1.ReceivedRTP, 'L1 not notified');
       Check(L2.ReceivedRTP, 'L2 not notified');
     finally
+      Self.Media.RemoveRTPListener(L2);
       L2.Free;
     end;
   finally
+    Self.Media.RemoveRTPListener(L1);
     L1.Free;
   end;
 end;
@@ -6438,7 +6444,7 @@ begin
 
   Self.Sender.JoinSession;                
 
-  // We#re using a debug timer, so we fire the event manually.
+  // We're using a debug timer, so we fire the event manually.
   Self.Timer.TriggerEarliestEvent;
 
   Self.WaitForSignaled(Self.RTCPEvent, 'No RTCP sent');
