@@ -122,8 +122,8 @@ type
     procedure TestAssign;
     procedure TestEquals;
     procedure TestFormatClear;
-    procedure TestHasFormat;
     procedure TestGetFormat;
+    procedure TestHasFormat;
     procedure TestInitialState;
     procedure TestIsText;
     procedure TestPrintOnBasic;
@@ -1524,6 +1524,16 @@ begin
   CheckEquals(0, Self.M.FormatCount, 'FormatCount after ClearFormats');
 end;
 
+procedure TestTIdSdpMediaDescription.TestGetFormat;
+var
+  I: Integer;
+begin
+  for I := 0 to 999 do begin
+    Self.M.AddFormat(IntToStr(I));
+    CheckEquals(IntToStr(I), Self.M.Formats[I], 'Formats[' + IntToStr(I) + ']');
+  end;
+end;
+
 procedure TestTIdSdpMediaDescription.TestHasFormat;
 var
   Fmt: String;
@@ -1533,16 +1543,6 @@ begin
   Check(not Self.M.HasFormat(Fmt), 'Empty format list');
   Self.M.AddFormat(Fmt);
   Check(Self.M.HasFormat(Fmt), 'Format not added?');
-end;
-
-procedure TestTIdSdpMediaDescription.TestGetFormat;
-var
-  I: Integer;
-begin
-  for I := 0 to 999 do begin
-    Self.M.AddFormat(IntToStr(I));
-    CheckEquals(IntToStr(I), Self.M.Formats[I], 'Formats[' + IntToStr(I) + ']');
-  end;
 end;
 
 procedure TestTIdSdpMediaDescription.TestInitialState;
