@@ -125,6 +125,7 @@ type
     procedure TestGetFormat;
     procedure TestHasFormat;
     procedure TestInitialState;
+    procedure TestIsRefusedStream;
     procedure TestIsText;
     procedure TestPrintOnBasic;
     procedure TestPrintOnFull;
@@ -511,7 +512,6 @@ type
     procedure TestSendDataWhenNotSender;
     procedure TestSetRemoteDescriptionSendsNoPackets;
     procedure TestStartListening;
-    procedure TestStartListeningOnRefusedStream;
     procedure TestStopListeningStopsListening;
     procedure TestTakeOffHold;
   end;
@@ -541,6 +541,7 @@ type
     procedure OnRTP(Packet: TIdRTPPacket;
                     Binding: TIdConnection);
     procedure ReceiveDataOfType(PayloadType: Cardinal);
+    function  RefusedStreamSDP(Port: Cardinal): String;
     function  SingleStreamSDP(Port: Cardinal;
                               PayloadType: Cardinal = 96): String;
   public
@@ -552,6 +553,7 @@ type
     procedure TestInitialize;
     procedure TestIsListening;
     procedure TestLocalSessionDescription;
+    procedure TestLocalSessionDescriptionWithRefusedStream;
     procedure TestLocalSessionVersionIncrements;
     procedure TestMimeType;
     procedure TestNetTypeFor;
@@ -570,6 +572,7 @@ type
     procedure TestStartListeningSingleStream;
     procedure TestStartListeningMalformedSdp;
     procedure TestStartListeningMultipleStreams;
+    procedure TestStartListeningPortsOutsideAllowedRange;
     procedure TestStartListeningRegistersLocalRtpMaps;
     procedure TestStartListeningRegistersRemoteRtpMaps;
     procedure TestStartListeningTriesConsecutivePorts;
@@ -1548,6 +1551,15 @@ end;
 procedure TestTIdSdpMediaDescription.TestInitialState;
 begin
   CheckEquals(1, Self.M.PortCount, 'PortCount');
+end;
+
+procedure TestTIdSdpMediaDescription.TestIsRefusedStream;
+begin
+  Self.M.Port := 8000;
+  Check(not Self.M.IsRefusedStream, 'Port <> 0 but stream looks refused');
+
+  Self.M.Port := 0;
+  Check(Self.M.IsRefusedStream, 'Port = 0 but stream doesn''t look refused');
 end;
 
 procedure TestTIdSdpMediaDescription.TestIsText;
@@ -6470,23 +6482,6 @@ begin
   Self.WaitForSignaled(Self.RTPEvent, 'No RTP sent');
 end;
 
-procedure TestTIdSDPMediaStream.TestStartListeningOnRefusedStream;
-begin
-  Self.Sender.StopListening;
-
-  Self.SetLocalMediaDesc(Self.Sender, 'm=audio 0 RTP/AVP 0');
-
-  // Make sure we don't simply blow up
-  Self.Media.StartListening;
-
-  Self.Sender.JoinSession;
-
-  // We're using a debug timer, so we fire the event manually.
-  Self.Timer.TriggerEarliestEvent;
-
-  Self.WaitForTimeout(Self.RTCPEvent, 'RTCP sent');
-end;
-
 procedure TestTIdSDPMediaStream.TestStopListeningStopsListening;
 begin
   // Commented out stuff: an idea for how to test that the server
@@ -6641,7 +6636,7 @@ begin
     Client.LocalProfile  := Self.Profile;
     Client.RemoteProfile := Self.Profile;
     Client.RTPPort       := Self.RemotePort + 1000;
-    
+
     NoData := TIdRTPPacket.Create(Client.RemoteProfile);
     try
       NoData.PayloadType := PayloadType;
@@ -6652,6 +6647,18 @@ begin
   finally
     Client.Free;
   end;
+end;
+
+function TestTIdSDPMultimediaSession.RefusedStreamSDP(Port: Cardinal): String;
+begin
+  // One stream refused, one accepted.
+  Result := 'v=0'#13#10
+          + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
+          + 's=-'#13#10
+          + 'c=IN IP4 127.0.0.1'#13#10
+          + 'm=text 0 RTP/AVP 0'#13#10
+          + 'm=text ' + IntToStr(Port) + ' RTP/AVP 96'#13#10
+          + 'a=rtpmap:96 t140/1000'#13#10
 end;
 
 function TestTIdSDPMultimediaSession.SingleStreamSDP(Port: Cardinal;
@@ -6742,6 +6749,31 @@ begin
   CheckNotEquals(CurrentDesc,
                  Self.MS.LocalSessionDescription,
               'After StopListening: session description not updated');
+end;
+
+procedure TestTIdSDPMultimediaSession.TestLocalSessionDescriptionWithRefusedStream;
+const
+  NormalPort          = 8000;
+  RefusedPortSentinel = 0;
+var
+  Desc: TIdSdpPayload;
+  S:    String;
+begin
+  Self.MS.LowestAllowedPort := NormalPort;
+
+  S := Self.MS.StartListening(Self.RefusedStreamSDP(NormalPort));
+  Desc := TIdSdpPayload.CreateFrom(S);
+  try
+    CheckEquals(2, Desc.MediaDescriptionCount, 'Incorrect number of media descriptions');
+
+    CheckEquals('RTP/AVP', Desc.MediaDescriptionAt(0).Transport, 'Transport changed: 1st desc');
+    CheckEquals(RefusedPortSentinel, Desc.MediaDescriptionAt(0).Port, 'Port changed: 1st desc');
+
+    CheckEquals('RTP/AVP', Desc.MediaDescriptionAt(1).Transport, 'Transport changed: 2nd desc');
+    CheckEquals(NormalPort, Desc.MediaDescriptionAt(1).Port, 'Port changed: 2nd desc');
+  finally
+    Desc.Free;
+  end;
 end;
 
 procedure TestTIdSDPMultimediaSession.TestLocalSessionVersionIncrements;
@@ -7050,6 +7082,26 @@ begin
                        HighPort,
                        'Server not listening on '
                      + GStack.LocalAddress + ':' + IntToStr(HighPort));
+end;
+
+procedure TestTIdSDPMultimediaSession.TestStartListeningPortsOutsideAllowedRange;
+var
+  I:   Integer;
+  SDP: TIdSdpPayload;
+begin
+  // We create an abnormal setup: there's no legal ports to use!
+  Self.MS.LowestAllowedPort := 10000;
+  Self.MS.HighestAllowedPort := 9000;
+
+  SDP := TIdSdpPayload.CreateFrom(Self.MS.StartListening(Self.MultiStreamSDP(Self.MS.HighestAllowedPort, Self.MS.LowestAllowedPort)));
+  try
+    for I := 0 to SDP.MediaDescriptionCount - 1 do
+      CheckEquals(0,
+                  SDP.MediaDescriptionAt(0).Port,
+                  IntToStr(I) + 'th description''s port');
+  finally
+    SDP.Free;
+  end;
 end;
 
 procedure TestTIdSDPMultimediaSession.TestStartListeningRegistersLocalRtpMaps;

@@ -174,6 +174,7 @@ type
     function  HasConnection: Boolean;
     function  HasFormat(Fmt: String): Boolean;
     function  HasKey: Boolean;
+    function  IsRefusedStream: Boolean;
     function  IsText: Boolean;
     procedure PrintOn(Dest: TStream); override;
 
@@ -1324,6 +1325,11 @@ end;
 function TIdSdpMediaDescription.HasKey: Boolean;
 begin
   Result := Assigned(fKey);
+end;
+
+function TIdSdpMediaDescription.IsRefusedStream: Boolean;
+begin
+  Result := Self.Port = 0;
 end;
 
 function TIdSdpMediaDescription.IsText: Boolean;
@@ -3980,15 +3986,27 @@ begin
     NewStream.Timer := Self.Timer;
     Self.fStreams.Add(NewStream);
 
-    SocketBound := false;
-    while not SocketBound and Self.AllowedPort(Desc.Port) do begin
+    if Desc.IsRefusedStream then begin
       NewStream.LocalDescription := Desc;
-      try
-        NewStream.StartListening;
-        SocketBound := true;
-      except
-        on EIdCouldNotBindSocket do
-          Desc.Port := Desc.Port + 2; // One for RTP, one for RTCP.
+    end
+    else begin
+      SocketBound := false;
+      while not SocketBound and Self.AllowedPort(Desc.Port) do begin
+        NewStream.LocalDescription := Desc;
+        try
+          NewStream.StartListening;
+          SocketBound := true;
+        except
+          on EIdCouldNotBindSocket do
+            Desc.Port := Desc.Port + 2; // One for RTP, one for RTCP.
+        end;
+      end;
+
+      // Note that even if the stream doesn't bind to a port, the stream object
+      // still exists!
+      if not SocketBound then begin
+        Desc.Port := 0;
+        NewStream.LocalDescription := Desc;
       end;
     end;
   except
@@ -3999,11 +4017,6 @@ begin
 
     raise;
   end;
-
-  // Note that even if the stream doesn't bind to a port, the stream object
-  // still exists!
-  if not SocketBound then
-    Desc.Port := 0;
 end;
 
 //* TIdSDPMultimediaSession Private methods ************************************
