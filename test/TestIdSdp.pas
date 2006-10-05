@@ -602,7 +602,6 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSdpParser unit tests');
-{
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSdpAttribute.Suite);
   Result.AddTest(TestTIdSdpRTPMapAttribute.Suite);
@@ -624,7 +623,6 @@ begin
   Result.AddTest(TestTIdSdpParser.Suite);
   Result.AddTest(TestTIdSdpPayload.Suite);
   Result.AddTest(TestTIdSDPMediaStream.Suite);
-}
   Result.AddTest(TestTIdSDPMultimediaSession.Suite);
 //  Result.AddTest(TestTIdSdpNatMasquerader.Suite);
 end;
