@@ -4926,6 +4926,7 @@ begin
   // Either an RR or SR, plus an SDES
   Result := TIdCompoundRTCPPacket.Create;
   try
+    Result.SyncSrcID := Self.SyncSrcID;
     Self.AddReports(Result);
     Self.AddSourceDesc(Result);
   except

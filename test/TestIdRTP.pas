@@ -7586,6 +7586,10 @@ begin
 
   Pkt := Self.Session.CreateNextReport;
   try
+    CheckEquals(IntToHex(Self.Session.SyncSrcID, 8),
+                IntToHex(Pkt.SyncSrcID, 8),
+                'SSRC');
+
     // An RR and the obligatory SDES
     CheckEquals(2, Pkt.PacketCount, 'Packet count');
     CheckEquals(RTCPReceiverReport,
