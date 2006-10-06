@@ -401,6 +401,8 @@ type
   published
     procedure TestAcceptCall;
     procedure TestAcceptCallWithGruu;
+    procedure TestAcceptCallWithAnswerInAck;
+    procedure TestAcceptCallWithNoSDPInAck;
     procedure TestAddSessionListener;
     procedure TestCancelAfterAccept;
     procedure TestCancelBeforeAccept;
@@ -4346,6 +4348,71 @@ begin
   // draft-ietf-sip-gruu section 8.1
   Check(Self.LastSentResponse.FirstContact.Address.HasParameter(GridParam),
         'GRUUs sent out in 200 OKs to INVITEs should have a "grid" parameter');
+end;
+
+procedure TestTIdSipInboundSession.TestAcceptCallWithAnswerInAck;
+begin
+  // <--- INVITE without SDP ---
+  //  --- 200 OK with offer  --->
+  // <---  ACK with answer   ---
+
+  Self.RemoteDesc := '';
+  Self.CreateAction;
+  CheckEquals(Self.RemoteDesc,
+              Self.Session.RemoteSessionDescription,
+              'Remote session description known');
+  CheckEquals('',
+              Self.Session.LocalSessionDescription,
+              'Local session description known');
+
+  Self.Session.AcceptCall(Self.SimpleSdp.AsString, SdpMimeType);
+  CheckEquals(Self.SimpleSdp.AsString,
+              Self.Session.LocalSessionDescription,
+              'Local session description (offer) not known');
+
+  Self.ReceiveAckWithBody(Self.SimpleSdp.AsString, SdpMimeType);
+  CheckEquals(Self.SimpleSdp.AsString,
+              Self.Session.RemoteSessionDescription,
+              'Remote session description (answer) not known');
+end;
+
+procedure TestTIdSipInboundSession.TestAcceptCallWithNoSDPInAck;
+var
+  LocalDesc:  String;
+  RemoteDesc: String;
+begin
+  // This case shouldn't happen with a SIP-compliant UA. SIPcon1 does (as of
+  // 2006/10/06) send an ACK with no SDP, so it behooves us to behave sanely. We
+  // just ignore the ACK's (lack of) session description and treat the INVITE's
+  // as the remote session description.
+  //
+  // <--- INVITE with offer  ---
+  //  --- 200 OK with answer --->
+  // <---  ACK with no SDP   ---
+
+  Self.RemoteContentType := SdpMimeType;
+  Self.RemoteDesc        := Self.MultiStreamSdp.AsString;  
+
+  LocalDesc  := Self.SimpleSdp.AsString;
+  RemoteDesc := Self.RemoteDesc;
+
+  Self.CreateAction;
+  CheckEquals(RemoteDesc,
+              Self.Session.RemoteSessionDescription,
+              'Remote session description (offer) not known');
+  CheckEquals('',
+              Self.Session.LocalSessionDescription,
+              'Local session description known');
+
+  Self.Session.AcceptCall(LocalDesc, SdpMimeType);
+  CheckEquals(LocalDesc,
+              Self.Session.LocalSessionDescription,
+              'Local session description (answer) not known');
+
+  Self.ReceiveAckWithBody('', '');
+  CheckEquals(RemoteDesc,
+              Self.Session.RemoteSessionDescription,
+              'Remote session description (answer) not known');
 end;
 
 procedure TestTIdSipInboundSession.TestAddSessionListener;
