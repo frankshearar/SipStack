@@ -28,11 +28,15 @@ function  GetTickDiff(const OldTickCount, NewTickCount : Cardinal): Cardinal;
 function  GetUserName: WideString;
 function  LocalAddress: String;
 procedure LocalAddresses(IPs: TStrings);
+procedure DefineLocalAddress(AAddress: String);
 
 implementation
 
 uses
   IdSimpleParser, IdGlobal, IdStack, IdUDPServer, SysUtils, Windows, Winsock;
+
+var
+  idLocalAddress: String;
 
 function ConstructUUID: String;
 var
@@ -132,16 +136,20 @@ function LocalAddress: String;
 var
   UnusedServer: TIdUDPServer;
 begin
-  if not Assigned(GStack) then begin
-    UnusedServer := TIdUDPServer.Create(nil);
-    try
+  if (Length(idLocalAddress)=0) or (idLocalAddress='0.0.0.0') then
+  begin
+    if not Assigned(GStack) then begin
+      UnusedServer := TIdUDPServer.Create(nil);
+      try
+        Result := GStack.LocalAddress;
+      finally
+        UnusedServer.Free;
+      end;
+    end
+    else
       Result := GStack.LocalAddress;
-    finally
-      UnusedServer.Free;
-    end;
-  end
-  else
-    Result := GStack.LocalAddress;
+  end else
+    Result:=idLocalAddress;
 end;
 
 procedure LocalAddresses(IPs: TStrings);
@@ -162,4 +170,13 @@ begin
     IPs.AddStrings(GStack.LocalAddresses);
 end;
 
+procedure DefineLocalAddress(AAddress: String);
+begin
+  idLocalAddress:=AAddress;
+end;
+
+initialization
+  idLocalAddress:='0.0.0.0';
+
 end.
+
