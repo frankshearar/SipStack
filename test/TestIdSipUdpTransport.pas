@@ -46,6 +46,7 @@ type
     procedure TestLeaveNonRportRequestsUntouched;
     procedure TestMessageWithTrailingGarbage;
     procedure TestMissingContentLength;
+    procedure TestReceiveFragmentedUDP;
     procedure TestRportParamFilledIn;
     procedure TestRportListening;
   end;
@@ -330,7 +331,64 @@ begin
               Self.RecvdRequest.Body,
               'The transport MUST treat the rest of the packet as the body. '
             + 'cf. RFC 3261, section 18.3');
-              
+
+end;
+
+procedure TestTIdSipUDPTransport.TestReceiveFragmentedUDP;
+const
+  FragmentedInvite =
+    'INVITE sip:lisa@192.168.0.33 SIP/2.0'#13#10
+  + 'From: "Thomas Johansson"<sip:thomas@sip.example.com>;tag=22b8828-2200a8c0-13c4-29a0f-7bc38b07-29a0f'#13#10
+  + 'To: "lisa"<sip:lisa@192.168.0.33>'#13#10
+  + 'Call-ID: 22eff48-2200a8c0-13c4-29a0f-25e4a1b7-29a0f@sip.example.com'#13#10
+  + 'CSeq: 1 INVITE'#13#10
+  + 'Via: SIP/2.0/UDP 192.168.0.34:5060;branch=z9hG4bK-29a0f-a29cd2d-35eb934d'#13#10
+  + 'Expires: 1800'#13#10
+  + 'Max-Forwards: 70'#13#10
+  + 'Supported: 100rel,replaces'#13#10
+  + 'User-Agent: FranceTelecom/eConf'#13#10
+  + 'Accept: application/sdp,audio/telephone-event,text/plain,text/html,application/media_control+xml,application/mc+xml,application/dtmf-relay,message/sipfrag'#13#10
+  + 'Contact: <sip:thomas@192.168.0.34>'#13#10
+  + 'Allow: INVITE,ACK,BYE,CANCEL,OPTIONS,REFER,PRACK,INFO,MESSAGE,SUBSCRIBE,NOTIFY'#13#10
+  + 'Content-Type: application/SDP'#13#10
+  + 'Content-Length: 738'#13#10
+  + #13#10
+  + 'v=0'#13#10
+  + 'o=anonymous 1159541940 1159541940 IN IP4 192.168.0.34'#13#10
+  + 's=-'#13#10
+  + 'i=eConf 4.1'#13#10
+  + 'c=IN IP4 192.168.0.34'#13#10
+  + 'b=AS:384'#13#10
+  + 't=0 0'#13#10
+  + 'm=audio 6000 RTP/AVP 102 104 9 108 4 8 0 116'#13#10
+  + 'a=rtpmap:102 X-G72x1/16000'#13#10
+  + 'a=rtpmap:104 X-G72x24/16000'#13#10
+  + 'a=rtpmap:9 G722/8000'#13#10
+  + 'a=rtpmap:108 X-G72xH/8000'#13#10
+  + 'a=rtpmap:4 G723/8000'#13#10
+  + 'a=rtpmap:8 PCMA/8000'#13#10
+  + 'a=rtpmap:0 PCMU/8000'#13#10
+  + 'a=rtpmap:116 telephone-event/8000'#13#10
+  + 'a=fmtp:116 0-15'#13#10
+  + 'a=sendrecv'#13#10
+  + 'm=video 6002 RTP/AVP 97 34 31'#13#10
+  + 'b=AS:352'#13#10
+  + 'a=rtpmap:97 H263-1998/90000'#13#10
+  + 'a=rtpmap:34 H263/90000'#13#10
+  + 'a=rtpmap:31 H261/90000'#13#10
+  + 'a=TIAS:352000'#13#10
+  + 'a=fmtp:97 CIF=1 QCIF=1/I=1 J=1 T=1 N=4 K=1'#13#10
+  + 'a=fmtp:34 CIF=1 QCIF=1'#13#10
+  + 'a=fmtp:31 CIF=1 QCIF=1'#13#10
+  + 'a=sendrecv'#13#10
+  + 'm=text 6006 RTP/AVP 98 99'#13#10
+  + 'a=rtpmap:98 T140';
+begin
+  Self.CheckingResponseEvent := Self.CheckForBadRequest;
+
+  Self.SendMessage(FragmentedInvite);
+
+  Self.WaitForSignaled(Self.RejectedMessageEvent);
 end;
 
 procedure TestTIdSipUDPTransport.TestRportParamFilledIn;
