@@ -6,6 +6,7 @@
 
   This unit contains code written by:
     * Frank Shearar
+    * Guido Gybels
 }
 unit IdSystem;
 
@@ -28,13 +29,14 @@ function  GetTickDiff(const OldTickCount, NewTickCount : Cardinal): Cardinal;
 function  GetUserName: WideString;
 function  LocalAddress: String;
 procedure LocalAddresses(IPs: TStrings);
-procedure DefineLocalAddress(AAddress: String);
+procedure DefineLocalAddress(AAddress: String); {Allows you to use a specified IP address}
 
 implementation
 
 uses
   IdSimpleParser, IdGlobal, IdStack, IdUDPServer, SysUtils, Windows, Winsock;
 
+{See commentary for LocalAddress for an explanation of this variable}
 var
   idLocalAddress: String;
 
@@ -132,6 +134,14 @@ begin
   end;
 end;
 
+{Normally, the local machine address is automatically discovered when using the "LocalAddress" function.
+ In certain scenarios, however, you might want to preselect which local address to use. This applies
+ for instance to multihomed scenarios as well as cases where you wish to signal a public IP address
+ in stead of the local address.
+ If you want to override the automatic address discovery, call "DefineLocalAddress" with the address
+ you wish to use. Subsequent calls to LocalAddress will then always return this address. To restore
+ automatic discovery, call DefineLocalAddress with a zero length string or with "0.0.0.0" as the
+ address.}
 function LocalAddress: String;
 var
   UnusedServer: TIdUDPServer;
@@ -170,6 +180,7 @@ begin
     IPs.AddStrings(GStack.LocalAddresses);
 end;
 
+{See commentary for LocalAddress for an explanation of this function}
 procedure DefineLocalAddress(AAddress: String);
 begin
   idLocalAddress:=AAddress;
