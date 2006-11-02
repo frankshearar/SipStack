@@ -12,7 +12,7 @@ unit IdUnicode;
 interface
 
 uses
-  Types;
+  SysUtils, Types;
 
 const
   Utf8ZeroWidthNonBreakingSpace = #$EF#$BB#$BF;
@@ -37,11 +37,10 @@ function UTF16LEToUTF8(const W: WideString): String;
 function UTF8ToUTF16LE(const S: String): WideString;
 
 function LastPosW(const Needle, Haystack: WideString; Start: Integer = -1): Integer;
+function PosW(const Needle, Haystack: WideString): Integer;
+function StringReplaceW(const S, OldPattern, NewPattern: WideString; ReplaceAll: Boolean = false): WideString;
 
 implementation
-
-uses
-  SysUtils;
 
 //******************************************************************************
 //* Unit public functions & procedures                                         *
@@ -247,7 +246,7 @@ begin
 
   Result := 0;
   TokenLen := Length(Needle);
-  
+
   // Get starting position
   if Start < 0 then
     Start := Length(Haystack);
@@ -262,6 +261,63 @@ begin
       Result := I;
       Break;
     end;
+  end;
+end;
+
+function PosW(const Needle, Haystack: WideString): Integer;
+var
+  I: Integer;
+begin
+  Result := 0;
+  if (Needle = '') or (Haystack = '') then Exit;
+
+  I := 1;
+  while (I <= Length(Haystack) - Length(Needle) + 1) do begin
+    if (Copy(Haystack, I, Length(Needle)) = Needle) then begin
+      Result := I;
+      Break;
+    end
+    else begin
+      // It would be nice here to increment I by the length of that substring
+      // common between the search string at I and the substring. That means
+      // we can't use Copy.
+      Inc(I);
+    end;
+  end;
+end;
+
+function StringReplaceW(const S, OldPattern, NewPattern: WideString; ReplaceAll: Boolean = false): WideString;
+var
+  SearchStr, Patt, NewStr: WideString;
+  Offset: Integer;
+begin
+  // We IGNORE rfIgnoreCase: case sensitivity is very complicated in Unicode,
+  // and is relative to culture. For instance, "I" is NOT the upper case of "i"
+  // in tr-TR (Turkey).
+
+  // Code shamelessly based on SysUtils.StringReplace
+
+  SearchStr := S;
+  Patt := OldPattern;
+
+  NewStr := S;
+  Result := '';
+  while (SearchStr <> '') do begin
+    Offset := PosW(Patt, SearchStr);
+    if (Offset = 0) then begin
+      Result := Result + NewStr;
+      Break;
+    end;
+
+    Result := Result + Copy(NewStr, 1, Offset - 1) + NewPattern;
+    NewStr := Copy(NewStr, Offset + Length(OldPattern), MaxInt);
+
+    if not ReplaceAll then begin
+      Result := Result + NewStr;
+      Break;
+    end;
+
+    SearchStr := Copy(SearchStr, Offset + Length(Patt), MaxInt);
   end;
 end;
 

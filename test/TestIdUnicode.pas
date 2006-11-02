@@ -23,6 +23,8 @@ type
     procedure TestIsLowSurrogate;
     procedure TestLowSurrogate;
     procedure TestLastPosW;
+    procedure TestPosW;
+    procedure TestStringReplaceW;
     procedure TestSurrogateToCodePoint;
     procedure TestUTF16LEToUTF8;
     procedure TestUTF8ToUTF16LE;
@@ -202,6 +204,80 @@ begin
   CheckEquals(4, LastPosW(Needle, Haystack, 4), 'UCS-2, starting at 4');
   CheckEquals(4, LastPosW(Needle, Haystack, 5), 'UCS-2, starting at 5');
   CheckEquals(4, LastPosW(Needle, Haystack),    'UCS-2, starting at left');
+end;
+
+procedure TestUnicodeFunctions.TestPosW;
+var
+  SearchString: WideString;
+  Substring:    WideString;
+begin
+  // The kanji for what, romanised, reads "nihongo".
+  SearchString := WideChar($65E5);
+  SearchString := SearchString + WideChar($672C) + WideChar($8A9E);
+
+  // Substrings not in the search string
+  CheckEquals(0, PosW('', ''), 'Empty string in the empty string');
+  CheckEquals(0, PosW('foo', ''), '"foo" in the empty string');
+  CheckEquals(0, PosW('', 'foo'), 'Empty string in "foo"');
+  CheckEquals(0, PosW('foo', 'bar'), '"foo" in "bar"');
+  CheckEquals(0, PosW(SearchString, 'foo'), '"nihongo" in "foo"');
+  CheckEquals(0, PosW('foo', SearchString), '"foo" in "nihongo"');
+
+  // Substrings at the beginning of the search string
+  CheckEquals(1, PosW('foo', 'foo'), '"foo" in "foo"');
+  CheckEquals(1, PosW('foo', 'foobar'), '"foo" in "foobar"');
+  CheckEquals(1, PosW('f', 'foo'), '"f" in "foo"');
+
+  // Position in repeated substrings
+  CheckEquals(1, PosW('foo', 'foofoo'), '"foo" in "foofoo"');
+
+  // Substrings near or at the end of the search string
+  CheckEquals(4, PosW('bar', 'foobar'), '"bar" in "foobar"');
+  CheckEquals(4, PosW('b',   'foobar'), '"b" in "foobar"');
+  CheckEquals(4, PosW('ba',  'foobar'), '"ba" in "foobar"');
+  CheckEquals(5, PosW('a',   'foobar'), '"a" in "foobar"');
+  CheckEquals(5, PosW('ar',  'foobar'), '"ar" in "foobar"');
+  CheckEquals(6, PosW('r',   'foobar'), '"r" in "foobar"');
+
+  // Unicode substrings at the beginning of the search string
+  Substring := Copy(SearchString, 1, 1);
+  CheckEquals(1, PosW(Substring, SearchString), '"ni" in "nihongo"');
+  Substring := Copy(SearchString, 1, 2);
+  CheckEquals(1, PosW(Substring, SearchString), '"nihon" in "nihongo"');
+  Substring := Copy(SearchString, 1, 3);
+  CheckEquals(1, PosW(Substring, SearchString), '"nihongo" in "nihongo"');
+
+  // Unicode Substrings near or at the end of the search string
+  Substring := Copy(SearchString, 3, 1);
+  CheckEquals(3, PosW(Substring, SearchString), '"go" in "nihongo"');
+  Substring := Copy(SearchString, 2, 2);
+  CheckEquals(2, PosW(Substring, SearchString), '"hongo" in "nihongo"');
+  Substring := Copy(SearchString, 2, 1);
+  CheckEquals(2, PosW(Substring, SearchString), '"hon" in "nihongo"');
+end;
+
+procedure TestUnicodeFunctions.TestStringReplaceW;
+begin
+  CheckEquals('', StringReplaceW('', '', '', false), 'Empty strings');
+  CheckEquals('', StringReplaceW('', '', '', true), 'Empty strings, replace all');
+
+  CheckEquals('', StringReplaceW('foo', 'foo', '', false), 'Replace entire string with empty string');
+  CheckEquals('', StringReplaceW('foo', 'foo', '', true), 'Replace entire string with empty string, replace all');
+
+  CheckEquals('', StringReplaceW('', 'foo', '', false), 'Replace something in empty string with empty string');
+  CheckEquals('', StringReplaceW('', 'foo', '', true), 'Replace something in empty string with empty string, replace all');
+
+  CheckEquals('', StringReplaceW('', 'foo', 'bar', false), 'Replace something in empty string');
+  CheckEquals('', StringReplaceW('', 'foo', 'bar', true), 'Replace something in empty string, replace all');
+
+  CheckEquals('bar', StringReplaceW('foo', 'foo', 'bar', false), 'Replace foo with bar in "foo"');
+  CheckEquals('bar', StringReplaceW('foo', 'foo', 'bar', true), 'Replace foo with bar in "foo", replace all');
+
+  CheckEquals('barfoo not foo', StringReplaceW('foofoo not foo', 'foo', 'bar', false), 'Replace foo with bar in "foofoo not foo"');
+  CheckEquals('barbar not bar', StringReplaceW('foofoo not foo', 'foo', 'bar', true), 'Replace foo with bar in "foofoo not foo", replace all');
+
+  CheckEquals('barFOO not foo', StringReplaceW('FOOFOO not foo', 'FOO', 'bar', false), 'Replace FOO with bar in "FOOFOO not foo"');
+  CheckEquals('barbar not foo', StringReplaceW('FOOFOO not foo', 'FOO', 'bar', true), 'Replace FOO with bar in "FOOFOO not foo", replace all');
 end;
 
 procedure TestUnicodeFunctions.TestSurrogateToCodePoint;
