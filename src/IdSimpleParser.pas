@@ -94,6 +94,7 @@ const
   FetchDefaultDelimiter = ' '; // Do not localise
 
 function EncodeNonLineUnprintableChars(S: String): String;
+function EndsWith(const S, Suffix: String): Boolean;
 function Fetch(var Source: String;
                const Delimiter: String = FetchDefaultDelimiter;
                Delete: Boolean = FetchDefaultDelete): String;
@@ -126,6 +127,13 @@ begin
       Result := Result + S[I]
     else
       Result := Result + '#' + IntToHex(Ord(S[I]), 2);
+end;
+
+function EndsWith(const S, Suffix: String): Boolean;
+begin
+  // Returns true iff a string ends with a specified suffix. 
+
+  Result := Copy(S, Length(S) - Length(Suffix) + 1, Length(Suffix)) = Suffix;
 end;
 
 function Fetch(var Source: String;

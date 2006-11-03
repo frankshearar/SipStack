@@ -18,6 +18,7 @@ type
   TestFunctions = class(TTestCase)
   published
     procedure TestEncodeNonLineUnprintableChars;
+    procedure TestEndsWith;
     procedure TestFetch;
     procedure TestFetchDefaultParameters;
     procedure TestFetchDelimiterNotPresent;
@@ -124,6 +125,23 @@ begin
   CheckEquals('abc#7F#7F#7F',
               EncodeNonLineUnprintableChars('abc'#$7f#$7f#$7f),
               '''abc''#$7f#$7f#$7f');
+end;
+
+procedure TestFunctions.TestEndsWith;
+begin
+  Check(EndsWith('', ''), 'The empty string ends with the empty string');
+  Check(EndsWith('foo', ''), 'All strings end with the empty string');
+  Check(EndsWith('foo', 'foo'), 'All strings end with themselves');
+
+  Check(not EndsWith('foo', 'barbar'), 'No string ends with a string longer than itself');
+
+  Check(EndsWith('foo', 'o'), '"foo" ends with "o"');
+  Check(EndsWith('foo', 'oo'), '"foo" ends with "oo"');
+
+  Check(not EndsWith('foo', 'bar'), '"foo" does not end with "bar"');
+  Check(not EndsWith('foo', 'foobar'), '"foo" does not end with "foobar"');
+  Check(not EndsWith('foo', 'fo'), '"foo" does not end with "fo"');
+  Check(not EndsWith('foo', 'foobar'), '"foo" does not end with "foobar"');
 end;
 
 procedure TestFunctions.TestFetch;
