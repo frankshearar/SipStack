@@ -216,7 +216,7 @@ end;
 uses
   IdSipAuthentication, IdSipCore, IdSipDialog, IdSipInviteModule, IdSipMessage,
   IdSipSubscribeModule, IdSipTransport, IdSipUserAgent, IdTimerQueue,
-  TestFrameworkSip, TestFrameworkSipTU;
+  TestFramework, TestFrameworkSip, TestFrameworkSipTU;
 
 type
   TSubscribeTestCase = class(TTestCaseTU,
@@ -747,6 +747,16 @@ type
     procedure TestTriggerOutboundSubscription;
   end;
 
+  TestTIdSipInboundReferralWait = class(TTestCase)
+  private
+    Wait: TIdSipInboundReferralWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestHasResponse;
+  end;
+
   TestTIdSipSubscriptionRetryWait = class(TSubscribeTestCase)
   private
     Wait: TIdSipSubscriptionRetryWait;
@@ -892,7 +902,7 @@ type
 implementation
 
 uses
-  IdException, IdSipConsts, IdSipDialogID, SysUtils, TestFramework;
+  IdException, IdSipConsts, IdSipDialogID, SysUtils;
 
 type
   TIdSipTestPackage = class(TIdSipEventPackage)
@@ -918,6 +928,7 @@ begin
   Result.AddTest(TestTIdSipOutboundSubscription.Suite);
   Result.AddTest(TestTIdSipInboundReferral.Suite);
   Result.AddTest(TestTIdSipOutboundReferral.Suite);
+  Result.AddTest(TestTIdSipInboundReferralWait.Suite);
   Result.AddTest(TestTIdSipSubscriptionExpires.Suite);
   Result.AddTest(TestTIdSipSubscriptionRetryWait.Suite);
   Result.AddTest(TestTIdSipNotifyFailedMethod.Suite);
@@ -5101,6 +5112,47 @@ begin
 
   Check(Self.OutSubscription.Terminating,
         'Subscription''s not terminating');
+end;
+
+//******************************************************************************
+//* TestTIdSipInboundReferralWait                                              *
+//******************************************************************************
+//* TestTIdSipInboundReferralWait Public methods *******************************
+
+procedure TestTIdSipInboundReferralWait.SetUp;
+begin
+  inherited SetUp;
+
+  // The type of subclass isn't important; it just shuts up warnings of abstract
+  // methods.
+  Self.Wait := TIdSipNotifyReferralDeniedWait.Create;
+end;
+
+procedure TestTIdSipInboundReferralWait.TearDown;
+begin
+  Self.Wait.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipInboundReferralWait Published methods ****************************
+
+procedure TestTIdSipInboundReferralWait.TestHasResponse;
+var
+  Response: TIdSipResponse;
+begin
+  Response := TIdSipResponse.Create;
+  try
+    Check(not Wait.HasResponse, 'Initial state of HasResponse');
+
+    Wait.Response := Response;
+    Check(Wait.HasResponse, 'After assigning a response to Response');
+
+    Wait.Response := nil;
+    Check(not Wait.HasResponse, 'After assigning nil to Response');
+  finally
+    Response.Free
+  end;
 end;
 
 //******************************************************************************

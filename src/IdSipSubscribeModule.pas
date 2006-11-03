@@ -695,16 +695,18 @@ type
   // succeeded, etc.
   TIdSipInboundReferralWait = class(TIdWait)
   private
-    fReferral: TIdSipInboundReferral;
-    fResponse: TIdSipResponse;
+    fHasResponse: Boolean;
+    fReferral:    TIdSipInboundReferral;
+    fResponse:    TIdSipResponse;
 
     procedure SetResponse(Value: TIdSipResponse);
   public
     constructor Create; override;
     destructor  Destroy; override;
 
-    property Referral: TIdSipInboundReferral read fReferral write fReferral;
-    property Response: TIdSipResponse        read fResponse write SetResponse;
+    property HasResponse: Boolean               read fHasResponse;
+    property Referral:    TIdSipInboundReferral read fReferral write fReferral;
+    property Response:    TIdSipResponse        read fResponse write SetResponse;
   end;
 
   TIdSipInboundReferralWaitClass = class of TIdSipInboundReferralWait;
@@ -3209,7 +3211,8 @@ constructor TIdSipInboundReferralWait.Create;
 begin
   inherited Create;
 
-  Self.fResponse := TIdSipResponse.Create;
+  Self.fHasResponse := false;
+  Self.fResponse    := TIdSipResponse.Create;
 
   Self.Response.StatusCode := SIPServiceUnavailable;
 end;
@@ -3225,7 +3228,10 @@ end;
 
 procedure TIdSipInboundReferralWait.SetResponse(Value: TIdSipResponse);
 begin
-  Self.Response.Assign(Value);
+  Self.fHasResponse := Assigned(Value);
+
+  if Self.HasResponse then
+    Self.Response.Assign(Value);
 end;
 
 //******************************************************************************
