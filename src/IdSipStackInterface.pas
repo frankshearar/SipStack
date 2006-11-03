@@ -1361,7 +1361,8 @@ begin
 
     Wait := NotifyType.Create;
     Wait.Referral := Action as TIdSipInboundReferral;
-    Wait.Response := Response;
+    if Assigned(Response) then
+      Wait.Response := Response;
 
     Self.AddEvent(TriggerImmediately, Wait);
   finally
