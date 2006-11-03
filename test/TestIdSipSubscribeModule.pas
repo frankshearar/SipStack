@@ -701,6 +701,7 @@ type
     procedure TestReceiveRefer;
     procedure TestReferenceDenied;
     procedure TestReferenceFailed;
+    procedure TestReferenceFailedWithResponse;
     procedure TestReferenceSucceeded;
     procedure TestReferenceTrying;
     procedure TestRejectUnsupportedReferToUri;
@@ -4697,7 +4698,41 @@ begin
               Notify.SubscriptionState.Reason,
               'Subscription-State reason');
   Check(Self.Refer.IsTerminated,
-        'Referral didn''t terminate');            
+        'Referral didn''t terminate');
+end;
+
+procedure TestTIdSipInboundReferral.TestReferenceFailedWithResponse;
+var
+  Notify:              TIdSipRequest;
+  ReferFailedResponse: TIdSipResponse;
+begin
+  ReferFailedResponse := TIdSipResponse.Create;
+  try
+    ReferFailedResponse.StatusCode := SIPBusyHere;
+    ReferFailedResponse.ContentType := 'text/plain';
+    ReferFailedResponse.Body := 'A body explaining the failure reason';
+
+    Self.Refer.Accept;
+
+    Self.MarkSentRequestCount;
+    Self.Refer.ReferenceFailed(ReferFailedResponse);
+    Self.CheckSendNotify(Self.Refer, SubscriptionSubstateTerminated);
+
+    Notify := Self.LastSentRequest;
+    CheckEquals(SipFragmentMimeType,
+                Notify.ContentType,
+                'NOTIFY Content-Type');
+    CheckEquals(ReferFailedResponse.AsString,
+                Notify.Body,
+                'NOTIFY body');
+    CheckEquals(EventReasonNoResource,
+                Notify.SubscriptionState.Reason,
+                'Subscription-State reason');
+    Check(Self.Refer.IsTerminated,
+          'Referral didn''t terminate');
+  finally
+    ReferFailedResponse.Free;
+  end;
 end;
 
 procedure TestTIdSipInboundReferral.TestReferenceSucceeded;

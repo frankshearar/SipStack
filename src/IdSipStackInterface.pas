@@ -115,7 +115,8 @@ type
     procedure NotifyOfStackShutdown;
     procedure NotifyOfStackStartup;
     procedure NotifyReferral(ActionHandle: TIdSipHandle;
-                             NotifyType: TIdSipInboundReferralWaitClass);
+                             NotifyType: TIdSipInboundReferralWaitClass;
+                             Response: TIdSipResponse);
     procedure NotifySubscriptionEvent(Event: Cardinal;
                                       Subscription: TIdSipSubscription;
                                       Notify: TIdSipRequest);
@@ -222,7 +223,8 @@ type
                          const Offer: String;
                          const ContentType: String);
     procedure NotifyReferralDenied(ActionHandle: TIdSipHandle);
-    procedure NotifyReferralFailed(ActionHandle: TIdSipHandle);
+    procedure NotifyReferralFailed(ActionHandle: TIdSipHandle;
+                                   Response: TIdSipResponse = nil);
     procedure NotifyReferralSucceeded(ActionHandle: TIdSipHandle);
     procedure NotifyReferralTrying(ActionHandle: TIdSipHandle);
     procedure NotifySubcriber(ActionHandle: TIdSipHandle;
@@ -982,22 +984,23 @@ end;
 
 procedure TIdSipStackInterface.NotifyReferralDenied(ActionHandle: TIdSipHandle);
 begin
-  Self.NotifyReferral(ActionHandle, TIdSipNotifyReferralDeniedWait);
+  Self.NotifyReferral(ActionHandle, TIdSipNotifyReferralDeniedWait, nil);
 end;
 
-procedure TIdSipStackInterface.NotifyReferralFailed(ActionHandle: TIdSipHandle);
+procedure TIdSipStackInterface.NotifyReferralFailed(ActionHandle: TIdSipHandle;
+                                                    Response: TIdSipResponse = nil);
 begin
-  Self.NotifyReferral(ActionHandle, TIdSipNotifyReferralFailedWait);
+  Self.NotifyReferral(ActionHandle, TIdSipNotifyReferralFailedWait, Response);
 end;
 
 procedure TIdSipStackInterface.NotifyReferralSucceeded(ActionHandle: TIdSipHandle);
 begin
-  Self.NotifyReferral(ActionHandle, TIdSipNotifyReferralSucceededWait);
+  Self.NotifyReferral(ActionHandle, TIdSipNotifyReferralSucceededWait, nil);
 end;
 
 procedure TIdSipStackInterface.NotifyReferralTrying(ActionHandle: TIdSipHandle);
 begin
-  Self.NotifyReferral(ActionHandle, TIdSipNotifyReferralTryingWait);
+  Self.NotifyReferral(ActionHandle, TIdSipNotifyReferralTryingWait, nil);
 end;
 
 procedure TIdSipStackInterface.NotifySubcriber(ActionHandle: TIdSipHandle;
@@ -1346,7 +1349,8 @@ begin
 end;
 
 procedure TIdSipStackInterface.NotifyReferral(ActionHandle: TIdSipHandle;
-                                              NotifyType: TIdSipInboundReferralWaitClass);
+                                              NotifyType: TIdSipInboundReferralWaitClass;
+                                              Response: TIdSipResponse);
 var
   Action: TIdSipAction;
   Wait:   TIdSipInboundReferralWait;
@@ -1357,6 +1361,7 @@ begin
 
     Wait := NotifyType.Create;
     Wait.Referral := Action as TIdSipInboundReferral;
+    Wait.Response := Response;
 
     Self.AddEvent(TriggerImmediately, Wait);
   finally

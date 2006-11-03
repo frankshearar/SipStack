@@ -628,7 +628,7 @@ type
                      const NewState: String = '';
                      const Reason: String = ''); override;
     procedure ReferenceDenied;
-    procedure ReferenceFailed;
+    procedure ReferenceFailed(Response: TIdSipResponse = nil);
     procedure ReferenceSucceeded;
     procedure ReferenceTrying;
   end;
@@ -696,8 +696,15 @@ type
   TIdSipInboundReferralWait = class(TIdWait)
   private
     fReferral: TIdSipInboundReferral;
+    fResponse: TIdSipResponse;
+
+    procedure SetResponse(Value: TIdSipResponse);
   public
+    constructor Create; override;
+    destructor  Destroy; override;
+
     property Referral: TIdSipInboundReferral read fReferral write fReferral;
+    property Response: TIdSipResponse        read fResponse write SetResponse;
   end;
 
   TIdSipInboundReferralWaitClass = class of TIdSipInboundReferralWait;
@@ -2902,9 +2909,16 @@ begin
               EventReasonNoResource);
 end;
 
-procedure TIdSipInboundReferral.ReferenceFailed;
+procedure TIdSipInboundReferral.ReferenceFailed(Response: TIdSipResponse = nil);
+var
+  NotifyBody: String;
 begin
-  Self.Notify(Self.ReferralFailedBody,
+  if Assigned(Response) then
+    NotifyBody := Response.AsString
+  else
+    NotifyBody := Self.ReferralFailedBody;
+
+  Self.Notify(NotifyBody,
               SipFragmentMimeType,
               SubscriptionSubstateTerminated,
               EventReasonNoResource);
@@ -3187,6 +3201,34 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipInboundReferralWait                                                  *
+//******************************************************************************
+//* TIdSipInboundReferralWait Public methods ***********************************
+
+constructor TIdSipInboundReferralWait.Create;
+begin
+  inherited Create;
+
+  Self.fResponse := TIdSipResponse.Create;
+
+  Self.Response.StatusCode := SIPServiceUnavailable;
+end;
+
+destructor TIdSipInboundReferralWait.Destroy;
+begin
+  Self.fResponse.Free;
+
+  inherited Destroy;
+end;
+
+//* TIdSipInboundReferralWait Private methods *****************************
+
+procedure TIdSipInboundReferralWait.SetResponse(Value: TIdSipResponse);
+begin
+  Self.Response.Assign(Value);
+end;
+
+//******************************************************************************
 //* TIdSipNotifyReferralDeniedWait                                             *
 //******************************************************************************
 //* TIdSipNotifyReferralDeniedWait Public methods ******************************
@@ -3203,7 +3245,7 @@ end;
 
 procedure TIdSipNotifyReferralFailedWait.Trigger;
 begin
-  Self.Referral.ReferenceFailed;
+  Self.Referral.ReferenceFailed(Self.Response);
 end;
 
 //******************************************************************************
