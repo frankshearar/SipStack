@@ -244,7 +244,7 @@ type
     function MimeType: String; override;
   end;
 
-  // cf. draft-sparks-sipping-dialogusage-00
+  // cf. RFC 4538
   TIdSipTargetDialogPackage = class(TIdSipEventPackage)
   public
     class function EventPackage: String; override;

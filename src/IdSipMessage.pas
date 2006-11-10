@@ -1866,7 +1866,7 @@ const
   OpaqueParam                    = 'opaque';
   OrganizationHeader             = 'Organization';
   PackageRefer                   = 'refer'; // cf. RFC 3515
-  PackageTargetDialog            = 'target-dialog'; // cf. draft-sparks-sipping-dialogusage-00
+  PackageTargetDialog            = 'target-dialog'; // cf. RFC 4538
   PriorityHeader                 = 'Priority';
   ProxyAuthenticateHeader        = 'Proxy-Authenticate';
   ProxyAuthorizationHeader       = 'Proxy-Authorization';
