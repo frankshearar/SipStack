@@ -622,7 +622,7 @@ type
     class function ReferralSucceededBody: String;
     class function ReferralTryingBody: String;
 
-    function Method: String; override;
+    function  Method: String; override;
     procedure Notify(const Body: String;
                      const MimeType: String;
                      const NewState: String = '';
