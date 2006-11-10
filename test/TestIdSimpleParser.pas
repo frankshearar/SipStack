@@ -26,10 +26,14 @@ type
     procedure TestFetchDontDelete;
     procedure TestFetchEmptyString;
     procedure TestFetchMulticharDelimiter;
+    procedure TestFetchMultipleDelimiters;
     procedure TestFetchNullCharDelimiter;
+    procedure TestFirstOfCharSet;
+    procedure TestFirstOfString;
     procedure TestHexDigitToInt;
     procedure TestHexToInt;
     procedure TestLastPos;
+    procedure TestStartsWith;
     procedure TestWithoutFirstAndLastChars;
   end;
 
@@ -88,8 +92,8 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSimpleParser unit tests');
   Result.AddTest(TestFunctions.Suite);
-//  Result.AddTest(TestTIdIPAddressParser.Suite);
-//  Result.AddTest(TestTIdSimpleParser.Suite);
+  Result.AddTest(TestTIdIPAddressParser.Suite);
+  Result.AddTest(TestTIdSimpleParser.Suite);
 end;
 
 //******************************************************************************
@@ -132,6 +136,7 @@ begin
   Check(EndsWith('', ''), 'The empty string ends with the empty string');
   Check(EndsWith('foo', ''), 'All strings end with the empty string');
   Check(EndsWith('foo', 'foo'), 'All strings end with themselves');
+  Check(not EndsWith('', 'foo'), 'The empty string does not end with a non-empty string');
 
   Check(not EndsWith('foo', 'barbar'), 'No string ends with a string longer than itself');
 
@@ -142,6 +147,7 @@ begin
   Check(not EndsWith('foo', 'foobar'), '"foo" does not end with "foobar"');
   Check(not EndsWith('foo', 'fo'), '"foo" does not end with "fo"');
   Check(not EndsWith('foo', 'foobar'), '"foo" does not end with "foobar"');
+  Check(not EndsWith('foo', 'O'), '"foo" does not end with "O"');
 end;
 
 procedure TestFunctions.TestFetch;
@@ -252,6 +258,38 @@ begin
   CheckEquals(LineTwo, Source, 'Token and delimiter not removed');
 end;
 
+procedure TestFunctions.TestFetchMultipleDelimiters;
+const
+  LineOne = 'abc';
+  LineTwo = 'def';
+var
+  OriginalSource: String;
+  Source:         String;
+  Token:          String;
+begin
+  OriginalSource := LineOne + #$D#$A + LineTwo;
+
+  Source := OriginalSource;
+  Token   := Fetch(Source, [#$D, #$A], true);
+  CheckEquals(LineOne, Token, 'Token not fetched correctly; Delete');
+  CheckEquals(#$A + LineTwo, Source, 'Token and delimiter not removed; Delete');
+
+  Source := OriginalSource;
+  Token  := Fetch(Source, [#$A, #$D], true);
+  CheckEquals(LineOne, Token, 'Token not fetched correctly; arbitrarily ordered delimiters');
+  CheckEquals(#$A + LineTwo, Source, 'Token or delimiter removed; arbitrarily ordered delimiters');
+
+  Source := OriginalSource;
+  Token  := Fetch(Source, [#$D, #$A], false);
+  CheckEquals(LineOne, Token, 'Token not fetched correctly; not Delete');
+  CheckEquals(OriginalSource, Source, 'Token or delimiter removed; not Delete');
+
+  Source := OriginalSource;
+  Token  := Fetch(Source, []);
+  CheckEquals(OriginalSource, Token, 'Fetch with no delimiters');
+  CheckEquals('', Source, 'Fetch didn''t eat the whole string; no delimiters specified');
+end;
+
 procedure TestFunctions.TestFetchNullCharDelimiter;
 const
   OriginalSource = 'abcdef';
@@ -269,6 +307,34 @@ begin
   Source := 'abc'#0'def';
   CheckEquals('abc', Fetch(Source, #0), 'Fetch with NUL delimiter');
   CheckEquals('def', Source, 'Fetch didn''t alter source properly; NUL delimiter in the middle of the string');
+end;
+
+procedure TestFunctions.TestFirstOfCharSet;
+begin
+  CheckEquals(0, FirstOf([], ''), 'No characters, empty string');
+  CheckEquals(0, FirstOf(['a'], ''), '"a", empty string');
+  CheckEquals(0, FirstOf(['z'], 'abc'), '"z", in "abc"');
+  CheckEquals(0, FirstOf(['x', 'y', 'z'], 'abc'), '"x" or "y" or "z", in "abc"');
+
+  CheckEquals(1, FirstOf(['a'], 'a'), '"a", in "a"');
+  CheckEquals(1, FirstOf(['a'], 'abc'), '"a", in "abc"');
+  CheckEquals(3, FirstOf(['c'], 'abc'), '"c", in "abc"');
+  CheckEquals(1, FirstOf(['a', 'b', 'c'], 'abc'), '"a" or "b" or "c", in "abc"');
+end;
+
+procedure TestFunctions.TestFirstOfString;
+begin
+  CheckEquals(0, FirstOf('', ''), 'No characters, empty string');
+  CheckEquals(0, FirstOf('a', ''), '"a", empty string');
+  CheckEquals(0, FirstOf('z', 'abc'), '"z", in "abc"');
+  CheckEquals(0, FirstOf('xyz', 'abc'), '"x" or "y" or "z", in "abc"');
+
+
+  CheckEquals(1, FirstOf('a', 'a'), '"a", in "a"');
+  CheckEquals(1, FirstOf('a', 'abc'), '"a", in "abc"');
+  CheckEquals(3, FirstOf('c', 'abc'), '"c", in "abc"');
+  CheckEquals(1, FirstOf('abc', 'abc'), '"a" or "b" or "c", in "abc"');
+  CheckEquals(1, FirstOf('cab', 'abc'), '"c" or "a" or "b", in "abc"');
 end;
 
 procedure TestFunctions.TestHexDigitToInt;
@@ -377,6 +443,22 @@ begin
   CheckEquals(4, LastPos(Needle, Haystack, 5), 'Haystack = 3xNeedle, starting at 5');
   CheckEquals(7, LastPos(Needle, Haystack, 7), 'Haystack = 3xNeedle, starting at 7');
   CheckEquals(7, LastPos(Needle, Haystack),    'Haystack = 3xNeedle');
+end;
+
+procedure TestFunctions.TestStartsWith;
+begin
+  Check(StartsWith('', ''), 'The empty string starts with the empty string');
+  Check(StartsWith('foo', ''), 'All strings start with the empty string');
+  Check(not StartsWith('', 'foo'), 'The empty string doesn''t start with any non-empty string');
+
+  Check(not StartsWith('foo', 'foofoo'), 'No string starts with a string longer than itself');
+
+  Check(StartsWith('foo', 'f'), '"foo" starts with "f"');
+  Check(StartsWith('foo', 'fo'), '"foo" starts with "fo"');
+  Check(StartsWith('foo', 'foo'), '"foo" starts with "foo"');
+  Check(not StartsWith('foo', 'bar'), '"foo" does not start with "bar"');
+  Check(not StartsWith('foo', 'o'), '"foo" does not start with "o"');
+  Check(not StartsWith('foo', 'F'), '"foo" does not start with "F"');
 end;
 
 procedure TestFunctions.TestWithoutFirstAndLastChars;

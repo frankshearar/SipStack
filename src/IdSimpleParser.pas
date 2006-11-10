@@ -15,6 +15,8 @@ uses
   Classes, SysUtils;
 
 type
+  TCharSet = set of Char;
+
   // for IdCore or whatever. Indy10 defines these but Indy9 doesn't
   TIdIPVersion = (Id_IPv4, Id_IPv6, Id_IPUnknown);
 
@@ -97,17 +99,48 @@ function EncodeNonLineUnprintableChars(S: String): String;
 function EndsWith(const S, Suffix: String): Boolean;
 function Fetch(var Source: String;
                const Delimiter: String = FetchDefaultDelimiter;
-               Delete: Boolean = FetchDefaultDelete): String;
+               Delete: Boolean = FetchDefaultDelete): String; overload;
+function Fetch(var Source: String;
+               Delimiters: TCharSet;
+               Delete: Boolean = FetchDefaultDelete): String; overload;
+function FirstOf(Needles: String; Haystack: String): Integer; overload;
+function FirstOf(Needles: TCharSet; Haystack: String): Integer; overload;
 function HexDigitToInt(Digit: Char): Cardinal;
 function HexToInt(const HexValue: String): Cardinal;
 function LastPos(const Needle, Haystack: String; Start: Integer = -1): Integer;
 function Localhost(IPType: TIdIPVersion): String;
+function StartsWith(const S, Prefix: String): Boolean;
 function WithoutFirstAndLastChars(const S: String): String;
 
 implementation
 
 uses
   StrUtils;
+
+//******************************************************************************
+//* Unit Private Functions and Procedures                                      *
+//******************************************************************************
+
+function FetchCopy(var Source: String;
+                   StartPos: Integer;
+                   DelimiterLength: Integer;
+                   Delete: Boolean): String;
+begin
+  // FetchCopy contains the guts of the two Fetch functions.
+
+  if (StartPos = 0) then begin
+    Result := Source;
+
+    if Delete then
+      Source := '';
+  end
+  else begin
+    Result := Copy(Source, 1, StartPos - 1);
+
+    if Delete then
+      Source := Copy(Source, StartPos + DelimiterLength, Length(Source));
+  end;
+end;
 
 //******************************************************************************
 //* Unit Public Functions and Procedures                                       *
@@ -131,7 +164,7 @@ end;
 
 function EndsWith(const S, Suffix: String): Boolean;
 begin
-  // Returns true iff a string ends with a specified suffix. 
+  // Returns true iff a string ends with a specified suffix.
 
   Result := Copy(S, Length(S) - Length(Suffix) + 1, Length(Suffix)) = Suffix;
 end;
@@ -139,23 +172,64 @@ end;
 function Fetch(var Source: String;
                const Delimiter: String = FetchDefaultDelimiter;
                Delete: Boolean = FetchDefaultDelete): String;
-var
-  StartPos: Integer;
 begin
-  StartPos := Pos(Delimiter, Source);
+  // This version of Fetch returns the contents of Source up to the Delimiter.
+  // If Delete = true then the returned characters are deleted from the Source.
 
-  if (StartPos = 0) then begin
-    Result := Source;
+  Result := FetchCopy(Source,
+                      Pos(Delimiter, Source),
+                      Length(Delimiter),
+                      Delete);
+end;
 
-    if Delete then
-      Source := '';
-  end
-  else begin
-    Result := Copy(Source, 1, StartPos - 1);
+function Fetch(var Source: String;
+               Delimiters: TCharSet;
+               Delete: Boolean = FetchDefaultDelete): String;
+begin
+  // This version of Fetch returns the contents of Source up to the first
+  // occurence of the Delimiters. If Delete = true then the returned characters
+  // are deleted from the Source.
 
-    if Delete then
-      Source := Copy(Source, StartPos + Length(Delimiter), Length(Source));
+  Result := FetchCopy(Source,
+                      FirstOf(Delimiters, Source),
+                      1,
+                      Delete);
+end;
+
+function FirstOf(Needles: String; Haystack: String): Integer;
+var
+  CharSet: TCharSet;
+  I:       Integer;
+begin
+  CharSet := [];
+
+  for I := 1 to Length(Needles) do
+    CharSet := CharSet + [Needles[I]];
+
+  Result := FirstOf(CharSet, Haystack);
+end;
+
+function FirstOf(Needles: TCharSet; Haystack: String): Integer;
+begin
+  // FirstOf is a generalisation of Pos: it returns the index of the first
+  // occurence of any member of Needles in Haystack. If no occurence is found,
+  // FirstOf returns 0.
+
+  if (Haystack = '') or (Needles = []) then begin
+    Result := 0;
+    Exit;
   end;
+
+  Result := 1;
+  while (Result <= Length(Haystack)) do begin
+    if (Haystack[Result] in Needles) then
+      Break
+    else
+      Inc(Result);
+  end;
+
+  if (Result > Length(Haystack)) then
+    Result := 0;
 end;
 
 function HexDigitToInt(Digit: Char): Cardinal;
@@ -248,6 +322,13 @@ begin
     Result := '';
     raise Exception.Create('Unknown TIdIPVersion');
   end;
+end;
+
+function StartsWith(const S, Prefix: String): Boolean;
+begin
+  // Returns true iff a string starts with a specified prefix.
+
+  Result := Copy(S, 1, Length(Prefix)) = Prefix;
 end;
 
 function WithoutFirstAndLastChars(const S: String): String;
