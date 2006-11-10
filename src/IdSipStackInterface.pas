@@ -1633,7 +1633,7 @@ var
 begin
   Data := TIdSessionProgressData.Create;
   try
-    Data.Banner                   := TIdSipUri.Decode(Progress.StatusText);
+    Data.Banner                   := TIdUri.Decode(Progress.StatusText);
     Data.Handle                   := Self.HandleFor(Session);
     Data.LocalMimeType            := Session.LocalMimeType;
     Data.LocalSessionDescription  := Session.LocalSessionDescription;

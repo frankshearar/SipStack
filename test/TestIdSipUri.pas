@@ -25,6 +25,7 @@ type
   published
     procedure TestSetDefaultPort;
     procedure TestSetValueHost;
+    procedure TestSetValueHostWithColonAndNoPort;
     procedure TestSetValueHostWithDefaultPort;
     procedure TestSetValueHostWithMalformedPort;
     procedure TestSetValueHostWithPort;
@@ -38,13 +39,46 @@ type
 
   TestTIdUri = class(TTestCase)
   private
-    Uri: TIdUri;
+    DirectoryPath:     String;
+    EmptySegmentPath:  String;
+    FilePath:          String;
+    NoPath:            String;
+    RootPath:          String;
+    Uri:               TIdUri;
+    UTF8EncodedNihongo: String;
+
+    procedure CheckPath(BaseUri: String; Path: String);
+    procedure CheckPaths(BaseUri: String);
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestCreateUri;
+    procedure TestDecode;
+    procedure TestEncode;
+    procedure TestEraseUserInfo;
+    procedure TestHasValidSyntax;
+    procedure TestHasValidSyntaxAddressChecks;
+    procedure TestHasValidSyntaxUserPasswordChecks;
+    procedure TestHasValidSyntaxSchemeChecks;
+    procedure TestIsFragment;
+    procedure TestIsPChar;
+    procedure TestIsQuery;
+    procedure TestIsScheme;
     procedure TestIsSipUri;
     procedure TestIsSipsUri;
+    procedure TestSetSchemeNormalisesScheme;
+    procedure TestSetUriNormalisesScheme;
+    procedure TestSetUriIllegalScheme;
+    procedure TestUriWithAuthority;
+    procedure TestUriWithFragment;
+    procedure TestUriWithNoAuthority;
+    procedure TestUriWithQuery;
+    procedure TestUriWithQueryAndFragment;
+    procedure TestUriWithSipUri;
+    procedure TestUriWithUserInfoInAuthority;
+    procedure TestWeirdUris;
+    procedure TestWellFormedPercentEncoding;
   end;
 
   TestTIdSipUri = class(TTestCaseSip)
@@ -79,9 +113,6 @@ type
     procedure TestCreateRequestWithMethodParam;
     procedure TestCreateRequestWithUnknownParams;
     procedure TestCreateSetsUri;
-    procedure TestCreateUri;
-    procedure TestDecode;
-    procedure TestEncode;
     procedure TestEqualsBasic;
     procedure TestEqualsDefaultPortVersusSpecified;
     procedure TestEqualsDefaultSecureTransportVersusSpecified;
@@ -116,10 +147,6 @@ type
     procedure TestHasMaddr;
     procedure TestHasMethod;
     procedure TestHasParameter;
-    procedure TestHasValidSyntax;
-    procedure TestHasValidSyntaxAddressChecks;
-    procedure TestHasValidSyntaxSchemeChecks;
-    procedure TestHasValidSyntaxUserPasswordChecks;
     procedure TestIsGruu;
     procedure TestIsLooseRoutable;
     procedure TestIsMalformedBadHeader;
@@ -175,6 +202,7 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipUri unit tests');
   Result.AddTest(TestTIdSipHostAndPort.Suite);
+  Result.AddTest(TestTIdUri.Suite);
   Result.AddTest(TestTIdSipUri.Suite);
 //  Result.AddTest(TestTIdSipsUri.Suite);
 end;
@@ -216,10 +244,12 @@ begin
 end;
 
 procedure TestTIdSipHostAndPort.TestSetValueHost;
+const
+  FooComHost = 'foo.com';
 begin
-  Self.HP.Value := 'foo.com';
+  Self.HP.Value := FooComHost;
 
-  CheckEquals('foo.com',
+  CheckEquals(FooComHost,
               Self.HP.Host,
               'Host');
   CheckEquals(Self.HP.DefaultPort,
@@ -227,9 +257,24 @@ begin
               'Port');
   Check(not Self.HP.PortIsSpecified,
               'PortIsSpecified');
-  CheckEquals('foo.com',
+  CheckEquals(FooComHost,
               Self.HP.Value,
               'GetValue');
+end;
+
+procedure TestTIdSipHostAndPort.TestSetValueHostWithColonAndNoPort;
+const
+  MissingPortString = 'foo.com:';
+begin
+  try
+    Self.HP.Value := MissingPortString;
+    Fail('Failed to bail out on malformed port');
+  except
+    on E: EParserError do begin
+      Check(Pos(MissingPortString, E.Message) > 0,
+            'Uninformative error message');
+    end;
+  end;
 end;
 
 procedure TestTIdSipHostAndPort.TestSetValueHostWithDefaultPort;
@@ -393,6 +438,13 @@ begin
   inherited SetUp;
 
   Self.Uri := TIdUri.Create('');
+
+  Self.EmptySegmentPath   := '/path//nowhere/';
+  Self.NoPath             := '';
+  Self.RootPath           := '/';
+  Self.DirectoryPath      := '/path/to/nowhere/';
+  Self.FilePath           := Self.DirectoryPath + 'index.html';
+  Self.UTF8EncodedNihongo := #$E6#$97#$A5#$E6#$9C#$AC#$E8#$AA#$9E;
 end;
 
 procedure TestTIdUri.TearDown;
@@ -402,7 +454,187 @@ begin
   inherited TearDown;
 end;
 
+//* TestTIdUri Private methods *************************************************
+
+procedure TestTIdUri.CheckPath(BaseUri: String; Path: String);
+var
+  TestUri: String;
+begin
+  TestUri := BaseUri + Path;
+  Self.Uri.Uri := TestUri;
+
+  CheckEquals(Path, Self.Uri.Path, 'Path: ' + TestUri);
+end;
+
+procedure TestTIdUri.CheckPaths(BaseUri: String);
+begin
+  CheckPath(BaseUri, Self.NoPath);
+  CheckPath(BaseUri, Self.RootPath);
+  CheckPath(BaseUri, Self.DirectoryPath);
+  CheckPath(BaseUri, Self.FilePath);
+  CheckPath(BaseUri, Self.EmptySegmentPath)
+end;
+
 //* TestTIdUri Published methods ***********************************************
+
+procedure TestTIdUri.TestCreateUri;
+var
+  Uri: TIdUri;
+begin
+  Uri := TIdUri.CreateUri('sip:wintermute@tessier-ashpool.co.luna');
+  try
+    CheckEquals(TIdSipUri.ClassName,
+                Uri.ClassName,
+                'SIP URI');
+  finally
+    Uri.Free;
+  end;
+
+  Uri := TIdUri.CreateUri('sipx:wintermute@tessier-ashpool.co.luna');
+  CheckEquals('sipx', Uri.Scheme, 'Incorrect scheme for unknown URI scheme');
+  Check(not Uri.IsSipUri, 'URI thinks it''s a SIP URI');
+end;
+
+procedure TestTIdUri.TestDecode;
+var
+  C:               Char;
+  InvalidEncoding: String;
+begin
+  for C := #$00 to #$FF do
+    CheckEquals(C, TIdUri.Decode('%' + IntToHex(Ord(C), 2)), 'Decoding %' + IntToHex(Ord(C), 2));
+
+  CheckEquals('abc',
+              TIdUri.Decode('%61%62%63'),
+              'Decode multi-character string');
+
+  InvalidEncoding := '%XX';
+  try
+    TIdUri.Decode(InvalidEncoding);
+    Fail('Failed to bail on decoding "' + InvalidEncoding + '"');
+  except
+    on EParserError do;
+  end;
+end;
+
+procedure TestTIdUri.TestEncode;
+begin
+  CheckEquals('%61%62%63',
+              TIdUri.Encode('abc', []),
+              'Encode all characters');
+  CheckEquals('%61%62%63',
+              TIdUri.Encode('abc', Digits),
+              'Leave out digits');
+  CheckEquals('%61b%63',
+              TIdUri.Encode('abc', ['b']),
+              'Leave out the b');
+  CheckEquals('%61bc',
+              TIdUri.Encode('abc', ['b', 'c']),
+              'Leave out the b and the c');
+  CheckEquals('abc',
+              TIdUri.Encode('abc', Alphabet),
+              'Leave out all alphabet characters');
+end;
+
+procedure TestTIdUri.TestEraseUserInfo;
+begin
+  Self.Uri.Uri := 'http://foo:bar@baz';
+  Self.Uri.EraseUserInfo;
+
+  CheckEquals('', Self.Uri.UserInfo, 'UserInfo not erased');
+end;
+
+procedure TestTIdUri.TestHasValidSyntax;
+begin
+  Check(not TIdUri.HasValidSyntax(''), 'The empty string is not a URI');
+  Check(not TIdUri.HasValidSyntax('x'), 'Just a scheme, no colon');
+end;
+
+procedure TestTIdUri.TestHasValidSyntaxAddressChecks;
+begin
+  Check(TIdUri.HasValidSyntax('sip:127.0.0.1'), 'IPv4 address');
+  Check(TIdUri.HasValidSyntax('sip:[::1]'), 'IPv6 reference');
+  Check(TIdUri.HasValidSyntax('sip:example.com'), 'Fully qualified domain name');
+
+  Check(not TIdUri.HasValidSyntax('sip:::1'),
+        'Only IPv6 REFERENCES are valid as a host.');
+
+  Check(not TIdUri.HasValidSyntax('sip:foo.1example.com'),
+        Self.Uri.Uri + ': Tokens in a FQDN may not start with a digit.');
+end;
+
+procedure TestTIdUri.TestHasValidSyntaxUserPasswordChecks;
+begin
+  Check(TIdUri.HasValidSyntax('sip:foo@bar'), 'Well-formed URI');
+
+  Check(not TIdUri.HasValidSyntax('sip:foo@@bar'),
+        'User token cannot contain an @');
+
+  Check(not TIdUri.HasValidSyntax('sip:localhostjoe127.0.0.1'),
+        'The user likely left out an @. The remaining URI is invalid because '
+      + 'some of the FQDN''s labels start with digits.');
+
+  Check(TIdUri.HasValidSyntax('sip:b:@bar'),
+        'A colon indicates the presence of a password, and it''s the empty password');
+
+  Check(not TIdUri.HasValidSyntax('sip:b"@bar'),
+        'DQUOT is an illegal character in a user token.');
+
+  Check(not TIdUri.HasValidSyntax('sip:b:"@bar'),
+        'A DQUOT is an illegal character in a password token.');
+end;
+
+procedure TestTIdUri.TestHasValidSyntaxSchemeChecks;
+begin
+  Check(TIdUri.HasValidSyntax('sip:127.0.0.1'), 'SIP scheme');
+  Check(TIdUri.HasValidSyntax('sips:127.0.0.1'), 'SIPS scheme');
+  Check(TIdUri.HasValidSyntax('sipp:127.0.0.1'), 'Unknown scheme: "sipp"');
+
+  Check(not TIdUri.HasValidSyntax('sip127.0.0.1'),
+        'The user likely left out the colon terminating the scheme.');
+end;
+
+procedure TestTIdUri.TestIsFragment;
+begin
+  Check(not TIdUri.IsFragment(''), '''''');
+  Check(not TIdUri.IsFragment('%'), '%');
+  Check(TIdUri.IsFragment('~'), '~');
+
+  Check(TIdUri.IsFragment('%20'), '%20');
+  Check(TIdUri.IsFragment('fragment'), 'fragment');
+  Check(TIdUri.IsFragment('/fragment?'), '/fragment?');
+  Check(TIdUri.IsFragment(':@!$&''()*+,;=-._~'), ':@!$&''()*+,;=-._~');
+end;
+
+procedure TestTIdUri.TestIsPChar;
+begin
+  Check(not TIdUri.IsPChar(''), '''''');
+  Check(not TIdUri.IsPChar('%'), '%');
+
+  Check(TIdUri.IsPChar('%20'), '%20');
+  Check(TIdUri.IsPChar('word'), 'word');
+  Check(TIdUri.IsPChar(':@!$&''()*+,;=-._~'), ':@!$&''()*+,;=-._~');
+end;
+
+procedure TestTIdUri.TestIsQuery;
+begin
+  Check(not TIdUri.IsQuery(''), '''''');
+  Check(not TIdUri.IsQuery('%'), '%');
+  Check(TIdUri.IsQuery('~'), '~');
+
+  Check(TIdUri.IsQuery('%20'), '%20');
+  Check(TIdUri.IsQuery('query'), 'query');
+  Check(TIdUri.IsQuery('/query?'), '/query?');
+  Check(TIdUri.IsQuery(':@!$&''()*+,;=-._~'), ':@!$&''()*+,;=-._~');
+end;
+
+procedure TestTIdUri.TestIsScheme;
+begin
+  Check(not TIdUri.IsScheme(''),          '''''');
+  Check(not TIdUri.IsScheme('%'),         '%');
+  Check(not TIdUri.IsScheme('1sip'),      '1sip');
+  Check(    TIdUri.IsScheme('sip-2.0+3'), 'sip-2.0+3');
+  Check(    TIdUri.IsScheme('http'),      'http');
+end;
 
 procedure TestTIdUri.TestIsSipUri;
 begin
@@ -419,13 +651,172 @@ end;
 procedure TestTIdUri.TestIsSipsUri;
 begin
   Self.Uri.Scheme := 'http';
-  Check(not Self.Uri.IsSipUri, 'http');
+  Check(not Self.Uri.IsSipsUri, 'http');
 
   Self.Uri.Scheme := SipScheme;
-  Check(not Self.Uri.IsSipUri, SipScheme);
+  Check(not Self.Uri.IsSipsUri, SipScheme);
 
   Self.Uri.Scheme := SipsScheme;
-  Check(Self.Uri.IsSipUri, SipsScheme);
+  Check(Self.Uri.IsSipsUri, SipsScheme);
+end;
+
+procedure TestTIdUri.TestSetSchemeNormalisesScheme;
+const
+  NormalisedScheme = 'http';
+begin
+  Self.Uri.Scheme := NormalisedScheme;
+  CheckEquals(NormalisedScheme, Self.Uri.Scheme, NormalisedScheme);
+
+  Self.Uri.Scheme := Uppercase(NormalisedScheme);
+  CheckEquals(NormalisedScheme, Self.Uri.Scheme, Uppercase(NormalisedScheme));
+end;
+
+procedure TestTIdUri.TestSetUriNormalisesScheme;
+begin
+  Self.Uri.Uri := 'HTTP://foo';
+  CheckEquals('http', Self.Uri.Scheme, 'Scheme not normalised');
+end;
+
+procedure TestTIdUri.TestSetUriIllegalScheme;
+begin
+  Self.Uri.Uri := '%%:illegalUri';
+  Check(Self.Uri.IsMalformed, 'URI not marked as malformed');
+  CheckEquals(InvalidScheme, Self.Uri.ParseFailReason, 'URI has unexpected malformed reason');
+end;
+
+procedure TestTIdUri.TestUriWithAuthority;
+const
+  WeirdAuthority = 'abc-._~!$&''()*+,;=';
+begin
+  Self.Uri.Uri := 'http://foo/';
+  CheckEquals('foo', Self.Uri.Host, 'Host foo');
+
+  Self.Uri.Uri := 'http://foo.bar/';
+  CheckEquals('foo.bar', Self.Uri.Host, 'Host foo.bar');
+
+  Self.Uri.Uri := 'http://127.0.0.1/';
+  CheckEquals('127.0.0.1', Self.Uri.Host, 'Host 127.0.0.1');
+
+  Self.Uri.Uri := 'http://[::1]/';
+  CheckEquals('[::1]', Self.Uri.Host, 'Host [::1]');
+
+  Self.Uri.Uri := 'name://' + TIdUri.Encode(Self.UTF8EncodedNihongo, []) + '/foo';
+  CheckEquals(EncodeNonLineUnprintableChars(Self.UTF8EncodedNihongo),
+              EncodeNonLineUnprintableChars(Self.Uri.Host),
+              'Percent-encoded UTF-8 hostname');
+
+  Self.Uri.Uri := 'name://' + WeirdAuthority;
+  CheckEquals(WeirdAuthority, Self.Uri.Host, 'Weird authority');
+
+  CheckPaths('http://foo');
+end;
+
+procedure TestTIdUri.TestUriWithFragment;
+const
+  BaseUri           = 'http://foo/';
+  NormalFragment    = 'bar';
+  MalformedFragment = '[bar]';
+begin
+  Self.Uri.Uri := BaseUri + '#' + NormalFragment;
+  CheckEquals(NormalFragment, Self.Uri.Fragment, 'Normal fragment');
+  Check(not Self.Uri.IsMalformed, 'URI with normal fragment marked as malformed');
+
+  Self.Uri.Uri := BaseUri + '#' + MalformedFragment;
+  CheckEquals(MalformedFragment, Self.Uri.Fragment, 'Malformed fragment');
+  Check(Self.Uri.IsMalformed, 'URI with malformed fragment not marked as malformed');
+end;
+
+procedure TestTIdUri.TestUriWithNoAuthority;
+begin
+  CheckPaths('x:');
+end;
+
+procedure TestTIdUri.TestUriWithQuery;
+const
+  BaseUri        = 'http://foo/';
+  NormalQuery    = 'bar';
+  MalformedQuery = '[bar]';
+begin
+  Self.Uri.Uri := BaseUri + '?' + NormalQuery;
+  CheckEquals(NormalQuery, Self.Uri.Query, 'Normal query');
+  Check(not Self.Uri.IsMalformed, 'URI with normal query marked as malformed');
+
+  Self.Uri.Uri := BaseUri + '?' + MalformedQuery;
+  CheckEquals(MalformedQuery, Self.Uri.Query, 'Malformed query');
+  Check(Self.Uri.IsMalformed, 'URI with malformed query not marked as malformed');
+end;
+
+procedure TestTIdUri.TestUriWithQueryAndFragment;
+const
+  BaseUri  = 'http://foo/';
+  Query    = 'bar';
+  Fragment = 'baz';
+begin
+  Self.Uri.Uri := BaseUri + '?' + Query + '#' + Fragment;
+  CheckEquals(Query,    Self.Uri.Query,    'Query');
+  CheckEquals(Fragment, Self.Uri.Fragment, 'Fragment');
+end;
+
+procedure TestTIdUri.TestUriWithSipUri;
+begin
+  Self.Uri.Uri := 'sip:case@fried-neurons.org';
+  CheckEquals('sip', Self.Uri.Scheme, 'Scheme of simple SIP URI');
+  CheckEquals('case@fried-neurons.org', Self.Uri.Path, 'Path of simple SIP URI');
+
+  Self.Uri.Uri := 'sip:case@fried-neurons.org;gruu';
+  CheckEquals('sip', Self.Uri.Scheme, 'Scheme of SIP URI with parameter');
+  CheckEquals('case@fried-neurons.org;gruu', Self.Uri.Path, 'Path of SIP URI with parameter');
+
+  Self.Uri.Uri := 'sip:case@fried-neurons.org;gruu?Subject=foo';
+  CheckEquals('sip', Self.Uri.Scheme, 'Scheme of SIP URI with parameter & header');
+  CheckEquals('case@fried-neurons.org;gruu', Self.Uri.Path, 'Path of SIP URI with parameter & header');
+  CheckEquals('Subject=foo', Self.Uri.Query, 'Query of SIP URI with parameter & header');
+end;
+
+procedure TestTIdUri.TestUriWithUserInfoInAuthority;
+const
+  WeirdUserInfo = '::~!&''(*)+,;=abc'#$E6;
+begin
+  Self.Uri.Uri := 'http://foo@bar';
+  CheckEquals('foo', Self.Uri.UserInfo, 'User "foo"');
+
+  Self.Uri.Uri := 'http://' + TIdSipUri.UsernameEncode(Self.UTF8EncodedNihongo) + '@bar';
+  CheckEquals(EncodeNonLineUnprintableChars(Self.UTF8EncodedNihongo),
+              EncodeNonLineUnprintableChars(Self.Uri.UserInfo),
+              'User "nihongo"');
+
+  Self.Uri.Uri := 'http://foo:bar@baz';
+  CheckEquals('foo:bar', Self.Uri.UserInfo, 'User "foo" with password "bar"');
+
+  Self.Uri.Uri := 'http://' + TIdUri.UsernameEncode(WeirdUserInfo) + '@bar';
+  CheckEquals(WeirdUserInfo, Self.Uri.UserInfo, 'User "' + WeirdUserInfo + '"');
+
+  CheckPaths('http://foo@bar');
+end;
+
+procedure TestTIdUri.TestWeirdUris;
+begin
+  Self.Uri.Uri := 'x:';
+  CheckEquals('x', Self.Uri.Scheme, 'Scheme of "x:"');
+  CheckEquals('',  Self.Uri.Path,   'Path of "x:"');
+  Check(not Self.Uri.HasAuthority, 'Authority of "x:"');
+end;
+
+procedure TestTIdUri.TestWellFormedPercentEncoding;
+var
+  I: Integer;
+begin
+  Check(not TIdUri.WellFormedPercentEncoding('%'), '%');
+  Check(not TIdUri.WellFormedPercentEncoding('%1'), '%1');
+  Check(not TIdUri.WellFormedPercentEncoding('%fx'), '%fx');
+  Check(not TIdUri.WellFormedPercentEncoding('%%00'), '%%00');
+
+  Check(TIdUri.WellFormedPercentEncoding(''), 'The empty string');
+
+  for I := 0 to $ff do
+    Check(TIdUri.WellFormedPercentEncoding('%' + IntToHex(I, 2)), '%' + IntToHex(I, 2));
+
+  Check(TIdUri.WellFormedPercentEncoding('%00%01%02%03'), '%00%01%02%03');
 end;
 
 //******************************************************************************
@@ -758,13 +1149,14 @@ begin
 end;
 
 procedure TestTIdSipUri.TestCreateRequestWithBody;
-const
-  Body = 'I am a plain text body';
 var
+  Body:    String;
   Request: TIdSipRequest;
 begin
+  Body := 'I am a plain text body';
+
   Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna?'
-                + BodyHeaderFake + '=' + Body;
+                + BodyHeaderFake + '=' + TIdSipUri.HeaderEncode(Body);
 
   Request := Self.Uri.CreateRequest;
   try
@@ -912,64 +1304,6 @@ begin
   finally
     Uri.Free;
   end;
-end;
-
-procedure TestTIdSipUri.TestCreateUri;
-var
-  Uri: TIdUri;
-begin
-  Uri := TIdSipUri.CreateUri('sip:wintermute@tessier-ashpool.co.luna');
-  try
-    CheckEquals(TIdSipUri.ClassName,
-                Uri.ClassName,
-                'SIP URI');
-  finally
-    Uri.Free;
-  end;
-{
-  Uri := TIdSipUri.CreateUri('sips:wintermute@tessier-ashpool.co.luna');
-  try
-    CheckEquals(TIdSipsUri.ClassName,
-                Uri.ClassName,
-                'SIPS URI');
-  finally
-    Uri.Free;
-  end;
-}
-  try
-    TIdSipUri.CreateUri('sipx:wintermute@tessier-ashpool.co.luna');
-    Fail('Failed to bail out on unknown/unsupported scheme');
-  except
-    on ESchemeNotSupported do begin
-      Check(true);
-    end;
-  end;
-end;
-
-procedure TestTIdSipUri.TestDecode;
-begin
-  CheckEquals('abc',
-              TIdSipUri.Decode('%61%62%63'),
-              'Decode');
-end;
-
-procedure TestTIdSipUri.TestEncode;
-begin
-  CheckEquals('%61%62%63',
-              TIdSipUri.Encode('abc', []),
-              'Encode all characters');
-  CheckEquals('%61%62%63',
-              TIdSipUri.Encode('abc', Digits),
-              'Leave out digits');
-  CheckEquals('%61b%63',
-              TIdSipUri.Encode('abc', ['b']),
-              'Leave out the b');
-  CheckEquals('%61bc',
-              TIdSipUri.Encode('abc', ['b', 'c']),
-              'Leave out the b and the c');
-  CheckEquals('abc',
-              TIdSipUri.Encode('abc', Alphabet),
-              'Leave out all alphabet characters');
 end;
 
 procedure TestTIdSipUri.TestEqualsBasic;
@@ -1320,58 +1654,6 @@ begin
 
   Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;transport=udp;foo=bar;lr';
   Check(Uri.HasParameter('foo'), 'parameter amongst others');
-end;
-
-procedure TestTIdSipUri.TestHasValidSyntax;
-begin
-  Check(not TIdSipUri.HasValidSyntax(''), 'The empty string is not a URI');
-end;
-
-procedure TestTIdSipUri.TestHasValidSyntaxAddressChecks;
-begin
-  Check(TIdSipUri.HasValidSyntax('sip:127.0.0.1'), 'IPv4 address');
-  Check(TIdSipUri.HasValidSyntax('sip:[::1]'), 'IPv6 reference');
-  Check(TIdSipUri.HasValidSyntax('sip:example.com'), 'Fully qualified domain name');
-
-  Check(not TIdSipUri.HasValidSyntax('sip:::1'),
-        'Only IPv6 REFERENCES are valid as a host.');
-
-  Check(not TIdSipUri.HasValidSyntax('foo.1example.com'),
-        Self.Uri.Uri + ': Tokens in a FQDN may not start with a digit.');
-end;
-
-procedure TestTIdSipUri.TestHasValidSyntaxSchemeChecks;
-begin
-  Check(TIdSipUri.HasValidSyntax('sip:127.0.0.1'), 'SIP scheme');
-  Check(TIdSipUri.HasValidSyntax('sips:127.0.0.1'), 'SIPS scheme');
-
-  Check(not TIdSipUri.HasValidSyntax('sipp:127.0.0.1'), 'Invalid scheme: "sipp"');
-  Check(not TIdSipUri.HasValidSyntax('http:127.0.0.1'), 'HTTP scheme');
-
-  Check(not TIdSipUri.HasValidSyntax('sip127.0.0.1'),
-        'The user likely left out the colon terminating the '
-      + 'scheme.');
-end;
-
-procedure TestTIdSipUri.TestHasValidSyntaxUserPasswordChecks;
-begin
-  Check(TIdSipUri.HasValidSyntax('sip:foo@bar'), 'Well-formed URI');
-
-  Check(not TIdSipUri.HasValidSyntax('sip:foo@@bar'),
-        'User token cannot contain an @');
-
-  Check(not TIdSipUri.HasValidSyntax('sip:localhostjoe127.0.0.1'),
-        'The user likely left out an @. The remaining URI is invalid because '
-      + 'some of the FQDN''s labels start with digits.');
-
-  Check(TIdSipUri.HasValidSyntax('sip:b:@bar'),
-        'A colon indicates the presence of a password, and it''s the empty password');
-
-  Check(not TIdSipUri.HasValidSyntax('sip:b"@bar'),
-        'DQUOT is an illegal character in a user token.');
-
-  Check(not TIdSipUri.HasValidSyntax('sip:b:"@bar'),
-        'A DQUOT is an illegal character in a password token.');
 end;
 
 procedure TestTIdSipUri.TestIsGruu;

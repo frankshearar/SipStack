@@ -17,7 +17,6 @@ uses
 
 type
   TIdSipQValue = 0..1000;
-  TIdSipChars = set of Char;
 
 type
   TIdSipMessage = class;
@@ -189,37 +188,94 @@ type
     procedure Parse(ParamList: String); override;
   end;
 
+  TIdUriClass = class of TIdUri;
+
   // I represent some sort've URI. My subclasses implement URIs like SIP or SIPS
   //  or TEL URIs. My subclasses do all parsing. My constructor is a Template
   // Method - my subclasses need only override Initialize to instantiate
   // any private variables they define, and Parse to actually parse a string.
   //
+  // I implement the ABNF specified in RFC 3986, Appendix A.
+  //
   // This class exists because the author doesn't like Indy's TIdUri for
   // various reasons.
   TIdUri = class(TObject)
   private
-    fScheme:     String;
-    HostAndPort: TIdSipHostAndPort;
+    fFragment:        String;
+    fHasAuthority:    Boolean;
+    fIsMalformed:     Boolean;
+    fParseFailReason: String;
+    fPath:            String;
+    fQuery:           String;
+    fScheme:          String;
+    fUnparsedValue:   String;
+    fUserInfo:        String;
+    HostAndPort:      TIdSipHostAndPort;
+
+    class function ContainsOnly(const Token: String; LegalChars: TCharSet): Boolean;
 
     function  GetHost: String;
     function  GetPort: Cardinal;
+    procedure ParseFragment(Fragment: String);
+    procedure ParseHierPart(HierPart: String);
     procedure SetHost(const Value: String);
     procedure SetPort(const Value: Cardinal);
   protected
+    function  GetUri: String; virtual;
+    function  HasAcceptableScheme: Boolean; virtual;
     procedure Initialize; virtual;
+    procedure MarkAsInvalid(const Reason: String);
     procedure Parse(Uri: String); virtual;
+    procedure ParseAuthority(Authority: String); virtual;
+    procedure ParsePath(Path: String); virtual;
+    procedure ParseQuery(Query: String); virtual;
+    procedure ParseUserInfo(UserInfo: String); virtual;
+    procedure Reset; virtual;
     procedure SetScheme(const Value: String); virtual;
+    procedure SetUri(const Value: String); virtual;
   public
+    class function AlphaChars: TCharSet;
+    class function CreateUri(URI: String = ''): TIdUri;
+    class function Decode(const Src: String): String;
+    class function DigitChars: TCharSet;
+    class function Encode(const Src: String;
+                          const SafeChars: TCharSet): String;
+    class function GenDelimChars: TCharSet;
+    class function HasValidSyntax(URI: String): Boolean;
+    class function FragmentChars: TCharSet;
+    class function IsFragment(const Token: String): Boolean;
+    class function IsPChar(const Token: String): Boolean;
+    class function IsQuery(const Token: String): Boolean;
+    class function IsScheme(const Scheme: String): Boolean;
+    class function PCharChars: TCharSet;
+    class function ReservedChars: TCharSet;
+    class function SchemeChars: TCharSet;
+    class function SubDelimChars: TCharSet;
+    class function UnreservedChars: TCharSet;
+    class function UriType(const Scheme: String): TIdUriClass;
+    class function UsernameEncode(const Username: String): String;
+    class function WellFormedPercentEncoding(const Token: String): Boolean;
+
     constructor Create(URI: String = ''); virtual;
     destructor  Destroy; override;
 
-    function AsString: String; virtual;
-    function IsSipUri: Boolean; virtual;
-    function IsSipsUri: Boolean;
+    function  AsString: String; virtual;
+    procedure EraseUserInfo; virtual;
+    function  IsMalformed: Boolean; virtual;
+    function  IsSipUri: Boolean; virtual;
+    function  IsSipsUri: Boolean;
 
-    property Host:   String   read GetHost write SetHost;
-    property Port:   Cardinal read GetPort write SetPort;
-    property Scheme: String   read fScheme write SetScheme;
+    property Fragment:        String   read fFragment write fFragment;
+    property HasAuthority:    Boolean  read fHasAuthority write fHasAuthority;
+    property Host:            String   read GetHost write SetHost;
+    property ParseFailReason: String   read fParseFailReason;
+    property Path:            String   read fPath write fPath;
+    property Port:            Cardinal read GetPort write SetPort;
+    property Query:           String   read fQuery write fQuery;
+    property Scheme:          String   read fScheme write SetScheme;
+    property UnparsedValue:   String   read fUnparsedValue;
+    property Uri:             String   read GetUri write SetUri;
+    property UserInfo:        String   read fUserInfo write fUserInfo;
   end;
 
   TIdSipHeader = class;
@@ -237,16 +293,13 @@ type
   // identifier, see ParamToTransport.
   TIdSipUri = class(TIdUri)
   private
-    fHeaders:         TIdSipHeaders;
-    fIsMalformed:     Boolean;
-    fParseFailReason: String;
-    fPassword:        String;
-    fUnparsedValue:   String;
-    fUsername:        String;
-    Parameters:       TIdSipParameters;
+    fHeaders:   TIdSipHeaders;
+    fPassword:  String;
+    fUsername:  String;
+    Parameters: TIdSipParameters;
 
     class function IsEscapedOrInSet(const Token: String;
-                                    AcceptableChars: TIdSipChars): Boolean;
+                                    AcceptableChars: TCharSet): Boolean;
 
     function  EqualParameters(const Uri: TIdSipUri): Boolean;
     function  GetGrid: String;
@@ -256,21 +309,16 @@ type
     function  GetOpaque: String;
     function  GetTransport: String;
     function  GetTTL: Cardinal;
-    function  GetUri: String;
     function  GetUserParameter: String;
-    function  HasAcceptableScheme: Boolean;
     function  HasValidHost: Boolean;
     function  HasValidPassword: Boolean;
     function  HasValidUser: Boolean;
     function  HasValidUserInfo: Boolean;
     function  HeadersAsString: String;
     function  IsKnownParameter(const Name: String): Boolean;
-    procedure MarkAsInvalid(const Reason: String);
     function  ParamsAsString: String;
     procedure ParseHeaders(HeaderList: String);
     procedure ParseHost(HostAndPort: String);
-    procedure ParseUserInfo(UserInfo: String);
-    procedure Reset;
     procedure SetGrid(const Value: String);
     procedure SetIsGruu(const Value: Boolean);
     procedure SetMaddr(const Value: String);
@@ -278,26 +326,24 @@ type
     procedure SetOpaque(const Value: String);
     procedure SetTransport(const Value: String);
     procedure SetTTL(const Value: Cardinal);
-    procedure SetUri(const Value: String);
     procedure SetUserParameter(const Value: String);
     function  ValidUser(Username: String): Boolean;
     function  ValidPassword(Password: String): Boolean;
   protected
+    function  GetUri: String; override;
+    function  HasAcceptableScheme: Boolean; override;
     procedure Initialize; override;
-    procedure Parse(Uri: String); override;
+    procedure ParsePath(Path: String); override;
+    procedure ParseQuery(Query: String); override;
+    procedure ParseUserInfo(UserInfo: String); override;
+    procedure Reset; override;
     procedure SetScheme(const Value: String); override;
   public
-    class function CreateUri(URI: String = ''): TIdUri;
-    class function Decode(const Src: String): String;
-    class function Encode(const Src: String;
-                          const SafeChars: TIdSipChars): String;
-    class function HasValidSyntax(URI: String): Boolean; 
     class function HeaderEncode(const NameOrValue: String): String;
     class function IsParamNameOrValue(const Token: String): Boolean;
     class function IsPassword(const Token: String): Boolean;
     class function IsUser(const Token: String): Boolean;
     class function ParameterEncode(const Parameter: String): String;
-    class function UsernameEncode(const Username: String): String;
 
     destructor Destroy; override;
 
@@ -313,14 +359,14 @@ type
     function  DefaultPort: Cardinal; virtual;
     function  DefaultTransport: String; virtual;
     function  Equals(Uri: TIdSipUri): Boolean;
-    procedure EraseUserInfo;
+    procedure EraseUserInfo; override;
     function  HasGrid: Boolean;
     function  HasHeaders: Boolean;
     function  HasMaddr: Boolean;
     function  HasMethod: Boolean;
     function  HasParameter(const Name: String): Boolean;
     function  IsLooseRoutable: Boolean;
-    function  IsMalformed: Boolean;
+    function  IsMalformed: Boolean; override;
     function  IsSecure: Boolean; virtual;
     function  ParamCount: Integer;
     function  ParamValue(const Name: String): String; overload;
@@ -336,12 +382,9 @@ type
     property Maddr:           String        read GetMaddr write SetMaddr;
     property Method:          String        read GetMethod write SetMethod;
     property Opaque:          String        read GetOpaque write SetOpaque;
-    property ParseFailReason: String        read fParseFailReason;
     property Password:        String        read fPassword write fPassword;
     property Transport:       String        read GetTransport write SetTransport;
     property TTL:             Cardinal      read GetTTL write SetTTL;
-    property UnparsedValue:   String        read fUnparsedValue;
-    property Uri:             String        read GetUri write SetUri;
     property Username:        String        read fUsername write fUsername;
     property UserParameter:   String        read GetUserParameter write SetUserParameter;
   end;
@@ -1667,7 +1710,6 @@ type
     class function IsQuotedString(const Token: String): Boolean;
     class function IsQValue(const Token: String): Boolean;
     class function IsRequest(FirstLine: String): Boolean;
-    class function IsScheme(const Scheme: String): Boolean;
     class function IsSipVersion(Version: String): Boolean;
     class function IsToken(const Token: String): Boolean;
     class function IsTransport(const Token: String): Boolean;
@@ -2127,11 +2169,13 @@ const
   InvalidDisplayName          = 'Invalid display-name';
   InvalidEventType            = 'Invalid event-type';
   InvalidExpires              = 'Invalid Expires parameter';
+  InvalidFragment             = 'Invalid fragment';
   InvalidHost                 = 'Invalid host';
   InvalidMaddr                = 'Invalid maddr';
   InvalidMethod               = 'Invalid method';
   InvalidNameAddr             = 'Invalid name-addr';
   InvalidNumber               = 'Invalid number';
+  InvalidQuery                = 'Invalid query';
   InvalidQuotedString         = 'Invalid quoted-string';
   InvalidQValue               = 'Invalid q-value';
   InvalidReceived             = 'Invalid received';
@@ -2153,6 +2197,7 @@ const
   MethodToken                 = 'Method';
   MissingAngleBrackets        = 'Missing angle brackets';
   MissingCallID               = 'Missing Call-ID header';
+  MissingColonAfterScheme     = 'Missing colon after scheme';
   MissingContentType          = 'Missing Content-Type header with a non-empty message-body';
   MissingCSeq                 = 'Missing CSeq header';
   MissingFrom                 = 'Missing From header';
@@ -2591,6 +2636,9 @@ begin
     Self.Port := StrToIntDef(Value, Self.DefaultPort);
     Self.PortIsSpecified := true;
   end;
+
+  if (OriginalValue[Length(OriginalValue)] = ':') then
+    raise EParserError.Create('Malformed host/port: ' + OriginalValue);
 end;
 
 //******************************************************************************
@@ -3099,7 +3147,7 @@ begin
       Self.FailParse(InvalidToken);
     end;
 }
-    Self.AddParam(ParamName, TIdSipUri.Decode(ParamValue));
+    Self.AddParam(ParamName, TIdUri.Decode(ParamValue));
   end;
 end;
 
@@ -3115,12 +3163,205 @@ end;
 //******************************************************************************
 //* TIdUri Public methods ******************************************************
 
+class function TIdUri.AlphaChars: TCharSet;
+begin
+  Result := ['a'..'z', 'A'..'Z'];
+end;
+
+class function TIdUri.CreateUri(URI: String = ''): TIdUri;
+var
+  Scheme: String;
+begin
+  Result := nil;
+  try
+    if (URI = '') then
+      Result := TIdSipUri.Create(URI)
+    else begin
+      Scheme := Lowercase(Fetch(URI, ':', false));
+      Result := Self.UriType(Scheme).Create(URI);
+    end;
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
+class function TIdUri.Decode(const Src: String): String;
+var
+  CharCode:   Integer;
+  Error:      Integer;
+  EscapeCode: String[2];
+  I:          Integer;
+begin
+  // This code is heavily based on Indy's TIdUri.Decode. It also behaves
+  // slightly differently: the null character ($00) is encoded as '%00'.
+  Result := '';
+
+  I := 1;
+  while I <= Length(Src) do begin
+    if Src[I] <> '%' then begin
+      Result := Result + Src[I];
+      Inc(I);
+    end
+    else begin
+      Inc(I);
+      EscapeCode := Copy(Src, I, 2);
+      Inc(I, 2);
+
+      // '%1' is not a valid encoded character because there's only one digit
+      // following the percent sign.
+      if (Length(EscapeCode) < 2) then
+        raise EParserError.Create('Invalid URI encoding: %' + EscapeCode);
+
+      Val('$' + EscapeCode, CharCode, Error);
+
+      if (Error <> 0) then
+        raise EParserError.Create('Invalid URI encoding: %' + EscapeCode);
+
+      Result := Result + Char(CharCode);
+    end;
+  end;
+end;
+
+class function TIdUri.DigitChars: TCharSet;
+begin
+  Result := ['0'..'9'];
+end;
+
+class function TIdUri.Encode(const Src: String;
+                             const SafeChars: TCharSet): String;
+var
+  I: Integer;
+begin
+  Result := '';
+  for I := 1 to Length(Src) do begin
+    if Src[I] in SafeChars then
+      Result := Result + Src[I]
+    else
+      Result := Result + '%' + IntToHex(Ord(Src[I]), 2);
+  end;
+end;
+
+class function TIdUri.GenDelimChars: TCharSet;
+begin
+  Result := [':', '/', '?', '#', '[', ']', '@'];
+end;
+
+class function TIdUri.HasValidSyntax(URI: String): Boolean;
+var
+  U: TIdUri;
+begin
+  if (URI = '') then begin
+    Result := false;
+    Exit;
+  end;
+
+  U := TIdUri.CreateUri(URI);
+  try
+    Result := not U.IsMalformed;
+  finally
+    U.Free;
+  end;
+end;
+
+class function TIdUri.FragmentChars: TCharSet;
+begin
+  Result := Self.PCharChars + ['/', '?'];
+end;
+
+class function TIdUri.IsFragment(const Token: String): Boolean;
+begin
+  Result := Token <> '';
+
+  if Result then
+    Result := Self.WellFormedPercentEncoding(Token);
+
+  if Result then
+    Result := Self.ContainsOnly(Token, Self.FragmentChars);
+end;
+
+class function TIdUri.IsPChar(const Token: String): Boolean;
+begin
+  Result := Token <> '';
+
+  if Result then
+    Result := Self.WellFormedPercentEncoding(Token);
+
+  if Result then
+    Result := Self.ContainsOnly(Token, Self.PCharChars);
+end;
+
+class function TIdUri.IsQuery(const Token: String): Boolean;
+begin
+  Result := Self.IsFragment(Token);
+end;
+
+class function TIdUri.IsScheme(const Scheme: String): Boolean;
+begin
+  Result := Scheme <> '';
+
+  if Result then begin
+    Result := TIdSipParser.IsLetter(Scheme[1])
+          and Self.ContainsOnly(Scheme, Self.SchemeChars);
+  end;
+end;
+
+class function TIdUri.PCharChars: TCharSet;
+begin
+  Result := Self.UnreservedChars + ['%', ':', '@'] + Self.SubDelimChars;
+end;
+
+class function TIdUri.ReservedChars: TCharSet;
+begin
+  Result := Self.GenDelimChars + Self.SubDelimChars;
+end;
+
+class function TIdUri.SchemeChars: TCharSet;
+begin
+  Result := Self.AlphaChars + Self.DigitChars + ['+', '-', '.'];
+end;
+
+class function TIdUri.SubDelimChars: TCharSet;
+begin
+  Result := ['!', '$', '&', '''', '(', ')', '*', '+', ',', ';', '='];
+end;
+
+class function TIdUri.UnreservedChars: TCharSet;
+begin
+  Result := Self.AlphaChars + Self.DigitChars + ['-', '.', '_', '~'];
+end;
+
+class function TIdUri.UriType(const Scheme: String): TIdUriClass;
+begin
+  if (Scheme = SipScheme) or (Scheme = SipsScheme) then
+    Result := TIdSipUri
+  else
+    Result := TIdUri;
+end;
+
+class function TIdUri.UsernameEncode(const Username: String): String;
+begin
+  Result := Self.Encode(Username, UserChars);
+end;
+
+class function TIdUri.WellFormedPercentEncoding(const Token: String): Boolean;
+begin
+  try
+    Self.Decode(Token);
+    Result := true;
+  except
+    on EParserError do
+      Result := false;
+  end;
+end;
+
 constructor TIdUri.Create(URI: String = '');
 begin
   inherited Create;
 
   Self.Initialize;
-  Self.Parse(URI);
+  Self.Uri := URI;
 end;
 
 destructor TIdUri.Destroy;
@@ -3133,6 +3374,16 @@ end;
 function TIdUri.AsString: String;
 begin
   Result := '';
+end;
+
+procedure TIdUri.EraseUserInfo;
+begin
+  Self.UserInfo := ''; 
+end;
+
+function TIdUri.IsMalformed: Boolean;
+begin
+  Result := Self.fIsMalformed;//not Self.HasAcceptableScheme;
 end;
 
 function TIdUri.IsSipUri: Boolean;
@@ -3148,22 +3399,129 @@ end;
 
 //* TIdUri Protected methods ***************************************************
 
+function TIdUri.GetUri: String;
+begin
+  Result := '';
+end;
+
+function TIdUri.HasAcceptableScheme: Boolean;
+begin
+  Result := Self.IsScheme(Self.Scheme);
+end;
+
 procedure TIdUri.Initialize;
 begin
   Self.HostAndPort := TIdSipHostAndPort.Create;
 end;
 
-procedure TIdUri.Parse(Uri: String);
+procedure TIdUri.MarkAsInvalid(const Reason: String);
 begin
-  // Make no assumptions about how URI schemes parse; do nothing.
+  Self.fIsMalformed     := true;
+  Self.fParseFailReason := Reason;
+end;
+
+procedure TIdUri.Parse(Uri: String);
+var
+  HasQuery: Boolean;
+begin
+  Self.Reset;
+
+  if (Uri <> '') then begin
+    if (Pos(':', Uri) = 0) then begin
+      Self.Scheme := Uri;
+
+      raise EParserError.Create(MissingColonAfterScheme);
+    end;
+
+    Self.Scheme := Fetch(Uri, ':');
+
+    HasQuery := Pos('?', Uri) > 0;
+    Self.ParseHierPart(Fetch(Uri, ['?', '#']));
+
+    if HasQuery then
+      Self.ParseQuery(Fetch(Uri, '#'));
+
+    if (Uri <> '') then
+      Self.ParseFragment(Uri);
+
+    if not TIdUri.IsScheme(Self.Scheme) then
+      raise EParserError.Create(InvalidScheme);
+  end;
+end;
+
+procedure TIdUri.ParseAuthority(Authority: String);
+begin
+  if (Pos('@', Authority) > 0) then
+    Self.ParseUserInfo(Fetch(Authority, '@'));
+
+  Self.HasAuthority      := true;
+  Self.HostAndPort.Value := TIdUri.Decode(Authority);
+end;
+
+procedure TIdUri.ParsePath(Path: String);
+begin
+  Self.Path := Path;
+end;
+
+procedure TIdUri.ParseQuery(Query: String);
+begin
+  Self.Query := Query;
+
+  if not TIdUri.IsQuery(Self.Query) then
+    raise EParserError.Create(InvalidQuery);
+end;
+
+procedure TIdUri.ParseUserInfo(UserInfo: String);
+begin
+  try
+    Self.UserInfo := TIdUri.Decode(UserInfo);
+  except
+    on EParserError do
+      raise EParserError.Create(InvalidUserInfo);
+  end;
+end;
+
+procedure TIdUri.Reset;
+begin
+  Self.fIsMalformed     := false;
+  Self.fParseFailReason := '';
+  Self.Host             := '';
+  Self.Port             := 0;
+  Self.Scheme           := '';
+
+  Self.HostAndPort.PortIsSpecified := false;
 end;
 
 procedure TIdUri.SetScheme(const Value: String);
 begin
-  Self.fScheme := Value;
+  Self.fScheme := Lowercase(Value);
+end;
+
+procedure TIdUri.SetUri(const Value: String);
+begin
+  Self.fIsMalformed   := false;
+  Self.fUnparsedValue := Value;
+
+  try
+    Self.Parse(Value);
+  except
+    on E: EParserError do
+      Self.MarkAsInvalid(E.Message);
+  end;
 end;
 
 //* TIdUri Private methods *****************************************************
+
+class function TIdUri.ContainsOnly(const Token: String; LegalChars: TCharSet): Boolean;
+var
+  I: Integer;
+begin
+  Result := true;
+  for I := 1 to Length(Token) do begin
+    Result := Result and (Token[I] in LegalChars);
+    if not Result then Break;
+  end;
+end;
 
 function TIdUri.GetHost: String;
 begin
@@ -3173,6 +3531,41 @@ end;
 function TIdUri.GetPort: Cardinal;
 begin
   Result := Self.HostAndPort.Port;
+end;
+
+procedure TIdUri.ParseFragment(Fragment: String);
+begin
+  Self.Fragment := Fragment;
+
+  if not TIdUri.IsFragment(Self.Fragment) then
+    raise EParserError.Create(InvalidFragment);
+end;
+
+procedure TIdUri.ParseHierPart(HierPart: String);
+var
+  Auth: String;
+begin
+  if (HierPart = '') then begin
+    // This is the path-empty rule in RFC 3986's Appendix A ABNF.
+    Self.HasAuthority := false;
+    Self.HostAndPort.Value := '';
+    Self.Path := '';
+  end
+  else begin
+    if StartsWith(HierPart, '//') then begin
+      HierPart := Copy(HierPart, 3, Length(HierPart));
+
+      Auth := Fetch(HierPart, '/', false);
+      Self.ParseAuthority(Auth);
+      Self.ParsePath(Copy(HierPart, Length(Auth) + 1, Length(HierPart)));
+    end
+    else if StartsWith(HierPart, '/') then begin
+      Self.ParsePath(HierPart);
+    end
+    else begin
+      Self.ParsePath(HierPart);
+    end;
+  end;
 end;
 
 procedure TIdUri.SetHost(const Value: String);
@@ -3189,93 +3582,6 @@ end;
 //* TIdSipUri                                                                  *
 //******************************************************************************
 //* TIdSipUri Public methods ***************************************************
-
-class function TIdSipUri.CreateUri(URI: String = ''): TIdUri;
-var
-  Scheme: String;
-begin
-  Result := nil;
-  try
-    if (URI = '') then
-      Result := TIdSipUri.Create(URI)
-    else begin
-      Scheme := Lowercase(Fetch(URI, ':', false));
-      if (Scheme = SipScheme) or (Scheme = SipsScheme) then
-        Result := TIdSipUri.Create(URI)
-//      else if (Scheme = SipsScheme) then
-//        Result := TIdSipsUri.Create(URI)
-      else raise ESchemeNotSupported.Create(URI);
-    end;
-  except
-    FreeAndNil(Result);
-
-    raise;
-  end;
-end;
-
-class function TIdSipUri.Decode(const Src: String): String;
-var
-  CharCode: Integer;
-  ESC:      String[2];
-  I:        Integer;
-begin
-  // This code comes straight from Indy's TIdUri. 
-  Result := '';
-  // S.G. 27/11/2002: Spaces is NOT to be encoded as "+".
-  // S.G. 27/11/2002: "+" is a field separator in query parameter, space is...
-  // S.G. 27/11/2002: well, a space
-
-  I := 1;
-  while I <= Length(Src) do begin
-    if Src[I] <> '%' then begin
-      Result := Result + Src[I];
-      Inc(I);
-    end
-    else begin
-      Inc(I); // skip the % char
-      ESC := Copy(Src, I, 2); // Copy the escape code
-      Inc(I, 2); // Then skip it.
-      try
-        CharCode := StrToInt('$' + ESC);
-        if (CharCode > 0) and (CharCode < 256) then
-          Result := Result + Char(CharCode);
-      except
-      end;
-    end;
-  end;
-end;
-
-class function TIdSipUri.Encode(const Src: String;
-                                const SafeChars: TIdSipChars): String;
-var
-  I: Integer;
-begin
-  Result := '';
-  for I := 1 to Length(Src) do begin
-    if Src[I] in SafeChars then
-      Result := Result + Src[I]
-    else
-      Result := Result + '%' + IntToHex(Ord(Src[I]), 2);
-  end;
-end;
-
-class function TIdSipUri.HasValidSyntax(URI: String): Boolean;
-var
-  U: TIdSipUri;
-begin
-  if (URI = '') then begin
-    Result := false;
-    Exit;
-  end;
-
-  U := TIdSipUri.Create('');
-  try
-    U.Uri := URI;
-    Result := not U.IsMalformed;
-  finally
-    U.Free;
-  end;
-end;
 
 class function TIdSipUri.HeaderEncode(const NameOrValue: String): String;
 begin
@@ -3300,11 +3606,6 @@ end;
 class function TIdSipUri.ParameterEncode(const Parameter: String): String;
 begin
   Result := Self.Encode(Parameter, ParamChars);
-end;
-
-class function TIdSipUri.UsernameEncode(const Username: String): String;
-begin
-  Result := Self.Encode(Username, UserChars);
 end;
 
 destructor TIdSipUri.Destroy;
@@ -3355,7 +3656,7 @@ begin
     ResultUri.Password := '';
     ResultUri.Headers.Clear;
 
-    Result := TIdSipUri.Decode(ResultUri.Uri);
+    Result := TIdUri.Decode(ResultUri.Uri);
   finally
     ResultUri.Free;
   end;
@@ -3371,7 +3672,7 @@ begin
     ResultUri.Headers.Clear;
     ResultUri.Parameters.Clear;
 
-    Result := TIdSipUri.Decode(ResultUri.Uri);
+    Result := TIdUri.Decode(ResultUri.Uri);
   finally
     ResultUri.Free;
   end;
@@ -3421,7 +3722,7 @@ begin
 
   // This is a fake header to allow us to hack a body into the header list
   if Self.Headers.HasHeader(BodyHeaderFake) then begin
-    Result.Body := Self.Headers[BodyHeaderFake].FullValue;
+    Result.Body := TIdUri.Decode(Self.Headers[BodyHeaderFake].FullValue);
     Result.RemoveAllHeadersNamed(BodyHeaderFake);
   end;
 end;
@@ -3461,6 +3762,8 @@ end;
 
 procedure TIdSipUri.EraseUserInfo;
 begin
+  inherited EraseUserInfo;
+
   Self.Username := '';
   Self.Password := '';
 end;
@@ -3554,6 +3857,34 @@ end;
 
 //* TIdSipUri Protected methods ************************************************
 
+function TIdSipUri.GetUri: String;
+begin
+  if (Self.Scheme = '') and (Self.Host = '') then
+    Result := ''
+  else begin
+    Result := Self.Scheme + ':';
+
+    if (Self.Username <> '') then begin
+      Result := Result + Self.UsernameEncode(Self.Username);
+
+      if (Self.Password <> '') then
+        Result := Result + ':' + Self.Password;
+
+      Result := Result + '@';
+    end;
+
+    Result := Result + Self.HostAndPort.Value;
+
+    Result := Result + Self.ParamsAsString + Self.HeadersAsString;
+  end;
+end;
+
+function TIdSipUri.HasAcceptableScheme: Boolean;
+begin
+  Result := IsEqual(Self.Scheme, SipScheme)
+         or IsEqual(Self.Scheme, SipsScheme);
+end;
+
 procedure TIdSipUri.Initialize;
 begin
   inherited Initialize;
@@ -3562,36 +3893,56 @@ begin
   Self.Parameters := TIdSipUriParameters.Create;
 end;
 
-procedure TIdSipUri.Parse(Uri: String);
+procedure TIdSipUri.ParsePath(Path: String);
 begin
-  Self.Reset;
+  inherited ParsePath(Path);
 
-  if (Uri <> '') then begin
-    Self.Scheme := Fetch(Uri, ':');
+  if (Pos('@', Path) > 0) then
+    Self.ParseUserInfo(Fetch(Path, '@'));
 
-    if not TIdSipParser.IsToken(Self.Scheme)
-      or not Self.HasAcceptableScheme then
-      raise EParserError.Create(InvalidScheme);
+  if (Pos(';', Path) > 0) then begin
+    Self.ParseHost(Fetch(Path, ';'));
+    Self.Parameters.Parse(Path);
+  end
+  else
+    Self.ParseHost(Path);
+end;
 
-    if (Pos('@', Uri) > 0) then
-      Self.ParseUserInfo(Fetch(Uri, '@'));
+procedure TIdSipUri.ParseQuery(Query: String);
+begin
+  inherited ParseQuery(Query);
 
-    if (Pos(';', Uri) > 0) then begin
-      Self.HostAndPort.Value := Fetch(Uri, ';');
-      Self.Parameters.Parse(Fetch(Uri, '?'));
+  Self.ParseHeaders(Query);
+end;
 
-      if (Uri <> '') then
-        Self.ParseHeaders(Uri);
-    end
-    else begin
-      if (Pos('?', Uri) > 0) then begin
-        Self.HostAndPort.Value := Fetch(Uri, '?');
-        Self.ParseHeaders(Uri);
-      end
-      else
-        Self.ParseHost(Uri);
-    end;
-  end;
+procedure TIdSipUri.ParseUserInfo(UserInfo: String);
+var
+  User:   String;
+  Passwd: String;
+begin
+  inherited ParseUserInfo(UserInfo);
+
+  User   := Fetch(UserInfo, ':');
+  Passwd := UserInfo;
+
+  Self.Username := TIdUri.Decode(User);
+  Self.Password := Passwd;
+
+  if not Self.ValidUser(User) or not Self.ValidPassword(Passwd) then
+    raise EParserError.Create(InvalidUserInfo);
+end;
+
+procedure TIdSipUri.Reset;
+begin
+  inherited Reset;
+
+  Self.Headers.Clear;
+  Self.Parameters.Clear;
+  Self.Password  := '';
+  Self.Port      := Self.DefaultPort;
+  Self.Username  := '';
+
+  Self.HostAndPort.PortIsSpecified := false;
 end;
 
 procedure TIdSipUri.SetScheme(const Value: String);
@@ -3612,7 +3963,7 @@ end;
 //* TIdSipUri Private methods **************************************************
 
 class function TIdSipUri.IsEscapedOrInSet(const Token: String;
-                                          AcceptableChars: TIdSipChars): Boolean;
+                                          AcceptableChars: TCharSet): Boolean;
 var
   EndOfString: Integer;
   I:           Integer;
@@ -3694,37 +4045,9 @@ begin
   Result := StrToInt(Self.ParamValue(TTLParam));
 end;
 
-function TIdSipUri.GetUri: String;
-begin
-  if (Self.Scheme = '') and (Self.Host = '') then
-    Result := ''
-  else begin
-    Result := Self.Scheme + ':';
-
-    if (Self.Username <> '') then begin
-      Result := Result + Self.UsernameEncode(Self.Username);
-
-      if (Self.Password <> '') then
-        Result := Result + ':' + Self.Password;
-
-      Result := Result + '@';
-    end;
-
-    Result := Result + Self.HostAndPort.Value;
-
-    Result := Result + Self.ParamsAsString + Self.HeadersAsString;
-  end;
-end;
-
 function TIdSipUri.GetUserParameter: String;
 begin
   Result := Self.ParamValue(UserParam);
-end;
-
-function TIdSipUri.HasAcceptableScheme: Boolean;
-begin
-  Result := IsEqual(Self.Scheme, SipScheme)
-         or IsEqual(Self.Scheme, SipsScheme);
 end;
 
 function TIdSipUri.HasValidHost: Boolean;
@@ -3788,12 +4111,6 @@ begin
          or (CaselessName = MaddrParam)
 end;
 
-procedure TIdSipUri.MarkAsInvalid(const Reason: String);
-begin
-  Self.fIsMalformed     := true;
-  Self.fParseFailReason := Reason;
-end;
-
 function TIdSipUri.ParamsAsString: String;
 begin
   Result := Self.Parameters.AsString;
@@ -3808,41 +4125,13 @@ begin
     HeaderValue := Fetch(HeaderList, '&');
     HeaderName := Fetch(HeaderValue, '=');
 
-    Self.Headers.Add(HeaderName).Value := TIdSipURI.Decode(HeaderValue);
+    Self.Headers.Add(HeaderName).Value := TIdUri.Decode(HeaderValue);
   end;
 end;
 
 procedure TIdSipUri.ParseHost(HostAndPort: String);
 begin
   Self.HostAndPort.Value := Trim(HostAndPort);
-end;
-
-procedure TIdSipUri.ParseUserInfo(UserInfo: String);
-var
-  User:   String;
-  Passwd: String;
-begin
-  User   := Fetch(UserInfo, ':');
-  Passwd := UserInfo;
-
-  if not Self.ValidUser(User) or not Self.ValidPassword(Passwd) then
-    raise EParserError.Create(InvalidUserInfo);
-
-  Self.Username := TIdSipURI.Decode(User);
-  Self.Password := Passwd;
-end;
-
-procedure TIdSipUri.Reset;
-begin
-  Self.Headers.Clear;
-  Self.Host      := '';
-  Self.Parameters.Clear;
-  Self.Password  := '';
-  Self.Port      := Self.DefaultPort;
-  Self.Scheme    := '';
-  Self.Username  := '';
-
-  Self.HostAndPort.PortIsSpecified := false;
 end;
 
 procedure TIdSipUri.SetGrid(const Value: String);
@@ -3884,19 +4173,6 @@ end;
 procedure TIdSipUri.SetTTL(const Value: Cardinal);
 begin
   Self.Parameters[TTLParam] := IntToStr(Value);
-end;
-
-procedure TIdSipUri.SetUri(const Value: String);
-begin
-  Self.fIsMalformed   := false;
-  Self.fUnparsedValue := Value;
-
-  try
-    Self.Parse(Value);
-  except
-    on E: EParserError do
-      Self.MarkAsInvalid(E.Message);
-  end;
 end;
 
 procedure TIdSipUri.SetUserParameter(const Value: String);
@@ -10030,25 +10306,6 @@ begin
   // does not represent a valid token. A method MUST satisfy token
   // syntax. Ergo, we consider the below as sufficient. 
   Result := Self.IsToken(Fetch(FirstLine, ' '));
-end;
-
-class function TIdSipParser.IsScheme(const Scheme: String): Boolean;
-var
-  I: Integer;
-begin
-  Result := Scheme <> '';
-
-  if Result then begin
-    Result := Result and Self.IsLetter(Scheme[1]);
-
-    I := 2;
-    while (I <= Length(Scheme)) and Result do begin
-      Result := Result
-            and (Self.IsAlphaNumeric(Scheme[I])
-                 or (Scheme[I] in ['+', '-', '.']));
-      Inc(I);
-    end;
-  end;
 end;
 
 class function TIdSipParser.IsSipVersion(Version: String): Boolean;

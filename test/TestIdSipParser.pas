@@ -53,7 +53,6 @@ type
     procedure TestIsQValue;
     procedure TestIsRequest;
     procedure TestIsSipVersion;
-    procedure TestIsScheme;
     procedure TestIsToken;
     procedure TestIsTransport;
     procedure TestIsUuidUrn;
@@ -443,14 +442,6 @@ begin
   Check(    TIdSipParser.IsSipVersion('sip/2.0'),  'sip/2.0');
   Check(    TIdSipParser.IsSipVersion(SIPVersion), 'SIPVersion constant');
   Check(not TIdSipParser.IsSipVersion('SIP/X.Y'),  'SIP/X.Y');
-end;
-
-procedure TestTIdSipParser.TestIsScheme;
-begin
-  Check(not TIdSipParser.IsScheme(''),          '''''');
-  Check(not TIdSipParser.IsScheme('%'),         '%');
-  Check(not TIdSipParser.IsScheme('1sip'),      '1sip');
-  Check(    TIdSipParser.IsScheme('sip-2.0+3'), 'sip-2.0+3');
 end;
 
 procedure TestTIdSipParser.TestIsToken;

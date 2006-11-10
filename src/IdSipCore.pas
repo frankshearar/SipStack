@@ -1540,7 +1540,7 @@ end;
 
 procedure TIdSipAbstractCore.AddAllowedScheme(const Scheme: String);
 begin
-  if not TIdSipParser.IsScheme(Scheme) then
+  if not TIdUri.IsScheme(Scheme) then
     raise EIdSipBadSyntax.Create('Not a valid scheme');
 
   if (Self.AllowedSchemeList.IndexOf(Scheme) = ItemNotFoundIndex) then
