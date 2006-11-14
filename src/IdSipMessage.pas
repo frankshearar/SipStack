@@ -4605,13 +4605,7 @@ end;
 
 function TIdSipUriHeader.GetValue: String;
 begin
-  Result := Self.Address.URI;
-
-  if   (Pos(';', Result) > 0)
-    or (Pos(',', Result) > 0)
-    or (Pos('?', Result) > 0)
-    or (Result <> '') then
-    Result := '<' + Result + '>';
+    Result := '<' + Self.Address.URI + '>';
 end;
 
 procedure TIdSipUriHeader.Parse(const Value: String);
@@ -4717,13 +4711,13 @@ var
   URI: String;
 begin
   Result := Self.DisplayName;
-  if (Pos('"', Result) > 0) or (Pos('\', Result) > 0) then
+  if (FirstOf(['"', '\'], Result) > 0) then
     Result := Self.EncodeQuotedStr(Result);
 
   Result := QuoteStringIfNecessary(Result);
 
   URI := Self.Address.URI;
-  if (Pos(';', URI) > 0) or (Pos(',', URI) > 0) or (Pos('?', URI) > 0) or (Result <> '') then
+  if (FirstOf([';', ',', '?'], URI) > 0) or (Result <> '') then
     URI := '<' + URI + '>';
 
   if (Result = '') then
@@ -6224,7 +6218,7 @@ var
   URI: String;
 begin
   Result := Self.DisplayName;
-  if (Pos('"', Result) > 0) or (Pos('\', Result) > 0) then
+  if (FirstOf(['"', '\'], Result) > 0) then
     Result := EncodeQuotedStr(Result);
 
   Result := QuoteStringIfNecessary(Result);
