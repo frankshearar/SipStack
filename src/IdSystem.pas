@@ -29,6 +29,7 @@ function  GetTickDiff(const OldTickCount, NewTickCount : Cardinal): Cardinal;
 function  GetUserName: WideString;
 function  LocalAddress: String;
 procedure LocalAddresses(IPs: TStrings);
+function  RoutableIP: String;
 procedure DefineLocalAddress(AAddress: String); {Allows you to use a specified IP address}
 
 implementation
@@ -178,6 +179,17 @@ begin
   end
   else
     IPs.AddStrings(GStack.LocalAddresses);
+end;
+
+function RoutableIP: String;
+begin
+  // If you have a machine sitting behind a Network Address Translator (NAT),
+  // your LocalAddress will probably return an IP in one of the private address
+  // ranges (e.g., in the 192.168.0.0/24 subnet). These addresses are by
+  // definition not reachable by machines on the public Internet. This function
+  // returns an address that other people can use to make calls to you.
+
+  Result := '41.241.49.94';
 end;
 
 {See commentary for LocalAddress for an explanation of this function}
