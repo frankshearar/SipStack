@@ -164,6 +164,7 @@ type
     procedure TestSchemeChangeChangesPort;
     procedure TestSchemeChangeDoesntChangeSpecifiedPort;
     procedure TestSetUriBasicUri;
+    procedure TestSetUriMalformedUserinfo;
     procedure TestSetUriMultipleHeaders;
     procedure TestSetUriMultipleParameters;
     procedure TestSetUriOneHeader;
@@ -181,6 +182,7 @@ type
     procedure TestSetUriClearsOldValues;
     procedure TestTransport;
     procedure TestUnparsedValue;
+    procedure TestUserInfoWithEscapedCharacters;
     procedure TestUserIsIP;
     procedure TestUserIsPhone;
   end;
@@ -1935,6 +1937,12 @@ begin
   CheckEquals(0,                         Self.Uri.ParamCount, 'Parameter count');
 end;
 
+procedure TestTIdSipUri.TestSetUriMalformedUserinfo;
+begin
+ Self.Uri.Uri := 'sip:foo @bar';
+ Check(Self.Uri.IsMalformed, 'URI not marked as malformed');
+end;
+
 procedure TestTIdSipUri.TestSetUriMultipleHeaders;
 begin
   Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna'
@@ -2121,7 +2129,20 @@ begin
   Check(Self.Uri.IsMalformed,
         'URI not marked as being malformed');
   Check(Pos(InvalidScheme, Self.Uri.ParseFailReason) > 0,
-        'ParseFailReason not explanatory enough');            
+        'ParseFailReason not explanatory enough');
+end;
+
+procedure TestTIdSipUri.TestUserInfoWithEscapedCharacters;
+const
+  UserInfo = 'sip:christer2@192.168.0.221';
+begin
+  Self.Uri.Uri := 'sip:217.13.240.136';
+  Self.Uri.Username := UserInfo;
+
+  Check(not Self.Uri.IsMalformed,
+        'Setting Username means the actual userinfo may have escaped '
+      + 'characters, so should NEVER trigger IsMalformed.');
+  CheckEquals(UserInfo, Self.Uri.Username, 'Username not set properly');
 end;
 
 procedure TestTIdSipUri.TestUserIsIP;

@@ -3803,7 +3803,7 @@ var
   WellFormed: Boolean;
 begin
   WellFormed := Self.HasAcceptableScheme
-        and Self.HasValidUserInfo
+//        and Self.HasValidUserInfo
         and Self.HasValidHost
         and not Self.Parameters.IsMalformed
         and not Self.Headers.IsMalformed;
