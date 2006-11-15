@@ -913,7 +913,6 @@ type
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipSubscribeModule unit tests');
-{
   Result.AddTest(TestTIdSipSubscribeModule.Suite);
   Result.AddTest(TestTIdSipUserAgentWithSubscribeModule.Suite);
   Result.AddTest(TestCallFlows.Suite);
@@ -927,9 +926,7 @@ begin
   Result.AddTest(TestTIdSipOutboundRefer.Suite);
   Result.AddTest(TestTIdSipInboundSubscription.Suite);
   Result.AddTest(TestTIdSipOutboundSubscription.Suite);
-}
   Result.AddTest(TestTIdSipInboundReferral.Suite);
-{
   Result.AddTest(TestTIdSipOutboundReferral.Suite);
   Result.AddTest(TestTIdSipInboundReferralWait.Suite);
   Result.AddTest(TestTIdSipSubscriptionExpires.Suite);
@@ -942,7 +939,6 @@ begin
   Result.AddTest(TestTIdSipRenewedSubscriptionMethod.Suite);
   Result.AddTest(TestTIdSipOutboundSubscriptionNotifyMethod.Suite);
   Result.AddTest(TestTIdSipSubscriptionRequestMethod.Suite);
-}
 end;
 
 //******************************************************************************
@@ -4796,7 +4792,7 @@ procedure TestTIdSipInboundReferral.TestRejectUnsupportedReferToUri;
 var
   HttpReferTo: TIdSipAddressHeader;
 begin
-//  Fail('This test cannot work until TIdSipUriHeaders can properly support non-SIP URIs');
+  Fail('This test cannot work until TIdSipUriHeaders can properly support non-SIP URIs');
   HttpReferTo := TIdSipFromHeader.Create;
   try
     HttpReferTo.Address.Uri := 'http://www.example.com/';
