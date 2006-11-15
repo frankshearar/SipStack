@@ -29,17 +29,19 @@ function  GetTickDiff(const OldTickCount, NewTickCount : Cardinal): Cardinal;
 function  GetUserName: WideString;
 function  LocalAddress: String;
 procedure LocalAddresses(IPs: TStrings);
-function  RoutableIP: String;
+function  RoutableAddress: String;
 procedure DefineLocalAddress(AAddress: String); {Allows you to use a specified IP address}
+procedure DefineRoutableAddress(Address: String);
 
 implementation
 
 uses
   IdSimpleParser, IdGlobal, IdStack, IdUDPServer, SysUtils, Windows, Winsock;
 
-{See commentary for LocalAddress for an explanation of this variable}
+{See commentary for LocalAddress and RoutableAddress for explanations of these variables}
 var
-  idLocalAddress: String;
+  idLocalAddress:    String;
+  idRoutableAddress: String;
 
 function ConstructUUID: String;
 var
@@ -181,7 +183,7 @@ begin
     IPs.AddStrings(GStack.LocalAddresses);
 end;
 
-function RoutableIP: String;
+function RoutableAddress: String;
 begin
   // If you have a machine sitting behind a Network Address Translator (NAT),
   // your LocalAddress will probably return an IP in one of the private address
@@ -189,13 +191,24 @@ begin
   // definition not reachable by machines on the public Internet. This function
   // returns an address that other people can use to make calls to you.
 
-  Result := '41.241.49.94';
+  if (Length(idRoutableAddress)=0) or (idRoutableAddress='0.0.0.0') then begin
+    // This is a stub implementation; a proper implementation might contact an
+    // external server to discover the external IP, or use STUN, or something
+    // similar.
+    Result := LocalAddress;
+  end else
+    Result := idRoutableAddress;
 end;
 
 {See commentary for LocalAddress for an explanation of this function}
 procedure DefineLocalAddress(AAddress: String);
 begin
   idLocalAddress:=AAddress;
+end;
+
+procedure DefineRoutableAddress(Address: String);
+begin
+  idRoutableAddress := Address;
 end;
 
 initialization
