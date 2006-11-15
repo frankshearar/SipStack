@@ -157,6 +157,8 @@ type
     procedure TestMaddr;
     procedure TestMalformedUris;
     procedure TestOpaque;
+    procedure TestPasswordIsUriEncoded;
+    procedure TestPasswordEncode;
     procedure TestPortIsSpecified;
     procedure TestPortWithSipScheme;
     procedure TestPortWithSipsScheme;
@@ -1846,6 +1848,30 @@ begin
               'After SetOpaque');
 end;
 
+procedure TestTIdSipUri.TestPasswordIsUriEncoded;
+const
+  Host            = 'bar';
+  IllegalPassword = 'contains+illegal+characters:@@@';
+  User            = 'foo';
+begin
+  Self.Uri.Password := IllegalPassword;
+  Self.Uri.Host     := Host;
+  Self.Uri.Scheme   := SipScheme;
+  Self.Uri.Username := User;
+
+  CheckEquals('sip:' + User + ':' + TIdSipUri.PasswordEncode(IllegalPassword) + '@' + Host,
+              Self.Uri.AsString,
+              'Password not properly encoded');
+end;
+
+procedure TestTIdSipUri.TestPasswordEncode;
+begin
+  CheckEquals('',      TIdSipUri.PasswordEncode(''),      'The empty string');
+  CheckEquals('foo',   TIdSipUri.PasswordEncode('foo'),   'foo');
+  CheckEquals('%20',   TIdSipUri.PasswordEncode(' '),     'The space character');
+  CheckEquals('&=+$,', TIdSipUri.PasswordEncode('&=+$,'), '&=+$,');
+end;
+
 procedure TestTIdSipUri.TestPortIsSpecified;
 begin
   Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
@@ -2069,6 +2095,9 @@ begin
   Self.Uri.Uri := 'sip:wintermute:foo@tessier-ashpool.co.lu';
 
   CheckEquals('foo', Self.Uri.Password, 'Password');
+
+  Self.Uri.Uri := 'sip:wintermute:%20@tessier-ashpool.co.lu';
+  CheckEquals(' ', Self.Uri.Password, 'Encoded characters not decoded');
 end;
 
 procedure TestTIdSipUri.TestSetUriWithPort;

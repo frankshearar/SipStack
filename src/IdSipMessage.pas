@@ -344,6 +344,7 @@ type
     class function IsPassword(const Token: String): Boolean;
     class function IsUser(const Token: String): Boolean;
     class function ParameterEncode(const Parameter: String): String;
+    class function PasswordEncode(const Password: String): String;
 
     destructor Destroy; override;
 
@@ -3608,6 +3609,11 @@ begin
   Result := Self.Encode(Parameter, ParamChars);
 end;
 
+class function TIdSipUri.PasswordEncode(const Password: String): String;
+begin
+  Result := Self.Encode(Password, PasswordChars);
+end;
+
 destructor TIdSipUri.Destroy;
 begin
   Self.Parameters.Free;
@@ -3868,7 +3874,7 @@ begin
       Result := Result + Self.UsernameEncode(Self.Username);
 
       if (Self.Password <> '') then
-        Result := Result + ':' + Self.Password;
+        Result := Result + ':' + Self.PasswordEncode(Self.Password);
 
       Result := Result + '@';
     end;
@@ -3926,7 +3932,7 @@ begin
   Passwd := UserInfo;
 
   Self.Username := TIdUri.Decode(User);
-  Self.Password := Passwd;
+  Self.Password := TIdUri.Decode(Passwd);
 
   if not Self.ValidUser(User) or not Self.ValidPassword(Passwd) then
     raise EParserError.Create(InvalidUserInfo);
