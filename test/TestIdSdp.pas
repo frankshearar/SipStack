@@ -83,6 +83,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAddressRoutableAddress;
     procedure TestAssign;
     procedure TestCopy;
     procedure TestPrintOnMulticast;
@@ -90,6 +91,7 @@ type
     procedure TestPrintOnMulticastWithTtl;
     procedure TestPrintOnMulticastWithTtlAndNumber;
     procedure TestPrintOnUnicast;
+    procedure TestPrintOnUsesRoutableAddress;
   end;
 
   TestTIdSdpKey = class(TTestCase)
@@ -1175,6 +1177,32 @@ end;
 
 //* TestTIdSdpConnection Published methods *************************************
 
+procedure TestTIdSdpConnection.TestAddressRoutableAddress;
+const
+  Binding   = '10.0.0.1';
+  Localhost = '127.0.0.1';
+begin
+  Self.C.Address := Localhost;
+
+  CheckEquals(Localhost,      Self.C.Address,         '1: Address not set');
+  CheckEquals(Self.C.Address, Self.C.RoutableAddress, '1: RoutableAddress not defaulted to Address');
+
+  Self.C.RoutableAddress := Binding;
+  CheckEquals(Binding,   Self.C.RoutableAddress, '2: RoutableAddress value not overwritten');
+  CheckEquals(Localhost, Self.C.Address,         '2: Address altered');
+
+  Self.C.Address := '';
+  Self.C.RoutableAddress := '';
+
+  Self.C.RoutableAddress := Binding;
+  CheckEquals(Binding,                Self.C.RoutableAddress, '3: RoutableAddress not set');
+  CheckEquals(Self.C.RoutableAddress, Self.C.Address,         '3: Address not defaulted to RoutableAddress');
+
+  Self.C.Address := Localhost;
+  CheckEquals(Binding,   Self.C.RoutableAddress, '4: RoutableAddress altered');
+  CheckEquals(Localhost, Self.C.Address,         '4: Address value not overwritten');
+end;
+
 procedure TestTIdSdpConnection.TestAssign;
 var
   Other: TIdSdpConnection;
@@ -1278,6 +1306,21 @@ begin
   Self.C.PrintOn(Self.S);
 
   CheckEquals('c=IN IP4 0.0.0.255'#13#10, S.DataString, 'PrintOn');
+end;
+
+procedure TestTIdSdpConnection.TestPrintOnUsesRoutableAddress;
+const
+  Binding   = '10.0.0.1';
+  LocalHost = '127.0.0.1';
+begin
+  Self.C.Address         := Localhost;
+  Self.C.AddressType     := Id_IPv4;
+  Self.C.NetType         := Id_SDP_IN;
+  Self.C.RoutableAddress := Binding;
+
+  Self.C.PrintOn(Self.S);
+
+  CheckEquals('c=IN IP4 ' + Self.C.RoutableAddress + #13#10, S.DataString, 'PrintOn didn''t use the routable address');
 end;
 
 //******************************************************************************

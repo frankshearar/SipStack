@@ -101,16 +101,21 @@ type
   private
     fAddress:           String;
     fAddressType:       TIdIPVersion;
+    fRoutableAddress:     String; // If you're behind a NAT, this will hold the NAT's external IP.
     fNetType:           String;
     fNumberOfAddresses: Cardinal;
     fTTL:               Byte;
+
+    procedure SetAddress(Value: String);
+    procedure SetRoutableAddress(Value: String);
   public
     procedure Assign(Src: TPersistent); override;
     function  Copy: TIdSdpConnection;
     procedure PrintOn(Dest: TStream); override;
 
     property AddressType:       TIdIPVersion read fAddressType write fAddressType;
-    property Address:           String       read fAddress write fAddress;
+    property Address:           String       read fAddress write SetAddress;
+    property RoutableAddress:     String       read fRoutableAddress write SetRoutableAddress;
     property NetType:           String       read fNetType write fNetType;
     property NumberOfAddresses: Cardinal     read fNumberOfAddresses write fNumberOfAddresses;
     property TTL:               Byte         read fTTL write fTTL;
@@ -1174,6 +1179,24 @@ begin
   Dest.Write(PChar(S)^, Length(S));
 end;
 
+//* TIdSdpConnection Private methods *******************************************
+
+procedure TIdSdpConnection.SetAddress(Value: String);
+begin
+  Self.fAddress := Value;
+
+  if (Self.RoutableAddress = '') then
+    Self.fRoutableAddress := Value;
+end;
+
+procedure TIdSdpConnection.SetRoutableAddress(Value: String);
+begin
+  Self.fRoutableAddress := Value;
+
+  if (Self.Address = '') then
+    Self.fAddress := Value;
+end;
+
 //******************************************************************************
 //* TIdSdpKey                                                                  *
 //******************************************************************************
@@ -1201,7 +1224,7 @@ begin
   if (Self.KeyType <> ktPrompt) then
     S := S + ':' + Self.Value;
 
-  S := S + #13#10;   
+  S := S + #13#10;
 
   Dest.Write(PChar(S)^, Length(S));
 end;
