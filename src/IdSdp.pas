@@ -1141,6 +1141,7 @@ begin
     Self.Address           := Other.Address;
     Self.NetType           := Other.NetType;
     Self.NumberOfAddresses := Other.NumberOfAddresses;
+    Self.RoutableAddress   := Other.RoutableAddress;
     Self.TTL               := Other.TTL;
   end
   else inherited Assign(Src);

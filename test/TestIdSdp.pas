@@ -1213,6 +1213,7 @@ begin
     Other.AddressType       := Id_IPv6;
     Other.NetType           := Id_SDP_IN;
     Other.NumberOfAddresses := 2;
+    Other.RoutableAddress   := 'F00F::1';
     Other.TTL               := 255;
 
     Self.C.Assign(Other);
@@ -1221,6 +1222,7 @@ begin
     Check      (Other.AddressType      = Self.C.AddressType,       'AddressType');
     CheckEquals(Other.NetType,           Self.C.NetType,           'NetType');
     CheckEquals(Other.NumberOfAddresses, Self.C.NumberOfAddresses, 'NumberOfAddresses');
+    CheckEquals(Other.RoutableAddress,   Self.C.RoutableAddress,   'RoutableAddress');
     CheckEquals(Other.TTL,               Self.C.TTL,               'TTL');
   finally
     Other.Free;
