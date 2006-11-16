@@ -205,14 +205,6 @@ begin
   idLocalAddress:=AAddress;
 end;
 
-function RoutableAddress: String;
-begin
-  if (Length(idRoutableAddress)=0) or (idRoutableAddress='0.0.0.0') then
-    Result:=LocalAddress
-  else
-    Result:=idRoutableAddress;
-end;
-
 procedure DefineRoutableAddress(AAddress: String); {Allows you to set a public IP address}
 begin
   idRoutableAddress:=AAddress;
