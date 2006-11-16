@@ -1164,7 +1164,7 @@ var
 begin
   S := S + 'c=' + Self.NetType + ' '
          + AddressTypeToStr(Self.AddressType)
-         + ' ' + Self.Address;
+         + ' ' + Self.RoutableAddress;
 
   if (Self.TTL > 0) then begin
     S := S + '/' + IntToStr(Self.TTL);
