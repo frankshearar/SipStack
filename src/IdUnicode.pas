@@ -15,6 +15,8 @@ uses
   SysUtils, Types;
 
 const
+  LineSeparator                 = $2028;
+  LineSeparatorChar             = WideChar(LineSeparator);
   Utf8ZeroWidthNonBreakingSpace = #$EF#$BB#$BF;
   ZeroWidthNonBreakingSpace     = $FEFF;
   ZeroWidthNonBreakingSpaceChar = WideChar(ZeroWidthNonBreakingSpace);
