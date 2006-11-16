@@ -87,7 +87,7 @@ begin
 
   try
     Self.Resolver.Resolve(DomainName);
-    ProcessNameRecords(Self.Resolver.QueryResult, DomainName, Result);
+    Self.ProcessNameRecords(Self.Resolver.QueryResult, DomainName, Result);
   except
     on EIdException do;
   end;
