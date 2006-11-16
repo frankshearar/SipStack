@@ -28,10 +28,10 @@ function  GetTickCount: Cardinal;
 function  GetTickDiff(const OldTickCount, NewTickCount : Cardinal): Cardinal;
 function  GetUserName: WideString;
 function  LocalAddress: String;
-procedure LocalAddresses(IPs: TStrings);
 function  RoutableAddress: String;
-procedure DefineLocalAddress(AAddress: String); {Allows you to use a specified IP address}
-procedure DefineRoutableAddress(Address: String);
+procedure LocalAddresses(IPs: TStrings);
+procedure DefineLocalAddress(AAddress: String); {Allows you to use a specified local IP address}
+procedure DefineRoutableAddress(AAddress: String); {Allows you to set a public IP address}
 
 implementation
 
@@ -40,8 +40,7 @@ uses
 
 {See commentary for LocalAddress and RoutableAddress for explanations of these variables}
 var
-  idLocalAddress:    String;
-  idRoutableAddress: String;
+  idLocalAddress, idRoutableAddress: String;
 
 function ConstructUUID: String;
 var
@@ -206,13 +205,22 @@ begin
   idLocalAddress:=AAddress;
 end;
 
-procedure DefineRoutableAddress(Address: String);
+function RoutableAddress: String;
 begin
-  idRoutableAddress := Address;
+  if (Length(idRoutableAddress)=0) or (idRoutableAddress='0.0.0.0') then
+    Result:=LocalAddress
+  else
+    Result:=idRoutableAddress;
+end;
+
+procedure DefineRoutableAddress(AAddress: String); {Allows you to set a public IP address}
+begin
+  idRoutableAddress:=AAddress;
 end;
 
 initialization
   idLocalAddress:='0.0.0.0';
+  idRoutableAddress:='0.0.0.0';
 
 end.
 
