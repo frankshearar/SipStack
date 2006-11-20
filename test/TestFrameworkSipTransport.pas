@@ -812,13 +812,20 @@ begin
   // This binding will have a port of DefaultPort, hence our test bindings below
   // have values such that Port <> DefaultPort.
 
+  Self.LowPortTransport.Stop;
+  CheckServerNotOnPort(Self.LowPortTransport.Bindings[0].IP,
+                       IdPORT_SIP,
+                       'Close down all SIP UAs before running this test.');
+
   Address   := Self.LowPortTransport.Bindings[0].IP;
   FirstPort := Self.LowPortTransport.Bindings[0].Port + 1;
 
   NewPort := FirstPort + 1;
+
   Self.LowPortTransport.AddBinding(Address, NewPort);
 
   Self.LowPortTransport.ClearBindings;
+  Self.LowPortTransport.Start;
   CheckServerNotOnPort(Address,
                        FirstPort,
                        'ClearBindings didn''t remove the first binding');
@@ -838,11 +845,18 @@ end;
 
 procedure TestTIdSipTransport.TestClearBindingLeavesOneBindingBehind;
 begin
+  Self.LowPortTransport.Stop;
+  CheckServerNotOnPort(Self.LowPortTransport.Bindings[0].IP,
+                       IdPORT_SIP,
+                       'Close down all SIP UAs before running this test.');
+
   Self.LowPortTransport.AddBinding(Self.LowPortTransport.Bindings[0].IP,
                                    Self.LowPortTransport.Bindings[0].Port + 1);
   Self.LowPortTransport.AddBinding(Self.LowPortTransport.Bindings[0].IP,
                                    Self.LowPortTransport.Bindings[0].Port + 2);
   Self.LowPortTransport.ClearBindings;
+
+  Self.LowPortTransport.Start;
 
   Check(Self.LowPortTransport.Bindings.Count > 0,
         'Indy''s behaviour changed: usually the server will recreate a default binding');
@@ -850,6 +864,11 @@ end;
 
 procedure TestTIdSipTransport.TestClearBindingRestartsStartedTransport;
 begin
+  Self.LowPortTransport.Stop;
+  CheckServerNotOnPort(Self.LowPortTransport.Bindings[0].IP,
+                       IdPORT_SIP,
+                       'Close down all SIP UAs before running this test.');
+
   Self.LowPortTransport.Start;
   Self.LowPortTransport.ClearBindings;
 
