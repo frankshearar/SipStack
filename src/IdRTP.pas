@@ -5325,8 +5325,8 @@ begin
   try
     Table := Self.LockMembers;
     try
-      Table.RemoveTimedOutSenders(Members.SenderTimeout(Self));
-      Table.RemoveTimedOutMembersExceptFor(Members.MemberTimeout(Self),
+      Table.RemoveTimedOutSenders(Table.SenderTimeout(Self));
+      Table.RemoveTimedOutMembersExceptFor(Table.MemberTimeout(Self),
                                            Self.SyncSrcID);
       Self.AdjustTransmissionTime(Table);
 
