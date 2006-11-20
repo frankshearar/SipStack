@@ -93,19 +93,16 @@ var
   Count, Frequency: Int64;
   Temp:             Int64;
 begin
-  if QueryPerformanceFrequency(Frequency) then
-    if QueryPerformanceCounter(Count) then begin
-       Temp := Trunc((Count * 1000)/ Frequency);
+  if QueryPerformanceFrequency(Frequency) and QueryPerformanceCounter(Count) then begin
+    Temp := Trunc((Count * 1000)/ Frequency);
 
-       if (Temp > High(Cardinal)) then
-         Result := Temp - High(Cardinal)
-       else
-         Result := Temp
-    end
+    if (Temp > High(Cardinal)) then
+      Result := Temp - High(Cardinal)
     else
-       Result:= Windows.GetTickCount
+      Result := Temp
+  end
   else
-    Result:= Windows.GetTickCount;
+    Result:= Windows.GetTickCount
 end;
 
 function GetTickDiff(const OldTickCount, NewTickCount : Cardinal): Cardinal;
