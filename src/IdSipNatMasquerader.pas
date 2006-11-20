@@ -153,8 +153,8 @@ var
 begin
   for I := 0 to Payload.MediaDescriptionCount - 1 do
     for J := 0 to Payload.MediaDescriptionAt(I).Connections.Count - 1 do begin
-      Payload.MediaDescriptionAt(I).Connections[J].Address     := Self.NatAddress;
-      Payload.MediaDescriptionAt(I).Connections[J].AddressType := Self.AddressType;
+      Payload.MediaDescriptionAt(I).Connections[J].RoutableAddress := Self.NatAddress;
+      Payload.MediaDescriptionAt(I).Connections[J].AddressType     := Self.AddressType;
     end;
 end;
 
@@ -169,8 +169,8 @@ var
   I: Integer;
 begin
   for I := 0 to Payload.ConnectionCount - 1 do begin
-    Payload.ConnectionAt(I).Address     := Self.NatAddress;
-    Payload.ConnectionAt(I).AddressType := Self.AddressType
+    Payload.ConnectionAt(I).RoutableAddress := Self.NatAddress;
+    Payload.ConnectionAt(I).AddressType     := Self.AddressType
   end;
 end;
 
