@@ -22,6 +22,7 @@ type
     procedure TestDefineRoutableAddress;
     procedure TestGetCurrentProcessId;
     procedure TestGetHostNameNoWinsock;
+    procedure TestOnSameNetwork;
   end;
 
 implementation
@@ -89,6 +90,90 @@ begin
     CheckEquals(Buf, IdSystem.GetHostName, 'GetHostName');
   finally
     FreeMem(Buf);
+  end;
+end;
+
+procedure TestFunctions.TestOnSameNetwork;
+begin
+  DefineNetMask('0.0.0.0');
+  // A "subnet" of all possible IPs
+  Check(OnSameNetwork('1.1.1.1', '1.1.1.1'), '1.1.1.1/0 + 1.1.1.1/0');
+  Check(OnSameNetwork('1.1.1.1', '1.1.2.1'), '1.1.1.1/0 + 1.1.2.1/0');
+  Check(OnSameNetwork('1.1.1.1', '1.2.1.1'), '1.1.1.1/0 + 1.2.1.1/0');
+  Check(OnSameNetwork('1.1.1.1', '2.1.1.1'), '2.1.1.1/0 + 2.1.1.1/0');
+
+  // A class subnet
+  DefineNetMask('255.0.0.0');
+  Check(    OnSameNetwork('1.1.1.1', '1.1.1.1'), '1.1.1.1/8 + 1.1.1.1/8');
+  Check(    OnSameNetwork('1.1.1.1', '1.1.1.2'), '1.1.1.1/8 + 1.1.1.2/8');
+  Check(    OnSameNetwork('1.1.1.1', '1.1.2.1'), '1.1.1.1/8 + 1.1.2.1/8');
+  Check(    OnSameNetwork('1.1.1.1', '1.2.1.1'), '1.1.1.1/8 + 1.2.1.1/8');
+  Check(not OnSameNetwork('1.1.1.1', '2.1.1.1'), '2.1.1.1/8 + 2.1.1.1/8');
+
+  // B class subnet
+  DefineNetMask('255.255.0.0');
+  Check(    OnSameNetwork('1.1.1.1', '1.1.1.1'), '1.1.1.1/16 + 1.1.1.1/16');
+  Check(    OnSameNetwork('1.1.1.1', '1.1.1.2'), '1.1.1.1/16 + 1.1.1.2/16');
+  Check(    OnSameNetwork('1.1.1.1', '1.1.2.1'), '1.1.1.1/16 + 1.1.2.1/16');
+  Check(not OnSameNetwork('1.1.1.1', '1.2.1.1'), '1.1.1.1/16 + 1.2.1.1/16');
+  Check(not OnSameNetwork('1.1.1.1', '2.1.1.1'), '2.1.1.1/16 + 2.1.1.1/16');
+
+  // C class subnet
+  DefineNetMask('255.255.255.0');
+  Check(    OnSameNetwork('1.1.1.1', '1.1.1.1'), '1.1.1.1/24 + 1.1.1.1/24');
+  Check(    OnSameNetwork('1.1.1.1', '1.1.1.2'), '1.1.1.1/24 + 1.1.1.2/24');
+  Check(not OnSameNetwork('1.1.1.1', '1.1.2.1'), '1.1.1.1/24 + 1.1.2.1/24');
+  Check(not OnSameNetwork('1.1.1.1', '1.2.1.1'), '1.1.1.1/24 + 1.2.1.1/24');
+  Check(not OnSameNetwork('1.1.1.1', '2.1.1.1'), '2.1.1.1/24 + 2.1.1.1/24');
+
+  // A subnet of 8 IP addresses
+  DefineNetMask('255.255.255.248');
+  Check(    OnSameNetwork('1.1.1.1', '1.1.1.1'), '1.1.1.1/29 + 1.1.1.1/29');
+  Check(    OnSameNetwork('1.1.1.1', '1.1.1.2'), '1.1.1.1/29 + 1.1.1.2/29');
+  Check(not OnSameNetwork('1.1.1.1', '1.1.2.1'), '1.1.1.1/29 + 1.1.2.1/29');
+  Check(not OnSameNetwork('1.1.1.1', '1.2.1.1'), '1.1.1.1/29 + 1.2.1.1/29');
+  Check(not OnSameNetwork('1.1.1.1', '2.1.1.1'), '2.1.1.1/29 + 2.1.1.1/29');
+  Check(not OnSameNetwork('1.1.1.1', '1.1.1.9'), '1.1.1.1/29 + 1.1.1.9/29');
+  Check(    OnSameNetwork('1.1.1.254', '1.1.1.255'), '1.1.1.254/29 + 1.1.1.255/29');
+
+  // A "subnet" of 1 IP
+  DefineNetMask('255.255.255.255');
+  Check(    OnSameNetwork('1.1.1.1', '1.1.1.1'), '1.1.1.1/32 + 1.1.1.1/32');
+  Check(not OnSameNetwork('1.1.1.1', '1.1.1.2'), '1.1.1.1/32 + 1.1.1.2/32');
+  Check(not OnSameNetwork('1.1.1.1', '1.1.2.1'), '1.1.1.1/32 + 1.1.2.1/32');
+  Check(not OnSameNetwork('1.1.1.1', '1.2.1.1'), '1.1.1.1/32 + 1.2.1.1/32');
+  Check(not OnSameNetwork('1.1.1.1', '2.1.1.1'), '2.1.1.1/32 + 2.1.1.1/32');
+
+  // Badly formed parameters
+  DefineNetMask('0.0.0.0');
+  try
+    OnSameNetwork('256.0.0.0', '1.1.1.1');
+    Fail('Failed to bail on ''256.0.0.0'' as first parameter');
+  except
+    on EConvertError do;
+  end;
+
+  try
+    OnSameNetwork('abcd', '1.1.1.1');
+    Fail('Failed to bail on ''abcd'' as first parameter');
+  except
+    on EConvertError do;
+  end;
+
+  DefineNetMask('0.0.0.0');
+  try
+    OnSameNetwork('1.1.1.1', '256.0.0.0');
+    Fail('Failed to bail on ''256.0.0.0'' as second parameter');
+  except
+    on EConvertError do;
+  end;
+
+  DefineNetMask('256.0.0.0');
+  try
+    OnSameNetwork('1.1.1.1', '1.1.1.1');
+    Fail('Failed to bail on ''256.0.0.0'' as netmask');
+  except
+    on EConvertError do;
   end;
 end;
 

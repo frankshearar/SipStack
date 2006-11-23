@@ -221,11 +221,10 @@ var
   Mask: DWord;
   AAddr1, AAddr2: DWord;
 begin
-  //We should raise exceptions when the addresses or the mask are incorrect, i.e. when inet_addr returns INADDR_NONE
-  Mask:=inet_addr(PChar(idNetMask));
-  AAddr1:=inet_addr(PChar(AAddress1));
-  AAddr2:=inet_addr(PChar(AAddress2));
-  Result:=(AAddr1 and Mask)=(AAddr2 and Mask);
+  Mask   := TIdIPAddressParser.InetAddr(idNetMask);
+  AAddr1 := TIdIPAddressParser.InetAddr(AAddress1);
+  AAddr2 := TIdIPAddressParser.InetAddr(AAddress2);
+  Result := (AAddr1 and Mask) = (AAddr2 and Mask);
 end;
 
 initialization
