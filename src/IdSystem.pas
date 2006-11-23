@@ -32,6 +32,8 @@ function  RoutableAddress: String;
 procedure LocalAddresses(IPs: TStrings);
 procedure DefineLocalAddress(AAddress: String); {Allows you to use a specified local IP address}
 procedure DefineRoutableAddress(AAddress: String); {Allows you to set a public IP address}
+procedure DefineNetMask(AMask: String); {Let you set the netmask, used to identify if any IP address is local or not}
+function OnSameNetwork(AAddress1, AAddress2: String): Boolean;
 
 implementation
 
@@ -40,7 +42,7 @@ uses
 
 {See commentary for LocalAddress and RoutableAddress for explanations of these variables}
 var
-  idLocalAddress, idRoutableAddress: String;
+  idLocalAddress, idRoutableAddress, idNetMask: String;
 
 function ConstructUUID: String;
 var
@@ -207,9 +209,29 @@ begin
   idRoutableAddress:=AAddress;
 end;
 
+procedure DefineNetMask(AMask: String); {Let you set the netmask, used to identify if any IP address is local or not}
+begin
+  idNetMask:=AMask;
+end;
+
+{This function allows you to identify if two different IP addresses are on the "same" network, by
+ using idNetMask.}
+function OnSameNetwork(AAddress1, AAddress2: String): Boolean;
+var
+  Mask: DWord;
+  AAddr1, AAddr2: DWord;
+begin
+  //We should raise exceptions when the addresses or the mask are incorrect, i.e. when inet_addr returns INADDR_NONE
+  Mask:=inet_addr(PChar(idNetMask));
+  AAddr1:=inet_addr(PChar(AAddress1));
+  AAddr2:=inet_addr(PChar(AAddress2));
+  Result:=(AAddr1 and Mask)=(AAddr2 and Mask);
+end;
+
 initialization
   idLocalAddress:='0.0.0.0';
   idRoutableAddress:='0.0.0.0';
+  idNetMask:='0.0.0.0';
 
 end.
 
