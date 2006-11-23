@@ -525,32 +525,6 @@ class procedure TIdIPAddressParser.ParseIPv6Address(const IPv6Address: String;
     IPv4Delim    = '.';
     IPv6ZeroAbbr = IPv6Delim + IPv6Delim; // The short-hand way of writing a
                                           // large sequence of zeroes
-  procedure Swap(var Address: TIdIPv6AddressRec; X, Y: Cardinal);
-  begin
-
-    Address[X] := Address[X] xor Address[Y];
-    Address[Y] := Address[X] xor Address[Y];
-    Address[X] := Address[X] xor Address[Y];
-  end;
-
-  procedure Reverse(var Address: TIdIPv6AddressRec);
-  var
-    Temp: Word;
-  begin
-//    Swap(Address, 0, 7);
-//    Swap(Address, 1, 6);
-//    Swap(Address, 2, 5);
-//    Swap(Address, 3, 4);
-    Temp := Address[0];
-    Address[0] := Address[1];
-    Address[1] := Address[2];
-    Address[2] := Address[3];
-    Address[3] := Address[4];
-    Address[4] := Address[5];
-    Address[5] := Address[6];
-    Address[6] := Address[7];
-    Address[7] := Temp;
-  end;
 
   procedure ParseChunk(Chunk: String;
                        var Address: TIdIPv6AddressRec;
