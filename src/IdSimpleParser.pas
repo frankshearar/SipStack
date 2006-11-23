@@ -31,6 +31,8 @@ type
                                    N: Cardinal = 1): String;
     class procedure IncIPv6Address(var Address: TIdIPv6AddressRec;
                                    N: Cardinal = 1);
+    class function  InetAddr(const IPv4Address: String): Cardinal;
+    class function  IPv4AddressToStr(Address: Cardinal): String;
     class function  IPv6AddressToStr(Address: TIdIPv6AddressRec): String;
     class function  IsIPAddress(IpVersion: TIdIPVersion;
                                 const Token: String): Boolean;
@@ -371,34 +373,16 @@ end;
 class function TIdIPAddressParser.IncIPv4Address(const IPAddress: String;
                                                  N: Cardinal = 1): String;
 var
-  B1, B2, B3, B4: Byte;
-  Addy:           Cardinal;
-  Work:           String;
+  Addy: Cardinal;
 begin
-  Work := IPAddress;
-  try
-    B1 := StrToInt(Fetch(Work, '.'));
-    B2 := StrToInt(Fetch(Work, '.'));
-    B3 := StrToInt(Fetch(Work, '.'));
-    B4 := StrToInt(Work);
+  Addy := Self.InetAddr(IPAddress);
 
-    Addy := (B1 shl 24)
-         or (B2 shl 16)
-         or (B3 shl 8)
-         or  B4;
+  if (Addy > High(Cardinal) - N) then
+    Addy := N - (High(Cardinal) - Addy) - 1
+  else
+    Inc(Addy, N);
 
-    if (Addy > High(Cardinal) - N) then
-      Addy := N - (High(Cardinal) - Addy) - 1
-    else
-      Inc(Addy, N);
-
-    Result := IntToStr((Addy shr 24) and $ff) + '.'
-            + IntToStr((Addy shr 16) and $ff) + '.'
-            + IntToStr((Addy shr 8) and $ff) + '.'
-            + IntToStr(Addy and $ff);
-  except
-    raise EConvertError.Create(Format(IPv4AddrError, [IPAddress]));
-  end;
+  Result := IPv4AddressToStr(Addy);
 end;
 
 class procedure TIdIPAddressParser.IncIPv6Address(var Address: TIdIPv6AddressRec;
@@ -428,6 +412,39 @@ begin
 
   if (Carry > 0) then
     Address[7] := Carry - 1;
+end;
+
+class function TIdIPAddressParser.InetAddr(const IPv4Address: String): Cardinal;
+var
+  B1, B2, B3, B4: Byte;
+  Work:           String;
+begin
+  // Return a Cardinal representing a IPv4 address. The most significant bits of
+  // the result represent the first number of the IPv4 address. Thus, "1.2.3.4"
+  // returns $01020304
+
+  Work := IPv4Address;
+  try
+    B1 := StrToInt(Fetch(Work, '.'));
+    B2 := StrToInt(Fetch(Work, '.'));
+    B3 := StrToInt(Fetch(Work, '.'));
+    B4 := StrToInt(Work);
+
+    Result := (B1 shl 24)
+           or (B2 shl 16)
+           or (B3 shl 8)
+           or  B4;
+  except
+    raise EConvertError.Create(Format(IPv4AddrError, [IPv4Address]));
+  end;
+end;
+
+class function TIdIPAddressParser.IPv4AddressToStr(Address: Cardinal): String;
+begin
+  Result := IntToStr((Address shr 24) and $ff) + '.'
+          + IntToStr((Address shr 16) and $ff) + '.'
+          + IntToStr((Address shr 8) and $ff) + '.'
+          + IntToStr(Address and $ff);
 end;
 
 class function TIdIPAddressParser.IPv6AddressToStr(Address: TIdIPv6AddressRec): String;

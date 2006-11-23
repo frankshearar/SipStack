@@ -48,6 +48,8 @@ type
     procedure TestIncIPAddress;
     procedure TestIncIPv4Address;
     procedure TestIncIPv6Address;
+    procedure TestInetAddr;
+    procedure TestIPv4AddressToStr;
     procedure TestIPv6AddressToStr;
     procedure TestIsIpv4Address;
     procedure TestIsIpv6Address;
@@ -579,6 +581,43 @@ begin
   CheckIncIPv6Address('1:0:0:0:0:0:FFFF:FFFE',
                       '0:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF',
                       High(Cardinal));
+end;
+
+procedure TestTIdIPAddressParser.TestInetAddr;
+const
+  MalformedIPv4Address = '256.0.0.0';
+var
+  Result: Cardinal;
+begin
+  CheckEquals(IntToHex($00000000, 8), IntToHex(TIdIPAddressParser.InetAddr('0.0.0.0'), 8),         '0.0.0.0');
+  CheckEquals(IntToHex($00ffffff, 8), IntToHex(TIdIPAddressParser.InetAddr('0.255.255.255'), 8),   '0.255.255.255');
+  CheckEquals(IntToHex($ff00ffff, 8), IntToHex(TIdIPAddressParser.InetAddr('255.0.255.255'), 8),   '255.0.255.255');
+  CheckEquals(IntToHex($ffff00ff, 8), IntToHex(TIdIPAddressParser.InetAddr('255.255.0.255'), 8),   '255.255.0.255');
+  CheckEquals(IntToHex($ffffff00, 8), IntToHex(TIdIPAddressParser.InetAddr('255.255.255.0'), 8),   '255.255.255.0');
+  CheckEquals(IntToHex($ffffffff, 8), IntToHex(TIdIPAddressParser.InetAddr('255.255.255.255'), 8), '255.255.255.255');
+  CheckEquals(IntToHex($01020304, 8), IntToHex(TIdIPAddressParser.InetAddr('1.2.3.4'), 8),         '1.2.3.4');
+
+  try
+    Result := TIdIPAddressParser.InetAddr(MalformedIPv4Address);
+    Fail('Failed to bail on ' + MalformedIPv4Address + '; Result = $' + IntToHex(Result, 8));
+  except
+    on EConvertError do;
+  end;
+end;
+
+procedure TestTIdIPAddressParser.TestIPv4AddressToStr;
+const
+  TestCases: array[1..3] of String
+             = ('0.0.0.0',
+                '1.2.3.4',
+                '255.255.255.255');
+var
+  I: Integer;
+begin
+  for I := Low(TestCases) to High(TestCases) do
+    CheckEquals(TestCases[I],
+                TIdIPAddressParser.IPv4AddressToStr(TIdIPAddressParser.InetAddr(TestCases[I])),
+                TestCases[I]);
 end;
 
 procedure TestTIdIPAddressParser.TestIPv6AddressToStr;
