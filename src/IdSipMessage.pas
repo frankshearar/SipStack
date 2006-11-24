@@ -3726,7 +3726,8 @@ begin
   Result.RemoveAllHeadersNamed(SupportedHeaderFull);
   Result.RemoveAllHeadersNamed(UserAgentHeader);
 
-  // This is a fake header to allow us to hack a body into the header list
+  // This is a fake header to allow us to hack a body into the header list.
+  // cf. RFC 3261, section 19.1.1
   if Self.Headers.HasHeader(BodyHeaderFake) then begin
     Result.Body := TIdUri.Decode(Self.Headers[BodyHeaderFake].FullValue);
     Result.RemoveAllHeadersNamed(BodyHeaderFake);
