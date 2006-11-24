@@ -832,7 +832,8 @@ type
     procedure RemoveSources(Bye: TIdRTCPBye);
     procedure RemoveTimedOutMembersExceptFor(CutoffTime: TDateTime;
                                              SessionSSRC: Cardinal);
-    procedure RemoveTimedOutSenders(CutoffTime: TDateTime);
+    procedure RemoveTimedOutSendersExceptFor(CutoffTime: TDateTime;
+                                             SessionSSRC: Cardinal);
     procedure SendControl(Packet: TIdRTCPPacket;
                           Agent: IIdAbstractRTPPeer);
     procedure SendData(Packet: TIdRTPPacket;
@@ -4354,6 +4355,12 @@ var
 begin
   Timestamp := Now;
 
+  // PreviousMemberCount should NEVER be zero (since the session owning Self
+  // has to at least have itself as a member. In the interests of safety, though,
+  // we make sure we can't divide by zero. The methods calling this method should
+  // also Assert that PreviousMemberCount > 0.
+  if (PreviousMemberCount = 0) then PreviousMemberCount := 1;
+
   NextTransmissionTime := Timestamp
            + (Self.Count/PreviousMemberCount) * (NextTransmissionTime - Timestamp);
 
@@ -4484,7 +4491,8 @@ begin
   end;
 end;
 
-procedure TIdRTPMemberTable.RemoveTimedOutSenders(CutoffTime: TDateTime);
+procedure TIdRTPMemberTable.RemoveTimedOutSendersExceptFor(CutoffTime: TDateTime;
+                                                           SessionSSRC: Cardinal);
 var
   I:      Cardinal;
   Member: TIdRTPMember;
@@ -4493,6 +4501,7 @@ begin
   while (I < Self.Count) do begin
     Member := Self.MemberAt(I);
     if Member.IsSender
+      and (Member.SyncSrcID <> SessionSSRC)
       and (Member.LastRTCPReceiptTime < CutoffTime) then
       Self.Remove(Member)
     else
@@ -5197,6 +5206,7 @@ begin
   try
     MemberTable.RemoveTimedOutMembersExceptFor(MemberTable.MemberTimeout(Self),
                                                Self.SyncSrcID);
+    Assert(MemberTable.Count > 0, 'At the least, an RTP session should include itself as a member');
   finally
     Self.UnlockMembers;
   end;
@@ -5209,7 +5219,10 @@ begin
   // Self can itself be timed out as a sender. That's fine.
   MemberTable := Self.LockMembers;
   try
-    MemberTable.RemoveTimedOutSenders(MemberTable.SenderTimeout(Self));
+    MemberTable.RemoveTimedOutSendersExceptFor(MemberTable.SenderTimeout(Self),
+                                               Self.SyncSrcID);
+
+    Assert(MemberTable.Count > 0, 'At the least, an RTP session should include itself as a member');
   finally
     Self.UnlockMembers;
   end;
@@ -5325,7 +5338,8 @@ begin
   try
     Table := Self.LockMembers;
     try
-      Table.RemoveTimedOutSenders(Table.SenderTimeout(Self));
+      Table.RemoveTimedOutSendersExceptFor(Table.SenderTimeout(Self),
+                                           Self.SyncSrcID);
       Table.RemoveTimedOutMembersExceptFor(Table.MemberTimeout(Self),
                                            Self.SyncSrcID);
       Self.AdjustTransmissionTime(Table);

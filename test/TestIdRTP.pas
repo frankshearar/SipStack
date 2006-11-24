@@ -578,7 +578,7 @@ type
     procedure TestRemoveAll;
     procedure TestReceiverCount;
     procedure TestRemoveTimedOutMembers;
-    procedure TestRemoveTimedOutSenders;
+    procedure TestRemoveTimedOutSendersExceptFor;
     procedure TestSenderCount;
     procedure TestSetControlBinding;
     procedure TestSetDataBinding;
@@ -6758,7 +6758,7 @@ begin
               'Protected member removed');
 end;
 
-procedure TestTIdRTPMemberTable.TestRemoveTimedOutSenders;
+procedure TestTIdRTPMemberTable.TestRemoveTimedOutSendersExceptFor;
 var
   FirstSSRC:  Cardinal;
   SecondSSRC: Cardinal;
@@ -6770,7 +6770,8 @@ begin
 
   Self.Members.AddSender(FirstSSRC).LastRTCPReceiptTime  := Timestamp - 1;
   Self.Members.AddSender(SecondSSRC).LastRTCPReceiptTime := Timestamp;
-  Self.Members.RemoveTimedOutSenders(Timestamp);
+  Self.Members.RemoveTimedOutSendersExceptFor(Timestamp,
+                                              0);
   CheckEquals(1,
               Self.Members.SenderCount,
               'Timed-out sender not removed');
@@ -6778,6 +6779,12 @@ begin
   CheckEquals(SecondSSRC,
               Self.Members.MemberAt(0).SyncSrcID,
               'Wrong member removed');
+
+  Self.Members.RemoveTimedOutSendersExceptFor(Timestamp,
+                                              SecondSSRC);
+  CheckEquals(1,
+              Self.Members.SenderCount,
+              'Protected sender removed');
 end;
 
 procedure TestTIdRTPMemberTable.TestSenderCount;
