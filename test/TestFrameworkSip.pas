@@ -13,10 +13,10 @@ interface
 
 uses
   Classes, IdInterfacedObject, IdObservable, IdRTP, IdSdp, IdSipAuthentication,
-  IdSipInviteModule, IdSipLocator, IdSipMessage, IdSipCore, IdSipDialog,
-  IdSipMockLocator, IdSipMockTransactionDispatcher, IdSipRegistration,
-  IdSipSubscribeModule, IdSipTransaction, IdSipTransport, IdTimerQueue,
-  IdSipUserAgent, SysUtils, TestFramework, TestFrameworkEx;
+  IdSipInviteModule, IdSipLocator, IdSipMessage, IdSipOptionsModule, IdSipCore,
+  IdSipDialog, IdSipMockLocator, IdSipMockTransactionDispatcher,
+  IdSipRegistration, IdSipSubscribeModule, IdSipTransaction, IdSipTransport,
+  IdTimerQueue, IdSipUserAgent, SysUtils, TestFramework, TestFrameworkEx;
 
 type
   TIdSipTestResources = class(TObject)

@@ -13,8 +13,8 @@ interface
 
 uses
   Contnrs, Classes, IdNotification, IdSipAuthentication, IdSipCore,
-  IdSipInviteModule, IdSipMessage, IdSipRegistration, IdSipTransaction,
-  IdSipTransport, IdTimerQueue;
+  IdSipInviteModule, IdSipOptionsModule, IdSipMessage, IdSipRegistration,
+  IdSipTransaction, IdSipTransport, IdTimerQueue;
 
 type
   TIdSipUserAgent = class;

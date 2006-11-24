@@ -902,7 +902,7 @@ type
 implementation
 
 uses
-  IdException, IdSipConsts, IdSipDialogID, SysUtils;
+  IdException, IdSipConsts, IdSipDialogID, IdSipOptionsModule, SysUtils;
 
 type
   TIdSipTestPackage = class(TIdSipEventPackage)
