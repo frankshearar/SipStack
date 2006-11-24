@@ -70,7 +70,6 @@ var
   ErrorCode: Integer;
   Len:       Integer;
   RC:        Integer;
-  Unused:    TWSAData;
 begin
   // Return the full name of this machine.
 
