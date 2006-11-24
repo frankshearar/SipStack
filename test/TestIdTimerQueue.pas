@@ -132,7 +132,7 @@ type
 
 function Suite: ITestSuite;
 begin
-  Result := TTestSuite.Create('IdRTPTimerQueue unit tests');
+  Result := TTestSuite.Create('IdTimerQueue unit tests');
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdTimerQueue.Suite);
   Result.AddTest(TestTIdThreadedTimerQueue.Suite);
