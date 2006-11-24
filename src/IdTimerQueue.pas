@@ -15,11 +15,13 @@ uses
   Classes, Contnrs, IdBaseThread, SyncObjs, SysUtils;
 
 type
+  TIdTimerQueue = class;
+
   // I represent something that will happen in the future. If you want an alarm
   // to go off in 10 seconds, you'd instantiate me (well, a subclass of me) with
-  // a TriggerTime of (Now + 10000) (milliseconds) and given me a TEvent or
+  // a TriggerTime of (Now + 10000) (milliseconds) and give me a TEvent or
   // TNotifyEvent or the like to set/run when you call my Trigger.
-  // TimeToWait tells you how soon my timer expires.
+  // TimeToWait tells you how soon (in milliseconds) my timer expires.
   //
   // My DebugWaitTime property aids debugging by giving the wait time specified -
   // in our example, a TimerQueue would set DebugWaitTime to 10000, and the
@@ -28,18 +30,19 @@ type
   private
     fData:          TObject;
     fDebugWaitTime: Cardinal;
-    fTriggerTime:   Cardinal;
+    fTriggerTime:   TDateTime;
   public
     constructor Create; virtual;
 
     function  Due: Boolean;
     function  MatchEvent(Event: Pointer): Boolean; virtual;
+    procedure Schedule(Timer: TIdTimerQueue; Data: TObject; Delay: Cardinal);
     function  TimeToWait: Cardinal;
     procedure Trigger; virtual; abstract;
 
-    property Data:          TObject  read fData write fData;
-    property DebugWaitTime: Cardinal read fDebugWaitTime write fDebugWaitTime;
-    property TriggerTime:   Cardinal read fTriggerTime write fTriggerTime;
+    property Data:          TObject   read fData write fData;
+    property DebugWaitTime: Cardinal  read fDebugWaitTime write fDebugWaitTime;
+    property TriggerTime:   TDateTime read fTriggerTime write fTriggerTime;
   end;
 
   TIdWaitClass = class of TIdWait;
@@ -198,7 +201,7 @@ function AddModuloWord(Addend, Augend: Word): Word;
 implementation
 
 uses
-  IdSystem;
+  DateUtils, IdSystem;
 
 //******************************************************************************
 //* Unit public functions & procedures                                         *
@@ -246,7 +249,7 @@ end;
 
 function TIdWait.Due: Boolean;
 begin
-  Result := GetTickCount >= Self.TriggerTime;
+  Result := Now >= Self.TriggerTime;
 end;
 
 function TIdWait.MatchEvent(Event: Pointer): Boolean;
@@ -254,12 +257,19 @@ begin
   Result := Self = Event;
 end;
 
+procedure TIdWait.Schedule(Timer: TIdTimerQueue; Data: TObject; Delay: Cardinal);
+begin
+  Self.Data          := Data;
+  Self.DebugWaitTime := Delay;
+  Self.TriggerTime   := Now + OneMillisecond*Delay;
+end;
+
 function TIdWait.TimeToWait: Cardinal;
 begin
   if Self.Due then
     Result := 0
   else
-    Result := Self.TriggerTime - GetTickCount;
+    Result := MilliSecondsBetween(Now, Self.TriggerTime);
 end;
 
 //******************************************************************************
@@ -475,11 +485,8 @@ begin
   try
     try
       Self.EventList.Add(Event);
-      Event.Data          := Data;
-      Event.DebugWaitTime := MillisecsWait;
-      Event.TriggerTime   := AddModulo(GetTickCount,
-                                       MillisecsWait,
-                                       High(MillisecsWait));
+      Event.Schedule(Self, Data, MillisecsWait);
+
       Self.SortEvents;
     except
       if (Self.EventList.IndexOf(Event) <> ItemNotFoundIndex) then
