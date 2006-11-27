@@ -248,7 +248,7 @@ begin
   Result := (AAddr1 and Mask) = (AAddr2 and Mask);
 end;
 
-function  ResolveARecords(Name: String; ResolvedList: TStrings): Integer;
+function ResolveARecords(Name: String; ResolvedList: TStrings): Integer;
 var
   AHostEnt: PHostEnt;
   I, J:     Integer;
