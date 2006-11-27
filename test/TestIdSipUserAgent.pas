@@ -179,8 +179,8 @@ type
     procedure TearDown; override;
 
     procedure CheckPortFree(Address: String;
-                              Port: Cardinal;
-                              Msg: String);
+                            Port: Cardinal;
+                            Msg: String);
   published
     procedure TestCreateUserAgentHandlesMultipleSpaces;
     procedure TestCreateUserAgentHandlesTabs;
