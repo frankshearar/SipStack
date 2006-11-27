@@ -12,28 +12,84 @@ unit TestIdSystem;
 interface
 
 uses
-  IdSystem, TestFramework;
+  IdSipMockDnsServer, IdSystem, TestFramework;
 
 type
   // This suite currently only supports Windows (2000).
   TestFunctions = class(TTestCase)
+  private
+    NameServer: TIdSipMockDnsServer;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+
+    procedure CheckPortFree(Address: String; Port: Cardinal; Msg: String);
   published
     procedure TestDefineLocalAddress;
     procedure TestDefineRoutableAddress;
     procedure TestGetCurrentProcessId;
     procedure TestGetHostNameNoWinsock;
     procedure TestOnSameNetwork;
+    procedure TestResolveARecords;
   end;
 
 implementation
 
 uses
-  SysUtils, Windows, Winsock;
+  Classes, IdSocketHandle, IdUdpServer, SysUtils, Windows, Winsock;
 
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSystem unit tests');
   Result.AddTest(TestFunctions.Suite);
+end;
+
+//******************************************************************************
+//* TestFunctions                                                              *
+//******************************************************************************
+//* TestFunctions Public methods ***********************************************
+
+procedure TestFunctions.SetUp;
+begin
+  inherited SetUp;
+
+  Self.NameServer := TIdSipMockDnsServer.Create;
+  Self.NameServer.Stop;
+end;
+
+procedure TestFunctions.TearDown;
+begin
+  Self.NameServer.Free;
+
+  inherited TearDown;
+end;
+
+procedure TestFunctions.CheckPortFree(Address: String; Port: Cardinal; Msg: String);
+var
+  Binding: TIdSocketHandle;
+  Server:  TIdUDPServer;
+  FailMsg: String;
+begin
+  FailMsg := 'Port ' + Address + ':' + IntToStr(Port) + ' is not free';
+  if (Msg <> '') then
+    FailMsg := Msg + ': ' + FailMsg;
+
+  Server := TIdUDPServer.Create(nil);
+  try
+    Binding := Server.Bindings.Add;
+    Binding.IP   := Address;
+    Binding.Port := Port;
+
+    try
+      Server.Active := true;
+    except
+      on EIdCouldNotBindSocket do begin
+        Fail(FailMsg);
+      end;
+    end;
+  finally
+    Server.Free;
+  end;
 end;
 
 //* TestFunctions Published methods ********************************************
@@ -174,6 +230,26 @@ begin
     Fail('Failed to bail on ''256.0.0.0'' as netmask');
   except
     on EConvertError do;
+  end;
+end;
+
+procedure TestFunctions.TestResolveARecords;
+var
+  Addresses: TStrings;
+begin
+  CheckPortFree('127.0.0.1', 53, 'This test requires a free port: 127.0.0.1:53/udp');
+
+  Self.NameServer.AddAnswer(Self.NameServer.ARecords);
+
+  Addresses := TStringList.Create;
+  try
+    ResolveARecords('paranoid.leo-ix.net', Addresses);
+
+    CheckEquals(2, Addresses.Count, 'Address count');
+    CheckEquals('127.0.0.1', Addresses[0], 'Second address');
+    CheckEquals('127.0.0.2', Addresses[1], 'First address');
+  finally
+    Addresses.Free;
   end;
 end;
 

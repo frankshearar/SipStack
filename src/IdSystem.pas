@@ -34,11 +34,33 @@ procedure DefineLocalAddress(AAddress: String); {Allows you to use a specified l
 procedure DefineRoutableAddress(AAddress: String); {Allows you to set a public IP address}
 procedure DefineNetMask(AMask: String); {Let you set the netmask, used to identify if any IP address is local or not}
 function OnSameNetwork(AAddress1, AAddress2: String): Boolean;
+function  ResolveARecords(Name: String; ResolvedList: TStrings): Integer;
 
 implementation
 
 uses
   IdSimpleParser, IdGlobal, IdStack, IdUDPServer, SysUtils, Windows, Winsock;
+
+// See GetHostByName's explanation.
+type
+  PPCharArray = ^TPCharArray;
+  TPCharArray = array[0..(MaxInt div 4)-2] of PChar;
+
+  PBytePointerArray = ^TBytePointerArray;
+  TBytePointerArray = array[0..(MaxInt div 4)-2] of PByteArray;
+
+  PHostEnt = ^THostEnt;
+  THostEnt = packed record
+    h_name: PAnsiChar;
+    h_aliases: PPCharArray;
+    h_addrtype: SmallInt;
+    h_length: SmallInt;
+    h_addr_list: PBytePointerArray;
+  end;
+
+// WinSock's gethostbyname & hostent have terrible declarations. We override
+// these to provice a more natural interface to the information.
+function GetHostByName(Name: PChar): PHostEnt; stdcall; external 'wsock32.dll' name 'gethostbyname';
 
 {See commentary for LocalAddress and RoutableAddress for explanations of these variables}
 var
@@ -226,10 +248,41 @@ begin
   Result := (AAddr1 and Mask) = (AAddr2 and Mask);
 end;
 
+function  ResolveARecords(Name: String; ResolvedList: TStrings): Integer;
+var
+  AHostEnt: PHostEnt;
+  I, J:     Integer;
+  AString:  String;
+begin
+  ResolvedList.Clear;
+  AHostEnt := GetHostByName(PChar(Name));
+  if (AHostEnt <> nil) then begin
+    if (AHostEnt.h_addrtype = AF_INET) then begin
+      I := 0;
+      while (AHostEnt^.h_addr_list[I] <> nil) do begin
+        AString := '';
+        for J := 0 to AHostEnt^.h_length - 1 do begin
+          if (J > 0) then
+             AString := AString + '.';
+          AString := AString + IntToStr(AHostEnt^.h_addr_list[I]^[J]);
+        end;
+        ResolvedList.Add(AString);
+        Inc(I);
+      end;
+      Result := 0;
+    end
+    else
+      Result := WSANO_DATA;
+  end
+  else
+  begin
+    Result := WSAGetLastError;
+  end;
+end;
+
 initialization
   idLocalAddress:='0.0.0.0';
   idRoutableAddress:='0.0.0.0';
   idNetMask:='0.0.0.0';
 
 end.
-
