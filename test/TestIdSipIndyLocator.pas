@@ -12,8 +12,7 @@ unit TestIdSipIndyLocator;
 interface
 
 uses
-  Classes, IdSipDns, IdSipIndyLocator, IdSipLocator, IdSocketHandle,
-  IdUdpServer, TestFramework;
+  IdSipDns, IdSipIndyLocator, IdSipMockDnsServer, TestFramework;
 
 type
   // The NameServer provides hard-coded answers to the questions. The important
@@ -21,26 +20,20 @@ type
   // parse and present the answer.
   TestTIdSipIndyLocator = class(TTestCase)
   private
-    AnswerIndex: Integer;
-    Answers:     TStrings;
     Loc:         TIdSipIndyLocator;
     NameRecs:    TIdDomainNameRecords;
-    NameServer:  TIdUdpServer;
+    NameServer:  TIdSipMockDnsServer;
     NaptrRecs:   TIdNaptrRecords;
     SrvRecs:     TIdSrvRecords;
 
-    function  ARecords: String;
-    function  ARecordProxy: String;
-    function  ARecordsWithCNAME: String;
-    function  ARecordsWithCNAMEOnly: String;
-    function  CNAMEChain: String;
-    function  NaptrRecords: String;
-    function  NaptrMissingARecord: String;
-    function  NoSuchRecord: String;
-
-    procedure ProvideAnswer(Sender: TObject;
-                            AData: TStream;
-                            ABinding: TIdSocketHandle);
+    function ARecords: String;
+    function ARecordProxy: String;
+    function ARecordsWithCNAME: String;
+    function ARecordsWithCNAMEOnly: String;
+    function CNAMEChain: String;
+    function NaptrRecords: String;
+    function NaptrMissingARecord: String;
+    function NoSuchRecord: String;
     function SrvRecords: String;
   public
     procedure SetUp; override;
@@ -77,42 +70,28 @@ end;
 //* TestTIdSipIndyLocator Public methods ***************************************
 
 procedure TestTIdSipIndyLocator.SetUp;
-var
-  LocalHost: TIdSocketHandle;
 begin
   inherited SetUp;
 
-  Self.Answers := TStringList.Create;
-  Self.AnswerIndex := 0;
-
   Self.Loc := TIdSipIndyLocator.Create;
   Self.Loc.NameServer := '127.0.0.1';
-
-  Self.NameServer := TIdUDPServer.Create(nil);
-
-  LocalHost := Self.NameServer.Bindings.Add;
-  LocalHost.IP   := '127.0.0.1';
-  LocalHost.Port := 53;
 
   Self.NameRecs  := TIdDomainNameRecords.Create;
   Self.NaptrRecs := TIdNaptrRecords.Create;
   Self.SrvRecs   := TIdSrvRecords.Create;
 
-  Self.NameServer.OnUDPRead     := Self.ProvideAnswer;
-  Self.NameServer.ThreadedEvent := true;
-  Self.NameServer.Active        := true;
+  Self.NameServer := TIdSipMockDnsServer.Create;
 end;
 
 procedure TestTIdSipIndyLocator.TearDown;
 begin
+  Self.NameServer.Free;
+
   Self.SrvRecs.Free;
   Self.NaptrRecs.Free;
   Self.NameRecs.Free;
 
-  Self.NameServer.Active := false;
-  Self.NameServer.Free;
   Self.Loc.Free;
-  Self.Answers.Free;
 
   inherited TearDown;
 end;
@@ -370,31 +349,6 @@ begin
   + #$00#$01#$51#$80;
 end;
 
-procedure TestTIdSipIndyLocator.ProvideAnswer(Sender: TObject;
-                                              AData: TStream;
-                                              ABinding: TIdSocketHandle);
-var
-  Answer:  String;
-  ReplyID: String;
-  S:       TStringStream;
-begin
-  S := TStringStream.Create('');
-  try
-    S.CopyFrom(AData, 0);
-
-    ReplyID := Copy(S.DataString, 1, 2);
-  finally
-    S.Free;
-  end;
-
-  Answer := ReplyID + Self.Answers[Self.AnswerIndex];
-
-  Self.NameServer.Send(ABinding.PeerIP,
-                       ABinding.PeerPort,
-                       Answer);
-  Inc(Self.AnswerIndex);                     
-end;
-
 function TestTIdSipIndyLocator.SrvRecords: String;
 begin
   // Dig would translate this data as
@@ -436,7 +390,7 @@ end;
 
 procedure TestTIdSipIndyLocator.TestResolveNameRecords;
 begin
-  Self.Answers.Add(Self.ARecords);
+  Self.NameServer.AddAnswer(Self.ARecords);
 
   Self.Loc.ResolveNameRecords('paranoid.leo-ix.net', Self.NameRecs);
 
@@ -456,7 +410,7 @@ procedure TestTIdSipIndyLocator.TestResolveNameRecordsNetworkFailure;
 begin
   // This shows what happens when something on the network goes wrong (like,
   // say, the name server disappearing).
-  Self.NameServer.Active := false;
+  Self.NameServer.Stop;
 
   Self.Loc.ResolveNameRecords('paranoid.leo-ix.net', Self.NameRecs);
 
@@ -465,7 +419,7 @@ end;
 
 procedure TestTIdSipIndyLocator.TestResolveNameRecordsOnNonexistentDomain;
 begin
-  Self.Answers.Add(Self.NoSuchRecord);
+  Self.NameServer.AddAnswer(Self.NoSuchRecord);
 
   Self.Loc.ResolveNameRecords('foo.bar', Self.NameRecs);
 
@@ -474,7 +428,7 @@ end;
 
 procedure TestTIdSipIndyLocator.TestResolveNameRecordsWithCNAMEChain;
 begin
-  Self.Answers.Add(Self.CNAMEChain);
+  Self.NameServer.AddAnswer(Self.CNAMEChain);
 
   Self.Loc.ResolveNameRecords('www.borland.com', Self.NameRecs);
 
@@ -490,7 +444,7 @@ end;
 
 procedure TestTIdSipIndyLocator.TestResolveNameRecordsWithCNAMEsAndNameRecords;
 begin
-  Self.Answers.Add(Self.ARecordsWithCNAME);
+  Self.NameServer.AddAnswer(Self.ARecordsWithCNAME);
 
   Self.Loc.ResolveNameRecords('proxy.leo-ix.net', Self.NameRecs);
 
@@ -504,8 +458,8 @@ end;
 
 procedure TestTIdSipIndyLocator.TestResolveNameRecordsWithCNAMEsOnly;
 begin
-  Self.Answers.Add(Self.ARecordsWithCNAMEOnly);
-  Self.Answers.Add(Self.ARecordProxy);
+  Self.NameServer.AddAnswer(Self.ARecordsWithCNAMEOnly);
+  Self.NameServer.AddAnswer(Self.ARecordProxy);
 
   Self.Loc.ResolveNameRecords('proxy.leo-ix.net', Self.NameRecs);
 
@@ -521,7 +475,7 @@ procedure TestTIdSipIndyLocator.TestResolveNAPTR;
 var
   Uri: TIdSipUri;
 begin
-  Self.Answers.Add(Self.NaptrRecords);
+  Self.NameServer.AddAnswer(Self.NaptrRecords);
 
   Uri := TIdSipUri.Create('sip:leo-ix.net');
   try
@@ -563,7 +517,7 @@ var
 begin
   // This shows what happens when something on the network goes wrong (like,
   // say, the name server disappearing).
-  Self.NameServer.Active := false;
+  Self.NameServer.Stop;
 
   Uri := TIdSipUri.Create('sip:foo.bar');
   try
@@ -579,7 +533,7 @@ procedure TestTIdSipIndyLocator.TestResolveNAPTROnNonexistentDomain;
 var
   Uri: TIdSipUri;
 begin
-  Self.Answers.Add(Self.NoSuchRecord);
+  Self.NameServer.AddAnswer(Self.NoSuchRecord);
 
   Uri := TIdSipUri.Create('sip:foo.bar');
   try
@@ -593,7 +547,7 @@ end;
 
 procedure TestTIdSipIndyLocator.TestResolveSRV;
 begin
-  Self.Answers.Add(Self.SrvRecords);
+  Self.NameServer.AddAnswer(Self.SrvRecords);
 
   Self.Loc.ResolveSRV('_sip._tcp.leo-ix.net', Self.SrvRecs);
 
@@ -651,7 +605,7 @@ procedure TestTIdSipIndyLocator.TestResolveSRVNetworkFailure;
 begin
   // This shows what happens when something on the network goes wrong (like,
   // say, the name server disappearing).
-  Self.NameServer.Active := false;
+  Self.NameServer.Stop;
 
   Self.Loc.ResolveSRV('foo.bar', Self.SrvRecs);
 
@@ -660,7 +614,7 @@ end;
 
 procedure TestTIdSipIndyLocator.TestResolveSRVOnNonexistentDomain;
 begin
-  Self.Answers.Add(Self.NoSuchRecord);
+  Self.NameServer.AddAnswer(Self.NoSuchRecord);
 
   Self.Loc.ResolveSRV('foo.bar', Self.SrvRecs);
 

@@ -38,6 +38,7 @@ uses
   IdSipMessage in 'src\IdSipMessage.pas',
   IdSipMockBindingDatabase in 'test\IdSipMockBindingDatabase.pas',
   IdSipMockCore in 'test\IdSipMockCore.pas',
+  IdSipMockDnsServer in 'test\IdSipMockDnsServer.pas',
   IdSipMockLocator in 'test\IdSipMockLocator.pas',
   IdSipMockTransactionDispatcher in 'test\IdSipMockTransactionDispatcher.pas',
   IdSipMockTransport in 'test\IdSipMockTransport.pas',
@@ -63,7 +64,7 @@ uses
   SingleCoreSpike in 'test\SingleCoreSpike.pas' {SingleCore},
   SpikeRegistrar in 'test\SpikeRegistrar.pas' {rnidSpikeRegistrar},
   SpikeT140 in 'test\SpikeT140.pas' {IdSpikeT140},
-  StackWindow in 'test\StackWindow.pas', {StackWindow}
+  StackWindow in 'test\StackWindow.pas' {StackWindow},
   TestFrameworkEx in 'test\TestFrameworkEx.pas',
   TestFrameworkRtp in 'test\TestFrameworkRtp.pas',
   TestFrameworkSip in 'test\TestFrameworkSip.pas',

@@ -20,6 +20,7 @@ type
   // no records". I swallow these exceptions and return empty sets.
   TIdSipIndyLocator = class(TIdSipAbstractLocator)
   private
+    fResolveLocallyFirst: Boolean;
     Resolver: TIdDNSResolver;
 
     procedure CollapseChain(List: TStrings; Index: Integer; NewCanonicalName: String);
@@ -43,9 +44,10 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
-    property NameServer: String  read GetNameServer write SetNameServer;
-    property Port:       Integer read GetPort write SetPort;
-    property Timeout:    Integer read GetTimeout write SetTimeout;
+    property NameServer:          String  read GetNameServer write SetNameServer;
+    property Port:                Integer read GetPort write SetPort;
+    property ResolveLocallyFirst: Boolean read fResolveLocallyFirst write fResolveLocallyFirst;
+    property Timeout:             Integer read GetTimeout write SetTimeout;
   end;
 
 const
@@ -54,7 +56,7 @@ const
 implementation
 
 uses
-  IdException, IdSimpleParser, SysUtils;
+  IdException, IdSimpleParser, SysUtils, WinSock;
 
 //******************************************************************************
 //* TIdSipIndyLocator                                                          *
@@ -81,15 +83,35 @@ end;
 
 procedure TIdSipIndyLocator.PerformNameLookup(const DomainName: String;
                                               Result: TIdDomainNameRecords);
+type
+  TIPv4Addresses = array[0..100] of PCardinal;
+  PIPv4Addresses = ^TIPv4Addresses;
+var
+  HostInfo:  PHostEnt;
+  I:         Integer;
+  Addresses: PIPv4Addresses;
 begin
-  // We can only do A records for now.
-  Self.Resolver.QueryRecords := [qtA];
+  if Self.ResolveLocallyFirst then begin
+    HostInfo := gethostbyname(PChar(DomainName));
 
-  try
-    Self.Resolver.Resolve(DomainName);
-    Self.ProcessNameRecords(Self.Resolver.QueryResult, DomainName, Result);
-  except
-    on EIdException do;
+    Addresses := PIPv4Addresses(HostInfo.h_addr_list);
+    I := 0;
+    while (Addresses^[I] <> nil) do begin
+      Result.Add(DnsARecord, DomainName, TIdIPAddressParser.IPv4AddressToStr(Addresses^[I]^));
+      Inc(I);
+    end;
+  end;
+
+  if Result.IsEmpty then begin
+    // We can only do A records for now.
+    Self.Resolver.QueryRecords := [qtA];
+
+    try
+      Self.Resolver.Resolve(DomainName);
+      Self.ProcessNameRecords(Self.Resolver.QueryResult, DomainName, Result);
+    except
+      on EIdException do;
+    end;
   end;
 end;
 
