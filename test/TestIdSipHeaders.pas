@@ -360,6 +360,7 @@ type
     procedure TestIsEqualDifferentURI;
     procedure TestIsEqualSameURINoParams;
     procedure TestIsEqualSameURIWithParams;
+    procedure TestIsMalformedWithBlankTag;
     procedure TestValue; override;
     procedure TestValueWithTag;
     procedure TestValueResettingTag;
@@ -4072,6 +4073,13 @@ begin
   Check(not Self.F.HasTag, 'No tag sanity check');
   Self.F.Value := 'Case <sip:case@fried.neurons.org>;' + TagParam + '=f00';
   Check(Self.F.HasTag, 'Tag added via SetValue');
+
+  Self.F.Tag := '';
+  Check(not Self.F.HasTag, 'Tag set to the empty string after being set by SetValue');
+
+  Self.F.Value := 'Case <sip:case@fried.neurons.org>';
+  Self.F.Tag := '';
+  Check(not Self.F.HasTag, 'Tag set to the empty string after a SetValue with a no-tag URI');
 end;
 
 procedure TestTIdSipFromToHeader.TestIsEqualDifferentURI;
@@ -4136,6 +4144,12 @@ begin
   finally
     From.Free;
   end;
+end;
+
+procedure TestTIdSipFromToHeader.TestIsMalformedWithBlankTag;
+begin
+  Self.F.Value := 'sip:foo;tag=';
+  Check(Self.F.IsMalformed, 'From/To tags are not allowed to be blank');
 end;
 
 procedure TestTIdSipFromToHeader.TestValue;
