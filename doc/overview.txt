@@ -1,6 +1,18 @@
 This library implements a Session Initiation Protocol stack. Sections
 of the source code also provide an RTP stack.
 
+USING THE STACK
+
+Instantiate a TIdSipStackInterface, giving a (Windows) window handle
+to which the stack can post messages. Implement message handlers for
+each of the CM_FOO messages defined in IdSipStackInterface.
+
+When you want to perform actions (register with a registrar, make a
+call, etc.) you instantiate the action through the MakeFoo methods -
+MakeCall, etc. This in itself doesn't execute the action - you store
+the SipHandle of the action, and then use the Send method to execute
+the action.
+
 BROAD STROKES
 
 At the very lowest level, TIdSipTransports connect to the OS's socket
@@ -56,18 +68,6 @@ reference counting objects that implement interfaces. Where possible,
 we inherit from TIdInterfacedObject, which implements QueryInterface,
 _AddRef and _Release, directly. Otherwise we implement these methods
 as necessary to ensure that reference counting doesn't.
-
-USING THE STACK
-
-Instantiate a TIdSipStackInterface, giving a (Windows) window handle
-to which the stack can post messages. Implement message handlers for
-each of the CM_FOO messages defined in IdSipStackInterface.
-
-When you want to perform actions (register with a registrar, make a
-call, etc.) you instantiate the action through the MakeFoo methods -
-MakeCall, etc. This in itself doesn't execute the action - you store
-the SipHandle of the action, and then use the Send method to execute
-the action.
 
 MESSAGE FLOW OF AN INBOUND CALL
 
