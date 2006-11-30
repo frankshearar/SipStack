@@ -69,7 +69,8 @@ begin
 
   Self.Resolver := TIdDNSResolver.Create(nil);
 
-  Self.Timeout := DefaultTimeout;
+  Self.Timeout             := DefaultTimeout;
+  Self.ResolveLocallyFirst := true;
 end;
 
 destructor TIdSipIndyLocator.Destroy;

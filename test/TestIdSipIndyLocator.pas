@@ -65,7 +65,8 @@ begin
   inherited SetUp;
 
   Self.Loc := TIdSipIndyLocator.Create;
-  Self.Loc.NameServer := '127.0.0.1';
+  Self.Loc.NameServer          := '127.0.0.1';
+  Self.Loc.ResolveLocallyFirst := false;
 
   Self.NameRecs  := TIdDomainNameRecords.Create;
   Self.NaptrRecs := TIdNaptrRecords.Create;
