@@ -56,7 +56,7 @@ const
 implementation
 
 uses
-  IdException, IdSimpleParser, SysUtils, WinSock;
+  IdException, IdSimpleParser, IdSystem, SysUtils, WinSock;
 
 //******************************************************************************
 //* TIdSipIndyLocator                                                          *
@@ -83,22 +83,19 @@ end;
 
 procedure TIdSipIndyLocator.PerformNameLookup(const DomainName: String;
                                               Result: TIdDomainNameRecords);
-type
-  TIPv4Addresses = array[0..100] of PCardinal;
-  PIPv4Addresses = ^TIPv4Addresses;
 var
-  HostInfo:  PHostEnt;
+  Addresses: TStrings;
   I:         Integer;
-  Addresses: PIPv4Addresses;
 begin
   if Self.ResolveLocallyFirst then begin
-    HostInfo := gethostbyname(PChar(DomainName));
+    Addresses := TStringList.Create;
+    try
+      ResolveARecords(DomainName, Addresses);
 
-    Addresses := PIPv4Addresses(HostInfo.h_addr_list);
-    I := 0;
-    while (Addresses^[I] <> nil) do begin
-      Result.Add(DnsARecord, DomainName, TIdIPAddressParser.IPv4AddressToStr(Addresses^[I]^));
-      Inc(I);
+      for I := 0 to Addresses.Count - 1 do
+        Result.Add(DnsARecord, DomainName, Addresses[I]);
+    finally
+      Addresses.Free;
     end;
   end;
 
