@@ -2473,7 +2473,6 @@ procedure TIdSdpPayload.PrintUriField(Dest: TStream);
 var
   S: String;
 begin
-  // TODO: I hate stinking TIdURI
   if (Self.URI <> '') then begin
     S := 'u=' + Self.URI + #13#10;
 
