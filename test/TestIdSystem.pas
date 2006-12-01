@@ -235,7 +235,7 @@ end;
 
 procedure TestFunctions.TestResolveARecords;
 var
-  Addresses: TStrings;
+  Addresses: TStringList;
 begin
   CheckPortFree('127.0.0.1', 53, 'This test requires a free port: 127.0.0.1:53/udp');
 
@@ -246,8 +246,10 @@ begin
     ResolveARecords('paranoid.leo-ix.net', Addresses);
 
     CheckEquals(2, Addresses.Count, 'Address count');
-    CheckEquals('127.0.0.1', Addresses[0], 'Second address');
-    CheckEquals('127.0.0.2', Addresses[1], 'First address');
+
+    Addresses.Sort;
+    CheckEquals('127.0.0.1', Addresses[0], 'First address');
+    CheckEquals('127.0.0.2', Addresses[1], 'Second address');
   finally
     Addresses.Free;
   end;
