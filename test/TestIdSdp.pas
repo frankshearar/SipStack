@@ -144,6 +144,7 @@ type
   published
     procedure TestAssign;
     procedure TestPrintOn;
+    procedure TestUsernameWithSpaces;
   end;
 
   TestTIdSdpRepeat = class(TTestCase)
@@ -1773,6 +1774,24 @@ begin
   CheckEquals('o=Holy_Cow side0f beef IN IP6 www.example.com'#13#10,
               S.DataString,
               'PrintOn');
+end;
+
+procedure TestTIdSdpOrigin.TestUsernameWithSpaces;
+begin
+  Self.O.Address        := 'www.example.com';
+  Self.O.AddressType    := Id_IPv6;
+  Self.O.NetType        := Id_SDP_IN;
+  Self.O.SessionID      := 'side0f';
+  Self.O.SessionVersion := 'beef';
+  Self.O.Username       := 'Holy Cow';
+
+  Self.O.PrintOn(S);
+
+  CheckEquals('o=Holy_Cow side0f beef IN IP6 www.example.com'#13#10,
+              S.DataString,
+              'PrintOn didn''t "escape" spaces in username');
+
+  CheckEquals('Holy Cow', Self.O.Username, 'Username not encoded');
 end;
 
 //******************************************************************************

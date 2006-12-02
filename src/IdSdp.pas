@@ -207,6 +207,7 @@ type
   public
     procedure Assign(Src: TPersistent); override;
     procedure PrintOn(Dest: TStream); override;
+    function  UsernameEncode(Name: String): String;
 
     property Address:        String       read fAddress write fAddress;
     property AddressType:    TIdIPVersion read fAddressType write fAddressType;
@@ -1488,7 +1489,7 @@ procedure TIdSdpOrigin.PrintOn(Dest: TStream);
 var
   S: String;
 begin
-  S := 'o=' + Self.Username + ' '
+  S := 'o=' + Self.UsernameEncode(Self.Username) + ' '
      + Self.SessionID + ' '
      + Self.SessionVersion + ' '
      + Self.NetType + ' '
@@ -1497,6 +1498,11 @@ begin
      + #13#10;
 
   Dest.Write(PChar(S)^, Length(S));
+end;
+
+function TIdSdpOrigin.UsernameEncode(Name: String): String;
+begin
+  Result := StringReplace(Name, ' ', '_', [rfReplaceAll]);
 end;
 
 //******************************************************************************
