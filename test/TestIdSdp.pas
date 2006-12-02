@@ -144,6 +144,7 @@ type
   published
     procedure TestAssign;
     procedure TestPrintOn;
+    procedure TestUsernameEncode;
     procedure TestUsernameWithSpaces;
   end;
 
@@ -605,7 +606,7 @@ const
 implementation
 
 uses
-  IdSocketHandle, IdStack, SysUtils;
+  IdSocketHandle, IdStack, IdUnicode, SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -1776,14 +1777,34 @@ begin
               'PrintOn');
 end;
 
+procedure TestTIdSdpOrigin.TestUsernameEncode;
+var
+  NihongoSpace: WideString;
+  UnicodeUsername: String;
+begin
+  // The kanji for what, romanised, reads "NihongoSpace".
+  NihongoSpace := WideChar($65E5);
+  NihongoSpace := NihongoSpace + WideChar($672C) + WideChar($8A9E) + WideChar(' ');
+
+  UnicodeUsername := UTF16LEToUTF8(NihongoSpace);
+
+  CheckEquals('one',     Self.O.UsernameEncode('one'),     'one');
+  CheckEquals('one_two', Self.O.UsernameEncode('one_two'), 'one_two');
+
+  CheckEquals(UTF16LEToUTF8(StringReplaceW(NihongoSpace, ' ', '_', true)),
+              Self.O.UsernameEncode(UnicodeUsername), '"nihongo" + space');
+end;
+
 procedure TestTIdSdpOrigin.TestUsernameWithSpaces;
+const
+  SpacedUsername = 'Holy Cow';
 begin
   Self.O.Address        := 'www.example.com';
   Self.O.AddressType    := Id_IPv6;
   Self.O.NetType        := Id_SDP_IN;
   Self.O.SessionID      := 'side0f';
   Self.O.SessionVersion := 'beef';
-  Self.O.Username       := 'Holy Cow';
+  Self.O.Username       := SpacedUsername;
 
   Self.O.PrintOn(S);
 
@@ -1791,7 +1812,7 @@ begin
               S.DataString,
               'PrintOn didn''t "escape" spaces in username');
 
-  CheckEquals('Holy Cow', Self.O.Username, 'Username not encoded');
+  CheckEquals(SpacedUsername, Self.O.Username, 'Username not encoded');
 end;
 
 //******************************************************************************
