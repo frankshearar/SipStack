@@ -210,6 +210,9 @@ type
     procedure TestCreateUserAgentWithProxy;
     procedure TestCreateUserAgentWithReferSupport;
     procedure TestCreateUserAgentWithRegistrar;
+    procedure TestCreateUserAgentWithResolveNamesLocallyFirst;
+    procedure TestCreateUserAgentWithoutResolveNamesLocallyFirst;
+    procedure TestStrToBool;
     procedure TestUpdateConfigurationWithContact;
     procedure TestUpdateConfigurationWithFrom;
     procedure TestUpdateConfigurationWithLocator;
@@ -2271,10 +2274,14 @@ begin
   // and an unused port as the registrar. That's just because we don't care
   // about the REGISTER message - we just want to make sure the UA sends a DNS
   // query to the name server specified in the configuration.
+  //
+  // We also tell the stack to resolve names using only our nameserver so we
+  // don't have to change the test machine's default nameserver.
 
   Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
   Self.Configuration.Add('NameServer: 127.0.0.1:' + IntToStr(Self.Server.DefaultPort));
   Self.Configuration.Add('Register: sip:localhost:' + IntToStr(Self.Server.DefaultPort + 1));
+  Self.Configuration.Add('ResolveNamesLocallyFirst: false');
   Self.Server.OnUDPRead := Self.ProvideAnswer;
 
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
@@ -2570,6 +2577,92 @@ begin
   finally
     UA.Free;
   end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithResolveNamesLocallyFirst;
+var
+  UA: TIdSipUserAgent;
+begin
+  // We check that, even though we specified our own name server, we make use of
+  // the OS's name resolution services (i.e., gethostbyname or getaddrinfo and
+  // the like) first. This test really only shows that the stack doesn't send a
+  // query to the specified namserver: it won't fail if no DNS queries happen at
+  // all (as in the case of using the /etc/hosts file), or because of a failed
+  // attempt to contain the OS's specified name server.
+
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('NameServer: 127.0.0.1:' + IntToStr(Self.Server.DefaultPort));
+  Self.Configuration.Add('Register: sip:localhost:' + IntToStr(Self.Server.DefaultPort + 1));
+  Self.Configuration.Add('ResolveNamesLocallyFirst: true');
+  Self.Server.OnUDPRead := Self.ProvideAnswer;
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Check(Assigned(UA.Locator),
+          'Transaction-User has no Locator');
+    Self.WaitForTimeout('Waiting for DNS query');
+    Check(not Self.ReceivedPacket, 'DNS queries not sent to OS''s name server');
+
+    Check(Assigned(UA.Dispatcher.Locator),
+          'No Locator assigned to the Transaction layer');
+    Check(UA.Locator = UA.Dispatcher.Locator,
+          'Transaction and Transaction-User layers have different Locators');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithoutResolveNamesLocallyFirst;
+var
+  UA: TIdSipUserAgent;
+begin
+  // This test demonstrates that the default behaviour of the stack is to use a
+  // local name resolution strategy first.
+  //
+  // Also see the comment in Self.TestCreateUserAgentWithResolveNamesLocallyFirst.
+
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('NameServer: 127.0.0.1:' + IntToStr(Self.Server.DefaultPort));
+  Self.Configuration.Add('Register: sip:localhost:' + IntToStr(Self.Server.DefaultPort + 1));
+  Self.Configuration.Add('ResolveNamesLocallyFirst: true');
+  Self.Server.OnUDPRead := Self.ProvideAnswer;
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Check(Assigned(UA.Locator),
+          'Transaction-User has no Locator');
+    Self.WaitForTimeout('Waiting for DNS query');
+    Check(not Self.ReceivedPacket, 'DNS queries not sent to OS''s name server');
+
+    Check(Assigned(UA.Dispatcher.Locator),
+          'No Locator assigned to the Transaction layer');
+    Check(UA.Locator = UA.Dispatcher.Locator,
+          'Transaction and Transaction-User layers have different Locators');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestStrToBool;
+begin
+  Check(Self.Conf.StrToBool('true'), 'true');
+  Check(Self.Conf.StrToBool('TRUE'), 'TRUE');
+  Check(Self.Conf.StrToBool('yes'),  'yes');
+  Check(Self.Conf.StrToBool('YES'),  'YES');
+  Check(Self.Conf.StrToBool('1'),    '1');
+  Check(Self.Conf.StrToBool('on'),   'on');
+  Check(Self.Conf.StrToBool('ON'),   'ON');
+
+  Check(not Self.Conf.StrToBool('false'), 'false');
+  Check(not Self.Conf.StrToBool('FALSE'), 'FALSE');
+  Check(not Self.Conf.StrToBool('no'), 'no');
+  Check(not Self.Conf.StrToBool('NO'), 'NO');
+  Check(not Self.Conf.StrToBool('0'), '0');
+  Check(not Self.Conf.StrToBool('off'), 'off');
+  Check(not Self.Conf.StrToBool('OFF'), 'OFF');
+
+  Check(Self.Conf.StrToBool(''), 'The empty string defaults to "true"');
+  Check(Self.Conf.StrToBool('random'), 'Non-false strings default to "true"');
 end;
 
 procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithContact;

@@ -67,6 +67,8 @@ type
     property RegisterModule:         TIdSipOutboundRegisterModule read fRegisterModule;
   end;
 
+  TIdSipPendingLocalResolutionAction = class;
+
   // Given a configuration file, I create a stack.
   // The configuration file consists of lines. Each line is a complete and
   // independent setting consisting of a Directive, at least one space, and the
@@ -81,11 +83,22 @@ type
   //   NameServer: <domain name or IP>:<port>
   //   NameServer: MOCK
   //   Register: <SIP/S URI>
+  //   ResolveNamesLocallyFirst: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
   //   Proxy: <SIP/S URI>
   //   SupportEvent: refer
   //   InstanceID: urn:uuid:00000000-0000-0000-0000-000000000000
+  //
+  // We try keep the configuration as order independent as possible. To
+  // accomplish this, directives are sometimes marked as pending (by putting
+  // objects in the PendingActions list in UpdateConfiguration). Some pending
+  // actions involve sending SIP messages (like REGISTERs). Others configure the
+  // stack that must only happen after other directives have been processed
+  // (like ResolveNamesLocallyFirst, which must happen after processing the
+  // NameServer directive). All pending actions that modify the stack
+  // configuration are always processed BEFORE message-sending pending actions.
   TIdSipStackConfigurator = class(TObject)
   private
+    FalseValues:             TStrings;
     FirstTransportDirective: Boolean;
 
     procedure AddAddress(UserAgent: TIdSipAbstractCore;
@@ -103,6 +116,10 @@ type
                       const HostNameLine: String);
     procedure AddLocator(UserAgent: TIdSipAbstractCore;
                          const NameServerLine: String);
+    procedure AddPendingConfiguration(PendingActions: TObjectList;
+                                      Action: TIdSipPendingLocalResolutionAction);
+    procedure AddPendingMessageSend(PendingActions: TObjectList;
+                                    Action: TIdSipAction);
     procedure AddProxy(UserAgent: TIdSipUserAgent;
                        const ProxyLine: String);
     procedure AddSupportForEventPackage(UserAgent: TIdSipAbstractCore;
@@ -122,14 +139,51 @@ type
     procedure RegisterUA(UserAgent: TIdSipUserAgent;
                          const RegisterLine: String;
                          PendingActions: TObjectList);
+    procedure UseLocalResolution(UserAgent: TIdSipAbstractCore;
+                                 const ResolveNamesLocallyFirstLine: String;
+                                 PendingActions: TObjectList);
     procedure SendPendingActions(Actions: TObjectList);
     procedure SetInstanceID(UserAgent: TIdSipUserAgent;
                             const InstanceIDLine: String);
   public
+    constructor Create;
+    destructor  Destroy; override;
+
     function CreateUserAgent(Configuration: TStrings;
                              Context: TIdTimerQueue): TIdSipUserAgent; overload;
+    function  StrToBool(B: String): Boolean;
     procedure UpdateConfiguration(UserAgent: TIdSipUserAgent;
                                   Configuration: TStrings);
+  end;
+
+  TIdSipPendingConfigurationAction = class(TObject)
+  public
+    procedure Execute; virtual; abstract;
+  end;
+
+  TIdSipPendingLocalResolutionAction = class(TIdSipPendingConfigurationAction)
+  private
+    fCore:                TIdSipAbstractCore;
+    fResolveLocallyFirst: Boolean;
+  public
+    constructor Create(Core: TIdSipAbstractCore;
+                       ResolveLocallyFirst: Boolean);
+
+    procedure Execute; override;
+
+    property Core:                TIdSipAbstractCore read fCore;
+    property ResolveLocallyFirst: Boolean            read fResolveLocallyFirst;
+  end;
+
+  TIdSipPendingMessageSend = class(TIdSipPendingConfigurationAction)
+  private
+    fAction: TIdSipAction;
+  public
+    constructor Create(Action: TIdSipAction);
+
+    procedure Execute; override;
+
+    property Action: TIdSipAction read fAction;
   end;
 
   TIdSipReconfigureStackWait = class(TIdWait)
@@ -150,19 +204,20 @@ type
 
 // Configuration file constants
 const
-  AuthenticationDirective  = 'Authentication';
-  AutoKeyword              = 'AUTO';
-  ContactDirective         = ContactHeaderFull;
-  DebugMessageLogDirective = 'DebugMessageLog';
-  FromDirective            = FromHeaderFull;
-  HostNameDirective        = 'HostName';
-  InstanceIDDirective      = 'InstanceID';
-  ListenDirective          = 'Listen';
-  MockKeyword              = 'MOCK';
-  NameServerDirective      = 'NameServer';
-  ProxyDirective           = 'Proxy';
-  RegisterDirective        = 'Register';
-  SupportEventDirective    = 'SupportEvent';
+  AuthenticationDirective           = 'Authentication';
+  AutoKeyword                       = 'AUTO';
+  ContactDirective                  = ContactHeaderFull;
+  DebugMessageLogDirective          = 'DebugMessageLog';
+  FromDirective                     = FromHeaderFull;
+  HostNameDirective                 = 'HostName';
+  InstanceIDDirective               = 'InstanceID';
+  ListenDirective                   = 'Listen';
+  MockKeyword                       = 'MOCK';
+  NameServerDirective               = 'NameServer';
+  ProxyDirective                    = 'Proxy';
+  RegisterDirective                 = 'Register';
+  ResolveNamesLocallyFirstDirective = 'ResolveNamesLocallyFirst';
+  SupportEventDirective             = 'SupportEvent';
 
 procedure EatDirective(var Line: String);
 
@@ -334,6 +389,27 @@ end;
 //******************************************************************************
 //* TIdSipStackConfigurator Public methods *************************************
 
+constructor TIdSipStackConfigurator.Create;
+begin
+  inherited Create;
+
+  Self.FalseValues := TStringList.Create;
+  Self.FalseValues.Add('false');
+  Self.FalseValues.Add('FALSE');
+  Self.FalseValues.Add('no');
+  Self.FalseValues.Add('NO');
+  Self.FalseValues.Add('off');
+  Self.FalseValues.Add('OFF');
+  Self.FalseValues.Add('0');
+end;
+
+destructor TIdSipStackConfigurator.Destroy;
+begin
+  Self.FalseValues.Free;
+
+  inherited Destroy;
+end;
+
 function TIdSipStackConfigurator.CreateUserAgent(Configuration: TStrings;
                                                  Context: TIdTimerQueue): TIdSipUserAgent;
 begin
@@ -345,6 +421,11 @@ begin
 
     raise;
   end;
+end;
+
+function TIdSipStackConfigurator.StrToBool(B: String): Boolean;
+begin
+  Result := Self.FalseValues.IndexOf(B) = ItemNotFoundIndex;
 end;
 
 procedure TIdSipStackConfigurator.UpdateConfiguration(UserAgent: TIdSipUserAgent;
@@ -470,13 +551,28 @@ begin
       raise EParserError.Create(Format(MalformedConfigurationLine, [NameServerLine]));
 
     Loc := TIdSipIndyLocator.Create;
-    Loc.NameServer := Host;
-    Loc.Port       := StrToInt(Port);
+    Loc.NameServer          := Host;
+    Loc.Port                := StrToInt(Port);
 
     UserAgent.Locator := Loc;
   end;
 
   UserAgent.Dispatcher.Locator := UserAgent.Locator;
+end;
+
+procedure TIdSipStackConfigurator.AddPendingConfiguration(PendingActions: TObjectList;
+                                                          Action: TIdSipPendingLocalResolutionAction);
+begin
+  PendingActions.Insert(0, Action);
+end;
+
+procedure TIdSipStackConfigurator.AddPendingMessageSend(PendingActions: TObjectList;
+                                                        Action: TIdSipAction);
+var
+  Pending: TIdSipPendingMessageSend;
+begin
+  Pending := TIdSipPendingMessageSend.Create(Action);
+  PendingActions.Add(Pending);
 end;
 
 procedure TIdSipStackConfigurator.AddProxy(UserAgent: TIdSipUserAgent;
@@ -626,6 +722,8 @@ begin
     Self.AddProxy(UserAgent,  ConfigurationLine)
   else if IsEqual(FirstToken, RegisterDirective) then
     Self.RegisterUA(UserAgent, ConfigurationLine, PendingActions)
+  else if IsEqual(FirstToken, ResolveNamesLocallyFirstDirective) then
+    Self.UseLocalResolution(UserAgent, ConfigurationLine, PendingActions)
   else if IsEqual(FirstToken, SupportEventDirective) then
     Self.AddSupportForEventPackage(UserAgent, ConfigurationLine);
 end;
@@ -648,7 +746,24 @@ begin
   Reg.AutoReRegister := true;
   Reg.HasRegistrar := true;
   Reg.Registrar.Uri := Line;
-  PendingActions.Add(Reg.RegisterWith(Reg.Registrar));
+  Self.AddPendingMessageSend(PendingActions, Reg.RegisterWith(Reg.Registrar));
+end;
+
+procedure TIdSipStackConfigurator.UseLocalResolution(UserAgent: TIdSipAbstractCore;
+                                                     const ResolveNamesLocallyFirstLine: String;
+                                                     PendingActions: TObjectList);
+var
+  Line:    String;
+  Pending: TIdSipPendingLocalResolutionAction;
+begin
+  // See class comment for the format for this directive.
+  Line := ResolveNamesLocallyFirstLine;
+  EatDirective(Line);
+
+  Line := Trim(Line);
+
+  Pending := TIdSipPendingLocalResolutionAction.Create(UserAgent, Self.StrToBool(Line));
+  Self.AddPendingConfiguration(PendingActions, Pending);
 end;
 
 procedure TIdSipStackConfigurator.SendPendingActions(Actions: TObjectList);
@@ -656,7 +771,7 @@ var
   I: Integer;
 begin
   for I := 0 to Actions.Count - 1 do
-    (Actions[I] as TIdSipAction).Send;
+    (Actions[I] as TIdSipPendingConfigurationAction).Execute;
 end;
 
 procedure TIdSipStackConfigurator.SetInstanceID(UserAgent: TIdSipUserAgent;
@@ -668,6 +783,48 @@ begin
   EatDirective(Line);
 
   UserAgent.InstanceID := Line;
+end;
+
+//******************************************************************************
+//* TIdSipPendingLocalResolutionAction                                         *
+//******************************************************************************
+//* TIdSipPendingLocalResolutionAction Public methods **************************
+
+constructor TIdSipPendingLocalResolutionAction.Create(Core: TIdSipAbstractCore;
+                                                      ResolveLocallyFirst: Boolean);
+begin
+  inherited Create;
+
+  Self.fCore                := Core;
+  Self.fResolveLocallyFirst := ResolveLocallyFirst;
+end;
+
+procedure TIdSipPendingLocalResolutionAction.Execute;
+var
+  IndyLoc: TIdSipIndyLocator;
+begin
+  if (Self.Core.Locator is TIdSipIndyLocator) then begin
+    IndyLoc := Self.Core.Locator as TIdSipIndyLocator;
+
+    IndyLoc.ResolveLocallyFirst := Self.ResolveLocallyFirst;
+  end;
+end;
+
+//******************************************************************************
+//* TIdSipPendingMessageSend                                                   *
+//******************************************************************************
+//* TIdSipPendingMessageSend Public methods ************************************
+
+constructor TIdSipPendingMessageSend.Create(Action: TIdSipAction);
+begin
+  inherited Create;
+
+  Self.fAction := Action;
+end;
+
+procedure TIdSipPendingMessageSend.Execute;
+begin
+  Self.Action.Send;
 end;
 
 //******************************************************************************
