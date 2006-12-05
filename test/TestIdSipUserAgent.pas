@@ -2600,7 +2600,7 @@ begin
   try
     Check(Assigned(UA.Locator),
           'Transaction-User has no Locator');
-    Self.WaitForTimeout('Waiting for DNS query');
+    Self.WaitForTimeout('DNS query arrived');
     Check(not Self.ReceivedPacket, 'DNS queries not sent to OS''s name server');
 
     Check(Assigned(UA.Dispatcher.Locator),
@@ -2631,7 +2631,7 @@ begin
   try
     Check(Assigned(UA.Locator),
           'Transaction-User has no Locator');
-    Self.WaitForTimeout('Waiting for DNS query');
+    Self.WaitForTimeout('DNS query arrived');
     Check(not Self.ReceivedPacket, 'DNS queries not sent to OS''s name server');
 
     Check(Assigned(UA.Dispatcher.Locator),
