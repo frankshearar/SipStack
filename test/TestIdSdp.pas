@@ -566,6 +566,7 @@ type
     procedure TestPortAsHighestAllowedPort;
     procedure TestPortAsLowestAllowedPort;
     procedure TestPortBelowLowestAllowedPort;
+    procedure TestPortThreePortRange;
     procedure TestPutOnHold;
     procedure TestSetLocalMachineName;
     procedure TestSetLocalSessionName;
@@ -6979,6 +6980,26 @@ begin
   CheckEquals(0,
               Self.MS.Streams[0].LocalDescription.Port,
               'Port value');
+end;
+
+procedure TestTIdSDPMultimediaSession.TestPortThreePortRange;
+const
+  LowPort = 8000;
+begin
+  // This gives us three allowed ports, and we're trying to open two media
+  // streams (which requires four ports).
+  Self.MS.LowestAllowedPort  := LowPort;
+  Self.MS.HighestAllowedPort := LowPort + 2;
+
+  Self.MS.StartListening(Self.MultiStreamSDP(LowPort, LowPort + 2));
+
+  CheckEquals(2, Self.MS.StreamCount, 'Wrong number of streams');
+  CheckEquals(LowPort,
+              Self.MS.Streams[0].LocalDescription.Port,
+              'First stream port value');
+  CheckEquals(0,
+              Self.MS.Streams[1].LocalDescription.Port,
+              'Second stream port value');
 end;
 
 procedure TestTIdSDPMultimediaSession.TestPutOnHold;
