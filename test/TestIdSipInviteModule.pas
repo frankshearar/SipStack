@@ -46,7 +46,7 @@ type
                                   Progress: TIdSipResponse);
     procedure OnReferral(Session: TIdSipSession;
                          Refer: TIdSipRequest;
-                         UsingSecureTransport: Boolean);
+                         Binding: TIdSipConnectionBindings);
     procedure ReceiveMovedTemporarily(Invite: TIdSipRequest;
                                       const Contacts: array of String); overload;
     procedure ReceiveMovedTemporarily(const Contacts: array of String); overload;
@@ -327,7 +327,7 @@ type
                                   Progress: TIdSipResponse); virtual;
     procedure OnReferral(Session: TIdSipSession;
                          Refer: TIdSipRequest;
-                         UsingSecureTransport: Boolean);
+                         Binding: TIdSipConnectionBindings);
     procedure ReceiveRemoteReInvite(Session: TIdSipSession);
     procedure ResendWith(Session: TIdSipSession;
                          AuthenticationChallenge: TIdSipResponse);
@@ -783,7 +783,7 @@ end;
 
 procedure TestDebug.OnReferral(Session: TIdSipSession;
                                Refer: TIdSipRequest;
-                               UsingSecureTransport: Boolean);
+                               Binding: TIdSipConnectionBindings);
 begin
 end;
 
@@ -1465,7 +1465,7 @@ begin
   Self.Failed         := false;
   Self.OnSuccessFired := false;
 
-  Self.InviteAction := TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false);
+  Self.InviteAction := TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, Self.Binding);
   Self.InviteAction.AddListener(Self);
 end;
 
@@ -1596,7 +1596,7 @@ begin
   Self.MarkSentResponseCount;
   Cancel := Self.Invite.CreateCancel;
   try
-    Self.InviteAction.ReceiveRequest(Cancel);
+    Self.InviteAction.ReceiveRequest(Cancel, Self.Binding);
   finally
     Cancel.Free;
   end;
@@ -1638,7 +1638,7 @@ begin
 
   Cancel := Self.Invite.CreateCancel;
   try
-    Self.InviteAction.ReceiveRequest(Cancel);
+    Self.InviteAction.ReceiveRequest(Cancel, Self.Binding);
   finally
     Cancel.Free;
   end;
@@ -1666,7 +1666,7 @@ begin
   Self.Invite.Body := '';
   Self.Invite.RemoveAllHeadersNamed(ContentTypeHeaderFull);
 
-  Action := TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false);
+  Action := TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, Self.Binding);
   Action.AddListener(Self);
 
   Self.MarkSentResponseCount;
@@ -1688,7 +1688,7 @@ begin
     Ack.ContentLength               := Length(Answer);
     Ack.ContentType                 := Self.LastSentResponse.ContentType;
 
-    Action.ReceiveRequest(Ack);
+    Action.ReceiveRequest(Ack, Self.Binding);
   finally
     Ack.Free;
   end;
@@ -1801,7 +1801,7 @@ begin
   // We want an in-dialog action
   Self.Invite.ToHeader.Tag := Self.Core.NextTag;
 
-  Action := TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false);
+  Action := TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, Self.Binding);
   try
     Action.Accept('', '');
 
@@ -1818,7 +1818,7 @@ begin
   // We want an in-dialog action
   Self.Invite.ToHeader.Tag := Self.Core.NextTag;
 
-  Action := TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false);
+  Action := TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, Self.Binding);
   try
     Self.CheckAckWithDifferentCSeq(Action);
   finally
@@ -1887,7 +1887,7 @@ begin
 
       Ack := Self.InviteAction.InitialRequest.AckFor(Self.LastSentResponse);
       try
-        Self.InviteAction.ReceiveRequest(Ack);
+        Self.InviteAction.ReceiveRequest(Ack, Self.Binding);
       finally
         Ack.Free;
       end;
@@ -1913,13 +1913,13 @@ begin
 
   Ack := Self.InviteAction.InitialRequest.AckFor(Self.LastSentResponse);
   try
-    Self.InviteAction.ReceiveRequest(Ack);
+    Self.InviteAction.ReceiveRequest(Ack, Self.Binding);
 
     Listener := TIdSipTestInboundInviteListener.Create;
     try
       Self.InviteAction.AddListener(Listener);
 
-      Self.InviteAction.ReceiveRequest(Ack);
+      Self.InviteAction.ReceiveRequest(Ack, Self.Binding);
       Check(not Listener.Succeeded, 'The InboundInvite renotified its listeners of success');
     finally
       Listener.Free;
@@ -2046,7 +2046,7 @@ begin
   // But once we receive an ACK, we don't want to resend the OK.
   Ack := Self.Invite.AckFor(Self.LastSentResponse);
   try
-    Self.InviteAction.ReceiveRequest(Ack);
+    Self.InviteAction.ReceiveRequest(Ack, Self.Binding);
   finally
     Ack.Free;
   end;
@@ -2082,7 +2082,7 @@ var
 begin
   Self.UseGruu;
 
-  Action := TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false);
+  Action := TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, Self.Binding);
   try
     Self.MarkSentResponseCount;
     Action.Ring;
@@ -2120,7 +2120,7 @@ var
 begin
   Self.UseGruu;
 
-  Action := TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false);
+  Action := TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, Self.Binding);
   try
     Self.MarkSentResponseCount;
     Action.Ring;
@@ -2176,7 +2176,7 @@ begin
 
   Ack := Self.InviteAction.InitialRequest.AckFor(Self.LastSentResponse);
   try
-    Self.InviteAction.ReceiveRequest(Ack);
+    Self.InviteAction.ReceiveRequest(Ack, Self.Binding);
   finally
     Ack.Free;
   end;
@@ -3426,7 +3426,7 @@ end;
 
 procedure TestTIdSipSession.OnReferral(Session: TIdSipSession;
                                        Refer: TIdSipRequest;
-                                       UsingSecureTransport: Boolean);
+                                       Binding: TIdSipConnectionBindings);
 begin
   Self.OnReferralFired := true;
 end;
@@ -7112,7 +7112,7 @@ begin
   Self.Invite   := TIdSipTestResources.CreateBasicRequest;
 
   Self.Listener := TIdSipTestInviteModuleListener.Create;
-  Self.Session  := TIdSipInboundSession.CreateInbound(Self.UA, Self.Invite, false);
+  Self.Session  := TIdSipInboundSession.CreateInbound(Self.UA, Self.Invite, Self.Binding);
 
   Self.Method := TIdSipInviteModuleInboundCallMethod.Create;
   Self.Method.Session   := Self.Session;
@@ -7155,7 +7155,7 @@ begin
   Self.Invite := TIdSipTestResources.CreateBasicRequest;
 
   Self.Method := TIdSipInboundInviteFailureMethod.Create;
-  Self.Method.Invite := TIdSipInboundInvite.CreateInbound(Self.UA, Self.Invite, false);
+  Self.Method.Invite := TIdSipInboundInvite.CreateInbound(Self.UA, Self.Invite, Self.Binding);
 end;
 
 procedure TestTIdSipInboundInviteFailureMethod.TearDown;
@@ -7197,7 +7197,7 @@ begin
   Self.Invite := TIdSipTestResources.CreateBasicRequest;
 
   Self.Method := TIdSipInboundInviteSuccessMethod.Create;
-  Self.Method.Invite := TIdSipInboundInvite.CreateInbound(Self.UA, Self.Invite, false);
+  Self.Method.Invite := TIdSipInboundInvite.CreateInbound(Self.UA, Self.Invite, Self.Binding);
 end;
 
 procedure TestTIdSipInboundInviteSuccessMethod.TearDown;
@@ -7594,9 +7594,9 @@ begin
   Self.Method := TIdSipSessionReferralMethod.Create;
   Self.Refer  :=  TIdSipRequest.Create;
 
-  Self.Method.Refer                := Self.Refer;
-  Self.Method.Session              := Self.Session;
-  Self.Method.UsingSecureTransport := Self.UA.Dispatcher.Transports[0].IsSecure;
+  Self.Method.Refer   := Self.Refer;
+  Self.Method.Session := Self.Session;
+  Self.Method.Binding := Self.Binding;
 end;
 
 procedure TestTIdSipSessionReferralMethod.TearDown;
@@ -7619,8 +7619,8 @@ begin
         'Refer param');
   Check(Self.Method.Session = Self.Listener.SessionParam,
         'Session param');
-  Check(Self.Method.UsingSecureTransport = Self.UA.Dispatcher.Transports[0].IsSecure,
-        'UsingSecureTransport param');
+  Check(Self.Method.Binding = Self.Listener.BindingParam,
+        'Binding param');
 end;
 
 initialization

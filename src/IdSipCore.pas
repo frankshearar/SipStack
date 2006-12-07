@@ -371,7 +371,7 @@ type
     procedure AddAllowedLanguage(const LanguageID: String);
     procedure AddAllowedScheme(const Scheme: String);
     function  AddInboundAction(Request: TIdSipRequest;
-                               UsingSecureTransport: Boolean): TIdSipAction;
+                               Binding: TIdSipConnectionBindings): TIdSipAction;
     procedure AddLocalHeaders(OutboundRequest: TIdSipRequest); virtual;
     function  AddModule(ModuleType: TIdSipMessageModuleClass): TIdSipMessageModule;
     procedure AddObserver(const Listener: IIdObserver);
@@ -485,7 +485,7 @@ type
     Listeners:              TIdNotificationList;
 
     function  AcceptRequest(Request: TIdSipRequest;
-                            UsingSecureTransport: Boolean): TIdSipAction; virtual;
+                            Binding: TIdSipConnectionBindings): TIdSipAction; virtual;
     function  ListHasUnknownValue(Request: TIdSipRequest;
                                   ValueList: TStrings;
                                   const HeaderName: String): Boolean;
@@ -501,7 +501,7 @@ type
     destructor  Destroy; override;
 
     function  Accept(Request: TIdSipRequest;
-                     UsingSecureTransport: Boolean): TIdSipAction; virtual;
+                     Binding: TIdSipConnectionBindings): TIdSipAction; virtual;
     procedure AddAllowedContentType(const MimeType: String);
     procedure AddAllowedContentTypes(MimeTypes: TStrings);
     procedure AddLocalHeaders(OutboundMessage: TIdSipMessage); virtual;
@@ -587,7 +587,7 @@ type
     function  CreateNewAttempt: TIdSipRequest; virtual; abstract;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         UsingSecureTransport: Boolean); virtual;
+                         Binding: TIdSipConnectionBindings); virtual;
     procedure MarkAsTerminated; virtual;
     procedure NotifyOfAuthenticationChallenge(Challenge: TIdSipResponse);
     procedure NotifyOfFailure(Response: TIdSipResponse); virtual;
@@ -597,12 +597,13 @@ type
     function  ReceiveGlobalFailureResponse(Response: TIdSipResponse): TIdSipActionResult; virtual;
 
     function  ReceiveOKResponse(Response: TIdSipResponse;
-                                UsingSecureTransport: Boolean): TIdSipActionResult; virtual;
-    procedure ReceiveOtherRequest(Request: TIdSipRequest); virtual;
+                                Binding: TIdSipConnectionBindings): TIdSipActionResult; virtual;
+    procedure ReceiveOtherRequest(Request: TIdSipRequest;
+                                  Binding: TIdSipConnectionBindings); virtual;
     function  ReceiveProvisionalResponse(Response: TIdSipResponse;
-                                         UsingSecureTransport: Boolean): TIdSipActionResult; virtual;
+                                         Binding: TIdSipConnectionBindings): TIdSipActionResult; virtual;
     function  ReceiveRedirectionResponse(Response: TIdSipResponse;
-                                         UsingSecureTransport: Boolean): TIdSipActionResult; virtual;
+                                         Binding: TIdSipConnectionBindings): TIdSipActionResult; virtual;
     function  ReceiveServerFailureResponse(Response: TIdSipResponse): TIdSipActionResult; virtual;
     procedure SendRequest(Request: TIdSipRequest); virtual;
     procedure SendResponse(Response: TIdSipResponse); virtual;
@@ -611,7 +612,7 @@ type
     constructor Create(UA: TIdSipAbstractCore); virtual;
     constructor CreateInbound(UA: TIdSipAbstractCore;
                               Request: TIdSipRequest;
-                              UsingSecureTransport: Boolean); virtual;
+                              Binding: TIdSipConnectionBindings); virtual;
     destructor  Destroy; override;
 
     procedure AddActionListener(Listener: IIdSipActionListener);
@@ -623,9 +624,10 @@ type
     function  Match(Msg: TIdSipMessage): Boolean; virtual;
     function  Method: String; virtual; abstract;
     procedure NetworkFailureSending(Msg: TIdSipMessage); virtual;
-    procedure ReceiveRequest(Request: TIdSipRequest); virtual;
+    procedure ReceiveRequest(Request: TIdSipRequest;
+                             Binding: TIdSipConnectionBindings); virtual;
     procedure ReceiveResponse(Response: TIdSipResponse;
-                              UsingSecureTransport: Boolean); virtual;
+                              Binding: TIdSipConnectionBindings); virtual;
     procedure RemoveActionListener(Listener: IIdSipActionListener);
     procedure Resend(AuthorizationCredentials: TIdSipAuthorizationHeader); virtual;
     procedure Send; virtual;
@@ -649,12 +651,12 @@ type
     procedure ActionSucceeded(Response: TIdSipResponse); override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         UsingSecureTransport: Boolean); override;
+                         Binding: TIdSipConnectionBindings); override;
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
     procedure NotifyOfRedirect(Response: TIdSipResponse);
     procedure NotifyOfSuccess(Msg: TIdSipMessage); virtual;
     function  ReceiveRedirectionResponse(Response: TIdSipResponse;
-                                         UsingSecureTransport: Boolean): TIdSipActionResult; override;
+                                         Binding: TIdSipConnectionBindings): TIdSipActionResult; override;
   public
     destructor Destroy; override;
 
@@ -675,7 +677,7 @@ type
     function  CreateNewAttempt: TIdSipRequest; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         UsingSecureTransport: Boolean); override;
+                         Binding: TIdSipConnectionBindings); override;
   public
     destructor Destroy; override;
 
@@ -1390,10 +1392,10 @@ begin
   // Action generates the response - cf. RFC 3261, section 8.2.6
 
   if Assigned(Action) then
-    Action.ReceiveRequest(Request);
+    Action.ReceiveRequest(Request, Self.Binding);
 
   if not Assigned(Action) then
-    Action := Self.UserAgent.AddInboundAction(Self.Request, Self.Binding.IsSecureTransport);
+    Action := Self.UserAgent.AddInboundAction(Self.Request, Self.Binding);
 
   if not Assigned(Action) then begin
     if Request.IsAck then
@@ -1413,7 +1415,7 @@ begin
   // a transaction, since the receipt of a 200 terminates a client INVITE
   // immediately.
   if Assigned(Action) then
-    Action.ReceiveResponse(Self.Response, Self.Binding.IsSecureTransport)
+    Action.ReceiveResponse(Self.Response, Self.Binding)
   else
 
   Self.UserAgent.NotifyOfDroppedMessage(Self.Response, Self.Binding);
@@ -1514,14 +1516,14 @@ begin
 end;
 
 function TIdSipAbstractCore.AddInboundAction(Request: TIdSipRequest;
-                                             UsingSecureTransport: Boolean): TIdSipAction;
+                                             Binding: TIdSipConnectionBindings): TIdSipAction;
 var
   Module: TIdSipMessageModule;
 begin
   Module := Self.ModuleFor(Request);
 
   if Assigned(Module) then begin
-    Result := Module.Accept(Request, UsingSecureTransport);
+    Result := Module.Accept(Request, Binding);
 
     if Assigned(Result) then begin
       Self.Actions.Add(Result);
@@ -2601,14 +2603,14 @@ begin
 end;
 
 function TIdSipMessageModule.Accept(Request: TIdSipRequest;
-                                    UsingSecureTransport: Boolean): TIdSipAction;
+                                    Binding: TIdSipConnectionBindings): TIdSipAction;
 var
   WillAccept: TIdSipUserAgentReaction;
 begin
   WillAccept := Self.WillAcceptRequest(Request);
 
   if (WillAccept = uarAccept) then
-    Result := Self.AcceptRequest(Request, UsingSecureTransport)
+    Result := Self.AcceptRequest(Request, Binding)
   else begin
     Result := nil;
     Self.RejectRequest(WillAccept, Request);
@@ -2704,7 +2706,7 @@ end;
 //* TIdSipMessageModule Protected methods **************************************
 
 function TIdSipMessageModule.AcceptRequest(Request: TIdSipRequest;
-                                           UsingSecureTransport: Boolean): TIdSipAction;
+                                           Binding: TIdSipConnectionBindings): TIdSipAction;
 begin
   Result := nil;
 end;
@@ -2914,17 +2916,17 @@ constructor TIdSipAction.Create(UA: TIdSipAbstractCore);
 begin
   inherited Create;
 
-  Self.Initialise(UA, nil, false);
+  Self.Initialise(UA, nil, nil);
 end;
 
 constructor TIdSipAction.CreateInbound(UA: TIdSipAbstractCore;
                                        Request: TIdSipRequest;
-                                       UsingSecureTransport: Boolean);
+                                       Binding: TIdSipConnectionBindings);
 begin
   inherited Create;
 
-  Self.Initialise(UA, Request, UsingSecureTransport);
-  Self.ReceiveRequest(Request);
+  Self.Initialise(UA, Request, Binding);
+  Self.ReceiveRequest(Request, Binding);
 end;
 
 destructor TIdSipAction.Destroy;
@@ -3011,13 +3013,14 @@ begin
   end;
 end;
 
-procedure TIdSipAction.ReceiveRequest(Request: TIdSipRequest);
+procedure TIdSipAction.ReceiveRequest(Request: TIdSipRequest;
+                                      Binding: TIdSipConnectionBindings);
 begin
-  Self.ReceiveOtherRequest(Request);
+  Self.ReceiveOtherRequest(Request, Binding);
 end;
 
 procedure TIdSipAction.ReceiveResponse(Response: TIdSipResponse;
-                                       UsingSecureTransport: Boolean);
+                                       Binding: TIdSipConnectionBindings);
 var
   Succeeded: TIdSipActionResult;
 begin
@@ -3028,13 +3031,13 @@ begin
   case Response.StatusCode div 100 of
     SIPProvisionalResponseClass:
       Succeeded := Self.ReceiveProvisionalResponse(Response,
-                                                   UsingSecureTransport);
+                                                   Binding);
     SIPOKResponseClass:
       Succeeded := Self.ReceiveOKResponse(Response,
-                                          UsingSecureTransport);
+                                          Binding);
     SIPRedirectionResponseClass:
       Succeeded := Self.ReceiveRedirectionResponse(Response,
-                                                   UsingSecureTransport);
+                                                   Binding);
     SIPFailureResponseClass:
       Succeeded := Self.ReceiveFailureResponse(Response);
     SIPServerFailureResponseClass:
@@ -3105,7 +3108,7 @@ end;
 
 procedure TIdSipAction.Initialise(UA: TIdSipAbstractCore;
                                   Request: TIdSipRequest;
-                                  UsingSecureTransport: Boolean);
+                                  Binding: TIdSipConnectionBindings);
 begin
   Self.fUA := UA;
 
@@ -3189,23 +3192,24 @@ begin
 end;
 
 function TIdSipAction.ReceiveOKResponse(Response: TIdSipResponse;
-                                        UsingSecureTransport: Boolean): TIdSipActionResult;
+                                        Binding: TIdSipConnectionBindings): TIdSipActionResult;
 begin
   Result := arSuccess;
 end;
 
-procedure TIdSipAction.ReceiveOtherRequest(Request: TIdSipRequest);
+procedure TIdSipAction.ReceiveOtherRequest(Request: TIdSipRequest;
+                                           Binding: TIdSipConnectionBindings);
 begin
 end;
 
 function TIdSipAction.ReceiveProvisionalResponse(Response: TIdSipResponse;
-                                                 UsingSecureTransport: Boolean): TIdSipActionResult;
+                                                 Binding: TIdSipConnectionBindings): TIdSipActionResult;
 begin
   Result := arFailure;
 end;
 
 function TIdSipAction.ReceiveRedirectionResponse(Response: TIdSipResponse;
-                                                 UsingSecureTransport: Boolean): TIdSipActionResult;
+                                                 Binding: TIdSipConnectionBindings): TIdSipActionResult;
 begin
   Result := arFailure;
 end;
@@ -3359,9 +3363,9 @@ end;
 
 procedure TIdSipOwnedAction.Initialise(UA: TIdSipAbstractCore;
                                        Request: TIdSipRequest;
-                                       UsingSecureTransport: Boolean);
+                                       Binding: TIdSipConnectionBindings);
 begin
-  inherited Initialise(UA, Request, UsingSecureTransport);
+  inherited Initialise(UA, Request, Binding);
 
   Self.fIsOwned := true;
 
@@ -3417,9 +3421,9 @@ begin
 end;
 
 function TIdSipOwnedAction.ReceiveRedirectionResponse(Response: TIdSipResponse;
-                                                      UsingSecureTransport: Boolean): TIdSipActionResult;
+                                                      Binding: TIdSipConnectionBindings): TIdSipActionResult;
 begin
-  Result := inherited ReceiveRedirectionResponse(Response, UsingSecureTransport);
+  Result := inherited ReceiveRedirectionResponse(Response, Binding);
 
   Self.NotifyOfRedirect(Response);
 end;
@@ -3476,9 +3480,9 @@ end;
 
 procedure TIdSipRedirectedAction.Initialise(UA: TIdSipAbstractCore;
                                                        Request: TIdSipRequest;
-                                                       UsingSecureTransport: Boolean);
+                                                       Binding: TIdSipConnectionBindings);
 begin
-  inherited Initialise(UA, Request, UsingSecureTransport);
+  inherited Initialise(UA, Request, Binding);
 
   Self.fContact         := TIdSipAddressHeader.Create;
   Self.fOriginalRequest := TIdSipRequest.Create;

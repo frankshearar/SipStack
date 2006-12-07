@@ -5571,7 +5571,7 @@ procedure TestTIdSipSubscriptionRequestMethod.SetUp;
 begin
   inherited SetUp;
 
-  Self.Subscription := TIdSipInboundSubscription.CreateInbound(Self.UA, Self.Request, false);
+  Self.Subscription := TIdSipInboundSubscription.CreateInbound(Self.UA, Self.Request, Self.Binding);
   Self.Method := TIdSipSubscriptionRequestMethod.Create;
   Self.Method.Subscription := Self.Subscription;
 end;

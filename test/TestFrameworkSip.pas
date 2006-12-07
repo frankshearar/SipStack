@@ -121,6 +121,7 @@ type
 
   TActionMethodTestCase = class(TTestCase)
   protected
+    Binding:    TIdSipConnectionBindings;
     Dispatcher: TIdSipMockTransactionDispatcher;
     Response:   TIdSipResponse;
     UA:         TIdSipUserAgent;
@@ -423,6 +424,7 @@ type
                                     IIdSipSessionListener)
   private
     fAnswerParam:              TIdSipResponse;
+    fBindingParam:             TIdSipConnectionBindings;
     fEndedSession:             Boolean;
     fErrorCodeParam:           Cardinal;
     fEstablishedSession:       Boolean;
@@ -433,13 +435,11 @@ type
     fProgressedSession:        Boolean;
     fProgressParam:            TIdSipResponse;
     fReasonParam:              String;
-    fReceiverParam:            TIdSipTransport;
     fRedirect:                 Boolean;
     fReferParam:               TIdSipRequest;
     fReferral:                 Boolean;
     fRemoteSessionDescription: String;
     fSessionParam:             TIdSipSession;
-    fUsingSecureTransport:     Boolean;
   public
     constructor Create; override;
 
@@ -461,26 +461,25 @@ type
                                   Progress: TIdSipResponse);
     procedure OnReferral(Session: TIdSipSession;
                          Refer: TIdSipRequest;
-                         UsingSecureTransport: Boolean);
+                         Binding: TIdSipConnectionBindings);
 
-    property AnswerParam:              TIdSipResponse      read fAnswerParam;
-    property EndedSession:             Boolean             read fEndedSession;
-    property ErrorCodeParam:           Cardinal            read fErrorCodeParam;
-    property EstablishedSession:       Boolean             read fEstablishedSession;
-    property MimeType:                 String              read fMimeType;
-    property ModifiedSession:          Boolean             read fModifiedSession;
-    property ModifySession:            Boolean             read fModifySession;
-    property NewSession:               Boolean             read fNewSession;
-    property ProgressParam:            TIdSipResponse      read fProgressParam;
-    property ProgressedSession:        Boolean             read fProgressedSession;
-    property ReasonParam:              String              read fReasonParam;
-    property ReceiverParam:            TIdSipTransport     read fReceiverParam;
-    property Redirect:                 Boolean             read fRedirect;
-    property ReferParam:               TIdSipRequest       read fReferParam;
-    property Referral:                 Boolean             read fReferral;
-    property RemoteSessionDescription: String              read fRemoteSessionDescription;
-    property SessionParam:             TIdSipSession       read fSessionParam;
-    property UsingSecureTransport:     Boolean             read fUsingSecureTransport;
+    property AnswerParam:              TIdSipResponse           read fAnswerParam;
+    property BindingParam:             TIdSipConnectionBindings read fBindingParam;
+    property EndedSession:             Boolean                  read fEndedSession;
+    property ErrorCodeParam:           Cardinal                 read fErrorCodeParam;
+    property EstablishedSession:       Boolean                  read fEstablishedSession;
+    property MimeType:                 String                   read fMimeType;
+    property ModifiedSession:          Boolean                  read fModifiedSession;
+    property ModifySession:            Boolean                  read fModifySession;
+    property NewSession:               Boolean                  read fNewSession;
+    property ProgressParam:            TIdSipResponse           read fProgressParam;
+    property ProgressedSession:        Boolean                  read fProgressedSession;
+    property ReasonParam:              String                   read fReasonParam;
+    property Redirect:                 Boolean                  read fRedirect;
+    property ReferParam:               TIdSipRequest            read fReferParam;
+    property Referral:                 Boolean                  read fReferral;
+    property RemoteSessionDescription: String                   read fRemoteSessionDescription;
+    property SessionParam:             TIdSipSession            read fSessionParam;
   end;
 
   TIdSipTestSessionListenerEndedCounter = class(TIdSipTestSessionListener)
@@ -689,7 +688,6 @@ type
     fDroppedUnmatchedMessage: Boolean;
     fMessageParam:            TIdSipMessage;
     fPassword:                String;
-    fReceiverParam:           TIdSipTransport;
     fResponseParam:           TIdSipResponse;
     fTryAgain:                Boolean;
     fUsername:                String;
@@ -715,7 +713,6 @@ type
     property DroppedUnmatchedMessage: Boolean                  read fDroppedUnmatchedMessage;
     property MessageParam:            TIdSipMessage            read fMessageParam;
     property Password:                String                   read fPassword write fPassword;
-    property ReceiverParam:           TIdSipTransport          read fReceiverParam;
     property ResponseParam:           TIdSipResponse           read fResponseParam;
     property TryAgain:                Boolean                  read fTryAgain write fTryAgain;
     property Username:                String                   read fUsername write fUsername;
@@ -1399,6 +1396,13 @@ procedure TActionMethodTestCase.SetUp;
 begin
   inherited SetUp;
 
+  Self.Binding           := TIdSipConnectionBindings.Create;
+  Self.Binding.LocalIP   := '127.0.0.1';
+  Self.Binding.LocalPort := 5060;
+  Self.Binding.PeerIP    := '127.0.0.1';
+  Self.Binding.PeerPort  := 5060;
+  Self.Binding.Transport := UdpTransport;
+
   Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
 
   Self.UA := TIdSipUserAgent.Create;
@@ -1410,7 +1414,8 @@ end;
 procedure TActionMethodTestCase.TearDown;
 begin
   Self.Response.Free;
-  Self.UA.Free;
+  Self.UA.Free; // The UA frees the dispatcher
+  Self.Binding.Free;
 
   inherited TearDown;
 end;
@@ -1984,12 +1989,12 @@ end;
 
 procedure TIdSipTestSessionListener.OnReferral(Session: TIdSipSession;
                                                Refer: TIdSipRequest;
-                                               UsingSecureTransport: Boolean);
+                                               Binding: TIdSipConnectionBindings);
 begin
+  Self.fBindingParam         := Binding;
   Self.fReferral             := true;
   Self.fReferParam           := Refer;
   Self.fSessionParam         := Session;
-  Self.fUsingSecureTransport := UsingSecureTransport;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnReferral');

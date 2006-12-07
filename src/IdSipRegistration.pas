@@ -219,7 +219,7 @@ type
     destructor  Destroy; override;
 
     function  Accept(Request: TIdSipRequest;
-                     UsingSecureTransport: Boolean): TIdSipAction; override;
+                     Binding: TIdSipConnectionBindings): TIdSipAction; override;
     procedure CleanUp; override;
     function  CreateRegister(Registrar: TIdSipToHeader): TIdSipRequest;
     function  CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistrationQuery;
@@ -251,7 +251,7 @@ type
     constructor Create(UA: TIdSipAbstractCore); override;
 
     function Accept(Request: TIdSipRequest;
-                    UsingSecureTransport: Boolean): TIdSipAction; override;
+                    Binding: TIdSipConnectionBindings): TIdSipAction; override;
     function AcceptsMethods: String; override;
 
     property BindingDB:         TIdSipAbstractBindingDatabase read fBindingDB write SetBindingDB;
@@ -292,10 +292,11 @@ type
     function  CreateNewAttempt: TIdSipRequest; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         UsingSecureTransport: Boolean); override;
+                         Binding: TIdSipConnectionBindings); override;
   public
     function  IsInbound: Boolean; override;
-    procedure ReceiveRequest(Register: TIdSipRequest); override;
+    procedure ReceiveRequest(Register: TIdSipRequest;
+                             Binding: TIdSipConnectionBindings); override;
   end;
 
   // I piggyback on a transaction in a blocking I/O fashion to provide a UAC
@@ -324,10 +325,10 @@ type
                              Bindings: TIdSipContacts): TIdSipRequest; virtual;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         UsingSecureTransport: Boolean); override;
+                         Binding: TIdSipConnectionBindings); override;
     function  ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionResult; override;
     function  ReceiveOKResponse(Response: TIdSipResponse;
-                                UsingSecureTransport: Boolean): TIdSipActionResult; override;
+                                Binding: TIdSipConnectionBindings): TIdSipActionResult; override;
     procedure RegisterWith(Registrar: TIdSipUri;
                            Bindings: TIdSipContacts); overload;
     procedure RegisterWith(Registrar: TIdSipUri;
@@ -359,7 +360,7 @@ type
                              Bindings: TIdSipContacts): TIdSipRequest; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         UsingSecureTransport: Boolean); override;
+                         Binding: TIdSipConnectionBindings); override;
   public
     procedure Send; override;
 
@@ -405,7 +406,7 @@ type
   protected
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         UsingSecureTransport: Boolean); override;
+                         Binding: TIdSipConnectionBindings); override;
     procedure NotifyOfFailure(ErrorCode: Cardinal;
                               const Reason: String); reintroduce; // TODO: Not all Actions will fail from a Response
     procedure NotifyOfSuccess(Response: TIdSipMessage); virtual;
@@ -932,7 +933,7 @@ begin
 end;
 
 function TIdSipOutboundRegisterModule.Accept(Request: TIdSipRequest;
-                                             UsingSecureTransport: Boolean): TIdSipAction;
+                                             Binding: TIdSipConnectionBindings): TIdSipAction;
 begin
   // As a purely UAC module, don't accept ANY requests.
   Result := nil;
@@ -1023,14 +1024,14 @@ begin
 end;
 
 function TIdSipRegisterModule.Accept(Request: TIdSipRequest;
-                                     UsingSecureTransport: Boolean): TIdSipAction;
+                                     Binding: TIdSipConnectionBindings): TIdSipAction;
 begin
-  Result := inherited Accept(Request, UsingSecureTransport);
+  Result := inherited Accept(Request, Binding);
 
   if not Assigned(Result) then
     Result := TIdSipInboundRegistration.CreateInbound(Self.UserAgent,
                                                       Request,
-                                                      UsingSecureTransport);
+                                                      Binding);
 end;
 
 function TIdSipRegisterModule.AcceptsMethods: String;
@@ -1116,7 +1117,8 @@ begin
   Result := true;
 end;
 
-procedure TIdSipInboundRegistration.ReceiveRequest(Register: TIdSipRequest);
+procedure TIdSipInboundRegistration.ReceiveRequest(Register: TIdSipRequest;
+                                                   Binding: TIdSipConnectionBindings);
 begin
   Assert(Register.IsRegister,
          'TIdSipAction.ReceiveRegister must only receive REGISTERs');
@@ -1163,11 +1165,11 @@ end;
 
 procedure TIdSipInboundRegistration.Initialise(UA: TIdSipAbstractCore;
                                                Request: TIdSipRequest;
-                                               UsingSecureTransport: Boolean);
+                                               Binding: TIdSipConnectionBindings);
 var
   RegModule: TIdSipMessageModule;
 begin
-  inherited Initialise(UA, Request, UsingSecureTransport);
+  inherited Initialise(UA, Request, Binding);
 
   Self.InitialRequest.Assign(Request);
 
@@ -1402,11 +1404,11 @@ end;
 
 procedure TIdSipOutboundRegisterBase.Initialise(UA: TIdSipAbstractCore;
                                                 Request: TIdSipRequest;
-                                                UsingSecureTransport: Boolean);
+                                                Binding: TIdSipConnectionBindings);
 var
   RegModule: TIdSipMessageModule;
 begin
-  inherited Initialise(UA, Request, UsingSecureTransport);
+  inherited Initialise(UA, Request, Binding);
 
   RegModule := UA.ModuleFor(TIdSipOutboundRegisterModule);
 
@@ -1445,9 +1447,9 @@ begin
 end;
 
 function TIdSipOutboundRegisterBase.ReceiveOKResponse(Response: TIdSipResponse;
-                                                      UsingSecureTransport: Boolean): TIdSipActionResult;
+                                                      Binding: TIdSipConnectionBindings): TIdSipActionResult;
 begin
-  Result := inherited ReceiveOKResponse(Response, UsingSecureTransport);
+  Result := inherited ReceiveOKResponse(Response, Binding);
 
   Self.NotifyOfSuccess(Response);
   Self.Terminate;
@@ -1667,9 +1669,9 @@ end;
 
 procedure TIdSipOutboundUnregister.Initialise(UA: TIdSipAbstractCore;
                                               Request: TIdSipRequest;
-                                              UsingSecureTransport: Boolean);
+                                              Binding: TIdSipConnectionBindings);
 begin
-  inherited Initialise(UA, Request, UsingSecureTransport);
+  inherited Initialise(UA, Request, Binding);
 
   Self.IsWildCard := false;
 end;
@@ -1732,11 +1734,11 @@ end;
 
 procedure TIdSipOutboundRegistrationBase.Initialise(UA: TIdSipAbstractCore;
                                                     Request: TIdSipRequest;
-                                                    UsingSecureTransport: Boolean);
+                                                    Binding: TIdSipConnectionBindings);
 var
   RegModule: TIdSipMessageModule;
 begin
-  inherited Initialise(UA, Request, UsingSecureTransport);
+  inherited Initialise(UA, Request, Binding);
 
   RegModule := UA.ModuleFor(TIdSipOutboundRegisterModule);
 

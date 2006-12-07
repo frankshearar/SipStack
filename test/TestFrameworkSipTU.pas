@@ -21,6 +21,7 @@ type
     ActionFailed:             Boolean;
     ActionParam:              TIdSipAction;
     AuthenticationChallenged: Boolean;
+    Binding:                  TIdSipConnectionBindings;
     FailReason:               String;
     Password:                 String;
 
@@ -55,6 +56,7 @@ type
     procedure ReceiveServiceUnavailable(Invite: TIdSipRequest);
   public
     procedure SetUp; override;
+    procedure TearDown; override;
 
     procedure CheckAckSent(const Msg: String); override;
     procedure CheckRequestSent(const Msg: String); override;
@@ -86,7 +88,7 @@ type
 implementation
 
 uses
-  IdException, IdSipAuthentication;
+  IdException, IdSipAuthentication, IdSipTransport;
 
 //******************************************************************************
 //* TestTIdSipAction                                                           *
@@ -97,9 +99,23 @@ procedure TestTIdSipAction.SetUp;
 begin
   inherited SetUp;
 
+  Self.Binding := TIdSipConnectionBindings.Create;
+  Self.Binding.LocalIP   := '127.0.0.1';
+  Self.Binding.LocalPort := 5060;
+  Self.Binding.PeerIP    := '127.0.0.2';
+  Self.Binding.PeerPort  := 5060;
+  Self.Binding.Transport := UdpTransport;
+
   Self.ActionFailed             := false;
   Self.AuthenticationChallenged := false;
   Self.Password                 := 'mycotoxin';
+end;
+
+procedure TestTIdSipAction.TearDown;
+begin
+  Self.Binding.Free;
+
+  inherited TearDown;
 end;
 
 procedure TestTIdSipAction.CheckAckSent(const Msg: String);

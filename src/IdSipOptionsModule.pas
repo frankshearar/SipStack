@@ -30,7 +30,7 @@ type
     constructor Create(UA: TIdSipAbstractCore); override;
 
     function Accept(Request: TIdSipRequest;
-                    UsingSecureTransport: Boolean): TIdSipAction; override;
+                    Binding: TIdSipConnectionBindings): TIdSipAction; override;
     function AcceptsMethods: String; override;
     function CreateOptions(Dest: TIdSipAddressHeader): TIdSipRequest;
     function QueryOptions(Server: TIdSipAddressHeader): TIdSipOutboundOptions;
@@ -43,7 +43,7 @@ type
     function  CreateNewAttempt: TIdSipRequest; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         UsingSecureTransport: Boolean); override;
+                         Binding: TIdSipConnectionBindings); override;
   public
     function IsOptions: Boolean; override;
     function Method: String; override;
@@ -52,7 +52,8 @@ type
   TIdSipInboundOptions = class(TIdSipOptions)
   public
     function  IsInbound: Boolean; override;
-    procedure ReceiveRequest(Options: TIdSipRequest); override;
+    procedure ReceiveRequest(Options: TIdSipRequest;
+                             Binding: TIdSipConnectionBindings); override;
   end;
 
   TIdSipOutboundOptions = class(TIdSipOptions)
@@ -66,7 +67,7 @@ type
     function  CreateNewAttempt: TIdSipRequest; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         UsingSecureTransport: Boolean); override;
+                         Binding: TIdSipConnectionBindings); override;
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
   public
     destructor Destroy; override;
@@ -108,14 +109,14 @@ begin
 end;
 
 function TIdSipOptionsModule.Accept(Request: TIdSipRequest;
-                                    UsingSecureTransport: Boolean): TIdSipAction;
+                                    Binding: TIdSipConnectionBindings): TIdSipAction;
 begin
-  Result := inherited Accept(Request, UsingSecureTransport);
+  Result := inherited Accept(Request, Binding);
 
   if not Assigned(Result) then
     Result := TIdSipInboundOptions.CreateInbound(Self.UserAgent,
                                                  Request,
-                                                 UsingSecureTransport);
+                                                 Binding);
 end;
 
 function TIdSipOptionsModule.AcceptsMethods: String;
@@ -193,9 +194,9 @@ end;
 
 procedure TIdSipOptions.Initialise(UA: TIdSipAbstractCore;
                                    Request: TIdSipRequest;
-                                   UsingSecureTransport: Boolean);
+                                   Binding: TIdSipConnectionBindings);
 begin
-  inherited Initialise(UA, Request, UsingSecureTransport);
+  inherited Initialise(UA, Request, Binding);
 
   Self.Module := Self.UA.ModuleFor(Self.Method) as TIdSipOptionsModule;
 end;
@@ -210,7 +211,8 @@ begin
   Result := true;
 end;
 
-procedure TIdSipInboundOptions.ReceiveRequest(Options: TIdSipRequest);
+procedure TIdSipInboundOptions.ReceiveRequest(Options: TIdSipRequest;
+                                              Binding: TIdSipConnectionBindings);
 var
   Response: TIdSipResponse;
 begin
@@ -295,9 +297,9 @@ end;
 
 procedure TIdSipOutboundOptions.Initialise(UA: TIdSipAbstractCore;
                                            Request: TIdSipRequest;
-                                           UsingSecureTransport: Boolean);
+                                           Binding: TIdSipConnectionBindings);
 begin
-  inherited Initialise(UA, Request, UsingSecureTransport);
+  inherited Initialise(UA, Request, Binding);
 
   Self.fServer := TIdSipAddressHeader.Create;
 end;

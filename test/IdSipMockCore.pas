@@ -40,7 +40,7 @@ type
   protected
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         UsingSecureTransport: Boolean); override;
+                         Binding: TIdSipConnectionBindings); override;
   public
     function  IsInbound: Boolean; override;
     procedure SetIsInbound(Value: Boolean);
@@ -99,9 +99,9 @@ end;
 
 procedure TIdSipMockSession.Initialise(UA: TIdSipAbstractCore;
                                        Request: TIdSipRequest;
-                                       UsingSecureTransport: Boolean);
+                                       Binding: TIdSipConnectionBindings);
 begin
-  inherited Initialise(UA, Request, UsingSecureTransport);
+  inherited Initialise(UA, Request, Binding);
 
   Self.fResponseResent := false;
   Self.SetIsInbound(false);

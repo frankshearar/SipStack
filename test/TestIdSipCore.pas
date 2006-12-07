@@ -100,6 +100,7 @@ type
   private
     ActionProcUsed:      String;
     Actions:             TIdSipActions;
+    Binding:             TIdSipConnectionBindings;
     DidntFindActionName: String;
     FoundActionName:     String;
     Options:             TIdSipRequest;
@@ -1560,6 +1561,7 @@ begin
   inherited SetUp;
 
   Self.Actions := TIdSipActions.Create;
+  Self.Binding := TIdSipConnectionBindings.Create;
   Self.Options := TIdSipRequest.Create;
   Self.Options.Assign(Self.Invite);
   Self.Options.Method := MethodOptions;
@@ -1572,6 +1574,7 @@ end;
 procedure TestTIdSipActions.TearDown;
 begin
   Self.Options.Free;
+  Self.Binding.Free;
   Self.Actions.Free;
 
   inherited TearDown;
@@ -1597,7 +1600,7 @@ begin
   try
     Self.Actions.AddObserver(L1);
 
-    Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false));
+    Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, Self.Binding));
 
     Check(L1.Changed, 'TIdSipInboundInvite didn''t notify listener');
   finally
@@ -1617,7 +1620,7 @@ begin
       Self.Actions.AddObserver(L1);
       Self.Actions.AddObserver(L2);
 
-      Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false));
+      Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, Self.Binding));
 
       Check(L1.Changed, 'TIdSipInboundInvite didn''t notify L1, thus didn''t add it');
       Check(L2.Changed, 'TIdSipInboundInvite didn''t notify L2, thus didn''t add it');
@@ -1671,7 +1674,7 @@ begin
   Self.Invite.Supported.Values.Add(ExtensionGruu);
 
   // Create two actions (which will use different LocalGruus)
-  A := Self.Actions.Add(TIdSipInboundSession.CreateInbound(Self.Core, Self.Invite, false));
+  A := Self.Actions.Add(TIdSipInboundSession.CreateInbound(Self.Core, Self.Invite, Self.Binding));
   A.LocalGruu.Value := '<' + LocalGruuOne + '>';
   B := Self.Actions.Add(TIdSipOutboundSession.Create(Self.Core));
   B.LocalGruu.Value := '<' + LocalGruuTwo + '>';
@@ -1689,7 +1692,7 @@ begin
   Check(not Assigned(Self.Actions.FindActionForGruu('sip:127.0.0.1')),
         'Action found despite there being no actions');
 
-  Self.Actions.Add(TIdSipInboundSession.CreateInbound(Self.Core, Self.Invite, false));
+  Self.Actions.Add(TIdSipInboundSession.CreateInbound(Self.Core, Self.Invite, Self.Binding));
   Check(not Assigned(Self.Actions.FindActionForGruu('sip:127.0.0.1')),
         'Action found despite there being no matching action');
 end;
@@ -1705,9 +1708,9 @@ begin
   Self.Core.Contact.IsGruu := true;
 
   // Create two actions (which will use different LocalGruus
-  A := Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false));
+  A := Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, Self.Binding));
   A.LocalGruu.Value := '<' + LocalGruu + '>';
-  B := Self.Actions.Add(TIdSipInboundSession.CreateInbound(Self.Core, Self.Invite, false));
+  B := Self.Actions.Add(TIdSipInboundSession.CreateInbound(Self.Core, Self.Invite, Self.Binding));
   B.LocalGruu.Value := '<' + LocalGruu + '>';
 
   Check(B = Self.Actions.FindActionForGruu(LocalGruu),
@@ -1719,8 +1722,8 @@ var
   A:      TIdSipAction;
   Finder: TIdSipActionFinder;
 begin
-  Self.Actions.Add(TIdSipInboundOptions.CreateInbound(Self.Core, Self.Options, false));
-  A := Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false));
+  Self.Actions.Add(TIdSipInboundOptions.CreateInbound(Self.Core, Self.Options, Self.Binding));
+  A := Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, Self.Binding));
   Self.Actions.Add(TIdSipOutboundOptions.Create(Self.Core));
 
   Finder := TIdSipActionFinder.Create;
@@ -1753,7 +1756,7 @@ var
   AnotherID: String;
   Finder:    TIdSipActionFinder;
 begin
-  Action := TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false);
+  Action := TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, Self.Binding);
   Self.Actions.Add(Action);
 
   AnotherID := Action.ID + '1';
@@ -1774,8 +1777,8 @@ var
   Finder: TIdSipActionFinder;
   Switch: TIdSipActionSwitch;
 begin
-  Self.Actions.Add(TIdSipInboundOptions.CreateInbound(Self.Core, Self.Options, false));
-  A := Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false));
+  Self.Actions.Add(TIdSipInboundOptions.CreateInbound(Self.Core, Self.Options, Self.Binding));
+  A := Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, Self.Binding));
   Self.Actions.Add(TIdSipOutboundOptions.Create(Self.Core));
 
   Finder := TIdSipActionFinder.Create;
@@ -1803,7 +1806,7 @@ var
   Finder:    TIdSipActionFinder;
   Switch:    TIdSipActionSwitch;
 begin
-  Action := TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false);
+  Action := TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, Self.Binding);
   Self.Actions.Add(Action);
 
   AnotherID := Action.ID + '1';
@@ -1830,10 +1833,10 @@ procedure TestTIdSipActions.TestInviteCount;
 begin
   CheckEquals(0, Self.Actions.InviteCount, 'No messages received');
 
-  Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false));
+  Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, Self.Binding));
   CheckEquals(1, Self.Actions.InviteCount, 'One INVITE');
 
-  Self.Actions.Add(TIdSipInboundOptions.CreateInbound(Self.Core, Self.Options, false));
+  Self.Actions.Add(TIdSipInboundOptions.CreateInbound(Self.Core, Self.Options, Self.Binding));
   CheckEquals(1, Self.Actions.InviteCount, 'One INVITE, one OPTIONS');
 
   Self.Actions.Add(TIdSipOutboundInvite.Create(Self.Core));
@@ -1857,7 +1860,7 @@ begin
       Self.Actions.AddObserver(L2);
       Self.Actions.RemoveObserver(L1);
 
-      Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, false));
+      Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, Self.Binding));
 
       Check(not L1.Changed, 'L1 notified, thus not removed');
       Check(L2.Changed, 'L2 not notified, thus not added');
@@ -1875,7 +1878,7 @@ procedure TestTIdSipActions.TestTerminateAllActions;
 begin
   // We don't add INVITEs here because INVITEs need additional events to
   // properly terminate: an INVITE needs to wait for a final response, etc.
-  Self.Actions.Add(TIdSipInboundOptions.CreateInbound(Self.Core, Self.Options, false));
+  Self.Actions.Add(TIdSipInboundOptions.CreateInbound(Self.Core, Self.Options, Self.Binding));
   Self.Actions.Add(TIdSipOutboundRegistration.Create(Self.Core));
 
   Self.Actions.TerminateAllActions;

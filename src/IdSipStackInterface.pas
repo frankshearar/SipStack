@@ -173,7 +173,7 @@ type
                                 Source: TIdSipConnectionBindings);
     procedure OnReferral(Session: TIdSipSession;
                          Refer: TIdSipRequest;
-                         UsingSecureTransport: Boolean);
+                         Binding: TIdSipConnectionBindings);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure OnRenewedSubscription(UserAgent: TIdSipAbstractCore;
@@ -1699,14 +1699,14 @@ end;
 
 procedure TIdSipStackInterface.OnReferral(Session: TIdSipSession;
                                           Refer: TIdSipRequest;
-                                          UsingSecureTransport: Boolean);
+                                          Binding: TIdSipConnectionBindings);
 begin
   // We receive notifications of REFER messages sent to Session's GRUU through
   // Session. Specifically, REFERs outside of Session's dialog will end up here.
   // Since we're notified that a message has arrived, the stack doesn't know of
   // the message as a call flow (a TIdSipAction, in other words). Thus, we
-  // inform the stack to keep track of the call flow around this message. 
-  Self.UserAgent.AddInboundAction(Refer, UsingSecureTransport);
+  // inform the stack to keep track of the call flow around this message.
+  Self.UserAgent.AddInboundAction(Refer, Binding);
 end;
 
 procedure TIdSipStackInterface.OnRejectedMessage(const Msg: String;

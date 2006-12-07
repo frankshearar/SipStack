@@ -993,7 +993,7 @@ begin
   inherited SetUp;
 
   Self.Invite.Method := MethodRegister;
-  Self.RegisterAction := TIdSipInboundRegistration.CreateInbound(Self.Core, Self.Invite, false);
+  Self.RegisterAction := TIdSipInboundRegistration.CreateInbound(Self.Core, Self.Invite, Self.Binding);
 end;
 
 procedure TestTIdSipInboundRegistration.TearDown;

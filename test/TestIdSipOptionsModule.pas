@@ -242,7 +242,7 @@ begin
   Self.Invite.Method := MethodOptions;
   Self.Options := TIdSipInboundOptions.CreateInbound(Self.Core,
                                                      Self.Invite,
-                                                     false);
+                                                     Self.Binding);
 end;
 
 procedure TestTIdSipInboundOptions.TearDown;
@@ -350,7 +350,7 @@ begin
   Self.MarkSentResponseCount;
   NewOptions := TIdSipInboundOptions.CreateInbound(Self.Core,
                                                    Self.Options.InitialRequest,
-                                                   false);
+                                                   Self.Binding);
   try
     CheckResponseSent('No response sent');
 
