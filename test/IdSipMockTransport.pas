@@ -462,9 +462,12 @@ end;
 function TIdSipMockTransport.CreateFakeBinding: TIdSipConnectionBindings;
 begin
   Result := TIdSipConnectionBindings.Create;
-  
-  Result.PeerIP   := Self.PeerIP;
-  Result.PeerPort := Self.PeerPort;
+
+  Result.LocalIP   := Self.Bindings[0].IP;
+  Result.LocalPort := Self.Bindings[0].Port;
+  Result.PeerIP    := Self.PeerIP;
+  Result.PeerPort  := Self.PeerPort;
+  Result.Transport := Self.GetTransportType;
 end;
 
 procedure TIdSipMockTransport.DispatchRequest(R: TidSipRequest;
