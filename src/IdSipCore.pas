@@ -74,7 +74,7 @@ uses
   IdSipTransaction, IdTimerQueue, SysUtils;
 
 const
-  SipStackVersion = '0.5.3';
+  SipStackVersion = '0.6';
 
 type
   TIdSipAction = class;
