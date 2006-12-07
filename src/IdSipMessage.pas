@@ -35,6 +35,7 @@ type
     function  AsString: String;
     function  Copy: TIdSipConnectionBindings;
     function  Equals(Other: TIdSipConnectionBindings): Boolean;
+    function  IsSecureTransport: Boolean;
 
     property LocalIP:   String  read fLocalIP write fLocalIP;
     property LocalPort: Integer read fLocalPort write fLocalPort;
@@ -2559,6 +2560,11 @@ begin
         and (Self.PeerIP = Other.PeerIP)
         and (Self.PeerPort = Other.PeerPort)
         and (Self.Transport = Other.Transport);
+end;
+
+function TIdSipConnectionBindings.IsSecureTransport: Boolean;
+begin
+  Result := TIdSipTransportRegistry.IsSecure(Self.Transport);
 end;
 
 //******************************************************************************

@@ -263,7 +263,7 @@ type
                                         Challenge: TIdSipResponse); overload;
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
-                                        Receiver: TIdSipTransport);
+                                        Binding: TIdSipConnectionBindings);
     procedure OnInboundCall(UserAgent: TIdSipInviteModule;
                             Session: TIdSipInboundSession);
     procedure ReceiveNotify(const EventPackage: String);
@@ -1099,7 +1099,7 @@ end;
 
 procedure TestTIdSipSubscribeModule.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                                               Message: TIdSipMessage;
-                                                              Receiver: TIdSipTransport);
+                                                              Binding: TIdSipConnectionBindings);
 begin
   // Do nothing.
 end;

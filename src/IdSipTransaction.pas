@@ -35,10 +35,10 @@ type
                      const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transaction: TIdSipTransaction;
-                               Receiver: TIdSipTransport);
+                               Binding: TIdSipConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Transaction: TIdSipTransaction;
-                                Receiver: TIdSipTransport);
+                                Binding: TIdSipConnectionBindings);
     procedure OnTerminated(Transaction: TIdSipTransaction);
   end;
 
@@ -51,9 +51,9 @@ type
                                    Error: Exception;
                                    const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               Receiver: TIdSipTransport);
+                               Binding: TIdSipConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                Receiver: TIdSipTransport);
+                                Binding: TIdSipConnectionBindings);
   end;
 
   TIdSipTransactionProc = procedure(Tran: TIdSipTransaction) of object;
@@ -82,9 +82,9 @@ type
     Transactions:             TObjectList;
 
     procedure DeliverToTransaction(Request: TIdSipRequest;
-                                   Receiver: TIdSipTransport); overload;
+                                   Binding: TIdSipConnectionBindings); overload;
     procedure DeliverToTransaction(Response: TIdSipResponse;
-                                   Receiver: TIdSipTransport); overload;
+                                   Binding: TIdSipConnectionBindings); overload;
     procedure RemoveTransaction(TerminatedTransaction: TIdSipTransaction);
     function  TransactionAt(Index: Cardinal): TIdSipTransaction;
     function  TransportAt(Index: Cardinal): TIdSipTransport;
@@ -100,9 +100,9 @@ type
                                 E: Exception;
                                 const Reason: String);
     procedure NotifyOfRequest(Request: TIdSipRequest;
-                              Receiver: TIdSipTransport);
+                              Binding: TIdSipConnectionBindings);
     procedure NotifyOfResponse(Response: TIdSipResponse;
-                               Receiver: TIdSipTransport);
+                               Binding: TIdSipConnectionBindings);
 
     // IIdSipTransactionListener
     procedure OnFail(Transaction: TIdSipTransaction;
@@ -110,10 +110,10 @@ type
                      const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transaction: TIdSipTransaction;
-                               Receiver: TIdSipTransport); overload;
+                               Binding: TIdSipConnectionBindings); overload;
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Transaction: TIdSipTransaction;
-                                Receiver: TIdSipTransport); overload;
+                                Binding: TIdSipConnectionBindings); overload;
     procedure OnTerminated(Transaction: TIdSipTransaction);
 
     // IIdSipTransportListener
@@ -142,7 +142,7 @@ type
     procedure AddTransportListener(Listener: IIdSipTransportListener);
     function  AddClientTransaction(InitialRequest: TIdSipRequest): TIdSipTransaction;
     function  AddServerTransaction(InitialRequest: TIdSipRequest;
-                                   Receiver: TIdSipTransport): TIdSipTransaction;
+                                   Binding: TIdSipConnectionBindings): TIdSipTransaction;
     procedure ClearTransports;
     procedure FindServersFor(Response: TIdSipResponse;
                              Result: TIdSipLocations);
@@ -204,24 +204,24 @@ type
 
     procedure ChangeToCompleted; overload; virtual;
     procedure ChangeToCompleted(R: TIdSipResponse;
-                                T: TIdSipTransport); overload; virtual;
+                                Binding: TIdSipConnectionBindings); overload; virtual;
     procedure ChangeToProceeding; overload; virtual;
     procedure ChangeToProceeding(R: TIdSipRequest;
-                                 T: TIdSipTransport); overload;
+                                 Binding: TIdSipConnectionBindings); overload;
     procedure ChangeToProceeding(R: TIdSipResponse;
-                                 T: TIdSipTransport); overload;
+                                 Binding: TIdSipConnectionBindings); overload;
     procedure ChangeToTerminated(Quiet: Boolean); overload;
     procedure ChangeToTerminated(R: TIdSipResponse;
-                                 T: TIdSipTransport); overload; virtual;
+                                 Binding: TIdSipConnectionBindings); overload; virtual;
     procedure DoOnTimeout(Request: TIdSipRequest;
                           const Reason: String);
     procedure NotifyOfFailure(const Reason: String); overload; virtual; abstract;
     procedure NotifyOfFailure(FailedMessage: TIdSipMessage;
                               const Reason: String); overload;
     procedure NotifyOfRequest(R: TIdSipRequest;
-                              T: TIdSipTransport);
+                              Binding: TIdSipConnectionBindings);
     procedure NotifyOfResponse(R: TIdSipResponse;
-                               Receiver: TIdSipTransport);
+                               Binding: TIdSipConnectionBindings);
     procedure NotifyOfTermination;
     procedure SetState(Value: TIdSipTransactionState); virtual;
     procedure TryResendInitialRequest;
@@ -249,9 +249,9 @@ type
     function  Match(Msg: TIdSipMessage): Boolean; virtual;
     function  LoopDetected(Request: TIdSipRequest): Boolean;
     procedure ReceiveRequest(R: TIdSipRequest;
-                             T: TIdSipTransport); virtual;
+                             Binding: TIdSipConnectionBindings); virtual;
     procedure ReceiveResponse(R: TIdSipResponse;
-                              T: TIdSipTransport); virtual;
+                              Binding: TIdSipConnectionBindings); virtual;
     procedure RemoveTransactionListener(const Listener: IIdSipTransactionListener);
     procedure SendRequest(Dest: TIdSipLocation); virtual;
     procedure SendResponse(R: TIdSipResponse); virtual;
@@ -310,8 +310,7 @@ type
   private
     fTimerGInterval: Cardinal;
 
-    procedure ChangeToConfirmed(R: TIdSipRequest;
-                                T: TIdSipTransport);
+    procedure ChangeToConfirmed(R: TIdSipRequest);
     procedure ScheduleTimerG;
     procedure ScheduleTimerH;
     procedure ScheduleTimerI;
@@ -331,7 +330,7 @@ type
     function  IsInvite: Boolean; override;
     function  IsNull: Boolean; override;
     procedure ReceiveRequest(R: TIdSipRequest;
-                             T: TIdSipTransport); override;
+                             Binding: TIdSipConnectionBindings); override;
     procedure SendResponse(R: TIdSipResponse); override;
     function  TimerGInterval: Cardinal;
     function  TimerHInterval: Cardinal;
@@ -352,15 +351,18 @@ type
     function  IsInvite: Boolean; override;
     function  IsNull: Boolean; override;
     procedure ReceiveRequest(R: TIdSipRequest;
-                             T: TIdSipTransport); override;
+                             Binding: TIdSipConnectionBindings); override;
     procedure SendResponse(R: TIdSipResponse); override;
     function  TimerJInterval: Cardinal;
   end;
 
   TIdSipClientTransaction = class(TIdSipTransaction)
+  protected
+    LastTriedLocation: TIdSipLocation;
   public
     function  IsClient: Boolean; override;
     procedure NotifyOfFailure(const Reason: String); overload; override;
+    procedure SendRequest(Dest: TIdSipLocation); override;
   end;
 
   TIdSipClientInviteTransaction = class(TIdSipClientTransaction)
@@ -374,7 +376,7 @@ type
     procedure TrySendACK(R: TIdSipResponse);
   protected
     procedure ChangeToCompleted(R: TIdSipResponse;
-                                T: TIdSipTransport); override;
+                                Binding: TIdSipConnectionBindings); override;
   public
     constructor Create(Dispatcher: TIdSipTransactionDispatcher;
                        InitialRequest: TIdSipRequest); override;
@@ -385,7 +387,7 @@ type
     function  IsInvite: Boolean; override;
     function  IsNull: Boolean; override;
     procedure ReceiveResponse(R: TIdSipResponse;
-                              T: TIdSipTransport); override;
+                              Binding: TIdSipConnectionBindings); override;
     procedure SendRequest(Dest: TIdSipLocation); override;
     function  TimerAInterval: Cardinal;
     function  TimerBInterval: Cardinal;
@@ -413,7 +415,7 @@ type
     function  IsInvite: Boolean; override;
     function  IsNull: Boolean; override;
     procedure ReceiveResponse(R: TIdSipResponse;
-                              T: TIdSipTransport); override;
+                              Binding: TIdSipConnectionBindings); override;
     procedure SendRequest(Dest: TIdSipLocation); override;
     function  TimerEInterval: Cardinal;
     function  TimerFInterval: Cardinal;
@@ -516,9 +518,9 @@ type
 
   TIdSipTransactionDispatcherMethod = class(TIdNotification)
   private
-    fReceiver: TIdSipTransport;
+    fBinding: TIdSipConnectionBindings;
   public
-    property Receiver: TIdSipTransport read fReceiver write fReceiver;
+    property Binding: TIdSipConnectionBindings read fBinding write fBinding;
   end;
 
   TIdSipTransactionDispatcherListenerFailedSendMethod = class(TIdSipTransactionDispatcherMethod)
@@ -572,24 +574,24 @@ type
 
   TIdSipTransactionListenerReceiveRequestMethod = class(TIdSipTransactionMethod)
   private
-    fReceiver: TIdSipTransport;
+    fBinding:  TIdSipConnectionBindings;
     fRequest:  TIdSipRequest;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Receiver: TIdSipTransport read fReceiver write fReceiver;
-    property Request:  TIdSipRequest   read fRequest write fRequest;
+    property Binding: TIdSipConnectionBindings read fBinding write fBinding;
+    property Request: TIdSipRequest            read fRequest write fRequest;
   end;
 
   TIdSipTransactionListenerReceiveResponseMethod = class(TIdSipTransactionMethod)
   private
-    fReceiver: TIdSipTransport;
+    fBinding:  TIdSipConnectionBindings;
     fResponse: TIdSipResponse;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Receiver: TIdSipTransport read fReceiver write fReceiver;
-    property Response: TIdSipResponse  read fResponse write fResponse;
+    property Binding:  TIdSipConnectionBindings read fBinding write fBinding;
+    property Response: TIdSipResponse           read fResponse write fResponse;
   end;
 
   TIdSipTransactionListenerTerminatedMethod = class(TIdSipTransactionMethod)
@@ -735,7 +737,7 @@ begin
 end;
 
 function TIdSipTransactionDispatcher.AddServerTransaction(InitialRequest: TIdSipRequest;
-                                                          Receiver: TIdSipTransport): TIdSipTransaction;
+                                                          Binding: TIdSipConnectionBindings): TIdSipTransaction;
 begin
   Result := nil;
 
@@ -1027,14 +1029,14 @@ begin
 end;
 
 procedure TIdSipTransactionDispatcher.NotifyOfRequest(Request: TIdSipRequest;
-                                                      Receiver: TIdSipTransport);
+                                                      Binding: TIdSipConnectionBindings);
 var
   Notification: TIdSipTransactionDispatcherListenerReceiveRequestMethod;
 begin
   Notification := TIdSipTransactionDispatcherListenerReceiveRequestMethod.Create;
   try
-    Notification.Receiver := Receiver;
-    Notification.Request  := Request;
+    Notification.Binding := Binding;
+    Notification.Request := Request;
 
     Self.MsgListeners.Notify(Notification);
   finally
@@ -1043,13 +1045,13 @@ begin
 end;
 
 procedure TIdSipTransactionDispatcher.NotifyOfResponse(Response: TIdSipResponse;
-                                                       Receiver: TIdSipTransport);
+                                                       Binding: TIdSipConnectionBindings);
 var
   Notification: TIdSipTransactionDispatcherListenerReceiveResponseMethod;
 begin
   Notification := TIdSipTransactionDispatcherListenerReceiveResponseMethod.Create;
   try
-    Notification.Receiver := Receiver;
+    Notification.Binding  := Binding;
     Notification.Response := Response;
 
     Self.MsgListeners.Notify(Notification);
@@ -1067,16 +1069,16 @@ end;
 
 procedure TIdSipTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
                                                        Transaction: TIdSipTransaction;
-                                                       Receiver: TIdSipTransport);
+                                                       Binding: TIdSipConnectionBindings);
 begin
-  Self.NotifyOfRequest(Request, Receiver);
+  Self.NotifyOfRequest(Request, Binding);
 end;
 
 procedure TIdSipTransactionDispatcher.OnReceiveResponse(Response: TIdSipResponse;
                                                         Transaction: TIdSipTransaction;
-                                                        Receiver: TIdSipTransport);
+                                                        Binding: TIdSipConnectionBindings);
 begin
-  Self.NotifyOfResponse(Response, Receiver);
+  Self.NotifyOfResponse(Response, Binding);
 end;
 
 procedure TIdSipTransactionDispatcher.OnTerminated(Transaction: TIdSipTransaction);
@@ -1094,14 +1096,14 @@ procedure TIdSipTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
                                                        Receiver: TIdSipTransport;
                                                        Source: TIdSipConnectionBindings);
 begin
-  Self.DeliverToTransaction(Request, Receiver);
+  Self.DeliverToTransaction(Request, Source);
 end;
 
 procedure TIdSipTransactionDispatcher.OnReceiveResponse(Response: TIdSipResponse;
                                                         Receiver: TIdSipTransport;
                                                         Source: TIdSipConnectionBindings);
 begin
-  Self.DeliverToTransaction(Response, Receiver);
+  Self.DeliverToTransaction(Response, Source);
 end;
 
 procedure TIdSipTransactionDispatcher.OnRejectedMessage(const Msg: String;
@@ -1122,37 +1124,37 @@ end;
 //* TIdSipTransactionDispatcher Private methods ********************************
 
 procedure TIdSipTransactionDispatcher.DeliverToTransaction(Request: TIdSipRequest;
-                                                           Receiver: TIdSipTransport);
+                                                           Binding: TIdSipConnectionBindings);
 var
   Tran: TIdSipTransaction;
 begin
   Tran := Self.FindTransaction(Request, false);
 
   if Assigned(Tran) then begin
-    Tran.ReceiveRequest(Request, Receiver);
+    Tran.ReceiveRequest(Request, Binding);
   end
   else begin
     // An ACK does not belong inside a transaction when a UAS sends a 2xx in
     // response to an INVITE
     if Request.IsAck then begin
-      Self.NotifyOfRequest(Request, Receiver);
+      Self.NotifyOfRequest(Request, Binding);
     end
     else begin
-      Tran := Self.AddServerTransaction(Request, Receiver);
-      Tran.ReceiveRequest(Request, Receiver);
+      Tran := Self.AddServerTransaction(Request, Binding);
+      Tran.ReceiveRequest(Request, Binding);
     end;
   end;
 end;
 
 procedure TIdSipTransactionDispatcher.DeliverToTransaction(Response: TIdSipResponse;
-                                                           Receiver: TIdSipTransport);
+                                                           Binding: TIdSipConnectionBindings);
 var
   Tran: TIdSipTransaction;
 begin
   Tran := Self.FindTransaction(Response, true);
 
   if Assigned(Tran) then begin
-    Tran.ReceiveResponse(Response, Receiver);
+    Tran.ReceiveResponse(Response, Binding);
 
     if Tran.IsTerminated then
       Self.RemoveTransaction(Tran);
@@ -1164,7 +1166,7 @@ begin
     // 200. That arrives here, in this clause - even though the 200 doesn't
     // match a transaction, we most definitely do want the Transaction-User
     // layer to see this message!
-    Self.NotifyOfResponse(Response, Receiver);
+    Self.NotifyOfResponse(Response, Binding);
   end;
 end;
 
@@ -1326,13 +1328,13 @@ begin
 end;
 
 procedure TIdSipTransaction.ReceiveRequest(R: TIdSipRequest;
-                                           T: TIdSipTransport);
+                                           Binding: TIdSipConnectionBindings);
 begin
   // By default we do nothing
 end;
 
 procedure TIdSipTransaction.ReceiveResponse(R: TIdSipResponse;
-                                            T: TIdSipTransport);
+                                            Binding: TIdSipConnectionBindings);
 begin
   // By default we do nothing
 end;
@@ -1365,11 +1367,11 @@ begin
 end;
 
 procedure TIdSipTransaction.ChangeToCompleted(R: TIdSipResponse;
-                                              T: TIdSipTransport);
+                                              Binding: TIdSipConnectionBindings);
 begin
   Self.ChangeToCompleted;
 
-  Self.NotifyOfResponse(R, T);
+  Self.NotifyOfResponse(R, Binding);
 end;
 
 procedure TIdSipTransaction.ChangeToProceeding;
@@ -1378,17 +1380,17 @@ begin
 end;
 
 procedure TIdSipTransaction.ChangeToProceeding(R: TIdSipRequest;
-                                               T: TIdSipTransport);
+                                               Binding: TIdSipConnectionBindings);
 begin
   Self.ChangeToProceeding;
-  Self.NotifyOfRequest(R, T);
+  Self.NotifyOfRequest(R, Binding);
 end;
 
 procedure TIdSipTransaction.ChangeToProceeding(R: TIdSipResponse;
-                                               T: TIdSipTransport);
+                                               Binding: TIdSipConnectionBindings);
 begin
   Self.ChangeToProceeding;
-  Self.NotifyOfResponse(R, T);
+  Self.NotifyOfResponse(R, Binding);
 end;
 
 procedure TIdSipTransaction.ChangeToTerminated(Quiet: Boolean);
@@ -1400,17 +1402,17 @@ begin
 end;
 
 procedure TIdSipTransaction.ChangeToTerminated(R: TIdSipResponse;
-                                               T: TIdSipTransport);
+                                               Binding: TIdSipConnectionBindings);
 begin
-  Self.NotifyOfResponse(R, T);
+  Self.NotifyOfResponse(R, Binding);
   Self.ChangeToTerminated(false);
 end;
 
 procedure TIdSipTransaction.DoOnTimeout(Request: TIdSipRequest;
                                         const Reason: String);
 var
+  FakeBinding: TIdSipConnectionBindings;
   Timeout: TIdSipResponse;
-  Lies:    TIdSipLocation;
 begin
   Self.NotifyOfFailure(Reason);
 
@@ -1421,11 +1423,16 @@ begin
   // Self.InitialRequest for server transactions!
   Timeout := TIdSipResponse.InResponseTo(Request, SIPRequestTimeout);
   try
-    Lies := TIdSipLocation.Create(Self.InitialRequest.LastHop);
+    FakeBinding := TIdSipConnectionBindings.Create;
     try
-      Self.NotifyOfResponse(Timeout, Self.Dispatcher.FindAppropriateTransport(Lies));
+      FakeBinding.LocalIP   := Self.InitialRequest.LastHop.SentBy;
+      FakeBinding.LocalPort := Self.InitialRequest.LastHop.Port;
+      FakeBinding.Transport := Self.InitialRequest.LastHop.Transport;
+//      FakeBinding.PeerIP    := Self.Last
+
+      Self.NotifyOfResponse(Timeout, FakeBinding);
     finally
-      Lies.Free;
+      FakeBinding.Free;
     end;
   finally
     Timeout.Free;
@@ -1453,13 +1460,13 @@ end;
 
 
 procedure TIdSipTransaction.NotifyOfRequest(R: TIdSipRequest;
-                                            T: TIdSipTransport);
+                                            Binding: TIdSipConnectionBindings);
 var
   Notification: TIdSipTransactionListenerReceiveRequestMethod;
 begin
   Notification := TIdSipTransactionListenerReceiveRequestMethod.Create;
   try
-    Notification.Receiver    := T;
+    Notification.Binding     := Binding;
     Notification.Request     := R;
     Notification.Transaction := Self;
 
@@ -1470,13 +1477,13 @@ begin
 end;
 
 procedure TIdSipTransaction.NotifyOfResponse(R: TIdSipResponse;
-                                             Receiver: TIdSipTransport);
+                                             Binding: TIdSipConnectionBindings);
 var
   Notification: TIdSipTransactionListenerReceiveResponseMethod;
 begin
   Notification := TIdSipTransactionListenerReceiveResponseMethod.Create;
   try
-    Notification.Receiver    := Receiver;
+    Notification.Binding     := Binding;
     Notification.Response    := R;
     Notification.Transaction := Self;
 
@@ -1699,12 +1706,12 @@ begin
 end;
 
 procedure TIdSipServerInviteTransaction.ReceiveRequest(R: TIdSipRequest;
-                                                       T: TIdSipTransport);
+                                                       Binding: TIdSipConnectionBindings);
 begin
   if Self.FirstTime then begin
     Self.FirstTime := false;
 
-    Self.ChangeToProceeding(R, T);
+    Self.ChangeToProceeding(R, Binding);
   end else begin
     case Self.State of
       itsProceeding: Self.TrySendLastResponse;
@@ -1713,7 +1720,7 @@ begin
         if R.IsInvite then
           Self.TrySendLastResponse
         else if R.IsAck then
-          Self.ChangeToConfirmed(R, T);
+          Self.ChangeToConfirmed(R);
       end;
     end;
   end;
@@ -1776,8 +1783,7 @@ end;
 
 //* TIdSipServerInviteTransaction Private methods ******************************
 
-procedure TIdSipServerInviteTransaction.ChangeToConfirmed(R: TIdSipRequest;
-                                                          T: TIdSipTransport);
+procedure TIdSipServerInviteTransaction.ChangeToConfirmed(R: TIdSipRequest);
 begin
   Self.SetState(itsConfirmed);
 
@@ -1846,14 +1852,14 @@ begin
 end;
 
 procedure TIdSipServerNonInviteTransaction.ReceiveRequest(R: TIdSipRequest;
-                                                          T: TIdSipTransport);
+                                                          Binding: TIdSipConnectionBindings);
 begin
-  inherited ReceiveRequest(R, T);
+  inherited ReceiveRequest(R, Binding);
 
   if Self.FirstTime then begin
     Self.FirstTime := false;
     Self.ChangeToTrying;
-    Self.NotifyOfRequest(R, T);
+    Self.NotifyOfRequest(R, Binding);
   end
   else begin
     if (Self.State in [itsCompleted, itsProceeding]) then
@@ -1926,6 +1932,13 @@ begin
   Self.NotifyOfFailure(Self.InitialRequest, Reason);
 end;
 
+procedure TIdSipClientTransaction.SendRequest(Dest: TIdSipLocation);
+begin
+  inherited SendRequest(Dest);
+
+  Self.LastTriedLocation := Dest;
+end;
+
 //******************************************************************************
 //* TIdSipClientInviteTransaction                                              *
 //******************************************************************************
@@ -1977,30 +1990,30 @@ begin
 end;
 
 procedure TIdSipClientInviteTransaction.ReceiveResponse(R: TIdSipResponse;
-                                                        T: TIdSipTransport);
+                                                        Binding: TIdSipConnectionBindings);
 begin
   case Self.State of
     itsCalling: begin
       case R.StatusCode div 100 of
-        1: Self.ChangeToProceeding(R, T);
-        2: Self.ChangeToTerminated(R, T);
+        1: Self.ChangeToProceeding(R, Binding);
+        2: Self.ChangeToTerminated(R, Binding);
       else
-        Self.ChangeToCompleted(R, T);
+        Self.ChangeToCompleted(R, Binding);
       end;
     end;
 
     itsProceeding: begin
       case R.StatusCode div 100 of
-        1: Self.ChangeToProceeding(R, T);
-        2: Self.ChangeToTerminated(R, T);
+        1: Self.ChangeToProceeding(R, Binding);
+        2: Self.ChangeToTerminated(R, Binding);
       else
-        Self.ChangeToCompleted(R, T);
+        Self.ChangeToCompleted(R, Binding);
       end;
     end;
 
     itsCompleted: begin
       if R.IsFinal then
-        Self.ChangeToCompleted(R, T);
+        Self.ChangeToCompleted(R, Binding);
     end;
   end;
 end;
@@ -2042,7 +2055,7 @@ end;
 //* TIdSipClientInviteTransaction Protected methods ****************************
 
 procedure TIdSipClientInviteTransaction.ChangeToCompleted(R: TIdSipResponse;
-                                                          T: TIdSipTransport);
+                                                          Binding: TIdSipConnectionBindings);
 var
   FirstResponse: Boolean;
 begin
@@ -2060,7 +2073,7 @@ begin
   Self.TrySendACK(R);
 
   if FirstResponse then
-    Self.NotifyOfResponse(R, T);
+    Self.NotifyOfResponse(R, Binding);
 end;
 
 //* TIdSipClientInviteTransaction Private methods ******************************
@@ -2167,16 +2180,16 @@ begin
 end;
 
 procedure TIdSipClientNonInviteTransaction.ReceiveResponse(R: TIdSipResponse;
-                                                           T: TIdSipTransport);
+                                                           Binding: TIdSipConnectionBindings);
 begin
   if (Self.State = itsTerminated) then
     Exit;
 
   if (Self.State in [itsTrying, itsProceeding]) then begin
     if R.IsFinal then
-      Self.ChangeToCompleted(R, T)
+      Self.ChangeToCompleted(R, Binding)
     else
-      Self.ChangeToProceeding(R, T);
+      Self.ChangeToProceeding(R, Binding);
   end;
 end;
 
@@ -2579,7 +2592,7 @@ end;
 procedure TIdSipTransactionDispatcherListenerReceiveRequestMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipTransactionDispatcherListener).OnReceiveRequest(Self.Request,
-                                                                    Self.Receiver);
+                                                                    Self.Binding);
 end;
 
 //******************************************************************************
@@ -2590,7 +2603,7 @@ end;
 procedure TIdSipTransactionDispatcherListenerReceiveResponseMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipTransactionDispatcherListener).OnReceiveResponse(Self.Response,
-                                                                     Self.Receiver);
+                                                                     Self.Binding);
 end;
 
 //******************************************************************************
@@ -2614,7 +2627,7 @@ procedure TIdSipTransactionListenerReceiveRequestMethod.Run(const Subject: IInte
 begin
   (Subject as IIdSipTransactionListener).OnReceiveRequest(Self.Request,
                                                           Self.Transaction,
-                                                          Self.Receiver);
+                                                          Self.Binding);
 end;
 
 //******************************************************************************
@@ -2626,7 +2639,7 @@ procedure TIdSipTransactionListenerReceiveResponseMethod.Run(const Subject: IInt
 begin
   (Subject as IIdSipTransactionListener).OnReceiveResponse(Self.Response,
                                                            Self.Transaction,
-                                                           Self.Receiver);
+                                                           Self.Binding);
 end;
 
 //******************************************************************************

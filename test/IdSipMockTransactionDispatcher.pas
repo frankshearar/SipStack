@@ -18,10 +18,11 @@ uses
 type
   TIdSipMockTransactionDispatcher = class(TIdSipTransactionDispatcher)
   private
-    SentAcks:      TIdSipRequestList;
-    SentRequests:  TIdSipRequestList;
-    SentResponses: TIdSipResponseList;
+    fBinding:       TIdSipConnectionBindings;
     fTransportType: String;
+    SentAcks:       TIdSipRequestList;
+    SentRequests:   TIdSipRequestList;
+    SentResponses:  TIdSipResponseList;
 
     function GetDebugTimer: TIdDebugTimerQueue;
     function GetMockLocator: TIdSipMockLocator;
@@ -49,10 +50,11 @@ type
     function  SentRequestCount:  Cardinal;
     function  SentResponseCount: Cardinal;
 
-    property DebugTimer:    TIdDebugTimerQueue  read GetDebugTimer;
-    property MockLocator:   TIdSipMockLocator   read GetMockLocator;
-    property Transport:     TIdSipMockTransport read GetTransport;
-    property TransportType: String              read fTransportType write fTransportType;
+    property Binding:       TIdSipConnectionBindings read fBinding;
+    property DebugTimer:    TIdDebugTimerQueue       read GetDebugTimer;
+    property MockLocator:   TIdSipMockLocator        read GetMockLocator;
+    property Transport:     TIdSipMockTransport      read GetTransport;
+    property TransportType: String                   read fTransportType write fTransportType;
   end;
 
 implementation
@@ -102,6 +104,13 @@ begin
   finally
     SupportedTrans.Free;
   end;
+
+  Self.fBinding := TIdSipConnectionBindings.Create;
+  Self.fBinding.LocalIP   := '127.0.0.1';
+  Self.fBinding.LocalPort := TIdSipTransportRegistry.TransportTypeFor(Self.TransportType).DefaultPort;
+  Self.fBinding.PeerIP    := '127.0.0.2';
+  Self.fBinding.PeerPort  := TIdSipTransportRegistry.TransportTypeFor(Self.TransportType).DefaultPort;
+  Self.fBinding.Transport := Self.TransportType;
 end;
 
 destructor TIdSipMockTransactionDispatcher.Destroy;

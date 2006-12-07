@@ -213,6 +213,17 @@ type
     procedure TestAsString;
   end;
 
+  TestTIdDebugDroppedMessageData = class(TTestCase)
+  private
+    Data: TIdDebugDroppedMessageData;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCopy;
+    procedure TestAsString;
+  end;
+
   TestTIdDebugReceiveMessageData = class(TTestCase)
   private
     Data: TIdDebugReceiveMessageData;
@@ -371,6 +382,7 @@ begin
   Result.AddTest(TestTIdAuthenticationChallengeData.Suite);
   Result.AddTest(TestTIdDebugData.Suite);
   Result.AddTest(TestTIdDebugMessageData.Suite);
+  Result.AddTest(TestTIdDebugDroppedMessageData.Suite);
   Result.AddTest(TestTIdDebugReceiveMessageData.Suite);
   Result.AddTest(TestTIdDebugSendMessageData.Suite);
   Result.AddTest(TestTIdDebugTransportExceptionData.Suite);
@@ -1325,6 +1337,80 @@ begin
       // and event name)
       Received[0] := '';
       Received[1] := '';
+
+      CheckEquals(Expected.Text,
+                  Received.Text,
+                  'Unexpected debug data');
+    finally
+      Received.Free;
+    end;
+  finally
+    Expected.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdDebugDroppedMessageData                                             *
+//******************************************************************************
+//* TestTIdDebugDroppedMessageData Public methods ******************************
+
+procedure TestTIdDebugDroppedMessageData.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Data := TIdDebugDroppedMessageData.Create;
+
+  Self.Data.Binding := TIdSipConnectionBindings.Create;
+  Self.Data.Message := TIdSipResponse.Create;
+end;
+
+procedure TestTIdDebugDroppedMessageData.TearDown;
+begin
+  Self.Data.Free;
+
+  inherited TearDown;
+end;
+
+procedure TestTIdDebugDroppedMessageData.TestCopy;
+var
+  Copy: TIdDebugDroppedMessageData;
+begin
+  Copy := Self.Data.Copy as TIdDebugDroppedMessageData;
+  try
+    CheckEquals(IntToHex(Self.Data.Handle, 8),
+                IntToHex(Copy.Handle, 8),
+                'Handle');
+    Check(Copy.Binding.Equals(Self.Data.Binding),
+          'The copy''s binding doesn''t contain the original binding');
+    Check(Copy.Binding <> Self.Data.Binding,
+          'The copy contains a reference to the original binding, not a copy');
+    Check(Copy.Message.Equals(Self.Data.Message),
+          'The copy''s message doesn''t contain the original message');
+    Check(Copy.Message <> Self.Data.Message,
+          'The copy contains a reference to the original message, not a copy');
+  finally
+    Copy.Free;
+  end;
+end;
+
+procedure TestTIdDebugDroppedMessageData.TestAsString;
+var
+  Expected: TStrings;
+  Received: TStrings;
+begin
+  Expected := TStringList.Create;
+  try
+    Received := TStringList.Create;
+    try
+      Expected.Text := Self.Data.Message.AsString;
+      Expected.Insert(0, '');
+      Expected.Insert(1, EventNames(CM_DEBUG_DROPPED_MSG));
+      Expected.Insert(2, Self.Data.Binding.AsString);
+      Received.Text := Self.Data.AsString;
+
+      // We ignore the first line of the debug data (it's a timestamp & a
+      // handle)
+      Received[0] := '';
 
       CheckEquals(Expected.Text,
                   Received.Text,

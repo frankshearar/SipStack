@@ -71,7 +71,7 @@ interface
 uses
   Classes, Contnrs, IdSipDialog, IdException, IdInterfacedObject,
   IdNotification, IdObservable, IdSipAuthentication, IdSipLocator, IdSipMessage,
-  IdSipTransaction, IdSipTransport, IdTimerQueue, SysUtils;
+  IdSipTransaction, IdTimerQueue, SysUtils;
 
 const
   SipStackVersion = '0.5.3';
@@ -124,13 +124,15 @@ type
     ['{0AE275B0-4C4D-470B-821B-7F88719E822D}']
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
-                                        Receiver: TIdSipTransport);
+                                        Binding: TIdSipConnectionBindings);
   end;
 
   // I represent a closure that contains some block of code involving an Action.
   // I also represent the null action closure.
   TIdSipActionClosure = class(TObject)
   public
+    constructor Create; virtual;
+
     procedure Execute(Action: TIdSipAction); virtual;
   end;
 
@@ -231,13 +233,18 @@ type
   // request or response.
   TIdUserAgentClosure = class(TIdSipActionClosure)
   private
-    fReceiver:  TIdSipTransport;
+    fBinding:   TIdSipConnectionBindings;
     fRequest:   TIdSipRequest;
     fUserAgent: TIdSipAbstractCore;
+
+    procedure SetBinding(Value: TIdSipConnectionBindings);
   public
-    property Receiver:  TIdSipTransport    read fReceiver write fReceiver;
-    property Request:   TIdSipRequest      read fRequest write fRequest;
-    property UserAgent: TIdSipAbstractCore read fUserAgent write fUserAgent;
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    property Binding:   TIdSipConnectionBindings read fBinding write SetBinding;
+    property Request:   TIdSipRequest            read fRequest write fRequest;
+    property UserAgent: TIdSipAbstractCore       read fUserAgent write fUserAgent;
   end;
 
   // I give my Request to the Action or create a new Action to which I give the
@@ -304,9 +311,9 @@ type
     procedure CollectAllowedExtensions(ExtensionList: TStrings);
     function  ConvertToHeader(ValueList: TStrings): String;
     function  CreateRequestHandler(Request: TIdSipRequest;
-                                   Receiver: TIdSipTransport): TIdSipUserAgentActOnRequest;
+                                   Binding: TIdSipConnectionBindings): TIdSipUserAgentActOnRequest;
     function  CreateResponseHandler(Response: TIdSipResponse;
-                                    Receiver: TIdSipTransport): TIdSipUserAgentActOnResponse;
+                                    Binding: TIdSipConnectionBindings): TIdSipUserAgentActOnResponse;
     function  DefaultFrom: String;
     function  DefaultHostName: String;
     function  DefaultUserAgent: String;
@@ -315,9 +322,9 @@ type
     procedure NotifyModulesOfFree;
     procedure OnChanged(Observed: TObject);
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               Receiver: TIdSipTransport); virtual;
+                               Binding: TIdSipConnectionBindings); virtual;
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                Receiver: TIdSipTransport); virtual;
+                                Binding: TIdSipConnectionBindings); virtual;
     procedure OnTransportException(FailedMessage: TIdSipMessage;
                                    Error: Exception;
                                    const Reason: String); virtual;
@@ -333,9 +340,9 @@ type
     procedure SetRealm(const Value: String);
   protected
     procedure ActOnRequest(Request: TIdSipRequest;
-                           Receiver: TIdSipTransport); virtual;
+                           Binding: TIdSipConnectionBindings); virtual;
     procedure ActOnResponse(Response: TIdSipResponse;
-                            Receiver: TIdSipTransport); virtual;
+                            Binding: TIdSipConnectionBindings); virtual;
     function  CreateActionsClosure(ClosureType: TIdSipActionsWaitClass;
                                    Msg: TIdSipMessage): TIdSipActionsWait;
     function  ListHasUnknownValue(Request: TIdSipRequest;
@@ -343,7 +350,7 @@ type
                                   const HeaderName: String): Boolean;
     procedure NotifyOfChange;
     procedure NotifyOfDroppedMessage(Message: TIdSipMessage;
-                                     Receiver: TIdSipTransport); virtual;
+                                     Binding: TIdSipConnectionBindings); virtual;
     procedure PrepareResponse(Response: TIdSipResponse;
                               Request: TIdSipRequest);
     procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
@@ -894,13 +901,13 @@ type
 
   TIdSipUserAgentDroppedUnmatchedMessageMethod = class(TIdSipAbstractCoreMethod)
   private
-    fReceiver: TIdSipTransport;
-    fMessage:  TIdSipMessage;
+    fBinding: TIdSipConnectionBindings;
+    fMessage: TIdSipMessage;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Receiver: TIdSipTransport read fReceiver write fReceiver;
-    property Message:  TIdSipMessage  read fMessage write fMessage;
+    property Binding: TIdSipConnectionBindings read fBinding write fBinding;
+    property Message: TIdSipMessage            read fMessage write fMessage;
   end;
 
   EIdSipBadSyntax = class(EIdException);
@@ -978,7 +985,8 @@ const
 implementation
 
 uses
-  IdRandom, IdSdp, IdSipInviteModule, IdSipOptionsModule, IdSipRegistration;
+  IdRandom, IdSdp, IdSipInviteModule, IdSipOptionsModule, IdSipRegistration,
+  IdSipTransport;
 
 // Used by the ActionRegistry.
 var
@@ -1039,6 +1047,11 @@ end;
 //* TIdSipActionClosure                                                        *
 //******************************************************************************
 //* TIdSipActionClosure Public methods *****************************************
+
+constructor TIdSipActionClosure.Create;
+begin
+  inherited Create;
+end;
 
 procedure TIdSipActionClosure.Execute(Action: TIdSipAction);
 begin
@@ -1341,6 +1354,32 @@ begin
 end;
 
 //******************************************************************************
+//* TIdUserAgentClosure                                                        *
+//******************************************************************************
+//* TIdUserAgentClosure Public methods *****************************************
+
+constructor TIdUserAgentClosure.Create;
+begin
+  inherited Create;
+
+  Self.fBinding := TIdSipConnectionBindings.Create;
+end;
+
+destructor TIdUserAgentClosure.Destroy;
+begin
+  Self.Binding.Free;
+
+  inherited Destroy;
+end;
+
+//* TIdUserAgentClosure Public methods *****************************************
+
+procedure TIdUserAgentClosure.SetBinding(Value: TIdSipConnectionBindings);
+begin
+  Self.Binding.Assign(Value);
+end;
+
+//******************************************************************************
 //* TIdSipUserAgentActOnRequest                                                *
 //******************************************************************************
 //* TIdSipUserAgentActOnRequest Public methods *********************************
@@ -1354,11 +1393,11 @@ begin
     Action.ReceiveRequest(Request);
 
   if not Assigned(Action) then
-    Action := Self.UserAgent.AddInboundAction(Self.Request, Self.Receiver.IsSecure);
+    Action := Self.UserAgent.AddInboundAction(Self.Request, Self.Binding.IsSecureTransport);
 
   if not Assigned(Action) then begin
     if Request.IsAck then
-      Self.UserAgent.NotifyOfDroppedMessage(Self.Request, Self.Receiver);
+      Self.UserAgent.NotifyOfDroppedMessage(Self.Request, Self.Binding);
   end;
 end;
 
@@ -1374,10 +1413,10 @@ begin
   // a transaction, since the receipt of a 200 terminates a client INVITE
   // immediately.
   if Assigned(Action) then
-    Action.ReceiveResponse(Self.Response, Self.Receiver.IsSecure)
+    Action.ReceiveResponse(Self.Response, Self.Binding.IsSecureTransport)
   else
 
-  Self.UserAgent.NotifyOfDroppedMessage(Self.Response, Self.Receiver);
+  Self.UserAgent.NotifyOfDroppedMessage(Self.Response, Self.Binding);
 end;
 
 //******************************************************************************
@@ -2053,11 +2092,11 @@ end;
 //* TIdSipAbstractCore Protected methods ***************************************
 
 procedure TIdSipAbstractCore.ActOnRequest(Request: TIdSipRequest;
-                                          Receiver: TIdSipTransport);
+                                          Binding: TIdSipConnectionBindings);
 var
   Actor: TIdSipUserAgentActOnRequest;
 begin
-  Actor := Self.CreateRequestHandler(Request, Receiver);
+  Actor := Self.CreateRequestHandler(Request, Binding);
   try
     Self.Actions.Perform(Request, Actor, false);
   finally
@@ -2066,11 +2105,11 @@ begin
 end;
 
 procedure TIdSipAbstractCore.ActOnResponse(Response: TIdSipResponse;
-                                           Receiver: TIdSipTransport);
+                                           Binding: TIdSipConnectionBindings);
 var
   Actor: TIdSipUserAgentActOnResponse;
 begin
-  Actor := Self.CreateResponseHandler(Response, Receiver);
+  Actor := Self.CreateResponseHandler(Response, Binding);
   try
     Self.Actions.Perform(Response, Actor, true);
   finally
@@ -2100,7 +2139,7 @@ begin
 end;
 
 procedure TIdSipAbstractCore.NotifyOfDroppedMessage(Message: TIdSipMessage;
-                                                    Receiver: TIdSipTransport);
+                                                    Binding: TIdSipConnectionBindings);
 begin
   // By default do nothing.
 end;
@@ -2313,21 +2352,21 @@ begin
 end;
 
 function TIdSipAbstractCore.CreateRequestHandler(Request: TIdSipRequest;
-                                                 Receiver: TIdSipTransport): TIdSipUserAgentActOnRequest;
+                                                 Binding: TIdSipConnectionBindings): TIdSipUserAgentActOnRequest;
 begin
   Result := TIdSipUserAgentActOnRequest.Create;
 
-  Result.Receiver  := Receiver;
+  Result.Binding   := Binding;
   Result.Request   := Request;
   Result.UserAgent := Self;
 end;
 
 function TIdSipAbstractCore.CreateResponseHandler(Response: TIdSipResponse;
-                                                  Receiver: TIdSipTransport): TIdSipUserAgentActOnResponse;
+                                                  Binding: TIdSipConnectionBindings): TIdSipUserAgentActOnResponse;
 begin
   Result := TIdSipUserAgentActOnResponse.Create;
 
-  Result.Receiver  := Receiver;
+  Result.Binding   := Binding;
   Result.Response  := Response;
   Result.UserAgent := Self;
 end;
@@ -2379,22 +2418,22 @@ begin
 end;
 
 procedure TIdSipAbstractCore.OnReceiveRequest(Request: TIdSipRequest;
-                                              Receiver: TIdSipTransport);
+                                              Binding: TIdSipConnectionBindings);
 var
   Reaction: TIdSipUserAgentReaction;
 begin
   Reaction := Self.WillAcceptRequest(Request);
   if (Reaction = uarAccept) then
-    Self.ActOnRequest(Request, Receiver)
+    Self.ActOnRequest(Request, Binding)
   else
     Self.RejectRequest(Reaction, Request);
 end;
 
 procedure TIdSipAbstractCore.OnReceiveResponse(Response: TIdSipResponse;
-                                               Receiver: TIdSipTransport);
+                                               Binding: TIdSipConnectionBindings);
 begin
   if (Self.WillAcceptResponse(Response) = uarAccept) then
-    Self.ActOnResponse(Response, Receiver);
+    Self.ActOnResponse(Response, Binding);
 end;
 
 procedure TIdSipAbstractCore.OnTransportException(FailedMessage: TIdSipMessage;
@@ -3897,7 +3936,7 @@ procedure TIdSipUserAgentDroppedUnmatchedMessageMethod.Run(const Subject: IInter
 begin
   (Subject as IIdSipTransactionUserListener).OnDroppedUnmatchedMessage(Self.UserAgent,
                                                                        Self.Message,
-                                                                       Self.Receiver);
+                                                                       Self.Binding);
 end;
 
 initialization

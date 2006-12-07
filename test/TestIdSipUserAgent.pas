@@ -55,7 +55,7 @@ type
     procedure OnChanged(Observed: TObject);
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
-                                        Receiver: TIdSipTransport);
+                                        Binding: TIdSipConnectionBindings);
     procedure OnEndedSession(Session: TIdSipSession;
                              ErrorCode: Cardinal;
                              const Reason: String);
@@ -439,7 +439,7 @@ end;
 
 procedure TestTIdSipUserAgent.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                                         Message: TIdSipMessage;
-                                                        Receiver: TIdSipTransport);
+                                                        Binding: TIdSipConnectionBindings);
 begin
 end;
 

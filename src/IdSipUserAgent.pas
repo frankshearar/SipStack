@@ -44,7 +44,7 @@ type
     procedure SetProxy(Value: TIdSipUri);
   protected
     procedure NotifyOfDroppedMessage(Message: TIdSipMessage;
-                                     Receiver: TIdSipTransport); override;
+                                     Binding: TIdSipConnectionBindings); override;
   public
     constructor Create; override;
     destructor  Destroy; override;
@@ -297,14 +297,14 @@ begin
 end;
 
 procedure TIdSipUserAgent.NotifyOfDroppedMessage(Message: TIdSipMessage;
-                                                 Receiver: TIdSipTransport);
+                                                 Binding: TIdSipConnectionBindings);
 var
   Notification: TIdSipUserAgentDroppedUnmatchedMessageMethod;
 begin
   Notification := TIdSipUserAgentDroppedUnmatchedMessageMethod.Create;
   try
+    Notification.Binding   := Binding;
     Notification.Message   := Message;
-    Notification.Receiver  := Receiver;
     Notification.UserAgent := Self;
 
     Self.UserAgentListeners.Notify(Notification);

@@ -35,7 +35,7 @@ type
                                         Challenge: TIdSipResponse); overload;
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
-                                        Receiver: TIdSipTransport);
+                                        Binding: TIdSipConnectionBindings);
     procedure ScheduledEvent(Sender: TObject);
   public
     procedure SetUp; override;
@@ -354,7 +354,7 @@ type
   TestTIdSipUserAgentDroppedUnmatchedMessageMethod = class(TTestCase)
   private
     Method:   TIdSipUserAgentDroppedUnmatchedMessageMethod;
-    Receiver: TIdSipTransport;
+    Binding:  TIdSipConnectionBindings;
     Response: TIdSipResponse;
   public
     procedure SetUp; override;
@@ -499,7 +499,7 @@ end;
 
 procedure TestTIdSipAbstractCore.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                                            Message: TIdSipMessage;
-                                                           Receiver: TIdSipTransport);
+                                                           Binding: TIdSipConnectionBindings);
 begin
 end;
 
@@ -1036,7 +1036,7 @@ var
   Response: TIdSipResponse;
 begin
   // cf. RFC 3261, section 8.2.2.2
-  Self.Dispatcher.AddServerTransaction(Self.Invite, Self.Dispatcher.Transport);
+  Self.Dispatcher.AddServerTransaction(Self.Invite, Self.Dispatcher.Binding);
 
   // wipe out the tag & give a different branch
   Self.Invite.ToHeader.Value := Self.Invite.ToHeader.Address.URI;
@@ -2967,11 +2967,11 @@ procedure TestTIdSipUserAgentDroppedUnmatchedMessageMethod.SetUp;
 begin
   inherited SetUp;
 
-  Self.Receiver := TIdSipMockUdpTransport.Create;
+  Self.Binding := TIdSipConnectionBindings.Create;
   Self.Response := TIdSipResponse.Create;
 
   Self.Method := TIdSipUserAgentDroppedUnmatchedMessageMethod.Create;
-  Self.Method.Receiver := Self.Receiver;
+  Self.Method.Binding := Self.Binding;
   Self.Method.Message := Self.Response.Copy;
 end;
 
@@ -2979,7 +2979,7 @@ procedure TestTIdSipUserAgentDroppedUnmatchedMessageMethod.TearDown;
 begin
   Self.Method.Free;
   Self.Response.Free;
-  Self.Receiver.Free;
+  Self.Binding.Free;
 
   inherited TearDown;
 end;
@@ -2995,8 +2995,8 @@ begin
     Self.Method.Run(L);
 
     Check(L.DroppedUnmatchedMessage, 'Listener not notified');
-    Check(Self.Method.Receiver = L.ReceiverParam,
-          'Receiver param');
+    Check(Self.Method.Binding = L.BindingParam,
+          'Binding param');
     Check(Self.Method.Message = L.MessageParam,
           'Message param');
     Check(Self.Method.UserAgent = L.AbstractUserAgentParam,

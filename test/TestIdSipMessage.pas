@@ -51,6 +51,7 @@ type
     procedure TestAsString;
     procedure TestCopy;
     procedure TestEquals;
+    procedure TestIsSecure;
   end;
 
   TestTIdSipMessage = class(TTestCaseSip)
@@ -327,7 +328,7 @@ type
 implementation
 
 uses
-  Classes, IdSimpleParser, IdSipConsts, TestMessages;
+  Classes, IdSimpleParser, IdSipConsts, IdSipTransport, TestMessages;
 
 const
   AllMethods: array[1..9] of String = (MethodAck, MethodBye, MethodCancel,
@@ -612,6 +613,31 @@ begin
           'LocalPort, LocalPort, PeerIP, PeerPort, Transport equal');
   finally
     Other.Free;
+  end;
+end;
+
+procedure TestTIdSipConnectionBindings.TestIsSecure;
+var
+  I:          Integer;
+  Transports: TStrings;
+begin
+  Transports := TStringList.Create;
+  try
+    TIdSipTransportRegistry.SecureTransports(Transports);
+
+    for I := 0 to Transports.Count -1 do begin
+      Self.Binding.Transport := Transports[I];
+      Check(Self.Binding.IsSecureTransport, Self.Binding.Transport + ' is not marked as being secure');
+    end;
+
+    TIdSipTransportRegistry.InsecureTransports(Transports);
+
+    for I := 0 to Transports.Count -1 do begin
+      Self.Binding.Transport := Transports[I];
+      Check(not Self.Binding.IsSecureTransport, Self.Binding.Transport + ' is not marked as being insecure');
+    end;
+  finally
+    Transports.Free;
   end;
 end;
 

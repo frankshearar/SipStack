@@ -132,7 +132,7 @@ type
                                         Challenge: TIdSipResponse); overload;
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
-                                        Receiver: TIdSipTransport);
+                                        Binding: TIdSipConnectionBindings);
     procedure OnEndedSession(Session: TIdSipSession;
                              ErrorCode: Cardinal;
                              const Reason: String);
@@ -341,8 +341,18 @@ type
   end;
 
   TIdDebugDroppedMessageData = class(TIdDebugMessageData)
+  private
+    fBinding: TIdSipConnectionBindings;
+
   protected
+    function Data: String; override;
     function EventName: String; override;
+  public
+    destructor Destroy; override;
+
+    procedure Assign(Src: TPersistent); override;
+
+    property Binding: TIdSipConnectionBindings read fBinding write fBinding;
   end;
 
   TIdDebugReceiveMessageData = class(TIdDebugMessageData)
@@ -1422,13 +1432,14 @@ end;
 
 procedure TIdSipStackInterface.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                                          Message: TIdSipMessage;
-                                                         Receiver: TIdSipTransport);
+                                                         Binding: TIdSipConnectionBindings);
 var
   Data: TIdDebugDroppedMessageData;
 begin
   Data := TIdDebugDroppedMessageData.Create;
   try
-    Data.Handle := InvalidHandle;
+    Data.Binding := Binding.Copy;
+    Data.Handle  := InvalidHandle;
     Data.Message := Message.Copy;
 
     Self.NotifyEvent(CM_DEBUG_DROPPED_MSG, Data);
@@ -2039,7 +2050,35 @@ end;
 //******************************************************************************
 //* TIdDebugDroppedMessageData                                                 *
 //******************************************************************************
+//* TIdDebugDroppedMessageData Public methods **********************************
+
+destructor TIdDebugDroppedMessageData.Destroy;
+begin
+  Self.Binding.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdDebugDroppedMessageData.Assign(Src: TPersistent);
+var
+  Other: TIdDebugDroppedMessageData;
+begin
+  inherited Assign(Src);
+
+  if (Src is TIdDebugDroppedMessageData) then begin
+    Other := Src as TIdDebugDroppedMessageData;
+
+    Self.Binding := Other.Binding.Copy;
+  end;
+end;
+
 //* TIdDebugDroppedMessageData Protected methods *******************************
+
+function TIdDebugDroppedMessageData.Data: String;
+begin
+  Result := Self.Binding.AsString + CRLF
+          + inherited Data;
+end;
 
 function TIdDebugDroppedMessageData.EventName;
 begin

@@ -577,6 +577,7 @@ begin
       ReceivedFrom.LocalPort := Connection.Socket.Binding.Port;
       ReceivedFrom.PeerIP    := Connection.Socket.Binding.PeerIP;
       ReceivedFrom.PeerPort  := Connection.Socket.Binding.PeerPort;
+      ReceivedFrom.Transport := TIdSipTransportRegistry.TransportFor(Self.TransportID).GetTransportType;
 
       S := TStringStream.Create('');
       try

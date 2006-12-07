@@ -57,6 +57,7 @@ type
     Parser:                TIdSipParser;
     ReceivedRequest:       Boolean;
     ReceivedResponse:      Boolean;
+    ReceivingBinding:      TIdSipConnectionBindings;
     RecvdRequest:          TIdSipRequest;
     RejectedMessage:       Boolean;
     RejectedMessageEvent:  TEvent;
@@ -67,6 +68,7 @@ type
     Timer:                 TTransportTestTimerQueue;
     WrongServer:           Boolean;
 
+    procedure CheckBinding(Received: TIdSipConnectionBindings);
     procedure CheckCanReceiveRequest(Sender: TObject;
                                      R: TIdSipRequest;
                                      ReceivedFrom: TIdSipConnectionBindings);
@@ -173,6 +175,8 @@ type
     procedure TestReceivedParamDifferentIPv4SentBy;
     procedure TestReceivedParamFQDNSentBy;
     procedure TestReceivedParamIPv4SentBy;
+    procedure TestReceiveRequestShowsCorrectBinding;
+    procedure TestReceiveResponseShowsCorrectBinding;
     procedure TestRemoveBinding;
     procedure TestRemoveBindingDoesntStartStoppedTransport;
     procedure TestRemoveBindingNoSuchBinding;
@@ -316,6 +320,8 @@ begin
                                                 Self.LowPortTransport.Bindings[0].IP,
                                                 Self.LowPortTransport.Bindings[0].Port);
 
+  Self.ReceivingBinding := TIdSipConnectionBindings.Create;
+
   Self.Request := TIdSipTestResources.CreateLocalLoopRequest;
   Self.Request.LastHop.SentBy    := Self.LowPortTransport.Bindings[0].IP;
   Self.Request.LastHop.Transport := Self.LowPortTransport.GetTransportType;
@@ -354,6 +360,7 @@ begin
     Self.RecvdRequest.Free;
     Self.Response.Free;
     Self.Request.Free;
+    Self.ReceivingBinding.Free;
 
     Self.LowPortLocation.Free;
     Self.HighPortLocation.Free;
@@ -384,12 +391,22 @@ end;
 
 //* TestTIdSipTransport Protected methods **************************************
 
+procedure TestTIdSipTransport.CheckBinding(Received: TIdSipConnectionBindings);
+begin
+  CheckEquals(Self.HighPortTransport.Bindings[0].IP, Received.LocalIP, 'LocalIP incorrect');
+  CheckEquals(Self.HighPortTransport.Bindings[0].Port, Received.LocalPort, 'LocalPort incorrect');
+  CheckEquals(Self.HighPortTransport.GetTransportType, Received.Transport, 'Transport incorrect');
+  CheckNotEquals('', Received.PeerIP, 'PeerIP not filled in');
+  CheckNotEquals(0, Received.PeerPort, 'PeerPort not filled in');
+end;
+
 procedure TestTIdSipTransport.CheckCanReceiveRequest(Sender: TObject;
                                                      R: TIdSipRequest;
                                                      ReceivedFrom: TIdSipConnectionBindings);
 begin
   try
     Self.ReceivedRequest := true;
+    Self.ReceivingBinding.Assign(ReceivedFrom);
     Self.SendOkResponse(Sender as TIdSipTransport);
 
     Self.ThreadEvent.SetEvent;
@@ -407,6 +424,7 @@ procedure TestTIdSipTransport.CheckCanReceiveResponse(Sender: TObject;
 begin
   try
     Self.ReceivedResponse := true;
+    Self.ReceivingBinding.Assign(ReceivedFrom);
 
     Self.ThreadEvent.SetEvent;
   except
@@ -1220,6 +1238,28 @@ begin
   Self.HighPortTransport.Send(Self.Request, Self.LowPortLocation);
 
   Self.WaitForSignaled;
+end;
+
+procedure TestTIdSipTransport.TestReceiveRequestShowsCorrectBinding;
+begin
+  // LowPortTransport sends an INVITE to HighPortTransport.
+  Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
+
+  Self.SendMessage(Self.Request.AsString);
+
+  Self.WaitForSignaled;
+  Self.CheckBinding(Self.ReceivingBinding);
+end;
+
+procedure TestTIdSipTransport.TestReceiveResponseShowsCorrectBinding;
+begin
+  // LowPortTransport sends an INVITE to HighPortTransport.
+  Self.CheckingResponseEvent := Self.CheckCanReceiveResponse;
+
+  Self.SendMessage(Self.Response.AsString);
+
+  Self.WaitForSignaled;
+  Self.CheckBinding(Self.ReceivingBinding);
 end;
 
 procedure TestTIdSipTransport.TestRemoveBinding;

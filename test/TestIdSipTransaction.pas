@@ -50,6 +50,7 @@ type
                                           IIdSipTransactionDispatcherListener)
   private
     AckCount:               Cardinal;
+    Binding:                TIdSipConnectionBindings;
     Core:                   TIdSipMockCore;
     D:                      TIdSipTransactionDispatcher;
     Destination:            TIdSipLocation;
@@ -81,14 +82,14 @@ type
                      const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transaction: TIdSipTransaction;
-                               Receiver: TIdSipTransport); overload;
+                               Binding: TIdSipConnectionBindings); overload;
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               Receiver: TIdSipTransport); overload;
+                               Binding: TIdSipConnectionBindings); overload;
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Transaction: TIdSipTransaction;
-                                Receiver: TIdSipTransport); overload;
+                                Binding: TIdSipConnectionBindings); overload;
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                Receiver: TIdSipTransport); overload;
+                                Binding: TIdSipConnectionBindings); overload;
     procedure OnTerminated(Transaction: TIdSipTransaction);
     procedure OnTransportException(FailedMessage: TIdSipMessage;
                                    Error: Exception;
@@ -136,6 +137,7 @@ type
   // Test the location-using code in SendResponse
   TestLocation = class(TMessageCountingTestCase)
   private
+    Binding:      TIdSipConnectionBindings;
     D:            TIdSipTransactionDispatcher;
     L:            TIdSipMockLocator;
     Timer:        TIdDebugTimerQueue;
@@ -225,10 +227,10 @@ type
                      const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transaction: TIdSipTransaction;
-                               Receiver: TIdSipTransport);
+                               Binding: TIdSipConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Transaction: TIdSipTransaction;
-                                Receiver: TIdSipTransport); virtual;
+                                Binding: TIdSipConnectionBindings); virtual;
     procedure OnTerminated(Transaction: TIdSipTransaction);
     procedure Proceeding(Sender: TObject;
                          R: TIdSipResponse);
@@ -455,7 +457,7 @@ type
 
   TTransactionDispatcherListenerMethodTestCase = class(TTestCase)
   protected
-    Receiver: TIdSipTransport;
+    Binding: TIdSipConnectionBindings;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -679,6 +681,10 @@ begin
   Self.MockUdpTransport := Self.D.Transports[1] as TIdSipMockTransport;
   Self.MockTransport    := Self.MockTcpTransport;
 
+  Self.Binding := TIdSipConnectionBindings.Create;
+  Self.Binding.LocalIP   := Self.MockTransport.Bindings[0].IP;
+  Self.Binding.LocalPort := Self.MockTransport.Bindings[0].Port;
+
   // This must differ from Self.D's bindings, or we will make hairpin calls
   // when we send INVITEs. That in itself isn't a problem, but for most tests
   // that's not what we want!
@@ -727,6 +733,7 @@ begin
   Self.ReceivedRequest.Free;
 
   Self.Destination.Free;
+  Self.Binding.Free;
   Self.D.Free;
   Self.Locator.Free;
   Self.Core.Free;
@@ -818,27 +825,27 @@ end;
 
 procedure TestTIdSipTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
                                                            Transaction: TIdSipTransaction;
-                                                           Receiver: TIdSipTransport);
+                                                           Binding: TIdSipConnectionBindings);
 begin
   // Do nothing
 end;
 
 procedure TestTIdSipTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
-                                                           Receiver: TIdSipTransport);
+                                                           Binding: TIdSipConnectionBindings);
 begin
   // Do nothing
 end;
 
 procedure TestTIdSipTransactionDispatcher.OnReceiveResponse(Response: TIdSipResponse;
                                                             Transaction: TIdSipTransaction;
-                                                            Receiver: TIdSipTransport);
+                                                            Binding: TIdSipConnectionBindings);
 begin
   Check(not Transaction.IsClient, 'Client tran got the response - from the TU!');
   Self.OnReceiveResponseFired := true;
 end;
 
 procedure TestTIdSipTransactionDispatcher.OnReceiveResponse(Response: TIdSipResponse;
-                                                            Receiver: TIdSipTransport);
+                                                            Binding: TIdSipConnectionBindings);
 begin
   // Do nothing
 end;
@@ -909,7 +916,7 @@ begin
   try
     Ack := RemoteDialog.CreateAck;
     try
-      Tran := Self.D.AddServerTransaction(Self.Invite, Self.MockTransport);
+      Tran := Self.D.AddServerTransaction(Self.Invite, Self.Binding);
 
       Listener := TIdSipTestTransactionDispatcherListener.Create;
       try
@@ -953,7 +960,7 @@ var
   TranCount: Cardinal;
 begin
   TranCount := Self.D.TransactionCount;
-  Tran := Self.D.AddServerTransaction(Self.Invite, Self.MockTransport);
+  Tran := Self.D.AddServerTransaction(Self.Invite, Self.Binding);
   Check(not Tran.IsClient,
         'Wrong kind of transaction added');
   CheckEquals(TranCount + 1,
@@ -1078,7 +1085,7 @@ procedure TestTIdSipTransactionDispatcher.TestDispatcherDoesntGetTransactionRequ
 var
   Listener: TIdSipTestTransactionDispatcherListener;
 begin
-  Self.D.AddServerTransaction(Self.Invite, Self.MockTransport);
+  Self.D.AddServerTransaction(Self.Invite, Self.Binding);
 
   Listener := TIdSipTestTransactionDispatcherListener.Create;
   try
@@ -1207,7 +1214,7 @@ begin
 
   Self.Invite.ToHeader.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna>';
 
-  Self.D.AddServerTransaction(Self.TranRequest, Self.MockTransport);
+  Self.D.AddServerTransaction(Self.TranRequest, Self.Binding);
   Check(not Self.D.LoopDetected(Self.Invite),
         'Loop should not be detected - requests match (same branch)');
 
@@ -1227,7 +1234,7 @@ begin
 
   Self.Invite.ToHeader.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna>';
 
-  Self.D.AddServerTransaction(Self.TranRequest, Self.MockTransport);
+  Self.D.AddServerTransaction(Self.TranRequest, Self.Binding);
   Check(not Self.D.LoopDetected(Self.Invite),
         'Loop should not be detected - requests match (same branch)');
 
@@ -1368,7 +1375,7 @@ begin
   // We want to check that a server invite transaction gets its ACK.
   Listener := TIdSipTestTransactionListener.Create;
   try
-    ServerTran := Self.D.AddServerTransaction(Self.Invite, Self.MockTransport);
+    ServerTran := Self.D.AddServerTransaction(Self.Invite, Self.Binding);
     ServerTran.AddTransactionListener(Listener);
 
     Response := Self.CreateMultipleChoices(Self.Invite);
@@ -1423,7 +1430,7 @@ var
   OK:   TIdSipResponse;
   Tran: TIdSipTransaction;
 begin
-  Tran := Self.D.AddServerTransaction(Self.Invite, Self.MockTransport);
+  Tran := Self.D.AddServerTransaction(Self.Invite, Self.Binding);
 
   OK := TIdSipResponse.InResponseTo(Tran.InitialRequest, SIPOK);
   try
@@ -1458,7 +1465,7 @@ procedure TestTIdSipTransactionDispatcher.TestTransactionsCleanedUp;
 var
   TranCount: Integer;
 begin
-  Self.D.AddServerTransaction(Self.TranRequest, Self.MockTransport);
+  Self.D.AddServerTransaction(Self.TranRequest, Self.Binding);
 
   TranCount := Self.D.TransactionCount;
 
@@ -1515,6 +1522,10 @@ begin
   Self.UdpTransport := Self.D.Transports[1] as TIdSipMockTransport;
   Self.MockTransport := Self.UdpTransport;
 
+  Self.Binding := TIdSipConnectionBindings.Create;
+  Self.Binding.LocalIP   := Self.MockTransport.Bindings[0].IP;
+  Self.Binding.LocalPort := Self.MockTransport.Bindings[0].Port;
+
   Self.Request  := TIdSipTestResources.CreateBasicRequest;
   Self.Response := TIdSipResponse.InResponseTo(Self.Request, SIPNotFound);
 
@@ -1524,6 +1535,8 @@ end;
 
 procedure TestLocation.TearDown;
 begin
+  Self.Binding.Free;
+
   Self.Response.Free;
   Self.Request.Free;
 
@@ -1557,7 +1570,7 @@ begin
 
   Self.L.AddA('localhost', '127.0.0.2');
 
-  Tran := Self.D.AddServerTransaction(Self.Request, Self.TcpTransport);
+  Tran := Self.D.AddServerTransaction(Self.Request, Self.Binding);
 
   DnsLookupCount := Self.L.LookupCount;
   Self.MarkSentResponseCount;
@@ -1580,7 +1593,7 @@ var
   DnsLookupCount: Cardinal;
   Tran:           TIdSipTransaction;
 begin
-  Tran := Self.D.AddServerTransaction(Self.Request, Self.MockTransport);
+  Tran := Self.D.AddServerTransaction(Self.Request, Self.Binding);
 
   DnsLookupCount := Self.L.LookupCount;
   Self.MarkSentResponseCount;
@@ -1599,7 +1612,7 @@ var
 begin
   // When a transaction retransmits a response, don't issue a fresh DNS query,
   // in the interests of reducing network congestion.
-  Tran := Self.D.AddServerTransaction(Self.Request, Self.MockTransport);
+  Tran := Self.D.AddServerTransaction(Self.Request, Self.Binding);
 
   DnsLookupCount := Self.L.LookupCount;
 
@@ -1618,7 +1631,7 @@ var
   Tran:           TIdSipTransaction;
 begin
   // When a transaction sends a new response, it must make a fresh DNS query.
-  Tran := Self.D.AddServerTransaction(Self.Request, Self.MockTransport);
+  Tran := Self.D.AddServerTransaction(Self.Request, Self.Binding);
 
   DnsLookupCount := Self.L.LookupCount;
 
@@ -1677,7 +1690,7 @@ begin
         Tran.AddTransactionListener(Listener);
 
         Response.StatusCode := SIPTrying;
-        Tran.ReceiveResponse(Response, Self.Dispatcher.Transport);
+        Tran.ReceiveResponse(Response, Self.Dispatcher.Binding);
 
         Check(Listener.ReceivedResponse, 'Listener wasn''t added');
       finally
@@ -1709,7 +1722,7 @@ begin
           Tran.AddTransactionListener(L2);
 
           Response.StatusCode := SIPTrying;
-          Tran.ReceiveResponse(Response, Self.Dispatcher.Transport);
+          Tran.ReceiveResponse(Response, Self.Dispatcher.Binding);
 
           Check(L1.ReceivedResponse and L2.ReceivedResponse, 'Listener wasn''t added');
         finally
@@ -1952,7 +1965,7 @@ var
   Tran: TIdSipTransaction;
 begin
   Tran := Self.Dispatcher.AddServerTransaction(Self.Request,
-                                             Self.Dispatcher.Transport);
+                                             Self.Dispatcher.Binding);
 
   Check(Tran.Match(Self.Request),
         'Identical INVITE request');
@@ -2018,7 +2031,7 @@ begin
   Self.Request.Method         := MethodRegister;
 
   Tran := Self.Dispatcher.AddServerTransaction(Self.Request,
-                                             Self.Dispatcher.Transport);
+                                             Self.Dispatcher.Binding);
 
   Check(Tran.Match(Self.ReceivedRequest),
         'Identical REGISTER request');
@@ -2037,7 +2050,7 @@ begin
   Self.Request.LastHop.Branch := '1'; // Some arbitrary non-SIP/2.0 branch
 
   Tran := Self.Dispatcher.AddServerTransaction(Self.Request,
-                                               Self.Dispatcher.Transport);
+                                               Self.Dispatcher.Binding);
 
   // RFC2543 matching depends on the last response the server sent.
   // And remember, a 200 OK in response to an INVITE will TERMINATE THE
@@ -2064,7 +2077,7 @@ begin
   Self.Request.LastHop.Branch := '1'; // Some arbitrary non-SIP/2.0 branch
 
   Tran := Self.Dispatcher.AddServerTransaction(Self.Request,
-                                             Self.Dispatcher.Transport);
+                                             Self.Dispatcher.Binding);
 
   Check(Tran.Match(Self.Request), 'Identical INVITE');
 end;
@@ -2169,7 +2182,7 @@ begin
         Tran.RemoveTransactionListener(Listener);
 
         Response.StatusCode := SIPTrying;
-        Tran.ReceiveResponse(Response, Self.Dispatcher.Transport);
+        Tran.ReceiveResponse(Response, Self.Dispatcher.Binding);
 
         Check(not Listener.ReceivedResponse, 'Listener wasn''t removed');
       finally
@@ -2265,7 +2278,7 @@ end;
 
 procedure TTestTransaction.OnReceiveRequest(Request: TIdSipRequest;
                                             Transaction: TIdSipTransaction;
-                                            Receiver: TIdSipTransport);
+                                            Binding: TIdSipConnectionBindings);
 begin
   if Assigned(Self.CheckReceiveRequest) then
     Self.CheckReceiveRequest(Self, Request);
@@ -2273,7 +2286,7 @@ end;
 
 procedure TTestTransaction.OnReceiveResponse(Response: TIdSipResponse;
                                              Transaction: TIdSipTransaction;
-                                             Receiver: TIdSipTransport);
+                                             Binding: TIdSipConnectionBindings);
 begin
   if Assigned(Self.CheckReceiveResponse) then
     Self.CheckReceiveResponse(Self, Response);
@@ -2322,7 +2335,7 @@ begin
   inherited SetUp;
 
   Self.Tran.ReceiveRequest(Self.Request,
-                           Self.MockTransport);
+                           Self.MockDispatcher.Binding);
 
   Self.ServerTran := Self.Tran as TIdSipServerInviteTransaction;
 
@@ -2359,7 +2372,7 @@ begin
               'MoveToCompletedState precondition');
 
   Self.Request.Method := MethodAck;
-  Self.Tran.ReceiveRequest(Self.Request, Self.MockTransport);
+  Self.Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
 
   CheckEquals(Transaction(itsConfirmed),
               Transaction(Self.Tran.State),
@@ -2387,8 +2400,7 @@ var
 begin
   Self.MarkSentResponseCount;
 
-  Self.Tran.ReceiveRequest(Self.Request,
-                           Self.MockTransport);
+  Self.Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
 
   CheckResponseSent('No response was sent');
 
@@ -2443,7 +2455,7 @@ begin
                                       Self.Request);
   try
     Tran.AddTransactionListener(Self);
-    Tran.ReceiveRequest(Self.Request, Self.MockTransport);
+    Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
     Check(Self.TransactionProceeding, 'Initial request not sent to TU');
   finally
     Tran.Free;
@@ -2502,7 +2514,7 @@ begin
   Self.MoveToCompletedState;
 
   Self.Request.Method := MethodAck;
-  Self.Tran.ReceiveRequest(Self.Request, Self.MockTransport);
+  Self.Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
 
   CheckEquals(Transaction(itsConfirmed),
               Transaction(Self.Tran.State),
@@ -2530,7 +2542,7 @@ begin
 
   Self.MarkSentResponseCount;
 
-  Self.Tran.ReceiveRequest(Self.Request, Self.MockTransport);
+  Self.Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
 
   CheckEquals(Transaction(itsConfirmed),
               Transaction(Tran.State),
@@ -2574,7 +2586,7 @@ begin
 
   Self.MarkSentResponseCount;
 
-  Self.Tran.ReceiveRequest(Self.Request, Self.MockTransport);
+  Self.Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
 
   CheckEquals(Transaction(itsTerminated),
               Transaction(Self.Tran.State),
@@ -2596,8 +2608,7 @@ begin
       Self.MarkSentResponseCount;
       Tran.AddTransactionListener(Self);
 
-      Tran.ReceiveRequest(Self.Request,
-                          Self.MockTransport);
+      Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
 
       Self.Response.StatusCode := StatusCode*100;
       Tran.SendResponse(Self.Response);
@@ -2645,8 +2656,7 @@ begin
   Tran := Self.TransactionType.Create(Self.MockDispatcher,
                                       Self.Request) as TIdSipServerInviteTransaction;
   try
-    Tran.ReceiveRequest(Self.Request,
-                        Self.MockTransport);
+    Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
 
     Self.Response.StatusCode := SIPMultipleChoices;
     Tran.SendResponse(Self.Response);
@@ -2673,7 +2683,7 @@ begin
 
     FirstResponse.Assign(Self.MockTransport.LastResponse);
 
-    Self.Tran.ReceiveRequest(Self.Request, Self.MockTransport);
+    Self.Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
 
     CheckEquals(1,
                 Self.MockTransport.SentResponseCount,
@@ -2884,8 +2894,7 @@ begin
                                       Self.Request) as TIdSipServerInviteTransaction;
   try
     Tran.AddTransactionListener(Self);
-    Tran.ReceiveRequest(Self.Request,
-                        Self.MockTransport);
+    Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
 
     Response.StatusCode := SIPMultipleChoices;
     Tran.SendResponse(Self.Response);
@@ -3003,8 +3012,7 @@ begin
   inherited SetUp;
 
   Self.Request.Method := MethodOptions;
-  Self.Tran.ReceiveRequest(Self.Request,
-                           Self.MockTransport);
+  Self.Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
 
   Self.TransactionTrying := false;
 end;
@@ -3066,8 +3074,7 @@ begin
                                       Self.Request);
   try
     Tran.AddTransactionListener(Self);
-    Tran.ReceiveRequest(Self.Request,
-                        Self.MockTransport);
+    Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
 
     Check(Self.TransactionTrying, 'TU not informed of initial request');
   finally
@@ -3132,8 +3139,7 @@ begin
     Tran := Self.TransactionType.Create(Self.MockDispatcher,
                                         Self.Request);
     try
-      Tran.ReceiveRequest(Self.Request,
-                          Self.MockTransport);
+      Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
 
       Self.MoveToProceedingState(Tran);
       Self.Response.StatusCode := I*100;
@@ -3162,8 +3168,7 @@ begin
   Tran := Self.TransactionType.Create(Self.MockDispatcher,
                                       Self.Request) as TIdSipServerNonInviteTransaction;
   try
-    Tran.ReceiveRequest(Self.Request,
-                        Self.MockTransport);
+    Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
     Self.MoveToProceedingState(Tran);
     Self.MoveToCompletedState(Tran);
 
@@ -3199,8 +3204,7 @@ begin
     Tran := Self.TransactionType.Create(Self.MockDispatcher,
                                         Self.Request);
     try
-      Tran.ReceiveRequest(Self.Request,
-                          Self.MockTransport);
+      Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
 
       Self.MockTransport.ResetSentResponseCount;
       Self.Response.StatusCode := I*100;
@@ -3272,7 +3276,7 @@ begin
 
     FirstResponse.Assign(Self.MockTransport.LastResponse);
 
-    Self.Tran.ReceiveRequest(Self.Request, Self.MockTransport);
+    Self.Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
 
     CheckEquals(1,
                 Self.MockTransport.SentResponseCount,
@@ -3298,7 +3302,7 @@ begin
 
     FirstResponse.Assign(Self.MockTransport.LastResponse);
 
-    Self.Tran.ReceiveRequest(Self.Request, Self.MockTransport);
+    Self.Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
 
     CheckEquals(1,
                 Self.MockTransport.SentResponseCount,
@@ -3363,8 +3367,7 @@ begin
   try
     Self.CheckTerminated := Self.Terminated;
 
-    Tran.ReceiveRequest(Self.Request,
-                        Self.MockTransport);
+    Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
 
     Self.MoveToProceedingState(Tran);
     Self.MoveToCompletedState(Tran);
@@ -3387,7 +3390,7 @@ begin
   Self.MoveToProceedingState(Self.Tran);
   Self.MoveToCompletedState(Self.Tran);
 
-  Self.Tran.ReceiveRequest(Self.Request, Self.MockTransport);
+  Self.Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
   Self.Tran.DoOnTransportError(Self.Tran.LastResponse, 'Connection refused');
 
   CheckEquals(Transaction(itsTerminated),
@@ -3495,7 +3498,7 @@ begin
               'MoveToCompletedState precondition');
 
   Self.Response.StatusCode := SIPMultipleChoices;
-  Tran.ReceiveResponse(Self.Response, Self.MockTransport);
+  Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
 
   CheckEquals(Transaction(itsCompleted),
               Transaction(Tran.State),
@@ -3509,7 +3512,7 @@ begin
               'MoveToProceedingState precondition');
 
   Self.Response.StatusCode := SIPTrying;
-  Tran.ReceiveResponse(Self.Response, Self.MockTransport);
+  Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
 
   CheckEquals(Transaction(itsProceeding),
               Transaction(Tran.State),
@@ -3754,7 +3757,7 @@ begin
   Self.MoveToCompletedState(Self.Tran);
 
   Self.Response.StatusCode := SIPTrying;
-  Self.Tran.ReceiveResponse(Self.Response, Self.MockTransport);
+  Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
 
   CheckEquals(Transaction(itsCompleted),
               Transaction(Self.Tran.State),
@@ -3767,7 +3770,7 @@ begin
 
   Self.CheckReceiveResponse := Self.Proceeding;
   Self.Response.StatusCode := SIPRinging;
-  Self.Tran.ReceiveResponse(Self.Response, Self.MockTransport);
+  Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
 
   CheckEquals(Transaction(itsProceeding),
               Transaction(Self.Tran.State),
@@ -3784,7 +3787,7 @@ begin
 
   Self.Response.StatusCode := SIPMultipleChoices;
 
-  Self.Tran.ReceiveResponse(Self.Response, Self.MockTransport);
+  Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
   Self.Tran.DoOnTransportError(Self.Tran.InitialRequest, 'Connection refused');
 
   CheckEquals(Transaction(itsTerminated),
@@ -3792,7 +3795,7 @@ begin
               'Transport layer failed');
 
   Self.Response.StatusCode := SIPTrying;
-  Self.Tran.ReceiveResponse(Self.Response, Self.MockTransport);
+  Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
 
   CheckEquals(Transaction(itsTerminated),
               Transaction(Self.Tran.State),
@@ -3811,7 +3814,7 @@ begin
     Self.Response.StatusCode := SIPOK;
 
     Self.MarkSentRequestCount;
-    Self.Tran.ReceiveResponse(Self.Response, Self.MockTransport);
+    Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
     CheckNoRequestSent('Transactions MUST NOT send an ACK to a 2xx - the TU does that');
 
     CheckNoACKSent('ACK sending arrogated by transaction');
@@ -3832,7 +3835,7 @@ begin
   Self.Response.StatusCode := SIPOK;
 
   Self.MarkSentRequestCount;
-  Self.Tran.ReceiveResponse(Self.Response, Self.MockTransport);
+  Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
   CheckNoRequestSent('Transactions MUST NOT send an ACK to a 2xx - the TU does that');
 
   CheckEquals(Transaction(itsCompleted),
@@ -3853,7 +3856,7 @@ begin
     Self.Response.StatusCode := SIPOK;
 
     Self.MarkSentRequestCount;
-    Self.Tran.ReceiveResponse(Self.Response, Self.MockTransport);
+    Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
     CheckNoRequestSent('Transactions MUST NOT send an ACK to a 2xx - the TU does that');
 
     CheckNoACKSent('ACK sending arrogated by transaction');
@@ -3872,7 +3875,7 @@ begin
   Self.MarkSentACKCount;
 
   Self.Response.StatusCode := SIPMultipleChoices;
-  Self.Tran.ReceiveResponse(Self.Response, Self.MockTransport);
+  Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
 
   CheckEquals(Transaction(itsCompleted),
               Transaction(Self.Tran.State),
@@ -3888,7 +3891,7 @@ begin
   Self.MoveToCompletedState(Self.Tran);
 
   Self.Response.StatusCode := SIPMultipleChoices;
-  Self.Tran.ReceiveResponse(Self.Response, Self.MockTransport);
+  Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
 
   CheckEquals(Transaction(itsCompleted),
               Transaction(Self.Tran.State),
@@ -3904,7 +3907,7 @@ begin
   Self.MarkSentACKCount;
 
   Self.Response.StatusCode := SIPMultipleChoices;
-  Self.Tran.ReceiveResponse(Self.Response, Self.MockTransport);
+  Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
 
   CheckEquals(Transaction(itsCompleted),
               Transaction(Self.Tran.State),
@@ -3922,7 +3925,7 @@ begin
   Self.TransactionCompleted := false;
 
   Self.Response.StatusCode := SIPMultipleChoices;
-  Self.Tran.ReceiveResponse(Self.Response, Self.MockTransport);
+  Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
   Check(not Self.TransactionCompleted, '2nd response was passed up to TU');
 end;
 
@@ -4122,7 +4125,7 @@ begin
   // This makes the transaction try send an ACK, which fails.
   Self.Response.StatusCode := SIPMultipleChoices;
 
-  Self.Tran.ReceiveResponse(Self.Response, Self.MockTransport);
+  Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
   Self.Tran.DoOnTransportError(Self.LastSentRequest, 'Connection refused');
 
   CheckEquals(Transaction(itsTerminated),
@@ -4178,7 +4181,7 @@ begin
               'MoveToProceedingState precondition');
 
   Self.Response.StatusCode := SIPTrying;
-  Tran.ReceiveResponse(Self.Response, Self.MockTransport);
+  Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
 
   CheckEquals(Transaction(itsProceeding),
               Transaction(Tran.State),
@@ -4193,7 +4196,7 @@ begin
       + ' in MoveToCompletedState precondition');
 
   Self.Response.StatusCode := SIPOK;
-  Tran.ReceiveResponse(Self.Response, Self.MockTransport);
+  Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
 
   CheckEquals(Transaction(itsCompleted),
               Transaction(Tran.State),
@@ -4391,7 +4394,7 @@ begin
 
   Self.CheckReceiveResponse := Self.Completed;
   Self.Response.StatusCode := SIPMultipleChoices;
-  Self.Tran.ReceiveResponse(Self.Response, Self.MockTransport);
+  Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
 
   Check(not Self.TransactionCompleted,
         'Response not dropped');
@@ -4403,7 +4406,7 @@ begin
   Self.CheckReceiveResponse := Self.Proceeding;
 
   Self.Response.StatusCode := SIPTrying;
-  Self.Tran.ReceiveResponse(Self.Response, Self.MockTransport);
+  Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
 
   CheckEquals(Transaction(itsProceeding),
               Transaction(Self.Tran.State),
@@ -4426,7 +4429,7 @@ begin
 
   Self.CheckReceiveResponse := Self.AcknowledgeResponseReceipt;
   Self.Response.StatusCode := SIPSessionProgress;
-  Self.ClientTran.ReceiveResponse(Self.Response, Self.MockTransport);
+  Self.ClientTran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
 
   Check(not Self.ResponseReceived,
         'Response not dropped');
@@ -4460,7 +4463,7 @@ begin
 
       Self.CheckReceiveResponse := Self.Completed;
       Self.Response.StatusCode := 100*I;
-      Tran.ReceiveResponse(Self.Response, Self.MockTransport);
+      Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
 
       CheckEquals(Transaction(itsCompleted),
                   Transaction(Tran.State),
@@ -4491,7 +4494,7 @@ begin
 
       Self.CheckReceiveResponse := Self.Completed;
       Self.Response.StatusCode := 100*I;
-      Tran.ReceiveResponse(Self.Response, Self.MockTransport);
+      Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
 
       CheckEquals(Transaction(itsCompleted),
                   Transaction(Tran.State),
@@ -4859,12 +4862,12 @@ procedure TTransactionDispatcherListenerMethodTestCase.SetUp;
 begin
   inherited SetUp;
 
-  Self.Receiver := TIdSipMockUdpTransport.Create;
+  Self.Binding := TIdSipConnectionBindings.Create;
 end;
 
 procedure TTransactionDispatcherListenerMethodTestCase.TearDown;
 begin
-  Self.Receiver.Free;
+  Self.Binding.Free;
 
   inherited TearDown;
 end;
@@ -4881,8 +4884,8 @@ begin
   Self.Request := TIdSipRequest.Create;
 
   Self.Method := TIdSipTransactionDispatcherListenerReceiveRequestMethod.Create;
-  Self.Method.Receiver := Self.Receiver;
-  Self.Method.Request  := Self.Request;
+  Self.Method.Binding := Self.Binding;
+  Self.Method.Request := Self.Request;
 end;
 
 procedure TestTIdSipTransactionDispatcherListenerReceiveRequestMethod.TearDown;
@@ -4905,8 +4908,8 @@ begin
 
     Check(Listener.ReceivedRequest,
           Self.ClassName + ': Listener not notified');
-    Check(Self.Method.Receiver = Listener.ReceiverParam,
-          Self.ClassName + ': Receiver param');
+    Check(Self.Method.Binding = Listener.BindingParam,
+          Self.ClassName + ': Binding param');
     Check(Self.Method.Request = Listener.RequestParam,
           Self.ClassName + ': Request param');
   finally
@@ -4926,8 +4929,8 @@ begin
   Self.Response := TIdSipResponse.Create;
 
   Self.Method := TIdSipTransactionDispatcherListenerReceiveResponseMethod.Create;
-  Self.Method.Receiver := Self.Receiver;
-  Self.Method.Response  := Self.Response;
+  Self.Method.Binding  := Self.Binding;
+  Self.Method.Response := Self.Response;
 end;
 
 procedure TestTIdSipTransactionDispatcherListenerReceiveResponseMethod.TearDown;
@@ -4950,8 +4953,8 @@ begin
 
     Check(Listener.ReceivedResponse,
           Self.ClassName + ': Listener not notified');
-    Check(Self.Method.Receiver = Listener.ReceiverParam,
-          Self.ClassName + ': Receiver param');
+    Check(Self.Method.Binding = Listener.BindingParam,
+          Self.ClassName + ': Binding param');
     Check(Self.Method.Response = Listener.ResponseParam,
           Self.ClassName + ': Response param');
   finally
@@ -5039,7 +5042,7 @@ begin
   inherited SetUp;
 
   Self.Method := TIdSipTransactionListenerReceiveRequestMethod.Create;
-  Self.Method.Receiver    := Self.Dispatcher.Transport;
+  Self.Method.Binding     := Self.Dispatcher.Binding;
   Self.Method.Request     := Self.Request;
   Self.Method.Transaction := Self.Transaction;
 end;
@@ -5063,8 +5066,8 @@ begin
 
     Check(Listener.ReceivedRequest,
           Self.ClassName + ': Listener not notified');
-    Check(Self.Method.Receiver = Listener.ReceiverParam,
-          Self.ClassName + ': Receiver param');
+    Check(Self.Method.Binding = Listener.BindingParam,
+          Self.ClassName + ': Binding param');
     Check(Self.Method.Transaction = Listener.TransactionParam,
           Self.ClassName + ': Transaction param');
     Check(Self.Method.Request = Listener.RequestParam,
@@ -5086,8 +5089,8 @@ begin
   Self.Response := TIdSipTestResources.CreateLocalLoopResponse;
 
   Self.Method := TIdSipTransactionListenerReceiveResponseMethod.Create;
-  Self.Method.Receiver    := Self.Dispatcher.Transport;
-  Self.Method.Response     := Self.Response;
+  Self.Method.Binding     := Self.Dispatcher.Binding;
+  Self.Method.Response    := Self.Response;
   Self.Method.Transaction := Self.Transaction;
 end;
 
@@ -5111,8 +5114,8 @@ begin
 
     Check(Listener.ReceivedResponse,
           Self.ClassName + ': Listener not notified');
-    Check(Self.Method.Receiver = Listener.ReceiverParam,
-          Self.ClassName + ': Receiver param');
+    Check(Self.Method.Binding = Listener.BindingParam,
+          Self.ClassName + ': Binding param');
     Check(Self.Method.Transaction = Listener.TransactionParam,
           Self.ClassName + ': Transaction param');
     Check(Self.Method.Response = Listener.ResponseParam,

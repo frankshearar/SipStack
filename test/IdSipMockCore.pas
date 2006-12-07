@@ -22,9 +22,9 @@ type
     fReceiveResponseCalled: Boolean;
   protected
     procedure ActOnRequest(Request: TIdSipRequest;
-                           Receiver: TIdSipTransport); override;
+                           Binding: TIdSipConnectionBindings); override;
     procedure ActOnResponse(Response: TIdSipResponse;
-                            Receiver: TIdSipTransport); override;
+                            Binding: TIdSipConnectionBindings); override;
     function  WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; override;
   public
     procedure Reset;
@@ -64,13 +64,13 @@ end;
 //* TIdSipMockCore Protected methods *******************************************
 
 procedure TIdSipMockCore.ActOnRequest(Request: TIdSipRequest;
-                                      Receiver: TIdSipTransport);
+                                      Binding: TIdSipConnectionBindings);
 begin
   fReceiveRequestCalled := true;
 end;
 
 procedure TIdSipMockCore.ActOnResponse(Response: TIdSipResponse;
-                                      Receiver: TIdSipTransport);
+                                      Binding: TIdSipConnectionBindings);
 begin
   fReceiveResponseCalled := true;
 end;

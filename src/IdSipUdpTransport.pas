@@ -282,6 +282,7 @@ begin
   Wait.ReceivedFrom.LocalPort := Binding.Port;
   Wait.ReceivedFrom.PeerIP    := Binding.PeerIP;
   Wait.ReceivedFrom.PeerPort  := Binding.PeerPort;
+  Wait.ReceivedFrom.Transport := TIdSipTransportRegistry.TransportFor(Self.TransportID).GetTransportType;
   Wait.TransportID            := Self.TransportID;
 
   Self.Timer.AddEvent(TriggerImmediately, Wait);

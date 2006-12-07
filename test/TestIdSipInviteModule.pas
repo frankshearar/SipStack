@@ -190,7 +190,7 @@ type
                                   NewDialog: TidSipDialog);
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
-                                        Receiver: TIdSipTransport);
+                                        Binding: TIdSipConnectionBindings);
     procedure OnFailure(Action: TIdSipAction;
                         Response: TIdSipResponse;
                         const Reason: String);
@@ -311,7 +311,7 @@ type
     procedure EstablishSession(Session: TIdSipSession); virtual; abstract;
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
-                                        Receiver: TIdSipTransport);
+                                        Binding: TIdSipConnectionBindings);
     procedure OnEndedSession(Session: TIdSipSession;
                              ErrorCode: Cardinal;
                              const Reason: String); virtual;
@@ -550,7 +550,7 @@ type
                                    const Address: String): TIdSipUserAgent;
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
-                                        Receiver: TIdSipTransport);
+                                        Binding: TIdSipConnectionBindings);
     procedure OnInboundCall(UserAgent: TIdSipInviteModule;
                             Session: TIdSipInboundSession);
     procedure OnRenewedSubscription(UserAgent: TIdSipAbstractCore;
@@ -2362,7 +2362,7 @@ end;
 
 procedure TestTIdSipOutboundInvite.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                                              Message: TIdSipMessage;
-                                                             Receiver: TIdSipTransport);
+                                                             Binding: TIdSipConnectionBindings);
 begin
   Self.DroppedUnmatchedResponse := true;
 end;
@@ -3378,7 +3378,7 @@ end;
 
 procedure TestTIdSipSession.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                                       Message: TIdSipMessage;
-                                                      Receiver: TIdSipTransport);
+                                                      Binding: TIdSipConnectionBindings);
 begin
   Self.DroppedUnmatchedResponse := true;
 end;
@@ -7004,7 +7004,7 @@ end;
 
 procedure TestSessionReplacer.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                                         Message: TIdSipMessage;
-                                                        Receiver: TIdSipTransport);
+                                                        Binding: TIdSipConnectionBindings);
 begin
   // It'd be nice to fail here, but three UAs all use this same procedure; for
   // each response, two of the three will drop the response as unmatched.
