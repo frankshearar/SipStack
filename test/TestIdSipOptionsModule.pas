@@ -335,7 +335,7 @@ begin
 
   Check(Response.HasHeader(WarningHeader),
         'No Warning header');
-  CheckEquals(Self.Core.Hostname,
+  CheckEquals(Self.Binding.LocalIP,
               Response.FirstWarning.Agent,
               'Warning warn-agent');
 end;

@@ -234,7 +234,7 @@ begin
 
     // For OPTIONS "traceroute"-like functionality. cf RFC 3261, section 11.2
     Response.FirstWarning.Code  := WarningMisc;
-    Response.FirstWarning.Agent := Self.UA.HostName;
+    Response.FirstWarning.Agent := Binding.LocalIP;
     // This should contain the IP of the transport that received the OPTIONS.
     Response.FirstWarning.Text  := '';
 
