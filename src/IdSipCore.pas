@@ -3234,6 +3234,13 @@ begin
     // Request-URI. Thus this clause should never execute. Still, this
     // clause protects the code that follows.
 
+    // Synchronise our state to what actually went down to the network.
+    // The condition means that an INVITE won't set its InitialRequest to a
+    // CANCEL or BYE it's just sent. Perhaps we could eliminate this condition
+    // by using TIdSipOutboundBye/Cancel objects. TODO.
+    if (Request.Method = Self.InitialRequest.Method) then
+      Self.InitialRequest.Assign(Request);
+
     FailReason := Format(RSNoLocationFound, [Request.DestinationUri]);
     Self.NotifyOfNetworkFailure(NoLocationFound,
                                 Format(OutboundActionFailed,
@@ -3298,32 +3305,23 @@ end;
 
 procedure TIdSipAction.TrySendRequest(Request: TIdSipRequest;
                                       Target: TIdSipLocation);
-var
-  ActualRequest: TIdSipRequest;
 begin
-  ActualRequest := TIdSipRequest.Create;
-  try
-    ActualRequest.Assign(Request);
+  // This means that a message that travels to the Target using SCTP will have
+  // SIP/2.0/SCTP in its topmost Via. Remember, we try to avoid having the
+  // transport layer change the message.
+  Request.LastHop.Transport := Target.Transport;
 
-    // This means that a message that travels to the Target using SCTP will have
-    // SIP/2.0/SCTP in its topmost Via. Remember, we try to avoid having the
-    // transport layer change the message.
-    ActualRequest.LastHop.Transport := Target.Transport;
+  // Synchronise our state to what actually went down to the network.
+  // The condition means that an INVITE won't set its InitialRequest to a
+  // CANCEL or BYE it's just sent. Perhaps we could eliminate this condition
+  // by using TIdSipOutboundBye/Cancel objects. TODO.
+  if (Request.Method = Self.InitialRequest.Method) then
+    Self.InitialRequest.Assign(Request);
 
-    // Synchronise our state to what actually went down to the network.
-    // The condition means that an INVITE won't set its InitialRequest to a
-    // CANCEL or BYE it's just sent. Perhaps we could eliminate this condition
-    // by using TIdSipOutboundBye/Cancel objects. TODO.
-    if (ActualRequest.Method = Self.InitialRequest.Method) then
-      Self.InitialRequest.Assign(ActualRequest);
+  Self.UA.SendRequest(Request, Target);
 
-    Self.UA.SendRequest(ActualRequest, Target);
-
-    if not Self.TargetLocations.IsEmpty then
-      Self.TargetLocations.Remove(Target);
-  finally
-    ActualRequest.Free;
-  end;
+  if not Self.TargetLocations.IsEmpty then
+    Self.TargetLocations.Remove(Target);
 end;
 
 //******************************************************************************
