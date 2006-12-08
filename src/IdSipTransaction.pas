@@ -831,7 +831,7 @@ end;
 procedure TIdSipTransactionDispatcher.SendToTransport(Msg: TIdSipMessage;
                                                       Dest: TIdSipLocation);
 var
-  T:    TIdSipTransport;
+  T: TIdSipTransport;
 begin
   T := Self.FindAppropriateTransport(Dest);
 
