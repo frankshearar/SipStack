@@ -1562,6 +1562,12 @@ begin
 
   Self.Actions := TIdSipActions.Create;
   Self.Binding := TIdSipConnectionBindings.Create;
+  Self.Binding.LocalIP   := '127.0.0.1';
+  Self.Binding.LocalPort := 5060;
+  Self.Binding.PeerIP    := '127.0.0.2';
+  Self.Binding.PeerPort  := 5060;
+  Self.Binding.Transport := UdpTransport;
+
   Self.Options := TIdSipRequest.Create;
   Self.Options.Assign(Self.Invite);
   Self.Options.Method := MethodOptions;
