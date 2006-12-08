@@ -1897,7 +1897,7 @@ end;
 procedure TIdSipOutboundInvite.SendBye(Response: TIdSipResponse;
                                        Binding: TIdSipConnectionBindings);
 var
-  Bye: TIdSipRequest;
+  Bye: TIdSipOutboundBye;
   Dlg: TIdSipDialog;
 begin
   // You might think we'd need to terminate Self here. We don't want to do that
@@ -1909,12 +1909,10 @@ begin
                                            Response,
                                            Binding.IsSecureTransport);
   try
-    Bye := Self.Module.CreateBye(Dlg);
-    try
-      Self.SendRequest(Bye);
-    finally
-      Bye.Free;
-    end;
+    Bye := Self.UA.AddOutboundAction(TIdSipOutboundBye) as TIdSipOutboundBye;
+    Bye.Dialog := Dlg;
+    Bye.OriginalInvite := Self.InitialRequest;
+    Bye.Send;
   finally
     Dlg.Free;
   end;
