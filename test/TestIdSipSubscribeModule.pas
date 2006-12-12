@@ -2684,11 +2684,14 @@ begin
 end;
 
 procedure TestTIdSipInboundSubscriptionBase.TestReceiveRefreshingSubscribe;
-const
-  ArbExpiresValue = 100;
 var
-  SubCount: Integer;
+  ArbExpiresValue: Integer;
+  Method:          String;
+  SubCount:        Integer;
 begin
+  Method := Self.Action.Method;
+  ArbExpiresValue := Self.Package.MinimumExpiryTime + 1;
+
   Self.Action.Accept;
 
   SubCount := Self.Core.CountOf(MethodSubscribe);
@@ -2701,7 +2704,7 @@ begin
   CheckResponseSent('No response sent');
   CheckNotEquals(SIPAccepted,
                  Self.LastSentResponse.StatusCode,
-                 Self.Action.Method + ' started a new subscription: it didn''t match the existing one');
+                 Method + ' started a new subscription: it didn''t match the existing one');
   CheckEquals(SIPOK,
               Self.LastSentResponse.StatusCode,
               'Unexpected response sent to refreshing subscription');
