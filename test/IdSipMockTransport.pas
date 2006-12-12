@@ -230,7 +230,7 @@ var
 begin
   FakeBinding := Self.CreateFakeBinding;
   try
-    Self.ReceiveRequest(R, FakeBinding);
+    Self.FireOnRequest(R, FakeBinding);
   finally
     FakeBinding.Free;
   end;
