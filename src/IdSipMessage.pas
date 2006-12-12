@@ -997,7 +997,7 @@ type
     property ToTag:   String read GetToTag write SetToTag;
   end;
 
-  // cf. draft-ietf-sip-target-dialog-01
+  // cf. RFC 4538
   TIdSipTargetDialogHeader = class(TIdSipParameteredCallIDHeader)
   private
     procedure CheckLocalRemoteTagCount(Params: TIdSipParameters);
@@ -1833,7 +1833,7 @@ const
   ExtensionGruu                  = 'gruu'; // cf. draft-ietf-sip-gruu-10
   ExtensionReliableProvisional   = '100rel'; // cf. RFC 3262
   ExtensionReplaces              = 'replaces'; // cf. RFC 3891
-  ExtensionTargetDialog          = 'tdialog'; // cf. draft-ietf-sip-target-dialog-01
+  ExtensionTargetDialog          = 'tdialog'; // cf. RFC 4538
   FromHeaderFull                 = 'From';
   FromHeaderShort                = 'f';
   FromTagParam                   = 'from-tag'; // cf. RFC 3891
@@ -1844,7 +1844,7 @@ const
   HandlingRequired               = 'required';
   IdParam                        = 'id';
   InReplyToHeader                = 'In-Reply-To';
-  LocalTagParam                  = 'local-tag'; // cf. draft-ietf-sip-target-dialog-01
+  LocalTagParam                  = 'local-tag'; // cf. RFC 4538
   LooseRoutableParam             = 'lr';
   MaddrParam                     = 'maddr';
   MaxForwardsHeader              = 'Max-Forwards';
@@ -1890,7 +1890,7 @@ const
   RecordRouteHeader              = 'Record-Route';
   ReferToHeaderFull              = 'Refer-To'; // cf. RFC 3515
   ReferToHeaderShort             = 'r';        // cf. RFC 3515
-  RemoteTagParam                 = 'remote-tag'; // cf. draft-ietf-sip-target-dialog-01
+  RemoteTagParam                 = 'remote-tag'; // cf. RFC 4538
   ReplacesExtension              = 'replaces'; // cf. RFC 3891
   ReplacesHeader                 = 'Replaces'; // cf. RFC 3891
   ReplyToHeader                  = 'Reply-To';
@@ -1913,7 +1913,7 @@ const
   SupportedHeaderFull            = 'Supported';
   SupportedHeaderShort           = 'k';
   TagParam                       = 'tag';
-  TargetDialogHeader             = 'Target-Dialog'; // cf. draft-ietf-sip-target-dialog-01
+  TargetDialogHeader             = 'Target-Dialog'; // cf. RFC 4538
   TimestampHeader                = 'Timestamp';
   ToHeaderFull                   = 'To';
   ToHeaderShort                  = 't';
