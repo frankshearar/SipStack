@@ -558,7 +558,8 @@ begin
   Expected := Format(BindingTuple, [Self.Binding.LocalIP,
                                     Self.Binding.LocalPort,
                                     Self.Binding.PeerIP,
-                                    Self.Binding.PeerPort]);
+                                    Self.Binding.PeerPort,
+                                    Self.Binding.Transport]);
 
   CheckEquals(Expected,
               Self.Binding.AsString,

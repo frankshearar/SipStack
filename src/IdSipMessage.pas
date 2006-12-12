@@ -2230,7 +2230,7 @@ const
 
 // Miscellaneous constants
 const
-  BindingTuple = '(connection-bindings local-ip: %s local-port %d peer-ip: %s peer-port: %d)';
+  BindingTuple = '(connection-bindings local-ip: %s local-port %d peer-ip: %s peer-port: %d transport: %s)';
 
 implementation
 
@@ -2544,7 +2544,8 @@ begin
   Result := Format(BindingTuple, [Self.LocalIP,
                                   Self.LocalPort,
                                   Self.PeerIP,
-                                  Self.PeerPort]);
+                                  Self.PeerPort,
+                                  Self.Transport]);
 end;
 
 function TIdSipConnectionBindings.Copy: TIdSipConnectionBindings;
