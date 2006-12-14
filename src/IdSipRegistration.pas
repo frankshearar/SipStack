@@ -342,27 +342,24 @@ type
   end;
 
   TIdSipOutboundRegisterQuery = class(TIdSipOutboundRegisterBase)
-  public
-    procedure Send; override;
+  protected
+    function CreateNewAttempt: TIdSipRequest; override;
   end;
 
   TIdSipOutboundRegister = class(TIdSipOutboundRegisterBase)
-  public
-    procedure Send; override;
+  protected
+    function CreateNewAttempt: TIdSipRequest; override;
   end;
 
   TIdSipOutboundUnregister = class(TIdSipOutboundRegisterBase)
   private
     fIsWildCard: Boolean;
   protected
-    function  CreateRegister(Registrar: TIdSipUri;
-                             Bindings: TIdSipContacts): TIdSipRequest; override;
+    function  CreateNewAttempt: TIdSipRequest; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
                          Binding: TIdSipConnectionBindings); override;
   public
-    procedure Send; override;
-
     property IsWildCard: Boolean read fIsWildCard write fIsWildCard;
   end;
 
@@ -1602,37 +1599,31 @@ end;
 //******************************************************************************
 //* TIdSipOutboundRegisterQuery                                                *
 //******************************************************************************
-//* TIdSipOutboundRegisterQuery Public methods *********************************
+//* TIdSipOutboundRegisterQuery Protected methods ******************************
 
-procedure TIdSipOutboundRegisterQuery.Send;
+function TIdSipOutboundRegisterQuery.CreateNewAttempt: TIdSipRequest;
 begin
-  inherited Send;
-
   Self.Bindings.Clear;
-  Self.RegisterWith(Self.Registrar, Self.Bindings);
+  Result := Self.CreateRegister(Self.Registrar, Self.Bindings);
 end;
 
 //******************************************************************************
 //* TIdSipOutboundRegister                                                     *
 //******************************************************************************
-//* TIdSipOutboundRegister Public methods **************************************
+//* TIdSipOutboundRegister Protected methods ***********************************
 
-procedure TIdSipOutboundRegister.Send;
+function TIdSipOutboundRegister.CreateNewAttempt: TIdSipRequest;
 begin
-  inherited Send;
-
-  Self.RegisterWith(Self.Registrar, Self.Bindings);
+  Result := Self.CreateRegister(Self.Registrar, Self.Bindings);
 end;
 
 //******************************************************************************
 //* TIdSipOutboundUnregister                                                   *
 //******************************************************************************
-//* TIdSipOutboundUnregister Public methods ************************************
+//* TIdSipOutboundUnregister Protected methods *********************************
 
-procedure TIdSipOutboundUnregister.Send;
+function TIdSipOutboundUnregister.CreateNewAttempt: TIdSipRequest;
 begin
-  inherited Send;
-
   if Self.IsWildCard then begin
     Self.Bindings.Clear;
     Self.Bindings.Add(ContactHeaderFull);
@@ -1646,16 +1637,7 @@ begin
     end;
   end;
 
-  Self.RegisterWith(Self.Registrar, Self.Bindings);
-end;
-
-//* TIdSipOutboundUnregister Protected methods *********************************
-
-function TIdSipOutboundUnregister.CreateRegister(Registrar: TIdSipUri;
-                                                 Bindings: TIdSipContacts): TIdSipRequest;
-begin
-  Result := inherited CreateRegister(Registrar, Bindings);
-
+  Result := Self.CreateRegister(Self.Registrar, Self.Bindings);
   Result.Expires.NumericValue := ExpireNow;
 end;
 
@@ -1716,7 +1698,7 @@ end;
 
 procedure TIdSipOutboundRegistrationBase.Send;
 begin
-  inherited Send;
+  Self.SetStateToSent;
 
   Self.Redirector.Send;
   Self.InitialRequest.Assign(Self.Redirector.InitialAction.InitialRequest);

@@ -608,6 +608,8 @@ type
     procedure SendRequest(Request: TIdSipRequest);
     procedure SendResponse(Response: TIdSipResponse); virtual;
     procedure SetResult(Value: TIdSipActionResult);
+    procedure SetStateToResent;
+    procedure SetStateToSent;
   public
     constructor Create(UA: TIdSipAbstractCore); virtual;
     constructor CreateInbound(UA: TIdSipAbstractCore;
@@ -683,7 +685,6 @@ type
 
     function  Method: String; override;
     procedure SetMethod(const Method: String);
-    procedure Send; override;
 
     property Contact:         TIdSipAddressHeader read fContact write SetContact;
     property OriginalRequest: TIdSipRequest       read fOriginalRequest write SetOriginalRequest;
@@ -3070,11 +3071,7 @@ procedure TIdSipAction.Resend(AuthorizationCredentials: TIdSipAuthorizationHeade
 var
   AuthedRequest: TIdSipRequest;
 begin
-  if (Self.State = asInitialised) then
-    raise EIdSipTransactionUser.Create('You cannot REsend if you didn''t send'
-                                     + ' in the first place');
-
-  Self.State := asResent;
+  Self.SetStateToResent;
 
   AuthedRequest := Self.CreateResend(AuthorizationCredentials);
   try
@@ -3085,11 +3082,17 @@ begin
 end;
 
 procedure TIdSipAction.Send;
+var
+  Attempt: TIdSipRequest;
 begin
-  if (Self.State <> asInitialised) then
-    raise EIdSipTransactionUser.Create(Format(MethodInProgress, [Self.Method]));
+  Self.SetStateToSent;
 
-  Self.State := asSent;  
+  Attempt := Self.CreateNewAttempt;
+  try
+    Self.SendRequest(Attempt);
+  finally
+    Attempt.Free;
+  end;
 end;
 
 procedure TIdSipAction.Terminate;
@@ -3264,6 +3267,23 @@ end;
 procedure TIdSipAction.SetResult(Value: TIdSipActionResult);
 begin
   Self.fResult := Value;
+end;
+
+procedure TIdSipAction.SetStateToResent;
+begin
+  if (Self.State = asInitialised) then
+    raise EIdSipTransactionUser.Create('You cannot REsend if you didn''t send'
+                                     + ' in the first place');
+
+  Self.State := asResent;
+end;
+
+procedure TIdSipAction.SetStateToSent;
+begin
+  if (Self.State <> asInitialised) then
+    raise EIdSipTransactionUser.Create(Format(MethodInProgress, [Self.Method]));
+
+  Self.State := asSent;
 end;
 
 //* TIdSipAction Private methods ***********************************************
@@ -3445,22 +3465,6 @@ end;
 procedure TIdSipRedirectedAction.SetMethod(const Method: String);
 begin
   Self.fMethod := Method;
-end;
-
-procedure TIdSipRedirectedAction.Send;
-var
-  Sub: TIdSipRequest;
-begin
-  inherited Send;
-
-  Sub := Self.CreateNewAttempt;
-  try
-    Self.InitialRequest.Assign(Sub);
-
-    Self.SendRequest(Sub);
-  finally
-    Sub.Free;
-  end;
 end;
 
 //* TIdSipRedirectedAction Protected methods ***************************

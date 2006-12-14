@@ -275,7 +275,6 @@ type
 
     procedure AddNotifyListener(Listener: IIdSipNotifyListener);
     procedure RemoveNotifyListener(Listener: IIdSipNotifyListener);
-    procedure Send; override;
 
     property Body:      String        read fBody write fBody;
     property Dialog:    TIdSipDialog  read fDialog write fDialog;
@@ -343,7 +342,6 @@ type
     destructor  Destroy; override;
 
     function  Match(Msg: TIdSipMessage): Boolean; override;
-    procedure Send; override;
 
     property Target: TIdSipAddressHeader read fTarget write SetTarget;
   end;
@@ -406,25 +404,6 @@ type
 
     property ReferTo:      TIdSipAddressHeader read fReferTo write SetReferTo;
     property TargetDialog: TIdSipDialogID      read fTargetDialog write SetTargetDialog;
-  end;
-
-  TIdSipOutboundRedirectedRefer = class(TIdSipOutboundRefer)
-  private
-    fContact:         TIdSipAddressHeader;
-    fOriginalRequest: TIdSipRequest;
-
-    procedure SetContact(Value: TIdSipAddressHeader);
-    procedure SetOriginalRequest(Value: TIdSipRequest);
-  protected
-    function  CreateNewAttempt: TIdSipRequest; override;
-    procedure Initialise(UA: TIdSipAbstractCore;
-                         Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
-  public
-    destructor Destroy; override;
-
-    property Contact:         TIdSipAddressHeader read fContact write SetContact;
-    property OriginalRequest: TIdSipRequest       read fOriginalRequest write SetOriginalRequest;
   end;
 
   TIdSipSubscriptionExpires = class;
@@ -653,8 +632,6 @@ type
     procedure StartNewSubscription(Notify: TIdSipRequest); override;
   public
     function  CreateInitialAction: TIdSipOwnedAction; override;
-    function  CreateRedirectedAction(OriginalRequest: TIdSipRequest;
-                                     Contact: TIdSipContactHeader): TIdSipOwnedAction; override;
     function  Method: String; override;
     procedure Send; override;
 
@@ -1425,20 +1402,6 @@ begin
   Self.NotifyListeners.RemoveListener(Listener);
 end;
 
-procedure TIdSipOutboundNotifyBase.Send;
-var
-  Notify: TIdSipRequest;
-begin
-  inherited Send;
-
-  Notify := Self.CreateNewAttempt;
-  try
-    Self.SendRequest(Notify);
-  finally
-    Notify.Free;
-  end;
-end;
-
 //* TIdSipOutboundNotifyBase Protected methods *********************************
 
 procedure TIdSipOutboundNotifyBase.ConfigureAttempt(Notify: TIdSipRequest);
@@ -1636,20 +1599,6 @@ begin
     Result := Self.InitialRequest.Equals(Msg);
 end;
 
-procedure TIdSipOutboundSubscribe.Send;
-var
-  Sub: TIdSipRequest;
-begin
-  inherited Send;
-
-  Sub := Self.CreateNewAttempt;
-  try
-    Self.SendRequest(Sub);
-  finally
-    Sub.Free;
-  end;
-end;
-
 //* TIdSipOutboundSubscribe Protected methods **********************************
 
 function TIdSipOutboundSubscribe.CreateNewAttempt: TIdSipRequest;
@@ -1828,52 +1777,6 @@ begin
 
   if Assigned(Value) then
     Self.fTargetDialog := TIdSipDialogID.Create(Value);
-end;
-
-//******************************************************************************
-//* TIdSipOutboundRedirectedRefer                                              *
-//******************************************************************************
-//* TIdSipOutboundRedirectedRefer Public methods *******************************
-
-destructor TIdSipOutboundRedirectedRefer.Destroy;
-begin
-  Self.fOriginalRequest.Free;
-  Self.fContact.Free;
-
-  inherited Destroy;
-end;
-
-//* TIdSipOutboundRedirectedRefer Protected methods ****************************
-
-function TIdSipOutboundRedirectedRefer.CreateNewAttempt: TIdSipRequest;
-begin
-  // Use this method in the context of a redirect to a Refer.
-  // cf. RFC 3261, section 8.1.3.4
-
-  Result := Self.UA.CreateRedirectedRequest(Self.OriginalRequest,
-                                            Self.Contact);
-end;
-
-procedure TIdSipOutboundRedirectedRefer.Initialise(UA: TIdSipAbstractCore;
-                                                   Request: TIdSipRequest;
-                                                   Binding: TIdSipConnectionBindings);
-begin
-  inherited Initialise(UA, Request, Binding);
-
-  Self.fContact         := TIdSipAddressHeader.Create;
-  Self.fOriginalRequest := TIdSipRequest.Create;
-end;
-
-//* TIdSipOutboundRedirectedRefer Private methods ******************************
-
-procedure TIdSipOutboundRedirectedRefer.SetContact(Value: TIdSipAddressHeader);
-begin
-  Self.fContact.Assign(Value);
-end;
-
-procedure TIdSipOutboundRedirectedRefer.SetOriginalRequest(Value: TIdSipRequest);
-begin
-  Self.OriginalRequest.Assign(Value);
 end;
 
 //******************************************************************************
@@ -2494,7 +2397,7 @@ end;
 
 procedure TIdSipOutboundSubscription.Send;
 begin
-  inherited Send;
+  Self.SetStateToSent;
 
   Self.Redirector.Send;
   Self.InitialRequest.Assign(Self.Redirector.InitialAction.InitialRequest);
@@ -3034,18 +2937,6 @@ var
 begin
   Refer := Self.UA.AddOutboundAction(TIdSipOutboundRefer) as TIdSipOutboundRefer;
   Self.ConfigureRequest(Refer);
-
-  Result := Refer;
-end;
-
-function TIdSipOutboundReferral.CreateRedirectedAction(OriginalRequest: TIdSipRequest;
-                                                       Contact: TIdSipContactHeader): TIdSipOwnedAction;
-var
-  Refer: TIdSipOutboundRedirectedRefer;
-begin
-  Refer := Self.UA.AddOutboundAction(TIdSipOutboundRedirectedRefer) as TIdSipOutboundRedirectedRefer;
-  Refer.Contact         := Contact;
-  Refer.OriginalRequest := OriginalRequest;
 
   Result := Refer;
 end;

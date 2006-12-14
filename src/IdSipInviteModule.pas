@@ -159,7 +159,6 @@ type
                          Binding: TIdSipConnectionBindings); override;
   public
     function  Method: String; override;
-    procedure Send; override;
 
     property Dialog:         TIdSipDialog  read fDialog write fDialog;
     property OriginalInvite: TIdSipRequest read fOriginalInvite write fOriginalInvite;
@@ -178,7 +177,6 @@ type
   public
     function  Method: String; override;
     procedure Resend(AuthorizationCredentials: TIdSipAuthorizationHeader); override;
-    procedure Send; override;
 
     property OriginalInvite: TIdSipRequest read fOriginalInvite write fOriginalInvite;
   end;
@@ -1123,20 +1121,6 @@ begin
   Result := MethodBye;
 end;
 
-procedure TIdSipOutboundBye.Send;
-var
-  Bye: TIdSipRequest;
-begin
-  inherited Send;
-
-  Bye := Self.CreateNewAttempt;
-  try
-    Self.SendRequest(Bye);
-  finally
-    Bye.Free;
-  end;
-end;
-
 //* TIdSipOutboundBye Protected methods ****************************************
 
 function TIdSipOutboundBye.CreateNewAttempt: TIdSipRequest;
@@ -1180,20 +1164,6 @@ begin
   //     proper credentials in an Authorization header field.
   //
   // Thus, we do nothing, and we do not move to the asResent state.
-end;
-
-procedure TIdSipOutboundCancel.Send;
-var
-  Cancel: TIdSipRequest;
-begin
-  inherited Send;
-
-  Cancel := Self.CreateNewAttempt;
-  try
-    Self.SendRequest(Cancel);
-  finally
-    Cancel.Free;
-  end;
 end;
 
 //* TIdSipOutboundCancel Protected methods *************************************
@@ -1703,18 +1673,10 @@ begin
 end;  
 
 procedure TIdSipOutboundInvite.Send;
-var
-  Invite: TIdSipRequest;
 begin
   inherited Send;
 
-  Invite := Self.CreateNewAttempt;
-  try
-    Self.LocalGruu := Invite.FirstContact;
-    Self.SendRequest(Invite);
-  finally
-    Invite.Free;
-  end;
+  Self.LocalGruu := Self.InitialRequest.FirstContact;
 end;
 
 procedure TIdSipOutboundInvite.SendAck(Dialog: TIdSipDialog;
@@ -3139,7 +3101,7 @@ end;
 
 procedure TIdSipOutboundSession.Send;
 begin
-  inherited Send;
+  Self.SetStateToSent;
 
   Self.Redirector.Send;
   Self.InitialRequest.Assign(Self.Redirector.InitialAction.InitialRequest);

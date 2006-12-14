@@ -74,7 +74,6 @@ type
 
     procedure AddListener(const Listener: IIdSipOptionsListener);
     procedure RemoveListener(const Listener: IIdSipOptionsListener);
-    procedure Send; override;
 
     property Server: TIdSipAddressHeader read fServer write SetServer;
   end;
@@ -266,21 +265,6 @@ end;
 procedure TIdSipOutboundOptions.RemoveListener(const Listener: IIdSipOptionsListener);
 begin
   Self.ActionListeners.RemoveListener(Listener);
-end;
-
-procedure TIdSipOutboundOptions.Send;
-var
-  Options: TIdSipRequest;
-begin
-  inherited Send;
-
-  Options := Self.CreateNewAttempt;
-  try
-    Self.InitialRequest.Assign(Options);
-    Self.SendRequest(Options);
-  finally
-    Options.Free;
-  end;
 end;
 
 //* TIdSipOutboundOptions Protected methods ************************************
