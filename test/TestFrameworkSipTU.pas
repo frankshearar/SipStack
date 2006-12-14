@@ -63,8 +63,8 @@ type
     procedure CheckResponseSent(const Msg: String); override;
   published
     procedure TestAbandonAuthentication; virtual;
-    procedure TestAuthentication;
-    procedure TestAuthenticationChallenge;
+    procedure TestAuthentication; virtual;
+    procedure TestAuthenticationChallenge; virtual;
     procedure TestIsInbound; virtual;
     procedure TestIsInvite; virtual;
     procedure TestIsOptions; virtual;
@@ -72,11 +72,11 @@ type
     procedure TestIsRegistration; virtual;
     procedure TestIsSession; virtual;
     procedure TestLocalGruu; virtual;
-    procedure TestMultipleAuthentication;
+    procedure TestMultipleAuthentication; virtual;
     procedure TestNetworkFailureTerminatesAction; virtual;
-    procedure TestResend;
-    procedure TestResendBeforeSend;
-    procedure TestResendWithProxyAuth;
+    procedure TestResend; virtual;
+    procedure TestResendBeforeSend; virtual;
+    procedure TestResendWithProxyAuth; virtual;
 {
     procedure TestReceiveResponseBadExtension; // Currently our stack can't sent Requires; ergo we can't test in the usual fashion
     procedure TestReceiveResponseBadExtensionWithoutRequires;

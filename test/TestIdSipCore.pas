@@ -80,6 +80,7 @@ type
     procedure TestScheduleEvent;
     procedure TestSendRequest;
     procedure TestSendRequestMalformedRequest;
+    procedure TestSendRequestRewritesContactUri;
     procedure TestSendRequestUnknownMethod;
     procedure TestSendRequestUnknownRequiredExtension;
     procedure TestSendRequestUnknownSupportedExtension;
@@ -1382,6 +1383,10 @@ begin
   finally
     Dest.Free;
   end;
+end;
+
+procedure TestTIdSipAbstractCore.TestSendRequestRewritesContactUri;
+begin
 end;
 
 procedure TestTIdSipAbstractCore.TestSendRequestUnknownMethod;

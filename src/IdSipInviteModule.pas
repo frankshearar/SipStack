@@ -165,6 +165,24 @@ type
     property OriginalInvite: TIdSipRequest read fOriginalInvite write fOriginalInvite;
   end;
 
+  TIdSipOutboundCancel = class(TIdSipAction)
+  private
+    fOriginalInvite: TIdSipRequest;
+    Module:          TIdSipInviteModule;
+  protected
+    function  CreateNewAttempt: TIdSipRequest; override;
+    procedure Initialise(UA: TIdSipAbstractCore;
+                         Request: TIdSipRequest;
+                         Binding: TIdSipConnectionBindings); override;
+    procedure NotifyOfAuthenticationChallenge(Challenge: TIdSipResponse); override;
+  public
+    function  Method: String; override;
+    procedure Resend(AuthorizationCredentials: TIdSipAuthorizationHeader); override;
+    procedure Send; override;
+
+    property OriginalInvite: TIdSipRequest read fOriginalInvite write fOriginalInvite;
+  end;
+
   // I provide basic facilities for all (owned) Actions that need to handle
   // INVITEs, BYEs, CANCELs.
   TIdSipInvite = class(TIdSipOwnedAction)
@@ -1113,8 +1131,6 @@ begin
 
   Bye := Self.CreateNewAttempt;
   try
-    Self.InitialRequest.Assign(Bye);
-
     Self.SendRequest(Bye);
   finally
     Bye.Free;
@@ -1144,6 +1160,71 @@ begin
 
   Assert(Assigned(Self.Module),
          'The Transaction-User layer cannot send BYE methods without adding the Invite module to it');
+end;
+
+//******************************************************************************
+//* TIdSipOutboundCancel                                                       *
+//******************************************************************************
+//* TIdSipOutboundCancel Public methods ****************************************
+
+function TIdSipOutboundCancel.Method: String;
+begin
+  Result := MethodCancel;
+end;
+
+procedure TIdSipOutboundCancel.Resend(AuthorizationCredentials: TIdSipAuthorizationHeader);
+begin
+  // You cannot resubmit a CANCEL (cf. RFC 3261, section 9.2:
+  //     However, since CANCEL requests are hop-by-hop and cannot be
+  //     resubmitted, they cannot be challenged by the server in order to get
+  //     proper credentials in an Authorization header field.
+  //
+  // Thus, we do nothing, and we do not move to the asResent state.
+end;
+
+procedure TIdSipOutboundCancel.Send;
+var
+  Cancel: TIdSipRequest;
+begin
+  inherited Send;
+
+  Cancel := Self.CreateNewAttempt;
+  try
+    Self.SendRequest(Cancel);
+  finally
+    Cancel.Free;
+  end;
+end;
+
+//* TIdSipOutboundCancel Protected methods *************************************
+
+function TIdSipOutboundCancel.CreateNewAttempt: TIdSipRequest;
+begin
+  Result := Self.Module.CreateCancel(Self.OriginalInvite);
+
+  Result.CopyHeaders(Self.OriginalInvite, AuthorizationHeader);
+  Result.CopyHeaders(Self.OriginalInvite, ProxyAuthorizationHeader);
+end;
+
+procedure TIdSipOutboundCancel.Initialise(UA: TIdSipAbstractCore;
+                                          Request: TIdSipRequest;
+                                          Binding: TIdSipConnectionBindings);
+begin
+  inherited Initialise(UA, Request, Binding);
+
+  Self.fIsOwned := true;
+  Self.Module := Self.UA.ModuleFor(Self.Method) as TIdSipInviteModule;
+
+  Assert(Assigned(Self.Module),
+         'The Transaction-User layer cannot send BYE methods without adding the Invite module to it');
+end;
+
+procedure TIdSipOutboundCancel.NotifyOfAuthenticationChallenge(Challenge: TIdSipResponse);
+begin
+  // You can't resubmit CANCELs, so there's nothing a user can do to respond to
+  // this authentication challenge. In fact, there should NEVER BE a challenge
+  // to a CANCEL. Thus, we do nothing, and don't notify the listeners of the
+  // challenge.
 end;
 
 //******************************************************************************
@@ -1629,7 +1710,6 @@ begin
 
   Invite := Self.CreateNewAttempt;
   try
-    Self.InitialRequest.Assign(Invite);
     Self.LocalGruu := Invite.FirstContact;
     Self.SendRequest(Invite);
   finally
@@ -1920,7 +2000,7 @@ end;
 
 procedure TIdSipOutboundInvite.SendCancel;
 var
-  Cancel: TIdSipRequest;
+  Cancel: TIdSipOutboundCancel;
 begin
   // Note that sending a CANCEL does NOT terminate an outbound INVITE: we must
   // still wait for a final response from the network (either a 487 Request
@@ -1930,14 +2010,12 @@ begin
   Assert(not Self.SentCancel, DoubleCancelSend);
   Self.SentCancel := true;
 
-  Cancel := Self.Module.CreateCancel(Self.InitialRequest);
-  try
-    Self.CancelRequest.Assign(Cancel);
-  finally
-    Cancel.Free;
-  end;
-
-  Self.SendRequest(Self.CancelRequest);
+  // We don't listen to the Cancel's notifications because we don't care:
+  // whatever response the remote SIP agent returns, we're still cancelling
+  // the action. 
+  Cancel := Self.UA.AddOutboundAction(TIdSipOutboundCancel) as TIdSipOutboundCancel;
+  Cancel.OriginalInvite := Self.InitialRequest;
+  Cancel.Send;
 end;
 
 procedure TIdSipOutboundInvite.SetAckBody(Ack: TIdSipRequest);

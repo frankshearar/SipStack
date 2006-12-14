@@ -589,7 +589,7 @@ type
                          Request: TIdSipRequest;
                          Binding: TIdSipConnectionBindings); virtual;
     procedure MarkAsTerminated; virtual;
-    procedure NotifyOfAuthenticationChallenge(Challenge: TIdSipResponse);
+    procedure NotifyOfAuthenticationChallenge(Challenge: TIdSipResponse); virtual;
     procedure NotifyOfFailure(Response: TIdSipResponse); virtual;
     procedure NotifyOfNetworkFailure(ErrorCode: Cardinal;
                                      const Reason: String); virtual;
@@ -605,7 +605,7 @@ type
     function  ReceiveRedirectionResponse(Response: TIdSipResponse;
                                          Binding: TIdSipConnectionBindings): TIdSipActionResult; virtual;
     function  ReceiveServerFailureResponse(Response: TIdSipResponse): TIdSipActionResult; virtual;
-    procedure SendRequest(Request: TIdSipRequest); virtual;
+    procedure SendRequest(Request: TIdSipRequest);
     procedure SendResponse(Response: TIdSipResponse); virtual;
     procedure SetResult(Value: TIdSipActionResult);
   public
@@ -988,7 +988,7 @@ implementation
 
 uses
   IdRandom, IdSdp, IdSipInviteModule, IdSipOptionsModule, IdSipRegistration,
-  IdSipTransport;
+  IdSipSubscribeModule, IdSipTransport;
 
 // Used by the ActionRegistry.
 var
@@ -3078,7 +3078,6 @@ begin
 
   AuthedRequest := Self.CreateResend(AuthorizationCredentials);
   try
-    Self.InitialRequest.Assign(AuthedRequest);
     Self.SendRequest(AuthedRequest);
   finally
     AuthedRequest.Free;
@@ -3238,7 +3237,7 @@ begin
     // The condition means that an INVITE won't set its InitialRequest to a
     // CANCEL or BYE it's just sent. Perhaps we could eliminate this condition
     // by using TIdSipOutboundBye/Cancel objects. TODO.
-    if (Request.Method = Self.InitialRequest.Method) then
+    if not Request.IsAck then
       Self.InitialRequest.Assign(Request);
 
     FailReason := Format(RSNoLocationFound, [Request.DestinationUri]);
@@ -3312,10 +3311,9 @@ begin
   Request.LastHop.Transport := Target.Transport;
 
   // Synchronise our state to what actually went down to the network.
-  // The condition means that an INVITE won't set its InitialRequest to a
-  // CANCEL or BYE it's just sent. Perhaps we could eliminate this condition
-  // by using TIdSipOutboundBye/Cancel objects. TODO.
-  if (Request.Method = Self.InitialRequest.Method) then
+  // The condition means that an INVITE won't set its InitialRequest to an
+  // ACK it's just sent.
+  if not Request.IsAck then
     Self.InitialRequest.Assign(Request);
 
   Self.UA.SendRequest(Request, Target);

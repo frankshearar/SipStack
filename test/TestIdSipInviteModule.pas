@@ -106,6 +106,25 @@ type
     procedure TestIsSession; override;
   end;
 
+  TestTIdSipOutboundCancel = class(TestTIdSipAction)
+  protected
+    function CreateAction: TIdSipAction; override;
+  published
+    procedure TestAbandonAuthentication; override;
+    procedure TestAuthentication; override;
+    procedure TestAuthenticationChallenge; override;
+    procedure TestIsInbound; override;
+    procedure TestIsInvite; override;
+    procedure TestIsOptions; override;
+    procedure TestIsOwned; override;
+    procedure TestIsRegistration; override;
+    procedure TestIsSession; override;
+    procedure TestMultipleAuthentication; override;
+    procedure TestResend; override;
+    procedure TestResendBeforeSend; override;
+    procedure TestResendWithProxyAuth; override;
+  end;
+
   TestTIdSipInboundInvite = class(TestTIdSipAction,
                                   IIdSipInboundInviteListener)
   private
@@ -722,6 +741,7 @@ begin
 //  Result.AddTest(TestDebug.Suite);
   Result.AddTest(TestTIdSipInviteModule.Suite);
   Result.AddTest(TestTIdSipOutboundBye.Suite);
+  Result.AddTest(TestTIdSipOutboundCancel.Suite);
   Result.AddTest(TestTIdSipInboundInvite.Suite);
   Result.AddTest(TestTIdSipOutboundInitialInvite.Suite);
   Result.AddTest(TestTIdSipOutboundRedirectedInvite.Suite);
@@ -1436,6 +1456,201 @@ procedure TestTIdSipOutboundBye.TestIsSession;
 begin
   Check(not Self.CreateAction.IsInbound,
         'Outbound BYE marked as a Session');
+end;
+
+//******************************************************************************
+//* TestTIdSipOutboundCancel
+//******************************************************************************
+//* TestTIdSipOutboundCancel Protected methods *********************************
+
+function TestTIdSipOutboundCancel.CreateAction: TIdSipAction;
+var
+  Cancel: TIdSipOutboundCancel;
+begin
+  Cancel := Self.Core.AddOutboundAction(TIdSipOutboundCancel) as TIdSipOutboundCancel;
+  Cancel.OriginalInvite := Self.Invite;
+  Cancel.AddActionListener(Self);
+  Cancel.Send;
+
+  Result := Cancel;
+end;
+
+//* TestTIdSipOutboundCancel Published methods *********************************
+
+procedure TestTIdSipOutboundCancel.TestAbandonAuthentication;
+begin
+  // You can't resubmit CANCELs, so it's a sign of a broken SIP implementation
+  // if the targetted UA/proxy returns anything other than a 200 OK to your
+  // CANCEL (like, say, a 401 Unauthorized or a 407 Proxy Authentication
+  // Required). This test, which matches that of other objects, just shows
+  // that Cancel objects terminate correctly.
+
+  inherited TestAbandonAuthentication;
+end;
+
+procedure TestTIdSipOutboundCancel.TestAuthentication;
+var
+  Action:         TIdSipAction;
+  AuthCreds:      TIdSipAuthorizationHeader;
+  InitialRequest: TIdSipRequest;
+begin
+  Action := Self.CreateAction;
+
+  InitialRequest := Action.InitialRequest.Copy as TIdSipRequest;
+  try
+    Self.ReceiveUnauthorized(WWWAuthenticateHeader, QopAuth);
+
+    Self.MarkSentRequestCount;
+
+    AuthCreds := Self.CreateAuthorization(Self.Dispatcher.Transport.LastResponse);
+    try
+      Action.Resend(AuthCreds);
+      CheckNoRequestSent('You cannot resubmit a CANCEL: Resend must be a no-op.');
+    finally
+      AuthCreds.Free;
+    end;
+  finally
+    InitialRequest.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundCancel.TestAuthenticationChallenge;
+var
+  Action:    TIdSipAction;
+  AuthCreds: TIdSipAuthorizationHeader;
+begin
+  // This test only makes sense for OUTbound actions.
+  if Self.IsInboundTest then Exit;
+
+  Action := Self.CreateAction;
+
+  Self.ReceiveUnauthorized(WWWAuthenticateHeader, '');
+
+  Check(not Self.AuthenticationChallenged,
+        'The TIdSipOutboundCancel notified its listeners of an authentication '
+      + 'challeng about which they can do nothing.');
+
+  Self.MarkSentRequestCount;
+
+  AuthCreds := Self.CreateAuthorization(Self.Dispatcher.Transport.LastResponse);
+  try
+    Action.Resend(AuthCreds);
+  finally
+    AuthCreds.Free;
+  end;
+
+  CheckNoRequestSent('You cannot resubmit a CANCEL: Resend must be a no-op.');
+end;
+
+procedure TestTIdSipOutboundCancel.TestIsInbound;
+begin
+  Check(not Self.CreateAction.IsInbound,
+        'Outbound CANCEL marked as an inbound action');
+end;
+
+procedure TestTIdSipOutboundCancel.TestIsInvite;
+begin
+  Check(not Self.CreateAction.IsInvite,
+        'Outbound CANCEL marked as an INVITE');
+end;
+
+procedure TestTIdSipOutboundCancel.TestIsOptions;
+begin
+  Check(not Self.CreateAction.IsOptions,
+        'Outbound CANCEL marked as an OPTIONS');
+end;
+
+procedure TestTIdSipOutboundCancel.TestIsOwned;
+begin
+  Check(Self.CreateAction.IsOwned,
+        'Outbound CANCEL not marked as an owned action');
+end;
+
+procedure TestTIdSipOutboundCancel.TestIsRegistration;
+begin
+  Check(not Self.CreateAction.IsInbound,
+        'Outbound CANCEL marked as a REGISTER');
+end;
+
+procedure TestTIdSipOutboundCancel.TestIsSession;
+begin
+  Check(not Self.CreateAction.IsInbound,
+        'Outbound BYE marked as a Session');
+end;
+
+procedure TestTIdSipOutboundCancel.TestMultipleAuthentication;
+begin
+  // This test makes no sense for a CANCEL. You can't issue multiple
+  // authentication challenges to a CANCEL, because a CANCEL cannot be
+  // resubmitted: you send out a CANCEL, you (erroneously) receive a
+  // 401 Unauthorized, and you won't send out a new CANCEL, so you cannot
+  // receive a second challenge.
+end;
+
+procedure TestTIdSipOutboundCancel.TestResend;
+var
+  Action:    TIdSipAction;
+  AuthCreds: TIdSipAuthorizationHeader;
+begin
+  Action := Self.CreateAction;
+
+  Self.ReceiveUnauthorized(WWWAuthenticateHeader, '');
+  AuthCreds := Self.CreateAuthorization(Self.Dispatcher.Transport.LastResponse);
+  try
+    Self.MarkSentRequestCount;
+    Action.Resend(AuthCreds);
+    CheckNoRequestSent('You cannot resubmit a CANCEL: Resend must be a no-op.');
+  finally
+    AuthCreds.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundCancel.TestResendBeforeSend;
+var
+  Action:          TIdSipAction;
+  AuthCreds:       TIdSipAuthorizationHeader;
+  ThrowawayAction: TIdSipAction;
+begin
+  // You cannot resubmit CANCELs, so there's really no sense in invoking
+  // Cancel.Resend. This test merely demonstrates that the Cancel object's
+  // behaviour matches those of other Actions, and that the Cancel really
+  // doesn't allow resubmissions.
+
+  // This looks very strange: We create an Action using the polymorphic
+  // CreateAction. No surprise there. But CreateAction calls Send() on its
+  // result, and for this test we don't want that. So we instantiate another
+  // Action using the class type of the result of CreateAction.
+  ThrowawayAction := Self.CreateAction;
+
+  // Normally we wouldn't bother with receiving a response, but it allows us
+  // to call CreateAuthorization later, without messing with junk.
+  Self.ReceiveUnauthorized(WWWAuthenticateHeader, '');
+
+  Action := Self.Core.AddOutboundAction(TIdSipActionClass(ThrowawayAction.ClassType));
+
+  Self.MarkSentRequestCount;
+  AuthCreds := Self.CreateAuthorization(Self.Dispatcher.Transport.LastResponse);
+  Action.Resend(AuthCreds);
+  Self.CheckNoRequestSent('You cannot resubmit a CANCEL: Resend must be a no-op.');
+end;
+
+procedure TestTIdSipOutboundCancel.TestResendWithProxyAuth;
+var
+  Action:    TIdSipAction;
+  ProxyAuth: TIdSipAuthorizationHeader;
+begin
+  Action := Self.CreateAction;
+  Self.ReceiveUnauthorized(ProxyAuthenticateHeader, '');
+
+  ProxyAuth := Self.CreateAuthorization(Self.Dispatcher.Transport.LastResponse);
+  try
+    Self.MarkSentRequestCount;
+
+    Action.Resend(ProxyAuth);
+    CheckNoRequestSent('You cannot resubmit a CANCEL: Resend must be a no-op.');
+  finally
+    ProxyAuth.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -2620,9 +2835,10 @@ end;
 
 procedure TestTIdSipOutboundInvite.TestCancelReceiveInviteOkBeforeCancelOk;
 var
-  Action: TIdSipOutboundInvite;
-  Cancel: TIdSipRequest;
-  Invite: TIdSipRequest;
+  Action:    TIdSipOutboundInvite;
+  Cancel:    TIdSipRequest;
+  ClassName: String;
+  Invite:    TIdSipRequest;
 begin
   //  ---          INVITE         --->
   // <---        100 Trying       ---
@@ -2634,6 +2850,7 @@ begin
   // <---   200 OK (for the BYE)  ---
 
   Action := Self.CreateAction as TIdSipOutboundInvite;
+  ClassName := Action.ClassName;
 
   Invite := TIdSipRequest.Create;
   try
@@ -2650,20 +2867,20 @@ begin
       Self.ReceiveOk(Invite);
       Self.ReceiveOk(Cancel);
 
-      CheckRequestSent('No request sent to terminate the cancelled session');
+      CheckRequestSent(ClassName + ': No request sent to terminate the cancelled session');
       CheckEquals(MethodBye,
                   Self.LastSentRequest.Method,
-                  'Terminating request');
+                  ClassName + ': Terminating request');
 
-      CheckAckSent('No ACK sent in response to the 2xx');
+      CheckAckSent(ClassName + ': No ACK sent in response to the 2xx');
       CheckEquals(Invite.Body,
                   Self.LastSentAck.Body,
-                  'ACK body');
+                  ClassName + ': ACK body');
       CheckEquals(Invite.ContentType,
                   Self.LastSentAck.ContentType,
-                  'ACK Content-Type');
+                  ClassName + ': ACK Content-Type');
       Check(Invite.ContentDisposition.Equals(Self.LastSentAck.ContentDisposition),
-            'ACK Content-Disposition');
+            ClassName + ': ACK Content-Disposition');
     finally
       Cancel.Free;
     end;

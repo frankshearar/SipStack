@@ -1433,7 +1433,6 @@ begin
 
   Notify := Self.CreateNewAttempt;
   try
-    Self.InitialRequest.Assign(Notify);
     Self.SendRequest(Notify);
   finally
     Notify.Free;
@@ -1645,8 +1644,6 @@ begin
 
   Sub := Self.CreateNewAttempt;
   try
-    Self.InitialRequest.Assign(Sub);
-
     Self.SendRequest(Sub);
   finally
     Sub.Free;
@@ -1716,8 +1713,6 @@ begin
 
   Sub := Self.CreateNewAttempt;
   try
-    Self.InitialRequest.Assign(Sub);
-
     Self.SendRequest(Sub);
   finally
     Sub.Free;
@@ -2027,19 +2022,16 @@ end;
 
 procedure TIdSipInboundSubscription.Accept;
 var
-  ActiveNotify: TIdSipRequest;
+  ActiveNotify: TIdSipOutboundNotify;
 begin
   Assert(Self.DialogEstablished, SubscriptionDidntEstablishDialog);
 
-  ActiveNotify := Self.Module.CreateNotify(Self.Dialog,
-                                           Self.InitialRequest,
-                                           SubscriptionSubstateActive);
-  try
-    Self.SetSubscriptionState(SubscriptionSubstateActive);
-    Self.SendRequest(ActiveNotify);
-  finally
-    ActiveNotify.Free;
-  end;
+  Self.SetSubscriptionState(SubscriptionSubstateActive);
+  ActiveNotify := Self.UA.AddOutboundAction(TIdSipOutboundNotify) as TIdSipOutboundNotify;
+  Self.ConfigureNotify(ActiveNotify);
+  ActiveNotify.Expires := Self.ExpiryTimeInSeconds;
+  ActiveNotify.SubscriptionState := Self.SubscriptionState;
+  ActiveNotify.Send;
 end;
 
 procedure TIdSipInboundSubscription.Expire;
