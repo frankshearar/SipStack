@@ -8442,7 +8442,9 @@ end;
 
 function TIdSipMessage.HasMalformedFirstLine: Boolean;
 begin
-  // By default behave laxly
+  // As of end of 2006 there are only two types of messages in SIP, viz.,
+  // requests (TIdSipRequest) and responses (TIdSipResponse). This just provides
+  // a liberal default.
   Result := false;
 end;
 
@@ -8459,6 +8461,11 @@ begin
   end;
 
   // cf. RFC 3261 section 17.2.3
+  //
+  // Also, when a UA receives a CANCEL it attempts to match that CANCEL against
+  // a transaction by pretending that the request is any method other than
+  // CANCEL or ACK. (cf. RFC 3261, section 9.2). We do this kind of "special"
+  // matching by invoking this method with UseCSeqMethod = true.
   if Self.LastHop.IsRFC3261Branch then
     Result := Self.MatchRFC3261Request(InitialRequest, UseCSeqMethod)
   else
