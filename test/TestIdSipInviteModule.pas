@@ -360,6 +360,7 @@ type
     procedure TestInboundModify;
     procedure TestIsSession; override;
     procedure TestMatchBye;
+    procedure TestMatchByeWithDifferingGridParameter;
     procedure TestMatchInitialRequest;
     procedure TestMatchInboundModify;
     procedure TestMatchInboundModifyAck;
@@ -3818,6 +3819,29 @@ begin
   end;
 end;
 
+procedure TestTIdSipSession.TestMatchByeWithDifferingGridParameter;
+var
+  Bye:     TIdSipRequest;
+  Session: TIdSipSession;
+begin
+  Session := Self.CreateAction as TIdSipSession;
+  Self.EstablishSession(Session);
+  Check(Session.DialogEstablished,
+        Session.ClassName + ': No dialog established');
+
+  Bye := Self.CreateRemoteReInvite(Session.Dialog);
+  try
+    // Force a mismatch between the BYE's target GRUU and the local GRUU.
+    Bye.RequestUri.Grid := Session.LocalGruu.Grid + '1';
+    Bye.Method := MethodBye;
+
+    Check(Session.Match(Bye),
+          Session.ClassName + ': BYE must match session');
+  finally
+    Bye.Free;
+  end;
+end;
+
 procedure TestTIdSipSession.TestMatchInitialRequest;
 var
   Session: TIdSipSession;
@@ -6585,7 +6609,7 @@ begin
     Self.ReceiveResponse(Ok);
     Check(not Self.DroppedUnmatchedResponse,
           'Dropped the retransmitted OK');
-    CheckAckSent('Retransmission');
+    CheckAckSent('No retransmitted ACK to the retransmitted 200 OK');
 
     Ack := Self.LastSentAck;
     CheckEquals(MethodAck, Ack.Method, 'Unexpected method');

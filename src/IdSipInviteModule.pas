@@ -458,6 +458,7 @@ type
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
                          Binding: TIdSipConnectionBindings); override;
+    function  MatchesLocalGruu(Msg: TIdSipMessage): Boolean;
     procedure NotifyOfEndedSession(ErrorCode: Cardinal;
                                    const Reason: String);
     procedure NotifyOfEstablishedSession(const RemoteSessionDescription: String;
@@ -533,7 +534,6 @@ type
     Terminating:   Boolean;
 
     function CreateInboundDialog(Response: TIdSipResponse): TIdSipDialog;
-    function MatchesLocalGruu(Msg: TIdSipMessage): Boolean;
     function MatchReplaces(Request: TIdSipRequest): Boolean;
   protected
     function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID; override;
@@ -2339,6 +2339,21 @@ begin
   Self.fRemoteParty   := TIdSipAddressHeader.Create;
 end;
 
+function TIdSipSession.MatchesLocalGruu(Msg: TIdSipMessage): Boolean;
+begin
+  Result := Msg.IsRequest;
+
+  if Result then begin
+    Result := Result
+          and (Msg as TIdSipRequest).RequestUri.HasGrid;
+
+    if Result then begin
+      Result := Result
+          and (Self.LocalGruu.Grid = (Msg as TIdSipRequest).RequestUri.Grid);
+    end;
+  end;
+end;
+
 procedure TIdSipSession.NotifyOfEndedSession(ErrorCode: Cardinal;
                                              const Reason: String);
 var
@@ -2978,21 +2993,6 @@ begin
   Result.ReceiveResponse(Response);
 end;
 
-function TIdSipInboundSession.MatchesLocalGruu(Msg: TIdSipMessage): Boolean;
-begin
-  Result := Msg.IsRequest;
-
-  if Result then begin
-    Result := Result
-          and (Msg as TIdSipRequest).RequestUri.HasGrid;
-
-    if Result then begin
-      Result := Result
-          and (Self.LocalGruu.Grid = (Msg as TIdSipRequest).RequestUri.Grid);
-    end;
-  end;
-end;
-
 function TIdSipInboundSession.MatchReplaces(Request: TIdSipRequest): Boolean;
 begin
   // We don't check for malformed requests like having multiple Replaces
@@ -3068,14 +3068,15 @@ begin
     Result := false
   else if MatchesReInvite then
     Result := false
-  else if Msg.IsRequest and (Msg as TIdSipRequest).RequestUri.HasGrid then
-    Result := Self.LocalGruu.Grid = (Msg as TIdSipRequest).RequestUri.Grid
   else begin
     // Any responses to our initial invite(s) must go to the OutboundInvite.
-    // Otherwise, we match any in-dialog request that bears our dialog ID. 
-    Result := Msg.IsRequest
-          and not Self.InitialRequest.Equals(Msg)
-          and Self.DialogMatches(Msg);
+    // Otherwise, we match any in-dialog request that bears our dialog ID,
+    // or anything directed at our LocalGRUU.
+    // Match anything directed at our LocalGRUU or shares our dialog
+    Result := Self.MatchesLocalGruu(Msg)
+          or (Msg.IsRequest
+              and not Self.InitialRequest.Equals(Msg)
+              and Self.DialogMatches(Msg));
   end;
 end;
 
