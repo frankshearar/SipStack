@@ -565,6 +565,23 @@ type
     property Notify: TIdSipRequest read fNotify write SetNotify;
   end;
 
+  TIdFailedSubscriptionData = class(TIdFailData)
+  private
+    fResponse: TIdSipResponse;
+
+    procedure SetResponse(Value: TIdSipResponse);
+  protected
+    function Data: String; override;
+    function EventName: String; override;
+  public
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    procedure Assign(Src: TPersistent); override;
+
+    property Response: TIdSipResponse read fResponse write SetResponse;
+  end;
+
   // I represent a reified method call, like my ancestor, that a
   // SipStackInterface uses to signal that something interesting happened (an
   // inbound call has arrived, a network failure occured, an action succeeded,
@@ -1543,8 +1560,20 @@ end;
 
 procedure TIdSipStackInterface.OnFailure(Subscription: TIdSipOutboundSubscription;
                                          Response: TIdSipResponse);
+var
+  Data: TIdFailedSubscriptionData;
 begin
-  raise Exception.Create('Implement TIdSipStackInterface.OnFailure');
+  Data := TIdFailedSubscriptionData.Create;
+  try
+    Data.Handle    := Self.HandleFor(Subscription);
+    Data.ErrorCode := Response.StatusCode;
+    Data.Reason    := Response.StatusText;
+    Data.Response  := Response;
+
+    Self.NotifyEvent(CM_FAIL, Data);
+  finally
+    Data.Free;
+  end;
 end;
 
 procedure TIdSipStackInterface.OnInboundCall(UserAgent: TIdSipInviteModule;
@@ -2316,7 +2345,7 @@ end;
 
 function TIdFailedRegistrationData.EventName: String;
 begin
-  Result := EventNames(CM_FAIL) + 'Registration';
+  Result := EventNames(CM_FAIL) + ' Registration';
 end;
 
 //******************************************************************************
@@ -2618,6 +2647,57 @@ end;
 procedure TIdSubscriptionData.SetNotify(Value: TIdSipRequest);
 begin
   Self.fNotify.Assign(Value);
+end;
+
+//******************************************************************************
+//* TIdFailedSubscriptionData                                                  *
+//******************************************************************************
+//* TIdFailedSubscriptionData Public methods ***********************************
+
+constructor TIdFailedSubscriptionData.Create;
+begin
+  inherited Create;
+
+  Self.fResponse := TIdSipResponse.Create;
+end;
+
+destructor TIdFailedSubscriptionData.Destroy;
+begin
+  inherited Destroy;
+end;
+
+procedure TIdFailedSubscriptionData.Assign(Src: TPersistent);
+var
+  Other: TIdFailedSubscriptionData;
+begin
+  inherited Assign(Src);
+
+  if (Src is TIdFailedSubscriptionData) then begin
+    Other := Src as TIdFailedSubscriptionData;
+
+    Self.ErrorCode := Other.ErrorCode;
+    Self.Reason    := Other.Reason;
+    Self.Response  := Other.Response;
+  end;
+end;
+
+//* TIdFailedSubscriptionData Protected methods ********************************
+
+function TIdFailedSubscriptionData.Data: String;
+begin
+  Result := Self.Response.AsString;
+end;
+
+function TIdFailedSubscriptionData.EventName: String;
+begin
+  Result := EventNames(CM_FAIL) + ' Subscription';
+end;
+
+//* TIdFailedSubscriptionData Private methods **********************************
+
+procedure TIdFailedSubscriptionData.SetResponse(Value: TIdSipResponse);
+begin
+  Self.Response.Assign(Value);
 end;
 
 //******************************************************************************

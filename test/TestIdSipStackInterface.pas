@@ -357,6 +357,18 @@ type
     procedure TestCopy;
   end;
 
+  TestTIdFailedSubscriptionData = class(TTestCase)
+  private
+    Data:         TIdFailedSubscriptionData;
+    FailResponse: TIdSipResponse;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAsString;
+    procedure TestCopy;
+  end;
+
 const
   DummySdp = 'v=0'#13#10
            + 'o=sc 1105373135 1105373135 IN IP4 %s'#13#10
@@ -396,6 +408,7 @@ begin
   Result.AddTest(TestTIdSubscriptionRequestData.Suite);
   Result.AddTest(TestTIdSessionReferralData.Suite);
   Result.AddTest(TestTIdSubscriptionData.Suite);
+  Result.AddTest(TestTIdFailedSubscriptionData.Suite);
 end;
 
 //******************************************************************************
@@ -2105,6 +2118,87 @@ begin
     Copy.Free;
   end;
 end;
+
+//******************************************************************************
+//* TestTIdFailedSubscriptionData                                              *
+//******************************************************************************
+//* TestTIdFailedSubscriptionData Public methods *******************************
+
+procedure TestTIdFailedSubscriptionData.SetUp;
+begin
+  inherited SetUp;
+
+  Self.FailResponse := TIdSipResponse.Create;
+  Self.FailResponse.StatusCode := SIPCallLegOrTransactionDoesNotExist;
+
+  Self.Data := TIdFailedSubscriptionData.Create;
+  Self.Data.Handle    := $decafbad;
+  Self.Data.ErrorCode := SIPCallLegOrTransactionDoesNotExist;
+  Self.Data.Reason    := RSSIPCallLegOrTransactionDoesNotExist;
+  Self.Data.Response  := Self.FailResponse;
+end;
+
+procedure TestTIdFailedSubscriptionData.TearDown;
+begin
+  Self.Data.Free;
+  Self.FailResponse.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdFailedSubscriptionData Published methods ****************************
+
+procedure TestTIdFailedSubscriptionData.TestAsString;
+var
+  Expected: TStrings;
+  Received: TStrings;
+begin
+  Expected := TStringList.Create;
+  try
+    Received := TStringList.Create;
+    try
+      Expected.Text := Self.Data.Response.AsString;
+      Expected.Insert(0, '');
+      Expected.Insert(1, EventNames(CM_FAIL) + ' Subscription');
+      Received.Text := Self.Data.AsString;
+
+      // We ignore the first line of the debug data (it's a timestamp & a
+      // handle)
+      Received[0] := '';
+
+      CheckEquals(Expected.Text,
+                  Received.Text,
+                  'Unexpected debug data');
+    finally
+      Received.Free;
+    end;
+  finally
+    Expected.Free;
+  end;
+end;
+
+procedure TestTIdFailedSubscriptionData.TestCopy;
+var
+  Copy: TIdFailedSubscriptionData;
+begin
+  Copy := Self.Data.Copy as TIdFailedSubscriptionData;
+  try
+    CheckEquals(IntToHex(Self.Data.Handle, 8),
+                IntToHex(Copy.Handle, 8),
+                'Handle');
+    CheckEquals(Self.Data.ErrorCode,
+                Copy.ErrorCode,
+                'ErrorCode');
+    CheckEquals(Self.Data.Reason,
+                Copy.Reason,
+                'Reason');
+    Check(Copy.Response.Equals(Self.Data.Response),
+          'Response messages don''t match');
+  finally
+    Copy.Free;
+  end;
+end;
+
 
 initialization
   RegisterTest('SIP stack interface tests', Suite);
