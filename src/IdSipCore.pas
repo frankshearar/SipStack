@@ -3475,8 +3475,8 @@ begin
 end;
 
 procedure TIdSipRedirectedAction.Initialise(UA: TIdSipAbstractCore;
-                                                       Request: TIdSipRequest;
-                                                       Binding: TIdSipConnectionBindings);
+                                            Request: TIdSipRequest;
+                                            Binding: TIdSipConnectionBindings);
 begin
   inherited Initialise(UA, Request, Binding);
 
