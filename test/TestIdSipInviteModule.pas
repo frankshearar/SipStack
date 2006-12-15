@@ -378,6 +378,7 @@ type
     procedure TestReceiveByeWithPendingRequests;
     procedure TestReceiveInDialogReferWithNoSubscribeModule;
     procedure TestReceiveInDialogRefer;
+    procedure TestReceiveOutOfDialogByeTargettingLocalGruu;
     procedure TestRejectInviteWhenInboundModificationInProgress;
     procedure TestRejectInviteWhenOutboundModificationInProgress;
     procedure TestRemodify;
@@ -4253,6 +4254,31 @@ begin
           'Session didn''t receive the REFER');
   finally
     Refer.Free;
+  end;
+end;
+
+procedure TestTIdSipSession.TestReceiveOutOfDialogByeTargettingLocalGruu;
+var
+  Bye:     TIdSipRequest;
+  Session: TIdSipSession;
+begin
+  Self.UseGruu;
+
+  Session := Self.CreateAndEstablishSession;
+
+  Bye := Self.Core.CreateRequest(MethodBye, Session.LocalGruu);
+  try
+    Self.MarkSentResponseCount;
+    Self.ReceiveRequest(Bye);
+
+    Check(not Session.IsTerminated, 'Session terminated because it accepted an out-of-dialog BYE!');
+    CheckResponseSent('No response sent for the BYE');
+    CheckEquals(SIPCallLegOrTransactionDoesNotExist,
+                Self.LastSentResponse.StatusCode,
+                'Unexpected response sent');
+
+  finally
+    Bye.Free;
   end;
 end;
 

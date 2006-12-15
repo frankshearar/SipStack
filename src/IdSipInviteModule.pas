@@ -2795,9 +2795,12 @@ begin
     Result := Self.MatchReplaces(Msg as TIdSipRequest)
   else begin
     // Match anything directed at our LocalGRUU or shares our dialog
-    Result := Self.MatchesLocalGruu(Msg)
-          or (not Self.InitialRequest.Equals(Msg)
-              and Self.DialogMatches(Msg));
+    if Msg.IsRequest and (Msg as TIdSipRequest).IsBye then
+      Result := Self.DialogMatches(Msg)
+    else
+      Result := Self.MatchesLocalGruu(Msg)
+            or (not Self.InitialRequest.Equals(Msg)
+                and Self.DialogMatches(Msg));
   end;
 end;
 
@@ -3064,6 +3067,7 @@ begin
   MatchesReInvite := Self.ModificationInProgress
                  and Self.ModifyAttempt.Match(Msg);
 
+  // ACKs must go to the relevant TIdSipOutboundInvite action.
   if Msg.IsRequest and (Msg as TIdSipRequest).IsAck then
     Result := false
   else if MatchesReInvite then
@@ -3071,12 +3075,15 @@ begin
   else begin
     // Any responses to our initial invite(s) must go to the OutboundInvite.
     // Otherwise, we match any in-dialog request that bears our dialog ID,
-    // or anything directed at our LocalGRUU.
+    // or anything other than a BYE directed at our LocalGRUU.
     // Match anything directed at our LocalGRUU or shares our dialog
-    Result := Self.MatchesLocalGruu(Msg)
-          or (Msg.IsRequest
-              and not Self.InitialRequest.Equals(Msg)
-              and Self.DialogMatches(Msg));
+    if Msg.IsRequest and (Msg as TIdSipRequest).IsBye then
+      Result := Self.DialogMatches(Msg)
+    else
+      Result := Self.MatchesLocalGruu(Msg)
+            or (Msg.IsRequest
+                and not Self.InitialRequest.Equals(Msg)
+                and Self.DialogMatches(Msg));
   end;
 end;
 
