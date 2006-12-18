@@ -50,7 +50,6 @@ type
                                           IIdSipTransactionDispatcherListener)
   private
     AckCount:               Cardinal;
-    Binding:                TIdSipConnectionBindings;
     Core:                   TIdSipMockCore;
     D:                      TIdSipTransactionDispatcher;
     Destination:            TIdSipLocation;
@@ -137,7 +136,6 @@ type
   // Test the location-using code in SendResponse
   TestLocation = class(TMessageCountingTestCase)
   private
-    Binding:      TIdSipConnectionBindings;
     D:            TIdSipTransactionDispatcher;
     L:            TIdSipMockLocator;
     Timer:        TIdDebugTimerQueue;
@@ -681,10 +679,6 @@ begin
   Self.MockUdpTransport := Self.D.Transports[1] as TIdSipMockTransport;
   Self.MockTransport    := Self.MockTcpTransport;
 
-  Self.Binding := TIdSipConnectionBindings.Create;
-  Self.Binding.LocalIP   := Self.MockTransport.Bindings[0].IP;
-  Self.Binding.LocalPort := Self.MockTransport.Bindings[0].Port;
-
   // This must differ from Self.D's bindings, or we will make hairpin calls
   // when we send INVITEs. That in itself isn't a problem, but for most tests
   // that's not what we want!
@@ -733,7 +727,6 @@ begin
   Self.ReceivedRequest.Free;
 
   Self.Destination.Free;
-  Self.Binding.Free;
   Self.D.Free;
   Self.Locator.Free;
   Self.Core.Free;
@@ -916,7 +909,7 @@ begin
   try
     Ack := RemoteDialog.CreateAck;
     try
-      Tran := Self.D.AddServerTransaction(Self.Invite, Self.Binding);
+      Tran := Self.D.AddServerTransaction(Self.Invite);
 
       Listener := TIdSipTestTransactionDispatcherListener.Create;
       try
@@ -960,7 +953,7 @@ var
   TranCount: Cardinal;
 begin
   TranCount := Self.D.TransactionCount;
-  Tran := Self.D.AddServerTransaction(Self.Invite, Self.Binding);
+  Tran := Self.D.AddServerTransaction(Self.Invite);
   Check(not Tran.IsClient,
         'Wrong kind of transaction added');
   CheckEquals(TranCount + 1,
@@ -1085,7 +1078,7 @@ procedure TestTIdSipTransactionDispatcher.TestDispatcherDoesntGetTransactionRequ
 var
   Listener: TIdSipTestTransactionDispatcherListener;
 begin
-  Self.D.AddServerTransaction(Self.Invite, Self.Binding);
+  Self.D.AddServerTransaction(Self.Invite);
 
   Listener := TIdSipTestTransactionDispatcherListener.Create;
   try
@@ -1214,7 +1207,7 @@ begin
 
   Self.Invite.ToHeader.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna>';
 
-  Self.D.AddServerTransaction(Self.TranRequest, Self.Binding);
+  Self.D.AddServerTransaction(Self.TranRequest);
   Check(not Self.D.LoopDetected(Self.Invite),
         'Loop should not be detected - requests match (same branch)');
 
@@ -1234,7 +1227,7 @@ begin
 
   Self.Invite.ToHeader.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna>';
 
-  Self.D.AddServerTransaction(Self.TranRequest, Self.Binding);
+  Self.D.AddServerTransaction(Self.TranRequest);
   Check(not Self.D.LoopDetected(Self.Invite),
         'Loop should not be detected - requests match (same branch)');
 
@@ -1375,7 +1368,7 @@ begin
   // We want to check that a server invite transaction gets its ACK.
   Listener := TIdSipTestTransactionListener.Create;
   try
-    ServerTran := Self.D.AddServerTransaction(Self.Invite, Self.Binding);
+    ServerTran := Self.D.AddServerTransaction(Self.Invite);
     ServerTran.AddTransactionListener(Listener);
 
     Response := Self.CreateMultipleChoices(Self.Invite);
@@ -1430,7 +1423,7 @@ var
   OK:   TIdSipResponse;
   Tran: TIdSipTransaction;
 begin
-  Tran := Self.D.AddServerTransaction(Self.Invite, Self.Binding);
+  Tran := Self.D.AddServerTransaction(Self.Invite);
 
   OK := TIdSipResponse.InResponseTo(Tran.InitialRequest, SIPOK);
   try
@@ -1465,7 +1458,7 @@ procedure TestTIdSipTransactionDispatcher.TestTransactionsCleanedUp;
 var
   TranCount: Integer;
 begin
-  Self.D.AddServerTransaction(Self.TranRequest, Self.Binding);
+  Self.D.AddServerTransaction(Self.TranRequest);
 
   TranCount := Self.D.TransactionCount;
 
@@ -1522,10 +1515,6 @@ begin
   Self.UdpTransport := Self.D.Transports[1] as TIdSipMockTransport;
   Self.MockTransport := Self.UdpTransport;
 
-  Self.Binding := TIdSipConnectionBindings.Create;
-  Self.Binding.LocalIP   := Self.MockTransport.Bindings[0].IP;
-  Self.Binding.LocalPort := Self.MockTransport.Bindings[0].Port;
-
   Self.Request  := TIdSipTestResources.CreateBasicRequest;
   Self.Response := TIdSipResponse.InResponseTo(Self.Request, SIPNotFound);
 
@@ -1535,8 +1524,6 @@ end;
 
 procedure TestLocation.TearDown;
 begin
-  Self.Binding.Free;
-
   Self.Response.Free;
   Self.Request.Free;
 
@@ -1570,7 +1557,7 @@ begin
 
   Self.L.AddA('localhost', '127.0.0.2');
 
-  Tran := Self.D.AddServerTransaction(Self.Request, Self.Binding);
+  Tran := Self.D.AddServerTransaction(Self.Request);
 
   DnsLookupCount := Self.L.LookupCount;
   Self.MarkSentResponseCount;
@@ -1593,7 +1580,7 @@ var
   DnsLookupCount: Cardinal;
   Tran:           TIdSipTransaction;
 begin
-  Tran := Self.D.AddServerTransaction(Self.Request, Self.Binding);
+  Tran := Self.D.AddServerTransaction(Self.Request);
 
   DnsLookupCount := Self.L.LookupCount;
   Self.MarkSentResponseCount;
@@ -1612,7 +1599,7 @@ var
 begin
   // When a transaction retransmits a response, don't issue a fresh DNS query,
   // in the interests of reducing network congestion.
-  Tran := Self.D.AddServerTransaction(Self.Request, Self.Binding);
+  Tran := Self.D.AddServerTransaction(Self.Request);
 
   DnsLookupCount := Self.L.LookupCount;
 
@@ -1631,7 +1618,7 @@ var
   Tran:           TIdSipTransaction;
 begin
   // When a transaction sends a new response, it must make a fresh DNS query.
-  Tran := Self.D.AddServerTransaction(Self.Request, Self.Binding);
+  Tran := Self.D.AddServerTransaction(Self.Request);
 
   DnsLookupCount := Self.L.LookupCount;
 
@@ -1964,8 +1951,7 @@ procedure TestTIdSipTransaction.TestMatchInviteServer;
 var
   Tran: TIdSipTransaction;
 begin
-  Tran := Self.Dispatcher.AddServerTransaction(Self.Request,
-                                             Self.Dispatcher.Binding);
+  Tran := Self.Dispatcher.AddServerTransaction(Self.Request);
 
   Check(Tran.Match(Self.Request),
         'Identical INVITE request');
@@ -2030,8 +2016,7 @@ begin
   Self.ReceivedRequest.Method := MethodRegister;
   Self.Request.Method         := MethodRegister;
 
-  Tran := Self.Dispatcher.AddServerTransaction(Self.Request,
-                                             Self.Dispatcher.Binding);
+  Tran := Self.Dispatcher.AddServerTransaction(Self.Request);
 
   Check(Tran.Match(Self.ReceivedRequest),
         'Identical REGISTER request');
@@ -2049,8 +2034,7 @@ var
 begin
   Self.Request.LastHop.Branch := '1'; // Some arbitrary non-SIP/2.0 branch
 
-  Tran := Self.Dispatcher.AddServerTransaction(Self.Request,
-                                               Self.Dispatcher.Binding);
+  Tran := Self.Dispatcher.AddServerTransaction(Self.Request);
 
   // RFC2543 matching depends on the last response the server sent.
   // And remember, a 200 OK in response to an INVITE will TERMINATE THE
@@ -2076,8 +2060,7 @@ var
 begin
   Self.Request.LastHop.Branch := '1'; // Some arbitrary non-SIP/2.0 branch
 
-  Tran := Self.Dispatcher.AddServerTransaction(Self.Request,
-                                             Self.Dispatcher.Binding);
+  Tran := Self.Dispatcher.AddServerTransaction(Self.Request);
 
   Check(Tran.Match(Self.Request), 'Identical INVITE');
 end;

@@ -141,8 +141,7 @@ type
                                   Port: Cardinal);
     procedure AddTransportListener(Listener: IIdSipTransportListener);
     function  AddClientTransaction(InitialRequest: TIdSipRequest): TIdSipTransaction;
-    function  AddServerTransaction(InitialRequest: TIdSipRequest;
-                                   Binding: TIdSipConnectionBindings): TIdSipTransaction;
+    function  AddServerTransaction(InitialRequest: TIdSipRequest): TIdSipTransaction;
     procedure ClearTransports;
     procedure FindServersFor(Response: TIdSipResponse;
                              Result: TIdSipLocations);
@@ -736,8 +735,7 @@ begin
   end;
 end;
 
-function TIdSipTransactionDispatcher.AddServerTransaction(InitialRequest: TIdSipRequest;
-                                                          Binding: TIdSipConnectionBindings): TIdSipTransaction;
+function TIdSipTransactionDispatcher.AddServerTransaction(InitialRequest: TIdSipRequest): TIdSipTransaction;
 begin
   Result := nil;
 
@@ -1140,7 +1138,7 @@ begin
       Self.NotifyOfRequest(Request, Binding);
     end
     else begin
-      Tran := Self.AddServerTransaction(Request, Binding);
+      Tran := Self.AddServerTransaction(Request);
       Tran.ReceiveRequest(Request, Binding);
     end;
   end;

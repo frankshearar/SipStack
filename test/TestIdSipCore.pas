@@ -1038,7 +1038,7 @@ var
   Response: TIdSipResponse;
 begin
   // cf. RFC 3261, section 8.2.2.2
-  Self.Dispatcher.AddServerTransaction(Self.Invite, Self.Dispatcher.Binding);
+  Self.Dispatcher.AddServerTransaction(Self.Invite);
 
   // wipe out the tag & give a different branch
   Self.Invite.ToHeader.Value := Self.Invite.ToHeader.Address.URI;

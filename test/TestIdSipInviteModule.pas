@@ -741,13 +741,16 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipInviteModule unit tests');
 //  Result.AddTest(TestDebug.Suite);
+{
   Result.AddTest(TestTIdSipInviteModule.Suite);
   Result.AddTest(TestTIdSipOutboundBye.Suite);
   Result.AddTest(TestTIdSipOutboundCancel.Suite);
   Result.AddTest(TestTIdSipInboundInvite.Suite);
   Result.AddTest(TestTIdSipOutboundInitialInvite.Suite);
   Result.AddTest(TestTIdSipOutboundRedirectedInvite.Suite);
+}
   Result.AddTest(TestTIdSipOutboundReInvite.Suite);
+{
   Result.AddTest(TestTIdSipOutboundReplacingInvite.Suite);
   Result.AddTest(TestTIdSipInboundSession.Suite);
   Result.AddTest(TestTIdSipOutboundSession.Suite);
@@ -763,6 +766,7 @@ begin
   Result.AddTest(TestTIdSipSessionModifySessionMethod.Suite);
   Result.AddTest(TestTIdSipProgressedSessionMethod.Suite);
   Result.AddTest(TestTIdSipSessionReferralMethod.Suite);
+}
 end;
 
 //******************************************************************************
