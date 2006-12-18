@@ -12,8 +12,7 @@ unit IdSipMockCore;
 interface
 
 uses
-  IdSipCore, IdSipInviteModule, IdSipMessage, IdSipTransaction, IdSipTransport,
-  IdSipUserAgent;
+  IdSipCore, IdSipInviteModule, IdSipMessage, IdSipTransaction, IdSipUserAgent;
 
 type
   TIdSipMockCore = class(TIdSipAbstractCore)

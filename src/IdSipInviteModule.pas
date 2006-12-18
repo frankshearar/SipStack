@@ -13,7 +13,7 @@ interface
 
 uses
   Classes, Contnrs, IdInterfacedObject, IdNotification, IdSipCore, IdSipDialog,
-  IdSipDialogID, IdSipMessage, IdSipTransport, IdTimerQueue;
+  IdSipDialogID, IdSipMessage, IdTimerQueue;
 
 type
   TIdSipInboundInvite = class;

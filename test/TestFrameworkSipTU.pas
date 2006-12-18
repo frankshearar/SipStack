@@ -88,7 +88,7 @@ type
 implementation
 
 uses
-  IdException, IdSipAuthentication, IdSipTransport;
+  IdException, IdSipAuthentication;
 
 //******************************************************************************
 //* TestTIdSipAction                                                           *
