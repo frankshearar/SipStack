@@ -2589,8 +2589,8 @@ end;
 
 function TIdSessionReferralData.Data: String;
 begin
-  Result := inherited Data
-          + 'Refer action: ' + IntToStr(Self.ReferAction) + CRLF;
+  Result := 'Refer action: ' + IntToStr(Self.ReferAction) + CRLF
+          + inherited Data;
 end;
 
 function TIdSessionReferralData.EventName: String;
