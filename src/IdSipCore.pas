@@ -354,7 +354,7 @@ type
     procedure PrepareResponse(Response: TIdSipResponse;
                               Request: TIdSipRequest);
     procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
-                            Request: TIdSipRequest);
+                            Request: TIdSipRequest); 
     procedure RejectRequestUnauthorized(Request: TIdSipRequest);
     procedure SetAuthenticator(Value: TIdSipAbstractAuthenticator); virtual;
     function  WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; virtual;
@@ -540,9 +540,9 @@ type
   // Note that both in- and out-bound actions subclass Action. Thus this class
   // contains methods that are sometimes inapplicable to a particular action.
   //
-  // Proxies and User Agents can challenge an Action, forcing us to re-issue an
-  // action with authorisation credentials. We represent this by the following
-  // state machine:
+  // Proxies and User Agents can challenge an outbound Action, forcing us to re-
+  // issue an action with authorisation credentials. We represent this by the
+  // following state machine:
   //
   //                                    +------+
   //                                    |      |
