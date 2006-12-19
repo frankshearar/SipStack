@@ -59,7 +59,7 @@ type
   end;
 
 // WinSock's gethostbyname & hostent have terrible declarations. We override
-// these to provice a more natural interface to the information.
+// these to provide a more natural interface to the information.
 function GetHostByName(Name: PChar): PHostEnt; stdcall; external 'wsock32.dll' name 'gethostbyname';
 
 {See commentary for LocalAddress and RoutableAddress for explanations of these variables}
