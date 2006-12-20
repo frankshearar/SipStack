@@ -93,6 +93,9 @@ type
     procedure OnTransportException(FailedMessage: TIdSipMessage;
                                    Error: Exception;
                                    const Reason: String);
+    procedure ReceiveAck(Invite: TIdSipRequest; Reply: TIdSipResponse);
+    procedure ReceiveRequest(Request: TIdSipRequest);
+    procedure ReceiveResponse(Request: TIdSipRequest; StatusCode: Cardinal);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -128,6 +131,13 @@ type
     procedure TestServerInviteTransactionGetsAck;
     procedure TestStartAllTranspors;
     procedure TestStopAllTranspors;
+    procedure TestTransactionDeletedWhenTimerBFires;
+    procedure TestTransactionDeletedWhenTimerDFires;
+    procedure TestTransactionDeletedWhenTimerFFires;
+    procedure TestTransactionDeletedWhenTimerHFires;
+    procedure TestTransactionDeletedWhenTimerIFires;
+    procedure TestTransactionDeletedWhenTimerJFires;
+    procedure TestTransactionDeletedWhenTimerKFires;
     procedure TestTransactionlessResponseRetransmissionsTryAlternateLocations;
     procedure TestTransactionsCleanedUp;
     procedure TestWillUseReliableTransport;
@@ -856,6 +866,39 @@ begin
   Self.TransportException := true;
 end;
 
+procedure TestTIdSipTransactionDispatcher.ReceiveAck(Invite: TIdSipRequest; Reply: TIdSipResponse);
+var
+  Ack: TIdSipRequest;
+begin
+  Ack := Invite.AckFor(Reply);
+  try
+    Ack.LastHop.Transport := Self.MockTransport.GetTransportType;
+    Self.MockTransport.FireOnRequest(Ack);
+  finally
+    Ack.Free;
+  end;
+end;
+
+procedure TestTIdSipTransactionDispatcher.ReceiveRequest(Request: TIdSipRequest);
+begin
+  Request.LastHop.Transport := Self.MockTransport.GetTransportType;
+  Self.MockTransport.FireOnRequest(Request);
+end;
+
+procedure TestTIdSipTransactionDispatcher.ReceiveResponse(Request: TIdSipRequest; StatusCode: Cardinal);
+var
+  Response: TIdSipResponse;
+begin
+  Response := TIdSipResponse.InResponseTo(Request, StatusCode);
+  try
+    Response.LastHop.Transport := Self.MockTransport.GetTransportType;
+
+    Self.MockTransport.FireOnResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
 //* TestTIdSipTransactionDispatcher Published methods **************************
 
 procedure TestTIdSipTransactionDispatcher.TestAckDoesntCreateATransaction;
@@ -1415,6 +1458,159 @@ begin
 
   for I := 0 to Self.D.TransportCount - 1 do
     Check(not Self.D.Transports[I].IsRunning, IntToStr(I) + 'th transport is running');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestTransactionDeletedWhenTimerBFires;
+var
+  TranCount: Integer;
+begin
+  // This test demonstrates that when a client INVITE transaction's Timer B
+  // fires, the transaction dispatcher removes the transaction from memory.
+
+  Self.D.SendRequest(Self.Invite, Self.Destination);
+
+  TranCount := Self.D.TransactionCount;
+
+  Self.Timer.TriggerAllEventsOfType(TIdSipClientInviteTransactionTimerBWait);
+
+  Check(Self.D.TransactionCount < TranCount,
+        'Client INVITE transaction not destroyed after Timer B fired');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestTransactionDeletedWhenTimerDFires;
+var
+  TranCount: Integer;
+begin
+  // This test demonstrates that when a client INVITE transaction's Timer D
+  // fires, the transaction dispatcher removes the transaction from memory.
+
+  Self.D.SendRequest(Self.Invite, Self.Destination);
+
+  TranCount := Self.D.TransactionCount;
+  Self.ReceiveResponse(Self.Invite, SIPBusyHere);
+
+  Self.Timer.TriggerAllEventsOfType(TIdSipClientInviteTransactionTimerDWait);
+
+  Check(Self.D.TransactionCount < TranCount,
+        'Client INVITE transaction not destroyed after Timer D fired');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestTransactionDeletedWhenTimerFFires;
+var
+  TranCount: Integer;
+begin
+  // This test demonstrates that when a client non-INVITE transaction's Timer F
+  // fires, the transaction dispatcher removes the transaction from memory.
+
+  Self.D.SendRequest(Self.Options, Self.Destination);
+
+  TranCount := Self.D.TransactionCount;
+
+  Self.Timer.TriggerAllEventsOfType(TIdSipClientNonInviteTransactionTimerFWait);
+
+  Check(Self.D.TransactionCount < TranCount,
+        'Client non-INVITE transaction not destroyed after Timer F fired');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestTransactionDeletedWhenTimerHFires;
+var
+  BusyHere:  TIdSipResponse;
+  TranCount: Integer;
+begin
+  // This test demonstrates that when a server INVITE transaction's Timer H
+  // fires, the transaction dispatcher removes the transaction from memory.
+
+  Self.ReceiveRequest(Self.Invite);
+
+  TranCount := Self.D.TransactionCount;
+
+  BusyHere := TIdSipResponse.InResponseTo(Self.Invite, SIPBusyHere);
+  try
+    Self.D.SendResponse(BusyHere);
+  finally
+    BusyHere.Free;
+  end;
+
+  Self.Timer.TriggerAllEventsOfType(TIdSipServerInviteTransactionTimerHWait);
+
+  Check(Self.D.TransactionCount < TranCount,
+        'Server INVITE transaction not destroyed after Timer H fired');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestTransactionDeletedWhenTimerIFires;
+var
+  BusyHere:  TIdSipResponse;
+  TranCount: Integer;
+begin
+  // This test demonstrates that when a server INVITE transaction's Timer I
+  // fires, the transaction dispatcher removes the transaction from memory.
+
+  Self.ReceiveRequest(Self.Invite);
+
+  TranCount := Self.D.TransactionCount;
+
+  BusyHere := TIdSipResponse.InResponseTo(Self.Invite, SIPBusyHere);
+  try
+    Self.D.SendResponse(BusyHere);
+    Self.ReceiveAck(Self.Invite, BusyHere);
+  finally
+    BusyHere.Free;
+  end;
+
+  Self.Timer.TriggerAllEventsOfType(TIdSipServerInviteTransactionTimerIWait);
+
+  Check(Self.D.TransactionCount < TranCount,
+        'Server INVITE transaction not destroyed after Timer I fired');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestTransactionDeletedWhenTimerJFires;
+var
+  OK:        TIdSipResponse;
+  TranCount: Integer;
+begin
+  // This test demonstrates that when a server non-INVITE transaction's Timer J
+  // fires, the transaction dispatcher removes the transaction from memory.
+
+  OK := TIdSipResponse.InResponseTo(Self.Options, SIPOK);
+  try
+    Self.ReceiveRequest(Options);
+
+    TranCount := Self.D.TransactionCount;
+    Self.D.SendResponse(OK);
+    Self.Timer.TriggerAllEventsOfType(TIdSipServerNonInviteTransactionTimerJWait);
+
+    Check(Self.D.TransactionCount < TranCount,
+          'Server non-INVITE transaction not destroyed after Timer J fired');
+  finally
+    OK.Free;
+  end;
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestTransactionDeletedWhenTimerKFires;
+var
+  OK:        TIdSipResponse;
+  TranCount: Integer;
+begin
+  // This test demonstrates that when a client non-INVITE transaction's Timer K
+  // fires, the transaction dispatcher removes the transaction from memory.
+
+  OK := TIdSipResponse.InResponseTo(Self.Options, SIPOK);
+  try
+    OK.LastHop.Transport := Self.MockTransport.GetTransportType;
+
+    Self.D.SendRequest(Options, Self.Destination);
+
+    TranCount := Self.D.TransactionCount;
+    Self.MockTransport.FireOnResponse(OK);
+
+  finally
+    OK.Free;
+  end;
+
+  Self.Timer.TriggerAllEventsOfType(TIdSipClientNonInviteTransactionTimerKWait);
+
+  Check(Self.D.TransactionCount < TranCount,
+        'Client non-INVITE transaction not destroyed after Timer K fired');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestTransactionlessResponseRetransmissionsTryAlternateLocations;
