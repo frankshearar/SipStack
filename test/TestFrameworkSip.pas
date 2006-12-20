@@ -975,12 +975,12 @@ begin
   Self.Destination := TIdSipToHeader.Create;
   Self.Destination.Value := 'sip:franks@remotehost';
 
-  Self.DebugTimer := TIdDebugTimerQueue.Create(false);
-  Self.DebugTimer.TriggerImmediateEvents := true;
-
   Self.Core := Self.CreateUserAgent(Self.DebugTimer, 'sip:case@localhost');
   Self.Authenticator := Self.Core.Authenticator as TIdSipAuthenticator;
   Self.Dispatcher    := Self.Core.Dispatcher as TIdSipMockTransactionDispatcher;
+
+  Self.DebugTimer := Self.Dispatcher.DebugTimer;
+  Self.DebugTimer.TriggerImmediateEvents := true;
 
   Self.Invite := TIdSipTestResources.CreateBasicRequest;
   Self.RemoveBody(Self.Invite);
@@ -991,8 +991,6 @@ end;
 
 procedure TTestCaseTU.TearDown;
 begin
-  Self.DebugTimer.Terminate;
-
   Self.Invite.Free;
   Self.Core.Free;
   Self.Destination.Free;
