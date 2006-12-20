@@ -141,6 +141,9 @@ type
 {
     procedure TestInboundCall;
     procedure TestMakeCall;
+}
+    procedure TestMakeCallMalformedAddress;
+{
     procedure TestMakeRegistration;
     procedure TestModifyCall;
 }
@@ -944,7 +947,24 @@ end;
 procedure TestTIdSipStackInterface.TestMakeCall;
 begin
 end;
+}
+procedure TestTIdSipStackInterface.TestMakeCallMalformedAddress;
+var
+  Handle:           TIdSipHandle;
+  MalformedAddress: TIdSipToHeader;
+begin
+  MalformedAddress := TIdSipToHeader.Create;
+  try
+    MalformedAddress.Address.Uri := 'sip:::1';
+    Check(MalformedAddress.IsMalformed, 'Sanity check: the URI must be malformed');
 
+    Handle := Self.Intf.MakeCall(MalformedAddress, '', '');
+    CheckEquals(InvalidHandle, Handle, 'MakeCall didn''t return the invalid handle');
+  finally
+    MalformedAddress.Free;
+  end;
+end;
+{
 procedure TestTIdSipStackInterface.TestMakeRegistration;
 begin
 end;
