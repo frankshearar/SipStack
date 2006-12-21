@@ -1035,7 +1035,6 @@ begin
   // can resolve to an IP.
 
   Self.Core.Contact.IsGruu := true;
-  Self.Core.Contact.Grid   := Self.Core.NextGrid;
   Self.Locator.AddA(Self.Core.Contact.Address.Host, '127.0.0.2');
 end;
 
