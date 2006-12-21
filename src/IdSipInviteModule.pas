@@ -2764,6 +2764,7 @@ begin
   Self.LocalMimeType           := ContentType;
 
   Self.InitialInvite.Accept(Offer, ContentType);
+  Self.LocalGruu := Self.InitialInvite.LocalGruu;
 end;
 
 function TIdSipInboundSession.IsInbound: Boolean;

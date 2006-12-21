@@ -4592,7 +4592,9 @@ begin
   Answer         := TIdSipTestResources.BasicSDP('public.booth.org');
   AnswerMimeType := SdpMimeType;
 
+  Self.MarkSentResponseCount;
   Self.Session.AcceptCall(Answer, AnswerMimeType);
+  Self.CheckResponseSent('No 200 OK sent');
 
   Check(Self.Session.DialogEstablished,
         'Dialog not established');
@@ -4600,6 +4602,10 @@ begin
                'Dialog object wasn''t created');
   CheckEquals(Answer,         Self.Session.LocalSessionDescription, 'LocalSessionDescription');
   CheckEquals(AnswerMimeType, Self.Session.LocalMimeType,           'LocalMimeType');
+
+  CheckEquals(Self.LastSentResponse.FirstContact.AsString,
+              Self.Session.LocalGruu.AsString,
+              'LocalGRUU property not set');
 end;
 
 procedure TestTIdSipInboundSession.TestAcceptCallWithGruu;
@@ -4615,6 +4621,9 @@ begin
   // draft-ietf-sip-gruu section 8.1
   Check(Self.LastSentResponse.FirstContact.Address.HasParameter(GridParam),
         'GRUUs sent out in 200 OKs to INVITEs should have a "grid" parameter');
+  CheckEquals(Self.LastSentResponse.FirstContact.AsString,
+              Self.Session.LocalGruu.AsString,
+              'LocalGRUU property not set');
 end;
 
 procedure TestTIdSipInboundSession.TestAcceptCallWithAnswerInAck;
