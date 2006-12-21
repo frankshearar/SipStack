@@ -608,6 +608,7 @@ type
     procedure SendRequest(Request: TIdSipRequest);
     procedure SendResponse(Response: TIdSipResponse); virtual;
     procedure SetResult(Value: TIdSipActionResult);
+    procedure SetStateToFinished;
     procedure SetStateToResent;
     procedure SetStateToSent;
   public
@@ -3183,20 +3184,24 @@ begin
       Self.NotifyOfAuthenticationChallenge(Response);
       Result := arInterim;
     end;
-  else
+  else begin
     Result := arFailure;
+    Self.SetStateToFinished;
+  end;
   end;
 end;
 
 function TIdSipAction.ReceiveGlobalFailureResponse(Response: TIdSipResponse): TIdSipActionResult;
 begin
   Result := arFailure;
+  Self.SetStateToFinished;
 end;
 
 function TIdSipAction.ReceiveOKResponse(Response: TIdSipResponse;
                                         Binding: TIdSipConnectionBindings): TIdSipActionResult;
 begin
   Result := arSuccess;
+  Self.SetStateToFinished;
 end;
 
 procedure TIdSipAction.ReceiveOtherRequest(Request: TIdSipRequest;
@@ -3214,11 +3219,13 @@ function TIdSipAction.ReceiveRedirectionResponse(Response: TIdSipResponse;
                                                  Binding: TIdSipConnectionBindings): TIdSipActionResult;
 begin
   Result := arFailure;
+  Self.SetStateToFinished;
 end;
 
 function TIdSipAction.ReceiveServerFailureResponse(Response: TIdSipResponse): TIdSipActionResult;
 begin
   Result := arFailure;
+  Self.SetStateToFinished;
 end;
 
 procedure TIdSipAction.SendRequest(Request: TIdSipRequest);
@@ -3267,6 +3274,11 @@ end;
 procedure TIdSipAction.SetResult(Value: TIdSipActionResult);
 begin
   Self.fResult := Value;
+end;
+
+procedure TIdSipAction.SetStateToFinished;
+begin
+  Self.State := asFinished;
 end;
 
 procedure TIdSipAction.SetStateToResent;
