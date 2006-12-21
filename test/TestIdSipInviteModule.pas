@@ -272,7 +272,9 @@ type
 
   TestTIdSipOutboundReInvite = class(TestTIdSipOutboundInvite)
   private
-    Dialog: TIdSipDialog;
+    Dialog:            TIdSipDialog;
+    InOutboundSession: Boolean;
+    LocalGruu:         TIdSipContactHeader;
 
     function CreateInvite: TIdSipOutboundReInvite;
   protected
@@ -280,6 +282,9 @@ type
   public
     procedure SetUp; override;
     procedure TearDown; override;
+  published
+    procedure TestSendInInboundSessionWithAuthentication;
+    procedure TestSendWithGruu; override;
   end;
 
   TestTIdSipOutboundReplacingInvite = class(TestTIdSipOutboundInvite)
@@ -1169,6 +1174,7 @@ begin
 
   Invite := Self.Module.CreateInvite(Self.Destination, '', '');
   try
+    Self.CheckCreateRequest(Self.Destination, Invite);
     Check(not Invite.FirstContact.Address.HasGrid,
           '"grid" parameter automatically added to Contact');
   finally
@@ -3312,10 +3318,14 @@ begin
   inherited SetUp;
 
   Self.Dialog := Self.CreateArbitraryDialog;
+  Self.LocalGruu := TIdSipContactHeader.Create;
+  Self.LocalGruu.Value := 'sip:case@localhost;gruu;grid="decafbad"';
+  Self.InOutboundSession := true;
 end;
 
 procedure TestTIdSipOutboundReInvite.TearDown;
 begin
+  Self.LocalGruu.Free;
   Self.Dialog.Free;
 
   inherited TearDown;
@@ -3330,10 +3340,12 @@ begin
   Self.Dialog.RemoteTarget.Uri := Self.Destination.Address.Uri;
 
   Invite := Self.CreateInvite;
-  Invite.Dialog         := Self.Dialog;
-  Invite.MimeType       := Self.InviteMimeType;
-  Invite.Offer          := Self.InviteOffer;
-  Invite.OriginalInvite := Self.Invite;
+  Invite.LocalGruu         := Self.LocalGruu;
+  Invite.Dialog            := Self.Dialog;
+  Invite.MimeType          := Self.InviteMimeType;
+  Invite.InOutboundSession := Self.InOutboundSession;
+  Invite.Offer             := Self.InviteOffer;
+  Invite.OriginalInvite    := Self.Invite;
   Invite.AddActionListener(Self);
   Invite.AddOwnedActionListener(Self);
   Invite.AddInviteListener(Self);
@@ -3347,6 +3359,46 @@ end;
 function TestTIdSipOutboundReInvite.CreateInvite: TIdSipOutboundReInvite;
 begin
   Result := Self.Core.AddOutboundAction(TIdSipOutboundReInvite) as TIdSipOutboundReInvite;
+end;
+
+//* TestTIdSipOutboundReInvite Published methods *******************************
+
+procedure TestTIdSipOutboundReInvite.TestSendInInboundSessionWithAuthentication;
+var
+  Invite: TIdSipOutboundInvite;
+begin
+  Self.Invite.AddHeader(AuthorizationHeader).Value := '';
+  Self.InOutboundSession := false;
+
+  Self.MarkSentRequestCount;
+  Invite := Self.CreateAction as TIdSipOutboundInvite;
+  CheckRequestSent(Self.ClassName + ': No request sent');
+
+  CheckEquals(MethodInvite,
+              Self.LastSentRequest.Method,
+              Self.ClassName + ': Method of sent request');
+  Check(not Self.LastSentRequest.HasAuthorization,
+        'You can''t use the other party''s authorization credentials when '
+      + 'sending them a re-INVITE');
+end;
+
+procedure TestTIdSipOutboundReInvite.TestSendWithGruu;
+var
+  Invite: TIdSipOutboundInvite;
+begin
+  Self.UseGruu;
+
+  Self.MarkSentRequestCount;
+  Invite := Self.CreateAction as TIdSipOutboundInvite;
+  CheckRequestSent(Self.ClassName + ': No request sent');
+
+  CheckEquals(MethodInvite,
+              Self.LastSentRequest.Method,
+              Self.ClassName + ': Method of sent request');
+
+  CheckEquals(Self.LocalGruu.AsString,
+              Invite.LocalGruu.AsString,
+              Self.ClassName + ': LocalGruu not set (to that of the session-established local GRUU)');
 end;
 
 //******************************************************************************

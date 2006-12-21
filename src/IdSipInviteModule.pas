@@ -1670,7 +1670,7 @@ begin
   Self.ReceivedFinalResponse := false;
 
   inherited Resend(AuthorizationCredentials);
-end;  
+end;
 
 procedure TIdSipOutboundInvite.Send;
 begin
@@ -2099,8 +2099,12 @@ begin
   Result := Self.Module.CreateReInvite(Self.Dialog, Self.Offer, Self.MimeType);
   // Re-INVITEs use the same credentials as the original INVITE that
   // established the dialog.
-  Result.CopyHeaders(Self.OriginalInvite, AuthorizationHeader);
-  Result.CopyHeaders(Self.OriginalInvite, ProxyAuthorizationHeader);
+  if Self.InOutboundSession then begin
+    Result.CopyHeaders(Self.OriginalInvite, AuthorizationHeader);
+    Result.CopyHeaders(Self.OriginalInvite, ProxyAuthorizationHeader);
+  end;
+
+  Result.FirstContact.Assign(Self.LocalGruu)
 end;
 
 procedure TIdSipOutboundReInvite.Initialise(UA: TIdSipAbstractCore;
@@ -2223,6 +2227,7 @@ begin
     raise EIdSipTransactionUser.Create(CannotModifyDuringModification);
 
   ReInvite := Self.UA.AddOutboundAction(TIdSipOutboundReInvite) as TIdSipOutboundReInvite;
+  ReInvite.LocalGruu         := Self.LocalGruu;
   ReInvite.MimeType          := ContentType;
   ReInvite.Dialog            := Self.Dialog;
   ReInvite.InOutboundSession := Self.IsOutboundCall;
