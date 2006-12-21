@@ -1334,7 +1334,7 @@ var
 begin
   EventCount := Self.DebugTimer.EventCount;
   Self.Core.ScheduleEvent(Self.ScheduledEvent, 50, Self.Invite.Copy);
-  Check(EventCount < DebugTimer.EventCount,
+  Check(EventCount < Self.DebugTimer.EventCount,
         'Event not scheduled');
 end;
 
