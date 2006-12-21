@@ -4031,7 +4031,7 @@ begin
     Check(EventCount < Self.DebugTimer.EventCount,
           Session.ClassName + ': No timer added');
 
-    LatestEvent := Self.DebugTimer.LastEventScheduled;
+    LatestEvent := Self.DebugTimer.LastEventScheduled(TIdSipActionsWait);
 
     Check(Assigned(LatestEvent),
           Session.ClassName + ': Wrong notify event');

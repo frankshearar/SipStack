@@ -174,7 +174,8 @@ type
                        Event: TIdWait); override;
     function  EventCount: Integer;
     function  FirstEventScheduledFor(Event: Pointer): TIdWait;
-    function  LastEventScheduled: TIdWait;
+    function  LastEventScheduled: TIdWait; overload;
+    function  LastEventScheduled(WaitType: TIdWaitClass): TIdWait; overload;
     function  LastEventScheduledFor(Event: Pointer): TIdWait;
     procedure LockTimer; override;
     procedure RemoveAllEvents;
@@ -720,6 +721,25 @@ begin
   Self.LockTimer;
   try
     Result := Self.EventAt(Self.EventCount - 1);
+  finally
+    Self.UnlockTimer;
+  end;
+end;
+
+function TIdDebugTimerQueue.LastEventScheduled(WaitType: TIdWaitClass): TIdWait;
+var
+  I: Integer;
+begin
+  Result := nil;
+
+  Self.LockTimer;
+  try
+    I := Self.EventList.Count - 1;
+    while (I >= 0) and not Assigned(Result) do begin
+      if (Self.EventAt(I).ClassType = WaitType) then
+        Result := Self.EventAt(I);
+      Dec(I);
+    end;
   finally
     Self.UnlockTimer;
   end;
