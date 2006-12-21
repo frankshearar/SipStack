@@ -567,8 +567,7 @@ type
     ReceivingUA:    TIdSipAbstractCore;
     Refer:          TIdSipInboundSubscription;
 
-    function  CreateTransferringUA(Timer: TIdTimerQueue;
-                                   const Address: String): TIdSipUserAgent;
+    function  CreateTransferringUA(const Address: String): TIdSipUserAgent;
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
                                         Binding: TIdSipConnectionBindings);
@@ -7236,14 +7235,10 @@ procedure TestSessionReplacer.SetUp;
 begin
   inherited SetUp;
 
-  Self.Alice          := Self.CreateTransferringUA(Self.DebugTimer,
-                                                   'sip:alice@127.0.0.1');
-  Self.AlicesNewPhone := Self.CreateTransferringUA(Self.DebugTimer,
-                                                   'sip:alice@127.0.0.2');
-  Self.Bob            := Self.CreateTransferringUA(Self.DebugTimer,
-                                                   'sip:bob@127.0.0.3');
-  Self.ParkPlace      := Self.CreateTransferringUA(Self.DebugTimer,
-                                                   'sip:parkingplace@127.0.0.4');
+  Self.Alice          := Self.CreateTransferringUA('sip:alice@127.0.0.1');
+  Self.AlicesNewPhone := Self.CreateTransferringUA('sip:alice@127.0.0.2');
+  Self.Bob            := Self.CreateTransferringUA('sip:bob@127.0.0.3');
+  Self.ParkPlace      := Self.CreateTransferringUA('sip:parkingplace@127.0.0.4');
 end;
 
 procedure TestSessionReplacer.TearDown;
@@ -7257,12 +7252,11 @@ end;
 
 //* TestSessionReplacer Private methods ****************************************
 
-function TestSessionReplacer.CreateTransferringUA(Timer: TIdTimerQueue;
-                                                  const Address: String): TIdSipUserAgent;
+function TestSessionReplacer.CreateTransferringUA(const Address: String): TIdSipUserAgent;
 var
   SubMod: TIdSipSubscribeModule;
 begin
-  Result := Self.CreateUserAgent(Timer, Address);
+  Result := Self.CreateUserAgent(Address);
   Result.InviteModule.AddListener(Self);
 
   (Result.Dispatcher as TIdSipMockTransactionDispatcher).Transport.AddBinding(Result.Contact.Address.Host,
