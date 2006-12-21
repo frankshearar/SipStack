@@ -68,8 +68,7 @@ type
     function  CreateRemoteUnauthorized(Request: TIdSipRequest;
                                        const AuthHeaderName: String;
                                        const Qop: String): TIdSipResponse;
-    function  CreateUserAgent(Timer: TIdTimerQueue;
-                              const Address: String): TIdSipUserAgent;
+    function  CreateUserAgent(const Address: String): TIdSipUserAgent;
     function  LastSentAck: TIdSipRequest;
     function  LastSentRequest: TIdSipRequest;
     function  LastSentResponse: TIdSipResponse;
@@ -975,7 +974,7 @@ begin
   Self.Destination := TIdSipToHeader.Create;
   Self.Destination.Value := 'sip:franks@remotehost';
 
-  Self.Core := Self.CreateUserAgent(Self.DebugTimer, 'sip:case@localhost');
+  Self.Core := Self.CreateUserAgent('sip:case@localhost');
   Self.Authenticator := Self.Core.Authenticator as TIdSipAuthenticator;
   Self.Dispatcher    := Self.Core.Dispatcher as TIdSipMockTransactionDispatcher;
 
@@ -1089,8 +1088,7 @@ begin
   Result.AddHeader(AuthenticationInfoHeader);
 end;
 
-function TTestCaseTU.CreateUserAgent(Timer: TIdTimerQueue;
-                                     const Address: String): TIdSipUserAgent;
+function TTestCaseTU.CreateUserAgent(const Address: String): TIdSipUserAgent;
 var
   MockLocator: TIdSipMockLocator;
 begin
@@ -1098,7 +1096,7 @@ begin
   Result.Authenticator := TIdSipAuthenticator.Create;
   Result.Dispatcher    := TIdSipMockTransactionDispatcher.Create;
   Result.Locator       := Result.Dispatcher.Locator;
-  Result.Timer         := Timer;
+  Result.Timer         := Result.Dispatcher.Timer;
 
   Result.Contact.Value := Address;
   Result.From.Value    := Address;
