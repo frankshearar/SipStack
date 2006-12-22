@@ -3026,6 +3026,9 @@ procedure TIdSipAction.ReceiveResponse(Response: TIdSipResponse;
 var
   Succeeded: TIdSipActionResult;
 begin
+  // Accept one final response only
+  if (Self.State = asFinished) then Exit;
+
   // Each of the ReceiveXXXResponse functions returns true if we succeeded
   // in our Action, or we could re-issue the request. They only return
   // false when the action failed irrecoverably.
