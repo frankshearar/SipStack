@@ -2836,19 +2836,19 @@ end;
 procedure TestTIdSipInboundSubscription.CheckExpiresScheduled(ExpectedExpires: Cardinal;
                                                               const Msg: String);
 var
-  ActualExpires: Cardinal;
+  Wait: TIdWait;
 begin
   Check(Self.DebugTimer.EventCount > 0,
         Msg + ': No events scheduled');
 
-  // DebugWaitTime's in milliseconds & ExpectedExpires's in seconds
-  ActualExpires := Self.DebugTimer.LastEventScheduled.DebugWaitTime div 1000;
-  CheckEquals(ExpectedExpires,
-              ActualExpires,
-              Msg + ': Expires wait time');
+  Wait := Self.DebugTimer.LastEventScheduled(TIdSipActionsWait);
+  CheckNotNull(Wait, Msg + ': No event scheduled');
+  CheckEquals(ExpectedExpires*1000,
+              Wait.DebugWaitTime,
+              Msg + ': Expires wait time (in milliseconds)');
 
   Self.MarkSentRequestCount;
-  Self.DebugTimer.TriggerEarliestEvent;
+  Self.DebugTimer.TriggerAllEventsOfType(TIdSipActionsWait);
   CheckRequestSent(Msg + ': No request sent for expired subscription');
   CheckEquals(MethodNotify,
               Self.LastSentRequest.Method,
@@ -4286,13 +4286,17 @@ end;
 //* TestTIdSipOutboundSubscription Private methods *****************************
 
 procedure TestTIdSipOutboundSubscription.CheckExpires(ExpectedRefreshTime: Cardinal);
+var
+  Wait: TIdWait;
 begin
   Check(Self.DebugTimer.EventCount > 0,
         'No events scheduled at all');
 
+  Wait := Self.DebugTimer.LastEventScheduled(TIdSipOutboundSubscriptionRefreshWait);
+  CheckNotNull(Wait, 'No event scheduled');
   CheckEquals(ExpectedRefreshTime*1000,
-              Self.DebugTimer.LastEventScheduled.DebugWaitTime,
-              'Wrong Expiry time');
+              Wait.DebugWaitTime,
+              'Wrong Expiry time (in milliseconds)');
 
   Self.MarkSentRequestCount;
   Self.DebugTimer.TriggerAllEventsOfType(TIdSipActionWait);
