@@ -250,7 +250,7 @@ type
     class function EventPackage: String; override;
   end;
 
-  TIdSipNotify = class(TIdSipAction)
+  TIdSipNotify = class(TIdSipOwnedAction)
   public
     function Method: String; override;
   end;
@@ -289,7 +289,7 @@ type
   protected
     procedure ConfigureAttempt(Notify: TIdSipRequest); override;
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
-    procedure NotifyOfSuccess(Response: TIdSipResponse);
+    procedure NotifyOfSuccess(Msg: TIdSipMessage); override;
   public
     property Expires:           Cardinal read fExpires write fExpires;
     property SubscriptionState: String   read fSubscriptionState write fSubscriptionState;
@@ -1471,10 +1471,14 @@ begin
   Self.MarkAsTerminated;
 end;
 
-procedure TIdSipOutboundNotify.NotifyOfSuccess(Response: TIdSipResponse);
+procedure TIdSipOutboundNotify.NotifyOfSuccess(Msg: TIdSipMessage);
 var
   Notification: TIdSipNotifySucceededMethod;
+  Response:     TIdSipResponse;
 begin
+  Assert(Msg.IsResponse, 'NOTIFYs succeed only upon receiving a response');
+
+  Response := Msg as TIdSipResponse;
   Notification := TIdSipNotifySucceededMethod.Create;
   try
     Notification.Notify   := Self;
