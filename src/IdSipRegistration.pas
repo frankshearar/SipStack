@@ -1426,6 +1426,7 @@ begin
       SIPIntervalTooBrief: begin
         Self.ReissueRequestWithLongerExpiry(Self.InitialRequest.RequestUri,
                                             Response.MinExpires.NumericValue);
+        Self.SetStateToResent;
         Result := arSuccess;
       end;
 
@@ -1433,6 +1434,7 @@ begin
         if Self.InitialRequest.HasHeader(RequireHeader) then begin
           Self.RetryWithoutExtensions(Self.InitialRequest.RequestUri,
                                       Response);
+          Self.SetStateToResent;                                      
           Result := arSuccess;
         end;
       end;

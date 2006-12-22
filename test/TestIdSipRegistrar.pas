@@ -1854,7 +1854,7 @@ begin
       Check(EventCount < Self.DebugTimer.EventCount,
             MsgPrefix + ': No timer added');
 
-      LatestEvent := Self.DebugTimer.LastEventScheduled;
+      LatestEvent := Self.DebugTimer.LastEventScheduled(TIdSipReregisterWait);
 
       Check(Assigned(LatestEvent),
             MsgPrefix + ': Wrong notify event');
@@ -1868,10 +1868,12 @@ begin
                   Self.LastSentRequest.RequestUri.Uri,
                   'REGISTER re-registering to a different registrar');
     end
-    else
-      CheckEquals(EventCount,
-                  Self.DebugTimer.EventCount,
-                  MsgPrefix + ': Timer erroneously added');
+    else begin
+      LatestEvent := Self.DebugTimer.LastEventScheduled(TIdSipReregisterWait);
+
+      Check(not Assigned(LatestEvent),
+            MsgPrefix + ': Timer erroneously added');
+    end;
   finally
     Self.DebugTimer.UnlockTimer;
   end;
