@@ -3364,14 +3364,12 @@ end;
 //* TestTIdSipOutboundReInvite Published methods *******************************
 
 procedure TestTIdSipOutboundReInvite.TestSendInInboundSessionWithAuthentication;
-var
-  Invite: TIdSipOutboundInvite;
 begin
   Self.Invite.AddHeader(AuthorizationHeader).Value := '';
   Self.InOutboundSession := false;
 
   Self.MarkSentRequestCount;
-  Invite := Self.CreateAction as TIdSipOutboundInvite;
+  Self.CreateAction;
   CheckRequestSent(Self.ClassName + ': No request sent');
 
   CheckEquals(MethodInvite,
