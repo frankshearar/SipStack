@@ -1005,7 +1005,7 @@ begin
     Registrar.Bindings[0].IP   := '127.0.0.1';
     Registrar.Bindings[0].Port := 25060;
 
-    UA := Self.CreateUserAgent(Self.DebugTimer, 'sip:case@localhost');
+    UA := Self.CreateUserAgent('sip:case@localhost');
     try
       UA.RegisterModule.Registrar.Uri := 'sip:' + Registrar.Bindings[0].IP + ':' + IntToStr(Registrar.Bindings[0].Port);
       UA.RegisterModule.HasRegistrar  := true;
@@ -1029,7 +1029,7 @@ begin
   // This bug catches a dangling pointer bug when you destroy a UA that uses a
   // proxy and unregisters automatically from a registrar.
 
-  UA := Self.CreateUserAgent(Self.DebugTimer, 'sip:case@localhost');
+  UA := Self.CreateUserAgent('sip:case@localhost');
   try
     UA.Proxy.Uri := ProxyUri;
     UA.HasProxy  := true;
