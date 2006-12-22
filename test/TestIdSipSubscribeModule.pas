@@ -715,6 +715,7 @@ type
   published
     procedure TestEventPackage;
     procedure TestMethod; override;
+    procedure TestReceiveSecondFinalResponse; 
     procedure TestReceiveTerminatingNotifyDeactivated; override;
     procedure TestReceiveTerminatingNotifyGiveUp; override;
     procedure TestReceiveTerminatingNotifyGiveUpWithRetryAfter; override;
@@ -902,7 +903,8 @@ type
 implementation
 
 uses
-  IdException, IdSipConsts, IdSipDialogID, IdSipOptionsModule, SysUtils;
+  IdException, IdSipConsts, IdSipDialogID, IdSipOptionsModule, IdSipTransaction,
+  SysUtils;
 
 type
   TIdSipTestPackage = class(TIdSipEventPackage)
@@ -4859,6 +4861,31 @@ begin
   CheckEquals(MethodRefer,
               Action.Method,
               Action.ClassName + '; Method');
+end;
+
+procedure TestTIdSipOutboundReferral.TestReceiveSecondFinalResponse;
+var
+  Action:    TIdSipAction;
+  ClassName: String;
+begin
+  //  ---                 REFER                  --->
+  // <---                 200 OK                 ---
+  //          <transaction's Timer K fires>
+  // <-- 481 Call leg/Transaction Does Not Exist --- (*)
+  //
+  // (*) No RFC 3261-compliant would send a 481 for a request after sending a
+  // 200 OK to the same request. Nevertheless, the author's seen it happen.
+  //
+  // What we expect to happen is that the Action drops/ignores the second
+  // response.
+  Action := Self.CreateAction;
+  ClassName := Action.ClassName;
+
+  Self.ReceiveOk(Self.LastSentRequest);
+  Self.DebugTimer.TriggerAllEventsOfType(TIdSipClientNonInviteTransactionTimerKWait);
+  Self.ReceiveServiceUnavailable(Self.LastSentRequest);
+  Check(not Action.IsTerminated,
+        ClassName + ' accepted second response, and now thinks it failed');
 end;
 
 procedure TestTIdSipOutboundReferral.TestReceiveTerminatingNotifyDeactivated;
