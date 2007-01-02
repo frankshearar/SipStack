@@ -33,7 +33,8 @@ procedure LocalAddresses(IPs: TStrings);
 procedure DefineLocalAddress(AAddress: String); {Allows you to use a specified local IP address}
 procedure DefineRoutableAddress(AAddress: String); {Allows you to set a public IP address}
 procedure DefineNetMask(AMask: String); {Let you set the netmask, used to identify if any IP address is local or not}
-function OnSameNetwork(AAddress1, AAddress2: String): Boolean;
+function OnSameNetwork(AAddress1, AAddress2: String): Boolean; overload;
+function OnSameNetwork(Address1, Address2, Netmask: String): Boolean; overload;
 function  ResolveARecords(Name: String; ResolvedList: TStrings): Integer;
 
 implementation
@@ -238,14 +239,19 @@ end;
 {This function allows you to identify if two different IP addresses are on the "same" network, by
  using idNetMask.}
 function OnSameNetwork(AAddress1, AAddress2: String): Boolean;
+begin
+  Result := OnSameNetwork(AAddress1, AAddress2, idNetMask);
+end;
+
+function OnSameNetwork(Address1, Address2, Netmask: String): Boolean;
 var
   Mask: DWord;
-  AAddr1, AAddr2: DWord;
+  Addr1, Addr2: DWord;
 begin
-  Mask   := TIdIPAddressParser.InetAddr(idNetMask);
-  AAddr1 := TIdIPAddressParser.InetAddr(AAddress1);
-  AAddr2 := TIdIPAddressParser.InetAddr(AAddress2);
-  Result := (AAddr1 and Mask) = (AAddr2 and Mask);
+  Mask   := TIdIPAddressParser.InetAddr(Netmask);
+  Addr1 := TIdIPAddressParser.InetAddr(Address1);
+  Addr2 := TIdIPAddressParser.InetAddr(Address2);
+  Result := (Addr1 and Mask) = (Addr2 and Mask);
 end;
 
 function ResolveARecords(Name: String; ResolvedList: TStrings): Integer;
