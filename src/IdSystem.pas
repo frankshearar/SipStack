@@ -245,13 +245,39 @@ end;
 
 function OnSameNetwork(Address1, Address2, Netmask: String): Boolean;
 var
-  Mask: DWord;
-  Addr1, Addr2: DWord;
+  Addr1:    DWord;
+  Addr2:    DWord;
+  Mask:     DWord;
+  Ip6Addr1: TIdIPv6AddressRec;
+  Ip6Addr2: TIdIPv6AddressRec;
+  Ip6Mask:  TIdIPv6AddressRec;
+  I:        Integer;
 begin
-  Mask   := TIdIPAddressParser.InetAddr(Netmask);
-  Addr1 := TIdIPAddressParser.InetAddr(Address1);
-  Addr2 := TIdIPAddressParser.InetAddr(Address2);
-  Result := (Addr1 and Mask) = (Addr2 and Mask);
+  if TIdIPAddressParser.IsIPv4Address(Address1) then begin
+    if TIdIPAddressParser.IsIPv4Address(Address2)
+      and TIdIPAddressParser.IsIPv4Address(NetMask) then begin
+      Mask   := TIdIPAddressParser.InetAddr(Netmask);
+      Addr1 := TIdIPAddressParser.InetAddr(Address1);
+      Addr2 := TIdIPAddressParser.InetAddr(Address2);
+      Result := (Addr1 and Mask) = (Addr2 and Mask);
+    end
+    else
+      Result := false;
+  end
+  else begin
+    if TIdIPAddressParser.IsIPv6Address(Address1)
+      and TIdIPAddressParser.IsIPv6Address(Address2)
+      and TIdIPAddressParser.IsIPv6Address(NetMask) then begin
+      TIdIPAddressParser.ParseIPv6Address(Address1, Ip6Addr1);
+      TIdIPAddressParser.ParseIPv6Address(Address2, Ip6Addr2);
+      TIdIPAddressParser.ParseIPv6Address(Netmask, Ip6Mask);
+      Result := true;
+      for I := Low(Ip6Mask) to High(Ip6Mask) do begin
+        Result := Result
+              and ((Ip6Addr1[I] and Ip6Mask[I]) = (Ip6Addr2[I] and Ip6Mask[I]));
+      end;
+    end;
+  end;
 end;
 
 function ResolveARecords(Name: String; ResolvedList: TStrings): Integer;

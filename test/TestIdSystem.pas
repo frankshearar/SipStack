@@ -30,7 +30,9 @@ type
     procedure TestGetCurrentProcessId;
     procedure TestGetHostNameNoWinsock;
     procedure TestOnSameNetwork;
+    procedure TestOnSameNetworkWithMixedAddresses;
     procedure TestOnSameNetworkWithNetmask;
+    procedure TestOnSameNetworkWithNetmaskIPv6;
     procedure TestResolveARecords;
   end;
 
@@ -203,35 +205,29 @@ begin
 
   // Badly formed parameters
   DefineNetMask('0.0.0.0');
-  try
-    OnSameNetwork('256.0.0.0', '1.1.1.1');
-    Fail('Failed to bail on ''256.0.0.0'' as first parameter');
-  except
-    on EConvertError do;
-  end;
-
-  try
-    OnSameNetwork('abcd', '1.1.1.1');
-    Fail('Failed to bail on ''abcd'' as first parameter');
-  except
-    on EConvertError do;
-  end;
+  Check(not OnSameNetwork('256.0.0.0', '1.1.1.1'), '''256.0.0.0'' as first parameter');
+  Check(not OnSameNetwork('abcd', '1.1.1.1'), '''abcd'' as first parameter');
 
   DefineNetMask('0.0.0.0');
-  try
-    OnSameNetwork('1.1.1.1', '256.0.0.0');
-    Fail('Failed to bail on ''256.0.0.0'' as second parameter');
-  except
-    on EConvertError do;
-  end;
+  Check(not OnSameNetwork('1.1.1.1', '256.0.0.0'), '''256.0.0.0'' as second parameter');
 
   DefineNetMask('256.0.0.0');
-  try
-    OnSameNetwork('1.1.1.1', '1.1.1.1');
-    Fail('Failed to bail on ''256.0.0.0'' as netmask');
-  except
-    on EConvertError do;
-  end;
+  Check(not OnSameNetwork('1.1.1.1', '1.1.1.1'), '''256.0.0.0'' as netmask');
+end;
+
+procedure TestFunctions.TestOnSameNetworkWithMixedAddresses;
+const
+  IPv4Address = '127.0.0.1';
+  IPv4Mask    = '0.0.0.0';
+  IPv6Address = '::1';
+  IPv6Mask    = '::';
+begin
+  Check(not OnSameNetwork(IPv4Address, IPv4Address, IPv6Mask), '1st address IPv4, 2nd address IPv4, mask IPv6');
+  Check(not OnSameNetwork(IPv4Address, IPv6Address, IPv4Mask), '1st address IPv4, 2nd address IPv6, mask IPv6');
+  Check(not OnSameNetwork(IPv4Address, IPv6Address, IPv6Mask), '1st address IPv4, 2nd address IPv6, mask IPv6');
+  Check(not OnSameNetwork(IPv6Address, IPv4Address, IPv4Mask), '1st address IPv6, 2nd address IPv4, mask IPv4');
+  Check(not OnSameNetwork(IPv6Address, IPv4Address, IPv6Mask), '1st address IPv6, 2nd address IPv4, mask IPv6');
+  Check(not OnSameNetwork(IPv6Address, IPv6Address, IPv4Mask), '1st address IPv6, 2nd address IPv6, mask IPv4');
 end;
 
 procedure TestFunctions.TestOnSameNetworkWithNetmask;
@@ -280,33 +276,95 @@ begin
   Check(not OnSameNetwork('1.1.1.1', '2.1.1.1', '255.255.255.255'), '2.1.1.1/32 + 2.1.1.1/32');
 
   // Badly formed parameters
-  try
-    OnSameNetwork('256.0.0.0', '1.1.1.1', '0.0.0.0');
-    Fail('Failed to bail on ''256.0.0.0'' as first parameter');
-  except
-    on EConvertError do;
-  end;
+  Check(not OnSameNetwork('256.0.0.0', '1.1.1.1', '0.0.0.0'), '''256.0.0.0'' as first parameter');
+  Check(not OnSameNetwork('abcd', '1.1.1.1', '0.0.0.0'), '''abcd'' as first parameter');
+  Check(not OnSameNetwork('1.1.1.1', '256.0.0.0', '0.0.0.0'), '''256.0.0.0'' as second parameter');
+  Check(not OnSameNetwork('1.1.1.1', '1.1.1.1', '256.0.0.0'), '''256.0.0.0'' as netmask');
+end;
 
-  try
-    OnSameNetwork('abcd', '1.1.1.1', '0.0.0.0');
-    Fail('Failed to bail on ''abcd'' as first parameter');
-  except
-    on EConvertError do;
-  end;
-
-  try
-    OnSameNetwork('1.1.1.1', '256.0.0.0', '0.0.0.0');
-    Fail('Failed to bail on ''256.0.0.0'' as second parameter');
-  except
-    on EConvertError do;
-  end;
-
-  try
-    OnSameNetwork('1.1.1.1', '1.1.1.1', '256.0.0.0');
-    Fail('Failed to bail on ''256.0.0.0'' as netmask');
-  except
-    on EConvertError do;
-  end;
+procedure TestFunctions.TestOnSameNetworkWithNetmaskIPv6;
+begin
+  Check(    OnSameNetwork('::1',             '::1', '::'), '::1/0 + ::1/0');
+  Check(    OnSameNetwork('::1',             '::2', '::'), '::1/0 + ::2/0');
+  Check(    OnSameNetwork('::1',           '::1:1', '::'), '::1/0 + ::1:1/0');
+  Check(    OnSameNetwork('::1',         '::1:1:1', '::'), '::1/0 + ::1:1:1/0');
+  Check(    OnSameNetwork('::1',       '::1:1:1:1', '::'), '::1/0 + ::1:1:1:1/0');
+  Check(    OnSameNetwork('::1',     '::1:1:1:1:1', '::'), '::1/0 + ::1:1:1:1:1/0');
+  Check(    OnSameNetwork('::1',   '::1:1:1:1:1:1', '::'), '::1/0 + ::1:1:1:1:1:1/0');
+  Check(    OnSameNetwork('::1', '::1:1:1:1:1:1:1', '::'), '::1/0 + ::1:1:1:1:1:1:1/0');
+  Check(    OnSameNetwork('::1', '1:1:1:1:1:1:1:1', '::'), '::1/0 + 1:1:1:1:1:1:1:1/0');
+  Check(    OnSameNetwork('::1',             '::1', 'ff::'), '::1/16 + ::1/16');
+  Check(    OnSameNetwork('::1',             '::2', 'ff::'), '::1/16 + ::2/16');
+  Check(    OnSameNetwork('::1',           '::1:1', 'ff::'), '::1/16 + ::1:1/16');
+  Check(    OnSameNetwork('::1',         '::1:1:1', 'ff::'), '::1/16 + ::1:1:1/16');
+  Check(    OnSameNetwork('::1',       '::1:1:1:1', 'ff::'), '::1/16 + ::1:1:1:1/16');
+  Check(    OnSameNetwork('::1',     '::1:1:1:1:1', 'ff::'), '::1/16 + ::1:1:1:1:1/16');
+  Check(    OnSameNetwork('::1',   '::1:1:1:1:1:1', 'ff::'), '::1/16 + ::1:1:1:1:1:1/16');
+  Check(    OnSameNetwork('::1', '::1:1:1:1:1:1:1', 'ff::'), '::1/16 + ::1:1:1:1:1:1:1/16');
+  Check(not OnSameNetwork('::1', '1:1:1:1:1:1:1:1', 'ff::'), '::1/16 + 1:1:1:1:1:1:1:1/16');
+  Check(    OnSameNetwork('::1',             '::1', 'ff:ff::'), '::1/32 + ::1/32');
+  Check(    OnSameNetwork('::1',             '::2', 'ff:ff::'), '::1/32 + ::2/32');
+  Check(    OnSameNetwork('::1',           '::1:1', 'ff:ff::'), '::1/32 + ::1:1/32');
+  Check(    OnSameNetwork('::1',         '::1:1:1', 'ff:ff::'), '::1/32 + ::1:1:1/32');
+  Check(    OnSameNetwork('::1',       '::1:1:1:1', 'ff:ff::'), '::1/32 + ::1:1:1:1/32');
+  Check(    OnSameNetwork('::1',     '::1:1:1:1:1', 'ff:ff::'), '::1/32 + ::1:1:1:1:1/32');
+  Check(    OnSameNetwork('::1',   '::1:1:1:1:1:1', 'ff:ff::'), '::1/32 + ::1:1:1:1:1:1/32');
+  Check(not OnSameNetwork('::1', '::1:1:1:1:1:1:1', 'ff:ff::'), '::1/32 + ::1:1:1:1:1:1:1/32');
+  Check(not OnSameNetwork('::1', '1:1:1:1:1:1:1:1', 'ff:ff::'), '::1/32 + 1:1:1:1:1:1:1:1/32');
+  Check(    OnSameNetwork('::1',             '::1', 'ff:ff:ff::'), '::1/48 + ::1/48');
+  Check(    OnSameNetwork('::1',             '::2', 'ff:ff:ff::'), '::1/48 + ::2/48');
+  Check(    OnSameNetwork('::1',           '::1:1', 'ff:ff:ff::'), '::1/48 + ::1:1/48');
+  Check(    OnSameNetwork('::1',         '::1:1:1', 'ff:ff:ff::'), '::1/48 + ::1:1:1/48');
+  Check(    OnSameNetwork('::1',       '::1:1:1:1', 'ff:ff:ff::'), '::1/48 + ::1:1:1:1/48');
+  Check(    OnSameNetwork('::1',     '::1:1:1:1:1', 'ff:ff:ff::'), '::1/48 + ::1:1:1:1:1/48');
+  Check(not OnSameNetwork('::1',   '::1:1:1:1:1:1', 'ff:ff:ff::'), '::1/48 + ::1:1:1:1:1:1/48');
+  Check(not OnSameNetwork('::1', '::1:1:1:1:1:1:1', 'ff:ff:ff::'), '::1/48 + ::1:1:1:1:1:1:1/48');
+  Check(not OnSameNetwork('::1', '1:1:1:1:1:1:1:1', 'ff:ff:ff::'), '::1/48 + 1:1:1:1:1:1:1:1/48');
+  Check(    OnSameNetwork('::1',             '::1', 'ff:ff:ff:ff::'), '::1/64 + ::1/64');
+  Check(    OnSameNetwork('::1',             '::2', 'ff:ff:ff:ff::'), '::1/64 + ::2/64');
+  Check(    OnSameNetwork('::1',           '::1:1', 'ff:ff:ff:ff::'), '::1/64 + ::1:1/64');
+  Check(    OnSameNetwork('::1',         '::1:1:1', 'ff:ff:ff:ff::'), '::1/64 + ::1:1:1/64');
+  Check(    OnSameNetwork('::1',       '::1:1:1:1', 'ff:ff:ff:ff::'), '::1/64 + ::1:1:1:1/64');
+  Check(not OnSameNetwork('::1',     '::1:1:1:1:1', 'ff:ff:ff:ff::'), '::1/64 + ::1:1:1:1:1/64');
+  Check(not OnSameNetwork('::1',   '::1:1:1:1:1:1', 'ff:ff:ff:ff::'), '::1/64 + ::1:1:1:1:1:1/64');
+  Check(not OnSameNetwork('::1', '::1:1:1:1:1:1:1', 'ff:ff:ff:ff::'), '::1/64 + ::1:1:1:1:1:1:1/64');
+  Check(not OnSameNetwork('::1', '1:1:1:1:1:1:1:1', 'ff:ff:ff:ff::'), '::1/64 + 1:1:1:1:1:1:1:1/64');
+  Check(    OnSameNetwork('::1',             '::1', 'ff:ff:ff:ff:ff::'), '::1/80 + ::1/80');
+  Check(    OnSameNetwork('::1',             '::2', 'ff:ff:ff:ff:ff::'), '::1/80 + ::2/80');
+  Check(    OnSameNetwork('::1',           '::1:1', 'ff:ff:ff:ff:ff::'), '::1/80 + ::1:1/80');
+  Check(    OnSameNetwork('::1',         '::1:1:1', 'ff:ff:ff:ff:ff::'), '::1/80 + ::1:1:1/80');
+  Check(not OnSameNetwork('::1',       '::1:1:1:1', 'ff:ff:ff:ff:ff::'), '::1/80 + ::1:1:1:1/80');
+  Check(not OnSameNetwork('::1',     '::1:1:1:1:1', 'ff:ff:ff:ff:ff::'), '::1/80 + ::1:1:1:1:1/80');
+  Check(not OnSameNetwork('::1',   '::1:1:1:1:1:1', 'ff:ff:ff:ff:ff::'), '::1/80 + ::1:1:1:1:1:1/80');
+  Check(not OnSameNetwork('::1', '::1:1:1:1:1:1:1', 'ff:ff:ff:ff:ff::'), '::1/80 + ::1:1:1:1:1:1:1/80');
+  Check(not OnSameNetwork('::1', '1:1:1:1:1:1:1:1', 'ff:ff:ff:ff:ff::'), '::1/80 + 1:1:1:1:1:1:1:1/80');
+  Check(    OnSameNetwork('::1',             '::1', 'ff:ff:ff:ff:ff:ff::'), '::1/96 + ::1/96');
+  Check(    OnSameNetwork('::1',             '::2', 'ff:ff:ff:ff:ff:ff::'), '::1/96 + ::2/96');
+  Check(    OnSameNetwork('::1',           '::1:1', 'ff:ff:ff:ff:ff:ff::'), '::1/96 + ::1:1/96');
+  Check(not OnSameNetwork('::1',         '::1:1:1', 'ff:ff:ff:ff:ff:ff::'), '::1/96 + ::1:1:1/96');
+  Check(not OnSameNetwork('::1',       '::1:1:1:1', 'ff:ff:ff:ff:ff:ff::'), '::1/96 + ::1:1:1:1/96');
+  Check(not OnSameNetwork('::1',     '::1:1:1:1:1', 'ff:ff:ff:ff:ff:ff::'), '::1/96 + ::1:1:1:1:1/96');
+  Check(not OnSameNetwork('::1',   '::1:1:1:1:1:1', 'ff:ff:ff:ff:ff:ff::'), '::1/96 + ::1:1:1:1:1:1/96');
+  Check(not OnSameNetwork('::1', '::1:1:1:1:1:1:1', 'ff:ff:ff:ff:ff:ff::'), '::1/96 + ::1:1:1:1:1:1:1/96');
+  Check(not OnSameNetwork('::1', '1:1:1:1:1:1:1:1', 'ff:ff:ff:ff:ff:ff::'), '::1/96 + 1:1:1:1:1:1:1:1/96');
+  Check(    OnSameNetwork('::1',             '::1', 'ff:ff:ff:ff:ff:ff:ff::'), '::1/112 + ::1/112');
+  Check(    OnSameNetwork('::1',             '::2', 'ff:ff:ff:ff:ff:ff:ff::'), '::1/112 + ::2/112');
+  Check(not OnSameNetwork('::1',           '::1:1', 'ff:ff:ff:ff:ff:ff:ff::'), '::1/112 + ::1:1/112');
+  Check(not OnSameNetwork('::1',         '::1:1:1', 'ff:ff:ff:ff:ff:ff:ff::'), '::1/112 + ::1:1:1/112');
+  Check(not OnSameNetwork('::1',       '::1:1:1:1', 'ff:ff:ff:ff:ff:ff:ff::'), '::1/112 + ::1:1:1:1/112');
+  Check(not OnSameNetwork('::1',     '::1:1:1:1:1', 'ff:ff:ff:ff:ff:ff:ff::'), '::1/112 + ::1:1:1:1:1/112');
+  Check(not OnSameNetwork('::1',   '::1:1:1:1:1:1', 'ff:ff:ff:ff:ff:ff:ff::'), '::1/112 + ::1:1:1:1:1:1/112');
+  Check(not OnSameNetwork('::1', '::1:1:1:1:1:1:1', 'ff:ff:ff:ff:ff:ff:ff::'), '::1/112 + ::1:1:1:1:1:1:1/112');
+  Check(not OnSameNetwork('::1', '1:1:1:1:1:1:1:1', 'ff:ff:ff:ff:ff:ff:ff::'), '::1/112 + 1:1:1:1:1:1:1:1/112');
+  Check(    OnSameNetwork('::1',             '::1', 'ff:ff:ff:ff:ff:ff:ff:ff::'), '::1/128 + ::1/128');
+  Check(not OnSameNetwork('::1',             '::2', 'ff:ff:ff:ff:ff:ff:ff:ff::'), '::1/128 + ::2/128');
+  Check(not OnSameNetwork('::1',           '::1:1', 'ff:ff:ff:ff:ff:ff:ff:ff::'), '::1/128 + ::1:1/128');
+  Check(not OnSameNetwork('::1',         '::1:1:1', 'ff:ff:ff:ff:ff:ff:ff:ff::'), '::1/128 + ::1:1:1/128');
+  Check(not OnSameNetwork('::1',       '::1:1:1:1', 'ff:ff:ff:ff:ff:ff:ff:ff::'), '::1/128 + ::1:1:1:1/128');
+  Check(not OnSameNetwork('::1',     '::1:1:1:1:1', 'ff:ff:ff:ff:ff:ff:ff:ff::'), '::1/128 + ::1:1:1:1:1/128');
+  Check(not OnSameNetwork('::1',   '::1:1:1:1:1:1', 'ff:ff:ff:ff:ff:ff:ff:ff::'), '::1/128 + ::1:1:1:1:1:1/128');
+  Check(not OnSameNetwork('::1', '::1:1:1:1:1:1:1', 'ff:ff:ff:ff:ff:ff:ff:ff::'), '::1/128 + ::1:1:1:1:1:1:1/128');
+  Check(not OnSameNetwork('::1', '1:1:1:1:1:1:1:1', 'ff:ff:ff:ff:ff:ff:ff:ff::'), '::1/128 + 1:1:1:1:1:1:1:1/128');
 end;
 
 procedure TestFunctions.TestResolveARecords;
