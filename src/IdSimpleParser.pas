@@ -21,7 +21,7 @@ type
   TIdIPVersion = (Id_IPv4, Id_IPv6, Id_IPUnknown);
 
   // Indy10 defines this in IdStackBSDBase
-  TIdIPv6AddressRec = packed array[0..7] of Word;
+  TIdIPv6AddressRec = array[0..7] of Word;
 
   TIdIPAddressParser = class(TObject)
     class function  ExpandIPv6Address(const IPAddress: String): String;
