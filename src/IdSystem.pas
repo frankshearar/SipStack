@@ -21,6 +21,7 @@ uses
 }
 
 function  ConstructUUID: String;
+function  GetBestLocalAddress(DestinationAddress: String): String;
 function  GetCurrentProcessId: Cardinal;
 function  GetFullUserName: WideString;
 function  GetHostName: String;
@@ -42,6 +43,9 @@ implementation
 uses
   IdSimpleParser, IdGlobal, IdStack, IdUDPServer, SysUtils, Windows, Winsock;
 
+const
+  ANY_SIZE = 100;
+
 // See GetHostByName's explanation.
 type
   PPCharArray = ^TPCharArray;
@@ -59,13 +63,71 @@ type
     h_addr_list: PBytePointerArray;
   end;
 
+  _MIB_IPADDRROW = record
+    dwAddr:      DWORD;
+    dwIndex:     DWORD;
+    dwMask:      DWORD;
+    dwBCastAddr: DWORD;
+    dwReasmSize: DWORD;
+    unused1:     Word;
+    wType:       Word;
+  end;
+  MIB_IPADDRROW = _MIB_IPADDRROW;
+  TMibIpAddrRow = MIB_IPADDRROW;
+  PMibIpAddrRow = TMibIpAddrRow;
+
+  _MIB_IPADDRTABLE = record
+    dwNumEntries: DWORD;
+    table: array[0..ANY_SIZE - 1] of MIB_IPADDRROW;
+  end;
+  MIB_IPADDRTABLE = _MIB_IPADDRTABLE;
+  TMibIpAddrTable = MIB_IPADDRTABLE;
+  PMibIpAddrTable = ^TMibIpAddrTable;
+
+  TIpAddr = TInAddr;
+  PIpAddr = ^TIpAddr;
+
+const
+  IpHelper  = 'iphlpapi.dll';
+  WinSocket = 'wsock32.dll';
+
+function GetBestInterface(dwDestAddr: TIpAddr; var pdwBestIfIndex: DWORD): DWORD; stdcall; external IpHelper name 'GetBestInterface';
+function GetIpAddrTable(pIpAddrTable: PMibIpAddrTable; var pdwSize: ULONG; bOrder: BOOL): DWORD; stdcall; external IpHelper name 'GetIpAddrTable';
+
 // WinSock's gethostbyname & hostent have terrible declarations. We override
 // these to provide a more natural interface to the information.
-function GetHostByName(Name: PChar): PHostEnt; stdcall; external 'wsock32.dll' name 'gethostbyname';
+function GetHostByName(Name: PChar): PHostEnt; stdcall; external WinSocket name 'gethostbyname';
 
 {See commentary for LocalAddress and RoutableAddress for explanations of these variables}
 var
   idLocalAddress, idRoutableAddress, idNetMask: String;
+
+function GetIpAddress(InterfaceIndex: DWORD): String;
+var
+  I:    Integer;
+  RC:   DWORD;
+  Size: ULONG;
+  Table: PMibIpAddrTable;
+begin
+  Result := '';
+  Size   := 0;
+  if not GetIpAddrTable(nil, Size, true) = ERROR_BUFFER_OVERFLOW then Exit;
+
+  Table := AllocMem(Size);
+  try
+    RC := GetIpAddrTable(Table, Size, true);
+    if (RC <> 0) then Exit;
+
+    for I := 0 to Table.dwNumEntries - 1 do begin
+      if (Table.table[I].dwIndex = InterfaceIndex) then begin
+        Result := TIdIPAddressParser.IPv4AddressToStr(ntohl(Table.table[I].dwAddr));
+        Break;
+      end;
+    end;
+  finally
+    FreeMem(Table);
+  end;
+end;
 
 function ConstructUUID: String;
 var
@@ -73,6 +135,29 @@ var
 begin
   CreateGUID(NewGuid);
   Result := Lowercase(WithoutFirstAndLastChars(GUIDToString(NewGuid)));
+end;
+
+function GetBestLocalAddress(DestinationAddress: String): String;
+var
+  DstAddr:        TIpAddr;
+  InterfaceIndex: DWORD;
+  RC:             DWORD;
+begin
+  // Return the most appropriate local address to use when sending packets to
+  // the machine at DestinationAddress.
+  // Right now, this only supports IPv4 addresses.
+
+  Result := '';
+
+  if not TIdIPAddressParser.IsIPv4Address(DestinationAddress) then
+    raise Exception.Create('We do not support IPv6 addresses yet, because only XP and onwards have an IPv6 stack');
+
+  DstAddr.S_addr := htonl(TIdIPAddressParser.InetAddr(DestinationAddress));
+  RC := GetBestInterface(DstAddr, InterfaceIndex);
+
+  if (RC <> 0) then Exit;
+
+  Result := GetIpAddress(InterfaceIndex);
 end;
 
 function GetCurrentProcessId: Cardinal;
@@ -276,7 +361,9 @@ begin
         Result := Result
               and ((Ip6Addr1[I] and Ip6Mask[I]) = (Ip6Addr2[I] and Ip6Mask[I]));
       end;
-    end;
+    end
+    else
+      Result := false;
   end;
 end;
 

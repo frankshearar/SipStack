@@ -27,6 +27,7 @@ type
   published
     procedure TestDefineLocalAddress;
     procedure TestDefineRoutableAddress;
+    procedure TestGetBestLocalAddress;
     procedure TestGetCurrentProcessId;
     procedure TestGetHostNameNoWinsock;
     procedure TestOnSameNetwork;
@@ -39,7 +40,8 @@ type
 implementation
 
 uses
-  Classes, IdSocketHandle, IdUdpServer, SysUtils, Windows, Winsock;
+  Classes, IdSocketHandle, IdSimpleParser, IdUdpServer, SysUtils, Windows,
+  Winsock;
 
 function Suite: ITestSuite;
 begin
@@ -119,6 +121,25 @@ begin
 
   DefineRoutableAddress(AddressTwo);
   CheckEquals(AddressTwo, RoutableAddress, 'RoutableAddress not re-set');
+end;
+
+procedure TestFunctions.TestGetBestLocalAddress;
+var
+  Addresses: TStrings;
+  Dest:      String;
+  I:         Integer;
+begin
+  Addresses := TStringList.Create;
+  try
+    LocalAddresses(Addresses);
+
+    for I := 0 to Addresses.Count - 1 do begin
+      Dest := TIdIpAddressParser.IncIPAddress(Addresses[I]);
+      CheckEquals(Addresses[I], GetBestLocalAddress(Dest), 'Wrong local address for ' + Dest);
+    end;
+  finally
+    Addresses.Free;
+  end;
 end;
 
 procedure TestFunctions.TestGetCurrentProcessId;
