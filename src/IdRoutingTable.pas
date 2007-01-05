@@ -64,7 +64,7 @@ type
   // When you ask me what local address to use, I consult my list of mapped
   // routes (in Self.Routes), and return the best-matching route. Should none
   // be found, I ask the OS for the best local address to use.
-  TIdIPv4RoutingTable = class(TObject)
+  TIdRoutingTable = class(TObject)
   private
     Routes: TObjectList;
   protected
@@ -83,6 +83,13 @@ type
     function  MappedAddressFor(DestinationIP: String): String;
     procedure RemoveRoute(Destination, Mask, Gateway: String);
     function  RouteCount: Integer;
+  end;
+
+  TIdWindowsRoutingTable = class(TIdRoutingTable)
+  protected
+    function  GetBestLocalAddress(DestinationIP: String): String; overload; override;
+    procedure GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation); overload; override;
+    procedure GetBestRoute(DestinationIP, LocalIP: String; Route: TIdRouteEntry); override;
   end;
 
 function RouteSort(Item1, Item2: Pointer): Integer;
@@ -373,25 +380,25 @@ begin
 end;
 
 //******************************************************************************
-//* TIdIPv4RoutingTable                                                        *
+//* TIdRoutingTable                                                            *
 //******************************************************************************
-//* TIdIPv4RoutingTable Public methods *****************************************
+//* TIdRoutingTable Public methods *********************************************
 
-constructor TIdIPv4RoutingTable.Create;
+constructor TIdRoutingTable.Create;
 begin
   inherited Create;
 
   Self.Routes := TObjectList.Create(true);
 end;
 
-destructor TIdIPv4RoutingTable.Destroy;
+destructor TIdRoutingTable.Destroy;
 begin
   Self.Routes.Free;
 
   inherited Destroy;
 end;
 
-procedure TIdIPv4RoutingTable.AddMappedRoute(Destination, Mask, MappedAddress: String);
+procedure TIdRoutingTable.AddMappedRoute(Destination, Mask, MappedAddress: String);
 var
   NewRoute: TIdRouteEntry;
 begin
@@ -414,34 +421,24 @@ begin
   end;
 end;
 
-function TIdIPv4RoutingTable.HasRoute(Route: TIdRouteEntry): Boolean;
+function TIdRoutingTable.HasRoute(Route: TIdRouteEntry): Boolean;
 var
   I: Integer;
 begin
   Result := false;
-  for I := 0 to Self.RouteCount - 1 do begin
-    if Self.RouteAt(I).Equals(Route) then begin
-      Result := true;
-    end;
+  I      := 0;
+  while (I < Self.RouteCount) and not Result do begin
+    Result := Self.RouteAt(I).Equals(Route);
+    Inc(I);
   end;
 end;
 
-function TIdIPv4RoutingTable.LocalAddressFor(DestinationIP: String): String;
+function TIdRoutingTable.LocalAddressFor(DestinationIP: String): String;
 var
   LocalIP:             String;
   ProposedRoute:       TIdRouteEntry;
   WillUseDefaultRoute: Boolean;
 begin
-  // The below doesn't work. With normal routing you have a default route
-  // pointing to your internet IP (or to your internet gateway). Suppose you
-  // have that for your mapped routes (So you have a public internet IP as your
-  // destination? Here, use your gateway's address.). Then searching the
-  // mapped routes will ALWAYS give you a Result <> '', and you'll never query
-  // the OS routes. So when you call your buddy on the LAN, you'll use your
-  // internet gateway as a Contact. That doesn't work. (Especially not with a
-  // FreeBSD internet gateway, where you can't make ipf "bounce" your packets
-  // back to LAN space.)
-
   ProposedRoute := TIdRouteEntry.Create;
   try
     LocalIP := Self.GetBestLocalAddress(DestinationIP);
@@ -465,7 +462,7 @@ begin
     Result := LocalIP;
 end;
 
-procedure TIdIPv4RoutingTable.LocalAddressFor(DestinationIP: String; LocalAddress: TIdSipLocation);
+procedure TIdRoutingTable.LocalAddressFor(DestinationIP: String; LocalAddress: TIdSipLocation);
 var
   Found: Boolean;
   I:     Integer;
@@ -479,9 +476,8 @@ begin
     Found := Self.RouteAt(I).WillRoute(DestinationIP);
 
     if Found then begin
-      raise Exception.Create('Do we change locations from Value Objects?. When you fix this, remove SysUtils from the uses clause');
-//      LocalAddress.IPAddress := Self.RouteAt(I).LocalAddress;
-//      LocalAddress.Port      := Self.RouteAt(I).Port;
+      LocalAddress.IPAddress := Self.RouteAt(I).LocalAddress;
+      LocalAddress.Port      := Self.RouteAt(I).Port;
     end;
     Inc(I)
   end;
@@ -490,7 +486,7 @@ begin
     Self.GetBestLocalAddress(DestinationIP, LocalAddress);
 end;
 
-function TIdIPv4RoutingTable.MappedAddressFor(DestinationIP: String): String;
+function TIdRoutingTable.MappedAddressFor(DestinationIP: String): String;
 var
   I: Integer;
 begin
@@ -503,7 +499,7 @@ begin
   end;
 end;
 
-procedure TIdIPv4RoutingTable.RemoveRoute(Destination, Mask, Gateway: String);
+procedure TIdRoutingTable.RemoveRoute(Destination, Mask, Gateway: String);
 var
   I:           Integer;
   SearchRoute: TIdRouteEntry;
@@ -527,19 +523,19 @@ begin
   end;
 end;
 
-function TIdIPv4RoutingTable.RouteCount: Integer;
+function TIdRoutingTable.RouteCount: Integer;
 begin
   Result := Self.Routes.Count;
 end;
 
-//* TIdIPv4RoutingTable Protected methods **************************************
+//* TIdRoutingTable Protected methods ******************************************
 
-function TIdIPv4RoutingTable.GetBestLocalAddress(DestinationIP: String): String;
+function TIdRoutingTable.GetBestLocalAddress(DestinationIP: String): String;
 begin
   // Return the best local address needed to contact the machine at DestinationIP.
 end;
 
-procedure TIdIPv4RoutingTable.GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation);
+procedure TIdRoutingTable.GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation);
 begin
   // Return the best local address needed to contact the machine at DestinationIP.
   // This version of the method allows one to specify ports.
@@ -551,15 +547,34 @@ begin
   // like sip:you@your.natted.address:5064.
 end;
 
-procedure TIdIPv4RoutingTable.GetBestRoute(DestinationIP, LocalIP: String; Route: TIdRouteEntry);
+procedure TIdRoutingTable.GetBestRoute(DestinationIP, LocalIP: String; Route: TIdRouteEntry);
 begin
   // The choice of parameters for this method is because Windows' GetBestRoute
   // requires both the source and destination addresses.
 end;
 
-function TIdIPv4RoutingTable.RouteAt(Index: Integer): TIdRouteEntry;
+function TIdRoutingTable.RouteAt(Index: Integer): TIdRouteEntry;
 begin
   Result := TIdRouteEntry(Self.Routes[Index]);
+end;
+
+//******************************************************************************
+//* TIdWindowsRoutingTable                                                     *
+//******************************************************************************
+//* TIdWindowsRoutingTable Protected methods ***********************************
+
+function TIdWindowsRoutingTable.GetBestLocalAddress(DestinationIP: String): String;
+begin
+  Result := IdSystem.GetBestLocalAddress(DestinationIP);
+end;
+
+procedure TIdWindowsRoutingTable.GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation);
+begin
+end;
+
+procedure TIdWindowsRoutingTable.GetBestRoute(DestinationIP, LocalIP: String; Route: TIdRouteEntry);
+begin
+
 end;
 
 end.

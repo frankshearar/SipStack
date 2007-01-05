@@ -15,7 +15,7 @@ uses
   Contnrs, IdRoutingTable, IdSipLocator;
 
 type
-  TIdMockRoutingTable = class(TIdIPv4RoutingTable)
+  TIdMockRoutingTable = class(TIdRoutingTable)
   private
     OsRoutes: TObjectList;
 
