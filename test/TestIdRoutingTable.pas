@@ -24,12 +24,14 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestClone;
     procedure TestEquals; virtual;
     procedure TestEqualsDestinationDiffers;
     procedure TestEqualsGatewayDiffers;
     procedure TestEqualsInterfaceIndexDiffers;
     procedure TestEqualsMaskDiffers;
     procedure TestEqualsMetricDiffers;
+    procedure TestIsDefaultRoute;
     procedure TestIsIPv4Address;
     procedure TestIsMappedRoute; virtual;
     procedure TestSetDestination;
@@ -46,18 +48,49 @@ type
   // will work the same way.
   TestTIdIPv4RoutingTable = class(TTestCase)
   private
-    RouteA: TIdRouteEntry;
-    RouteB: TIdRouteEntry;
-    RT:     TIdMockRoutingTable;
+    InternetDestination: String;
+    InternetGateway:     String;
+    InternetIP:          String;
+    InternetMask:        String;
+    InternetRoute:       String;
+    LanDestination:      String;
+    LanGateway:          String;
+    LanIP:               String;
+    LanMask:             String;
+    LanRoute:            String;
+    LoopbackDestination: String;
+    LoopbackGateway:     String;
+    LoopbackIP:          String;
+    LoopbackMask:        String;
+    LoopbackRoute:       String;
+    VpnDestination:      String;
+    VpnGateway:          String;
+    VpnIP:               String;
+    VpnMask:             String;
+    VpnRoute:            String;
+
+    RouteA:   TIdRouteEntry;
+    RouteB:   TIdRouteEntry;
+    RT:       TIdMockRoutingTable;
+
+    procedure AddDefaultRoute(Gateway, LocalAddress: String);
+    procedure AddInternetRoute;
+    procedure AddLanRoute;
+    procedure AddLoopbackRoute;
+    procedure AddVpnRoute;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
     procedure TestAddMappedRouteAndCount;
-    procedure TestGatewayForNoRoutes;
-    procedure TestGatewayForOneMappedRoute;
-    procedure TestGatewayForTwoMappedRoutes;
     procedure TestHasRoute;
+    procedure TestLocalAddressForInternetGateway;
+    procedure TestLocalAddressForNoMappedRoutes;
+    procedure TestLocalAddressForMappedRouteToInternet;
+    procedure TestLocalAddressForMappedRouteToInternetAndVpn;
+    procedure TestLocalAddressForMappedRouteToVpn;
+    procedure TestLocalAddressForMultipleLansPlusMultipleMappedRoutes;
+    procedure TestLocalAddressForNoRoutes;
     procedure TestRemoveRoute;
     procedure TestRouteSortDestinationAndMaskDiffers;
     procedure TestRouteSortGatewayAndMetricDiffers;
@@ -96,6 +129,7 @@ begin
   Self.Route.Destination    := '10.0.0.0';
   Self.Route.Gateway        := '10.0.0.1';
   Self.Route.InterfaceIndex := 'rl0';
+  Self.Route.LocalAddress   := '10.0.0.6';
   Self.Route.Mask           := '255.0.0.0';
   Self.Route.Metric         := 1;
 end;
@@ -115,6 +149,25 @@ begin
 end;
 
 //* TestTIdRouteEntry Published methods ****************************************
+
+procedure TestTIdRouteEntry.TestClone;
+var
+  Other: TIdRouteEntry;
+begin
+  Other := Self.Route.Clone;
+  try
+    CheckEquals(Self.Route.Destination,    Other.Destination,    'Destination');
+    CheckEquals(Self.Route.Gateway,        Other.Gateway,        'Gateway');
+    CheckEquals(Self.Route.InterfaceIndex, Other.InterfaceIndex, 'InterfaceIndex');
+    CheckEquals(Self.Route.IsMappedRoute,  Other.IsMappedRoute,  'IsMappedRoute');
+    CheckEquals(Self.Route.LocalAddress,   Other.LocalAddress,   'LocalAddress');
+    CheckEquals(Self.Route.Mask,           Other.Mask,           'Mask');
+    CheckEquals(Self.Route.Metric,         Other.Metric,         'Metric');
+
+  finally
+    Other.Free;
+  end;
+end;  
 
 procedure TestTIdRouteEntry.TestEquals;
 var
@@ -197,6 +250,34 @@ begin
   finally
     Other.Free;
   end;
+end;
+
+procedure TestTIdRouteEntry.TestIsDefaultRoute;
+begin
+  Self.Route.Destination := '1.1.1.1';
+  Check(not Self.Route.IsDefaultRoute, '1.1.1.1');
+
+  Self.Route.Destination := '0.0.0.0';
+  Check(Self.Route.IsDefaultRoute, '0.0.0.0');
+
+  Self.Route.Destination := '2002::';
+  Check(not Self.Route.IsDefaultRoute, '2002::');
+
+  Self.Route.Destination := '::';
+  Check(Self.Route.IsDefaultRoute, '::');
+
+  Self.Route.Destination := '0:0:0:0:0:0:0:0';
+  Check(Self.Route.IsDefaultRoute, '0:0:0:0:0:0:0:0');
+
+  Self.Route.Destination := '00:00:00:00:00:00:00:00';
+  Check(Self.Route.IsDefaultRoute, '00:00:00:00:00:00:00:00');
+
+  // And lastly, malformed destinations:
+  Self.Route.Destination := 'abcd';
+  Check(not Self.Route.IsDefaultRoute, 'abcd');
+
+  Self.Route.Destination := '';
+  Check(not Self.Route.IsDefaultRoute, 'The empty string');
 end;
 
 procedure TestTIdRouteEntry.TestIsIPv4Address;
@@ -390,6 +471,29 @@ begin
   Self.RouteB.Metric         := Self.RouteA.Metric;
 
   Self.RT := TIdMockRoutingTable.Create;
+
+  // These settings are pretty arbitrary; they're more or less the author's
+  // setup.
+  Self.InternetDestination := '1.2.3.4';
+  Self.InternetGateway     := '41.241.0.1';
+  Self.InternetIP          := '41.241.2.134';
+  Self.InternetMask        := '0.0.0.0';
+  Self.InternetRoute       := '0.0.0.0';
+  Self.LanDestination      := '10.0.0.8';
+  Self.LanGateway          := '10.0.0.1';
+  Self.LanIP               := '10.0.0.6';
+  Self.LanMask             := '255.0.0.0';
+  Self.LanRoute            := '10.0.0.0';
+  Self.LoopbackDestination := '127.0.0.2';
+  Self.LoopbackGateway     := '127.0.0.1';
+  Self.LoopbackIP          := '127.0.0.1';
+  Self.LoopbackMask        := '255.0.0.0';
+  Self.LoopbackRoute       := '127.0.0.0';
+  Self.VpnDestination      := '192.168.0.43';
+  Self.VpnGateway          := '192.168.0.1';
+  Self.VpnIP               := '192.168.0.42';
+  Self.VpnMask             := '255.255.255.0';
+  Self.VpnRoute            := '192.168.0.0';
 end;
 
 procedure TestTIdIPv4RoutingTable.TearDown;
@@ -399,6 +503,33 @@ begin
   Self.RT.Free;
 
   inherited TearDown;
+end;
+
+//* TestTIdIPv4RoutingTable Private methods ************************************
+
+procedure TestTIdIPv4RoutingTable.AddDefaultRoute(Gateway, LocalAddress: String);
+begin
+  Self.RT.AddOsRoute('0.0.0.0', '0.0.0.0', Gateway, 1, '1', LocalAddress);
+end;
+
+procedure TestTIdIPv4RoutingTable.AddInternetRoute;
+begin
+  Self.RT.AddOsRoute(Self.InternetRoute, Self.InternetGateway, Self.InternetMask, 1, '1', Self.InternetIP);
+end;
+
+procedure TestTIdIPv4RoutingTable.AddLanRoute;
+begin
+  Self.RT.AddOsRoute(Self.LanRoute, Self.LanGateway, Self.LanMask, 1, '1', Self.LanIP);
+end;
+
+procedure TestTIdIPv4RoutingTable.AddLoopbackRoute;
+begin
+  Self.RT.AddOsRoute(Self.LoopbackRoute, Self.LoopbackGateway, Self.LoopbackMask, 1, '1', Self.LoopbackIP);
+end;
+
+procedure TestTIdIPv4RoutingTable.AddVpnRoute;
+begin
+  Self.RT.AddOsRoute(Self.VpnRoute, Self.VpnGateway, Self.VpnMask, 1, '1', Self.VpnIP);
 end;
 
 //* TestTIdIPv4RoutingTable Published methods **********************************
@@ -417,43 +548,125 @@ begin
   CheckEquals(2, Self.RT.RouteCount, 'Two mapped routes');
 end;
 
-procedure TestTIdIPv4RoutingTable.TestGatewayForNoRoutes;
-begin
-  CheckEquals('', Self.RT.GatewayFor('10.0.0.1'), 'LAN destination, no routes');
-end;
-
-procedure TestTIdIPv4RoutingTable.TestGatewayForOneMappedRoute;
-const
-  LanGateway = '10.0.0.1';
-begin
-  Self.RT.AddMappedRoute('0.0.0.0', '0.0.0.0', LanGateway);
-
-  CheckEquals(LanGateway, Self.RT.GatewayFor('10.0.0.1'), 'LAN destination, one mapped route');
-  CheckEquals(LanGateway, Self.RT.GatewayFor('1.2.3.4'), 'Internet destination, one mapped route');
-end;
-
-procedure TestTIdIPv4RoutingTable.TestGatewayForTwoMappedRoutes;
-const
-  InetGateway = '4.3.2.1';
-  LanGateway = '10.0.0.1';
-begin
-  Self.RT.AddMappedRoute('0.0.0.0', '0.0.0.0', InetGateway);
-  Self.RT.AddMappedRoute('10.0.0.0', '255.0.0.0', LanGateway);
-
-  CheckEquals(LanGateway, Self.RT.GatewayFor('10.0.0.1'), 'LAN destination, mapped routes for LAN + inet');
-  CheckEquals(InetGateway, Self.RT.GatewayFor('1.2.3.4'), 'Internet destination, mapped routes for LAN + inet');
-end;
-
 procedure TestTIdIPv4RoutingTable.TestHasRoute;
 begin
   Check(not Self.RT.HasRoute(Self.RouteA), 'Empty table');
 
-  Self.RT.AddRoute(Self.RouteA.Destination, Self.RouteA.Mask, Self.RouteA.Gateway, Self.RouteA.Metric, Self.RouteA.InterfaceIndex);
+  Self.RT.AddMappedRoute(Self.RouteA.Destination, Self.RouteA.Mask, Self.RouteA.Gateway);
   Check(Self.RT.HasRoute(Self.RouteA), 'Route not added? not found?');
   Check(Self.RT.HasRoute(Self.RouteB), 'Duplicate of in-table route not found');
 
   Self.RouteB.Destination := TIdIPAddressParser.IncIPAddress(Self.RouteB.Destination);
   Check(not Self.RT.HasRoute(Self.RouteB), 'Route not in table still found');
+end;
+
+procedure TestTIdIPv4RoutingTable.TestLocalAddressForInternetGateway;
+begin
+  // Scenario: A machine with a LAN IP, and a gateway to the internet.
+  // Even though the internet gateway's a NAT, we've not specified a mapped
+  // route through it.
+  Self.AddLoopbackRoute;
+  Self.AddLanRoute;
+  Self.AddDefaultRoute(Self.LanGateway, Self.LanIP);
+
+  CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LoopbackDestination), 'Local destination');
+  CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.LanDestination),      'LAN destination');
+  CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.InternetDestination), 'Internet destination');
+  CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.VpnDestination),      'VPN destination');
+end;
+
+procedure TestTIdIPv4RoutingTable.TestLocalAddressForNoMappedRoutes;
+begin
+  // Scenario: A machine with a LAN IP, with no gateway (say, to the internet).
+  Self.AddLoopbackRoute;
+  Self.AddLanRoute;
+  Self.AddDefaultRoute(Self.LanGateway, Self.LanIP);
+
+  CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LoopbackDestination), 'Local destination');
+  CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.LanDestination),      'LAN destination');
+  CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.InternetDestination), 'Internet destination');
+  CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.VpnDestination),      'VPN destination');
+end;
+
+procedure TestTIdIPv4RoutingTable.TestLocalAddressForMappedRouteToInternet;
+begin
+  // Scenario: A machine with a LAN IP, and a gateway to the internet.
+  // One mapped route, because the internet gateway's a NAT.
+  Self.AddLoopbackRoute;
+  Self.AddLanRoute;
+  Self.AddDefaultRoute(Self.InternetGateway, Self.LanIP);
+
+  Self.RT.AddMappedRoute(Self.InternetRoute, Self.InternetMask, Self.InternetIP);
+
+  CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LoopbackDestination), 'Local destination');
+  CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.LanDestination),      'LAN destination');
+  CheckEquals(Self.InternetIP, Self.RT.LocalAddressFor(Self.InternetDestination), 'Internet destination');
+  CheckEquals(Self.InternetIP, Self.RT.LocalAddressFor(Self.VpnDestination),      'VPN destination');
+end;
+
+procedure TestTIdIPv4RoutingTable.TestLocalAddressForMappedRouteToInternetAndVpn;
+begin
+  // Scenario: A machine with a LAN IP, and both a gateway to the internet and
+  // a gateway to another network. (This is the situation for the author.)
+  // The default route will use the LAN IP.
+  Self.AddLoopbackRoute;
+  Self.AddLanRoute;
+  Self.AddDefaultRoute(Self.InternetGateway, Self.LanIP);
+
+  Self.RT.AddMappedRoute(Self.InternetRoute, Self.InternetMask, Self.InternetIP);
+  Self.RT.AddMappedRoute(Self.VpnRoute, Self.VpnMask, Self.VpnIP);
+
+  CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LoopbackDestination), 'Local destination');
+  CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.LanDestination),      'LAN destination');
+  CheckEquals(Self.InternetIP, Self.RT.LocalAddressFor(Self.InternetDestination), 'Internet destination');
+  CheckEquals(Self.VpnIP,      Self.RT.LocalAddressFor(Self.VpnDestination),      'VPN destination');
+end;
+
+procedure TestTIdIPv4RoutingTable.TestLocalAddressForMappedRouteToVpn;
+begin
+  // Scenario: A machine with a LAN IP, and a gateway to another network.
+  // There's no internet gateway, so the default route will use the LAN IP.
+  Self.AddLoopbackRoute;
+  Self.AddLanRoute;
+  Self.AddDefaultRoute(Self.InternetGateway, Self.LanIP);
+
+  Self.RT.AddMappedRoute(Self.VpnRoute, Self.VpnMask, Self.VpnIP);
+
+  CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LoopbackDestination), 'Local destination');
+  CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.LanDestination),      'LAN destination');
+  CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.InternetDestination), 'Internet destination');
+  CheckEquals(Self.VpnIP,      Self.RT.LocalAddressFor(Self.VpnDestination),      'VPN destination');
+end;
+
+procedure TestTIdIPv4RoutingTable.TestLocalAddressForMultipleLansPlusMultipleMappedRoutes;
+const
+  SecondLanDestination = '172.0.0.2';
+  SecondLanGateway     = '172.0.0.1';
+  SecondLanIP          = '172.0.0.6';
+  SecondLanMask        = '255.0.0.0';
+  SecondLanRoute       = '172.0.0.0';
+begin
+  // Scenario: A machine with a LAN IP, and both a gateway to the internet and
+  // a gateway to another network. (This is the situation for the author.)
+  // The default route will use the LAN IP.
+  Self.AddLoopbackRoute;
+  Self.AddLanRoute;
+  Self.RT.AddOsRoute(SecondLanRoute, SecondLanGateway, SecondLanMask, 1, '1', SecondLanIP);
+  Self.AddDefaultRoute(Self.InternetGateway, Self.LanIP);
+
+  Self.RT.AddMappedRoute(Self.InternetRoute, Self.InternetMask, Self.InternetIP);
+  Self.RT.AddMappedRoute(Self.VpnRoute, Self.VpnMask, Self.VpnIP);
+
+  CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LoopbackDestination), 'Local destination');
+  CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.LanDestination),      'LAN destination');
+  CheckEquals(SecondLanIP,     Self.RT.LocalAddressFor(SecondLanDestination),     'LAN #2 destination');
+  CheckEquals(Self.InternetIP, Self.RT.LocalAddressFor(Self.InternetDestination), 'Internet destination');
+  CheckEquals(Self.VpnIP,      Self.RT.LocalAddressFor(Self.VpnDestination),      'VPN destination');
+end;
+
+procedure TestTIdIPv4RoutingTable.TestLocalAddressForNoRoutes;
+begin
+  CheckEquals('', Self.RT.LocalAddressFor(Self.LanDestination), 'LAN destination, no routes');
 end;
 
 procedure TestTIdIPv4RoutingTable.TestRemoveRoute;
@@ -462,8 +675,8 @@ begin
   Self.RouteB.Destination := TIdIPAddressParser.IncIPAddress(Self.RouteB.Destination);
   Check(not Self.RouteA.Equals(Self.RouteB), 'Sanity check');
 
-  Self.RT.AddRoute(Self.RouteA);
-  Self.RT.AddRoute(Self.RouteB);
+  Self.RT.AddMappedRoute(Self.RouteA.Destination, Self.RouteA.Mask, Self.RouteA.Gateway);
+  Self.RT.AddMappedRoute(Self.RouteB.Destination, Self.RouteB.Mask, Self.RouteB.Gateway);
   Self.RT.RemoveRoute(Self.RouteA.Destination, Self.RouteA.Mask, Self.RouteA.Gateway);
 
   CheckEquals(1, Self.RT.RouteCount, 'Route not removed');

@@ -62,9 +62,9 @@ type
     function AsString: String;
     function Copy: TIdSipLocation;
 
-    property Transport: String   read fTransport;
-    property IPAddress: String   read fIPAddress;
-    property Port:      Cardinal read fPort;
+    property Transport: String   read fTransport write fTransport;
+    property IPAddress: String   read fIPAddress write fIPAddress;
+    property Port:      Cardinal read fPort write fPort;
   end;
 
   TIdSipLocations = class(TIdBaseList)
