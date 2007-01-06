@@ -34,6 +34,7 @@ type
     class function  InetAddr(const IPv4Address: String): Cardinal;
     class function  IPv4AddressToStr(Address: Cardinal): String;
     class function  IPv6AddressToStr(Address: TIdIPv6AddressRec): String;
+    class function  IPVersion(Address: String): TIdIPVersion;
     class function  IsIPAddress(IpVersion: TIdIPVersion;
                                 const Token: String): Boolean;
     class function  IsIPv4Address(const Token: String): Boolean;
@@ -467,6 +468,20 @@ begin
     Result := Result + StripLeadingZeroes(IntToHex(Address[I], 4)) + ':';
 
   Result := Copy(Result, 1, Length(Result) - 1);
+end;
+
+class function TIdIPAddressParser.IPVersion(Address: String): TIdIPVersion;
+begin
+  // Return the IP version of the Address parameter: Address = '127.0.0.1'
+  // returns Id_IPv4; Address = '::1' returns Id_IPv6; Address = 'foo' returns
+  // Id_IPUnknown
+
+  if TIdIPAddressParser.IsIPv4Address(Address) then
+    Result := Id_IPv4
+  else if TIdIPAddressParser.IsIPv6Address(Address) then
+    Result := Id_IPv6
+  else
+    Result := Id_IPUnknown;
 end;
 
 class function TIdIPAddressParser.IsIPAddress(IpVersion: TIdIPVersion;

@@ -51,6 +51,7 @@ type
     procedure TestInetAddr;
     procedure TestIPv4AddressToStr;
     procedure TestIPv6AddressToStr;
+    procedure TestIPVersion;
     procedure TestIsIpv4Address;
     procedure TestIsIpv6Address;
     procedure TestIsIpv6Reference;
@@ -639,6 +640,13 @@ begin
   for I := Low(Address) to High(Address) do
     Address[I] := (I + 1) shl 4;
   CheckEquals('10:20:30:40:50:60:70:80', TIdIPAddressParser.IPv6AddressToStr(Address));
+end;
+
+procedure TestTIdIPAddressParser.TestIPVersion;
+begin
+  Check(Id_IPv4      = TIdIPAddressParser.IPVersion('127.0.0.1'), '127.0.0.1');
+  Check(Id_IPv6      = TIdIPAddressParser.IPVersion('::1'),       '::1');
+  Check(Id_IPUnknown = TIdIPAddressParser.IPVersion('foo'),       'foo');
 end;
 
 procedure TestTIdIPAddressParser.TestIsIpv4Address;
