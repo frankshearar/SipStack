@@ -268,7 +268,7 @@ begin
   // Self.Dispatcher and Self.Authenticator.
   //
   // Thus we destroy these objects AFTER the inherited Destroy, because the base
-  // class could well expect these objects to still exit.
+  // class could well expect these objects to still exist.
 
   inherited Destroy;
 
