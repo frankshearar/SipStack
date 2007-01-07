@@ -46,7 +46,7 @@ type
   // While we use a mock routing table in these tests, note that the algorithms
   // under test cannot be overridden by subclasses. Ergo, real routing tables
   // will work the same way.
-  TestTIdIPv4RoutingTable = class(TTestCase)
+  TestTIdRoutingTable = class(TTestCase)
   private
     InternetDestination: String;
     InternetGateway:     String;
@@ -113,7 +113,7 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSystem unit tests');
   Result.AddTest(TestTIdRouteEntry.Suite);
-  Result.AddTest(TestTIdIPv4RoutingTable.Suite);
+  Result.AddTest(TestTIdRoutingTable.Suite);
 end;
 
 //******************************************************************************
@@ -448,11 +448,11 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdIPv4RoutingTable                                                    *
+//* TestTIdRoutingTable                                                        *
 //******************************************************************************
-//* TestTIdIPv4RoutingTable Public methods *************************************
+//* TestTIdRoutingTable Public methods *****************************************
 
-procedure TestTIdIPv4RoutingTable.SetUp;
+procedure TestTIdRoutingTable.SetUp;
 begin
   inherited SetUp;
 
@@ -496,7 +496,7 @@ begin
   Self.VpnRoute            := '192.168.0.0';
 end;
 
-procedure TestTIdIPv4RoutingTable.TearDown;
+procedure TestTIdRoutingTable.TearDown;
 begin
   Self.RouteB.Free;
   Self.RouteA.Free;
@@ -505,36 +505,36 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdIPv4RoutingTable Private methods ************************************
+//* TestTIdRoutingTable Private methods ****************************************
 
-procedure TestTIdIPv4RoutingTable.AddDefaultRoute(Gateway, LocalAddress: String);
+procedure TestTIdRoutingTable.AddDefaultRoute(Gateway, LocalAddress: String);
 begin
   Self.RT.AddOsRoute('0.0.0.0', '0.0.0.0', Gateway, 1, '1', LocalAddress);
 end;
 
-procedure TestTIdIPv4RoutingTable.AddInternetRoute;
+procedure TestTIdRoutingTable.AddInternetRoute;
 begin
   Self.RT.AddOsRoute(Self.InternetRoute, Self.InternetGateway, Self.InternetMask, 1, '1', Self.InternetIP);
 end;
 
-procedure TestTIdIPv4RoutingTable.AddLanRoute;
+procedure TestTIdRoutingTable.AddLanRoute;
 begin
   Self.RT.AddOsRoute(Self.LanRoute, Self.LanGateway, Self.LanMask, 1, '1', Self.LanIP);
 end;
 
-procedure TestTIdIPv4RoutingTable.AddLoopbackRoute;
+procedure TestTIdRoutingTable.AddLoopbackRoute;
 begin
   Self.RT.AddOsRoute(Self.LoopbackRoute, Self.LoopbackGateway, Self.LoopbackMask, 1, '1', Self.LoopbackIP);
 end;
 
-procedure TestTIdIPv4RoutingTable.AddVpnRoute;
+procedure TestTIdRoutingTable.AddVpnRoute;
 begin
   Self.RT.AddOsRoute(Self.VpnRoute, Self.VpnGateway, Self.VpnMask, 1, '1', Self.VpnIP);
 end;
 
-//* TestTIdIPv4RoutingTable Published methods **********************************
+//* TestTIdRoutingTable Published methods **************************************
 
-procedure TestTIdIPv4RoutingTable.TestAddMappedRouteAndCount;
+procedure TestTIdRoutingTable.TestAddMappedRouteAndCount;
 begin
   CheckEquals(0, Self.RT.RouteCount, 'Empty list');
 
@@ -548,7 +548,7 @@ begin
   CheckEquals(2, Self.RT.RouteCount, 'Two mapped routes');
 end;
 
-procedure TestTIdIPv4RoutingTable.TestHasRoute;
+procedure TestTIdRoutingTable.TestHasRoute;
 begin
   Check(not Self.RT.HasRoute(Self.RouteA), 'Empty table');
 
@@ -560,7 +560,7 @@ begin
   Check(not Self.RT.HasRoute(Self.RouteB), 'Route not in table still found');
 end;
 
-procedure TestTIdIPv4RoutingTable.TestLocalAddressForInternetGateway;
+procedure TestTIdRoutingTable.TestLocalAddressForInternetGateway;
 begin
   // Scenario: A machine with a LAN IP, and a gateway to the internet.
   // Even though the internet gateway's a NAT, we've not specified a mapped
@@ -588,7 +588,7 @@ begin
   CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.VpnDestination),      'VPN destination');
 end;
 
-procedure TestTIdIPv4RoutingTable.TestLocalAddressForMappedRouteToInternet;
+procedure TestTIdRoutingTable.TestLocalAddressForMappedRouteToInternet;
 begin
   // Scenario: A machine with a LAN IP, and a gateway to the internet.
   // One mapped route, because the internet gateway's a NAT.
@@ -604,7 +604,7 @@ begin
   CheckEquals(Self.InternetIP, Self.RT.LocalAddressFor(Self.VpnDestination),      'VPN destination');
 end;
 
-procedure TestTIdIPv4RoutingTable.TestLocalAddressForMappedRouteToInternetAndVpn;
+procedure TestTIdRoutingTable.TestLocalAddressForMappedRouteToInternetAndVpn;
 begin
   // Scenario: A machine with a LAN IP, and both a gateway to the internet and
   // a gateway to another network. (This is the situation for the author.)
@@ -622,7 +622,7 @@ begin
   CheckEquals(Self.VpnIP,      Self.RT.LocalAddressFor(Self.VpnDestination),      'VPN destination');
 end;
 
-procedure TestTIdIPv4RoutingTable.TestLocalAddressForMappedRouteToVpn;
+procedure TestTIdRoutingTable.TestLocalAddressForMappedRouteToVpn;
 begin
   // Scenario: A machine with a LAN IP, and a gateway to another network.
   // There's no internet gateway, so the default route will use the LAN IP.
@@ -638,7 +638,7 @@ begin
   CheckEquals(Self.VpnIP,      Self.RT.LocalAddressFor(Self.VpnDestination),      'VPN destination');
 end;
 
-procedure TestTIdIPv4RoutingTable.TestLocalAddressForMultipleLansPlusMultipleMappedRoutes;
+procedure TestTIdRoutingTable.TestLocalAddressForMultipleLansPlusMultipleMappedRoutes;
 const
   SecondLanDestination = '172.0.0.2';
   SecondLanGateway     = '172.0.0.1';
@@ -664,12 +664,17 @@ begin
   CheckEquals(Self.VpnIP,      Self.RT.LocalAddressFor(Self.VpnDestination),      'VPN destination');
 end;
 
-procedure TestTIdIPv4RoutingTable.TestLocalAddressForNoRoutes;
+procedure TestTIdRoutingTable.TestLocalAddressForNoRoutes;
+var
+  IPv6Destination: String;
 begin
-  CheckEquals('', Self.RT.LocalAddressFor(Self.LanDestination), 'LAN destination, no routes');
+  CheckEquals(LocalHost(Id_IPv4), Self.RT.LocalAddressFor(Self.LanDestination), 'LAN destination, no routes');
+
+  IPv6Destination := '2002:deca:fbad::1';
+  CheckEquals(LocalHost(Id_IPv6), Self.RT.LocalAddressFor(IPv6Destination), 'IPv6 destination, no routes');
 end;
 
-procedure TestTIdIPv4RoutingTable.TestRemoveRoute;
+procedure TestTIdRoutingTable.TestRemoveRoute;
 begin
   // Make sure that RouteA <> RouteB.
   Self.RouteB.Destination := TIdIPAddressParser.IncIPAddress(Self.RouteB.Destination);
@@ -684,7 +689,7 @@ begin
   Check(    Self.RT.HasRoute(Self.RouteB), 'Wrong route left in the table');
 end;
 
-procedure TestTIdIPv4RoutingTable.TestRouteSortDestinationAndMaskDiffers;
+procedure TestTIdRoutingTable.TestRouteSortDestinationAndMaskDiffers;
 begin
   // "Higher" addresses appear earlier in the sorted routing table.
 
@@ -697,7 +702,7 @@ begin
   CheckEquals(-1, RouteSort(Self.RouteB, Self.RouteA), '192.168.0.0/24 > 10.0.0.0/8');
 end;
 
-procedure TestTIdIPv4RoutingTable.TestRouteSortGatewayAndMetricDiffers;
+procedure TestTIdRoutingTable.TestRouteSortGatewayAndMetricDiffers;
 var
   PrimaryGateway, SecondaryGateway: TIdRouteEntry;
 begin
@@ -715,7 +720,7 @@ begin
   CheckEquals(1,  RouteSort(SecondaryGateway, PrimaryGateway), 'SecondaryGateway > PrimaryGateway');
 end;
 
-procedure TestTIdIPv4RoutingTable.TestRouteSortIPv4RoutesFirst;
+procedure TestTIdRoutingTable.TestRouteSortIPv4RoutesFirst;
 var
   IPv4Route, IPv6Route: TIdRouteEntry;
 begin
@@ -731,7 +736,7 @@ begin
   CheckEquals(1,  RouteSort(IPv6Route, IPv4Route), 'IPv6Route > IPv4Route');
 end;
 
-procedure TestTIdIPv4RoutingTable.TestRouteSortMetricDiffers;
+procedure TestTIdRoutingTable.TestRouteSortMetricDiffers;
 begin
   // Even though RouteB's a "wider" route, it costs less
   Self.RouteA.Destination := '10.0.0.0';
@@ -745,7 +750,7 @@ begin
   CheckEquals(1,  RouteSort(Self.RouteB, Self.RouteA), 'RouteA < RouteB');
 end;
 
-procedure TestTIdIPv4RoutingTable.TestRouteSortOneRouteAMappedRoute;
+procedure TestTIdRoutingTable.TestRouteSortOneRouteAMappedRoute;
 var
   MappedRoute: TIdRouteEntry;
   NormalRoute: TIdRouteEntry;
@@ -764,7 +769,7 @@ begin
   CheckEquals(1,  RouteSort(NormalRoute, MappedRoute), 'NormalRoute > MappedRoute even when much less costly');
 end;
 
-procedure TestTIdIPv4RoutingTable.TestRouteSortOnlyDestinationDiffers;
+procedure TestTIdRoutingTable.TestRouteSortOnlyDestinationDiffers;
 var
   LowerAddress, HigherAddress: TIdRouteEntry;
 begin
@@ -792,11 +797,11 @@ begin
   CheckEquals(-1, RouteSort(HigherAddress, LowerAddress), '2002:0101:0101::/8 > ::/8');
 end;
 
-procedure TestTIdIPv4RoutingTable.TestRouteSortOnlyGatewayDiffers;
+procedure TestTIdRoutingTable.TestRouteSortOnlyGatewayDiffers;
 begin
 end;
 
-procedure TestTIdIPv4RoutingTable.TestRouteSortOnlyMaskDiffers;
+procedure TestTIdRoutingTable.TestRouteSortOnlyMaskDiffers;
 var
   NarrowerRoute, WiderRoute: TIdRouteEntry;
 begin
@@ -812,7 +817,7 @@ begin
   CheckEquals(1,  RouteSort(WiderRoute, NarrowerRoute), '10.0.0.0/8 > 10.0.0.0/24');
 end;
 
-procedure TestTIdIPv4RoutingTable.TestRouteSortOnlyMetricDiffers;
+procedure TestTIdRoutingTable.TestRouteSortOnlyMetricDiffers;
 var
   CheapRoute, ExpensiveRoute: TIdRouteEntry;
 begin
@@ -825,7 +830,7 @@ begin
   CheckEquals(1,  RouteSort(ExpensiveRoute, CheapRoute), 'ExpensiveRoute > CheapRoute');
 end;
 
-procedure TestTIdIPv4RoutingTable.TestRouteSortSameRoute;
+procedure TestTIdRoutingTable.TestRouteSortSameRoute;
 begin
   CheckEquals(0, RouteSort(Self.RouteA, Self.RouteB), 'RouteA < RouteB');
   CheckEquals(0, RouteSort(Self.RouteB, Self.RouteA), 'RouteB > RouteA');
