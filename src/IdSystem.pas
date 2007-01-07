@@ -20,6 +20,7 @@ uses
   implemented.
 }
 
+function  BestRouteIsDefaultRoute(DestinationIP, LocalIP: String): Boolean;
 function  ConstructUUID: String;
 function  GetBestLocalAddress(DestinationAddress: String): String;
 function  GetCurrentProcessId: Cardinal;
@@ -87,11 +88,32 @@ type
   TIpAddr = TInAddr;
   PIpAddr = ^TIpAddr;
 
+  _MIB_IPFORWARDROW = record
+    dwForwardDest:      DWORD;
+    dwForwardMask:      DWORD;
+    dwForwardPolicy:    DWORD;
+    dwForwardNextHop:   DWORD;
+    dwForwardIfIndex:   DWORD;
+    dwForwardType:      DWORD;
+    dwForwardProto:     DWORD;
+    dwForwardAge:       DWORD;
+    dwForwardNextHopAS: DWORD;
+    dwForwardMetric1:   DWORD;
+    dwForwardMetric2:   DWORD;
+    dwForwardMetric3:   DWORD;
+    dwForwardMetric4:   DWORD;
+    dwForwardMetric5:   DWORD;
+  end;
+  MIB_IPFORWARDROW = _MIB_IPFORWARDROW;
+  TMibIpForwardRow = MIB_IPFORWARDROW;
+  PMibIpForwardRow = ^TMibIpForwardRow;
+
 const
   IpHelper  = 'iphlpapi.dll';
   WinSocket = 'wsock32.dll';
 
 function GetBestInterface(dwDestAddr: TIpAddr; var pdwBestIfIndex: DWORD): DWORD; stdcall; external IpHelper name 'GetBestInterface';
+function GetBestRoute(dwDestAddr: DWORD; dwSourceAddr: DWORD; var pBestRoute: TMibIpForwardRow): DWORD; stdcall; external IpHelper name 'GetBestRoute';
 function GetIpAddrTable(pIpAddrTable: PMibIpAddrTable; var pdwSize: ULONG; bOrder: BOOL): DWORD; stdcall; external IpHelper name 'GetIpAddrTable';
 
 // WinSock's gethostbyname & hostent have terrible declarations. We override
@@ -126,6 +148,36 @@ begin
     end;
   finally
     FreeMem(Table);
+  end;
+end;
+
+function BestRouteIsDefaultRoute(DestinationIP, LocalIP: String): Boolean;
+var
+  DstAddr: DWORD;
+  Route:   TMibIpForwardRow;
+  SrcAddr: DWORD;
+begin
+  // I'm not sure about the value of Result when you try break this function by
+  // mixing your address types (say, DestinationIP being IPv4 and LocalIP being
+  // IPv6...
+
+  Assert(TIdIPAddressParser.IPVersion(DestinationIP) = TIdIPAddressParser.IPVersion(LocalIP),
+         '');
+
+  if TIdIPAddressParser.IsIPv4Address(DestinationIP) then begin
+    DstAddr := htonl(TIdIPAddressParser.InetAddr(DestinationIP));
+    SrcAddr := htonl(TIdIPAddressParser.InetAddr(LocalIP));
+
+    GetBestRoute(DstAddr, SrcAddr, Route);
+    Result := Route.dwForwardDest = 0;
+  end
+  else begin
+    {$IFDEF INET6}
+
+    raise Exception.Create('Implement BestRouteIsDefaultRoute for IPv6');
+    {$ELSE}
+    Result := false;
+    {$ENDIF}
   end;
 end;
 

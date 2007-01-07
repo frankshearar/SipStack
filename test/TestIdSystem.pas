@@ -25,6 +25,7 @@ type
 
     procedure CheckPortFree(Address: String; Port: Cardinal; Msg: String);
   published
+    procedure TestBestRouteIsDefaultRoute;
     procedure TestDefineLocalAddress;
     procedure TestDefineRoutableAddress;
     procedure TestGetBestLocalAddress;
@@ -98,6 +99,46 @@ begin
 end;
 
 //* TestFunctions Published methods ********************************************
+
+procedure TestFunctions.TestBestRouteIsDefaultRoute;
+var
+  Addresses:   TStrings;
+  Destination: String;
+  I:           Integer;
+begin
+  // This test isn't foolproof.
+
+  Destination := Localhost(Id_IPv4);
+  Check(not BestRouteIsDefaultRoute(Destination, Localhost(Id_IPv4)), Destination + ' from ' + Localhost(Id_IPv4));
+
+  Destination := TIdIPAddressParser.IncIPAddress(Destination);
+  Check(not BestRouteIsDefaultRoute(Destination, Localhost(Id_IPv4)), Destination + ' from ' + Localhost(Id_IPv4));
+
+  Destination := Localhost(Id_IPv6);
+  Check(not BestRouteIsDefaultRoute(Destination, Localhost(Id_IPv6)), Destination + ' from ' + Localhost(Id_IPv6));
+
+  Destination := TIdIPAddressParser.IncIPAddress(Destination);
+  Check(not BestRouteIsDefaultRoute(Destination, Localhost(Id_IPv6)), Destination + ' from ' + Localhost(Id_IPv6));
+
+  Addresses := TStringList.Create;
+  try
+    LocalAddresses(Addresses);
+    for I := 0 to Addresses.Count - 1 do begin
+      Destination := Addresses[I];
+      Check(not BestRouteIsDefaultRoute(Destination, Addresses[I]), Destination + ' from ' + Addresses[I]);
+
+      Destination := TIdIPAddressParser.IncIPAddress(Addresses[I]);
+      Check(not BestRouteIsDefaultRoute(Destination, Addresses[I]), Destination + ' from ' + Addresses[I]);
+
+      if TIdIPAddressParser.IsIPv4Address(Addresses[I]) then
+        Check(BestRouteIsDefaultRoute('1.2.3.4', Addresses[I]), '1.2.3.4 from ' + Addresses[I])
+      else
+        Check(BestRouteIsDefaultRoute('2002:deca:fbad::1', Addresses[I]), '2002:deca:fbad::1 from ' + Addresses[I]);
+    end;
+  finally
+    Addresses.Free;
+  end;
+end;
 
 procedure TestFunctions.TestDefineLocalAddress;
 const
