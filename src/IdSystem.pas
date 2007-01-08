@@ -165,8 +165,8 @@ begin
          '');
 
   if TIdIPAddressParser.IsIPv4Address(DestinationIP) then begin
-    DstAddr := htonl(TIdIPAddressParser.InetAddr(DestinationIP));
-    SrcAddr := htonl(TIdIPAddressParser.InetAddr(LocalIP));
+    DstAddr := htonl(Integer(TIdIPAddressParser.InetAddr(DestinationIP)));
+    SrcAddr := htonl(Integer(TIdIPAddressParser.InetAddr(LocalIP)));
 
     GetBestRoute(DstAddr, SrcAddr, Route);
     Result := Route.dwForwardDest = 0;
@@ -204,7 +204,11 @@ begin
   if not TIdIPAddressParser.IsIPv4Address(DestinationAddress) then
     raise Exception.Create('We do not support IPv6 addresses yet, because only XP and onwards have an IPv6 stack');
 
-  DstAddr.S_addr := htonl(TIdIPAddressParser.InetAddr(DestinationAddress));
+  // htonl says it takes a "u_long". This looks like what in normal C would be
+  // written as "unsigned long". That's typically an unsigned 32-bit value,
+  // represented in Delphi as a Cardinal. However, u_long is ACTUALLY declared
+  // to be a Longint, a SIGNED 32-bit value!
+  DstAddr.S_addr := htonl(Integer(TIdIPAddressParser.InetAddr(DestinationAddress)));
   RC := GetBestInterface(DstAddr, InterfaceIndex);
 
   if (RC <> 0) then Exit;
