@@ -41,6 +41,7 @@ type
     class function  IsIPv6Address(const Token: String): Boolean;
     class function  IsIPv6Reference(const Token: String): Boolean;
     class function  IsNumericAddress(const Token: String): Boolean;
+    class function  MaskToAddress(NumberSignificantBits: Cardinal; IPVersion: TIdIPVersion): String;
     class procedure ParseIPv6Address(const IPv6Address: String;
                                      var Address: TIdIPv6AddressRec);
   end;
@@ -62,7 +63,7 @@ type
     class function IsHexNumber(const Number: String): Boolean;
     class function IsLetter(C: Char): Boolean;
     class function IsNumber(const Number: String): Boolean;
-    
+
     constructor Create; virtual;
 
     function  CurrentLine: Cardinal;
@@ -77,6 +78,8 @@ type
 
     property  Source: TStream read fSource write fSource;
   end;
+
+  EBadParameter = class(Exception);
 
 const
   BadSyntax        = 'Bad syntax';
@@ -118,7 +121,7 @@ function WithoutFirstAndLastChars(const S: String): String;
 implementation
 
 uses
-  StrUtils;
+  Math, StrUtils;
 
 //******************************************************************************
 //* Unit Private Functions and Procedures                                      *
@@ -613,6 +616,64 @@ begin
   Result := Self.IsIPv6Reference(Token)
          or Self.IsIPv6Address(Token)
          or Self.IsIPv4Address(Token);
+end;
+
+class function TIdIPAddressParser.MaskToAddress(NumberSignificantBits: Cardinal; IPVersion: TIdIPVersion): String;
+const
+  BitsInCardinal = 32;
+
+  procedure MaskWord(var NumberSignificantBits: Cardinal; var AddressPart: Word);
+  const
+    BitsInWord = 16;
+  var
+    I:           Integer;
+    BitsForWord: Cardinal;
+    Shift:       Integer;
+  begin
+    if (NumberSignificantBits = 0) then Exit;
+
+    AddressPart := 0;
+    Shift       := BitsInWord - 1;
+    BitsForWord := Min(BitsInWord, NumberSignificantBits);
+    for I := 1 to BitsForWord do begin
+      AddressPart := AddressPart or (1 shl Shift);
+      Dec(Shift);
+    end;
+    Dec(NumberSignificantBits, BitsForWord);
+  end;
+var
+  Addr:  Cardinal;
+  Addr6: TIdIPv6AddressRec;
+  I:     Cardinal;
+  Shift: Integer;
+begin
+  // Convert something like "24" to "255.255.255.0", or "96" to "ffff:ffff:ffff::"
+
+  Result := '';
+  if (IPVersion = Id_IPv4) then begin
+    if (NumberSignificantBits > BitsInCardinal) then
+      raise EBadParameter.Create('Too many significant bits for an IPv4 mask');
+
+    Addr  := 0;
+    Shift := BitsInCardinal - 1;
+    for I := 1 to NumberSignificantBits do begin
+      Addr := Addr or (1 shl Shift);
+      Dec(Shift);
+    end;
+    Result := Self.IPv4AddressToStr(Addr);
+  end
+  else if (IPVersion = Id_IPv6) then begin
+    if (NumberSignificantBits > (BitsInCardinal*4)) then
+      raise EBadParameter.Create('Too many significant bits for an IPv6 mask');
+
+    FillChar(Addr6, SizeOf(TIdIPv6AddressRec), 0);
+    for I := Low(TIdIPv6AddressRec) to High(TIdIPv6AddressRec) do
+      MaskWord(NumberSignificantBits, Addr6[I]);
+
+    Result := IPv6AddressToStr(Addr6);
+  end
+  else
+    raise EBadParameter.Create('Cannot convert "' + IntToStr(NumberSignificantBits) + '" into an address of unknown IP version');
 end;
 
 class procedure TIdIPAddressParser.ParseIPv6Address(const IPv6Address: String;

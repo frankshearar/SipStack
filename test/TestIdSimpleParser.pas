@@ -56,6 +56,7 @@ type
     procedure TestIsIpv6Address;
     procedure TestIsIpv6Reference;
     procedure TestIsNumericAddress;
+    procedure TestMaskToAddress;
     procedure TestParseIpv6Address;
   end;
 
@@ -720,6 +721,79 @@ begin
   Check(    TIdIPAddressParser.IsNumericAddress('127.0.0.1'),            '127.0.0.1');
   Check(    TIdIPAddressParser.IsNumericAddress('[1::1:129.144.52.38]'), '[1::1:129.144.52.38]');
   Check(    TIdIPAddressParser.IsNumericAddress('1::1:129.144.52.38'),   '1::1:129.144.52.38');
+end;
+
+procedure TestTIdIPAddressParser.TestMaskToAddress;
+begin
+  CheckEquals('0.0.0.0',         TIdIPAddressParser.MaskToAddress(0, Id_IPv4), '0 significant digits, IPv4');
+  CheckEquals('128.0.0.0',       TIdIPAddressParser.MaskToAddress(1, Id_IPv4), '1 significant digit, IPv4');
+  CheckEquals('192.0.0.0',       TIdIPAddressParser.MaskToAddress(2, Id_IPv4), '2 significant digits, IPv4');
+  CheckEquals('224.0.0.0',       TIdIPAddressParser.MaskToAddress(3, Id_IPv4), '3 significant digits, IPv4');
+  CheckEquals('240.0.0.0',       TIdIPAddressParser.MaskToAddress(4, Id_IPv4), '4 significant digits, IPv4');
+  CheckEquals('248.0.0.0',       TIdIPAddressParser.MaskToAddress(5, Id_IPv4), '5 significant digits, IPv4');
+  CheckEquals('252.0.0.0',       TIdIPAddressParser.MaskToAddress(6, Id_IPv4), '6 significant digits, IPv4');
+  CheckEquals('254.0.0.0',       TIdIPAddressParser.MaskToAddress(7, Id_IPv4), '7 significant digits, IPv4');
+  CheckEquals('255.0.0.0',       TIdIPAddressParser.MaskToAddress(8, Id_IPv4), '8 significant digits, IPv4');
+  CheckEquals('255.128.0.0',     TIdIPAddressParser.MaskToAddress(9, Id_IPv4), '9 significant digits, IPv4');
+  CheckEquals('255.192.0.0',     TIdIPAddressParser.MaskToAddress(10, Id_IPv4), '10 significant digits, IPv4');
+  CheckEquals('255.224.0.0',     TIdIPAddressParser.MaskToAddress(11, Id_IPv4), '11 significant digits, IPv4');
+  CheckEquals('255.240.0.0',     TIdIPAddressParser.MaskToAddress(12, Id_IPv4), '12 significant digits, IPv4');
+  CheckEquals('255.248.0.0',     TIdIPAddressParser.MaskToAddress(13, Id_IPv4), '13 significant digits, IPv4');
+  CheckEquals('255.252.0.0',     TIdIPAddressParser.MaskToAddress(14, Id_IPv4), '14 significant digits, IPv4');
+  CheckEquals('255.254.0.0',     TIdIPAddressParser.MaskToAddress(15, Id_IPv4), '15 significant digits, IPv4');
+  CheckEquals('255.255.0.0',     TIdIPAddressParser.MaskToAddress(16, Id_IPv4), '16 significant digits, IPv4');
+  CheckEquals('255.255.128.0',   TIdIPAddressParser.MaskToAddress(17, Id_IPv4), '17 significant digits, IPv4');
+  CheckEquals('255.255.192.0',   TIdIPAddressParser.MaskToAddress(18, Id_IPv4), '18 significant digits, IPv4');
+  CheckEquals('255.255.224.0',   TIdIPAddressParser.MaskToAddress(19, Id_IPv4), '19 significant digits, IPv4');
+  CheckEquals('255.255.240.0',   TIdIPAddressParser.MaskToAddress(20, Id_IPv4), '20 significant digits, IPv4');
+  CheckEquals('255.255.248.0',   TIdIPAddressParser.MaskToAddress(21, Id_IPv4), '21 significant digits, IPv4');
+  CheckEquals('255.255.252.0',   TIdIPAddressParser.MaskToAddress(22, Id_IPv4), '22 significant digits, IPv4');
+  CheckEquals('255.255.254.0',   TIdIPAddressParser.MaskToAddress(23, Id_IPv4), '23 significant digits, IPv4');
+  CheckEquals('255.255.255.0',   TIdIPAddressParser.MaskToAddress(24, Id_IPv4), '24 significant digits, IPv4');
+  CheckEquals('255.255.255.128', TIdIPAddressParser.MaskToAddress(25, Id_IPv4), '25 significant digits, IPv4');
+  CheckEquals('255.255.255.192', TIdIPAddressParser.MaskToAddress(26, Id_IPv4), '26 significant digits, IPv4');
+  CheckEquals('255.255.255.224', TIdIPAddressParser.MaskToAddress(27, Id_IPv4), '27 significant digits, IPv4');
+  CheckEquals('255.255.255.240', TIdIPAddressParser.MaskToAddress(28, Id_IPv4), '28 significant digits, IPv4');
+  CheckEquals('255.255.255.248', TIdIPAddressParser.MaskToAddress(29, Id_IPv4), '29 significant digits, IPv4');
+  CheckEquals('255.255.255.252', TIdIPAddressParser.MaskToAddress(30, Id_IPv4), '30 significant digits, IPv4');
+  CheckEquals('255.255.255.254', TIdIPAddressParser.MaskToAddress(31, Id_IPv4), '31 significant digits, IPv4');
+  CheckEquals('255.255.255.255', TIdIPAddressParser.MaskToAddress(32, Id_IPv4), '32 significant digits, IPv4');
+
+  CheckEquals('::',     TIdIPAddressParser.MaskToAddress(0, Id_IPv6), '0 significant digits, IPv6');
+  CheckEquals('8000::', TIdIPAddressParser.MaskToAddress(1, Id_IPv6), '1 significant digit, IPv6');
+  CheckEquals('C000::', TIdIPAddressParser.MaskToAddress(2, Id_IPv6), '2 significant digits, IPv6');
+  CheckEquals('E000::', TIdIPAddressParser.MaskToAddress(3, Id_IPv6), '3 significant digits, IPv6');
+  CheckEquals('F000::', TIdIPAddressParser.MaskToAddress(4, Id_IPv6), '4 significant digits, IPv6');
+  CheckEquals('F800::', TIdIPAddressParser.MaskToAddress(5, Id_IPv6), '5 significant digits, IPv6');
+  CheckEquals('FC00::', TIdIPAddressParser.MaskToAddress(6, Id_IPv6), '6 significant digits, IPv6');
+  CheckEquals('FE00::', TIdIPAddressParser.MaskToAddress(7, Id_IPv6), '7 significant digits, IPv6');
+  CheckEquals('FF00::', TIdIPAddressParser.MaskToAddress(8, Id_IPv6), '8 significant digits, IPv6');
+
+  // Skip a whole bunch
+  CheckEquals('FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFE', TIdIPAddressParser.MaskToAddress(127, Id_IPv6), '127 significant digits, IPv6');
+  CheckEquals('FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF', TIdIPAddressParser.MaskToAddress(128, Id_IPv6), '128 significant digits, IPv6');
+
+  // Bad parameters
+  try
+    TIdIPAddressParser.MaskToAddress(33, Id_IPv4);
+    Fail('Failed to bail out on bad mask 33 for an IPv4 mask');
+  except
+    on EBadParameter do;
+  end;
+
+  try
+    TIdIPAddressParser.MaskToAddress(129, Id_IPv4);
+    Fail('Failed to bail out on bad mask 129 for an IPv6 mask');
+  except
+    on EBadParameter do;
+  end;
+
+  try
+    TIdIPAddressParser.MaskToAddress(0, Id_IPUnknown);
+    Fail('Failed to bail out on an unknown IP version');
+  except
+    on EBadParameter do;
+  end;
 end;
 
 procedure TestTIdIPAddressParser.TestParseIpv6Address;
