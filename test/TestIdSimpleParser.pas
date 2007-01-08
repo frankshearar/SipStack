@@ -504,9 +504,12 @@ begin
   CheckEquals('0.0.0.1',
               TIdIPAddressParser.IncIPAddress('0.0.0.0'),
               '0.0.0.0');
-  CheckEquals('0:0:0:0:0:0:0:1',
+  CheckEquals('::1',
               TIdIPAddressParser.IncIPAddress('0:0:0:0:0:0:0:0'),
               '0:0:0:0:0:0:0:0');
+  CheckEquals('::1',
+              TIdIPAddressParser.IncIPAddress('::'),
+              '::');
 end;
 
 procedure TestTIdIPAddressParser.TestIncIPv4Address;
@@ -547,39 +550,41 @@ procedure TestTIdIPAddressParser.TestIncIPv6Address;
 var
   Addy: TIdIPv6AddressRec;
 begin
-  CheckIncIPv6Address('0:0:0:0:0:0:0:1',
+  CheckIncIPv6Address('::1',
                       '0:0:0:0:0:0:0:0');
-  CheckIncIPv6Address('0:0:0:0:0:0:1:0',
+  CheckIncIPv6Address('::1',
+                      '::');
+  CheckIncIPv6Address('::1:0',
                       '0:0:0:0:0:0:0:FFFF');
-  CheckIncIPv6Address('0:0:0:0:0:1:0:0',
+  CheckIncIPv6Address('::1:0:0',
                       '0:0:0:0:0:0:FFFF:FFFF');
-  CheckIncIPv6Address('0:0:0:0:1:0:0:0',
+  CheckIncIPv6Address('::1:0:0:0',
                       '0:0:0:0:0:FFFF:FFFF:FFFF');
-  CheckIncIPv6Address('0:0:0:1:0:0:0:0',
+  CheckIncIPv6Address('0:0:0:1::',
                       '0:0:0:0:FFFF:FFFF:FFFF:FFFF');
-  CheckIncIPv6Address('0:0:1:0:0:0:0:0',
+  CheckIncIPv6Address('0:0:1::',
                       '0:0:0:FFFF:FFFF:FFFF:FFFF:FFFF');
-  CheckIncIPv6Address('0:1:0:0:0:0:0:0',
+  CheckIncIPv6Address('0:1::',
                       '0:0:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF');
-  CheckIncIPv6Address('1:0:0:0:0:0:0:0',
+  CheckIncIPv6Address('1::',
                       '0:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF');
-  CheckIncIPv6Address('0:0:0:0:0:0:0:0',
+  CheckIncIPv6Address('::',
                       'FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF');
 
-  CheckIncIPv6Address('0:0:0:0:DEAD:BEEF:FFFF:FFFF',
+  CheckIncIPv6Address('::DEAD:BEEF:FFFF:FFFF',
                       '0:0:0:0:DEAD:BEEF:0:0',
                       High(Cardinal));
-  CheckIncIPv6Address('1:0:0:0:0:0:0:0',
+  CheckIncIPv6Address('1::',
                       '0:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF');
 
-  TIdIPAddressParser.ParseIPv6Address('0:0:0:0:dead:beee:0:0', Addy);
+  TIdIPAddressParser.ParseIPv6Address('::DEAD:BEEE:0:0', Addy);
   TIdIPAddressParser.IncIPv6Address(Addy, High(Cardinal));
   TIdIPAddressParser.IncIPv6Address(Addy, 1);
-  CheckEquals('0:0:0:0:DEAD:BEEF:0:0',
+  CheckEquals('::DEAD:BEEF:0:0',
               TIdIPAddressParser.IPv6AddressToStr(Addy),
-              '0:0:0:0:DEAD:BEEF:0:0, High(Cardinal) + 1');
+              '::DEAD:BEEF:0:0, High(Cardinal) + 1');
 
-  CheckIncIPv6Address('1:0:0:0:0:0:FFFF:FFFE',
+  CheckIncIPv6Address('1::FFFF:FFFE',
                       '0:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF',
                       High(Cardinal));
 end;
@@ -627,7 +632,7 @@ var
   I:       Integer;
 begin
   FillChar(Address, Sizeof(Address), 0);
-  CheckEquals('0:0:0:0:0:0:0:0', TIdIPAddressParser.IPv6AddressToStr(Address));
+  CheckEquals('::', TIdIPAddressParser.IPv6AddressToStr(Address));
 
   for I := Low(Address) to High(Address) do
     Address[I] := I + 1;
@@ -640,6 +645,19 @@ begin
   for I := Low(Address) to High(Address) do
     Address[I] := (I + 1) shl 4;
   CheckEquals('10:20:30:40:50:60:70:80', TIdIPAddressParser.IPv6AddressToStr(Address));
+
+  FillChar(Address, Sizeof(Address), 0);
+  Address[0] := $2002;
+  Address[1] := $deca;
+  Address[2] := $fbad;
+  Address[7] := 1;
+  CheckEquals('2002:DECA:FBAD::1', TIdIPAddressParser.IPv6AddressToStr(Address));
+
+  FillChar(Address, Sizeof(Address), 0);
+  Address[6] := $0102;
+  Address[7] := $0304;
+  CheckEquals('::102:304', TIdIPAddressParser.IPv6AddressToStr(Address), 'No encapsulated IPv4 addresses');
+  CheckEquals('::1.2.3.4', TIdIPAddressParser.IPv6AddressToStr(Address, true), 'Show encapsulated IPv4 addresses');
 end;
 
 procedure TestTIdIPAddressParser.TestIPVersion;

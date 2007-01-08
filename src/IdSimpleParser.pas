@@ -33,7 +33,7 @@ type
                                    N: Cardinal = 1);
     class function  InetAddr(const IPv4Address: String): Cardinal;
     class function  IPv4AddressToStr(Address: Cardinal): String;
-    class function  IPv6AddressToStr(Address: TIdIPv6AddressRec): String;
+    class function  IPv6AddressToStr(Address: TIdIPv6AddressRec; ShowEncapsulatedIPv4: Boolean = false): String;
     class function  IPVersion(Address: String): TIdIPVersion;
     class function  IsIPAddress(IpVersion: TIdIPVersion;
                                 const Token: String): Boolean;
@@ -347,12 +347,20 @@ end;
 class function TIdIPAddressParser.ExpandIPv6Address(const IPAddress: String): String;
 var
   Address: TIdIPv6AddressRec;
+  I:       Integer;
 begin
+  // Take an address like "2002:DEAD:BEEF::1" and return
+  // "2002:DEAD:BEEF:0:0:0:0:1".
+
   if not TIdIPAddressParser.IsIPv6Address(IPAddress) then
     raise EConvertError.Create(Format(IPv6AddrError, [IPAddress]));
 
   Self.ParseIPv6Address(IPAddress, Address);
-  Result := Self.IPv6AddressToStr(Address);
+
+  Result := '';
+  for I := Low(Address) to High(Address) do
+    Result := Result + Format('%x', [Address[I]]) + ':';
+  Delete(Result, Length(Result), 1);
 end;
 
 class function TIdIPAddressParser.IncIPAddress(const IPAddress: String;
@@ -448,26 +456,100 @@ begin
           + IntToStr(Address and $ff);
 end;
 
-class function TIdIPAddressParser.IPv6AddressToStr(Address: TIdIPv6AddressRec): String;
-  function StripLeadingZeroes(Digits: String): String;
+class function TIdIPAddressParser.IPv6AddressToStr(Address: TIdIPv6AddressRec; ShowEncapsulatedIPv4: Boolean = false): String;
+  const
+    NS_INT16SZ   =   2;       // #/bytes of data in a u_int16_t
+    NS_IN6ADDRSZ =   16;      // IPv6 T_AAAA
+    EndOfAddress = NS_IN6ADDRSZ / NS_INT16SZ;
+  type
+    TPlace = record
+      Base: Integer;
+      Len:  Integer;
+    end;
+  function BestRunOfZeroes(Address: TIdIPv6AddressRec): TPlace;
   var
+    Cur: TPlace;
     I: Integer;
   begin
-    I := 1;
-    while (I <= Length(Digits)) and (Digits[I] = '0') do
-      Inc(I);
-    Result := Copy(Digits, I, Length(Digits));
-
-    if (Result = '') then Result := '0';
+    Result.Base := -1;
+    Cur.Base := -1;
+    for I := Low(Address) to High(Address) do begin
+      if (Address[I] = 0) then begin
+        if (Cur.Base = -1) then begin
+          Cur.Base := I;
+          Cur.Len := 1;
+        end
+        else
+          Inc(Cur.Len);
+      end
+      else begin
+        if (Cur.Base <> -1) then begin
+          if (Result.Base = -1) or (Cur.Len > Result.Len) then
+            Result := Cur;
+          Cur.Base := -1;
+        end;
+      end;
+    end;
+    if (Cur.Base <> -1) then begin
+      if (Result.Base = -1) or (Cur.Len > Result.Len) then
+        Result := Cur;
+    end;
+    if (Result.Base <> -1) and (Result.Len < 2) then
+      Result.Base := -1;
+  end;
+  function InsideRunOfZeroes(Index: Integer; Best: TPlace): Boolean;
+  begin
+    Result := (Best.Base <> -1)
+          and (Index >= Best.Base) and (Index < (Best.Base + Best.Len))
+  end;
+  function TrailingRunOfZeroes(Place: TPlace): Boolean;
+  begin
+    Result := (Place.Base <> -1) and ((Place.Base + Place.Len) = EndOfAddress)
+  end;
+  function MayBeEncapsulatedIPv4(Address: TIdIPv6AddressRec; Index: Integer; Best: TPlace): Boolean;
+  begin
+    // Return true if Address is of the form ::13.1.68.3 or ::FFFF:129.144.52.38
+    Result := (Index = 6)
+          and (Best.Base = 0)
+          and ((Best.Len = 6) or ((Best.Len = 5) and (Address[5] = $ffff)));
   end;
 var
+  Best: TPlace;
   I: Integer;
 begin
-  Result := '';
-  for I := Low(Address) to High(Address) do
-    Result := Result + StripLeadingZeroes(IntToHex(Address[I], 4)) + ':';
+  // This method is a translation of FreeBSD's inet_ntop6, in libc. A notable
+  // departure is you can choose to show encapsulated IPv4 addresses or not.
+  // That is, if ShowEncapsulatedIPv4 is true then this method will return
+  // "::0.1.0.0" (like inet_ntop6 does), but by default will return "::1:0", a
+  // "pure" IPv6 address.
+  Best := BestRunOfZeroes(Address);
 
-  Result := Copy(Result, 1, Length(Result) - 1);
+  Result := '';
+  for I := Low(Address) to High(Address) do begin
+    // Are we inside the best run of $00s?
+    if InsideRunOfZeroes(I, Best) then begin
+      if (I = Best.Base) then
+        Result := Result + ':';
+      Continue;
+    end;
+
+    // Are we following an initial run of $00s or any real hex?
+    if (I <> Low(Address)) then
+      Result := Result + ':';
+
+    // Is this address an encapsulated IPv4?
+    if ShowEncapsulatedIPv4 and MayBeEncapsulatedIPv4(Address, I, Best) then begin
+      Result := Result + Self.IPv4AddressToStr((Address[6] shl 16) or Address[7]);
+      Break;
+    end;
+
+    // Otherwise print the word
+    Result := Result + Format('%x', [Address[I]]);
+  end;
+
+  // Was it a trailing run of $00's?
+  if TrailingRunOfZeroes(Best) then
+    Result := Result + ':'
 end;
 
 class function TIdIPAddressParser.IPVersion(Address: String): TIdIPVersion;
