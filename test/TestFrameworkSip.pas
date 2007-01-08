@@ -12,11 +12,12 @@ unit TestFrameworkSip;
 interface
 
 uses
-  Classes, IdInterfacedObject, IdObservable, IdRTP, IdSdp, IdSipAuthentication,
-  IdSipInviteModule, IdSipLocator, IdSipMessage, IdSipOptionsModule, IdSipCore,
-  IdSipDialog, IdSipMockLocator, IdSipMockTransactionDispatcher,
-  IdSipRegistration, IdSipSubscribeModule, IdSipTransaction, IdSipTransport,
-  IdTimerQueue, IdSipUserAgent, SysUtils, TestFramework, TestFrameworkEx;
+  Classes, IdInterfacedObject, IdMockRoutingTable, IdObservable, IdRTP, IdSdp,
+  IdSipAuthentication, IdSipInviteModule, IdSipLocator, IdSipMessage,
+  IdSipOptionsModule, IdSipCore, IdSipDialog, IdSipMockLocator,
+  IdSipMockTransactionDispatcher, IdSipRegistration, IdSipSubscribeModule,
+  IdSipTransaction, IdSipTransport, IdTimerQueue, IdSipUserAgent, SysUtils,
+  TestFramework, TestFrameworkEx;
 
 type
   TIdSipTestResources = class(TObject)
@@ -60,8 +61,13 @@ type
     Destination:   TIdSipToHeader;
     Dispatcher:    TIdSipMockTransactionDispatcher;
     Invite:        TIdSipRequest;
+    LanGateway:    String;
+    LanIP:         String;
+    LanNetmask:    String;
+    LanNetwork:    String;
     RequestCount:  Cardinal;
     ResponseCount: Cardinal;
+    RoutingTable:  TIdMockRoutingTable;
 
     function  CreateRemoteBye(LocalDialog: TIdSipDialog): TIdSipRequest;
     function  CreateRemoteOk(Request: TIdSipRequest): TIdSipResponse;
@@ -971,12 +977,18 @@ procedure TTestCaseTU.SetUp;
 begin
   inherited SetUp;
 
+  Self.LanGateway := '10.0.0.1';
+  Self.LanIP      := '10.0.0.6';
+  Self.LanNetmask := '255.0.0.0';
+  Self.LanNetwork := '10.0.0.0';  
+
   Self.Destination := TIdSipToHeader.Create;
   Self.Destination.Value := 'sip:franks@remotehost';
 
   Self.Core := Self.CreateUserAgent('sip:case@localhost');
   Self.Authenticator := Self.Core.Authenticator as TIdSipAuthenticator;
   Self.Dispatcher    := Self.Core.Dispatcher as TIdSipMockTransactionDispatcher;
+  Self.RoutingTable  := Self.Core.RoutingTable as TIdMockRoutingTable;
 
   Self.DebugTimer := Self.Dispatcher.DebugTimer;
   Self.DebugTimer.TriggerImmediateEvents := true;
@@ -985,7 +997,10 @@ begin
   Self.RemoveBody(Self.Invite);
   // The address differs from the transports attached to Self.Core so we
   // don't construct hairpin calls.
-  Self.Locator.AddA(Self.Invite.LastHop.SentBy, '127.0.0.2');
+  Self.Locator.AddA(Self.Invite.LastHop.SentBy, '10.0.0.8');
+
+  Self.RoutingTable.AddOsRoute(Self.LanNetwork, Self.LanNetmask, Self.LanGateway, 1, '1', Self.LanIP);
+  Self.RoutingTable.AddOsRoute('0.0.0.0', '0.0.0.0', Self.LanGateway, 1, '1', Self.LanIP);
 end;
 
 procedure TTestCaseTU.TearDown;
@@ -994,7 +1009,7 @@ begin
   Self.Core.Free;
   Self.Destination.Free;
 
-  // The UserAgent kills the Dispatcher & Authenticator
+  // The UserAgent kills the Dispatcher, Authenticator, RoutingTable
 
   inherited TearDown;
 end;
@@ -1093,6 +1108,7 @@ var
 begin
   Result := TIdSipUserAgent.Create;
   Result.Authenticator := TIdSipAuthenticator.Create;
+  Result.RoutingTable  := TIdMockRoutingTable.Create;
   Result.Dispatcher    := TIdSipMockTransactionDispatcher.Create;
   Result.Locator       := Result.Dispatcher.Locator;
   Result.Timer         := Result.Dispatcher.Timer;
@@ -1103,8 +1119,8 @@ begin
   // Make sure we have a sane DNS setup so that actions don't terminate
   // themselves after they try find locations to which to send their messages.
   MockLocator := Result.Locator as TIdSipMockLocator;
-  MockLocator.AddA(Self.Destination.Address.Host, '127.0.0.2');
-  MockLocator.AddA(Result.From.Address.Host,      '127.0.0.1');
+  MockLocator.AddA(Self.Destination.Address.Host, '10.0.0.2');
+  MockLocator.AddA(Result.From.Address.Host,      Self.LanIP);
   MockLocator.AddA('localhost',                   '127.0.0.1');
 end;
 

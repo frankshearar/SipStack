@@ -98,7 +98,7 @@ begin
 
     for I := 0 to SupportedTrans.Count - 1 do begin
       Self.AddTransportBinding(SupportedTrans[I],
-                               '127.0.0.1',
+                               '10.0.0.6',
                                TIdSipTransportRegistry.TransportTypeFor(SupportedTrans[I]).DefaultPort);
     end;
   finally
