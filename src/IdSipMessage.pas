@@ -1170,7 +1170,7 @@ type
     function  IsMalformed: Boolean;
     function  HasNext: Boolean; virtual; abstract;
     function  Equals(OtherHeaders: TIdSipHeaderList): Boolean;
-    function  IsEmpty: Boolean;
+    function  IsEmpty: Boolean; virtual;
     procedure Next; virtual; abstract;
     procedure Remove(Header: TIdSipHeader); virtual; abstract;
 
@@ -1200,6 +1200,7 @@ type
     function  CurrentHeader: TIdSipHeader; override;
     procedure First; override;
     function  HasNext: Boolean; override;
+    function  IsEmpty: Boolean; override;
     procedure Next; override;
     procedure Remove(Header: TIdSipHeader); override;
     procedure RemoveAll;
@@ -7435,6 +7436,11 @@ end;
 function TIdSipHeadersFilter.HasNext: Boolean;
 begin
   Result := Self.CurrentIndex < Self.Count;
+end;
+
+function TIdSipHeadersFilter.IsEmpty: Boolean;
+begin
+  Result := not Self.Headers.HasHeader(Self.HeaderName);
 end;
 
 procedure TIdSipHeadersFilter.Next;
