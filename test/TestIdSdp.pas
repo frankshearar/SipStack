@@ -4459,13 +4459,13 @@ begin
                 'NetType');
     Check(Id_IPv6 = Self.Payload.ConnectionAt(0).AddressType,
           'AddressType');
-    CheckEquals('FF02:5156:4019:2:0:0:0:FFFF',
+    CheckEquals('FF02:5156:4019:2::FFFF',
                 Self.Payload.ConnectionAt(0).Address,
                 'Address 1');
-    CheckEquals('FF02:5156:4019:2:0:0:1:0',
+    CheckEquals('FF02:5156:4019:2::1:0',
                 Self.Payload.ConnectionAt(1).Address,
                 'Address 2');
-    CheckEquals('FF02:5156:4019:2:0:0:1:1',
+    CheckEquals('FF02:5156:4019:2::1:1',
                 Self.Payload.ConnectionAt(2).Address,
                 'Address 3');
     CheckEquals(127,
