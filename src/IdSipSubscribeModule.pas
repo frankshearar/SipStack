@@ -820,6 +820,9 @@ const
 
 implementation
 
+uses
+  IdSipLocator;
+
 const
   BadReferNotifyBody               = 'REFER NOTIFYs MUST have '
                                    + SipFragmentMimeType + ' bodies';
@@ -2100,6 +2103,8 @@ procedure TIdSipInboundSubscription.SendResponse(Response: TIdSipResponse);
 begin
   inherited SendResponse(Response);
 
+  Self.LocalGruu := Response.FirstContact;
+
   if Response.IsOK then
     Self.NotifySubscriberOfState;
 end;
@@ -2280,10 +2285,6 @@ begin
 
     if (Response.Expires.NumericValue > 0) then
       Self.ScheduleTermination(Response.Expires.NumericValue);
-
-    // This works regardless of whether the UA supports GRUU: if the UA doesn't
-    // then we simply make no USE of LocalGruu.
-    Self.LocalGruu := Response.FirstContact;
 
     Self.SendResponse(Response);
   finally
