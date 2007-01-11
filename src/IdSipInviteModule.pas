@@ -1550,8 +1550,6 @@ end;
 
 procedure TIdSipInboundInvite.SendResponse(Response: TIdSipResponse);
 begin
-  Self.LastResponse.Assign(Response);
-
   if Self.InitialRequest.Match(Response) then begin
     if not Self.SentFinalResponse then
       Self.SentFinalResponse := Response.IsFinal;
@@ -1561,6 +1559,12 @@ begin
   end;
 
   inherited SendResponse(Response);
+
+  // We do this last because we expect the Transaction layer to mutate the
+  // Contact header (this response being potentially a dialog-establishing
+  // response).
+  Self.LastResponse.Assign(Response);
+  Self.LocalGruu := Response.FirstContact;
 end;
 
 //* TIdSipInboundInvite Private methods ****************************************
