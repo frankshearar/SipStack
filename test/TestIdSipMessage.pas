@@ -144,6 +144,7 @@ type
     procedure TestAsString;
     procedure TestAsStringNoMaxForwardsSet;
     procedure TestAuthorizationFor;
+    procedure TestCanEstablishDialog;
     procedure TestCopy;
     procedure TestCopyMessageMutatedFromString;
     procedure TestCreateCancel;
@@ -237,6 +238,7 @@ type
     procedure TestAuthenticateHeaderWithNoAuthorization;
     procedure TestAuthenticateHeaderWithProxy;
     procedure TestAuthenticateHeaderWithUser;
+    procedure TestCanEstablishDialog;
     procedure TestCopy;
     procedure TestCopyMessageMutatedFromString;
     procedure TestEqualsComplexMessages;
@@ -351,6 +353,10 @@ const
       SIPServerTimeOut, SIPSIPVersionNotSupported, SIPMessageTooLarge,
       SIPBusyEverywhere, SIPDecline, SIPDoesNotExistAnywhere,
       SIPNotAcceptableGlobal);
+  DialogEstablishingMethods: array[0..2] of String = (MethodInvite,
+      MethodSubscribe, MethodRefer);
+  OtherMethods: array[0..5] of String = (MethodAck, MethodBye, MethodCancel,
+      MethodNotify, MethodOptions, MethodRegister);
 
 function Suite: ITestSuite;
 begin
@@ -1989,6 +1995,21 @@ begin
         'Auth2');
 end;
 
+procedure TestTIdSipRequest.TestCanEstablishDialog;
+var
+  I: Integer;
+begin
+  for I := Low(DialogEstablishingMethods) to High(DialogEstablishingMethods) do begin
+    Self.Request.Method := DialogEstablishingMethods[I];
+    Check(Self.Request.CanEstablishDialog, Self.Request.Method + 's can establish dialogs');
+  end;
+
+  for I := Low(OtherMethods) to High(OtherMethods) do begin
+    Self.Request.Method := OtherMethods[I];
+    Check(not Self.Request.CanEstablishDialog, Self.Request.Method + 's cannot establish dialogs');
+  end;
+end;
+
 procedure TestTIdSipRequest.TestCopy;
 var
   Cancel: TIdSipRequest;
@@ -3568,6 +3589,61 @@ begin
   Self.Response.AddHeader(WWWAuthenticateHeader);
   Check(Self.Response.AuthenticateHeader = Self.Response.FirstWWWAuthenticate,
         'AuthenticateHeader with a WWW-Authenticate header');
+end;
+
+procedure TestTIdSipResponse.TestCanEstablishDialog;
+var
+  I, J: Integer;
+begin
+  Self.Response.StatusCode := SIPTrying;
+  for I := Low(DialogEstablishingMethods) to High(DialogEstablishingMethods) do begin
+    Self.Response.ToHeader.Tag := 'something_arb';
+    Self.Response.CSeq.Method := DialogEstablishingMethods[I];
+    Check(not Self.Response.CanEstablishDialog,
+          Self.Response.Description + ' response to a ' + Self.Response.CSeq.Method + ' cannot establish a dialog, even with a To tag');
+  end;
+
+  Self.Response.StatusCode := SIPRinging;
+  for I := Low(DialogEstablishingMethods) to High(DialogEstablishingMethods) do begin
+    Self.Response.ToHeader.RemoveParameter(TagParam);
+    Self.Response.CSeq.Method := DialogEstablishingMethods[I];
+    Check(not Self.Response.CanEstablishDialog,
+          Self.Response.Description + ' response to a ' + Self.Response.CSeq.Method + ' cannot establish a dialog, without a To tag');
+  end;
+
+  Self.Response.StatusCode := SIPOK;
+  for I := Low(DialogEstablishingMethods) to High(DialogEstablishingMethods) do begin
+    Self.Response.ToHeader.RemoveParameter(TagParam);
+    Self.Response.CSeq.Method := DialogEstablishingMethods[I];
+    Check(not Self.Response.CanEstablishDialog,
+          Self.Response.Description + ' response to a ' + Self.Response.CSeq.Method + ' cannot establish a dialog, without a To tag');
+  end;
+
+  Self.Response.StatusCode := SIPOK;
+  for I := Low(DialogEstablishingMethods) to High(DialogEstablishingMethods) do begin
+    Self.Response.ToHeader.Tag := 'something_arb';
+    Self.Response.CSeq.Method := DialogEstablishingMethods[I];
+    Check(Self.Response.CanEstablishDialog,
+          Self.Response.Description + ' response to a ' + Self.Response.CSeq.Method + ' can establish a dialog');
+  end;
+
+  for I := Low(DialogEstablishingMethods) to High(DialogEstablishingMethods) do begin
+    for J := SIPRedirectionResponseClass to SIPGlobalFailureResponseClass do begin
+      Self.Response.StatusCode := J * 100;
+      Self.Response.ToHeader.Tag := 'something_arb';
+      Self.Response.CSeq.Method := DialogEstablishingMethods[I];
+      Check(not Self.Response.CanEstablishDialog,
+            Self.Response.Description + ' response to a ' + Self.Response.CSeq.Method + ' can establish a dialog');
+    end;
+  end;
+
+  for I := Low(OtherMethods) to High(OtherMethods) do begin
+    Self.Response.StatusCode := SIPOK;
+    Self.Response.ToHeader.Tag := 'something_arb';
+    Self.Response.CSeq.Method := OtherMethods[I];
+      Check(not Self.Response.CanEstablishDialog,
+            Self.Response.Description + ' response to a ' + Self.Response.CSeq.Method + ' cannot establish a dialog');
+  end;
 end;
 
 procedure TestTIdSipResponse.TestCopy;

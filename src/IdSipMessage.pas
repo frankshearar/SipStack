@@ -1436,6 +1436,7 @@ type
     procedure AddHeaders(Headers: TIdSipHeaderList);
     procedure Assign(Src: TPersistent); override;
     function  AsString: String;
+    function  CanEstablishDialog: Boolean; virtual;
     procedure ClearHeaders;
     function  ContactCount: Cardinal;
     function  Copy: TIdSipMessage;
@@ -1542,6 +1543,7 @@ type
     function  AddressOfRecord: String;
     procedure Assign(Src: TPersistent); override;
     function  AuthorizationFor(const Realm: String): TIdSipAuthorizationHeader;
+    function  CanEstablishDialog: Boolean; override;
     function  CreateCancel: TIdSipRequest;
     function  DefaultMaxForwards: Cardinal;
     function  DestinationUri: String;
@@ -1604,6 +1606,7 @@ type
     fStatusCode:        Integer;
     fStatusText:        String;
 
+    function  InResponseToDialogCreatingRequest: Boolean;
     procedure SetRequestRequestUri(Value: TIdSipUri);
     procedure SetStatusCode(Value: Integer);
   protected
@@ -1628,6 +1631,7 @@ type
     procedure AcceptVisitor(Visitor: IIdSipMessageVisitor); override;
     procedure Assign(Src: TPersistent); override;
     function  AuthenticateHeader: TIdSipAuthenticateHeader;
+    function  CanEstablishDialog: Boolean; override;
     function  CanRetryRequest: Boolean;
     function  Description: String;
     function  Equals(Msg: TIdSipMessage): Boolean; override;
@@ -8152,6 +8156,32 @@ begin
   Result := Result + Self.Body;
 end;
 
+function TIdSipMessage.CanEstablishDialog: Boolean;
+begin
+  // RFC 3261, section 12:
+  //   Dialogs are created through the generation of non-failure responses
+  //   to requests with specific methods.  Within this specification, only
+  //   2xx and 101-199 responses with a To tag, where the request was
+  //   INVITE, will establish a dialog.  A dialog established by a non-final
+  //   response to a request is in the "early" state and it is called an
+  //   early dialog.  Extensions MAY define other means for creating
+  //   dialogs.
+  //
+  // In fact, RFC 3265 defines another way:
+  //   If an initial SUBSCRIBE request is not sent on a pre-existing dialog,
+  //   the subscriber will wait for a response to the SUBSCRIBE request or a
+  //   matching NOTIFY.
+  //
+  //   Responses are matched to such SUBSCRIBE requests if they contain the
+  //   same the same "Call-ID", the same "From" header "tag", and the same
+  //   "CSeq".  Rules for the comparison of these headers are described in
+  //   SIP [1].  If a 200-class response matches such a SUBSCRIBE request,
+  //   it creates a new subscription and a new dialog (unless they have
+  //   already been created by a matching NOTIFY request; see below).
+
+  Result := false;
+end;
+
 procedure TIdSipMessage.ClearHeaders;
 begin
   Self.Headers.Clear;
@@ -8966,6 +8996,11 @@ begin
                                          AuthorizationHeader) as TIdSipAuthorizationHeader;
 end;
 
+function TIdSipRequest.CanEstablishDialog: Boolean;
+begin
+  Result := Self.IsInvite or Self.IsSubscribe or Self.IsRefer;
+end;
+
 function TIdSipRequest.CreateCancel: TIdSipRequest;
 begin
   Assert(Self.IsInvite,
@@ -9674,6 +9709,22 @@ begin
     Result := nil;
 end;
 
+function TIdSipResponse.CanEstablishDialog: Boolean;
+var
+  FakedRequest: TIdSipRequest;
+begin
+  FakedRequest := TIdSipRequest.Create;
+  try
+    FakedRequest.Method := Self.CSeq.Method;
+
+    Result := Self.InResponseToDialogCreatingRequest
+           and Self.WillEstablishDialog(FakedRequest)
+           and Self.ToHeader.HasTag;
+  finally
+    FakedRequest.Free;
+  end;
+end;
+
 function TIdSipResponse.CanRetryRequest: Boolean;
 begin
   // Result = true means that the response indicates the UAC can do something
@@ -9913,6 +9964,13 @@ begin
 end;
 
 //* TIdSipResponse Private methods **********************************************
+
+function TIdSipResponse.InResponseToDialogCreatingRequest: Boolean;
+begin
+  Result := (Self.CSeq.Method = MethodInvite)
+         or (Self.CSeq.Method = MethodSubscribe)
+         or (Self.CSeq.Method = MethodRefer);
+end;
 
 procedure TIdSipResponse.SetRequestRequestUri(Value: TIdSipUri);
 begin
