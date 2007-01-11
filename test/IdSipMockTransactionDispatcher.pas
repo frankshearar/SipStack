@@ -12,7 +12,7 @@ unit IdSipMockTransactionDispatcher;
 interface
 
 uses
-  Classes, IdSipLocator, IdSipMessage, IdSipMockLocator, IdSipMockTransport,
+  Classes, IdSipLocation, IdSipMessage, IdSipMockLocator, IdSipMockTransport,
   IdSipTransaction, IdSipTransport, IdTimerQueue;
 
 type
@@ -60,7 +60,7 @@ type
 implementation
 
 uses
-  IdSipConsts, SysUtils;
+  IdSipConsts, IdMockRoutingTable, SysUtils;
 
 const
   NoDestinationsForResponse = 'Couldn''t send the response because there are '
@@ -78,6 +78,8 @@ var
   SupportedTrans: TStrings;
 begin
   inherited Create(TIdDebugTimerQueue.Create(false), TIdSipMockLocator.Create);
+  
+  Self.RoutingTable := TIdMockRoutingTable.Create;
 
   Self.SentAcks      := TIdSipRequestList.Create;
   Self.SentRequests  := TIdSipRequestList.Create;
@@ -125,6 +127,8 @@ begin
   Self.SentResponses.Free;
   Self.SentRequests.Free;
   Self.SentAcks.Free;
+
+  Self.RoutingTable.Free;
 
   inherited Destroy;
 end;

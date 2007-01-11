@@ -12,7 +12,7 @@ unit SpikeRegistrar;
 interface
 
 uses
-  Classes, Controls, ExtCtrls, Forms, IdObservable, IdSipCore, IdSipLocator,
+  Classes, Controls, ExtCtrls, Forms, IdObservable, IdSipCore, IdSipLocation,
   IdSipMessage, IdSipMockBindingDatabase, IdSipMockLocator,IdSipRegistration,
   IdSipTransaction, IdSipTransport, IdTimerQueue, StdCtrls, SyncObjs, SysUtils;
 

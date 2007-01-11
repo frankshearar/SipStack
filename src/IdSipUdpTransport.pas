@@ -12,8 +12,8 @@ unit IdSipUdpTransport;
 interface
 
 uses
-  Classes, IdSipLocator, IdSipMessage, IdSipTransport, IdSocketHandle,IdTimerQueue,
-  IdUDPServer, SysUtils;
+  Classes, IdSipLocation, IdSipMessage, IdSipTransport, IdSocketHandle,
+  IdTimerQueue, IdUDPServer, SysUtils;
 
 type
   TIdSipUdpServer = class;

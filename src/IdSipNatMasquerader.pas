@@ -12,7 +12,7 @@ unit IdSipNatMasquerader;
 interface
 
 uses
-  IdInterfacedObject, IdSdp, IdSimpleParser, IdSipLocator, IdSipMessage,
+  IdInterfacedObject, IdSdp, IdSimpleParser, IdSipLocation, IdSipMessage,
   IdSipTransport;
 
 type

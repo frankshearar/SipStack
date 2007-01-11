@@ -64,6 +64,7 @@ type
                      Weight: Word;
                      Port: Cardinal;
                      const Target: String);
+    procedure RemoveNameRecords(const DomainName: String);
     procedure ResetLookupCount;
 
     property LookupCount:                Cardinal             read fLookupCount;
@@ -164,6 +165,20 @@ begin
     Self.SRV.Add(NewSrv);
   finally
     NewSrv.Free;
+  end;
+end;
+
+procedure TIdSipMockLocator.RemoveNameRecords(const DomainName: String);
+var
+  I: Integer;
+begin
+  I := 0;
+
+  while (I < Self.NameRecords.Count) do begin
+    if (Self.NameRecords[I].Domain = DomainName) then
+      Self.NameRecords.Delete(I)
+    else
+      Inc(I);
   end;
 end;
 

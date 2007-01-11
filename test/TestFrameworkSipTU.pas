@@ -26,6 +26,7 @@ type
     Password:                 String;
 
     function  AddFailReason(const Msg: String): String;
+    procedure AdjustNameResolutionForInDialogActions(DestinationIP: String); virtual;
     procedure CheckAuthentication(const AuthenticationHeaderName: String;
                                   const AuthorizationHeaderName: String;
                                   const QopType: String);
@@ -34,6 +35,7 @@ type
                                            const AuthenticationHeaderName: String;
                                            const AuthorizationHeaderName: String;
                                            const MsgPrefix: String);
+    procedure CheckLocalAddress(ExpectedIP: String; DestinationIP: String; Msg: String); virtual;
     function  CreateAction: TIdSipAction; virtual;
     function  CreateAuthorization(Challenge: TIdSipResponse): TIdSipAuthorizationHeader;
     function  IsInboundTest: Boolean;
@@ -74,6 +76,7 @@ type
     procedure TestLocalGruu; virtual;
     procedure TestMultipleAuthentication; virtual;
     procedure TestNetworkFailureTerminatesAction; virtual;
+    procedure TestSendUsesMappedRoutes; virtual;
     procedure TestResend; virtual;
     procedure TestResendBeforeSend; virtual;
     procedure TestResendWithProxyAuth; virtual;
@@ -140,6 +143,14 @@ begin
   Result := Msg;
   if (Self.FailReason <> '') then
     Result := Result + '(' + Self.FailReason + ')';
+end;
+
+procedure TestTIdSipAction.AdjustNameResolutionForInDialogActions(DestinationIP: String);
+begin
+  // Some requests will go to a dialog's remote target. This method allows you
+  // to force the Action to be sent to a particular IP address. 
+  //
+  // By default, do nothing.
 end;
 
 procedure TestTIdSipAction.CheckAuthentication(const AuthenticationHeaderName: String;
@@ -249,6 +260,44 @@ begin
   CheckEquals(ExpectedResponse,
               Auth.Response,
               MsgPrefix + ' Response');
+end;
+
+procedure TestTIdSipAction.CheckLocalAddress(ExpectedIP: String; DestinationIP: String; Msg: String);
+var
+  Action:    TIdSipAction;
+  ClassName: String;
+begin
+  // This test only makes sense for OUTbound actions.
+  if Self.IsInboundTest then Exit;
+
+  Self.AdjustNameResolutionForInDialogActions(DestinationIP);
+
+  // Make sure the target name resolves to the IP address against which we wish
+  // to test.
+  // Some tests use Self.Destination in CreateAction, others use Self.Invite
+  Self.Locator.RemoveNameRecords(Self.Destination.Address.Host);
+  Self.Locator.AddA(Self.Destination.Address.Host, DestinationIP);
+  Self.Locator.RemoveNameRecords(Self.Invite.FirstContact.Address.Host);
+  Self.Locator.AddA(Self.Invite.FirstContact.Address.Host, DestinationIP);
+
+  Self.MarkSentRequestCount;
+
+  Action := Self.CreateAction;
+  ClassName := Action.ClassName;
+
+  CheckRequestSent(ClassName + ': ' + Msg + ': didn''t send request');
+
+  // Some requests don't have Contact headers.
+  if not Self.LastSentRequest.Contacts.IsEmpty then begin
+    if Self.LastSentRequest.CanEstablishDialog then
+      CheckEquals(ExpectedIP,
+                  Self.LastSentRequest.FirstContact.Address.Host,
+                  ClassName + ': ' + Msg + ': Contact host not set');
+  end;
+  
+  CheckEquals(ExpectedIP,
+              Self.LastSentRequest.LastHop.SentBy,
+              ClassName + ': ' + Msg + ': sent-by not set');
 end;
 
 function TestTIdSipAction.CreateAction: TIdSipAction;
@@ -581,7 +630,7 @@ begin
   if Self.IsInboundTest then Exit;
 
   // Try send a message to a machine that's not running a SIP entity.
-  // This test relies on the message being sent to only one location. 
+  // This test relies on the message being sent to only one location.
   Action    := Self.CreateAction;
   ClassName := Action.ClassName;
   Method    := Action.Method;
@@ -594,6 +643,12 @@ begin
 
   Check(Self.Core.CountOf(Method) < PreExceptionCount,
         ClassName + ' didn''t terminate after a network failure');
+end;
+
+procedure TestTIdSipAction.TestSendUsesMappedRoutes;
+begin
+  CheckLocalAddress(Self.LanIP, Self.LanDestination, 'LAN destination');
+  CheckLocalAddress('127.0.0.1', '127.0.0.2', 'Loopback destination');
 end;
 
 procedure TestTIdSipAction.TestResend;

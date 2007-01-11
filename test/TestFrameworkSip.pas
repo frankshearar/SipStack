@@ -13,7 +13,7 @@ interface
 
 uses
   Classes, IdInterfacedObject, IdMockRoutingTable, IdObservable, IdRTP, IdSdp,
-  IdSipAuthentication, IdSipInviteModule, IdSipLocator, IdSipMessage,
+  IdSipAuthentication, IdSipInviteModule, IdSipLocation, IdSipMessage,
   IdSipOptionsModule, IdSipCore, IdSipDialog, IdSipMockLocator,
   IdSipMockTransactionDispatcher, IdSipRegistration, IdSipSubscribeModule,
   IdSipTransaction, IdSipTransport, IdTimerQueue, IdSipUserAgent, SysUtils,
@@ -54,21 +54,25 @@ type
   private
     procedure RemoveBody(Msg: TIdSipMessage);
   protected
-    AckCount:      Cardinal;
-    Authenticator: TIdSipAuthenticator;
-    Core:          TIdSipUserAgent;
-    DebugTimer:    TIdDebugTimerQueue;
-    Destination:   TIdSipToHeader;
-    Dispatcher:    TIdSipMockTransactionDispatcher;
-    Invite:        TIdSipRequest;
-    LanGateway:    String;
-    LanIP:         String;
-    LanNetmask:    String;
-    LanNetwork:    String;
-    RequestCount:  Cardinal;
-    ResponseCount: Cardinal;
-    RoutingTable:  TIdMockRoutingTable;
+    AckCount:       Cardinal;
+    Authenticator:  TIdSipAuthenticator;
+    Core:           TIdSipUserAgent;
+    DebugTimer:     TIdDebugTimerQueue;
+    Destination:    TIdSipToHeader;
+    Dispatcher:     TIdSipMockTransactionDispatcher;
+    Invite:         TIdSipRequest;
+    LanDestination: String;
+    LanGateway:     String;
+    LanIP:          String;
+    LanNetmask:     String;
+    LanNetwork:     String;
+    RequestCount:   Cardinal;
+    ResponseCount:  Cardinal;
+    RoutingTable:   TIdMockRoutingTable;
 
+    procedure AddDefaultRoute(Table: TIdMockRoutingTable; Gateway, LocalAddress: String);
+    procedure AddLanRoute(Table: TIdMockRoutingTable);
+    procedure AddLoopbackRoute(Table: TIdMockRoutingTable);
     function  CreateRemoteBye(LocalDialog: TIdSipDialog): TIdSipRequest;
     function  CreateRemoteOk(Request: TIdSipRequest): TIdSipResponse;
     function  CreateRemoteUnauthorized(Request: TIdSipRequest;
@@ -111,6 +115,7 @@ type
     function  SentRequestCount: Cardinal;
     function  SentResponseCount: Cardinal;
     function  SentRequestAt(Index: Integer): TIdSipRequest;
+    procedure SetRoutingTableForSingleLanIP;
     function  ThirdLastSentRequest: TIdSipRequest;
   public
     procedure SetUp; override;
@@ -977,10 +982,11 @@ procedure TTestCaseTU.SetUp;
 begin
   inherited SetUp;
 
-  Self.LanGateway := '10.0.0.1';
-  Self.LanIP      := '10.0.0.6';
-  Self.LanNetmask := '255.0.0.0';
-  Self.LanNetwork := '10.0.0.0';  
+  Self.LanDestination := '10.0.0.8';
+  Self.LanGateway     := '10.0.0.1';
+  Self.LanIP          := '10.0.0.6';
+  Self.LanNetmask     := '255.0.0.0';
+  Self.LanNetwork     := '10.0.0.0';
 
   Self.Destination := TIdSipToHeader.Create;
   Self.Destination.Value := 'sip:franks@remotehost';
@@ -997,10 +1003,10 @@ begin
   Self.RemoveBody(Self.Invite);
   // The address differs from the transports attached to Self.Core so we
   // don't construct hairpin calls.
-  Self.Locator.AddA(Self.Invite.LastHop.SentBy, '10.0.0.8');
+  Self.Locator.AddA(Self.Invite.LastHop.SentBy, Self.LanDestination);
+  Self.Locator.AddA(Self.Invite.RequestUri.Host, Self.LanDestination);
 
-  Self.RoutingTable.AddOsRoute(Self.LanNetwork, Self.LanNetmask, Self.LanGateway, 1, '1', Self.LanIP);
-  Self.RoutingTable.AddOsRoute('0.0.0.0', '0.0.0.0', Self.LanGateway, 1, '1', Self.LanIP);
+  Self.SetRoutingTableForSingleLanIP;
 end;
 
 procedure TTestCaseTU.TearDown;
@@ -1009,7 +1015,7 @@ begin
   Self.Core.Free;
   Self.Destination.Free;
 
-  // The UserAgent kills the Dispatcher, Authenticator, RoutingTable
+  // The UserAgent kills the Dispatcher, Authenticator
 
   inherited TearDown;
 end;
@@ -1054,6 +1060,21 @@ begin
 end;
 
 //* TTestCaseTU Protected methods **********************************************
+
+procedure TTestCaseTU.AddDefaultRoute(Table: TIdMockRoutingTable; Gateway, LocalAddress: String);
+begin
+  Self.RoutingTable.AddOsRoute('0.0.0.0', '0.0.0.0', Gateway, 1, '1', LocalAddress);
+end;
+
+procedure TTestCaseTU.AddLanRoute(Table: TIdMockRoutingTable);
+begin
+  Self.RoutingTable.AddOsRoute(Self.LanNetwork, Self.LanNetmask, Self.LanGateway, 1, '1', Self.LanIP);
+end;
+
+procedure TTestCaseTU.AddLoopbackRoute(Table: TIdMockRoutingTable);
+begin
+  Table.AddOsRoute('127.0.0.0', '255.0.0.0', '127.0.0.1', 1, '1', '127.0.0.1');
+end;
 
 function TTestCaseTU.CreateRemoteBye(LocalDialog: TIdSipDialog): TIdSipRequest;
 begin
@@ -1108,9 +1129,9 @@ var
 begin
   Result := TIdSipUserAgent.Create;
   Result.Authenticator := TIdSipAuthenticator.Create;
-  Result.RoutingTable  := TIdMockRoutingTable.Create;
   Result.Dispatcher    := TIdSipMockTransactionDispatcher.Create;
   Result.Locator       := Result.Dispatcher.Locator;
+  Result.RoutingTable  := Result.Dispatcher.RoutingTable;
   Result.Timer         := Result.Dispatcher.Timer;
 
   Result.Contact.Value := Address;
@@ -1380,6 +1401,16 @@ end;
 function TTestCaseTU.SentRequestAt(Index: Integer): TIdSipRequest;
 begin
   Result := Self.Dispatcher.Transport.RequestAt(Index);
+end;
+
+procedure TTestCaseTU.SetRoutingTableForSingleLanIP;
+begin
+  // This machine has one loopback IP address, and one LAN IP address. It sits
+  // on a network with a NATting gateway to the internet.
+
+  Self.AddLanRoute(Self.RoutingTable);
+  Self.AddLoopbackRoute(Self.RoutingTable);
+  Self.AddDefaultRoute(Self.RoutingTable, Self.LanGateway, Self.LanIP);
 end;
 
 function TTestCaseTU.ThirdLastSentRequest: TIdSipRequest;

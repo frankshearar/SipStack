@@ -368,7 +368,7 @@ type
 implementation
 
 uses
-  Classes, IdException, IdSdp, IdSimpleParser, IdSipDns, IdSipLocator,
+  Classes, IdException, IdSdp, IdSimpleParser, IdSipDns, IdSipLocation,
   IdSipMockTransport, IdSipOptionsModule, IdSipRegistration,
   IdSipSubscribeModule, SysUtils;
 

@@ -385,7 +385,7 @@ const
 implementation
 
 uses
-  Classes, IdRandom, IdSipLocator, StackWindow, SysUtils;
+  Classes, IdRandom, IdSipLocation, StackWindow, SysUtils;
 
 function Suite: ITestSuite;
 begin

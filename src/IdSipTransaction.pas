@@ -13,8 +13,8 @@ interface
 
 uses
   Classes, Contnrs, IdBaseThread, IdInterfacedObject, IdNotification,
-  IdSipAuthentication, IdSipLocator, IdSipMessage, IdSipTransport, IdTimerQueue,
-  SysUtils;
+  IdRoutingTable, IdSipAuthentication, IdSipLocation, IdSipLocator,
+  IdSipMessage, IdSipTransport, IdTimerQueue, SysUtils;
 
 type
   // This covers all states - INVITE, non-INVITE, client, server.
@@ -72,6 +72,7 @@ type
                                       IIdSipTransportListener)
   private
     fLocator:                 TIdSipAbstractLocator;
+    fRoutingTable:            TIdRoutingTable;
     fT1Interval:              Cardinal;
     fT2Interval:              Cardinal;
     fT4Interval:              Cardinal;
@@ -168,12 +169,13 @@ type
     function  TransportCount: Integer;
     function  WillUseReliableTranport(R: TIdSipMessage): Boolean;
 
-    property Locator:    TIdSipAbstractLocator read fLocator write fLocator;
-    property T1Interval: Cardinal              read fT1Interval write fT1Interval;
-    property T2Interval: Cardinal              read fT2Interval write fT2Interval;
-    property T4Interval: Cardinal              read fT4Interval write fT4Interval;
-    property Timer:      TIdTimerQueue         read fTimer;
-    property Transports: TIdSipTransports      read fTransports;
+    property Locator:      TIdSipAbstractLocator read fLocator write fLocator;
+    property RoutingTable: TIdRoutingTable       read fRoutingTable write fRoutingTable;
+    property T1Interval:   Cardinal              read fT1Interval write fT1Interval;
+    property T2Interval:   Cardinal              read fT2Interval write fT2Interval;
+    property T4Interval:   Cardinal              read fT4Interval write fT4Interval;
+    property Timer:        TIdTimerQueue         read fTimer;
+    property Transports:   TIdSipTransports      read fTransports;
   end;
 
   // I am a SIP Transaction. As such, I am a finite state machine. I swallow
@@ -957,6 +959,7 @@ begin
                              Format(RSNoLocationSucceeded, [Response.LastHop.SentBy]));
     end
     else begin
+      Response.RewriteLocationHeaders(Self.RoutingTable, RemainingLocations.First);
       Self.SendToTransport(Response, RemainingLocations.First);
       RemainingLocations.RemoveFirst;
     end;
@@ -1614,9 +1617,20 @@ procedure TIdSipServerTransaction.TrySendResponseTo(R: TIdSipResponse;
 var
   Locations: TIdSipLocations;
 begin
-  Self.Dispatcher.SendToTransport(R, Dest);
+  // Some explanation: SentResponses contains a bunch of responses that we've
+  // sent. (We might have sent several because we sent some provisional
+  // responses before a final one.) SentResponses contains copies of those
+  // responses, but those responses can't have the correct Contact information
+  // because the Transaction-User layer doesn't find out to what Locations to
+  // send the response. Thus, we look up the Locations FIRST and then EDIT the
+  // response before sending it. If we edit first, then we won't find the
+  // locations, because the newly-edited response was never added to
+  // SentResponses.
 
   Locations := Self.SentResponses.LocationsFor(R);
+
+  R.RewriteLocationHeaders(Self.Dispatcher.RoutingTable, Dest);
+  Self.Dispatcher.SendToTransport(R, Dest);
 
   if not Locations.IsEmpty then
     Locations.Remove(Dest);

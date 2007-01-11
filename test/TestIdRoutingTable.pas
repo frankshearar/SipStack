@@ -12,7 +12,7 @@ unit TestIdRoutingTable;
 interface
 
 uses
-  IdMockRoutingTable, IdRoutingTable, IdSipLocator, TestFramework;
+  IdMockRoutingTable, IdRoutingTable, IdSipLocation, TestFramework;
 
 type
   TestTIdRouteEntry = class(TTestCase)

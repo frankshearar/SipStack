@@ -12,7 +12,7 @@ unit TestIdSipTransportLogger;
 interface
 
 uses
-  Classes, IdSipLocator, IdSipMessage, IdSipMockTransport, IdSipTransportLogger,
+  Classes, IdSipLocation, IdSipMessage, IdSipMockTransport, IdSipTransportLogger,
   TestFramework;
 
 type

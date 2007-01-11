@@ -12,7 +12,7 @@ unit TestFrameworkSipTransport;
 interface
 
 uses
-  IdSipLocator, IdSipMessage, IdSipTransport, IdTimerQueue, SyncObjs,
+  IdSipLocation, IdSipMessage, IdSipTransport, IdTimerQueue, SyncObjs,
   SysUtils, TestFrameworkEx;
 
 type

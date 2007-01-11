@@ -13,7 +13,7 @@ interface
 
 uses
   Classes, Contnrs, IdInterfacedObject, IdNotification, IdSipCore,
-  IdSipDialogID, IdSipInviteModule, IdSipLocator, IdSipMessage,
+  IdSipDialogID, IdSipInviteModule, IdSipLocation, IdSipMessage,
   IdSipNatMasquerader, IdSipRegistration, IdSipSubscribeModule,
   IdSipTransaction, IdSipTransport, IdSipUserAgent, IdTimerQueue, SyncObjs,
   SysUtils, Messages, Windows;

@@ -12,7 +12,7 @@ unit IdSipTcpTransport;
 interface
 
 uses
-  Classes, Contnrs, IdBaseThread, IdSipLocator, IdSipMessage, IdSipTransport,
+  Classes, Contnrs, IdBaseThread, IdSipLocation, IdSipMessage, IdSipTransport,
   IdSocketHandle, IdTCPConnection, IdTCPClient, IdTCPServer, IdTimerQueue,
   SyncObjs, SysUtils;
 

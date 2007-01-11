@@ -12,7 +12,7 @@ unit IdSipTransportLogger;
 interface
 
 uses
-  Classes, IdInterfacedObject, IdSipLocator, IdSipMessage, IdSipTransport,
+  Classes, IdInterfacedObject, IdSipLocation, IdSipMessage, IdSipTransport,
   SysUtils;
 
 type

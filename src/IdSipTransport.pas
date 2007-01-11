@@ -13,7 +13,7 @@ interface
 
 uses
   Classes, Contnrs, IdException, IdInterfacedObject,
-  IdNotification, IdSipLocator, IdSipMessage, IdSocketHandle, IdSSLOpenSSL,
+  IdNotification, IdSipLocation, IdSipMessage, IdSocketHandle, IdSSLOpenSSL,
   IdTCPConnection, IdTimerQueue, SyncObjs, SysUtils;
 
 type

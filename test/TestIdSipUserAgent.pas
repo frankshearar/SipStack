@@ -12,10 +12,10 @@ unit TestIdSipUserAgent;
 interface
 
 uses
-  Classes, IdObservable, IdSipCore, IdSipDialog, IdSipDialogID,
-  IdSipInviteModule, IdSipLocator, IdSipMessage, IdSipTransport, IdSocketHandle,
-  IdUdpServer, IdSipUserAgent, IdTimerQueue, SyncObjs, TestFrameworkEx,
-  TestFramework, TestFrameworkSip, TestFrameworkSipTU;
+  Classes, IdObservable, IdRoutingTable, IdSipCore, IdSipDialog, IdSipDialogID,
+  IdSipInviteModule, IdSipLocation, IdSipMessage, IdSipTransport,
+  IdSocketHandle, IdUdpServer, IdSipUserAgent, IdTimerQueue, SyncObjs,
+  TestFrameworkEx, TestFramework, TestFrameworkSip, TestFrameworkSipTU;
 
 type
   TestTIdSipUserAgent = class(TTestCaseTU,
@@ -160,6 +160,7 @@ type
     procedure CheckAutoFrom(UserAgent: TIdSipAbstractCore);
     procedure CheckEventPackageRegistered(UA: TIdSipUserAgent;
                                           PackageName: String);
+    procedure CheckLocalAddress(UA: TIdSipUserAgent; ExpectedLocalAddress, DestinationIP: String; Msg: String);
     procedure CheckTCPServerNotOnPort(const Host: String;
                                       Port: Cardinal;
                                       const Msg: String);
@@ -200,6 +201,7 @@ type
     procedure TestCreateUserAgentWithMalformedFrom;
     procedure TestCreateUserAgentWithMalformedLocator;
     procedure TestCreateUserAgentWithMalformedProxy;
+    procedure TestCreateUserAgentWithMappedRoutes;
     procedure TestCreateUserAgentWithMockAuthenticator;
     procedure TestCreateUserAgentWithMockLocator;
     procedure TestCreateUserAgentWithMultipleEventPackageSupport;
@@ -239,9 +241,10 @@ type
 implementation
 
 uses
-  IdException, IdSdp, IdSipAuthentication, IdSipConsts, IdSipIndyLocator,
-  IdSipMockLocator, IdSipMockTransport, IdSipSubscribeModule, IdSipTCPTransport,
-  IdSipUDPTransport, IdSystem, IdTcpClient, IdUnicode, SysUtils;
+  IdException, IdSdp, IdSimpleParser, IdSipAuthentication, IdSipConsts,
+  IdSipIndyLocator, IdSipMockLocator, IdSipMockTransport, IdSipSubscribeModule,
+  IdSipTCPTransport, IdSipUDPTransport, IdSystem, IdTcpClient, IdUnicode,
+  SysUtils;
 
 const
   // SFTF: Sip Foundry Test Framework. cf. http://www.sipfoundry.org/sftf/
@@ -1941,6 +1944,24 @@ begin
         '"' + PackageName + '" package not supported by the SubscribeModule');
 end;
 
+procedure TestTIdSipStackConfigurator.CheckLocalAddress(UA: TIdSipUserAgent; ExpectedLocalAddress, DestinationIP: String; Msg: String);
+var
+  Call:        TIdSipOutboundSession;
+  Destination: TIdSipToHeader;
+begin
+  Destination := TIdSipToHeader.Create;
+  try
+    Destination.Address.Scheme := SipScheme;
+    Destination.Address.Host   := DestinationIP;
+    Call := UA.InviteModule.Call(Destination, '', '');
+    Call.Send;
+
+    CheckEquals(ExpectedLocalAddress, Call.InitialRequest.FirstContact.Address.Host, Msg);
+  finally
+    Destination.Free;
+  end;
+end;
+
 procedure TestTIdSipStackConfigurator.CheckTCPServerNotOnPort(const Host: String;
                                                               Port: Cardinal;
                                                               const Msg: String);
@@ -2361,6 +2382,41 @@ begin
     on E: EParserError do
       Check(Pos(MalformedProxyLine, E.Message) > 0,
             'Insufficient error message');
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithMappedRoutes;
+const
+  InternetDestination = '5.6.7.8';
+  InternetGateway     = '1.2.3.4';
+  InternetMappedRoute = 'MappedRoute: 0.0.0.0/0.0.0.0 ' + InternetGateway + ' 15060';
+  VpnDestination      = '192.168.0.2';
+  VpnGateway          = '192.168.0.1';
+  VpnMappedRoute      = 'MappedRoute: 192.168.0.0/24 ' + VpnGateway;
+var
+  LanDestination: String;
+  LanIP:          String;
+  UA:             TIdSipUserAgent;
+begin
+  // There's lots under test here: you can specify a mapped route with two kinds
+  // of (address/mask)s. You can optionally specify a port.
+
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Port));
+  Self.Configuration.Add(InternetMappedRoute);
+  Self.Configuration.Add(VpnMappedRoute);
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    LanIP := LocalAddress;
+    LanDestination := TIdIPAddressParser.IncIPAddress(LanIP);
+
+    CheckEquals(GetBestLocalAddress(LanDestination),
+                UA.RoutingTable.LocalAddressFor(LanDestination),
+                'UA routing table not consulting OS');
+    CheckLocalAddress(UA, InternetGateway, InternetDestination, 'Internet mapped route not used');
+    CheckLocalAddress(UA, VpnGateway, VpnDestination, 'Vpn mapped route not used');
+  finally
+    UA.Free;
   end;
 end;
 

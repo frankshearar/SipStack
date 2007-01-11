@@ -12,10 +12,14 @@ unit IdRoutingTable;
 interface
 
 uses
-  Classes, Contnrs, IdSipLocator;
+  Classes, Contnrs, IdSipLocation;
 
 type
-  // I represent an entry in this machine's routing table.
+  // I represent an entry in this machine's routing table, or a "mapped
+  // route" - a route that passes through a NAT gateway.
+  //
+  // LocalAddress is only meaningful if I represent a mapped route - this will
+  // contain the IP address that remote parties will need to contact me.
   TIdRouteEntry = class(TObject)
   private
     fDestination:      String;
@@ -59,7 +63,7 @@ type
   TIdRouteEntryClass = class of TIdRouteEntry;
 
   // I represent this machine's routing table, plus any user-defined "mapped
-  // routes" - routes which pass through a NAT gateway.
+  // routes" (routes which pass through a NAT gateway).
   //
   // When you ask me what local address to use, I consult my list of mapped
   // routes (in Self.Routes), and return the best-matching route. Should none

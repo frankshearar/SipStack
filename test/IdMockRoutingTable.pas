@@ -12,7 +12,7 @@ unit IdMockRoutingTable;
 interface
 
 uses
-  Contnrs, IdRoutingTable, IdSipLocator;
+  Contnrs, IdRoutingTable, IdSipLocation;
 
 type
   TIdMockRoutingTable = class(TIdRoutingTable)

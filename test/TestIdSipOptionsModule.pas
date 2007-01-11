@@ -39,7 +39,8 @@ type
 
   TestTIdSipInboundOptions = class(TestTIdSipOptionsAction)
   private
-    Options: TIdSipInboundOptions;
+    Options:        TIdSipInboundOptions;
+    OptionsRequest: TIdSipRequest;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -86,7 +87,7 @@ type
 implementation
 
 uses
-  SysUtils, TestFramework;
+  SysUtils, TestFramework, IdSipUserAgent;
 
 function Suite: ITestSuite;
 begin
@@ -239,15 +240,17 @@ procedure TestTIdSipInboundOptions.SetUp;
 begin
   inherited SetUp;
 
-  Self.Invite.Method := MethodOptions;
+  Self.OptionsRequest := Self.Module.CreateOptions(Self.Destination);
+
   Self.Options := TIdSipInboundOptions.CreateInbound(Self.Core,
-                                                     Self.Invite,
+                                                     Self.OptionsRequest,
                                                      Self.Binding);
 end;
 
 procedure TestTIdSipInboundOptions.TearDown;
 begin
   Self.Options.Free;
+  Self.OptionsRequest.Free;
 
   inherited TearDown;
 end;
@@ -330,7 +333,8 @@ begin
 
   Check(Response.HasHeader(ContactHeaderFull),
         'No Contact header');
-  Check(Self.Core.Contact.Equals(Response.FirstContact),
+  CheckEquals(Self.Core.Contact.AsString,
+              Response.FirstContact.AsString,
         'Contact header value');
 
   Check(Response.HasHeader(WarningHeader),

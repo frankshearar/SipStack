@@ -12,10 +12,10 @@ unit TestIdSipTransaction;
 interface
 
 uses
-  IdSipAuthentication, IdSipCore, IdSipDialog, IdSipDns, IdSipLocator,
-  IdSipMessage, IdSipMockCore, IdSipMockLocator, IdSipMockTransactionDispatcher,
-  IdSipMockTransport, IdSipTransaction, IdSipTransport, IdTimerQueue, SysUtils,
-  TestFramework, TestFrameworkSip;
+  IdMockRoutingTable, IdSipAuthentication, IdSipCore, IdSipDialog, IdSipDns,
+  IdSipLocation, IdSipMessage, IdSipMockCore, IdSipMockLocator,
+  IdSipMockTransactionDispatcher, IdSipMockTransport, IdSipTransaction,
+  IdSipTransport, IdTimerQueue, SysUtils, TestFramework, TestFrameworkSip;
 
 type
   TMessageCountingTestCase = class(TTestCaseSip)
@@ -64,6 +64,7 @@ type
     ReceivedResponse:       TIdSipResponse;
     RejectedRequest:        TIdSipRequest;
     Response200:            TIdSipResponse;
+    RoutingTable:           TIdMockRoutingTable;
     Timer:                  TIdDebugTimerQueue;
     TranRequest:            TIdSipRequest;
     TransportException:     Boolean;
@@ -151,6 +152,7 @@ type
     Timer:        TIdDebugTimerQueue;
     Request:      TIdSipRequest;
     Response:     TIdSipResponse;
+    RoutingTable: TIdMockRoutingTable;
     TcpTransport: TIdSipMockTransport;
     UdpTransport: TIdSipMockTransport;
   public
@@ -681,6 +683,10 @@ begin
 
   Self.Core.Dispatcher := Self.D;
 
+  Self.RoutingTable := TIdMockRoutingTable.Create;
+  Self.Core.RoutingTable := Self.RoutingTable;
+  Self.D.RoutingTable := Self.Core.RoutingTable;
+
   // Remember, Self's subclass has registered mock transports for these symbols.
   Self.D.AddTransportBinding(TcpTransport, '127.0.0.1', IdPORT_SIP);
   Self.D.AddTransportBinding(UdpTransport, '127.0.0.1', IdPORT_SIP);
@@ -737,6 +743,7 @@ begin
   Self.ReceivedRequest.Free;
 
   Self.Destination.Free;
+  Self.RoutingTable.Free;
   Self.D.Free;
   Self.Locator.Free;
   Self.Core.Free;
@@ -1707,6 +1714,9 @@ begin
   Self.D.AddTransportBinding(IdSipMessage.TcpTransport, '127.0.0.1', 5060);
   Self.D.AddTransportBinding(IdSipMessage.UdpTransport, '127.0.0.1', 5060);
 
+  Self.RoutingTable := TIdMockRoutingTable.Create;
+  Self.D.RoutingTable := Self.RoutingTable;
+
   Self.TcpTransport := Self.D.Transports[0] as TIdSipMockTransport;
   Self.UdpTransport := Self.D.Transports[1] as TIdSipMockTransport;
   Self.MockTransport := Self.UdpTransport;
@@ -1723,6 +1733,7 @@ begin
   Self.Response.Free;
   Self.Request.Free;
 
+  Self.RoutingTable.Free;
   Self.D.Free;
   Self.Timer.Terminate;
   Self.L.Free;
@@ -2402,6 +2413,8 @@ begin
 
   Self.MockTransport := Self.MockDispatcher.Transport;
   Self.MockTransport.HostName := 'gw1.leo-ix.org';
+
+  Self.Core.RoutingTable := Self.MockDispatcher.RoutingTable;
 
   Self.Tran := Self.TransactionType.Create(Self.MockDispatcher, Self.Request);
   Self.Tran.AddTransactionListener(Self);

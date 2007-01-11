@@ -12,7 +12,7 @@ unit IdSipMockTransport;
 interface
 
 uses
-  IdSipLocator, IdSipMessage, IdSipTransport, IdSocketHandle, SysUtils;
+  IdSipLocation, IdSipMessage, IdSipTransport, IdSocketHandle, SysUtils;
 
 type
   TIdMessageDirection = (dirIn, dirOut);

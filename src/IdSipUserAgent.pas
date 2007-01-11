@@ -116,6 +116,8 @@ type
                       const HostNameLine: String);
     procedure AddLocator(UserAgent: TIdSipAbstractCore;
                          const NameServerLine: String);
+    procedure AddMappedRoute(UserAgent: TIdSipAbstractCore;
+                             const MappedRouteLine: String);
     procedure AddPendingConfiguration(PendingActions: TObjectList;
                                       Action: TIdSipPendingLocalResolutionAction);
     procedure AddPendingMessageSend(PendingActions: TObjectList;
@@ -213,6 +215,7 @@ const
   InstanceIDDirective               = 'InstanceID';
   ListenDirective                   = 'Listen';
   MockKeyword                       = 'MOCK';
+  MappedRouteDirective              = 'MappedRoute';
   NameServerDirective               = 'NameServer';
   ProxyDirective                    = 'Proxy';
   RegisterDirective                 = 'Register';
@@ -224,7 +227,7 @@ procedure EatDirective(var Line: String);
 implementation
 
 uses
-  IdSimpleParser, IdSipIndyLocator, IdSipMockLocator,
+  IdRoutingTable, IdSimpleParser, IdSipIndyLocator, IdSipMockLocator,
   IdSipSubscribeModule, IdSystem, IdUnicode, SysUtils;
 
 //******************************************************************************
@@ -560,6 +563,42 @@ begin
   UserAgent.Dispatcher.Locator := UserAgent.Locator;
 end;
 
+procedure TIdSipStackConfigurator.AddMappedRoute(UserAgent: TIdSipAbstractCore;
+                                                 const MappedRouteLine: String);
+var
+  ActualPort: Cardinal;
+  Gateway:    String;
+  Line:       String;
+  Mask:       String;
+  Network:    String;
+  Port:       String;
+  Route:      String;
+begin
+  Line := MappedRouteLine;
+  EatDirective(Line);
+
+  Route   := Fetch(Line, ' ');
+  Gateway := Fetch(Line, ' ');
+  Port    := Line;
+
+  Network := Fetch(Route, '/');
+  Mask    := Route;
+
+  // If IsNumber returns true then the route is something like "192.168.0.0/24".
+  // Otherwise the route is something like "192.168.0.0/255.255.255.0".
+  if TIdSimpleParser.IsNumber(Mask) then begin
+    Mask := TIdIPAddressParser.MaskToAddress(StrToInt(Mask), TIdIPAddressParser.IPVersion(Network));
+  end;
+
+  // If there's no port, default to the SIP port.
+  if (Port = '') then
+    ActualPort := TIdSipTransportRegistry.DefaultPortFor(TcpTransport)
+  else
+    ActualPort := StrToInt(Port);
+
+  UserAgent.RoutingTable.AddMappedRoute(Network, Mask, Gateway, ActualPort);
+end;
+
 procedure TIdSipStackConfigurator.AddPendingConfiguration(PendingActions: TObjectList;
                                                           Action: TIdSipPendingLocalResolutionAction);
 begin
@@ -667,6 +706,9 @@ begin
   Result := TIdSipUserAgent.Create;
   Result.Timer := Context;
   Result.Dispatcher := TIdSipTransactionDispatcher.Create(Result.Timer, nil);
+  Result.RoutingTable := TIdWindowsRoutingTable.Create;
+
+  Result.Dispatcher.RoutingTable := Result.RoutingTable;
 end;
 
 procedure TIdSipStackConfigurator.InstantiateMissingObjectsAsDefaults(UserAgent: TIdSipAbstractCore);
@@ -716,6 +758,8 @@ begin
     Self.SetInstanceID(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, ListenDirective) then
     Self.AddTransport(UserAgent.Dispatcher, ConfigurationLine)
+  else if IsEqual(FirstToken, MappedRouteDirective) then
+    Self.AddMappedRoute(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, NameServerDirective) then
     Self.AddLocator(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, ProxyDirective) then

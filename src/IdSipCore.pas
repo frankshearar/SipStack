@@ -70,8 +70,9 @@ interface
 
 uses
   Classes, Contnrs, IdSipDialog, IdException, IdInterfacedObject,
-  IdNotification, IdObservable, IdSipAuthentication, IdSipLocator, IdSipMessage,
-  IdSipTransaction, IdTimerQueue, SysUtils;
+  IdNotification, IdObservable, IdRoutingTable, IdSipAuthentication,
+  IdSipLocation, IdSipLocator, IdSipMessage, IdSipTransaction, IdTimerQueue,
+  SysUtils;
 
 const
   SipStackVersion = '0.6';
@@ -301,6 +302,7 @@ type
     fLocator:                TIdSipAbstractLocator;
     fRealm:                  String;
     fRequireAuthentication:  Boolean;
+    fRoutingTable:           TIdRoutingTable;
     fTimer:                  TIdTimerQueue;
     fUserAgentName:          String;
     Modules:                 TObjectList;
@@ -354,7 +356,7 @@ type
     procedure PrepareResponse(Response: TIdSipResponse;
                               Request: TIdSipRequest);
     procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
-                            Request: TIdSipRequest); 
+                            Request: TIdSipRequest);
     procedure RejectRequestUnauthorized(Request: TIdSipRequest);
     procedure SetAuthenticator(Value: TIdSipAbstractAuthenticator); virtual;
     function  WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; virtual;
@@ -458,6 +460,7 @@ type
     property Locator:               TIdSipAbstractLocator       read fLocator write fLocator;
     property Realm:                 String                      read fRealm write SetRealm;
     property RequireAuthentication: Boolean                     read fRequireAuthentication write fRequireAuthentication;
+    property RoutingTable:          TIdRoutingTable             read fRoutingTable write fRoutingTable;
     property Timer:                 TIdTimerQueue               read fTimer write fTimer;
     property UserAgentName:         String                      read fUserAgentName write fUserAgentName;
   end;
@@ -1486,7 +1489,6 @@ begin
   Self.AllowedContentTypeList.Free;
   Self.Actions.Free;
 
-
   Self.Observed.Free;
   Self.NullModule.Free;
   Self.Modules.Free;
@@ -2036,6 +2038,7 @@ procedure TIdSipAbstractCore.SendRequest(Request: TIdSipRequest;
                                          Dest: TIdSipLocation);
 begin
   Self.MaybeChangeTransport(Request);
+
   if Self.RequiresUnsupportedExtension(Request) then
     raise EIdSipTransactionUser.Create(Format(MessageSendFailureUnknownExtension,
                                               [Request.Require.Value]));
@@ -3344,6 +3347,7 @@ begin
   // SIP/2.0/SCTP in its topmost Via. Remember, we try to avoid having the
   // transport layer change the message.
   Request.LastHop.Transport := Target.Transport;
+  Request.RewriteLocationHeaders(Self.UA.RoutingTable, Target);
 
   // Synchronise our state to what actually went down to the network.
   // The condition means that an INVITE won't set its InitialRequest to an

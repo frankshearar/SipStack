@@ -2743,12 +2743,15 @@ begin
   Self.ReceiveSubscribeRequestWithGruu;
   CheckResponseSent('No response sent');
 
+  Check(Assigned(Self.Action),
+        'No subscribing request received');
+
   Check(Self.LastSentResponse.HasHeader(SupportedHeaderFull),
         'Response missing Supported header');
   Check(Self.LastSentResponse.SupportsExtension(ExtensionGruu),
         'Supported header fails to indicate support of "gruu" extension');
-  CheckEquals(Self.Core.Contact.Address.Host,
-              Self.LastSentResponse.FirstContact.Address.Host,
+  CheckEquals(Self.Action.LocalGruu.AsString,
+              Self.LastSentResponse.FirstContact.AsString,
               'Response didn''t use GRUU');
   Check(Self.LastSentResponse.FirstContact.Address.HasGrid,
         'Response''s GRUU doesn''t have a "grid" parameter');
@@ -4240,9 +4243,8 @@ begin
         'Missing Supported header');
   Check(Sub.SupportsExtension(ExtensionGruu),
         'Supported header fails to indicate "gruu" support');
-  CheckEquals(Self.Core.Contact.Address.Host,
-              Sub.FirstContact.Address.Host,
-              Sub.Method + ' didn''t use GRUU');
+  Check(Sub.FirstContact.IsGruu,
+        Sub.Method + ' didn''t use GRUU');
   Check(Sub.FirstContact.Address.HasGrid,
         Sub.Method + ' doesn''t have a "grid" parameter');
 end;

@@ -12,7 +12,7 @@ unit TestIdSipTransport;
 interface
 
 uses
-  Classes, IdSipLocator, IdSipMessage, IdSipTransport, IdSipTcpTransport,
+  Classes, IdSipLocation, IdSipMessage, IdSipTransport, IdSipTcpTransport,
   IdSocketHandle, IdTcpConnection, IdTcpServer, IdTimerQueue, SyncObjs,
   SysUtils, TestFramework, TestFrameworkEx, TestFrameworkSip,
   TestFrameworkSipTransport;

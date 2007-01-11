@@ -82,6 +82,10 @@ type
   TestTIdSipRegistration = class(TestTIdSipAction)
   private
     RegisterModule: TIdSipRegisterModule;
+  protected
+    Contacts: TIdSipContacts;
+
+    procedure CheckLocalAddress(ExpectedIP: String; DestinationIP: String; Msg: String); override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -108,7 +112,6 @@ type
   TestTIdSipOutboundRegisterBase = class(TestTIdSipRegistration,
                                          IIdSipOwnedActionListener)
   private
-    Contacts:   TIdSipContacts;
     MinExpires: Cardinal;
     Redirected: Boolean;
     Registrar:  TIdSipRegistrar;
@@ -173,7 +176,6 @@ type
   TOutboundRegistrationBaseTestCase = class(TestTIdSipRegistration,
                                             IIdSipRegistrationListener)
   protected
-    Contacts:  TIdSipContacts;
     ErrorCode: Cardinal;
     Failed:    Boolean;
     Reason:    String;
@@ -290,6 +292,7 @@ begin
 //  Self.DB.DefaultExpiryTime := 0;
 
   Self.Dispatch := TIdSipMockTransactionDispatcher.Create;
+
   Self.Registrar := TIdSipRegistrar.Create;
   Self.Registrar.BindingDB := Self.DB;
   Self.Registrar.Dispatcher := Self.Dispatch;
@@ -961,14 +964,59 @@ begin
   inherited SetUp;
 
   Self.RegisterModule := Self.Core.AddModule(TIdSipRegisterModule) as TIdSipRegisterModule;
-  Self.RegisterModule.BindingDB := TIdSipMockBindingDatabase.Create
+  Self.RegisterModule.BindingDB := TIdSipMockBindingDatabase.Create;
+
+  Self.Contacts := TIdSipContacts.Create;
+  Self.Contacts.Add(ContactHeaderFull).Value := 'sip:wintermute@talking-head.tessier-ashpool.co.luna';
 end;
 
 procedure TestTIdSipRegistration.TearDown;
 begin
+  Self.Contacts.Free;
   Self.RegisterModule.BindingDB.Free;
 
   inherited TearDown;
+end;
+
+//*  TestTIdSipRegistration Protected methods **********************************
+
+procedure TestTIdSipRegistration.CheckLocalAddress(ExpectedIP: String; DestinationIP: String; Msg: String);
+var
+  Action:    TIdSipAction;
+  ClassName: String;
+begin
+  // This test only makes sense for OUTbound actions.
+  if Self.IsInboundTest then Exit;
+
+  Self.AdjustNameResolutionForInDialogActions(DestinationIP);
+
+  // Make sure the target name resolves to the IP address against which we wish
+  // to test.
+  // Some tests use Self.Destination in CreateAction, others use Self.Invite
+  Self.Locator.RemoveNameRecords(Self.Destination.Address.Host);
+  Self.Locator.AddA(Self.Destination.Address.Host, DestinationIP);
+  Self.Locator.RemoveNameRecords(Self.Invite.FirstContact.Address.Host);
+  Self.Locator.AddA(Self.Invite.FirstContact.Address.Host, DestinationIP);
+
+  Self.MarkSentRequestCount;
+
+  Action := Self.CreateAction;
+  ClassName := Action.ClassName;
+
+  CheckRequestSent(ClassName + ': ' + Msg + ': didn''t send request');
+
+  // Some REGISTER requests don't have Contact headers: when you wish to query
+  // your bindings, for instance. 
+  if not Self.LastSentRequest.Contacts.IsEmpty then begin
+    Self.Contacts.First;
+    CheckEquals(Self.Contacts.CurrentContact.Address.Host,
+                Self.LastSentRequest.FirstContact.Address.Host,
+                ClassName + ': ' + Msg + ': Contact host overwritten');
+  end;
+
+  CheckEquals(ExpectedIP,
+              Self.LastSentRequest.LastHop.SentBy,
+              ClassName + ': ' + Msg + ': sent-by not set');
 end;
 
 //*  TestTIdSipRegistration Published methods **********************************
@@ -1063,9 +1111,6 @@ begin
   Self.Registrar.From.Address.Uri := 'sip:talking-head.tessier-ashpool.co.luna';
   Self.Registrar.BindingDB := TIdSipMockBindingDatabase.Create;
 
-  Self.Contacts := TIdSipContacts.Create;
-  Self.Contacts.Add(ContactHeaderFull).Value := 'sip:wintermute@talking-head.tessier-ashpool.co.luna';
-
   Self.Redirected := false;
   Self.Succeeded  := false;
   Self.MinExpires := TwoHours;
@@ -1073,7 +1118,6 @@ end;
 
 procedure TestTIdSipOutboundRegisterBase.TearDown;
 begin
-  Self.Contacts.Free;
   Self.Registrar.BindingDB.Free;
   Self.Registrar.Free;
 
@@ -1499,19 +1543,17 @@ procedure TOutboundRegistrationBaseTestCase.SetUp;
 begin
   inherited SetUp;
 
+  Self.Contacts.Add(ContactHeaderFull).Value := 'sip:wintermute@talking-head.tessier-ashpool.co.luna';
+
   Self.Registrar := TIdSipRegistrar.Create;
   Self.Registrar.From.Address.Uri := 'sip:talking-head.tessier-ashpool.co.luna';
   Self.Registrar.BindingDB := TIdSipMockBindingDatabase.Create;
-
-  Self.Contacts := TIdSipContacts.Create;
-  Self.Contacts.Add(ContactHeaderFull).Value := 'sip:wintermute@talking-head.tessier-ashpool.co.luna';
 
   Self.Failed := false;
 end;
 
 procedure TOutboundRegistrationBaseTestCase.TearDown;
 begin
-  Self.Contacts.Free;
   Self.Registrar.Free;
 
   inherited TearDown;

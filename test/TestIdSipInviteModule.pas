@@ -13,7 +13,7 @@ interface
 
 uses
   Classes, IdRtp, IdSdp, IdSipCore, IdSipDialog, IdSipInviteModule,
-  IdSipLocator, IdSipMessage, IdSipSubscribeModule, IdSipTransport,
+  IdSipLocation, IdSipMessage, IdSipSubscribeModule, IdSipTransport,
   IdSipUserAgent, IdTimerQueue, TestFrameworkSip, TestFrameworkSipTU;
 
 type
@@ -93,7 +93,8 @@ type
   private
     Dialog: TIdSipDialog;
   protected
-    function CreateAction: TIdSipAction; override;
+    procedure AdjustNameResolutionForInDialogActions(DestinationIP: String); override;
+    function  CreateAction: TIdSipAction; override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -108,7 +109,7 @@ type
 
   TestTIdSipOutboundCancel = class(TestTIdSipAction)
   protected
-    function CreateAction: TIdSipAction; override;
+    function  CreateAction: TIdSipAction; override;
   published
     procedure TestAbandonAuthentication; override;
     procedure TestAuthentication; override;
@@ -738,8 +739,8 @@ type
 implementation
 
 uses
-  IdException, IdSimpleParser, IdSipMockTransactionDispatcher, SysUtils,
-  TestFramework;
+  IdException, IdSimpleParser, IdSipConsts, IdSipDns,
+  IdSipMockTransactionDispatcher, SysUtils, TestFramework;
 
 function Suite: ITestSuite;
 begin
@@ -1413,6 +1414,15 @@ end;
 
 //* TestTIdSipOutboundBye Protected methods ************************************
 
+procedure TestTIdSipOutboundBye.AdjustNameResolutionForInDialogActions(DestinationIP: String);
+var
+  RemoteTargetHost: String;
+begin
+  RemoteTargetHost := Self.Invite.FirstContact.Address.Host;
+  Self.Locator.RemoveNameRecords(RemoteTargetHost);
+  Self.Locator.AddA(RemoteTargetHost, DestinationIP);
+end;
+
 function TestTIdSipOutboundBye.CreateAction: TIdSipAction;
 var
   Bye: TIdSipOutboundBye;
@@ -1474,6 +1484,12 @@ function TestTIdSipOutboundCancel.CreateAction: TIdSipAction;
 var
   Cancel: TIdSipOutboundCancel;
 begin
+  // Given that this is a new Action, and that you can only CANCEL an INVITE
+  // once, we must make Self.Invite look like a different INVITE. Otherwise, if
+  // we try Cancel.Send the CANCEL will match an ongoing server transaction and
+  // not send a request to the network.
+  Self.Invite.LastHop.Branch := Self.Core.NextBranch;
+
   Cancel := Self.Core.AddOutboundAction(TIdSipOutboundCancel) as TIdSipOutboundCancel;
   Cancel.OriginalInvite := Self.Invite;
   Cancel.AddActionListener(Self);
@@ -2487,8 +2503,8 @@ begin
               Self.LastSentRequest.Method,
               'Method of sent request');
 
-  CheckEquals(Self.Core.Contact.Address.Host,
-              Invite.LocalGruu.Address.Host,
+  CheckEquals(Self.LastSentRequest.FirstContact.AsString,
+              Invite.LocalGruu.AsString,
               'LocalGruu not set');
   Check(Invite.LocalGruu.Address.HasGrid,
         'Local GRUU doesn''t have a "grid" parameter');
@@ -3159,9 +3175,9 @@ begin
               Self.LastSentRequest.Method,
               Self.ClassName + ': Method of sent request');
 
-  CheckEquals(Self.Core.Contact.Address.Host,
-              Invite.LocalGruu.Address.Host,
-              Self.ClassName + ': LocalGruu not set');
+  CheckEquals(Self.LastSentRequest.FirstContact.AsString,
+              Invite.LocalGruu.AsString,
+              Self.ClassName + ': LocalGruu host not set');
   Check(not Invite.LocalGruu.Address.HasGrid,
         Self.ClassName + ': Local GRUU has a "grid" parameter but isn''t a '
       + 'dialog-creating request');
@@ -3241,7 +3257,7 @@ begin
   Invite.Offer       := Self.InviteOffer;
   Invite.AddActionListener(Self);
   Invite.AddOwnedActionListener(Self);
-  Invite.AddInviteListener(Self);  
+  Invite.AddInviteListener(Self);
   Invite.Send;
 end;
 
@@ -3319,7 +3335,13 @@ begin
 
   Self.Dialog := Self.CreateArbitraryDialog;
   Self.LocalGruu := TIdSipContactHeader.Create;
-  Self.LocalGruu.Value := 'sip:case@localhost;gruu;grid="decafbad"';
+  Self.LocalGruu.Address.Username := 'case';
+  Self.LocalGruu.Address.Grid     := 'decafbad';
+  Self.LocalGruu.Address.Host     := Self.LanIP;
+  Self.LocalGruu.Address.IsGruu   := true;
+  Self.LocalGruu.Address.Port     := IdPORT_SIP;
+  Self.LocalGruu.Address.Scheme   := SipScheme;
+
   Self.InOutboundSession := true;
 end;
 
@@ -5138,9 +5160,8 @@ begin
         'OK missing a Supported header');
   Check(Ok.SupportsExtension(ExtensionGruu),
         'OK''s Supported header doesn''t indicate support of GRUU');
-  CheckEquals(Self.Core.Contact.Address.Host,
-              Self.LastSentResponse.FirstContact.Address.Host,
-              'GRUU not used as OK''s Contact');
+  Check(Self.LastSentResponse.FirstContact.IsGruu,
+        'GRUU not used as OK''s Contact');
 end;
 
 procedure TestTIdSipInboundSession.TestInboundModifyBeforeFullyEstablished;
@@ -5531,9 +5552,8 @@ begin
   Check(Assigned(Self.Session), 'OnInboundCall not called');
   CheckResponseSent('No response sent');
 
-  CheckEquals(Self.Core.Contact.Address.Host,
-              Self.LastSentResponse.FirstContact.Address.Host,
-              'Response didn''t use GRUU as Contact');
+  Check(Self.LastSentResponse.FirstContact.IsGruu,
+        'Response didn''t use GRUU as Contact');
   Check(Self.LastSentResponse.FirstContact.Address.HasGrid,
         'Dialog-creating response (180 Ringing) has no "grid" parameter');
 end;
@@ -6198,7 +6218,7 @@ end;
 
 procedure TestTIdSipOutboundSession.TestCallWithGruu;
 var
-  Invite:  TIdSipRequest;
+  Invite: TIdSipRequest;
 begin
   Self.UseGruu;
 
@@ -6208,10 +6228,15 @@ begin
 
   Invite := Self.LastSentRequest;
 
-  // draft-ietf-sip-gruu section 8.1
-  CheckEquals(Self.Core.Contact.Address.Host,
+  // draft-ietf-sip-gruu section 8.1: requests should use the UA's GRUU. Our UA
+  // uses one GRUU per local interface.
+  Check(Invite.FirstContact.IsGruu,
+        'INVITE''s not using a GRUU');
+
+  CheckEquals(Self.LanIP,
               Invite.FirstContact.Address.Host,
               'INVITE didn''t use UA''s GRUU (' + Self.Core.Contact.Address.AsString + ')');
+
   Check(Invite.FirstContact.Address.HasParameter(GridParam),
         'GRUUs sent out in INVITEs should have a "grid" parameter');
 end;
@@ -7088,8 +7113,8 @@ begin
   Session := Self.CreateAndEstablishSession;
   CheckRequestSent('No INVITE sent');
 
-  CheckEquals(Self.Core.Contact.Address.Host,
-              Session.LocalGruu.Address.Host,
+  CheckEquals(Self.LastSentRequest.FirstContact.AsString,
+              Session.LocalGruu.AsString,
               'LocalGruu not set');
   Check(Session.LocalGruu.Address.HasGrid,
         'Local GRUU doesn''t have a "grid" parameter');
