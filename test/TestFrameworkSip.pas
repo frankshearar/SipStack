@@ -145,7 +145,7 @@ type
     procedure Parse(const Value: String); override;
   end;
 
-  TIdSipMockListener = class(TIdInterfacedObject,
+  TIdSipTestActionListener = class(TIdInterfacedObject,
                              IIdSipActionListener)
   private
     fActionParam:              TIdSipAction;
@@ -174,7 +174,7 @@ type
     property ResponseParam:            TIdSipResponse read fResponseParam;
   end;
 
-  TIdSipTestDataListener = class(TIdSipMockListener,
+  TIdSipTestDataListener = class(TIdSipTestActionListener,
                                  IIdRtpDataListener)
   private
     fNewData:    Boolean;
@@ -190,7 +190,7 @@ type
     property NewUdpData: Boolean read fNewUdpData;
   end;
 
-  TIdSipTestMessageListener = class(TIdSipMockListener,
+  TIdSipTestMessageListener = class(TIdSipTestActionListener,
                                     IIdSipMessageListener)
   private
     fException:             Boolean;
@@ -225,7 +225,7 @@ type
     property ResponseParam:         TIdSipResponse           read fResponseParam;
   end;
 
-  TIdSipTestObserver = class(TIdSipMockListener,
+  TIdSipTestObserver = class(TIdSipTestActionListener,
                              IIdObserver)
   private
     fChanged: Boolean;
@@ -237,7 +237,7 @@ type
     property Changed: Boolean read fChanged;
   end;
 
-  TIdSipTestInboundInviteListener = class(TIdSipMockListener,
+  TIdSipTestInboundInviteListener = class(TIdSipTestActionListener,
                                           IIdSipInboundInviteListener)
   private
     fAckParam:          TIdSipMessage;
@@ -257,7 +257,7 @@ type
     property Succeeded:        Boolean             read fSucceeded;
   end;
 
-  TIdSipOwnedActionListener = class(TIdSipMockListener,
+  TIdSipOwnedActionListener = class(TIdSipTestActionListener,
                                     IIdSipOwnedActionListener)
   private
     fFailure:       Boolean;
@@ -308,7 +308,7 @@ type
     property ResponseParam:     TIdSipResponse       read fResponseParam;
   end;
 
-  TIdSipTestInviteModuleListener = class(TIdSipMockListener,
+  TIdSipTestInviteModuleListener = class(TIdSipTestActionListener,
                                          IIdSipMessageModuleListener,
                                          IIdSipInviteModuleListener)
   private
@@ -326,7 +326,7 @@ type
     property UserAgentParam: TIdSipInviteModule   read fUserAgentParam;
   end;
 
-  TIdSipTestNotifyListener = class(TIdSipMockListener,
+  TIdSipTestNotifyListener = class(TIdSipTestActionListener,
                                    IIdSipNotifyListener)
   private
     fFailed:           Boolean;
@@ -346,7 +346,7 @@ type
   end;
 
 
-  TIdSipTestOptionsListener = class(TIdSipMockListener,
+  TIdSipTestOptionsListener = class(TIdSipTestActionListener,
                                     IIdSipOptionsListener)
   private
     fOptionsAgentParam: TIdSipOutboundOptions;
@@ -363,7 +363,7 @@ type
     property Response:          Boolean               read fResponse;
   end;
 
-  TIdSipTestRegistrationListener = class(TIdSipMockListener,
+  TIdSipTestRegistrationListener = class(TIdSipTestActionListener,
                                          IIdSipRegistrationListener)
   private
     fCurrentBindingsParam: TIdSipContacts;
@@ -391,7 +391,7 @@ type
     property Success:              Boolean                        read fSuccess;
   end;
 
-  TIdSipTestActionRedirectorListener = class(TIdSipMockListener,
+  TIdSipTestActionRedirectorListener = class(TIdSipTestActionListener,
                                              IIdSipActionRedirectorListener)
   private
     fErrorCodeParam:        Cardinal;
@@ -430,7 +430,7 @@ type
     property SuccessfulActionParam: TIdSipAction           read fSuccessfulActionParam;
   end;
 
-  TIdSipTestSessionListener = class(TIdSipMockListener,
+  TIdSipTestSessionListener = class(TIdSipTestActionListener,
                                     IIdSipSessionListener)
   private
     fAnswerParam:              TIdSipResponse;
@@ -505,7 +505,7 @@ type
     property EndedNotificationCount: Integer read fEndedNotificationCount;
   end;
 
-  TIdSipTestSubscriptionListener = class(TIdSipMockListener,
+  TIdSipTestSubscriptionListener = class(TIdSipTestActionListener,
                                          IIdSipSubscriptionListener)
   private
     fEstablishedSubscription: Boolean;
@@ -538,7 +538,7 @@ type
     property SubscriptionParam:       TIdSipOutboundSubscription read fSubscriptionParam;
   end;
 
-  TIdSipTestTransactionListener = class(TIdSipMockListener,
+  TIdSipTestTransactionListener = class(TIdSipTestActionListener,
                                         IIdSipTransactionListener)
   private
     fBindingParam:       TIdSipConnectionBindings;
@@ -578,7 +578,7 @@ type
   end;
 
 
-  TIdSipTestTransportListener = class(TIdSipMockListener,
+  TIdSipTestTransportListener = class(TIdSipTestActionListener,
                                       IIdSipTransportListener)
   private
     fException:          Boolean;
@@ -622,7 +622,7 @@ type
     property SourceParam:        TIdSipConnectionBindings read fSourceParam;
   end;
 
-  TIdSipTestTransportSendingListener = class(TIdSipMockListener,
+  TIdSipTestTransportSendingListener = class(TIdSipTestActionListener,
                                              IIdSipTransportSendingListener)
   private
     fDestinationParam: TIdSipLocation;
@@ -650,7 +650,7 @@ type
 
   end;
 
-  TIdSipTestTransactionDispatcherListener = class(TIdSipMockListener,
+  TIdSipTestTransactionDispatcherListener = class(TIdSipTestActionListener,
                                                   IIdSipTransactionDispatcherListener)
   private
     fBindingParam:              TIdSipConnectionBindings;
@@ -688,7 +688,7 @@ type
     property ResponseParam:             TIdSipResponse              read fResponseParam;
   end;
 
-  TIdSipTestTransactionUserListener = class(TIdSipMockListener,
+  TIdSipTestTransactionUserListener = class(TIdSipTestActionListener,
                                             IIdSipTransactionUserListener)
   private
     fAbstractUserAgentParam:  TIdSipAbstractCore;
@@ -739,7 +739,7 @@ type
     property UserAgentParam: TIdSipUserAgent read fUserAgentParam;
   end;
 
-  TIdSipTestSubscribeModuleListener = class(TIdSipMockListener,
+  TIdSipTestSubscribeModuleListener = class(TIdSipTestActionListener,
                                             IIdSipSubscribeModuleListener)
   private
     fRenewedSubscription: Boolean;
@@ -1474,11 +1474,11 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipMockListener                                                         *
+//* TIdSipTestActionListener                                                   *
 //******************************************************************************
-//* TIdSipMockListener Public methods ******************************************
+//* TIdSipTestActionListener Public methods ************************************
 
-constructor TIdSipMockListener.Create;
+constructor TIdSipTestActionListener.Create;
 begin
   inherited Create;
 
@@ -1488,9 +1488,9 @@ begin
   Self.fReasonParam              := '';
 end;
 
-//* TIdSipMockListener Private methods *****************************************
+//* TIdSipTestActionListener Private methods ***********************************
 
-procedure TIdSipMockListener.OnAuthenticationChallenge(Action: TIdSipAction;
+procedure TIdSipTestActionListener.OnAuthenticationChallenge(Action: TIdSipAction;
                                                        Response: TIdSipResponse);
 begin
   Self.fActionParam              := Action;
@@ -1498,7 +1498,7 @@ begin
   Self.fResponseParam            := Response;
 end;
 
-procedure TIdSipMockListener.OnNetworkFailure(Action: TIdSipAction;
+procedure TIdSipTestActionListener.OnNetworkFailure(Action: TIdSipAction;
                                               ErrorCode: Cardinal;
                                               const Reason: String);
 begin
