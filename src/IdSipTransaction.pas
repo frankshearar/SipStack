@@ -151,9 +151,6 @@ type
     procedure RemoveTransaction(TerminatedTransaction: TIdSipTransaction);
     procedure RemoveTransactionDispatcherListener(const Listener: IIdSipTransactionDispatcherListener);
     procedure RemoveTransportListener(Listener: IIdSipTransportListener);
-    procedure ScheduleEvent(Event: TNotifyEvent;
-                            WaitTime: Cardinal;
-                            Request: TIdSipMessage); overload;
     procedure ScheduleEvent(Event: TIdWait;
                             WaitTime: Cardinal); overload;
     procedure SendToTransport(Msg: TIdSipMessage;
@@ -835,14 +832,6 @@ var
 begin
   for I := 0 to Self.Transports.Count - 1 do
     Self.Transports[I].RemoveTransportListener(Listener);
-end;
-
-procedure TIdSipTransactionDispatcher.ScheduleEvent(Event: TNotifyEvent;
-                                                    WaitTime: Cardinal;
-                                                    Request: TIdSipMessage);
-begin
-  if Assigned(Self.Timer) then
-    Self.Timer.AddEvent(WaitTime, Event, Request);
 end;
 
 procedure TIdSipTransactionDispatcher.ScheduleEvent(Event: TIdWait;
