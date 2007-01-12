@@ -73,6 +73,7 @@ type
     procedure TestIsOutOfOrder; virtual;
     procedure TestIsSecure;
     procedure TestOnEstablishedFired;
+    procedure TestOnEstablishedFiredSubscription;
     procedure TestRemoteTarget;
     procedure TestSupportsExtension;
   end;
@@ -896,6 +897,37 @@ begin
     Self.Dlg.ReceiveRequest(Invite);
   finally
     Invite.Free;
+  end;
+
+  Check(not Self.OnEstablishedFired,
+        'OnEstablished event fired prematurely');
+
+  OK := TIdSipResponse.Create;
+  try
+    OK.StatusCode := SIPOK;
+
+    Self.Dlg.ReceiveResponse(OK);
+  finally
+    OK.Free;
+  end;
+
+  Check(Self.OnEstablishedFired,
+        'OnEstablished event didn''t fire');
+end;
+
+procedure TestTIdSipDialog.TestOnEstablishedFiredSubscription;
+var
+  Subscribe: TIdSipRequest;
+  OK:        TIdSipResponse;
+begin
+  Self.Dlg.OnEstablished := Self.CheckOnEstablishedFired;
+
+  Subscribe := TIdSipRequest.Create;
+  try
+    Subscribe.Method := MethodSubscribe;
+    Self.Dlg.ReceiveRequest(Subscribe);
+  finally
+    Subscribe.Free;
   end;
 
   Check(not Self.OnEstablishedFired,

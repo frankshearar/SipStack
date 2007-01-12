@@ -24,7 +24,6 @@ type
   // where the request was INVITE, will establish a dialog.
   TIdSipDialog = class(TPersistent)
   private
-    fCanBeEstablished:      Boolean;
     fID:                    TIdSipDialogID;
     fInitialRequest:        TIdSipRequest;
     fInitialResponse:       TIdSipResponse;
@@ -44,7 +43,6 @@ type
     procedure IntersectionOfSupportedExtensions(Target: TStrings;
                                                 Request: TIdSipRequest;
                                                 Response: TIdSipResponse);
-    procedure SetCanBeEstablished(Value: Boolean);
     procedure SetIsEarly(Value: Boolean);
     procedure SetIsSecure(Value: Boolean);
   protected
@@ -64,7 +62,6 @@ type
     procedure SetRemoteTarget(Value: TIdSipURI);
     procedure SetState(Value: TIdSipDialogState);
 
-    property CanBeEstablished: Boolean        read fCanBeEstablished;
     property InitialRequest:   TIdSipRequest  read fInitialRequest;
     property InitialResponse:  TIdSipResponse read fInitialResponse;
   public
@@ -442,8 +439,6 @@ end;
 
 procedure TIdSipDialog.ReceiveRequest(Request: TIdSipRequest);
 begin
-  if Request.IsInvite then
-    Self.SetCanBeEstablished(true);
 end;
 
 procedure TIdSipDialog.ReceiveResponse(Response: TIdSipResponse);
@@ -457,7 +452,7 @@ begin
   if Response.IsFinal then begin
     Self.SetIsEarly(false);
 
-    if Self.CanBeEstablished and (Response.StatusCode = SIPOK) then
+    if Response.WillEstablishDialog(Self.InitialRequest) then
       Self.DoOnEstablished;
   end;
 
@@ -568,11 +563,6 @@ begin
     ResponseSupports := '';
 
   IntersectionOf(Self.SupportedExtensionList, RequestSupports, ResponseSupports);
-end;
-
-procedure TIdSipDialog.SetCanBeEstablished(Value: Boolean);
-begin
-  Self.fCanBeEstablished := Value;
 end;
 
 procedure TIdSipDialog.SetIsEarly(Value: Boolean);
