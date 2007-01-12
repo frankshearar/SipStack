@@ -372,6 +372,7 @@ type
     procedure TestMatchInboundModifyAck;
     procedure TestMatchReferWithCorrectGridParameter;
     procedure TestMatchReferWithIncorrectGridParameter;
+    procedure TestMatchTargetDialog;
     procedure TestModify;
     procedure TestModifyBeforeFullyEstablished;
     procedure TestModifyDuringModification;
@@ -746,6 +747,7 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipInviteModule unit tests');
 //  Result.AddTest(TestDebug.Suite);
+{
   Result.AddTest(TestTIdSipInviteModule.Suite);
   Result.AddTest(TestTIdSipOutboundBye.Suite);
   Result.AddTest(TestTIdSipOutboundCancel.Suite);
@@ -754,8 +756,10 @@ begin
   Result.AddTest(TestTIdSipOutboundRedirectedInvite.Suite);
   Result.AddTest(TestTIdSipOutboundReInvite.Suite);
   Result.AddTest(TestTIdSipOutboundReplacingInvite.Suite);
+}
   Result.AddTest(TestTIdSipInboundSession.Suite);
   Result.AddTest(TestTIdSipOutboundSession.Suite);
+{
 //  Result.AddTest(TestSessionReplacer.Suite);
   Result.AddTest(TestTIdSipInviteModuleOnInboundCallMethod.Suite);
   Result.AddTest(TestTIdSipInboundInviteFailureMethod.Suite);
@@ -768,6 +772,7 @@ begin
   Result.AddTest(TestTIdSipSessionModifySessionMethod.Suite);
   Result.AddTest(TestTIdSipProgressedSessionMethod.Suite);
   Result.AddTest(TestTIdSipSessionReferralMethod.Suite);
+}
 end;
 
 //******************************************************************************
@@ -4016,10 +4021,39 @@ begin
     Refer.RequestUri.Grid := Refer.RequestUri.Grid + '-x';
 
     Check(not Session.Match(Refer),
-          'Session mustn''t match any request whose "grid" parameter matches '
+          'Session mustn''t match any request whose "grid" parameter doesn''t match '
         + 'that of the GRUU that the stack sent out in creating this session');
   finally
     Refer.Free;
+  end;
+end;
+
+procedure TestTIdSipSession.TestMatchTargetDialog;
+var
+  Session: TIdSipSession;
+  SubMod:  TIdSipSubscribeModule;
+  TDRefer: TIdSipRequest;
+begin
+  Session := Self.CreateAction as TIdSipSession;
+  Self.EstablishSession(Session);
+
+  SubMod := Self.Core.AddModule(TIdSipSubscribeModule) as TIdSipSubscribeModule;
+  TDRefer := SubMod.CreateRefer(Self.Destination, Self.Destination);
+  try
+    Check(not Session.Match(TDRefer),
+          Session.ClassName + ': shouldn''t match an arbitrary (out-of-dialog) REFER');
+    TDRefer.TargetDialog.LocalTag := Session.Dialog.ID.LocalTag;
+    TDRefer.TargetDialog.RemoteTag := Session.Dialog.ID.RemoteTag;
+    TDRefer.TargetDialog.CallID := Session.Dialog.ID.CallID;
+
+    Check(Session.Match(TDRefer),
+          Session.ClassName + ': didn''t match a REFER with a Target-Dialog containing its dialog ID');
+
+    TDRefer.TargetDialog.CallID := Session.Dialog.ID.CallID + '1';
+    Check(not Session.Match(TDRefer),
+          Session.ClassName + ': matched a REFER with a Target-Dialog not containing its dialog ID');
+  finally
+    TDRefer.Free;
   end;
 end;
 

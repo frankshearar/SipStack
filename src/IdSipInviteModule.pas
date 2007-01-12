@@ -459,6 +459,7 @@ type
                          Request: TIdSipRequest;
                          Binding: TIdSipConnectionBindings); override;
     function  MatchesLocalGruu(Msg: TIdSipMessage): Boolean;
+    function  MatchesTargetDialog(Request: TIdSipRequest): Boolean;
     procedure NotifyOfEndedSession(ErrorCode: Cardinal;
                                    const Reason: String);
     procedure NotifyOfEstablishedSession(const RemoteSessionDescription: String;
@@ -2363,6 +2364,16 @@ begin
   end;
 end;
 
+function TIdSipSession.MatchesTargetDialog(Request: TIdSipRequest): Boolean;
+begin
+  Assert(Request.HasHeader(TargetDialogHeader),
+         'Request MUST have a Target-Dialog header');
+
+  Result := (Request.TargetDialog.LocalTag = Self.Dialog.ID.LocalTag)
+        and (Request.TargetDialog.RemoteTag = Self.Dialog.ID.RemoteTag)
+        and (Request.TargetDialog.CallID = Self.Dialog.ID.CallID)
+end;
+
 procedure TIdSipSession.NotifyOfEndedSession(ErrorCode: Cardinal;
                                              const Reason: String);
 var
@@ -2803,6 +2814,8 @@ begin
     Result := Self.InitialRequest.MatchCancel(Msg as TIdSipRequest)
   else if Msg.IsRequest and Msg.HasHeader(ReplacesHeader) then
     Result := Self.MatchReplaces(Msg as TIdSipRequest)
+  else if Msg.IsRequest and Msg.HasHeader(TargetDialogHeader) then
+    Result := Self.MatchesTargetDialog(Msg as TIdSipRequest)
   else begin
     // Match anything directed at our LocalGRUU or shares our dialog
     if Msg.IsRequest and (Msg as TIdSipRequest).IsBye then
@@ -3082,6 +3095,8 @@ begin
     Result := false
   else if MatchesReInvite then
     Result := false
+  else if Msg.IsRequest and Msg.HasHeader(TargetDialogHeader) then
+    Result := Self.MatchesTargetDialog(Msg as TIdSipRequest)    
   else begin
     // Any responses to our initial invite(s) must go to the OutboundInvite.
     // Otherwise, we match any in-dialog request that bears our dialog ID,
