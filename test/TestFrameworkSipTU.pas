@@ -103,9 +103,9 @@ begin
   inherited SetUp;
 
   Self.Binding := TIdSipConnectionBindings.Create;
-  Self.Binding.LocalIP   := '127.0.0.1';
+  Self.Binding.LocalIP   := Self.LanIP;
   Self.Binding.LocalPort := 5060;
-  Self.Binding.PeerIP    := '127.0.0.2';
+  Self.Binding.PeerIP    := Self.LanDestination;
   Self.Binding.PeerPort  := 5060;
   Self.Binding.Transport := UdpTransport;
 
