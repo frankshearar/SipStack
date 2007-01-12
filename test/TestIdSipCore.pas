@@ -248,7 +248,7 @@ type
   TestTIdSipActionAuthenticationChallengeMethod = class(TActionMethodTestCase)
   private
     Action:   TIdSipAction;
-    Listener: TIdSipMockListener;
+    Listener: TIdSipTestActionListener;
     Method:   TIdSipActionAuthenticationChallengeMethod;
   public
     procedure SetUp; override;
@@ -261,7 +261,7 @@ type
   private
     Action:    TIdSipAction;
     ErrorCode: Cardinal;
-    Listener:  TIdSipMockListener;
+    Listener:  TIdSipTestActionListener;
     Method:    TIdSipActionNetworkFailureMethod;
     Reason:    String;
   public
@@ -312,7 +312,7 @@ type
 
   TestTIdSipActionRedirectorMethod = class(TActionMethodTestCase)
   private
-    Listener:   TIdSipMockActionRedirectorListener;
+    Listener:   TIdSipTestActionRedirectorListener;
     Redirector: TIdSipActionRedirector;
   public
     procedure SetUp; override;
@@ -2610,7 +2610,7 @@ begin
     Nowhere.Free;
   end;
 
-  Self.Listener := TIdSipMockListener.Create;
+  Self.Listener := TIdSipTestActionListener.Create;
 
   Self.Method := TIdSipActionAuthenticationChallengeMethod.Create;
   Self.Method.ActionAgent := Self.Action;
@@ -2657,7 +2657,7 @@ begin
     Nowhere.Free;
   end;
 
-  Self.Listener := TIdSipMockListener.Create;
+  Self.Listener := TIdSipTestActionListener.Create;
   Self.Method   := TIdSipActionNetworkFailureMethod.Create;
 
   Self.ErrorCode := 13;
@@ -2843,7 +2843,7 @@ var
 begin
   inherited SetUp;
 
-  Self.Listener   := TIdSipMockActionRedirectorListener.Create;
+  Self.Listener   := TIdSipTestActionRedirectorListener.Create;
   ArbitraryAction := Self.UA.InviteModule.Call(Self.UA.Contact, '', '');
   Self.Redirector := TIdSipActionRedirector.Create(ArbitraryAction);
 end;
