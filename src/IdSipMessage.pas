@@ -1538,6 +1538,8 @@ type
     procedure ParseStartLine(Parser: TIdSipParser); override;
     procedure RewriteLocationHeaders(LocalAddress: TIdSipLocation); overload; override;
   public
+    class function DialogFormingMethods: TStrings;
+
     constructor Create; override;
     destructor  Destroy; override;
 
@@ -2252,6 +2254,7 @@ const
 // class variables
 var
   GCanonicalHeaderNames: TStrings;
+  GDialogFormingMethods: TStrings;
   GIdSipHeadersMap:      TObjectList;
 
 //******************************************************************************
@@ -8937,6 +8940,18 @@ end;
 //*******************************************************************************
 //* TIdSipRequest Public methods ************************************************
 
+class function TIdSipRequest.DialogFormingMethods: TStrings;
+begin
+  if not Assigned(GDialogFormingMethods) then begin
+    GDialogFormingMethods := TStringList.Create;
+    GDialogFormingMethods.Add(MethodInvite);    // from RFC 3261
+    GDialogFormingMethods.Add(MethodSubscribe); // from RFC 3265
+    GDialogFormingMethods.Add(MethodRefer);     // from RFC 3515
+  end;
+
+  Result := GDialogFormingMethods;
+end;
+
 constructor TIdSipRequest.Create;
 begin
   inherited Create;
@@ -10027,9 +10042,7 @@ end;
 
 function TIdSipResponse.InResponseToDialogCreatingRequest: Boolean;
 begin
-  Result := (Self.CSeq.Method = MethodInvite)
-         or (Self.CSeq.Method = MethodSubscribe)
-         or (Self.CSeq.Method = MethodRefer);
+  Result := TIdSipRequest.DialogFormingMethods.IndexOf(Self.CSeq.Method) <> ItemNotFoundIndex
 end;
 
 procedure TIdSipResponse.SetRequestRequestUri(Value: TIdSipUri);
@@ -10552,5 +10565,6 @@ finalization
 // Still, perhaps we need to review this methodology. How else do we get
 // something like class variables?
 //  GCanonicalHeaderNames.Free;
+// GDialogFormingMethods.Free;
 //  GIdSipHeadersMap.Free;
 end.
