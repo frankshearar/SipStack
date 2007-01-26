@@ -9,8 +9,64 @@ v0.6 (2007/xx/yy)
   external IP as the host in their URIs. Of course, you still need
   packet redirection or such on the NATs in your environment.
 
-v0.5.3 (2006/xx/yy)
-* 
+v0.5.3 (2007/01/26)
+* All modules now reside in separate units. (This only affects
+  TIdSipOptionsModule).
+* The Locator classes now allow you to use the OS's name location
+  routines. This allows you to resolve WINS names, for instance.
+* Bugfixes:
+** In-dialog messages with a Request-URI grid that doesn't match
+   LocalGruu's grid don't match dialogs.
+** TIdSdpOriginHeader.Username := 'foo bar' results in a malformed
+   origin header.
+** Long-running TBT raises EIntOverflow in TIdWait.TimeToWait.
+** When an RTP session hasn't sent data for a long time, it removes
+   itself from the session. This causes a division by zero.
+** TIdSipUri.GetUri doesn't encode passwords, and parsing doesn't
+   decode encoded passwords
+** Setting TIdSipUri.Username can make a valid URI report itself as
+   malformed.
+** TIdSipInboundReferralWait.Response := nil. If you set this property
+   the Wait keeps a COPY of the data, as it must and should. Some
+   users of the class though won't set the Response, and some
+   will. You know when the Response is set to something meaningful
+   when HasResponse = true.
+** NOTIFYs don't tell you exactly why transfer failed. Now you have
+   the choice of either using the default reasons as defined in RFC
+   3515, or you can pass in a more meaningful message, like the
+   response to an INVITE that failed.
+** If SDPMultimediaSession's LowestAllowablePort >
+   HighestAllowablePort the local description is malformed.
+** RTCP packets sent with SSRC = 0.
+** Address headers can be given malformed URIs, but still look
+   well-formed.
+** LocalGruu property of TIdSipOutboundTerminatingNotify not set.
+** LocalGruu property of
+   TIdSipInboundSubscription/TIdSipOutboundNotify not set.
+** RTP collisions don't result in rejoining a session.
+** TIdSDPMultimediaSession.LocalSessionDescription uses hard-coded SDP
+   headers.
+** TIdSDPMediaStream's interface is obtuse: You HAVE to call
+   LocalDescription's setter or the RTP servers won't be
+   instantiated. Separated out functions: you call
+   SDPMultimediaSession.StartListening to set the local description,
+   SetRemoteDescription. At this point you now JoinSession, since it's
+   difficult (impossible, with the current interface) to know when you
+   have a complete session description and can thus meaningfully join
+   the RTP sessions you've created.
+** TIdSDPMediaStream: SetRemoteDescription sends network packets.
+** TimerQueue.RemoveEvent has a memory leak.
+** Access violation shutting down a proxy-using stack that registers
+   to a registrar.
+** TIdSipOutboundReferral doesn't reSUBSCRIBE after receiving 423
+   Interval Too Brief.
+** TIdInboundReferral doesn't terminate when receiving a SUBSCRIBE
+   with "Expires: 0".
+** Refreshing SUBSCRIBEs for a REFER call transfer send "Expires: 0".
+** Locator can't process CNAME records, CNAME chains.
+** REGISTER From, To incorrect: for reasons unknown, the REGISTERs
+   sent out by the stack have the stack's CONTACT header in both From
+   & To.
 
 v0.5.2 (2006/07/24)
 * The receipt of messages is now threadsafe. Previously,
