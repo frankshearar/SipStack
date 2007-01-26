@@ -1,3 +1,14 @@
+v0.6 (2007/xx/yy)
+* The stack now supports "mapped routes": just before messages are
+  sent to the network, the stack asks the OS what local interface is
+  best to use, and whether the default route is going to be used. If
+  the default route's going to be used, the stack inspects its set of
+  mapped routes (in the Core's RoutingTable) to see if the route
+  passes through a NAT. If so, the Contact and Via headers of the
+  request, or the Contact headers of the response, use the NAT's
+  external IP as the host in their URIs. Of course, you still need
+  packet redirection or such on the NATs in your environment.
+
 v0.5.3 (2006/xx/yy)
 * 
 
