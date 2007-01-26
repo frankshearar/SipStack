@@ -80,6 +80,10 @@ type
   //   HostName: talkinghead1.tessier-ashpool.co.luna
   //   HostName: 192.168.1.1
   //   Listen: <transport name><SP><host|IPv4 address|IPv6 reference|AUTO>:<port>
+  //   MappedRoute: <route>/<netmask|number of bits> <gateway> [<port>]
+  //   MappedRoute: 192.168.0.0/16 192.168.1.1 5060
+  //   MappedRoute: 192.168.0.0/255.255.255.0 192.168.1.1
+  //   MappedRoute: ::/0 2002:deca:fbad::1 15060  
   //   NameServer: <domain name or IP>:<port>
   //   NameServer: MOCK
   //   Register: <SIP/S URI>
