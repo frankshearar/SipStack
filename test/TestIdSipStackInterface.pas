@@ -372,6 +372,16 @@ type
     procedure TestCopy;
   end;
 
+  TestTIdSipStackReconfigureStackInterfaceWait = class(TTestCase)
+  private
+    Wait: TIdSipStackReconfigureStackInterfaceWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestSetConfiguration;
+  end;
+
 const
   DummySdp = 'v=0'#13#10
            + 'o=sc 1105373135 1105373135 IN IP4 %s'#13#10
@@ -412,6 +422,7 @@ begin
   Result.AddTest(TestTIdSessionReferralData.Suite);
   Result.AddTest(TestTIdSubscriptionData.Suite);
   Result.AddTest(TestTIdFailedSubscriptionData.Suite);
+  Result.AddTest(TestTIdSipStackReconfigureStackInterfaceWait.Suite);
 end;
 
 //******************************************************************************
@@ -2219,6 +2230,43 @@ begin
   end;
 end;
 
+//******************************************************************************
+//* TestTIdSipStackReconfigureStackInterfaceWait                               *
+//******************************************************************************
+//* TestTIdSipStackReconfigureStackInterfaceWait Public methods ****************
+
+procedure TestTIdSipStackReconfigureStackInterfaceWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Wait := TIdSipStackReconfigureStackInterfaceWait.Create;
+end;
+
+procedure TestTIdSipStackReconfigureStackInterfaceWait.TearDown;
+begin
+  Self.Wait.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipStackReconfigureStackInterfaceWait Published methods *************
+
+procedure TestTIdSipStackReconfigureStackInterfaceWait.TestSetConfiguration;
+var
+  Expected: TStrings;
+begin
+  Expected := TStringList.Create;
+  try
+    Expected.Add('Listen: TCP 127.0.0.1:5060');
+
+    Self.Wait.Configuration := Expected;
+
+    CheckEquals(Expected.Count, Self.Wait.Configuration.Count, 'Configuration not set');
+    CheckEquals(Expected[0], Self.Wait.Configuration[0], 'Configuration set incorrectly');
+  finally
+    Expected.Free;
+  end;
+end;
 
 initialization
   RegisterTest('SIP stack interface tests', Suite);

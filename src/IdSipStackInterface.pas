@@ -2694,6 +2694,9 @@ procedure TIdSipStackReconfigureStackInterfaceWait.Trigger;
 var
   Configurator: TIdSipStackConfigurator;
 begin
+  // The configuration file can contain both configuration details defined by
+  // TIdSipStackInterface and TIdSipUserAgent.
+
   Self.Stack.Configure(Self.Configuration);
 
   Configurator := TIdSipStackConfigurator.Create;
@@ -2708,6 +2711,7 @@ end;
 
 procedure TIdSipStackReconfigureStackInterfaceWait.SetConfiguration(Value: TStrings);
 begin
+  Self.Configuration.Assign(Value);
 end;
 
 end.
