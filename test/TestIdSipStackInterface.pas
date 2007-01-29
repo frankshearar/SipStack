@@ -12,8 +12,8 @@ unit TestIdSipStackInterface;
 interface
 
 uses
-  Contnrs, Forms, IdSipMessage, IdSipMockTransport, IdSipStackInterface,
-  TestFramework, TestFrameworkEx, TestFrameworkSip;
+  Classes, Contnrs, Forms, IdSipMessage, IdSipMockTransport,
+  IdSipStackInterface, TestFramework, TestFrameworkEx, TestFrameworkSip;
 
 type
   // The testing of the StackInterface is not completely simple. The UI (or
@@ -374,12 +374,19 @@ type
 
   TestTIdSipStackReconfigureStackInterfaceWait = class(TTestCase)
   private
-    Wait: TIdSipStackReconfigureStackInterfaceWait;
+    Conf:  TStrings;
+    Stack: TIdSipStackInterface;
+    Wait:  TIdSipStackReconfigureStackInterfaceWait;
   public
     procedure SetUp; override;
     procedure TearDown; override;
+
+    procedure CheckUdpServerOnPort(const Host: String;
+                                   Port: Cardinal;
+                                   const Msg: String);
   published
     procedure TestSetConfiguration;
+    procedure TestTriggerStartsTransports;
   end;
 
 const
@@ -395,7 +402,8 @@ const
 implementation
 
 uses
-  Classes, IdRandom, IdSipLocation, StackWindow, SysUtils;
+  IdRandom, IdSipLocation, IdSocketHandle, IdSipTransport, IdSipUdpTransport,
+  IdUdpServer, StackWindow, SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -2236,17 +2244,56 @@ end;
 //* TestTIdSipStackReconfigureStackInterfaceWait Public methods ****************
 
 procedure TestTIdSipStackReconfigureStackInterfaceWait.SetUp;
+const
+  OneSecond = 1000;
 begin
   inherited SetUp;
 
+  TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipUdpTransport);
+
+  Self.Conf := TStringList.Create;
+  Self.Conf.Add('Listen: UDP 127.0.0.1:5060');
+
+  Self.Stack := TIdSipStackInterface.Create(0, Self.Conf);
+  Self.Stack.Resume;
   Self.Wait := TIdSipStackReconfigureStackInterfaceWait.Create;
+  Self.Wait.Stack := Self.Stack;
 end;
 
 procedure TestTIdSipStackReconfigureStackInterfaceWait.TearDown;
 begin
+  Self.Stack.Terminate;
   Self.Wait.Free;
 
   inherited TearDown;
+end;
+
+procedure TestTIdSipStackReconfigureStackInterfaceWait.CheckUdpServerOnPort(const Host: String;
+                                                                            Port: Cardinal;
+                                                                            const Msg: String);
+var
+  Binding: TIdSocketHandle;
+  Server:  TIdUdpServer;
+begin
+  try
+    Server := TIdUdpServer.Create(nil);
+    try
+      Binding := Server.Bindings.Add;
+      Binding.IP    := Host;
+      Binding.Port  := Port;
+      Server.Active := true;
+      try
+        // Do nothing
+      finally
+        Server.Active := false;
+      end;
+    finally
+      Server.Free;
+    end;
+    Fail('No UDP server running on ' + Host + ': ' + IntToStr(Port) + '; ' + Msg);
+  except
+    on EIdCouldNotBindSocket do;
+  end;
 end;
 
 //* TestTIdSipStackReconfigureStackInterfaceWait Published methods *************
@@ -2257,7 +2304,7 @@ var
 begin
   Expected := TStringList.Create;
   try
-    Expected.Add('Listen: TCP 127.0.0.1:5060');
+    Expected.Add('Listen: UDP 127.0.0.1:5060');
 
     Self.Wait.Configuration := Expected;
 
@@ -2265,6 +2312,28 @@ begin
     CheckEquals(Expected[0], Self.Wait.Configuration[0], 'Configuration set incorrectly');
   finally
     Expected.Free;
+  end;
+end;
+
+procedure TestTIdSipStackReconfigureStackInterfaceWait.TestTriggerStartsTransports;
+const
+  Address = '127.0.0.1';
+  Port    = 15060;
+var
+  Conf: TStrings;
+begin
+  Conf := TStringList.Create;
+  try
+    Conf.Add('Listen: UDP ' + Address + ':' + IntToStr(Port));
+    Self.Wait.Configuration := Conf;
+
+    Self.Wait.Trigger;
+    Sleep(1000);
+//    Self.WaitForSignaled('Event didn''t fire: stack not reconfigured?');
+
+    CheckUdpServerOnPort(Address, Port, 'Stack not reconfigured or transports not started');
+  finally
+    Conf.Free;
   end;
 end;
 

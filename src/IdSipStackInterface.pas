@@ -2702,6 +2702,7 @@ begin
   Configurator := TIdSipStackConfigurator.Create;
   try
     Configurator.UpdateConfiguration(Self.Stack.UserAgent, Self.Configuration);
+    Self.Stack.UserAgent.Dispatcher.StartAllTransports;
   finally
     Configurator.Free;
   end;
