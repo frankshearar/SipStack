@@ -14,7 +14,7 @@ interface
 uses
   Classes, Contnrs, IdInterfacedObject, IdNotification, IdSipCore,
   IdSipDialogID, IdSipInviteModule, IdSipLocation, IdSipMessage,
-  IdSipNatMasquerader, IdSipRegistration, IdSipSubscribeModule,
+  IdSipRegistration, IdSipSubscribeModule,
   IdSipTransaction, IdSipTransport, IdSipUserAgent, IdTimerQueue, SyncObjs,
   SysUtils, Messages, Windows;
 
@@ -86,7 +86,6 @@ type
   private
     ActionLock:      TCriticalSection;
     Actions:         TObjectList;
-    Masquerader:     TIdSipNatMasquerader;
     fUiHandle:       HWnd;
     fUserAgent:      TIdSipUserAgent;
     SubscribeModule: TIdSipSubscribeModule;
@@ -97,9 +96,6 @@ type
 
     function  ActionFor(Handle: TIdSipHandle): TIdSipAction;
     function  AddAction(Action: TIdSipAction): TIdSipHandle;
-    procedure AddListenerToAllTransports(Listener: IIdSipTransportSendingListener);
-    procedure AddMasquerader(UserAgent: TIdSipAbstractCore;
-                             const MasqueradeAsLine: String);
     function  AssociationAt(Index: Integer): TIdActionAssociation;
     procedure Configure(Configuration: TStrings);
     function  GetAndCheckAction(Handle: TIdSipHandle;
@@ -777,9 +773,6 @@ destructor TIdSipStackInterface.Destroy;
 begin
 //  Self.DebugUnregister;
 
-  if Assigned(Self.Masquerader) then
-    Self.Masquerader.Free;
-
   Self.UserAgent.Free;
 
   Self.Actions.Free;
@@ -1189,41 +1182,6 @@ begin
   end;
 end;
 
-procedure TIdSipStackInterface.AddListenerToAllTransports(Listener: IIdSipTransportSendingListener);
-var
-  I: Integer;
-begin
-  for I := 0 to Self.UserAgent.Dispatcher.TransportCount - 1 do
-    Self.UserAgent.Dispatcher.Transports[I].AddTransportSendingListener(Listener);
-end;
-
-procedure TIdSipStackInterface.AddMasquerader(UserAgent: TIdSipAbstractCore;
-                                              const MasqueradeAsLine: String);
-var
-  Address: String;
-begin
-  // PRECONDITION: UserAgent's fully configured (specifically, UserAgent has a
-  // Dispatcher, and that Dispatcher has been given all the transports you
-  // wanted.
-
-  // See class comment for the format for this directive.
-  Address := MasqueradeAsLine;
-  EatDirective(Address);
-
-  if not TIdIPAddressParser.IsIPv4Address(Address)
-    and not TIdIPAddressParser.IsIPv6Reference(Address) then
-    raise EParserError.Create('MasqueradeAs: "' + Address + '" is neither an IPv4 address or an IPv6 reference');
-
-  Self.Masquerader := TIdSipNatMasquerader.Create;
-
-  if TIdIPAddressParser.IsIPv6Reference(Address) then
-    Self.Masquerader.AddressType := Id_IPv6;
-
-  Self.Masquerader.NatAddress := Address;
-
-  Self.AddListenerToAllTransports(Self.Masquerader);
-end;
-
 function TIdSipStackInterface.AssociationAt(Index: Integer): TIdActionAssociation;
 begin
   Result := Self.Actions[Index] as TIdActionAssociation;
@@ -1239,8 +1197,9 @@ begin
     Line := Configuration[I];
     FirstToken := Trim(Fetch(Line, ':', false));
 
-    if IsEqual(FirstToken, MasqueradeAsDirective) then
-      Self.AddMasquerader(UserAgent, Configuration[I]);
+    // Put your directive-processing stuff here:
+    // if IsEqual(FirstToken, YourDirective) then
+    //   Self.DoSomething(UserAgent, Configuration[I]);
   end;
 end;
 
