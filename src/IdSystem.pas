@@ -159,7 +159,7 @@ var
 begin
   // I'm not sure about the value of Result when you try break this function by
   // mixing your address types (say, DestinationIP being IPv4 and LocalIP being
-  // IPv6...
+  // IPv6...).
 
   Assert(TIdIPAddressParser.IPVersion(DestinationIP) = TIdIPAddressParser.IPVersion(LocalIP),
          '');
