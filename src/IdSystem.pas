@@ -303,7 +303,7 @@ begin
   // twofold casting everywhere, this function hides the awfulness behind a
   // PROPERLY DECLARED htonl.
 
-  Result := Cardinal(htonl(Integer(N)));
+  Result := Cardinal(Winsock.htonl(Integer(N)));
 end;
 
 {Normally, the local machine address is automatically discovered when using the "LocalAddress" function.
