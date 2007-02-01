@@ -956,6 +956,14 @@ begin
   except
     on EConvertError do;
   end;
+
+  try
+    TIdIPAddressParser.ParseIPv6Address('1::256.0.0.0', Address);
+
+    Fail('Failed to raise exception on ''1::256.0.0.0');
+  except
+    on EConvertError do;
+  end;
 end;
 
 //* TestTIdIPAddressParser Private methods *************************************

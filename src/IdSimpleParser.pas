@@ -689,6 +689,7 @@ class procedure TIdIPAddressParser.ParseIPv6Address(const IPv6Address: String;
                        var WordCount: Integer;
                        AllowTrailingIPv4: Boolean);
   var
+    C: Cardinal;
     W: String;
     I: Cardinal;
   begin
@@ -711,11 +712,19 @@ class procedure TIdIPAddressParser.ParseIPv6Address(const IPv6Address: String;
 
     if AllowTrailingIPv4 and (Pos(IPv4Delim, Chunk) > 0) then begin
       if (Chunk <> '') then begin
-        Address[I] := (StrToInt(Fetch(Chunk, IPv4Delim)) shl 8)
-                    or StrToInt(Fetch(Chunk, IPv4Delim));
+        C := (StrToInt(Fetch(Chunk, IPv4Delim)) shl 8)
+           or StrToInt(Fetch(Chunk, IPv4Delim));
+        if (C > High(Address[I])) then
+          raise EConvertError.Create('Invalid IPv4 byte');
+        Address[I] := C and $0000FFFF;
+
         Inc(I);
-        Address[I] := (StrToInt(Fetch(Chunk, IPv4Delim)) shl 8)
-                    or StrToInt(Chunk);
+
+        C := (StrToInt(Fetch(Chunk, IPv4Delim)) shl 8)
+           or StrToInt(Chunk);
+        if (C > High(Address[I])) then
+          raise EConvertError.Create('Invalid IPv4 byte');
+        Address[I] := C and $0000FFFF;
         Inc(WordCount, 2);
       end
     end
