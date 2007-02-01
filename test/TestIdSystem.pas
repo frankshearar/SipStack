@@ -130,8 +130,10 @@ begin
       Destination := TIdIPAddressParser.IncIPAddress(Addresses[I]);
       Check(not BestRouteIsDefaultRoute(Destination, Addresses[I]), Destination + ' from ' + Addresses[I]);
 
-      if TIdIPAddressParser.IsIPv4Address(Addresses[I]) then
-        Check(BestRouteIsDefaultRoute('1.2.3.4', Addresses[I]), '1.2.3.4 from ' + Addresses[I])
+      if TIdIPAddressParser.IsIPv4Address(Addresses[I]) then begin
+        Check(BestRouteIsDefaultRoute('1.2.3.4', Addresses[I]), '1.2.3.4 from ' + Addresses[I]);
+        Check(BestRouteIsDefaultRoute('90.3.135.129', Addresses[I]), '90.3.135.129 from ' + Addresses[I]);
+      end
       else
         Check(BestRouteIsDefaultRoute('2002:deca:fbad::1', Addresses[I]), '2002:deca:fbad::1 from ' + Addresses[I]);
     end;

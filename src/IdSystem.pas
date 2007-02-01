@@ -29,6 +29,7 @@ function  GetHostName: String;
 function  GetTickCount: Cardinal;
 function  GetTickDiff(const OldTickCount, NewTickCount : Cardinal): Cardinal;
 function  GetUserName: WideString;
+function  HtoNL(N: Cardinal): Cardinal;
 function  LocalAddress: String;
 function  RoutableAddress: String;
 procedure LocalAddresses(IPs: TStrings);
@@ -165,8 +166,8 @@ begin
          '');
 
   if TIdIPAddressParser.IsIPv4Address(DestinationIP) then begin
-    DstAddr := htonl(Integer(TIdIPAddressParser.InetAddr(DestinationIP)));
-    SrcAddr := htonl(Integer(TIdIPAddressParser.InetAddr(LocalIP)));
+    DstAddr := HtoNL(TIdIPAddressParser.InetAddr(DestinationIP));
+    SrcAddr := HtoNL(TIdIPAddressParser.InetAddr(LocalIP));
 
     GetBestRoute(DstAddr, SrcAddr, Route);
     Result := Route.dwForwardDest = 0;
@@ -296,6 +297,17 @@ begin
   finally
     FreeMem(Buf);
   end;
+end;
+
+function  HtoNL(N: Cardinal): Cardinal;
+begin
+  // Yes, this looks crazy. But WinSock's htonl is declared as taking a u_long -
+  // presumably an UNSIGNED value - and yes u_long is declared as Longint, a
+  // SIGNED value. In the interests of not making the reader go blind with
+  // twofold casting everywhere, this function hides the awfulness behind a
+  // PROPERLY DECLARED htonl.
+
+  Result := Cardinal(htonl(Integer(N)));
 end;
 
 {Normally, the local machine address is automatically discovered when using the "LocalAddress" function.
