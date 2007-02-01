@@ -86,6 +86,17 @@ type
   TMibIpAddrTable = MIB_IPADDRTABLE;
   PMibIpAddrTable = ^TMibIpAddrTable;
 
+  // Delphi's WinSock incorrectly translate S_addr's unsigned value in the
+  // WinSock C API to a signed value (Longint).
+  PInAddr = ^TInAddr;
+  in_addr = record
+    case integer of
+      0: (S_un_b: SunB);
+      1: (S_un_w: SunW);
+      2: (S_addr: Cardinal);
+  end;
+  TInAddr = in_addr;
+
   TIpAddr = TInAddr;
   PIpAddr = ^TIpAddr;
 
