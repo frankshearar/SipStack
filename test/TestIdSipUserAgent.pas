@@ -2449,9 +2449,8 @@ begin
                 'Locator type');
     Check(Assigned(UA.Dispatcher.Locator),
           'Transaction Dispatcher has no Locator');
-    CheckEquals(TIdSipMockLocator.ClassName,
-                UA.Locator.ClassName,
-                'Transaction level Locator type');
+    Check(UA.Locator = UA.Dispatcher.Locator,
+          'Transaction User and Transaction layers don''t use the same Locator');
   finally
     UA.Free;
   end;
