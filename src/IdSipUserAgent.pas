@@ -12,9 +12,9 @@ unit IdSipUserAgent;
 interface
 
 uses
-  Contnrs, Classes, IdNotification, IdSipAuthentication, IdSipCore,
-  IdSipInviteModule, IdSipOptionsModule, IdSipMessage, IdSipRegistration,
-  IdSipTransaction, IdSipTransport, IdTimerQueue;
+  Contnrs, Classes, IdNotification, IdRoutingTable, IdSipAuthentication,
+  IdSipCore, IdSipInviteModule, IdSipOptionsModule, IdSipMessage,
+  IdSipRegistration, IdSipTransaction, IdSipTransport, IdTimerQueue;
 
 type
   TIdSipUserAgent = class;
@@ -80,17 +80,18 @@ type
   //   HostName: talkinghead1.tessier-ashpool.co.luna
   //   HostName: 192.168.1.1
   //   Listen: <transport name><SP><host|IPv4 address|IPv6 reference|AUTO>:<port>
-  //   Listen: UDP AUTO 
+  //   Listen: UDP AUTO
   //   Listen: UDP 127.0.0.1
   //   Listen: TCP [::1]:5060
   //   MappedRoute: <route>/<netmask|number of bits><SP><gateway>[<SP><port>]
   //   MappedRoute: 192.168.0.0/16 192.168.1.1 5060
   //   MappedRoute: 192.168.0.0/255.255.255.0 192.168.1.1
-  //   MappedRoute: ::/0 2002:deca:fbad::1 15060  
+  //   MappedRoute: ::/0 2002:deca:fbad::1 15060
   //   NameServer: <domain name or IP>:<port>
   //   NameServer: MOCK
   //   Register: <SIP/S URI>
   //   ResolveNamesLocallyFirst: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
+  //   RoutingTable: MOCK
   //   Proxy: <SIP/S URI>
   //   SupportEvent: refer
   //   InstanceID: urn:uuid:00000000-0000-0000-0000-000000000000
@@ -124,13 +125,16 @@ type
     procedure AddLocator(UserAgent: TIdSipAbstractCore;
                          const NameServerLine: String);
     procedure AddMappedRoute(UserAgent: TIdSipAbstractCore;
-                             const MappedRouteLine: String);
+                             const MappedRouteLine: String;
+                             PendingActions: TObjectList);
     procedure AddPendingConfiguration(PendingActions: TObjectList;
                                       Action: TIdSipPendingLocalResolutionAction);
     procedure AddPendingMessageSend(PendingActions: TObjectList;
                                     Action: TIdSipAction);
     procedure AddProxy(UserAgent: TIdSipUserAgent;
                        const ProxyLine: String);
+    procedure AddRoutingTable(UserAgent: TIdSipAbstractCore;
+                              const RoutingTableLine: String);
     procedure AddSupportForEventPackage(UserAgent: TIdSipAbstractCore;
                                         const SupportEventLine: String);
     procedure AddTransport(Dispatcher: TIdSipTransactionDispatcher;
@@ -184,6 +188,25 @@ type
     property ResolveLocallyFirst: Boolean            read fResolveLocallyFirst;
   end;
 
+  TIdSipPendingMappedRouteAction = class(TIdSipPendingConfigurationAction)
+  private
+    fCore:         TIdSipAbstractCore;
+    fGateway:      String;
+    fMappedPort:   Cardinal;
+    fMask:         String;
+    fNetwork:      String;
+  public
+    constructor Create(Core: TIdSipAbstractCore);
+
+    procedure Execute; override;
+
+    property Core:         TIdSipAbstractCore read fCore;
+    property Gateway:      String             read fGateway write fGateway;
+    property MappedPort:   Cardinal           read fMappedPort write fMappedPort;
+    property Mask:         String             read fMask write fMask;
+    property Network:      String             read fNetwork write fNetwork;
+  end;
+
   TIdSipPendingMessageSend = class(TIdSipPendingConfigurationAction)
   private
     fAction: TIdSipAction;
@@ -227,6 +250,7 @@ const
   ProxyDirective                    = 'Proxy';
   RegisterDirective                 = 'Register';
   ResolveNamesLocallyFirstDirective = 'ResolveNamesLocallyFirst';
+  RoutingTableDirective             = 'RoutingTable';
   SupportEventDirective             = 'SupportEvent';
 
 procedure EatDirective(var Line: String);
@@ -234,7 +258,7 @@ procedure EatDirective(var Line: String);
 implementation
 
 uses
-  IdRoutingTable, IdSimpleParser, IdSipIndyLocator, IdSipMockLocator,
+  IdMockRoutingTable, IdSimpleParser, IdSipIndyLocator, IdSipMockLocator,
   IdSipSubscribeModule, IdSystem, IdUnicode, SysUtils;
 
 //******************************************************************************
@@ -571,15 +595,17 @@ begin
 end;
 
 procedure TIdSipStackConfigurator.AddMappedRoute(UserAgent: TIdSipAbstractCore;
-                                                 const MappedRouteLine: String);
+                                                 const MappedRouteLine: String;
+                                                 PendingActions: TObjectList);
 var
-  ActualPort: Cardinal;
-  Gateway:    String;
-  Line:       String;
-  Mask:       String;
-  Network:    String;
-  Port:       String;
-  Route:      String;
+  MappedPort:        Cardinal;
+  Gateway:           String;
+  Line:              String;
+  MappedRouteAction: TIdSipPendingMappedRouteAction;
+  Mask:              String;
+  Network:           String;
+  Port:              String;
+  Route:             String;
 begin
   Line := MappedRouteLine;
   EatDirective(Line);
@@ -599,11 +625,16 @@ begin
 
   // If there's no port, default to the SIP port.
   if (Port = '') then
-    ActualPort := TIdSipTransportRegistry.DefaultPortFor(TcpTransport)
+    MappedPort := TIdSipTransportRegistry.DefaultPortFor(TcpTransport)
   else
-    ActualPort := StrToInt(Port);
+    MappedPort := StrToInt(Port);
 
-  UserAgent.RoutingTable.AddMappedRoute(Network, Mask, Gateway, ActualPort);
+  MappedRouteAction := TIdSipPendingMappedRouteAction.Create(UserAgent);
+  MappedRouteAction.Network      := Network;
+  MappedRouteAction.Mask         := Mask;
+  MappedRouteAction.Gateway      := Gateway;
+  MappedRouteAction.MappedPort   := MappedPort;
+  PendingActions.Add(MappedRouteAction);
 end;
 
 procedure TIdSipStackConfigurator.AddPendingConfiguration(PendingActions: TObjectList;
@@ -635,6 +666,26 @@ begin
   UserAgent.Proxy.Uri := Trim(Line);
 
   Self.CheckUri(UserAgent.Proxy, Format(MalformedConfigurationLine, [ProxyLine]));
+end;
+
+procedure TIdSipStackConfigurator.AddRoutingTable(UserAgent: TIdSipAbstractCore;
+                                                  const RoutingTableLine: String);
+var
+  Line: String;
+begin
+  // See class comment for the format for this directive.
+  Line := RoutingTableLine;
+  EatDirective(Line);
+
+  if IsEqual(Line, MockKeyword) then
+    UserAgent.RoutingTable := TIdMockRoutingTable.Create
+  else begin
+    // TODO: This needs to determine the platform for which we're compiling (Windows,
+    // FreeBSD, whatever), and instantiate the appropriate routing table.
+    UserAgent.RoutingTable := TIdWindowsRoutingTable.Create;
+  end;
+
+  UserAgent.Dispatcher.RoutingTable := UserAgent.RoutingTable;
 end;
 
 procedure TIdSipStackConfigurator.AddSupportForEventPackage(UserAgent: TIdSipAbstractCore;
@@ -713,9 +764,6 @@ begin
   Result := TIdSipUserAgent.Create;
   Result.Timer := Context;
   Result.Dispatcher := TIdSipTransactionDispatcher.Create(Result.Timer, nil);
-  Result.RoutingTable := TIdWindowsRoutingTable.Create;
-
-  Result.Dispatcher.RoutingTable := Result.RoutingTable;
 end;
 
 procedure TIdSipStackConfigurator.InstantiateMissingObjectsAsDefaults(UserAgent: TIdSipAbstractCore);
@@ -725,6 +773,11 @@ begin
 
   if not Assigned(UserAgent.Locator) then
     UserAgent.Locator := TIdSipIndyLocator.Create;
+
+  if not Assigned(UserAgent.RoutingTable) then begin
+    UserAgent.RoutingTable := TIdWindowsRoutingTable.Create;
+    UserAgent.Dispatcher.RoutingTable := UserAgent.RoutingTable;
+  end;
 
   if UserAgent.UsingDefaultContact then
     Self.AddAutoAddress(UserAgent, UserAgent.Contact);
@@ -766,7 +819,7 @@ begin
   else if IsEqual(FirstToken, ListenDirective) then
     Self.AddTransport(UserAgent.Dispatcher, ConfigurationLine)
   else if IsEqual(FirstToken, MappedRouteDirective) then
-    Self.AddMappedRoute(UserAgent, ConfigurationLine)
+    Self.AddMappedRoute(UserAgent, ConfigurationLine, PendingActions)
   else if IsEqual(FirstToken, NameServerDirective) then
     Self.AddLocator(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, ProxyDirective) then
@@ -775,6 +828,8 @@ begin
     Self.RegisterUA(UserAgent, ConfigurationLine, PendingActions)
   else if IsEqual(FirstToken, ResolveNamesLocallyFirstDirective) then
     Self.UseLocalResolution(UserAgent, ConfigurationLine, PendingActions)
+  else if IsEqual(FirstToken, RoutingTableDirective) then
+    Self.AddRoutingTable(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, SupportEventDirective) then
     Self.AddSupportForEventPackage(UserAgent, ConfigurationLine);
 end;
@@ -859,6 +914,23 @@ begin
 
     IndyLoc.ResolveLocallyFirst := Self.ResolveLocallyFirst;
   end;
+end;
+
+//******************************************************************************
+//* TIdSipPendingMappedRouteAction                                             *
+//******************************************************************************
+//* TIdSipPendingMappedRouteAction Public methods ******************************
+
+constructor TIdSipPendingMappedRouteAction.Create(Core: TIdSipAbstractCore);
+begin
+  inherited Create;
+
+  Self.fCore := Core;
+end;
+
+procedure TIdSipPendingMappedRouteAction.Execute;
+begin
+  Self.Core.RoutingTable.AddMappedRoute(Self.Network, Self.Mask, Self.Gateway, Self.MappedPort);
 end;
 
 //******************************************************************************

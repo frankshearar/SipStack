@@ -204,6 +204,7 @@ type
     procedure TestCreateUserAgentWithMappedRoutes;
     procedure TestCreateUserAgentWithMockAuthenticator;
     procedure TestCreateUserAgentWithMockLocator;
+    procedure TestCreateUserAgentWithMockRoutingTable;
     procedure TestCreateUserAgentWithMultipleEventPackageSupport;
     procedure TestCreateUserAgentWithMultipleTransports;
     procedure TestCreateUserAgentWithNoContact;
@@ -230,6 +231,7 @@ type
     NewProxy:      String;
     OldProxy:      String;
     Stack:         TIdSipUserAgent;
+    Timer:         TIdDebugTimerQueue;
     Wait:          TIdSipReconfigureStackWait;
   public
     procedure SetUp; override;
@@ -241,10 +243,10 @@ type
 implementation
 
 uses
-  IdException, IdSdp, IdSimpleParser, IdSipAuthentication, IdSipConsts,
-  IdSipIndyLocator, IdSipMockLocator, IdSipMockTransport, IdSipSubscribeModule,
-  IdSipTCPTransport, IdSipUDPTransport, IdSystem, IdTcpClient, IdUnicode,
-  SysUtils;
+  IdException, IdMockRoutingTable, IdSdp, IdSimpleParser, IdSipAuthentication,
+  IdSipConsts, IdSipIndyLocator, IdSipMockLocator, IdSipMockTransport,
+  IdSipSubscribeModule, IdSipTCPTransport, IdSipUDPTransport, IdSystem,
+  IdTcpClient, IdUnicode, SysUtils;
 
 const
   // SFTF: Sip Foundry Test Framework. cf. http://www.sipfoundry.org/sftf/
@@ -2138,6 +2140,8 @@ begin
           'Transaction-User layer has no Authenticator');
     Check(Assigned(UA.Locator),
           'Transaction-User layer has no Locator');
+    Check(Assigned(UA.RoutingTable),
+          'Transaction-User layer has no RoutingTable');
     Check(Assigned(UA.Timer),
           'Transaction-User layer has no timer');
     Check(UA.Timer = UA.Dispatcher.Timer,
@@ -2451,6 +2455,26 @@ begin
           'Transaction Dispatcher has no Locator');
     Check(UA.Locator = UA.Dispatcher.Locator,
           'Transaction User and Transaction layers don''t use the same Locator');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithMockRoutingTable;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('RoutingTable: MOCK');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(TIdMockRoutingTable.ClassName,
+                UA.RoutingTable.ClassName,
+                'RoutingTable type');
+    Check(Assigned(UA.Dispatcher.RoutingTable),
+          'Transaction Dispatcher has no RoutingTable');
+    Check(UA.RoutingTable = UA.Dispatcher.RoutingTable,
+          'Transaction User and Transaction layers don''t use the same RoutingTable');
   finally
     UA.Free;
   end;
@@ -2959,6 +2983,8 @@ end;
 //* TestTIdSipReconfigureStackWait Public methods ******************************
 
 procedure TestTIdSipReconfigureStackWait.SetUp;
+var
+  Conf: TIdSipStackConfigurator;
 begin
   inherited SetUp;
 
@@ -2967,7 +2993,15 @@ begin
 
   Self.Configuration := TStringList.Create;
   Self.Configuration.Add(ProxyDirective + ': ' + Self.NewProxy);
-  Self.Stack := TIdSipUserAgent.Create;
+
+  Self.Timer := TIdDebugTimerQueue.Create(true);
+  Conf := TIdSipStackConfigurator.Create;
+  try
+    Self.Stack := Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  finally
+    Conf.Free;
+  end;
+
   Self.Stack.Proxy.Uri := Self.OldProxy;
 
   Self.Wait := TIdSipReconfigureStackWait.Create;
@@ -2979,6 +3013,7 @@ procedure TestTIdSipReconfigureStackWait.TearDown;
 begin
   Self.Wait.Free;
   Self.Stack.Free;
+  Self.Timer.Terminate;
   Self.Configuration.Free;
 
   inherited TearDown;
