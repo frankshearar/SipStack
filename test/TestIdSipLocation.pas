@@ -19,6 +19,7 @@ type
     procedure TestAsString;
     procedure TestCopy;
     procedure TestCreate;
+    procedure TestEquals;
   end;
 
   TestTIdSipLocations = class(TTestCase)
@@ -35,13 +36,15 @@ type
     procedure TestIsEmpty;
     procedure TestRemoveFirst;
     procedure TestRemove;
+    procedure TestRemoveDuplicateLocationsOnlyRemovesOne;
+    procedure TestRemoveEquivalentLocation;
     procedure TestRemoveNonExtantLocationDoesNothing;
   end;
 
 implementation
 
 uses
-  IdSipConsts, IdSipDns, IdSipMessage, Math, SysUtils;
+  IdSimpleParser, IdSipConsts, IdSipDns, IdSipMessage, Math, SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -102,6 +105,33 @@ begin
   CheckEquals(Self.Address,   Self.Loc.IPAddress, 'IPAddress');
   CheckEquals(Self.Port,      Self.Loc.Port,      'Port');
   CheckEquals(Self.Transport, Self.Loc.Transport, 'Transport');
+end;
+
+procedure TestTIdSipLocation.TestEquals;
+var
+  Other: TIdSipLocation;
+begin
+  Other := Self.Loc.Copy;
+  try
+    Check(Other.Equals(Self.Loc), 'Other <> Self.Loc');
+    Check(Self.Loc.Equals(Other), 'Self.Loc <> Other');
+
+    Other.Transport := UdpTransport;
+    Check(not Other.Equals(Self.Loc), 'Other = Self.Loc but transports differ');
+    Check(not Self.Loc.Equals(Other), 'Self.Loc = Other but transports differ');
+
+    Other.Transport := Self.Loc.Transport;
+    Other.Port      := Self.Loc.Port + 1;
+    Check(not Other.Equals(Self.Loc), 'Other = Self.Loc but ports differ');
+    Check(not Self.Loc.Equals(Other), 'Self.Loc = Other but ports differ');
+
+    Other.Port    := Self.Loc.Port;
+    Other.IPAddress := TIdIPAddressParser.IncIPAddress(Self.Loc.IPAddress);
+    Check(not Other.Equals(Self.Loc), 'Other = Self.Loc but addresses differ');
+    Check(not Self.Loc.Equals(Other), 'Self.Loc = Other but addresses differ');
+  finally
+    Other.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -266,6 +296,45 @@ begin
 
   CheckEquals(1, Self.Locs.Count, 'No location removed (#2)');
   CheckEquals(SecondAddress, Self.Locs.First.IPAddress, 'Wrong location removed (#2)');
+end;
+
+procedure TestTIdSipLocations.TestRemoveDuplicateLocationsOnlyRemovesOne;
+const
+  Address = '2002:deca:fbad::1';
+var
+  Location:      TIdSipLocation;
+  OriginalCount: Integer;
+begin
+  Self.Locs.AddLocation(TcpTransport, Address, 5060);
+  Self.Locs.AddLocation(TcpTransport, Address, 5060);
+
+  Location := Self.Locs.First.Copy;
+  try
+    OriginalCount := Self.Locs.Count;
+    Self.Locs.Remove(Location);
+    CheckEquals(Self.Locs.Count + 1, OriginalCount, 'Too many copies of location not removed');
+  finally
+    Location.Free;
+  end;
+end;
+
+procedure TestTIdSipLocations.TestRemoveEquivalentLocation;
+const
+  Address = '2002:deca:fbad::1';
+var
+  Location:      TIdSipLocation;
+  OriginalCount: Integer;
+begin
+  Self.Locs.AddLocation(TcpTransport, Address, 5060);
+
+  Location := Self.Locs.First.Copy;
+  try
+    OriginalCount := Self.Locs.Count;
+    Self.Locs.Remove(Location);
+    Check(Self.Locs.Count < OriginalCount, 'Copy of location not removed');
+  finally
+    Location.Free;
+  end;
 end;
 
 procedure TestTIdSipLocations.TestRemoveNonExtantLocationDoesNothing;

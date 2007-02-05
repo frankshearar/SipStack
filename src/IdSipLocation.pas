@@ -18,6 +18,7 @@ type
 
     function AsString: String;
     function Copy: TIdSipLocation;
+    function Equals(Other: TIdSipLocation): Boolean;
 
     property Transport: String   read fTransport write fTransport;
     property IPAddress: String   read fIPAddress write fIPAddress;
@@ -76,6 +77,13 @@ end;
 function TIdSipLocation.Copy: TIdSipLocation;
 begin
   Result := TIdSipLocation.Create(Self.Transport, Self.IPAddress, Self.Port);
+end;
+
+function TIdSipLocation.Equals(Other: TIdSipLocation): Boolean;
+begin
+  Result := (Self.Transport = Other.Transport)
+        and (Self.IPAddress = Other.IPAddress)
+        and (Self.Port = Other.Port);
 end;
 
 //******************************************************************************
@@ -138,8 +146,18 @@ begin
 end;
 
 procedure TIdSipLocations.Remove(Location: TIdSipLocation);
+var
+  Found: Boolean;
+  I:     Integer;
 begin
-  Self.List.Remove(Location);
+  Found := false;
+  I     := 0;
+  while (I < Self.Count) and not Found do begin
+    Found := Location.Equals(Self[I]);
+    if not Found then Inc(I);
+  end;
+
+  if Found then Self.List.Delete(I);
 end;
 
 //* TIdSipLocations Private methods ********************************************
