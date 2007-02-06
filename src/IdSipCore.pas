@@ -579,7 +579,7 @@ type
     procedure SetLocalGruu(Value: TIdSipContactHeader);
     procedure SetUsername(const Value: String);
     procedure TrySendRequest(Request: TIdSipRequest;
-                             Target: TIdSipLocation);
+                             Targets: TIdSipLocations);
   protected
     ActionListeners: TIdNotificationList;
     fIsOwned:        Boolean;
@@ -3003,7 +3003,7 @@ begin
       if not Self.TargetLocations.IsEmpty then begin
         NewAttempt := Self.CreateNewAttempt;
         try
-          Self.TrySendRequest(NewAttempt, Self.TargetLocations.First)
+          Self.TrySendRequest(NewAttempt, Self.TargetLocations);
         finally
           NewAttempt.Free;
         end;
@@ -3261,8 +3261,9 @@ begin
                                 Format(OutboundActionFailed,
                                        [Self.Method, FailReason]));
   end
-  else
-    Self.TrySendRequest(Request, Self.TargetLocations.First);
+  else begin
+    Self.TrySendRequest(Request, Self.TargetLocations);
+  end;
 end;
 
 procedure TIdSipAction.SendResponse(Response: TIdSipResponse);
@@ -3341,24 +3342,35 @@ begin
 end;
 
 procedure TIdSipAction.TrySendRequest(Request: TIdSipRequest;
-                                      Target: TIdSipLocation);
+                                      Targets: TIdSipLocations);
+var
+  CurrentTarget: TIdSipLocation;
 begin
-  // This means that a message that travels to the Target using SCTP will have
-  // SIP/2.0/SCTP in its topmost Via. Remember, we try to avoid having the
-  // transport layer change the message.
-  Request.LastHop.Transport := Target.Transport;
-  Request.RewriteLocationHeaders(Self.UA.RoutingTable, Target);
+  // We remove the current target from the set of targets first to prevent any
+  // damage from bugs lower in the stack: should something cause the message
+  // sending to try the next location, we must ensure that we don't retry
+  // sending the message to an already-attempted location.
 
-  // Synchronise our state to what actually went down to the network.
-  // The condition means that an INVITE won't set its InitialRequest to an
-  // ACK it's just sent.
-  if not Request.IsAck then
-    Self.InitialRequest.Assign(Request);
+  CurrentTarget := Targets.First.Copy;
+  try
+    Targets.Remove(CurrentTarget);
 
-  Self.UA.SendRequest(Request, Target);
+    // This means that a message that travels to the Target using SCTP will have
+    // SIP/2.0/SCTP in its topmost Via. Remember, we try to avoid having the
+    // transport layer change the message.
+    Request.LastHop.Transport := CurrentTarget.Transport;
+    Request.RewriteLocationHeaders(Self.UA.RoutingTable, CurrentTarget);
 
-  if not Self.TargetLocations.IsEmpty then
-    Self.TargetLocations.Remove(Target);
+    // Synchronise our state to what actually went down to the network.
+    // The condition means that an INVITE won't set its InitialRequest to an
+    // ACK it's just sent.
+    if not Request.IsAck then
+      Self.InitialRequest.Assign(Request);
+
+    Self.UA.SendRequest(Request, CurrentTarget);
+  finally
+    CurrentTarget.Free;
+  end;
 end;
 
 //******************************************************************************
