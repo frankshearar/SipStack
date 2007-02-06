@@ -907,6 +907,7 @@ end;
 
 procedure TIdSipTransactionDispatcher.SendResponse(Response: TIdSipResponse);
 var
+  CurrentTarget:      TIdSipLocation;
   Destinations:       TIdSipLocations;
   Tran:               TIdSipTransaction;
   RemainingLocations: TIdSipLocations;
@@ -948,9 +949,14 @@ begin
                              Format(RSNoLocationSucceeded, [Response.LastHop.SentBy]));
     end
     else begin
-      Response.RewriteLocationHeaders(Self.RoutingTable, RemainingLocations.First);
-      Self.SendToTransport(Response, RemainingLocations.First);
-      RemainingLocations.RemoveFirst;
+      CurrentTarget := RemainingLocations.First.Copy;
+      try
+        RemainingLocations.RemoveFirst;
+        Response.RewriteLocationHeaders(Self.RoutingTable, CurrentTarget);
+        Self.SendToTransport(Response, CurrentTarget);
+      finally
+        CurrentTarget.Free;
+      end;
     end;
   end;
 end;
