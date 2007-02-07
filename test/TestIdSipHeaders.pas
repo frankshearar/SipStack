@@ -268,6 +268,7 @@ type
   public
     procedure SetUp; override;
   published
+    procedure TestAssign;
     procedure TestIsContact; override;
     procedure TestIsMalformedWildCardUri;
     procedure TestName;
@@ -3450,6 +3451,21 @@ begin
 end;
 
 //* TestTIdSipContactHeader Published methods **********************************
+
+procedure TestTIdSipContactHeader.TestAssign;
+var
+  Other: TIdSipContactHeader;
+begin
+  Other := TIdSipContactHeader.Create;
+  try
+    Self.C.IsUnset := true;
+
+    Other.Assign(Self.C);
+    Check(Other.IsUnset, 'IsUnset not copied');
+  finally
+    Other.Free;
+  end;
+end;
 
 procedure TestTIdSipContactHeader.TestIsContact;
 begin

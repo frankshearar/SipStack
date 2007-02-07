@@ -689,8 +689,16 @@ type
   // presence indicates that it's a GRUU. Thus:
   //   Contact: sip:case@fried-neurons.org;gruu="sip:foo;opaque="bar";gruu>
   // is a Contact containing a GRUU.
+  //
+  // IsUnset is a marker, telling you whether or not I need setting by some
+  // part of the stack other than the part that instantiated me. For instance,
+  // if you send an INVITE the Transaction-User layer doesn't know what IP
+  // address or FQDN to put in the Contact header: setting IsUnset to true means
+  // that the Transaction layer knows to set me to an IP address/FQDN
+  // appropriate for contacting a particular UA.
   TIdSipContactHeader = class(TIdSipAddressHeader)
   private
+    fIsUnset:     Boolean;
     fIsWildCard:  Boolean;
 
     function  GetExpires: Cardinal;
@@ -706,12 +714,14 @@ type
     function  GetValue: String; override;
     procedure Parse(const Value: String); override;
   public
+    procedure Assign(Src: TPersistent); override;
     function  IsMalformed: Boolean; override;
     procedure RemoveExpires;
     function  WillExpire: Boolean;
 
     property Expires:     Cardinal     read GetExpires write SetExpires;
     property Gruu:        String       read GetGruu write SetGruu;
+    property IsUnset:     Boolean      read fIsUnset write fIsUnset;
     property IsWildCard:  Boolean      read fIsWildCard write fIsWildCard;
     property Q:           TIdSipQValue read GetQ write SetQ;
     property SipInstance: String       read GetSipInstance write SetSipInstance;
@@ -5470,6 +5480,19 @@ end;
 //* TIdSipContactHeader                                                        *
 //******************************************************************************
 //* TIdSipContactHeader Public methods *****************************************
+
+procedure TIdSipContactHeader.Assign(Src: TPersistent);
+var
+  Other: TIdSipContactHeader;
+begin
+  if (Src is TIdSipContactHeader) then begin
+    Other := Src as TIdSipContactHeader;
+
+    Self.IsUnset := Other.IsUnset;
+  end;
+
+  inherited Assign(Src);
+end;
 
 function TIdSipContactHeader.IsMalformed: Boolean;
 begin
