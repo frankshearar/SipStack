@@ -157,7 +157,7 @@ type
   // about, and information about those transports.
   TIdSipTransportRegistry = class(TObject)
   private
-    class function TransportAt(Index: Integer): TIdSipTransport;
+    class function TransportAt(Index: Integer): TIdSipTransport; virtual;
     class function TransportTypeAt(Index: Integer): TIdSipTransportClass;
     class function TransportRegistry: TStrings;
     class function TransportTypeRegistry: TStrings;
@@ -174,6 +174,15 @@ type
     class procedure UnregisterTransport(const TransportID: String);
     class procedure UnregisterTransportType(const Name: String);
     class function  UriSchemeFor(const Transport: String): String;
+  end;
+
+  // I give complete and arbitrary access to all transports. Use me at your
+  // peril. I exist so that tests may access transports that are not visible to
+  // production code.
+  TIdSipDebugTransportRegistry = class(TIdSipTransportRegistry)
+  public
+    class function TransportAt(Index: Integer): TIdSipTransport; override;
+    class function TransportCount: Integer;
   end;
 
   // I represent the (possibly) deferred handling of an exception raised in the
@@ -1005,6 +1014,21 @@ end;
 class function TIdSipTransportRegistry.TransportTypeRegistry: TStrings;
 begin
   Result := GTransportTypes;
+end;
+
+//******************************************************************************
+//* TIdSipDebugTransportRegistry                                               *
+//******************************************************************************
+//* TIdSipDebugTransportRegistry Public methods ********************************
+
+class function TIdSipDebugTransportRegistry.TransportAt(Index: Integer): TIdSipTransport;
+begin
+  Result := inherited TransportAt(Index);
+end;
+
+class function TIdSipDebugTransportRegistry.TransportCount: Integer;
+begin
+  Result := Self.TransportRegistry.Count;
 end;
 
 //******************************************************************************
