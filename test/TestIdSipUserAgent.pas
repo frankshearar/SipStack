@@ -164,6 +164,8 @@ type
     procedure CheckTCPServerNotOnPort(const Host: String;
                                       Port: Cardinal;
                                       const Msg: String);
+    procedure CheckUserAgentUsesGruu(Configuration: TStrings; Value: String; UsesGruu: Boolean);
+    function  CreateUserAgentWithUsesGruuDirective(Configuration: TStrings; Value: String): TIdSipUserAgent;
     procedure NoteReceiptOfPacket(Sender: TObject;
                                   AData: TStream;
                                   ABinding: TIdSocketHandle);
@@ -216,6 +218,7 @@ type
     procedure TestCreateUserAgentWithRegistrar;
     procedure TestCreateUserAgentWithResolveNamesLocallyFirst;
     procedure TestCreateUserAgentWithoutResolveNamesLocallyFirst;
+    procedure TestCreateUserAgentWithUseGruu;
     procedure TestStrToBool;
     procedure TestUpdateConfigurationWithContact;
     procedure TestUpdateConfigurationWithFrom;
@@ -1990,6 +1993,33 @@ begin
   end;
 end;
 
+procedure TestTIdSipStackConfigurator.CheckUserAgentUsesGruu(Configuration: TStrings; Value: String; UsesGruu: Boolean);
+var
+  UA: TIdSipUserAgent;
+begin
+  UA := Self.CreateUserAgentWithUsesGruuDirective(Configuration, Value);
+  try
+    Check(UsesGruu = UA.UseGruu, 'UseGruu not set correctly');
+  finally
+    UA.Free;
+  end;
+end;
+
+function TestTIdSipStackConfigurator.CreateUserAgentWithUsesGruuDirective(Configuration: TStrings; Value: String): TIdSipUserAgent;
+var
+  Conf: TStrings;
+begin
+  Conf := TStringList.Create;
+  try
+    Conf.AddStrings(Configuration);
+    Conf.Add('UseGruu: ' + Value);
+
+    Result := Self.Conf.CreateUserAgent(Conf, Self.Timer);
+  finally
+    Conf.Free;
+  end;
+end;
+
 procedure TestTIdSipStackConfigurator.NoteReceiptOfPacket(Sender: TObject;
                                                           AData: TStream;
                                                           ABinding: TIdSocketHandle);
@@ -2740,6 +2770,27 @@ begin
   finally
     UA.Free;
   end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithUseGruu;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+
+  CheckUserAgentUsesGruu(Self.Configuration, 'true', true);
+  CheckUserAgentUsesGruu(Self.Configuration, 'TRUE', true);
+  CheckUserAgentUsesGruu(Self.Configuration, 'yes',  true);
+  CheckUserAgentUsesGruu(Self.Configuration, 'YES',  true);
+  CheckUserAgentUsesGruu(Self.Configuration, '1',    true);
+  CheckUserAgentUsesGruu(Self.Configuration, 'on',   true);
+  CheckUserAgentUsesGruu(Self.Configuration, 'ON',   true);
+
+  CheckUserAgentUsesGruu(Self.Configuration, 'false', false);
+  CheckUserAgentUsesGruu(Self.Configuration, 'FALSE', false);
+  CheckUserAgentUsesGruu(Self.Configuration, 'no',    false);
+  CheckUserAgentUsesGruu(Self.Configuration, 'NO',    false);
+  CheckUserAgentUsesGruu(Self.Configuration, '0',     false);
+  CheckUserAgentUsesGruu(Self.Configuration, 'off',   false);
+  CheckUserAgentUsesGruu(Self.Configuration, 'OFF',   false);
 end;
 
 procedure TestTIdSipStackConfigurator.TestStrToBool;

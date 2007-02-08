@@ -95,6 +95,7 @@ type
   //   Proxy: <SIP/S URI>
   //   SupportEvent: refer
   //   InstanceID: urn:uuid:00000000-0000-0000-0000-000000000000
+  //   UseGruu: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
   //
   // We try keep the configuration as order independent as possible. To
   // accomplish this, directives are sometimes marked as pending (by putting
@@ -152,6 +153,8 @@ type
     procedure RegisterUA(UserAgent: TIdSipUserAgent;
                          const RegisterLine: String;
                          PendingActions: TObjectList);
+    procedure UseGruu(UserAgent: TIdSipAbstractCore;
+                      const UseGruuLine: String);
     procedure UseLocalResolution(UserAgent: TIdSipAbstractCore;
                                  const ResolveNamesLocallyFirstLine: String;
                                  PendingActions: TObjectList);
@@ -253,6 +256,7 @@ const
   ReturnOnlySpecifiedRecordsLocatorOption = 'ReturnOnlySpecifiedRecords';
   RoutingTableDirective                   = 'RoutingTable';
   SupportEventDirective                   = 'SupportEvent';
+  UseGruuDirective                        = 'UseGruu';
 
 procedure EatDirective(var Line: String);
 
@@ -840,7 +844,9 @@ begin
   else if IsEqual(FirstToken, RoutingTableDirective) then
     Self.AddRoutingTable(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, SupportEventDirective) then
-    Self.AddSupportForEventPackage(UserAgent, ConfigurationLine);
+    Self.AddSupportForEventPackage(UserAgent, ConfigurationLine)
+  else if IsEqual(FirstToken, UseGruuDirective) then
+    Self.UseGruu(UserAgent, ConfigurationLine);
 end;
 
 procedure TIdSipStackConfigurator.RegisterUA(UserAgent: TIdSipUserAgent;
@@ -862,6 +868,18 @@ begin
   Reg.HasRegistrar := true;
   Reg.Registrar.Uri := Line;
   Self.AddPendingMessageSend(PendingActions, Reg.RegisterWith(Reg.Registrar));
+end;
+
+procedure TIdSipStackConfigurator.UseGruu(UserAgent: TIdSipAbstractCore;
+                                          const UseGruuLine: String);
+var
+  Line: String;
+
+begin
+  Line := UseGruuLine;
+  EatDirective(Line);
+
+  UserAgent.UseGruu := StrToBool(Line);
 end;
 
 procedure TIdSipStackConfigurator.UseLocalResolution(UserAgent: TIdSipAbstractCore;
