@@ -1613,6 +1613,12 @@ begin
   Result := Self.Module.CreateSubscribe(Self.Target, Self.EventPackage);
   Result.Event.ID             := Self.EventID;
   Result.Expires.NumericValue := Self.Duration;
+
+  Result.FirstContact.Assign(Self.LocalGruu);
+
+  if Result.FirstContact.IsGruu then begin
+    Result.FirstContact.Grid := Self.UA.NextGrid;
+  end;
 end;
 
 procedure TIdSipOutboundSubscribe.Initialise(UA: TIdSipAbstractCore;
@@ -1767,6 +1773,12 @@ begin
     Result.TargetDialog.CallID    := Self.TargetDialog.CallID;
     Result.TargetDialog.LocalTag  := Self.TargetDialog.LocalTag;
     Result.TargetDialog.RemoteTag := Self.TargetDialog.RemoteTag;
+  end;
+
+  Result.FirstContact.Assign(Self.LocalGruu);
+
+  if Result.FirstContact.IsGruu then begin
+    Result.FirstContact.Grid := Self.UA.NextGrid;
   end;
 end;
 
@@ -2233,7 +2245,7 @@ procedure TIdSipInboundSubscription.RejectExpiresTooBrief(Subscribe: TIdSipReque
 var
   Response: TIdSipResponse;
 begin
-  Response := Self.UA.CreateResponse(Subscribe, SIPIntervalTooBrief);
+  Response := Self.UA.CreateResponse(Subscribe, SIPIntervalTooBrief, Self.LocalGruu);
   try
     Response.MinExpires.NumericValue := Self.Package.MinimumExpiryTime;
 
@@ -2272,7 +2284,7 @@ procedure TIdSipInboundSubscription.SendAcceptingResponse(Subscribe: TIdSipReque
 var
   Response: TIdSipResponse;
 begin
-  Response := Self.UA.CreateResponse(Subscribe, StatusCode);
+  Response := Self.UA.CreateResponse(Subscribe, StatusCode, Self.LocalGruu);
   try
     Response.Expires.NumericValue := Self.OurExpires(Subscribe);
 
@@ -2911,7 +2923,7 @@ procedure TIdSipInboundReferral.RejectBadRequest(Request: TIdSipRequest);
 var
   Response: TIdSipResponse;
 begin
-  Response := Self.UA.CreateResponse(Request, SIPBadRequest);
+  Response := Self.UA.CreateResponse(Request, SIPBadRequest, Self.LocalGruu);
   try
     Self.SendResponse(Response);
   finally

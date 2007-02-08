@@ -1055,7 +1055,7 @@ begin
   // Set up this stack to use the GRUU extension. Make sure that the GRUU
   // can resolve to an IP.
 
-  Self.Core.Contact.IsGruu := true;
+  Self.Core.UseGruu := true;
   Self.Locator.AddA(Self.Core.Contact.Address.Host, '127.0.0.2');
 end;
 
@@ -1279,14 +1279,23 @@ end;
 procedure TTestCaseTU.ReceiveResponse(Request: TIdSipRequest;
                                       StatusCode: Cardinal);
 var
-  Response: TIdSipResponse;
+  RemoteContact: TIdSipContactHeader;
+  Response:      TIdSipResponse;
 begin
-  Response := Self.Core.CreateResponse(Request,
-                                       StatusCode);
+  RemoteContact := TIdSipContactHeader.Create;
   try
-    Self.ReceiveResponse(Response);
+    RemoteContact.Value := Self.Destination.FullValue;
+
+    Response := Self.Core.CreateResponse(Request,
+                                         StatusCode,
+                                         RemoteContact);
+    try
+      Self.ReceiveResponse(Response);
+    finally
+      Response.Free;
+    end;
   finally
-    Response.Free;
+    RemoteContact.Free;
   end;
 end;
 

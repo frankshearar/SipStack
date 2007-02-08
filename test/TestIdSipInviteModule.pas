@@ -247,6 +247,7 @@ type
     procedure TestReceiveRequestFailedAfterAckSent;
     procedure TestReceiveServerFailed;
     procedure TestRemoveListener;
+    procedure TestSendToSipsUri; virtual;
     procedure TestSendTwice;
     procedure TestSendWithGruu; virtual;
     procedure TestTerminateBeforeAccept;
@@ -285,6 +286,7 @@ type
     procedure TearDown; override;
   published
     procedure TestSendInInboundSessionWithAuthentication;
+    procedure TestSendToSipsUri; override;
     procedure TestSendWithGruu; override;
   end;
 
@@ -747,7 +749,6 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipInviteModule unit tests');
 //  Result.AddTest(TestDebug.Suite);
-{
   Result.AddTest(TestTIdSipInviteModule.Suite);
   Result.AddTest(TestTIdSipOutboundBye.Suite);
   Result.AddTest(TestTIdSipOutboundCancel.Suite);
@@ -756,10 +757,8 @@ begin
   Result.AddTest(TestTIdSipOutboundRedirectedInvite.Suite);
   Result.AddTest(TestTIdSipOutboundReInvite.Suite);
   Result.AddTest(TestTIdSipOutboundReplacingInvite.Suite);
-}
   Result.AddTest(TestTIdSipInboundSession.Suite);
   Result.AddTest(TestTIdSipOutboundSession.Suite);
-{
 //  Result.AddTest(TestSessionReplacer.Suite);
   Result.AddTest(TestTIdSipInviteModuleOnInboundCallMethod.Suite);
   Result.AddTest(TestTIdSipInboundInviteFailureMethod.Suite);
@@ -772,7 +771,6 @@ begin
   Result.AddTest(TestTIdSipSessionModifySessionMethod.Suite);
   Result.AddTest(TestTIdSipProgressedSessionMethod.Suite);
   Result.AddTest(TestTIdSipSessionReferralMethod.Suite);
-}
 end;
 
 //******************************************************************************
@@ -2003,7 +2001,7 @@ var
   OkGrid:   String;
   RingGrid: String;
 begin
-  Self.UseGruu;
+  Self.InviteAction.UseGruu := true;
 
   Self.MarkSentResponseCount;
   Self.InviteAction.Ring;
@@ -2320,28 +2318,22 @@ end;
 
 procedure TestTIdSipInboundInvite.TestRingWithGruu;
 var
-  Action:   TIdSipInboundInvite;
   Response: TIdSipResponse;
 begin
-  Self.UseGruu;
+  Self.InviteAction.UseGruu := true;
 
-  Action := TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, Self.Binding);
-  try
-    Self.MarkSentResponseCount;
-    Action.Ring;
+  Self.MarkSentResponseCount;
+  Self.InviteAction.Ring;
 
-    CheckResponseSent('No ringing response sent');
+  CheckResponseSent('No ringing response sent');
 
-    Response := Self.LastSentResponse;
-    Check(Response.HasHeader(SupportedHeaderFull),
-          'Response lacks a Supported header');
-    Check(Response.SupportsExtension(ExtensionGruu),
-          'Supported header lacks indication of GRUU support');
-    Check(Response.FirstContact.Address.HasGrid,
-          '180 Ringing lacks a Contact with a "grid" parameter');
-  finally
-    Action.Free;
-  end;
+  Response := Self.LastSentResponse;
+  Check(Response.HasHeader(SupportedHeaderFull),
+        'Response lacks a Supported header');
+  Check(Response.SupportsExtension(ExtensionGruu),
+        'Supported header lacks indication of GRUU support');
+  Check(Response.FirstContact.Address.HasGrid,
+        '180 Ringing lacks a Contact with a "grid" parameter');
 end;
 
 procedure TestTIdSipInboundInvite.TestSendSessionProgress;
@@ -2358,29 +2350,24 @@ end;
 
 procedure TestTIdSipInboundInvite.TestSendSessionProgressWithGruu;
 var
-  Action:   TIdSipInboundInvite;
   Response: TIdSipResponse;
 begin
-  Self.UseGruu;
+  Self.InviteAction.UseGruu := true;
 
-  Action := TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, Self.Binding);
-  try
-    Self.MarkSentResponseCount;
-    Action.Ring;
-    Action.SendSessionProgress;
+  Self.InviteAction.Ring;
 
-    CheckResponseSent('No session progress response sent');
+  Self.MarkSentResponseCount;
+  Self.InviteAction.SendSessionProgress;
 
-    Response := Self.LastSentResponse;
-    Check(Response.HasHeader(SupportedHeaderFull),
-          'Response lacks a Supported header');
-    Check(Response.SupportsExtension(ExtensionGruu),
-          'Supported header lacks indication of GRUU support');
-    Check(Response.FirstContact.Address.HasGrid,
-          '183 Session Progress lacks a Contact with a "grid" parameter');
-  finally
-    Action.Free;
-  end;
+  CheckResponseSent('No session progress response sent');
+
+  Response := Self.LastSentResponse;
+  Check(Response.HasHeader(SupportedHeaderFull),
+        'Response lacks a Supported header');
+  Check(Response.SupportsExtension(ExtensionGruu),
+        'Supported header lacks indication of GRUU support');
+  Check(Response.FirstContact.Address.HasGrid,
+        '183 Session Progress lacks a Contact with a "grid" parameter');
 end;
 
 procedure TestTIdSipInboundInvite.TestSendTrying;
@@ -2502,17 +2489,17 @@ begin
 
   Self.MarkSentRequestCount;
   Invite := Self.CreateAction as TIdSipOutboundInvite;
-  CheckRequestSent('No request sent');
+  CheckRequestSent(Invite.ClassName + ': No request sent');
 
   CheckEquals(MethodInvite,
               Self.LastSentRequest.Method,
-              'Method of sent request');
+              Invite.ClassName + ': Method of sent request');
 
   CheckEquals(Self.LastSentRequest.FirstContact.AsString,
               Invite.LocalGruu.AsString,
               'LocalGruu not set');
   Check(Invite.LocalGruu.Address.HasGrid,
-        'Local GRUU doesn''t have a "grid" parameter');
+        Invite.ClassName + ': Local GRUU doesn''t have a "grid" parameter');
 end;
 
 function TestTIdSipOutboundInvite.CreateInitialInvite: TIdSipOutboundInitialInvite;
@@ -3153,6 +3140,25 @@ begin
   end;
 end;
 
+procedure TestTIdSipOutboundInvite.TestSendToSipsUri;
+var
+  Invite: TIdSipAction;
+begin
+  Self.Destination.Address.Scheme := SipsScheme;
+
+  Self.MarkSentRequestCount;
+  Invite := Self.CreateAction;
+
+  CheckEquals(Self.Destination.Address.Scheme,
+              Invite.LocalGruu.Address.Scheme,
+              Invite.ClassName + ': LocalGruu doesn''t use a SIPS URI');
+
+  CheckRequestSent(Invite.ClassName + ': No INVITE sent');
+  CheckEquals(Self.Destination.Address.Scheme,
+              Self.LastSentRequest.FirstContact.Address.Scheme,
+              Invite.ClassName + ': SIPS URI not used when contacting a SIPS URI');
+end;
+
 procedure TestTIdSipOutboundInvite.TestSendTwice;
 var
   Invite: TIdSipAction;
@@ -3405,6 +3411,16 @@ begin
   Check(not Self.LastSentRequest.HasAuthorization,
         'You can''t use the other party''s authorization credentials when '
       + 'sending them a re-INVITE');
+end;
+
+procedure TestTIdSipOutboundReInvite.TestSendToSipsUri;
+begin
+  // A re-INVITE of course takes place in the context of an existing dialog; if
+  // the dialog was a secure one, then our LocalGruu of necessity must also be
+  // a SIPS URI.
+  Self.LocalGruu.Address.Scheme := SipsScheme;
+
+  inherited TestSendToSipsUri;
 end;
 
 procedure TestTIdSipOutboundReInvite.TestSendWithGruu;
@@ -7145,13 +7161,13 @@ begin
 
   Self.MarkSentRequestCount;
   Session := Self.CreateAndEstablishSession;
-  CheckRequestSent('No INVITE sent');
+  CheckRequestSent(Session.ClassName + ': No INVITE sent');
 
   CheckEquals(Self.LastSentRequest.FirstContact.AsString,
               Session.LocalGruu.AsString,
-              'LocalGruu not set');
+              Session.ClassName + ': LocalGruu not set');
   Check(Session.LocalGruu.Address.HasGrid,
-        'Local GRUU doesn''t have a "grid" parameter');
+        Session.ClassName + ': Local GRUU doesn''t have a "grid" parameter');
 end;
 
 procedure TestTIdSipOutboundSession.TestSupportsExtension;

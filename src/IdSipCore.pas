@@ -304,6 +304,7 @@ type
     fRequireAuthentication:  Boolean;
     fRoutingTable:           TIdRoutingTable;
     fTimer:                  TIdTimerQueue;
+    fUseGruu:                Boolean;
     fUserAgentName:          String;
     Modules:                 TObjectList;
     NullModule:              TIdSipMessageModule;
@@ -395,7 +396,10 @@ type
     function  CreateRequest(const Method: String;
                             Dialog: TIdSipDialog): TIdSipRequest; overload;
     function  CreateResponse(Request: TIdSipRequest;
-                             ResponseCode: Cardinal): TIdSipResponse;
+                             ResponseCode: Cardinal): TIdSipResponse; overload;
+    function  CreateResponse(Request: TIdSipRequest;
+                             ResponseCode: Cardinal;
+                             Contact: TIdSipContactHeader): TIdSipResponse; overload;
     function  FindActionForGruu(const LocalGruu: String): TIdSipAction;
     procedure FindServersFor(Request: TIdSipRequest;
                              Result: TIdSipLocations); overload;
@@ -462,6 +466,7 @@ type
     property RequireAuthentication: Boolean                     read fRequireAuthentication write fRequireAuthentication;
     property RoutingTable:          TIdRoutingTable             read fRoutingTable write fRoutingTable;
     property Timer:                 TIdTimerQueue               read fTimer write fTimer;
+    property UseGruu:               Boolean                     read fUseGruu write fUseGruu;
     property UserAgentName:         String                      read fUserAgentName write fUserAgentName;
   end;
 
@@ -575,9 +580,11 @@ type
     NonceCount:      Cardinal;
 
     function  CreateResend(AuthorizationCredentials: TIdSipAuthorizationHeader): TIdSipRequest;
+    function  GetUseGruu: Boolean;
     function  GetUsername: String;
     procedure SetLocalGruu(Value: TIdSipContactHeader);
-    procedure SetUsername(const Value: String);
+    procedure SetUseGruu(Value: Boolean);
+    procedure SetUsername(Value: String);
     procedure TrySendRequest(Request: TIdSipRequest;
                              Targets: TIdSipLocations);
   protected
@@ -646,6 +653,7 @@ type
     property LocalGruu:      TIdSipContactHeader read fLocalGruu write SetLocalGruu;
     property Result:         TIdSipActionResult  read fResult;
     property UA:             TIdSipAbstractCore  read fUA;
+    property UseGruu:        Boolean             read GetUseGruu write SetUseGruu;
     property Username:       String              read GetUsername write SetUsername;
   end;
 
@@ -1737,11 +1745,21 @@ function TIdSipAbstractCore.CreateResponse(Request: TIdSipRequest;
                                            ResponseCode: Cardinal): TIdSipResponse;
 begin
   Result := TIdSipResponse.InResponseTo(Request,
-                                        ResponseCode,
-                                        Self.Contact);
+                                        ResponseCode);
 
   Self.PrepareResponse(Result, Request);
 end;
+
+function TIdSipAbstractCore.CreateResponse(Request: TIdSipRequest;
+                                           ResponseCode: Cardinal;
+                                           Contact: TIdSipContactHeader): TIdSipResponse;
+begin
+  Result := TIdSipResponse.InResponseTo(Request,
+                                        ResponseCode,
+                                        Contact);
+
+  Self.PrepareResponse(Result, Request);
+end;                                           
 
 function TIdSipAbstractCore.FindActionForGruu(const LocalGruu: String): TIdSipAction;
 begin
@@ -2234,12 +2252,6 @@ begin
     Response.AddHeader(ServerHeader).Value := Self.UserAgentName;
 
   Response.AddHeader(SupportedHeaderFull).Value := Self.AllowedExtensions;
-
-  // There's a nasty assumption here: that there's only one Contact in the Response.
-  if Response.HasHeader(ContactHeaderFull)
-    and Response.FirstContact.IsGruu
-    and TIdSipMessage.WillEstablishDialog(Request, Response) then
-    Response.FirstContact.Grid := Self.NextGrid;
 
   Self.AddModuleSpecificHeaders(Response);
 end;
@@ -3131,6 +3143,14 @@ begin
   Self.State           := asInitialised;
   Self.TargetLocations := TIdSipLocations.Create;
 
+  // It's good practice to keep LocalGruu containing a valid URI, even though
+  // the Contact will be altered just before it hits the network. We signal our
+  // ignorance of the correct address/port by setting LocalGruu.IsUnset.
+  Self.LocalGruu.Value   := 'sip:127.0.0.1';
+  Self.LocalGruu.IsUnset := true;
+
+  Self.UseGruu := UA.UseGruu;
+
   Self.SetResult(arUnknown);
 
   if Self.IsInbound then
@@ -3326,9 +3346,14 @@ begin
   Result.AddHeader(AuthorizationCredentials);
 end;
 
+function TIdSipAction.GetUseGruu: Boolean;
+begin
+  Result := Self.LocalGruu.IsGruu;
+end;
+
 function TIdSipAction.GetUsername: String;
 begin
-  Result := Self.UA.Username;
+  Result := Self.LocalGruu.DisplayName;
 end;
 
 procedure TIdSipAction.SetLocalGruu(Value: TIdSipContactHeader);
@@ -3336,9 +3361,14 @@ begin
   Self.fLocalGruu.Assign(Value);
 end;
 
-procedure TIdSipAction.SetUsername(const Value: String);
+procedure TIdSipAction.SetUseGruu(Value: Boolean);
 begin
-  Self.UA.From.DisplayName := Value;
+  Self.LocalGruu.IsGruu := Value;
+end;
+
+procedure TIdSipAction.SetUsername(Value: String);
+begin
+  Self.LocalGruu.DisplayName := Value;
 end;
 
 procedure TIdSipAction.TrySendRequest(Request: TIdSipRequest;

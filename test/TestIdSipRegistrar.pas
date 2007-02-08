@@ -138,7 +138,6 @@ type
     procedure TestReceiveMovedPermanently;
     procedure TestReceiveOK;
     procedure TestSequenceNumberIncrements;
-    procedure TestUsername;
   end;
 
   TExpiryProc = procedure(ExpiryTime: Cardinal) of object;
@@ -1250,23 +1249,6 @@ begin
   Self.CreateAction;
   Check(SeqNo + 1 = Self.LastSentRequest.CSeq.SequenceNo,
         'CSeq sequence number didn''t increment');
-end;
-
-procedure TestTIdSipOutboundRegisterBase.TestUsername;
-var
-  Registration: TIdSipOutboundRegisterBase;
-begin
-  Registration := Self.CreateAction as TIdSipOutboundRegisterBase;
-
-  Self.Core.From.DisplayName := 'foo';
-  CheckEquals(Self.Core.Username,
-              Registration.Username,
-              'Username "foo"');
-
-  Self.Core.From.DisplayName := 'bar';
-  CheckEquals(Self.Core.Username,
-              Registration.Username,
-              'Username "bar"');
 end;
 
 //******************************************************************************

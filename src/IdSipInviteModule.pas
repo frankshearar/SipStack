@@ -1250,9 +1250,6 @@ begin
 
   Self.Module := Self.UA.ModuleFor(Self.Method) as TIdSipInviteModule;
 
-  // Invites are always owned by a Session
-  Self.fIsOwned := true;
-
   Assert(Assigned(Self.Module),
          'The Transaction-User layer cannot process INVITE methods without adding the Invite module to it');
 end;
@@ -1293,7 +1290,7 @@ begin
   Assert(Cancel.IsCancel,
          'TIdSipInvite.ReceiveCancel must only receive CANCELs');
 
-  Ok := Self.UA.CreateResponse(Cancel, SIPOK);
+  Ok := Self.UA.CreateResponse(Cancel, SIPOK, Self.LocalGruu);
   try
     Self.SendResponse(Ok);
   finally
@@ -1330,7 +1327,7 @@ begin
   Self.fLocalSessionDescription := Offer;
   Self.fLocalMimeType           := ContentType;
 
-  Ok := Self.UA.CreateResponse(Self.InitialRequest, SIPOK);
+  Ok := Self.UA.CreateResponse(Self.InitialRequest, SIPOK, Self.LocalGruu);
   try
     Ok.Body          := Offer;
     Ok.ContentType   := ContentType;
@@ -1340,11 +1337,10 @@ begin
     if Ok.FirstContact.IsGruu then
       Ok.FirstContact.Grid := Self.Grid;
 
-    // This works regardless of whether the UA supports GRUU: if the UA doesn't
-    // then we simply make no USE of LocalGruu.
-    Self.LocalGruu := Ok.FirstContact;
-
     Self.SendResponse(Ok);
+
+    // Sending the response usually alters the first Contact of the response.
+    Self.LocalGruu := Ok.FirstContact;
   finally
     Ok.Free;
   end;
@@ -1373,6 +1369,7 @@ end;
 procedure TIdSipInboundInvite.Redirect(NewDestination: TIdSipAddressHeader;
                                        Temporary: Boolean = true);
 var
+  Contact:          TIdSipContactHeader;
   RedirectResponse: TIdSipResponse;
   RedirectType:     Cardinal;
 begin
@@ -1381,13 +1378,20 @@ begin
   else
     RedirectType := SIPMovedPermanently;
 
-  RedirectResponse := Self.UA.CreateResponse(Self.InitialRequest,
-                                             RedirectType);
+  Contact := TIdSipContactHeader.Create;
   try
-    RedirectResponse.FirstContact.Value := NewDestination.FullValue;
-    Self.SendResponse(RedirectResponse);
+    Contact.Value := NewDestination.FullValue;
+    RedirectResponse := Self.UA.CreateResponse(Self.InitialRequest,
+                                               RedirectType,
+                                               Contact);
+
+    try
+      Self.SendResponse(RedirectResponse);
+    finally
+      RedirectResponse.Free;
+    end;
   finally
-    RedirectResponse.Free;
+    Contact.Free;
   end;
 end;
 
@@ -1440,7 +1444,7 @@ end;
 
 procedure TIdSipInboundInvite.SendTrying;
 begin
-  if not Self.SentFinalResponse then 
+  if not Self.SentFinalResponse then
     Self.SendSimpleResponse(SIPTrying);
 end;
 
@@ -1608,10 +1612,12 @@ procedure TIdSipInboundInvite.SendSimpleResponse(StatusCode: Cardinal);
 var
   Response: TIdSipResponse;
 begin
+  // Subtlety note: 100 Trying messages will contain a Contact header.
   Response := Self.UA.CreateResponse(Self.InitialRequest,
-                                     StatusCode);
+                                     StatusCode,
+                                     Self.LocalGruu);
   try
-    if Self.UA.Contact.IsGruu then begin
+    if Response.FirstContact.IsGruu then begin
       Response.FirstContact.Grid := Self.Grid;
       Self.LocalGruu := Response.FirstContact;
     end;
@@ -2016,7 +2022,11 @@ end;
 
 function TIdSipOutboundInitialInvite.CreateNewAttempt: TIdSipRequest;
 begin
+  // If making a SIPS call, we need to use a SIPS URI.
+  Self.LocalGruu.Address.Scheme := Self.Destination.Address.Scheme;
+
   Result := Self.Module.CreateInvite(Self.Destination, Self.Offer, Self.MimeType);
+  Result.FirstContact.Assign(Self.LocalGruu);
 
   if Result.FirstContact.IsGruu then begin
     Result.FirstContact.Grid := Self.UA.NextGrid;
@@ -2135,6 +2145,9 @@ end;
 
 function TIdSipOutboundReplacingInvite.CreateNewAttempt: TIdSipRequest;
 begin
+  // If making a SIPS call, we need to use a SIPS URI.
+  Self.LocalGruu.Address.Scheme := Self.Destination.Address.Scheme;
+
   Result := Self.Module.CreateInvite(Self.Destination, Self.Offer, Self.MimeType);
   Result.AddHeader(ReplacesHeader);
   Result.Replaces.CallID  := Self.CallID;
@@ -2554,7 +2567,7 @@ begin
 
   Self.Dialog.ReceiveRequest(Bye);
 
-  OK := Self.UA.CreateResponse(Bye, SIPOK);
+  OK := Self.UA.CreateResponse(Bye, SIPOK, Self.LocalGruu);
   try
     Self.SendResponse(OK);
   finally
@@ -2572,7 +2585,7 @@ begin
   Assert(Cancel.IsCancel,
          'TIdSipInvite.ReceiveCancel must only receive CANCELs');
 
-  Ok := Self.UA.CreateResponse(Cancel, SIPOK);
+  Ok := Self.UA.CreateResponse(Cancel, SIPOK, Self.LocalGruu);
   try
     Self.SendResponse(Ok);
   finally
@@ -2687,7 +2700,8 @@ var
   Response: TIdSipResponse;
 begin
   Response := Self.UA.CreateResponse(Request,
-                                     SIPInternalServerError);
+                                     SIPInternalServerError,
+                                     Self.LocalGruu);
   try
     Response.StatusText := RSSIPRequestOutOfOrder;
     Self.SendResponse(Response);
@@ -2702,7 +2716,8 @@ var
   RetryAfter: TIdSipRetryAfterHeader;
 begin
   Response := Self.UA.CreateResponse(Invite,
-                                     SIPInternalServerError);
+                                     SIPInternalServerError,
+                                     Self.LocalGruu);
   try
     RetryAfter := Response.RetryAfter;
 
@@ -2718,7 +2733,9 @@ procedure TIdSipSession.RejectReInvite(Invite: TIdSipRequest);
 var
   RequestPending: TIdSipResponse;
 begin
-  RequestPending := Self.UA.CreateResponse(Invite, SIPRequestPending);
+  RequestPending := Self.UA.CreateResponse(Invite,
+                                           SIPRequestPending,
+                                           Self.LocalGruu);
   try
     Self.SendResponse(RequestPending);
   finally
@@ -2731,7 +2748,8 @@ var
   Response: TIdSipResponse;
 begin
   Response := Self.UA.CreateResponse(Request,
-                                     SIPRequestTerminated);
+                                     SIPRequestTerminated,
+                                     Self.LocalGruu);
   try
     Self.SendResponse(Response);
   finally
