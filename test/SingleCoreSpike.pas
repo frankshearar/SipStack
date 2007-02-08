@@ -13,7 +13,7 @@ interface
 
 uses
   ActnList, ActnMan, Controls, Classes, ExtCtrls, Forms, IdSipMessage,
-  IdSipStackInterface, StdCtrls;
+  IdSipStackInterface, IdTimerQueue, StdCtrls;
 
 type
   TSingleCore = class(TForm)
@@ -57,6 +57,7 @@ type
     ReferTo:     TIdSipAddressHeader;
     RemoteParty: TIdSipAddressHeader;
     Stack:       TIdSipStackInterface;
+    TimerQueue:  TIdTimerQueue;
 
     procedure CMAUTHENTICATION_CHALLENGE(var Msg: TIdSipEventMessage); message CM_AUTHENTICATION_CHALLENGE;
     procedure CMSUCCESS(var Msg: TIdSipEventMessage); message CM_SUCCESS;
@@ -125,7 +126,8 @@ begin
   Self.ReferTo            := TIdSipReferToHeader.Create;
   Self.RemoteParty        := TIdSipFromHeader.Create;
 
-  Self.Stack      := TIdSipStackInterface.Create(Self.Handle, Configuration);
+  Self.TimerQueue := TIdThreadedTimerQueue.Create(true);
+  Self.Stack      := TIdSipStackInterface.Create(Self.Handle, Self.TimerQueue, Configuration);
   Self.CallHandle := InvalidHandle;
 
   Self.Stack.Resume;
@@ -379,9 +381,7 @@ end;
 
 procedure TSingleCore.RefreshConfigClick(Sender: TObject);
 begin
-  Self.Stack.Free;
-  Self.Stack := TIdSipStackInterface.Create(Self.Handle,
-                                            Self.Configuration.Lines);
+  Self.Stack.ReconfigureStack(Self.Configuration.Lines);
 end;
 
 procedure TSingleCore.AnswerActionExecute(Sender: TObject);

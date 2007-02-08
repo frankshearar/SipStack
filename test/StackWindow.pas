@@ -16,15 +16,11 @@ uses
   IdTimerQueue, IdUdpClient, SyncObjs, SysUtils, TestIdSipStackInterface;
 
 type
+  // I provide a message queue to which a StackInterface can send messages. Then
+  // I route them back to a test case.
   TStackWindow = class(TForm)
   private
-    DefaultTimeout: Cardinal;
-    EmptyListEvent: TEvent;
-    ExceptionType:  ExceptClass;
-    fAddress:       String;
-    fPort:          Cardinal;
-    fTestCase:      TestTIdSipStackInterface;
-    Intf:           TIdSipStackInterface;
+    fTestCase: TestTIdSipStackInterface;
 
     procedure CMSUCCESS(var Msg: TIdSipEventMessage); message CM_SUCCESS;
     procedure CMFAIL(var Msg: TIdSipEventMessage); message CM_FAIL;
@@ -34,24 +30,29 @@ type
     procedure CMCALL_ESTABLISHED(var Msg: TIdSipEventMessage); message CM_CALL_ESTABLISHED;
     procedure CMCALL_REMOTE_MODIFY_REQUEST(var Msg: TIdSipEventMessage); message CM_CALL_REMOTE_MODIFY_REQUEST;
     procedure CMCALL_OUTBOUND_MODIFY_SUCCESS(var Msg: TIdSipEventMessage); message CM_CALL_OUTBOUND_MODIFY_SUCCESS;
+    procedure CMCALL_PROGRESS(var Msg: TIdSipEventMessage); message CM_CALL_PROGRESS;
+    procedure CMCALL_REFERRAL(var Msg: TIdSipEventMessage); message CM_CALL_REFERRAL;
+    procedure CMAUTHENTICATION_CHALLENGE(var Msg: TIdSipEventMessage); message CM_AUTHENTICATION_CHALLENGE;
+    procedure CMSUBSCRIPTION_ESTABLISHED(var Msg: TIdSipEventMessage); message CM_SUBSCRIPTION_ESTABLISHED;
+    procedure CMSUBSCRIPTION_RECV_NOTIFY(var Msg: TIdSipEventMessage); message CM_SUBSCRIPTION_RECV_NOTIFY;
+    procedure CMSUBSCRIPTION_EXPIRED(var Msg: TIdSipEventMessage); message CM_SUBSCRIPTION_EXPIRED;
+    procedure CMSUBSCRIPTION_REQUEST_NOTIFY(var Msg: TIdSipEventMessage); message CM_SUBSCRIPTION_REQUEST_NOTIFY;
+    procedure CMDEBUG_DROPPED_MSG(var Msg: TIdSipEventMessage); message CM_DEBUG_DROPPED_MSG;
+    procedure CMDEBUG_RECV_MSG(var Msg: TIdSipEventMessage); message CM_DEBUG_RECV_MSG;
     procedure CMDEBUG_SEND_MSG(var Msg: TIdSipEventMessage); message CM_DEBUG_SEND_MSG;
+    procedure CMDEBUG_TRANSPORT_EXCEPTION(var Msg: TIdSipEventMessage); message CM_DEBUG_TRANSPORT_EXCEPTION;
+    procedure CMDEBUG_TRANSPORT_REJECTED_MSG(var Msg: TIdSipEventMessage); message CM_DEBUG_TRANSPORT_REJECTED_MSG;
+    procedure CMDEBUG_STACK_STARTED(var Msg: TIdSipEventMessage); message CM_DEBUG_STACK_STARTED;
+    procedure CMDEBUG_STACK_STOPPED(var Msg: TIdSipEventMessage); message CM_DEBUG_STACK_STOPPED;
 
     procedure NotifyTestCase(Msg: TIdSipEventMessage);
-    procedure OnStackQueueEmpty(Sender: TIdTimerQueue);
-    procedure WaitForSignaled(Event: TEvent; Msg: String);
   public
     constructor Create(AOwner: TComponent; TestCase: TestTIdSipStackInterface); reintroduce;
-    destructor  Destroy; override;
 
-    property Address: String   read fAddress;
-    property Port:    Cardinal read fPort;
     property TestCase: TestTIdSipStackInterface read fTestCase;
   end;
 
 implementation
-
-uses
-  IdSipMockTransport, IdSipTransport, IdSystem;
 
 {$R *.dfm}
 
@@ -61,48 +62,10 @@ uses
 //* TStackWindow Public methods ************************************************
 
 constructor TStackWindow.Create(AOwner: TComponent; TestCase: TestTIdSipStackInterface);
-var
-  BasicConf: TStrings;
 begin
   inherited Create(AOwner);
 
-  Self.DefaultTimeout := 2000;
-  Self.EmptyListEvent := TSimpleEvent.Create;
-  Self.ExceptionType  := Exception;
-  Self.fTestCase      := TestCase;
-
-  TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipMockUDPTransport);
-
-  BasicConf := TStringList.Create;
-  try
-    BasicConf.Add('Listen: UDP 127.0.0.1:5060');
-    BasicConf.Add('NameServer: MOCK');
-    BasicConf.Add('Contact: sip:foo@127.0.0.1:5060');
-    BasicConf.Add('From: sip:foo@127.0.0.1:5060');
-
-    Self.Intf := TIdSipStackInterface.Create(Self.Handle, BasicConf);
-  finally
-    BasicConf.Free;
-  end;
-  Self.Intf.OnEmpty := Self.OnStackQueueEmpty;
-  Self.Intf.Resume;
-
-  Self.TestCase.Intf := Self.Intf;
-//  Self.fTestCase := TestTIdSipStackInterface.Create('TestAcceptCallWithInvalidHandle');
-end;
-
-destructor TStackWindow.Destroy;
-begin
-// Self.TestCase.Free;
-  Self.Intf.Terminate;
-  Self.WaitForSignaled(Self.EmptyListEvent,
-                       'Stack took too long to finish handling outstanding events');
-
-  TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
-
-  Self.EmptyListEvent.Free;
-
-  inherited Destroy;
+  Self.fTestCase := TestCase;
 end;
 
 //* TStackWindow Private methods ***********************************************
@@ -147,7 +110,72 @@ begin
   Self.NotifyTestCase(Msg);
 end;
 
+procedure TStackWindow.CMCALL_PROGRESS(var Msg: TIdSipEventMessage);
+begin
+  Self.NotifyTestCase(Msg);
+end;
+
+procedure TStackWindow.CMCALL_REFERRAL(var Msg: TIdSipEventMessage);
+begin
+  Self.NotifyTestCase(Msg);
+end;
+
+procedure TStackWindow.CMAUTHENTICATION_CHALLENGE(var Msg: TIdSipEventMessage);
+begin
+  Self.NotifyTestCase(Msg);
+end;
+
+procedure TStackWindow.CMSUBSCRIPTION_ESTABLISHED(var Msg: TIdSipEventMessage);
+begin
+  Self.NotifyTestCase(Msg);
+end;
+
+procedure TStackWindow.CMSUBSCRIPTION_RECV_NOTIFY(var Msg: TIdSipEventMessage);
+begin
+  Self.NotifyTestCase(Msg);
+end;
+
+procedure TStackWindow.CMSUBSCRIPTION_EXPIRED(var Msg: TIdSipEventMessage);
+begin
+  Self.NotifyTestCase(Msg);
+end;
+
+procedure TStackWindow.CMSUBSCRIPTION_REQUEST_NOTIFY(var Msg: TIdSipEventMessage);
+begin
+  Self.NotifyTestCase(Msg);
+end;
+
+procedure TStackWindow.CMDEBUG_DROPPED_MSG(var Msg: TIdSipEventMessage);
+begin
+  Self.NotifyTestCase(Msg);
+end;
+
+procedure TStackWindow.CMDEBUG_RECV_MSG(var Msg: TIdSipEventMessage);
+begin
+  Self.NotifyTestCase(Msg);
+end;
+
 procedure TStackWindow.CMDEBUG_SEND_MSG(var Msg: TIdSipEventMessage);
+begin
+  Self.NotifyTestCase(Msg);
+end;
+
+procedure TStackWindow.CMDEBUG_TRANSPORT_EXCEPTION(var Msg: TIdSipEventMessage);
+begin
+  Self.NotifyTestCase(Msg);
+end;
+
+procedure TStackWindow.CMDEBUG_TRANSPORT_REJECTED_MSG(var Msg: TIdSipEventMessage);
+begin
+  Self.NotifyTestCase(Msg);
+end;
+
+procedure TStackWindow.CMDEBUG_STACK_STARTED(var Msg: TIdSipEventMessage);
+begin
+  Self.NotifyTestCase(Msg);
+end;
+
+procedure TStackWindow.CMDEBUG_STACK_STOPPED(var Msg: TIdSipEventMessage);
 begin
   Self.NotifyTestCase(Msg);
 end;
@@ -159,19 +187,6 @@ begin
   finally
     Msg.Data.Free;
   end;
-end;
-
-procedure TStackWindow.OnStackQueueEmpty(Sender: TIdTimerQueue);
-begin
-  Self.EmptyListEvent.SetEvent;
-end;
-
-procedure TStackWindow.WaitForSignaled(Event: TEvent; Msg: String);
-begin
-  if (wrSignaled <> Event.WaitFor(Self.DefaultTimeout)) then
-    raise Self.ExceptionType.Create(Msg);
-
-  Event.ResetEvent;
 end;
 
 end.

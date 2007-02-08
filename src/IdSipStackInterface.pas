@@ -71,7 +71,7 @@ type
   // address! (If you don't then the stack cannot match failed message sends
   // against the TIdSipAction that sent the message, and you will never know
   // that your INVITE attempt (for instance) failed.
-  TIdSipStackInterface = class(TIdThreadedTimerQueue,
+  TIdSipStackInterface = class(TObject,
                                IIdSipActionListener,
                                IIdSipInviteModuleListener,
                                IIdSipMessageModuleListener,
@@ -89,6 +89,7 @@ type
     fUiHandle:       HWnd;
     fUserAgent:      TIdSipUserAgent;
     SubscribeModule: TIdSipSubscribeModule;
+    TimerQueue:      TIdTimerQueue;
 
     function QueryInterface(const IID: TGUID; out Obj): HResult; stdcall;
     function _AddRef: Integer; stdcall;
@@ -192,6 +193,7 @@ type
     property UserAgent: TIdSipUserAgent read fUserAgent;
   public
     constructor Create(UiHandle: HWnd;
+                       TimerQueue: TIdTimerQueue;
                        Configuration: TStrings); reintroduce;
     destructor  Destroy; override;
 
@@ -230,9 +232,9 @@ type
     procedure RedirectCall(ActionHandle: TIdSipHandle;
                            NewTarget: TIdSipAddressHeader);
     procedure RejectCall(ActionHandle: TIdSipHandle);
-    procedure Resume; override;
+    procedure Resume;
     procedure Send(ActionHandle: TIdSipHandle);
-    procedure Terminate; override;
+    procedure Terminate;
   end;
 
   // I contain data relating to a particular event.
@@ -732,13 +734,16 @@ end;
 //* TIdSipStackInterface Public methods ****************************************
 
 constructor TIdSipStackInterface.Create(UiHandle: HWnd;
+                                        TimerQueue: TIdTimerQueue;
                                         Configuration: TStrings);
 var
   Configurator: TIdSipStackConfigurator;
   I:            Integer;
   Module:       TIdSipMessageModule;
 begin
-  inherited Create(true);
+  inherited Create;
+
+  Self.TimerQueue := TimerQueue;
 
   Self.ActionLock := TCriticalSection.Create;
   Self.Actions    := TObjectList.Create(true);
@@ -747,7 +752,7 @@ begin
 
   Configurator := TIdSipStackConfigurator.Create;
   try
-    Self.fUserAgent := Configurator.CreateUserAgent(Configuration, Self);
+    Self.fUserAgent := Configurator.CreateUserAgent(Configuration, Self.TimerQueue);
     Self.Configure(Configuration);
     Self.UserAgent.AddUserAgentListener(Self);
     Self.UserAgent.InviteModule.AddListener(Self);
@@ -771,6 +776,10 @@ end;
 
 destructor TIdSipStackInterface.Destroy;
 begin
+  Self.NotifyOfStackShutdown;
+
+  Self.TimerQueue.Terminate;
+
 //  Self.DebugUnregister;
 
   Self.UserAgent.Free;
@@ -796,7 +805,7 @@ begin
     Wait.Offer       := LocalSessionDescription;
     Wait.Session     := Action as TIdSipSession;
 
-   Self.AddEvent(TriggerImmediately, Wait);
+   Self.TimerQueue.AddEvent(TriggerImmediately, Wait);
   finally
     Self.ActionLock.Release;
   end;
@@ -818,7 +827,7 @@ begin
     Wait.Offer       := Offer;
     Wait.Session     := Action as TIdSipInboundSession;
 
-    Self.AddEvent(TriggerImmediately, Wait);
+    Self.TimerQueue.AddEvent(TriggerImmediately, Wait);
   finally
     Self.ActionLock.Release;
   end;
@@ -880,7 +889,7 @@ begin
     TerminateWait := TIdSipActionTerminateWait.Create;
     TerminateWait.ActionID := Action.ID;
 
-    Self.AddEvent(TriggerImmediately, TerminateWait);
+    Self.TimerQueue.AddEvent(TriggerImmediately, TerminateWait);
   finally
     Self.ActionLock.Release;
   end;
@@ -996,7 +1005,7 @@ begin
     Wait.ContentType := ContentType;
     Wait.Offer := Offer;
 
-    Self.AddEvent(TriggerImmediately, Wait);
+    Self.TimerQueue.AddEvent(TriggerImmediately, Wait);
   finally
     Self.ActionLock.Release;
   end;
@@ -1039,7 +1048,7 @@ begin
     Wait.Notification := Notification;
     Wait.Subscription := Action as TIdSipInboundSubscription;
 
-    Self.AddEvent(TriggerImmediately, Wait);
+    Self.TimerQueue.AddEvent(TriggerImmediately, Wait);
   finally
     Self.ActionLock.Release;
   end;
@@ -1053,7 +1062,7 @@ begin
   Wait.Configuration := NewConfiguration;
   Wait.Stack         := Self;
   
-  Self.AddEvent(TriggerImmediately, Wait);
+  Self.TimerQueue.AddEvent(TriggerImmediately, Wait);
 end;
 
 procedure TIdSipStackInterface.RedirectCall(ActionHandle: TIdSipHandle;
@@ -1070,7 +1079,7 @@ begin
     Wait.NewTarget := NewTarget;
     Wait.Session   := Action as TIdSipInboundSession;
 
-    Self.AddEvent(TriggerImmediately, Wait);
+    Self.TimerQueue.AddEvent(TriggerImmediately, Wait);
   finally
     Self.ActionLock.Release;
   end;
@@ -1088,7 +1097,7 @@ begin
     Wait := TIdSipSessionRejectWait.Create;
     Wait.Session := Action as TIdSipInboundSession;
 
-    Self.AddEvent(TriggerImmediately, Wait);
+    Self.TimerQueue.AddEvent(TriggerImmediately, Wait);
   finally
     Self.ActionLock.Release;
   end;
@@ -1099,13 +1108,13 @@ var
   I: Integer;
 begin
   // Start me first (since I'm the "heartbeat" thread).
-  inherited Resume;
+  Self.TimerQueue.Resume;
 
   // THEN start my transport threads.
   for I := 0 to Self.UserAgent.Dispatcher.TransportCount - 1 do
     Self.UserAgent.Dispatcher.Transports[I].Start;
 
-  Self.NotifyOfStackStartup;  
+  Self.NotifyOfStackStartup;
 end;
 
 procedure TIdSipStackInterface.Send(ActionHandle: TIdSipHandle);
@@ -1124,9 +1133,7 @@ end;
 
 procedure TIdSipStackInterface.Terminate;
 begin
-  Self.NotifyOfStackShutdown;
-
-  inherited Terminate;
+  Self.Free;
 end;
 
 //* TIdSipStackInterface Private methods ***************************************
@@ -1349,7 +1356,7 @@ begin
     Wait.Referral := Action as TIdSipInboundReferral;
     Wait.Response := Response;
 
-    Self.AddEvent(TriggerImmediately, Wait);
+    Self.TimerQueue.AddEvent(TriggerImmediately, Wait);
   finally
     Self.ActionLock.Release;
   end;

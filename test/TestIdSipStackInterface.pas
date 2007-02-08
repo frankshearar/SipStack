@@ -12,8 +12,9 @@ unit TestIdSipStackInterface;
 interface
 
 uses
-  Classes, Contnrs, Forms, IdSipMessage, IdSipMockTransport,
-  IdSipStackInterface, TestFramework, TestFrameworkEx, TestFrameworkSip;
+  Classes, Contnrs, Forms, IdSipInviteModule, IdSipMessage, IdSipMockTransport,
+  IdSipStackInterface, IdSipUserAgent, IdTimerQueue, TestFramework,
+  TestFrameworkEx, TestFrameworkSip;
 
 type
   // The testing of the StackInterface is not completely simple. The UI (or
@@ -43,65 +44,77 @@ type
     procedure TestCreateStackWithNoSubscribeSupport;
   end;
 
-  TestTIdSipStackInterface = class(TThreadingTestCase)
+  // When writing tests for the stack interface, remember that the stack runs in
+  // a separate thread. All the methods (that don't create Actions) of the
+  // StackInterface use TIdWaits to schedule events within the stack thread.
+  // Thus, when you invoke these methods (like Send, AnswerCall, RejectCall,
+  // etc.), you have to trigger the newly-scheduled events by, for instance,
+  //
+  //    Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
+  //
+  // The same applies for notifications: the StackWindow sends us notifications
+  // like CM_CALL_REQUEST_NOTIFY, and you have to process these notifications
+  // (by invoking Application.ProcessMessages) before you can inspect what the
+  // stack does with these notification, or how it presents them. This means
+  // that if you're establishing a call and you receive a 200 OK, you must call
+  // Application.ProcessMessages before the test can know about the response.
+  TestTIdSipStackInterface = class(TThreadingTestCase,
+                                   IIdSipInviteModuleListener)
   private
-    CheckDataProc:  TDataCheckProc;
-    fIntf:          TIdSipStackInterface;
-    DataList:       TObjectList; // Holds all the data received from the stack
-    Destination:    TIdSipToHeader;
-    LocalMimeType:  String;
-    LocalOffer:     String;
-    MockTransport:  TIdSipMockUDPTransport;
-    Requests:       TIdSipRequestList;
-    RemoteMimeType: String;
-    RemoteOffer:    String;
-//    RemoteUA:       TIdSipUserAgent;
-    Responses:      TIdSipResponseList;
-//    UdpClient:      TIdUdpClient;
-    UI:             TForm;
-{
+    fIntf:             TIdSipStackInterface;
+    DataList:          TObjectList; // Holds all the data received from the stack
+    Destination:       TIdSipToHeader;
+    LocalAddress:      String;
+    LocalMimeType:     String;
+    LocalOffer:        String;
+    LocalPort:         Cardinal;
+    MockTransport:     TIdSipMockUDPTransport;
+    Registrar:         TIdSipUri;
+    RemoteMimeType:    String;
+    RemoteOffer:       String;
+    RemoteSession:     TIdSipInboundSession;
+    RemoteUA:          TIdSipUserAgent;
+    Requests:          TIdSipRequestList;
+    Responses:         TIdSipResponseList;
+    SentRequestCount:  Cardinal;
+    SentResponseCount: Cardinal;
+    TargetAddress:     String;
+    TargetPort:        Cardinal;
+    TimerQueue:        TIdDebugTimerQueue;
+    UI:                TForm;
 
-    procedure CheckSessionData(Stack: TIdSipStackInterface;
-                               Event: Cardinal;
-                               Data: TIdEventData);
-    procedure CheckInboundCallData(Stack: TIdSipStackInterface;
-                                   Event: Cardinal;
-                                   Data: TIdEventData);
-}
-    procedure CheckNothing(Stack: TIdSipStackInterface;
-                           Event: Cardinal;
-                           Data: TIdEventData);
+    procedure CheckNotificationReceived(EventType: TIdEventDataClass; Msg: String);
+    procedure CheckRequestSent(Msg: String);
+    procedure CheckResponseSent(Msg: String);
 {
-    procedure CheckRequestSent(const Msg: String);
-    procedure CheckResponseSent(const Msg: String);
     function  CreateBindings: TIdSipContacts;
     function  CreateRemoteBye(LocalDialog: TIdSipDialog): TIdSipRequest;
+}
     function  CreateRemoteInvite: TIdSipRequest;
-}
     function  CreateRemoteOk(Request: TIdSipRequest): TIdSipResponse;
-{
     function  EstablishCall: TIdSipHandle;
-    function  LastEventData: TIdEventData;
-    function  LastRequest: TIdSipRequest;
-    function  LastResponse: TIdSipResponse;
-}
+    function  EventAt(Index: Integer): TIdEventData;
+    function  LastEventOfType(EventType: TIdEventDataClass): TIdEventData;
     function  LastSentRequest: TIdSipRequest;
-{
     function  LastSentResponse: TIdSipResponse;
+    procedure MarkSentRequestCount;
+    procedure MarkSentResponseCount;
+    procedure OnInboundCall(UserAgent: TIdSipInviteModule;
+                            Session: TIdSipInboundSession);
+{
     procedure LogSentMessage(Msg: TIdSipMessage);
+}
     procedure ReceiveAck;
-    procedure ReceiveBusyHereFromRegistrar(Register: TIdSipRequest;
-                                           Contacts: TIdSipContacts);
-
+    procedure ReceiveBusyHereFromRegistrar(Register: TIdSipRequest);
+{
     procedure ReceiveBye(LocalDialog: TIdSipDialog);
     procedure ReceiveByeForOutboundCall;
-    procedure ReceiveIntervalTooBrief(Register: TIdSipRequest;
-                                      Contacts: TIdSipContacts);
+}
+    procedure ReceiveIntervalTooBrief(Register: TIdSipRequest);
     procedure ReceiveInvite;
     procedure ReceiveInviteWithOffer(const Offer: String;
                                      const MimeType: String);
-}
-    procedure ReceiveOk(Request: TIdSipRequest);
+    procedure ReceiveOk(Request: TIdSipRequest; Offer: String = ''; MimeType: String = '');
 {
     procedure ReceiveOkWithContacts(Register: TIdSipRequest;
                                     Contacts: TIdSipContacts);
@@ -111,12 +124,11 @@ type
 }
     procedure ReceiveRequest(Request: TIdSipRequest);
     procedure ReceiveResponse(Response: TIdSipResponse);
-    procedure RecordSentMessage(MsgData: TIdDebugMessageData);
+    function  SecondLastEventData: TIdEventData;
+    function  ThirdLastEventData: TIdEventData;
 {
     procedure ReceiveReInvite;
 }
-    function TargetAddress: String;
-    function TargetPort: Cardinal;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -127,28 +139,25 @@ type
 
     property Intf: TIdSipStackInterface read fIntf write fIntf;
   published
-//    procedure TestAcceptCall;
+    procedure TestAcceptCall;
     procedure TestAcceptCallWithInvalidHandle;
     procedure TestAcceptCallWithNoExistentHandle;
-{
     procedure TestEndedSession;
     procedure TestEstablishedSessionInboundCall;
     procedure TestEstablishedSessionOutboundCall;
     procedure TestHangUp;
-}
     procedure TestHangUpWithInvalidHandle;
     procedure TestHangUpWithNonExistentHandle;
-{
     procedure TestInboundCall;
     procedure TestMakeCall;
-}
     procedure TestMakeCallMalformedAddress;
-{
     procedure TestMakeRegistration;
+{
     procedure TestModifyCall;
 }
     procedure TestModifyCallWithInvalidHandle;
     procedure TestModifyCallWithNonExistentHandle;
+    procedure TestNetworkFailure;
     procedure TestOutboundCall;
     procedure TestRedirectCall;
     procedure TestRedirectCallWithInvalidHandle;
@@ -156,11 +165,8 @@ type
     procedure TestRejectCall;
     procedure TestRejectCallWithInvalidHandle;
     procedure TestRejectCallWithNonExistentHandle;
-{
-//    procedure TestNetworkFailure;
     procedure TestRegistrationFails;
     procedure TestRegistrationFailsWithRetry;
-}
     procedure TestSendNonExistentHandle;
 //    procedure TestSessionModifiedByRemoteSide;
   end;
@@ -374,9 +380,10 @@ type
 
   TestTIdSipStackReconfigureStackInterfaceWait = class(TTestCase)
   private
-    Conf:  TStrings;
-    Stack: TIdSipStackInterface;
-    Wait:  TIdSipStackReconfigureStackInterfaceWait;
+    Conf:       TStrings;
+    Stack:      TIdSipStackInterface;
+    TimerQueue: TIdTimerQueue;
+    Wait:       TIdSipStackReconfigureStackInterfaceWait;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -402,14 +409,14 @@ const
 implementation
 
 uses
-  IdRandom, IdSipLocation, IdSocketHandle, IdSipTransport, IdSipUdpTransport,
-  IdUdpServer, StackWindow, SysUtils;
+  IdRandom, IdSimpleParser, IdSipCore, IdSipLocation, IdSipTransport,
+  IdSipUdpTransport, IdSocketHandle, IdUdpServer, StackWindow, SysUtils;
 
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipStackInterface unit tests');
   Result.AddTest(TestTIdSipStackInterfaceCreation.Suite);
-//  Result.AddTest(TestTIdSipStackInterface.Suite);
+  Result.AddTest(TestTIdSipStackInterface.Suite);
   Result.AddTest(TestTIdEventData.Suite);
   Result.AddTest(TestTIdInformationalData.Suite);
   Result.AddTest(TestTIdAuthenticationChallengeData.Suite);
@@ -445,7 +452,7 @@ var
 begin
   EmptyConf := TStringList.Create;
   try
-    Stack := TIdSipStackInterface.Create(0, EmptyConf);
+    Stack := TIdSipStackInterface.Create(0, TIdDebugTimerQueue.Create(true), EmptyConf);
     try
       // This test tries catches a (now squashed) bug: when no subscribe module
       // was attached to the stack we'd get an Invalid Cast exception.
@@ -463,44 +470,89 @@ end;
 //* TestTIdSipStackInterface Public methods ************************************
 
 procedure TestTIdSipStackInterface.SetUp;
+var
+  BasicConf: TStrings;
+  Conf:      TIdSipStackConfigurator;
 begin
   inherited SetUp;
 
-  Self.CheckDataProc := Self.CheckNothing;
-  Self.DataList       := TObjectList.Create(true);
-  Self.Destination    := TIdSipToHeader.Create;
-  Self.Requests       := TIdSipRequestList.Create;
-//  Self.RemoteUA       := TIdSipUserAgent.Create;
-  Self.Responses      := TIdSipResponseList.Create;
+  TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipMockUDPTransport);
 
-{
-  Self.RemoteUA.Contact.Value := 'sip:case@localhost:5060';
-  Self.RemoteUA.From.Value    := 'sip:case@localhost:5060';
+  Self.DataList    := TObjectList.Create(true);
+  Self.Destination := TIdSipToHeader.Create;
+  Self.Requests    := TIdSipRequestList.Create;
+  Self.Responses   := TIdSipResponseList.Create;
 
-  Self.UdpClient      := TIdUdpClient.Create(nil);
-  Self.UdpClient.Host := '127.0.0.1';
-  Self.UdpClient.Port := 5060;
-}
-  Self.MockTransport := TIdSipMockUDPTransport.Create;
-  Self.UI            := TStackWindow.Create(nil, Self);
+  Self.TimerQueue := TIdDebugTimerQueue.Create(true);
 
-  Self.Destination.Value := 'sip:franks@localhost:5060';
-  Self.LocalOffer        := Format(DummySdp, ['127.0.0.1']);
+  Self.TargetAddress := '10.0.0.8';
+  Self.TargetPort    := 5060;
+  BasicConf := TStringList.Create;
+  try
+    BasicConf.Add('Listen: UDP ' + Self.TargetAddress + ':' + IntToStr(Self.TargetPort));
+    BasicConf.Add('NameServer: MOCK');
+    BasicConf.Add('Contact: sip:' + Self.TargetAddress + ':' + IntToStr(Self.TargetPort));
+    BasicConf.Add('From: sip:' + Self.TargetAddress + ':' + IntToStr(Self.TargetPort));
+
+    Conf := TIdSipStackConfigurator.Create;
+    try
+      Self.RemoteUA := Conf.CreateUserAgent(BasicConf, Self.TimerQueue);
+      Self.RemoteUA.InviteModule.AddListener(Self);
+    finally
+      Conf.Free;
+    end;
+  finally
+    BasicConf.Free;
+  end;
+
+  Self.UI := TStackWindow.Create(nil, Self);
+
+  Self.LocalAddress := '10.0.0.6';
+  Self.LocalPort    := 5060;
+  BasicConf := TStringList.Create;
+  try
+    BasicConf.Add('Listen: UDP ' + Self.LocalAddress + ':' + IntToStr(Self.LocalPort));
+    BasicConf.Add('NameServer: MOCK;ReturnOnlySpecifiedRecords');
+    BasicConf.Add('Contact: sip:foo@' + Self.LocalAddress + ':' + IntToStr(Self.LocalPort));
+    BasicConf.Add('From: sip:foo@' + Self.LocalAddress + ':' + IntToStr(Self.LocalPort));
+
+    Self.Intf := TIdSipStackInterface.Create(Self.UI.Handle, Self.TimerQueue, BasicConf);
+  finally
+    BasicConf.Free;
+  end;
+  Self.Intf.Resume;
+  // Clear the "pending" CM_DEBUG_STACK_STARTED
+  Application.ProcessMessages;
+
+  Self.MockTransport := TIdSipDebugTransportRegistry.TransportAt(TIdSipDebugTransportRegistry.TransportCount - 1) as TIdSipMockUdpTransport;
+
+  // The registrar URI MUST NOT be that of RemoteUA, because RemoteUA will not
+  // process REGISTER messages.
+  Self.Registrar := TIdSipUri.Create;
+  Self.Registrar.Uri := Self.RemoteUA.From.Address.AsString;
+  Self.Registrar.Host := TIdIPAddressParser.IncIPAddress(Self.Registrar.Host);
+
+  Self.Destination.Value := Self.RemoteUA.From.Value;
+  Self.LocalOffer        := Format(DummySdp, [Self.LocalAddress]);
   Self.LocalMimeType     := 'application/sdp';
-  Self.RemoteOffer       := Format(DummySdp, ['127.0.0.2']);
+  Self.RemoteOffer       := Format(DummySdp, [Self.TargetAddress]);
   Self.RemoteMimeType    := 'application/sdp';
 end;
 
 procedure TestTIdSipStackInterface.TearDown;
 begin
+  // Process any outstanding notifications from the StackWindow
   Application.ProcessMessages;
   Self.UI.Release;
-  Self.MockTransport.Free;
-//  Self.UdpClient.Free;
+  Self.Registrar.Free;
+  Self.Intf.Terminate;
   Self.Responses.Free;
   Self.Requests.Free;
+  Self.RemoteUA.Free;
   Self.Destination.Free;
   Self.DataList.Free;
+
+  TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
 
   inherited TearDown;
 end;
@@ -509,74 +561,36 @@ procedure TestTIdSipStackInterface.OnEvent(Stack: TIdSipStackInterface;
                                            Event: Cardinal;
                                            Data:  TIdEventData);
 begin
-  case Event of
-    CM_DEBUG_SEND_MSG: Self.RecordSentMessage(Data as TIdDebugMessageData);
-  else
-    Self.CheckDataProc(Stack, Event, Data);
-  end;
+  Self.DataList.Add(Data);
 end;
 
 //* TestTIdSipStackInterface Private methods ***********************************
-{
-procedure TestTIdSipStackInterface.CheckSessionData(Stack: TIdSipStackInterface;
-                                                    Event: Cardinal;
-                                                    Data: TIdEventData);
+
+procedure TestTIdSipStackInterface.CheckNotificationReceived(EventType: TIdEventDataClass; Msg: String);
 var
-  SessionData: TIdSessionData;
+  Found: Boolean;
+  I: Integer;
 begin
-  Check(Stack = Self.Intf, 'Wrong Stack param');
+  Found := false;
+  I     := 0;
+  while (I < Self.DataList.Count) and not Found do begin
+    Found := Self.EventAt(I) is EventType;
+    Inc(I);
+  end;
 
-  CheckNotNull(Data, 'Data not present');
-  CheckEquals(TIdSessionData.ClassName,
-              Data.ClassName,
-              'Type of data');
-
-  SessionData := Data as TIdSessionData;
-
-  CheckEquals(Self.LocalOffer,
-              SessionData.LocalSessionDescription,
-              'LocalSessionDescription');
-  CheckEquals(Self.LocalMimeType,
-              SessionData.LocalMimeType,
-              'LocalMimeType');
-  CheckEquals(Self.RemoteOffer,
-              SessionData.RemoteSessionDescription,
-              'RemoteSessionDescription');
-  CheckEquals(Self.RemoteMimeType,
-              SessionData.RemoteMimeType,
-              'RemoteMimeType');
+  if not Found then Fail(Msg);
 end;
 
-procedure TestTIdSipStackInterface.CheckInboundCallData(Stack: TIdSipStackInterface;
-                                                        Event: Cardinal;
-                                                        Data: TIdEventData);
+procedure TestTIdSipStackInterface.CheckRequestSent(Msg: String);
 begin
-  Check(Stack = Self.Intf, 'Wrong Stack param');
-  CheckEquals(CM_CALL_REQUEST_NOTIFY, Event, 'Wrong Event param');
-  CheckNotNull(Data, 'Data not present');
-  CheckEquals(TIdSessionData.ClassName,
-              Data.ClassName,
-              'Wrong data');
-  Check(Data.Handle > 0, 'Invalid Action handle');
+  Check(Self.SentRequestCount < Self.MockTransport.SentRequestCount, Msg);
 end;
-}
-procedure TestTIdSipStackInterface.CheckNothing(Stack: TIdSipStackInterface;
-                                                Event: Cardinal;
-                                                Data: TIdEventData);
+
+procedure TestTIdSipStackInterface.CheckResponseSent(Msg: String);
 begin
-  // Use this "Null Object" when you don't actually want to check anything.
+  Check(Self.SentResponseCount < Self.MockTransport.SentResponseCount, Msg);
 end;
 {
-procedure TestTIdSipStackInterface.CheckRequestSent(const Msg: String);
-begin
-  raise Exception.Create('implement TestTIdSipStackInterface.CheckRequestSent');
-end;
-
-procedure TestTIdSipStackInterface.CheckResponseSent(const Msg: String);
-begin
-  raise Exception.Create('implement TestTIdSipStackInterface.CheckResponseSent');
-end;
-
 function TestTIdSipStackInterface.CreateBindings: TIdSipContacts;
 begin
   Result := TIdSipContacts.Create;
@@ -597,16 +611,17 @@ begin
     raise;
   end;
 end;
-
+}
 function TestTIdSipStackInterface.CreateRemoteInvite: TIdSipRequest;
 begin
-  Result := Self.RemoteUA.CreateInvite(Self.Destination, '', '');
+  Result := Self.RemoteUA.InviteModule.CreateInvite(Self.Destination, '', '');
 end;
-}
+
 function TestTIdSipStackInterface.CreateRemoteOk(Request: TIdSipRequest): TIdSipResponse;
 begin
   Result := TIdSipResponse.InResponseTo(Request, SIPOK);
   try
+    Result.FirstContact.Value := 'sip:' + Self.TargetAddress + ':' + IntToStr(Self.TargetPort);
     Result.ToHeader.Tag := GRandomNumber.NextSipUserAgentTag;
   except
     FreeAndNil(Result);
@@ -614,45 +629,74 @@ begin
     raise;
   end;
 end;
-{
+
 function TestTIdSipStackInterface.EstablishCall: TIdSipHandle;
 begin
   Result := Self.Intf.MakeCall(Self.Destination,
                                Self.LocalOffer,
                                Self.LocalMimeType);
+
+  Self.MarkSentRequestCount;
   Self.Intf.Send(Result);
+  Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
   CheckRequestSent('No INVITE sent in EstablishCall');
 
-  Self.ReceiveOkWithOffer(Self.LastSentRequest,
-                          Self.RemoteOffer,
-                          Self.RemoteMimeType);
+  Self.ReceiveOk(Self.LastSentRequest, Self.RemoteOffer, Self.RemoteMimeType);
+  Application.ProcessMessages;
 end;
 
-function TestTIdSipStackInterface.LastEventData: TIdEventData;
+function TestTIdSipStackInterface.EventAt(Index: Integer): TIdEventData;
 begin
-  Result := Self.DataList[Self.DataList.Count - 1] as TIdEventData;
+  Result := Self.DataList[Index] as TIdEventData;
 end;
 
-function TestTIdSipStackInterface.LastRequest: TIdSipRequest;
+function TestTIdSipStackInterface.LastEventOfType(EventType: TIdEventDataClass): TIdEventData;
+var
+  Found: Boolean;
+  I:     Integer;
 begin
-  Result := Self.Requests.Last;
+  Result := nil;
+
+  Found := false;
+  I     := Self.DataList.Count - 1;
+  while (I > 0) and not Found do begin
+    Found := Self.EventAt(I) is EventType;
+
+    if not Found then Dec(I);
+  end;
+
+  if Found then
+    Result := Self.EventAt(I)
+  else
+    Fail('No event of type ' + EventType.ClassName + ' found');
 end;
 
-function TestTIdSipStackInterface.LastResponse: TIdSipResponse;
-begin
-  Result := Self.Responses.Last;
-end;
-}
 function TestTIdSipStackInterface.LastSentRequest: TIdSipRequest;
 begin
-  Result := Self.Requests.Last;
-end;
-{
-function TestTIdSipStackInterface.LastSentResponse: TIdSipResponse;
-begin
-  Result := Self.Responses.Last;
+  Result := Self.MockTransport.LastRequest;
 end;
 
+function TestTIdSipStackInterface.LastSentResponse: TIdSipResponse;
+begin
+  Result := Self.MockTransport.LastResponse;
+end;
+
+procedure TestTIdSipStackInterface.MarkSentRequestCount;
+begin
+  Self.SentRequestCount := Self.MockTransport.SentRequestCount;
+end;
+
+procedure TestTIdSipStackInterface.MarkSentResponseCount;
+begin
+  Self.SentResponseCount := Self.MockTransport.SentResponseCount;
+end;
+
+procedure TestTIdSipStackInterface.OnInboundCall(UserAgent: TIdSipInviteModule;
+                                                 Session: TIdSipInboundSession);
+begin
+  Self.RemoteSession := Session;
+end;
+{
 procedure TestTIdSipStackInterface.LogSentMessage(Msg: TIdSipMessage);
 begin
   if Msg.IsRequest then begin
@@ -662,12 +706,12 @@ begin
     Self.Responses.AddCopy(Msg as TIdSipResponse);
   end;
 end;
-
+}
 procedure TestTIdSipStackInterface.ReceiveAck;
 var
   Ack: TIdSipRequest;
 begin
-  Ack := Self.LastRequest.AckFor(Self.LastResponse);
+  Ack := Self.MockTransport.LastRequest.AckFor(Self.LastSentResponse);
   try
     Self.ReceiveRequest(Ack);
   finally
@@ -675,8 +719,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipStackInterface.ReceiveBusyHereFromRegistrar(Register: TIdSipRequest;
-                                                                Contacts: TIdSipContacts);
+procedure TestTIdSipStackInterface.ReceiveBusyHereFromRegistrar(Register: TIdSipRequest);
 var
   Response: TIdSipResponse;
 begin
@@ -684,14 +727,13 @@ begin
   try
     Response.StatusCode := SIPBusyHere;
     Response.Contacts.Clear;
-    Response.Contacts.Add(Contacts);
 
     Self.ReceiveResponse(Response);
   finally
     Response.Free;
   end;
 end;
-
+{
 procedure TestTIdSipStackInterface.ReceiveBye(LocalDialog: TIdSipDialog);
 var
   Bye: TIdSipRequest;
@@ -717,9 +759,8 @@ begin
     LocalDlg.Free;
   end;
 end;
-
-procedure TestTIdSipStackInterface.ReceiveIntervalTooBrief(Register: TIdSipRequest;
-                                                           Contacts: TIdSipContacts);
+}
+procedure TestTIdSipStackInterface.ReceiveIntervalTooBrief(Register: TIdSipRequest);
 var
   Response: TIdSipResponse;
 begin
@@ -728,7 +769,7 @@ begin
     Response.StatusCode := SIPIntervalTooBrief;
     Response.AddHeader(MinExpiresHeader).Value := '1000';
     Response.Contacts.Clear;
-    Response.Contacts.Add(Contacts);
+    Response.Contacts.Add(Register.Contacts);
 
     Self.ReceiveResponse(Response);
   finally
@@ -757,13 +798,21 @@ begin
     Invite.Free;
   end;
 end;
-}
-procedure TestTIdSipStackInterface.ReceiveOk(Request: TIdSipRequest);
+
+procedure TestTIdSipStackInterface.ReceiveOk(Request: TIdSipRequest; Offer: String = ''; MimeType: String = '');
 var
   Response: TIdSipResponse;
 begin
   Response := Self.CreateRemoteOk(Request);
   try
+    if (Offer <> '') then begin
+      Response.Body := Offer;
+      Response.ContentLength := Length(Offer);
+    end;
+    
+    if (MimeType <> '') then
+      Response.ContentType := MimeType;
+
     Self.ReceiveResponse(Response);
   finally
     Response.Free;
@@ -804,38 +853,52 @@ end;
 }
 procedure TestTIdSipStackInterface.ReceiveRequest(Request: TIdSipRequest);
 var
-  Dest: TIdSipLocation;
+  Target: TIdSipConnectionBindings;
 begin
   Self.Requests.AddCopy(Request);
 
-  Dest := TIdSipLocation.Create('UDP', Self.TargetAddress, Self.TargetPort);
+  Target := TIdSipConnectionBindings.Create;
   try
-    Self.MockTransport.Send(Request, Dest);
+    Target.LocalIP   := Self.MockTransport.Bindings[0].IP;
+    Target.LocalPort := Self.MockTransport.Bindings[0].Port;
+    Target.PeerIP    := Self.TargetAddress;
+    Target.PeerPort  := Self.TargetPort;
+    Target.Transport := Self.MockTransport.GetTransportType;
+
+    Self.MockTransport.ReceiveRequest(Request, Target);
   finally
-    Dest.Free;
+    Target.Free;
   end;
 end;
 
 procedure TestTIdSipStackInterface.ReceiveResponse(Response: TIdSipResponse);
 var
-  Dest: TIdSipLocation;
+  Target: TIdSipConnectionBindings;
 begin
   Self.Responses.AddCopy(Response);
 
-  Dest := TIdSipLocation.Create('UDP', Self.TargetAddress, Self.TargetPort);
+  Target := TIdSipConnectionBindings.Create;
   try
-    Self.MockTransport.Send(Response, Dest);
+    Target.LocalIP   := Self.MockTransport.Bindings[0].IP;
+    Target.LocalPort := Self.MockTransport.Bindings[0].Port;
+    Target.PeerIP    := Self.TargetAddress;
+    Target.PeerPort  := Self.TargetPort;
+    Target.Transport := Self.MockTransport.GetTransportType;
+
+    Self.MockTransport.ReceiveResponse(Response, Target);
   finally
-    Dest.Free;
+    Target.Free;
   end;
 end;
 
-procedure TestTIdSipStackInterface.RecordSentMessage(MsgData: TIdDebugMessageData);
+function TestTIdSipStackInterface.SecondLastEventData: TIdEventData;
 begin
-  if MsgData.Message.IsRequest then
-    Self.Requests.AddCopy(MsgData.Message as TIdSipRequest)
-  else
-    Self.Responses.AddCopy(MsgData.Message as TIdSipResponse)
+  Result := Self.DataList[Self.DataList.Count - 2] as TIdEventData;
+end;
+
+function TestTIdSipStackInterface.ThirdLastEventData: TIdEventData;
+begin
+  Result := Self.DataList[Self.DataList.Count - 3] as TIdEventData;
 end;
 {
 procedure TestTIdSipStackInterface.ReceiveReInvite;
@@ -866,25 +929,27 @@ begin
   end;
 end;
 }
-function TestTIdSipStackInterface.TargetAddress: String;
-begin
-  Result := (Self.UI as TStackWindow).Address;
-end;
-
-function TestTIdSipStackInterface.TargetPort: Cardinal;
-begin
-  Result := (Self.UI as TStackWindow).Port;
-end;
-
 //* TestTIdSipStackInterface Published methods *********************************
-{
+
 procedure TestTIdSipStackInterface.TestAcceptCall;
-const
-  Offer = 'offer';
-  ContentType = 'content/type';
 begin
+  Self.ReceiveInviteWithOffer(Self.RemoteOffer, Self.RemoteMimeType);
+  Application.ProcessMessages;
+  CheckNotificationReceived(TIdInboundCallData, 'No inbound call notification received');
+
+  Self.MarkSentResponseCount;
+
+  // Second last data because a CM_DEBUG_RECV_MSG always follows.
+  Self.Intf.AnswerCall(Self.LastEventOfType(TIdInboundCallData).Handle, Self.LocalOffer, Self.LocalMimeType);
+  Self.TimerQueue.TriggerAllEventsOfType(TIdSipSessionAcceptWait);
+  CheckResponseSent('No response sent');
+
+  CheckEquals(SIPOK, Self.LastSentResponse.StatusCode, 'Unexpected response sent');
+  CheckEquals(Self.LocalOffer, Self.LastSentResponse.Body, 'Local offer not used');
+  Check(Self.LastSentResponse.HasHeader(ContentTypeHeaderFull), 'Local MIME type not present');
+  CheckEquals(Self.LocalMimeType, Self.LastSentResponse.ContentType, 'Local MIME type not used');
 end;
-}
+
 procedure TestTIdSipStackInterface.TestAcceptCallWithInvalidHandle;
 var
   H: TIdSipHandle;
@@ -912,23 +977,81 @@ begin
     on EInvalidHandle do;
   end;
 end;
-{
+
 procedure TestTIdSipStackInterface.TestEndedSession;
+var
+  Data: TIdCallEndedData;
+  H:    TIdSipHandle;
 begin
+  H := Self.EstablishCall;
+
+  Self.MarkSentRequestCount;
+  Self.Intf.HangUp(H);
+  Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionTerminateWait);
+  Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
+  Application.ProcessMessages;
+  CheckRequestSent('No BYE sent');
+  CheckEquals(MethodBye, Self.MockTransport.LastRequest.Method, 'Unexpected request sent');
+
+  CheckNotificationReceived(TIdCallEndedData, 'Call hangup notification not sent');
+
+  Data := Self.LastEventOfType(TIdCallEndedData) as TIdCallEndedData;
+  CheckEquals(IntToHex(H, 8), IntToHex(Data.Handle, 8), 'Handle');
+  CheckEquals(0, Data.ErrorCode, 'ErrorCode');
 end;
 
 procedure TestTIdSipStackInterface.TestEstablishedSessionInboundCall;
+var
+  InboundCallData: TIdInboundCallData;
 begin
+  Self.ReceiveInvite;
+  Application.ProcessMessages;
+  CheckNotificationReceived(TIdInboundCallData, 'No inbound call notification received?');
+  InboundCallData := Self.LastEventOfType(TIdInboundCallData) as TIdInboundCallData;
+
+  Self.Intf.AnswerCall(InboundCallData.Handle, Self.LocalOffer, Self.LocalMimeType);
+  Self.TimerQueue.TriggerAllEventsOfType(TIdSipSessionAcceptWait);
+
+  Self.ReceiveAck;
+  Application.ProcessMessages;
+
+  CheckNotificationReceived(TIdEstablishedSessionData, 'No established session notification received');
 end;
 
 procedure TestTIdSipStackInterface.TestEstablishedSessionOutboundCall;
+var
+  Call: TIdSipHandle;
 begin
+  Call := Self.Intf.MakeCall(Self.Destination, Self.LocalOffer, Self.LocalMimeType);
+  Self.Intf.Send(Call);
+  Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
+  // Receive the CM_DEBUG_SEND_MSG for the INVITE
+  Application.ProcessMessages;
+
+  Self.ReceiveOk(Self.LastSentRequest);
+  Application.ProcessMessages;
+  CheckNotificationReceived(TIdEstablishedSessionData, 'No established session notification received');
+  CheckEquals(TIdEstablishedSessionData.ClassName,
+              Self.ThirdLastEventData.ClassName,
+              'Unexpected notification');
 end;
 
 procedure TestTIdSipStackInterface.TestHangUp;
+var
+  Call: TIdSipHandle;
 begin
+  Call := Self.EstablishCall;
+
+  Self.MarkSentRequestCount;
+  Self.Intf.HangUp(Call);
+  Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionTerminateWait);
+  Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
+  Application.ProcessMessages;
+  CheckNotificationReceived(TIdCallEndedData, 'No notification of end of call');
+  CheckRequestSent('No BYE sent');
+  CheckEquals(MethodBye, Self.LastSentRequest.Method, 'Unexpected request sent');
 end;
-}
+
 procedure TestTIdSipStackInterface.TestHangUpWithInvalidHandle;
 var
   R: TIdSipHandle;
@@ -956,17 +1079,36 @@ begin
     on EInvalidHandle do;
   end;
 end;
-{
+
 procedure TestTIdSipStackInterface.TestInboundCall;
+var
+  Data: TIdInboundCallData;
 begin
-  Self.CheckDataProc := Self.CheckInboundCallData;
-  Self.ReceiveInvite;
+  Self.ReceiveInviteWithOffer(Self.RemoteOffer, Self.RemoteMimeType);
+  Application.ProcessMessages;
+  CheckNotificationReceived(TIdInboundCallData, 'No inbound call notification received');
+
+  Data := Self.LastEventOfType(TIdInboundCallData) as TIdInboundCallData;
+  Check(Data.Handle > 0, 'Invalid Action handle');
+  CheckEquals(Self.RemoteOffer,            Data.RemoteSessionDescription, 'RemoteSessionDescription');
+  CheckEquals(Self.RemoteMimeType,         Data.RemoteMimeType,           'RemoteMimeType');
+  CheckEquals(Self.RemoteUA.Contact.Value, Data.RemoteContact.Value,      'RemoteContact');
+  CheckEquals(Self.RemoteUA.From.Value,    Data.RemoteParty.Value,        'RemoteParty');
 end;
 
 procedure TestTIdSipStackInterface.TestMakeCall;
+var
+  Handle: TIdSipHandle;
 begin
+  Handle := Self.Intf.MakeCall(Self.Destination, '', '');
+
+  Self.MarkSentRequestCount;
+  Self.Intf.Send(Handle);
+  Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
+  CheckRequestSent('No request sent');
+  CheckEquals(MethodInvite, Self.MockTransport.LastRequest.Method, 'Unexpected request sent');
 end;
-}
+
 procedure TestTIdSipStackInterface.TestMakeCallMalformedAddress;
 var
   Handle:           TIdSipHandle;
@@ -983,11 +1125,20 @@ begin
     MalformedAddress.Free;
   end;
 end;
-{
-procedure TestTIdSipStackInterface.TestMakeRegistration;
-begin
-end;
 
+procedure TestTIdSipStackInterface.TestMakeRegistration;
+var
+  Handle: TIdSipHandle;
+begin
+  Handle := Self.Intf.MakeRegistration(Self.Registrar);
+
+  Self.MarkSentRequestCount;
+  Self.Intf.Send(Handle);
+  Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
+  CheckRequestSent('No request sent');
+  CheckEquals(MethodRegister, Self.LastSentRequest.Method, 'Unexpected request sent');
+end;
+{
 procedure TestTIdSipStackInterface.TestModifyCall;
 begin
   //  ---   INVITE   --->
@@ -1029,31 +1180,85 @@ begin
   end;
 end;
 
+procedure TestTIdSipStackInterface.TestNetworkFailure;
+var
+  Call:     TIdSipHandle;
+  FailData: TIdNetworkFailureData;
+begin
+  Self.Destination.Address.Host := 'does.not.exist.com';
+  Call := Self.Intf.MakeCall(Self.Destination, '', '');
+  Check(Call > 0, 'Invalid handle');
+  Self.Intf.Send(Call);
+  Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
+  Application.ProcessMessages;
+
+  CheckNotificationReceived(TIdNetworkFailureData, 'Network failure notification not received');
+
+  FailData := Self.LastEventOfType(TIdNetworkFailureData) as TIdNetworkFailureData;
+//  CheckEquals(Format(OutboundActionFailed, [MethodInvite, Format(RSNoLocationSucceeded, [Self.Destination.Address.AsString])]), FailData.Reason, 'Reason');
+  CheckEquals(NoLocationFound, FailData.ErrorCode, 'ErrorCode');
+  CheckEquals(IntToHex(Call, 8), IntToHex(FailData.Handle, 8), 'Handle');
+end;
+
 procedure TestTIdSipStackInterface.TestOutboundCall;
 var
-  EventCount: Integer;
-  H: TIdSipHandle;
+  H:           TIdSipHandle;
+  SessionData: TIdEstablishedSessionData;
 begin
-  EventCount := Self.DataList.Count;
   H := Self.Intf.MakeCall(Self.Destination,
                           Self.LocalOffer,
                           Self.LocalMimeType);
   Self.Intf.Send(H);
-  Sleep(1000);
-  Self.ReceiveOk(Self.LastSentRequest);
+  Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
   Application.ProcessMessages;
-  CheckEquals(EventCount + 1,
-              Self.DataList.Count,
-              'Event count after established session: where''s the event?');
-  CheckEquals(TIdSessionData.ClassName,
-              Self.DataList[Self.DataList.Count - 1].ClassName,
-              'Unexpected event data');
 
+  Check(Assigned(Self.RemoteSession), 'RemoteSession never assigned: RemoteUA didn''t receive INVITE?');
+  Self.RemoteSession.AcceptCall(Self.RemoteOffer, Self.RemoteMimeType);
+  Application.ProcessMessages;
+
+  CheckNotificationReceived(TIdEstablishedSessionData, 'No established session notification');
+
+  SessionData := Self.LastEventOfType(TIdEstablishedSessionData) as TIdEstablishedSessionData;
+
+  CheckEquals(Self.LocalOffer,
+              SessionData.LocalSessionDescription,
+              'LocalSessionDescription');
+  CheckEquals(Self.LocalMimeType,
+              SessionData.LocalMimeType,
+              'LocalMimeType');
+  CheckEquals(Self.RemoteOffer,
+              SessionData.RemoteSessionDescription,
+              'RemoteSessionDescription');
+  CheckEquals(Self.RemoteMimeType,
+              SessionData.RemoteMimeType,
+              'RemoteMimeType');
 end;
 
 procedure TestTIdSipStackInterface.TestRedirectCall;
+var
+  NewTarget: TIdSipAddressHeader;
 begin
-  Fail('Not yet implemented');
+  Self.ReceiveInviteWithOffer(Self.RemoteOffer, Self.RemoteMimeType);
+  Application.ProcessMessages;
+  CheckNotificationReceived(TIdInboundCallData, 'No inbound call notification received');
+
+  Check(Self.LastEventOfType(TIdInboundCallData).Handle > 0, 'Invalid Action handle');
+
+  NewTarget := TIdSipContactHeader.Create;
+  try
+    NewTarget.Value := 'sip:' + TIdIPAddressParser.IncIPAddress(Self.TargetAddress);
+
+    Self.MarkSentResponseCount;
+    Self.Intf.RedirectCall(Self.SecondLastEventData.Handle, NewTarget);
+    Self.TimerQueue.TriggerAllEventsOfType(TIdSipSessionRedirectWait);
+    CheckResponseSent('No response sent');
+    CheckEquals(SIPMovedTemporarily, Self.LastSentResponse.StatusCode, 'Unexpected response sent');
+    CheckEquals(NewTarget.AsString,
+                Self.LastSentResponse.FirstContact.AsString,
+                'Unexpected redirection target');
+  finally
+    NewTarget.Free;
+  end;
 end;
 
 procedure TestTIdSipStackInterface.TestRedirectCallWithInvalidHandle;
@@ -1086,7 +1291,17 @@ end;
 
 procedure TestTIdSipStackInterface.TestRejectCall;
 begin
-  Fail('Not yet implemented');
+  Self.ReceiveInviteWithOffer(Self.RemoteOffer, Self.RemoteMimeType);
+  Application.ProcessMessages;
+  CheckNotificationReceived(TIdInboundCallData, 'No inbound call notification received');
+
+  Check(Self.LastEventOfType(TIdInboundCallData).Handle > 0, 'Invalid Action handle');
+
+  Self.MarkSentResponseCount;
+  Self.Intf.RejectCall(Self.SecondLastEventData.Handle);
+  Self.TimerQueue.TriggerAllEventsOfType(TIdSipSessionRejectWait);
+  CheckResponseSent('No response sent');
+  CheckEquals(SIPBusyHere, Self.LastSentResponse.StatusCode, 'Unexpected response sent');
 end;
 
 procedure TestTIdSipStackInterface.TestRejectCallWithInvalidHandle;
@@ -1116,40 +1331,52 @@ begin
     on EInvalidHandle do;
   end;
 end;
-{
-procedure TestTIdSipStackInterface.TestNetworkFailure;
-var
-  Call: TIdSipHandle;
-begin
-  Self.Dispatcher.Transport.FailWith := Exception;
-  Call := Self.Intf.MakeCall(Self.Destination, '', '');
-  Check(Call > 0, 'Invalid handle');
-  Self.Intf.Send(Call);
-  Self.DebugTimer.TriggerEarliestEvent;
-
-  Check(Self.OnEventFired, 'OnEvent didn''t fire');
-  Check(Self.Action = Call, 'Invalid Action handle');
-  CheckEquals(CM_NETWORK_FAILURE, Self.Event, 'Wrong Event param');
-
-  CheckEquals(TIdFailData.ClassName,
-              Self.LastEventData.ClassName,
-              'Wrong data');
-end;
 
 procedure TestTIdSipStackInterface.TestRegistrationFails;
+var
+  FailData: TIdFailData;
+  Reg:      TIdSipHandle;
 begin
   //  ---    REGISTER   --->
   // <--- 486 Busy Here ---
+  Reg := Self.Intf.MakeRegistration(Self.Registrar);
+  Self.Intf.Send(Reg);
+  Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
+
+  Self.ReceiveBusyHereFromRegistrar(Self.LastSentRequest);
+  Application.ProcessMessages;
+  CheckNotificationReceived(TIdFailData, 'No fail notification received');
+
+  FailData := Self.LastEventOfType(TIdFailData) as TIdFailData;
+  CheckEquals(IntToHex(Reg, 8), IntToHex(FailData.Handle, 8), 'Incorrect handle');
+  CheckEquals(Self.LastSentResponse.StatusCode, FailData.ErrorCode, 'Incorrect ErrorCode');
+  CheckEquals(Self.LastSentResponse.StatusText, FailData.Reason, 'Incorrect Reason');
 end;
 
 procedure TestTIdSipStackInterface.TestRegistrationFailsWithRetry;
+var
+  Reg: TIdSipHandle;
 begin
   //  ---        REGISTER        --->
   // <--- 423 Interval Too Brief ---
   //  ---        REGISTER        --->
   // <---         200 OK         ---
+
+  Reg := Self.Intf.MakeRegistration(Self.Registrar);
+  Self.Intf.Send(Reg);
+  Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
+
+  Self.MarkSentRequestCount;
+  Self.ReceiveIntervalTooBrief(Self.LastSentRequest);
+  CheckRequestSent('No REGISTER resent');
+  CheckEquals(MethodRegister, Self.LastSentRequest.Method, 'Unexpected request sent');
+
+  Self.ReceiveOk(Self.LastSentRequest);
+  Application.ProcessMessages;
+
+  CheckNotificationReceived(TIdRegistrationData, 'No registration success notification received');
 end;
-}
+
 procedure TestTIdSipStackInterface.TestSendNonExistentHandle;
 const
   ArbValue = 42;
@@ -2254,7 +2481,9 @@ begin
   Self.Conf := TStringList.Create;
   Self.Conf.Add('Listen: UDP 127.0.0.1:5060');
 
-  Self.Stack := TIdSipStackInterface.Create(0, Self.Conf);
+  Self.TimerQueue := TIdDebugTimerQueue.Create(true);
+
+  Self.Stack := TIdSipStackInterface.Create(0, Self.TimerQueue, Self.Conf);
   Self.Stack.Resume;
   Self.Wait := TIdSipStackReconfigureStackInterfaceWait.Create;
   Self.Wait.Stack := Self.Stack;

@@ -8,6 +8,8 @@ v0.6 (2007/xx/yy)
   request, or the Contact headers of the response, use the NAT's
   external IP as the host in their URIs. Of course, you still need
   packet redirection or such on the NATs in your environment.
+* TIdSipStackInterface now USES a thread, but is itself NOT a
+  thread. This greatly facilitates testing of the stack interface.
 
 v0.5.3 (2007/01/26)
 * All modules now reside in separate units. (This only affects
