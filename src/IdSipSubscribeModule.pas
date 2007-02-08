@@ -2077,8 +2077,7 @@ begin
   // here.
 //  Self.Package := Self.Module.Package(Self.EventPackage).Clone;
 
-  if Self.UA.Contact.IsGruu then
-    Self.Grid := Self.UA.NextGrid;
+  Self.Grid := Self.UA.NextGrid;
 end;
 
 procedure TIdSipInboundSubscription.ReceiveSubscribe(Request: TIdSipRequest);
