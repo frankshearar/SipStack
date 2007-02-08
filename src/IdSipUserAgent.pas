@@ -158,6 +158,8 @@ type
     procedure UseLocalResolution(UserAgent: TIdSipAbstractCore;
                                  const ResolveNamesLocallyFirstLine: String;
                                  PendingActions: TObjectList);
+    procedure UserAgentName(UserAgent: TIdSipAbstractCore;
+                      const UserAgentNameLine: String);
     procedure SendPendingActions(Actions: TObjectList);
     procedure SetInstanceID(UserAgent: TIdSipUserAgent;
                             const InstanceIDLine: String);
@@ -257,6 +259,7 @@ const
   RoutingTableDirective                   = 'RoutingTable';
   SupportEventDirective                   = 'SupportEvent';
   UseGruuDirective                        = 'UseGruu';
+  UserAgentNameDirective                  = 'UserAgentName';
 
 procedure EatDirective(var Line: String);
 
@@ -846,7 +849,9 @@ begin
   else if IsEqual(FirstToken, SupportEventDirective) then
     Self.AddSupportForEventPackage(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, UseGruuDirective) then
-    Self.UseGruu(UserAgent, ConfigurationLine);
+    Self.UseGruu(UserAgent, ConfigurationLine)
+  else if IsEqual(FirstToken, UserAgentNameDirective) then
+    Self.UserAgentName(UserAgent, ConfigurationLine);
 end;
 
 procedure TIdSipStackConfigurator.RegisterUA(UserAgent: TIdSipUserAgent;
@@ -897,6 +902,17 @@ begin
 
   Pending := TIdSipPendingLocalResolutionAction.Create(UserAgent, Self.StrToBool(Line));
   Self.AddPendingConfiguration(PendingActions, Pending);
+end;
+
+procedure TIdSipStackConfigurator.UserAgentName(UserAgent: TIdSipAbstractCore;
+                                                const UserAgentNameLine: String);
+var
+  Line: String;
+begin
+  Line := UserAgentNameLine;
+  EatDirective(Line);
+
+  UserAgent.UserAgentName := Line;
 end;
 
 procedure TIdSipStackConfigurator.SendPendingActions(Actions: TObjectList);

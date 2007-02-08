@@ -219,6 +219,7 @@ type
     procedure TestCreateUserAgentWithResolveNamesLocallyFirst;
     procedure TestCreateUserAgentWithoutResolveNamesLocallyFirst;
     procedure TestCreateUserAgentWithUseGruu;
+    procedure TestCreateUserAgentWithUserAgentName;
     procedure TestStrToBool;
     procedure TestUpdateConfigurationWithContact;
     procedure TestUpdateConfigurationWithFrom;
@@ -2791,6 +2792,23 @@ begin
   CheckUserAgentUsesGruu(Self.Configuration, '0',     false);
   CheckUserAgentUsesGruu(Self.Configuration, 'off',   false);
   CheckUserAgentUsesGruu(Self.Configuration, 'OFF',   false);
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithUserAgentName;
+const
+  UserAgentName = 'FooBar/1.1';
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('UserAgentName: ' + UserAgentName);
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(UserAgentName, UA.UserAgentName, 'UserAgentName not set');
+  finally
+    UA.Free;
+  end;
 end;
 
 procedure TestTIdSipStackConfigurator.TestStrToBool;
