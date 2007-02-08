@@ -6,7 +6,7 @@
 
 4. How do I create a new header type?
 
-5. When my test runs and I expect a message to be sent. It's not. Why?
+5. When my test runs I expect a message to be sent. It's not. Why?
 
 6. The tests take too long to run. I only want to test this little
    test unit. What do I do?
@@ -54,7 +54,10 @@
    the hostname in the requests's Request-URI or response's top-most
    Via header. See if the stack signals OnNetworkFailure. If it does,
    add a new A or AAAA record to the locator by means of AddA/AddAAAA
-   as part of the test setup.
+   as part of the test setup. If your test involves a TimerQueue (say,
+   it's a test for TIdSipStackInterface), then you need to trigger
+   those TIdWaits manually, via
+   TIdDebugTimerQueue.TriggerAllEventsOfType.
 
 6. Comment out the unwanted test units. Unfortunately, up to at least
    version 0.5.2, TestIdSipStackInterface depends on the StackWindow
