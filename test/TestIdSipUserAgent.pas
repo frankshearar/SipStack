@@ -204,6 +204,7 @@ type
     procedure TestCreateUserAgentWithMappedRoutes;
     procedure TestCreateUserAgentWithMockAuthenticator;
     procedure TestCreateUserAgentWithMockLocator;
+    procedure TestCreateUserAgentWithMockLocatorConfigured;
     procedure TestCreateUserAgentWithMockRoutingTable;
     procedure TestCreateUserAgentWithMultipleEventPackageSupport;
     procedure TestCreateUserAgentWithMultipleTransports;
@@ -2455,6 +2456,25 @@ begin
           'Transaction Dispatcher has no Locator');
     Check(UA.Locator = UA.Dispatcher.Locator,
           'Transaction User and Transaction layers don''t use the same Locator');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithMockLocatorConfigured;
+var
+  Mock: TIdSipMockLocator;
+  UA:   TIdSipUserAgent;
+begin
+  Self.Configuration.Add('NameServer: MOCK;ReturnOnlySpecifiedRecords');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(TIdSipMockLocator.ClassName,
+                UA.Locator.ClassName,
+                'Locator type');
+    Mock := UA.Locator as TIdSipMockLocator;
+    Check(Mock.ReturnOnlySpecifiedRecords, 'Mock locator not configured');
   finally
     UA.Free;
   end;

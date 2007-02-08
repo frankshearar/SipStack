@@ -88,7 +88,7 @@ type
   //   MappedRoute: 192.168.0.0/255.255.255.0 192.168.1.1
   //   MappedRoute: ::/0 2002:deca:fbad::1 15060
   //   NameServer: <domain name or IP>:<port>
-  //   NameServer: MOCK
+  //   NameServer: MOCK [;ReturnOnlySpecifiedRecords]
   //   Register: <SIP/S URI>
   //   ResolveNamesLocallyFirst: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
   //   RoutingTable: MOCK
@@ -236,22 +236,23 @@ type
 
 // Configuration file constants
 const
-  AuthenticationDirective           = 'Authentication';
-  AutoKeyword                       = 'AUTO';
-  ContactDirective                  = ContactHeaderFull;
-  DebugMessageLogDirective          = 'DebugMessageLog';
-  FromDirective                     = FromHeaderFull;
-  HostNameDirective                 = 'HostName';
-  InstanceIDDirective               = 'InstanceID';
-  ListenDirective                   = 'Listen';
-  MockKeyword                       = 'MOCK';
-  MappedRouteDirective              = 'MappedRoute';
-  NameServerDirective               = 'NameServer';
-  ProxyDirective                    = 'Proxy';
-  RegisterDirective                 = 'Register';
-  ResolveNamesLocallyFirstDirective = 'ResolveNamesLocallyFirst';
-  RoutingTableDirective             = 'RoutingTable';
-  SupportEventDirective             = 'SupportEvent';
+  AuthenticationDirective                 = 'Authentication';
+  AutoKeyword                             = 'AUTO';
+  ContactDirective                        = ContactHeaderFull;
+  DebugMessageLogDirective                = 'DebugMessageLog';
+  FromDirective                           = FromHeaderFull;
+  HostNameDirective                       = 'HostName';
+  InstanceIDDirective                     = 'InstanceID';
+  ListenDirective                         = 'Listen';
+  MockKeyword                             = 'MOCK';
+  MappedRouteDirective                    = 'MappedRoute';
+  NameServerDirective                     = 'NameServer';
+  ProxyDirective                          = 'Proxy';
+  RegisterDirective                       = 'Register';
+  ResolveNamesLocallyFirstDirective       = 'ResolveNamesLocallyFirst';
+  ReturnOnlySpecifiedRecordsLocatorOption = 'ReturnOnlySpecifiedRecords';
+  RoutingTableDirective                   = 'RoutingTable';
+  SupportEventDirective                   = 'SupportEvent';
 
 procedure EatDirective(var Line: String);
 
@@ -569,8 +570,7 @@ begin
   Line := NameServerLine;
   EatDirective(Line);
 
-  Host := Fetch(Line, ':');
-  Port := Fetch(Line, ' ');
+  Host := Fetch(Line, [':', ';']);
 
   if Assigned(UserAgent.Locator) then begin
     UserAgent.Locator.Free;
@@ -578,9 +578,18 @@ begin
     UserAgent.Dispatcher.Locator := nil;
   end;
 
-  if IsEqual(Host, MockKeyword) then
-    UserAgent.Locator := TIdSipMockLocator.Create
+  if IsEqual(Host, MockKeyword) then begin
+    UserAgent.Locator := TIdSipMockLocator.Create;
+
+    if (Line <> '') then begin
+      // There are additional configuration options for the mock locator to
+      // process:
+
+      (UserAgent.Locator as TIdSipMockLocator).ReturnOnlySpecifiedRecords := IsEqual(Line, ReturnOnlySpecifiedRecordsLocatorOption);
+    end;
+  end
   else begin
+    Port := Fetch(Line, [' ', ';']);
     if not TIdSimpleParser.IsNumber(Port) then
       raise EParserError.Create(Format(MalformedConfigurationLine, [NameServerLine]));
 
