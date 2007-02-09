@@ -1494,7 +1494,7 @@ begin
 
   Self.LocalTag := Self.UA.NextTag;
 
-  if Self.UA.Contact.IsGruu then
+  if Self.UseGruu then
     Self.Grid := Self.UA.NextGrid;
 end;
 
