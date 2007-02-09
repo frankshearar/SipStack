@@ -333,7 +333,7 @@ begin
 
   Check(Response.HasHeader(ContactHeaderFull),
         'No Contact header');
-  CheckEquals(Self.Core.Contact.AsString,
+  CheckEquals(Self.Options.LocalGruu.AsString,
               Response.FirstContact.AsString,
         'Contact header value');
 

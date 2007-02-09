@@ -218,7 +218,8 @@ begin
   Assert(Options.IsOptions, 'TIdSipAction.ReceiveOptions must only receive OPTIONSes');
 
   Response := Self.UA.CreateResponse(Options,
-                                     Self.UA.ResponseForInvite);
+                                     Self.UA.ResponseForInvite,
+                                     Self.LocalGruu);
   try
     Response.Accept.Value := Self.UA.AllowedContentTypes;
     Response.Allow.Value  := Self.UA.KnownMethods;
@@ -229,7 +230,6 @@ begin
       Response.AddHeader(AcceptLanguageHeader).Value := Self.UA.AllowedLanguages;
 
     Response.Supported.Value := Self.UA.AllowedExtensions;
-    Response.FirstContact.Assign(Self.UA.Contact);
 
     // For OPTIONS "traceroute"-like functionality. cf RFC 3261, section 11.2
     Response.FirstWarning.Code  := WarningMisc;
