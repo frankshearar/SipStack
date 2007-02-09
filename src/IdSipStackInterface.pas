@@ -62,15 +62,6 @@ type
   //
   // Find the details on what to put in the Configuration TStrings by reading
   // the class comment of TIdSipStackConfigurator.
-  //
-  // I use certain lines in the Configuration you give me, and the formats of
-  // these lines are:
-  //   MasqueradeAs: <IPv4 address|IPv6 reference>
-  //
-  // If you use MasqueradeAs, be sure to add a HostName directive with the same
-  // address! (If you don't then the stack cannot match failed message sends
-  // against the TIdSipAction that sent the message, and you will never know
-  // that your INVITE attempt (for instance) failed.
   TIdSipStackInterface = class(TObject,
                                IIdSipActionListener,
                                IIdSipInviteModuleListener,
@@ -667,10 +658,6 @@ type
     Data:     TIdSipStackInterfaceEventMethod;
     Reserved: DWord;
   end;
-
-// Configuration file constants
-const
-  MasqueradeAsDirective = 'MasqueradeAs';
 
 function EventNames(Event: Cardinal): String;
 
