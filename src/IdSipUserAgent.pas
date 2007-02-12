@@ -19,10 +19,6 @@ uses
 type
   TIdSipUserAgent = class;
 
-  IIdSipUserAgentListener = interface(IIdSipTransactionUserListener)
-    ['{E365D17F-054B-41AB-BB18-0C339715BFA3}']
-  end;
-
   TIdSipUserAgent = class(TIdSipAbstractCore,
                           IIdSipInviteModuleListener)
   private
@@ -31,7 +27,6 @@ type
     fProxy:               TIdSipUri;
     fRegisterModule:      TIdSipOutboundRegisterModule;
     fInviteModule:        TIdSipInviteModule;
-    UserAgentListeners:   TIdNotificationList;
 
     function  GetDoNotDisturb: Boolean;
     function  GetInitialResendInterval: Cardinal;
@@ -42,18 +37,13 @@ type
     procedure SetInitialResendInterval(Value: Cardinal);
     procedure SetProgressResendInterval(Value: Cardinal);
     procedure SetProxy(Value: TIdSipUri);
-  protected
-    procedure NotifyOfDroppedMessage(Message: TIdSipMessage;
-                                     Binding: TIdSipConnectionBindings); override;
   public
     constructor Create; override;
     destructor  Destroy; override;
 
     procedure AddLocalHeaders(OutboundRequest: TIdSipRequest); override;
     procedure AddTransportListener(Listener: IIdSipTransportListener);
-    procedure AddUserAgentListener(const Listener: IIdSipUserAgentListener);
     procedure RemoveTransportListener(Listener: IIdSipTransportListener);
-    procedure RemoveUserAgentListener(const Listener: IIdSipUserAgentListener);
     function  ResponseForInvite: Cardinal; override;
     function  SessionCount: Integer;
 
@@ -288,9 +278,6 @@ constructor TIdSipUserAgent.Create;
 begin
   inherited Create;
 
-  Self.UserAgentListeners := TIdNotificationList.Create;
-  Self.UserAgentListeners.AddExpectedException(EParserError);
-
   Self.fInviteModule   := Self.AddModule(TIdSipInviteModule) as TIdSipInviteModule;
   Self.fRegisterModule := Self.AddModule(TIdSipOutboundRegisterModule) as TIdSipOutboundRegisterModule;
 
@@ -315,7 +302,6 @@ begin
   inherited Destroy;
 
   Self.Proxy.Free;
-  Self.UserAgentListeners.Free;
   Self.Dispatcher.Free;
   Self.Authenticator.Free;
 end;
@@ -333,36 +319,9 @@ begin
   Self.Dispatcher.AddTransportListener(Listener);
 end;
 
-procedure TIdSipUserAgent.AddUserAgentListener(const Listener: IIdSipUserAgentListener);
-begin
-  Self.UserAgentListeners.AddListener(Listener);
-end;
-
-procedure TIdSipUserAgent.NotifyOfDroppedMessage(Message: TIdSipMessage;
-                                                 Binding: TIdSipConnectionBindings);
-var
-  Notification: TIdSipUserAgentDroppedUnmatchedMessageMethod;
-begin
-  Notification := TIdSipUserAgentDroppedUnmatchedMessageMethod.Create;
-  try
-    Notification.Binding   := Binding;
-    Notification.Message   := Message;
-    Notification.UserAgent := Self;
-
-    Self.UserAgentListeners.Notify(Notification);
-  finally
-    Notification.Free;
-  end;
-end;
-
 procedure TIdSipUserAgent.RemoveTransportListener(Listener: IIdSipTransportListener);
 begin
   Self.Dispatcher.RemoveTransportListener(Listener);
-end;
-
-procedure TIdSipUserAgent.RemoveUserAgentListener(const Listener: IIdSipUserAgentListener);
-begin
-  Self.UserAgentListeners.RemoveListener(Listener);
 end;
 
 function TIdSipUserAgent.ResponseForInvite: Cardinal;

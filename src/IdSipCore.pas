@@ -306,6 +306,7 @@ type
     fTimer:                  TIdTimerQueue;
     fUseGruu:                Boolean;
     fUserAgentName:          String;
+    Listeners:               TIdNotificationList;
     Modules:                 TObjectList;
     NullModule:              TIdSipMessageModule;
     Observed:                TIdObservable;
@@ -378,6 +379,7 @@ type
     procedure AddLocalHeaders(OutboundRequest: TIdSipRequest); virtual;
     function  AddModule(ModuleType: TIdSipMessageModuleClass): TIdSipMessageModule;
     procedure AddObserver(const Listener: IIdObserver);
+    procedure AddListener(Listener: IIdSipTransactionUserListener);
     function  AddOutboundAction(ActionType: TIdSipActionClass): TIdSipAction;
     function  AllowedContentTypes: String;
     function  AllowedEncodings: String;
@@ -425,6 +427,7 @@ type
     function  NextTag: String;
     function  OptionsCount: Integer;
     function  QueryOptions(Server: TIdSipAddressHeader): TIdSipAction;
+    procedure RemoveListener(Listener: IIdSipTransactionUserListener);
     procedure RemoveModule(ModuleType: TIdSipMessageModuleClass);
     procedure RemoveObserver(const Listener: IIdObserver);
     function  RequiresUnsupportedExtension(Request: TIdSipRequest): Boolean;
@@ -1458,6 +1461,9 @@ begin
   Self.fAllowedLanguageList    := TStringList.Create;
   Self.fAllowedSchemeList      := TStringList.Create;
 
+  Self.Listeners  := TIdNotificationList.Create;
+  Self.Listeners.AddExpectedException(EParserError);
+
   Self.Modules    := TObjectList.Create(true);
   Self.NullModule := TIdSipNullModule.Create(Self);
   Self.Observed   := TIdObservable.Create;
@@ -1500,6 +1506,7 @@ begin
   Self.Observed.Free;
   Self.NullModule.Free;
   Self.Modules.Free;
+  Self.Listeners.Free;
 
   inherited Destroy;
 end;
@@ -1594,6 +1601,11 @@ end;
 procedure TIdSipAbstractCore.AddObserver(const Listener: IIdObserver);
 begin
   Self.Observed.AddObserver(Listener);
+end;
+
+procedure TIdSipAbstractCore.AddListener(Listener: IIdSipTransactionUserListener);
+begin
+  Self.Listeners.AddListener(Listener);
 end;
 
 function TIdSipAbstractCore.AddOutboundAction(ActionType: TIdSipActionClass): TIdSipAction;
@@ -1938,6 +1950,11 @@ begin
   Result := (Module as TIdSipOptionsModule).QueryOptions(Server);
 end;
 
+procedure TIdSipAbstractCore.RemoveListener(Listener: IIdSipTransactionUserListener);
+begin
+  Self.Listeners.RemoveListener(Listener);
+end;
+
 procedure TIdSipAbstractCore.RemoveModule(ModuleType: TIdSipMessageModuleClass);
 var
   I: Integer;
@@ -2165,8 +2182,19 @@ end;
 
 procedure TIdSipAbstractCore.NotifyOfDroppedMessage(Message: TIdSipMessage;
                                                     Binding: TIdSipConnectionBindings);
+var
+  Notification: TIdSipUserAgentDroppedUnmatchedMessageMethod;
 begin
-  // By default do nothing.
+  Notification := TIdSipUserAgentDroppedUnmatchedMessageMethod.Create;
+  try
+    Notification.Binding   := Binding;
+    Notification.Message   := Message;
+    Notification.UserAgent := Self;
+
+    Self.Listeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
 end;
 {
 procedure TIdSipAbstractCore.OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;

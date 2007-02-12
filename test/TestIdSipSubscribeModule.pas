@@ -245,8 +245,7 @@ type
   TestTIdSipSubscribeModule = class(TSubscribeTestCase,
                                     IIdSipMessageModuleListener,
                                     IIdSipInviteModuleListener,
-                                    IIdSipTransactionUserListener,
-                                    IIdSipUserAgentListener)
+                                    IIdSipTransactionUserListener)
   private
     InboundCall: TIdSipInboundSession;
 
@@ -1052,7 +1051,7 @@ procedure TestTIdSipSubscribeModule.SetUp;
 begin
   inherited SetUp;
 
-  Self.Core.AddUserAgentListener(Self);
+  Self.Core.AddListener(Self);
   Self.Core.InviteModule.AddListener(Self);
 end;
 

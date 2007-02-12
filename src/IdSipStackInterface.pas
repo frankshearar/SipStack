@@ -72,8 +72,7 @@ type
                                IIdSipSubscriptionListener,
                                IIdSipTransactionUserListener,
                                IIdSipTransportListener,
-                               IIdSipTransportSendingListener,
-                               IIdSipUserAgentListener)
+                               IIdSipTransportSendingListener)
   private
     ActionLock:      TCriticalSection;
     Actions:         TObjectList;
@@ -765,7 +764,7 @@ begin
   try
     Self.fUserAgent := Configurator.CreateUserAgent(Configuration, Self.TimerQueue);
     Self.Configure(Configuration);
-    Self.UserAgent.AddUserAgentListener(Self);
+    Self.UserAgent.AddListener(Self);
     Self.UserAgent.InviteModule.AddListener(Self);
 //    Self.UserAgent.AddTransportListener(Self);
 

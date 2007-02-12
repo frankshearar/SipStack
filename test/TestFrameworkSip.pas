@@ -728,17 +728,6 @@ type
     property Username:                String                   read fUsername write fUsername;
   end;
 
-  TIdSipTestUserAgentListener = class(TIdSipTestTransactionUserListener,
-                                      IIdSipUserAgentListener)
-  private
-    fUserAgentParam: TIdSipUserAgent;
-
-  public
-    constructor Create; override;
-
-    property UserAgentParam: TIdSipUserAgent read fUserAgentParam;
-  end;
-
   TIdSipTestSubscribeModuleListener = class(TIdSipTestActionListener,
                                             IIdSipSubscribeModuleListener)
   private
@@ -2421,16 +2410,6 @@ begin
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnDroppedUnmatchedMessage');
-end;
-
-//******************************************************************************
-//* TIdSipTestUserAgentListener                                                *
-//******************************************************************************
-//* TIdSipTestUserAgentListener Public methods *********************************
-
-constructor TIdSipTestUserAgentListener.Create;
-begin
-  inherited Create;
 end;
 
 //******************************************************************************

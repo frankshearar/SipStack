@@ -185,8 +185,7 @@ type
                                    IIdSipOwnedActionListener,
                                    IIdSipInviteListener,
                                    IIdSipMessageModuleListener,
-                                   IIdSipTransactionUserListener,
-                                   IIdSipUserAgentListener)
+                                   IIdSipTransactionUserListener)
   private
     Dialog:                   TIdSipDialog;
     DroppedUnmatchedResponse: Boolean;
@@ -308,8 +307,7 @@ type
 
   TestTIdSipSession = class(TestTIdSipAction,
                             IIdSipSessionListener,
-                            IIdSipTransactionUserListener,
-                            IIdSipUserAgentListener)
+                            IIdSipTransactionUserListener)
   protected
     DroppedUnmatchedResponse:  Boolean;
     ErrorCode:                 Cardinal;
@@ -397,8 +395,7 @@ type
                                    IIdRTPDataListener,
                                    IIdSipInviteModuleListener,
                                    IIdSipMessageModuleListener,
-                                   IIdSipTransportSendingListener,
-                                   IIdSipUserAgentListener)
+                                   IIdSipTransportSendingListener)
   private
     RemoteContentType:      String;
     RemoteDesc:             String;
@@ -2458,7 +2455,7 @@ procedure TestTIdSipOutboundInvite.SetUp;
 begin
   inherited SetUp;
 
-  Self.Core.AddUserAgentListener(Self);
+  Self.Core.AddListener(Self);
 
   // We create Self.Dialog in Self.OnDialogEstablished
 
@@ -4577,7 +4574,7 @@ procedure TestTIdSipInboundSession.SetUp;
 begin
   inherited SetUp;
 
-  Self.Core.AddUserAgentListener(Self);
+  Self.Core.AddListener(Self);
   Self.Core.InviteModule.AddListener(Self);
 
   Self.OnEndedSessionFired    := false;

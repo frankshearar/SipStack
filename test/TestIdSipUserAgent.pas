@@ -25,8 +25,7 @@ type
                               IIdSipMessageModuleListener,
                               IIdSipTransportSendingListener,
                               IIdSipSessionListener,
-                              IIdSipTransactionUserListener,
-                              IIdSipUserAgentListener)
+                              IIdSipTransactionUserListener)
   private
     Dlg:                 TIdSipDialog;
     FailReason:          String;
@@ -91,7 +90,7 @@ type
     procedure TestAcksDontMakeTransactions;
     procedure TestAcceptCallSchedulesResendOk;
     procedure TestActionsNotifyUAObservers;
-    procedure TestAddUserAgentListener;
+    procedure TestAddListener;
 //    procedure TestByeWithAuthentication;
     procedure TestCallUsingProxy;
     procedure TestCancelNotifiesTU;
@@ -324,7 +323,7 @@ begin
 
   Self.OnChangedEvent := TSimpleEvent.Create;
 
-  Self.Core.AddUserAgentListener(Self);
+  Self.Core.AddListener(Self);
   Self.Core.InviteModule.AddListener(Self);
 
   Self.ID := TIdSipDialogID.Create('1', '2', '3');
@@ -609,16 +608,16 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgent.TestAddUserAgentListener;
+procedure TestTIdSipUserAgent.TestAddListener;
 var
-  L1, L2: TIdSipTestUserAgentListener;
+  L1, L2: TIdSipTestTransactionUserListener;
 begin
-  L1 := TIdSipTestUserAgentListener.Create;
+  L1 := TIdSipTestTransactionUserListener.Create;
   try
-    L2 := TIdSipTestUserAgentListener.Create;
+    L2 := TIdSipTestTransactionUserListener.Create;
     try
-      Self.Core.AddUserAgentListener(L1);
-      Self.Core.AddUserAgentListener(L2);
+      Self.Core.AddListener(L1);
+      Self.Core.AddListener(L2);
 
       Self.ReceiveOk(Self.Invite);
 
@@ -1224,16 +1223,16 @@ end;
 
 procedure TestTIdSipUserAgent.TestNotificationOfNewSessionRobust;
 var
-  L1, L2: TIdSipTestUserAgentListener;
+  L1, L2: TIdSipTestTransactionUserListener;
 begin
-  L1 := TIdSipTestUserAgentListener.Create;
+  L1 := TIdSipTestTransactionUserListener.Create;
   try
-    L2 := TIdSipTestUserAgentListener.Create;
+    L2 := TIdSipTestTransactionUserListener.Create;
     try
       L1.FailWith := EParserError;
 
-      Self.Core.AddUserAgentListener(L1);
-      Self.Core.AddUserAgentListener(L2);
+      Self.Core.AddListener(L1);
+      Self.Core.AddListener(L2);
 
       Self.ReceiveOk(Self.Invite);
 
@@ -1466,15 +1465,15 @@ end;
 
 procedure TestTIdSipUserAgent.TestRemoveUserAgentListener;
 var
-  L1, L2: TIdSipTestUserAgentListener;
+  L1, L2: TIdSipTestTransactionUserListener;
 begin
-  L1 := TIdSipTestUserAgentListener.Create;
+  L1 := TIdSipTestTransactionUserListener.Create;
   try
-    L2 := TIdSipTestUserAgentListener.Create;
+    L2 := TIdSipTestTransactionUserListener.Create;
     try
-      Self.Core.AddUserAgentListener(L1);
-      Self.Core.AddUserAgentListener(L2);
-      Self.Core.RemoveUserAgentListener(L2);
+      Self.Core.AddListener(L1);
+      Self.Core.AddListener(L2);
+      Self.Core.RemoveListener(L2);
 
       Self.ReceiveOk(Self.Invite);
 
@@ -1752,11 +1751,11 @@ end;
 procedure TestTIdSipUserAgent.TestUnmatchedAckGetsDropped;
 var
   Ack:      TIdSipRequest;
-  Listener: TIdSipTestUserAgentListener;
+  Listener: TIdSipTestTransactionUserListener;
 begin
-  Listener := TIdSipTestUserAgentListener.Create;
+  Listener := TIdSipTestTransactionUserListener.Create;
   try
-    Self.Core.AddUserAgentListener(Listener);
+    Self.Core.AddListener(Listener);
 
     Self.MarkSentResponseCount;
     Ack := TIdSipRequest.Create;
@@ -1776,7 +1775,7 @@ begin
           'UserAgent param of Session''s DroppedUnmatchedMessage notification wrong');
     CheckNoResponseSent('Sent a response to an unmatched ACK');
   finally
-    Self.Core.RemoveUserAgentListener(Listener);
+    Self.Core.RemoveListener(Listener);
     Listener.Free;
   end;
 end;
