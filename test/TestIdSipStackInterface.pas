@@ -171,6 +171,19 @@ type
 //    procedure TestSessionModifiedByRemoteSide;
   end;
 
+  TestTIdSipStackInterfaceRegistry = class(TTestCase)
+  private
+    Configuration: TStrings;
+    Timer:         TIdTimerQueue;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestStackInterfacesAddToRegistryAutomatically;
+    procedure TestStackInterfacesGetUniqueIDs;
+    procedure TestStackInterfacesAutomaticallyUnregister;
+  end;
+
   TestTIdEventData = class(TTestCase)
   private
     Data: TIdEventData;
@@ -417,6 +430,7 @@ begin
   Result := TTestSuite.Create('IdSipStackInterface unit tests');
   Result.AddTest(TestTIdSipStackInterfaceCreation.Suite);
   Result.AddTest(TestTIdSipStackInterface.Suite);
+  Result.AddTest(TestTIdSipStackInterfaceRegistry.Suite);
   Result.AddTest(TestTIdEventData.Suite);
   Result.AddTest(TestTIdInformationalData.Suite);
   Result.AddTest(TestTIdAuthenticationChallengeData.Suite);
@@ -545,7 +559,8 @@ begin
   Application.ProcessMessages;
   Self.UI.Release;
   Self.Registrar.Free;
-  Self.Intf.Terminate;
+  Self.Intf.Free;
+  Self.TimerQueue.Terminate;
   Self.Responses.Free;
   Self.Requests.Free;
   Self.RemoteUA.Free;
@@ -1399,6 +1414,84 @@ begin
   // <---    ACK     ---
 end;
 }
+//******************************************************************************
+//* TestTIdSipStackInterfaceRegistry                                           *
+//******************************************************************************
+//* TestTIdSipStackInterfaceRegistry Public methods ****************************
+
+procedure TestTIdSipStackInterfaceRegistry.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Configuration := TStringList.Create;
+  Self.Timer         := TIdDebugTimerQueue.Create(false);
+end;
+
+procedure TestTIdSipStackInterfaceRegistry.TearDown;
+begin
+  Self.Timer.Terminate;
+  Self.Configuration.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipStackInterfaceRegistry Published methods *************************
+
+procedure TestTIdSipStackInterfaceRegistry.TestStackInterfacesAddToRegistryAutomatically;
+var
+  UA: TIdSipStackInterface;
+begin
+  UA := TIdSipStackInterface.Create(0, Self.Timer, Self.Configuration);
+  try
+    CheckNotEquals('', UA.ID, 'StackInterface has no ID');
+    Check(nil <> TIdSipStackInterfaceRegistry.FindStackInterface(UA.ID),
+          'StackInterface not added to registry');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackInterfaceRegistry.TestStackInterfacesGetUniqueIDs;
+var
+  UA1: TIdSipStackInterface;
+  UA2: TIdSipStackInterface;
+begin
+  // This test isn't exactly thorough: it's not possible to write a test that
+  // proves the registry will never duplicate an existing StackInterface's ID,
+  // but this at least demonstrates that the registry won't return the same
+  // ID twice in a row.
+
+  UA1 := TIdSipStackInterface.Create(0, Self.Timer, Self.Configuration);
+  try
+    UA2 := TIdSipStackInterface.Create(0, Self.Timer, Self.Configuration);
+    try
+      CheckNotEquals(UA1.ID,
+                     UA2.ID,
+                     'The registry gave two StackInterfaces the same ID');
+    finally
+      UA2.Free;
+    end;
+  finally
+    UA1.Free;
+  end;
+end;
+
+procedure TestTIdSipStackInterfaceRegistry.TestStackInterfacesAutomaticallyUnregister;
+var
+  UA:               TIdSipStackInterface;
+  StackInterfaceID: String;
+begin
+  UA := TIdSipStackInterface.Create(0, Self.Timer, Self.Configuration);
+  try
+    StackInterfaceID := UA.ID;
+  finally
+    UA.Free;
+  end;
+
+  Check(nil = TIdSipStackInterfaceRegistry.FindStackInterface(StackInterfaceID),
+        'StackInterface not removed from registry');
+end;
+
 //******************************************************************************
 //* TestTIdEventData                                                           *
 //******************************************************************************
@@ -2486,12 +2579,13 @@ begin
   Self.Stack := TIdSipStackInterface.Create(0, Self.TimerQueue, Self.Conf);
   Self.Stack.Resume;
   Self.Wait := TIdSipStackReconfigureStackInterfaceWait.Create;
-  Self.Wait.Stack := Self.Stack;
+  Self.Wait.StackID := Self.Stack.ID;
 end;
 
 procedure TestTIdSipStackReconfigureStackInterfaceWait.TearDown;
 begin
-  Self.Stack.Terminate;
+  Self.Stack.Free;
+  Self.TimerQueue.Terminate;
   Self.Wait.Free;
 
   inherited TearDown;

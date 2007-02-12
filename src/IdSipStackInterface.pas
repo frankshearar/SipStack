@@ -77,6 +77,7 @@ type
   private
     ActionLock:      TCriticalSection;
     Actions:         TObjectList;
+    fID:             String;
     fUiHandle:       HWnd;
     fUserAgent:      TIdSipUserAgent;
     SubscribeModule: TIdSipSubscribeModule;
@@ -226,6 +227,26 @@ type
     procedure Resume;
     procedure Send(ActionHandle: TIdSipHandle);
     procedure Terminate;
+
+    property ID: String read fID;
+  end;
+
+  // I provide a registry for TIdSipStackInterface instances. Typically my
+  // registry will only contain one entry, i.e., typically, there will be only
+  // one TIdSipStackInterface instance in existence. However, if you built a
+  // B2BUA, you would need two TIdSipStackInterfaces. The point of my existence
+  // is to provide a safe way for TIdSipStackInterfaces to interact with other
+  // objects sharing the same TIdTimerQueue: Wait objects for a
+  // TIdSipStackInterface will use an ID to find the appropriate instance and,
+  // only if that instance is found, will the Wait object trigger.
+  TIdSipStackInterfaceRegistry = class(TObject)
+  private
+    class function StackInterfaceAt(Index: Integer): TIdSipStackInterface;
+    class function StackInterfaceRegistry: TStrings;
+  public
+    class function  RegisterStackInterface(Instance: TIdSipStackInterface): String;
+    class function  FindStackInterface(const StackInterfaceID: String): TIdSipStackInterface;
+    class procedure UnregisterStackInterface(const StackInterfaceID: String);
   end;
 
   // I contain data relating to a particular event.
@@ -591,7 +612,7 @@ type
   TIdSipStackReconfigureStackInterfaceWait = class(TIdWait)
   private
     fConfiguration: TStrings;
-    fStack:         TIdSipStackInterface;
+    fStackID:       String;
 
     procedure SetConfiguration(Value: TStrings);
   public
@@ -600,8 +621,8 @@ type
 
     procedure Trigger; override;
 
-    property Configuration: TStrings             read fConfiguration write SetConfiguration;
-    property Stack:         TIdSipStackInterface read fStack write fStack;
+    property Configuration: TStrings read fConfiguration write SetConfiguration;
+    property StackID:       String   read fStackID write fStackID;
   end;
 
   EInvalidHandle = class(Exception);
@@ -666,6 +687,9 @@ implementation
 uses
   IdRandom, IdSimpleParser, IdSipAuthentication, IdSipIndyLocator,
   IdSipMockLocator, IdStack, IdUDPServer;
+
+var
+  GStackInterfaces: TStrings;
 
 const
   ActionNotAllowedForHandle = 'You cannot perform a %s action on a %s handle (%d)';
@@ -759,13 +783,15 @@ begin
   finally
     Configurator.Free;
   end;
+
+  Self.fID := TIdSipStackInterfaceRegistry.RegisterStackInterface(Self);
 end;
 
 destructor TIdSipStackInterface.Destroy;
 begin
   Self.NotifyOfStackShutdown;
 
-  Self.TimerQueue.Terminate;
+  TIdSipStackInterfaceRegistry.UnregisterStackInterface(Self.ID);
 
 //  Self.DebugUnregister;
 
@@ -1047,7 +1073,7 @@ var
 begin
   Wait := TIdSipStackReconfigureStackInterfaceWait.Create;
   Wait.Configuration := NewConfiguration;
-  Wait.Stack         := Self;
+  Wait.StackID       := Self.ID;
   
   Self.TimerQueue.AddEvent(TriggerImmediately, Wait);
 end;
@@ -1790,6 +1816,53 @@ begin
   Wait := TIdSipActionSendWait.Create;
   Wait.ActionID := Action.ID;
   Self.UserAgent.ScheduleEvent(TriggerImmediately, Wait);
+end;
+
+//******************************************************************************
+//* TIdSipStackInterfaceRegistry                                               *
+//******************************************************************************
+//* TIdSipStackInterfaceRegistry Public methods ********************************
+
+class function TIdSipStackInterfaceRegistry.RegisterStackInterface(Instance: TIdSipStackInterface): String;
+begin
+  repeat
+    Result := GRandomNumber.NextHexString;
+  until (Self.StackInterfaceRegistry.IndexOf(Result) = ItemNotFoundIndex);
+
+  Self.StackInterfaceRegistry.AddObject(Result, Instance);
+end;
+
+class function TIdSipStackInterfaceRegistry.FindStackInterface(const StackInterfaceID: String): TIdSipStackInterface;
+var
+  Index: Integer;
+begin
+  Index := Self.StackInterfaceRegistry.IndexOf(StackInterfaceID);
+
+  if (Index = ItemNotFoundIndex) then
+    Result := nil
+  else
+    Result := Self.StackInterfaceAt(Index);
+end;
+
+class procedure TIdSipStackInterfaceRegistry.UnregisterStackInterface(const StackInterfaceID: String);
+var
+  Index: Integer;
+begin
+  Index := Self.StackInterfaceRegistry.IndexOf(StackInterfaceID);
+  if (Index <> ItemNotFoundIndex) then
+    Self.StackInterfaceRegistry.Delete(Index);
+end;
+
+//* TIdSipStackInterfaceRegistry Private methods *******************************
+
+class function TIdSipStackInterfaceRegistry.StackInterfaceAt(Index: Integer): TIdSipStackInterface;
+begin
+  Result := TIdSipStackInterface(Self.StackInterfaceRegistry.Objects[Index]);
+end;
+
+class function TIdSipStackInterfaceRegistry.StackInterfaceRegistry: TStrings;
+begin
+  Result := GStackInterfaces;
 end;
 
 //******************************************************************************
@@ -2686,19 +2759,24 @@ end;
 
 procedure TIdSipStackReconfigureStackInterfaceWait.Trigger;
 var
+  Stack:        TIdSipStackInterface;
   Configurator: TIdSipStackConfigurator;
 begin
   // The configuration file can contain both configuration details defined by
   // TIdSipStackInterface and TIdSipUserAgent.
 
-  Self.Stack.Configure(Self.Configuration);
+  Stack := TIdSipStackInterfaceRegistry.FindStackInterface(Self.StackID);
 
-  Configurator := TIdSipStackConfigurator.Create;
-  try
-    Configurator.UpdateConfiguration(Self.Stack.UserAgent, Self.Configuration);
-    Self.Stack.UserAgent.Dispatcher.StartAllTransports;
-  finally
-    Configurator.Free;
+  if Assigned(Stack) then begin
+    Stack.Configure(Self.Configuration);
+
+    Configurator := TIdSipStackConfigurator.Create;
+    try
+      Configurator.UpdateConfiguration(Stack.UserAgent, Self.Configuration);
+      Stack.UserAgent.Dispatcher.StartAllTransports;
+    finally
+      Configurator.Free;
+    end;
   end;
 end;
 
@@ -2709,4 +2787,11 @@ begin
   Self.Configuration.Assign(Value);
 end;
 
+initialization
+  GStackInterfaces := TStringList.Create;
+finalization
+// These objects are purely memory-based, so it's safe not to free them here.
+// Still, perhaps we need to review this methodology. How else do we get
+// something like class variables?
+//  GStackInterfaces.Free;
 end.
