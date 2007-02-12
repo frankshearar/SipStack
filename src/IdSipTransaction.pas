@@ -2372,7 +2372,7 @@ begin
     Self.TransactionRegistry.Delete(Index);
 end;
 
-//* TIdSipTransactionRegistry Private methods ***********************************
+//* TIdSipTransactionRegistry Private methods **********************************
 
 class function TIdSipTransactionRegistry.TransactionAt(Index: Integer): TIdSipTransaction;
 begin
