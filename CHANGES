@@ -9,7 +9,10 @@ v0.6 (2007/xx/yy)
   external IP as the host in their URIs. Of course, you still need
   packet redirection or such on the NATs in your environment.
 * TIdSipStackInterface now USES a thread, but is itself NOT a
-  thread. This greatly facilitates testing of the stack interface.
+  thread. This greatly facilitates testing of the stack
+  interface. Note in particular that the StackInterface DOES NOT
+  terminate its TimerQueue!
+* StackWindow.pas has finally bitten the dust.
 
 v0.5.3 (2007/01/26)
 * All modules now reside in separate units. (This only affects

@@ -13,7 +13,7 @@ interface
 
 uses
   Classes, Contnrs, Forms, IdSipInviteModule, IdSipMessage, IdSipMockTransport,
-  IdSipStackInterface, IdSipUserAgent, IdTimerQueue, TestFramework,
+  IdSipStackInterface, IdSipUserAgent, IdTimerQueue, Messages, TestFramework,
   TestFrameworkEx, TestFrameworkSip;
 
 type
@@ -81,7 +81,7 @@ type
     TargetAddress:     String;
     TargetPort:        Cardinal;
     TimerQueue:        TIdDebugTimerQueue;
-    UI:                TForm;
+    UI:                TCustomForm;
 
     procedure CheckNotificationReceived(EventType: TIdEventDataClass; Msg: String);
     procedure CheckRequestSent(Msg: String);
@@ -409,6 +409,22 @@ type
     procedure TestTriggerStartsTransports;
   end;
 
+  // I provide a message queue to which a StackInterface can send messages. Then
+  // I route them back to a test case.
+  TStackWindow = class(TCustomForm)
+  private
+    fTestCase: TestTIdSipStackInterface;
+
+    function  IsStackMessage(Msg: TMessage): Boolean;
+    procedure NotifyTestCase(Msg: TIdSipEventMessage);
+  public
+    constructor CreateNew(AOwner: TComponent; TestCase: TestTIdSipStackInterface); reintroduce;
+
+    procedure DefaultHandler(var Message); override;
+
+    property TestCase: TestTIdSipStackInterface read fTestCase;
+  end;
+
 const
   DummySdp = 'v=0'#13#10
            + 'o=sc 1105373135 1105373135 IN IP4 %s'#13#10
@@ -423,7 +439,7 @@ implementation
 
 uses
   IdRandom, IdSimpleParser, IdSipCore, IdSipLocation, IdSipTransport,
-  IdSipUdpTransport, IdSocketHandle, IdUdpServer, StackWindow, SysUtils;
+  IdSipUdpTransport, IdSocketHandle, IdUdpServer, SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -519,7 +535,7 @@ begin
     BasicConf.Free;
   end;
 
-  Self.UI := TStackWindow.Create(nil, Self);
+  Self.UI := TStackWindow.CreateNew(nil, Self);
 
   Self.LocalAddress := '10.0.0.6';
   Self.LocalPort    := 5060;
@@ -2651,12 +2667,46 @@ begin
     Self.Wait.Configuration := Conf;
 
     Self.Wait.Trigger;
-    Sleep(1000);
-//    Self.WaitForSignaled('Event didn''t fire: stack not reconfigured?');
 
     CheckUdpServerOnPort(Address, Port, 'Stack not reconfigured or transports not started');
   finally
     Conf.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TStackWindow                                                               *
+//******************************************************************************
+//* TStackWindow Public methods ************************************************
+
+constructor TStackWindow.CreateNew(AOwner: TComponent; TestCase: TestTIdSipStackInterface);
+begin
+  inherited CreateNew(AOwner, 0);
+
+  Self.fTestCase := TestCase;
+end;
+
+procedure TStackWindow.DefaultHandler(var Message);
+begin
+  inherited DefaultHandler(Message);
+
+  if Self.IsStackMessage(TMessage(Message)) then
+    Self.NotifyTestCase(TIdSipEventMessage(Message));
+end;
+
+//* TStackWindow Private methods ***********************************************
+
+function TStackWindow.IsStackMessage(Msg: TMessage): Boolean;
+begin
+  Result := ((Msg.Msg >= CM_BASE) and (Msg.Msg <= CM_LAST));
+end;
+
+procedure TStackWindow.NotifyTestCase(Msg: TIdSipEventMessage);
+begin
+  try
+    Self.TestCase.OnEvent(Msg.Data.Stack, Msg.Data.Event, Msg.Data.Data);
+  finally
+    Msg.Data.Free;
   end;
 end;
 
