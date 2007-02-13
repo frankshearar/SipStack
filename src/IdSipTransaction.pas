@@ -893,12 +893,10 @@ begin
   else begin
     Tran := Self.FindTransaction(Request, true);
 
-    if Assigned(Tran) then
-      Tran.SendRequest(Dest)
-    else begin
+    if not Assigned(Tran) then
       Tran := Self.AddClientTransaction(Request);
-      Tran.SendRequest(Dest);
-    end;
+
+    Tran.SendRequest(Dest);
 
     if Tran.IsTerminated then
       Self.RemoveTransaction(Tran);
