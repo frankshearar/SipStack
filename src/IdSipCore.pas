@@ -449,7 +449,8 @@ type
     procedure StartAllTransports;
     procedure StopAllTransports;
     function  Username: String;
-    function  UsesModule(ModuleType: TIdSipMessageModuleClass): Boolean;
+    function  UsesModule(ModuleType: TIdSipMessageModuleClass): Boolean; overload;
+    function  UsesModule(Method: String): Boolean; overload;
 
     // Move to UserAgent:
     procedure TerminateAllCalls; // move to InviteModule
@@ -2129,6 +2130,11 @@ end;
 function TIdSipAbstractCore.UsesModule(ModuleType: TIdSipMessageModuleClass): Boolean;
 begin
   Result := not Self.ModuleFor(ModuleType).IsNull;
+end;
+
+function TIdSipAbstractCore.UsesModule(Method: String): Boolean;
+begin
+  Result := not Self.ModuleFor(Method).IsNull;
 end;
 
 //* TIdSipAbstractCore Protected methods ***************************************

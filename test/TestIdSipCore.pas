@@ -88,6 +88,8 @@ type
     procedure TestSendResponseMalformedResponse;
     procedure TestSendResponseUnknownSupportedExtension;
     procedure TestSetInstanceID;
+    procedure TestUsesModuleClassType;
+    procedure TestUsesModuleString;
   end;
 
   TIdSipNullAction = class(TIdSipAction)
@@ -1537,6 +1539,22 @@ begin
   CheckEquals(ValidUrn,
               Self.Core.InstanceID,
               'InstanceID');
+end;
+
+procedure TestTIdSipAbstractCore.TestUsesModuleClassType;
+begin
+  Check(not Self.Core.UsesModule(TIdSipSubscribeModule), 'Core doesn''t yet use the SubscribeModule');
+
+  Self.Core.AddModule(TIdSipSubscribeModule);
+  Check(Self.Core.UsesModule(TIdSipSubscribeModule), 'Core doesn''t use the SubscribeModule');
+end;
+
+procedure TestTIdSipAbstractCore.TestUsesModuleString;
+begin
+  Check(not Self.Core.UsesModule(MethodSubscribe), 'Core doesn''t yet use the SubscribeModule');
+
+  Self.Core.AddModule(TIdSipSubscribeModule);
+  Check(Self.Core.UsesModule(MethodSubscribe), 'Core doesn''t use the SubscribeModule');
 end;
 
 //******************************************************************************
