@@ -83,7 +83,7 @@ type
     TimerQueue:        TIdDebugTimerQueue;
     UI:                TCustomForm;
 
-    procedure AddSubscribeSupport(Stack: TIdSipStackInterface);
+    procedure AddSubscribeSupport(Stack: TIdSipStackInterface; EventPackage: String);
     procedure CheckNotificationReceived(EventType: TIdEventDataClass; Msg: String);
     procedure CheckRequestSent(Msg: String);
     procedure CheckResponseSent(Msg: String);
@@ -464,12 +464,6 @@ uses
   IdRandom, IdSimpleParser, IdSipCore, IdSipLocation, IdSipTransport,
   IdSipUdpTransport, IdSocketHandle, IdUdpServer, SysUtils;
 
-type
-  TIdSipTestPackage = class(TIdSipEventPackage)
-  public
-    class function EventPackage: String; override;
-  end;
-
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipStackInterface unit tests');
@@ -498,16 +492,6 @@ begin
   Result.AddTest(TestTIdSubscriptionNotifyData.Suite);
   Result.AddTest(TestTIdFailedSubscriptionData.Suite);
   Result.AddTest(TestTIdSipStackReconfigureStackInterfaceWait.Suite);
-end;
-
-//******************************************************************************
-//* TIdSipTestPackage                                                          *
-//******************************************************************************
-//* TIdSipTestPackage Public methods *******************************************
-
-class function TIdSipTestPackage.EventPackage: String;
-begin
-  Result := 'foo';
 end;
 
 //******************************************************************************
@@ -547,7 +531,6 @@ begin
   inherited SetUp;
 
   TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipMockUDPTransport);
-  TIdSipEventPackageRegistry.RegisterEvent(TIdSipTestPackage);
 
   Self.DataList    := TObjectList.Create(true);
   Self.Destination := TIdSipToHeader.Create;
@@ -564,7 +547,6 @@ begin
     BasicConf.Add('NameServer: MOCK');
     BasicConf.Add('Contact: sip:' + Self.TargetAddress + ':' + IntToStr(Self.TargetPort));
     BasicConf.Add('From: sip:' + Self.TargetAddress + ':' + IntToStr(Self.TargetPort));
-    BasicConf.Add('SupportEvent: ' + TIdSipTestPackage.EventPackage);
 
     Conf := TIdSipStackConfigurator.Create;
     try
@@ -625,7 +607,6 @@ begin
   Self.Destination.Free;
   Self.DataList.Free;
 
-  TIdSipEventPackageRegistry.UnregisterEvent(TIdSipTestPackage);
   TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
 
   inherited TearDown;
@@ -640,13 +621,13 @@ end;
 
 //* TestTIdSipStackInterface Private methods ***********************************
 
-procedure TestTIdSipStackInterface.AddSubscribeSupport(Stack: TIdSipStackInterface);
+procedure TestTIdSipStackInterface.AddSubscribeSupport(Stack: TIdSipStackInterface; EventPackage: String);
 var
   NewConf: TStrings;
 begin
   NewConf := TStringList.Create;
   try
-    NewConf.Add('SupportEvent: ' + TIdSipTestPackage.EventPackage);
+    NewConf.Add('SupportEvent: ' + EventPackage);
     Stack.ReconfigureStack(NewConf);
     Self.TimerQueue.TriggerAllEventsOfType(TIdSipStackReconfigureStackInterfaceWait);
   finally
@@ -1309,20 +1290,28 @@ end;
 
 procedure TestTIdSipStackInterface.TestMakeSubscription;
 var
-  Handle: TIdSipHandle;
+  Package: TIdSipEventPackageClass;
+  Handle:  TIdSipHandle;
 begin
-  Self.AddSubscribeSupport(Self.Intf);
+  Package := TIdSipTargetDialogPackage;
 
-  // We try subscribe to something that isn't going to immediately reply.
-  Self.Destination.Address.Host := TIdIPAddressParser.IncIPAddress(Self.TargetAddress);
+  Self.SetUpPackageSupport(Package);
+  try
+    Self.AddSubscribeSupport(Self.Intf, Package.EventPackage);
 
-  Handle := Self.Intf.MakeSubscription(Self.Destination, TIdSipTestPackage.EventPackage);
+    // We try subscribe to something that isn't going to immediately reply.
+    Self.Destination.Address.Host := TIdIPAddressParser.IncIPAddress(Self.TargetAddress);
 
-  Self.MarkSentRequestCount;
-  Self.Intf.Send(Handle);
-  Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
-  CheckRequestSent('No request sent');
-  CheckEquals(MethodSubscribe, Self.LastSentRequest.Method, 'Unexpected request sent');
+    Handle := Self.Intf.MakeSubscription(Self.Destination, Package.EventPackage);
+
+    Self.MarkSentRequestCount;
+    Self.Intf.Send(Handle);
+    Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
+    CheckRequestSent('No request sent');
+    CheckEquals(MethodSubscribe, Self.LastSentRequest.Method, 'Unexpected request sent');
+  finally
+    Self.TearDownPackageSupport(Package);
+  end;
 end;
 
 procedure TestTIdSipStackInterface.TestMakeSubscriptionMalformedTarget;
@@ -1340,13 +1329,21 @@ end;
 
 procedure TestTIdSipStackInterface.TestMakeSubscriptionNoSubscribeSupport;
 var
-  Handle: TIdSipHandle;
+  Handle:  TIdSipHandle;
+  Package: TIdSipEventPackageClass;
 begin
-  Handle := Self.Intf.MakeSubscription(Self.Destination, TIdSipTestPackage.EventPackage);
+  Package := TIdSipTargetDialogPackage;
 
-  CheckEquals(IntToHex(InvalidHandle, 8),
-              IntToHex(Handle, 8),
-              'No SUBSCRIBE support should result in an InvalidHandle');
+  Self.SetUpPackageSupport(Package);
+  try
+    Handle := Self.Intf.MakeSubscription(Self.Destination, Package.EventPackage);
+
+    CheckEquals(IntToHex(InvalidHandle, 8),
+                IntToHex(Handle, 8),
+                'No SUBSCRIBE support should result in an InvalidHandle');
+  finally
+    Self.TearDownPackageSupport(Package);
+  end;
 end;
 {
 procedure TestTIdSipStackInterface.TestModifyCall;
@@ -1590,6 +1587,7 @@ end;
 procedure TestTIdSipStackInterface.TestResubscription;
 var
   OK:           TIdSipResponse;
+  Package:      TIdSipEventPackageClass;
   RemoteDialog: TIdSipDialog;
   Sub:          TIdSipHandle;
   Subscribe:    TIdSipRequest;
@@ -1603,37 +1601,44 @@ begin
   //  ---              SUBSCRIBE              --->
   // <---               200 OK                ---
 
-  Self.AddSubscribeSupport(Self.Intf);
+  Package := TIdSipTargetDialogPackage;
 
-  Self.Destination.Address.Host := TIdIPAddressParser.IncIPAddress(Self.Destination.Address.Host);
-  Sub := Self.Intf.MakeSubscription(Self.Destination, TIdSipTestPackage.EventPackage);
-  Self.Intf.Send(Sub);
-  Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
-
-  Subscribe := TIdSipRequest.Create;
+  Self.SetUpPackageSupport(Package);
   try
-    Subscribe.Assign(Self.LastSentRequest);
+    Self.AddSubscribeSupport(Self.Intf, Package.EventPackage);
 
-    OK := TIdSipResponse.InResponseTo(Subscribe, SIPOK);
+    Self.Destination.Address.Host := TIdIPAddressParser.IncIPAddress(Self.Destination.Address.Host);
+    Sub := Self.Intf.MakeSubscription(Self.Destination, Package.EventPackage);
+    Self.Intf.Send(Sub);
+    Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
+
+    Subscribe := TIdSipRequest.Create;
     try
-      RemoteDialog := TIdSipDialog.CreateInboundDialog(Subscribe, OK, false);
+      Subscribe.Assign(Self.LastSentRequest);
+
+      OK := TIdSipResponse.InResponseTo(Subscribe, SIPOK);
       try
-        RemoteDialog.ReceiveRequest(Subscribe);
+        RemoteDialog := TIdSipDialog.CreateInboundDialog(Subscribe, OK, false);
+        try
+          RemoteDialog.ReceiveRequest(Subscribe);
 
-        Self.ReceiveNotify(RemoteDialog, Subscribe);
+          Self.ReceiveNotify(RemoteDialog, Subscribe);
 
-        Self.ReceiveTerminatingNotify(RemoteDialog, Subscribe, EventReasonTimeout);
+          Self.ReceiveTerminatingNotify(RemoteDialog, Subscribe, EventReasonTimeout);
 
-        Application.ProcessMessages;
-        CheckNotificationReceived(TIdResubscriptionData, 'No resubscription notification received');
+          Application.ProcessMessages;
+          CheckNotificationReceived(TIdResubscriptionData, 'No resubscription notification received');
+        finally
+          RemoteDialog.Free;
+        end;
       finally
-        RemoteDialog.Free;
+        OK.Free;
       end;
     finally
-      OK.Free;
+      Subscribe.Free;
     end;
   finally
-    Subscribe.Free;
+    Self.TearDownPackageSupport(Package);
   end;
 end;
 
