@@ -68,7 +68,7 @@ type
     LocalMimeType:     String;
     LocalOffer:        String;
     LocalPort:         Cardinal;
-    MockTransport:     TIdSipMockUDPTransport;
+    MockTransport:     TIdSipMockTransport;
     Registrar:         TIdSipUri;
     RemoteMimeType:    String;
     RemoteOffer:       String;
@@ -374,9 +374,9 @@ type
     procedure TestCopy;
   end;
 
-  TestTIdSubscriptionData = class(TTestCase)
+  TestTIdSubscriptionNotifyData = class(TTestCase)
   private
-    Data: TIdSubscriptionData;
+    Data: TIdSubscriptionNotifyData;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -470,7 +470,7 @@ begin
   Result.AddTest(TestTIdSessionData.Suite);
   Result.AddTest(TestTIdSubscriptionRequestData.Suite);
   Result.AddTest(TestTIdSessionReferralData.Suite);
-  Result.AddTest(TestTIdSubscriptionData.Suite);
+  Result.AddTest(TestTIdSubscriptionNotifyData.Suite);
   Result.AddTest(TestTIdFailedSubscriptionData.Suite);
   Result.AddTest(TestTIdSipStackReconfigureStackInterfaceWait.Suite);
 end;
@@ -559,7 +559,7 @@ begin
   // Clear the "pending" CM_DEBUG_STACK_STARTED
   Application.ProcessMessages;
 
-  Self.MockTransport := TIdSipDebugTransportRegistry.TransportAt(TIdSipDebugTransportRegistry.TransportCount - 1) as TIdSipMockUdpTransport;
+  Self.MockTransport := TIdSipDebugTransportRegistry.TransportAt(TIdSipDebugTransportRegistry.TransportCount - 1) as TIdSipMockTransport;
 
   // The registrar URI MUST NOT be that of RemoteUA, because RemoteUA will not
   // process REGISTER messages.
@@ -2467,6 +2467,7 @@ begin
   Self.Data := TIdSubscriptionRequestData.Create;
   Self.Data.EventPackage        := PackageRefer;
   Self.Data.From.Value          := 'Case <sip:case@fried-neurons.org>';
+  Self.Data.Handle              := $decafbad;
   Self.Data.ReferTo.Value       := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna';
   Self.Data.RemoteContact.Value := 'sip:machine-1@internet-cafe.org>';
   Self.Data.Target.Uri          := 'sip:case@fried-neurons.org;grid="foo"';
@@ -2570,33 +2571,33 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSubscriptionData                                                    *
+//* TestTIdSubscriptionNotifyData                                              *
 //******************************************************************************
-//* TestTIdSubscriptionData Public methods *************************************
+//* TestTIdSubscriptionNotifyData Public methods *******************************
 
-procedure TestTIdSubscriptionData.SetUp;
+procedure TestTIdSubscriptionNotifyData.SetUp;
 begin
   inherited SetUp;
 
-  Self.Data := TIdSubscriptionData.Create;
+  Self.Data := TIdSubscriptionNotifyData.Create;
   Self.Data.Handle := $decafbad;
   Self.Data.Notify.RequestUri.Uri := 'sip:case@fried-neurons.org';
 end;
 
-procedure TestTIdSubscriptionData.TearDown;
+procedure TestTIdSubscriptionNotifyData.TearDown;
 begin
   Self.Data.Free;
 
   inherited TearDown;
 end;
 
-//* TestTIdSubscriptionData Published methods **********************************
+//* TestTIdSubscriptionNotifyData Published methods ****************************
 
-procedure TestTIdSubscriptionData.TestCopy;
+procedure TestTIdSubscriptionNotifyData.TestCopy;
 var
-  Copy: TIdSubscriptionData;
+  Copy: TIdSubscriptionNotifyData;
 begin
-  Copy := Self.Data.Copy as TIdSubscriptionData;
+  Copy := Self.Data.Copy as TIdSubscriptionNotifyData;
   try
     CheckEquals(IntToHex(Self.Data.Handle, 8),
                 IntToHex(Copy.Handle, 8),

@@ -513,9 +513,19 @@ type
     property ProgressCode: Cardinal read fProgressCode write fProgressCode;
   end;
 
-  TIdSubscriptionRequestData = class(TIdEventData)
+  TIdSubscriptionData = class(TIdEventData)
   private
-    fEventPackage:  String;
+    fEventPackage: String;
+  protected
+    function Data: String; override;
+  public
+    procedure Assign(Src: TPersistent); override;
+
+    property EventPackage: String read fEventPackage write fEventPackage;
+  end;
+
+  TIdSubscriptionRequestData = class(TIdSubscriptionData)
+  private
     fFrom:          TIdSipFromHeader;
     fReferTo:       TIdSipReferToHeader;
     fRemoteContact: TIdSipContactHeader;
@@ -534,7 +544,6 @@ type
 
     procedure Assign(Src: TPersistent); override;
 
-    property EventPackage:  String              read fEventPackage write fEventPackage;
     property From:          TIdSipFromHeader    read fFrom write SetFrom;
     property ReferTo:       TIdSipReferToHeader read fReferTo write SetReferTo;
     property RemoteContact: TIdSipContactHeader read fRemoteContact write SetRemoteContact;
@@ -555,7 +564,7 @@ type
     property ReferAction: TIdSipHandle read fReferAction write fReferAction;
   end;
 
-  TIdSubscriptionData = class(TIdEventData)
+  TIdSubscriptionNotifyData = class(TIdEventData)
   private
     fEvent:  Cardinal;
     fNotify: TIdSipRequest;
@@ -1378,9 +1387,9 @@ procedure TIdSipStackInterface.NotifySubscriptionEvent(Event: Cardinal;
                                                        Subscription: TIdSipSubscription;
                                                        Notify: TIdSipRequest);
 var
-  Data: TIdSubscriptionData;
+  Data: TIdSubscriptionNotifyData;
 begin
-  Data := TIdSubscriptionData.Create;
+  Data := TIdSubscriptionNotifyData.Create;
   try
     Data.Handle := Self.HandleFor(Subscription);
     Data.Event  := Event;
@@ -2512,6 +2521,31 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSubscriptionData                                                        *
+//******************************************************************************
+//* TIdSubscriptionData Public methods *****************************************
+
+procedure TIdSubscriptionData.Assign(Src: TPersistent);
+var
+  Other: TIdSubscriptionData;
+begin
+  inherited Assign(Src);
+
+  if (Src is TIdSubscriptionData) then begin
+    Other := Src as TIdSubscriptionData;
+
+    Self.EventPackage  := Other.EventPackage;
+  end;
+end;
+
+//* TIdSubscriptionData Protected methods **************************************
+
+function TIdSubscriptionData.Data: String;
+begin
+  Result := 'Event: ' + Self.EventPackage + CRLF;
+end;
+
+//******************************************************************************
 //* TIdSubscriptionRequestData                                                 *
 //******************************************************************************
 //* TIdSubscriptionRequestData Public methods **********************************
@@ -2557,8 +2591,8 @@ end;
 
 function TIdSubscriptionRequestData.Data: String;
 begin
-  Result := Self.ReferTo.AsString + CRLF
-          + 'Event: ' + Self.EventPackage + CRLF
+  Result := inherited Data
+          + Self.ReferTo.AsString + CRLF
           + Self.From.AsString + CRLF
           + Self.RemoteContact.AsString + CRLF;
 end;
@@ -2624,52 +2658,52 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSubscriptionData                                                        *
+//* TIdSubscriptionNotifyData                                                  *
 //******************************************************************************
-//* TIdSubscriptionData Public methods *****************************************
+//* TIdSubscriptionNotifyData Public methods ***********************************
 
-constructor TIdSubscriptionData.Create;
+constructor TIdSubscriptionNotifyData.Create;
 begin
   inherited Create;
 
   Self.fNotify := TIdSipRequest.Create;
 end;
 
-destructor TIdSubscriptionData.Destroy;
+destructor TIdSubscriptionNotifyData.Destroy;
 begin
   Self.fNotify.Free;
 
   inherited Destroy;
 end;
 
-procedure TIdSubscriptionData.Assign(Src: TPersistent);
+procedure TIdSubscriptionNotifyData.Assign(Src: TPersistent);
 var
-  Other: TIdSubscriptionData;
+  Other: TIdSubscriptionNotifyData;
 begin
   inherited Assign(Src);
 
-  if (Src is TIdSubscriptionData) then begin
-    Other := Src as TIdSubscriptionData;
+  if (Src is TIdSubscriptionNotifyData) then begin
+    Other := Src as TIdSubscriptionNotifyData;
 
     Self.Notify := Other.Notify;
   end;
 end;
 
-//* TIdSubscriptionData Protected methods **************************************
+//* TIdSubscriptionNotifyData Protected methods ********************************
 
-function TIdSubscriptionData.Data: String;
+function TIdSubscriptionNotifyData.Data: String;
 begin
   Result := Self.Notify.AsString;
 end;
 
-function TIdSubscriptionData.EventName: String;
+function TIdSubscriptionNotifyData.EventName: String;
 begin
   Result := EventNames(Self.Event);
 end;
 
-//* TIdSubscriptionData Private methods ****************************************
+//* TIdSubscriptionNotifyData Private methods **********************************
 
-procedure TIdSubscriptionData.SetNotify(Value: TIdSipRequest);
+procedure TIdSubscriptionNotifyData.SetNotify(Value: TIdSipRequest);
 begin
   Self.fNotify.Assign(Value);
 end;

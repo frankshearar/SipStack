@@ -89,11 +89,11 @@ type
     procedure NotifyOfIncomingCall(Data: TIdSessionData);
     procedure NotifyOfNetworkFailure(Data: TIdFailData);
     procedure NotifyOfReceivedMsg(Data: TIdDebugMessageData);
-    procedure NotifyOfReceivedNotify(Data: TIdSubscriptionData);
+    procedure NotifyOfReceivedNotify(Data: TIdSubscriptionNotifyData);
     procedure NotifyOfRemoteModifyRequest(Data: TIdSessionData);
     procedure NotifyOfSentMsg(Data: TIdDebugSendMessageData);
-    procedure NotifyOfSubscriptionEstablished(Data: TIdSubscriptionData);
-    procedure NotifyOfSubscriptionExpired(Data: TIdSubscriptionData);
+    procedure NotifyOfSubscriptionEstablished(Data: TIdSubscriptionNotifyData);
+    procedure NotifyOfSubscriptionExpired(Data: TIdSubscriptionNotifyData);
     procedure NotifyOfSubscriptionRequest(Data: TIdSubscriptionRequestData);
     procedure ReceiveNotify(Data: TIdSipStackInterfaceEventMethod);
   public
@@ -295,7 +295,7 @@ procedure TSingleCore.NotifyOfReceivedMsg(Data: TIdDebugMessageData);
 begin
 end;
 
-procedure TSingleCore.NotifyOfReceivedNotify(Data: TIdSubscriptionData);
+procedure TSingleCore.NotifyOfReceivedNotify(Data: TIdSubscriptionNotifyData);
 begin
 end;
 
@@ -312,11 +312,11 @@ procedure TSingleCore.NotifyOfSentMsg(Data: TIdDebugSendMessageData);
 begin
 end;
 
-procedure TSingleCore.NotifyOfSubscriptionEstablished(Data: TIdSubscriptionData);
+procedure TSingleCore.NotifyOfSubscriptionEstablished(Data: TIdSubscriptionNotifyData);
 begin
 end;
 
-procedure TSingleCore.NotifyOfSubscriptionExpired(Data: TIdSubscriptionData);
+procedure TSingleCore.NotifyOfSubscriptionExpired(Data: TIdSubscriptionNotifyData);
 begin
 end;
 
@@ -340,10 +340,10 @@ begin
       CM_CALL_REQUEST_NOTIFY: Self.NotifyOfIncomingCall(Data.Data as TIdSessionData);
       CM_NETWORK_FAILURE:     Self.NotifyOfNetworkFailure(Data.Data as TIdFailData);
       CM_SUBSCRIPTION_ESTABLISHED:
-                              Self.NotifyOfSubscriptionEstablished(Data.Data as TIdSubscriptionData);
+                              Self.NotifyOfSubscriptionEstablished(Data.Data as TIdSubscriptionNotifyData);
       CM_SUBSCRIPTION_RECV_NOTIFY:
-                              Self.NotifyOfReceivedNotify(Data.Data as TIdSubscriptionData);
-      CM_SUBSCRIPTION_EXPIRED:Self.NotifyOfSubscriptionExpired(Data.Data as TIdSubscriptionData);
+                              Self.NotifyOfReceivedNotify(Data.Data as TIdSubscriptionNotifyData);
+      CM_SUBSCRIPTION_EXPIRED:Self.NotifyOfSubscriptionExpired(Data.Data as TIdSubscriptionNotifyData);
       CM_SUBSCRIPTION_REQUEST_NOTIFY:
                               Self.NotifyOfSubscriptionRequest(Data.Data as TIdSubscriptionRequestData);
 
