@@ -969,6 +969,11 @@ begin
     Exit;
   end;
 
+  if not Self.UserAgent.UsesModule(TIdSipOutboundRegisterModule) then begin
+    Result := InvalidHandle;
+    Exit;
+  end;
+
   Reg := Self.UserAgent.RegisterModule.RegisterWith(Registrar);
   Result := Self.AddAction(Reg);
   Reg.AddListener(Self);
