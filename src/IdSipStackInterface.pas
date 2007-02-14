@@ -552,6 +552,9 @@ type
     property Target:        TIdSipUri           read fTarget write SetTarget;
   end;
 
+  TIdResubscriptionData = class(TIdSubscriptionData)
+  end;
+
   // ReferAction contains the handle of the TIdSipInboundReferral that the stack
   // has allocated to handling this request.
   TIdSessionReferralData = class(TIdSubscriptionRequestData)
@@ -663,6 +666,7 @@ const
   CM_SUBSCRIPTION_RECV_NOTIFY     = CM_BASE + 12;
   CM_SUBSCRIPTION_EXPIRED         = CM_BASE + 13;
   CM_SUBSCRIPTION_REQUEST_NOTIFY  = CM_BASE + 14;
+  CM_SUBSCRIPTION_RESUBSCRIBED    = CM_BASE + 15;
 
   CM_DEBUG = CM_BASE + 10000;
 
@@ -721,6 +725,7 @@ begin
     CM_SUBSCRIPTION_EXPIRED:         Result := 'CM_SUBSCRIPTION_EXPIRED';
     CM_SUBSCRIPTION_RECV_NOTIFY:     Result := 'CM_SUBSCRIPTION_RECV_NOTIFY';
     CM_SUBSCRIPTION_REQUEST_NOTIFY:  Result := 'CM_SUBSCRIPTION_REQUEST_NOTIFY';
+    CM_SUBSCRIPTION_RESUBSCRIBED:    Result := 'CM_SUBSCRIPTION_RESUBSCRIBED';
     CM_SUCCESS:                      Result := 'CM_SUCCESS';
 
     CM_DEBUG_DROPPED_MSG:            Result := 'CM_DEBUG_DROPPED_MSG';
@@ -1768,10 +1773,22 @@ end;
 
 procedure TIdSipStackInterface.OnRenewedSubscription(UserAgent: TIdSipAbstractCore;
                                                      Subscription: TIdSipOutboundSubscription);
+var
+  Data:   TIdResubscriptionData;
+  Handle: TIdSipHandle;
 begin
   Subscription.AddListener(Self);
-  Self.AddAction(Subscription);
-  raise Exception.Create('TIdSipStackInterface.OnRenewedSubscription');
+  Handle := Self.AddAction(Subscription);
+
+  Data := TIdResubscriptionData.Create;
+  try
+    Data.Handle       := Handle;
+    Data.EventPackage := Subscription.EventPackage;
+
+    Self.NotifyEvent(CM_SUBSCRIPTION_RESUBSCRIBED, Data);
+  finally
+    Data.Free;
+  end;
 end;
 
 procedure TIdSipStackInterface.OnSendRequest(Request: TIdSipRequest;

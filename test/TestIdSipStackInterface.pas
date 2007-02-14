@@ -12,9 +12,9 @@ unit TestIdSipStackInterface;
 interface
 
 uses
-  Classes, Contnrs, Forms, IdSipInviteModule, IdSipMessage, IdSipMockTransport,
-  IdSipStackInterface, IdSipSubscribeModule, IdSipUserAgent, IdTimerQueue,
-  Messages, TestFramework, TestFrameworkEx, TestFrameworkSip;
+  Classes, Contnrs, Forms, IdSipDialog, IdSipInviteModule, IdSipMessage,
+  IdSipMockTransport, IdSipStackInterface, IdSipSubscribeModule, IdSipUserAgent,
+  IdTimerQueue, Messages, TestFramework, TestFrameworkEx, TestFrameworkSip;
 
 type
   // The testing of the StackInterface is not completely simple. The UI (or
@@ -92,6 +92,7 @@ type
     function  CreateRemoteBye(LocalDialog: TIdSipDialog): TIdSipRequest;
 }
     function  CreateRemoteInvite: TIdSipRequest;
+    function  CreateRemoteNotify(RemoteDialog: TIdSipDialog; Subscribe: TIdSipRequest): TIdSipRequest;
     function  CreateRemoteOk(Request: TIdSipRequest): TIdSipResponse;
     function  EstablishCall: TIdSipHandle;
     function  EventAt(Index: Integer): TIdEventData;
@@ -115,6 +116,8 @@ type
     procedure ReceiveInvite;
     procedure ReceiveInviteWithOffer(const Offer: String;
                                      const MimeType: String);
+    procedure ReceiveNotify(RemoteDialog: TIdSipDialog; Subscribe: TIdSipRequest);
+    procedure ReceiveTerminatingNotify(RemoteDialog: TIdSipDialog; Subscribe: TIdSipRequest; Reason: String);
     procedure ReceiveOk(Request: TIdSipRequest; Offer: String = ''; MimeType: String = '');
 {
     procedure ReceiveOkWithContacts(Register: TIdSipRequest;
@@ -174,6 +177,7 @@ type
     procedure TestRejectCallWithNonExistentHandle;
     procedure TestRegistrationFails;
     procedure TestRegistrationFailsWithRetry;
+    procedure TestResubscription;
     procedure TestSendNonExistentHandle;
 //    procedure TestSessionModifiedByRemoteSide;
     procedure TestStackListensToSubscribeModule;
@@ -368,6 +372,16 @@ type
     procedure TestCopy;
   end;
 
+  TestTIdResubscriptionData = class(TTestCase)
+  private
+    Data: TIdSubscriptionData;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCopy;
+  end;
+
   TestTIdSessionReferralData = class(TTestCase)
   private
     Data: TIdSessionReferralData;
@@ -479,6 +493,7 @@ begin
   Result.AddTest(TestTIdSessionProgressData.Suite);
   Result.AddTest(TestTIdSessionData.Suite);
   Result.AddTest(TestTIdSubscriptionRequestData.Suite);
+  Result.AddTest(TestTIdResubscriptionData.Suite);
   Result.AddTest(TestTIdSessionReferralData.Suite);
   Result.AddTest(TestTIdSubscriptionNotifyData.Suite);
   Result.AddTest(TestTIdFailedSubscriptionData.Suite);
@@ -690,6 +705,15 @@ begin
   Result := Self.RemoteUA.InviteModule.CreateInvite(Self.Destination, '', '');
 end;
 
+function TestTIdSipStackInterface.CreateRemoteNotify(RemoteDialog: TIdSipDialog; Subscribe: TIdSipRequest): TIdSipRequest;
+var
+  SubMod: TIdSipSubscribeModule;
+begin
+  SubMod := Self.RemoteUA.ModuleFor(TIdSipSubscribeModule) as TIdSipSubscribeModule;
+
+  Result := SubMod.CreateNotify(RemoteDialog, Subscribe, SubscriptionSubstateActive);
+end;
+
 function TestTIdSipStackInterface.CreateRemoteOk(Request: TIdSipRequest): TIdSipResponse;
 begin
   Result := TIdSipResponse.InResponseTo(Request, SIPOK);
@@ -869,6 +893,33 @@ begin
     Self.ReceiveRequest(Invite);
   finally
     Invite.Free;
+  end;
+end;
+
+procedure TestTIdSipStackInterface.ReceiveNotify(RemoteDialog: TIdSipDialog; Subscribe: TIdSipRequest);
+var
+  Notify: TIdSipRequest;
+begin
+  Notify := Self.CreateRemoteNotify(RemoteDialog, Subscribe);
+  try
+    Self.ReceiveRequest(Notify);
+  finally
+    Notify.Free;
+  end;
+end;
+
+procedure TestTIdSipStackInterface.ReceiveTerminatingNotify(RemoteDialog: TIdSipDialog; Subscribe: TIdSipRequest; Reason: String);
+var
+  Notify: TIdSipRequest;
+begin
+  Notify := Self.CreateRemoteNotify(RemoteDialog, Subscribe);
+  try
+    Notify.SubscriptionState.SubState := SubscriptionSubstateTerminated;
+    Notify.SubscriptionState.Reason   := Reason;
+
+    Self.ReceiveRequest(Notify);
+  finally
+    Notify.Free;
   end;
 end;
 
@@ -1534,6 +1585,56 @@ begin
   Application.ProcessMessages;
 
   CheckNotificationReceived(TIdRegistrationData, 'No registration success notification received');
+end;
+
+procedure TestTIdSipStackInterface.TestResubscription;
+var
+  OK:           TIdSipResponse;
+  RemoteDialog: TIdSipDialog;
+  Sub:          TIdSipHandle;
+  Subscribe:    TIdSipRequest;
+begin
+  //  ---              SUBSCRIBE              --->
+  // <---               200 OK                ---
+  // <---               NOTIFY                ---
+  //  ---               200 OK                --->
+  // <--- NOTIFY (terminated; reason=timeout) ---
+  //  ---               200 OK                --->
+  //  ---              SUBSCRIBE              --->
+  // <---               200 OK                ---
+
+  Self.AddSubscribeSupport(Self.Intf);
+
+  Self.Destination.Address.Host := TIdIPAddressParser.IncIPAddress(Self.Destination.Address.Host);
+  Sub := Self.Intf.MakeSubscription(Self.Destination, TIdSipTestPackage.EventPackage);
+  Self.Intf.Send(Sub);
+  Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
+
+  Subscribe := TIdSipRequest.Create;
+  try
+    Subscribe.Assign(Self.LastSentRequest);
+
+    OK := TIdSipResponse.InResponseTo(Subscribe, SIPOK);
+    try
+      RemoteDialog := TIdSipDialog.CreateInboundDialog(Subscribe, OK, false);
+      try
+        RemoteDialog.ReceiveRequest(Subscribe);
+
+        Self.ReceiveNotify(RemoteDialog, Subscribe);
+
+        Self.ReceiveTerminatingNotify(RemoteDialog, Subscribe, EventReasonTimeout);
+
+        Application.ProcessMessages;
+        CheckNotificationReceived(TIdResubscriptionData, 'No resubscription notification received');
+      finally
+        RemoteDialog.Free;
+      end;
+    finally
+      OK.Free;
+    end;
+  finally
+    Subscribe.Free;
+  end;
 end;
 
 procedure TestTIdSipStackInterface.TestSendNonExistentHandle;
@@ -2585,6 +2686,46 @@ begin
     CheckEquals(Self.Data.Target.Uri,
                 Copy.Target.Uri,
                 'Target');
+  finally
+    Copy.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdResubscriptionData                                                  *
+//******************************************************************************
+//* TestTIdResubscriptionData Public methods ***********************************
+
+procedure TestTIdResubscriptionData.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Data := TIdSubscriptionData.Create;
+  Self.Data.EventPackage := 'foo';
+  Self.Data.Handle       := $decafbad;
+end;
+
+procedure TestTIdResubscriptionData.TearDown;
+begin
+  Self.Data.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdResubscriptionData Published methods ********************************
+
+procedure TestTIdResubscriptionData.TestCopy;
+var
+  Copy: TIdSubscriptionData;
+begin
+  Copy := Self.Data.Copy as TIdSubscriptionData;
+  try
+    CheckEquals(IntToHex(Self.Data.Handle, 8),
+                IntToHex(Copy.Handle, 8),
+                'Handle');
+    CheckEquals(Self.Data.EventPackage,
+                Copy.EventPackage,
+                'EventPackage');
   finally
     Copy.Free;
   end;
