@@ -13,8 +13,8 @@ interface
 
 uses
   Classes, Contnrs, Forms, IdSipInviteModule, IdSipMessage, IdSipMockTransport,
-  IdSipStackInterface, IdSipUserAgent, IdTimerQueue, Messages, TestFramework,
-  TestFrameworkEx, TestFrameworkSip;
+  IdSipStackInterface, IdSipSubscribeModule, IdSipUserAgent, IdTimerQueue,
+  Messages, TestFramework, TestFrameworkEx, TestFrameworkSip;
 
 type
   // The testing of the StackInterface is not completely simple. The UI (or
@@ -126,6 +126,8 @@ type
     procedure ReceiveResponse(Response: TIdSipResponse);
     procedure ReceiveSubscribe(EventPackage: String);
     function  SecondLastEventData: TIdEventData;
+    procedure SetUpPackageSupport(EventPackage: TIdSipEventPackageClass);
+    procedure TearDownPackageSupport(EventPackage: TIdSipEventPackageClass);
     function  ThirdLastEventData: TIdEventData;
 {
     procedure ReceiveReInvite;
@@ -171,6 +173,7 @@ type
     procedure TestSendNonExistentHandle;
 //    procedure TestSessionModifiedByRemoteSide;
     procedure TestStackListensToSubscribeModule;
+    procedure TestStackListensToSubscribeModuleAfterReconfigure;
   end;
 
   TestTIdSipStackInterfaceRegistry = class(TTestCase)
@@ -440,8 +443,8 @@ const
 implementation
 
 uses
-  IdRandom, IdSimpleParser, IdSipCore, IdSipLocation, IdSipSubscribeModule,
-  IdSipTransport, IdSipUdpTransport, IdSocketHandle, IdUdpServer, SysUtils;
+  IdRandom, IdSimpleParser, IdSipCore, IdSipLocation, IdSipTransport,
+  IdSipUdpTransport, IdSocketHandle, IdUdpServer, SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -957,6 +960,22 @@ begin
   Result := Self.DataList[Self.DataList.Count - 2] as TIdEventData;
 end;
 
+procedure TestTIdSipStackInterface.SetUpPackageSupport(EventPackage: TIdSipEventPackageClass);
+var
+  SubMod: TIdSipSubscribeModule;
+begin
+  TIdSipEventPackageRegistry.RegisterEvent(EventPackage);
+
+  Self.RemoteUA.AddModule(TIdSipSubscribeModule);
+  SubMod := Self.RemoteUA.ModuleFor(TIdSipSubscribeModule) as TIdSipSubscribeModule;
+  SubMod.AddPackage(EventPackage);
+end;
+
+procedure TestTIdSipStackInterface.TearDownPackageSupport(EventPackage: TIdSipEventPackageClass);
+begin
+  TIdSipEventPackageRegistry.UnregisterEvent(EventPackage);
+end;
+
 function TestTIdSipStackInterface.ThirdLastEventData: TIdEventData;
 begin
   Result := Self.DataList[Self.DataList.Count - 3] as TIdEventData;
@@ -1462,22 +1481,66 @@ end;
 }
 procedure TestTIdSipStackInterface.TestStackListensToSubscribeModule;
 var
+  Conf:    TStrings;
   Package: TIdSipEventPackageClass;
-  SubMod: TIdSipSubscribeModule;
+  Stack:   TIdSipStackInterface;
 begin
   Package := TIdSipTargetDialogPackage;
 
-  TIdSipEventPackageRegistry.RegisterEvent(Package);
+  Self.SetUpPackageSupport(Package);
   try
-    Self.RemoteUA.AddModule(TIdSipSubscribeModule);
-    SubMod := Self.RemoteUA.ModuleFor(TIdSipSubscribeModule) as TIdSipSubscribeModule;
-    SubMod.AddPackage(Package);
+    Conf := TStringList.Create;
+    try
+      Conf.Add('Listen: UDP ' + Self.LocalAddress + ':' + IntToStr(Self.LocalPort));
+      Conf.Add('NameServer: MOCK;ReturnOnlySpecifiedRecords');
+      Conf.Add('Contact: sip:foo@' + Self.LocalAddress + ':' + IntToStr(Self.LocalPort));
+      Conf.Add('From: sip:foo@' + Self.LocalAddress + ':' + IntToStr(Self.LocalPort));
+      Conf.Add('SupportEvent: ' + Package.EventPackage);
 
-    Self.ReceiveSubscribe(Package.EventPackage);
-    Application.ProcessMessages;
-    CheckNotificationReceived(TIdSubscriptionRequestData, 'No subscription request notification received');
+      Stack := TIdSipStackInterface.Create(Self.UI.Handle, Self.TimerQueue, Conf);
+      try
+        // This is expedient, but evil: it works because Self.MockTransport will
+        // be reset in SetUp when the next test runs.
+        Self.MockTransport := TIdSipDebugTransportRegistry.TransportAt(TIdSipDebugTransportRegistry.TransportCount - 1) as TIdSipMockUdpTransport;
+
+        Self.ReceiveSubscribe(Package.EventPackage);
+        Application.ProcessMessages;
+        CheckNotificationReceived(TIdSubscriptionRequestData, 'No subscription request notification received');
+
+      finally
+        Stack.Free;
+      end;
+    finally
+      Conf.Free;
+    end;
   finally
-    TIdSipEventPackageRegistry.UnregisterEvent(Package);
+    Self.TearDownPackageSupport(Package);
+  end;
+end;
+
+procedure TestTIdSipStackInterface.TestStackListensToSubscribeModuleAfterReconfigure;
+var
+  NewConf: TStrings;
+  Package: TIdSipEventPackageClass;
+begin
+  Package := TIdSipTargetDialogPackage;
+
+  Self.SetUpPackageSupport(Package);
+  try
+    NewConf := TStringList.Create;
+    try
+      NewConf.Add('SupportEvent: ' + Package.EventPackage);
+      Self.Intf.ReconfigureStack(NewConf);
+      Self.TimerQueue.TriggerAllEventsOfType(TIdSipStackReconfigureStackInterfaceWait);
+
+      Self.ReceiveSubscribe(Package.EventPackage);
+      Application.ProcessMessages;
+      CheckNotificationReceived(TIdSubscriptionRequestData, 'No subscription request notification received');
+    finally
+      NewConf.Free;
+    end;
+  finally
+    Self.TearDownPackageSupport(Package);
   end;
 end;
 
