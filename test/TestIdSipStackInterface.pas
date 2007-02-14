@@ -83,6 +83,7 @@ type
     TimerQueue:        TIdDebugTimerQueue;
     UI:                TCustomForm;
 
+    procedure AddSubscribeSupport(Stack: TIdSipStackInterface);
     procedure CheckNotificationReceived(EventType: TIdEventDataClass; Msg: String);
     procedure CheckRequestSent(Msg: String);
     procedure CheckResponseSent(Msg: String);
@@ -155,6 +156,9 @@ type
     procedure TestMakeCall;
     procedure TestMakeCallMalformedAddress;
     procedure TestMakeRegistration;
+    procedure TestMakeSubscription;
+    procedure TestMakeSubscriptionMalformedTarget;
+    procedure TestMakeSubscriptionNoSubscribeSupport;
 {
     procedure TestModifyCall;
 }
@@ -446,6 +450,12 @@ uses
   IdRandom, IdSimpleParser, IdSipCore, IdSipLocation, IdSipTransport,
   IdSipUdpTransport, IdSocketHandle, IdUdpServer, SysUtils;
 
+type
+  TIdSipTestPackage = class(TIdSipEventPackage)
+  public
+    class function EventPackage: String; override;
+  end;
+
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipStackInterface unit tests');
@@ -473,6 +483,16 @@ begin
   Result.AddTest(TestTIdSubscriptionNotifyData.Suite);
   Result.AddTest(TestTIdFailedSubscriptionData.Suite);
   Result.AddTest(TestTIdSipStackReconfigureStackInterfaceWait.Suite);
+end;
+
+//******************************************************************************
+//* TIdSipTestPackage                                                          *
+//******************************************************************************
+//* TIdSipTestPackage Public methods *******************************************
+
+class function TIdSipTestPackage.EventPackage: String;
+begin
+  Result := 'foo';
 end;
 
 //******************************************************************************
@@ -512,6 +532,7 @@ begin
   inherited SetUp;
 
   TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipMockUDPTransport);
+  TIdSipEventPackageRegistry.RegisterEvent(TIdSipTestPackage);
 
   Self.DataList    := TObjectList.Create(true);
   Self.Destination := TIdSipToHeader.Create;
@@ -528,6 +549,7 @@ begin
     BasicConf.Add('NameServer: MOCK');
     BasicConf.Add('Contact: sip:' + Self.TargetAddress + ':' + IntToStr(Self.TargetPort));
     BasicConf.Add('From: sip:' + Self.TargetAddress + ':' + IntToStr(Self.TargetPort));
+    BasicConf.Add('SupportEvent: ' + TIdSipTestPackage.EventPackage);
 
     Conf := TIdSipStackConfigurator.Create;
     try
@@ -588,6 +610,7 @@ begin
   Self.Destination.Free;
   Self.DataList.Free;
 
+  TIdSipEventPackageRegistry.UnregisterEvent(TIdSipTestPackage);
   TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
 
   inherited TearDown;
@@ -601,6 +624,20 @@ begin
 end;
 
 //* TestTIdSipStackInterface Private methods ***********************************
+
+procedure TestTIdSipStackInterface.AddSubscribeSupport(Stack: TIdSipStackInterface);
+var
+  NewConf: TStrings;
+begin
+  NewConf := TStringList.Create;
+  try
+    NewConf.Add('SupportEvent: ' + TIdSipTestPackage.EventPackage);
+    Stack.ReconfigureStack(NewConf);
+    Self.TimerQueue.TriggerAllEventsOfType(TIdSipStackReconfigureStackInterfaceWait);
+  finally
+    NewConf.Free;
+  end;
+end;
 
 procedure TestTIdSipStackInterface.CheckNotificationReceived(EventType: TIdEventDataClass; Msg: String);
 var
@@ -1217,6 +1254,48 @@ begin
   Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
   CheckRequestSent('No request sent');
   CheckEquals(MethodRegister, Self.LastSentRequest.Method, 'Unexpected request sent');
+end;
+
+procedure TestTIdSipStackInterface.TestMakeSubscription;
+var
+  Handle: TIdSipHandle;
+begin
+  Self.AddSubscribeSupport(Self.Intf);
+
+  // We try subscribe to something that isn't going to immediately reply.
+  Self.Destination.Address.Host := TIdIPAddressParser.IncIPAddress(Self.TargetAddress);
+
+  Handle := Self.Intf.MakeSubscription(Self.Destination, TIdSipTestPackage.EventPackage);
+
+  Self.MarkSentRequestCount;
+  Self.Intf.Send(Handle);
+  Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
+  CheckRequestSent('No request sent');
+  CheckEquals(MethodSubscribe, Self.LastSentRequest.Method, 'Unexpected request sent');
+end;
+
+procedure TestTIdSipStackInterface.TestMakeSubscriptionMalformedTarget;
+var
+  Handle: TIdSipHandle;
+begin
+  Self.Destination.Address.Uri := 'sip:foo@@bar';
+  Check(Self.Destination.IsMalformed, 'Destination not malformed');
+
+  Handle := Self.Intf.MakeSubscription(Self.Destination, 'foo');
+  CheckEquals(IntToHex(InvalidHandle, 8),
+              IntToHex(Handle, 8),
+              'Malformed Target should result in an InvalidHandle');
+end;
+
+procedure TestTIdSipStackInterface.TestMakeSubscriptionNoSubscribeSupport;
+var
+  Handle: TIdSipHandle;
+begin
+  Handle := Self.Intf.MakeSubscription(Self.Destination, TIdSipTestPackage.EventPackage);
+
+  CheckEquals(IntToHex(InvalidHandle, 8),
+              IntToHex(Handle, 8),
+              'No SUBSCRIBE support should result in an InvalidHandle');
 end;
 {
 procedure TestTIdSipStackInterface.TestModifyCall;

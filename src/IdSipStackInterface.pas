@@ -205,6 +205,8 @@ type
     function  MakeRefer(Target: TIdSipAddressHeader;
                         Resource: TIdSipAddressHeader): TIdSipHandle;
     function  MakeRegistration(Registrar: TIdSipUri): TIdSipHandle;
+    function  MakeSubscription(Target: TIdSipAddressHeader;
+                               const EventPackage: String): TIdSipHandle;
     function  MakeTransfer(Transferee: TIdSipAddressHeader;
                            TransferTarget: TIdSipAddressHeader;
                            Call: TIdSipHandle): TIdSipHandle;
@@ -965,6 +967,28 @@ begin
   Reg := Self.UserAgent.RegisterModule.RegisterWith(Registrar);
   Result := Self.AddAction(Reg);
   Reg.AddListener(Self);
+end;
+
+function TIdSipStackInterface.MakeSubscription(Target: TIdSipAddressHeader;
+                                               const EventPackage: String): TIdSipHandle;
+var
+  Sub: TIdSipOutboundSubscription;
+  SubMod: TIdSipSubscribeModule;
+begin
+  if Target.IsMalformed then begin
+    Result := InvalidHandle;
+    Exit;
+  end;
+
+  if not Self.UserAgent.UsesModule(MethodSubscribe) then begin
+    Result := InvalidHandle;
+    Exit;
+  end;
+
+  SubMod := Self.UserAgent.ModuleFor(MethodSubscribe) as TIdSipSubscribeModule;
+  Sub := SubMod.Subscribe(Target, EventPackage);
+  Result := Self.AddAction(Sub);
+  Sub.AddListener(Self);
 end;
 
 function TIdSipStackInterface.MakeTransfer(Transferee: TIdSipAddressHeader;
@@ -2579,11 +2603,10 @@ begin
   if (Src is TIdSubscriptionRequestData) then begin
     Other := Src as TIdSubscriptionRequestData;
 
-    Self.EventPackage  := Other.EventPackage;
     Self.From          := Other.From;
     Self.ReferTo       := Other.ReferTo;
     Self.RemoteContact := Other.RemoteContact;
-    Self.Target        := Other.Target;                        
+    Self.Target        := Other.Target;
   end;
 end;
 
