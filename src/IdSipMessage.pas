@@ -9442,9 +9442,13 @@ begin
   if Self.HasHeader(ContactHeaderFull) then begin
     // REGISTERs shouldn't rewrite Contact details: this REGISTER could be
     // registering several URIs (say, this UA and a voicemail URI, etc.).
-    if Self.CanEstablishDialog then begin
+    //
+    // On the other hand, the Transaction-User layer doesn't know what IP
+    // address to put in the INVITE's Contact header.
+    if Self.CanEstablishDialog or Self.FirstContact.IsUnset then begin
       Self.FirstContact.Address.Host := LocalAddress.IPAddress;
       Self.FirstContact.Address.Port := LocalAddress.Port;
+      Self.FirstContact.IsUnset := false;
     end;
   end;
 
@@ -10053,10 +10057,15 @@ end;
 procedure TIdSipResponse.RewriteLocationHeaders(LocalAddress: TIdSipLocation);
 begin
   // Some messages (like CANCEL) don't have Contact headers.
+  //
+  // This method assumes that the first Contact header is open to mutation.
+  // However, a UA could well have several Contacts. If the first Contact is a
+  // mailto URI, this method fails.
   if Self.HasHeader(ContactHeaderFull) then begin
-    if Self.CanEstablishDialog then begin
+    if Self.CanEstablishDialog or Self.FirstContact.IsUnset then begin
       Self.FirstContact.Address.Host := LocalAddress.IPAddress;
       Self.FirstContact.Address.Port := LocalAddress.Port;
+      Self.FirstContact.IsUnset := false;
     end;
   end;
 end;
