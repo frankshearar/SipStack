@@ -680,6 +680,8 @@ begin
   Line := SupportEventLine;
   EatDirective(Line);
 
+  Module.RemoveAllPackages;
+
   Packages := TStringList.Create;
   try
     Packages.CommaText := Line;

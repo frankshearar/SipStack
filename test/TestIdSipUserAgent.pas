@@ -226,6 +226,8 @@ type
     procedure TestUpdateConfigurationWithNewRegistrar;
     procedure TestUpdateConfigurationWithProxy;
     procedure TestUpdateConfigurationWithRegistrar;
+    procedure TestUpdateConfigurationWithSupportEvent;
+    procedure TestUpdateConfigurationWithBlankSupportEvent;
     procedure TestUpdateConfigurationWithTransport;
   end;
 
@@ -1832,6 +1834,8 @@ begin
   Self.Server.ThreadedEvent := true;
   Self.Server.Active        := true;
 
+  TIdSipEventPackageRegistry.RegisterEvent(TIdSipTargetDialogPackage);
+  TIdSipEventPackageRegistry.RegisterEvent(TIdSipReferPackage);
   TIdSipTransportRegistry.RegisterTransportType(TcpTransport, TIdSipTCPTransport);
   TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipUDPTransport);
 
@@ -1841,6 +1845,8 @@ end;
 
 procedure TestTIdSipStackConfigurator.TearDown;
 begin
+  TIdSipEventPackageRegistry.UnregisterEvent(TIdSipReferPackage);
+  TIdSipEventPackageRegistry.UnregisterEvent(TIdSipTargetDialogPackage);
   TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
   TIdSipTransportRegistry.UnregisterTransportType(TcpTransport);
 
@@ -3013,6 +3019,79 @@ begin
 
       Self.WaitForSignaled(Self.NewRegistrarEvent, 'Waiting for REGISTER to new registrar');
       Check(Self.NewRegistrarReceivedPacket, 'No REGISTER sent to new registrar');
+    finally
+      NewConfig.Free;
+    end;
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithSupportEvent;
+var
+  NewConfig: TStrings;
+  NewEvent:  String;
+  OldEvent:  String;
+  SubMod:    TIdSipSubscribeModule;
+  UA:        TIdSipUserAgent;
+begin
+  // This test demonstrates that you can add or remove support for event
+  // packages through updating the UserAgent's configuration.
+
+  OldEvent := TIdSipTargetDialogPackage.EventPackage;
+  NewEvent := TIdSipReferPackage.EventPackage;
+
+  Self.Configuration.Add('SupportEvent: ' + OldEvent);
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Check(UA.UsesModule(TIdSipSubscribeModule), 'UA doesn''t use SubscribeModule');
+
+    SubMod := UA.ModuleFor(TIdSipSubscribeModule) as TIdSipSubscribeModule;
+
+    Check(Assigned(SubMod.Package(OldEvent)), 'Newly instantiated stack doesn''t support ' + OldEvent);
+
+    NewConfig := TStringList.Create;
+    try
+      NewConfig.Add('SupportEvent: ' + NewEvent);
+
+      Self.Conf.UpdateConfiguration(UA, NewConfig);
+
+      Check(UA.UsesModule(TIdSipSubscribeModule), 'SubscribeModule removed');
+
+      Check(not Assigned(SubMod.Package(OldEvent)), 'Support for ' + OldEvent + ' not removed');
+      Check(not Assigned(SubMod.Package(OldEvent)), 'Support for ' + NewEvent + ' not added');
+    finally
+      NewConfig.Free;
+    end;
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithBlankSupportEvent;
+var
+  NewConfig: TStrings;
+  UA:        TIdSipUserAgent;
+begin
+  // This test demonstrates that if you remove support for all events, you DO
+  // NOT remove the entire SubscribeModule. (To do so could cause
+  // currently-running actions (say, a TIdSipOutboundReferral) to suddenly blow
+  // up.
+
+  Self.Configuration.Add('SupportEvent: ' + TIdSipTargetDialogPackage.EventPackage);
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Check(UA.UsesModule(TIdSipSubscribeModule), 'UA doesn''t use SubscribeModule');
+
+    NewConfig := TStringList.Create;
+    try
+      NewConfig.Add('SupportEvent: ');
+
+      Self.Conf.UpdateConfiguration(UA, NewConfig);
+
+      Check(UA.UsesModule(TIdSipSubscribeModule), 'SubscribeModule removed');
     finally
       NewConfig.Free;
     end;
