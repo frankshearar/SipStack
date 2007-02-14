@@ -2759,6 +2759,7 @@ end;
 procedure TIdSipStackReconfigureStackInterfaceWait.Trigger;
 var
   Stack:        TIdSipStackInterface;
+  SubMod:       TIdSipSubscribeModule;
   Configurator: TIdSipStackConfigurator;
 begin
   // The configuration file can contain both configuration details defined by
@@ -2772,6 +2773,18 @@ begin
     Configurator := TIdSipStackConfigurator.Create;
     try
       Configurator.UpdateConfiguration(Stack.UserAgent, Self.Configuration);
+
+      if Stack.UserAgent.UsesModule(TIdSipSubscribeModule) then begin
+        SubMod := Stack.UserAgent.ModuleFor(TIdSipSubscribeModule) as TIdSipSubscribeModule;
+
+        // "RemoveListener" first because SubMod may have existed before this
+        // update. If it did, then Stack is already a Listener, and we wouldn't
+        // want to re-add it. However, we've no way of knowing if Stack is
+        // already a Listener.
+        SubMod.RemoveListener(Stack);
+        SubMod.AddListener(Stack);
+      end;
+
       Stack.UserAgent.Dispatcher.StartAllTransports;
     finally
       Configurator.Free;

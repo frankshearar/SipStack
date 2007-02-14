@@ -124,6 +124,7 @@ type
 }
     procedure ReceiveRequest(Request: TIdSipRequest);
     procedure ReceiveResponse(Response: TIdSipResponse);
+    procedure ReceiveSubscribe(EventPackage: String);
     function  SecondLastEventData: TIdEventData;
     function  ThirdLastEventData: TIdEventData;
 {
@@ -169,6 +170,7 @@ type
     procedure TestRegistrationFailsWithRetry;
     procedure TestSendNonExistentHandle;
 //    procedure TestSessionModifiedByRemoteSide;
+    procedure TestStackListensToSubscribeModule;
   end;
 
   TestTIdSipStackInterfaceRegistry = class(TTestCase)
@@ -438,8 +440,8 @@ const
 implementation
 
 uses
-  IdRandom, IdSimpleParser, IdSipCore, IdSipLocation, IdSipTransport,
-  IdSipUdpTransport, IdSocketHandle, IdUdpServer, SysUtils;
+  IdRandom, IdSimpleParser, IdSipCore, IdSipLocation, IdSipSubscribeModule,
+  IdSipTransport, IdSipUdpTransport, IdSocketHandle, IdUdpServer, SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -919,6 +921,34 @@ begin
     Self.MockTransport.ReceiveResponse(Response, Target);
   finally
     Target.Free;
+  end;
+end;
+
+procedure TestTIdSipStackInterface.ReceiveSubscribe(EventPackage: String);
+var
+  LocalFrom: TIdSipAddressHeader;
+  Subscribe: TIdSipRequest;
+  SubMod:    TIdSipSubscribeModule;
+begin
+  Check(Self.RemoteUA.UsesModule(TIdSipSubscribeModule),
+        'RemoteUA must support SUBSCRIBE requests for this test');
+
+  SubMod := Self.RemoteUA.ModuleFor(TIdSipSubscribeModule) as TIdSipSubscribeModule;
+  Check(Assigned(SubMod.Package(EventPackage)),
+        'RemoteUA must support the ' + EventPackage + ' event package');
+
+  LocalFrom := TIdSipFromHeader.Create;
+  try
+    LocalFrom.Value := 'sip:' + Self.LocalAddress + ':' + IntToStr(Self.LocalPort);
+
+    Subscribe := SubMod.CreateSubscribe(LocalFrom, EventPackage);
+    try
+      Self.ReceiveRequest(Subscribe);
+    finally
+      Subscribe.Free;
+    end;
+  finally
+    LocalFrom.Free;
   end;
 end;
 
@@ -1430,6 +1460,27 @@ begin
   // <---    ACK     ---
 end;
 }
+procedure TestTIdSipStackInterface.TestStackListensToSubscribeModule;
+var
+  Package: TIdSipEventPackageClass;
+  SubMod: TIdSipSubscribeModule;
+begin
+  Package := TIdSipTargetDialogPackage;
+
+  TIdSipEventPackageRegistry.RegisterEvent(Package);
+  try
+    Self.RemoteUA.AddModule(TIdSipSubscribeModule);
+    SubMod := Self.RemoteUA.ModuleFor(TIdSipSubscribeModule) as TIdSipSubscribeModule;
+    SubMod.AddPackage(Package);
+
+    Self.ReceiveSubscribe(Package.EventPackage);
+    Application.ProcessMessages;
+    CheckNotificationReceived(TIdSubscriptionRequestData, 'No subscription request notification received');
+  finally
+    TIdSipEventPackageRegistry.UnregisterEvent(Package);
+  end;
+end;
+
 //******************************************************************************
 //* TestTIdSipStackInterfaceRegistry                                           *
 //******************************************************************************
