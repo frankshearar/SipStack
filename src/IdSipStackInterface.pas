@@ -974,7 +974,7 @@ begin
     Exit;
   end;
 
-  Reg := Self.UserAgent.RegisterModule.RegisterWith(Registrar);
+  Reg := Self.UserAgent.RegisterModule.RegisterWith(Registrar, Self.UserAgent.Contact);
   Result := Self.AddAction(Reg);
   Reg.AddListener(Self);
 end;

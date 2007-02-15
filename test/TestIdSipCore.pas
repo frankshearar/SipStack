@@ -2531,7 +2531,7 @@ procedure TestTIdSipActionSendWait.SetUp;
 begin
   inherited SetUp;
 
-  Self.Action := Self.Core.RegisterModule.RegisterWith(Self.Destination.Address);
+  Self.Action := Self.Core.RegisterModule.RegisterWith(Self.Destination.Address, Self.Core.Contact);
   Self.Wait := TIdSipActionSendWait.Create;
   Self.Wait.ActionID := Self.Action.ID;
 end;

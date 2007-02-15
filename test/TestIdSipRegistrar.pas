@@ -925,7 +925,7 @@ var
   OurBindings: TIdSipContacts;
 begin
   Self.MarkSentRequestCount;
-  Self.Module.UnregisterFrom(Self.RemoteUri).Send;
+  Self.Module.UnregisterFrom(Self.RemoteUri, Self.Core.Contact).Send;
   CheckRequestSent('No REGISTER sent');
   CheckEquals(MethodRegister,
               Self.LastSentRequest.Method,
@@ -1843,7 +1843,7 @@ function TestTIdSipOutboundRegistration.CreateAction: TIdSipAction;
 var
   Reg: TIdSipOutboundRegistration;
 begin
-  Reg := Self.Core.RegisterModule.RegisterWith(Self.RegistrarAddress);
+  Reg := Self.Core.RegisterModule.RegisterWith(Self.RegistrarAddress, Self.Contacts);
 
   Reg.AddActionListener(Self);
   Reg.AddListener(Self);
@@ -2102,15 +2102,15 @@ var
 begin
   inherited SetUp;
 
+  Self.Bindings := TIdSipContacts.Create;
+  Self.Listener := TIdSipTestRegistrationListener.Create;
+
   Registrar := TIdSipUri.Create;
   try
-    Reg := Self.UA.RegisterModule.RegisterWith(Registrar);
+    Reg := Self.UA.RegisterModule.RegisterWith(Registrar, Self.Bindings);
   finally
     Registrar.Free;
   end;
-
-  Self.Bindings := TIdSipContacts.Create;
-  Self.Listener := TIdSipTestRegistrationListener.Create;
 end;
 
 procedure TestRegistrationMethod.TearDown;

@@ -441,7 +441,7 @@ begin
   Self.FirstTransportDirective := true;
 
   if UserAgent.RegisterModule.HasRegistrar and not UserAgent.RegisterModule.Registrar.IsMalformed then
-    UserAgent.RegisterModule.UnregisterFrom(UserAgent.RegisterModule.Registrar).Send;
+    UserAgent.RegisterModule.UnregisterFrom(UserAgent.RegisterModule.Registrar, UserAgent.Contact).Send;
 
 //  UserAgent.Dispatcher.ClearTransports;
 
@@ -833,7 +833,7 @@ begin
   Reg.AutoReRegister := true;
   Reg.HasRegistrar := true;
   Reg.Registrar.Uri := Line;
-  Self.AddPendingMessageSend(PendingActions, Reg.RegisterWith(Reg.Registrar));
+  Self.AddPendingMessageSend(PendingActions, Reg.RegisterWith(Reg.Registrar, UserAgent.Contact));
 end;
 
 procedure TIdSipStackConfigurator.UseGruu(UserAgent: TIdSipAbstractCore;

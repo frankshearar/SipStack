@@ -223,9 +223,13 @@ type
     procedure CleanUp; override;
     function  CreateRegister(Registrar: TIdSipToHeader): TIdSipRequest;
     function  CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistrationQuery;
-    function  RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
+    function  RegisterWith(Registrar: TIdSipUri;
+                           Contact: TIdSipContactHeader): TIdSipOutboundRegistration; overload;
+    function  RegisterWith(Registrar: TIdSipUri;
+                           Contacts: TIdSipContacts): TIdSipOutboundRegistration; overload;
     function  RegistrationCount: Integer;
-    function  UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundUnregistration;
+    function  UnregisterFrom(Registrar: TIdSipUri;
+                             Contact: TIdSipContactHeader): TIdSipOutboundUnregistration;
     function  WillAccept(Request: TIdSipRequest): Boolean; override;
 
     property AutoReRegister: Boolean   read fAutoReRegister write fAutoReRegister;
@@ -445,9 +449,11 @@ type
 
   TIdSipReregisterWait = class(TIdWait)
   private
+    fBindings:       TIdSipContacts;
     fRegisterModule: TIdSipOutboundRegisterModule;
     fRegistrar:      TIdSipUri;
 
+    procedure SetBindings(Value: TIdSipContacts);
     procedure SetRegistrar(Value: TIdSipUri);
   public
     constructor Create; override;
@@ -455,6 +461,7 @@ type
 
     procedure Trigger; override;
 
+    property Bindings:       TIdSipContacts               read fBindings write SetBindings;
     property RegisterModule: TIdSipOutboundRegisterModule read fRegisterModule write fRegisterModule;
     property Registrar:      TIdSipUri                    read fRegistrar write SetRegistrar;
   end;
@@ -938,7 +945,7 @@ end;
 procedure TIdSipOutboundRegisterModule.CleanUp;
 begin
   if Self.HasRegistrar then
-    Self.UnregisterFrom(Self.Registrar).Send;
+    Self.UnregisterFrom(Self.Registrar, Self.UserAgent.Contact).Send;
 end;
 
 function TIdSipOutboundRegisterModule.CreateRegister(Registrar: TIdSipToHeader): TIdSipRequest;
@@ -954,7 +961,7 @@ begin
 
     Result.CallID := Self.KnownRegistrars.CallIDFor(Registrar.Address);
 
-    Result.ToHeader.Assign(Self.UserAgent.From);
+    Result.ToHeader.Assign(Result.From);
 
     if Result.FirstContact.IsGruu then begin
       Result.FirstContact.Params[SipInstanceParam] := Self.UserAgent.InstanceID;
@@ -975,10 +982,26 @@ begin
   Result.Registrar := Registrar;
 end;
 
-function TIdSipOutboundRegisterModule.RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
+function TIdSipOutboundRegisterModule.RegisterWith(Registrar: TIdSipUri;
+                                                   Contact: TIdSipContactHeader): TIdSipOutboundRegistration;
+var
+  Bindings: TIdSipContacts;
+begin
+  Bindings := TIdSipContacts.Create;
+  try
+    Bindings.Add(Contact);
+
+    Result := Self.RegisterWith(Registrar, Bindings);
+  finally
+    Bindings.Free;
+  end;
+end;
+
+function TIdSipOutboundRegisterModule.RegisterWith(Registrar: TIdSipUri;
+                                                   Contacts: TIdSipContacts): TIdSipOutboundRegistration;
 begin
   Result := Self.UserAgent.AddOutboundAction(TIdSipOutboundRegistration) as TIdSipOutboundRegistration;
-  Result.Bindings.Add(Self.UserAgent.Contact);
+  Result.Bindings.Add(Contacts);
   Result.Registrar := Registrar;
 end;
 
@@ -987,10 +1010,11 @@ begin
   Result := Self.UserAgent.CountOf(MethodRegister);
 end;
 
-function TIdSipOutboundRegisterModule.UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundUnregistration;
+function TIdSipOutboundRegisterModule.UnregisterFrom(Registrar: TIdSipUri;
+                                                     Contact: TIdSipContactHeader): TIdSipOutboundUnregistration;
 begin
   Result := Self.UserAgent.AddOutboundAction(TIdSipOutboundUnregistration) as TIdSipOutboundUnregistration;
-  Result.Bindings.Add(Self.UserAgent.Contact);
+  Result.Bindings.Add(Contact);
   Result.Registrar := Registrar;
 end;
 
@@ -1546,30 +1570,22 @@ end;
 procedure TIdSipOutboundRegisterBase.RetryWithoutExtensions(Registrar: TIdSipUri;
                                                             Response: TIdSipResponse);
 var
-  Bindings: TIdSipContacts;
-  Request:  TIdSipRequest;
+  Request: TIdSipRequest;
 begin
-  Bindings := TIdSipContacts.Create;
+  Request := Self.CreateRegister(Registrar, Self.Bindings);
   try
-    Bindings.Add(Self.UA.Contact);
+    if not Response.HasHeader(UnsupportedHeader) then begin
+      // A 420 Bad Extension MUST have an Unsupported header. In the
+      // interests of accepting liberally though, we just drop all
+      // Requires.
+      Request.RemoveAllHeadersNamed(RequireHeader);
+    end
+    else
+      Request.Require.RemoveValues(Response.FirstUnsupported);
 
-    Request := Self.CreateRegister(Registrar, Bindings);
-    try
-      if not Response.HasHeader(UnsupportedHeader) then begin
-        // A 420 Bad Extension MUST have an Unsupported header. In the
-        // interests of accepting liberally though, we just drop all
-        // Requires.
-        Request.RemoveAllHeadersNamed(RequireHeader);
-      end
-      else
-        Request.Require.RemoveValues(Response.FirstUnsupported);
-
-      Self.SendRequest(Request);
-    finally
-      Request.Free;
-    end;
+    Self.SendRequest(Request);
   finally
-    Bindings.Free;
+    Request.Free;
   end;
 end;
 
@@ -1923,7 +1939,10 @@ procedure TIdSipOutboundRegistration.ScheduleReregistration(MillisecondsToWait: 
 var
   Reregister: TIdSipReregisterWait;
 begin
+  Self.Bindings.First;
+
   Reregister := TIdSipReregisterWait.Create;
+  Reregister.Bindings       := Self.Bindings;
   Reregister.RegisterModule := Self.OutModule;
   Reregister.Registrar      := Self.Registrar;
   Self.UA.ScheduleEvent(MillisecondsToWait, Reregister);
@@ -1971,22 +1990,30 @@ constructor TIdSipReregisterWait.Create;
 begin
   inherited Create;
 
+  Self.fBindings  := TIdSipContacts.Create;
   Self.fRegistrar := TIdSipUri.Create('');
 end;
 
 destructor TIdSipReregisterWait.Destroy;
 begin
   Self.fRegistrar.Free;
+  Self.fBindings.Free;
 
   inherited Destroy;
 end;
 
 procedure TIdSipReregisterWait.Trigger;
 begin
-  Self.RegisterModule.RegisterWith(Self.Registrar).Send;
+  Self.RegisterModule.RegisterWith(Self.Registrar, Self.Bindings).Send;
 end;
 
 //* TIdSipReregisterWait Private methods ***************************************
+
+procedure TIdSipReregisterWait.SetBindings(Value: TIdSipContacts);
+begin
+  Self.Bindings.Clear;
+  Self.Bindings.Add(Value);
+end;
 
 procedure TIdSipReregisterWait.SetRegistrar(Value: TIdSipUri);
 begin
