@@ -433,6 +433,7 @@ procedure TIdSipStackConfigurator.UpdateConfiguration(UserAgent: TIdSipUserAgent
                                                       Configuration: TStrings);
 var
   PendingActions: TObjectList;
+  RegMod:         TIdSipOutboundRegisterModule;
 begin
   // Unregister if necessary (we've got a Registrar, and there's a different one in Configuration)
   // Update any settings in Configuration
@@ -440,8 +441,9 @@ begin
 
   Self.FirstTransportDirective := true;
 
-  if UserAgent.RegisterModule.HasRegistrar and not UserAgent.RegisterModule.Registrar.IsMalformed then
-    UserAgent.RegisterModule.UnregisterFrom(UserAgent.RegisterModule.Registrar, UserAgent.Contact).Send;
+  RegMod := UserAgent.RegisterModule;
+  if RegMod.HasRegistrar and not RegMod.Registrar.IsMalformed then
+    RegMod.UnregisterFrom(RegMod.Registrar, UserAgent.Contact).Send;
 
 //  UserAgent.Dispatcher.ClearTransports;
 
