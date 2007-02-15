@@ -7824,6 +7824,12 @@ end;
 
 function TIdSipContacts.GruuFor(Contact: TIdSipContactHeader): String;
 begin
+  // When a registrar returns a list of bindings (valid Contacts), if the UAC
+  // asked for GRUUs and the registrar supports GRUU, then it may return a GRUU
+  // in the "gruu" parameter of the Contacts. You can find a particular GRUU
+  // by searching for the Contact in Self that has the same "sip-instance"
+  // parameter as the Contact parameter.
+
   Result := '';
   Self.First;
 
