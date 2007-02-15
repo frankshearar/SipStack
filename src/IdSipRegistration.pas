@@ -1782,9 +1782,6 @@ begin
     finally
       Notification.Free;
     end;
-
-    if Response.SupportsExtension(ExtensionGruu) and Self.UA.Contact.IsGruu then
-      Self.UA.Contact.Address.Uri := CurrentBindings.GruuFor(Self.UA.Contact);
   finally
     CurrentBindings.Free;
   end;

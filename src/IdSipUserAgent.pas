@@ -20,7 +20,9 @@ type
   TIdSipUserAgent = class;
 
   TIdSipUserAgent = class(TIdSipAbstractCore,
-                          IIdSipInviteModuleListener)
+                          IIdSipInviteModuleListener,
+                          IIdSipActionListener,
+                          IIdSipRegistrationListener)
   private
     fDoNotDisturbMessage: String;
     fHasProxy:            Boolean;
@@ -31,8 +33,18 @@ type
     function  GetDoNotDisturb: Boolean;
     function  GetInitialResendInterval: Cardinal;
     function  GetProgressResendInterval: Cardinal;
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Challenge: TIdSipResponse);
+    procedure OnFailure(RegisterAgent: TIdSipOutboundRegistrationBase;
+                        ErrorCode: Cardinal;
+                        const Reason: String);
     procedure OnInboundCall(UserAgent: TIdSipInviteModule;
                             Session: TIdSipInboundSession);
+    procedure OnNetworkFailure(Action: TIdSipAction;
+                               ErrorCode: Cardinal;
+                               const Reason: String);
+    procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistrationBase;
+                        CurrentBindings: TIdSipContacts);
     procedure SetDoNotDisturb(Value: Boolean);
     procedure SetInitialResendInterval(Value: Cardinal);
     procedure SetProgressResendInterval(Value: Cardinal);
@@ -44,6 +56,7 @@ type
     procedure AddLocalHeaders(OutboundRequest: TIdSipRequest); override;
     procedure AddTransportListener(Listener: IIdSipTransportListener);
     procedure RemoveTransportListener(Listener: IIdSipTransportListener);
+    function  RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
     function  ResponseForInvite: Cardinal; override;
     function  SessionCount: Integer;
 
@@ -324,6 +337,12 @@ begin
   Self.Dispatcher.RemoveTransportListener(Listener);
 end;
 
+function TIdSipUserAgent.RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
+begin
+  Result := Self.RegisterModule.RegisterWith(Registrar, Self.Contact);
+  Result.AddListener(Self);
+end;
+
 function TIdSipUserAgent.ResponseForInvite: Cardinal;
 begin
   // If we receive an INVITE (or an OPTIONS), what response code
@@ -359,10 +378,42 @@ begin
   Result := Self.InviteModule.ProgressResendInterval;
 end;
 
+procedure TIdSipUserAgent.OnAuthenticationChallenge(Action: TIdSipAction;
+                                                    Challenge: TIdSipResponse);
+begin
+  // Do nothing.
+end;
+
+procedure TIdSipUserAgent.OnFailure(RegisterAgent: TIdSipOutboundRegistrationBase;
+                                    ErrorCode: Cardinal;
+                                    const Reason: String);
+begin
+end;
+
 procedure TIdSipUserAgent.OnInboundCall(UserAgent: TIdSipInviteModule;
                                         Session: TIdSipInboundSession);
 begin
-  // For now, do nothing
+  // For now, do nothing.
+end;
+
+procedure TIdSipUserAgent.OnNetworkFailure(Action: TIdSipAction;
+                                           ErrorCode: Cardinal;
+                                           const Reason: String);
+begin
+  // Do nothing.
+end;
+
+procedure TIdSipUserAgent.OnSuccess(RegisterAgent: TIdSipOutboundRegistrationBase;
+                                    CurrentBindings: TIdSipContacts);
+var
+  Gruu: String;
+begin
+  if Self.Contact.IsGruu then begin
+    Gruu := CurrentBindings.GruuFor(Self.Contact);
+
+    if (Gruu <> '') then
+      Self.Contact.Address.Uri := Gruu;
+  end;
 end;
 
 procedure TIdSipUserAgent.SetDoNotDisturb(Value: Boolean);

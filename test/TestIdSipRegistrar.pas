@@ -216,7 +216,6 @@ type
     procedure TestAutoReregisterNoExpiresValue;
     procedure TestAutoReregisterSwitchedOff;
     procedure TestReceiveGruu;
-    procedure TestReceiveMultipleGruus;
     procedure TestReregisterTime;
   end;
 
@@ -1994,52 +1993,9 @@ begin
 
     Self.ReceiveResponse(OkWithGruu);
 
-    CheckEquals(Gruu.Gruu,
-                Self.Core.Contact.Address.AsString,
-                'Core''s GRUU not set');
-  finally
-    OkWithGruu.Free;
-  end;
-end;
-
-procedure TestTIdSipOutboundRegistration.TestReceiveMultipleGruus;
-const
-  OurUrn   = 'urn:uuid:00000000-0000-0000-0000-000000000000';
-  TheirUrn = 'urn:uuid:11111111-1111-1111-1111-111111111111';
-var
-  GruuOne:    TIdSipContactHeader;
-  GruuTwo:    TidSipContactHeader;
-  OkWithGruu: TIdSipResponse;
-begin
-  // If more than one UA registers for the same Address Of Record, then THIS
-  // UA only wants to know ITS GRUU when it registers.
-
-  Self.Core.Contact.SipInstance := OurUrn;
-  Self.Core.Contact.IsGruu := true;
-  Self.Contacts.Clear;
-  Self.Contacts.Add(Self.Core.Contact);
-  Self.CreateAction;
-
-  OkWithGruu := TIdSipResponse.InResponseTo(Self.LastSentRequest, SIPOK);
-  try
-    OkWithGruu.Supported.Values.Add(ExtensionGruu);
-    // The other UA
-    GruuOne := OkWithGruu.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
-    GruuOne.Value       := Self.Core.Contact.FullValue;
-    GruuOne.Gruu        := Self.Core.Contact.Address.AsString + ';opaque=bar';
-    GruuOne.SipInstance := TheirUrn;
-
-    // Our UA
-    GruuTwo := OkWithGruu.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
-    GruuTwo.Value       := Self.Core.Contact.FullValue;
-    GruuTwo.Gruu        := Self.Core.Contact.Address.AsString + ';opaque=foo';
-    GruuTwo.SipInstance := OurUrn;
-
-    Self.ReceiveResponse(OkWithGruu);
-
-    CheckEquals(GruuTwo.Gruu,
-                Self.Core.Contact.Address.AsString,
-                'Core''s GRUU not set');
+    CheckNotEquals(Gruu.Gruu,
+                   Self.Core.Contact.Address.AsString,
+                   'The OutboundRegistration action mustn''t touch the AbstractCore''s GRUU');
   finally
     OkWithGruu.Free;
   end;
