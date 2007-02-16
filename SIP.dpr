@@ -66,6 +66,7 @@ uses
   SingleCoreSpike in 'test\SingleCoreSpike.pas' {SingleCore},
   SpikeRegistrar in 'test\SpikeRegistrar.pas' {rnidSpikeRegistrar},
   SpikeT140 in 'test\SpikeT140.pas' {IdSpikeT140},
+  StringDictionary in 'src\StringDictionary.pas',
   TestFrameworkEx in 'test\TestFrameworkEx.pas',
   TestFrameworkRtp in 'test\TestFrameworkRtp.pas',
   TestFrameworkSip in 'test\TestFrameworkSip.pas',
@@ -110,7 +111,8 @@ uses
   TestIdSipUri in 'test\TestIdSipUri.pas',
   TestIdSystem in 'test\TestIdSystem.pas',
   TestIdTimerQueue in 'test\TestIdTimerQueue.pas',
-  TestIdUnicode in 'test\TestIdUnicode.pas';
+  TestIdUnicode in 'test\TestIdUnicode.pas',
+  TestStringDictionary in 'test\TestStringDictionary.pas';
 
 {,
   TestIdSipTlsServer in 'test\TestIdSipTlsServer.pas'}

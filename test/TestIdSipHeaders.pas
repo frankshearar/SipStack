@@ -141,6 +141,8 @@ type
     procedure TestCanonicaliseName;
     procedure TestEncodeQuotedStr;
     procedure TestFullValue;
+    procedure TestGetHeaderName;
+    procedure TestGetHeaderValue;
     procedure TestGetSetParam;
     procedure TestHasParam;
     procedure TestEquals;
@@ -2333,6 +2335,32 @@ begin
   CheckEquals(Self.H.Value + Self.H.ParamsAsString,
               Self.H.FullValue,
               'No value, only parameters');
+end;
+
+procedure TestTIdSipHeader.TestGetHeaderName;
+begin
+  CheckEquals('haha', TIdSipHeader.GetHeaderName('haha'),        'haha');
+  CheckEquals('haha', TIdSipHeader.GetHeaderName('haha: kief'),  'haha: kief');
+  CheckEquals('haha', TIdSipHeader.GetHeaderName('haha:kief'),   'haha:kief');
+  CheckEquals('haha', TIdSipHeader.GetHeaderName('haha :kief'),  'haha :kief');
+  CheckEquals('haha', TIdSipHeader.GetHeaderName('haha : kief'), 'haha : kief');
+  CheckEquals('haha', TIdSipHeader.GetHeaderName(' haha'),       ' haha');
+  CheckEquals('',     TIdSipHeader.GetHeaderName(''),            '''''');
+  CheckEquals('',     TIdSipHeader.GetHeaderName(#0),            '#0');
+end;
+
+procedure TestTIdSipHeader.TestGetHeaderValue;
+begin
+  CheckEquals('',     TIdSipHeader.GetHeaderValue('haha'),        'haha');
+  CheckEquals('kief', TIdSipHeader.GetHeaderValue('haha: kief'),  'haha: kief');
+  CheckEquals('kief', TIdSipHeader.GetHeaderValue('haha:kief'),   'haha:kief');
+  CheckEquals('kief', TIdSipHeader.GetHeaderValue('haha :kief'),  'haha :kief');
+  CheckEquals('kief', TIdSipHeader.GetHeaderValue('haha : kief'), 'haha : kief');
+  CheckEquals('kief', TIdSipHeader.GetHeaderValue(' : kief'),     ' : kief');
+  CheckEquals('kief', TIdSipHeader.GetHeaderValue(': kief'),      ': kief');
+  CheckEquals('',     TIdSipHeader.GetHeaderValue(' haha'),       ' haha');
+  CheckEquals('',     TIdSipHeader.GetHeaderValue(''),            '''''');
+  CheckEquals('',     TIdSipHeader.GetHeaderValue(#0),            '#0');
 end;
 
 procedure TestTIdSipHeader.TestGetSetParam;

@@ -44,8 +44,6 @@ type
     procedure TestExtractQuotedString;
     procedure TestExtractQuotedStringMalformed;
     procedure TestExtractToken;
-    procedure TestGetHeaderName;
-    procedure TestGetHeaderValue;
 //    procedure TestHasValidSyntax;
     procedure TestIsIPv6Reference;
     procedure TestIsMethod;
@@ -307,32 +305,6 @@ begin
 
   CheckExtractToken(' abc', 'abc', '');
   CheckExtractToken('Bar <sip:foo>', 'Bar', '<sip:foo>');
-end;
-
-procedure TestTIdSipParser.TestGetHeaderName;
-begin
-  CheckEquals('haha', Self.P.GetHeaderName('haha'),        'haha');
-  CheckEquals('haha', Self.P.GetHeaderName('haha: kief'),  'haha: kief');
-  CheckEquals('haha', Self.P.GetHeaderName('haha:kief'),   'haha:kief');
-  CheckEquals('haha', Self.P.GetHeaderName('haha :kief'),  'haha :kief');
-  CheckEquals('haha', Self.P.GetHeaderName('haha : kief'), 'haha : kief');
-  CheckEquals('haha', Self.P.GetHeaderName(' haha'),       ' haha');
-  CheckEquals('',     Self.P.GetHeaderName(''),            '''''');
-  CheckEquals('',     Self.P.GetHeaderName(#0),            '#0');
-end;
-
-procedure TestTIdSipParser.TestGetHeaderValue;
-begin
-  CheckEquals('',     Self.P.GetHeaderValue('haha'),        'haha');
-  CheckEquals('kief', Self.P.GetHeaderValue('haha: kief'),  'haha: kief');
-  CheckEquals('kief', Self.P.GetHeaderValue('haha:kief'),   'haha:kief');
-  CheckEquals('kief', Self.P.GetHeaderValue('haha :kief'),  'haha :kief');
-  CheckEquals('kief', Self.P.GetHeaderValue('haha : kief'), 'haha : kief');
-  CheckEquals('kief', Self.P.GetHeaderValue(' : kief'),  ' : kief');
-  CheckEquals('kief', Self.P.GetHeaderValue(': kief'),  ': kief');
-  CheckEquals('',     Self.P.GetHeaderValue(' haha'),       ' haha');
-  CheckEquals('',     Self.P.GetHeaderValue(''),            '''''');
-  CheckEquals('',     Self.P.GetHeaderValue(#0),            '#0');
 end;
 {
 procedure TestTIdSipParser.TestHasValidSyntax;
