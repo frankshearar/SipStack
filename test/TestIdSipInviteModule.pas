@@ -1084,7 +1084,7 @@ begin
   Dest := TIdSipToHeader.Create;
   try
     Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna';
-    Request := Self.Module.CreateInvite(Dest, '', '');
+    Request := Self.Module.CreateInvite(Self.Core.From, Dest, '', '');
     try
       Self.CheckCreateRequest(Dest, Request);
       CheckEquals(MethodInvite, Request.Method, 'Incorrect method');
@@ -1152,7 +1152,7 @@ var
 begin
   Body := 'foo fighters';
 
-  Invite := Self.Module.CreateInvite(Self.Destination, Body, 'text/plain');
+  Invite := Self.Module.CreateInvite(Self.Core.From, Self.Destination, Body, 'text/plain');
   try
     CheckEquals(Length(Body), Invite.ContentLength, 'Content-Length');
     CheckEquals(Body,         Invite.Body,          'Body');
@@ -1173,7 +1173,7 @@ var
 begin
   Self.UseGruu;
 
-  Invite := Self.Module.CreateInvite(Self.Destination, '', '');
+  Invite := Self.Module.CreateInvite(Self.Core.From, Self.Destination, '', '');
   try
     Self.CheckCreateRequest(Self.Destination, Invite);
     Check(not Invite.FirstContact.Address.HasGrid,
@@ -1237,7 +1237,7 @@ var
   Bye:      TIdSipRequest;
   Response: TIdSipResponse;
 begin
-  Bye := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+  Bye := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Self.Destination);
   try
     Bye.Method          := MethodBye;
     Bye.CSeq.SequenceNo := $deadbeef;
@@ -1263,7 +1263,7 @@ var
   Bye:      TIdSipRequest;
   Response: TIdSipResponse;
 begin
-  Bye := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+  Bye := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Self.Destination);
   try
     Bye.Method          := MethodBye;
     Bye.From.Value      := Bye.From.Address.URI;     // strip the tag
@@ -4002,7 +4002,7 @@ begin
   Self.EstablishSession(Session);
 
   SubMod := Self.Core.AddModule(TIdSipSubscribeModule) as TIdSipSubscribeModule;
-  Refer := SubMod.CreateRefer(Self.Destination, Self.Destination);
+  Refer := SubMod.CreateRefer(Self.Core.From, Self.Destination, Self.Destination);
   try
     Refer.RequestUri.Grid := Session.LocalGruu.Grid;
 
@@ -4024,7 +4024,7 @@ begin
   Self.EstablishSession(Session);
 
   SubMod := Self.Core.AddModule(TIdSipSubscribeModule) as TIdSipSubscribeModule;
-  Refer := SubMod.CreateRefer(Self.Destination, Self.Destination);
+  Refer := SubMod.CreateRefer(Self.Destination, Self.Destination, Self.Destination);
   try
     if Session.IsInbound then
       Refer.RequestUri := Session.InitialRequest.FirstContact.Address
@@ -4051,7 +4051,7 @@ begin
   Self.EstablishSession(Session);
 
   SubMod := Self.Core.AddModule(TIdSipSubscribeModule) as TIdSipSubscribeModule;
-  TDRefer := SubMod.CreateRefer(Self.Destination, Self.Destination);
+  TDRefer := SubMod.CreateRefer(Self.Destination, Self.Destination, Self.Destination);
   try
     Check(not Session.Match(TDRefer),
           Session.ClassName + ': shouldn''t match an arbitrary (out-of-dialog) REFER');
@@ -4298,17 +4298,20 @@ var
   Refer:   TIdSipRequest;
   Session: TIdSipSession;
   SubMod:  TIdSipSubscribeModule;
+  Them:    TIdSipFromToHeader;
   Us:      TIdSipAddressHeader;
 begin
   Session := Self.CreateAction as TIdSipSession;
   Self.EstablishSession(Session);
 
   if Session.IsOutboundCall then begin
-    Us := Session.InitialRequest.From;
+    Them    := Session.InitialRequest.ToHeader;
+    Us      := Session.InitialRequest.From;
     Us.Grid := Session.InitialRequest.FirstContact.Grid;
   end
   else begin
-    Us := Session.InitialRequest.ToHeader;
+    Them    := Session.InitialRequest.From;
+    Us      := Session.InitialRequest.ToHeader;
     Us.Grid := Self.LastSentResponse.FirstContact.Grid;
   end;
 
@@ -4316,7 +4319,7 @@ begin
 
   SubMod := TIdSipSubscribeModule.Create(Self.Core);
   try
-    Refer := SubMod.CreateRefer(Us, Self.Destination);
+    Refer := SubMod.CreateRefer(Them, Us, Self.Destination);
     try
       Refer.CallID       := Session.Dialog.ID.CallID;
       Refer.From.Tag     := Session.Dialog.ID.RemoteTag;
@@ -4341,24 +4344,27 @@ var
   Refer:   TIdSipRequest;
   Session: TIdSipSession;
   SubMod:  TIdSipSubscribeModule;
+  Them:    TIdSipFromToHeader;
   Us:      TIdSipAddressHeader;
 begin
   Session := Self.CreateAction as TIdSipSession;
   Self.EstablishSession(Session);
 
   if Session.IsOutboundCall then begin
-    Us := Session.InitialRequest.From;
+    Them    := Session.InitialRequest.ToHeader;
+    Us      := Session.InitialRequest.From;
     Us.Grid := Session.InitialRequest.FirstContact.Grid;
   end
   else begin
-    Us := Session.InitialRequest.ToHeader;
+    Them    := Session.InitialRequest.From;
+    Us      := Session.InitialRequest.ToHeader;
     Us.Grid := Self.LastSentResponse.FirstContact.Grid;
   end;
 
   Us.RemoveParameter(TagParam);
 
   SubMod := Self.Core.AddModule(TIdSipSubscribeModule) as TIdSipSubscribeModule;
-  Refer := SubMod.CreateRefer(Us, Self.Destination);
+  Refer := SubMod.CreateRefer(Them, Us, Self.Destination);
   try
     Refer.CallID       := Session.Dialog.ID.CallID;
     Refer.From.Tag     := Session.Dialog.ID.RemoteTag;
@@ -4384,7 +4390,7 @@ begin
 
   Session := Self.CreateAndEstablishSession;
 
-  Bye := Self.Core.CreateRequest(MethodBye, Session.LocalGruu);
+  Bye := Self.Core.CreateRequest(MethodBye, Self.Core.From, Session.LocalGruu);
   try
     Self.MarkSentResponseCount;
     Self.ReceiveRequest(Bye);
@@ -5097,7 +5103,7 @@ var
 begin
   Self.CreateAction;
 
-  Replaces := Self.Core.InviteModule.CreateInvite(Self.Destination, '', '');
+  Replaces := Self.Core.InviteModule.CreateInvite(Self.Core.From, Self.Destination, '', '');
   try
     Replaces.Replaces.CallID  := Self.Session.InitialRequest.CallID;
     Replaces.Replaces.FromTag := Self.Session.InitialRequest.From.Tag;

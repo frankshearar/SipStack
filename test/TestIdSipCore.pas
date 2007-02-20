@@ -747,7 +747,7 @@ begin
                           + 'Record-Route=' + TIdSipUri.ParameterEncode('<sip:127.0.0.1>') + '&'
                           + 'Via=' + TIdSipUri.ParameterEncode(ViaHeader);
 
-  Invite := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+  Invite := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Self.Destination);
   try
     Check(not Invite.HasHeader(RecordRouteHeader),
           'Record-Route header erroneously added');
@@ -765,7 +765,7 @@ procedure TestTIdSipAbstractCore.TestCreateRequestFromUriWithDifferentMethod;
 begin
   Self.Destination.Address.Method := MethodInvite;
   try
-    Self.Core.CreateRequest(MethodRegister, Self.Destination);
+    Self.Core.CreateRequest(MethodRegister, Self.Core.From, Self.Destination);
     Fail('Failed to bail out of a contradictory request');
   except
     on EIdSipTransactionUser do;
@@ -786,7 +786,7 @@ begin
                           + 'Supported=refer' + '&'
                           + 'User-Agent=nothing';
 
-  Invite := Self.Core.CreateRequest(MethodOptions, Self.Destination);
+  Invite := Self.Core.CreateRequest(MethodOptions, Self.Core.From, Self.Destination);
   try
     Check(not Invite.HasHeader(AcceptHeader),
           'Accept header erroneously added');
@@ -828,7 +828,7 @@ begin
                     + 'Replaces=' + TIdSipUri.ParameterEncode(Replaces) + '&'
                     + 'Subject=' + TIdSipUri.ParameterEncode(Subject);
 
-  Invite := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+  Invite := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Self.Destination);
   try
     Check(Invite.RequestUri.Headers.IsEmpty,
           'The Request-URI must have no headers');
@@ -865,7 +865,7 @@ begin
   Self.Destination.Address.AddParameter(TtlParam, TtlValue);
   Self.Destination.Address.AddParameter(UserParam, UserValue);
 
-  Invite := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+  Invite := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Self.Destination);
   try
     Check(Invite.RequestUri.HasParameter(MaddrParam),
           'Request-URI''s missing the maddr parameter');
@@ -898,7 +898,7 @@ var
 begin
   Self.Destination.Address.Headers.Add(ReplacesHeader).Value := '1';
 
-  Invite := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+  Invite := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Self.Destination);
   try
     Check(Invite.IsMalformed,
           'Request not marked as malformed despite a malformed Replaces header');
@@ -913,7 +913,7 @@ var
 begin
   Self.Destination.Address.Method := MethodInvite;
 
-  Invite := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+  Invite := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Self.Destination);
   try
     CheckEquals(Self.Destination.Address.Method,
                 Invite.Method,
@@ -934,7 +934,7 @@ var
 begin
   Self.Destination.Address.AddParameter(FooParam, FooParamValue);
 
-  Invite := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+  Invite := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Self.Destination);
   try
     Check(Invite.RequestUri.HasParameter(FooParam),
           'Request-URI doesn''t have the unknown parameter');
@@ -952,7 +952,7 @@ var
 begin
   Self.Core.Contact.IsGruu := true;
 
-  Request := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+  Request := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Self.Destination);
   try
     Check(Request.HasHeader(SupportedHeaderFull),
           'Request has no Supported header');
@@ -1347,7 +1347,7 @@ var
 begin
   Dest := TIdSipLocation.Create('TCP', '127.0.0.2', 5060);
   try
-    Invite := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+    Invite := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Self.Destination);
     try
       Self.MarkSentRequestCount;
       Self.Core.SendRequest(Invite, Dest);
@@ -1369,7 +1369,7 @@ var
 begin
   Dest := TIdSipLocation.Create('TCP', '127.0.0.2', 5060);
   try
-    Invite := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+    Invite := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Self.Destination);
     try
       Invite.CallID := '@@illegal';
       try
@@ -1398,7 +1398,7 @@ var
 begin
   Dest := TIdSipLocation.Create('TCP', '127.0.0.2', 5060);
   try
-    Invite := Self.Core.CreateRequest('UNKNOWN', Self.Destination);
+    Invite := Self.Core.CreateRequest('UNKNOWN', Self.Core.From, Self.Destination);
     try
       try
         Self.Core.SendRequest(Invite, Dest);
@@ -1422,7 +1422,7 @@ var
 begin
   Dest := TIdSipLocation.Create('TCP', '127.0.0.2', 5060);
   try
-    Invite := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+    Invite := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Self.Destination);
     try
       Invite.Require.Value := 'unknown-extension';
 
@@ -1449,7 +1449,7 @@ var
 begin
   Dest := TIdSipLocation.Create('TCP', '127.0.0.2', 5060);
   try
-    Invite := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+    Invite := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Self.Destination);
     try
       Invite.Supported.Value := 'unknown-extension';
 
@@ -2248,7 +2248,7 @@ procedure TestTIdSipMessageModule.TestHasKnownAcceptEmptyAcceptHeader;
 var
   Request: TIdSipRequest;
 begin
-  Request := Self.Core.CreateRequest(MethodOptions, Self.Destination);
+  Request := Self.Core.CreateRequest(MethodOptions, Self.Core.From, Self.Destination);
   try
     Request.Accept.Value := '';
 
@@ -2265,7 +2265,7 @@ procedure TestTIdSipMessageModule.TestHasKnownAcceptNoAcceptableMimeTypes;
 var
   Request: TIdSipRequest;
 begin
-  Request := Self.Core.CreateRequest(MethodOptions, Self.Destination);
+  Request := Self.Core.CreateRequest(MethodOptions, Self.Core.From, Self.Destination);
   try
     Request.Accept.Value := 'x-application/unknown';
 
@@ -2280,7 +2280,7 @@ procedure TestTIdSipMessageModule.TestHasKnownAcceptNoAcceptHeader;
 var
   Request: TIdSipRequest;
 begin
-  Request := Self.Core.CreateRequest(MethodOptions, Self.Destination);
+  Request := Self.Core.CreateRequest(MethodOptions, Self.Core.From, Self.Destination);
   try
     Request.RemoveAllHeadersNamed(AcceptHeader);
 
@@ -2296,7 +2296,7 @@ procedure TestTIdSipMessageModule.TestHasKnownAcceptWithKnownMimeType;
 var
   Request: TIdSipRequest;
 begin
-  Request := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+  Request := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Self.Destination);
   try
     Request.Accept.Value := SdpMimeType;
 
@@ -2311,7 +2311,7 @@ procedure TestTIdSipMessageModule.TestHasKnownAcceptWithKnownMimeTypeAmongOthers
 var
   Request: TIdSipRequest;
 begin
-  Request := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+  Request := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Self.Destination);
   try
     Request.Accept.Value := 'text/plain, ' + SdpMimeType + ', message/sipfrag';
 
@@ -2326,7 +2326,7 @@ procedure TestTIdSipMessageModule.TestHasUnknownContentType;
 var
   Request: TIdSipRequest;
 begin
-  Request := Self.Core.CreateRequest(MethodOptions, Self.Destination);
+  Request := Self.Core.CreateRequest(MethodOptions, Self.Core.From, Self.Destination);
   try
     Request.RemoveAllHeadersNamed(ContentTypeHeaderFull);
 
@@ -2350,7 +2350,7 @@ procedure TestTIdSipMessageModule.TestRejectNonInviteWithReplacesHeader;
 var
   Request: TIdSipRequest;
 begin
-  Request := Self.Core.CreateRequest(MethodOptions, Self.Destination);
+  Request := Self.Core.CreateRequest(MethodOptions, Self.Core.From, Self.Destination);
   try
     Request.AddHeader(ReplacesHeader).Value := '1;from-tag=2;to-tag=3';
 
@@ -2369,7 +2369,7 @@ procedure TestTIdSipMessageModule.TestRejectNoSupportedMimeTypesInAccept;
 var
   Request: TIdSipRequest;
 begin
-  Request := Self.Core.CreateRequest(MethodOptions, Self.Destination);
+  Request := Self.Core.CreateRequest(MethodOptions, Self.Core.From, Self.Destination);
   try
     Request.Accept.Value := 'x-application/unknown';
 

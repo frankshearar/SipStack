@@ -838,7 +838,7 @@ begin
   Dest := TIdSipToHeader.Create;
   try
     Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna';
-    Request := Self.Core.CreateRequest(UnknownMethod, Dest);
+    Request := Self.Core.CreateRequest(UnknownMethod, Self.Core.From, Dest);
     try
       CheckEquals(UnknownMethod, Request.Method, 'Requet-Method');
       Self.CheckCreateRequest(Dest, Request);
@@ -859,7 +859,7 @@ begin
   Dest := TIdSipToHeader.Create;
   try
     Dest.Address.URI := 'sips:wintermute@tessier-ashpool.co.luna';
-    Request := Self.Core.CreateRequest(MethodInvite, Dest);
+    Request := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Dest);
     try
       Contact := Request.FirstContact;
       CheckEquals(SipsScheme,
@@ -883,7 +883,7 @@ begin
   Dest := TIdSipToHeader.Create;
   try
     Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna';
-    Request := Self.Core.CreateRequest(MethodInvite, Dest);
+    Request := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Dest);
     try
       CheckEquals(Self.Core.UserAgentName,
                   Request.FirstHeader(UserAgentHeader).Value,
@@ -904,7 +904,7 @@ begin
   Dest := TIdSipToHeader.Create;
   try
     Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna;transport=udp';
-    Request := Self.Core.CreateRequest(MethodInvite, Dest);
+    Request := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Dest);
     try
       CheckEquals(UdpTransport,
                   Request.LastHop.Transport,
@@ -914,7 +914,7 @@ begin
     end;
 
     Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna;transport=tcp';
-    Request := Self.Core.CreateRequest(MethodInvite, Dest);
+    Request := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Dest);
     try
       CheckEquals(TcpTransport,
                   Request.LastHop.Transport,
@@ -924,7 +924,7 @@ begin
     end;
 
     Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna;transport=foo';
-    Request := Self.Core.CreateRequest(MethodInvite, Dest);
+    Request := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Dest);
     try
       CheckEquals('FOO',
                   Request.LastHop.Transport,

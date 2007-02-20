@@ -813,7 +813,7 @@ procedure TestTIdSipOutboundRegisterModule.TestCreateRegister;
 var
   Reg: TIdSipRequest;
 begin
-  Reg := Self.Module.CreateRegister(Self.Destination);
+  Reg := Self.Module.CreateRegister(Self.Core.From, Self.Destination);
   try
     CheckEquals(MethodRegister, Reg.Method,              'Incorrect method');
     CheckEquals(MethodRegister, Reg.CSeq.Method,         'Incorrect CSeq method');
@@ -840,14 +840,14 @@ var
   Reg:          TIdSipRequest;
   SecondCallID: String;
 begin
-  Reg := Self.Module.CreateRegister(Self.Destination);
+  Reg := Self.Module.CreateRegister(Self.Core.From, Self.Destination);
   try
     FirstCallID := Reg.CallID;
   finally
     Reg.Free;
   end;
 
-  Reg := Self.Module.CreateRegister(Self.Destination);
+  Reg := Self.Module.CreateRegister(Self.Core.From, Self.Destination);
   try
     SecondCallID := Reg.CallID;
   finally
@@ -859,7 +859,7 @@ begin
               'Call-ID SHOULD be the same for same registrar');
 
   Self.Destination.Address.Uri := 'sip:enki.org';
-  Reg := Self.Module.CreateRegister(Self.Destination);
+  Reg := Self.Module.CreateRegister(Self.Core.From, Self.Destination);
   try
     CheckNotEquals(FirstCallID,
                    Reg.CallID,
@@ -879,7 +879,7 @@ begin
   Self.Module.UserAgent.InstanceID := ZeroURN;
 
   // cf. draft-ietf-sip-gruu-10, section 7.1.1.1
-  Reg := Self.Module.CreateRegister(Self.Destination);
+  Reg := Self.Module.CreateRegister(Self.Core.From, Self.Destination);
   try
     Check(Reg.FirstContact.HasParameter(SipInstanceParam),
           'Contact doesn''t have the "' + SipInstanceParam + '" parameter');
@@ -907,7 +907,7 @@ begin
   Self.Module.UserAgent.Contact.IsGruu := true;
   Self.Module.RequireGRUU              := true;
 
-  Reg := Self.Module.CreateRegister(Self.Destination);
+  Reg := Self.Module.CreateRegister(Self.Core.From, Self.Destination);
   try
     Check(Reg.HasHeader(RequireHeader),
           'REGISTER lacks a Require header');

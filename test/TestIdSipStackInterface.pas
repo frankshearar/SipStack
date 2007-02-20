@@ -683,7 +683,7 @@ end;
 }
 function TestTIdSipStackInterface.CreateRemoteInvite: TIdSipRequest;
 begin
-  Result := Self.RemoteUA.InviteModule.CreateInvite(Self.Destination, '', '');
+  Result := Self.RemoteUA.InviteModule.CreateInvite(Self.RemoteUA.From, Self.Destination, '', '');
 end;
 
 function TestTIdSipStackInterface.CreateRemoteNotify(RemoteDialog: TIdSipDialog; Subscribe: TIdSipRequest): TIdSipRequest;
@@ -1013,7 +1013,7 @@ begin
   try
     LocalFrom.Value := 'sip:' + Self.LocalAddress + ':' + IntToStr(Self.LocalPort);
 
-    Subscribe := SubMod.CreateSubscribe(LocalFrom, EventPackage);
+    Subscribe := SubMod.CreateSubscribe(Self.RemoteUA.From, LocalFrom, EventPackage);
     try
       Self.ReceiveRequest(Subscribe);
     finally

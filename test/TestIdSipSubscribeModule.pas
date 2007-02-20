@@ -464,8 +464,9 @@ type
   TSubscribeModuleActionTestCase = class(TestTIdSipAction,
                                          IIdSipSubscribeModuleListener)
   protected
-    Module:  TIdSipSubscribeModule;
-    Package: TIdSipEventPackage;
+    Module:      TIdSipSubscribeModule;
+    Package:     TIdSipEventPackage;
+    RemoteParty: TIdSipFromHeader;
 
     procedure OnRenewedSubscription(UserAgent: TIdSipAbstractCore;
                                     Subscription: TIdSipOutboundSubscription); virtual;
@@ -473,6 +474,7 @@ type
                                     Subscription: TIdSipInboundSubscription); virtual;
   public
     procedure SetUp; override;
+    procedure TearDown; override;
   end;
 
   TestTIdSipInboundSubscriptionBase = class(TSubscribeModuleActionTestCase)
@@ -993,7 +995,7 @@ procedure TSubscribeTestCase.ReceiveRefer(Target: TIdSipAddressHeader);
 var
   Refer: TIdSipRequest;
 begin
-  Refer := Self.Module.CreateRefer(Self.Destination, Target);
+  Refer := Self.Module.CreateRefer(Self.Core.From, Self.Destination, Target);
   try
     // See the comment in TSubscribeTestCase.ReceiveSubscribe.
     Refer.FirstContact.Address := Self.Destination.Address;
@@ -1008,7 +1010,7 @@ procedure TSubscribeTestCase.ReceiveSubscribe(const EventPackage: String;
 var
   Sub: TIdSipRequest;
 begin
-  Sub := Self.Core.CreateRequest(MethodSubscribe, Self.Destination);
+  Sub := Self.Core.CreateRequest(MethodSubscribe, Self.Core.From, Self.Destination);
   try
     // Self.Core will use "localhost" here, and as a result of the mock
     // infrastructure this will access violate - the stack assumes that
@@ -1127,7 +1129,7 @@ var
   Ok:           TIdSipResponse;
   Sub:          TIdSipRequest;
 begin
-  Sub := Self.Module.CreateSubscribe(Self.Destination, EventPackage);
+  Sub := Self.Module.CreateSubscribe(Self.Core.From, Self.Destination, EventPackage);
   try
     Ok := TIdSipResponse.InResponseTo(Sub, SIPOK, Self.Core.Contact);
     try
@@ -1156,7 +1158,7 @@ procedure TestTIdSipSubscribeModule.ReceiveReferWithNoReferToHeader;
 var
   Refer: TIdSipRequest;
 begin
-  Refer := Self.Module.CreateRefer(Self.Destination, Self.Core.Contact);
+  Refer := Self.Module.CreateRefer(Self.Core.From, Self.Destination, Self.Core.Contact);
   try
     // See the comment in TSubscribeTestCase.ReceiveSubscribe.
     Refer.FirstContact.Address := Self.Destination.Address;
@@ -1171,7 +1173,8 @@ procedure TestTIdSipSubscribeModule.ReceiveSubscribeWithNoEventHeader;
 var
   MalformedSub: TIdSipRequest;
 begin
-  MalformedSub := Self.Module.CreateSubscribe(Self.Destination,
+  MalformedSub := Self.Module.CreateSubscribe(Self.Core.From,
+                                              Self.Destination,
                                               TIdSipTestPackage.EventPackage);
   try
     MalformedSub.RemoveAllHeadersNamed(EventHeaderFull);
@@ -1540,7 +1543,7 @@ var
   Notify:   TIdSipRequest;
   Response: TIdSipResponse;
 begin
-  Notify := Self.Core.CreateRequest(MethodInvite, Self.Destination);
+  Notify := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Self.Destination);
   try
     Notify.Method          := MethodNotify;
     Notify.CSeq.SequenceNo := $deadbeef;
@@ -1733,7 +1736,8 @@ end;
 
 procedure TestTIdSipOutboundNotifyBase.SetUp;
 var
-  Ok: TIdSipResponse;
+  Ok:          TIdSipResponse;
+  RemoteParty: TIdSipFromHeader;
 begin
   inherited SetUp;
 
@@ -1744,8 +1748,16 @@ begin
   // Self.Subscribe contains a SUBSCRIBE we receive from sip:case@remotehost.
   // CreateSubscribe creates a SUBSCRIBE that WE SEND, so we alter the request
   // by hand to make it look like it comes from the network.
-  Self.Subscribe := Self.Module.CreateSubscribe(Self.Destination,
-                                                TIdSipTestPackage.EventPackage);
+  RemoteParty := TIdSipFromHeader.Create;
+  try
+    RemoteParty.Assign(Self.Destination);
+    Self.Subscribe := Self.Module.CreateSubscribe(RemoteParty,
+                                                  Self.Destination,
+                                                  TIdSipTestPackage.EventPackage);
+  finally
+    RemoteParty.Free;
+  end;
+
   Self.Subscribe.RequestUri           := Self.Core.From.Address;
   Self.Subscribe.From.Address         := Self.Destination.Address;
   Self.Subscribe.ToHeader.Address     := Self.Core.From.Address;
@@ -2182,7 +2194,7 @@ begin
 
   Self.ExpiresValue := 1000;
 
-  Subscribe := Self.Module.CreateSubscribe(Self.Destination, TIdSipTestPackage.EventPackage);
+  Subscribe := Self.Module.CreateSubscribe(Self.Core.From, Self.Destination, TIdSipTestPackage.EventPackage);
   try
     OK := TIdSipResponse.InResponseTo(Subscribe, SIPOK);
     try
@@ -2484,6 +2496,16 @@ begin
 
   Self.Module.AddPackage(TIdSipTestPackage);
   Self.Package := Self.Module.Package(TIdSipTestPackage.EventPackage);
+
+  Self.RemoteParty := TIdSipFromHeader.Create;
+  Self.RemoteParty.Assign(Self.Destination);
+end;
+
+procedure TSubscribeModuleActionTestCase.TearDown;
+begin
+  Self.RemoteParty.Free;
+
+  inherited TearDown;
 end;
 
 //* TSubscribeModuleActionTestCase Protected methods ***************************
@@ -2884,7 +2906,7 @@ procedure TestTIdSipInboundSubscription.ReceiveSubscribeWithoutExpires(const Eve
 var
   Subscribe: TIdSipRequest;
 begin
-  Subscribe := Self.Module.CreateSubscribe(Self.Destination, EventPackage);
+  Subscribe := Self.Module.CreateSubscribe(RemoteParty, Self.Destination, EventPackage);
   try
     // See the comment in TSubscribeTestCase.ReceiveSubscribe.
     Subscribe.FirstContact.Address := Self.Destination.Address;
@@ -2901,7 +2923,7 @@ procedure TestTIdSipInboundSubscription.ReceiveSubscribe(const EventPackage: Str
 var
   Sub: TIdSipRequest;
 begin
-  Sub := Self.Module.CreateSubscribe(Self.Core.Contact, EventPackage);
+  Sub := Self.Module.CreateSubscribe(RemoteParty, Self.Core.Contact, EventPackage);
   try
     Sub.From.Address         := Self.Destination.Address;
     Sub.FirstContact.Address := Self.Destination.Address;
@@ -2920,7 +2942,7 @@ procedure TestTIdSipInboundSubscription.ReceiveSubscribeWithExpiresInContact(Dur
 var
   Subscribe: TIdSipRequest;
 begin
-  Subscribe := Self.Module.CreateSubscribe(Self.Destination, TIdSipTestPackage.EventPackage);
+  Subscribe := Self.Module.CreateSubscribe(RemoteParty, Self.Destination, TIdSipTestPackage.EventPackage);
   try
     // See the comment in TSubscribeTestCase.ReceiveSubscribe.
     Subscribe.FirstContact.Address := Self.Destination.Address;
@@ -2959,7 +2981,7 @@ var
 begin
   Self.Package.MinimumExpiryTime := MinExpTime;
 
-  Sub := Self.Module.CreateSubscribe(Self.Destination, TIdSipTestPackage.EventPackage);
+  Sub := Self.Module.CreateSubscribe(RemoteParty, Self.Destination, TIdSipTestPackage.EventPackage);
   try
     // See the comment in TSubscribeTestCase.ReceiveSubscribe.
     Sub.FirstContact.Address := Self.Destination.Address;
@@ -3069,7 +3091,7 @@ begin
   // Set us up to support GRUU
   Self.UseGruu;
 
-  Sub := Self.Module.CreateSubscribe(Self.Destination, TIdSipTestPackage.EventPackage);
+  Sub := Self.Module.CreateSubscribe(Self.Core.From, Self.Destination, TIdSipTestPackage.EventPackage);
   try
     // See the comment in TSubscribeTestCase.ReceiveSubscribe.
     Sub.FirstContact.Address := Self.Destination.Address;
@@ -4534,7 +4556,7 @@ begin
   // cf. TestTIdSipInboundSubscription.ReceiveSubscribeRequestWithGruu.
   Self.Module.AddPackage(TIdSipReferPackage);
 
-  Refer := Self.Module.CreateRefer(Self.Destination, Self.Core.Contact);
+  Refer := Self.Module.CreateRefer(Self.Core.From, Self.Destination, Self.Core.Contact);
   try
     // See the comment in TSubscribeTestCase.ReceiveSubscribe.
     Refer.FirstContact.Address := Self.Destination.Address;
@@ -4552,7 +4574,7 @@ procedure TestTIdSipInboundReferral.ReceiveRefer(Target: TIdSipAddressHeader);
 var
   Refer: TIdSipRequest;
 begin
-  Refer := Self.Module.CreateRefer(Self.Core.Contact, Target);
+  Refer := Self.Module.CreateRefer(Self.RemoteParty, Self.Core.Contact, Target);
   try
     Refer.From.Address         := Self.Destination.Address;
     Refer.FirstContact.Address := Self.Destination.Address;
@@ -4588,7 +4610,7 @@ begin
   // Set us up to support GRUU
   Self.UseGruu;
 
-  Refer := Self.Module.CreateRefer(Self.Destination, Self.Core.Contact);
+  Refer := Self.Module.CreateRefer(Self.RemoteParty, Self.Destination, Self.Core.Contact);
   try
     // See the comment in TSubscribeTestCase.ReceiveSubscribe.
     Refer.FirstContact.Address := Self.Destination.Address;

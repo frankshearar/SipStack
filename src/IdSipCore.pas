@@ -394,6 +394,7 @@ type
     function  CreateRedirectedRequest(OriginalRequest: TIdSipRequest;
                                       Contact: TIdSipAddressHeader): TIdSipRequest;
     function  CreateRequest(const Method: String;
+                            From: TIdSipFromToHeader;
                             Dest: TIdSipAddressHeader): TIdSipRequest; overload;
     function  CreateRequest(const Method: String;
                             Dialog: TIdSipDialog): TIdSipRequest; overload;
@@ -575,6 +576,7 @@ type
   TIdSipActionState = (asInitialised, asSent, asResent, asFinished);
   TIdSipAction = class(TIdInterfacedObject)
   private
+    fFrom:           TIdSipFromHeader;
     fID:             String;
     fInitialRequest: TIdSipRequest;
     fIsTerminated:   Boolean;
@@ -586,6 +588,7 @@ type
     function  CreateResend(AuthorizationCredentials: TIdSipAuthorizationHeader): TIdSipRequest;
     function  GetUseGruu: Boolean;
     function  GetUsername: String;
+    procedure SetFrom(Value: TIdSipFromHeader);
     procedure SetLocalGruu(Value: TIdSipContactHeader);
     procedure SetUseGruu(Value: Boolean);
     procedure SetUsername(Value: String);
@@ -650,6 +653,7 @@ type
     procedure Send; virtual;
     procedure Terminate; virtual;
 
+    property From:           TIdSipFromHeader    read fFrom write SetFrom;
     property ID:             String              read fID;
     property InitialRequest: TIdSipRequest       read fInitialRequest;
     property IsOwned:        Boolean             read fIsOwned;
@@ -1711,6 +1715,7 @@ begin
 end;
 
 function TIdSipAbstractCore.CreateRequest(const Method: String;
+                                          From: TIdSipFromToHeader;
                                           Dest: TIdSipAddressHeader): TIdSipRequest;
 begin
   if Dest.Address.HasMethod then begin
@@ -1722,7 +1727,7 @@ begin
   Result := Dest.Address.CreateRequest;
   try
     Result.CallID         := Self.NextCallID;
-    Result.From           := Self.From;
+    Result.From.Value     := From.FullValue;
     Result.From.Tag       := Self.NextTag;
     Result.Method         := Method;
     Result.ToHeader.Value := Dest.FullValue;
@@ -2987,6 +2992,7 @@ begin
   Self.TargetLocations.Free;
   Self.LocalGruu.Free;
   Self.InitialRequest.Free;
+  Self.From.Free;
   Self.ActionListeners.Free;
 
   inherited Destroy;
@@ -3168,6 +3174,7 @@ begin
   Self.fUA := UA;
 
   Self.ActionListeners := TIdNotificationList.Create;
+  Self.fFrom           := TIdSipFromHeader.Create;
   Self.fID             := TIdSipActionRegistry.RegisterAction(Self);
   Self.fInitialRequest := TIdSipRequest.Create;
   Self.fIsOwned        := false;
@@ -3182,6 +3189,12 @@ begin
   // ignorance of the correct address/port by setting LocalGruu.IsUnset.
   Self.LocalGruu.Value   := 'sip:127.0.0.1';
   Self.LocalGruu.IsUnset := true;
+
+  // A sensible default.
+  if Self.IsInbound then
+    Self.From := Request.From
+  else
+    Self.From := Self.UA.From;
 
   Self.UseGruu := UA.UseGruu;
 
@@ -3388,6 +3401,11 @@ end;
 function TIdSipAction.GetUsername: String;
 begin
   Result := Self.LocalGruu.DisplayName;
+end;
+
+procedure TIdSipAction.SetFrom(Value: TIdSipFromHeader);
+begin
+  Self.fFrom.Assign(Value);
 end;
 
 procedure TIdSipAction.SetLocalGruu(Value: TIdSipContactHeader);

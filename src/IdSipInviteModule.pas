@@ -123,7 +123,8 @@ type
     function  CreateAck(Dialog: TIdSipDialog): TIdSipRequest;
     function  CreateBye(Dialog: TIdSipDialog): TIdSipRequest;
     function  CreateCancel(Invite: TIdSipRequest): TIdSipRequest;
-    function  CreateInvite(Dest: TIdSipAddressHeader;
+    function  CreateInvite(From: TIdSipFromHeader;
+                           Dest: TIdSipAddressHeader;
                            const Body: String;
                            const MimeType: String): TIdSipRequest;
     function  CreateReInvite(Dialog: TIdSipDialog;
@@ -955,11 +956,12 @@ begin
   Self.UserAgent.AddLocalHeaders(Invite);
 end;
 
-function TIdSipInviteModule.CreateInvite(Dest: TIdSipAddressHeader;
+function TIdSipInviteModule.CreateInvite(From: TIdSipFromHeader;
+                                         Dest: TIdSipAddressHeader;
                                          const Body: String;
                                          const MimeType: String): TIdSipRequest;
 begin
-  Result := Self.UserAgent.CreateRequest(MethodInvite, Dest);
+  Result := Self.UserAgent.CreateRequest(MethodInvite, From, Dest);
   try
     Self.TurnIntoInvite(Result, Body, MimeType);
   except
@@ -1234,7 +1236,8 @@ begin
   try
     TempTo.Address := Self.InitialRequest.RequestUri;
 
-    Result := Self.Module.CreateInvite(TempTo,
+    Result := Self.Module.CreateInvite(Self.From,
+                                       TempTo,
                                        Self.InitialRequest.Body,
                                        Self.InitialRequest.ContentType);
   finally
@@ -2025,7 +2028,7 @@ begin
   // If making a SIPS call, we need to use a SIPS URI.
   Self.LocalGruu.Address.Scheme := Self.Destination.Address.Scheme;
 
-  Result := Self.Module.CreateInvite(Self.Destination, Self.Offer, Self.MimeType);
+  Result := Self.Module.CreateInvite(Self.From, Self.Destination, Self.Offer, Self.MimeType);
   Result.FirstContact.Assign(Self.LocalGruu);
 
   if Result.FirstContact.IsGruu then begin
@@ -2148,7 +2151,7 @@ begin
   // If making a SIPS call, we need to use a SIPS URI.
   Self.LocalGruu.Address.Scheme := Self.Destination.Address.Scheme;
 
-  Result := Self.Module.CreateInvite(Self.Destination, Self.Offer, Self.MimeType);
+  Result := Self.Module.CreateInvite(Self.From, Self.Destination, Self.Offer, Self.MimeType);
   Result.AddHeader(ReplacesHeader);
   Result.Replaces.CallID  := Self.CallID;
   Result.Replaces.FromTag := Self.FromTag;
@@ -2328,7 +2331,8 @@ end;
 
 function TIdSipSession.CreateNewAttempt: TIdSipRequest;
 begin
-  Result := Self.Module.CreateInvite(Self.InitialRequest.ToHeader,
+  Result := Self.Module.CreateInvite(Self.InitialRequest.From,
+                                     Self.InitialRequest.ToHeader,
                                      Self.InitialRequest.Body,
                                      Self.InitialRequest.ContentType);
 end;

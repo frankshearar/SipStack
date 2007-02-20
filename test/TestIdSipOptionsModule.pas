@@ -116,7 +116,7 @@ procedure TestTIdSipOptionsModule.ReceiveOptions;
 var
   Options: TIdSipRequest;
 begin
-  Options := Self.Module.CreateOptions(Self.Core.Contact);
+  Options := Self.Module.CreateOptions(Self.Core.From, Self.Core.Contact);
   try
     Self.ReceiveRequest(Options);
   finally
@@ -130,7 +130,7 @@ procedure TestTIdSipOptionsModule.TestCreateOptions;
 var
   Options: TIdSipRequest;
 begin
-  Options := Self.Module.CreateOptions(Self.Destination);
+  Options := Self.Module.CreateOptions(Self.Core.From, Self.Destination);
   try
     CheckEquals(MethodOptions, Options.Method,      'Incorrect method');
     CheckEquals(MethodOptions, Options.CSeq.Method, 'Incorrect CSeq method');
@@ -204,7 +204,7 @@ procedure TestTIdSipOptionsModule.TestRejectOptionsWithReplacesHeader;
 var
   Options: TIdSipRequest;
 begin
-  Options := Self.Module.CreateOptions(Self.Destination);
+  Options := Self.Module.CreateOptions(Self.Core.From, Self.Destination);
   try
     Options.AddHeader(ReplacesHeader).Value := '1;from-tag=2;to-tag=3';
 
@@ -240,7 +240,7 @@ procedure TestTIdSipInboundOptions.SetUp;
 begin
   inherited SetUp;
 
-  Self.OptionsRequest := Self.Module.CreateOptions(Self.Destination);
+  Self.OptionsRequest := Self.Module.CreateOptions(Self.Core.From, Self.Destination);
 
   Self.Options := TIdSipInboundOptions.CreateInbound(Self.Core,
                                                      Self.OptionsRequest,

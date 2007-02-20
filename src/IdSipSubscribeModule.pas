@@ -151,9 +151,11 @@ type
     function  CreateNotify(Dialog: TIdSipDialog;
                            Subscribe: TIdSipRequest;
                            const SubscriptionState: String): TIdSipRequest;
-    function  CreateRefer(Dest: TIdSipAddressHeader;
+    function  CreateRefer(From: TIdSipFromToHeader;
+                          Dest: TIdSipAddressHeader;
                           ReferTo: TIdSipAddressHeader): TIdSipRequest;
-    function  CreateSubscribe(Dest: TIdSipAddressHeader;
+    function  CreateSubscribe(From: TIdSipFromToHeader;
+                              Dest: TIdSipAddressHeader;
                               const EventPackage: String): TIdSipRequest; overload;
     function  CreateSubscribe(Dialog: TIdSipDialog;
                               const EventPackage: String): TIdSipRequest; overload;
@@ -919,10 +921,11 @@ begin
   end;
 end;
 
-function TIdSipSubscribeModule.CreateRefer(Dest: TIdSipAddressHeader;
+function TIdSipSubscribeModule.CreateRefer(From: TIdSipFromToHeader;
+                                           Dest: TIdSipAddressHeader;
                                            ReferTo: TIdSipAddressHeader): TIdSipRequest;
 begin
-  Result := Self.UserAgent.CreateRequest(MethodRefer, Dest);
+  Result := Self.UserAgent.CreateRequest(MethodRefer, From, Dest);
   try
     // draft-ietf-sip-gruu-10, section 8.1
     if Result.FirstContact.IsGruu then
@@ -937,10 +940,11 @@ begin
   end;
 end;
 
-function TIdSipSubscribeModule.CreateSubscribe(Dest: TIdSipAddressHeader;
+function TIdSipSubscribeModule.CreateSubscribe(From: TIdSipFromToHeader;
+                                               Dest: TIdSipAddressHeader;
                                                const EventPackage: String): TIdSipRequest;
 begin
-  Result := Self.UserAgent.CreateRequest(MethodSubscribe, Dest);
+  Result := Self.UserAgent.CreateRequest(MethodSubscribe, From, Dest);
   try
     // draft-ietf-sip-gruu-10, section 8.1
     if Result.FirstContact.IsGruu then
@@ -1538,7 +1542,7 @@ begin
   try
     TempTo.Address := Self.InitialRequest.RequestUri;
 
-    Result := Self.Module.CreateSubscribe(TempTo, Self.EventPackage);
+    Result := Self.Module.CreateSubscribe(Self.From, TempTo, Self.EventPackage);
     Result.Event.ID := Self.EventID;
   finally
     TempTo.Free;
@@ -1610,7 +1614,7 @@ end;
 
 function TIdSipOutboundSubscribe.CreateNewAttempt: TIdSipRequest;
 begin
-  Result := Self.Module.CreateSubscribe(Self.Target, Self.EventPackage);
+  Result := Self.Module.CreateSubscribe(Self.From, Self.Target, Self.EventPackage);
   Result.Event.ID             := Self.EventID;
   Result.Expires.NumericValue := Self.Duration;
 
@@ -1688,7 +1692,7 @@ end;
 
 function TIdSipOutboundUnsubscribe.CreateNewAttempt: TIdSipRequest;
 begin
-  Result := Self.Module.CreateSubscribe(Self.Target, Self.EventPackage);
+  Result := Self.Module.CreateSubscribe(Self.From, Self.Target, Self.EventPackage);
   Result.CallID               := Self.CallID;
   Result.Event.ID             := Self.EventID;
   Result.Expires.NumericValue := 0;
@@ -1765,7 +1769,7 @@ end;
 
 function TIdSipOutboundRefer.CreateNewAttempt: TIdSipRequest;
 begin
-  Result := Self.Module.CreateRefer(Self.Target, Self.ReferTo);
+  Result := Self.Module.CreateRefer(Self.From, Self.Target, Self.ReferTo);
   Result.Event.ID             := Self.EventID;
   Result.Expires.NumericValue := Self.Duration;
 
@@ -1845,7 +1849,7 @@ end;
 
 function TIdSipSubscription.CreateNewAttempt: TIdSipRequest;
 begin
-  Result := Self.Module.CreateSubscribe(Self.Target, Self.EventPackage);
+  Result := Self.Module.CreateSubscribe(Self.From, Self.Target, Self.EventPackage);
   Result.Event.ID             := Self.EventID;
   Result.Expires.NumericValue := Self.Duration;
 end;
@@ -2991,7 +2995,7 @@ end;
 
 function TIdSipOutboundReferral.CreateNewAttempt: TIdSipRequest;
 begin
-  Result := Self.Module.CreateRefer(Self.Target, Self.ReferredResource);
+  Result := Self.Module.CreateRefer(Self.From, Self.Target, Self.ReferredResource);
   Result.Event.ID             := Self.EventID;
   Result.Expires.NumericValue := Self.Duration;
 

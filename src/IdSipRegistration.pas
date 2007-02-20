@@ -221,7 +221,8 @@ type
     function  Accept(Request: TIdSipRequest;
                      Binding: TIdSipConnectionBindings): TIdSipAction; override;
     procedure CleanUp; override;
-    function  CreateRegister(Registrar: TIdSipToHeader): TIdSipRequest;
+    function  CreateRegister(From: TIdSipFromToHeader;
+                             Registrar: TIdSipToHeader): TIdSipRequest;
     function  CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistrationQuery;
     function  RegisterWith(Registrar: TIdSipUri;
                            Contact: TIdSipContactHeader): TIdSipOutboundRegistration; overload;
@@ -948,9 +949,10 @@ begin
     Self.UnregisterFrom(Self.Registrar, Self.UserAgent.Contact).Send;
 end;
 
-function TIdSipOutboundRegisterModule.CreateRegister(Registrar: TIdSipToHeader): TIdSipRequest;
+function TIdSipOutboundRegisterModule.CreateRegister(From: TIdSipFromToHeader;
+                                                     Registrar: TIdSipToHeader): TIdSipRequest;
 begin
-  Result := Self.UserAgent.CreateRequest(MethodRegister, Registrar);
+  Result := Self.UserAgent.CreateRequest(MethodRegister, From, Registrar);
   try
     Self.KnownRegistrars.AddKnownRegistrar(Registrar.Address,
                                            Result.CallID,
@@ -1174,7 +1176,7 @@ begin
     // TODO: This is very hacky.
     OutModule := TIdSipOutboundRegisterModule.Create(Self.UA);
     try
-      Result := OutModule.CreateRegister(TempTo);
+      Result := OutModule.CreateRegister(Self.From, TempTo);
     finally
       OutModule.Free;
     end;
@@ -1394,7 +1396,7 @@ begin
   try
     TempTo.Address := Self.InitialRequest.RequestUri;
 
-    Result := Self.OutModule.CreateRegister(TempTo);
+    Result := Self.OutModule.CreateRegister(Self.From, TempTo);
   finally
     TempTo.Free;
   end;
@@ -1409,7 +1411,7 @@ begin
   try
     ToHeader.Address := Registrar;
 
-    Result := Self.OutModule.CreateRegister(ToHeader);
+    Result := Self.OutModule.CreateRegister(Self.From, ToHeader);
 
     // Bindings explicitly carries all Contact information. Thus we must remove
     // any Contact information already in Result.
