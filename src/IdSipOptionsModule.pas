@@ -240,6 +240,7 @@ begin
     Response.FirstWarning.Text  := '';
 
     Self.SendResponse(Response);
+    Self.LocalGruu := Response.FirstContact;
   finally
     Response.Free;
   end;
