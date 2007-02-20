@@ -225,7 +225,6 @@ type
     fMaxResendInterval:       Cardinal; // in milliseconds
     Grid:                     String;
     InviteListeners:          TIdNotificationList;
-    InviteModule:             TIdSipInviteModule;
     ReceivedAck:              Boolean;
     ResendInterval:           Cardinal;
     SentFinalResponse:        Boolean;
@@ -1489,7 +1488,6 @@ begin
   inherited Initialise(UA, Request, Binding);
 
   Self.InviteListeners := TIdNotificationList.Create;
-  Self.InviteModule    := Self.UA.ModuleFor(MethodInvite) as TIdSipInviteModule;
 
   Self.fLastResponse     := TIdSipResponse.Create;
   Self.ReceivedAck       := false;
@@ -1579,12 +1577,12 @@ end;
 
 function TIdSipInboundInvite.GetInitialResendInterval: Cardinal;
 begin
-  Result := Self.InviteModule.InitialResendInterval;
+  Result := Self.Module.InitialResendInterval;
 end;
 
 function TIdSipInboundInvite.GetProgressResendInterval: Cardinal;
 begin
-  Result := Self.InviteModule.ProgressResendInterval;
+  Result := Self.Module.ProgressResendInterval;
 end;
 
 procedure TIdSipInboundInvite.NotifyOfFailure;
