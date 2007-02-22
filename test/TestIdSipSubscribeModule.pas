@@ -1131,7 +1131,7 @@ var
 begin
   Sub := Self.Module.CreateSubscribe(Self.Core.From, Self.Destination, EventPackage);
   try
-    Ok := TIdSipResponse.InResponseTo(Sub, SIPOK, Self.Core.Contact);
+    Ok := TIdSipResponse.InResponseTo(Sub, SIPOK, Self.Core.RegisterModule.Contact);
     try
       RemoteDialog := TIdSipDialog.CreateOutboundDialog(Sub, Ok, false);
       try
@@ -1158,7 +1158,7 @@ procedure TestTIdSipSubscribeModule.ReceiveReferWithNoReferToHeader;
 var
   Refer: TIdSipRequest;
 begin
-  Refer := Self.Module.CreateRefer(Self.Core.From, Self.Destination, Self.Core.Contact);
+  Refer := Self.Module.CreateRefer(Self.Core.From, Self.Destination, Self.Core.RegisterModule.Contact);
   try
     // See the comment in TSubscribeTestCase.ReceiveSubscribe.
     Refer.FirstContact.Address := Self.Destination.Address;
@@ -1327,7 +1327,7 @@ procedure TestTIdSipSubscribeModule.TestReceiveReferNotifiesListeners;
 begin
   Self.Module.AddPackage(TIdSipReferPackage);
 
-  Self.ReceiveRefer(Self.Core.Contact);
+  Self.ReceiveRefer(Self.Core.RegisterModule.Contact);
 
   Check(Self.OnSubscriptionRequestFired, 'OnSubscriptionRequest didn''t fire');
   Check(Self.Core = Self.UserAgentParam,
@@ -1343,7 +1343,7 @@ var
 begin
   Self.Module.AddPackage(TIdSipReferPackage);
 
-  Refer := Self.Module.Refer(Self.Destination, Self.Core.Contact);
+  Refer := Self.Module.Refer(Self.Destination, Self.Core.RegisterModule.Contact);
   Check(Assigned(Refer),
         'Result not assigned');
 
@@ -1523,7 +1523,7 @@ var
 begin
   Module := Self.Core.ModuleFor(MethodOptions) as TIdSipOptionsModule;
 
-  Options := Module.CreateOptions(Self.Destination);
+  Options := Module.CreateOptions(Self.Core.From, Self.Destination);
   try
     // Swop To & From because this comes from the network
     Temp := Options.From.FullValue;
@@ -1646,7 +1646,7 @@ begin
 
   Self.CreateAndEstablishInboundCall;
 
-  Self.ReceiveRefer(Self.Core.Contact);
+  Self.ReceiveRefer(Self.Core.RegisterModule.Contact);
   Check(Assigned(Self.Subscription), 'No REFER/SUBSCRIBE received');
   CheckEquals(TIdSipInboundReferral.ClassName,
               Self.Subscription.ClassName,
@@ -2356,7 +2356,7 @@ begin
   Self.Module.AddPackage(TIdSipReferPackage);
 
   Self.ReferTo := TIdSipToHeader.Create;
-  Self.ReferTo.Assign(Self.Core.Contact);
+  Self.ReferTo.Assign(Self.Core.RegisterModule.Contact);
 end;
 
 procedure TestTIdSipOutboundRefer.TearDown;
@@ -2423,7 +2423,7 @@ begin
               Self.ClassName + ': Method');
   Check(Refer.HasHeader(ReferToHeaderFull),
         Self.ClassName + ': No Refer-To header');
-  CheckEquals(Self.Core.Contact.Value,
+  CheckEquals(Self.Core.RegisterModule.Contact.Value,
               Refer.FirstHeader(ReferToHeaderFull).Value,
               Self.ClassName + ': Wrong Refer-To value');
   Check(Refer.HasHeader(EventHeaderFull),
@@ -2923,7 +2923,7 @@ procedure TestTIdSipInboundSubscription.ReceiveSubscribe(const EventPackage: Str
 var
   Sub: TIdSipRequest;
 begin
-  Sub := Self.Module.CreateSubscribe(RemoteParty, Self.Core.Contact, EventPackage);
+  Sub := Self.Module.CreateSubscribe(RemoteParty, Self.Core.RegisterModule.Contact, EventPackage);
   try
     Sub.From.Address         := Self.Destination.Address;
     Sub.FirstContact.Address := Self.Destination.Address;
@@ -4544,7 +4544,7 @@ procedure TestTIdSipInboundReferral.ReceiveSubscribeRequest;
 begin
   // cf. TestTIdSipInboundSubscription.ReceiveSubscribeRequest.
   Self.Module.AddPackage(TIdSipReferPackage);
-  Self.ReceiveRefer(Self.Core.Contact);
+  Self.ReceiveRefer(Self.Core.RegisterModule.Contact);
 end;
 
 procedure TestTIdSipInboundReferral.ReceiveSubscribeRequestWithGruu;
@@ -4556,7 +4556,7 @@ begin
   // cf. TestTIdSipInboundSubscription.ReceiveSubscribeRequestWithGruu.
   Self.Module.AddPackage(TIdSipReferPackage);
 
-  Refer := Self.Module.CreateRefer(Self.Core.From, Self.Destination, Self.Core.Contact);
+  Refer := Self.Module.CreateRefer(Self.Core.From, Self.Destination, Self.Core.RegisterModule.Contact);
   try
     // See the comment in TSubscribeTestCase.ReceiveSubscribe.
     Refer.FirstContact.Address := Self.Destination.Address;
@@ -4574,7 +4574,7 @@ procedure TestTIdSipInboundReferral.ReceiveRefer(Target: TIdSipAddressHeader);
 var
   Refer: TIdSipRequest;
 begin
-  Refer := Self.Module.CreateRefer(Self.RemoteParty, Self.Core.Contact, Target);
+  Refer := Self.Module.CreateRefer(Self.RemoteParty, Self.Core.RegisterModule.Contact, Target);
   try
     Refer.From.Address         := Self.Destination.Address;
     Refer.FirstContact.Address := Self.Destination.Address;
@@ -4610,7 +4610,7 @@ begin
   // Set us up to support GRUU
   Self.UseGruu;
 
-  Refer := Self.Module.CreateRefer(Self.RemoteParty, Self.Destination, Self.Core.Contact);
+  Refer := Self.Module.CreateRefer(Self.RemoteParty, Self.Destination, Self.Core.RegisterModule.Contact);
   try
     // See the comment in TSubscribeTestCase.ReceiveSubscribe.
     Refer.FirstContact.Address := Self.Destination.Address;
@@ -5108,7 +5108,7 @@ function TestTIdSipOutboundReferral.CreateReferral: TIdSipOutboundReferral;
 begin
   Self.Module.AddPackage(TIdSipReferPackage);
 
-  Result := Self.Module.Refer(Self.Destination, Self.Core.Contact);
+  Result := Self.Module.Refer(Self.Destination, Self.Core.RegisterModule.Contact);
   Result.AddActionListener(Self);
   Result.AddListener(Self);
   Result.Send;

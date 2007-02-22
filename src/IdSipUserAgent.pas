@@ -118,8 +118,7 @@ type
                          const AddressLine: String);
     procedure AddAuthentication(UserAgent: TIdSipAbstractCore;
                                 const AuthenticationLine: String);
-    procedure AddAutoAddress(UserAgent: TIdSipAbstractCore;
-                             AddressHeader: TIdSipAddressHeader);
+    procedure AddAutoAddress(AddressHeader: TIdSipAddressHeader);
     procedure AddContact(UserAgent: TIdSipAbstractCore;
                       const ContactLine: String);
     procedure AddFrom(UserAgent: TIdSipAbstractCore;
@@ -323,6 +322,12 @@ procedure TIdSipUserAgent.AddLocalHeaders(OutboundRequest: TIdSipRequest);
 begin
   inherited AddLocalHeaders(OutboundRequest);
 
+  // draft-ietf-sip-gruu-10, section 8.1
+  OutboundRequest.AddHeader(Self.RegisterModule.Contact);
+
+  if OutboundRequest.HasSipsUri then
+    OutboundRequest.FirstContact.Address.Scheme := SipsScheme;
+
   if Self.HasProxy then
     OutboundRequest.Route.AddRoute(Self.Proxy);
 end;
@@ -339,7 +344,7 @@ end;
 
 function TIdSipUserAgent.RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
 begin
-  Result := Self.RegisterModule.RegisterWith(Registrar, Self.Contact);
+  Result := Self.RegisterModule.RegisterWith(Registrar, Self.RegisterModule.Contact);
   Result.AddListener(Self);
 end;
 
@@ -408,11 +413,11 @@ procedure TIdSipUserAgent.OnSuccess(RegisterAgent: TIdSipOutboundRegistrationBas
 var
   Gruu: String;
 begin
-  if Self.Contact.IsGruu then begin
-    Gruu := CurrentBindings.GruuFor(Self.Contact);
+  if Self.RegisterModule.Contact.IsGruu then begin
+    Gruu := CurrentBindings.GruuFor(Self.RegisterModule.Contact);
 
     if (Gruu <> '') then
-      Self.Contact.Address.Uri := Gruu;
+      Self.RegisterModule.Contact.Address.Uri := Gruu;
   end;
 end;
 
@@ -494,7 +499,7 @@ begin
 
   RegMod := UserAgent.RegisterModule;
   if RegMod.HasRegistrar and not RegMod.Registrar.IsMalformed then
-    RegMod.UnregisterFrom(RegMod.Registrar, UserAgent.Contact).Send;
+    RegMod.UnregisterFrom(RegMod.Registrar, RegMod.Contact).Send;
 
 //  UserAgent.Dispatcher.ClearTransports;
 
@@ -520,7 +525,7 @@ begin
   EatDirective(Line);
 
   if (Trim(Line) = AutoKeyword) then
-    Self.AddAutoAddress(UserAgent, AddressHeader)
+    Self.AddAutoAddress(AddressHeader)
   else begin
     AddressHeader.Value := Line;
 
@@ -542,8 +547,7 @@ begin
     UserAgent.Authenticator := TIdSipMockAuthenticator.Create;
 end;
 
-procedure TIdSipStackConfigurator.AddAutoAddress(UserAgent: TIdSipAbstractCore;
-                                                 AddressHeader: TIdSipAddressHeader);
+procedure TIdSipStackConfigurator.AddAutoAddress(AddressHeader: TIdSipAddressHeader);
 begin
   AddressHeader.DisplayName      := UTF16LEToUTF8(GetFullUserName);
   AddressHeader.Address.Username := UTF16LEToUTF8(GetUserName);
@@ -552,9 +556,17 @@ end;
 
 procedure TIdSipStackConfigurator.AddContact(UserAgent: TIdSipAbstractCore;
                                              const ContactLine: String);
+var
+  RegMod: TIdSipOutboundRegisterModule;
 begin
   // See class comment for the format for this directive.
-  Self.AddAddress(UserAgent, UserAgent.Contact, ContactLine);
+
+  if (UserAgent is TIdSipUserAgent) then begin
+    RegMod := UserAgent.ModuleFor(TIdSipOutboundRegisterModule) as TIdSipOutboundRegisterModule;
+
+    Self.AddAddress(UserAgent, RegMod.Contact, ContactLine);
+    RegMod.Contact.IsUnset := false;
+  end;
 end;
 
 procedure TIdSipStackConfigurator.AddFrom(UserAgent: TIdSipAbstractCore;
@@ -797,6 +809,8 @@ begin
 end;
 
 procedure TIdSipStackConfigurator.InstantiateMissingObjectsAsDefaults(UserAgent: TIdSipAbstractCore);
+var
+  RegMod: TIdSipOutboundRegisterModule;
 begin
   if not Assigned(UserAgent.Authenticator) then
     UserAgent.Authenticator := TIdSipAuthenticator.Create;
@@ -809,11 +823,17 @@ begin
     UserAgent.Dispatcher.RoutingTable := UserAgent.RoutingTable;
   end;
 
-  if UserAgent.UsingDefaultContact then
-    Self.AddAutoAddress(UserAgent, UserAgent.Contact);
+  if (UserAgent is TIdSipUserAgent) then begin
+    RegMod := UserAgent.ModuleFor(TIdSipOutboundRegisterModule) as TIdSipOutboundRegisterModule;
+
+    if RegMod.Contact.IsUnset then begin
+      Self.AddAutoAddress(RegMod.Contact);
+      RegMod.Contact.IsUnset := false;
+    end;
+  end;
 
   if UserAgent.UsingDefaultFrom then
-    Self.AddAutoAddress(UserAgent, UserAgent.From);
+    Self.AddAutoAddress(UserAgent.From);
 end;
 
 procedure TIdSipStackConfigurator.ParseFile(UserAgent: TIdSipUserAgent;
@@ -886,7 +906,7 @@ begin
   Reg.AutoReRegister := true;
   Reg.HasRegistrar := true;
   Reg.Registrar.Uri := Line;
-  Self.AddPendingMessageSend(PendingActions, Reg.RegisterWith(Reg.Registrar, UserAgent.Contact));
+  Self.AddPendingMessageSend(PendingActions, Reg.RegisterWith(Reg.Registrar, UserAgent.RegisterModule.Contact));
 end;
 
 procedure TIdSipStackConfigurator.UseGruu(UserAgent: TIdSipAbstractCore;

@@ -81,7 +81,6 @@ const
 
 constructor TrnidSpikeRegistrar.Create(AOwner: TComponent);
 var
-  Contact:  TIdSipContactHeader;
   From:     TIdSipFromHeader;
   HostName: String;
 begin
@@ -110,16 +109,6 @@ begin
   Self.UA.HostName      := 'wsfrank';
   Self.UA.Timer         := Self.Timer;
   Self.UA.UserAgentName := 'Frank''s Registration Spike';
-
-  Contact := TIdSipContactHeader.Create;
-  try
-    Contact.Value := 'sip:franks@'
-                   + Self.Transport.HostName + ':'
-                   + Self.Port.Text;
-    Self.UA.Contact := Contact;
-  finally
-    Contact.Free;
-  end;
 
   From := TIdSipFromHeader.Create;
   try

@@ -798,7 +798,7 @@ begin
           'Allow header erroneously added');
     Check(Invite.ContactCount = 1,
           'Contact header erroneously added');
-    CheckEquals(Self.Core.Contact.AsString,
+    CheckEquals(Self.Core.RegisterModule.Contact.AsString,
                 Invite.FirstContact.AsString,
                 'URI header used instead of UA''s');
     Check(not Invite.HasHeader(OrganizationHeader),
@@ -950,7 +950,7 @@ procedure TestTIdSipAbstractCore.TestCreateRequestWithGruu;
 var
   Request: TIdSipRequest;
 begin
-  Self.Core.Contact.IsGruu := true;
+  Self.Core.RegisterModule.Contact.IsGruu := true;
 
   Request := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Self.Destination);
   try
@@ -958,7 +958,7 @@ begin
           'Request has no Supported header');
     Check(Request.SupportsExtension(ExtensionGruu),
           'Supported header doesn''t indicate that the UA supports "gruu"');
-    CheckEquals(Self.Core.Contact.AsString,
+    CheckEquals(Self.Core.RegisterModule.Contact.AsString,
                 Request.FirstContact.AsString,
                 'Contact MUST contain GRUU');
   finally
@@ -1699,7 +1699,7 @@ var
   B: TIdSipAction;
 begin
   // Set us up to use GRUU
-  Self.Core.Contact.IsGruu := true;
+  Self.Core.RegisterModule.Contact.IsGruu := true;
   Self.Invite.Supported.Values.Add(ExtensionGruu);
 
   // Create two actions (which will use different LocalGruus)
@@ -1734,7 +1734,7 @@ var
   B: TIdSipAction;
 begin
   // Set us up to use GRUU
-  Self.Core.Contact.IsGruu := true;
+  Self.Core.RegisterModule.Contact.IsGruu := true;
 
   // Create two actions (which will use different LocalGruus
   A := Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, Self.Binding));
@@ -2531,7 +2531,7 @@ procedure TestTIdSipActionSendWait.SetUp;
 begin
   inherited SetUp;
 
-  Self.Action := Self.Core.RegisterModule.RegisterWith(Self.Destination.Address, Self.Core.Contact);
+  Self.Action := Self.Core.RegisterModule.RegisterWith(Self.Destination.Address, Self.Core.RegisterModule.Contact);
   Self.Wait := TIdSipActionSendWait.Create;
   Self.Wait.ActionID := Self.Action.ID;
 end;
@@ -2862,7 +2862,7 @@ begin
   inherited SetUp;
 
   Self.Listener   := TIdSipTestActionRedirectorListener.Create;
-  ArbitraryAction := Self.UA.InviteModule.Call(Self.UA.Contact, '', '');
+  ArbitraryAction := Self.UA.InviteModule.Call(Self.UA.RegisterModule.Contact, '', '');
   Self.Redirector := TIdSipActionRedirector.Create(ArbitraryAction);
 end;
 
@@ -2924,7 +2924,7 @@ procedure TestTIdSipRedirectorNewActionMethod.SetUp;
 begin
   inherited SetUp;
 
-  Self.NewAction := Self.UA.QueryOptions(Self.UA.Contact);
+  Self.NewAction := Self.UA.QueryOptions(Self.UA.RegisterModule.Contact);
 
   Self.Method := TIdSipRedirectorNewActionMethod.Create;
   Self.Method.NewAction  := Self.NewAction;

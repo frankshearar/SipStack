@@ -994,7 +994,7 @@ begin
 
   Check(Request.HasHeader(ContactHeaderFull), 'No Contact header added');
   Contact := Request.FirstContact;
-  Check(Contact.Equals(Self.Core.Contact), 'Contact header incorrectly set');
+  Check(Contact.Equals(Self.Core.RegisterModule.Contact), 'Contact header incorrectly set');
 
   CheckEquals(Request.From.DisplayName,
               Self.Core.From.DisplayName,
@@ -6288,7 +6288,7 @@ begin
 
   CheckEquals(Self.LanIP,
               Invite.FirstContact.Address.Host,
-              'INVITE didn''t use UA''s GRUU (' + Self.Core.Contact.Address.AsString + ')');
+              'INVITE didn''t use UA''s GRUU (' + Self.Core.RegisterModule.Contact.Address.AsString + ')');
 
   Check(Invite.FirstContact.Address.HasParameter(GridParam),
         'GRUUs sent out in INVITEs should have a "grid" parameter');
@@ -7392,8 +7392,8 @@ begin
   Result := Self.CreateUserAgent(Address);
   Result.InviteModule.AddListener(Self);
 
-  (Result.Dispatcher as TIdSipMockTransactionDispatcher).Transport.AddBinding(Result.Contact.Address.Host,
-                                                                              Result.Contact.Address.Port);
+  (Result.Dispatcher as TIdSipMockTransactionDispatcher).Transport.AddBinding(Result.RegisterModule.Contact.Address.Host,
+                                                                              Result.RegisterModule.Contact.Address.Port);
 
   SubMod := Result.AddModule(TIdSipSubscribeModule) as TIdSipSubscribeModule;
   SubMod.AddPackage(TIdSipReferPackage);
@@ -7471,7 +7471,7 @@ begin
   Self.InboundCall.AcceptCall('', '');
 
   // Alice refers Bob to the Parking Place
-  AlicesReferToBob := Self.SubscribeModuleOf(Alice).Refer(Self.Bob.Contact,
+  AlicesReferToBob := Self.SubscribeModuleOf(Alice).Refer(Self.Bob.RegisterModule.Contact,
                                                           Self.ParkPlace.From);
   AlicesReferToBob.Send;
   Check(Assigned(Self.Refer) and (Self.ReceivingUA = Self.Bob),

@@ -1045,7 +1045,7 @@ begin
   // can resolve to an IP.
 
   Self.Core.UseGruu := true;
-  Self.Locator.AddA(Self.Core.Contact.Address.Host, '127.0.0.2');
+  Self.Locator.AddA(Self.Core.RegisterModule.Contact.Address.Host, '127.0.0.2');
 end;
 
 //* TTestCaseTU Protected methods **********************************************
@@ -1123,7 +1123,7 @@ begin
   Result.RoutingTable  := Result.Dispatcher.RoutingTable;
   Result.Timer         := Result.Dispatcher.Timer;
 
-  Result.Contact.Value := Address;
+  Result.RegisterModule.Contact.Value := Address;
   Result.From.Value    := Address;
 
   // Make sure we have a sane DNS setup so that actions don't terminate

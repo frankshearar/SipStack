@@ -293,7 +293,6 @@ type
     fAllowedLanguageList:    TStrings;
     fAllowedSchemeList:      TStrings;
     fAuthenticator:          TIdSipAbstractAuthenticator;
-    fContact:                TIdSipContactHeader;
     fDispatcher:             TIdSipTransactionDispatcher;
     fFrom:                   TIdSipFromHeader;
     fHostName:               String;
@@ -337,7 +336,6 @@ type
     procedure RejectRequestBadExtension(Request: TIdSipRequest);
     procedure RejectRequestMethodNotSupported(Request: TIdSipRequest);
     procedure RejectUnsupportedSipVersion(Request: TIdSipRequest);
-    procedure SetContact(Value: TIdSipContactHeader);
     procedure SetDispatcher(Value: TIdSipTransactionDispatcher);
     procedure SetFrom(Value: TIdSipFromHeader);
     procedure SetInstanceID(Value: String);
@@ -455,12 +453,10 @@ type
 
     // Move to UserAgent:
     procedure TerminateAllCalls; // move to InviteModule
-    function  UsingDefaultContact: Boolean;
     function  UsingDefaultFrom: Boolean;
 
     property Actions:               TIdSipActions               read fActions;
     property Authenticator:         TIdSipAbstractAuthenticator read fAuthenticator write SetAuthenticator;
-    property Contact:               TIdSipContactHeader         read fContact write SetContact;
     property Dispatcher:            TIdSipTransactionDispatcher read fDispatcher write SetDispatcher;
     property From:                  TIdSipFromHeader            read fFrom write SetFrom;
     property HostName:              String                      read fHostName write fHostName;
@@ -1476,7 +1472,6 @@ begin
   Self.fActions                := TIdSipActions.Create;
   Self.fAllowedContentTypeList := TStringList.Create;
   Self.fAllowedLanguageList    := TStringList.Create;
-  Self.fContact                := TIdSipContactHeader.Create;
   Self.fFrom                   := TIdSipFromHeader.Create;
   Self.fKeyring                := TIdKeyRing.Create;
 
@@ -1489,7 +1484,6 @@ begin
   Self.HostName := Self.DefaultHostName;
 
   // DefaultFrom depends on Self.HostName
-  Self.Contact.Value         := Self.DefaultFrom;
   Self.From.Value            := Self.DefaultFrom;
   Self.Realm                 := Self.HostName;
   Self.RequireAuthentication := false;
@@ -1502,7 +1496,6 @@ begin
 
   Self.Keyring.Free;
   Self.From.Free;
-  Self.Contact.Free;
   Self.AllowedSchemeList.Free;
   Self.AllowedLanguageList.Free;
   Self.AllowedContentTypeList.Free;
@@ -1581,12 +1574,6 @@ begin
 
   if (Self.UserAgentName <> '') then
     OutboundRequest.AddHeader(UserAgentHeader).Value := Self.UserAgentName;
-
-  // draft-ietf-sip-gruu-10, section 8.1
-  OutboundRequest.AddHeader(Self.Contact);
-
-  if OutboundRequest.HasSipsUri then
-    OutboundRequest.FirstContact.Address.Scheme := SipsScheme;
 
   Self.AddModuleSpecificHeaders(OutboundRequest);
   OutboundRequest.Supported.Value := Self.AllowedExtensions;
@@ -2024,11 +2011,6 @@ procedure TIdSipAbstractCore.TerminateAllCalls;
 begin
   // This is WRONG! It will also terminate subscriptions, which are not calls!
   Self.Actions.TerminateAllActions;
-end;
-
-function TIdSipAbstractCore.UsingDefaultContact: Boolean;
-begin
-  Result := Pos(Self.Contact.Address.Uri, Self.DefaultFrom) > 0;
 end;
 
 function TIdSipAbstractCore.UsingDefaultFrom: Boolean;
@@ -2581,21 +2563,6 @@ begin
   finally
     Response.Free;
   end;
-end;
-
-procedure TIdSipAbstractCore.SetContact(Value: TIdSipContactHeader);
-begin
-  Assert(not Value.IsWildCard,
-         'You may not use a wildcard Contact header for a User Agent''s '
-       + 'Contact');
-
-  Self.Contact.Assign(Value);
-
-  if Self.Contact.IsMalformed then
-    raise EBadHeader.Create(Self.Contact.Name);
-
-  if not Self.Contact.Address.IsSipUri then
-    raise EBadHeader.Create(Self.Contact.Name + ': MUST be a SIP/SIPS URI');
 end;
 
 procedure TIdSipAbstractCore.SetDispatcher(Value: TIdSipTransactionDispatcher);

@@ -1241,7 +1241,7 @@ begin
   Check(Data.Handle > 0, 'Invalid Action handle');
   CheckEquals(Self.RemoteOffer,            Data.RemoteSessionDescription, 'RemoteSessionDescription');
   CheckEquals(Self.RemoteMimeType,         Data.RemoteMimeType,           'RemoteMimeType');
-  CheckEquals(Self.RemoteUA.Contact.Value, Data.RemoteContact.Value,      'RemoteContact');
+  CheckEquals(Self.RemoteUA.RegisterModule.Contact.Value, Data.RemoteContact.Value,      'RemoteContact');
   CheckEquals(Self.RemoteUA.From.Value,    Data.RemoteParty.Value,        'RemoteParty');
 end;
 

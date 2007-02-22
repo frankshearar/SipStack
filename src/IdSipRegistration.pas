@@ -208,11 +208,13 @@ type
   TIdSipOutboundRegisterModule = class(TIdSipMessageModule)
   private
     fAutoReRegister: Boolean;
+    fContact:        TIdSipContactHeader;
     fHasRegistrar:   Boolean;
     fRegistrar:      TIdSipUri;
     fRequireGRUU:    Boolean;
     KnownRegistrars: TIdSipRegistrations;
 
+    procedure SetContact(Value: TIdSipContactHeader);
     procedure SetRegistrar(Value: TIdSipUri);
   public
     constructor Create(UA: TIdSipAbstractCore); override;
@@ -233,10 +235,11 @@ type
                              Contact: TIdSipContactHeader): TIdSipOutboundUnregistration;
     function  WillAccept(Request: TIdSipRequest): Boolean; override;
 
-    property AutoReRegister: Boolean   read fAutoReRegister write fAutoReRegister;
-    property HasRegistrar:   Boolean   read fHasRegistrar write fHasRegistrar;
-    property Registrar:      TIdSipUri read fRegistrar write SetRegistrar;
-    property RequireGRUU:    Boolean   read fRequireGRUU write fRequireGRUU;
+    property AutoReRegister: Boolean             read fAutoReRegister write fAutoReRegister;
+    property Contact:        TIdSipContactHeader read fContact write SetContact;
+    property HasRegistrar:   Boolean             read fHasRegistrar write fHasRegistrar;
+    property Registrar:      TIdSipUri           read fRegistrar write SetRegistrar;
+    property RequireGRUU:    Boolean             read fRequireGRUU write fRequireGRUU;
   end;
 
   // I implement that functionality necessary for a User Agent to respond to
@@ -922,15 +925,20 @@ begin
   inherited Create(UA);
 
   Self.KnownRegistrars := TIdSipRegistrations.Create;
+  Self.fContact        := TIdSipContactHeader.Create;
   Self.fRegistrar      := TIdSipUri.Create('');
 
-  Self.AutoReRegister := true;
-  Self.HasRegistrar   := false;
+  Self.AutoReRegister  := true;
+  Self.HasRegistrar    := false;
+
+  Self.Contact.Value   := Self.UserAgent.From.FullValue;
+  Self.Contact.IsUnset := true;
 end;
 
 destructor TIdSipOutboundRegisterModule.Destroy;
 begin
   Self.Registrar.Free;
+  Self.Contact.Free;
   Self.KnownRegistrars.Free;
 
   inherited Destroy;
@@ -946,7 +954,7 @@ end;
 procedure TIdSipOutboundRegisterModule.CleanUp;
 begin
   if Self.HasRegistrar then
-    Self.UnregisterFrom(Self.Registrar, Self.UserAgent.Contact).Send;
+    Self.UnregisterFrom(Self.Registrar, Self.Contact).Send;
 end;
 
 function TIdSipOutboundRegisterModule.CreateRegister(From: TIdSipFromToHeader;
@@ -1027,6 +1035,22 @@ begin
 end;
 
 //* TIdSipOutboundRegisterModule Private methods *******************************
+
+procedure TIdSipOutboundRegisterModule.SetContact(Value: TIdSipContactHeader);
+begin
+  Assert(not Value.IsWildCard,
+         'You may not use a wildcard Contact header for a User Agent''s '
+       + 'Contact');
+
+  Self.Contact.Assign(Value);
+
+  if Self.Contact.IsMalformed then
+    raise EBadHeader.Create(Self.Contact.Name);
+
+  if not Self.Contact.Address.IsSipUri then
+    raise EBadHeader.Create(Self.Contact.Name + ': MUST be a SIP/SIPS URI');
+end;
+
 
 procedure TIdSipOutboundRegisterModule.SetRegistrar(Value: TIdSipUri);
 begin

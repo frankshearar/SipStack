@@ -359,7 +359,7 @@ begin
   C := TIdSipContactHeader.Create;
   try
     C.Value := 'sip:wintermute@tessier-ashpool.co.luna';
-    Self.Core.Contact := C;
+    Self.Core.RegisterModule.Contact := C;
   finally
     C.Free;
   end;
@@ -415,7 +415,7 @@ begin
 
   Check(Request.HasHeader(ContactHeaderFull), 'No Contact header added');
   Contact := Request.FirstContact;
-  Check(Contact.Equals(Self.Core.Contact), 'Contact header incorrectly set');
+  Check(Contact.Equals(Self.Core.RegisterModule.Contact), 'Contact header incorrectly set');
 
   CheckEquals(Request.From.DisplayName,
               Self.Core.From.DisplayName,
@@ -1212,7 +1212,7 @@ begin
                 UA.From.Address.Host,
                 'From host should default to the UA''s HostName');
     CheckEquals(UA.HostName,
-                UA.Contact.Address.Host,
+                UA.RegisterModule.Contact.Address.Host,
                 'Contact host should default to the UA''s HostName');
   finally
     UA.Free;
@@ -1368,7 +1368,7 @@ begin
 
   Response := TIdSipResponse.InResponseTo(Self.Invite,
                                           SIPOK,
-                                          Self.Core.Contact);
+                                          Self.Core.RegisterModule.Contact);
   try
     Response.AddHeader(Response.Path.LastHop);
     Self.ReceiveResponse(Response);
@@ -1394,7 +1394,7 @@ var
   Gruu:       TIdSipContactHeader;
   OkWithGruu: TIdSipResponse;
 begin
-  Self.Core.Contact.IsGruu := true;
+  Self.Core.RegisterModule.Contact.IsGruu := true;
 
   Self.MarkSentRequestCount;
   Self.Core.RegisterWith(Self.RemoteTarget).Send;
@@ -1405,12 +1405,12 @@ begin
     OkWithGruu.Supported.Values.Add(ExtensionGruu);
     Gruu := OkWithGruu.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
     Gruu.Value := Self.LastSentRequest.FirstContact.FullValue;
-    Gruu.Gruu := Self.Core.Contact.Address.AsString + ';opaque=foo';
+    Gruu.Gruu := Self.Core.RegisterModule.Contact.Address.AsString + ';opaque=foo';
 
     Self.ReceiveResponse(OkWithGruu);
 
     CheckEquals(Gruu.Gruu,
-                Self.Core.Contact.Address.AsString,
+                Self.Core.RegisterModule.Contact.Address.AsString,
                 'Core''s GRUU not set');
   finally
     OkWithGruu.Free;
@@ -1429,8 +1429,8 @@ begin
   // If more than one UA registers for the same Address Of Record, then THIS
   // UA only wants to know ITS GRUU when it registers.
 
-  Self.Core.Contact.SipInstance := OurUrn;
-  Self.Core.Contact.IsGruu := true;
+  Self.Core.RegisterModule.Contact.SipInstance := OurUrn;
+  Self.Core.RegisterModule.Contact.IsGruu := true;
 
   Self.MarkSentRequestCount;
   Self.Core.RegisterWith(Self.RemoteTarget).Send;
@@ -1441,20 +1441,20 @@ begin
     OkWithGruu.Supported.Values.Add(ExtensionGruu);
     // The other UA
     GruuOne := OkWithGruu.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
-    GruuOne.Value       := Self.Core.Contact.FullValue;
-    GruuOne.Gruu        := Self.Core.Contact.Address.AsString + ';opaque=bar';
+    GruuOne.Value       := Self.Core.RegisterModule.Contact.FullValue;
+    GruuOne.Gruu        := Self.Core.RegisterModule.Contact.Address.AsString + ';opaque=bar';
     GruuOne.SipInstance := TheirUrn;
 
     // Our UA
     GruuTwo := OkWithGruu.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
-    GruuTwo.Value       := Self.Core.Contact.FullValue;
-    GruuTwo.Gruu        := Self.Core.Contact.Address.AsString + ';opaque=foo';
+    GruuTwo.Value       := Self.Core.RegisterModule.Contact.FullValue;
+    GruuTwo.Gruu        := Self.Core.RegisterModule.Contact.Address.AsString + ';opaque=foo';
     GruuTwo.SipInstance := OurUrn;
 
     Self.ReceiveResponse(OkWithGruu);
 
     CheckEquals(GruuTwo.Gruu,
-                Self.Core.Contact.Address.AsString,
+                Self.Core.RegisterModule.Contact.Address.AsString,
                 'Core''s GRUU not set');
   finally
     OkWithGruu.Free;
@@ -1666,9 +1666,9 @@ begin
   C := TIdSipContactHeader.Create;
   try
     C.Value := 'sip:case@fried.neurons.org';
-    Self.Core.Contact := C;
+    Self.Core.RegisterModule.Contact := C;
 
-    Check(Self.Core.Contact.Equals(C),
+    Check(Self.Core.RegisterModule.Contact.Equals(C),
                 'Contact not set');
   finally
     C.Free;
@@ -1683,7 +1683,7 @@ begin
   try
     try
       C.Value := 'mailto:wintermute@tessier-ashpool.co.luna';
-      Self.Core.Contact := C;
+      Self.Core.RegisterModule.Contact := C;
       Fail('Only a SIP or SIPs URI may be specified');
     except
       on EBadHeader do;
@@ -1701,7 +1701,7 @@ begin
   try
     try
       C.Value := '*';
-      Self.Core.Contact := C;
+      Self.Core.RegisterModule.Contact := C;
       Fail('Wildcard Contact headers make no sense in a response that sets up '
          + 'a dialog');
     except
@@ -2019,7 +2019,8 @@ end;
 
 procedure TestTIdSipStackConfigurator.CheckAutoContact(UserAgent: TIdSipAbstractCore);
 begin
-  Self.CheckAutoAddress(UserAgent.Contact);
+  CheckEquals(TIdSipUserAgent.ClassName, UserAgent.ClassName, 'Unexpected UA type');
+  Self.CheckAutoAddress((UserAgent as TIdSipUserAgent).RegisterModule.Contact);
 end;
 
 procedure TestTIdSipStackConfigurator.CheckAutoFrom(UserAgent: TIdSipAbstractCore);
@@ -2352,8 +2353,8 @@ begin
 
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
-    CheckEquals(DisplayName, UA.Contact.DisplayName,      'Contact display-name');
-    CheckEquals(ContactUri,  UA.Contact.Address.AsString, 'Contact URI');
+    CheckEquals(DisplayName, UA.RegisterModule.Contact.DisplayName,      'Contact display-name');
+    CheckEquals(ContactUri,  UA.RegisterModule.Contact.Address.AsString, 'Contact URI');
   finally
     UA.Free;
   end;
@@ -2935,7 +2936,7 @@ begin
   Self.SetBasicConfiguration(Self.Configuration);
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
-    OldContact := UA.Contact.FullValue;
+    OldContact := UA.RegisterModule.Contact.FullValue;
     CheckNotEquals(NewContact,
                    OldContact,
                    'NewContact contains the same Contact header as the original '
@@ -2946,7 +2947,7 @@ begin
       NewConfig.Add('Contact: ' + NewContact);
 
       Self.Conf.UpdateConfiguration(UA, NewConfig);
-      CheckEquals(NewContact, UA.Contact.FullValue, 'UA''s Contact property not updated');
+      CheckEquals(NewContact, UA.RegisterModule.Contact.FullValue, 'UA''s Contact property not updated');
     finally
       NewConfig.Free;
     end;

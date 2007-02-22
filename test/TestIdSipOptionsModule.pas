@@ -116,7 +116,7 @@ procedure TestTIdSipOptionsModule.ReceiveOptions;
 var
   Options: TIdSipRequest;
 begin
-  Options := Self.Module.CreateOptions(Self.Core.From, Self.Core.Contact);
+  Options := Self.Module.CreateOptions(Self.Core.From, Self.Core.RegisterModule.Contact);
   try
     Self.ReceiveRequest(Options);
   finally
