@@ -26,6 +26,7 @@ type
     procedure CheckPortFree(Address: String; Port: Cardinal; Msg: String);
   published
     procedure TestBestRouteIsDefaultRoute;
+    procedure TestConstructUUIDURN;
     procedure TestDefineLocalAddress;
     procedure TestDefineRoutableAddress;
     procedure TestGetBestLocalAddress;
@@ -41,8 +42,8 @@ type
 implementation
 
 uses
-  Classes, IdSocketHandle, IdSimpleParser, IdUdpServer, SysUtils, Windows,
-  Winsock;
+  Classes, IdSocketHandle, IdSimpleParser, IdSipMessage, IdUdpServer, SysUtils,
+  Windows, Winsock;
 
 function Suite: ITestSuite;
 begin
@@ -140,6 +141,14 @@ begin
   finally
     Addresses.Free;
   end;
+end;
+
+procedure TestFunctions.TestConstructUUIDURN;
+var
+  URN: String;
+begin
+  URN := ConstructUUIDURN;
+  Check(TIdSipParser.IsUuidUrn(URN), 'ConstructUUIDURN returned "' + URN + '", an invalid UUID URN');
 end;
 
 procedure TestFunctions.TestDefineLocalAddress;

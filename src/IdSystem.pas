@@ -22,6 +22,7 @@ uses
 
 function  BestRouteIsDefaultRoute(DestinationIP, LocalIP: String): Boolean;
 function  ConstructUUID: String;
+function  ConstructUUIDURN: String;
 function  GetBestLocalAddress(DestinationAddress: String): String;
 function  GetCurrentProcessId: Cardinal;
 function  GetFullUserName: WideString;
@@ -199,6 +200,11 @@ var
 begin
   CreateGUID(NewGuid);
   Result := Lowercase(WithoutFirstAndLastChars(GUIDToString(NewGuid)));
+end;
+
+function ConstructUUIDURN: String;
+begin
+  Result := 'urn:uuid:' + ConstructUUID;
 end;
 
 function GetBestLocalAddress(DestinationAddress: String): String;
