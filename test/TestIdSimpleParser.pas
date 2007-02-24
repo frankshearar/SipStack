@@ -52,6 +52,7 @@ type
     procedure TestIPv4AddressToStr;
     procedure TestIPv6AddressToStr;
     procedure TestIPVersion;
+    procedure TestIsIPAddress;
     procedure TestIsIpv4Address;
     procedure TestIsIpv6Address;
     procedure TestIsIpv6Reference;
@@ -666,6 +667,24 @@ begin
   Check(Id_IPv4      = TIdIPAddressParser.IPVersion('127.0.0.1'), '127.0.0.1');
   Check(Id_IPv6      = TIdIPAddressParser.IPVersion('::1'),       '::1');
   Check(Id_IPUnknown = TIdIPAddressParser.IPVersion('foo'),       'foo');
+end;
+
+procedure TestTIdIPAddressParser.TestIsIPAddress;
+begin
+  Check(not TIdIPAddressParser.IsIPAddress(''),                '''''');
+  Check(not TIdIPAddressParser.IsIPAddress('1'),               '1');
+  Check(not TIdIPAddressParser.IsIPAddress('abcd'),            'abcd');
+  Check(not TIdIPAddressParser.IsIPAddress('224.'),            '224.');
+  Check(not TIdIPAddressParser.IsIPAddress('-1.0.0.0'),        '-1.0.0.0');
+  Check(not TIdIPAddressParser.IsIPAddress('224.255.255.256'), '224.255.255.256');
+  Check(not TIdIPAddressParser.IsIPAddress('ffef1::'),                    'ffef1::');
+
+  Check(    TIdIPAddressParser.IsIPAddress('1080:0:0:0:8:800:200C:417A'), '1080:0:0:0:8:800:200C:417A');
+  Check(    TIdIPAddressParser.IsIPAddress('127.2.17.12'),                '127.2.17.12');
+  Check(    TIdIPAddressParser.IsIPAddress('1080:0:0:0:8:800:1.2.3.4'),   '1080:0:0:0:8:800:1.2.3.4');
+  Check(    TIdIPAddressParser.IsIPAddress('::13.1.68.3'),                '::13.1.68.3');
+  Check(    TIdIPAddressParser.IsIPAddress('::FFFF:129.144.52.38'),       '::FFFF:129.144.52.38');
+  Check(    TIdIPAddressParser.IsIPAddress('1::1:129.144.52.38'),         '1::1:129.144.52.38');
 end;
 
 procedure TestTIdIPAddressParser.TestIsIpv4Address;

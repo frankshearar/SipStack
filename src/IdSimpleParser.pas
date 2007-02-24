@@ -36,7 +36,8 @@ type
     class function  IPv6AddressToStr(Address: TIdIPv6AddressRec; ShowEncapsulatedIPv4: Boolean = false): String;
     class function  IPVersion(Address: String): TIdIPVersion;
     class function  IsIPAddress(IpVersion: TIdIPVersion;
-                                const Token: String): Boolean;
+                                const Token: String): Boolean; overload;
+    class function  IsIPAddress(const Token: String): Boolean; overload;
     class function  IsIPv4Address(const Token: String): Boolean;
     class function  IsIPv6Address(const Token: String): Boolean;
     class function  IsIPv6Reference(const Token: String): Boolean;
@@ -578,6 +579,11 @@ begin
   else
     raise EParserError.Create('Unknown TIdIPVersion in IsIPAddress');
   end;
+end;
+
+class function TIdIPAddressParser.IsIPAddress(const Token: String): Boolean;
+begin
+  Result := Self.IsIPV4Address(Token) or Self.IsIPv6Address(Token);
 end;
 
 class function TIdIPAddressParser.IsIPv4Address(const Token: String): Boolean;
