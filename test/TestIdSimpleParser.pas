@@ -706,6 +706,9 @@ end;
 procedure TestTIdIPAddressParser.TestIsIpv6Address;
 begin
   Check(not TIdIPAddressParser.IsIPv6Address(''),                           '''''');
+  Check(not TIdIPAddressParser.IsIPv6Address('1'),                          '1');
+  Check(not TIdIPAddressParser.IsIPv6Address('ffff'),                       'ffff');
+  Check(not TIdIPAddressParser.IsIPv6Address('10000'),                      '10000');
   Check(not TIdIPAddressParser.IsIPv6Address('x'),                          'x');
   Check(not TIdIPAddressParser.IsIPv6Address('ffef1::'),                    'ffef1::');
   Check(    TIdIPAddressParser.IsIPv6Address('::'),                         '::');

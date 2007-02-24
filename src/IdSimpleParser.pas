@@ -767,6 +767,9 @@ begin
   if Self.IsIPv4Address(IPv6Address) then
     raise EConvertError.Create(Format(IPv6AddrError, [IPv6Address]));
 
+  if (Pos(IPv6Delim, IPv6Address) = 0) and (Pos(IPv6ZeroAbbr, IPv6Address) = 0) then
+    raise EConvertError.Create(Format(IPv6AddrError, [IPv6Address]));
+
   FillChar(Address, SizeOf(Address), 0);
   try
     // We split the address into two chunks - the "pre-::" and the "post-::"
