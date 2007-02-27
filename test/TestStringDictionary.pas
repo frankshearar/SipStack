@@ -18,6 +18,7 @@ type
     procedure TestFind;
     procedure TestHasKey;
     procedure TestRemove;
+    procedure TestSort;
   end;
 
 implementation
@@ -107,6 +108,36 @@ begin
   Self.D.Remove('foo');
 
   Check(not Self.D.HasKey('foo'), '"foo" not removed');
+end;
+
+procedure TestTStringDictionary.TestSort;
+var
+  KeyA, KeyB: TKeyValuePair;
+begin
+  KeyA := TKeyValuePair.Create('foo', '1');
+  try
+    KeyB := TKeyValuePair.Create('foo', '1');
+    try
+      CheckEquals(0, TKeyValuePairSort(KeyA, KeyB), '(foo 1) = (foo 1)');
+
+      KeyB.Value := '2';
+      CheckEquals(-1, TKeyValuePairSort(KeyA, KeyB), '(foo 1) < (foo 2)');
+      CheckEquals(1,  TKeyValuePairSort(KeyB, KeyA), '(foo 2) > (foo 1)');
+
+      KeyA.Value := '1';
+      KeyB.Key   := 'bar';
+      CheckEquals(1,  TKeyValuePairSort(KeyA, KeyB), '(foo 1) > (bar 1)');
+      CheckEquals(-1, TKeyValuePairSort(KeyB, KeyA), '(bar 1) < (foo 1)');
+
+      KeyB.Value := '2';
+      CheckEquals(1,  TKeyValuePairSort(KeyA, KeyB), '(foo 1) > (bar 2)');
+      CheckEquals(-1, TKeyValuePairSort(KeyB, KeyA), '(bar 2) < (foo 1)');
+    finally
+      KeyB.Free;
+    end;
+  finally
+    KeyA.Free;
+  end;
 end;
 
 initialization

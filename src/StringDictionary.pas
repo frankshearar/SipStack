@@ -22,6 +22,7 @@ type
     Associations: TObjectList;
 
     function InternalFind(Key: String): TKeyValuePair;
+    procedure Sort; 
   public
     constructor Create;
     destructor  Destroy; override;
@@ -34,10 +35,34 @@ type
     procedure Remove(Key: String);
   end;
 
+function TKeyValuePairSort(Item1, Item2: Pointer): Integer;
+
 implementation
 
 uses
   SysUtils;
+
+function TKeyValuePairSort(Item1, Item2: Pointer): Integer;
+var
+  KeyA, KeyB: TKeyValuePair;
+begin
+  KeyA := TKeyValuePair(Item1);
+  KeyB := TKeyValuePair(Item2);
+
+  if (KeyA.Key < KeyB.Key) then
+    Result := -1
+  else if (KeyA.Key > KeyB.Key) then
+    Result := 1
+  else
+    Result := 0;
+
+  if (Result = 0) then begin
+    if (KeyA.Value < KeyB.Value) then
+      Result := -1
+    else if (KeyA.Value > KeyB.Value) then
+      Result := 1;
+  end;
+end;
 
 //******************************************************************************
 //* TKeyValuePair                                                              *
@@ -73,8 +98,10 @@ end;
 
 procedure TStringDictionary.Add(Key, Value: String);
 begin
-  if not Self.HasKey(Key) then
+  if not Self.HasKey(Key) then begin
     Self.Associations.Add(TKeyValuePair.Create(Key, Value));
+    Self.Sort;
+  end;
 end;
 
 procedure TStringDictionary.Clear;
@@ -109,20 +136,47 @@ begin
   Self.Associations.Remove(Self.InternalFind(Key));
 end;
 
+
+
 //* TStringDictionary Private methods ******************************************
 
 function TStringDictionary.InternalFind(Key: String): TKeyValuePair;
 var
-  I: Integer;
+  C:          Integer;
+  Middle:     Integer;
+  StartIndex: Integer;
+  EndIndex:   Integer;
+  MiddlePair: TKeyValuePair;
 begin
   Result := nil;
 
-  for I := 0 to Self.Count - 1 do begin
-    if Lowercase(TKeyValuePair(Self.Associations[I]).Key) = Lowercase(Key) then begin
-      Result := TKeyValuePair(Self.Associations[I]);
+  Key := Lowercase(Key);
+  StartIndex := 0;
+  EndIndex   := Self.Count - 1;
+
+  if (StartIndex > EndIndex) then Exit;
+
+  while (StartIndex <= EndIndex) do begin
+    Middle := (EndIndex + StartIndex) div 2;
+    MiddlePair := TKeyValuePair(Self.Associations[Middle]);
+
+    C := CompareStr(Key, Lowercase(MiddlePair.Key));
+
+    if (C < 0) then
+      EndIndex := Middle - 1
+    else if (C > 0) then
+      StartIndex := Middle + 1
+    else
       Break;
-    end;
   end;
+
+  if (C = 0) then
+    Result := MiddlePair;
+end;
+
+procedure TStringDictionary.Sort;
+begin
+  Self.Associations.Sort(TKeyValuePairSort);
 end;
 
 end.
