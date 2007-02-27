@@ -1475,6 +1475,7 @@ type
     procedure MarkAsInvalid(const Reason: String);
     function  ParseFailReason: String;
     procedure Parse(Parser: TIdSipParser); virtual;
+    procedure ProtectAllContacts;
     procedure ReadBody(Src: TStream);
     procedure RemoveHeader(Header: TIdSipHeader);
     procedure RemoveAllHeadersNamed(const Name: String);
@@ -8438,6 +8439,17 @@ begin
   end;
 end;
 
+procedure TIdSipMessage.ProtectAllContacts;
+begin
+  if Self.HasHeader(ContactHeaderFull) then begin
+    Self.Contacts.First;
+    while Self.Contacts.HasNext do begin
+      Self.Contacts.CurrentContact.IsUnset := false;
+      Self.Contacts.Next;
+    end;
+  end;
+end;
+
 procedure TIdSipMessage.ReadBody(Src: TStream);
 const
   BufLen = 100;
@@ -9464,7 +9476,7 @@ begin
     //
     // On the other hand, the Transaction-User layer doesn't know what IP
     // address to put in the INVITE's Contact header.
-    if Self.CanEstablishDialog or Self.FirstContact.IsUnset then begin
+    if Self.FirstContact.IsUnset then begin
       Self.FirstContact.Address.Host := LocalAddress.IPAddress;
       Self.FirstContact.Address.Port := LocalAddress.Port;
       Self.FirstContact.IsUnset := false;
@@ -10081,7 +10093,7 @@ begin
   // However, a UA could well have several Contacts. If the first Contact is a
   // mailto URI, this method fails.
   if Self.HasHeader(ContactHeaderFull) then begin
-    if Self.CanEstablishDialog or Self.FirstContact.IsUnset then begin
+    if Self.FirstContact.IsUnset then begin
       Self.FirstContact.Address.Host := LocalAddress.IPAddress;
       Self.FirstContact.Address.Port := LocalAddress.Port;
       Self.FirstContact.IsUnset := false;

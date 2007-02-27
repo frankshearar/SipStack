@@ -1045,7 +1045,6 @@ begin
   // can resolve to an IP.
 
   Self.Core.UseGruu := true;
-  Self.Locator.AddA(Self.Core.RegisterModule.Contact.Address.Host, '127.0.0.2');
 end;
 
 //* TTestCaseTU Protected methods **********************************************
@@ -1119,12 +1118,10 @@ begin
   Result := TIdSipUserAgent.Create;
   Result.Authenticator := TIdSipAuthenticator.Create;
   Result.Dispatcher    := TIdSipMockTransactionDispatcher.Create;
+  Result.From.Value    := Address;
   Result.Locator       := Result.Dispatcher.Locator;
   Result.RoutingTable  := Result.Dispatcher.RoutingTable;
   Result.Timer         := Result.Dispatcher.Timer;
-
-  Result.RegisterModule.Contact.Value := Address;
-  Result.From.Value    := Address;
 
   // Make sure we have a sane DNS setup so that actions don't terminate
   // themselves after they try find locations to which to send their messages.

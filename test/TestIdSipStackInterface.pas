@@ -1204,8 +1204,15 @@ end;
 procedure TestTIdSipStackInterface.TestHangUpWithInvalidHandle;
 var
   R: TIdSipHandle;
+  Registrar: TIdSipUri;
 begin
-  R := Self.Intf.MakeRegistration(Self.Destination.Address);
+  Registrar := TIdSipUri.Create;
+  try
+    Registrar.Uri := 'sip:1.2.3.4';
+    R := Self.Intf.MakeRegistration(Registrar);
+  finally
+    Registrar.Free;
+  end;
 
   try
     // You can't, obviously, "hang up" a registration attempt.
@@ -1231,7 +1238,8 @@ end;
 
 procedure TestTIdSipStackInterface.TestInboundCall;
 var
-  Data: TIdInboundCallData;
+  Data:          TIdInboundCallData;
+  RemoteContact: TIdSipContactHeader;
 begin
   Self.ReceiveInviteWithOffer(Self.RemoteOffer, Self.RemoteMimeType);
   Application.ProcessMessages;
@@ -1240,9 +1248,18 @@ begin
   Data := Self.LastEventOfType(TIdInboundCallData) as TIdInboundCallData;
   Check(Data.Handle > 0, 'Invalid Action handle');
   CheckEquals(Self.RemoteOffer,            Data.RemoteSessionDescription, 'RemoteSessionDescription');
-  CheckEquals(Self.RemoteMimeType,         Data.RemoteMimeType,           'RemoteMimeType');
-  CheckEquals(Self.RemoteUA.RegisterModule.Contact.Value, Data.RemoteContact.Value,      'RemoteContact');
+  CheckEquals(Self.RemoteMimeType,         Data.RemoteMimeType,             'RemoteMimeType');
   CheckEquals(Self.RemoteUA.From.Value,    Data.RemoteParty.Value,        'RemoteParty');
+
+  RemoteContact := TIdSipContactHeader.Create;
+  try
+    RemoteContact.Assign(Self.RemoteUA.From);
+    RemoteContact.Address.Host := Self.TargetAddress;
+    RemoteContact.Address.Port := Self.TargetPort;
+    CheckEquals(RemoteContact.AsString, Data.RemoteContact.AsString, 'RemoteContact');
+  finally
+    RemoteContact.Free;
+  end;
 end;
 
 procedure TestTIdSipStackInterface.TestMakeCall;
@@ -1362,8 +1379,15 @@ end;
 procedure TestTIdSipStackInterface.TestModifyCallWithInvalidHandle;
 var
   R: TIdSipHandle;
+  Registrar: TIdSipUri;
 begin
-  R := Self.Intf.MakeRegistration(Self.Destination.Address);
+  Registrar := TIdSipUri.Create;
+  try
+    Registrar.Uri := 'sip:1.2.3.4';
+    R := Self.Intf.MakeRegistration(Registrar);
+  finally
+    Registrar.Free;
+  end;
 
   try
     // You can't, obviously, "modify" a registration attempt.
@@ -1471,8 +1495,15 @@ end;
 procedure TestTIdSipStackInterface.TestRedirectCallWithInvalidHandle;
 var
   R: TIdSipHandle;
+  Registrar: TIdSipUri;
 begin
-  R := Self.Intf.MakeRegistration(Self.Destination.Address);
+  Registrar := TIdSipUri.Create;
+  try
+    Registrar.Uri := 'sip:1.2.3.4';
+    R := Self.Intf.MakeRegistration(Registrar);
+  finally
+    Registrar.Free;
+  end;
 
   try
     // You can't, obviously, "Redirect" a registration attempt.
@@ -1514,8 +1545,15 @@ end;
 procedure TestTIdSipStackInterface.TestRejectCallWithInvalidHandle;
 var
   R: TIdSipHandle;
+  Registrar: TIdSipUri;
 begin
-  R := Self.Intf.MakeRegistration(Self.Destination.Address);
+  Registrar := TIdSipUri.Create;
+  try
+    Registrar.Uri := 'sip:1.2.3.4';
+    R := Self.Intf.MakeRegistration(Registrar);
+  finally
+    Registrar.Free;
+  end;
 
   try
     // You can't, obviously, "reject" a registration attempt.

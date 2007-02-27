@@ -159,7 +159,7 @@ type
     function  Add(Action: TIdSipAction): TIdSipAction;
     procedure AddObserver(const Listener: IIdObserver);
     function  AddOutboundAction(UserAgent: TIdSipAbstractCore;
-                                ActionType: TIdSipActionClass): TIdSipAction;
+                                ActionType: TIdSipActionClass): TIdSipAction; 
     procedure CleanOutTerminatedActions;
     function  Count: Integer;
     function  CountOf(const MethodName: String): Integer;
@@ -378,7 +378,7 @@ type
     function  AddModule(ModuleType: TIdSipMessageModuleClass): TIdSipMessageModule;
     procedure AddObserver(const Listener: IIdObserver);
     procedure AddListener(Listener: IIdSipTransactionUserListener);
-    function  AddOutboundAction(ActionType: TIdSipActionClass): TIdSipAction;
+    function  AddOutboundAction(ActionType: TIdSipActionClass): TIdSipAction; virtual;
     function  AllowedContentTypes: String;
     function  AllowedEncodings: String;
     function  AllowedExtensions: String;

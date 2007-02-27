@@ -980,8 +980,6 @@ end;
 
 procedure TestTIdSipInviteModule.CheckCreateRequest(Dest: TIdSipToHeader;
                                                     Request: TIdSipRequest);
-var
-  Contact: TIdSipContactHeader;
 begin
   CheckEquals(Dest.Address,
               Request.RequestUri,
@@ -993,8 +991,6 @@ begin
                  'Call-ID must not be empty');
 
   Check(Request.HasHeader(ContactHeaderFull), 'No Contact header added');
-  Contact := Request.FirstContact;
-  Check(Contact.Equals(Self.Core.RegisterModule.Contact), 'Contact header incorrectly set');
 
   CheckEquals(Request.From.DisplayName,
               Self.Core.From.DisplayName,
@@ -3349,6 +3345,7 @@ begin
   Self.LocalGruu.Address.IsGruu   := true;
   Self.LocalGruu.Address.Port     := IdPORT_SIP;
   Self.LocalGruu.Address.Scheme   := SipScheme;
+  Self.LocalGruu.IsUnset          := true;
 
   Self.InOutboundSession := true;
 end;
@@ -6288,7 +6285,7 @@ begin
 
   CheckEquals(Self.LanIP,
               Invite.FirstContact.Address.Host,
-              'INVITE didn''t use UA''s GRUU (' + Self.Core.RegisterModule.Contact.Address.AsString + ')');
+              'INVITE didn''t use UA''s GRUU');
 
   Check(Invite.FirstContact.Address.HasParameter(GridParam),
         'GRUUs sent out in INVITEs should have a "grid" parameter');
@@ -7392,8 +7389,8 @@ begin
   Result := Self.CreateUserAgent(Address);
   Result.InviteModule.AddListener(Self);
 
-  (Result.Dispatcher as TIdSipMockTransactionDispatcher).Transport.AddBinding(Result.RegisterModule.Contact.Address.Host,
-                                                                              Result.RegisterModule.Contact.Address.Port);
+  (Result.Dispatcher as TIdSipMockTransactionDispatcher).Transport.AddBinding(TIdIPAddressParser.IncIPAddress(Self.LanIP),
+                                                                              5060);
 
   SubMod := Result.AddModule(TIdSipSubscribeModule) as TIdSipSubscribeModule;
   SubMod.AddPackage(TIdSipReferPackage);
@@ -7440,6 +7437,7 @@ var
   AlicesReplace:    TIdSipOutboundSession;
   BobsCallToAlice:  TIdSipOutboundSession;
   BobsCallToPP:     TIdSipOutboundSession;
+  BobsContact:      TIdSipContactHeader;
 begin
 // cf. RFC 3891, section 1 for the inspiration for this test:
 //        Alice          Alice                             Parking
@@ -7463,39 +7461,46 @@ begin
 //        |               |<===============>|                   |
 //        |               |                 |                   |
 
-  // Bob calls Alice; Alice answers
-  BobsCallToAlice := Bob.InviteModule.Call(Alice.From, '', '');
-  BobsCallToAlice.Send;
-  Check(Assigned(Self.InboundCall) and (Self.ReceivingUA = Self.Alice),
-        'Alice''s UA isn''t ringing');
-  Self.InboundCall.AcceptCall('', '');
+  BobsContact := TIdSipContactHeader.Create;
+  try
+    // Bob calls Alice; Alice answers
+    BobsCallToAlice := Bob.InviteModule.Call(Alice.From, '', '');
+    BobsCallToAlice.Send;
 
-  // Alice refers Bob to the Parking Place
-  AlicesReferToBob := Self.SubscribeModuleOf(Alice).Refer(Self.Bob.RegisterModule.Contact,
-                                                          Self.ParkPlace.From);
-  AlicesReferToBob.Send;
-  Check(Assigned(Self.Refer) and (Self.ReceivingUA = Self.Bob),
-        'Bob''s UA didn''t receive the REFER');
-  CheckEquals(TIdSipInboundReferral.ClassName,
-              Self.Refer.ClassName,
-              'Unexpected subscription request');
+    BobsContact.Assign(Self.LastSentRequest.FirstContact);
+    Check(Assigned(Self.InboundCall) and (Self.ReceivingUA = Self.Alice),
+          'Alice''s UA isn''t ringing');
+    Self.InboundCall.AcceptCall('', '');
 
-  // and Bob calls the Parking Place, which automatically answers.
-  BobsCallToPP := Self.Bob.InviteModule.Call(Self.ParkPlace.From, '', '');
-  BobsCallToPP.Send;
-  Check(Assigned(Self.InboundCall) and (Self.ReceivingUA = Self.ParkPlace),
-        'The Parking Place UA isn''t ringing');
-  Self.InboundCall.AcceptCall('', '');
-  (Self.Refer as TIdSipInboundReferral).ReferenceSucceeded;
+    // Alice refers Bob to the Parking Place
+    AlicesReferToBob := Self.SubscribeModuleOf(Alice).Refer(BobsContact,
+                                                            Self.ParkPlace.From);
+    AlicesReferToBob.Send;
+    Check(Assigned(Self.Refer) and (Self.ReceivingUA = Self.Bob),
+          'Bob''s UA didn''t receive the REFER');
+    CheckEquals(TIdSipInboundReferral.ClassName,
+                Self.Refer.ClassName,
+                'Unexpected subscription request');
 
-  // Now Alice retrieves the call from the Parking Place
-  AlicesReplace := Self.AlicesNewPhone.InviteModule.ReplaceCall(BobsCallToPP.InitialRequest,
-                                                                Self.Bob.From,
-                                                                '',
-                                                                '');
-  AlicesReplace.Send;
-  Check(Assigned(Self.InboundCall) and (Self.ReceivingUA = Self.Bob),
-        'Bob''s UA isn''t ringing');
+    // and Bob calls the Parking Place, which automatically answers.
+    BobsCallToPP := Self.Bob.InviteModule.Call(Self.ParkPlace.From, '', '');
+    BobsCallToPP.Send;
+    Check(Assigned(Self.InboundCall) and (Self.ReceivingUA = Self.ParkPlace),
+          'The Parking Place UA isn''t ringing');
+    Self.InboundCall.AcceptCall('', '');
+    (Self.Refer as TIdSipInboundReferral).ReferenceSucceeded;
+
+    // Now Alice retrieves the call from the Parking Place
+    AlicesReplace := Self.AlicesNewPhone.InviteModule.ReplaceCall(BobsCallToPP.InitialRequest,
+                                                                  Self.Bob.From,
+                                                                  '',
+                                                                  '');
+    AlicesReplace.Send;
+    Check(Assigned(Self.InboundCall) and (Self.ReceivingUA = Self.Bob),
+          'Bob''s UA isn''t ringing');
+  finally
+    BobsContact.Free;
+  end;
 end;
 
 //******************************************************************************

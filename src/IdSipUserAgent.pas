@@ -24,11 +24,14 @@ type
                           IIdSipActionListener,
                           IIdSipRegistrationListener)
   private
-    fDoNotDisturbMessage: String;
-    fHasProxy:            Boolean;
-    fProxy:               TIdSipUri;
-    fRegisterModule:      TIdSipOutboundRegisterModule;
-    fInviteModule:        TIdSipInviteModule;
+    ContactClosestToRegistrar: TIdSipContactHeader;
+    Registrar:                 TIdSipUri;
+    fDoNotDisturbMessage:      String;
+    fHasProxy:                 Boolean;
+    fProxy:                    TIdSipUri;
+    fRegisterModule:           TIdSipOutboundRegisterModule;
+    fInviteModule:             TIdSipInviteModule;
+    HasRegistered:             Boolean;
 
     function  GetDoNotDisturb: Boolean;
     function  GetInitialResendInterval: Cardinal;
@@ -54,11 +57,13 @@ type
     destructor  Destroy; override;
 
     procedure AddLocalHeaders(OutboundRequest: TIdSipRequest); override;
+    function  AddOutboundAction(ActionType: TIdSipActionClass): TIdSipAction; override;
     procedure AddTransportListener(Listener: IIdSipTransportListener);
     procedure RemoveTransportListener(Listener: IIdSipTransportListener);
     function  RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
     function  ResponseForInvite: Cardinal; override;
     function  SessionCount: Integer;
+    function  UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundUnregistration;
 
     property DoNotDisturb:           Boolean                      read GetDoNotDisturb write SetDoNotDisturb;
     property DoNotDisturbMessage:    String                       read fDoNotDisturbMessage write fDoNotDisturbMessage;
@@ -119,8 +124,6 @@ type
     procedure AddAuthentication(UserAgent: TIdSipAbstractCore;
                                 const AuthenticationLine: String);
     procedure AddAutoAddress(AddressHeader: TIdSipAddressHeader);
-    procedure AddContact(UserAgent: TIdSipAbstractCore;
-                      const ContactLine: String);
     procedure AddFrom(UserAgent: TIdSipAbstractCore;
                       const FromLine: String);
     procedure AddHostName(UserAgent: TIdSipAbstractCore;
@@ -134,6 +137,8 @@ type
                                       Action: TIdSipPendingLocalResolutionAction);
     procedure AddPendingMessageSend(PendingActions: TObjectList;
                                     Action: TIdSipAction);
+    procedure AddPendingUnregister(UserAgent: TIdSipUserAgent;
+                                   PendingActions: TObjectList);
     procedure AddProxy(UserAgent: TIdSipUserAgent;
                        const ProxyLine: String);
     procedure AddRoutingTable(UserAgent: TIdSipAbstractCore;
@@ -225,6 +230,20 @@ type
     property Action: TIdSipAction read fAction;
   end;
 
+  TIdSipPendingRegistration = class(TIdSipPendingConfigurationAction)
+  private
+    fRegistrar: TIdSipUri;
+    fUA:        TIdSipUserAgent;
+  public
+    constructor Create(UA: TIdSipUserAgent; Registrar: TIdSipUri);
+
+    procedure Execute; override;
+
+    property UA:        TIdSipUserAgent read fUA;
+    property Registrar: TIdSipUri       read fRegistrar;
+
+  end;
+
   TIdSipReconfigureStackWait = class(TIdWait)
   private
     fConfiguration: TStrings;
@@ -268,8 +287,9 @@ procedure EatDirective(var Line: String);
 implementation
 
 uses
-  IdMockRoutingTable, IdSimpleParser, IdSipIndyLocator, IdSipMockLocator,
-  IdSipSubscribeModule, IdSystem, IdUnicode, SysUtils;
+  IdMockRoutingTable, IdSimpleParser, IdSipConsts, IdSipDns, IdSipIndyLocator,
+  IdSipLocation, IdSipMockLocator, IdSipSubscribeModule, IdSystem, IdUnicode,
+  SysUtils;
 
 //******************************************************************************
 //* Unit Public functions & procedures                                         *
@@ -290,6 +310,10 @@ constructor TIdSipUserAgent.Create;
 begin
   inherited Create;
 
+  Self.ContactClosestToRegistrar := TIdSipContactHeader.Create;
+  Self.ContactClosestToRegistrar.IsUnset := true;
+  Self.Registrar := TIdSipUri.Create;
+
   Self.fInviteModule   := Self.AddModule(TIdSipInviteModule) as TIdSipInviteModule;
   Self.fRegisterModule := Self.AddModule(TIdSipOutboundRegisterModule) as TIdSipOutboundRegisterModule;
 
@@ -299,6 +323,7 @@ begin
   Self.DoNotDisturbMessage    := RSSIPTemporarilyUnavailable;
   Self.fProxy                 := TIdSipUri.Create('');
   Self.HasProxy               := false;
+  Self.HasRegistered          := false;
   Self.InitialResendInterval  := DefaultT1;
 end;
 
@@ -311,25 +336,55 @@ begin
   // Thus we destroy these objects AFTER the inherited Destroy, because the base
   // class could well expect these objects to still exist.
 
+  if Self.HasRegistered then
+    Self.UnregisterFrom(Self.Registrar).Send;
+
   inherited Destroy;
 
   Self.Proxy.Free;
   Self.Dispatcher.Free;
   Self.Authenticator.Free;
+
+  Self.Registrar.Free;
+  Self.ContactClosestToRegistrar.Free;
 end;
 
 procedure TIdSipUserAgent.AddLocalHeaders(OutboundRequest: TIdSipRequest);
+var
+  LocalContact: TIdSipContactHeader;
 begin
   inherited AddLocalHeaders(OutboundRequest);
 
   // draft-ietf-sip-gruu-10, section 8.1
-  OutboundRequest.AddHeader(Self.RegisterModule.Contact);
+
+  LocalContact := TIdSipContactHeader.Create;
+  try
+    if Self.ContactClosestToRegistrar.IsUnset then
+      LocalContact.Value := Self.From.FullValue
+    else
+      LocalContact.Assign(Self.ContactClosestToRegistrar);
+
+    LocalContact.IsGruu  := Self.UseGruu;
+    LocalContact.IsUnset := Self.ContactClosestToRegistrar.IsUnset;
+
+    OutboundRequest.AddHeader(LocalContact);
+  finally
+    LocalContact.Free;
+  end;
 
   if OutboundRequest.HasSipsUri then
     OutboundRequest.FirstContact.Address.Scheme := SipsScheme;
 
   if Self.HasProxy then
     OutboundRequest.Route.AddRoute(Self.Proxy);
+end;
+
+function TIdSipUserAgent.AddOutboundAction(ActionType: TIdSipActionClass): TIdSipAction;
+begin
+  Result := inherited AddOutboundAction(ActionType);
+
+  if not Self.ContactClosestToRegistrar.IsUnset then
+    Result.LocalGruu := Self.ContactClosestToRegistrar;
 end;
 
 procedure TIdSipUserAgent.AddTransportListener(Listener: IIdSipTransportListener);
@@ -343,8 +398,61 @@ begin
 end;
 
 function TIdSipUserAgent.RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
+var
+  DefaultPort:      Cardinal;
+  LocalAddress:     TIdSipLocation;
+  Names:            TIdDomainNameRecords;
+  RegistrarAddress: String;
 begin
-  Result := Self.RegisterModule.RegisterWith(Registrar, Self.RegisterModule.Contact);
+  LocalAddress := TIdSipLocation.Create;
+  try
+    if Registrar.IsSecure then
+      DefaultPort := IdPORT_SIPS
+    else
+      DefaultPort := IdPORT_SIP;
+
+    if TIdIPAddressParser.IsIPAddress(Registrar.Host) then
+      RegistrarAddress := Registrar.Host
+    else begin
+      Names := TIdDomainNameRecords.Create;
+      try
+        Self.Locator.ResolveNameRecords(Registrar.Host, Names);
+
+        if Names.IsEmpty then begin
+          // Something's gone very wrong and we're about to try register to a
+          // registrar that doesn't really exist!
+          //
+          // This isn't much of a solution. The only good reasons for doing this
+          // are that (a) it doesn't do much harm (?) and (b) it allows us to
+          // produce a meaningful Result, even if the result of Result.Send is
+          // effectively a no-op.
+          RegistrarAddress := '127.0.0.1';
+        end
+        else
+          RegistrarAddress := Names[0].IPAddress;
+      finally
+        Names.Free;
+      end;
+    end;
+
+    Self.RoutingTable.LocalAddressFor(RegistrarAddress, LocalAddress, DefaultPort);
+
+    // We can only regard ContactClosestToRegistrar as "set" when we receive a
+    // successful response to the REGISTER.
+    Self.ContactClosestToRegistrar.DisplayName      := Self.From.DisplayName;
+    Self.ContactClosestToRegistrar.Address.Scheme   := Registrar.Scheme;
+    Self.ContactClosestToRegistrar.Address.Username := Self.From.Address.Username;
+    Self.ContactClosestToRegistrar.Address.Host     := LocalAddress.IPAddress;
+    Self.ContactClosestToRegistrar.Address.Port     := LocalAddress.Port;
+    Self.ContactClosestToRegistrar.SipInstance      := Self.InstanceID;
+    Self.HasRegistered := true;
+  finally
+    LocalAddress.Free;
+  end;
+
+  Self.Registrar.Uri := Registrar.Uri;
+
+  Result := Self.RegisterModule.RegisterWith(Registrar, Self.ContactClosestToRegistrar);
   Result.AddListener(Self);
 end;
 
@@ -364,6 +472,16 @@ end;
 function TIdSipUserAgent.SessionCount: Integer;
 begin
   Result := Self.Actions.SessionCount;
+end;
+
+function TIdSipUserAgent.UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundUnregistration;
+begin
+  Result := Self.RegisterModule.UnregisterFrom(Registrar, Self.ContactClosestToRegistrar);
+  Result.AddListener(Self);
+
+  // This is technically incorrect: we should only set this when Result.Send is
+  // invoked.
+  Self.HasRegistered := false;
 end;
 
 //* TIdSipUserAgent Private methods ********************************************
@@ -413,11 +531,13 @@ procedure TIdSipUserAgent.OnSuccess(RegisterAgent: TIdSipOutboundRegistrationBas
 var
   Gruu: String;
 begin
-  if Self.RegisterModule.Contact.IsGruu then begin
-    Gruu := CurrentBindings.GruuFor(Self.RegisterModule.Contact);
+  if Self.UseGruu then begin
+    Gruu := CurrentBindings.GruuFor(Self.ContactClosestToRegistrar);
 
-    if (Gruu <> '') then
-      Self.RegisterModule.Contact.Address.Uri := Gruu;
+    if (Gruu <> '') then begin
+      Self.ContactClosestToRegistrar.Address.Uri := Gruu;
+      Self.ContactClosestToRegistrar.IsUnset     := false;
+    end;
   end;
 end;
 
@@ -489,7 +609,6 @@ procedure TIdSipStackConfigurator.UpdateConfiguration(UserAgent: TIdSipUserAgent
                                                       Configuration: TStrings);
 var
   PendingActions: TObjectList;
-  RegMod:         TIdSipOutboundRegisterModule;
 begin
   // Unregister if necessary (we've got a Registrar, and there's a different one in Configuration)
   // Update any settings in Configuration
@@ -497,14 +616,11 @@ begin
 
   Self.FirstTransportDirective := true;
 
-  RegMod := UserAgent.RegisterModule;
-  if RegMod.HasRegistrar and not RegMod.Registrar.IsMalformed then
-    RegMod.UnregisterFrom(RegMod.Registrar, RegMod.Contact).Send;
-
 //  UserAgent.Dispatcher.ClearTransports;
 
   PendingActions := TObjectList.Create(false);
   try
+    Self.AddPendingUnregister(UserAgent, PendingActions);
     Self.ParseFile(UserAgent, Configuration, PendingActions);
     Self.InstantiateMissingObjectsAsDefaults(UserAgent);
     Self.SendPendingActions(PendingActions);
@@ -552,21 +668,6 @@ begin
   AddressHeader.DisplayName      := UTF16LEToUTF8(GetFullUserName);
   AddressHeader.Address.Username := UTF16LEToUTF8(GetUserName);
   AddressHeader.Address.Host     := LocalAddress;
-end;
-
-procedure TIdSipStackConfigurator.AddContact(UserAgent: TIdSipAbstractCore;
-                                             const ContactLine: String);
-var
-  RegMod: TIdSipOutboundRegisterModule;
-begin
-  // See class comment for the format for this directive.
-
-  if (UserAgent is TIdSipUserAgent) then begin
-    RegMod := UserAgent.ModuleFor(TIdSipOutboundRegisterModule) as TIdSipOutboundRegisterModule;
-
-    Self.AddAddress(UserAgent, RegMod.Contact, ContactLine);
-    RegMod.Contact.IsUnset := false;
-  end;
 end;
 
 procedure TIdSipStackConfigurator.AddFrom(UserAgent: TIdSipAbstractCore;
@@ -692,6 +793,17 @@ begin
   PendingActions.Add(Pending);
 end;
 
+procedure TIdSipStackConfigurator.AddPendingUnregister(UserAgent: TIdSipUserAgent;
+                                                       PendingActions: TObjectList);
+var
+  Reg: TIdSipOutboundRegisterModule;
+begin
+  Reg := UserAgent.RegisterModule;
+
+  if Reg.HasRegistrar and not Reg.Registrar.IsMalformed then
+    Self.AddPendingMessageSend(PendingActions, UserAgent.UnregisterFrom(Reg.Registrar));
+end;
+
 procedure TIdSipStackConfigurator.AddProxy(UserAgent: TIdSipUserAgent;
                                            const ProxyLine: String);
 var
@@ -809,8 +921,6 @@ begin
 end;
 
 procedure TIdSipStackConfigurator.InstantiateMissingObjectsAsDefaults(UserAgent: TIdSipAbstractCore);
-var
-  RegMod: TIdSipOutboundRegisterModule;
 begin
   if not Assigned(UserAgent.Authenticator) then
     UserAgent.Authenticator := TIdSipAuthenticator.Create;
@@ -821,15 +931,6 @@ begin
   if not Assigned(UserAgent.RoutingTable) then begin
     UserAgent.RoutingTable := TIdWindowsRoutingTable.Create;
     UserAgent.Dispatcher.RoutingTable := UserAgent.RoutingTable;
-  end;
-
-  if (UserAgent is TIdSipUserAgent) then begin
-    RegMod := UserAgent.ModuleFor(TIdSipOutboundRegisterModule) as TIdSipOutboundRegisterModule;
-
-    if RegMod.Contact.IsUnset then begin
-      Self.AddAutoAddress(RegMod.Contact);
-      RegMod.Contact.IsUnset := false;
-    end;
   end;
 
   if UserAgent.UsingDefaultFrom then
@@ -858,8 +959,6 @@ begin
 
   if      IsEqual(FirstToken, AuthenticationDirective) then
     Self.AddAuthentication(UserAgent, ConfigurationLine)
-  else if IsEqual(FirstToken, ContactDirective) then
-    Self.AddContact(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, FromDirective) then
     Self.AddFrom(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, HostNameDirective) then
@@ -892,8 +991,9 @@ procedure TIdSipStackConfigurator.RegisterUA(UserAgent: TIdSipUserAgent;
                                              const RegisterLine: String;
                                              PendingActions: TObjectList);
 var
-  Line: String;
-  Reg:  TIdSipOutboundRegisterModule;
+  Line:         String;
+  Registrar:    TIdSipUri;
+  Registration: TIdSipPendingRegistration;
 begin
   // See class comment for the format for this directive.
   Line := RegisterLine;
@@ -901,12 +1001,14 @@ begin
 
   Line := Trim(Line);
 
-  Reg := UserAgent.RegisterModule;
+  Registrar := TIdSipUri.Create(Line);
+  try
+    Registration := TIdSipPendingRegistration.Create(UserAgent, Registrar);
 
-  Reg.AutoReRegister := true;
-  Reg.HasRegistrar := true;
-  Reg.Registrar.Uri := Line;
-  Self.AddPendingMessageSend(PendingActions, Reg.RegisterWith(Reg.Registrar, UserAgent.RegisterModule.Contact));
+    PendingActions.Add(Registration);
+  finally
+    Registrar.Free;
+  end;
 end;
 
 procedure TIdSipStackConfigurator.UseGruu(UserAgent: TIdSipAbstractCore;
@@ -1025,6 +1127,32 @@ end;
 procedure TIdSipPendingMessageSend.Execute;
 begin
   Self.Action.Send;
+end;
+
+//******************************************************************************
+//* TIdSipPendingRegistration                                                  *
+//******************************************************************************
+//* TIdSipPendingRegistration Public methods ***********************************
+
+constructor TIdSipPendingRegistration.Create(UA: TIdSipUserAgent; Registrar: TIdSipUri);
+begin
+  inherited Create;
+
+  Self.fRegistrar := TIdSipUri.Create(Registrar.Uri);
+  Self.fUA        := UA;
+end;
+
+procedure TIdSipPendingRegistration.Execute;
+var
+  Reg: TIdSipOutboundRegisterModule;
+begin
+  Reg := Self.UA.RegisterModule;
+
+  Reg.AutoReRegister := true;
+  Reg.HasRegistrar := true;
+  Reg.Registrar := Self.Registrar;
+
+  Self.UA.RegisterWith(Self.Registrar).Send;
 end;
 
 //******************************************************************************

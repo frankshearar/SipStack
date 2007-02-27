@@ -97,6 +97,7 @@ type
     procedure TestMinExpires;
     procedure TestQuickestExpiry;
     procedure TestQuickestExpiryNoExpires;
+    procedure TestProtectAllContacts;
     procedure TestReadBody;
     procedure TestReadBodyWithZeroContentLength;
     procedure TestRemoveHeader;
@@ -1309,6 +1310,21 @@ begin
 
   Self.Msg.AddHeader(ContactHeaderFull).Value := 'sip:case@fried.neurons.org;expires=22';
   CheckEquals(8, Self.Msg.QuickestExpiry, 'Three Contacts');
+end;
+
+procedure TestTIdSipMessage.TestProtectAllContacts;
+begin
+  Self.Msg.AddHeader(ContactHeaderFull).Value := 'sip:hiro@enki.org';
+  Self.Msg.AddHeader(ContactHeaderFull).Value := 'sip:case@fried.neurons.org';
+
+  Self.Msg.ProtectAllContacts;
+
+  Self.Msg.Contacts.First;
+  while Self.Msg.Contacts.HasNext do begin
+    Check(not Self.Msg.Contacts.CurrentContact.IsUnset,
+          'Contact "' + Self.Msg.Contacts.CurrentContact.Address.AsString + '" not protected');
+    Self.Msg.Contacts.Next;
+  end;
 end;
 
 procedure TestTIdSipMessage.TestReadBody;

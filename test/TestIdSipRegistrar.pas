@@ -805,6 +805,10 @@ end;
 
 procedure TestTIdSipOutboundRegisterModule.TestCleanUpUnregisters;
 begin
+  // For the moment, the UserAgent takes care of unregistering: the
+  // OutboundRegisterModule just provides an API that allows unregistering.
+
+{
   Self.Module.HasRegistrar := true;
   Self.Module.Registrar.Uri := 'sip:remotehost';
   Self.MarkSentRequestCount;
@@ -818,6 +822,7 @@ begin
   CheckEquals(0,
               Self.LastSentRequest.QuickestExpiry,
               'Expiry time indicates this wasn''t an un-REGISTER');
+}
 end;
 
 procedure TestTIdSipOutboundRegisterModule.TestCreateRegister;
@@ -831,15 +836,15 @@ begin
     CheckEquals('',             Reg.RequestUri.Username, 'Request-URI Username');
     CheckEquals('',             Reg.RequestUri.Password, 'Request-URI Password');
 
-    CheckEquals(Self.Core.RegisterModule.Contact.Value,
-                Reg.FirstHeader(ContactHeaderFull).Value,
-                'Contact');
-    CheckEquals(Self.Core.RegisterModule.Contact.Value,
-                Reg.ToHeader.Value,
-                'To');
-    CheckEquals(Reg.ToHeader.Value,
+    // Note: we don't check the Contact here because that could change when sent
+    // to the network.
+
+    CheckEquals(Self.Core.From.Value,
                 Reg.From.Value,
                 'From');
+    CheckEquals(Reg.From.Value,
+                Reg.ToHeader.Value,
+                'To');
   finally
     Reg.Free;
   end;
@@ -886,7 +891,7 @@ const
 var
   Reg: TIdSipRequest;
 begin
-  Self.Module.Contact.IsGruu := true;
+  Self.Module.UserAgent.UseGruu    := true;
   Self.Module.UserAgent.InstanceID := ZeroURN;
 
   // cf. draft-ietf-sip-gruu-10, section 7.1.1.1
@@ -915,8 +920,8 @@ procedure TestTIdSipOutboundRegisterModule.TestCreateRegisterWithRequiredGruu;
 var
   Reg: TIdSipRequest;
 begin
-  Self.Module.Contact.IsGruu := true;
-  Self.Module.RequireGRUU    := true;
+  Self.Module.UserAgent.UseGruu := true;
+  Self.Module.RequireGRUU       := true;
 
   Reg := Self.Module.CreateRegister(Self.Core.From, Self.Destination);
   try
@@ -935,7 +940,11 @@ var
   OurBindings: TIdSipContacts;
 begin
   Self.MarkSentRequestCount;
-  Self.Module.UnregisterFrom(Self.RemoteUri, Self.Core.RegisterModule.Contact).Send;
+  Self.Core.InviteModule.Call(Self.Destination, '', '').Send;
+  CheckRequestSent('No INVITE sent');
+
+  Self.MarkSentRequestCount;
+  Self.Module.UnregisterFrom(Self.RemoteUri, Self.LastSentRequest.FirstContact).Send;
   CheckRequestSent('No REGISTER sent');
   CheckEquals(MethodRegister,
               Self.LastSentRequest.Method,
@@ -1987,28 +1996,39 @@ end;
 
 procedure TestTIdSipOutboundRegistration.TestReceiveGruu;
 var
+  LocalContact: TIdSipContactHeader;
   Gruu:       TIdSipContactHeader;
   OkWithGruu: TIdSipResponse;
 begin
-  Self.Core.RegisterModule.Contact.IsGruu := true;
-  Self.Contacts.Clear;
-  Self.Contacts.Add(Self.Core.RegisterModule.Contact);
-  Self.CreateAction;
-
-  OkWithGruu := TIdSipResponse.InResponseTo(Self.LastSentRequest, SIPOK);
+  LocalContact := TIdSipContactHeader.Create;
   try
-    OkWithGruu.Supported.Values.Add(ExtensionGruu);
-    Gruu := OkWithGruu.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
-    Gruu.Value := Self.LastSentRequest.FirstContact.FullValue;
-    Gruu.Gruu := Self.Core.RegisterModule.Contact.Address.AsString + ';opaque=foo';
+    Self.MarkSentRequestCount;
+    Self.Core.InviteModule.Call(Self.Destination, '', '').Send;
+    CheckRequestSent('No INVITE sent');
+    LocalContact.Assign(Self.LastSentRequest.FirstContact);
 
-    Self.ReceiveResponse(OkWithGruu);
+    Self.Core.UseGruu := true;
+    Self.Contacts.Clear;
+    Self.Contacts.Add(LocalContact);
+    Self.CreateAction;
 
-    CheckNotEquals(Gruu.Gruu,
-                   Self.Core.RegisterModule.Contact.Address.AsString,
-                   'The OutboundRegistration action mustn''t touch the AbstractCore''s GRUU');
+    OkWithGruu := TIdSipResponse.InResponseTo(Self.LastSentRequest, SIPOK);
+    try
+      OkWithGruu.Supported.Values.Add(ExtensionGruu);
+      Gruu := OkWithGruu.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
+      Gruu.Value := Self.LastSentRequest.FirstContact.FullValue;
+      Gruu.Gruu := LocalContact.Address.AsString + ';opaque=foo';
+
+      Self.ReceiveResponse(OkWithGruu);
+
+      CheckNotEquals(Gruu.Gruu,
+                     LocalContact.Address.AsString,
+                     'The OutboundRegistration action mustn''t touch the AbstractCore''s GRUU');
+    finally
+      OkWithGruu.Free;
+    end;
   finally
-    OkWithGruu.Free;
+    LocalContact.Free;
   end;
 end;
 

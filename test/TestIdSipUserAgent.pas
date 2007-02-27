@@ -49,6 +49,7 @@ type
 
     procedure CheckCreateRequest(Dest: TIdSipToHeader;
                                  Request: TIdSipRequest);
+    procedure CheckGruuSet(ExpectedGruu: String; Msg: String);
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Response: TIdSipResponse); overload;
     procedure OnChanged(Observed: TObject);
@@ -104,7 +105,7 @@ type
     procedure TestCreateResponseUserAgent;
     procedure TestCreateResponseUserAgentBlank;
     procedure TestDeclinedCallNotifiesListeners;
-    procedure TestDestroyCallsModuleCleanups;
+    procedure TestDestroyUnregisters;
     procedure TestDestroyWithProxyAndAutoReregister;
     procedure TestDialogLocalSequenceNoMonotonicallyIncreases;
     procedure TestDispatchToCorrectSession;
@@ -131,9 +132,6 @@ type
     procedure TestRemoveUserAgentListener;
     procedure TestRFC2543InviteCallFlow;
     procedure TestScheduleEventActionClosure;
-    procedure TestSetContact;
-    procedure TestSetContactMailto;
-    procedure TestSetContactWildCard;
     procedure TestSetFrom;
     procedure TestSetFromMailto;
     procedure TestSimultaneousInAndOutboundCall;
@@ -158,7 +156,6 @@ type
 
     function  ARecords: String;
     procedure CheckAutoAddress(Address: TIdSipAddressHeader);
-    procedure CheckAutoContact(UserAgent: TIdSipAbstractCore);
     procedure CheckAutoFrom(UserAgent: TIdSipAbstractCore);
     procedure CheckEventPackageRegistered(UA: TIdSipUserAgent;
                                           PackageName: String);
@@ -193,15 +190,12 @@ type
     procedure TestCreateUserAgentRegisterDirectiveBeforeTransport;
     procedure TestCreateUserAgentReturnsSomething;
     procedure TestCreateUserAgentTransportHasMalformedPort;
-    procedure TestCreateUserAgentWithAutoContact;
     procedure TestCreateUserAgentWithAutoFrom;
     procedure TestCreateUserAgentWithAutoTransport;
-    procedure TestCreateUserAgentWithContact;
     procedure TestCreateUserAgentWithFrom;
     procedure TestCreateUserAgentWithHostName;
     procedure TestCreateUserAgentWithInstanceID;
     procedure TestCreateUserAgentWithLocator;
-    procedure TestCreateUserAgentWithMalformedContact;
     procedure TestCreateUserAgentWithMalformedFrom;
     procedure TestCreateUserAgentWithMalformedLocator;
     procedure TestCreateUserAgentWithMalformedProxy;
@@ -212,7 +206,6 @@ type
     procedure TestCreateUserAgentWithMockRoutingTable;
     procedure TestCreateUserAgentWithMultipleEventPackageSupport;
     procedure TestCreateUserAgentWithMultipleTransports;
-    procedure TestCreateUserAgentWithNoContact;
     procedure TestCreateUserAgentWithNoFrom;
     procedure TestCreateUserAgentWithOneTransport;
     procedure TestCreateUserAgentWithProxy;
@@ -223,7 +216,6 @@ type
     procedure TestCreateUserAgentWithUseGruu;
     procedure TestCreateUserAgentWithUserAgentName;
     procedure TestStrToBool;
-    procedure TestUpdateConfigurationWithContact;
     procedure TestUpdateConfigurationWithFrom;
     procedure TestUpdateConfigurationWithLocator;
     procedure TestUpdateConfigurationWithNewRegistrar;
@@ -317,7 +309,6 @@ end;
 
 procedure TestTIdSipUserAgent.SetUp;
 var
-  C:        TIdSipContactHeader;
   F:        TIdSipFromHeader;
   Invite:   TIdSipRequest;
   Response: TIdSipResponse;
@@ -354,14 +345,6 @@ begin
     end;
   finally
     Invite.Free;
-  end;
-
-  C := TIdSipContactHeader.Create;
-  try
-    C.Value := 'sip:wintermute@tessier-ashpool.co.luna';
-    Self.Core.RegisterModule.Contact := C;
-  finally
-    C.Free;
   end;
 
   F := TIdSipFromHeader.Create;
@@ -415,7 +398,9 @@ begin
 
   Check(Request.HasHeader(ContactHeaderFull), 'No Contact header added');
   Contact := Request.FirstContact;
-  Check(Contact.Equals(Self.Core.RegisterModule.Contact), 'Contact header incorrectly set');
+  CheckEquals(Self.Core.From.DisplayName,
+              Contact.DisplayName,
+              'Contact header incorrectly set');
 
   CheckEquals(Request.From.DisplayName,
               Self.Core.From.DisplayName,
@@ -438,6 +423,15 @@ begin
   CheckEquals(UdpTransport,
               Request.LastHop.Transport,
               'UDP should be the default transport');
+end;
+
+procedure TestTIdSipUserAgent.CheckGruuSet(ExpectedGruu: String; Msg: String);
+begin
+  Self.MarkSentRequestCount;
+  Self.Core.InviteModule.Call(Self.Destination, '', '').Send;
+  CheckRequestSent('CheckGruuSet: no request sent (' + Msg + ')');
+
+  CheckEquals(ExpectedGruu, Self.LastSentRequest.FirstContact.Address.AsString, Msg);
 end;
 
 procedure TestTIdSipUserAgent.OnAuthenticationChallenge(Action: TIdSipAction;
@@ -1009,22 +1003,27 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgent.TestDestroyCallsModuleCleanups;
+procedure TestTIdSipUserAgent.TestDestroyUnregisters;
 var
-  Registrar: TIdSipMockUdpTransport;
-  UA:        TIdSipUserAgent;
+  Registrar:    TIdSipMockUdpTransport;
+  RegistrarUri: TIdSipUri;
+  UA:           TIdSipUserAgent;
 begin
   Registrar := TIdSipMockUdpTransport.Create;
   try
     Registrar.Bindings[0].IP   := '127.0.0.1';
     Registrar.Bindings[0].Port := 25060;
 
-    UA := Self.CreateUserAgent('sip:case@localhost');
+    RegistrarUri := TIdSipUri.Create('sip:' + Registrar.Bindings[0].IP + ':' + IntToStr(Registrar.Bindings[0].Port));
     try
-      UA.RegisterModule.Registrar.Uri := 'sip:' + Registrar.Bindings[0].IP + ':' + IntToStr(Registrar.Bindings[0].Port);
-      UA.RegisterModule.HasRegistrar  := true;
+      UA := Self.CreateUserAgent('sip:case@localhost');
+      try
+        UA.RegisterWith(RegistrarUri);
+      finally
+        UA.Free;
+      end;
     finally
-      UA.Free;
+      RegistrarUri.Free;
     end;
 
     Check(Registrar.LastRequest <> nil,
@@ -1211,9 +1210,6 @@ begin
     CheckEquals(UA.HostName,
                 UA.From.Address.Host,
                 'From host should default to the UA''s HostName');
-    CheckEquals(UA.HostName,
-                UA.RegisterModule.Contact.Address.Host,
-                'Contact host should default to the UA''s HostName');
   finally
     UA.Free;
   end;
@@ -1362,20 +1358,28 @@ end;
 
 procedure TestTIdSipUserAgent.TestReceiveResponseWithMultipleVias;
 var
-  Response: TIdSipResponse;
+  FakeContact: TIdSipContactHeader;
+  Response:    TIdSipResponse;
 begin
   Self.Core.InviteModule.Call(Self.Destination, '', '');
 
-  Response := TIdSipResponse.InResponseTo(Self.Invite,
-                                          SIPOK,
-                                          Self.Core.RegisterModule.Contact);
+  FakeContact := TIdSipContactHeader.Create;
   try
-    Response.AddHeader(Response.Path.LastHop);
-    Self.ReceiveResponse(Response);
-    Check(not Self.SessionEstablished,
-          'Multiple-Via Response not dropped');
+    FakeContact.Value := Self.Core.From.FullValue;
+
+    Response := TIdSipResponse.InResponseTo(Self.Invite,
+                                            SIPOK,
+                                            FakeContact);
+    try
+      Response.AddHeader(Response.Path.LastHop);
+      Self.ReceiveResponse(Response);
+      Check(not Self.SessionEstablished,
+            'Multiple-Via Response not dropped');
+    finally
+      Response.Free;
+    end;
   finally
-    Response.Free;
+    FakeContact.Free;
   end;
 end;
 
@@ -1394,7 +1398,8 @@ var
   Gruu:       TIdSipContactHeader;
   OkWithGruu: TIdSipResponse;
 begin
-  Self.Core.RegisterModule.Contact.IsGruu := true;
+  Self.Core.UseGruu := true;
+  Self.Core.InstanceID := ConstructUUIDURN;
 
   Self.MarkSentRequestCount;
   Self.Core.RegisterWith(Self.RemoteTarget).Send;
@@ -1404,14 +1409,15 @@ begin
   try
     OkWithGruu.Supported.Values.Add(ExtensionGruu);
     Gruu := OkWithGruu.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
+
+    // This, so that the address of record of Gruu and the Contact in the last
+    // sent request match.
     Gruu.Value := Self.LastSentRequest.FirstContact.FullValue;
-    Gruu.Gruu := Self.Core.RegisterModule.Contact.Address.AsString + ';opaque=foo';
+    Gruu.Gruu := 'sip:arbitrary.gruu@example.com;opaque=foo';
 
     Self.ReceiveResponse(OkWithGruu);
 
-    CheckEquals(Gruu.Gruu,
-                Self.Core.RegisterModule.Contact.Address.AsString,
-                'Core''s GRUU not set');
+    CheckGruuSet(Gruu.Gruu, 'Core''s GRUU not set');
   finally
     OkWithGruu.Free;
   end;
@@ -1429,8 +1435,8 @@ begin
   // If more than one UA registers for the same Address Of Record, then THIS
   // UA only wants to know ITS GRUU when it registers.
 
-  Self.Core.RegisterModule.Contact.SipInstance := OurUrn;
-  Self.Core.RegisterModule.Contact.IsGruu := true;
+  Self.Core.InstanceID := OurUrn;
+  Self.Core.UseGruu    := true;
 
   Self.MarkSentRequestCount;
   Self.Core.RegisterWith(Self.RemoteTarget).Send;
@@ -1441,21 +1447,22 @@ begin
     OkWithGruu.Supported.Values.Add(ExtensionGruu);
     // The other UA
     GruuOne := OkWithGruu.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
-    GruuOne.Value       := Self.Core.RegisterModule.Contact.FullValue;
-    GruuOne.Gruu        := Self.Core.RegisterModule.Contact.Address.AsString + ';opaque=bar';
+    // This, so that the address of record of Gruu and the Contact in the last
+    // sent request match.
+    GruuOne.Value       := Self.LastSentRequest.FirstContact.FullValue;
+    GruuOne.Gruu        := 'sip:arbitrary.contact@example.com;opaque=bar';
     GruuOne.SipInstance := TheirUrn;
 
     // Our UA
     GruuTwo := OkWithGruu.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
-    GruuTwo.Value       := Self.Core.RegisterModule.Contact.FullValue;
-    GruuTwo.Gruu        := Self.Core.RegisterModule.Contact.Address.AsString + ';opaque=foo';
+    GruuTwo.Value       := Self.LastSentRequest.FirstContact.FullValue;
+    GruuTwo.Gruu        := 'sip:arbitrary.contact@example.com;opaque=foo';
     GruuTwo.SipInstance := OurUrn;
 
     Self.ReceiveResponse(OkWithGruu);
 
-    CheckEquals(GruuTwo.Gruu,
-                Self.Core.RegisterModule.Contact.Address.AsString,
-                'Core''s GRUU not set');
+    CheckGruuSet(GruuTwo.Gruu,
+                 'Core''s GRUU not set');
   finally
     OkWithGruu.Free;
   end;
@@ -1657,60 +1664,6 @@ begin
   Self.Core.ScheduleEvent(TIdSipInboundInviteExpire, 50, Self.Invite.Copy, '');
   Check(EventCount < DebugTimer.EventCount,
         'Event not scheduled');
-end;
-
-procedure TestTIdSipUserAgent.TestSetContact;
-var
-  C: TIdSipContactHeader;
-begin
-  C := TIdSipContactHeader.Create;
-  try
-    C.Value := 'sip:case@fried.neurons.org';
-    Self.Core.RegisterModule.Contact := C;
-
-    Check(Self.Core.RegisterModule.Contact.Equals(C),
-                'Contact not set');
-  finally
-    C.Free;
-  end;
-end;
-
-procedure TestTIdSipUserAgent.TestSetContactMailTo;
-var
-  C: TIdSipContactHeader;
-begin
-  C := TIdSipContactHeader.Create;
-  try
-    try
-      C.Value := 'mailto:wintermute@tessier-ashpool.co.luna';
-      Self.Core.RegisterModule.Contact := C;
-      Fail('Only a SIP or SIPs URI may be specified');
-    except
-      on EBadHeader do;
-    end;
-  finally
-    C.Free;
-  end;
-end;
-
-procedure TestTIdSipUserAgent.TestSetContactWildCard;
-var
-  C: TIdSipContactHeader;
-begin
-  C := TIdSipContactHeader.Create;
-  try
-    try
-      C.Value := '*';
-      Self.Core.RegisterModule.Contact := C;
-      Fail('Wildcard Contact headers make no sense in a response that sets up '
-         + 'a dialog');
-    except
-      on EBadHeader do;
-      on EAssertionFailed do;
-    end;
-  finally
-    C.Free;
-  end;
 end;
 
 procedure TestTIdSipUserAgent.TestSetFrom;
@@ -2017,12 +1970,6 @@ begin
               Address.Name + ': host-info');
 end;
 
-procedure TestTIdSipStackConfigurator.CheckAutoContact(UserAgent: TIdSipAbstractCore);
-begin
-  CheckEquals(TIdSipUserAgent.ClassName, UserAgent.ClassName, 'Unexpected UA type');
-  Self.CheckAutoAddress((UserAgent as TIdSipUserAgent).RegisterModule.Contact);
-end;
-
 procedure TestTIdSipStackConfigurator.CheckAutoFrom(UserAgent: TIdSipAbstractCore);
 begin
   Self.CheckAutoAddress(UserAgent.From);
@@ -2288,20 +2235,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithAutoContact;
-var
-  UA: TIdSipUserAgent;
-begin
-  Self.Configuration.Add('Contact: AUTO');
-
-  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
-  try
-    Self.CheckAutoContact(UA);
-  finally
-    UA.Free;
-  end;
-end;
-
 procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithAutoFrom;
 var
   UA: TIdSipUserAgent;
@@ -2336,25 +2269,6 @@ begin
     finally
       UA.Dispatcher.Transports[0].Stop;
     end;
-  finally
-    UA.Free;
-  end;
-end;
-
-procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithContact;
-const
-  DisplayName = 'Count Zero';
-  ContactUri  = 'sip:countzero@jammer.org';
-  Contact     = '"' + DisplayName + '" <' + ContactUri + '>';
-var
-  UA: TIdSipUserAgent;
-begin
-  Self.Configuration.Add('Contact: ' + Contact);
-
-  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
-  try
-    CheckEquals(DisplayName, UA.RegisterModule.Contact.DisplayName,      'Contact display-name');
-    CheckEquals(ContactUri,  UA.RegisterModule.Contact.Address.AsString, 'Contact URI');
   finally
     UA.Free;
   end;
@@ -2445,22 +2359,6 @@ begin
           'Transaction and Transaction-User layers have different Locators');
   finally
     UA.Free;
-  end;
-end;
-
-procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithMalformedContact;
-const
-  MalformedContactLine = '"Count Zero <sip:countzero@jammer.org>';
-begin
-  Self.Configuration.Add('Contact: ' + MalformedContactLine);
-
-  try
-    Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
-    Fail('Failed to bail out with malformed Contact');
-  except
-    on E: EParserError do
-      Check(Pos(MalformedContactLine, E.Message) > 0,
-            'Insufficient error message');
   end;
 end;
 
@@ -2663,20 +2561,6 @@ begin
     CheckEquals(1,
                 UA.Dispatcher.TransportCount,
                 'Dispatcher didn''t use one transport with multiple bindings');
-  finally
-    UA.Free;
-  end;
-end;
-
-procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithNoContact;
-var
-  UA: TIdSipUserAgent;
-begin
-  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
-
-  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
-  try
-    Self.CheckAutoContact(UA);
   finally
     UA.Free;
   end;
@@ -2924,38 +2808,6 @@ begin
   Check(Self.Conf.StrToBool('random'), 'Non-false strings default to "true"');
 end;
 
-procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithContact;
-var
-  NewConfig:  TStrings;
-  NewContact: String;
-  OldContact: String;
-  UA:         TIdSipUserAgent;
-begin
-  NewContact := 'sip:unit253@jammers.org';
-
-  Self.SetBasicConfiguration(Self.Configuration);
-  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
-  try
-    OldContact := UA.RegisterModule.Contact.FullValue;
-    CheckNotEquals(NewContact,
-                   OldContact,
-                   'NewContact contains the same Contact header as the original '
-                 + 'configuration');
-
-    NewConfig := TStringList.Create;
-    try
-      NewConfig.Add('Contact: ' + NewContact);
-
-      Self.Conf.UpdateConfiguration(UA, NewConfig);
-      CheckEquals(NewContact, UA.RegisterModule.Contact.FullValue, 'UA''s Contact property not updated');
-    finally
-      NewConfig.Free;
-    end;
-  finally
-    UA.Free;
-  end;
-end;
-
 procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithFrom;
 var
   NewConfig: TStrings;
@@ -3082,7 +2934,7 @@ var
 begin
   // Update an existing Registrar property.
 
-  OldRegistrar := 'sip:127.0.0.1:' + IntToStr(Self.Server.DefaultPort);
+  OldRegistrar := 'sip:127.0.0.2:' + IntToStr(Self.Server.DefaultPort);
   Self.SetBasicConfiguration(Self.Configuration);
   Self.Configuration.Add(RegisterDirective + ': ' + OldRegistrar);
 
