@@ -4257,7 +4257,7 @@ begin
 
   Check(EventCount < Self.DebugTimer.EventCount,
         'No event added');
-  LastEvent := Self.DebugTimer.LastEventScheduled;
+  LastEvent := Self.DebugTimer.LastEventScheduled(TIdSipClientInviteTransactionTimerDWait);
   CheckEquals(TIdSipClientInviteTransactionTimerDWait.ClassName,
               LastEvent.ClassName,
               'Wrong event scheduled');
