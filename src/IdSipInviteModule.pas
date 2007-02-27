@@ -2120,7 +2120,7 @@ begin
     Result.CopyHeaders(Self.OriginalInvite, ProxyAuthorizationHeader);
   end;
 
-  Result.FirstContact.Assign(Self.LocalGruu)
+  Result.FirstContact.Assign(Self.LocalGruu);
 end;
 
 procedure TIdSipOutboundReInvite.Initialise(UA: TIdSipAbstractCore;
