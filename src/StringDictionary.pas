@@ -156,6 +156,8 @@ begin
 
   if (StartIndex > EndIndex) then Exit;
 
+  C := 1;
+  MiddlePair := nil;
   while (StartIndex <= EndIndex) do begin
     Middle := (EndIndex + StartIndex) div 2;
     MiddlePair := TKeyValuePair(Self.Associations[Middle]);
@@ -170,7 +172,7 @@ begin
       Break;
   end;
 
-  if (C = 0) then
+  if (C = 0) and Assigned(MiddlePair) then
     Result := MiddlePair;
 end;
 
