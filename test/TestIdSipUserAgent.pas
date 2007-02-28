@@ -126,6 +126,7 @@ type
     procedure TestRegisterWith;
     procedure TestRegisterWithGruu;
     procedure TestRegisterWithReceiveMultipleGruus;
+    procedure TestRegisterWithRegistrarNameDoesntResolve;
     procedure TestRejectMalformedAuthorizedRequest;
     procedure TestRejectMethodNotAllowed;
     procedure TestRejectNoContact;
@@ -1394,12 +1395,18 @@ end;
 
 procedure TestTIdSipUserAgent.TestRegisterWith;
 begin
+  Self.Core.UseGruu := false;
 
   Self.MarkSentRequestCount;
   Self.Core.RegisterWith(Self.RemoteTarget).Send;
   CheckRequestSent('No REGISTER sent');
-
   CheckEquals(MethodRegister, Self.LastSentRequest.Method, 'Unexpected request sent');
+
+  Check(not Self.LastSentRequest.FirstContact.IsGruu,
+        'If the Core doesn''t use GRUUs the Contact mustn''t be a GRUU');
+
+  Check(not Self.LastSentRequest.FirstContact.HasParameter(SipInstanceParam),
+        '"' + SipInstanceParam + '" parameters apply only to GRUUs');
 end;
 
 procedure TestTIdSipUserAgent.TestRegisterWithGruu;
@@ -1475,6 +1482,16 @@ begin
   finally
     OkWithGruu.Free;
   end;
+end;
+
+procedure TestTIdSipUserAgent.TestRegisterWithRegistrarNameDoesntResolve;
+begin
+  Self.Dispatcher.MockLocator.ReturnOnlySpecifiedRecords := true;
+  Self.Destination.Value := 'sip:rlyeh.org';
+
+  Self.MarkSentRequestCount;
+  Self.Core.RegisterWith(Self.Destination.Address).Send;
+  CheckNoRequestSent('Request sent even though "rlyeh.org" is not resolvable');
 end;
 
 procedure TestTIdSipUserAgent.TestRejectMalformedAuthorizedRequest;
