@@ -33,9 +33,12 @@ type
     fInviteModule:             TIdSipInviteModule;
     HasRegistered:             Boolean;
 
+    function  DefaultPort(SecureTransport: Boolean): Cardinal;
     function  GetDoNotDisturb: Boolean;
     function  GetInitialResendInterval: Cardinal;
     function  GetProgressResendInterval: Cardinal;
+    function  FirstResolvedName(FQDN: String): String;
+    function  LocalContactNeverSet: Boolean;
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Challenge: TIdSipResponse);
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistrationBase;
@@ -406,36 +409,11 @@ var
 begin
   LocalAddress := TIdSipLocation.Create;
   try
-    if Registrar.IsSecure then
-      DefaultPort := IdPORT_SIPS
-    else
-      DefaultPort := IdPORT_SIP;
+    RegistrarAddress := Self.FirstResolvedName(Registrar.Host);
 
-    if TIdIPAddressParser.IsIPAddress(Registrar.Host) then
-      RegistrarAddress := Registrar.Host
-    else begin
-      Names := TIdDomainNameRecords.Create;
-      try
-        Self.Locator.ResolveNameRecords(Registrar.Host, Names);
-
-        if Names.IsEmpty then begin
-          // Something's gone very wrong and we're about to try register to a
-          // registrar that doesn't really exist!
-          //
-          // This isn't much of a solution. The only good reasons for doing this
-          // are that (a) it doesn't do much harm (?) and (b) it allows us to
-          // produce a meaningful Result, even if the result of Result.Send is
-          // effectively a no-op.
-          RegistrarAddress := '127.0.0.1';
-        end
-        else
-          RegistrarAddress := Names[0].IPAddress;
-      finally
-        Names.Free;
-      end;
-    end;
-
-    Self.RoutingTable.LocalAddressFor(RegistrarAddress, LocalAddress, DefaultPort);
+    Self.RoutingTable.LocalAddressFor(RegistrarAddress,
+                                      LocalAddress,
+                                      Self.DefaultPort(Registrar.IsSecure));
 
     // We can only regard ContactClosestToRegistrar as "set" when we receive a
     // successful response to the REGISTER.
@@ -444,7 +422,9 @@ begin
     Self.ContactClosestToRegistrar.Address.Username := Self.From.Address.Username;
     Self.ContactClosestToRegistrar.Address.Host     := LocalAddress.IPAddress;
     Self.ContactClosestToRegistrar.Address.Port     := LocalAddress.Port;
-    Self.ContactClosestToRegistrar.SipInstance      := Self.InstanceID;
+
+    if Self.UseGruu then
+      Self.ContactClosestToRegistrar.SipInstance := Self.InstanceID;
     Self.HasRegistered := true;
   finally
     LocalAddress.Free;
@@ -476,7 +456,7 @@ end;
 
 function TIdSipUserAgent.UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundUnregistration;
 begin
-  if not Self.HasRegistered and Self.ContactClosestToRegistrar.IsUnset then
+  if not Self.HasRegistered and Self.LocalContactNeverSet then
     Self.ContactClosestToRegistrar.Assign(Self.From);
 
   Result := Self.RegisterModule.UnregisterFrom(Registrar, Self.ContactClosestToRegistrar);
@@ -488,6 +468,14 @@ begin
 end;
 
 //* TIdSipUserAgent Private methods ********************************************
+
+function TIdSipUserAgent.DefaultPort(SecureTransport: Boolean): Cardinal;
+begin
+  if SecureTransport then
+    DefaultPort := IdPORT_SIPS
+  else
+    DefaultPort := IdPORT_SIP;
+end;
 
 function TIdSipUserAgent.GetDoNotDisturb: Boolean;
 begin
@@ -502,6 +490,40 @@ end;
 function TIdSipUserAgent.GetProgressResendInterval: Cardinal;
 begin
   Result := Self.InviteModule.ProgressResendInterval;
+end;
+
+function TIdSipUserAgent.FirstResolvedName(FQDN: String): String;
+var
+  Names: TIdDomainNameRecords;
+begin
+  if TIdIPAddressParser.IsIPAddress(Registrar.Host) then
+    Result := Registrar.Host
+  else begin
+    Names := TIdDomainNameRecords.Create;
+    try
+      Self.Locator.ResolveNameRecords(Registrar.Host, Names);
+
+      if Names.IsEmpty then begin
+        // Something's gone very wrong and we're about to try register to a
+        // registrar that doesn't really exist!
+        //
+        // This isn't much of a solution. The only good reasons for doing this
+        // are that (a) it doesn't do much harm (?) and (b) it allows us to
+        // produce a meaningful Result, even if the result of Result.Send is
+        // effectively a no-op.
+        Result := '127.0.0.1';
+      end
+      else
+        Result := Names[0].IPAddress;
+    finally
+      Names.Free;
+    end;
+  end;
+end;
+
+function TIdSipUserAgent.LocalContactNeverSet: Boolean;
+begin
+  Result := Self.ContactClosestToRegistrar.IsUnset;
 end;
 
 procedure TIdSipUserAgent.OnAuthenticationChallenge(Action: TIdSipAction;
