@@ -1218,20 +1218,13 @@ end;
 
 procedure TestTIdSipStackInterface.TestHangUpWithInvalidHandle;
 var
-  R: TIdSipHandle;
-  Registrar: TIdSipUri;
+  H: TIdSipHandle;
 begin
-  Registrar := TIdSipUri.Create;
-  try
-    Registrar.Uri := 'sip:1.2.3.4';
-    R := Self.Intf.MakeRegistration(Registrar);
-  finally
-    Registrar.Free;
-  end;
+  H := Self.Intf.MakeOptionsQuery(Self.Destination);
 
   try
-    // You can't, obviously, "hang up" a registration attempt.
-    Self.Intf.HangUp(R);
+    // You can't, obviously, "hang up" an options query attempt.
+    Self.Intf.HangUp(H);
 
     Fail('No exception raised for an invalid handle');
   except
@@ -1423,20 +1416,13 @@ end;
 }
 procedure TestTIdSipStackInterface.TestModifyCallWithInvalidHandle;
 var
-  R: TIdSipHandle;
-  Registrar: TIdSipUri;
+  H: TIdSipHandle;
 begin
-  Registrar := TIdSipUri.Create;
-  try
-    Registrar.Uri := 'sip:1.2.3.4';
-    R := Self.Intf.MakeRegistration(Registrar);
-  finally
-    Registrar.Free;
-  end;
+  H := Self.Intf.MakeOptionsQuery(Self.Destination);
 
   try
-    // You can't, obviously, "modify" a registration attempt.
-    Self.Intf.ModifyCall(R, Self.LocalOffer, Self.LocalMimeType);
+    // You can't, obviously, "modify" an options query attempt.
+    Self.Intf.ModifyCall(H, Self.LocalOffer, Self.LocalMimeType);
 
     Fail('No exception raised for an invalid handle');
   except
@@ -1559,20 +1545,13 @@ end;
 
 procedure TestTIdSipStackInterface.TestRedirectCallWithInvalidHandle;
 var
-  R: TIdSipHandle;
-  Registrar: TIdSipUri;
+  H: TIdSipHandle;
 begin
-  Registrar := TIdSipUri.Create;
-  try
-    Registrar.Uri := 'sip:1.2.3.4';
-    R := Self.Intf.MakeRegistration(Registrar);
-  finally
-    Registrar.Free;
-  end;
+  H := Self.Intf.MakeOptionsQuery(Self.Destination);
 
   try
-    // You can't, obviously, "Redirect" a registration attempt.
-    Self.Intf.RedirectCall(R, Self.Destination);
+    // You can't, obviously, "Redirect" an options query attempt.
+    Self.Intf.RedirectCall(H, Self.Destination);
 
     Fail('No exception raised for an invalid handle');
   except
@@ -1609,20 +1588,13 @@ end;
 
 procedure TestTIdSipStackInterface.TestRejectCallWithInvalidHandle;
 var
-  R: TIdSipHandle;
-  Registrar: TIdSipUri;
+  H: TIdSipHandle;
 begin
-  Registrar := TIdSipUri.Create;
-  try
-    Registrar.Uri := 'sip:1.2.3.4';
-    R := Self.Intf.MakeRegistration(Registrar);
-  finally
-    Registrar.Free;
-  end;
+  H := Self.Intf.MakeOptionsQuery(Self.Destination);
 
   try
-    // You can't, obviously, "reject" a registration attempt.
-    Self.Intf.RejectCall(R);
+    // You can't, obviously, "reject" an options query attempt.
+    Self.Intf.RejectCall(H);
 
     Fail('No exception raised for an invalid handle');
   except
