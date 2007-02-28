@@ -20,8 +20,6 @@ type
   TestTIdSipAbstractCore = class(TTestCaseTU,
                                  IIdSipTransactionUserListener)
   private
-    ScheduledEventFired: Boolean;
-
     procedure CheckCommaSeparatedHeaders(const ExpectedValues: String;
                                          Header: TIdSipHeader;
                                          const Msg: String);
@@ -36,9 +34,6 @@ type
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
                                         Binding: TIdSipConnectionBindings);
-    procedure ScheduledEvent(Sender: TObject);
-  public
-    procedure SetUp; override;
   published
     procedure TestAddAllowedLanguage;
     procedure TestAddAllowedLanguageLanguageAlreadyPresent;
@@ -77,7 +72,6 @@ type
     procedure TestRejectUnsupportedSipVersion;
     procedure TestRemoveObserver;
     procedure TestRequiresUnsupportedExtension;
-    procedure TestScheduleEvent;
     procedure TestSendRequest;
     procedure TestSendRequestMalformedRequest;
     procedure TestSendRequestRewritesContactUri;
@@ -450,15 +444,6 @@ end;
 //******************************************************************************
 //* TestTIdSipAbstractCore                                                     *
 //******************************************************************************
-//* TestTIdSipAbstractCore Public methods **************************************
-
-procedure TestTIdSipAbstractCore.SetUp;
-begin
-  inherited SetUp;
-
-  Self.ScheduledEventFired := false;
-end;
-
 //* TestTIdSipAbstractCore Private methods *************************************
 
 procedure TestTIdSipAbstractCore.CheckCommaSeparatedHeaders(const ExpectedValues: String;
@@ -507,13 +492,6 @@ procedure TestTIdSipAbstractCore.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbst
                                                            Binding: TIdSipConnectionBindings);
 begin
 end;
-
-procedure TestTIdSipAbstractCore.ScheduledEvent(Sender: TObject);
-begin
-  Self.ScheduledEventFired := true;
-  Self.ThreadEvent.SetEvent;
-end;
-
 
 //* TestTIdSipAbstractCore Published methods ***********************************
 
@@ -1330,16 +1308,6 @@ begin
   finally
     InviteExtensions.Free;
   end;
-end;
-
-procedure TestTIdSipAbstractCore.TestScheduleEvent;
-var
-  EventCount: Integer;
-begin
-  EventCount := Self.DebugTimer.EventCount;
-  Self.Core.ScheduleEvent(Self.ScheduledEvent, 50, Self.Invite.Copy);
-  Check(EventCount < Self.DebugTimer.EventCount,
-        'Event not scheduled');
 end;
 
 procedure TestTIdSipAbstractCore.TestSendRequest;

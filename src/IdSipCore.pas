@@ -437,9 +437,6 @@ type
                             WaitTime: Cardinal;
                             Copy: TIdSipMessage;
                             const ActionID: String); overload;
-    procedure ScheduleEvent(Event: TNotifyEvent;
-                            WaitTime: Cardinal;
-                            Msg: TIdSipMessage); overload;
     procedure ScheduleEvent(WaitTime: Cardinal;
                             Wait: TIdWait); overload;
     procedure SendRequest(Request: TIdSipRequest;
@@ -2032,20 +2029,6 @@ begin
   Event.BlockType := BlockType;
   Event.ActionID  := ActionID;
   Self.ScheduleEvent(WaitTime, Event);
-end;
-
-procedure TIdSipAbstractCore.ScheduleEvent(Event: TNotifyEvent;
-                                           WaitTime: Cardinal;
-                                           Msg: TIdSipMessage);
-var
-  RequestEvent: TIdSipMessageNotifyEventWait;
-begin
-  if Assigned(Self.Timer) then begin
-    RequestEvent := TIdSipMessageNotifyEventWait.Create;
-    RequestEvent.Message := Msg;
-    RequestEvent.Event   := Event;
-    Self.Timer.AddEvent(WaitTime, RequestEvent);
-  end;
 end;
 
 procedure TIdSipAbstractCore.ScheduleEvent(WaitTime: Cardinal;
