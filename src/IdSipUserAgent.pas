@@ -476,6 +476,9 @@ end;
 
 function TIdSipUserAgent.UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundUnregistration;
 begin
+  if not Self.HasRegistered and Self.ContactClosestToRegistrar.IsUnset then
+    Self.ContactClosestToRegistrar.Assign(Self.From);
+
   Result := Self.RegisterModule.UnregisterFrom(Registrar, Self.ContactClosestToRegistrar);
   Result.AddListener(Self);
 

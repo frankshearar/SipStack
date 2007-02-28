@@ -50,6 +50,7 @@ type
     procedure CheckCreateRequest(Dest: TIdSipToHeader;
                                  Request: TIdSipRequest);
     procedure CheckGruuSet(ExpectedGruu: String; Msg: String);
+    procedure CheckIsUnregister(Request: TIdSipRequest);
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Response: TIdSipResponse); overload;
     procedure OnChanged(Observed: TObject);
@@ -138,6 +139,8 @@ type
     procedure TestTerminateAllCalls;
 //    procedure TestUnknownAcceptValue;
     procedure TestUnmatchedAckGetsDropped;
+    procedure TestUnregisterFromWhenNotRegistered;
+    procedure TestUnregisterFromWhenRegistered;
     procedure TestViaMatchesTransportParameter;
   end;
 
@@ -432,6 +435,12 @@ begin
   CheckRequestSent('CheckGruuSet: no request sent (' + Msg + ')');
 
   CheckEquals(ExpectedGruu, Self.LastSentRequest.FirstContact.Address.AsString, Msg);
+end;
+
+procedure TestTIdSipUserAgent.CheckIsUnregister(Request: TIdSipRequest);
+begin
+  Check(Request.HasHeader(ContactHeaderFull), 'Request looks like a registration query');
+  CheckEquals(0, Request.FirstContact.Expires, 'Request not a deregistration');
 end;
 
 procedure TestTIdSipUserAgent.OnAuthenticationChallenge(Action: TIdSipAction;
@@ -1817,6 +1826,41 @@ begin
   finally
     Self.Core.RemoveListener(Listener);
     Listener.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgent.TestUnregisterFromWhenNotRegistered;
+begin
+  Self.MarkSentRequestCount;
+  Self.Core.UnregisterFrom(Self.Destination.Address).Send;
+  CheckRequestSent('No REGISTER sent');
+  CheckEquals(MethodRegister, Self.LastSentRequest.Method, 'Unexpected request sent');
+  CheckIsUnregister(Self.LastSentRequest);
+end;
+
+procedure TestTIdSipUserAgent.TestUnregisterFromWhenRegistered;
+var
+  RegisteredContact: TIdSipContactHeader;
+begin
+  RegisteredContact := TIdSipContactHeader.Create;
+  try
+    Self.MarkSentRequestCount;
+    Self.Core.RegisterWith(Self.Destination.Address).Send;
+    CheckRequestSent('No REGISTER sent');
+    CheckEquals(MethodRegister, Self.LastSentRequest.Method, 'Unexpected request sent');
+
+    RegisteredContact.Assign(Self.LastSentRequest.FirstContact);
+    Self.ReceiveOk(Self.LastSentRequest);
+
+    Self.MarkSentRequestCount;
+    Self.Core.UnregisterFrom(Self.Destination.Address).Send;
+    CheckRequestSent('No REGISTER sent');
+    CheckIsUnregister(Self.LastSentRequest);
+    CheckEquals(RegisteredContact.Address.AsString,
+                Self.LastSentRequest.FirstContact.Address.AsString,
+                'Deregistration of unexpected Contact');
+  finally
+    RegisteredContact.Free;
   end;
 end;
 
