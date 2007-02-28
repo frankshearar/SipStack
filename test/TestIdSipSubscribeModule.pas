@@ -424,7 +424,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestReceive423;
+    procedure TestReceiveIntervalTooBrief;
     procedure TestSend; override;
   end;
 
@@ -2249,7 +2249,7 @@ end;
 
 //* TestTIdSipOutboundRefreshSubscribe Published methods ***********************
 
-procedure TestTIdSipOutboundRefreshSubscribe.TestReceive423;
+procedure TestTIdSipOutboundRefreshSubscribe.TestReceiveIntervalTooBrief;
 var
   MinExpires: Cardinal;
   Refresh:    TIdSipAction;
