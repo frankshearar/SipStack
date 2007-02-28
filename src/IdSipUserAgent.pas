@@ -402,9 +402,7 @@ end;
 
 function TIdSipUserAgent.RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
 var
-  DefaultPort:      Cardinal;
   LocalAddress:     TIdSipLocation;
-  Names:            TIdDomainNameRecords;
   RegistrarAddress: String;
 begin
   LocalAddress := TIdSipLocation.Create;
