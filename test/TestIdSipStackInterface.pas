@@ -158,6 +158,8 @@ type
     procedure TestInboundCall;
     procedure TestMakeCall;
     procedure TestMakeCallMalformedAddress;
+    procedure TestMakeOptionsQuery;
+    procedure TestMakeOptionsQueryMalformedAddress;
     procedure TestMakeRegistration;
     procedure TestMakeSubscription;
     procedure TestMakeSubscriptionMalformedTarget;
@@ -169,6 +171,7 @@ type
     procedure TestModifyCallWithNonExistentHandle;
     procedure TestNetworkFailure;
     procedure TestOutboundCall;
+    procedure TestOptionsQuery;
     procedure TestRedirectCall;
     procedure TestRedirectCallWithInvalidHandle;
     procedure TestRedirectCallWithNonExistentHandle;
@@ -277,6 +280,17 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestCopy;
+  end;
+
+  TestTIdQueryOptionsData = class(TTestCase)
+  private
+    Data: TIdQueryOptionsData;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAsString;
     procedure TestCopy;
   end;
 
@@ -462,7 +476,7 @@ implementation
 
 uses
   IdRandom, IdSimpleParser, IdSipCore, IdSipLocation, IdSipTransport,
-  IdSipUdpTransport, IdSocketHandle, IdUdpServer, SysUtils;
+  IdSipUdpTransport, IdSocketHandle, IdUdpServer, SysUtils, TestMessages;
 
 function Suite: ITestSuite;
 begin
@@ -478,6 +492,7 @@ begin
   Result.AddTest(TestTIdDebugDroppedMessageData.Suite);
   Result.AddTest(TestTIdDebugReceiveMessageData.Suite);
   Result.AddTest(TestTIdDebugSendMessageData.Suite);
+  Result.AddTest(TestTIdQueryOptionsData.Suite);
   Result.AddTest(TestTIdDebugTransportExceptionData.Suite);
   Result.AddTest(TestTIdDebugTransportRejectedMessageData.Suite);
   Result.AddTest(TestTIdFailData.Suite);
@@ -1292,6 +1307,36 @@ begin
   end;
 end;
 
+procedure TestTIdSipStackInterface.TestMakeOptionsQuery;
+var
+  Handle: TIdSipHandle;
+begin
+  Handle := Self.Intf.MakeOptionsQuery(Self.Destination);
+
+  Self.MarkSentRequestCount;
+  Self.Intf.Send(Handle);
+  Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
+  CheckRequestSent('No request sent');
+  CheckEquals(MethodOptions, Self.LastSentRequest.Method, 'Unexpected request sent');
+end;
+
+procedure TestTIdSipStackInterface.TestMakeOptionsQueryMalformedAddress;
+var
+  Handle:           TIdSipHandle;
+  MalformedAddress: TIdSipToHeader;
+begin
+  MalformedAddress := TIdSipToHeader.Create;
+  try
+    MalformedAddress.Address.Uri := 'sip:::1';
+    Check(MalformedAddress.IsMalformed, 'Sanity check: the URI must be malformed');
+
+    Handle := Self.Intf.MakeOptionsQuery(MalformedAddress);
+    CheckEquals(InvalidHandle, Handle, 'MakeCall didn''t return the invalid handle');
+  finally
+    MalformedAddress.Free;
+  end;
+end;
+
 procedure TestTIdSipStackInterface.TestMakeRegistration;
 var
   Handle: TIdSipHandle;
@@ -1463,6 +1508,26 @@ begin
   CheckEquals(Self.RemoteMimeType,
               SessionData.RemoteMimeType,
               'RemoteMimeType');
+end;
+
+procedure TestTIdSipStackInterface.TestOptionsQuery;
+var
+  Data: TIdQueryOptionsData;
+  H: TIdSipHandle;
+begin
+  H := Self.Intf.MakeOptionsQuery(Self.Destination);
+
+  Self.MarkSentRequestCount;
+  Self.Intf.Send(H);
+  Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
+  Application.ProcessMessages;
+
+  CheckNotificationReceived(TIdQueryOptionsData, 'No options query response notification received');
+
+  Data := Self.LastEventOfType(TIdQueryOptionsData) as TIdQueryOptionsData;
+
+  CheckEquals(IntToHex(H, 8), IntToHex(Data.Handle, 8), 'Invalid Action handle');
+  Check(Data.Response.Equals(Self.MockTransport.LastResponse), 'Unexpected response');
 end;
 
 procedure TestTIdSipStackInterface.TestRedirectCall;
@@ -2265,6 +2330,82 @@ begin
           'The copy''s message doesn''t contain the original message');
     Check(Copy.Message <> Self.Data.Message,
           'The copy contains a reference to the original message, not a copy');
+  finally
+    Copy.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdQueryOptionsData                                                    *
+//******************************************************************************
+//* TestTIdQueryOptionsData Public methods *************************************
+
+procedure TestTIdQueryOptionsData.SetUp;
+var
+  R: TIdSipResponse;
+begin
+  inherited SetUp;
+
+  Self.Data := TIdQueryOptionsData.Create;
+  Self.Data.Handle := $decafbad;
+
+  R := TIdSipResponse.ReadResponseFrom(BasicResponse);
+  try
+    Self.Data.Response := R;
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TestTIdQueryOptionsData.TearDown;
+begin
+  Self.Data.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdQueryOptionsData Published methods **********************************
+
+procedure TestTIdQueryOptionsData.TestAsString;
+var
+  Expected: TStrings;
+  Received: TStrings;
+begin
+  Expected := TStringList.Create;
+  try
+    Received := TStringList.Create;
+    try
+      Expected.Text := Self.Data.Response.AsString;
+      Expected.Insert(0, '');
+      Expected.Insert(1, EventNames(CM_QUERY_OPTIONS_RESPONSE));
+      Expected.Insert(2, 'Response:');
+      Received.Text := Self.Data.AsString;
+
+      // We ignore the first line of the debug data (it's a timestamp & a
+      // handle)
+      Received[0] := '';
+
+      CheckEquals(Expected.Text,
+                  Received.Text,
+                  'Unexpected debug data');
+    finally
+      Received.Free;
+    end;
+  finally
+    Expected.Free;
+  end;
+end;
+
+procedure TestTIdQueryOptionsData.TestCopy;
+var
+  Copy: TIdQueryOptionsData;
+begin
+  Copy := Self.Data.Copy as TIdQueryOptionsData;
+  try
+    CheckEquals(IntToHex(Self.Data.Handle, 8),
+                IntToHex(Copy.Handle, 8),
+                'Handle');
+    Check(Self.Data.Response.Equals(Copy.Response), 'Response');            
   finally
     Copy.Free;
   end;

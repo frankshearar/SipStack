@@ -14,7 +14,7 @@ interface
 uses
   Classes, Contnrs, IdInterfacedObject, IdNotification, IdSipCore,
   IdSipDialogID, IdSipInviteModule, IdSipLocation, IdSipMessage,
-  IdSipRegistration, IdSipSubscribeModule,
+  IdSipOptionsModule, IdSipRegistration, IdSipSubscribeModule,
   IdSipTransaction, IdSipTransport, IdSipUserAgent, IdTimerQueue, SyncObjs,
   SysUtils, Messages, Windows;
 
@@ -66,6 +66,7 @@ type
                                IIdSipActionListener,
                                IIdSipInviteModuleListener,
                                IIdSipMessageModuleListener,
+                               IIdSipOptionsListener,
                                IIdSipRegistrationListener,
                                IIdSipSessionListener,
                                IIdSipSubscribeModuleListener,
@@ -166,6 +167,8 @@ type
                                 const Reason: String);
     procedure OnRenewedSubscription(UserAgent: TIdSipAbstractCore;
                                     Subscription: TIdSipOutboundSubscription);
+    procedure OnResponse(OptionsAgent: TIdSipOutboundOptions;
+                         Response: TIdSipResponse);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport;
                             Destination: TIdSipLocation);
@@ -202,6 +205,7 @@ type
     function  MakeCall(Dest: TIdSipAddressHeader;
                        const LocalSessionDescription: String;
                        const MimeType: String): TIdSipHandle;
+    function  MakeOptionsQuery(Dest: TIdSipAddressHeader): TIdSipHandle;
     function  MakeRefer(Target: TIdSipAddressHeader;
                         Resource: TIdSipAddressHeader): TIdSipHandle;
     function  MakeRegistration(Registrar: TIdSipUri): TIdSipHandle;
@@ -420,6 +424,23 @@ type
 
     property Msg:    String read fMsg write fMsg;
     property Reason: String read fReason write fReason;
+  end;
+
+  TIdQueryOptionsData = class(TIdEventData)
+  private
+    fResponse: TIdSipResponse;
+
+    procedure SetResponse(Value: TIdSipResponse);
+  protected
+    function Data: String; override;
+    function EventName: String; override;
+  public
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    procedure Assign(Src: TPersistent); override;
+
+    property Response: TIdSipResponse read fResponse write SetResponse;
   end;
 
   TIdRegistrationData = class(TIdEventData)
@@ -667,6 +688,7 @@ const
   CM_SUBSCRIPTION_EXPIRED         = CM_BASE + 13;
   CM_SUBSCRIPTION_REQUEST_NOTIFY  = CM_BASE + 14;
   CM_SUBSCRIPTION_RESUBSCRIBED    = CM_BASE + 15;
+  CM_QUERY_OPTIONS_RESPONSE       = CM_BASE + 16;
 
   CM_DEBUG = CM_BASE + 10000;
 
@@ -727,6 +749,7 @@ begin
     CM_SUBSCRIPTION_REQUEST_NOTIFY:  Result := 'CM_SUBSCRIPTION_REQUEST_NOTIFY';
     CM_SUBSCRIPTION_RESUBSCRIBED:    Result := 'CM_SUBSCRIPTION_RESUBSCRIBED';
     CM_SUCCESS:                      Result := 'CM_SUCCESS';
+    CM_QUERY_OPTIONS_RESPONSE:       Result := 'CM_QUERY_OPTIONS_RESPONSE';
 
     CM_DEBUG_DROPPED_MSG:            Result := 'CM_DEBUG_DROPPED_MSG';
     CM_DEBUG_RECV_MSG:               Result := 'CM_DEBUG_RECV_MSG';
@@ -937,6 +960,20 @@ begin
   Sess := Self.UserAgent.InviteModule.Call(Dest, LocalSessionDescription, MimeType);
   Result := Self.AddAction(Sess);
   Sess.AddSessionListener(Self);
+end;
+
+function TIdSipStackInterface.MakeOptionsQuery(Dest: TIdSipAddressHeader): TIdSipHandle;
+var
+  Options: TIdSipOutboundOptions;
+begin
+  if Dest.IsMalformed then begin
+    Result := InvalidHandle;
+    Exit;
+  end;
+
+  Options := Self.UserAgent.QueryOptions(Dest) as TIdSipOutboundOptions;
+  Result := Self.AddAction(Options);
+  Options.AddListener(Self);
 end;
 
 function TIdSipStackInterface.MakeRefer(Target: TIdSipAddressHeader;
@@ -1796,6 +1833,22 @@ begin
   end;
 end;
 
+procedure TIdSipStackInterface.OnResponse(OptionsAgent: TIdSipOutboundOptions;
+                                          Response: TIdSipResponse);
+var
+  Data: TIdQueryOptionsData;
+begin
+  Data := TIdQueryOptionsData.Create;
+  try
+    Data.Handle   := Self.HandleFor(OptionsAgent);
+    Data.Response := Response;
+
+    Self.NotifyEvent(CM_QUERY_OPTIONS_RESPONSE, Data);
+  finally
+    Data.Free;
+  end;
+end;
+
 procedure TIdSipStackInterface.OnSendRequest(Request: TIdSipRequest;
                                              Sender: TIdSipTransport;
                                              Destination: TIdSipLocation);
@@ -2319,6 +2372,58 @@ end;
 function TIdDebugTransportRejectedMessageData.EventName: String;
 begin
   Result := EventNames(CM_DEBUG_TRANSPORT_REJECTED_MSG);
+end;
+
+//******************************************************************************
+//* TIdQueryOptionsData                                                        *
+//******************************************************************************
+//* TIdQueryOptionsData Public methods *****************************************
+
+constructor TIdQueryOptionsData.Create;
+begin
+  inherited Create;
+
+  Self.fResponse := TIdSipResponse.Create;
+end;
+
+destructor TIdQueryOptionsData.Destroy;
+begin
+  Self.Response.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdQueryOptionsData.Assign(Src: TPersistent);
+var
+  Other: TIdQueryOptionsData;
+begin
+  inherited Assign(Src);
+
+  if (Src is TIdQueryOptionsData) then begin
+    Other := Src as TIdQueryOptionsData;
+
+    Self.Response := Other.Response;
+  end;
+end;
+
+//* TIdQueryOptionsData Protected methods **************************************
+
+function TIdQueryOptionsData.Data: String;
+begin
+  Result := 'Response:' + CRLF
+          + Self.Response.AsString;
+end;
+
+function TIdQueryOptionsData.EventName: String;
+begin
+  Result := EventNames(CM_QUERY_OPTIONS_RESPONSE);
+end;
+
+//* TIdQueryOptionsData Private methods ****************************************
+
+procedure TIdQueryOptionsData.SetResponse(Value: TIdSipResponse);
+begin
+  Self.fResponse.Assign(Value);
 end;
 
 //******************************************************************************
