@@ -1854,7 +1854,7 @@ begin
 
     Self.MarkSentRequestCount;
     Self.Core.UnregisterFrom(Self.Destination.Address).Send;
-    CheckRequestSent('No REGISTER sent');
+    CheckRequestSent('No (un)REGISTER sent');
     CheckIsUnregister(Self.LastSentRequest);
     CheckEquals(RegisteredContact.Address.AsString,
                 Self.LastSentRequest.FirstContact.Address.AsString,
