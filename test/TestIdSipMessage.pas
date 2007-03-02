@@ -282,6 +282,7 @@ type
     procedure TestMatchToRFC2543DifferentToTag;
     procedure TestMatchToRFC2543EmptyRequestPath;
     procedure TestMatchToRFC2543EmptyResponsePath;
+    procedure TestMatchToRFC2543OutOfDialogInviteHasNoToTag;
     procedure TestMatchToRFC2543ServerTransaction;
     procedure TestIsTrying;
     procedure TestParse;
@@ -4436,9 +4437,32 @@ begin
   Response := TIdSipResponse.InResponseTo(Self.Request, SIPOK);
   try
     Response.Path.Clear;
-    
+
     Check(not Self.Request.Match(Response),
           'Response matched despite no Via headers');
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestMatchToRFC2543OutOfDialogInviteHasNoToTag;
+var
+  Response: TIdSipResponse;
+begin
+  // An incoming RFC 2543 (out-of-dialog) INVITE has no To tag. The response to
+  // it (say, 180 Ringing) does have a To tag. We need to ensure that the
+  // response does actually match the INVITE.
+
+  Self.TurnIntoRFC2543(Self.Request);
+  Self.Request.ToHeader.RemoveParameter(TagParam);
+
+  Response := TIdSipResponse.InResponseTo(Self.Request, SIPRinging);
+  try
+    Response.ToHeader.Tag := 'a-random-tag';
+
+    Check(Self.Request.Match(Response),
+          'The ' + Response.StatusText + ' generated against the '
+        + Self.Request.Method + ' doesn''t match the ' + Self.Request.Method);
   finally
     Response.Free;
   end;

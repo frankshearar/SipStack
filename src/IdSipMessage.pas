@@ -10032,10 +10032,18 @@ begin
   // RequestRequestUri property: it allows us to match responses against server
   // transactions without passing Transaction objects all over the place!
 
-  Result := Self.RequestRequestUri.Equals(InitialRequest.RequestUri)
-        and (Self.ToHeader.Tag = InitialRequest.ToHeader.Tag)
-        and (Self.From.Tag     = InitialRequest.From.Tag)
-        and (Self.CallID       = InitialRequest.CallID)
+  Result := true;
+
+  // The above quote says that one CANNOT match responses against RFC 2543
+  // requests. Here, we just exclude the To tag comparison when either the
+  // request or response has no To header.
+  if (InitialRequest.ToHeader.HasTag and Self.ToHeader.HasTag) then
+    Result := Self.ToHeader.Tag = InitialRequest.ToHeader.Tag;
+
+  Result := Result
+        and Self.RequestRequestUri.Equals(InitialRequest.RequestUri)
+        and (Self.From.Tag = InitialRequest.From.Tag)
+        and (Self.CallID   = InitialRequest.CallID)
         and Self.CSeq.Equals(InitialRequest.CSeq);
 
   Result := Result
