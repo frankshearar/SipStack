@@ -286,6 +286,7 @@ type
     procedure TestReceiveInviteInProceedingState;
     procedure TestReceiveInviteInTerminatedState;
     procedure TestReceiveNonTryingProvisionalResponseFromTUInProceedingState;
+    procedure TestReceiveRetransmissionBeforeResponseSent;
     procedure TestReliableTransportNoFinalResponseRetransmissions;
     procedure TestReReceiveInitialRequestInCompletedState;
     procedure TestResponseRetransmissionInCompletedState;
@@ -326,6 +327,7 @@ type
     procedure TestReceiveFinalResponseFromTUInTryingState;
     procedure TestReceiveProvisionalResponseFromTUInProceedingState;
     procedure TestReceiveProvisionalResponseFromTUInTryingState;
+    procedure TestReceiveRetransmissionBeforeResponseSent;
     procedure TestReReceiveInitialRequestInCompletedState;
     procedure TestReReceiveInitialRequestInProceedingState;
     procedure TestResponseFromTUInCompletedState;
@@ -2834,6 +2836,19 @@ begin
               'Unexpected response sent');
 end;
 
+procedure TestTIdSipServerInviteTransaction.TestReceiveRetransmissionBeforeResponseSent;
+begin
+  // A server INVITE transaction relies on the Transaction-User layer sending a
+  // 100 Trying response immediately, or a non-100 provisional response within
+  // 200ms. Should retransmissions arrive in this 200ms time frame, the server
+  // transaction must simply ignore them, until such time as the
+  // Transaction-User layer gives the transaction a response to send.
+
+  Self.MarkSentResponseCount;
+  Self.Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
+  CheckNoResponseSent('A response was sent even though the TU hasn''t yet given us one to send');
+end;
+
 procedure TestTIdSipServerInviteTransaction.TestReliableTransportNoFinalResponseRetransmissions;
 var
   Tran: TIdSipServerInviteTransaction;
@@ -3460,6 +3475,17 @@ begin
               'Transport wasn''t given a '
             + IntToStr(Self.Response.StatusCode)
             + ' Response to send');
+end;
+
+procedure TestTIdSipServerNonInviteTransaction.TestReceiveRetransmissionBeforeResponseSent;
+begin
+  // Server non-INVITE transactions don't send responses to retransmissiongs of
+  // the initial request in the Trying state, because the Transaction-User layer
+  // has yet to give them a response to send.
+
+  Self.MarkSentResponseCount;
+  Self.Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
+  CheckNoResponseSent('A response was sent even though the TU hasn''t yet given us one to send');
 end;
 
 procedure TestTIdSipServerNonInviteTransaction.TestReReceiveInitialRequestInCompletedState;

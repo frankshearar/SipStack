@@ -289,7 +289,7 @@ type
     LastResponseSent: TIdSipResponse;
     SentResponses:    TIdSipResponseLocationsList;
 
-    procedure TrySendLastResponse;
+    procedure TrySendLastResponse; virtual;
     procedure TrySendResponse(R: TIdSipResponse); virtual;
     procedure TrySendResponseTo(R: TIdSipResponse;
                                 Dest: TIdSipLocation); virtual;
@@ -307,6 +307,7 @@ type
   TIdSipServerInviteTransaction = class(TIdSipServerTransaction)
   private
     fTimerGInterval: Cardinal;
+    HasSentResponse: Boolean;
 
     procedure ChangeToConfirmed(R: TIdSipRequest);
     procedure ScheduleTimerG;
@@ -314,6 +315,7 @@ type
     procedure ScheduleTimerI;
   protected
     procedure ChangeToCompleted; override;
+    procedure TrySendLastResponse; override;
     procedure TrySendResponseTo(R: TIdSipResponse;
                                 Dest: TIdSipLocation); override;
   public
@@ -1649,6 +1651,8 @@ constructor TIdSipServerInviteTransaction.Create(Dispatcher: TIdSipTransactionDi
 begin
   inherited Create(Dispatcher, InitialRequest);
 
+  Self.HasSentResponse := false;
+  
   Self.ChangeToProceeding;
 end;
 
@@ -1740,6 +1744,8 @@ end;
 
 procedure TIdSipServerInviteTransaction.SendResponse(R: TIdSipResponse);
 begin
+  Self.HasSentResponse := true;
+
   if (Self.State = itsProceeding) then begin
     Self.TrySendResponse(R);
 
@@ -1782,6 +1788,13 @@ begin
     Self.ScheduleTimerG;
 
   Self.ScheduleTimerH;
+end;
+
+procedure TIdSipServerInviteTransaction.TrySendLastResponse;
+begin
+  if not Self.HasSentResponse then Exit;
+
+  inherited TrySendLastResponse;
 end;
 
 procedure TIdSipServerInviteTransaction.TrySendResponseTo(R: TIdSipResponse;
