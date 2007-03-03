@@ -32,6 +32,7 @@ function  GetTickDiff(const OldTickCount, NewTickCount : Cardinal): Cardinal;
 function  GetUserName: WideString;
 function  HtoNL(N: Cardinal): Cardinal;
 function  LocalAddress: String;
+function  NtoHL(N: Cardinal): Cardinal;
 function  RoutableAddress: String;
 procedure LocalAddresses(IPs: TStrings);
 procedure DefineLocalAddress(AAddress: String); {Allows you to use a specified local IP address}
@@ -155,7 +156,7 @@ begin
 
     for I := 0 to Table.dwNumEntries - 1 do begin
       if (Table.table[I].dwIndex = InterfaceIndex) then begin
-        Result := TIdIPAddressParser.IPv4AddressToStr(ntohl(Table.table[I].dwAddr));
+        Result := TIdIPAddressParser.IPv4AddressToStr(NtoHL(Table.table[I].dwAddr));
         Break;
       end;
     end;
@@ -349,6 +350,13 @@ begin
       Result := GStack.LocalAddress;
   end else
     Result:=idLocalAddress;
+end;
+
+function NtoHL(N: Cardinal): Cardinal;
+begin
+  // See the comment in HtoNL
+
+  Result := Cardinal(Winsock.ntohl(Integer(N)));
 end;
 
 procedure LocalAddresses(IPs: TStrings);
