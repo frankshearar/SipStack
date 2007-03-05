@@ -61,27 +61,28 @@ type
   TestTIdSipStackInterface = class(TThreadingTestCase,
                                    IIdSipInviteModuleListener)
   private
-    fIntf:             TIdSipStackInterface;
-    DataList:          TObjectList; // Holds all the data received from the stack
-    Destination:       TIdSipToHeader;
-    LocalAddress:      String;
-    LocalMimeType:     String;
-    LocalOffer:        String;
-    LocalPort:         Cardinal;
-    MockTransport:     TIdSipMockTransport;
-    Registrar:         TIdSipUri;
-    RemoteMimeType:    String;
-    RemoteOffer:       String;
-    RemoteSession:     TIdSipInboundSession;
-    RemoteUA:          TIdSipUserAgent;
-    Requests:          TIdSipRequestList;
-    Responses:         TIdSipResponseList;
-    SentRequestCount:  Cardinal;
-    SentResponseCount: Cardinal;
-    TargetAddress:     String;
-    TargetPort:        Cardinal;
-    TimerQueue:        TIdDebugTimerQueue;
-    UI:                TCustomForm;
+    fIntf:               TIdSipStackInterface;
+    DataList:            TObjectList; // Holds all the data received from the stack
+    Destination:         TIdSipToHeader;
+    LocalAddress:        String;
+    LocalMimeType:       String;
+    LocalOffer:          String;
+    LocalPort:           Cardinal;
+    MockTransport:       TIdSipMockTransport;
+    Registrar:           TIdSipUri;
+    RemoteMimeType:      String;
+    RemoteMockTransport: TIdSipMockTransport;
+    RemoteOffer:         String;
+    RemoteSession:       TIdSipInboundSession;
+    RemoteUA:            TIdSipUserAgent;
+    Requests:            TIdSipRequestList;
+    Responses:           TIdSipResponseList;
+    SentRequestCount:    Cardinal;
+    SentResponseCount:   Cardinal;
+    TargetAddress:       String;
+    TargetPort:          Cardinal;
+    TimerQueue:          TIdDebugTimerQueue;
+    UI:                  TCustomForm;
 
     procedure AddSubscribeSupport(Stack: TIdSipStackInterface; EventPackage: String);
     procedure CheckNotificationReceived(EventType: TIdEventDataClass; Msg: String);
@@ -573,6 +574,8 @@ begin
   finally
     BasicConf.Free;
   end;
+
+  Self.RemoteMockTransport := TIdSipDebugTransportRegistry.TransportAt(TIdSipDebugTransportRegistry.TransportCount - 1) as TIdSipMockTransport;
 
   Self.UI := TStackWindow.CreateNew(nil, Self);
 
@@ -1470,12 +1473,19 @@ begin
   H := Self.Intf.MakeCall(Self.Destination,
                           Self.LocalOffer,
                           Self.LocalMimeType);
+  // Send the INVITE
   Self.Intf.Send(H);
   Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
+  Self.RemoteMockTransport.FireOnRequest(Self.MockTransport.LastRequest);
+
+  // Receive the 100 Trying and 180 Ringing from the RemoteUA
+  Self.MockTransport.FireOnResponse(Self.RemoteMockTransport.SecondLastResponse);
+  Self.MockTransport.FireOnResponse(Self.RemoteMockTransport.LastResponse);
   Application.ProcessMessages;
 
   Check(Assigned(Self.RemoteSession), 'RemoteSession never assigned: RemoteUA didn''t receive INVITE?');
   Self.RemoteSession.AcceptCall(Self.RemoteOffer, Self.RemoteMimeType);
+  Self.MockTransport.FireOnResponse(Self.RemoteMockTransport.LastResponse);
   Application.ProcessMessages;
 
   CheckNotificationReceived(TIdEstablishedSessionData, 'No established session notification');
@@ -1505,7 +1515,12 @@ begin
 
   Self.MarkSentRequestCount;
   Self.Intf.Send(H);
+  // Send the OPTIONS
   Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
+  Self.RemoteMockTransport.FireOnRequest(Self.MockTransport.LastRequest);
+
+  // Receive the response
+  Self.MockTransport.FireOnResponse(Self.RemoteMockTransport.LastResponse);
   Application.ProcessMessages;
 
   CheckNotificationReceived(TIdQueryOptionsData, 'No options query response notification received');

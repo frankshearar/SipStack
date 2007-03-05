@@ -430,7 +430,7 @@ begin
                                  'TIdSipMockTransport.SendRequest ('
                                + Self.FailWith.ClassName + ')');
 
-  Self.DispatchRequest(R, Dest);
+//  Self.DispatchRequest(R, Dest);
 end;
 
 procedure TIdSipMockTransport.SendResponse(R: TIdSipResponse;
@@ -449,7 +449,7 @@ begin
                                  'TIdSipMockTransport.SendResponse ('
                                + Self.FailWith.ClassName + ')');
 
-  Self.DispatchResponse(R, Dest);
+//  Self.DispatchResponse(R, Dest);
 end;
 
 function TIdSipMockTransport.SentByIsRecognised(Via: TIdSipViaHeader): Boolean;
