@@ -1001,7 +1001,7 @@ begin
           'Destination param');
     Check(Self.Method.Sender = Listener.SenderParam,
           'Sender param');
-    Check(Self.Method.Request = Listener.RequestParam,
+    Check(Self.Method.Request.Equals(Listener.RequestParam),
           'Request param');
   finally
     Listener.Free;
@@ -1050,7 +1050,7 @@ begin
           'Destination param');
     Check(Self.Method.Sender = Listener.SenderParam,
           'Sender param');
-    Check(Self.Method.Response = Listener.ResponseParam,
+    Check(Self.Method.Response.Equals(Listener.ResponseParam),
           'Response param');
   finally
     Listener.Free;

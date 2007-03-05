@@ -640,6 +640,7 @@ type
                              Destination: TIdSipLocation);
   public
     constructor Create; override;
+    destructor  Destroy; override;
 
     property DestinationParam: TIdSipLocation  read fDestinationParam;
     property RequestParam:     TIdSipRequest   read fRequestParam;
@@ -2263,8 +2264,18 @@ constructor TIdSipTestTransportSendingListener.Create;
 begin
   inherited Create;
 
-  Self.fSentRequest      := false;
-  Self.fSentResponse     := false;
+  Self.fRequestParam  := TIdSipRequest.Create;
+  Self.fResponseParam := TIdSipResponse.Create;
+  Self.fSentRequest   := false;
+  Self.fSentResponse  := false;
+end;
+
+destructor TIdSipTestTransportSendingListener.Destroy;
+begin
+  Self.ResponseParam.Free;
+  Self.RequestParam.Free;
+
+  inherited Destroy;
 end;
 
 //* TIdSipTestTransportSendingListener Private methods *************************
@@ -2275,7 +2286,7 @@ procedure TIdSipTestTransportSendingListener.OnSendRequest(Request: TIdSipReques
                                                            Destination: TIdSipLocation);
 begin
   Self.fDestinationParam := Destination;
-  Self.fRequestParam     := Request;
+  Self.fRequestParam.Assign(Request);
   Self.fSenderParam      := Sender;
   Self.fSentRequest      := true;
 
@@ -2288,7 +2299,7 @@ procedure TIdSipTestTransportSendingListener.OnSendResponse(Response: TIdSipResp
                                                             Destination: TIdSipLocation);
 begin
   Self.fDestinationParam := Destination;
-  Self.fResponseParam    := Response;
+  Self.fResponseParam.Assign(Response);
   Self.fSenderParam      := Sender;
   Self.fSentResponse     := true;
 

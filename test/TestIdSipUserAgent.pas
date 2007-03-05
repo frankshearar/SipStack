@@ -249,9 +249,10 @@ implementation
 
 uses
   IdException, IdMockRoutingTable, IdSdp, IdSimpleParser, IdSipAuthentication,
-  IdSipConsts, IdSipIndyLocator, IdSipMockLocator, IdSipMockTransport,
-  IdSipSubscribeModule, IdSipTCPTransport, IdSipUDPTransport, IdSystem,
-  IdTcpClient, IdUnicode, SysUtils;
+  IdSipConsts, IdSipIndyLocator, IdSipMockLocator,
+  IdSipMockTransactionDispatcher, IdSipMockTransport, IdSipSubscribeModule,
+  IdSipTCPTransport, IdSipUDPTransport, IdSystem, IdTcpClient, IdUnicode,
+  SysUtils;
 
 const
   // SFTF: Sip Foundry Test Framework. cf. http://www.sipfoundry.org/sftf/
@@ -1015,31 +1016,23 @@ end;
 
 procedure TestTIdSipUserAgent.TestDestroyUnregisters;
 var
-  Registrar:    TIdSipMockUdpTransport;
-  RegistrarUri: TIdSipUri;
-  UA:           TIdSipUserAgent;
+  Listener: TIdSipTestTransportSendingListener;
+  UA:       TIdSipUserAgent;
 begin
-  Registrar := TIdSipMockUdpTransport.Create;
+  Listener := TIdSipTestTransportSendingListener.Create;
   try
-    Registrar.Bindings[0].IP   := '127.0.0.1';
-    Registrar.Bindings[0].Port := 25060;
-
-    RegistrarUri := TIdSipUri.Create('sip:' + Registrar.Bindings[0].IP + ':' + IntToStr(Registrar.Bindings[0].Port));
+    UA := Self.CreateUserAgent('sip:case@localhost');
     try
-      UA := Self.CreateUserAgent('sip:case@localhost');
-      try
-        UA.RegisterWith(RegistrarUri);
-      finally
-        UA.Free;
-      end;
+      UA.RegisterWith(Self.Destination.Address);
     finally
-      RegistrarUri.Free;
+      (UA.Dispatcher as TIdSipMockTransactionDispatcher).Transport.AddTransportSendingListener(Listener);
+      UA.Free;
+      Check(Listener.SentRequest,
+            'No REGISTER sent, so UA didn''t unregister when Freeing');
+      CheckEquals(MethodRegister, Listener.RequestParam.Method, 'Unexpected request sent');
     end;
-
-    Check(Registrar.LastRequest <> nil,
-          'No REGISTER sent, so Module.Cleanup not called');
   finally
-    Registrar.Free;
+    Listener.Free;
   end;
 end;
 
