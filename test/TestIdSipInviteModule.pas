@@ -6546,6 +6546,7 @@ begin
 
   Session := Self.Module.Call(Self.Core.From, '', '');
   Session.Send;
+  Self.Dispatcher.Transport.FireOnRequest(Self.LastSentRequest);
   Check(Assigned(Self.HairpinCall), 'We didn''t receive the INVITE');
 end;
 
