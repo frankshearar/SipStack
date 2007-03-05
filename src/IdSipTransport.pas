@@ -181,6 +181,8 @@ type
   // production code.
   TIdSipDebugTransportRegistry = class(TIdSipTransportRegistry)
   public
+    class function LastTransport: TIdSipTransport;
+    class function SecondLastTransport: TIdSipTransport;
     class function TransportAt(Index: Integer): TIdSipTransport; override;
     class function TransportCount: Integer;
   end;
@@ -1020,6 +1022,16 @@ end;
 //* TIdSipDebugTransportRegistry                                               *
 //******************************************************************************
 //* TIdSipDebugTransportRegistry Public methods ********************************
+
+class function TIdSipDebugTransportRegistry.LastTransport: TIdSipTransport;
+begin
+  Result := Self.TransportAt(Self.TransportCount - 1);
+end;
+
+class function TIdSipDebugTransportRegistry.SecondLastTransport: TIdSipTransport;
+begin
+  Result := Self.TransportAt(Self.TransportCount - 1);
+end;
 
 class function TIdSipDebugTransportRegistry.TransportAt(Index: Integer): TIdSipTransport;
 begin
