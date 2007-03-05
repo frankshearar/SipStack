@@ -13,6 +13,17 @@ v0.6 (2007/xx/yy)
   interface. Note in particular that the StackInterface DOES NOT
   terminate its TimerQueue!
 * StackWindow.pas has finally bitten the dust.
+* tests run MUCH faster - ~20x speedup - because
+  TIdSipHeader.CanonicaliseName now uses a TStringDictionary (with a
+  binary search algorithm) to hold canonical names instead of a
+  TStrings with "key=value" strings (and a sequential search).
+* MockTransports no longer dispatch message to other instances. A nice
+  idea in theory, it completely toasts tests because the stack assumes
+  that sending a message is a single unit of work. With dispatching on
+  though you can send a message, dispatch it to another MockTransport
+  which replies, triggering your reaction to that response before you
+  finish sending the message! This often terminates the action whose
+  code you're currently executing!
 
 v0.5.3 (2007/01/26)
 * All modules now reside in separate units. (This only affects
