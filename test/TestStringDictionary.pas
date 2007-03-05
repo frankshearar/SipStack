@@ -9,6 +9,10 @@ type
   TestTStringDictionary = class(TTestCase)
   private
     D: TStringDictionary;
+
+    procedure CheckNegative(KeyA, KeyB: TKeyValuePair; Msg: String);
+    procedure CheckPositive(KeyA, KeyB: TKeyValuePair; Msg: String);
+    procedure CheckZero(KeyA, KeyB: TKeyValuePair; Msg: String);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -19,9 +23,13 @@ type
     procedure TestHasKey;
     procedure TestRemove;
     procedure TestSort;
+    procedure TestSortAndFindUseConsistentSorting;
   end;
 
 implementation
+
+uses
+  SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -46,6 +54,32 @@ begin
   Self.D.Free;
 
   inherited TearDown;
+end;
+
+//* TestTStringDictionary Private methods **************************************
+
+procedure TestTStringDictionary.CheckNegative(KeyA, KeyB: TKeyValuePair; Msg: String);
+var
+  RC: Integer;
+begin
+  RC := TKeyValuePairSort(KeyA, KeyB);
+  Check(RC < 0, Msg + '(' + IntToStr(RC) + ')');
+end;
+
+procedure TestTStringDictionary.CheckPositive(KeyA, KeyB: TKeyValuePair; Msg: String);
+var
+  RC: Integer;
+begin
+  RC := TKeyValuePairSort(KeyA, KeyB);
+  Check(RC > 0, Msg + '(' + IntToStr(RC) + ')');
+end;
+
+procedure TestTStringDictionary.CheckZero(KeyA, KeyB: TKeyValuePair; Msg: String);
+var
+  RC: Integer;
+begin
+  RC := TKeyValuePairSort(KeyA, KeyB);
+  CheckEquals(0, RC, Msg);
 end;
 
 //* TestTStringDictionary Published methods ************************************
@@ -121,23 +155,32 @@ begin
       CheckEquals(0, TKeyValuePairSort(KeyA, KeyB), '(foo 1) = (foo 1)');
 
       KeyB.Value := '2';
-      CheckEquals(-1, TKeyValuePairSort(KeyA, KeyB), '(foo 1) < (foo 2)');
-      CheckEquals(1,  TKeyValuePairSort(KeyB, KeyA), '(foo 2) > (foo 1)');
+      CheckNegative(KeyA, KeyB, '(foo 1) < (foo 2)');
+      CheckPositive(KeyB, KeyA, '(foo 2) > (foo 1)');
 
       KeyA.Value := '1';
       KeyB.Key   := 'bar';
-      CheckEquals(1,  TKeyValuePairSort(KeyA, KeyB), '(foo 1) > (bar 1)');
-      CheckEquals(-1, TKeyValuePairSort(KeyB, KeyA), '(bar 1) < (foo 1)');
+      CheckPositive(KeyA, KeyB, '(foo 1) > (bar 1)');
+      CheckNegative(KeyB, KeyA, '(bar 1) < (foo 1)');
 
       KeyB.Value := '2';
-      CheckEquals(1,  TKeyValuePairSort(KeyA, KeyB), '(foo 1) > (bar 2)');
-      CheckEquals(-1, TKeyValuePairSort(KeyB, KeyA), '(bar 2) < (foo 1)');
+      CheckPositive(KeyA, KeyB, '(foo 1) > (bar 2)');
+      CheckNegative(KeyB, KeyA, '(bar 2) < (foo 1)');
     finally
       KeyB.Free;
     end;
   finally
     KeyA.Free;
   end;
+end;
+
+procedure TestTStringDictionary.TestSortAndFindUseConsistentSorting;
+begin
+  Self.D.Add('Call-ID',  'Call-ID');
+  Self.D.Add('i',        'Call-ID');
+  Check(Self.D.HasKey('i'), 'Has key "i"');
+  Self.D.Add('Priority', 'Priority');
+  Check(Self.D.HasKey('i'), 'Still has key "i"');
 end;
 
 initialization

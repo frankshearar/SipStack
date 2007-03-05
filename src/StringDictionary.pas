@@ -49,19 +49,10 @@ begin
   KeyA := TKeyValuePair(Item1);
   KeyB := TKeyValuePair(Item2);
 
-  if (KeyA.Key < KeyB.Key) then
-    Result := -1
-  else if (KeyA.Key > KeyB.Key) then
-    Result := 1
-  else
-    Result := 0;
+  Result := CompareStr(KeyA.Key, KeyB.Key);
 
-  if (Result = 0) then begin
-    if (KeyA.Value < KeyB.Value) then
-      Result := -1
-    else if (KeyA.Value > KeyB.Value) then
-      Result := 1;
-  end;
+  if (Result = 0) then
+    Result := CompareStr(KeyA.Value, KeyB.Value)
 end;
 
 //******************************************************************************
@@ -162,7 +153,7 @@ begin
     Middle := (EndIndex + StartIndex) div 2;
     MiddlePair := TKeyValuePair(Self.Associations[Middle]);
 
-    C := CompareStr(Key, Lowercase(MiddlePair.Key));
+    C := CompareStr(Key, MiddlePair.Key);
 
     if (C < 0) then
       EndIndex := Middle - 1
