@@ -2745,7 +2745,7 @@ begin
                 'RemoteMimeType');
     CheckEquals(Self.Data.RemoteParty.FullValue,
                 Copy.RemoteParty.FullValue,
-                'RemotePartyp');
+                'RemoteParty');
     CheckEquals(Self.Data.RemoteSessionDescription,
                 Copy.RemoteSessionDescription,
                 'RemoteSessionDescription');
