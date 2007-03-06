@@ -508,8 +508,19 @@ type
   end;
 
   TIdInboundCallData = class(TIdSessionData)
+  private
+    fInvite: TIdSipRequest;
+
+    procedure SetInvite(Value: TIdSipRequest);
   protected
     function EventName: String; override;
+  public
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    procedure Assign(Src: TPersistent); override;
+
+    property Invite: TIdSipRequest read fInvite write SetInvite;
   end;
 
   TIdModifiedSessionData = class(TIdSessionData)
@@ -1645,6 +1656,7 @@ begin
   Data := TIdInboundCallData.Create;
   try
     Data.Handle                   := Self.HandleFor(Session);
+    Data.Invite                   := Session.InitialRequest;
     Data.RemoteContact            := Session.RemoteContact;
     Data.RemoteParty              := Session.RemoteParty;
     Data.RemoteSessionDescription := Session.RemoteSessionDescription;
@@ -2612,11 +2624,46 @@ end;
 //******************************************************************************
 //* TIdInboundCallData                                                         *
 //******************************************************************************
+
+constructor TIdInboundCallData.Create;
+begin
+  inherited Create;
+
+  Self.fInvite := TIdSipRequest.Create; 
+end;
+
+destructor TIdInboundCallData.Destroy;
+begin
+  Self.Invite.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdInboundCallData.Assign(Src: TPersistent);
+var
+  Other: TIdInboundCallData;
+begin
+  inherited Assign(Src);
+
+  if (Src is TIdInboundCallData) then begin
+    Other := Src as TIdInboundCallData;
+
+    Self.Invite := Other.Invite;
+  end;
+end;
+
 //* TIdInboundCallData Protected methods ***************************************
 
 function TIdInboundCallData.EventName: String;
 begin
   Result := EventNames(CM_CALL_REQUEST_NOTIFY);
+end;
+
+//* TIdInboundCallData Private methods *****************************************
+
+procedure TIdInboundCallData.SetInvite(Value: TIdSipRequest);
+begin
+  Self.fInvite.Assign(Value);
 end;
 
 //******************************************************************************

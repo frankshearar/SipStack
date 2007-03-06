@@ -367,6 +367,16 @@ type
     procedure TestSetRemotePartyStripsTagParam;
   end;
 
+  TestTIdInboundCallData = class(TTestCase)
+  private
+    Data: TIdInboundCallData;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCopy;
+  end;
+
   TestTIdSessionProgressData = class(TTestCase)
   private
     Data: TIdSessionProgressData;
@@ -502,6 +512,7 @@ begin
   Result.AddTest(TestTIdFailedRegistrationData.Suite);
   Result.AddTest(TestTIdSessionProgressData.Suite);
   Result.AddTest(TestTIdSessionData.Suite);
+  Result.AddTest(TestTIdInboundCallData.Suite);
   Result.AddTest(TestTIdSubscriptionRequestData.Suite);
   Result.AddTest(TestTIdResubscriptionData.Suite);
   Result.AddTest(TestTIdSessionReferralData.Suite);
@@ -1250,6 +1261,7 @@ end;
 procedure TestTIdSipStackInterface.TestInboundCall;
 var
   Data:          TIdInboundCallData;
+  DatasInvite:   TIdSipRequest;
   RemoteContact: TIdSipContactHeader;
 begin
   Self.ReceiveInviteWithOffer(Self.RemoteOffer, Self.RemoteMimeType);
@@ -1259,7 +1271,7 @@ begin
   Data := Self.LastEventOfType(TIdInboundCallData) as TIdInboundCallData;
   Check(Data.Handle > 0, 'Invalid Action handle');
   CheckEquals(Self.RemoteOffer,            Data.RemoteSessionDescription, 'RemoteSessionDescription');
-  CheckEquals(Self.RemoteMimeType,         Data.RemoteMimeType,             'RemoteMimeType');
+  CheckEquals(Self.RemoteMimeType,         Data.RemoteMimeType,           'RemoteMimeType');
   CheckEquals(Self.RemoteUA.From.Value,    Data.RemoteParty.Value,        'RemoteParty');
 
   RemoteContact := TIdSipContactHeader.Create;
@@ -1270,6 +1282,18 @@ begin
     CheckEquals(RemoteContact.AsString, Data.RemoteContact.AsString, 'RemoteContact');
   finally
     RemoteContact.Free;
+  end;
+
+  DatasInvite := Data.Invite.Copy as TIdSipRequest;
+  try
+    // The transport layer adds a "received" parameter, which doesn't show in
+    // the copy of the INVITE stored by the mock transport.
+    DatasInvite.LastHop.RemoveParameter(ReceivedParam);
+    DatasInvite.ToHeader.RemoveParameter(TagParam);
+
+    Check(Self.MockTransport.LastRequest.Equals(DatasInvite), 'Invite');
+  finally
+    DatasInvite.Free;
   end;
 end;
 
@@ -2740,6 +2764,77 @@ begin
   try
     Copy.RemoteParty := Self.Data.RemoteParty;
     Check(not Copy.RemoteParty.HasParameter(TagParam), 'Tag param not removed');
+  finally
+    Copy.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdInboundCallData                                                     *
+//******************************************************************************
+//* TestTIdInboundCallData Public methods **************************************
+
+procedure TestTIdInboundCallData.SetUp;
+var
+  Inv: TIdSipRequest;
+begin
+  inherited SetUp;
+
+  Self.Data := TIdInboundCallData.Create;
+  Self.Data.Handle := $decafbad;
+
+  Inv := TIdSipRequest.ReadRequestFrom(BasicRequest);
+  try
+    Self.Data.Invite                   := Inv;
+    Self.Data.LocalMimeType            := Inv.ContentType;
+    Self.Data.LocalSessionDescription  := '1';
+    Self.Data.RemoteContact            := Inv.FirstContact;
+    Self.Data.RemoteMimeType           := Inv.ContentType;
+    Self.Data.RemoteParty              := Inv.From;
+    Self.Data.RemoteSessionDescription := Inv.Body;
+  finally
+    Inv.Free;
+  end;
+end;
+
+procedure TestTIdInboundCallData.TearDown;
+begin
+  Self.Data.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdInboundCallData Published methods ***********************************
+
+procedure TestTIdInboundCallData.TestCopy;
+var
+  Copy: TIdInboundCallData;
+begin
+  Copy := Self.Data.Copy as TIdInboundCallData;
+  try
+    CheckEquals(IntToHex(Self.Data.Handle, 8),
+                IntToHex(Copy.Handle, 8),
+                'Handle');
+    CheckEquals(Self.Data.LocalMimeType,
+                Copy.LocalMimeType,
+                'LocalMimeType');
+    CheckEquals(Self.Data.LocalSessionDescription,
+                Copy.LocalSessionDescription,
+                'LocalSessionDescription');
+    CheckEquals(Self.Data.RemoteContact.FullValue,
+                Copy.RemoteContact.FullValue,
+                'RemoteContact');
+    CheckEquals(Self.Data.RemoteMimeType,
+                Copy.RemoteMimeType,
+                'RemoteMimeType');
+    CheckEquals(Self.Data.RemoteParty.FullValue,
+                Copy.RemoteParty.FullValue,
+                'RemoteParty');
+    CheckEquals(Self.Data.RemoteSessionDescription,
+                Copy.RemoteSessionDescription,
+                'RemoteSessionDescription');
+    Check(Self.Data.Invite.Equals(Copy.Invite),
+                'Invite');
   finally
     Copy.Free;
   end;
