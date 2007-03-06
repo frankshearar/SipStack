@@ -2879,8 +2879,8 @@ begin
     Self.InitialInvite.Ring;
     Self.fDialog := Self.CreateInboundDialog(Self.InitialInvite.LastResponse);
     Self.InitialRequest.Assign(Self.InitialInvite.InitialRequest);
-    Self.InitialRequest.ToHeader.Tag := Self.Dialog.ID.LocalTag;
-    Self.LocalGruu                   := Self.InitialInvite.LocalGruu;
+
+    Self.LocalGruu := Self.InitialInvite.LocalGruu;
   end;
 end;
 

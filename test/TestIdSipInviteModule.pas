@@ -5102,9 +5102,9 @@ begin
 
   Replaces := Self.Core.InviteModule.CreateInvite(Self.Core.From, Self.Destination, '', '');
   try
-    Replaces.Replaces.CallID  := Self.Session.InitialRequest.CallID;
-    Replaces.Replaces.FromTag := Self.Session.InitialRequest.From.Tag;
-    Replaces.Replaces.ToTag   := Self.Session.InitialRequest.ToHeader.Tag;
+    Replaces.Replaces.CallID  := Self.Session.Dialog.ID.CallID;
+    Replaces.Replaces.FromTag := Self.Session.Dialog.ID.RemoteTag;
+    Replaces.Replaces.ToTag   := Self.Session.Dialog.ID.LocalTag;
 
     Check(Self.Session.Match(Replaces),
           'INVITE with Replaces header');
