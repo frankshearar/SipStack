@@ -2264,16 +2264,16 @@ constructor TIdSipTestTransportSendingListener.Create;
 begin
   inherited Create;
 
-  Self.fRequestParam  := TIdSipRequest.Create;
   Self.fResponseParam := TIdSipResponse.Create;
+  Self.fRequestParam  := TIdSipRequest.Create;
   Self.fSentRequest   := false;
   Self.fSentResponse  := false;
 end;
 
 destructor TIdSipTestTransportSendingListener.Destroy;
 begin
-  Self.ResponseParam.Free;
-  Self.RequestParam.Free;
+  Self.fRequestParam.Free;
+  Self.fResponseParam.Free;
 
   inherited Destroy;
 end;
