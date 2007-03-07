@@ -79,7 +79,7 @@ type
   TIdTimerQueue = class(TObject)
   private
     fCreateSuspended: Boolean;
-    fEventList:       TList;
+    fEventList:       TObjectList;
     fLock:            TCriticalSection;
     fTerminated:      Boolean;
     fDefaultTimeout:  Cardinal;
@@ -103,7 +103,7 @@ type
     procedure UnlockTimer; virtual;
 
     property CreateSuspended: Boolean          read fCreateSuspended write fCreateSuspended;
-    property EventList:       TList            read fEventList;
+    property EventList:       TObjectList      read fEventList;
     property Lock:            TCriticalSection read fLock;
     property Terminated:      Boolean          read fTerminated write fTerminated;
   public
@@ -184,6 +184,7 @@ type
     function  SecondLastEventScheduled: TIdWait;
     procedure Terminate; override;
     procedure TriggerAllEventsOfType(WaitType: TIdWaitClass);
+    procedure TriggerAllEventsUpToFirst(WaitType: TIdWaitClass);
     procedure TriggerEarliestEvent; override;
     procedure UnlockTimer; override;
 
@@ -318,7 +319,7 @@ begin
 
   // Before inherited - inherited creates the actual thread and if not
   // suspended will start before we initialize.
-  Self.fEventList := TList.Create;
+  Self.fEventList := TObjectList.Create(true);
   Self.fLock      := TCriticalSection.Create;
   Self.Terminated := false;
   Self.WaitEvent  := TSimpleEvent.Create;
@@ -506,10 +507,7 @@ end;
 
 procedure TIdTimerQueue.ClearEvents;
 begin
-  while Self.EventList.Count > 0 do begin
-    Self.EventAt(0).Free;
-    Self.EventList.Delete(0);
-  end;
+  Self.EventList.Clear;
 end;
 
 function TIdTimerQueue.EarliestEvent: TIdWait;
@@ -818,24 +816,41 @@ end;
 
 procedure TIdDebugTimerQueue.TriggerAllEventsOfType(WaitType: TIdWaitClass);
 var
-  I:         Integer;
   NextEvent: TIdWait;
 begin
   Self.LockTimer;
   try
-    I := 0;
-    while (I < Self.EventList.Count) do begin
-      NextEvent := Self.EventAt(I);
-
-      if (NextEvent is WaitType) then begin
+    NextEvent := Self.EarliestEvent;
+    while Assigned(NextEvent) do begin
+      if (NextEvent is WaitType) then
         NextEvent.Trigger;
-        Self.EventList.Delete(I);
-      end
-      else
-        Inc(I);
+
+      Self.EventList.Remove(NextEvent);
+      NextEvent := Self.EarliestEvent;
     end;
 
     Self.WaitEvent.ResetEvent;
+  finally
+    Self.UnlockTimer;
+  end;
+end;
+
+procedure TIdDebugTimerQueue.TriggerAllEventsUpToFirst(WaitType: TIdWaitClass);
+var
+  Done:      Boolean;
+  NextEvent: TIdWait;
+begin
+  Self.LockTimer;
+  try
+    Done := false;
+    NextEvent := Self.EarliestEvent;
+    while Assigned(NextEvent) and not Done do begin
+      Done := NextEvent is WaitType;
+      NextEvent.Trigger;
+      Self.EventList.Remove(NextEvent);
+
+      NextEvent := Self.EarliestEvent;
+    end;
   finally
     Self.UnlockTimer;
   end;
