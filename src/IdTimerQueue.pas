@@ -818,17 +818,21 @@ end;
 
 procedure TIdDebugTimerQueue.TriggerAllEventsOfType(WaitType: TIdWaitClass);
 var
+  I:         Integer;
   NextEvent: TIdWait;
 begin
   Self.LockTimer;
   try
-    NextEvent := Self.EarliestEvent;
-    while Assigned(NextEvent) do begin
-      if (NextEvent is WaitType) then
-        NextEvent.Trigger;
+    I := 0;
+    while (I < Self.EventList.Count) do begin
+      NextEvent := Self.EventAt(I);
 
-      Self.EventList.Remove(NextEvent);
-      NextEvent := Self.EarliestEvent;
+      if (NextEvent is WaitType) then begin
+        NextEvent.Trigger;
+        Self.EventList.Delete(I);
+      end
+      else
+        Inc(I);
     end;
 
     Self.WaitEvent.ResetEvent;
