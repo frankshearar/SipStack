@@ -319,7 +319,7 @@ begin
 
   // Before inherited - inherited creates the actual thread and if not
   // suspended will start before we initialize.
-  Self.fEventList := TObjectList.Create(true);
+  Self.fEventList := TObjectList.Create(false);
   Self.fLock      := TCriticalSection.Create;
   Self.Terminated := false;
   Self.WaitEvent  := TSimpleEvent.Create;
@@ -507,7 +507,15 @@ end;
 
 procedure TIdTimerQueue.ClearEvents;
 begin
-  Self.EventList.Clear;
+  Self.LockTimer;
+  try
+    while (Self.EventList.Count > 0) do begin
+      Self.EventAt(0).Free;
+      Self.EventList.Delete(0);
+    end;
+  finally
+    Self.UnlockTimer;
+  end;
 end;
 
 function TIdTimerQueue.EarliestEvent: TIdWait;
@@ -771,15 +779,7 @@ end;
 
 procedure TIdDebugTimerQueue.RemoveAllEvents;
 begin
-  Self.LockTimer;
-  try
-    while (Self.EventCount > 0) do begin
-      Self.EventAt(0).Free;
-      Self.EventList.Delete(0);
-    end;
-  finally
-    Self.UnlockTimer;
-  end;
+  Self.ClearEvents;
 end;
 
 function TIdDebugTimerQueue.ScheduledEvent(Event: TObject): Boolean;
@@ -834,7 +834,7 @@ begin
     Self.UnlockTimer;
   end;
 end;
-
+    
 procedure TIdDebugTimerQueue.TriggerAllEventsUpToFirst(WaitType: TIdWaitClass);
 var
   Done:      Boolean;
