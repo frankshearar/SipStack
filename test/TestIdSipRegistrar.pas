@@ -796,7 +796,7 @@ end;
 
 function TestTIdSipOutboundRegisterModule.ActualContact: TIdSipContactHeader;
 begin
-  Self.Core.InviteModule.Call(Self.Destination, '', '').Send;
+  Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '').Send;
 
   Result := Self.LastSentRequest.FirstContact;
 end;
@@ -940,7 +940,7 @@ var
   OurBindings: TIdSipContacts;
 begin
   Self.MarkSentRequestCount;
-  Self.Core.InviteModule.Call(Self.Destination, '', '').Send;
+  Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '').Send;
   CheckRequestSent('No INVITE sent');
 
   Self.MarkSentRequestCount;
@@ -2003,7 +2003,7 @@ begin
   LocalContact := TIdSipContactHeader.Create;
   try
     Self.MarkSentRequestCount;
-    Self.Core.InviteModule.Call(Self.Destination, '', '').Send;
+    Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '').Send;
     CheckRequestSent('No INVITE sent');
     LocalContact.Assign(Self.LastSentRequest.FirstContact);
 

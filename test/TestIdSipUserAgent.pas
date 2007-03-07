@@ -433,7 +433,7 @@ end;
 procedure TestTIdSipUserAgent.CheckGruuSet(ExpectedGruu: String; Msg: String);
 begin
   Self.MarkSentRequestCount;
-  Self.Core.InviteModule.Call(Self.Destination, '', '').Send;
+  Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '').Send;
   CheckRequestSent('CheckGruuSet: no request sent (' + Msg + ')');
 
   CheckEquals(ExpectedGruu, Self.LastSentRequest.FirstContact.Address.AsString, Msg);
@@ -685,7 +685,7 @@ begin
   Self.Core.HasProxy := true;
 
   Self.MarkSentRequestCount;
-  Self.Core.InviteModule.Call(Self.Destination, '', '').Send;
+  Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '').Send;
   CheckRequestSent('No request sent');
   CheckEquals(MethodInvite,
               Self.LastSentRequest.Method,
@@ -999,7 +999,7 @@ procedure TestTIdSipUserAgent.TestDeclinedCallNotifiesListeners;
 var
   O: TIdObserverListener;
 begin
-  Self.Core.InviteModule.Call(Self.Destination, '', '').Send;
+  Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '').Send;
 
   O := TIdObserverListener.Create;
   try
@@ -1124,7 +1124,7 @@ procedure TestTIdSipUserAgent.TestDontReAuthenticate;
 begin
   Self.TryAgain := false;
 
-  Self.Core.InviteModule.Call(Self.Destination, '', '').Send;
+  Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '').Send;
 
   Self.MarkSentRequestCount;
   Self.ReceiveUnauthorized(ProxyAuthenticateHeader, QopAuthInt);
@@ -1253,7 +1253,7 @@ procedure TestTIdSipUserAgent.TestOutboundCallAndByeToXlite;
 var
   Session: TIdSipSession;
 begin
-  Session := Self.Core.InviteModule.Call(Self.Destination, '', '');
+  Session := Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '');
   Session.AddSessionListener(Self);
   Session.Send;
 
@@ -1307,7 +1307,7 @@ end;
 
 procedure TestTIdSipUserAgent.TestOutboundInviteDoesNotTerminateWhenNoResponse;
 begin
-  Self.Core.InviteModule.Call(Self.Destination, '', '').Send;
+  Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '').Send;
   CheckEquals(1, Self.Core.CountOf(MethodInvite), 'Calling makes an INVITE');
 
   Self.DebugTimer.TriggerEarliestEvent;
@@ -1364,7 +1364,7 @@ var
   FakeContact: TIdSipContactHeader;
   Response:    TIdSipResponse;
 begin
-  Self.Core.InviteModule.Call(Self.Destination, '', '');
+  Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '');
 
   FakeContact := TIdSipContactHeader.Create;
   try
@@ -1721,7 +1721,7 @@ end;
 
 procedure TestTIdSipUserAgent.TestSimultaneousInAndOutboundCall;
 begin
-  Self.Core.InviteModule.Call(Self.Destination, '', '').Send;
+  Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '').Send;
   Self.ReceiveTrying(Self.LastSentRequest);
   Self.ReceiveRinging(Self.LastSentRequest);
 
@@ -1759,13 +1759,13 @@ begin
   Self.ReceiveInvite;
 
   // Set up the unestablished outbound call (#3)
-  Sess := Self.Core.InviteModule.Call(Self.Destination, '', '');
+  Sess := Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '');
   Sess.AddSessionListener(Self);
   Sess.Send;
   Self.ReceiveTrying(Self.LastSentRequest);
 
   // Set up the established outbound call (#4)
-  Sess := Self.Core.InviteModule.Call(Self.Destination, '', '');
+  Sess := Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '');
   Sess.AddSessionListener(Self);
   Sess.Send;
   Self.ReceiveOk(Self.LastSentRequest);
@@ -1881,7 +1881,7 @@ begin
 
   Self.Dispatcher.TransportType := UdpTransport;
   Self.Destination.Address.Transport := Self.Dispatcher.Transport.GetTransportType;
-  Self.Core.InviteModule.Call(Self.Destination, '', '').Send;
+  Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '').Send;
 
   CheckEquals(Self.Dispatcher.Transport.GetTransportType,
               Self.LastSentRequest.LastHop.Transport,
@@ -1890,7 +1890,7 @@ begin
 
   Self.Dispatcher.TransportType := TlsTransport;
   Self.Destination.Address.Transport := Self.Dispatcher.Transport.GetTransportType;
-  Self.Core.InviteModule.Call(Self.Destination, '', '').Send;
+  Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '').Send;
 
   CheckEquals(Self.Dispatcher.Transport.GetTransportType,
               Self.LastSentRequest.LastHop.Transport,
@@ -2052,7 +2052,7 @@ begin
   try
     Destination.Address.Scheme := SipScheme;
     Destination.Address.Host   := DestinationIP;
-    Call := UA.InviteModule.Call(Destination, '', '');
+    Call := UA.InviteModule.Call(UA.From, Destination, '', '');
     Call.Send;
 
     CheckEquals(ExpectedLocalAddress, Call.InitialRequest.FirstContact.Address.Host, Msg);

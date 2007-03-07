@@ -1464,7 +1464,7 @@ begin
   Self.Module.AddPackage(TIdSipReferPackage);
 
   // Establish a session
-  Session := Self.Core.InviteModule.Call(Self.Destination, '', '');
+  Session := Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '');
   Session.Send;
   Self.ReceiveOk(Session.InitialRequest);
 
@@ -1589,7 +1589,7 @@ var
   Invite:    TIdSipRequest;
 begin
   Self.MarkSentRequestCount;
-  Self.Core.InviteModule.Call(Self.Destination, '', '').Send;
+  Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '').Send;
 
   CheckRequestSent('No request sent');
 
@@ -1617,7 +1617,7 @@ end;
 
 function TestCallFlows.CreateAndEstablishInboundCall: TIdSipOutboundSession;
 begin
-  Result := Self.Core.InviteModule.Call(Self.Destination, '', '');
+  Result := Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '');
   Result.Send;
 
   Self.MarkSentAckCount;

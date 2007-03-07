@@ -202,7 +202,8 @@ type
     function  GruuOf(ActionHandle: TIdSipHandle): String;
     function  HandleOf(const LocalGruu: String): TIdSipHandle;
     procedure HangUp(ActionHandle: TIdSipHandle);
-    function  MakeCall(Dest: TIdSipAddressHeader;
+    function  MakeCall(From: TIdSipFromHeader;
+                       Dest: TIdSipAddressHeader;
                        const LocalSessionDescription: String;
                        const MimeType: String): TIdSipHandle;
     function  MakeOptionsQuery(Dest: TIdSipAddressHeader): TIdSipHandle;
@@ -957,18 +958,24 @@ begin
   end;
 end;
 
-function TIdSipStackInterface.MakeCall(Dest: TIdSipAddressHeader;
+function TIdSipStackInterface.MakeCall(From: TIdSipFromHeader;
+                                       Dest: TIdSipAddressHeader;
                                        const LocalSessionDescription: String;
                                        const MimeType: String): TIdSipHandle;
 var
   Sess: TIdSipOutboundSession;
 begin
+  if From.IsMalformed then begin
+    Result := InvalidHandle;
+    Exit;
+  end;
+
   if Dest.IsMalformed then begin
     Result := InvalidHandle;
     Exit;
   end;
 
-  Sess := Self.UserAgent.InviteModule.Call(Dest, LocalSessionDescription, MimeType);
+  Sess := Self.UserAgent.InviteModule.Call(From, Dest, LocalSessionDescription, MimeType);
   Result := Self.AddAction(Sess);
   Sess.AddSessionListener(Self);
 end;

@@ -117,7 +117,8 @@ type
     function  AddOutboundSession: TIdSipOutboundSession;
     function  AddOutboundSessionReplacer(Invite: TIdSipRequest): TIdSipOutboundSession;
     function  AllowedExtensions: String; override;
-    function  Call(Dest: TIdSipAddressHeader;
+    function  Call(From: TIdSipFromHeader;
+                   Dest: TIdSipAddressHeader;
                    const LocalSessionDescription: String;
                    const MimeType: String): TIdSipOutboundSession;
     function  CreateAck(Dialog: TIdSipDialog): TIdSipRequest;
@@ -916,12 +917,14 @@ begin
           + ExtensionTargetDialog;
 end;
 
-function TIdSipInviteModule.Call(Dest: TIdSipAddressHeader;
+function TIdSipInviteModule.Call(From: TIdSipFromHeader;
+                                 Dest: TIdSipAddressHeader;
                                  const LocalSessionDescription: String;
                                  const MimeType: String): TIdSipOutboundSession;
 begin
   Result := Self.AddOutboundSession;
   Result.Destination             := Dest;
+  Result.From                    := From;                  
   Result.LocalSessionDescription := LocalSessionDescription;
   Result.LocalMimeType           := MimeType;
 end;

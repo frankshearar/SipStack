@@ -362,8 +362,10 @@ begin
 
   LocalContact := TIdSipContactHeader.Create;
   try
-    if Self.ContactClosestToRegistrar.IsUnset then
-      LocalContact.Value := Self.From.FullValue
+    if Self.ContactClosestToRegistrar.IsUnset then begin
+      LocalContact.Value := OutboundRequest.From.FullValue;
+      LocalContact.RemoveParameter(TagParam);
+    end
     else
       LocalContact.Assign(Self.ContactClosestToRegistrar);
 

@@ -54,6 +54,7 @@ type
     procedure RejectActionExecute(Sender: TObject);
   private
     CallHandle:  TIdSipHandle;
+    From:        TIdSipFromHeader;
     ReferTo:     TIdSipAddressHeader;
     RemoteParty: TIdSipAddressHeader;
     Stack:       TIdSipStackInterface;
@@ -79,6 +80,7 @@ type
     procedure CMDEBUG_SEND_MSG(var Msg: TIdSipEventMessage); message CM_DEBUG_SEND_MSG;
     procedure CMDEBUG_TRANSPORT_EXCEPTION(var Msg: TIdSipEventMessage); message CM_DEBUG_TRANSPORT_EXCEPTION;
 
+    procedure Configure(Conf: TStrings);
     procedure Log(Data: TIdEventData);
     procedure MarkReferral(Data: TIdSubscriptionRequestData);
     procedure NotifyOfCallProgress(Data: TIdSessionProgressData);
@@ -110,7 +112,7 @@ implementation
 {$R *.dfm}
 
 uses
-  IdSdp, IdSipSubscribeModule, SysUtils;
+  IdSdp, IdSimpleParser, IdSipSubscribeModule, SysUtils;
 
 //******************************************************************************
 //* TSingleCore                                                                *
@@ -123,10 +125,12 @@ begin
   inherited Create(AOwner);
 
   Self.Configuration.Text := Configuration.Text;
+  Self.From               := TIdSipFromHeader.Create;
   Self.ReferTo            := TIdSipReferToHeader.Create;
   Self.RemoteParty        := TIdSipFromHeader.Create;
 
   Self.TimerQueue := TIdThreadedTimerQueue.Create(true);
+  Self.Configure(Self.Configuration.Lines);
   Self.Stack      := TIdSipStackInterface.Create(Self.Handle, Self.TimerQueue, Configuration);
   Self.CallHandle := InvalidHandle;
 
@@ -138,6 +142,7 @@ begin
   Self.Stack.Free;
   Self.ReferTo.Free;
   Self.RemoteParty.Free;
+  Self.From.Free;
 
   inherited Destroy;
 end;
@@ -237,6 +242,18 @@ end;
 procedure TSingleCore.CMDEBUG_TRANSPORT_EXCEPTION(var Msg: TIdSipEventMessage);
 begin
   Self.ReceiveNotify(Msg.Data);
+end;
+
+procedure TSingleCore.Configure(Conf: TStrings);
+var
+  I: Integer;
+  Line: String;
+begin
+  for I := 0 to Conf.Count - 1 do begin
+    Line := Conf[I];
+    if IsEqual(Lowercase(Fetch(Line, ' ')), 'from') then
+      Self.From.Value := Line;
+  end;
 end;
 
 procedure TSingleCore.Log(Data: TIdEventData);
@@ -364,7 +381,8 @@ begin
   try
     Destination.Value := Self.ToHeader.Text;
 
-    Self.CallHandle := Self.Stack.MakeCall(Destination,
+    Self.CallHandle := Self.Stack.MakeCall(Self.From,
+                                           Destination,
                                            Self.LocalSessionDescription.Text,
                                            SdpMimeType);
 
@@ -414,7 +432,8 @@ procedure TSingleCore.FollowReferActionExecute(Sender: TObject);
 begin
   if Self.ReferTo.Address.IsSipUri then begin
     Self.Stack.HangUp(Self.CallHandle);
-    Self.CallHandle := Self.Stack.MakeCall(Self.ReferTo,
+    Self.CallHandle := Self.Stack.MakeCall(Self.From,
+                                           Self.ReferTo,
                                            Self.LocalSessionDescription.Text,
                                            SdpMimeType);
     Self.Stack.Send(Self.CallHandle);

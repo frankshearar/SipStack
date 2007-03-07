@@ -850,7 +850,7 @@ procedure TestDebug.SetUp;
 begin
   inherited SetUp;
 
-  Self.Session := Self.Core.InviteModule.Call(Self.Destination, '', '');
+  Self.Session := Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '');
   Self.Session.AddSessionListener(Self);
   Self.Session.Send;
 end;
@@ -861,7 +861,7 @@ procedure TestDebug.TestSendSetsInitialRequest;
 var
   Session: TIdSipOutboundSession;
 begin
-  Session := Core.InviteModule.Call(Self.Destination, '', '') as TIdSipOutboundSession;
+  Session := Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '') as TIdSipOutboundSession;
   Session.AddSessionListener(Self);
   Session.Send;
 
@@ -1102,6 +1102,9 @@ begin
       CheckEquals(Self.Core.AllowedExtensions,
                   Request.FirstHeader(SupportedHeaderFull).Value,
                   'Supported header value');
+
+      Check(Request.HasHeader(ContactHeaderFull), 'No Contact header');
+      Check(not Request.FirstContact.HasParameter(TagParam), 'Contact headers don''t use "tag" parameters');
     finally
       Request.Free;
     end;
@@ -5739,7 +5742,7 @@ function TestTIdSipOutboundSession.CreateAction: TIdSipAction;
 var
   Session: TIdSipOutboundSession;
 begin
-  Session := Self.Core.InviteModule.Call(Self.Destination, Self.SDP, Self.MimeType);
+  Session := Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, Self.SDP, Self.MimeType);
   Session.AddActionListener(Self);
   Session.AddSessionListener(Self);
   Session.Send;
@@ -6050,7 +6053,7 @@ begin
   // ===========================================
   //  ---               BYE                 ---> (with 2x proxy, UA credentials)
 
-  Session := Self.Module.Call(Self.Destination, '', '');
+  Session := Self.Module.Call(Self.Core.From, Self.Destination, '', '');
 
   // 1st proxy challenge
   Session.Send;
@@ -6544,7 +6547,7 @@ var
 begin
   Self.Core.InviteModule.AddListener(Self);
 
-  Session := Self.Module.Call(Self.Core.From, '', '');
+  Session := Self.Module.Call(Self.Core.From, Self.Core.From, '', '');
   Session.Send;
   Self.Dispatcher.Transport.FireOnRequest(Self.LastSentRequest);
   Check(Assigned(Self.HairpinCall), 'We didn''t receive the INVITE');
@@ -6896,7 +6899,7 @@ var
   L:       TIdSipTestSessionListenerEndedCounter;
   Session: TIdSipOutboundSession;
 begin
-  Session := Self.Core.InviteModule.Call(Self.Destination, Self.SDP, SdpMimeType);
+  Session := Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, Self.SDP, SdpMimeType);
   L := TIdSipTestSessionListenerEndedCounter.Create;
   try
     Session.AddSessionListener(L);
@@ -7183,7 +7186,7 @@ begin
                + ': Sanity check: our InviteModule should support at least one '
                + 'extension');
 
-  Session := Self.Module.Call(Self.Destination, '', '');
+  Session := Self.Module.Call(Self.Core.From, Self.Destination, '', '');
   Session.Send;
   Check(Session.InitialRequest.HasHeader(SupportedHeaderFull),
         Self.ClassName
@@ -7465,7 +7468,7 @@ begin
   BobsContact := TIdSipContactHeader.Create;
   try
     // Bob calls Alice; Alice answers
-    BobsCallToAlice := Bob.InviteModule.Call(Alice.From, '', '');
+    BobsCallToAlice := Bob.InviteModule.Call(Bob.From, Alice.From, '', '');
     BobsCallToAlice.Send;
 
     BobsContact.Assign(Self.LastSentRequest.FirstContact);
@@ -7484,7 +7487,7 @@ begin
                 'Unexpected subscription request');
 
     // and Bob calls the Parking Place, which automatically answers.
-    BobsCallToPP := Self.Bob.InviteModule.Call(Self.ParkPlace.From, '', '');
+    BobsCallToPP := Self.Bob.InviteModule.Call(Bob.From, Self.ParkPlace.From, '', '');
     BobsCallToPP.Send;
     Check(Assigned(Self.InboundCall) and (Self.ReceivingUA = Self.ParkPlace),
           'The Parking Place UA isn''t ringing');
@@ -7921,7 +7924,7 @@ begin
 
   Invite := TIdSipTestResources.CreateBasicRequest;
   try
-    Self.Session := Self.UA.InviteModule.Call(Invite.ToHeader, '', '');
+    Self.Session := Self.UA.InviteModule.Call(Invite.From, Invite.ToHeader, '', '');
 
     Self.Method.RemoteSessionDescription := Invite.Body;
     Self.Method.Session                  := Self.Session;

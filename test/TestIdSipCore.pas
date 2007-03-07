@@ -2550,7 +2550,7 @@ procedure TestTIdSipActionTerminateWait.SetUp;
 begin
   inherited SetUp;
 
-  Self.Action := Self.Core.InviteModule.Call(Self.Destination, '', '');
+  Self.Action := Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '');
   Self.Wait   := TIdSipActionTerminateWait.Create;
   Self.Wait.ActionID := Self.Action.ID;
 end;
@@ -2844,7 +2844,7 @@ begin
   Self.Contact.Value := 'sip:foo@bar';
 
   Self.Listener   := TIdSipTestActionRedirectorListener.Create;
-  ArbitraryAction := Self.UA.InviteModule.Call(Self.Contact, '', '');
+  ArbitraryAction := Self.UA.InviteModule.Call(Self.UA.From, Self.Contact, '', '');
   Self.Redirector := TIdSipActionRedirector.Create(ArbitraryAction);
 end;
 
