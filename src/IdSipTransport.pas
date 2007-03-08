@@ -1030,7 +1030,7 @@ end;
 
 class function TIdSipDebugTransportRegistry.SecondLastTransport: TIdSipTransport;
 begin
-  Result := Self.TransportAt(Self.TransportCount - 1);
+  Result := Self.TransportAt(Self.TransportCount - 2);
 end;
 
 class function TIdSipDebugTransportRegistry.TransportAt(Index: Integer): TIdSipTransport;
