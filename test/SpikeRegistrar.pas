@@ -81,7 +81,6 @@ const
 
 constructor TrnidSpikeRegistrar.Create(AOwner: TComponent);
 var
-  From:     TIdSipFromHeader;
   HostName: String;
 begin
   inherited Create(AOwner);
@@ -109,14 +108,6 @@ begin
   Self.UA.HostName      := 'wsfrank';
   Self.UA.Timer         := Self.Timer;
   Self.UA.UserAgentName := 'Frank''s Registration Spike';
-
-  From := TIdSipFromHeader.Create;
-  try
-    From.Value := 'sip:franks@' + Self.Transport.HostName;
-    Self.UA.From := From;
-  finally
-    From.Free;
-  end;
 end;
 
 destructor TrnidSpikeRegistrar.Destroy;

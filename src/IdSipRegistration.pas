@@ -405,6 +405,7 @@ type
     procedure SetBindings(Value: TIdSipContacts);
     procedure SetRegistrar(Value: TIdSipUri);
   protected
+    procedure ConfigureRequest(Action: TIdSipOutboundRegisterBase); virtual;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
                          Binding: TIdSipConnectionBindings); override;
@@ -442,6 +443,8 @@ type
   TIdSipOutboundUnregistration = class(TIdSipOutboundRegistrationBase)
   private
     fIsWildCard: Boolean;
+  protected
+    procedure ConfigureRequest(Action: TIdSipOutboundRegisterBase); override;
   public
     function CreateInitialAction: TIdSipOwnedAction; override;
 
@@ -1728,6 +1731,13 @@ end;
 
 //* TIdSipOutboundRegistrationBase Protected methods ***************************
 
+procedure TIdSipOutboundRegistrationBase.ConfigureRequest(Action: TIdSipOutboundRegisterBase);
+begin
+  Action.Bindings  := Self.Bindings;
+  Action.From      := Self.From;
+  Action.Registrar := Self.Registrar;
+end;
+
 procedure TIdSipOutboundRegistrationBase.Initialise(UA: TIdSipAbstractCore;
                                                     Request: TIdSipRequest;
                                                     Binding: TIdSipConnectionBindings);
@@ -1876,8 +1886,7 @@ var
   Reg: TIdSipOutboundRegister;
 begin
   Reg := Self.UA.AddOutboundAction(TIdSipOutboundRegister) as TIdSipOutboundRegister;
-  Reg.Bindings  := Self.Bindings;
-  Reg.Registrar := Self.Registrar;
+  Self.ConfigureRequest(Reg);
 
   Result := Reg;
 end;
@@ -1960,6 +1969,7 @@ var
 begin
   Reg := Self.UA.AddOutboundAction(TIdSipOutboundRegisterQuery) as TIdSipOutboundRegisterQuery;
   Reg.Bindings  := Self.Bindings;
+  Reg.From      := Self.From;
   Reg.Registrar := Self.Registrar;
 
   Result := Reg;
@@ -1975,11 +1985,18 @@ var
   Reg: TIdSipOutboundUnregister;
 begin
   Reg := Self.UA.AddOutboundAction(TIdSipOutboundUnregister) as TIdSipOutboundUnregister;
-  Reg.Bindings   := Self.Bindings;
-  Reg.IsWildCard := Self.IsWildCard;
-  Reg.Registrar  := Self.Registrar;
+  Self.ConfigureRequest(Reg);
 
   Result := Reg;
+end;
+
+//* TIdSipOutboundUnregistration Protected methods *****************************
+
+procedure TIdSipOutboundUnregistration.ConfigureRequest(Action: TIdSipOutboundRegisterBase);
+begin
+  inherited ConfigureRequest(Action);
+
+  (Action as TIdSipOutboundUnregister).IsWildCard := Self.IsWildCard;
 end;
 
 //******************************************************************************

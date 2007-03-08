@@ -294,7 +294,6 @@ type
     fAllowedSchemeList:      TStrings;
     fAuthenticator:          TIdSipAbstractAuthenticator;
     fDispatcher:             TIdSipTransactionDispatcher;
-    fFrom:                   TIdSipFromHeader;
     fHostName:               String;
     fInstanceID:             String;
     fKeyring:                TIdKeyRing;
@@ -317,7 +316,6 @@ type
                                    Binding: TIdSipConnectionBindings): TIdSipUserAgentActOnRequest;
     function  CreateResponseHandler(Response: TIdSipResponse;
                                     Binding: TIdSipConnectionBindings): TIdSipUserAgentActOnResponse;
-    function  DefaultFrom: String;
     function  DefaultHostName: String;
     function  DefaultUserAgent: String;
     procedure MaybeChangeTransport(Msg: TIdSipMessage);
@@ -337,7 +335,6 @@ type
     procedure RejectRequestMethodNotSupported(Request: TIdSipRequest);
     procedure RejectUnsupportedSipVersion(Request: TIdSipRequest);
     procedure SetDispatcher(Value: TIdSipTransactionDispatcher);
-    procedure SetFrom(Value: TIdSipFromHeader);
     procedure SetInstanceID(Value: String);
     procedure SetRealm(const Value: String);
   protected
@@ -444,18 +441,15 @@ type
     procedure SendResponse(Response: TIdSipResponse);
     procedure StartAllTransports;
     procedure StopAllTransports;
-    function  Username: String;
     function  UsesModule(ModuleType: TIdSipMessageModuleClass): Boolean; overload;
     function  UsesModule(Method: String): Boolean; overload;
 
     // Move to UserAgent:
     procedure TerminateAllCalls; // move to InviteModule
-    function  UsingDefaultFrom: Boolean;
 
     property Actions:               TIdSipActions               read fActions;
     property Authenticator:         TIdSipAbstractAuthenticator read fAuthenticator write SetAuthenticator;
     property Dispatcher:            TIdSipTransactionDispatcher read fDispatcher write SetDispatcher;
-    property From:                  TIdSipFromHeader            read fFrom write SetFrom;
     property HostName:              String                      read fHostName write fHostName;
     property InstanceID:            String                      read fInstanceID write SetInstanceID;
     property Keyring:               TIdKeyRing                  read fKeyring;
@@ -1469,7 +1463,6 @@ begin
   Self.fActions                := TIdSipActions.Create;
   Self.fAllowedContentTypeList := TStringList.Create;
   Self.fAllowedLanguageList    := TStringList.Create;
-  Self.fFrom                   := TIdSipFromHeader.Create;
   Self.fKeyring                := TIdKeyRing.Create;
 
   Self.Actions.AddObserver(Self);
@@ -1480,8 +1473,6 @@ begin
 
   Self.HostName := Self.DefaultHostName;
 
-  // DefaultFrom depends on Self.HostName
-  Self.From.Value            := Self.DefaultFrom;
   Self.Realm                 := Self.HostName;
   Self.RequireAuthentication := false;
   Self.UserAgentName         := Self.DefaultUserAgent;
@@ -1492,7 +1483,6 @@ begin
   Self.NotifyModulesOfFree;
 
   Self.Keyring.Free;
-  Self.From.Free;
   Self.AllowedSchemeList.Free;
   Self.AllowedLanguageList.Free;
   Self.AllowedContentTypeList.Free;
@@ -2010,11 +2000,6 @@ begin
   Self.Actions.TerminateAllActions;
 end;
 
-function TIdSipAbstractCore.UsingDefaultFrom: Boolean;
-begin
-  Result := Pos(Self.From.Address.Uri, Self.DefaultFrom) > 0;
-end;
-
 procedure TIdSipAbstractCore.ScheduleEvent(BlockType: TIdSipActionClosureClass;
                                            WaitTime: Cardinal;
                                            Copy: TIdSipMessage;
@@ -2090,11 +2075,6 @@ end;
 procedure TIdSipAbstractCore.StopAllTransports;
 begin
   Self.Dispatcher.StopAllTransports;
-end;
-
-function TIdSipAbstractCore.Username: String;
-begin
-  Result := Self.From.Address.Username;
 end;
 
 function TIdSipAbstractCore.UsesModule(ModuleType: TIdSipMessageModuleClass): Boolean;
@@ -2394,11 +2374,6 @@ begin
   Result.UserAgent := Self;
 end;
 
-function TIdSipAbstractCore.DefaultFrom: String;
-begin
-  Result := 'unknown <sip:unknown@' + Self.HostName + '>';
-end;
-
 function TIdSipAbstractCore.DefaultHostName: String;
 begin
   Result := 'localhost';
@@ -2553,17 +2528,6 @@ begin
   Self.fDispatcher := Value;
 
   Self.fDispatcher.AddTransactionDispatcherListener(Self);
-end;
-
-procedure TIdSipAbstractCore.SetFrom(Value: TIdSipFromHeader);
-begin
-  Self.From.Assign(Value);
-
-  if Self.From.IsMalformed then
-    raise EBadHeader.Create(Self.From.Name);
-
-  if not Self.From.Address.IsSipUri then
-    raise EBadHeader.Create(Self.From.Name + ': MUST be a SIP/SIPS URI');
 end;
 
 procedure TIdSipAbstractCore.SetInstanceID(Value: String);
@@ -3144,7 +3108,7 @@ begin
   if Self.IsInbound then
     Self.From := Request.From
   else
-    Self.From := Self.UA.From;
+    Self.From.Value := Self.LocalGruu.FullValue;
 
   Self.UseGruu := UA.UseGruu;
 

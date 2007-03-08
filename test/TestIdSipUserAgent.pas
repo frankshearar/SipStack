@@ -160,7 +160,7 @@ type
 
     function  ARecords: String;
     procedure CheckAutoAddress(Address: TIdSipAddressHeader);
-    procedure CheckAutoFrom(UserAgent: TIdSipAbstractCore);
+    procedure CheckAutoFrom(UserAgent: TIdSipUserAgent);
     procedure CheckEventPackageRegistered(UA: TIdSipUserAgent;
                                           PackageName: String);
     procedure CheckLocalAddress(UA: TIdSipUserAgent; ExpectedLocalAddress, DestinationIP: String; Msg: String);
@@ -1023,7 +1023,7 @@ begin
   try
     UA := Self.CreateUserAgent('sip:case@localhost');
     try
-      UA.RegisterWith(Self.Destination.Address);
+      UA.RegisterWith(Self.Destination.Address, UA.From);
     finally
       (UA.Dispatcher as TIdSipMockTransactionDispatcher).Transport.AddTransportSendingListener(Listener);
       UA.Free;
@@ -1387,11 +1387,13 @@ begin
 end;
 
 procedure TestTIdSipUserAgent.TestRegisterWith;
+var
+  RequestsFrom: TIdSipFromHeader;
 begin
   Self.Core.UseGruu := false;
 
   Self.MarkSentRequestCount;
-  Self.Core.RegisterWith(Self.RemoteTarget).Send;
+  Self.Core.RegisterWith(Self.RemoteTarget, Self.Core.From).Send;
   CheckRequestSent('No REGISTER sent');
   CheckEquals(MethodRegister, Self.LastSentRequest.Method, 'Unexpected request sent');
 
@@ -1400,6 +1402,16 @@ begin
 
   Check(not Self.LastSentRequest.FirstContact.HasParameter(SipInstanceParam),
         '"' + SipInstanceParam + '" parameters apply only to GRUUs');
+
+  RequestsFrom := TIdSipFromHeader.Create;
+  try
+    RequestsFrom.Assign(Self.LastSentRequest.From);
+    RequestsFrom.RemoveParameter(TagParam);
+
+    CheckEquals(Self.Core.From.AsString, RequestsFrom.AsString, 'From');
+  finally
+    RequestsFrom.Free;
+  end;
 end;
 
 procedure TestTIdSipUserAgent.TestRegisterWithGruu;
@@ -1411,7 +1423,7 @@ begin
   Self.Core.InstanceID := ConstructUUIDURN;
 
   Self.MarkSentRequestCount;
-  Self.Core.RegisterWith(Self.RemoteTarget).Send;
+  Self.Core.RegisterWith(Self.RemoteTarget, Self.Core.From).Send;
   CheckRequestSent('No REGISTER sent');
 
   OkWithGruu := TIdSipResponse.InResponseTo(Self.LastSentRequest, SIPOK);
@@ -1448,7 +1460,7 @@ begin
   Self.Core.UseGruu    := true;
 
   Self.MarkSentRequestCount;
-  Self.Core.RegisterWith(Self.RemoteTarget).Send;
+  Self.Core.RegisterWith(Self.RemoteTarget, Self.Core.From).Send;
   CheckRequestSent('No REGISTER sent');
 
   OkWithGruu := TIdSipResponse.InResponseTo(Self.LastSentRequest, SIPOK);
@@ -1483,7 +1495,7 @@ begin
   Self.Destination.Value := 'sip:rlyeh.org';
 
   Self.MarkSentRequestCount;
-  Self.Core.RegisterWith(Self.Destination.Address).Send;
+  Self.Core.RegisterWith(Self.Destination.Address, Self.Core.From).Send;
   CheckNoRequestSent('Request sent even though "rlyeh.org" is not resolvable');
 end;
 
@@ -1855,7 +1867,7 @@ begin
   RegisteredContact := TIdSipContactHeader.Create;
   try
     Self.MarkSentRequestCount;
-    Self.Core.RegisterWith(Self.Destination.Address).Send;
+    Self.Core.RegisterWith(Self.Destination.Address, Self.Core.From).Send;
     CheckRequestSent('No REGISTER sent');
     CheckEquals(MethodRegister, Self.LastSentRequest.Method, 'Unexpected request sent');
 
@@ -2024,7 +2036,7 @@ begin
               Address.Name + ': host-info');
 end;
 
-procedure TestTIdSipStackConfigurator.CheckAutoFrom(UserAgent: TIdSipAbstractCore);
+procedure TestTIdSipStackConfigurator.CheckAutoFrom(UserAgent: TIdSipUserAgent);
 begin
   Self.CheckAutoAddress(UserAgent.From);
 end;

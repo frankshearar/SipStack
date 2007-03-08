@@ -1029,7 +1029,7 @@ begin
     Exit;
   end;
 
-  Reg := Self.UserAgent.RegisterWith(Registrar);
+  Reg := Self.UserAgent.RegisterWith(Registrar, Self.UserAgent.From);
   Result := Self.AddAction(Reg);
   Reg.AddListener(Self);
 end;

@@ -3086,6 +3086,7 @@ begin
   Initial := Self.UA.AddOutboundAction(TIdSipOutboundInitialInvite) as TIdSipOutboundInitialInvite;
 
   Initial.Destination := Self.Destination;
+  Initial.From        := Self.From;
   Initial.Offer       := Self.LocalSessionDescription;
   Initial.MimeType    := Self.LocalMimeType;
 
@@ -3359,6 +3360,7 @@ begin
   Replacer := Self.UA.AddOutboundAction(TIdSipOutboundReplacingInvite) as TIdSipOutboundReplacingInvite;
   Replacer.CallID      := Invite.CallID;
   Replacer.Destination := Self.Destination;
+  Replacer.From        := Self.From;
   Replacer.FromTag     := Invite.From.Tag;
   Replacer.ToTag       := Invite.ToHeader.Tag;
 

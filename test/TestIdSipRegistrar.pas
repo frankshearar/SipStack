@@ -1126,7 +1126,7 @@ begin
   inherited SetUp;
 
   Self.Registrar := TIdSipRegistrar.Create;
-  Self.Registrar.From.Address.Uri := 'sip:talking-head.tessier-ashpool.co.luna';
+  Self.Destination.Address.Uri := 'sip:talking-head.tessier-ashpool.co.luna';
   Self.Registrar.BindingDB := TIdSipMockBindingDatabase.Create;
 
   Self.Redirected := false;
@@ -1146,9 +1146,7 @@ end;
 
 function TestTIdSipOutboundRegisterBase.RegistrarAddress: TIdSipUri;
 begin
-  Self.Registrar.From.Address.Uri      := Self.Destination.Address.Uri;
-  Self.Registrar.From.Address.Username := '';
-  Result := Self.Registrar.From.Address;
+  Result := Self.Destination.Address;
 end;
 
 //*  TestTIdSipOutboundRegisterBase Private methods ****************************
@@ -1283,6 +1281,7 @@ begin
   Reg.AddActionListener(Self);
   Reg.AddOwnedActionListener(Self);
   Reg.Bindings  := Self.Contacts;
+  Reg.From      := Self.Core.From;
   Reg.Registrar := Self.RegistrarAddress;
   Reg.Send;
 
@@ -1547,7 +1546,7 @@ begin
   Self.Contacts.Add(ContactHeaderFull).Value := 'sip:wintermute@talking-head.tessier-ashpool.co.luna';
 
   Self.Registrar := TIdSipRegistrar.Create;
-  Self.Registrar.From.Address.Uri := 'sip:talking-head.tessier-ashpool.co.luna';
+  Self.Destination.Address.Uri := 'sip:talking-head.tessier-ashpool.co.luna';
   Self.Registrar.BindingDB := TIdSipMockBindingDatabase.Create;
 
   Self.Failed := false;
@@ -1580,9 +1579,7 @@ end;
 
 function TOutboundRegistrationBaseTestCase.RegistrarAddress: TIdSipUri;
 begin
-  Self.Registrar.From.Address.Uri      := Self.Destination.Address.Uri;
-  Self.Registrar.From.Address.Username := '';
-  Result := Self.Registrar.From.Address;
+  Result := Self.Destination.Address;
 end;
 
 //* TOutboundRegistrationBaseTestCase Published methods ************************

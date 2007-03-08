@@ -2447,6 +2447,7 @@ begin
   Sub.Duration     := Self.Duration;
   Sub.EventPackage := Self.EventPackage;
   Sub.EventID      := Self.EventID;
+  Sub.From         := Self.From;
   Sub.Target       := Self.Target;
 end;
 
