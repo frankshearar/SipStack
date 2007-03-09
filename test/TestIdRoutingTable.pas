@@ -105,6 +105,7 @@ type
     procedure TestLocalAddressForNoMappedRoutes;
     procedure TestLocalAddressForNoRoutes;
     procedure TestLocalAddressForPublicInternetAddress;
+    procedure TestRemoveNonexistentRoute;
     procedure TestRemoveRoute;
     procedure TestRouteSortDestinationAndMaskDiffers;
     procedure TestRouteSortGatewayAndMetricDiffers;
@@ -118,6 +119,11 @@ type
     procedure TestRouteSortSameRoute;
   end;
 
+  TestTIdMockRoutingTable = class(TestTIdRoutingTable)
+  published
+    procedure TestAddOsRouteAndCount;
+  end;
+
 implementation
 
 uses
@@ -128,6 +134,7 @@ begin
   Result := TTestSuite.Create('IdSystem unit tests');
   Result.AddTest(TestTIdRouteEntry.Suite);
   Result.AddTest(TestTIdRoutingTable.Suite);
+  Result.AddTest(TestTIdMockRoutingTable.Suite);
 end;
 
 //******************************************************************************
@@ -925,6 +932,13 @@ begin
   CheckEquals(Self.InternetIP, Self.RT.LocalAddressFor(Self.VpnDestination),      'VPN destination');
 end;
 
+procedure TestTIdRoutingTable.TestRemoveNonexistentRoute;
+begin
+  // Make sure that trying to remove a nonexistent route doesn't raise an
+  // EListError (or any error, for that matter).
+  Self.RT.RemoveRoute('10.0.0.6', '255.0.0.0', '10.0.0.1');
+end;
+
 procedure TestTIdRoutingTable.TestRemoveRoute;
 begin
   // Make sure that RouteA <> RouteB.
@@ -1085,6 +1099,20 @@ procedure TestTIdRoutingTable.TestRouteSortSameRoute;
 begin
   CheckEquals(0, RouteSort(Self.RouteA, Self.RouteB), 'RouteA < RouteB');
   CheckEquals(0, RouteSort(Self.RouteB, Self.RouteA), 'RouteB > RouteA');
+end;
+
+//******************************************************************************
+//* TestTIdMockRoutingTable                                                    *
+//******************************************************************************
+//* TestTIdMockRoutingTable Published methods **********************************
+
+procedure TestTIdMockRoutingTable.TestAddOsRouteAndCount;
+begin
+  CheckEquals(0, Self.RT.OsRouteCount, 'Supposedly empty routing table');
+  Self.RT.AddOsRoute('10.0.0.0', '255.0.0.0', '10.0.0.1', 1, '1', '10.0.0.6');
+  CheckEquals(1, Self.RT.OsRouteCount, 'No LAN route added');
+  Self.RT.AddOsRoute('0.0.0.0', '0.0.0.0', '10.0.0.1', 1, '1', '10.0.0.6');
+  CheckEquals(2, Self.RT.OsRouteCount, 'No default route added');
 end;
 
 initialization

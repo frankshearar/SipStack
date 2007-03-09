@@ -204,6 +204,7 @@ type
     procedure TestCreateUserAgentWithMalformedLocator;
     procedure TestCreateUserAgentWithMalformedProxy;
     procedure TestCreateUserAgentWithMappedRoutes;
+    procedure TestCreateUserAgentWithMockedRoutes;
     procedure TestCreateUserAgentWithMockAuthenticator;
     procedure TestCreateUserAgentWithMockLocator;
     procedure TestCreateUserAgentWithMockLocatorConfigured;
@@ -2506,6 +2507,36 @@ begin
                 'UA routing table not consulting OS');
     CheckLocalAddress(UA, InternetGateway, InternetDestination, 'Internet mapped route not used');
     CheckLocalAddress(UA, VpnGateway, VpnDestination, 'Vpn mapped route not used');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithMockedRoutes;
+var
+  DefaultRoute: String;
+  LanRoute:     String;
+  RT:           TIdMockRoutingTable;
+  UA:           TIdSipUserAgent;
+begin
+//  TIdIPAddressParser.NetworkFor(Self.Address, 24)
+  Self.Address := '10.0.0.6';
+  LanRoute := '10.0.0.0/24 10.0.0.1 1 1';
+  DefaultRoute := '0.0.0.0/0 10.0.0.1 1 1';
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Port));
+  Self.Configuration.Add('RoutingTable: MOCK');
+  Self.Configuration.Add('MockRoute: ' + LanRoute);
+  Self.Configuration.Add('MockRoute: ' + DefaultRoute);
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    RT := UA.RoutingTable as TIdMockRoutingTable;
+
+    CheckEquals(2, RT.OsRouteCount, 'Not all routes added');
+    RT.RemoveOsRoute('10.0.0.0', '255.255.255.0', '10.0.0.1');
+    CheckEquals(1, RT.OsRouteCount, 'LAN route not added');
+    RT.RemoveOsRoute('0.0.0.0', '0.0.0.0', '10.0.0.1');
+    CheckEquals(0, RT.RouteCount, 'Default route not added');
   finally
     UA.Free;
   end;

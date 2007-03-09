@@ -32,6 +32,9 @@ type
 
     procedure AddOsRoute(Destination, Mask, Gateway: String; Metric: Cardinal; InterfaceIndex: String; LocalAddress: String); overload; //override;
     procedure AddOsRoute(Route: TIdRouteEntry); overload; //override;
+    function  HasOsRoute(Route: TIdRouteEntry): Boolean;
+    function  OsRouteCount: Integer;
+    procedure RemoveOsRoute(Destination, Mask, Gateway: String);
   end;
 
 implementation
@@ -77,6 +80,21 @@ end;
 procedure TIdMockRoutingTable.AddOsRoute(Route: TIdRouteEntry);
 begin
   Self.AddOsRoute(Route.Destination, Route.Mask, Route.Gateway, Route.Metric, Route.InterfaceIndex, Route.LocalAddress);
+end;
+
+function TIdMockRoutingTable.HasOsRoute(Route: TIdRouteEntry): Boolean;
+begin
+  Result := Self.InternalHasRoute(Self.OsRoutes, Route);
+end;
+
+function TIdMockRoutingTable.OsRouteCount: Integer;
+begin
+  Result := Self.OsRoutes.Count;
+end;
+
+procedure TIdMockRoutingTable.RemoveOsRoute(Destination, Mask, Gateway: String);
+begin
+  Self.InternalRemoveRoute(Self.OsRoutes, Destination, Mask, Gateway);
 end;
 
 //* TIdMockRoutingTable Protected methods **************************************

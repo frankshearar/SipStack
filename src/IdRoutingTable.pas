@@ -78,6 +78,8 @@ type
     function  BestRouteIsDefaultRoute(DestinationIP, LocalIP: String): Boolean; virtual;
     function  GetBestLocalAddress(DestinationIP: String): String; overload; virtual;
     procedure GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation; DefaultPort: Cardinal); overload; virtual;
+    function  InternalHasRoute(RouteList: TObjectList; Route: TIdRouteEntry): Boolean;
+    procedure InternalRemoveRoute(RouteList: TObjectList; Destination, Mask, Gateway: String);
     function  RouteAt(Index: Integer): TIdRouteEntry;
   public
     constructor Create; virtual;
@@ -451,15 +453,8 @@ begin
 end;
 
 function TIdRoutingTable.HasRoute(Route: TIdRouteEntry): Boolean;
-var
-  I: Integer;
 begin
-  Result := false;
-  I      := 0;
-  while (I < Self.RouteCount) and not Result do begin
-    Result := Self.RouteAt(I).Equals(Route);
-    Inc(I);
-  end;
+  Result := Self.InternalHasRoute(Self.Routes, Route);
 end;
 
 function TIdRoutingTable.LocalAddressFor(DestinationIP: String): String;
@@ -537,27 +532,8 @@ begin
 end;
 
 procedure TIdRoutingTable.RemoveRoute(Destination, Mask, Gateway: String);
-var
-  I:           Integer;
-  SearchRoute: TIdRouteEntry;
 begin
-  SearchRoute := TIdRouteEntry.Create;
-  try
-    SearchRoute.Destination := Destination;
-    SearchRoute.Gateway     := Gateway;
-    SearchRoute.Mask        := Mask;
-
-    I := 0;
-    while (I < Self.RouteCount) do begin
-      if Self.RouteAt(I).Equals(SearchRoute) then begin
-        Self.Routes.Delete(I);
-      end
-      else
-        Inc(I);
-    end;
-  finally
-    SearchRoute.Free;
-  end;
+  Self.InternalRemoveRoute(Self.Routes, Destination, Mask, Gateway);
 end;
 
 function TIdRoutingTable.RouteCount: Integer;
@@ -591,6 +567,42 @@ begin
   // 5060 to your boss, 5062 to your neighbouring colleague and 5064 to your
   // machine. Using this method allows you to send out your Contact with a URI
   // like sip:you@your.natted.address:5064.
+end;
+
+function TIdRoutingTable.InternalHasRoute(RouteList: TObjectList; Route: TIdRouteEntry): Boolean;
+var
+  I: Integer;
+begin
+  Result := false;
+  I      := 0;
+  while (I < RouteList.Count) and not Result do begin
+    Result := (RouteList[I] as TIdRouteEntry).Equals(Route);
+    Inc(I);
+  end;
+end;
+
+procedure TIdRoutingTable.InternalRemoveRoute(RouteList: TObjectList; Destination, Mask, Gateway: String);
+var
+  I:           Integer;
+  SearchRoute: TIdRouteEntry;
+begin
+  SearchRoute := TIdRouteEntry.Create;
+  try
+    SearchRoute.Destination := Destination;
+    SearchRoute.Gateway     := Gateway;
+    SearchRoute.Mask        := Mask;
+
+    I := 0;
+    while (I < RouteList.Count) do begin
+      if (RouteList[I] as TIdRouteEntry).Equals(SearchRoute) then begin
+        RouteList.Delete(I);
+      end
+      else
+        Inc(I);
+    end;
+  finally
+    SearchRoute.Free;
+  end;
 end;
 
 function TIdRoutingTable.RouteAt(Index: Integer): TIdRouteEntry;

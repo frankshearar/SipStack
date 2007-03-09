@@ -117,6 +117,9 @@ type
   //   InstanceID: urn:uuid:00000000-0000-0000-0000-000000000000
   //   UseGruu: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
   //
+  // Some directives only make sense for mock objects. For instance:
+  //   MockedRoute: <destination network>/<mask|number of bits><SP><gateway><SP><metric><SP><interface>
+  //
   // We try keep the configuration as order independent as possible. To
   // accomplish this, directives are sometimes marked as pending (by putting
   // objects in the PendingActions list in UpdateConfiguration). Some pending
@@ -144,6 +147,9 @@ type
                          const NameServerLine: String);
     procedure AddMappedRoute(UserAgent: TIdSipAbstractCore;
                              const MappedRouteLine: String;
+                             PendingActions: TObjectList);
+    procedure AddMockedRoute(UserAgent: TIdSipAbstractCore;
+                             const MockedRouteLine: String;
                              PendingActions: TObjectList);
     procedure AddPendingConfiguration(PendingActions: TObjectList;
                                       Action: TIdSipPendingLocalResolutionAction);
@@ -231,6 +237,29 @@ type
     property Network:      String             read fNetwork write fNetwork;
   end;
 
+  TIdSipPendingMockRouteAction = class(TIdSipPendingConfigurationAction)
+  private
+    fCore:           TIdSipAbstractCore;
+    fDestination:    String;
+    fGateway:        String;
+    fInterfaceIndex: String;
+    fLocalAddress:   String;
+    fMask:           String;
+    fMetric:         Cardinal;
+  public
+    constructor Create(Core: TIdSipAbstractCore);
+
+    procedure Execute; override;
+
+    property Core:           TIdSipAbstractCore read fCore;
+    property Destination:    String             read fDestination write fDestination;
+    property Gateway:        String             read fGateway write fGateway;
+    property InterfaceIndex: String             read fInterfaceIndex write fInterfaceIndex;
+    property LocalAddress:   String             read fLocalAddress write fLocalAddress;
+    property Mask:           String             read fMask write fMask;
+    property Metric:         Cardinal           read fMetric write fMetric;
+  end;
+
   TIdSipPendingMessageSend = class(TIdSipPendingConfigurationAction)
   private
     fAction: TIdSipAction;
@@ -284,6 +313,7 @@ const
   ListenDirective                         = 'Listen';
   MockKeyword                             = 'MOCK';
   MappedRouteDirective                    = 'MappedRoute';
+  MockRouteDirective                      = 'MockRoute';
   NameServerDirective                     = 'NameServer';
   ProxyDirective                          = 'Proxy';
   RegisterDirective                       = 'Register';
@@ -818,6 +848,7 @@ var
   Port:              String;
   Route:             String;
 begin
+  // See class comment for the format for this directive.
   Line := MappedRouteLine;
   EatDirective(Line);
 
@@ -846,6 +877,42 @@ begin
   MappedRouteAction.Gateway      := Gateway;
   MappedRouteAction.MappedPort   := MappedPort;
   PendingActions.Add(MappedRouteAction);
+end;
+
+procedure TIdSipStackConfigurator.AddMockedRoute(UserAgent: TIdSipAbstractCore;
+                                                 const MockedRouteLine: String;
+                                                 PendingActions: TObjectList);
+var
+  Gateway:         String;
+  LocalAddress:    String;
+  Iface:           String;
+  Line:            String;
+  MockRouteAction: TIdSipPendingMockRouteAction;
+  Mask:            String;
+  Metric:          Cardinal;
+  Network:         String;
+begin
+  // See class comment for the format for this directive.
+  Line := MockedRouteLine;
+  EatDirective(Line);
+
+  //   MockedRoute: <destination network>/<mask|number of bits><SP><gateway><SP><metric><SP><interface>
+
+  Mask := Fetch(Line, ' ');
+  Network := Fetch(Mask, '/');
+
+  Gateway := Fetch(Line, ' ');
+  Metric  := StrToInt(Fetch(Line, ' '));
+  Iface := Fetch(Line, ' ');
+
+  MockRouteAction := TIdSipPendingMockRouteAction.Create(UserAgent);
+  MockRouteAction.Destination    := Network;
+  MockRouteAction.Gateway        := Gateway;
+  MockRouteAction.InterfaceIndex := Iface;
+  MockRouteAction.LocalAddress   := '';
+  MockRouteAction.Mask           := Mask;
+  MockRouteAction.Metric         := Metric;
+  PendingActions.Add(MockRouteAction);
 end;
 
 procedure TIdSipStackConfigurator.AddPendingConfiguration(PendingActions: TObjectList;
@@ -1039,6 +1106,8 @@ begin
     Self.AddTransport(UserAgent.Dispatcher, ConfigurationLine)
   else if IsEqual(FirstToken, MappedRouteDirective) then
     Self.AddMappedRoute(UserAgent, ConfigurationLine, PendingActions)
+  else if IsEqual(FirstToken, MockRouteDirective) then
+    Self.AddMockedRoute(UserAgent, ConfigurationLine, PendingActions)
   else if IsEqual(FirstToken, NameServerDirective) then
     Self.AddLocator(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, ProxyDirective) then
@@ -1180,6 +1249,32 @@ end;
 procedure TIdSipPendingMappedRouteAction.Execute;
 begin
   Self.Core.RoutingTable.AddMappedRoute(Self.Network, Self.Mask, Self.Gateway, Self.MappedPort);
+end;
+
+//******************************************************************************
+//* TIdSipPendingMockRouteAction                                               *
+//******************************************************************************
+//* TIdSipPendingMockRouteAction Public methods ********************************
+
+constructor TIdSipPendingMockRouteAction.Create(Core: TIdSipAbstractCore);
+begin
+  inherited Create;
+
+  Self.fCore := Core;
+end;
+
+procedure TIdSipPendingMockRouteAction.Execute;
+var
+  RT: TIdMockRoutingTable;
+begin
+  RT := Self.Core.RoutingTable as TIdMockRoutingTable;
+
+  RT.AddOsRoute(Self.Destination,
+                Self.Mask,
+                Self.Gateway,
+                Self.Metric,
+                Self.InterfaceIndex,
+                Self.LocalAddress);
 end;
 
 //******************************************************************************
