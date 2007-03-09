@@ -44,6 +44,7 @@ type
     procedure Assign(Other: TIdRouteEntry);
     function  Clone: TIdRouteEntry;
     function  Equals(OtherRoute: TIdRouteEntry): Boolean;
+    function  CanonicalFormMask: String;
     function  IsDefaultRoute: Boolean;
     function  IsIPv4Route: Boolean;
     function  WillRoute(DestinationIP: String): Boolean;
@@ -305,8 +306,27 @@ end;
 function TIdRouteEntry.Equals(OtherRoute: TIdRouteEntry): Boolean;
 begin
   Result := (Self.Destination = OtherRoute.Destination)
-        and (Self.Mask = OtherRoute.Mask)
+        and (Self.CanonicalFormMask = OtherRoute.CanonicalFormMask)
         and (Self.Gateway = OtherRoute.Gateway);
+end;
+
+function TIdRouteEntry.CanonicalFormMask: String;
+var
+  N, E: Integer;
+  Version: TIdIPVersion;
+begin
+  Val(Self.Mask, N, E);
+
+  Version := TIdIPAddressParser.IPVersion(Self.Destination);
+
+  if (E = 0) then
+    Result := TIdIPAddressParser.MaskToAddress(N, Version)
+  else begin
+    if (Version = Id_IPv6) then
+      Result := TIdIPAddressParser.ExpandIPv6Address(Self.Mask)
+    else
+      Result := Self.Mask;
+  end;
 end;
 
 function TIdRouteEntry.IsDefaultRoute: Boolean;

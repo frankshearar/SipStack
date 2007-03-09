@@ -30,6 +30,7 @@ type
     procedure TestEqualsGatewayDiffers;
     procedure TestEqualsInterfaceIndexDiffers;
     procedure TestEqualsMaskDiffers;
+    procedure TestEqualsMaskInDifferentForm;
     procedure TestEqualsMetricDiffers;
     procedure TestIsDefaultRoute;
     procedure TestIsIPv4Address;
@@ -247,6 +248,28 @@ begin
     Other.Mask := TIdIPAddressParser.IncIPAddress(Self.Route.Mask);
     Check(not Self.Route.Equals(Other), 'Self.Route <> Other because their masks differ');
     Check(not Other.Equals(Self.Route), 'Equals must be reflexive');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TestTIdRouteEntry.TestEqualsMaskInDifferentForm;
+var
+  Other: TIdRouteEntry;
+begin
+  Other := Self.Route.Clone;
+  try
+    Other.Mask := '8';
+    Check(Self.Route.Equals(Other), 'Self.Route = Other despite their masks using different representations');
+    Check(Other.Equals(Self.Route), 'Equals must be reflexive (IPv4)');
+
+    Self.Route.Destination := '2002:deca:fbad::1';
+    Other.Destination      := Self.Route.Destination;
+    Self.Route.Mask        := 'ffff::';
+    Other.Mask             := 'ffff:0000::';
+
+    Check(Self.Route.Equals(Other), 'Self.Route = Other despite their masks being equivalent');
+    Check(Other.Equals(Self.Route), 'Equals must be reflexive (IPv6)');
   finally
     Other.Free;
   end;
