@@ -884,7 +884,6 @@ procedure TIdSipStackConfigurator.AddMockedRoute(UserAgent: TIdSipAbstractCore;
                                                  PendingActions: TObjectList);
 var
   Gateway:         String;
-  LocalAddress:    String;
   Iface:           String;
   Line:            String;
   MockRouteAction: TIdSipPendingMockRouteAction;
