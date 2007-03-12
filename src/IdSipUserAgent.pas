@@ -905,6 +905,12 @@ begin
   Metric  := StrToInt(Fetch(Line, ' '));
   Iface := Fetch(Line, ' ');
 
+  // If IsNumber returns true then the route is something like "192.168.0.0/24".
+  // Otherwise the route is something like "192.168.0.0/255.255.255.0".
+  if TIdSimpleParser.IsNumber(Mask) then begin
+    Mask := TIdIPAddressParser.MaskToAddress(StrToInt(Mask), TIdIPAddressParser.IPVersion(Network));
+  end;
+
   MockRouteAction := TIdSipPendingMockRouteAction.Create(UserAgent);
   MockRouteAction.Destination    := Network;
   MockRouteAction.Gateway        := Gateway;
