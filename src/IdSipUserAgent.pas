@@ -118,7 +118,7 @@ type
   //   UseGruu: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
   //
   // Some directives only make sense for mock objects. For instance:
-  //   MockedRoute: <destination network>/<mask|number of bits><SP><gateway><SP><metric><SP><interface>
+  //   MockedRoute: <destination network>/<mask|number of bits><SP><gateway><SP><metric><SP><interface><SP><local address>
   //
   // We try keep the configuration as order independent as possible. To
   // accomplish this, directives are sometimes marked as pending (by putting
@@ -886,6 +886,7 @@ var
   Gateway:         String;
   Iface:           String;
   Line:            String;
+  LocalAddress:    String;
   MockRouteAction: TIdSipPendingMockRouteAction;
   Mask:            String;
   Metric:          Cardinal;
@@ -895,7 +896,7 @@ begin
   Line := MockedRouteLine;
   EatDirective(Line);
 
-  //   MockedRoute: <destination network>/<mask|number of bits><SP><gateway><SP><metric><SP><interface>
+  //   MockedRoute: <destination network>/<mask|number of bits><SP><gateway><SP><metric><SP><interface><SP><local address>
 
   Mask := Fetch(Line, ' ');
   Network := Fetch(Mask, '/');
@@ -903,6 +904,7 @@ begin
   Gateway := Fetch(Line, ' ');
   Metric  := StrToInt(Fetch(Line, ' '));
   Iface := Fetch(Line, ' ');
+  LocalAddress := Line;
 
   // If IsNumber returns true then the route is something like "192.168.0.0/24".
   // Otherwise the route is something like "192.168.0.0/255.255.255.0".
@@ -914,7 +916,7 @@ begin
   MockRouteAction.Destination    := Network;
   MockRouteAction.Gateway        := Gateway;
   MockRouteAction.InterfaceIndex := Iface;
-  MockRouteAction.LocalAddress   := '';
+  MockRouteAction.LocalAddress   := LocalAddress;
   MockRouteAction.Mask           := Mask;
   MockRouteAction.Metric         := Metric;
   PendingActions.Add(MockRouteAction);

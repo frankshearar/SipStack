@@ -2514,15 +2514,17 @@ end;
 
 procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithMockedRoutes;
 var
-  DefaultRoute: String;
-  LanRoute:     String;
-  RT:           TIdMockRoutingTable;
-  UA:           TIdSipUserAgent;
+  DefaultRoute:    String;
+  InternetAddress: String;
+  LanRoute:        String;
+  RT:              TIdMockRoutingTable;
+  UA:              TIdSipUserAgent;
 begin
 //  TIdIPAddressParser.NetworkFor(Self.Address, 24)
-  Self.Address := '10.0.0.6';
-  LanRoute := '10.0.0.0/24 10.0.0.1 1 1';
-  DefaultRoute := '0.0.0.0/0 10.0.0.1 1 1';
+  Self.Address    := '10.0.0.6';
+  InternetAddress := '1.2.3.4';
+  LanRoute        := '10.0.0.0/24 10.0.0.1 1 1 ' + Self.Address;
+  DefaultRoute    := '0.0.0.0/0 10.0.0.1 1 1 ' + Self.Address;
   Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Port));
   Self.Configuration.Add('RoutingTable: MOCK');
   Self.Configuration.Add('MockRoute: ' + LanRoute);
@@ -2533,6 +2535,14 @@ begin
     RT := UA.RoutingTable as TIdMockRoutingTable;
 
     CheckEquals(2, RT.OsRouteCount, 'Not all routes added');
+
+    CheckEquals(Self.Address,
+                RT.LocalAddressFor(TIdIPAddressParser.IncIPAddress(Self.Address)),
+                'Local address not set for LAN route');
+    CheckEquals(Self.Address,
+                RT.LocalAddressFor(InternetAddress),
+                'Local address not set for default route');
+
     RT.RemoveOsRoute('10.0.0.0', '255.255.255.0', '10.0.0.1');
     CheckEquals(1, RT.OsRouteCount, 'LAN route not added');
     RT.RemoveOsRoute('0.0.0.0', '0.0.0.0', '10.0.0.1');
