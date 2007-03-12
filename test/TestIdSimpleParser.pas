@@ -58,6 +58,8 @@ type
     procedure TestIsIpv6Reference;
     procedure TestIsNumericAddress;
     procedure TestMaskToAddress;
+    procedure TestNetworkFor;
+    procedure TestNetworkForNumBits;
     procedure TestParseIpv6Address;
   end;
 
@@ -813,6 +815,94 @@ begin
   try
     TIdIPAddressParser.MaskToAddress(0, Id_IPUnknown);
     Fail('Failed to bail out on an unknown IP version');
+  except
+    on EBadParameter do;
+  end;
+end;
+
+procedure TestTIdIPAddressParser.TestNetworkFor;
+var
+  I:    Integer;
+  Mask: String;
+begin
+  CheckEquals('192.168.1.1', TIdIPAddressParser.NetworkFor('192.168.1.1', '255.255.255.255'), '192.168.1.1/255.255.255.255');
+  CheckEquals('192.168.1.0', TIdIPAddressParser.NetworkFor('192.168.1.1', '255.255.255.0'),   '192.168.1.1/255.255.255.0');
+  CheckEquals('192.168.0.0', TIdIPAddressParser.NetworkFor('192.168.1.1', '255.255.0.0'),     '192.168.1.1/255.255.0.0');
+  CheckEquals('192.0.0.0',   TIdIPAddressParser.NetworkFor('192.168.1.1', '255.0.0.0'),       '192.168.1.1/255.255.0.0');
+  CheckEquals('0.0.0.0',     TIdIPAddressParser.NetworkFor('192.168.1.1', '0.0.0.0'),         '192.168.1.1/255.255.0.0');
+
+  for I := 0 to BitsInCardinal do begin
+    Mask := TIdIPAddressParser.MaskToAddress(I, Id_IPv4);
+    CheckEquals(Mask,
+                TIdIPAddressParser.NetworkFor('255.255.255.255', Mask),
+                '255.255.255.255/' + Mask);
+  end;
+
+  for I := 0 to BitsInCardinal do begin
+    Mask := TIdIPAddressParser.MaskToAddress(I, Id_IPv4);
+    CheckEquals(Mask,
+                TIdIPAddressParser.NetworkFor('255.255.255.255', Mask),
+                '255.255.255.255/' + Mask);
+  end;
+
+  for I := 0 to BitsInIPv6Address do begin
+    Mask := TIdIPAddressParser.MaskToAddress(I, Id_IPv6);
+    CheckEquals(Mask,
+                TIdIPAddressParser.NetworkFor('ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff', Mask),
+                'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff/' + Mask);
+  end;
+end;
+
+procedure TestTIdIPAddressParser.TestNetworkForNumBits;
+var
+  I: Integer;
+begin
+  CheckEquals('192.168.1.1', TIdIPAddressParser.NetworkFor('192.168.1.1', 32), '192.168.1.1/32');
+  CheckEquals('192.168.1.0', TIdIPAddressParser.NetworkFor('192.168.1.1', 24), '192.168.1.1/24');
+  CheckEquals('192.168.0.0', TIdIPAddressParser.NetworkFor('192.168.1.1', 16), '192.168.1.1/16');
+  CheckEquals('192.0.0.0',   TIdIPAddressParser.NetworkFor('192.168.1.1', 8),  '192.168.1.1/8');
+  CheckEquals('0.0.0.0',     TIdIPAddressParser.NetworkFor('192.168.1.1', 0),  '192.168.1.1/0');
+
+  for I := 0 to BitsInCardinal do begin
+    CheckEquals(TIdIPAddressParser.MaskToAddress(I, Id_IPv4),
+                 TIdIPAddressParser.NetworkFor('255.255.255.255', I),
+                 '255.255.255.255/' + IntToStr(I));
+  end;
+
+  try
+    TIdIPAddressParser.NetworkFor('192.168.1.1', 33);
+    Fail('Failed to bail out on bad mask 33 for an IPv4 mask');
+  except
+    on EBadParameter do;
+  end;
+
+  CheckEquals('2002:DECA:FBAD:1::1', TIdIPAddressParser.NetworkFor('2002:deca:fbad:1::1', 128),  '2002:deca:fbad:1::1/128');
+  CheckEquals('2002:DECA:FBAD:1::',  TIdIPAddressParser.NetworkFor('2002:deca:fbad:1::1', 120),  '2002:deca:fbad:1::1/120');
+  CheckEquals('2002:DECA:FBAD:1::',  TIdIPAddressParser.NetworkFor('2002:deca:fbad:1::1', 112),  '2002:deca:fbad:1::1/112');
+  CheckEquals('2002:DECA:FBAD:1::',  TIdIPAddressParser.NetworkFor('2002:deca:fbad:1::1', 104),  '2002:deca:fbad:1::1/104');
+  CheckEquals('2002:DECA:FBAD:1::',  TIdIPAddressParser.NetworkFor('2002:deca:fbad:1::1', 96),   '2002:deca:fbad:1::1/96');
+  CheckEquals('2002:DECA:FBAD:1::',  TIdIPAddressParser.NetworkFor('2002:deca:fbad:1::1', 88),   '2002:deca:fbad:1::1/88');
+  CheckEquals('2002:DECA:FBAD:1::',  TIdIPAddressParser.NetworkFor('2002:deca:fbad:1::1', 80),   '2002:deca:fbad:1::1/80');
+  CheckEquals('2002:DECA:FBAD:1::',  TIdIPAddressParser.NetworkFor('2002:deca:fbad:1::1', 72),   '2002:deca:fbad:1::1/72');
+  CheckEquals('2002:DECA:FBAD:1::',  TIdIPAddressParser.NetworkFor('2002:deca:fbad:1::1', 64),   '2002:deca:fbad:1::1/64');
+  CheckEquals('2002:DECA:FBAD::',    TIdIPAddressParser.NetworkFor('2002:deca:fbad:1::1', 56),   '2002:deca:fbad:1::1/56');
+  CheckEquals('2002:DECA:FBAD::',    TIdIPAddressParser.NetworkFor('2002:deca:fbad:1::1', 48),   '2002:deca:fbad:1::1/48');
+  CheckEquals('2002:DECA:FB00::',    TIdIPAddressParser.NetworkFor('2002:deca:fbad:1::1', 40),   '2002:deca:fbad:1::1/40');
+  CheckEquals('2002:DECA::',         TIdIPAddressParser.NetworkFor('2002:deca:fbad:1::1', 32),   '2002:deca:fbad:1::1/32');
+  CheckEquals('2002:DE00::',         TIdIPAddressParser.NetworkFor('2002:deca:fbad:1::1', 24),   '2002:deca:fbad:1::1/24');
+  CheckEquals('2002::',              TIdIPAddressParser.NetworkFor('2002:deca:fbad:1::1', 16),   '2002:deca:fbad:1::1/16');
+  CheckEquals('2000::',              TIdIPAddressParser.NetworkFor('2002:deca:fbad:1::1', 8),    '2002:deca:fbad:1::1/8');
+  CheckEquals('::',                  TIdIPAddressParser.NetworkFor('2002:deca:fbad:1::1', 0),    '2002:deca:fbad:1::1/0');
+
+  for I := 0 to BitsInIPv6Address do begin
+    CheckEquals(TIdIPAddressParser.MaskToAddress(I, Id_IPv6),
+                TIdIPAddressParser.NetworkFor('ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff', I),
+                'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff/' + IntToStr(I));
+  end;
+
+  try
+    TIdIPAddressParser.NetworkFor('2002:deca:fbad:1::1', 129);
+    Fail('Failed to bail out on bad mask 129 for an IPv4 mask');
   except
     on EBadParameter do;
   end;

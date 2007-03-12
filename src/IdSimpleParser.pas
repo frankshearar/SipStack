@@ -43,6 +43,10 @@ type
     class function  IsIPv6Reference(const Token: String): Boolean;
     class function  IsNumericAddress(const Token: String): Boolean;
     class function  MaskToAddress(NumberSignificantBits: Cardinal; IPVersion: TIdIPVersion): String;
+    class function  NetworkForIPv4(Address: String; Mask: String): String;
+    class function  NetworkForIPv6(Address: String; Mask: String): String;
+    class function  NetworkFor(Address: String; Mask: String): String; overload;
+    class function  NetworkFor(Address: String; NumSignificantBits: Cardinal): String; overload;
     class procedure ParseIPv6Address(const IPv6Address: String;
                                      var Address: TIdIPv6AddressRec);
   end;
@@ -101,7 +105,9 @@ const
 const
   FetchDefaultDelete = true;
   FetchDefaultDelimiter = ' '; // Do not localise
+  BitsInIPv6Address = SizeOf(TIdIPv6AddressRec)*SizeOf(Word);
 
+function BitsInCardinal: Cardinal;
 function EncodeNonLineUnprintableChars(S: String): String;
 function EndsWith(const S, Suffix: String): Boolean;
 function Fetch(var Source: String;
@@ -152,6 +158,11 @@ end;
 //******************************************************************************
 //* Unit Public Functions and Procedures                                       *
 //******************************************************************************
+
+function BitsInCardinal: Cardinal;
+begin
+  Result := SizeOf(Cardinal)*8;
+end;
 
 function EncodeNonLineUnprintableChars(S: String): String;
 var
@@ -625,9 +636,6 @@ begin
 end;
 
 class function TIdIPAddressParser.MaskToAddress(NumberSignificantBits: Cardinal; IPVersion: TIdIPVersion): String;
-const
-  BitsInCardinal = 32;
-
   procedure MaskWord(var NumberSignificantBits: Cardinal; var AddressPart: Word);
   const
     BitsInWord = 16;
@@ -680,6 +688,57 @@ begin
   end
   else
     raise EBadParameter.Create('Cannot convert "' + IntToStr(NumberSignificantBits) + '" into an address of unknown IP version');
+end;
+
+class function TIdIPAddressParser.NetworkForIPv4(Address: String; Mask: String): String;
+var
+  Addr:  Cardinal;
+  M:     Cardinal;
+begin
+  Addr := Self.InetAddr(Address);
+  M    := Self.InetAddr(Mask);
+
+  Result := Self.IPv4AddressToStr(Addr and M);
+end;
+
+class function TIdIPAddressParser.NetworkForIPv6(Address: String; Mask: String): String;
+var
+  Addr6: TIdIPv6AddressRec;
+  I:     Integer;
+  M6:    TIdIPv6AddressRec;
+  Net6:  TIdIPv6AddressRec;
+begin
+  FillChar(Net6, SizeOf(Addr6), 0);
+  Self.ParseIPv6Address(Address, Addr6);
+  Self.ParseIPv6Address(Mask, M6);
+
+  for I := Low(TIdIPv6AddressRec) to High(TIdIPv6AddressRec) do
+    Net6[I] := Addr6[I] and M6[I];
+
+  Result := Self.IPv6AddressToStr(Net6);
+end;
+
+class function TIdIPAddressParser.NetworkFor(Address: String; Mask: String): String;
+var
+  Addr:  Cardinal;
+  Addr6: TIdIPv6AddressRec;
+  I:     Integer;
+  M:     Cardinal;
+  M6:    TIdIPv6AddressRec;
+  Net6:  TIdIPv6AddressRec;
+begin
+  case Self.IPVersion(Address) of
+    Id_IPv4: Result := Self.NetworkForIPv4(Address, Mask);
+
+    Id_IPv6: Result := Self.NetworkForIPv6(Address, Mask);
+  else
+    raise EBadParameter('''' + Address + ''' not an IPv4 or IPv6 address');
+  end;
+end;
+
+class function TIdIPAddressParser.NetworkFor(Address: String; NumSignificantBits: Cardinal): String;
+begin
+  Result := Self.NetworkFor(Address, Self.MaskToAddress(NumSignificantBits, Self.IPVersion(Address)))
 end;
 
 class procedure TIdIPAddressParser.ParseIPv6Address(const IPv6Address: String;
