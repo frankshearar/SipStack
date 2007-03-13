@@ -75,6 +75,9 @@ begin
   Self.Response  := TIdSipTestResources.CreateBasicResponse;
   Self.Transport := TIdSipMockUdpTransport.Create;
 
+  Self.Response.LastHop.SentBy := Self.Transport.Bindings[0].IP;
+  Self.Response.LastHop.Port   := Self.Transport.Bindings[0].Port;
+
   Self.Logger := TIdSipTransportLogger.Create;
   Self.Logger.OutputStream := Self.LogStream;
   Self.Logger.LogTransport(Self.Transport);

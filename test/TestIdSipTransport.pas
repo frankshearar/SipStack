@@ -12,9 +12,9 @@ unit TestIdSipTransport;
 interface
 
 uses
-  Classes, IdSipLocation, IdSipMessage, IdSipTransport, IdSipTcpTransport,
-  IdSocketHandle, IdTcpConnection, IdTcpServer, IdTimerQueue, SyncObjs,
-  SysUtils, TestFramework, TestFrameworkEx, TestFrameworkSip,
+  Classes, IdSipLocation, IdSipMessage, IdSipMockTransport, IdSipTransport,
+  IdSipTcpTransport, IdSocketHandle, IdTcpConnection, IdTcpServer, IdTimerQueue,
+  SyncObjs, SysUtils, TestFramework, TestFrameworkEx, TestFrameworkSip,
   TestFrameworkSipTransport;
 
 type
@@ -89,8 +89,30 @@ type
   end;
 
   TestTIdSipMockTransport = class(TestTIdSipTransport)
+  private
+    MockTransport: TIdSipMockTransport;
+    RequestOne:    TIdSipRequest;
+    RequestTwo:    TIdSipRequest;
+    RequestThree:  TIdSipRequest;
+    RequestFour:   TIdSipRequest;
+    ResponseOne:   TIdSipResponse;
+    ResponseTwo:   TIdSipResponse;
+    ResponseThree: TIdSipResponse;
+    ResponseFour:  TIdSipResponse;
   protected
-    function TransportType: TIdSipTransportClass; override;
+    procedure CheckServerOnPort(const Host: String;
+                                Port: Cardinal;
+                                const Msg: String); override;
+    procedure SendMessage(Msg: String); override;
+    function  TransportType: TIdSipTransportClass; override;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestLastRequest;
+    procedure TestLastResponse;
+    procedure TestSecondLastRequest;
+    procedure TestThirdLastRequest;
   end;
 
   TestTIdSipTransports = class(TTestCase)
@@ -186,16 +208,16 @@ type
 implementation
 
 uses
-  IdException, IdGlobal, IdSimpleParser, IdSipConsts, IdSipMockTransport,
-  IdSipSCTPTransport, IdSipTlsTransport, IdSipUdpTransport, IdSSLOpenSSL,
-  IdStack, IdSystem, IdTcpClient, IdUdpClient, IdUDPServer, TestMessages;
+  IdException, IdGlobal, IdSimpleParser, IdSipConsts, IdSipSCTPTransport,
+  IdSipTlsTransport, IdSipUdpTransport, IdSSLOpenSSL, IdStack, IdSystem,
+  IdTcpClient, IdUdpClient, IdUDPServer, TestMessages;
 
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipTransport unit tests');
   Result.AddTest(TestTIdSipTransportEventNotifications.Suite);
   Result.AddTest(TestTransportRegistry.Suite);
-//  Result.AddTest(TestTIdSipMockTransport.Suite);
+  Result.AddTest(TestTIdSipMockTransport.Suite);
   Result.AddSuite(TestTIdSipTransports.Suite);
   Result.AddTest(TestTIdSipTransportExceptionMethod.Suite);
   Result.AddTest(TestTIdSipTransportReceiveRequestMethod.Suite);
@@ -680,11 +702,158 @@ end;
 //******************************************************************************
 //* TestTIdSipMockTransport                                                    *
 //******************************************************************************
+//* TestTIdSipMockTransport Public methods *************************************
+
+procedure TestTIdSipMockTransport.SetUp;
+begin
+  inherited SetUp;
+
+  (Self.LowPortTransport  as TIdSipMockTransport).AutoDispatch          := true;
+  (Self.LowPortTransport  as TIdSipMockTransport).AlwaysRecogniseSentBy := false;
+  (Self.HighPortTransport as TIdSipMockTransport).AutoDispatch          := true;
+  (Self.HighPortTransport as TIdSipMockTransport).AlwaysRecogniseSentBy := false;
+
+  Self.RequestOne := TIdSipRequest.ReadRequestFrom(BasicRequest);
+  Self.RequestOne.LastHop.Transport := Self.LowPortTransport.GetTransportType;
+
+  Self.RequestTwo := TIdSipRequest.ReadRequestFrom(BasicRequest);
+  Self.RequestTwo.Method      := MethodRegister;
+  Self.RequestTwo.CSeq.Method := MethodRegister;
+  Self.RequestTwo.LastHop.Transport := Self.LowPortTransport.GetTransportType;
+
+  Self.RequestThree := TIdSipRequest.ReadRequestFrom(BasicRequest);
+  Self.RequestThree.Method      := MethodOptions;
+  Self.RequestThree.CSeq.Method := MethodOptions;
+  Self.RequestThree.LastHop.Transport := Self.LowPortTransport.GetTransportType;
+
+  Self.RequestFour := TIdSipRequest.ReadRequestFrom(BasicRequest);
+  Self.RequestFour.Method      := MethodSubscribe;
+  Self.RequestFour.CSeq.Method := MethodSubscribe;
+  Self.RequestFour.LastHop.Transport := Self.LowPortTransport.GetTransportType;
+
+  Self.ResponseOne := TIdSipResponse.ReadResponseFrom(BasicResponse);
+  Self.ResponseOne.StatusCode := SIPTrying;
+
+  Self.ResponseTwo := TIdSipResponse.ReadResponseFrom(BasicResponse);
+  Self.ResponseTwo.StatusCode := SIPOK;
+
+  Self.ResponseThree := TIdSipResponse.ReadResponseFrom(BasicResponse);
+  Self.ResponseThree.StatusCode := SIPMultipleChoices;
+
+  Self.ResponseFour := TIdSipResponse.ReadResponseFrom(BasicResponse);
+  Self.ResponseFour.StatusCode := SIPBadRequest;
+
+  Self.MockTransport := Self.LowPortTransport as TIdSipMockTransport;
+end;
+
+procedure TestTIdSipMockTransport.TearDown;
+begin
+  Self.ResponseFour.Free;
+  Self.ResponseThree.Free;
+  Self.ResponseTwo.Free;
+  Self.ResponseOne.Free;
+  Self.RequestFour.Free;
+  Self.RequestThree.Free;
+  Self.RequestTwo.Free;
+  Self.RequestOne.Free;
+
+  inherited TearDown;
+end;
+
 //* TestTIdSipMockTransport Protected methods **********************************
+
+procedure TestTIdSipMockTransport.CheckServerOnPort(const Host: String;
+                                                    Port: Cardinal;
+                                                    const Msg: String);
+var
+  I:       Integer;
+  Running: Boolean;
+begin
+  if not Self.MockTransport.IsRunning then Fail(Msg);
+
+  Running  := false;
+  for I := 0 to Self.MockTransport.Bindings.Count - 1 do begin
+    if (Self.MockTransport.Bindings[I].IP = Host)
+      and (Cardinal(Self.MockTransport.Bindings[I].Port) = Port) then begin
+      Running := true;
+      Break;
+    end;
+  end;
+
+  if not Running then Fail(Msg);
+end;
+
+procedure TestTIdSipMockTransport.SendMessage(Msg: String);
+var
+  M: TIdSipMessage;
+begin
+  M := TIdSipMessage.ReadMessageFrom(Msg);
+  try
+    if M.IsRequest then
+      (Self.HighPortTransport as TIdSipMockTransport).FireOnRequest(M as TIdSipRequest)
+    else
+      (Self.HighPortTransport as TIdSipMockTransport).FireOnResponse(M as TIdSipResponse)
+  finally
+    M.Free;
+  end;
+end;
 
 function TestTIdSipMockTransport.TransportType: TIdSipTransportClass;
 begin
-  Result := TIdSipMockTransport;
+  Result := TIdSipMockUdpTransport;
+end;
+
+//* TestTIdSipMockTransport Published methods **********************************
+
+procedure TestTIdSipMockTransport.TestLastRequest;
+begin
+  CheckNull(Self.MockTransport.LastRequest, 'Unexpected last request from a new transport');
+
+  Self.MockTransport.Send(Self.RequestOne, Self.HighPortLocation);
+
+  CheckNotNull(Self.MockTransport.LastRequest, '(Copy of) last request not stored');
+  Check(Self.MockTransport.LastRequest.Equals(Self.RequestOne), 'Unknown request stored');
+end;
+
+procedure TestTIdSipMockTransport.TestLastResponse;
+begin
+  CheckNull(Self.MockTransport.LastResponse, 'Unexpected last response from a new transport');
+
+  Self.MockTransport.Send(Self.ResponseOne, Self.HighPortLocation);
+
+  CheckNotNull(Self.MockTransport.LastResponse, '(Copy of) last response not stored');
+  Check(Self.MockTransport.LastResponse.Equals(Self.ResponseOne), 'Unknown response stored');
+end;
+
+procedure TestTIdSipMockTransport.TestSecondLastRequest;
+begin
+  CheckNull(Self.MockTransport.SecondLastRequest, 'Unexpected second-last request from a new transport');
+
+  Self.MockTransport.Send(Self.RequestOne, Self.HighPortLocation);
+  CheckNull(Self.MockTransport.SecondLastRequest, 'Unexpected second-last request from a nearly new transport');
+
+  Self.MockTransport.Send(Self.RequestTwo, Self.HighPortLocation);
+  CheckNotNull(Self.MockTransport.LastRequest, '(Copy of) second-last request not stored');
+  Check(Self.MockTransport.SecondLastRequest.Equals(Self.RequestOne), 'Unknown request stored');
+end;
+
+procedure TestTIdSipMockTransport.TestThirdLastRequest;
+begin
+  CheckNull(Self.MockTransport.ThirdLastRequest, 'Unexpected third-last request from a new transport');
+
+  Self.MockTransport.Send(Self.RequestOne, Self.HighPortLocation);
+  CheckNull(Self.MockTransport.ThirdLastRequest, 'Unexpected third-last request from a nearly new transport');
+
+  Self.MockTransport.Send(Self.RequestTwo, Self.HighPortLocation);
+  CheckNull(Self.MockTransport.ThirdLastRequest, 'Unexpected third-last request from a not new transport');
+
+  Self.MockTransport.Send(Self.RequestThree, Self.HighPortLocation);
+  CheckNotNull(Self.MockTransport.LastRequest, '(Copy of) third-last request not stored');
+  Check(Self.MockTransport.ThirdLastRequest.Equals(Self.RequestOne), 'Unknown request stored');
+
+  Self.MockTransport.Send(Self.RequestFour, Self.HighPortLocation);
+  CheckNotNull(Self.MockTransport.LastRequest, '(Copy of) third-last request not stored (again)');
+  Check(Self.MockTransport.ThirdLastRequest.Equals(Self.RequestTwo), 'Unknown request stored (again)');
 end;
 
 //******************************************************************************

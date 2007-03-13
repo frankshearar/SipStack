@@ -590,6 +590,9 @@ begin
 
   Request := TIdSipMessage.ReadRequestFrom(LocalLoopRequest);
   try
+    Self.MockTransport.Bindings[0].IP   := Request.LastHop.SentBy;
+    Self.MockTransport.Bindings[0].Port := Request.LastHop.Port;
+
     SipClient := Self.CreateClient;
     try
       SipClient.Host        := Self.LowPortTransport.Bindings[0].IP;

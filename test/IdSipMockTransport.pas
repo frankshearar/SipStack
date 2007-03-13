@@ -27,6 +27,7 @@ type
   TIdSipMockTransport = class(TIdSipTransport)
   private
     fACKCount:          Cardinal;
+    fAutoDispatch:      Boolean;
     fBindings:          TIdSocketHandles;
     fFailWith:          ExceptClass;
     fIsRunning:         Boolean;
@@ -37,6 +38,7 @@ type
     fSentResponseCount: Cardinal;
     fWriteLog:          Boolean;
 
+    procedure AddIndyStyleDefaultBinding;
     function  CreateFakeBinding: TIdSipConnectionBindings;
     procedure DispatchRequest(R: TidSipRequest;
                               Dest: TIdSipLocation);
@@ -55,7 +57,6 @@ type
                           Dest: TIdSipLocation); override;
     procedure SendResponse(R: TIdSipResponse;
                            Dest: TIdSipLocation); override;
-    function  SentByIsRecognised(Via: TIdSipViaHeader): Boolean; override;
   public
     class function DefaultPort: Cardinal; override;
     class function GetTransportType: String; override;
@@ -98,8 +99,10 @@ type
     procedure Start; override;
     procedure Stop; override;
     function  ThirdLastRequest: TIdSipRequest;
+    function  ThirdLastResponse: TIdSipResponse;
 
     property ACKCount:          Cardinal      read fACKCount;
+    property AutoDispatch:      Boolean       read fAutoDispatch write fAutoDispatch;
     property FailWith:          ExceptClass   read fFailWith write fFailWith;
     property LastACK:           TIdSipRequest read fLastACK;
     property SentRequestCount:  Cardinal      read fSentRequestCount;
@@ -195,6 +198,8 @@ begin
   Self.Bindings.Add;
 
   GAllTransports.Add(Self);
+
+  Self.AutoDispatch := false;
 end;
 
 destructor TIdSipMockTransport.Destroy;
@@ -388,6 +393,9 @@ end;
 
 procedure TIdSipMockTransport.Start;
 begin
+  if (Self.Bindings.Count = 0) then
+    Self.AddIndyStyleDefaultBinding;
+
   Self.fIsRunning := true;
 end;
 
@@ -401,6 +409,11 @@ begin
   Result := Self.fRequests.ThirdLast;
 end;
 
+function TIdSipMockTransport.ThirdLastResponse: TIdSipResponse;
+begin
+  Result := Self.fResponses.ThirdLast;
+end;
+
 //* TIdSipMockTransport Protected methods **************************************
 
 function TIdSipMockTransport.GetBindings: TIdSocketHandles;
@@ -411,7 +424,7 @@ end;
 procedure TIdSipMockTransport.SendRequest(R: TIdSipRequest;
                                           Dest: TIdSipLocation);
 begin
-  Self.NotifyOfSentRequest(R, Dest);
+  inherited SendRequest(R, Dest);
 
   Self.Log(R.AsString, dirOut);
 
@@ -430,7 +443,8 @@ begin
                                  'TIdSipMockTransport.SendRequest ('
                                + Self.FailWith.ClassName + ')');
 
-//  Self.DispatchRequest(R, Dest);
+  if Self.AutoDispatch then
+    Self.DispatchRequest(R, Dest);
 end;
 
 procedure TIdSipMockTransport.SendResponse(R: TIdSipResponse;
@@ -449,15 +463,20 @@ begin
                                  'TIdSipMockTransport.SendResponse ('
                                + Self.FailWith.ClassName + ')');
 
-//  Self.DispatchResponse(R, Dest);
-end;
-
-function TIdSipMockTransport.SentByIsRecognised(Via: TIdSipViaHeader): Boolean;
-begin
-  Result := true;
+  if Self.AutoDispatch then                               
+    Self.DispatchResponse(R, Dest);
 end;
 
 //* TIdSipMockTransport Private methods ****************************************
+
+procedure TIdSipMockTransport.AddIndyStyleDefaultBinding;
+var
+  Binding: TIdSocketHandle;
+begin
+  Binding := Self.Bindings.Add;
+  Binding.IP   := '127.0.01';
+  Binding.Port := Self.DefaultPort;
+end;
 
 function TIdSipMockTransport.CreateFakeBinding: TIdSipConnectionBindings;
 begin
