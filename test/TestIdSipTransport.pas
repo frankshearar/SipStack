@@ -708,10 +708,8 @@ procedure TestTIdSipMockTransport.SetUp;
 begin
   inherited SetUp;
 
-  (Self.LowPortTransport  as TIdSipMockTransport).AutoDispatch          := true;
-  (Self.LowPortTransport  as TIdSipMockTransport).AlwaysRecogniseSentBy := false;
-  (Self.HighPortTransport as TIdSipMockTransport).AutoDispatch          := true;
-  (Self.HighPortTransport as TIdSipMockTransport).AlwaysRecogniseSentBy := false;
+  (Self.LowPortTransport  as TIdSipMockTransport).AutoDispatch := true;
+  (Self.HighPortTransport as TIdSipMockTransport).AutoDispatch := true;
 
   Self.RequestOne := TIdSipRequest.ReadRequestFrom(BasicRequest);
   Self.RequestOne.LastHop.Transport := Self.LowPortTransport.GetTransportType;
