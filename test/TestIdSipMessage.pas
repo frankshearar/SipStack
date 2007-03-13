@@ -327,6 +327,7 @@ type
     procedure TestLast;
     procedure TestListStoresCopiesNotReferences;
     procedure TestSecondLast;
+    procedure TestThirdLast;
   end;
 
 implementation
@@ -5144,6 +5145,46 @@ begin
     CheckEquals(SIPOK,
                 Self.List.SecondLast.StatusCode,
                 'List with three responses');
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipResponseList.TestThirdLast;
+var
+  Response: TIdSipResponse;
+begin
+  Response := TIdSipResponse.Create;
+  try
+    Response.StatusCode := SIPTrying;
+
+    Check(nil = Self.List.ThirdLast,
+          'Empty list');
+
+    Self.List.AddCopy(Response);
+
+    Check(nil = Self.List.ThirdLast,
+          'Non-empty list');
+
+    Response.StatusCode := SIPOK;
+    Self.List.AddCopy(Response);
+
+    Check(nil = Self.List.ThirdLast,
+         'List with two Responses');
+
+    Response.StatusCode := SIPMultipleChoices;
+    Self.List.AddCopy(Response);
+
+    CheckEquals(SIPTrying,
+                Self.List.ThirdLast.StatusCode,
+                'List with three Responses');
+
+    Response.StatusCode := SIPBadRequest;
+    Self.List.AddCopy(Response);
+
+    CheckEquals(SIPOK,
+                Self.List.ThirdLast.StatusCode,
+                'List with four Responses');
   finally
     Response.Free;
   end;

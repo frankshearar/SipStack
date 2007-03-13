@@ -1706,6 +1706,7 @@ type
   private
     List: TObjectList;
 
+    function FromTheFront(Offset: Integer): TIdSipResponse;
     function GetItems(Index: Integer): TIdSipResponse;
   public
     constructor Create;
@@ -1720,6 +1721,7 @@ type
     function  IsEmpty: Boolean;
     function  Last: TIdSipResponse;
     function  SecondLast: TIdSipResponse;
+    function  ThirdLast: TIdSipResponse;
 
     property Items[Index: Integer]: TIdSipResponse read GetItems; default;
   end;
@@ -10289,21 +10291,27 @@ end;
 
 function TIdSipResponseList.Last: TIdSipResponse;
 begin
-  if Self.IsEmpty then
-    Result := nil
-  else
-    Result := Self.List[Self.List.Count - 1] as TIdSipResponse;
+  Result := Self.FromTheFront(0);
 end;
 
 function TIdSipResponseList.SecondLast: TIdSipResponse;
 begin
-  if (Self.Count < 2) then
-    Result := nil
-  else
-    Result := Self.List[Self.List.Count - 2] as TIdSipResponse;
+  Result := Self.FromTheFront(1);
+end;
+
+function TIdSipResponseList.ThirdLast: TIdSipResponse;
+begin
+  Result := Self.FromTheFront(2);
 end;
 
 //* TIdSipRequestList Private methods ******************************************
+
+function TIdSipResponseList.FromTheFront(Offset: Integer): TIdSipResponse;
+begin
+  Assert(Offset >= 0, OffsetMustBeNonNegative);
+
+  Result := Self.Items[Self.List.Count - Offset - 1];
+end;
 
 function TIdSipResponseList.GetItems(Index: Integer): TIdSipResponse;
 begin
