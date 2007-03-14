@@ -550,7 +550,7 @@ type
     procedure ReceiveInitialInvite(Invite: TIdSipRequest); override;
     procedure ReceiveInvite(Invite: TIdSipRequest);
   public
-    function  AcceptCall(const Offer, ContentType: String): String;
+    procedure AcceptCall(const Offer, ContentType: String);
     function  IsInbound: Boolean; override;
     function  Match(Msg: TIdSipMessage): Boolean; override;
     function  ModifyWaitTime: Cardinal; override;
@@ -2798,7 +2798,7 @@ end;
 //******************************************************************************
 //* TIdSipInboundSession Public methods ****************************************
 
-function TIdSipInboundSession.AcceptCall(const Offer, ContentType: String): String;
+procedure TIdSipInboundSession.AcceptCall(const Offer, ContentType: String);
 begin
   if not Assigned(Self.InitialInvite) then
     raise EIdSipTransactionUser.Create('You have already invoked AcceptCall');
