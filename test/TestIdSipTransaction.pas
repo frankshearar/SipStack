@@ -549,6 +549,27 @@ type
     procedure TestRun;
   end;
 
+  TestTIdSipClientInviteTransactionTimerBWait = class(TTestCase)
+  private
+    Binding:          TIdSipConnectionBindings;
+    Destination:      TIdSipContactHeader;
+    Dispatcher:       TIdSipMockTransactionDispatcher;
+    Invite:           TIdSipRequest;
+    Ringing:          TIdSipResponse;
+    Tran:             TIdSipClientInviteTransaction;
+    TransactionCount: Integer;
+    Wait:             TIdSipClientInviteTransactionTimerBWait;
+
+    procedure CheckTransactionNotRemoved(Msg: String);
+    procedure MarkTransactionCount;
+    procedure MoveToProceedingState(Tran: TIdSipTransaction);
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTimerBFiresInProceedingState;
+  end;
+
 implementation
 
 uses
@@ -572,6 +593,7 @@ begin
   Result.AddTest(TestTIdSipTransactionListenerReceiveRequestMethod.Suite);
   Result.AddTest(TestTIdSipTransactionListenerReceiveResponseMethod.Suite);
   Result.AddTest(TestTIdSipTransactionListenerTerminatedMethod.Suite);
+  Result.AddTest(TestTIdSipClientInviteTransactionTimerBWait.Suite);
 end;
 
 function Transaction(S: TIdSipTransactionState): String;
@@ -5098,6 +5120,68 @@ begin
   CheckEquals(OldCount + 1,
               RepLoc.Count,
               'LocationsFor returned an immutable list');
+end;
+
+//******************************************************************************
+//* TestTIdSipClientInviteTransactionTimerBWait
+//******************************************************************************
+//* TestTIdSipClientInviteTransactionTimerBWait Public methods *****************
+
+procedure TestTIdSipClientInviteTransactionTimerBWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Binding     := TIdSipConnectionBindings.Create;
+  Self.Destination := TIdSipContactHeader.Create;
+  Self.Destination.Value := 'sip:cthulhu@rlyeh.org';
+
+  Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
+  Self.Invite     := TIdSipTestResources.CreateBasicRequest;
+  Self.Ringing    := TIdSipResponse.InResponseTo(Self.Invite, SIPRinging, Self.Destination);
+  Self.Tran       := Self.Dispatcher.AddClientTransaction(Self.Invite) as TIdSipClientInviteTransaction;
+
+  Self.Wait := TIdSipClientInviteTransactionTimerBWait.Create;
+  Self.Wait.TransactionID := Self.Tran.ID;
+end;
+
+procedure TestTIdSipClientInviteTransactionTimerBWait.TearDown;
+begin
+  Self.Wait.Free;
+  Self.Ringing.Free;
+  Self.Invite.Free;
+  Self.Dispatcher.Free;
+  Self.Destination.Free;
+  Self.Binding.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipClientInviteTransactionTimerBWait Private methods ****************
+
+procedure TestTIdSipClientInviteTransactionTimerBWait.CheckTransactionNotRemoved(Msg: String);
+begin
+  Check(Self.TransactionCount = Self.Dispatcher.TransactionCount, Msg);
+end;
+
+procedure TestTIdSipClientInviteTransactionTimerBWait.MarkTransactionCount;
+begin
+  Self.TransactionCount := Self.Dispatcher.TransactionCount;
+end;
+
+procedure TestTIdSipClientInviteTransactionTimerBWait.MoveToProceedingState(Tran: TIdSipTransaction);
+begin
+  Self.Tran.ReceiveResponse(Self.Ringing, Self.Binding);
+end;
+
+//* TestTIdSipClientInviteTransactionTimerBWait Published methods **************
+
+procedure TestTIdSipClientInviteTransactionTimerBWait.TestTimerBFiresInProceedingState;
+begin
+  Self.MoveToProceedingState(Self.Tran);
+
+  Self.MarkTransactionCount;
+  Self.Wait.Trigger;
+  Self.CheckTransactionNotRemoved('Transaction removed before it was terminated');
 end;
 
 //******************************************************************************

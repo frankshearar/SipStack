@@ -2408,7 +2408,12 @@ begin
 
   if Assigned(Tran) then begin
     Self.FireTerminatingTimer(Tran);
-    Tran.Dispatcher.RemoveTransaction(Tran);
+
+    // Sometimes a terminating timer won't terminate the transaction. For
+    // instance, a client INVITE in the Proceeding state mustn't terminate if
+    // a scheduled TimerBWait triggers.
+    if Tran.IsTerminated then
+      Tran.Dispatcher.RemoveTransaction(Tran);
   end;
 end;
 
