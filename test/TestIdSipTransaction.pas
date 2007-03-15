@@ -248,6 +248,7 @@ type
                               const Reason: String);
     procedure Terminated(Sender: TIdSipTransaction);
     function  TransactionType: TIdSipTransactionClass; virtual; abstract;
+    procedure UseReliableTransport;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -2535,6 +2536,13 @@ begin
   Self.ThreadEvent.SetEvent;
 end;
 
+procedure TTestTransaction.UseReliableTransport;
+begin
+  Self.MockDispatcher.TransportType := TcpTransport;
+  Self.Request.LastHop.Transport    := Self.MockDispatcher.TransportType;
+  Self.Destination.Transport        := Self.MockDispatcher.TransportType;
+end;
+
 //* TTestTransaction Published methods *****************************************
 
 procedure TTestTransaction.TestIsNull;
@@ -2880,8 +2888,7 @@ begin
   // messages. Hence we terminate it.
   Self.Terminate(Self.Tran);
 
-  Self.MockDispatcher.TransportType := TlsTransport;
-  Self.Request.LastHop.Transport := TlsTransport;
+  Self.UseReliableTransport;
 
   Tran := Self.TransactionType.Create(Self.MockDispatcher,
                                       Self.Request) as TIdSipServerInviteTransaction;
@@ -3706,39 +3713,29 @@ end;
 
 procedure TestTIdSipClientInviteTransaction.CheckACK(Ack: TIdSipRequest;
                                                      Response: TIdSipResponse);
+var
+  Request: TIdSipRequest;
 begin
-  CheckEquals(MethodAck,               Ack.Method,     'Method');
-  CheckEquals(Self.Request.SipVersion, Ack.SipVersion, 'SIP-Version');
-  CheckEquals(Self.Request.RequestUri, Ack.RequestUri, 'Request-URI');
-  CheckEquals(Self.Request.CallID,     Ack.CallID,     'Call-ID');
-  Check(Self.Request.From.Equals(Ack.From),
-        'From');
-  Check(Response.ToHeader.Equals(Ack.ToHeader),
-        'To');
+  Request := Self.Tran.InitialRequest;
+
+  CheckEquals(MethodAck,          Ack.Method,     'Method');
+  CheckEquals(Request.SipVersion, Ack.SipVersion, 'SIP-Version');
+  CheckEquals(Request.RequestUri, Ack.RequestUri, 'Request-URI');
+  CheckEquals(Request.CallID,     Ack.CallID,     'Call-ID');
+  Check(Request.From.Equals(Ack.From),            'From');
+  Check(Response.ToHeader.Equals(Ack.ToHeader),   'To');
 
   CheckEquals(1, Ack.Path.Length, 'Number of Via headers');
-  Check(Self.Request.LastHop.Equals(Ack.LastHop),
-        'Topmost Via');
+  Check(Request.LastHop.Equals(Ack.LastHop), 'Topmost Via');
 
-  Check(Ack.HasHeader(MaxForwardsHeader),
-        'Max-Forwards header is mandatory');
+  Check(Ack.HasHeader(MaxForwardsHeader), 'Max-Forwards header is mandatory');
 
-  CheckEquals(Self.Request.CSeq.SequenceNo,
-              Ack.CSeq.SequenceNo,
-              'CSeq sequence no');
-  CheckEquals(MethodAck,
-              Ack.CSeq.Method,
-              'CSeq method');
+  CheckEquals(Request.CSeq.SequenceNo, Ack.CSeq.SequenceNo, 'CSeq sequence no');
+  CheckEquals(MethodAck,               Ack.CSeq.Method,     'CSeq method');
+  CheckEquals(0,                       Ack.ContentLength,   'Content-Length');
+  CheckEquals('',                      Ack.Body,            'RFC 3261 recommends having an empty ACK body');
 
-  CheckEquals(0,
-              Ack.ContentLength,
-              'Content-Length');
-  CheckEquals('',
-              Ack.Body,
-              'RFC 3261 recommends having an empty ACK body');
-
-  Check(Self.Tran.InitialRequest.Route.Equals(Ack.Route),
-        'Route path differs');
+  Check(Request.Route.Equals(Ack.Route), 'Route path differs');
 end;
 
 procedure TestTIdSipClientInviteTransaction.MoveToCompletedState(Tran: TIdSipTransaction);
@@ -4186,8 +4183,7 @@ begin
   // Hack: we terminate Self.Tran so it doesn't keep sending INVITEs
   Self.Terminate(Self.Tran);
 
-  Self.MockDispatcher.TransportType := TcpTransport;
-  Self.Request.LastHop.Transport    := Self.MockDispatcher.TransportType;
+  Self.UseReliableTransport;
 
   Self.MockTransport.ResetSentRequestCount;
   Tran := Self.TransactionType.Create(Self.MockDispatcher,
@@ -4839,7 +4835,8 @@ begin
   Self.RemoveWaitsScheduledForAlreadyInstantiatedTransactions;
 
   // This disables the Timer E stuff (cf RFC 3261, section 17.1.2.2)
-  Self.Request.LastHop.Transport := TcpTransport;
+  Self.UseReliableTransport;
+
   Tran := Self.TransactionType.Create(Self.MockDispatcher,
                                       Self.Request) as TIdSipClientNonInviteTransaction;
   try
