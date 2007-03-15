@@ -118,7 +118,7 @@ type
   //   UseGruu: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
   //
   // Some directives only make sense for mock objects. For instance:
-  //   MockedRoute: <destination network>/<mask|number of bits><SP><gateway><SP><metric><SP><interface><SP><local address>
+  //   MockRoute: <destination network>/<mask|number of bits><SP><gateway><SP><metric><SP><interface><SP><local address>
   //
   // We try keep the configuration as order independent as possible. To
   // accomplish this, directives are sometimes marked as pending (by putting
