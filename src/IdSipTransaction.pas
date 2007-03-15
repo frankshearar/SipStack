@@ -1702,12 +1702,16 @@ end;
 
 procedure TIdSipServerInviteTransaction.FireTimerH;
 begin
+  if (Self.State <> itsCompleted) then Exit;
+
   Self.DoOnTimeout(Self.InitialRequest,
                    SessionTimeoutMsg);
 end;
 
 procedure TIdSipServerInviteTransaction.FireTimerI;
 begin
+  if (Self.State <> itsConfirmed) then Exit;
+
   Self.ChangeToTerminated(true);
 end;
 
@@ -1863,6 +1867,8 @@ end;
 
 procedure TIdSipServerNonInviteTransaction.FireTimerJ;
 begin
+  if (Self.State <> itsCompleted) then Exit;
+
   Self.ChangeToTerminated(true);
 end;
 
