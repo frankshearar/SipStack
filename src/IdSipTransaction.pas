@@ -147,6 +147,7 @@ type
                              Result: TIdSipLocations);
     function  FindTransaction(R: TIdSipMessage;
                               ClientTran: Boolean): TIdSipTransaction;
+    procedure LocalBindings(Bindings: TIdSipLocations);
     function  LoopDetected(Request: TIdSipRequest): Boolean;
     procedure RemoveTransaction(TerminatedTransaction: TIdSipTransaction);
     procedure RemoveTransactionDispatcherListener(const Listener: IIdSipTransactionDispatcherListener);
@@ -709,8 +710,7 @@ begin
     T.Timer    := Self.Timer;
 
     // Indy servers instantiate with one binding.
-    T.Bindings[0].IP   := Address;
-    T.Bindings[0].Port := Port;
+    T.SetFirstBinding(Address, Port);
 
     Self.Transports.Add(T);
     T.AddTransportListener(Self);
@@ -789,6 +789,14 @@ begin
       Result := Self.TransactionAt(I)
     else
      Inc(I);
+end;
+
+procedure TIdSipTransactionDispatcher.LocalBindings(Bindings: TIdSipLocations);
+var
+  I: Integer;
+begin
+  for I := 0 to Self.TransportCount - 1 do
+    Self.TransportAt(I).LocalBindings(Bindings);
 end;
 
 function TIdSipTransactionDispatcher.LoopDetected(Request: TIdSipRequest): Boolean;

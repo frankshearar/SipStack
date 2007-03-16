@@ -80,8 +80,8 @@ begin
   // TODO: This won't work! You need to set up the certs & such!
   Client := TIdTcpClient.Create(nil);
   try
-    Client.Host := Self.HighPortTransport.Bindings[0].IP;
-    Client.Port := Self.HighPortTransport.Bindings[0].Port;
+    Client.Host := Self.HighPortLocation.IPAddress;
+    Client.Port := Self.HighPortLocation.Port;
     Client.Connect(DefaultTimeout);
     try
       Client.Write(Msg);

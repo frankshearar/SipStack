@@ -359,8 +359,8 @@ var
 begin
   Client := TIdTcpClient.Create(nil);
   try
-    Client.Host := Self.HighPortTransport.Bindings[0].IP;
-    Client.Port := Self.HighPortTransport.Bindings[0].Port;
+    Client.Host := Self.HighPortLocation.IPAddress;
+    Client.Port := Self.HighPortLocation.Port;
     Client.Connect(DefaultTimeout);
     try
       Client.Write(Msg);
@@ -486,8 +486,8 @@ begin
 
   Request := TIdSipMessage.ReadRequestFrom(LocalLoopRequest);
   try
-    Self.SipClient.Host        := Self.LowPortTransport.Bindings[0].IP;
-    Self.SipClient.Port        := Self.LowPortTransport.Bindings[0].Port;
+    Self.SipClient.Host        := Self.LowPortLocation.IPAddress;
+    Self.SipClient.Port        := Self.LowPortLocation.Port;
     Self.SipClient.ReadTimeout := 100;
 
     Self.SipClient.Connect;
@@ -538,8 +538,8 @@ begin
     try
       Request := TIdSipMessage.ReadRequestFrom(LocalLoopRequest);
       try
-        Self.SipClient.Host             := Self.HighPortTransport.Bindings[0].IP;
-        Self.SipClient.Port             := Self.HighPortTransport.Bindings[0].Port;
+        Self.SipClient.Host             := Self.HighPortLocation.IPAddress;
+        Self.SipClient.Port             := Self.HighPortLocation.Port;
         Self.SipClient.ReadTimeout      := 100;
 
         Self.SipClient.Connect;
@@ -555,8 +555,8 @@ begin
         Self.CheckingResponseEvent := Self.AcknowledgeEvent;
         Response := TIdSipMessage.ReadResponseFrom(LocalLoopResponse);
         try
-          Response.LastHop.Received := Self.HighPortTransport.Bindings[0].IP;
-          Response.LastHop.Port     := Self.HighPortTransport.Bindings[0].Port;
+          Response.LastHop.Received := Self.HighPortLocation.IPAddress;
+          Response.LastHop.Port     := Self.HighPortLocation.Port;
           Response.StatusCode       := SIPOK;
           Self.LowPortTransport.Send(Response, Self.HighPortLocation);
         finally
@@ -590,13 +590,12 @@ begin
 
   Request := TIdSipMessage.ReadRequestFrom(LocalLoopRequest);
   try
-    Self.MockTransport.Bindings[0].IP   := Request.LastHop.SentBy;
-    Self.MockTransport.Bindings[0].Port := Request.LastHop.Port;
+    Self.MockTransport.SetFirstBinding(Request.LastHop.SentBy, Request.LastHop.Port);
 
     SipClient := Self.CreateClient;
     try
-      SipClient.Host        := Self.LowPortTransport.Bindings[0].IP;
-      SipClient.Port        := Self.LowPortTransport.Bindings[0].Port;
+      SipClient.Host        := Self.LowPortLocation.IPAddress;
+      SipClient.Port        := Self.LowPortLocation.Port;
       SipClient.ReadTimeout := 1000;
       SipClient.Timer       := Self.Timer;
 
@@ -901,11 +900,21 @@ begin
 end;
 
 procedure TestTIdSipTcpServer.TestReceiveResponse;
+var
+  OK: TIdSipResponse;
 begin
   Self.CheckingResponseEvent := Self.AcknowledgeEvent;
 
   Self.Client.Connect(DefaultTimeout);
-  Self.Client.Write(Format(BasicResponse, [ViaFQDN]));
+
+  OK := TIdSipResponse.ReadResponseFrom(Format(BasicResponse, [ViaFQDN]));
+  try
+    OK.LastHop.SentBy := Self.Transport.FirstIPBound;
+
+    Self.Client.Write(OK.AsString);
+  finally
+    OK.Free;
+  end;
 
   Self.WaitForSignaled;
   Check(nil <> Self.Transport.LastResponse,
@@ -941,6 +950,7 @@ begin
   Self.Client.Timer       := Self.Timer;
 
   Self.Invite := TIdSipTestResources.CreateLocalLoopRequest;
+  Self.Invite.LastHop.SentBy := Self.Transport.FirstIPBound;
 
   Self.Finished              := false;
   Self.InviteCount           := 0;
@@ -1126,6 +1136,8 @@ end;
 procedure TestTIdSipTcpClient.OnRejectedMessage(const Msg: String;
                                                 const Reason: String);
 begin
+  Self.ExceptionType    := ETestFailure;
+  Self.ExceptionMessage := 'Message rejected: ' + Reason;
 end;
 
 procedure TestTIdSipTcpClient.PauseAndSendOkResponse(Sender: TObject;
@@ -1180,23 +1192,30 @@ end;
 procedure TestTIdSipTcpClient.SendProvisionalAndOkResponse(Sender: TObject;
                                                            Request: TIdSipRequest);
 var
-  OK:      String;
+  OK:      TIdSipResponse;
   Threads: TList;
-  Trying:  String;
+  Trying:  TIdSipResponse;
 begin
-  Trying := StringReplace(LocalLoopResponse, '486 Busy Here', '100 Trying', []);
-  OK     := StringReplace(LocalLoopResponse, '486 Busy Here', '200 OK', []);
-
-  Threads := Self.Server.Threads.LockList;
+  Trying := TIdSipResponse.InResponseTo(Self.Invite, SIPTrying);
   try
-    if (Threads.Count = 0) then
-      raise Exception.Create('TCP connection disappeared: SendProvisionalAndOkResponse');
+    Ok := TIdSipResponse.InResponseTo(Self.Invite, SIPOK);
+    try
+      Threads := Self.Server.Threads.LockList;
+      try
+        if (Threads.Count = 0) then
+          raise Exception.Create('TCP connection disappeared: SendProvisionalAndOkResponse');
 
-    (TObject(Threads[0]) as TIdPeerThread).Connection.Write(Trying);
-    IdGlobal.Sleep(500);
-    (TObject(Threads[0]) as TIdPeerThread).Connection.Write(OK);
+        (TObject(Threads[0]) as TIdPeerThread).Connection.Write(Trying.AsString);
+        IdGlobal.Sleep(500);
+        (TObject(Threads[0]) as TIdPeerThread).Connection.Write(OK.AsString);
+      finally
+        Self.Server.Threads.UnlockList;
+      end;
+    finally
+      OK.Free;
+    end;
   finally
-    Self.Server.Threads.UnlockList;
+    Trying.Free;
   end;
 end;
 

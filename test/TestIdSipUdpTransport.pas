@@ -168,8 +168,8 @@ var
 begin
   Client := TIdUdpClient.Create(nil);
   try
-    Client.Host := Self.HighPortTransport.Bindings[0].IP;
-    Client.Port := Self.HighPortTransport.Bindings[0].Port;
+    Client.Host := Self.HighPortLocation.IPAddress;
+    Client.Port := Self.HighPortLocation.Port;
 
     Client.Send(Msg);
   finally
@@ -275,8 +275,8 @@ begin
 
   Client := TIdUdpClient.Create(nil);
   try
-    Client.Host := Self.HighPortTransport.Bindings[0].IP;
-    Client.Port := Self.HighPortTransport.Bindings[0].Port;
+    Client.Host := Self.HighPortLocation.IPAddress;
+    Client.Port := Self.HighPortLocation.Port;
 
     Client.Send('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
               + 'Via: SIP/2.0/UDP proxy.tessier-ashpool.co.luna;branch=z9hG4bK776asdhds'#13#10
@@ -419,7 +419,7 @@ begin
   try
     try
       Binding := Server.Bindings.Add;
-      Binding.IP   := Self.LowPortTransport.Bindings[0].IP;
+      Binding.IP   := Self.LowPortLocation.IPAddress;
       Binding.Port := Self.RPort;
 
       Server.Active := true;

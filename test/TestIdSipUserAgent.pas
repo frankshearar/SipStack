@@ -315,9 +315,9 @@ end;
 
 procedure TestTIdSipUserAgent.SetUp;
 var
-  F:        TIdSipFromHeader;
-  Invite:   TIdSipRequest;
-  Response: TIdSipResponse;
+  Dest: TIdSipContactHeader;
+  F:    TIdSipFromHeader;
+  Ok:   TIdSipResponse;
 begin
   inherited SetUp;
 
@@ -341,16 +341,19 @@ begin
   Self.RouteSet.Add(RecordRouteHeader).Value := '<sip:127.0.0.1:6000>';
   Self.RouteSet.Add(RecordRouteHeader).Value := '<sip:127.0.0.1:8000>';
 
-  Invite := TIdSipTestResources.CreateBasicRequest;
+  Self.Invite.LastHop.SentBy := Self.Dispatcher.Transport.FirstIPBound;
+
+  Dest := TIdSipContactHeader.Create;
   try
-    Response := TIdSipTestResources.CreateBasicResponse;
+    Dest.Value := Self.Destination.FullValue;
+    Ok := TIdSipResponse.InResponseTo(Self.Invite, SIPOK, Dest);
     try
-      Self.Dlg := TIdSipDialog.CreateOutboundDialog(Invite, Response, false);
+      Self.Dlg := TIdSipDialog.CreateOutboundDialog(Self.Invite, Ok, false);
     finally
-      Response.Free;
+      Ok.Free;
     end;
   finally
-    Invite.Free;
+    Dest.Free;
   end;
 
   F := TIdSipFromHeader.Create;
@@ -2318,7 +2321,8 @@ end;
 
 procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithAutoTransport;
 var
-  UA: TIdSipUserAgent;
+  Bindings: TIdSipLocations;
+  UA:       TIdSipUserAgent;
 begin
   CheckPortFree(LocalAddress,
                 IdPORT_SIP,
@@ -2330,9 +2334,16 @@ begin
   try
     UA.Dispatcher.Transports[0].Start;
     try
-      CheckEquals(LocalAddress,
-                  UA.Dispatcher.Transports[0].Bindings[0].IP,
-                  'Local NIC (or loopback) address not used');
+      Bindings := TIdSipLocations.Create;
+      try
+        UA.Dispatcher.LocalBindings(Bindings);
+
+        CheckEquals(LocalAddress,
+                    Bindings[0].IPAddress,
+                    'Local NIC (or loopback) address not used');
+      finally
+        Bindings.Free;
+      end;
     finally
       UA.Dispatcher.Transports[0].Stop;
     end;
@@ -2689,39 +2700,46 @@ end;
 
 procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithOneTransport;
 var
-  UA: TIdSipUserAgent;
+  Bindings: TIdSipLocations;
+  UA:       TIdSipUserAgent;
 begin
   Self.Port := 15060;
   Self.Configuration.Add('Listen: TCP ' + Self.Address + ':' + IntToStr(Self.Port));
 
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
-    CheckEquals(1, UA.Dispatcher.TransportCount, 'Number of transports');
-    CheckEquals(TIdSipTCPTransport.ClassName,
-                UA.Dispatcher.Transports[0].ClassName,
-                'Transport type');
-    CheckEquals(Port,
-                UA.Dispatcher.Transports[0].Bindings[0].Port,
-                'Transport port');
-    CheckEquals(Self.Address,
-                UA.Dispatcher.Transports[0].Bindings[0].IP,
-                'Transport address');
-    CheckEquals(Self.Address,
-                UA.Dispatcher.Transports[0].HostName,
-                'Transport hostname');
-    Check(Assigned(UA.Dispatcher.Transports[0].Timer),
-          'Transport has no timer');
-    Check(UA.Dispatcher.Timer = UA.Dispatcher.Transports[0].Timer,
-          'Transport and Transaction layers have different timers');
-
-    UA.Dispatcher.Transports[0].Start;
+    Bindings := TIdSipLocations.Create;
     try
-      CheckTcpServerNotOnPort(UA.Dispatcher.Transports[0].Bindings[0].IP,
-                              IdPort_SIP,
-                              'With only one listener (on a non-standard port) '
-                            + 'there should be no server on the standard port');
+      UA.Dispatcher.LocalBindings(Bindings);
+      CheckEquals(1, UA.Dispatcher.TransportCount, 'Number of transports');
+      CheckEquals(TIdSipTCPTransport.ClassName,
+                  UA.Dispatcher.Transports[0].ClassName,
+                  'Transport type');
+      CheckEquals(Port,
+                  Bindings[0].Port,
+                  'Transport port');
+      CheckEquals(Self.Address,
+                  Bindings[0].IPAddress,
+                  'Transport address');
+      CheckEquals(Self.Address,
+                  UA.Dispatcher.Transports[0].HostName,
+                  'Transport hostname');
+      Check(Assigned(UA.Dispatcher.Transports[0].Timer),
+            'Transport has no timer');
+      Check(UA.Dispatcher.Timer = UA.Dispatcher.Transports[0].Timer,
+            'Transport and Transaction layers have different timers');
+
+      UA.Dispatcher.Transports[0].Start;
+      try
+        CheckTcpServerNotOnPort(Bindings[0].IPAddress,
+                                IdPort_SIP,
+                                'With only one listener (on a non-standard port) '
+                              + 'there should be no server on the standard port');
+      finally
+        UA.Dispatcher.Transports[0].Stop;
+      end;
     finally
-      UA.Dispatcher.Transports[0].Stop;
+     Bindings.Free;
     end;
   finally
     UA.Free;
@@ -3147,6 +3165,7 @@ end;
 
 procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithTransport;
 var
+  Bindings:  TIdSipLocations;
   NewConfig: TStrings;
   NewPort:   Cardinal;
   UA:        TIdSipUserAgent;
@@ -3161,26 +3180,34 @@ begin
       NewConfig.Add('Listen: TCP ' + Self.Address + ':' + IntToStr(NewPort));
 
       Self.Conf.UpdateConfiguration(UA, NewConfig);
-      CheckEquals(1,
-                  UA.Dispatcher.TransportCount,
-                  'Too many transports: old Listen directives still in force');
-      CheckEquals(TIdSipTCPTransport.ClassName,
-                  UA.Dispatcher.Transports[0].ClassName,
-                  'New transport type');
-      CheckEquals(NewPort,
-                  UA.Dispatcher.Transports[0].Bindings[0].Port,
-                  'New transport port');
-      CheckEquals(Self.Address,
-                  UA.Dispatcher.Transports[0].Bindings[0].IP,
-                  'New transport address');
-      CheckEquals(Self.Address,
-                  UA.Dispatcher.Transports[0].HostName,
-                  'New transport hostname');
-      Check(Assigned(UA.Dispatcher.Transports[0].Timer),
-            'New transport has no timer');
-      Check(UA.Dispatcher.Timer = UA.Dispatcher.Transports[0].Timer,
-            'New transport and Transaction layers have different timers');
-      CheckTCPServerNotOnPort(Self.Address, Self.Port, 'Old TCP transport still running');
+
+      Bindings := TIdSipLocations.Create;
+      try
+        UA.Dispatcher.LocalBindings(Bindings);
+
+        CheckEquals(1,
+                    UA.Dispatcher.TransportCount,
+                    'Too many transports: old Listen directives still in force');
+        CheckEquals(TIdSipTCPTransport.ClassName,
+                    UA.Dispatcher.Transports[0].ClassName,
+                    'New transport type');
+        CheckEquals(NewPort,
+                    Bindings[0].Port,
+                    'New transport port');
+        CheckEquals(Self.Address,
+                    Bindings[0].IPAddress,
+                    'New transport address');
+        CheckEquals(Self.Address,
+                    UA.Dispatcher.Transports[0].HostName,
+                    'New transport hostname');
+        Check(Assigned(UA.Dispatcher.Transports[0].Timer),
+              'New transport has no timer');
+        Check(UA.Dispatcher.Timer = UA.Dispatcher.Transports[0].Timer,
+              'New transport and Transaction layers have different timers');
+        CheckTCPServerNotOnPort(Self.Address, Self.Port, 'Old TCP transport still running');
+      finally
+        Bindings.Free;
+      end;
     finally
       NewConfig.Free;
     end;

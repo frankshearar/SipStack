@@ -110,6 +110,9 @@ type
     function  SentByIsRecognised(Via: TIdSipViaHeader): Boolean; virtual;
     procedure SetTimeout(Value: Cardinal); virtual;
     procedure SetTimer(Value: TIdTimerQueue); virtual;
+
+  protected
+    property Bindings: TIdSocketHandles read GetBindings;
   public
     class function  DefaultPort: Cardinal; virtual;
     class function  GetTransportType: String; virtual; abstract;
@@ -124,12 +127,15 @@ type
     procedure AddBinding(const Address: String; Port: Cardinal); virtual;
     procedure AddTransportListener(const Listener: IIdSipTransportListener);
     procedure AddTransportSendingListener(const Listener: IIdSipTransportSendingListener);
+    function  BindingCount: Integer;
     procedure ClearBindings;
     function  DefaultTimeout: Cardinal; virtual;
+    function  FirstIPBound: String;
     function  HasBinding(const Address: String; Port: Cardinal): Boolean;
     function  IsNull: Boolean; virtual;
     function  IsReliable: Boolean; virtual;
     function  IsRunning: Boolean; virtual;
+    procedure LocalBindings(Bindings: TIdSipLocations);
     procedure ReceiveException(FailedMessage: TIdSipMessage;
                                E: Exception;
                                const Reason: String); virtual;
@@ -142,10 +148,10 @@ type
     procedure RemoveTransportSendingListener(const Listener: IIdSipTransportSendingListener);
     procedure Send(Msg: TIdSipMessage;
                    Dest: TIdSipLocation);
+    procedure SetFirstBinding(IPAddress: String; Port: Cardinal);
     procedure Start; virtual;
     procedure Stop; virtual;
 
-    property Bindings: TIdSocketHandles read GetBindings;
     property HostName: String           read fHostName write fHostName;
     property ID:       String           read fID;
     property Timeout:  Cardinal         read fTimeout write SetTimeout;
@@ -457,6 +463,11 @@ begin
   Self.TransportSendingListeners.AddListener(Listener);
 end;
 
+function TIdSipTransport.BindingCount: Integer;
+begin
+  Result := Self.Bindings.Count;
+end;
+
 procedure TIdSipTransport.ClearBindings;
 var
   WasRunning: Boolean;
@@ -480,6 +491,14 @@ begin
   Result := 5000;
 end;
 
+function TIdSipTransport.FirstIPBound: String;
+begin
+  if (Self.BindingCount = 0) then
+    Result := ''
+  else
+    Result := Self.Bindings[0].IP;
+end;
+
 function TIdSipTransport.HasBinding(const Address: String; Port: Cardinal): Boolean;
 begin
   Result := Self.IndexOfBinding(Address, Port) <> ItemNotFoundIndex;
@@ -498,6 +517,15 @@ end;
 function TIdSipTransport.IsRunning: Boolean;
 begin
   Result := false;
+end;
+
+procedure TIdSipTransport.LocalBindings(Bindings: TIdSipLocations);
+var
+  I: Integer;
+begin
+
+  for I := 0 to Self.Bindings.Count - 1 do
+    Bindings.AddLocation(Self.GetTransportType, Self.Bindings[I].IP, Self.Bindings[I].Port);
 end;
 
 procedure TIdSipTransport.ReceiveException(FailedMessage: TIdSipMessage;
@@ -606,6 +634,12 @@ begin
     on E: EIdException do
       raise EIdSipTransport.Create(Self, Msg, E.Message);
   end;
+end;
+
+procedure TIdSipTransport.SetFirstBinding(IPAddress: String; Port: Cardinal);
+begin
+  Self.Bindings[0].IP   := IPAddress;
+  Self.Bindings[0].Port := Port;
 end;
 
 procedure TIdSipTransport.Start;

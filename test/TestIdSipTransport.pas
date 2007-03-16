@@ -13,8 +13,8 @@ interface
 
 uses
   Classes, IdSipLocation, IdSipMessage, IdSipMockTransport, IdSipTransport,
-  IdSipTcpTransport, IdSocketHandle, IdTcpConnection, IdTcpServer, IdTimerQueue,
-  SyncObjs, SysUtils, TestFramework, TestFrameworkEx, TestFrameworkSip,
+  IdSipTcpTransport, IdTcpConnection, IdTcpServer, IdTimerQueue, SyncObjs,
+  SysUtils, TestFramework, TestFrameworkEx, TestFrameworkSip,
   TestFrameworkSipTransport;
 
 type
@@ -25,7 +25,7 @@ type
     procedure NotifyOfSentRequest(Request: TIdSipRequest;
                                   Dest: TIdSipLocation);
     procedure NotifyOfSentResponse(Response: TIdSipResponse;
-                                   Dest: TIdSipLocation); 
+                                   Dest: TIdSipLocation);
   end;
 
   TestTIdSipTransportEventNotifications = class(TTestCaseSip,
@@ -755,6 +755,14 @@ begin
   Self.RequestTwo.Free;
   Self.RequestOne.Free;
 
+  // MockTransport tests execute really fast. So fast, in fact, that the
+  // TTransportTestTimerQueue blows up when you try free it. (You know this
+  // happened when you see an access violation at $77f8f281 referencing memory
+  // at $10.) Sleeping a bit first makes the AV go away!
+  //
+  // Please, this is a terrible fix. If you know of a better way, let me know!
+
+  Sleep(100);
   inherited TearDown;
 end;
 
@@ -764,18 +772,26 @@ procedure TestTIdSipMockTransport.CheckServerOnPort(const Host: String;
                                                     Port: Cardinal;
                                                     const Msg: String);
 var
-  I:       Integer;
-  Running: Boolean;
+  Bindings: TIdSipLocations;
+  I:        Integer;
+  Running:  Boolean;
 begin
   if not Self.MockTransport.IsRunning then Fail(Msg);
 
-  Running  := false;
-  for I := 0 to Self.MockTransport.Bindings.Count - 1 do begin
-    if (Self.MockTransport.Bindings[I].IP = Host)
-      and (Cardinal(Self.MockTransport.Bindings[I].Port) = Port) then begin
-      Running := true;
-      Break;
+  Bindings := TIdSipLocations.Create;
+  try
+    Self.MockTransport.LocalBindings(Bindings);
+
+    Running  := false;
+    for I := 0 to Bindings.Count - 1 do begin
+      if (Bindings[I].IPAddress = Host)
+        and (Bindings[I].Port = Port) then begin
+        Running := true;
+        Break;
+      end;
     end;
+  finally
+    Bindings.Free;
   end;
 
   if not Running then Fail(Msg);

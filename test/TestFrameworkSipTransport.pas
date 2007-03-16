@@ -115,6 +115,7 @@ type
     procedure CheckUseRport(Sender: TObject;
                             R: TIdSipRequest;
                             ReceivedFrom: TIdSipConnectionBindings);
+    function  CopyFirstLocation(Transport: TIdSipTransport): TIdSipLocation;
     function  HighPortTransport: TIdSipTransport;
     function  LowPortTransport: TIdSipTransport;
     procedure OnException(FailedMessage: TIdSipMessage;
@@ -154,6 +155,7 @@ type
     procedure TestAddBinding;
     procedure TestAddBindingDoesntStartStoppedTransport;
     procedure TestAddBindingRestartsStartedTransport;
+    procedure TestBindingCount;
     procedure TestCanReceiveRequest;
     procedure TestCanReceiveResponse;
     procedure TestCanReceiveUnsolicitedResponse;
@@ -166,6 +168,9 @@ type
     procedure TestInstantiationRegistersTransport;
     procedure TestIsNull; virtual;
     procedure TestIsRunning;
+    procedure TestLocalBindingsDoesntClearParameter;
+    procedure TestLocalBindingsMultipleBindings;
+    procedure TestLocalBindingsSingleBinding;
     procedure TestDiscardMalformedMessage;
     procedure TestDiscardRequestWithInconsistentTransport;
     procedure TestDiscardResponseWithInconsistentTransport;
@@ -275,8 +280,7 @@ begin
   Transport.Timer    := Self;
   Transport.HostName := HostName;
 
-  Transport.Bindings[0].IP   := Address;
-  Transport.Bindings[0].Port := Port;
+  Transport.SetFirstBinding(Address, Port);
 end;
 
 //******************************************************************************
@@ -313,24 +317,21 @@ begin
 
   Check(Self.HighPortTransport <> nil,
         'Something went wrong creating the TTransportTestTimerQueue');
-  Self.HighPortLocation := TIdSipLocation.Create(Self.TransportType.GetTransportType,
-                                                 Self.HighPortTransport.Bindings[0].IP,
-                                                 Self.HighPortTransport.Bindings[0].Port);
-  Self.LowPortLocation := TIdSipLocation.Create(Self.TransportType.GetTransportType,
-                                                Self.LowPortTransport.Bindings[0].IP,
-                                                Self.LowPortTransport.Bindings[0].Port);
+
+  Self.HighPortLocation := Self.CopyFirstLocation(Self.HighPortTransport);
+  Self.LowPortLocation  :=  Self.CopyFirstLocation(Self.LowPortTransport);
 
   Self.ReceivingBinding := TIdSipConnectionBindings.Create;
 
   Self.Request := TIdSipTestResources.CreateLocalLoopRequest;
-  Self.Request.LastHop.SentBy    := Self.LowPortTransport.Bindings[0].IP;
-  Self.Request.LastHop.Transport := Self.LowPortTransport.GetTransportType;
+  Self.Request.LastHop.SentBy    := Self.LowPortLocation.IPAddress;
+  Self.Request.LastHop.Transport := Self.LowPortLocation.Transport;
   Self.Request.RequestUri.Host   := Self.HighPortTransport.HostName;
-  Self.Request.RequestUri.Port   := Self.HighPortTransport.Bindings[0].Port;
+  Self.Request.RequestUri.Port   := Self.HighPortLocation.Port;
 
   Self.Response := TIdSipTestResources.CreateLocalLoopResponse;
-  Self.Response.LastHop.Transport := Self.HighPortTransport.GetTransportType;
-  Self.Response.LastHop.Port      := Self.HighPortTransport.Bindings[0].Port;
+  Self.Response.LastHop.Transport := Self.HighPortLocation.Transport;
+  Self.Response.LastHop.Port      := Self.HighPortLocation.Port;
 
   Self.RecvdRequest := TIdSipRequest.Create;
 
@@ -393,11 +394,12 @@ end;
 
 procedure TestTIdSipTransport.CheckBinding(Received: TIdSipConnectionBindings);
 begin
-  CheckEquals(Self.HighPortTransport.Bindings[0].IP, Received.LocalIP, 'LocalIP incorrect');
-  CheckEquals(Self.HighPortTransport.Bindings[0].Port, Received.LocalPort, 'LocalPort incorrect');
-  CheckEquals(Self.HighPortTransport.GetTransportType, Received.Transport, 'Transport incorrect');
+  CheckEquals(Self.HighPortLocation.IPAddress, Received.LocalIP,   'LocalIP incorrect');
+  CheckEquals(Self.HighPortLocation.Port,      Received.LocalPort, 'LocalPort incorrect');
+  CheckEquals(Self.HighPortLocation.Transport, Received.Transport, 'Transport incorrect');
+
   CheckNotEquals('', Received.PeerIP, 'PeerIP not filled in');
-  CheckNotEquals(0, Received.PeerPort, 'PeerPort not filled in');
+  CheckNotEquals(0,  Received.PeerPort, 'PeerPort not filled in');
 end;
 
 procedure TestTIdSipTransport.CheckCanReceiveRequest(Sender: TObject;
@@ -527,7 +529,7 @@ procedure TestTIdSipTransport.CheckSendRequestFromNonStandardPort(Sender: TObjec
 begin
   try
     CheckEquals(Request.LastHop.Port,
-                Self.HighPortTransport.Bindings[0].Port,
+                Self.HighPortLocation.Port,
                 Self.HighPortTransport.ClassName
               + ': Port number on top via');
 
@@ -566,7 +568,7 @@ procedure TestTIdSipTransport.CheckSendResponseFromNonStandardPort(Sender: TObje
                                                                    ReceivedFrom: TIdSipConnectionBindings);
 begin
   try
-    CheckEquals(Self.LowPortTransport.Bindings[0].Port,
+    CheckEquals(Self.LowPortLocation.Port,
                 R.LastHop.Port,
                 Self.HighPortTransport.ClassName
               + ': Port number on top via');
@@ -612,6 +614,23 @@ begin
       Self.ExceptionType    := ExceptClass(E.ClassType);
       Self.ExceptionMessage := E.Message;
     end;
+  end;
+end;
+
+function TestTIdSipTransport.CopyFirstLocation(Transport: TIdSipTransport): TIdSipLocation;
+var
+  Bindings: TIdSipLocations;
+begin
+  Bindings := TIdSipLocations.Create;
+  try
+    Transport.LocalBindings(Bindings);
+
+    if Bindings.IsEmpty then
+      Result := nil
+    else
+      Result := Bindings[0].Copy;
+  finally
+    Bindings.Free;
   end;
 end;
 
@@ -711,9 +730,9 @@ begin
   if (Pos('%s', Msg) > 0) then
     Msg := StringReplace(Msg,
                          '%s',
-                         Self.HighPortTransport.Bindings[0].IP
+                         Self.HighPortLocation.IPAddress
                        + ':'
-                       + IntToStr(Self.HighPortTransport.Bindings[0].Port), [rfReplaceAll]);
+                       + IntToStr(Self.HighPortLocation.Port), [rfReplaceAll]);
 
   Self.SendMessage(Msg);
 end;
@@ -746,15 +765,15 @@ var
   NewPort:      Cardinal;
   OriginalPort: Cardinal;
 begin
-  OriginalPort := Self.LowPortTransport.Bindings[0].Port;
+  OriginalPort := Self.LowPortLocation.Port;
   NewPort      := OriginalPort + 1;
 
-  Self.CheckServerNotOnPort(Self.LowPortTransport.Bindings[0].IP,
+  Self.CheckServerNotOnPort(Self.LowPortLocation.IPAddress,
                             NewPort,
                             'Sanity check: nothing should be running on port ' + IntToStr(NewPort));
 
-  Self.LowPortTransport.AddBinding(Self.LowPortTransport.Bindings[0].IP, NewPort);
-  Self.CheckServerOnPort(Self.LowPortTransport.Bindings[0].IP,
+  Self.LowPortTransport.AddBinding(Self.LowPortLocation.IPAddress, NewPort);
+  Self.CheckServerOnPort(Self.LowPortLocation.IPAddress,
                          NewPort,
                          'Nothing running on port ' + IntToStr(NewPort) + '; binding not added');
 end;
@@ -762,8 +781,8 @@ end;
 procedure TestTIdSipTransport.TestAddBindingDoesntStartStoppedTransport;
 begin
   Self.LowPortTransport.Stop;
-  Self.LowPortTransport.AddBinding(Self.LowPortTransport.Bindings[0].IP,
-                                   Self.LowPortTransport.Bindings[0].Port + 1);
+  Self.LowPortTransport.AddBinding(Self.LowPortLocation.IPAddress,
+                                   Self.LowPortLocation.Port + 1);
   Check(not Self.LowPortTransport.IsRunning,
         'AddBinding started the server');
 end;
@@ -771,10 +790,21 @@ end;
 procedure TestTIdSipTransport.TestAddBindingRestartsStartedTransport;
 begin
   Self.LowPortTransport.Start;
-  Self.LowPortTransport.AddBinding(Self.LowPortTransport.Bindings[0].IP,
-                                   Self.LowPortTransport.Bindings[0].Port + 1);
+  Self.LowPortTransport.AddBinding(Self.LowPortLocation.IPAddress,
+                                   Self.LowPortLocation.Port + 1);
   Check(Self.LowPortTransport.IsRunning,
         'AddBinding stopped the server');
+end;
+
+procedure TestTIdSipTransport.TestBindingCount;
+begin
+  CheckEquals(1, Self.LowPortTransport.BindingCount, 'Initial count');
+
+  Self.LowPortTransport.AddBinding(Self.LowPortLocation.IPAddress, Self.LowPortLocation.Port + 1);
+  CheckEquals(2, Self.LowPortTransport.BindingCount, 'One AddBinding later');
+
+  Self.LowPortTransport.AddBinding(Self.LowPortLocation.IPAddress, Self.LowPortLocation.Port + 2);
+  CheckEquals(3, Self.LowPortTransport.BindingCount, 'Two AddBindings later');
 end;
 
 procedure TestTIdSipTransport.TestCanReceiveRequest;
@@ -831,12 +861,12 @@ begin
   // have values such that Port <> DefaultPort.
 
   Self.LowPortTransport.Stop;
-  CheckServerNotOnPort(Self.LowPortTransport.Bindings[0].IP,
+  CheckServerNotOnPort(Self.LowPortLocation.IPAddress,
                        IdPORT_SIP,
                        'Close down all SIP UAs before running this test.');
 
-  Address   := Self.LowPortTransport.Bindings[0].IP;
-  FirstPort := Self.LowPortTransport.Bindings[0].Port + 1;
+  Address   := Self.LowPortLocation.IPAddress;
+  FirstPort := Self.LowPortLocation.Port + 1;
 
   NewPort := FirstPort + 1;
 
@@ -864,26 +894,26 @@ end;
 procedure TestTIdSipTransport.TestClearBindingLeavesOneBindingBehind;
 begin
   Self.LowPortTransport.Stop;
-  CheckServerNotOnPort(Self.LowPortTransport.Bindings[0].IP,
+  CheckServerNotOnPort(Self.LowPortLocation.IPAddress,
                        IdPORT_SIP,
                        'Close down all SIP UAs before running this test.');
 
-  Self.LowPortTransport.AddBinding(Self.LowPortTransport.Bindings[0].IP,
-                                   Self.LowPortTransport.Bindings[0].Port + 1);
-  Self.LowPortTransport.AddBinding(Self.LowPortTransport.Bindings[0].IP,
-                                   Self.LowPortTransport.Bindings[0].Port + 2);
+  Self.LowPortTransport.AddBinding(Self.LowPortLocation.IPAddress,
+                                   Self.LowPortLocation.Port + 1);
+  Self.LowPortTransport.AddBinding(Self.LowPortLocation.IPAddress,
+                                   Self.LowPortLocation.Port + 2);
   Self.LowPortTransport.ClearBindings;
 
   Self.LowPortTransport.Start;
 
-  Check(Self.LowPortTransport.Bindings.Count > 0,
+  Check(Self.LowPortTransport.BindingCount > 0,
         'Indy''s behaviour changed: usually the server will recreate a default binding');
 end;
 
 procedure TestTIdSipTransport.TestClearBindingRestartsStartedTransport;
 begin
   Self.LowPortTransport.Stop;
-  CheckServerNotOnPort(Self.LowPortTransport.Bindings[0].IP,
+  CheckServerNotOnPort(Self.LowPortLocation.IPAddress,
                        IdPORT_SIP,
                        'Close down all SIP UAs before running this test.');
 
@@ -915,8 +945,8 @@ var
   Address: String;
   Port:    Cardinal;
 begin
-  Address := Self.LowPortTransport.Bindings[0].IP;
-  Port    := Self.LowPortTransport.Bindings[0].Port + 1;
+  Address := Self.LowPortLocation.IPAddress;
+  Port    := Self.LowPortLocation.Port + 1;
 
   Check(not Self.LowPortTransport.HasBinding(Address, Port),
         Self.LowPortTransport.ClassName
@@ -964,6 +994,73 @@ begin
   Self.LowPortTransport.Stop;
   Check(not Self.LowPortTransport.IsRunning,
         'Transport didn''t stop');
+end;
+
+procedure TestTIdSipTransport.TestLocalBindingsDoesntClearParameter;
+var
+  LocalBindings: TIdSipLocations;
+begin
+  LocalBindings := TIdSipLocations.Create;
+  try
+    LocalBindings.AddLocation(Self.HighPortLocation);
+
+    Self.LowPortTransport.LocalBindings(LocalBindings);
+    CheckEquals(2, LocalBindings.Count, 'Incorrect binding count: parameter not first cleared');
+    CheckEquals(Self.HighPortLocation.AsString, LocalBindings[0].AsString, 'First binding');
+    CheckEquals(Self.LowPortLocation.AsString,  LocalBindings[1].AsString, 'Second binding');
+  finally
+    LocalBindings.Free;
+  end;
+end;
+
+procedure TestTIdSipTransport.TestLocalBindingsMultipleBindings;
+var
+  LocalBindings: TIdSipLocations;
+  SecondBinding: TIdSipLocation;
+  ThirdBinding:  TIdSipLocation;
+begin
+  LocalBindings := TIdSipLocations.Create;
+  try
+    SecondBinding := TIdSipLocation.Create(Self.LowPortLocation.Transport,
+                                           Self.LowPortLocation.IPAddress,
+                                           Self.LowPortLocation.Port + 1);
+    try
+      ThirdBinding := TIdSipLocation.Create(SecondBinding.Transport,
+                                            SecondBinding.IPAddress,
+                                            SecondBinding.Port + 1);
+      try
+        Self.LowPortTransport.AddBinding(SecondBinding.IPAddress, SecondBinding.Port);
+        Self.LowPortTransport.AddBinding(ThirdBinding.IPAddress,  ThirdBinding.Port);
+
+
+        Self.LowPortTransport.LocalBindings(LocalBindings);
+        CheckEquals(3, LocalBindings.Count, 'Incorrect number of bindings');
+        CheckEquals(Self.LowPortLocation.AsString, LocalBindings[0].AsString, 'First binding');
+        CheckEquals(SecondBinding.AsString, LocalBindings[1].AsString, 'Second binding');
+        CheckEquals(ThirdBinding.AsString, LocalBindings[2].AsString, 'Third binding');
+      finally
+        ThirdBinding.Free;
+      end;
+    finally
+      SecondBinding.Free;
+    end;
+  finally
+    LocalBindings.Free;
+  end;
+end;
+
+procedure TestTIdSipTransport.TestLocalBindingsSingleBinding;
+var
+  LocalBindings: TIdSipLocations;
+begin
+  LocalBindings := TIdSipLocations.Create;
+  try
+    Self.LowPortTransport.LocalBindings(LocalBindings);
+    CheckEquals(1, LocalBindings.Count, 'Incorrect number of bindings');
+    Check(LocalBindings[0].Equals(Self.LowPortLocation), 'First binding incorrect');
+  finally
+    LocalBindings.Free;
+  end;
 end;
 
 procedure TestTIdSipTransport.TestDiscardMalformedMessage;
@@ -1144,7 +1241,7 @@ begin
   // the message to the right SIP server. No, you'd never do this
   // in production, because it's wilfully wrong.
   Self.Response.LastHop.SentBy := 'unknown.host';
-  Self.Response.LastHop.Received := Self.LowPortTransport.Bindings[0].IP;
+  Self.Response.LastHop.Received := Self.LowPortLocation.IPAddress;
   Self.SendMessage(Self.Response.AsString);
 
   Self.WaitForSignaled(Self.RejectedMessageEvent);
@@ -1166,7 +1263,7 @@ begin
 
   Self.ExceptionMessage := 'Waiting for request to arrive';
 
-  Destination := Self.HighPortTransport.Bindings[0].IP + ':' + IntToStr(Self.HighPortTransport.Bindings[0].Port);
+  Destination := Self.HighPortLocation.IPAddress + ':' + IntToStr(Self.HighPortLocation.Port);
 
   TortureTest41 := 'INVITE sip:t.watson@' + Destination + ' SIP/7.0'#13#10
                  + 'Via:     SIP/2.0/' + Self.HighPortTransport.GetTransportType + ' c.bell-tel.com;branch=z9hG4bKkdjuw'#13#10
@@ -1234,7 +1331,7 @@ procedure TestTIdSipTransport.TestReceivedParamIPv4SentBy;
 begin
   Self.CheckingRequestEvent := Self.CheckReceivedParamIPv4SentBy;
   // This is a bit of a hack. We want to make sure the sent-by's an IP.
-  Self.HighPortTransport.HostName := Self.HighPortTransport.Bindings[0].IP;
+  Self.HighPortTransport.HostName := Self.HighPortLocation.IPAddress;
   Self.HighPortTransport.Send(Self.Request, Self.LowPortLocation);
 
   Self.WaitForSignaled;
@@ -1267,17 +1364,17 @@ var
   NewPort:      Cardinal;
   OriginalPort: Cardinal;
 begin
-  OriginalPort := Self.LowPortTransport.Bindings[0].Port;
+  OriginalPort := Self.LowPortLocation.Port;
   NewPort      := OriginalPort + 1;
 
-  Self.CheckServerNotOnPort(Self.LowPortTransport.Bindings[0].IP,
+  Self.CheckServerNotOnPort(Self.LowPortLocation.IPAddress,
                             NewPort,
                             'Sanity check: nothing should be running on port ' + IntToStr(NewPort));
 
-  Self.LowPortTransport.AddBinding(Self.LowPortTransport.Bindings[0].IP, NewPort);
-  Self.LowPortTransport.RemoveBinding(Self.LowPortTransport.Bindings[0].IP, NewPort);
+  Self.LowPortTransport.AddBinding(Self.LowPortLocation.IPAddress, NewPort);
+  Self.LowPortTransport.RemoveBinding(Self.LowPortLocation.IPAddress, NewPort);
 
-  Self.CheckServerNotOnPort(Self.LowPortTransport.Bindings[0].IP,
+  Self.CheckServerNotOnPort(Self.LowPortLocation.IPAddress,
                             NewPort,
                             'Something running on port ' + IntToStr(NewPort)
                           + '; binding not removed');
@@ -1286,10 +1383,10 @@ end;
 procedure TestTIdSipTransport.TestRemoveBindingDoesntStartStoppedTransport;
 begin
   Self.LowPortTransport.Stop;
-  Self.LowPortTransport.AddBinding(Self.LowPortTransport.Bindings[0].IP,
-                                   Self.LowPortTransport.Bindings[0].Port + 1);
-  Self.LowPortTransport.RemoveBinding(Self.LowPortTransport.Bindings[0].IP,
-                                      Self.LowPortTransport.Bindings[0].Port + 1);
+  Self.LowPortTransport.AddBinding(Self.LowPortLocation.IPAddress,
+                                   Self.LowPortLocation.Port + 1);
+  Self.LowPortTransport.RemoveBinding(Self.LowPortLocation.IPAddress,
+                                      Self.LowPortLocation.Port + 1);
 
   Check(not Self.LowPortTransport.IsRunning,
         'RemoveBinding restarted the transport');
@@ -1299,18 +1396,18 @@ procedure TestTIdSipTransport.TestRemoveBindingNoSuchBinding;
 begin
   // Check that calling RemoveBinding for a non-existent doesn't blow up.
 
-  Self.LowPortTransport.RemoveBinding(Self.LowPortTransport.Bindings[0].IP,
-                                      Self.LowPortTransport.Bindings[0].Port + 1);
+  Self.LowPortTransport.RemoveBinding(Self.LowPortLocation.IPAddress,
+                                      Self.LowPortLocation.Port + 1);
 end;
 
 procedure TestTIdSipTransport.TestRemoveBindingRestartsStartedTransport;
 begin
   Self.LowPortTransport.Start;
 
-  Self.LowPortTransport.AddBinding(Self.LowPortTransport.Bindings[0].IP,
-                                   Self.LowPortTransport.Bindings[0].Port + 1);
-  Self.LowPortTransport.RemoveBinding(Self.LowPortTransport.Bindings[0].IP,
-                                      Self.LowPortTransport.Bindings[0].Port + 1);
+  Self.LowPortTransport.AddBinding(Self.LowPortLocation.IPAddress,
+                                   Self.LowPortLocation.Port + 1);
+  Self.LowPortTransport.RemoveBinding(Self.LowPortLocation.IPAddress,
+                                      Self.LowPortLocation.Port + 1);
 
   Check(Self.LowPortTransport.IsRunning,
         'RemoveBinding stopped the transport');
@@ -1332,7 +1429,7 @@ end;
 procedure TestTIdSipTransport.TestSendRequestFromNonStandardPort;
 begin
   Self.Request.RequestUri.Host := Self.LowPortTransport.HostName;
-  Self.Request.RequestUri.Port := Self.LowPortTransport.Bindings[0].Port;
+  Self.Request.RequestUri.Port := Self.LowPortLocation.Port;
   Self.CheckingRequestEvent := Self.CheckSendRequestFromNonStandardPort;
   Self.HighPortTransport.Send(Self.Request, Self.LowPortLocation);
 
@@ -1361,7 +1458,7 @@ end;
 
 procedure TestTIdSipTransport.TestSendResponseFromNonStandardPort;
 begin
-  Self.Response.LastHop.Port := Self.LowPortTransport.Bindings[0].Port;
+  Self.Response.LastHop.Port := Self.LowPortLocation.Port;
   Self.CheckingResponseEvent := Self.CheckSendResponseFromNonStandardPort;
   Self.HighPortTransport.Send(Self.Response, Self.LowPortLocation);
 
@@ -1407,7 +1504,7 @@ begin
           Self.LowPortTransport.RemoveTransportListener(Self);
           Self.LowPortTransport.AddTransportListener(Self);
 
-          Self.Response.LastHop.Received := Self.LowPortTransport.Bindings[0].IP;
+          Self.Response.LastHop.Received := Self.LowPortLocation.IPAddress;
           Self.HighPortTransport.Send(Self.Response, Self.LowPortLocation);
 
           // It's not perfect, but anyway. We need to wait long enough for
@@ -1453,7 +1550,7 @@ begin
   Self.DefaultTimeout := Self.HighPortTransport.Timeout * 2;
   Self.CheckingResponseEvent := Self.CheckForBadRequest;
 
-  Destination := Self.HighPortTransport.Bindings[0].IP + ':' + IntToStr(Self.HighPortTransport.Bindings[0].Port);
+  Destination := Self.HighPortLocation.IPAddress + ':' + IntToStr(Self.HighPortLocation.Port);
   TortureTest16 := 'INVITE sip:user@%s SIP/2.0'#13#10
                  + 'Max-Forwards: 80'#13#10
                  + 'To: sip:j.user@%s'#13#10
@@ -1488,7 +1585,7 @@ begin
   //
   //   The server should respond with an error.
 
-  Destination := Self.HighPortTransport.Bindings[0].IP + ':' + IntToStr(Self.HighPortTransport.Bindings[0].Port);
+  Destination := Self.HighPortLocation.IPAddress + ':' + IntToStr(Self.HighPortLocation.Port);
 
   TortureTest17 := 'INVITE sip:user@%s SIP/2.0'#13#10
                  + 'Max-Forwards: 254'#13#10
@@ -1525,7 +1622,7 @@ begin
   //   The server can either return an error, or proxy it if it is
   //   successful parsing without the terminating quote.
 
-  Destination := Self.HighPortTransport.Bindings[0].IP + ':' + IntToStr(Self.HighPortTransport.Bindings[0].Port);
+  Destination := Self.HighPortLocation.IPAddress + ':' + IntToStr(Self.HighPortLocation.Port);
   MalformedTo := '"Mr. J. User <sip:j.user@%s>';
 
   TortureTest19 := 'INVITE sip:user@%s SIP/2.0'#13#10
@@ -1567,7 +1664,7 @@ begin
   //   athe Request-URI if acting as a Proxy. If not it should respond 400
   //   with an appropriate reason phrase.
 
-  Destination := Self.HighPortTransport.Bindings[0].IP + ':' + IntToStr(Self.HighPortTransport.Bindings[0].Port);
+  Destination := Self.HighPortLocation.IPAddress + ':' + IntToStr(Self.HighPortLocation.Port);
 
   TortureTest21 := 'INVITE <sip:user@%s> SIP/2.0'#13#10
                  + 'To: sip:user@%s'#13#10
@@ -1605,7 +1702,7 @@ begin
   //   the Request-URI if acting as a Proxy. If not it should respond 400
   //   with an appropriate reason phrase.
 
-  Destination := Self.HighPortTransport.Bindings[0].IP + ':' + IntToStr(Self.HighPortTransport.Bindings[0].Port);
+  Destination := Self.HighPortLocation.IPAddress + ':' + IntToStr(Self.HighPortLocation.Port);
 
   TortureTest22 := 'INVITE sip:user@%s; transport=udp SIP/2.0'#13#10
                  + 'To: sip:user@%s'#13#10
@@ -1664,7 +1761,7 @@ begin
 
   Self.CheckingResponseEvent := Self.CheckForBadRequest;
 
-  Destination := Self.HighPortTransport.Bindings[0].IP + ':' + IntToStr(Self.HighPortTransport.Bindings[0].Port);
+  Destination := Self.HighPortLocation.IPAddress + ':' + IntToStr(Self.HighPortLocation.Port);
   Self.SendFromLowTransport(StringReplace(TortureTest23, '%s', Destination, [rfReplaceAll]));
 
   Self.WaitForSignaled(Self.RejectedMessageEvent);
@@ -1680,7 +1777,7 @@ begin
   //   A server should respond 400 with an appropriate reason phrase if it
   //   can. It may just drop this message.
 
-  Destination := Self.HighPortTransport.Bindings[0].IP + ':' + IntToStr(Self.HighPortTransport.Bindings[0].Port);
+  Destination := Self.HighPortLocation.IPAddress + ':' + IntToStr(Self.HighPortLocation.Port);
 
   TortureTest35 := 'OPTIONS sip:%s SIP/2.0'#13#10
                  + 'Via: SIP/2.0/' + Self.HighPortTransport.GetTransportType + ' %s'#13#10
@@ -1720,7 +1817,7 @@ begin
 
   Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
 
-  Destination := Self.HighPortTransport.Bindings[0].IP + ':' + IntToStr(Self.HighPortTransport.Bindings[0].Port);
+  Destination := Self.HighPortLocation.IPAddress + ':' + IntToStr(Self.HighPortLocation.Port);
   TortureTest40 := 'INVITE sip:t.watson@%s SIP/2.0'#13#10
                 + 'Via:     SIP/2.0/' + Self.HighPortTransport.GetTransportType + ' c.bell-tel.com:5060;branch=z9hG4bKkdjuw'#13#10
                 + 'Max-Forwards:      70'#13#10
@@ -1745,7 +1842,7 @@ var
 begin
   Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
 
-  Destination := Self.HighPortTransport.Bindings[0].IP + ':' + IntToStr(Self.HighPortTransport.Bindings[0].Port);
+  Destination := Self.HighPortLocation.IPAddress + ':' + IntToStr(Self.HighPortLocation.Port);
 
   //   This is an illegal INVITE as the SIP Protocol version is unknown.
   //

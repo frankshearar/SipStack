@@ -121,6 +121,7 @@ type
     procedure TestHandUnmatchedRequestToCore;
     procedure TestHandUnmatchedResponseToCore;
     procedure TestInviteDoesntSendTrying;
+    procedure TestLocalBindings;
     procedure TestLoopDetected;
     procedure TestLoopDetectedRFC2543RequestWithNoBranch;
     procedure TestSendAckWontCreateTransaction;
@@ -1309,6 +1310,34 @@ begin
   Self.MarkSentResponseCount;
   Self.MockTransport.FireOnRequest(Self.ReceivedRequest);
   CheckNoResponseSent('Response sent by the transaction');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestLocalBindings;
+var
+  I:             Integer;
+  LocalBindings: TIdSipLocations;
+  MockBindings:  TIdSipLocations;
+begin
+  MockBindings := TIdSipLocations.Create;
+  try
+    // We rely here on the order in which the dispatcher stores its transports!
+    Self.MockTcpTransport.LocalBindings(MockBindings);
+    Self.MockUdpTransport.LocalBindings(MockBindings);
+
+    LocalBindings := TIdSipLocations.Create;
+    try
+      Self.D.LocalBindings(LocalBindings);
+
+      CheckEquals(MockBindings.Count, LocalBindings.Count, 'Incorrect number of bindings');
+
+      for I := 0 to MockBindings.Count - 1 do
+        CheckEquals(MockBindings[I].AsString, LocalBindings[I].AsString, IntToStr(I) + 'th binding');
+    finally
+      LocalBindings.Free;
+    end;
+  finally
+    MockBindings.Free;
+  end;
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestLoopDetected;

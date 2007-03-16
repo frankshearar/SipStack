@@ -66,6 +66,8 @@ end;
 //* TestTIdSipTransportLogger Public methods ***********************************
 
 procedure TestTIdSipTransportLogger.SetUp;
+var
+  Bindings: TIdSipLocations;
 begin
   inherited SetUp;
 
@@ -75,8 +77,14 @@ begin
   Self.Response  := TIdSipTestResources.CreateBasicResponse;
   Self.Transport := TIdSipMockUdpTransport.Create;
 
-  Self.Response.LastHop.SentBy := Self.Transport.Bindings[0].IP;
-  Self.Response.LastHop.Port   := Self.Transport.Bindings[0].Port;
+  Bindings := TIdSipLocations.Create;
+  try
+    Self.Transport.LocalBindings(Bindings);
+    Self.Response.LastHop.SentBy := Bindings[0].IPAddress;
+    Self.Response.LastHop.Port   := Bindings[0].Port;
+  finally
+    Bindings.Free;
+  end;
 
   Self.Logger := TIdSipTransportLogger.Create;
   Self.Logger.OutputStream := Self.LogStream;
