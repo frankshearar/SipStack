@@ -318,7 +318,6 @@ type
                                     Binding: TIdSipConnectionBindings): TIdSipUserAgentActOnResponse;
     function  DefaultHostName: String;
     function  DefaultUserAgent: String;
-    procedure MaybeChangeTransport(Msg: TIdSipMessage);
     function  ModuleAt(Index: Integer): TIdSipMessageModule;
     procedure NotifyModulesOfFree;
     procedure OnChanged(Observed: TObject);
@@ -969,7 +968,6 @@ const
 const
   BadAuthorizationTokens      = 'Bad Authorization tokens';
   MalformedConfigurationLine  = 'Malformed configuration line: %s';
-  MaximumUDPMessageSize       = 1300;
   MaxPrematureInviteRetry     = 10;
   MissingContactHeader        = 'Missing Contact Header';
   NonInviteWithReplacesHeader = 'Non-INVITE request with Replaces header';
@@ -2028,7 +2026,10 @@ end;
 procedure TIdSipAbstractCore.SendRequest(Request: TIdSipRequest;
                                          Dest: TIdSipLocation);
 begin
-  Self.MaybeChangeTransport(Request);
+  if Request.ExceedsMaximumUdpMessageSize and (Request.LastHop.Transport = UdpTransport) then
+    Dest.Transport := TcpTransport;
+
+  Request.LastHop.Transport := Dest.Transport;
 
   if Self.RequiresUnsupportedExtension(Request) then
     raise EIdSipTransactionUser.Create(Format(MessageSendFailureUnknownExtension,
@@ -2054,8 +2055,6 @@ end;
 
 procedure TIdSipAbstractCore.SendResponse(Response: TIdSipResponse);
 begin
-  Self.MaybeChangeTransport(Response);
-
   if Self.HasUnsupportedExtension(Response) then
     raise EIdSipTransactionUser.Create(Format(MessageSendFailureUnknownExtension,
                                               [Response.Supported.Value]));
@@ -2382,19 +2381,6 @@ end;
 function TIdSipAbstractCore.DefaultUserAgent: String;
 begin
   Result := 'RNID SipStack v' + SipStackVersion;
-end;
-
-procedure TIdSipAbstractCore.MaybeChangeTransport(Msg: TIdSipMessage);
-var
-  MsgLen:       Cardinal;
-  RewrittenVia: Boolean;
-begin
-  MsgLen := Length(Msg.AsString);
-  RewrittenVia := (MsgLen > MaximumUDPMessageSize)
-              and (Msg.LastHop.Transport = UdpTransport);
-
-  if RewrittenVia then
-    Msg.LastHop.Transport := TcpTransport;
 end;
 
 function TIdSipAbstractCore.ModuleAt(Index: Integer): TIdSipMessageModule;

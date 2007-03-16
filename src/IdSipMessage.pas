@@ -1567,6 +1567,7 @@ type
     function  DefaultMaxForwards: Cardinal;
     function  DestinationUri: String;
     function  Equals(Msg: TIdSipMessage): Boolean; override;
+    function  ExceedsMaximumUdpMessageSize: Boolean;
     function  FirstAuthorization: TIdSipAuthorizationHeader;
     function  FirstProxyAuthorization: TIdSipProxyAuthorizationHeader;
     function  FirstRoute: TIdSipRouteHeader;
@@ -1802,8 +1803,9 @@ function WithoutFirstAndLastCharsW(const W: WideString): WideString;
 
 // Widely known constants. Don't localise them.
 const
-  SipName    = 'SIP';
-  SIPVersion = SipName + '/2.0';
+  MaximumUDPMessageSize       = 1300;
+  SipName                     = 'SIP';
+  SIPVersion                  = SipName + '/2.0';
 
 // Header and parameter names. Don't localise them.
 const
@@ -9162,6 +9164,15 @@ begin
   end
   else
     Result := false;
+end;
+
+function TIdSipRequest.ExceedsMaximumUdpMessageSize: Boolean;
+var
+  MsgLen:       Cardinal;
+  RewrittenVia: Boolean;
+begin
+  MsgLen := Length(Self.AsString);
+  Result := MsgLen > MaximumUDPMessageSize
 end;
 
 function TIdSipRequest.FirstAuthorization: TIdSipAuthorizationHeader;
