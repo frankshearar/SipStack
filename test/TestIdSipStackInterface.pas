@@ -1018,8 +1018,8 @@ begin
 
   Target := TIdSipConnectionBindings.Create;
   try
-    Target.LocalIP   := Self.MockTransport.Bindings[0].IP;
-    Target.LocalPort := Self.MockTransport.Bindings[0].Port;
+    Target.LocalIP   := Self.LocalAddress;
+    Target.LocalPort := Self.LocalPort;
     Target.PeerIP    := Self.TargetAddress;
     Target.PeerPort  := Self.TargetPort;
     Target.Transport := Self.MockTransport.GetTransportType;
@@ -1038,8 +1038,8 @@ begin
 
   Target := TIdSipConnectionBindings.Create;
   try
-    Target.LocalIP   := Self.MockTransport.Bindings[0].IP;
-    Target.LocalPort := Self.MockTransport.Bindings[0].Port;
+    Target.LocalIP   := Self.LocalAddress;
+    Target.LocalPort := Self.LocalPort;
     Target.PeerIP    := Self.TargetAddress;
     Target.PeerPort  := Self.TargetPort;
     Target.Transport := Self.MockTransport.GetTransportType;
