@@ -719,13 +719,6 @@ begin
 end;
 
 class function TIdIPAddressParser.NetworkFor(Address: String; Mask: String): String;
-var
-  Addr:  Cardinal;
-  Addr6: TIdIPv6AddressRec;
-  I:     Integer;
-  M:     Cardinal;
-  M6:    TIdIPv6AddressRec;
-  Net6:  TIdIPv6AddressRec;
 begin
   case Self.IPVersion(Address) of
     Id_IPv4: Result := Self.NetworkForIPv4(Address, Mask);

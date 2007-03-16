@@ -9167,12 +9167,8 @@ begin
 end;
 
 function TIdSipRequest.ExceedsMaximumUdpMessageSize: Boolean;
-var
-  MsgLen:       Cardinal;
-  RewrittenVia: Boolean;
 begin
-  MsgLen := Length(Self.AsString);
-  Result := MsgLen > MaximumUDPMessageSize
+  Result := Length(Self.AsString) > MaximumUDPMessageSize
 end;
 
 function TIdSipRequest.FirstAuthorization: TIdSipAuthorizationHeader;

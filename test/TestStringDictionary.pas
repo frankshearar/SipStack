@@ -152,7 +152,7 @@ begin
   try
     KeyB := TKeyValuePair.Create('foo', '1');
     try
-      CheckEquals(0, TKeyValuePairSort(KeyA, KeyB), '(foo 1) = (foo 1)');
+      CheckZero(KeyA, KeyB, '(foo 1) = (foo 1)');
 
       KeyB.Value := '2';
       CheckNegative(KeyA, KeyB, '(foo 1) < (foo 2)');

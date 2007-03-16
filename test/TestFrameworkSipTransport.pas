@@ -54,7 +54,6 @@ type
     HighPortLocation:      TIdSipLocation;
     Lock:                  TCriticalSection;
     LowPortLocation:       TIdSipLocation;
-    Parser:                TIdSipParser;
     ReceivedRequest:       Boolean;
     ReceivedResponse:      Boolean;
     ReceivingBinding:      TIdSipConnectionBindings;
@@ -164,6 +163,11 @@ type
     procedure TestClearBindingLeavesOneBindingBehind;
     procedure TestClearBindingRestartsStartedTransport;
     procedure TestDestructionUnregistersTransport;
+    procedure TestDiscardMalformedMessage;
+    procedure TestDiscardRequestWithInconsistentTransport;
+    procedure TestDiscardResponseWithInconsistentTransport;
+    procedure TestDiscardResponseWithUnknownSentBy;
+    procedure TestDontDiscardUnknownSipVersion;
     procedure TestHasBinding;
     procedure TestInstantiationRegistersTransport;
     procedure TestIsNull; virtual;
@@ -171,11 +175,6 @@ type
     procedure TestLocalBindingsDoesntClearParameter;
     procedure TestLocalBindingsMultipleBindings;
     procedure TestLocalBindingsSingleBinding;
-    procedure TestDiscardMalformedMessage;
-    procedure TestDiscardRequestWithInconsistentTransport;
-    procedure TestDiscardResponseWithInconsistentTransport;
-    procedure TestDiscardResponseWithUnknownSentBy;
-    procedure TestDontDiscardUnknownSipVersion;
     procedure TestMalformedCallID;
     procedure TestReceivedParamDifferentIPv4SentBy;
     procedure TestReceivedParamFQDNSentBy;
@@ -940,129 +939,6 @@ begin
         Self.HighPortTransport.ClassName + ' didn''t unregister when Freed');
 end;
 
-procedure TestTIdSipTransport.TestHasBinding;
-var
-  Address: String;
-  Port:    Cardinal;
-begin
-  Address := Self.LowPortLocation.IPAddress;
-  Port    := Self.LowPortLocation.Port + 1;
-
-  Check(not Self.LowPortTransport.HasBinding(Address, Port),
-        Self.LowPortTransport.ClassName
-      + ': The server has, but shouldn''t, a binding on '
-      + Address + ':' + IntToStr(Port));
-
-  Self.LowPortTransport.AddBinding(Address, Port);
-
-  Check(Self.LowPortTransport.HasBinding(Address, Port),
-        Self.LowPortTransport.ClassName
-     +  ': The server doesn''t have, but should, a binding on '
-     + Address + ':' + IntToStr(Port));
-end;
-
-procedure TestTIdSipTransport.TestInstantiationRegistersTransport;
-begin
-  CheckNotEquals('',
-                 Self.HighPortTransport.ID,
-                 'HighPortTransport not registered');
-  CheckNotEquals('',
-                 Self.LowPortTransport.ID,
-                 'LowPortTransport not registered');
-  CheckNotEquals(Self.HighPortTransport.ID,
-                 Self.LowPortTransport.ID,
-                 'HighPortTransport and LowPortTransport have same ID');
-end;
-
-procedure TestTIdSipTransport.TestIsNull;
-begin
-  Check(not Self.HighPortTransport.IsNull,
-        'non-null transport (' + Self.HighPortTransport.ClassName
-      + ') marked as null');
-end;
-
-procedure TestTIdSipTransport.TestIsRunning;
-begin
-  Self.LowPortTransport.Stop;
-  Check(not Self.LowPortTransport.IsRunning,
-        'Initial condition: stopped transport');
-
-  Self.LowPortTransport.Start;
-  Check(Self.LowPortTransport.IsRunning,
-        'Transport didn''t start');
-
-  Self.LowPortTransport.Stop;
-  Check(not Self.LowPortTransport.IsRunning,
-        'Transport didn''t stop');
-end;
-
-procedure TestTIdSipTransport.TestLocalBindingsDoesntClearParameter;
-var
-  LocalBindings: TIdSipLocations;
-begin
-  LocalBindings := TIdSipLocations.Create;
-  try
-    LocalBindings.AddLocation(Self.HighPortLocation);
-
-    Self.LowPortTransport.LocalBindings(LocalBindings);
-    CheckEquals(2, LocalBindings.Count, 'Incorrect binding count: parameter not first cleared');
-    CheckEquals(Self.HighPortLocation.AsString, LocalBindings[0].AsString, 'First binding');
-    CheckEquals(Self.LowPortLocation.AsString,  LocalBindings[1].AsString, 'Second binding');
-  finally
-    LocalBindings.Free;
-  end;
-end;
-
-procedure TestTIdSipTransport.TestLocalBindingsMultipleBindings;
-var
-  LocalBindings: TIdSipLocations;
-  SecondBinding: TIdSipLocation;
-  ThirdBinding:  TIdSipLocation;
-begin
-  LocalBindings := TIdSipLocations.Create;
-  try
-    SecondBinding := TIdSipLocation.Create(Self.LowPortLocation.Transport,
-                                           Self.LowPortLocation.IPAddress,
-                                           Self.LowPortLocation.Port + 1);
-    try
-      ThirdBinding := TIdSipLocation.Create(SecondBinding.Transport,
-                                            SecondBinding.IPAddress,
-                                            SecondBinding.Port + 1);
-      try
-        Self.LowPortTransport.AddBinding(SecondBinding.IPAddress, SecondBinding.Port);
-        Self.LowPortTransport.AddBinding(ThirdBinding.IPAddress,  ThirdBinding.Port);
-
-
-        Self.LowPortTransport.LocalBindings(LocalBindings);
-        CheckEquals(3, LocalBindings.Count, 'Incorrect number of bindings');
-        CheckEquals(Self.LowPortLocation.AsString, LocalBindings[0].AsString, 'First binding');
-        CheckEquals(SecondBinding.AsString, LocalBindings[1].AsString, 'Second binding');
-        CheckEquals(ThirdBinding.AsString, LocalBindings[2].AsString, 'Third binding');
-      finally
-        ThirdBinding.Free;
-      end;
-    finally
-      SecondBinding.Free;
-    end;
-  finally
-    LocalBindings.Free;
-  end;
-end;
-
-procedure TestTIdSipTransport.TestLocalBindingsSingleBinding;
-var
-  LocalBindings: TIdSipLocations;
-begin
-  LocalBindings := TIdSipLocations.Create;
-  try
-    Self.LowPortTransport.LocalBindings(LocalBindings);
-    CheckEquals(1, LocalBindings.Count, 'Incorrect number of bindings');
-    Check(LocalBindings[0].Equals(Self.LowPortLocation), 'First binding incorrect');
-  finally
-    LocalBindings.Free;
-  end;
-end;
-
 procedure TestTIdSipTransport.TestDiscardMalformedMessage;
 var
   Listener:          TIdSipTestTransportListener;
@@ -1277,6 +1153,129 @@ begin
 
   Self.WaitForSignaled(Self.ClassName
                     + ': Didn''t receive a message with an unknown SIP-Version (timeout)');
+end;
+
+procedure TestTIdSipTransport.TestHasBinding;
+var
+  Address: String;
+  Port:    Cardinal;
+begin
+  Address := Self.LowPortLocation.IPAddress;
+  Port    := Self.LowPortLocation.Port + 1;
+
+  Check(not Self.LowPortTransport.HasBinding(Address, Port),
+        Self.LowPortTransport.ClassName
+      + ': The server has, but shouldn''t, a binding on '
+      + Address + ':' + IntToStr(Port));
+
+  Self.LowPortTransport.AddBinding(Address, Port);
+
+  Check(Self.LowPortTransport.HasBinding(Address, Port),
+        Self.LowPortTransport.ClassName
+     +  ': The server doesn''t have, but should, a binding on '
+     + Address + ':' + IntToStr(Port));
+end;
+
+procedure TestTIdSipTransport.TestInstantiationRegistersTransport;
+begin
+  CheckNotEquals('',
+                 Self.HighPortTransport.ID,
+                 'HighPortTransport not registered');
+  CheckNotEquals('',
+                 Self.LowPortTransport.ID,
+                 'LowPortTransport not registered');
+  CheckNotEquals(Self.HighPortTransport.ID,
+                 Self.LowPortTransport.ID,
+                 'HighPortTransport and LowPortTransport have same ID');
+end;
+
+procedure TestTIdSipTransport.TestIsNull;
+begin
+  Check(not Self.HighPortTransport.IsNull,
+        'non-null transport (' + Self.HighPortTransport.ClassName
+      + ') marked as null');
+end;
+
+procedure TestTIdSipTransport.TestIsRunning;
+begin
+  Self.LowPortTransport.Stop;
+  Check(not Self.LowPortTransport.IsRunning,
+        'Initial condition: stopped transport');
+
+  Self.LowPortTransport.Start;
+  Check(Self.LowPortTransport.IsRunning,
+        'Transport didn''t start');
+
+  Self.LowPortTransport.Stop;
+  Check(not Self.LowPortTransport.IsRunning,
+        'Transport didn''t stop');
+end;
+
+procedure TestTIdSipTransport.TestLocalBindingsDoesntClearParameter;
+var
+  LocalBindings: TIdSipLocations;
+begin
+  LocalBindings := TIdSipLocations.Create;
+  try
+    LocalBindings.AddLocation(Self.HighPortLocation);
+
+    Self.LowPortTransport.LocalBindings(LocalBindings);
+    CheckEquals(2, LocalBindings.Count, 'Incorrect binding count: parameter not first cleared');
+    CheckEquals(Self.HighPortLocation.AsString, LocalBindings[0].AsString, 'First binding');
+    CheckEquals(Self.LowPortLocation.AsString,  LocalBindings[1].AsString, 'Second binding');
+  finally
+    LocalBindings.Free;
+  end;
+end;
+
+procedure TestTIdSipTransport.TestLocalBindingsMultipleBindings;
+var
+  LocalBindings: TIdSipLocations;
+  SecondBinding: TIdSipLocation;
+  ThirdBinding:  TIdSipLocation;
+begin
+  LocalBindings := TIdSipLocations.Create;
+  try
+    SecondBinding := TIdSipLocation.Create(Self.LowPortLocation.Transport,
+                                           Self.LowPortLocation.IPAddress,
+                                           Self.LowPortLocation.Port + 1);
+    try
+      ThirdBinding := TIdSipLocation.Create(SecondBinding.Transport,
+                                            SecondBinding.IPAddress,
+                                            SecondBinding.Port + 1);
+      try
+        Self.LowPortTransport.AddBinding(SecondBinding.IPAddress, SecondBinding.Port);
+        Self.LowPortTransport.AddBinding(ThirdBinding.IPAddress,  ThirdBinding.Port);
+
+
+        Self.LowPortTransport.LocalBindings(LocalBindings);
+        CheckEquals(3, LocalBindings.Count, 'Incorrect number of bindings');
+        CheckEquals(Self.LowPortLocation.AsString, LocalBindings[0].AsString, 'First binding');
+        CheckEquals(SecondBinding.AsString, LocalBindings[1].AsString, 'Second binding');
+        CheckEquals(ThirdBinding.AsString, LocalBindings[2].AsString, 'Third binding');
+      finally
+        ThirdBinding.Free;
+      end;
+    finally
+      SecondBinding.Free;
+    end;
+  finally
+    LocalBindings.Free;
+  end;
+end;
+
+procedure TestTIdSipTransport.TestLocalBindingsSingleBinding;
+var
+  LocalBindings: TIdSipLocations;
+begin
+  LocalBindings := TIdSipLocations.Create;
+  try
+    Self.LowPortTransport.LocalBindings(LocalBindings);
+    CheckEquals(1, LocalBindings.Count, 'Incorrect number of bindings');
+    Check(LocalBindings[0].Equals(Self.LowPortLocation), 'First binding incorrect');
+  finally
+    LocalBindings.Free;
+  end;
 end;
 
 procedure TestTIdSipTransport.TestMalformedCallID;
