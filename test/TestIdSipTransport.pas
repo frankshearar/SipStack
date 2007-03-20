@@ -80,6 +80,7 @@ type
     procedure TestDefaultPortFor;
     procedure TestInsecureTransports;
     procedure TestIsSecure;
+    procedure TestNonstandardPort;
     procedure TestRegisterTransportType;
     procedure TestSecureTransports;
     procedure TestTransportFor;
@@ -550,6 +551,22 @@ begin
   Check(TIdSipTLSTransport.IsSecure
       = TIdSipTransportRegistry.IsSecure(TIdSipTLSTransport.GetTransportType),
         TIdSipTLSTransport.GetTransportType);
+end;
+
+procedure TestTransportRegistry.TestNonstandardPort;
+const
+  Transports: array[1..2] of TIdSipTransportClass = (TIdSipTLSTransport, TIdSipUDPTransport);
+var
+  I: Integer;
+begin
+  for I := Low(Transports) to High(Transports) do begin
+    Check(not TIdSipTransportRegistry.NonstandardPort(Transports[I].GetTransportType,
+                                                      Transports[I].DefaultPort),
+          Transports[I].GetTransportType + ' standard port');
+    Check(TIdSipTransportRegistry.NonstandardPort(Transports[I].GetTransportType,
+                                                  Transports[I].DefaultPort + 1),
+          Transports[I].GetTransportType + ' standard port + 1');
+  end;
 end;
 
 procedure TestTransportRegistry.TestRegisterTransportType;

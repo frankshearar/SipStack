@@ -171,6 +171,7 @@ type
     class function  DefaultPortFor(const Transport: String): Cardinal;
     class procedure InsecureTransports(Result: TStrings);
     class function  IsSecure(const Transport: String): Boolean;
+    class function  NonstandardPort(const Transport: String; Port: Cardinal): Boolean;
     class function  RegisterTransport(Instance: TIdSipTransport): String;
     class procedure RegisterTransportType(const Name: String;
                                           const TransportType: TIdSipTransportClass);
@@ -948,6 +949,11 @@ end;
 class function TIdSipTransportRegistry.IsSecure(const Transport: String): Boolean;
 begin
   Result := Self.TransportTypeFor(Transport).IsSecure;
+end;
+
+class function TIdSipTransportRegistry.NonstandardPort(const Transport: String; Port: Cardinal): Boolean;
+begin
+  Result := Self.TransportTypeFor(Transport).DefaultPort <> Port
 end;
 
 class function TIdSipTransportRegistry.RegisterTransport(Instance: TIdSipTransport): String;
