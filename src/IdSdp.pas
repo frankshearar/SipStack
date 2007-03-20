@@ -115,7 +115,7 @@ type
 
     property AddressType:       TIdIPVersion read fAddressType write fAddressType;
     property Address:           String       read fAddress write SetAddress;
-    property RoutableAddress:     String     read fRoutableAddress write SetRoutableAddress;
+    property RoutableAddress:   String       read fRoutableAddress write SetRoutableAddress;
     property NetType:           String       read fNetType write fNetType;
     property NumberOfAddresses: Cardinal     read fNumberOfAddresses write fNumberOfAddresses;
     property TTL:               Byte         read fTTL write fTTL;
