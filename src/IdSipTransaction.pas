@@ -917,6 +917,7 @@ procedure TIdSipTransactionDispatcher.SendResponse(Response: TIdSipResponse);
 var
   CurrentTarget:      TIdSipLocation;
   Destinations:       TIdSipLocations;
+  LocalBindings:      TIdSipLocations;
   Tran:               TIdSipTransaction;
   RemainingLocations: TIdSipLocations;
 begin
@@ -957,13 +958,19 @@ begin
                              Format(RSNoLocationSucceeded, [Response.LastHop.SentBy]));
     end
     else begin
-      CurrentTarget := RemainingLocations.First.Copy;
+      LocalBindings := TIdSipLocations.Create;
       try
-        RemainingLocations.RemoveFirst;
-        Response.RewriteLocationHeaders(Self.RoutingTable, CurrentTarget);
-        Self.SendToTransport(Response, CurrentTarget);
+        Self.LocalBindings(LocalBindings);
+        CurrentTarget := RemainingLocations.First.Copy;
+        try
+          RemainingLocations.RemoveFirst;
+          Response.RewriteLocationHeaders(Self.RoutingTable, LocalBindings, CurrentTarget);
+          Self.SendToTransport(Response, CurrentTarget);
+        finally
+          CurrentTarget.Free;
+        end;
       finally
-        CurrentTarget.Free;
+        LocalBindings.Free;
       end;
     end;
   end;
@@ -1618,7 +1625,8 @@ end;
 procedure TIdSipServerTransaction.TrySendResponseTo(R: TIdSipResponse;
                                                     Dest: TIdSipLocation);
 var
-  Locations: TIdSipLocations;
+  Locations:     TIdSipLocations;
+  LocalBindings: TIdSipLocations;
 begin
   // Some explanation: SentResponses contains a bunch of responses that we've
   // sent. (We might have sent several because we sent some provisional
@@ -1632,11 +1640,19 @@ begin
 
   Locations := Self.SentResponses.LocationsFor(R);
 
-  R.RewriteLocationHeaders(Self.Dispatcher.RoutingTable, Dest);
-  Self.Dispatcher.SendToTransport(R, Dest);
+  LocalBindings := TIdSipLocations.Create;
+  try
+    Self.Dispatcher.LocalBindings(LocalBindings);
 
-  if not Locations.IsEmpty then
-    Locations.Remove(Dest);
+    R.RewriteLocationHeaders(Self.Dispatcher.RoutingTable, LocalBindings, Dest);
+
+    Self.Dispatcher.SendToTransport(R, Dest);
+
+    if not Locations.IsEmpty then
+      Locations.Remove(Dest);
+  finally
+    LocalBindings.Free;
+  end;      
 end;
 
 //* TIdSipServerTransaction Private methods ************************************

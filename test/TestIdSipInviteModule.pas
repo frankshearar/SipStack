@@ -4725,6 +4725,7 @@ begin
         'Dialog not established');
   CheckNotNull(Self.Session.Dialog,
                'Dialog object wasn''t created');
+
   CheckEquals(Answer,         Self.Session.LocalSessionDescription, 'LocalSessionDescription');
   CheckEquals(AnswerMimeType, Self.Session.LocalMimeType,           'LocalMimeType');
 

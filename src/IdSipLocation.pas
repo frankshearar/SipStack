@@ -29,16 +29,18 @@ type
   private
     function GetLocation(Index: Integer): TIdSipLocation;
   public
-    procedure AddLocation(Location: TIdSipLocation); overload;
-    procedure AddLocation(const Transport: String;
+    function  AddLocation(Location: TIdSipLocation): TIdSipLocation; overload;
+    function  AddLocation(const Transport: String;
                           const Address: String;
-                          Port: Cardinal); overload;
+                          Port: Cardinal): TIdSipLocation; overload;
     procedure AddLocations(Locations: TIdSipLocations);
     procedure AddLocationsFromNames(const Transport: String;
                                     Port: Cardinal;
                                     Names: TIdDomainNameRecords);
     procedure AddLocationsFromSRVs(SRV: TIdSrvRecords);
     function  First: TIdSipLocation;
+    function  FirstAddressMatch(SearchLocation: TIdSipLocation): TIdSipLocation;
+    function  Last: TIdSipLocation;
     procedure RemoveFirst;
     procedure Remove(Location: TIdSipLocation);
 
@@ -91,19 +93,17 @@ end;
 //******************************************************************************
 //* TIdSipLocations Public methods *********************************************
 
-procedure TIdSipLocations.AddLocation(Location: TIdSipLocation);
+function TIdSipLocations.AddLocation(Location: TIdSipLocation): TIdSipLocation;
 begin
-  Self.List.Add(Location.Copy);
+  Result := Location.Copy;
+  Self.List.Add(Result);
 end;
 
-procedure TIdSipLocations.AddLocation(const Transport: String;
-                                      const Address: String;
-                                      Port: Cardinal);
-var
-  NewLocation: TIdSipLocation;
+function TIdSipLocations.AddLocation(const Transport: String;
+                                     const Address: String;
+                                     Port: Cardinal): TIdSipLocation;
 begin
-  NewLocation := TIdSipLocation.Create(Transport, Address, Port);
-  Self.List.Add(NewLocation);
+  Result := Self.AddLocation(TIdSipLocation.Create(Transport, Address, Port));
 end;
 
 procedure TIdSipLocations.AddLocations(Locations: TIdSipLocations);
@@ -137,7 +137,31 @@ end;
 
 function TIdSipLocations.First: TIdSipLocation;
 begin
-  Result := Self.Items[0];
+  if Self.IsEmpty then
+    Result := nil
+  else
+    Result := Self.Items[0];
+end;
+
+function TIdSipLocations.FirstAddressMatch(SearchLocation: TIdSipLocation): TIdSipLocation;
+var
+  I: Integer;
+begin
+  Result := nil;
+  for I := 0 to Self.Count - 1 do begin
+    if (Self[I].IPAddress = SearchLocation.IPAddress) then begin
+      Result := Self[I];
+      Break;
+    end;
+  end;
+end;
+
+function TIdSipLocations.Last: TIdSipLocation;
+begin
+  if Self.IsEmpty then
+    Result := nil
+  else
+    Result := Self.Items[Self.Count - 1];
 end;
 
 procedure TIdSipLocations.RemoveFirst;

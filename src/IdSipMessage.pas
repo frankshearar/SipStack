@@ -1479,7 +1479,9 @@ type
     procedure ReadBody(Src: TStream);
     procedure RemoveHeader(Header: TIdSipHeader);
     procedure RemoveAllHeadersNamed(const Name: String);
-    procedure RewriteLocationHeaders(Table: TIdRoutingTable; Dest: TIdSipLocation); overload;
+    procedure RewriteLocationHeaders(Table: TIdRoutingTable;
+                                     LocalBindings: TIdSipLocations;
+                                     Dest: TIdSipLocation); overload;
     function  RequiresExtension(const Extension: String): Boolean;
     function  SupportsExtension(const Extension: String): Boolean;
     function  WantsAllowEventsHeader: Boolean; virtual;
@@ -8496,10 +8498,13 @@ begin
   Self.Headers.RemoveAll(Name);
 end;
 
-procedure TIdSipMessage.RewriteLocationHeaders(Table: TIdRoutingTable; Dest: TIdSipLocation);
+procedure TIdSipMessage.RewriteLocationHeaders(Table: TIdRoutingTable;
+                                               LocalBindings: TIdSipLocations;
+                                               Dest: TIdSipLocation);
 var
-  DefaultPort:  Cardinal;
-  LocalAddress: TIdSipLocation;
+  ActualAddress: TIdSipLocation;
+  DefaultPort:   Cardinal;
+  LocalAddress:  TIdSipLocation;
 begin
   // On a machine with multiple local addresses, and at least one gateway, you
   // need to be careful what IP address/hostname you put into certain headers,
@@ -8516,7 +8521,17 @@ begin
     DefaultPort := TIdSipTransportRegistry.DefaultPortFor(Self.LastHop.Transport);
     Table.LocalAddressFor(Dest.IPAddress, LocalAddress, DefaultPort);
 
-    Self.RewriteLocationHeaders(LocalAddress);
+    ActualAddress := LocalBindings.FirstAddressMatch(LocalAddress);
+
+    if Assigned(ActualAddress) then
+      Self.RewriteLocationHeaders(ActualAddress)
+    else begin
+      // This is dubious. If ActualAddress is nil then it means that the stack
+      // listens on NO ports on the LocalAddress.IPAddress. In other words, any
+      // rewriting you do with LocalAddress will be wrong. This is a strong sign
+      // of a badly configured system!
+      Self.RewriteLocationHeaders(LocalAddress);
+    end;
   finally
     LocalAddress.Free;
   end;
@@ -9493,6 +9508,9 @@ begin
   end;
 
   Self.LastHop.SentBy := LocalAddress.IPAddress;
+
+  if TIdSipTransportRegistry.NonstandardPort(Self.LastHop.Transport, LocalAddress.Port) then
+    Self.LastHop.Port := LocalAddress.Port;
 end;
 
 //* TIdSipRequest Private methods **********************************************

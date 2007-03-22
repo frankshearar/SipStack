@@ -2124,6 +2124,7 @@ begin
   end;
 
   Result.FirstContact.Assign(Self.LocalGruu);
+  Result.FirstContact.IsUnset := false;
 end;
 
 procedure TIdSipOutboundReInvite.Initialise(UA: TIdSipAbstractCore;

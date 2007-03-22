@@ -12,7 +12,8 @@ unit TestIdSipMessage;
 interface
 
 uses
-  IdSipDialogID, IdSipMessage, SysUtils, TestFramework, TestFrameworkSip;
+  IdMockRoutingTable, IdSipConsts, IdSipDialogID, IdSipLocation, IdSipMessage,
+  SysUtils, TestFramework, TestFrameworkSip;
 
 type
   TestFunctions = class(TTestCase)
@@ -330,10 +331,60 @@ type
     procedure TestThirdLast;
   end;
 
+  TRewriteLocationTestCase = class(TTestCase)
+  private
+    InternetDestination: TIdSipLocation;
+    InternetGateway:     String;
+    InternetMap:         TIdSipLocation;
+    LanDestination:      TIdSipLocation;
+    LanIP:               String;
+    LocalBindings:       TIdSipLocations;
+    LoopbackDestination: TIdSipLocation;
+    Request:             TIdSipRequest;
+    Response:            TIdSipResponse;
+    RoutingTable:        TIdMockRoutingTable;
+    VpnDestination:      TIdSipLocation;
+    VpnGateway:          String;
+    VpnMap:              TIdSipLocation;
+    VpnMask:             String;
+    VpnNetwork:          String;
+    VpnIP:               String;
+    VpnPort:             Cardinal;
+
+    procedure AddDefaultRoute;
+    procedure AddInternetMappedRoute(Port: Cardinal = IdPORT_SIP);
+    function  AddLanBinding(Port: Cardinal = IdPORT_SIP): TIdSipLocation;
+    procedure AddLanRoute;
+    function  AddLoopbackBinding(Port: Cardinal = IdPORT_SIP): TIdSipLocation;
+    procedure AddLoopbackRoute;
+    function  AddVpnBinding(Port: Cardinal = IdPORT_SIP): TIdSipLocation;
+    procedure AddVpnMappedRoute(Port: Cardinal = IdPORT_SIP);
+    procedure AddVpnRoute;
+    procedure CheckAgainstDestination(ExpectedBinding: TIdSipLocation; Destination: TIdSipLocation);
+    procedure CheckContact(ExpectedBinding: TIdSipLocation; SipMsg: TIdSipMessage; Msg: String = '');
+    procedure CheckRequest(ExpectedBinding: TIdSipLocation; Request: TIdSipRequest; Msg: String = '');
+    procedure CheckResponse(ExpectedBinding: TIdSipLocation; Response: TIdSipResponse; Msg: String = '');
+    procedure CheckVia(ExpectedBinding: TIdSipLocation; Request: TIdSipRequest; Msg: String = '');
+    function  CreateRequest: TIdSipRequest;
+    function  CreateResponse: TIdSipResponse;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRewriteLocationOneLanIP;
+    procedure TestRewriteLocationOneLanIPOneLocalhostIP;
+    procedure TestRewriteLocationOneLanIPOneLocalhostIPOneMappedRouteToInternet;
+    procedure TestRewriteLocationOneLanIPOneLocalhostIPOneMappedRouteToInternetNonstandardPort;
+    procedure TestRewriteLocationOneLanIPOneLocalhostIPOneMappedRouteToInternetOneMappedRouteToVpn;
+    procedure TestRewriteLocationOneLanIPOneLocalhostIPOneMappedRouteToInternetOneRouteToVpn;
+    procedure TestRewriteLocationOneLocalhostIP;
+    procedure TestRewriteLocationOneLocalhostIPNonstandardPort;
+  end;
+
 implementation
 
 uses
-  Classes, IdSimpleParser, IdSipConsts, IdSipTransport, TestMessages;
+  Classes, IdSimpleParser, IdSipMockTransport, IdSipTransport, TestMessages;
 
 const
   AllMethods: array[1..9] of String = (MethodAck, MethodBye, MethodCancel,
@@ -364,12 +415,15 @@ const
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipMessage tests (Messages)');
+{
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSipConnectionBindings.Suite);
   Result.AddTest(TestTIdSipRequest.Suite);
   Result.AddTest(TestTIdSipResponse.Suite);
   Result.AddTest(TestTIdSipRequestList.Suite);
   Result.AddTest(TestTIdSipResponseList.Suite);
+}
+  Result.AddTest(TRewriteLocationTestCase.Suite);
 end;
 
 //******************************************************************************
@@ -5188,6 +5242,339 @@ begin
   finally
     Response.Free;
   end;
+end;
+
+//******************************************************************************
+//* TRewriteLocationTestCase                                                   *
+//******************************************************************************
+//* TRewriteLocationTestCase Public methods ************************************
+
+procedure TRewriteLocationTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  TIdSipTransportRegistry.RegisterTransportType(TcpTransport, TIdSipMockTcpTransport);
+  TIdSipTransportRegistry.RegisterTransportType(TlsTransport, TIdSipMockTlsTransport);
+  TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipMockUdpTransport);
+
+  Self.InternetGateway := '10.0.0.1';
+  Self.LanIP           := '10.0.0.6';
+  Self.VpnGateway      := '192.168.1.1';
+  Self.VpnMask         := '255.255.255.0';
+  Self.VpnNetwork      := '192.168.1.0';
+  Self.VpnIP           := '192.168.1.100';
+  Self.VpnPort         := 15060;
+
+  Self.InternetDestination := TIdSipLocation.Create('UDP', '1.2.3.4', 5060);
+  Self.InternetMap         := TIdSipLocation.Create('TCP', Self.InternetGateway, 5060);
+  Self.LanDestination      := TIdSipLocation.Create('TCP', '10.0.0.8', 5060);
+  Self.LocalBindings       := TIdSipLocations.Create;
+  Self.LoopbackDestination := TIdSipLocation.Create('UDP', '127.0.0.1', 5060);
+  Self.Request             := Self.CreateRequest;
+  Self.Response            := Self.CreateResponse;
+  Self.RoutingTable        := TIdMockRoutingTable.Create;
+  Self.VpnDestination      := TIdSipLocation.Create('TLS', '192.168.1.99', 5060);
+  Self.VpnMap              := TIdSipLocation.Create('TLS', Self.VpnGateway, 5060);
+end;
+
+procedure TRewriteLocationTestCase.TearDown;
+begin
+  try
+    Self.VpnMap.Free;
+    Self.VpnDestination.Free;
+    Self.RoutingTable.Free;
+    Self.Response.Free;
+    Self.Request.Free;
+    Self.LoopbackDestination.Free;
+    Self.LocalBindings.Free;
+    Self.LanDestination.Free;
+    Self.InternetMap.Free;
+    Self.InternetDestination.Free;
+  finally
+    TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
+    TIdSipTransportRegistry.UnregisterTransportType(TlsTransport);
+    TIdSipTransportRegistry.UnregisterTransportType(TcpTransport);
+  end;
+
+  inherited TearDown;
+end;
+
+//* TRewriteLocationTestCase Private methods ***********************************
+
+procedure TRewriteLocationTestCase.AddDefaultRoute;
+begin
+  Self.RoutingTable.AddOsRoute('0.0.0.0', '0.0.0.0', Self.InternetGateway, 1, '1', Self.LanIP);
+end;
+
+procedure TRewriteLocationTestCase.AddInternetMappedRoute;
+begin
+  Self.RoutingTable.AddMappedRoute('0.0.0.0', '0.0.0.0', Self.InternetGateway, Port);
+end;
+
+function TRewriteLocationTestCase.AddLanBinding(Port: Cardinal = IdPORT_SIP): TIdSipLocation;
+begin
+  Result := Self.LocalBindings.AddLocation('TCP', Self.LanIP, 5060);
+end;
+
+procedure TRewriteLocationTestCase.AddLanRoute;
+const
+  Mask = '255.0.0.0';
+var
+  Gateway: String;
+  Network: String;
+begin
+  Network := TIdIPAddressParser.NetworkForIPv4(Self.LanIP, Mask);
+  Gateway := TIdIPAddressParser.IncIPAddress(Network);
+  Self.RoutingTable.AddOsRoute(Network, Mask, Gateway, 1, '1', Self.LanIP);
+end;
+
+function TRewriteLocationTestCase.AddLoopbackBinding(Port: Cardinal = IdPORT_SIP): TIdSipLocation;
+begin
+  Result := Self.LocalBindings.AddLocation('UDP', '127.0.0.1', Port);
+end;
+
+procedure TRewriteLocationTestCase.AddLoopbackRoute;
+begin
+  Self.RoutingTable.AddOsRoute('127.0.0.0', '255.0.0.0', '127.0.0.1', 1, '1', '127.0.0.1');
+end;
+
+function TRewriteLocationTestCase.AddVpnBinding(Port: Cardinal = IdPORT_SIP): TIdSipLocation;
+begin
+  Result := Self.LocalBindings.AddLocation('TCP', Self.VpnIP, 5060);
+end;
+
+procedure TRewriteLocationTestCase.AddVpnMappedRoute(Port: Cardinal = IdPORT_SIP);
+begin
+  Self.RoutingTable.AddMappedRoute(Self.VpnNetwork, Self.VpnMask, Self.VpnGateway, Port);
+end;
+
+procedure TRewriteLocationTestCase.AddVpnRoute;
+begin
+  Self.RoutingTable.AddOsRoute(Self.VpnNetwork, Self.VpnMask, Self.VpnGateway, 1, '1', Self.VpnIP);
+end;
+
+procedure TRewriteLocationTestCase.CheckAgainstDestination(ExpectedBinding: TIdSipLocation; Destination: TIdSipLocation);
+var
+  Msg:      String;
+  Request:  TIdSipRequest;
+  Response: TIdSipResponse;
+begin
+  Msg := 'From ' + ExpectedBinding.IPAddress + ' to ' + Destination.IPAddress;
+
+  Request := Self.CreateRequest;
+  try
+    Request.RewriteLocationHeaders(Self.RoutingTable, Self.LocalBindings, Destination);
+    CheckRequest(ExpectedBinding, Request, Msg);
+  finally
+    Request.Free;
+  end;
+
+  Response := Self.CreateResponse;
+  try
+    Response.RewriteLocationHeaders(Self.RoutingTable, Self.LocalBindings, Destination);
+    CheckResponse(ExpectedBinding, Response, Msg);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TRewriteLocationTestCase.CheckContact(ExpectedBinding: TIdSipLocation; SipMsg: TIdSipMessage; Msg: String = '');
+begin
+  if (Msg = '') then
+    Msg := 'Fail';
+
+  CheckEquals(ExpectedBinding.IPAddress,
+              SipMsg.FirstContact.Address.Host,
+              Msg + ': Contact URI''s host');
+  CheckEquals(ExpectedBinding.Port,
+              SipMsg.FirstContact.Address.Port,
+              Msg + ': Contact URI''s port');
+end;
+
+procedure TRewriteLocationTestCase.CheckRequest(ExpectedBinding: TIdSipLocation; Request: TIdSipRequest; Msg: String = '');
+begin
+  if (Msg = '') then
+    Msg := 'Fail';
+
+  CheckContact(ExpectedBinding, Request, Msg);
+  CheckVia(ExpectedBinding, Request, Msg);
+end;
+
+procedure TRewriteLocationTestCase.CheckResponse(ExpectedBinding: TIdSipLocation; Response: TIdSipResponse; Msg: String = '');
+begin
+  if (Msg = '') then
+    Msg := 'Fail';
+
+  CheckContact(ExpectedBinding, Response, Msg);
+end;
+
+procedure TRewriteLocationTestCase.CheckVia(ExpectedBinding: TIdSipLocation; Request: TIdSipRequest; Msg: String = '');
+begin
+  if (Msg = '') then
+    Msg := 'Fail';
+
+  CheckEquals(ExpectedBinding.IPAddress,
+              Request.LastHop.SentBy,
+              Msg + ': Via sent-by address');
+  CheckEquals(ExpectedBinding.Port,
+              Request.LastHop.Port,
+              Msg + ': Via sent-by port');
+end;
+
+function TRewriteLocationTestCase.CreateRequest: TIdSipRequest;
+begin
+  // Requests/responses coming from the Transaction-User layer will usually have
+  // the first Contact unset (unless, say, it's registered to a registrar).
+
+  Result := TIdSipTestResources.CreateBasicRequest;
+  Result.FirstContact.IsUnset := true;
+end;
+
+function TRewriteLocationTestCase.CreateResponse: TIdSipResponse;
+begin
+  // Requests/responses coming from the Transaction-User layer will usually have
+  // the first Contact unset (unless, say, it's registered to a registrar).
+
+  Result := TIdSipTestResources.CreateBasicResponse;
+  Result.FirstContact.IsUnset := true;
+end;
+
+//* TRewriteLocationTestCase Published methods *********************************
+
+procedure TRewriteLocationTestCase.TestRewriteLocationOneLanIP;
+var
+  LanBinding: TIdSipLocation;
+begin
+  LanBinding := Self.AddLanBinding;
+  Self.AddLanRoute;
+
+  CheckAgainstDestination(LanBinding, Self.InternetDestination);
+  CheckAgainstDestination(LanBinding, Self.LanDestination);
+  CheckAgainstDestination(LanBinding, Self.LoopbackDestination);
+  CheckAgainstDestination(LanBinding, Self.VpnDestination);
+end;
+
+procedure TRewriteLocationTestCase.TestRewriteLocationOneLanIPOneLocalhostIP;
+var
+  LanBinding:      TIdSipLocation;
+  LoopbackBinding: TIdSipLocation;
+begin
+  LanBinding := Self.AddLanBinding;
+  Self.AddLanRoute;
+  LoopbackBinding := Self.AddLoopbackBinding;
+  Self.AddLoopbackRoute;
+
+  CheckAgainstDestination(LanBinding,      Self.InternetDestination);
+  CheckAgainstDestination(LanBinding,      Self.LanDestination);
+  CheckAgainstDestination(LoopbackBinding, Self.LoopbackDestination);
+  CheckAgainstDestination(LanBinding,      Self.VpnDestination);
+end;
+
+procedure TRewriteLocationTestCase.TestRewriteLocationOneLanIPOneLocalhostIPOneMappedRouteToInternet;
+var
+  LanBinding:      TIdSipLocation;
+  LoopbackBinding: TIdSipLocation;
+begin
+  LanBinding := Self.AddLanBinding;
+  Self.AddLanRoute;
+  LoopbackBinding := Self.AddLoopbackBinding;
+  Self.AddLoopbackRoute;
+  Self.AddInternetMappedRoute;
+  Self.AddDefaultRoute;
+
+  CheckAgainstDestination(Self.InternetMap, Self.InternetDestination);
+  CheckAgainstDestination(LanBinding,       Self.LanDestination);
+  CheckAgainstDestination(LoopbackBinding,  Self.LoopbackDestination);
+  CheckAgainstDestination(Self.InternetMap, Self.VpnDestination);
+end;
+
+procedure TRewriteLocationTestCase.TestRewriteLocationOneLanIPOneLocalhostIPOneMappedRouteToInternetNonstandardPort;
+const
+  NonstandardPort = 15060;
+var
+  LanBinding:      TIdSipLocation;
+  LoopbackBinding: TIdSipLocation;
+begin
+  LanBinding := Self.AddLanBinding;
+  Self.AddLanRoute;
+  LoopbackBinding := Self.AddLoopbackBinding;
+  Self.AddLoopbackRoute;
+  Self.AddInternetMappedRoute(NonstandardPort);
+  Self.AddDefaultRoute;
+
+  Self.InternetMap.Port := NonstandardPort;
+
+  CheckAgainstDestination(Self.InternetMap, Self.InternetDestination);
+  CheckAgainstDestination(LanBinding,       Self.LanDestination);
+  CheckAgainstDestination(LoopbackBinding,  Self.LoopbackDestination);
+  CheckAgainstDestination(Self.InternetMap, Self.VpnDestination);
+end;
+
+procedure TRewriteLocationTestCase.TestRewriteLocationOneLanIPOneLocalhostIPOneMappedRouteToInternetOneMappedRouteToVpn;
+var
+  LanBinding:      TIdSipLocation;
+  LoopbackBinding: TIdSipLocation;
+begin
+  LanBinding := Self.AddLanBinding;
+  Self.AddLanRoute;
+  LoopbackBinding := Self.AddLoopbackBinding;
+  Self.AddLoopbackRoute;
+  Self.AddInternetMappedRoute;
+  Self.AddVpnMappedRoute;
+  Self.AddDefaultRoute;
+
+  CheckAgainstDestination(Self.InternetMap, Self.InternetDestination);
+  CheckAgainstDestination(LanBinding,       Self.LanDestination);
+  CheckAgainstDestination(LoopbackBinding,  Self.LoopbackDestination);
+  CheckAgainstDestination(Self.VpnMap,      Self.VpnDestination);
+end;
+
+procedure TRewriteLocationTestCase.TestRewriteLocationOneLanIPOneLocalhostIPOneMappedRouteToInternetOneRouteToVpn;
+var
+  LanBinding:      TIdSipLocation;
+  LoopbackBinding: TIdSipLocation;
+  VpnBinding:      TIdSipLocation;
+begin
+  LanBinding := Self.AddLanBinding;
+  Self.AddLanRoute;
+  LoopbackBinding := Self.AddLoopbackBinding;
+  Self.AddLoopbackRoute;
+  Self.AddInternetMappedRoute;
+  VpnBinding := Self.AddVpnBinding;
+  Self.AddVpnRoute;
+  Self.AddDefaultRoute;
+
+  CheckAgainstDestination(Self.InternetMap, Self.InternetDestination);
+  CheckAgainstDestination(LanBinding,       Self.LanDestination);
+  CheckAgainstDestination(LoopbackBinding,  Self.LoopbackDestination);
+  CheckAgainstDestination(VpnBinding,       Self.VpnDestination);
+end;
+
+procedure TRewriteLocationTestCase.TestRewriteLocationOneLocalhostIP;
+var
+  Binding: TIdSipLocation;
+begin
+  Self.AddLoopbackRoute;
+  Binding := Self.AddLoopbackBinding;
+
+  CheckAgainstDestination(Binding, Self.InternetDestination);
+  CheckAgainstDestination(Binding, Self.LanDestination);
+  CheckAgainstDestination(Binding, Self.LoopbackDestination);
+  CheckAgainstDestination(Binding, Self.VpnDestination);
+end;
+
+procedure TRewriteLocationTestCase.TestRewriteLocationOneLocalhostIPNonstandardPort;
+const
+  HighPort = 15060;
+var
+  Binding: TIdSipLocation;
+begin
+  Self.AddLoopbackRoute;
+  Binding := Self.AddLoopbackBinding(HighPort);
+
+  Self.Request.RewriteLocationHeaders(Self.RoutingTable, Self.LocalBindings, Self.LoopbackDestination);
+
+  CheckRequest(Binding, Self.Request);
 end;
 
 initialization

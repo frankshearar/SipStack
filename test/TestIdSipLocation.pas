@@ -33,7 +33,10 @@ type
     procedure TestAddLocations;
     procedure TestAddLocationsFromNames;
     procedure TestCount;
+    procedure TestFirst;
+    procedure TestFirstAddressMatch;
     procedure TestIsEmpty;
+    procedure TestLast;
     procedure TestRemoveFirst;
     procedure TestRemove;
     procedure TestRemoveDuplicateLocationsOnlyRemovesOne;
@@ -160,18 +163,22 @@ const
   Transport = TcpTransport;
   Address   = 'foo.com';
   Port      = IdPORT_SIP;
+var
+  Result: TIdSipLocation;
 begin
-  Self.Locs.AddLocation(Transport, Address, Port);
+  Result := Self.Locs.AddLocation(Transport, Address, Port);
 
   CheckEquals(Address,   Self.Locs.First.IPAddress, 'IPAddress');
   CheckEquals(Port,      Self.Locs.First.Port,      'Port');
   CheckEquals(Transport, Self.Locs.First.Transport, 'Transport');
+  Check(Result = Self.Locs[0], 'AddLocation(String, Cardinal, String) returned unexpected location');
 
-  Self.Locs.AddLocation(Self.Locs[0]);
+  Result := Self.Locs.AddLocation(Self.Locs[0]);
   CheckEquals(2, Self.Locs.Count, 'Location not added');
   CheckEquals(Address,   Self.Locs[1].IPAddress, 'IPAddress of 2nd location');
   CheckEquals(Port,      Self.Locs[1].Port,      'Port of 2nd location');
   CheckEquals(Transport, Self.Locs[1].Transport, 'Transport of 2nd location');
+  Check(Result = Self.Locs[1], 'AddLocation(TIdSipLocatio) returned unexpected location');
 
   Check(Self.Locs[0] <> Self.Locs[1],
         'Locations added the location, not a COPY of the location');
@@ -251,6 +258,49 @@ begin
   end;
 end;
 
+procedure TestTIdSipLocations.TestFirst;
+var
+  FirstAddress:  TIdSipLocation;
+  SecondAddress: TIdSipLocation;
+begin
+  CheckNull(Self.Locs.First, 'First on an empty collection');
+
+  FirstAddress  := Self.Locs.AddLocation(TcpTransport, '10.0.0.1',  5060);
+  Check(FirstAddress = Self.Locs.First, 'First, 1-element collection');
+
+  SecondAddress := Self.Locs.AddLocation(TcpTransport, '10.0.0.1', 5060);
+  Check(FirstAddress = Self.Locs.First, 'First, 2-element collection');
+end;
+
+procedure TestTIdSipLocations.TestFirstAddressMatch;
+const
+  LocalAddress = '10.0.0.6';
+var
+  Found:     TIdSipLocation;
+  SearchLoc: TIdSipLocation;
+begin
+  SearchLoc := TIdSipLocation.Create('UDP', LocalAddress, 5060);
+  try
+    CheckNull(Self.Locs.FirstAddressMatch(SearchLoc), 'Empty collection');
+
+    Self.Locs.AddLocation('TCP', '10.0.0.1', 5060);
+    CheckNull(Self.Locs.FirstAddressMatch(SearchLoc), 'No match');
+
+    Self.Locs.AddLocation('TCP', LocalAddress, 15060);
+    Found := Self.Locs.FirstAddressMatch(SearchLoc);
+    CheckNotNull(Found, 'Same address, different transport, different port');
+    CheckEquals(SearchLoc.IPAddress, Found.IPAddress, 'Address of found location');
+
+    SearchLoc.IPAddress := '::1';
+    Self.Locs.AddLocation('TCP', SearchLoc.IPAddress, 15060);
+    Found := Self.Locs.FirstAddressMatch(SearchLoc);
+    CheckNotNull(Found, 'Same address, different transport, different port (IPv6)');
+    CheckEquals(SearchLoc.IPAddress, Found.IPAddress, 'Address of found location (IPv6)');
+  finally
+    SearchLoc.Free;
+  end;
+end;
+
 procedure TestTIdSipLocations.TestIsEmpty;
 var
   I: Integer;
@@ -262,6 +312,20 @@ begin
     Check(not Self.Locs.IsEmpty,
           'IsEmpty after ' + IntToStr(I) + ' item(s)');
   end;
+end;
+
+procedure TestTIdSipLocations.TestLast;
+var
+  FirstAddress:  TIdSipLocation;
+  SecondAddress: TIdSipLocation;
+begin
+  CheckNull(Self.Locs.Last, 'Last on an empty collection');
+
+  FirstAddress  := Self.Locs.AddLocation(TcpTransport, '10.0.0.1',  5060);
+  Check(FirstAddress = Self.Locs.Last, 'Last, 1-element collection');
+
+  SecondAddress := Self.Locs.AddLocation(TcpTransport, '10.0.0.1', 5060);
+  Check(SecondAddress = Self.Locs.Last, 'Last, 2-element collection');
 end;
 
 procedure TestTIdSipLocations.TestRemoveFirst;

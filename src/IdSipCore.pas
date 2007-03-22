@@ -3327,6 +3327,7 @@ procedure TIdSipAction.TrySendRequest(Request: TIdSipRequest;
                                       Targets: TIdSipLocations);
 var
   CurrentTarget: TIdSipLocation;
+  LocalBindings: TIdSipLocations;
 begin
   // We remove the current target from the set of targets first to prevent any
   // damage from bugs lower in the stack: should something cause the message
@@ -3337,19 +3338,26 @@ begin
   try
     Targets.Remove(CurrentTarget);
 
-    // This means that a message that travels to the Target using SCTP will have
-    // SIP/2.0/SCTP in its topmost Via. Remember, we try to avoid having the
-    // transport layer change the message.
-    Request.LastHop.Transport := CurrentTarget.Transport;
-    Request.RewriteLocationHeaders(Self.UA.RoutingTable, CurrentTarget);
+    LocalBindings := TIdSipLocations.Create;
+    try
+      Self.UA.Dispatcher.LocalBindings(LocalBindings);
 
-    // Synchronise our state to what actually went down to the network.
-    // The condition means that an INVITE won't set its InitialRequest to an
-    // ACK it's just sent.
-    if not Request.IsAck then
-      Self.InitialRequest.Assign(Request);
+      // This means that a message that travels to the Target using SCTP will have
+      // SIP/2.0/SCTP in its topmost Via. Remember, we try to avoid having the
+      // transport layer change the message.
+      Request.LastHop.Transport := CurrentTarget.Transport;
+      Request.RewriteLocationHeaders(Self.UA.RoutingTable, LocalBindings, CurrentTarget);
 
-    Self.UA.SendRequest(Request, CurrentTarget);
+      // Synchronise our state to what actually went down to the network.
+      // The condition means that an INVITE won't set its InitialRequest to an
+      // ACK it's just sent.
+      if not Request.IsAck then
+        Self.InitialRequest.Assign(Request);
+
+      Self.UA.SendRequest(Request, CurrentTarget);
+    finally
+      LocalBindings.Free;
+    end;
   finally
     CurrentTarget.Free;
   end;
