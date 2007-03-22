@@ -4721,6 +4721,8 @@ begin
   Self.Session.AcceptCall(Answer, AnswerMimeType);
   Self.CheckResponseSent('No 200 OK sent');
 
+  Check(not Self.Session.IsEarly, 'Dialog still in Early state');
+
   Check(Self.Session.DialogEstablished,
         'Dialog not established');
   CheckNotNull(Self.Session.Dialog,

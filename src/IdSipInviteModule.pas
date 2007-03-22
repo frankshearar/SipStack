@@ -2809,6 +2809,8 @@ begin
 
   Self.InitialInvite.Accept(Offer, ContentType);
   Self.LocalGruu := Self.InitialInvite.LocalGruu;
+
+  Self.Dialog.ReceiveResponse(Self.InitialInvite.LastResponse);
 end;
 
 function TIdSipInboundSession.IsInbound: Boolean;
