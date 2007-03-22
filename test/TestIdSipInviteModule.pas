@@ -286,6 +286,7 @@ type
   published
     procedure TestSendInInboundSessionWithAuthentication;
     procedure TestSendToSipsUri; override;
+    procedure TestSendUsesMappedRoutes; override;
     procedure TestSendWithGruu; override;
   end;
 
@@ -3418,6 +3419,12 @@ begin
   Self.LocalGruu.Address.Scheme := SipsScheme;
 
   inherited TestSendToSipsUri;
+end;
+
+procedure TestTIdSipOutboundReInvite.TestSendUsesMappedRoutes;
+begin
+  CheckLocalAddress(Self.LocalGruu.Address.Host, Self.LanDestination, 'LAN destination', Self.LanIP);
+  CheckLocalAddress(Self.LocalGruu.Address.Host, '127.0.0.2', 'Loopback destination', '127.0.0.1');
 end;
 
 procedure TestTIdSipOutboundReInvite.TestSendWithGruu;
