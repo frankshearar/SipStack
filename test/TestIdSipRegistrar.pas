@@ -87,7 +87,7 @@ type
   protected
     Contacts: TIdSipContacts;
 
-    procedure CheckLocalAddress(ExpectedIP: String; DestinationIP: String; Msg: String); override;
+    procedure CheckLocalAddress(ExpectedIP: String; DestinationIP: String; Msg: String; ExpectedSentBy: String = ''); override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -998,7 +998,7 @@ end;
 
 //*  TestTIdSipRegistration Protected methods **********************************
 
-procedure TestTIdSipRegistration.CheckLocalAddress(ExpectedIP: String; DestinationIP: String; Msg: String);
+procedure TestTIdSipRegistration.CheckLocalAddress(ExpectedIP: String; DestinationIP: String; Msg: String; ExpectedSentBy: String = '');
 var
   Action:    TIdSipAction;
   ClassName: String;

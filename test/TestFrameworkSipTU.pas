@@ -35,7 +35,7 @@ type
                                            const AuthenticationHeaderName: String;
                                            const AuthorizationHeaderName: String;
                                            const MsgPrefix: String);
-    procedure CheckLocalAddress(ExpectedIP: String; DestinationIP: String; Msg: String); virtual;
+    procedure CheckLocalAddress(ExpectedIP: String; DestinationIP: String; Msg: String; ExpectedSentBy: String = ''); virtual;
     function  CreateAction: TIdSipAction; virtual;
     function  CreateAuthorization(Challenge: TIdSipResponse): TIdSipAuthorizationHeader;
     function  IsInboundTest: Boolean;
@@ -262,7 +262,7 @@ begin
               MsgPrefix + ' Response');
 end;
 
-procedure TestTIdSipAction.CheckLocalAddress(ExpectedIP: String; DestinationIP: String; Msg: String);
+procedure TestTIdSipAction.CheckLocalAddress(ExpectedIP: String; DestinationIP: String; Msg: String; ExpectedSentBy: String = '');
 var
   Action:    TIdSipAction;
   ClassName: String;
@@ -294,10 +294,20 @@ begin
                   Self.LastSentRequest.FirstContact.Address.Host,
                   ClassName + ': ' + Msg + ': Contact host not set');
   end;
-  
-  CheckEquals(ExpectedIP,
-              Self.LastSentRequest.LastHop.SentBy,
-              ClassName + ': ' + Msg + ': sent-by not set');
+
+  // In-dialog requests mustn't rewrite their Contacts - their Contact must
+  // match that of the Contact in the Dialog's LocalURI. However, the topmost
+  // Via's sent-by MUST be altered.
+  if (ExpectedSentBy <> '') then begin
+    CheckEquals(ExpectedSentBy,
+                Self.LastSentRequest.LastHop.SentBy,
+                ClassName + ': ' + Msg + ': sent-by not set');
+  end
+  else begin
+    CheckEquals(ExpectedIP,
+                Self.LastSentRequest.LastHop.SentBy,
+                ClassName + ': ' + Msg + ': sent-by not set');
+  end;
 end;
 
 function TestTIdSipAction.CreateAction: TIdSipAction;
