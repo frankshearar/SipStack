@@ -370,7 +370,7 @@ type
     procedure AddAllowedScheme(const Scheme: String);
     function  AddInboundAction(Request: TIdSipRequest;
                                Binding: TIdSipConnectionBindings): TIdSipAction;
-    procedure AddLocalHeaders(OutboundRequest: TIdSipRequest); virtual;
+    procedure AddLocalHeaders(OutboundRequest: TIdSipRequest; InDialogRequest: Boolean); virtual;
     function  AddModule(ModuleType: TIdSipMessageModuleClass): TIdSipMessageModule;
     procedure AddObserver(const Listener: IIdObserver);
     procedure AddListener(Listener: IIdSipTransactionUserListener);
@@ -1535,7 +1535,7 @@ begin
     Result := nil;
 end;
 
-procedure TIdSipAbstractCore.AddLocalHeaders(OutboundRequest: TIdSipRequest);
+procedure TIdSipAbstractCore.AddLocalHeaders(OutboundRequest: TIdSipRequest; InDialogRequest: Boolean);
 var
   Transport: String;
 begin
@@ -1707,7 +1707,7 @@ begin
     Result.CSeq.Method     := Result.Method;
     Result.CSeq.SequenceNo := Self.NextInitialSequenceNo;
 
-    Self.AddLocalHeaders(Result);
+    Self.AddLocalHeaders(Result, false);
   except
     FreeAndNil(Result);
 
@@ -1723,7 +1723,7 @@ begin
     Result.Method      := Method;
     Result.CSeq.Method := Method;
 
-    Self.AddLocalHeaders(Result);
+    Self.AddLocalHeaders(Result, true);
   except
     FreeAndNil(Result);
 

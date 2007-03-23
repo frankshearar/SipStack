@@ -99,6 +99,7 @@ type
     procedure TestConcurrentCalls;
     procedure TestContentTypeDefault;
     procedure TestCreateRequest;
+    procedure TestCreateRequestInDialogWithOutboundProxy;
     procedure TestCreateRequestSipsRequestUri;
     procedure TestCreateRequestUserAgent;
     procedure TestCreateRequestWithTransport;
@@ -856,6 +857,24 @@ begin
     end;
   finally
     Dest.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgent.TestCreateRequestInDialogWithOutboundProxy;
+const
+  ProxyUri = 'sip:proxy.tessier-ashpool.co.luna';
+var
+  Inv: TIdSipRequest;
+begin
+  Self.Core.Proxy.Uri := ProxyUri;
+  Self.Core.HasProxy := true;
+
+  Check(Self.Dlg.RouteSet.IsEmpty, 'Dialog doesn''t have an empty route set');
+  Inv := Self.Core.CreateRequest(MethodInvite, Self.Dlg);
+  try
+    Check(not Inv.HasRoute, 'In-dialog request created with Route header, but dialog has no route set');
+  finally
+    Inv.Free;
   end;
 end;
 

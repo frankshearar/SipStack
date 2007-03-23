@@ -123,7 +123,6 @@ type
                    const MimeType: String): TIdSipOutboundSession;
     function  CreateAck(Dialog: TIdSipDialog): TIdSipRequest;
     function  CreateBye(Dialog: TIdSipDialog): TIdSipRequest;
-    function  CreateCancel(Invite: TIdSipRequest): TIdSipRequest;
     function  CreateInvite(From: TIdSipFromHeader;
                            Dest: TIdSipAddressHeader;
                            const Body: String;
@@ -168,8 +167,9 @@ type
 
   TIdSipOutboundCancel = class(TIdSipAction)
   private
-    fOriginalInvite: TIdSipRequest;
-    Module:          TIdSipInviteModule;
+    fInDialogRequest: Boolean;
+    fOriginalInvite:  TIdSipRequest;
+    Module:           TIdSipInviteModule;
   protected
     function  CreateNewAttempt: TIdSipRequest; override;
     procedure Initialise(UA: TIdSipAbstractCore;
@@ -180,7 +180,8 @@ type
     function  Method: String; override;
     procedure Resend(AuthorizationCredentials: TIdSipAuthorizationHeader); override;
 
-    property OriginalInvite: TIdSipRequest read fOriginalInvite write fOriginalInvite;
+    property InDialogRequest: Boolean       read fInDialogRequest write fInDialogRequest;
+    property OriginalInvite:  TIdSipRequest read fOriginalInvite write fOriginalInvite;
   end;
 
   // I provide basic facilities for all (owned) Actions that need to handle
@@ -305,6 +306,7 @@ type
     procedure SetAckBody(Ack: TIdSipRequest);
   protected
     procedure ActionSucceeded(Response: TIdSipResponse); override;
+    function  CreateCancel: TIdSipOutboundCancel; virtual;
     function  CreateNewAttempt: TIdSipRequest; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
@@ -383,6 +385,7 @@ type
 
     procedure SetOriginalInvite(Value: TIdSipRequest);
   protected
+    function  CreateCancel: TIdSipOutboundCancel; override;
     function  CreateNewAttempt: TIdSipRequest; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
@@ -933,7 +936,7 @@ function TIdSipInviteModule.CreateAck(Dialog: TIdSipDialog): TIdSipRequest;
 begin
   try
     Result := Dialog.CreateAck;
-    Self.UserAgent.AddLocalHeaders(Result);
+    Self.UserAgent.AddLocalHeaders(Result, true);
   except
     FreeAndNil(Result);
 
@@ -950,12 +953,6 @@ begin
 
     raise;
   end;
-end;
-
-function TIdSipInviteModule.CreateCancel(Invite: TIdSipRequest): TIdSipRequest;
-begin
-  Result := Invite.CreateCancel;
-  Self.UserAgent.AddLocalHeaders(Invite);
 end;
 
 function TIdSipInviteModule.CreateInvite(From: TIdSipFromHeader;
@@ -1175,7 +1172,8 @@ end;
 
 function TIdSipOutboundCancel.CreateNewAttempt: TIdSipRequest;
 begin
-  Result := Self.Module.CreateCancel(Self.OriginalInvite);
+  Result := Self.OriginalInvite.CreateCancel;
+  Self.UA.AddLocalHeaders(Result, Self.InDialogRequest);
 
   Result.CopyHeaders(Self.OriginalInvite, AuthorizationHeader);
   Result.CopyHeaders(Self.OriginalInvite, ProxyAuthorizationHeader);
@@ -1188,6 +1186,8 @@ begin
   inherited Initialise(UA, Request, Binding);
 
   Self.fIsOwned := true;
+  
+  Self.InDialogRequest := false;
   Self.Module := Self.UA.ModuleFor(Self.Method) as TIdSipInviteModule;
 
   Assert(Assigned(Self.Module),
@@ -1747,6 +1747,12 @@ begin
   // another 200 OK our way before we had a chance
 end;
 
+function TIdSipOutboundInvite.CreateCancel: TIdSipOutboundCancel;
+begin
+  Result := Self.UA.AddOutboundAction(TIdSipOutboundCancel) as TIdSipOutboundCancel;
+  Result.OriginalInvite := Self.InitialRequest;
+end;
+
 function TIdSipOutboundInvite.CreateNewAttempt: TIdSipRequest;
 begin
   raise Exception.Create('Override TIdSipOutboundInvite.CreateNewAttempt');
@@ -1989,9 +1995,8 @@ begin
 
   // We don't listen to the Cancel's notifications because we don't care:
   // whatever response the remote SIP agent returns, we're still cancelling
-  // the action. 
-  Cancel := Self.UA.AddOutboundAction(TIdSipOutboundCancel) as TIdSipOutboundCancel;
-  Cancel.OriginalInvite := Self.InitialRequest;
+  // the action.
+  Cancel := Self.CreateCancel;
   Cancel.Send;
 end;
 
@@ -2112,6 +2117,12 @@ begin
 end;
 
 //* TIdSipOutboundReInvite Protected methods ***********************************
+
+function TIdSipOutboundReInvite.CreateCancel: TIdSipOutboundCancel;
+begin
+  Result := inherited CreateCancel;
+  Result.InDialogRequest := true;
+end;
 
 function TIdSipOutboundReInvite.CreateNewAttempt: TIdSipRequest;
 begin

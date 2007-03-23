@@ -231,6 +231,7 @@ type
     procedure TestCancelBeforeAccept;
     procedure TestCancelBeforeProvisional;
     procedure TestCancelReceiveInviteOkBeforeCancelOk;
+    procedure TestCancelWithOutboundProxy; virtual;
     procedure TestInviteTwice;
     procedure TestIsInvite; override;
     procedure TestIsOwned; override;
@@ -284,6 +285,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestCancelWithOutboundProxy; override;
     procedure TestSendInInboundSessionWithAuthentication;
     procedure TestSendToSipsUri; override;
     procedure TestSendUsesMappedRoutes; override;
@@ -2901,6 +2903,24 @@ begin
   end;
 end;
 
+procedure TestTIdSipOutboundInvite.TestCancelWithOutboundProxy;
+const
+  ProxyUri = 'sip:proxy.tessier-ashpool.co.luna';
+var
+  Invite: TIdSipAction;
+begin
+  Self.Core.Proxy.Uri := ProxyUri;
+  Self.Core.HasProxy  := true;
+
+  Invite := Self.CreateAction;
+  Self.ReceiveTrying(Self.LastSentRequest);
+
+  Self.MarkSentRequestCount;
+  Invite.Terminate;
+  CheckRequestSent('No CANCEL sent');
+  Check(Self.LastSentRequest.HasRoute, 'Route header not added to (out-of-dialog) INVITE');
+end;
+
 procedure TestTIdSipOutboundInvite.TestInviteTwice;
 var
   Invite: TIdSipAction;
@@ -3393,6 +3413,28 @@ begin
 end;
 
 //* TestTIdSipOutboundReInvite Published methods *******************************
+
+procedure TestTIdSipOutboundReInvite.TestCancelWithOutboundProxy;
+const
+  ProxyUri = 'sip:proxy.tessier-ashpool.co.luna';
+var
+  Invite: TIdSipAction;
+begin
+  Check(Self.Dialog.RouteSet.IsEmpty,
+        'For the purposes of this test the dialog''s route set must be empty');
+
+  Self.Core.Proxy.Uri := ProxyUri;
+  Self.Core.HasProxy  := true;
+
+  Invite := Self.CreateAction;
+  Self.ReceiveTrying(Self.LastSentRequest);
+
+  Self.MarkSentRequestCount;
+  Invite.Terminate;
+  CheckRequestSent('No CANCEL sent');
+  Check(not Self.LastSentRequest.HasRoute,
+        'Route header added to (in-dialog) INVITE (on a dialog with an empty route set)');
+end;
 
 procedure TestTIdSipOutboundReInvite.TestSendInInboundSessionWithAuthentication;
 begin

@@ -64,7 +64,7 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
-    procedure AddLocalHeaders(OutboundRequest: TIdSipRequest); override;
+    procedure AddLocalHeaders(OutboundRequest: TIdSipRequest; InDialogRequest: Boolean); override;
     function  AddOutboundAction(ActionType: TIdSipActionClass): TIdSipAction; override;
     procedure AddTransportListener(Listener: IIdSipTransportListener);
     function  UsingDefaultFrom: Boolean;
@@ -394,11 +394,11 @@ begin
   Self.ContactClosestToRegistrar.Free;
 end;
 
-procedure TIdSipUserAgent.AddLocalHeaders(OutboundRequest: TIdSipRequest);
+procedure TIdSipUserAgent.AddLocalHeaders(OutboundRequest: TIdSipRequest; InDialogRequest: Boolean);
 var
   LocalContact: TIdSipContactHeader;
 begin
-  inherited AddLocalHeaders(OutboundRequest);
+  inherited AddLocalHeaders(OutboundRequest, InDialogRequest);
 
   // draft-ietf-sip-gruu-10, section 8.1
 
@@ -422,7 +422,7 @@ begin
   if OutboundRequest.HasSipsUri then
     OutboundRequest.FirstContact.Address.Scheme := SipsScheme;
 
-  if Self.HasProxy then
+  if Self.HasProxy and not InDialogRequest then
     OutboundRequest.Route.AddRoute(Self.Proxy);
 end;
 
