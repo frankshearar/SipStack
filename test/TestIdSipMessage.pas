@@ -415,14 +415,12 @@ const
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipMessage tests (Messages)');
-{
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSipConnectionBindings.Suite);
   Result.AddTest(TestTIdSipRequest.Suite);
   Result.AddTest(TestTIdSipResponse.Suite);
   Result.AddTest(TestTIdSipRequestList.Suite);
   Result.AddTest(TestTIdSipResponseList.Suite);
-}
   Result.AddTest(TRewriteLocationTestCase.Suite);
 end;
 
