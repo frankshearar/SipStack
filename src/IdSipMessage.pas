@@ -2258,7 +2258,7 @@ const
 
 // Miscellaneous constants
 const
-  BindingTuple = '(connection-bindings local-ip: %s local-port %d peer-ip: %s peer-port: %d transport: %s)';
+  BindingTuple = '(connection-bindings local-ip: %s local-port: %d peer-ip: %s peer-port: %d transport: %s)';
 
 implementation
 
