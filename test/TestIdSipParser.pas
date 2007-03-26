@@ -619,10 +619,10 @@ begin
     CheckEquals('Max-Forwards: 70',
                 Req.FirstHeader(MaxForwardsHeader).AsString,
                 'Max-Forwards');
-    CheckEquals('Record-Route: localhost <sip:127.0.0.1>;lr',
+    CheckEquals('Record-Route: localhost <sip:127.0.0.1;lr>',
                 Req.FirstHeader(RecordRouteHeader).AsString,
                 'Record-Route');
-    CheckEquals('Route: localhost <sip:127.0.0.1>;lr',
+    CheckEquals('Route: localhost <sip:127.0.0.1;lr>',
                 Req.FirstHeader(RouteHeader).AsString,
                 'Route');
     CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>;tag=1928301775',
