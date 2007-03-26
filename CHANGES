@@ -24,6 +24,13 @@ v0.6 (2007/xx/yy)
   which replies, triggering your reaction to that response before you
   finish sending the message! This often terminates the action whose
   code you're currently executing!
+* The stack now uses the underlying OS's routing table for
+  autogenerating Contact headers. You now cannot set the Contact
+  headers for a stack except through REGISTERing to a registrar. The
+  stack will automatically select the best local address/port to use
+  to send a message.
+* For tests, you can use MockRoute directives to set up a routing
+  table any way you like. (Use RoutingTable: MOCK at the same time!)
 
 v0.5.3 (2007/01/26)
 * All modules now reside in separate units. (This only affects
