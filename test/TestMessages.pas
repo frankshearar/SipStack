@@ -56,8 +56,8 @@ const
                    + 'Expires: 1000'#13#10
                    + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
                    + 'Max-Forwards: 70'#13#10
-                   + 'Record-Route: localhost <sip:127.0.0.1>;lr'#13#10
-                   + 'Route: localhost <sip:127.0.0.1>;lr'#13#10
+                   + 'Record-Route: localhost <sip:127.0.0.1;lr>'#13#10
+                   + 'Route: localhost <sip:127.0.0.1;lr>'#13#10
                    + 'Subject: I am a SIP request with every legal header (even an extension)'#13#10
                    + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>;tag=1928301775'#13#10
                    + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
