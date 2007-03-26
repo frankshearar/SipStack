@@ -94,12 +94,12 @@ type
     procedure TestActionsNotifyUAObservers;
     procedure TestAddListener;
 //    procedure TestByeWithAuthentication;
-    procedure TestCallUsingProxy;
+    procedure TestCallUsingRoutePath;
     procedure TestCancelNotifiesTU;
     procedure TestConcurrentCalls;
     procedure TestContentTypeDefault;
     procedure TestCreateRequest;
-    procedure TestCreateRequestInDialogWithOutboundProxy;
+    procedure TestCreateRequestInDialogWithRoutes;
     procedure TestCreateRequestSipsRequestUri;
     procedure TestCreateRequestUserAgent;
     procedure TestCreateRequestWithTransport;
@@ -108,7 +108,6 @@ type
     procedure TestCreateResponseUserAgentBlank;
     procedure TestDeclinedCallNotifiesListeners;
     procedure TestDestroyUnregisters;
-    procedure TestDestroyWithProxyAndAutoReregister;
     procedure TestDialogLocalSequenceNoMonotonicallyIncreases;
     procedure TestDispatchToCorrectSession;
     procedure TestDontReAuthenticate;
@@ -203,7 +202,7 @@ type
     procedure TestCreateUserAgentWithLocator;
     procedure TestCreateUserAgentWithMalformedFrom;
     procedure TestCreateUserAgentWithMalformedLocator;
-    procedure TestCreateUserAgentWithMalformedProxy;
+    procedure TestCreateUserAgentWithMalformedRoute;
     procedure TestCreateUserAgentWithMappedRoutes;
     procedure TestCreateUserAgentWithMockedRoutes;
     procedure TestCreateUserAgentWithMockAuthenticator;
@@ -214,10 +213,10 @@ type
     procedure TestCreateUserAgentWithMultipleTransports;
     procedure TestCreateUserAgentWithNoFrom;
     procedure TestCreateUserAgentWithOneTransport;
-    procedure TestCreateUserAgentWithProxy;
     procedure TestCreateUserAgentWithReferSupport;
     procedure TestCreateUserAgentWithRegistrar;
     procedure TestCreateUserAgentWithResolveNamesLocallyFirst;
+    procedure TestCreateUserAgentWithRouteHeaders;
     procedure TestCreateUserAgentWithoutResolveNamesLocallyFirst;
     procedure TestCreateUserAgentWithUseGruu;
     procedure TestCreateUserAgentWithUserAgentName;
@@ -225,18 +224,58 @@ type
     procedure TestUpdateConfigurationWithFrom;
     procedure TestUpdateConfigurationWithLocator;
     procedure TestUpdateConfigurationWithNewRegistrar;
-    procedure TestUpdateConfigurationWithProxy;
     procedure TestUpdateConfigurationWithRegistrar;
+    procedure TestUpdateConfigurationWithRouteHeaders;
     procedure TestUpdateConfigurationWithSupportEvent;
     procedure TestUpdateConfigurationWithBlankSupportEvent;
     procedure TestUpdateConfigurationWithTransport;
   end;
 
+  // These tests exercise the SIP discovery algorithms as defined in RFC 3263.
+  TestLocation = class(TTestCaseTU,
+                       IIdSipActionListener,
+                       IIdSipOwnedActionListener,
+                       IIdSipInviteListener)
+  private
+    InviteOffer:    String;
+    InviteMimeType: String;
+    NetworkFailure: Boolean;
+    TransportParam: String;
+
+    function  CreateAction: TIdSipOutboundInitialInvite;
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Response: TIdSipResponse);
+    procedure OnCallProgress(InviteAgent: TIdSipOutboundInvite;
+                        Response: TIdSipResponse);
+    procedure OnFailure(Action: TIdSipAction;
+                        Response: TIdSipResponse;
+                        const Reason: String);
+    procedure OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
+                                  NewDialog: TIdSipDialog);
+    procedure OnNetworkFailure(Action: TIdSipAction;
+                               ErrorCode: Cardinal;
+                               const Reason: String);
+    procedure OnRedirect(Action: TIdSipAction;
+                         Redirect: TIdSipResponse);
+    procedure OnSuccess(Action: TIdSipAction;
+                        Msg: TIdSipMessage);
+  public
+    procedure SetUp; override;
+  published
+    procedure TestAllLocationsFail;
+    procedure TestLooseRoutingProxy;
+    procedure TestStrictRoutingProxy;
+    procedure TestUseCorrectTransport;
+    procedure TestUseTransportParam;
+    procedure TestUseUdpByDefault;
+    procedure TestVeryLargeMessagesUseAReliableTransport;
+  end;
+
   TestTIdSipReconfigureStackWait = class(TTestCase)
   private
     Configuration: TStrings;
-    NewProxy:      String;
-    OldProxy:      String;
+    NewRoute:      String;
+    OldRoute:      String;
     Stack:         TIdSipUserAgent;
     Timer:         TIdDebugTimerQueue;
     Wait:          TIdSipReconfigureStackWait;
@@ -251,7 +290,7 @@ implementation
 
 uses
   IdException, IdMockRoutingTable, IdSdp, IdSimpleParser, IdSipAuthentication,
-  IdSipConsts, IdSipIndyLocator, IdSipMockLocator,
+  IdSipConsts, IdSipDns, IdSipIndyLocator, IdSipMockLocator,
   IdSipMockTransactionDispatcher, IdSipMockTransport, IdSipSubscribeModule,
   IdSipTCPTransport, IdSipUDPTransport, IdSystem, IdTcpClient, IdUnicode,
   SysUtils;
@@ -306,6 +345,7 @@ begin
   Result := TTestSuite.Create('IdSipUserAgent unit tests');
   Result.AddTest(TestTIdSipUserAgent.Suite);
   Result.AddTest(TestTIdSipStackConfigurator.Suite);
+  Result.AddTest(TestLocation.Suite);
   Result.AddTest(TestTIdSipReconfigureStackWait.Suite);
 end;
 
@@ -680,30 +720,48 @@ begin
   Self.CheckRequestSent('No re-issue of a BYE');
 end;
 }
-procedure TestTIdSipUserAgent.TestCallUsingProxy;
+procedure TestTIdSipUserAgent.TestCallUsingRoutePath;
 const
-  ProxyUri = 'sip:proxy.tessier-ashpool.co.luna';
+  RouteOne = 'sip:proxy.tessier-ashpool.co.luna;lr';
+  RouteTwo = 'sip:gw1.leo-ix.net;lr';
 var
   Invite: TIdSipRequest;
+  RouteUriOne: TIdSipUri;
+  RouteUriTwo: TIdSipUri;
 begin
-  Self.Core.Proxy.Uri := ProxyUri;
-  Self.Core.HasProxy := true;
+  RouteUriOne := TIdSipUri.Create(RouteOne);
+  try
+    RouteUriTwo := TIdSipUri.Create(RouteTwo);
+    try
+      Self.Core.RoutePath.AddRoute(RouteUriOne);
+      Self.Core.RoutePath.AddRoute(RouteUriTwo);
 
-  Self.MarkSentRequestCount;
-  Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '').Send;
-  CheckRequestSent('No request sent');
-  CheckEquals(MethodInvite,
-              Self.LastSentRequest.Method,
-              'Unexpected request sent');
+      Self.MarkSentRequestCount;
+      Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '').Send;
+      CheckRequestSent('No request sent');
+      CheckEquals(MethodInvite,
+                  Self.LastSentRequest.Method,
+                  'Unexpected request sent');
 
-  Invite := Self.LastSentRequest;
-  Check(Invite.HasHeader(RouteHeader),
-        'No Route header added');
+      Invite := Self.LastSentRequest;
+      Check(Invite.HasHeader(RouteHeader),
+            'No Route header added');
 
-  Invite.Route.First;
-  CheckEquals(ProxyUri,
-              Invite.Route.CurrentRoute.Address.Uri,
-              'Route points to wrong proxy');
+      Invite.Route.First;
+      CheckEquals(RouteOne,
+                  Invite.Route.CurrentRoute.Address.Uri,
+                  'Route points to wrong next-hop');
+
+      Invite.Route.Next;
+      CheckEquals(RouteTwo,
+                  Invite.Route.CurrentRoute.Address.Uri,
+                  'Route points to wrong next-next-hop');
+    finally
+      RouteUriTwo.Free;
+    end;
+  finally
+    RouteUriOne.Free;
+  end;
 end;
 
 procedure TestTIdSipUserAgent.TestCancelNotifiesTU;
@@ -860,21 +918,34 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgent.TestCreateRequestInDialogWithOutboundProxy;
+procedure TestTIdSipUserAgent.TestCreateRequestInDialogWithRoutes;
 const
-  ProxyUri = 'sip:proxy.tessier-ashpool.co.luna';
+  RouteOne = 'sip:proxy.tessier-ashpool.co.luna;lr';
+  RouteTwo = 'sip:gw1.leo-ix.net;lr';
 var
-  Inv: TIdSipRequest;
+  Inv:         TIdSipRequest;
+  RouteUriOne: TIdSipUri;
+  RouteUriTwo: TIdSipUri;
 begin
-  Self.Core.Proxy.Uri := ProxyUri;
-  Self.Core.HasProxy := true;
-
-  Check(Self.Dlg.RouteSet.IsEmpty, 'Dialog doesn''t have an empty route set');
-  Inv := Self.Core.CreateRequest(MethodInvite, Self.Dlg);
+  RouteUriOne := TIdSipUri.Create(RouteOne);
   try
-    Check(not Inv.HasRoute, 'In-dialog request created with Route header, but dialog has no route set');
+    RouteUriTwo := TIdSipUri.Create(RouteTwo);
+    try
+      Self.Core.RoutePath.AddRoute(RouteUriOne);
+      Self.Core.RoutePath.AddRoute(RouteUriTwo);
+
+      Check(Self.Dlg.RouteSet.IsEmpty, 'Dialog doesn''t have an empty route set');
+      Inv := Self.Core.CreateRequest(MethodInvite, Self.Dlg);
+      try
+        Check(not Inv.HasRoute, 'In-dialog request created with Route header, but dialog has no route set');
+      finally
+        Inv.Free;
+      end;
+    finally
+      RouteUriTwo.Free;
+    end;
   finally
-    Inv.Free;
+    RouteUriOne.Free;
   end;
 end;
 
@@ -1056,28 +1127,6 @@ begin
     end;
   finally
     Listener.Free;
-  end;
-end;
-
-procedure TestTIdSipUserAgent.TestDestroyWithProxyAndAutoReregister;
-const
-  ProxyUri = 'sip:127.0.0.2';
-var
-  UA: TIdSipUserAgent;
-begin
-  // This bug catches a dangling pointer bug when you destroy a UA that uses a
-  // proxy and unregisters automatically from a registrar.
-
-  UA := Self.CreateUserAgent('sip:case@localhost');
-  try
-    UA.Proxy.Uri := ProxyUri;
-    UA.HasProxy  := true;
-
-    UA.RegisterModule.Registrar.Uri  := ProxyUri;
-    UA.RegisterModule.HasRegistrar   := true;
-    UA.RegisterModule.AutoReRegister := true;
-  finally
-    UA.Free;
   end;
 end;
 
@@ -2491,18 +2540,18 @@ begin
   end;
 end;
 
-procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithMalformedProxy;
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithMalformedRoute;
 const
-  MalformedProxyLine = 'Proxy: sip://localhost'; // SIP URIs don't use "//"
+  MalformedRouteLine = 'Route: sip://localhost'; // SIP URIs don't use "//"
 begin
-  Self.Configuration.Add(MalformedProxyLine);
+  Self.Configuration.Add(MalformedRouteLine);
 
   try
     Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
-    Fail('Failed to bail out with malformed proxy');
+    Fail('Failed to bail out with malformed Route header');
   except
     on E: EParserError do
-      Check(Pos(MalformedProxyLine, E.Message) > 0,
+      Check(Pos(MalformedRouteLine, E.Message) > 0,
             'Insufficient error message');
   end;
 end;
@@ -2765,26 +2814,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithProxy;
-const
-  ProxyUri = 'sip:localhost';
-var
-  UA: TIdSipUserAgent;
-begin
-  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
-  Self.Configuration.Add('Proxy: ' + ProxyUri);
-
-  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
-  try
-    Check(UA.HasProxy, 'No proxy specified');
-    CheckEquals(ProxyUri,
-                UA.Proxy.AsString,
-                'Wrong proxy specified');
-  finally
-    UA.Free;
-  end;
-end;
-
 procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithReferSupport;
 var
   Module: TIdSipSubscribeModule;
@@ -2856,6 +2885,31 @@ begin
           'No Locator assigned to the Transaction layer');
     Check(UA.Locator = UA.Dispatcher.Locator,
           'Transaction and Transaction-User layers have different Locators');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithRouteHeaders;
+const
+  RouteOne = 'sip:proxy.tessier-ashpool.co.luna;lr';
+  RouteTwo = 'sip:gw1.leo-ix.net;lr';
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('NameServer: MOCK');
+  Self.Configuration.Add('Route: ' + RouteOne);
+  Self.Configuration.Add('Route: ' + RouteTwo);
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Check(not UA.RoutePath.IsEmpty, 'No routes added');
+
+    UA.RoutePath.First;
+    CheckEquals(RouteOne, UA.RoutePath.CurrentRoute.Address.Uri, 'First Route');
+    UA.RoutePath.Next;
+    CheckEquals(RouteTwo, UA.RoutePath.CurrentRoute.Address.Uri, 'Second Route');
   finally
     UA.Free;
   end;
@@ -3044,31 +3098,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithProxy;
-var
-  NewConfig: TStrings;
-  NewProxy:  String;
-  UA:        TIdSipUserAgent;
-begin
-  NewProxy := 'sip:proxy.leo-ix.net';
-
-  Self.SetBasicConfiguration(Self.Configuration);
-  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
-  try
-    NewConfig := TStringList.Create;
-    try
-      NewConfig.Add('Proxy: ' + NewProxy);
-
-      Self.Conf.UpdateConfiguration(UA, NewConfig);
-      CheckEquals(NewProxy, UA.Proxy.AsString, 'Proxy not updated');
-    finally
-      NewConfig.Free;
-    end;
-  finally
-    UA.Free;
-  end;
-end;
-
 procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithRegistrar;
 var
   NewConfig:    TStrings;
@@ -3101,6 +3130,34 @@ begin
 
       Self.WaitForSignaled(Self.NewRegistrarEvent, 'Waiting for REGISTER to new registrar');
       Check(Self.NewRegistrarReceivedPacket, 'No REGISTER sent to new registrar');
+    finally
+      NewConfig.Free;
+    end;
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithRouteHeaders;
+const
+  OldRoute = 'sip:proxy.leo-ix.net';
+  NewRoute = 'sip:gw1.leo-ix.net;lr';
+var
+  NewConfig: TStrings;
+  UA:        TIdSipUserAgent;
+begin
+  Self.SetBasicConfiguration(Self.Configuration);
+  Self.Configuration.Add('Route: ' + OldRoute);
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    NewConfig := TStringList.Create;
+    try
+      NewConfig.Add('Route: ' + NewRoute);
+
+      Self.Conf.UpdateConfiguration(UA, NewConfig);
+      Check(not UA.RoutePath.IsEmpty, 'Route path is empty - nothing added');
+      UA.RoutePath.First;
+      CheckEquals(NewRoute, UA.RoutePath.CurrentRoute.Address.AsString, 'Route not updated');
     finally
       NewConfig.Free;
     end;
@@ -3236,6 +3293,254 @@ begin
 end;
 
 //******************************************************************************
+//* TestLocation                                                               *
+//******************************************************************************
+//* TestLocation Public methods ************************************************
+
+procedure TestLocation.SetUp;
+begin
+  inherited SetUp;
+
+  Self.InviteMimeType := '';
+  Self.InviteOffer    := '';
+  Self.NetworkFailure := false;
+  Self.TransportParam := SctpTransport;
+end;
+
+//* TestLocation Private methods ***********************************************
+
+function TestLocation.CreateAction: TIdSipOutboundInitialInvite;
+begin
+  Result := Self.Core.AddOutboundAction(TIdSipOutboundInitialInvite) as TIdSipOutboundInitialInvite;
+  Result.Destination := Self.Destination;
+  Result.MimeType    := Self.InviteMimeType;
+  Result.Offer       := Self.InviteOffer;
+  Result.AddActionListener(Self);
+  Result.AddInviteListener(Self);
+  Result.Send;
+end;
+
+procedure TestLocation.OnAuthenticationChallenge(Action: TIdSipAction;
+                                                 Response: TIdSipResponse);
+begin
+end;
+
+procedure TestLocation.OnCallProgress(InviteAgent: TIdSipOutboundInvite;
+                                      Response: TIdSipResponse);
+begin
+end;
+
+procedure TestLocation.OnFailure(Action: TIdSipAction;
+                                 Response: TIdSipResponse;
+                                 const Reason: String);
+begin
+end;
+
+procedure TestLocation.OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
+                                           NewDialog: TIdSipDialog);
+begin
+end;
+
+procedure TestLocation.OnNetworkFailure(Action: TIdSipAction;
+                                        ErrorCode: Cardinal;
+                                        const Reason: String);
+begin
+  Self.NetworkFailure := true;
+end;
+
+procedure TestLocation.OnRedirect(Action: TIdSipAction;
+                                  Redirect: TIdSipResponse);
+begin
+end;
+
+procedure TestLocation.OnSuccess(Action: TIdSipAction;
+                                 Msg: TIdSipMessage);
+begin
+end;
+
+//* TestLocation Published methods *********************************************
+
+procedure TestLocation.TestAllLocationsFail;
+var
+  I:         Integer;
+  Locations: TIdSipLocations;
+begin
+  // SRV records point to Self.Destination.Address.Host;
+  // Self.Destination.Address.Host resolves to two name records.
+
+  Self.Locator.AddSRV(Self.Destination.Address.Host,
+                      SrvUdpPrefix,
+                      0,
+                      0,
+                      5060,
+                      Self.Destination.Address.Host);
+  Self.Locator.AddA   (Self.Destination.Address.Host, '127.0.0.2');
+  Self.Locator.AddAAAA(Self.Destination.Address.Host, '::2');
+
+  Locations := TIdSipLocations.Create;
+  try
+    Self.Locator.FindServersFor(Self.Destination.Address, Locations);
+
+    Self.MarkSentRequestCount;
+    Self.CreateAction;
+    CheckRequestSent('No request sent');
+    for I := 0 to Locations.Count - 1 do begin
+      // This should trigger a resend of the message to a new location.
+      Self.Dispatcher.Transport.FireOnException(Self.LastSentRequest,
+                                                EIdConnectException,
+                                                '10061',
+                                                'Connection refused');
+    end;
+
+    // Locations.Count >= 0, so the typecast is safe.
+    CheckEquals(Self.RequestCount + Cardinal(Locations.Count),
+                Self.SentRequestCount,
+                'Number of requests sent');
+  finally
+    Locations.Free;
+  end;
+
+  Check(Self.NetworkFailure,
+        'No notification of failure after all locations attempted');
+end;
+
+procedure TestLocation.TestLooseRoutingProxy;
+const
+  ProxyAAAARecord = '::1';
+  ProxyHost       = 'gw1.leo-ix.net';
+  ProxyTransport  = SctpTransport;
+  ProxyUri        = 'sip:' + ProxyHost + ';lr';
+var
+  RequestUriTransport: String;
+  Uri:                 TIdSipUri;
+begin
+  RequestUriTransport := Self.Invite.LastHop.Transport;
+
+  Uri := TIdSipUri.Create(ProxyUri);
+  try
+    Self.Core.RoutePath.AddRoute(Uri);
+
+    // Set so LastSentRequest uses the correct transport
+    Self.Dispatcher.TransportType := ProxyTransport;
+
+    Self.Locator.AddSRV(ProxyHost, SrvSctpPrefix, 0, 0, 5060, ProxyHost);
+    Self.Locator.AddAAAA(ProxyHost, ProxyAAAARecord);
+
+    Self.Locator.AddSRV(Self.Destination.Address.Host, SrvTcpPrefix, 0, 0,
+                        5060, Self.Destination.Address.Host);
+
+    Self.Locator.AddA(Self.Destination.Address.Host, '127.0.0.1');
+
+    Self.MarkSentRequestCount;
+    Self.CreateAction;
+    CheckRequestSent('No request sent');
+
+    CheckEquals(ProxyTransport,
+                Self.LastSentRequest.LastHop.Transport,
+                'Wrong transport means UA gave Locator wrong URI');
+  finally
+    Uri.Free;
+  end;
+end;
+
+procedure TestLocation.TestStrictRoutingProxy;
+const
+  ProxyUri = 'sip:127.0.0.1;transport=' + TransportParamSCTP;
+var
+  RequestUriTransport: String;
+  Uri:                 TIdSipUri;
+begin
+  // The transport specified in the INVITE's Request-URI differs from that in
+  // the Route header. We check that the message goes over the transport
+  // specified in the Request-URI header, as per RFC 3261, section 8.1.2
+
+  Uri := TIdSipUri.Create(ProxyUri);
+  try
+    Self.Destination.Address.Transport := TransportParamTCP;
+    RequestUriTransport                := TcpTransport;
+
+    Self.Core.RoutePath.AddRoute(Uri);
+
+    Self.MarkSentRequestCount;
+    Self.CreateAction;
+    CheckRequestSent('No request sent');
+
+    CheckEquals(RequestUriTransport,
+                Self.LastSentRequest.LastHop.Transport,
+                'Wrong transport means UA gave Locator wrong URI');
+  finally
+    Uri.Free;
+  end;
+end;
+
+procedure TestLocation.TestUseCorrectTransport;
+const
+  CorrectTransport = SctpTransport;
+var
+  Action: TIdSipAction;
+  Domain: String;
+begin
+  Domain := Self.Destination.Address.Host;
+
+  Self.Dispatcher.TransportType := SctpTransport;  
+  // NAPTR record points to SCTP SRV record whose target resolves to the A
+  // record.
+  Self.Locator.AddNAPTR(Domain, 0, 0, NaptrDefaultFlags, NaptrSctpService, SrvSctpPrefix + Domain);
+  Self.Locator.AddSRV(Domain, SrvSctpPrefix, 0, 0, 5060, Domain);
+  Self.Locator.AddSRV(Domain, SrvTcpPrefix,  1, 0, 5060, Domain);
+
+  Self.MarkSentRequestCount;
+  Action := Self.CreateAction;
+
+  CheckRequestSent('No request sent');
+  CheckEquals(CorrectTransport,
+              Self.LastSentRequest.LastHop.Transport,
+              'Incorrect transport');
+  Check(Self.LastSentRequest.Equals(Action.InitialRequest),
+        'Action''s InitialRequest not updated to the latest attempt');
+end;
+
+procedure TestLocation.TestUseTransportParam;
+begin
+  Self.Dispatcher.TransportType := Self.TransportParam;
+  Self.Destination.Address.Transport := Self.TransportParam;
+
+  Self.MarkSentRequestCount;
+  Self.CreateAction;
+  Self.CheckRequestSent('No request sent');
+
+  CheckEquals(SctpTransport,
+              Self.LastSentRequest.LastHop.Transport,
+              'INVITE didn''t use transport param');
+end;
+
+procedure TestLocation.TestUseUdpByDefault;
+begin
+  Self.MarkSentRequestCount;
+  Self.CreateAction;
+  Self.CheckRequestSent('No request sent');
+
+  CheckEquals(UdpTransport,
+              Self.LastSentRequest.LastHop.Transport,
+              'INVITE didn''t use UDP by default');
+end;
+
+procedure TestLocation.TestVeryLargeMessagesUseAReliableTransport;
+begin
+  Self.InviteOffer    := TIdSipTestResources.VeryLargeSDP('localhost');
+  Self.InviteMimeType := SdpMimeType;
+
+  Self.MarkSentRequestCount;
+  Self.CreateAction;
+  Self.CheckRequestSent('No request sent');
+
+  CheckEquals(TcpTransport,
+              Self.LastSentRequest.LastHop.Transport,
+              'INVITE didn''t use a reliable transport despite the large size '
+            + 'of the message');
+end;
+
+//******************************************************************************
 //* TestTIdSipReconfigureStackWait                                             *
 //******************************************************************************
 //* TestTIdSipReconfigureStackWait Public methods ******************************
@@ -3246,11 +3551,11 @@ var
 begin
   inherited SetUp;
 
-  Self.NewProxy := 'sip:gw1.leo-ix.net';
-  Self.OldProxy := 'sip:proxy.tessier-ashpool.co.luna';
+  Self.NewRoute := 'sip:gw1.leo-ix.net';
+  Self.OldRoute := 'sip:proxy.tessier-ashpool.co.luna';
 
   Self.Configuration := TStringList.Create;
-  Self.Configuration.Add(ProxyDirective + ': ' + Self.NewProxy);
+  Self.Configuration.Add(RouteHeaderDirective + ': ' + Self.NewRoute);
 
   Self.Timer := TIdDebugTimerQueue.Create(true);
   Conf := TIdSipStackConfigurator.Create;
@@ -3260,7 +3565,7 @@ begin
     Conf.Free;
   end;
 
-  Self.Stack.Proxy.Uri := Self.OldProxy;
+  Self.Stack.RoutePath.Add(RouteHeader).Value := Self.OldRoute;
 
   Self.Wait := TIdSipReconfigureStackWait.Create;
   Self.Wait.Configuration := Self.Configuration;
@@ -3283,9 +3588,10 @@ procedure TestTIdSipReconfigureStackWait.TestTrigger;
 begin
   Self.Wait.Trigger;
 
-  CheckEquals(Self.NewProxy,
-              Self.Stack.Proxy.Uri,
-              'Proxy not set, ergo Wait didn''t trigger');
+  Self.Stack.RoutePath.First;
+  CheckEquals(Self.NewRoute,
+              Self.Stack.RoutePath.CurrentRoute.Address.Uri,
+              'Route not changed, ergo Wait didn''t trigger');
 end;
 
 initialization

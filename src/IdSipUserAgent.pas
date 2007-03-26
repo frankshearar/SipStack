@@ -28,9 +28,8 @@ type
     Registrar:                 TIdSipUri;
     fDoNotDisturbMessage:      String;
     fFrom:                     TIdSipFromHeader;
-    fHasProxy:                 Boolean;
-    fProxy:                    TIdSipUri;
     fRegisterModule:           TIdSipOutboundRegisterModule;
+    fRoutePath:                TIdSipRoutePath;
     fInviteModule:             TIdSipInviteModule;
     HasRegistered:             Boolean;
 
@@ -58,7 +57,7 @@ type
     procedure SetFrom(Value: TIdSipFromHeader);
     procedure SetInitialResendInterval(Value: Cardinal);
     procedure SetProgressResendInterval(Value: Cardinal);
-    procedure SetProxy(Value: TIdSipUri);
+    procedure SetRoutePath(Value: TIdSipRoutePath);
     procedure SetUsername(Value: String);
   public
     constructor Create; override;
@@ -78,12 +77,11 @@ type
     property DoNotDisturb:           Boolean                      read GetDoNotDisturb write SetDoNotDisturb;
     property DoNotDisturbMessage:    String                       read fDoNotDisturbMessage write fDoNotDisturbMessage;
     property From:                   TIdSipFromHeader             read fFrom write SetFrom;
-    property HasProxy:               Boolean                      read fHasProxy write fHasProxy;
     property InitialResendInterval:  Cardinal                     read GetInitialResendInterval write SetInitialResendInterval;
     property InviteModule:           TIdSipInviteModule           read fInviteModule;
     property ProgressResendInterval: Cardinal                     read GetProgressResendInterval write SetProgressResendInterval;
-    property Proxy:                  TIdSipUri                    read fProxy write SetProxy;
     property RegisterModule:         TIdSipOutboundRegisterModule read fRegisterModule;
+    property RoutePath:              TIdSipRoutePath              read fRoutePath write SetRoutePath;
     property Username:               String                       read GetUsername write SetUsername;
   end;
 
@@ -111,8 +109,8 @@ type
   //   NameServer: MOCK [;ReturnOnlySpecifiedRecords]
   //   Register: <SIP/S URI>
   //   ResolveNamesLocallyFirst: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
+  //   Route: <SIP/S URI>
   //   RoutingTable: MOCK
-  //   Proxy: <SIP/S URI>
   //   SupportEvent: refer
   //   InstanceID: urn:uuid:00000000-0000-0000-0000-000000000000
   //   UseGruu: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
@@ -131,6 +129,7 @@ type
   TIdSipStackConfigurator = class(TObject)
   private
     FalseValues:             TStrings;
+    FirstRouteDirective:     Boolean;
     FirstTransportDirective: Boolean;
 
     procedure AddAddress(UserAgent: TIdSipAbstractCore;
@@ -157,8 +156,8 @@ type
                                     Action: TIdSipAction);
     procedure AddPendingUnregister(UserAgent: TIdSipUserAgent;
                                    PendingActions: TObjectList);
-    procedure AddProxy(UserAgent: TIdSipUserAgent;
-                       const ProxyLine: String);
+    procedure AddRouteHeader(UserAgent: TIdSipUserAgent;
+                       const RouteHeaderLine: String);
     procedure AddRoutingTable(UserAgent: TIdSipAbstractCore;
                               const RoutingTableLine: String);
     procedure AddSupportForEventPackage(UserAgent: TIdSipAbstractCore;
@@ -315,10 +314,10 @@ const
   MappedRouteDirective                    = 'MappedRoute';
   MockRouteDirective                      = 'MockRoute';
   NameServerDirective                     = 'NameServer';
-  ProxyDirective                          = 'Proxy';
   RegisterDirective                       = 'Register';
   ResolveNamesLocallyFirstDirective       = 'ResolveNamesLocallyFirst';
   ReturnOnlySpecifiedRecordsLocatorOption = 'ReturnOnlySpecifiedRecords';
+  RouteHeaderDirective                    = 'Route';
   RoutingTableDirective                   = 'RoutingTable';
   SupportEventDirective                   = 'SupportEvent';
   UseGruuDirective                        = 'UseGruu';
@@ -359,14 +358,13 @@ begin
   Self.fFrom           := TIdSipFromHeader.Create;
   Self.fInviteModule   := Self.AddModule(TIdSipInviteModule) as TIdSipInviteModule;
   Self.fRegisterModule := Self.AddModule(TIdSipOutboundRegisterModule) as TIdSipOutboundRegisterModule;
+  Self.fRoutePath      := TIdSipRoutePath.Create;
 
   Self.InviteModule.AddListener(Self);
 
   Self.DoNotDisturb           := false;
   Self.DoNotDisturbMessage    := RSSIPTemporarilyUnavailable;
   Self.From.Value             := Self.DefaultFrom;
-  Self.fProxy                 := TIdSipUri.Create('');
-  Self.HasProxy               := false;
   Self.HasRegistered          := false;
   Self.InitialResendInterval  := DefaultT1;
 end;
@@ -385,7 +383,7 @@ begin
 
   inherited Destroy;
 
-  Self.Proxy.Free;
+  Self.RoutePath.Free;
   Self.Dispatcher.Free;
   Self.Authenticator.Free;
 
@@ -422,8 +420,8 @@ begin
   if OutboundRequest.HasSipsUri then
     OutboundRequest.FirstContact.Address.Scheme := SipsScheme;
 
-  if Self.HasProxy and not InDialogRequest then
-    OutboundRequest.Route.AddRoute(Self.Proxy);
+  if not InDialogRequest then
+    OutboundRequest.AddHeaders(Self.RoutePath);
 end;
 
 function TIdSipUserAgent.AddOutboundAction(ActionType: TIdSipActionClass): TIdSipAction;
@@ -651,9 +649,10 @@ begin
   Self.InviteModule.ProgressResendInterval := Value;
 end;
 
-procedure TIdSipUserAgent.SetProxy(Value: TIdSipUri);
+procedure TIdSipUserAgent.SetRoutePath(Value: TIdSipRoutePath);
 begin
-  Self.Proxy.Uri := Value.Uri;
+  Self.RoutePath.Clear;
+  Self.RoutePath.Add(Value);
 end;
 
 procedure TIdSipUserAgent.SetUsername(Value: String);
@@ -715,6 +714,7 @@ begin
   // Register to a new registrar if necessary
 
   Self.FirstTransportDirective := true;
+  Self.FirstRouteDirective     := true;
 
 //  UserAgent.Dispatcher.ClearTransports;
 
@@ -948,20 +948,28 @@ begin
     Self.AddPendingMessageSend(PendingActions, UserAgent.UnregisterFrom(Reg.Registrar));
 end;
 
-procedure TIdSipStackConfigurator.AddProxy(UserAgent: TIdSipUserAgent;
-                                           const ProxyLine: String);
+procedure TIdSipStackConfigurator.AddRouteHeader(UserAgent: TIdSipUserAgent;
+                                                 const RouteHeaderLine: String);
 var
   Line: String;
+  Uri:  TIdSipUri;
 begin
   // See class comment for the format for this directive.
-  Line := ProxyLine;
+  Line := RouteHeaderLine;
   EatDirective(Line);
 
-  UserAgent.HasProxy := true;
+  // If the configuration file contains any Route directives, make sure we
+  // clear the existing Route path.
+  if Self.FirstRouteDirective then begin
+    UserAgent.RoutePath.Clear;
+    Self.FirstRouteDirective := false;
+  end;
 
-  UserAgent.Proxy.Uri := Trim(Line);
+  Uri := TIdSipUri.Create(Trim(Line));
 
-  Self.CheckUri(UserAgent.Proxy, Format(MalformedConfigurationLine, [ProxyLine]));
+  UserAgent.RoutePath.AddRoute(Uri);
+
+  Self.CheckUri(Uri, Format(MalformedConfigurationLine, [RouteHeaderLine]));
 end;
 
 procedure TIdSipStackConfigurator.AddRoutingTable(UserAgent: TIdSipAbstractCore;
@@ -1117,12 +1125,12 @@ begin
     Self.AddMockedRoute(UserAgent, ConfigurationLine, PendingActions)
   else if IsEqual(FirstToken, NameServerDirective) then
     Self.AddLocator(UserAgent, ConfigurationLine)
-  else if IsEqual(FirstToken, ProxyDirective) then
-    Self.AddProxy(UserAgent,  ConfigurationLine)
   else if IsEqual(FirstToken, RegisterDirective) then
     Self.RegisterUA(UserAgent, ConfigurationLine, PendingActions)
   else if IsEqual(FirstToken, ResolveNamesLocallyFirstDirective) then
     Self.UseLocalResolution(UserAgent, ConfigurationLine, PendingActions)
+  else if IsEqual(FirstToken, RouteHeaderDirective) then
+    Self.AddRouteHeader(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, RoutingTableDirective) then
     Self.AddRoutingTable(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, SupportEventDirective) then

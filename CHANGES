@@ -31,6 +31,9 @@ v0.6 (2007/xx/yy)
   to send a message.
 * For tests, you can use MockRoute directives to set up a routing
   table any way you like. (Use RoutingTable: MOCK at the same time!)
+* The Route directive replaces the Proxy directive. You can now
+  specify multiple Route directives, which define the route set put
+  into dialog-establishing requests.
 
 v0.5.3 (2007/01/26)
 * All modules now reside in separate units. (This only affects

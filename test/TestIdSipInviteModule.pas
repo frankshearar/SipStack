@@ -2908,17 +2908,22 @@ const
   ProxyUri = 'sip:proxy.tessier-ashpool.co.luna';
 var
   Invite: TIdSipAction;
+  Uri:    TIdSipUri;
 begin
-  Self.Core.Proxy.Uri := ProxyUri;
-  Self.Core.HasProxy  := true;
+  Uri := TIdSipUri.Create(ProxyUri);
+  try
+    Self.Core.RoutePath.AddRoute(Uri);
 
-  Invite := Self.CreateAction;
-  Self.ReceiveTrying(Self.LastSentRequest);
+    Invite := Self.CreateAction;
+    Self.ReceiveTrying(Self.LastSentRequest);
 
-  Self.MarkSentRequestCount;
-  Invite.Terminate;
-  CheckRequestSent('No CANCEL sent');
-  Check(Self.LastSentRequest.HasRoute, 'Route header not added to (out-of-dialog) INVITE');
+    Self.MarkSentRequestCount;
+    Invite.Terminate;
+    CheckRequestSent('No CANCEL sent');
+    Check(Self.LastSentRequest.HasRoute, 'Route header not added to (out-of-dialog) INVITE');
+  finally
+    Uri.Free;
+  end;
 end;
 
 procedure TestTIdSipOutboundInvite.TestInviteTwice;
@@ -3423,8 +3428,7 @@ begin
   Check(Self.Dialog.RouteSet.IsEmpty,
         'For the purposes of this test the dialog''s route set must be empty');
 
-  Self.Core.Proxy.Uri := ProxyUri;
-  Self.Core.HasProxy  := true;
+  Self.Core.RoutePath.Add(RouteHeader).Value := ProxyUri;
 
   Invite := Self.CreateAction;
   Self.ReceiveTrying(Self.LastSentRequest);
