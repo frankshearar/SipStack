@@ -132,6 +132,7 @@ type
     procedure TestPrintOnBasic;
     procedure TestPrintOnFull;
     procedure TestPrintOnWithPortCount;
+    procedure TestUsesBinding;
   end;
 
   TestTIdSdpOrigin = class(TTestCase)
@@ -1712,6 +1713,53 @@ begin
   finally
     S.Free;
   end;
+end;
+
+procedure TestTIdSdpMediaDescription.TestUsesBinding;
+var
+  Binding: TIdConnection;
+begin
+  Self.ConfigureComplicatedly(Self.M);
+
+  Binding.LocalIP   := Self.M.Connections[0].Address;
+  Binding.LocalPort := Self.M.Port;
+  Check(Self.M.UsesBinding(Binding), 'IPv4 binding');
+
+  Binding.LocalIP   := Self.M.Connections[0].Address;
+  Binding.LocalPort := Self.M.Port + 1;
+  Check(not Self.M.UsesBinding(Binding), 'IPv4 binding with unused port');
+
+  Binding.LocalIP   := TIdIPAddressParser.IncIPAddress(Self.M.Connections[0].Address);
+  Binding.LocalPort := Self.M.Port;
+  Check(not Self.M.UsesBinding(Binding), 'IPv4 binding with unused address');
+
+  Binding.LocalIP   := Self.M.Connections[1].Address;
+  Binding.LocalPort := Self.M.Port;
+  Check(Self.M.UsesBinding(Binding), 'IPv6 binding');
+
+  Binding.LocalIP   := Self.M.Connections[1].Address;
+  Binding.LocalPort := Self.M.Port + 1;
+  Check(not Self.M.UsesBinding(Binding), 'IPv6 binding with unused port');
+
+  Binding.LocalIP   := TIdIPAddressParser.IncIPAddress(Self.M.Connections[1].Address);
+  Binding.LocalPort := Self.M.Port;
+  Check(not Self.M.UsesBinding(Binding), 'IPv6 binding with unused address');
+
+  Self.M.Connections.Remove(Self.M.Connections[1]);
+  Self.M.PortCount := 2;
+
+  Binding.LocalIP   := Self.M.Connections[0].Address;
+  Binding.LocalPort := Self.M.Port;
+  Check(Self.M.UsesBinding(Binding), 'IPv4 binding (with port count)');
+
+  Binding.LocalPort := Self.M.Port + 2;
+  Check(Self.M.UsesBinding(Binding), 'IPv4 binding (with port count), 2nd port');
+  Binding.LocalPort := Self.M.Port + 1;
+  Check(not Self.M.UsesBinding(Binding), 'IPv4 binding (with port count), on RTCP port ');
+  Binding.LocalPort := Self.M.Port + 3;
+  Check(not Self.M.UsesBinding(Binding), 'IPv4 binding (with port count), on 2nd RTCP port');
+  Binding.LocalPort := Self.M.Port + 4;
+  Check(not Self.M.UsesBinding(Binding), 'IPv4 binding (with port count), unused port');
 end;
 
 //******************************************************************************

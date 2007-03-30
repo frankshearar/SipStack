@@ -182,6 +182,7 @@ type
     function  IsRefusedStream: Boolean;
     function  IsText: Boolean;
     procedure PrintOn(Dest: TStream); override;
+    function  UsesBinding(Binding: TIdConnection): Boolean;
 
     property Attributes:              TIdSdpAttributes       read GetAttributes;
     property Bandwidths:              TIdSdpBandwidths       read GetBandwidths;
@@ -584,6 +585,7 @@ type
     procedure StartListening;
     procedure StopListening;
     procedure TakeOffHold;
+    function  UsesBinding(Binding: TIdConnection): Boolean;
 
     property Direction:         TIdSdpDirection        read GetDirection write SetDirection;
     property LocalDescription:  TIdSdpMediaDescription read fLocalDescription write SetLocalDescription;
@@ -1377,6 +1379,22 @@ begin
 
   Self.RTPMapAttributes.PrintOn(Dest);
   Self.Attributes.PrintOn(Dest);
+end;
+
+function TIdSdpMediaDescription.UsesBinding(Binding: TIdConnection): Boolean;
+var
+  I: Integer;
+  J: Integer;
+begin
+  Result := false;
+  for I := 0 to Self.Connections.Count - 1 do begin
+    for J := 0 to Self.PortCount - 1 do begin
+      if (Binding.LocalIP = Self.Connections[I].Address) and (Binding.LocalPort = (Self.Port + Cardinal(2*J))) then begin
+        Result := true;
+        Break;
+      end;
+    end;
+  end;
 end;
 
 //* TIdSdpMediaDescription Private methods *************************************
@@ -3569,6 +3587,11 @@ begin
     Self.Direction := Self.PreHoldDirection;
     Self.fOnHold   := false;
   end;
+end;
+
+function TIdSDPMediaStream.UsesBinding(Binding: TIdConnection): Boolean;
+begin
+  Result := Self.LocalDescription.UsesBinding(Binding);
 end;
 
 //* TIdSDPMediaStream Private methods ******************************************
