@@ -95,8 +95,8 @@ type
                         Binding: TIdConnection);
 
     property BindingParam: TIdConnection read fBindingParam;
-    property DataParam: TIdRTPPayload      read fDataParam;
-    property NewData:   Boolean            read fNewData;
+    property DataParam:    TIdRTPPayload read fDataParam;
+    property NewData:      Boolean       read fNewData;
   end;
 
   TIdRTPTestRTPListener = class(TIdInterfacedObject,
