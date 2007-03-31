@@ -30,8 +30,9 @@ type
   private
     List: TObjectList;
 
-    function GetEntries(Index: Integer): TIdHistogramEntry;
-    function IndexOf(const Name: String): Integer;
+    procedure AddNewEntry(const Name: String);
+    function  GetEntries(Index: Integer): TIdHistogramEntry;
+    function  IndexOf(const Name: String): Integer;
   public
     constructor Create;
     destructor  Destroy; override;
@@ -166,31 +167,37 @@ end;
 
 procedure TIdHistogram.RecordEvent(const Name: String);
 var
-  Index:    Integer;
-  NewEntry: TIdHistogramEntry;
+  Index: Integer;
 begin
   Index := Self.IndexOf(Name);
 
-  if (Index = ItemNotFoundIndex) then begin
-    NewEntry := TIdHistogramEntry.Create;
-    try
-      NewEntry.Count := 1;
-      NewEntry.Name  := Name;
-
-      Self.List.Add(NewEntry);
-    except
-      if (Self.List.IndexOf(NewEntry) <> ItemNotFoundIndex) then
-        Self.List.Remove(NewEntry)
-      else
-        NewEntry.Free;
-    end;
-  end
-  else begin
+  if (Index = ItemNotFoundIndex) then
+    Self.AddNewEntry(Name)
+  else
     Self.Entries[Index].IncrementCount;
-  end;
 end;
 
 //* TIdHistogram Private methods ***********************************************
+
+procedure TIdHistogram.AddNewEntry(const Name: String);
+var
+  NewEntry: TIdHistogramEntry;
+begin
+  NewEntry := TIdHistogramEntry.Create;
+  try
+    NewEntry.Count := 1;
+    NewEntry.Name  := Name;
+
+    Self.List.Add(NewEntry);
+  except
+    if (Self.List.IndexOf(NewEntry) <> ItemNotFoundIndex) then
+      Self.List.Remove(NewEntry)
+    else
+      NewEntry.Free;
+
+    raise;
+  end;
+end;
 
 function TIdHistogram.GetEntries(Index: Integer): TIdHistogramEntry;
 begin
