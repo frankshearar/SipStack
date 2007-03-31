@@ -76,6 +76,12 @@ type
   //
   // WaitEvent lets me re-evaluate the shortest wait time whenever something
   //  adds or removes events. Or when something's Terminated me.
+  //
+  // Note that if you add several Waits with the same MillisecsWait in a very
+  // short space of time, I do not guarantee the execution order of the Waits.
+  // This is a limitation of using TDateTimes for the Waits' TriggerTimes: the
+  // Waits will have TriggerTimes so close together that they're effectively
+  // equal.
   TIdTimerQueue = class(TObject)
   private
     fCreateSuspended: Boolean;
