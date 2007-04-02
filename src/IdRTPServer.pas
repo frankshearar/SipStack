@@ -30,18 +30,23 @@ type
   //
   // SendPacket provides a service to the Session. Don't use it directly.
   //
-  // When I receive an RTCP packet, I notify my listeners (as you might expect).
-  // However, when I receive a compound RTCP packet, I present the contents of
-  // that packet one at a time to my listeners. In other words, if I receive
-  // a compound packet containing an SR, an RR and an SDES, then my listeners
-  // will see first an SR, then an RR, then an SDES, with no apparent connection
+  // When I receive an RTCP packet, I do two things: first, I schedule a Wait
+  // object so that higher layers of the stack run only in the context of my
+  // Timer's thread. Second, I notify my listeners (as you might expect). THIS
+  // NOTIFICATION HAPPENS IN THE CONTEXT OF MY LISTENER THREAD. USE IT FOR
+  // TESTING, AND NOT FOR PRODUCTION CODE.
+  // When I receive a compound RTCP packet, I present the contents of that
+  // packet one at a time to my listeners. In other words, if I receive a
+  // compound packet containing an SR, an RR and an SDES, then my listeners will
+  // see first an SR, then an RR, then an SDES, with no apparent connection
   // between the packets other than them having arrived on the same binding. This
-  // can work because the packets will all share the same SSRC.
+  // can work because the packets will all share the same SSRC. (Note that since
+  // these Wait objects are scheduled to execute at the same time, and are
+  // scheduled in a very short space of time, you cannot assume a particular
+  // ordering of these RTCP Waits.) 
   TIdRTPServer = class(TIdInterfacedObject,
                        IIdAbstractRTPPeer)
   private
-    fOnRTCPRead:     TIdRTCPReadEvent;
-    fOnRTPRead:      TIdRTPReadEvent;
     fSession:        TIdRTPSession;
     ManuallySetRTCP: Boolean;
     Peer:            TIdBaseRTPAbstractPeer; // We delegate to this to facilitate code reuse
@@ -53,23 +58,26 @@ type
     function  GetAddress: String;
     function  GetDefaultPort: Integer;
     function  GetLocalProfile: TIdRTPProfile;
-    function  GetOnUDPRead: TUDPReadEvent;
     function  GetRemoteProfile: TIdRTPProfile;
-    function  GetRTCPPort: Integer;
-    function  GetRTPPort: Integer;
+    function  GetRTCPPort: Cardinal;
+    function  GetRTPPort: Cardinal;
     function  GetTimer: TIdTimerQueue;
     procedure NotifyListenersOfRTCP(Packet: TIdRTCPPacket;
                                     Binding: TIdConnection);
     procedure NotifyListenersOfRTP(Packet: TIdRTPPacket;
                                    Binding: TIdConnection);
+    procedure ReceiveInTimerContext(Packet: TIdRTPBasePacket;
+                                    Binding: TIdConnection);
+    procedure ReceiveRTCPInTimerContext(Packet: TIdRTCPPacket;
+                                       Binding: TIdConnection);
     procedure SetActive(Value: Boolean);
     procedure SetAddress(Value: String);
     procedure SetDefaultPort(Value: Integer);
     procedure SetLocalProfile(Value: TIdRTPProfile);
-    procedure SetOnUDPRead(Value: TUDPReadEvent);
+    procedure SetPort(Server: TIdUdpServer; Port: Cardinal);
     procedure SetRemoteProfile(Value: TIdRTPProfile);
-    procedure SetRTCPPort(Value: Integer);
-    procedure SetRTPPort(Value: Integer);
+    procedure SetRTCPPort(Value: Cardinal);
+    procedure SetRTPPort(Value: Cardinal);
     procedure SetTimer(Value: TIdTimerQueue);
   protected
     procedure DoUDPRead(Sender: TObject;
@@ -80,6 +88,8 @@ type
     destructor  Destroy; override;
 
     procedure AddListener(const Listener: IIdRTPListener);
+    procedure ReceivePacket(Packet: TIdRTPBasePacket;
+                            Binding: TIdConnection);
     procedure RemoveListener(const Listener: IIdRTPListener);
     procedure Send(const Host: String;
                    Port: Integer;
@@ -92,12 +102,9 @@ type
     property Address:       String           read GetAddress write SetAddress;
     property DefaultPort:   Integer          read GetDefaultPort write SetDefaultPort;
     property LocalProfile:  TIdRTPProfile    read GetLocalProfile write SetLocalProfile;
-    property OnRTCPRead:    TIdRTCPReadEvent read fOnRTCPRead write fOnRTCPRead;
-    property OnRTPRead:     TIdRTPReadEvent  read fOnRTPRead write fOnRTPRead;
-    property OnUDPRead:     TUDPReadEvent    read GetOnUDPRead write SetOnUDPRead;
     property RemoteProfile: TIdRTPProfile    read GetRemoteProfile write SetRemoteProfile;
-    property RTCPPort:      Integer          read GetRTCPPort write SetRTCPPort;
-    property RTPPort:       Integer          read GetRTPPort write SetRTPPort;
+    property RTCPPort:      Cardinal         read GetRTCPPort write SetRTCPPort;
+    property RTPPort:       Cardinal         read GetRTPPort write SetRTPPort;
     property Session:       TIdRTPSession    read fSession;
     property Timer:         TIdTimerQueue    read GetTimer write SetTimer;
   end;
@@ -129,7 +136,7 @@ begin
   Self.Session.Free;
   Self.Peer.Free;
   Self.RTCP.Free;
-  Self.RTP.Free;  
+  Self.RTP.Free;
 
   inherited Destroy;
 end;
@@ -137,6 +144,19 @@ end;
 procedure TIdRTPServer.AddListener(const Listener: IIdRTPListener);
 begin
   Self.Peer.AddListener(Listener);
+end;
+
+procedure TIdRTPServer.ReceivePacket(Packet: TIdRTPBasePacket;
+                                     Binding: TIdConnection);
+begin
+  if Packet.IsRTP then begin
+    Self.ReceiveInTimerContext(Packet, Binding);
+    Self.NotifyListenersOfRTP(Packet as TIdRTPPacket, Binding);
+  end
+  else begin
+    Self.ReceiveRTCPInTimerContext(Packet as TIdRTCPPacket, Binding);
+    Self.NotifyListenersOfRTCP(Packet as TIdRTCPPacket, Binding);
+  end;
 end;
 
 procedure TIdRTPServer.RemoveListener(const Listener: IIdRTPListener);
@@ -192,10 +212,7 @@ begin
   try
     Pkt.ReadFrom(AData);
 
-    if Pkt.IsRTP then
-      Self.NotifyListenersOfRTP(Pkt as TIdRTPPacket, Binding)
-    else
-      Self.NotifyListenersOfRTCP(Pkt as TIdRTCPPacket, Binding);
+    Self.ReceivePacket(Pkt, Binding);
   finally
     Pkt.Free;
   end;
@@ -237,24 +254,19 @@ begin
   Result := Self.Peer.LocalProfile;
 end;
 
-function TIdRTPServer.GetOnUDPRead: TUDPReadEvent;
-begin
-  Result := Self.RTP.OnUDPRead;
-end;
-
 function TIdRTPServer.GetRemoteProfile: TIdRTPProfile;
 begin
   Result := Self.Peer.RemoteProfile;
 end;
 
-function TIdRTPServer.GetRTCPPort: Integer;
+function TIdRTPServer.GetRTCPPort: Cardinal;
 begin
-  Result := Self.RTCP.DefaultPort;
+  Result := Abs(Self.RTCP.DefaultPort);
 end;
 
-function TIdRTPServer.GetRTPPort: Integer;
+function TIdRTPServer.GetRTPPort: Cardinal;
 begin
-  Result := Self.RTP.DefaultPort;
+  Result := Abs(Self.RTP.DefaultPort);
 end;
 
 function TIdRTPServer.GetTimer: TIdTimerQueue;
@@ -265,6 +277,41 @@ end;
 procedure TIdRTPServer.NotifyListenersOfRTCP(Packet: TIdRTCPPacket;
                                              Binding: TIdConnection);
 var
+  C: TIdCompoundRTCPPacket;
+  I: Integer;
+begin
+  if Packet is TIdCompoundRTCPPacket then begin
+    C := Packet as TIdCompoundRTCPPacket;
+    for I := 0 to C.PacketCount - 1 do
+      Self.Peer.NotifyListenersOfRTCP(C.PacketAt(I), Binding);
+  end
+  else
+    Self.Peer.NotifyListenersOfRTCP(Packet, Binding);
+end;
+
+procedure TIdRTPServer.NotifyListenersOfRTP(Packet: TIdRTPPacket;
+                                            Binding: TIdConnection);
+begin
+  Self.Peer.NotifyListenersOfRTP(Packet, Binding);
+end;
+
+procedure TIdRTPServer.ReceiveInTimerContext(Packet: TIdRTPBasePacket;
+                                             Binding: TIdConnection);
+var
+  Wait: TIdRTPReceivePacketWait;
+begin
+  Wait := TIdRTPReceivePacketWait.Create;
+  Wait.Packet := Packet.Clone;
+  Wait.SessionID := Self.Session.ID;
+
+  Wait.ReceivedFrom := Binding;
+
+  Self.Timer.AddEvent(TriggerImmediately, Wait);
+end;
+
+procedure TIdRTPServer.ReceiveRTCPInTimerContext(Packet: TIdRTCPPacket;
+                                                 Binding: TIdConnection);
+var
   Compound: TIdCompoundRTCPPacket;
   I:        Integer;
 begin
@@ -272,27 +319,12 @@ begin
     Compound := Packet as TIdCompoundRTCPPacket;
 
     for I := 0 to Compound.PacketCount - 1 do begin
-      Self.Peer.NotifyListenersOfRTCP(Compound.PacketAt(I), Binding);
-
-      if Assigned(Self.OnRTCPRead) then
-        Self.OnRTCPRead(Self, Compound.PacketAt(I), Binding);
+      Self.ReceiveInTimerContext(Compound.PacketAt(I), Binding);
     end;
   end
   else begin
-    Self.Peer.NotifyListenersOfRTCP(Packet, Binding);
-
-    if Assigned(Self.OnRTCPRead) then
-      Self.OnRTCPRead(Self, Packet, Binding);
+    Self.ReceiveInTimerContext(Packet, Binding);
   end;
-end;
-
-procedure TIdRTPServer.NotifyListenersOfRTP(Packet: TIdRTPPacket;
-                                            Binding: TIdConnection);
-begin
-  Self.Peer.NotifyListenersOfRTP(Packet, Binding);
-
-  if Assigned(Self.OnRTPRead) then
-    Self.OnRTPRead(Self, Packet, Binding);
 end;
 
 procedure TIdRTPServer.SetActive(Value: Boolean);
@@ -318,9 +350,14 @@ begin
   Self.Peer.LocalProfile    := Self.Session.LocalProfile;
 end;
 
-procedure TIdRTPServer.SetOnUDPRead(Value: TUDPReadEvent);
+procedure TIdRTPServer.SetPort(Server: TIdUdpServer; Port: Cardinal);
+var
+  ConvertedCardinal: Integer;
 begin
-  Self.RTP.OnUDPRead := Value;
+  ConvertedCardinal := Port and $7fffffff;
+
+  Server.DefaultPort      := ConvertedCardinal;
+  Server.Bindings[0].Port := ConvertedCardinal;
 end;
 
 procedure TIdRTPServer.SetRemoteProfile(Value: TIdRTPProfile);
@@ -329,18 +366,16 @@ begin
   Self.Peer.RemoteProfile    := Self.Session.RemoteProfile;
 end;
 
-procedure TIdRTPServer.SetRTCPPort(Value: Integer);
+procedure TIdRTPServer.SetRTCPPort(Value: Cardinal);
 begin
-  Self.RTCP.DefaultPort      := Value;
-  Self.RTCP.Bindings[0].Port := Value;
+  Self.SetPort(Self.RTCP, Value);
 
   Self.ManuallySetRTCP := true;
 end;
 
-procedure TIdRTPServer.SetRTPPort(Value: Integer);
+procedure TIdRTPServer.SetRTPPort(Value: Cardinal);
 begin
-  Self.RTP.DefaultPort      := Value;
-  Self.RTP.Bindings[0].Port := Value;
+  Self.SetPort(Self.RTP, Value);
 
   if not Self.ManuallySetRTCP then
     Self.RTCPPort := Value + 1;

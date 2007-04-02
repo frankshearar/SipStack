@@ -808,6 +808,25 @@ type
     procedure TestRun;
   end;
 
+  TestTIdRTPReceivePacketWait = class(TTestCase)
+  private
+    Agent:        TIdMockRTPPeer;
+    Binding:      TIdConnection;
+    Control:      TIdRTCPPacket;
+    Data:         TIdRTPPacket;
+    Listener:     TIdRTPTestRTPDataListener;
+    Payload:      TIdRTPT140Payload;
+    Profile:      TIdRTPProfile;
+    Session:      TIdRTPSession;
+    Wait:         TIdRTPReceivePacketWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTriggerRTCP;
+    procedure TestTriggerRTP;
+  end;
+
   TestTIdRTPSenderReportWait = class(TTestCase)
   private
     Agent:   TIdMockRTPPeer;
@@ -892,6 +911,7 @@ begin
   Result.AddTest(TestTIdRTPListenerReceiveRTCPMethod.Suite);
   Result.AddTest(TestTIdRTPListenerReceiveRTPMethod.Suite);
   Result.AddTest(TestTIdRTPDataListenerNewDataMethod.Suite);
+  Result.AddTest(TestTIdRTPReceivePacketWait.Suite);
   Result.AddTest(TestTIdRTPSenderReportWait.Suite);
 end;
 
@@ -8561,6 +8581,103 @@ begin
   finally
     Listener.Free;
   end;
+end;
+
+//******************************************************************************
+//* TestTIdRTPReceivePacketWait                                                *
+//******************************************************************************
+//* TestTIdRTPReceivePacketWait Public methods *********************************
+
+procedure TestTIdRTPReceivePacketWait.SetUp;
+const
+  ArbitraryHost = '127.0.0.1';
+  ArbitraryPort = 9000;
+  T140PT        = 98;
+var
+  M: TIdRTPMember;
+begin
+  inherited SetUp;
+
+  Self.Payload := TIdRTPT140Payload.Create;
+  Self.Payload.Block := 'test';
+
+  Self.Profile := TIdAudioVisualProfile.Create;
+  Self.Profile.AddEncoding(Self.Payload, T140PT);
+
+  Self.Agent := TIdMockRTPPeer.Create;
+  Self.Agent.Profile := Self.Profile;
+
+  Self.Binding.LocalIP   := '127.0.0.1';
+  Self.Binding.LocalPort := 8000;
+  Self.Binding.PeerIP    := '127.0.0.2';
+  Self.Binding.PeerPort  := 9000;
+
+  Self.Control := TIdRTCPBye.Create;
+  Self.Control.SyncSrcID := $decafbad;
+
+  Self.Data := TIdRTPPacket.Create(Self.Profile);
+  Self.Data.SyncSrcID := Self.Control.SyncSrcID;
+
+  Self.Data.Payload := Self.Payload;
+  Self.Data.PayloadType := T140PT;
+
+  Self.Listener := TIdRTPTestRTPDataListener.Create;
+
+  Self.Session := TIdRTPSession.Create(Self.Agent);
+  Self.Session.AddListener(Self.Listener);
+  
+  M := Self.Session.AddMember(Self.Control.SyncSrcID);
+  M.SourceAddress := ArbitraryHost;
+  M.SourcePort    := ArbitraryPort;
+
+  Self.Wait := TIdRTPReceivePacketWait.Create;
+  Self.Wait.ReceivedFrom := Self.Binding;
+  Self.Wait.SessionID    := Self.Session.ID;  
+end;
+
+procedure TestTIdRTPReceivePacketWait.TearDown;
+begin
+  Self.Session.Free;
+  Self.Listener.Free;
+  Self.Data.Free;
+  Self.Control.Free;
+  Self.Agent.Free;
+  Self.Profile.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdRTPReceivePacketWait Published methods ******************************
+
+procedure TestTIdRTPReceivePacketWait.TestTriggerRTCP;
+var
+  MemberCount: Cardinal;
+begin
+  MemberCount := Self.Session.MemberCount;
+
+  Self.Wait.Packet := Self.Control.Clone;
+  Self.Wait.Trigger;
+
+  Check(Self.Session.MemberCount < MemberCount, 'Bye not acted upon, so Wait not triggered');
+end;
+
+procedure TestTIdRTPReceivePacketWait.TestTriggerRTP;
+begin
+  Self.Wait.Packet := Self.Data.Clone;
+
+  Self.Wait.Trigger;
+
+  Check(Self.Listener.NewData, 'Listener not notified, so Wait not triggered');
+  CheckEquals(Self.Payload.ClassName,
+              Self.Listener.DataParam.ClassName,
+              'Packet param');
+  CheckEquals(Self.Payload.Block,
+              (Self.Listener.DataParam as TIdRTPT140Payload).Block,
+              'Packet param (block)');
+  CheckEquals(Self.Binding.LocalIP,   Self.Listener.BindingParam.LocalIP,   'Binding local IP');
+  CheckEquals(Self.Binding.LocalPort, Self.Listener.BindingParam.LocalPort, 'Binding local port');
+  CheckEquals(Self.Binding.PeerIP,    Self.Listener.BindingParam.PeerIP,    'Binding peer IP');
+  CheckEquals(Self.Binding.PeerPort,  Self.Listener.BindingParam.PeerPort,  'Binding peer port');
 end;
 
 //******************************************************************************

@@ -12,8 +12,8 @@ unit TestIdRTPDiagnostics;
 interface
 
 uses
-  IdObservable, IdRTP, IdRTPDiagnostics, IdRTPServer, TestFramework,
-  TestFrameworkEx;
+  IdObservable, IdRTP, IdRTPDiagnostics, IdRTPServer, IdTimerQueue,
+  TestFramework, TestFrameworkEx;
 
 type
   TestTIdHistogram = class(TTestCase)
@@ -35,6 +35,7 @@ type
     Profile:  TIdRTPProfile;
     Receiver: TIdRTPServer;
     Sender:   TIdRTPServer;
+    Timer:    TIdTimerQueue;
 
     procedure OnChanged(Observed: TObject);
     procedure SendData(PayloadType: TIdRTPPayloadType);
@@ -140,6 +141,7 @@ procedure TestTIdRTPPayloadHistogram.SetUp;
 begin
   inherited SetUp;
 
+  Self.Timer   := TIdThreadedTimerQueue.Create(false);
   Self.Profile := TIdAudioVisualProfile.Create;
 
   Self.Receiver := TIdRTPServer.Create;
@@ -147,6 +149,7 @@ begin
   Self.Receiver.LocalProfile  := Self.Profile;
   Self.Receiver.RemoteProfile := Self.Profile;
   Self.Receiver.RTPPort       := 58000;
+  Self.Receiver.Timer         := Self.Timer;
   Self.Receiver.Active        := true;
 
   Self.Sender := TIdRTPServer.Create;
@@ -154,6 +157,7 @@ begin
   Self.Sender.LocalProfile  := Self.Profile;
   Self.Sender.RemoteProfile := Self.Profile;
   Self.Sender.RTPPort       := Self.Receiver.RTPPort + 2;
+  Self.Sender.Timer         := Self.Timer;
   Self.Sender.Active        := true;
 
   Self.Hist := TIdRTPPayloadHistogram.Create;
@@ -169,6 +173,7 @@ begin
   Self.Sender.Free;
   Self.Receiver.Free;
   Self.Profile.Free;
+  Self.Timer.Terminate;
 
   inherited TearDown;
 end;

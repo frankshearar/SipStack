@@ -551,7 +551,7 @@ type
     Servers:            TObjectList;
 
     function  CreateServer: TIdRTPServer;
-    function  FindServer(LayerID: Integer): TIdRTPServer;
+    function  FindServer(LayerID: Cardinal): TIdRTPServer;
     function  GetDirection: TIdSdpDirection;
     procedure InitializeLocalRTPServers;
     procedure InitializeRemoteRTPServers;
@@ -567,6 +567,7 @@ type
     procedure SetLocalProfile(Value: TIdRTPProfile);
     procedure SetRemoteDescription(const Value: TIdSdpMediaDescription);
     procedure SetRemoteProfile(Value: TIdRTPProfile);
+    procedure SetTimer(Value: TIdTimerQueue);
   public
     constructor Create;
     destructor  Destroy; override;
@@ -593,7 +594,7 @@ type
     property OnHold:            Boolean                read fOnHold;
     property RemoteDescription: TIdSdpMediaDescription read fRemoteDescription write SetRemoteDescription;
     property RemoteProfile:     TIdRTPProfile          read fRemoteProfile write SetRemoteProfile;
-    property Timer:             TIdTimerQueue          read fTimer write fTimer;
+    property Timer:             TIdTimerQueue          read fTimer write SetTimer;
   end;
 
   // I process SDP (RFC 2327) payloads. This means that I instantiate (RTP)
@@ -3608,7 +3609,7 @@ begin
   Result.Timer := Self.Timer;
 end;
 
-function TIdSDPMediaStream.FindServer(LayerID: Integer): TIdRTPServer;
+function TIdSDPMediaStream.FindServer(LayerID: Cardinal): TIdRTPServer;
 var
   I: Integer;
 begin
@@ -3756,6 +3757,16 @@ end;
 procedure TIdSDPMediaStream.SetRemoteProfile(Value: TIdRTPProfile);
 begin
   Self.RemoteProfile.Assign(Value);
+end;
+
+procedure TIdSDPMediaStream.SetTimer(Value: TIdTimerQueue);
+var
+  I: Integer;
+begin
+  Self.fTimer := Value;
+
+  for I := 0 to Self.Servers.Count - 1 do
+    Self.ServerAt(I).Timer := Value;
 end;
 
 //******************************************************************************

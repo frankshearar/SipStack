@@ -81,6 +81,7 @@ object IdSpikeT140: TIdSpikeT140
       Height = 25
       Caption = 'Join'
       TabOrder = 0
+      OnClick = JoinClick
     end
     object RemoteHostAndPort: TEdit
       Left = 76
@@ -97,6 +98,7 @@ object IdSpikeT140: TIdSpikeT140
       Height = 25
       Caption = 'Leave'
       TabOrder = 2
+      OnClick = LeaveClick
     end
   end
   object Timer1: TTimer

@@ -1135,6 +1135,23 @@ type
     property SessionID: String read fSessionID write fSessionID;
   end;
 
+  // I represent the (possibly) deferred handling of an inbound packet.
+  // Give me a COPY of the packet received; I'll free it myself.
+  TIdRTPReceivePacketWait = class(TIdRTPWait)
+  private
+    fPacket:       TIdRTPBasePacket;
+    fReceivedFrom: TIdConnection;
+
+    procedure SetReceivedFrom(Value: TIdConnection);
+  public
+    destructor Destroy; override;
+
+    procedure Trigger; override;
+
+    property Packet: TIdRTPBasePacket read fPacket write fPacket;
+    property ReceivedFrom: TIdConnection read fReceivedFrom write SetReceivedFrom;
+  end;
+
   TIdRTPTransmissionTimeExpire = class(TIdRTPWait)
   public
     procedure Trigger; override;
@@ -5731,6 +5748,48 @@ end;
 procedure TIdRTPDataListenerNewDataMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdRTPDataListener).OnNewData(Self.Data, Self.Binding);
+end;
+
+//******************************************************************************
+//* TIdRTPReceivePacketWait                                                    *
+//******************************************************************************
+//* TIdRTPReceivePacketWait Public methods *************************************
+
+destructor TIdRTPReceivePacketWait.Destroy;
+begin
+  Self.Packet.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdRTPReceivePacketWait.Trigger;
+var
+  Binding: TIdConnection;
+  Session: TIdRTPSession;
+begin
+  Session := TIdRTPSessionRegistry.FindSession(Self.SessionID);
+
+  if Assigned(Session) then begin
+    Binding.LocalIP   := Self.ReceivedFrom.LocalIP;
+    Binding.LocalPort := Self.ReceivedFrom.LocalPort;
+    Binding.PeerIP    := Self.ReceivedFrom.PeerIP;
+    Binding.PeerPort  := Self.ReceivedFrom.PeerPort;
+
+    if Self.Packet.IsRTCP then
+      Session.ReceiveControl(Self.Packet as TIdRTCPPacket, Binding)
+    else
+      Session.ReceiveData(Self.Packet as TIdRTPPacket, Binding)
+  end;
+end;
+
+//* TIdRTPReceivePacketWait Private methods ************************************
+
+procedure TIdRTPReceivePacketWait.SetReceivedFrom(Value: TIdConnection);
+begin
+  Self.fReceivedFrom.LocalIP   := Value.LocalIP;
+  Self.fReceivedFrom.LocalPort := Value.LocalPort;
+  Self.fReceivedFrom.PeerIP    := Value.PeerIP;
+  Self.fReceivedFrom.PeerPort  := Value.PeerPort;
 end;
 
 //******************************************************************************

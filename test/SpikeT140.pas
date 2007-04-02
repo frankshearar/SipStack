@@ -13,10 +13,11 @@ interface
 
 uses
   Classes, Controls, ExtCtrls, Forms, IdRTP, IdRTPServer,
-  IdSocketHandle, IdUDPClient, IdUDPServer, StdCtrls, SyncObjs;
+  IdSocketHandle, IdTimerQueue, IdUDPClient, IdUDPServer, StdCtrls, SyncObjs;
 
 type
-  TIdSpikeT140 = class(TForm)
+  TIdSpikeT140 = class(TForm,
+                       IIdRTPListener)
     Sent: TMemo;
     Splitter1: TSplitter;
     Received: TMemo;
@@ -32,6 +33,7 @@ type
     procedure LeaveClick(Sender: TObject);
     procedure Timer1Timer(Sender: TObject);
     procedure SentKeyPress(Sender: TObject; var Key: Char);
+    procedure JoinClick(Sender: TObject);
   private
     ByteCounter:   Cardinal;
     Client:        TIdRTPServer;
@@ -43,13 +45,12 @@ type
     Session:       TIdRTPSession;
     T140:          TIdRTPPayload;
     T140PT:        TIdRTPPayloadType;
+    Timer:         TIdThreadedTimerQueue;
 
-    procedure CountUDP(Sender: TObject;
-                       Data: TStream;
-                       Binding: TIdSocketHandle);
-    procedure ReadRTP(Sender: TObject;
-                      APacket: TIdRTPPacket;
-                      ABinding: TIdConnection);
+    procedure OnRTCP(Packet: TIdRTCPPacket;
+                     Binding: TIdConnection);
+    procedure OnRTP(Packet: TIdRTPPacket;
+                    Binding: TIdConnection);
     procedure Reset;
   public
     constructor Create(AOwner: TComponent); override;
@@ -64,7 +65,7 @@ implementation
 {$R *.dfm}
 
 uses
-  IdSimpleParser, IdSipConsts, IdSystem, SysUtils;
+  IdSimpleParser, IdSipConsts, IdSystem, IdUnicode, SysUtils;
 
 //******************************************************************************
 //* TIdSpikeT140                                                               *
@@ -75,21 +76,26 @@ constructor TIdSpikeT140.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
+  Self.Timer   := TIdThreadedTimerQueue.Create(false);
   Self.Profile := TIdAudioVisualProfile.Create;
   Self.Server := TIdRTPServer.Create;
-  Self.Server.DefaultPort   := 8002;
+  Self.Server.AddListener(Self);
+  Self.Server.RTPPort       := 8002;
+  Self.Server.RTCPPort      := 8003;
   Self.Server.LocalProfile  := Self.Profile;
   Self.Server.RemoteProfile := Self.Profile;
+  Self.Server.Timer         := Self.Timer;
   Self.Server.Active        := true;
 
   Self.Session := Self.Server.Session;
 
   Self.Client := TIdRTPServer.Create;
-  Self.Client.DefaultPort   := Self.Server.DefaultPort + 2;
-  Self.Client.OnRTPRead     := Self.ReadRTP;
-  Self.Client.OnUDPRead     := Self.CountUDP;
+  Self.Client.AddListener(Self);
+  Self.Client.RTPPort       := Self.Server.RTPPort + 2;
+  Self.Client.RTCPPort      := Self.Server.RTCPPort + 2;
   Self.Client.LocalProfile  := Self.Profile;
   Self.Client.RemoteProfile := Self.Profile;
+  Self.Client.Timer         := Self.Timer;
   Self.Client.Active        := true;
 
   Self.T140   := TIdRTPT140Payload.Create;
@@ -100,9 +106,11 @@ begin
   Self.Lock := TCriticalSection.Create;
   Self.SendBuffer := '';
 
-  Self.Session.AddReceiver(GetHostName,
+  Self.Session.AddReceiver(Self.Client.Address,
                            Self.Client.RTPPort);
   Self.Reset;
+
+  Self.RemoteHostAndPort.Text := Self.Client.Address + ':' + IntToStr(Self.Client.RTPPort);
 end;
 
 destructor TIdSpikeT140.Destroy;
@@ -117,48 +125,40 @@ begin
   Self.Client.Free;
   Self.Server.Free;
   Self.Profile.Free;
+  Self.Timer.Terminate;
 
   inherited Destroy;
 end;
 
 //* TIdSpikeT140 Private methods ***********************************************
 
-procedure TIdSpikeT140.CountUDP(Sender: TObject;
-                                Data: TStream;
-                                Binding: TIdSocketHandle);
-var
-  S: TStringStream;
+procedure TIdSpikeT140.OnRTCP(Packet: TIdRTCPPacket;
+                              Binding: TIdConnection);
 begin
-  Self.Lock.Acquire;
-  try
-   S := TStringStream.Create('');
-   try
-     S.CopyFrom(Data, 0);
-     Inc(Self.ByteCounter, S.Size);
-   finally
-     S.Free;
-   end;
-
-    Inc(Self.PacketCounter);
-    Self.PacketCount.Caption := IntToStr(Self.PacketCounter);
-
-    Self.ByteCount.Caption := IntToStr(Self.ByteCounter);
-  finally
-    Self.Lock.Release;
-  end;
 end;
 
-procedure TIdSpikeT140.ReadRTP(Sender: TObject;
-                               APacket: TIdRTPPacket;
-                               ABinding: TIdConnection);
+procedure TIdSpikeT140.OnRTP(Packet: TIdRTPPacket;
+                             Binding: TIdConnection);
 begin
   Self.Lock.Acquire;
   try
-    if (APacket.Payload.Name = T140Encoding) then
-      Received.Text := Received.Text + (APacket.Payload as TIdRTPT140Payload).Block;
+    Inc(Self.ByteCounter, Packet.RealLength);
+    Inc(Self.PacketCounter);
+
+    Self.ByteCount.Caption   := IntToStr(Self.ByteCounter);
+    Self.PacketCount.Caption := IntToStr(Self.PacketCounter);
+
+    if (Packet.Payload.EncodingName = T140Encoding)
+      and (Binding.LocalIP   = Self.Server.Address)
+      and (Binding.LocalPort = Self.Server.RTPPort) then
+      Self.Received.Text := Self.Received.Text + (Packet.Payload as TIdRTPT140Payload).Block;
   finally
     Self.Lock.Release;
   end;
+
+  if (Binding.LocalIP = Self.Client.Address)
+    and (Binding.LocalPort = Self.Client.RTPPort) then
+    Self.Client.Session.SendData(Packet.Payload);
 end;
 
 procedure TIdSpikeT140.Reset;
@@ -207,6 +207,12 @@ end;
 procedure TIdSpikeT140.SentKeyPress(Sender: TObject; var Key: Char);
 begin
   Self.SendBuffer := Self.SendBuffer + Key;
+end;
+
+procedure TIdSpikeT140.JoinClick(Sender: TObject);
+begin
+  Self.Leave.Click;
+  Self.Session.JoinSession;
 end;
 
 end.

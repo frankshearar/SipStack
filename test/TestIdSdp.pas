@@ -613,6 +613,7 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSdpParser unit tests');
+{
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSdpAttribute.Suite);
   Result.AddTest(TestTIdSdpRTPMapAttribute.Suite);
@@ -633,8 +634,9 @@ begin
   Result.AddTest(TestTIdSdpZoneAdjustments.Suite);
   Result.AddTest(TestTIdSdpParser.Suite);
   Result.AddTest(TestTIdSdpPayload.Suite);
+}
   Result.AddTest(TestTIdSDPMediaStream.Suite);
-  Result.AddTest(TestTIdSDPMultimediaSession.Suite);
+//  Result.AddTest(TestTIdSDPMultimediaSession.Suite);
 //  Result.AddTest(TestTIdSdpNatMasquerader.Suite);
 end;
 
@@ -6327,6 +6329,10 @@ begin
   // We check that the SDP sets the RTCP address/ports of the remote party's
   // various layers by "joining a session" - that will send a Receiver Report to
   // the control ports of the remote party's different layers.
+
+  // When RTPServers receive packets they now schedule Waits to
+  // TriggerImmediately. We want the DebugTimer to trigger these immediately.
+  Self.Timer.TriggerImmediateEvents := true;
 
   Self.Media.StopListening;
   Self.Sender.StopListening;
