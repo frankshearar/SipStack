@@ -261,7 +261,7 @@ begin
       Result := Buf
     else begin
       ErrorCode := WSAGetLastError;
-      raise Exception.Create('GetHostName: ' + IntToStr(ErrorCode) + '(' + SysErrorMessage(ErrorCode) + ')');
+      raise Exception.Create('GetHostName: ' + IntToStr(ErrorCode) + ' (' + SysErrorMessage(ErrorCode) + ')');
     end;
   finally
     FreeMem(Buf);
