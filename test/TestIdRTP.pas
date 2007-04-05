@@ -604,13 +604,30 @@ type
 
   TestTIdBaseRTPAbstractPeer = class(TTestCase)
   private
-    Peer: TIdBaseRTPAbstractPeer;
+    Peer: TIdMockRTPPeer;
+    RTCP: TIdRTCPPacket;
+    RTP:  TIdRTPPacket;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
     procedure TestAddListener;
+    procedure TestAddSendListener;
     procedure TestRemoveListener;
+    procedure TestRemoveSendListener;
+  end;
+
+  TestTIdRTPPeerRegistry = class(TTestCase)
+  private
+    Agent: TIdMockRTPPeer;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestServerOn;
+    procedure TestServersAddToRegistryAutomatically;
+    procedure TestServersGetUniqueIDs;
+    procedure TestServersAutomaticallyUnregister;
   end;
 
   TRTPSessionTestCase = class(TTestCase)
@@ -808,17 +825,25 @@ type
     procedure TestRun;
   end;
 
-  TestTIdRTPReceivePacketWait = class(TTestCase)
+  TTestCaseRTP = class(TTestCase)
+  protected
+    Agent:   TIdMockRTPPeer;
+    Profile: TIdRTPProfile;
+    Session: TIdRTPSession;
+    Timer:   TIdDebugTimerQueue;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdRTPReceivePacketWait = class(TTestCaseRTP)
   private
-    Agent:        TIdMockRTPPeer;
-    Binding:      TIdConnection;
-    Control:      TIdRTCPPacket;
-    Data:         TIdRTPPacket;
-    Listener:     TIdRTPTestRTPDataListener;
-    Payload:      TIdRTPT140Payload;
-    Profile:      TIdRTPProfile;
-    Session:      TIdRTPSession;
-    Wait:         TIdRTPReceivePacketWait;
+    Binding:  TIdConnection;
+    Control:  TIdRTCPPacket;
+    Data:     TIdRTPPacket;
+    Listener: TIdRTPTestRTPDataListener;
+    Payload:  TIdRTPT140Payload;
+    Wait:     TIdRTPReceivePacketWait;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -827,12 +852,19 @@ type
     procedure TestTriggerRTP;
   end;
 
-  TestTIdRTPSenderReportWait = class(TTestCase)
+  TestTIdRTPSenderReportWait = class(TTestCaseRTP)
   private
-    Agent:   TIdMockRTPPeer;
-    Profile: TIdRTPProfile;
-    Session: TIdRTPSession;
-    Wait:    TIdRTPSenderReportWait;
+    Wait: TIdRTPSenderReportWait;
+  public
+    procedure SetUp; override;
+  published
+    procedure TestTrigger;
+  end;
+
+  TestTIdRTPSendDataWait = class(TTestCaseRTP)
+  private
+    Payload: TIdRTPT140Payload;
+    Wait:    TIdRTPSendDataWait;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -864,7 +896,8 @@ const
 implementation
 
 uses
-  Classes, DateUtils, IdRandom, IdRtpServer, IdSystem, SysUtils, Types;
+  Classes, DateUtils, IdRandom, IdRtpServer, IdSimpleParser, IdSystem,
+  SysUtils, Types;
 
 function Suite: ITestSuite;
 begin
@@ -901,6 +934,7 @@ begin
   Result.AddTest(TestTIdRTPMemberTable.Suite);
   Result.AddTest(TestTIdRTPSenderTable.Suite);
   Result.AddTest(TestTIdBaseRTPAbstractPeer.Suite);
+  Result.AddTest(TestTIdRTPPeerRegistry.Suite);
   Result.AddTest(TestSessionDelegationMethods.Suite);
   Result.AddTest(TestSessionSequenceNumberRules.Suite);
   Result.AddTest(TestTIdRTPSession.Suite);
@@ -913,6 +947,7 @@ begin
   Result.AddTest(TestTIdRTPDataListenerNewDataMethod.Suite);
   Result.AddTest(TestTIdRTPReceivePacketWait.Suite);
   Result.AddTest(TestTIdRTPSenderReportWait.Suite);
+  Result.AddTest(TestTIdRTPSendDataWait.Suite);
 end;
 
 function ShowEncoded(S: String): String;
@@ -5569,19 +5604,16 @@ begin
   try
     Profile := TIdAudioVisualProfile.Create;
     try
-      Session := TIdRTPSession.Create(MockAgent);
-      try
-        Session.LocalProfile := Profile;
-        Session.Timer   := Self.Timer;
-        Self.Bye.PrepareForTransmission(Session);
-        Check(Self.Bye.SourceCount > 0,
-              'BYE must have source counts');
-        CheckEquals(IntToHex(Session.SyncSrcID, 8),
-                    IntToHex(Self.Bye.Sources[0], 8),
-                    'We''re not BYEing ourselves');
-      finally
-        Session.Free;
-      end;
+      Session := MockAgent.Session;
+
+      Session.LocalProfile := Profile;
+      Session.Timer   := Self.Timer;
+      Self.Bye.PrepareForTransmission(Session);
+      Check(Self.Bye.SourceCount > 0,
+            'BYE must have source counts');
+      CheckEquals(IntToHex(Session.SyncSrcID, 8),
+                  IntToHex(Self.Bye.Sources[0], 8),
+                  'We''re not BYEing ourselves');
     finally
       Profile.Free;
     end;
@@ -6992,11 +7024,15 @@ procedure TestTIdBaseRTPAbstractPeer.SetUp;
 begin
   inherited SetUp;
 
-  Self.Peer := TIdBaseRTPAbstractPeer.Create;
+  Self.Peer := TIdMockRTPPeer.Create;
+  Self.RTCP := TIdRTCPSenderReport.Create;
+  Self.RTP  := TIdRTPPacket.Create(Self.Peer.LocalProfile);
 end;
 
 procedure TestTIdBaseRTPAbstractPeer.TearDown;
 begin
+  Self.RTP.Free;
+  Self.RTCP.Free;
   Self.Peer.Free;
 
   inherited TearDown;
@@ -7017,13 +7053,41 @@ begin
     try
       Self.Peer.AddListener(L2);
 
-      Self.Peer.NotifyListenersOfRTCP(nil, UnusedBinding);
+      Self.Peer.NotifyListenersOfRTCP(Self.RTCP, UnusedBinding);
       Check(L1.ReceivedRTCP, 'First listener didn''t receive RTCP');
       Check(L2.ReceivedRTCP, 'Second listener didn''t receive RTCP');
 
-      Self.Peer.NotifyListenersOfRTP(nil, UnusedBinding);
+      Self.Peer.NotifyListenersOfRTP(Self.RTP, UnusedBinding);
       Check(L1.ReceivedRTP,  'First listener didn''t receive RTP');
       Check(L2.ReceivedRTCP, 'Second listener didn''t receive RTP');
+    finally
+      L2.Free;
+    end;
+  finally
+    L1.Free;
+  end;
+end;
+
+procedure TestTIdBaseRTPAbstractPeer.TestAddSendListener;
+var
+  L1, L2:        TIdRTPTestRTPSendListener;
+  UnusedBinding: TIdConnection;
+begin
+  L1 := TIdRTPTestRTPSendListener.Create;
+  try
+    Self.Peer.AddSendListener(L1);
+
+    L2 := TIdRTPTestRTPSendListener.Create;
+    try
+      Self.Peer.AddSendListener(L2);
+
+      Self.Peer.NotifyListenersOfSentRTCP(Self.RTCP, UnusedBinding);
+      Check(L1.SentRTCP, 'First listener didn''t receive notification of sent RTCP');
+      Check(L2.SentRTCP, 'Second listener didn''t receive notification of sent RTCP');
+
+      Self.Peer.NotifyListenersOfSentRTP(Self.RTP, UnusedBinding);
+      Check(L1.SentRTP,  'First listener didn''t receive notification of sent RTP');
+      Check(L2.SentRTCP, 'Second listener didn''t receive notification of sent RTP');
     finally
       L2.Free;
     end;
@@ -7042,12 +7106,145 @@ begin
     Self.Peer.AddListener(Listener);
     Self.Peer.RemoveListener(Listener);
 
-    Self.Peer.NotifyListenersOfRTCP(nil, UnusedBinding);
+    Self.Peer.NotifyListenersOfRTCP(Self.RTCP, UnusedBinding);
     Check(not Listener.ReceivedRTCP,
           'Listener received RTCP');
+
+    Self.Peer.NotifyListenersOfRTP(Self.RTP, UnusedBinding);
+    Check(not Listener.ReceivedRTP,
+          'Listener received RTP');
   finally
     Listener.Free;
   end;
+end;
+
+procedure TestTIdBaseRTPAbstractPeer.TestRemoveSendListener;
+var
+  Listener:      TIdRTPTestRTPSendListener;
+  UnusedBinding: TIdConnection;
+begin
+  Listener := TIdRTPTestRTPSendListener.Create;
+  try
+    Self.Peer.AddSendListener(Listener);
+    Self.Peer.RemoveSendListener(Listener);
+
+    Self.Peer.NotifyListenersOfSentRTCP(Self.RTCP, UnusedBinding);
+    Check(not Listener.SentRTCP,
+          'Listener received sent RTCP notification');
+
+    Self.Peer.NotifyListenersOfSentRTP(Self.RTP, UnusedBinding);
+    Check(not Listener.SentRTP,
+          'Listener received sent RTP notification');
+  finally
+    Listener.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdRTPPeerRegistry                                                     *
+//******************************************************************************
+//* TestTIdRTPPeerRegistry Public methods **************************************
+
+procedure TestTIdRTPPeerRegistry.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Agent := TIdMockRTPPeer.Create;
+end;
+
+procedure TestTIdRTPPeerRegistry.TearDown;
+begin
+  Self.Agent.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdRTPPeerRegistry Published methods ***********************************
+
+procedure TestTIdRTPPeerRegistry.TestServerOn;
+const
+  ArbitraryAddress = '1.2.3.4';
+  ArbitraryPort    = 8000;
+  AnotherPort      = 9000;
+var
+  AnotherAgent: TIdBaseRTPAbstractPeer;
+begin
+  Self.Agent.Address := ArbitraryAddress;
+  Self.Agent.RTPPort := ArbitraryPort;
+
+  Check(Self.Agent = TIdRTPPeerRegistry.ServerOn(ArbitraryAddress, ArbitraryPort),
+        'Server not found in registry');
+
+  Check(nil = TIdRTPPeerRegistry.ServerOn(TIdIPAddressParser.IncIPAddress(ArbitraryAddress), ArbitraryPort),
+        'Server found in registry (no such host');
+  Check(nil = TIdRTPPeerRegistry.ServerOn(ArbitraryAddress, ArbitraryPort + 1),
+        'Server found in registry (no such port');
+
+  Self.Agent.RTPPort := AnotherPort;
+  Check(nil = TIdRTPPeerRegistry.ServerOn(ArbitraryAddress, ArbitraryPort),
+        'Server found in registry after moving');
+  Check(Self.Agent = TIdRTPPeerRegistry.ServerOn(ArbitraryAddress, AnotherPort),
+        'Server not found in registry after moving');
+
+  AnotherAgent := TIdMockRTPPeer.Create;
+  try
+    AnotherAgent.Address := Self.Agent.Address;
+    AnotherAgent.RTPPort := Self.Agent.RTPPort;
+    Check(Self.Agent = TIdRTPPeerRegistry.ServerOn(ArbitraryAddress, AnotherPort),
+          'First server found wins');
+  finally
+    AnotherAgent.Free;
+  end;
+end;
+
+procedure TestTIdRTPPeerRegistry.TestServersAddToRegistryAutomatically;
+begin
+  CheckNotEquals('', Self.Agent.ID, 'Server has no ID');
+  Check(nil <> TIdRTPPeerRegistry.FindServer(Self.Agent.ID),
+        'Server not added to registry');
+  Check(Self.Agent = TIdRTPPeerRegistry.FindServer(Self.Agent.ID),
+        'Server not found in registry');
+end;
+
+procedure TestTIdRTPPeerRegistry.TestServersGetUniqueIDs;
+var
+  ServerOne: TIdMockRTPPeer;
+  ServerTwo: TIdMockRTPPeer;
+begin
+  // This test isn't exactly thorough: it's not possible to write a test that
+  // proves the registry will never duplicate an existing server's ID,
+  // but this at least demonstrates that the registry won't return the same
+  // ID twice in a row.
+
+  ServerOne := TIdMockRTPPeer.Create;
+  try
+    ServerTwo := TIdMockRTPPeer.Create;
+    try
+      CheckNotEquals(ServerOne.ID,
+                     ServerTwo.ID,
+                     'The registry gave two servers the same ID');
+    finally
+      ServerTwo.Free;
+    end;
+  finally
+    ServerOne.Free;
+  end;
+end;
+
+procedure TestTIdRTPPeerRegistry.TestServersAutomaticallyUnregister;
+var
+  Agent: TIdMockRTPPeer;
+  ID:    String;
+begin
+  Agent := TIdMockRTPPeer.Create;
+  try
+    ID := Agent.ID;
+  finally
+    Agent.Free;
+  end;
+
+  Check(nil = TIdRTPPeerRegistry.FindServer(ID),
+        'Server not removed from registry');
 end;
 
 //******************************************************************************
@@ -7059,24 +7256,22 @@ procedure TRTPSessionTestCase.SetUp;
 begin
   inherited SetUp;
 
+  Self.Timer   := TIdDebugTimerQueue.Create(false);
   Self.Profile := TIdAudioVisualProfile.Create;
 
   Self.T140PT := Self.Profile.FirstFreePayloadType;
   Self.Profile.AddEncoding('T140', 1000, '', Self.T140PT);
 
   Self.Agent   := TIdMockRTPPeer.Create;
-  Self.Agent.Profile := Self.Profile;
+  Self.Agent.LocalProfile  := Self.Profile;
+  Self.Agent.RemoteProfile := Self.Profile;
+  Self.Agent.Timer         := Self.Timer;
 
-  Self.Session := TIdRTPSession.Create(Self.Agent);
-  Self.Session.LocalProfile  := Self.Profile;
-  Self.Session.RemoteProfile := Self.Profile;
-  Self.Timer := TIdDebugTimerQueue.Create(false);
-  Self.Session.Timer := Self.Timer;
+  Self.Session := Self.Agent.Session;
 end;
 
 procedure TRTPSessionTestCase.TearDown;
 begin
-  Self.Session.Free;
   Self.Agent.Free;
   Self.Profile.Free;
   Self.Timer.Terminate;
@@ -8300,17 +8495,10 @@ end;
 //* TestTIdSipSessionRegistry Published methods ********************************
 
 procedure TestTIdSipSessionRegistry.TestSessionsAddToRegistryAutomatically;
-var
-  Session: TIdRTPSession;
 begin
-  Session := TIdRTPSession.Create(Self.Agent);
-  try
-    CheckNotEquals('', Session.ID, 'Session has no ID');
-    Check(nil <> TIdRTPSessionRegistry.FindSession(Session.ID),
-          'Session not added to registry');
-  finally
-    Session.Free;
-  end;
+  CheckNotEquals('', Self.Agent.Session.ID, 'Session has no ID');
+  Check(nil <> TIdRTPSessionRegistry.FindSession(Self.Agent.Session.ID),
+        'Session not added to registry');
 end;
 
 procedure TestTIdSipSessionRegistry.TestSessionsGetUniqueIDs;
@@ -8319,7 +8507,7 @@ var
   SessionTwo: TIdRTPSession;
 begin
   // This test isn't exactly thorough: it's not possible to write a test that
-  // proves the registry will never duplicate an existing transaction's ID,
+  // proves the registry will never duplicate an existing session's ID,
   // but this at least demonstrates that the registry won't return the same
   // ID twice in a row.
 
@@ -8329,7 +8517,7 @@ begin
     try
       CheckNotEquals(SessionOne.ID,
                      SessionTwo.ID,
-                     'The registry gave two transactions the same ID');
+                     'The registry gave two sessions the same ID');
     finally
       SessionTwo.Free;
     end;
@@ -8340,14 +8528,14 @@ end;
 
 procedure TestTIdSipSessionRegistry.TestSessionsAutomaticallyUnregister;
 var
-  Session:   TIdRTPSession;
+  Agent:     TIdMockRTPPeer;
   SessionID: String;
 begin
-  Session := TIdRTPSession.Create(Self.Agent);
+  Agent := TIdMockRTPPeer.Create;
   try
-    SessionID := Session.ID;
+    SessionID := Agent.Session.ID;
   finally
-    Session.Free;
+    Agent.Free;
   end;
 
   Check(nil = TIdRTPSessionRegistry.FindSession(SessionID),
@@ -8584,6 +8772,35 @@ begin
 end;
 
 //******************************************************************************
+//* TTestCaseRTP                                                               *
+//******************************************************************************
+//* TTestCaseRTP Public methods ************************************************
+
+procedure TTestCaseRTP.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Profile := TIdAudioVisualProfile.Create;
+  Self.Timer   := TIdDebugTimerQueue.Create(false);
+
+  Self.Agent := TIdMockRTPPeer.Create;
+  Self.Agent.LocalProfile  := Self.Profile;
+  Self.Agent.RemoteProfile := Self.Profile;
+  Self.Agent.Timer         := Self.Timer;
+
+  Self.Session := Self.Agent.Session;
+end;
+
+procedure TTestCaseRTP.TearDown;
+begin
+  Self.Agent.Free;
+  Self.Timer.Terminate;
+  Self.Profile.Free;
+
+  inherited TearDown;
+end;
+
+//******************************************************************************
 //* TestTIdRTPReceivePacketWait                                                *
 //******************************************************************************
 //* TestTIdRTPReceivePacketWait Public methods *********************************
@@ -8601,11 +8818,7 @@ begin
   Self.Payload := TIdRTPT140Payload.Create;
   Self.Payload.Block := 'test';
 
-  Self.Profile := TIdAudioVisualProfile.Create;
   Self.Profile.AddEncoding(Self.Payload, T140PT);
-
-  Self.Agent := TIdMockRTPPeer.Create;
-  Self.Agent.Profile := Self.Profile;
 
   Self.Binding.LocalIP   := '127.0.0.1';
   Self.Binding.LocalPort := 8000;
@@ -8623,26 +8836,22 @@ begin
 
   Self.Listener := TIdRTPTestRTPDataListener.Create;
 
-  Self.Session := TIdRTPSession.Create(Self.Agent);
   Self.Session.AddListener(Self.Listener);
-  
+
   M := Self.Session.AddMember(Self.Control.SyncSrcID);
   M.SourceAddress := ArbitraryHost;
   M.SourcePort    := ArbitraryPort;
 
   Self.Wait := TIdRTPReceivePacketWait.Create;
   Self.Wait.ReceivedFrom := Self.Binding;
-  Self.Wait.SessionID    := Self.Session.ID;  
+  Self.Wait.SessionID    := Self.Session.ID;
 end;
 
 procedure TestTIdRTPReceivePacketWait.TearDown;
 begin
-  Self.Session.Free;
   Self.Listener.Free;
   Self.Data.Free;
   Self.Control.Free;
-  Self.Agent.Free;
-  Self.Profile.Free;
 
   inherited TearDown;
 end;
@@ -8692,25 +8901,10 @@ const
 begin
   inherited SetUp;
 
-  Self.Profile := TIdAudioVisualProfile.Create;
-
-  Self.Agent := TIdMockRTPPeer.Create;
-  Self.Agent.Profile := Self.Profile;
-
-  Self.Session := TIdRTPSession.Create(Self.Agent);
   Self.Session.AddReceiver(ArbitraryHost, ArbitraryPort);
 
   Self.Wait := TIdRTPSenderReportWait.Create;
   Self.Wait.SessionID := Self.Session.ID;
-end;
-
-procedure TestTIdRTPSenderReportWait.TearDown;
-begin
-  Self.Session.Free;
-  Self.Agent.Free;
-  Self.Profile.Free;
-
-  inherited TearDown;
 end;
 
 //* TestTIdRTPSenderReportWait Published methods *******************************
@@ -8722,6 +8916,56 @@ begin
   Self.Wait.Trigger;
 
   Check(Self.Agent.RTCPCount > 0, 'No RTCP sent, ergo Trigger didn''t happen');
+end;
+
+//******************************************************************************
+//* TestTIdRTPSendDataWait                                                     *
+//******************************************************************************
+//* TestTIdRTPSendDataWait Public methods **************************************
+
+procedure TestTIdRTPSendDataWait.SetUp;
+const
+  ArbitraryHost = '127.0.0.1';
+  ArbitraryPort = 9000;
+  T140PT        = 98;
+begin
+  inherited SetUp;
+
+  Self.Payload := TIdRTPT140Payload.Create;
+  Self.Payload.Block := 'test';
+
+  Self.Profile.AddEncoding(Self.Payload, T140PT);
+
+  Self.Session.AddReceiver(ArbitraryHost, ArbitraryPort);
+
+  Self.Wait := TIdRTPSendDataWait.Create;
+  Self.Wait.Data      := Self.Payload.Clone;
+  Self.Wait.SessionID := Self.Session.ID;
+end;
+
+procedure TestTIdRTPSendDataWait.TearDown;
+begin
+  Self.Wait.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdRTPSendDataWait Published methods ***********************************
+
+procedure TestTIdRTPSendDataWait.TestTrigger;
+begin
+  CheckEquals(0, Self.Agent.RTPCount, 'Sanity check: RTP sent before it should have');
+
+  Self.Wait.Trigger;
+
+  Check(Self.Agent.RTPCount > 0, 'No RTP sent, ergo Trigger didn''t happen');
+
+  CheckEquals(T140Encoding,
+              Self.Agent.LastRTP.Payload.EncodingName,
+              'Payload data type');
+  CheckEquals(Self.Payload.Block,
+              (Self.Agent.LastRTP.Payload as TIdRTPT140Payload).Block,
+              'Payload');
 end;
 
 initialization

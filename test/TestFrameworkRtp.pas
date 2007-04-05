@@ -13,7 +13,7 @@ interface
 
 uses
   Classes, Contnrs, IdInterfacedObject, IdNotification, IdObservable, IdRTP, IdSipCore,
-  SyncObjs, SysUtils, TestFramework, TestFrameworkEx;
+  IdTimerQueue, SyncObjs, SysUtils, TestFramework, TestFrameworkEx;
 
 type
   TTestRTP = class(TThreadingTestCase)
@@ -21,15 +21,18 @@ type
     procedure CheckHasEqualHeaders(const Expected, Received: TIdRTPPacket);
   end;
 
-  TIdMockRTPPeer = class(TIdInterfacedObject,
-                         IIdAbstractRTPPeer)
+  TIdMockRTPPeer = class(TIdBaseRTPAbstractPeer)
   private
     Listeners:             TIdNotificationList;
+    fActive:               Boolean;
+    fAddress:              String;
+    fDefaultPort:          Integer;
     fLastPacketHostTarget: String;
     fLastPacketPortTarget: Cardinal;
-    fProfile:              TIdRTPProfile;
     fRTCPCount:            Cardinal;
+    fRTCPPort:             Cardinal;
     fRTPCount:             Cardinal;
+    fRTPPort:              Cardinal;
     RTCPBuffer:            TObjectList;
     RTPBuffer:             TObjectList;
 
@@ -38,26 +41,39 @@ type
     function  GetRTCPCount: Cardinal;
     function  GetRTPCount: Cardinal;
     function  GetSecondLastRTCP: TIdRTCPPacket;
-    procedure SetProfile(Value: TIdRTPProfile);
+  protected
+    function  GetActive: Boolean; override;
+    function  GetAddress: String; override;
+    function  GetDefaultPort: Integer; override;
+    function  GetRTCPPort: Cardinal; override;
+    function  GetRTPPort: Cardinal; override;
+    procedure SetActive(Value: Boolean); override;
+    procedure SetAddress(Value: String); override;
+    procedure SetDefaultPort(Value: Integer); override;
+    procedure SetRTCPPort(Value: Cardinal); override;
+    procedure SetRTPPort(Value: Cardinal); override;
   public
-    constructor Create;
+    constructor Create; override;
     destructor  Destroy; override;
 
-    procedure AddListener(const Listener: IIdRTPListener);
     procedure NotifyListenersOfRTCP(Packet: TIdRTCPPacket;
-                                    Binding: TIdConnection);
+                                    Binding: TIdConnection); override;
     procedure NotifyListenersOfRTP(Packet: TIdRTPPacket;
-                                   Binding: TIdConnection);
-    procedure RemoveListener(const Listener: IIdRTPListener);
+                                   Binding: TIdConnection); override;
+    procedure NotifyListenersOfSentRTCP(Packet: TIdRTCPPacket;
+                                        Binding: TIdConnection); override;
+    procedure NotifyListenersOfSentRTP(Packet: TIdRTPPacket;
+                                       Binding: TIdConnection); override;
+    procedure ReceivePacket(Packet: TIdRTPBasePacket;
+                            Binding: TIdConnection); override;
     procedure SendPacket(const Host: String;
                          Port: Cardinal;
-                         Packet: TIdRTPBasePacket);
+                         Packet: TIdRTPBasePacket); override;
 
     property LastPacketHostTarget: String        read fLastPacketHostTarget;
     property LastPacketPortTarget: Cardinal      read fLastPacketPortTarget;
     property LastRTCP:             TIdRTCPPacket read GetLastRTCP;
     property LastRTP:              TIdRTPPacket  read GetLastRTP;
-    property Profile:              TIdRTPProfile read fProfile write SetProfile;
     property RTCPCount:            Cardinal      read GetRTCPCount;
     property RTPCount:             Cardinal      read GetRTPCount;
     property SecondLastRTCP:       TIdRTCPPacket read GetSecondLastRTCP;
@@ -122,12 +138,38 @@ type
     property RTPPacketParam:  TIdRTPPacket    read fRTPPacketParam;
   end;
 
+  TIdRTPTestRTPSendListener = class(TIdInterfacedObject,
+                                    IIdRTPSendListener)
+  private
+    fBindingParam:    TIdConnection;
+    fSentRTCP:        Boolean;
+    fSentRTP:         Boolean;
+    fRTCPPacketParam: TIdRTCPPacket;
+    fRTPPacketParam:  TIdRTPPacket;
+  public
+    constructor Create;
+
+    procedure OnSendRTCP(Packet: TIdRTCPPacket;
+                         Binding: TIdConnection);
+    procedure OnSendRTP(Packet: TIdRTPPacket;
+                        Binding: TIdConnection);
+
+    property BindingParam:    TIdConnection  read fBindingParam;
+    property SentRTCP:        Boolean        read fSentRTCP;
+    property SentRTP:         Boolean        read fSentRTP;
+    property RTCPPacketParam: TIdRTCPPacket  read fRTCPPacketParam;
+    property RTPPacketParam:  TIdRTPPacket   read fRTPPacketParam;
+  end;
+
   TestTTestRTP = class(TTestRTP)
   published
     procedure TestCheckUnicode;
   end;
 
 implementation
+
+uses
+  IdSocketHandle;
 
 function Suite: ITestSuite;
 begin
@@ -189,56 +231,65 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdMockRTPPeer.AddListener(const Listener: IIdRTPListener);
-begin
-  Self.Listeners.AddListener(Listener);
-end;
-
 procedure TIdMockRTPPeer.NotifyListenersOfRTCP(Packet: TIdRTCPPacket;
                                                Binding: TIdConnection);
-var
-  Notification: TIdRTPListenerReceiveRTCPMethod;
 begin
-  Notification := TIdRTPListenerReceiveRTCPMethod.Create;
-  try
-    Notification.Binding := Binding;
-    Notification.Packet  := Packet;
-
-    Self.Listeners.Notify(Notification);
-  finally
-    Notification.Free;
-  end;
+  inherited NotifyListenersOfRTCP(Packet, Binding);
 end;
 
 procedure TIdMockRTPPeer.NotifyListenersOfRTP(Packet: TIdRTPPacket;
                                               Binding: TIdConnection);
-var
-  Notification: TIdRTPListenerReceiveRTPMethod;
 begin
-  Notification := TIdRTPListenerReceiveRTPMethod.Create;
-  try
-    Notification.Binding := Binding;
-    Notification.Packet  := Packet;
-
-    Self.Listeners.Notify(Notification);
-  finally
-    Notification.Free;
-  end;
+  inherited NotifyListenersOfRTP(Packet, Binding);
 end;
 
-procedure TIdMockRTPPeer.RemoveListener(const Listener: IIdRTPListener);
+procedure TIdMockRTPPeer.NotifyListenersOfSentRTCP(Packet: TIdRTCPPacket;
+                                                   Binding: TIdConnection);
 begin
-  Self.Listeners.RemoveListener(Listener);
+  inherited NotifyListenersOfSentRTCP(Packet, Binding);
+end;
+
+procedure TIdMockRTPPeer.NotifyListenersOfSentRTP(Packet: TIdRTPPacket;
+                                                  Binding: TIdConnection);
+begin
+  inherited NotifyListenersOfSentRTP(Packet, Binding);
+end;
+
+procedure TIdMockRTPPeer.ReceivePacket(Packet: TIdRTPBasePacket;
+                                       Binding: TIdConnection);
+var
+  ReceivedPacket: TIdRTPBasePacket;
+  S:              TStringStream;
+begin
+  if Self.Active then begin
+    // This may look peculiar, but we're mimicking the behaviour of a
+    // TIdRTPServer. See TIdRTPServer.DoOnUdpRead.
+    S := TStringStream.Create('');
+    try
+      Packet.PrintOn(S);
+      S.Seek(0, soFromBeginning);
+
+      ReceivedPacket := Self.RemoteProfile.CreatePacket(S);
+      try
+        ReceivedPacket.ReadFrom(S);
+
+        inherited ReceivePacket(ReceivedPacket, Binding);
+      finally
+        ReceivedPacket.Free;
+      end;
+    finally
+      S.Free;
+    end;
+  end;
 end;
 
 procedure TIdMockRTPPeer.SendPacket(const Host: String;
                                     Port: Cardinal;
                                     Packet: TIdRTPBasePacket);
+var
+  Binding: TIdConnection;
 begin
   if Packet.IsRTP then begin
-    if not Assigned(Self.Profile) then
-      raise Exception.Create('You didn''t set TIdMockRTPPeer.Profile');
-
     Self.RTPBuffer.Add(Packet.Clone);
     Inc(Self.fRTPCount);
   end
@@ -249,6 +300,75 @@ begin
 
   Self.fLastPacketHostTarget := Host;
   Self.fLastPacketPortTarget := Port;
+
+  Binding.LocalIP  := Self.Address;
+  Binding.PeerIP   := Host;
+  Binding.PeerPort := Port;
+  if Packet.IsRTP then begin
+    Binding.LocalPort := Self.RTPPort;
+    Self.NotifyListenersOfSentRTP(Packet as TIdRTPPacket, Binding);
+  end
+  else begin
+    Binding.LocalPort := Self.RTCPPort;
+    Self.NotifyListenersOfSentRTCP(Packet as TIdRTCPPacket, Binding);
+  end;
+end;
+
+//* TIdMockRTPPeer Protected methods *******************************************
+
+function TIdMockRTPPeer.GetActive: Boolean;
+begin
+  Result := Self.fActive;
+end;
+
+function TIdMockRTPPeer.GetAddress: String;
+begin
+  Result := Self.fAddress;
+end;
+
+function TIdMockRTPPeer.GetDefaultPort: Integer;
+begin
+  Result := Self.fDefaultPort;
+end;
+
+function TIdMockRTPPeer.GetRTCPPort: Cardinal;
+begin
+  Result := Self.fRTCPPort;
+end;
+
+function TIdMockRTPPeer.GetRTPPort: Cardinal;
+begin
+  Result := Self.fRTPPort;
+end;
+
+procedure TIdMockRTPPeer.SetActive(Value: Boolean);
+begin
+  if Value then begin
+    if TIdRTPPeerRegistry.ServerRunningOn(Self.Address, Self.RTPPort) then
+      raise EIdCouldNotBindSocket.Create('');
+  end;
+  
+  Self.fActive := Value;
+end;
+
+procedure TIdMockRTPPeer.SetAddress(Value: String);
+begin
+  Self.fAddress := Value;
+end;
+
+procedure TIdMockRTPPeer.SetDefaultPort(Value: Integer);
+begin
+  Self.fDefaultPort := Value;
+end;
+
+procedure TIdMockRTPPeer.SetRTCPPort(Value: Cardinal);
+begin
+  Self.fRTCPPort := Value;
+end;
+
+procedure TIdMockRTPPeer.SetRTPPort(Value: Cardinal);
+begin
+  Self.fRTPPort := Value;
 end;
 
 //* TIdMockRTPPeer Private methods *********************************************
@@ -279,11 +399,6 @@ begin
     Result := nil
   else
     Result := Self.RTCPBuffer[Self.RTCPCount - 2] as TIdRTCPPacket;
-end;
-
-procedure TIdMockRTPPeer.SetProfile(Value: TIdRTPProfile);
-begin
-  Self.fProfile := Value;
 end;
 
 //******************************************************************************
@@ -373,6 +488,35 @@ begin
   Self.fBindingParam   := Binding;
   Self.fRTPPacketParam := Packet;
   Self.fReceivedRTP    := true;
+end;
+
+//******************************************************************************
+//* TIdRTPTestRTPSendListener                                                  *
+//******************************************************************************
+//* TIdRTPTestRTPSendListener Public methods ***********************************
+
+constructor TIdRTPTestRTPSendListener.Create;
+begin
+  inherited Create;
+
+  Self.fSentRTCP := false;
+  Self.fSentRTP  := false;
+end;
+
+procedure TIdRTPTestRTPSendListener.OnSendRTCP(Packet: TIdRTCPPacket;
+                                               Binding: TIdConnection);
+begin
+  Self.fBindingParam    := Binding;
+  Self.fRTCPPacketParam := Packet;
+  Self.fSentRTCP        := true;
+end;
+
+procedure TIdRTPTestRTPSendListener.OnSendRTP(Packet: TIdRTPPacket;
+                                              Binding: TIdConnection);
+begin
+  Self.fBindingParam   := Binding;
+  Self.fRTPPacketParam := Packet;
+  Self.fSentRTP        := true;
 end;
 
 //******************************************************************************

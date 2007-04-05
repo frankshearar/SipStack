@@ -462,8 +462,16 @@ type
     procedure TestParseVersionMultipleHeaders;
   end;
 
-  TIdSdpTestCase = class(TThreadingTestCase)
+  TIdSdpTestCase = class(TTestCase,
+                         IIdRTPDataListener)
+  protected
+    ReceivedData: Boolean;
+
+    procedure OnNewData(Data: TIdRTPPayload;
+                        Binding: TIdConnection); virtual;
   public
+    procedure SetUp; override;
+
     procedure CheckPortActive(Address: String;
                               Port: Cardinal;
                               Msg: String);
@@ -473,35 +481,33 @@ type
   end;
 
   TestTIdSDPMediaStream = class(TIdSdpTestCase,
-                                IIdRTPDataListener,
-                                IIdRTPListener)
+                                IIdRTPSendListener)
   private
-    AVP:              TIdRTPProfile;
-    Media:            TIdSDPMediaStream;
-    ReceivingBinding: TIdConnection;
-    RTCPEvent:        TEvent;
-    RTPEvent:         TEvent;
-    Sender:           TIdSDPMediaStream;
-    SentBye:          Boolean;
-    Timer:            TIdDebugTimerQueue;
+    AVP:            TIdRTPProfile;
+    Media:          TIdSDPMediaStream;
+    Sender:         TIdSDPMediaStream;
+    SendingBinding: TIdConnection;
+    SentBye:        Boolean;
+    SentData:       Boolean;
+    SentControl:    Boolean;
+    Text:           TIdRTPT140Payload;
+    Timer:          TIdDebugTimerQueue;
 
-    procedure OnNewData(Data: TIdRTPPayload;
+    procedure OnSendRTCP(Packet: TIdRTCPPacket;
+                         Binding: TIdConnection);
+    procedure OnSendRTP(Packet: TIdRTPPacket;
                         Binding: TIdConnection);
-    procedure OnRTCP(Packet: TIdRTCPPacket;
-                     Binding: TIdConnection);
-    procedure OnRTP(Packet: TIdRTPPacket;
-                    Binding: TIdConnection);
-    procedure SendRTCP;
-    procedure SendRTP(LayerID: Cardinal = 0);
+    procedure ReceiveControlOn(S: TIdSDPMediaStream);
+    procedure ReceiveDataOn(S: TIdSDPMediaStream);
     procedure SetLocalMediaDesc(Stream: TIdSDPMediaStream;
                                 const MediaDesc: String);
-    procedure ValidateSender(LayerID: Cardinal = 0);
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
     procedure TestAddDataListener;
     procedure TestAddRTPListener;
+    procedure TestAddRTPSendListener;
     procedure TestHierarchicallyEncodedStream;
     procedure TestIsReceiver;
     procedure TestIsSender;
@@ -511,6 +517,7 @@ type
     procedure TestPutOnHoldWhileOnHold;
     procedure TestReceiveDataWhenNotReceiver;
     procedure TestRemoteMembersControlAddressAndPortSet;
+    procedure TestRemoveRTPSendListener;
     procedure TestRTPListenersGetRTCP;
     procedure TestRTPListenersGetRTP;
     procedure TestSendData;
@@ -521,8 +528,7 @@ type
     procedure TestTakeOffHold;
   end;
 
-  TestTIdSDPMultimediaSession = class(TIdSdpTestCase,
-                                      IIdRTPListener)
+  TestTIdSDPMultimediaSession = class(TIdSdpTestCase)
   private
     Payload:    TClass;
     LocalPort:  Cardinal;
@@ -541,21 +547,19 @@ type
     procedure CheckOriginUsername(ExpectedUsername: String;
                                   SessionDescription: String);
     function  MultiStreamSDP(LowPort, HighPort: Cardinal): String;
-    procedure OnRTCP(Packet: TIdRTCPPacket;
-                     Binding: TIdConnection);
-    procedure OnRTP(Packet: TIdRTPPacket;
-                    Binding: TIdConnection);
     procedure ReceiveDataOfType(PayloadType: Cardinal);
     function  RefusedStreamSDP(Port: Cardinal): String;
     function  SingleStreamSDP(Port: Cardinal;
                               PayloadType: Cardinal = 96): String;
+  protected
+    procedure OnNewData(Data: TIdRTPPayload;
+                        Binding: TIdConnection); override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
     procedure TestAddressTypeFor;
     procedure TestDifferentPayloadTypesForSameEncoding;
-    procedure TestInitialize;
     procedure TestIsListening;
     procedure TestLocalSessionDescription;
     procedure TestLocalSessionDescriptionWithRefusedStream;
@@ -613,7 +617,6 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSdpParser unit tests');
-{
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSdpAttribute.Suite);
   Result.AddTest(TestTIdSdpRTPMapAttribute.Suite);
@@ -634,10 +637,9 @@ begin
   Result.AddTest(TestTIdSdpZoneAdjustments.Suite);
   Result.AddTest(TestTIdSdpParser.Suite);
   Result.AddTest(TestTIdSdpPayload.Suite);
-}
   Result.AddTest(TestTIdSDPMediaStream.Suite);
-//  Result.AddTest(TestTIdSDPMultimediaSession.Suite);
-//  Result.AddTest(TestTIdSdpNatMasquerader.Suite);
+  Result.AddTest(TestTIdSDPMultimediaSession.Suite);
+  Result.AddTest(TestTIdSdpNatMasquerader.Suite);
 end;
 
 const
@@ -5925,51 +5927,47 @@ end;
 //******************************************************************************
 //* TIdSdpTestCase Public methods **********************************************
 
+procedure TIdSdpTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  Self.ReceivedData := false;
+end;
+
 procedure TIdSdpTestCase.CheckPortActive(Address: String;
                                          Port: Cardinal;
                                          Msg: String);
 var
-  Binding: TIdSocketHandle;
-  Server:  TIdUDPServer;
+  Server: TIdBaseRTPAbstractPeer;
 begin
-  Server := TIdUDPServer.Create(nil);
-  try
-    Binding := Server.Bindings.Add;
-    Binding.IP   := Address;
-    Binding.Port := Port;
-    try
-      Server.Active := true;
-      Fail(Msg);
-    except
-      on EIdCouldNotBindSocket do;
-    end;
-  finally
-    Server.Free;
-  end;
+  Server := TIdRTPPeerRegistry.ServerOn(Address, Port);
+
+  if Assigned(Server) then begin
+    Check(Server.Active, Msg);
+  end
+  else
+    Fail(Msg);
 end;
 
 procedure TIdSdpTestCase.CheckPortFree(Address: String;
                                        Port: Cardinal;
                                        Msg: String);
 var
-  Binding: TIdSocketHandle;
-  Server:  TIdUDPServer;
+  Server: TIdBaseRTPAbstractPeer;
 begin
-  Server := TIdUDPServer.Create(nil);
-  try
-    Binding := Server.Bindings.Add;
-    Binding.IP   := Address;
-    Binding.Port := Port;
+  Server := TIdRTPPeerRegistry.ServerOn(Address, Port);
 
-    try
-      Server.Active := true;
-    except
-      on EIdCouldNotBindSocket do
-        Fail('Port ' + Address + ':' + IntToStr(Port) + ' is not free');
-    end;
-  finally
-    Server.Free;
+  if Assigned(Server) then begin
+    Check(not Server.Active, Msg);
   end;
+end;
+
+//* TIdSdpTestCase Protected methods *******************************************
+
+procedure TIdSdpTestCase.OnNewData(Data: TIdRTPPayload;
+                                   Binding: TIdConnection);
+begin
+  Self.ReceivedData := true;
 end;
 
 //******************************************************************************
@@ -5986,23 +5984,19 @@ var
 begin
   inherited SetUp;
 
-  Self.DefaultTimeout := OneSecond;
-
   T140PT := 96;
 
   Self.AVP := TIdRTPProfile.Create;
   Self.AVP.AddEncoding(T140EncodingName, T140ClockRate, '', T140PT);
 
-  Self.RTCPEvent := TSimpleEvent.Create;
-  Self.RTPEvent  := TSimpleEvent.Create;
-  Self.Timer     := TIdDebugTimerQueue.Create(false);
+  Self.Timer := TIdDebugTimerQueue.Create(false);
 
-  Self.Media := TIdSDPMediaStream.Create;
+  Self.Media := TIdSDPMediaStream.Create(TIdMockRTPPeer);
   Self.Media.LocalProfile  := Self.AVP;
   Self.Media.RemoteProfile := Self.AVP;
   Self.Media.Timer         := Self.Timer;
 
-  Self.Sender := TIdSDPMediaStream.Create;
+  Self.Sender := TIdSDPMediaStream.Create(TIdMockRTPPeer);
   Self.Sender.LocalProfile  := Self.AVP;
   Self.Sender.RemoteProfile := Self.AVP;
   Self.Sender.Timer         := Self.Timer;
@@ -6027,23 +6021,25 @@ begin
     SDP.Free;
   end;
 
+  Self.Text := TIdRTPT140Payload.Create;
+  Self.Text.Block := '1234';
+
   Self.Media.Initialize;
   Self.Sender.Initialize;
 
   Self.Media.StartListening;
   Self.Sender.StartListening;
 
-  Self.ValidateSender;
-
-  Self.SentBye := false;
+  Self.SentBye      := false;
+  Self.SentControl  := false;
+  Self.SentData     := false;
 end;
 
 procedure TestTIdSDPMediaStream.TearDown;
 begin
+  Self.Text.Free;
   Self.Sender.Free;
   Self.Media.Free;
-  Self.RTPEvent.Free;
-  Self.RTCPEvent.Free;
   Self.AVP.Free;
 
   Self.Timer.Terminate;
@@ -6053,76 +6049,86 @@ end;
 
 //* TestTIdSDPMediaStream Private methods **************************************
 
-procedure TestTIdSDPMediaStream.OnNewData(Data: TIdRTPPayload;
+procedure TestTIdSDPMediaStream.OnSendRTCP(Packet: TIdRTCPPacket;
+                                           Binding: TIdConnection);
+begin
+  Self.SendingBinding.LocalIP   := Binding.LocalIP;
+  Self.SendingBinding.LocalPort := Binding.LocalPort;
+  Self.SendingBinding.PeerIP    := Binding.PeerIP;
+  Self.SendingBinding.PeerPort  := Binding.PeerPort;
+
+  Self.SentBye := Packet.IsBye;
+  Self.SentControl := true;
+end;
+
+procedure TestTIdSDPMediaStream.OnSendRTP(Packet: TIdRTPPacket;
                                           Binding: TIdConnection);
 begin
-  Self.ReceivingBinding.LocalIP   := Binding.LocalIP;
-  Self.ReceivingBinding.LocalPort := Binding.LocalPort;
-  Self.ReceivingBinding.PeerIP    := Binding.PeerIP;
-  Self.ReceivingBinding.PeerPort  := Binding.PeerPort;
+  Self.SendingBinding.LocalIP   := Binding.LocalIP;
+  Self.SendingBinding.LocalPort := Binding.LocalPort;
+  Self.SendingBinding.PeerIP    := Binding.PeerIP;
+  Self.SendingBinding.PeerPort  := Binding.PeerPort;
 
-  Self.ThreadEvent.SetEvent;
+  Self.SentData := true;
 end;
 
-procedure TestTIdSDPMediaStream.OnRTCP(Packet: TIdRTCPPacket;
-                                       Binding: TIdConnection);
-begin
-  Self.SentBye := Packet.IsBye;
-
-  Self.ReceivingBinding.LocalIP   := Binding.LocalIP;
-  Self.ReceivingBinding.LocalPort := Binding.LocalPort;
-  Self.ReceivingBinding.PeerIP    := Binding.PeerIP;
-  Self.ReceivingBinding.PeerPort  := Binding.PeerPort;  
-
-  Self.RTCPEvent.SetEvent;
-end;
-
-procedure TestTIdSDPMediaStream.OnRTP(Packet: TIdRTPPacket;
-                                      Binding: TIdConnection);
-begin
-  Self.RTPEvent.SetEvent;
-end;
-
-procedure TestTIdSDPMediaStream.SendRTCP;
+procedure TestTIdSDPMediaStream.ReceiveControlOn(S: TIdSDPMediaStream);
 var
-  Svr:  TIdUDPServer;
-  RTCP: TIdRTCPBye;
-  S:    TStringStream;
+  Binding: TIdConnection;
+  RTCP:    TIdRTCPPacket;
+  Server:  TIdBaseRTPAbstractPeer;
 begin
-  Svr := TIdUDPServer.Create(nil);
+  Binding.LocalIP   := S.LocalDescription.Connections[0].Address;
+  Binding.LocalPort := S.LocalDescription.Port;
+  Binding.PeerIP    := Self.Sender.LocalDescription.Connections[0].Address;
+  Binding.PeerPort  := Self.Sender.LocalDescription.Port;
+
+  Server := TIdRTPPeerRegistry.ServerOn(Binding.LocalIP, Binding.LocalPort);
+
+  Check(Assigned(Server), 'RTP peer not found running on ' + Binding.LocalIP + ':' + IntToStr(Binding.LocalPort));
+
+  RTCP := TIdRTCPSenderReport.Create;
   try
-    RTCP := TIdRTCPBye.Create;
-    try
-      RTCP.Reason := 'foo';
+    RTCP.SyncSrcID := TIdRTPPeerRegistry.ServerOn(Binding.PeerIP, Binding.PeerPort).Session.SyncSrcID;
 
-      S := TStringStream.Create('');
-      try
-        RTCP.PrintOn(S);
-
-        Svr.Send(Self.Media.LocalDescription.Connections[0].Address,
-                 Self.Media.LocalDescription.Port,
-                 S.DataString);
-      finally
-        S.Free;
-      end;
-    finally
-      RTCP.Free;
-    end;
+    Server.ReceivePacket(RTCP, Binding);
   finally
-    Svr.Free;
+    RTCP.Free;
   end;
 end;
 
-procedure TestTIdSDPMediaStream.SendRTP(LayerID: Cardinal = 0);
+procedure TestTIdSDPMediaStream.ReceiveDataOn(S: TIdSDPMediaStream);
 var
-  Text: TIdRTPT140Payload;
+  Binding: TIdConnection;
+  Host:    String;
+  Port:    Cardinal;
+  RTP:     TIdRTPPacket;
+  Server:  TIdBaseRTPAbstractPeer;
+  Text:    TIdRTPT140Payload;
 begin
-  Text := TIdRTPT140Payload.Create;
+  Host := S.LocalDescription.Connections[0].Address;
+  Port := S.LocalDescription.Port;
+
+  Server := TIdRTPPeerRegistry.ServerOn(Host, Port);
+
+  Check(Assigned(Server), 'RTP peer not found running on ' + Host + ':' + IntToStr(Port));
+
+  Binding.PeerIP   := Host;
+  Binding.PeerPort := Port;
+
+  RTP := TIdRTPPacket.Create(Server.LocalProfile);
   try
-    Text.Block := '1234';
-    Self.Sender.SendData(Text, LayerID);
+    Text := TIdRTPT140Payload.Create;
+    try
+      Text.Block := '1234';
+      RTP.Payload := Text;
+
+      Server.ReceivePacket(RTP, Binding);
+    finally
+      Text.Free;
+    end;
   finally
-    Text.Free;
+    RTP.Free;
   end;
 end;
 
@@ -6143,19 +6149,6 @@ begin
   end;
 end;
 
-procedure TestTIdSDPMediaStream.ValidateSender(LayerID: Cardinal = 0);
-begin
-  Self.Media.AddRTPListener(Self);
-  try
-    // To authenticate Self.Sender as a real RTP member
-    Self.SendRTP(LayerID);
-    Self.WaitForSignaled(Self.RTPEvent, 'Waiting to validate sender');
-  finally
-    Self.Media.RemoveRTPListener(Self);
-  end;
-  Self.RTPEvent.ResetEvent;
-end;
-
 //* TestTIdSDPMediaStream Published methods ************************************
 
 procedure TestTIdSDPMediaStream.TestAddDataListener;
@@ -6171,9 +6164,7 @@ begin
       Self.Media.AddDataListener(L2);
       Self.Media.AddDataListener(Self);
 
-      Self.ExceptionMessage := 'Waiting for RTP data';
-      Self.SendRTP;
-      Self.WaitForSignaled;
+      Self.ReceiveDataOn(Self.Media);
 
       Check(L1.NewData, 'L1 not notified');
       Check(L2.NewData, 'L2 not notified');
@@ -6196,11 +6187,8 @@ begin
     try
       Self.Media.AddRTPListener(L1);
       Self.Media.AddRTPListener(L2);
-      Self.Media.AddRTPListener(Self);
 
-      Self.ExceptionMessage := 'Waiting for RTP';
-      Self.SendRTP;
-      Self.WaitForSignaled(Self.RTPEvent);
+      Self.ReceiveDataOn(Self.Media);
 
       Check(L1.ReceivedRTP, 'L1 not notified');
       Check(L2.ReceivedRTP, 'L2 not notified');
@@ -6214,6 +6202,39 @@ begin
   end;
 end;
 
+procedure TestTIdSDPMediaStream.TestAddRTPSendListener;
+var
+  L1: TIdRTPTestRTPSendListener;
+  L2: TIdRTPTestRTPSendListener;
+begin
+  L1 := TIdRTPTestRTPSendListener.Create;
+  try
+    L2 := TIdRTPTestRTPSendListener.Create;
+    try
+      Self.Media.AddRTPSendListener(L1);
+      Self.Media.AddRTPSendListener(L2);
+
+      Self.Media.SendData(Self.Text);
+      Self.Timer.TriggerAllEventsUpToFirst(TIdRTPSendDataWait);
+
+      Check(L1.SentRTP, 'L1 not notified of RTP');
+      Check(L2.SentRTP, 'L2 not notified of RTP');
+
+      Self.Media.JoinSession;
+      Self.Timer.TriggerAllEventsUpToFirst(TIdRTPTransmissionTimeExpire);
+
+      Check(L1.SentRTCP, 'L1 not notified of RTCP');
+      Check(L2.SentRTCP, 'L2 not notified of RTCP');
+    finally
+      Self.Media.RemoveRTPSendListener(L2);
+      L2.Free;
+    end;
+  finally
+    Self.Media.RemoveRTPSendListener(L1);
+    L1.Free;
+  end;
+end;
+
 procedure TestTIdSDPMediaStream.TestHierarchicallyEncodedStream;
 const
   PortCount = 1;
@@ -6222,37 +6243,36 @@ var
   ReceiverLayerID: Cardinal;
   SenderLayerID:   Cardinal;
 begin
-  // We change Self.Sender's description because both ends must have the same
-  // number of ports open.
+  // Both ends must have the same number of ports open.
   Self.SetLocalMediaDesc(Self.Sender,
                          'm=audio 9000/' + IntToStr(PortCount) + ' RTP/AVP 0'#13#10);
   Self.SetLocalMediaDesc(Self.Media,
                          'm=audio 8000/' + IntToStr(PortCount) + ' RTP/AVP 0'#13#10);
-  Self.Sender.RemoteDescription := Self.Media.LocalDescription;
   Self.Media.RemoteDescription  := Self.Sender.LocalDescription;
 
   Self.Media.Initialize;
-  Self.Sender.Initialize;
 
-  Self.Media.AddDataListener(Self);
+  Self.Media.AddRTPSendListener(Self);
 
   for Offset := 0 to PortCount - 1 do begin
-    ReceiverLayerID := Self.Media.LocalDescription.Port + 2*Offset;
-    SenderLayerID   := Self.Sender.LocalDescription.Port + 2*Offset;
+    ReceiverLayerID := Self.Media.RemoteDescription.Port + 2*Offset;
+    SenderLayerID   := Self.Media.LocalDescription.Port + 2*Offset;
     CheckPortActive(Self.Media.LocalDescription.Connections[0].Address,
                     ReceiverLayerID,
                     IntToStr(Offset + 1) + 'th port not active');
 
-    Self.ValidateSender(SenderLayerID);
-    Self.SendRTP(SenderLayerID);
-    Self.WaitForSignaled(IntToStr(Offset + 1) + 'th port of sender didn''t send data');
+    Self.Media.SendData(Self.Text, SenderLayerID);
 
-    CheckEquals(ReceiverLayerID,
-                Self.ReceivingBinding.LocalPort,
-                'Wrong layer received the data');
+    Self.SentData := false;
+    Self.Timer.TriggerAllEventsUpToFirst(TIdRTPSendDataWait);
+    Check(Self.SentData, IntToStr(Offset + 1) + 'th port of sender didn''t send data');
+
     CheckEquals(SenderLayerID,
-                Self.ReceivingBinding.PeerPort,
+                Self.SendingBinding.LocalPort,
                 'Sender used wrong port (hence layer) to send data');
+    CheckEquals(ReceiverLayerID,
+                Self.SendingBinding.PeerPort,
+                'Wrong layer will receive the data');
   end;
 end;
 
@@ -6330,10 +6350,6 @@ begin
   // various layers by "joining a session" - that will send a Receiver Report to
   // the control ports of the remote party's different layers.
 
-  // When RTPServers receive packets they now schedule Waits to
-  // TriggerImmediately. We want the DebugTimer to trigger these immediately.
-  Self.Timer.TriggerImmediateEvents := true;
-
   Self.Media.StopListening;
   Self.Sender.StopListening;
 
@@ -6347,56 +6363,46 @@ begin
   Self.Sender.RemoteDescription := Self.Media.LocalDescription;
 
   Self.Media.Initialize;
+  Self.Media.AddRTPSendListener(Self);
 
-  // Self.Sender sends off two RTCP packets to Self.Media (one per layer).
-  // We don't care about those two sending events, so we just trigger them
-  // to get them unqueued.
+  // Self.Media sends off two RTCP packets (one per layer).
   Self.Media.StartListening;
   Self.Media.JoinSession;
-  Self.Timer.RemoveAllEvents;
-
-  Self.Sender.Initialize;
-
-  Self.Media.AddRTPListener(Self);
-  Self.Sender.StartListening;
-  Self.Sender.JoinSession;
 
   // We use a debug timer, so we trigger the event manually.
   Self.Timer.TriggerEarliestEvent;
 
-  // Now we check that we received two RTCP packets. We don't necessarily know
+  // Now we check that we sent two RTCP packets. We don't necessarily know
   // the order in which the packets will be sent.
 
   // Check the first: it could come from one of two ports, and could arrive at
   // one of two ports.
-  Self.WaitForSignaled(Self.RTCPEvent, 'No RTCP sent');
-  Check((Self.ReceivingBinding.PeerPort = Self.Sender.LocalDescription.Port + 1)
-     or (Self.ReceivingBinding.PeerPort = Self.Sender.LocalDescription.Port + 3),
-        'The RTCP came from an unexpected port: ' + IntToStr(Self.ReceivingBinding.PeerPort));
-  Check((Self.ReceivingBinding.LocalPort = Self.Sender.RemoteDescription.Port + 1)
-     or (Self.ReceivingBinding.LocalPort = Self.Sender.RemoteDescription.Port + 3),
-        'The RTCP arrived at an unexpected port: ' + IntToStr(Self.ReceivingBinding.LocalPort));
+  Check((Self.SendingBinding.LocalPort = Self.Media.LocalDescription.Port + 1)
+     or (Self.SendingBinding.LocalPort = Self.Media.LocalDescription.Port + 3),
+        'The RTCP came from an unexpected port: ' + IntToStr(Self.SendingBinding.LocalPort));
+  Check((Self.SendingBinding.PeerPort = Self.Media.RemoteDescription.Port + 1)
+     or (Self.SendingBinding.PeerPort = Self.Media.RemoteDescription.Port + 3),
+        'The RTCP arrived at an unexpected port: ' + IntToStr(Self.SendingBinding.PeerPort));
 
   // Obviously, the second packet must come from the OTHER source and arrive at
   // the OTHER destination.
-  FirstPort := Self.ReceivingBinding.PeerPort;
+  FirstPort := Self.SendingBinding.PeerPort;
   if (FirstPort = Self.Sender.LocalDescription.Port + 1) then begin
-    SecondExpectedLocalPort := Self.Sender.RemoteDescription.Port + 3;
-    SecondExpectedPeerPort  := Self.Sender.LocalDescription.Port + 3;
+    SecondExpectedLocalPort := Self.Media.LocalDescription.Port + 3;
+    SecondExpectedPeerPort  := Self.Media.RemoteDescription.Port + 3;
   end
   else begin
-    SecondExpectedLocalPort := Self.Sender.RemoteDescription.Port + 1;
-    SecondExpectedPeerPort  := Self.Sender.LocalDescription.Port + 1;
+    SecondExpectedLocalPort := Self.Media.LocalDescription.Port + 1;
+    SecondExpectedPeerPort  := Self.Media.RemoteDescription.Port + 1;
   end;
 
   Self.Timer.TriggerEarliestEvent;
-  Self.WaitForSignaled(Self.RTCPEvent, 'No RTCP sent; second packet');
 
   CheckEquals(SecondExpectedPeerPort,
-              Self.ReceivingBinding.PeerPort,
+              Self.SendingBinding.PeerPort,
               'The RTCP came from an unexpected port');
   CheckEquals(SecondExpectedLocalPort,
-              Self.ReceivingBinding.LocalPort,
+              Self.SendingBinding.LocalPort,
               'The RTCP arrived at an unexpected port');
 end;
 
@@ -6464,9 +6470,9 @@ begin
                        + 'a=rtpmap:96 t140/1000'#13#10
                        + 'a=inactive');
 
-  Self.SendRTP;
+  Self.ReceiveDataOn(Self.Media);
 
-  Self.WaitForTimeout(Self.ThreadEvent, 'Received data when not a receiver');
+  Check(not Self.ReceivedData, 'Received data when not a receiver');
 end;
 
 procedure TestTIdSDPMediaStream.TestRemoteMembersControlAddressAndPortSet;
@@ -6479,15 +6485,30 @@ begin
 
   // This schedules the joining of the RTP session.
   Self.Media.JoinSession;
-  Self.Sender.AddRTPListener(Self);
+  Self.Media.AddRTPSendListener(Self);
 
-  // We use a debug timer, so we trigger the event manually.
-  Self.Timer.TriggerEarliestEvent;
+  Self.Timer.TriggerAllEventsUpToFirst(TIdRTPTransmissionTimeExpire);
 
-  Self.WaitForSignaled(Self.RTCPEvent, 'No RTCP sent');
+  Check(Self.SentControl, 'No RTCP sent');
 
-  CheckEquals(Self.Media.LocalDescription.Port + 1, Self.ReceivingBinding.PeerPort, 'The RTCP came from an unexpected port');
-  CheckEquals(Self.Sender.LocalDescription.Port + 1, Self.ReceivingBinding.LocalPort, 'The RTCP arrived at an unexpected port');
+  CheckEquals(Self.Media.LocalDescription.Port + 1, Self.SendingBinding.LocalPort, 'The RTCP came from an unexpected port');
+  CheckEquals(Self.Sender.LocalDescription.Port + 1, Self.SendingBinding.PeerPort, 'The RTCP arrived at an unexpected port');
+end;
+
+procedure TestTIdSDPMediaStream.TestRemoveRTPSendListener;
+var
+  L: TIdRTPTestRTPSendListener;
+begin
+  L := TIdRTPTestRTPSendListener.Create;
+  try
+    Self.Media.AddRTPSendListener(L);
+    Self.Media.RemoveRTPSendListener(L);
+    Self.Media.SendData(Self.Text);
+
+    Check(not L.SentRTP, 'L notified, thus not removed');
+  finally
+    L.Free;
+  end;
 end;
 
 procedure TestTIdSDPMediaStream.TestRTPListenersGetRTCP;
@@ -6501,11 +6522,8 @@ begin
     try
       Self.Media.AddRTPListener(L1);
       Self.Media.AddRTPListener(L2);
-      Self.Media.AddRTPListener(Self);
 
-      Self.ExceptionMessage := 'Waiting for RTCP';
-      Self.SendRTCP;
-      Self.WaitForSignaled(Self.RTCPEvent);
+      Self.ReceiveControlOn(Self.Media);
 
       Check(L1.ReceivedRTCP, 'L1 not notified');
       Check(L2.ReceivedRTCP, 'L2 not notified');
@@ -6530,11 +6548,8 @@ begin
     try
       Self.Media.AddRTPListener(L1);
       Self.Media.AddRTPListener(L2);
-      Self.Media.AddRTPListener(Self);
 
-      Self.ExceptionMessage := 'Waiting for RTP';
-      Self.SendRTP;
-      Self.WaitForSignaled(Self.RTPEvent);
+      Self.ReceiveDataOn(Self.Media);
 
       Check(L1.ReceivedRTP, 'L1 not notified');
       Check(L2.ReceivedRTP, 'L2 not notified');
@@ -6550,32 +6565,33 @@ end;
 
 procedure TestTIdSDPMediaStream.TestSendData;
 begin
-  Self.Media.AddRTPListener(Self);
+  Self.Media.AddRTPSendListener(Self);
 
-  Self.SendRTP;
+  Self.Media.SendData(Self.Text);
+  Self.Timer.TriggerAllEventsUpToFirst(TIdRTPSendDataWait);
 
-  Self.WaitForSignaled(Self.RTPEvent);
+  Check(Self.SentData, 'No data sent');
 end;
 
 procedure TestTIdSDPMediaStream.TestSendDataWhenNotSender;
 begin
-  Self.Media.AddRTPListener(Self);
-  Self.SetLocalMediaDesc(Self.Sender,
+  Self.Media.AddRTPSendListener(Self);
+  Self.SetLocalMediaDesc(Self.Media,
                          'm=text 8002 RTP/AVP 96'#13#10
                        + 'a=rtpmap:96 t140/1000'#13#10
                        + 'a=inactive');
-  Self.SendRTP;
 
-  Self.WaitForTimeout(Self.RTPEvent,
-                      'Server sent data when not a sender');
+  Self.Media.SendData(Self.Text);
+  Self.Timer.TriggerAllEventsUpToFirst(TIdRTPSendDataWait);
+
+  Check(not Self.SentData, 'Server sent data when not a sender');
 end;
 
 procedure TestTIdSDPMediaStream.TestSetRemoteDescriptionSendsNoPackets;
 begin
-  Self.Media.AddRTPListener(Self);
+  Self.Media.AddRTPSendListener(Self);
   Self.Media.RemoteDescription := Self.Media.RemoteDescription;
-
-  Self.WaitForTimeout(Self.RTCPEvent,  'SetRemoteDescription sent RTCP packets');
+  Check(not Self.SentControl, 'SetRemoteDescription sent RTCP packets');
 end;
 
 procedure TestTIdSDPMediaStream.TestStartListening;
@@ -6590,54 +6606,45 @@ begin
   Self.Sender.RemoteDescription := Self.Media.LocalDescription;
   Self.Media.RemoteDescription  := Self.Sender.LocalDescription;
 
-  CheckPortFree(Self.Sender.LocalDescription.Connections[0].Address,
-                Self.Sender.LocalDescription.Port,
+  CheckPortFree(Self.Media.LocalDescription.Connections[0].Address,
+                Self.Media.LocalDescription.Port,
                 'Local port active before Initialize');
 
-  Self.Media.AddRTPListener(Self);
-  Self.Media.StartListening;
+  Self.Media.AddRTPSendListener(Self);
 
-  Self.Sender.Initialize;
+  Self.Media.Initialize;
 
-  CheckPortFree(Self.Sender.LocalDescription.Connections[0].Address,
-                Self.Sender.LocalDescription.Port,
+  CheckPortFree(Self.Media.LocalDescription.Connections[0].Address,
+                Self.Media.LocalDescription.Port,
                 'Local port active after Initialize, before StartListening');
 
-  Self.Timer.RemoveAllEvents;
-  Self.Sender.StartListening;
+  Self.Media.StartListening;
 
-  CheckPortActive(Self.Sender.LocalDescription.Connections[0].Address,
-                  Self.Sender.LocalDescription.Port,
+  CheckPortActive(Self.Media.LocalDescription.Connections[0].Address,
+                  Self.Media.LocalDescription.Port,
                   'Local port not active after StartListening');
 
-  Self.Sender.JoinSession;
+  Self.Media.JoinSession;
+  Self.Timer.TriggerAllEventsUpToFirst(TIdRTPTransmissionTimeExpire);
 
-  // We're using a debug timer, so we fire the event manually.
-  Self.Timer.TriggerEarliestEvent;
+  Check(Self.SentControl, 'No RTCP sent');
 
-  Self.WaitForSignaled(Self.RTCPEvent, 'No RTCP sent');
+  Self.Media.SendData(Self.Text);
+  Self.Timer.TriggerAllEventsUpToFirst(TIdRTPSendDataWait);
 
-  Self.SendRTP;
-
-  Self.WaitForSignaled(Self.RTPEvent, 'No RTP sent');
+  Check(Self.SentData, 'No RTP sent');
 end;
 
 procedure TestTIdSDPMediaStream.TestStopListeningStopsListening;
 begin
-  // Commented out stuff: an idea for how to test that the server
-  // you stop sends an RTCP BYE to its RTP session.
-
-//  Self.Sender.AddRTPListener(Self);
-  Self.Media.AddRTPListener(Self);
+  Self.Media.AddDataListener(Self);
+  Self.Media.AddRTPSendListener(Self);
   Self.Media.StopListening;
-  Self.SendRTP;
 
-  Self.WaitForTimeout(Self.RTPEvent,  'Server didn''t stop listening');
-{
-  // How do we test that the server behaved nicely and sent an RTCP BYE?
-  Self.WaitForSignaled(Self.RTCPEvent, 'Server didn''t send any RTCP');
+  Self.ReceiveDataOn(Self.Media);
+
+  Check(not Self.ReceivedData, 'Server didn''t stop listening');
   Check(Self.SentBye, 'Server didn''t send an RTCP BYE');
-}
 end;
 
 procedure TestTIdSDPMediaStream.TestTakeOffHold;
@@ -6670,7 +6677,7 @@ begin
 
   Self.Profile := TIdAudioVisualProfile.Create;
 
-  Self.MS := TIdSDPMultimediaSession.Create(Self.Profile);
+  Self.MS := TIdSDPMultimediaSession.Create(Self.Profile, TIdMockRTPPeer);
 
   // We only instantiate Server so that we know that GStack points to an
   // instantiated stack.
@@ -6684,6 +6691,16 @@ begin
   Self.Profile.Free;
 
   inherited TearDown;
+end;
+
+//* TestTIdSDPMultimediaSession Protected methods ******************************
+
+procedure TestTIdSDPMultimediaSession.OnNewData(Data: TIdRTPPayload;
+                                                Binding: TIdConnection);
+begin
+  Self.Payload := Data.ClassType;
+
+  inherited OnNewData(Data, Binding);
 end;
 
 //* TestTIdSDPMultimediaSession Private methods ********************************
@@ -6754,38 +6771,22 @@ begin
           + 'a=rtpmap:96 t140/1000'#13#10
 end;
 
-procedure TestTIdSDPMultimediaSession.OnRTCP(Packet: TIdRTCPPacket;
-                                             Binding: TIdConnection);
-begin
-end;
-
-procedure TestTIdSDPMultimediaSession.OnRTP(Packet: TIdRTPPacket;
-                                            Binding: TIdConnection);
-begin
-  Self.Payload := Packet.Payload.ClassType;
-  Self.ThreadEvent.SetEvent;
-end;
-
 procedure TestTIdSDPMultimediaSession.ReceiveDataOfType(PayloadType: Cardinal);
 var
-  Client: TIdRTPServer;
-  NoData: TIdRTPPacket;
+  Binding: TIdConnection;
+  NoData:  TIdRTPPacket;
 begin
-  Client := TIdRTPServer.Create;
-  try
-    Client.LocalProfile  := Self.Profile;
-    Client.RemoteProfile := Self.Profile;
-    Client.RTPPort       := Self.RemotePort + 1000;
+  Binding.LocalIP   := '127.0.0.1';
+  Binding.LocalPort := Self.LocalPort;
+  Binding.PeerIP    := Binding.LocalIP;
+  Binding.PeerPort  := Self.RemotePort;
 
-    NoData := TIdRTPPacket.Create(Client.RemoteProfile);
-    try
-      NoData.PayloadType := PayloadType;
-      Client.SendPacket('127.0.0.1', Self.LocalPort, NoData);
-    finally
-      NoData.Free;
-    end;
+  NoData := TIdRTPPacket.Create(Self.Profile);
+  try
+    NoData.PayloadType := PayloadType;
+    TIdRTPPeerRegistry.ServerOn(Binding.LocalIP, Self.LocalPort).ReceivePacket(NoData, Binding);
   finally
-    Client.Free;
+    NoData.Free;
   end;
 end;
 
@@ -6840,19 +6841,15 @@ begin
   Self.MS.SetRemoteDescription(Self.SingleStreamSDP(Self.RemotePort, RemotePT));
 
   Check(Self.MS.StreamCount > 0, 'Sanity check: no ports open!');
-  Self.MS.Streams[0].AddRTPListener(Self);
+  Self.MS.Streams[0].AddDataListener(Self);
 
   Self.ReceiveDataOfType(RemotePT);
 
-  Self.WaitForSignaled('Waiting for RTP data');
+  Check(Self.ReceivedData, 'No RTP data received');
 
   CheckEquals(TIdRTPT140Payload.ClassName,
               Self.Payload.ClassName,
               'Remote profile not used to determine payload');
-end;
-
-procedure TestTIdSDPMultimediaSession.TestInitialize;
-begin
 end;
 
 procedure TestTIdSDPMultimediaSession.TestIsListening;
@@ -7340,13 +7337,16 @@ procedure TestTIdSDPMultimediaSession.TestStartListeningTriesConsecutivePorts;
 const
   BlockedPort = 8000;
 var
-  PortBlocker: TIdUdpServer;
+  PortBlocker: TIdMockRTPPeer;
   SDP:         String;
 begin
-  PortBlocker := TIdUDPServer.Create(nil);
+  PortBlocker := TIdMockRTPPeer.Create;
   try
-    PortBlocker.DefaultPort := BlockedPort;
-    PortBlocker.Active := true;
+    PortBlocker.Address := '127.0.0.1';
+    PortBlocker.RTPPort := BlockedPort;
+    PortBlocker.Active  := true;
+
+    CheckPortActive('127.0.0.1', BlockedPort, 'The PortBlocker isn''t blocking the port');
 
     SDP :=  'v=0'#13#10
           + 'o=local 0 0 IN IP4 127.0.0.1'#13#10

@@ -55,6 +55,8 @@ type
     procedure TestReceiveRTP;
     procedure TestRTCPComesFromRTCPPort;
     procedure TestSessionGetsPackets;
+    procedure TestSendRTCP;
+    procedure TestSendRTP;
     procedure TestSetRTCPPortOverridesDefaultSet;
     procedure TestSetRTPPortDefaultsRTCPPort;
     procedure TestSetRTPPortDoesntOverrideRTCPPort;
@@ -469,6 +471,59 @@ begin
   CheckEquals(OriginalMemberCount + 1,
               Self.Server.Session.MemberCount,
               'Session didn''t get RTCP');
+end;
+
+procedure TestTIdRTPServer.TestSendRTCP;
+var
+  Bye:      TIdRTCPBye;
+  Listener: TIdRTPTestRTPSendListener;
+begin
+  Listener := TIdRTPTestRTPSendListener.Create;
+  try
+    Self.Server.AddSendListener(Listener);
+
+    Bye := TIdRTCPBye.Create;
+    try
+      Bye.PrepareForTransmission(Self.Server.Session);
+      Self.Server.SendPacket(Self.Client.Address, Self.Client.RTCPPort, Bye);
+
+      Check(Listener.SentRTCP, 'Listener not notified');
+      CheckEquals(Self.Server.Address, Listener.BindingParam.LocalIP,    'Binding LocalIP');
+      CheckEquals(Self.Server.RTCPPort, Listener.BindingParam.LocalPort, 'Binding LocalIP');
+      CheckEquals(Self.Client.Address, Listener.BindingParam.PeerIP,     'Binding PeerIP');
+      CheckEquals(Self.Client.RTCPPort, Listener.BindingParam.PeerPort,  'Binding PeerIP');
+      Check(Listener.RTCPPacketParam.IsBye, 'Wrong packet sent');
+    finally
+      Bye.Free;
+    end;
+  finally
+    Self.Server.RemoveSendListener(Listener);
+    Listener.Free;
+  end;
+end;
+
+procedure TestTIdRTPServer.TestSendRTP;
+var
+  Listener: TIdRTPTestRTPSendListener;
+begin
+  Listener := TIdRTPTestRTPSendListener.Create;
+  try
+    Self.Server.AddSendListener(Listener);
+
+    Self.Server.SendPacket(Self.Client.Address, Self.Client.RTPPort, Self.Packet);
+
+    Check(Listener.SentRTP, 'Listener not notified');
+    CheckEquals(Self.Server.Address, Listener.BindingParam.LocalIP,    'Binding LocalIP');
+    CheckEquals(Self.Server.RTPPort, Listener.BindingParam.LocalPort,  'Binding LocalIP');
+    CheckEquals(Self.Client.Address, Listener.BindingParam.PeerIP,     'Binding PeerIP');
+    CheckEquals(Self.Client.RTPPort, Listener.BindingParam.PeerPort,   'Binding PeerIP');
+    CheckEquals(Self.Packet.Payload.EncodingName,
+                Listener.RTPPacketParam.Payload.EncodingName,
+                'Wrong packet sent');
+  finally
+    Self.Server.RemoveSendListener(Listener);
+    Listener.Free;
+  end;
 end;
 
 procedure TestTIdRTPServer.TestSetRTCPPortOverridesDefaultSet;
