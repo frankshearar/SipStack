@@ -537,7 +537,8 @@ type
   // sending data by setting the LayerID parameter to the port that layer uses.
   TIdSDPMediaStream = class(TIdInterfacedObject,
                             IIdRTPDataListener,
-                            IIdRTPListener)
+                            IIdRTPListener,
+                            IIdRTPSendListener)
   private
     DataListeners:      TIdNotificationList;
     fLocalDescription:  TIdSdpMediaDescription;
@@ -548,10 +549,13 @@ type
     fTimer:             TIdTimerQueue;
     PreHoldDirection:   TIdSdpDirection;
     RTPListeners:       TIdNotificationList;
+    RTPSendListeners:   TIdNotificationList;
     Servers:            TObjectList;
+    ServerType:         TIdBaseRTPAbstractPeerClass;
 
-    function  CreateServer: TIdRTPServer;
-    function  FindServer(LayerID: Cardinal): TIdRTPServer;
+    procedure InternalCreate;
+    function  CreateServer: TIdBaseRTPAbstractPeer;
+    function  FindServer(LayerID: Cardinal): TIdBaseRTPAbstractPeer;
     function  GetDirection: TIdSdpDirection;
     procedure InitializeLocalRTPServers;
     procedure InitializeRemoteRTPServers;
@@ -561,7 +565,11 @@ type
                      Binding: TIdConnection);
     procedure OnRTP(Packet: TIdRTPPacket;
                     Binding: TIdConnection);
-    function  ServerAt(Index: Integer): TIdRTPServer;
+    procedure OnSendRTCP(Packet: TIdRTCPPacket;
+                         Binding: TIdConnection);
+    procedure OnSendRTP(Packet: TIdRTPPacket;
+                        Binding: TIdConnection);
+    function  ServerAt(Index: Integer): TIdBaseRTPAbstractPeer;
     procedure SetDirection(Value: TIdSdpDirection);
     procedure SetLocalDescription(const Value: TIdSdpMediaDescription);
     procedure SetLocalProfile(Value: TIdRTPProfile);
@@ -569,11 +577,13 @@ type
     procedure SetRemoteProfile(Value: TIdRTPProfile);
     procedure SetTimer(Value: TIdTimerQueue);
   public
-    constructor Create;
+    constructor Create; overload;
+    constructor Create(ServerType: TIdBaseRTPAbstractPeerClass); overload;
     destructor  Destroy; override;
 
     procedure AddDataListener(const Listener: IIdRTPDataListener);
     procedure AddRTPListener(const Listener: IIdRTPListener);
+    procedure AddRTPSendListener(const Listener: IIdRTPSendListener);
     procedure Initialize;
     function  IsListening: Boolean;
     function  IsReceiver: Boolean;
@@ -582,6 +592,7 @@ type
     procedure PutOnHold;
     procedure RemoveDataListener(const Listener: IIdRTPDataListener);
     procedure RemoveRTPListener(const Listener: IIdRTPListener);
+    procedure RemoveRTPSendListener(const Listener: IIdRTPSendListener);
     procedure SendData(Payload: TIdRTPPayload; LayerID: Integer = 0);
     procedure StartListening;
     procedure StopListening;
@@ -615,10 +626,12 @@ type
     fRemoteProfile:       TIdRTPProfile;
     fStreams:             TObjectList;
     fUsername:            String;
+    ServerType:           TIdBaseRTPAbstractPeerClass;
     StreamLock:           TCriticalSection;
     Timer:                TIdThreadedTimerQueue;
 
     function  AllowedPort(Port: Cardinal): Boolean;
+    procedure InternalCreate(Profile: TIdRTPProfile);
     procedure EstablishStream(Desc: TIdSdpMediaDescription);
     function  GetStreams(Index: Integer): TIdSDPMediaStream;
     procedure RegisterEncodingMaps(Profile: TIdRTPProfile;
@@ -626,7 +639,8 @@ type
     procedure SetLocalMachineName(Value: String);
     procedure UpdateSessionVersion;
   public
-    constructor Create(Profile: TIdRTPProfile);
+    constructor Create(Profile: TIdRTPProfile); overload;
+    constructor Create(Profile: TIdRTPProfile; ServerType: TIdBaseRTPAbstractPeerClass); overload;
     destructor  Destroy; override;
 
     function  AddressTypeFor(Address: String): TIdIPVersion;
@@ -3465,16 +3479,18 @@ constructor TIdSDPMediaStream.Create;
 begin
   inherited Create;
 
-  Self.fOnHold := false;
+  Self.ServerType := TIdRTPServer;
 
-  Self.fLocalDescription  := TIdSdpMediaDescription.Create;
-  Self.fLocalProfile      := TIdRTPProfile.Create;
-  Self.fRemoteDescription := TIdSdpMediaDescription.Create;
-  Self.fRemoteProfile     := TIdRTPProfile.Create;
+  Self.InternalCreate;
+end;
 
-  Self.DataListeners := TIdNotificationList.Create;
-  Self.RTPListeners  := TIdNotificationList.Create;
-  Self.Servers       := TObjectList.Create(true);
+constructor TIdSDPMediaStream.Create(ServerType: TIdBaseRTPAbstractPeerClass);
+begin
+  inherited Create;
+
+  Self.ServerType := ServerType;
+
+  Self.InternalCreate;
 end;
 
 destructor TIdSDPMediaStream.Destroy;
@@ -3482,6 +3498,7 @@ begin
   Self.StopListening;
 
   Self.Servers.Free;
+  Self.RTPSendListeners.Free;
   Self.RTPListeners.Free;
   Self.DataListeners.Free;
 
@@ -3501,6 +3518,11 @@ end;
 procedure TIdSDPMediaStream.AddRTPListener(const Listener: IIdRTPListener);
 begin
   Self.RTPListeners.AddListener(Listener);
+end;
+
+procedure TIdSDPMediaStream.AddRTPSendListener(const Listener: IIdRTPSendListener);
+begin
+  Self.RTPSendListeners.AddListener(Listener);
 end;
 
 procedure TIdSDPMediaStream.Initialize;
@@ -3557,10 +3579,22 @@ begin
   Self.RTPListeners.RemoveListener(Listener);
 end;
 
-procedure TIdSDPMediaStream.SendData(Payload: TIdRTPPayload; LayerID: Integer = 0);
+procedure TIdSDPMediaStream.RemoveRTPSendListener(const Listener: IIdRTPSendListener);
 begin
-  if Self.IsSender and not Self.OnHold then
-    Self.FindServer(LayerID).Session.SendData(Payload);
+  Self.RTPSendListeners.RemoveListener(Listener);
+end;
+
+procedure TIdSDPMediaStream.SendData(Payload: TIdRTPPayload; LayerID: Integer = 0);
+var
+  Wait: TIdRTPSendDataWait;
+begin
+  if Self.IsSender and not Self.OnHold then begin
+    Wait := TIdRTPSendDataWait.Create;
+    Wait.Data      := Payload.Clone;
+    Wait.SessionID := Self.FindServer(LayerID).Session.ID;
+
+    Self.Timer.AddEvent(TriggerImmediately, Wait);
+  end;
 end;
 
 procedure TIdSDPMediaStream.StartListening;
@@ -3597,19 +3631,35 @@ end;
 
 //* TIdSDPMediaStream Private methods ******************************************
 
-function TIdSDPMediaStream.CreateServer: TIdRTPServer;
+procedure TIdSDPMediaStream.InternalCreate;
 begin
-  Result := TIdRTPServer.Create;
+  Self.fOnHold := false;
+
+  Self.fLocalDescription  := TIdSdpMediaDescription.Create;
+  Self.fLocalProfile      := TIdRTPProfile.Create;
+  Self.fRemoteDescription := TIdSdpMediaDescription.Create;
+  Self.fRemoteProfile     := TIdRTPProfile.Create;
+
+  Self.DataListeners    := TIdNotificationList.Create;
+  Self.RTPListeners     := TIdNotificationList.Create;
+  Self.RTPSendListeners := TIdNotificationList.Create;
+  Self.Servers          := TObjectList.Create(true);
+end;
+
+function TIdSDPMediaStream.CreateServer: TIdBaseRTPAbstractPeer;
+begin
+  Result := Self.ServerType.Create;
   Self.Servers.Add(Result);
 
   Result.AddListener(Self);
   Result.LocalProfile  := Self.LocalProfile;
   Result.RemoteProfile := Self.RemoteProfile;
   Result.Session.AddListener(Self);
+  Result.AddSendListener(Self);
   Result.Timer := Self.Timer;
 end;
 
-function TIdSDPMediaStream.FindServer(LayerID: Cardinal): TIdRTPServer;
+function TIdSDPMediaStream.FindServer(LayerID: Cardinal): TIdBaseRTPAbstractPeer;
 var
   I: Integer;
 begin
@@ -3635,7 +3685,7 @@ procedure TIdSDPMediaStream.InitializeLocalRTPServers;
 var
   AlreadyRunning: Boolean;
   I:              Cardinal;
-  Server:         TIdRTPServer;
+  Server:         TIdBaseRTPAbstractPeer;
 begin
   // Given our local session description, instantiate the RTP servers we need.
 
@@ -3725,9 +3775,41 @@ begin
   end;
 end;
 
-function TIdSDPMediaStream.ServerAt(Index: Integer): TIdRTPServer;
+procedure TIdSDPMediaStream.OnSendRTCP(Packet: TIdRTCPPacket;
+                                       Binding: TIdConnection);
+var
+  Notification: TIdRTPSendListenerSendRTCPMethod;
 begin
-  Result := Self.Servers[Index] as TIdRTPServer;
+  Notification := TIdRTPSendListenerSendRTCPMethod.Create;
+  try
+    Notification.Binding := Binding;
+    Notification.Packet  := Packet;
+
+    Self.RTPSendListeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
+end;
+
+procedure TIdSDPMediaStream.OnSendRTP(Packet: TIdRTPPacket;
+                                      Binding: TIdConnection);
+var
+  Notification: TIdRTPSendListenerSendRTPMethod;
+begin
+  Notification := TIdRTPSendListenerSendRTPMethod.Create;
+  try
+    Notification.Binding := Binding;
+    Notification.Packet  := Packet;
+
+    Self.RTPSendListeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
+end;
+
+function TIdSDPMediaStream.ServerAt(Index: Integer): TIdBaseRTPAbstractPeer;
+begin
+  Result := Self.Servers[Index] as TIdBaseRTPAbstractPeer;
 end;
 
 procedure TIdSDPMediaStream.SetDirection(Value: TIdSdpDirection);
@@ -3778,25 +3860,18 @@ constructor TIdSDPMultimediaSession.Create(Profile: TIdRTPProfile);
 begin
   inherited Create;
 
-  Self.fLocalProfile  := TIdRTPProfile.Create;
-  Self.fRemoteProfile := TIdRTPProfile.Create;
+  Self.ServerType := TIdRTPServer;
 
-  Self.LocalProfile.Assign(Profile);
-  Self.RemoteProfile.Assign(Profile);
+  Self.InternalCreate(Profile);
+end;
 
-  Self.fStreams := TObjectList.Create;
-  Self.StreamLock := TCriticalSection.Create;
+constructor TIdSDPMultimediaSession.Create(Profile: TIdRTPProfile; ServerType: TIdBaseRTPAbstractPeerClass);
+begin
+  inherited Create;
 
-  Self.Timer := TIdThreadedTimerQueue.Create(false);
+  Self.ServerType := ServerType;
 
-  Self.FirstLocalSessDesc   := true;
-  Self.fLocalSessionVersion := 0;
-  Self.LocalMachineName     := '127.0.0.1';
-  Self.LocalSessionID       := IntToStr(GRandomNumber.NextCardinal);
-  Self.LocalSessionName     := BlankSessionName;
-  Self.LowestAllowedPort    := LowestPossiblePort;
-  Self.HighestAllowedPort   := HighestPossiblePort;
-  Self.Username             := BlankUsername;
+  Self.InternalCreate(Profile);
 end;
 
 destructor TIdSDPMultimediaSession.Destroy;
@@ -4039,12 +4114,35 @@ begin
   Result := (Self.LowestAllowedPort <= Port) and (Port < Self.HighestAllowedPort);
 end;
 
+procedure TIdSDPMultimediaSession.InternalCreate(Profile: TIdRTPProfile);
+begin
+  Self.fLocalProfile  := TIdRTPProfile.Create;
+  Self.fRemoteProfile := TIdRTPProfile.Create;
+
+  Self.LocalProfile.Assign(Profile);
+  Self.RemoteProfile.Assign(Profile);
+
+  Self.fStreams := TObjectList.Create;
+  Self.StreamLock := TCriticalSection.Create;
+
+  Self.Timer := TIdThreadedTimerQueue.Create(false);
+
+  Self.FirstLocalSessDesc   := true;
+  Self.fLocalSessionVersion := 0;
+  Self.LocalMachineName     := '127.0.0.1';
+  Self.LocalSessionID       := IntToStr(GRandomNumber.NextCardinal);
+  Self.LocalSessionName     := BlankSessionName;
+  Self.LowestAllowedPort    := LowestPossiblePort;
+  Self.HighestAllowedPort   := HighestPossiblePort;
+  Self.Username             := BlankUsername;
+end;
+
 procedure TIdSDPMultimediaSession.EstablishStream(Desc: TIdSdpMediaDescription);
 var
   NewStream:   TIdSDPMediaStream;
   SocketBound: Boolean;
 begin
-  NewStream := TIdSDPMediaStream.Create;
+  NewStream := TIdSDPMediaStream.Create(Self.ServerType);
   try
     NewStream.Timer := Self.Timer;
     Self.fStreams.Add(NewStream);

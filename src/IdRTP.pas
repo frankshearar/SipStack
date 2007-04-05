@@ -894,6 +894,15 @@ type
                     Binding: TIdConnection);
   end;
 
+  // I provide a protocol for notifying of sent data/control packets.
+  IIdRTPSendListener = interface
+    ['{228672D3-EC22-4A59-978A-9ED26A6DBCAB}']
+    procedure OnSendRTCP(Packet: TIdRTCPPacket;
+                         Binding: TIdConnection);
+    procedure OnSendRTP(Packet: TIdRTPPacket;
+                        Binding: TIdConnection);
+  end;
+
   // I provide a protocol for sending RTP/RTCP data as well as notifying
   // reception of same.
   IIdAbstractRTPPeer = interface
@@ -912,26 +921,85 @@ type
   TIdBaseRTPAbstractPeer = class(TIdInterfacedObject,
                                  IIdAbstractRTPPeer)
   private
+    fID:            String;
     fLocalProfile:  TIdRTPProfile;
     fRemoteProfile: TIdRTPProfile;
+    fSession:       TIdRTPSession;
     Listeners:      TIdNotificationList;
+    SendListeners:  TIdNotificationList;
+
+    procedure NotifyListenersOfSingleSentRTCP(Packet: TIdRTCPPacket;
+                                              Binding: TIdConnection);
+    procedure NotifyListenersOfSingleRTCP(Packet: TIdRTCPPacket;
+                                          Binding: TIdConnection);
+  protected
+    function  GetActive: Boolean; virtual;
+    function  GetAddress: String; virtual;
+    function  GetDefaultPort: Integer; virtual;
+    function  GetRTCPPort: Cardinal; virtual;
+    function  GetRTPPort: Cardinal; virtual;
+    function  GetSession: TIdRTPSession; virtual;
+    function  GetTimer: TIdTimerQueue; virtual;
+    procedure NotifyListenersOfSentRTCP(Packet: TIdRTCPPacket;
+                                        Binding: TIdConnection); virtual;
+    procedure NotifyListenersOfSentRTP(Packet: TIdRTPPacket;
+                                       Binding: TIdConnection); virtual;
+    procedure NotifyListenersOfRTCP(Packet: TIdRTCPPacket;
+                                    Binding: TIdConnection); virtual;
+    procedure NotifyListenersOfRTP(Packet: TIdRTPPacket;
+                                   Binding: TIdConnection); virtual;
+    procedure SetActive(Value: Boolean); virtual;
+    procedure SetAddress(Value: String); virtual;
+    procedure SetDefaultPort(Value: Integer); virtual;
+    procedure SetLocalProfile(Value: TIdRTPProfile); virtual;
+    procedure SetRemoteProfile(Value: TIdRTPProfile); virtual;
+    procedure SetRTCPPort(Value: Cardinal); virtual;
+    procedure SetRTPPort(Value: Cardinal); virtual;
+    procedure SetTimer(Value: TIdTimerQueue); virtual;
   public
     constructor Create; virtual;
     destructor  Destroy; override;
 
     procedure AddListener(const Listener: IIdRTPListener);
-    procedure NotifyListenersOfRTCP(Packet: TIdRTCPPacket;
-                                    Binding: TIdConnection);
-    procedure NotifyListenersOfRTP(Packet: TIdRTPPacket;
-                                   Binding: TIdConnection);
+    procedure AddSendListener(const Listener: IIdRTPSendListener);
+    procedure ReceivePacket(Packet: TIdRTPBasePacket;
+                            Binding: TIdConnection); virtual;
     procedure RemoveListener(const Listener: IIdRTPListener);
+    procedure RemoveSendListener(const Listener: IIdRTPSendListener);
     procedure SendPacket(const Host: String;
                          Port: Cardinal;
                          Packet: TIdRTPBasePacket); virtual;
 
-    property LocalProfile: TIdRTPProfile  read fLocalProfile write fLocalProfile;
-    property RemoteProfile: TIdRTPProfile read fRemoteProfile write fRemoteProfile;
+    property Active:        Boolean          read GetActive write SetActive;
+    property Address:       String           read GetAddress write SetAddress;
+    property DefaultPort:   Integer          read GetDefaultPort write SetDefaultPort;
+    property ID:            String           read fID;
+    property LocalProfile:  TIdRTPProfile    read fLocalProfile write SetLocalProfile;
+    property RemoteProfile: TIdRTPProfile    read fRemoteProfile write SetRemoteProfile;
+    property RTCPPort:      Cardinal         read GetRTCPPort write SetRTCPPort;
+    property RTPPort:       Cardinal         read GetRTPPort write SetRTPPort;
+    property Session:       TIdRTPSession    read GetSession;
+    property Timer:         TIdTimerQueue    read GetTimer write SetTimer;
   end;
+
+  // I provide a way for tests to reference RTPPeers without exposing the peers
+  // directly in owning classes. For instance, TIdSDPMediaStream uses RTPPeers,
+  // but we don't want normal code to reference those peers except through
+  // TIdSDPMediaStream's methods, but tests must ALSO access the peers in order
+  // to, for instance, simulate the receipt of a packet.
+  TIdRTPPeerRegistry = class(TObject)
+  private
+    class function ServerAt(Index: Integer): TIdBaseRTPAbstractPeer;
+    class function ServerRegistry: TStrings;
+  public
+    class function  FindServer(const ServerID: String): TIdBaseRTPAbstractPeer;
+    class function  RegisterServer(Instance: TIdBaseRTPAbstractPeer): String;
+    class function  ServerOn(Host: String; Port: Cardinal): TIdBaseRTPAbstractPeer;
+    class function  ServerRunningOn(Host: String; Port: Cardinal): Boolean;
+    class procedure UnregisterServer(const ServerID: String);
+  end;
+
+  TIdBaseRTPAbstractPeerClass = class of TIdBaseRTPAbstractPeer;
 
   // I provide a self-contained SSRC space.
   // All values involving time represent milliseconds / ticks.
@@ -1119,6 +1187,16 @@ type
     property Packet: TIdRTPPacket read fPacket write fPacket;
   end;
 
+  TIdRTPSendListenerSendRTCPMethod = class(TIdRTPListenerReceiveRTCPMethod)
+  public
+    procedure Run(const Subject: IInterface); override;
+  end;
+
+  TIdRTPSendListenerSendRTPMethod = class(TIdRTPListenerReceiveRTPMethod)
+  public
+    procedure Run(const Subject: IInterface); override;
+  end;
+
   TIdRTPDataListenerNewDataMethod = class(TIdRTPMethod)
   private
     fData: TIdRTPPayload;
@@ -1148,8 +1226,17 @@ type
 
     procedure Trigger; override;
 
-    property Packet: TIdRTPBasePacket read fPacket write fPacket;
-    property ReceivedFrom: TIdConnection read fReceivedFrom write SetReceivedFrom;
+    property Packet:       TIdRTPBasePacket read fPacket write fPacket;
+    property ReceivedFrom: TIdConnection    read fReceivedFrom write SetReceivedFrom;
+  end;
+
+  TIdRTPSendDataWait = class(TIdRTPWait)
+  private
+    fData: TIdRTPPayload;
+  public
+    procedure Trigger; override;
+
+    property Data: TIdRTPPayload read fData write fData;
   end;
 
   TIdRTPTransmissionTimeExpire = class(TIdRTPWait)
@@ -1359,6 +1446,7 @@ const
 
 // Used by the SessionRegistry.
 var
+  GRTPPeers: TStrings;
   GSessions: TStrings;
 
 //******************************************************************************
@@ -2588,8 +2676,11 @@ begin
 
   RelativeTime := Session.TimeOffsetFromStart(Self.Payload.StartTime);
 
-  Assert(RelativeTime >= 0,
-         'You can''t send a packet with time less than the session start time');
+  if (RelativeTime < 0) then
+    RelativeTime := 0;
+
+//  Assert(RelativeTime >= 0,
+//         'You can''t send a packet with time less than the session start time');
 
   Self.Timestamp := DateTimeToRTPTimestamp(RelativeTime,
                                            Self.Payload.ClockRate);
@@ -4789,10 +4880,20 @@ begin
   inherited Create;
 
   Self.Listeners := TIdNotificationList.Create;
+  Self.SendListeners := TIdNotificationList.Create;
+
+  Self.fSession := TIdRTPSession.Create(Self);
+  Self.AddListener(Self.Session);
+
+  Self.fID := TIdRTPPeerRegistry.RegisterServer(Self);
 end;
 
 destructor TIdBaseRTPAbstractPeer.Destroy;
 begin
+  TIdRTPPeerRegistry.UnregisterServer(Self.ID);
+
+  Self.Session.Free;
+  Self.SendListeners.Free;
   Self.Listeners.Free;
 
   inherited Destroy;
@@ -4803,20 +4904,117 @@ begin
   Self.Listeners.AddListener(Listener);
 end;
 
-procedure TIdBaseRTPAbstractPeer.NotifyListenersOfRTCP(Packet: TIdRTCPPacket;
-                                                       Binding: TIdConnection);
-var
-  Notification: TIdRTPListenerReceiveRTCPMethod;
+procedure TIdBaseRTPAbstractPeer.AddSendListener(const Listener: IIdRTPSendListener);
 begin
-  Notification := TIdRTPListenerReceiveRTCPMethod.Create;
+  Self.SendListeners.AddListener(Listener);
+end;
+
+procedure TIdBaseRTPAbstractPeer.ReceivePacket(Packet: TIdRTPBasePacket;
+                                               Binding: TIdConnection);
+begin
+  if Packet.IsRTCP then
+    Self.NotifyListenersOfRTCP(Packet as TIdRTCPPacket, Binding)
+  else
+    Self.NotifyListenersOfRTP(Packet as TIdRTPPacket, Binding);
+end;
+
+procedure TIdBaseRTPAbstractPeer.RemoveListener(const Listener: IIdRTPListener);
+begin
+  Self.Listeners.RemoveListener(Listener);
+end;
+
+procedure TIdBaseRTPAbstractPeer.RemoveSendListener(const Listener: IIdRTPSendListener);
+begin
+  Self.SendListeners.RemoveListener(Listener);
+end;
+
+procedure TIdBaseRTPAbstractPeer.SendPacket(const Host: String;
+                                            Port: Cardinal;
+                                            Packet: TIdRTPBasePacket);
+begin
+end;
+
+//* TIdBaseRTPAbstractPeer Protected methods ***********************************
+
+function TIdBaseRTPAbstractPeer.GetActive: Boolean;
+begin
+  Result := false;
+end;
+
+function TIdBaseRTPAbstractPeer.GetAddress: String;
+begin
+  Result := '';
+end;
+
+function TIdBaseRTPAbstractPeer.GetDefaultPort: Integer;
+begin
+  Result := 0;
+end;
+
+function TIdBaseRTPAbstractPeer.GetRTCPPort: Cardinal;
+begin
+  Result := 0;
+end;
+
+function TIdBaseRTPAbstractPeer.GetRTPPort: Cardinal;
+begin
+  Result := 0;
+end;
+
+function TIdBaseRTPAbstractPeer.GetSession: TIdRTPSession;
+begin
+  Result := Self.fSession;
+end;
+
+function TIdBaseRTPAbstractPeer.GetTimer: TIdTimerQueue;
+begin
+  Result := Self.Session.Timer;
+end;
+
+procedure TIdBaseRTPAbstractPeer.NotifyListenersOfSentRTCP(Packet: TIdRTCPPacket;
+                                                           Binding: TIdConnection);
+var
+  C: TIdCompoundRTCPPacket;
+  I: Integer;
+begin
+  if Packet is TIdCompoundRTCPPacket then begin
+    C := Packet as TIdCompoundRTCPPacket;
+    for I := 0 to C.PacketCount - 1 do
+      Self.NotifyListenersOfSingleSentRTCP(C.PacketAt(I), Binding);
+  end
+  else
+    Self.NotifyListenersOfSingleSentRTCP(Packet, Binding);
+end;
+
+procedure TIdBaseRTPAbstractPeer.NotifyListenersOfSentRTP(Packet: TIdRTPPacket;
+                                                          Binding: TIdConnection);
+var
+  Notification: TIdRTPSendListenerSendRTPMethod;
+begin
+  Notification := TIdRTPSendListenerSendRTPMethod.Create;
   try
     Notification.Binding := Binding;
     Notification.Packet  := Packet;
 
-    Self.Listeners.Notify(Notification);
+    Self.SendListeners.Notify(Notification);
   finally
     Notification.Free;
   end;
+end;
+
+procedure TIdBaseRTPAbstractPeer.NotifyListenersOfRTCP(Packet: TIdRTCPPacket;
+                                                       Binding: TIdConnection);
+var
+  C: TIdCompoundRTCPPacket;
+  I: Integer;
+begin
+  if Packet is TIdCompoundRTCPPacket then begin
+    C := Packet as TIdCompoundRTCPPacket;
+    for I := 0 to C.PacketCount - 1 do
+      Self.NotifyListenersOfSingleRTCP(C.PacketAt(I), Binding);
+  end
+  else
+    Self.NotifyListenersOfSingleRTCP(Packet, Binding);
 end;
 
 procedure TIdBaseRTPAbstractPeer.NotifyListenersOfRTP(Packet: TIdRTPPacket;
@@ -4835,15 +5033,152 @@ begin
   end;
 end;
 
-procedure TIdBaseRTPAbstractPeer.RemoveListener(const Listener: IIdRTPListener);
+procedure TIdBaseRTPAbstractPeer.SetActive(Value: Boolean);
 begin
-  Self.Listeners.RemoveListener(Listener);
 end;
 
-procedure TIdBaseRTPAbstractPeer.SendPacket(const Host: String;
-                                            Port: Cardinal;
-                                            Packet: TIdRTPBasePacket);
+procedure TIdBaseRTPAbstractPeer.SetAddress(Value: String);
 begin
+end;
+
+procedure TIdBaseRTPAbstractPeer.SetDefaultPort(Value: Integer);
+begin
+end;
+
+procedure TIdBaseRTPAbstractPeer.SetLocalProfile(Value: TIdRTPProfile);
+begin
+  Self.fLocalProfile        := Value;
+  Self.Session.LocalProfile := Value;
+end;
+
+procedure TIdBaseRTPAbstractPeer.SetRemoteProfile(Value: TIdRTPProfile);
+begin
+  Self.fRemoteProfile        := Value;
+  Self.Session.RemoteProfile := Value;
+end;
+
+procedure TIdBaseRTPAbstractPeer.SetRTCPPort(Value: Cardinal);
+begin
+end;
+
+procedure TIdBaseRTPAbstractPeer.SetRTPPort(Value: Cardinal);
+begin
+end;
+
+procedure TIdBaseRTPAbstractPeer.SetTimer(Value: TIdTimerQueue);
+begin
+  Self.Session.Timer := Value;
+end;
+
+//* TIdBaseRTPAbstractPeer Private methods *************************************
+
+procedure TIdBaseRTPAbstractPeer.NotifyListenersOfSingleSentRTCP(Packet: TIdRTCPPacket;
+                                                                 Binding: TIdConnection);
+var
+  Notification: TIdRTPSendListenerSendRTCPMethod;
+begin
+  Notification := TIdRTPSendListenerSendRTCPMethod.Create;
+  try
+    Notification.Binding := Binding;
+    Notification.Packet  := Packet;
+
+    Self.SendListeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
+end;
+
+procedure TIdBaseRTPAbstractPeer.NotifyListenersOfSingleRTCP(Packet: TIdRTCPPacket;
+                                                             Binding: TIdConnection);
+var
+  Notification: TIdRTPListenerReceiveRTCPMethod;
+begin
+  Notification := TIdRTPListenerReceiveRTCPMethod.Create;
+  try
+    Notification.Binding := Binding;
+    Notification.Packet  := Packet;
+
+    Self.Listeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TIdRTPPeerRegistry                                                         *
+//******************************************************************************
+//* TIdRTPPeerRegistry Public methods ******************************************
+
+class function TIdRTPPeerRegistry.FindServer(const ServerID: String): TIdBaseRTPAbstractPeer;
+var
+  Index: Integer;
+begin
+  Index := Self.ServerRegistry.IndexOf(ServerID);
+
+  if (Index = ItemNotFoundIndex) then
+    Result := nil
+  else
+    Result := Self.ServerAt(Index);
+end;
+
+class function TIdRTPPeerRegistry.RegisterServer(Instance: TIdBaseRTPAbstractPeer): String;
+begin
+  repeat
+    Result := GRandomNumber.NextHexString;
+  until (Self.ServerRegistry.IndexOf(Result) = ItemNotFoundIndex);
+
+  Self.ServerRegistry.AddObject(Result, Instance);
+end;
+
+class function TIdRTPPeerRegistry.ServerOn(Host: String; Port: Cardinal): TIdBaseRTPAbstractPeer;
+var
+  I: Integer;
+begin
+  Result := nil;
+
+  for I := 0 to Self.ServerRegistry.Count - 1 do begin
+    if (Self.ServerAt(I).Address = Host) and (Self.ServerAt(I).RTPPort = Port) then begin
+      Result := Self.ServerAt(I);
+      Break;
+    end;
+  end;
+end;
+
+class function TIdRTPPeerRegistry.ServerRunningOn(Host: String; Port: Cardinal): Boolean;
+var
+  I: Integer;
+  S: TIdBaseRTPAbstractPeer;
+begin
+  Result := false;
+
+  for I := 0 to Self.ServerRegistry.Count - 1 do begin
+    S := Self.ServerAt(I);
+    if (S.Address = Host) and (S.RTPPort = Port) and S.Active then begin
+      Result := true;
+      Break;
+    end;
+  end;
+end;
+
+class procedure TIdRTPPeerRegistry.UnregisterServer(const ServerID: String);
+var
+  Index: Integer;
+begin
+  Index := Self.ServerRegistry.IndexOf(ServerID);
+  if (Index <> ItemNotFoundIndex) then
+    Self.ServerRegistry.Delete(Index);
+end;
+
+//* TIdRTPPeerRegistry Private methods *****************************************
+
+class function TIdRTPPeerRegistry.ServerAt(Index: Integer): TIdBaseRTPAbstractPeer;
+begin
+  Result := TIdBaseRTPAbstractPeer(Self.ServerRegistry.Objects[Index]);
+end;
+
+class function TIdRTPPeerRegistry.ServerRegistry: TStrings;
+begin
+  Result := GRTPPeers;
 end;
 
 //******************************************************************************
@@ -5741,6 +6076,26 @@ begin
 end;
 
 //******************************************************************************
+//* TIdRTPSendListenerSendRTCPMethod                                           *
+//******************************************************************************
+//* TIdRTPSendListenerSendRTCPMethod Public methods ****************************
+
+procedure TIdRTPSendListenerSendRTCPMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdRTPSendListener).OnSendRTCP(Self.Packet, Self.Binding);
+end;
+
+//******************************************************************************
+//* TIdRTPSendListenerSendRTPMethod                                            *
+//******************************************************************************
+//* TIdRTPSendListenerSendRTPMethod Public methods *****************************
+
+procedure TIdRTPSendListenerSendRTPMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdRTPSendListener).OnSendRTP(Self.Packet, Self.Binding);
+end;
+
+//******************************************************************************
 //* TIdRTPDataListenerNewDataMethod                                            *
 //******************************************************************************
 //* TIdRTPDataListenerNewDataMethod Public methods *****************************
@@ -5793,6 +6148,21 @@ begin
 end;
 
 //******************************************************************************
+//* TIdRTPSendDataWait                                                         *
+//******************************************************************************
+//* TIdRTPSendDataWait Public methods ******************************************
+
+procedure TIdRTPSendDataWait.Trigger;
+var
+  Session: TIdRTPSession;
+begin
+  Session := TIdRTPSessionRegistry.FindSession(Self.SessionID);
+
+  if Assigned(Session) then
+    Session.SendData(Self.Data);
+end;
+
+//******************************************************************************
 //* TIdRTPTransmissionTimeExpire                                               *
 //******************************************************************************
 //* TIdRTPTransmissionTimeExpire Public methods ********************************
@@ -5823,10 +6193,12 @@ begin
 end;
 
 initialization
+  GRTPPeers := TStringList.Create;
   GSessions := TStringList.Create;
 finalization
 // These objects are purely memory-based, so it's safe not to free them here.
 // Still, perhaps we need to review this methodology. How else do we get
 // something like class variables?
+//  GRTPPeers.Free;
 //  GSessions.Free;
 end.
