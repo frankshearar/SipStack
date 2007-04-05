@@ -45,10 +45,16 @@ function  ResolveARecords(Name: String; ResolvedList: TStrings): Integer;
 implementation
 
 uses
-  IdSimpleParser, IdGlobal, IdStack, IdUDPServer, SysUtils, Windows, Winsock;
+  IdSimpleParser, IdGlobal, IdStack, IdUDPServer, SyncObjs, SysUtils, Windows,
+  Winsock;
 
 const
   ANY_SIZE = 100;
+
+var
+  WinsockData:    TWSAData;
+  WinsockLock:    TCriticalSection;
+  WinsockStarted: Boolean;
 
 // See GetHostByName's explanation.
 type
@@ -137,6 +143,28 @@ function GetHostByName(Name: PChar): PHostEnt; stdcall; external WinSocket name 
 {See commentary for LocalAddress and RoutableAddress for explanations of these variables}
 var
   idLocalAddress, idRoutableAddress, idNetMask: String;
+
+procedure PossiblyInitialiseWinsock;
+var
+  ErrorCode: Integer;
+  RC:        Integer;
+begin
+  WinsockLock.Acquire;
+  try
+    if not WinsockStarted then begin
+      RC := WSAStartup($202, WinsockData);
+
+      if (RC <> 0) then begin
+        ErrorCode := WSAGetLastError;
+        raise Exception.Create('PossiblyInitialiseWinsock: ' + IntToStr(ErrorCode) + ' (' + SysErrorMessage(ErrorCode) + ')');
+     end;
+
+      WinsockStarted := true;
+    end;
+  finally
+    WinsockLock.Release;
+  end;
+end;
 
 function GetIpAddress(InterfaceIndex: DWORD): String;
 var
@@ -251,6 +279,8 @@ var
   RC:        Integer;
 begin
   // Return the full name of this machine.
+
+  PossiblyInitialiseWinsock;
 
   Len := 1000;
   GetMem(Buf, Len*Sizeof(AnsiChar));
@@ -493,4 +523,10 @@ initialization
   idRoutableAddress:='0.0.0.0';
   idNetMask:='0.0.0.0';
 
+  WinsockLock := TCriticalSection.Create;
+finalization
+  if WinsockStarted then
+    WSACleanup;
+
+  WinsockLock.Free;
 end.

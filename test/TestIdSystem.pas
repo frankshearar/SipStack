@@ -19,6 +19,8 @@ type
   TestFunctions = class(TTestCase)
   private
     NameServer: TIdSipMockDnsServer;
+
+    procedure RestartWinsock;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -31,6 +33,7 @@ type
     procedure TestDefineRoutableAddress;
     procedure TestGetBestLocalAddress;
     procedure TestGetCurrentProcessId;
+    procedure TestGetHostName;
     procedure TestGetHostNameNoWinsock;
     procedure TestOnSameNetwork;
     procedure TestOnSameNetworkWithMixedAddresses;
@@ -96,6 +99,20 @@ begin
     end;
   finally
     Server.Free;
+  end;
+end;
+
+procedure TestFunctions.RestartWinsock;
+var
+  Data:      TWSAData;
+  ErrorCode: Integer;
+  RC:        Integer;
+begin
+  RC := WSAStartup($202, Data);
+
+  if (RC <> 0) then begin
+    ErrorCode := WSAGetLastError;
+    raise Exception.Create('RestartWinsock: ' + IntToStr(ErrorCode) + ' (' + SysErrorMessage(ErrorCode) + ')');
   end;
 end;
 
@@ -201,7 +218,7 @@ begin
               'GetCurrentProcessId');
 end;
 
-procedure TestFunctions.TestGetHostNameNoWinsock;
+procedure TestFunctions.TestGetHostName;
 var
   Buf:       PAnsiChar;
   ErrorCode: Integer;
@@ -222,6 +239,37 @@ begin
     CheckEquals(Buf, IdSystem.GetHostName, 'GetHostName');
   finally
     FreeMem(Buf);
+  end;
+end;
+
+procedure TestFunctions.TestGetHostNameNoWinsock;
+var
+  Buf:       PAnsiChar;
+  ErrorCode: Integer;
+  Len:       Integer;
+  RC:        Integer;
+  WinsockRunning: Integer;
+begin
+  WinsockRunning := WSACleanup;
+  try
+    Len := 1000;
+    GetMem(Buf, Len*Sizeof(AnsiChar));
+    try
+      RC := Winsock.gethostname(Buf, Len);
+
+      if (RC <> 0) then begin
+        ErrorCode := WSAGetLastError;
+        Fail('gethostname failed: '
+           + IntToStr(ErrorCode) + '(' + SysErrorMessage(ErrorCode) + ')');
+      end;
+
+      CheckEquals(Buf, IdSystem.GetHostName, 'GetHostName');
+    finally
+      FreeMem(Buf);
+    end;
+  finally
+    if (WinsockRunning <> WSANOTINITIALISED) then
+      Self.RestartWinsock;
   end;
 end;
 
