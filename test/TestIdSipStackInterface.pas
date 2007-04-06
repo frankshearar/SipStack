@@ -14,7 +14,7 @@ interface
 uses
   Classes, Contnrs, Forms, IdSipDialog, IdSipInviteModule, IdSipMessage,
   IdSipMockTransport, IdSipStackInterface, IdSipSubscribeModule, IdSipUserAgent,
-  IdTimerQueue, Messages, TestFramework, TestFrameworkEx, TestFrameworkSip;
+  IdTimerQueue, Messages, TestFramework, TestFrameworkSip;
 
 type
   // The testing of the StackInterface is not completely simple. The UI (or
@@ -58,7 +58,7 @@ type
   // stack does with these notification, or how it presents them. This means
   // that if you're establishing a call and you receive a 200 OK, you must call
   // Application.ProcessMessages before the test can know about the response.
-  TestTIdSipStackInterface = class(TThreadingTestCase,
+  TestTIdSipStackInterface = class(TTestCase,
                                    IIdSipInviteModuleListener)
   private
     fIntf:               TIdSipStackInterface;
