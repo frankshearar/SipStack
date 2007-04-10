@@ -12,14 +12,24 @@ unit TestFrameworkSip;
 interface
 
 uses
-  Classes, IdInterfacedObject, IdMockRoutingTable, IdObservable, IdRTP, IdSdp,
-  IdSipAuthentication, IdSipInviteModule, IdSipLocation, IdSipMessage,
+  Classes, Forms, IdInterfacedObject, IdMockRoutingTable, IdObservable, IdRTP,
+  IdSdp, IdSipAuthentication, IdSipInviteModule, IdSipLocation, IdSipMessage,
   IdSipOptionsModule, IdSipCore, IdSipDialog, IdSipMockLocator,
-  IdSipMockTransactionDispatcher, IdSipRegistration, IdSipSubscribeModule,
-  IdSipTransaction, IdSipTransport, IdTimerQueue, IdSipUserAgent, SysUtils,
-  TestFramework, TestFrameworkEx;
+  IdSipMockTransactionDispatcher, IdSipRegistration, IdSipStackInterface,
+  IdSipSubscribeModule, IdSipTransaction, IdSipTransport, IdTimerQueue,
+  IdSipUserAgent, Messages, SysUtils, TestFramework, TestFrameworkEx;
 
 type
+  // I provide an interface that allows a TIdSipStackWindow to dispatch
+  // notifications from a TIdSipStackInterface to a test case.
+  IIdSipStackInterface = interface
+    ['{C97BD7D0-8554-4815-B6C8-5FD1D364DA0B}']
+
+    procedure OnEvent(Stack: TIdSipStackInterface;
+                      Event: Cardinal;
+                      Data:  TIdEventData);
+  end;
+
   TIdSipTestResources = class(TObject)
   private
     class function CreateCommonRequest: TIdSipRequest;
@@ -768,6 +778,22 @@ type
     procedure Execute(Action: TIdSipAction); override;
 
     property Executed: Boolean read fExecuted;
+  end;
+
+  // I provide a message queue to which a StackInterface can send messages. Then
+  // I route them back to a test case.
+  TIdSipStackWindow = class(TCustomForm)
+  private
+    fTestCase: IIdSipStackInterface;
+
+    function  IsStackMessage(Msg: TMessage): Boolean;
+    procedure NotifyTestCase(Msg: TIdSipEventMessage);
+  public
+    constructor CreateNew(AOwner: TComponent; TestCase: IIdSipStackInterface); reintroduce;
+
+    procedure DefaultHandler(var Message); override;
+
+    property TestCase: IIdSipStackInterface read fTestCase;
   end;
 
   // constants used in tests
@@ -2483,6 +2509,42 @@ end;
 procedure TIdSipActionSwitch.Execute(Action: TIdSipAction);
 begin
   Self.fExecuted := true;
+end;
+
+//******************************************************************************
+//* TIdSipStackWindow                                                          *
+//******************************************************************************
+//* TIdSipStackWindow Public methods *******************************************
+
+constructor TIdSipStackWindow.CreateNew(AOwner: TComponent; TestCase: IIdSipStackInterface);
+begin
+  inherited CreateNew(AOwner, 0);
+
+  Self.fTestCase := TestCase;
+end;
+
+procedure TIdSipStackWindow.DefaultHandler(var Message);
+begin
+  inherited DefaultHandler(Message);
+
+  if Self.IsStackMessage(TMessage(Message)) then
+    Self.NotifyTestCase(TIdSipEventMessage(Message));
+end;
+
+//* TIdSipStackWindow Private methods ******************************************
+
+function TIdSipStackWindow.IsStackMessage(Msg: TMessage): Boolean;
+begin
+  Result := ((Msg.Msg >= CM_BASE) and (Msg.Msg <= CM_LAST));
+end;
+
+procedure TIdSipStackWindow.NotifyTestCase(Msg: TIdSipEventMessage);
+begin
+  try
+    Self.TestCase.OnEvent(Msg.Data.Stack, Msg.Data.Event, Msg.Data.Data);
+  finally
+    Msg.Data.Free;
+  end;
 end;
 
 end.

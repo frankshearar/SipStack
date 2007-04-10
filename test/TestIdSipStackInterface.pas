@@ -20,7 +20,7 @@ type
   // The testing of the StackInterface is not completely simple. The UI (or
   // this test case) and the stack-running thread communicate using a Windows
   // message queue. TTestCases don't have a window handle, so we create a
-  // TStackWindow which does.
+  // TIdSipStackWindow which does.
   //
   // As an example, let's look at how TestInboundCall works. The test case
   // sends a SIP message through the (local loopback) network to the stack. The
@@ -33,7 +33,7 @@ type
 
   // That window does nothing but do stuff to the test
   // cases. That means that you have to keep the message handlers in the
-  // TStackWindow in sync with those defined in the StackInterface.
+  // TIdSipStackWindow in sync with those defined in the StackInterface.
 
   TDataCheckProc = procedure(Stack: TIdSipStackInterface;
                              Event: Cardinal;
@@ -59,7 +59,8 @@ type
   // that if you're establishing a call and you receive a 200 OK, you must call
   // Application.ProcessMessages before the test can know about the response.
   TestTIdSipStackInterface = class(TTestCase,
-                                   IIdSipInviteModuleListener)
+                                   IIdSipInviteModuleListener,
+                                   IIdSipStackInterface)
   private
     fIntf:               TIdSipStackInterface;
     DataList:            TObjectList; // Holds all the data received from the stack
@@ -463,22 +464,6 @@ type
     procedure TestTriggerStartsTransports;
   end;
 
-  // I provide a message queue to which a StackInterface can send messages. Then
-  // I route them back to a test case.
-  TStackWindow = class(TCustomForm)
-  private
-    fTestCase: TestTIdSipStackInterface;
-
-    function  IsStackMessage(Msg: TMessage): Boolean;
-    procedure NotifyTestCase(Msg: TIdSipEventMessage);
-  public
-    constructor CreateNew(AOwner: TComponent; TestCase: TestTIdSipStackInterface); reintroduce;
-
-    procedure DefaultHandler(var Message); override;
-
-    property TestCase: TestTIdSipStackInterface read fTestCase;
-  end;
-
 const
   DummySdp = 'v=0'#13#10
            + 'o=sc 1105373135 1105373135 IN IP4 %s'#13#10
@@ -595,7 +580,7 @@ begin
 
   Self.RemoteMockTransport := TIdSipDebugTransportRegistry.TransportAt(TIdSipDebugTransportRegistry.TransportCount - 1) as TIdSipMockTransport;
 
-  Self.UI := TStackWindow.CreateNew(nil, Self);
+  Self.UI := TIdSipStackWindow.CreateNew(nil, Self);
 
   Self.LocalAddress  := '10.0.0.6';
   Self.LocalPort     := 5060;
@@ -3325,42 +3310,6 @@ begin
     CheckUdpServerOnPort(Address, Port, 'Stack not reconfigured or transports not started');
   finally
     Conf.Free;
-  end;
-end;
-
-//******************************************************************************
-//* TStackWindow                                                               *
-//******************************************************************************
-//* TStackWindow Public methods ************************************************
-
-constructor TStackWindow.CreateNew(AOwner: TComponent; TestCase: TestTIdSipStackInterface);
-begin
-  inherited CreateNew(AOwner, 0);
-
-  Self.fTestCase := TestCase;
-end;
-
-procedure TStackWindow.DefaultHandler(var Message);
-begin
-  inherited DefaultHandler(Message);
-
-  if Self.IsStackMessage(TMessage(Message)) then
-    Self.NotifyTestCase(TIdSipEventMessage(Message));
-end;
-
-//* TStackWindow Private methods ***********************************************
-
-function TStackWindow.IsStackMessage(Msg: TMessage): Boolean;
-begin
-  Result := ((Msg.Msg >= CM_BASE) and (Msg.Msg <= CM_LAST));
-end;
-
-procedure TStackWindow.NotifyTestCase(Msg: TIdSipEventMessage);
-begin
-  try
-    Self.TestCase.OnEvent(Msg.Data.Stack, Msg.Data.Event, Msg.Data.Data);
-  finally
-    Msg.Data.Free;
   end;
 end;
 
