@@ -62,7 +62,7 @@ type
   //
   // Find the details on what to put in the Configuration TStrings by reading
   // the class comment of TIdSipStackConfigurator.
-  TIdSipStackInterface = class(TObject,
+  TIdSipStackInterface = class(TIdInterfacedObject,
                                IIdSipActionListener,
                                IIdSipInviteModuleListener,
                                IIdSipMessageModuleListener,
@@ -82,10 +82,6 @@ type
     fUserAgent:      TIdSipUserAgent;
     SubscribeModule: TIdSipSubscribeModule;
     TimerQueue:      TIdTimerQueue;
-
-    function QueryInterface(const IID: TGUID; out Obj): HResult; stdcall;
-    function _AddRef: Integer; stdcall;
-    function _Release: Integer; stdcall;
 
     function  ActionFor(Handle: TIdSipHandle): TIdSipAction;
     function  AddAction(Action: TIdSipAction): TIdSipHandle;
@@ -1247,27 +1243,6 @@ begin
 end;
 
 //* TIdSipStackInterface Private methods ***************************************
-
-function TIdSipStackInterface.QueryInterface(const IID: TGUID; out Obj): HResult;
-begin
-  // Don't support reference counting.
-  if GetInterface(IID, Obj) then
-    Result := S_OK
-  else
-    Result := E_NOINTERFACE;
-end;
-
-function TIdSipStackInterface._AddRef: Integer;
-begin
-  // Don't support reference counting.
-  Result := -1;
-end;
-
-function TIdSipStackInterface._Release: Integer;
-begin
-  // Don't support reference counting.
-  Result := -1;
-end;
 
 function TIdSipStackInterface.ActionFor(Handle: TIdSipHandle): TIdSipAction;
 var
