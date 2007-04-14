@@ -96,13 +96,13 @@ type
                   Data: TObject);
     procedure ClearEvents;
     function  EarliestEvent: TIdWait;
-    function  EventAt(Index: Integer): TIdWait;
     function  GetDefaultTimeout: Cardinal;
     procedure InternalRemove(Event: Pointer);
     procedure SetDefaultTimeout(Value: Cardinal);
     procedure SortEvents;
     function  ShortestWait: Cardinal;
   protected
+    function  EventAt(Index: Integer): TIdWait; virtual;
     function  IndexOfEvent(Event: Pointer): Integer;
     procedure LockTimer; virtual;
     procedure TriggerEarliestEvent; virtual;
@@ -178,6 +178,7 @@ type
   public
     procedure AddEvent(MillisecsWait: Cardinal;
                        Event: TIdWait); override;
+    function  EventAt(Index: Integer): TIdWait; override;
     function  EventCount: Integer;
     function  FirstEventScheduledFor(Event: Pointer): TIdWait;
     function  LastEventScheduled: TIdWait; overload;
@@ -421,6 +422,12 @@ end;
 
 //* TIdTimerQueue Protected methods ********************************************
 
+function TIdTimerQueue.EventAt(Index: Integer): TIdWait;
+begin
+  // Precondition: Something acquired Self.Lock
+  Result := TIdWait(Self.EventList[Index]);
+end;
+
 function TIdTimerQueue.IndexOfEvent(Event: Pointer): Integer;
 var
   Found: Boolean;
@@ -533,12 +540,6 @@ begin
   end;
 
   Result := Self.EventAt(0);
-end;
-
-function TIdTimerQueue.EventAt(Index: Integer): TIdWait;
-begin
-  // Precondition: Something acquired Self.Lock
-  Result := TIdWait(Self.EventList[Index]);
 end;
 
 function TIdTimerQueue.GetDefaultTimeout: Cardinal;
@@ -697,6 +698,11 @@ begin
   else begin
     inherited AddEvent(MillisecsWait, Event);
   end;
+end;
+
+function TIdDebugTimerQueue.EventAt(Index: Integer): TIdWait;
+begin
+  Result := inherited EventAt(Index);
 end;
 
 function TIdDebugTimerQueue.EventCount: Integer;
