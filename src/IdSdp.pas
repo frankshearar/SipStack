@@ -4011,13 +4011,18 @@ begin
   // which number of media descriptions to follow. Thus we do nothing, and
   // let you, the user of this class, decide.
 
-  for I := 0 to RemoteSessionDesc.MediaDescriptionCount - 1 do begin
-    Self.RegisterEncodingMaps(Self.RemoteProfile,
-                              RemoteSessionDesc.MediaDescriptionAt(I).RTPMapAttributes);
+  Self.StreamLock.Acquire;
+  try
+    for I := 0 to RemoteSessionDesc.MediaDescriptionCount - 1 do begin
+      Self.RegisterEncodingMaps(Self.RemoteProfile,
+                                RemoteSessionDesc.MediaDescriptionAt(I).RTPMapAttributes);
 
-    Self.Streams[I].LocalProfile.Assign(Self.LocalProfile);
-    Self.Streams[I].RemoteProfile.Assign(Self.RemoteProfile);
-    Self.Streams[I].RemoteDescription := RemoteSessionDesc.MediaDescriptionAt(I);
+      Self.Streams[I].LocalProfile.Assign(Self.LocalProfile);
+      Self.Streams[I].RemoteProfile.Assign(Self.RemoteProfile);
+      Self.Streams[I].RemoteDescription := RemoteSessionDesc.MediaDescriptionAt(I);
+    end;
+  finally
+    Self.StreamLock.Release;
   end;
 end;
 
