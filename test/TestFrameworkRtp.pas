@@ -23,7 +23,6 @@ type
 
   TIdMockRTPPeer = class(TIdBaseRTPAbstractPeer)
   private
-    Listeners:             TIdNotificationList;
     fActive:               Boolean;
     fAddress:              String;
     fDefaultPort:          Integer;
@@ -210,8 +209,6 @@ constructor TIdMockRTPPeer.Create;
 begin
   inherited Create;
 
-  Self.Listeners := TIdNotificationList.Create;
-
   Self.fRTCPCount := 0;
   Self.RTCPBuffer := TObjectList.Create(true);
   Self.fRTPCount  := 0;
@@ -226,7 +223,6 @@ destructor TIdMockRTPPeer.Destroy;
 begin
   Self.RTPBuffer.Free;
   Self.RTCPBuffer.Free;
-  Self.Listeners.Free;
 
   inherited Destroy;
 end;
