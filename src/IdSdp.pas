@@ -540,18 +540,20 @@ type
                             IIdRTPListener,
                             IIdRTPSendListener)
   private
-    DataListeners:      TIdNotificationList;
-    fLocalDescription:  TIdSdpMediaDescription;
-    fLocalProfile:      TIdRTPProfile;
-    fOnHold:            Boolean;
-    fRemoteDescription: TIdSdpMediaDescription;
-    fRemoteProfile:     TIdRTPProfile;
-    fTimer:             TIdTimerQueue;
-    PreHoldDirection:   TIdSdpDirection;
-    RTPListeners:       TIdNotificationList;
-    RTPSendListeners:   TIdNotificationList;
-    Servers:            TObjectList;
-    ServerType:         TIdBaseRTPAbstractPeerClass;
+    DataListeners:       TIdNotificationList;
+    fHighestAllowedPort: Cardinal;
+    fLocalDescription:   TIdSdpMediaDescription;
+    fLocalProfile:       TIdRTPProfile;
+    fLowestAllowedPort:  Cardinal;
+    fOnHold:             Boolean;
+    fRemoteDescription:  TIdSdpMediaDescription;
+    fRemoteProfile:      TIdRTPProfile;
+    fTimer:              TIdTimerQueue;
+    PreHoldDirection:    TIdSdpDirection;
+    RTPListeners:        TIdNotificationList;
+    RTPSendListeners:    TIdNotificationList;
+    Servers:             TObjectList;
+    ServerType:          TIdBaseRTPAbstractPeerClass;
 
     procedure InternalCreate;
     function  CreateServer: TIdBaseRTPAbstractPeer;
@@ -569,6 +571,7 @@ type
                          Binding: TIdConnection);
     procedure OnSendRTP(Packet: TIdRTPPacket;
                         Binding: TIdConnection);
+    procedure RecreateServers(NumberOfServers: Cardinal);
     function  ServerAt(Index: Integer): TIdBaseRTPAbstractPeer;
     procedure SetDirection(Value: TIdSdpDirection);
     procedure SetLocalDescription(const Value: TIdSdpMediaDescription);
@@ -576,6 +579,7 @@ type
     procedure SetRemoteDescription(const Value: TIdSdpMediaDescription);
     procedure SetRemoteProfile(Value: TIdRTPProfile);
     procedure SetTimer(Value: TIdTimerQueue);
+    procedure StartServers;
   public
     constructor Create; overload;
     constructor Create(ServerType: TIdBaseRTPAbstractPeerClass); overload;
@@ -584,11 +588,13 @@ type
     procedure AddDataListener(const Listener: IIdRTPDataListener);
     procedure AddRTPListener(const Listener: IIdRTPListener);
     procedure AddRTPSendListener(const Listener: IIdRTPSendListener);
+    function  AllowedPort(Port: Cardinal): Boolean;
     procedure Initialize;
     function  IsListening: Boolean;
     function  IsReceiver: Boolean;
     function  IsSender: Boolean;
     procedure JoinSession;
+    function  MatchPort(Port: Cardinal): Boolean;
     procedure PutOnHold;
     procedure RemoveDataListener(const Listener: IIdRTPDataListener);
     procedure RemoveRTPListener(const Listener: IIdRTPListener);
@@ -599,13 +605,15 @@ type
     procedure TakeOffHold;
     function  UsesBinding(Binding: TIdConnection): Boolean;
 
-    property Direction:         TIdSdpDirection        read GetDirection write SetDirection;
-    property LocalDescription:  TIdSdpMediaDescription read fLocalDescription write SetLocalDescription;
-    property LocalProfile:      TIdRTPProfile          read fLocalProfile write SetLocalProfile;
-    property OnHold:            Boolean                read fOnHold;
-    property RemoteDescription: TIdSdpMediaDescription read fRemoteDescription write SetRemoteDescription;
-    property RemoteProfile:     TIdRTPProfile          read fRemoteProfile write SetRemoteProfile;
-    property Timer:             TIdTimerQueue          read fTimer write SetTimer;
+    property Direction:          TIdSdpDirection        read GetDirection write SetDirection;
+    property HighestAllowedPort: Cardinal               read fHighestAllowedPort write fHighestAllowedPort;
+    property LocalDescription:   TIdSdpMediaDescription read fLocalDescription write SetLocalDescription;
+    property LocalProfile:       TIdRTPProfile          read fLocalProfile write SetLocalProfile;
+    property LowestAllowedPort:  Cardinal               read fLowestAllowedPort write fLowestAllowedPort;
+    property OnHold:             Boolean                read fOnHold;
+    property RemoteDescription:  TIdSdpMediaDescription read fRemoteDescription write SetRemoteDescription;
+    property RemoteProfile:      TIdRTPProfile          read fRemoteProfile write SetRemoteProfile;
+    property Timer:              TIdTimerQueue          read fTimer write SetTimer;
   end;
 
   // I process SDP (RFC 2327) payloads. This means that I instantiate (RTP)
@@ -630,13 +638,16 @@ type
     StreamLock:           TCriticalSection;
     Timer:                TIdThreadedTimerQueue;
 
-    function  AllowedPort(Port: Cardinal): Boolean;
+    procedure ClearStreams;
+    function  CreateStream: TIdSDPMediaStream;
     procedure InternalCreate(Profile: TIdRTPProfile);
-    procedure EstablishStream(Desc: TIdSdpMediaDescription);
     function  GetStreams(Index: Integer): TIdSDPMediaStream;
+    procedure RecreateStreams(NumberOfStreams: Cardinal);
     procedure RegisterEncodingMaps(Profile: TIdRTPProfile;
                                    Maps: TIdSdpRTPMapAttributes); overload;
+    procedure SetHighestAllowedPort(Value: Cardinal);
     procedure SetLocalMachineName(Value: String);
+    procedure SetLowestAllowedPort(Value: Cardinal);
     procedure UpdateSessionVersion;
   public
     constructor Create(Profile: TIdRTPProfile); overload;
@@ -660,11 +671,11 @@ type
     function  StreamCount: Integer;
     procedure TakeOffHold;
 
-    property HighestAllowedPort:      Cardinal          read fHighestAllowedPort write fHighestAllowedPort;
+    property HighestAllowedPort:      Cardinal          read fHighestAllowedPort write SetHighestAllowedPort;
     property LocalMachineName:        String            read fLocalMachineName write SetLocalMachineName;
     property LocalProfile:            TIdRTPProfile     read fLocalProfile;
     property LocalSessionID:          String            read fLocalSessionID write fLocalSessionID;
-    property LowestAllowedPort:       Cardinal          read fLowestAllowedPort write fLowestAllowedPort;
+    property LowestAllowedPort:       Cardinal          read fLowestAllowedPort write SetLowestAllowedPort;
     property OnHold:                  Boolean           read fOnHold;
     property RemoteProfile:           TIdRTPProfile     read fRemoteProfile;
     property LocalSessionName:        String            read fLocalSessionName write fLocalSessionName;
@@ -3525,6 +3536,11 @@ begin
   Self.RTPSendListeners.AddListener(Listener);
 end;
 
+function TIdSDPMediaStream.AllowedPort(Port: Cardinal): Boolean;
+begin
+  Result := (Self.LowestAllowedPort <= Port) and (Port < Self.HighestAllowedPort);
+end;
+
 procedure TIdSDPMediaStream.Initialize;
 begin
   // Initialize prepares the RTP session/s, binding sockets and such. It DOES
@@ -3555,6 +3571,18 @@ var
 begin
   for I := 0 to Self.Servers.Count - 1 do
     Self.ServerAt(I).Session.JoinSession;
+end;
+
+function TIdSDPMediaStream.MatchPort(Port: Cardinal): Boolean;
+var
+  I: Integer;
+begin
+  Result := false;
+  for I := 0 to Self.Servers.Count - 1 do
+    if (Self.ServerAt(I).RTPPort = Port) then begin
+      Result := true;
+      Break;
+    end;
 end;
 
 procedure TIdSDPMediaStream.PutOnHold;
@@ -3599,10 +3627,29 @@ end;
 
 procedure TIdSDPMediaStream.StartListening;
 var
-  I: Integer;
+  SocketBound: Boolean;
 begin
-  for I := 0 to Self.Servers.Count - 1 do
-    Self.ServerAt(I).Active := true;
+  if Self.LocalDescription.IsRefusedStream then Exit;
+
+  Self.InitializeLocalRTPServers;
+
+  SocketBound := false;
+  while not SocketBound and Self.AllowedPort(Self.LocalDescription.Port) do begin
+    try
+      Self.StartServers;
+      SocketBound := true;
+    except
+      on EIdCouldNotBindSocket do begin
+        Self.LocalDescription.Port := Self.LocalDescription.Port + 2; // One for RTP, one for RTCP.
+        Self.InitializeLocalRTPServers;
+      end;
+    end;
+  end;
+
+  // If the stream doesn't bind to a port, we indicate that we won't be using
+  // the stream.
+  if not SocketBound then
+    Self.LocalDescription.Port := 0;
 end;
 
 procedure TIdSDPMediaStream.StopListening;
@@ -3644,6 +3691,9 @@ begin
   Self.RTPListeners     := TIdNotificationList.Create;
   Self.RTPSendListeners := TIdNotificationList.Create;
   Self.Servers          := TObjectList.Create(true);
+
+  Self.LowestAllowedPort  := LowestPossiblePort;
+  Self.HighestAllowedPort := HighestPossiblePort;
 end;
 
 function TIdSDPMediaStream.CreateServer: TIdBaseRTPAbstractPeer;
@@ -3683,25 +3733,28 @@ end;
 
 procedure TIdSDPMediaStream.InitializeLocalRTPServers;
 var
-  AlreadyRunning: Boolean;
-  I:              Cardinal;
-  Server:         TIdBaseRTPAbstractPeer;
+  I:           Cardinal;
+  Server:      TIdBaseRTPAbstractPeer;
+  ServerCount: Cardinal;
 begin
   // Given our local session description, instantiate the RTP servers we need.
 
-  AlreadyRunning := Self.IsListening;
   Self.StopListening;
 
-  Self.Servers.Clear;
+  ServerCount := Self.Servers.Count;
+
+  if (ServerCount <> Self.LocalDescription.PortCount) then
+    Self.RecreateServers(Self.LocalDescription.PortCount);
+
   for I := 0 to Self.LocalDescription.PortCount - 1 do begin
-    Server := Self.CreateServer;
+    Server := Self.ServerAt(I);
     Server.Address  := Self.LocalDescription.Connections[0].Address;
     Server.RTPPort  := Self.LocalDescription.Port + 2*I;
     Server.RTCPPort := Server.RTPPort + 1;
   end;
 
-  if AlreadyRunning then
-    Self.StartListening;
+//  if AlreadyRunning then
+//    Self.StartListening;
 end;
 
 procedure TIdSDPMediaStream.InitializeRemoteRTPServers;
@@ -3709,8 +3762,13 @@ var
   I:           Cardinal;
   NextRTPPort: Cardinal;
   Peer:        TIdRTPMember;
+  ServerCount: Cardinal;
 begin
   if (Self.RemoteDescription.PortCount = 0) then Exit;
+
+  ServerCount := Self.Servers.Count;
+  if (ServerCount <> Self.RemoteDescription.PortCount) then
+    Self.RecreateServers(Self.RemoteDescription.PortCount);
 
   // We ASSUME that the local & remote descriptions are symmetrical: that, for
   // this stream, both ports have the same port count.
@@ -3807,6 +3865,16 @@ begin
   end;
 end;
 
+procedure TIdSDPMediaStream.RecreateServers(NumberOfServers: Cardinal);
+var
+  I: Integer;
+begin
+  Self.Servers.Clear;
+
+  for I := 1 to NumberOfServers do
+    Self.CreateServer;
+end;
+
 function TIdSDPMediaStream.ServerAt(Index: Integer): TIdBaseRTPAbstractPeer;
 begin
   Result := Self.Servers[Index] as TIdBaseRTPAbstractPeer;
@@ -3834,6 +3902,8 @@ end;
 procedure TIdSDPMediaStream.SetRemoteDescription(const Value: TIdSdpMediaDescription);
 begin
   Self.fRemoteDescription.Assign(Value);
+
+  Self.InitializeRemoteRTPServers;
 end;
 
 procedure TIdSDPMediaStream.SetRemoteProfile(Value: TIdRTPProfile);
@@ -3849,6 +3919,14 @@ begin
 
   for I := 0 to Self.Servers.Count - 1 do
     Self.ServerAt(I).Timer := Value;
+end;
+
+procedure TIdSDPMediaStream.StartServers;
+var
+  I: Integer;
+begin
+  for I := 0 to Self.Servers.Count - 1 do
+    Self.ServerAt(I).Active := true;
 end;
 
 //******************************************************************************
@@ -4013,6 +4091,9 @@ begin
 
   Self.StreamLock.Acquire;
   try
+    if (Self.StreamCount <> RemoteSessionDesc.MediaDescriptionCount) then
+      Self.RecreateStreams(RemoteSessionDesc.MediaDescriptionCount);
+
     for I := 0 to RemoteSessionDesc.MediaDescriptionCount - 1 do begin
       Self.RegisterEncodingMaps(Self.RemoteProfile,
                                 RemoteSessionDesc.MediaDescriptionAt(I).RTPMapAttributes);
@@ -4064,8 +4145,12 @@ begin
 
   Self.StreamLock.Acquire;
   try
+    if (Self.StreamCount <> LocalSessionDesc.MediaDescriptionCount) then
+      Self.RecreateStreams(LocalSessionDesc.MediaDescriptionCount);
+
     for I := 0 to LocalSessionDesc.MediaDescriptionCount - 1 do begin
-      Self.EstablishStream(LocalSessionDesc.MediaDescriptionAt(I));
+      Self.Streams[I].LocalDescription := LocalSessionDesc.MediaDescriptionAt(I);
+      Self.Streams[I].StartListening;
       Self.RegisterEncodingMaps(Self.LocalProfile,
                                 LocalSessionDesc.MediaDescriptionAt(I).RTPMapAttributes);
     end;
@@ -4114,9 +4199,19 @@ begin
   Self.UpdateSessionVersion;
 end;
 
-function TIdSDPMultimediaSession.AllowedPort(Port: Cardinal): Boolean;
+procedure TIdSDPMultimediaSession.ClearStreams;
 begin
-  Result := (Self.LowestAllowedPort <= Port) and (Port < Self.HighestAllowedPort);
+  // Precondition: you've acquired StreamLock
+  Self.fStreams.Clear;
+end;
+
+function TIdSDPMultimediaSession.CreateStream: TIdSDPMediaStream;
+begin
+  Result := TIdSDPMediaStream.Create(Self.ServerType);
+  Result.HighestAllowedPort := Self.HighestAllowedPort;
+  Result.LowestAllowedPort  := Self.LowestAllowedPort;
+  Result.Timer := Self.Timer;
+  Self.fStreams.Add(Result);
 end;
 
 procedure TIdSDPMultimediaSession.InternalCreate(Profile: TIdRTPProfile);
@@ -4142,49 +4237,6 @@ begin
   Self.Username             := BlankUsername;
 end;
 
-procedure TIdSDPMultimediaSession.EstablishStream(Desc: TIdSdpMediaDescription);
-var
-  NewStream:   TIdSDPMediaStream;
-  SocketBound: Boolean;
-begin
-  NewStream := TIdSDPMediaStream.Create(Self.ServerType);
-  try
-    NewStream.Timer := Self.Timer;
-    Self.fStreams.Add(NewStream);
-
-    if Desc.IsRefusedStream then begin
-      NewStream.LocalDescription := Desc;
-    end
-    else begin
-      SocketBound := false;
-      while not SocketBound and Self.AllowedPort(Desc.Port) do begin
-        NewStream.LocalDescription := Desc;
-        try
-          NewStream.StartListening;
-          SocketBound := true;
-        except
-          on EIdCouldNotBindSocket do
-            Desc.Port := Desc.Port + 2; // One for RTP, one for RTCP.
-        end;
-      end;
-
-      // Note that even if the stream doesn't bind to a port, the stream object
-      // still exists!
-      if not SocketBound then begin
-        Desc.Port := 0;
-        NewStream.LocalDescription := Desc;
-      end;
-    end;
-  except
-    if (Self.fStreams.IndexOf(NewStream) <> ItemNotFoundIndex) then
-      Self.fStreams.Remove(NewStream)
-    else
-      NewStream.Free;
-
-    raise;
-  end;
-end;
-
 //* TIdSDPMultimediaSession Private methods ************************************
 
 function TIdSDPMultimediaSession.GetStreams(Index: Integer): TIdSDPMediaStream;
@@ -4197,9 +4249,49 @@ begin
   end;
 end;
 
+procedure TIdSDPMultimediaSession.RecreateStreams(NumberOfStreams: Cardinal);
+var
+  I: Integer;
+begin
+  // Precondition: you've acquired StreamLock
+  Self.ClearStreams;
+  for I := 1 to NumberOfStreams do
+    Self.CreateStream;
+end;
+
+procedure TIdSDPMultimediaSession.SetHighestAllowedPort(Value: Cardinal);
+var
+  I: Integer;
+begin
+  Self.fHighestAllowedPort := Value;
+
+  Self.StreamLock.Acquire;
+  try
+    for I := 0 to Self.StreamCount - 1 do
+      Self.Streams[I].HighestAllowedPort := Self.fHighestAllowedPort;
+  finally
+    Self.StreamLock.Release;
+  end;
+end;
+
 procedure TIdSDPMultimediaSession.SetLocalMachineName(Value: String);
 begin
   Self.fLocalMachineName := Value;
+end;
+
+procedure TIdSDPMultimediaSession.SetLowestAllowedPort(Value: Cardinal);
+var
+  I: Integer;
+begin
+  Self.fLowestAllowedPort := Value;
+
+  Self.StreamLock.Acquire;
+  try
+    for I := 0 to Self.StreamCount - 1 do
+      Self.Streams[I].LowestAllowedPort := Self.fLowestAllowedPort;
+  finally
+    Self.StreamLock.Release;
+  end;
 end;
 
 procedure TIdSDPMultimediaSession.UpdateSessionVersion;

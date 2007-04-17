@@ -512,6 +512,7 @@ type
     procedure TestIsReceiver;
     procedure TestIsSender;
     procedure TestLayeredCodecAddressesAndPorts;
+    procedure TestMatchPort;
     procedure TestPutOnHoldRecvOnly;
     procedure TestPutOnHoldSendRecv;
     procedure TestPutOnHoldWhileOnHold;
@@ -639,7 +640,9 @@ begin
   Result.AddTest(TestTIdSdpPayload.Suite);
   Result.AddTest(TestTIdSDPMediaStream.Suite);
   Result.AddTest(TestTIdSDPMultimediaSession.Suite);
+{
   Result.AddTest(TestTIdSdpNatMasquerader.Suite);
+}
 end;
 
 const
@@ -6250,7 +6253,8 @@ begin
                          'm=audio 8000/' + IntToStr(PortCount) + ' RTP/AVP 0'#13#10);
   Self.Media.RemoteDescription  := Self.Sender.LocalDescription;
 
-  Self.Media.Initialize;
+  Self.Sender.StartListening;
+  Self.Media.StartListening;
 
   Self.Media.AddRTPSendListener(Self);
 
@@ -6259,7 +6263,10 @@ begin
     SenderLayerID   := Self.Media.LocalDescription.Port + 2*Offset;
     CheckPortActive(Self.Media.LocalDescription.Connections[0].Address,
                     ReceiverLayerID,
-                    IntToStr(Offset + 1) + 'th port not active');
+                    IntToStr(Offset + 1) + 'th port not active on the receiver');
+    CheckPortActive(Self.Media.LocalDescription.Connections[0].Address,
+                    SenderLayerID,
+                    IntToStr(Offset + 1) + 'th port not active on the sender');
 
     Self.Media.SendData(Self.Text, SenderLayerID);
 
@@ -6404,6 +6411,31 @@ begin
   CheckEquals(SecondExpectedLocalPort,
               Self.SendingBinding.LocalPort,
               'The RTCP arrived at an unexpected port');
+end;
+
+procedure TestTIdSDPMediaStream.TestMatchPort;
+const
+  Port      = 8000;
+  PortCount = 5;
+var
+  ActualPort: Cardinal;
+  I:          Integer;
+begin
+  Self.SetLocalMediaDesc(Self.Media,
+                         'm=text ' + IntToStr(Port) + ' RTP/AVP 96'#13#10
+                       + 'a=rtpmap:96 t140/1000'#13#10);
+  Check(Self.Media.MatchPort(8000), 'Single stream');
+  Check(not Self.Media.MatchPort(8002), 'Single stream, wrong port');
+
+  Self.SetLocalMediaDesc(Self.Media,
+                         'm=text ' + IntToStr(Port) + '/' + IntToStr(PortCount) + ' RTP/AVP 96'#13#10
+                       + 'a=rtpmap:96 t140/1000'#13#10);
+  for I := 0 to PortCount - 1 do begin
+    ActualPort := Port + I*2;
+    Check(Self.Media.MatchPort(ActualPort), 'Single hierarchically encoded stream; port = ' + IntToStr(ActualPort));
+  end;
+  ActualPort := Port + PortCount*2 + 2;
+  Check(not Self.Media.MatchPort(Port + PortCount*2 + 2), 'Single hierarchically encoded stream, wrong port (' + IntToStr(ActualPort) + ')');
 end;
 
 procedure TestTIdSDPMediaStream.TestPutOnHoldRecvOnly;
@@ -6588,10 +6620,21 @@ begin
 end;
 
 procedure TestTIdSDPMediaStream.TestSetRemoteDescriptionSendsNoPackets;
+var
+  SameDesc: TIdSdpMediaDescription;
 begin
   Self.Media.AddRTPSendListener(Self);
-  Self.Media.RemoteDescription := Self.Media.RemoteDescription;
-  Check(not Self.SentControl, 'SetRemoteDescription sent RTCP packets');
+
+  SameDesc := TIdSdpMediaDescription.Create;
+  try
+    SameDesc.Assign(Self.Media.RemoteDescription);
+
+    Self.Media.RemoteDescription := SameDesc;
+    
+    Check(not Self.SentControl, 'SetRemoteDescription sent RTCP packets');
+  finally
+    SameDesc.Free;
+  end;
 end;
 
 procedure TestTIdSDPMediaStream.TestStartListening;
@@ -6611,12 +6654,6 @@ begin
                 'Local port active before Initialize');
 
   Self.Media.AddRTPSendListener(Self);
-
-  Self.Media.Initialize;
-
-  CheckPortFree(Self.Media.LocalDescription.Connections[0].Address,
-                Self.Media.LocalDescription.Port,
-                'Local port active after Initialize, before StartListening');
 
   Self.Media.StartListening;
 
