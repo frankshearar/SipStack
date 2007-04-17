@@ -490,6 +490,7 @@ type
     SentBye:        Boolean;
     SentData:       Boolean;
     SentControl:    Boolean;
+    T140PT:         TIdRTPPayloadType;
     Text:           TIdRTPT140Payload;
     Timer:          TIdDebugTimerQueue;
 
@@ -525,6 +526,9 @@ type
     procedure TestSendDataWhenNotSender;
     procedure TestSetRemoteDescriptionSendsNoPackets;
     procedure TestStartListening;
+    procedure TestStartListeningRegistersLocalRtpMaps;
+    procedure TestStartListeningRegistersRemoteRtpMaps;
+    procedure TestStartListeningTriesConsecutivePorts;
     procedure TestStopListeningStopsListening;
     procedure TestTakeOffHold;
   end;
@@ -584,9 +588,6 @@ type
     procedure TestStartListeningMalformedSdp;
     procedure TestStartListeningMultipleStreams;
     procedure TestStartListeningPortsOutsideAllowedRange;
-    procedure TestStartListeningRegistersLocalRtpMaps;
-    procedure TestStartListeningRegistersRemoteRtpMaps;
-    procedure TestStartListeningTriesConsecutivePorts;
     procedure TestStopListening;
     procedure TestTakeOffHold;
   end;
@@ -5983,11 +5984,10 @@ const
   OneSecond = 1000; // milliseconds
 var
   SDP:    TIdSDPPayload;
-  T140PT: TIdRTPPayloadType;
 begin
   inherited SetUp;
 
-  T140PT := 96;
+  Self.T140PT := 96;
 
   Self.AVP := TIdRTPProfile.Create;
   Self.AVP.AddEncoding(T140EncodingName, T140ClockRate, '', T140PT);
@@ -6026,9 +6026,6 @@ begin
 
   Self.Text := TIdRTPT140Payload.Create;
   Self.Text.Block := '1234';
-
-  Self.Media.Initialize;
-  Self.Sender.Initialize;
 
   Self.Media.StartListening;
   Self.Sender.StartListening;
@@ -6240,7 +6237,7 @@ end;
 
 procedure TestTIdSDPMediaStream.TestHierarchicallyEncodedStream;
 const
-  PortCount = 1;
+  PortCount = 5;
 var
   Offset:          Cardinal;
   ReceiverLayerID: Cardinal;
@@ -6248,9 +6245,11 @@ var
 begin
   // Both ends must have the same number of ports open.
   Self.SetLocalMediaDesc(Self.Sender,
-                         'm=audio 9000/' + IntToStr(PortCount) + ' RTP/AVP 0'#13#10);
+                         'm=audio 9000/' + IntToStr(PortCount) + ' RTP/AVP 0'#13#10
+                       + 'a=rtpmap:98 t140/1000'#13#10);
   Self.SetLocalMediaDesc(Self.Media,
-                         'm=audio 8000/' + IntToStr(PortCount) + ' RTP/AVP 0'#13#10);
+                         'm=audio 8000/' + IntToStr(PortCount) + ' RTP/AVP 0'#13#10
+                       + 'a=rtpmap:98 t140/1000'#13#10);
   Self.Media.RemoteDescription  := Self.Sender.LocalDescription;
 
   Self.Sender.StartListening;
@@ -6643,9 +6642,11 @@ begin
   Self.Sender.StopListening;
 
   Self.SetLocalMediaDesc(Self.Sender,
-                         'm=audio 9000 RTP/AVP 0'#13#10);
+                         'm=audio 9000 RTP/AVP 98'#13#10
+                       + 'a=rtpmap:98 t140/1000'#13#10);
   Self.SetLocalMediaDesc(Self.Media,
-                         'm=audio 8000 RTP/AVP 0'#13#10);
+                         'm=audio 8000 RTP/AVP 0'#13#10
+                       + 'a=rtpmap:98 t140/1000'#13#10);
   Self.Sender.RemoteDescription := Self.Media.LocalDescription;
   Self.Media.RemoteDescription  := Self.Sender.LocalDescription;
 
@@ -6670,6 +6671,116 @@ begin
   Self.Timer.TriggerAllEventsUpToFirst(TIdRTPSendDataWait);
 
   Check(Self.SentData, 'No RTP sent');
+end;
+
+procedure TestTIdSDPMediaStream.TestStartListeningRegistersLocalRtpMaps;
+const
+  TEEncodingName = TelephoneEventEncoding;
+  TEPayloadType  = 97;
+var
+  P:   TIdSdpPayload;
+  SDP: String;
+begin
+  SDP :=  'v=0'#13#10
+        + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
+        + 's=-'#13#10
+        + 'c=IN IP4 127.0.0.1'#13#10
+        + 'm=text 8000 RTP/AVP ' + IntToStr(TEPayloadType)+ #13#10
+        + 'a=rtpmap:' + IntToStr(TEPayloadType) + ' ' + TEEncodingName + #13#10;
+
+  Check(Self.Media.RemoteProfile.HasPayloadType(Self.T140PT),
+        'Sanity check: profile already knows about ' + Self.Text.EncodingName + '!');
+  Check(not Self.Media.LocalProfile.HasPayloadType(TEPayloadType),
+        'Sanity check: profile doesn''t already know about ' + TEEncodingName + '!');
+
+  P := TIdSdpPayload.CreateFrom(SDP);
+  try
+    Self.Media.LocalDescription := P.MediaDescriptionAt(0);
+  finally
+    P.Free;
+  end;
+
+  Self.Media.StartListening;
+
+  Check(not Self.Media.LocalProfile.HasPayloadType(Self.T140PT),
+        Self.Text.EncodingName + ' not unregistered');
+  Check(Self.Media.LocalProfile.HasPayloadType(TEPayloadType),
+        TEEncodingName + ' not registered');
+end;
+
+procedure TestTIdSDPMediaStream.TestStartListeningRegistersRemoteRtpMaps;
+const
+  TEEncodingName = TelephoneEventEncoding;
+  TEPayloadType  = 97;
+var
+  P:   TIdSdpPayload;
+  SDP: String;
+begin
+  SDP :=  'v=0'#13#10
+        + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
+        + 's=-'#13#10
+        + 'c=IN IP4 127.0.0.1'#13#10
+        + 'm=audio 8000 RTP/AVP ' + IntToStr(TEPayloadType) + #13#10
+        + 'a=rtpmap:' + IntToStr(TEPayloadType) + ' ' + TEEncodingName + #13#10;
+
+  Check(Self.Media.RemoteProfile.HasPayloadType(Self.T140PT),
+        'Sanity check: profile already knows about ' + Self.Text.EncodingName + '!');
+  Check(not Self.Media.RemoteProfile.HasPayloadType(TEPayloadType),
+        'Sanity check: profile doesn''t already know about ' + TEEncodingName + '!');
+
+  P := TIdSdpPayload.CreateFrom(SDP);
+  try
+    Self.Media.RemoteDescription := P.MediaDescriptionAt(0);
+  finally
+    P.Free;
+  end;
+
+  Check(Self.Media.RemoteProfile.HasPayloadType(Self.T140PT),
+        Self.Text.EncodingName + ' not unregistered');
+  Check(Self.Media.RemoteProfile.HasPayloadType(TEPayloadType),
+        TEEncodingName + ' not registered');
+end;
+
+procedure TestTIdSDPMediaStream.TestStartListeningTriesConsecutivePorts;
+const
+  BlockedPort = 10000;
+var
+  P:           TIdSdpPayload;
+  PortBlocker: TIdMockRTPPeer;
+  SDP:         String;
+begin
+  PortBlocker := TIdMockRTPPeer.Create;
+  try
+    PortBlocker.Address := '127.0.0.1';
+    PortBlocker.RTPPort := BlockedPort;
+    PortBlocker.Active  := true;
+
+    CheckPortActive('127.0.0.1', BlockedPort, 'The PortBlocker isn''t blocking the port');
+
+    SDP := 'v=0'#13#10
+         + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
+         + 's=-'#13#10
+         + 'c=IN IP4 127.0.0.1'#13#10
+         + 'm=text ' + IntToStr(BlockedPort) + ' RTP/AVP 0'#13#10;
+
+    P := TIdSdpPayload.CreateFrom(SDP);
+    try
+      Self.Media.LocalDescription := P.MediaDescriptionAt(0);
+    finally
+      P.Free;
+    end;
+
+    Self.Media.StartListening;
+    CheckPortActive('127.0.0.1', BlockedPort + 2, 'Next available RTP port not used');
+
+    CheckEquals(BlockedPort + 2, Self.Media.LocalDescription.Port, 'Actual port used');
+
+    Self.Media.StopListening;
+
+    CheckPortFree('127.0.0.1', BlockedPort + 2, 'Port not closed');
+  finally
+    PortBlocker.Free;
+  end;
 end;
 
 procedure TestTIdSDPMediaStream.TestStopListeningStopsListening;
@@ -7295,114 +7406,6 @@ begin
                   IntToStr(I) + 'th description''s port');
   finally
     SDP.Free;
-  end;
-end;
-
-procedure TestTIdSDPMultimediaSession.TestStartListeningRegistersLocalRtpMaps;
-const
-  EncodingName   = T140EncodingName + '/1000';
-  PayloadType    = 96;
-  TEEncodingName = TelephoneEventEncoding;
-  TEPayloadType  = 97;
-var
-  SDP: String;
-begin
-  SDP :=  'v=0'#13#10
-        + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
-        + 's=-'#13#10
-        + 'c=IN IP4 127.0.0.1'#13#10
-        + 'm=text 8000 RTP/AVP ' + IntToStr(PayloadType) + #13#10
-        + 'a=rtpmap:' + IntToStr(PayloadType) + ' ' + EncodingName + #13#10
-        + 'm=audio 8002 RTP/AVP ' + IntToStr(TEPayloadType) + #13#10
-        + 'a=rtpmap:' + IntToStr(TEPayloadType) + ' ' + TEEncodingName + #13#10;
-
-  Check(not Self.MS.LocalProfile.HasPayloadType(PayloadType),
-        'Sanity check: profile already knows about ' + EncodingName + '!');
-  Check(not Self.MS.LocalProfile.HasPayloadType(TEPayloadType),
-        'Sanity check: profile already knows about ' + TEEncodingName + '!');
-
-  Self.MS.StartListening(SDP);
-
-  Check(Self.MS.LocalProfile.HasPayloadType(PayloadType),
-        EncodingName + ' not registered');
-  Check(Self.MS.LocalProfile.HasPayloadType(TEPayloadType),
-        TEEncodingName + ' not registered');
-end;
-
-procedure TestTIdSDPMultimediaSession.TestStartListeningRegistersRemoteRtpMaps;
-const
-  EncodingName   = T140EncodingName + '/1000';
-  PayloadType    = 96;
-  TEEncodingName = TelephoneEventEncoding;
-  TEPayloadType  = 97;
-var
-  LocalSDP: String;
-  SDP:      String;
-begin
-  SDP :=  'v=0'#13#10
-        + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
-        + 's=-'#13#10
-        + 'c=IN IP4 127.0.0.1'#13#10
-        + 'm=text 8000 RTP/AVP ' + IntToStr(PayloadType) + #13#10
-        + 'a=rtpmap:' + IntToStr(PayloadType) + ' ' + EncodingName + #13#10
-        + 'm=audio 8002 RTP/AVP ' + IntToStr(TEPayloadType) + #13#10
-        + 'a=rtpmap:' + IntToStr(TEPayloadType) + ' ' + TEEncodingName + #13#10;
-
-  // We need two streams to match the number of streams in SDP
-  LocalSDP := 'v=0'#13#10
-            + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
-            + 's=-'#13#10
-            + 'c=IN IP4 127.0.0.1'#13#10
-            + 'm=audio 9000 RTP/AVP 0'#13#10
-            + 'm=audio 9002 RTP/AVP 0'#13#10;
-
-  Check(not Self.MS.RemoteProfile.HasPayloadType(PayloadType),
-        'Sanity check: profile already knows about ' + EncodingName + '!');
-  Check(not Self.MS.RemoteProfile.HasPayloadType(TEPayloadType),
-        'Sanity check: profile already knows about ' + TEEncodingName + '!');
-
-  Self.MS.StartListening(LocalSDP);
-  Self.MS.SetRemoteDescription(SDP);
-
-  Check(Self.MS.RemoteProfile.HasPayloadType(PayloadType),
-        EncodingName + ' not registered');
-  Check(Self.MS.RemoteProfile.HasPayloadType(TEPayloadType),
-        TEEncodingName + ' not registered');
-end;
-
-procedure TestTIdSDPMultimediaSession.TestStartListeningTriesConsecutivePorts;
-const
-  BlockedPort = 8000;
-var
-  PortBlocker: TIdMockRTPPeer;
-  SDP:         String;
-begin
-  PortBlocker := TIdMockRTPPeer.Create;
-  try
-    PortBlocker.Address := '127.0.0.1';
-    PortBlocker.RTPPort := BlockedPort;
-    PortBlocker.Active  := true;
-
-    CheckPortActive('127.0.0.1', BlockedPort, 'The PortBlocker isn''t blocking the port');
-
-    SDP :=  'v=0'#13#10
-          + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
-          + 's=-'#13#10
-          + 'c=IN IP4 127.0.0.1'#13#10
-          + 'm=text ' + IntToStr(BlockedPort) + ' RTP/AVP 0'#13#10;
-
-    SDP := Self.MS.StartListening(SDP);
-    CheckPortActive('127.0.0.1', BlockedPort + 2, 'Next available RTP port not used');
-
-    Check(Pos(IntToStr(BlockedPort + 2), SDP) > 0,
-          'Expected actual port (' + IntToStr(BlockedPort + 2)
-        + ') not present in resultant SDP');
-
-    Self.MS.StopListening;
-
-    CheckPortFree('127.0.0.1', BlockedPort + 2, 'Port not closed');
-  finally
-    PortBlocker.Free;
   end;
 end;
 

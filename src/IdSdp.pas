@@ -572,6 +572,8 @@ type
     procedure OnSendRTP(Packet: TIdRTPPacket;
                         Binding: TIdConnection);
     procedure RecreateServers(NumberOfServers: Cardinal);
+    procedure RegisterEncodingMaps(Profile: TIdRTPProfile;
+                                   Maps: TIdSdpRTPMapAttributes);
     function  ServerAt(Index: Integer): TIdBaseRTPAbstractPeer;
     procedure SetDirection(Value: TIdSdpDirection);
     procedure SetLocalDescription(const Value: TIdSdpMediaDescription);
@@ -580,6 +582,8 @@ type
     procedure SetRemoteProfile(Value: TIdRTPProfile);
     procedure SetTimer(Value: TIdTimerQueue);
     procedure StartServers;
+    procedure UnregisterEncodingMaps(Profile: TIdRTPProfile;
+                                     Maps: TIdSdpRTPMapAttributes);
   public
     constructor Create; overload;
     constructor Create(ServerType: TIdBaseRTPAbstractPeerClass); overload;
@@ -626,12 +630,10 @@ type
     FirstLocalSessDesc:   Boolean;
     fLocalMachineName:      String;
     fLowestAllowedPort:   Cardinal;
-    fLocalProfile:        TIdRTPProfile;
     fLocalSessionID:      String;
     fLocalSessionName:    String;
     fLocalSessionVersion: Int64;
     fOnHold:              Boolean;
-    fRemoteProfile:       TIdRTPProfile;
     fStreams:             TObjectList;
     fUsername:            String;
     ServerType:           TIdBaseRTPAbstractPeerClass;
@@ -643,8 +645,6 @@ type
     procedure InternalCreate(Profile: TIdRTPProfile);
     function  GetStreams(Index: Integer): TIdSDPMediaStream;
     procedure RecreateStreams(NumberOfStreams: Cardinal);
-    procedure RegisterEncodingMaps(Profile: TIdRTPProfile;
-                                   Maps: TIdSdpRTPMapAttributes); overload;
     procedure SetHighestAllowedPort(Value: Cardinal);
     procedure SetLocalMachineName(Value: String);
     procedure SetLowestAllowedPort(Value: Cardinal);
@@ -673,11 +673,9 @@ type
 
     property HighestAllowedPort:      Cardinal          read fHighestAllowedPort write SetHighestAllowedPort;
     property LocalMachineName:        String            read fLocalMachineName write SetLocalMachineName;
-    property LocalProfile:            TIdRTPProfile     read fLocalProfile;
     property LocalSessionID:          String            read fLocalSessionID write fLocalSessionID;
     property LowestAllowedPort:       Cardinal          read fLowestAllowedPort write SetLowestAllowedPort;
     property OnHold:                  Boolean           read fOnHold;
-    property RemoteProfile:           TIdRTPProfile     read fRemoteProfile;
     property LocalSessionName:        String            read fLocalSessionName write fLocalSessionName;
     property Streams[Index: Integer]: TIdSDPMediaStream read GetStreams;
     property Username:                String            read fUsername write fUsername;
@@ -3875,6 +3873,15 @@ begin
     Self.CreateServer;
 end;
 
+procedure TIdSDPMediaStream.RegisterEncodingMaps(Profile: TIdRTPProfile;
+                                                 Maps: TIdSdpRTPMapAttributes);
+var
+  I: Integer;
+begin
+  for I := 0 to Maps.Count - 1 do
+    Profile.AddEncoding(Maps.Items[I].Encoding, Maps.Items[I].PayloadType);
+end;
+
 function TIdSDPMediaStream.ServerAt(Index: Integer): TIdBaseRTPAbstractPeer;
 begin
   Result := Self.Servers[Index] as TIdBaseRTPAbstractPeer;
@@ -3889,7 +3896,12 @@ procedure TIdSDPMediaStream.SetLocalDescription(const Value: TIdSdpMediaDescript
 begin
   Assert(Value.PortCount > 0, 'You have to have a PortCount of at least 1.');
 
+  Self.UnregisterEncodingMaps(Self.LocalProfile,
+                              Self.LocalDescription.RTPMapAttributes);
+
   Self.fLocalDescription.Assign(Value);
+  Self.RegisterEncodingMaps(Self.LocalProfile,
+                            Value.RTPMapAttributes);
 
   Self.InitializeLocalRTPServers;
 end;
@@ -3902,6 +3914,9 @@ end;
 procedure TIdSDPMediaStream.SetRemoteDescription(const Value: TIdSdpMediaDescription);
 begin
   Self.fRemoteDescription.Assign(Value);
+
+  Self.RegisterEncodingMaps(Self.RemoteProfile,
+                            Value.RTPMapAttributes);
 
   Self.InitializeRemoteRTPServers;
 end;
@@ -3927,6 +3942,21 @@ var
 begin
   for I := 0 to Self.Servers.Count - 1 do
     Self.ServerAt(I).Active := true;
+end;
+
+procedure TIdSDPMediaStream.UnregisterEncodingMaps(Profile: TIdRTPProfile;
+                                                   Maps: TIdSdpRTPMapAttributes);
+var
+  I:    Integer;
+  Null: TIdNullPayload;
+begin
+  Null := TIdNullPayload.Create;
+  try
+    for I := 0 to Maps.Count - 1 do
+      Profile.AddEncoding(Null, Maps.Items[I].PayloadType);
+  finally
+    Null.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -3961,9 +3991,6 @@ begin
     Self.StreamLock.Release;
   end;
   Self.StreamLock.Free;
-
-  Self.fRemoteProfile.Free;
-  Self.fLocalProfile.Free;
 
   Self.Timer.Terminate;
 
@@ -4094,14 +4121,8 @@ begin
     if (Self.StreamCount <> RemoteSessionDesc.MediaDescriptionCount) then
       Self.RecreateStreams(RemoteSessionDesc.MediaDescriptionCount);
 
-    for I := 0 to RemoteSessionDesc.MediaDescriptionCount - 1 do begin
-      Self.RegisterEncodingMaps(Self.RemoteProfile,
-                                RemoteSessionDesc.MediaDescriptionAt(I).RTPMapAttributes);
-
-      Self.Streams[I].LocalProfile.Assign(Self.LocalProfile);
-      Self.Streams[I].RemoteProfile.Assign(Self.RemoteProfile);
+    for I := 0 to RemoteSessionDesc.MediaDescriptionCount - 1 do
       Self.Streams[I].RemoteDescription := RemoteSessionDesc.MediaDescriptionAt(I);
-    end;
   finally
     Self.StreamLock.Release;
   end;
@@ -4151,8 +4172,6 @@ begin
     for I := 0 to LocalSessionDesc.MediaDescriptionCount - 1 do begin
       Self.Streams[I].LocalDescription := LocalSessionDesc.MediaDescriptionAt(I);
       Self.Streams[I].StartListening;
-      Self.RegisterEncodingMaps(Self.LocalProfile,
-                                LocalSessionDesc.MediaDescriptionAt(I).RTPMapAttributes);
     end;
 
     Self.UpdateSessionVersion;
@@ -4216,12 +4235,6 @@ end;
 
 procedure TIdSDPMultimediaSession.InternalCreate(Profile: TIdRTPProfile);
 begin
-  Self.fLocalProfile  := TIdRTPProfile.Create;
-  Self.fRemoteProfile := TIdRTPProfile.Create;
-
-  Self.LocalProfile.Assign(Profile);
-  Self.RemoteProfile.Assign(Profile);
-
   Self.fStreams := TObjectList.Create;
   Self.StreamLock := TCriticalSection.Create;
 
@@ -4301,15 +4314,6 @@ begin
   else begin
     Inc(Self.fLocalSessionVersion);
   end;
-end;
-
-procedure TIdSDPMultimediaSession.RegisterEncodingMaps(Profile: TIdRTPProfile;
-                                                       Maps: TIdSdpRTPMapAttributes);
-var
-  I: Integer;
-begin
-  for I := 0 to Maps.Count - 1 do
-    Profile.AddEncoding(Maps.Items[I].Encoding, Maps.Items[I].PayloadType);
 end;
 
 end.
