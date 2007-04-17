@@ -31,6 +31,7 @@ type
 
     procedure CheckEventScheduled(Msg: String);
     procedure CheckTwoEventsArrivedNonDeterministicOrder(ExpectedA, ExpectedB, ReceivedFirst, ReceivedSecond: String);
+    procedure CheckWaitTriggered(Msg: String);
     procedure MarkEventCount;
     procedure OnRTCP(Packet: TIdRTCPPacket;
                      Binding: TIdConnection);
@@ -262,6 +263,11 @@ begin
   end;
 end;
 
+procedure TestTIdRTPServer.CheckWaitTriggered(Msg: String);
+begin
+  Check(Self.EventCount > Self.Timer.EventCount, Msg);
+end;
+
 procedure TestTIdRTPServer.MarkEventCount;
 begin
   Self.EventCount := Self.Timer.EventCount;
@@ -400,6 +406,7 @@ begin
   CheckEventScheduled('No Wait scheduled for received RTP');
 
   LastEvent := Self.Timer.LastEventScheduled(TIdRTPReceivePacketWait) as TIdRTPReceivePacketWait;
+  Check(Assigned(LastEvent), 'No TIdRTPReceivePacketWait scheduled');
 
   CheckEquals(Self.Server.Address, LastEvent.ReceivedFrom.LocalIP,   'Local IP address');
   CheckEquals(Self.Server.RTPPort, LastEvent.ReceivedFrom.LocalPort, 'Local port');
@@ -425,6 +432,10 @@ begin
               IntToHex(ReceivedPacket.Timestamp, 8),                 'Packet Timestamp');
   CheckEquals(IntToHex(Self.Packet.SyncSrcID, 8),
               IntToHex(ReceivedPacket.SyncSrcID, 8),                 'Packet SyncSrcID');
+
+  Self.MarkEventCount;
+  Self.Timer.TriggerAllEventsUpToFirst(TIdRTPReceivePacketWait);
+  CheckWaitTriggered('A receive event was rescheduled');
 end;
 
 procedure TestTIdRTPServer.TestRTCPComesFromRTCPPort;
