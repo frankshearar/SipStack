@@ -1048,7 +1048,7 @@ begin
         Result := uarDoNotDisturb
       // RFC 3261, section 8.1.1.8 says that a request that can start a dialog
       // (like an INVITE), MUST contain a Contact.
-      else if not Request.HasHeader(ContactHeaderFull) then
+      else if not Request.HasContact then
         Result := uarMissingContact;
     end;
   end;

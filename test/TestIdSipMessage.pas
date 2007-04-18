@@ -84,6 +84,7 @@ type
     procedure TestFirstContact;
     procedure TestFirstHeader;
     procedure TestHasBody;
+    procedure TestHasContact;
     procedure TestHasExpiry;
     procedure TestIsMalformedContentLength;
     procedure TestIsMalformedMalformedHeader;
@@ -1128,7 +1129,24 @@ begin
   Check(Self.Msg.HasBody, 'Body present');
 
   Self.Msg.Body := '';
-  Check(not Self.Msg.HasBody, 'Body cleared');  
+  Check(not Self.Msg.HasBody, 'Body cleared');
+end;
+
+procedure TestTIdSipMessage.TestHasContact;
+begin
+  Self.Msg.ClearHeaders;
+  Check(not Self.Msg.HasContact, 'No headers');
+
+  Self.Msg.AddHeader(ContactHeaderFull);
+  Check(Self.Msg.HasContact, 'Contact header (full)');
+
+  Self.Msg.ClearHeaders;
+  Self.Msg.AddHeader(ContactHeaderShort);
+  Check(Self.Msg.HasContact, 'Contact header (short)');
+
+  Self.Msg.ClearHeaders;
+  Self.Msg.AddHeader(ExpiresHeader);
+  Check(not Self.Msg.HasContact, 'Expires with no Contact header');
 end;
 
 procedure TestTIdSipMessage.TestHasExpiry;
@@ -4156,7 +4174,7 @@ begin
       Check(Request.ToHeader.Equals(Response.ToHeader),
             'To header mismatch');
 
-      Check(Response.HasHeader(ContactHeaderFull), 'Missing Contact header');
+      Check(Response.HasContact, 'Missing Contact header');
     finally
       Response.Free;
     end;

@@ -1228,7 +1228,7 @@ begin
   end;
 
   // Step 6 (or part thereof)
-  if Request.HasHeader(ContactHeaderFull) then begin
+  if Request.HasContact then begin
     if Request.FirstContact.IsWildCard then begin
       if (Request.ContactCount > 1) then begin
         Self.RejectRequest(Request, SIPBadRequest);
@@ -1236,12 +1236,10 @@ begin
         Exit;
       end;
 
-      if Request.FirstContact.WillExpire
-        and (Request.FirstContact.Expires = 0) then
-          Result := true
-      else begin
+      Result := Request.FirstContact.WillExpire and (Request.FirstContact.Expires = 0);
+
+      if not Result then begin
         Self.RejectRequest(Request, SIPBadRequest);
-        Result := false;
         Exit;
       end;
     end

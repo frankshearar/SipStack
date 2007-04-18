@@ -1459,6 +1459,7 @@ type
     function  FirstContact: TIdSipContactHeader;
     function  FirstHeader(const HeaderName: String): TIdSipHeader;
     function  HasBody: Boolean;
+    function  HasContact: Boolean;
     function  HasExpiry: Boolean;
     function  HasHeader(const HeaderName: String): Boolean;
     function  InSameDialogAs(Msg: TIdSipMessage): Boolean;
@@ -8308,6 +8309,11 @@ begin
   Result := Self.Body <> '';
 end;
 
+function TIdSipMessage.HasContact: Boolean;
+begin
+  Result := Self.HasHeader(ContactHeaderFull);
+end;
+
 function TIdSipMessage.HasExpiry: Boolean;
 var
   Contacts: TIdSipContacts;
@@ -8447,7 +8453,7 @@ end;
 
 procedure TIdSipMessage.ProtectAllContacts;
 begin
-  if Self.HasHeader(ContactHeaderFull) then begin
+  if Self.HasContact then begin
     Self.Contacts.First;
     while Self.Contacts.HasNext do begin
       Self.Contacts.CurrentContact.IsUnset := false;
@@ -9494,7 +9500,7 @@ end;
 procedure TIdSipRequest.RewriteLocationHeaders(LocalAddress: TIdSipLocation);
 begin
   // Some messages (like CANCEL) don't have Contact headers.
-  if Self.HasHeader(ContactHeaderFull) then begin
+  if Self.HasContact then begin
     // REGISTERs shouldn't rewrite Contact details: this REGISTER could be
     // registering several URIs (say, this UA and a voicemail URI, etc.).
     //
@@ -10127,7 +10133,7 @@ begin
   // This method assumes that the first Contact header is open to mutation.
   // However, a UA could well have several Contacts. If the first Contact is a
   // mailto URI, this method fails.
-  if Self.HasHeader(ContactHeaderFull) then begin
+  if Self.HasContact then begin
     if Self.FirstContact.IsUnset then begin
       Self.FirstContact.Address.Host := LocalAddress.IPAddress;
       Self.FirstContact.Address.Port := LocalAddress.Port;
