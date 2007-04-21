@@ -39,9 +39,9 @@ type
                          ExpiryTime: TDateTime): Boolean; override;
     function  Binding(const AddressOfRecord: String;
                       const CanonicalUri: String): TIdRegistrarBinding; override;
-    function CollectBindingsFor(const AddressOfRecord: String;
-                                Bindings: TIdSipContacts;
-                                CollectGruus: Boolean): Boolean; override;
+    function  CollectBindingsFor(const AddressOfRecord: String;
+                                 Bindings: TIdSipContacts;
+                                 CollectGruus: Boolean): Boolean; override;
     procedure Commit; override;
     procedure Rollback; override;
     procedure StartTransaction; override;
