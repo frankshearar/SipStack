@@ -115,6 +115,11 @@ type
   //   InstanceID: urn:uuid:00000000-0000-0000-0000-000000000000
   //   UseGruu: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
   //
+  // Registrar-specific directives are:
+  //   ActAsRegistrar: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
+  //   RegistrarDatabase: MOCK|<as yet undefined>
+  //   RegistrarUseGruu: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
+  //
   // Some directives only make sense for mock objects. For instance:
   //   MockRoute: <destination network>/<mask|number of bits><SP><gateway><SP><metric><SP><interface><SP><local address>
   //
@@ -156,6 +161,8 @@ type
                                     Action: TIdSipAction);
     procedure AddPendingUnregister(UserAgent: TIdSipUserAgent;
                                    PendingActions: TObjectList);
+    procedure AddRegistrarModule(UserAgent: TIdSipUserAgent;
+                                 const RegistrarModuleLine: String);
     procedure AddRouteHeader(UserAgent: TIdSipUserAgent;
                        const RouteHeaderLine: String);
     procedure AddRoutingTable(UserAgent: TIdSipAbstractCore;
@@ -168,6 +175,7 @@ type
                        const FailMsg: String);
     function  CreateLayers(Context: TIdTimerQueue): TIdSipUserAgent;
     procedure InstantiateMissingObjectsAsDefaults(UserAgent: TIdSipUserAgent);
+    function  InstantiateRegistrarModule(UserAgent: TIdSipUserAgent): TIdSipRegisterModule;
     procedure ParseFile(UserAgent: TIdSipUserAgent;
                         Configuration: TStrings;
                         PendingActions: TObjectList);
@@ -177,6 +185,10 @@ type
     procedure RegisterUA(UserAgent: TIdSipUserAgent;
                          const RegisterLine: String;
                          PendingActions: TObjectList);
+    procedure SetRegistrarDatabase(UserAgent: TIdSipUserAgent;
+                                   const RegistrarDatabaseLine: String);
+    procedure SetRegistrarUseGruu(UserAgent: TIdSipUserAgent;
+                                  const UseGruuLine: String);
     procedure UseGruu(UserAgent: TIdSipAbstractCore;
                       const UseGruuLine: String);
     procedure UseLocalResolution(UserAgent: TIdSipAbstractCore;
@@ -302,6 +314,7 @@ type
 
 // Configuration file constants
 const
+  ActAsRegistrarDirective                 = 'ActAsRegistrar';
   AuthenticationDirective                 = 'Authentication';
   AutoKeyword                             = 'AUTO';
   ContactDirective                        = ContactHeaderFull;
@@ -315,6 +328,8 @@ const
   MockRouteDirective                      = 'MockRoute';
   NameServerDirective                     = 'NameServer';
   RegisterDirective                       = 'Register';
+  RegistrarDatabaseDirective              = 'RegistrarDatabase';
+  RegistrarUseGruuDirective               = 'RegistrarUseGruu';
   ResolveNamesLocallyFirstDirective       = 'ResolveNamesLocallyFirst';
   ReturnOnlySpecifiedRecordsLocatorOption = 'ReturnOnlySpecifiedRecords';
   RouteHeaderDirective                    = 'Route';
@@ -329,8 +344,8 @@ implementation
 
 uses
   IdMockRoutingTable, IdSimpleParser, IdSipConsts, IdSipDns, IdSipIndyLocator,
-  IdSipLocation, IdSipMockLocator, IdSipSubscribeModule, IdSystem, IdUnicode,
-  SysUtils;
+  IdSipLocation, IdSipMockBindingDatabase, IdSipMockLocator,
+  IdSipSubscribeModule, IdSystem, IdUnicode, SysUtils;
 
 //******************************************************************************
 //* Unit Public functions & procedures                                         *
@@ -948,6 +963,20 @@ begin
     Self.AddPendingMessageSend(PendingActions, UserAgent.UnregisterFrom(Reg.Registrar));
 end;
 
+procedure TIdSipStackConfigurator.AddRegistrarModule(UserAgent: TIdSipUserAgent;
+                                                     const RegistrarModuleLine: String);
+var
+  Line: String;
+begin
+  // See class comment for the format for this directive.
+  Line := RegistrarModuleLine;
+  EatDirective(Line);
+
+  if not UserAgent.UsesModule(TIdSipRegisterModule) and Self.StrToBool(Line) then begin
+    UserAgent.AddModule(TIdSipRegisterModule)
+  end;
+end;
+
 procedure TIdSipStackConfigurator.AddRouteHeader(UserAgent: TIdSipUserAgent;
                                                  const RouteHeaderLine: String);
 var
@@ -1089,6 +1118,14 @@ begin
     Self.AddAutoAddress(UserAgent.From);
 end;
 
+function TIdSipStackConfigurator.InstantiateRegistrarModule(UserAgent: TIdSipUserAgent): TIdSipRegisterModule;
+begin
+  if not UserAgent.UsesModule(TIdSipRegisterModule) then
+    Result := UserAgent.AddModule(TIdSipRegisterModule) as TIdSipRegisterModule
+  else
+    Result := UserAgent.ModuleFor(TIdSipRegisterModule) as TIdSipRegisterModule;
+end;
+
 procedure TIdSipStackConfigurator.ParseFile(UserAgent: TIdSipUserAgent;
                                             Configuration: TStrings;
                                             PendingActions: TObjectList);
@@ -1109,7 +1146,9 @@ begin
   Line := ConfigurationLine;
   FirstToken := Trim(Fetch(Line, ':', false));
 
-  if      IsEqual(FirstToken, AuthenticationDirective) then
+  if      IsEqual(FirstToken, ActAsRegistrarDirective) then
+    Self.AddRegistrarModule(UserAgent, ConfigurationLine)
+  else if IsEqual(FirstToken, AuthenticationDirective) then
     Self.AddAuthentication(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, FromDirective) then
     Self.AddFrom(UserAgent, ConfigurationLine)
@@ -1127,6 +1166,10 @@ begin
     Self.AddLocator(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, RegisterDirective) then
     Self.RegisterUA(UserAgent, ConfigurationLine, PendingActions)
+  else if IsEqual(FirstToken, RegistrarDatabaseDirective) then
+    Self.SetRegistrarDatabase(UserAgent, ConfigurationLine)
+  else if IsEqual(FirstToken, RegistrarUseGruuDirective) then
+    Self.SetRegistrarUseGruu(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, ResolveNamesLocallyFirstDirective) then
     Self.UseLocalResolution(UserAgent, ConfigurationLine, PendingActions)
   else if IsEqual(FirstToken, RouteHeaderDirective) then
@@ -1165,11 +1208,43 @@ begin
   end;
 end;
 
+procedure TIdSipStackConfigurator.SetRegistrarDatabase(UserAgent: TIdSipUserAgent;
+                                                       const RegistrarDatabaseLine: String);
+var
+  Line:   String;
+  RegMod: TIdSipRegisterModule;
+begin
+  Line := RegistrarDatabaseLine;
+  EatDirective(Line);
+
+  RegMod := Self.InstantiateRegistrarModule(UserAgent);
+
+  if IsEqual(Line, MockKeyword) then
+    RegMod.BindingDB := TIdSipMockBindingDatabase.Create;
+
+  // Fallback position: it means someone specified an unknown database type.
+  if not Assigned(RegMod.BindingDB) then
+    RegMod.BindingDB := TIdSipMockBindingDatabase.Create;
+end;
+
+procedure TIdSipStackConfigurator.SetRegistrarUseGruu(UserAgent: TIdSipUserAgent;
+                                                      const UseGruuLine: String);
+var
+  Line:   String;
+  RegMod: TIdSipRegisterModule;
+begin
+  Line := UseGruuLine;
+  EatDirective(Line);
+
+  RegMod := Self.InstantiateRegistrarModule(UserAgent);
+
+  RegMod.UseGruu := Self.StrToBool(Line);
+end;
+
 procedure TIdSipStackConfigurator.UseGruu(UserAgent: TIdSipAbstractCore;
                                           const UseGruuLine: String);
 var
   Line: String;
-
 begin
   Line := UseGruuLine;
   EatDirective(Line);

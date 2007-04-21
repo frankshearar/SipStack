@@ -145,17 +145,24 @@ type
     procedure TestViaMatchesTransportParameter;
   end;
 
-  TestTIdSipStackConfigurator = class(TThreadingTestCase)
+  TStackConfigurationTestCase = class(TThreadingTestCase)
+  protected
+    Address:       String;
+    Conf:          TIdSipStackConfigurator;
+    Configuration: TStrings;
+    Port:          Cardinal;
+    Timer:         TIdTimerQueue;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSipStackConfigurator = class(TStackConfigurationTestCase)
   private
-    Address:                    String;
-    Conf:                       TIdSipStackConfigurator;
-    Configuration:              TStrings;
     NewRegistrar:               TIdUdpServer;
     NewRegistrarReceivedPacket: Boolean;
     NewRegistrarEvent:          TEvent;
-    Port:                       Cardinal;
     ReceivedPacket:             Boolean;
-    Timer:                      TIdTimerQueue;
     Server:                     TIdUdpServer;
 
     function  ARecords: String;
@@ -231,6 +238,20 @@ type
     procedure TestUpdateConfigurationWithTransport;
   end;
 
+  TestConfigureRegistrar = class(TStackConfigurationTestCase)
+  private
+    procedure CheckMockDatabase(Configuration: TStrings);
+    procedure CheckUseGruu(ExpectedUseGruu: Boolean);
+  published
+    procedure TestActAsRegistrarDirectiveCreatesRegistrarModule;
+    procedure TestDatabaseDirectiveImpliesActAsRegistrarDirective;
+    procedure TestDatabaseDirectiveMock;
+    procedure TestDatabaseDirectiveUnknown;
+    procedure TestMisorderedDatabaseDirectiveMock;
+    procedure TestMisorderedUseGruuDirective;
+    procedure TestUseGruuDirective;
+  end;
+
   // These tests exercise the SIP discovery algorithms as defined in RFC 3263.
   TestLocation = class(TTestCaseTU,
                        IIdSipActionListener,
@@ -290,10 +311,10 @@ implementation
 
 uses
   IdException, IdMockRoutingTable, IdSdp, IdSimpleParser, IdSipAuthentication,
-  IdSipConsts, IdSipDns, IdSipIndyLocator, IdSipMockLocator,
-  IdSipMockTransactionDispatcher, IdSipMockTransport, IdSipSubscribeModule,
-  IdSipTCPTransport, IdSipUDPTransport, IdSystem, IdTcpClient, IdUnicode,
-  SysUtils;
+  IdSipConsts, IdSipDns, IdSipIndyLocator, IdSipMockBindingDatabase,
+  IdSipMockLocator, IdSipMockTransactionDispatcher, IdSipMockTransport,
+  IdSipRegistration, IdSipSubscribeModule, IdSipTCPTransport, IdSipUDPTransport,
+  IdSystem, IdTcpClient, IdUnicode, SysUtils;
 
 const
   // SFTF: Sip Foundry Test Framework. cf. http://www.sipfoundry.org/sftf/
@@ -345,6 +366,7 @@ begin
   Result := TTestSuite.Create('IdSipUserAgent unit tests');
   Result.AddTest(TestTIdSipUserAgent.Suite);
   Result.AddTest(TestTIdSipStackConfigurator.Suite);
+  Result.AddTest(TestConfigureRegistrar.Suite);
   Result.AddTest(TestLocation.Suite);
   Result.AddTest(TestTIdSipReconfigureStackWait.Suite);
 end;
@@ -1983,6 +2005,37 @@ begin
 end;
 
 //******************************************************************************
+//* TStackConfigurationTestCase                                                *
+//******************************************************************************
+//* TStackConfigurationTestCase Public methods *********************************
+
+procedure TStackConfigurationTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  TIdSipTransportRegistry.RegisterTransportType(TcpTransport, TIdSipTCPTransport);
+  TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipUDPTransport);
+
+  Self.Address       := '127.0.0.1';
+  Self.Conf          := TIdSipStackConfigurator.Create;
+  Self.Configuration := TStringList.Create;
+  Self.Port          := 15060;
+  Self.Timer         := TIdTimerQueue.Create(true);
+end;
+
+procedure TStackConfigurationTestCase.TearDown;
+begin
+  Self.Configuration.Free;
+  Self.Conf.Free;
+  Self.Timer.Terminate;
+
+  TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
+  TIdSipTransportRegistry.UnregisterTransportType(TcpTransport);
+
+  inherited TearDown;
+end;
+
+//******************************************************************************
 //* TestTIdSipStackConfigurator                                                *
 //******************************************************************************
 //* TestTIdSipStackConfigurator Public methods *********************************
@@ -1991,20 +2044,15 @@ procedure TestTIdSipStackConfigurator.SetUp;
 begin
   inherited SetUp;
 
-  Self.Address           := '127.0.0.1';
-  Self.Conf              := TIdSipStackConfigurator.Create;
-  Self.Configuration     := TStringList.Create;
   Self.NewRegistrarEvent := TSimpleEvent.Create;
-  Self.Port              := 15060;
-  Self.Timer             := TIdTimerQueue.Create(true);
 
-  Self.NewRegistrar  := TIdUDPServer.Create(nil);
+  Self.NewRegistrar := TIdUDPServer.Create(nil);
   Self.NewRegistrar.DefaultPort   := Self.Port + 11000;
   Self.NewRegistrar.OnUDPRead     := Self.NoteReceiptOfPacketOldRegistrar;
   Self.NewRegistrar.ThreadedEvent := true;
   Self.NewRegistrar.Active        := true;
 
-  Self.Server        := TIdUDPServer.Create(nil);
+  Self.Server := TIdUDPServer.Create(nil);
   Self.Server.DefaultPort   := Self.Port + 10000;
   Self.Server.OnUDPRead     := Self.NoteReceiptOfPacket;
   Self.Server.ThreadedEvent := true;
@@ -2012,8 +2060,6 @@ begin
 
   TIdSipEventPackageRegistry.RegisterEvent(TIdSipTargetDialogPackage);
   TIdSipEventPackageRegistry.RegisterEvent(TIdSipReferPackage);
-  TIdSipTransportRegistry.RegisterTransportType(TcpTransport, TIdSipTCPTransport);
-  TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipUDPTransport);
 
   Self.NewRegistrarReceivedPacket := false;
   Self.ReceivedPacket             := false;
@@ -2023,15 +2069,10 @@ procedure TestTIdSipStackConfigurator.TearDown;
 begin
   TIdSipEventPackageRegistry.UnregisterEvent(TIdSipReferPackage);
   TIdSipEventPackageRegistry.UnregisterEvent(TIdSipTargetDialogPackage);
-  TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
-  TIdSipTransportRegistry.UnregisterTransportType(TcpTransport);
 
   Self.Server.Free;
   Self.NewRegistrar.Free;
-  Self.Timer.Terminate;
   Self.NewRegistrarEvent.Free;
-  Self.Configuration.Free;
-  Self.Conf.Free;
 
   inherited TearDown;
 end;
@@ -3290,6 +3331,142 @@ begin
   finally
     UA.Free;
   end;
+end;
+
+//******************************************************************************
+//* TestConfigureRegistrar                                                     *
+//******************************************************************************
+//* TestConfigureRegistrar Private methods *************************************
+
+procedure TestConfigureRegistrar.CheckMockDatabase(Configuration: TStrings);
+var
+  RegMod: TIdSipRegisterModule;
+  UA:     TIdSipUserAgent;
+begin
+  UA := Self.Conf.CreateUserAgent(Configuration, Self.Timer);
+  try
+    Check(UA.UsesModule(TIdSipRegisterModule), 'Registrar module not instantiated');
+
+    RegMod := UA.ModuleFor(TIdSipRegisterModule) as TIdSipRegisterModule;
+    Check(Assigned(RegMod.BindingDB), 'Database not instantiated: directive ignored');
+
+    CheckEquals(TIdSipMockBindingDatabase.ClassName,
+                (UA.ModuleFor(TIdSipRegisterModule) as TIdSipRegisterModule).BindingDB.ClassName,
+                'Database type');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestConfigureRegistrar.CheckUseGruu(ExpectedUseGruu: Boolean);
+var
+  RegMod: TIdSipRegisterModule;
+  UA:     TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('NameServer: MOCK');
+  Self.Configuration.Add('ActAsRegistrar: true');
+  Self.Configuration.Add('RegistrarUseGruu: ' + Self.BoolToStr(ExpectedUseGruu));
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Check(UA.UsesModule(TIdSipRegisterModule), 'Registrar module not instantiated');
+
+    RegMod := UA.ModuleFor(TIdSipRegisterModule) as TIdSipRegisterModule;
+    CheckEquals(ExpectedUseGruu, RegMod.UseGruu, 'UseGruu directive not obeyed');
+  finally
+    UA.Free;
+  end;
+end;
+
+//* TestConfigureRegistrar Published methods ***********************************
+
+procedure TestConfigureRegistrar.TestActAsRegistrarDirectiveCreatesRegistrarModule;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('NameServer: MOCK');
+  Self.Configuration.Add('ActAsRegistrar: true');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Check(UA.UsesModule(TIdSipRegisterModule), 'User agent can''t act as a registrar');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestConfigureRegistrar.TestDatabaseDirectiveMock;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('NameServer: MOCK');
+  Self.Configuration.Add('ActAsRegistrar: true');
+  Self.Configuration.Add('RegistrarDatabase: MOCK');
+
+  Self.CheckMockDatabase(Self.Configuration);
+end;
+
+procedure TestConfigureRegistrar.TestDatabaseDirectiveUnknown;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('NameServer: MOCK');
+  Self.Configuration.Add('ActAsRegistrar: true');
+  Self.Configuration.Add('RegistrarDatabase: MOCKMOCK');
+
+  Self.CheckMockDatabase(Self.Configuration);
+end;
+
+procedure TestConfigureRegistrar.TestMisorderedDatabaseDirectiveMock;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('NameServer: MOCK');
+  Self.Configuration.Add('RegistrarDatabase: MOCK');
+  Self.Configuration.Add('ActAsRegistrar: true');
+
+  Self.CheckMockDatabase(Self.Configuration);
+end;
+
+procedure TestConfigureRegistrar.TestMisorderedUseGruuDirective;
+var
+  UA: TIdSipUserAgent;
+begin
+  // Check that User Agent creation doesn't blow up just because
+  // RegistrarUseGruuDirective occurs before ActAsRegistrarDirective.
+
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('NameServer: MOCK');
+  Self.Configuration.Add('RegistrarUseGruu: true');
+  Self.Configuration.Add('ActAsRegistrar: true');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Check(UA.UsesModule(TIdSipRegisterModule), 'Registrar module not instantiated');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestConfigureRegistrar.TestDatabaseDirectiveImpliesActAsRegistrarDirective;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('NameServer: MOCK');
+  Self.Configuration.Add('RegistrarDatabase: MOCK');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Check(UA.UsesModule(TIdSipRegisterModule), 'Registrar module not instantiated');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestConfigureRegistrar.TestUseGruuDirective;
+begin
+  CheckUseGruu(true);
+  CheckUseGruu(false);
 end;
 
 //******************************************************************************
