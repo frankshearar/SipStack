@@ -96,7 +96,7 @@ type
   end;
 
   TestTIdSipInboundRegistration = class(TestTIdSipRegistration)
-  private     
+  private
     RegisterAction: TIdSipInboundRegistration;
   public
     procedure SetUp; override;
@@ -317,10 +317,10 @@ end;
 
 procedure TestTIdSipRegistrar.TearDown;
 begin
+  // The registrar will free Self.DB.
   Self.Request.Free;
   Self.Registrar.Free;
   Self.Dispatch.Free;
-  Self.DB.Free;
 
   inherited TearDown;
 end;
@@ -990,8 +990,8 @@ end;
 
 procedure TestTIdSipRegistration.TearDown;
 begin
+  // The RegisterModule will free the BindingDB.
   Self.Contacts.Free;
-  Self.RegisterModule.BindingDB.Free;
 
   inherited TearDown;
 end;
@@ -1136,7 +1136,7 @@ end;
 
 procedure TestTIdSipOutboundRegisterBase.TearDown;
 begin
-  Self.Registrar.BindingDB.Free;
+  // The RegisterModule will free the BindingDB.
   Self.Registrar.Free;
 
   inherited TearDown;

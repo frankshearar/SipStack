@@ -241,6 +241,8 @@ type
 
   // I implement that functionality necessary for a User Agent to respond to
   // REGISTER messages, that is, to act as a registrar.
+  //
+  // Give me a BindingDB and I will free it.
   TIdSipRegisterModule = class(TIdSipMessageModule)
   private
     fBindingDB:         TIdSipAbstractBindingDatabase;
@@ -254,6 +256,7 @@ type
     function WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; override;
   public
     constructor Create(UA: TIdSipAbstractCore); override;
+    destructor  Destroy; override;
 
     function Accept(Request: TIdSipRequest;
                     Binding: TIdSipConnectionBindings): TIdSipAction; override;
@@ -1048,6 +1051,14 @@ begin
   Self.AcceptsMethodsList.Add(MethodRegister);
 end;
 
+destructor TIdSipRegisterModule.Destroy;
+begin
+  if Assigned(Self.BindingDB) then
+    Self.BindingDB.Free;
+
+  inherited Destroy;
+end;
+
 function TIdSipRegisterModule.Accept(Request: TIdSipRequest;
                                      Binding: TIdSipConnectionBindings): TIdSipAction;
 begin
@@ -1091,7 +1102,9 @@ end;
 procedure TIdSipRegisterModule.SetBindingDB(Value: TIdSipAbstractBindingDatabase);
 begin
   Self.fBindingDB := Value;
-  Self.fBindingDB.UseGruu := Self.fUseGruu;
+
+  if Assigned(Value) then
+    Self.fBindingDB.UseGruu := Self.fUseGruu;
 end;
 
 procedure TIdSipRegisterModule.SetUseGruu(Value: Boolean);
