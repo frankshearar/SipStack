@@ -74,6 +74,7 @@ type
     procedure TestAssign;
     procedure TestAssignWithUnknownBandwidthType;
     procedure TestPrintOn;
+    procedure TestPrintOnUnknownBandwidthType;
   end;
 
   TestTIdSdpConnection = class(TTestCase)
@@ -1181,6 +1182,17 @@ begin
   Self.B.PrintOn(Self.S);
 
   CheckEquals('b=CT:42'#13#10, S.DataString, 'PrintOn');
+end;
+
+procedure TestTIdSdpBandwidth.TestPrintOnUnknownBandwidthType;
+begin
+  Self.B.BandwidthType := btUnknown;
+  Self.B.BandwidthName := 'TIAS';
+  Self.B.Bandwidth     := 42;
+
+  Self.B.PrintOn(Self.S);
+
+  CheckEquals('b=TIAS:42'#13#10, S.DataString, 'PrintOn with unknown bandwidth type');
 end;
 
 //******************************************************************************
