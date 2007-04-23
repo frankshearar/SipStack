@@ -72,6 +72,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAssign;
+    procedure TestAssignWithUnknownBandwidthType;
     procedure TestPrintOn;
   end;
 
@@ -382,6 +383,7 @@ type
     procedure TestParseBandwidth;
     procedure TestParseBandwidthMalformed;
     procedure TestParseBandwidthMultipleHeaders;
+    procedure TestParseBandwidthUnknown;
     procedure TestParseConnectionInSessionAndMediaDescription;
     procedure TestParseConnectionMalformed;
     procedure TestParseConnectionMalformedMulticastAddress;
@@ -419,6 +421,7 @@ type
     procedure TestParseMediaDescriptionMissingPort;
     procedure TestParseMediaDescriptionsMissingSessionConnection;
     procedure TestParseMediaDescriptions;
+    procedure TestParseMediaDescriptionUnknownBandwidthType;
     procedure TestParseMediaDescriptionUnknownMediaType;
     procedure TestParseMediaDescriptionUnknownTransport;
     procedure TestParseMediaDescriptionWithAttributes;
@@ -811,17 +814,11 @@ var
   BT: TIdSdpBandwidthType;
 begin
   for BT := Low(TIdSdpBandwidthType) to High(TIdSdpBandwidthType) do
-    StrToBandwidthType(BandwidthTypeToStr(BT));
+    if (BT <> btUnknown) then
+      Check(BT = StrToBandwidthType(BandwidthTypeToStr(BT)),
+            'Ord(BT) = ' + IntToStr(Ord(BT)));
 
-  try
-    StrToBandwidthType('halloo');
-    Fail('Failed to bail out: ''halloo''');
-  except
-    on E: EConvertError do
-      CheckEquals('Couldn''t convert ''halloo'' to type TIdSdpBandwidthType',
-                  E.Message,
-                  'Unexpected exception: ''halloo''');
-  end;
+  Check(btUnknown = StrToBandwidthType('halloo'), 'Converting ''halloo''');
 
   try
     StrToBandwidthType(' ');
@@ -1150,6 +1147,26 @@ begin
 
     Self.B.Assign(Other);
     Check(Other.BandwidthType = Self.B.BandwidthType, 'BandwidthType');
+    CheckEquals(Other.BandwidthName, Self.B.BandwidthName, 'BandwidthName');
+    CheckEquals(Other.Bandwidth, Self.B.Bandwidth, 'Bandwidth');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TestTIdSdpBandwidth.TestAssignWithUnknownBandwidthType;
+var
+  Other: TIdSdpBandwidth;
+begin
+  Other := TIdSdpBandwidth.Create;
+  try
+    Other.BandwidthType := btUnknown;
+    Other.BandwidthName := 'TIAS';
+    Other.Bandwidth     := 42;
+
+    Self.B.Assign(Other);
+    Check(Other.BandwidthType = Self.B.BandwidthType, 'BandwidthType');
+    CheckEquals(Other.BandwidthName, Self.B.BandwidthName, 'BandwidthName');
     CheckEquals(Other.Bandwidth, Self.B.Bandwidth, 'Bandwidth');
   finally
     Other.Free;
@@ -4049,7 +4066,7 @@ end;
 procedure TestTIdSdpParser.TestIsBandwidthType;
 begin
   Check(not TIdSdpParser.IsBandwidthType(''),                         '''''');
-  Check(not TIdSdpParser.IsBandwidthType('ct'),                       'ct');
+  Check(    TIdSdpParser.IsBandwidthType('ct'),                       'ct');
   Check(    TIdSdpParser.IsBandwidthType('CT'),                       'CT');
   Check(    TIdSdpParser.IsBandwidthType(Id_SDP_ConferenceTotal),     'Id_SDP_ConferenceTotal constant');
   Check(    TIdSdpParser.IsBandwidthType('AS'),                       'AS');
@@ -4058,6 +4075,7 @@ begin
   Check(    TIdSdpParser.IsBandwidthType(Id_SDP_RS),                  'Id_SDP_RS constant');
   Check(    TIdSdpParser.IsBandwidthType('RR'),                       'RR');
   Check(    TIdSdpParser.IsBandwidthType(Id_SDP_RR),                  'Id_SDP_RR constant');
+  Check(    TIdSdpParser.IsBandwidthType('1Unknown2BWtype'),          '1Unknown2BWtype');
 end;
 
 procedure TestTIdSdpParser.TestIsByteString;
@@ -4379,6 +4397,27 @@ begin
     CheckEquals(666,                Self.Payload.Bandwidths[0].Bandwidth,     '[0].Bandwidth');
     Check      (btConferenceTotal = Self.Payload.Bandwidths[1].BandwidthType, '[1].BandwidthType');
     CheckEquals(123,                Self.Payload.Bandwidths[1].Bandwidth,     '[1].Bandwidth');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdSdpParser.TestParseBandwidthUnknown;
+const
+  TIAS = 'TIAS';
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(MinimumPayload
+                          + 'b=' + TIAS + ':666'#13#10);
+  try
+    Self.P.Source := S;
+
+    Self.P.Parse(Self.Payload);
+    CheckEquals(1,          Self.Payload.Bandwidths.Count,            'Bandwidths.Count');
+    Check      (btUnknown = Self.Payload.Bandwidths[0].BandwidthType, 'BandwidthType');
+    CheckEquals(TIAS,       Self.Payload.Bandwidths[0].BandwidthName, 'BandwidthName');
+    CheckEquals(666,        Self.Payload.Bandwidths[0].Bandwidth,     'Bandwidth');
   finally
     S.Free;
   end;
@@ -5083,6 +5122,28 @@ begin
                 Self.Payload.MediaDescriptionAt(I).Formats[0],
                 'MediaDescriptions[' + IntToStr(I) + '].Formats[0]');
     end;
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdSdpParser.TestParseMediaDescriptionUnknownBandwidthType;
+const
+  TIAS = 'TIAS';
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(MinimumPayload
+                          + 'm=audio 65535 RTP/AVP 0'#13#10
+                          + 'i=Information'#13#10
+                          + 'b=' + TIAS + ':35200'#13#10);
+  try
+    Self.P.Source := S;
+
+    Self.P.Parse(Self.Payload);
+
+    CheckEquals(1, Self.Payload.MediaDescriptionAt(0).Bandwidths.Count, 'Number of bandwidth attributes');
+    CheckEquals(TIAS, Self.Payload.MediaDescriptionAt(0).Bandwidths[0].BandwidthName, 'Bandwidth header not properly parsed');
   finally
     S.Free;
   end;

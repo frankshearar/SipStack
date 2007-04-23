@@ -21,7 +21,7 @@ uses
 
 type
   TIdNtpTimestamp     = Int64;
-  TIdSdpBandwidthType = (btConferenceTotal, btApplicationSpecific, btRS, btRR);
+  TIdSdpBandwidthType = (btConferenceTotal, btApplicationSpecific, btRS, btRR, btUnknown);
   TIdSdpDirection     = (sdInactive, sdRecvOnly, sdSendOnly, sdSendRecv);
   TIdSdpKeyType       = (ktClear, ktBase64, ktURI, ktPrompt);
   // Technically, Text doesn't exist. However, it will once
@@ -85,15 +85,21 @@ type
     property Encoding:    TIdRTPPayload     read fEncoding;
   end;
 
+  // Usually you need only look at my BandwidthType property. However, if you
+  // receive an SDP with some unknown bandwidth type, my BandwidthType will be
+  // btUnknown, and then you can look at my BandwidthName property to see what
+  // kind of bandwidth constraint I represent.
   TIdSdpBandwidth = class(TIdPrintable)
   private
     fBandwidth:     Cardinal;
+    fBandwidthName: String;
     fBandwidthType: TIdSdpBandwidthType;
   public
     procedure Assign(Src: TPersistent); override;
     procedure PrintOn(Dest: TStream); override;
 
     property Bandwidth:     Cardinal            read fBandwidth write fBandwidth;
+    property BandwidthName: String              read fBandwidthName write fBandwidthName;
     property BandwidthType: TIdSdpBandwidthType read fBandwidthType write fBandwidthType;
   end;
 
@@ -706,7 +712,8 @@ const
   UnknownOptionalHeader = 'Unknown optional header: ''%s''';
 
 const
-  SafeChars = Alphabet + Digits + ['''', '-', '.', '/', ':', '?', '#',
+  AlphanumericChars = Alphabet + Digits;
+  SafeChars = AlphanumericChars + ['''', '-', '.', '/', ':', '?', '#',
                '$', '&', '*', ';', '=', '@', '[', ']', '^', '_', '`', '{', '|',
                '}', '+', '~', '"'];
   EmailSafeChars = SafeChars + [' ', #9];
@@ -726,6 +733,7 @@ const
   Id_SDP_ApplicationSpecific = 'AS';
   Id_SDP_RS                  = 'RS';
   Id_SDP_RR                  = 'RR';
+  Id_SDP_Unknown             = ''; // not IANA assigned!
   // IANA assigned nettype
   Id_SDP_IN = 'IN';
   // IANA assigned addrtype
@@ -842,6 +850,7 @@ begin
     btApplicationSpecific: Result := Id_SDP_ApplicationSpecific;
     btRS:                  Result := Id_SDP_RS;
     btRR:                  Result := Id_SDP_RR;
+    btUnknown:             Result := Id_SDP_Unknown;
   else
     raise EConvertError.Create(Format(ConvertEnumErrorMsg,
                                       ['TIdSdpBandwidthType',
@@ -905,13 +914,16 @@ end;
 
 function StrToBandwidthType(const S: String): TIdSdpBandwidthType;
 begin
+  if not TIdSdpParser.IsBandwidthType(S) then
+    raise EConvertError.Create(Format(ConvertStrErrorMsg,
+                                      [S, 'TIdSdpBandwidthType']));
+
        if (S = Id_SDP_ConferenceTotal)     then Result := btConferenceTotal
   else if (S = Id_SDP_ApplicationSpecific) then Result := btApplicationSpecific
   else if (S = Id_SDP_RS)                  then Result := btRS
   else if (S = Id_SDP_RR)                  then Result := btRR
   else
-    raise EConvertError.Create(Format(ConvertStrErrorMsg,
-                                      [S, 'TIdSdpBandwidthType']));
+    Result := btUnknown;
 end;
 
 function StrToKeyType(const S: String): TIdSDPKeyType;
@@ -1137,6 +1149,7 @@ begin
     Other := Src as TIdSdpBandwidth;
 
     Self.Bandwidth     := Other.Bandwidth;
+    Self.BandwidthName := Other.BandwidthName;
     Self.BandwidthType := Other.BandwidthType;
   end
   else inherited Assign(Src);
@@ -1144,9 +1157,15 @@ end;
 
 procedure TIdSdpBandwidth.PrintOn(Dest: TStream);
 var
-  S: String;
+  BName: String;
+  S:     String;
 begin
-  S := 'b=' + BandwidthTypeToStr(Self.BandwidthType) + ':'
+  if (Self.BandwidthType <> btUnknown) then
+    BName := BandwidthTypeToStr(Self.BandwidthType)
+  else
+    BName := Self.BandwidthName;
+
+  S := 'b=' + BName + ':'
             + IntToStr(Self.Bandwidth) + #13#10;
 
   Dest.Write(PChar(S)^, Length(S));
@@ -2553,13 +2572,14 @@ begin
 end;
 
 class function TIdSdpParser.IsBandwidthType(const Token: String): Boolean;
+var
+  I: Integer;
 begin
-  try
-    StrToBandwidthType(Token);
-    Result := true;
-  except
-    on EConvertError do Result := false;
-  end;
+  Result := Token <> '';
+
+  if Result then
+    for I := 1 to Length(Token) do
+      Result := Result and (Token[I] in AlphanumericChars);
 end;
 
 class function TIdSdpParser.IsByteString(const Token: String): Boolean;
@@ -2859,6 +2879,7 @@ begin
   BW := Bandwidths.Add;
   try
     BW.BandwidthType := StrToBandwidthType(Token);
+    BW.BandwidthName := Token;
 
     // We should just be able to take the rest of the string. However, as of
     // this change, there's at least one SIP stack that uses a space in the
