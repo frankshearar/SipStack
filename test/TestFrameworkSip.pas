@@ -38,6 +38,7 @@ type
     class function CreateBasicResponse: TIdSipResponse;
     class function CreateLocalLoopRequest: TIdSipRequest;
     class function CreateLocalLoopResponse: TIdSipResponse;
+    class function CreateRegister(FromUri: TIdSipUri; Contact: String): TIdSipRequest;
     class function BasicSDP(const Host: String): String;
     class function VeryLargeSDP(const Host: String): String;
   end;
@@ -863,6 +864,29 @@ begin
     Result := TIdSipResponse.InResponseTo(Request, SIPBusyHere);
   finally
     Request.Free;
+  end;
+end;
+
+class function TIdSipTestResources.CreateRegister(FromUri: TIdSipUri; Contact: String): TIdSipRequest;
+var
+  H: TIdSipAddressHeader;
+begin
+  H := TIdSipToHeader.Create;
+  try
+    Result := Self.CreateBasicRequest;
+    Result.Method := MethodRegister;
+    Result.CSeq.Method := Result.Method;
+    Result.From.Value     := FromUri.AsString;
+    Result.RequestUri.Uri := Contact;
+    Result.ToHeader.Value := FromUri.AsString;
+    Result.RemoveAllHeadersNamed(ContactHeaderFull);
+    Result.RemoveAllHeadersNamed(ContentTypeHeaderFull);
+    Result.Body := '';
+    Result.ContentLength := Length(Result.Body);
+
+  Result.AddHeader(ContactHeaderFull).Value := Contact;
+  finally
+    H.Free;
   end;
 end;
 
