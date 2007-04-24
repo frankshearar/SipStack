@@ -12,7 +12,7 @@ unit IdSipMockBindingDatabase;
 interface
 
 uses
- Classes, Contnrs, IdSipMessage, IdSipRegistration;
+ Classes, Contnrs, IdSipMessage, IdSipRegistration, SyncObjs;
 
 type
   // I am a proper BindingDatabase. I just store my data in memory, and provide
@@ -26,6 +26,7 @@ type
     fFailBindingsFor:   Boolean;
     fFailIsValid:       Boolean;
     fFailRemoveBinding: Boolean;
+    Lock:               TCriticalSection;
 
     procedure DeleteBinding(Index: Integer);
     function  GetBindings(Index: Integer): TIdRegistrarBinding;
@@ -82,6 +83,7 @@ begin
   inherited Create;
 
   Self.BindingStore := TObjectList.Create(true);
+  Self.Lock         := TCriticalSection.Create;
 
   Self.Authorized        := true;
   Self.FailAddBinding    := false;
@@ -92,36 +94,62 @@ end;
 
 destructor TIdSipMockBindingDatabase.Destroy;
 begin
-  Self.BindingStore.Free;
+  Self.Lock.Acquire;
+  try
+    Self.BindingStore.Free;
+  finally
+    Self.Lock.Release;
+  end;
+  Self.Lock.Free;
 
   inherited Destroy;
 end;
 
 function TIdSipMockBindingDatabase.BindingCount: Integer;
 begin
-  Result := Self.BindingStore.Count;
+  Self.Lock.Acquire;
+  try
+    Result := Self.BindingStore.Count;
+  finally
+    Self.Lock.Release;
+  end;
 end;
 
 function TIdSipMockBindingDatabase.IsAuthorized(User: TIdSipAddressHeader;
                                                 AddressOfRecord: TIdSipUri): Boolean;
 begin
-  Result := Self.Authorized;
+  Self.Lock.Acquire;
+  try
+    Result := Self.Authorized;
+  finally
+    Self.Lock.Release;
+  end;
 end;
 
 function TIdSipMockBindingDatabase.IsValid(Request: TIdSipRequest): Boolean;
 begin
-  Result := not Self.FailIsValid;
+  Self.Lock.Acquire;
+  try
+    Result := not Self.FailIsValid;
+  finally
+    Self.Lock.Release;
+  end;
 end;
 
 function TIdSipMockBindingDatabase.RemoveBinding(Request: TIdSipRequest;
                                                  Contact: TIdSipContactHeader): Boolean;
 begin
-  Self.NotifyListenersOfChange;
+  Self.Lock.Acquire;
+  try
+    Self.NotifyListenersOfChange;
 
-  Self.DeleteBinding(Self.IndexOfBinding(Request.AddressOfRecord,
-                                         Contact));
+    Self.DeleteBinding(Self.IndexOfBinding(Request.AddressOfRecord,
+                                           Contact));
 
-  Result := not Self.FailRemoveBinding;
+    Result := not Self.FailRemoveBinding;
+  finally
+    Self.Lock.Release;
+  end;
 end;
 
 //* TIdSipMockBindingDatabase Protected methods ********************************
