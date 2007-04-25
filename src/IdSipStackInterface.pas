@@ -43,6 +43,8 @@ type
   end;
 
   TIdSipStackInterfaceEventMethod = class;
+  TIdSipStackInterfaceExtension = class;
+  TIdSipStackInterfaceExtensionClass = class of TIdSipStackInterfaceExtension;
 
   // I provide a high-level interface to a SIP stack.
   // On one hand, I make sure that messages are sent in the context of the
@@ -84,7 +86,6 @@ type
     TimerQueue:      TIdTimerQueue;
 
     function  ActionFor(Handle: TIdSipHandle): TIdSipAction;
-    function  AddAction(Action: TIdSipAction): TIdSipHandle;
     function  AssociationAt(Index: Integer): TIdActionAssociation;
     procedure Configure(Configuration: TStrings);
     function  GetAndCheckAction(Handle: TIdSipHandle;
@@ -179,6 +180,12 @@ type
     procedure RemoveAction(Handle: TIdSipHandle);
     procedure SendAction(Action: TIdSipAction);
 
+  protected
+    function  AddAction(Action: TIdSipAction): TIdSipHandle;
+    procedure ParseLine(Directive, Configuration: String); virtual;
+    procedure PostConfigurationActions; virtual;
+    procedure PreConfigurationActions; virtual;
+
     property UiHandle:  HWnd            read fUiHandle;
     property UserAgent: TIdSipUserAgent read fUserAgent;
   public
@@ -193,6 +200,7 @@ type
     procedure AnswerCall(ActionHandle: TIdSipHandle;
                          const Offer: String;
                          const ContentType: String);
+    function  AttachExtension(EType: TIdSipStackInterfaceExtensionClass): TIdSipStackInterfaceExtension;
     procedure Authenticate(ActionHandle: TIdSipHandle;
                            Credentials: TIdSipAuthorizationHeader);
     function  GruuOf(ActionHandle: TIdSipHandle): String;
@@ -201,7 +209,7 @@ type
     function  MakeCall(From: TIdSipFromHeader;
                        Dest: TIdSipAddressHeader;
                        const LocalSessionDescription: String;
-                       const MimeType: String): TIdSipHandle;
+                       const MimeType: String): TIdSipHandle; virtual;
     function  MakeOptionsQuery(Dest: TIdSipAddressHeader): TIdSipHandle;
     function  MakeRefer(Target: TIdSipAddressHeader;
                         Resource: TIdSipAddressHeader): TIdSipHandle;
@@ -214,6 +222,7 @@ type
     procedure ModifyCall(ActionHandle: TIdSipHandle;
                          const Offer: String;
                          const ContentType: String);
+    procedure NotifyOfReconfiguration;
     procedure NotifyReferralDenied(ActionHandle: TIdSipHandle);
     procedure NotifyReferralFailed(ActionHandle: TIdSipHandle;
                                    Response: TIdSipResponse = nil);
@@ -249,6 +258,25 @@ type
     class function  RegisterStackInterface(Instance: TIdSipStackInterface): String;
     class function  FindStackInterface(const StackInterfaceID: String): TIdSipStackInterface;
     class procedure UnregisterStackInterface(const StackInterfaceID: String);
+  end;
+
+  TIdSipStackInterfaceExtension = class(TObject)
+  private
+    fUserAgent: TIdSipUserAgent;
+  protected
+    property UserAgent: TIdSipUserAgent read fUserAgent;
+  public
+    constructor Create(UA: TIdSipUserAgent); virtual;
+  end;
+
+  TIdSipColocatedRegistrarExtension = class(TIdSipStackInterfaceExtension)
+  private
+    DB:             TIdSipAbstractBindingDatabase;
+    RegisterModule: TIdSipRegisterModule;
+  public
+    constructor Create(UA: TIdSipUserAgent); override;
+
+    procedure TargetsFor(URI: TIdSipUri; Targets: TIdSipContacts);
   end;
 
   // I contain data relating to a particular event.
@@ -634,6 +662,18 @@ type
     property Response: TIdSipResponse read fResponse write SetResponse;
   end;
 
+  TIdStackReconfiguredData = class(TIdEventData)
+  private
+    fActsAsRegistrar: Boolean;
+  protected
+    function Data: String; override;
+    function EventName: String; override;
+  public
+    procedure Assign(Src: TPersistent); override;
+
+    property ActsAsRegistrar: Boolean read fActsAsRegistrar write fActsAsRegistrar;
+  end;
+
   // I represent a reified method call, like my ancestor, that a
   // SipStackInterface uses to signal that something interesting happened (an
   // inbound call has arrived, a network failure occured, an action succeeded,
@@ -697,6 +737,7 @@ const
   CM_SUBSCRIPTION_REQUEST_NOTIFY  = CM_BASE + 14;
   CM_SUBSCRIPTION_RESUBSCRIBED    = CM_BASE + 15;
   CM_QUERY_OPTIONS_RESPONSE       = CM_BASE + 16;
+  CM_STACK_RECONFIGURED           = CM_BASE + 17;
 
   CM_DEBUG = CM_BASE + 10000;
 
@@ -758,6 +799,7 @@ begin
     CM_SUBSCRIPTION_RESUBSCRIBED:    Result := 'CM_SUBSCRIPTION_RESUBSCRIBED';
     CM_SUCCESS:                      Result := 'CM_SUCCESS';
     CM_QUERY_OPTIONS_RESPONSE:       Result := 'CM_QUERY_OPTIONS_RESPONSE';
+    CM_STACK_RECONFIGURED:           Result := 'CM_STACK_RECONFIGURED';
 
     CM_DEBUG_DROPPED_MSG:            Result := 'CM_DEBUG_DROPPED_MSG';
     CM_DEBUG_RECV_MSG:               Result := 'CM_DEBUG_RECV_MSG';
@@ -810,7 +852,6 @@ begin
   Configurator := TIdSipStackConfigurator.Create;
   try
     Self.fUserAgent := Configurator.CreateUserAgent(Configuration, Self.TimerQueue);
-    Self.Configure(Configuration);
     Self.UserAgent.AddListener(Self);
     Self.UserAgent.InviteModule.AddListener(Self);
 //    Self.UserAgent.AddTransportListener(Self);
@@ -830,7 +871,10 @@ begin
     Configurator.Free;
   end;
 
+  Self.Configure(Configuration);
+
   Self.fID := TIdSipStackInterfaceRegistry.RegisterStackInterface(Self);
+  Self.NotifyOfReconfiguration;
 end;
 
 destructor TIdSipStackInterface.Destroy;
@@ -890,6 +934,11 @@ begin
   finally
     Self.ActionLock.Release;
   end;
+end;
+
+function TIdSipStackInterface.AttachExtension(EType: TIdSipStackInterfaceExtensionClass): TIdSipStackInterfaceExtension;
+begin
+  Result := EType.Create(Self.UserAgent);
 end;
 
 procedure TIdSipStackInterface.Authenticate(ActionHandle: TIdSipHandle;
@@ -1117,6 +1166,21 @@ begin
   end;
 end;
 
+procedure TIdSipStackInterface.NotifyOfReconfiguration;
+var
+  Data: TIdStackReconfiguredData;
+begin
+  Data := TIdStackReconfiguredData.Create;
+  try
+    Data.ActsAsRegistrar := Self.UserAgent.UsesModule(TIdSipRegisterModule);
+    Data.Handle          := InvalidHandle;
+
+    Self.NotifyEvent(CM_STACK_RECONFIGURED, Data);
+  finally
+    Data.Free;
+  end;
+end;
+
 procedure TIdSipStackInterface.NotifyReferralDenied(ActionHandle: TIdSipHandle);
 begin
   Self.NotifyReferral(ActionHandle, TIdSipNotifyReferralDeniedWait, nil);
@@ -1242,6 +1306,35 @@ begin
   Self.Free;
 end;
 
+//* TIdSipStackInterface Protected methods *************************************
+
+function TIdSipStackInterface.AddAction(Action: TIdSipAction): TIdSipHandle;
+var
+  Assoc: TIdActionAssociation;
+begin
+  Self.ActionLock.Acquire;
+  try
+    Result := Self.NewHandle;
+    Assoc := TIdActionAssociation.Create(Action, Result);
+    Self.Actions.Add(Assoc);
+  finally
+    Self.ActionLock.Release;
+  end;
+end;
+
+procedure TIdSipStackInterface.ParseLine(Directive, Configuration: String);
+begin
+  // I have no special processing directives, even though my subclasses might.
+end;
+
+procedure TIdSipStackInterface.PostConfigurationActions;
+begin
+end;
+
+procedure TIdSipStackInterface.PreConfigurationActions;
+begin
+end;
+
 //* TIdSipStackInterface Private methods ***************************************
 
 function TIdSipStackInterface.ActionFor(Handle: TIdSipHandle): TIdSipAction;
@@ -1260,20 +1353,6 @@ begin
   end;
 end;
 
-function TIdSipStackInterface.AddAction(Action: TIdSipAction): TIdSipHandle;
-var
-  Assoc: TIdActionAssociation;
-begin
-  Self.ActionLock.Acquire;
-  try
-    Result := Self.NewHandle;
-    Assoc := TIdActionAssociation.Create(Action, Result);
-    Self.Actions.Add(Assoc);
-  finally
-    Self.ActionLock.Release;
-  end;
-end;
-
 function TIdSipStackInterface.AssociationAt(Index: Integer): TIdActionAssociation;
 begin
   Result := Self.Actions[Index] as TIdActionAssociation;
@@ -1281,17 +1360,20 @@ end;
 
 procedure TIdSipStackInterface.Configure(Configuration: TStrings);
 var
-  FirstToken: String;
-  I:          Integer;
-  Line:       String;
+  Config:    String;
+  Directive: String;
+  I:         Integer;
 begin
-  for I := 0 to Configuration.Count - 1 do begin
-    Line := Configuration[I];
-    FirstToken := Trim(Fetch(Line, ':', false));
+  Self.PreConfigurationActions;
+  try
+    for I := 0 to Configuration.Count - 1 do begin
+      Config := Configuration[I];
+      Directive := Trim(Fetch(Config, ':'));
 
-    // Put your directive-processing stuff here:
-    // if IsEqual(FirstToken, YourDirective) then
-    //   Self.DoSomething(UserAgent, Configuration[I]);
+      Self.ParseLine(Directive, Trim(Config));
+    end;
+  finally
+    Self.PostConfigurationActions;
   end;
 end;
 
@@ -1964,6 +2046,44 @@ end;
 class function TIdSipStackInterfaceRegistry.StackInterfaceRegistry: TStrings;
 begin
   Result := GStackInterfaces;
+end;
+
+//******************************************************************************
+//* TIdSipStackInterfaceExtension                                              *
+//******************************************************************************
+//* TIdSipStackInterfaceExtension Public methods *******************************
+
+constructor TIdSipStackInterfaceExtension.Create(UA: TIdSipUserAgent);
+begin
+  inherited Create;
+
+  Self.fUserAgent := UA;
+end;
+
+//******************************************************************************
+//* TIdSipColocatedRegistrarExtension                                          *
+//******************************************************************************
+//* TIdSipColocatedRegistrarExtension Public methods ***************************
+
+constructor TIdSipColocatedRegistrarExtension.Create(UA: TIdSipUserAgent);
+begin
+  inherited Create(UA);
+
+  Assert(Self.UserAgent.UsesModule(TIdSipRegisterModule),
+         'TIdSipColocatedRegistrarExtension needs a UA that supports receiving REGISTER methods');
+
+  Self.RegisterModule := Self.UserAgent.ModuleFor(TIdSipRegisterModule) as TIdSipRegisterModule;
+  Assert(Assigned(Self.RegisterModule.BindingDB), 'Register Module malformed: no BindingDatabase');
+
+  Self.DB := Self.RegisterModule.BindingDB;
+end;
+
+procedure TIdSipColocatedRegistrarExtension.TargetsFor(URI: TIdSipUri; Targets: TIdSipContacts);
+begin
+  if not Self.DB.BindingsFor(URI, Targets, Self.DB.UseGruu) then begin
+    // For now, do nothing: just return no valid targets.
+    Targets.Clear;
+  end;
 end;
 
 //******************************************************************************
@@ -2939,6 +3059,36 @@ begin
 end;
 
 //******************************************************************************
+//* TIdStackReconfiguredData                                                   *
+//******************************************************************************
+//* TIdStackReconfiguredData Public methods ************************************
+
+procedure TIdStackReconfiguredData.Assign(Src: TPersistent);
+var
+  Other: TIdStackReconfiguredData;
+begin
+  inherited Assign(Src);
+
+  if (Src is TIdStackReconfiguredData) then begin
+    Other := Src as TIdStackReconfiguredData;
+
+    Self.ActsAsRegistrar := Other.ActsAsRegistrar;
+  end;
+end;
+
+//* TIdStackReconfiguredData Protected methods *********************************
+
+function TIdStackReconfiguredData.Data: String;
+begin
+  Result := 'ActsAsRegistrar: ' + BoolToStr(Self.ActsAsRegistrar, true);
+end;
+
+function TIdStackReconfiguredData.EventName: String;
+begin
+  Result := EventNames(CM_STACK_RECONFIGURED);
+end;
+
+//******************************************************************************
 //* TIdSipStackInterfaceEventMethod                                            *
 //******************************************************************************
 //* TIdSipStackInterfaceEventMethod Public methods *****************************
@@ -3002,6 +3152,8 @@ begin
     finally
       Configurator.Free;
     end;
+
+    Stack.NotifyOfReconfiguration;
   end;
 end;
 

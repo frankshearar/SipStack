@@ -58,7 +58,23 @@ type
   // stack does with these notification, or how it presents them. This means
   // that if you're establishing a call and you receive a 200 OK, you must call
   // Application.ProcessMessages before the test can know about the response.
-  TestTIdSipStackInterface = class(TTestCase,
+  TStackInterfaceTestCase = class(TTestCase)
+  private
+    SentResponseCount: Cardinal;
+  protected
+    MockTransport: TIdSipMockTransport;
+    TimerQueue:    TIdDebugTimerQueue;
+
+    procedure CheckResponseSent(Msg: String);
+    function  LastSentResponse: TIdSipResponse;
+    procedure MarkSentResponseCount;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+
+  TestTIdSipStackInterface = class(TStackInterfaceTestCase,
                                    IIdSipInviteModuleListener,
                                    IIdSipStackInterface)
   private
@@ -71,7 +87,6 @@ type
     LocalOffer:          String;
     LocalPort:           Cardinal;
     LocalUsername:       String;
-    MockTransport:       TIdSipMockTransport;
     Registrar:           TIdSipUri;
     RemoteMimeType:      String;
     RemoteMockTransport: TIdSipMockTransport;
@@ -81,16 +96,13 @@ type
     Requests:            TIdSipRequestList;
     Responses:           TIdSipResponseList;
     SentRequestCount:    Cardinal;
-    SentResponseCount:   Cardinal;
     TargetAddress:       String;
     TargetPort:          Cardinal;
-    TimerQueue:          TIdDebugTimerQueue;
     UI:                  TCustomForm;
 
     procedure AddSubscribeSupport(Stack: TIdSipStackInterface; EventPackage: String);
     procedure CheckNotificationReceived(EventType: TIdEventDataClass; Msg: String);
     procedure CheckRequestSent(Msg: String);
-    procedure CheckResponseSent(Msg: String);
     procedure ClearPendingStackStartedNotification;
 {
     function  CreateBindings: TIdSipContacts;
@@ -103,9 +115,7 @@ type
     function  EventAt(Index: Integer): TIdEventData;
     function  LastEventOfType(EventType: TIdEventDataClass): TIdEventData;
     function  LastSentRequest: TIdSipRequest;
-    function  LastSentResponse: TIdSipResponse;
     procedure MarkSentRequestCount;
-    procedure MarkSentResponseCount;
     procedure OnInboundCall(UserAgent: TIdSipInviteModule;
                             Session: TIdSipInboundSession);
 {
@@ -156,6 +166,8 @@ type
     procedure TestAcceptCall;
     procedure TestAcceptCallWithInvalidHandle;
     procedure TestAcceptCallWithNoExistentHandle;
+    procedure TestAttachExtension;
+    procedure TestCreateNotifiesOfReconfiguration;
     procedure TestEndedSession;
     procedure TestEstablishedSessionInboundCall;
     procedure TestEstablishedSessionOutboundCall;
@@ -180,6 +192,7 @@ type
     procedure TestNetworkFailure;
     procedure TestOutboundCall;
     procedure TestOptionsQuery;
+    procedure TestReconfigureSendsNotify;
     procedure TestRedirectCall;
     procedure TestRedirectCallWithInvalidHandle;
     procedure TestRedirectCallWithNonExistentHandle;
@@ -206,6 +219,25 @@ type
     procedure TestStackInterfacesAddToRegistryAutomatically;
     procedure TestStackInterfacesGetUniqueIDs;
     procedure TestStackInterfacesAutomaticallyUnregister;
+  end;
+
+  TestTIdSipColocatedRegistrarExtension = class(TStackInterfaceTestCase)
+  private
+    Configuration: TStrings;
+    Contact:       String;
+    Contacts:      TIdSipContacts;
+    Iface:         TIdSipStackInterface;
+    Reg:           TIdSipColocatedRegistrarExtension;
+    Target:        TIdSipUri;
+
+    procedure ReceiveRegister(FromUri: TIdSipUri; Contact: String);
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTargetsForOneTargetUri;
+    procedure TestTargetsForUnknownUri;
+    procedure TestTargetsForWithDBFailure;
   end;
 
   TestTIdEventData = class(TTestCase)
@@ -446,6 +478,17 @@ type
     procedure TestCopy;
   end;
 
+  TestTIdStackReconfiguredData = class(TTestCase)
+  private
+    Data: TIdStackReconfiguredData;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAsString;
+    procedure TestCopy;
+  end;
+
   TestTIdSipStackReconfigureStackInterfaceWait = class(TTestCase)
   private
     Conf:       TStrings;
@@ -477,8 +520,15 @@ const
 implementation
 
 uses
-  IdRandom, IdSimpleParser, IdSipCore, IdSipLocation, IdSipTransport,
-  IdSipUdpTransport, IdSocketHandle, IdUdpServer, SysUtils, TestMessages;
+  IdRandom, IdSimpleParser, IdSipCore, IdSipLocation, IdSipMockBindingDatabase,
+  IdSipRegistration, IdSipTransport, IdSipUdpTransport, IdSocketHandle,
+  IdUdpServer, SysUtils, TestMessages;
+
+type
+  TIdSipStackInterfaceNullExtension = class(TIdSipStackInterfaceExtension)
+  public
+    function UA: TIdSipUserAgent;
+  end;
 
 function Suite: ITestSuite;
 begin
@@ -486,6 +536,7 @@ begin
   Result.AddTest(TestTIdSipStackInterfaceCreation.Suite);
   Result.AddTest(TestTIdSipStackInterface.Suite);
   Result.AddTest(TestTIdSipStackInterfaceRegistry.Suite);
+  Result.AddTest(TestTIdSipColocatedRegistrarExtension.Suite);
   Result.AddTest(TestTIdEventData.Suite);
   Result.AddTest(TestTIdInformationalData.Suite);
   Result.AddTest(TestTIdAuthenticationChallengeData.Suite);
@@ -509,7 +560,18 @@ begin
   Result.AddTest(TestTIdSessionReferralData.Suite);
   Result.AddTest(TestTIdSubscriptionNotifyData.Suite);
   Result.AddTest(TestTIdFailedSubscriptionData.Suite);
+  Result.AddTest(TestTIdStackReconfiguredData.Suite);
   Result.AddTest(TestTIdSipStackReconfigureStackInterfaceWait.Suite);
+end;
+
+//******************************************************************************
+//* TIdSipStackInterfaceNullExtension                                          *
+//******************************************************************************
+//* TIdSipStackInterfaceNullExtension Public methods ***************************
+
+function TIdSipStackInterfaceNullExtension.UA: TIdSipUserAgent;
+begin
+  Result := Self.UserAgent;
 end;
 
 //******************************************************************************
@@ -537,6 +599,42 @@ begin
 end;
 
 //******************************************************************************
+//* TStackInterfaceTestCase                                                    *
+//******************************************************************************
+//* TStackInterfaceTestCase Public methods *************************************
+
+procedure TStackInterfaceTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  Self.TimerQueue := TIdDebugTimerQueue.Create(true);
+end;
+
+procedure TStackInterfaceTestCase.TearDown;
+begin
+  Self.TimerQueue.Terminate;
+
+  inherited TearDown;
+end;
+
+//* TStackInterfaceTestCase Protected methods **********************************
+
+procedure TStackInterfaceTestCase.CheckResponseSent(Msg: String);
+begin
+  Check(Self.SentResponseCount < Self.MockTransport.SentResponseCount, Msg);
+end;
+
+function TStackInterfaceTestCase.LastSentResponse: TIdSipResponse;
+begin
+  Result := Self.MockTransport.LastResponse;
+end;
+
+procedure TStackInterfaceTestCase.MarkSentResponseCount;
+begin
+  Self.SentResponseCount := Self.MockTransport.SentResponseCount;
+end;
+
+//******************************************************************************
 //* TestTIdSipStackInterface                                                   *
 //******************************************************************************
 //* TestTIdSipStackInterface Public methods ************************************
@@ -555,8 +653,6 @@ begin
   Self.From        := TIdSipFromHeader.Create;
   Self.Requests    := TIdSipRequestList.Create;
   Self.Responses   := TIdSipResponseList.Create;
-
-  Self.TimerQueue := TIdDebugTimerQueue.Create(true);
 
   Self.TargetAddress := '10.0.0.8';
   Self.TargetPort    := 5060;
@@ -622,7 +718,6 @@ begin
   Self.UI.Release;
   Self.Registrar.Free;
   Self.Intf.Free;
-  Self.TimerQueue.Terminate;
   Self.Responses.Free;
   Self.Requests.Free;
   Self.RemoteUA.Free;
@@ -676,11 +771,6 @@ end;
 procedure TestTIdSipStackInterface.CheckRequestSent(Msg: String);
 begin
   Check(Self.SentRequestCount < Self.MockTransport.SentRequestCount, Msg);
-end;
-
-procedure TestTIdSipStackInterface.CheckResponseSent(Msg: String);
-begin
-  Check(Self.SentResponseCount < Self.MockTransport.SentResponseCount, Msg);
 end;
 
 procedure TestTIdSipStackInterface.ClearPendingStackStartedNotification;
@@ -783,19 +873,9 @@ begin
   Result := Self.MockTransport.LastRequest;
 end;
 
-function TestTIdSipStackInterface.LastSentResponse: TIdSipResponse;
-begin
-  Result := Self.MockTransport.LastResponse;
-end;
-
 procedure TestTIdSipStackInterface.MarkSentRequestCount;
 begin
   Self.SentRequestCount := Self.MockTransport.SentRequestCount;
-end;
-
-procedure TestTIdSipStackInterface.MarkSentResponseCount;
-begin
-  Self.SentResponseCount := Self.MockTransport.SentResponseCount;
 end;
 
 procedure TestTIdSipStackInterface.OnInboundCall(UserAgent: TIdSipInviteModule;
@@ -1164,6 +1244,27 @@ begin
   except
     on EInvalidHandle do;
   end;
+end;
+
+procedure TestTIdSipStackInterface.TestAttachExtension;
+var
+  Null: TIdSipStackInterfaceExtension;
+  E:    TIdSipStackInterfaceNullExtension;
+begin
+  Null := Self.Intf.AttachExtension(TIdSipStackInterfaceNullExtension);
+  CheckNotNull(Null, 'AttachExtension didn''t return a value');
+  CheckEquals(TIdSipStackInterfaceNullExtension, Null.ClassType, 'AttachExtension returned the wrong type object');
+
+  E := Null as TIdSipStackInterfaceNullExtension;
+  CheckEquals(Self.MockTransport.ID,
+              E.UA.Dispatcher.Transports[0].ID,
+              'Extension''s UserAgent isn''t using the same transport as the '
+            + 'StackInterface, and thus the UserAgent property is not properly set');
+end;
+
+procedure TestTIdSipStackInterface.TestCreateNotifiesOfReconfiguration;
+begin
+  CheckNotificationReceived(TIdStackReconfiguredData, 'No reconfigure notification received');
 end;
 
 procedure TestTIdSipStackInterface.TestEndedSession;
@@ -1594,6 +1695,43 @@ begin
   Check(Data.Response.Equals(Self.MockTransport.LastResponse), 'Unexpected response');
 end;
 
+procedure TestTIdSipStackInterface.TestReconfigureSendsNotify;
+var
+  E:       TIdEventData;
+  NewConf: TStrings;
+  Recon:   TIdStackReconfiguredData;
+begin
+  NewConf := TStringList.Create;
+  try
+    NewConf.Add('Listen: UDP ' + Self.TargetAddress + ':' + IntToStr(Self.TargetPort));
+    NewConf.Add('NameServer: MOCK');
+    NewConf.Add('Contact: sip:' + Self.TargetAddress + ':' + IntToStr(Self.TargetPort));
+    NewConf.Add('From: sip:' + Self.TargetAddress + ':' + IntToStr(Self.TargetPort));
+
+    Self.Intf.ReconfigureStack(NewConf);
+    Self.TimerQueue.TriggerAllEventsUpToFirst(TIdSipStackReconfigureStackInterfaceWait);
+    Self.ProcessAllPendingNotifications;
+    E := Self.LastEventOfType(TIdStackReconfiguredData);
+    Check(Assigned(E), 'No TIdStackReconfiguredData found (1)');
+
+    Recon := E as TIdStackReconfiguredData;
+    Check(not Recon.ActsAsRegistrar, 'Stack thinks it should act as a registrar');
+
+    NewConf.Add(ActAsRegistrarDirective + ': true');
+    NewConf.Add(RegistrarDatabaseDirective + ': ' + MockKeyword);
+
+    Self.Intf.ReconfigureStack(NewConf);
+    Self.TimerQueue.TriggerAllEventsUpToFirst(TIdSipStackReconfigureStackInterfaceWait);
+    Self.ProcessAllPendingNotifications;
+    E := Self.LastEventOfType(TIdStackReconfiguredData);
+    Check(Assigned(E), 'No TIdStackReconfiguredData found (2)');
+    Recon := E as TIdStackReconfiguredData;
+    Check(Recon.ActsAsRegistrar, 'Stack doesn''t think it should act as a registrar');
+  finally
+    NewConf.Free;
+  end;
+end;
+
 procedure TestTIdSipStackInterface.TestRedirectCall;
 var
   NewTarget: TIdSipAddressHeader;
@@ -1957,6 +2095,108 @@ begin
 
   Check(nil = TIdSipStackInterfaceRegistry.FindStackInterface(StackInterfaceID),
         'StackInterface not removed from registry');
+end;
+
+//******************************************************************************
+//* TestTIdSipColocatedRegistrarExtension                                      *
+//******************************************************************************
+//* TestTIdSipColocatedRegistrarExtension Public methods ***********************
+
+procedure TestTIdSipColocatedRegistrarExtension.SetUp;
+begin
+  inherited SetUp;
+
+  TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipMockUdpTransport);
+
+  Self.Configuration := TStringList.Create;
+  Self.Configuration.Add(ListenDirective            + ': UDP 127.0.0.1:5060');
+  Self.Configuration.Add(NameServerDirective        + ': ' + MockKeyword);
+  Self.Configuration.Add(ActAsRegistrarDirective    + ': yes');
+  Self.Configuration.Add(RegistrarDatabaseDirective + ': ' + MockKeyword);
+
+  Self.Contacts := TIdSipContacts.Create;
+
+  Self.Iface := TIdSipStackInterface.Create(0, Self.TimerQueue, Self.Configuration);
+  Self.MockTransport := TIdSipDebugTransportRegistry.LastTransport as TIdSipMockTransport;
+
+  Self.Reg    := Self.Iface.AttachExtension(TIdSipColocatedRegistrarExtension) as TIdSipColocatedRegistrarExtension;
+  Self.Target := TIdSipUri.Create('sip:case@fried-neurons.org');
+
+  Self.Contact := 'sip:case@tmp.node';
+end;
+
+procedure TestTIdSipColocatedRegistrarExtension.TearDown;
+begin
+  Self.Target.Free;
+  Self.Iface.Free;
+  Self.Contacts.Free;
+  Self.Configuration.Free;
+
+  TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipColocatedRegistrarExtension Private methods **********************
+
+procedure TestTIdSipColocatedRegistrarExtension.ReceiveRegister(FromUri: TIdSipUri; Contact: String);
+var
+  Reg: TIdSipRequest;
+begin
+  Self.MarkSentResponseCount;
+
+  Reg := TIdSipTestResources.CreateRegister(FromUri, Contact);
+  try
+    Self.MockTransport.FireOnRequest(Reg);
+  finally
+    Reg.Free;
+  end;
+
+  // Trigger the sending of a 200 OK to the REGISTER
+  Self.TimerQueue.TriggerAllEventsOfType(TIdSipMessageWait);
+
+  CheckResponseSent('No response sent to REGISTER');
+  CheckEquals(SIPOK, Self.LastSentResponse.StatusCode, 'Unexpected response sent: ' + Self.LastSentResponse.StatusText);
+  Check(Self.LastSentResponse.HasHeader(ContactHeaderFull), 'Registrar didn''t store bindings');
+end;
+
+//* TestTIdSipColocatedRegistrarExtension Published methods ********************
+
+procedure TestTIdSipColocatedRegistrarExtension.TestTargetsForOneTargetUri;
+begin
+  Self.ReceiveRegister(Self.Target, Self.Contact);
+
+  Self.Reg.TargetsFor(Self.Target, Self.Contacts);
+
+  Check(not Self.Contacts.IsEmpty, 'TargetsFor returned no targets');
+  CheckEquals(1, Self.Contacts.Count, 'Number of contacts');
+
+  Self.Contacts.First;
+  CheckEquals(Self.Contact, Self.Contacts.CurrentContact.Address.AsString, 'Wrong contact');
+end;
+
+procedure TestTIdSipColocatedRegistrarExtension.TestTargetsForUnknownUri;
+begin
+  Self.Reg.TargetsFor(Self.Target, Self.Contacts);
+
+  Check(Self.Contacts.IsEmpty, 'TargetsFor returned targets for an unknown URI');
+end;
+
+procedure TestTIdSipColocatedRegistrarExtension.TestTargetsForWithDBFailure;
+var
+  DB: TIdSipMockBindingDatabase;
+  N:  TIdSipStackInterfaceNullExtension;
+begin
+  N := Self.Iface.AttachExtension(TIdSipStackInterfaceNullExtension) as TIdSipStackInterfaceNullExtension;
+  Check(N.UA.UsesModule(TIdSipRegisterModule), 'UA doesn''t support REGISTER method');
+  DB := (N.UA.ModuleFor(TIdSipRegisterModule) as TIdSipRegisterModule).BindingDB as TIdSipMockBindingDatabase;
+
+  Self.ReceiveRegister(Self.Target, Self.Contact);
+
+  DB.FailBindingsFor := true;
+
+  Self.Reg.TargetsFor(Self.Target, Self.Contacts);
+  Check(Self.Contacts.IsEmpty, 'TargetsFor returned targets when the DB failed');
 end;
 
 //******************************************************************************
@@ -3208,6 +3448,69 @@ begin
                 'Reason');
     Check(Copy.Response.Equals(Self.Data.Response),
           'Response messages don''t match');
+  finally
+    Copy.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdStackReconfiguredData
+//******************************************************************************
+//* TestTIdStackReconfiguredData Public methods ********************************
+
+procedure TestTIdStackReconfiguredData.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Data := TIdStackReconfiguredData.Create;
+  Self.Data.ActsAsRegistrar := true;
+end;
+
+procedure TestTIdStackReconfiguredData.TearDown;
+begin
+  Self.Data.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdStackReconfiguredData Published methods *****************************
+
+procedure TestTIdStackReconfiguredData.TestAsString;
+var
+  Expected: TStrings;
+  Received: TStrings;
+begin
+  Expected := TStringList.Create;
+  try
+    Received := TStringList.Create;
+    try
+      Expected.Text := 'ActsAsRegistrar: True';
+      Expected.Insert(0, '');
+      Expected.Insert(1, EventNames(CM_STACK_RECONFIGURED));
+      Received.Text := Self.Data.AsString;
+
+      // We ignore the first line of the debug data (it's a timestamp & a
+      // handle)
+      Received[0] := '';
+
+      CheckEquals(Expected.Text,
+                  Received.Text,
+                  'Unexpected debug data');
+    finally
+      Received.Free;
+    end;
+  finally
+    Expected.Free;
+  end;
+end;
+
+procedure TestTIdStackReconfiguredData.TestCopy;
+var
+  Copy: TIdStackReconfiguredData;
+begin
+  Copy := Self.Data.Copy as TIdStackReconfiguredData;
+  try
+    CheckEquals(Self.Data.ActsAsRegistrar, Copy.ActsAsRegistrar, 'ActsAsRegistrar');
   finally
     Copy.Free;
   end;
