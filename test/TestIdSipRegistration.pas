@@ -64,6 +64,9 @@ type
     DB:             TIdSipMockBindingDatabase;
     Wintermute:     TIdSipContactHeader;
     WintermutesAOR: TIdSipRequest;
+
+    procedure SetDBForTwoWintermuteContacts;
+    procedure SetDBForTwoWintermuteContactsWithGruus;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -72,6 +75,9 @@ type
     procedure TestBindingsFor;
     procedure TestBindingsForClearsListParam;
     procedure TestBindingsForWithGruus;
+    procedure TestBindingsForUri;
+    procedure TestBindingsForUriClearsListParam;
+    procedure TestBindingsForUriWithGruus;
     procedure TestBindingsForWithGruusReusesCreatedGruus;
     procedure TestBindingsForWithGruusSips;
     procedure TestIsAuthorized;
@@ -481,6 +487,27 @@ begin
   inherited TearDown;
 end;
 
+//* TestTIdSipMockBindingDatabase Private methods ******************************
+
+procedure TestTIdSipMockBindingDatabase.SetDBForTwoWintermuteContacts;
+begin
+  Self.DB.AddBindings(Self.WintermutesAOR);
+  Self.Wintermute.Value := 'Wintermute <sip:wintermute@talking-head.tessier-ashpool.co.luna>';
+  Self.DB.AddBindings(Self.WintermutesAOR);
+end;
+
+procedure TestTIdSipMockBindingDatabase.SetDBForTwoWintermuteContactsWithGruus;
+begin
+  Self.DB.UseGruu := true;
+  Self.WintermutesAOR.Supported.Values.Add(ExtensionGruu);
+
+  Self.DB.AddBindings(Self.WintermutesAOR);
+  Self.Wintermute.Value := 'Wintermute <sip:wintermute@talking-head.tessier-ashpool.co.luna>';
+  Self.DB.AddBindings(Self.WintermutesAOR);
+
+  Self.DB.AddBindings(Self.CasesAOR);
+end;
+
 //* TestTIdSipMockBindingDatabase Published methods ****************************
 
 procedure TestTIdSipMockBindingDatabase.TestAddBindings;
@@ -511,9 +538,7 @@ procedure TestTIdSipMockBindingDatabase.TestBindingsFor;
 var
   Bindings: TIdSipContacts;
 begin
-  Self.DB.AddBindings(Self.WintermutesAOR);
-  Self.Wintermute.Value := 'Wintermute <sip:wintermute@talking-head.tessier-ashpool.co.luna>';
-  Self.DB.AddBindings(Self.WintermutesAOR);
+  Self.SetDBForTwoWintermuteContacts;
 
   Self.DB.AddBindings(Self.CasesAOR);
 
@@ -531,9 +556,7 @@ procedure TestTIdSipMockBindingDatabase.TestBindingsForClearsListParam;
 var
   Bindings: TIdSipContacts;
 begin
-  Self.DB.AddBindings(Self.WintermutesAOR);
-  Self.Wintermute.Value := 'Wintermute <sip:wintermute@talking-head.tessier-ashpool.co.luna>';
-  Self.DB.AddBindings(Self.WintermutesAOR);
+  Self.SetDBForTwoWintermuteContacts;
 
   Bindings := TIdSipContacts.Create;
   try
@@ -551,20 +574,84 @@ var
   Bindings: TIdSipContacts;
   Gruu:     TIdSipUri;
 begin
-  Self.DB.UseGruu := true;
-  Self.WintermutesAOR.Supported.Values.Add(ExtensionGruu);
-
-  Self.DB.AddBindings(Self.WintermutesAOR);
-  Self.Wintermute.Value := 'Wintermute <sip:wintermute@talking-head.tessier-ashpool.co.luna>';
-  Self.DB.AddBindings(Self.WintermutesAOR);
-
-  Self.DB.AddBindings(Self.CasesAOR);
+  Self.SetDBForTwoWintermuteContactsWithGruus;
 
   Gruu := TIdSipUri.Create('');
   try
     Bindings := TIdSipContacts.Create;
     try
       Self.DB.BindingsFor(Self.WintermutesAOR, Bindings);
+
+      CheckEquals(2, Bindings.Count, 'Wrong number of bindings');
+
+      Bindings.First;
+      while Bindings.HasNext do begin
+        Check(Bindings.CurrentContact.HasParameter(GruuParam),
+              'No "gruu" parameter: ' + Bindings.CurrentContact.FullValue);
+        CheckNotEquals('',
+                       Bindings.CurrentContact.Gruu,
+                      'Empty "gruu" parameter: ' + Bindings.CurrentContact.FullValue);
+        Gruu.Uri := Bindings.CurrentContact.Gruu;
+        Check(not Gruu.IsMalformed,
+              'Malformed "gruu" parameter: ' + Bindings.CurrentContact.Gruu);
+
+        Bindings.Next;
+      end;
+    finally
+      Bindings.Free;
+    end;
+  finally
+    Gruu.Free;
+  end;
+end;
+
+procedure TestTIdSipMockBindingDatabase.TestBindingsForUri;
+var
+  Bindings: TIdSipContacts;
+begin
+  Self.SetDBForTwoWintermuteContacts;
+
+  Self.DB.AddBindings(Self.CasesAOR);
+
+  Bindings := TIdSipContacts.Create;
+  try
+    Self.DB.BindingsFor(Self.WintermutesAOR.ToHeader.Address, Bindings, false);
+
+    CheckEquals(2, Bindings.Count, 'Wrong number of bindings');
+  finally
+    Bindings.Free;
+  end;
+end;
+
+procedure TestTIdSipMockBindingDatabase.TestBindingsForUriClearsListParam;
+var
+  Bindings: TIdSipContacts;
+begin
+  Self.SetDBForTwoWintermuteContacts;
+
+  Bindings := TIdSipContacts.Create;
+  try
+    Bindings.Add(Self.Wintermute);
+
+    Self.DB.BindingsFor(Self.CasesAOR.ToHeader.Address, Bindings, false);
+    CheckEquals(0, Bindings.Count, 'Wrong number of bindings');
+  finally
+    Bindings.Free;
+  end;
+end;
+
+procedure TestTIdSipMockBindingDatabase.TestBindingsForUriWithGruus;
+var
+  Bindings: TIdSipContacts;
+  Gruu:     TIdSipUri;
+begin
+  Self.SetDBForTwoWintermuteContactsWithGruus;
+
+  Gruu := TIdSipUri.Create('');
+  try
+    Bindings := TIdSipContacts.Create;
+    try
+      Self.DB.BindingsFor(Self.WintermutesAOR.ToHeader.Address, Bindings, true);
 
       CheckEquals(2, Bindings.Count, 'Wrong number of bindings');
 

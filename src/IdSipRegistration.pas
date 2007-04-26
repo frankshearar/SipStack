@@ -146,7 +146,10 @@ type
     function  BindingExpires(const AddressOfRecord: String;
                              const CanonicalUri: String): TDateTime;
     function  BindingsFor(Request: TIdSipRequest;
-                          Contacts: TIdSipContacts): Boolean; virtual;
+                          Contacts: TIdSipContacts): Boolean; overload;
+    function  BindingsFor(Target: TIdSipURI;
+                          Contacts: TIdSipContacts;
+                          UseGruu: Boolean): Boolean; overload; virtual;
     function  NotOutOfOrder(Request: TIdSipRequest;
                             Contact: TIdSipContactHeader): Boolean;
     function  RemoveAllBindings(Request: TIdSipRequest): Boolean;
@@ -759,10 +762,19 @@ end;
 function TIdSipAbstractBindingDatabase.BindingsFor(Request: TIdSipRequest;
                                                    Contacts: TIdSipContacts): Boolean;
 begin
+  Result := Self.BindingsFor(Request.ToHeader.Address,
+                             Contacts,
+                             Request.SupportsExtension(ExtensionGruu) and Self.UseGruu)
+end;
+
+function TIdSipAbstractBindingDatabase.BindingsFor(Target: TIdSipURI;
+                                                   Contacts: TIdSipContacts;
+                                                   UseGruu: Boolean): Boolean;
+begin
   Contacts.Clear;
-  Result := Self.CollectBindingsFor(Request.AddressOfRecord,
+  Result := Self.CollectBindingsFor(Target.AsString,
                                     Contacts,
-                                    Request.SupportsExtension(ExtensionGruu) and Self.UseGruu);
+                                    UseGruu);
 end;
 
 function TIdSipAbstractBindingDatabase.NotOutOfOrder(Request: TIdSipRequest;
