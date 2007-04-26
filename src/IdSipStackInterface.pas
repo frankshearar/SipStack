@@ -3080,7 +3080,7 @@ end;
 
 function TIdStackReconfiguredData.Data: String;
 begin
-  Result := 'ActsAsRegistrar: ' + BoolToStr(Self.ActsAsRegistrar, true);
+  Result := 'ActsAsRegistrar: ' + BoolToStr(Self.ActsAsRegistrar, true) + CRLF;
 end;
 
 function TIdStackReconfiguredData.EventName: String;
