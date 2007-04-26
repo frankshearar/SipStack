@@ -447,6 +447,8 @@ begin
   try
     Self.Client.Timer := LiveTimer;
     Self.Server.Timer := LiveTimer;
+
+    Self.Server.NotifyListeners := true;
     Self.Server.AddListener(Self);
 
     Bye := TIdRTCPBye.Create;

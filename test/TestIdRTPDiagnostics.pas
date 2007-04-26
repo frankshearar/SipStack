@@ -205,6 +205,7 @@ procedure TestTIdRTPPayloadHistogram.TestGetData;
 var
   Hist: TIdHistogram;
 begin
+  Self.Receiver.NotifyListeners := true;
   Self.Hist.AddObserver(Self);
 
   Self.ExceptionMessage := 'Waiting for OnChanged: 1';
@@ -243,9 +244,10 @@ begin
 end;
 
 procedure TestTIdRTPPayloadHistogram.TestOnePayloadType;
-
 begin
+  Self.Receiver.NotifyListeners := true;
   Self.Hist.AddObserver(Self);
+  
   CheckEquals(0, Self.Hist.RTPTypeCount, 'No data sent yet');
 
   Self.SendData(0);

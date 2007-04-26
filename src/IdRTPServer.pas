@@ -44,11 +44,21 @@ type
   // these Wait objects are scheduled to execute at the same time, and are
   // scheduled in a very short space of time, you cannot assume a particular
   // ordering of these RTCP Waits.)
+  //
+  // If NotifyListeners is true, we notify the Listeners of this class of
+  // received packets as per usual. This is only useful as a debugging aid,
+  // because usually you want to hand off the received packets to a TimerQueue.
+  // (You want this because it's threadsafe - all the packet processing then
+  // takes place in the context of the TimerQueue and not in the context of the
+  // thread listening on the RTP or RTCP port.) In the typical production setup
+  // then, if NotifyListeners is true you will receive every packet twice - once
+  // because of the NotificationList, and once because of the TIdWait event.  
   TIdRTPServer = class(TIdBaseRTPAbstractPeer)
   private
-    ManuallySetRTCP: Boolean;
-    RTCP:            TIdUDPServer;
-    RTP:             TIdUDPServer;
+    fNotifyListeners: Boolean;
+    ManuallySetRTCP:  Boolean;
+    RTCP:             TIdUDPServer;
+    RTP:              TIdUDPServer;
 
     function  CreateServer(const DefaultAddress: String; DefaultPort: Integer): TIdUDPServer;
     procedure ReceiveInTimerContext(Packet: TIdRTPBasePacket;
@@ -83,11 +93,12 @@ type
                          Port: Cardinal;
                          Packet: TIdRTPBasePacket); override;
   published
-    property Active:      Boolean  read GetActive write SetActive;
-    property Address:     String   read GetAddress write SetAddress;
-    property DefaultPort: Integer  read GetDefaultPort write SetDefaultPort;
-    property RTCPPort:    Cardinal read GetRTCPPort write SetRTCPPort;
-    property RTPPort:     Cardinal read GetRTPPort write SetRTPPort;
+    property Active:          Boolean  read GetActive write SetActive;
+    property Address:         String   read GetAddress write SetAddress;
+    property DefaultPort:     Integer  read GetDefaultPort write SetDefaultPort;
+    property NotifyListeners: Boolean  read fNotifyListeners write fNotifyListeners;
+    property RTCPPort:        Cardinal read GetRTCPPort write SetRTCPPort;
+    property RTPPort:         Cardinal read GetRTPPort write SetRTPPort;
   end;
 
 implementation
@@ -102,6 +113,7 @@ begin
   inherited Create;
 
   Self.ManuallySetRTCP := false;
+  Self.NotifyListeners := false;
 
   Self.RTP  := Self.CreateServer('127.0.0.1', 8000);
   Self.RTCP := Self.CreateServer('127.0.0.1', Self.RTP.DefaultPort + 1);
@@ -118,7 +130,8 @@ end;
 procedure TIdRTPServer.ReceivePacket(Packet: TIdRTPBasePacket;
                                      Binding: TIdConnection);
 begin
-  inherited ReceivePacket(Packet, Binding);
+  if Self.NotifyListeners then
+    inherited ReceivePacket(Packet, Binding);
 
   if Packet.IsRTP then
     Self.ReceiveInTimerContext(Packet, Binding)
