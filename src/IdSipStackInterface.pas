@@ -3131,8 +3131,6 @@ begin
   Stack := TIdSipStackInterfaceRegistry.FindStackInterface(Self.StackID);
 
   if Assigned(Stack) then begin
-    Stack.Configure(Self.Configuration);
-
     Configurator := TIdSipStackConfigurator.Create;
     try
       Configurator.UpdateConfiguration(Stack.UserAgent, Self.Configuration);
@@ -3152,6 +3150,8 @@ begin
     finally
       Configurator.Free;
     end;
+
+    Stack.Configure(Self.Configuration);    
 
     Stack.NotifyOfReconfiguration;
   end;
