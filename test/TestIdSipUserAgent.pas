@@ -249,6 +249,7 @@ type
     procedure TestDatabaseDirectiveUnknown;
     procedure TestMisorderedDatabaseDirectiveMock;
     procedure TestMisorderedUseGruuDirective;
+    procedure TestNoRegisterDatabaseDirectiveUsesMockDatabase;
     procedure TestUseGruuDirective;
   end;
 
@@ -3445,6 +3446,15 @@ begin
   finally
     UA.Free;
   end;
+end;
+
+procedure TestConfigureRegistrar.TestNoRegisterDatabaseDirectiveUsesMockDatabase;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('NameServer: MOCK');
+  Self.Configuration.Add('ActAsRegistrar: true');
+
+  Self.CheckMockDatabase(Self.Configuration);
 end;
 
 procedure TestConfigureRegistrar.TestDatabaseDirectiveImpliesActAsRegistrarDirective;

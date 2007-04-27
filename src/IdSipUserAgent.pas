@@ -182,6 +182,8 @@ type
     procedure ParseLine(UserAgent: TIdSipUserAgent;
                         const ConfigurationLine: String;
                         PendingActions: TObjectList);
+    procedure PostConfigurationActions(UA: TIdSipUserAgent);
+    procedure PreConfigurationActions(UA: TIdSipUserAgent);
     procedure RegisterUA(UserAgent: TIdSipUserAgent;
                          const RegisterLine: String;
                          PendingActions: TObjectList);
@@ -1132,8 +1134,13 @@ procedure TIdSipStackConfigurator.ParseFile(UserAgent: TIdSipUserAgent;
 var
   I: Integer;
 begin
-  for I := 0 to Configuration.Count - 1 do
-    Self.ParseLine(UserAgent, Configuration[I], PendingActions);
+  Self.PreConfigurationActions(UserAgent);
+  try
+    for I := 0 to Configuration.Count - 1 do
+      Self.ParseLine(UserAgent, Configuration[I], PendingActions);
+  finally
+    Self.PostConfigurationActions(UserAgent);
+  end;
 end;
 
 procedure TIdSipStackConfigurator.ParseLine(UserAgent: TIdSipUserAgent;
@@ -1182,6 +1189,22 @@ begin
     Self.UseGruu(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, UserAgentNameDirective) then
     Self.UserAgentName(UserAgent, ConfigurationLine);
+end;
+
+procedure TIdSipStackConfigurator.PostConfigurationActions(UA: TIdSipUserAgent);
+var
+  RegMod: TIdSipRegisterModule;
+begin
+  if UA.UsesModule(TIdSipRegisterModule) then begin
+    RegMod := UA.ModuleFor(TIdSipRegisterModule) as TIdSipRegisterModule;
+
+    if not Assigned(RegMod.BindingDB) then
+      RegMod.BindingDB := TIdSipMockBindingDatabase.Create;
+  end;
+end;
+
+procedure TIdSipStackConfigurator.PreConfigurationActions(UA: TIdSipUserAgent);
+begin
 end;
 
 procedure TIdSipStackConfigurator.RegisterUA(UserAgent: TIdSipUserAgent;
