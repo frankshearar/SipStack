@@ -157,7 +157,7 @@ type
   end;
 
   TIdSipTestActionListener = class(TIdInterfacedObject,
-                             IIdSipActionListener)
+                                   IIdSipActionListener)
   private
     fActionParam:              TIdSipAction;
     fAuthenticationChallenged: Boolean;
