@@ -1392,6 +1392,8 @@ begin
         '"grid" parameter not removed from 1st Contact URI');
   Check(not Request.FirstContact.Address.HasParameter(GruuParam),
         '"gruu" parameter not removed from 1st Contact URI');
+  Check(Request.FirstContact.HasParameter(SipInstanceParam),
+        '"+sip.instance" parameter removed from first Contact URI');
 
   Request.Contacts.First;
   Request.Contacts.Next;
