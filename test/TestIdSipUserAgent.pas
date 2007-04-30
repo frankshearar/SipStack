@@ -1520,6 +1520,8 @@ begin
   Self.MarkSentRequestCount;
   Self.Core.RegisterWith(Self.RemoteTarget, Self.Core.From).Send;
   CheckRequestSent('No REGISTER sent');
+  Check(Self.LastSentRequest.FirstContact.HasParameter(SipInstanceParam), 'REGISTER has no sip.instance parameter in its (first) Contact');
+  CheckEquals(Self.Core.InstanceID, Self.LastSentRequest.FirstContact.SipInstance, 'sip.instance parameter not sent');
 
   OkWithGruu := TIdSipResponse.InResponseTo(Self.LastSentRequest, SIPOK);
   try
