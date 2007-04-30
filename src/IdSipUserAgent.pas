@@ -97,6 +97,7 @@ type
   //   From: "Count Zero" <sip:countzero@jammer.org>
   //   HostName: talkinghead1.tessier-ashpool.co.luna
   //   HostName: 192.168.1.1
+  //   InstanceID: urn:uuid:00000000-0000-0000-0000-000000000000
   //   Listen: <transport name><SP><host|IPv4 address|IPv6 reference|AUTO>:<port>
   //   Listen: UDP AUTO
   //   Listen: UDP 127.0.0.1
@@ -112,7 +113,6 @@ type
   //   Route: <SIP/S URI>
   //   RoutingTable: MOCK
   //   SupportEvent: refer
-  //   InstanceID: urn:uuid:00000000-0000-0000-0000-000000000000
   //   UseGruu: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
   //
   // Registrar-specific directives are:
