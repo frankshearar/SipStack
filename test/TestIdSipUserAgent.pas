@@ -162,6 +162,8 @@ type
     NewRegistrar:               TIdUdpServer;
     NewRegistrarReceivedPacket: Boolean;
     NewRegistrarEvent:          TEvent;
+    Port:                       Cardinal;
+    ReceivedRequest:            TIdSipRequest;
     ReceivedPacket:             Boolean;
     Server:                     TIdUdpServer;
 
@@ -176,6 +178,8 @@ type
                                       const Msg: String);
     procedure CheckUserAgentUsesGruu(Configuration: TStrings; Value: String; UsesGruu: Boolean);
     function  CreateUserAgentWithUsesGruuDirective(Configuration: TStrings; Value: String): TIdSipUserAgent;
+    procedure CheckConfigurationInstanceIdAndRegister(ExtraDirectives: TStrings;
+                                                      InstanceID: String);
     procedure NoteReceiptOfPacket(Sender: TObject;
                                   AData: TStream;
                                   ABinding: TIdSocketHandle);
@@ -206,6 +210,7 @@ type
     procedure TestCreateUserAgentWithFrom;
     procedure TestCreateUserAgentWithHostName;
     procedure TestCreateUserAgentWithInstanceID;
+    procedure TestCreateUserAgentWithInstanceIDAndRegister;
     procedure TestCreateUserAgentWithLocator;
     procedure TestCreateUserAgentWithMalformedFrom;
     procedure TestCreateUserAgentWithMalformedLocator;
@@ -221,6 +226,7 @@ type
     procedure TestCreateUserAgentWithNoFrom;
     procedure TestCreateUserAgentWithOneTransport;
     procedure TestCreateUserAgentWithReferSupport;
+    procedure TestCreateUserAgentWithRegisterAndInstanceID;
     procedure TestCreateUserAgentWithRegistrar;
     procedure TestCreateUserAgentWithResolveNamesLocallyFirst;
     procedure TestCreateUserAgentWithRouteHeaders;
@@ -2064,6 +2070,8 @@ begin
   TIdSipEventPackageRegistry.RegisterEvent(TIdSipTargetDialogPackage);
   TIdSipEventPackageRegistry.RegisterEvent(TIdSipReferPackage);
 
+  Self.ReceivedRequest := TIdSipRequest.Create;
+
   Self.NewRegistrarReceivedPacket := false;
   Self.ReceivedPacket             := false;
 end;
@@ -2073,6 +2081,7 @@ begin
   TIdSipEventPackageRegistry.UnregisterEvent(TIdSipReferPackage);
   TIdSipEventPackageRegistry.UnregisterEvent(TIdSipTargetDialogPackage);
 
+  Self.ReceivedRequest.Free;
   Self.Server.Free;
   Self.NewRegistrar.Free;
   Self.NewRegistrarEvent.Free;
@@ -2241,10 +2250,44 @@ begin
   end;
 end;
 
+procedure TestTIdSipStackConfigurator.CheckConfigurationInstanceIdAndRegister(ExtraDirectives: TStrings;
+                                                                              InstanceID: String);
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('NameServer: MOCK');
+  Self.Configuration.Add('UseGruu: true');
+  Self.Configuration.AddStrings(ExtraDirectives);
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(InstanceID, UA.InstanceID, 'Instance-ID');
+
+    Self.WaitForSignaled('Waiting for REGISTER');
+    Check(Self.ReceivedPacket, 'No REGISTER sent to registrar');
+    Check(Self.ReceivedRequest.FirstContact.HasParameter(SipInstanceParam),
+          'REGISTER has no "sip.instance" parameter');
+    CheckEquals(InstanceID, Self.ReceivedRequest.FirstContact.SipInstance, '"sip.instance" parameter');
+  finally
+    UA.Free;
+  end;
+end;
+
 procedure TestTIdSipStackConfigurator.NoteReceiptOfPacket(Sender: TObject;
                                                           AData: TStream;
                                                           ABinding: TIdSocketHandle);
+var
+  Msg: TIdSipMessage;
 begin
+  Msg := TIdSipMessage.ReadMessageFrom(AData);
+  try
+    if Msg.IsRequest then
+      Self.ReceivedRequest.Assign(Msg);
+  finally
+    Msg.Free;
+  end;
+
   Self.ReceivedPacket := true;
   Self.ThreadEvent.SetEvent;
 end;
@@ -2515,6 +2558,23 @@ begin
         + 'support for GRUU');
   finally
     UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithInstanceIDAndRegister;
+const
+  InstanceID = 'urn:uuid:12345678-1234-1234-1234-123456789012';
+var
+  InstanceIDThenRegister: TStrings;
+begin
+  InstanceIDThenRegister := TStringList.Create;
+  try
+    InstanceIDThenRegister.Add('InstanceID: ' + InstanceID);
+    InstanceIDThenRegister.Add('Register: sip:127.0.0.1:' + IntToStr(Self.Server.DefaultPort));
+
+    Self.CheckConfigurationInstanceIdAndRegister(InstanceIDThenRegister, InstanceID);
+  finally
+    InstanceIDThenRegister.Free;
   end;
 end;
 
@@ -2881,6 +2941,23 @@ begin
     end;
   finally
     TIdSipEventPackageRegistry.UnregisterEvent(TIdSipReferPackage);
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithRegisterAndInstanceID;
+const
+  InstanceID = 'urn:uuid:12345678-1234-1234-1234-123456789012';
+var
+  RegisterThenInstanceID: TStrings;
+begin
+  RegisterThenInstanceID := TStringList.Create;
+  try
+    RegisterThenInstanceID.Add('Register: sip:127.0.0.1:' + IntToStr(Self.Server.DefaultPort));
+    RegisterThenInstanceID.Add('InstanceID: ' + InstanceID);
+
+    Self.CheckConfigurationInstanceIdAndRegister(RegisterThenInstanceID, InstanceID);
+  finally
+    RegisterThenInstanceID.Free;
   end;
 end;
 
