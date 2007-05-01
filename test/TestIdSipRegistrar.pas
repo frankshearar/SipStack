@@ -218,6 +218,7 @@ type
     procedure TestAutoReregisterNoExpiresValue;
     procedure TestAutoReregisterSwitchedOff;
     procedure TestReceiveGruu;
+    procedure TestReceiveNoGruu;
     procedure TestReregisterTime;
   end;
 
@@ -2029,6 +2030,40 @@ begin
   finally
     LocalContact.Free;
   end;
+end;
+
+procedure TestTIdSipOutboundRegistration.TestReceiveNoGruu;
+const
+  OurUrn   = 'urn:uuid:00000000-0000-0000-0000-000000000000';
+var
+  Gruu:       TIdSipContactHeader;
+  OldContact: String;
+  OkWithGruu: TIdSipResponse;
+begin
+  Self.UseGruu;
+
+  Self.MarkSentRequestCount;
+  Self.CreateAction;
+  CheckRequestSent('No REGISTER sent');
+
+  OldContact := Self.LastSentRequest.FirstContact.AsString;
+
+  OkWithGruu := TIdSipResponse.InResponseTo(Self.LastSentRequest, SIPOK);
+  try
+    OkWithGruu.Supported.Values.Add(ExtensionGruu);
+    Gruu := OkWithGruu.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
+    Gruu.Value := Self.LastSentRequest.FirstContact.FullValue;
+
+    Self.ReceiveResponse(OkWithGruu);
+  finally
+    OkWithGruu.Free;
+  end;
+
+  Self.MarkSentRequestCount;
+  Self.CreateAction;
+  CheckRequestSent('No REGISTER sent');
+
+  CheckEquals(OldContact, Self.LastSentRequest.FirstContact.AsString, 'UserAgent''s Contact not protected');
 end;
 
 procedure TestTIdSipOutboundRegistration.TestReregisterTime;
