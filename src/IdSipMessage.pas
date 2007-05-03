@@ -1592,6 +1592,7 @@ type
     function  IsRegister: Boolean;
     function  IsRequest: Boolean; override;
     function  IsSubscribe: Boolean;
+    function  IsValidWildcardUnregister: Boolean;
     function  MalformedException: EBadMessageClass; override;
     function  Match(Msg: TIdSipMessage): Boolean;
     function  MatchCancel(Cancel: TIdSipRequest): Boolean;
@@ -9327,6 +9328,31 @@ end;
 function TIdSipRequest.IsSubscribe: Boolean;
 begin
   Result := Self.Method = MethodSubscribe;
+end;
+
+function TIdSipRequest.IsValidWildcardUnregister: Boolean;
+begin
+  Result := Self.IsRegister;
+  if not Result then Exit;
+
+  Result := Self.HasHeader(ContactHeaderFull);
+  if not Result then Exit;
+
+  // If it has both an Expire and an "expires" and both are zero then return true.
+  // If it has only an Expires: 0 then return true.
+  // If it has only ";expires=0" then return true.
+
+  if (Self.HasHeader(ExpiresHeader) and Self.FirstContact.WillExpire) then begin
+    Result := (Self.Expires.NumericValue = 0) and (Self.FirstContact.Expires = 0);
+  end
+  else if Self.HasHeader(ExpiresHeader) then begin
+    Result := Self.Expires.NumericValue = 0;
+  end
+  else if Self.FirstContact.WillExpire then begin
+    Result := Self.FirstContact.Expires = 0;
+  end
+  else
+    Result := false;
 end;
 
 function TIdSipRequest.MalformedException: EBadMessageClass;

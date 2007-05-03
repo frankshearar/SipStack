@@ -56,6 +56,8 @@ type
     procedure TestReceiveWildcard;
     procedure TestReceiveWildcardWithExtraContacts;
     procedure TestReceiveWildcardWithNonzeroExpiration;
+    procedure TestReceiveWildcardWithZeroExpiresHeader;
+    procedure TestReceiveWildcardWithZeroExpiresHeaderButNonzeroExpiresParam;
     procedure TestRegisterAddsBindings;
     procedure TestRegisterAddsMultipleBindings;
     procedure TestRejectRegisterWithReplacesHeader;
@@ -697,6 +699,40 @@ begin
   Self.SimulateRemoteRequest;
   Self.CheckServerReturned(SIPBadRequest,
                            'Wildcard contact with non-zero expires');
+end;
+
+procedure TestTIdSipRegistrar.TestReceiveWildcardWithZeroExpiresHeader;
+begin
+  Self.DB.AddBindings(Self.Request);
+  // Remember the rules of RFC 3261 section 10.3 step 6!
+  Self.Request.CallID := Self.Request.CallID + '1';
+
+  Self.FirstContact.IsWildCard := true;
+  Self.Request.AddHeader(ExpiresHeader).Value := '0';
+  Self.SimulateRemoteRequest;
+
+  Self.CheckServerReturnedOK('Wildcard contact with Expires header');
+
+  CheckEquals(0, Self.DB.BindingCount, 'No bindings removed');
+end;
+
+procedure TestTIdSipRegistrar.TestReceiveWildcardWithZeroExpiresHeaderButNonzeroExpiresParam;
+var
+  OldBindingCount: Integer;
+begin
+  Self.DB.AddBindings(Self.Request);
+  OldBindingCount := Self.DB.BindingCount;
+  // Remember the rules of RFC 3261 section 10.3 step 6!
+  Self.Request.CallID := Self.Request.CallID + '1';
+
+  Self.FirstContact.IsWildCard := true;
+  Self.FirstContact.Expires := 1;
+  Self.Request.AddHeader(ExpiresHeader).Value := '0';
+  Self.SimulateRemoteRequest;
+
+  Self.CheckServerReturned(SIPBadRequest, 'Wildcard contact with (zero) Expires header and (nonzero) "expires" parameter.');
+
+  CheckEquals(OldBindingCount, Self.DB.BindingCount, 'Bindings removed');
 end;
 
 procedure TestTIdSipRegistrar.TestRegisterAddsBindings;

@@ -196,6 +196,7 @@ type
     procedure TestIsRequest;
     procedure TestIsResponse;
     procedure TestIsSubscribe;
+    procedure IsValidWildcardUnregister;
     procedure TestMatchRFC2543Options;
     procedure TestMatchRFC2543Cancel;
     procedure TestMatchCancel;
@@ -2969,6 +2970,48 @@ begin
 
   Self.Request.Method := MethodSubscribe;
   Check(Self.Request.IsSubscribe, MethodSubscribe);
+end;
+
+procedure TestTIdSipRequest.IsValidWildcardUnregister;
+begin
+  Self.Request.Method      := MethodRegister;
+  Self.Request.CSeq.Method := Self.Request.Method;
+
+  Self.Request.RemoveAllHeadersNamed(ContactHeaderFull);
+  Check(not Self.Request.IsValidWildcardUnregister, 'No Contacts');
+
+  Self.Request.FirstContact.Value := 'sip:case@unit22.local';
+  Check(not Self.Request.IsValidWildcardUnregister, 'Normal Contact');
+
+  Self.Request.FirstContact.Value := '*';
+  Check(not Self.Request.IsValidWildcardUnregister, 'Wildcard Contact, no Expires or "expires"');
+
+  Self.Request.Expires.NumericValue := 1;
+  Check(not Self.Request.IsValidWildcardUnregister, 'Wildcard Contact, non-zero Expires');
+
+  Self.Request.RemoveAllHeadersNamed(ExpiresHeader);
+  Self.Request.FirstContact.Expires := 1;
+  Check(not Self.Request.IsValidWildcardUnregister, 'Wildcard Contact, non-zero "expires"');
+
+  Self.Request.FirstContact.Expires := 1;
+  Self.Request.Expires.NumericValue := 0;
+  Check(not Self.Request.IsValidWildcardUnregister, 'Wildcard Contact, zero Expires, non-zero "expires"');
+
+  Self.Request.FirstContact.Expires := 0;
+  Self.Request.Expires.NumericValue := 1;
+  Check(not Self.Request.IsValidWildcardUnregister, 'Wildcard Contact, non-zero Expires, zero "expires"');
+
+  Self.Request.FirstContact.RemoveParameter(ExpiresParam);
+  Self.Request.Expires.NumericValue := 0;
+  Check(Self.Request.IsValidWildcardUnregister, 'Wildcard Contact, zero Expires');
+
+  Self.Request.RemoveAllHeadersNamed(ExpiresHeader);
+  Self.Request.FirstContact.Expires := 0;
+  Check(Self.Request.IsValidWildcardUnregister, 'Wildcard Contact, zero "expires"');
+
+  Self.Request.Method      := MethodInvite;
+  Self.Request.CSeq.Method := Self.Request.Method;
+  Check(not Self.Request.IsValidWildcardUnregister, 'INVITE, Wildcard Contact, zero "expires"');
 end;
 
 procedure TestTIdSipRequest.TestMatchRFC2543Options;

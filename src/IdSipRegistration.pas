@@ -1261,7 +1261,7 @@ begin
         Exit;
       end;
 
-      Result := Request.FirstContact.WillExpire and (Request.FirstContact.Expires = 0);
+      Result := Request.IsValidWildcardUnregister;
 
       if not Result then begin
         Self.RejectRequest(Request, SIPBadRequest);
