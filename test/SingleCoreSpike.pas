@@ -442,7 +442,7 @@ end;
 
 procedure TSingleCore.RejectActionExecute(Sender: TObject);
 begin
-  Self.Stack.RejectCall(Self.CallHandle);
+  Self.Stack.RejectCall(Self.CallHandle, SIPBusyHere);
 end;
 
 end.

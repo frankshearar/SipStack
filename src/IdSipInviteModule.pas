@@ -236,7 +236,7 @@ type
     function  GetProgressResendInterval: Cardinal;
     procedure NotifyOfFailure; reintroduce; overload;
     procedure ScheduleResendOk(Interval: Cardinal);
-    procedure SendSimpleResponse(StatusCode: Cardinal);
+    procedure SendSimpleResponse(StatusCode: Cardinal; StatusText: String = '');
   protected
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
@@ -256,6 +256,7 @@ type
     procedure Redirect(NewDestination: TIdSipAddressHeader;
                        Temporary: Boolean = true);
     procedure RejectCallBusy;
+    procedure RejectCall(StatusCode: Cardinal; StatusText: String = '');
     procedure RemoveListener(const Listener: IIdSipInboundInviteListener);
     procedure ResendOk;
     procedure Ring;
@@ -559,6 +560,7 @@ type
     function  ModifyWaitTime: Cardinal; override;
     procedure RedirectCall(NewDestination: TIdSipAddressHeader);
     procedure RejectCallBusy;
+    procedure RejectCall(ReasonCode: Cardinal; ReasonText: String = '');
     procedure Ring;
     procedure Terminate; override;
   end;
@@ -732,8 +734,14 @@ type
   end;
 
   TIdSipSessionRejectWait = class(TIdSipInboundSessionWait)
+  private
+    fStatusCode: Cardinal;
+    fStatusText: String;
   public
     procedure Trigger; override;
+
+    property StatusCode: Cardinal read fStatusCode write fStatusCode;
+    property StatusText: String   read fStatusText write fStatusText;
   end;
 
   TIdSipInviteModuleInboundCallMethod = class(TIdNotification)
@@ -1405,6 +1413,11 @@ begin
   Self.SendSimpleResponse(SIPBusyHere);
 end;
 
+procedure TIdSipInboundInvite.RejectCall(StatusCode: Cardinal; StatusText: String = '');
+begin
+  Self.SendSimpleResponse(StatusCode, StatusText);
+end;
+
 procedure TIdSipInboundInvite.RemoveListener(const Listener: IIdSipInboundInviteListener);
 begin
   Self.ActionListeners.RemoveListener(Listener);
@@ -1612,7 +1625,7 @@ begin
                         Self.ID);
 end;
 
-procedure TIdSipInboundInvite.SendSimpleResponse(StatusCode: Cardinal);
+procedure TIdSipInboundInvite.SendSimpleResponse(StatusCode: Cardinal; StatusText: String = '');
 var
   Response: TIdSipResponse;
 begin
@@ -1621,6 +1634,9 @@ begin
                                      StatusCode,
                                      Self.LocalGruu);
   try
+    if (StatusText <> '') then
+      Response.StatusText := StatusText;
+      
     if Response.FirstContact.IsGruu then begin
       Response.FirstContact.Grid := Self.Grid;
       Self.LocalGruu := Response.FirstContact;
@@ -2882,12 +2898,17 @@ end;
 
 procedure TIdSipInboundSession.RejectCallBusy;
 begin
+  Self.RejectCall(SIPBusyHere);
+end;
+
+procedure TIdSipInboundSession.RejectCall(ReasonCode: Cardinal; ReasonText: String = '');
+begin
   if not Assigned(Self.InitialInvite) then
     raise EIdSipTransactionUser.Create('You have already accepted the call');
 
-  Self.InitialInvite.RejectCallBusy;
+  Self.InitialInvite.RejectCall(ReasonCode, ReasonText);
 
-  Self.NotifyOfEndedSession(BusyHere, RSNoReason);
+  Self.NotifyOfEndedSession(NoError, RSNoReason);
 end;
 
 procedure TIdSipInboundSession.Ring;
@@ -3527,7 +3548,7 @@ end;
 
 procedure TIdSipSessionRejectWait.Trigger;
 begin
-  Self.Session.RejectCallBusy;
+  Self.Session.RejectCall(Self.StatusCode, Self.StatusText);
 end;
 
 //******************************************************************************

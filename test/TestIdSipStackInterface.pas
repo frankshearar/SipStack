@@ -1788,6 +1788,9 @@ begin
 end;
 
 procedure TestTIdSipStackInterface.TestRejectCall;
+const
+  StatusCode = SIPBusyHere;
+  StatusText = 'Call again later';
 begin
   Self.ReceiveInviteWithOffer(Self.RemoteOffer, Self.RemoteMimeType);
   Self.ProcessAllPendingNotifications;
@@ -1796,10 +1799,11 @@ begin
   Check(Self.LastEventOfType(TIdInboundCallData).Handle > 0, 'Invalid Action handle');
 
   Self.MarkSentResponseCount;
-  Self.Intf.RejectCall(Self.SecondLastEventData.Handle);
+  Self.Intf.RejectCall(Self.SecondLastEventData.Handle, StatusCode, StatusText);
   Self.TimerQueue.TriggerAllEventsOfType(TIdSipSessionRejectWait);
   CheckResponseSent('No response sent');
-  CheckEquals(SIPBusyHere, Self.LastSentResponse.StatusCode, 'Unexpected response sent');
+  CheckEquals(StatusCode, Self.LastSentResponse.StatusCode, 'Unexpected Status-Code sent');
+  CheckEquals(StatusText, Self.LastSentResponse.StatusText, 'Unexpected Status-Text sent');
 end;
 
 procedure TestTIdSipStackInterface.TestRejectCallWithInvalidHandle;
@@ -1810,7 +1814,7 @@ begin
 
   try
     // You can't, obviously, "reject" an options query attempt.
-    Self.Intf.RejectCall(H);
+    Self.Intf.RejectCall(H, SIPBusyHere);
 
     Fail('No exception raised for an invalid handle');
   except
@@ -1823,7 +1827,7 @@ const
   ArbValue = 42;
 begin
   try
-    Self.Intf.RejectCall(ArbValue);
+    Self.Intf.RejectCall(ArbValue, SIPBusyHere);
     Fail('No exception raised for a non-existent handle');
   except
     on EInvalidHandle do;

@@ -170,6 +170,8 @@ type
     procedure TestRedirectCall;
     procedure TestRedirectCallPermanent;
     procedure TestRejectCallBusy;
+    procedure TestRejectCallStatusCode;
+    procedure TestRejectCallStatusCodeAndText;
     procedure TestResendOk;
     procedure TestRing;
     procedure TestRingWithGruu;
@@ -458,6 +460,8 @@ type
     procedure TestReceiveOutOfOrderReInvite;
     procedure TestRedirectCall;
     procedure TestRejectCallBusy;
+    procedure TestRejectCallStatusCode;
+    procedure TestRejectCallStatusCodeAndText;
     procedure TestRemoveSessionListener;
     procedure TestRing;
     procedure TestRingWithGruu;
@@ -2251,6 +2255,46 @@ begin
   CheckEquals(SIPBusyHere,
               Response.StatusCode,
               'Unexpected Status-Code');
+  Check(Self.InviteAction.IsTerminated,
+        'Action not terminated');
+end;
+
+procedure TestTIdSipInboundInvite.TestRejectCallStatusCode;
+const
+  StatusCode = SIPNotFound;
+var
+  Response: TIdSipResponse;
+begin
+  Self.MarkSentResponseCount;
+  Self.InviteAction.RejectCall(StatusCode);
+  CheckResponseSent('No response sent');
+
+  Response := Self.LastSentResponse;
+  CheckEquals(StatusCode,
+              Response.StatusCode,
+              'Unexpected Status-Code');
+  Check(Self.InviteAction.IsTerminated,
+        'Action not terminated');
+end;
+
+procedure TestTIdSipInboundInvite.TestRejectCallStatusCodeAndText;
+const
+  StatusCode = SIPNotFound;
+  StatusText = 'No such user';
+var
+  Response: TIdSipResponse;
+begin
+  Self.MarkSentResponseCount;
+  Self.InviteAction.RejectCall(StatusCode, StatusText);
+  CheckResponseSent('No response sent');
+
+  Response := Self.LastSentResponse;
+  CheckEquals(StatusCode,
+              Response.StatusCode,
+              'Unexpected Status-Code');
+  CheckEquals(StatusText,
+              Response.StatusText,
+              'Unexpected Status-Text');
   Check(Self.InviteAction.IsTerminated,
         'Action not terminated');
 end;
@@ -5593,6 +5637,46 @@ begin
   CheckEquals(SIPBusyHere,
               Self.LastSentResponse.StatusCode,
               'Wrong response sent');
+
+  Check(Self.OnEndedSessionFired, 'OnEndedSession didn''t fire');
+end;
+
+procedure TestTIdSipInboundSession.TestRejectCallStatusCode;
+const
+  StatusCode = SIPNotFound;
+begin
+  Self.CreateAction;
+  Check(Assigned(Self.Session), 'OnInboundCall not called');
+
+  Self.MarkSentResponseCount;
+  Self.Session.RejectCall(StatusCode);
+
+  CheckResponseSent('No response sent');
+  CheckEquals(StatusCode,
+              Self.LastSentResponse.StatusCode,
+              'Wrong response sent');
+
+  Check(Self.OnEndedSessionFired, 'OnEndedSession didn''t fire');
+end;
+
+procedure TestTIdSipInboundSession.TestRejectCallStatusCodeAndText;
+const
+  StatusCode = SIPNotFound;
+  StatusText = 'That dude isn''t here';
+begin
+  Self.CreateAction;
+  Check(Assigned(Self.Session), 'OnInboundCall not called');
+
+  Self.MarkSentResponseCount;
+  Self.Session.RejectCall(StatusCode, StatusText);
+
+  CheckResponseSent('No response sent');
+  CheckEquals(StatusCode,
+              Self.LastSentResponse.StatusCode,
+              'Status-Code not set');
+  CheckEquals(StatusText,
+              Self.LastSentResponse.StatusText,
+              'Status-Text not set');
 
   Check(Self.OnEndedSessionFired, 'OnEndedSession didn''t fire');
 end;

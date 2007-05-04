@@ -234,7 +234,9 @@ type
     procedure ReconfigureStack(NewConfiguration: TStrings);
     procedure RedirectCall(ActionHandle: TIdSipHandle;
                            NewTarget: TIdSipAddressHeader);
-    procedure RejectCall(ActionHandle: TIdSipHandle);
+    procedure RejectCall(ActionHandle: TIdSipHandle;
+                         StatusCode: Cardinal;
+                         StatusText: String = '');
     procedure Resume;
     procedure Send(ActionHandle: TIdSipHandle);
     procedure Terminate;
@@ -1255,7 +1257,9 @@ begin
   end;
 end;
 
-procedure TIdSipStackInterface.RejectCall(ActionHandle: TIdSipHandle);
+procedure TIdSipStackInterface.RejectCall(ActionHandle: TIdSipHandle;
+                                          StatusCode: Cardinal;
+                                          StatusText: String = '');
 var
   Action: TIdSipAction;
   Wait:   TIdSipSessionRejectWait;
@@ -1265,7 +1269,9 @@ begin
     Action := Self.GetAndCheckAction(ActionHandle, TIdSipInboundSession);
 
     Wait := TIdSipSessionRejectWait.Create;
-    Wait.Session := Action as TIdSipInboundSession;
+    Wait.Session    := Action as TIdSipInboundSession;
+    Wait.StatusCode := StatusCode;
+    Wait.StatusText := StatusText;
 
     Self.TimerQueue.AddEvent(TriggerImmediately, Wait);
   finally
