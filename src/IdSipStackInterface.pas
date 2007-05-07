@@ -191,7 +191,7 @@ type
   public
     constructor Create(UiHandle: HWnd;
                        TimerQueue: TIdTimerQueue;
-                       Configuration: TStrings); reintroduce;
+                       Configuration: TStrings); reintroduce; virtual;
     destructor  Destroy; override;
 
     procedure AcceptCallModify(ActionHandle: TIdSipHandle;
