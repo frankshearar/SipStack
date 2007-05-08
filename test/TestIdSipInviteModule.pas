@@ -142,6 +142,7 @@ type
     procedure OnFailure(InviteAgent: TIdSipInboundInvite);
     procedure OnSuccess(InviteAgent: TIdSipInboundInvite;
                         Ack: TIdSipMessage);
+    procedure ReceiveAck;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -166,6 +167,7 @@ type
     procedure TestMethod;
     procedure TestNotifyOfNetworkFailure;
     procedure TestNotifyOfSuccess;
+    procedure TestReceiveAck;
     procedure TestReceiveResentAck;
     procedure TestRedirectCall;
     procedure TestRedirectCallPermanent;
@@ -1789,6 +1791,18 @@ begin
   Self.OnSuccessFired := true;
 end;
 
+procedure TestTIdSipInboundInvite.ReceiveAck;
+var
+  Ack: TIdSipRequest;
+begin
+  Ack := Self.InviteAction.InitialRequest.AckFor(Self.LastSentResponse);
+  try
+    Self.InviteAction.ReceiveRequest(Ack, Self.Binding);
+  finally
+    Ack.Free;
+  end;
+end;
+
 //* TestTIdSipInboundInvite Published methods **********************************
 
 procedure TestTIdSipInboundInvite.TestAccept;
@@ -2117,7 +2131,6 @@ end;
 
 procedure TestTIdSipInboundInvite.TestNotifyOfSuccess;
 var
-  Ack:    TIdSipRequest;
   L1, L2: TIdSipTestInboundInviteListener;
 begin
   L1 := TIdSipTestInboundInviteListener.Create;
@@ -2129,12 +2142,7 @@ begin
 
       Self.InviteAction.Accept('', '');
 
-      Ack := Self.InviteAction.InitialRequest.AckFor(Self.LastSentResponse);
-      try
-        Self.InviteAction.ReceiveRequest(Ack, Self.Binding);
-      finally
-        Ack.Free;
-      end;
+      Self.ReceiveAck;
 
       Check(L1.Succeeded, 'TIdSipInboundInvite didn''t notify L1 of action success');
       Check(L2.Succeeded, 'TIdSipInboundInvite didn''t notify L2 of action success');
@@ -2146,6 +2154,17 @@ begin
      Self.InviteAction.RemoveListener(L1);
     L1.Free;
   end;
+end;
+
+procedure TestTIdSipInboundInvite.TestReceiveAck;
+begin
+  Self.InviteAction.Accept('', '');
+  Self.ReceiveAck;
+  Check(Self.InviteAction.IsTerminated, 'InviteAction not terminated');
+
+  Self.MarkSentResponseCount;
+  Self.DebugTimer.TriggerAllEventsUpToFirst(TIdSipActionsWait);
+  CheckNoResponseSent('A 200 OK was sent after receiving an ACK');
 end;
 
 procedure TestTIdSipInboundInvite.TestReceiveResentAck;

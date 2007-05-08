@@ -230,7 +230,6 @@ type
     ReceivedAck:              Boolean;
     ResendInterval:           Cardinal;
     SentFinalResponse:        Boolean;
-    Terminating:              Boolean;
 
     function  GetInitialResendInterval: Cardinal;
     function  GetProgressResendInterval: Cardinal;
@@ -1471,17 +1470,6 @@ begin
   if not Self.SentFinalResponse then begin
     Self.SendSimpleResponse(SIPRequestTerminated);
     inherited Terminate;
-  end
-  else begin
-    if not Self.ReceivedAck then begin
-      // We sent a final response (say, 200) and we terminate the INVITE before
-      // we receive the ACK. We need to wait until we receive the ACK and THEN
-      // Terminate.
-      Self.Terminating := true;
-    end
-    else begin
-      // We can't reach here because the owning session's already killed Self.
-    end;
   end;
 end;
 
@@ -1542,8 +1530,7 @@ begin
     // correctly.
     Self.NotifyOfSuccess(Ack);
 
-    if Self.Terminating then
-      Self.MarkAsTerminated;
+    Self.MarkAsTerminated;
   end;
 end;
 
