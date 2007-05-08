@@ -1,11 +1,14 @@
 This library implements a Session Initiation Protocol stack. Sections
-of the source code also provide an RTP stack.
+of the source code also provide an RTP stack, SDP parsing facilities,
+and other useful things.
 
 USING THE STACK
 
 Instantiate a TIdSipStackInterface, giving a (Windows) window handle
-to which the stack can post messages. Implement message handlers for
-each of the CM_FOO messages defined in IdSipStackInterface.
+to which the stack can post messages, and a TIdThreadedTimerQueue (for
+production code) or TIdDebugTimerQueue (for test code). Implement
+message handlers for each of the CM_FOO messages defined in
+IdSipStackInterface.
 
 When you want to perform actions (register with a registrar, make a
 call, etc.) you instantiate the action through the MakeFoo methods -
@@ -15,9 +18,12 @@ the action.
 
 BROAD STROKES
 
-At the very lowest level, TIdSipTransports connect to the OS's socket
-layer. TIdSipTransports manage the sending of messages to and
-receiving of messages from the IP network.
+At the very lowest level, we have servers TIdSipTcpServer,
+TIdSipUdpServer, etc.) listening to the OS's socket layer. These
+classes parse SIP (and RTP) packets and pass them to a TIdTimerQueue
+for processing. When these TIdWait objects are triggered,
+TIdSipTransports further process the messages, potentially rejected
+malformed messages.
 
 We connect TIdSipTransports to a TIdSipTransactionDispatcher. The
 dispatcher does not own these TIdSipTransports (i.e., it does not manage
@@ -47,7 +53,7 @@ attach any object that implements the IIdSipTransportListener
 interface, and receive notifications.
 
 We use Listeners rather than Events because the event mechanism in the
-VCL (i.e., TNotifyEvent and company) only allow a single recipient of
+VCL (i.e., TNotifyEvent and company) only allows a single recipient of
 a notification. While we could provide something like "procedure
 AddListener(Event: TNotifyEvent)" and keep a list of TNotifyEvents to
 trigger when necessary, this makes us work as hard as we'd have to
@@ -90,7 +96,7 @@ answer the call, we still have a call flow we need to follow.
 The TIdSipUserAgent listening to the dispatcher receives the message, and
 notifies its listeners that a new inbound call request has arrived. It
 does this by creating a new TIdSipInboundSession (call it NewSession)
-and passing the message to NewSession. So we pick up the softphone by
+and passing the message to NewSession. So we pick up the call by
 invoking NewSession.AcceptCall with an appropriate answer to the
 request's offer (more on this later).
 
@@ -100,7 +106,7 @@ UserAgent.TerminateAllCalls.
 
 MESSAGE FLOW STRUCTURE
 
-Each layer has a single point of access to the adjacent layer. The
+Each layer has a single point of access to the adjacent layers. The
 Transaction User layer communicates with the Transaction layer solely
 through TIdSipTransactionDispatcher, and the Transport layer objects
 send their messages up to the Transaction layer also through the
@@ -164,11 +170,11 @@ Graphically, the stack looks something like this:
 THREADING MODEL
 
 If the layers are the skeleton of the stack, its heart is a
-TimerQueue. Each layer has a reference to this thread. The entire
+TIdTimerQueue. Each layer has a reference to this thread. The entire
 stack executes in the context of this thread, except for the socket
 layer and the synchronization layer.
 
-The TimerQueue processes Waits, objects that encapsulate a piece of
+The TimerQueue processes TIdWaits, objects that encapsulate a piece of
 code scheduled to run at a particular time.
 
 In the case of the socket layer, servers (TIdSipTcpServer,
@@ -181,11 +187,12 @@ scheduled to run in the context of the TimerQueue.
 
 THE SYNCHRONIZATION LAYER
 
-This provides access to the stack, running in its own thread. It
-notifies listeners of events (established sessions, network failures,
-successful/failed registrations, etc.) in the context of the main
-thread (in which the VCL runs). Any messages bound for the network run
-in the context of the TimerQueue. Thus, the synchronization layer
+A TIdSipStackInterface provides access to the stack, running in its
+own thread. It notifies listeners of events (established sessions,
+network failures, successful/failed registrations, etc.) in the
+context of the main thread (in which the VCL runs) through Windows'
+PostMessage function. Any messages bound for the network run in the
+context of the TimerQueue. Thus, the synchronization layer
 synchronizes the stack thread and the main thread.
 
 THE TRANSACTION USER LAYER
