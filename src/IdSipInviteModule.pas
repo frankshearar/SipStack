@@ -1409,7 +1409,7 @@ end;
 
 procedure TIdSipInboundInvite.RejectCallBusy;
 begin
-  Self.SendSimpleResponse(SIPBusyHere);
+  Self.RejectCall(SIPBusyHere);
 end;
 
 procedure TIdSipInboundInvite.RejectCall(StatusCode: Cardinal; StatusText: String = '');
