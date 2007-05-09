@@ -459,22 +459,16 @@ end;
 
 function TIdRoutingTable.LocalAddressFor(DestinationIP: String): String;
 var
-  DefaultRoute: Boolean;
-  LocalIP:      String;
+  LocalAddress: TIdSipLocation;
 begin
-  DefaultRoute := Self.WillUseDefaultRoute(DestinationIP, LocalIP);
+  LocalAddress := TIdSipLocation.Create;
+  try
+    Self.LocalAddressFor(DestinationIP, LocalAddress);
 
-  if DefaultRoute then begin
-    Result := Self.MappedAddressFor(DestinationIP);
-
-    if (Result = '') then begin
-      // There's no mapped route, so using the OS's default route is the right
-      // thing to do.
-      Result := LocalIP;
-    end;
-  end
-  else
-    Result := LocalIP;
+    Result := LocalAddress.IPAddress;
+  finally
+    LocalAddress.Free;
+  end;
 end;
 
 procedure TIdRoutingTable.LocalAddressFor(DestinationIP: String; LocalAddress: TIdSipLocation; DefaultPort: Cardinal = 0);
