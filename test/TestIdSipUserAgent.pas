@@ -249,7 +249,11 @@ type
     procedure CheckMockDatabase(Configuration: TStrings);
     procedure CheckUseGruu(ExpectedUseGruu: Boolean);
   published
+    procedure TestActAsRegistrarDirectiveCanBeSwitchedOff;
     procedure TestActAsRegistrarDirectiveCreatesRegistrarModule;
+    procedure TestActAsRegistrarDirectiveFalse;
+    procedure TestActAsRegistrarDirectiveFalseThenTrue;
+    procedure TestActAsRegistrarDirectiveTrueThenFalse;
     procedure TestDatabaseDirectiveImpliesActAsRegistrarDirective;
     procedure TestDatabaseDirectiveMock;
     procedure TestDatabaseDirectiveUnknown;
@@ -3461,6 +3465,29 @@ end;
 
 //* TestConfigureRegistrar Published methods ***********************************
 
+procedure TestConfigureRegistrar.TestActAsRegistrarDirectiveCanBeSwitchedOff;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('NameServer: MOCK');
+  Self.Configuration.Add('ActAsRegistrar: true');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Check(UA.UsesModule(TIdSipRegisterModule), 'User agent can''t act as a registrar');
+
+    Self.Configuration.Clear;
+    Self.Configuration.Add(ActAsRegistrarDirective + ': false');
+
+    Self.Conf.UpdateConfiguration(UA, Self.Configuration);
+
+    Check(not UA.UsesModule(TIdSipRegisterModule), 'Register module not removed');
+  finally
+    UA.Free;
+  end;
+end;
+
 procedure TestConfigureRegistrar.TestActAsRegistrarDirectiveCreatesRegistrarModule;
 var
   UA: TIdSipUserAgent;
@@ -3472,6 +3499,56 @@ begin
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
     Check(UA.UsesModule(TIdSipRegisterModule), 'User agent can''t act as a registrar');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestConfigureRegistrar.TestActAsRegistrarDirectiveFalse;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('NameServer: MOCK');
+  Self.Configuration.Add('ActAsRegistrar: false');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Check(not UA.UsesModule(TIdSipRegisterModule), 'User agent acts as a registrar');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestConfigureRegistrar.TestActAsRegistrarDirectiveFalseThenTrue;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('NameServer: MOCK');
+  Self.Configuration.Add('ActAsRegistrar: false');
+  Self.Configuration.Add('ActAsRegistrar: true');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Check(UA.UsesModule(TIdSipRegisterModule), 'User agent can''t act as a registrar');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestConfigureRegistrar.TestActAsRegistrarDirectiveTrueThenFalse;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('NameServer: MOCK');
+  Self.Configuration.Add('ActAsRegistrar: true');
+  Self.Configuration.Add('ActAsRegistrar: false');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Check(not UA.UsesModule(TIdSipRegisterModule), 'User agent acts as a registrar');
   finally
     UA.Free;
   end;

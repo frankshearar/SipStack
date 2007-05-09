@@ -974,8 +974,13 @@ begin
   Line := RegistrarModuleLine;
   EatDirective(Line);
 
-  if not UserAgent.UsesModule(TIdSipRegisterModule) and Self.StrToBool(Line) then begin
-    UserAgent.AddModule(TIdSipRegisterModule)
+  if not UserAgent.UsesModule(TIdSipRegisterModule) then begin
+    if Self.StrToBool(Line) then
+      UserAgent.AddModule(TIdSipRegisterModule)
+  end
+  else begin
+    if not Self.StrToBool(Line) then
+      UserAgent.RemoveModule(TIdSipRegisterModule);
   end;
 end;
 
