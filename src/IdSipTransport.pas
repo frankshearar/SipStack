@@ -524,7 +524,6 @@ procedure TIdSipTransport.LocalBindings(Bindings: TIdSipLocations);
 var
   I: Integer;
 begin
-
   for I := 0 to Self.Bindings.Count - 1 do
     Bindings.AddLocation(Self.GetTransportType, Self.Bindings[I].IP, Self.Bindings[I].Port);
 end;
