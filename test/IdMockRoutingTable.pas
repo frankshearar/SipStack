@@ -12,14 +12,18 @@ unit IdMockRoutingTable;
 interface
 
 uses
-  Contnrs, IdRoutingTable, IdSipLocation;
+  Classes, Contnrs, IdRoutingTable, IdSimpleParser, IdSipLocation;
 
 type
   TIdMockRoutingTable = class(TIdRoutingTable)
   private
-    OsRoutes: TObjectList;
+    LocalAddresses: TStringList;
+    OsRoutes:       TObjectList;
 
     function HasOsRoutes: Boolean;
+    function IsLocalAddress(DestinationIP: String): Boolean;
+    function LastOsRoute: TIdRouteEntry;
+    function LocalLoopRoute(IPType: TIdIPVersion): TIdRouteEntry;
     function OsRouteAt(Index: Integer): TIdRouteEntry;
   protected
     function  BestRouteIsDefaultRoute(DestinationIP, LocalIP: String): Boolean; override;
@@ -30,6 +34,7 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
+    procedure AddLocalAddress(IP: String);
     procedure AddOsRoute(Destination, Mask, Gateway: String; Metric: Cardinal; InterfaceIndex: String; LocalAddress: String); overload; //override;
     procedure AddOsRoute(Route: TIdRouteEntry); overload; //override;
     function  HasOsRoute(Route: TIdRouteEntry): Boolean;
@@ -38,9 +43,6 @@ type
   end;
 
 implementation
-
-uses
-  IdSimpleParser;
 
 //******************************************************************************
 //* TIdMockRoutingTable                                                        *
@@ -51,14 +53,23 @@ constructor TIdMockRoutingTable.Create;
 begin
   inherited Create;
 
+  Self.LocalAddresses := TStringList.Create;
+  Self.LocalAddresses.Duplicates := dupIgnore;
+
   Self.OsRoutes := TObjectList.Create(true);
 end;
 
 destructor TIdMockRoutingTable.Destroy;
 begin
   Self.OsRoutes.Free;
+  Self.LocalAddresses.Free;
 
   inherited Destroy;
+end;
+
+procedure TIdMockRoutingTable.AddLocalAddress(IP: String);
+begin
+  Self.LocalAddresses.Add(IP);
 end;
 
 procedure TIdMockRoutingTable.AddOsRoute(Destination, Mask, Gateway: String; Metric: Cardinal; InterfaceIndex: String; LocalAddress: String);
@@ -115,24 +126,16 @@ end;
 
 function TIdMockRoutingTable.GetBestLocalAddress(DestinationIP: String): String;
 var
-  I: Integer;
+  LocalAddress: TIdSipLocation;
 begin
-  Result := '';
-  for I := 0 to Self.OsRoutes.Count - 1 do begin
-    if Self.OsRouteAt(I).WillRoute(DestinationIP) then begin
-      Result := Self.OsRouteAt(I).LocalAddress;
-      Break;
-    end;
-  end;
+  LocalAddress := TIdSipLocation.Create;
+  try
+    Self.GetBestLocalAddress(DestinationIP, LocalAddress, 0);
 
-  // If all else fails, default to the last route: if there's a default route,
-  // this is where it will be.
-  if (Result = '') then begin
-    if Self.HasOsRoutes then
-      Result := Self.OsRouteAt(Self.OsRoutes.Count - 1).LocalAddress
-    else
-      Result := LocalHost(TIdIPAddressParser.IPVersion(DestinationIP));
- end;
+    Result := LocalAddress.IPAddress;
+  finally
+    LocalAddress.Free;
+  end;
 end;
 
 procedure TIdMockRoutingTable.GetBestLocalAddress(DestinationIP: String; Gateway: TIdSipLocation; DefaultPort: Cardinal);
@@ -140,6 +143,12 @@ var
   Found: Boolean;
   I:     Integer;
 begin
+  if Self.IsLocalAddress(DestinationIP) then begin
+    Gateway.IPAddress := Localhost(TIdIPAddressParser.IPVersion(DestinationIP));
+    Gateway.Port      := DefaultPort;
+    Exit;
+  end;
+
   Found := false;
   I     := 0;
   while (I < Self.OsRoutes.Count) and not Found do begin
@@ -157,8 +166,8 @@ begin
   // this is where it will be.
   if not Found then begin
     if Self.HasOsRoutes then begin
-      Gateway.IPAddress := Self.OsRouteAt(Self.OsRoutes.Count - 1).LocalAddress;
-      Gateway.Port      := Self.OsRouteAt(Self.OsRoutes.Count - 1).Port;
+      Gateway.IPAddress := Self.LastOsRoute.LocalAddress;
+      Gateway.Port      := Self.LastOsRoute.Port;
     end
     else begin
       Gateway.IPAddress := LocalHost(TIdIPAddressParser.IPVersion(DestinationIP));
@@ -172,6 +181,11 @@ var
   Found: Boolean;
   I:     Integer;
 begin
+  if Self.IsLocalAddress(DestinationIP) then begin
+    Route.Assign(Self.LocalLoopRoute(TIdIPAddressParser.IPVersion(DestinationIP)));
+    Exit;
+  end;
+
   Found := false;
   I     := 0;
   while (I < Self.OsRoutes.Count) and not Found do begin
@@ -187,7 +201,7 @@ begin
   // If all else fails, default to the last route: if there's a default route,
   // this is where it will be.
   if not Found and Self.HasOsRoutes then
-    Route.Assign(Self.OsRouteAt(Self.OsRoutes.Count - 1));
+    Route.Assign(Self.LastOsRoute);
 end;
 
 //* TIdMockRoutingTable Private methods ****************************************
@@ -195,6 +209,30 @@ end;
 function TIdMockRoutingTable.HasOsRoutes: Boolean;
 begin
   Result := Self.OsRoutes.Count > 0;
+end;
+
+function TIdMockRoutingTable.IsLocalAddress(DestinationIP: String): Boolean;
+begin
+  Result := Self.LocalAddresses.IndexOf(DestinationIP) <> -1;
+end;
+
+function TIdMockRoutingTable.LastOsRoute: TIdRouteEntry;
+begin
+  Result := Self.OsRouteAt(Self.OsRoutes.Count - 1);
+end;
+
+function TIdMockRoutingTable.LocalLoopRoute(IPType: TIdIPVersion): TIdRouteEntry;
+var
+  I: Integer;
+begin
+  Result := nil;
+
+  for I := 0 to Self.OsRouteCount - 1 do begin
+    if Self.OsRouteAt(I).WillRoute(Localhost(IPType)) then begin
+      Result := Self.OsRouteAt(I);
+      Break;
+    end;
+  end;
 end;
 
 function TIdMockRoutingTable.OsRouteAt(Index: Integer): TIdRouteEntry;

@@ -543,6 +543,9 @@ begin
   Self.VpnMask             := '255.255.255.0';
   Self.VpnPort             := 5060;
   Self.VpnRoute            := '192.168.0.0';
+
+  Self.RT.AddLocalAddress(Self.LoopbackIP);
+  Self.RT.AddLocalAddress(Self.LanIP);  
 end;
 
 procedure TestTIdRoutingTable.TearDown;
@@ -563,17 +566,17 @@ end;
 
 procedure TestTIdRoutingTable.AddInternetRoute;
 begin
-  Self.RT.AddOsRoute(Self.InternetRoute, Self.InternetGateway, Self.InternetMask, 1, '1', Self.InternetIP);
+  Self.RT.AddOsRoute(Self.InternetRoute, Self.InternetMask, Self.InternetGateway, 1, '1', Self.InternetIP);
 end;
 
 procedure TestTIdRoutingTable.AddLanRoute;
 begin
-  Self.RT.AddOsRoute(Self.LanRoute, Self.LanGateway, Self.LanMask, 1, '1', Self.LanIP);
+  Self.RT.AddOsRoute(Self.LanRoute, Self.LanMask, Self.LanGateway, 1, '1', Self.LanIP);
 end;
 
 procedure TestTIdRoutingTable.AddLoopbackRoute;
 begin
-  Self.RT.AddOsRoute(Self.LoopbackRoute, Self.LoopbackGateway, Self.LoopbackMask, 1, '1', Self.LoopbackIP);
+  Self.RT.AddOsRoute(Self.LoopbackRoute, Self.LoopbackMask, Self.LoopbackGateway, 1, '1', Self.LoopbackIP);
 end;
 
 procedure TestTIdRoutingTable.CheckLocalAddress(Expected: String; Destination: String; LocalAddress: TIdSipLocation; DefaultPort: Cardinal; RouteHasPort: Boolean; Msg: String);
@@ -656,6 +659,7 @@ begin
   Self.AddDefaultRoute(Self.LanGateway, Self.LanIP);
 
   CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LoopbackDestination), 'Local destination');
+  CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LanIP),               'Local (LAN) destination');
   CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.LanDestination),      'LAN destination');
   CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.InternetDestination), 'Internet destination');
   CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.VpnDestination),      'VPN destination');
@@ -680,6 +684,7 @@ begin
     Self.RT.AddMappedRoute(Self.InternetRoute, Self.InternetMask, Self.InternetIP, Self.InternetPort);
 
     CheckLocalAddressIsLoopbackForLocation(Self.LoopbackDestination, LocalAddress, SipPort, false, 'Loopback destination');
+    CheckLocalAddressIsLoopbackForLocation(Self.LanIP, LocalAddress, SipPort, false, 'Local (LAN) destination');
     CheckLocalAddressIsLanForLocation(Self.LanDestination, LocalAddress, SipPort, false, 'LAN destination');
     CheckLocalAddressIsInternetForLocation(Self.InternetDestination, LocalAddress, Self.InternetPort, true, 'Internet destination');
     CheckLocalAddressIsInternetForLocation(Self.VpnDestination, LocalAddress, Self.InternetPort, true, 'VPN destination');
@@ -707,6 +712,7 @@ begin
     Self.RT.AddMappedRoute(Self.VpnRoute, Self.VpnMask, Self.VpnIP, Self.VpnPort);
 
     CheckLocalAddressIsLoopbackForLocation(Self.LoopbackDestination, LocalAddress, SipPort, false, 'Local destination');
+    CheckLocalAddressIsLoopbackForLocation(Self.LanIP, LocalAddress, SipPort, false, 'Local (LAN) destination');
     CheckLocalAddressIsLanForLocation(Self.LanDestination, LocalAddress, SipPort, false, 'LAN destination');
     CheckLocalAddressIsInternetForLocation(Self.InternetDestination, LocalAddress, Self.InternetPort, true, 'Internet destination');
     CheckLocalAddressIsVpnForLocation(Self.VpnDestination, LocalAddress, Self.VpnPort, true, 'VPN destination');
@@ -732,6 +738,7 @@ begin
     Self.RT.AddMappedRoute(Self.VpnRoute, Self.VpnMask, Self.VpnIP, Self.VpnPort);
 
     CheckLocalAddressIsLoopbackForLocation(Self.LoopbackDestination, LocalAddress, SipPort, false, 'Loopback destination');
+    CheckLocalAddressIsLoopbackForLocation(Self.LanIP, LocalAddress, SipPort, false, 'Local (LAN) destination');
     CheckLocalAddressIsLanForLocation(Self.LanDestination, LocalAddress, SipPort, false, 'LAN destination');
     CheckLocalAddressIsLanForLocation(Self.InternetDestination, LocalAddress, SipPort, false, 'Internet destination with port, port');
     CheckLocalAddressIsVpnForLocation(Self.VpnDestination, LocalAddress, Self.VpnPort, true, 'VPN destination');
@@ -751,22 +758,27 @@ const
 var
   LocalAddress: TIdSipLocation;
 begin
+  Self.RT.AddLocalAddress(SecondLanIP);
+
   LocalAddress := TIdSipLocation.Create;
   try
     // Scenario: A machine with two LAN IPs, and both a gateway to the internet and
     // a gateway to another network.
     // The default route will use the (first) LAN IP.
+    Self.RT.AddLocalAddress(SecondLanIP);
     Self.AddLoopbackRoute;
     Self.AddLanRoute;
-    Self.RT.AddOsRoute(SecondLanRoute, SecondLanGateway, SecondLanMask, 1, '1', SecondLanIP);
+    Self.RT.AddOsRoute(SecondLanRoute, SecondLanMask, SecondLanGateway, 1, '1', SecondLanIP);
     Self.AddDefaultRoute(Self.InternetGateway, Self.LanIP);
 
     Self.RT.AddMappedRoute(Self.InternetRoute, Self.InternetMask, Self.InternetIP, Self.InternetPort);
     Self.RT.AddMappedRoute(Self.VpnRoute, Self.VpnMask, Self.VpnIP, Self.VpnPort);
 
     CheckLocalAddressIsLoopbackForLocation(Self.LoopbackDestination, LocalAddress, SipPort, false, 'Local destination');
-    CheckLocalAddressIsLanForLocation(Self.LanIP, LocalAddress, SipPort, false, 'LAN destination');
+    CheckLocalAddressIsLoopbackForLocation(Self.LanIP, LocalAddress, SipPort, false, 'Local (LAN) destination');
+    CheckLocalAddressIsLanForLocation(Self.LanDestination, LocalAddress, SipPort, false, 'LAN destination');
     CheckLocalAddress(SecondLanIP, SecondLanDestination, LocalAddress, SipPort, false, 'LAN #2 destination');
+    CheckLocalAddressIsLoopbackForLocation(SecondLanIP, LocalAddress, SipPort, false, 'Local (LAN #2) destination');
     CheckLocalAddressIsInternetForLocation(Self.InternetDestination, LocalAddress, Self.InternetPort, true, 'Internet destination');
     CheckLocalAddressIsVpnForLocation(Self.VpnDestination, LocalAddress, Self.VpnPort, true, 'VPN destination');
   finally
@@ -788,6 +800,7 @@ begin
     Self.AddDefaultRoute(Self.LanGateway, Self.LanIP);
 
     CheckLocalAddressIsLoopbackForLocation(Self.LoopbackDestination, LocalAddress, SipPort, false, 'Local destination');
+    CheckLocalAddressIsLoopbackForLocation(Self.LanIP, LocalAddress, SipPort, false, 'Local (LAN) destination');
     CheckLocalAddressIsLanForLocation(Self.LanDestination, LocalAddress, SipPort, false, 'LAN destination');
     CheckLocalAddressIsLanForLocation(Self.InternetDestination, LocalAddress, SipPort, false, 'Internet destination');
     CheckLocalAddressIsLanForLocation(Self.VpnDestination, LocalAddress, SipPort, false, 'VPN destination');
@@ -811,6 +824,7 @@ begin
     Self.AddDefaultRoute(Self.InternetGateway, Self.InternetIP);
 
     CheckLocalAddressIsLoopbackForLocation(Self.LoopbackDestination, LocalAddress, SipPort, false, 'Local destination');
+    CheckLocalAddressIsLoopbackForLocation(Self.LanIP, LocalAddress, SipPort, false, 'Local (LAN) destination');
     CheckLocalAddressIsLanForLocation(Self.LanDestination, LocalAddress, SipPort, false, 'LAN destination');
     CheckLocalAddressIsInternetForLocation(Self.InternetDestination, LocalAddress, SipPort, false, 'Internet destination');
     CheckLocalAddressIsInternetForLocation(Self.VpnDestination, LocalAddress, SipPort, false, 'VPN destination');
@@ -830,6 +844,7 @@ begin
   Self.RT.AddMappedRoute(Self.InternetRoute, Self.InternetMask, Self.InternetIP);
 
   CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LoopbackDestination), 'Local destination');
+  CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LanIP),               'Local (LAN) destination');
   CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.LanDestination),      'LAN destination');
   CheckEquals(Self.InternetIP, Self.RT.LocalAddressFor(Self.InternetDestination), 'Internet destination');
   CheckEquals(Self.InternetIP, Self.RT.LocalAddressFor(Self.VpnDestination),      'VPN destination');
@@ -848,6 +863,7 @@ begin
   Self.RT.AddMappedRoute(Self.VpnRoute, Self.VpnMask, Self.VpnIP);
 
   CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LoopbackDestination), 'Local destination');
+  CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LanIP),               'Local (LAN) destination');
   CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.LanDestination),      'LAN destination');
   CheckEquals(Self.InternetIP, Self.RT.LocalAddressFor(Self.InternetDestination), 'Internet destination');
   CheckEquals(Self.VpnIP,      Self.RT.LocalAddressFor(Self.VpnDestination),      'VPN destination');
@@ -864,6 +880,7 @@ begin
   Self.RT.AddMappedRoute(Self.VpnRoute, Self.VpnMask, Self.VpnIP);
 
   CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LoopbackDestination), 'Local destination');
+  CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LanIP),               'Local (LAN) destination');
   CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.LanDestination),      'LAN destination');
   CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.InternetDestination), 'Internet destination');
   CheckEquals(Self.VpnIP,      Self.RT.LocalAddressFor(Self.VpnDestination),      'VPN destination');
@@ -880,15 +897,18 @@ begin
   // Scenario: A machine with a LAN IP, and both a gateway to the internet and
   // a gateway to another network. (This is the situation for the author.)
   // The default route will use the LAN IP.
+  Self.RT.AddLocalAddress(SecondLanIP);
+
   Self.AddLoopbackRoute;
   Self.AddLanRoute;
-  Self.RT.AddOsRoute(SecondLanRoute, SecondLanGateway, SecondLanMask, 1, '1', SecondLanIP);
+  Self.RT.AddOsRoute(SecondLanRoute, SecondLanMask, SecondLanGateway, 1, '1', SecondLanIP);
   Self.AddDefaultRoute(Self.InternetGateway, Self.LanIP);
 
   Self.RT.AddMappedRoute(Self.InternetRoute, Self.InternetMask, Self.InternetIP);
   Self.RT.AddMappedRoute(Self.VpnRoute, Self.VpnMask, Self.VpnIP);
 
   CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LoopbackDestination), 'Local destination');
+  CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LanIP),               'Local (LAN) destination');
   CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.LanDestination),      'LAN destination');
   CheckEquals(SecondLanIP,     Self.RT.LocalAddressFor(SecondLanDestination),     'LAN #2 destination');
   CheckEquals(Self.InternetIP, Self.RT.LocalAddressFor(Self.InternetDestination), 'Internet destination');
@@ -903,6 +923,7 @@ begin
   Self.AddDefaultRoute(Self.LanGateway, Self.LanIP);
 
   CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LoopbackDestination), 'Local destination');
+  CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LanIP),               'Local (LAN) destination');
   CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.LanDestination),      'LAN destination');
   CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.InternetDestination), 'Internet destination');
   CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.VpnDestination),      'VPN destination');
@@ -927,6 +948,7 @@ begin
   Self.AddDefaultRoute(Self.InternetGateway, Self.InternetIP);
 
   CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LoopbackDestination), 'Local destination');
+  CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LanIP),               'Local (LAN) destination');
   CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.LanDestination),      'LAN destination');
   CheckEquals(Self.InternetIP, Self.RT.LocalAddressFor(Self.InternetDestination), 'Internet destination');
   CheckEquals(Self.InternetIP, Self.RT.LocalAddressFor(Self.VpnDestination),      'VPN destination');

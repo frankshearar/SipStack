@@ -8533,11 +8533,25 @@ begin
     if Assigned(ActualAddress) then
       Self.RewriteLocationHeaders(ActualAddress)
     else begin
-      // This is dubious. If ActualAddress is nil then it means that the stack
-      // listens on NO ports on the LocalAddress.IPAddress. In other words, any
-      // rewriting you do with LocalAddress will be wrong. This is a strong sign
-      // of a badly configured system!
-      Self.RewriteLocationHeaders(LocalAddress);
+      // There is no local binding that can be used to communicate with the UA
+      // at Dest. Possibly we've been told that the loopback address is the best
+      // local address to use, but we're not bound to any port on that address.
+      //
+      // Thus, we check to see if the UA at Dest is running on a local address:
+      ActualAddress := LocalBindings.FirstAddressMatch(Dest);
+
+      if Assigned(ActualAddress) then begin
+        // Yes, indeed, the UA at Dest is running on a local IP address. Thus,
+        // we use the same IP address as the UA at Dest uses.
+        Self.RewriteLocationHeaders(ActualAddress)
+      end;
+      else begin
+        // This is dubious. If ActualAddress is nil then it means that the stack
+        // listens on NO ports on the LocalAddress.IPAddress. In other words, any
+        // rewriting you do with LocalAddress will be wrong. This is a strong sign
+        // of a badly configured system!
+        Self.RewriteLocationHeaders(LocalAddress);
+      end;
     end;
   finally
     LocalAddress.Free;

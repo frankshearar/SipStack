@@ -381,6 +381,8 @@ type
     procedure TestRewriteLocationOneLanIPOneLocalhostIPOneMappedRouteToInternetOneRouteToVpn;
     procedure TestRewriteLocationOneLocalhostIP;
     procedure TestRewriteLocationOneLocalhostIPNonstandardPort;
+    procedure TestRewriteLocationTwoUAsOnSameLanIP;
+    procedure TestRewriteLocationTwoUAsOnSameLanIPNonstandardPort;
   end;
 
 implementation
@@ -5372,7 +5374,7 @@ end;
 
 function TRewriteLocationTestCase.AddLanBinding(Port: Cardinal = IdPORT_SIP): TIdSipLocation;
 begin
-  Result := Self.LocalBindings.AddLocation('TCP', Self.LanIP, 5060);
+  Result := Self.LocalBindings.AddLocation('TCP', Self.LanIP, Port);
 end;
 
 procedure TRewriteLocationTestCase.AddLanRoute;
@@ -5634,6 +5636,36 @@ begin
   Self.Request.RewriteLocationHeaders(Self.RoutingTable, Self.LocalBindings, Self.LoopbackDestination);
 
   CheckRequest(Binding, Self.Request);
+end;
+
+procedure TRewriteLocationTestCase.TestRewriteLocationTwoUAsOnSameLanIP;
+var
+  LanBinding: TIdSipLocation;
+begin
+  LanBinding := Self.AddLanBinding;
+  Self.AddLanRoute;
+  Self.AddLoopbackRoute;
+
+  Self.RoutingTable.AddLocalAddress(Self.LanIP);
+  Self.RoutingTable.AddLocalAddress(Self.LoopbackDestination.IPAddress);
+
+  CheckAgainstDestination(LanBinding, LanBinding);
+end;
+
+procedure TRewriteLocationTestCase.TestRewriteLocationTwoUAsOnSameLanIPNonstandardPort;
+const
+  HighPort = 15060;
+var
+  LanBinding: TIdSipLocation;
+begin
+  LanBinding := Self.AddLanBinding(HighPort);
+  Self.AddLanRoute;
+  Self.AddLoopbackRoute;
+
+  Self.RoutingTable.AddLocalAddress(Self.LanIP);
+  Self.RoutingTable.AddLocalAddress(Self.LoopbackDestination.IPAddress);
+
+  CheckAgainstDestination(LanBinding, LanBinding);
 end;
 
 initialization
