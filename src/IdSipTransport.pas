@@ -560,7 +560,7 @@ begin
   // We let the UA handle rejecting messages because of things like the UA
   // not supporting the SIP version or whatnot. This allows us to centralise
   // response generation.
-    Self.NotifyOfReceivedRequest(Request, ReceivedFrom);
+  Self.NotifyOfReceivedRequest(Request, ReceivedFrom);
 end;
 
 procedure TIdSipTransport.ReceiveResponse(Response: TIdSipResponse;
