@@ -17,8 +17,8 @@ uses
 type
   // I represent a reified method call.
   // My subclasses have properties representing the parameters of the method
-  // call, and the Run method the actually executes the method by typecasting
-  // its Subject parameter.
+  // call, and the Run method actually executes the method by typecasting its
+  // Subject parameter.
   TIdNotification = class(TObject)
   public
     procedure Run(const Subject: IInterface); virtual;
@@ -174,6 +174,10 @@ var
   Copy: TList;
   I:    Integer;
 begin
+  // Create a copy of the listeners, and iterate over them. Should a listener
+  // raise an expected exception, ignore that exception.
+  // Why a copy? Listeners can do arbitrary things, like removing themselves as
+  // listeners. Iterating over a mutable collection is a Bad Idea.
   Copy := TList.Create;
   try
     Self.CopyList(Copy);
