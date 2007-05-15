@@ -192,6 +192,7 @@ type
     procedure TestNetworkFailure;
     procedure TestOutboundCall;
     procedure TestOptionsQuery;
+    procedure TestReconfigureAddsStackAsTransportListener;
     procedure TestReconfigureSendsNotify;
     procedure TestRedirectCall;
     procedure TestRedirectCallWithInvalidHandle;
@@ -695,7 +696,7 @@ begin
   end;
   Self.Intf.Resume;
 
-  Self.MockTransport := TIdSipDebugTransportRegistry.TransportAt(TIdSipDebugTransportRegistry.TransportCount - 1) as TIdSipMockTransport;
+  Self.MockTransport := TIdSipDebugTransportRegistry.LastTransport as TIdSipMockTransport;
 
   // The registrar URI MUST NOT be that of RemoteUA, because RemoteUA will not
   // process REGISTER messages.
@@ -1693,6 +1694,26 @@ begin
 
   CheckEquals(IntToHex(H, 8), IntToHex(Data.Handle, 8), 'Invalid Action handle');
   Check(Data.Response.Equals(Self.MockTransport.LastResponse), 'Unexpected response');
+end;
+
+procedure TestTIdSipStackInterface.TestReconfigureAddsStackAsTransportListener;
+var
+  Conf: TStrings;
+begin
+  Conf := TStringList.Create;
+  try
+    Conf.Add(ListenDirective + ': UDP 127.0.0.1:5060');
+
+    Self.Intf.ReconfigureStack(Conf);
+    Self.TimerQueue.TriggerAllEventsOfType(TIdSipStackReconfigureStackInterfaceWait);
+    Self.MockTransport := TIdSipDebugTransportRegistry.LastTransport as TIdSipMockTransport;
+  finally
+    Conf.Free;
+  end;
+
+  Self.ReceiveInvite;
+  Self.ProcessAllPendingNotifications;
+  CheckNotificationReceived(TIdDebugReceiveMessageData, 'Stack not listening to UA''s transports');
 end;
 
 procedure TestTIdSipStackInterface.TestReconfigureSendsNotify;

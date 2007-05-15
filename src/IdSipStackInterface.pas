@@ -93,6 +93,7 @@ type
     function  HandleFor(Action: TIdSipAction): TIdSipHandle;
     function  IndexOf(H: TIdSipHandle): Integer;
     function  HasHandle(H: TIdSipHandle): Boolean;
+    procedure ListenToAllTransports;
     function  NewHandle: TIdSipHandle;
     procedure NotifyEvent(Event: Cardinal;
                           Data: TIdEventData);
@@ -179,7 +180,7 @@ type
 
     procedure RemoveAction(Handle: TIdSipHandle);
     procedure SendAction(Action: TIdSipAction);
-
+    procedure StopListeningToAllTransports;
   protected
     function  AddAction(Action: TIdSipAction): TIdSipHandle;
     procedure ParseLine(Directive, Configuration: String); virtual;
@@ -839,7 +840,6 @@ constructor TIdSipStackInterface.Create(UiHandle: HWnd;
                                         Configuration: TStrings);
 var
   Configurator: TIdSipStackConfigurator;
-  I:            Integer;
   Module:       TIdSipMessageModule;
 begin
   inherited Create;
@@ -858,10 +858,7 @@ begin
     Self.UserAgent.InviteModule.AddListener(Self);
 //    Self.UserAgent.AddTransportListener(Self);
 
-    for I := 0 to Self.UserAgent.Dispatcher.TransportCount - 1 do begin
-      Self.UserAgent.Dispatcher.Transports[I].AddTransportListener(Self);
-      Self.UserAgent.Dispatcher.Transports[I].AddTransportSendingListener(Self);
-    end;
+    Self.ListenToAllTransports;
 
     Module := Self.UserAgent.ModuleFor(TIdSipSubscribeModule);
 
@@ -1335,10 +1332,12 @@ end;
 
 procedure TIdSipStackInterface.PostConfigurationActions;
 begin
+  Self.ListenToAllTransports;
 end;
 
 procedure TIdSipStackInterface.PreConfigurationActions;
 begin
+  Self.StopListeningToAllTransports;
 end;
 
 //* TIdSipStackInterface Private methods ***************************************
@@ -1439,6 +1438,16 @@ function TIdSipStackInterface.HasHandle(H: TIdSipHandle): Boolean;
 begin
   // Precondition: ActionLock acquired.
   Result := Self.IndexOf(H) <> ItemNotFoundIndex;
+end;
+
+procedure TIdSipStackInterface.ListenToAllTransports;
+var
+  I: Integer;
+begin
+  for I := 0 to Self.UserAgent.Dispatcher.TransportCount - 1 do begin
+    Self.UserAgent.Dispatcher.Transports[I].AddTransportListener(Self);
+    Self.UserAgent.Dispatcher.Transports[I].AddTransportSendingListener(Self);
+  end;
 end;
 
 function TIdSipStackInterface.NewHandle: TIdSipHandle;
@@ -2005,6 +2014,16 @@ begin
   Wait := TIdSipActionSendWait.Create;
   Wait.ActionID := Action.ID;
   Self.UserAgent.ScheduleEvent(TriggerImmediately, Wait);
+end;
+
+procedure TIdSipStackInterface.StopListeningToAllTransports;
+var
+  I: Integer;
+begin
+  for I := 0 to Self.UserAgent.Dispatcher.TransportCount - 1 do begin
+    Self.UserAgent.Dispatcher.Transports[I].RemoveTransportListener(Self);
+    Self.UserAgent.Dispatcher.Transports[I].RemoveTransportSendingListener(Self);
+  end;
 end;
 
 //******************************************************************************
