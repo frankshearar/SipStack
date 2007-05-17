@@ -174,6 +174,7 @@ type
     procedure CheckUri(Uri: TIdSipUri;
                        const FailMsg: String);
     function  CreateLayers(Context: TIdTimerQueue): TIdSipUserAgent;
+    function  CreatePlatformRoutingTable: TIdRoutingTable;
     procedure InstantiateMissingObjectsAsDefaults(UserAgent: TIdSipUserAgent);
     function  InstantiateRegistrarModule(UserAgent: TIdSipUserAgent): TIdSipRegisterModule;
     procedure ParseFile(UserAgent: TIdSipUserAgent;
@@ -1019,11 +1020,8 @@ begin
 
   if IsEqual(Line, MockKeyword) then
     UserAgent.RoutingTable := TIdMockRoutingTable.Create
-  else begin
-    // TODO: This needs to determine the platform for which we're compiling (Windows,
-    // FreeBSD, whatever), and instantiate the appropriate routing table.
-    UserAgent.RoutingTable := TIdWindowsRoutingTable.Create;
-  end;
+  else
+    UserAgent.RoutingTable := Self.CreatePlatformRoutingTable;
 
   UserAgent.Dispatcher.RoutingTable := UserAgent.RoutingTable;
 end;
@@ -1108,6 +1106,23 @@ begin
   Result.Dispatcher := TIdSipTransactionDispatcher.Create(Result.Timer, nil);
 end;
 
+function TIdSipStackConfigurator.CreatePlatformRoutingTable: TIdRoutingTable;
+var
+  TableType: TIdRoutingTableClass;
+begin
+  case OsType of
+    otWindowsNT4: TableType := TIdWindowsNT4RoutingTable;
+    otWindows2k:  TableType := TIdWindowsRoutingTable;
+  else
+    TableType := TIdMockRoutingTable;
+  end;
+
+  if not Assigned(TableType) then
+    TableType := TIdMockRoutingTable;
+
+  Result := TableType.Create;
+end;
+
 procedure TIdSipStackConfigurator.InstantiateMissingObjectsAsDefaults(UserAgent: TIdSipUserAgent);
 begin
   if not Assigned(UserAgent.Authenticator) then
@@ -1117,7 +1132,7 @@ begin
     UserAgent.Locator := TIdSipIndyLocator.Create;
 
   if not Assigned(UserAgent.RoutingTable) then begin
-    UserAgent.RoutingTable := TIdWindowsRoutingTable.Create;
+    UserAgent.RoutingTable := CreatePlatformRoutingTable;
     UserAgent.Dispatcher.RoutingTable := UserAgent.RoutingTable;
   end;
 

@@ -20,10 +20,16 @@ uses
   implemented.
 }
 
+type
+  TIdOsType = (otWindows95, otWindows98, otWindowsMe, otWindowsNT4, otWindows2k,
+               otWindowsXP, otWindowsServer2003, otWindowsVista, otUnknown);
+
 function  BestRouteIsDefaultRoute(DestinationIP, LocalIP: String): Boolean;
+function  BestRouteIsDefaultRouteNT4(DestinationIP, LocalIP: String): Boolean;
 function  ConstructUUID: String;
 function  ConstructUUIDURN: String;
 function  GetBestLocalAddress(DestinationAddress: String): String;
+function  GetBestLocalAddressNT4(DestinationAddress: String): String;
 function  GetCurrentProcessId: Cardinal;
 function  GetFullUserName: WideString;
 function  GetHostName: String;
@@ -33,6 +39,7 @@ function  GetUserName: WideString;
 function  HtoNL(N: Cardinal): Cardinal;
 function  LocalAddress: String;
 function  NtoHL(N: Cardinal): Cardinal;
+function  OsType: TIdOsType;
 function  RoutableAddress: String;
 procedure LocalAddresses(IPs: TStrings);
 procedure DefineLocalAddress(AAddress: String); {Allows you to use a specified local IP address}
@@ -41,12 +48,13 @@ procedure DefineNetMask(AMask: String); {Let you set the netmask, used to identi
 function OnSameNetwork(AAddress1, AAddress2: String): Boolean; overload;
 function OnSameNetwork(Address1, Address2, Netmask: String): Boolean; overload;
 function  ResolveARecords(Name: String; ResolvedList: TStrings): Integer;
+function  WindowsOsType(PlatformID, MajorVersion, MinorVersion: Cardinal): TIdOsType;
 
 implementation
 
 uses
-  IdSimpleParser, IdGlobal, IdStack, IdUDPServer, SyncObjs, SysUtils, Windows,
-  Winsock;
+  IdMockRoutingTable, IdSimpleParser, IdGlobal, IdStack, IdUDPServer, SyncObjs,
+  SysUtils, Windows, Winsock;
 
 const
   ANY_SIZE = 100;
@@ -128,6 +136,15 @@ type
   TMibIpForwardRow = MIB_IPFORWARDROW;
   PMibIpForwardRow = ^TMibIpForwardRow;
 
+  _MIB_IPFORWARDTABLE = record
+    dwNumEntries: DWORD;
+    table: array[0..ANY_SIZE - 1] of MIB_IPFORWARDROW;
+  end;
+
+  MIB_IPFORWARDTABLE = _MIB_IPFORWARDTABLE;
+  TMibIpForwardTable = MIB_IPFORWARDTABLE;
+  PMibIpForwardTable = ^TMibIpForwardTable;
+
 const
   IpHelper  = 'iphlpapi.dll';
   WinSocket = 'wsock32.dll';
@@ -135,6 +152,7 @@ const
 function GetBestInterface(dwDestAddr: TIpAddr; var pdwBestIfIndex: DWORD): DWORD; stdcall; external IpHelper name 'GetBestInterface';
 function GetBestRoute(dwDestAddr: DWORD; dwSourceAddr: DWORD; var pBestRoute: TMibIpForwardRow): DWORD; stdcall; external IpHelper name 'GetBestRoute';
 function GetIpAddrTable(pIpAddrTable: PMibIpAddrTable; var pdwSize: ULONG; bOrder: BOOL): DWORD; stdcall; external IpHelper name 'GetIpAddrTable';
+function GetIpForwardTable(pIpForwardTable: PMibIpForwardTable; var pdwSize: ULONG; bOrder: BOOL): DWORD; stdcall; external IpHelper name 'GetIpForwardTable';
 
 // WinSock's gethostbyname & hostent have terrible declarations. We override
 // these to provide a more natural interface to the information.
@@ -193,6 +211,35 @@ begin
   end;
 end;
 
+procedure LoadRoutingTable(RT: TIdMockRoutingTable);
+var
+  I:     Integer;
+  RC:    DWORD;
+  Size:  ULONG;
+  Table: PMibIpForwardTable;
+begin
+  Size   := 0;
+  if not GetIpForwardTable(nil, Size, true) = ERROR_BUFFER_OVERFLOW then Exit;
+
+  Table := AllocMem(Size);
+  try
+    RC := GetIpForwardTable(Table, Size, true);
+    if (RC <> 0) then Exit;
+
+    RT.RemoveAllOsRoutes;
+    for I := 0 to Table.dwNumEntries - 1 do begin
+      RT.AddOsRoute(TIdIPAddressParser.IPv4AddressToStr(NtoHL(Table.table[I].dwForwardDest)),
+                    TIdIPAddressParser.IPv4AddressToStr(NtoHL(Table.table[I].dwForwardMask)),
+                    TIdIPAddressParser.IPv4AddressToStr(NtoHL(Table.table[I].dwForwardNextHop)),
+                    Cardinal(Table.table[I].dwForwardMetric1),
+                    IntToStr(Table.table[I].dwForwardIfIndex),
+                    GetIpAddress(Table.table[I].dwForwardIfIndex));
+    end;
+  finally
+    FreeMem(Table);
+  end;
+end;
+
 function BestRouteIsDefaultRoute(DestinationIP, LocalIP: String): Boolean;
 var
   DstAddr: DWORD;
@@ -204,7 +251,7 @@ begin
   // IPv6...).
 
   Assert(TIdIPAddressParser.IPVersion(DestinationIP) = TIdIPAddressParser.IPVersion(LocalIP),
-         '');
+         Format('"%s" and "%s" are not of the same IP version', [DestinationIP, LocalIP]));
 
   if TIdIPAddressParser.IsIPv4Address(DestinationIP) then begin
     DstAddr := HtoNL(TIdIPAddressParser.InetAddr(DestinationIP));
@@ -214,12 +261,24 @@ begin
     Result := Route.dwForwardDest = 0;
   end
   else begin
-    {$IFDEF INET6}
-
-    raise Exception.Create('Implement BestRouteIsDefaultRoute for IPv6');
-    {$ELSE}
     Result := false;
-    {$ENDIF}
+//    raise Exception.Create('Implement BestRouteIsDefaultRoute for IPv6');
+  end;
+end;
+
+function BestRouteIsDefaultRouteNT4(DestinationIP, LocalIP: String): Boolean;
+var
+  RT: TIdMockRoutingTable;
+begin
+  // NT 4 doesn't support GetBestRoute from the IP Helper API.
+
+  RT := TIdMockRoutingTable.Create;
+  try
+    LoadRoutingTable(RT);
+
+    Result := RT.BestRouteIsDefaultRoute(DestinationIP, LocalIP);
+  finally
+    RT.Free;
   end;
 end;
 
@@ -254,9 +313,25 @@ begin
   DstAddr.S_addr := HtoNL(TIdIPAddressParser.InetAddr(DestinationAddress));
   RC := GetBestInterface(DstAddr, InterfaceIndex);
 
-  if (RC <> 0) then Exit;
+  if (RC <> 0) then
+    raise Exception.Create(Format('GetBestInterface for destination "%s" failed with code %d (%s)', [DestinationAddress, RC, SysErrorMessage(RC)]));
 
   Result := GetIpAddress(InterfaceIndex);
+end;
+
+function GetBestLocalAddressNT4(DestinationAddress: String): String;
+var
+  RT: TIdMockRoutingTable;
+begin
+  // NT 4 doesn't support GetBestInterface from the IP Helper API.
+
+  RT := TIdMockRoutingTable.Create;
+  try
+    LoadRoutingTable(RT);
+    Result := RT.LocalAddressFor(DestinationAddress);
+  finally
+    RT.Free;
+  end;
 end;
 
 function GetCurrentProcessId: Cardinal;
@@ -389,6 +464,15 @@ begin
   Result := Cardinal(Winsock.ntohl(Integer(N)));
 end;
 
+function OsType: TIdOsType;
+begin
+  {$IFDEF MSWINDOWS}
+  Result := WindowsOsType(Win32Platform, Win32MajorVersion, Win32MinorVersion);
+  {$ELSE}
+  Result := otUnknown;
+  {$ENDIF}
+end;
+
 procedure LocalAddresses(IPs: TStrings);
 var
   UnusedServer: TIdUDPServer;
@@ -515,6 +599,28 @@ begin
   else
   begin
     Result := WSAGetLastError;
+  end;
+end;
+
+function WindowsOsType(PlatformID, MajorVersion, MinorVersion: Cardinal): TIdOsType;
+var
+  OsID: Cardinal;
+begin
+  OsID := ((PlatformID and $000000ff) shl 16)
+       or ((MajorVersion and $000000ff) shl 8)
+       or (MinorVersion and $000000ff);
+
+  case OsID of
+    $00010400: Result := otWindows95;
+    $0001040A: Result := otWindows98;
+    $0001045A: Result := otWindowsMe;
+    $00020400: Result := otWindowsNT4;
+    $00020500: Result := otWindows2k;
+    $00020501: Result := otWindowsXP;
+    $00020502: Result := otWindowsServer2003;
+    $00020600: Result := otWindowsVista;
+  else
+    Result := otUnknown;
   end;
 end;
 

@@ -122,6 +122,7 @@ type
   TestTIdMockRoutingTable = class(TestTIdRoutingTable)
   published
     procedure TestAddOsRouteAndCount;
+    procedure TestRemoveAllOsRoutes;
   end;
 
 implementation
@@ -1135,6 +1136,15 @@ begin
   CheckEquals(1, Self.RT.OsRouteCount, 'No LAN route added');
   Self.RT.AddOsRoute('0.0.0.0', '0.0.0.0', '10.0.0.1', 1, '1', '10.0.0.6');
   CheckEquals(2, Self.RT.OsRouteCount, 'No default route added');
+end;
+
+procedure TestTIdMockRoutingTable.TestRemoveAllOsRoutes;
+begin
+  Self.RT.AddOsRoute('10.0.0.0', '255.0.0.0', '10.0.0.1', 1, '1', '10.0.0.6');
+  Self.RT.AddOsRoute('0.0.0.0', '0.0.0.0', '10.0.0.1', 1, '1', '10.0.0.6');
+
+  Self.RT.RemoveAllOsRoutes;
+  CheckEquals(0, Self.RT.OsRouteCount, 'Routing table not cleared');
 end;
 
 initialization

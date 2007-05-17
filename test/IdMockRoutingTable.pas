@@ -26,8 +26,6 @@ type
     function LocalLoopRoute(IPType: TIdIPVersion): TIdRouteEntry;
     function OsRouteAt(Index: Integer): TIdRouteEntry;
   protected
-    function  BestRouteIsDefaultRoute(DestinationIP, LocalIP: String): Boolean; override;
-    function  GetBestLocalAddress(DestinationIP: String): String; overload; override;
     procedure GetBestLocalAddress(DestinationIP: String; Gateway: TIdSipLocation; DefaultPort: Cardinal); overload; override;
     procedure GetBestRoute(DestinationIP, LocalIP: String; Route: TIdRouteEntry);
   public
@@ -37,8 +35,10 @@ type
     procedure AddLocalAddress(IP: String);
     procedure AddOsRoute(Destination, Mask, Gateway: String; Metric: Cardinal; InterfaceIndex: String; LocalAddress: String); overload; //override;
     procedure AddOsRoute(Route: TIdRouteEntry); overload; //override;
+    function  BestRouteIsDefaultRoute(DestinationIP, LocalIP: String): Boolean; override;
     function  HasOsRoute(Route: TIdRouteEntry): Boolean;
     function  OsRouteCount: Integer;
+    procedure RemoveAllOsRoutes;
     procedure RemoveOsRoute(Destination, Mask, Gateway: String);
   end;
 
@@ -93,23 +93,6 @@ begin
   Self.AddOsRoute(Route.Destination, Route.Mask, Route.Gateway, Route.Metric, Route.InterfaceIndex, Route.LocalAddress);
 end;
 
-function TIdMockRoutingTable.HasOsRoute(Route: TIdRouteEntry): Boolean;
-begin
-  Result := Self.InternalHasRoute(Self.OsRoutes, Route);
-end;
-
-function TIdMockRoutingTable.OsRouteCount: Integer;
-begin
-  Result := Self.OsRoutes.Count;
-end;
-
-procedure TIdMockRoutingTable.RemoveOsRoute(Destination, Mask, Gateway: String);
-begin
-  Self.InternalRemoveRoute(Self.OsRoutes, Destination, Mask, Gateway);
-end;
-
-//* TIdMockRoutingTable Protected methods **************************************
-
 function TIdMockRoutingTable.BestRouteIsDefaultRoute(DestinationIP, LocalIP: String): Boolean;
 var
   ProposedRoute: TIdRouteEntry;
@@ -124,19 +107,27 @@ begin
   end;
 end;
 
-function TIdMockRoutingTable.GetBestLocalAddress(DestinationIP: String): String;
-var
-  LocalAddress: TIdSipLocation;
+function TIdMockRoutingTable.HasOsRoute(Route: TIdRouteEntry): Boolean;
 begin
-  LocalAddress := TIdSipLocation.Create;
-  try
-    Self.GetBestLocalAddress(DestinationIP, LocalAddress, 0);
-
-    Result := LocalAddress.IPAddress;
-  finally
-    LocalAddress.Free;
-  end;
+  Result := Self.InternalHasRoute(Self.OsRoutes, Route);
 end;
+
+function TIdMockRoutingTable.OsRouteCount: Integer;
+begin
+  Result := Self.OsRoutes.Count;
+end;
+
+procedure TIdMockRoutingTable.RemoveAllOsRoutes;
+begin
+  Self.OsRoutes.Clear;
+end;
+
+procedure TIdMockRoutingTable.RemoveOsRoute(Destination, Mask, Gateway: String);
+begin
+  Self.InternalRemoveRoute(Self.OsRoutes, Destination, Mask, Gateway);
+end;
+
+//* TIdMockRoutingTable Protected methods **************************************
 
 procedure TIdMockRoutingTable.GetBestLocalAddress(DestinationIP: String; Gateway: TIdSipLocation; DefaultPort: Cardinal);
 var
