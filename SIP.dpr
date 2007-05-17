@@ -72,6 +72,7 @@ uses
   TestFrameworkSip in 'test\TestFrameworkSip.pas',
   TestFrameworkSipTransport in 'test\TestFrameworkSipTransport.pas',
   TestFrameworkSipTU in 'test\TestFrameworkSipTU.pas',
+  TestFrameworkTimerQueue in 'test\TestFrameworkTimerQueue.pas',  
   TestMessages in 'test\TestMessages.pas',
   TestIdNotification in 'test\TestIdNotification.pas',
   TestIdObservable in 'test\TestIdObservable.pas',

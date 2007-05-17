@@ -12,7 +12,7 @@ unit IdTimerQueue;
 interface
 
 uses
-  Classes, Contnrs, IdBaseThread, SyncObjs, SysUtils;
+  Classes, Contnrs, IdBaseThread, IdNotification, SyncObjs, SysUtils;
 
 type
   TIdTimerQueue = class;
@@ -34,6 +34,7 @@ type
   public
     constructor Create; virtual;
 
+    function  Copy: TIdWait; virtual;
     function  Due: Boolean;
     function  MatchEvent(Event: Pointer): Boolean; virtual;
     procedure Schedule(Timer: TIdTimerQueue; Data: TObject; Delay: Cardinal);
@@ -67,6 +68,11 @@ type
     property Event: TNotifyEvent read fEvent write fEvent;
   end;
 
+  IIdTimerQueueListener = interface(IInterface)
+    ['{29C82AC3-EA30-420D-9073-FA4D25EB7A47}']
+    procedure OnException(Timer: TIdTimerQueue; Error: Exception; Wait: TIdWait);
+  end;
+
   // I supply a single timer thread with which you may register a wait time
   // (in milliseconds) and an event (a TEvent or a TNotifyEvent). When that
   // wait time is up, I set the event you've given me. You may register as
@@ -89,6 +95,7 @@ type
     fLock:            TCriticalSection;
     fTerminated:      Boolean;
     fDefaultTimeout:  Cardinal;
+    Listeners:        TIdNotificationList;
     WaitEvent:        TEvent;
 
     procedure Add(MillisecsWait: Cardinal;
@@ -98,6 +105,7 @@ type
     function  EarliestEvent: TIdWait;
     function  GetDefaultTimeout: Cardinal;
     procedure InternalRemove(Event: Pointer);
+    procedure NotifyOfException(OffendingWait: TIdWait; Error: Exception);
     procedure SetDefaultTimeout(Value: Cardinal);
     procedure SortEvents;
     function  ShortestWait: Cardinal;
@@ -106,6 +114,7 @@ type
     function  IndexOfEvent(Event: Pointer): Integer;
     procedure LockTimer; virtual;
     procedure TriggerEarliestEvent; virtual;
+    procedure TriggerEvent(Event: TIdWait);
     procedure UnlockTimer; virtual;
 
     property CreateSuspended: Boolean          read fCreateSuspended write fCreateSuspended;
@@ -124,11 +133,13 @@ type
                        Data: TObject = nil); overload;
     procedure AddEvent(MillisecsWait: Cardinal;
                        Event: TIdWait); overload; virtual;
+    procedure AddListener(Listener: IIdTimerQueueListener);
     function  Before(TimeA,
                      TimeB: Cardinal): Boolean;
     procedure RemoveEvent(Event: TEvent); overload;
     procedure RemoveEvent(Event: TNotifyEvent); overload;
     procedure RemoveEvent(Event: TIdWait); overload;
+    procedure RemoveListener(Listener: IIdTimerQueueListener);
     procedure Resume; virtual;
     procedure Terminate; virtual;
 
@@ -198,6 +209,19 @@ type
     property TriggerImmediateEvents: Boolean read fTriggerImmediateEvents write fTriggerImmediateEvents;
   end;
 
+  TIdOnExceptionMethod = class(TIdNotification)
+  private
+    fError:       Exception;
+    fErrorSource: TIdWait;
+    fContext:     TIdTimerQueue;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Error:       Exception     read fError write fError;
+    property ErrorSource: TIdWait       read fErrorSource  write fErrorSource;
+    property Context:     TIdTimerQueue read fContext write fContext;
+  end;
+
 const
   DefaultSleepTime   = 1000;
   ItemNotFoundIndex  = -1;
@@ -254,6 +278,14 @@ end;
 constructor TIdWait.Create;
 begin
   inherited Create;
+end;
+
+function TIdWait.Copy: TIdWait;
+begin
+  Result := TIdWaitClass(Self.ClassType).Create;
+  Result.Data          := Self.Data;
+  Result.DebugWaitTime := Self.DebugWaitTime;
+  Result.TriggerTime   := Self.TriggerTime;
 end;
 
 function TIdWait.Due: Boolean;
@@ -328,6 +360,7 @@ begin
   // suspended will start before we initialize.
   Self.fEventList := TObjectList.Create(false);
   Self.fLock      := TCriticalSection.Create;
+  Self.Listeners  := TIdNotificationList.Create;
   Self.Terminated := false;
   Self.WaitEvent  := TSimpleEvent.Create;
 
@@ -342,6 +375,7 @@ begin
   Self.LockTimer;
   try
     Self.WaitEvent.Free;
+    Self.Listeners.Free;
     Self.ClearEvents;
     Self.EventList.Free;
   finally
@@ -382,6 +416,11 @@ begin
   Self.Add(MillisecsWait, Event, nil);
 end;
 
+procedure TIdTimerQueue.AddListener(Listener: IIdTimerQueueListener);
+begin
+  Self.Listeners.AddListener(Listener);
+end;
+
 function TIdTimerQueue.Before(TimeA,
                               TimeB: Cardinal): Boolean;
 begin
@@ -403,6 +442,11 @@ end;
 procedure TIdTimerQueue.RemoveEvent(Event: TIdWait);
 begin
   Self.InternalRemove(Event);
+end;
+
+procedure TIdTimerQueue.RemoveListener(Listener: IIdTimerQueueListener);
+begin
+  Self.Listeners.RemoveListener(Listener);
 end;
 
 procedure TIdTimerQueue.Resume;
@@ -476,13 +520,20 @@ begin
     Self.UnlockTimer;
   end;
 
-  if FireEvent and not Self.Terminated then begin
-    try
-      NextEvent.Trigger;
-    finally
-      NextEvent.Free;
-    end;
+  if FireEvent and not Self.Terminated then
+    Self.TriggerEvent(NextEvent);
+end;
+
+procedure TIdTimerQueue.TriggerEvent(Event: TIdWait);
+begin
+  try
+    Event.Trigger;
+  except
+    on E: Exception do
+      Self.NotifyOfException(Event, E);
   end;
+  Self.EventList.Remove(Event);
+  Event.Free;
 end;
 
 procedure TIdTimerQueue.UnlockTimer;
@@ -571,6 +622,22 @@ begin
     Self.WaitEvent.SetEvent;
   finally
     Self.UnlockTimer;
+  end;
+end;
+
+procedure TIdTimerQueue.NotifyOfException(OffendingWait: TIdWait; Error: Exception);
+var
+  Notification: TIdOnExceptionMethod;
+begin
+  Notification := TIdOnExceptionMethod.Create;
+  try
+    Notification.Error       := Error;
+    Notification.ErrorSource := OffendingWait;
+    Notification.Context     := Self;
+
+    Self.Listeners.Notify(Notification);
+  finally
+    Notification.Free;
   end;
 end;
 
@@ -692,8 +759,7 @@ procedure TIdDebugTimerQueue.AddEvent(MillisecsWait: Cardinal;
 begin
   if Self.TriggerImmediateEvents
     and (MillisecsWait = TriggerImmediately) then begin
-    Event.Trigger;
-    Event.Free;
+    Self.TriggerEvent(Event);
   end
   else begin
     inherited AddEvent(MillisecsWait, Event);
@@ -829,16 +895,18 @@ end;
 procedure TIdDebugTimerQueue.TriggerAllEventsOfType(WaitType: TIdWaitClass);
 var
   NextEvent: TIdWait;
+  I:         Integer;
 begin
   Self.LockTimer;
   try
-    NextEvent := Self.EarliestEvent;
-    while Assigned(NextEvent) do begin
-      if (NextEvent is WaitType) then
-        NextEvent.Trigger;
+    I := 0;
+    while (I < Self.EventList.Count) do begin
+      NextEvent := Self.EventAt(I);
 
-      Self.EventList.Remove(NextEvent);
-      NextEvent := Self.EarliestEvent;
+      if (NextEvent is WaitType) then
+        Self.TriggerEvent(NextEvent)
+      else
+        Inc(I);
     end;
 
     Self.WaitEvent.ResetEvent;
@@ -846,7 +914,7 @@ begin
     Self.UnlockTimer;
   end;
 end;
-    
+
 procedure TIdDebugTimerQueue.TriggerAllEventsUpToFirst(WaitType: TIdWaitClass);
 var
   Done:      Boolean;
@@ -858,8 +926,7 @@ begin
     NextEvent := Self.EarliestEvent;
     while Assigned(NextEvent) and not Done do begin
       Done := NextEvent is WaitType;
-      NextEvent.Trigger;
-      Self.EventList.Remove(NextEvent);
+      Self.TriggerEvent(NextEvent);
 
       NextEvent := Self.EarliestEvent;
     end;
@@ -877,11 +944,8 @@ begin
   Self.LockTimer;
   try
     NextEvent := Self.EarliestEvent;
-    if Assigned(NextEvent) then begin
-      NextEvent.Trigger;
-
-      Self.EventList.Remove(NextEvent);
-    end;
+    if Assigned(NextEvent) then
+      Self.TriggerEvent(NextEvent);
 
     Self.WaitEvent.ResetEvent;
   finally
@@ -901,6 +965,18 @@ end;
 function TIdDebugTimerQueue.HasScheduledEvent(Event: Pointer): Boolean;
 begin
   Result := Self.IndexOfEvent(Event) <> ItemNotFoundIndex;
+end;
+
+//******************************************************************************
+//* TIdOnExceptionMethod                                                       *
+//******************************************************************************
+//* TIdOnExceptionMethod Public methods ****************************************
+
+procedure TIdOnExceptionMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdTimerQueueListener).OnException(Self.Context,
+                                                 Self.Error,
+                                                 Self.ErrorSource);
 end;
 
 end.

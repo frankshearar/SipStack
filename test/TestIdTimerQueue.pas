@@ -12,7 +12,8 @@ unit TestIdTimerQueue;
 interface
 
 uses
-  Classes, IdTimerQueue, SyncObjs, SysUtils, TestFramework, TestFrameworkEx;
+  Classes, IdInterfacedObject, IdTimerQueue, SyncObjs, SysUtils, TestFramework,
+  TestFrameworkEx, TestFrameworkTimerQueue;
 
 type
   TestFunctions = class(TTestCase)
@@ -34,6 +35,17 @@ type
     constructor Create(Event: TEvent;
                        OnEventSet: TNotifyEvent;
                        MaxWait: Cardinal);
+  end;
+
+  TestTIdWait = class(TTestCase)
+  private
+    Data: TObject;
+    Wait: TIdWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCopy;
   end;
 
   TestTIdTimerQueue = class(TTestCase)
@@ -106,9 +118,42 @@ type
     procedure TestAddEventWithZeroTimeToSuspendedTimer;
     procedure TestCount;
     procedure TestDebugWaitTime;
+    procedure TestExceptionNotifiesListeners;
     procedure TestRemoveAllEvents;
     procedure TestScheduledEvent;
     procedure TestTriggerEarliestEvent;
+  end;
+
+  TTimerQueueListener = class(TIdInterfacedObject,
+                              IIdTimerQueueListener)
+  private
+    fContextParam:     TIdTimerQueue;
+    fErrorParam:       Exception;
+    fExceptionRaised:  Boolean;
+    fErrorSourceParam: TIdWait;
+
+    procedure OnException(Timer: TIdTimerQueue; Error: Exception; Wait: TIdWait);
+  public
+    constructor Create;
+
+    property ContextParam:     TIdTimerQueue  read fContextParam;
+    property ErrorParam:       Exception      read fErrorParam;
+    property ExceptionRaised:  Boolean        read fExceptionRaised;
+    property ErrorSourceParam: TIdWait        read fErrorSourceParam;
+  end;
+
+  TestTIdOnExceptionMethod = class(TTestCase)
+  private
+    Context:     TIdTimerQueue;
+    Error:       Exception;
+    ErrorSource: TIdWait;
+    Listener:    TTimerQueueListener;
+    Method:      TIdOnExceptionMethod;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
   end;
 
 const
@@ -130,13 +175,20 @@ type
     property Triggered: Boolean read fTriggered;
   end;
 
+  TIdNullWait = class(TIdWait)
+  public
+    procedure Trigger; override;
+  end;
+
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdTimerQueue unit tests');
   Result.AddTest(TestFunctions.Suite);
+  Result.AddTest(TestTIdWait.Suite);
   Result.AddTest(TestTIdTimerQueue.Suite);
   Result.AddTest(TestTIdThreadedTimerQueue.Suite);
   Result.AddTest(TestTIdDebugTimerQueue.Suite);
+  Result.AddTest(TestTIdOnExceptionMethod.Suite);
 end;
 
 //******************************************************************************
@@ -147,6 +199,16 @@ end;
 procedure TIdFooEvent.Trigger;
 begin
   Self.fTriggered := true;
+end;
+
+//******************************************************************************
+//* TIdNullWait                                                                *
+//******************************************************************************
+//* TIdNullWait Public methods *************************************************
+
+procedure TIdNullWait.Trigger;
+begin
+  // Do nothing.
 end;
 
 //******************************************************************************
@@ -210,6 +272,49 @@ begin
 
   if not Self.Terminated and Assigned(Self.OnEventSet) then
     Self.OnEventSet(Self);
+end;
+
+//******************************************************************************
+//* TestTIdWait                                                                *
+//******************************************************************************
+//* TestTIdWait Public methods *************************************************
+
+procedure TestTIdWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Wait := TIdNullWait.Create;
+  Self.Wait.Data          := TObject.Create;
+  Self.Wait.DebugWaitTime := $decafbad;
+  Self.Wait.TriggerTime   := Now;
+end;
+
+procedure TestTIdWait.TearDown;
+begin
+  Self.Wait.Data.Free;
+  Self.Wait.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdWait Published methods **********************************************
+
+procedure TestTIdWait.TestCopy;
+var
+  Other: TIdWait;
+begin
+  Other := Self.Wait.Copy;
+  try
+    Check(Self.Wait.Data = Other.Data, 'Data');
+    CheckEquals(IntToHex(Self.Wait.DebugWaitTime, 8),
+                IntToHex(Other.DebugWaitTime, 8),
+                'DebugWaitTime');
+    CheckEquals(FormatDateTime('yyyy/mm/dd hh:mm:ss.zzz', Self.Wait.TriggerTime),
+                FormatDateTime('yyyy/mm/dd hh:mm:ss.zzz', Other.TriggerTime),
+                'TriggerTime');
+  finally
+    Other.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -698,6 +803,38 @@ begin
               'DebugWaitTime not set');
 end;
 
+procedure TestTIdDebugTimerQueue.TestExceptionNotifiesListeners;
+var
+  L1, L2: TTimerQueueListener;
+  Raiser: TExceptionRaisingWait;
+begin
+  Raiser := TExceptionRaisingWait.Create;
+  Raiser.ErrorMessage := 'You silly sausage';
+  Raiser.ErrorType    := EDivByZero;
+
+  Self.Timer.AddEvent(TriggerImmediately, Raiser);
+
+  L1 := TTimerQueueListener.Create;
+  try
+    L2 := TTimerQueueListener.Create;
+    try
+      Self.Timer.AddListener(L1);
+      Self.Timer.AddListener(L2);
+      
+      Self.Timer.TriggerEarliestEvent;
+
+      Check(L1.ExceptionRaised, 'Listener 1 not notified');
+      Check(L2.ExceptionRaised, 'Listener 2 not notified');
+    finally
+      Self.Timer.RemoveListener(L2);
+      L2.Free;
+    end;
+  finally
+    Self.Timer.RemoveListener(L1);
+    L1.Free;
+  end;
+end;
+
 procedure TestTIdDebugTimerQueue.TestRemoveAllEvents;
 begin
   Self.Timer.AddEvent(1000, Self.WaitEvent);
@@ -744,6 +881,72 @@ begin
   Self.Timer.TriggerEarliestEvent;
 
   Check(Self.OnSecondTimerFired, 'Second event not triggered');
+end;
+
+//******************************************************************************
+//* TTimerQueueListener                                                        *
+//******************************************************************************
+//* TTimerQueueListener Public methods *****************************************
+
+constructor TTimerQueueListener.Create;
+begin
+  inherited Create;
+
+  Self.fExceptionRaised := false;
+end;
+
+//* TTimerQueueListener Protected methods **************************************
+
+procedure TTimerQueueListener.OnException(Timer: TIdTimerQueue; Error: Exception; Wait: TIdWait);
+begin
+  Self.fContextParam     := Timer;
+  Self.fErrorParam       := Error;
+  Self.fErrorSourceParam := Wait;
+  Self.fExceptionRaised  := true;
+end;
+
+//******************************************************************************
+//* TestTIdOnExceptionMethod                                                   *
+//******************************************************************************
+//* TestTIdOnExceptionMethod Public methods ************************************
+
+procedure TestTIdOnExceptionMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Context     := TIdDebugTimerQueue.Create(false);
+  Self.Error       := EAccessViolation.Create('Access Violation Occured Nowhere');
+  Self.ErrorSource := TIdFooEvent.Create;
+  Self.Listener    := TTimerQueueListener.Create;
+  Self.Method      := TIdOnExceptionMethod.Create;
+
+  Self.Method.Error       := Self.Error;
+  Self.Method.ErrorSource := Self.ErrorSource;
+  Self.Method.Context     := Self.Context;
+end;
+
+procedure TestTIdOnExceptionMethod.TearDown;
+begin
+  Self.Method.Free;
+  Self.Listener.Free;
+  Self.ErrorSource.Free;
+  Self.Error.Free;
+  Self.Context.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdOnExceptionMethod Published methods *********************************
+
+procedure TestTIdOnExceptionMethod.TestRun;
+begin
+  Self.Method.Run(Self.Listener);
+
+  Check(Self.Listener.ExceptionRaised, 'Listener not notified');
+
+  Check(Self.Error = Self.Listener.ErrorParam, 'Error parameter');
+  Check(Self.Context = Self.Listener.ContextParam, 'Context parameter');
+  Check(Self.ErrorSource = Self.Listener.ErrorSourceParam,   'ErrorSource parameter');
 end;
 
 initialization
