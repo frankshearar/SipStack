@@ -65,6 +65,7 @@ type
   // Find the details on what to put in the Configuration TStrings by reading
   // the class comment of TIdSipStackConfigurator.
   TIdSipStackInterface = class(TIdInterfacedObject,
+                               IIdTimerQueueListener,
                                IIdSipActionListener,
                                IIdSipInviteModuleListener,
                                IIdSipMessageModuleListener,
@@ -130,7 +131,10 @@ type
                                         Notify: TIdSipRequest);
     procedure OnException(FailedMessage: TIdSipMessage;
                           E: Exception;
-                          const Reason: String);
+                          const Reason: String); overload;
+    procedure OnException(Timer: TIdTimerQueue;
+                          Error: Exception;
+                          Wait: TIdWait); overload;
     procedure OnExpiredSubscription(Subscription: TIdSipOutboundSubscription;
                                     Notify: TIdSipRequest);
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistrationBase;
@@ -426,7 +430,7 @@ type
     property Destination: TIdSipLocation read fDestination write fDestination;
   end;
 
-  TIdDebugTransportExceptionData = class(TIdDebugData)
+  TIdDebugExceptionData = class(TIdDebugData)
   private
     fError:  String;
     fReason: String;
@@ -438,6 +442,27 @@ type
 
     property Error:  String read fError write fError;
     property Reason: String read fReason write fReason;
+  end;
+
+  TIdDebugTransportExceptionData = class(TIdDebugExceptionData)
+  protected
+    function EventName: String; override;
+  end;
+
+  TIdDebugWaitExceptionData = class(TIdDebugExceptionData)
+  private
+    fWait: TIdWait;
+
+    procedure SetWait(Value: TIdWait);
+  protected
+    function Data: String; override;
+    function EventName: String; override;
+  public
+    destructor Destroy; override;
+
+    procedure Assign(Src: TPersistent); override;
+
+    property Wait: TIdWait read fWait write SetWait;
   end;
 
   TIdDebugTransportRejectedMessageData = class(TIdDebugData)
@@ -751,7 +776,9 @@ const
   CM_DEBUG_TRANSPORT_REJECTED_MSG = CM_DEBUG + 4;
   CM_DEBUG_STACK_STARTED          = CM_DEBUG + 5;
   CM_DEBUG_STACK_STOPPED          = CM_DEBUG + 6;
-  CM_LAST                         = CM_DEBUG_STACK_STOPPED;
+  CM_DEBUG_EXCEPTION              = CM_DEBUG + 7;
+  CM_DEBUG_WAIT_EXCEPTION         = CM_DEBUG + 8;
+  CM_LAST                         = CM_DEBUG_WAIT_EXCEPTION;
 
 // Constants for TIdCallEndedData
 const
@@ -805,12 +832,14 @@ begin
     CM_STACK_RECONFIGURED:           Result := 'CM_STACK_RECONFIGURED';
 
     CM_DEBUG_DROPPED_MSG:            Result := 'CM_DEBUG_DROPPED_MSG';
+    CM_DEBUG_EXCEPTION:              Result := 'CM_DEBUG_TRANSPORT_EXCEPTION';
     CM_DEBUG_RECV_MSG:               Result := 'CM_DEBUG_RECV_MSG';
     CM_DEBUG_SEND_MSG:               Result := 'CM_DEBUG_SEND_MSG';
-    CM_DEBUG_TRANSPORT_EXCEPTION:    Result := 'CM_DEBUG_TRANSPORT_EXCEPTION';
-    CM_DEBUG_TRANSPORT_REJECTED_MSG: Result := 'CM_DEBUG_TRANSPORT_REJECTED_MSG';
     CM_DEBUG_STACK_STARTED:          Result := 'CM_DEBUG_STACK_STARTED';
     CM_DEBUG_STACK_STOPPED:          Result := 'CM_DEBUG_STACK_STOPPED';
+    CM_DEBUG_TRANSPORT_EXCEPTION:    Result := 'CM_DEBUG_TRANSPORT_EXCEPTION';
+    CM_DEBUG_TRANSPORT_REJECTED_MSG: Result := 'CM_DEBUG_TRANSPORT_REJECTED_MSG';
+    CM_DEBUG_WAIT_EXCEPTION:         Result := 'CM_DEBUG_WAIT_EXCEPTION';
   else
     Result := 'Unknown: ' + IntToStr(Event);
   end;
@@ -845,6 +874,7 @@ begin
   inherited Create;
 
   Self.TimerQueue := TimerQueue;
+  Self.TimerQueue.AddListener(Self);
 
   Self.ActionLock := TCriticalSection.Create;
   Self.Actions    := TObjectList.Create(true);
@@ -1680,6 +1710,22 @@ begin
   end;
 end;
 
+procedure TIdSipStackInterface.OnException(Timer: TIdTimerQueue; Error: Exception; Wait: TIdWait);
+var
+  Data: TIdDebugWaitExceptionData;
+begin
+  Data := TIdDebugWaitExceptionData.Create;
+  try
+    Data.Handle := InvalidHandle;
+    Data.Error  := Error.ClassName;
+    Data.Reason := Error.Message;
+
+    Self.NotifyEvent(CM_DEBUG_WAIT_EXCEPTION, Data);
+  finally
+    Data.Free;
+  end;
+end;
+
 procedure TIdSipStackInterface.OnExpiredSubscription(Subscription: TIdSipOutboundSubscription;
                                                      Notify: TIdSipRequest);
 begin
@@ -2463,22 +2509,101 @@ begin
 end;
 
 //******************************************************************************
-//* TIdDebugTransportExceptionData                                             *
+//* TIdDebugExceptionData                                                      *
 //******************************************************************************
-//* TIdDebugTransportExceptionData Public methods ******************************
+//* TIdDebugExceptionData Public methods ***************************************
 
-procedure TIdDebugTransportExceptionData.Assign(Src: TPersistent);
+procedure TIdDebugExceptionData.Assign(Src: TPersistent);
 var
-  Other: TIdDebugTransportExceptionData;
+  Other: TIdDebugExceptionData;
 begin
   inherited Assign(Src);
 
-  if (Src is TIdDebugTransportExceptionData) then begin
-    Other := Src as TIdDebugTransportExceptionData;
+  if (Src is TIdDebugExceptionData) then begin
+    Other := Src as TIdDebugExceptionData;
 
     Self.Error  := Other.Error;
     Self.Reason := Other.Reason;
   end;
+end;
+
+//* TIdDebugExceptionData Protected methods ************************************
+
+function TIdDebugExceptionData.Data: String;
+begin
+  Result := Self.Error + ': ' + Self.Reason + CRLF;
+end;
+
+function TIdDebugExceptionData.EventName: String;
+begin
+  Result := EventNames(CM_DEBUG_EXCEPTION);
+end;
+
+//******************************************************************************
+//* TIdDebugTransportExceptionData                                             *
+//******************************************************************************
+//* TIdDebugTransportExceptionData Protected methods ***************************
+
+function TIdDebugTransportExceptionData.EventName: String;
+begin
+  Result := EventNames(CM_DEBUG_TRANSPORT_EXCEPTION);
+end;
+
+//******************************************************************************
+//* TIdDebugWaitExceptionData                                                  *
+//******************************************************************************
+//* TIdDebugWaitExceptionData Public methods ***********************************
+
+destructor TIdDebugWaitExceptionData.Destroy;
+begin
+  Self.Wait.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdDebugWaitExceptionData.Assign(Src: TPersistent);
+var
+  Other: TIdDebugWaitExceptionData;
+begin
+  inherited Assign(Src);
+
+  if (Src is TIdDebugWaitExceptionData) then begin
+    Other := Src as TIdDebugWaitExceptionData;
+
+    Self.Wait   := Other.Wait;
+  end;
+end;
+
+//* TIdDebugWaitExceptionData Protected methods ********************************
+
+function TIdDebugWaitExceptionData.Data: String;
+var
+  WaitType: String;
+begin
+  if Assigned(Self.Wait) then
+    WaitType := Self.Wait.ClassName
+  else
+    WaitType := 'nil';
+
+  Result := inherited Data
+          + 'Wait type: ' + WaitType + CRLF;
+end;
+
+function TIdDebugWaitExceptionData.EventName: String;
+begin
+  Result := EventNames(CM_DEBUG_WAIT_EXCEPTION);
+end;
+
+//* TIdDebugWaitExceptionData Private methods **********************************
+
+procedure TIdDebugWaitExceptionData.SetWait(Value: TIdWait);
+begin
+  Self.fWait.Free;
+
+  if Assigned(Value) then
+    Self.fWait := Value.Copy
+  else
+    Self.fWait := nil;
 end;
 
 //******************************************************************************
@@ -2563,21 +2688,6 @@ end;
 procedure TIdQueryOptionsData.SetResponse(Value: TIdSipResponse);
 begin
   Self.fResponse.Assign(Value);
-end;
-
-//******************************************************************************
-//* TIdDebugTransportExceptionData                                             *
-//******************************************************************************
-//* TIdDebugTransportExceptionData Protected methods ***************************
-
-function TIdDebugTransportExceptionData.Data: String;
-begin
-  Result := Self.Error + ': ' + Self.Reason;
-end;
-
-function TIdDebugTransportExceptionData.EventName: String;
-begin
-  Result := EventNames(CM_DEBUG_TRANSPORT_EXCEPTION);
 end;
 
 //******************************************************************************

@@ -14,7 +14,8 @@ interface
 uses
   Classes, Contnrs, Forms, IdSipDialog, IdSipInviteModule, IdSipMessage,
   IdSipMockTransport, IdSipStackInterface, IdSipSubscribeModule, IdSipUserAgent,
-  IdTimerQueue, Messages, TestFramework, TestFrameworkSip;
+  IdTimerQueue, Messages, TestFramework, TestFrameworkSip,
+  TestFrameworkTimerQueue;
 
 type
   // The testing of the StackInterface is not completely simple. The UI (or
@@ -207,6 +208,7 @@ type
 //    procedure TestSessionModifiedByRemoteSide;
     procedure TestStackListensToSubscribeModule;
     procedure TestStackListensToSubscribeModuleAfterReconfigure;
+    procedure TestStackReceivesExceptionNotifications;
   end;
 
   TestTIdSipStackInterfaceRegistry = class(TTestCase)
@@ -335,6 +337,16 @@ type
     procedure TestCopy;
   end;
 
+  TestTIdDebugExceptionData = class(TTestCase)
+  private
+    Data: TIdDebugExceptionData;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCopy;
+  end;
+
   TestTIdDebugTransportExceptionData = class(TTestCase)
   private
     Data: TIdDebugTransportExceptionData;
@@ -343,6 +355,22 @@ type
     procedure TearDown; override;
   published
     procedure TestCopy;
+  end;
+
+  TestTIdDebugWaitExceptionData = class(TTestCase)
+  private
+    Data: TIdDebugWaitExceptionData;
+    Wait: TIdSipReconfigureStackWait;
+
+    procedure ExpectedAsString(Expected: TStrings);
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAsString;
+    procedure TestAsStringWithNoWait;
+    procedure TestCopy;
+    procedure TestCopyFromNewObject;
   end;
 
   TestTIdDebugTransportRejectedMessageData = class(TTestCase)
@@ -548,6 +576,7 @@ begin
   Result.AddTest(TestTIdDebugSendMessageData.Suite);
   Result.AddTest(TestTIdQueryOptionsData.Suite);
   Result.AddTest(TestTIdDebugTransportExceptionData.Suite);
+  Result.AddTest(TestTIdDebugWaitExceptionData.Suite);
   Result.AddTest(TestTIdDebugTransportRejectedMessageData.Suite);
   Result.AddTest(TestTIdFailData.Suite);
   Result.AddTest(TestTIdCallEndedData.Suite);
@@ -2044,6 +2073,19 @@ begin
   end;
 end;
 
+procedure TestTIdSipStackInterface.TestStackReceivesExceptionNotifications;
+var
+  E: TExceptionRaisingWait;
+begin
+  E := TExceptionRaisingWait.Create;
+  Self.TimerQueue.AddEvent(TriggerImmediately, E);
+
+  Self.TimerQueue.TriggerEarliestEvent;
+  Self.ProcessAllPendingNotifications;
+
+  CheckNotificationReceived(TIdDebugWaitExceptionData, 'No exception notification received');
+end;
+
 //******************************************************************************
 //* TestTIdSipStackInterfaceRegistry                                           *
 //******************************************************************************
@@ -2726,6 +2768,50 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdDebugExceptionData                                                  *
+//******************************************************************************
+//* TestTIdDebugExceptionData Public methods ***********************************
+
+procedure TestTIdDebugExceptionData.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Data := TIdDebugExceptionData.Create;
+  Self.Data.Handle := $decafbad;
+  Self.Data.Error  := 'No Error';
+  Self.Data.Reason := 'Some Arb Reason';
+end;
+
+procedure TestTIdDebugExceptionData.TearDown;
+begin
+  Self.Data.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdDebugExceptionData Published methods ********************************
+
+procedure TestTIdDebugExceptionData.TestCopy;
+var
+  Copy: TIdDebugExceptionData;
+begin
+  Copy := Self.Data.Copy as TIdDebugExceptionData;
+  try
+    CheckEquals(IntToHex(Self.Data.Handle, 8),
+                IntToHex(Copy.Handle, 8),
+                'Handle');
+    CheckEquals(Self.Data.Error,
+                Copy.Error,
+                'Error');
+    CheckEquals(Self.Data.Reason,
+                Copy.Reason,
+                'Reason');
+  finally
+    Copy.Free;
+  end;
+end;
+
+//******************************************************************************
 //* TestTIdDebugTransportExceptionData                                         *
 //******************************************************************************
 //* TestTIdDebugTransportExceptionData Public methods **************************
@@ -2766,6 +2852,139 @@ begin
                 'Reason');
   finally
     Copy.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdDebugWaitExceptionData                                              *
+//******************************************************************************
+//* TestTIdDebugWaitExceptionData Public methods *******************************
+
+procedure TestTIdDebugWaitExceptionData.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Wait := TIdSipReconfigureStackWait.Create;
+  Self.Wait.Configuration.Add('First line');
+
+  Self.Data := TIdDebugWaitExceptionData.Create;
+  Self.Data.Handle := $decafbad;
+  Self.Data.Error  := 'EAccessViolation';
+  Self.Data.Reason := 'Dangling Pointer';
+  Self.Data.Wait   := Self.Wait;
+end;
+
+procedure TestTIdDebugWaitExceptionData.TearDown;
+begin
+  Self.Data.Free;
+  Self.Wait.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdDebugWaitExceptionData Private methods ******************************
+
+procedure TestTIdDebugWaitExceptionData.ExpectedAsString(Expected: TStrings);
+begin
+    Expected.Add(Self.Data.Error + ': ' + Self.Data.Reason);
+    Expected.Add('Wait type: ' + Self.Data.Wait.ClassName);
+    Expected.Insert(0, '');
+    Expected.Insert(1, EventNames(CM_DEBUG_WAIT_EXCEPTION));
+end;
+
+//* TestTIdDebugWaitExceptionData Published methods ****************************
+
+procedure TestTIdDebugWaitExceptionData.TestAsString;
+var
+  Expected: TStrings;
+  Received: TStrings;
+begin
+  Expected := TStringList.Create;
+  try
+    Received := TStringList.Create;
+    try
+      Self.ExpectedAsString(Expected);
+      Received.Text := Self.Data.AsString;
+
+      // We ignore the first line of the debug data (it's a timestamp & a
+      // handle)
+      Received[0] := '';
+
+      CheckEquals(Expected.Text,
+                  Received.Text,
+                  'Unexpected debug data');
+    finally
+      Received.Free;
+    end;
+  finally
+    Expected.Free;
+  end;
+end;
+
+procedure TestTIdDebugWaitExceptionData.TestAsStringWithNoWait;
+var
+  Expected: TStrings;
+  Received: TStrings;
+begin
+  Expected := TStringList.Create;
+  try
+    Received := TStringList.Create;
+    try
+      Self.ExpectedAsString(Expected);
+      Received.Text := Self.Data.AsString;
+
+      // We ignore the first line of the debug data (it's a timestamp & a
+      // handle)
+      Received[0] := '';
+
+      CheckEquals(Expected.Text,
+                  Received.Text,
+                  'Unexpected debug data');
+    finally
+      Received.Free;
+    end;
+  finally
+    Expected.Free;
+  end;
+end;
+
+procedure TestTIdDebugWaitExceptionData.TestCopy;
+var
+  Copy: TIdDebugWaitExceptionData;
+begin
+  Copy := Self.Data.Copy as TIdDebugWaitExceptionData;
+  try
+    CheckEquals(IntToHex(Self.Data.Handle, 8),
+                IntToHex(Copy.Handle, 8),
+                'Handle');
+    CheckEquals(Self.Data.Error,
+                Copy.Error,
+                'Error');
+    CheckEquals(Self.Data.Reason,
+                Copy.Reason,
+                'Reason');
+    CheckEquals(Self.Data.Wait.ClassType,
+                Copy.Wait.ClassType,
+                'Wait type');
+    CheckEquals(TIdSipReconfigureStackWait(Self.Data.Wait).Configuration.Text,
+                TIdSipReconfigureStackWait(Copy.Wait).Configuration.Text,
+                'Wait contents');
+  finally
+    Copy.Free;
+  end;
+end;
+
+procedure TestTIdDebugWaitExceptionData.TestCopyFromNewObject;
+var
+  NewObject: TIdDebugWaitExceptionData;
+begin
+  NewObject := TIdDebugWaitExceptionData.Create;
+  try
+    Self.Data.Assign(NewObject);
+
+    CheckNull(Self.Data.Wait, 'Wait object not nilled');
+  finally
+    NewObject.Free;
   end;
 end;
 
