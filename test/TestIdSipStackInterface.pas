@@ -3708,6 +3708,7 @@ begin
 
   Self.Data := TIdStackReconfiguredData.Create;
   Self.Data.ActsAsRegistrar := true;
+  Self.Data.RoutingTableType := 'TIdWindowsRoutingTable';
 end;
 
 procedure TestTIdStackReconfiguredData.TearDown;
@@ -3728,7 +3729,8 @@ begin
   try
     Received := TStringList.Create;
     try
-      Expected.Text := 'ActsAsRegistrar: True';
+      Expected.Add('ActsAsRegistrar: True');
+      Expected.Add('RoutingTableType: ' + Self.Data.RoutingTableType);
       Expected.Insert(0, '');
       Expected.Insert(1, EventNames(CM_STACK_RECONFIGURED));
       Received.Text := Self.Data.AsString;
@@ -3754,7 +3756,8 @@ var
 begin
   Copy := Self.Data.Copy as TIdStackReconfiguredData;
   try
-    CheckEquals(Self.Data.ActsAsRegistrar, Copy.ActsAsRegistrar, 'ActsAsRegistrar');
+    CheckEquals(Self.Data.ActsAsRegistrar,  Copy.ActsAsRegistrar,  'ActsAsRegistrar');
+    CheckEquals(Self.Data.RoutingTableType, Copy.RoutingTableType, 'RoutingTableType');
   finally
     Copy.Free;
   end;

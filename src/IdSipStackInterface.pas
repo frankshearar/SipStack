@@ -692,7 +692,8 @@ type
 
   TIdStackReconfiguredData = class(TIdEventData)
   private
-    fActsAsRegistrar: Boolean;
+    fActsAsRegistrar:  Boolean;
+    fRoutingTableType: String;
   protected
     function Data: String; override;
     function EventName: String; override;
@@ -700,6 +701,7 @@ type
     procedure Assign(Src: TPersistent); override;
 
     property ActsAsRegistrar: Boolean read fActsAsRegistrar write fActsAsRegistrar;
+    property RoutingTableType: String read fRoutingTableType write fRoutingTableType;
   end;
 
   // I represent a reified method call, like my ancestor, that a
@@ -1201,8 +1203,9 @@ var
 begin
   Data := TIdStackReconfiguredData.Create;
   try
-    Data.ActsAsRegistrar := Self.UserAgent.UsesModule(TIdSipRegisterModule);
-    Data.Handle          := InvalidHandle;
+    Data.ActsAsRegistrar  := Self.UserAgent.UsesModule(TIdSipRegisterModule);
+    Data.Handle           := InvalidHandle;
+    Data.RoutingTableType := Self.UserAgent.RoutingTable.ClassName;
 
     Self.NotifyEvent(CM_STACK_RECONFIGURED, Data);
   finally
@@ -3208,7 +3211,8 @@ begin
   if (Src is TIdStackReconfiguredData) then begin
     Other := Src as TIdStackReconfiguredData;
 
-    Self.ActsAsRegistrar := Other.ActsAsRegistrar;
+    Self.ActsAsRegistrar  := Other.ActsAsRegistrar;
+    Self.RoutingTableType := Other.RoutingTableType;
   end;
 end;
 
@@ -3216,7 +3220,8 @@ end;
 
 function TIdStackReconfiguredData.Data: String;
 begin
-  Result := 'ActsAsRegistrar: ' + BoolToStr(Self.ActsAsRegistrar, true) + CRLF;
+  Result := 'ActsAsRegistrar: ' + BoolToStr(Self.ActsAsRegistrar, true) + CRLF
+          + 'RoutingTableType: ' + Self.RoutingTableType + CRLF;
 end;
 
 function TIdStackReconfiguredData.EventName: String;
