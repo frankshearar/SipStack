@@ -1719,6 +1719,7 @@ begin
     Data.Handle := InvalidHandle;
     Data.Error  := Error.ClassName;
     Data.Reason := Error.Message;
+    Data.Wait   := Wait;
 
     Self.NotifyEvent(CM_DEBUG_WAIT_EXCEPTION, Data);
   finally
