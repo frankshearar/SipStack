@@ -96,8 +96,6 @@ type
     function  HasHandle(H: TIdSipHandle): Boolean;
     procedure ListenToAllTransports;
     function  NewHandle: TIdSipHandle;
-    procedure NotifyEvent(Event: Cardinal;
-                          Data: TIdEventData);
     procedure NotifyOfSentMessage(Msg: TIdSipMessage;
                                   Destination: TIdSipLocation);
     procedure NotifyOfStackShutdown;
@@ -187,6 +185,8 @@ type
     procedure StopListeningToAllTransports;
   protected
     function  AddAction(Action: TIdSipAction): TIdSipHandle;
+    procedure NotifyEvent(Event: Cardinal;
+                          Data: TIdEventData);
     procedure ParseLine(Directive, Configuration: String); virtual;
     procedure PostConfigurationActions; virtual;
     procedure PreConfigurationActions; virtual;
@@ -1358,6 +1358,20 @@ begin
   end;
 end;
 
+procedure TIdSipStackInterface.NotifyEvent(Event: Cardinal;
+                                           Data: TIdEventData);
+var
+  Notification: TIdSipStackInterfaceEventMethod;
+begin
+  Notification := TIdSipStackInterfaceEventMethod.Create;
+  Notification.Data   := Data.Copy;
+  Notification.Event  := Event;
+  Notification.Stack  := Self;
+
+  // The receiver of this message must free the Notification.
+  PostMessage(Self.UiHandle, UINT(Notification.Event), WPARAM(Notification), 0)
+end;
+
 procedure TIdSipStackInterface.ParseLine(Directive, Configuration: String);
 begin
   // I have no special processing directives, even though my subclasses might.
@@ -1492,20 +1506,6 @@ begin
   repeat
     Result := GRandomNumber.NextCardinal;
   until not Self.HasHandle(Result);
-end;
-
-procedure TIdSipStackInterface.NotifyEvent(Event: Cardinal;
-                                           Data: TIdEventData);
-var
-  Notification: TIdSipStackInterfaceEventMethod;
-begin
-  Notification := TIdSipStackInterfaceEventMethod.Create;
-  Notification.Data   := Data.Copy;
-  Notification.Event  := Event;
-  Notification.Stack  := Self;
-
-  // The receiver of this message must free the Notification.
-  PostMessage(Self.UiHandle, UINT(Notification.Event), WPARAM(Notification), 0)
 end;
 
 procedure TIdSipStackInterface.NotifyOfSentMessage(Msg: TIdSipMessage;
