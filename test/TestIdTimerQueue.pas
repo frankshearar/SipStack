@@ -39,7 +39,6 @@ type
 
   TestTIdWait = class(TTestCase)
   private
-    Data: TObject;
     Wait: TIdWait;
   public
     procedure SetUp; override;
