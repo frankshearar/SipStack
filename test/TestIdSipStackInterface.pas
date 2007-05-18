@@ -12,9 +12,9 @@ unit TestIdSipStackInterface;
 interface
 
 uses
-  Classes, Contnrs, Forms, IdSipDialog, IdSipInviteModule, IdSipMessage,
-  IdSipMockTransport, IdSipStackInterface, IdSipSubscribeModule, IdSipUserAgent,
-  IdTimerQueue, Messages, TestFramework, TestFrameworkSip,
+  Classes, IdSipDialog, IdSipInviteModule, IdSipMessage, IdSipMockTransport,
+  IdSipStackInterface, IdSipSubscribeModule, IdSipUserAgent, IdTimerQueue,
+  Messages, TestFramework, TestFrameworkSip, TestFrameworkStackInterface,
   TestFrameworkTimerQueue;
 
 type
@@ -45,42 +45,10 @@ type
     procedure TestCreateStackWithNoSubscribeSupport;
   end;
 
-  // When writing tests for the stack interface, remember that the stack runs in
-  // a separate thread. All the methods (that don't create Actions) of the
-  // StackInterface use TIdWaits to schedule events within the stack thread.
-  // Thus, when you invoke these methods (like Send, AnswerCall, RejectCall,
-  // etc.), you have to trigger the newly-scheduled events by, for instance,
-  //
-  //    Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
-  //
-  // The same applies for notifications: the StackWindow sends us notifications
-  // like CM_CALL_REQUEST_NOTIFY, and you have to process these notifications
-  // (by invoking Application.ProcessMessages) before you can inspect what the
-  // stack does with these notification, or how it presents them. This means
-  // that if you're establishing a call and you receive a 200 OK, you must call
-  // Application.ProcessMessages before the test can know about the response.
-  TStackInterfaceTestCase = class(TTestCase)
-  private
-    SentResponseCount: Cardinal;
-  protected
-    MockTransport: TIdSipMockTransport;
-    TimerQueue:    TIdDebugTimerQueue;
-
-    procedure CheckResponseSent(Msg: String);
-    function  LastSentResponse: TIdSipResponse;
-    procedure MarkSentResponseCount;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  end;
-
-
   TestTIdSipStackInterface = class(TStackInterfaceTestCase,
-                                   IIdSipInviteModuleListener,
-                                   IIdSipStackInterface)
+                                   IIdSipInviteModuleListener)
   private
     fIntf:               TIdSipStackInterface;
-    DataList:            TObjectList; // Holds all the data received from the stack
     Destination:         TIdSipToHeader;
     From:                TIdSipFromHeader;
     LocalAddress:        String;
@@ -96,14 +64,10 @@ type
     RemoteUA:            TIdSipUserAgent;
     Requests:            TIdSipRequestList;
     Responses:           TIdSipResponseList;
-    SentRequestCount:    Cardinal;
     TargetAddress:       String;
     TargetPort:          Cardinal;
-    UI:                  TCustomForm;
 
     procedure AddSubscribeSupport(Stack: TIdSipStackInterface; EventPackage: String);
-    procedure CheckNotificationReceived(EventType: TIdEventDataClass; Msg: String);
-    procedure CheckRequestSent(Msg: String);
     procedure ClearPendingStackStartedNotification;
 {
     function  CreateBindings: TIdSipContacts;
@@ -113,16 +77,11 @@ type
     function  CreateRemoteNotify(RemoteDialog: TIdSipDialog; Subscribe: TIdSipRequest): TIdSipRequest;
     function  CreateRemoteOk(Request: TIdSipRequest): TIdSipResponse;
     function  EstablishCall: TIdSipHandle;
-    function  EventAt(Index: Integer): TIdEventData;
-    function  LastEventOfType(EventType: TIdEventDataClass): TIdEventData;
-    function  LastSentRequest: TIdSipRequest;
-    procedure MarkSentRequestCount;
     procedure OnInboundCall(UserAgent: TIdSipInviteModule;
                             Session: TIdSipInboundSession);
 {
     procedure LogSentMessage(Msg: TIdSipMessage);
 }
-    procedure ProcessAllPendingNotifications;
     procedure ProcessAllPendingTerminationActions;
     procedure ReceiveAck;
     procedure ReceiveBusyHereFromRegistrar(Register: TIdSipRequest);
@@ -147,20 +106,14 @@ type
     procedure ReceiveRequest(Request: TIdSipRequest);
     procedure ReceiveResponse(Response: TIdSipResponse);
     procedure ReceiveSubscribe(EventPackage: String);
-    function  SecondLastEventData: TIdEventData;
     procedure SetUpPackageSupport(EventPackage: TIdSipEventPackageClass);
     procedure TearDownPackageSupport(EventPackage: TIdSipEventPackageClass);
-    function  ThirdLastEventData: TIdEventData;
 {
     procedure ReceiveReInvite;
 }
   public
     procedure SetUp; override;
     procedure TearDown; override;
-
-    procedure OnEvent(Stack: TIdSipStackInterface;
-                      Event: Cardinal;
-                      Data:  TIdEventData);
 
     property Intf: TIdSipStackInterface read fIntf write fIntf;
   published
@@ -629,42 +582,6 @@ begin
 end;
 
 //******************************************************************************
-//* TStackInterfaceTestCase                                                    *
-//******************************************************************************
-//* TStackInterfaceTestCase Public methods *************************************
-
-procedure TStackInterfaceTestCase.SetUp;
-begin
-  inherited SetUp;
-
-  Self.TimerQueue := TIdDebugTimerQueue.Create(true);
-end;
-
-procedure TStackInterfaceTestCase.TearDown;
-begin
-  Self.TimerQueue.Terminate;
-
-  inherited TearDown;
-end;
-
-//* TStackInterfaceTestCase Protected methods **********************************
-
-procedure TStackInterfaceTestCase.CheckResponseSent(Msg: String);
-begin
-  Check(Self.SentResponseCount < Self.MockTransport.SentResponseCount, Msg);
-end;
-
-function TStackInterfaceTestCase.LastSentResponse: TIdSipResponse;
-begin
-  Result := Self.MockTransport.LastResponse;
-end;
-
-procedure TStackInterfaceTestCase.MarkSentResponseCount;
-begin
-  Self.SentResponseCount := Self.MockTransport.SentResponseCount;
-end;
-
-//******************************************************************************
 //* TestTIdSipStackInterface                                                   *
 //******************************************************************************
 //* TestTIdSipStackInterface Public methods ************************************
@@ -678,7 +595,6 @@ begin
 
   TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipMockUDPTransport);
 
-  Self.DataList    := TObjectList.Create(true);
   Self.Destination := TIdSipToHeader.Create;
   Self.From        := TIdSipFromHeader.Create;
   Self.Requests    := TIdSipRequestList.Create;
@@ -705,8 +621,6 @@ begin
   end;
 
   Self.RemoteMockTransport := TIdSipDebugTransportRegistry.TransportAt(TIdSipDebugTransportRegistry.TransportCount - 1) as TIdSipMockTransport;
-
-  Self.UI := TIdSipStackWindow.CreateNew(nil, Self);
 
   Self.LocalAddress  := '10.0.0.6';
   Self.LocalPort     := 5060;
@@ -744,8 +658,6 @@ end;
 
 procedure TestTIdSipStackInterface.TearDown;
 begin
-  Self.ProcessAllPendingNotifications;
-  Self.UI.Release;
   Self.Registrar.Free;
   Self.Intf.Free;
   Self.Responses.Free;
@@ -753,18 +665,10 @@ begin
   Self.RemoteUA.Free;
   Self.From.Free;
   Self.Destination.Free;
-  Self.DataList.Free;
 
   TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
 
   inherited TearDown;
-end;
-
-procedure TestTIdSipStackInterface.OnEvent(Stack: TIdSipStackInterface;
-                                           Event: Cardinal;
-                                           Data:  TIdEventData);
-begin
-  Self.DataList.Add(Data);
 end;
 
 //* TestTIdSipStackInterface Private methods ***********************************
@@ -783,29 +687,9 @@ begin
   end;
 end;
 
-procedure TestTIdSipStackInterface.CheckNotificationReceived(EventType: TIdEventDataClass; Msg: String);
-var
-  Found: Boolean;
-  I: Integer;
-begin
-  Found := false;
-  I     := 0;
-  while (I < Self.DataList.Count) and not Found do begin
-    Found := Self.EventAt(I) is EventType;
-    Inc(I);
-  end;
-
-  if not Found then Fail(Msg);
-end;
-
-procedure TestTIdSipStackInterface.CheckRequestSent(Msg: String);
-begin
-  Check(Self.SentRequestCount < Self.MockTransport.SentRequestCount, Msg);
-end;
-
 procedure TestTIdSipStackInterface.ClearPendingStackStartedNotification;
 begin
-  Application.ProcessMessages;
+  Self.ProcessAllPendingNotifications;
 end;
 {
 function TestTIdSipStackInterface.CreateBindings: TIdSipContacts;
@@ -872,42 +756,6 @@ begin
   Self.ProcessAllPendingNotifications;
 end;
 
-function TestTIdSipStackInterface.EventAt(Index: Integer): TIdEventData;
-begin
-  Result := Self.DataList[Index] as TIdEventData;
-end;
-
-function TestTIdSipStackInterface.LastEventOfType(EventType: TIdEventDataClass): TIdEventData;
-var
-  Found: Boolean;
-  I:     Integer;
-begin
-  Result := nil;
-
-  Found := false;
-  I     := Self.DataList.Count - 1;
-  while (I > 0) and not Found do begin
-    Found := Self.EventAt(I) is EventType;
-
-    if not Found then Dec(I);
-  end;
-
-  if Found then
-    Result := Self.EventAt(I)
-  else
-    Fail('No event of type ' + EventType.ClassName + ' found');
-end;
-
-function TestTIdSipStackInterface.LastSentRequest: TIdSipRequest;
-begin
-  Result := Self.MockTransport.LastRequest;
-end;
-
-procedure TestTIdSipStackInterface.MarkSentRequestCount;
-begin
-  Self.SentRequestCount := Self.MockTransport.SentRequestCount;
-end;
-
 procedure TestTIdSipStackInterface.OnInboundCall(UserAgent: TIdSipInviteModule;
                                                  Session: TIdSipInboundSession);
 begin
@@ -924,11 +772,6 @@ begin
   end;
 end;
 }
-procedure TestTIdSipStackInterface.ProcessAllPendingNotifications;
-begin
-  Application.ProcessMessages;
-end;
-
 procedure TestTIdSipStackInterface.ProcessAllPendingTerminationActions;
 begin
   Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionTerminateWait);
@@ -1173,11 +1016,6 @@ begin
   end;
 end;
 
-function TestTIdSipStackInterface.SecondLastEventData: TIdEventData;
-begin
-  Result := Self.DataList[Self.DataList.Count - 2] as TIdEventData;
-end;
-
 procedure TestTIdSipStackInterface.SetUpPackageSupport(EventPackage: TIdSipEventPackageClass);
 var
   SubMod: TIdSipSubscribeModule;
@@ -1192,11 +1030,6 @@ end;
 procedure TestTIdSipStackInterface.TearDownPackageSupport(EventPackage: TIdSipEventPackageClass);
 begin
   TIdSipEventPackageRegistry.UnregisterEvent(EventPackage);
-end;
-
-function TestTIdSipStackInterface.ThirdLastEventData: TIdEventData;
-begin
-  Result := Self.DataList[Self.DataList.Count - 3] as TIdEventData;
 end;
 {
 procedure TestTIdSipStackInterface.ReceiveReInvite;
