@@ -260,15 +260,14 @@ end;
 
 procedure TestTIdSipLocations.TestFirst;
 var
-  FirstAddress:  TIdSipLocation;
-  SecondAddress: TIdSipLocation;
+  FirstAddress: TIdSipLocation;
 begin
   CheckNull(Self.Locs.First, 'First on an empty collection');
 
   FirstAddress  := Self.Locs.AddLocation(TcpTransport, '10.0.0.1',  5060);
   Check(FirstAddress = Self.Locs.First, 'First, 1-element collection');
 
-  SecondAddress := Self.Locs.AddLocation(TcpTransport, '10.0.0.1', 5060);
+  Self.Locs.AddLocation(TcpTransport, '10.0.0.1', 5060);
   Check(FirstAddress = Self.Locs.First, 'First, 2-element collection');
 end;
 
