@@ -13,7 +13,7 @@ interface
 
 uses
   Contnrs, Classes, IdNotification, IdRoutingTable, IdSipAuthentication,
-  IdSipCore, IdSipInviteModule, IdSipOptionsModule, IdSipMessage,
+  IdSipCore, IdSipInviteModule, IdSipLocator, IdSipOptionsModule, IdSipMessage,
   IdSipRegistration, IdSipTransaction, IdSipTransport, IdTimerQueue;
 
 type
@@ -152,9 +152,9 @@ type
     procedure AddMappedRoute(UserAgent: TIdSipAbstractCore;
                              const MappedRouteLine: String;
                              PendingActions: TObjectList);
-    procedure AddMockedRoute(UserAgent: TIdSipAbstractCore;
-                             const MockedRouteLine: String;
-                             PendingActions: TObjectList);
+    procedure AddMockRoute(UserAgent: TIdSipAbstractCore;
+                           const MockRouteLine: String;
+                           PendingActions: TObjectList);
     procedure AddPendingConfiguration(PendingActions: TObjectList;
                                       Action: TIdSipPendingLocalResolutionAction);
     procedure AddPendingMessageSend(PendingActions: TObjectList;
@@ -905,9 +905,9 @@ begin
   PendingActions.Add(MappedRouteAction);
 end;
 
-procedure TIdSipStackConfigurator.AddMockedRoute(UserAgent: TIdSipAbstractCore;
-                                                 const MockedRouteLine: String;
-                                                 PendingActions: TObjectList);
+procedure TIdSipStackConfigurator.AddMockRoute(UserAgent: TIdSipAbstractCore;
+                                               const MockRouteLine: String;
+                                               PendingActions: TObjectList);
 var
   Gateway:         String;
   Iface:           String;
@@ -919,10 +919,10 @@ var
   Network:         String;
 begin
   // See class comment for the format for this directive.
-  Line := MockedRouteLine;
+  Line := MockRouteLine;
   EatDirective(Line);
 
-  //   MockedRoute: <destination network>/<mask|number of bits><SP><gateway><SP><metric><SP><interface><SP><local address>
+  //   MockRoute: <destination network>/<mask|number of bits><SP><gateway><SP><metric><SP><interface><SP><local address>
 
   Mask := Fetch(Line, ' ');
   Network := Fetch(Mask, '/');
@@ -1196,7 +1196,7 @@ begin
   else if IsEqual(FirstToken, MappedRouteDirective) then
     Self.AddMappedRoute(UserAgent, ConfigurationLine, PendingActions)
   else if IsEqual(FirstToken, MockRouteDirective) then
-    Self.AddMockedRoute(UserAgent, ConfigurationLine, PendingActions)
+    Self.AddMockRoute(UserAgent, ConfigurationLine, PendingActions)
   else if IsEqual(FirstToken, NameServerDirective) then
     Self.AddLocator(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, RegisterDirective) then
