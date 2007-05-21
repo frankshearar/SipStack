@@ -13,8 +13,9 @@ interface
 
 uses
   Contnrs, Classes, IdNotification, IdRoutingTable, IdSipAuthentication,
-  IdSipCore, IdSipInviteModule, IdSipLocator, IdSipOptionsModule, IdSipMessage,
-  IdSipRegistration, IdSipTransaction, IdSipTransport, IdTimerQueue;
+  IdSipCore, IdSipInviteModule, IdSipLocator, IdSipMockLocator,
+  IdSipOptionsModule, IdSipMessage, IdSipRegistration, IdSipTransaction,
+  IdSipTransport, IdTimerQueue;
 
 type
   TIdSipUserAgent = class;
@@ -122,6 +123,12 @@ type
   //
   // Some directives only make sense for mock objects. For instance:
   //   MockRoute: <destination network>/<mask|number of bits><SP><gateway><SP><metric><SP><interface><SP><local address>
+  //   MockDns: A <FQDN> <IPv4 address>
+  //   MockDns: AAAA <FQDN> <IPv6 address>
+  //   MockDns: NAPTR <key (domain name)> <order> <preference> <flags> <service> <regex> <replacement>
+  //   MockDns: NAPTR local 0 0 "s" "SIP+D2T" "" _sip._tcp
+  //   MockDns: SRV <service> <domain> <priority> <weight> <port> <FQDN>
+  //   MockDns: SRV _sips._tcp local 1 2 5061 roke
   //
   // We try keep the configuration as order independent as possible. To
   // accomplish this, directives are sometimes marked as pending (by putting
@@ -152,6 +159,21 @@ type
     procedure AddMappedRoute(UserAgent: TIdSipAbstractCore;
                              const MappedRouteLine: String;
                              PendingActions: TObjectList);
+    procedure AddMockAAAARecord(UserAgent: TIdSipAbstractCore;
+                                const AAAALine: String;
+                                PendingActions: TObjectList);
+    procedure AddMockARecord(UserAgent: TIdSipAbstractCore;
+                             const ALine: String;
+                             PendingActions: TObjectList);
+    procedure AddMockDnsEntry(UserAgent: TIdSipAbstractCore;
+                              const MockDnsLine: String;
+                              PendingActions: TObjectList);
+    procedure AddMockNAPTRRecord(UserAgent: TIdSipAbstractCore;
+                                 const NaptrLine: String;
+                                 PendingActions: TObjectList);
+    procedure AddMockSRVRecord(UserAgent: TIdSipAbstractCore;
+                               const SrvLine: String;
+                               PendingActions: TObjectList);
     procedure AddMockRoute(UserAgent: TIdSipAbstractCore;
                            const MockRouteLine: String;
                            PendingActions: TObjectList);
@@ -252,6 +274,74 @@ type
     property Network:      String             read fNetwork write fNetwork;
   end;
 
+  TIdSipPendingMockDnsAction = class(TIdSipPendingConfigurationAction)
+  private
+    fCore: TIdSipAbstractCore;
+  public
+    constructor Create(Core: TIdSipAbstractCore);
+
+    property Core: TIdSipAbstractCore read fCore;
+  end;
+
+  TIdSipPendingMockDnsNameRecordAction = class(TIdSipPendingMockDnsAction)
+  private
+    fHostName:  String;
+    fIPAddress: String;
+  public
+    property HostName:  String read fHostName write fHostName;
+    property IPAddress: String read fIPAddress write fIPAddress;
+  end;
+
+  TIdSipPendingMockDnsARecordAction = class(TIdSipPendingMockDnsNameRecordAction)
+  public
+    procedure Execute; override;
+  end;
+
+  TIdSipPendingMockDnsAAAARecordAction = class(TIdSipPendingMockDnsNameRecordAction)
+  public
+    procedure Execute; override;
+  end;
+
+  TIdSipPendingMockDnsNAPTRRecordAction = class(TIdSipPendingMockDnsAction)
+  private
+    fFlags:       String;
+    fKey:         String;
+    fOrder:       Cardinal;
+    fPreference:  Cardinal;
+    fRegEx:       String;
+    fReplacement: String;
+    fService:     String;
+  public
+    procedure Execute; override;
+
+    property Flags:       String   read fFlags write fFlags;
+    property Key:         String   read fKey write fKey;
+    property Order:       Cardinal read fOrder write fOrder;
+    property Preference:  Cardinal read fPreference write fPreference;
+    property RegEx:       String   read fRegEx write fRegEx;
+    property Replacement: String   read fReplacement write fReplacement;
+    property Service:     String   read fService write fService;
+  end;
+
+  TIdSipPendingMockDnsSRVRecordAction = class(TIdSipPendingMockDnsAction)
+  private
+    fDomain:   String;
+    fPort:     Cardinal;
+    fPriority: Cardinal;
+    fService:  String;
+    fTarget:   String;
+    fWeight:   Cardinal;
+  public
+    procedure Execute; override;
+
+    property Domain:   String   read fDomain write fDomain;
+    property Port:     Cardinal read fPort write fPort;
+    property Priority: Cardinal read fPriority write fPriority;
+    property Service:  String   read fService write fService;
+    property Target:   String   read fTarget write fTarget;
+    property Weight:   Cardinal read fWeight write fWeight;
+  end;
+
   TIdSipPendingMockRouteAction = class(TIdSipPendingConfigurationAction)
   private
     fCore:           TIdSipAbstractCore;
@@ -329,6 +419,7 @@ const
   ListenDirective                         = 'Listen';
   MockKeyword                             = 'MOCK';
   MappedRouteDirective                    = 'MappedRoute';
+  MockDnsDirective                        = 'MockDns';
   MockRouteDirective                      = 'MockRoute';
   NameServerDirective                     = 'NameServer';
   RegisterDirective                       = 'Register';
@@ -348,8 +439,8 @@ implementation
 
 uses
   IdMockRoutingTable, IdSimpleParser, IdSipConsts, IdSipDns, IdSipIndyLocator,
-  IdSipLocation, IdSipMockBindingDatabase, IdSipMockLocator,
-  IdSipSubscribeModule, IdSystem, IdUnicode, SysUtils;
+  IdSipLocation, IdSipMockBindingDatabase, IdSipSubscribeModule, IdSystem,
+  IdUnicode, SysUtils;
 
 //******************************************************************************
 //* Unit Public functions & procedures                                         *
@@ -905,6 +996,197 @@ begin
   PendingActions.Add(MappedRouteAction);
 end;
 
+procedure TIdSipStackConfigurator.AddMockAAAARecord(UserAgent: TIdSipAbstractCore;
+                                                    const AAAALine: String;
+                                                    PendingActions: TObjectList);
+var
+  FQDN:        String;
+  IPv6Address: String;
+  Line:        String;
+  Pending:     TIdSipPendingMockDnsAAAARecordAction;
+begin
+  //   MockDns: A <FQDN> <IPv6 address>
+  Line := AAAALine;
+  EatDirective(Line);
+
+  // Eat the RR token.
+  Fetch(Line, ' ');
+
+  IPv6Address := Line;
+  FQDN        := Fetch(IPv6Address, ' ');
+
+  Pending := TIdSipPendingMockDnsAAAARecordAction.Create(UserAgent);
+  Pending.HostName  := FQDN;
+  Pending.IPAddress := IPv6Address;
+  PendingActions.Add(Pending);
+end;
+
+procedure TIdSipStackConfigurator.AddMockARecord(UserAgent: TIdSipAbstractCore;
+                                                 const ALine: String;
+                                                 PendingActions: TObjectList);
+var
+  FQDN:        String;
+  IPv4Address: String;
+  Line:        String;
+  Pending:     TIdSipPendingMockDnsARecordAction;
+begin
+  //   MockDns: A <FQDN> <IPv4 address>
+  Line := ALine;
+  EatDirective(Line);
+
+  // Eat the RR token.
+  Fetch(Line, ' ');
+
+  IPv4Address := Line;
+  FQDN        := Fetch(IPv4Address, ' ');
+
+  if not TIdSimpleParser.IsFQDN(FQDN) then
+    raise EParserError.Create(Format(MalformedConfigurationLine, [ALine]));
+
+  if not TIdIPAddressParser.IsIPv4Address(IPv4Address) then
+    raise EParserError.Create(Format(MalformedConfigurationLine, [ALine]));
+
+  Pending := TIdSipPendingMockDnsARecordAction.Create(UserAgent);
+  Pending.HostName  := FQDN;
+  Pending.IPAddress := IPv4Address;
+  PendingActions.Add(Pending);
+end;
+
+procedure TIdSipStackConfigurator.AddMockDnsEntry(UserAgent: TIdSipAbstractCore;
+                                                  const MockDnsLine: String;
+                                                  PendingActions: TObjectList);
+var
+  Line: String;
+  RR:   String;
+begin
+  // See class comment for the format for this directive.
+  Line := MockDnsLine;
+  EatDirective(Line);
+
+  RR := Fetch(Line, ' ');
+
+  if IsEqual(RR, DnsARecord) then
+    Self.AddMockARecord(UserAgent, MockDnsLine, PendingActions)
+  else if IsEqual(RR, DnsAAAARecord) then
+    Self.AddMockAAAARecord(UserAgent, MockDnsLine, PendingActions)
+  else if IsEqual(RR, DnsNAPTRRecord) then
+    Self.AddMockNAPTRRecord(UserAgent, MockDnsLine, PendingActions)
+  else if IsEqual(RR, DnsSRVRecord) then
+    Self.AddMockSRVRecord(UserAgent, MockDnsLine, PendingActions)
+end;
+
+procedure TIdSipStackConfigurator.AddMockNAPTRRecord(UserAgent: TIdSipAbstractCore;
+                                                     const NaptrLine: String;
+                                                     PendingActions: TObjectList);
+  function Dequote(S: String): String;
+  var
+    FirstChar: Char;
+  begin
+    Result := S;
+    if (S = '') then Exit;
+
+    FirstChar := S[1];
+    if (FirstChar in ['''', '"']) and (LastChar(S) = FirstChar) then
+      Result := WithoutFirstAndLastChars(S);
+  end;
+var
+  Flags:       String;
+  Key:         String;
+  Line:        String;
+  Order:       String;
+  Preference:  String;
+  Pending:     TIdSipPendingMockDnsNAPTRRecordAction;
+  RegEx:       String;
+  Replacement: String;
+  Service:     String;
+begin
+  //   MockDns: NAPTR <key (domain name)> <order> <preference> "<flags>" "<service>" "<regex>" <replacement>
+
+  Line := NaptrLine;
+  EatDirective(Line);
+
+  // Eat the RR token.
+  Fetch(Line, ' ');
+
+  Key         := Fetch(Line, ' ');
+  Order       := Fetch(Line, ' ');
+  Preference  := Fetch(Line, ' ');
+  Flags       := Fetch(Line, ' ');
+  Service     := Fetch(Line, ' ');
+  Regex       := Fetch(Line, ' ');
+  Replacement := Fetch(Line, ' ');
+
+  if not TIdSimpleParser.IsFQDN(Key) then
+      raise EParserError.Create(Format(MalformedConfigurationLine, [NaptrLine]));
+  if not TIdSimpleParser.IsNumber(Order) then
+      raise EParserError.Create(Format(MalformedConfigurationLine, [NaptrLine]));
+  if not TIdSimpleParser.IsNumber(Preference) then
+      raise EParserError.Create(Format(MalformedConfigurationLine, [NaptrLine]));
+  if (Flags = '') then
+    raise EParserError.Create(Format(MalformedConfigurationLine, [NaptrLine]));
+  if (Service = '') then
+    raise EParserError.Create(Format(MalformedConfigurationLine, [NaptrLine]));
+  if (Regex = '') then
+    raise EParserError.Create(Format(MalformedConfigurationLine, [NaptrLine]));
+  if (Replacement = '') then
+    raise EParserError.Create(Format(MalformedConfigurationLine, [NaptrLine]));
+
+  Pending := TIdSipPendingMockDnsNAPTRRecordAction.Create(UserAgent);
+  Pending.Flags       := Dequote(Flags);
+  Pending.Key         := Key;
+  Pending.Order       := StrToInt(Order);
+  Pending.Preference  := StrToInt(Preference);
+  Pending.Regex       := Dequote(Regex);
+  Pending.Replacement := Replacement;
+  Pending.Service     := Dequote(Service);
+
+  PendingActions.Add(Pending);
+end;
+
+procedure TIdSipStackConfigurator.AddMockSRVRecord(UserAgent: TIdSipAbstractCore;
+                                                   const SrvLine: String;
+                                                   PendingActions: TObjectList);
+var
+  Domain:   String;
+  Line:     String;
+  Pending:  TIdSipPendingMockDnsSRVRecordAction;
+  Port:     String;
+  Priority: String;
+  Service:  String;
+  Target:   String;
+  Weight:   String;
+begin
+  //   MockDns: SRV <service> <domain> <priority> <weight> <port> <FQDN>
+  Line := SrvLine;
+  EatDirective(Line);
+
+  // Eat the RR token.
+  Fetch(Line, ' ');
+
+  Service  := Fetch(Line, ' ');
+  Domain   := Fetch(Line, ' ');
+  Priority := Fetch(Line, ' ');
+  Weight   := Fetch(Line, ' ');
+  Port     := Fetch(Line, ' ');
+  Target   := Fetch(Line, ' ');
+
+  if not TIdSimpleParser.IsNumber(Priority) then
+    raise EParserError.Create(Format(MalformedConfigurationLine, [SrvLine]));
+  if not TIdSimpleParser.IsNumber(Weight) then
+    raise EParserError.Create(Format(MalformedConfigurationLine, [SrvLine]));
+  if not TIdSimpleParser.IsNumber(Port) then
+    raise EParserError.Create(Format(MalformedConfigurationLine, [SrvLine]));
+
+  Pending := TIdSipPendingMockDnsSRVRecordAction.Create(UserAgent);
+  Pending.Domain   := Domain;
+  Pending.Port     := StrToInt(Port);
+  Pending.Priority := StrToInt(Priority);
+  Pending.Service  := Service;
+  Pending.Target   := Target;
+  Pending.Weight   := StrToInt(Weight);
+  PendingActions.Add(Pending);
+end;
+
 procedure TIdSipStackConfigurator.AddMockRoute(UserAgent: TIdSipAbstractCore;
                                                const MockRouteLine: String;
                                                PendingActions: TObjectList);
@@ -1195,6 +1477,8 @@ begin
     Self.AddTransport(UserAgent.Dispatcher, ConfigurationLine)
   else if IsEqual(FirstToken, MappedRouteDirective) then
     Self.AddMappedRoute(UserAgent, ConfigurationLine, PendingActions)
+  else if IsEqual(FirstToken, MockDnsDirective) then
+    Self.AddMockDnsEntry(UserAgent, ConfigurationLine, PendingActions)
   else if IsEqual(FirstToken, MockRouteDirective) then
     Self.AddMockRoute(UserAgent, ConfigurationLine, PendingActions)
   else if IsEqual(FirstToken, NameServerDirective) then
@@ -1390,6 +1674,72 @@ end;
 procedure TIdSipPendingMappedRouteAction.Execute;
 begin
   Self.Core.RoutingTable.AddMappedRoute(Self.Network, Self.Mask, Self.Gateway, Self.MappedPort);
+end;
+
+//******************************************************************************
+//* TIdSipPendingMockDnsAction
+//******************************************************************************
+//* TIdSipPendingMockDnsAction Public methods **********************************
+
+constructor TIdSipPendingMockDnsAction.Create(Core: TIdSipAbstractCore);
+begin
+  inherited Create;
+
+  Self.fCore := Core;
+end;
+
+//******************************************************************************
+//* TIdSipPendingMockDnsARecordAction                                          *
+//******************************************************************************
+//* TIdSipPendingMockDnsARecordAction Public methods ***************************
+
+procedure TIdSipPendingMockDnsARecordAction.Execute;
+begin
+  if (Self.Core.Locator is TIdSipMockLocator) then
+    (Self.Core.Locator as TIdSipMockLocator).AddA(Self.HostName, Self.IPAddress);
+end;
+
+//******************************************************************************
+//* TIdSipPendingMockDnsAAAARecordAction                                       *
+//******************************************************************************
+//* TIdSipPendingMockDnsAAAARecordAction Public methods ************************
+
+procedure TIdSipPendingMockDnsAAAARecordAction.Execute;
+begin
+  if (Self.Core.Locator is TIdSipMockLocator) then
+    (Self.Core.Locator as TIdSipMockLocator).AddAAAA(Self.HostName, Self.IPAddress);
+end;
+
+//******************************************************************************
+//* TIdSipPendingMockDnsNAPTRRecordAction                                      *
+//******************************************************************************
+//* TIdSipPendingMockDnsNAPTRRecordAction Public methods ***********************
+
+procedure TIdSipPendingMockDnsNAPTRRecordAction.Execute;
+begin
+  if (Self.Core.Locator is TIdSipMockLocator) then
+    (Self.Core.Locator as TIdSipMockLocator).AddNAPTR(Self.Key,
+                                                      Self.Order,
+                                                      Self.Preference,
+                                                      Self.Flags,
+                                                      Self.Service,
+                                                      Self.Replacement);
+end;
+
+//******************************************************************************
+//* TIdSipPendingMockDnsSRVRecordAction                                        *
+//******************************************************************************
+//* TIdSipPendingMockDnsSRVRecordAction Public methods *************************
+
+procedure TIdSipPendingMockDnsSRVRecordAction.Execute;
+begin
+  if (Self.Core.Locator is TIdSipMockLocator) then
+    (Self.Core.Locator as TIdSipMockLocator).AddSRV(Self.Domain,
+                                                    Self.Service,
+                                                    Self.Priority,
+                                                    Self.Weight,
+                                                    Self.Port,
+                                                    Self.Target);
 end;
 
 //******************************************************************************

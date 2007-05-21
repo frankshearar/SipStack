@@ -13,7 +13,7 @@ interface
 
 uses
   Classes, IdObservable, IdRoutingTable, IdSipCore, IdSipDialog, IdSipDialogID,
-  IdSipInviteModule, IdSipLocation, IdSipMessage, IdSipTransport,
+  IdSipDns, IdSipInviteModule, IdSipLocation, IdSipMessage, IdSipTransport,
   IdSocketHandle, IdUdpServer, IdSipUserAgent, IdTimerQueue, SyncObjs,
   TestFrameworkEx, TestFramework, TestFrameworkSip, TestFrameworkSipTU;
 
@@ -263,6 +263,38 @@ type
     procedure TestUseGruuDirective;
   end;
 
+  TestConfigureMockLocator = class(TStackConfigurationTestCase)
+  private
+    NameRecords: TIdDomainNameRecords;
+    Naptr:       TIdNaptrRecords;
+    SRVs:        TIdSrvRecords;
+    Target:      TIdSipUri;
+
+    procedure CheckARecord(ExpectedIP,
+                           HostName: String;
+                           UserAgent: TIdSipUserAgent;
+                           Records: TIdDomainNameRecords);
+    procedure CheckMalformedRecord(Line, ErrorMsg: String);
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestALineBeforeLocatorLine;
+    procedure TestAddARecord;
+    procedure TestAddARecordMalformedDomainName;
+    procedure TestAddARecordMalformedIPAddress;
+    procedure TestAddAAAARecord;
+    procedure TestAddNAPTRRecord;
+    procedure TestAddNAPTRRecordMalformedKey;
+    procedure TestAddNAPTRRecordMalformedOrder;
+    procedure TestAddNAPTRRecordMalformedPreference;
+    procedure TestAddNAPTRRecordMissingFlags;
+    procedure TestAddSRVRecord;
+    procedure TestAddSRVRecordMalformedPort;
+    procedure TestAddSRVRecordMalformedPriority;
+    procedure TestAddSRVRecordMalformedWeight;
+  end;
+
   // These tests exercise the SIP discovery algorithms as defined in RFC 3263.
   TestLocation = class(TTestCaseTU,
                        IIdSipActionListener,
@@ -322,10 +354,10 @@ implementation
 
 uses
   IdException, IdMockRoutingTable, IdSdp, IdSimpleParser, IdSipAuthentication,
-  IdSipConsts, IdSipDns, IdSipIndyLocator, IdSipMockBindingDatabase,
-  IdSipMockLocator, IdSipMockTransactionDispatcher, IdSipMockTransport,
-  IdSipRegistration, IdSipSubscribeModule, IdSipTCPTransport, IdSipUDPTransport,
-  IdSystem, IdTcpClient, IdUnicode, SysUtils;
+  IdSipConsts, IdSipIndyLocator, IdSipMockBindingDatabase, IdSipMockLocator,
+  IdSipMockTransactionDispatcher, IdSipMockTransport, IdSipRegistration,
+  IdSipSubscribeModule, IdSipTCPTransport, IdSipUDPTransport, IdSystem,
+  IdTcpClient, IdUnicode, SysUtils;
 
 const
   // SFTF: Sip Foundry Test Framework. cf. http://www.sipfoundry.org/sftf/
@@ -378,6 +410,7 @@ begin
   Result.AddTest(TestTIdSipUserAgent.Suite);
   Result.AddTest(TestTIdSipStackConfigurator.Suite);
   Result.AddTest(TestConfigureRegistrar.Suite);
+  Result.AddTest(TestConfigureMockLocator.Suite);
   Result.AddTest(TestLocation.Suite);
   Result.AddTest(TestTIdSipReconfigureStackWait.Suite);
 end;
@@ -3633,6 +3666,229 @@ procedure TestConfigureRegistrar.TestUseGruuDirective;
 begin
   CheckUseGruu(true);
   CheckUseGruu(false);
+end;
+
+//******************************************************************************
+//* TestConfigureMockLocator                                                   *
+//******************************************************************************
+//* TestConfigureMockLocator Public methods ************************************
+
+procedure TestConfigureMockLocator.SetUp;
+begin
+  inherited SetUp;
+
+  Self.NameRecords := TIdDomainNameRecords.Create;
+  Self.Naptr       := TIdNaptrRecords.Create;
+  Self.SRVs        := TIdSrvRecords.Create;
+  Self.Target      := TIdSipUri.Create('');
+end;
+
+procedure TestConfigureMockLocator.TearDown;
+begin
+  Self.Target.Free;
+  Self.SRVs.Free;
+  Self.Naptr.Free;
+  Self.NameRecords.Free;
+
+  inherited TearDown;
+end;
+
+//* TestConfigureMockLocator Private methods ***********************************
+
+procedure TestConfigureMockLocator.CheckARecord(ExpectedIP,
+                                                HostName: String;
+                                                UserAgent: TIdSipUserAgent;
+                                                Records: TIdDomainNameRecords);
+begin
+  UserAgent.Locator.ResolveNameRecords(HostName, Records);
+  CheckEquals(1, Records.Count, 'Unexpected number of results for "' + HostName + '"');
+  CheckEquals(ExpectedIP, Records[0].IPAddress, 'Wrong IP address for "' + HostName + '"');
+end;
+
+procedure TestConfigureMockLocator.CheckMalformedRecord(Line, ErrorMsg: String);
+begin
+  Self.Configuration.Clear;
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('NameServer: MOCK');
+  Self.Configuration.Add(Line);
+
+  try
+    Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+    Fail('Failed to bail out with: ' + ErrorMsg);
+  except
+    on E: EParserError do
+      Check(Pos(Line, E.Message) > 0,
+            'Insufficient error message');
+  end;
+end;
+
+//* TestConfigureMockLocator Published methods *********************************
+
+procedure TestConfigureMockLocator.TestALineBeforeLocatorLine;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('MockDns: A localhost 127.0.0.1');
+  Self.Configuration.Add('NameServer: MOCK');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(TIdSipMockLocator, UA.Locator.ClassType, 'Unexpected locator type');
+
+    CheckARecord('127.0.0.1', 'localhost', UA, Self.NameRecords);
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestConfigureMockLocator.TestAddARecord;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('NameServer: MOCK');
+  Self.Configuration.Add('MockDns: A localhost 127.0.0.1');
+  Self.Configuration.Add('MockDns: A tessier-ashpool.co.luna 1.2.3.4');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(TIdSipMockLocator, UA.Locator.ClassType, 'Unexpected locator type');
+
+    CheckARecord('127.0.0.1', 'localhost', UA, Self.NameRecords);
+
+    Self.NameRecords.Clear;
+    CheckARecord('1.2.3.4', 'tessier-ashpool.co.luna', UA, Self.NameRecords);
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestConfigureMockLocator.TestAddARecordMalformedDomainName;
+begin
+  CheckMalformedRecord('MockDns: A 1foo 127.0.0.1', 'Malformed domain name');
+end;
+
+procedure TestConfigureMockLocator.TestAddARecordMalformedIPAddress;
+begin
+  CheckMalformedRecord('MockDns: A foo.com ::1', 'Malformed IPv4 address');
+end;
+
+procedure TestConfigureMockLocator.TestAddAAAARecord;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('NameServer: MOCK');
+  Self.Configuration.Add('MockDns: AAAA tessier-ashpool.co.luna ::1');
+  Self.Configuration.Add('MockDns: AAAA tessier-ashpool.co.luna ::2');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(TIdSipMockLocator, UA.Locator.ClassType, 'Unexpected locator type');
+
+    UA.Locator.ResolveNameRecords('tessier-ashpool.co.luna', Self.NameRecords);
+    CheckEquals(2,     Self.NameRecords.Count,        'Unexpected number of results for "tessier-ashpool.co.luna"');
+    CheckEquals('::1', Self.NameRecords[0].IPAddress, 'Wrong first IP address for "tessier-ashpool.co.luna"');
+    CheckEquals('::2', Self.NameRecords[1].IPAddress, 'Wrong second IP address for "tessier-ashpool.co.luna"');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestConfigureMockLocator.TestAddNAPTRRecord;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Target.Uri := 'sip:foo';
+
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('NameServer: MOCK');
+  Self.Configuration.Add('MockDns: NAPTR foo 1 2 "" "SIP+D2T" "" bar');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(TIdSipMockLocator, UA.Locator.ClassType, 'Unexpected locator type');
+
+    UA.Locator.ResolveNAPTR(Self.Target, Self.Naptr);
+    CheckEquals(1, Self.Naptr.Count, 'Unexpected record count');
+    CheckEquals('foo',     Self.Naptr[0].Key,         'Key');
+    CheckEquals(1,         Self.Naptr[0].Order,       'Order');
+    CheckEquals(2,         Self.Naptr[0].Preference,  'Preference');
+    CheckEquals('',        Self.Naptr[0].Flags,       'Flags');
+    CheckEquals('SIP+D2T', Self.Naptr[0].Service,     'Service');
+    CheckEquals('bar',     Self.Naptr[0].Value,       'Value');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestConfigureMockLocator.TestAddNAPTRRecordMalformedKey;
+begin
+  // First token must be a domain name.
+  CheckMalformedRecord('MockDns: NAPTR 1',
+                       'Malformed NAPTR key');
+end;
+
+procedure TestConfigureMockLocator.TestAddNAPTRRecordMalformedOrder;
+begin
+  // Second token must be a (positive) integer.
+  CheckMalformedRecord('MockDns: NAPTR foo a',
+                       'Malformed NAPTR order');
+end;
+
+procedure TestConfigureMockLocator.TestAddNAPTRRecordMalformedPreference;
+begin
+  // Third token must be a (positive) integer.
+  CheckMalformedRecord('MockDns: NAPTR foo 0 a',
+                       'Malformed NAPTR preference');
+end;
+
+procedure TestConfigureMockLocator.TestAddNAPTRRecordMissingFlags;
+begin
+  CheckMalformedRecord('MockDns: NAPTR foo 0 0', 'Missing flags (and everything else)');
+  CheckMalformedRecord('MockDns: NAPTR foo 0 0 "SIP+D2T" "" bar', 'Missing flags');
+end;
+
+procedure TestConfigureMockLocator.TestAddSRVRecord;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('NameServer: MOCK');
+  Self.Configuration.Add('MockDns: SRV _sip._tcp tessier-ashpool.co.luna 1 2 5060 proxy.tessier-ashpool.co.luna');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(TIdSipMockLocator, UA.Locator.ClassType, 'Unexpected locator type');
+
+    UA.Locator.ResolveSRV('_sip._tcp.tessier-ashpool.co.luna', Self.SRVs);
+    CheckEquals(1,                               Self.SRVs.Count,       'Unexpected number of SRV records');
+    CheckEquals(1,                               Self.SRVs[0].Priority, 'Priority');
+    CheckEquals(2,                               Self.SRVs[0].Weight,   'Weight');
+    CheckEquals(5060,                            Self.SRVs[0].Port,     'Port');
+    CheckEquals('proxy.tessier-ashpool.co.luna', Self.SRVs[0].Target,   'Target');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestConfigureMockLocator.TestAddSRVRecordMalformedPort;
+begin
+  CheckMalformedRecord('MockDns: SRV _sip._tcp tessier-ashpool.co.luna 1 2 506a proxy.tessier-ashpool.co.luna',
+                       'Malformed port');
+end;
+
+procedure TestConfigureMockLocator.TestAddSRVRecordMalformedPriority;
+begin
+  CheckMalformedRecord('MockDns: SRV _sip._tcp tessier-ashpool.co.luna a 2 5060 proxy.tessier-ashpool.co.luna',
+                       'Malformed priority');
+end;
+
+procedure TestConfigureMockLocator.TestAddSRVRecordMalformedWeight;
+begin
+  CheckMalformedRecord('MockDns: SRV _sip._tcp tessier-ashpool.co.luna 1 a 5060 proxy.tessier-ashpool.co.luna',
+                       'Malformed weight');
 end;
 
 //******************************************************************************

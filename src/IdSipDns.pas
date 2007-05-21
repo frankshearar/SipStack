@@ -184,8 +184,10 @@ type
   end;
 
 const
-  DnsARecord    = 'A';
-  DnsAAAARecord = 'AAAA';
+  DnsARecord     = 'A';
+  DnsAAAARecord  = 'AAAA';
+  DnsNAPTRRecord = 'NAPTR';
+  DnsSRVRecord   = 'SRV';
 
 // NAPTR (RFCs 2915, 3401-3) constants
 // Example full services: 'SIP+D2U', 'SIPS+D2S'
