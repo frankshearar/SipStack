@@ -206,6 +206,7 @@ type
     constructor Create;
     destructor  Destroy; override;
 
+    function CreateLocator(Configuration: String): TIdSipAbstractLocator;
     function CreateUserAgent(Configuration: TStrings;
                              Context: TIdTimerQueue): TIdSipUserAgent; overload;
     function  StrToBool(B: String): Boolean;
@@ -704,6 +705,44 @@ begin
   inherited Destroy;
 end;
 
+function TIdSipStackConfigurator.CreateLocator(Configuration: String): TIdSipAbstractLocator;
+var
+  Host: String;
+  Line: String;
+  Loc:  TIdSipIndyLocator;
+  Mock: TIdSipMockLocator;
+  Port: String;
+begin
+  Line := Configuration;
+  EatDirective(Line);
+
+  Host := Fetch(Line, [':', ';']);
+
+  if IsEqual(Host, MockKeyword) then begin
+    Mock := TIdSipMockLocator.Create;
+
+    if (Line <> '') then begin
+      // There are additional configuration options for the mock locator to
+      // process:
+
+      Mock.ReturnOnlySpecifiedRecords := IsEqual(Line, ReturnOnlySpecifiedRecordsLocatorOption);
+
+    end;
+    Result := Mock;
+  end
+  else begin
+    Port := Fetch(Line, [' ', ';']);
+    if {(Port <> '') and} not TIdSimpleParser.IsNumber(Port) then
+      raise EParserError.Create(Format(MalformedConfigurationLine, [Configuration]));
+
+    Loc := TIdSipIndyLocator.Create;
+    Loc.NameServer          := Host;
+    Loc.Port                := StrToInt(Port);
+
+    Result := Loc;
+  end;
+end;
+
 function TIdSipStackConfigurator.CreateUserAgent(Configuration: TStrings;
                                                  Context: TIdTimerQueue): TIdSipUserAgent;
 begin
@@ -810,46 +849,15 @@ end;
 
 procedure TIdSipStackConfigurator.AddLocator(UserAgent: TIdSipAbstractCore;
                                              const NameServerLine: String);
-var
-  Host: String;
-  Line: String;
-  Loc:  TIdSipIndyLocator;
-  Port: String;
 begin
   // See class comment for the format for this directive.
-  Line := NameServerLine;
-  EatDirective(Line);
-
-  Host := Fetch(Line, [':', ';']);
-
   if Assigned(UserAgent.Locator) then begin
     UserAgent.Locator.Free;
     UserAgent.Locator := nil;
     UserAgent.Dispatcher.Locator := nil;
   end;
 
-  if IsEqual(Host, MockKeyword) then begin
-    UserAgent.Locator := TIdSipMockLocator.Create;
-
-    if (Line <> '') then begin
-      // There are additional configuration options for the mock locator to
-      // process:
-
-      (UserAgent.Locator as TIdSipMockLocator).ReturnOnlySpecifiedRecords := IsEqual(Line, ReturnOnlySpecifiedRecordsLocatorOption);
-    end;
-  end
-  else begin
-    Port := Fetch(Line, [' ', ';']);
-    if not TIdSimpleParser.IsNumber(Port) then
-      raise EParserError.Create(Format(MalformedConfigurationLine, [NameServerLine]));
-
-    Loc := TIdSipIndyLocator.Create;
-    Loc.NameServer          := Host;
-    Loc.Port                := StrToInt(Port);
-
-    UserAgent.Locator := Loc;
-  end;
-
+  UserAgent.Locator := Self.CreateLocator(NameServerLine);
   UserAgent.Dispatcher.Locator := UserAgent.Locator;
 end;
 
