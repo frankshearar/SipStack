@@ -209,6 +209,7 @@ type
 
   TestTIdSipNameServerExtension = class(TStackInterfaceExtensionTestCase)
   private
+    LocalAddress: String;
     NS: TIdSipNameServerExtension;
 
     procedure ReconfigureStack(Intf: TIdSipStackInterface);
@@ -218,6 +219,9 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestLocalAddressForEmptyString;
+    procedure TestLocalAddressForFQDN;
+    procedure TestLocalAddressForNonFQDN;
     procedure TestResolveNamesFor;
   end;
 
@@ -410,6 +414,7 @@ type
     procedure TearDown; override;
   published
     procedure TestCopy;
+    procedure TestSetLocalPartyStripsTagParam;
     procedure TestSetRemotePartyStripsTagParam;
   end;
 
@@ -1181,20 +1186,66 @@ end;
 procedure TestTIdSipStackInterface.TestEstablishedSessionInboundCall;
 var
   InboundCallData: TIdInboundCallData;
+  Invite:          TIdSipRequest;
+  Data:            TIdEstablishedSessionData;
+  LocalParty:      TIdSipAddressHeader;
+  RemoteParty:     TIdSipAddressHeader;
 begin
-  Self.ReceiveInvite;
-  Self.ProcessAllPendingNotifications;
-  CheckNotificationReceived(TIdInboundCallData, 'No inbound call notification received?');
-  InboundCallData := Self.LastEventOfType(TIdInboundCallData) as TIdInboundCallData;
+  Invite := TIdSipRequest.Create;
+  try
+    Self.ReceiveInviteWithOffer(Self.RemoteOffer, Self.RemoteMimeType);
+    Invite.Assign(Self.MockTransport.LastRequest);
 
-  Self.Intf.AnswerCall(InboundCallData.Handle, Self.LocalOffer, Self.LocalMimeType);
-  Self.TimerQueue.TriggerAllEventsOfType(TIdSipSessionAcceptWait);
-  Self.ProcessAllPendingNotifications;
+    Self.ProcessAllPendingNotifications;
+    CheckNotificationReceived(TIdInboundCallData, 'No inbound call notification received?');
+    InboundCallData := Self.LastEventOfType(TIdInboundCallData) as TIdInboundCallData;
 
-  Self.ReceiveAck;
-  Self.ProcessAllPendingNotifications;
+    Self.Intf.AnswerCall(InboundCallData.Handle, Self.LocalOffer, Self.LocalMimeType);
+    Self.TimerQueue.TriggerAllEventsOfType(TIdSipSessionAcceptWait);
+    Self.ProcessAllPendingNotifications;
 
-  CheckNotificationReceived(TIdEstablishedSessionData, 'No established session notification received');
+    Self.ReceiveAck;
+    Self.ProcessAllPendingNotifications;
+
+    CheckNotificationReceived(TIdEstablishedSessionData, 'No established session notification received');
+
+    Data := Self.LastEventOfType(TIdEstablishedSessionData) as TIdEstablishedSessionData;
+
+    LocalParty := TIdSipFromHeader.Create;
+    try
+      RemoteParty := TIdSipFromHeader.Create;
+      try
+        LocalParty.Assign(Self.LastSentResponse.ToHeader);
+        LocalParty.RemoveParameter(TagParam);
+        RemoteParty.Assign(Invite.From);
+        RemoteParty.RemoveParameter(TagParam);
+
+        CheckEquals(Self.LastSentResponse.FirstContact.FullValue,
+                    Data.LocalContact.FullValue,
+                    'LocalContact');
+        CheckEquals(Self.LocalMimeType, Data.LocalMimeType, 'LocalMimeType');
+        CheckEquals(LocalParty.FullValue,
+                    Data.LocalParty.FullValue,
+                    'LocalParty');
+        CheckEquals(Self.LocalOffer, Data.LocalSessionDescription, 'LocalSessionDescription');
+
+        CheckEquals(Invite.FirstContact.FullValue,
+                    Data.RemoteContact.FullValue,
+                    'RemoteContact');
+        CheckEquals(Self.RemoteMimeType, Data.RemoteMimeType, 'RemoteMimeType');
+        CheckEquals(RemoteParty.FullValue,
+                    Data.RemoteParty.FullValue,
+                    'RemoteParty');
+        CheckEquals(Self.RemoteOffer, Data.RemoteSessionDescription, 'RemoteSessionDescription');
+      finally
+        RemoteParty.Free;
+      end;
+    finally
+      LocalParty.Free;
+    end;
+  finally
+    Invite.Free;
+  end;
 end;
 
 procedure TestTIdSipStackInterface.TestEstablishedSessionOutboundCall;
@@ -1270,9 +1321,17 @@ begin
 
   Data := Self.LastEventOfType(TIdInboundCallData) as TIdInboundCallData;
   Check(Data.Handle > 0, 'Invalid Action handle');
-  CheckEquals(Self.RemoteOffer,            Data.RemoteSessionDescription, 'RemoteSessionDescription');
-  CheckEquals(Self.RemoteMimeType,         Data.RemoteMimeType,           'RemoteMimeType');
-  CheckEquals(Self.RemoteUA.From.Value,    Data.RemoteParty.Value,        'RemoteParty');
+  CheckEquals('',                                 Data.LocalSessionDescription,  'LocalSessionDescription');
+  CheckEquals('',                                 Data.LocalMimeType,            'LocalMimeType');
+  CheckEquals(Self.MockTransport.LastRequest.ToHeader.Value,
+              Data.LocalParty.Value,
+              'LocalParty');
+  CheckEquals('sip:' + Self.LocalAddress + ':' + IntToStr(Self.LocalPort),
+              Data.LocalContact.Value,
+              'LocalContact');
+  CheckEquals(Self.RemoteOffer,                   Data.RemoteSessionDescription, 'RemoteSessionDescription');
+  CheckEquals(Self.RemoteMimeType,                Data.RemoteMimeType,           'RemoteMimeType');
+  CheckEquals(Self.RemoteUA.From.Value,           Data.RemoteParty.Value,        'RemoteParty');
 
   RemoteContact := TIdSipContactHeader.Create;
   try
@@ -2167,6 +2226,8 @@ begin
   inherited SetUp;
 
   Self.NS := Self.Iface.AttachExtension(TIdSipNameServerExtension) as TIdSipNameServerExtension;
+
+  Self.Configuration.Clear;
 end;
 
 procedure TestTIdSipNameServerExtension.TearDown;
@@ -2180,8 +2241,12 @@ end;
 
 function TestTIdSipNameServerExtension.CreateStackInterface: TIdSipStackInterface;
 begin
-  Self.Configuration.Add(ListenDirective     + ': UDP 127.0.0.1:5060');
-  Self.Configuration.Add(NameServerDirective + ': ' + MockKeyword);
+  Self.LocalAddress := '172.1.2.3';
+
+  Self.Configuration.Add(ListenDirective           + ': UDP 127.0.0.1:5060');
+  Self.Configuration.Add(NameServerDirective       + ': ' + MockKeyword);
+  Self.Configuration.Add(RoutingTableDirective     + ': ' + MockKeyword);
+  Self.Configuration.Add(MockLocalAddressDirective + ': ' + Self.LocalAddress);
 
   Result := inherited CreateStackInterface;
 end;
@@ -2195,6 +2260,40 @@ begin
 end;
 
 //* TestTIdSipNameServerExtension Published methods ****************************
+
+procedure TestTIdSipNameServerExtension.TestLocalAddressForEmptyString;
+begin
+  Self.ExpectedException := EBadParameter;
+  Self.NS.LocalAddressFor('');
+end;
+
+procedure TestTIdSipNameServerExtension.TestLocalAddressForFQDN;
+const
+  InternetHost = 'tessier-ashpool.co.luna';
+  InternetIP   = '1.2.3.4';
+  LocalAddress = '10.0.0.6';
+  VpnAddress   = '192.168.1.42';
+  VpnHost      = 'giftshop.local';
+  VpnIP        = '192.168.1.22';
+begin
+  Self.Configuration.Clear;
+  Self.Configuration.Add(RoutingTableDirective + ': ' + MockKeyword);
+  Self.Configuration.Add(Format('MockDns: A %s %s', [InternetHost, InternetIP]));
+  Self.Configuration.Add(Format('MockDns: A %s %s', [VpnHost, VpnIP]));
+  Self.Configuration.Add(MockRouteDirective + ': 0.0.0.0/0 10.0.0.1 1 1 ' + LocalAddress);
+  Self.Configuration.Add(MockRouteDirective + ': 10.0.0.0/24 10.0.0.1 1 1 ' + LocalAddress);
+  Self.Configuration.Add(MockRouteDirective + ': 192.168.1.0/24 192.168.1.1 1 1 ' + VpnAddress);
+  Self.ReconfigureStack(Self.Iface);
+
+  CheckEquals(LocalAddress, Self.NS.LocalAddressFor(InternetHost), 'Internet address');
+  CheckEquals(VpnAddress,   Self.NS.LocalAddressFor(VpnHost),      'VPN address');
+end;
+
+procedure TestTIdSipNameServerExtension.TestLocalAddressForNonFQDN;
+begin
+  Self.ExpectedException := EBadParameter;
+  Self.NS.LocalAddressFor('::G');
+end;
 
 procedure TestTIdSipNameServerExtension.TestResolveNamesFor;
 var
@@ -3178,7 +3277,9 @@ begin
   inherited SetUp;
 
   Self.Data := TIdSessionData.Create;
+  Self.Data.LocalContact.Value       := 'sip:giftshop.hilton.tr;transport=tcp';
   Self.Data.LocalMimeType            := '2';
+  Self.Data.LocalParty.Value         := 'sip:case@fried-neurons.org';
   Self.Data.LocalSessionDescription  := '1';
   Self.Data.RemoteContact.Value      := 'sip:wintermute@terminalhead.tessier-ashpool.co.luna;transport=sctp';
   Self.Data.RemoteMimeType           := '4';
@@ -3204,9 +3305,15 @@ begin
     CheckEquals(IntToHex(Self.Data.Handle, 8),
                 IntToHex(Copy.Handle, 8),
                 'Handle');
+    CheckEquals(Self.Data.LocalContact.FullValue,
+                Copy.LocalContact.FullValue,
+                'LocalContact');
     CheckEquals(Self.Data.LocalMimeType,
                 Copy.LocalMimeType,
                 'LocalMimeType');
+    CheckEquals(Self.Data.LocalParty.FullValue,
+                Copy.LocalParty.FullValue,
+                'LocalParty');
     CheckEquals(Self.Data.LocalSessionDescription,
                 Copy.LocalSessionDescription,
                 'LocalSessionDescription');
@@ -3222,6 +3329,21 @@ begin
     CheckEquals(Self.Data.RemoteSessionDescription,
                 Copy.RemoteSessionDescription,
                 'RemoteSessionDescription');
+  finally
+    Copy.Free;
+  end;
+end;
+
+procedure TestTIdSessionData.TestSetLocalPartyStripsTagParam;
+var
+  Copy: TIdSessionData;
+begin
+  Self.Data.LocalParty.Params[TagParam] := 'foofoo';
+
+  Copy := TIdSessionData.Create;
+  try
+    Copy.LocalParty := Self.Data.LocalParty;
+    Check(not Copy.LocalParty.HasParameter(TagParam), 'Tag param not removed');
   finally
     Copy.Free;
   end;

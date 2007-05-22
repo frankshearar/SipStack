@@ -288,6 +288,7 @@ type
 
   TIdSipNameServerExtension = class(TIdSipStackInterfaceExtension)
   public
+    function  LocalAddressFor(Destination: String): String;
     procedure ResolveNamesFor(Host: String; IPAddresses: TIdDomainNameRecords);
   end;
 
@@ -533,13 +534,17 @@ type
 
   TIdSessionData = class(TIdEventData)
   private
+    fLocalContact:             TIdSipContactHeader;
     fLocalMimeType:            String;
+    fLocalParty:               TIdSipAddressHeader;
     fLocalSessionDescription:  String;
     fRemoteContact:            TIdSipContactHeader;
     fRemoteMimeType:           String;
     fRemoteParty:              TIdSipAddressHeader;
     fRemoteSessionDescription: String;
 
+    procedure SetLocalContact(Value: TIdSipContactHeader);
+    procedure SetLocalParty(Value: TIdSipAddressHeader);
     procedure SetRemoteContact(Value: TIdSipContactHeader);
     procedure SetRemoteParty(Value: TIdSipAddressHeader);
   protected
@@ -550,7 +555,9 @@ type
 
     procedure Assign(Src: TPersistent); override;
 
+    property LocalContact:             TIdSipContactHeader read fLocalContact write SetLocalContact;
     property LocalMimeType:            String              read fLocalMimeType write fLocalMimeType;
+    property LocalParty:               TIdSipAddressHeader read fLocalParty write SetLocalParty;
     property LocalSessionDescription:  String              read fLocalSessionDescription write fLocalSessionDescription;
     property RemoteContact:            TIdSipContactHeader read fRemoteContact write SetRemoteContact;
     property RemoteMimeType:           String              read fRemoteMimeType write fRemoteMimeType;
@@ -1679,7 +1686,9 @@ begin
   Data := TIdEstablishedSessionData.Create;
   try
     Data.Handle                   := Self.HandleFor(Session);
+    Data.LocalContact             := Session.LocalGruu;
     Data.LocalMimeType            := Session.LocalMimeType;
+    Data.LocalParty               := Session.From;
     Data.LocalSessionDescription  := Session.LocalSessionDescription;
     Data.RemoteContact            := Session.RemoteContact;
     Data.RemoteMimeType           := MimeType;
@@ -1791,10 +1800,14 @@ begin
   try
     Data.Handle                   := Self.HandleFor(Session);
     Data.Invite                   := Session.InitialRequest;
+    Data.LocalContact             := Session.LocalGruu;
+    Data.LocalMimeType            := Session.LocalMimeType;
+    Data.LocalParty               := Session.From;
+    Data.LocalSessionDescription  := Session.LocalSessionDescription;
     Data.RemoteContact            := Session.RemoteContact;
+    Data.RemoteMimeType           := Session.RemoteMimeType;
     Data.RemoteParty              := Session.RemoteParty;
     Data.RemoteSessionDescription := Session.RemoteSessionDescription;
-    Data.RemoteMimeType           := Session.RemoteMimeType;
 
     Self.NotifyEvent(CM_CALL_REQUEST_NOTIFY, Data);
   finally
@@ -2170,6 +2183,40 @@ end;
 //* TIdSipNameServerExtension
 //******************************************************************************
 //* TIdSipNameServerExtension Public methods ***********************************
+
+function TIdSipNameServerExtension.LocalAddressFor(Destination: String): String;
+const
+  FailString = '''%s'' is neither a domain name nor IP address';
+var
+  IPAddress: String;
+  Names:     TIdDomainNameRecords;
+begin
+  // Destination may contain either a fully qualified domain name or an IPv4 or
+  // IPv6 address.
+
+  if (Destination = '') then
+    raise EBadParameter.Create(Format(FailString, [Destination]));
+
+  if TIdIPAddressParser.IsIPAddress(Destination) then begin
+    IPAddress := Destination
+  end
+  else if TIdSimpleParser.IsFQDN(Destination) then begin
+    Names := TIdDomainNameRecords.Create;
+    try
+      Self.ResolveNamesFor(Destination, Names);
+      if Names.IsEmpty then
+        raise Exception.Create('Could not resolve name ''' + Destination + '''');
+
+      IPAddress := Names[0].IPAddress;
+    finally
+      Names.Free;
+    end;
+  end
+  else
+    raise EBadParameter.Create(Format(FailString, [Destination]));
+
+  Result := Self.UserAgent.RoutingTable.LocalAddressFor(IPAddress);
+end;
 
 procedure TIdSipNameServerExtension.ResolveNamesFor(Host: String; IPAddresses: TIdDomainNameRecords);
 begin
@@ -2810,6 +2857,8 @@ constructor TIdSessionData.Create;
 begin
   inherited Create;
 
+  Self.fLocalContact  := TIdSipContactHeader.Create;
+  Self.fLocalParty    := TIdSipAddressHeader.Create;
   Self.fRemoteContact := TIdSipContactHeader.Create;
   Self.fRemoteParty   := TIdSipAddressHeader.Create;
 end;
@@ -2818,6 +2867,8 @@ destructor TIdSessionData.Destroy;
 begin
   Self.fRemoteParty.Free;
   Self.fRemoteContact.Free;
+  Self.fLocalParty.Free;
+  Self.fLocalContact.Free;
 
  inherited Destroy;
 end;
@@ -2831,7 +2882,9 @@ begin
   if (Src is TIdSessionData) then begin
     Other := Src as TIdSessionData;
 
+    Self.LocalContact             := Other.LocalContact;
     Self.LocalMimeType            := Other.LocalMimeType;
+    Self.LocalParty               := Other.LocalParty;    
     Self.LocalSessionDescription  := Other.LocalSessionDescription;
     Self.RemoteContact            := Other.RemoteContact;
     Self.RemoteMimeType           := Other.RemoteMimeType;
@@ -2844,7 +2897,9 @@ end;
 
 function TIdSessionData.Data: String;
 begin
-  Result := 'Remote party: ' + Self.RemoteParty.FullValue + CRLF
+  Result := 'Local party: ' + Self.LocalParty.FullValue + CRLF
+          + 'Local contact: ' + Self.LocalContact.FullValue + CRLF
+          + 'Remote party: ' + Self.RemoteParty.FullValue + CRLF
           + 'Remote contact: ' + Self.RemoteContact.FullValue + CRLF
           + 'Local session description (' + Self.LocalMimeType + '):' + CRLF
           + Self.LocalSessionDescription + CRLF
@@ -2853,6 +2908,19 @@ begin
 end;
 
 //* TIdSessionData Private methods *********************************************
+
+procedure TIdSessionData.SetLocalContact(Value: TIdSipContactHeader);
+begin
+  Self.LocalContact.Assign(Value);
+end;
+
+procedure TIdSessionData.SetLocalParty(Value: TIdSipAddressHeader);
+begin
+  Self.LocalParty.Assign(Value);
+
+  if Self.LocalParty.HasParameter(TagParam) then
+    Self.LocalParty.RemoveParameter(TagParam);
+end;
 
 procedure TIdSessionData.SetRemoteContact(Value: TIdSipContactHeader);
 begin
