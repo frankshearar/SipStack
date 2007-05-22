@@ -28,6 +28,9 @@ function  BestRouteIsDefaultRoute(DestinationIP, LocalIP: String): Boolean;
 function  BestRouteIsDefaultRouteNT4(DestinationIP, LocalIP: String): Boolean;
 function  ConstructUUID: String;
 function  ConstructUUIDURN: String;
+procedure DefineLocalAddress(AAddress: String); {Allows you to use a specified local IP address}
+procedure DefineNetMask(AMask: String); {Let you set the netmask, used to identify if any IP address is local or not}
+procedure DefineRoutableAddress(AAddress: String); {Allows you to set a public IP address}
 function  GetBestLocalAddress(DestinationAddress: String): String;
 function  GetBestLocalAddressNT4(DestinationAddress: String): String;
 function  GetCurrentProcessId: Cardinal;
@@ -38,16 +41,13 @@ function  GetTickDiff(const OldTickCount, NewTickCount : Cardinal): Cardinal;
 function  GetUserName: WideString;
 function  HtoNL(N: Cardinal): Cardinal;
 function  LocalAddress: String;
-function  NtoHL(N: Cardinal): Cardinal;
-function  OsType: TIdOsType;
-function  RoutableAddress: String;
 procedure LocalAddresses(IPs: TStrings);
-procedure DefineLocalAddress(AAddress: String); {Allows you to use a specified local IP address}
-procedure DefineRoutableAddress(AAddress: String); {Allows you to set a public IP address}
-procedure DefineNetMask(AMask: String); {Let you set the netmask, used to identify if any IP address is local or not}
-function OnSameNetwork(AAddress1, AAddress2: String): Boolean; overload;
-function OnSameNetwork(Address1, Address2, Netmask: String): Boolean; overload;
+function  NtoHL(N: Cardinal): Cardinal;
+function  OnSameNetwork(AAddress1, AAddress2: String): Boolean; overload;
+function  OnSameNetwork(Address1, Address2, Netmask: String): Boolean; overload;
+function  OsType: TIdOsType;
 function  ResolveARecords(Name: String; ResolvedList: TStrings): Integer;
+function  RoutableAddress: String;
 function  WindowsOsType(PlatformID, MajorVersion, MinorVersion: Cardinal): TIdOsType;
 
 implementation
@@ -295,6 +295,22 @@ begin
   Result := 'urn:uuid:' + ConstructUUID;
 end;
 
+{See commentary for LocalAddress for an explanation of this function}
+procedure DefineLocalAddress(AAddress: String);
+begin
+  idLocalAddress:=AAddress;
+end;
+
+procedure DefineNetMask(AMask: String); {Let you set the netmask, used to identify if any IP address is local or not}
+begin
+  idNetMask:=AMask;
+end;
+
+procedure DefineRoutableAddress(AAddress: String); {Allows you to set a public IP address}
+begin
+  idRoutableAddress:=AAddress;
+end;
+
 function GetBestLocalAddress(DestinationAddress: String): String;
 var
   DstAddr:        TIpAddr;
@@ -457,22 +473,6 @@ begin
     Result:=idLocalAddress;
 end;
 
-function NtoHL(N: Cardinal): Cardinal;
-begin
-  // See the comment in HtoNL
-
-  Result := Cardinal(Winsock.ntohl(Integer(N)));
-end;
-
-function OsType: TIdOsType;
-begin
-  {$IFDEF MSWINDOWS}
-  Result := WindowsOsType(Win32Platform, Win32MajorVersion, Win32MinorVersion);
-  {$ELSE}
-  Result := otUnknown;
-  {$ENDIF}
-end;
-
 procedure LocalAddresses(IPs: TStrings);
 var
   UnusedServer: TIdUDPServer;
@@ -491,37 +491,11 @@ begin
     IPs.AddStrings(GStack.LocalAddresses);
 end;
 
-function RoutableAddress: String;
+function NtoHL(N: Cardinal): Cardinal;
 begin
-  // If you have a machine sitting behind a Network Address Translator (NAT),
-  // your LocalAddress will probably return an IP in one of the private address
-  // ranges (e.g., in the 192.168.0.0/24 subnet). These addresses are by
-  // definition not reachable by machines on the public Internet. This function
-  // returns an address that other people can use to make calls to you.
+  // See the comment in HtoNL
 
-  if (Length(idRoutableAddress)=0) or (idRoutableAddress='0.0.0.0') then begin
-    // This is a stub implementation; a proper implementation might contact an
-    // external server to discover the external IP, or use STUN, or something
-    // similar.
-    Result := LocalAddress;
-  end else
-    Result := idRoutableAddress;
-end;
-
-{See commentary for LocalAddress for an explanation of this function}
-procedure DefineLocalAddress(AAddress: String);
-begin
-  idLocalAddress:=AAddress;
-end;
-
-procedure DefineRoutableAddress(AAddress: String); {Allows you to set a public IP address}
-begin
-  idRoutableAddress:=AAddress;
-end;
-
-procedure DefineNetMask(AMask: String); {Let you set the netmask, used to identify if any IP address is local or not}
-begin
-  idNetMask:=AMask;
+  Result := Cardinal(Winsock.ntohl(Integer(N)));
 end;
 
 {This function allows you to identify if two different IP addresses are on the "same" network, by
@@ -568,6 +542,32 @@ begin
     else
       Result := false;
   end;
+end;
+
+function OsType: TIdOsType;
+begin
+  {$IFDEF MSWINDOWS}
+  Result := WindowsOsType(Win32Platform, Win32MajorVersion, Win32MinorVersion);
+  {$ELSE}
+  Result := otUnknown;
+  {$ENDIF}
+end;
+
+function RoutableAddress: String;
+begin
+  // If you have a machine sitting behind a Network Address Translator (NAT),
+  // your LocalAddress will probably return an IP in one of the private address
+  // ranges (e.g., in the 192.168.0.0/24 subnet). These addresses are by
+  // definition not reachable by machines on the public Internet. This function
+  // returns an address that other people can use to make calls to you.
+
+  if (Length(idRoutableAddress)=0) or (idRoutableAddress='0.0.0.0') then begin
+    // This is a stub implementation; a proper implementation might contact an
+    // external server to discover the external IP, or use STUN, or something
+    // similar.
+    Result := LocalAddress;
+  end else
+    Result := idRoutableAddress;
 end;
 
 function ResolveARecords(Name: String; ResolvedList: TStrings): Integer;
