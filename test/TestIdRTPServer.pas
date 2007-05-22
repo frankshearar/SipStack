@@ -707,7 +707,7 @@ begin
   Self.Server.Session.AddListener(Self);
 
   Self.ExceptionMessage := 'Waiting for RFC 4103 data';
-  Payload := Self.Client.LocalProfile.EncodingFor(Self.T140PT).Clone as TIdRTPT140Payload;
+  Payload := Self.Client.LocalProfile.EncodingFor(Self.T140PT).Copy as TIdRTPT140Payload;
   try
     Payload.Block := Self.Msg;
     Payload.StartTime := Now;

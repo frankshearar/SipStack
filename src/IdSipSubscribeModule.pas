@@ -223,7 +223,7 @@ type
 
     function  Accept(Request: TIdSipRequest;
                      Binding: TIdSipConnectionBindings): TIdSipAction; virtual;
-    function Clone: TIdSipEventPackage;
+    function Copy: TIdSipEventPackage;
     function MimeType: String; virtual;
 
     property InboundSubscriptionDuration: Cardinal              read fInboundSubscriptionDuration write fInboundSubscriptionDuration;
@@ -1286,7 +1286,7 @@ begin
   Result := Subscription;
 end;
 
-function TIdSipEventPackage.Clone: TIdSipEventPackage;
+function TIdSipEventPackage.Copy: TIdSipEventPackage;
 begin
   Result := TIdSipEventPackageClass(Self.ClassType).Create(Self.Module);
   Result.InboundSubscriptionDuration := Self.InboundSubscriptionDuration;
@@ -1906,7 +1906,7 @@ begin
   if Assigned(Self.Package) then
     FreeAndNil(Self.Package);
 
-  Self.Package := Self.Module.Package(Self.EventPackage).Clone;
+  Self.Package := Self.Module.Package(Self.EventPackage).Copy;
 end;
 
 procedure TIdSipSubscription.SetExpiryTime(Value: TDateTime);
@@ -2079,7 +2079,7 @@ begin
   // Self.Module.Package WILL return something, because the SubscribeModule
   // rejects all SUBSCRIBEs with unknown Event header values before we get
   // here.
-//  Self.Package := Self.Module.Package(Self.EventPackage).Clone;
+//  Self.Package := Self.Module.Package(Self.EventPackage).Copy;
 
   Self.Grid := Self.UA.NextGrid;
 end;

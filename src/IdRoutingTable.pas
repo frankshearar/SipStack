@@ -42,7 +42,7 @@ type
     constructor Create;
 
     procedure Assign(Other: TIdRouteEntry);
-    function  Clone: TIdRouteEntry;
+    function  Copy: TIdRouteEntry;
     function  Equals(OtherRoute: TIdRouteEntry): Boolean;
     function  CanonicalFormMask: String;
     function  IsDefaultRoute: Boolean;
@@ -311,7 +311,7 @@ begin
   Self.Port           := Other.Port;
 end;
 
-function TIdRouteEntry.Clone: TIdRouteEntry;
+function TIdRouteEntry.Copy: TIdRouteEntry;
 begin
   Result := TIdRouteEntryClass(Self.ClassType).Create;
   Result.Assign(Self);
@@ -456,7 +456,7 @@ begin
     NewRoute.Port           := MappedPort;
 
     if not Self.HasRoute(NewRoute) then begin
-      Self.Routes.Add(NewRoute.Clone);
+      Self.Routes.Add(NewRoute.Copy);
       Self.Routes.Sort(RouteSort);
     end;
   finally

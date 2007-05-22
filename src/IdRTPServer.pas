@@ -251,7 +251,7 @@ var
   Wait: TIdRTPReceivePacketWait;
 begin
   Wait := TIdRTPReceivePacketWait.Create;
-  Wait.Packet := Packet.Clone;
+  Wait.Packet := Packet.Copy;
   Wait.SessionID := Self.Session.ID;
 
   Wait.ReceivedFrom := Binding;

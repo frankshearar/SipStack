@@ -288,7 +288,7 @@ var
   TE: TIdRTPTelephoneEventPayload;
 begin
   if Assigned(Self.Processor) then begin
-    TE := Self.Processor.LocalProfile.EncodingFor(TelephoneEventEncoding).Clone as TIdRTPTelephoneEventPayload;
+    TE := Self.Processor.LocalProfile.EncodingFor(TelephoneEventEncoding).Copy as TIdRTPTelephoneEventPayload;
     try
       TE.Event     := Event;
       TE.Duration  := 100;

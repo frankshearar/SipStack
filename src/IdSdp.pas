@@ -3637,7 +3637,7 @@ var
 begin
   if Self.IsSender and not Self.OnHold then begin
     Wait := TIdRTPSendDataWait.Create;
-    Wait.Data      := Payload.Clone;
+    Wait.Data      := Payload.Copy;
     Wait.SessionID := Self.FindServer(LayerID).Session.ID;
 
     Self.Timer.AddEvent(TriggerImmediately, Wait);

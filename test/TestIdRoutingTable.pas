@@ -24,7 +24,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestClone;
+    procedure TestCopy;
     procedure TestEquals; virtual;
     procedure TestEqualsDestinationDiffers;
     procedure TestEqualsGatewayDiffers;
@@ -173,11 +173,11 @@ end;
 
 //* TestTIdRouteEntry Published methods ****************************************
 
-procedure TestTIdRouteEntry.TestClone;
+procedure TestTIdRouteEntry.TestCopy;
 var
   Other: TIdRouteEntry;
 begin
-  Other := Self.Route.Clone;
+  Other := Self.Route.Copy;
   try
     CheckEquals(Self.Route.Destination,    Other.Destination,    'Destination');
     CheckEquals(Self.Route.Gateway,        Other.Gateway,        'Gateway');
@@ -190,13 +190,13 @@ begin
   finally
     Other.Free;
   end;
-end;  
+end;
 
 procedure TestTIdRouteEntry.TestEquals;
 var
   Other: TIdRouteEntry;
 begin
-  Other := Self.Route.Clone;
+  Other := Self.Route.Copy;
   try
     Check(Self.Route.Equals(Other), 'Self.Route must equal Other');
     Check(Other.Equals(Self.Route), 'Equals must be reflexive');
@@ -209,7 +209,7 @@ procedure TestTIdRouteEntry.TestEqualsDestinationDiffers;
 var
   Other: TIdRouteEntry;
 begin
-  Other := Self.Route.Clone;
+  Other := Self.Route.Copy;
   try
     Other.Destination := TIdIPAddressParser.IncIPAddress(Self.Route.Destination);
     Check(not Self.Route.Equals(Other), 'Self.Route <> Other because their destinations differ');
@@ -223,7 +223,7 @@ procedure TestTIdRouteEntry.TestEqualsGatewayDiffers;
 var
   Other: TIdRouteEntry;
 begin
-  Other := Self.Route.Clone;
+  Other := Self.Route.Copy;
   try
     Other.Gateway := TIdIPAddressParser.IncIPAddress(Self.Route.Gateway);
     Check(not Self.Route.Equals(Other), 'Self.Route <> Other because their gateways differ');
@@ -237,7 +237,7 @@ procedure TestTIdRouteEntry.TestEqualsInterfaceIndexDiffers;
 var
   Other: TIdRouteEntry;
 begin
-  Other := Self.Route.Clone;
+  Other := Self.Route.Copy;
   try
     Other.InterfaceIndex := Self.Route.InterfaceIndex + '1';
     Check(Self.Route.Equals(Other), 'InterfaceIndexes are irrelevant for route comparison');
@@ -251,7 +251,7 @@ procedure TestTIdRouteEntry.TestEqualsMaskDiffers;
 var
   Other: TIdRouteEntry;
 begin
-  Other := Self.Route.Clone;
+  Other := Self.Route.Copy;
   try
     Other.Mask := TIdIPAddressParser.IncIPAddress(Self.Route.Mask);
     Check(not Self.Route.Equals(Other), 'Self.Route <> Other because their masks differ');
@@ -265,7 +265,7 @@ procedure TestTIdRouteEntry.TestEqualsMaskInDifferentForm;
 var
   Other: TIdRouteEntry;
 begin
-  Other := Self.Route.Clone;
+  Other := Self.Route.Copy;
   try
     Other.Mask := '8';
     Check(Self.Route.Equals(Other), 'Self.Route = Other despite their masks using different representations');
@@ -287,7 +287,7 @@ procedure TestTIdRouteEntry.TestEqualsMetricDiffers;
 var
   Other: TIdRouteEntry;
 begin
-  Other := Self.Route.Clone;
+  Other := Self.Route.Copy;
   try
     Other.Metric := Self.Route.Metric + 1;
     Check(Self.Route.Equals(Other), 'Metrics are irrelevant for route comparison');

@@ -286,11 +286,11 @@ var
   Binding: TIdConnection;
 begin
   if Packet.IsRTP then begin
-    Self.RTPBuffer.Add(Packet.Clone);
+    Self.RTPBuffer.Add(Packet.Copy);
     Inc(Self.fRTPCount);
   end
   else if Packet.IsRTCP then begin
-    Self.RTCPBuffer.Add(Packet.Clone);
+    Self.RTCPBuffer.Add(Packet.Copy);
     Inc(Self.fRTCPCount);
   end;
 

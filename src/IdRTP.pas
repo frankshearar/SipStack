@@ -73,7 +73,7 @@ type
     constructor Create; overload; virtual;
 
     procedure Assign(Src: TPersistent); override;
-    function  Clone: TIdRTPPayload;
+    function  Copy: TIdRTPPayload;
     function  EncodingName: String; overload;
     function  HasKnownLength: Boolean; virtual;
     function  HasSameEncoding(Other: TIdRTPPayload): Boolean;
@@ -319,7 +319,7 @@ type
     constructor Create;
 
     procedure Assign(Src: TPersistent); override;
-    function  Clone: TIdRTPBasePacket; virtual; abstract;
+    function  Copy: TIdRTPBasePacket; virtual; abstract;
     function  IsRTCP: Boolean; virtual; abstract;
     function  IsRTP: Boolean; virtual; abstract;
     function  IsValid: Boolean; virtual; abstract;
@@ -362,7 +362,7 @@ type
     constructor Create(Profile: TIdRTPProfile);
     destructor  Destroy; override;
 
-    function  Clone: TIdRTPBasePacket; override;
+    function  Copy: TIdRTPBasePacket; override;
     function  CollidesWith(SSRC: Cardinal): Boolean;
     function  GetAllSrcIDs: TCardinalDynArray;
     function  IsRTCP: Boolean; override;
@@ -403,7 +403,7 @@ type
 
     constructor Create; virtual;
 
-    function Clone: TIdRTPBasePacket; override;
+    function Copy: TIdRTPBasePacket; override;
     function IsBye: Boolean; virtual;
     function IsReceiverReport: Boolean; virtual;
     function IsRTCP: Boolean; override;
@@ -682,7 +682,7 @@ type
     function  AddSenderReport: TIdRTCPSenderReport;
     function  AddSourceDescription: TIdRTCPSourceDescription;
     procedure Assign(Src: TPersistent); override;
-    function  Clone: TIdRTPBasePacket; override;
+    function  Copy: TIdRTPBasePacket; override;
     function  FirstPacket: TIdRTCPPacket;
     function  HasBye: Boolean;
     function  HasReceiverReport: Boolean;
@@ -1723,7 +1723,7 @@ end;
 class function TIdRTPPayload.CreateFrom(Payload: TIdRTPPayload;
                                         Src: TStream): TIdRTPPayload;
 begin
-  Result := Payload.Clone;
+  Result := Payload.Copy;
   try
     Result.ReadFrom(Src);
   except
@@ -1807,7 +1807,7 @@ begin
   end;
 end;
 
-function TIdRTPPayload.Clone: TIdRTPPayload;
+function TIdRTPPayload.Copy: TIdRTPPayload;
 begin
   Result := TIdRTPPayload.CreatePayload(Self.EncodingName);
   Result.Assign(Self);
@@ -2096,7 +2096,7 @@ begin
   if Encoding.IsNull then
     Self.RemoveEncoding(PayloadType)
   else
-    Self.AddEncodingAsReference(Encoding.Clone, PayloadType);
+    Self.AddEncodingAsReference(Encoding.Copy, PayloadType);
 end;
 
 procedure TIdRTPProfile.AddEncoding(Name: String;
@@ -2621,7 +2621,7 @@ begin
   inherited Destroy;
 end;
 
-function TIdRTPPacket.Clone: TIdRTPBasePacket;
+function TIdRTPPacket.Copy: TIdRTPBasePacket;
 begin
   Result := TIdRTPPacket.Create(Self.Profile);
   Result.Assign(Self);
@@ -2860,7 +2860,7 @@ begin
   // because the payload type doesn't match the type of the payload!
   fPayload.Free;
 
-  fPayload := Value.Clone;
+  fPayload := Value.Copy;
 end;
 
 //******************************************************************************
@@ -2887,7 +2887,7 @@ begin
   inherited Create;
 end;
 
-function TIdRTCPPacket.Clone: TIdRTPBasePacket;
+function TIdRTCPPacket.Copy: TIdRTPBasePacket;
 begin
   Result := TIdRTCPPacket.RTCPType(Self.PacketType).Create;
   Result.Assign(Self);
@@ -3875,7 +3875,7 @@ end;
 procedure TIdRTCPApplicationDefined.SetName(const Value: String);
 begin
   if (System.Length(Value) > 4) then
-    fName := Copy(Value, 1, 4)
+    fName := System.Copy(Value, 1, 4)
   else
     fName := Value;
 end;
@@ -3943,7 +3943,7 @@ begin
     inherited Assign(Src);
 end;
 
-function TIdCompoundRTCPPacket.Clone: TIdRTPBasePacket;
+function TIdCompoundRTCPPacket.Copy: TIdRTPBasePacket;
 begin
   Result := TIdCompoundRTCPPacket.Create;
   Result.Assign(Self);

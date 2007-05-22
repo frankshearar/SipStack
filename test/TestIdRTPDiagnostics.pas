@@ -189,7 +189,7 @@ procedure TestTIdRTPPayloadHistogram.SendData(PayloadType: TIdRTPPayloadType);
 var
   Data: TIdRTPPayload;
 begin
-  Data := Self.Sender.LocalProfile.EncodingFor(PayloadType).Clone;
+  Data := Self.Sender.LocalProfile.EncodingFor(PayloadType).Copy;
   try
     Data.StartTime := Now;
 

@@ -66,8 +66,8 @@ type
   published
     procedure TestCreate;
     procedure TestCreateFromBadEncodingName;
-    procedure TestClone;
-    procedure TestCloneCopiesData;
+    procedure TestCopy;
+    procedure TestCopyCopiesData;
     procedure TestEncodingName;
     procedure TestIsNull; virtual;
     procedure TestIsReserved; virtual;
@@ -220,7 +220,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestClone;
+    procedure TestCopy;
     procedure TestCollidesWith;
     procedure TestGetAllSrcIDsNoCsrcs;
     procedure TestGetAllSrcIDsWithCsrcs;
@@ -371,7 +371,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestClone;
+    procedure TestCopy;
     procedure TestIsBye; virtual;
     procedure TestIsReceiverReport; virtual;
     procedure TestIsSenderReport; virtual;
@@ -518,7 +518,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAdd;
-    procedure TestClone;
+    procedure TestCopy;
     procedure TestFirstPacket;
     procedure TestHasBye;
     procedure TestHasReceiverReport;
@@ -1629,16 +1629,16 @@ begin
   end;
 end;
 
-procedure TPayloadTestCase.TestClone;
+procedure TPayloadTestCase.TestCopy;
 var
   Copy: TIdRTPPayload;
 begin
-  Copy := Self.Payload.Clone;
+  Copy := Self.Payload.Copy;
   try
     Check(Copy <> nil,
-          'Clone returned the nil pointer');
+          'Copy returned the nil pointer');
     Check(Copy <> Self.Payload,
-          'Clone returned the original object, not a copy');
+          'Copy returned the original object, not a copy');
     Check(Copy.HasSameEncoding(Self.Payload),
           'Copy has different encoding to original');
   finally
@@ -1646,7 +1646,7 @@ begin
   end;
 end;
 
-procedure TPayloadTestCase.TestCloneCopiesData;
+procedure TPayloadTestCase.TestCopyCopiesData;
 var
   Source: TIdRTPRawPayload;
   Copy:   TIdRTPRawPayload;
@@ -1656,7 +1656,7 @@ begin
     Source.SetName('foo');
     Source.Data := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
 
-    Copy := Source.Clone as TIdRTPRawPayload;
+    Copy := Source.Copy as TIdRTPRawPayload;
     try
       CheckEquals(Source.Data,
                   Copy.Data,
@@ -2896,9 +2896,9 @@ end;
 
 //* TestTIdRTPPacket Published methods *****************************************
 
-procedure TestTIdRTPPacket.TestClone;
+procedure TestTIdRTPPacket.TestCopy;
 var
-  Clone:    TIdRTPBasePacket;
+  Copy:    TIdRTPBasePacket;
   Expected: TStringStream;
   Received: TStringStream;
 begin
@@ -2918,15 +2918,15 @@ begin
     try
       Self.Packet.PrintOn(Expected);
 
-      Clone := Self.Packet.Clone;
+      Copy := Self.Packet.Copy;
       try
-        Clone.PrintOn(Received);
+        Copy.PrintOn(Received);
 
         CheckEquals(Expected.DataString,
                     Received.DataString,
-                    'Clone');
+                    'Copy');
       finally
-        Clone.Free;
+        Copy.Free;
       end;
     finally
       Received.Free;
@@ -3606,7 +3606,7 @@ var
   Expected: TIdRTPRawPayload;
 begin
   Data := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
-  Expected := Self.AVP.EncodingFor(Self.T140PT).Clone as TIdRTPRawPayload;
+  Expected := Self.AVP.EncodingFor(Self.T140PT).Copy as TIdRTPRawPayload;
   try
     Expected.Data := Data;
 
@@ -4386,9 +4386,9 @@ end;
 
 //* TRTCPPacketTestCase Published methods **************************************
 
-procedure TRTCPPacketTestCase.TestClone;
+procedure TRTCPPacketTestCase.TestCopy;
 var
-  Clone:    TIdRTPBasePacket;
+  Copy:    TIdRTPBasePacket;
   Expected: TStringStream;
   Received: TStringStream;
 begin
@@ -4398,15 +4398,15 @@ begin
     try
       Self.Packet.PrintOn(Expected);
 
-      Clone := Self.Packet.Clone;
+      Copy := Self.Packet.Copy;
       try
-        Clone.PrintOn(Received);
+        Copy.PrintOn(Received);
 
         CheckEquals(Expected.DataString,
                     Received.DataString,
-                    Self.Packet.ClassName + ' Clone');
+                    Self.Packet.ClassName + ' Copy');
       finally
-        Clone.Free;
+        Copy.Free;
       end;
     finally
       Received.Free;
@@ -6164,31 +6164,31 @@ begin
   CheckEquals(5, Self.Packet.PacketCount, 'APPDEF + BYE + RR + SR + SDES');
 end;
 
-procedure TestTIdCompoundRTCPPacket.TestClone;
+procedure TestTIdCompoundRTCPPacket.TestCopy;
 var
-  Clone: TIdCompoundRTCPPacket;
+  Copy: TIdCompoundRTCPPacket;
   I:     Integer;
 begin
   Self.Packet.AddReceiverReport;
   Self.Packet.AddReceiverReport;
   Self.Packet.AddApplicationDefined;
 
-  Clone := Self.Packet.Clone as TIdCompoundRTCPPacket;
+  Copy := Self.Packet.Copy as TIdCompoundRTCPPacket;
   try
     CheckEquals(Self.Packet.ClassType,
-                Clone.ClassType,
-                'Unexpected type for a clone');
+                Copy.ClassType,
+                'Unexpected type for a Copy');
 
     CheckEquals(Self.Packet.PacketCount,
-                Clone.PacketCount,
+                Copy.PacketCount,
                 'Packet count');
 
     for I := 0 to Self.Packet.PacketCount - 1 do
       CheckEquals(Self.Packet.PacketAt(I).ClassType,
-                  Clone.PacketAt(I).ClassType,
+                  Copy.PacketAt(I).ClassType,
                   'Report #' + IntToStr(I + 1));
   finally
-    Clone.Free;
+    Copy.Free;
   end;
 end;
 
@@ -7403,7 +7403,7 @@ procedure TestSessionDelegationMethods.TestIsSenderSelf;
 var
   Data: TIdRTPPayload;
 begin
-  Data := Self.Profile.EncodingFor(Self.T140PT).Clone;
+  Data := Self.Profile.EncodingFor(Self.T140PT).Copy;
   try
     Check(not Self.Session.IsSender, 'New session');
 
@@ -7435,7 +7435,7 @@ begin
   try
     Self.Profile.AddEncoding(Encoding, Self.Profile.FirstFreePayloadType);
 
-    Data := Encoding.Clone;
+    Data := Encoding.Copy;
     try
       Data.ClockRate := Encoding.ClockRate;
       Data.StartTime := Now + 5*OneSecond;
@@ -8864,7 +8864,7 @@ var
 begin
   MemberCount := Self.Session.MemberCount;
 
-  Self.Wait.Packet := Self.Control.Clone;
+  Self.Wait.Packet := Self.Control.Copy;
   Self.Wait.Trigger;
 
   Check(Self.Session.MemberCount < MemberCount, 'Bye not acted upon, so Wait not triggered');
@@ -8872,7 +8872,7 @@ end;
 
 procedure TestTIdRTPReceivePacketWait.TestTriggerRTP;
 begin
-  Self.Wait.Packet := Self.Data.Clone;
+  Self.Wait.Packet := Self.Data.Copy;
 
   Self.Wait.Trigger;
 
@@ -8939,7 +8939,7 @@ begin
   Self.Session.AddReceiver(ArbitraryHost, ArbitraryPort);
 
   Self.Wait := TIdRTPSendDataWait.Create;
-  Self.Wait.Data      := Self.Payload.Clone;
+  Self.Wait.Data      := Self.Payload.Copy;
   Self.Wait.SessionID := Self.Session.ID;
 end;
 
