@@ -13,7 +13,7 @@ interface
 
 uses
   Classes, Contnrs, IdInterfacedObject, IdNotification, IdSipCore,
-  IdSipDialogID, IdSipInviteModule, IdSipLocation, IdSipMessage,
+  IdSipDialogID, IdSipDns, IdSipInviteModule, IdSipLocation, IdSipMessage,
   IdSipOptionsModule, IdSipRegistration, IdSipSubscribeModule,
   IdSipTransaction, IdSipTransport, IdSipUserAgent, IdTimerQueue, SyncObjs,
   SysUtils, Messages, Windows;
@@ -284,6 +284,11 @@ type
     constructor Create(UA: TIdSipUserAgent); override;
 
     procedure TargetsFor(URI: TIdSipUri; Targets: TIdSipContacts);
+  end;
+
+  TIdSipNameServerExtension = class(TIdSipStackInterfaceExtension)
+  public
+    procedure ResolveNamesFor(Host: String; IPAddresses: TIdDomainNameRecords);
   end;
 
   // I contain data relating to a particular event.
@@ -2159,6 +2164,16 @@ begin
     // For now, do nothing: just return no valid targets.
     Targets.Clear;
   end;
+end;
+
+//******************************************************************************
+//* TIdSipNameServerExtension
+//******************************************************************************
+//* TIdSipNameServerExtension Public methods ***********************************
+
+procedure TIdSipNameServerExtension.ResolveNamesFor(Host: String; IPAddresses: TIdDomainNameRecords);
+begin
+  Self.UserAgent.Locator.ResolveNameRecords(Host, IPAddresses);
 end;
 
 //******************************************************************************

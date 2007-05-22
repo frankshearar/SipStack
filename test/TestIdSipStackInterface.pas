@@ -177,16 +177,27 @@ type
     procedure TestStackInterfacesAutomaticallyUnregister;
   end;
 
-  TestTIdSipColocatedRegistrarExtension = class(TStackInterfaceTestCase)
-  private
+  TStackInterfaceExtensionTestCase = class(TStackInterfaceTestCase)
+  protected
     Configuration: TStrings;
-    Contact:       String;
-    Contacts:      TIdSipContacts;
     Iface:         TIdSipStackInterface;
-    Reg:           TIdSipColocatedRegistrarExtension;
-    Target:        TIdSipUri;
+
+    function CreateStackInterface: TIdSipStackInterface; virtual;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSipColocatedRegistrarExtension = class(TStackInterfaceExtensionTestCase)
+  private
+    Contact:  String;
+    Contacts: TIdSipContacts;
+    Reg:      TIdSipColocatedRegistrarExtension;
+    Target:   TIdSipUri;
 
     procedure ReceiveRegister(FromUri: TIdSipUri; Contact: String);
+  protected
+    function CreateStackInterface: TIdSipStackInterface; override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -194,6 +205,20 @@ type
     procedure TestTargetsForOneTargetUri;
     procedure TestTargetsForUnknownUri;
     procedure TestTargetsForWithDBFailure;
+  end;
+
+  TestTIdSipNameServerExtension = class(TStackInterfaceExtensionTestCase)
+  private
+    NS: TIdSipNameServerExtension;
+
+    procedure ReconfigureStack(Intf: TIdSipStackInterface);
+  protected
+    function CreateStackInterface: TIdSipStackInterface; override;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestResolveNamesFor;
   end;
 
   TestTIdEventData = class(TTestCase)
@@ -502,9 +527,9 @@ const
 implementation
 
 uses
-  IdRandom, IdSimpleParser, IdSipCore, IdSipLocation, IdSipMockBindingDatabase,
-  IdSipRegistration, IdSipTransport, IdSipUdpTransport, IdSocketHandle,
-  IdUdpServer, SysUtils, TestMessages;
+  IdRandom, IdSimpleParser, IdSipCore, IdSipDns, IdSipLocation,
+  IdSipMockBindingDatabase, IdSipRegistration, IdSipTransport,
+  IdSipUdpTransport, IdSocketHandle, IdUdpServer, SysUtils, TestMessages;
 
 type
   TIdSipStackInterfaceNullExtension = class(TIdSipStackInterfaceExtension)
@@ -519,6 +544,7 @@ begin
   Result.AddTest(TestTIdSipStackInterface.Suite);
   Result.AddTest(TestTIdSipStackInterfaceRegistry.Suite);
   Result.AddTest(TestTIdSipColocatedRegistrarExtension.Suite);
+  Result.AddTest(TestTIdSipNameServerExtension.Suite);
   Result.AddTest(TestTIdEventData.Suite);
   Result.AddTest(TestTIdInformationalData.Suite);
   Result.AddTest(TestTIdAuthenticationChallengeData.Suite);
@@ -1998,6 +2024,38 @@ begin
 end;
 
 //******************************************************************************
+//* TStackInterfaceExtensionTestCase                                           *
+//******************************************************************************
+//* TStackInterfaceExtensionTestCase Public methods ****************************
+
+procedure TStackInterfaceExtensionTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipMockUdpTransport);
+
+  Self.Configuration := TStringList.Create;
+
+  Self.Iface := Self.CreateStackInterface;
+end;
+
+procedure TStackInterfaceExtensionTestCase.TearDown;
+begin
+  Self.Configuration.Free;
+
+  TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
+
+  inherited TearDown;
+end;
+
+//* TStackInterfaceExtensionTestCase Protected methods *************************
+
+function TStackInterfaceExtensionTestCase.CreateStackInterface: TIdSipStackInterface;
+begin
+  Result := TIdSipStackInterface.Create(Self.UI.Handle, Self.TimerQueue, Self.Configuration);
+end;
+
+//******************************************************************************
 //* TestTIdSipColocatedRegistrarExtension                                      *
 //******************************************************************************
 //* TestTIdSipColocatedRegistrarExtension Public methods ***********************
@@ -2006,17 +2064,8 @@ procedure TestTIdSipColocatedRegistrarExtension.SetUp;
 begin
   inherited SetUp;
 
-  TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipMockUdpTransport);
-
-  Self.Configuration := TStringList.Create;
-  Self.Configuration.Add(ListenDirective            + ': UDP 127.0.0.1:5060');
-  Self.Configuration.Add(NameServerDirective        + ': ' + MockKeyword);
-  Self.Configuration.Add(ActAsRegistrarDirective    + ': yes');
-  Self.Configuration.Add(RegistrarDatabaseDirective + ': ' + MockKeyword);
-
   Self.Contacts := TIdSipContacts.Create;
 
-  Self.Iface := TIdSipStackInterface.Create(0, Self.TimerQueue, Self.Configuration);
   Self.MockTransport := TIdSipDebugTransportRegistry.LastTransport as TIdSipMockTransport;
 
   Self.Reg    := Self.Iface.AttachExtension(TIdSipColocatedRegistrarExtension) as TIdSipColocatedRegistrarExtension;
@@ -2030,11 +2079,20 @@ begin
   Self.Target.Free;
   Self.Iface.Free;
   Self.Contacts.Free;
-  Self.Configuration.Free;
-
-  TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
 
   inherited TearDown;
+end;
+
+//* TestTIdSipColocatedRegistrarExtension Protected methods ********************
+
+function TestTIdSipColocatedRegistrarExtension.CreateStackInterface: TIdSipStackInterface;
+begin
+  Self.Configuration.Add(ListenDirective            + ': UDP 127.0.0.1:5060');
+  Self.Configuration.Add(NameServerDirective        + ': ' + MockKeyword);
+  Self.Configuration.Add(ActAsRegistrarDirective    + ': yes');
+  Self.Configuration.Add(RegistrarDatabaseDirective + ': ' + MockKeyword);
+
+  Result := inherited CreateStackInterface;
 end;
 
 //* TestTIdSipColocatedRegistrarExtension Private methods **********************
@@ -2097,6 +2155,66 @@ begin
 
   Self.Reg.TargetsFor(Self.Target, Self.Contacts);
   Check(Self.Contacts.IsEmpty, 'TargetsFor returned targets when the DB failed');
+end;
+
+//******************************************************************************
+//* TestTIdSipNameServerExtension                                              *
+//******************************************************************************
+//* TestTIdSipNameServerExtension Public methods *******************************
+
+procedure TestTIdSipNameServerExtension.SetUp;
+begin
+  inherited SetUp;
+
+  Self.NS := Self.Iface.AttachExtension(TIdSipNameServerExtension) as TIdSipNameServerExtension;
+end;
+
+procedure TestTIdSipNameServerExtension.TearDown;
+begin
+  Self.NS.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipNameServerExtension Protected methods ****************************
+
+function TestTIdSipNameServerExtension.CreateStackInterface: TIdSipStackInterface;
+begin
+  Self.Configuration.Add(ListenDirective     + ': UDP 127.0.0.1:5060');
+  Self.Configuration.Add(NameServerDirective + ': ' + MockKeyword);
+
+  Result := inherited CreateStackInterface;
+end;
+
+//* TestTIdSipNameServerExtension Private methods ******************************
+
+procedure TestTIdSipNameServerExtension.ReconfigureStack(Intf: TIdSipStackInterface);
+begin
+  Self.Iface.ReconfigureStack(Self.Configuration);
+  Self.TimerQueue.TriggerAllEventsUpToFirst(TIdSipStackReconfigureStackInterfaceWait);
+end;
+
+//* TestTIdSipNameServerExtension Published methods ****************************
+
+procedure TestTIdSipNameServerExtension.TestResolveNamesFor;
+var
+  Names: TIdDomainNameRecords;
+begin
+  Self.Configuration.Clear;
+  Self.Configuration.Add(MockDnsDirective + ': A tessier-ashpool.co.luna 1.2.3.4');
+  Self.Configuration.Add(MockDnsDirective + ': AAAA tessier-ashpool.co.luna 12::34');
+  Self.ReconfigureStack(Self.Iface);
+
+  Names := TIdDomainNameRecords.Create;
+  try
+    Self.NS.ResolveNamesFor('tessier-ashpool.co.luna', Names);
+
+    CheckEquals(2, Names.Count, 'Unexpected number of name records');
+    CheckEquals('1.2.3.4', Names[0].IPAddress, 'First name record');
+    CheckEquals('12::34',  Names[1].IPAddress, 'Second name record');
+  finally
+    Names.Free;
+  end;
 end;
 
 //******************************************************************************
