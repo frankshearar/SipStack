@@ -263,6 +263,11 @@ type
     procedure TestUseGruuDirective;
   end;
 
+  TestConfigureMockRoutingTable = class(TStackConfigurationTestCase)
+  published
+    procedure TestAddLocalAddress;
+  end;
+
   TestConfigureMockLocator = class(TStackConfigurationTestCase)
   private
     NameRecords: TIdDomainNameRecords;
@@ -410,6 +415,7 @@ begin
   Result.AddTest(TestTIdSipUserAgent.Suite);
   Result.AddTest(TestTIdSipStackConfigurator.Suite);
   Result.AddTest(TestConfigureRegistrar.Suite);
+  Result.AddTest(TestConfigureMockRoutingTable.Suite);
   Result.AddTest(TestConfigureMockLocator.Suite);
   Result.AddTest(TestLocation.Suite);
   Result.AddTest(TestTIdSipReconfigureStackWait.Suite);
@@ -3666,6 +3672,33 @@ procedure TestConfigureRegistrar.TestUseGruuDirective;
 begin
   CheckUseGruu(true);
   CheckUseGruu(false);
+end;
+
+//******************************************************************************
+//* TestConfigureMockRoutingTable                                              *
+//******************************************************************************
+//* TestConfigureMockRoutingTable Public methods *******************************
+
+procedure TestConfigureMockRoutingTable.TestAddLocalAddress;
+const
+  LocalAddress = '192.168.1.42';
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add(RoutingTableDirective     + ': ' + MockKeyword);
+  Self.Configuration.Add(MockLocalAddressDirective + ': ' + LocalAddress);
+  Self.Configuration.Add(MockRouteDirective + ': 127.0.0.0/8 127.0.0.1 1 1 127.0.0.1');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(TIdMockRoutingTable, UA.RoutingTable.ClassType, 'RoutingTable type');
+
+    CheckEquals(Localhost(TIdIPAddressParser.IPVersion(LocalAddress)),
+                UA.RoutingTable.LocalAddressFor(LocalAddress),
+                'Local address not stored in the routing table');
+  finally
+    UA.Free;
+  end;
 end;
 
 //******************************************************************************

@@ -129,6 +129,7 @@ type
   //   MockDns: NAPTR local 0 0 "s" "SIP+D2T" "" _sip._tcp
   //   MockDns: SRV <service> <domain> <priority> <weight> <port> <FQDN>
   //   MockDns: SRV _sips._tcp local 1 2 5061 roke
+  //   MockLocalAddress: <IPv4 address|IPv6 address>
   //
   // We try keep the configuration as order independent as possible. To
   // accomplish this, directives are sometimes marked as pending (by putting
@@ -168,6 +169,9 @@ type
     procedure AddMockDnsEntry(UserAgent: TIdSipAbstractCore;
                               const MockDnsLine: String;
                               PendingActions: TObjectList);
+    procedure AddMockLocalAddress(UserAgent: TIdSipAbstractCore;
+                                  const MockLocalAddressLine: String;
+                                  PendingActions: TObjectList);
     procedure AddMockNAPTRRecord(UserAgent: TIdSipAbstractCore;
                                  const NaptrLine: String;
                                  PendingActions: TObjectList);
@@ -272,6 +276,19 @@ type
     property MappedPort:   Cardinal           read fMappedPort write fMappedPort;
     property Mask:         String             read fMask write fMask;
     property Network:      String             read fNetwork write fNetwork;
+  end;
+
+  TIdSipPendingMockLocalAddressAction = class(TIdSipPendingConfigurationAction)
+  private
+    fCore:    TIdSipAbstractCore;
+    fAddress: String;
+  public
+    constructor Create(Core: TIdSipAbstractCore);
+
+    procedure Execute; override;
+
+    property Address: String             read fAddress write fAddress;
+    property Core:    TIdSipAbstractCore read fCore;
   end;
 
   TIdSipPendingMockDnsAction = class(TIdSipPendingConfigurationAction)
@@ -420,6 +437,7 @@ const
   MockKeyword                             = 'MOCK';
   MappedRouteDirective                    = 'MappedRoute';
   MockDnsDirective                        = 'MockDns';
+  MockLocalAddressDirective               = 'MockLocalAddress';
   MockRouteDirective                      = 'MockRoute';
   NameServerDirective                     = 'NameServer';
   RegisterDirective                       = 'Register';
@@ -1075,6 +1093,26 @@ begin
     Self.AddMockSRVRecord(UserAgent, MockDnsLine, PendingActions)
 end;
 
+procedure TIdSipStackConfigurator.AddMockLocalAddress(UserAgent: TIdSipAbstractCore;
+                                                      const MockLocalAddressLine: String;
+                                                      PendingActions: TObjectList);
+var
+  Line: String;
+  Pending: TIdSipPendingMockLocalAddressAction;
+begin
+  // See class comment for the format for this directive.
+  Line := MockLocalAddressLine;
+  EatDirective(Line);
+
+  if not TIdIPAddressParser.IsIPAddress(Line) then
+      raise EParserError.Create(Format(MalformedConfigurationLine, [MockLocalAddressLine]));
+
+  Pending := TIdSipPendingMockLocalAddressAction.Create(UserAgent);
+  Pending.Address := Line;
+
+  PendingActions.Add(Pending);
+end;
+
 procedure TIdSipStackConfigurator.AddMockNAPTRRecord(UserAgent: TIdSipAbstractCore;
                                                      const NaptrLine: String;
                                                      PendingActions: TObjectList);
@@ -1479,6 +1517,8 @@ begin
     Self.AddMappedRoute(UserAgent, ConfigurationLine, PendingActions)
   else if IsEqual(FirstToken, MockDnsDirective) then
     Self.AddMockDnsEntry(UserAgent, ConfigurationLine, PendingActions)
+  else if IsEqual(FirstToken, MockLocalAddressDirective) then
+    Self.AddMockLocalAddress(UserAgent, ConfigurationLine, PendingActions)
   else if IsEqual(FirstToken, MockRouteDirective) then
     Self.AddMockRoute(UserAgent, ConfigurationLine, PendingActions)
   else if IsEqual(FirstToken, NameServerDirective) then
@@ -1674,6 +1714,24 @@ end;
 procedure TIdSipPendingMappedRouteAction.Execute;
 begin
   Self.Core.RoutingTable.AddMappedRoute(Self.Network, Self.Mask, Self.Gateway, Self.MappedPort);
+end;
+
+//******************************************************************************
+//* TIdSipPendingMockLocalAddressAction                                        *
+//******************************************************************************
+//* TIdSipPendingMockLocalAddressAction Public methods *************************
+
+constructor TIdSipPendingMockLocalAddressAction.Create(Core: TIdSipAbstractCore);
+begin
+  inherited Create;
+
+  Self.fCore := Core;
+end;
+
+procedure TIdSipPendingMockLocalAddressAction.Execute;
+begin
+  if (Self.Core.RoutingTable is TIdMockRoutingTable) then
+    (Self.Core.RoutingTable as TIdMockRoutingTable).AddLocalAddress(Self.Address);
 end;
 
 //******************************************************************************
