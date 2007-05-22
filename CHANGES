@@ -36,6 +36,7 @@ v0.6 (2007/xx/yy)
   into dialog-establishing requests.
 * RTP message receiving occurs within the context of a TimerQueue
   (instead of in the context of a TIdUdpListenerThread)
+* All methods called "Clone" are now called "Copy".
 
 v0.5.3 (2007/01/26)
 * All modules now reside in separate units. (This only affects
