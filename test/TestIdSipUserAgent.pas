@@ -216,11 +216,9 @@ type
     procedure TestCreateUserAgentWithMalformedLocator;
     procedure TestCreateUserAgentWithMalformedRoute;
     procedure TestCreateUserAgentWithMappedRoutes;
-    procedure TestCreateUserAgentWithMockedRoutes;
     procedure TestCreateUserAgentWithMockAuthenticator;
     procedure TestCreateUserAgentWithMockLocator;
     procedure TestCreateUserAgentWithMockLocatorConfigured;
-    procedure TestCreateUserAgentWithMockRoutingTable;
     procedure TestCreateUserAgentWithMultipleEventPackageSupport;
     procedure TestCreateUserAgentWithMultipleTransports;
     procedure TestCreateUserAgentWithNoFrom;
@@ -265,7 +263,9 @@ type
 
   TestConfigureMockRoutingTable = class(TStackConfigurationTestCase)
   published
-    procedure TestAddLocalAddress;
+    procedure TestAddLocalAddress;  
+    procedure TestMockRoute;
+    procedure TestMockRoutingTable;
   end;
 
   TestConfigureMockLocator = class(TStackConfigurationTestCase)
@@ -2738,46 +2738,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithMockedRoutes;
-var
-  DefaultRoute:    String;
-  InternetAddress: String;
-  LanRoute:        String;
-  RT:              TIdMockRoutingTable;
-  UA:              TIdSipUserAgent;
-begin
-//  TIdIPAddressParser.NetworkFor(Self.Address, 24)
-  Self.Address    := '10.0.0.6';
-  InternetAddress := '1.2.3.4';
-  LanRoute        := '10.0.0.0/24 10.0.0.1 1 1 ' + Self.Address;
-  DefaultRoute    := '0.0.0.0/0 10.0.0.1 1 1 ' + Self.Address;
-  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Port));
-  Self.Configuration.Add('RoutingTable: MOCK');
-  Self.Configuration.Add('MockRoute: ' + LanRoute);
-  Self.Configuration.Add('MockRoute: ' + DefaultRoute);
-
-  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
-  try
-    RT := UA.RoutingTable as TIdMockRoutingTable;
-
-    CheckEquals(2, RT.OsRouteCount, 'Not all routes added');
-
-    CheckEquals(Self.Address,
-                RT.LocalAddressFor(TIdIPAddressParser.IncIPAddress(Self.Address)),
-                'Local address not set for LAN route');
-    CheckEquals(Self.Address,
-                RT.LocalAddressFor(InternetAddress),
-                'Local address not set for default route');
-
-    RT.RemoveOsRoute('10.0.0.0', '255.255.255.0', '10.0.0.1');
-    CheckEquals(1, RT.OsRouteCount, 'LAN route not added');
-    RT.RemoveOsRoute('0.0.0.0', '0.0.0.0', '10.0.0.1');
-    CheckEquals(0, RT.RouteCount, 'Default route not added');
-  finally
-    UA.Free;
-  end;
-end;
-
 procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithMockAuthenticator;
 var
   UA: TIdSipUserAgent;
@@ -2828,26 +2788,6 @@ begin
                 'Locator type');
     Mock := UA.Locator as TIdSipMockLocator;
     Check(Mock.ReturnOnlySpecifiedRecords, 'Mock locator not configured');
-  finally
-    UA.Free;
-  end;
-end;
-
-procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithMockRoutingTable;
-var
-  UA: TIdSipUserAgent;
-begin
-  Self.Configuration.Add('RoutingTable: MOCK');
-
-  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
-  try
-    CheckEquals(TIdMockRoutingTable.ClassName,
-                UA.RoutingTable.ClassName,
-                'RoutingTable type');
-    Check(Assigned(UA.Dispatcher.RoutingTable),
-          'Transaction Dispatcher has no RoutingTable');
-    Check(UA.RoutingTable = UA.Dispatcher.RoutingTable,
-          'Transaction User and Transaction layers don''t use the same RoutingTable');
   finally
     UA.Free;
   end;
@@ -3696,6 +3636,67 @@ begin
     CheckEquals(Localhost(TIdIPAddressParser.IPVersion(LocalAddress)),
                 UA.RoutingTable.LocalAddressFor(LocalAddress),
                 'Local address not stored in the routing table');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestConfigureMockRoutingTable.TestMockRoute;
+var
+  DefaultRoute:    String;
+  InternetAddress: String;
+  LanRoute:        String;
+  LocalAddress:    String;
+  RT:              TIdMockRoutingTable;
+  UA:              TIdSipUserAgent;
+begin
+//  TIdIPAddressParser.NetworkFor(Self.Address, 24)
+  LocalAddress    := '10.0.0.6';
+  InternetAddress := '1.2.3.4';
+  LanRoute        := '10.0.0.0/24 10.0.0.1 1 1 ' + LocalAddress;
+  DefaultRoute    := '0.0.0.0/0 10.0.0.1 1 1 ' + LocalAddress;
+  Self.Configuration.Add('Listen: UDP ' + LocalAddress + ':' + IntToStr(Port));
+  Self.Configuration.Add('RoutingTable: MOCK');
+  Self.Configuration.Add('MockRoute: ' + LanRoute);
+  Self.Configuration.Add('MockRoute: ' + DefaultRoute);
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    RT := UA.RoutingTable as TIdMockRoutingTable;
+
+    CheckEquals(2, RT.OsRouteCount, 'Not all routes added');
+
+    CheckEquals(LocalAddress,
+                RT.LocalAddressFor(TIdIPAddressParser.IncIPAddress(Self.Address)),
+                'Local address not set for LAN route');
+    CheckEquals(LocalAddress,
+                RT.LocalAddressFor(InternetAddress),
+                'Local address not set for default route');
+
+    RT.RemoveOsRoute('10.0.0.0', '255.255.255.0', '10.0.0.1');
+    CheckEquals(1, RT.OsRouteCount, 'LAN route not added');
+    RT.RemoveOsRoute('0.0.0.0', '0.0.0.0', '10.0.0.1');
+    CheckEquals(0, RT.RouteCount, 'Default route not added');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestConfigureMockRoutingTable.TestMockRoutingTable;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('RoutingTable: MOCK');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(TIdMockRoutingTable.ClassName,
+                UA.RoutingTable.ClassName,
+                'RoutingTable type');
+    Check(Assigned(UA.Dispatcher.RoutingTable),
+          'Transaction Dispatcher has no RoutingTable');
+    Check(UA.RoutingTable = UA.Dispatcher.RoutingTable,
+          'Transaction User and Transaction layers don''t use the same RoutingTable');
   finally
     UA.Free;
   end;
