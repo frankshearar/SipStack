@@ -45,6 +45,8 @@ type
   TIdSipStackInterfaceEventMethod = class;
   TIdSipStackInterfaceExtension = class;
   TIdSipStackInterfaceExtensionClass = class of TIdSipStackInterfaceExtension;
+  TIdStackReconfiguredData = class;
+  TIdStackReconfiguredDataClass = class of TIdStackReconfiguredData;
 
   // I provide a high-level interface to a SIP stack.
   // On one hand, I make sure that messages are sent in the context of the
@@ -185,11 +187,13 @@ type
     procedure StopListeningToAllTransports;
   protected
     function  AddAction(Action: TIdSipAction): TIdSipHandle;
+    function  CreateReconfigureNotificationData: TIdStackReconfiguredData; virtual;
     procedure NotifyEvent(Event: Cardinal;
                           Data: TIdEventData);
     procedure ParseLine(Directive, Configuration: String); virtual;
     procedure PostConfigurationActions; virtual;
     procedure PreConfigurationActions; virtual;
+    function  ReconfiguredNotificationDataType: TIdStackReconfiguredDataClass; virtual;
 
     property UiHandle:  HWnd            read fUiHandle;
     property UserAgent: TIdSipUserAgent read fUserAgent;
@@ -755,6 +759,10 @@ type
   // the SubscribeModule and the caller tried to MakeRefer).
   ENotSupported = class(Exception);
 
+  // Raise me whenever something goes wrong in the network. That might be things
+  // like networks being unreachable, or names failing to resolve.
+  ENetworkError = class(Exception);
+
 // Call management constants
 const
   InvalidHandle = 0;
@@ -1213,12 +1221,8 @@ procedure TIdSipStackInterface.NotifyOfReconfiguration;
 var
   Data: TIdStackReconfiguredData;
 begin
-  Data := TIdStackReconfiguredData.Create;
+  Data := Self.CreateReconfigureNotificationData;
   try
-    Data.ActsAsRegistrar  := Self.UserAgent.UsesModule(TIdSipRegisterModule);
-    Data.Handle           := InvalidHandle;
-    Data.RoutingTableType := Self.UserAgent.RoutingTable.ClassName;
-
     Self.NotifyEvent(CM_STACK_RECONFIGURED, Data);
   finally
     Data.Free;
@@ -1370,6 +1374,14 @@ begin
   end;
 end;
 
+function TIdSipStackInterface.CreateReconfigureNotificationData: TIdStackReconfiguredData;
+begin
+  Result := Self.ReconfiguredNotificationDataType.Create;
+  Result.ActsAsRegistrar  := Self.UserAgent.UsesModule(TIdSipRegisterModule);
+  Result.Handle           := InvalidHandle;
+  Result.RoutingTableType := Self.UserAgent.RoutingTable.ClassName;
+end;
+
 procedure TIdSipStackInterface.NotifyEvent(Event: Cardinal;
                                            Data: TIdEventData);
 var
@@ -1397,6 +1409,11 @@ end;
 procedure TIdSipStackInterface.PreConfigurationActions;
 begin
   Self.StopListeningToAllTransports;
+end;
+
+function TIdSipStackInterface.ReconfiguredNotificationDataType: TIdStackReconfiguredDataClass;
+begin
+  Result := TIdStackReconfiguredData;
 end;
 
 //* TIdSipStackInterface Private methods ***************************************
@@ -2205,7 +2222,7 @@ begin
     try
       Self.ResolveNamesFor(Destination, Names);
       if Names.IsEmpty then
-        raise Exception.Create('Could not resolve name ''' + Destination + '''');
+        raise ENetworkError.Create('Could not resolve name ''' + Destination + '''');
 
       IPAddress := Names[0].IPAddress;
     finally
