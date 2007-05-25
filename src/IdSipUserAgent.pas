@@ -245,6 +245,15 @@ type
     procedure Execute; virtual; abstract;
   end;
 
+  TIdSipPendingCoreConfigurationAction = class(TIdSipPendingConfigurationAction)
+  private
+    fCore: TIdSipAbstractCore;
+  public
+    constructor Create(Core: TIdSipAbstractCore);
+
+    property Core: TIdSipAbstractCore read fCore;
+  end;
+
   TIdSipPendingLocalResolutionAction = class(TIdSipPendingConfigurationAction)
   private
     fCore:                TIdSipAbstractCore;
@@ -259,45 +268,31 @@ type
     property ResolveLocallyFirst: Boolean            read fResolveLocallyFirst;
   end;
 
-  TIdSipPendingMappedRouteAction = class(TIdSipPendingConfigurationAction)
+  TIdSipPendingMappedRouteAction = class(TIdSipPendingCoreConfigurationAction)
   private
-    fCore:         TIdSipAbstractCore;
     fGateway:      String;
     fMappedPort:   Cardinal;
     fMask:         String;
     fNetwork:      String;
   public
-    constructor Create(Core: TIdSipAbstractCore);
-
     procedure Execute; override;
 
-    property Core:         TIdSipAbstractCore read fCore;
-    property Gateway:      String             read fGateway write fGateway;
-    property MappedPort:   Cardinal           read fMappedPort write fMappedPort;
-    property Mask:         String             read fMask write fMask;
-    property Network:      String             read fNetwork write fNetwork;
+    property Gateway:    String   read fGateway write fGateway;
+    property MappedPort: Cardinal read fMappedPort write fMappedPort;
+    property Mask:       String   read fMask write fMask;
+    property Network:    String   read fNetwork write fNetwork;
   end;
 
-  TIdSipPendingMockLocalAddressAction = class(TIdSipPendingConfigurationAction)
+  TIdSipPendingMockLocalAddressAction = class(TIdSipPendingCoreConfigurationAction)
   private
-    fCore:    TIdSipAbstractCore;
     fAddress: String;
   public
-    constructor Create(Core: TIdSipAbstractCore);
-
     procedure Execute; override;
 
-    property Address: String             read fAddress write fAddress;
-    property Core:    TIdSipAbstractCore read fCore;
+    property Address: String read fAddress write fAddress;
   end;
 
-  TIdSipPendingMockDnsAction = class(TIdSipPendingConfigurationAction)
-  private
-    fCore: TIdSipAbstractCore;
-  public
-    constructor Create(Core: TIdSipAbstractCore);
-
-    property Core: TIdSipAbstractCore read fCore;
+  TIdSipPendingMockDnsAction = class(TIdSipPendingCoreConfigurationAction)
   end;
 
   TIdSipPendingMockDnsNameRecordAction = class(TIdSipPendingMockDnsAction)
@@ -359,9 +354,8 @@ type
     property Weight:   Cardinal read fWeight write fWeight;
   end;
 
-  TIdSipPendingMockRouteAction = class(TIdSipPendingConfigurationAction)
+  TIdSipPendingMockRouteAction = class(TIdSipPendingCoreConfigurationAction)
   private
-    fCore:           TIdSipAbstractCore;
     fDestination:    String;
     fGateway:        String;
     fInterfaceIndex: String;
@@ -369,11 +363,8 @@ type
     fMask:           String;
     fMetric:         Cardinal;
   public
-    constructor Create(Core: TIdSipAbstractCore);
-
     procedure Execute; override;
 
-    property Core:           TIdSipAbstractCore read fCore;
     property Destination:    String             read fDestination write fDestination;
     property Gateway:        String             read fGateway write fGateway;
     property InterfaceIndex: String             read fInterfaceIndex write fInterfaceIndex;
@@ -1675,6 +1666,18 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipPendingCoreConfigurationAction                                       *
+//******************************************************************************
+//* TIdSipPendingCoreConfigurationAction Public methods ************************
+
+constructor TIdSipPendingCoreConfigurationAction.Create(Core: TIdSipAbstractCore);
+begin
+  inherited Create;
+
+  Self.fCore := Core;
+end;
+
+//******************************************************************************
 //* TIdSipPendingLocalResolutionAction                                         *
 //******************************************************************************
 //* TIdSipPendingLocalResolutionAction Public methods **************************
@@ -1704,13 +1707,6 @@ end;
 //******************************************************************************
 //* TIdSipPendingMappedRouteAction Public methods ******************************
 
-constructor TIdSipPendingMappedRouteAction.Create(Core: TIdSipAbstractCore);
-begin
-  inherited Create;
-
-  Self.fCore := Core;
-end;
-
 procedure TIdSipPendingMappedRouteAction.Execute;
 begin
   Self.Core.RoutingTable.AddMappedRoute(Self.Network, Self.Mask, Self.Gateway, Self.MappedPort);
@@ -1721,29 +1717,10 @@ end;
 //******************************************************************************
 //* TIdSipPendingMockLocalAddressAction Public methods *************************
 
-constructor TIdSipPendingMockLocalAddressAction.Create(Core: TIdSipAbstractCore);
-begin
-  inherited Create;
-
-  Self.fCore := Core;
-end;
-
 procedure TIdSipPendingMockLocalAddressAction.Execute;
 begin
   if (Self.Core.RoutingTable is TIdMockRoutingTable) then
     (Self.Core.RoutingTable as TIdMockRoutingTable).AddLocalAddress(Self.Address);
-end;
-
-//******************************************************************************
-//* TIdSipPendingMockDnsAction
-//******************************************************************************
-//* TIdSipPendingMockDnsAction Public methods **********************************
-
-constructor TIdSipPendingMockDnsAction.Create(Core: TIdSipAbstractCore);
-begin
-  inherited Create;
-
-  Self.fCore := Core;
 end;
 
 //******************************************************************************
@@ -1804,13 +1781,6 @@ end;
 //* TIdSipPendingMockRouteAction                                               *
 //******************************************************************************
 //* TIdSipPendingMockRouteAction Public methods ********************************
-
-constructor TIdSipPendingMockRouteAction.Create(Core: TIdSipAbstractCore);
-begin
-  inherited Create;
-
-  Self.fCore := Core;
-end;
 
 procedure TIdSipPendingMockRouteAction.Execute;
 var
