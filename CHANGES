@@ -37,6 +37,13 @@ v0.6 (2007/xx/yy)
 * RTP message receiving occurs within the context of a TimerQueue
   (instead of in the context of a TIdUdpListenerThread)
 * All methods called "Clone" are now called "Copy".
+* bugfixes from the unreleased 0.5.4 version:
+** The registrar returns a 400 Bad Request when it receives a wildcard
+   Contact with an Expires header.
+** Requesting a GRUU and receiving none hoses UserAgent.Contact.
+** InstanceID directive value not mapped to registration action.
+* bugfixes ported from 0.5.3:
+** SDP parser chokes on unknown bandwidth types.
 
 v0.5.3 (2007/01/26)
 * All modules now reside in separate units. (This only affects
