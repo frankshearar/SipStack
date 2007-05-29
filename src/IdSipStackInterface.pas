@@ -2203,7 +2203,8 @@ end;
 
 function TIdSipNameServerExtension.LocalAddressFor(Destination: String): String;
 const
-  FailString = '''%s'' is neither a domain name nor IP address';
+  BadParameter     = '''%s'' is neither a domain name nor IP address';
+  UnresolvableName = 'Could not resolve name ''%s''';
 var
   IPAddress: String;
   Names:     TIdDomainNameRecords;
@@ -2212,7 +2213,7 @@ begin
   // IPv6 address.
 
   if (Destination = '') then
-    raise EBadParameter.Create(Format(FailString, [Destination]));
+    raise EBadParameter.Create(Format(BadParameter, [Destination]));
 
   if TIdIPAddressParser.IsIPAddress(Destination) then begin
     IPAddress := Destination
@@ -2222,7 +2223,7 @@ begin
     try
       Self.ResolveNamesFor(Destination, Names);
       if Names.IsEmpty then
-        raise ENetworkError.Create('Could not resolve name ''' + Destination + '''');
+        raise ENetworkError.Create(Format(UnresolvableName, [Destination]));
 
       IPAddress := Names[0].IPAddress;
     finally
@@ -2230,7 +2231,7 @@ begin
     end;
   end
   else
-    raise EBadParameter.Create(Format(FailString, [Destination]));
+    raise EBadParameter.Create(Format(BadParameter, [Destination]));
 
   Result := Self.UserAgent.RoutingTable.LocalAddressFor(IPAddress);
 end;
