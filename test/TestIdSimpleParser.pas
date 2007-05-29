@@ -50,6 +50,7 @@ type
     procedure TestIncIPv6Address;
     procedure TestInetAddr;
     procedure TestIPv4AddressToStr;
+    procedure TestIPv6AddressEquivalence;
     procedure TestIPv6AddressToStr;
     procedure TestIPVersion;
     procedure TestIsIPAddress;
@@ -628,6 +629,26 @@ begin
     CheckEquals(TestCases[I],
                 TIdIPAddressParser.IPv4AddressToStr(TIdIPAddressParser.InetAddr(TestCases[I])),
                 TestCases[I]);
+end;
+
+procedure TestTIdIPAddressParser.TestIPv6AddressEquivalence;
+const
+  ShortForm = '2001:DB8::1428:57AB';
+  Addresses : array [0..5] of String = (
+              '2001:0DB8:0000:0000:0000:0000:1428:57AB',
+              '2001:0DB8:0000:0000:0000::1428:57AB',
+              '2001:0DB8:0:0:0:0:1428:57AB',
+              '2001:0DB8:0:0::1428:57AB',
+              '2001:0DB8::1428:57AB',
+              ShortForm);
+var
+  Address: TIdIPv6AddressRec;
+  I:       Integer;
+begin
+  for I := Low(Addresses) to High(Addresses) do begin
+    TIdIPAddressParser.ParseIPv6Address(Addresses[I], Address);
+    CheckEquals(ShortForm, TIdIPAddressParser.IPv6AddressToStr(Address), Addresses[I]);
+  end;
 end;
 
 procedure TestTIdIPAddressParser.TestIPv6AddressToStr;
