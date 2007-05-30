@@ -12,7 +12,7 @@ unit TestFrameworkSipTU;
 interface
 
 uses
-  TestFrameworkSip, IdSipCore, IdSipMessage, SysUtils;
+  IdSipCore, IdSipMessage, SysUtils, TestFrameworkSip;
 
 type
   TestTIdSipAction = class(TTestCaseTU,
