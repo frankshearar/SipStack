@@ -362,7 +362,7 @@ uses
   IdSipConsts, IdSipIndyLocator, IdSipMockBindingDatabase, IdSipMockLocator,
   IdSipMockTransactionDispatcher, IdSipMockTransport, IdSipRegistration,
   IdSipSubscribeModule, IdSipTCPTransport, IdSipUDPTransport, IdSystem,
-  IdTcpClient, IdUnicode, SysUtils;
+  IdTcpClient, IdUnicode, SysUtils, TestFrameworkSipTransport;
 
 const
   // SFTF: Sip Foundry Test Framework. cf. http://www.sipfoundry.org/sftf/
