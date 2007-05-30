@@ -1825,6 +1825,7 @@ const
   AuthorizationHeader            = 'Authorization';
   BasicAuthorizationScheme       = 'Basic';
   BodyHeaderFake                 = 'body'; // cf. RFC 3261, p. 149 under "Headers"
+  BranchMagicCookie              = 'z9hG4bK';
   BranchParam                    = 'branch';
   CallIDHeaderFull               = 'Call-ID';
   CallIDHeaderShort              = 'i';

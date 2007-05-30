@@ -25,10 +25,10 @@ type
     function NextHexString: String;
     function NextHighestPowerOf2(N: Cardinal): Cardinal;
     function NextRandomBits(NumBits: Cardinal): Cardinal;
-    function NextSipUserAgentBranch: String; virtual; abstract;
     function NextSipUserAgentTag: String; virtual; abstract;
     function NextWord: Word;
     function NumBitsNeeded(N: Cardinal): Cardinal;
+    function Next128bitNumber: String; virtual; abstract;
   end;
 
   // I do NOT supply you with cryptographically adequate random numbers!
@@ -44,8 +44,8 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
-    function NextSipUserAgentBranch: String; override;
     function NextSipUserAgentTag: String; override;
+    function Next128bitNumber: String; override;
   end;
 
 var
@@ -56,7 +56,7 @@ function  MultiplyCardinal(FirstValue, SecondValue: Cardinal): Cardinal;
 implementation
 
 uses
-  IdSipConsts, SysUtils;
+  IdSipConsts, IdSimpleParser, IdSystem, SysUtils;
 
 //******************************************************************************
 //* Unit public functions & procedures                                         *
@@ -184,24 +184,6 @@ begin
   inherited Destroy;
 end;
 
-function TIdBasicRandomNumber.NextSipUserAgentBranch: String;
-begin
-  Self.BranchLock.Acquire;
-  try
-    // TODO
-    // This is a CRAP way to generate a branch.
-    // cf. RFC 3261 section 8.1.1.7
-    // While this (almost) satisfies the uniqueness constraint (the branch is
-    // unique for the lifetime of the instantiation of the UA), it just
-    // seems sensible to generate an unguessable branch.
-    Result := BranchMagicCookie + IntToStr(Self.fLastBranch);
-
-    Inc(Self.fLastBranch);
-  finally
-    Self.BranchLock.Release;
-  end;
-end;
-
 function TIdBasicRandomNumber.NextSipUserAgentTag: String;
 begin
   // TODO
@@ -209,6 +191,16 @@ begin
   // cf. RFC 3261 section 19.3
   Result := Self.NextHexString
           + Self.NextHexString;
+end;
+
+function TIdBasicRandomNumber.Next128bitNumber: String;
+begin
+  // This function returns something as cryptographically secure as the
+  // operating system's UUID construction.
+
+  Result := StringReplace(ConstructUUID, '-', '', [rfReplaceAll]);
+
+  Result := StripLeadingZeroes(Result);
 end;
 
 //* TIdBasicRandomNumber Private methods ***************************************

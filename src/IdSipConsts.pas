@@ -11,10 +11,6 @@ unit IdSipConsts;
 
 interface
 
-// for IdResourceStrings ?
-const
-  BranchMagicCookie = 'z9hG4bK';
-
 // for IdAssignedNumbers
 const
   IdPORT_SIP  = 5060;

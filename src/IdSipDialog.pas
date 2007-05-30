@@ -155,7 +155,7 @@ procedure IntersectionOf(Target: TStrings;
 implementation
 
 uses
-  IdSipConsts, IdRandom, SysUtils;
+  IdRandom, SysUtils;
 
 //******************************************************************************
 //* Unit Public procedures & functions                                         *
@@ -321,7 +321,7 @@ begin
   // We create an ACK as an in-dialog request. Further, an ACK to a 2xx
   // _cannot_ match a transaction since the 2xx _terminated_ the transaction.
   // Therefore we use a completely new branch/transaction ID.
-  Result.LastHop.Branch := GRandomNumber.NextSipUserAgentBranch;
+  Result.LastHop.Branch := BranchMagicCookie + GRandomNumber.Next128bitNumber;
 
   if (Self.InitialRequest.ContentLength > 0) then begin
     Result.ContentLength := Self.InitialRequest.ContentLength;

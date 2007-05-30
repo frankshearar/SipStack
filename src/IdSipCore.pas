@@ -1885,7 +1885,7 @@ end;
 
 function TIdSipAbstractCore.NextBranch: String;
 begin
-  Result := GRandomNumber.NextSipUserAgentBranch;
+  Result := BranchMagicCookie + GRandomNumber.Random128bitNumber;
 end;
 
 function TIdSipAbstractCore.NextCallID: String;

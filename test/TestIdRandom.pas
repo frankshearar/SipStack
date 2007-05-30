@@ -26,12 +26,13 @@ type
     procedure TestNextCardinalLimited;
     procedure TestNextHighestPowerOf2;
     procedure TestNumBitsNeeded;
+    procedure TestNext128bitNumber;
   end;
 
 implementation
 
 uses
-  SysUtils;
+  IdSimpleParser, SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -122,6 +123,18 @@ begin
   CheckEquals(8, Self.Random.NumBitsNeeded(128), '128');
 
   CheckEquals(32, Self.Random.NumBitsNeeded(High(Cardinal)), 'High(Cardinal)');
+end;
+
+procedure TestTIdRandomNumber.TestNext128bitNumber;
+var
+  N: String;
+begin
+  // This is by no means an adequate test. All it does is check that the result
+  // is syntactically valid.
+
+  N := Self.Random.Next128bitNumber;
+  CheckNotEquals('', N, 'Next128bitNumber returned the empty string');
+  Check(TIdSimpleParser.IsHexNumber(N), 'Next128bitNumber isn''t in hex');
 end;
 
 initialization
