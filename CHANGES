@@ -37,6 +37,7 @@ v0.6 (2007/xx/yy)
 * RTP message receiving occurs within the context of a TimerQueue
   (instead of in the context of a TIdUdpListenerThread)
 * All methods called "Clone" are now called "Copy".
+* IdSipConsts removed.
 * bugfixes from the unreleased 0.5.4 version:
 ** The registrar returns a 400 Bad Request when it receives a wildcard
    Contact with an Expires header.
