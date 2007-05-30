@@ -67,11 +67,6 @@ type
     TransportListeners:        TIdNotificationList;
     TransportSendingListeners: TIdNotificationList;
 
-    procedure RewriteOwnVia(Msg: TIdSipMessage;
-                            const SentBy: String); overload;
-    procedure RewriteOwnVia(Msg: TIdSipMessage;
-                            const SentBy: String;
-                            Port: Cardinal); overload;
   protected
     procedure DestroyServer; virtual;
     function  GetAddress: String; virtual;
@@ -848,7 +843,9 @@ end;
 procedure TIdSipTransport.SendRequest(R: TIdSipRequest;
                                       Dest: TIdSipLocation);
 begin
-  Self.RewriteOwnVia(R, Self.Bindings[0].IP, Self.Bindings[0].Port);
+  if Self.UseRport then
+    R.LastHop.Params[RportParam] := '';
+
   Self.NotifyOfSentRequest(R, Dest);
 end;
 
@@ -883,41 +880,6 @@ end;
 procedure TIdSipTransport.SetTimer(Value: TIdTimerQueue);
 begin
   Self.fTimer := Value;
-end;
-
-//* TIdSipTransport Private methods ********************************************
-
-procedure TIdSipTransport.RewriteOwnVia(Msg: TIdSipMessage;
-                                        const SentBy: String);
-begin
-  // We have two separate RewriteOwnVias because there is a difference between
-  // "Via: SIP/2.0/TCP foo:5060" and "Via: SIP/2.0/TCP foo" - the latter uses
-  // SRV lookups to determine the actual address/port while the former uses only
-  // A/AAAA lookups. See RFC 3263 for more detail. This method sets up a Via
-  // without an explicit port:
-  // Via: SIP/2.0/<this transport> <SentBy>
-  Assert(Msg.Path.Length > 0,
-         MustHaveAtLeastOneVia);
-
-  Assert(Msg.LastHop.Transport = Self.GetTransportType,
-         Format(WrongTransport, [Self.GetTransportType, Msg.LastHop.Transport]));
-
-  Msg.LastHop.SentBy := SentBy;
-
-  if Self.UseRport then
-    Msg.LastHop.Params[RportParam] := '';
-end;
-
-procedure TIdSipTransport.RewriteOwnVia(Msg: TIdSipMessage;
-                                        const SentBy: String;
-                                        Port: Cardinal);
-begin
-  // This method rewrites a Via header in the form
-  // Via: SIP/2.0/<this transport> <SentBy>:<Port>
-
-  Self.RewriteOwnVia(Msg, SentBy);
-
-  Msg.LastHop.Port := Port;
 end;
 
 //******************************************************************************

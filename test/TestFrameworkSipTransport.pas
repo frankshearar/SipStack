@@ -64,6 +64,7 @@ type
     Request:               TIdSipRequest;
     Response:              TIdSipResponse;
     SendEvent:             TEvent;
+    SentBy:                String;
     Timer:                 TTransportTestTimerQueue;
     WrongServer:           Boolean;
 
@@ -186,7 +187,6 @@ type
     procedure TestRemoveBindingNoSuchBinding;
     procedure TestRemoveBindingRestartsStartedTransport;
     procedure TestSendRequest;
-    procedure TestSendRequestFromNonStandardPort;
     procedure TestSendRequestTopVia;
     procedure TestSendResponse;
     procedure TestSendResponseFromNonStandardPort;
@@ -338,6 +338,7 @@ begin
   Self.ReceivedResponse := false;
   Self.RejectedMessage  := false;
   RejectedMessageReason := '';
+  Self.SentBy           := '';
   Self.WrongServer      := false;
 end;
 
@@ -552,6 +553,10 @@ begin
 
     Check(R.LastHop.HasBranch,
           Self.HighPortTransport.ClassName + ': Branch parameter missing');
+    CheckEquals(Self.SentBy,
+                R.LastHop.SentBy,
+                Self.HighPortTransport.ClassName
+             + ': Topmost Via header''s sent-by altered');
 
     Self.ThreadEvent.SetEvent;
   except
@@ -1425,18 +1430,10 @@ begin
       + 'didn''t use the DestinationLocation or something bad happened');
 end;
 
-procedure TestTIdSipTransport.TestSendRequestFromNonStandardPort;
-begin
-  Self.Request.RequestUri.Host := Self.LowPortTransport.HostName;
-  Self.Request.RequestUri.Port := Self.LowPortLocation.Port;
-  Self.CheckingRequestEvent := Self.CheckSendRequestFromNonStandardPort;
-  Self.HighPortTransport.Send(Self.Request, Self.LowPortLocation);
-
-  Self.WaitForSignaled;
-end;
-
 procedure TestTIdSipTransport.TestSendRequestTopVia;
 begin
+  Self.SentBy := 'talking-head.tessier-ashpool.co.luna';
+  Self.Request.LastHop.SentBy := Self.SentBy;
   Self.CheckingRequestEvent := Self.CheckSendRequestTopVia;
   Self.LowPortTransport.Send(Self.Request, Self.HighPortLocation);
 
@@ -1870,6 +1867,10 @@ end;
 
 procedure TestTIdSipTransport.TestUseRport;
 begin
+  // The request does indeed come from localhost, but we want a FQDN here to
+  // force the receiving UA to add an rport parameter.
+  Self.Request.LastHop.SentBy := 'localhost';
+
   Self.ExceptionMessage := 'Waiting for rport request';
   Self.LowPortTransport.UseRport := true;
   Self.CheckingRequestEvent := Self.CheckUseRport;
