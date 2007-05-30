@@ -105,7 +105,6 @@ type
                                 Port: Cardinal;
                                 const Msg: String); override;
     procedure SendMessage(Msg: String); override;
-    function  TransportType: TIdSipTransportClass; override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -114,6 +113,31 @@ type
     procedure TestLastResponse;
     procedure TestSecondLastRequest;
     procedure TestThirdLastRequest;
+  end;
+
+  TestTIdSipMockSctpTransport = class(TestTIdSipMockTransport)
+  protected
+    function TransportType: TIdSipTransportClass; override;
+  end;
+
+  TestTIdSipMockTcpTransport = class(TestTIdSipMockTransport)
+  protected
+    function TransportType: TIdSipTransportClass; override;
+  end;
+
+  TestTIdSipMockTlsTransport = class(TestTIdSipMockTransport)
+  protected
+    function TransportType: TIdSipTransportClass; override;
+  end;
+
+  TestTIdSipMockTlsOverSctpTransport = class(TestTIdSipMockTransport)
+  protected
+    function TransportType: TIdSipTransportClass; override;
+  end;
+
+  TestTIdSipMockUdpTransport = class(TestTIdSipMockTransport)
+  protected
+    function TransportType: TIdSipTransportClass; override;
   end;
 
   TestTIdSipTransports = class(TTestCase)
@@ -218,7 +242,11 @@ begin
   Result := TTestSuite.Create('IdSipTransport unit tests');
   Result.AddTest(TestTIdSipTransportEventNotifications.Suite);
   Result.AddTest(TestTransportRegistry.Suite);
-  Result.AddTest(TestTIdSipMockTransport.Suite);
+  Result.AddTest(TestTIdSipMockSctpTransport.Suite);
+  Result.AddTest(TestTIdSipMockTcpTransport.Suite);
+  Result.AddTest(TestTIdSipMockTlsTransport.Suite);
+  Result.AddTest(TestTIdSipMockTlsOverSctpTransport.Suite);
+  Result.AddTest(TestTIdSipMockUdpTransport.Suite);
   Result.AddSuite(TestTIdSipTransports.Suite);
   Result.AddTest(TestTIdSipTransportExceptionMethod.Suite);
   Result.AddTest(TestTIdSipTransportReceiveRequestMethod.Suite);
@@ -829,11 +857,6 @@ begin
   end;
 end;
 
-function TestTIdSipMockTransport.TransportType: TIdSipTransportClass;
-begin
-  Result := TIdSipMockUdpTransport;
-end;
-
 //* TestTIdSipMockTransport Published methods **********************************
 
 procedure TestTIdSipMockTransport.TestLastRequest;
@@ -885,6 +908,56 @@ begin
   Self.MockTransport.Send(Self.RequestFour, Self.HighPortLocation);
   CheckNotNull(Self.MockTransport.LastRequest, '(Copy of) third-last request not stored (again)');
   Check(Self.MockTransport.ThirdLastRequest.Equals(Self.RequestTwo), 'Unknown request stored (again)');
+end;
+
+//******************************************************************************
+//* TestTIdSipMockSctpTransport                                                *
+//******************************************************************************
+//* TestTIdSipMockSctpTransport Protected methods ******************************
+
+function TestTIdSipMockSctpTransport.TransportType: TIdSipTransportClass;
+begin
+  Result := TIdSipMockSctpTransport;
+end;
+
+//******************************************************************************
+//* TestTIdSipMockTcpTransport                                                 *
+//******************************************************************************
+//* TestTIdSipMockTcpTransport Protected methods *******************************
+
+function TestTIdSipMockTcpTransport.TransportType: TIdSipTransportClass;
+begin
+  Result := TIdSipMockTcpTransport;
+end;
+
+//******************************************************************************
+//* TestTIdSipMockTlsTransport                                                 *
+//******************************************************************************
+//* TestTIdSipMockTlsTransport Protected methods *******************************
+
+function TestTIdSipMockTlsTransport.TransportType: TIdSipTransportClass;
+begin
+  Result := TIdSipMockTlsTransport;
+end;
+
+//******************************************************************************
+//* TestTIdSipMockTlsOverSctpTransport                                         *
+//******************************************************************************
+//* TestTIdSipMockTlsOverSctpTransport Protected methods ***********************
+
+function TestTIdSipMockTlsOverSctpTransport.TransportType: TIdSipTransportClass;
+begin
+  Result := TIdSipMockTlsOverSctpTransport;
+end;
+
+//******************************************************************************
+//* TestTIdSipMockUdpTransport                                                 *
+//******************************************************************************
+//* TestTIdSipMockUdpTransport Protected methods *******************************
+
+function TestTIdSipMockUdpTransport.TransportType: TIdSipTransportClass;
+begin
+  Result := TIdSipMockUdpTransport;
 end;
 
 //******************************************************************************
