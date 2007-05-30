@@ -56,7 +56,8 @@ function  MultiplyCardinal(FirstValue, SecondValue: Cardinal): Cardinal;
 implementation
 
 uses
-  IdSipConsts, IdSimpleParser, IdSystem, SysUtils;
+
+  IdSimpleParser, IdSystem, SysUtils;
 
 //******************************************************************************
 //* Unit public functions & procedures                                         *

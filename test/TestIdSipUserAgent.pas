@@ -359,7 +359,7 @@ implementation
 
 uses
   IdException, IdMockRoutingTable, IdSdp, IdSimpleParser, IdSipAuthentication,
-  IdSipConsts, IdSipIndyLocator, IdSipMockBindingDatabase, IdSipMockLocator,
+  IdSipIndyLocator, IdSipMockBindingDatabase, IdSipMockLocator,
   IdSipMockTransactionDispatcher, IdSipMockTransport, IdSipRegistration,
   IdSipSubscribeModule, IdSipTCPTransport, IdSipUDPTransport, IdSystem,
   IdTcpClient, IdUnicode, SysUtils, TestFrameworkSipTransport;
@@ -2423,14 +2423,14 @@ begin
                  'You MUST have two IPs on this machine to complete this test!');
 
   CheckPortFree(LocalAddress,
-                IdPORT_SIP,
+                DefaultSipPort,
                 'Close down all SIP UAs before running this test.');
 
   Server := TIdUDPServer.Create(nil);
   try
     with Server.Bindings.Add do begin
       Address := LocalAddress;
-      Port    := IdPORT_SIP
+      Port    := DefaultSipPort
     end;
     Server.Active := true;
 
@@ -2523,7 +2523,7 @@ var
   UA:       TIdSipUserAgent;
 begin
   CheckPortFree(LocalAddress,
-                IdPORT_SIP,
+                DefaultSipPort,
                 'Close down all SIP UAs before running this test.');
 
   Self.Configuration.Add('Listen: UDP AUTO:5060');
@@ -2887,7 +2887,7 @@ begin
       UA.Dispatcher.Transports[0].Start;
       try
         CheckTcpServerNotOnPort(Bindings[0].IPAddress,
-                                IdPort_SIP,
+                                DefaultSipPort,
                                 'With only one listener (on a non-standard port) '
                               + 'there should be no server on the standard port');
       finally

@@ -619,7 +619,7 @@ const
 implementation
 
 uses
-  IdException, IdRandom, IdSipConsts, IdSipDialogID, Math;
+  IdException, IdRandom, IdSipDialogID, Math;
 
 // Used by the TransactionRegistry.
 var

@@ -609,7 +609,7 @@ type
 implementation
 
 uses
-  Classes, IdException, IdRandom, IdSdp, IdSipConsts, Math, TypInfo;
+  Classes, IdException, IdRandom, IdSdp, Math, TypInfo;
 
 function Suite: ITestSuite;
 begin
@@ -750,8 +750,8 @@ begin
   Self.D.RoutingTable := Self.Core.RoutingTable;
 
   // Remember, Self's subclass has registered mock transports for these symbols.
-  Self.D.AddTransportBinding(TcpTransport, '127.0.0.1', IdPORT_SIP);
-  Self.D.AddTransportBinding(UdpTransport, '127.0.0.1', IdPORT_SIP);
+  Self.D.AddTransportBinding(TcpTransport, '127.0.0.1', DefaultSipPort);
+  Self.D.AddTransportBinding(UdpTransport, '127.0.0.1', DefaultSipPort);
 
   Self.MockTcpTransport := Self.D.Transports[0] as TIdSipMockTransport;
   Self.MockUdpTransport := Self.D.Transports[1] as TIdSipMockTransport;
@@ -760,7 +760,7 @@ begin
   // This must differ from Self.D's bindings, or we will make hairpin calls
   // when we send INVITEs. That in itself isn't a problem, but for most tests
   // that's not what we want!
-  Self.Destination := TIdSipLocation.Create(TcpTransport, '127.0.0.2', IdPORT_SIP);
+  Self.Destination := TIdSipLocation.Create(TcpTransport, '127.0.0.2', DefaultSipPort);
 
   Self.ReceivedRequest  := TIdSipTestResources.CreateLocalLoopRequest;
   Self.TranRequest      := TIdSipTestResources.CreateLocalLoopRequest;
@@ -1121,12 +1121,12 @@ begin
 
   Self.D.AddTransportBinding(UdpTransport,
                              '127.0.0.1',
-                             IdPORT_SIP);
+                             DefaultSipPort);
   CheckEquals(1, Self.D.TransportCount, 'After one AddTransport');
 
   Self.D.AddTransportBinding(TcpTransport,
                              '127.0.0.1',
-                             IdPORT_SIP);
+                             DefaultSipPort);
   CheckEquals(2, Self.D.TransportCount, 'After two AddTransports');
 end;
 
@@ -1409,7 +1409,7 @@ procedure TestTIdSipTransactionDispatcher.TestSendRequestOverUdp;
 var
   UdpDest: TIdSipLocation;
 begin
-  UdpDest := TIdSipLocation.Create(UdpTransport, '127.0.0.1', IdPORT_SIP);
+  UdpDest := TIdSipLocation.Create(UdpTransport, '127.0.0.1', DefaultSipPort);
   try
     Self.MockTransport := Self.MockUdpTransport;
 
@@ -1814,7 +1814,7 @@ begin
   Self.Request  := TIdSipTestResources.CreateBasicRequest;
   Self.Response := TIdSipResponse.InResponseTo(Self.Request, SIPNotFound);
 
-  Self.L.AddSRV(Self.Response.LastHop.SentBy, SrvUdpPrefix,  0, 0, IdPORT_SIP, 'localhost');
+  Self.L.AddSRV(Self.Response.LastHop.SentBy, SrvUdpPrefix,  0, 0, DefaultSipPort, 'localhost');
   Self.L.AddA('localhost', '127.0.0.1');
 end;
 
@@ -2512,7 +2512,7 @@ begin
   // This must differ from the dispatcher's bindings, or we will make hairpin
   // calls when we send INVITEs. That in itself isn't a problem, but for most
   // tests that's not what we want!
-  Self.Destination := TIdSipLocation.Create(UdpTransport, '127.0.0.2', IdPORT_SIP);
+  Self.Destination := TIdSipLocation.Create(UdpTransport, '127.0.0.2', DefaultSipPort);
 
   Self.TransactionCompleted  := false;
   Self.TransactionFailed     := false;

@@ -280,8 +280,7 @@ type
 implementation
 
 uses
-  IdSimpleParser, IdSipConsts, IdStack, IdTcpServer, TestFramework,
-  TestMessages;
+  IdSimpleParser, IdStack, IdTcpServer, TestFramework, TestMessages;
 
 var
   ServerThatInstantiatesGStack: TIdTcpServer;
@@ -460,7 +459,7 @@ end;
 
 function TestTIdSipTransport.DefaultPort: Cardinal;
 begin
-  Result := IdPORT_SIP;
+  Result := DefaultSipPort;
 end;
 
 //* TestTIdSipTransport Protected methods **************************************
@@ -939,7 +938,7 @@ begin
 
   Self.LowPortTransport.Stop;
   CheckServerNotOnPort(Self.LowPortLocation.IPAddress,
-                       IdPORT_SIP,
+                       DefaultSipPort,
                        'Close down all SIP UAs before running this test.');
 
   Address   := Self.LowPortLocation.IPAddress;
@@ -972,7 +971,7 @@ procedure TestTIdSipTransport.TestClearBindingLeavesOneBindingBehind;
 begin
   Self.LowPortTransport.Stop;
   CheckServerNotOnPort(Self.LowPortLocation.IPAddress,
-                       IdPORT_SIP,
+                       DefaultSipPort,
                        'Close down all SIP UAs before running this test.');
 
   Self.LowPortTransport.AddBinding(Self.LowPortLocation.IPAddress,
@@ -991,7 +990,7 @@ procedure TestTIdSipTransport.TestClearBindingRestartsStartedTransport;
 begin
   Self.LowPortTransport.Stop;
   CheckServerNotOnPort(Self.LowPortLocation.IPAddress,
-                       IdPORT_SIP,
+                       DefaultSipPort,
                        'Close down all SIP UAs before running this test.');
 
   Self.LowPortTransport.Start;

@@ -748,8 +748,8 @@ type
 implementation
 
 uses
-  IdException, IdSimpleParser, IdSipConsts, IdSipDns,
-  IdSipMockTransactionDispatcher, SysUtils, TestFramework;
+  IdException, IdSimpleParser, IdSipDns, IdSipMockTransactionDispatcher,
+  SysUtils, TestFramework;
 
 function Suite: ITestSuite;
 begin
@@ -3435,7 +3435,7 @@ begin
   Self.LocalGruu.Address.Grid     := 'decafbad';
   Self.LocalGruu.Address.Host     := Self.LanIP;
   Self.LocalGruu.Address.IsGruu   := true;
-  Self.LocalGruu.Address.Port     := IdPORT_SIP;
+  Self.LocalGruu.Address.Port     := DefaultSipPort;
   Self.LocalGruu.Address.Scheme   := SipScheme;
   Self.LocalGruu.IsUnset          := true;
 

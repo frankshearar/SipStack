@@ -65,7 +65,7 @@ implementation
 {$R *.dfm}
 
 uses
-  IdSimpleParser, IdSipConsts, IdSystem, IdUnicode, SysUtils;
+  IdSimpleParser, IdSystem, IdUnicode, SysUtils;
 
 //******************************************************************************
 //* TIdSpikeT140                                                               *

@@ -117,7 +117,7 @@ type
 implementation
 
 uses
-  Classes, IdSipConsts, IdSipMessage, Math, SysUtils;
+  Classes, IdSipMessage, Math, SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -624,7 +624,7 @@ begin
 
   Self.Domain      := 'foo.bar';
   Self.NameRecords := TIdDomainNameRecords.Create;
-  Self.Port        := IdPORT_SIPS;
+  Self.Port        := DefaultSipsPort;
   Self.Priority    := 50;
   Self.Service     := '_sips._sctp';
   Self.Target      := 'sipsmachine.foo.bar';
@@ -766,7 +766,7 @@ const
   Service  = '_sips.sctp';
   Priority = 0;
   Weight   = 1;
-  Port     = IdPORT_SIPS;
+  Port     = DefaultSipsPort;
   Target   = 'gw1.leo-ix.net';
 
 begin

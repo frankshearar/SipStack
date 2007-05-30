@@ -247,8 +247,8 @@ const
 implementation
 
 uses
-  Classes, IdException, IdGlobal, IdSimpleParser, IdSipConsts, IdSocketHandle,
-  IdStack, TestMessages;
+  Classes, IdException, IdGlobal, IdSimpleParser, IdSocketHandle, IdStack,
+  TestMessages;
 
 function Suite: ITestSuite;
 begin
@@ -655,14 +655,14 @@ begin
   Self.LowPortServer.Bindings.Clear;
   Binding := LowPortServer.Bindings.Add;
   Binding.IP   := LocalHost;
-  Binding.Port := IdPORT_SIP;
+  Binding.Port := DefaultSipPort;
 
   Self.HighPortServer.Timer := Self.Timer;
   Self.HighPortServer.TransportID := Self.Transport.ID;
   Self.HighPortServer.Bindings.Clear;
   Binding := Self.HighPortServer.Bindings.Add;
   Binding.IP   := GStack.LocalAddress;
-  Binding.Port := IdPORT_SIP + 10000;
+  Binding.Port := DefaultSipPort + 10000;
 
   Self.HighPortLocation := TIdSipLocation.Create(TcpTransport,
                                                  Binding.IP,
@@ -1263,7 +1263,7 @@ end;
 procedure TestTIdSipTcpClient.TestConnectAndDisconnect;
 begin
   Self.Client.Host := '127.0.0.1';
-  Self.Client.Port := IdPORT_SIP;
+  Self.Client.Port := DefaultSipPort;
   Self.Client.Connect(1000);
   try
     Check(Self.Client.Connected, 'Client didn''t connect');

@@ -116,7 +116,7 @@ type
 implementation
 
 uses
-  IdSipConsts, SysUtils, TestMessages, TypInfo;
+  SysUtils, TestMessages, TypInfo;
 
 function DialogStateToStr(const S: TIdSipDialogState): String;
 begin

@@ -42,7 +42,7 @@ type
 implementation
 
 uses
-  IdSipConsts, TestFrameworkSip, IdSipMockTransport, SysUtils;
+  IdSipMockTransport, SysUtils, TestFrameworkSip;
 
 function Suite: ITestSuite;
 begin

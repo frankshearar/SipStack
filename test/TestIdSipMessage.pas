@@ -12,8 +12,8 @@ unit TestIdSipMessage;
 interface
 
 uses
-  IdMockRoutingTable, IdSipConsts, IdSipDialogID, IdSipLocation, IdSipMessage,
-  SysUtils, TestFramework, TestFrameworkSip;
+  IdMockRoutingTable, IdSipDialogID, IdSipLocation, IdSipMessage, SysUtils,
+  TestFramework, TestFrameworkSip;
 
 type
   TestFunctions = class(TTestCase)
@@ -354,13 +354,13 @@ type
     VpnPort:             Cardinal;
 
     procedure AddDefaultRoute;
-    procedure AddInternetMappedRoute(Port: Cardinal = IdPORT_SIP);
-    function  AddLanBinding(Port: Cardinal = IdPORT_SIP): TIdSipLocation;
+    procedure AddInternetMappedRoute(Port: Cardinal = DefaultSipPort);
+    function  AddLanBinding(Port: Cardinal = DefaultSipPort): TIdSipLocation;
     procedure AddLanRoute;
-    function  AddLoopbackBinding(Port: Cardinal = IdPORT_SIP): TIdSipLocation;
+    function  AddLoopbackBinding(Port: Cardinal = DefaultSipPort): TIdSipLocation;
     procedure AddLoopbackRoute;
-    function  AddVpnBinding(Port: Cardinal = IdPORT_SIP): TIdSipLocation;
-    procedure AddVpnMappedRoute(Port: Cardinal = IdPORT_SIP);
+    function  AddVpnBinding(Port: Cardinal = DefaultSipPort): TIdSipLocation;
+    procedure AddVpnMappedRoute(Port: Cardinal = DefaultSipPort);
     procedure AddVpnRoute;
     procedure CheckAgainstDestination(ExpectedBinding: TIdSipLocation; Destination: TIdSipLocation);
     procedure CheckContact(ExpectedBinding: TIdSipLocation; SipMsg: TIdSipMessage; Msg: String = '');
@@ -757,7 +757,7 @@ begin
   CheckEquals('SIP/2.0',          Msg.LastHop.SipVersion,       'LastHop.SipVersion');
   CheckEquals(TcpTransport,       Msg.LastHop.Transport,        'LastHop.Transport');
   CheckEquals('gw1.leo-ix.org',   Msg.LastHop.SentBy,           'LastHop.SentBy');
-  CheckEquals(IdPORT_SIP,         Msg.LastHop.Port,             'LastHop.Port');
+  CheckEquals(DefaultSipPort,         Msg.LastHop.Port,             'LastHop.Port');
   CheckEquals('z9hG4bK776asdhds', Msg.LastHop.Params['branch'], 'LastHop.Params[''branch'']');
 
   CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>;tag=1928301775',
@@ -5372,7 +5372,7 @@ begin
   Self.RoutingTable.AddMappedRoute('0.0.0.0', '0.0.0.0', Self.InternetGateway, Port);
 end;
 
-function TRewriteLocationTestCase.AddLanBinding(Port: Cardinal = IdPORT_SIP): TIdSipLocation;
+function TRewriteLocationTestCase.AddLanBinding(Port: Cardinal = DefaultSipPort): TIdSipLocation;
 begin
   Result := Self.LocalBindings.AddLocation('TCP', Self.LanIP, Port);
 end;
@@ -5389,7 +5389,7 @@ begin
   Self.RoutingTable.AddOsRoute(Network, Mask, Gateway, 1, '1', Self.LanIP);
 end;
 
-function TRewriteLocationTestCase.AddLoopbackBinding(Port: Cardinal = IdPORT_SIP): TIdSipLocation;
+function TRewriteLocationTestCase.AddLoopbackBinding(Port: Cardinal = DefaultSipPort): TIdSipLocation;
 begin
   Result := Self.LocalBindings.AddLocation('UDP', '127.0.0.1', Port);
 end;
@@ -5399,12 +5399,12 @@ begin
   Self.RoutingTable.AddOsRoute('127.0.0.0', '255.0.0.0', '127.0.0.1', 1, '1', '127.0.0.1');
 end;
 
-function TRewriteLocationTestCase.AddVpnBinding(Port: Cardinal = IdPORT_SIP): TIdSipLocation;
+function TRewriteLocationTestCase.AddVpnBinding(Port: Cardinal = DefaultSipPort): TIdSipLocation;
 begin
   Result := Self.LocalBindings.AddLocation('TCP', Self.VpnIP, 5060);
 end;
 
-procedure TRewriteLocationTestCase.AddVpnMappedRoute(Port: Cardinal = IdPORT_SIP);
+procedure TRewriteLocationTestCase.AddVpnMappedRoute(Port: Cardinal = DefaultSipPort);
 begin
   Self.RoutingTable.AddMappedRoute(Self.VpnNetwork, Self.VpnMask, Self.VpnGateway, Port);
 end;

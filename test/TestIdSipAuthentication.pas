@@ -102,7 +102,7 @@ type
 implementation
 
 uses
-  IdHashMessageDigest, IdSipConsts, SysUtils;
+  IdHashMessageDigest, SysUtils;
 
 function Suite: ITestSuite;
 begin

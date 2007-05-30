@@ -520,7 +520,7 @@ type
 implementation
 
 uses
-  IdSipAuthentication, IdSipConsts, Math, SysUtils;
+  IdSipAuthentication, Math, SysUtils;
 
 const
   ItemNotFoundIndex = -1;

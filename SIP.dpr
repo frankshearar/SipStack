@@ -29,7 +29,6 @@ uses
   IdSdp in 'src\IdSdp.pas',
   IdSimpleParser in 'src\IdSimpleParser.pas',
   IdSipAuthentication in 'src\IdSipAuthentication.pas',
-  IdSipConsts in 'src\IdSipConsts.pas',
   IdSipCore in 'src\IdSipCore.pas',
   IdSipDialog in 'src\IdSipDialog.pas',
   IdSipDialogID in 'src\IdSipDialogID.pas',

@@ -29,11 +29,11 @@ type
 implementation
 
 uses
-  IdSipConsts, IdSipDns;
+  IdSipDns;
 
 class function TIdSipTlsOverSctpTransport.DefaultPort: Cardinal;
 begin
-  Result := IdPORT_SIPS;
+  Result := DefaultSipsPort;
 end;
 
 class function TIdSipTlsOverSctpTransport.GetTransportType: String;

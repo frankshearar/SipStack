@@ -262,7 +262,7 @@ type
 implementation
 
 uses
-  Classes, DateUtils, IdSipConsts, IdTimerQueue, SysUtils;
+  Classes, DateUtils, IdTimerQueue, SysUtils;
 
 function Suite: ITestSuite;
 begin

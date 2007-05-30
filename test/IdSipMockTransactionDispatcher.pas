@@ -60,7 +60,7 @@ type
 implementation
 
 uses
-  IdSipConsts, IdMockRoutingTable, SysUtils;
+  IdMockRoutingTable, SysUtils;
 
 const
   NoDestinationsForResponse = 'Couldn''t send the response because there are '

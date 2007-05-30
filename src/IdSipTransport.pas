@@ -367,7 +367,7 @@ const
 implementation
 
 uses
-  IdRandom, IdSipConsts, IdTCPServer, IdIOHandlerSocket;
+  IdRandom, IdTCPServer, IdIOHandlerSocket;
 
 var
   GTransports:     TStrings;
@@ -380,7 +380,7 @@ var
 
 class function TIdSipTransport.DefaultPort: Cardinal;
 begin
-  Result := IdPORT_SIP;
+  Result := DefaultSipPort;
 end;
 
 class function TIdSipTransport.IsSecure: Boolean;

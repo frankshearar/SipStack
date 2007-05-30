@@ -200,7 +200,7 @@ type
 implementation
 
 uses
-  Classes, IdSimpleParser, IdSipConsts, SysUtils;
+  Classes, IdSimpleParser, SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -959,7 +959,7 @@ begin
   Self.Uri.Scheme   := 'sip';
   Self.Uri.Username := 'wintermute';
   Self.Uri.Host     := 'tessier-ashpool.co.luna';
-  Self.Uri.Port     := IdPORT_SIP;
+  Self.Uri.Port     := DefaultSipPort;
 
   CheckEquals('sip:wintermute@tessier-ashpool.co.luna:5060',
               Self.Uri.AsString,
@@ -988,7 +988,7 @@ procedure TestTIdSipUri.TestAsStringWithSpecialPort;
 begin
   Self.Uri.Scheme   := 'sip';
   Self.Uri.Username := 'wintermute';
-  Self.Uri.Port     := IdPORT_SIP + 10000;
+  Self.Uri.Port     := DefaultSipPort + 10000;
   Self.Uri.Host     := 'tessier-ashpool.co.luna';
 
   CheckEquals('sip:wintermute@tessier-ashpool.co.luna:15060',
@@ -1017,7 +1017,7 @@ begin
   CheckEquals('sip',                     Self.Uri.Scheme,        'Scheme');
   CheckEquals('wintermute',              Self.Uri.Username,      'User');
   CheckEquals('tessier-ashpool.co.luna', Self.Uri.Host,          'Host');
-  CheckEquals(IdPORT_SIP,                Self.Uri.Port,          'Port');
+  CheckEquals(DefaultSipPort,                Self.Uri.Port,          'Port');
   CheckEquals(0,                         Self.Uri.ParamCount,    'Parameters');
   CheckEquals('',                        Self.Uri.Password,      'Password');
   CheckEquals(0,                         Self.Uri.Headers.Count, 'Headers');
@@ -1891,13 +1891,13 @@ end;
 procedure TestTIdSipUri.TestPortWithSipScheme;
 begin
   Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
-  CheckEquals(IdPORT_SIP, Self.Uri.Port, 'SIP URI default port');
+  CheckEquals(DefaultSipPort, Self.Uri.Port, 'SIP URI default port');
 end;
 
 procedure TestTIdSipUri.TestPortWithSipsScheme;
 begin
   Self.Uri.Uri := 'sips:wintermute@tessier-ashpool.co.luna';
-  CheckEquals(IdPORT_SIPS, Self.Uri.Port, 'SIPS URI default port');
+  CheckEquals(DefaultSipsPort, Self.Uri.Port, 'SIPS URI default port');
 end;
 
 procedure TestTIdSipUri.TestRemoveParameter;
@@ -1920,17 +1920,17 @@ end;
 procedure TestTIdSipUri.TestSchemeChangeChangesPort;
 begin
   Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
-  CheckEquals(IdPORT_SIP, Self.Uri.Port, 'Sanity check on SIP scheme port');
+  CheckEquals(DefaultSipPort, Self.Uri.Port, 'Sanity check on SIP scheme port');
 
   Self.Uri.Scheme := SipsScheme;
-  CheckEquals(IdPORT_SIPS,
+  CheckEquals(DefaultSipsPort,
               Self.Uri.Port,
               'Changing to SIPS scheme didn''t affect port');
   Check(not Self.Uri.PortIsSpecified,
         'Changing the scheme doesn''t mean you''ve specified a port');
 
   Self.Uri.Scheme := SipScheme;
-  CheckEquals(IdPORT_SIP,
+  CheckEquals(DefaultSipPort,
               Self.Uri.Port,
               'Changing back to SIP scheme didn''t affect port');
   Check(not Self.Uri.PortIsSpecified,
@@ -2213,7 +2213,7 @@ var
 begin
   Uri := TIdSipsUri.Create('sips:wintermute@tessier-ashpool.co.luna');
   try
-    CheckEquals(IdPORT_SIPS, Uri.Port, 'Port not specified');
+    CheckEquals(DefaultSipsPort, Uri.Port, 'Port not specified');
   finally
     Uri.Free;
   end;

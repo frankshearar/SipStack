@@ -255,7 +255,7 @@ type
 implementation
 
 uses
-  IdException, IdSipConsts, IdSipDns;
+  IdException, IdSipDns;
 
 //******************************************************************************
 //* TIdSipTCPTransport                                                         *

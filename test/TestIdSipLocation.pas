@@ -47,7 +47,7 @@ type
 implementation
 
 uses
-  IdSimpleParser, IdSipConsts, IdSipDns, IdSipMessage, Math, SysUtils;
+  IdSimpleParser, IdSipDns, IdSipMessage, Math, SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -162,7 +162,7 @@ procedure TestTIdSipLocations.TestAddLocation;
 const
   Transport = TcpTransport;
   Address   = 'foo.com';
-  Port      = IdPORT_SIP;
+  Port      = DefaultSipPort;
 var
   Result: TIdSipLocation;
 begin
@@ -212,7 +212,7 @@ end;
 procedure TestTIdSipLocations.TestAddLocationsFromNames;
 const
   Transport = TcpTransport;
-  Port      = IdPORT_SIP;
+  Port      = DefaultSipPort;
 var
   I:     Integer;
   Names: TIdDomainNameRecords;

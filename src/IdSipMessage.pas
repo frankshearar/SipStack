@@ -13,7 +13,7 @@ interface
 
 uses
   Classes, Contnrs, IdDateTimeStamp, IdRoutingTable, IdSimpleParser,
-  IdSipConsts, IdSipLocation, IdTimerQueue, StringDictionary, SysUtils;
+  IdSipLocation, IdTimerQueue, StringDictionary, SysUtils;
 
 type
   TIdSipQValue = 0..1000;
@@ -2166,6 +2166,10 @@ const
   TlsTransport         = 'TLS';
   UdpTransport         = 'UDP';
 
+const
+  DefaultSipPort  = 5060;
+  DefaultSipsPort = 5061;
+
 // Grammar definitions. Don't localise them.
 const
   CRLF                  = #$D#$A;
@@ -3776,9 +3780,9 @@ end;
 function TIdSipUri.DefaultPort: Cardinal;
 begin
   if Self.IsSecure then
-    Result := IdPORT_SIPS
+    Result := DefaultSipsPort
   else
-    Result := IdPORT_SIP;
+    Result := DefaultSipPort;
 end;
 
 function TIdSipUri.DefaultTransport: String;
@@ -3996,9 +4000,9 @@ begin
   inherited SetScheme(Value);
 
   if (Self.Scheme = SipsScheme) then
-    Self.HostAndPort.DefaultPort := IdPORT_SIPS
+    Self.HostAndPort.DefaultPort := DefaultSipsPort
   else
-    Self.HostAndPort.DefaultPort := IdPORT_SIP;
+    Self.HostAndPort.DefaultPort := DefaultSipPort;
 
   if not Self.HostAndPort.PortIsSpecified then begin
     Self.HostAndPort.Port := Self.HostAndPort.DefaultPort;

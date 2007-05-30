@@ -742,7 +742,7 @@ const
 implementation
 
 uses
-  IdSipConsts, IdSipMockTransport;
+  IdSipMockTransport;
 
 //******************************************************************************
 //* TIdSipTestResources                                                        *

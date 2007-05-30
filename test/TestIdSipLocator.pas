@@ -112,7 +112,7 @@ type
 implementation
 
 uses
-  IdSipConsts, IdSipMockTransport, IdSipTransport, Math, SysUtils;
+  IdSipMockTransport, IdSipTransport, Math, SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -157,7 +157,7 @@ begin
   Self.Locations  := TIdSipLocations.Create;
   Self.NameRecs   := TIdDomainNameRecords.Create;
   Self.Naptr      := TIdNaptrRecords.Create;
-  Self.Port       := IdPORT_SIP;
+  Self.Port       := DefaultSipPort;
   Self.Response   := TIdSipTestResources.CreateBasicResponse;
   Self.Srv        := TIdSrvRecords.Create;
   Self.Target     := TIdSipUri.Create;
@@ -437,7 +437,7 @@ begin
   // up SRV stuff for NAPTR records at least until we find some SRVs.
   Self.Loc.AddNAPTR(Self.Domain, 0, 0, NaptrDefaultFlags, NaptrTlsService, SrvTlsPrefix + '.' + Self.Domain);
   Self.Loc.AddNAPTR(Self.Domain, 0, 0, NaptrDefaultFlags, NaptrTcpService, SrvTcpPrefix + '.' + Self.Domain);
-  Self.Loc.AddSRV(Self.Domain, SrvTcpPrefix, 0, 0, IdPORT_SIP, 'sip.' + Self.Domain);
+  Self.Loc.AddSRV(Self.Domain, SrvTcpPrefix, 0, 0, DefaultSipPort, 'sip.' + Self.Domain);
   Self.Loc.AddAAAA('sip.' + Self.Domain, Self.AAAARecord);
 
   Self.Loc.FindServersFor(Self.Target, Self.Locations);
@@ -521,7 +521,7 @@ begin
   // A/AAAA lookup
   Self.Target.Uri := 'sips:' + Self.Domain;
 
-  Self.Port := IdPORT_SIPS; // default for TLS
+  Self.Port := DefaultSipsPort; // default for TLS
   Self.AddNameRecords(Self.Target.Host);
 
   Self.Loc.FindServersFor(Self.Target, Self.Locations);
@@ -589,7 +589,7 @@ begin
   CheckEquals(1,            Self.Locations.Count,        'SIP Location count');
   CheckEquals(UdpTransport, Self.Locations[0].Transport, 'SIP Transport');
   CheckEquals(Self.IP,      Self.Locations[0].IPAddress, 'SIP IPAddress');
-  CheckEquals(IdPORT_SIP,   Self.Locations[0].Port,      'SIP Port');
+  CheckEquals(DefaultSipPort,   Self.Locations[0].Port,      'SIP Port');
 end;
 
 procedure TestTIdSipAbstractLocator.TestFindServersForNumericAddressIPv6;
@@ -602,7 +602,7 @@ begin
   CheckEquals(1,            Self.Locations.Count,        'SIP IPv6 Location count');
   CheckEquals(UdpTransport, Self.Locations[0].Transport, 'SIP IPv6 Transport');
   CheckEquals(Self.IP,      Self.Locations[0].IPAddress, 'SIP IPv6 IPAddress');
-  CheckEquals(IdPORT_SIP,   Self.Locations[0].Port,      'SIP IPv6 Port');
+  CheckEquals(DefaultSipPort,   Self.Locations[0].Port,      'SIP IPv6 Port');
 end;
 
 procedure TestTIdSipAbstractLocator.TestFindServersForNumericAddressSips;
@@ -616,7 +616,7 @@ begin
   CheckEquals(1,            Self.Locations.Count,        'SIPS Location count');
   CheckEquals(TlsTransport, Self.Locations[0].Transport, 'SIPS Transport');
   CheckEquals(Self.IP,      Self.Locations[0].IPAddress, 'SIPS IPAddress');
-  CheckEquals(IdPORT_SIPS,  Self.Locations[0].Port,      'SIPS Port');
+  CheckEquals(DefaultSipsPort,  Self.Locations[0].Port,      'SIPS Port');
 end;
 
 procedure TestTIdSipAbstractLocator.TestFindServersForNumericAddressWithPort;
@@ -679,7 +679,7 @@ begin
 
   CheckEquals(TlsTransport, Self.Locations[0].Transport, 'Transport');
   CheckEquals(Self.ARecord, Self.Locations[0].IPAddress, 'IPAddress');
-  CheckEquals(IdPORT_SIPS,  Self.Locations[0].Port,      'Port');
+  CheckEquals(DefaultSipsPort,  Self.Locations[0].Port,      'Port');
 end;
 
 procedure TestTIdSipAbstractLocator.TestFindServersForNumericMaddrSipsIPv6;
@@ -692,7 +692,7 @@ begin
 
   CheckEquals(TlsTransport,    Self.Locations[0].Transport, 'Transport');
   CheckEquals(Self.AAAARecord, Self.Locations[0].IPAddress, 'IPAddress');
-  CheckEquals(IdPORT_SIPS,     Self.Locations[0].Port,      'Port');
+  CheckEquals(DefaultSipsPort,     Self.Locations[0].Port,      'Port');
 end;
 
 procedure TestTIdSipAbstractLocator.TestFindServersForResponseReceivedHasPrecedenceOverSentBy;
@@ -893,8 +893,8 @@ var
 begin
   TlsDomain := 'sips.' + Self.Domain;
 
-  Self.Loc.AddSRV(Self.Domain, SrvTlsPrefix, 0, 0, IdPORT_SIPS, TlsDomain);
-  Self.Loc.AddSRV(Self.Domain, SrvTcpPrefix, 0, 0, IdPORT_SIP,  Self.Domain);
+  Self.Loc.AddSRV(Self.Domain, SrvTlsPrefix, 0, 0, DefaultSipsPort, TlsDomain);
+  Self.Loc.AddSRV(Self.Domain, SrvTcpPrefix, 0, 0, DefaultSipPort,  Self.Domain);
 
   Self.Loc.AddAAAA(Self.Domain, Self.AAAARecord);
   Self.Loc.AddAAAA(TlsDomain, SecondRecord);
@@ -914,7 +914,7 @@ begin
   CheckEquals(SecondRecord,
               Self.Locations[0].IPAddress,
               '1st record address');
-  CheckEquals(IdPORT_SIPS,
+  CheckEquals(DefaultSipsPort,
               Self.Locations[0].Port,
               '1st record port');
   CheckEquals(TlsTransport,
@@ -923,7 +923,7 @@ begin
   CheckEquals(ThirdRecord,
               Self.Locations[1].IPAddress,
               '2nd record address');
-  CheckEquals(IdPORT_SIPS,
+  CheckEquals(DefaultSipsPort,
               Self.Locations[1].Port,
               '2nd record port');
 end;
@@ -1189,11 +1189,11 @@ procedure TestTIdSipMockLocator.TestResolveSRV;
 var
   Results: TIdSrvRecords;
 begin
-  Self.Loc.AddSRV('foo.bar', SrvTlsPrefix,  0, 0, IdPORT_SIPS, 'paranoid.bar');
-  Self.Loc.AddSRV('foo.bar', SrvTcpPrefix, 10, 1, IdPORT_SIP , 'backup.bar');
-  Self.Loc.AddSRV('foo.bar', SrvTcpPrefix, 10, 2, IdPORT_SIP , 'normal.bar');
-  Self.Loc.AddSRV('foo.bar', SrvTcpPrefix, 20, 0, IdPORT_SIP , 'fallback.bar');
-  Self.Loc.AddSRV('boo.far', SrvTlsPrefix,  0, 0, IdPORT_SIPS, 'paranoid.far');
+  Self.Loc.AddSRV('foo.bar', SrvTlsPrefix,  0, 0, DefaultSipsPort, 'paranoid.bar');
+  Self.Loc.AddSRV('foo.bar', SrvTcpPrefix, 10, 1, DefaultSipPort , 'backup.bar');
+  Self.Loc.AddSRV('foo.bar', SrvTcpPrefix, 10, 2, DefaultSipPort , 'normal.bar');
+  Self.Loc.AddSRV('foo.bar', SrvTcpPrefix, 20, 0, DefaultSipPort , 'fallback.bar');
+  Self.Loc.AddSRV('boo.far', SrvTlsPrefix,  0, 0, DefaultSipsPort, 'paranoid.far');
 
   Results := TIdSrvRecords.Create;
   try
@@ -1215,7 +1215,7 @@ procedure TestTIdSipMockLocator.TestResolveSRVWithNameRecords;
 var
   Results: TIdSrvRecords;
 begin
-  Self.Loc.AddSRV('foo.bar', SrvTlsPrefix,  0, 0, IdPORT_SIPS, 'paranoid.bar');
+  Self.Loc.AddSRV('foo.bar', SrvTlsPrefix,  0, 0, DefaultSipsPort, 'paranoid.bar');
   Self.Loc.AddAAAA('paranoid.bar', '::1');
   Self.Loc.AddA(   'arbitrary',    '127.0.0.2');
   Self.Loc.AddA(   'paranoid.bar', '127.0.0.1');

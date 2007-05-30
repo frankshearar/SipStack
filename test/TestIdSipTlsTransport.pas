@@ -35,8 +35,7 @@ type
 implementation
 
 uses
-  IdSipConsts, IdSipMessage, IdTcpClient, IdSipTlsTransport, TestFramework,
-  TestFrameworkSip;
+  IdSipMessage, IdTcpClient, IdSipTlsTransport, TestFramework, TestFrameworkSip;
 
 function Suite: ITestSuite;
 begin
@@ -68,7 +67,7 @@ end;
 
 function TestTIdSipTLSTransport.DefaultPort: Cardinal;
 begin
-  Result := IdPORT_SIPS;
+  Result := DefaultSipsPort;
 end;
 
 //* TestTIdSipTLSTransport Protected methods ***********************************

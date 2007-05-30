@@ -856,8 +856,7 @@ type
 implementation
 
 uses
-  Classes, IdSipConsts, IdSipMockTransport, IdSipTransport, IdSystem, IdUnicode,
-  SysUtils;
+  Classes, IdSipMockTransport, IdSipTransport, IdSystem, IdUnicode, SysUtils;
 
 function Suite: ITestSuite;
 begin

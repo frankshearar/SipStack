@@ -79,7 +79,7 @@ type
 implementation
 
 uses
-  DateUtils, IdSipConsts, IdSimpleParser, SysUtils, TestMessages;
+  DateUtils, IdSimpleParser, SysUtils, TestMessages;
 
 function Suite: ITestSuite;
 begin
@@ -709,7 +709,7 @@ begin
     CheckEquals('SIP/3.0',               Via1.SipVersion,       'Via1.SipVersion');
     CheckEquals(TlsTransport,            Via1.Transport,        'Via1.Transport');
     CheckEquals('gw5.cust1.leo-ix.org',  Via1.SentBy,           'Via1.SentBy');
-    CheckEquals(IdPORT_SIPS,             Via1.Port,             'Via1.Port');
+    CheckEquals(DefaultSipsPort,         Via1.Port,             'Via1.Port');
     CheckEquals('z9hG4bK776aheh',        Via1.Params['branch'], 'Via1.Params[''branch'']');
     CheckEquals('SIP/3.0/TLS gw5.cust1.leo-ix.org',
                 Via1.Value,
@@ -896,7 +896,7 @@ begin
   CheckEquals('SIP/2.0',          Msg.LastHop.SipVersion,       'LastHop.SipVersion');
   CheckEquals(TcpTransport,       Msg.LastHop.Transport,        'LastHop.Transport');
   CheckEquals('gw1.leo-ix.org',   Msg.LastHop.SentBy,           'LastHop.SentBy');
-  CheckEquals(IdPORT_SIP,         Msg.LastHop.Port,             'LastHop.Port');
+  CheckEquals(DefaultSipPort,     Msg.LastHop.Port,             'LastHop.Port');
   CheckEquals('z9hG4bK776asdhds', Msg.LastHop.Params['branch'], 'LastHop.Params[''branch'']');
 
   CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>;tag=1928301775',

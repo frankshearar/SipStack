@@ -11,11 +11,6 @@ unit IdSipConsts;
 
 interface
 
-// for IdAssignedNumbers
-const
-  IdPORT_SIP  = 5060;
-  IdPORT_SIPS = 5061;
-
 implementation
 
 end.

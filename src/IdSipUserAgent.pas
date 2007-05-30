@@ -447,9 +447,8 @@ procedure EatDirective(var Line: String);
 implementation
 
 uses
-  IdMockRoutingTable, IdSimpleParser, IdSipConsts, IdSipDns, IdSipIndyLocator,
-  IdSipLocation, IdSipMockBindingDatabase, IdSipSubscribeModule, IdSystem,
-  IdUnicode, SysUtils;
+  IdMockRoutingTable, IdSimpleParser, IdSipDns, IdSipIndyLocator, IdSipLocation,
+  IdSipMockBindingDatabase, IdSipSubscribeModule, IdSystem, IdUnicode, SysUtils;
 
 //******************************************************************************
 //* Unit Public functions & procedures                                         *
@@ -643,9 +642,9 @@ end;
 function TIdSipUserAgent.DefaultPort(SecureTransport: Boolean): Cardinal;
 begin
   if SecureTransport then
-    DefaultPort := IdPORT_SIPS
+    DefaultPort := DefaultSipsPort
   else
-    DefaultPort := IdPORT_SIP;
+    DefaultPort := DefaultSipPort;
 end;
 
 function TIdSipUserAgent.GetDoNotDisturb: Boolean;

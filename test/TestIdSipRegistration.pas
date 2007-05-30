@@ -93,7 +93,7 @@ type
 implementation
 
 uses
-  Classes, DateUtils, IdSipConsts, SysUtils;
+  Classes, DateUtils, SysUtils;
 
 function Suite: ITestSuite;
 begin

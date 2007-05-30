@@ -83,7 +83,7 @@ type
 implementation
 
 uses
-  IdSipConsts, IdSipDns, IdSipMessage;
+  IdSipDns, IdSipMessage;
 
 //******************************************************************************
 //* TIdSipTLSTransport                                                         *
@@ -92,7 +92,7 @@ uses
 
 class function TIdSipTLSTransport.DefaultPort: Cardinal;
 begin
-  Result := IdPORT_SIPS;
+  Result := DefaultSipsPort;
 end;
 
 class function TIdSipTLSTransport.GetTransportType: String;

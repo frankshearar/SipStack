@@ -120,7 +120,7 @@ const
 implementation
 
 uses
-  IdSipConsts, IdSocketHandle, IdUdpServer, TestFramework, TestMessages;
+  IdSocketHandle, IdUdpServer, TestFramework, TestMessages;
 
 function Suite: ITestSuite;
 begin

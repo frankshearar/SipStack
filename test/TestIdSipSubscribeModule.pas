@@ -904,8 +904,7 @@ type
 implementation
 
 uses
-  IdException, IdSipConsts, IdSipDialogID, IdSipOptionsModule, IdSipTransaction,
-  SysUtils;
+  IdException, IdSipDialogID, IdSipOptionsModule, IdSipTransaction, SysUtils;
 
 type
   TIdSipTestPackage = class(TIdSipEventPackage)

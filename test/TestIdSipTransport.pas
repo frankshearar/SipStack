@@ -233,9 +233,9 @@ type
 implementation
 
 uses
-  IdException, IdGlobal, IdSimpleParser, IdSipConsts, IdSipSCTPTransport,
-  IdSipTlsTransport, IdSipUdpTransport, IdSSLOpenSSL, IdStack, IdSystem,
-  IdTcpClient, IdUdpClient, IdUDPServer, TestMessages;
+  IdException, IdGlobal, IdSimpleParser, IdSipSCTPTransport, IdSipTlsTransport,
+  IdSipUdpTransport, IdSSLOpenSSL, IdStack, IdSystem, IdTcpClient, IdUdpClient,
+  IdUDPServer, TestMessages;
 
 function Suite: ITestSuite;
 begin

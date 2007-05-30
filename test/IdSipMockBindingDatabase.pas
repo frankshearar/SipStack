@@ -68,7 +68,7 @@ type
 implementation
 
 uses
-  DateUtils, IdRandom, IdSipConsts, IdSystem, SysUtils;
+  DateUtils, IdRandom, IdSystem, SysUtils;
 
 const
   ItemNotFoundIndex = -1;
