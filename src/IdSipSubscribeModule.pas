@@ -1542,7 +1542,7 @@ begin
   try
     TempTo.Address := Self.InitialRequest.RequestUri;
 
-    Result := Self.Module.CreateSubscribe(Self.From, TempTo, Self.EventPackage);
+    Result := Self.Module.CreateSubscribe(Self.LocalParty, TempTo, Self.EventPackage);
     Result.Event.ID := Self.EventID;
   finally
     TempTo.Free;
@@ -1614,7 +1614,7 @@ end;
 
 function TIdSipOutboundSubscribe.CreateNewAttempt: TIdSipRequest;
 begin
-  Result := Self.Module.CreateSubscribe(Self.From, Self.Target, Self.EventPackage);
+  Result := Self.Module.CreateSubscribe(Self.LocalParty, Self.Target, Self.EventPackage);
   Result.Event.ID             := Self.EventID;
   Result.Expires.NumericValue := Self.Duration;
 
@@ -1692,7 +1692,7 @@ end;
 
 function TIdSipOutboundUnsubscribe.CreateNewAttempt: TIdSipRequest;
 begin
-  Result := Self.Module.CreateSubscribe(Self.From, Self.Target, Self.EventPackage);
+  Result := Self.Module.CreateSubscribe(Self.LocalParty, Self.Target, Self.EventPackage);
   Result.CallID               := Self.CallID;
   Result.Event.ID             := Self.EventID;
   Result.Expires.NumericValue := 0;
@@ -1769,7 +1769,7 @@ end;
 
 function TIdSipOutboundRefer.CreateNewAttempt: TIdSipRequest;
 begin
-  Result := Self.Module.CreateRefer(Self.From, Self.Target, Self.ReferTo);
+  Result := Self.Module.CreateRefer(Self.LocalParty, Self.Target, Self.ReferTo);
   Result.Event.ID             := Self.EventID;
   Result.Expires.NumericValue := Self.Duration;
 
@@ -1849,7 +1849,7 @@ end;
 
 function TIdSipSubscription.CreateNewAttempt: TIdSipRequest;
 begin
-  Result := Self.Module.CreateSubscribe(Self.From, Self.Target, Self.EventPackage);
+  Result := Self.Module.CreateSubscribe(Self.LocalParty, Self.Target, Self.EventPackage);
   Result.Event.ID             := Self.EventID;
   Result.Expires.NumericValue := Self.Duration;
 end;
@@ -2447,7 +2447,7 @@ begin
   Sub.Duration     := Self.Duration;
   Sub.EventPackage := Self.EventPackage;
   Sub.EventID      := Self.EventID;
-  Sub.From         := Self.From;
+  Sub.LocalParty   := Self.LocalParty;
   Sub.Target       := Self.Target;
 end;
 
@@ -2996,7 +2996,7 @@ end;
 
 function TIdSipOutboundReferral.CreateNewAttempt: TIdSipRequest;
 begin
-  Result := Self.Module.CreateRefer(Self.From, Self.Target, Self.ReferredResource);
+  Result := Self.Module.CreateRefer(Self.LocalParty, Self.Target, Self.ReferredResource);
   Result.Event.ID             := Self.EventID;
   Result.Expires.NumericValue := Self.Duration;
 

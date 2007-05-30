@@ -1317,9 +1317,9 @@ begin
   Reg := Self.Core.AddOutboundAction(TIdSipOutboundRegister) as TIdSipOutboundRegister;
   Reg.AddActionListener(Self);
   Reg.AddOwnedActionListener(Self);
-  Reg.Bindings  := Self.Contacts;
-  Reg.From      := Self.Core.From;
-  Reg.Registrar := Self.RegistrarAddress;
+  Reg.Bindings   := Self.Contacts;
+  Reg.LocalParty := Self.Core.From;
+  Reg.Registrar  := Self.RegistrarAddress;
   Reg.Send;
 
   Result := Reg;

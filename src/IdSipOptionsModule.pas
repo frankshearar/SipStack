@@ -187,7 +187,7 @@ begin
   try
     TempTo.Address := Self.InitialRequest.RequestUri;
 
-    Result := Self.Module.CreateOptions(Self.From, TempTo);
+    Result := Self.Module.CreateOptions(Self.LocalParty, TempTo);
   finally
     TempTo.Free;
   end;
@@ -279,7 +279,7 @@ end;
 
 function TIdSipOutboundOptions.CreateNewAttempt: TIdSipRequest;
 begin
-  Result := Self.Module.CreateOptions(Self.From, Self.Server);
+  Result := Self.Module.CreateOptions(Self.LocalParty, Self.Server);
 end;
 
 procedure TIdSipOutboundOptions.Initialise(UA: TIdSipAbstractCore;

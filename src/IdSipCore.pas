@@ -562,11 +562,11 @@ type
   TIdSipActionState = (asInitialised, asSent, asResent, asFinished);
   TIdSipAction = class(TIdInterfacedObject)
   private
-    fFrom:           TIdSipFromHeader;
     fID:             String;
     fInitialRequest: TIdSipRequest;
     fIsTerminated:   Boolean;
     fLocalGruu:      TIdSipContactHeader;
+    fLocalParty:     TIdSipFromHeader;
     fResult:         TIdSipActionResult;
     fUA:             TIdSipAbstractCore;
     NonceCount:      Cardinal;
@@ -574,8 +574,8 @@ type
     function  CreateResend(AuthorizationCredentials: TIdSipAuthorizationHeader): TIdSipRequest;
     function  GetUseGruu: Boolean;
     function  GetUsername: String;
-    procedure SetFrom(Value: TIdSipFromHeader);
     procedure SetLocalGruu(Value: TIdSipContactHeader);
+    procedure SetLocalParty(Value: TIdSipFromHeader);
     procedure SetUseGruu(Value: Boolean);
     procedure SetUsername(Value: String);
     procedure TrySendRequest(Request: TIdSipRequest;
@@ -639,12 +639,12 @@ type
     procedure Send; virtual;
     procedure Terminate; virtual;
 
-    property From:           TIdSipFromHeader    read fFrom write SetFrom;
     property ID:             String              read fID;
     property InitialRequest: TIdSipRequest       read fInitialRequest;
     property IsOwned:        Boolean             read fIsOwned;
     property IsTerminated:   Boolean             read fIsTerminated;
     property LocalGruu:      TIdSipContactHeader read fLocalGruu write SetLocalGruu;
+    property LocalParty:     TIdSipFromHeader    read fLocalParty write SetLocalParty;
     property Result:         TIdSipActionResult  read fResult;
     property UA:             TIdSipAbstractCore  read fUA;
     property UseGruu:        Boolean             read GetUseGruu write SetUseGruu;
@@ -2890,9 +2890,9 @@ begin
   TIdSipActionRegistry.UnregisterAction(Self.ID);
 
   Self.TargetLocations.Free;
+  Self.LocalParty.Free;
   Self.LocalGruu.Free;
   Self.InitialRequest.Free;
-  Self.From.Free;
   Self.ActionListeners.Free;
 
   inherited Destroy;
@@ -3074,7 +3074,7 @@ begin
   Self.fUA := UA;
 
   Self.ActionListeners := TIdNotificationList.Create;
-  Self.fFrom           := TIdSipFromHeader.Create;
+  Self.fLocalParty     := TIdSipFromHeader.Create;
   Self.fID             := TIdSipActionRegistry.RegisterAction(Self);
   Self.fInitialRequest := TIdSipRequest.Create;
   Self.fIsOwned        := false;
@@ -3092,9 +3092,9 @@ begin
 
   // A sensible default.
   if Self.IsInbound then
-    Self.From := Request.From
+    Self.LocalParty := Request.From
   else
-    Self.From.Value := Self.LocalGruu.FullValue;
+    Self.LocalParty.Value := Self.LocalGruu.FullValue;
 
   Self.UseGruu := UA.UseGruu;
 
@@ -3303,14 +3303,14 @@ begin
   Result := Self.LocalGruu.DisplayName;
 end;
 
-procedure TIdSipAction.SetFrom(Value: TIdSipFromHeader);
-begin
-  Self.fFrom.Assign(Value);
-end;
-
 procedure TIdSipAction.SetLocalGruu(Value: TIdSipContactHeader);
 begin
   Self.fLocalGruu.Assign(Value);
+end;
+
+procedure TIdSipAction.SetLocalParty(Value: TIdSipFromHeader);
+begin
+  Self.fLocalParty.Assign(Value);
 end;
 
 procedure TIdSipAction.SetUseGruu(Value: Boolean);

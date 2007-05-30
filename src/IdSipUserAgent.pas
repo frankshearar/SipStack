@@ -597,7 +597,7 @@ begin
   Self.Registrar.Uri := Registrar.Uri;
 
   Result := Self.RegisterModule.RegisterWith(Registrar, Self.ContactClosestToRegistrar);
-  Result.From := From;
+  Result.LocalParty := From;
   Result.AddListener(Self);
 end;
 

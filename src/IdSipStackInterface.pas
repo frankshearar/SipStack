@@ -1705,7 +1705,7 @@ begin
     Data.Handle                   := Self.HandleFor(Session);
     Data.LocalContact             := Session.LocalGruu;
     Data.LocalMimeType            := Session.LocalMimeType;
-    Data.LocalParty               := Session.From;
+    Data.LocalParty               := Session.LocalParty;
     Data.LocalSessionDescription  := Session.LocalSessionDescription;
     Data.RemoteContact            := Session.RemoteContact;
     Data.RemoteMimeType           := MimeType;
@@ -1819,7 +1819,7 @@ begin
     Data.Invite                   := Session.InitialRequest;
     Data.LocalContact             := Session.LocalGruu;
     Data.LocalMimeType            := Session.LocalMimeType;
-    Data.LocalParty               := Session.From;
+    Data.LocalParty               := Session.LocalParty;
     Data.LocalSessionDescription  := Session.LocalSessionDescription;
     Data.RemoteContact            := Session.RemoteContact;
     Data.RemoteMimeType           := Session.RemoteMimeType;

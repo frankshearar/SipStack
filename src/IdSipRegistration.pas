@@ -1204,7 +1204,7 @@ begin
     // TODO: This is very hacky.
     OutModule := TIdSipOutboundRegisterModule.Create(Self.UA);
     try
-      Result := OutModule.CreateRegister(Self.From, TempTo);
+      Result := OutModule.CreateRegister(Self.LocalParty, TempTo);
     finally
       OutModule.Free;
     end;
@@ -1422,7 +1422,7 @@ begin
   try
     TempTo.Address := Self.InitialRequest.RequestUri;
 
-    Result := Self.OutModule.CreateRegister(Self.From, TempTo);
+    Result := Self.OutModule.CreateRegister(Self.LocalParty, TempTo);
   finally
     TempTo.Free;
   end;
@@ -1437,7 +1437,7 @@ begin
   try
     ToHeader.Address := Registrar;
 
-    Result := Self.OutModule.CreateRegister(Self.From, ToHeader);
+    Result := Self.OutModule.CreateRegister(Self.LocalParty, ToHeader);
 
     // Bindings explicitly carries all Contact information. Thus we must remove
     // any Contact information already in Result.
@@ -1756,9 +1756,9 @@ end;
 
 procedure TIdSipOutboundRegistrationBase.ConfigureRequest(Action: TIdSipOutboundRegisterBase);
 begin
-  Action.Bindings  := Self.Bindings;
-  Action.From      := Self.From;
-  Action.Registrar := Self.Registrar;
+  Action.Bindings   := Self.Bindings;
+  Action.LocalParty := Self.LocalParty;
+  Action.Registrar  := Self.Registrar;
 end;
 
 procedure TIdSipOutboundRegistrationBase.Initialise(UA: TIdSipAbstractCore;
@@ -1991,9 +1991,9 @@ var
   Reg: TIdSipOutboundRegisterQuery;
 begin
   Reg := Self.UA.AddOutboundAction(TIdSipOutboundRegisterQuery) as TIdSipOutboundRegisterQuery;
-  Reg.Bindings  := Self.Bindings;
-  Reg.From      := Self.From;
-  Reg.Registrar := Self.Registrar;
+  Reg.Bindings   := Self.Bindings;
+  Reg.LocalParty := Self.LocalParty;
+  Reg.Registrar  := Self.Registrar;
 
   Result := Reg;
 end;

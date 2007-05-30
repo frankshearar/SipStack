@@ -934,7 +934,7 @@ function TIdSipInviteModule.Call(From: TIdSipFromHeader;
 begin
   Result := Self.AddOutboundSession;
   Result.Destination             := Dest;
-  Result.From                    := From;                  
+  Result.LocalParty              := From;
   Result.LocalSessionDescription := LocalSessionDescription;
   Result.LocalMimeType           := MimeType;
 end;
@@ -1245,7 +1245,7 @@ begin
   try
     TempTo.Address := Self.InitialRequest.RequestUri;
 
-    Result := Self.Module.CreateInvite(Self.From,
+    Result := Self.Module.CreateInvite(Self.LocalParty,
                                        TempTo,
                                        Self.InitialRequest.Body,
                                        Self.InitialRequest.ContentType);
@@ -2037,7 +2037,7 @@ begin
   // If making a SIPS call, we need to use a SIPS URI.
   Self.LocalGruu.Address.Scheme := Self.Destination.Address.Scheme;
 
-  Result := Self.Module.CreateInvite(Self.From, Self.Destination, Self.Offer, Self.MimeType);
+  Result := Self.Module.CreateInvite(Self.LocalParty, Self.Destination, Self.Offer, Self.MimeType);
   Result.FirstContact.Assign(Self.LocalGruu);
 
   if Result.FirstContact.IsGruu then begin
@@ -2167,7 +2167,7 @@ begin
   // If making a SIPS call, we need to use a SIPS URI.
   Self.LocalGruu.Address.Scheme := Self.Destination.Address.Scheme;
 
-  Result := Self.Module.CreateInvite(Self.From, Self.Destination, Self.Offer, Self.MimeType);
+  Result := Self.Module.CreateInvite(Self.LocalParty, Self.Destination, Self.Offer, Self.MimeType);
   Result.AddHeader(ReplacesHeader);
   Result.Replaces.CallID  := Self.CallID;
   Result.Replaces.FromTag := Self.FromTag;
@@ -3108,7 +3108,7 @@ begin
   Initial := Self.UA.AddOutboundAction(TIdSipOutboundInitialInvite) as TIdSipOutboundInitialInvite;
 
   Initial.Destination := Self.Destination;
-  Initial.From        := Self.From;
+  Initial.LocalParty  := Self.LocalParty;
   Initial.Offer       := Self.LocalSessionDescription;
   Initial.MimeType    := Self.LocalMimeType;
 
@@ -3382,7 +3382,7 @@ begin
   Replacer := Self.UA.AddOutboundAction(TIdSipOutboundReplacingInvite) as TIdSipOutboundReplacingInvite;
   Replacer.CallID      := Invite.CallID;
   Replacer.Destination := Self.Destination;
-  Replacer.From        := Self.From;
+  Replacer.LocalParty  := Self.LocalParty;
   Replacer.FromTag     := Invite.From.Tag;
   Replacer.ToTag       := Invite.ToHeader.Tag;
 
