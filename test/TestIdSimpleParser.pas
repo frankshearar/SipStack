@@ -34,6 +34,7 @@ type
     procedure TestHexToInt;
     procedure TestLastPos;
     procedure TestStartsWith;
+    procedure TestStripLeadingZeroes;
     procedure TestWithoutFirstAndLastChars;
   end;
 
@@ -467,6 +468,16 @@ begin
   Check(not StartsWith('foo', 'bar'), '"foo" does not start with "bar"');
   Check(not StartsWith('foo', 'o'), '"foo" does not start with "o"');
   Check(not StartsWith('foo', 'F'), '"foo" does not start with "F"');
+end;
+
+procedure TestFunctions.TestStripLeadingZeroes;
+begin
+  CheckEquals('',       StripLeadingZeroes(''),          'The empty string');
+  CheckEquals('abcxyz', StripLeadingZeroes('abcxyz'),    'abcxyz');
+  CheckEquals('123abc', StripLeadingZeroes('123abc'),    '123abc');
+  CheckEquals('1',      StripLeadingZeroes('0001'),      '0001');
+  CheckEquals('1000',   StripLeadingZeroes('1000'),      '1000');
+  CheckEquals('1010',   StripLeadingZeroes('0001010'),   '0001010');
 end;
 
 procedure TestFunctions.TestWithoutFirstAndLastChars;

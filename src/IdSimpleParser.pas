@@ -123,6 +123,7 @@ function HexToInt(const HexValue: String): Cardinal;
 function LastPos(const Needle, Haystack: String; Start: Integer = -1): Integer;
 function Localhost(IPType: TIdIPVersion): String;
 function StartsWith(const S, Prefix: String): Boolean;
+function StripLeadingZeroes(const S: String): String;
 function WithoutFirstAndLastChars(const S: String): String;
 
 implementation
@@ -347,6 +348,17 @@ begin
   // Returns true iff a string starts with a specified prefix.
 
   Result := Copy(S, 1, Length(Prefix)) = Prefix;
+end;
+
+function StripLeadingZeroes(const S: String): String;
+var
+  I, L: Integer;
+begin
+  L := Length(S);
+  I := 1;
+  while (I <= L) and (S[I] = '0') do Inc(I);
+
+  Result := Copy(S, I, Maxint);
 end;
 
 function WithoutFirstAndLastChars(const S: String): String;
