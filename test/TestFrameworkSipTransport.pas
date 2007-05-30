@@ -334,12 +334,12 @@ begin
 
   Self.RecvdRequest := TIdSipRequest.Create;
 
-  Self.ReceivedRequest  := false;
-  Self.ReceivedResponse := false;
-  Self.RejectedMessage  := false;
-  RejectedMessageReason := '';
-  Self.SentBy           := '';
-  Self.WrongServer      := false;
+  Self.ReceivedRequest       := false;
+  Self.ReceivedResponse      := false;
+  Self.RejectedMessage       := false;
+  Self.RejectedMessageReason := '';
+  Self.SentBy                := '';
+  Self.WrongServer           := false;
 end;
 
 procedure TestTIdSipTransport.TearDown;
