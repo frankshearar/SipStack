@@ -53,7 +53,7 @@ function  WindowsOsType(PlatformID, MajorVersion, MinorVersion: Cardinal): TIdOs
 implementation
 
 uses
-  IdMockRoutingTable, IdSimpleParser, IdGlobal, IdStack, IdUDPServer, SyncObjs,
+  IdMockRoutingTable, IdGlobal, IdSimpleParser, IdStack, IdUDPServer, SyncObjs,
   SysUtils, Windows, Winsock;
 
 const
