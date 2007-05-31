@@ -144,6 +144,7 @@ type
     procedure TestAddressOfRecord;
     procedure TestAssign;
     procedure TestAssignBad;
+    procedure TestAssignFromResponse;
     procedure TestAsString;
     procedure TestAsStringNoMaxForwardsSet;
     procedure TestAuthorizationFor;
@@ -238,6 +239,7 @@ type
   published
     procedure TestAssign;
     procedure TestAssignBad;
+    procedure TestAssignFromRequest;
     procedure TestAsString;
     procedure TestAuthenticateHeaderWithNoAuthorization;
     procedure TestAuthenticateHeaderWithProxy;
@@ -2046,6 +2048,24 @@ begin
   end;
 end;
 
+procedure TestTIdSipRequest.TestAssignFromResponse;
+var
+  R: TIdSipResponse;
+begin
+  R := TIdSipResponse.Create;
+  try
+    R.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+    R.ContentLength := 5;
+    R.Body := 'hello';
+
+    Self.Response.Assign(R);
+    Check(R.Headers.Equals(Self.Response.Headers),
+          'Headers not assigned properly');
+  finally
+    R.Free;
+  end;
+end;
+
 procedure TestTIdSipRequest.TestAsString;
 var
   Req: TIdSipRequest;
@@ -3658,6 +3678,25 @@ begin
     end;
   finally
     P.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestAssignFromRequest;
+var
+  R: TIdSipRequest;
+begin
+  R := TIdSipRequest.Create;
+  try
+    R.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+    R.ContentLength := 5;
+    R.Body := 'hello';
+
+    Self.Request.Assign(R);
+
+    Check(R.Headers.Equals(Self.Request.Headers),
+          'Headers not assigned properly');
+  finally
+    R.Free;
   end;
 end;
 

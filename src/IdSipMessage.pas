@@ -9132,10 +9132,12 @@ var
 begin
   inherited Assign(Src);
 
-  R := Src as TIdSipRequest;
+  if (Src is TIdSipRequest) then begin
+    R := Src as TIdSipRequest;
 
-  Self.Method     := R.Method;
-  Self.RequestUri := R.RequestUri;
+    Self.Method     := R.Method;
+    Self.RequestUri := R.RequestUri;
+  end;
 end;
 
 function TIdSipRequest.AuthorizationFor(const Realm: String): TIdSipAuthorizationHeader;
@@ -9892,11 +9894,13 @@ var
 begin
   inherited Assign(Src);
 
-  R := Src as TIdSipResponse;
+  if (Src is TIdSipResponse) then begin
+    R := Src as TIdSipResponse;
 
-  Self.RequestRequestUri := R.RequestRequestUri;
-  Self.StatusCode        := R.StatusCode;
-  Self.StatusText        := R.StatusText;
+    Self.RequestRequestUri := R.RequestRequestUri;
+    Self.StatusCode        := R.StatusCode;
+    Self.StatusText        := R.StatusText;
+  end;
 end;
 
 function TIdSipResponse.AuthenticateHeader: TIdSipAuthenticateHeader;
