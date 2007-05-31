@@ -41,13 +41,13 @@ type
     function  GetIsEarly: Boolean;
     function  GetLocalSequenceNo: Cardinal;
     procedure IntersectionOfSupportedExtensions(Target: TStrings;
-                                                Request: TIdSipRequest;
-                                                Response: TIdSipResponse);
+                                                Offer: TIdSipMessage;
+                                                Answer: TIdSipMessage);
     procedure SetIsEarly(Value: Boolean);
     procedure SetIsSecure(Value: Boolean);
   protected
     procedure CreateInternal(Request: TIdSipRequest;
-                             Response: TIdSipResponse;
+                             Response: TIdSipMessage;
                              DialogID: TIdSipDialogID;
                              LocalSequenceNo: Cardinal;
                              RemoteSequenceNo: Cardinal;
@@ -69,7 +69,7 @@ type
                                        Response: TIdSipResponse;
                                        UsingSecureTransport: Boolean): TIdSipDialog;
     class function CreateOutboundDialog(Request: TIdSipRequest;
-                                        Response: TIdSipResponse;
+                                        Response: TIdSipMessage;
                                         UsingSecureTransport: Boolean): TIdSipDialog;
 
     constructor Create(Dialog: TIdSipDialog); overload;
@@ -104,7 +104,7 @@ type
     fHasReceivedRemoteRequest: Boolean;
   protected
     procedure CreateInternal(Request: TIdSipRequest;
-                             Response: TIdSipResponse;
+                             Response: TIdSipMessage;
                              DialogID: TIdSipDialogID;
                              LocalSequenceNo: Cardinal;
                              RemoteSequenceNo: Cardinal;
@@ -224,12 +224,16 @@ begin
 end;
 
 class function TIdSipDialog.CreateOutboundDialog(Request: TIdSipRequest;
-                                                 Response: TIdSipResponse;
+                                                 Response: TIdSipMessage;
                                                  UsingSecureTransport: Boolean): TIdSipDialog;
 var
   ID:       TIdSipDialogID;
   RouteSet: TIdSipRecordRoutePath;
 begin
+  // Response isn't always a SIP response: if you send a SUBSCRIBE, the far end
+  // will send a 200 OK and then a NOTIFY, but the NOTIFY could possibly arrive
+  // before the 200 OK. In that event we still want to establish a dialog.
+
   ID := TIdSipDialogID.Create(Request.CallID,
                               Request.From.Tag,
                               Response.ToHeader.Tag);
@@ -468,7 +472,7 @@ end;
 //* TIdSipDialog Protected methods *********************************************
 
 procedure TIdSipDialog.CreateInternal(Request: TIdSipRequest;
-                                      Response: TIdSipResponse;
+                                      Response: TIdSipMessage;
                                       DialogID: TIdSipDialogID;
                                       LocalSequenceNo: Cardinal;
                                       RemoteSequenceNo: Cardinal;
@@ -546,23 +550,23 @@ begin
 end;
 
 procedure TIdSipDialog.IntersectionOfSupportedExtensions(Target: TStrings;
-                                                         Request: TIdSipRequest;
-                                                         Response: TIdSipResponse);
+                                                         Offer: TIdSipMessage;
+                                                         Answer: TIdSipMessage);
 var
-  RequestSupports:  String;
-  ResponseSupports: String;
+  OfferSupports:  String;
+  AnswerSupports: String;
 begin
-  if Request.HasHeader(SupportedHeaderFull) then
-    RequestSupports := Request.Supported.Value
+  if Offer.HasHeader(SupportedHeaderFull) then
+    OfferSupports := Offer.Supported.Value
   else
-    RequestSupports := '';
+    OfferSupports := '';
 
-  if Response.HasHeader(SupportedHeaderFull) then
-    ResponseSupports := Response.Supported.Value
+  if Answer.HasHeader(SupportedHeaderFull) then
+    AnswerSupports := Answer.Supported.Value
   else
-    ResponseSupports := '';
+    AnswerSupports := '';
 
-  IntersectionOf(Self.SupportedExtensionList, RequestSupports, ResponseSupports);
+  IntersectionOf(Self.SupportedExtensionList, OfferSupports, AnswerSupports);
 end;
 
 procedure TIdSipDialog.SetIsEarly(Value: Boolean);
@@ -603,7 +607,7 @@ end;
 //* TIdSipOutboundDialog Protected methods *************************************
 
 procedure TIdSipOutboundDialog.CreateInternal(Request: TIdSipRequest;
-                                              Response: TIdSipResponse;
+                                              Response: TIdSipMessage;
                                               DialogID: TIdSipDialogID;
                                               LocalSequenceNo: Cardinal;
                                               RemoteSequenceNo: Cardinal;

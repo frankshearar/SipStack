@@ -437,7 +437,6 @@ type
 
     function  CreateDialog(Response: TIdSipResponse): TIdSipDialog; virtual; abstract;
     function  CreateNewAttempt: TIdSipRequest; override;
-    function  DialogEstablished: Boolean;
     procedure EstablishDialog(Response: TIdSipResponse); virtual;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
@@ -452,6 +451,7 @@ type
   public
     destructor Destroy; override;
 
+    function  DialogEstablished: Boolean;
     procedure Expire; virtual;
     function  ExpiryTime: TDateTime;
     function  ExpiryTimeInSeconds: Integer;
@@ -536,6 +536,7 @@ type
 
     function  CreateRefresh(NewDuration: Cardinal): TIdSipOutboundRefreshSubscribe;
     function  CreateUnsubscribe: TIdSipOutboundUnsubscribe;
+    procedure EstablishDialogFromNotify(Notify: TIdSipRequest);
     procedure NotifyOfExpiredSubscription(Notify: TIdSipRequest);
     procedure NotifyOfReceivedNotify(Notify: TIdSipRequest);
     procedure NotifyOfSuccess(Notify: TIdSipRequest);
@@ -1815,6 +1816,11 @@ begin
   inherited Destroy;
 end;
 
+function TIdSipSubscription.DialogEstablished: Boolean;
+begin
+  Result := Assigned(Self.Dialog);
+end;
+
 procedure TIdSipSubscription.Expire;
 begin
   // See subclasses' implementations
@@ -1852,11 +1858,6 @@ begin
   Result := Self.Module.CreateSubscribe(Self.LocalParty, Self.Target, Self.EventPackage);
   Result.Event.ID             := Self.EventID;
   Result.Expires.NumericValue := Self.Duration;
-end;
-
-function TIdSipSubscription.DialogEstablished: Boolean;
-begin
-  Result := Assigned(Self.Dialog);
 end;
 
 procedure TIdSipSubscription.EstablishDialog(Response: TIdSipResponse);
@@ -2514,6 +2515,9 @@ begin
   Self.NotifyOfReceivedNotify(Notify);
 
   State := Notify.SubscriptionState;
+  Self.SetSubscriptionState(State.SubState);
+
+  Self.EstablishDialogFromNotify(Notify);
 
   if State.IsActive then begin
     if (State.Expires > 0) then
@@ -2590,6 +2594,15 @@ begin
   Result.FromTag := Self.InitialRequest.From.Tag;
   Self.ConfigureRequest(Result);
   Result.AddOwnedActionListener(Self);
+end;
+
+procedure TIdSipOutboundSubscription.EstablishDialogFromNotify(Notify: TIdSipRequest);
+begin
+  if Self.DialogEstablished then Exit;
+
+  Self.Dialog := TIdSipDialog.CreateOutboundDialog(Self.InitialRequest,
+                                                   Notify,
+                                                   false)
 end;
 
 procedure TIdSipOutboundSubscription.NotifyOfExpiredSubscription(Notify: TIdSipRequest);

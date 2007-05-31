@@ -628,6 +628,7 @@ type
     procedure TestReceiveGlobalFailureResponse;
     procedure TestReceiveServerFailureResponse;
     procedure TestReceiveNotify;
+    procedure TestReceiveNotifyBeforeSubscribesResponse;
     procedure TestReceiveTerminatingNotifyDeactivated; virtual;
     procedure TestReceiveTerminatingNotifyDeactivatedWithRetryAfter; virtual;
     procedure TestReceiveTerminatingNotifyGiveUp; virtual;
@@ -3888,7 +3889,7 @@ begin
         Self.ClassName + ': Subscription didn''t notify listeners of received NOTIFY');
 
   // We would use .Equals() here, but remember that the transport could alter
-  // the message, putting a received param on the topmost Via header.      
+  // the message, putting a received param on the topmost Via header.
   Check(Self.ReceivedNotify.Match(Self.Dispatcher.Transport.LastRequest),
         Self.ClassName + ': Wrong NOTIFY in the notification');
 
@@ -3896,6 +3897,40 @@ begin
   CheckEquals(SIPOK,
               Self.LastSentResponse.StatusCode,
               Self.ClassName + ': Unexpected response');
+end;
+
+procedure TestTIdSipOutboundSubscriptionBase.TestReceiveNotifyBeforeSubscribesResponse;
+const
+  NotifyState = SubscriptionSubstateActive;
+var
+  OK:  TIdSipResponse;
+  Sub: TIdSipOutboundSubscription;
+begin
+  // |       SUBSCRIBE      |
+  // |--------------------->|
+  // |        NOTIFY        |
+  // |<---------------------|
+  // |  200 OK for NOTIFY   |
+  // |--------------------->|
+  // | 200 OK for SUBSCRIBE |
+  // |<---------------------|
+
+  Sub := Self.CreateSubscription;
+  OK := TIdSipResponse.InResponseTo(Sub.InitialRequest, SIPOK);
+  try
+    Self.MarkSentResponseCount;
+    Self.ReceiveNotify(Sub.InitialRequest, OK, NotifyState);
+    CheckResponseSent('No response sent for NOTIFY');
+    CheckEquals(SIPOK, Self.LastSentResponse.StatusCode, 'Unexpected response sent');
+
+    Check(Sub.DialogEstablished, 'NOTIFY didn''t establish a dialog');
+
+    Self.ReceiveResponse(OK);
+
+    CheckEquals(NotifyState, Sub.SubscriptionState, Self.ClassName + ': Subscription-State');
+  finally
+    OK.Free;
+  end;
 end;
 
 procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyDeactivated;
