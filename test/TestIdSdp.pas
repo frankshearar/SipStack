@@ -105,9 +105,11 @@ type
     procedure TearDown; override;
   published
     procedure TestAssign;
+    procedure TestAssignWithUnknownKeyType;
     procedure TestPrintOnJustMethod;
     procedure TestPrintOnMethodPlusValue;
     procedure TestPrintOnPromptWithKeyData;
+    procedure TestPrintOnUnknownKeyType;
     procedure TestPrintOnUriWithNoKeyData;
   end;
 
@@ -124,6 +126,7 @@ type
     procedure TestAddRTPMapAttribute;
     procedure TestAddFormatAndFormatCount;
     procedure TestAssign;
+    procedure TestAssignUnknownMediaType;
     procedure TestEquals;
     procedure TestFormatClear;
     procedure TestGetFormat;
@@ -134,6 +137,7 @@ type
     procedure TestPrintOnBasic;
     procedure TestPrintOnFull;
     procedure TestPrintOnWithPortCount;
+    procedure TestPrintOnWithUnknownMediaType;
     procedure TestUsesBinding;
   end;
 
@@ -376,6 +380,7 @@ type
     procedure TestIsPort;
     procedure TestIsText;
     procedure TestIsTime;
+    procedure TestIsToken;
     procedure TestIsTransport;
     procedure TestParseAttribute;
     procedure TestParseAttributeWithValue;
@@ -410,6 +415,7 @@ type
     procedure TestParseKeyMalformedBase64;
     procedure TestParseKeyMalformedUri;
     procedure TestParseKeyUnknownKeyType;
+    procedure TestParseKeyUnknownKeyTypeWithValue;
     procedure TestParseLinphoneSessionDescription;
     procedure TestParseMediaDescription;
     procedure TestParseMediaDescriptionWithSessionAttributes;
@@ -837,17 +843,11 @@ var
   KT: TIdSdpKeyType;
 begin
   for KT := Low(TIdSdpKeyType) to High(TIdSdpKeyType) do
-    StrToKeyType(KeyTypeToStr(KT));
+    if (KT <> ktUnknown) then
+      Check(KT = StrToKeyType(KeyTypeToStr(KT)),
+            'Ord(KT) = ' + IntToStr(Ord(KT)));
 
-  try
-    StrToKeyType('halloo');
-    Fail('Failed to bail out: ''halloo''');
-  except
-    on E: EConvertError do
-      CheckEquals('Couldn''t convert ''halloo'' to type TIdSdpKeyType',
-                  E.Message,
-                  'Unexpected exception: ''halloo''');
-  end;
+  Check(ktUnknown = StrToKeyType('halloo'), 'Converting ''halloo''');
 
   try
     StrToKeyType(' ');
@@ -865,17 +865,11 @@ var
   MT: TIdSdpMediaType;
 begin
   for MT := Low(TIdSdpMediaType) to High(TIdSdpMediaType) do
-    StrToMediaType(MediaTypeToStr(MT));
+    if (MT <> mtUnknown) then
+      Check(MT = StrToMediaType(MediaTypeToStr(MT)),
+            'Ord(MT) = ' + IntToStr(Ord(MT)));
 
-  try
-    StrToMediaType('halloo');
-    Fail('Failed to bail out: ''halloo''');
-  except
-    on E: EConvertError do
-      CheckEquals('Couldn''t convert ''halloo'' to type TIdSdpMediaType',
-                  E.Message,
-                  'Unexpected exception: ''halloo''');
-  end;
+  Check(mtUnknown = StrToMediaType('halloo'), 'Converting ''halloo''');
 
   try
     StrToMediaType(' ');
@@ -1406,6 +1400,25 @@ begin
   end;
 end;
 
+procedure TestTIdSdpKey.TestAssignWithUnknownKeyType;
+var
+  Other: TIdSdpKey;
+begin
+  Other := TIdSdpKey.Create;
+  try
+    Other.KeyType := ktUnknown;
+    Other.KeyName := 'unknown-key-type';
+    Other.Value   := '42';
+
+    Self.K.Assign(Other);
+    Check(Other.KeyType = Self.K.KeyType, 'KeyType');
+    CheckEquals(Other.KeyName, Self.K.KeyName, 'KeyName');
+    CheckEquals(Other.Value, Self.K.Value, 'Value');
+  finally
+    Other.Free;
+  end;
+end;
+
 procedure TestTIdSdpKey.TestPrintOnJustMethod;
 begin
   Self.K.KeyType := ktPrompt;
@@ -1433,6 +1446,17 @@ begin
   Self.K.PrintOn(Self.S);
 
   CheckEquals('k=prompt'#13#10, S.DataString, 'PrintOn');
+end;
+
+procedure TestTIdSdpKey.TestPrintOnUnknownKeyType;
+begin
+  Self.K.KeyType := ktUnknown;
+  Self.K.KeyName := 'rot26';
+  Self.K.Value   := '42';
+
+  Self.K.PrintOn(Self.S);
+
+  CheckEquals('k=rot26:42'#13#10, S.DataString, 'PrintOn with unknown key type');
 end;
 
 procedure TestTIdSdpKey.TestPrintOnUriWithNoKeyData;
@@ -1552,6 +1576,26 @@ begin
     Check(Self.M.Equals(NewDesc), 'M = NewDesc');
   finally
     NewDesc.Free;
+  end;
+end;
+
+procedure TestTIdSdpMediaDescription.TestAssignUnknownMediaType;
+const
+  UnknownMediaType = 'unknown-media-type';
+var
+  Other: TIdSdpMediaDescription;
+begin
+  Other := TIdSdpMediaDescription.Create;
+  try
+    Other.MediaName := UnknownMediaType;
+    Other.MediaType := mtUnknown;
+
+    Self.M.Assign(Other);
+
+    Check(Other.MediaType = Self.M.MediaType, 'MediaType');
+    CheckEquals(Other.MediaName, Self.M.MediaName, 'MediaName');
+  finally
+    Other.Free;
   end;
 end;
 
@@ -1747,6 +1791,30 @@ begin
     CheckEquals('m=audio 49230/4 RTP/AVP 0'#13#10,
                 S.DataString,
                 'PrintOn');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdSdpMediaDescription.TestPrintOnWithUnknownMediaType;
+var
+  S: TStringStream;
+begin
+  Self.M.MediaType := mtUnknown;
+  Self.M.MediaName := 'whiteboard';
+
+  // Stuff not relevant to the test per se, but just to make the m header well-formed.
+  Self.M.AddFormat('0');
+  Self.M.Port      := 49230;
+  Self.M.Transport := 'RTP/AVP';
+
+  S := TStringStream.Create('');
+  try
+    Self.M.PrintOn(S);
+
+    CheckEquals('m=whiteboard 49230 RTP/AVP 0'#13#10,
+                S.DataString,
+                'PrintOn with unknown media type');
   finally
     S.Free;
   end;
@@ -4142,31 +4210,35 @@ end;
 procedure TestTIdSdpParser.TestIsKeyType;
 begin
   Check(not TIdSdpParser.IsKeyType(''),            '''''');
-  Check(not TIdSdpParser.IsKeyType('PROMPT'),      'PROMPT');
-  Check(    TIdSdpParser.IsKeyType('clear'),       'clear');
-  Check(    TIdSdpParser.IsKeyType(Id_SDP_Clear),  'Id_SDP_Clear constant');
-  Check(    TIdSdpParser.IsKeyType('base64'),      'base64');
-  Check(    TIdSdpParser.IsKeyType(Id_SDP_Base64), 'Id_SDP_Base64 constant');
-  Check(    TIdSdpParser.IsKeyType('uri'),         'uri');
-  Check(    TIdSdpParser.IsKeyType(Id_SDP_URI),    'Id_SDP_URI constant');
-  Check(    TIdSdpParser.IsKeyType('prompt'),      'prompt');
-  Check(    TIdSdpParser.IsKeyType(Id_SDP_Prompt), 'Id_SDP_Prompt constant');
+
+  Check(TIdSdpParser.IsKeyType('clear'),       'clear');
+  Check(TIdSdpParser.IsKeyType(Id_SDP_Clear),  'Id_SDP_Clear constant');
+  Check(TIdSdpParser.IsKeyType('base64'),      'base64');
+  Check(TIdSdpParser.IsKeyType(Id_SDP_Base64), 'Id_SDP_Base64 constant');
+  Check(TIdSdpParser.IsKeyType('uri'),         'uri');
+  Check(TIdSdpParser.IsKeyType(Id_SDP_URI),    'Id_SDP_URI constant');
+  Check(TIdSdpParser.IsKeyType('prompt'),      'prompt');
+  Check(TIdSdpParser.IsKeyType(Id_SDP_Prompt), 'Id_SDP_Prompt constant');
+
+  Check(TIdSdpParser.IsKeyType(AllTokenChars), AllTokenChars);
 end;
 
 procedure TestTIdSdpParser.TestIsMediaType;
 begin
-  Check(not TIdSdpParser.IsMediaType(''),                        '''''');
-  Check(not TIdSdpParser.IsMediaType('Audio'),                   'Audio');
-  Check(    TIdSdpParser.IsMediaType('audio'),                   'audio');
-  Check(    TIdSdpParser.IsMediaType(RSSDPMediaTypeAudio),       'RSSDPMediaTypeAudio constant');
-  Check(    TIdSdpParser.IsMediaType('video'),                   'video');
-  Check(    TIdSdpParser.IsMediaType(RSSDPMediaTypeVideo),       'RSSDPMediaTypeVideo constant');
-  Check(    TIdSdpParser.IsMediaType('application'),             'application');
-  Check(    TIdSdpParser.IsMediaType(RSSDPMediaTypeApplication), 'RSSDPMediaTypeApplication constant');
-  Check(    TIdSdpParser.IsMediaType('data'),                    'data');
-  Check(    TIdSdpParser.IsMediaType(RSSDPMediaTypeData),        'RSSDPMediaTypeData constant');
-  Check(    TIdSdpParser.IsMediaType('control'),                 'control');
-  Check(    TIdSdpParser.IsMediaType(RSSDPMediaTypeControl),     'RSSDPMediaTypeControl constant');
+  Check(not TIdSdpParser.IsMediaType(''), '''''');
+
+  Check(TIdSdpParser.IsMediaType('audio'),                   'audio');
+  Check(TIdSdpParser.IsMediaType(RSSDPMediaTypeAudio),       'RSSDPMediaTypeAudio constant');
+  Check(TIdSdpParser.IsMediaType('video'),                   'video');
+  Check(TIdSdpParser.IsMediaType(RSSDPMediaTypeVideo),       'RSSDPMediaTypeVideo constant');
+  Check(TIdSdpParser.IsMediaType('application'),             'application');
+  Check(TIdSdpParser.IsMediaType(RSSDPMediaTypeApplication), 'RSSDPMediaTypeApplication constant');
+  Check(TIdSdpParser.IsMediaType('data'),                    'data');
+  Check(TIdSdpParser.IsMediaType(RSSDPMediaTypeData),        'RSSDPMediaTypeData constant');
+  Check(TIdSdpParser.IsMediaType('control'),                 'control');
+  Check(TIdSdpParser.IsMediaType(RSSDPMediaTypeControl),     'RSSDPMediaTypeControl constant');
+
+  Check(TIdSdpParser.IsMediaType(AllTokenChars), AllTokenChars);
 end;
 
 procedure TestTIdSdpParser.TestIsMulticastAddress;
@@ -4287,6 +4359,26 @@ begin
   Check(    TIdSdpParser.IsTime('1000h'),                '1000h');
   Check(    TIdSdpParser.IsTime('1000m'),                '1000m');
   Check(    TIdSdpParser.IsTime('1000s'),                '1000s');
+end;
+
+procedure TestTIdSdpParser.TestIsToken;
+var
+  C: Integer;
+begin
+  for C := 0 to 31 do
+    Check(not TIdSdpParser.IsToken(Char(C)), 'Control character #$' + IntToHex(C, 2));
+
+  Check(not TIdSdpParser.IsToken(''),                '''''');
+  Check(not TIdSdpParser.IsToken('no spaces'),       'no spaces');
+  Check(not TIdSdpParser.IsToken('(noparentheses)'), '(noparentheses)');
+  Check(not TIdSdpParser.IsToken('no,comma'),        'no,comma');
+  Check(not TIdSdpParser.IsToken('no/slash'),        'no/slash');
+  Check(not TIdSdpParser.IsToken('no@at'),           'no@at');
+  Check(not TIdSdpParser.IsToken('[nobrackets]'),    '[nobrackets]');
+  Check(not TIdSdpParser.IsToken('no\backslash'),    'no\backslash');
+  Check(not TIdSdpParser.IsToken('nodelete'#$7f),    'nodelete#$7f');
+
+  Check(TIdSdpParser.IsToken(AllTokenChars), AllTokenChars);
 end;
 
 procedure TestTIdSdpParser.TestIsTransport;
@@ -4865,8 +4957,52 @@ begin
 end;
 
 procedure TestTIdSdpParser.TestParseKeyUnknownKeyType;
+const
+  UnknownKeyType = 'rot26';
+var
+  Key: TIdSdpKey;
+  S:   TStringStream;
 begin
-  Self.CheckMalformedKey('base46');
+  S := TStringStream.Create(MinimumPayload
+                          + 'k=' + UnknownKeyType + #13#10);
+  try
+    Self.P.Source := S;
+
+    Self.P.Parse(Self.Payload);
+
+    Key := Self.Payload.Key;
+
+    Check(ktUnknown = Key.KeyType, 'KeyType');
+    CheckEquals(UnknownKeyType, Key.KeyName, 'KeyName');
+    CheckEquals('', Key.Value, 'Value');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdSdpParser.TestParseKeyUnknownKeyTypeWithValue;
+const
+  UnknownKeyType = 'rot26';
+  Value          = 'foo';
+var
+  Key: TIdSdpKey;
+  S:   TStringStream;
+begin
+  S := TStringStream.Create(MinimumPayload
+                          + 'k=' + UnknownKeyType + ':' + Value + #13#10);
+  try
+    Self.P.Source := S;
+
+    Self.P.Parse(Self.Payload);
+
+    Key := Self.Payload.Key;
+
+    Check(ktUnknown = Key.KeyType, 'KeyType');
+    CheckEquals(UnknownKeyType, Key.KeyName, 'KeyName');
+    CheckEquals(Value, Key.Value, 'Value');
+  finally
+    S.Free;
+  end;
 end;
 
 procedure TestTIdSdpParser.TestParseLinphoneSessionDescription;
@@ -5162,8 +5298,25 @@ begin
 end;
 
 procedure TestTIdSdpParser.TestParseMediaDescriptionUnknownMediaType;
+const
+  UnknownMediaType = 'unknown-media-type';
+var
+  S: TStringStream;
 begin
-  Self.CheckMalformedMediaDescription('date 65535 RTP/AVP 1');
+  S := TStringStream.Create(MinimumPayload
+                          + 'm=' + UnknownMediaType + ' 65535 RTP/AVP 0'#13#10
+                          + 'i=Information'#13#10);
+  try
+    Self.P.Source := S;
+
+    Self.P.Parse(Self.Payload);
+
+    Check(Self.Payload.MediaDescriptionCount > 0, 'Insufficient media descriptions');
+    Check(mtUnknown = Self.Payload.MediaDescriptionAt(0).MediaType, 'MediaType');
+    CheckEquals(UnknownMediaType, Self.Payload.MediaDescriptionAt(0).MediaName, 'MediaName');
+  finally
+    S.Free;
+  end;
 end;
 
 procedure TestTIdSdpParser.TestParseMediaDescriptionUnknownTransport;

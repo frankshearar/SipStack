@@ -23,11 +23,11 @@ type
   TIdNtpTimestamp     = Int64;
   TIdSdpBandwidthType = (btConferenceTotal, btApplicationSpecific, btRS, btRR, btUnknown);
   TIdSdpDirection     = (sdInactive, sdRecvOnly, sdSendOnly, sdSendRecv);
-  TIdSdpKeyType       = (ktClear, ktBase64, ktURI, ktPrompt);
+  TIdSdpKeyType       = (ktClear, ktBase64, ktURI, ktPrompt, ktUnknown);
   // Technically, Text doesn't exist. However, it will once
   // draft-ietf-sip-callee-caps gets an RFC number.
   TIdSdpMediaType     = (mtAudio, mtVideo, mtApplication, mtData, mtControl,
-                         mtText);
+                         mtText, mtUnknown);
 
   TIdPrintable = class(TPersistent)
   public
@@ -129,12 +129,14 @@ type
 
   TIdSdpKey = class(TIdPrintable)
   private
+    fKeyName: String;
     fKeyType: TIdSdpKeyType;
     fValue:   String;
   public
     procedure Assign(Src: TPersistent); override;
     procedure PrintOn(Dest: TStream); override;
 
+    property KeyName: String        read fKeyName write fKeyName;
     property KeyType: TIdSdpKeyType read fKeyType write fKeyType;
     property Value:   String        read fValue write fValue;
   end;
@@ -151,6 +153,7 @@ type
     fConnections:      TIdSdpConnections;
     fInfo:             String;
     fKey:              TIdSdpKey;
+    fMediaName:        String;
     fMediaType:        TIdSdpMediaType;
     fRTPMapAttributes: TIdSdpRTPMapAttributes;
     FormatList:        TStrings;
@@ -196,6 +199,7 @@ type
     property Formats[Index: Integer]: String                 read GetFormats;
     property Info:                    String                 read fInfo write fInfo;
     property Key:                     TIdSdpKey              read GetKey;
+    property MediaName:               String                 read fMediaName write fMediaName;
     property MediaType:               TIdSdpMediaType        read fMediaType write fMediaType;
     property Port:                    Cardinal               read fPort write fPort;
     property PortCount:               Cardinal               read fPortCount write fPortCount;
@@ -529,6 +533,7 @@ type
     class function IsPort(const Token: String): Boolean;
     class function IsText(const Token: String): Boolean;
     class function IsTime(const Token: String): Boolean;
+    class function IsToken(const S: String): Boolean;
     class function IsTransport(const Token: String): Boolean;
 
     procedure Parse(Payload: TIdSdpPayload);
@@ -720,6 +725,8 @@ const
   IllegalByteStringChars = [#0, #10, #13];
   RTPMapAttribute    = 'rtpmap';
   TimeTypes          = ['d', 'h', 'm', 's'];
+  TokenChars         = ['!', '#', '$', '%', '&', '''', '*', '+', '-', '.', '^', '_', '`', '{', '|', '}', '~'] + AlphanumericChars;
+  AllTokenChars = '!#$%&''*+-.0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ^_`abcdefhijklmnopqrstuvwxyz{|}~';
 
   // MIME types etc
 const
@@ -778,10 +785,10 @@ const
   RSSDPMediaTypeControl      = 'control';
   RSSDPMediaTypeText         = 'text';
 
-  RSSDPDirectionInactive = 'inactive';
-  RSSDPDirectionRecvOnly = 'recvonly';
-  RSSDPDirectionSendOnly = 'sendonly';
-  RSSDPDirectionSendRecv = 'sendrecv';
+  RSSDPDirectionInactive = 'inactive'; // RFC 3264
+  RSSDPDirectionRecvOnly = 'recvonly'; // RFC 3264
+  RSSDPDirectionSendOnly = 'sendonly'; // RFC 3264
+  RSSDPDirectionSendRecv = 'sendrecv'; // RFC 3264
 
 const
   BlankSessionName    = '-';
@@ -862,10 +869,11 @@ end;
 function KeyTypeToStr(KeyType: TIdSdpKeyType): String;
 begin
   case KeyType of
-    ktClear:  Result := Id_SDP_Clear;
-    ktBase64: Result := Id_SDP_Base64;
-    ktURI:    Result := Id_SDP_URI;
-    ktPrompt: Result := Id_SDP_Prompt;
+    ktClear:   Result := Id_SDP_Clear;
+    ktBase64:  Result := Id_SDP_Base64;
+    ktURI:     Result := Id_SDP_URI;
+    ktPrompt:  Result := Id_SDP_Prompt;
+    ktUnknown: Result := Id_SDP_Unknown;
   else
     raise EConvertError.Create(Format(ConvertEnumErrorMsg,
                                       ['TIdSdpKeyType',
@@ -883,6 +891,7 @@ begin
     mtData:        Result := RSSDPMediaTypeData;
     mtControl:     Result := RSSDPMediaTypeControl;
     mtText:        Result := RSSDPMediaTypeText;
+    mtUnknown:     Result := Id_SDP_Unknown;
   else
     raise EConvertError.Create(Format(ConvertEnumErrorMsg,
                                       ['TIdSdpMediaType',
@@ -928,17 +937,24 @@ end;
 
 function StrToKeyType(const S: String): TIdSDPKeyType;
 begin
+  if not TIdSdpParser.IsKeyType(S) then
+    raise EConvertError.Create(Format(ConvertStrErrorMsg,
+                                      [S, 'TIdSdpKeyType']));
+
        if (S = Id_SDP_Clear)  then Result := ktClear
   else if (S = Id_SDP_Base64) then Result := ktBase64
   else if (S = Id_SDP_URI)    then Result := ktURI
   else if (S = Id_SDP_Prompt) then Result := ktPrompt
   else
-    raise EConvertError.Create(Format(ConvertStrErrorMsg,
-                                      [S, 'TIdSdpKeyType']));
+    Result := ktUnknown;
 end;
 
 function StrToMediaType(const S: String): TIdSDPMediaType;
 begin
+  if not TIdSdpParser.IsMediaType(S) then
+    raise EConvertError.Create(Format(ConvertStrErrorMsg,
+                                      [S, 'TIdSdpMediaType']));
+
        if (S = RSSDPMediaTypeAudio)       then Result := mtAudio
   else if (S = RSSDPMediaTypeVideo)       then Result := mtVideo
   else if (S = RSSDPMediaTypeApplication) then Result := mtApplication
@@ -946,8 +962,7 @@ begin
   else if (S = RSSDPMediaTypeControl)     then Result := mtControl
   else if (S = RSSDPMediaTypeText)        then Result := mtText
   else
-    raise EConvertError.Create(Format(ConvertStrErrorMsg,
-                                      [S, 'TIdSdpMediaType']));
+    Result := mtUnknown;
 end;
 
 //******************************************************************************
@@ -1256,6 +1271,7 @@ begin
   if (Src is TIdSdpKey) then begin
     Other := Src as TIdSdpKey;
 
+    Self.KeyName := Other.KeyName;
     Self.KeyType := Other.KeyType;
     Self.Value   := Other.Value;
   end
@@ -1264,9 +1280,15 @@ end;
 
 procedure TIdSdpKey.PrintOn(Dest: TStream);
 var
-  S: String;
+  KName: String;
+  S:     String;
 begin
-  S := 'k=' + KeyTypeToStr(Self.KeyType);
+  if (Self.KeyType <> ktUnknown) then
+    KName := KeyTypeToStr(Self.KeyType)
+  else
+    KName := Self.KeyName;
+
+  S := 'k=' + KName;
 
   if (Self.KeyType <> ktPrompt) then
     S := S + ':' + Self.Value;
@@ -1344,6 +1366,7 @@ begin
 
     Self.Info := Other.Info;
 
+    Self.MediaName := Other.MediaName;
     Self.MediaType := Other.MediaType;
     Self.Port      := Other.Port;
     Self.PortCount := Other.PortCount;
@@ -1505,11 +1528,16 @@ end;
 
 procedure TIdSdpMediaDescription.PrintMediaField(Dest: TStream);
 var
-  I: Integer;
-  S: String;
+  I:     Integer;
+  MName: String;
+  S:     String;
 begin
-  S := 'm=' + MediaTypeToStr(Self.MediaType) + ' '
-     + IntToStr(Self.Port);
+  if (Self.MediaType <> mtUnknown) then
+    MName := MediaTypeToStr(Self.MediaType)
+  else
+    MName := Self.MediaName;
+
+  S := 'm=' + MName + ' ' + IntToStr(Self.Port);
 
   if (Self.PortCount > 1) then
     S := S + '/' + IntToStr(PortCount);
@@ -2572,14 +2600,8 @@ begin
 end;
 
 class function TIdSdpParser.IsBandwidthType(const Token: String): Boolean;
-var
-  I: Integer;
 begin
-  Result := Token <> '';
-
-  if Result then
-    for I := 1 to Length(Token) do
-      Result := Result and (Token[I] in AlphanumericChars);
+  Result := Self.IsToken(Token);
 end;
 
 class function TIdSdpParser.IsByteString(const Token: String): Boolean;
@@ -2619,22 +2641,16 @@ end;
 
 class function TIdSdpParser.IsKeyType(const Token: String): Boolean;
 begin
-  try
-    StrToKeyType(Token);
-    Result := true;
-  except
-    on EConvertError do Result := false;
-  end;
+  // Note that this is a departure from RFC 4566! RFC 4566 limits the allowed
+  // key types to {prompt, clear, base64, uri}. We accept tokens in the
+  // interests of supporting as-yet-undefined key types.
+   
+  Result := Self.IsToken(Token);
 end;
 
 class function TIdSdpParser.IsMediaType(const Token: String): Boolean;
 begin
-  try
-    StrToMediaType(Token);
-    Result := true;
-  except
-    on EConvertError do Result := false;
-  end;
+  Result := Self.IsToken(Token);
 end;
 
 class function TIdSdpParser.IsMulticastAddress(IpVersion: TIdIPVersion;
@@ -2755,6 +2771,17 @@ begin
    if Result then
      Result := Result and (Self.IsDigit(Token[Length(Token)])
                        or (Token[Length(Token)] in TimeTypes));
+end;
+
+class function TIdSdpParser.IsToken(const S: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := S <> '';
+
+  if Result then
+    for I := 1 to Length(S) do
+      Result := Result and (S[I] in TokenChars);
 end;
 
 class function TIdSdpParser.IsTransport(const Token: String): Boolean;
@@ -3049,6 +3076,7 @@ begin
                                      [RSSDPKeyName,
                                       Name + '=' + OriginalValue]));
 
+  Key.KeyName := Token;
   Key.KeyType := StrToKeyType(Token);
 
   if (Key.KeyType = ktPrompt) then begin
@@ -3058,7 +3086,10 @@ begin
                                         Name + '=' + OriginalValue]))
   end
   else begin
-    if Self.IsKeyData(Value) then
+    // Given that we don't know whether an unknown key type even uses a key (we
+    // can safely say only that we know nothing about it), if Value is empty
+    // we don't care.
+    if Self.IsKeyData(Value) or (Key.KeyType = ktUnknown) then
       Key.Value := Value
     else
       raise EParserError.Create(Format(MalformedToken,
@@ -3092,6 +3123,7 @@ begin
       raise EParserError.Create(Format(MalformedToken,
                                        [RSSDPMediaDescriptionName,
                                         Name + '=' + OriginalValue]));
+    NewMediaDesc.MediaName := Token;
     NewMediaDesc.MediaType := StrToMediaType(Token);
 
     Token := Fetch(Value, ' ');
