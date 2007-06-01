@@ -2041,7 +2041,7 @@ end;
 function TIdSipInboundSubscription.CreateDialog(Response: TIdSipMessage): TIdSipDialog;
 begin
   Result := TIdSipDialog.CreateInboundDialog(Self.InitialRequest,
-                                             Response,
+                                             Response as TIdSipResponse,
                                              false);
   Result.ReceiveResponse(Response as TIdSipResponse);
 end;
