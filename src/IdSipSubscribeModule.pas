@@ -435,9 +435,9 @@ type
     Module:  TIdSipSubscribeModule;
     Package: TIdSipEventPackage;
 
-    function  CreateDialog(Response: TIdSipResponse): TIdSipDialog; virtual; abstract;
+    function  CreateDialog(Response: TIdSipMessage): TIdSipDialog; virtual; abstract;
     function  CreateNewAttempt: TIdSipRequest; override;
-    procedure EstablishDialog(Response: TIdSipResponse); virtual;
+    procedure EstablishDialog(Response: TIdSipMessage); virtual;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
                          Binding: TIdSipConnectionBindings); override;
@@ -504,8 +504,8 @@ type
                                     const Reason: String);
     procedure TerminateSubscription(const Reason: String);
   protected
-    function  CreateDialog(Response: TIdSipResponse): TIdSipDialog; override;
-    procedure EstablishDialog(Response: TIdSipResponse); override;
+    function  CreateDialog(Response: TIdSipMessage): TIdSipDialog; override;
+    procedure EstablishDialog(Response: TIdSipMessage); override;
     function  GetEventPackage(Request: TIdSipRequest): String; virtual;
     function  GetID(Request: TIdSipRequest): String; virtual;
     procedure Initialise(UA: TIdSipAbstractCore;
@@ -567,7 +567,7 @@ type
     SubscriptionListeners: TIdNotificationList;
 
     procedure ConfigureRequest(Sub: TIdSipOutboundSubscribe); virtual;
-    function  CreateDialog(Response: TIdSipResponse): TIdSipDialog; override;
+    function  CreateDialog(Response: TIdSipMessage): TIdSipDialog; override;
     function  CreateOutboundSubscribe: TIdSipOutboundSubscribe; virtual;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
@@ -1860,7 +1860,7 @@ begin
   Result.Expires.NumericValue := Self.Duration;
 end;
 
-procedure TIdSipSubscription.EstablishDialog(Response: TIdSipResponse);
+procedure TIdSipSubscription.EstablishDialog(Response: TIdSipMessage);
 begin
   if not Self.DialogEstablished then
     Self.Dialog := Self.CreateDialog(Response);
@@ -2038,15 +2038,15 @@ end;
 
 //* TIdSipInboundSubscription Protected methods ********************************
 
-function TIdSipInboundSubscription.CreateDialog(Response: TIdSipResponse): TIdSipDialog;
+function TIdSipInboundSubscription.CreateDialog(Response: TIdSipMessage): TIdSipDialog;
 begin
   Result := TIdSipDialog.CreateInboundDialog(Self.InitialRequest,
                                              Response,
                                              false);
-  Result.ReceiveResponse(Response);                                           
+  Result.ReceiveResponse(Response as TIdSipResponse);
 end;
 
-procedure TIdSipInboundSubscription.EstablishDialog(Response: TIdSipResponse);
+procedure TIdSipInboundSubscription.EstablishDialog(Response: TIdSipMessage);
 begin
   if not Self.DialogEstablished then begin
     inherited EstablishDialog(Response);
@@ -2452,7 +2452,7 @@ begin
   Sub.Target       := Self.Target;
 end;
 
-function TIdSipOutboundSubscription.CreateDialog(Response: TIdSipResponse): TIdSipDialog;
+function TIdSipOutboundSubscription.CreateDialog(Response: TIdSipMessage): TIdSipDialog;
 begin
   Result := TIdSipDialog.CreateOutboundDialog(Self.InitialRequest,
                                               Response,
@@ -2517,7 +2517,7 @@ begin
   State := Notify.SubscriptionState;
   Self.SetSubscriptionState(State.SubState);
 
-  Self.EstablishDialogFromNotify(Notify);
+  Self.EstablishDialog(Notify);
 
   if State.IsActive then begin
     if (State.Expires > 0) then
