@@ -725,7 +725,8 @@ const
   IllegalByteStringChars = [#0, #10, #13];
   RTPMapAttribute    = 'rtpmap';
   TimeTypes          = ['d', 'h', 'm', 's'];
-  TokenChars         = ['!', '#', '$', '%', '&', '''', '*', '+', '-', '.', '^', '_', '`', '{', '|', '}', '~'] + AlphanumericChars;
+  TokenChars         = ['!', '#', '$', '%', '&', '''', '*', '+', '-', '.', '^',
+                        '_', '`', '{', '|', '}', '~'] + AlphanumericChars;
   AllTokenChars = '!#$%&''*+-.0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ^_`abcdefhijklmnopqrstuvwxyz{|}~';
 
   // MIME types etc
