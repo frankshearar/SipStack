@@ -2337,8 +2337,9 @@ begin
   if Self.DialogEstablished then
     Self.SendTerminatingNotify(Self.Package.State,
                                Self.Package.MimeType,
-                               Reason);
-  Self.MarkAsTerminated;
+                               Reason)
+  else
+    Self.MarkAsTerminated;
 end;
 
 //******************************************************************************
