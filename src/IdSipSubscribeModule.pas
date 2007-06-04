@@ -536,7 +536,6 @@ type
 
     function  CreateRefresh(NewDuration: Cardinal): TIdSipOutboundRefreshSubscribe;
     function  CreateUnsubscribe: TIdSipOutboundUnsubscribe;
-    procedure EstablishDialogFromNotify(Notify: TIdSipRequest);
     procedure NotifyOfExpiredSubscription(Notify: TIdSipRequest);
     procedure NotifyOfReceivedNotify(Notify: TIdSipRequest);
     procedure NotifyOfSuccess(Notify: TIdSipRequest);
@@ -2595,15 +2594,6 @@ begin
   Result.FromTag := Self.InitialRequest.From.Tag;
   Self.ConfigureRequest(Result);
   Result.AddOwnedActionListener(Self);
-end;
-
-procedure TIdSipOutboundSubscription.EstablishDialogFromNotify(Notify: TIdSipRequest);
-begin
-  if Self.DialogEstablished then Exit;
-
-  Self.Dialog := TIdSipDialog.CreateOutboundDialog(Self.InitialRequest,
-                                                   Notify,
-                                                   false)
 end;
 
 procedure TIdSipOutboundSubscription.NotifyOfExpiredSubscription(Notify: TIdSipRequest);
