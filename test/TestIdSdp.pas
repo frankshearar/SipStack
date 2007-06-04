@@ -19,13 +19,13 @@ type
   TestFunctions = class(TTestCase)
   published
     procedure TestAddressTypeToStr;
-    procedure TestDirectionToStr;
     procedure TestBandwidthTypeToStr;
+    procedure TestDirectionToStr;
     procedure TestKeyTypeToStr;
     procedure TestMediaTypeToStr;
     procedure TestStrToAddressType;
-    procedure TestStrToDirection;
     procedure TestStrToBandwidthType;
+    procedure TestStrToDirection;    
     procedure TestStrToKeyType;
     procedure TestStrToMediaType;
   end;
@@ -678,20 +678,6 @@ begin
     AddressTypeToStr(A);
 end;
 
-procedure TestFunctions.TestDirectionToStr;
-var
-  D: TIdSdpDirection;
-begin
-  CheckEquals('inactive', DirectionToStr(sdInactive), 'sdInactive');
-  CheckEquals('recvonly', DirectionToStr(sdRecvOnly), 'sdRecvOnly');
-  CheckEquals('sendonly', DirectionToStr(sdSendOnly), 'sdSendOnly');
-  CheckEquals('sendrecv', DirectionToStr(sdSendRecv), 'sdSendRecv');
-
-  // To check that ALL TIdSdpDirections can be converted
-  for D := Low(TIdSdpDirection) to High(TIdSdpDirection) do
-    DirectionToStr(D);
-end;
-
 procedure TestFunctions.TestBandwidthTypeToStr;
 var
   B: TIdSdpBandwidthType;
@@ -704,6 +690,20 @@ begin
   // To check that ALL TIdSdpBandwidthTypes can be converted
   for B := Low(TIdSdpBandwidthType) to High(TIdSdpBandwidthType) do
     BandwidthTypeToStr(B);
+end;
+
+procedure TestFunctions.TestDirectionToStr;
+var
+  D: TIdSdpDirection;
+begin
+  CheckEquals('inactive', DirectionToStr(sdInactive), 'sdInactive');
+  CheckEquals('recvonly', DirectionToStr(sdRecvOnly), 'sdRecvOnly');
+  CheckEquals('sendonly', DirectionToStr(sdSendOnly), 'sdSendOnly');
+  CheckEquals('sendrecv', DirectionToStr(sdSendRecv), 'sdSendRecv');
+
+  // To check that ALL TIdSdpDirections can be converted
+  for D := Low(TIdSdpDirection) to High(TIdSdpDirection) do
+    DirectionToStr(D);
 end;
 
 procedure TestFunctions.TestKeyTypeToStr;
@@ -794,28 +794,6 @@ begin
   end;
 end;
 
-procedure TestFunctions.TestStrToDirection;
-begin
-  Check(sdInactive = StrToDirection('inactive'), 'inactive');
-  Check(sdRecvOnly = StrToDirection('recvonly'), 'recvonly');
-  Check(sdSendOnly = StrToDirection('sendonly'), 'sendonly');
-  Check(sdSendRecv = StrToDirection('sendrecv'), 'sendrecv');
-
-  try
-    StrToDirection('');
-    Fail('Failed to bail out on empty string');
-  except
-    on EConvertError do;
-  end;
-
-  try
-    StrToDirection('foo');
-    Fail('Failed to bail out on ''foo''');
-  except
-    on EConvertError do;
-  end;
-end;
-
 procedure TestFunctions.TestStrToBandwidthType;
 var
   BT: TIdSdpBandwidthType;
@@ -835,6 +813,28 @@ begin
       CheckEquals('Couldn''t convert '' '' to type TIdSdpBandwidthType',
                   E.Message,
                   'Unexpected exception: '' ''');
+  end;
+end;
+
+procedure TestFunctions.TestStrToDirection;
+begin
+  Check(sdInactive = StrToDirection('inactive'), 'inactive');
+  Check(sdRecvOnly = StrToDirection('recvonly'), 'recvonly');
+  Check(sdSendOnly = StrToDirection('sendonly'), 'sendonly');
+  Check(sdSendRecv = StrToDirection('sendrecv'), 'sendrecv');
+
+  try
+    StrToDirection('');
+    Fail('Failed to bail out on empty string');
+  except
+    on EConvertError do;
+  end;
+
+  try
+    StrToDirection('foo');
+    Fail('Failed to bail out on ''foo''');
+  except
+    on EConvertError do;
   end;
 end;
 
