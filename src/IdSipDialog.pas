@@ -26,7 +26,7 @@ type
   private
     fID:                    TIdSipDialogID;
     fInitialRequest:        TIdSipRequest;
-    fInitialResponse:       TIdSipResponse;
+    fInitialResponse:       TIdSipMessage;
     fIsSecure:              Boolean;
     fLocalSequenceNo:       Cardinal;
     fLocalURI:              TIdSipURI;
@@ -62,8 +62,8 @@ type
     procedure SetRemoteTarget(Value: TIdSipURI);
     procedure SetState(Value: TIdSipDialogState);
 
-    property InitialRequest:   TIdSipRequest  read fInitialRequest;
-    property InitialResponse:  TIdSipResponse read fInitialResponse;
+    property InitialRequest:   TIdSipRequest read fInitialRequest;
+    property InitialResponse:  TIdSipMessage read fInitialResponse;
   public
     class function CreateInboundDialog(Request: TIdSipRequest;
                                        Response: TIdSipResponse;
@@ -483,7 +483,7 @@ procedure TIdSipDialog.CreateInternal(Request: TIdSipRequest;
                                       RouteSet: TIdSipHeaderList);
 begin
   Self.fInitialRequest  := Request.Copy as TIdSipRequest;
-  Self.fInitialResponse := Response.Copy as TIdSipResponse;
+  Self.fInitialResponse := Response.Copy;
 
   Self.fID := TIdSipDialogID.Create(DialogID);
   Self.SetLocalSequenceNo(LocalSequenceNo);
