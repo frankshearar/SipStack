@@ -5277,21 +5277,26 @@ end;
 
 procedure TestTIdSdpParser.TestParseMediaDescriptionUnknownBandwidthType;
 const
-  TIAS = 'TIAS';
+  UnknownBandwidthType = 'UnknownBandwidthType';
 var
   S: TStringStream;
 begin
   S := TStringStream.Create(MinimumPayload
                           + 'm=audio 65535 RTP/AVP 0'#13#10
                           + 'i=Information'#13#10
-                          + 'b=' + TIAS + ':35200'#13#10);
+                          + 'b=' + UnknownBandwidthType + ':35200'#13#10);
   try
     Self.P.Source := S;
 
     Self.P.Parse(Self.Payload);
 
-    CheckEquals(1, Self.Payload.MediaDescriptionAt(0).Bandwidths.Count, 'Number of bandwidth attributes');
-    CheckEquals(TIAS, Self.Payload.MediaDescriptionAt(0).Bandwidths[0].BandwidthName, 'Bandwidth header not properly parsed');
+    Check(Self.Payload.MediaDescriptionCount > 0, 'No media descriptions');
+    CheckEquals(1,
+                Self.Payload.MediaDescriptionAt(0).Bandwidths.Count,
+                'Number of bandwidth attributes');
+    CheckEquals(UnknownBandwidthType,
+                Self.Payload.MediaDescriptionAt(0).Bandwidths[0].BandwidthName,
+                'Bandwidth header not properly parsed');
   finally
     S.Free;
   end;
