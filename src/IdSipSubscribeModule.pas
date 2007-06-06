@@ -211,9 +211,14 @@ type
     fProbationRetryTime:          Cardinal;
     fState:                       String;
 
-  protected
     procedure NotifyOfSubscriptionRequest(Subscription: TIdSipInboundSubscription);
+  protected
+    function  CreateSubscription(UA: TIdSipAbstractCore;
+                                 Request: TIdSipRequest;
+                                 Binding: TIdSipConnectionBindings): TIdSipInboundSubscription; virtual;
+    procedure Reject(Request: TIdSipRequest); virtual;
     function  UserAgent: TIdSipAbstractCore;
+    function  WillAccept(Request: TIdSipRequest): Boolean; virtual;
   public
     class function DefaultProbationRetryTime: Cardinal; virtual;
     class function DefaultSubscriptionDuration: Cardinal; virtual;
@@ -237,12 +242,16 @@ type
   TIdSipReferPackage = class(TIdSipEventPackage)
   private
     procedure RejectForbidden(Request: TIdSipRequest);
+  protected
+    function  CreateSubscription(UA: TIdSipAbstractCore;
+                                 Request: TIdSipRequest;
+                                 Binding: TIdSipConnectionBindings): TIdSipInboundSubscription; override;
+    procedure Reject(Request: TIdSipRequest); override;
+    function  WillAccept(Request: TIdSipRequest): Boolean; override;
   public
     class function DefaultSubscriptionDuration: Cardinal; override;
     class function EventPackage: String; override;
 
-    function Accept(Request: TIdSipRequest;
-                    Binding: TIdSipConnectionBindings): TIdSipAction; override;
     function MimeType: String; override;
   end;
 
@@ -1277,13 +1286,14 @@ var
   Subscription: TIdSipInboundSubscription;
 begin
   Result := nil;
-  if not Request.IsSubscribe then Exit;
 
-  Subscription := TIdSipInboundSubscription.CreateInbound(Self.UserAgent,
-                                                          Request,
-                                                          Binding);
-  Self.NotifyOfSubscriptionRequest(Subscription);
-  Result := Subscription;
+  if Self.WillAccept(Request) then begin
+    Subscription := Self.CreateSubscription(Self.UserAgent, Request, Binding);
+    Self.NotifyOfSubscriptionRequest(Subscription);
+    Result := Subscription;
+  end
+  else
+    Self.Reject(Request);
 end;
 
 function TIdSipEventPackage.Copy: TIdSipEventPackage;
@@ -1300,14 +1310,32 @@ end;
 
 //* TIdSipEventPackage Protected methods ***************************************
 
-procedure TIdSipEventPackage.NotifyOfSubscriptionRequest(Subscription: TIdSipInboundSubscription);
+function TIdSipEventPackage.CreateSubscription(UA: TIdSipAbstractCore;
+                                               Request: TIdSipRequest;
+                                               Binding: TIdSipConnectionBindings): TIdSipInboundSubscription;
 begin
-  Self.Module.NotifyOfSubscriptionRequest(Subscription);
+  Result := TIdSipInboundSubscription.CreateInbound(UA, Request, Binding);
+end;
+
+procedure TIdSipEventPackage.Reject(Request: TIdSipRequest);
+begin
 end;
 
 function TIdSipEventPackage.UserAgent: TIdSipAbstractCore;
 begin
   Result := Self.Module.UserAgent;
+end;
+
+function TIdSipEventPackage.WillAccept(Request: TIdSipRequest): Boolean;
+begin
+  Result := Request.IsSubscribe;
+end;
+
+//* TIdSipEventPackage Private methods *****************************************
+
+procedure TIdSipEventPackage.NotifyOfSubscriptionRequest(Subscription: TIdSipInboundSubscription);
+begin
+  Self.Module.NotifyOfSubscriptionRequest(Subscription);
 end;
 
 //******************************************************************************
@@ -1326,31 +1354,32 @@ begin
   Result := PackageRefer;
 end;
 
-function TIdSipReferPackage.Accept(Request: TIdSipRequest;
-                                   Binding: TIdSipConnectionBindings): TIdSipAction;
-var
-  Referral: TIdSipInboundReferral;
-begin
-  Result := nil;
-
-  // RFC 3515, section 2.4.4: no SUBSCRIBE may use the refer event package, if
-  // it doesn't match an ongoing subscription. And the SUBSCRIBE only reaches
-  // here if it doesn't match an ongoing subscription.
-  if Request.IsSubscribe then begin
-    Self.RejectForbidden(Request);
-    Exit;
-  end;
-
-  Referral := TIdSipInboundReferral.CreateInbound(Self.UserAgent,
-                                                  Request,
-                                                  Binding);
-  Self.NotifyOfSubscriptionRequest(Referral);
-  Result := Referral;
-end;
-
 function TIdSipReferPackage.MimeType: String;
 begin
   Result := SipFragmentMimeType;
+end;
+
+//* TIdSipReferPackage Protected methods ***************************************
+
+function TIdSipReferPackage.CreateSubscription(UA: TIdSipAbstractCore;
+                                               Request: TIdSipRequest;
+                                               Binding: TIdSipConnectionBindings): TIdSipInboundSubscription;
+begin
+  Result := TIdSipInboundReferral.CreateInbound(Self.UserAgent, Request, Binding);
+end;
+
+procedure TIdSipReferPackage.Reject(Request: TIdSipRequest);
+begin
+  Self.RejectForbidden(Request);
+end;
+
+function TIdSipReferPackage.WillAccept(Request: TIdSipRequest): Boolean;
+begin
+  // RFC 3515, section 2.4.4: no SUBSCRIBE may use the refer event package, if
+  // it doesn't match an ongoing subscription. And the SUBSCRIBE only reaches
+  // here if it doesn't match an ongoing subscription.
+
+  Result := Request.IsRefer;
 end;
 
 //* TIdSipEventPackage Private methods *****************************************
