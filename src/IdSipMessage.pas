@@ -806,6 +806,7 @@ type
   protected
     procedure Parse(const Value: String); override;
   public
+    function CopyWithoutTag: TIdSipFromToHeader;
     function HasTag: Boolean;
     function Equals(Header: TIdSipHeader): Boolean; override;
 
@@ -5881,6 +5882,13 @@ end;
 //* TIdSipFromToHeader                                                         *
 //******************************************************************************
 //* TIdSipFromToHeader Public methods ******************************************
+
+function TIdSipFromToHeader.CopyWithoutTag: TIdSipFromToHeader;
+begin
+  Result := TIdSipHeaderClass(Self.ClassType).Create as TIdSipFromToHeader;
+  Result.Assign(Self);
+  Result.RemoveParameter(TagParam);
+end;
 
 function TIdSipFromToHeader.HasTag: Boolean;
 begin

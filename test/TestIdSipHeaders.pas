@@ -359,6 +359,7 @@ type
   public
     procedure SetUp; override;
   published
+    procedure TestCopyWithoutTag;
     procedure TestHasTag;
     procedure TestIsEqualDifferentURI;
     procedure TestIsEqualSameURINoParams;
@@ -4103,6 +4104,23 @@ end;
 
 
 //* TestTIdSipFromToHeader Published methods ***********************************
+
+procedure TestTIdSipFromToHeader.TestCopyWithoutTag;
+var
+  Copy: TIdSipFromToHeader;
+begin
+  Self.F.Value := 'Case <sip:case@fried.neurons.org>;tag=7553452';
+
+  Copy := Self.F.CopyWithoutTag;
+  try
+    Check(not Copy.HasTag, 'Tag copied');
+    Copy.Tag := Self.F.Tag;
+
+    CheckEquals(Self.F.AsString, Copy.AsString, 'Copy and original not equal in other respects');
+  finally
+    Copy.Free;
+  end;
+end;
 
 procedure TestTIdSipFromToHeader.TestHasTag;
 begin
