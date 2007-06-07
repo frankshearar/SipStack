@@ -651,7 +651,7 @@ begin
     BasicConf.Free;
   end;
 
-  Self.RemoteMockTransport := TIdSipDebugTransportRegistry.TransportAt(TIdSipDebugTransportRegistry.TransportCount - 1) as TIdSipMockTransport;
+  Self.RemoteMockTransport := TIdSipDebugTransportRegistry.LastTransport as TIdSipMockTransport;
 
   Self.LocalAddress  := '10.0.0.6';
   Self.LocalPort     := 5060;
