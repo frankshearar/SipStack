@@ -388,7 +388,7 @@ type
     function  CreateRedirectedRequest(OriginalRequest: TIdSipRequest;
                                       Contact: TIdSipAddressHeader): TIdSipRequest;
     function  CreateRequest(const Method: String;
-                            From: TIdSipFromToHeader;
+                            From: TIdSipAddressHeader;
                             Dest: TIdSipAddressHeader): TIdSipRequest; overload;
     function  CreateRequest(const Method: String;
                             Dialog: TIdSipDialog): TIdSipRequest; overload;
@@ -566,7 +566,7 @@ type
     fInitialRequest: TIdSipRequest;
     fIsTerminated:   Boolean;
     fLocalGruu:      TIdSipContactHeader;
-    fLocalParty:     TIdSipFromHeader;
+    fLocalParty:     TIdSipAddressHeader;
     fResult:         TIdSipActionResult;
     fUA:             TIdSipAbstractCore;
     NonceCount:      Cardinal;
@@ -575,7 +575,7 @@ type
     function  GetUseGruu: Boolean;
     function  GetUsername: String;
     procedure SetLocalGruu(Value: TIdSipContactHeader);
-    procedure SetLocalParty(Value: TIdSipFromHeader);
+    procedure SetLocalParty(Value: TIdSipAddressHeader);
     procedure SetUseGruu(Value: Boolean);
     procedure SetUsername(Value: String);
     procedure TrySendRequest(Request: TIdSipRequest;
@@ -644,7 +644,7 @@ type
     property IsOwned:        Boolean             read fIsOwned;
     property IsTerminated:   Boolean             read fIsTerminated;
     property LocalGruu:      TIdSipContactHeader read fLocalGruu write SetLocalGruu;
-    property LocalParty:     TIdSipFromHeader    read fLocalParty write SetLocalParty;
+    property LocalParty:     TIdSipAddressHeader read fLocalParty write SetLocalParty;
     property Result:         TIdSipActionResult  read fResult;
     property UA:             TIdSipAbstractCore  read fUA;
     property UseGruu:        Boolean             read GetUseGruu write SetUseGruu;
@@ -1687,7 +1687,7 @@ begin
 end;
 
 function TIdSipAbstractCore.CreateRequest(const Method: String;
-                                          From: TIdSipFromToHeader;
+                                          From: TIdSipAddressHeader;
                                           Dest: TIdSipAddressHeader): TIdSipRequest;
 begin
   if Dest.Address.HasMethod then begin
@@ -3074,7 +3074,7 @@ begin
   Self.fUA := UA;
 
   Self.ActionListeners := TIdNotificationList.Create;
-  Self.fLocalParty     := TIdSipFromHeader.Create;
+  Self.fLocalParty     := TIdSipAddressHeader.Create;
   Self.fID             := TIdSipActionRegistry.RegisterAction(Self);
   Self.fInitialRequest := TIdSipRequest.Create;
   Self.fIsOwned        := false;
@@ -3308,7 +3308,7 @@ begin
   Self.fLocalGruu.Assign(Value);
 end;
 
-procedure TIdSipAction.SetLocalParty(Value: TIdSipFromHeader);
+procedure TIdSipAction.SetLocalParty(Value: TIdSipAddressHeader);
 begin
   Self.fLocalParty.Assign(Value);
 end;

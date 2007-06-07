@@ -224,7 +224,7 @@ type
     function  Accept(Request: TIdSipRequest;
                      Binding: TIdSipConnectionBindings): TIdSipAction; override;
     procedure CleanUp; override;
-    function  CreateRegister(From: TIdSipFromToHeader;
+    function  CreateRegister(From: TIdSipAddressHeader;
                              Registrar: TIdSipToHeader): TIdSipRequest;
     function  CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistrationQuery;
     function  RegisterWith(Registrar: TIdSipUri;
@@ -967,7 +967,7 @@ begin
 //    Self.UnregisterFrom(Self.Registrar, Self.Contact).Send;
 end;
 
-function TIdSipOutboundRegisterModule.CreateRegister(From: TIdSipFromToHeader;
+function TIdSipOutboundRegisterModule.CreateRegister(From: TIdSipAddressHeader;
                                                      Registrar: TIdSipToHeader): TIdSipRequest;
 begin
   Result := Self.UserAgent.CreateRequest(MethodRegister, From, Registrar);

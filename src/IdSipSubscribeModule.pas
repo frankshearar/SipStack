@@ -151,10 +151,10 @@ type
     function  CreateNotify(Dialog: TIdSipDialog;
                            Subscribe: TIdSipRequest;
                            const SubscriptionState: String): TIdSipRequest;
-    function  CreateRefer(From: TIdSipFromToHeader;
+    function  CreateRefer(From: TIdSipAddressHeader;
                           Dest: TIdSipAddressHeader;
                           ReferTo: TIdSipAddressHeader): TIdSipRequest;
-    function  CreateSubscribe(From: TIdSipFromToHeader;
+    function  CreateSubscribe(From: TIdSipAddressHeader;
                               Dest: TIdSipAddressHeader;
                               const EventPackage: String): TIdSipRequest; overload;
     function  CreateSubscribe(Dialog: TIdSipDialog;
@@ -930,7 +930,7 @@ begin
   end;
 end;
 
-function TIdSipSubscribeModule.CreateRefer(From: TIdSipFromToHeader;
+function TIdSipSubscribeModule.CreateRefer(From: TIdSipAddressHeader;
                                            Dest: TIdSipAddressHeader;
                                            ReferTo: TIdSipAddressHeader): TIdSipRequest;
 begin
@@ -949,7 +949,7 @@ begin
   end;
 end;
 
-function TIdSipSubscribeModule.CreateSubscribe(From: TIdSipFromToHeader;
+function TIdSipSubscribeModule.CreateSubscribe(From: TIdSipAddressHeader;
                                                Dest: TIdSipAddressHeader;
                                                const EventPackage: String): TIdSipRequest;
 begin

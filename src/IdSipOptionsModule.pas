@@ -32,7 +32,7 @@ type
     function Accept(Request: TIdSipRequest;
                     Binding: TIdSipConnectionBindings): TIdSipAction; override;
     function AcceptsMethods: String; override;
-    function CreateOptions(From: TIdSipFromToHeader;
+    function CreateOptions(From: TIdSipAddressHeader;
                            Dest: TIdSipAddressHeader): TIdSipRequest;
     function QueryOptions(Server: TIdSipAddressHeader): TIdSipOutboundOptions;
   end;
@@ -124,7 +124,7 @@ begin
   Result := MethodOptions;
 end;
 
-function TIdSipOptionsModule.CreateOptions(From: TIdSipFromToHeader;
+function TIdSipOptionsModule.CreateOptions(From: TIdSipAddressHeader;
                                            Dest: TIdSipAddressHeader): TIdSipRequest;
 begin
   Result := Self.UserAgent.CreateRequest(MethodOptions, From, Dest);

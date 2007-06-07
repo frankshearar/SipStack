@@ -215,7 +215,7 @@ type
     function  GruuOf(ActionHandle: TIdSipHandle): String;
     function  HandleOf(const LocalGruu: String): TIdSipHandle;
     procedure HangUp(ActionHandle: TIdSipHandle);
-    function  MakeCall(From: TIdSipFromHeader;
+    function  MakeCall(From: TIdSipAddressHeader;
                        Dest: TIdSipAddressHeader;
                        const LocalSessionDescription: String;
                        const MimeType: String): TIdSipHandle; virtual;
@@ -1054,7 +1054,7 @@ begin
   end;
 end;
 
-function TIdSipStackInterface.MakeCall(From: TIdSipFromHeader;
+function TIdSipStackInterface.MakeCall(From: TIdSipAddressHeader;
                                        Dest: TIdSipAddressHeader;
                                        const LocalSessionDescription: String;
                                        const MimeType: String): TIdSipHandle;

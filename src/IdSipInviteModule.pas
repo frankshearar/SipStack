@@ -117,13 +117,13 @@ type
     function  AddOutboundSession: TIdSipOutboundSession;
     function  AddOutboundSessionReplacer(Invite: TIdSipRequest): TIdSipOutboundSession;
     function  AllowedExtensions: String; override;
-    function  Call(From: TIdSipFromHeader;
+    function  Call(From: TIdSipAddressHeader;
                    Dest: TIdSipAddressHeader;
                    const LocalSessionDescription: String;
                    const MimeType: String): TIdSipOutboundSession;
     function  CreateAck(Dialog: TIdSipDialog): TIdSipRequest;
     function  CreateBye(Dialog: TIdSipDialog): TIdSipRequest;
-    function  CreateInvite(From: TIdSipFromHeader;
+    function  CreateInvite(From: TIdSipAddressHeader;
                            Dest: TIdSipAddressHeader;
                            const Body: String;
                            const MimeType: String): TIdSipRequest;
@@ -927,7 +927,7 @@ begin
           + ExtensionTargetDialog;
 end;
 
-function TIdSipInviteModule.Call(From: TIdSipFromHeader;
+function TIdSipInviteModule.Call(From: TIdSipAddressHeader;
                                  Dest: TIdSipAddressHeader;
                                  const LocalSessionDescription: String;
                                  const MimeType: String): TIdSipOutboundSession;
@@ -962,7 +962,7 @@ begin
   end;
 end;
 
-function TIdSipInviteModule.CreateInvite(From: TIdSipFromHeader;
+function TIdSipInviteModule.CreateInvite(From: TIdSipAddressHeader;
                                          Dest: TIdSipAddressHeader;
                                          const Body: String;
                                          const MimeType: String): TIdSipRequest;
