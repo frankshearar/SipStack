@@ -1949,7 +1949,7 @@ begin
       try
         // This is expedient, but evil: it works because Self.MockTransport will
         // be reset in SetUp when the next test runs.
-        Self.MockTransport := TIdSipDebugTransportRegistry.TransportAt(TIdSipDebugTransportRegistry.TransportCount - 1) as TIdSipMockUdpTransport;
+        Self.MockTransport := TIdSipDebugTransportRegistry.LastTransport as TIdSipMockUdpTransport;
 
         Self.ReceiveSubscribe(Package.EventPackage);
         Self.ProcessAllPendingNotifications;
