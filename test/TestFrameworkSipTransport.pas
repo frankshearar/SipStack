@@ -368,7 +368,7 @@ begin
                          + 'that opens a socket');
 
   TIdSipTransportRegistry.RegisterTransportType(Self.TransportType.GetTransportType,
-                                              Self.TransportType);
+                                                Self.TransportType);
 
   Self.ExceptionMessage := Self.TransportType.ClassName + ': ' + Self.ExceptionMessage;
 
