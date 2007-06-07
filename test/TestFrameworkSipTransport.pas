@@ -917,7 +917,7 @@ procedure TestTIdSipTransport.TestCanReceiveUnsolicitedResponse;
 begin
   Self.CheckingResponseEvent := Self.CheckCanReceiveResponse;
 
-  Self.HighPortTransport.Send(Self.Response, Self.LowPortLocation);
+  Self.LowPortTransport.Send(Self.Response, Self.HighPortLocation);
 
   Self.WaitForSignaled;
 
@@ -1407,8 +1407,8 @@ procedure TestTIdSipTransport.TestReceivedParamIPv4SentBy;
 begin
   Self.CheckingRequestEvent := Self.CheckReceivedParamIPv4SentBy;
   // This is a bit of a hack. We want to make sure the sent-by's an IP.
-  Self.HighPortTransport.HostName := Self.HighPortLocation.IPAddress;
-  Self.HighPortTransport.Send(Self.Request, Self.LowPortLocation);
+  Self.LowPortTransport.HostName := Self.LowPortLocation.IPAddress;
+  Self.LowPortTransport.Send(Self.Request, Self.HighPortLocation);
 
   Self.WaitForSignaled;
 end;
@@ -1528,7 +1528,7 @@ procedure TestTIdSipTransport.TestSendResponseFromNonStandardPort;
 begin
   Self.Response.LastHop.Port := Self.LowPortLocation.Port;
   Self.CheckingResponseEvent := Self.CheckSendResponseFromNonStandardPort;
-  Self.HighPortTransport.Send(Self.Response, Self.LowPortLocation);
+  Self.LowPortTransport.Send(Self.Response, Self.HighPortLocation);
 
   Self.WaitForSignaled;
 end;
@@ -1569,11 +1569,11 @@ begin
         try
           // Ensure that we only set ThreadEvent after we know that
           // LowPortListener's finished with it
-          Self.LowPortTransport.RemoveTransportListener(Self);
-          Self.LowPortTransport.AddTransportListener(Self);
+          Self.HighPortTransport.RemoveTransportListener(Self);
+          Self.HighPortTransport.AddTransportListener(Self);
 
-          Self.Response.LastHop.Received := Self.LowPortLocation.IPAddress;
-          Self.HighPortTransport.Send(Self.Response, Self.LowPortLocation);
+          Self.Response.LastHop.Received := Self.HighPortLocation.IPAddress;
+          Self.LowPortTransport.Send(Self.Response, Self.HighPortLocation);
 
           // It's not perfect, but anyway. We need to wait long enough for
           // LowPortTransport to get its response.
@@ -1583,10 +1583,10 @@ begin
                 Self.HighPortTransport.ClassName
               + ': Somehow we received a mangled message');
 
-          Check(LowPortListener.ReceivedResponse,
+          Check(HighPortListener.ReceivedResponse,
                 Self.HighPortTransport.ClassName
-              + ': LowPortTransport didn''t get the message');
-          Check(not HighPortListener.ReceivedResponse,
+              + ': HighPortTransport didn''t get the message');
+          Check(not LowPortListener.ReceivedResponse,
                 Self.HighPortTransport.ClassName
               + ': Received param in top Via header ignored - '
               + 'wrong server got the message');
