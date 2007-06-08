@@ -442,7 +442,8 @@ type
 
   TestTIdSubscriptionRequestData = class(TTestCase)
   private
-    Data: TIdSubscriptionRequestData;
+    Data:      TIdSubscriptionRequestData;
+    Subscribe: TIdSipRequest;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -3519,18 +3520,24 @@ procedure TestTIdSubscriptionRequestData.SetUp;
 begin
   inherited SetUp;
 
+  Self.Subscribe := TIdSipTestResources.CreateBasicRequest;
+  Self.Subscribe.Method             := MethodSubscribe;
+  Self.Subscribe.CSeq.Method        := Self.Subscribe.Method;
+  Self.Subscribe.FirstContact.Value := 'sip:machine-1@internet-cafe.org>';
+  Self.Subscribe.From.Value         := 'Case <sip:case@fried-neurons.org>';
+  Self.Subscribe.ReferTo.Value      := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna';
+  Self.Subscribe.RequestUri.Uri     := 'sip:case@fried-neurons.org;grid="foo"';
+
   Self.Data := TIdSubscriptionRequestData.Create;
   Self.Data.EventPackage        := PackageRefer;
-  Self.Data.From.Value          := 'Case <sip:case@fried-neurons.org>';
   Self.Data.Handle              := $decafbad;
-  Self.Data.ReferTo.Value       := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna';
-  Self.Data.RemoteContact.Value := 'sip:machine-1@internet-cafe.org>';
-  Self.Data.Target.Uri          := 'sip:case@fried-neurons.org;grid="foo"';
+  Self.Data.Request             := Self.Subscribe;
 end;
 
 procedure TestTIdSubscriptionRequestData.TearDown;
 begin
   Self.Data.Free;
+  Self.Subscribe.Free;
 
   inherited TearDown;
 end;
@@ -3558,6 +3565,8 @@ begin
     CheckEquals(Self.Data.RemoteContact.FullValue,
                 Copy.RemoteContact.FullValue,
                 'RemoteContact');
+    Check(Self.Data.Request.Equals(Copy.Request),
+                'Request');            
     CheckEquals(Self.Data.Target.Uri,
                 Copy.Target.Uri,
                 'Target');

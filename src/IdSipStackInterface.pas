@@ -622,6 +622,8 @@ type
     fEventPackage: String;
   protected
     function Data: String; override;
+    function  GetEventPackage: String; virtual;
+    procedure SetEventPackage(Value: String); virtual;
   public
     procedure Assign(Src: TPersistent); override;
 
@@ -630,28 +632,29 @@ type
 
   TIdSubscriptionRequestData = class(TIdSubscriptionData)
   private
-    fFrom:          TIdSipFromHeader;
-    fReferTo:       TIdSipReferToHeader;
-    fRemoteContact: TIdSipContactHeader;
-    fTarget:        TIdSipUri;
+    fRequest: TIdSipRequest;
 
-    procedure SetFrom(Value: TIdSipFromHeader);
-    procedure SetReferTo(Value: TIdSipReferToHeader);
-    procedure SetRemoteContact(Value: TIdSipContactHeader);
-    procedure SetTarget(Value: TIdSipUri);
+    function  GetFrom: TIdSipFromHeader;
+    function  GetReferTo: TIdSipReferToHeader;
+    function  GetRemoteContact: TIdSipContactHeader;
+    function  GetTarget: TIdSipUri;
+    procedure SetRequest(Value: TIdSipRequest);
   protected
-    function Data: String; override;
-    function EventName: String; override;
+    function  Data: String; override;
+    function  EventName: String; override;
+    function  GetEventPackage: String; override;
+    procedure SetEventPackage(Value: String); override;
   public
     constructor Create; override;
     destructor  Destroy; override;
 
     procedure Assign(Src: TPersistent); override;
 
-    property From:          TIdSipFromHeader    read fFrom write SetFrom;
-    property ReferTo:       TIdSipReferToHeader read fReferTo write SetReferTo;
-    property RemoteContact: TIdSipContactHeader read fRemoteContact write SetRemoteContact;
-    property Target:        TIdSipUri           read fTarget write SetTarget;
+    property From:          TIdSipFromHeader    read GetFrom;
+    property ReferTo:       TIdSipReferToHeader read GetReferTo;
+    property Request:       TIdSipRequest       read fRequest write SetRequest;
+    property RemoteContact: TIdSipContactHeader read GetRemoteContact;
+    property Target:        TIdSipUri           read GetTarget;
   end;
 
   TIdResubscriptionData = class(TIdSubscriptionData)
@@ -2051,12 +2054,9 @@ begin
 
   Data := TIdSubscriptionRequestData.Create;
   try
-    Data.Handle        := Self.HandleFor(Subscription);
-    Data.EventPackage  := Subscription.EventPackage;
-    Data.From          := Subscription.InitialRequest.From;
-    Data.ReferTo       := Subscription.InitialRequest.ReferTo;
-    Data.RemoteContact := Subscription.InitialRequest.FirstContact;
-    Data.Target        := Subscription.InitialRequest.RequestUri;
+    Data.Handle       := Self.HandleFor(Subscription);
+    Data.EventPackage := Subscription.EventPackage;
+    Data.Request      := Subscription.InitialRequest;
 
     Self.NotifyEvent(CM_SUBSCRIPTION_REQUEST_NOTIFY, Data);
   finally
@@ -3088,6 +3088,16 @@ begin
   Result := 'Event: ' + Self.EventPackage + CRLF;
 end;
 
+function TIdSubscriptionData.GetEventPackage: String;
+begin
+  Result := Self.fEventPackage;
+end;
+
+procedure TIdSubscriptionData.SetEventPackage(Value: String);
+begin
+  Self.fEventPackage := Value;
+end;
+
 //******************************************************************************
 //* TIdSubscriptionRequestData                                                 *
 //******************************************************************************
@@ -3097,18 +3107,12 @@ constructor TIdSubscriptionRequestData.Create;
 begin
   inherited Create;
 
-  Self.fFrom          := TIdSipFromHeader.Create;
-  Self.fReferTo       := TIdSipReferToHeader.Create;
-  Self.fRemoteContact := TIdSipContactHeader.Create;
-  Self.fTarget        := TIdSipUri.Create;
+  Self.fRequest := TIdSipRequest.Create;
 end;
 
 destructor TIdSubscriptionRequestData.Destroy;
 begin
-  Self.fTarget.Free;
-  Self.fRemoteContact.Free;
-  Self.fReferTo.Free;
-  Self.fFrom.Free;
+  Self.fRequest.Free;
 
   inherited Destroy;
 end;
@@ -3122,10 +3126,7 @@ begin
   if (Src is TIdSubscriptionRequestData) then begin
     Other := Src as TIdSubscriptionRequestData;
 
-    Self.From          := Other.From;
-    Self.ReferTo       := Other.ReferTo;
-    Self.RemoteContact := Other.RemoteContact;
-    Self.Target        := Other.Target;
+    Self.Request := Other.Request;
   end;
 end;
 
@@ -3144,26 +3145,41 @@ begin
   Result := EventNames(CM_SUBSCRIPTION_REQUEST_NOTIFY);
 end;
 
+function TIdSubscriptionRequestData.GetEventPackage: String;
+begin
+  Result := Self.Request.Event.EventType;
+end;
+
+procedure TIdSubscriptionRequestData.SetEventPackage(Value: String);
+begin
+  // Do nothing.
+end;
+
 //* TIdSubscriptionRequestData Private methods *********************************
 
-procedure TIdSubscriptionRequestData.SetFrom(Value: TIdSipFromHeader);
+function TIdSubscriptionRequestData.GetFrom: TIdSipFromHeader;
 begin
-  Self.fFrom.Assign(Value);
+  Result := Self.Request.From;
 end;
 
-procedure TIdSubscriptionRequestData.SetReferTo(Value: TIdSipReferToHeader);
+function TIdSubscriptionRequestData.GetReferTo: TIdSipReferToHeader;
 begin
-  Self.fReferTo.Assign(Value);
+  Result := Self.Request.ReferTo;
 end;
 
-procedure TIdSubscriptionRequestData.SetRemoteContact(Value: TIdSipContactHeader);
+function TIdSubscriptionRequestData.GetRemoteContact: TIdSipContactHeader;
 begin
-  Self.fRemoteContact.Assign(Value);
+  Result := Self.Request.FirstContact;
 end;
 
-procedure TIdSubscriptionRequestData.SetTarget(Value: TIdSipUri);
+function TIdSubscriptionRequestData.GetTarget: TIdSipUri;
 begin
-  Self.fTarget.Uri := Value.Uri;
+  Result := Self.Request.RequestUri;
+end;
+
+procedure TIdSubscriptionRequestData.SetRequest(Value: TIdSipRequest);
+begin
+  Self.Request.Assign(Value);
 end;
 
 //******************************************************************************
