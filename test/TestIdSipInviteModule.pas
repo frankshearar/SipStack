@@ -409,6 +409,7 @@ type
     SentRequestTerminated:  Boolean;
     Session:                TIdSipInboundSession;
 
+    procedure CheckRedirectCall(TemporaryMove: Boolean);
     procedure OnNewData(Data: TIdRTPPayload;
                         Binding: TIdConnection);
     procedure OnSendRequest(Request: TIdSipRequest;
@@ -461,6 +462,7 @@ type
     procedure TestReceiveCallSendsTrying;
     procedure TestReceiveOutOfOrderReInvite;
     procedure TestRedirectCall;
+    procedure TestRedirectCallPermanent;
     procedure TestRejectCallBusy;
     procedure TestRejectCallStatusCode;
     procedure TestRejectCallStatusCodeAndText;
@@ -745,6 +747,20 @@ type
     procedure TestRun;
   end;
 
+  TestTIdSipSessionRedirectWait = class(TTestCaseTU)
+  private
+    L:       TIdSipTestInviteModuleListener;
+    Session: TIdSipInboundSession;
+    Target:  TIdSipAddressHeader;
+    Wait:    TIdSipSessionRedirectWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTriggerWithTemporaryFalse;
+    procedure TestTriggerWithTemporaryTrue;
+  end;
+
 implementation
 
 uses
@@ -777,6 +793,7 @@ begin
   Result.AddTest(TestTIdSipSessionModifySessionMethod.Suite);
   Result.AddTest(TestTIdSipProgressedSessionMethod.Suite);
   Result.AddTest(TestTIdSipSessionReferralMethod.Suite);
+  Result.AddTest(TestTIdSipSessionRedirectWait.Suite);
 end;
 
 //******************************************************************************
@@ -4768,6 +4785,42 @@ end;
 
 //* TestTIdSipInboundSession Private methods ***********************************
 
+procedure TestTIdSipInboundSession.CheckRedirectCall(TemporaryMove: Boolean);
+var
+  Dest:         TIdSipAddressHeader;
+  SentResponse: TIdSipResponse;
+begin
+  Self.CreateAction;
+  Check(Assigned(Self.Session), 'OnInboundCall not called');
+  Self.MarkSentResponseCount;
+
+  Dest := TIdSipAddressHeader.Create;
+  try
+    Dest.DisplayName := 'Wintermute';
+    Dest.Address.Uri := 'sip:wintermute@talking-head.tessier-ashpool.co.luna';
+
+    Self.Session.RedirectCall(Dest, TemporaryMove);
+    CheckResponseSent('No response sent');
+
+    SentResponse := Self.LastSentResponse;
+    CheckEquals(TIdSipInboundInvite.RedirectStatusCode(TemporaryMove),
+                SentResponse.StatusCode,
+                'Wrong response sent');
+    Check(SentResponse.HasHeader(ContactHeaderFull),
+          'No Contact header');
+    CheckEquals(Dest.DisplayName,
+                SentResponse.FirstContact.DisplayName,
+                'Contact display name');
+    CheckEquals(Dest.Address.Uri,
+                SentResponse.FirstContact.Address.Uri,
+                'Contact address');
+
+    Check(Self.OnEndedSessionFired, 'OnEndedSession didn''t fire');
+  finally
+    Dest.Free;
+  end;
+end;
+
 procedure TestTIdSipInboundSession.OnNewData(Data: TIdRTPPayload;
                                              Binding: TIdConnection);
 begin
@@ -5610,39 +5663,13 @@ begin
 end;
 
 procedure TestTIdSipInboundSession.TestRedirectCall;
-var
-  Dest:         TIdSipAddressHeader;
-  SentResponse: TIdSipResponse;
 begin
-  Self.CreateAction;
-  Check(Assigned(Self.Session), 'OnInboundCall not called');
-  Self.MarkSentResponseCount;
+  Self.CheckRedirectCall(true);
+end;
 
-  Dest := TIdSipAddressHeader.Create;
-  try
-    Dest.DisplayName := 'Wintermute';
-    Dest.Address.Uri := 'sip:wintermute@talking-head.tessier-ashpool.co.luna';
-
-    Self.Session.RedirectCall(Dest);
-    CheckResponseSent('No response sent');
-
-    SentResponse := Self.LastSentResponse;
-    CheckEquals(SIPMovedTemporarily,
-                SentResponse.StatusCode,
-                'Wrong response sent');
-    Check(SentResponse.HasHeader(ContactHeaderFull),
-          'No Contact header');
-    CheckEquals(Dest.DisplayName,
-                SentResponse.FirstContact.DisplayName,
-                'Contact display name');
-    CheckEquals(Dest.Address.Uri,
-                SentResponse.FirstContact.Address.Uri,
-                'Contact address');
-
-    Check(Self.OnEndedSessionFired, 'OnEndedSession didn''t fire');
-  finally
-    Dest.Free;
-  end;
+procedure TestTIdSipInboundSession.TestRedirectCallPermanent;
+begin
+  Self.CheckRedirectCall(false);
 end;
 
 procedure TestTIdSipInboundSession.TestRejectCallBusy;
@@ -8149,7 +8176,7 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipSessionReferralMethod
+//* TestTIdSipSessionReferralMethod                                            *
 //******************************************************************************
 //* TestTIdSipSessionReferralMethod Public methods *****************************
 
@@ -8187,6 +8214,67 @@ begin
         'Session param');
   Check(Self.Method.Binding = Self.Listener.BindingParam,
         'Binding param');
+end;
+
+//******************************************************************************
+//* TestTIdSipSessionRedirectWait                                              *
+//******************************************************************************
+//* TestTIdSipSessionRedirectWait Public methods *******************************
+
+procedure TestTIdSipSessionRedirectWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.L := TIdSipTestInviteModuleListener.Create;
+  Self.Core.InviteModule.AddListener(Self.L);
+
+  Self.ReceiveInvite;
+  Self.Session := Self.L.SessionParam;
+  Self.Target  := TIdSipToHeader.Create;
+  Self.Target.Value := 'sip:charlie@example.com';
+
+  Self.Wait := TIdSipSessionRedirectWait.Create;
+  Self.Wait.NewTarget := Self.Target;
+  Self.Wait.Session   := Self.Session;
+end;
+
+procedure TestTIdSipSessionRedirectWait.TearDown;
+begin
+  Self.Wait.Free;
+  Self.Target.Free;
+  Self.Core.InviteModule.RemoveListener(Self.L);
+  Self.L.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipSessionRedirectWait Published methods ****************************
+
+procedure TestTIdSipSessionRedirectWait.TestTriggerWithTemporaryFalse;
+begin
+  Self.Wait.Temporary := false;
+
+  Self.MarkSentResponseCount;
+  Self.Wait.Trigger;
+  CheckResponseSent('No response sent');
+  CheckEquals(TIdSipInboundInvite.RedirectStatusCode(Self.Wait.Temporary),
+              Self.LastSentResponse.StatusCode,
+              'Unexpected response sent');
+  CheckEquals(Self.Target.Address.AsString,
+              Self.LastSentResponse.FirstContact.Address.AsString,
+              'Contact doesn''t contain the redirect target');            
+end;
+
+procedure TestTIdSipSessionRedirectWait.TestTriggerWithTemporaryTrue;
+begin
+  Self.Wait.Temporary := true;
+
+  Self.MarkSentResponseCount;
+  Self.Wait.Trigger;
+  CheckResponseSent('No response sent');
+  CheckEquals(TIdSipInboundInvite.RedirectStatusCode(Self.Wait.Temporary),
+              Self.LastSentResponse.StatusCode,
+              'Unexpected response sent');
 end;
 
 initialization

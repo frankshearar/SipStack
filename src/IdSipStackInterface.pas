@@ -242,7 +242,8 @@ type
                               const MimeType: String);
     procedure ReconfigureStack(NewConfiguration: TStrings);
     procedure RedirectCall(ActionHandle: TIdSipHandle;
-                           NewTarget: TIdSipAddressHeader);
+                           NewTarget: TIdSipAddressHeader;
+                           Temporary: Boolean = true);
     procedure RejectCall(ActionHandle: TIdSipHandle;
                          StatusCode: Cardinal;
                          StatusText: String = '');
@@ -1284,7 +1285,8 @@ begin
 end;
 
 procedure TIdSipStackInterface.RedirectCall(ActionHandle: TIdSipHandle;
-                                            NewTarget: TIdSipAddressHeader);
+                                            NewTarget: TIdSipAddressHeader;
+                                            Temporary: Boolean = true);
 var
   Action: TIdSipAction;
   Wait:   TIdSipSessionRedirectWait;
@@ -1296,6 +1298,7 @@ begin
     Wait := TIdSipSessionRedirectWait.Create;
     Wait.NewTarget := NewTarget;
     Wait.Session   := Action as TIdSipInboundSession;
+    Wait.Temporary := Temporary;
 
     Self.TimerQueue.AddEvent(TriggerImmediately, Wait);
   finally

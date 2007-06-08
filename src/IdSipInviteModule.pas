@@ -246,6 +246,8 @@ type
     procedure ReceiveInvite(Invite: TIdSipRequest); override;
     procedure SendResponse(Response: TIdSipResponse); override;
   public
+    class function  RedirectStatusCode(TemporaryMove: Boolean): Cardinal;
+
     destructor Destroy; override;
 
     procedure Accept(const Offer, ContentType: String);
@@ -557,7 +559,8 @@ type
     function  IsInbound: Boolean; override;
     function  Match(Msg: TIdSipMessage): Boolean; override;
     function  ModifyWaitTime: Cardinal; override;
-    procedure RedirectCall(NewDestination: TIdSipAddressHeader);
+    procedure RedirectCall(NewDestination: TIdSipAddressHeader;
+                           Temporary: Boolean = true);
     procedure RejectCallBusy;
     procedure RejectCall(ReasonCode: Cardinal; ReasonText: String = '');
     procedure Ring;
@@ -721,6 +724,7 @@ type
   TIdSipSessionRedirectWait = class(TIdSipInboundSessionWait)
   private
     fNewTarget: TIdSipAddressHeader;
+    fTemporary: Boolean;
 
     procedure SetNewTarget(Value: TIdSipAddressHeader);
   public
@@ -730,6 +734,7 @@ type
     procedure Trigger; override;
 
     property NewTarget: TIdSipAddressHeader read fNewTarget write SetNewTarget;
+    property Temporary: Boolean             read fTemporary write fTemporary;
   end;
 
   TIdSipSessionRejectWait = class(TIdSipInboundSessionWait)
@@ -1321,6 +1326,14 @@ end;
 //******************************************************************************
 //* TIdSipInboundInvite Public methods *****************************************
 
+class function TIdSipInboundInvite.RedirectStatusCode(TemporaryMove: Boolean): Cardinal;
+begin
+  if TemporaryMove then
+    Result := SIPMovedTemporarily
+  else
+    Result := SIPMovedPermanently;
+end;
+
 destructor TIdSipInboundInvite.Destroy;
 begin
   Self.LastResponse.Free;
@@ -1385,10 +1398,7 @@ var
   RedirectResponse: TIdSipResponse;
   RedirectType:     Cardinal;
 begin
-  if Temporary then
-    RedirectType := SIPMovedTemporarily
-  else
-    RedirectType := SIPMovedPermanently;
+  RedirectType := Self.RedirectStatusCode(Temporary);
 
   Contact := TIdSipContactHeader.Create;
   try
@@ -2873,12 +2883,13 @@ begin
   Result := GRandomNumber.NextCardinal(20)*10;
 end;
 
-procedure TIdSipInboundSession.RedirectCall(NewDestination: TIdSipAddressHeader);
+procedure TIdSipInboundSession.RedirectCall(NewDestination: TIdSipAddressHeader;
+                                            Temporary: Boolean = true);
 begin
   if not Assigned(Self.InitialInvite) then
     raise EIdSipTransactionUser.Create('You have already accepted the call');
 
-  Self.InitialInvite.Redirect(NewDestination);
+  Self.InitialInvite.Redirect(NewDestination, Temporary);
 
   Self.NotifyOfEndedSession(CallRedirected, RSNoReason);
 end;
@@ -3518,7 +3529,7 @@ end;
 
 procedure TIdSipSessionRedirectWait.Trigger;
 begin
-  Self.Session.RedirectCall(Self.NewTarget);
+  Self.Session.RedirectCall(Self.NewTarget, Self.Temporary);
 end;
 
 //* TIdSipSessionRedirectWait Private methods **********************************

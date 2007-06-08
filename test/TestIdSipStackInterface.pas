@@ -68,6 +68,7 @@ type
     TargetPort:          Cardinal;
 
     procedure AddSubscribeSupport(Stack: TIdSipStackInterface; EventPackage: String);
+    procedure CheckRedirectCall(Temporary: Boolean);
     procedure ClearPendingStackStartedNotification;
 {
     function  CreateBindings: TIdSipContacts;
@@ -149,6 +150,7 @@ type
     procedure TestReconfigureAddsStackAsTransportListener;
     procedure TestReconfigureSendsNotify;
     procedure TestRedirectCall;
+    procedure TestRedirectCallPermanently;
     procedure TestRedirectCallWithInvalidHandle;
     procedure TestRedirectCallWithNonExistentHandle;
     procedure TestRejectCall;
@@ -715,6 +717,35 @@ begin
     Self.TimerQueue.TriggerAllEventsOfType(TIdSipStackReconfigureStackInterfaceWait);
   finally
     NewConf.Free;
+  end;
+end;
+
+procedure TestTIdSipStackInterface.CheckRedirectCall(Temporary: Boolean);
+var
+  NewTarget: TIdSipAddressHeader;
+begin
+  Self.ReceiveInviteWithOffer(Self.RemoteOffer, Self.RemoteMimeType);
+  Self.ProcessAllPendingNotifications;
+  CheckNotificationReceived(TIdInboundCallData, 'No inbound call notification received');
+
+  Check(Self.LastEventOfType(TIdInboundCallData).Handle > 0, 'Invalid Action handle');
+
+  NewTarget := TIdSipContactHeader.Create;
+  try
+    NewTarget.Value := 'sip:' + TIdIPAddressParser.IncIPAddress(Self.TargetAddress);
+
+    Self.MarkSentResponseCount;
+    Self.Intf.RedirectCall(Self.SecondLastEventData.Handle, NewTarget, Temporary);
+    Self.TimerQueue.TriggerAllEventsOfType(TIdSipSessionRedirectWait);
+    CheckResponseSent('No response sent');
+    CheckEquals(TIdSipInboundInvite.RedirectStatusCode(Temporary),
+                Self.LastSentResponse.StatusCode,
+                'Unexpected response sent');
+    CheckEquals(NewTarget.AsString,
+                Self.LastSentResponse.FirstContact.AsString,
+                'Unexpected redirection target');
+  finally
+    NewTarget.Free;
   end;
 end;
 
@@ -1701,30 +1732,13 @@ begin
 end;
 
 procedure TestTIdSipStackInterface.TestRedirectCall;
-var
-  NewTarget: TIdSipAddressHeader;
 begin
-  Self.ReceiveInviteWithOffer(Self.RemoteOffer, Self.RemoteMimeType);
-  Self.ProcessAllPendingNotifications;
-  CheckNotificationReceived(TIdInboundCallData, 'No inbound call notification received');
+  CheckRedirectCall(true);
+end;
 
-  Check(Self.LastEventOfType(TIdInboundCallData).Handle > 0, 'Invalid Action handle');
-
-  NewTarget := TIdSipContactHeader.Create;
-  try
-    NewTarget.Value := 'sip:' + TIdIPAddressParser.IncIPAddress(Self.TargetAddress);
-
-    Self.MarkSentResponseCount;
-    Self.Intf.RedirectCall(Self.SecondLastEventData.Handle, NewTarget);
-    Self.TimerQueue.TriggerAllEventsOfType(TIdSipSessionRedirectWait);
-    CheckResponseSent('No response sent');
-    CheckEquals(SIPMovedTemporarily, Self.LastSentResponse.StatusCode, 'Unexpected response sent');
-    CheckEquals(NewTarget.AsString,
-                Self.LastSentResponse.FirstContact.AsString,
-                'Unexpected redirection target');
-  finally
-    NewTarget.Free;
-  end;
+procedure TestTIdSipStackInterface.TestRedirectCallPermanently;
+begin
+  CheckRedirectCall(false);
 end;
 
 procedure TestTIdSipStackInterface.TestRedirectCallWithInvalidHandle;
