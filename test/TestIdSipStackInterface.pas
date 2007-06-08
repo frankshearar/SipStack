@@ -408,7 +408,12 @@ type
     procedure TestCopy;
   end;
 
-  TestTIdSessionData = class(TTestCase)
+  TSessionDataTestCase = class(TTestCase)
+  protected
+    procedure SetTestData(Data: TIdSessionData); virtual;
+  end;
+
+  TestTIdSessionData = class(TSessionDataTestCase)
   private
     Data: TIdSessionData;
   public
@@ -418,6 +423,17 @@ type
     procedure TestCopy;
     procedure TestSetLocalPartyStripsTagParam;
     procedure TestSetRemotePartyStripsTagParam;
+  end;
+
+  TestTIdEstablishedSessionData = class(TSessionDataTestCase)
+  private
+    Data: TIdEstablishedSessionData;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAsString;
+    procedure TestCopy;
   end;
 
   TestTIdInboundCallData = class(TTestCase)
@@ -3282,6 +3298,20 @@ begin
   end;
 end;
 
+//* TSessionDataTestCase Protected methods *************************************
+
+procedure TSessionDataTestCase.SetTestData(Data: TIdSessionData);
+begin
+  Data.LocalContact.Value       := 'sip:giftshop.hilton.tr;transport=tcp';
+  Data.LocalMimeType            := '2';
+  Data.LocalParty.Value         := 'sip:case@fried-neurons.org';
+  Data.LocalSessionDescription  := '1';
+  Data.RemoteContact.Value      := 'sip:wintermute@terminalhead.tessier-ashpool.co.luna;transport=sctp';
+  Data.RemoteMimeType           := '4';
+  Data.RemoteParty.Value        := 'sip:wintermute@tessier-ashpool.co.luna';
+  Data.RemoteSessionDescription := '3';
+end;
+
 //******************************************************************************
 //* TestTIdSessionData                                                         *
 //******************************************************************************
@@ -3292,14 +3322,7 @@ begin
   inherited SetUp;
 
   Self.Data := TIdSessionData.Create;
-  Self.Data.LocalContact.Value       := 'sip:giftshop.hilton.tr;transport=tcp';
-  Self.Data.LocalMimeType            := '2';
-  Self.Data.LocalParty.Value         := 'sip:case@fried-neurons.org';
-  Self.Data.LocalSessionDescription  := '1';
-  Self.Data.RemoteContact.Value      := 'sip:wintermute@terminalhead.tessier-ashpool.co.luna;transport=sctp';
-  Self.Data.RemoteMimeType           := '4';
-  Self.Data.RemoteParty.Value        := 'sip:wintermute@tessier-ashpool.co.luna';
-  Self.Data.RemoteSessionDescription := '3';
+  Self.SetTestData(Self.Data);
 end;
 
 procedure TestTIdSessionData.TearDown;
@@ -3374,6 +3397,70 @@ begin
   try
     Copy.RemoteParty := Self.Data.RemoteParty;
     Check(not Copy.RemoteParty.HasParameter(TagParam), 'Tag param not removed');
+  finally
+    Copy.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdEstablishedSessionData                                              *
+//******************************************************************************
+//* TestTIdEstablishedSessionData Public methods *******************************
+
+procedure TestTIdEstablishedSessionData.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Data := TIdEstablishedSessionData.Create;
+  Self.SetTestData(Self.Data);
+  Self.Data.ID.CallID    := '1';
+  Self.Data.ID.LocalTag  := '2';
+  Self.Data.ID.RemoteTag := '3';
+end;
+
+procedure TestTIdEstablishedSessionData.TearDown;
+begin
+  Self.Data.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdEstablishedSessionData Published methods ****************************
+
+procedure TestTIdEstablishedSessionData.TestAsString;
+begin
+end;
+
+procedure TestTIdEstablishedSessionData.TestCopy;
+var
+  Copy: TIdEstablishedSessionData;
+begin
+  Copy := Self.Data.Copy as TIdEstablishedSessionData;
+  try
+    CheckEquals(IntToHex(Self.Data.Handle, 8),
+                IntToHex(Copy.Handle, 8),
+                'Handle');
+    CheckEquals(Self.Data.LocalMimeType,
+                Copy.LocalMimeType,
+                'LocalMimeType');
+    CheckEquals(Self.Data.LocalSessionDescription,
+                Copy.LocalSessionDescription,
+                'LocalSessionDescription');
+    CheckEquals(Self.Data.RemoteContact.FullValue,
+                Copy.RemoteContact.FullValue,
+                'RemoteContact');
+    CheckEquals(Self.Data.RemoteMimeType,
+                Copy.RemoteMimeType,
+                'RemoteMimeType');
+    CheckEquals(Self.Data.RemoteParty.FullValue,
+                Copy.RemoteParty.FullValue,
+                'RemoteParty');
+    CheckEquals(Self.Data.RemoteSessionDescription,
+                Copy.RemoteSessionDescription,
+                'RemoteSessionDescription');
+    CheckEquals(Self.Data.ID.AsString,
+                Copy.ID.AsString,
+                'ID');
   finally
     Copy.Free;
   end;

@@ -573,8 +573,17 @@ type
   TIdSessionDataClass = class of TIdSessionData;
 
   TIdEstablishedSessionData = class(TIdSessionData)
+  private
+    fID: TIdSipDialogID;
+
+    procedure SetID(Value: TIdSipDialogID);
   protected
     function EventName: String; override;
+  public
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    property ID: TIdSipDialogID read fID write SetID;
   end;
 
   TIdInboundCallData = class(TIdSessionData)
@@ -1710,6 +1719,7 @@ begin
   try
     Data.Handle                   := Self.HandleFor(Session);
     Data.LocalContact             := Session.LocalGruu;
+    Data.ID                       := Session.Dialog.ID;
     Data.LocalMimeType            := Session.LocalMimeType;
     Data.LocalParty               := Session.LocalParty;
     Data.LocalSessionDescription  := Session.LocalSessionDescription;
@@ -2959,11 +2969,37 @@ end;
 //******************************************************************************
 //* TIdEstablishedSessionData                                                  *
 //******************************************************************************
+//* TIdEstablishedSessionData Public methods ***********************************
+
+
+constructor TIdEstablishedSessionData.Create;
+begin
+  inherited Create;
+
+  Self.fID := TIdSipDialogID.Create;
+end;
+
+destructor TIdEstablishedSessionData.Destroy;
+begin
+  Self.fID.Free;
+
+  inherited Destroy;
+end;
+
 //* TIdEstablishedSessionData Protected methods ********************************
 
 function TIdEstablishedSessionData.EventName: String;
 begin
   Result := EventNames(CM_CALL_ESTABLISHED);
+end;
+
+//* TIdEstablishedSessionData Private methods **********************************
+
+procedure TIdEstablishedSessionData.SetID(Value: TIdSipDialogID);
+begin
+  Self.fID.CallID    := Value.CallID;
+  Self.fID.LocalTag  := Value.LocalTag;
+  Self.fID.RemoteTag := Value.RemoteTag;
 end;
 
 //******************************************************************************

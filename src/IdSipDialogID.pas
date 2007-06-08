@@ -27,9 +27,9 @@ type
     function Equals(ID: TIdSipDialogID): Boolean;
     function GetRemoteID: TIdSipDialogID;
 
-    property CallID:    String read fCallID;
-    property LocalTag:  String read fLocalTag;
-    property RemoteTag: String read fRemoteTag;
+    property CallID:    String read fCallID    write fCallID;
+    property LocalTag:  String read fLocalTag  write fLocalTag;
+    property RemoteTag: String read fRemoteTag write fRemoteTag;
   end;
 
 const
