@@ -249,7 +249,8 @@ type
                          StatusText: String = '');
     procedure Resume;
     procedure Send(ActionHandle: TIdSipHandle);
-    procedure Terminate;
+    procedure Terminate; overload;
+    procedure Terminate(ActionHandle: TIdSipHandle); overload;
 
     property ID: String read fID;
   end;
@@ -1373,6 +1374,24 @@ end;
 procedure TIdSipStackInterface.Terminate;
 begin
   Self.Free;
+end;
+
+procedure TIdSipStackInterface.Terminate(ActionHandle: TIdSipHandle);
+var
+  Action: TIdSipAction;
+  Wait:   TIdSipActionTerminateWait;
+begin
+  Self.ActionLock.Acquire;
+  try
+    Action := Self.GetAndCheckAction(ActionHandle, TIdSipAction);
+
+    Wait := TIdSipActionTerminateWait.Create;
+    Wait.ActionID := Action.ID;
+
+    Self.TimerQueue.AddEvent(TriggerImmediately, Wait);    
+  finally
+    Self.ActionLock.Release;
+  end;
 end;
 
 //* TIdSipStackInterface Protected methods *************************************

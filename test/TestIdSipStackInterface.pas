@@ -164,6 +164,7 @@ type
     procedure TestStackListensToSubscribeModule;
     procedure TestStackListensToSubscribeModuleAfterReconfigure;
     procedure TestStackReceivesExceptionNotifications;
+    procedure TestTerminateAction;
   end;
 
   TestTIdSipStackInterfaceRegistry = class(TTestCase)
@@ -2034,6 +2035,40 @@ begin
   Self.ProcessAllPendingNotifications;
 
   CheckNotificationReceived(TIdDebugWaitExceptionData, 'No exception notification received');
+end;
+
+procedure TestTIdSipStackInterface.TestTerminateAction;
+var
+  Handle:  TIdSipHandle;
+  Notify:  TIdSipRequest;
+  Package: TIdSipEventPackageClass;
+begin
+  Package := TIdSipTargetDialogPackage;
+
+  Self.SetUpPackageSupport(Package);
+  try
+    Self.AddSubscribeSupport(Self.Intf, Package.EventPackage);
+
+    Self.ReceiveSubscribe(Package.EventPackage);
+    Self.ProcessAllPendingNotifications;
+    CheckNotificationReceived(TIdSubscriptionRequestData, 'No subscription request notification received');
+    Handle := Self.LastEventOfType(TIdSubscriptionRequestData).Handle;
+
+    Self.MarkSentRequestCount;
+    Self.Intf.Terminate(Handle);
+    Self.TimerQueue.TriggerAllEventsUpToFirst(TIdSipActionTerminateWait);
+    CheckRequestSent('No request sent');
+
+    Notify := Self.LastSentRequest;
+    CheckEquals(MethodNotify, Notify.Method, 'Unexpected request sent');
+    Check(Notify.HasHeader(SubscriptionStateHeader),
+          'NOTIFY lacks a Subscription-State header');
+    CheckEquals(SubscriptionSubstateTerminated,
+                Notify.SubscriptionState.SubState,
+                'NOTIFY didn''t terminate');
+  finally
+    Self.TearDownPackageSupport(Package);
+  end;
 end;
 
 //******************************************************************************
