@@ -17,7 +17,10 @@ type
     fCallID:    String;
     fLocalTag:  String;
     fRemoteTag: String;
+
+    procedure Initialise(CallID, LocalTag, RemoteTag: String);
   public
+    constructor Create; overload;
     constructor Create(const CallID: String;
                        const LocalTag: String;
                        const RemoteTag: String); overload;
@@ -45,24 +48,27 @@ uses
 //******************************************************************************
 //* TIdSipDialogID Public methods **********************************************
 
+constructor TIdSipDialogID.Create;
+begin
+  inherited Create;
+
+  Self.Initialise('', '', '');
+end;
+
 constructor TIdSipDialogID.Create(const CallID: String;
                                   const LocalTag: String;
                                   const RemoteTag: String);
 begin
   inherited Create;
 
-  Self.fCallID    := CallID;
-  Self.fLocalTag  := LocalTag;
-  Self.fRemoteTag := RemoteTag;
+  Self.Initialise(CallID, LocalTag, RemoteTag);
 end;
 
 constructor TIdSipDialogID.Create(ID: TIdSipDialogID);
 begin
   inherited Create;
 
-  Self.fCallID    := ID.CallID;
-  Self.fLocalTag  := ID.LocalTag;
-  Self.fRemoteTag := ID.RemoteTag;
+  Self.Initialise(ID.CallID, ID.LocalTag, ID.RemoteTag);
 end;
 
 function TIdSipDialogID.AsString: String;
@@ -81,6 +87,15 @@ end;
 function TIdSipDialogID.GetRemoteID: TIdSipDialogID;
 begin
   Result := TIdSipDialogID.Create(Self.CallID, Self.RemoteTag, Self.LocalTag);
+end;
+
+//* TIdSipDialogID Private methods *********************************************
+
+procedure TIdSipDialogID.Initialise(CallID, LocalTag, RemoteTag: String);
+begin
+  Self.fCallID    := CallID;
+  Self.fLocalTag  := LocalTag;
+  Self.fRemoteTag := RemoteTag;
 end;
 
 end.
