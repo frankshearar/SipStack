@@ -165,6 +165,7 @@ type
     procedure TestStackListensToSubscribeModuleAfterReconfigure;
     procedure TestStackReceivesExceptionNotifications;
     procedure TestTerminateAction;
+    procedure TestTerminateActionWithNonExistentHandle;
   end;
 
   TestTIdSipStackInterfaceRegistry = class(TTestCase)
@@ -2068,6 +2069,18 @@ begin
                 'NOTIFY didn''t terminate');
   finally
     Self.TearDownPackageSupport(Package);
+  end;
+end;
+
+procedure TestTIdSipStackInterface.TestTerminateActionWithNonExistentHandle;
+const
+  ArbValue = 42;
+begin
+  try
+    Self.Intf.Terminate(ArbValue);
+    Fail('No exception raised for a non-existent handle');
+  except
+    on EInvalidHandle do;
   end;
 end;
 
