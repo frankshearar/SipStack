@@ -587,6 +587,7 @@ begin
   Result.AddTest(TestTIdFailedRegistrationData.Suite);
   Result.AddTest(TestTIdSessionProgressData.Suite);
   Result.AddTest(TestTIdSessionData.Suite);
+  Result.AddTest(TestTIdEstablishedSessionData.Suite);
   Result.AddTest(TestTIdInboundCallData.Suite);
   Result.AddTest(TestTIdSubscriptionRequestData.Suite);
   Result.AddTest(TestTIdResubscriptionData.Suite);
@@ -3428,7 +3429,40 @@ end;
 //* TestTIdEstablishedSessionData Published methods ****************************
 
 procedure TestTIdEstablishedSessionData.TestAsString;
+var
+  Expected: TStrings;
+  Received: TStrings;
 begin
+  Expected := TStringList.Create;
+  try
+    Received := TStringList.Create;
+    try
+      Expected.Add('Local party: ' + Self.Data.LocalParty.FullValue);
+      Expected.Add('Local contact: ' + Self.Data.LocalContact.FullValue);
+      Expected.Add('Remote party: ' + Self.Data.RemoteParty.FullValue);
+      Expected.Add('Remote contact: ' + Self.Data.RemoteContact.FullValue);
+      Expected.Add('Local session description (' + Self.Data.LocalMimeType + '):');
+      Expected.Add(Self.Data.LocalSessionDescription);
+      Expected.Add('Remote session description (' + Self.Data.RemoteMimeType + '):');
+      Expected.Add(Self.Data.RemoteSessionDescription);
+      Expected.Add('Dialog ID: ' + Self.Data.ID.AsString);
+      Expected.Insert(0, '');
+      Expected.Insert(1, EventNames(CM_CALL_ESTABLISHED));
+      Received.Text := Self.Data.AsString;
+
+      // We ignore the first line of the debug data (it's a timestamp & a
+      // handle)
+      Received[0] := '';
+
+      CheckEquals(Expected.Text,
+                  Received.Text,
+                  'Unexpected debug data');
+    finally
+      Received.Free;
+    end;
+  finally
+    Expected.Free;
+  end;
 end;
 
 procedure TestTIdEstablishedSessionData.TestCopy;

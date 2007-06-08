@@ -583,6 +583,8 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
+    procedure Assign(Src: TPersistent); override;
+
     property ID: TIdSipDialogID read fID write SetID;
   end;
 
@@ -2984,6 +2986,19 @@ begin
   Self.fID.Free;
 
   inherited Destroy;
+end;
+
+procedure TIdEstablishedSessionData.Assign(Src: TPersistent);
+var
+  Other: TIdEstablishedSessionData;
+begin
+  inherited Assign(Src);
+
+  if (Src is TIdEstablishedSessionData) then begin
+    Other := Src as TIdEstablishedSessionData;
+
+    Self.ID := Other.ID;
+  end;
 end;
 
 //* TIdEstablishedSessionData Protected methods ********************************
