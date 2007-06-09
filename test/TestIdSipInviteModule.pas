@@ -327,6 +327,7 @@ type
     OnModifySessionFired:      Boolean;
     OnReferralFired:           Boolean;
     Reason:                    String;
+    ReceivingBinding:          TIdSipConnectionBindings;
     RemoteSessionDescription:  String;
     SimpleSdp:                 TIdSdpPayload;
 
@@ -3869,6 +3870,8 @@ procedure TestTIdSipSession.OnReferral(Session: TIdSipSession;
                                        Refer: TIdSipRequest;
                                        Binding: TIdSipConnectionBindings);
 begin
+  Self.ReceivingBinding := Binding;
+
   Self.OnReferralFired := true;
 end;
 
@@ -4509,6 +4512,9 @@ begin
     Self.ReceiveRequest(Refer);
     Check(Self.OnReferralFired,
           'Session didn''t receive the REFER');
+
+    Check(Assigned(Self.ReceivingBinding),
+          'Session didn''t pass the Binding to its listeners');
   finally
     Refer.Free;
   end;

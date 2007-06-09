@@ -497,7 +497,8 @@ type
     procedure ReceiveInitialInvite(Invite: TIdSipRequest); virtual;
     procedure ReceiveInvite(Invite: TIdSipRequest;
                             Binding: TIdSipConnectionBindings);
-    procedure ReceiveRefer(Refer: TIdSipRequest); virtual;
+    procedure ReceiveRefer(Refer: TIdSipRequest;
+                           Binding: TIdSipConnectionBindings); virtual;
     procedure SendBye; virtual;
     procedure SetFullyEstablished(Value: Boolean); virtual;
 
@@ -2308,7 +2309,7 @@ begin
   else if Request.IsBye    then Self.ReceiveBye(Request)
   else if Request.IsCancel then Self.ReceiveCancel(Request)
   else if Request.IsInvite then Self.ReceiveInvite(Request, Binding)
-  else if Request.IsRefer  then Self.ReceiveRefer(Request)
+  else if Request.IsRefer  then Self.ReceiveRefer(Request, Binding)
   else
     inherited ReceiveRequest(Request, Binding);
 end;
@@ -2666,7 +2667,8 @@ begin
   end;
 end;
 
-procedure TIdSipSession.ReceiveRefer(Refer: TIdSipRequest);
+procedure TIdSipSession.ReceiveRefer(Refer: TIdSipRequest;
+                                     Binding: TIdSipConnectionBindings);
 var
   Module:       TIdSipSubscribeModule;
   Notification: TIdSipSessionReferralMethod;
@@ -2682,6 +2684,7 @@ begin
   else begin
     Notification := TIdSipSessionReferralMethod.Create;
     try
+      Notification.Binding := Binding;
       Notification.Refer   := Refer;
       Notification.Session := Self;
 
