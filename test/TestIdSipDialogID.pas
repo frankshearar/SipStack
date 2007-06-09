@@ -22,6 +22,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAssign;
     procedure TestAsString;
     procedure TestCreationFromParameters;
     procedure TestCreationFromDialogID;
@@ -63,6 +64,22 @@ begin
 end;
 
 //* TestTIdSipDialogID Published methods ***************************************
+
+procedure TestTIdSipDialogID.TestAssign;
+var
+  Copy: TIdSipDialogID;
+begin
+  Copy := TIdSipDialogID.Create;
+  try
+    Copy.Assign(Self.ID);
+
+    CheckEquals(Self.ID.CallID,    Copy.CallID,    'CallID');
+    CheckEquals(Self.ID.LocalTag,  Copy.LocalTag,  'LocalTag');
+    CheckEquals(Self.ID.RemoteTag, Copy.RemoteTag, 'RemoteTag');
+  finally
+    Copy.Free;
+  end;
+end;
 
 procedure TestTIdSipDialogID.TestAsString;
 begin

@@ -11,8 +11,11 @@ unit IdSipDialogID;
 
 interface
 
+uses
+  Classes;
+
 type
-  TIdSipDialogID = class(TObject)
+  TIdSipDialogID = class(TPersistent)
   private
     fCallID:    String;
     fLocalTag:  String;
@@ -26,9 +29,10 @@ type
                        const RemoteTag: String); overload;
     constructor Create(ID: TIdSipDialogID); overload;
 
-    function AsString: String;
-    function Equals(ID: TIdSipDialogID): Boolean;
-    function GetRemoteID: TIdSipDialogID;
+    procedure Assign(Src: TPersistent); override;
+    function  AsString: String;
+    function  Equals(ID: TIdSipDialogID): Boolean;
+    function  GetRemoteID: TIdSipDialogID;
 
     property CallID:    String read fCallID    write fCallID;
     property LocalTag:  String read fLocalTag  write fLocalTag;
@@ -69,6 +73,22 @@ begin
   inherited Create;
 
   Self.Initialise(ID.CallID, ID.LocalTag, ID.RemoteTag);
+end;
+
+procedure TIdSipDialogID.Assign(Src: TPersistent);
+var
+  Other: TIdSipDialogID;
+begin
+  // Foo.Assign(Foo) should do nothing.
+  if (Self = Src) then Exit;
+
+  if (Src is TIdSipDialogID) then begin
+    Other := Src as TIdSipDialogID;
+
+    Self.fCallID    := Other.CallID;
+    Self.fLocalTag  := Other.LocalTag;
+    Self.fRemoteTag := Other.RemoteTag;
+  end;
 end;
 
 function TIdSipDialogID.AsString: String;
