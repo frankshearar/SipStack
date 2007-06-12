@@ -1916,6 +1916,8 @@ end;
 
 function TIdSipOutboundRegistration.ReregisterTime(Expires: Cardinal): Cardinal;
 begin
+  // Expires and Result are both expressed in seconds.
+  
   // Expires magnitude:                  Result
   // Expires >= 20 minutes               Expires - 5 minutes
   // 1 minute <= Expires < 20 minutes    Expires - 1 minute
