@@ -576,6 +576,7 @@ type
     SubscriptionNotified:    Boolean;
     UnknownReason:           String;
 
+    procedure CheckExpires(ExpectedRefreshTime: Cardinal);
     procedure CheckNoRetryScheduled(const MsgPrefix: String);
     procedure CheckReceiveFailureResponse(StatusCode: Cardinal);
     procedure CheckRetryScheduled(const MsgPrefix: String);
@@ -661,7 +662,6 @@ type
   TestTIdSipOutboundSubscription = class(TestTIdSipOutboundSubscriptionBase,
                                          IIdSipSubscriptionListener)
   private
-    procedure CheckExpires(ExpectedRefreshTime: Cardinal);
 {
     procedure ReceiveNotifyNoAuth(Subscribe: TIdSipRequest;
                                   Response: TIdSipResponse;
@@ -3427,6 +3427,29 @@ begin
   Result.Send;
 end;
 
+procedure TestTIdSipOutboundSubscriptionBase.CheckExpires(ExpectedRefreshTime: Cardinal);
+var
+  Wait: TIdWait;
+begin
+  Check(Self.DebugTimer.EventCount > 0,
+        'No events scheduled at all');
+
+  Wait := Self.DebugTimer.LastEventScheduled(TIdSipOutboundSubscriptionRefreshWait);
+  CheckNotNull(Wait, 'No event scheduled');
+  Check(Wait.DebugWaitTime < ExpectedRefreshTime*1000,
+        'Refresh scheduled too late');
+
+  Self.MarkSentRequestCount;
+  Self.DebugTimer.TriggerAllEventsOfType(TIdSipActionWait);
+  Self.CheckRequestSent('No request sent, thus no refresh was scheduled');
+
+  Check(not Self.Subscription.Terminating,
+        'Subscription can''t terminating, since we''ve just refreshed');
+  Check(not Self.Subscription.IsTerminated,
+        'Subscription can''t be terminated, since we''ve not received a '
+      + 'terminating NOTIFY');
+end;
+
 procedure TestTIdSipOutboundSubscriptionBase.CheckNoRetryScheduled(const MsgPrefix: String);
 begin
   // Self.RenewSubscriptionFired might be true if the subscription automatically
@@ -3834,12 +3857,7 @@ begin
   Sub := Self.CreateSubscription;
   Self.ReceiveResponse(SIPAccepted);
 
-  Check(Self.DebugTimer.EventCount > 0,
-        Self.ClassName + ': No refresh scheduled');
-
-  CheckEquals(Sub.Duration*1000,
-              Self.DebugTimer.LastEventScheduled.DebugWaitTime,
-              Self.ClassName + ': Refresh''s scheduled time wrong');
+  CheckExpires(Sub.Duration);
 end;
 
 procedure TestTIdSipOutboundSubscriptionBase.TestReceiveActiveNotify;
@@ -4343,30 +4361,6 @@ begin
 end;
 
 //* TestTIdSipOutboundSubscription Private methods *****************************
-
-procedure TestTIdSipOutboundSubscription.CheckExpires(ExpectedRefreshTime: Cardinal);
-var
-  Wait: TIdWait;
-begin
-  Check(Self.DebugTimer.EventCount > 0,
-        'No events scheduled at all');
-
-  Wait := Self.DebugTimer.LastEventScheduled(TIdSipOutboundSubscriptionRefreshWait);
-  CheckNotNull(Wait, 'No event scheduled');
-  CheckEquals(ExpectedRefreshTime*1000,
-              Wait.DebugWaitTime,
-              'Wrong Expiry time (in milliseconds)');
-
-  Self.MarkSentRequestCount;
-  Self.DebugTimer.TriggerAllEventsOfType(TIdSipActionWait);
-  Self.CheckRequestSent('No request sent, thus no refresh was scheduled');
-
-  Check(not Self.Subscription.Terminating,
-        'Subscription can''t terminating, since we''ve just refreshed');
-  Check(not Self.Subscription.IsTerminated,
-        'Subscription can''t be terminated, since we''ve not received a '
-      + 'terminating NOTIFY');
-end;
 {
 procedure TestTIdSipOutboundSubscription.ReceiveNotifyNoAuth(Subscribe: TIdSipRequest;
                                                              Response: TIdSipResponse;
@@ -4465,19 +4459,20 @@ end;
 procedure TestTIdSipOutboundSubscription.TestReceive2xx;
 const
   ExpireTime = 1000;
+var
+  Sub: TIdSipOutboundSubscription;
 begin
-  Self.CreateSubscription;
+  Sub := Self.CreateSubscription;
   Self.ReceiveOkFor(Self.LastSentRequest, ExpireTime);
 
   Check(not Self.SubscriptionEstablished,
         'Subscriptions are only established when we receive a NOTIFY saying so');
 
-  Check(Self.DebugTimer.EventCount > 0,
-        'No refresh scheduled');
+  CheckExpires(ExpireTime);
 
-  CheckEquals(ExpireTime*1000,
-              Self.DebugTimer.LastEventScheduled.DebugWaitTime,
-              'Refresh''s scheduled time wrong');
+  CheckEquals(ExpireTime,
+              Sub.Duration,
+              Self.ClassName + ': Subscription''s duration not updated');
 end;
 
 procedure TestTIdSipOutboundSubscription.TestReceiveActiveNotifyWithExpires;

@@ -592,6 +592,7 @@ type
     procedure Expire; override;
     function  Match(Msg: TIdSipMessage): Boolean; override;
     procedure Refresh(NewDuration: Cardinal);
+    function  RefreshTime(SubscriptionDurationInSeconds: Cardinal): Cardinal;
     procedure RemoveListener(Listener: IIdSipSubscriptionListener);
     procedure Send; override;
     procedure Terminate; override;
@@ -2440,6 +2441,29 @@ begin
   RefreshSubscribe.Send;
 end;
 
+function TIdSipOutboundSubscription.RefreshTime(SubscriptionDurationInSeconds: Cardinal): Cardinal;
+begin
+  // Return the amount of time, in seconds, before actually sending a refreshing
+  // SUBSCRIBE, given the subscription duration in seconds.
+  // Expires and Result are both expressed in seconds.
+
+  // Duration magnitude:                  Result
+  // Duration >= 20 minutes               Duration - 5 minutes
+  // 1 minute <= Duration < 20 minutes    Duration - 1 minute
+  // Duration < 1 minute                  0.8 * Duration
+
+  // Postcondition: Result > 0
+
+  if (SubscriptionDurationInSeconds <= 1) then
+    Result := 1
+  else if (SubscriptionDurationInSeconds < OneMinute) then
+    Result := 4*(SubscriptionDurationInSeconds div 5)
+  else if (SubscriptionDurationInSeconds < TwentyMinutes) then
+    Result := SubscriptionDurationInSeconds - OneMinute
+  else
+    Result := SubscriptionDurationInSeconds - FiveMinutes;
+end;
+
 procedure TIdSipOutboundSubscription.RemoveListener(Listener: IIdSipSubscriptionListener);
 begin
   Self.SubscriptionListeners.RemoveListener(Listener);
@@ -2732,13 +2756,7 @@ begin
   Self.InitialRequest.Assign(SuccessfulAction.InitialRequest);
   Self.EstablishDialog(Response);
 
-  if Response.HasHeader(ExpiresHeader) then
-    Self.RescheduleRefresh(Response.Expires.NumericValue)
-  else begin
-    // We shouldn't actually ever reach this: notifiers MUST have an Expires
-    // header.
-    Self.RescheduleRefresh(Self.Duration);
-  end;
+  Self.OnSuccess(SuccessfulAction, Response);
 end;
 
 procedure TIdSipOutboundSubscription.OnSuccess(Action: TIdSipAction;
@@ -2747,8 +2765,10 @@ begin
   if (Self.Unsubscriber = Action) then
     Exit;
 
-  if Msg.HasHeader(ExpiresHeader) then
-    Self.RescheduleRefresh(Msg.Expires.NumericValue)
+  if Msg.HasHeader(ExpiresHeader) then begin
+    Self.RescheduleRefresh(Msg.Expires.NumericValue);
+    Self.Duration := Msg.Expires.NumericValue;
+  end
   else begin
     // We shouldn't actually ever reach this: notifiers MUST have an Expires
     // header.
@@ -2778,8 +2798,8 @@ begin
   Refresh.ActionID    := Self.ID;
   Refresh.NewDuration := NewDuration;
 
-  // NewDuration is in seconds
-  Self.UA.ScheduleEvent(NewDuration*1000,
+  // NewDuration is in seconds.
+  Self.UA.ScheduleEvent(Self.RefreshTime(NewDuration)*1000,
                         Refresh);
 end;
 
