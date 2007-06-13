@@ -674,6 +674,7 @@ type
     procedure TestSetValueIPv6;
     procedure TestSetValueMalformed;
     procedure TestSetValuePortSpecified;
+    procedure TestSetValueToken;
   end;
 
   TestTIdSipWeightedCommaSeparatedHeader = class(THeaderTestCase)
@@ -6616,6 +6617,23 @@ begin
               Self.W.Code,
               'Code');
   CheckEquals('gw1.leo-ix.net:5060',
+              Self.W.Agent,
+              'Agent');
+  CheckEquals('Case is not home',
+              Self.W.Text,
+              'Text');
+end;
+
+procedure TestTIdSipWarningHeader.TestSetValueToken;
+const
+  WeirdToken = '%%%.this-is_a~token!';
+begin
+  Self.W.Value := '302 ' + WeirdToken + ' "Case is not home"';
+
+  CheckEquals(302,
+              Self.W.Code,
+              'Code');
+  CheckEquals(WeirdToken,
               Self.W.Agent,
               'Agent');
   CheckEquals('Case is not home',
