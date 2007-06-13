@@ -146,7 +146,7 @@ var
   Srv:      TIdSrvRecords;
   Target:   TIdSipUri;
 begin
-  // See doc/locating_servers.txt for a nice flow chart of this algorithm.begin
+  // See doc/locating_servers.txt for a nice flow chart of this algorithm.
 
   Self.PreFindServersFor(AddressOfRecord);
   try
