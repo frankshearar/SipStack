@@ -4212,13 +4212,15 @@ begin
 
   Self.MarkSentRequestCount;
   Self.ReceiveIntervalTooBrief(Self.LastSentRequest, NewExpiry);
-  CheckRequestSent('No request sent, so no re-attempted SUBSCRIBE refresh');
+  CheckRequestSent(Self.ClassName + ': No request sent, so no re-attempted SUBSCRIBE refresh');
   CheckEquals(MethodSubscribe,
               Self.LastSentRequest.Method,
-              'Wrong request sent');
+              Self.ClassName
+            + ': Wrong request sent');
   CheckEquals(NewExpiry,
               Self.LastSentRequest.Expires.NumericValue,
-              'Wrong expiry time attempted');
+              Self.ClassName
+            + ': Wrong expiry time attempted');
 end;
 
 procedure TestTIdSipOutboundSubscriptionBase.TestRefreshReceives481;
