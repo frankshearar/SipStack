@@ -110,9 +110,9 @@ type
     function  SrvTarget(Target: TIdUri;
                         const Protocol: String): String;
     function  TransportTypeFor(AddressOfRecord: TIdSipUri;
-                           NAPTR: TIdNaptrRecords;
-                           SRV: TIdSrvRecords;
-                           NameRecords: TIdDomainNameRecords): String;
+                               NAPTR: TIdNaptrRecords;
+                               SRV: TIdSrvRecords;
+                               NameRecords: TIdDomainNameRecords): String;
   end;
 
   ESipLocator = class(Exception);
@@ -396,9 +396,9 @@ begin
 end;
 
 function TIdSipAbstractLocator.TransportTypeFor(AddressOfRecord: TIdSipUri;
-                                            NAPTR: TIdNaptrRecords;
-                                            SRV: TIdSrvRecords;
-                                            NameRecords: TIdDomainNameRecords): String;
+                                                NAPTR: TIdNaptrRecords;
+                                                SRV: TIdSrvRecords;
+                                                NameRecords: TIdDomainNameRecords): String;
 var
   Target: String;
 begin
