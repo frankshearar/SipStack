@@ -1123,12 +1123,9 @@ type
 
   TIdSipWarningHeader = class(TIdSipHeader)
   private
-    fCode:       Cardinal;
-    fText:       String;
-    HostAndPort: TIdSipHostAndPort;
-
-    function  GetAgent: String;
-    procedure SetAgent(const Value: String);
+    fAgent: String;
+    fCode:  Cardinal;
+    fText:  String;
   protected
     function  GetName: String; override;
     function  GetValue: String; override;
@@ -1136,10 +1133,7 @@ type
   public
     class function IsHostPort(Token: String): Boolean;
 
-    constructor Create; override;
-    destructor  Destroy; override;
-
-    property Agent: String   read GetAgent write SetAgent;
+    property Agent: String   read fAgent write fAgent;
     property Code:  Cardinal read fCode write fCode;
     property Text:  String   read fText write fText;
   end;
@@ -7214,32 +7208,16 @@ begin
     HP := TIdSipHostAndPort.Create;
     try
       HP.Value := Token;
+      Result := true;
     finally
       HP.Free;
     end;
-
-    Result := TIdIPAddressParser.IsIPv4Address(HP.Host)
-           or TIdIPAddressParser.IsIPv6Address(HP.Host)
   except
-    on EBadHeader do
+    on EParserError do
       Result := false;
     on EConvertError do
       Result := false;
   end;
-end;
-
-constructor TIdSipWarningHeader.Create;
-begin
-  inherited Create;
-
-  Self.HostAndPort := TIdSipHostAndPort.Create;
-end;
-
-destructor TIdSipWarningHeader.Destroy;
-begin
-  Self.HostAndPort.Free;
-
-  inherited Destroy;
 end;
 
 //* TIdSipWarningHeader Protected methods **************************************
@@ -7288,12 +7266,9 @@ begin
   // warn-agent
   Token := Fetch(S, ' ');
 
-  try
-    Self.HostAndPort.Value := Token;
-  except
-    on E: EParserError do
-      Self.FailParse(E.Message);
-  end;
+  Self.Agent := Token;
+  if not Self.IsHostPort(Token) and not TIdSipParser.IsToken(Token) then
+    Self.FailParse(InvalidWarnAgent);
 
   // warn-text
   if not TIdSipParser.IsQuotedString(S) then
@@ -7301,18 +7276,6 @@ begin
 
   DecodeQuotedStr(Copy(S, 2, Length(S) - 2), S);
   Self.Text := S;
-end;
-
-//* TIdSipWarningHeader Private methods **************************************&&
-
-function TIdSipWarningHeader.GetAgent: String;
-begin
-  Result := Self.HostAndPort.Value;
-end;
-
-procedure TIdSipWarningHeader.SetAgent(const Value: String);
-begin
-  Self.HostAndPort.Value := Value;
 end;
 
 //******************************************************************************
