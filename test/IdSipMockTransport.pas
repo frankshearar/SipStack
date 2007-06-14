@@ -147,7 +147,7 @@ implementation
 
 uses
   Classes, Contnrs, IdRTP, IdSipSctpTransport, IdSipTcpTransport,
-  IdSipTlsTransport, IdSipUdpTransport, IdSipTlsOverSctpTransport;
+  IdSipTlsTransport, IdSipUdpTransport, IdSipTlsOverSctpTransport, IdTimerQueue;
 
 var
   GAllTransports: TObjectList;
@@ -423,6 +423,8 @@ end;
 
 procedure TIdSipMockTransport.SendRequest(R: TIdSipRequest;
                                           Dest: TIdSipLocation);
+var
+  Wait: TIdSipMessageExceptionWait;
 begin
   inherited SendRequest(R, Dest);
 
@@ -437,11 +439,14 @@ begin
     Inc(Self.fSentRequestCount);
   end;
 
-  if Assigned(Self.FailWith) then
-    raise EIdSipTransport.Create(Self,
-                                 R,
-                                 'TIdSipMockTransport.SendRequest ('
-                               + Self.FailWith.ClassName + ')');
+  if Assigned(Self.FailWith) then begin
+    Wait := TIdSipMessageExceptionWait.Create;
+    Wait.ExceptionType := Self.FailWith;
+    Wait.ExceptionMessage := 'Error injection';
+    Wait.Reason           := 'TIdSipMockTransport.SendRequest (' + Self.FailWith.ClassName + ')';
+
+    Self.Timer.AddEvent(TriggerImmediately, Wait);
+  end;
 
   if Self.AutoDispatch then
     Self.DispatchRequest(R, Dest);
