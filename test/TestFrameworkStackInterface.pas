@@ -7,6 +7,34 @@ uses
   IdTimerQueue, TestFramework, TestFrameworkSip;
 
 type
+  // I provide all the tests necessary to check on notifications sent by a
+  // TIdSipStackInterface.
+  //
+  // I am a bit of a hack played on the DUnit framework: when instantiated,
+  // I use the aptly-named Unused method's name as my MethodName (see TTestCase
+  // for details). I'm hacked like this to provide access to the context-free
+  // tests like Check, CheckEquals that TTestCase provides.
+  TIdDataList = class(TTestCase,
+                    IIdSipStackInterface)
+  private
+    DataList: TObjectList; // Holds all the data received from the stack
+
+    procedure OnEvent(Stack: TIdSipStackInterface;
+                      Event: Cardinal;
+                      Data:  TIdEventData);
+  public
+    constructor Create; reintroduce;
+    destructor  Destroy; override;
+
+    procedure CheckNotificationReceived(EventType: TIdEventDataClass; Msg: String);
+    function  EventAt(Index: Integer): TIdEventData;
+    function  LastEventOfType(EventType: TIdEventDataClass): TIdEventData;
+    function  SecondLastEventData: TIdEventData;
+    function  ThirdLastEventData: TIdEventData;
+  published
+    procedure Unused;
+  end;
+
   // When writing tests for the stack interface, remember that the stack runs in
   // a separate thread. All the methods (that don't create Actions) of the
   // StackInterface use TIdWaits to schedule events within the stack thread.
@@ -21,10 +49,9 @@ type
   // stack does with these notification, or how it presents them. This means
   // that if you're establishing a call and you receive a 200 OK, you must call
   // Application.ProcessMessages before the test can know about the response.
-  TStackInterfaceTestCase = class(TTestCase,
-                                  IIdSipStackInterface)
+  TStackInterfaceTestCase = class(TTestCase)
   private
-    DataList:          TObjectList; // Holds all the data received from the stack
+    DataList:          TIdDataList;
     SentRequestCount:  Cardinal;
     SentResponseCount: Cardinal;
   protected
@@ -48,48 +75,30 @@ type
   public
     procedure SetUp; override;
     procedure TearDown; override;
-
-    procedure OnEvent(Stack: TIdSipStackInterface;
-                      Event: Cardinal;
-                      Data:  TIdEventData);
   end;
 
 implementation
 
 //******************************************************************************
-//* TStackInterfaceTestCase                                                    *
+//* TIdDataList                                                                *
 //******************************************************************************
-//* TStackInterfaceTestCase Public methods *************************************
+//* TIdDataList Public methods *************************************************
 
-procedure TStackInterfaceTestCase.SetUp;
+constructor TIdDataList.Create;
 begin
-  inherited SetUp;
+  inherited Create('Unused');
 
-  Self.DataList   := TObjectList.Create(true);
-  Self.TimerQueue := TIdDebugTimerQueue.Create(true);
-  Self.UI         := TIdSipStackWindow.CreateNew(nil, Self);
+  Self.DataList := TObjectList.Create(true);
 end;
 
-procedure TStackInterfaceTestCase.TearDown;
+destructor TIdDataList.Destroy;
 begin
-  Self.ProcessAllPendingNotifications;
-  Self.UI.Release;
-  Self.TimerQueue.Terminate;
   Self.DataList.Free;
 
-  inherited TearDown;
+  inherited Destroy;
 end;
 
-procedure TStackInterfaceTestCase.OnEvent(Stack: TIdSipStackInterface;
-                                          Event: Cardinal;
-                                          Data:  TIdEventData);
-begin
-  Self.DataList.Add(Data);
-end;
-
-//* TStackInterfaceTestCase Protected methods **********************************
-
-procedure TStackInterfaceTestCase.CheckNotificationReceived(EventType: TIdEventDataClass; Msg: String);
+procedure TIdDataList.CheckNotificationReceived(EventType: TIdEventDataClass; Msg: String);
 var
   Found: Boolean;
   I: Integer;
@@ -104,22 +113,12 @@ begin
   if not Found then Fail(Msg);
 end;
 
-procedure TStackInterfaceTestCase.CheckRequestSent(Msg: String);
-begin
-  Check(Self.SentRequestCount < Self.MockTransport.SentRequestCount, Msg);
-end;
-
-procedure TStackInterfaceTestCase.CheckResponseSent(Msg: String);
-begin
-  Check(Self.SentResponseCount < Self.MockTransport.SentResponseCount, Msg);
-end;
-
-function TStackInterfaceTestCase.EventAt(Index: Integer): TIdEventData;
+function TIdDataList.EventAt(Index: Integer): TIdEventData;
 begin
   Result := Self.DataList[Index] as TIdEventData;
 end;
 
-function TStackInterfaceTestCase.LastEventOfType(EventType: TIdEventDataClass): TIdEventData;
+function TIdDataList.LastEventOfType(EventType: TIdEventDataClass): TIdEventData;
 var
   Found: Boolean;
   I:     Integer;
@@ -138,6 +137,84 @@ begin
     Result := Self.EventAt(I)
   else
     Fail('No event of type ' + EventType.ClassName + ' found');
+end;
+
+function TIdDataList.SecondLastEventData: TIdEventData;
+begin
+  Result := Self.DataList[Self.DataList.Count - 2] as TIdEventData;
+end;
+
+function TIdDataList.ThirdLastEventData: TIdEventData;
+begin
+  Result := Self.DataList[Self.DataList.Count - 3] as TIdEventData;
+end;
+
+//* TIdDataList Private methods ************************************************
+
+procedure TIdDataList.OnEvent(Stack: TIdSipStackInterface;
+                            Event: Cardinal;
+                            Data:  TIdEventData);
+begin
+  Self.DataList.Add(Data);
+end;
+
+//* TIdDataList Published methods **********************************************
+
+procedure TIdDataList.Unused;
+begin
+  // This method exists solely to provide a method name with which to create
+  // an instance of this class.
+end;
+
+//******************************************************************************
+//* TStackInterfaceTestCase                                                    *
+//******************************************************************************
+//* TStackInterfaceTestCase Public methods *************************************
+
+procedure TStackInterfaceTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  Self.DataList   := TIdDataList.Create;
+  Self.TimerQueue := TIdDebugTimerQueue.Create(true);
+  Self.UI         := TIdSipStackWindow.CreateNew(nil, Self.DataList);
+end;
+
+procedure TStackInterfaceTestCase.TearDown;
+begin
+  Self.ProcessAllPendingNotifications;
+  Self.UI.Release;
+  Self.TimerQueue.Terminate;
+  Self.DataList := nil; // TIdDataList is a TInterfacedObject, and so is reference counted.
+
+  inherited TearDown;
+end;
+
+//* TStackInterfaceTestCase Protected methods **********************************
+
+procedure TStackInterfaceTestCase.CheckNotificationReceived(EventType: TIdEventDataClass; Msg: String);
+begin
+  Self.DataList.CheckNotificationReceived(EventType, Msg);
+end;
+
+procedure TStackInterfaceTestCase.CheckRequestSent(Msg: String);
+begin
+  Check(Self.SentRequestCount < Self.MockTransport.SentRequestCount, Msg);
+end;
+
+procedure TStackInterfaceTestCase.CheckResponseSent(Msg: String);
+begin
+  Check(Self.SentResponseCount < Self.MockTransport.SentResponseCount, Msg);
+end;
+
+function TStackInterfaceTestCase.EventAt(Index: Integer): TIdEventData;
+begin
+  Result := Self.DataList.EventAt(Index);
+end;
+
+function TStackInterfaceTestCase.LastEventOfType(EventType: TIdEventDataClass): TIdEventData;
+begin
+  Result := Self.DataList.LastEventOfType(EventType)
 end;
 
 function TStackInterfaceTestCase.LastSentRequest: TIdSipRequest;
@@ -185,12 +262,12 @@ end;
 
 function TStackInterfaceTestCase.SecondLastEventData: TIdEventData;
 begin
-  Result := Self.DataList[Self.DataList.Count - 2] as TIdEventData;
+  Result := Self.DataList.SecondLastEventData
 end;
 
 function TStackInterfaceTestCase.ThirdLastEventData: TIdEventData;
 begin
-  Result := Self.DataList[Self.DataList.Count - 3] as TIdEventData;
+  Result := Self.DataList.ThirdLastEventData;
 end;
 
 end.
