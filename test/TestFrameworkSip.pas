@@ -108,8 +108,8 @@ type
     procedure ReceiveOkFrom(Invite: TIdSipRequest;
                             const Contact: String);
     procedure ReceiveMovedPermanently(const SipUrl: String);
-    procedure ReceiveRequest(Request: TIdSipRequest);
-    procedure ReceiveResponse(Response: TIdSipResponse); overload;
+    procedure ReceiveRequest(Request: TIdSipRequest); virtual;
+    procedure ReceiveResponse(Response: TIdSipResponse); overload; virtual;
     procedure ReceiveResponse(StatusCode: Cardinal); overload;
     procedure ReceiveResponse(Request: TIdSipRequest;
                               StatusCode: Cardinal); overload;
