@@ -59,6 +59,10 @@ type
                                           Port: Cardinal;
                                           Srv: TIdSrvRecords;
                                           Names: TIdDomainNameRecords);
+    procedure AddLocationsFromNameRecords(Result: TIdSipLocations;
+                                          Transport,
+                                          SentBy: String;
+                                          Port: Cardinal);
     function  ChooseSupportedTransport(TargetUri: TIdUri;
                                        Naptr: TIdNaptrRecords): String;
     procedure ClearOutUnwantedNaptrRecords(TargetUri: TIdUri;
@@ -66,9 +70,9 @@ type
     procedure ClearOutUnwantedSrvRecords(Recs: TIdSrvRecords);
     function  FindTransportFromSrv(AddressOfRecord: TIdUri;
                                    SRV: TIdSrvRecords): String;
-    function  PassNaptrFiltering(TargetUri: TIdUri;
-                                 NAPTR: TIdNaptrRecord): Boolean;
-    function  PassSrvFiltering(SRV: TIdSrvRecord): Boolean;
+    function  IsAvailable(SRV: TIdSrvRecord): Boolean;
+    function  IsSipNaptrRecord(TargetUri: TIdUri;
+                               NAPTR: TIdNaptrRecord): Boolean;
     procedure RemoveAlreadyResolvedSrvs(SupportedTransports: TStrings;
                                         SRV: TIdSrvRecords);
     procedure ResolveSRVForAllSupportedTransports(TargetUri: TIdUri;
@@ -299,22 +303,16 @@ begin
     else begin
       Services := TIdSrvRecords.Create;
       try
-        Names := TIdDomainNameRecords.Create;
-        try
-          Self.ResolveSRV(Response.LastHop.SrvQuery, Services);
+        Self.ResolveSRV(Response.LastHop.SrvQuery, Services);
 
-          if Services.IsEmpty then begin
-            Self.ResolveNameRecords(SentBy, Names);
-
-            Result.AddLocationsFromNames(Response.LastHop.Transport,
-                                         Port,
-                                         Names);
-          end
-          else
-            Result.AddLocationsFromSRVs(Services);
-        finally
-          Names.Free;
-        end;
+        if Services.IsEmpty then begin
+          Self.AddLocationsFromNameRecords(Result,
+                                           Response.LastHop.Transport,
+                                           SentBy,
+                                           Port);
+        end
+        else
+          Result.AddLocationsFromSRVs(Services);
       finally
         Services.Free;
       end;
@@ -481,6 +479,9 @@ end;
 procedure TIdSipAbstractLocator.PerformNAPTRLookup(TargetUri: TIdUri;
                                                   Result: TIdNaptrRecords);
 begin
+  // The results to a NAPTR lookup may contain SRV and A/AAAA records associated
+  // with the NAPTR. It behooves the subclass to store these additional records
+  // in Result.
   raise Exception.Create(Self.ClassName + ' doesn''t know how to PerformNAPTRLookup');
 end;
 
@@ -524,6 +525,25 @@ begin
     Result.AddLocationsFromSRVs(Srv);
 end;
 
+procedure TIdSipAbstractLocator.AddLocationsFromNameRecords(Result: TIdSipLocations;
+                                                            Transport,
+                                                            SentBy: String;
+                                                            Port: Cardinal);
+var
+  Names: TIdDomainNameRecords;
+begin
+  Names := TIdDomainNameRecords.Create;
+  try
+    Self.ResolveNameRecords(SentBy, Names);
+
+    Result.AddLocationsFromNames(Transport,
+                                 Port,
+                                 Names);
+  finally
+    Names.Free;
+  end;
+end;
+
 function TIdSipAbstractLocator.ChooseSupportedTransport(TargetUri: TIdUri;
                                                         Naptr: TIdNaptrRecords): String;
 var
@@ -559,7 +579,7 @@ var
 begin
   I := 0;
   while (I < Recs.Count) do begin
-    if Self.PassNaptrFiltering(TargetUri, Recs[I]) then
+    if Self.IsSipNaptrRecord(TargetUri, Recs[I]) then
       Inc(I)
     else
       Recs.Delete(I);
@@ -572,7 +592,7 @@ var
 begin
   I := 0;
   while (I < Recs.Count) do begin
-    if Self.PassSrvFiltering(Recs[I]) then
+    if Self.IsAvailable(Recs[I]) then
       Inc(I)
     else
       Recs.Delete(I);
@@ -608,8 +628,13 @@ begin
   end;
 end;
 
-function TIdSipAbstractLocator.PassNaptrFiltering(TargetUri: TIdUri;
-                                                  NAPTR: TIdNaptrRecord): Boolean;
+function TIdSipAbstractLocator.IsAvailable(SRV: TIdSrvRecord): Boolean;
+begin
+  Result := SRV.Target <> SrvNotAvailableTarget;
+end;
+
+function TIdSipAbstractLocator.IsSipNaptrRecord(TargetUri: TIdUri;
+                                                NAPTR: TIdNaptrRecord): Boolean;
 var
   Protocol:          String;
   ServiceResolution: String;
@@ -631,11 +656,6 @@ begin
   Result := Result
         and (Length(Protocol) > 2)
         and (Copy(Protocol, 1, 2) = 'D2');
-end;
-
-function TIdSipAbstractLocator.PassSrvFiltering(SRV: TIdSrvRecord): Boolean;
-begin
-  Result := SRV.Target <> SrvNotAvailableTarget;
 end;
 
 procedure TIdSipAbstractLocator.RemoveAlreadyResolvedSrvs(SupportedTransports: TStrings;
