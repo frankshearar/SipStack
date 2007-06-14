@@ -76,6 +76,7 @@ type
     procedure TestClear;
     procedure TestDelete;
     procedure TestIsEmpty;
+    procedure TestRecordFor;
     procedure TestSort;
   end;
 
@@ -109,6 +110,7 @@ type
     procedure TestAdd;
     procedure TestAddWithParameters;
     procedure TestAddNameRecord;
+    procedure TestAddServiceRecords;
     procedure TestClear;
     procedure TestLast;
     procedure TestIsEmpty;
@@ -372,18 +374,32 @@ end;
 procedure TestTIdNaptrRecord.TestCopy;
 var
   Copy: TIdNaptrRecord;
+  Srv:  TIdSrvRecord;
 begin
-  Copy := Self.Rec.Copy;
+  Srv := TIdSrvRecord.Create('leo-ix.net', '_sip._tcp', 2, 0, 5060, 'sip-proxy');
   try
-    CheckEquals(Self.Rec.Flags,      Copy.Flags,      'Flags');
-    CheckEquals(Self.Rec.Key,        Copy.Key,        'Key');
-    CheckEquals(Self.Rec.Order,      Copy.Order,      'Order');
-    CheckEquals(Self.Rec.Preference, Copy.Preference, 'Preference');
-    CheckEquals(Self.Rec.Regex,      Copy.Regex,      'Regex');
-    CheckEquals(Self.Rec.Service,    Copy.Service,    'Service');
-    CheckEquals(Self.Rec.Value,      Copy.Value,      'Value');
+    Self.Rec.ServiceRecords.Add(Srv);
+
+    Copy := Self.Rec.Copy;
+    try
+      CheckEquals(Self.Rec.Flags,      Copy.Flags,      'Flags');
+      CheckEquals(Self.Rec.Key,        Copy.Key,        'Key');
+      CheckEquals(Self.Rec.Order,      Copy.Order,      'Order');
+      CheckEquals(Self.Rec.Preference, Copy.Preference, 'Preference');
+      CheckEquals(Self.Rec.Regex,      Copy.Regex,      'Regex');
+      CheckEquals(Self.Rec.Service,    Copy.Service,    'Service');
+      CheckEquals(Self.Rec.Value,      Copy.Value,      'Value');
+
+      CheckEquals(Self.Rec.ServiceRecords.Count,
+                  Copy.ServiceRecords.Count,
+                  'Service records not copied');
+      CheckEquals(Self.Rec.ServiceRecords[0].Target,
+                  Copy.ServiceRecords[0].Target,
+                  'SRV records not copied correctly');
+    finally
+      Copy.Free;
+    end;
   finally
-    Copy.Free;
   end;
 end;
 
@@ -597,6 +613,31 @@ begin
   Check(Self.List.IsEmpty, 'After clear');
 end;
 
+procedure TestTIdNaptrRecords.TestRecordFor;
+const
+  SipOverTcpTarget   = '_sip._tcp.bar';
+  WeirdServiceTarget = 'foo.bar';
+var
+  N: TIdNaptrRecord;
+begin
+  Self.List.Add('foo', 30, 10, 's', 'SIP+D2U',  '', '_sip._udp.foo');
+  Self.List.Add('bar', 10, 10, 's', 'http+foo', '', WeirdServiceTarget);
+  Self.List.Add('bar', 20, 10, 's', 'SIP+D2T',  '', SipOverTcpTarget);
+  Self.List.Add('bar', 10, 10, 's', 'SIPS+D2T', '', '_sips._tcp.bar');
+  Self.List.Add('bar', 30, 10, 's', 'SIP+D2U',  '', '_sip._udp.bar');
+
+  CheckNull(Self.List.RecordFor(''), 'The empty string');
+  CheckNull(Self.List.RecordFor('_sip._udp.quaax'), 'A valid target that''s not present');
+
+  N := Self.List.RecordFor(SipOverTcpTarget);
+  CheckNotNull(N, 'An extant record');
+  CheckEquals(SipOverTcpTarget, N.Value, 'Wrong record returned');
+
+  N := Self.List.RecordFor(WeirdServiceTarget);
+  CheckNotNull(N, 'An extant record for a weird service');
+  CheckEquals(WeirdServiceTarget, N.Value, 'Wrong record returned for a weird service');
+end;
+
 procedure TestTIdNaptrRecords.TestSort;
 begin
   Self.List.Add('foo', 30, 10, 's', 'SIP+D2U',  '', '_sip._udp.foo');
@@ -806,6 +847,30 @@ begin
     CheckEquals('::' + IntToStr(I + 1),
                 Self.List[I].NameRecords[0].IPAddress,
                 IntToStr(I) + 'th record has wrong IP address');
+  end;
+end;
+
+procedure TestTIdSrvRecords.TestAddServiceRecords;
+var
+  NewList: TIdSrvRecords;
+  I:       Integer;
+begin
+  NewList := TIdSrvRecords.Create;
+  try
+    NewList.Add('leo-ix.net', '_sips._tcp', 1, 2, 5061, 'paranoid');
+    NewList.Add('leo-ix.net', '_sip._tcp',  2, 0, 5060, 'sip-proxy');
+    NewList.Add('leo-ix.net', '_sip._udp',  2, 0, 5060, 'sip-proxy');
+
+    Self.List.AddServiceRecords(NewList);
+
+    CheckEquals(NewList.Count, Self.List.Count, 'Unexpected number of records');
+
+    for I := 0 to Self.List.Count - 1 do
+      CheckEquals(NewList[I].QueryName,
+                  Self.List[I].QueryName,
+                  'RR #' + IntToStr(I) + ' not copied correctly');
+  finally
+    NewList.Free;
   end;
 end;
 

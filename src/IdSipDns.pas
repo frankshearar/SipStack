@@ -67,20 +67,32 @@ type
     property Items[Index: Integer]: TIdDomainNameRecord read GetItems; default;
   end;
 
-  // cf RFCs 2915, 3401-3
+  TIdSrvRecords = class;
+
+  // RFC 3403 obsoletes RFC 2915, and defines NAPTR records as part of the
+  // Dynamic Delegation Discovery System (RFCs 3401-3405). RFC 3403 says that
+  // domain name servers MAY also return associated records with the results of
+  // a NAPTR lookup - A, SRV records, for instance.
+  //
   // I represent a single NAPTR record. As you can see, I am a Value Object.
   //
   // My Value property gets its name from RFC 3401's nomenclature. in "classic
   // NAPTR" language it would be called "Replacement".
+  //
+  // Note that while I aspire to be a Value Object, my ServiceRecords property
+  // is actually mutable. This might seem odd, but remember that the
+  // ServiceRecords have no bearing on my NAPTR RR - they're included as a
+  // convenience, a denormalisation for efficiency, if you like.
   TIdNaptrRecord = class(TObject)
   private
-    fFlags:      String;
-    fKey:        String; // The DDDS key
-    fOrder:      Word;
-    fPreference: Word;
-    fRegex:      String;
-    fService:    String;
-    fValue:      String; // The DDDS value (a domain name we can feed into SRV queries)
+    fFlags:          String;
+    fKey:            String; // The DDDS key
+    fOrder:          Word;
+    fPreference:     Word;
+    fRegex:          String;
+    fService:        String;
+    fServiceRecords: TIdSrvRecords;
+    fValue:          String; // The DDDS value (a domain name we can feed into SRV queries)
   public
     constructor Create(const Key: String;
                        Order: Word;
@@ -89,17 +101,20 @@ type
                        const Service: String;
                        const Regex: String;
                        const Value: String);
+    destructor Destroy; override;
+
     function AsSipTransport: String;
     function Copy: TIdNaptrRecord;
     function IsSecureService: Boolean;
 
-    property Flags:      String read fFlags;
-    property Key:        String read fKey;
-    property Order:      Word   read fOrder;
-    property Preference: Word   read fPreference;
-    property Regex:      String read fRegex;
-    property Service:    String read fService;
-    property Value:      String read fValue;
+    property Flags:          String        read fFlags;
+    property Key:            String        read fKey;
+    property Order:          Word          read fOrder;
+    property Preference:     Word          read fPreference;
+    property Regex:          String        read fRegex;
+    property Service:        String        read fService;
+    property ServiceRecords: TIdSrvRecords read fServiceRecords;
+    property Value:          String        read fValue;
   end;
 
   // I represent a list of NAPTR records, usually a result of a NAPTR query.
@@ -116,6 +131,7 @@ type
                   const Regex: String;
                   const Value: String); overload;
     function  AnyAppropriateRecord(Transports: TStrings): TIdNaptrRecord;
+    function  RecordFor(ReplacementValue: String): TIdNaptrRecord;
     procedure Sort;
 
     property Items[Index: Integer]: TIdNaptrRecord read GetItems; default;
@@ -177,6 +193,7 @@ type
     procedure AddNameRecord(const RecordType: String;
                             const Domain: String;
                             const IPAddress: String);
+    procedure AddServiceRecords(SRVs: TIdSrvRecords);
     function  Last: TIdSrvRecord;
     procedure Sort;
 
@@ -464,6 +481,8 @@ constructor TIdNaptrRecord.Create(const Key: String;
 begin
   inherited Create;
 
+  Self.fServiceRecords := TIdSrvRecords.Create;
+
   Self.fKey        := Key;
   Self.fOrder      := Order;
   Self.fPreference := Preference;
@@ -471,6 +490,13 @@ begin
   Self.fService    := Service;
   Self.fRegex      := Regex;
   Self.fValue      := Value;
+end;
+
+destructor TIdNaptrRecord.Destroy;
+begin
+  Self.fServiceRecords.Free;
+
+  inherited Destroy;
 end;
 
 function TIdNaptrRecord.AsSipTransport: String;
@@ -499,6 +525,8 @@ begin
                                   Self.Service,
                                   Self.Regex,
                                   Self.Value);
+
+  Result.ServiceRecords.AddServiceRecords(Self.ServiceRecords);                                
 end;
 
 function TIdNaptrRecord.IsSecureService: Boolean;
@@ -555,6 +583,21 @@ begin
       Result := Self[I]
     else
       Inc(I);
+end;
+
+function TIdNaptrRecords.RecordFor(ReplacementValue: String): TIdNaptrRecord;
+var
+  I: Integer;
+begin
+  // Return the first NAPTR record that has ReplacementValue as its replacement.
+
+  Result := nil;
+  for I := 0 to Self.Count - 1 do begin
+    if (Self[I].Value = ReplacementValue) then begin
+      Result := Self[I];
+      Break;
+    end;
+  end;
 end;
 
 procedure TIdNaptrRecords.Sort;
@@ -702,6 +745,14 @@ begin
 
   if Assigned(Srv) then
     Srv.NameRecords.Add(RecordType, Domain, IPAddress);
+end;
+
+procedure TIdSrvRecords.AddServiceRecords(SRVs: TIdSrvRecords);
+var
+  I: Integer;
+begin
+  for I := 0 to SRVs.Count - 1 do
+    Self.Add(SRVs[I]);
 end;
 
 function TIdSrvRecords.Last: TIdSrvRecord;
