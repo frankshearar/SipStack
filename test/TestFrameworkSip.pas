@@ -90,9 +90,9 @@ type
                                        const AuthHeaderName: String;
                                        const Qop: String): TIdSipResponse;
     function  CreateUserAgent(const Address: String): TIdSipUserAgent;
-    function  LastSentAck: TIdSipRequest;
-    function  LastSentRequest: TIdSipRequest;
-    function  LastSentResponse: TIdSipResponse;
+    function  LastSentAck: TIdSipRequest; virtual;
+    function  LastSentRequest: TIdSipRequest; virtual;
+    function  LastSentResponse: TIdSipResponse; virtual;
     function  Locator: TIdSipMockLocator;
     procedure MarkSentAckCount;
     procedure MarkSentRequestCount;
@@ -122,9 +122,9 @@ type
                                   const Qop: String);
     function  SecondLastSentRequest: TIdSipRequest;
     function  SecondLastSentResponse: TIdSipResponse;
-    function  SentAckCount: Cardinal;
-    function  SentRequestCount: Cardinal;
-    function  SentResponseCount: Cardinal;
+    function  SentAckCount: Cardinal; virtual;
+    function  SentRequestCount: Cardinal; virtual;
+    function  SentResponseCount: Cardinal; virtual;
     function  SentRequestAt(Index: Integer): TIdSipRequest;
     procedure SetRoutingTableForSingleLanIP;
     function  ThirdLastSentRequest: TIdSipRequest;
