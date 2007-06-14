@@ -16,6 +16,7 @@ uses
 
 type
   TIdTimerQueue = class;
+  TIdTimerQueueClass = class of TIdTimerQueue;
 
   // I represent something that will happen in the future. If you want an alarm
   // to go off in 10 seconds, you'd instantiate me (well, a subclass of me) with
