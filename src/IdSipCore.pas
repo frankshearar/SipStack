@@ -473,6 +473,7 @@ type
     fUserAgent: TIdSipAbstractCore;
 
     function  ConvertToHeader(ValueList: TStrings): String;
+    function  CreateListWithoutDuplicates(CaseSensitive: Boolean): TStringList;
     procedure RejectRequestUnknownAccept(Request: TIdSipRequest);
     procedure RejectRequestUnknownContentEncoding(Request: TIdSipRequest);
     procedure RejectRequestUnknownContentLanguage(Request: TIdSipRequest);
@@ -2541,11 +2542,9 @@ constructor TIdSipMessageModule.Create(UA: TIdSipAbstractCore);
 begin
   inherited Create;
 
-  Self.AcceptsMethodsList     := TStringList.Create;
-  Self.AcceptsMethodsList.CaseSensitive := true;
-  Self.AllowedContentTypeList := TStringList.Create;
+  Self.AcceptsMethodsList     := Self.CreateListWithoutDuplicates(true);
+  Self.AllowedContentTypeList := Self.CreateListWithoutDuplicates(false);
   Self.Listeners              := TIdNotificationList.Create;
-
   Self.fUserAgent             := UA;
 end;
 
@@ -2767,6 +2766,14 @@ end;
 function TIdSipMessageModule.ConvertToHeader(ValueList: TStrings): String;
 begin
   Result := StringReplace(ValueList.CommaText, ',', ', ', [rfReplaceAll]);
+end;
+
+function TIdSipMessageModule.CreateListWithoutDuplicates(CaseSensitive: Boolean): TStringList;
+begin
+  Result := TStringList.Create;
+  Result.CaseSensitive := CaseSensitive;
+  Result.Duplicates    := dupIgnore;
+  Result.Sorted        := true;
 end;
 
 procedure TIdSipMessageModule.RejectRequestUnknownAccept(Request: TIdSipRequest);
