@@ -891,7 +891,7 @@ begin
   NewPkg := PackageType.Create(Self);
   Self.PackagePrototypes.Add(NewPkg);
 
-  if (NewPkg.EventPackage = PackageRefer) then
+  if (NewPkg.EventPackage = PackageRefer) and (Self.AcceptsMethodsList.IndexOf(PackageRefer) <> -1) then
     Self.AcceptsMethodsList.Add(MethodRefer)
 end;
 

@@ -274,6 +274,7 @@ type
     procedure TestAcceptsMethodsWithReferPackage;
     procedure TestAddListener;
     procedure TestAddPackage;
+    procedure TestAddReferPackageTwice;
     procedure TestPackage;
     procedure TestPackageFor;
     procedure TestReceiveReferWithNoReferTo;
@@ -1249,6 +1250,22 @@ begin
             + TIdSipTestPackage.EventPackage,
               Self.Module.AllowedEvents,
               'After adding ' + TIdSipReferPackage.EventPackage + ' package');
+end;
+
+procedure TestTIdSipSubscribeModule.TestAddReferPackageTwice;
+var
+  OldAllowedMethods: String;
+begin
+  Self.Module.RemoveAllPackages;
+
+  Self.Module.AddPackage(TIdSipReferPackage);
+
+  OldAllowedMethods := Self.Module.AcceptsMethods;
+
+  Self.Module.AddPackage(TIdSipReferPackage);
+  CheckEquals(OldAllowedMethods,
+              Self.Module.AcceptsMethods,
+              'Re-adding the "refer" package messed up AcceptsMethods');
 end;
 
 procedure TestTIdSipSubscribeModule.TestPackage;
