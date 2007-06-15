@@ -49,6 +49,7 @@ type
                                   Port: Cardinal): TIdSipMockTransport;
     procedure Log(Msg: String;
                   Direction: TIdMessageDirection);
+    procedure ScheduleException(Msg: TIdSipMessage);
     procedure SetWriteLog(const Value: Boolean);
     function  TransportAt(Index: Integer): TIdSipMockTransport;
   protected
@@ -440,12 +441,10 @@ begin
   end;
 
   if Assigned(Self.FailWith) then begin
-    Wait := TIdSipMessageExceptionWait.Create;
-    Wait.ExceptionType := Self.FailWith;
-    Wait.ExceptionMessage := 'Error injection';
-    Wait.Reason           := 'TIdSipMockTransport.SendRequest (' + Self.FailWith.ClassName + ')';
+    Self.ScheduleException(R);
 
-    Self.Timer.AddEvent(TriggerImmediately, Wait);
+    // Never autodispatch a message that's "failed".
+    Exit;
   end;
 
   if Self.AutoDispatch then
@@ -462,13 +461,14 @@ begin
 
   Inc(Self.fSentResponseCount);
 
-  if Assigned(Self.FailWith) then
-    raise EIdSipTransport.Create(Self,
-                                 R,
-                                 'TIdSipMockTransport.SendResponse ('
-                               + Self.FailWith.ClassName + ')');
+  if Assigned(Self.FailWith) then begin
+    Self.ScheduleException(R);
 
-  if Self.AutoDispatch then                               
+    // Never autodispatch a message that's "failed".
+    Exit;
+  end;
+
+  if Self.AutoDispatch then
     Self.DispatchResponse(R, Dest);
 end;
 
@@ -581,6 +581,20 @@ begin
   WriteString(GLog, Date);
   WriteString(GLog, Msg);
   WriteString(GLog, #13#10);
+end;
+
+procedure TIdSipMockTransport.ScheduleException(Msg: TIdSipMessage);
+var
+  Wait: TIdSipMessageExceptionWait;
+begin
+  Wait := TIdSipMessageExceptionWait.Create;
+  Wait.ExceptionType    := Self.FailWith;
+  Wait.ExceptionMessage := 'Error injection';
+  Wait.FailedMessage    := Msg;
+  Wait.Reason           := 'TIdSipMockTransport.SendRequest (' + Self.FailWith.ClassName + ')';
+  Wait.TransportID      := Self.ID;
+
+  Self.Timer.AddEvent(TriggerImmediately, Wait);
 end;
 
 procedure TIdSipMockTransport.SetWriteLog(const Value: Boolean);
