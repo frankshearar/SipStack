@@ -166,7 +166,8 @@ type
                          Refer: TIdSipRequest;
                          Binding: TIdSipConnectionBindings);
     procedure OnRejectedMessage(const Msg: String;
-                                const Reason: String);
+                                const Reason: String;
+                                Source: TIdSipConnectionBindings);
     procedure OnRenewedSubscription(UserAgent: TIdSipAbstractCore;
                                     Subscription: TIdSipOutboundSubscription);
     procedure OnResponse(OptionsAgent: TIdSipOutboundOptions;
@@ -479,16 +480,20 @@ type
 
   TIdDebugTransportRejectedMessageData = class(TIdDebugData)
   private
-    fMsg:    String;
-    fReason: String;
+    fBinding: TIdSipConnectionBindings;
+    fMsg:     String;
+    fReason:  String;
   protected
     function Data: String; override;
     function EventName: String; override;
   public
+    destructor Destroy; override;
+
     procedure Assign(Src: TPersistent); override;
 
-    property Msg:    String read fMsg write fMsg;
-    property Reason: String read fReason write fReason;
+    property Binding: TIdSipConnectionBindings read fBinding write fBinding;
+    property Msg:     String                   read fMsg write fMsg;
+    property Reason:  String                   read fReason write fReason;
   end;
 
   TIdQueryOptionsData = class(TIdEventData)
@@ -2010,15 +2015,17 @@ begin
 end;
 
 procedure TIdSipStackInterface.OnRejectedMessage(const Msg: String;
-                                                 const Reason: String);
+                                                 const Reason: String;
+                                                 Source: TIdSipConnectionBindings);
 var
   Data: TIdDebugTransportRejectedMessageData;
 begin
   Data := TIdDebugTransportRejectedMessageData.Create;
   try
-    Data.Handle := InvalidHandle;
-    Data.Msg    := Msg;
-    Data.Reason := Reason;
+    Data.Handle  := InvalidHandle;
+    Data.Binding := Source.Copy;
+    Data.Msg     := Msg;
+    Data.Reason  := Reason;
 
     Self.NotifyEvent(CM_DEBUG_TRANSPORT_REJECTED_MSG, Data);
   finally
@@ -2729,6 +2736,13 @@ end;
 //******************************************************************************
 //* TIdDebugTransportRejectedMessageData Public methods ************************
 
+destructor TIdDebugTransportRejectedMessageData.Destroy;
+begin
+  Self.Binding.Free;
+
+  inherited Destroy;
+end;
+
 procedure TIdDebugTransportRejectedMessageData.Assign(Src: TPersistent);
 var
   Other: TIdDebugTransportRejectedMessageData;
@@ -2738,8 +2752,9 @@ begin
   if (Src is TIdDebugTransportRejectedMessageData) then begin
     Other := Src as TIdDebugTransportRejectedMessageData;
 
-    Self.Msg    := Other.Msg;
-    Self.Reason := Other.Reason;
+    Self.Binding := Other.Binding.Copy;
+    Self.Msg     := Other.Msg;
+    Self.Reason  := Other.Reason;
   end;
 end;
 
@@ -2747,7 +2762,8 @@ end;
 
 function TIdDebugTransportRejectedMessageData.Data: String;
 begin
-  Result := Self.Reason + CRLF
+  Result := Self.Binding.AsString + CRLF
+          + Self.Reason + CRLF
           + Self.Msg;
 end;
 

@@ -127,7 +127,8 @@ type
                                 Receiver: TIdSipTransport;
                                 Source: TIdSipConnectionBindings); overload; virtual;
     procedure OnRejectedMessage(const Msg: String;
-                                const Reason: String);
+                                const Reason: String;
+                                Source: TIdSipConnectionBindings);
     procedure SetLocator(Value: TIdSipAbstractLocator);
     procedure SetTimer(Value: TIdTimerQueue);
   public
@@ -1142,7 +1143,8 @@ begin
 end;
 
 procedure TIdSipTransactionDispatcher.OnRejectedMessage(const Msg: String;
-                                                        const Reason: String);
+                                                        const Reason: String;
+                                                        Source: TIdSipConnectionBindings);
 begin
 end;
 

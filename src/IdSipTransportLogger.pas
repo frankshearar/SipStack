@@ -37,7 +37,8 @@ type
                                 Receiver: TIdSipTransport;
                                 Source: TIdSipConnectionBindings);
     procedure OnRejectedMessage(const Msg: String;
-                                const Reason: String);
+                                const Reason: String;
+                                Source: TIdSipConnectionBindings);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport;
                             Destination: TIdSipLocation);
@@ -139,7 +140,8 @@ begin
 end;
 
 procedure TIdSipTransportLogger.OnRejectedMessage(const Msg: String;
-                                                  const Reason: String);
+                                                  const Reason: String;
+                                                  Source: TIdSipConnectionBindings);
 begin
   Self.Log(RejectedMsg + Reason + #13#10 + Msg, dirError);
 end;

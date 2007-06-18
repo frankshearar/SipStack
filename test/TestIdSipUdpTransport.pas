@@ -88,7 +88,8 @@ type
                                 Receiver: TIdSipTransport;
                                 Source: TIdSipConnectionBindings);
     procedure OnRejectedMessage(const Msg: String;
-                                const Reason: String);
+                                const Reason: String;
+                                Source: TIdSipConnectionBindings);
 
   public
     procedure SetUp; override;
@@ -573,7 +574,8 @@ begin
 end;
 
 procedure TestTIdSipUdpServer.OnRejectedMessage(const Msg: String;
-                                                const Reason: String);
+                                                const Reason: String;
+                                                Source: TIdSipConnectionBindings);
 begin
   Self.NotifiedMalformedMessage := true;
   Self.ThreadEvent.SetEvent;

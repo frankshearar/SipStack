@@ -217,7 +217,8 @@ type
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnMalformedMessage(const Msg: String;
-                                 const Reason: String);
+                                 const Reason: String;
+                                 Source: TIdSipConnectionBindings);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                ReceivedFrom: TIdSipConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -1543,11 +1544,13 @@ begin
 end;
 
 procedure TIdSipTestMessageListener.OnMalformedMessage(const Msg: String;
-                                                       const Reason: String);
+                                                       const Reason: String;
+                                                       Source: TIdSipConnectionBindings);
 begin
   Self.fMalformedMessage      := true;
   Self.fMalformedMessageParam := Msg;
   Self.fReasonParam           := Reason;
+  Self.fReceivedFromParam     := Source;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnMalformedMessage');

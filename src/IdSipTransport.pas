@@ -33,7 +33,8 @@ type
                                 Receiver: TIdSipTransport;
                                 Source: TIdSipConnectionBindings);
     procedure OnRejectedMessage(const Msg: String;
-                                const Reason: String);
+                                const Reason: String;
+                                Source: TIdSipConnectionBindings);
   end;
 
   // I listen for when messages are sent, rather than received. You could use
@@ -82,7 +83,8 @@ type
                                 E: Exception;
                                 const Reason: String);
     procedure NotifyOfRejectedMessage(const Msg: String;
-                                      const Reason: String);
+                                      const Reason: String;
+                                      ReceivedFrom: TIdSipConnectionBindings);
     procedure NotifyOfSentRequest(Request: TIdSipRequest;
                                   Dest: TIdSipLocation);
     procedure NotifyOfSentResponse(Response: TIdSipResponse;
@@ -90,7 +92,8 @@ type
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnMalformedMessage(const Msg: String;
-                                 const Reason: String);
+                                 const Reason: String;
+                                 ReceivedFrom: TIdSipConnectionBindings);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                ReceivedFrom: TIdSipConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -299,11 +302,13 @@ type
   private
     fMsg:    String;
     fReason: String;
+    fSource: TIdSipConnectionBindings;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Msg:    String read fMsg write fMsg;
-    property Reason: String read fReason write fReason;
+    property Msg:    String                   read fMsg write fMsg;
+    property Reason: String                   read fReason write fReason;
+    property Source: TIdSipConnectionBindings read fSource write fSource;
   end;
 
   TIdSipTransportSendingMethod = class(TIdNotification)
@@ -535,14 +540,16 @@ procedure TIdSipTransport.ReceiveRequest(Request: TIdSipRequest;
 begin
   if Request.IsMalformed then begin
     Self.NotifyOfRejectedMessage(Request.AsString,
-                                 Request.ParseFailReason);
+                                 Request.ParseFailReason,
+                                 ReceivedFrom);
     Self.ReturnBadRequest(Request, ReceivedFrom, Request.ParseFailReason);
     Exit;
   end;
 
   if (Request.LastHop.Transport <> Self.GetTransportType) then begin
     Self.NotifyOfRejectedMessage(Request.AsString,
-                                 ViaTransportMismatch);
+                                 ViaTransportMismatch,
+                                 ReceivedFrom);
     Self.ReturnBadRequest(Request, ReceivedFrom, ViaTransportMismatch);
     Exit;
   end;
@@ -563,14 +570,16 @@ procedure TIdSipTransport.ReceiveResponse(Response: TIdSipResponse;
 begin
   if Response.IsMalformed then begin
     Self.NotifyOfRejectedMessage(Response.AsString,
-                                 Response.ParseFailReason);
+                                 Response.ParseFailReason,
+                                 ReceivedFrom);
     // Drop the malformed response.
     Exit;
   end;
 
   if (Response.LastHop.Transport <> Self.GetTransportType) then begin
     Self.NotifyOfRejectedMessage(Response.AsString,
-                                 ViaTransportMismatch);
+                                 ViaTransportMismatch,
+                                 ReceivedFrom);
 
     // Drop the malformed response.
     Exit;
@@ -583,7 +592,8 @@ begin
   end
   else
     Self.NotifyOfRejectedMessage(Response.AsString,
-                                 RequestNotSentFromHere);
+                                 RequestNotSentFromHere,
+                                 ReceivedFrom);
 end;
 
 
@@ -743,7 +753,8 @@ begin
 end;
 
 procedure TIdSipTransport.NotifyOfRejectedMessage(const Msg: String;
-                                                  const Reason: String);
+                                                  const Reason: String;
+                                                  ReceivedFrom: TIdSipConnectionBindings);
 var
   Notification: TIdSipTransportRejectedMessageMethod;
 begin
@@ -751,6 +762,7 @@ begin
   try
     Notification.Msg    := Msg;
     Notification.Reason := Reason;
+    Notification.Source := ReceivedFrom;
 
     Self.TransportListeners.Notify(Notification);
   finally
@@ -799,9 +811,10 @@ begin
 end;
 
 procedure TIdSipTransport.OnMalformedMessage(const Msg: String;
-                                             const Reason: String);
+                                             const Reason: String;
+                                             ReceivedFrom: TIdSipConnectionBindings);
 begin
-  Self.NotifyOfRejectedMessage(Msg, Reason);
+  Self.NotifyOfRejectedMessage(Msg, Reason, ReceivedFrom);
 end;
 
 procedure TIdSipTransport.OnReceiveRequest(Request: TIdSipRequest;
@@ -1214,7 +1227,8 @@ end;
 procedure TIdSipTransportRejectedMessageMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipTransportListener).OnRejectedMessage(Self.Msg,
-                                                         Self.Reason);
+                                                         Self.Reason,
+                                                         Self.Source);
 end;
 
 //******************************************************************************

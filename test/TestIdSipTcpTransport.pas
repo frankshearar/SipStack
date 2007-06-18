@@ -100,7 +100,8 @@ type
                                 Receiver: TIdSipTransport;
                                 Source: TIdSipConnectionBindings); overload;
     procedure OnRejectedMessage(const Msg: String;
-                                const Reason: String);
+                                const Reason: String;
+                                Source: TIdSipConnectionBindings);
     procedure RaiseException(Sender: TObject;
                              Request: TIdSipRequest);
   protected
@@ -171,7 +172,8 @@ type
                                 Receiver: TIdSipTransport;
                                 Source: TIdSipConnectionBindings);
     procedure OnRejectedMessage(const Msg: String;
-                                const Reason: String);
+                                const Reason: String;
+                                Source: TIdSipConnectionBindings);
     procedure PauseAndSendOkResponse(Sender: TObject;
                                      Request: TIdSipRequest);
     procedure ReceiveOptions;
@@ -817,7 +819,8 @@ begin
 end;
 
 procedure TestTIdSipTcpServer.OnRejectedMessage(const Msg: String;
-                                                const Reason: String);
+                                                const Reason: String;
+                                                Source: TIdSipConnectionBindings);
 begin
   Self.NotifiedMalformedMessage := true;
 end;
@@ -1134,7 +1137,8 @@ begin
 end;
 
 procedure TestTIdSipTcpClient.OnRejectedMessage(const Msg: String;
-                                                const Reason: String);
+                                                const Reason: String;
+                                                Source: TIdSipConnectionBindings);
 begin
   Self.ExceptionType    := ETestFailure;
   Self.ExceptionMessage := 'Message rejected: ' + Reason;

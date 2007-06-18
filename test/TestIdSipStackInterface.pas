@@ -366,6 +366,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAsString;
     procedure TestCopy;
   end;
 
@@ -3128,9 +3129,16 @@ begin
   inherited SetUp;
 
   Self.Data := TIdDebugTransportRejectedMessageData.Create;
-  Self.Data.Handle := $decafbad;
-  Self.Data.Msg    := 'This contains a (malformed) SIP message';
-  Self.Data.Reason := 'Here''s why it''s malformed';
+  Self.Data.Handle  := $decafbad;
+  Self.Data.Binding := TIdSipConnectionBindings.Create;
+  Self.Data.Msg     := 'This contains a (malformed) SIP message';
+  Self.Data.Reason  := 'Here''s why it''s malformed';
+
+  Self.Data.Binding.Transport := SctpTransport;
+  Self.Data.Binding.LocalIP   := '127.0.0.1';
+  Self.Data.Binding.LocalPort := 5060;
+  Self.Data.Binding.PeerIP    := '127.0.0.2';
+  Self.Data.Binding.PeerPort  := 15060;
 end;
 
 procedure TestTIdDebugTransportRejectedMessageData.TearDown;
@@ -3142,6 +3150,38 @@ end;
 
 //* TestTIdDebugTransportRejectedMessageData Published methods *****************
 
+procedure TestTIdDebugTransportRejectedMessageData.TestAsString;
+var
+  Expected: TStrings;
+  Received: TStrings;
+begin
+  Expected := TStringList.Create;
+  try
+    Received := TStringList.Create;
+    try
+      Expected.Add(Self.Data.Binding.AsString);
+      Expected.Add(Self.Data.Reason);
+      Expected.Add(Self.Data.Msg);
+
+      Expected.Insert(0, '');
+      Expected.Insert(1, EventNames(CM_DEBUG_TRANSPORT_REJECTED_MSG));
+      Received.Text := Self.Data.AsString;
+
+      // We ignore the first line of the debug data (it's a timestamp & a
+      // handle)
+      Received[0] := '';
+
+      CheckEquals(Expected.Text,
+                  Received.Text,
+                  'Unexpected debug data');
+    finally
+      Received.Free;
+    end;
+  finally
+    Expected.Free;
+  end;
+end;
+
 procedure TestTIdDebugTransportRejectedMessageData.TestCopy;
 var
   Copy: TIdDebugTransportRejectedMessageData;
@@ -3151,6 +3191,10 @@ begin
     CheckEquals(IntToHex(Self.Data.Handle, 8),
                 IntToHex(Copy.Handle, 8),
                 'Handle');
+    Check(Copy.Binding.Equals(Self.Data.Binding),
+          'The copy''s binding doesn''t contain the original binding');
+    Check(Copy.Binding <> Self.Data.Binding,
+          'The copy contains a reference to the original binding, not a copy');
     CheckEquals(Self.Data.Msg,
                 Copy.Msg,
                 'Msg');

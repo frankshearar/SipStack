@@ -129,7 +129,8 @@ type
                                 Receiver: TIdSipTransport;
                                 Source: TIdSipConnectionBindings); virtual;
     procedure OnRejectedMessage(const Msg: String;
-                                const Reason: String);
+                                const Reason: String;
+                                Source: TIdSipConnectionBindings);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport;
                             Destination: TIdSipLocation); virtual;
@@ -230,7 +231,8 @@ type
                                 Receiver: TIdSipTransport;
                                 Source: TIdSipConnectionBindings);
     procedure OnRejectedMessage(const Msg: String;
-                                const Reason: String);
+                                const Reason: String;
+                                Source: TIdSipConnectionBindings);
   public
     constructor Create; override;
 
@@ -758,11 +760,14 @@ begin
 end;
 
 procedure TestTIdSipTransport.OnRejectedMessage(const Msg: String;
-                                                const Reason: String);
+                                                const Reason: String;
+                                                Source: TIdSipConnectionBindings);
 begin
   Self.RejectedMessage       := true;
   Self.RejectedMessageReason := Reason;
   Self.ExceptionMessage      := Reason;
+  Self.ReceivingBinding.Assign(Source);
+
   Self.RejectedMessageEvent.SetEvent;
 end;
 
@@ -1041,7 +1046,7 @@ begin
     // We wait for the SendEvent event, because we always notify of a rejected
     // message before we send the response. Thus, the test could fail because
     // we didn't have enough time to register the sending of the 400 Bad
-    // Request.               
+    // Request.
     Self.WaitForSignaled(Self.SendEvent);
 
     Check(not Self.ReceivedRequest,
@@ -1050,6 +1055,19 @@ begin
     Check(Self.RejectedMessage,
           Self.HighPortTransport.ClassName
         + ': Notification of message rejection not received');
+
+    CheckEquals(Self.HighPortLocation.IPAddress,
+                Self.ReceivingBinding.LocalIP,
+                Self.HighPortTransport.ClassName
+              + ': Receiving binding IP address not correctly recorded');
+    CheckEquals(Self.HighPortLocation.Port,
+                Self.ReceivingBinding.LocalPort,
+                Self.HighPortTransport.ClassName
+              + ': Receiving binding port not correctly recorded');
+    CheckEquals(Self.HighPortLocation.Transport,
+                Self.ReceivingBinding.Transport,
+                Self.HighPortTransport.ClassName
+              + ': Receiving binding transport not correctly recorded');
 
     CheckNotEquals(0,
                    Self.LastSentResponse.StatusCode,
@@ -2008,11 +2026,13 @@ begin
 end;
 
 procedure TIdSipTestTransportListener.OnRejectedMessage(const Msg: String;
-                                                        const Reason: String);
+                                                        const Reason: String;
+                                                        Source: TIdSipConnectionBindings);
 begin
   Self.fMsgParam        := Msg;
   Self.fReasonParam     := Reason;
   Self.fRejectedMessage := true;
+  Self.fSourceParam     := Source;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnRejectedMessage');

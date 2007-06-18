@@ -49,7 +49,8 @@ type
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnMalformedMessage(const Msg: String;
-                                 const Reason: String);
+                                 const Reason: String;
+                                 ReceivedFrom: TIdSipConnectionBindings);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                ReceivedFrom: TIdSipConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;

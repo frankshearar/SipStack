@@ -51,7 +51,8 @@ type
                                 Receiver: TIdSipTransport;
                                 Source: TIdSipConnectionBindings);
     procedure OnRejectedMessage(const Msg: String;
-                                const Reason: String);
+                                const Reason: String;
+                                Source: TIdSipConnectionBindings);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport;
                             Destination: TIdSipLocation);
@@ -352,7 +353,8 @@ begin
 end;
 
 procedure TestTIdSipTransportEventNotifications.OnRejectedMessage(const Msg: String;
-                                                                  const Reason: String);
+                                                                  const Reason: String;
+                                                                  Source: TIdSipConnectionBindings);
 begin
 end;
 
@@ -844,14 +846,26 @@ end;
 
 procedure TestTIdSipMockTransport.SendMessage(Msg: String);
 var
-  M: TIdSipMessage;
+  Binding: TIdSipConnectionBindings;
+  M:       TIdSipMessage;
 begin
   M := TIdSipMessage.ReadMessageFrom(Msg);
   try
-    if M.IsRequest then
-      (Self.HighPortTransport as TIdSipMockTransport).FireOnRequest(M as TIdSipRequest)
-    else
-      (Self.HighPortTransport as TIdSipMockTransport).FireOnResponse(M as TIdSipResponse)
+    Binding := TIdSipConnectionBindings.Create;
+    try
+      Binding.LocalIP   := Self.HighPortLocation.IPAddress;
+      Binding.LocalPort := Self.HighPortLocation.Port;
+      Binding.PeerIP    := TIdIPAddressParser.IncIPAddress(Self.HighPortLocation.IPAddress);
+      Binding.PeerPort  := 5060;
+      Binding.Transport := Self.HighPortLocation.Transport;
+
+      if M.IsRequest then
+        (Self.HighPortTransport as TIdSipMockTransport).FireOnRequest(M as TIdSipRequest, Binding)
+      else
+        (Self.HighPortTransport as TIdSipMockTransport).FireOnResponse(M as TIdSipResponse, Binding)
+    finally
+      Binding.Free;
+    end;
   finally
     M.Free;
   end;
@@ -1201,10 +1215,12 @@ begin
   Self.Method := TIdSipTransportRejectedMessageMethod.Create;
   Self.Method.Msg    := 'Foo';
   Self.Method.Reason := 'Bar';
+  Self.Method.Source := TIdSipConnectionBindings.Create;
 end;
 
 procedure TestTIdSipTransportRejectedMessageMethod.TearDown;
 begin
+  Self.Method.Source.Free;
   Self.Method.Free;
 
   inherited TearDown;
@@ -1227,6 +1243,8 @@ begin
     CheckEquals(Self.Method.Reason,
                 Listener.ReasonParam,
                 'Reason param');
+    Check(Self.Method.Source = Listener.SourceParam,
+          'Source param');            
   finally
     Listener.Free;
   end;

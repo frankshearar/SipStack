@@ -263,6 +263,7 @@ procedure TIdSipMockTransport.FireOnRejectedMessage(Msg: TIdSipMessage;
                                                     const Reason: String);
 var
   CopyOfMessage: TIdSipMessage;
+  FakeBinding:   TIdSipConnectionBindings;
 begin
   Self.Log(Msg.AsString, dirIn);
 
@@ -273,8 +274,14 @@ begin
 
   CopyOfMessage := Msg.Copy;
   try
-    Self.NotifyOfRejectedMessage(CopyOfMessage.AsString,
-                                 Reason);
+    FakeBinding := Self.CreateFakeBinding;
+    try
+      Self.NotifyOfRejectedMessage(CopyOfMessage.AsString,
+                                   Reason,
+                                   FakeBinding);
+    finally
+      FakeBinding.Free;
+    end;
   finally
     CopyOfMessage.Free;
   end;

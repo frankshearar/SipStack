@@ -49,7 +49,8 @@ type
                                 Receiver: TIdSipTransport;
                                 Source: TIdSipConnectionBindings);
     procedure OnRejectedMessage(const Msg: String;
-                                const Reason: String);
+                                const Reason: String;
+                                Source: TIdSipConnectionBindings);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport;
                             Destination: TIdSipLocation);
@@ -172,7 +173,8 @@ begin
 end;
 
 procedure TrnidSpikeRegistrar.OnRejectedMessage(const Msg: String;
-                                                const Reason: String);
+                                                const Reason: String;
+                                                Source: TIdSipConnectionBindings);
 begin
   Self.Log.Lines.Add('----REJECTED MESSAGE: ' + Reason + '----');
   Self.Log.Lines.Add(Msg);
