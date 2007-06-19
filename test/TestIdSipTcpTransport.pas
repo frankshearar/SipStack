@@ -637,6 +637,8 @@ begin
   Self.Timer.OnEmpty := Self.OnEmpty;
 
   Self.Transport := TIdSipMockTcpTransport.Create;
+  Self.Transport.ClearBindings;
+  Self.Transport.AddBinding('127.0.0.1', 5060);
   Self.Transport.AddTransportListener(Self);
 
   Self.Client         := TIdTcpClient.Create(nil);
@@ -674,6 +676,10 @@ begin
   Self.HighPortServer.Active := true;
 
   Self.NotifiedMalformedMessage := false;
+
+  CheckNotEquals('',
+                 Self.Transport.FirstIPBound,
+                 'Transport.FirstIPBound returned the empty string: add a binding');
 end;
 
 procedure TestTIdSipTcpServer.TearDown;
@@ -939,6 +945,8 @@ begin
   Self.Timer.OnEmpty := Self.OnEmpty;
 
   Self.Transport := TIdSipMockTcpTransport.Create;
+  Self.Transport.ClearBindings;
+  Self.Transport.AddBinding('127.0.0.1', 5060);
   Self.Transport.AddTransportListener(Self);
 
   Self.Client := TIdSipTcpClient.Create(nil);
@@ -954,6 +962,10 @@ begin
 
   Self.Invite := TIdSipTestResources.CreateLocalLoopRequest;
   Self.Invite.LastHop.SentBy := Self.Transport.FirstIPBound;
+
+  CheckNotEquals('',
+                 Self.Transport.FirstIPBound,
+                 'Transport.FirstIPBound returned the empty string: add a binding');
 
   Self.Finished              := false;
   Self.InviteCount           := 0;

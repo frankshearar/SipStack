@@ -975,6 +975,10 @@ begin
   Self.Locator.AddA(Self.Invite.RequestUri.Host, Self.LanDestination);
 
   Self.SetRoutingTableForSingleLanIP;
+
+  CheckNotEquals('',
+                 Self.Dispatcher.Transport.FirstIPBound,
+                 'Dispatcher.Transport.FirstIPBound returned the empty string: add a binding');
 end;
 
 procedure TTestCaseTU.TearDown;
