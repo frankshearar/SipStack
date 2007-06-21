@@ -372,7 +372,7 @@ begin
   //      use of other weighting information, a client arranges the SRV
   //      RRs of the same Priority in the order in which target hosts,
   //      specified by the SRV RRs, will be contacted. The following
-  //     algorithm SHOULD be used to order the SRV RRs of the same
+  //      algorithm SHOULD be used to order the SRV RRs of the same
   //      priority:
 
   //      To select a target to be contacted next, arrange all SRV RRs
