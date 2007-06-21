@@ -28,6 +28,7 @@ type
   // manually.
   TIdSipMockLocator = class(TIdSipAbstractLocator)
   private
+    fAliases:                    TIdDomainNameAliasRecords;
     fLookupCount:                Cardinal;
     fNAPTR:                      TIdNaptrRecords;
     fNameRecords:                TIdDomainNameRecords;
@@ -52,6 +53,8 @@ type
                    const IPv4Address: String);
     procedure AddAAAA(const AddressOfRecord: String;
                       const IPv6Address: String);
+    procedure AddCNAME(const CanonicalName: String;
+                       const Alias: String);
     procedure AddNAPTR(const AddressOfRecord: String;
                        Order: Cardinal;
                        Preference: Cardinal;
@@ -67,11 +70,12 @@ type
     procedure RemoveNameRecords(const DomainName: String);
     procedure ResetLookupCount;
 
-    property LookupCount:                Cardinal             read fLookupCount;
-    property NameRecords:                TIdDomainNameRecords read fNameRecords;
-    property NAPTR:                      TIdNaptrRecords      read fNAPTR;
-    property SRV:                        TIdSrvRecords        read fSRV;
-    property ReturnOnlySpecifiedRecords: Boolean              read fReturnOnlySpecifiedRecords write fReturnOnlySpecifiedRecords;
+    property Aliases:                    TIdDomainNameAliasRecords read fAliases;
+    property LookupCount:                Cardinal                  read fLookupCount;
+    property NameRecords:                TIdDomainNameRecords      read fNameRecords;
+    property NAPTR:                      TIdNaptrRecords           read fNAPTR;
+    property SRV:                        TIdSrvRecords             read fSRV;
+    property ReturnOnlySpecifiedRecords: Boolean                   read fReturnOnlySpecifiedRecords write fReturnOnlySpecifiedRecords;
   end;
 
 implementation
@@ -88,6 +92,7 @@ constructor TIdSipMockLocator.Create;
 begin
   inherited Create;
 
+  Self.fAliases     := TIdDomainNameAliasRecords.Create;
   Self.fLookupCount := 0;
   Self.fNameRecords := TIdDomainNameRecords.Create;
   Self.fNAPTR       := TIdNaptrRecords.Create;
@@ -101,6 +106,7 @@ begin
   Self.SRV.Free;
   Self.NAPTR.Free;
   Self.NameRecords.Free;
+  Self.Aliases.Free;
 
   inherited Destroy;
 end;
@@ -132,6 +138,20 @@ begin
     Self.NameRecords.Add(NewAAAA);
   finally
     NewAAAA.Free;
+  end;
+end;
+
+procedure TIdSipMockLocator.AddCNAME(const CanonicalName: String;
+                                     const Alias: String);
+var
+  NewCNAME: TIdDomainNameAliasRecord;
+begin
+  NewCNAME := TIdDomainNameAliasRecord.Create(CanonicalName,
+                                              Alias);
+  try
+    Self.Aliases.Add(NewCNAME);
+  finally
+    NewCNAME.Free;
   end;
 end;
 

@@ -43,6 +43,33 @@ type
     procedure TestIsEmpty;
   end;
 
+  TestTIdDomainNameAliasRecord = class(TTestCase)
+  private
+    Alias:         String;
+    CanonicalName: String;
+    Rec:           TIdDomainNameAliasRecord;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCopy;
+    procedure TestInstantiation;
+  end;
+
+  TestTIdDomainNameAliasRecords = class(TTestCase)
+  private
+    List: TIdDomainNameAliasRecords;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAdd;
+    procedure TestAddWithParameters;
+    procedure TestClear;
+    procedure TestCopy;
+    procedure TestIsEmpty;
+  end;
+
   TestTIdNaptrRecord = class(TTestCase)
   private
     Flags:      String;
@@ -126,6 +153,8 @@ begin
   Result := TTestSuite.Create('IdSipDns unit tests');
   Result.AddTest(TestTIdDomainNameRecord.Suite);
   Result.AddTest(TestTIdDomainNameRecords.Suite);
+  Result.AddTest(TestTIdDomainNameAliasRecord.Suite);
+  Result.AddTest(TestTIdDomainNameAliasRecords.Suite);
   Result.AddTest(TestTIdNaptrRecord.Suite);
   Result.AddTest(TestTIdNaptrRecords.Suite);
   Result.AddTest(TestTIdSrvRecord.Suite);
@@ -296,6 +325,173 @@ begin
   Check(Self.List.IsEmpty, 'Empty list');
 
   NewRec := TIdDomainNameRecord.Create('', '', '');
+  try
+    Self.List.Add(NewRec);
+  finally
+    NewRec.Free;
+  end;
+
+  Check(not Self.List.IsEmpty, 'After Add');
+
+  Self.List.Clear;
+
+  Check(Self.List.IsEmpty, 'After clear');
+end;
+
+//******************************************************************************
+//* TestTIdDomainNameAliasRecord                                               *
+//******************************************************************************
+//* TestTIdDomainNameAliasRecord Public methods ********************************
+
+procedure TestTIdDomainNameAliasRecord.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Alias         := 'alias';
+  Self.CanonicalName := 'canonical.name';
+
+  Rec := TIdDomainNameAliasRecord.Create(Self.CanonicalName, Self.Alias);
+end;
+
+procedure TestTIdDomainNameAliasRecord.TearDown;
+begin
+  Self.Rec.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdDomainNameAliasRecord Public methods ********************************
+
+procedure TestTIdDomainNameAliasRecord.TestCopy;
+var
+  Copy: TIdDomainNameAliasRecord;
+begin
+  Copy := Self.Rec.Copy;
+  try
+    CheckEquals(Self.Rec.Alias,         Copy.Alias,         'Alias');
+    CheckEquals(Self.Rec.CanonicalName, Copy.CanonicalName, 'CanonicalName');
+  finally
+    Copy.Free;
+  end;
+end;
+
+procedure TestTIdDomainNameAliasRecord.TestInstantiation;
+begin
+  CheckEquals(Self.Alias,         Self.Rec.Alias,         'Alias');
+  CheckEquals(Self.CanonicalName, Self.Rec.CanonicalName, 'CanonicalName');
+end;
+
+//******************************************************************************
+//* TestTIdDomainNameAliasRecords                                              *
+//******************************************************************************
+//* TestTIdDomainNameAliasRecords Public methods *******************************
+
+procedure TestTIdDomainNameAliasRecords.SetUp;
+begin
+  inherited SetUp;
+
+  Self.List := TIdDomainNameAliasRecords.Create;
+end;
+
+procedure TestTIdDomainNameAliasRecords.TearDown;
+begin
+  Self.List.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdDomainNameAliasRecords Published methods ****************************
+
+procedure TestTIdDomainNameAliasRecords.TestAdd;
+var
+  NewRec: TIdDomainNameAliasRecord;
+begin
+  CheckEquals(0, Self.List.Count, 'Empty list');
+
+  NewRec := TIdDomainNameAliasRecord.Create('', '');
+  try
+    Self.List.Add(NewRec);
+    CheckEquals(1, Self.List.Count, 'Non-empty list');
+  finally
+    NewRec.Free;
+  end;
+end;
+
+procedure TestTIdDomainNameAliasRecords.TestAddWithParameters;
+const
+  Alias         = 'sipproxy.leo-ix.net';
+  CanonicalName = 'gw1.leo-ix.net';
+begin
+  Self.List.Add(CanonicalName, Alias);
+
+  CheckEquals(Alias,         Self.List[0].Alias,         'Alias');
+  CheckEquals(CanonicalName, Self.List[0].CanonicalName, 'CanonicalName');
+end;
+
+procedure TestTIdDomainNameAliasRecords.TestClear;
+var
+  NewRec: TIdDomainNameAliasRecord;
+begin
+  NewRec := TIdDomainNameAliasRecord.Create('', '');
+  try
+    Self.List.Add(NewRec);
+    Self.List.Add(NewRec);
+  finally
+    NewRec.Free;
+  end;
+
+  Self.List.Clear;
+
+  CheckEquals(0, Self.List.Count, 'Cleared list');
+end;
+
+procedure TestTIdDomainNameAliasRecords.TestCopy;
+var
+  I:      Integer;
+  NewRec: TIdDomainNameAliasRecord;
+  NewSet: TIdDomainNameAliasRecords;
+begin
+  NewRec := TIdDomainNameAliasRecord.Create('foo.bar', 'quaax.bar');
+  try
+    Self.List.Add(NewRec);
+  finally
+    NewRec.Free;
+  end;
+
+  NewRec := TIdDomainNameAliasRecord.Create('foo.bar', 'baz.bar');
+  try
+    Self.List.Add(NewRec);
+  finally
+    NewRec.Free;
+  end;
+
+  NewSet := Self.List.Copy;
+  try
+    for I := 0 to Min(NewSet.Count, Self.List.Count) - 1 do begin
+      CheckEquals(Self.List[I].Alias,
+                  NewSet[I].Alias,
+                  'Alias at index ' + IntToStr(I));
+      CheckEquals(Self.List[I].CanonicalName,
+                  NewSet[I].CanonicalName,
+                  'CanonicalName at index ' + IntToStr(I));
+
+    end;
+
+    CheckEquals(Self.List.Count,
+                NewSet.Count,
+                'Record count');
+  finally
+    NewSet.Free;
+  end;
+end;
+
+procedure TestTIdDomainNameAliasRecords.TestIsEmpty;
+var
+  NewRec: TIdDomainNameAliasRecord;
+begin
+  Check(Self.List.IsEmpty, 'Empty list');
+
+  NewRec := TIdDomainNameAliasRecord.Create('', '');
   try
     Self.List.Add(NewRec);
   finally

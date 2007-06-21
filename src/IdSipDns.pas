@@ -67,6 +67,35 @@ type
     property Items[Index: Integer]: TIdDomainNameRecord read GetItems; default;
   end;
 
+  // I represent a CNAME record.
+  TIdDomainNameAliasRecord = class(TObject)
+  private
+    fAlias:         String;
+    fCanonicalName: String;
+  public
+    constructor Create(const CanonicalName: String;
+                       const Alias: String);
+
+    function Copy: TIdDomainNameAliasRecord;
+
+    property Alias:         String read fAlias;
+    property CanonicalName: String read fCanonicalName;
+  end;
+
+  // I provide a collection of name record aliases.
+  TIdDomainNameAliasRecords = class(TIdBaseList)
+  private
+    function GetItems(Index: Integer): TIdDomainNameAliasRecord;
+  public
+    procedure Add(Copy: TIdDomainNameAliasRecord); overload;
+    procedure Add(const CanonicalName: String;
+                  const Alias: String); overload;
+    function  Copy: TIdDomainNameAliasRecords;
+    procedure Sort;
+
+    property Items[Index: Integer]: TIdDomainNameAliasRecord read GetItems; default;
+  end;
+
   TIdSrvRecords = class;
 
   // RFC 3403 obsoletes RFC 2915, and defines NAPTR records as part of the
@@ -238,6 +267,7 @@ const
   SrvTlsOverSctpPrefix  = '_sips._sctp';
   SrvUdpPrefix          = '_sip._udp';
 
+function AliasSort(Item1, Item2: Pointer): Integer;
 function DomainNameSort(Item1, Item2: Pointer): Integer;
 function NaptrSort(Item1, Item2: Pointer): Integer;
 function SrvSort(Item1, Item2: Pointer): Integer;
@@ -257,6 +287,11 @@ const
 //* Unit functions & procedures                                                *
 //******************************************************************************
 //* Unit Public functions & procedures *****************************************
+
+function AliasSort(Item1, Item2: Pointer): Integer;
+begin
+  raise Exception.Create('Implement AliasSort');
+end;
 
 function DomainNameSort(Item1, Item2: Pointer): Integer;
 begin
@@ -464,6 +499,67 @@ end;
 function TIdDomainNameRecords.GetItems(Index: Integer): TIdDomainNameRecord;
 begin
   Result := Self.List[Index] as TIdDomainNameRecord;
+end;
+
+//******************************************************************************
+//* TIdDomainNameAliasRecord                                                   *
+//******************************************************************************
+//* TIdDomainNameAliasRecord Public methods ************************************
+
+constructor TIdDomainNameAliasRecord.Create(const CanonicalName: String;
+                                            const Alias: String);
+begin
+  inherited Create;
+
+  Self.fAlias         := Alias;
+  Self.fCanonicalName := CanonicalName;
+end;
+
+function TIdDomainNameAliasRecord.Copy: TIdDomainNameAliasRecord;
+begin
+  Result := TIdDomainNameAliasRecord.Create(Self.CanonicalName,
+                                            Self.Alias);
+end;
+
+//******************************************************************************
+//* TIdDomainNameAliasRecords                                                  *
+//******************************************************************************
+//* TIdDomainNameAliasRecords Public methods ***********************************
+
+procedure TIdDomainNameAliasRecords.Add(Copy: TIdDomainNameAliasRecord);
+begin
+  Self.List.Add(Copy.Copy);
+end;
+
+procedure TIdDomainNameAliasRecords.Add(const CanonicalName: String;
+                                        const Alias: String);
+var
+  NewRec: TIdDomainNameAliasRecord;
+begin
+  NewRec := TIdDomainNameAliasRecord.Create(CanonicalName, Alias);
+  Self.List.Add(NewRec);
+end;
+
+function TIdDomainNameAliasRecords.Copy: TIdDomainNameAliasRecords;
+var
+  I: Integer;
+begin
+  Result := TIdDomainNameAliasRecords.Create;
+
+  for I := 0 to Self.Count - 1 do
+    Result.Add(Self[I]);
+end;
+
+procedure TIdDomainNameAliasRecords.Sort;
+begin
+  Self.List.Sort(AliasSort);
+end;
+
+//* TIdDomainNameAliasRecords Private methods **********************************
+
+function TIdDomainNameAliasRecords.GetItems(Index: Integer): TIdDomainNameAliasRecord;
+begin
+  Result := Self.List[Index] as TIdDomainNameAliasRecord;
 end;
 
 //******************************************************************************
