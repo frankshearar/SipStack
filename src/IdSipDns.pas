@@ -212,13 +212,13 @@ type
     function ItemFor(const Target: String): TIdSrvRecord;
   public
     class function TransportToPrefix(const Transport: String): String;
-    procedure Add(Copy: TIdSrvRecord); overload;
-    procedure Add(const Domain: String;
+    function  Add(Copy: TIdSrvRecord): TIdSrvRecord; overload;
+    function  Add(const Domain: String;
                   const Service: String;
                   Priority: Word;
                   Weight: Word;
                   Port: Cardinal;
-                  const Target: String); overload;
+                  const Target: String): TIdSrvRecord; overload;
     procedure AddNameRecord(const RecordType: String;
                             const Domain: String;
                             const IPAddress: String);
@@ -808,27 +808,26 @@ begin
     Result := SrvTlsOverSctpPrefix;
 end;
 
-procedure TIdSrvRecords.Add(Copy: TIdSrvRecord);
+function TIdSrvRecords.Add(Copy: TIdSrvRecord): TIdSrvRecord;
 begin
-  Self.List.Add(Copy.Copy);
+  Result := Copy.Copy;
+  Self.List.Add(Result);
 end;
 
-procedure TIdSrvRecords.Add(const Domain: String;
-                            const Service: String;
-                            Priority: Word;
-                            Weight: Word;
-                            Port: Cardinal;
-                            const Target: String);
-var
-  NewRec: TIdSrvRecord;
+function TIdSrvRecords.Add(const Domain: String;
+                           const Service: String;
+                           Priority: Word;
+                           Weight: Word;
+                           Port: Cardinal;
+                           const Target: String): TIdSrvRecord;
 begin
-  NewRec := TIdSrvRecord.Create(Domain,
+  Result := TIdSrvRecord.Create(Domain,
                                 Service,
                                 Priority,
                                 Weight,
                                 Port,
                                 Target);
-  Self.List.Add(NewRec);
+  Self.List.Add(Result);
 end;
 
 procedure TIdSrvRecords.AddNameRecord(const RecordType: String;
