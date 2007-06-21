@@ -293,6 +293,9 @@ var
   Inet1: Cardinal;
   Inet2: Cardinal;
 begin
+  // Considering the IPv4 addresses as 32 bit numbers, order the addresses in
+  // ascending order.
+
   Inet1 := TIdIPAddressParser.InetAddr(Addr1);
   Inet2 := TIdIPAddressParser.InetAddr(Addr2);
 
@@ -310,6 +313,9 @@ var
   RecA: TIdIPv6AddressRec;
   RecB: TIdIPv6AddressRec;
 begin
+  // Considering the IPv6 addresses as 128 bit numbers, order the addresses in
+  // ascending order.
+
   TIdIPAddressParser.ParseIPv6Address(Addr1, RecA);
   TIdIPAddressParser.ParseIPv6Address(Addr2, RecB);
 
