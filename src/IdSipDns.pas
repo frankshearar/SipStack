@@ -281,21 +281,138 @@ const
   ItemNotFoundIndex = -1;
   LessThan          = -1;
   GreaterThan       = 1;
-  Equal             = 0;  
+  Equal             = 0;
 
 //******************************************************************************
 //* Unit functions & procedures                                                *
 //******************************************************************************
+//* Unit Private functions & procedures ****************************************
+
+function CompareIPv4Address(Addr1, Addr2: String): Integer;
+var
+  Inet1: Cardinal;
+  Inet2: Cardinal;
+begin
+  Inet1 := TIdIPAddressParser.InetAddr(Addr1);
+  Inet2 := TIdIPAddressParser.InetAddr(Addr2);
+
+  if (Inet1 < Inet2) then
+    Result := LessThan
+  else if (Inet1 > Inet2) then
+    Result := GreaterThan
+  else
+    Result := Equal;
+end;
+
+function CompareIPv6Address(Addr1, Addr2: String): Integer;
+var
+  I:    Integer;
+  RecA: TIdIPv6AddressRec;
+  RecB: TIdIPv6AddressRec;
+begin
+  TIdIPAddressParser.ParseIPv6Address(Addr1, RecA);
+  TIdIPAddressParser.ParseIPv6Address(Addr2, RecB);
+
+  Result := Equal;
+  for I := Low(RecA) to High(RecB) do begin
+    if (RecA[I] < RecB[I]) then
+      Result := LessThan
+    else if (RecA[I] > RecB[I]) then
+      Result := GreaterThan;
+
+    if (Result <> Equal) then Break;
+  end;
+end;
+
+function CompareRecordType(Item1, Item2: String): Integer;
+begin
+  // We cheat: "A" < "AAAA", so we just reverse the string sort order.
+
+  Result := CompareStr(Item2, Item1);
+end;
+
+function CompareAddress(Item1, Item2: String): Integer;
+var
+  Ver1: TIdIPVersion;
+  Ver2: TIdIPVersion;
+begin
+  Ver1 := TIdIPAddressParser.IPVersion(Item1);
+  Ver2 := TIdIPAddressParser.IPVersion(Item2);
+
+  if (Ver1 <> Ver2) then begin
+    if (Ver1 = Id_IPv6) then
+      Result := LessThan
+    else
+      Result := GreaterThan;
+    Exit;
+  end;
+
+  if (Ver1 = Id_IPv4) then
+    Result := CompareIPv4Address(Item1, Item2)
+  else if (Ver2 = Id_IPv6) then
+    Result := CompareIPv6Address(Item1, Item2)
+  else begin
+    // We should never reach here, but if we do, just say "the two addresses
+    // are equal in order".
+    Result := Equal;
+  end;
+end;
+
+function CompareString(Item1, Item2: String): Integer;
+begin
+  if (Item1 < Item2) then
+    Result := LessThan
+  else if (Item1 > Item2) then
+    Result := GreaterThan
+  else
+    Result := Equal;
+end;
+
 //* Unit Public functions & procedures *****************************************
 
 function AliasSort(Item1, Item2: Pointer): Integer;
+var
+  A: TIdDomainNameAliasRecord;
+  B: TIdDomainNameAliasRecord;
 begin
-  raise Exception.Create('Implement AliasSort');
+  A := TIdDomainNameAliasRecord(Item1);
+  B := TIdDomainNameAliasRecord(Item2);
+
+  if (A.CanonicalName < B.CanonicalName) then
+    Result := LessThan
+  else if (A.CanonicalName > B.CanonicalName) then
+    Result := GreaterThan
+  else
+    Result := Equal;
+
+  if (Result = Equal) then begin
+    if (A.Alias < B.Alias) then
+      Result := LessThan
+    else if (A.Alias > B.Alias) then
+      Result := GreaterThan;
+  end;
 end;
 
 function DomainNameSort(Item1, Item2: Pointer): Integer;
+var
+  A: TIdDomainNameRecord;
+  B: TIdDomainNameRecord;
 begin
-  raise Exception.Create('Implement DomainNameSort');
+  // AAAA records first
+  // Then in alphabetic order of domain name
+  // Then in descending (numeric) order of address
+
+  A := TIdDomainNameRecord(Item1);
+  B := TIdDomainNameRecord(Item2);
+
+  Result := CompareRecordType(A.RecordType, B.RecordType);
+
+  if (Result = Equal) then begin
+    Result := CompareString(A.Domain, B.Domain);
+
+    if (Result = Equal) then
+      Result := CompareAddress(A.IPAddress, B.IPAddress);
+  end;
 end;
 
 function NaptrSort(Item1, Item2: Pointer): Integer;

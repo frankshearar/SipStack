@@ -41,6 +41,7 @@ type
     procedure TestClear;
     procedure TestCopy;
     procedure TestIsEmpty;
+    procedure TestSort;
   end;
 
   TestTIdDomainNameAliasRecord = class(TTestCase)
@@ -68,6 +69,7 @@ type
     procedure TestClear;
     procedure TestCopy;
     procedure TestIsEmpty;
+    procedure TestSort;
   end;
 
   TestTIdNaptrRecord = class(TTestCase)
@@ -338,6 +340,35 @@ begin
   Check(Self.List.IsEmpty, 'After clear');
 end;
 
+procedure TestTIdDomainNameRecords.TestSort;
+begin
+  Self.List.Add(DnsARecord,    'foo', '127.0.0.1');
+  Self.List.Add(DnsAAAARecord, 'foo', '::1');
+  Self.List.Add(DnsARecord,    'foo', '192.168.0.1');
+  Self.List.Add(DnsAAAARecord, 'foo', '::1:1');
+  Self.List.Add(DnsAAAARecord, 'bar', '127.0.0.1');
+
+  Self.List.Sort;
+
+  CheckEquals('bar',         Self.List[0].Domain,     '1st record');
+
+  CheckEquals('foo',         Self.List[1].Domain,     '2nd record (domain)');
+  CheckEquals(DnsAAAARecord, Self.List[1].RecordType, '2nd record (record type)');
+  CheckEquals('::1',         Self.List[1].IPAddress,  '3rd record (IP address)');
+
+  CheckEquals('foo',         Self.List[2].Domain,     '3rd record (domain)');
+  CheckEquals(DnsAAAARecord, Self.List[2].RecordType, '3rd record (record type)');
+  CheckEquals('::1:1',       Self.List[2].IPAddress,  '2nd record (IP address)');
+
+  CheckEquals('foo',         Self.List[3].Domain,     '4th record (domain)');
+  CheckEquals(DnsARecord,    Self.List[3].RecordType, '4th record (record type)');
+  CheckEquals('127.0.0.1',   Self.List[3].IPAddress,  '5th record (IP address)');
+
+  CheckEquals('foo',         Self.List[4].Domain,     '5th record (domain)');
+  CheckEquals(DnsARecord,    Self.List[4].RecordType, '5th record (record type)');
+  CheckEquals('192.168.0.1', Self.List[4].IPAddress,  '4th record (IP address)');
+end;
+
 //******************************************************************************
 //* TestTIdDomainNameAliasRecord                                               *
 //******************************************************************************
@@ -503,6 +534,21 @@ begin
   Self.List.Clear;
 
   Check(Self.List.IsEmpty, 'After clear');
+end;
+
+procedure TestTIdDomainNameAliasRecords.TestSort;
+var
+  I: Integer;
+begin
+  Self.List.Add('quaax', '3');
+  Self.List.Add('quaax', '4');
+  Self.List.Add('foo', '1');
+  Self.List.Add('foo', '2');
+
+  Self.List.Sort;
+
+  for I := 0 to Self.List.Count - 1 do
+    CheckEquals(IntToStr(I + 1), Self.List[I].Alias, 'Record #' + IntToStr(I + 1));
 end;
 
 //******************************************************************************
