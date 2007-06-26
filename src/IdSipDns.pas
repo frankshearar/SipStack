@@ -30,12 +30,17 @@ type
     function  IsEmpty: Boolean;
   end;
 
+  TIdResourceRecord = class(TObject)
+  public
+    function ResourceType: String; virtual; abstract;
+  end;
+
   // I represent a name record of some sort. I might contain an A (RFC 1034) or
   // AAAA (RFC 1886) records, or some future name record (like, perhaps, A6
   // (RFC 2874).
   //
   // As you can see, I am a Value Object.
-  TIdDomainNameRecord = class(TObject)
+  TIdDomainNameRecord = class(TIdResourceRecord)
   private
     fDomain:     String;
     fIPAddress:  String;
@@ -46,6 +51,7 @@ type
                        const IPAddress: String);
 
     function Copy: TIdDomainNameRecord;
+    function ResourceType: String; override;
 
     property Domain:     String read fDomain;
     property IPAddress:  String read fIPAddress;
@@ -68,7 +74,7 @@ type
   end;
 
   // I represent a CNAME record.
-  TIdDomainNameAliasRecord = class(TObject)
+  TIdDomainNameAliasRecord = class(TIdResourceRecord)
   private
     fAlias:         String;
     fCanonicalName: String;
@@ -77,6 +83,7 @@ type
                        const Alias: String);
 
     function Copy: TIdDomainNameAliasRecord;
+    function ResourceType: String; override;
 
     property Alias:         String read fAlias;
     property CanonicalName: String read fCanonicalName;
@@ -112,7 +119,7 @@ type
   // is actually mutable. This might seem odd, but remember that the
   // ServiceRecords have no bearing on my NAPTR RR - they're included as a
   // convenience, a denormalisation for efficiency, if you like.
-  TIdNaptrRecord = class(TObject)
+  TIdNaptrRecord = class(TIdResourceRecord)
   private
     fFlags:          String;
     fKey:            String; // The DDDS key
@@ -135,6 +142,7 @@ type
     function AsSipTransport: String;
     function Copy: TIdNaptrRecord;
     function IsSecureService: Boolean;
+    function ResourceType: String; override;
 
     property Flags:          String        read fFlags;
     property Key:            String        read fKey;
@@ -175,7 +183,7 @@ type
   // is actually mutable. This might seem odd, but remember that the NameRecords
   // have no bearing on my SRV RR - they're included as a convenience, a
   // denormalisation for efficiency, if you like.
-  TIdSrvRecord = class(TObject)
+  TIdSrvRecord = class(TIdResourceRecord)
   private
     fDomain:      String;
     fNameRecords: TIdDomainNameRecords;
@@ -195,6 +203,7 @@ type
 
     function  Copy: TIdSrvRecord;
     function  QueryName: String;
+    function  ResourceType: String; override;
     function  SipTransport: String;
 
     property Domain:      String               read fDomain;
@@ -229,9 +238,48 @@ type
     property Items[Index: Integer]: TIdSrvRecord read GetItems; default;
   end;
 
+  // DNS servers typically return several kinds of resource records in the
+  // answer to a query. For instance, a NAPTR lookup can return all of SRV,
+  // A, AAAA, CNAME records. I thus can contain a miscellany of resource
+  // records, and supply methods of searching for relationships between the
+  // resource records.
+  TIdResourceRecords = class(TIdBaseList)
+  private
+    function GetItems(Index: Integer): TIdResourceRecord;
+  public
+    procedure AddARecord(Domain,
+                         IPAddress: String);
+    procedure AddAAAARecord(Domain,
+                             IPAddress: String);
+    procedure AddCNAMERecord(CanonicalName,
+                             Alias: String);
+    procedure AddNAPTRRecord(Key: String;
+                             Order: Word;
+                             Preference: Word;
+                             Flags,
+                             Service,
+                             Regex,
+                             Value: String);
+    procedure AddSRVRecord(Domain,
+                           Service: String;
+                           Priority: Word;
+                           Weight: Word;
+                           Port: Cardinal;
+                           Target: String);
+    procedure CollectAliases(Result: TIdDomainNameAliasRecords);
+    procedure CollectNamePointerRecords(Result: TIdNaptrRecords);
+    procedure CollectNameRecords(Result: TIdDomainNameRecords);
+    procedure CollectServiceRecords(Result: TIdSrvRecords);
+    function  ContainsType(ResourceRecordType: String): Boolean;
+    function  LastRecord: TIdResourceRecord;
+
+    property Items[Index: Integer]: TIdResourceRecord read GetItems; default;
+  end;
+
 const
   DnsARecord     = 'A';
   DnsAAAARecord  = 'AAAA';
+  DnsCNAMERecord = 'CNAME';
   DnsNAPTRRecord = 'NAPTR';
   DnsSRVRecord   = 'SRV';
 
@@ -582,6 +630,11 @@ begin
                                        Self.IPAddress);
 end;
 
+function TIdDomainNameRecord.ResourceType: String;
+begin
+  Result := Self.RecordType;
+end;
+
 //******************************************************************************
 //* TIdDomainNameRecords                                                       *
 //******************************************************************************
@@ -642,6 +695,11 @@ function TIdDomainNameAliasRecord.Copy: TIdDomainNameAliasRecord;
 begin
   Result := TIdDomainNameAliasRecord.Create(Self.CanonicalName,
                                             Self.Alias);
+end;
+
+function TIdDomainNameAliasRecord.ResourceType: String;
+begin
+  Result := DnsCNAMERecord;
 end;
 
 //******************************************************************************
@@ -758,6 +816,11 @@ begin
   Service := Fetch(Service, NaptrDelimiter);
 
   Result := IsEqual(NaptrSipsService, Service);
+end;
+
+function TIdNaptrRecord.ResourceType: String;
+begin
+  Result := DnsNAPTRRecord;
 end;
 
 //******************************************************************************
@@ -881,6 +944,11 @@ begin
   Result := Self.Service + '.' + Self.Domain;
 end;
 
+function TIdSrvRecord.ResourceType: String;
+begin
+  Result := DnsSRVRecord;
+end;
+
 function TIdSrvRecord.SipTransport: String;
 var
   UriType:   String;
@@ -1002,6 +1070,110 @@ begin
       Result := Self[I]
     else
       Inc(I);
+end;
+
+//******************************************************************************
+//* TIdResourceRecords                                                         *
+//******************************************************************************
+//* TIdResourceRecords Public methods ******************************************
+
+procedure TIdResourceRecords.AddARecord(Domain,
+                                        IPAddress: String);
+begin
+  Self.List.Add(TIdDomainNameRecord.Create(DnsARecord, Domain, IPAddress));
+end;
+
+procedure TIdResourceRecords.AddAAAARecord(Domain,
+                                           IPAddress: String);
+begin
+  Self.List.Add(TIdDomainNameRecord.Create(DnsAAAARecord, Domain, IPAddress));
+end;
+
+procedure TIdResourceRecords.AddCNAMERecord(CanonicalName,
+                                            Alias: String);
+begin
+  Self.List.Add(TIdDomainNameAliasRecord.Create(CanonicalName, Alias));
+end;
+
+procedure TIdResourceRecords.AddNAPTRRecord(Key: String;
+                                            Order: Word;
+                                            Preference: Word;
+                                            Flags,
+                                            Service,
+                                            Regex,
+                                            Value: String);
+begin
+  Self.List.Add(TIdNaptrRecord.Create(Key, Order, Preference, Flags, Service, Regex, Value));
+end;
+
+procedure TIdResourceRecords.AddSRVRecord(Domain,
+                                          Service: String;
+                                          Priority: Word;
+                                          Weight: Word;
+                                          Port: Cardinal;
+                                          Target: String);
+begin
+  Self.List.Add(TIdSrvRecord.Create(Domain, Service, Priority, Weight, Port, Target));
+end;
+
+procedure TIdResourceRecords.CollectAliases(Result: TIdDomainNameAliasRecords);
+var
+  I: Integer;
+begin
+  for I := 0 to Self.Count - 1 do
+    if (Self[I] is TIdDomainNameAliasRecord) then
+      Result.Add(Self[I] as TIdDomainNameAliasRecord);
+end;
+
+procedure TIdResourceRecords.CollectNamePointerRecords(Result: TIdNaptrRecords);
+var
+  I: Integer;
+begin
+  for I := 0 to Self.Count - 1 do
+    if (Self[I] is TIdNaptrRecord) then
+      Result.Add(Self[I] as TIdNaptrRecord);
+end;
+
+procedure TIdResourceRecords.CollectNameRecords(Result: TIdDomainNameRecords);
+var
+  I: Integer;
+begin
+  for I := 0 to Self.Count - 1 do
+    if (Self[I] is TIdDomainNameRecord) then
+      Result.Add(Self[I] as TIdDomainNameRecord);
+end;
+
+procedure TIdResourceRecords.CollectServiceRecords(Result: TIdSrvRecords);
+var
+  I: Integer;
+begin
+  for I := 0 to Self.Count - 1 do
+    if (Self[I] is TIdSrvRecord) then
+      Result.Add(Self[I] as TIdSrvRecord);
+end;
+
+function TIdResourceRecords.ContainsType(ResourceRecordType: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := false;
+  for I := 0 to Self.Count -1 do
+    if (Self[I].ResourceType = ResourceRecordType) then begin
+      Result := true;
+      Break;
+    end;
+end;
+
+function TIdResourceRecords.LastRecord: TIdResourceRecord;
+begin
+  Result := Self[Self.Count - 1];
+end;
+
+//* TIdResourceRecords Public methods ******************************************
+
+function TIdResourceRecords.GetItems(Index: Integer): TIdResourceRecord;
+begin
+  Result := Self.List[Index] as TIdResourceRecord;
 end;
 
 end.

@@ -27,6 +27,7 @@ type
   published
     procedure TestCopy;
     procedure TestInstantiation;
+    procedure TestResourceType;
   end;
 
   TestTIdDomainNameRecords = class(TTestCase)
@@ -55,6 +56,7 @@ type
   published
     procedure TestCopy;
     procedure TestInstantiation;
+    procedure TestResourceType;
   end;
 
   TestTIdDomainNameAliasRecords = class(TTestCase)
@@ -90,6 +92,7 @@ type
     procedure TestCopy;
     procedure TestInstantiation;
     procedure TestIsSecureService;
+    procedure TestResourceType;
   end;
 
   TestTIdNaptrRecords = class(TTestCase)
@@ -126,6 +129,7 @@ type
     procedure TestCopy;
     procedure TestInstantiation;
     procedure TestQueryName;
+    procedure TestResourceType;
     procedure TestSipTransport;
   end;
 
@@ -145,6 +149,25 @@ type
     procedure TestIsEmpty;
   end;
 
+  TestTIdResourceRecords = class(TTestCase)
+  private
+    List: TIdResourceRecords;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAddARecord;
+    procedure TestAddAAAARecord;
+    procedure TestAddCNAMERecord;
+    procedure TestAddNAPTRRecord;
+    procedure TestAddSRVRecord;
+    procedure TestCollectAliases;
+    procedure TestCollectNamePointerRecords;
+    procedure TestCollectNameRecords;
+    procedure TestCollectServiceRecords;
+    procedure TestContainsType;
+  end;
+
 implementation
 
 uses
@@ -161,6 +184,7 @@ begin
   Result.AddTest(TestTIdNaptrRecords.Suite);
   Result.AddTest(TestTIdSrvRecord.Suite);
   Result.AddTest(TestTIdSrvRecords.Suite);
+  Result.AddTest(TestTIdResourceRecords.Suite);
 end;
 
 //******************************************************************************
@@ -209,6 +233,25 @@ begin
   CheckEquals(Self.Domain,     Self.Rec.Domain,     'Domain');
   CheckEquals(Self.IPAddress,  Self.Rec.IPAddress,  'IPAddress');
   CheckEquals(Self.RecordType, Self.Rec.RecordType, 'RecordType');
+end;
+
+procedure TestTIdDomainNameRecord.TestResourceType;
+var
+  NewRec: TIdDomainNameRecord;
+begin
+  NewRec := TIdDomainNameRecord.Create(DnsARecord, 'foo', '127.0.0.1');
+  try
+    CheckEquals(DnsARecord, NewRec.ResourceType, DnsARecord);
+  finally
+    NewRec.Free;
+  end;
+
+  NewRec := TIdDomainNameRecord.Create(DnsAAAARecord, 'foo', '::1');
+  try
+    CheckEquals(DnsAAAARecord, NewRec.ResourceType, DnsAAAARecord);
+  finally
+    NewRec.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -410,6 +453,11 @@ procedure TestTIdDomainNameAliasRecord.TestInstantiation;
 begin
   CheckEquals(Self.Alias,         Self.Rec.Alias,         'Alias');
   CheckEquals(Self.CanonicalName, Self.Rec.CanonicalName, 'CanonicalName');
+end;
+
+procedure TestTIdDomainNameAliasRecord.TestResourceType;
+begin
+  CheckEquals(DnsCNAMERecord, Self.Rec.ResourceType, DnsCNAMERecord);
 end;
 
 //******************************************************************************
@@ -681,6 +729,11 @@ begin
       N.Free;
     end;
   end;
+end;
+
+procedure TestTIdNaptrRecord.TestResourceType;
+begin
+  CheckEquals(DnsNAPTRRecord, Self.Rec.ResourceType, DnsNAPTRRecord);
 end;
 
 //******************************************************************************
@@ -979,6 +1032,11 @@ begin
               'QueryName');
 end;
 
+procedure TestTIdSrvRecord.TestResourceType;
+begin
+  CheckEquals(DnsSRVRecord, Self.Rec.ResourceType, DnsSRVRecord);
+end;
+
 procedure TestTIdSrvRecord.TestSipTransport;
 type
   TServiceTransportPair = record
@@ -1168,6 +1226,269 @@ begin
   Self.List.Clear;
 
   Check(Self.List.IsEmpty, 'After clear');
+end;
+
+//******************************************************************************
+//* TestTIdResourceRecords                                                     *
+//******************************************************************************
+//* TestTIdResourceRecords Public methods **************************************
+
+procedure TestTIdResourceRecords.SetUp;
+begin
+  inherited SetUp;
+
+  Self.List := TIdResourceRecords.Create;
+end;
+
+procedure TestTIdResourceRecords.TearDown;
+begin
+  Self.List.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdResourceRecords Published methods ***********************************
+
+procedure TestTIdResourceRecords.TestAddARecord;
+const
+  Domain  = 'gw1.leo.ix.net';
+  Address = '127.0.0.1';
+var
+  ARec: TIdDomainNameRecord;
+begin
+  Self.List.AddARecord(Domain, Address);
+
+  Check(not Self.List.IsEmpty, 'No record added');
+
+  CheckEquals(TIdDomainNameRecord,
+              Self.List.LastRecord.ClassType,
+              'Wrong type of record added');
+
+  ARec := Self.List.LastRecord as TIdDomainNameRecord;
+  CheckEquals(DnsARecord, ARec.RecordType, 'RecordType');
+  CheckEquals(Domain,     ARec.Domain,     'Domain');
+  CheckEquals(Address,    ARec.IPAddress,  'Address');
+end;
+
+procedure TestTIdResourceRecords.TestAddAAAARecord;
+const
+  Domain  = 'gw1.leo.ix.net';
+  Address = '127.0.0.1';
+var
+  AAAARec: TIdDomainNameRecord;
+begin
+  Self.List.AddAAAARecord(Domain, Address);
+
+  Check(not Self.List.IsEmpty, 'No record added');
+
+  CheckEquals(TIdDomainNameRecord,
+              Self.List.LastRecord.ClassType,
+              'Wrong type of record added');
+
+  AAAARec := Self.List.LastRecord as TIdDomainNameRecord;
+  CheckEquals(DnsAAAARecord, AAAARec.RecordType, 'RecordType');
+  CheckEquals(Domain,        AAAARec.Domain,     'Domain');
+  CheckEquals(Address,       AAAARec.IPAddress,  'Address');
+end;
+
+procedure TestTIdResourceRecords.TestAddCNAMERecord;
+const
+  Alias         = '127.0.0.1';
+  CanonicalName = 'gw1.leo.ix.net';
+var
+  CNAMERec: TIdDomainNameAliasRecord;
+begin
+  Self.List.AddCNAMERecord(CanonicalName, Alias);
+
+  Check(not Self.List.IsEmpty, 'No record added');
+
+  CheckEquals(TIdDomainNameAliasRecord,
+              Self.List.LastRecord.ClassType,
+              'Wrong type of record added');
+
+  CNAMERec := Self.List.LastRecord as TIdDomainNameAliasRecord;
+  CheckEquals(CanonicalName, CNAMERec.CanonicalName, 'CanonicalName');
+  CheckEquals(Alias,         CNAMERec.Alias,         'Alias');
+end;
+
+procedure TestTIdResourceRecords.TestAddNAPTRRecord;
+const
+  Flags          = 'fakeflags';
+  Key            = 'fakekey';
+  Order          = 42;
+  Preference     = 13;
+  Regex          = 'fakeregex';
+  Service        = 'fakeservice';
+  Value          = 'fakereplacement';
+var
+  NAPTRRec: TIdNaptrRecord;
+begin
+  Self.List.AddNAPTRRecord(Key, Order, Preference, Flags, Service, Regex, Value);
+
+  Check(not Self.List.IsEmpty, 'No record added');
+
+  CheckEquals(TIdNaptrRecord,
+              Self.List.LastRecord.ClassType,
+              'Wrong type of record added');
+
+  NAPTRRec := Self.List.LastRecord as TIdNaptrRecord;
+  CheckEquals(Flags,      NAPTRRec.Flags,      'Flags');
+  CheckEquals(Key,        NAPTRRec.Key,        'Key');
+  CheckEquals(Order,      NAPTRRec.Order,      'Order');
+  CheckEquals(Preference, NAPTRRec.Preference, 'Preference');
+  CheckEquals(Regex,      NAPTRRec.Regex,      'Regex');
+  CheckEquals(Service,    NAPTRRec.Service,    'Service');
+  CheckEquals(Value,      NAPTRRec.Value,      'Value');
+end;
+
+procedure TestTIdResourceRecords.TestAddSRVRecord;
+const
+  Domain   = 'fakedomain';
+  Service  = 'fakeservice';
+  Priority = 42;
+  Weight   = 13;
+  Port     = 666;
+  Target   = 'faketarget';
+var
+  SRVRec: TIdSrvRecord;
+begin
+  Self.List.AddSRVRecord(Domain, Service, Priority, Weight, Port, Target);
+
+  Check(not Self.List.IsEmpty, 'No record added');
+
+  CheckEquals(TIdSrvRecord,
+              Self.List.LastRecord.ClassType,
+              'Wrong type of record added');
+
+  SRVRec := Self.List.LastRecord as TIdSrvRecord;
+  CheckEquals(Domain,   SRVRec.Domain,   'Domain');
+  CheckEquals(Service,  SRVRec.Service,  'Service');
+  CheckEquals(Priority, SRVRec.Priority, 'Priority');
+  CheckEquals(Weight,   SRVRec.Weight,   'Weight');
+  CheckEquals(Port,     SRVRec.Port,     'Port');
+  CheckEquals(Target,   SRVRec.Target,   'Target');
+end;
+
+procedure TestTIdResourceRecords.TestCollectAliases;
+const
+  AliasOne         = 'baz1';
+  CanonicalNameOne = 'baz';
+  AliasTwo         = 'quaax1';
+  CanonicalNameTwo = 'quaax';
+var
+  C: TIdDomainNameAliasRecords;
+begin
+  Self.List.AddARecord('foo', '127.0.0.1');
+  Self.List.AddARecord('bar', '127.0.0.1');
+  Self.List.AddCNAMERecord(CanonicalNameOne, AliasOne);
+  Self.List.AddCNAMERecord(CanonicalNameTwo, AliasTwo);
+
+  C := TIdDomainNameAliasRecords.Create;
+  try
+    Self.List.CollectAliases(C);
+
+    CheckEquals(2, C.Count, 'Incorrect number of CNAMEs collected');
+    CheckEquals(CanonicalNameOne, C[0].CanonicalName, '1st record');
+    CheckEquals(CanonicalNameTwo, C[1].CanonicalName, '2nd record');
+  finally
+    C.Free;
+  end;
+end;
+
+procedure TestTIdResourceRecords.TestCollectNamePointerRecords;
+const
+  KeyOne = 'one';
+  KeyTwo = 'two';
+var
+  N: TIdNaptrRecords;
+begin
+  Self.List.AddARecord('foo', '127.0.0.1');
+  Self.List.AddARecord('bar', '127.0.0.1');
+  Self.List.AddNAPTRRecord(KeyOne, 0, 0, '', '', '', '');
+  Self.List.AddNAPTRRecord(KeyTwo, 0, 0, '', '', '', '');
+
+  N := TIdNaptrRecords.Create;
+  try
+    Self.List.CollectNamePointerRecords(N);
+
+    CheckEquals(2, N.Count, 'Incorrect number of NAPTRs collected');
+    CheckEquals(KeyOne, N[0].Key, '1st record');
+    CheckEquals(KeyTwo, N[1].Key, '2nd record');
+  finally
+    N.Free;
+  end;
+end;
+
+procedure TestTIdResourceRecords.TestCollectNameRecords;
+const
+  FQDNOne      = 'baz';
+  IPAddressOne = '::1';
+  FQDNTwo      = 'quaax';
+  IPAddressTwo = '127.0.0.1';
+var
+  D: TIdDomainNameRecords;
+begin
+  Self.List.AddAAAARecord(FQDNOne, IPAddressOne);
+  Self.List.AddARecord(FQDNTwo, IPAddressTwo);
+  Self.List.AddCNAMERecord('foo', 'bar');
+  Self.List.AddCNAMERecord('baz', 'quaax');
+
+  D := TIdDomainNameRecords.Create;
+  try
+    Self.List.CollectNameRecords(D);
+
+    CheckEquals(2, D.Count, 'Incorrect number of name records collected');
+    CheckEquals(IPAddressOne, D[0].IPAddress, '1st record');
+    CheckEquals(IPAddressTwo, D[1].IPAddress, '2nd record');
+  finally
+    D.Free;
+  end;
+end;
+
+procedure TestTIdResourceRecords.TestCollectServiceRecords;
+const
+  DomainOne = 'one';
+  DomainTwo = 'two';
+var
+  S: TIdSrvRecords;
+begin
+  Self.List.AddARecord('foo', '127.0.0.1');
+  Self.List.AddARecord('bar', '127.0.0.1');
+  Self.List.AddSRVRecord(DomainOne, '', 0, 0, 0, '');
+  Self.List.AddSRVRecord(DomainTwo, '', 0, 0, 0, '');
+
+  S := TIdSrvRecords.Create;
+  try
+    Self.List.CollectServiceRecords(S);
+
+    CheckEquals(2, S.Count, 'Incorrect number of service records collected');
+    CheckEquals(DomainOne, S[0].Domain, '1st record');
+    CheckEquals(DomainTwo, S[1].Domain, '2nd record');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdResourceRecords.TestContainsType;
+begin
+  Check(not Self.List.ContainsType(DnsARecord),
+        'Empty list, so there should be no A records');
+
+  Self.List.AddAAAARecord('foo', '::1');
+  Check(not Self.List.ContainsType(DnsARecord),
+        'Only an AAAA record');
+
+  Self.List.AddARecord('foo', '127.0.0.1');
+  Check(Self.List.ContainsType(DnsARecord),
+        'AAAA, A record (looking for A)');
+  Check(not Self.List.ContainsType(DnsCNAMERecord),
+        'AAAA, A record (looking for CNAME)');
+
+  Self.List.AddCNAMERecord('foo', 'bar');
+  Check(Self.List.ContainsType(DnsARecord),
+        'AAAA, A, CNAME record (looking for A)');
+  Check(Self.List.ContainsType(DnsCNAMERecord),
+        'AAAA, A, CNAME record (looking for CNAME)');
 end;
 
 initialization
