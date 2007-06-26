@@ -431,8 +431,6 @@ end;
 
 procedure TIdSipMockTransport.SendRequest(R: TIdSipRequest;
                                           Dest: TIdSipLocation);
-var
-  Wait: TIdSipMessageExceptionWait;
 begin
   inherited SendRequest(R, Dest);
 
