@@ -23,6 +23,14 @@ type
     fResolveLocallyFirst: Boolean;
     Resolver: TIdDNSResolver;
 
+    procedure AddNaptrRecord(Result: TIdNaptrRecords;
+                             NaptrRecord: TNAPTRRecord);
+    procedure AddSrvRecord(Data: TQueryResult;
+                           Result: TIdNaptrRecords;
+                           SrvRecord: TSRVRecord); overload;
+    procedure AddSrvRecord(Data: TQueryResult;
+                           SRVs: TIdSrvRecords;
+                           SrvRecord: TSRVRecord); overload;
     procedure CollapseChain(List: TStrings; Index: Integer; NewCanonicalName: String);
     function  GetNameServer: String;
     function  GetPort: Integer;
@@ -116,8 +124,7 @@ end;
 procedure TIdSipIndyLocator.PerformNAPTRLookup(TargetUri: TIdUri;
                                                Result: TIdNaptrRecords);
 var
-  I:     Integer;
-  NAPTR: TNAPTRRecord;
+  I: Integer;
 begin
   Self.Resolver.QueryRecords := [qtNAPTR];
 
@@ -126,15 +133,10 @@ begin
 
     for I := 0 to Self.Resolver.QueryResult.Count - 1 do begin
       if (Self.Resolver.QueryResult[I] is TNAPTRRecord) then begin
-        NAPTR := Self.Resolver.QueryResult[I] as TNAPTRRecord;
-
-        Result.Add(TargetUri.Host,
-                   NAPTR.Order,
-                   NAPTR.Preference,
-                   NAPTR.Flags,
-                   NAPTR.Service,
-                   NAPTR.RegExp,
-                   NAPTR.Replacement);
+        Self.AddNaptrRecord(Result, Self.Resolver.QueryResult[I] as TNAPTRRecord);
+      end
+      else if (Self.Resolver.QueryResult[I] is TSRVRecord) then begin
+        Self.AddSrvRecord(Self.Resolver.QueryResult, Result, Self.Resolver.QueryResult[I] as TSRVRecord);
       end;
     end;
   except
@@ -156,17 +158,7 @@ begin
     for I := 0 to Self.Resolver.QueryResult.Count - 1 do begin
       if (Self.Resolver.QueryResult[I] is TSRVRecord) then begin
         SRV := Self.Resolver.QueryResult[I] as TSRVRecord;
-
-        Result.Add(SRV.Domain,
-                   SRV.Service + '.' + SRV.Protocol,
-                   SRV.Priority,
-                   SRV.Weight,
-                   SRV.Port,
-                   SRV.Target);
-
-        Self.ProcessNameRecords(Self.Resolver.QueryResult,
-                                SRV.Target,
-                                Result[Result.Count - 1].NameRecords);
+        Self.AddSrvRecord(Self.Resolver.QueryResult, Result, SRV);
       end;
     end;
   except
@@ -175,6 +167,48 @@ begin
 end;
 
 //* TIdSipIndyLocator Private methods ******************************************
+
+procedure TIdSipIndyLocator.AddNaptrRecord(Result: TIdNaptrRecords;
+                                           NaptrRecord: TNAPTRRecord);
+begin
+  Result.Add(NaptrRecord.Name,
+             NaptrRecord.Order,
+             NaptrRecord.Preference,
+             NaptrRecord.Flags,
+             NaptrRecord.Service,
+             NaptrRecord.RegExp,
+             NaptrRecord.Replacement);
+end;
+
+procedure TIdSipIndyLocator.AddSrvRecord(Data: TQueryResult;
+                                         Result: TIdNaptrRecords;
+                                         SrvRecord: TSRVRecord);
+var
+  Naptr:   TIdNaptrRecord;
+  Service: String;
+begin
+  Service := SrvRecord.Service + '.' + SrvRecord.Protocol;
+  Naptr := Result.RecordFor(Service + '.' + SrvRecord.Domain);
+
+  if Assigned(Naptr) then
+    Self.AddSrvRecord(Data, Naptr.ServiceRecords, SrvRecord);
+end;
+
+procedure TIdSipIndyLocator.AddSrvRecord(Data: TQueryResult;
+                                         SRVs: TIdSrvRecords;
+                                         SrvRecord: TSRVRecord);
+var
+  NewRR: TIdSrvRecord;
+begin
+  NewRR := SRVs.Add(SrvRecord.Domain,
+                    SrvRecord.Service + '.' + SrvRecord.Protocol,
+                    SrvRecord.Priority,
+                    SrvRecord.Weight,
+                    SrvRecord.Port,
+                    SrvRecord.Target);
+
+  Self.ProcessNameRecords(Data, SrvRecord.Target, NewRR.NameRecords);
+end;
 
 procedure TIdSipIndyLocator.CollapseChain(List: TStrings; Index: Integer; NewCanonicalName: String);
 var
