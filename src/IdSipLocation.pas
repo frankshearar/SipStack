@@ -151,6 +151,11 @@ begin
   for I := 0 to Self.Count - 1 do begin
     if (Self[I].IPAddress = SearchLocation.IPAddress) then begin
       Result := Self[I];
+    end;
+
+    if    (Self[I].Transport = SearchLocation.Transport)
+      and (Self[I].IPAddress = SearchLocation.IPAddress) then begin
+      Result := Self[I];
       Break;
     end;
   end;

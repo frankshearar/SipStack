@@ -35,6 +35,7 @@ type
     procedure TestCount;
     procedure TestFirst;
     procedure TestFirstAddressMatch;
+    procedure TestFirstAddressMatchTriesToMatchTransports;
     procedure TestIsEmpty;
     procedure TestLast;
     procedure TestRemoveFirst;
@@ -273,7 +274,9 @@ end;
 
 procedure TestTIdSipLocations.TestFirstAddressMatch;
 const
-  LocalAddress = '10.0.0.6';
+  IPv6LocalHost = '::1';
+  LanIP         = '10.0.0.1';
+  LocalAddress  = '10.0.0.6';
 var
   Found:     TIdSipLocation;
   SearchLoc: TIdSipLocation;
@@ -282,7 +285,7 @@ begin
   try
     CheckNull(Self.Locs.FirstAddressMatch(SearchLoc), 'Empty collection');
 
-    Self.Locs.AddLocation('TCP', '10.0.0.1', 5060);
+    Self.Locs.AddLocation('TCP', LanIP, 5060);
     CheckNull(Self.Locs.FirstAddressMatch(SearchLoc), 'No match');
 
     Self.Locs.AddLocation('TCP', LocalAddress, 15060);
@@ -290,11 +293,35 @@ begin
     CheckNotNull(Found, 'Same address, different transport, different port');
     CheckEquals(SearchLoc.IPAddress, Found.IPAddress, 'Address of found location');
 
-    SearchLoc.IPAddress := '::1';
+    SearchLoc.IPAddress := IPv6LocalHost;
     Self.Locs.AddLocation('TCP', SearchLoc.IPAddress, 15060);
     Found := Self.Locs.FirstAddressMatch(SearchLoc);
     CheckNotNull(Found, 'Same address, different transport, different port (IPv6)');
     CheckEquals(SearchLoc.IPAddress, Found.IPAddress, 'Address of found location (IPv6)');
+  finally
+    SearchLoc.Free;
+  end;
+end;
+
+procedure TestTIdSipLocations.TestFirstAddressMatchTriesToMatchTransports;
+const
+  LocalAddress  = '10.0.0.6';
+var
+  Found:     TIdSipLocation;
+  SearchLoc: TIdSipLocation;
+begin
+  SearchLoc := TIdSipLocation.Create('UDP', LocalAddress, 5060);
+  try
+    Self.Locs.AddLocation('TCP', LocalAddress, 5060);
+
+    Found := Self.Locs.FirstAddressMatch(SearchLoc);
+    CheckNotNull(Found, 'Same address, different transport');
+    CheckEquals('TCP', Found.Transport, 'Transport of found location');
+
+    Self.Locs.AddLocation('UDP', LocalAddress, 5060);
+    Found := Self.Locs.FirstAddressMatch(SearchLoc);
+    CheckNotNull(Found, 'Same address, same transport, same port');
+    CheckEquals('UDP', Found.Transport, 'Transport-matching location not used in preference');
   finally
     SearchLoc.Free;
   end;
