@@ -150,7 +150,7 @@ var
   InviteModule: TIdSipInviteModule;
 begin
   Result := inherited WillAcceptRequest(Request);
-
+{
   if (Result = uarAccept) then begin
     // It's safe to typecast here because we know that a module is prepared to
     // accept this request - and that module is a TIdSipInviteModule.
@@ -160,6 +160,7 @@ begin
         Result := uarDoNotDisturb;
     end;
   end;
+}  
 end;
 
 //******************************************************************************

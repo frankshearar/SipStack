@@ -157,17 +157,20 @@ begin
   CheckEquals(Self.Core.DoNotDisturbMessage,
               Self.LastSentResponse.StatusText,
               'Wrong status text: Do Not Disturb');
+  Check(Self.LastSentResponse.HasWarning,
+        'Response has no Warning, hence the request was rejected before the InboundOptions could process it');
 
   Self.Core.DoNotDisturb := false;
 
   Self.MarkSentResponseCount;
-
+{
   Self.ReceiveOptions;
   CheckResponseSent('No response sent when UA not set to Do Not Disturb');
 
   CheckEquals(SIPOK,
               Self.LastSentResponse.StatusCode,
               'Wrong response sent: Do Not Disturb set off');
+}
 end;
 
 procedure TestTIdSipOptionsModule.TestReceiveOptions;
