@@ -130,6 +130,7 @@ type
                                 const Reason: String;
                                 Source: TIdSipConnectionBindings);
     procedure SetLocator(Value: TIdSipAbstractLocator);
+    procedure SetRoutingTable(Value: TIdRoutingTable);
     procedure SetTimer(Value: TIdTimerQueue);
   public
     constructor Create(Timer: TIdTimerQueue;
@@ -167,7 +168,7 @@ type
     function  WillUseReliableTranport(R: TIdSipMessage): Boolean;
 
     property Locator:      TIdSipAbstractLocator read fLocator write fLocator;
-    property RoutingTable: TIdRoutingTable       read fRoutingTable write fRoutingTable;
+    property RoutingTable: TIdRoutingTable       read fRoutingTable write SetRoutingTable;
     property T1Interval:   Cardinal              read fT1Interval write fT1Interval;
     property T2Interval:   Cardinal              read fT2Interval write fT2Interval;
     property T4Interval:   Cardinal              read fT4Interval write fT4Interval;
@@ -705,8 +706,9 @@ begin
     T.AddBinding(Address, Port)
   else begin
     T := TIdSipTransportRegistry.TransportTypeFor(Transport).Create;
-    T.HostName := Address;
-    T.Timer    := Self.Timer;
+    T.HostName     := Address;
+    T.Timer        := Self.Timer;
+    T.RoutingTable := Self.RoutingTable;
 
     // Indy servers instantiate with one binding.
     T.SetFirstBinding(Address, Port);
@@ -1124,6 +1126,16 @@ end;
 procedure TIdSipTransactionDispatcher.SetLocator(Value: TIdSipAbstractLocator);
 begin
   Self.fLocator := Value;
+end;
+
+procedure TIdSipTransactionDispatcher.SetRoutingTable(Value: TIdRoutingTable);
+var
+  I: Integer;
+begin
+  Self.fRoutingTable := Value;
+
+  for I := 0 to Self.TransportCount - 1 do
+    Self.Transports[I].RoutingTable := Value;
 end;
 
 procedure TIdSipTransactionDispatcher.SetTimer(Value: TIdTimerQueue);

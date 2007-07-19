@@ -399,8 +399,8 @@ end;
 
 procedure TIdSipMockTransport.Start;
 begin
-  if (Self.Bindings.Count = 0) then
-    Self.AddIndyStyleDefaultBinding;
+//  if (Self.Bindings.Count = 0) then
+//    Self.AddIndyStyleDefaultBinding;
 
   Self.fIsRunning := true;
 end;
@@ -467,7 +467,7 @@ var
   Binding: TIdSocketHandle;
 begin
   Binding := Self.Bindings.Add;
-  Binding.IP   := '127.0.01';
+  Binding.IP   := '127.0.0.1';
   Binding.Port := Self.DefaultPort;
 end;
 

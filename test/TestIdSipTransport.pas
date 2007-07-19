@@ -12,9 +12,9 @@ unit TestIdSipTransport;
 interface
 
 uses
-  Classes, IdSipLocation, IdSipMessage, IdSipMockTransport, IdSipTransport,
-  IdSipTcpTransport, IdTcpConnection, IdTcpServer, IdTimerQueue, SyncObjs,
-  SysUtils, TestFramework, TestFrameworkEx, TestFrameworkSip,
+  Classes, IdMockRoutingTable, IdSipLocation, IdSipMessage, IdSipMockTransport,
+  IdSipTransport, IdSipTcpTransport, IdTcpConnection, IdTcpServer, IdTimerQueue,
+  SyncObjs, SysUtils, TestFramework, TestFrameworkEx, TestFrameworkSip,
   TestFrameworkSipTransport;
 
 type
@@ -92,15 +92,30 @@ type
 
   TestTIdSipMockTransport = class(TestTIdSipTransport)
   private
-    MockTransport: TIdSipMockTransport;
-    RequestOne:    TIdSipRequest;
-    RequestTwo:    TIdSipRequest;
-    RequestThree:  TIdSipRequest;
-    RequestFour:   TIdSipRequest;
-    ResponseOne:   TIdSipResponse;
-    ResponseTwo:   TIdSipResponse;
-    ResponseThree: TIdSipResponse;
-    ResponseFour:  TIdSipResponse;
+    GatewayIP:        String;
+    LanDestination:   String;
+    LanIP:            String;
+    LocalhostIP:      String;
+    MockRoutingTable: TIdMockRoutingTable;
+    MockTransport:    TIdSipMockTransport;
+    RequestOne:       TIdSipRequest;
+    RequestTwo:       TIdSipRequest;
+    RequestThree:     TIdSipRequest;
+    RequestFour:      TIdSipRequest;
+    ResponseOne:      TIdSipResponse;
+    ResponseTwo:      TIdSipResponse;
+    ResponseThree:    TIdSipResponse;
+    ResponseFour:     TIdSipResponse;
+    VpnDestination:   String;
+    VpnIP:            String;
+
+    procedure CheckBinding(ExpectedIP: String;
+                           ExpectedPort: Integer;
+                           Destination,
+                           Msg: String);
+    function  CreateRequest(Method, Transport: String): TIdSipRequest;
+    function  CreateResponse(StatusCode: Cardinal): TIdSipResponse;
+    procedure InitialiseRoutingTable;
   protected
     procedure CheckServerOnPort(const Host: String;
                                 Port: Cardinal;
@@ -110,6 +125,13 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestFindBindingLanOnly;
+    procedure TestFindBindingLocalhostOnly;
+    procedure TestFindBindingLocalhostAndLan;
+    procedure TestFindBindingMappedRoute;
+    procedure TestFindBindingNonStandardPort;
+    procedure TestFindBindingTwoLan;
+    procedure TestFindBindingTwoLanMultiplePort;
     procedure TestLastRequest;
     procedure TestLastResponse;
     procedure TestSecondLastRequest;
@@ -241,8 +263,8 @@ implementation
 
 uses
   IdException, IdGlobal, IdSimpleParser, IdSipSCTPTransport, IdSipTlsTransport,
-  IdSipUdpTransport, IdSSLOpenSSL, IdStack, IdSystem, IdTcpClient, IdUdpClient,
-  IdUDPServer, TestMessages;
+  IdSipUdpTransport, IdSocketHandle, IdSSLOpenSSL, IdStack, IdSystem,
+  IdTcpClient, IdUdpClient, IdUDPServer, TestMessages;
 
 function Suite: ITestSuite;
 begin
@@ -782,37 +804,30 @@ begin
   (Self.LowPortTransport  as TIdSipMockTransport).AutoDispatch := true;
   (Self.HighPortTransport as TIdSipMockTransport).AutoDispatch := true;
 
-  Self.RequestOne := TIdSipRequest.ReadRequestFrom(BasicRequest);
-  Self.RequestOne.LastHop.Transport := Self.LowPortTransport.GetTransportType;
+  Self.RequestOne   := Self.CreateRequest(MethodInvite, Self.LowPortTransport.GetTransportType);
+  Self.RequestTwo   := Self.CreateRequest(MethodRegister, Self.LowPortTransport.GetTransportType);
+  Self.RequestThree := Self.CreateRequest(MethodOptions, Self.LowPortTransport.GetTransportType);
+  Self.RequestFour  := Self.CreateRequest(MethodSubscribe, Self.LowPortTransport.GetTransportType);
 
-  Self.RequestTwo := TIdSipRequest.ReadRequestFrom(BasicRequest);
-  Self.RequestTwo.Method      := MethodRegister;
-  Self.RequestTwo.CSeq.Method := MethodRegister;
-  Self.RequestTwo.LastHop.Transport := Self.LowPortTransport.GetTransportType;
+  Self.ResponseOne   := Self.CreateResponse(SIPTrying);
+  Self.ResponseTwo   := Self.CreateResponse(SIPOK);
+  Self.ResponseThree := Self.CreateResponse(SIPMultipleChoices);
+  Self.ResponseFour  := Self.CreateResponse(SIPBadRequest);
 
-  Self.RequestThree := TIdSipRequest.ReadRequestFrom(BasicRequest);
-  Self.RequestThree.Method      := MethodOptions;
-  Self.RequestThree.CSeq.Method := MethodOptions;
-  Self.RequestThree.LastHop.Transport := Self.LowPortTransport.GetTransportType;
+  Self.MockTransport    := Self.LowPortTransport as TIdSipMockTransport;
+  Self.MockRoutingTable := Self.MockTransport.RoutingTable as TIdMockRoutingTable;
 
-  Self.RequestFour := TIdSipRequest.ReadRequestFrom(BasicRequest);
-  Self.RequestFour.Method      := MethodSubscribe;
-  Self.RequestFour.CSeq.Method := MethodSubscribe;
-  Self.RequestFour.LastHop.Transport := Self.LowPortTransport.GetTransportType;
+  // There's nothing special about these addresses: they're just the current
+  // configuration of the author's development machine.
+  Self.GatewayIP   := '10.0.0.1';
+  Self.LocalhostIP := '127.0.0.1';
+  Self.LanIP       := '10.0.0.6';
+  Self.VpnIP       := '192.168.1.100';
 
-  Self.ResponseOne := TIdSipResponse.ReadResponseFrom(BasicResponse);
-  Self.ResponseOne.StatusCode := SIPTrying;
+  Self.LanDestination := TIdIPAddressParser.IncIPAddress(Self.LanIP);
+  Self.VpnDestination := TIdIPAddressParser.IncIPAddress(Self.VpnIP);
 
-  Self.ResponseTwo := TIdSipResponse.ReadResponseFrom(BasicResponse);
-  Self.ResponseTwo.StatusCode := SIPOK;
-
-  Self.ResponseThree := TIdSipResponse.ReadResponseFrom(BasicResponse);
-  Self.ResponseThree.StatusCode := SIPMultipleChoices;
-
-  Self.ResponseFour := TIdSipResponse.ReadResponseFrom(BasicResponse);
-  Self.ResponseFour.StatusCode := SIPBadRequest;
-
-  Self.MockTransport := Self.LowPortTransport as TIdSipMockTransport;
+  Self.InitialiseRoutingTable;
 end;
 
 procedure TestTIdSipMockTransport.TearDown;
@@ -895,7 +910,159 @@ begin
   end;
 end;
 
+procedure TestTIdSipMockTransport.CheckBinding(ExpectedIP: String;
+                                               ExpectedPort: Integer;
+                                               Destination,
+                                               Msg: String);
+var
+  Binding: TIdSocketHandle;
+  Dest:    TIdSipConnectionBindings;
+begin
+  Dest := TIdSipConnectionBindings.Create;
+  try
+    Dest.Transport :=  Self.MockTransport.GetTransportType;
+    Dest.PeerIP    := Destination;
+    Dest.PeerPort  := 5060;
+    Binding := Self.MockTransport.FindBinding(Dest);
+
+    CheckEquals(ExpectedIP,   Binding.IP, Msg + ': IP address');
+    CheckEquals(ExpectedPort, Binding.Port, Msg + ': port');
+  finally
+    Dest.Free;
+  end;
+end;
+
+function TestTIdSipMockTransport.CreateRequest(Method, Transport: String): TIdSipRequest;
+begin
+  Result := TIdSipRequest.ReadRequestFrom(BasicRequest);
+
+  Result.Method            := Method;
+  Result.CSeq.Method       := Method;
+  Result.LastHop.Transport := Transport;
+end;
+
+function TestTIdSipMockTransport.CreateResponse(StatusCode: Cardinal): TIdSipResponse;
+begin
+  Result := TIdSipResponse.ReadResponseFrom(BasicResponse);
+
+  Result.StatusCode := StatusCode;
+end;
+
+procedure TestTIdSipMockTransport.InitialiseRoutingTable;
+var
+  RT: TIdMockRoutingTable;
+begin
+  RT := Self.MockTransport.RoutingTable as TIdMockRoutingTable;
+
+  RT.AddOsRoute(TIdIPAddressParser.NetworkFor(Self.LocalhostIP, 24),
+                TIdIPAddressParser.MaskToAddress(24, TIdIPAddressParser.IPVersion(Self.LocalhostIP)),
+                Self.LocalhostIP,
+                0,
+                '1',
+                Self.LocalhostIP);
+  RT.AddOsRoute(TIdIPAddressParser.NetworkFor(Self.LanIP, 24),
+                TIdIPAddressParser.MaskToAddress(24, TIdIPAddressParser.IPVersion(Self.LanIP)),
+                Self.LanIP,
+                0,
+                '1',
+                Self.LanIP);
+  RT.AddOsRoute(TIdIPAddressParser.NetworkFor(Self.VpnIP, 24),
+                TIdIPAddressParser.MaskToAddress(24, TIdIPAddressParser.IPVersion(Self.VpnIP)),
+                Self.VpnIP,
+                0,
+                '1',
+                Self.VpnIP);
+
+  RT.AddOsRoute('0.0.0.0', '0.0.0.0', Self.GatewayIP, 0, '1', Self.LanIP);
+end;
+
 //* TestTIdSipMockTransport Published methods **********************************
+
+procedure TestTIdSipMockTransport.TestFindBindingLanOnly;
+begin
+  Self.MockTransport.ClearBindings;
+  Self.MockTransport.AddBinding(Self.LanIP, 5060);
+
+  CheckBinding(Self.LanIP, 5060, Self.LocalhostIP,    'Localhost');
+  CheckBinding(Self.LanIP, 5060, Self.LanDestination, 'LAN IP');
+  CheckBinding(Self.LanIP, 5060, Self.VpnDestination, 'VPN IP');
+end;
+
+procedure TestTIdSipMockTransport.TestFindBindingLocalhostOnly;
+begin
+  Self.MockTransport.ClearBindings;
+  Self.MockTransport.AddBinding(Self.LocalhostIP, 5060);
+
+  CheckBinding(Self.LocalhostIP, 5060, Self.LocalhostIP,    'Localhost');
+  CheckBinding(Self.LocalhostIP, 5060, Self.LanDestination, 'LAN IP');
+  CheckBinding(Self.LocalhostIP, 5060, Self.VpnDestination, 'VPN IP');
+end;
+
+procedure TestTIdSipMockTransport.TestFindBindingLocalhostAndLan;
+begin
+  Self.MockTransport.ClearBindings;
+  Self.MockTransport.AddBinding(Self.LocalhostIP, 5060);
+  Self.MockTransport.AddBinding(Self.LanIP,       5060);
+
+  CheckBinding(Self.LocalhostIP, 5060, Self.LocalhostIP,    'Localhost');
+  CheckBinding(Self.LanIP,       5060, Self.LanDestination, 'LAN IP');
+  CheckBinding(Self.LocalhostIP, 5060, Self.VpnDestination, 'VPN IP');
+end;
+
+procedure TestTIdSipMockTransport.TestFindBindingMappedRoute;
+begin
+  Self.MockRoutingTable.AddMappedRoute('0.0.0.0', '0.0.0.0', '1.2.3.4', 5060);
+  Self.MockTransport.AddBinding(Self.LanIP, 5060);
+
+  CheckBinding(Self.LanIP, 5060, '5.6.7.8', 'Internet IP');
+end;
+
+procedure TestTIdSipMockTransport.TestFindBindingNonStandardPort;
+var
+  NonstandardPort: Cardinal;
+  StandardPort:    Cardinal;
+begin
+  StandardPort := TIdSipTransportRegistry.DefaultPortFor(Self.MockTransport.GetTransportType);
+  NonstandardPort := StandardPort + 1000;
+
+  Self.MockTransport.ClearBindings;
+  Self.MockTransport.AddBinding(Self.LocalhostIP, StandardPort);
+  Self.MockTransport.AddBinding(Self.LanIP,       NonstandardPort);
+
+  CheckBinding(Self.LanIP, NonstandardPort, Self.LanDestination, 'LAN IP (nonstandard port)');
+
+  Self.MockTransport.AddBinding(Self.LanIP, StandardPort);
+
+  CheckBinding(Self.LanIP, StandardPort, Self.LanDestination, 'LAN IP (standard port)');
+end;
+
+procedure TestTIdSipMockTransport.TestFindBindingTwoLan;
+begin
+  Self.MockTransport.ClearBindings;
+  Self.MockTransport.AddBinding(Self.LocalhostIP, 5060);
+  Self.MockTransport.AddBinding(Self.LanIP,       5060);
+  Self.MockTransport.AddBinding(Self.VpnIP,       5060);
+
+  CheckBinding(Self.LocalhostIP, 5060, Self.LocalhostIP,    'Localhost');
+  CheckBinding(Self.LanIP,       5060, Self.LanDestination, 'LAN IP');
+  CheckBinding(Self.VpnIP,       5060, Self.VpnDestination, 'VPN IP');
+end;
+
+procedure TestTIdSipMockTransport.TestFindBindingTwoLanMultiplePort;
+const
+  DefaultPort    = 5060;
+  NonDefaultPort = 15060;
+begin
+  Self.MockTransport.ClearBindings;
+  Self.MockTransport.AddBinding(Self.LocalhostIP, 5060);
+  Self.MockTransport.AddBinding(Self.LanIP,       NonDefaultPort);
+  Self.MockTransport.AddBinding(Self.LanIP,       DefaultPort);
+  Self.MockTransport.AddBinding(Self.VpnIP,       5060);
+
+  CheckBinding(Self.LocalhostIP, 5060,        Self.LocalhostIP,    'Localhost');
+  CheckBinding(Self.LanIP,       DefaultPort, Self.LanDestination, 'LAN IP');
+  CheckBinding(Self.VpnIP,       5060,        Self.VpnDestination, 'VPN IP');
+end;
 
 procedure TestTIdSipMockTransport.TestLastRequest;
 begin

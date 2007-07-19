@@ -111,6 +111,7 @@ type
     procedure TestAddServerTransaction;
     procedure TestAddTransportBinding;
     procedure TestAddTransportBindingAddsTimerToTransport;
+    procedure TestAddTransportBindingAddsRoutingTableToTransport;
     procedure TestClearAddAndCountTransports;
     procedure TestCreateNewTransaction;
     procedure TestDispatchToCorrectTransaction;
@@ -128,6 +129,7 @@ type
     procedure TestSendRequest;
     procedure TestSendRequestOverUdp;
     procedure TestServerInviteTransactionGetsAck;
+    procedure TestSetRoutingTableSetsTransports;
     procedure TestStartAllTranspors;
     procedure TestStopAllTranspors;
     procedure TestTransactionDeletedWhenTimerBFires;
@@ -606,7 +608,7 @@ type
 implementation
 
 uses
-  Classes, IdException, IdRandom, IdSdp, Math, TypInfo;
+  Classes, IdException, IdRandom, IdRoutingTable, IdSdp, Math, TypInfo;
 
 function Suite: ITestSuite;
 begin
@@ -757,7 +759,10 @@ begin
   // This must differ from Self.D's bindings, or we will make hairpin calls
   // when we send INVITEs. That in itself isn't a problem, but for most tests
   // that's not what we want!
-  Self.Destination := TIdSipLocation.Create(TcpTransport, '127.0.0.2', DefaultSipPort);
+  Self.Destination := TIdSipLocation.Create;
+  Self.Destination.IPAddress := '127.0.0.2';
+  Self.Destination.Port      := DefaultSipPort;
+  Self.Destination.Transport := TcpTransport;
 
   Self.ReceivedRequest  := TIdSipTestResources.CreateLocalLoopRequest;
   Self.TranRequest      := TIdSipTestResources.CreateLocalLoopRequest;
@@ -1109,6 +1114,16 @@ begin
         'Newly-added transport doesn''t use the dispatcher''s timer');
 end;
 
+procedure TestTIdSipTransactionDispatcher.TestAddTransportBindingAddsRoutingTableToTransport;
+begin
+  // Let's start with a clean slate, as far as transports are concerned.
+  Self.D.Transports.Clear;
+
+  Self.D.AddTransportBinding(TcpTransport, '127.0.0.1', 1);
+  Check(Self.D.RoutingTable = Self.D.Transports[0].RoutingTable,
+        'Newly-added transport doesn''t use the dispatcher''s routing table');
+end;
+
 procedure TestTIdSipTransactionDispatcher.TestClearAddAndCountTransports;
 begin
   CheckNotEquals(0, Self.D.TransportCount, 'Precondition: SetUp didn''t add transports');
@@ -1406,8 +1421,12 @@ procedure TestTIdSipTransactionDispatcher.TestSendRequestOverUdp;
 var
   UdpDest: TIdSipLocation;
 begin
-  UdpDest := TIdSipLocation.Create(UdpTransport, '127.0.0.1', DefaultSipPort);
+  UdpDest := TIdSipLocation.Create;
   try
+    UdpDest.IPAddress := '127.0.0.1';
+    UdpDest.Port      := DefaultSipPort;
+    UdpDest.Transport := UdpTransport;
+
     Self.MockTransport := Self.MockUdpTransport;
 
     Self.MarkSentRequestCount;
@@ -1451,6 +1470,26 @@ begin
     end;
   finally
     Listener.Free;
+  end;
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestSetRoutingTableSetsTransports;
+var
+  I:     Integer;
+  NewRT: TIdRoutingTable;
+begin
+  Self.D.AddTransportBinding(TcpTransport, '127.0.0.1', 5060);
+  Self.D.AddTransportBinding(UdpTransport, '127.0.0.1', 5060);
+
+  NewRT := TIdMockRoutingTable.Create;
+  try
+    Self.D.RoutingTable := NewRT;
+
+    for I := 0 to Self.D.TransportCount - 1 do
+      Check(NewRT = Self.D.Transports[I].RoutingTable,
+            'Transport #' + IntToStr(I) + '''s routing table not set');
+  finally
+    NewRT.Free;
   end;
 end;
 
@@ -2435,7 +2474,10 @@ begin
   // This must differ from the dispatcher's bindings, or we will make hairpin
   // calls when we send INVITEs. That in itself isn't a problem, but for most
   // tests that's not what we want!
-  Self.Destination := TIdSipLocation.Create(UdpTransport, '127.0.0.2', DefaultSipPort);
+  Self.Destination := TIdSipLocation.Create;
+  Self.Destination.IPAddress := '127.0.0.2';
+  Self.Destination.Port      := DefaultSipPort;
+  Self.Destination.Transport := UdpTransport;
 
   Self.TransactionCompleted  := false;
   Self.TransactionFailed     := false;
@@ -5211,7 +5253,10 @@ procedure TestTIdSipClientInviteTransactionTimerBWait.SetUp;
 begin
   inherited SetUp;
 
-  Self.DestinationLocation := TIdSipLocation.Create(Self.Dispatcher.TransportType, '127.0.0.', 5060);
+  Self.DestinationLocation := TIdSipLocation.Create;
+  Self.DestinationLocation.IPAddress := '127.0.0.1';
+  Self.DestinationLocation.Port      := 5060;
+  Self.DestinationLocation.Transport := Self.Dispatcher.TransportType;
 
   Self.Tran := Self.Dispatcher.AddClientTransaction(Self.Invite) as TIdSipClientInviteTransaction;
   Self.Tran.SendRequest(Self.DestinationLocation);

@@ -71,7 +71,10 @@ var
 begin
   inherited SetUp;
 
-  Self.ArbDest   := TIdSipLocation.Create('UDP', '127.0.0.1', 5060);
+  Self.ArbDest := TIdSipLocation.Create;
+  Self.ArbDest.IPAddress := '127.0.0.1';
+  Self.ArbDest.Port      := 5060;
+  Self.ArbDest.Transport := 'UDP';
   Self.LogStream := TStringStream.Create('');
   Self.Request   := TIdSipTestResources.CreateBasicRequest;
   Self.Response  := TIdSipTestResources.CreateBasicResponse;

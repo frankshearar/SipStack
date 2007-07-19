@@ -121,6 +121,7 @@ type
 
   TestTIdMockRoutingTable = class(TestTIdRoutingTable)
   published
+    procedure TestAddDefaultOsRoute;
     procedure TestAddOsRouteAndCount;
     procedure TestRemoveAllOsRoutes;
   end;
@@ -1128,6 +1129,16 @@ end;
 //* TestTIdMockRoutingTable                                                    *
 //******************************************************************************
 //* TestTIdMockRoutingTable Published methods **********************************
+
+procedure TestTIdMockRoutingTable.TestAddDefaultOsRoute;
+const
+  Gateway = '10.0.0.1';
+  InetIP  = '1.2.3.4';
+  LanIP   = '10.0.0.6';
+begin
+  Self.RT.AddDefaultOsRoute(Gateway, 1, '1', LanIP);
+  CheckEquals(LanIP, Self.RT.LocalAddressFor(InetIP), 'Default route not added');
+end;
 
 procedure TestTIdMockRoutingTable.TestAddOsRouteAndCount;
 begin

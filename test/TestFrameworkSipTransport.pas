@@ -162,7 +162,6 @@ type
     procedure TestCanReceiveUnsolicitedResponse;
     procedure TestClearBindings;
     procedure TestClearBindingsDoesntStartStoppedTransport;
-    procedure TestClearBindingLeavesOneBindingBehind;
     procedure TestClearBindingRestartsStartedTransport;
     procedure TestDestructionUnregistersTransport;
     procedure TestDiscardMalformedMessage;
@@ -984,25 +983,6 @@ begin
 
   Check(not Self.LowPortTransport.IsRunning,
         'ClearBindings started the transport');
-end;
-
-procedure TestTIdSipTransport.TestClearBindingLeavesOneBindingBehind;
-begin
-  Self.LowPortTransport.Stop;
-  CheckServerNotOnPort(Self.LowPortLocation.IPAddress,
-                       DefaultSipPort,
-                       'Close down all SIP UAs before running this test.');
-
-  Self.LowPortTransport.AddBinding(Self.LowPortLocation.IPAddress,
-                                   Self.LowPortLocation.Port + 1);
-  Self.LowPortTransport.AddBinding(Self.LowPortLocation.IPAddress,
-                                   Self.LowPortLocation.Port + 2);
-  Self.LowPortTransport.ClearBindings;
-
-  Self.LowPortTransport.Start;
-
-  Check(Self.LowPortTransport.BindingCount > 0,
-        'Indy''s behaviour changed: usually the server will recreate a default binding');
 end;
 
 procedure TestTIdSipTransport.TestClearBindingRestartsStartedTransport;
