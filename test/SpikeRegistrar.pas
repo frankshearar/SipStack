@@ -53,10 +53,10 @@ type
                                 Source: TIdSipConnectionBindings);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport;
-                            Destination: TIdSipLocation);
+                            Binding: TIdSipConnectionBindings);
     procedure OnSendResponse(Response: TIdSipResponse;
                              Sender: TIdSipTransport;
-                             Destination: TIdSipLocation);
+                             Binding: TIdSipConnectionBindings);
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
@@ -183,14 +183,14 @@ end;
 
 procedure TrnidSpikeRegistrar.OnSendRequest(Request: TIdSipRequest;
                                             Sender: TIdSipTransport;
-                                            Destination: TIdSipLocation);
+                                            Binding: TIdSipConnectionBindings);
 begin
   Self.LogMessage(Request);
 end;
 
 procedure TrnidSpikeRegistrar.OnSendResponse(Response: TIdSipResponse;
                                              Sender: TIdSipTransport;
-                                             Destination: TIdSipLocation);
+                                             Binding: TIdSipConnectionBindings);
 begin
   Self.LogMessage(Response);
 end;

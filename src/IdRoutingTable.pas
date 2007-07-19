@@ -76,8 +76,6 @@ type
     function WillUseDefaultRoute(DestinationIP: String; var LocalIP: String): Boolean;
   protected
     function  BestRouteIsDefaultRoute(DestinationIP, LocalIP: String): Boolean; virtual;
-    function  GetBestLocalAddress(DestinationIP: String): String; overload; virtual;
-    procedure GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation; DefaultPort: Cardinal); overload; virtual;
     function  InternalHasRoute(RouteList: TObjectList; Route: TIdRouteEntry): Boolean;
     procedure InternalRemoveRoute(RouteList: TObjectList; Destination, Mask, Gateway: String);
     function  RouteAt(Index: Integer): TIdRouteEntry;
@@ -86,6 +84,8 @@ type
     destructor  Destroy; override;
 
     procedure AddMappedRoute(Destination, Mask, MappedAddress: String; MappedPort: Cardinal = 0);
+    function  GetBestLocalAddress(DestinationIP: String): String; overload; virtual;
+    procedure GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation; DefaultPort: Cardinal); overload; virtual;
     function  HasRoute(Route: TIdRouteEntry): Boolean;
     function  LocalAddressFor(DestinationIP: String): String; overload;
     procedure LocalAddressFor(DestinationIP: String; LocalAddress: TIdSipLocation; DefaultPort: Cardinal = 0); overload;
@@ -100,6 +100,7 @@ type
   TIdWindowsRoutingTable = class(TIdRoutingTable)
   protected
     function  BestRouteIsDefaultRoute(DestinationIP, LocalIP: String): Boolean; override;
+  public
     function  GetBestLocalAddress(DestinationIP: String): String; overload; override;
     procedure GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation; DefaultPort: Cardinal); overload; override;
   end;
@@ -110,6 +111,7 @@ type
   TIdWindowsNT4RoutingTable = class(TIdWindowsRoutingTable)
   protected
     function  BestRouteIsDefaultRoute(DestinationIP, LocalIP: String): Boolean; override;
+   public
     function  GetBestLocalAddress(DestinationIP: String): String; overload; override;
     procedure GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation; DefaultPort: Cardinal); overload; override;
   end;
@@ -464,6 +466,37 @@ begin
   end;
 end;
 
+function TIdRoutingTable.GetBestLocalAddress(DestinationIP: String): String;
+var
+  LocalAddress: TIdSipLocation;
+begin
+  // Return the best local address needed to contact the machine at DestinationIP.
+
+  LocalAddress := TIdSipLocation.Create;
+  try
+    Self.GetBestLocalAddress(DestinationIP, LocalAddress, 0);
+
+    Result := LocalAddress.IPAddress;
+  finally
+    LocalAddress.Free;
+  end;
+end;
+
+procedure TIdRoutingTable.GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation; DefaultPort: Cardinal);
+begin
+  // Return the best local address needed to contact the machine at DestinationIP.
+  // This version of the method allows one to specify ports. Since this class is
+  // protocol agnostic (above the IP layer), you probably want to set DefaultPort
+  // to whatever default port your application layer protocol uses. If you were
+  // using SIP, for instance, you'd set DefaultPort to 5060.
+  //
+  // An example of using this would be if you have multiple SIP User Agents
+  // behind one NATting firewall: the firewall could redirect packets on port
+  // 5060 to your boss, 5062 to your neighbouring colleague and 5064 to your
+  // machine. Using this method allows you to send out your Contact with a URI
+  // like sip:you@your.natted.address:5064.
+end;
+
 function TIdRoutingTable.HasRoute(Route: TIdRouteEntry): Boolean;
 begin
   Result := Self.InternalHasRoute(Self.Routes, Route);
@@ -554,37 +587,6 @@ begin
   Result := false;
 end;
 
-function TIdRoutingTable.GetBestLocalAddress(DestinationIP: String): String;
-var
-  LocalAddress: TIdSipLocation;
-begin
-  // Return the best local address needed to contact the machine at DestinationIP.
-
-  LocalAddress := TIdSipLocation.Create;
-  try
-    Self.GetBestLocalAddress(DestinationIP, LocalAddress, 0);
-
-    Result := LocalAddress.IPAddress;
-  finally
-    LocalAddress.Free;
-  end;
-end;
-
-procedure TIdRoutingTable.GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation; DefaultPort: Cardinal);
-begin
-  // Return the best local address needed to contact the machine at DestinationIP.
-  // This version of the method allows one to specify ports. Since this class is
-  // protocol agnostic (above the IP layer), you probably want to set DefaultPort
-  // to whatever default port your application layer protocol uses. If you were
-  // using SIP, for instance, you'd set DefaultPort to 5060.
-  //
-  // An example of using this would be if you have multiple SIP User Agents
-  // behind one NATting firewall: the firewall could redirect packets on port
-  // 5060 to your boss, 5062 to your neighbouring colleague and 5064 to your
-  // machine. Using this method allows you to send out your Contact with a URI
-  // like sip:you@your.natted.address:5064.
-end;
-
 function TIdRoutingTable.InternalHasRoute(RouteList: TObjectList; Route: TIdRouteEntry): Boolean;
 var
   I: Integer;
@@ -639,12 +641,7 @@ end;
 //******************************************************************************
 //* TIdWindowsRoutingTable                                                     *
 //******************************************************************************
-//* TIdWindowsRoutingTable Protected methods ***********************************
-
-function TIdWindowsRoutingTable.BestRouteIsDefaultRoute(DestinationIP, LocalIP: String): Boolean;
-begin
-  Result := IdSystem.BestRouteIsDefaultRoute(DestinationIP, LocalIP);
-end;
+//* TIdWindowsRoutingTable Public methods **************************************
 
 function TIdWindowsRoutingTable.GetBestLocalAddress(DestinationIP: String): String;
 begin
@@ -657,15 +654,17 @@ begin
   LocalLocation.Port      := DefaultPort;
 end;
 
+//* TIdWindowsRoutingTable Protected methods ***********************************
+
+function TIdWindowsRoutingTable.BestRouteIsDefaultRoute(DestinationIP, LocalIP: String): Boolean;
+begin
+  Result := IdSystem.BestRouteIsDefaultRoute(DestinationIP, LocalIP);
+end;
+
 //******************************************************************************
 //* TIdWindowsNT4RoutingTable                                                  *
 //******************************************************************************
-//* TIdWindowsNT4RoutingTable Protected methods ********************************
-
-function TIdWindowsNT4RoutingTable.BestRouteIsDefaultRoute(DestinationIP, LocalIP: String): Boolean;
-begin
-  Result := IdSystem.BestRouteIsDefaultRouteNT4(DestinationIP, LocalIP);
-end;
+//* TIdWindowsNT4RoutingTable Public methods ***********************************
 
 function TIdWindowsNT4RoutingTable.GetBestLocalAddress(DestinationIP: String): String;
 begin
@@ -676,6 +675,13 @@ procedure TIdWindowsNT4RoutingTable.GetBestLocalAddress(DestinationIP: String; L
 begin
   LocalLocation.IPAddress := IdSystem.GetBestLocalAddressNT4(DestinationIP);
   LocalLocation.Port      := DefaultPort;
+end;
+
+//* TIdWindowsNT4RoutingTable Protected methods ********************************
+
+function TIdWindowsNT4RoutingTable.BestRouteIsDefaultRoute(DestinationIP, LocalIP: String): Boolean;
+begin
+  Result := IdSystem.BestRouteIsDefaultRouteNT4(DestinationIP, LocalIP);
 end;
 
 end.

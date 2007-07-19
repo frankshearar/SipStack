@@ -41,9 +41,9 @@ type
     procedure AddIndyStyleDefaultBinding;
     function  CreateFakeBinding: TIdSipConnectionBindings;
     procedure DispatchRequest(R: TidSipRequest;
-                              Dest: TIdSipLocation);
+                              Dest: TIdSipConnectionBindings);
     procedure DispatchResponse(R: TidSipResponse;
-                               Dest: TIdSipLocation);
+                               Dest: TIdSipConnectionBindings);
     function  FindTransport(const TransportType: String;
                             const Address: String;
                                   Port: Cardinal): TIdSipMockTransport;
@@ -54,10 +54,8 @@ type
     function  TransportAt(Index: Integer): TIdSipMockTransport;
   protected
     function  GetBindings: TIdSocketHandles; override;
-    procedure SendRequest(R: TIdSipRequest;
-                          Dest: TIdSipLocation); override;
-    procedure SendResponse(R: TIdSipResponse;
-                           Dest: TIdSipLocation); override;
+    procedure SendMessage(M: TIdSipMessage;
+                          Dest: TIdSipConnectionBindings); override;
   public
     class function DefaultPort: Cardinal; override;
     class function GetTransportType: String; override;
@@ -429,52 +427,37 @@ begin
   Result := Self.fBindings;
 end;
 
-procedure TIdSipMockTransport.SendRequest(R: TIdSipRequest;
-                                          Dest: TIdSipLocation);
+procedure TIdSipMockTransport.SendMessage(M: TIdSipMessage;
+                                          Dest: TIdSipConnectionBindings);
 begin
-  inherited SendRequest(R, Dest);
+  Self.Log(M.AsString, dirOut);
 
-  Self.Log(R.AsString, dirOut);
-
-  if R.IsAck then begin
-    Self.LastACK.Assign(R);
+  if M.IsAck then begin
+    Self.LastACK.Assign(M);
     Inc(Self.fACKCount)
   end
-  else begin
-    Self.fRequests.AddCopy(R);
+  else if M.IsRequest then begin
+    Self.fRequests.AddCopy(M as TIdSipRequest);
     Inc(Self.fSentRequestCount);
+  end
+  else if M.IsResponse then begin
+    Self.fResponses.AddCopy(M as TIdSipResponse);
+    Inc(Self.fSentResponseCount);
   end;
 
   if Assigned(Self.FailWith) then begin
-    Self.ScheduleException(R);
+    Self.ScheduleException(M);
 
     // Never autodispatch a message that's "failed".
     Exit;
   end;
 
-  if Self.AutoDispatch then
-    Self.DispatchRequest(R, Dest);
-end;
-
-procedure TIdSipMockTransport.SendResponse(R: TIdSipResponse;
-                                           Dest: TIdSipLocation);
-begin
-  Self.NotifyOfSentResponse(R, Dest);
-
-  Self.Log(R.AsString, dirOut);
-  Self.fResponses.AddCopy(R);
-
-  Inc(Self.fSentResponseCount);
-
-  if Assigned(Self.FailWith) then begin
-    Self.ScheduleException(R);
-
-    // Never autodispatch a message that's "failed".
-    Exit;
+  if Self.AutoDispatch then begin
+    if M.IsRequest then
+      Self.DispatchRequest(M as TIdSipRequest, Dest)
+    else
+      Self.DispatchResponse(M as TIdSipResponse, Dest);
   end;
-
-  if Self.AutoDispatch then
-    Self.DispatchResponse(R, Dest);
 end;
 
 //* TIdSipMockTransport Private methods ****************************************
@@ -500,12 +483,12 @@ begin
 end;
 
 procedure TIdSipMockTransport.DispatchRequest(R: TidSipRequest;
-                                              Dest: TIdSipLocation);
+                                              Dest: TIdSipConnectionBindings);
 var
   FakeBinding: TIdSipConnectionBindings;
   T:           TIdSipMockTransport;
 begin
-  T := Self.FindTransport(Dest.Transport, Dest.IPAddress, Dest.Port);
+  T := Self.FindTransport(Dest.Transport, Dest.PeerIP, Dest.PeerPort);
 
   if Assigned(T) then begin
     // FakeBinding represents the socket binding information that the remote
@@ -526,12 +509,12 @@ begin
 end;
 
 procedure TIdSipMockTransport.DispatchResponse(R: TidSipResponse;
-                                               Dest: TIdSipLocation);
+                                               Dest: TIdSipConnectionBindings);
 var
   FakeBinding: TIdSipConnectionBindings;
   T:           TIdSipMockTransport;
 begin
-  T := Self.FindTransport(Dest.Transport, Dest.IPAddress, Dest.Port);
+  T := Self.FindTransport(Dest.Transport, Dest.PeerIP, Dest.PeerPort);
 
   if Assigned(T) then begin
     // FakeBinding represents the socket binding information that the remote

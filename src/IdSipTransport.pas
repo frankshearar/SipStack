@@ -12,8 +12,8 @@ unit IdSipTransport;
 interface
 
 uses
-  Classes, Contnrs, IdException, IdInterfacedObject,
-  IdNotification, IdSipLocation, IdSipMessage, IdSocketHandle, IdSSLOpenSSL,
+  Classes, Contnrs, IdException, IdInterfacedObject, IdNotification,
+  IdRoutingTable, IdSipLocation, IdSipMessage, IdSocketHandle, IdSSLOpenSSL,
   IdTCPConnection, IdTimerQueue, SyncObjs, SysUtils;
 
 type
@@ -43,10 +43,10 @@ type
     ['{2E451F5D-5053-4A2C-BE5F-BB68E5CB3A6D}']
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport;
-                            Destination: TIdSipLocation);
+                            Destination: TIdSipConnectionBindings);
     procedure OnSendResponse(Response: TIdSipResponse;
                              Sender: TIdSipTransport;
-                             Destination: TIdSipLocation);
+                             Destination: TIdSipConnectionBindings);
   end;
 
   // I provide functionality common to all transports.
@@ -62,6 +62,7 @@ type
     fHostName:                 String;
     fID:                       String;
     fPort:                     Cardinal;
+    fRoutingTable:             TIdRoutingTable;
     fTimeout:                  Cardinal;
     fTimer:                    TIdTimerQueue;
     fUseRport:                 Boolean;
@@ -86,9 +87,9 @@ type
                                       const Reason: String;
                                       ReceivedFrom: TIdSipConnectionBindings);
     procedure NotifyOfSentRequest(Request: TIdSipRequest;
-                                  Dest: TIdSipLocation);
+                                  Binding: TIdSipConnectionBindings);
     procedure NotifyOfSentResponse(Response: TIdSipResponse;
-                                   Dest: TIdSipLocation);
+                                   Binding: TIdSipConnectionBindings);
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnMalformedMessage(const Msg: String;
@@ -101,15 +102,18 @@ type
     procedure ReturnBadRequest(Request: TIdSipRequest;
                                Target: TIdSipConnectionBindings;
                                const StatusText: String);
+    procedure SendMessage(M: TIdSipMessage;
+                          Dest: TIdSipConnectionBindings); virtual; abstract;
     procedure SendRequest(R: TIdSipRequest;
-                          Dest: TIdSipLocation); virtual;
+                          Dest: TIdSipLocation);
     procedure SendResponse(R: TIdSipResponse;
-                           Dest: TIdSipLocation); virtual;
+                           Dest: TIdSipLocation); overload;
+    procedure SendResponse(R: TIdSipResponse;
+                           Binding: TIdSipConnectionBindings); overload;
     function  SentByIsRecognised(Via: TIdSipViaHeader): Boolean; virtual;
     procedure SetTimeout(Value: Cardinal); virtual;
     procedure SetTimer(Value: TIdTimerQueue); virtual;
 
-  protected
     property Bindings: TIdSocketHandles read GetBindings;
   public
     class function  DefaultPort: Cardinal; virtual;
@@ -128,6 +132,7 @@ type
     function  BindingCount: Integer;
     procedure ClearBindings;
     function  DefaultTimeout: Cardinal; virtual;
+    function  FindBinding(Dest: TIdSipConnectionBindings): TIdSocketHandle;
     function  FirstIPBound: String;
     function  HasBinding(const Address: String; Port: Cardinal): Boolean;
     function  IsNull: Boolean; virtual;
@@ -150,11 +155,12 @@ type
     procedure Start; virtual;
     procedure Stop; virtual;
 
-    property HostName: String           read fHostName write fHostName;
-    property ID:       String           read fID;
-    property Timeout:  Cardinal         read fTimeout write SetTimeout;
-    property Timer:    TIdTimerQueue    read fTimer write SetTimer;
-    property UseRport: Boolean          read fUseRport write fUseRport;
+    property HostName:     String          read fHostName write fHostName;
+    property ID:           String          read fID;
+    property RoutingTable: TIdRoutingTable read fRoutingTable write fRoutingTable;
+    property Timeout:      Cardinal        read fTimeout write SetTimeout;
+    property Timer:        TIdTimerQueue   read fTimer write SetTimer;
+    property UseRport:     Boolean         read fUseRport write fUseRport;
   end;
 
   // I supply methods for objects to find out what transports the stack knows
@@ -313,11 +319,11 @@ type
 
   TIdSipTransportSendingMethod = class(TIdNotification)
   private
-    fDestination: TIdSipLocation;
-    fSender:      TIdSipTransport;
+    fBinding: TIdSipConnectionBindings;
+    fSender:  TIdSipTransport;
   public
-    property Destination: TIdSipLocation  read fDestination write fDestination;
-    property Sender:      TIdSipTransport read fSender write fSender;
+    property Binding: TIdSipConnectionBindings read fBinding write fBinding;
+    property Sender:  TIdSipTransport          read fSender write fSender;
   end;
 
   // Look at IIdSipTransportSendingListener's declaration.
@@ -360,8 +366,11 @@ const
                                       + 'request or receiving a response to one.';
   MustHaveAtLeastOneVia   = 'An outbound message must always have at least one '
                           + 'Via, namely, this stack.';
+  NoBindings              = 'You can''t send messages through a transport with '
+                          + 'no bindings';
   RequestNotSentFromHere  = 'The request to which this response replies could '
                           + 'not have been sent from here.';
+  TransportMismatch       = 'You can''t use a %s transport to send a %s packet.';
   ViaTransportMismatch    = 'Via transport mismatch';
   WrongTransport          = 'This transport only supports %s  messages but '
                           + 'received a %s message.';
@@ -491,6 +500,59 @@ begin
 
   Result := 5000;
 end;
+
+function TIdSipTransport.FindBinding(Dest: TIdSipConnectionBindings): TIdSocketHandle;
+var
+  DefaultPort:  Cardinal;
+  I:            Integer;
+  LocalAddress: String;
+begin
+  // In a multihomed environment, Indy does the wrong thing when you invoke
+  // Send. It uses the first socket in its list of bindings, not the socket most
+  // appropriate to use to send to a target.
+  //
+  // Now we might have several bindings on the same IP address (say, 192.168.1.1
+  // on ports 5060, 15060 and 25060. All these bindings are equally appropriate
+  // because port numbers don't exist in the network (i.e., IP) layer, so we
+  // simply return the first one.
+
+  Assert(Dest.Transport = Self.GetTransportType,
+         Format(TransportMismatch, [Self.GetTransportType, Dest.Transport]));
+  Assert(Self.Bindings.Count > 0, NoBindings);
+
+  // A subtlety: this method will select the binding on the default port if
+  // it can.
+  DefaultPort  := TIdSipTransportRegistry.DefaultPortFor(Dest.Transport);
+  LocalAddress := Self.RoutingTable.GetBestLocalAddress(Dest.PeerIP);
+
+  // Try find the binding using the default port on the LocalAddress for this
+  // transport.
+  Result := nil;
+
+  for I := 0 to Self.Bindings.Count - 1 do begin
+    // Try use any address bound on LocalAddress.IPAddress
+    if (Self.Bindings[I].IP = LocalAddress) then begin
+      Result := Self.Bindings[I];
+    end;
+
+    // But if something's bound on LocalAddress.IPAddress AND uses the default
+    // port for this transport, use that instead.
+    if Assigned(Result) then begin
+      if    (Self.Bindings[I].IP = LocalAddress)
+        and (Cardinal(Self.Bindings[I].Port) = DefaultPort) then begin
+        Result := Self.Bindings[I];
+        Break;
+      end;
+    end;
+  end;
+
+  // Nothing appropriate found? Just use any old socket, and pray.
+  if (Result = nil) then
+    Result := Self.Bindings[0];
+
+  Assert(Result <> nil, 'No binding found for the destination ' + Dest.AsString);
+end;
+
 
 function TIdSipTransport.FirstIPBound: String;
 begin
@@ -771,15 +833,15 @@ begin
 end;
 
 procedure TIdSipTransport.NotifyOfSentRequest(Request: TIdSipRequest;
-                                              Dest: TIdSipLocation);
+                                              Binding: TIdSipConnectionBindings);
 var
   Notification: TIdSipTransportSendingRequestMethod;
 begin
   Notification := TIdSipTransportSendingRequestMethod.Create;
   try
-    Notification.Destination := Dest;
-    Notification.Sender      := Self;
-    Notification.Request     := Request;
+    Notification.Binding := Binding;
+    Notification.Sender  := Self;
+    Notification.Request := Request;
 
     Self.TransportSendingListeners.Notify(Notification);
   finally
@@ -788,15 +850,15 @@ begin
 end;
 
 procedure TIdSipTransport.NotifyOfSentResponse(Response: TIdSipResponse;
-                                               Dest: TIdSipLocation);
+                                               Binding: TIdSipConnectionBindings);
 var
   Notification: TIdSipTransportSendingResponseMethod;
 begin
   Notification := TIdSipTransportSendingResponseMethod.Create;
   try
-    Notification.Destination := Dest;
-    Notification.Sender      := Self;
-    Notification.Response    := Response;
+    Notification.Binding  := Binding;
+    Notification.Sender   := Self;
+    Notification.Response := Response;
 
     Self.TransportSendingListeners.Notify(Notification);
   finally
@@ -833,21 +895,13 @@ procedure TIdSipTransport.ReturnBadRequest(Request: TIdSipRequest;
                                            Target: TIdSipConnectionBindings;
                                            const StatusText: String);
 var
-  Destination: TIdSipLocation;
-  Res:         TIdSipResponse;
+  Res: TIdSipResponse;
 begin
   Res := TIdSipResponse.InResponseTo(Request, SIPBadRequest);
   try
     Res.StatusText := StatusText;
 
-    Destination := TIdSipLocation.Create(Self.GetTransportType,
-                                         Target.PeerIP,
-                                         Target.PeerPort);
-    try
-      Self.SendResponse(Res, Destination);
-    finally
-      Destination.Free;
-    end;
+    Self.SendResponse(Res, Target);
   finally
     Res.Free;
   end;
@@ -855,17 +909,48 @@ end;
 
 procedure TIdSipTransport.SendRequest(R: TIdSipRequest;
                                       Dest: TIdSipLocation);
+var
+  LocalBinding: TIdSipConnectionBindings;
 begin
   if Self.UseRport then
     R.LastHop.Params[RportParam] := '';
 
-  Self.NotifyOfSentRequest(R, Dest);
+  LocalBinding := TIdSipConnectionBindings.Create;
+  try
+    LocalBinding.Assign(Dest);
+    Self.SendMessage(R, LocalBinding);
+
+    Self.NotifyOfSentRequest(R, LocalBinding);
+  finally
+    LocalBinding.Free;
+  end;
 end;
 
 procedure TIdSipTransport.SendResponse(R: TIdSipResponse;
                                        Dest: TIdSipLocation);
+var
+  LocalBinding: TIdSipConnectionBindings;
 begin
-  Self.NotifyOfSentResponse(R, Dest);
+  // Send a response to a machine identified by a transport/ip-address/port
+  // triple.
+  LocalBinding := TIdSipConnectionBindings.Create;
+  try
+    LocalBinding.Assign(Dest);
+    Self.SendResponse(R, LocalBinding);
+  finally
+    LocalBinding.Free;
+  end;
+end;
+
+procedure TIdSipTransport.SendResponse(R: TIdSipResponse;
+                                       Binding: TIdSipConnectionBindings);
+begin
+  // Send a response to a machine when you already know exactly what binding to
+  // use.
+
+  Self.SendMessage(R, Binding);
+
+  Self.NotifyOfSentResponse(R, Binding);
 end;
 
 function TIdSipTransport.SentByIsRecognised(Via: TIdSipViaHeader): Boolean;
@@ -1240,7 +1325,7 @@ procedure TIdSipTransportSendingRequestMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipTransportSendingListener).OnSendRequest(Self.Request,
                                                             Self.Sender,
-                                                            Self.Destination);
+                                                            Self.Binding);
 end;
 
 //******************************************************************************
@@ -1252,7 +1337,7 @@ procedure TIdSipTransportSendingResponseMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipTransportSendingListener).OnSendResponse(Self.Response,
                                                              Self.Sender,
-                                                             Self.Destination);
+                                                             Self.Binding);
 end;
 
 //******************************************************************************

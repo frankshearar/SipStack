@@ -23,16 +23,16 @@ type
     procedure NotifyOfReceivedRequest(Request: TIdSipRequest);
     procedure NotifyOfReceivedResponse(Response: TIdSipResponse);
     procedure NotifyOfSentRequest(Request: TIdSipRequest;
-                                  Dest: TIdSipLocation);
+                                  Binding: TIdSipConnectionBindings);
     procedure NotifyOfSentResponse(Response: TIdSipResponse;
-                                   Dest: TIdSipLocation);
+                                   Binding: TIdSipConnectionBindings);
   end;
 
   TestTIdSipTransportEventNotifications = class(TTestCaseSip,
                                                 IIdSipTransportListener,
                                                 IIdSipTransportSendingListener)
   private
-    Destination:      TIdSipLocation;
+    Binding:          TIdSipConnectionBindings;
     ReceivedRequest:  Boolean;
     ReceivedResponse: Boolean;
     Request:          TIdSipRequest;
@@ -55,10 +55,10 @@ type
                                 Source: TIdSipConnectionBindings);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport;
-                            Destination: TIdSipLocation);
+                            Binding: TIdSipConnectionBindings);
     procedure OnSendResponse(Response: TIdSipResponse;
                              Sender: TIdSipTransport;
-                             Destination: TIdSipLocation);
+                             Binding: TIdSipConnectionBindings);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -207,11 +207,18 @@ type
     procedure TestRun;
   end;
 
-  TestTIdSipTransportSendingRequestMethod = class(TTransportMethodTestCase)
+  TTransportSendingMethodTestCase = class(TTransportMethodTestCase)
+  protected
+    Binding: TIdSipConnectionBindings;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSipTransportSendingRequestMethod = class(TTransportSendingMethodTestCase)
   private
-    Destination: TIdSipLocation;
-    Method:      TIdSipTransportSendingRequestMethod;
-    Request:     TIdSipRequest;
+    Method:  TIdSipTransportSendingRequestMethod;
+    Request: TIdSipRequest;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -219,11 +226,10 @@ type
     procedure TestRun;
   end;
 
-  TestTIdSipTransportSendingResponseMethod = class(TTransportMethodTestCase)
+  TestTIdSipTransportSendingResponseMethod = class(TTransportSendingMethodTestCase)
   private
-    Destination: TIdSipLocation;
-    Method:      TIdSipTransportSendingResponseMethod;
-    Response:    TIdSipResponse;
+    Method:   TIdSipTransportSendingResponseMethod;
+    Response: TIdSipResponse;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -287,15 +293,15 @@ begin
 end;
 
 procedure TIdSipTransportSubclass.NotifyOfSentRequest(Request: TIdSipRequest;
-                                                      Dest: TIdSipLocation);
+                                                      Binding: TIdSipConnectionBindings);
 begin
-  inherited NotifyOfSentRequest(Request, Dest);
+  inherited NotifyOfSentRequest(Request, Binding);
 end;
 
 procedure TIdSipTransportSubclass.NotifyOfSentResponse(Response: TIdSipResponse;
-                                                       Dest: TIdSipLocation);
+                                                       Binding: TIdSipConnectionBindings);
 begin
-  inherited NotifyOfSentResponse(Response, Dest);
+  inherited NotifyOfSentResponse(Response, Binding);
 end;
 
 //******************************************************************************
@@ -307,7 +313,13 @@ procedure TestTIdSipTransportEventNotifications.SetUp;
 begin
   inherited SetUp;
 
-  Self.Destination      := TIdSipLocation.Create('TCP', '127.0.0.1', 5060);
+  Self.Binding := TIdSipConnectionBindings.Create;
+  Self.Binding.Transport := 'TCP';
+  Self.Binding.LocalIP   := '127.0.0.1';
+  Self.Binding.LocalPort := 5060;
+  Self.Binding.PeerIP   := '127.0.0.2';
+  Self.Binding.PeerPort := 5061;
+
   Self.ReceivedRequest  := false;
   Self.ReceivedResponse := false;
   Self.Request          := TIdSipTestResources.CreateLocalLoopRequest;
@@ -320,7 +332,7 @@ begin
   Self.Transport.Free;
   Self.Response.Free;
   Self.Request.Free;
-  Self.Destination.Free;
+  Self.Binding.Free;
 
   inherited TearDown;
 end;
@@ -360,7 +372,7 @@ end;
 
 procedure TestTIdSipTransportEventNotifications.OnSendRequest(Request: TIdSipRequest;
                                                               Sender: TIdSipTransport;
-                                                              Destination: TIdSipLocation);
+                                                              Binding: TIdSipConnectionBindings);
 begin
   Self.SentRequest := true;
   Check(Self.Request = Request,     'Request not correct');
@@ -369,7 +381,7 @@ end;
 
 procedure TestTIdSipTransportEventNotifications.OnSendResponse(Response: TIdSipResponse;
                                                                Sender: TIdSipTransport;
-                                                               Destination: TIdSipLocation);
+                                                               Binding: TIdSipConnectionBindings);
 begin
   Self.SentResponse := true;
 
@@ -392,7 +404,7 @@ procedure TestTIdSipTransportEventNotifications.TestAddTransportSendingListener;
 begin
   Self.Transport.AddTransportSendingListener(Self);
 
-  Self.Transport.NotifyOfSentRequest(Self.Request, Self.Destination);
+  Self.Transport.NotifyOfSentRequest(Self.Request, Self.Binding);
 
   Check(Self.SentRequest, 'Listener wasn''t added');
 end;
@@ -443,10 +455,16 @@ begin
     Self.Transport.AddTransportSendingListener(Listener);
 
     Self.Transport.NotifyOfSentRequest(Self.Request,
-                                       Self.Destination);
+                                       Self.Binding);
 
     Check(Self.SentRequest and Listener.SentRequest,
           'Not all Listeners Sent the request');
+
+    CheckEquals(Self.Binding.LocalIP,   Listener.BindingParam.LocalIP,   'Binding param Local IP');
+    CheckEquals(Self.Binding.LocalPort, Listener.BindingParam.LocalPort, 'Binding param Local Port');
+    CheckEquals(Self.Binding.PeerIP,    Listener.BindingParam.PeerIP,    'Binding param peer IP');
+    CheckEquals(Self.Binding.PeerPort,  Listener.BindingParam.PeerPort,  'Binding param peer Port');
+    CheckEquals(Self.Binding.Transport, Listener.BindingParam.Transport, 'Binding param transport');
   finally
     Listener.Free;
   end;
@@ -462,10 +480,16 @@ begin
     Self.Transport.AddTransportSendingListener(Listener);
 
     Self.Transport.NotifyOfSentResponse(Self.Response,
-                                        Self.Destination);
+                                        Self.Binding);
 
     Check(Self.SentResponse and Listener.SentResponse,
           'Not all Listeners Sent the Response');
+
+    CheckEquals(Self.Binding.LocalIP,   Listener.BindingParam.LocalIP,   'Binding param Local IP');
+    CheckEquals(Self.Binding.LocalPort, Listener.BindingParam.LocalPort, 'Binding param Local Port');
+    CheckEquals(Self.Binding.PeerIP,    Listener.BindingParam.PeerIP,    'Binding param peer IP');
+    CheckEquals(Self.Binding.PeerPort,  Listener.BindingParam.PeerPort,  'Binding param peer Port');
+    CheckEquals(Self.Binding.Transport, Listener.BindingParam.Transport, 'Binding param transport');
   finally
     Listener.Free;
   end;
@@ -487,7 +511,7 @@ begin
   Self.Transport.RemoveTransportSendingListener(Self);
 
   Self.Transport.NotifyOfSentRequest(Self.Request,
-                                     Self.Destination);
+                                     Self.Binding);
 
   Check(not Self.SentRequest, 'Listener wasn''t removed');
 end;
@@ -1244,10 +1268,32 @@ begin
                 Listener.ReasonParam,
                 'Reason param');
     Check(Self.Method.Source = Listener.SourceParam,
-          'Source param');            
+          'Source param');
   finally
     Listener.Free;
   end;
+end;
+
+//******************************************************************************
+//* TTransportSendingMethodTestCase                                            *
+//******************************************************************************
+//* TTransportSendingMethodTestCase Public methods *****************************
+
+procedure TTransportSendingMethodTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Binding := TIdSipConnectionBindings.Create;
+  Self.Binding.Transport := 'TCP';
+  Self.Binding.PeerIP    := '127.0.0.1';
+  Self.Binding.PeerPort  := 5060;
+end;
+
+procedure TTransportSendingMethodTestCase.TearDown;
+begin
+  Self.Binding.Free;
+
+  inherited TearDown;
 end;
 
 //******************************************************************************
@@ -1259,20 +1305,18 @@ procedure TestTIdSipTransportSendingRequestMethod.SetUp;
 begin
   inherited SetUp;
 
-  Self.Destination := TIdSipLocation.Create('TCP', '127.0.0.1', 5060);
   Self.Request := TIdSipRequest.Create;
 
   Self.Method := TIdSipTransportSendingRequestMethod.Create;
-  Self.Method.Destination := Self.Destination;
-  Self.Method.Request     := Self.Request;
-  Self.Method.Sender      := Self.Transport;
+  Self.Method.Binding := Self.Binding;
+  Self.Method.Request := Self.Request;
+  Self.Method.Sender  := Self.Transport;
 end;
 
 procedure TestTIdSipTransportSendingRequestMethod.TearDown;
 begin
   Self.Method.Free;
   Self.Request.Free;
-  Self.Destination.Free;
 
   inherited TearDown;
 end;
@@ -1288,8 +1332,8 @@ begin
     Self.Method.Run(Listener);
 
     Check(Listener.SentRequest, 'Listener not notified');
-    Check(Self.Method.Destination = Listener.DestinationParam,
-          'Destination param');
+    Check(Self.Method.Binding = Listener.BindingParam,
+          'Binding param');
     Check(Self.Method.Sender = Listener.SenderParam,
           'Sender param');
     Check(Self.Method.Request.Equals(Listener.RequestParam),
@@ -1308,20 +1352,18 @@ procedure TestTIdSipTransportSendingResponseMethod.SetUp;
 begin
   inherited SetUp;
 
-  Self.Destination := TIdSipLocation.Create('TCP', '127.0.0.1', 5060);
   Self.Response := TIdSipResponse.Create;
 
   Self.Method := TIdSipTransportSendingResponseMethod.Create;
-  Self.Method.Destination := Self.Destination;
-  Self.Method.Response    := Self.Response;
-  Self.Method.Sender      := Self.Transport;
+  Self.Method.Binding  := Self.Binding;
+  Self.Method.Response := Self.Response;
+  Self.Method.Sender   := Self.Transport;
 end;
 
 procedure TestTIdSipTransportSendingResponseMethod.TearDown;
 begin
   Self.Method.Free;
   Self.Response.Free;
-  Self.Destination.Free;
 
   inherited TearDown;
 end;
@@ -1337,8 +1379,8 @@ begin
     Self.Method.Run(Listener);
 
     Check(Listener.SentResponse, 'Listener not notified');
-    Check(Self.Method.Destination = Listener.DestinationParam,
-          'Destination param');
+    Check(Self.Method.Binding = Listener.BindingParam,
+          'Binding param');
     Check(Self.Method.Sender = Listener.SenderParam,
           'Sender param');
     Check(Self.Method.Response.Equals(Listener.ResponseParam),

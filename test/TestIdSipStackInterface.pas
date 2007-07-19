@@ -2785,9 +2785,15 @@ begin
   inherited SetUp;
 
   Self.Data := TIdDebugSendMessageData.Create;
-  Self.Data.Destination := TIdSipLocation.Create('TCP', '127.0.0.1', 5060);
-  Self.Data.Handle      := $decafbad;
-  Self.Data.Message     := TIdSipRequest.Create;
+  Self.Data.Binding := TIdSipConnectionBindings.Create;
+  Self.Data.Binding.LocalIP   := '127.0.0.1';
+  Self.Data.Binding.LocalPort := 5060;
+  Self.Data.Binding.PeerIP    := '127.0.0.2';
+  Self.Data.Binding.PeerPort  := 5061;
+  Self.Data.Binding.Transport := 'UDP';
+
+  Self.Data.Handle  := $decafbad;
+  Self.Data.Message := TIdSipRequest.Create;
 end;
 
 procedure TestTIdDebugSendMessageData.TearDown;
@@ -2808,10 +2814,10 @@ begin
     CheckEquals(IntToHex(Self.Data.Handle, 8),
                 IntToHex(Copy.Handle, 8),
                 'Handle');
-    CheckEquals(Self.Data.Destination.AsString,
-                Copy.Destination.AsString,
-               'The copy''s Destination doesn''t contain the original Destination');
-    Check(Copy.Destination <> Self.Data.Destination,
+    CheckEquals(Self.Data.Binding.AsString,
+                Copy.Binding.AsString,
+               'The copy''s Binding doesn''t contain the original Binding');
+    Check(Copy.Binding <> Self.Data.Binding,
           'The copy contains a reference to the original Destination, not a copy');
     Check(Copy.Message.Equals(Self.Data.Message),
           'The copy''s message doesn''t contain the original message');

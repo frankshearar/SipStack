@@ -27,10 +27,8 @@ type
     procedure DestroyServer; override;
     function  GetBindings: TIdSocketHandles; override;
     procedure InstantiateServer; override;
-    procedure SendRequest(R: TIdSipRequest;
-                          Dest: TIdSipLocation); override;
-    procedure SendResponse(R: TIdSipResponse;
-                           Dest: TIdSipLocation); override;
+    procedure SendMessage(M: TIdSipMessage;
+                          Dest: TIdSipConnectionBindings); override;
     procedure SetTimer(Value: TIdTimerQueue); override;
   public
     class function GetTransportType: String; override;
@@ -156,28 +154,18 @@ begin
   Self.Transport.TransportID := Self.ID;
 end;
 
-procedure TIdSipUDPTransport.SendRequest(R: TIdSipRequest;
-                                         Dest: TIdSipLocation);
+procedure TIdSipUDPTransport.SendMessage(M: TIdSipMessage;
+                                         Dest: TIdSipConnectionBindings);
+var
+  B: TIdSocketHandle;
+  S: String;
 begin
-  inherited SendRequest(R, Dest);
+  B := Self.FindBinding(Dest);
 
-  Self.Transport.Send(Dest.IPAddress,
-                      Dest.Port,
-                      R.AsString);
-end;
-
-procedure TIdSipUDPTransport.SendResponse(R: TIdSipResponse;
-                                          Dest: TIdSipLocation);
-begin
-  inherited SendResponse(R, Dest);
-
-  // cf RFC 3581 section 4.
-  // TODO: this isn't quite right. We have to send the response (if that's what
-  // the message is) from the ip/port that the request was received on.
-
-  Self.Transport.Send(Dest.IPAddress,
-                      Dest.Port,
-                      R.AsString);
+  if Assigned(B) then begin
+    S := M.AsString;
+    B.SendTo(Dest.PeerIP, Dest.PeerPort, S[1], Length(S));
+  end;
 end;
 
 procedure TIdSipUDPTransport.SetTimer(Value: TIdTimerQueue);

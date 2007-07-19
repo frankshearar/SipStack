@@ -41,10 +41,10 @@ type
                                 Source: TIdSipConnectionBindings);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport;
-                            Destination: TIdSipLocation);
+                            Binding: TIdSipConnectionBindings);
     procedure OnSendResponse(Response: TIdSipResponse;
                              Sender: TIdSipTransport;
-                             Destination: TIdSipLocation);
+                             Binding: TIdSipConnectionBindings);
     function Timestamp(Direction: TIdMessageDirection): String;
   public
     procedure LogTransport(T: TIdSipTransport);
@@ -148,14 +148,14 @@ end;
 
 procedure TIdSipTransportLogger.OnSendRequest(Request: TIdSipRequest;
                                               Sender: TIdSipTransport;
-                                              Destination: TIdSipLocation);
+                                              Binding: TIdSipConnectionBindings);
 begin
   Self.Log(Request.AsString, dirOut);
 end;
 
 procedure TIdSipTransportLogger.OnSendResponse(Response: TIdSipResponse;
                                                Sender: TIdSipTransport;
-                                               Destination: TIdSipLocation);
+                                               Binding: TIdSipConnectionBindings);
 begin
   Self.Log(Response.AsString, dirOut);
 end;

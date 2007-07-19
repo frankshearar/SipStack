@@ -12,8 +12,8 @@ unit TestFrameworkSipTransport;
 interface
 
 uses
-  IdSipLocation, IdSipMessage, IdSipTransport, IdTimerQueue, SyncObjs,
-  SysUtils, TestFrameworkEx, TestFrameworkSip;
+  IdMockRoutingTable, IdSipLocation, IdSipMessage, IdSipTransport, IdTimerQueue,
+  SyncObjs, SysUtils, TestFrameworkEx, TestFrameworkSip;
 
 type
   TestTIdSipTransport = class;
@@ -133,10 +133,10 @@ type
                                 Source: TIdSipConnectionBindings);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport;
-                            Destination: TIdSipLocation); virtual;
+                            Binding: TIdSipConnectionBindings); virtual;
     procedure OnSendResponse(Response: TIdSipResponse;
                              Sender: TIdSipTransport;
-                             Destination: TIdSipLocation); virtual;
+                             Binding: TIdSipConnectionBindings); virtual;
     procedure ReturnResponse(Sender: TObject;
                              R: TIdSipRequest;
                              ReceivedFrom: TIdSipConnectionBindings);
@@ -253,29 +253,29 @@ type
   TIdSipTestTransportSendingListener = class(TIdSipTestActionListener,
                                              IIdSipTransportSendingListener)
   private
-    fDestinationParam: TIdSipLocation;
-    fRequestParam:     TIdSipRequest;
-    fResponseParam:    TIdSipResponse;
-    fSenderParam:      TIdSipTransport;
-    fSentRequest:      Boolean;
-    fSentResponse:     Boolean;
+    fBindingParam:  TIdSipConnectionBindings;
+    fRequestParam:  TIdSipRequest;
+    fResponseParam: TIdSipResponse;
+    fSenderParam:   TIdSipTransport;
+    fSentRequest:   Boolean;
+    fSentResponse:  Boolean;
 
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport;
-                            Destination: TIdSipLocation);
+                            Binding: TIdSipConnectionBindings);
     procedure OnSendResponse(Response: TIdSipResponse;
                              Sender: TIdSipTransport;
-                             Destination: TIdSipLocation);
+                             Binding: TIdSipConnectionBindings);
   public
     constructor Create; override;
     destructor  Destroy; override;
 
-    property DestinationParam: TIdSipLocation  read fDestinationParam;
-    property RequestParam:     TIdSipRequest   read fRequestParam;
-    property ResponseParam:    TIdSipResponse  read fResponseParam;
-    property SenderParam:      TIdSipTransport read fSenderParam;
-    property SentRequest:      Boolean         read fSentRequest;
-    property SentResponse:     Boolean         read fSentResponse;
+    property BindingParam:  TIdSipConnectionBindings  read fBindingParam;
+    property RequestParam:  TIdSipRequest   read fRequestParam;
+    property ResponseParam: TIdSipResponse  read fResponseParam;
+    property SenderParam:   TIdSipTransport read fSenderParam;
+    property SentRequest:   Boolean         read fSentRequest;
+    property SentResponse:  Boolean         read fSentResponse;
 
   end;
 
@@ -322,7 +322,9 @@ destructor TTransportTestTimerQueue.Destroy;
 begin
   Self.LowPortTransport.Stop;
   Self.HighPortTransport.Stop;
+  Self.LowPortTransport.RoutingTable.Free;
   Self.LowPortTransport.Free;
+  Self.HighPortTransport.RoutingTable.Free;
   Self.HighPortTransport.Free;
 
   Self.FinishedEvent.SetEvent;
@@ -349,9 +351,10 @@ begin
   Transport.AddTransportListener(TestCase);
   Transport.AddTransportSendingListener(TestCase);
 
-  Transport.Timeout  := TestCase.DefaultTimeout div 10;
-  Transport.Timer    := Self;
-  Transport.HostName := HostName;
+  Transport.RoutingTable := TIdMockRoutingTable.Create;
+  Transport.Timeout      := TestCase.DefaultTimeout div 10;
+  Transport.Timer        := Self;
+  Transport.HostName     := HostName;
 
   Transport.SetFirstBinding(Address, Port);
 end;
@@ -773,13 +776,13 @@ end;
 
 procedure TestTIdSipTransport.OnSendRequest(Request: TIdSipRequest;
                                             Sender: TIdSipTransport;
-                                            Destination: TIdSipLocation);
+                                            Binding: TIdSipConnectionBindings);
 begin
 end;
 
 procedure TestTIdSipTransport.OnSendResponse(Response: TIdSipResponse;
                                              Sender: TIdSipTransport;
-                                             Destination: TIdSipLocation);
+                                             Binding: TIdSipConnectionBindings);
 begin
   Self.Lock.Acquire;
   try
@@ -819,10 +822,21 @@ begin
 end;
 
 procedure TestTIdSipTransport.SendOkResponse(Transport: TIdSipTransport);
+var
+  Dest: TIdSipLocation;
 begin
   Self.Response.StatusCode := SIPOK;
 
-  Transport.Send(Self.Response, Self.HighPortLocation);
+  Dest := TIdSipLocation.Create;
+  try
+    Dest.IPAddress := Self.HighPortLocation.IPAddress;
+    Dest.Port      := Self.HighPortLocation.Port;
+    Dest.Transport := Self.HighPortLocation.Transport;
+
+    Transport.Send(Self.Response, Dest);
+  finally
+    Dest.Free;
+  end;
 end;
 
 procedure TestTIdSipTransport.SetEvent(Sender: TObject;
@@ -2067,12 +2081,12 @@ end;
 
 procedure TIdSipTestTransportSendingListener.OnSendRequest(Request: TIdSipRequest;
                                                            Sender: TIdSipTransport;
-                                                           Destination: TIdSipLocation);
+                                                           Binding: TIdSipConnectionBindings);
 begin
-  Self.fDestinationParam := Destination;
+  Self.fBindingParam := Binding;
   Self.fRequestParam.Assign(Request);
-  Self.fSenderParam      := Sender;
-  Self.fSentRequest      := true;
+  Self.fSenderParam  := Sender;
+  Self.fSentRequest  := true;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnSendRequest');
@@ -2080,12 +2094,12 @@ end;
 
 procedure TIdSipTestTransportSendingListener.OnSendResponse(Response: TIdSipResponse;
                                                             Sender: TIdSipTransport;
-                                                            Destination: TIdSipLocation);
+                                                            Binding: TIdSipConnectionBindings);
 begin
-  Self.fDestinationParam := Destination;
+  Self.fBindingParam := Binding;
   Self.fResponseParam.Assign(Response);
-  Self.fSenderParam      := Sender;
-  Self.fSentResponse     := true;
+  Self.fSenderParam  := Sender;
+  Self.fSentResponse := true;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnSendResponse');

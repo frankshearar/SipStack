@@ -99,7 +99,7 @@ type
     procedure ListenToAllTransports;
     function  NewHandle: TIdSipHandle;
     procedure NotifyOfSentMessage(Msg: TIdSipMessage;
-                                  Destination: TIdSipLocation);
+                                  Binding: TIdSipConnectionBindings);
     procedure NotifyOfStackShutdown;
     procedure NotifyOfStackStartup;
     procedure NotifyReferral(ActionHandle: TIdSipHandle;
@@ -174,10 +174,10 @@ type
                          Response: TIdSipResponse);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport;
-                            Destination: TIdSipLocation);
+                            Destination: TIdSipConnectionBindings);
     procedure OnSendResponse(Response: TIdSipResponse;
                              Sender: TIdSipTransport;
-                             Destination: TIdSipLocation);
+                             Destination: TIdSipConnectionBindings);
     procedure OnSubscriptionRequest(UserAgent: TIdSipAbstractCore;
                                     Subscription: TIdSipInboundSubscription);
     procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistrationBase;
@@ -431,7 +431,7 @@ type
 
   TIdDebugSendMessageData = class(TIdDebugMessageData)
   private
-    fDestination: TIdSipLocation;
+    fBinding: TIdSipConnectionBindings;
   protected
     function Data: String; override;
     function EventName: String; override;
@@ -440,7 +440,7 @@ type
 
     procedure Assign(Src: TPersistent); override;
 
-    property Destination: TIdSipLocation read fDestination write fDestination;
+    property Binding: TIdSipConnectionBindings read fBinding write fBinding;
   end;
 
   TIdDebugExceptionData = class(TIdDebugData)
@@ -1579,16 +1579,16 @@ begin
 end;
 
 procedure TIdSipStackInterface.NotifyOfSentMessage(Msg: TIdSipMessage;
-                                                   Destination: TIdSipLocation);
+                                                   Binding: TIdSipConnectionBindings);
 
 var
   Data: TIdDebugSendMessageData;
 begin
   Data := TIdDebugSendMessageData.Create;
   try
-    Data.Handle      := InvalidHandle;
-    Data.Destination := Destination.Copy;
-    Data.Message     := Msg.Copy;
+    Data.Handle  := InvalidHandle;
+    Data.Binding := Binding.Copy;
+    Data.Message := Msg.Copy;
 
     Self.NotifyEvent(CM_DEBUG_SEND_MSG, Data);
   finally
@@ -2071,14 +2071,14 @@ end;
 
 procedure TIdSipStackInterface.OnSendRequest(Request: TIdSipRequest;
                                              Sender: TIdSipTransport;
-                                             Destination: TIdSipLocation);
+                                             Destination: TIdSipConnectionBindings);
 begin
   Self.NotifyOfSentMessage(Request, Destination);
 end;
 
 procedure TIdSipStackInterface.OnSendResponse(Response: TIdSipResponse;
                                               Sender: TIdSipTransport;
-                                              Destination: TIdSipLocation);
+                                              Destination: TIdSipConnectionBindings);
 begin
   Self.NotifyOfSentMessage(Response, Destination);
 end;
@@ -2602,7 +2602,7 @@ end;
 
 destructor TIdDebugSendMessageData.Destroy;
 begin
-  Self.Destination.Free;
+  Self.Binding.Free;
 
   inherited Destroy;
 end;
@@ -2616,7 +2616,7 @@ begin
   if (Src is TIdDebugSendMessageData) then begin
     Other := Src as TIdDebugSendMessageData;
 
-    Self.Destination := Other.Destination.Copy;
+    Self.Binding := Other.Binding.Copy;
   end;
 end;
 
@@ -2624,7 +2624,7 @@ end;
 
 function TIdDebugSendMessageData.Data: String;
 begin
-  Result := Self.Destination.AsString + CRLF
+  Result := Self.Binding.AsString + CRLF
           + inherited Data;
 end;
 

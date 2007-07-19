@@ -28,9 +28,7 @@ type
     RunningClients: TThreadList;
 
     procedure SendMessageTo(Msg: TIdSipMessage;
-                            Dest: TIdSipLocation);
-    procedure SendMessage(Msg: TIdSipMessage;
-                          Dest: TIdSipLocation);
+                            Dest: TIdSipConnectionBindings);
     procedure StopAllClientConnections;
   protected
     ConnectionMap: TIdSipConnectionTableLock;
@@ -41,10 +39,8 @@ type
                                 Request: TIdSipRequest);
     function  GetBindings: TIdSocketHandles; override;
     procedure InstantiateServer; override;
-    procedure SendRequest(R: TIdSipRequest;
-                          Dest: TIdSipLocation); override;
-    procedure SendResponse(R: TIdSipResponse;
-                           Dest: TIdSipLocation); override;
+    procedure SendMessage(Msg: TIdSipMessage;
+                          Dest: TIdSipConnectionBindings); override;
     function  ServerType: TIdSipTcpServerClass; virtual;
     procedure SetTimeout(Value: Cardinal); override;
     procedure SetTimer(Value: TIdTimerQueue); override;
@@ -235,7 +231,7 @@ type
     procedure Add(Connection: TIdTCPConnection;
                   Request:    TIdSipRequest);
     function  ConnectionFor(Msg: TIdSipMessage): TIdTCPConnection; overload;
-    function  ConnectionFor(Destination: TIdSipLocation): TIdTCPConnection; overload;
+    function  ConnectionFor(Destination: TIdSipConnectionBindings): TIdTCPConnection; overload;
     function  Count: Integer;
     procedure Remove(Connection: TIdTCPConnection);
   end;
@@ -363,20 +359,31 @@ begin
   Self.Transport.OnAddConnection := Self.DoOnAddConnection;
 end;
 
-procedure TIdSipTCPTransport.SendRequest(R: TIdSipRequest;
-                                         Dest: TIdSipLocation);
+procedure TIdSipTCPTransport.SendMessage(Msg: TIdSipMessage;
+                                         Dest: TIdSipConnectionBindings);
+var
+  Connection:  TIdTCPConnection;
+  Table:       TIdSipConnectionTable;
 begin
-  inherited SendRequest(R, Dest);
+  Table := Self.ConnectionMap.LockList;
+  try
+    // Try send the response down the same connection on which we received the
+    // request.
+    Connection := Table.ConnectionFor(Msg);
 
-  Self.SendMessage(R, Dest);
-end;
+    // Otherwise, try find an existing connection to Dest.
+    if not Assigned(Connection) then
+      Connection := Table.ConnectionFor(Dest);
 
-procedure TIdSipTCPTransport.SendResponse(R: TIdSipResponse;
-                                          Dest: TIdSipLocation);
-begin
-  inherited SendResponse(R, Dest);
-
-  Self.SendMessage(R, Dest);
+    if Assigned(Connection) and Connection.Connected then
+      Self.WriteMessageTo(Msg, Connection)
+    else begin
+      // Last resort: make a new connection to Dest.
+      Self.SendMessageTo(Msg, Dest);
+    end;
+  finally
+    Self.ConnectionMap.UnlockList;
+  end;
 end;
 
 function TIdSipTCPTransport.ServerType: TIdSipTcpServerClass;
@@ -402,36 +409,9 @@ end;
 //* TIdSipTCPTransport Protected methods ***************************************
 
 procedure TIdSipTCPTransport.SendMessageTo(Msg: TIdSipMessage;
-                                           Dest: TIdSipLocation);
+                                           Dest: TIdSipConnectionBindings);
 begin
-  Self.RunningClients.Add(TIdSipTcpClientThread.Create(Dest.IPAddress, Dest.Port, Msg, Self));
-end;
-
-procedure TIdSipTCPTransport.SendMessage(Msg: TIdSipMessage;
-                                         Dest: TIdSipLocation);
-var
-  Connection:  TIdTCPConnection;
-  Table:       TIdSipConnectionTable;
-begin
-  Table := Self.ConnectionMap.LockList;
-  try
-    // Try send the response down the same connection on which we received the
-    // request.
-    Connection := Table.ConnectionFor(Msg);
-
-    // Otherwise, try find an existing connection to Dest.
-    if not Assigned(Connection) then
-      Connection := Table.ConnectionFor(Dest);
-
-    if Assigned(Connection) and Connection.Connected then
-      Self.WriteMessageTo(Msg, Connection)
-    else begin
-      // Last resort: make a new connection to Dest.
-      Self.SendMessageTo(Msg, Dest);
-    end;
-  finally
-    Self.ConnectionMap.UnlockList;
-  end;
+  Self.RunningClients.Add(TIdSipTcpClientThread.Create(Dest.PeerIP, Dest.PeerPort, Msg, Self));
 end;
 
 procedure TIdSipTCPTransport.StopAllClientConnections;
@@ -970,7 +950,7 @@ begin
     Result := Self.EntryAt(I).Connection;
 end;
 
-function TIdSipConnectionTable.ConnectionFor(Destination: TIdSipLocation): TIdTCPConnection;
+function TIdSipConnectionTable.ConnectionFor(Destination: TIdSipConnectionBindings): TIdTCPConnection;
 var
   Count: Integer;
   I:     Integer;
@@ -984,8 +964,8 @@ begin
   while (I < Count) and not Found do begin
     if Self.EntryAt(I).Connection.Connected then
       Found := (Destination.Transport = TcpTransport)
-           and (Destination.IPAddress = Self.EntryAt(I).Connection.Socket.Binding.PeerIP)
-           and (Integer(Destination.Port) = Self.EntryAt(I).Connection.Socket.Binding.PeerPort);
+           and (Destination.PeerIP = Self.EntryAt(I).Connection.Socket.Binding.PeerIP)
+           and (Integer(Destination.PeerPort) = Self.EntryAt(I).Connection.Socket.Binding.PeerPort);
 
     if not Found then
       Inc(I);

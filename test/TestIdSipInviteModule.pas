@@ -415,10 +415,10 @@ type
                         Binding: TIdConnection);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport;
-                            Destination: TIdSipLocation);
+                            Binding: TIdSipConnectionBindings);
     procedure OnSendResponse(Response: TIdSipResponse;
                              Sender: TIdSipTransport;
-                             Destination: TIdSipLocation);
+                             Binding: TIdSipConnectionBindings);
     procedure ReceiveAckWithBody(const SessionDesc,
                                  ContentType: String);
   protected
@@ -493,10 +493,10 @@ type
                             Session: TIdSipInboundSession);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport;
-                            Destination: TIdSipLocation);
+                            Binding: TIdSipConnectionBindings);
     procedure OnSendResponse(Response: TIdSipResponse;
                              Sender: TIdSipTransport;
-                             Destination: TIdSipLocation);
+                             Binding: TIdSipConnectionBindings);
     procedure ReceiveForbidden;
     procedure ReceiveOKWithRecordRoute;
     procedure ReceiveProvisionalResponse(StatusCode: Cardinal; SDP: String);
@@ -4835,13 +4835,13 @@ end;
 
 procedure TestTIdSipInboundSession.OnSendRequest(Request: TIdSipRequest;
                                                  Sender: TIdSipTransport;
-                                                 Destination: TIdSipLocation);
+                                                 Binding: TIdSipConnectionBindings);
 begin
 end;
 
 procedure TestTIdSipInboundSession.OnSendResponse(Response: TIdSipResponse;
                                                   Sender: TIdSipTransport;
-                                                  Destination: TIdSipLocation);
+                                                  Binding: TIdSipConnectionBindings);
 begin
   if (Response.StatusCode = SIPRequestTerminated) then
     Self.SentRequestTerminated := true;
@@ -5978,7 +5978,7 @@ end;
 
 procedure TestTIdSipOutboundSession.OnSendRequest(Request: TIdSipRequest;
                                                   Sender: TIdSipTransport;
-                                                  Destination: TIdSipLocation);
+                                                  Binding: TIdSipConnectionBindings);
 begin
   if Request.IsInvite then begin
     if Self.FailFirstInviteSend then begin
@@ -5991,7 +5991,7 @@ end;
 
 procedure TestTIdSipOutboundSession.OnSendResponse(Response: TIdSipResponse;
                                                    Sender: TIdSipTransport;
-                                                   Destination: TIdSipLocation);
+                                                   Binding: TIdSipConnectionBindings);
 begin
 end;
 

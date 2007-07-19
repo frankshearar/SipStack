@@ -80,10 +80,10 @@ type
                          Binding: TIdSipConnectionBindings);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport;
-                            Destination: TIdSipLocation);
+                            Binding: TIdSipConnectionBindings);
     procedure OnSendResponse(Response: TIdSipResponse;
                              Sender: TIdSipTransport;
-                             Destination: TIdSipLocation);
+                             Binding: TIdSipConnectionBindings);
     procedure ReceiveBye(Dialog: TIdSipDialog);
   public
     procedure SetUp; override;
@@ -640,13 +640,13 @@ end;
 
 procedure TestTIdSipUserAgent.OnSendRequest(Request: TIdSipRequest;
                                             Sender: TIdSipTransport;
-                                            Destination: TIdSipLocation);
+                                            Binding: TIdSipConnectionBindings);
 begin
 end;
 
 procedure TestTIdSipUserAgent.OnSendResponse(Response: TIdSipResponse;
                                              Sender: TIdSipTransport;
-                                             Destination: TIdSipLocation);
+                                             Binding: TIdSipConnectionBindings);
 begin
   if (Response.StatusCode = SIPSessionProgress) then
     Self.SendEvent.SetEvent;
