@@ -23,7 +23,10 @@
 
 1. Check that you've installed DUnit (http://dunit.sourceforge.net/),
    and, if you're running Indy 9, that you've installed the patch in
-   the indy-patches directory to Indy 9.
+   the indy-patches directory to Indy 9. If you're getting "Undeclared
+   identifier: 'TNAPTRRecord'" in IdSipIndyLocator, make sure you
+   replace Indy's IdDNSResolver.pas with the version in the
+   indy-patches\Indy9 folder (or just merge the differences).
 
 2. If you're running the test suite or demo in the IDE, then you'll
    find exceptions (like EParserError, EBadHeader) being raised. This
