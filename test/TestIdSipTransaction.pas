@@ -127,9 +127,6 @@ type
     procedure TestSendAckWontCreateTransaction;
     procedure TestSendRequest;
     procedure TestSendRequestOverUdp;
-    procedure TestSendResponse;
-    procedure TestSendMessageButNoAppropriateTransport;
-    procedure TestSendMessageWithAppropriateTransport;
     procedure TestServerInviteTransactionGetsAck;
     procedure TestStartAllTranspors;
     procedure TestStopAllTranspors;
@@ -1422,80 +1419,6 @@ begin
   finally
     UdpDest.Free;
   end;
-end;
-
-procedure TestTIdSipTransactionDispatcher.TestSendResponse;
-var
-  Destinations: TIdSipLocations;
-begin
-  Self.MockTransport := Self.MockUdpTransport;
-  Self.Response200.LastHop.Transport := Self.MockTransport.GetTransportType;
-
-  Destinations := TIdSipLocations.Create;
-  try
-    Destinations.AddLocation(Self.MockTransport.GetTransportType,
-                             '127.0.0.1',
-                             Self.MockUdpTransport.DefaultPort);
-
-    Self.MarkSentResponseCount;
-
-    Self.D.SendToTransport(Self.Response200, Destinations);
-
-    CheckResponseSent('No response sent');
-  finally
-    Destinations.Free;
-  end;
-end;
-
-procedure TestTIdSipTransactionDispatcher.TestSendMessageButNoAppropriateTransport;
-var
-  Destinations: TIdSipLocations;
-begin
-  Self.Response200.LastHop.Transport := 'SOME-UNKNOWN-TRANSPORT';
-
-  Destinations := TIdSipLocations.Create;
-  try
-    Destinations.AddLocation('SOME-UNKNOWN-TRANSPORT',
-                             '127.0.0.1',
-                             Self.MockUdpTransport.DefaultPort);
-
-    try
-      Self.D.SendToTransport(Self.Response200, Destinations);
-      Fail('Failed to bail out');
-    except
-      on EUnknownTransport do;
-    end;
-  finally
-    Destinations.Free;
-  end;
-end;
-
-procedure TestTIdSipTransactionDispatcher.TestSendMessageWithAppropriateTransport;
-var
-  Destinations:     TIdSipLocations;
-  TcpResponseCount: Cardinal;
-  UdpResponseCount: Cardinal;
-begin
-  TcpResponseCount := Self.MockTcpTransport.SentResponseCount;
-  UdpResponseCount := Self.MockUdpTransport.SentResponseCount;
-
-  Self.Response200.LastHop.Transport := Self.MockUdpTransport.GetTransportType;
-
-  Destinations := TIdSipLocations.Create;
-  try
-    Destinations.AddLocation(Self.MockUdpTransport.GetTransportType,
-                             '127.0.0.1',
-                             Self.MockUdpTransport.DefaultPort);
-
-    Self.D.SendToTransport(Self.Response200, Destinations);
-  finally
-    Destinations.Free;
-  end;
-
-  Check(UdpResponseCount < Self.MockUdpTransport.SentResponseCount,
-        'No response sent down UDP');
-  CheckEquals(TcpResponseCount, Self.MockTcpTransport.SentResponseCount,
-              'TCP response was sent');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestServerInviteTransactionGetsAck;

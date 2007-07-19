@@ -156,9 +156,7 @@ type
     procedure ScheduleEvent(Event: TIdWait;
                             WaitTime: Cardinal); overload;
     procedure SendToTransport(Msg: TIdSipMessage;
-                              Dest: TIdSipLocation); overload; virtual;
-    procedure SendToTransport(Response: TIdSipResponse;
-                              Dests: TIdSipLocations); overload; virtual;
+                              Dest: TIdSipLocation); virtual;
     procedure SendRequest(Request: TIdSipRequest;
                           Dest: TIdSipLocation); virtual;
     procedure SendResponse(Response: TIdSipResponse); virtual;
@@ -863,32 +861,6 @@ begin
     T.Send(Msg, Dest)
   else
     raise Exception.Create('What do we do when the dispatcher can''t find a Transport?');
-end;
-
-procedure TIdSipTransactionDispatcher.SendToTransport(Response: TIdSipResponse;
-                                                      Dests: TIdSipLocations);
-var
-  Current:   Integer;
-  Sent:      Boolean;
-  Transport: TIdSipTransport;
-begin
-  Current := 0;
-  Sent    := false;
-
-  while not Sent and (Current < Dests.Count) do begin
-    Transport := Self.FindAppropriateTransport(Dests[Current]);
-
-    if Assigned(Transport) then begin
-      try
-        Transport.Send(Response, Dests[Current]);
-        Sent := true;
-      except
-        on EIdSipTransport do;
-      end;
-    end;
-
-    Inc(Current);
-  end;
 end;
 
 procedure TIdSipTransactionDispatcher.SendRequest(Request: TIdSipRequest;

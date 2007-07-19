@@ -44,8 +44,6 @@ type
     function  LastResponse: TIdSipResponse;
     procedure SendToTransport(Msg: TIdSipMessage;
                               Dest: TIdSipLocation); overload; override;
-    procedure SendToTransport(Response: TIdSipResponse;
-                              Dests: TIdSipLocations); override;
     function  SentAckCount: Cardinal;
     function  SentRequestCount:  Cardinal;
     function  SentResponseCount: Cardinal;
@@ -170,15 +168,6 @@ begin
   end;
 
   inherited SendToTransport(Msg, Dest);
-end;
-
-procedure TIdSipMockTransactionDispatcher.SendToTransport(Response: TIdSipResponse;
-                                                          Dests: TIdSipLocations);
-begin
-  if Dests.IsEmpty then
-    raise Exception.Create(Format(NoDestinationsForResponse, [Response.LastHop.SentBy]));
-
-  Self.Transport.Send(Response, Dests[0]);
 end;
 
 function TIdSipMockTransactionDispatcher.SentAckCount: Cardinal;
