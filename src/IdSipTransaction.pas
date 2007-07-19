@@ -937,6 +937,7 @@ begin
         CurrentTarget := RemainingLocations.First.Copy;
         try
           RemainingLocations.RemoveFirst;
+
           Response.RewriteLocationHeaders(Self.RoutingTable, LocalBindings, CurrentTarget);
           Self.SendToTransport(Response, CurrentTarget);
         finally
@@ -1215,6 +1216,7 @@ begin
     end
     else begin
       Self.SendToTransport(FailedMessage, RemainingLocations.First);
+
       RemainingLocations.RemoveFirst;
     end;
   end
@@ -1961,7 +1963,7 @@ begin
   Self.NotifyOfFailure(Self.InitialRequest, Reason);
 end;
 
-procedure TIdSipClientTransaction.SendRequest(Dest: TIdSipLocation);
+procedure TIdSipClientTransaction.SendRequest(Dest: TIdSipLocation); 
 begin
   inherited SendRequest(Dest);
 
@@ -2047,7 +2049,7 @@ begin
   end;
 end;
 
-procedure TIdSipClientInviteTransaction.SendRequest(Dest: TIdSipLocation);
+procedure TIdSipClientInviteTransaction.SendRequest(Dest: TIdSipLocation); 
 begin
   inherited SendRequest(Dest);
 
@@ -2222,7 +2224,7 @@ begin
   end;
 end;
 
-procedure TIdSipClientNonInviteTransaction.SendRequest(Dest: TIdSipLocation);
+procedure TIdSipClientNonInviteTransaction.SendRequest(Dest: TIdSipLocation); 
 begin
   inherited SendRequest(Dest);
 

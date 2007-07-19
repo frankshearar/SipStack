@@ -64,7 +64,7 @@ type
                                           SentBy: String;
                                           Port: Cardinal);
     function  ChooseSupportedTransport(TargetUri: TIdUri;
-                                       Naptr: TIdNaptrRecords): String;
+                                       Naptr: TIdNaptrRecords): String; 
     procedure ClearOutUnwantedNaptrRecords(TargetUri: TIdUri;
                                            Recs: TIdNaptrRecords);
     procedure ClearOutUnwantedSrvRecords(Recs: TIdSrvRecords);
@@ -116,7 +116,7 @@ type
     function  TransportTypeFor(AddressOfRecord: TIdSipUri;
                                NAPTR: TIdNaptrRecords;
                                SRV: TIdSrvRecords;
-                               NameRecords: TIdDomainNameRecords): String;
+                               NameRecords: TIdDomainNameRecords): String; 
   end;
 
   ESipLocator = class(Exception);
@@ -254,7 +254,6 @@ end;
 procedure TIdSipAbstractLocator.FindServersFor(Response: TIdSipResponse;
                                                Result: TIdSipLocations);
 var
-  Names:    TIdDomainNameRecords;
   Port:     Cardinal;
   SentBy:   String;
   Services: TIdSrvRecords;
@@ -336,6 +335,10 @@ begin
   // My subclasses perform a DNS lookup for NAPTR records. Specifically, those
   // NAPTR RRs for services SIP+D2T, SIP+D2U, SIP+D2S, etc. - all the services
   // for all the transports this stack supports.
+
+  // DNS servers that support NATPR MAY (RFC 3403 section 4.2) return additional
+  // records (typically A, AAAA, SRV) associated with the NAPTR record/s
+  // returned. All such records are stored in Result.
 
   Self.PerformNAPTRLookup(TargetUri, Result);
   Self.ClearOutUnwantedNaptrRecords(TargetUri, Result);

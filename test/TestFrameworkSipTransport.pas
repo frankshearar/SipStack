@@ -437,8 +437,8 @@ begin
     Self.Request.Free;
     Self.ReceivingBinding.Free;
 
-    Self.LowPortLocation.Free;
     Self.HighPortLocation.Free;
+    Self.LowPortLocation.Free;
 
     Self.Lock.Acquire;
     try

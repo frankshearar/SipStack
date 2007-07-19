@@ -1128,7 +1128,7 @@ begin
   Results := TIdDomainNameRecords.Create;
   try
     Self.Loc.ResolveNameRecords(Self.AOR.Host, Results);
-      
+
     CheckEquals(0, Results.Count, 'MockLocator created a name record for the domain');
 
     Self.Loc.ResolveNameRecords(Self.AOR.Host, Results);

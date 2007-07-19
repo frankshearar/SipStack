@@ -2072,7 +2072,7 @@ begin
   Self.Conf          := TIdSipStackConfigurator.Create;
   Self.Configuration := TStringList.Create;
   Self.Port          := 15060;
-  Self.Timer         := TIdTimerQueue.Create(true);
+  Self.Timer         := TIdDebugTimerQueue.Create(true);
 end;
 
 procedure TStackConfigurationTestCase.TearDown;
@@ -2097,6 +2097,8 @@ begin
   inherited SetUp;
 
   Self.NewRegistrarEvent := TSimpleEvent.Create;
+
+  Self.Port := 5060;
 
   Self.NewRegistrar := TIdUDPServer.Create(nil);
   Self.NewRegistrar.DefaultPort   := Self.Port + 11000;
