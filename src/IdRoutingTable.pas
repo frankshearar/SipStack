@@ -12,7 +12,7 @@ unit IdRoutingTable;
 interface
 
 uses
-  Classes, Contnrs, IdSipLocation;
+  Classes, Contnrs, IdSipLocation, IdSystem;
 
 type
   // I represent an entry in this machine's routing table, or a "mapped
@@ -63,6 +63,9 @@ type
 
   TIdRouteEntryClass = class of TIdRouteEntry;
 
+  TIdRoutingTable = class;
+  TIdRoutingTableClass = class of TIdRoutingTable;
+
   // I represent this machine's routing table, plus any user-defined "mapped
   // routes" (routes which pass through a NAT gateway).
   //
@@ -80,6 +83,8 @@ type
     procedure InternalRemoveRoute(RouteList: TObjectList; Destination, Mask, Gateway: String);
     function  RouteAt(Index: Integer): TIdRouteEntry;
   public
+    class function PlatformRoutingTable(OS: TIdOsType): TIdRoutingTableClass;
+
     constructor Create; virtual;
     destructor  Destroy; override;
 
@@ -94,8 +99,6 @@ type
     procedure RemoveRoute(Destination, Mask, Gateway: String);
     function  RouteCount: Integer;
   end;
-
-  TIdRoutingTableClass = class of TIdRoutingTable;
 
   TIdWindowsRoutingTable = class(TIdRoutingTable)
   protected
@@ -121,7 +124,7 @@ function RouteSort(Item1, Item2: Pointer): Integer;
 implementation
 
 uses
-  IdSimpleParser, IdSystem, SysUtils;
+  IdMockRoutingTable, IdSimpleParser, SysUtils;
 
 function HighestIPv4AddressFirst(RouteA, RouteB: TIdRouteEntry): Integer;
 begin
@@ -427,6 +430,19 @@ end;
 //* TIdRoutingTable                                                            *
 //******************************************************************************
 //* TIdRoutingTable Public methods *********************************************
+
+class function TIdRoutingTable.PlatformRoutingTable(OS: TIdOsType): TIdRoutingTableClass;
+begin
+  case OS of
+    otWindowsNT4:        Result := TIdWindowsNT4RoutingTable;
+    otWindows2k,
+    otWindowsXP,
+    otWindowsServer2003,
+    otWindowsVista:      Result := TIdWindowsRoutingTable;
+  else
+    Result := TIdMockRoutingTable;
+  end;
+end;
 
 constructor TIdRoutingTable.Create;
 begin

@@ -105,6 +105,7 @@ type
     procedure TestLocalAddressForNoMappedRoutes;
     procedure TestLocalAddressForNoRoutes;
     procedure TestLocalAddressForPublicInternetAddress;
+    procedure TestPlatformRoutingTable;
     procedure TestRemoveNonexistentRoute;
     procedure TestRemoveRoute;
     procedure TestRouteSortDestinationAndMaskDiffers;
@@ -129,7 +130,7 @@ type
 implementation
 
 uses
-  IdSimpleParser, SysUtils;
+  IdSimpleParser, IdSystem, SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -954,6 +955,20 @@ begin
   CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.LanDestination),      'LAN destination');
   CheckEquals(Self.InternetIP, Self.RT.LocalAddressFor(Self.InternetDestination), 'Internet destination');
   CheckEquals(Self.InternetIP, Self.RT.LocalAddressFor(Self.VpnDestination),      'VPN destination');
+end;
+
+procedure TestTIdRoutingTable.TestPlatformRoutingTable;
+begin
+  CheckEquals(TIdWindowsNT4RoutingTable, TIdRoutingTable.PlatformRoutingTable(otWindowsNT4),        'Windows NT4');
+  CheckEquals(TIdWindowsRoutingTable,    TIdRoutingTable.PlatformRoutingTable(otWindows2k),         'Windows 2000');
+  CheckEquals(TIdWindowsRoutingTable,    TIdRoutingTable.PlatformRoutingTable(otWindowsXP),         'Windows XP');
+  CheckEquals(TIdWindowsRoutingTable,    TIdRoutingTable.PlatformRoutingTable(otWindowsServer2003), 'Windows Server 2003');
+  CheckEquals(TIdWindowsRoutingTable,    TIdRoutingTable.PlatformRoutingTable(otWindowsVista),      'Windows Vista');
+
+  CheckEquals(TIdMockRoutingTable, TIdRoutingTable.PlatformRoutingTable(otWindows95), 'Windows 95 (default)');
+  CheckEquals(TIdMockRoutingTable, TIdRoutingTable.PlatformRoutingTable(otWindows98), 'Windows 98 (default)');
+  CheckEquals(TIdMockRoutingTable, TIdRoutingTable.PlatformRoutingTable(otWindowsMe), 'Windows Me (default)');
+  CheckEquals(TIdMockRoutingTable, TIdRoutingTable.PlatformRoutingTable(otUnknown),   'Unknown (default)');
 end;
 
 procedure TestTIdRoutingTable.TestRemoveNonexistentRoute;

@@ -1425,20 +1425,8 @@ begin
 end;
 
 function TIdSipStackConfigurator.CreatePlatformRoutingTable: TIdRoutingTable;
-var
-  TableType: TIdRoutingTableClass;
 begin
-  case OsType of
-    otWindowsNT4: TableType := TIdWindowsNT4RoutingTable;
-    otWindows2k:  TableType := TIdWindowsRoutingTable;
-  else
-    TableType := TIdMockRoutingTable;
-  end;
-
-  if not Assigned(TableType) then
-    TableType := TIdMockRoutingTable;
-
-  Result := TableType.Create;
+  Result := TIdRoutingTable.PlatformRoutingTable(OsType).Create;
 end;
 
 procedure TIdSipStackConfigurator.InstantiateMissingObjectsAsDefaults(UserAgent: TIdSipUserAgent);
