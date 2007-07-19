@@ -362,9 +362,9 @@ type
   protected
     function ItemType: TIdPrintableClass; override;
   public
-    function  Add: TIdSdpMediaDescription; overload;
-    function  Add(Desc: TIdSdpMediaDescription): TIdSdpMediaDescription; overload;
-    function  AllDescriptionsHaveConnections: Boolean;
+    function Add: TIdSdpMediaDescription; overload;
+    function Add(Desc: TIdSdpMediaDescription): TIdSdpMediaDescription; overload;
+    function AllDescriptionsHaveConnections: Boolean;
 
     property Items[Index: Integer]: TIdSdpMediaDescription read GetItems; default;
   end;
@@ -375,8 +375,8 @@ type
   protected
     function ItemType: TIdPrintableClass; override;
   public
-    function  Add: TIdSdpRepeat; overload;
-    function  Add(R: TIdSdpRepeat): TIdSdpRepeat; overload;
+    function Add: TIdSdpRepeat; overload;
+    function Add(R: TIdSdpRepeat): TIdSdpRepeat; overload;
 
     property Items[Index: Integer]: TIdSdpRepeat read GetItems; default;
   end;
@@ -387,8 +387,8 @@ type
   protected
     function ItemType: TIdPrintableClass; override;
   public
-    function  Add: TIdSdpTime; overload;
-    function  Add(T: TIdSdpTime): TIdSdpTime; overload;
+    function Add: TIdSdpTime; overload;
+    function Add(T: TIdSdpTime): TIdSdpTime; overload;
 
     property Items[Index: Integer]: TIdSdpTime read GetItems; default;
   end;
@@ -399,8 +399,8 @@ type
   protected
     function ItemType: TIdPrintableClass; override;
   public
-    function  Add: TIdSdpZoneAdjustment; overload;
-    function  Add(Adj: TIdSdpZoneAdjustment): TIdSdpZoneAdjustment; overload;
+    function Add: TIdSdpZoneAdjustment; overload;
+    function Add(Adj: TIdSdpZoneAdjustment): TIdSdpZoneAdjustment; overload;
 
     property Items[Index: Integer]: TIdSdpZoneAdjustment read GetItems; default;
   end;
