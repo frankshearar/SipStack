@@ -1424,7 +1424,6 @@ type
                           const RawHeader: String);
     procedure ParseHeaders(Parser: TIdSipParser);
     procedure ParseStartLine(Parser: TIdSipParser); virtual; abstract;
-    procedure RewriteLocationHeaders(LocalAddress: TIdSipLocation); overload; virtual;
 
     property RawFirstLine: String read fRawFirstLine;
   public
@@ -1476,6 +1475,7 @@ type
     procedure ReadBody(Src: TStream);
     procedure RemoveHeader(Header: TIdSipHeader);
     procedure RemoveAllHeadersNamed(const Name: String);
+    procedure RewriteLocationHeaders(LocalAddress: TIdSipLocation); overload; virtual;
     procedure RewriteLocationHeaders(Table: TIdRoutingTable;
                                      LocalBindings: TIdSipLocations;
                                      Dest: TIdSipLocation); overload;
@@ -1549,7 +1549,6 @@ type
                                   UseCSeqMethod: Boolean): Boolean; override;
     function  MissingRequiredHeaders: Boolean; override;
     procedure ParseStartLine(Parser: TIdSipParser); override;
-    procedure RewriteLocationHeaders(LocalAddress: TIdSipLocation); overload; override;
   public
     class function DialogFormingMethods: TStrings;
 
@@ -1594,6 +1593,7 @@ type
     function  MatchCancel(Cancel: TIdSipRequest): Boolean;
     function  ProxyAuthorizationFor(const Realm: String): TIdSipProxyAuthorizationHeader;
     function  RequiresResponse: Boolean;
+    procedure RewriteLocationHeaders(LocalAddress: TIdSipLocation); overload; override;
     function  WantsAllowEventsHeader: Boolean; override;
 
     property Event:             TIdSipEventHeader             read GetEvent write SetEvent;
@@ -1637,7 +1637,6 @@ type
     function  MatchRFC3261Request(InitialRequest: TIdSipRequest;
                                   UseCSeqMethod: Boolean): Boolean; override;
     procedure ParseStartLine(Parser: TIdSipParser); override;
-    procedure RewriteLocationHeaders(LocalAddress: TIdSipLocation); overload; override;
   public
     class function InResponseTo(Request: TIdSipRequest;
                                 StatusCode: Cardinal): TIdSipResponse; overload;
@@ -1673,6 +1672,7 @@ type
     function  IsRequest: Boolean; override;
     function  IsTrying: Boolean;
     function  MalformedException: EBadMessageClass; override;
+    procedure RewriteLocationHeaders(LocalAddress: TIdSipLocation); overload; override;
     function  WantsAllowEventsHeader: Boolean; override;
     function  WillEstablishDialog(Request: TIdSipRequest): Boolean; overload;
 
@@ -8491,6 +8491,10 @@ begin
   Self.Headers.RemoveAll(Name);
 end;
 
+procedure TIdSipMessage.RewriteLocationHeaders(LocalAddress: TIdSipLocation);
+begin
+end;
+
 procedure TIdSipMessage.RewriteLocationHeaders(Table: TIdRoutingTable;
                                                LocalBindings: TIdSipLocations;
                                                Dest: TIdSipLocation);
@@ -8513,6 +8517,7 @@ begin
   try
     DefaultPort := TIdSipTransportRegistry.DefaultPortFor(Self.LastHop.Transport);
     Table.LocalAddressFor(Dest.IPAddress, LocalAddress, DefaultPort);
+    LocalAddress.Transport := Dest.Transport;
 
     ActualAddress := LocalBindings.FirstAddressMatch(LocalAddress);
 
@@ -8711,10 +8716,6 @@ begin
     if (FoldedHeader <> '') then
       Self.ParseHeader(Parser, FoldedHeader);
   end;
-end;
-
-procedure TIdSipMessage.RewriteLocationHeaders(LocalAddress: TIdSipLocation);
-begin
 end;
 
 //* TIdSipMessage Private methods **********************************************
@@ -9386,6 +9387,29 @@ begin
   Result := not Self.IsAck;
 end;
 
+procedure TIdSipRequest.RewriteLocationHeaders(LocalAddress: TIdSipLocation);
+begin
+  // Some messages (like CANCEL) don't have Contact headers.
+  if Self.HasContact then begin
+    // REGISTERs shouldn't rewrite Contact details: this REGISTER could be
+    // registering several URIs (say, this UA and a voicemail URI, etc.).
+    //
+    // On the other hand, the Transaction-User layer doesn't know what IP
+    // address to put in the INVITE's Contact header.
+    if Self.FirstContact.IsUnset then begin
+      Self.FirstContact.Address.Host := LocalAddress.IPAddress;
+      Self.FirstContact.Address.Port := LocalAddress.Port;
+      Self.FirstContact.IsUnset := false;
+    end;
+  end;
+
+  Self.LastHop.SentBy    := LocalAddress.IPAddress;
+  Self.LastHop.Transport := LocalAddress.Transport;
+
+  if TIdSipTransportRegistry.NonstandardPort(Self.LastHop.Transport, LocalAddress.Port) then
+    Self.LastHop.Port := LocalAddress.Port;
+end;
+
 function TIdSipRequest.WantsAllowEventsHeader: Boolean;
 begin
   Result := Self.IsInvite
@@ -9523,28 +9547,6 @@ begin
 
   if (Line <> '') then
     Self.FailParse(RequestUriNoSpaces);
-end;
-
-procedure TIdSipRequest.RewriteLocationHeaders(LocalAddress: TIdSipLocation);
-begin
-  // Some messages (like CANCEL) don't have Contact headers.
-  if Self.HasContact then begin
-    // REGISTERs shouldn't rewrite Contact details: this REGISTER could be
-    // registering several URIs (say, this UA and a voicemail URI, etc.).
-    //
-    // On the other hand, the Transaction-User layer doesn't know what IP
-    // address to put in the INVITE's Contact header.
-    if Self.FirstContact.IsUnset then begin
-      Self.FirstContact.Address.Host := LocalAddress.IPAddress;
-      Self.FirstContact.Address.Port := LocalAddress.Port;
-      Self.FirstContact.IsUnset := false;
-    end;
-  end;
-
-  Self.LastHop.SentBy := LocalAddress.IPAddress;
-
-  if TIdSipTransportRegistry.NonstandardPort(Self.LastHop.Transport, LocalAddress.Port) then
-    Self.LastHop.Port := LocalAddress.Port;
 end;
 
 //* TIdSipRequest Private methods **********************************************
@@ -10029,6 +10031,22 @@ begin
   Result := EBadResponse;
 end;
 
+procedure TIdSipResponse.RewriteLocationHeaders(LocalAddress: TIdSipLocation);
+begin
+  // Some messages (like CANCEL) don't have Contact headers.
+  //
+  // This method assumes that the first Contact header is open to mutation.
+  // However, a UA could well have several Contacts. If the first Contact is a
+  // mailto URI, this method fails.
+  if Self.HasContact then begin
+    if Self.FirstContact.IsUnset then begin
+      Self.FirstContact.Address.Host := LocalAddress.IPAddress;
+      Self.FirstContact.Address.Port := LocalAddress.Port;
+      Self.FirstContact.IsUnset := false;
+    end;
+  end;
+end;
+
 function TIdSipResponse.WantsAllowEventsHeader: Boolean;
 begin
   Result := (Self.CSeq.Method = MethodInvite)
@@ -10154,22 +10172,6 @@ begin
   Self.StatusCode := StrToIntDef(StatusCode, BadStatusCode);
 
   Self.StatusText := Line;
-end;
-
-procedure TIdSipResponse.RewriteLocationHeaders(LocalAddress: TIdSipLocation);
-begin
-  // Some messages (like CANCEL) don't have Contact headers.
-  //
-  // This method assumes that the first Contact header is open to mutation.
-  // However, a UA could well have several Contacts. If the first Contact is a
-  // mailto URI, this method fails.
-  if Self.HasContact then begin
-    if Self.FirstContact.IsUnset then begin
-      Self.FirstContact.Address.Host := LocalAddress.IPAddress;
-      Self.FirstContact.Address.Port := LocalAddress.Port;
-      Self.FirstContact.IsUnset := false;
-    end;
-  end;
 end;
 
 //* TIdSipResponse Private methods **********************************************

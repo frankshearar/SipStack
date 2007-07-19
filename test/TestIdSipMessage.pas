@@ -126,8 +126,11 @@ type
 
   TestTIdSipRequest = class(TestTIdSipMessage)
   private
-    Request:  TIdSipRequest;
-    Response: TIdSipResponse;
+    DefaultPortLocation:    TIdSipLocation;
+    NonDefaultPortLocation: TIdSipLocation;
+    Request:                TIdSipRequest;
+    Response:               TIdSipResponse;
+    Transport:              String;
 
     procedure CheckBasicRequest(Msg: TIdSipMessage;
                                 CheckBody: Boolean = true);
@@ -215,6 +218,9 @@ type
     procedure TestReferTo;
     procedure TestReplaces;
     procedure TestRequiresResponse;
+    procedure TestRewriteLocationHeadersNoContact;
+    procedure TestRewriteLocationHeadersSetContact;
+    procedure TestRewriteLocationHeadersUnsetContact;
     procedure TestSetMaxForwards;
     procedure TestSetRoute;
     procedure TestSubject;
@@ -1837,9 +1843,19 @@ procedure TestTIdSipRequest.SetUp;
 begin
   inherited SetUp;
 
+  Self.Transport := TlsOverSctpTransport;
+  TIdSipTransportRegistry.RegisterTransportType(Self.Transport, TIdSipMockTlsOverSctpTransport);
+
   Self.Msg.SIPVersion := SIPVersion;
   (Self.Msg as TIdSipRequest).Method := 'foo';
   (Self.Msg as TIdSipRequest).RequestUri.Uri := 'sip:foo';
+
+  Self.DefaultPortLocation := TIdSipLocation.Create(Self.Transport,
+                                                    '1.2.3.4',
+                                                    TIdSipTransportRegistry.DefaultPortFor(Self.Transport));
+  Self.NonDefaultPortLocation := TIdSipLocation.Create(Self.DefaultPortLocation.Transport,
+                                                       Self.DefaultPortLocation.IPAddress,
+                                                       Self.DefaultPortLocation.Port + 1);
 
   Self.Request  := TIdSipTestResources.CreateBasicRequest;
   Self.Response := TIdSipTestResources.CreateBasicResponse;
@@ -1847,8 +1863,12 @@ end;
 
 procedure TestTIdSipRequest.TearDown;
 begin
+  Self.NonDefaultPortLocation.Free;
+  Self.DefaultPortLocation.Free;
   Self.Response.Free;
   Self.Request.Free;
+
+  TIdSipTransportRegistry.UnregisterTransportType(Self.Transport);
 
   inherited TearDown;
 end;
@@ -3455,6 +3475,46 @@ begin
   Self.Request.Method := 'NewFangledMethod';
   Check(Self.Request.RequiresResponse,
         'Unknown methods, by default (our assumption) require responses');
+end;
+
+procedure TestTIdSipRequest.TestRewriteLocationHeadersNoContact;
+begin
+  Self.Request.Contacts.Clear;
+  Self.Request.RewriteLocationHeaders(Self.DefaultPortLocation);
+
+  Check(Self.Request.Contacts.IsEmpty, 'Contact added by rewrite');
+end;
+
+procedure TestTIdSipRequest.TestRewriteLocationHeadersSetContact;
+var
+  OriginalAddress: String;
+  OriginalPort:    Cardinal;
+begin
+  OriginalAddress := Self.Request.FirstContact.Address.Host;
+  OriginalPort    := Self.Request.FirstContact.Address.Port;
+
+  Self.Request.RewriteLocationHeaders(Self.DefaultPortLocation);
+  CheckEquals(Self.DefaultPortLocation.IPAddress, Self.Request.LastHop.SentBy,    'Via sent-by');
+  CheckEquals(Self.DefaultPortLocation.Port,      Self.Request.LastHop.Port,      'Via port (default port)');
+  CheckEquals(Self.DefaultPortLocation.Transport, Self.Request.LastHop.Transport, 'Via transport');
+
+  CheckEquals(OriginalAddress, Self.Request.FirstContact.Address.Host, 'Contact host changed');
+  CheckEquals(OriginalPort,    Self.Request.FirstContact.Address.Port, 'Contact port changed');
+
+  Self.Request.RewriteLocationHeaders(Self.NonDefaultPortLocation);
+  CheckEquals(Self.NonDefaultPortLocation.Port, Self.Request.LastHop.Port, 'Via port (non-default port)');
+end;
+
+procedure TestTIdSipRequest.TestRewriteLocationHeadersUnsetContact;
+begin
+  Self.Request.FirstContact.IsUnset := true;
+  Self.Request.RewriteLocationHeaders(Self.DefaultPortLocation);
+  CheckEquals(Self.DefaultPortLocation.IPAddress, Self.Request.LastHop.SentBy,    'Via sent-by');
+  CheckEquals(Self.DefaultPortLocation.Port,      Self.Request.LastHop.Port,      'Via port (non-default port)');
+  CheckEquals(Self.DefaultPortLocation.Transport, Self.Request.LastHop.Transport, 'Via transport');
+
+  CheckEquals(Self.DefaultPortLocation.IPAddress, Self.Request.FirstContact.Address.Host, 'Contact host');
+  CheckEquals(Self.DefaultPortLocation.Port,      Self.Request.FirstContact.Address.Port, 'Contact port');
 end;
 
 procedure TestTIdSipRequest.TestSetMaxForwards;
