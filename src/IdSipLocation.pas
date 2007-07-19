@@ -3,10 +3,10 @@ unit IdSipLocation;
 interface
 
 uses
-  IdSipDns;
+  Classes, IdSipDns;
 
 type
-  TIdSipLocation = class(TObject)
+  TIdSipLocation = class(TPersistent)
   private
     fTransport: String;
     fIPAddress: String;

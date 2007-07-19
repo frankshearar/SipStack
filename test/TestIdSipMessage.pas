@@ -49,6 +49,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAssign;
+    procedure TestAssignFromLocation;
     procedure TestAsString;
     procedure TestCopy;
     procedure TestEquals;
@@ -615,6 +616,23 @@ begin
                 'Transport');
   finally
     Other.Free;
+  end;
+end;
+
+procedure TestTIdSipConnectionBindings.TestAssignFromLocation;
+var
+  Loc: TIdSipLocation;
+begin
+  Loc := TIdSipLocation.Create(TlsTransport, '10.0.0.1', 10000);
+  try
+    Self.Binding.Assign(Loc);
+    CheckEquals('',            Self.Binding.LocalIP,   'LocalIP');
+    CheckEquals(0,             Self.Binding.LocalPort, 'LocalPort');
+    CheckEquals(Loc.IPAddress, Self.Binding.PeerIP,    'PeerIP');
+    CheckEquals(Loc.Port,      Self.Binding.PeerPort,  'PeerPort');
+    CheckEquals(Loc.Transport, Self.Binding.Transport, 'Transport');
+  finally
+    Loc.Free;
   end;
 end;
 

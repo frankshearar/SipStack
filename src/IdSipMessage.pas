@@ -2556,6 +2556,7 @@ end;
 
 procedure TIdSipConnectionBindings.Assign(Src: TPersistent);
 var
+  Loc:   TIdSipLocation;
   Other: TIdSipConnectionBindings;
 begin
   if (Src is TIdSipConnectionBindings) then begin
@@ -2566,6 +2567,14 @@ begin
     Self.PeerIP    := Other.PeerIP;
     Self.PeerPort  := Other.PeerPort;
     Self.Transport := Other.Transport;
+  end
+  else if (Src is TIdSipLocation) then begin
+    Loc := Src as TIdSipLocation;
+    Self.LocalIP   := '';
+    Self.LocalPort := 0;
+    Self.PeerIP    := Loc.IPAddress;
+    Self.PeerPort  := Loc.Port;
+    Self.Transport := Loc.Transport;
   end
   else
     inherited Assign(Src);
