@@ -1827,7 +1827,9 @@ end;
 
 procedure TIdSipPendingRegistration.Execute;
 var
-  Reg: TIdSipOutboundRegisterModule;
+  PlaceholderContact: TIdSipContactHeader;
+  Reg:                TIdSipOutboundRegisterModule;
+  Wait:               TIdSipReregisterWait;
 begin
   Reg := Self.UA.RegisterModule;
 
@@ -1835,7 +1837,24 @@ begin
   Reg.HasRegistrar := true;
   Reg.Registrar := Self.Registrar;
 
-  Self.UA.RegisterWith(Self.Registrar, Self.UA.From).Send;
+  PlaceholderContact := TIdSipContactHeader.Create;
+  try
+    PlaceholderContact.Value  := Self.UA.From.FullValue;
+
+    if UA.UseGruu then
+      PlaceholderContact.SipInstance := Self.UA.InstanceID;
+
+    Wait := TIdSipReregisterWait.Create;
+    Wait.RegisterModule := Reg;
+    Wait.Registrar      := Self.Registrar;
+    // We're not actually going to register the From: the Contact header will be
+    // rewritten on its way to the network.
+    Wait.Bindings.Add(PlaceholderContact);
+  finally
+    PlaceholderContact.Free;
+  end;
+
+  Self.UA.Timer.AddEvent(TriggerImmediately, Wait);
 end;
 
 //******************************************************************************

@@ -151,7 +151,7 @@ type
     Conf:          TIdSipStackConfigurator;
     Configuration: TStrings;
     Port:          Cardinal;
-    Timer:         TIdTimerQueue;
+    Timer:         TIdDebugTimerQueue;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -210,7 +210,7 @@ type
     procedure TestCreateUserAgentWithFrom;
     procedure TestCreateUserAgentWithHostName;
     procedure TestCreateUserAgentWithInstanceID;
-    procedure TestCreateUserAgentWithInstanceIDAndRegister;
+    procedure TestCreateUserAgentWithInstanceIDThenRegister;
     procedure TestCreateUserAgentWithLocator;
     procedure TestCreateUserAgentWithMalformedFrom;
     procedure TestCreateUserAgentWithMalformedLocator;
@@ -353,6 +353,16 @@ type
     procedure TearDown; override;
   published
     procedure TestTrigger;
+  end;
+
+  TestTIdSipPendingRegistration = class(TTestCaseTU)
+  private
+    Pending: TIdSipPendingRegistration;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestExecuteSchedulesWait;
   end;
 
 implementation
@@ -2302,12 +2312,16 @@ var
 begin
   Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
   Self.Configuration.Add('NameServer: MOCK');
+  Self.Configuration.Add('Registrar: sip:gw1.leo-ix.net');
   Self.Configuration.Add('UseGruu: true');
   Self.Configuration.AddStrings(ExtraDirectives);
 
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
     CheckEquals(InstanceID, UA.InstanceID, 'Instance-ID');
+
+    UA.StartAllTransports;
+    Self.Timer.TriggerAllEventsOfType(TIdSipReregisterWait);
 
     Self.WaitForSignaled('Waiting for REGISTER');
     Check(Self.ReceivedPacket, 'No REGISTER sent to registrar');
@@ -2391,8 +2405,8 @@ begin
 
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
-    CheckEquals(TIdSipTCPTransport.ClassName,
-                UA.Dispatcher.Transports[0].ClassName,
+    CheckEquals(TIdSipTransportRegistry.TransportTypeFor(TcpTransport),
+                UA.Dispatcher.Transports[0].ClassType,
                 'Transport type');
   finally
     UA.Free;
@@ -2407,8 +2421,8 @@ begin
 
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
-    CheckEquals(TIdSipTCPTransport.ClassName,
-                UA.Dispatcher.Transports[0].ClassName,
+    CheckEquals(TIdSipTransportRegistry.TransportTypeFor(TcpTransport),
+                UA.Dispatcher.Transports[0].ClassType,
                 'Transport type');
   finally
     UA.Free;
@@ -2460,6 +2474,8 @@ begin
 
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
+    UA.StartAllTransports;
+    Self.Timer.TriggerAllEventsOfType(TIdSipReregisterWait);
     Self.WaitForSignaled('Waiting for REGISTER');
     Check(Self.ReceivedPacket, 'No REGISTER received');
   finally
@@ -2606,7 +2622,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithInstanceIDAndRegister;
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithInstanceIDThenRegister;
 const
   InstanceID = 'urn:uuid:12345678-1234-1234-1234-123456789012';
 var
@@ -2643,6 +2659,8 @@ begin
 
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
+    UA.StartAllTransports;
+    Self.Timer.TriggerAllEventsUpToFirst(TIdSipReregisterWait);
     Check(Assigned(UA.Locator),
           'Transaction-User has no Locator');
     Self.WaitForSignaled('Waiting for DNS query');
@@ -2721,12 +2739,13 @@ begin
   // There's lots under test here: you can specify a mapped route with two kinds
   // of (address/mask)s. You can optionally specify a port.
 
-  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Port));
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
   Self.Configuration.Add(InternetMappedRoute);
   Self.Configuration.Add(VpnMappedRoute);
 
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
+    UA.Dispatcher.Transports[0].Start;
     LanIP := LocalAddress;
     LanDestination := TIdIPAddressParser.IncIPAddress(LanIP);
 
@@ -2869,8 +2888,8 @@ begin
     try
       UA.Dispatcher.LocalBindings(Bindings);
       CheckEquals(1, UA.Dispatcher.TransportCount, 'Number of transports');
-      CheckEquals(TIdSipTCPTransport.ClassName,
-                  UA.Dispatcher.Transports[0].ClassName,
+    CheckEquals(TIdSipTransportRegistry.TransportTypeFor(TcpTransport),
+                  UA.Dispatcher.Transports[0].ClassType,
                   'Transport type');
       CheckEquals(Port,
                   Bindings[0].Port,
@@ -2956,6 +2975,8 @@ begin
 
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
+    UA.StartAllTransports;
+    Self.Timer.TriggerAllEventsOfType(TIdSipReregisterWait);
     Self.WaitForSignaled('Waiting for REGISTER');
     Check(Self.ReceivedPacket, 'No REGISTER sent to registrar');
   finally
@@ -3187,11 +3208,14 @@ begin
   Self.SetBasicConfiguration(Self.Configuration);
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
+    UA.StartAllTransports;
     NewConfig := TStringList.Create;
     try
       NewConfig.Add(RegisterDirective + ': ' + Registrar);
 
       Self.Conf.UpdateConfiguration(UA, NewConfig);
+
+      Self.Timer.TriggerAllEventsOfType(TIdSipReregisterWait);
 
       Self.WaitForSignaled('Waiting for REGISTER');
       Check(Self.ReceivedPacket, 'No REGISTER sent to registrar');
@@ -3219,6 +3243,8 @@ begin
 
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
+    UA.StartAllTransports;
+    Self.Timer.TriggerAllEventsUpToFirst(TIdSipReRegisterWait);
     // This has the side effect of resetting ThreadEvent.
     Self.WaitForSignaled('Waiting for REGISTER to old registrar');
 
@@ -3228,6 +3254,9 @@ begin
       NewConfig.Add(RegisterDirective + ': ' + NewRegistrar);
 
       Self.Conf.UpdateConfiguration(UA, NewConfig);
+      UA.StartAllTransports;
+      Self.Timer.TriggerAllEventsUpToFirst(TIdSipReRegisterWait);
+      Self.Timer.TriggerAllEventsUpToFirst(TIdSipActionSendWait);
 
       Self.WaitForSignaled('Waiting for unREGISTER to old registrar');
       Check(Self.ReceivedPacket, 'No unREGISTER sent to old registrar');
@@ -3370,8 +3399,8 @@ begin
         CheckEquals(1,
                     UA.Dispatcher.TransportCount,
                     'Too many transports: old Listen directives still in force');
-        CheckEquals(TIdSipTCPTransport.ClassName,
-                    UA.Dispatcher.Transports[0].ClassName,
+    CheckEquals(TIdSipTransportRegistry.TransportTypeFor(TcpTransport),
+                    UA.Dispatcher.Transports[0].ClassType,
                     'New transport type');
         CheckEquals(NewPort,
                     Bindings[0].Port,
@@ -4227,6 +4256,42 @@ begin
   CheckEquals(Self.NewRoute,
               Self.Stack.RoutePath.CurrentRoute.Address.Uri,
               'Route not changed, ergo Wait didn''t trigger');
+end;
+
+//******************************************************************************
+//* TestTIdSipPendingRegistration                                              *
+//******************************************************************************
+//* TestTIdSipPendingRegistration Public methods *******************************
+
+procedure TestTIdSipPendingRegistration.SetUp;
+begin
+  inherited SetUp;
+
+  Self.DebugTimer.TriggerImmediateEvents := false;
+
+  Self.Core.RegisterModule.Registrar.Uri := 'sip:gw1.leo-ix.net';
+
+  Self.Pending := TIdSipPendingRegistration.Create(Self.Core, Self.Core.RegisterModule.Registrar);
+end;
+
+procedure TestTIdSipPendingRegistration.TearDown;
+begin
+  Self.Pending.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipPendingRegistration Published methods ****************************
+
+procedure TestTIdSipPendingRegistration.TestExecuteSchedulesWait;
+begin
+  Self.MarkSentRequestCount;
+  Self.Pending.Execute;
+  Self.DebugTimer.TriggerAllEventsUpToFirst(TIdSipReregisterWait);
+  Self.CheckRequestSent('No REGISTER sent');
+  CheckEquals(MethodRegister,
+              Self.LastSentRequest.Method,
+              'Unexpected request sent');
 end;
 
 initialization

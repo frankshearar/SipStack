@@ -259,6 +259,16 @@ type
     procedure TestRun;
   end;
 
+  TestTIdSipReregisterWait = class(TTestCaseTU)
+  private
+    Wait: TIdSipReregisterWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTrigger;
+  end;
+
 implementation
 
 uses
@@ -277,6 +287,7 @@ begin
   Result.AddTest(TestTIdSipOutboundRegistrationQuery.Suite);
   Result.AddTest(TestTIdSipRegistrationFailedMethod.Suite);
   Result.AddTest(TestTIdSipRegistrationSucceededMethod.Suite);
+  Result.AddTest(TestTIdSipReregisterWait.Suite);
 end;
 
 //******************************************************************************
@@ -2249,6 +2260,43 @@ begin
         'CurrentBindings param');
   Check(Self.Method.Registration = Self.Listener.RegisterAgentParam,
         'RegisterAgent param');
+end;
+
+//******************************************************************************
+//* TestTIdSipReregisterWait                                                   *
+//******************************************************************************
+//* TestTIdSipReregisterWait Public methods ************************************
+
+procedure TestTIdSipReregisterWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Wait := TIdSipReregisterWait.Create;
+  Self.Wait.Bindings.Add(ContactHeaderFull).Value := 'sip:case@hilton.tr';
+  Self.Wait.RegisterModule := Self.Core.RegisterModule;
+  Self.Wait.Registrar.Uri := 'sip:gw1.leo-ix.net';
+end;
+
+procedure TestTIdSipReregisterWait.TearDown;
+begin
+  Self.Wait.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipReregisterWait Published methods *********************************
+
+procedure TestTIdSipReregisterWait.TestTrigger;
+begin
+  Self.MarkSentRequestCount;
+  Self.Wait.Trigger;
+  CheckRequestSent('No request sent');
+  CheckEquals(MethodRegister,
+              Self.LastSentRequest.Method,
+              'Unexpected request sent');
+  CheckEquals(Self.Wait.Registrar.Uri,
+              Self.LastSentRequest.RequestUri.Uri,
+              'Request-URI');
 end;
 
 initialization
