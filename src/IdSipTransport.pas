@@ -918,6 +918,8 @@ begin
   LocalBinding := TIdSipConnectionBindings.Create;
   try
     LocalBinding.Assign(Dest);
+
+    // We expect the subclass to fill in the local IP and port.    
     Self.SendMessage(R, LocalBinding);
 
     Self.NotifyOfSentRequest(R, LocalBinding);
@@ -936,6 +938,7 @@ begin
   LocalBinding := TIdSipConnectionBindings.Create;
   try
     LocalBinding.Assign(Dest);
+
     Self.SendResponse(R, LocalBinding);
   finally
     LocalBinding.Free;
@@ -948,6 +951,7 @@ begin
   // Send a response to a machine when you already know exactly what binding to
   // use.
 
+  // We expect the subclass to fill in the local IP and port.
   Self.SendMessage(R, Binding);
 
   Self.NotifyOfSentResponse(R, Binding);
