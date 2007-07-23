@@ -16,9 +16,10 @@ type
                        const IPAddress:   String;
                              Port: Cardinal); overload;
 
-    function AsString: String;
-    function Copy: TIdSipLocation;
-    function Equals(Other: TIdSipLocation): Boolean;
+    procedure Assign(Src: TPersistent); override;
+    function  AsString: String;
+    function  Copy: TIdSipLocation;
+    function  Equals(Other: TIdSipLocation): Boolean;
 
     property Transport: String   read fTransport write fTransport;
     property IPAddress: String   read fIPAddress write fIPAddress;
@@ -69,6 +70,21 @@ begin
   Self.fTransport := Transport;
   Self.fIPAddress := IPAddress;
   Self.fPort      := Port;
+end;
+
+procedure TIdSipLocation.Assign(Src: TPersistent);
+var
+  Other: TIdSipLocation;
+begin
+  if (Src is TIdSipLocation) then begin
+    Other := Src as TIdSipLocation;
+
+    Self.IPAddress := Other.IPAddress;
+    Self.Port      := Other.Port;
+    Self.Transport := Other.Transport;
+  end
+  else
+    inherited Assign(Src);
 end;
 
 function TIdSipLocation.AsString: String;

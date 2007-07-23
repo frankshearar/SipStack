@@ -16,6 +16,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAssign;
     procedure TestAsString;
     procedure TestCopy;
     procedure TestCreate;
@@ -81,6 +82,22 @@ begin
 end;
 
 //* TestTIdSipLocation Published methods ***************************************
+
+procedure TestTIdSipLocation.TestAssign;
+var
+  Other: TIdSipLocation;
+begin
+  Other := TIdSipLocation.Create;
+  try
+    Other.Assign(Self.Loc);
+
+    CheckEquals(Self.Loc.Transport, Other.Transport, 'Transport');
+    CheckEquals(Self.Loc.IPAddress, Other.IPAddress, 'IPAddress');
+    CheckEquals(Self.Loc.Port,      Other.Port,      'Port');
+  finally
+    Other.Free;
+  end;
+end;
 
 procedure TestTIdSipLocation.TestAsString;
 begin

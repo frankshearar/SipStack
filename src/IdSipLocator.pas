@@ -367,10 +367,13 @@ var
   I:        Integer;
   Services: TStrings;
 begin
+  // TIdNaptrRecords can contain SRV records already, and we don't want to
+  // look these up again.
   Services := TStringList.Create;
   try
     for I := 0 to Naptr.Count - 1 do
-      Services.Add(Naptr[I].Value);
+      if Naptr[I].ServiceRecords.IsEmpty then
+        Services.Add(Naptr[I].Value);
 
     Self.ResolveSRVs(Services, Result);
   finally
