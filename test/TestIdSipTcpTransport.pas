@@ -40,6 +40,7 @@ type
                         Request: TIdSipRequest;
                         ReceivedFrom: TIdSipConnectionBindings);
   protected
+    procedure CheckSendBindingSet(Binding: TIdSipConnectionBindings); override;
     function  CreateClient: TIdSipTcpClient; virtual;
     procedure CheckServerOnPort(const Host: String;
                                 Port: Cardinal;
@@ -299,6 +300,32 @@ begin
 end;
 
 //* TestTIdSipTCPTransport Protected methods ***********************************
+
+procedure TestTIdSipTCPTransport.CheckSendBindingSet(Binding: TIdSipConnectionBindings);
+begin
+  CheckEquals(Self.LowPortLocation.Transport,
+              Binding.Transport,
+              Self.HighPortTransport.ClassName
+            + ': Transport of sending binding');
+  CheckEquals(Self.LowPortLocation.IPAddress,
+              Binding.LocalIP,
+              Self.HighPortTransport.ClassName
+            + ': LocalIP of sending binding');
+  // Initiating a TCP connection will result in an ephemeral local port. We don't
+  // know what the port will be, but we know it won't be zero.
+  CheckNotEquals(0,
+                 Binding.LocalPort,
+                 Self.HighPortTransport.ClassName
+               + ': LocalPort of sending binding');
+  CheckEquals(Self.HighPortLocation.IPAddress,
+              Binding.PeerIP,
+              Self.HighPortTransport.ClassName
+            + ': PeerIP of sending binding');
+  CheckEquals(Self.HighPortLocation.Port,
+              Binding.PeerPort,
+              Self.HighPortTransport.ClassName
+            + ': PeerPort of sending binding');
+end;
 
 function TestTIdSipTCPTransport.CreateClient: TIdSipTcpClient;
 begin

@@ -163,6 +163,9 @@ begin
   B := Self.FindBinding(Dest);
 
   if Assigned(B) then begin
+    Dest.LocalIP   := B.IP;
+    Dest.LocalPort := B.Port;
+
     S := M.AsString;
     B.SendTo(Dest.PeerIP, Dest.PeerPort, S[1], Length(S));
   end;

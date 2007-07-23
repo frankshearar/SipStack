@@ -38,6 +38,8 @@ type
     class function IsSecure: Boolean; override;
     class function SrvPrefix: String; override;
 
+    function  ClientType: TIdSipTcpClientClass; override;
+
     property OnGetPassword:     TPasswordEvent read GetOnGetPassword write SetOnGetPassword;
     property RootCertificate:   TFileName      read GetRootCertificate write SetRootCertificate;
     property ServerCertificate: TFileName      read GetServerCertificate write SetServerCertificate;
@@ -108,6 +110,11 @@ end;
 class function TIdSipTLSTransport.SrvPrefix: String;
 begin
   Result := SrvTlsPrefix;
+end;
+
+function TIdSipTLSTransport.ClientType: TIdSipTcpClientClass; 
+begin
+  Result := TIdSipTlsClient;
 end;
 
 //* TIdSipTLSTransport Protected methods ***************************************

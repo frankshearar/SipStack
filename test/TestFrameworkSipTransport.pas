@@ -47,26 +47,28 @@ type
   private
     LastSentResponse: TIdSipResponse;
   protected
-    CheckingRequestEvent:  TIdSipRequestEvent;
-    CheckingResponseEvent: TIdSipResponseEvent;
-    EmptyListEvent:        TEvent;
-    FinishedTimer:         TEvent;
-    HighPortLocation:      TIdSipLocation;
-    Lock:                  TCriticalSection;
-    LowPortLocation:       TIdSipLocation;
-    ReceivedRequest:       Boolean;
-    ReceivedResponse:      Boolean;
-    ReceivingBinding:      TIdSipConnectionBindings;
-    RecvdRequest:          TIdSipRequest;
-    RejectedMessage:       Boolean;
-    RejectedMessageEvent:  TEvent;
-    RejectedMessageReason: String;
-    Request:               TIdSipRequest;
-    Response:              TIdSipResponse;
-    SendEvent:             TEvent;
-    SentBy:                String;
-    Timer:                 TTransportTestTimerQueue;
-    WrongServer:           Boolean;
+    CheckingRequestEvent:   TIdSipRequestEvent;
+    CheckingResponseEvent:  TIdSipResponseEvent;
+    EmptyListEvent:         TEvent;
+    FinishedTimer:          TEvent;
+    HighPortLocation:       TIdSipLocation;
+    Lock:                   TCriticalSection;
+    LowPortLocation:        TIdSipLocation;
+    ReceivedRequest:        Boolean;
+    ReceivedResponse:       Boolean;
+    ReceivingBinding:       TIdSipConnectionBindings;
+    RecvdRequest:           TIdSipRequest;
+    RejectedMessage:        Boolean;
+    RejectedMessageEvent:   TEvent;
+    RejectedMessageReason:  String;
+    Request:                TIdSipRequest;
+    Response:               TIdSipResponse;
+    RequestSendingBinding:  TIdSipConnectionBindings;
+    ResponseSendingBinding: TIdSipConnectionBindings;
+    SendEvent:              TEvent;
+    SentBy:                 String;
+    Timer:                  TTransportTestTimerQueue;
+    WrongServer:            Boolean;
 
     procedure CheckBinding(Received: TIdSipConnectionBindings);
     procedure CheckCanReceiveRequest(Sender: TObject;
@@ -97,6 +99,7 @@ type
                                            ReceivedFrom: TIdSipConnectionBindings);
     procedure CheckResponse(Response: TIdSipResponse;
                             ExpectedStatusCode: Cardinal);
+    procedure CheckSendBindingSet(Binding: TIdSipConnectionBindings); virtual;
     procedure CheckSendRequestFromNonStandardPort(Sender: TObject;
                                                   R: TIdSipRequest;
                                                   ReceivedFrom: TIdSipConnectionBindings);
@@ -396,7 +399,9 @@ begin
   Self.HighPortLocation := Self.CopyFirstLocation(Self.HighPortTransport);
   Self.LowPortLocation  :=  Self.CopyFirstLocation(Self.LowPortTransport);
 
-  Self.ReceivingBinding := TIdSipConnectionBindings.Create;
+  Self.ReceivingBinding       := TIdSipConnectionBindings.Create;
+  Self.RequestSendingBinding  := TIdSipConnectionBindings.Create;
+  Self.ResponseSendingBinding := TIdSipConnectionBindings.Create;
 
   Self.Request := TIdSipTestResources.CreateLocalLoopRequest;
   Self.Request.LastHop.SentBy    := Self.LowPortLocation.IPAddress;
@@ -437,6 +442,8 @@ begin
     Self.RecvdRequest.Free;
     Self.Response.Free;
     Self.Request.Free;
+    Self.ResponseSendingBinding.Free;
+    Self.RequestSendingBinding.Free;
     Self.ReceivingBinding.Free;
 
     Self.HighPortLocation.Free;
@@ -597,6 +604,30 @@ begin
       Self.ExceptionMessage := E.Message;
     end;
   end;
+end;
+
+procedure TestTIdSipTransport.CheckSendBindingSet(Binding: TIdSipConnectionBindings);
+begin
+  CheckEquals(Self.LowPortLocation.Transport,
+              Binding.Transport,
+              Self.HighPortTransport.ClassName
+            + ': Transport of sending binding');
+  CheckEquals(Self.LowPortLocation.IPAddress,
+              Binding.LocalIP,
+              Self.HighPortTransport.ClassName
+            + ': LocalIP of sending binding');
+  CheckEquals(Self.LowPortLocation.Port,
+              Binding.LocalPort,
+              Self.HighPortTransport.ClassName
+            + ': LocalPort of sending binding');
+  CheckEquals(Self.HighPortLocation.IPAddress,
+              Binding.PeerIP,
+              Self.HighPortTransport.ClassName
+            + ': PeerIP of sending binding');
+  CheckEquals(Self.HighPortLocation.Port,
+              Binding.PeerPort,
+              Self.HighPortTransport.ClassName
+            + ': PeerPort of sending binding');
 end;
 
 procedure TestTIdSipTransport.CheckSendRequestFromNonStandardPort(Sender: TObject;
@@ -777,6 +808,12 @@ procedure TestTIdSipTransport.OnSendRequest(Request: TIdSipRequest;
                                             Sender: TIdSipTransport;
                                             Binding: TIdSipConnectionBindings);
 begin
+  Self.Lock.Acquire;
+  try
+    Self.RequestSendingBinding.Assign(Binding);
+  finally
+    Self.Lock.Release;
+  end;
 end;
 
 procedure TestTIdSipTransport.OnSendResponse(Response: TIdSipResponse;
@@ -785,6 +822,7 @@ procedure TestTIdSipTransport.OnSendResponse(Response: TIdSipResponse;
 begin
   Self.Lock.Acquire;
   try
+    Self.ResponseSendingBinding.Assign(Binding);
     if Assigned(Self.LastSentResponse) then begin
       Self.LastSentResponse.Assign(Response);
       Self.SendEvent.SetEvent;
@@ -1512,6 +1550,8 @@ begin
   Check(Self.ReceivedRequest,
         Self.HighPortTransport.ClassName + ': Request not received: SendRequest '
       + 'didn''t use the DestinationLocation or something bad happened');
+
+  CheckSendBindingSet(Self.RequestSendingBinding);
 end;
 
 procedure TestTIdSipTransport.TestSendRequestTopVia;
@@ -1534,6 +1574,8 @@ begin
 
   Check(Self.ReceivedResponse,
         Self.HighPortTransport.ClassName + ': Response not received');
+
+  CheckSendBindingSet(Self.ResponseSendingBinding);
 end;
 
 procedure TestTIdSipTransport.TestSendResponseFromNonStandardPort;

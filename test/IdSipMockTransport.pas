@@ -429,8 +429,23 @@ end;
 
 procedure TIdSipMockTransport.SendMessage(M: TIdSipMessage;
                                           Dest: TIdSipConnectionBindings);
+var
+  SendingBinding: TIdSocketHandle;
 begin
   Self.Log(M.AsString, dirOut);
+
+  SendingBinding := Self.FindBinding(Dest);
+
+  if Assigned(SendingBinding) then begin
+    Dest.LocalIP   := SendingBinding.IP;
+    Dest.LocalPort := SendingBinding.Port;
+  end
+  else begin
+    Assert(Self.BindingCount > 0, 'This MockTransport has no bindings on which to send this message');
+    // A Mock Transport will always appear to send messages from its first binding.
+    Dest.LocalIP   := Self.Bindings[0].IP;
+    Dest.LocalPort := Self.Bindings[0].Port;
+  end;
 
   if M.IsAck then begin
     Self.LastACK.Assign(M);

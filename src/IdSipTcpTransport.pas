@@ -21,11 +21,15 @@ type
   TIdSipTcpServer = class;
   TIdSipTcpServerClass = class of TIdSipTcpServer;
 
+  TIdSipTcpClient = class;
+  TIdSipTcpClientClass = class of TIdSipTcpClient;
+
   // I implement the Transmission Control Protocol (RFC 793) connections for the
   // SIP stack.
   TIdSipTCPTransport = class(TIdSipTransport)
   private
-    RunningClients: TThreadList;
+    fConnectionTimeout: Cardinal;
+    RunningClients:     TThreadList;
 
     procedure SendMessageTo(Msg: TIdSipMessage;
                             Dest: TIdSipConnectionBindings);
@@ -51,16 +55,16 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
+    function  ClientType: TIdSipTcpClientClass; virtual;
     function  IsRunning: Boolean; override;
     procedure RemoveClient(ClientThread: TObject);
     procedure Start; override;
     procedure Stop; override;
     procedure WriteMessageTo(Msg: TIdSipMessage;
                              Connection: TIdTCPConnection);
-  end;
 
-  TIdSipTcpClient = class;
-  TIdSipTcpClientClass = class of TIdSipTcpClient;
+    property ConnectionTimeout: Cardinal read fConnectionTimeout write fConnectionTimeout;
+  end;
 
   // I allow the sending of TCP requests to happen asynchronously: in my
   // context, I instantiate a TCP client, send a request, and receive
@@ -72,16 +76,13 @@ type
     FirstMsg:  TIdSipMessage;
     Transport: TIdSipTCPTransport;
 
-    procedure AddConnection(Connection: TIdTCPConnection;
-                            Request: TIdSipRequest);
     procedure NotifyOfException(E: Exception);
   protected
     function  ClientType: TIdSipTcpClientClass; virtual;
     procedure Run; override;
   public
-    constructor Create(const Host: String;
-                       Port: Cardinal;
-                       Msg: TIdSipMessage;
+    constructor Create(Connection: TIdSipTCPClient;
+                       FirstMsg: TIdSipMessage;
                        Transport: TIdSipTCPTransport); reintroduce;
     destructor Destroy; override;
 
@@ -248,6 +249,9 @@ type
     procedure UnlockList;
   end;
 
+const
+  FiveSeconds = 5000; // milliseconds
+
 implementation
 
 uses
@@ -275,6 +279,8 @@ begin
   Self.ConnectionMap  := TIdSipConnectionTableLock.Create;
   Self.RunningClients := TThreadList.Create;
 
+  Self.ConnectionTimeout := FiveSeconds;
+
   Self.Bindings.Add;
 end;
 
@@ -284,6 +290,11 @@ begin
   Self.ConnectionMap.Free;
 
   inherited Destroy;
+end;
+
+function TIdSipTCPTransport.ClientType: TIdSipTcpClientClass;
+begin
+  Result := TIdSipTcpClient;
 end;
 
 function TIdSipTCPTransport.IsRunning: Boolean;
@@ -375,8 +386,11 @@ begin
     if not Assigned(Connection) then
       Connection := Table.ConnectionFor(Dest);
 
-    if Assigned(Connection) and Connection.Connected then
+    if Assigned(Connection) and Connection.Connected then begin
+      Dest.LocalIP   := Connection.Socket.Binding.IP;
+      Dest.LocalPort := Connection.Socket.Binding.Port;
       Self.WriteMessageTo(Msg, Connection)
+    end
     else begin
       // Last resort: make a new connection to Dest.
       Self.SendMessageTo(Msg, Dest);
@@ -410,8 +424,29 @@ end;
 
 procedure TIdSipTCPTransport.SendMessageTo(Msg: TIdSipMessage;
                                            Dest: TIdSipConnectionBindings);
+var
+  NewConnection: TIdSipTcpClient;
 begin
-  Self.RunningClients.Add(TIdSipTcpClientThread.Create(Dest.PeerIP, Dest.PeerPort, Msg, Self));
+  NewConnection := Self.ClientType.Create(nil);
+  NewConnection.Host        := Dest.PeerIP;
+  NewConnection.Port        := Dest.PeerPort;
+  NewConnection.Timer       := Self.Timer;
+  NewConnection.TransportID := Self.ID;
+
+  try
+    NewConnection.Connect(Self.ConnectionTimeout);
+
+    if Msg.IsRequest then
+      Self.DoOnAddConnection(NewConnection, Msg as TIdSipRequest);
+
+    Dest.LocalIP   := NewConnection.Socket.Binding.IP;
+    Dest.LocalPort := NewConnection.Socket.Binding.Port;
+
+    Self.RunningClients.Add(TIdSipTcpClientThread.Create(NewConnection, Msg, Self));
+  except
+    on E: EIdException do
+      Self.NotifyOfException(Msg, E, E.Message);
+  end;
 end;
 
 procedure TIdSipTCPTransport.StopAllClientConnections;
@@ -433,20 +468,13 @@ end;
 //******************************************************************************
 //* TIdSipTcpClientThread Public methods ***************************************
 
-constructor TIdSipTcpClientThread.Create(const Host: String;
-                                         Port: Cardinal;
-                                         Msg: TIdSipMessage;
+constructor TIdSipTcpClientThread.Create(Connection: TIdSipTCPClient;
+                                         FirstMsg: TIdSipMessage;
                                          Transport: TIdSipTCPTransport);
 begin
   Self.FreeOnTerminate := true;
-
-  Self.Client := Self.ClientType.Create(nil);
-  Self.Client.Host        := Host;
-  Self.Client.Port        := Port;
-  Self.Client.Timer       := Transport.Timer;
-  Self.Client.TransportID := Transport.ID;
-
-  Self.FirstMsg  := Msg.Copy;
+  Self.Client    := Connection;
+  Self.FirstMsg  := FirstMsg.Copy;
   Self.Transport := Transport;
 
   inherited Create(false);
@@ -477,11 +505,7 @@ end;
 procedure TIdSipTcpClientThread.Run;
 begin
   try
-    Self.Client.Connect(Self.Client.ReadTimeout);
     try
-      if Self.FirstMsg.IsRequest then
-        Self.AddConnection(Self.Client, Self.FirstMsg as TIdSipRequest);
-
       Self.Client.Send(Self.FirstMsg);
       Self.Client.ReceiveMessages;
     finally
@@ -498,13 +522,6 @@ begin
 end;
 
 //* TIdSipTcpClientThread Private methods **************************************
-
-procedure TIdSipTcpClientThread.AddConnection(Connection: TIdTCPConnection;
-                                              Request: TIdSipRequest);
-begin
-  // TOD: This is accessing the PROTECTED method of the transport!
-  Self.Transport.DoOnAddConnection(Connection, Request);
-end;
 
 procedure TIdSipTcpClientThread.NotifyOfException(E: Exception);
 var
@@ -839,7 +856,7 @@ end;
 
 function TIdSipTcpClient.DefaultTimeout: Cardinal;
 begin
-  Result := 5000;
+  Result := FiveSeconds;
 end;
 
 //* TIdSipTcpClient Private methods ********************************************
