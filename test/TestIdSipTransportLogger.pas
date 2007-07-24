@@ -12,18 +12,19 @@ unit TestIdSipTransportLogger;
 interface
 
 uses
-  Classes, IdSipLocation, IdSipMessage, IdSipMockTransport, IdSipTransportLogger,
-  TestFramework;
+  Classes, IdRoutingTable, IdSipLocation, IdSipMessage, IdSipMockTransport,
+  IdSipTransportLogger, TestFramework;
 
 type
   TestTIdSipTransportLogger = class(TTestCase)
   private
-    ArbDest:   TIdSipLocation;
-    Logger:    TIdSipTransportLogger;
-    Request:   TIdSipRequest;
-    Response:  TIdSipResponse;
-    Transport: TIdSipMockTransport;
-    LogStream: TStringStream;
+    ArbDest:      TIdSipLocation;
+    Logger:       TIdSipTransportLogger;
+    Request:      TIdSipRequest;
+    Response:     TIdSipResponse;
+    RoutingTable: TIdRoutingTable;
+    Transport:    TIdSipMockTransport;
+    LogStream:    TStringStream;
 
     function FirstLineOfLog: String; overload;
     function FirstLineOfLog(S: TStringStream): String; overload;
@@ -52,7 +53,7 @@ type
 implementation
 
 uses
-  IdSipTransport, SysUtils, TestFrameworkSip;
+  IdMockRoutingTable, IdSipTransport, SysUtils, TestFrameworkSip;
 
 function Suite: ITestSuite;
 begin
@@ -75,10 +76,12 @@ begin
   Self.ArbDest.IPAddress := '127.0.0.1';
   Self.ArbDest.Port      := 5060;
   Self.ArbDest.Transport := 'UDP';
-  Self.LogStream := TStringStream.Create('');
-  Self.Request   := TIdSipTestResources.CreateBasicRequest;
-  Self.Response  := TIdSipTestResources.CreateBasicResponse;
-  Self.Transport := TIdSipMockUdpTransport.Create;
+  Self.LogStream    := TStringStream.Create('');
+  Self.Request      := TIdSipTestResources.CreateBasicRequest;
+  Self.Response     := TIdSipTestResources.CreateBasicResponse;
+  Self.RoutingTable := TIdMockRoutingTable.Create;
+  Self.Transport    := TIdSipMockUdpTransport.Create;
+  Self.Transport.RoutingTable := Self.RoutingTable;
 
   Bindings := TIdSipLocations.Create;
   try
@@ -97,6 +100,7 @@ end;
 procedure TestTIdSipTransportLogger.TearDown;
 begin
   Self.Transport.Free;
+  Self.RoutingTable.Free;
   Self.Response.Free;
   Self.Request.Free;
   Self.LogStream.Free;
