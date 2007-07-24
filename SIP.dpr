@@ -61,10 +61,6 @@ uses
   IdSystem in 'src\IdSystem.pas',
   IdTimerQueue in 'src\IdTimerQueue.pas',
   IdUnicode in 'src\IdUnicode.pas',
-  MultipleCoreSpike in 'test\MultipleCoreSpike.pas' {MultiCore},
-  SingleCoreSpike in 'test\SingleCoreSpike.pas' {SingleCore},
-  SpikeRegistrar in 'test\SpikeRegistrar.pas' {rnidSpikeRegistrar},
-  SpikeT140 in 'test\SpikeT140.pas' {IdSpikeT140},
   StringDictionary in 'src\StringDictionary.pas',
   TestFrameworkEx in 'test\TestFrameworkEx.pas',
   TestFrameworkRtp in 'test\TestFrameworkRtp.pas',
@@ -131,8 +127,7 @@ begin
   {$IFDEF SPIKE}
   Forms.Application.Initialize;
 //  Forms.Application.CreateForm(TrnidSpike, rnidSpike);
-  Forms.Application.CreateForm(TMultiCore, MultiCore);
-  Forms.Application.Run;
+  Forms.Forms.Application.Run;
   {$ELSE}
     {$IFDEF GUI}
     GuiTestRunner.RunRegisteredTests;
