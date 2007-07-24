@@ -201,10 +201,10 @@ type
                        const Target: String);
     destructor  Destroy; override;
 
-    function  Copy: TIdSrvRecord;
-    function  QueryName: String;
-    function  ResourceType: String; override;
-    function  SipTransport: String;
+    function Copy: TIdSrvRecord;
+    function QueryName: String;
+    function ResourceType: String; override;
+    function SipTransport: String;
 
     property Domain:      String               read fDomain;
     property NameRecords: TIdDomainNameRecords read fNameRecords;
