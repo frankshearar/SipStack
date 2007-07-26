@@ -875,7 +875,7 @@ begin
     CM_STACK_RECONFIGURED:           Result := 'CM_STACK_RECONFIGURED';
 
     CM_DEBUG_DROPPED_MSG:            Result := 'CM_DEBUG_DROPPED_MSG';
-    CM_DEBUG_EXCEPTION:              Result := 'CM_DEBUG_TRANSPORT_EXCEPTION';
+    CM_DEBUG_EXCEPTION:              Result := 'CM_DEBUG_EXCEPTION';
     CM_DEBUG_RECV_MSG:               Result := 'CM_DEBUG_RECV_MSG';
     CM_DEBUG_SEND_MSG:               Result := 'CM_DEBUG_SEND_MSG';
     CM_DEBUG_STACK_STARTED:          Result := 'CM_DEBUG_STACK_STARTED';
