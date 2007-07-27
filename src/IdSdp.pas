@@ -703,9 +703,6 @@ type
   end;
 
 const
-  BlankSession = '-';
-
-const
   BadHeaderOrder        = 'Headers in the wrong order: found %s after %s';
   ConvertEnumErrorMsg   = 'Couldn''t convert a %s with Ord() = %d to type %s';
   ConvertStrErrorMsg    = 'Couldn''t convert ''%s'' to type %s';
@@ -716,6 +713,7 @@ const
   TooManyHeaders        = 'Header ''%s'' occured multiple times';
   UnknownOptionalHeader = 'Unknown optional header: ''%s''';
 
+// Grammar definitions. Don't localise them.
 const
   AlphanumericChars = Alphabet + Digits;
   SafeChars = AlphanumericChars + ['''', '-', '.', '/', ':', '?', '#',
@@ -2559,7 +2557,7 @@ begin
   if (Self.SessionName <> '') then
     MungedSessionName := Self.SessionName
   else
-    MungedSessionName := BlankSession;
+    MungedSessionName := BlankSessionName;
 
   S := 's=' + MungedSessionName + #13#10;
   Dest.Write(PChar(S)^, Length(S));
