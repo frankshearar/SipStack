@@ -3334,6 +3334,7 @@ procedure TIdSipAction.TrySendRequest(Request: TIdSipRequest;
                                       Targets: TIdSipLocations);
 var
   CurrentTarget: TIdSipLocation;
+  LocalAddress:  TIdSipLocation;
   LocalBindings: TIdSipLocations;
 begin
   // We remove the current target from the set of targets first to prevent any
@@ -3353,7 +3354,14 @@ begin
       // SIP/2.0/SCTP in its topmost Via. Remember, we try to avoid having the
       // transport layer change the message.
       Request.LastHop.Transport := CurrentTarget.Transport;
-      Request.RewriteLocationHeaders(Self.UA.RoutingTable, LocalBindings, CurrentTarget);
+
+      LocalAddress := TIdSipLocation.Create;
+      try
+        Self.UA.RoutingTable.BestLocalAddress(LocalBindings, CurrentTarget, LocalAddress);
+        Request.RewriteLocationHeaders(LocalAddress);
+      finally
+        LocalAddress.Free;
+      end;
 
       // Synchronise our state to what actually went down to the network.
       // The condition means that an INVITE won't set its InitialRequest to an

@@ -89,6 +89,9 @@ type
     destructor  Destroy; override;
 
     procedure AddMappedRoute(Destination, Mask, MappedAddress: String; MappedPort: Cardinal = 0);
+    procedure BestLocalAddress(LocalBindings: TIdSipLocations;
+                               Destination: TIdSipLocation;
+                               LocalAddress: TIdSipLocation);
     function  GetBestLocalAddress(DestinationIP: String): String; overload; virtual;
     procedure GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation; DefaultPort: Cardinal); overload; virtual;
     function  HasRoute(Route: TIdRouteEntry): Boolean;
@@ -124,7 +127,7 @@ function RouteSort(Item1, Item2: Pointer): Integer;
 implementation
 
 uses
-  IdMockRoutingTable, IdSimpleParser, SysUtils;
+  IdMockRoutingTable, IdSimpleParser, IdSipTransport, SysUtils;
 
 function HighestIPv4AddressFirst(RouteA, RouteB: TIdRouteEntry): Integer;
 begin
@@ -479,6 +482,46 @@ begin
     end;
   finally
     NewRoute.Free;
+  end;
+end;
+
+procedure TIdRoutingTable.BestLocalAddress(LocalBindings: TIdSipLocations;
+                                           Destination: TIdSipLocation;
+                                           LocalAddress: TIdSipLocation);
+var
+  ActualAddress: TIdSipLocation;
+  DefaultPort:   Cardinal;
+begin
+  // On a machine with multiple local addresses, and at least one gateway, you
+  // need to be careful what IP address/hostname you put into certain headers,
+  // since putting in a LAN IP address in your Contact when you're making a
+  // call to someone on the public Internet is going to result in the remote
+  // party's messages not reaching you.
+  //
+  // Only messages involved in creating a dialog care: INVITE, SUBSCRIBE, REFER,
+  // and their responses. In-dialog messages already have "correct" (routable,
+  // in other words) URIs.
+
+  DefaultPort := TIdSipTransportRegistry.DefaultPortFor(Destination.Transport);
+  Self.LocalAddressFor(Destination.IPAddress, LocalAddress, DefaultPort);
+  LocalAddress.Transport := Destination.Transport;
+
+  ActualAddress := LocalBindings.FirstAddressMatch(LocalAddress);
+
+  if not Assigned(ActualAddress) then begin
+    // There is no local binding that can be used to communicate with the UA
+    // at Dest, or we have no binding on the best local address.
+    //
+    // Thus, we check to see if the UA at Dest is running on a local address:
+    ActualAddress := LocalBindings.FirstAddressMatch(Destination);
+  end;
+
+  // Either Dest contains a non-local IP address (in which ActualAddress
+  // contains the most appropriate local IP address to use), or Dest contains
+  // a local IP address (in which case ActualAddress contains that local IP
+  // address).
+  if Assigned(ActualAddress) then begin
+    LocalAddress.Assign(ActualAddress)
   end;
 end;
 

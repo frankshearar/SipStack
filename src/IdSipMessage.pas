@@ -12,8 +12,8 @@ unit IdSipMessage;
 interface
 
 uses
-  Classes, Contnrs, IdDateTimeStamp, IdRoutingTable, IdSimpleParser,
-  IdSipLocation, IdTimerQueue, StringDictionary, SysUtils;
+  Classes, Contnrs, IdDateTimeStamp, IdSimpleParser, IdSipLocation, IdTimerQueue,
+  StringDictionary, SysUtils;
 
 type
   TIdSipQValue = 0..1000;
@@ -1475,10 +1475,7 @@ type
     procedure ReadBody(Src: TStream);
     procedure RemoveHeader(Header: TIdSipHeader);
     procedure RemoveAllHeadersNamed(const Name: String);
-    procedure RewriteLocationHeaders(LocalAddress: TIdSipLocation); overload; virtual;
-    procedure RewriteLocationHeaders(Table: TIdRoutingTable;
-                                     LocalBindings: TIdSipLocations;
-                                     Dest: TIdSipLocation); overload;
+    procedure RewriteLocationHeaders(LocalAddress: TIdSipLocation); virtual;
     function  RequiresExtension(const Extension: String): Boolean;
     function  SupportsExtension(const Extension: String): Boolean;
     function  WantsAllowEventsHeader: Boolean; virtual;
@@ -1593,7 +1590,7 @@ type
     function  MatchCancel(Cancel: TIdSipRequest): Boolean;
     function  ProxyAuthorizationFor(const Realm: String): TIdSipProxyAuthorizationHeader;
     function  RequiresResponse: Boolean;
-    procedure RewriteLocationHeaders(LocalAddress: TIdSipLocation); overload; override;
+    procedure RewriteLocationHeaders(LocalAddress: TIdSipLocation); override;
     function  WantsAllowEventsHeader: Boolean; override;
 
     property Event:             TIdSipEventHeader             read GetEvent write SetEvent;
@@ -1672,7 +1669,7 @@ type
     function  IsRequest: Boolean; override;
     function  IsTrying: Boolean;
     function  MalformedException: EBadMessageClass; override;
-    procedure RewriteLocationHeaders(LocalAddress: TIdSipLocation); overload; override;
+    procedure RewriteLocationHeaders(LocalAddress: TIdSipLocation); override;
     function  WantsAllowEventsHeader: Boolean; override;
     function  WillEstablishDialog(Request: TIdSipRequest): Boolean; overload;
 
@@ -8493,60 +8490,6 @@ end;
 
 procedure TIdSipMessage.RewriteLocationHeaders(LocalAddress: TIdSipLocation);
 begin
-end;
-
-procedure TIdSipMessage.RewriteLocationHeaders(Table: TIdRoutingTable;
-                                               LocalBindings: TIdSipLocations;
-                                               Dest: TIdSipLocation);
-var
-  ActualAddress: TIdSipLocation;
-  DefaultPort:   Cardinal;
-  LocalAddress:  TIdSipLocation;
-begin
-  // On a machine with multiple local addresses, and at least one gateway, you
-  // need to be careful what IP address/hostname you put into certain headers,
-  // since putting in a LAN IP address in your Contact when you're making a
-  // call to someone on the public Internet is going to result in the remote
-  // party's messages not reaching you.
-  //
-  // Only messages involved in creating a dialog care: INVITE, SUBSCRIBE, REFER,
-  // and their responses. In-dialog messages already have "correct" (routable,
-  // in other words) URIs.
-
-  LocalAddress := TIdSipLocation.Create;
-  try
-    DefaultPort := TIdSipTransportRegistry.DefaultPortFor(Self.LastHop.Transport);
-    Table.LocalAddressFor(Dest.IPAddress, LocalAddress, DefaultPort);
-    LocalAddress.Transport := Dest.Transport;
-
-    ActualAddress := LocalBindings.FirstAddressMatch(LocalAddress);
-
-    if not Assigned(ActualAddress) then begin
-      // There is no local binding that can be used to communicate with the UA
-      // at Dest. Possibly we've been told that the loopback address is the best
-      // local address to use, but we're not bound to any port on that address.
-      //
-      // Thus, we check to see if the UA at Dest is running on a local address:
-      ActualAddress := LocalBindings.FirstAddressMatch(Dest);
-    end;
-
-    // Either Dest contains a non-local IP address (in which ActualAddress
-    // contains the most appropriate local IP address to use), or Dest contains
-    // a local IP address (in which case ActualAddress contains that local IP
-    // address).
-    if Assigned(ActualAddress) then begin
-      Self.RewriteLocationHeaders(ActualAddress)
-    end
-    else begin
-      // This is dubious. If ActualAddress is nil then it means that the stack
-      // listens on NO ports on the LocalAddress.IPAddress. In other words, any
-      // rewriting you do with LocalAddress will be wrong. This is a strong sign
-      // of a badly configured system!
-      Self.RewriteLocationHeaders(LocalAddress);
-    end;
-  finally
-    LocalAddress.Free;
-  end;
 end;
 
 function TIdSipMessage.RequiresExtension(const Extension: String): Boolean;

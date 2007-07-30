@@ -5533,26 +5533,34 @@ end;
 
 procedure TRewriteLocationTestCase.CheckAgainstDestination(ExpectedBinding: TIdSipLocation; Destination: TIdSipLocation);
 var
-  Msg:      String;
-  Request:  TIdSipRequest;
-  Response: TIdSipResponse;
+  LocalAddress: TIdSipLocation;
+  Msg:          String;
+  Request:      TIdSipRequest;
+  Response:     TIdSipResponse;
 begin
   Msg := 'From ' + ExpectedBinding.IPAddress + ' to ' + Destination.IPAddress;
 
-  Request := Self.CreateRequest;
+  LocalAddress := TIdSipLocation.Create;
   try
-    Request.RewriteLocationHeaders(Self.RoutingTable, Self.LocalBindings, Destination);
-    CheckRequest(ExpectedBinding, Request, Msg);
-  finally
-    Request.Free;
-  end;
+    Self.RoutingTable.BestLocalAddress(Self.LocalBindings, Destination, LocalAddress);
 
-  Response := Self.CreateResponse;
-  try
-    Response.RewriteLocationHeaders(Self.RoutingTable, Self.LocalBindings, Destination);
-    CheckResponse(ExpectedBinding, Response, Msg);
+    Request := Self.CreateRequest;
+    try
+      Request.RewriteLocationHeaders(LocalAddress);
+      CheckRequest(ExpectedBinding, Request, Msg);
+    finally
+      Request.Free;
+    end;
+
+    Response := Self.CreateResponse;
+    try
+      Response.RewriteLocationHeaders(LocalAddress);
+      CheckResponse(ExpectedBinding, Response, Msg);
+    finally
+      Response.Free;
+    end;
   finally
-    Response.Free;
+    LocalAddress.Free;
   end;
 end;
 
@@ -5746,11 +5754,18 @@ const
   HighPort = 15060;
 var
   Binding: TIdSipLocation;
+  LocalAddress: TIdSipLocation;
 begin
   Self.AddLoopbackRoute;
   Binding := Self.AddLoopbackBinding(HighPort);
 
-  Self.Request.RewriteLocationHeaders(Self.RoutingTable, Self.LocalBindings, Self.LoopbackDestination);
+  LocalAddress := TIdSipLocation.Create;
+  try
+    Self.RoutingTable.BestLocalAddress(Self.LocalBindings, Self.LoopbackDestination, LocalAddress);
+    Self.Request.RewriteLocationHeaders(LocalAddress);
+  finally
+    LocalAddress.Free;
+  end;
 
   CheckRequest(Binding, Self.Request);
 end;

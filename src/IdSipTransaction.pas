@@ -892,6 +892,7 @@ procedure TIdSipTransactionDispatcher.SendResponse(Response: TIdSipResponse);
 var
   CurrentTarget:      TIdSipLocation;
   Destinations:       TIdSipLocations;
+  LocalAddress:       TIdSipLocation;
   LocalBindings:      TIdSipLocations;
   Tran:               TIdSipTransaction;
   RemainingLocations: TIdSipLocations;
@@ -940,8 +941,14 @@ begin
         try
           RemainingLocations.RemoveFirst;
 
-          Response.RewriteLocationHeaders(Self.RoutingTable, LocalBindings, CurrentTarget);
-          Self.SendToTransport(Response, CurrentTarget);
+          LocalAddress := TIdSipLocation.Create;
+          try
+            Self.RoutingTable.BestLocalAddress(LocalBindings, CurrentTarget, LocalAddress);
+            Response.RewriteLocationHeaders(LocalAddress);
+            Self.SendToTransport(Response, CurrentTarget);
+          finally
+            LocalAddress.Free;
+          end;
         finally
           CurrentTarget.Free;
         end;
@@ -1613,8 +1620,9 @@ end;
 procedure TIdSipServerTransaction.TrySendResponseTo(R: TIdSipResponse;
                                                     Dest: TIdSipLocation);
 var
-  Locations:     TIdSipLocations;
+  LocalAddress:  TIdSipLocation;
   LocalBindings: TIdSipLocations;
+  Locations:     TIdSipLocations;
 begin
   // Some explanation: SentResponses contains a bunch of responses that we've
   // sent. (We might have sent several because we sent some provisional
@@ -1632,7 +1640,13 @@ begin
   try
     Self.Dispatcher.LocalBindings(LocalBindings);
 
-    R.RewriteLocationHeaders(Self.Dispatcher.RoutingTable, LocalBindings, Dest);
+    LocalAddress := TIdSipLocation.Create;
+    try
+      Self.Dispatcher.RoutingTable.BestLocalAddress(LocalBindings, Dest, LocalAddress);
+      R.RewriteLocationHeaders(LocalAddress);
+    finally
+      LocalAddress.Free;
+    end;
 
     Self.Dispatcher.SendToTransport(R, Dest);
 

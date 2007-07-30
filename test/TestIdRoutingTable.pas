@@ -15,6 +15,26 @@ uses
   IdMockRoutingTable, IdRoutingTable, IdSipLocation, TestFramework;
 
 type
+  TestFunctions = class(TTestCase)
+  private
+    RouteA: TIdRouteEntry;
+    RouteB: TIdRouteEntry;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRouteSortDestinationAndMaskDiffers;
+    procedure TestRouteSortGatewayAndMetricDiffers;
+    procedure TestRouteSortIPv4RoutesFirst;
+    procedure TestRouteSortMetricDiffers;
+    procedure TestRouteSortOneRouteAMappedRoute;
+    procedure TestRouteSortOnlyDestinationDiffers;
+    procedure TestRouteSortOnlyGatewayDiffers;
+    procedure TestRouteSortOnlyMaskDiffers;
+    procedure TestRouteSortOnlyMetricDiffers;
+    procedure TestRouteSortSameRoute;
+  end;
+
   TestTIdRouteEntry = class(TTestCase)
   private
     Route: TIdRouteEntry;
@@ -108,16 +128,6 @@ type
     procedure TestPlatformRoutingTable;
     procedure TestRemoveNonexistentRoute;
     procedure TestRemoveRoute;
-    procedure TestRouteSortDestinationAndMaskDiffers;
-    procedure TestRouteSortGatewayAndMetricDiffers;
-    procedure TestRouteSortIPv4RoutesFirst;
-    procedure TestRouteSortMetricDiffers;
-    procedure TestRouteSortOneRouteAMappedRoute;
-    procedure TestRouteSortOnlyDestinationDiffers;
-    procedure TestRouteSortOnlyGatewayDiffers;
-    procedure TestRouteSortOnlyMaskDiffers;
-    procedure TestRouteSortOnlyMetricDiffers;
-    procedure TestRouteSortSameRoute;
   end;
 
   TestTIdMockRoutingTable = class(TestTIdRoutingTable)
@@ -135,9 +145,191 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSystem unit tests');
+  Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdRouteEntry.Suite);
   Result.AddTest(TestTIdRoutingTable.Suite);
   Result.AddTest(TestTIdMockRoutingTable.Suite);
+end;
+
+//******************************************************************************
+//* TestFunctions                                                              *
+//******************************************************************************
+//* TestFunctions Public methods ***********************************************
+
+procedure TestFunctions.SetUp;
+begin
+  inherited SetUp;
+
+  Self.RouteA := TIdRouteEntry.Create;
+  Self.RouteA.Destination    := '10.0.0.0';
+  Self.RouteA.Gateway        := '10.0.0.1';
+  Self.RouteA.InterfaceIndex := '1';
+  Self.RouteA.Mask           := '255.0.0.0';
+  Self.RouteA.Metric         := 1;
+
+  Self.RouteB := TIdRouteEntry.Create;
+  Self.RouteB.Destination    := Self.RouteA.Destination;
+  Self.RouteB.Gateway        := Self.RouteA.Gateway;
+  Self.RouteB.InterfaceIndex := Self.RouteA.InterfaceIndex;
+  Self.RouteB.Mask           := Self.RouteA.Mask;
+  Self.RouteB.Metric         := Self.RouteA.Metric;
+end;
+
+procedure TestFunctions.TearDown;
+begin
+  Self.RouteB.Free;
+  Self.RouteA.Free;
+
+  inherited TearDown;
+end;
+
+//* TestFunctions Published methods ********************************************
+
+procedure TestFunctions.TestRouteSortDestinationAndMaskDiffers;
+begin
+  // "Higher" addresses appear earlier in the sorted routing table.
+
+  Self.RouteA.Destination := '10.0.0.0';
+  Self.RouteA.Mask        := '255.0.0.0';
+  Self.RouteB.Destination := '192.168.0.0';
+  Self.RouteB.Mask        := '255.255.255.0';
+
+  CheckEquals(1,  RouteSort(Self.RouteA, Self.RouteB), '10.0.0.0/8 > 192.168.0.0/24');
+  CheckEquals(-1, RouteSort(Self.RouteB, Self.RouteA), '192.168.0.0/24 > 10.0.0.0/8');
+end;
+
+procedure TestFunctions.TestRouteSortGatewayAndMetricDiffers;
+var
+  PrimaryGateway, SecondaryGateway: TIdRouteEntry;
+begin
+  PrimaryGateway   := Self.RouteA;
+  SecondaryGateway := Self.RouteB;
+
+  // SecondaryGateway.Gateway < PrimaryGateway.Gateway, but
+  // PrimaryGateway.Metric < SecondaryGateway.Metric. Metric takes priority.
+  PrimaryGateway.Gateway   := '10.0.0.2';
+  PrimaryGateway.Metric    := 1;
+  SecondaryGateway.Gateway := '10.0.0.1';
+  SecondaryGateway.Metric  := 2;
+
+  CheckEquals(-1, RouteSort(PrimaryGateway, SecondaryGateway), 'PrimaryGateway < SecondaryGateway');
+  CheckEquals(1,  RouteSort(SecondaryGateway, PrimaryGateway), 'SecondaryGateway > PrimaryGateway');
+end;
+
+procedure TestFunctions.TestRouteSortIPv4RoutesFirst;
+var
+  IPv4Route, IPv6Route: TIdRouteEntry;
+begin
+  IPv4Route := Self.RouteA;
+  IPv6Route := Self.RouteB;
+
+  IPv4Route.Destination := '0.0.0.0';
+  IPv4Route.Mask        := '0.0.0.0';
+  IPv6Route.Destination := '::';
+  IPv6Route.Mask        := '::';
+
+  CheckEquals(-1, RouteSort(IPv4Route, IPv6Route), 'IPv4Route < IPv6Route');
+  CheckEquals(1,  RouteSort(IPv6Route, IPv4Route), 'IPv6Route > IPv4Route');
+end;
+
+procedure TestFunctions.TestRouteSortMetricDiffers;
+begin
+  // Even though RouteB's a "wider" route, it costs less
+  Self.RouteA.Destination := '10.0.0.0';
+  Self.RouteA.Mask        := '255.255.255.0';
+  Self.RouteA.Metric      := 2;
+  Self.RouteB.Destination := '10.0.0.0';
+  Self.RouteB.Mask        := '255.0.0.0';
+  Self.RouteB.Metric      := 1;
+
+  CheckEquals(-1, RouteSort(Self.RouteA, Self.RouteB), 'RouteB < RouteA');
+  CheckEquals(1,  RouteSort(Self.RouteB, Self.RouteA), 'RouteA < RouteB');
+end;
+
+procedure TestFunctions.TestRouteSortOneRouteAMappedRoute;
+var
+  MappedRoute: TIdRouteEntry;
+  NormalRoute: TIdRouteEntry;
+begin
+  NormalRoute := Self.RouteA;
+  MappedRoute := Self.RouteB;
+
+  MappedRoute.Gateway       := '1.2.3.4';
+  MappedRoute.IsMappedRoute := true;
+
+  CheckEquals(-1, RouteSort(MappedRoute, NormalRoute), 'All else being equal, MappedRoute < NormalRoute');
+  CheckEquals(1,  RouteSort(NormalRoute, MappedRoute), 'All else being equal, NormalRoute > MappedRoute');
+
+  MappedRoute.Metric := 999;
+  CheckEquals(-1, RouteSort(MappedRoute, NormalRoute), 'MappedRoute < NormalRoute even when much more costly');
+  CheckEquals(1,  RouteSort(NormalRoute, MappedRoute), 'NormalRoute > MappedRoute even when much less costly');
+end;
+
+procedure TestFunctions.TestRouteSortOnlyDestinationDiffers;
+var
+  LowerAddress, HigherAddress: TIdRouteEntry;
+begin
+  // "Higher" addresses appear earlier in the sorted routing table.
+
+  LowerAddress  := Self.RouteA;
+  HigherAddress := Self.RouteB;
+
+  LowerAddress.Destination  := '10.0.0.0';
+  HigherAddress.Destination := '172.0.0.0';
+
+  CheckEquals(1,  RouteSort(LowerAddress, HigherAddress), '10.0.0.0/8 < 172.0.0.0/8');
+  CheckEquals(-1, RouteSort(HigherAddress, LowerAddress), '172.0.0.0/8 > 10.0.0.0/8');
+
+  LowerAddress.Destination  := '0.0.0.0';
+  HigherAddress.Destination := '172.0.0.0';
+
+  CheckEquals(1,  RouteSort(LowerAddress, HigherAddress), '0.0.0.0/8 < 172.0.0.0/8');
+  CheckEquals(-1, RouteSort(HigherAddress, LowerAddress), '172.0.0.0/8 > 0.0.0.0/8');
+
+  LowerAddress.Destination  := '::';
+  HigherAddress.Destination := '2002:0101:0101::';
+
+  CheckEquals(1,  RouteSort(LowerAddress, HigherAddress), '::/8 < 2002:0101:0101::/8');
+  CheckEquals(-1, RouteSort(HigherAddress, LowerAddress), '2002:0101:0101::/8 > ::/8');
+end;
+
+procedure TestFunctions.TestRouteSortOnlyGatewayDiffers;
+begin
+end;
+
+procedure TestFunctions.TestRouteSortOnlyMaskDiffers;
+var
+  NarrowerRoute, WiderRoute: TIdRouteEntry;
+begin
+  NarrowerRoute := Self.RouteA;
+  WiderRoute    := Self.RouteB;
+
+  WiderRoute.Destination    := '10.0.0.0';
+  WiderRoute.Mask           := '255.0.0.0';
+  NarrowerRoute.Destination := '10.0.0.0';
+  NarrowerRoute.Mask        := '255.255.255.0';
+
+  CheckEquals(-1, RouteSort(NarrowerRoute, WiderRoute), '10.0.0.0/24 < 10.0.0.0/8');
+  CheckEquals(1,  RouteSort(WiderRoute, NarrowerRoute), '10.0.0.0/8 > 10.0.0.0/24');
+end;
+
+procedure TestFunctions.TestRouteSortOnlyMetricDiffers;
+var
+  CheapRoute, ExpensiveRoute: TIdRouteEntry;
+begin
+  CheapRoute     := Self.RouteA;
+  ExpensiveRoute := Self.RouteB;
+
+  ExpensiveRoute.Metric := CheapRoute.Metric + 1;
+
+  CheckEquals(-1, RouteSort(CheapRoute, ExpensiveRoute), 'CheapRoute < ExpensiveRoute');
+  CheckEquals(1,  RouteSort(ExpensiveRoute, CheapRoute), 'ExpensiveRoute > CheapRoute');
+end;
+
+procedure TestFunctions.TestRouteSortSameRoute;
+begin
+  CheckEquals(0, RouteSort(Self.RouteA, Self.RouteB), 'RouteA < RouteB');
+  CheckEquals(0, RouteSort(Self.RouteB, Self.RouteA), 'RouteB > RouteA');
 end;
 
 //******************************************************************************
@@ -553,8 +745,6 @@ end;
 
 procedure TestTIdRoutingTable.TearDown;
 begin
-  Self.RouteB.Free;
-  Self.RouteA.Free;
   Self.RT.Free;
 
   inherited TearDown;
@@ -991,153 +1181,6 @@ begin
   CheckEquals(1, Self.RT.RouteCount, 'Route not removed');
   Check(not Self.RT.HasRoute(Self.RouteA), 'Wrong route removed');
   Check(    Self.RT.HasRoute(Self.RouteB), 'Wrong route left in the table');
-end;
-
-procedure TestTIdRoutingTable.TestRouteSortDestinationAndMaskDiffers;
-begin
-  // "Higher" addresses appear earlier in the sorted routing table.
-
-  Self.RouteA.Destination := '10.0.0.0';
-  Self.RouteA.Mask        := '255.0.0.0';
-  Self.RouteB.Destination := '192.168.0.0';
-  Self.RouteB.Mask        := '255.255.255.0';
-
-  CheckEquals(1,  RouteSort(Self.RouteA, Self.RouteB), '10.0.0.0/8 > 192.168.0.0/24');
-  CheckEquals(-1, RouteSort(Self.RouteB, Self.RouteA), '192.168.0.0/24 > 10.0.0.0/8');
-end;
-
-procedure TestTIdRoutingTable.TestRouteSortGatewayAndMetricDiffers;
-var
-  PrimaryGateway, SecondaryGateway: TIdRouteEntry;
-begin
-  PrimaryGateway   := Self.RouteA;
-  SecondaryGateway := Self.RouteB;
-
-  // SecondaryGateway.Gateway < PrimaryGateway.Gateway, but
-  // PrimaryGateway.Metric < SecondaryGateway.Metric. Metric takes priority.
-  PrimaryGateway.Gateway   := '10.0.0.2';
-  PrimaryGateway.Metric    := 1;
-  SecondaryGateway.Gateway := '10.0.0.1';
-  SecondaryGateway.Metric  := 2;
-
-  CheckEquals(-1, RouteSort(PrimaryGateway, SecondaryGateway), 'PrimaryGateway < SecondaryGateway');
-  CheckEquals(1,  RouteSort(SecondaryGateway, PrimaryGateway), 'SecondaryGateway > PrimaryGateway');
-end;
-
-procedure TestTIdRoutingTable.TestRouteSortIPv4RoutesFirst;
-var
-  IPv4Route, IPv6Route: TIdRouteEntry;
-begin
-  IPv4Route := Self.RouteA;
-  IPv6Route := Self.RouteB;
-
-  IPv4Route.Destination := '0.0.0.0';
-  IPv4Route.Mask        := '0.0.0.0';
-  IPv6Route.Destination := '::';
-  IPv6Route.Mask        := '::';
-
-  CheckEquals(-1, RouteSort(IPv4Route, IPv6Route), 'IPv4Route < IPv6Route');
-  CheckEquals(1,  RouteSort(IPv6Route, IPv4Route), 'IPv6Route > IPv4Route');
-end;
-
-procedure TestTIdRoutingTable.TestRouteSortMetricDiffers;
-begin
-  // Even though RouteB's a "wider" route, it costs less
-  Self.RouteA.Destination := '10.0.0.0';
-  Self.RouteA.Mask        := '255.255.255.0';
-  Self.RouteA.Metric      := 2;
-  Self.RouteB.Destination := '10.0.0.0';
-  Self.RouteB.Mask        := '255.0.0.0';
-  Self.RouteB.Metric      := 1;
-
-  CheckEquals(-1, RouteSort(Self.RouteA, Self.RouteB), 'RouteB < RouteA');
-  CheckEquals(1,  RouteSort(Self.RouteB, Self.RouteA), 'RouteA < RouteB');
-end;
-
-procedure TestTIdRoutingTable.TestRouteSortOneRouteAMappedRoute;
-var
-  MappedRoute: TIdRouteEntry;
-  NormalRoute: TIdRouteEntry;
-begin
-  NormalRoute := Self.RouteA;
-  MappedRoute := Self.RouteB;
-
-  MappedRoute.Gateway       := '1.2.3.4';
-  MappedRoute.IsMappedRoute := true;
-
-  CheckEquals(-1, RouteSort(MappedRoute, NormalRoute), 'All else being equal, MappedRoute < NormalRoute');
-  CheckEquals(1,  RouteSort(NormalRoute, MappedRoute), 'All else being equal, NormalRoute > MappedRoute');
-
-  MappedRoute.Metric := 999;
-  CheckEquals(-1, RouteSort(MappedRoute, NormalRoute), 'MappedRoute < NormalRoute even when much more costly');
-  CheckEquals(1,  RouteSort(NormalRoute, MappedRoute), 'NormalRoute > MappedRoute even when much less costly');
-end;
-
-procedure TestTIdRoutingTable.TestRouteSortOnlyDestinationDiffers;
-var
-  LowerAddress, HigherAddress: TIdRouteEntry;
-begin
-  // "Higher" addresses appear earlier in the sorted routing table.
-
-  LowerAddress  := Self.RouteA;
-  HigherAddress := Self.RouteB;
-
-  LowerAddress.Destination  := '10.0.0.0';
-  HigherAddress.Destination := '172.0.0.0';
-
-  CheckEquals(1,  RouteSort(LowerAddress, HigherAddress), '10.0.0.0/8 < 172.0.0.0/8');
-  CheckEquals(-1, RouteSort(HigherAddress, LowerAddress), '172.0.0.0/8 > 10.0.0.0/8');
-
-  LowerAddress.Destination  := '0.0.0.0';
-  HigherAddress.Destination := '172.0.0.0';
-
-  CheckEquals(1,  RouteSort(LowerAddress, HigherAddress), '0.0.0.0/8 < 172.0.0.0/8');
-  CheckEquals(-1, RouteSort(HigherAddress, LowerAddress), '172.0.0.0/8 > 0.0.0.0/8');
-
-  LowerAddress.Destination  := '::';
-  HigherAddress.Destination := '2002:0101:0101::';
-
-  CheckEquals(1,  RouteSort(LowerAddress, HigherAddress), '::/8 < 2002:0101:0101::/8');
-  CheckEquals(-1, RouteSort(HigherAddress, LowerAddress), '2002:0101:0101::/8 > ::/8');
-end;
-
-procedure TestTIdRoutingTable.TestRouteSortOnlyGatewayDiffers;
-begin
-end;
-
-procedure TestTIdRoutingTable.TestRouteSortOnlyMaskDiffers;
-var
-  NarrowerRoute, WiderRoute: TIdRouteEntry;
-begin
-  NarrowerRoute := Self.RouteA;
-  WiderRoute    := Self.RouteB;
-
-  WiderRoute.Destination    := '10.0.0.0';
-  WiderRoute.Mask           := '255.0.0.0';
-  NarrowerRoute.Destination := '10.0.0.0';
-  NarrowerRoute.Mask        := '255.255.255.0';
-
-  CheckEquals(-1, RouteSort(NarrowerRoute, WiderRoute), '10.0.0.0/24 < 10.0.0.0/8');
-  CheckEquals(1,  RouteSort(WiderRoute, NarrowerRoute), '10.0.0.0/8 > 10.0.0.0/24');
-end;
-
-procedure TestTIdRoutingTable.TestRouteSortOnlyMetricDiffers;
-var
-  CheapRoute, ExpensiveRoute: TIdRouteEntry;
-begin
-  CheapRoute     := Self.RouteA;
-  ExpensiveRoute := Self.RouteB;
-
-  ExpensiveRoute.Metric := CheapRoute.Metric + 1;
-
-  CheckEquals(-1, RouteSort(CheapRoute, ExpensiveRoute), 'CheapRoute < ExpensiveRoute');
-  CheckEquals(1,  RouteSort(ExpensiveRoute, CheapRoute), 'ExpensiveRoute > CheapRoute');
-end;
-
-procedure TestTIdRoutingTable.TestRouteSortSameRoute;
-begin
-  CheckEquals(0, RouteSort(Self.RouteA, Self.RouteB), 'RouteA < RouteB');
-  CheckEquals(0, RouteSort(Self.RouteB, Self.RouteA), 'RouteB > RouteA');
 end;
 
 //******************************************************************************
