@@ -283,6 +283,7 @@ type
     constructor Create(UA: TIdSipUserAgent); virtual;
   end;
 
+  // I allow access to the UserAgent's REGISTER module.
   TIdSipColocatedRegistrarExtension = class(TIdSipStackInterfaceExtension)
   private
     DB:             TIdSipAbstractBindingDatabase;
@@ -293,6 +294,7 @@ type
     procedure TargetsFor(URI: TIdSipUri; Targets: TIdSipContacts);
   end;
 
+  // I allow access to the UserAgent's TIdSipLocator.
   TIdSipNameServerExtension = class(TIdSipStackInterfaceExtension)
   public
     function  LocalAddressFor(Destination: String): String;
