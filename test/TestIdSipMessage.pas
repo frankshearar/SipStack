@@ -372,6 +372,12 @@ type
     procedure AddVpnMappedRoute(Port: Cardinal = DefaultSipPort);
     procedure AddVpnRoute;
     procedure CheckAgainstDestination(ExpectedBinding: TIdSipLocation; Destination: TIdSipLocation);
+    procedure CheckAgainstDestinationUsingLocation(ExpectedBinding: TIdSipLocation;
+                                                   LocalAddress: TIdSipLocation;
+                                                   Msg: String);
+    procedure CheckAgainstDestinationUsingConnectionBindings(ExpectedBinding: TIdSipLocation;
+                                                             LocalAddress: TIdSipConnectionBindings;
+                                                             Msg: String);
     procedure CheckContact(ExpectedBinding: TIdSipLocation; SipMsg: TIdSipMessage; Msg: String = '');
     procedure CheckRequest(ExpectedBinding: TIdSipLocation; Request: TIdSipRequest; Msg: String = '');
     procedure CheckResponse(ExpectedBinding: TIdSipLocation; Response: TIdSipResponse; Msg: String = '');
@@ -5535,8 +5541,7 @@ procedure TRewriteLocationTestCase.CheckAgainstDestination(ExpectedBinding: TIdS
 var
   LocalAddress: TIdSipLocation;
   Msg:          String;
-  Request:      TIdSipRequest;
-  Response:     TIdSipResponse;
+  SocketDesc:   TIdSipConnectionBindings;
 begin
   Msg := 'From ' + ExpectedBinding.IPAddress + ' to ' + Destination.IPAddress;
 
@@ -5544,23 +5549,68 @@ begin
   try
     Self.RoutingTable.BestLocalAddress(Self.LocalBindings, Destination, LocalAddress);
 
-    Request := Self.CreateRequest;
-    try
-      Request.RewriteLocationHeaders(LocalAddress);
-      CheckRequest(ExpectedBinding, Request, Msg);
-    finally
-      Request.Free;
-    end;
+    CheckAgainstDestinationUsingLocation(ExpectedBinding, LocalAddress, Msg);
 
-    Response := Self.CreateResponse;
+    SocketDesc := TIdSipConnectionBindings.Create;
     try
-      Response.RewriteLocationHeaders(LocalAddress);
-      CheckResponse(ExpectedBinding, Response, Msg);
+      SocketDesc.LocalIP   := LocalAddress.IPAddress;
+      SocketDesc.LocalPort := LocalAddress.Port;
+      SocketDesc.Transport := LocalAddress.Transport;
+
+      CheckAgainstDestinationUsingConnectionBindings(ExpectedBinding, SocketDesc, Msg);
     finally
-      Response.Free;
+      SocketDesc.Free;
     end;
   finally
     LocalAddress.Free;
+  end;
+end;
+
+procedure TRewriteLocationTestCase.CheckAgainstDestinationUsingLocation(ExpectedBinding: TIdSipLocation;
+                                                                        LocalAddress: TIdSipLocation;
+                                                                        Msg: String);
+var
+  Request:  TIdSipRequest;
+  Response: TIdSipResponse;
+begin
+  Request := Self.CreateRequest;
+  try
+    Request.RewriteLocationHeaders(LocalAddress);
+    CheckRequest(ExpectedBinding, Request, Msg);
+  finally
+    Request.Free;
+  end;
+
+  Response := Self.CreateResponse;
+  try
+    Response.RewriteLocationHeaders(LocalAddress);
+    CheckResponse(ExpectedBinding, Response, Msg);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TRewriteLocationTestCase.CheckAgainstDestinationUsingConnectionBindings(ExpectedBinding: TIdSipLocation;
+                                                                                  LocalAddress: TIdSipConnectionBindings;
+                                                                                  Msg: String);
+var
+  Request:  TIdSipRequest;
+  Response: TIdSipResponse;                                                                                  
+begin
+  Request := Self.CreateRequest;
+  try
+    Request.RewriteLocationHeaders(LocalAddress);
+    CheckRequest(ExpectedBinding, Request, Msg);
+  finally
+    Request.Free;
+  end;
+
+  Response := Self.CreateResponse;
+  try
+    Response.RewriteLocationHeaders(LocalAddress);
+    CheckResponse(ExpectedBinding, Response, Msg);
+  finally
+    Response.Free;
   end;
 end;
 

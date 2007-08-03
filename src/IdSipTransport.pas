@@ -972,6 +972,10 @@ begin
       Inc(I);
     end;
   end;
+
+  // Maybe the response is to a request sent to a mapped route.
+  if not Result then
+    Result := Self.RoutingTable.HasRouteThrough(Via.SentBy);
 end;
 
 procedure TIdSipTransport.SetTimeout(Value: Cardinal);

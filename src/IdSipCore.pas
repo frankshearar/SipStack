@@ -3359,6 +3359,8 @@ begin
       try
         Self.UA.RoutingTable.BestLocalAddress(LocalBindings, CurrentTarget, LocalAddress);
         Request.RewriteLocationHeaders(LocalAddress);
+
+        Request.LastHop.IsUnset := LocalBindings.Contains(LocalAddress);
       finally
         LocalAddress.Free;
       end;

@@ -72,6 +72,8 @@ var
 begin
   inherited SetUp;
 
+  TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipMockUdpTransport);
+
   Self.ArbDest := TIdSipLocation.Create;
   Self.ArbDest.IPAddress := '127.0.0.1';
   Self.ArbDest.Port      := 5060;
@@ -106,6 +108,8 @@ begin
   Self.LogStream.Free;
   Self.Logger.Free;
   Self.ArbDest.Free;
+
+  TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
 
   inherited TearDown;
 end;

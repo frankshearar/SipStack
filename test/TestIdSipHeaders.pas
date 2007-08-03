@@ -5978,6 +5978,10 @@ begin
     Self.V.Value := 'SIP/7.0/SCTP localhost;branch=' + BranchMagicCookie + 'f00';
     V2.Assign(Self.V);
     Check(V2.Equals(Self.V), 'V2 not properly assigned to');
+
+    Self.V.IsUnset := true;
+    V2.Assign(Self.V);
+    Check(V2.IsUnset, 'IsUnset not copied');
   finally
     V2.Free;
   end;

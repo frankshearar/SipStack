@@ -331,9 +331,6 @@ end;
 procedure TIdSipTCPTransport.WriteMessageTo(Msg: TIdSipMessage;
                                             Connection: TIdTCPConnection);
 begin
-  if Msg.IsRequest then
-    Msg.LastHop.SentBy := Connection.Socket.Binding.IP;
-
   Connection.Write(Msg.AsString);
 end;
 
@@ -389,6 +386,10 @@ begin
     if Assigned(Connection) and Connection.Connected then begin
       Dest.LocalIP   := Connection.Socket.Binding.IP;
       Dest.LocalPort := Connection.Socket.Binding.Port;
+
+      if Msg.LastHop.IsUnset then
+        Msg.RewriteLocationHeaders(Dest);
+
       Self.WriteMessageTo(Msg, Connection)
     end
     else begin
@@ -441,6 +442,9 @@ begin
 
     Dest.LocalIP   := NewConnection.Socket.Binding.IP;
     Dest.LocalPort := NewConnection.Socket.Binding.Port;
+
+    if Msg.LastHop.IsUnset then
+      Msg.RewriteLocationHeaders(Dest);
 
     Self.RunningClients.Add(TIdSipTcpClientThread.Create(NewConnection, Msg, Self));
   except

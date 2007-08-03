@@ -33,6 +33,7 @@ type
     procedure TestAddLocation;
     procedure TestAddLocations;
     procedure TestAddLocationsFromNames;
+    procedure TestContains;
     procedure TestCount;
     procedure TestFirst;
     procedure TestFirstAddressMatch;
@@ -259,6 +260,21 @@ begin
                 'Number of records');
   finally
     Names.Free;
+  end;
+end;
+
+procedure TestTIdSipLocations.TestContains;
+var
+  Search: TIdSipLocation;
+begin
+  Search := TIdSipLocation.Create('TCP', '::1', 5060);
+  try
+    Check(not Self.Locs.Contains(Search), 'Empty list');
+
+    Self.Locs.AddLocation(Search.Transport, Search.IPAddress, Search.Port);
+    Check(Self.Locs.Contains(Search), 'Search looks for equality, not identity');
+  finally
+    Search.Free;
   end;
 end;
 

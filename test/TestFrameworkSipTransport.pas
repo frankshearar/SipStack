@@ -103,9 +103,12 @@ type
     procedure CheckSendRequestFromNonStandardPort(Sender: TObject;
                                                   R: TIdSipRequest;
                                                   ReceivedFrom: TIdSipConnectionBindings);
-    procedure CheckSendRequestTopVia(Sender: TObject;
+    procedure CheckSendRequestAutoRewriteVia(Sender: TObject;
                                      R: TIdSipRequest;
                                      ReceivedFrom: TIdSipConnectionBindings);
+    procedure CheckSendRequestSpecifiedVia(Sender: TObject;
+                                           R: TIdSipRequest;
+                                           ReceivedFrom: TIdSipConnectionBindings);
     procedure CheckSendResponseFromNonStandardPort(Sender: TObject;
                                                    R: TIdSipResponse;
                                                    ReceivedFrom: TIdSipConnectionBindings);
@@ -184,13 +187,15 @@ type
     procedure TestReceivedParamFQDNSentBy;
     procedure TestReceivedParamIPv4SentBy;
     procedure TestReceiveRequestShowsCorrectBinding;
+    procedure TestReceiveResponseFromMappedRoute;
     procedure TestReceiveResponseShowsCorrectBinding;
     procedure TestRemoveBinding;
     procedure TestRemoveBindingDoesntStartStoppedTransport;
     procedure TestRemoveBindingNoSuchBinding;
     procedure TestRemoveBindingRestartsStartedTransport;
     procedure TestSendRequest;
-    procedure TestSendRequestTopVia;
+    procedure TestSendRequestAutoRewriteVia;
+    procedure TestSendRequestSpecifiedVia;
     procedure TestSendResponse;
     procedure TestSendResponseFromNonStandardPort;
     procedure TestSendResponseUsesDestinationLocation;
@@ -649,9 +654,42 @@ begin
   end;
 end;
 
-procedure TestTIdSipTransport.CheckSendRequestTopVia(Sender: TObject;
+procedure TestTIdSipTransport.CheckSendRequestAutoRewriteVia(Sender: TObject;
                                                      R: TIdSipRequest;
                                                      ReceivedFrom: TIdSipConnectionBindings);
+begin
+  try
+    Check(Self.HighPortTransport.GetTransportType = R.LastHop.Transport,
+          Self.HighPortTransport.ClassName
+       + ': Incorrect transport specified');
+
+    Check(R.LastHop.HasBranch,
+          Self.HighPortTransport.ClassName + ': Branch parameter missing');
+    CheckEquals(ReceivedFrom.PeerIP,
+                R.LastHop.SentBy,
+                Self.HighPortTransport.ClassName
+             + ': Topmost Via header''s sent-by doesn''t match sending IP');
+    CheckEquals(ReceivedFrom.PeerPort,
+                R.LastHop.Port,
+                Self.HighPortTransport.ClassName
+             + ': Topmost Via header''s port doesn''t match sending port');
+    CheckEquals(ReceivedFrom.Transport,
+                R.LastHop.Transport,
+                Self.HighPortTransport.ClassName
+             + ': Topmost Via header''s transport doesn''t match sending transport');
+
+    Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
+procedure TestTIdSipTransport.CheckSendRequestSpecifiedVia(Sender: TObject;
+                                                           R: TIdSipRequest;
+                                                           ReceivedFrom: TIdSipConnectionBindings);
 begin
   try
     Check(Self.HighPortTransport.GetTransportType = R.LastHop.Transport,
@@ -663,7 +701,11 @@ begin
     CheckEquals(Self.SentBy,
                 R.LastHop.SentBy,
                 Self.HighPortTransport.ClassName
-             + ': Topmost Via header''s sent-by altered');
+             + ': (Set) topmost Via header''s sent-by altered by sending transport');
+    CheckEquals(ReceivedFrom.Transport,
+                R.LastHop.Transport,
+                Self.HighPortTransport.ClassName
+             + ': Topmost Via header''s transport doesn''t match sending transport');
 
     Self.ThreadEvent.SetEvent;
   except
@@ -1474,6 +1516,25 @@ begin
   Self.CheckBinding(Self.ReceivingBinding);
 end;
 
+procedure TestTIdSipTransport.TestReceiveResponseFromMappedRoute;
+const
+  GatewayAddress = '1.2.3.4';
+var
+  MockRT: TIdMockRoutingTable;
+begin
+  // We have a NAT gateway to the Internet, with external IP of 1.2.3.4.
+  MockRT := Self.HighPortTransport.RoutingTable as TIdMockRoutingTable;
+  MockRT.AddMappedRoute('0.0.0.0', '0.0.0.0', GatewayAddress);
+
+  Self.Response.LastHop.SentBy := GatewayAddress;
+
+  // If we reach CheckingResponseEvent then the response has been accepted.
+  Self.CheckingResponseEvent := Self.CheckCanReceiveResponse;
+  Self.SendMessage(Self.Response.AsString);
+
+  Self.WaitForSignaled('Message from a mapped route not accepted');
+end;
+
 procedure TestTIdSipTransport.TestReceiveResponseShowsCorrectBinding;
 begin
   // LowPortTransport sends an INVITE to HighPortTransport.
@@ -1554,11 +1615,23 @@ begin
   CheckSendBindingSet(Self.RequestSendingBinding);
 end;
 
-procedure TestTIdSipTransport.TestSendRequestTopVia;
+procedure TestTIdSipTransport.TestSendRequestAutoRewriteVia;
 begin
   Self.SentBy := 'talking-head.tessier-ashpool.co.luna';
   Self.Request.LastHop.SentBy := Self.SentBy;
-  Self.CheckingRequestEvent := Self.CheckSendRequestTopVia;
+  Self.Request.LastHop.IsUnset := true;
+  Self.CheckingRequestEvent := Self.CheckSendRequestAutoRewriteVia;
+  Self.LowPortTransport.Send(Self.Request, Self.HighPortLocation);
+
+  Self.WaitForSignaled;
+end;
+
+procedure TestTIdSipTransport.TestSendRequestSpecifiedVia;
+begin
+  Self.SentBy := 'talking-head.tessier-ashpool.co.luna';
+  Self.Request.LastHop.SentBy := Self.SentBy;
+  Self.Request.LastHop.IsUnset := false;
+  Self.CheckingRequestEvent := Self.CheckSendRequestSpecifiedVia;
   Self.LowPortTransport.Send(Self.Request, Self.HighPortLocation);
 
   Self.WaitForSignaled;

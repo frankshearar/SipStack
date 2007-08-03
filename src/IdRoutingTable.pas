@@ -95,6 +95,7 @@ type
     function  GetBestLocalAddress(DestinationIP: String): String; overload; virtual;
     procedure GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation; DefaultPort: Cardinal); overload; virtual;
     function  HasRoute(Route: TIdRouteEntry): Boolean;
+    function  HasRouteThrough(Gateway: String): Boolean;
     function  LocalAddressFor(DestinationIP: String): String; overload;
     procedure LocalAddressFor(DestinationIP: String; LocalAddress: TIdSipLocation; DefaultPort: Cardinal = 0); overload;
     function  MappedAddressFor(DestinationIP: String): String; overload;
@@ -559,6 +560,21 @@ end;
 function TIdRoutingTable.HasRoute(Route: TIdRouteEntry): Boolean;
 begin
   Result := Self.InternalHasRoute(Self.Routes, Route);
+end;
+
+function TIdRoutingTable.HasRouteThrough(Gateway: String): Boolean;
+var
+  I: Integer;
+begin
+  // Given an address Gateway, do we have any mapped routes using that address?
+  Result := false;
+
+  for I := 0 to Self.RouteCount - 1 do begin
+    if (Self.RouteAt(I).Gateway = Gateway) then begin
+      Result := true;
+      Break;
+    end;
+  end;
 end;
 
 function TIdRoutingTable.LocalAddressFor(DestinationIP: String): String;

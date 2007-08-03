@@ -698,8 +698,8 @@ type
   // part of the stack other than the part that instantiated me. For instance,
   // if you send an INVITE the Transaction-User layer doesn't know what IP
   // address or FQDN to put in the Contact header: setting IsUnset to true means
-  // that the Transaction layer knows to set me to an IP address/FQDN
-  // appropriate for contacting a particular UA.
+  // that the Transaction or Transport layer knows to set me to an IP
+  // address/FQDN appropriate for contacting a particular UA.
   TIdSipContactHeader = class(TIdSipAddressHeader)
   private
     fIsUnset:     Boolean;
@@ -1063,8 +1063,15 @@ type
     function GetName: String; override;
   end;
 
+  // IsUnset is a marker, telling you whether or not I need setting by some
+  // part of the stack other than the part that instantiated me. For instance,
+  // if you send an INVITE the Transaction-User layer doesn't know what IP
+  // address or FQDN to put in the Contact header: setting IsUnset to true means
+  // that the Transaction or Transport layer knows to set me to an IP
+  // address/FQDN appropriate for contacting a particular UA.
   TIdSipViaHeader = class(TIdSipHeader)
   private
+    fIsUnset:    Boolean;
     fSipVersion: String;
     fTransport:  String;
     HostAndPort: TIdSipHostAndPort;
@@ -1112,6 +1119,7 @@ type
     function  UsesSecureTransport: Boolean;
 
     property Branch:     String   read GetBranch write SetBranch;
+    property IsUnset:    Boolean  read fIsUnset write fIsUnset;
     property SentBy:     String   read GetSentBy write SetSentBy;
     property Maddr:      String   read GetMaddr write SetMaddr;
     property Port:       Cardinal read GetPort write SetPort;
@@ -1475,7 +1483,8 @@ type
     procedure ReadBody(Src: TStream);
     procedure RemoveHeader(Header: TIdSipHeader);
     procedure RemoveAllHeadersNamed(const Name: String);
-    procedure RewriteLocationHeaders(LocalAddress: TIdSipLocation); virtual;
+    procedure RewriteLocationHeaders(LocalAddress: TIdSipLocation); overload;
+    procedure RewriteLocationHeaders(Binding: TIdSipConnectionBindings); overload; virtual;
     function  RequiresExtension(const Extension: String): Boolean;
     function  SupportsExtension(const Extension: String): Boolean;
     function  WantsAllowEventsHeader: Boolean; virtual;
@@ -1590,7 +1599,7 @@ type
     function  MatchCancel(Cancel: TIdSipRequest): Boolean;
     function  ProxyAuthorizationFor(const Realm: String): TIdSipProxyAuthorizationHeader;
     function  RequiresResponse: Boolean;
-    procedure RewriteLocationHeaders(LocalAddress: TIdSipLocation); override;
+    procedure RewriteLocationHeaders(Binding: TIdSipConnectionBindings); override;
     function  WantsAllowEventsHeader: Boolean; override;
 
     property Event:             TIdSipEventHeader             read GetEvent write SetEvent;
@@ -1669,7 +1678,7 @@ type
     function  IsRequest: Boolean; override;
     function  IsTrying: Boolean;
     function  MalformedException: EBadMessageClass; override;
-    procedure RewriteLocationHeaders(LocalAddress: TIdSipLocation); override;
+    procedure RewriteLocationHeaders(Binding: TIdSipConnectionBindings); override;
     function  WantsAllowEventsHeader: Boolean; override;
     function  WillEstablishDialog(Request: TIdSipRequest): Boolean; overload;
 
@@ -6931,6 +6940,8 @@ begin
 
     // And we use the usual way of setting everything else.
     Self.Parameters := V.Parameters;
+
+    Self.IsUnset := V.IsUnset;
   end
   else
     inherited Assign(Src);
@@ -8489,6 +8500,21 @@ begin
 end;
 
 procedure TIdSipMessage.RewriteLocationHeaders(LocalAddress: TIdSipLocation);
+var
+  Binding: TIdSipConnectionBindings;
+begin
+  Binding := TIdSipConnectionBindings.Create;
+  try
+    Binding.LocalIP   := LocalAddress.IPAddress;
+    Binding.LocalPort := LocalAddress.Port;
+    Binding.Transport := LocalAddress.Transport;
+    Self.RewriteLocationHeaders(Binding);
+  finally
+    Binding.Free;
+  end;
+end;
+
+procedure TIdSipMessage.RewriteLocationHeaders(Binding: TIdSipConnectionBindings);
 begin
 end;
 
@@ -9330,7 +9356,7 @@ begin
   Result := not Self.IsAck;
 end;
 
-procedure TIdSipRequest.RewriteLocationHeaders(LocalAddress: TIdSipLocation);
+procedure TIdSipRequest.RewriteLocationHeaders(Binding: TIdSipConnectionBindings);
 begin
   // Some messages (like CANCEL) don't have Contact headers.
   if Self.HasContact then begin
@@ -9340,17 +9366,17 @@ begin
     // On the other hand, the Transaction-User layer doesn't know what IP
     // address to put in the INVITE's Contact header.
     if Self.FirstContact.IsUnset then begin
-      Self.FirstContact.Address.Host := LocalAddress.IPAddress;
-      Self.FirstContact.Address.Port := LocalAddress.Port;
+      Self.FirstContact.Address.Host := Binding.LocalIP;
+      Self.FirstContact.Address.Port := Binding.LocalPort;
       Self.FirstContact.IsUnset := false;
     end;
   end;
 
-  Self.LastHop.SentBy    := LocalAddress.IPAddress;
-  Self.LastHop.Transport := LocalAddress.Transport;
+  Self.LastHop.SentBy    := Binding.LocalIP;
+  Self.LastHop.Transport := Binding.Transport;
 
-  if TIdSipTransportRegistry.NonstandardPort(Self.LastHop.Transport, LocalAddress.Port) then
-    Self.LastHop.Port := LocalAddress.Port;
+  if TIdSipTransportRegistry.NonstandardPort(Self.LastHop.Transport, Binding.LocalPort) then
+    Self.LastHop.Port := Binding.LocalPort;
 end;
 
 function TIdSipRequest.WantsAllowEventsHeader: Boolean;
@@ -9974,7 +10000,7 @@ begin
   Result := EBadResponse;
 end;
 
-procedure TIdSipResponse.RewriteLocationHeaders(LocalAddress: TIdSipLocation);
+procedure TIdSipResponse.RewriteLocationHeaders(Binding: TIdSipConnectionBindings);
 begin
   // Some messages (like CANCEL) don't have Contact headers.
   //
@@ -9983,8 +10009,8 @@ begin
   // mailto URI, this method fails.
   if Self.HasContact then begin
     if Self.FirstContact.IsUnset then begin
-      Self.FirstContact.Address.Host := LocalAddress.IPAddress;
-      Self.FirstContact.Address.Port := LocalAddress.Port;
+      Self.FirstContact.Address.Host := Binding.LocalIP;
+      Self.FirstContact.Address.Port := Binding.LocalPort;
       Self.FirstContact.IsUnset := false;
     end;
   end;

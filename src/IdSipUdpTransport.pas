@@ -166,6 +166,9 @@ begin
     Dest.LocalIP   := B.IP;
     Dest.LocalPort := B.Port;
 
+    if M.LastHop.IsUnset then
+      M.RewriteLocationHeaders(Dest);
+
     S := M.AsString;
     B.SendTo(Dest.PeerIP, Dest.PeerPort, S[1], Length(S));
   end;

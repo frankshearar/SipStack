@@ -111,6 +111,7 @@ type
   published
     procedure TestAddMappedRouteAndCount;
     procedure TestHasRoute;
+    procedure TestHasRouteThrough;
     procedure TestLocalAddressForInternetGateway;
     procedure TestLocalAddressForLocationMappedRouteToInternet;
     procedure TestLocalAddressForLocationMappedRouteToInternetAndVpn;
@@ -840,6 +841,17 @@ begin
 
   Self.RouteB.Destination := TIdIPAddressParser.IncIPAddress(Self.RouteB.Destination);
   Check(not Self.RT.HasRoute(Self.RouteB), 'Route not in table still found');
+end;
+
+procedure TestTIdRoutingTable.TestHasRouteThrough;
+begin
+  Check(not Self.RT.HasRouteThrough(Self.InternetGateway), 'No mapped routes');
+
+  Self.RT.AddMappedRoute(Self.VpnRoute, Self.VpnMask, Self.VpnIP, Self.VpnPort);
+  Check(not Self.RT.HasRouteThrough(Self.InternetGateway), 'Mapped route to VPN');
+
+  Self.RT.AddMappedRoute(Self.InternetRoute, Self.InternetMask, Self.InternetGateway, Self.InternetPort);
+  Check(Self.RT.HasRouteThrough(Self.InternetGateway), 'Mapped route to Internet (and VPN)');
 end;
 
 procedure TestTIdRoutingTable.TestLocalAddressForInternetGateway;

@@ -439,6 +439,9 @@ begin
   if Assigned(SendingBinding) then begin
     Dest.LocalIP   := SendingBinding.IP;
     Dest.LocalPort := SendingBinding.Port;
+
+    if M.LastHop.IsUnset then
+      M.RewriteLocationHeaders(Dest);
   end
   else begin
     Assert(Self.BindingCount > 0, 'This MockTransport has no bindings on which to send this message');

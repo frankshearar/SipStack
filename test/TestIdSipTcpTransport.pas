@@ -61,6 +61,7 @@ type
     procedure TestGetTransportType;
     procedure TestIsReliable;
     procedure TestIsSecure;
+    procedure TestSendRequestOverExistingConnection;
     procedure TestSendResponsesClosedConnection;
     procedure TestSendResponsesClosedConnectionReceivedParam;
     procedure TestSendResponsesOpenConnection;
@@ -499,6 +500,40 @@ end;
 procedure TestTIdSipTCPTransport.TestIsSecure;
 begin
   Check(not Self.HighPortTransport.IsSecure, 'TCP transport marked as secure');
+end;
+
+procedure TestTIdSipTCPTransport.TestSendRequestOverExistingConnection;
+var
+  FirstBinding: TIdSipConnectionBindings;
+  Request:      TIdSipRequest;
+begin
+  // If a TCP connection exists to a remote party, we should reuse that
+  // connection.
+
+  Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
+
+  Request := TIdSipMessage.ReadRequestFrom(LocalLoopRequest);
+  try
+    FirstBinding := TIdSipConnectionBindings.Create;
+    try
+      Self.LowPortTransport.Send(Request, Self.HighPortLocation);
+      Self.WaitForSignaled;
+      FirstBinding.Assign(Self.ReceivingBinding);
+
+      Self.ReceivedRequest := false;
+
+      Self.LowPortTransport.Send(Request, Self.HighPortLocation);
+      Self.WaitForSignaled;
+      Check(Self.ReceivedRequest, '2nd request not received');
+      CheckEquals(FirstBinding.AsString,
+                  Self.ReceivingBinding.AsString,
+                  'Same binding (hence connection) not used');
+    finally
+      FirstBinding.Free;
+    end;
+  finally
+    Request.Free;
+  end;
 end;
 
 procedure TestTIdSipTCPTransport.TestSendResponsesClosedConnection;
