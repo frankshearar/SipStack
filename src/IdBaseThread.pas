@@ -27,7 +27,7 @@ type
     procedure DoOnException(E: Exception);
   protected
     procedure Execute; override;
-    procedure Run; virtual; abstract;
+    procedure Run; virtual;
   public
     constructor Create(CreateSuspended: Boolean = True); virtual;
 
@@ -76,6 +76,12 @@ begin
     on E: Exception do
       Self.DoOnException(E);
   end;
+end;
+
+procedure TIdBaseThread.Run;
+begin
+  // By default, do nothing. If you don't override this method, the thread
+  // simply terminates immediately.
 end;
 
 //* TIdBaseThread Private methods **********************************************

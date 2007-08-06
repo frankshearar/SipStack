@@ -240,9 +240,9 @@ type
     procedure DoOnTransportError(Msg: TIdSipMessage;
                                  const Reason: String); virtual;
     procedure ExceptionRaised(E: Exception);
-    function  IsClient: Boolean; virtual; abstract;
-    function  IsInvite: Boolean; virtual; abstract;
-    function  IsNull: Boolean; virtual; abstract;
+    function  IsClient: Boolean; virtual;
+    function  IsInvite: Boolean; virtual;
+    function  IsNull: Boolean; virtual;
     function  IsServer: Boolean;
     function  IsTerminated: Boolean;
     function  Match(Msg: TIdSipMessage): Boolean; virtual;
@@ -299,7 +299,6 @@ type
                        InitialRequest: TIdSipRequest); override;
     destructor  Destroy; override;
 
-    function  IsClient: Boolean; override;
     function  Match(Msg: TIdSipMessage): Boolean; override;
     procedure NotifyOfFailure(const Reason: String); overload; override;
     procedure SendResponse(R: TIdSipResponse); override;
@@ -329,7 +328,6 @@ type
     procedure FireTimerH;
     procedure FireTimerI;
     function  IsInvite: Boolean; override;
-    function  IsNull: Boolean; override;
     procedure ReceiveRequest(R: TIdSipRequest;
                              Binding: TIdSipConnectionBindings); override;
     procedure SendResponse(R: TIdSipResponse); override;
@@ -349,8 +347,6 @@ type
     constructor Create(Dispatcher: TIdSipTransactionDispatcher;
                        InitialRequest: TIdSipRequest); override;
     procedure FireTimerJ;
-    function  IsInvite: Boolean; override;
-    function  IsNull: Boolean; override;
     procedure ReceiveRequest(R: TIdSipRequest;
                              Binding: TIdSipConnectionBindings); override;
     procedure SendResponse(R: TIdSipResponse); override;
@@ -386,7 +382,6 @@ type
     procedure FireTimerB;
     procedure FireTimerD;
     function  IsInvite: Boolean; override;
-    function  IsNull: Boolean; override;
     procedure ReceiveResponse(R: TIdSipResponse;
                               Binding: TIdSipConnectionBindings); override;
     procedure SendRequest(Dest: TIdSipLocation); override;
@@ -413,8 +408,6 @@ type
     procedure FireTimerE;
     procedure FireTimerF;
     procedure FireTimerK;
-    function  IsInvite: Boolean; override;
-    function  IsNull: Boolean; override;
     procedure ReceiveResponse(R: TIdSipResponse;
                               Binding: TIdSipConnectionBindings); override;
     procedure SendRequest(Dest: TIdSipLocation); override;
@@ -428,8 +421,6 @@ type
     constructor Create(Dispatcher: TIdSipTransactionDispatcher;
                        InitialRequest: TIdSipRequest); override;
 
-    function IsClient: Boolean; override;
-    function IsInvite: Boolean; override;
     function IsNull: Boolean; override;
   end;
 
@@ -1317,6 +1308,21 @@ begin
                               [Self.ClassName, E.ClassName, E.Message]));
 end;
 
+function TIdSipTransaction.IsClient: Boolean;
+begin
+  Result := false;
+end;
+
+function TIdSipTransaction.IsInvite: Boolean;
+begin
+  Result := false;
+end;
+
+function TIdSipTransaction.IsNull: Boolean;
+begin
+  Result := false;
+end;
+
 function TIdSipTransaction.IsServer: Boolean;
 begin
   Result := not Self.IsClient;
@@ -1560,11 +1566,6 @@ begin
   inherited Destroy;
 end;
 
-function TIdSipServerTransaction.IsClient: Boolean;
-begin
-  Result := false;
-end;
-
 function TIdSipServerTransaction.Match(Msg: TIdSipMessage): Boolean;
 begin
   Result := inherited Match(Msg);
@@ -1746,11 +1747,6 @@ begin
   Result := true;
 end;
 
-function TIdSipServerInviteTransaction.IsNull: Boolean;
-begin
-  Result := false;
-end;
-
 procedure TIdSipServerInviteTransaction.ReceiveRequest(R: TIdSipRequest;
                                                        Binding: TIdSipConnectionBindings);
 begin
@@ -1898,16 +1894,6 @@ begin
   Self.ChangeToTerminated(true);
 end;
 
-function TIdSipServerNonInviteTransaction.IsInvite: Boolean;
-begin
-  Result := false;
-end;
-
-function TIdSipServerNonInviteTransaction.IsNull: Boolean;
-begin
-  Result := false;
-end;
-
 procedure TIdSipServerNonInviteTransaction.ReceiveRequest(R: TIdSipRequest;
                                                           Binding: TIdSipConnectionBindings);
 begin
@@ -2039,11 +2025,6 @@ end;
 function TIdSipClientInviteTransaction.IsInvite: Boolean;
 begin
   Result := true;
-end;
-
-function TIdSipClientInviteTransaction.IsNull: Boolean;
-begin
-  Result := false;
 end;
 
 procedure TIdSipClientInviteTransaction.ReceiveResponse(R: TIdSipResponse;
@@ -2226,16 +2207,6 @@ begin
   Self.ChangeToTerminated(true);
 end;
 
-function TIdSipClientNonInviteTransaction.IsInvite: Boolean;
-begin
-  Result := false;
-end;
-
-function TIdSipClientNonInviteTransaction.IsNull: Boolean;
-begin
-  Result := false;
-end;
-
 procedure TIdSipClientNonInviteTransaction.ReceiveResponse(R: TIdSipResponse;
                                                            Binding: TIdSipConnectionBindings);
 begin
@@ -2363,16 +2334,6 @@ begin
   finally
     NothingRequest.Free;
   end;
-end;
-
-function TIdSipNullTransaction.IsClient: Boolean;
-begin
-  Result := false;
-end;
-
-function TIdSipNullTransaction.IsInvite: Boolean;
-begin
-  Result := false;
 end;
 
 function TIdSipNullTransaction.IsNull: Boolean;

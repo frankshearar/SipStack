@@ -40,7 +40,7 @@ type
     function  MatchEvent(Event: Pointer): Boolean; virtual;
     procedure Schedule(Timer: TIdTimerQueue; Data: TObject; Delay: Cardinal);
     function  TimeToWait: Cardinal;
-    procedure Trigger; virtual; abstract;
+    procedure Trigger; virtual;
 
     property Data:          TObject   read fData write fData;
     property DebugWaitTime: Cardinal  read fDebugWaitTime write fDebugWaitTime;
@@ -312,6 +312,11 @@ begin
     Result := 0
   else
     Result := MilliSecondsBetween(Now, Self.TriggerTime);
+end;
+
+procedure TIdWait.Trigger;
+begin
+  // By default, do nothing.
 end;
 
 //******************************************************************************

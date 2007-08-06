@@ -320,9 +320,9 @@ type
 
     procedure Assign(Src: TPersistent); override;
     function  Copy: TIdRTPBasePacket; virtual; abstract;
-    function  IsRTCP: Boolean; virtual; abstract;
-    function  IsRTP: Boolean; virtual; abstract;
-    function  IsValid: Boolean; virtual; abstract;
+    function  IsRTCP: Boolean; virtual;
+    function  IsRTP: Boolean; virtual;
+    function  IsValid: Boolean; virtual;
     procedure PrepareForTransmission(Session: TIdRTPSession); virtual;
     procedure PrintOn(Dest: TStream); virtual; abstract;
     procedure ReadFrom(Src: TStream); virtual; abstract;
@@ -365,7 +365,6 @@ type
     function  Copy: TIdRTPBasePacket; override;
     function  CollidesWith(SSRC: Cardinal): Boolean;
     function  GetAllSrcIDs: TCardinalDynArray;
-    function  IsRTCP: Boolean; override;
     function  IsRTP: Boolean; override;
     function  IsValid: Boolean; override;
     procedure PrepareForTransmission(Session: TIdRTPSession); override;
@@ -407,7 +406,6 @@ type
     function IsBye: Boolean; virtual;
     function IsReceiverReport: Boolean; virtual;
     function IsRTCP: Boolean; override;
-    function IsRTP: Boolean; override;
     function IsSenderReport: Boolean; virtual;
     function IsSourceDescription: Boolean; virtual;
     function IsValid: Boolean; override;
@@ -2534,6 +2532,21 @@ begin
   end;
 end;
 
+function TIdRTPBasePacket.IsRTCP: Boolean;
+begin
+  Result := false;
+end;
+
+function TIdRTPBasePacket.IsRTP: Boolean;
+begin
+  Result := false;
+end;
+
+function TIdRTPBasePacket.IsValid: Boolean;
+begin
+  Result := false;
+end;
+
 procedure TIdRTPBasePacket.PrepareForTransmission(Session: TIdRTPSession);
 begin
   Self.SyncSrcID := Session.SyncSrcID;
@@ -2647,11 +2660,6 @@ begin
 
   for I := 0 to Self.CsrcCount - 1 do
     Result[I + 1] := Self.CsrcIDs[I];
-end;
-
-function TIdRTPPacket.IsRTCP: Boolean;
-begin
-  Result := false;
 end;
 
 function TIdRTPPacket.IsRTP: Boolean;
@@ -2906,11 +2914,6 @@ end;
 function TIdRTCPPacket.IsRTCP: Boolean;
 begin
   Result := true;
-end;
-
-function TIdRTCPPacket.IsRTP: Boolean;
-begin
-  Result := false;
 end;
 
 function TIdRTCPPacket.IsSenderReport: Boolean;
