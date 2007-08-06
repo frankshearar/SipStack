@@ -977,7 +977,7 @@ begin
 
   if not Result then begin
     // Or does it match a mapped route?
-//    Result := Self.RoutingTable.HasMapFor(Via.SentBy)
+    Result := Self.RoutingTable.HasRouteThrough(Via.SentBy)
   end;
 end;
 
