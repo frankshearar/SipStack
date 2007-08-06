@@ -961,11 +961,13 @@ function TIdSipTransport.SentByIsRecognised(Via: TIdSipViaHeader): Boolean;
 var
   I: Integer;
 begin
+  // Does the sent-by match our hostname?
   Result := IsEqual(Via.SentBy, Self.HostName);
 
   I := 0;
 
   if not Result then begin
+    // Or does it match a binding?
     while (I < Self.Bindings.Count) and not Result do begin
       Result := Result or (Self.Bindings[I].IP = Via.SentBy);
 
@@ -973,9 +975,10 @@ begin
     end;
   end;
 
-  // Maybe the response is to a request sent to a mapped route.
-  if not Result then
-    Result := Self.RoutingTable.HasRouteThrough(Via.SentBy);
+  if not Result then begin
+    // Or does it match a mapped route?
+//    Result := Self.RoutingTable.HasMapFor(Via.SentBy)
+  end;
 end;
 
 procedure TIdSipTransport.SetTimeout(Value: Cardinal);
