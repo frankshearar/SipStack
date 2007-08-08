@@ -386,6 +386,7 @@ type
     procedure TestModifyDuringModification;
     procedure TestModifyGlareInbound;
     procedure TestModifyGlareOutbound;
+    procedure TestModifyNetworkFailure;
     procedure TestModifyRejected;
     procedure TestModifyRejectedWithTimeout;
     procedure TestModifyWaitTime;
@@ -4301,6 +4302,30 @@ begin
   CheckEquals(Body,
               Self.LastSentRequest.Body,
               'Wrong message sent?');
+end;
+
+procedure TestTIdSipSession.TestModifyNetworkFailure;
+var
+  OldSessionCount: Integer;
+  Session:         TIdSipSession;
+  L:               TIdSipTestActionListener;
+begin
+  Session := Self.CreateAndEstablishSession;
+
+  L := TIdSipTestActionListener.Create;
+  try
+    OldSessionCount := Self.Core.SessionCount;
+
+    Session.AddActionListener(L);
+    Session.Modify('new session desc', PlainTextMimeType);
+    Self.Dispatcher.Transport.FireOnException(Self.LastSentRequest, EIdConnectTimeout, '10051', 'Host not found');
+
+    Check(L.NetworkFailed, 'Listener not notified of failure: did the ReInvite notify the Session?');
+    Check(Self.Core.SessionCount < OldSessionCount, 'Session not torn down');
+  finally
+    // We don't need to remove the listener here because the Session's dead.
+    L.Free;
+  end;
 end;
 
 procedure TestTIdSipSession.TestModifyRejected;

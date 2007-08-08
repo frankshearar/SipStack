@@ -2281,6 +2281,7 @@ begin
   ReInvite.InOutboundSession := Self.IsOutboundCall;
   ReInvite.Offer             := Offer;
   ReInvite.OriginalInvite    := Self.InitialRequest;
+  ReInvite.AddActionListener(Self);
   ReInvite.AddOwnedActionListener(Self);
   ReInvite.AddInviteListener(Self);
   ReInvite.Send;
