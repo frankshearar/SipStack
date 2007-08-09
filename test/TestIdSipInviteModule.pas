@@ -763,6 +763,20 @@ type
     procedure TestTriggerWithTemporaryTrue;
   end;
 
+  TestTIdSipSessionRejectWait = class(TTestCaseTU)
+  private
+    L:            TIdSipTestInviteModuleListener;
+    ReasonPhrase: String;
+    Session:      TIdSipInboundSession;
+    StatusCode:   Cardinal;
+    Wait:         TIdSipSessionRejectWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTrigger;
+  end;
+
 implementation
 
 uses
@@ -796,6 +810,7 @@ begin
   Result.AddTest(TestTIdSipProgressedSessionMethod.Suite);
   Result.AddTest(TestTIdSipSessionReferralMethod.Suite);
   Result.AddTest(TestTIdSipSessionRedirectWait.Suite);
+  Result.AddTest(TestTIdSipSessionRejectWait.Suite);
 end;
 
 //******************************************************************************
@@ -8293,7 +8308,7 @@ begin
               'Unexpected response sent');
   CheckEquals(Self.Target.Address.AsString,
               Self.LastSentResponse.FirstContact.Address.AsString,
-              'Contact doesn''t contain the redirect target');            
+              'Contact doesn''t contain the redirect target');
 end;
 
 procedure TestTIdSipSessionRedirectWait.TestTriggerWithTemporaryTrue;
@@ -8306,6 +8321,51 @@ begin
   CheckEquals(TIdSipInboundInvite.RedirectStatusCode(Self.Wait.Temporary),
               Self.LastSentResponse.StatusCode,
               'Unexpected response sent');
+end;
+
+//******************************************************************************
+//* TestTIdSipSessionRejectWait                                                *
+//******************************************************************************
+//* TestTIdSipSessionRejectWait Public methods *********************************
+
+procedure TestTIdSipSessionRejectWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.StatusCode := SIPBusyHere;
+  Self.ReasonPhrase := 'Call back later';
+
+  Self.L := TIdSipTestInviteModuleListener.Create;
+  Self.Core.InviteModule.AddListener(Self.L);
+
+  Self.ReceiveInvite;
+  Self.Session := Self.L.SessionParam;
+
+  Self.Wait := TIdSipSessionRejectWait.Create;
+  Self.Wait.Session   := Self.Session;
+  Self.Wait.StatusCode := Self.StatusCode;
+  Self.Wait.StatusText := Self.ReasonPhrase;
+end;
+
+procedure TestTIdSipSessionRejectWait.TearDown;
+begin
+  Self.Wait.Free;
+  Self.Core.InviteModule.RemoveListener(Self.L);
+  Self.L.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipSessionRejectWait Published methods ******************************
+
+procedure TestTIdSipSessionRejectWait.TestTrigger;
+begin
+  Self.MarkSentResponseCount;
+  Self.Wait.Trigger;
+  CheckResponseSent('No response sent');
+
+  CheckEquals(Self.StatusCode,   Self.LastSentResponse.StatusCode, 'Unexpected Status-Code');
+  CheckEquals(Self.ReasonPhrase, Self.LastSentResponse.StatusText, 'Unexpected ReasonPhrase');
 end;
 
 initialization
