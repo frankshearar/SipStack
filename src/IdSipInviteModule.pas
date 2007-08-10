@@ -907,6 +907,7 @@ begin
   Self.AcceptsMethodsList.Add(MethodCancel);
   Self.AcceptsMethodsList.Add(MethodInvite);
 
+  // cf RFC 3261, section 13.3.1.1
   Self.ProgressResendInterval := OneMinute*1000;
 end;
 
@@ -1459,14 +1460,8 @@ end;
 
 procedure TIdSipInboundInvite.Ring;
 begin
-  if not Self.SentFinalResponse then begin
-    Self.SendSimpleResponse(SIPRinging);
-
-    Self.UA.ScheduleEvent(TIdSipInboundInviteSessionProgress,
-                          Self.ProgressResendInterval,
-                          Self.InitialRequest,
-                          Self.ID);
-  end;
+  if not Self.SentFinalResponse then
+    Self.SendProvisional(SIPRinging, RSSIPRinging);
 end;
 
 procedure TIdSipInboundInvite.SendProvisional(StatusCode: Cardinal;
@@ -1478,6 +1473,9 @@ begin
   if not Self.SentFinalResponse then begin
     Self.SendSimpleResponse(StatusCode, Description);
 
+    // cf RFC 3261, section 13.3.1.1. We resend periodic provisional responses
+    // to keep SIP proxies from cancelling a transaction that's taking a long
+    // while to complete.
     Self.UA.ScheduleEvent(TIdSipInboundInviteSessionProgress,
                           Self.ProgressResendInterval,
                           Self.InitialRequest,
