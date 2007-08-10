@@ -160,6 +160,9 @@ type
     procedure TestRegistrationFailsWithRetry;
     procedure TestResubscription;
     procedure TestSendNonExistentHandle;
+    procedure TestSendProvisional;
+    procedure TestSendProvisionalWithInvalidHandle;
+    procedure TestSendProvisionalWithNonExistentHandle;
 //    procedure TestSessionModifiedByRemoteSide;
     procedure TestStackListensToSubscribeModule;
     procedure TestStackListensToSubscribeModuleAfterReconfigure;
@@ -1946,6 +1949,52 @@ const
 begin
   try
     Self.Intf.Send(ArbValue);
+    Fail('No exception raised for a non-existent handle');
+  except
+    on EInvalidHandle do;
+  end;
+end;
+
+procedure TestTIdSipStackInterface.TestSendProvisional;
+const
+  ReasonPhrase = 'Some progress';
+  StatusCode   = SIPQueued;
+begin
+  Self.ReceiveInviteWithOffer(Self.RemoteOffer, Self.RemoteMimeType);
+  Self.ProcessAllPendingNotifications;
+  CheckNotificationReceived(TIdInboundCallData, 'No inbound call notification received');
+
+  Self.MarkSentResponseCount;
+  Self.Intf.SendProvisional(Self.LastEventOfType(TIdInboundCallData).Handle, StatusCode, ReasonPhrase);
+  Self.TimerQueue.TriggerAllEventsOfType(TIdSipSendProvisionalWait);
+  CheckResponseSent('No response sent');
+
+  CheckEquals(StatusCode,   Self.LastSentResponse.StatusCode, 'Status-Code ignored');
+  CheckEquals(ReasonPhrase, Self.LastSentResponse.StatusText, 'Reason-Phrase ignored');
+end;
+
+procedure TestTIdSipStackInterface.TestSendProvisionalWithInvalidHandle;
+var
+  H: TIdSipHandle;
+begin
+  H := Self.Intf.MakeCall(Self.From, Self.Destination, '', '');
+
+  try
+    // Of course, you can't send a progress response for an outbound call.
+    Self.Intf.SendProvisional(H);
+
+    Fail('No exception raised for an invalid handle');
+  except
+    on EInvalidHandle do;
+  end;
+end;
+
+procedure TestTIdSipStackInterface.TestSendProvisionalWithNonExistentHandle;
+const
+  ArbValue = 42;
+begin
+  try
+    Self.Intf.SendProvisional(ArbValue);
     Fail('No exception raised for a non-existent handle');
   except
     on EInvalidHandle do;

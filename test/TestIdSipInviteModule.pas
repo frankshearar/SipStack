@@ -177,8 +177,8 @@ type
     procedure TestResendOk;
     procedure TestRing;
     procedure TestRingWithGruu;
-    procedure TestSendSessionProgress;
-    procedure TestSendSessionProgressWithGruu;
+    procedure TestSendProvisional;
+    procedure TestSendProvisionalWithGruu;
     procedure TestSendTrying;
     procedure TestTerminateAfterAccept;
     procedure TestTerminateBeforeAccept;
@@ -412,6 +412,8 @@ type
     Session:                TIdSipInboundSession;
 
     procedure CheckRedirectCall(TemporaryMove: Boolean);
+    procedure CheckSendProvisionalWithInappropriateStatusCode(Session: TIdSipInboundSession;
+                                                 StatusCode: Cardinal);
     procedure OnNewData(Data: TIdRTPPayload;
                         Binding: TIdConnection);
     procedure OnSendRequest(Request: TIdSipRequest;
@@ -471,6 +473,12 @@ type
     procedure TestRemoveSessionListener;
     procedure TestRing;
     procedure TestRingWithGruu;
+    procedure TestSendProvisional;
+    procedure TestSendProvisionalAfterDialogEstablished;
+    procedure TestSendProvisionalAfterEarlyDialogEstablished;
+    procedure TestSendProvisionalWithDefaults;
+    procedure TestSendProvisionalWithGruu;
+    procedure TestSendProvisionalWithInappropriateStatusCode;
     procedure TestSupportsExtension;
     procedure TestTerminate;
     procedure TestTerminateAlmostEstablishedSession;
@@ -763,6 +771,20 @@ type
     procedure TestTriggerWithTemporaryTrue;
   end;
 
+  TestTIdSipSendProvisionalWait = class(TTestCaseTU)
+  private
+    L:          TIdSipTestInviteModuleListener;
+    Session:    TIdSipInboundSession;
+    StatusCode: Cardinal;
+    StatusText: String;
+    Wait:       TIdSipSendProvisionalWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTrigger;
+  end;
+  
   TestTIdSipSessionRejectWait = class(TTestCaseTU)
   private
     L:            TIdSipTestInviteModuleListener;
@@ -811,6 +833,7 @@ begin
   Result.AddTest(TestTIdSipSessionReferralMethod.Suite);
   Result.AddTest(TestTIdSipSessionRedirectWait.Suite);
   Result.AddTest(TestTIdSipSessionRejectWait.Suite);
+Result.AddTest(TestTIdSipSendProvisionalWait.Suite);  
 end;
 
 //******************************************************************************
@@ -2432,19 +2455,25 @@ begin
         '180 Ringing lacks a Contact with a "grid" parameter');
 end;
 
-procedure TestTIdSipInboundInvite.TestSendSessionProgress;
+procedure TestTIdSipInboundInvite.TestSendProvisional;
+const
+  ReasonPhrase = 'Progress of some kind has been made';
+  StatusCode   = SIPQueued;
 begin
   Self.MarkSentResponseCount;
-  Self.InviteAction.SendSessionProgress;
+  Self.InviteAction.SendProvisional(StatusCode, ReasonPhrase);
 
   CheckResponseSent('No session progress response sent');
 
-  CheckEquals(SIPSessionProgress,
+  CheckEquals(StatusCode,
               Self.LastSentResponse.StatusCode,
               'Unexpected Status-Code');
+  CheckEquals(ReasonPhrase,
+              Self.LastSentResponse.StatusText,
+              'Unexpected Reason-Phrase');
 end;
 
-procedure TestTIdSipInboundInvite.TestSendSessionProgressWithGruu;
+procedure TestTIdSipInboundInvite.TestSendProvisionalWithGruu;
 var
   Response: TIdSipResponse;
 begin
@@ -2453,7 +2482,7 @@ begin
   Self.InviteAction.Ring;
 
   Self.MarkSentResponseCount;
-  Self.InviteAction.SendSessionProgress;
+  Self.InviteAction.SendProvisional(SIPSessionProgress, RSSIPSessionProgress);
 
   CheckResponseSent('No session progress response sent');
 
@@ -2461,9 +2490,9 @@ begin
   Check(Response.HasHeader(SupportedHeaderFull),
         'Response lacks a Supported header');
   Check(Response.SupportsExtension(ExtensionGruu),
-        'Supported header lacks indication of GRUU support');
+        'Supported header in Response lacks indication of GRUU support');
   Check(Response.FirstContact.Address.HasGrid,
-        '183 Session Progress lacks a Contact with a "grid" parameter');
+        'Response lacks a Contact with a "grid" parameter');
 end;
 
 procedure TestTIdSipInboundInvite.TestSendTrying;
@@ -4867,6 +4896,17 @@ begin
   end;
 end;
 
+procedure TestTIdSipInboundSession.CheckSendProvisionalWithInappropriateStatusCode(Session: TIdSipInboundSession;
+                                                                      StatusCode: Cardinal);
+begin
+  try
+    Session.SendProvisional(StatusCode);
+    Fail('StatusCode ' + IntToStr(StatusCode) + ' is not a provisional Status-Code');
+  except
+    on EIdSipTransactionUser do;
+  end;
+end;
+
 procedure TestTIdSipInboundSession.OnNewData(Data: TIdRTPPayload;
                                              Binding: TIdConnection);
 begin
@@ -5841,6 +5881,110 @@ begin
         'Response didn''t use GRUU as Contact');
   Check(Self.LastSentResponse.FirstContact.Address.HasGrid,
         'Dialog-creating response (180 Ringing) has no "grid" parameter');
+end;
+
+procedure TestTIdSipInboundSession.TestSendProvisional;
+const
+  ReasonPhrase = 'Progress of some kind has been made';
+  StatusCode   = SIPQueued;
+begin
+  Self.CreateAction;
+  Check(Assigned(Self.Session), 'OnInboundCall not called');
+
+  Self.MarkSentResponseCount;
+  Self.Session.SendProvisional(StatusCode, ReasonPhrase);
+  CheckResponseSent('No response sent');
+
+  CheckEquals(StatusCode,
+              Self.LastSentResponse.StatusCode,
+              'Unexpected Status-Code');
+  CheckEquals(ReasonPhrase,
+              Self.LastSentResponse.StatusText,
+              'Unexpected Reason-Phrase');
+end;
+
+procedure TestTIdSipInboundSession.TestSendProvisionalAfterDialogEstablished;
+begin
+  // It would be an error to send a provisional response after establishing a
+  // dialog, so we just do nothing (in other words don't send a response).
+
+  Self.CreateAction;
+  Check(Assigned(Self.Session), 'OnInboundCall not called');
+  Self.Session.AcceptCall('', '');
+
+  Self.MarkSentResponseCount;
+  Self.Session.SendProvisional;
+  CheckNoResponseSent('A provisional response sent after the dialog''s established');
+end;
+
+procedure TestTIdSipInboundSession.TestSendProvisionalAfterEarlyDialogEstablished;
+begin
+  // If we've established an _early_ dialog, then we may still send provisional
+  // responses.
+
+  Self.CreateAction;
+  Check(Assigned(Self.Session), 'OnInboundCall not called');
+
+  Self.MarkSentResponseCount;
+  Self.Session.SendProvisional;
+  CheckResponseSent('A provisional response not sent after the dialog''s established (as early)');
+
+  Self.MarkSentResponseCount;
+  Self.Session.SendProvisional;
+  CheckResponseSent('A subsequent provisional response not sent');
+end;
+
+procedure TestTIdSipInboundSession.TestSendProvisionalWithInappropriateStatusCode;
+var
+  I: Integer;
+begin
+  Self.CreateAction;
+  Check(Assigned(Self.Session), 'OnInboundCall not called');
+
+  CheckSendProvisionalWithInappropriateStatusCode(Self.Session, 0);
+  CheckSendProvisionalWithInappropriateStatusCode(Self.Session, 999);
+
+  for I := SIPLowestOkCode to SIPHighestStatusCode do
+    CheckSendProvisionalWithInappropriateStatusCode(Self.Session, I);
+end;
+
+procedure TestTIdSipInboundSession.TestSendProvisionalWithDefaults;
+begin
+  Self.CreateAction;
+  Check(Assigned(Self.Session), 'OnInboundCall not called');
+
+  Self.MarkSentResponseCount;
+  Self.Session.SendProvisional;
+  CheckResponseSent('No response sent');
+  CheckEquals(SIPSessionProgress,
+              Self.LastSentResponse.StatusCode,
+              'Unexpected Status-Code');
+  CheckEquals(RSSIPSessionProgress,
+              Self.LastSentResponse.StatusText,
+              'Unexpected Reason-Phrase');
+end;
+
+procedure TestTIdSipInboundSession.TestSendProvisionalWithGruu;
+var
+  Response: TIdSipResponse;
+begin
+  Self.Core.UseGruu := true;
+
+  Self.CreateAction;
+  Check(Assigned(Self.Session), 'OnInboundCall not called');
+
+  Self.MarkSentResponseCount;
+  Self.Session.SendProvisional;
+  CheckResponseSent('No session progress response sent');
+
+  Response := Self.LastSentResponse;
+
+  Check(Response.HasHeader(SupportedHeaderFull),
+        'Response lacks a Supported header');
+  Check(Response.SupportsExtension(ExtensionGruu),
+        'Supported header lacks indication of GRUU support');
+  Check(Response.FirstContact.Address.HasGrid,
+        'Response lacks a Contact with a "grid" parameter');
 end;
 
 procedure TestTIdSipInboundSession.TestSupportsExtension;
@@ -8321,6 +8465,50 @@ begin
   CheckEquals(TIdSipInboundInvite.RedirectStatusCode(Self.Wait.Temporary),
               Self.LastSentResponse.StatusCode,
               'Unexpected response sent');
+end;
+
+//******************************************************************************
+//* TestTIdSipSendProvisionalWait                                              *
+//******************************************************************************
+//* TestTIdSipSendProvisionalWait Public methods *******************************
+
+procedure TestTIdSipSendProvisionalWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.StatusCode := SIPQueued;
+  Self.StatusText := 'Far side is taking its time';
+
+  Self.L := TIdSipTestInviteModuleListener.Create;
+  Self.Core.InviteModule.AddListener(Self.L);
+
+  Self.ReceiveInvite;
+  Self.Session := Self.L.SessionParam;
+
+  Self.Wait := TIdSipSendProvisionalWait.Create;
+  Self.Wait.Session    := Self.Session;
+  Self.Wait.StatusCode := Self.StatusCode;
+  Self.Wait.StatusText := Self.StatusText;
+end;
+
+procedure TestTIdSipSendProvisionalWait.TearDown;
+begin
+  Self.Wait.Free;
+  Self.Core.InviteModule.RemoveListener(Self.L);
+  Self.L.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipSendProvisionalWait Published methods ****************************
+
+procedure TestTIdSipSendProvisionalWait.TestTrigger;
+begin
+  Self.MarkSentResponseCount;
+  Self.Wait.Trigger;
+  CheckResponseSent('No response sent');
+  CheckEquals(Self.StatusCode, Self.LastSentResponse.StatusCode, 'Unexpected Status-Code');
+  CheckEquals(Self.StatusText, Self.LastSentResponse.StatusText, 'Unexpected Status-Text');
 end;
 
 //******************************************************************************

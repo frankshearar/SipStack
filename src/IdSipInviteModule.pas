@@ -261,7 +261,8 @@ type
     procedure RemoveListener(const Listener: IIdSipInboundInviteListener);
     procedure ResendOk;
     procedure Ring;
-    procedure SendSessionProgress;
+    procedure SendProvisional(StatusCode: Cardinal;
+                              Description: String);
     procedure SendTrying;
     procedure Terminate; override;
     procedure TimeOut;
@@ -565,6 +566,8 @@ type
     procedure RejectCallBusy;
     procedure RejectCall(ReasonCode: Cardinal; ReasonText: String = '');
     procedure Ring;
+    procedure SendProvisional(StatusCode: Cardinal = SIPSessionProgress;
+                              Description: String = RSSIPSessionProgress);
     procedure Terminate; override;
   end;
 
@@ -738,15 +741,23 @@ type
     property Temporary: Boolean             read fTemporary write fTemporary;
   end;
 
-  TIdSipSessionRejectWait = class(TIdSipInboundSessionWait)
+  TIdSipSendResponseWait = class(TIdSipInboundSessionWait)
   private
     fStatusCode: Cardinal;
     fStatusText: String;
   public
-    procedure Trigger; override;
-
     property StatusCode: Cardinal read fStatusCode write fStatusCode;
     property StatusText: String   read fStatusText write fStatusText;
+  end;
+
+  TIdSipSessionRejectWait = class(TIdSipSendResponseWait)
+  public
+    procedure Trigger; override;
+  end;
+
+  TIdSipSendProvisionalWait = class(TIdSipSendResponseWait)
+  public
+    procedure Trigger; override;
   end;
 
   TIdSipInviteModuleInboundCallMethod = class(TIdNotification)
@@ -1458,10 +1469,14 @@ begin
   end;
 end;
 
-procedure TIdSipInboundInvite.SendSessionProgress;
+procedure TIdSipInboundInvite.SendProvisional(StatusCode: Cardinal;
+                                              Description: String);
 begin
+  if not TIdSipResponse.IsProvisionalStatusCode(StatusCode) then
+    raise EIdSipTransactionUser.Create('SendProvisional only accepts provisional response status codes. Attempted Status-Code was ' + IntToStr(StatusCode));
+
   if not Self.SentFinalResponse then begin
-    Self.SendSimpleResponse(SIPSessionProgress);
+    Self.SendSimpleResponse(StatusCode, Description);
 
     Self.UA.ScheduleEvent(TIdSipInboundInviteSessionProgress,
                           Self.ProgressResendInterval,
@@ -2924,6 +2939,15 @@ begin
   end;
 end;
 
+procedure TIdSipInboundSession.SendProvisional(StatusCode: Cardinal = SIPSessionProgress;
+                                               Description: String = RSSIPSessionProgress);
+begin
+
+
+  if Assigned(Self.InitialInvite) then
+    Self.InitialInvite.SendProvisional(StatusCode, Description);
+end;
+
 procedure TIdSipInboundSession.Terminate;
 begin
   if Self.FullyEstablished then begin
@@ -3451,7 +3475,7 @@ end;
 procedure TIdSipInboundInviteSessionProgress.Execute(Action: TIdSipAction);
 begin
   if (Action is TIdSipInboundInvite) then
-    (Action as TIdSipInboundInvite).SendSessionProgress;
+    (Action as TIdSipInboundInvite).SendProvisional(SIPSessionProgress, RSSIPSessionProgress);
 end;
 
 //******************************************************************************
@@ -3551,6 +3575,16 @@ end;
 procedure TIdSipSessionRejectWait.Trigger;
 begin
   Self.Session.RejectCall(Self.StatusCode, Self.StatusText);
+end;
+
+//******************************************************************************
+//* TIdSipSendProvisionalWait                                                  *
+//******************************************************************************
+//* TIdSipSendProvisionalWait Public methods ***********************************
+
+procedure TIdSipSendProvisionalWait.Trigger;
+begin
+  Self.Session.SendProvisional(Self.StatusCode, Self.StatusText);
 end;
 
 //******************************************************************************

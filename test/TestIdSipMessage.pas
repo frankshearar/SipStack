@@ -4515,14 +4515,28 @@ procedure TestTIdSipResponse.TestIsProvisional;
 var
   I: Integer;
 begin
-  for I := 100 to 199 do begin
+  for I := 0 to SIPLowestStatusCode - 1 do begin
+    Self.Response.StatusCode := I;
+    Check(not Self.Response.IsProvisional,
+          IntToStr(Self.Response.StatusCode)
+        + ' ' + Self.Response.StatusText);
+  end;
+
+  for I := SIPLowestProvisionalCode to SIPHighestProvisionalCode do begin
     Self.Response.StatusCode := I;
     Check(Self.Response.IsProvisional,
           IntToStr(Self.Response.StatusCode)
         + ' ' + Self.Response.StatusText);
   end;
 
-  for I := 200 to 699 do begin
+  for I := SIPLowestOkCode to SIPHighestStatusCode do begin
+    Self.Response.StatusCode := I;
+    Check(not Self.Response.IsProvisional,
+          IntToStr(Self.Response.StatusCode)
+        + ' ' + Self.Response.StatusText);
+  end;
+
+  for I := SIPHighestStatusCode + 1 to 1000 do begin
     Self.Response.StatusCode := I;
     Check(not Self.Response.IsProvisional,
           IntToStr(Self.Response.StatusCode)

@@ -1649,6 +1649,7 @@ type
     class function InResponseTo(Request: TIdSipRequest;
                                 StatusCode: Cardinal;
                                 Contact: TIdSipContactHeader): TIdSipResponse; overload;
+    class function IsProvisionalStatusCode(StatusCode: Cardinal): Boolean;
     class function TextForCode(StatusCode: Integer): String;
 
     constructor Create; override;
@@ -2103,6 +2104,9 @@ const
   SIPHighestServerFailureCode = 599;
   SIPLowestGlobalFailureCode  = 600;
   SIPHighestGlobalFailureCode = 699;
+
+  SIPLowestStatusCode  = SIPLowestProvisionalCode;
+  SIPHighestStatusCode = SIPHighestGlobalFailureCode;
 
 // Standard warning codes
 const
@@ -9761,6 +9765,11 @@ begin
   end;
 end;
 
+class function TIdSipResponse.IsProvisionalStatusCode(StatusCode: Cardinal): Boolean;
+begin
+  Result := StatusCode div 100 = 1;
+end;
+
 class function TIdSipResponse.TextForCode(StatusCode: Integer): String;
 begin
   case StatusCode of
@@ -9976,7 +9985,7 @@ end;
 
 function TIdSipResponse.IsProvisional: Boolean;
 begin
-  Result := Self.StatusCode div 100 = 1;
+  Result := Self.IsProvisionalStatusCode(Self.StatusCode)
 end;
 
 function TIdSipResponse.IsRedirect: Boolean;

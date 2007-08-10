@@ -250,6 +250,9 @@ type
                          StatusText: String = '');
     procedure Resume;
     procedure Send(ActionHandle: TIdSipHandle);
+    procedure SendProvisional(ActionHandle: TIdSipHandle;
+                              StatusCode: Cardinal = SIPSessionProgress;
+                              Description: String = RSSIPSessionProgress);
     procedure Terminate; overload;
     procedure Terminate(ActionHandle: TIdSipHandle); overload;
 
@@ -1373,6 +1376,28 @@ begin
     Action := Self.GetAndCheckAction(ActionHandle, TIdSipAction);
 
     Self.SendAction(Action);
+  finally
+    Self.ActionLock.Release;
+  end;
+end;
+
+procedure TIdSipStackInterface.SendProvisional(ActionHandle: TIdSipHandle;
+                                               StatusCode: Cardinal = SIPSessionProgress;
+                                               Description: String = RSSIPSessionProgress);
+var
+  Action: TIdSipAction;
+  Wait:   TIdSipSendProvisionalWait;
+begin
+  Self.ActionLock.Acquire;
+  try
+    Action := Self.GetAndCheckAction(ActionHandle, TIdSipInboundSession);
+
+    Wait := TIdSipSendProvisionalWait.Create;
+    Wait.StatusCode := StatusCode;
+    Wait.StatusText := Description;
+    Wait.Session    := Action as TIdSipInboundSession;
+
+    Self.TimerQueue.AddEvent(TriggerImmediately, Wait);
   finally
     Self.ActionLock.Release;
   end;
