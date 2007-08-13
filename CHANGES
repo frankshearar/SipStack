@@ -28,7 +28,7 @@ v0.6 (2007/xx/yy)
   autogenerating Contact headers. You now cannot set the Contact
   headers for a stack except through REGISTERing to a registrar. The
   stack will automatically select the best local address/port to use
-  to send a message.
+  to send a message. The Contact directive no longer has any meaning.
 * For tests, you can use MockRoute directives to set up a routing
   table any way you like. (Use RoutingTable: MOCK at the same time!)
 * The Route directive replaces the Proxy directive. You can now

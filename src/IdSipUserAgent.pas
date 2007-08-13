@@ -94,7 +94,6 @@ type
   // settings for that Directive.
   //
   // Here's a summary of the formats for each directive:
-  //   Contact: sip:wintermute@tessier-ashpool.co.luna
   //   From: "Count Zero" <sip:countzero@jammer.org>
   //   HostName: talkinghead1.tessier-ashpool.co.luna
   //   HostName: 192.168.1.1
@@ -419,7 +418,6 @@ const
   ActAsRegistrarDirective                 = 'ActAsRegistrar';
   AuthenticationDirective                 = 'Authentication';
   AutoKeyword                             = 'AUTO';
-  ContactDirective                        = ContactHeaderFull;
   DebugMessageLogDirective                = 'DebugMessageLog';
   FromDirective                           = FromHeaderFull;
   HostNameDirective                       = 'HostName';
