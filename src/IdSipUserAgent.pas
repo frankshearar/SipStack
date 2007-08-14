@@ -117,7 +117,7 @@ type
   //
   // Registrar-specific directives are:
   //   ActAsRegistrar: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
-  //   RegistrarDatabase: MOCK|<as yet undefined>
+  //   RegistrarDatabase: MOCK|<as yet undefined>[;MatchOnlyUsername]
   //   RegistrarUseGruu: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
   //
   // Some directives only make sense for mock objects. For instance:
@@ -423,8 +423,9 @@ const
   HostNameDirective                       = 'HostName';
   InstanceIDDirective                     = 'InstanceID';
   ListenDirective                         = 'Listen';
-  MockKeyword                             = 'MOCK';
   MappedRouteDirective                    = 'MappedRoute';
+  MatchOnlyUsernameOption                 = 'MatchOnlyUsername';
+  MockKeyword                             = 'MOCK';
   MockDnsDirective                        = 'MockDns';
   MockLocalAddressDirective               = 'MockLocalAddress';
   MockRouteDirective                      = 'MockRoute';
@@ -1562,16 +1563,25 @@ end;
 procedure TIdSipStackConfigurator.SetRegistrarDatabase(UserAgent: TIdSipUserAgent;
                                                        const RegistrarDatabaseLine: String);
 var
-  Line:   String;
-  RegMod: TIdSipRegisterModule;
+  DatabaseType: String;
+  Line:         String;
+  RegMod:       TIdSipRegisterModule;
 begin
   Line := RegistrarDatabaseLine;
   EatDirective(Line);
 
   RegMod := Self.InstantiateRegistrarModule(UserAgent);
 
-  if IsEqual(Line, MockKeyword) then
-    RegMod.BindingDB := TIdSipMockBindingDatabase.Create;
+  DatabaseType := Fetch(Line, ';');
+
+  if IsEqual(DatabaseType, MockKeyword) then begin
+    if IsEqual(Line, MatchOnlyUsernameOption) then
+      RegMod.BindingDB := TIdSipNameMatchingMockBindingDatabase.Create
+    else
+      RegMod.BindingDB := TIdSipMockBindingDatabase.Create;
+  end;
+
+  // Insert your special database type creation code here.
 
   // Fallback position: it means someone specified an unknown database type.
   if not Assigned(RegMod.BindingDB) then

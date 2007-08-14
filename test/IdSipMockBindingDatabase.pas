@@ -15,6 +15,8 @@ uses
  Classes, Contnrs, IdSipMessage, IdSipRegistration, SyncObjs;
 
 type
+  TIdSipMatchingFunction = function(UriA, UriB: TIdSipUri): Boolean;
+
   // I am a proper BindingDatabase. I just store my data in memory, and provide
   // no persistence. Oh, and I allow you to cause operations to fail by setting
   // any of the Fail* properties.
@@ -43,6 +45,10 @@ type
     function  CollectBindingsFor(const AddressOfRecord: String;
                                  Bindings: TIdSipContacts;
                                  CollectGruus: Boolean): Boolean; override;
+    function  CollectBindingsForUsing(const AddressOfRecord: String;
+                                      Bindings: TIdSipContacts;
+                                      CollectGruus: Boolean;
+                                      MatchingFunction: TIdSipMatchingFunction): Boolean;
     procedure Commit; override;
     procedure Rollback; override;
     procedure StartTransaction; override;
@@ -65,6 +71,19 @@ type
     property FailIsValid:              Boolean             read fFailIsValid write fFailIsValid;
   end;
 
+  // I am an in-memory BindingDatabase that matches only the usernames of URIs.
+  // That means that <sip:foo@bar> will match <sip:foo@baz> and <sip:foo@quaax>.
+  // This is in contrast to my superclass, who matches on the entire URI.
+  TIdSipNameMatchingMockBindingDatabase = class(TIdSipMockBindingDatabase)
+  protected
+    function CollectBindingsFor(const AddressOfRecord: String;
+                                Bindings: TIdSipContacts;
+                                CollectGruus: Boolean): Boolean; override;
+  end;
+
+function FullUriMatch(UriA, UriB: TIdSipUri): Boolean;
+function UsernameMatch(UriA, UriB: TIdSipUri): Boolean;
+
 implementation
 
 uses
@@ -72,6 +91,20 @@ uses
 
 const
   ItemNotFoundIndex = -1;
+
+//******************************************************************************
+//* Unit public functions and procedures                                       *
+//******************************************************************************
+
+function FullUriMatch(UriA, UriB: TIdSipUri): Boolean;
+begin
+  Result := UriA.AsString = UriB.AsString;
+end;
+
+function UsernameMatch(UriA, UriB: TIdSipUri): Boolean;
+begin
+  Result := UriA.Username = UriB.Username;
+end;
 
 //******************************************************************************
 //* TIdSipMockBindingDatabase                                                  *
@@ -204,30 +237,52 @@ end;
 function TIdSipMockBindingDatabase.CollectBindingsFor(const AddressOfRecord: String;
                                                       Bindings: TIdSipContacts;
                                                       CollectGruus: Boolean): Boolean;
+begin
+  Result := Self.CollectBindingsForUsing(AddressOfRecord, Bindings, CollectGruus, FullUriMatch)
+end;
+
+function TIdSipMockBindingDatabase.CollectBindingsForUsing(const AddressOfRecord: String;
+                                                           Bindings: TIdSipContacts;
+                                                           CollectGruus: Boolean;
+                                                           MatchingFunction: TIdSipMatchingFunction): Boolean;
 var
+  AOR:          TIdSipUri;
+  BindingAOR:   TIdSipUri;
   ContactValue: String;
   I:            Integer;
   Gruu:         String;
 begin
-  Bindings.Clear;
+  AOR := TIdSipUri.Create;
+  try
+    BindingAOR := TIdSipUri.Create;
+    try
+      AOR.Uri := AddressOfRecord;
+      for I := 0 to Self.BindingStore.Count - 1 do begin
+        BindingAOR.Uri := Self.Bindings[I].AddressOfRecord;
 
-  for I := 0 to Self.BindingStore.Count - 1 do
-    if (Self.Bindings[I].AddressOfRecord = AddressOfRecord) then begin
-      ContactValue := Self.Bindings[I].Uri
-                    + ';' + ExpiresParam + '=';
+        if MatchingFunction(BindingAOR, AOR) then begin
+          ContactValue := Self.Bindings[I].Uri
+                        + ';' + ExpiresParam + '=';
 
-      if (Now > Self.Bindings[I].ValidUntil) then
-        ContactValue := ContactValue + '0'
-      else
-        ContactValue := ContactValue + IntToStr(SecondsBetween(Self.Bindings[I].ValidUntil, Now));
+          if (Now > Self.Bindings[I].ValidUntil) then
+            ContactValue := ContactValue + '0'
+          else
+            ContactValue := ContactValue + IntToStr(SecondsBetween(Self.Bindings[I].ValidUntil, Now));
 
-      if CollectGruus then begin
-        Gruu := Self.CreateGruu(Self.Bindings[I].Uri, Self.Bindings[I].InstanceID);
-        ContactValue := ContactValue + ';' + GruuParam + '="' + Gruu + '"';
+          if CollectGruus then begin
+            Gruu := Self.CreateGruu(Self.Bindings[I].Uri, Self.Bindings[I].InstanceID);
+            ContactValue := ContactValue + ';' + GruuParam + '="' + Gruu + '"';
+          end;
+
+          Bindings.Add(ContactHeaderFull).Value := ContactValue;
+        end;
       end;
-
-      Bindings.Add(ContactHeaderFull).Value := ContactValue;
+    finally
+      BindingAOR.Free;
     end;
+  finally
+    AOR.Free;
+  end;
 
   Result := not Self.FailBindingsFor;
 end;
@@ -268,6 +323,18 @@ begin
 
   if (Result >= Self.BindingCount) then
     Result := ItemNotFoundIndex;
+end;
+
+//******************************************************************************
+//* TIdSipNameMatchingMockBindingDatabase
+//******************************************************************************
+//* TIdSipNameMatchingMockBindingDatabase Protected methods ********************
+
+function TIdSipNameMatchingMockBindingDatabase.CollectBindingsFor(const AddressOfRecord: String;
+                                                                  Bindings: TIdSipContacts;
+                                                                  CollectGruus: Boolean): Boolean;
+begin
+  Result := Self.CollectBindingsForUsing(AddressOfRecord, Bindings, CollectGruus, UsernameMatch);
 end;
 
 end.

@@ -16,6 +16,21 @@ uses
   TestFrameworkSip;
 
 type
+  TestFunctions = class(TTestCase)
+  private
+    UriA: TIdSipUri;
+    UriB: TIdSipUri;
+
+    procedure CheckMatch(MatchingFunction: TIdSipMatchingFunction; UriOne, UriTwo: String);
+    procedure CheckNoMatch(MatchingFunction: TIdSipMatchingFunction; UriOne, UriTwo: String);
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestFullUriMatch;
+    procedure TestUsernameMatch;
+  end;
+
   TestTIdSipRegistrations = class(TTestCase)
   private
     Regs: TIdSipRegistrations;
@@ -90,6 +105,27 @@ type
     procedure TestRemoveBindingWhenNotPresent;
   end;
 
+  TestTIdSipNameMatchingMockBindingDatabase = class(TTestCase)
+  private
+    Bindings:       TIdSipContacts;
+    CaseContact:    TIdSipContactHeader;
+    CasesAOR:       TIdSipRequest;
+    DB:             TIdSipNameMatchingMockBindingDatabase;
+    Wintermute:     TIdSipContactHeader;
+    WintermutesAOR: TIdSipRequest;
+
+    procedure AddBinding(AOR, ContactUri: String);
+    procedure AddCaseBinding(Uri: String);
+    procedure AddWintermuteBinding(Uri: String);
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestBindingsForNoBindings;
+    procedure TestBindingsForSingleBinding;
+    procedure TestBindingsForMatchesOnlyUsername;
+  end;
+
 implementation
 
 uses
@@ -98,9 +134,70 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipRegistration unit tests');
+  Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSipRegistrations.Suite);
   Result.AddTest(TestTIdSipAbstractBindingDatabase.Suite);
   Result.AddTest(TestTIdSipMockBindingDatabase.Suite);
+  Result.AddTest(TestTIdSipNameMatchingMockBindingDatabase.Suite);
+end;
+
+//******************************************************************************
+//* TestFunctions                                                              *
+//******************************************************************************
+//* TestFunctions Public methods ***********************************************
+
+procedure TestFunctions.SetUp;
+begin
+  inherited SetUp;
+
+  Self.UriA := TIdSipUri.Create;
+  Self.UriB := TIdSipUri.Create;
+end;
+
+procedure TestFunctions.TearDown;
+begin
+  Self.UriB.Free;
+  Self.UriA.Free;
+
+  inherited TearDown;
+end;
+
+//* TestFunctions Private methods **********************************************
+
+procedure TestFunctions.CheckMatch(MatchingFunction: TIdSipMatchingFunction; UriOne, UriTwo: String);
+begin
+  Self.UriA.Uri := UriOne;
+  Self.UriB.Uri := UriTwo;
+
+  Check(MatchingFunction(Self.UriA, Self.UriB), '<' + UriOne + '> does not match <' + UriTwo + '>');
+end;
+
+procedure TestFunctions.CheckNoMatch(MatchingFunction: TIdSipMatchingFunction; UriOne, UriTwo: String);
+begin
+  Self.UriA.Uri := UriOne;
+  Self.UriB.Uri := UriTwo;
+
+  Check(not MatchingFunction(Self.UriA, Self.UriB), '<' + UriOne + '> matches <' + UriTwo + '>');
+end;
+
+//* TestFunctions Published methods ********************************************
+
+procedure TestFunctions.TestFullUriMatch;
+begin
+  CheckMatch(  FullUriMatch, 'sip:foo', 'sip:foo');
+  CheckNoMatch(FullUriMatch, 'sip:foo', 'sip:bar@foo');
+  CheckNoMatch(FullUriMatch, 'sip:foo', 'sip:foo;transport=tcp');
+  CheckNoMatch(FullUriMatch, 'sip:foo', 'sip:FOO');
+end;
+
+procedure TestFunctions.TestUsernameMatch;
+begin
+  CheckMatch(  UsernameMatch, 'sip:foo',     'sip:foo');
+  CheckMatch(  UsernameMatch, 'sip:bar@foo', 'sip:bar@foo');
+  CheckNoMatch(UsernameMatch, 'sip:foo',     'sip:bar@foo');
+  CheckMatch(  UsernameMatch, 'sip:foo',     'sip:foo;transport=tcp');
+  CheckMatch(  UsernameMatch, 'sip:bar@foo', 'sip:bar@foo;transport=tcp');
+  CheckMatch(  UsernameMatch, 'sip:bar@foo', 'sip:bar@FOO');
 end;
 
 //******************************************************************************
@@ -885,6 +982,102 @@ begin
   Self.DB.AddBindings(Self.WintermutesAOR);
   Self.DB.RemoveBinding(Self.CasesAOR, Self.CaseContact);
   CheckEquals(1, Self.DB.BindingCount, 'Binding not in DB');
+end;
+
+//******************************************************************************
+//* TestTIdSipNameMatchingMockBindingDatabase                                  *
+//******************************************************************************
+//* TestTIdSipNameMatchingMockBindingDatabase Public methods *******************
+
+procedure TestTIdSipNameMatchingMockBindingDatabase.SetUp;
+begin
+  inherited SetUp;
+
+  Self.DB := TIdSipNameMatchingMockBindingDatabase.Create;
+  Self.Bindings := TIdSipContacts.Create;
+
+  Self.CasesAOR := TIdSipRequest.Create;
+  Self.CasesAOR.Method         := MethodRegister;
+  Self.CasesAOR.ToHeader.Value := 'sip:case@fried.neurons.org';
+  Self.CasesAOR.RequestUri.Uri := 'sip:fried.neurons.org';
+  Self.CaseContact := Self.CasesAOR.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
+  Self.CaseContact.Value := 'Case <sip:terminal1>';
+
+  Self.WintermutesAOR := TIdSipRequest.Create;
+  Self.WintermutesAOR.Method         := MethodRegister;
+  Self.WintermutesAOR.ToHeader.Value := 'sip:wintermute@tessier-ashpool.co.luna';
+  Self.WintermutesAOR.RequestUri.Uri := 'sip:tessier-ashpool.co.luna';
+  Self.Wintermute := Self.WintermutesAOR.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
+  Self.Wintermute.Value := 'Wintermute <sip:talking-head.tessier-ashpool.co.luna>';
+end;
+
+procedure TestTIdSipNameMatchingMockBindingDatabase.TearDown;
+begin
+  Self.WintermutesAOR.Free;
+  Self.CasesAOR.Free;
+  Self.Bindings.Free;
+  Self.DB.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipNameMatchingMockBindingDatabase Private methods ******************
+
+procedure TestTIdSipNameMatchingMockBindingDatabase.AddBinding(AOR, ContactUri: String);
+begin
+  Self.WintermutesAOR.ToHeader.Value     := AOR;
+  Self.WintermutesAOR.FirstContact.Value := ContactUri;
+  Self.DB.AddBindings(Self.WintermutesAOR);
+end;
+
+procedure TestTIdSipNameMatchingMockBindingDatabase.AddCaseBinding(Uri: String);
+begin
+  Self.CasesAOR.FirstContact.Value := Uri;
+  Self.DB.AddBindings(Self.CasesAOR);
+end;
+
+procedure TestTIdSipNameMatchingMockBindingDatabase.AddWintermuteBinding(Uri: String);
+begin
+  Self.WintermutesAOR.FirstContact.Value := Uri;
+  Self.DB.AddBindings(Self.WintermutesAOR);
+end;
+
+procedure TestTIdSipNameMatchingMockBindingDatabase.TestBindingsForNoBindings;
+begin
+  Self.DB.BindingsFor(Self.WintermutesAOR, Self.Bindings);
+  Check(Bindings.IsEmpty, 'No bindings should be returned for an empty database');
+end;
+
+procedure TestTIdSipNameMatchingMockBindingDatabase.TestBindingsForSingleBinding;
+const
+  AOR     = 'sip:wintermute@tessier-ashpool.co.luna';
+  Binding = 'sip:talking-head.tessier-ashpool.co.luna';
+begin
+  Self.AddBinding(AOR, Binding);
+  Self.DB.BindingsFor(Self.WintermutesAOR, Self.Bindings);
+  Check(not Self.Bindings.IsEmpty, 'No bindings returned');
+
+  Self.Bindings.First;
+  CheckEquals(Binding, Self.Bindings.CurrentContact.Value, 'Wrong binding returned');
+end;
+
+procedure TestTIdSipNameMatchingMockBindingDatabase.TestBindingsForMatchesOnlyUsername;
+const
+  ContactUri     = 'sip:wintermute@tessier-ashpool.co.luna';
+  MatchingAOR    = 'sip:wintermute@talking-head.tessier-ashpool.co.luna';
+  NonMatchingAOR = 'sip:talking-head.tessier-ashpool.co.luna';
+begin
+  Self.AddBinding(MatchingAOR,    ContactUri);
+  Self.AddBinding(NonMatchingAOR, ContactUri);
+
+  Self.WintermutesAOR.ToHeader.Value := MatchingAOR;
+  Self.DB.BindingsFor(Self.WintermutesAOR, Self.Bindings);
+  Check(not Self.Bindings.IsEmpty, 'No bindings returned');
+
+  Self.Bindings.First;
+  CheckEquals(ContactUri, Self.Bindings.CurrentContact.Value, 'Correct binding not returned');
+
+  CheckEquals(1, Self.Bindings.Count, 'Too many bindings returned: didn''t match _solely_ on username');
 end;
 
 initialization

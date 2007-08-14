@@ -160,6 +160,8 @@ type
     property UseGruu:           Boolean  read fUseGruu write fUseGruu;
   end;
 
+  TIdSipAbstractBindingDatabaseClass = class of TIdSipAbstractBindingDatabase;
+
   TIdSipOutboundRegistrationBase = class;
 
   // I provide a protocol for using a registrar. You send a REGISTER, and

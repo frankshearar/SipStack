@@ -13,9 +13,10 @@ interface
 
 uses
   Classes, IdObservable, IdRoutingTable, IdSipCore, IdSipDialog, IdSipDialogID,
-  IdSipDns, IdSipInviteModule, IdSipLocation, IdSipMessage, IdSipTransport,
-  IdSocketHandle, IdUdpServer, IdSipUserAgent, IdTimerQueue, SyncObjs,
-  TestFrameworkEx, TestFramework, TestFrameworkSip, TestFrameworkSipTU;
+  IdSipDns, IdSipInviteModule, IdSipLocation, IdSipMessage, IdSipRegistration,
+  IdSipTransport, IdSipUserAgent,  IdSocketHandle, IdUdpServer, IdTimerQueue,
+  SyncObjs, TestFrameworkEx, TestFramework, TestFrameworkSip,
+  TestFrameworkSipTU;
 
 type
   TestTIdSipUserAgent = class(TTestCaseTU,
@@ -244,6 +245,8 @@ type
 
   TestConfigureRegistrar = class(TStackConfigurationTestCase)
   private
+    procedure CheckDatabaseType(ExpectedDatabase: TIdSipAbstractBindingDatabaseClass;
+                                Configuration: TStrings);
     procedure CheckMockDatabase(Configuration: TStrings);
     procedure CheckUseGruu(ExpectedUseGruu: Boolean);
   published
@@ -254,6 +257,7 @@ type
     procedure TestActAsRegistrarDirectiveTrueThenFalse;
     procedure TestDatabaseDirectiveImpliesActAsRegistrarDirective;
     procedure TestDatabaseDirectiveMock;
+    procedure TestDatabaseDirectiveMockWithMatchOnlyUsernameOption;
     procedure TestDatabaseDirectiveUnknown;
     procedure TestMisorderedDatabaseDirectiveMock;
     procedure TestMisorderedUseGruuDirective;
@@ -370,9 +374,9 @@ implementation
 uses
   IdException, IdMockRoutingTable, IdSdp, IdSimpleParser, IdSipAuthentication,
   IdSipIndyLocator, IdSipMockBindingDatabase, IdSipMockLocator,
-  IdSipMockTransactionDispatcher, IdSipMockTransport, IdSipRegistration,
-  IdSipSubscribeModule, IdSipTCPTransport, IdSipUDPTransport, IdSystem,
-  IdTcpClient, IdUnicode, SysUtils, TestFrameworkSipTransport;
+  IdSipMockTransactionDispatcher, IdSipMockTransport, IdSipSubscribeModule,
+  IdSipTCPTransport, IdSipUDPTransport, IdSystem, IdTcpClient, IdUnicode,
+  SysUtils, TestFrameworkSipTransport;
 
 const
   // SFTF: Sip Foundry Test Framework. cf. http://www.sipfoundry.org/sftf/
@@ -3432,7 +3436,8 @@ end;
 //******************************************************************************
 //* TestConfigureRegistrar Private methods *************************************
 
-procedure TestConfigureRegistrar.CheckMockDatabase(Configuration: TStrings);
+procedure TestConfigureRegistrar.CheckDatabaseType(ExpectedDatabase: TIdSipAbstractBindingDatabaseClass;
+                                                   Configuration: TStrings);
 var
   RegMod: TIdSipRegisterModule;
   UA:     TIdSipUserAgent;
@@ -3444,12 +3449,17 @@ begin
     RegMod := UA.ModuleFor(TIdSipRegisterModule) as TIdSipRegisterModule;
     Check(Assigned(RegMod.BindingDB), 'Database not instantiated: directive ignored');
 
-    CheckEquals(TIdSipMockBindingDatabase.ClassName,
+    CheckEquals(ExpectedDatabase.ClassName,
                 (UA.ModuleFor(TIdSipRegisterModule) as TIdSipRegisterModule).BindingDB.ClassName,
                 'Database type');
   finally
     UA.Free;
   end;
+end;
+
+procedure TestConfigureRegistrar.CheckMockDatabase(Configuration: TStrings);
+begin
+  CheckDatabaseType(TIdSipMockBindingDatabase, Configuration);
 end;
 
 procedure TestConfigureRegistrar.CheckUseGruu(ExpectedUseGruu: Boolean);
@@ -3572,6 +3582,16 @@ begin
   Self.Configuration.Add('RegistrarDatabase: MOCK');
 
   Self.CheckMockDatabase(Self.Configuration);
+end;
+
+procedure TestConfigureRegistrar.TestDatabaseDirectiveMockWithMatchOnlyUsernameOption;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('NameServer: MOCK');
+  Self.Configuration.Add('ActAsRegistrar: true');
+  Self.Configuration.Add('RegistrarDatabase: MOCK;MatchOnlyUsername');
+
+  Self.CheckDatabaseType(TIdSipNameMatchingMockBindingDatabase, Self.Configuration);
 end;
 
 procedure TestConfigureRegistrar.TestDatabaseDirectiveUnknown;
