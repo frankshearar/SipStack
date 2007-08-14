@@ -838,9 +838,10 @@ const
 
 type
   TIdSipEventMessage = packed record
-    Event:    Cardinal;
-    Data:     TIdSipStackInterfaceEventMethod;
-    Reserved: DWord;
+    Event:     Cardinal;
+    Data:      TIdSipStackInterfaceEventMethod;
+    Reserved1: DWord;
+    Reserved2: DWord;
   end;
 
 function EventNames(Event: Cardinal): String;
