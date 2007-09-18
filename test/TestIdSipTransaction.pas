@@ -453,19 +453,6 @@ type
     procedure TestTransportErrorInTryingState;
   end;
 
-  TestTIdSipTransactionRegistry = class(TTestCase)
-  private
-    Dispatcher: TIdSipTransactionDispatcher;
-    Request:    TIdSipRequest;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestTransactionsAddToRegistryAutomatically;
-    procedure TestTransactionsGetUniqueIDs;
-    procedure TestTransactionsAutomaticallyUnregister;
-  end;
-
   TestTIdSipResponseLocationsList = class(TTestCase)
   private
     List:      TIdSipResponseLocationsList;
@@ -480,48 +467,166 @@ type
     procedure TestLocationsForReturnsMutableList;
   end;
 
-  TTerminatingTransactionWaitTestCase = class(TTestCase)
+  TIdSipTransactionWaitClass = class of TIdSipTransactionWait;
+
+  TTransactionWaitTestCase = class(TTestCase)
   private
-    TransactionCount: Integer;
+    SentRequestCount: Cardinal;
   protected
     Binding:     TIdSipConnectionBindings;
     Destination: TIdSipContactHeader;
     Dispatcher:  TIdSipMockTransactionDispatcher;
     Invite:      TIdSipRequest;
+    OK:          TIdSipResponse;
+    Options:     TIdSipRequest;
     Ringing:     TIdSipResponse;
+    Target:      TIdSipLocation;
+    Tran:        TIdSipTransaction;
+    Wait:        TIdSipTransactionWait;
 
-    procedure CheckTransactionNotRemoved(Msg: String);
-    procedure MarkTransactionCount;
+    procedure CheckRequestSent(Msg: String);
+    procedure CheckNoRequestSent(Msg: String);
+    procedure MarkSentRequestCount;
+    function  CreateTransaction: TIdSipTransaction; virtual;
+    procedure CheckTriggerDoesNothing(Msg: String); virtual;
+    function  WaitType: TIdSipTransactionWaitClass; virtual;
   public
     procedure SetUp; override;
     procedure TearDown; override;
+  published
+    procedure TestTriggerWithInappropriateObjectID;
+    procedure TestTriggerWithUnregisteredObjectID;
+  end;
+
+  TTerminatingTransactionWaitTestCase = class(TTransactionWaitTestCase)
+  private
+    TransactionCount: Integer;
+  protected
+    procedure CheckTransactionNotRemoved(Msg: String);
+    procedure CheckTransactionRemoved(Msg: String);
+    procedure CheckTriggerDoesNothing(Msg: String); override;
+    procedure MarkTransactionCount;
+  public
+    procedure SetUp; override;
+  end;
+
+  TestTIdSipClientInviteTransactionTimerAWait = class(TTransactionWaitTestCase)
+  protected
+    procedure CheckTriggerDoesNothing(Msg: String); override;
+    function  CreateTransaction: TIdSipTransaction; override;
+    function  WaitType: TIdSipTransactionWaitClass; override;
+  public
+    procedure SetUp; override;
+  published
+    procedure TestTrigger;
   end;
 
   TestTIdSipClientInviteTransactionTimerBWait = class(TTerminatingTransactionWaitTestCase)
   private
-    DestinationLocation: TIdSipLocation;
-    Tran:                TIdSipClientInviteTransaction;
-    Wait:                TIdSipClientInviteTransactionTimerBWait;
-
     procedure MoveToProceedingState(Tran: TIdSipTransaction);
+  protected
+    function CreateTransaction: TIdSipTransaction; override;
+    function WaitType: TIdSipTransactionWaitClass; override;
+  published
+    procedure TestTimerBFiresInProceedingState;
+    procedure TestTrigger;
+  end;
+
+  TestTIdSipClientInviteTransactionTimerDWait = class(TTerminatingTransactionWaitTestCase)
+  private
+    NotFound: TIdSipResponse;
+
+    procedure MoveToCompletedState(Tran: TIdSipTransaction);
+  protected
+    function CreateTransaction: TIdSipTransaction; override;
+    function WaitType: TIdSipTransactionWaitClass; override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestTimerBFiresInProceedingState;
+    procedure TestTrigger;
+  end;
+
+  TestTIdSipClientNonInviteTransactionTimerEWait = class(TTransactionWaitTestCase)
+  protected
+    procedure CheckTriggerDoesNothing(Msg: String); override;
+    function  CreateTransaction: TIdSipTransaction; override;
+    function  WaitType: TIdSipTransactionWaitClass; override;
+  public
+    procedure SetUp; override;
+  published
+    procedure TestTrigger;
+  end;
+
+  TestTIdSipClientNonInviteTransactionTimerFWait = class(TTerminatingTransactionWaitTestCase)
+  protected
+    function CreateTransaction: TIdSipTransaction; override;
+    function WaitType: TIdSipTransactionWaitClass; override;
+  published
+    procedure TestTrigger;
+  end;
+
+  TestTIdSipServerInviteTransactionTimerGWait = class(TTransactionWaitTestCase)
+  private
+    SentResponseCount: Cardinal;
+
+    procedure CheckNoResponseSent(Msg: String);
+    procedure CheckResponseSent(Msg: String);
+    procedure MarkSentResponseCount;
+    procedure MoveToCompletedState(Tran: TIdSipTransaction);
+  protected
+    procedure CheckTriggerDoesNothing(Msg: String); override;
+    function  CreateTransaction: TIdSipTransaction; override;
+    function  WaitType: TIdSipTransactionWaitClass; override;
+  public
+    procedure SetUp; override;
+  published
+    procedure TestTrigger;
   end;
 
   TestTIdSipServerInviteTransactionTimerHWait = class(TTerminatingTransactionWaitTestCase)
   private
-    Tran: TIdSipServerInviteTransaction;
-    Wait: TIdSipServerInviteTransactionTimerHWait;
-
     procedure MoveToProceedingState(Tran: TIdSipTransaction);
+  protected
+    function CreateTransaction: TIdSipTransaction; override;
+    function WaitType: TIdSipTransactionWaitClass; override;
+  published
+    procedure TestTimerHFiresInProceedingState;
+  end;
+
+  TestTIdSipServerInviteTransactionTimerIWait = class(TTerminatingTransactionWaitTestCase)
+  private
+    procedure MoveToConfirmedState(Tran: TIdSipTransaction);
+  protected
+    function CreateTransaction: TIdSipTransaction; override;
+    function WaitType: TIdSipTransactionWaitClass; override;
+  published
+    procedure Trigger;
+  end;
+
+  TestTIdSipServerNonInviteTransactionTimerJWait = class(TTerminatingTransactionWaitTestCase)
+  private
+    procedure MoveToCompletedState(Tran: TIdSipTransaction);
+  protected
+    function CreateTransaction: TIdSipTransaction; override;
+    function WaitType: TIdSipTransactionWaitClass; override;
+  published
+    procedure Trigger;
+  end;
+
+  TestTIdSipClientNonInviteTransactionTimerKWait = class(TTerminatingTransactionWaitTestCase)
+  private
+    NotFound: TIdSipResponse;
+
+    procedure MoveToCompletedState(Tran: TIdSipTransaction);
+  protected
+    function  CreateTransaction: TIdSipTransaction; override;
+    function  WaitType: TIdSipTransactionWaitClass; override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestTimerHFiresInProceedingState;
+    procedure TestTrigger;
   end;
 
   TTransactionDispatcherListenerMethodTestCase = class(TTestCase)
@@ -608,7 +713,8 @@ type
 implementation
 
 uses
-  Classes, IdException, IdRandom, IdRoutingTable, IdSdp, Math, TypInfo;
+  Classes, IdException, IdRandom, IdRegisteredObject, IdRoutingTable, IdSdp,
+  Math, TypInfo;
 
 function Suite: ITestSuite;
 begin
@@ -620,7 +726,6 @@ begin
   Result.AddTest(TestTIdSipServerNonInviteTransaction.Suite);
   Result.AddTest(TestTIdSipClientInviteTransaction.Suite);
   Result.AddTest(TestTIdSipClientNonInviteTransaction.Suite);
-  Result.AddTest(TestTIdSipTransactionRegistry.Suite);
   Result.AddTest(TestTIdSipResponseLocationsList.Suite);
   Result.AddTest(TestTIdSipTransactionDispatcherListenerReceiveRequestMethod.Suite);
   Result.AddTest(TestTIdSipTransactionDispatcherListenerReceiveResponseMethod.Suite);
@@ -628,8 +733,16 @@ begin
   Result.AddTest(TestTIdSipTransactionListenerReceiveRequestMethod.Suite);
   Result.AddTest(TestTIdSipTransactionListenerReceiveResponseMethod.Suite);
   Result.AddTest(TestTIdSipTransactionListenerTerminatedMethod.Suite);
+  Result.AddTest(TestTIdSipClientInviteTransactionTimerAWait.Suite);
   Result.AddTest(TestTIdSipClientInviteTransactionTimerBWait.Suite);
+  Result.AddTest(TestTIdSipClientInviteTransactionTimerDWait.Suite);
+  Result.AddTest(TestTIdSipClientNonInviteTransactionTimerEWait.Suite);
+  Result.AddTest(TestTIdSipClientNonInviteTransactionTimerFWait.Suite);
+  Result.AddTest(TestTIdSipServerInviteTransactionTimerGWait.Suite);
   Result.AddTest(TestTIdSipServerInviteTransactionTimerHWait.Suite);
+  Result.AddTest(TestTIdSipServerInviteTransactionTimerIWait.Suite);
+  Result.AddTest(TestTIdSipServerNonInviteTransactionTimerJWait.Suite);
+  Result.AddTest(TestTIdSipClientNonInviteTransactionTimerKWait.Suite);
 end;
 
 function Transaction(S: TIdSipTransactionState): String;
@@ -5047,84 +5160,6 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipTransactionRegistry                                              *
-//******************************************************************************
-//* TestTIdSipTransactionRegistry Public methods *******************************
-
-procedure TestTIdSipTransactionRegistry.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
-  Self.Request    := TIdSipTestResources.CreateBasicRequest;
-end;
-
-procedure TestTIdSipTransactionRegistry.TearDown;
-begin
-  Self.Request.Free;
-  Self.Dispatcher.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipTransactionRegistry Published methods ****************************
-
-procedure TestTIdSipTransactionRegistry.TestTransactionsAddToRegistryAutomatically;
-var
-  InviteTran: TIdSipTransaction;
-begin
-  InviteTran := TIdSipClientInviteTransaction.Create(Self.Dispatcher, Self.Request);
-  try
-    CheckNotEquals('', InviteTran.ID, 'Transaction has no ID');
-    Check(nil <> TIdSipTransactionRegistry.FindTransaction(InviteTran.ID),
-          'Transaction not added to registry');
-  finally
-    InviteTran.Free;
-  end;
-end;
-
-procedure TestTIdSipTransactionRegistry.TestTransactionsGetUniqueIDs;
-var
-  InviteTran:  TIdSipTransaction;
-  OptionsTran: TIdSipTransaction;
-begin
-  // This test isn't exactly thorough: it's not possible to write a test that
-  // proves the registry will never duplicate an existing transaction's ID,
-  // but this at least demonstrates that the registry won't return the same
-  // ID twice in a row.
-
-  InviteTran := TIdSipClientInviteTransaction.Create(Self.Dispatcher, Self.Request);
-  try
-    OptionsTran := TIdSipClientNonInviteTransaction.Create(Self.Dispatcher, Self.Request);
-    try
-      CheckNotEquals(InviteTran.ID,
-                     OptionsTran.ID,
-                     'The registry gave two transactions the same ID');
-    finally
-      OptionsTran.Free;
-    end;
-  finally
-    InviteTran.Free;
-  end;
-end;
-
-procedure TestTIdSipTransactionRegistry.TestTransactionsAutomaticallyUnregister;
-var
-  InviteTran:    TIdSipTransaction;
-  TransactionID: String;
-begin
-  InviteTran := TIdSipServerInviteTransaction.Create(Self.Dispatcher, Self.Request);
-  try
-    TransactionID := InviteTran.ID;
-  finally
-    InviteTran.Free;
-  end;
-
-  Check(nil = TIdSipTransactionRegistry.FindTransaction(TransactionID),
-        'Transaction not removed from registry');
-end;
-
-//******************************************************************************
 //* TestTIdSipResponseLocationsList                                            *
 //******************************************************************************
 //* TestTIdSipResponseLocationsList Public methods *****************************
@@ -5203,26 +5238,40 @@ begin
 end;
 
 //******************************************************************************
-//* TTerminatingTransactionWaitTestCase                                        *
+//* TTransactionWaitTestCase                                                   *
 //******************************************************************************
-//* TTerminatingTransactionWaitTestCase Protected methods **********************
+//* TTransactionWaitTestCase Public methods ************************************
 
-procedure TTerminatingTransactionWaitTestCase.SetUp;
+procedure TTransactionWaitTestCase.SetUp;
 begin
   inherited SetUp;
 
   Self.Binding := TIdSipConnectionBindings.Create;
-
   Self.Destination := TIdSipContactHeader.Create;
   Self.Destination.Value := 'sip:cthulhu@rlyeh.org';
 
   Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
   Self.Invite     := TIdSipTestResources.CreateBasicRequest;
   Self.Ringing    := TIdSipResponse.InResponseTo(Self.Invite, SIPRinging, Self.Destination);
+  Self.OK         := TIdSipResponse.InResponseTo(Self.Invite, SIPOK, Self.Destination);
+  Self.Options    := TIdSipTestResources.CreateBasicRequest;
+  Self.Options.Method := MethodOptions;
+  Self.Options.CSeq.Method := Self.Options.Method;
+  Self.Target     := TIdSipLocation.Create(Self.Dispatcher.TransportType, '127.0.0.1', 5060);
+
+  // The Dispatcher will free the transaction.
+  Self.Tran := Self.CreateTransaction;
+
+  Self.Wait := Self.WaitType.Create;
+  Self.Wait.TransactionID := Self.Tran.ID;
 end;
 
-procedure TTerminatingTransactionWaitTestCase.TearDown;
+procedure TTransactionWaitTestCase.TearDown;
 begin
+  Self.Wait.Free;
+  Self.Target.Free;
+  Self.Options.Free;
+  Self.OK.Free;
   Self.Ringing.Free;
   Self.Invite.Free;
   Self.Dispatcher.Free;
@@ -5232,11 +5281,90 @@ begin
   inherited TearDown;
 end;
 
+//* TTransactionWaitTestCase Protected methods *********************************
+
+procedure TTransactionWaitTestCase.CheckRequestSent(Msg: String);
+begin
+  Check(Self.SentRequestCount < Self.Dispatcher.SentRequestCount, Msg);
+end;
+
+procedure TTransactionWaitTestCase.CheckNoRequestSent(Msg: String);
+begin
+  CheckEquals(Self.SentRequestCount, Self.Dispatcher.SentRequestCount, Msg);
+end;
+
+procedure TTransactionWaitTestCase.MarkSentRequestCount;
+begin
+  Self.SentRequestCount := Self.Dispatcher.SentRequestCount;
+end;
+
+function TTransactionWaitTestCase.CreateTransaction: TIdSipTransaction;
+begin
+  Result := nil;
+  Fail(Self.ClassName + ' must override CreateTransaction');
+end;
+
+procedure TTransactionWaitTestCase.CheckTriggerDoesNothing(Msg: String);
+begin
+  Fail(Self.ClassName + ' must override CheckTriggerDoesNothing');
+end;
+
+function TTransactionWaitTestCase.WaitType: TIdSipTransactionWaitClass;
+begin
+  Result := nil;
+  Fail(Self.ClassName + ' must override WaitType');
+end;
+
+//* TTransactionWaitTestCase Published methods *********************************
+
+procedure TTransactionWaitTestCase.TestTriggerWithInappropriateObjectID;
+begin
+  Self.Wait.TransactionID := 'fake ID';
+  Self.Wait.Trigger;
+  CheckTriggerDoesNothing('Triggered on unregistered object ID');
+end;
+
+procedure TTransactionWaitTestCase.TestTriggerWithUnregisteredObjectID;
+var
+  R: TIdRegisteredObject;
+begin
+  R := TIdRegisteredObject.Create;
+  try
+    Self.Wait.TransactionID := R.ID;
+    Self.Wait.Trigger;
+    CheckTriggerDoesNothing('Triggered on inappropriate object ID');
+  finally
+    R.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TTerminatingTransactionWaitTestCase                                        *
+//******************************************************************************
+//* TTerminatingTransactionWaitTestCase Protected methods **********************
+
+procedure TTerminatingTransactionWaitTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  Self.MarkTransactionCount;
+end;
+
 //* TTerminatingTransactionWaitTestCase Protected methods **********************
 
 procedure TTerminatingTransactionWaitTestCase.CheckTransactionNotRemoved(Msg: String);
 begin
   Check(Self.TransactionCount = Self.Dispatcher.TransactionCount, Msg);
+end;
+
+procedure TTerminatingTransactionWaitTestCase.CheckTransactionRemoved(Msg: String);
+begin
+  Check(Self.TransactionCount > Self.Dispatcher.TransactionCount, Msg);
+end;
+
+procedure TTerminatingTransactionWaitTestCase.CheckTriggerDoesNothing(Msg: String);
+begin
+  CheckTransactionNotRemoved(Msg);
 end;
 
 procedure TTerminatingTransactionWaitTestCase.MarkTransactionCount;
@@ -5245,39 +5373,65 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipClientInviteTransactionTimerBWait                                *
+//* TestTIdSipClientInviteTransactionTimerAWait                                *
 //******************************************************************************
-//* TestTIdSipClientInviteTransactionTimerBWait Public methods *****************
+//* TestTIdSipClientInviteTransactionTimerAWait Public methods *****************
 
-procedure TestTIdSipClientInviteTransactionTimerBWait.SetUp;
+procedure TestTIdSipClientInviteTransactionTimerAWait.SetUp;
 begin
   inherited SetUp;
 
-  Self.DestinationLocation := TIdSipLocation.Create;
-  Self.DestinationLocation.IPAddress := '127.0.0.1';
-  Self.DestinationLocation.Port      := 5060;
-  Self.DestinationLocation.Transport := Self.Dispatcher.TransportType;
-
-  Self.Tran := Self.Dispatcher.AddClientTransaction(Self.Invite) as TIdSipClientInviteTransaction;
-  Self.Tran.SendRequest(Self.DestinationLocation);
-
-  Self.Wait := TIdSipClientInviteTransactionTimerBWait.Create;
-  Self.Wait.TransactionID := Self.Tran.ID;
+  Self.MarkSentRequestCount;
 end;
 
-procedure TestTIdSipClientInviteTransactionTimerBWait.TearDown;
-begin
-  Self.Wait.Free;
-  Self.DestinationLocation.Free;
+//* TestTIdSipClientInviteTransactionTimerAWait Protected methods **************
 
-  inherited TearDown;
+procedure TestTIdSipClientInviteTransactionTimerAWait.CheckTriggerDoesNothing(Msg: String);
+begin
+  CheckNoRequestSent(Msg);
+end;
+
+function TestTIdSipClientInviteTransactionTimerAWait.CreateTransaction: TIdSipTransaction;
+begin
+  Result := Self.Dispatcher.AddClientTransaction(Self.Invite) as TIdSipClientInviteTransaction;
+  Result.SendRequest(Self.Target);
+end;
+
+function TestTIdSipClientInviteTransactionTimerAWait.WaitType: TIdSipTransactionWaitClass;
+begin
+  Result := TIdSipClientInviteTransactionTimerAWait;
+end;
+
+//* TestTIdSipClientInviteTransactionTimerAWait Published methods **************
+
+procedure TestTIdSipClientInviteTransactionTimerAWait.TestTrigger;
+begin
+  Self.MarkSentRequestCount;
+  Self.Wait.Trigger;
+  CheckRequestSent('No request sent, so no Wait was triggered');
+end;
+
+//******************************************************************************
+//* TestTIdSipClientInviteTransactionTimerBWait                                *
+//******************************************************************************
+//* TestTIdSipClientInviteTransactionTimerBWait Protected methods **************
+
+function TestTIdSipClientInviteTransactionTimerBWait.CreateTransaction: TIdSipTransaction;
+begin
+  Result := Self.Dispatcher.AddClientTransaction(Self.Invite) as TIdSipClientInviteTransaction;
+  Result.SendRequest(Self.Target);
+end;
+
+function TestTIdSipClientInviteTransactionTimerBWait.WaitType: TIdSipTransactionWaitClass;
+begin
+  Result := TIdSipClientInviteTransactionTimerBWait;
 end;
 
 //* TestTIdSipClientInviteTransactionTimerBWait Private methods ****************
 
 procedure TestTIdSipClientInviteTransactionTimerBWait.MoveToProceedingState(Tran: TIdSipTransaction);
 begin
-  Self.Tran.ReceiveResponse(Self.Ringing, Self.Binding);
+  Tran.ReceiveResponse(Self.Ringing, Self.Binding);
 end;
 
 //* TestTIdSipClientInviteTransactionTimerBWait Published methods **************
@@ -5286,32 +5440,202 @@ procedure TestTIdSipClientInviteTransactionTimerBWait.TestTimerBFiresInProceedin
 begin
   Self.MoveToProceedingState(Self.Tran);
 
-  Self.MarkTransactionCount;
   Self.Wait.Trigger;
   Self.CheckTransactionNotRemoved('Transaction removed before it was terminated');
+end;
+
+procedure TestTIdSipClientInviteTransactionTimerBWait.TestTrigger;
+begin
+  Self.Wait.Trigger;
+  Self.CheckTransactionRemoved('Transaction not terminated, hence Wait didn''t fire');
+end;
+
+//******************************************************************************
+//* TestTIdSipClientInviteTransactionTimerDWait                                *
+//******************************************************************************
+//* TestTIdSipClientInviteTransactionTimerDWait Public methods *****************
+
+procedure TestTIdSipClientInviteTransactionTimerDWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.NotFound := TIdSipResponse.InResponseTo(Self.Invite, SIPNotFound);
+end;
+
+procedure TestTIdSipClientInviteTransactionTimerDWait.TearDown;
+begin
+  Self.NotFound.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipClientInviteTransactionTimerDWait Protected methods **************
+
+function TestTIdSipClientInviteTransactionTimerDWait.CreateTransaction: TIdSipTransaction;
+begin
+  Result := Self.Dispatcher.AddClientTransaction(Self.Invite);
+  Result.SendRequest(Self.Target);
+end;
+
+function TestTIdSipClientInviteTransactionTimerDWait.WaitType: TIdSipTransactionWaitClass;
+begin
+  Result := TIdSipClientInviteTransactionTimerDWait;
+end;
+
+//* TestTIdSipClientInviteTransactionTimerDWait Private methods ****************
+
+procedure TestTIdSipClientInviteTransactionTimerDWait.MoveToCompletedState(Tran: TIdSipTransaction);
+begin
+  Self.Tran.ReceiveResponse(Self.NotFound, Self.Binding);
+end;
+
+//* TestTIdSipClientInviteTransactionTimerDWait Published methods **************
+
+procedure TestTIdSipClientInviteTransactionTimerDWait.TestTrigger;
+begin
+  Self.MoveToCompletedState(Self.Tran);
+
+  Self.Wait.Trigger;
+  CheckTransactionRemoved('Transaction not terminated, hence Wait wasn''t triggered');
+end;
+
+//******************************************************************************
+//* TestTIdSipClientNonInviteTransactionTimerEWait                             *
+//******************************************************************************
+//* TestTIdSipClientNonInviteTransactionTimerEWait Public methods **************
+
+procedure TestTIdSipClientNonInviteTransactionTimerEWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.MarkSentRequestCount;
+end;
+
+//* TestTIdSipClientNonInviteTransactionTimerEWait Protected methods ***********
+
+procedure TestTIdSipClientNonInviteTransactionTimerEWait.CheckTriggerDoesNothing(Msg: String);
+begin
+  CheckNoRequestSent(Msg);
+end;
+
+function TestTIdSipClientNonInviteTransactionTimerEWait.CreateTransaction: TIdSipTransaction;
+begin
+  Result := Self.Dispatcher.AddClientTransaction(Self.Options);
+  Result.SendRequest(Self.Target);
+end;
+
+function TestTIdSipClientNonInviteTransactionTimerEWait.WaitType: TIdSipTransactionWaitClass;
+begin
+  Result := TIdSipClientNonInviteTransactionTimerEWait;
+end;
+
+//* TestTIdSipClientNonInviteTransactionTimerEWait Published methods ***********
+
+procedure TestTIdSipClientNonInviteTransactionTimerEWait.TestTrigger;
+begin
+  Self.Wait.Trigger;
+  CheckRequestSent('No request sent, hence no Wait triggered');
+end;
+
+//******************************************************************************
+//* TestTIdSipClientNonInviteTransactionTimerFWait                             *
+//******************************************************************************
+//* TestTIdSipClientNonInviteTransactionTimerFWait Protected methods ***********
+
+function TestTIdSipClientNonInviteTransactionTimerFWait.CreateTransaction: TIdSipTransaction;
+begin
+  Result := Self.Dispatcher.AddClientTransaction(Self.Options);
+  Result.SendRequest(Self.Target);
+end;
+
+function TestTIdSipClientNonInviteTransactionTimerFWait.WaitType: TIdSipTransactionWaitClass;
+begin
+  Result := TIdSipClientNonInviteTransactionTimerFWait;
+end;
+
+//* TestTIdSipClientNonInviteTransactionTimerFWait Published methods ***********
+
+procedure TestTIdSipClientNonInviteTransactionTimerFWait.TestTrigger;
+begin
+  Self.Wait.Trigger;
+  CheckTransactionRemoved('Transaction not terminated, hence Wait didn''t trigger');
+end;
+
+//******************************************************************************
+//* TestTIdSipServerInviteTransactionTimerGWait                                *
+//******************************************************************************
+//* TestTIdSipServerInviteTransactionTimerGWait Public methods *****************
+
+procedure TestTIdSipServerInviteTransactionTimerGWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.MarkSentResponseCount;
+end;
+
+//* TestTIdSipServerInviteTransactionTimerGWait Protected methods **************
+
+procedure TestTIdSipServerInviteTransactionTimerGWait.CheckNoResponseSent(Msg: String);
+begin
+  CheckEquals(Self.SentResponseCount, Self.Dispatcher.SentResponseCount, Msg);
+end;
+
+procedure TestTIdSipServerInviteTransactionTimerGWait.CheckResponseSent(Msg: String);
+begin
+  Check(Self.SentResponseCount < Self.Dispatcher.SentResponseCount, Msg);
+end;
+
+procedure TestTIdSipServerInviteTransactionTimerGWait.MarkSentResponseCount;
+begin
+  Self.SentResponseCount := Self.Dispatcher.SentResponseCount;
+end;
+
+procedure TestTIdSipServerInviteTransactionTimerGWait.MoveToCompletedState(Tran: TIdSipTransaction);
+begin
+  Self.Dispatcher.SendResponse(Self.OK);
+end;
+
+//* TestTIdSipServerInviteTransactionTimerGWait Protected methods **************
+
+procedure TestTIdSipServerInviteTransactionTimerGWait.CheckTriggerDoesNothing(Msg: String);
+begin
+  CheckNoResponseSent(Msg);
+end;
+
+function TestTIdSipServerInviteTransactionTimerGWait.CreateTransaction: TIdSipTransaction;
+begin
+  Result := Self.Dispatcher.AddServerTransaction(Self.Invite) as TIdSipServerInviteTransaction;
+  Result.ReceiveRequest(Self.Invite, Self.Binding);
+end;
+
+function TestTIdSipServerInviteTransactionTimerGWait.WaitType: TIdSipTransactionWaitClass;
+begin
+  Result := TIdSipServerInviteTransactionTimerGWait;
+end;
+
+//* TestTIdSipServerInviteTransactionTimerGWait Published methods **************
+
+procedure TestTIdSipServerInviteTransactionTimerGWait.TestTrigger;
+begin
+  Self.MoveToCompletedState(Self.Tran);
+  Self.Wait.Trigger;
+  CheckResponseSent('No response sent, so no Wait triggered');
 end;
 
 //******************************************************************************
 //* TestTIdSipServerInviteTransactionTimerHWait                                *
 //******************************************************************************
-//* TestTIdSipServerInviteTransactionTimerHWait Public methods *****************
+//* TestTIdSipServerInviteTransactionTimerHWait Protected methods **************
 
-procedure TestTIdSipServerInviteTransactionTimerHWait.SetUp;
+function TestTIdSipServerInviteTransactionTimerHWait.CreateTransaction: TIdSipTransaction;
 begin
-  inherited SetUp;
-
-  Self.Tran := Self.Dispatcher.AddServerTransaction(Self.Invite) as TIdSipServerInviteTransaction;
-  Self.Tran.ReceiveRequest(Self.Invite, Self.Binding);
-
-  Self.Wait := TIdSipServerInviteTransactionTimerHWait.Create;
-  Self.Wait.TransactionID := Self.Tran.ID;
+  Result := Self.Dispatcher.AddServerTransaction(Self.Invite);
+  Result.ReceiveRequest(Self.Invite, Self.Binding);
 end;
 
-procedure TestTIdSipServerInviteTransactionTimerHWait.TearDown;
+function TestTIdSipServerInviteTransactionTimerHWait.WaitType: TIdSipTransactionWaitClass;
 begin
-  Self.Wait.Free;
-
-  inherited TearDown;
+  Result := TIdSipServerInviteTransactionTimerHWait;
 end;
 
 //* TestTIdSipServerInviteTransactionTimerHWait Private methods ****************
@@ -5327,10 +5651,145 @@ procedure TestTIdSipServerInviteTransactionTimerHWait.TestTimerHFiresInProceedin
 begin
   Self.MoveToProceedingState(Self.Tran);
 
-  Self.MarkTransactionCount;
   Self.Wait.Trigger;
   Self.CheckTransactionNotRemoved('Transaction removed before it was terminated');
 end;
+
+//******************************************************************************
+//* TestTIdSipServerInviteTransactionTimerIWait                                *
+//******************************************************************************
+//* TestTIdSipServerInviteTransactionTimerIWait Protected methods **************
+
+function TestTIdSipServerInviteTransactionTimerIWait.CreateTransaction: TIdSipTransaction;
+begin
+  Result := Self.Dispatcher.AddServerTransaction(Self.Invite);
+  Result.ReceiveRequest(Self.Invite, Self.Binding);
+end;
+
+function TestTIdSipServerInviteTransactionTimerIWait.WaitType: TIdSipTransactionWaitClass;
+begin
+  Result := TIdSipServerInviteTransactionTimerIWait;
+end;
+
+//* TestTIdSipServerInviteTransactionTimerIWait Private methods ****************
+
+procedure TestTIdSipServerInviteTransactionTimerIWait.MoveToConfirmedState(Tran: TIdSipTransaction);
+var
+  Ack:      TIdSipRequest;
+  NotFound: TIdSipResponse;
+begin
+  NotFound := TIdSipResponse.InResponseTo(Self.Invite, SIPNotFound);
+  try
+    Tran.SendResponse(NotFound);
+
+    Ack := Self.Invite.AckFor(NotFound);
+    try
+      Tran.ReceiveRequest(Ack, Self.Binding);
+    finally
+      Ack.Free;
+    end;
+  finally
+    NotFound.Free;
+  end;
+end;
+
+//* TestTIdSipServerInviteTransactionTimerIWait Published methods **************
+
+procedure TestTIdSipServerInviteTransactionTimerIWait.Trigger;
+begin
+  Self.MoveToConfirmedState(Self.Tran);
+  Self.Wait.Trigger;
+  CheckTransactionRemoved('Transaction not terminated, hence Wait not triggered');
+end;
+
+//******************************************************************************
+//* TestTIdSipServerNonInviteTransactionTimerJWait                             *
+//******************************************************************************
+//* TestTIdSipServerNonInviteTransactionTimerJWait Protected methods ***********
+
+function TestTIdSipServerNonInviteTransactionTimerJWait.CreateTransaction: TIdSipTransaction;
+begin
+  Result := Self.Dispatcher.AddServerTransaction(Self.Options);
+  Result.ReceiveRequest(Self.Options, Self.Binding);
+end;
+
+function TestTIdSipServerNonInviteTransactionTimerJWait.WaitType: TIdSipTransactionWaitClass;
+begin
+  Result := TIdSipServerNonInviteTransactionTimerJWait;
+end;
+
+//* TestTIdSipServerNonInviteTransactionTimerJWait Private methods *************
+
+procedure TestTIdSipServerNonInviteTransactionTimerJWait.MoveToCompletedState(Tran: TIdSipTransaction);
+var
+  NotFound: TIdSipResponse;
+begin
+  NotFound := TIdSipResponse.InResponseTo(Self.Options, SIPNotFound);
+  try
+    Tran.SendResponse(NotFound);
+  finally
+    NotFound.Free;
+  end;
+end;
+
+//* TestTIdSipServerNonInviteTransactionTimerJWait Published methods ***********
+
+procedure TestTIdSipServerNonInviteTransactionTimerJWait.Trigger;
+begin
+  Self.MoveToCompletedState(Self.Tran);
+  Self.Wait.Trigger;
+  CheckTransactionRemoved('Transaction not terminated, hence Wait not triggered');
+end;
+
+//******************************************************************************
+//* TestTIdSipClientNonInviteTransactionTimerKWait                             *
+//******************************************************************************
+//* TestTIdSipClientNonInviteTransactionTimerKWait Public methods **************
+
+procedure TestTIdSipClientNonInviteTransactionTimerKWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.NotFound := TIdSipResponse.InResponseTo(Self.Options, SIPNotFound);
+end;
+
+procedure TestTIdSipClientNonInviteTransactionTimerKWait.TearDown;
+begin
+  Self.NotFound.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipClientNonInviteTransactionTimerKWait Protected methods ***********
+
+function TestTIdSipClientNonInviteTransactionTimerKWait.CreateTransaction: TIdSipTransaction;
+begin
+  Result := Self.Dispatcher.AddClientTransaction(Self.Options);
+  Result.SendRequest(Self.Target);
+end;
+
+function TestTIdSipClientNonInviteTransactionTimerKWait.WaitType: TIdSipTransactionWaitClass;
+begin
+  Result := TIdSipClientNonInviteTransactionTimerKWait;
+end;
+
+//* TestTIdSipClientNonInviteTransactionTimerKWait Private methods *************
+
+procedure TestTIdSipClientNonInviteTransactionTimerKWait.MoveToCompletedState(Tran: TIdSipTransaction);
+begin
+  Tran.ReceiveResponse(Self.NotFound, Self.Binding);
+end;
+
+//* TestTIdSipClientNonInviteTransactionTimerKWait Published methods ***********
+
+procedure TestTIdSipClientNonInviteTransactionTimerKWait.TestTrigger;
+begin
+  Self.MoveToCompletedState(Self.Tran);
+
+  Self.Wait.Trigger;
+  Self.CheckTransactionRemoved('Transaction not terminated hence Wait didn''t trigger');
+end;
+
 
 //******************************************************************************
 //* TTransactionDispatcherListenerMethodTestCase                               *

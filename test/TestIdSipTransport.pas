@@ -84,9 +84,7 @@ type
     procedure TestNonstandardPort;
     procedure TestRegisterTransportType;
     procedure TestSecureTransports;
-    procedure TestTransportFor;
     procedure TestTransportTypeFor;
-    procedure TestUnregisterTransport;
     procedure TestUriSchemeFor;
   end;
 
@@ -161,6 +159,32 @@ type
   TestTIdSipMockUdpTransport = class(TestTIdSipMockTransport)
   protected
     function TransportType: TIdSipTransportClass; override;
+  end;
+
+  TestTIdSipMessageExceptionWait = class(TTestCase)
+  private
+    Transport: TIdSipMockTransport;
+    Wait:      TIdSipMessageExceptionWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTrigger;
+    procedure TestTriggerOnNonExistentAction;
+    procedure TestTriggerOnWrongTypeOfObject;
+  end;
+
+  TestTIdSipReceiveMessageWait = class(TTestCase)
+  private
+    Transport: TIdSipMockTransport;
+    Wait:      TIdSipReceiveMessageWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTrigger;
+    procedure TestTriggerOnNonExistentAction;
+    procedure TestTriggerOnWrongTypeOfObject;
   end;
 
   TestTIdSipTransports = class(TTestCase)
@@ -262,9 +286,9 @@ type
 implementation
 
 uses
-  IdException, IdGlobal, IdSimpleParser, IdSipSCTPTransport, IdSipTlsTransport,
-  IdSipUdpTransport, IdSocketHandle, IdSSLOpenSSL, IdStack, IdSystem,
-  IdTcpClient, IdUdpClient, IdUDPServer, TestMessages;
+  IdException, IdGlobal, IdRegisteredObject, IdSimpleParser, IdSipSCTPTransport,
+  IdSipTlsTransport, IdSipUdpTransport, IdSocketHandle, IdSSLOpenSSL, IdStack,
+  IdSystem, IdTcpClient, IdUdpClient, IdUDPServer, TestMessages;
 
 function Suite: ITestSuite;
 begin
@@ -276,6 +300,8 @@ begin
   Result.AddTest(TestTIdSipMockTlsTransport.Suite);
   Result.AddTest(TestTIdSipMockTlsOverSctpTransport.Suite);
   Result.AddTest(TestTIdSipMockUdpTransport.Suite);
+  Result.AddSuite(TestTIdSipMessageExceptionWait.Suite);
+  Result.AddSuite(TestTIdSipReceiveMessageWait.Suite);
   Result.AddSuite(TestTIdSipTransports.Suite);
   Result.AddTest(TestTIdSipTransportExceptionMethod.Suite);
   Result.AddTest(TestTIdSipTransportReceiveRequestMethod.Suite);
@@ -715,31 +741,6 @@ begin
   end;
 end;
 
-procedure TestTransportRegistry.TestTransportFor;
-var
-  ID1, ID2: String;
-  T1, T2:   TIdSipTransport;
-begin
-  Check(nil = TIdSipTransportRegistry.TransportFor('non-existent transport ID'),
-        'TransportFor returned a transport for a non-existent transport ID');
-
-  T1 := TIdSipMockTcpTransport.Create;
-  try
-    T2 := TIdSipMockTcpTransport.Create;
-    try
-      ID1 := T1.ID;
-      ID2 := T2.ID;
-
-      Check(T1 = TIdSipTransportRegistry.TransportFor(ID1),
-            'TransportFor returned an unexpected transport');
-    finally
-      T2.Free;
-    end;
-  finally
-    T1.Free;
-  end;
-end;
-
 procedure TestTransportRegistry.TestTransportTypeFor;
 const
   NewTransport = 'UNKNOWN-TRANSPORT';
@@ -751,29 +752,6 @@ begin
                 NewTransport);
   finally
     TIdSipTransportRegistry.UnregisterTransportType(NewTransport);
-  end;
-end;
-
-procedure TestTransportRegistry.TestUnregisterTransport;
-var
-  ID:            String;
-  MockTransport: TIdSipTransport;
-begin
-  MockTransport := TIdSipMockTcpTransport.Create;
-  try
-    ID := MockTransport.ID;
-    TIdSipTransportRegistry.UnregisterTransport(ID);
-    Check(nil = TIdSipTransportRegistry.TransportFor(ID),
-          'Registry didn''t unregister transport');
-
-    try
-      TIdSipTransportRegistry.UnregisterTransport(ID);
-    except
-      on E: Exception do
-        Fail('Double-unregister blew up: ' + E.ClassName + ': ' + E.Message);
-    end;
-  finally
-    MockTransport.Free;
   end;
 end;
 
@@ -1163,6 +1141,161 @@ end;
 function TestTIdSipMockUdpTransport.TransportType: TIdSipTransportClass;
 begin
   Result := TIdSipMockUdpTransport;
+end;
+
+//******************************************************************************
+//* TestTIdSipMessageExceptionWait                                             *
+//******************************************************************************
+//* TestTIdSipMessageExceptionWait Public methods ******************************
+
+procedure TestTIdSipMessageExceptionWait.SetUp;
+var
+  Msg:           TIdSipMessage;
+  TransportType: String;
+begin
+  inherited SetUp;
+
+  TransportType := UdpTransport;
+
+  TIdSipTransportRegistry.RegisterTransportType(TransportType, TIdSipMockUdpTransport);
+  Self.Transport := TIdSipTransportRegistry.TransportTypeFor(TransportType).Create as TIdSipMockTransport;
+
+  Msg := TIdSipTestResources.CreateBasicRequest;
+  try
+    Self.Wait := TIdSipMessageExceptionWait.Create;
+    Self.Wait.ExceptionType := EIdSipTransport;
+    Self.Wait.ExceptionMessage := 'Connection timed out';
+    Self.Wait.FailedMessage    := Msg.Copy;
+    Self.Wait.Reason           := 'Too lazy to evaluate';
+    Self.Wait.TransportID      := Self.Transport.ID;
+  finally
+    Msg.Free;
+  end;
+end;
+
+procedure TestTIdSipMessageExceptionWait.TearDown;
+begin
+  Self.Wait.Free;
+
+  TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipMessageExceptionWait Published methods ***************************
+
+procedure TestTIdSipMessageExceptionWait.TestTrigger;
+var
+  L: TIdSipTestTransportListener;
+begin
+  L := TIdSipTestTransportListener.Create;
+  try
+    Self.Transport.AddTransportListener(L);
+
+    Self.Wait.Trigger;
+
+    Check(L.Exception, 'Listener not notified: no exception occured, so no Wait triggered');
+  finally
+    Self.Transport.RemoveTransportListener(L);
+    L.Free;
+  end;
+end;
+
+procedure TestTIdSipMessageExceptionWait.TestTriggerOnNonExistentAction;
+begin
+  // Check that the Wait doesn't blow up when given the ID of a nonexistent
+  // transport.
+  Self.Wait.TransportID := 'fake ID';
+  Self.Wait.Trigger;
+end;
+
+procedure TestTIdSipMessageExceptionWait.TestTriggerOnWrongTypeOfObject;
+var
+  R: TIdRegisteredObject;
+begin
+  // Check that the Wait doesn't blow up when given the ID of a non-transport
+  // object.
+  R := TIdRegisteredObject.Create;
+  try
+    Self.Wait.TransportID := R.ID;
+    Self.Wait.Trigger;
+  finally
+    R.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipReceiveMessageWait                                               *
+//******************************************************************************
+//* TestTIdSipReceiveMessageWait Public methods ********************************
+
+procedure TestTIdSipReceiveMessageWait.SetUp;
+var
+  TransportType: String;
+begin
+  inherited SetUp;
+
+  TransportType := UdpTransport;
+  TIdSipTransportRegistry.RegisterTransportType(TransportType, TIdSipMockUdpTransport);
+  Self.Transport := TIdSipTransportRegistry.TransportTypeFor(TransportType).Create as TIdSipMockTransport;
+
+  Self.Wait := TIdSipReceiveMessageWait.Create;
+  Self.Wait.Message      := TIdSipTestResources.CreateBasicRequest;
+  Self.Wait.TransportID  := Self.Transport.ID;
+  Self.Wait.ReceivedFrom := TIdSipConnectionBindings.Create;
+
+  Self.Wait.ReceivedFrom.LocalIP   := '127.0.0.1';
+  Self.Wait.ReceivedFrom.LocalPort := 5060;
+  Self.Wait.ReceivedFrom.PeerIP    := '127.0.0.1';
+  Self.Wait.ReceivedFrom.PeerPort  := 5060;
+  Self.Wait.ReceivedFrom.Transport := Self.Transport.GetTransportType;
+end;
+
+procedure TestTIdSipReceiveMessageWait.TearDown;
+begin
+  Self.Wait.Free;
+
+  inherited TearDown;
+end;
+
+procedure TestTIdSipReceiveMessageWait.TestTrigger;
+var
+  L: TIdSipTestTransportListener;
+begin
+  L := TIdSipTestTransportListener.Create;
+  try
+    Self.Transport.AddTransportListener(L);
+
+    Self.Wait.Trigger;
+
+    Check(L.ReceivedRequest, 'No request received, so no Wait triggered');
+  finally
+    Self.Transport.RemoveTransportListener(L);
+    L.Free;
+  end;
+end;
+
+procedure TestTIdSipReceiveMessageWait.TestTriggerOnNonExistentAction;
+begin
+  // Check that the Wait doesn't blow up when given the ID of a nonexistent
+  // transport.
+  Self.Wait.TransportID := 'fake ID';
+  Self.Wait.Trigger;
+end;
+
+procedure TestTIdSipReceiveMessageWait.TestTriggerOnWrongTypeOfObject;
+var
+  R: TIdRegisteredObject;
+begin
+  // Check that the Wait doesn't blow up when given the ID of a non-transport
+  // object.
+  R := TIdRegisteredObject.Create;
+  try
+    Self.Wait.TransportID := R.ID;
+    Self.Wait.Trigger;
+  finally
+    R.Free;
+  end;
 end;
 
 //******************************************************************************

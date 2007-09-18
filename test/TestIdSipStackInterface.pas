@@ -171,19 +171,6 @@ type
     procedure TestTerminateActionWithNonExistentHandle;
   end;
 
-  TestTIdSipStackInterfaceRegistry = class(TTestCase)
-  private
-    Configuration: TStrings;
-    Timer:         TIdTimerQueue;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestStackInterfacesAddToRegistryAutomatically;
-    procedure TestStackInterfacesGetUniqueIDs;
-    procedure TestStackInterfacesAutomaticallyUnregister;
-  end;
-
   TStackInterfaceExtensionTestCase = class(TStackInterfaceTestCase)
   protected
     Configuration: TStrings;
@@ -197,10 +184,12 @@ type
 
   TestTIdSipColocatedRegistrarExtension = class(TStackInterfaceExtensionTestCase)
   private
-    Contact:  String;
-    Contacts: TIdSipContacts;
-    Reg:      TIdSipColocatedRegistrarExtension;
-    Target:   TIdSipUri;
+    Contact:      String;
+    Contacts:     TIdSipContacts;
+    LocalAddress: String;
+    LocalPort:    Integer;
+    Reg:          TIdSipColocatedRegistrarExtension;
+    Target:       TIdSipUri;
 
     procedure ReceiveRegister(FromUri: TIdSipUri; Contact: String);
   protected
@@ -572,7 +561,6 @@ begin
   Result := TTestSuite.Create('IdSipStackInterface unit tests');
   Result.AddTest(TestTIdSipStackInterfaceCreation.Suite);
   Result.AddTest(TestTIdSipStackInterface.Suite);
-  Result.AddTest(TestTIdSipStackInterfaceRegistry.Suite);
   Result.AddTest(TestTIdSipColocatedRegistrarExtension.Suite);
   Result.AddTest(TestTIdSipNameServerExtension.Suite);
   Result.AddTest(TestTIdEventData.Suite);
@@ -677,7 +665,8 @@ begin
     BasicConf.Free;
   end;
 
-  Self.RemoteMockTransport := TIdSipDebugTransportRegistry.LastTransport as TIdSipMockTransport;
+  Self.RemoteMockTransport := TIdSipDebugTransportRegistry.TransportRunningOn(Self.TargetAddress, Self.TargetPort) as TIdSipMockTransport;
+  CheckEquals(Self.TargetAddress, Self.RemoteMockTransport.FirstIPBound, 'DebugTransportRegistry messed up finding RemoteMockTransport');
 
   Self.LocalAddress  := '10.0.0.6';
   Self.LocalPort     := 5060;
@@ -696,7 +685,8 @@ begin
   end;
   Self.Intf.Resume;
 
-  Self.MockTransport := TIdSipDebugTransportRegistry.LastTransport as TIdSipMockTransport;
+  Self.MockTransport := TIdSipDebugTransportRegistry.TransportRunningOn(Self.LocalAddress, Self.LocalPort) as TIdSipMockTransport;
+  CheckEquals(Self.LocalAddress, Self.MockTransport.FirstIPBound, 'DebugTransportRegistry messed up finding MockTransport');
 
   // The registrar URI MUST NOT be that of RemoteUA, because RemoteUA will not
   // process REGISTER messages.
@@ -710,7 +700,7 @@ begin
   Self.RemoteOffer       := Format(DummySdp, [Self.TargetAddress]);
   Self.RemoteMimeType    := 'application/sdp';
 
-  Self.ClearPendingStackStartedNotification;  
+  Self.ClearPendingStackStartedNotification;
 end;
 
 procedure TestTIdSipStackInterface.TearDown;
@@ -1642,7 +1632,9 @@ begin
                           Self.LocalMimeType);
   // Send the INVITE
   Self.Intf.Send(H);
+  Self.MarkSentRequestCount;
   Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
+  CheckRequestSent('No INVITE sent');
   Self.RemoteMockTransport.FireOnRequest(Self.MockTransport.LastRequest);
 
   // Receive the 100 Trying and 180 Ringing from the RemoteUA
@@ -1699,16 +1691,19 @@ begin
 end;
 
 procedure TestTIdSipStackInterface.TestReconfigureAddsStackAsTransportListener;
+const
+  Address = '127.0.0.1';
+  Port    = 5060;
 var
   Conf: TStrings;
 begin
   Conf := TStringList.Create;
   try
-    Conf.Add(ListenDirective + ': UDP 127.0.0.1:5060');
+    Conf.Add(ListenDirective + ': UDP ' + Address + ':' + IntToStr(Port));
 
     Self.Intf.ReconfigureStack(Conf);
     Self.TimerQueue.TriggerAllEventsOfType(TIdSipStackReconfigureStackInterfaceWait);
-    Self.MockTransport := TIdSipDebugTransportRegistry.LastTransport as TIdSipMockTransport;
+    Self.MockTransport := TIdSipDebugTransportRegistry.TransportRunningOn(Address, Port) as TIdSipMockTransport;
   finally
     Conf.Free;
   end;
@@ -2013,9 +2008,10 @@ end;
 }
 procedure TestTIdSipStackInterface.TestStackListensToSubscribeModule;
 var
-  Conf:    TStrings;
-  Package: TIdSipEventPackageClass;
-  Stack:   TIdSipStackInterface;
+  Conf:      TStrings;
+  LocalPort: Cardinal;
+  Package:   TIdSipEventPackageClass;
+  Stack:     TIdSipStackInterface;
 begin
   Package := TIdSipTargetDialogPackage;
 
@@ -2023,17 +2019,18 @@ begin
   try
     Conf := TStringList.Create;
     try
-      Conf.Add('Listen: UDP ' + Self.LocalAddress + ':' + IntToStr(Self.LocalPort));
+      LocalPort := Self.LocalPort + 1;
+      Conf.Add('Listen: UDP ' + Self.LocalAddress + ':' + IntToStr(LocalPort));
       Conf.Add('NameServer: MOCK;ReturnOnlySpecifiedRecords');
-      Conf.Add('Contact: sip:foo@' + Self.LocalAddress + ':' + IntToStr(Self.LocalPort));
-      Conf.Add('From: sip:foo@' + Self.LocalAddress + ':' + IntToStr(Self.LocalPort));
+      Conf.Add('Contact: sip:foo@' + Self.LocalAddress + ':' + IntToStr(LocalPort));
+      Conf.Add('From: sip:foo@' + Self.LocalAddress + ':' + IntToStr(LocalPort));
       Conf.Add('SupportEvent: ' + Package.EventPackage);
 
       Stack := TIdSipStackInterface.Create(Self.UI.Handle, Self.TimerQueue, Conf);
       try
         // This is expedient, but evil: it works because Self.MockTransport will
         // be reset in SetUp when the next test runs.
-        Self.MockTransport := TIdSipDebugTransportRegistry.LastTransport as TIdSipMockUdpTransport;
+        Self.MockTransport := TIdSipDebugTransportRegistry.TransportRunningOn(Self.LocalAddress, LocalPort) as TIdSipMockUdpTransport;
 
         Self.ReceiveSubscribe(Package.EventPackage);
         Self.ProcessAllPendingNotifications;
@@ -2135,84 +2132,6 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipStackInterfaceRegistry                                           *
-//******************************************************************************
-//* TestTIdSipStackInterfaceRegistry Public methods ****************************
-
-procedure TestTIdSipStackInterfaceRegistry.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Configuration := TStringList.Create;
-  Self.Timer         := TIdDebugTimerQueue.Create(false);
-end;
-
-procedure TestTIdSipStackInterfaceRegistry.TearDown;
-begin
-  Self.Timer.Terminate;
-  Self.Configuration.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipStackInterfaceRegistry Published methods *************************
-
-procedure TestTIdSipStackInterfaceRegistry.TestStackInterfacesAddToRegistryAutomatically;
-var
-  UA: TIdSipStackInterface;
-begin
-  UA := TIdSipStackInterface.Create(0, Self.Timer, Self.Configuration);
-  try
-    CheckNotEquals('', UA.ID, 'StackInterface has no ID');
-    Check(nil <> TIdSipStackInterfaceRegistry.FindStackInterface(UA.ID),
-          'StackInterface not added to registry');
-  finally
-    UA.Free;
-  end;
-end;
-
-procedure TestTIdSipStackInterfaceRegistry.TestStackInterfacesGetUniqueIDs;
-var
-  UA1: TIdSipStackInterface;
-  UA2: TIdSipStackInterface;
-begin
-  // This test isn't exactly thorough: it's not possible to write a test that
-  // proves the registry will never duplicate an existing StackInterface's ID,
-  // but this at least demonstrates that the registry won't return the same
-  // ID twice in a row.
-
-  UA1 := TIdSipStackInterface.Create(0, Self.Timer, Self.Configuration);
-  try
-    UA2 := TIdSipStackInterface.Create(0, Self.Timer, Self.Configuration);
-    try
-      CheckNotEquals(UA1.ID,
-                     UA2.ID,
-                     'The registry gave two StackInterfaces the same ID');
-    finally
-      UA2.Free;
-    end;
-  finally
-    UA1.Free;
-  end;
-end;
-
-procedure TestTIdSipStackInterfaceRegistry.TestStackInterfacesAutomaticallyUnregister;
-var
-  UA:               TIdSipStackInterface;
-  StackInterfaceID: String;
-begin
-  UA := TIdSipStackInterface.Create(0, Self.Timer, Self.Configuration);
-  try
-    StackInterfaceID := UA.ID;
-  finally
-    UA.Free;
-  end;
-
-  Check(nil = TIdSipStackInterfaceRegistry.FindStackInterface(StackInterfaceID),
-        'StackInterface not removed from registry');
-end;
-
-//******************************************************************************
 //* TStackInterfaceExtensionTestCase                                           *
 //******************************************************************************
 //* TStackInterfaceExtensionTestCase Public methods ****************************
@@ -2255,7 +2174,7 @@ begin
 
   Self.Contacts := TIdSipContacts.Create;
 
-  Self.MockTransport := TIdSipDebugTransportRegistry.LastTransport as TIdSipMockTransport;
+  Self.MockTransport := TIdSipDebugTransportRegistry.TransportRunningOn(Self.LocalAddress, Self.LocalPort) as TIdSipMockTransport;
 
   Self.Reg    := Self.Iface.AttachExtension(TIdSipColocatedRegistrarExtension) as TIdSipColocatedRegistrarExtension;
   Self.Target := TIdSipUri.Create('sip:case@fried-neurons.org');
@@ -2276,7 +2195,10 @@ end;
 
 function TestTIdSipColocatedRegistrarExtension.CreateStackInterface: TIdSipStackInterface;
 begin
-  Self.Configuration.Add(ListenDirective            + ': UDP 127.0.0.1:5060');
+  Self.LocalAddress := '127.0.0.1';
+  Self.LocalPort    := 5060;
+
+  Self.Configuration.Add(ListenDirective            + ': UDP ' + Self.LocalAddress + ':' + IntToStr(Self.LocalPort));
   Self.Configuration.Add(NameServerDirective        + ': ' + MockKeyword);
   Self.Configuration.Add(ActAsRegistrarDirective    + ': yes');
   Self.Configuration.Add(RegistrarDatabaseDirective + ': ' + MockKeyword);

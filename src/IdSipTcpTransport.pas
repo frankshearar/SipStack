@@ -102,6 +102,7 @@ type
     fReadTimeout:        Integer;
     fTimer:              TIdTimerQueue;
     fTransportID:        String;
+    fTransportType:      String;
 
     procedure AddConnection(Connection: TIdTCPConnection;
                             Request: TIdSipRequest);
@@ -124,6 +125,7 @@ type
     property ReadTimeout:        Integer                     read fReadTimeout write fReadTimeout;
     property Timer:              TIdTimerQueue               read fTimer write fTimer;
     property TransportID:        String                      read fTransportID write fTransportID;
+    property TransportType:      String                      read fTransportType write fTransportType;
   end;
 
   // ReadTimeout = -1 implies that we never timeout the body wait. We do not
@@ -255,7 +257,7 @@ const
 implementation
 
 uses
-  IdException, IdSipDns;
+  IdException, IdRegisteredObject, IdSipDns;
 
 //******************************************************************************
 //* TIdSipTCPTransport                                                         *
@@ -578,7 +580,7 @@ begin
       ReceivedFrom.LocalPort := Connection.Socket.Binding.Port;
       ReceivedFrom.PeerIP    := Connection.Socket.Binding.PeerIP;
       ReceivedFrom.PeerPort  := Connection.Socket.Binding.PeerPort;
-      ReceivedFrom.Transport := TIdSipTransportRegistry.TransportFor(Self.TransportID).GetTransportType;
+      ReceivedFrom.Transport := Self.TransportType;
 
       S := TStringStream.Create('');
       try
@@ -817,8 +819,15 @@ begin
 end;
 
 procedure TIdSipTcpServer.SetTransportID(const Value: String);
+var
+  Transport: TObject;
 begin
   Self.MessageReader.TransportID := Value;
+
+  Transport := TIdObjectRegistry.FindObject(Value);
+
+  if Assigned(Transport) and (Transport is TIdSipTransport) then
+    Self.MessageReader.TransportType := (Transport as TIdSipTransport).GetTransportType;
 end;
 
 //******************************************************************************

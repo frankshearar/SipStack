@@ -807,32 +807,6 @@ type
   published
     procedure TestHasResponse;
     procedure TestTrigger;
-    procedure TestTriggerWithIDOfNonexistentObject;
-    procedure TestTriggerWithIDOfWrongTypeOfObject;
-  end;
-
-  TestTIdSipNotifyReferralDeniedWait = class(TestTIdSipInboundReferralWait)
-  protected
-    procedure CheckReferralResponse(Msg: String); override;
-    function  WaitType: TIdSipInboundReferralWaitClass; override;
-  end;
-
-  TestTIdSipNotifyReferralFailedWait = class(TestTIdSipInboundReferralWait)
-  protected
-    procedure CheckReferralResponse(Msg: String); override;
-    function  WaitType: TIdSipInboundReferralWaitClass; override;
-  end;
-
-  TestTIdSipNotifyReferralSucceededWait = class(TestTIdSipInboundReferralWait)
-  protected
-    procedure CheckReferralResponse(Msg: String); override;
-    function  WaitType: TIdSipInboundReferralWaitClass; override;
-  end;
-
-  TestTIdSipNotifyReferralTryingWait = class(TestTIdSipInboundReferralWait)
-  protected
-    procedure CheckReferralResponse(Msg: String); override;
-    function  WaitType: TIdSipInboundReferralWaitClass; override;
   end;
 
   TestTIdSipNotifyReferralDeniedWait = class(TestTIdSipInboundReferralWait)
@@ -998,7 +972,8 @@ type
 implementation
 
 uses
-  IdException, IdSipDialogID, IdSipOptionsModule, IdSipTransaction, SysUtils;
+  IdException, IdRegisteredObject, IdSipDialogID, IdSipOptionsModule,
+  IdSipTransaction, SysUtils;
 
 type
   TIdSipTestPackage = class(TIdSipEventPackage)
@@ -5392,13 +5367,13 @@ begin
 
   ArbitraryObject := TIdSipOutboundCancel.Create(Self.Core);
   try
-    TIdSipActionRegistry.RegisterAction(ArbitraryObject);
+    TIdObjectRegistry.RegisterObject(ArbitraryObject);
     try
       Self.Wait.ActionID := ArbitraryObject.ID;
 
       CheckTriggerDoesNothing(Self.Wait, 'Wait didn''t check object type before triggering');
     finally
-      TIdSipActionRegistry.UnregisterAction(ArbitraryObject.ID);
+      TIdObjectRegistry.UnregisterObject(ArbitraryObject.ID);
     end;
   finally
     ArbitraryObject.Free;
@@ -5491,13 +5466,13 @@ begin
 
   ArbitraryObject := TIdSipOutboundCancel.Create(Self.Core);
   try
-    TIdSipActionRegistry.RegisterAction(ArbitraryObject);
+    TIdObjectRegistry.RegisterObject(ArbitraryObject);
     try
       Self.Wait.ActionID := ArbitraryObject.ID;
 
       CheckTriggerDoesNothing(Self.Wait, 'Wait didn''t check object type before triggering');
     finally
-      TIdSipActionRegistry.UnregisterAction(ArbitraryObject.ID);
+      TIdObjectRegistry.UnregisterObject(ArbitraryObject.ID);
     end;
   finally
     ArbitraryObject.Free;
@@ -5731,13 +5706,13 @@ begin
 
   ArbitraryObject := TIdSipOutboundCancel.Create(Self.Core);
   try
-    TIdSipActionRegistry.RegisterAction(ArbitraryObject);
+    TIdObjectRegistry.RegisterObject(ArbitraryObject);
     try
       Self.Wait.ModuleID := ArbitraryObject.ID;
 
       CheckTriggerDoesNothing(Self.Wait, 'Wait didn''t check object type before triggering');
     finally
-      TIdSipActionRegistry.UnregisterAction(ArbitraryObject.ID);
+      TIdObjectRegistry.UnregisterObject(ArbitraryObject.ID);
     end;
   finally
     ArbitraryObject.Free;

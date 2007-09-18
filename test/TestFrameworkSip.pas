@@ -174,7 +174,7 @@ type
   protected
     fReasonParam: String;
   public
-    constructor Create; virtual;
+    constructor Create; override;
 
     property ActionParam:              TIdSipAction   read fActionParam;
     property AuthenticationChallenged: Boolean        read fAuthenticationChallenged;

@@ -25,7 +25,7 @@ type
   private
     fBarCalled:   Boolean;
   public
-    constructor Create;
+    constructor Create; override;
 
     procedure Bar; virtual;
 

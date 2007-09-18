@@ -522,7 +522,7 @@ type
 implementation
 
 uses
-  IdSipAuthentication, Math, SysUtils;
+  IdRegisteredObject, IdSipAuthentication, Math, SysUtils;
 
 const
   ItemNotFoundIndex = -1;
@@ -2049,9 +2049,9 @@ end;
 
 procedure TIdSipReregisterWait.Trigger;
 var
-  Module: TIdSipMessageModule;
+  Module: TObject;
 begin
-  Module := TIdSipMessageModuleRegistry.FindModule(Self.RegisterModuleID);
+  Module := TIdObjectRegistry.FindObject(Self.RegisterModuleID);
 
   if Assigned(Module) and (Module is TIdSipOutboundRegisterModule) then
     (Module as TIdSipOutboundRegisterModule).RegisterWith(Self.Registrar, Self.Bindings).Send;

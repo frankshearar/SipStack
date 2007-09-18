@@ -359,11 +359,16 @@ type
     Stack:         TIdSipUserAgent;
     Timer:         TIdDebugTimerQueue;
     Wait:          TIdSipReconfigureStackWait;
+  private
+    procedure CheckTriggerDoesNothing(Msg: String);
+    function  CreateUserAgent(Context: TIdTimerQueue): TIdSipUserAgent;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
     procedure TestTrigger;
+    procedure TestTriggerWithInappropriateObjectReference;
+    procedure TestTriggerWithUnregisteredObjectID;
   end;
 
   TestTIdSipPendingRegistration = class(TTestCaseTU)
@@ -379,11 +384,11 @@ type
 implementation
 
 uses
-  IdException, IdMockRoutingTable, IdSdp, IdSimpleParser, IdSipAuthentication,
-  IdSipIndyLocator, IdSipMockBindingDatabase, IdSipMockLocator,
-  IdSipMockTransactionDispatcher, IdSipMockTransport, IdSipSubscribeModule,
-  IdSipTCPTransport, IdSipUDPTransport, IdSystem, IdTcpClient, IdUnicode,
-  SysUtils, TestFrameworkSipTransport;
+  IdException, IdMockRoutingTable, IdRegisteredObject, IdSdp, IdSimpleParser,
+  IdSipAuthentication, IdSipIndyLocator, IdSipMockBindingDatabase,
+  IdSipMockLocator, IdSipMockTransactionDispatcher, IdSipMockTransport,
+  IdSipSubscribeModule, IdSipTCPTransport, IdSipUDPTransport, IdSystem,
+  IdTcpClient, IdUnicode, SysUtils, TestFrameworkSipTransport;
 
 const
   // SFTF: Sip Foundry Test Framework. cf. http://www.sipfoundry.org/sftf/
@@ -4296,8 +4301,6 @@ end;
 //* TestTIdSipReconfigureStackWait Public methods ******************************
 
 procedure TestTIdSipReconfigureStackWait.SetUp;
-var
-  Conf: TIdSipStackConfigurator;
 begin
   inherited SetUp;
 
@@ -4308,14 +4311,7 @@ begin
   Self.Configuration.Add(RouteHeaderDirective + ': ' + Self.NewRoute);
 
   Self.Timer := TIdDebugTimerQueue.Create(true);
-  Conf := TIdSipStackConfigurator.Create;
-  try
-    Self.Stack := Conf.CreateUserAgent(Self.Configuration, Self.Timer);
-  finally
-    Conf.Free;
-  end;
-
-  Self.Stack.RoutePath.Add(RouteHeader).Value := Self.OldRoute;
+  Self.Stack := Self.CreateUserAgent(Self.Timer);
 
   Self.Wait := TIdSipReconfigureStackWait.Create;
   Self.Wait.Configuration := Self.Configuration;
@@ -4334,6 +4330,36 @@ end;
 
 //* TestTIdSipReconfigureStackWait Published methods ***************************
 
+procedure TestTIdSipReconfigureStackWait.CheckTriggerDoesNothing(Msg: String);
+begin
+  Self.Stack.RoutePath.First;
+  CheckEquals(Self.OldRoute,
+              Self.Stack.RoutePath.CurrentRoute.Address.Uri,
+              Msg);
+end;
+
+function TestTIdSipReconfigureStackWait.CreateUserAgent(Context: TIdTimerQueue): TIdSipUserAgent;
+var
+  Conf: TIdSipStackConfigurator;
+  Configuration: TStrings;
+begin
+  Conf := TIdSipStackConfigurator.Create;
+  try
+    Configuration := TStringList.Create;
+    try
+      Configuration.Add(RouteHeaderDirective + ': ' + Self.OldRoute);
+
+      Result := Conf.CreateUserAgent(Configuration, Self.Timer);
+    finally
+      Configuration.Free;
+    end;
+  finally
+    Conf.Free;
+  end;
+end;
+
+//* TestTIdSipReconfigureStackWait Published methods ***************************
+
 procedure TestTIdSipReconfigureStackWait.TestTrigger;
 begin
   Self.Wait.Trigger;
@@ -4342,6 +4368,27 @@ begin
   CheckEquals(Self.NewRoute,
               Self.Stack.RoutePath.CurrentRoute.Address.Uri,
               'Route not changed, ergo Wait didn''t trigger');
+end;
+
+procedure TestTIdSipReconfigureStackWait.TestTriggerWithInappropriateObjectReference;
+var
+  R: TIdRegisteredObject;
+begin
+  R := TIdRegisteredObject.Create;
+  try
+    Self.Wait.UserAgentID := R.ID;
+    Self.Wait.Trigger;
+    CheckTriggerDoesNothing('Wait triggered when given the ID of a non-UserAgent object');
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TestTIdSipReconfigureStackWait.TestTriggerWithUnregisteredObjectID;
+begin
+  Self.Wait.UserAgentID := 'fake ID';
+  Self.Wait.Trigger;
+  CheckTriggerDoesNothing('Wait triggered when given a non-existent ID');
 end;
 
 //******************************************************************************

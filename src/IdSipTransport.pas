@@ -60,7 +60,6 @@ type
   private
     fAddress:                  String;
     fHostName:                 String;
-    fID:                       String;
     fPort:                     Cardinal;
     fRoutingTable:             TIdRoutingTable;
     fTimeout:                  Cardinal;
@@ -123,7 +122,7 @@ type
     class function  SrvQuery(const Domain: String): String;
     class function  UriScheme: String;
 
-    constructor Create; virtual;
+    constructor Create; override;
     destructor  Destroy; override;
 
     procedure AddBinding(const Address: String; Port: Cardinal); virtual;
@@ -156,7 +155,6 @@ type
     procedure Stop; virtual;
 
     property HostName:     String          read fHostName write fHostName;
-    property ID:           String          read fID;
     property RoutingTable: TIdRoutingTable read fRoutingTable write fRoutingTable;
     property Timeout:      Cardinal        read fTimeout write SetTimeout;
     property Timer:        TIdTimerQueue   read fTimer write SetTimer;
@@ -167,22 +165,17 @@ type
   // about, and information about those transports.
   TIdSipTransportRegistry = class(TObject)
   private
-    class function TransportAt(Index: Integer): TIdSipTransport; virtual;
     class function TransportTypeAt(Index: Integer): TIdSipTransportClass;
-    class function TransportRegistry: TStrings;
     class function TransportTypeRegistry: TStrings;
   public
     class function  DefaultPortFor(const Transport: String): Cardinal;
     class procedure InsecureTransports(Result: TStrings);
     class function  IsSecure(const Transport: String): Boolean;
     class function  NonstandardPort(const Transport: String; Port: Cardinal): Boolean;
-    class function  RegisterTransport(Instance: TIdSipTransport): String;
     class procedure RegisterTransportType(const Name: String;
                                           const TransportType: TIdSipTransportClass);
     class procedure SecureTransports(Result: TStrings);
-    class function  TransportFor(const TransportID: String): TIdSipTransport;
     class function  TransportTypeFor(const Transport: String): TIdSipTransportClass;
-    class procedure UnregisterTransport(const TransportID: String);
     class procedure UnregisterTransportType(const Name: String);
     class function  UriSchemeFor(const Transport: String): String;
   end;
@@ -190,11 +183,15 @@ type
   // I give complete and arbitrary access to all transports. Use me at your
   // peril. I exist so that tests may access transports that are not visible to
   // production code.
+  //
+  // Please note that I make no attempt to prevent multiple TIdSipMockTransports
+  // from running on the same Host:Port, even though that's not possible for
+  // real transports.
   TIdSipDebugTransportRegistry = class(TIdSipTransportRegistry)
+  private
+    class function GetAllTransports: TStrings;
   public
-    class function LastTransport: TIdSipTransport;
-    class function SecondLastTransport: TIdSipTransport;
-    class function TransportAt(Index: Integer): TIdSipTransport; override;
+    class function TransportRunningOn(Host: String; Port: Cardinal): TIdSipTransport;
     class function TransportCount: Integer;
   end;
 
@@ -225,6 +222,7 @@ type
   end;
 
   // I represent the (possibly) deferred handling of an inbound message.
+  // Give me a COPY of a TIdSipConnectionBindings and I'll free it for you.
   TIdSipReceiveMessageWait = class(TIdSipMessageWait)
   private
     fReceivedFrom: TIdSipConnectionBindings;
@@ -381,10 +379,9 @@ const
 implementation
 
 uses
-  IdRandom, IdTCPServer, IdIOHandlerSocket;
+  IdRegisteredObject, IdTCPServer, IdIOHandlerSocket;
 
 var
-  GTransports:     TStrings;
   GTransportTypes: TStrings;
 
 //******************************************************************************
@@ -427,10 +424,8 @@ begin
   Self.TransportListeners        := TIdNotificationList.Create;
   Self.TransportSendingListeners := TIdNotificationList.Create;
 
-  Self.fID := TIdSipTransportRegistry.RegisterTransport(Self);
-
   Self.InstantiateServer;
-    
+
   Self.Timeout  := Self.DefaultTimeout;
   Self.UseRport := false;
 end;
@@ -441,8 +436,6 @@ begin
   Self.TransportListeners.Free;
 
   Self.DestroyServer;
-
-  TIdSipTransportRegistry.UnregisterTransport(Self.ID);
 
   inherited Destroy;
 end;
@@ -1026,15 +1019,6 @@ begin
   Result := Self.TransportTypeFor(Transport).DefaultPort <> Port
 end;
 
-class function TIdSipTransportRegistry.RegisterTransport(Instance: TIdSipTransport): String;
-begin
-  repeat
-    Result := GRandomNumber.NextHexString;
-  until (Self.TransportRegistry.IndexOf(Result) = ItemNotFoundIndex);
-
-  Self.TransportRegistry.AddObject(Result, Instance);
-end;
-
 class procedure TIdSipTransportRegistry.RegisterTransportType(const Name: String;
                                                           const TransportType: TIdSipTransportClass);
 begin
@@ -1052,20 +1036,6 @@ begin
   end;
 end;
 
-class function TIdSipTransportRegistry.TransportFor(const TransportID: String): TIdSipTransport;
-var
-  Index: Integer;
-begin
-  Index := Self.TransportRegistry.IndexOf(TransportID);
-
-  // Unlike TransportTypeFor, we don't blow up if you request a transport we
-  // don't know about.
-  if (Index <> ItemNotFoundIndex) then
-    Result := Self.TransportAt(Index)
-  else
-    Result := nil;
-end;
-
 class function TIdSipTransportRegistry.TransportTypeFor(const Transport: String): TIdSipTransportClass;
 var
   Index: Integer;
@@ -1076,15 +1046,6 @@ begin
     Result := Self.TransportTypeAt(Index)
   else
     raise EUnknownTransport.Create('TIdSipTransportRegistry.TransportTypeFor: ' + Transport);
-end;
-
-class procedure TIdSipTransportRegistry.UnregisterTransport(const TransportID: String);
-var
-  Index: Integer;
-begin
-  Index := Self.TransportRegistry.IndexOf(TransportID);
-  if (Index <> ItemNotFoundIndex) then
-    Self.TransportRegistry.Delete(Index);
 end;
 
 class procedure TIdSipTransportRegistry.UnregisterTransportType(const Name: String);
@@ -1108,19 +1069,9 @@ end;
 
 //* TIdSipTransportRegistry Private methods ************************************
 
-class function TIdSipTransportRegistry.TransportAt(Index: Integer): TIdSipTransport;
-begin
-  Result := TIdSipTransport(Self.TransportRegistry.Objects[Index]);
-end;
-
 class function TIdSipTransportRegistry.TransportTypeAt(Index: Integer): TIdSipTransportClass;
 begin
   Result := TIdSipTransportClass(Self.TransportTypeRegistry.Objects[Index]);
-end;
-
-class function TIdSipTransportRegistry.TransportRegistry: TStrings;
-begin
-  Result := GTransports;
 end;
 
 class function TIdSipTransportRegistry.TransportTypeRegistry: TStrings;
@@ -1133,24 +1084,47 @@ end;
 //******************************************************************************
 //* TIdSipDebugTransportRegistry Public methods ********************************
 
-class function TIdSipDebugTransportRegistry.LastTransport: TIdSipTransport;
+class function TIdSipDebugTransportRegistry.TransportRunningOn(Host: String; Port: Cardinal): TIdSipTransport;
+var
+  I: Integer;
+  L: TStrings;
+  T: TIdSipTransport;
 begin
-  Result := Self.TransportAt(Self.TransportCount - 1);
-end;
+  L := Self.GetAllTransports;
+  try
+    Result := nil;
 
-class function TIdSipDebugTransportRegistry.SecondLastTransport: TIdSipTransport;
-begin
-  Result := Self.TransportAt(Self.TransportCount - 2);
-end;
+    for I := 0 to L.Count - 1 do begin
+      T := L.Objects[I] as TIdSipTransport;
 
-class function TIdSipDebugTransportRegistry.TransportAt(Index: Integer): TIdSipTransport;
-begin
-  Result := inherited TransportAt(Index);
+      if T.HasBinding(Host, Port) then begin
+        Result := T;
+        Break;
+      end;
+    end;
+  finally
+    L.Free;
+  end;
 end;
 
 class function TIdSipDebugTransportRegistry.TransportCount: Integer;
+var
+  L: TStrings;
 begin
-  Result := Self.TransportRegistry.Count;
+  L := Self.GetAllTransports;
+  try
+    Result := L.Count;
+  finally
+    L.Free;
+  end;
+end;
+
+//* TIdSipDebugTransportRegistry Private methods *******************************
+
+class function TIdSipDebugTransportRegistry.GetAllTransports: TStrings;
+begin
+  Result := TStringList.Create;
+  TIdObjectRegistry.CollectAllObjectsOfClass(TIdSipTransport, Result, true);
 end;
 
 //******************************************************************************
@@ -1168,16 +1142,16 @@ end;
 procedure TIdSipMessageExceptionWait.Trigger;
 var
   FakeException: Exception;
-  Receiver:      TIdSipTransport;
+  Receiver:      TObject;
 begin
   FakeException := Self.ExceptionType.Create(Self.ExceptionMessage);
   try
-    Receiver := TIdSipTransportRegistry.TransportFor(Self.TransportID);
+    Receiver := TIdObjectRegistry.FindObject(Self.TransportID);
 
-    if Assigned(Receiver) then
-      Receiver.ReceiveException(Self.FailedMessage,
-                                FakeException,
-                                Self.Reason);
+    if Assigned(Receiver) and (Receiver is TIdSipTransport) then
+      (Receiver as TIdSipTransport).ReceiveException(Self.FailedMessage,
+                                                     FakeException,
+                                                     Self.Reason);
   finally
     FakeException.Free;
   end;
@@ -1207,17 +1181,17 @@ end;
 
 procedure TIdSipReceiveMessageWait.Trigger;
 var
-  Receiver: TIdSipTransport;
+  Receiver: TObject;
 begin
-  Receiver := TIdSipTransportRegistry.TransportFor(Self.TransportID);
+  Receiver := TIdObjectRegistry.FindObject(Self.TransportID);
 
-  if Assigned(Receiver) then begin
+  if Assigned(Receiver) and (Receiver is TIdSipTransport) then begin
     if Self.Message.IsRequest then
-      Receiver.ReceiveRequest(Self.Message as TIdSipRequest,
-                              Self.ReceivedFrom)
+      (Receiver as TIdSipTransport).ReceiveRequest(Self.Message as TIdSipRequest,
+                                                   Self.ReceivedFrom)
     else
-      Receiver.ReceiveResponse(Self.Message as TIdSipResponse,
-                               Self.ReceivedFrom);
+      (Receiver as TIdSipTransport).ReceiveResponse(Self.Message as TIdSipResponse,
+                                                    Self.ReceivedFrom);
   end;
 end;
 
@@ -1367,12 +1341,10 @@ begin
 end;
 
 initialization
-  GTransports     := TStringList.Create;
   GTransportTypes := TStringList.Create;
 finalization
 // These objects are purely memory-based, so it's safe not to free them here.
 // Still, perhaps we need to review this methodology. How else do we get
 // something like class variables?
-//  GTransports.Free;
 //  GTransportTypes.Free;
 end.

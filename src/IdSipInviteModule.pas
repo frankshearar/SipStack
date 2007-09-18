@@ -887,7 +887,8 @@ type
 implementation
 
 uses
-  IdRandom, IdSdp, IdSipSubscribeModule, IdSipUserAgent, IdSipTransaction, SysUtils;
+  IdRandom, IdRegisteredObject, IdSdp, IdSipSubscribeModule, IdSipUserAgent,
+  IdSipTransaction, SysUtils;
 
 // Exception messages
 const
@@ -3515,9 +3516,9 @@ end;
 
 procedure TIdSipSessionWait.Trigger;
 var
-  Action: TIdSipAction;
+  Action: TObject;
 begin
-  Action := TIdSipActionRegistry.FindAction(Self.SessionID);
+  Action := TIdObjectRegistry.FindObject(Self.SessionID);
 
   if Assigned(Action) and (Action is TIdSipSession) then begin
     Self.FireTimer(Action as TIdSipSession);
@@ -3558,9 +3559,9 @@ end;
 
 procedure TIdSipInboundSessionWait.Trigger;
 var
-  Action: TIdSipAction;
+  Action: TObject;
 begin
-  Action := TIdSipActionRegistry.FindAction(Self.SessionID);
+  Action := TIdObjectRegistry.FindObject(Self.SessionID);
 
   if Assigned(Action) and (Action is TIdSipInboundSession) then
     Self.FireTimer(Action as TIdSipInboundSession);

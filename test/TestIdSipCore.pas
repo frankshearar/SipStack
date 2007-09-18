@@ -174,44 +174,39 @@ type
     procedure TestMethodSetMethod;
   end;
 
-  TestTIdSipActionRegistry = class(TTestCase)
-  private
-    Core:    TIdSipUserAgent;
-    Request: TIdSipRequest;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestActionsAddToRegistryAutomatically;
-    procedure TestActionsGetUniqueIDs;
-    procedure TestActionsAutomaticallyUnregister;
-  end;
-
   TIdSipActionWaitTestCase = class(TTestCaseTU)
-  end;
-
-  TestTIdSipActionSendWait = class(TTestCaseTU)
   private
     Action: TIdSipAction;
-    Wait:   TIdSipActionSendWait;
+    Wait:   TIdSipActionWait;
+  protected
+    procedure CheckTriggerDoesNothing(Msg: String); virtual;
+    function  WaitType: TIdSipActionWaitClass; virtual;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestTrigger;
     procedure TestTriggerOnNonExistentAction;
+    procedure TestTriggerOnWrongTypeOfObject;
   end;
 
-  TestTIdSipActionTerminateWait = class(TTestCaseTU)
-  private
-    Action: TIdSipAction;
-    Wait:   TIdSipActionTerminateWait;
+  TestTIdSipActionSendWait = class(TIdSipActionWaitTestCase)
+  protected
+    procedure CheckTriggerDoesNothing(Msg: String); override;
+    function  WaitType: TIdSipActionWaitClass; override;
   public
     procedure SetUp; override;
-    procedure TearDown; override;
   published
     procedure TestTrigger;
-    procedure TestTriggerOnNonExistentAction;
+  end;
+
+  TestTIdSipActionTerminateWait = class(TIdSipActionWaitTestCase)
+  protected
+    procedure CheckTriggerDoesNothing(Msg: String); override;
+    function  WaitType: TIdSipActionWaitClass; override;
+  public
+    procedure SetUp; override;
+  published
+    procedure TestTrigger;
   end;
 
   TestTIdSipActionAuthenticationChallengeMethod = class(TActionMethodTestCase)
@@ -338,8 +333,8 @@ type
 implementation
 
 uses
-  Classes, IdException, IdSdp, IdSimpleParser, IdSipLocation,
-  IdSipMockTransport, IdSipOptionsModule, IdSipRegistration,
+  Classes, IdException, IdRegisteredObject, IdSdp, IdSimpleParser,
+  IdSipLocation, IdSipMockTransport, IdSipOptionsModule, IdSipRegistration,
   IdSipSubscribeModule, SysUtils;
 
 const
@@ -370,7 +365,6 @@ begin
   Result.AddTest(TestTIdSipNullModule.Suite);
   Result.AddTest(TestTIdSipMessageModuleRegistry.Suite);
   Result.AddTest(TestTIdSipRedirectedAction.Suite);
-  Result.AddTest(TestTIdSipActionRegistry.Suite);
   Result.AddTest(TestTIdSipActionSendWait.Suite);
   Result.AddTest(TestTIdSipActionTerminateWait.Suite);
   Result.AddTest(TestTIdSipActionAuthenticationChallengeMethod.Suite);
@@ -2228,81 +2222,55 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipActionRegistry                                                   *
+//* TIdSipActionWaitTestCase                                                   *
 //******************************************************************************
-//* TestTIdSipActionRegistry Public methods ************************************
+//* TIdSipActionWaitTestCase Public methods ************************************
 
-procedure TestTIdSipActionRegistry.SetUp;
+procedure TIdSipActionWaitTestCase.SetUp;
 begin
   inherited SetUp;
 
-  Self.Core    := TIdSipUserAgent.Create;
-  Self.Request := TIdSipTestResources.CreateBasicRequest;
+  Self.Wait := Self.WaitType.Create;
 end;
 
-procedure TestTIdSipActionRegistry.TearDown;
+procedure TIdSipActionWaitTestCase.TearDown;
 begin
-  Self.Request.Free;
-  Self.Core.Free;
+  Self.Wait.Free;
 
   inherited TearDown;
 end;
 
-//* TestTIdSipActionRegistry Published methods *********************************
+//* TIdSipActionWaitTestCase Protected methods *********************************
 
-procedure TestTIdSipActionRegistry.TestActionsAddToRegistryAutomatically;
-var
-  InviteAction: TIdSipAction;
+procedure TIdSipActionWaitTestCase.CheckTriggerDoesNothing(Msg: String);
 begin
-  InviteAction := TIdSipOutboundInitialInvite.Create(Self.Core);
-  try
-    CheckNotEquals('', InviteAction.ID, 'Action has no ID');
-    Check(nil <> TIdSipActionRegistry.FindAction(InviteAction.ID),
-          'Action not added to registry');
-  finally
-    InviteAction.Free;
-  end;
+  Fail(Self.ClassName + ' must override CheckTriggerDoesNothing');
 end;
 
-procedure TestTIdSipActionRegistry.TestActionsGetUniqueIDs;
-var
-  InviteAction:  TIdSipAction;
-  OptionsAction: TIdSipAction;
+function TIdSipActionWaitTestCase.WaitType: TIdSipActionWaitClass;
 begin
-  // This test isn't exactly thorough: it's not possible to write a test that
-  // proves the registry will never duplicate an existing Action's ID,
-  // but this at least demonstrates that the registry won't return the same
-  // ID twice in a row.
-
-  InviteAction := TIdSipOutboundInitialInvite.Create(Self.Core);
-  try
-    OptionsAction := TIdSipOutboundOptions.Create(Self.Core);
-    try
-      CheckNotEquals(InviteAction.ID,
-                     OptionsAction.ID,
-                     'The registry gave two Actions the same ID');
-    finally
-      OptionsAction.Free;
-    end;
-  finally
-    InviteAction.Free;
-  end;
+  Result := nil;
+  Fail(Self.ClassName + ' must override WaitType');
 end;
 
-procedure TestTIdSipActionRegistry.TestActionsAutomaticallyUnregister;
-var
-  InviteAction: TIdSipAction;
-  ActionID:     String;
+procedure TIdSipActionWaitTestCase.TestTriggerOnNonExistentAction;
 begin
-  InviteAction := TIdSipOutboundInitialInvite.Create(Self.Core);
-  try
-    ActionID := InviteAction.ID;
-  finally
-    InviteAction.Free;
-  end;
+  Self.Wait.ActionID := 'fake ID';
 
-  Check(nil = TIdSipActionRegistry.FindAction(ActionID),
-        'Action not removed from registry');
+  CheckTriggerDoesNothing('Wait triggered on nonexistent action');
+end;
+
+procedure TIdSipActionWaitTestCase.TestTriggerOnWrongTypeOfObject;
+var
+  R: TIdRegisteredObject;
+begin
+  R := TIdRegisteredObject.Create;
+  try
+    Self.Wait.ActionID := R.ID;
+    CheckTriggerDOesNothing('Wait triggered on unexpected object');
+  finally
+    R.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -2324,15 +2292,21 @@ begin
     FakeContact.Free;
   end;
 
-  Self.Wait := TIdSipActionSendWait.Create;
   Self.Wait.ActionID := Self.Action.ID;
 end;
 
-procedure TestTIdSipActionSendWait.TearDown;
-begin
-  Self.Wait.Free;
+//* TestTIdSipActionSendWait Private methods ***********************************
 
-  inherited TearDown;
+procedure TestTIdSipActionSendWait.CheckTriggerDoesNothing(Msg: String);
+begin
+  Self.MarkSentRequestCount;
+  Self.Wait.Trigger;
+  CheckNoRequestSent(Msg);
+end;
+
+function TestTIdSipActionSendWait.WaitType: TIdSipActionWaitClass;
+begin
+  Result := TIdSipActionSendWait;
 end;
 
 //* TestTIdSipActionSendWait Published methods *********************************
@@ -2342,16 +2316,6 @@ begin
   Self.MarkSentRequestCount;
   Self.Wait.Trigger;
   CheckRequestSent('No request sent, so Wait didn''t Trigger');
-end;
-
-procedure TestTIdSipActionSendWait.TestTriggerOnNonExistentAction;
-begin
-  Self.Wait.ActionID := '';
-
-  Self.MarkSentRequestCount;
-  Self.Wait.Trigger;
-  CheckNoRequestSent('A request sent, so something mapped the Wait to an '
-                   + 'unexpected Action');
 end;
 
 //******************************************************************************
@@ -2364,15 +2328,21 @@ begin
   inherited SetUp;
 
   Self.Action := Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '');
-  Self.Wait   := TIdSipActionTerminateWait.Create;
   Self.Wait.ActionID := Self.Action.ID;
 end;
 
-procedure TestTIdSipActionTerminateWait.TearDown;
-begin
-  Self.Wait.Free;
+//* TestTIdSipActionTerminateWait Private methods ******************************
 
-  inherited TearDown;
+procedure TestTIdSipActionTerminateWait.CheckTriggerDoesNothing(Msg: String);
+begin
+  // This test just makes sure the Trigger doesn't blow up when called on a
+  // non-existent action ID.
+  Self.Wait.Trigger;
+end;
+
+function TestTIdSipActionTerminateWait.WaitType: TIdSipActionWaitClass;
+begin
+  Result := TIdSipActionTerminateWait;
 end;
 
 //* TestTIdSipActionTerminateWait Published methods ****************************
@@ -2391,15 +2361,6 @@ begin
   CheckEquals(MethodCancel,
               Self.LastSentRequest.Method,
               'Unexpected message sent');
-end;
-
-procedure TestTIdSipActionTerminateWait.TestTriggerOnNonExistentAction;
-begin
-  Self.Wait.ActionID := '';
-
-  // This test just makes sure the Trigger doesn't blow up when called on a
-  // non-existent action ID.
-  Self.Wait.Trigger;
 end;
 
 //******************************************************************************

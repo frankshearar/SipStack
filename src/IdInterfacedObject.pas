@@ -11,9 +11,12 @@ unit IdInterfacedObject;
 
 interface
 
+uses
+  IdRegisteredObject;
+
 type
   // I AM NOT a reference-counted object, nor are any of my subclasses.
-  TIdInterfacedObject = class(TObject, IInterface)
+  TIdInterfacedObject = class(TIdRegisteredObject, IInterface)
   protected
     function QueryInterface(const IID: TGUID; out Obj): HResult; stdcall;
     function _AddRef: Integer; stdcall;

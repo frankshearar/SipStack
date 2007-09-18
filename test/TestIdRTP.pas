@@ -625,9 +625,6 @@ type
     procedure TearDown; override;
   published
     procedure TestServerOn;
-    procedure TestServersAddToRegistryAutomatically;
-    procedure TestServersGetUniqueIDs;
-    procedure TestServersAutomaticallyUnregister;
   end;
 
   TRTPSessionTestCase = class(TTestCase)
@@ -754,18 +751,6 @@ type
     procedure TestSendControlDoesntSendToSelf;
   end;
 
-  TestTIdSipSessionRegistry = class(TTestCase)
-  private
-    Agent: TIdMockRTPPeer;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestSessionsAddToRegistryAutomatically;
-    procedure TestSessionsGetUniqueIDs;
-    procedure TestSessionsAutomaticallyUnregister;
-  end;
-
   TestTIdRTPPacketBuffer = class(TTestCase)
   private
     Profile: TIdRTPProfile;
@@ -825,25 +810,37 @@ type
     procedure TestRun;
   end;
 
+  TIdRTPWaitClass = class of TIdRTPWait;
+
   TTestCaseRTP = class(TTestCase)
   protected
     Agent:   TIdMockRTPPeer;
     Profile: TIdRTPProfile;
     Session: TIdRTPSession;
     Timer:   TIdDebugTimerQueue;
+    Wait:    TIdRTPWait;
+
+    procedure CheckTriggerDoesNothing(Msg: String); virtual;
+    function  WaitType: TIdRTPWaitClass; virtual;
   public
     procedure SetUp; override;
     procedure TearDown; override;
+  published
+    procedure TestTriggerWithNonexistentSession;
+    procedure TestTriggerWithWrongTypeOfObject;
   end;
 
   TestTIdRTPReceivePacketWait = class(TTestCaseRTP)
   private
-    Binding:  TIdConnection;
-    Control:  TIdRTCPPacket;
-    Data:     TIdRTPPacket;
-    Listener: TIdRTPTestRTPDataListener;
-    Payload:  TIdRTPT140Payload;
-    Wait:     TIdRTPReceivePacketWait;
+    Binding:     TIdConnection;
+    Control:     TIdRTCPPacket;
+    Data:        TIdRTPPacket;
+    Listener:    TIdRTPTestRTPDataListener;
+    MemberCount: Cardinal;
+    Payload:     TIdRTPT140Payload;
+  protected
+    procedure CheckTriggerDoesNothing(Msg: String); override;
+    function  WaitType: TIdRTPWaitClass; override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -852,22 +849,33 @@ type
     procedure TestTriggerRTP;
   end;
 
-  TestTIdRTPSenderReportWait = class(TTestCaseRTP)
-  private
-    Wait: TIdRTPSenderReportWait;
+  TSenderReportTestCase = class(TTestCaseRTP)
+  protected
+    procedure CheckTriggerDoesNothing(Msg: String); override;
   public
     procedure SetUp; override;
   published
     procedure TestTrigger;
   end;
 
+  TestTIdRTPTransmissionTimeExpire = class(TSenderReportTestCase)
+  protected
+    function WaitType: TIdRTPWaitClass; override;
+  end;
+
+  TestTIdRTPSenderReportWait = class(TSenderReportTestCase)
+  protected
+    function WaitType: TIdRTPWaitClass; override;
+  end;
+
   TestTIdRTPSendDataWait = class(TTestCaseRTP)
   private
     Payload: TIdRTPT140Payload;
-    Wait:    TIdRTPSendDataWait;
+  protected
+    procedure CheckTriggerDoesNothing(Msg: String); override;
+    function  WaitType: TIdRTPWaitClass; override;
   public
     procedure SetUp; override;
-    procedure TearDown; override;
   published
     procedure TestTrigger;
   end;
@@ -896,8 +904,8 @@ const
 implementation
 
 uses
-  Classes, DateUtils, IdRandom, IdRtpServer, IdSimpleParser, IdSystem,
-  SysUtils, Types;
+  Classes, DateUtils, IdRandom, IdRegisteredObject, IdRtpServer, IdSimpleParser,
+  IdSystem, SysUtils, Types;
 
 function Suite: ITestSuite;
 begin
@@ -940,12 +948,12 @@ begin
   Result.AddTest(TestTIdRTPSession.Suite);
   Result.AddTest(TestSessionReportRules.Suite);
   Result.AddTest(TestSessionSendReceiveRules.Suite);
-  Result.AddTest(TestTIdSipSessionRegistry.Suite);
   Result.AddTest(TestTIdRTPPacketBuffer.Suite);
   Result.AddTest(TestTIdRTPListenerReceiveRTCPMethod.Suite);
   Result.AddTest(TestTIdRTPListenerReceiveRTPMethod.Suite);
   Result.AddTest(TestTIdRTPDataListenerNewDataMethod.Suite);
   Result.AddTest(TestTIdRTPReceivePacketWait.Suite);
+  Result.AddTest(TestTIdRTPTransmissionTimeExpire.Suite);
   Result.AddTest(TestTIdRTPSenderReportWait.Suite);
   Result.AddTest(TestTIdRTPSendDataWait.Suite);
 end;
@@ -7166,8 +7174,6 @@ const
   ArbitraryAddress = '1.2.3.4';
   ArbitraryPort    = 8000;
   AnotherPort      = 9000;
-var
-  AnotherAgent: TIdBaseRTPAbstractPeer;
 begin
   Self.Agent.Address := ArbitraryAddress;
   Self.Agent.RTPPort := ArbitraryPort;
@@ -7185,66 +7191,6 @@ begin
         'Server found in registry after moving');
   Check(Self.Agent = TIdRTPPeerRegistry.ServerOn(ArbitraryAddress, AnotherPort),
         'Server not found in registry after moving');
-
-  AnotherAgent := TIdMockRTPPeer.Create;
-  try
-    AnotherAgent.Address := Self.Agent.Address;
-    AnotherAgent.RTPPort := Self.Agent.RTPPort;
-    Check(Self.Agent = TIdRTPPeerRegistry.ServerOn(ArbitraryAddress, AnotherPort),
-          'First server found wins');
-  finally
-    AnotherAgent.Free;
-  end;
-end;
-
-procedure TestTIdRTPPeerRegistry.TestServersAddToRegistryAutomatically;
-begin
-  CheckNotEquals('', Self.Agent.ID, 'Server has no ID');
-  Check(nil <> TIdRTPPeerRegistry.FindServer(Self.Agent.ID),
-        'Server not added to registry');
-  Check(Self.Agent = TIdRTPPeerRegistry.FindServer(Self.Agent.ID),
-        'Server not found in registry');
-end;
-
-procedure TestTIdRTPPeerRegistry.TestServersGetUniqueIDs;
-var
-  ServerOne: TIdMockRTPPeer;
-  ServerTwo: TIdMockRTPPeer;
-begin
-  // This test isn't exactly thorough: it's not possible to write a test that
-  // proves the registry will never duplicate an existing server's ID,
-  // but this at least demonstrates that the registry won't return the same
-  // ID twice in a row.
-
-  ServerOne := TIdMockRTPPeer.Create;
-  try
-    ServerTwo := TIdMockRTPPeer.Create;
-    try
-      CheckNotEquals(ServerOne.ID,
-                     ServerTwo.ID,
-                     'The registry gave two servers the same ID');
-    finally
-      ServerTwo.Free;
-    end;
-  finally
-    ServerOne.Free;
-  end;
-end;
-
-procedure TestTIdRTPPeerRegistry.TestServersAutomaticallyUnregister;
-var
-  Agent: TIdMockRTPPeer;
-  ID:    String;
-begin
-  Agent := TIdMockRTPPeer.Create;
-  try
-    ID := Agent.ID;
-  finally
-    Agent.Free;
-  end;
-
-  Check(nil = TIdRTPPeerRegistry.FindServer(ID),
-        'Server not removed from registry');
 end;
 
 //******************************************************************************
@@ -8474,75 +8420,6 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipSessionRegistry
-//******************************************************************************
-//* TestTIdSipSessionRegistry Public methods ***********************************
-
-procedure TestTIdSipSessionRegistry.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Agent := TIdMockRTPPeer.Create;
-end;
-
-procedure TestTIdSipSessionRegistry.TearDown;
-begin
-  Self.Agent.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipSessionRegistry Published methods ********************************
-
-procedure TestTIdSipSessionRegistry.TestSessionsAddToRegistryAutomatically;
-begin
-  CheckNotEquals('', Self.Agent.Session.ID, 'Session has no ID');
-  Check(nil <> TIdRTPSessionRegistry.FindSession(Self.Agent.Session.ID),
-        'Session not added to registry');
-end;
-
-procedure TestTIdSipSessionRegistry.TestSessionsGetUniqueIDs;
-var
-  SessionOne: TIdRTPSession;
-  SessionTwo: TIdRTPSession;
-begin
-  // This test isn't exactly thorough: it's not possible to write a test that
-  // proves the registry will never duplicate an existing session's ID,
-  // but this at least demonstrates that the registry won't return the same
-  // ID twice in a row.
-
-  SessionOne := TIdRTPSession.Create(Self.Agent);
-  try
-    SessionTwo := TIdRTPSession.Create(Self.Agent);
-    try
-      CheckNotEquals(SessionOne.ID,
-                     SessionTwo.ID,
-                     'The registry gave two sessions the same ID');
-    finally
-      SessionTwo.Free;
-    end;
-  finally
-    SessionOne.Free;
-  end;
-end;
-
-procedure TestTIdSipSessionRegistry.TestSessionsAutomaticallyUnregister;
-var
-  Agent:     TIdMockRTPPeer;
-  SessionID: String;
-begin
-  Agent := TIdMockRTPPeer.Create;
-  try
-    SessionID := Agent.Session.ID;
-  finally
-    Agent.Free;
-  end;
-
-  Check(nil = TIdRTPSessionRegistry.FindSession(SessionID),
-        'Session not removed from registry');
-end;
-
-//******************************************************************************
 //* TestTIdRTPPacketBuffer                                                     *
 //******************************************************************************
 //* TestTIdRTPPacketBuffer Public methods **************************************
@@ -8789,15 +8666,55 @@ begin
   Self.Agent.Timer         := Self.Timer;
 
   Self.Session := Self.Agent.Session;
+
+  Self.Wait := Self.WaitType.Create;
+  Self.Wait.SessionID := Self.Session.ID;
 end;
 
 procedure TTestCaseRTP.TearDown;
 begin
+  Self.Wait.Free;
   Self.Agent.Free;
   Self.Timer.Terminate;
   Self.Profile.Free;
 
   inherited TearDown;
+end;
+
+//* TTestCaseRTP Protected methods *********************************************
+
+procedure TTestCaseRTP.CheckTriggerDoesNothing(Msg: String);
+begin
+  Fail(Self.ClassName + ' must override CheckTriggerDoesNothing');
+end;
+
+function TTestCaseRTP.WaitType: TIdRTPWaitClass;
+begin
+  Result := nil;
+  Fail(Self.ClassName + ' must override WaitType');
+end;
+
+//* TTestCaseRTP Published methods *********************************************
+
+procedure TTestCaseRTP.TestTriggerWithNonexistentSession;
+begin
+  Self.Wait.SessionID := 'fake ID';
+  Self.Wait.Trigger;
+  CheckTriggerDoesNothing('Triggered using a nonexistent object ID');
+end;
+
+procedure TTestCaseRTP.TestTriggerWithWrongTypeOfObject;
+var
+  R: TIdRegisteredObject;
+begin
+  R := TIdRegisteredObject.Create;
+  try
+    Self.Wait.SessionID := R.ID;
+    Self.Wait.Trigger;
+    CheckTriggerDoesNothing('Triggered using the ID of some inappropriate object');
+  finally
+    R.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -8812,6 +8729,7 @@ const
   T140PT        = 98;
 var
   M: TIdRTPMember;
+  W: TIdRTPReceivePacketWait;
 begin
   inherited SetUp;
 
@@ -8842,9 +8760,11 @@ begin
   M.SourceAddress := ArbitraryHost;
   M.SourcePort    := ArbitraryPort;
 
-  Self.Wait := TIdRTPReceivePacketWait.Create;
-  Self.Wait.ReceivedFrom := Self.Binding;
-  Self.Wait.SessionID    := Self.Session.ID;
+  W := Self.Wait as TIdRTPReceivePacketWait;
+  W.ReceivedFrom := Self.Binding;
+  W.SessionID    := Self.Session.ID;
+
+  Self.MemberCount := Self.Session.MemberCount;
 end;
 
 procedure TestTIdRTPReceivePacketWait.TearDown;
@@ -8856,6 +8776,18 @@ begin
   inherited TearDown;
 end;
 
+//* TestTIdRTPReceivePacketWait Protected methods ******************************
+
+procedure TestTIdRTPReceivePacketWait.CheckTriggerDoesNothing(Msg: String);
+begin
+  CheckEquals(Self.MemberCount, Self.Session.MemberCount, Msg);
+end;
+
+function TestTIdRTPReceivePacketWait.WaitType: TIdRTPWaitClass;
+begin
+  Result := TIdRTPReceivePacketWait;
+end;
+
 //* TestTIdRTPReceivePacketWait Published methods ******************************
 
 procedure TestTIdRTPReceivePacketWait.TestTriggerRTCP;
@@ -8864,7 +8796,7 @@ var
 begin
   MemberCount := Self.Session.MemberCount;
 
-  Self.Wait.Packet := Self.Control.Copy;
+  (Self.Wait as TIdRTPReceivePacketWait).Packet := Self.Control.Copy;
   Self.Wait.Trigger;
 
   Check(Self.Session.MemberCount < MemberCount, 'Bye not acted upon, so Wait not triggered');
@@ -8872,7 +8804,7 @@ end;
 
 procedure TestTIdRTPReceivePacketWait.TestTriggerRTP;
 begin
-  Self.Wait.Packet := Self.Data.Copy;
+  (Self.Wait as TIdRTPReceivePacketWait).Packet := Self.Data.Copy;
 
   Self.Wait.Trigger;
 
@@ -8890,11 +8822,11 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdRTPSenderReportWait                                                 *
+//* TSenderReportTestCase                                                      *
 //******************************************************************************
-//* TestTIdRTPSenderReportWait Public methods **********************************
+//* TSenderReportTestCase Public methods ***************************************
 
-procedure TestTIdRTPSenderReportWait.SetUp;
+procedure TSenderReportTestCase.SetUp;
 const
   ArbitraryHost = '127.0.0.1';
   ArbitraryPort = 9000;
@@ -8902,20 +8834,44 @@ begin
   inherited SetUp;
 
   Self.Session.AddReceiver(ArbitraryHost, ArbitraryPort);
-
-  Self.Wait := TIdRTPSenderReportWait.Create;
-  Self.Wait.SessionID := Self.Session.ID;
 end;
 
-//* TestTIdRTPSenderReportWait Published methods *******************************
+//* TSenderReportTestCase Protected methods ************************************
 
-procedure TestTIdRTPSenderReportWait.TestTrigger;
+procedure TSenderReportTestCase.CheckTriggerDoesNothing(Msg: String);
+begin
+  CheckEquals(0, Self.Agent.RTCPCount, Msg);
+end;
+
+//* TSenderReportTestCase Published methods ************************************
+
+procedure TSenderReportTestCase.TestTrigger;
 begin
   CheckEquals(0, Self.Agent.RTCPCount, 'Sanity check: RTCP sent before it should have');
 
   Self.Wait.Trigger;
 
   Check(Self.Agent.RTCPCount > 0, 'No RTCP sent, ergo Trigger didn''t happen');
+end;
+
+//******************************************************************************
+//* TestTIdRTPTransmissionTimeExpire                                           *
+//******************************************************************************
+//* TestTIdRTPTransmissionTimeExpire Protected methods *************************
+
+function TestTIdRTPTransmissionTimeExpire.WaitType: TIdRTPWaitClass;
+begin
+  Result := TIdRTPTransmissionTimeExpire;
+end;
+
+//******************************************************************************
+//* TestTIdRTPSenderReportWait                                                 *
+//******************************************************************************
+//* TestTIdRTPSenderReportWait Protected methods *******************************
+
+function TestTIdRTPSenderReportWait.WaitType: TIdRTPWaitClass;
+begin
+  Result := TIdRTPSenderReportWait;
 end;
 
 //******************************************************************************
@@ -8938,16 +8894,19 @@ begin
 
   Self.Session.AddReceiver(ArbitraryHost, ArbitraryPort);
 
-  Self.Wait := TIdRTPSendDataWait.Create;
-  Self.Wait.Data      := Self.Payload.Copy;
-  Self.Wait.SessionID := Self.Session.ID;
+  (Self.Wait as TIdRTPSendDataWait).Data := Self.Payload.Copy;
 end;
 
-procedure TestTIdRTPSendDataWait.TearDown;
-begin
-  Self.Wait.Free;
+//* TestTIdRTPSendDataWait Protected methods ***********************************
 
-  inherited TearDown;
+procedure TestTIdRTPSendDataWait.CheckTriggerDoesNothing(Msg: String);
+begin
+  CheckEquals(0, Self.Agent.RTPCount, Msg);
+end;
+
+function TestTIdRTPSendDataWait.WaitType: TIdRTPWaitClass;
+begin
+  Result := TIdRTPSendDataWait;
 end;
 
 //* TestTIdRTPSendDataWait Published methods ***********************************

@@ -596,7 +596,7 @@ type
     procedure UnregisterEncodingMaps(Profile: TIdRTPProfile;
                                      Maps: TIdSdpRTPMapAttributes);
   public
-    constructor Create; overload;
+    constructor Create; override;
     constructor Create(ServerType: TIdBaseRTPAbstractPeerClass); overload;
     destructor  Destroy; override;
 

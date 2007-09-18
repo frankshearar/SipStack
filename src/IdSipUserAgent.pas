@@ -458,12 +458,9 @@ procedure EatDirective(var Line: String);
 implementation
 
 uses
-  IdMockRoutingTable, IdRandom, IdSimpleParser, IdSipDns, IdSipIndyLocator,
-  IdSipLocation, IdSipMockBindingDatabase, IdSipSubscribeModule, IdSystem,
-  IdUnicode, SysUtils;
-
-var
-  GUserAgents: TStrings;
+  IdMockRoutingTable, IdRegisteredObject, IdSimpleParser, IdSipDns,
+  IdSipIndyLocator, IdSipLocation, IdSipMockBindingDatabase,
+  IdSipSubscribeModule, IdSystem, IdUnicode, SysUtils;
 
 //******************************************************************************
 //* Unit Public functions & procedures                                         *
@@ -1942,14 +1939,14 @@ end;
 procedure TIdSipReconfigureStackWait.Trigger;
 var
   Configurator: TIdSipStackConfigurator;
-  UA:           TIdSipUserAgent;
+  UA:           TObject;
 begin
-  UA := TIdSipUserAgentRegistry.FindUserAgent(Self.UserAgentID);
+  UA := TIdObjectRegistry.FindObject(Self.UserAgentID);
 
   if Assigned(UA) and (UA is TIdSipUserAgent) then begin
     Configurator := TIdSipStackConfigurator.Create;
     try
-      Configurator.UpdateConfiguration(UA, Self.Configuration);
+      Configurator.UpdateConfiguration(UA as TIdSipUserAgent, Self.Configuration);
     finally
       Configurator.Free;
     end;

@@ -833,7 +833,7 @@ const
 implementation
 
 uses
-  IdSipLocator;
+  IdRegisteredObject, IdSipLocator;
 
 const
   BadReferNotifyBody               = 'REFER NOTIFYs MUST have '
@@ -3150,10 +3150,10 @@ end;
 
 procedure TIdSipOutboundSubscriptionRefreshWait.Trigger;
 var
-  Action:       TIdSipAction;
+  Action:       TObject;
   Subscription: TIdSipOutboundSubscription;
 begin
-  Action := TIdSipActionRegistry.FindAction(Self.ActionID);
+  Action := TIdObjectRegistry.FindObject(Self.ActionID);
 
   if Assigned(Action) and (Action is TIdSipOutboundSubscription) then begin
     Subscription := Action as TIdSipOutboundSubscription;
@@ -3170,9 +3170,9 @@ end;
 
 procedure TIdSipInboundSubscriptionNotifyWait.Trigger;
 var
-  Action: TIdSipAction;
+  Action: TObject;
 begin
-  Action := TIdSipActionRegistry.FindAction(Self.ActionID);
+  Action := TIdObjectRegistry.FindObject(Self.ActionID);
 
   if Assigned(Action) and (Action is TIdSipInboundSubscription) then
     (Action as TIdSipInboundSubscription).Notify(Self.Notification, Self.MimeType);
@@ -3202,9 +3202,9 @@ end;
 
 procedure TIdSipInboundReferralWait.Trigger;
 var
-  Action: TIdSipAction;
+  Action: TObject;
 begin
-  Action := TIdSipActionRegistry.FindAction(Self.ActionID);
+  Action := TIdObjectRegistry.FindObject(Self.ActionID);
 
   if Assigned(Action) and (Action is TIdSipInboundReferral) then
     Self.FireTimer(Action as TIdSipInboundReferral);
@@ -3288,9 +3288,9 @@ end;
 
 procedure TIdSipSubscriptionRetryWait.Trigger;
 var
-  Module: TIdSipMessageModule;
+  Module: TObject;
 begin
-  Module := TIdSipMessageModuleRegistry.FindModule(Self.ModuleID);
+  Module := TIdObjectRegistry.FindObject(Self.ModuleID);
 
   if Assigned(Module) and (Module is TIdSipSubscribeModule) then
     (Module as TIdSipSubscribeModule).Resubscribe(Self.Target, Self.EventPackage);

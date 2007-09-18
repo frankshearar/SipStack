@@ -871,8 +871,8 @@ type
 implementation
 
 uses
-  IdException, IdSimpleParser, IdSipDns, IdSipMockTransactionDispatcher,
-  SysUtils, TestFramework;
+  IdException, IdRegisteredObject, IdSimpleParser, IdSipDns,
+  IdSipMockTransactionDispatcher, SysUtils, TestFramework;
 
 function Suite: ITestSuite;
 begin
@@ -8533,13 +8533,13 @@ begin
 
   ArbitraryObject := TIdSipOutboundCancel.Create(Self.Core);
   try
-    TIdSipActionRegistry.RegisterAction(ArbitraryObject);
+    TIdObjectRegistry.RegisterObject(ArbitraryObject);
     try
       Self.Wait.SessionID := ArbitraryObject.ID;
 
       CheckTriggerDoesNothing(Self.Wait, 'Wait didn''t check object type before triggering');
     finally
-      TIdSipActionRegistry.UnregisterAction(ArbitraryObject.ID);
+      TIdObjectRegistry.UnregisterObject(ArbitraryObject.ID);
     end;
   finally
     ArbitraryObject.Free;

@@ -169,7 +169,6 @@ type
     procedure TestClearBindings;
     procedure TestClearBindingsDoesntStartStoppedTransport;
     procedure TestClearBindingRestartsStartedTransport;
-    procedure TestDestructionUnregistersTransport;
     procedure TestDiscardMalformedMessage;
     procedure TestDiscardRequestWithInconsistentTransport;
     procedure TestDiscardResponseWithInconsistentTransport;
@@ -1077,22 +1076,6 @@ begin
 
   Check(Self.LowPortTransport.IsRunning,
         'ClearBindings didn''t restart the transport');
-end;
-
-procedure TestTIdSipTransport.TestDestructionUnregistersTransport;
-var
-  ID: String;
-  T:  TIdSipTransport;
-begin
-  T := Self.TransportType.Create;
-  try
-    ID := T.ID;
-  finally
-    T.Free;
-  end;
-
-  Check(nil = TIdSipTransportRegistry.TransportFor(ID),
-        Self.HighPortTransport.ClassName + ' didn''t unregister when Freed');
 end;
 
 procedure TestTIdSipTransport.TestDiscardMalformedMessage;

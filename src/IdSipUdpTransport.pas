@@ -46,8 +46,9 @@ type
 
   TIdSipUdpServer = class(TIdUDPServer)
   private
-    fTransportID: String;
-    fTimer:       TIdTimerQueue;
+    fTimer:         TIdTimerQueue;
+    fTransportID:   String;
+    fTransportType: String;
   protected
     procedure DoUDPRead(AData: TStream; ABinding: TIdSocketHandle); override;
     procedure NotifyOfException(E: Exception);
@@ -56,8 +57,9 @@ type
   public
     constructor Create(AOwner: TComponent); override;
 
-    property Timer:       TIdTimerQueue read fTimer write fTimer;
-    property TransportID: String        read fTransportID write fTransportID;
+    property Timer:         TIdTimerQueue read fTimer write fTimer;
+    property TransportID:   String        read fTransportID write fTransportID;
+    property TransportType: String        read fTransportType write fTransportType;
   end;
 
   TIdSipUdpClient = class(TIdSipUdpServer)
@@ -152,6 +154,7 @@ begin
   Self.Transport := TIdSipUdpServer.Create(nil);
   Self.Transport.ThreadedEvent := true;
   Self.Transport.TransportID := Self.ID;
+  Self.Transport.TransportType := Self.GetTransportType;
 end;
 
 procedure TIdSipUDPTransport.SendMessage(M: TIdSipMessage;
@@ -276,7 +279,7 @@ begin
   Wait.ReceivedFrom.LocalPort := Binding.Port;
   Wait.ReceivedFrom.PeerIP    := Binding.PeerIP;
   Wait.ReceivedFrom.PeerPort  := Binding.PeerPort;
-  Wait.ReceivedFrom.Transport := TIdSipTransportRegistry.TransportFor(Self.TransportID).GetTransportType;
+  Wait.ReceivedFrom.Transport := Self.TransportType;
   Wait.TransportID            := Self.TransportID;
 
   Self.Timer.AddEvent(TriggerImmediately, Wait);

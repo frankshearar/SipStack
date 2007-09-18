@@ -30,7 +30,7 @@ type
   private
     Observers: TIdNotificationList;
   public
-    constructor Create; virtual;
+    constructor Create; override;
     destructor  Destroy; override;
 
     procedure AddObserver(const Listener: IIdObserver);
@@ -58,7 +58,7 @@ type
     fChanged: Boolean;
     fData:    TObject;
   public
-    constructor Create;
+    constructor Create; override;
 
     procedure OnChanged(Observed: TObject);
 

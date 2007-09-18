@@ -70,9 +70,9 @@ interface
 
 uses
   Classes, Contnrs, IdSipDialog, IdException, IdInterfacedObject,
-  IdNotification, IdObservable, IdRoutingTable, IdSipAuthentication,
-  IdSipLocation, IdSipLocator, IdSipMessage, IdSipTransaction, IdTimerQueue,
-  SysUtils;
+  IdNotification, IdObservable, IdRegisteredObject, IdRoutingTable,
+  IdSipAuthentication, IdSipLocation, IdSipLocator, IdSipMessage,
+  IdSipTransaction, IdTimerQueue, SysUtils;
 
 const
   SipStackVersion = '0.6pre';
@@ -364,7 +364,7 @@ type
     property AllowedLanguageList:    TStrings read fAllowedLanguageList;
     property AllowedSchemeList:      TStrings read fAllowedSchemeList;
   public
-    constructor Create; virtual;
+    constructor Create; override;
     destructor  Destroy; override;
 
     function  AddAction(Action: TIdSipAction): TIdSipAction;
@@ -470,7 +470,7 @@ type
   // I and my subclasses represent chunks of Transaction-User Core
   // functionality: the ability to process REGISTERs, say, or OPTIONS, or the
   // requests involved with establishing a call.
-  TIdSipMessageModule = class(TObject)
+  TIdSipMessageModule = class(TIdRegisteredObject)
   private
     fID:        String;
     fUserAgent: TIdSipAbstractCore;
@@ -577,7 +577,6 @@ type
   TIdSipActionState = (asInitialised, asSent, asResent, asFinished);
   TIdSipAction = class(TIdInterfacedObject)
   private
-    fID:             String;
     fInitialRequest: TIdSipRequest;
     fIsTerminated:   Boolean;
     fLocalGruu:      TIdSipContactHeader;
@@ -630,7 +629,7 @@ type
     procedure SetStateToResent;
     procedure SetStateToSent;
   public
-    constructor Create(UA: TIdSipAbstractCore); virtual;
+    constructor Create(UA: TIdSipAbstractCore); overload; virtual;
     constructor CreateInbound(UA: TIdSipAbstractCore;
                               Request: TIdSipRequest;
                               Binding: TIdSipConnectionBindings); virtual;
@@ -654,7 +653,6 @@ type
     procedure Send; virtual;
     procedure Terminate; virtual;
 
-    property ID:             String              read fID;
     property InitialRequest: TIdSipRequest       read fInitialRequest;
     property IsOwned:        Boolean             read fIsOwned;
     property IsTerminated:   Boolean             read fIsTerminated;
@@ -803,19 +801,6 @@ type
     property Cancelling:       Boolean           read fCancelling write fCancelling;
     property FullyEstablished: Boolean           read fFullyEstablished write fFullyEstablished;
     property InitialAction:    TIdSipOwnedAction read fInitialAction;
-  end;
-
-  // I provide facilities to unambiguously locate any action resident in
-  // memory, and to allow actions to register and unregister from me as
-  // they instantiate and free.
-  TIdSipActionRegistry = class(TObject)
-  private
-    class function ActionAt(Index: Integer): TIdSipAction;
-    class function ActionRegistry: TStrings;
-  public
-    class function  RegisterAction(Instance: TIdSipAction): String;
-    class function  FindAction(const ActionID: String): TIdSipAction;
-    class procedure UnregisterAction(const ActionID: String);
   end;
 
   TIdSipActionMethod = class(TIdNotification)
@@ -1011,11 +996,6 @@ implementation
 uses
   IdRandom, IdSdp, IdSipInviteModule, IdSipOptionsModule, IdSipRegistration,
   IdSipSubscribeModule, IdSipTransport;
-
-// Used by the ActionRegistry.
-var
-  GActions:        TStrings;
-  GMessageModules: TStrings;
 
 const
   ItemNotFoundIndex = -1;
@@ -1327,8 +1307,20 @@ begin
 end;
 
 function TIdSipActions.FindAction(const ActionID: String): TIdSipAction;
+var
+  Action: TObject;
 begin
-  Result := TIdSipActionRegistry.FindAction(ActionID);
+  Action := TIdObjectRegistry.FindObject(ActionID);
+
+  if not Assigned(Action) then begin
+    Result := nil;
+    Exit;
+  end;
+
+  if not (Action is TIdSipAction) then
+    raise ERegistry.Create(ActionID + ' does not point to a TIdSipAction, but a ' + Action.ClassName);
+
+  Result := Action as TIdSipAction;
 end;
 
 //******************************************************************************
@@ -1355,12 +1347,12 @@ end;
 
 procedure TIdSipActionSendWait.Trigger;
 var
-  Action: TIdSipAction;
+  Action: TObject;
 begin
-  Action := TIdSipActionRegistry.FindAction(Self.ActionID);
+  Action := TIdObjectRegistry.FindObject(Self.ActionID);
 
-  if Assigned(Action) then
-    Action.Send;
+  if Assigned(Action) and (Action is TIdSipAction) then
+    (Action as TIdSipAction).Send;
 end;
 
 //******************************************************************************
@@ -1370,12 +1362,12 @@ end;
 
 procedure TIdSipActionTerminateWait.Trigger;
 var
-  Action: TIdSipAction;
+  Action: TObject;
 begin
-  Action := TIdSipActionRegistry.FindAction(Self.ActionID);
+  Action := TIdObjectRegistry.FindObject(Self.ActionID);
 
-  if Assigned(Action) then
-    Action.Terminate;
+  if Assigned(Action) and (Action is TIdSipAction) then
+    (Action as TIdSipAction).Terminate;
 end;
 
 //******************************************************************************
@@ -2961,8 +2953,6 @@ end;
 
 destructor TIdSipAction.Destroy;
 begin
-  TIdSipActionRegistry.UnregisterAction(Self.ID);
-
   Self.TargetLocations.Free;
   Self.LocalParty.Free;
   Self.LocalGruu.Free;
@@ -3149,7 +3139,6 @@ begin
 
   Self.ActionListeners := TIdNotificationList.Create;
   Self.fLocalParty     := TIdSipAddressHeader.Create;
-  Self.fID             := TIdSipActionRegistry.RegisterAction(Self);
   Self.fInitialRequest := TIdSipRequest.Create;
   Self.fIsOwned        := false;
   Self.fIsTerminated   := false;
@@ -3898,53 +3887,6 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipActionRegistry                                                       *
-//******************************************************************************
-//* TIdSipActionRegistry Public methods ****************************************
-
-class function TIdSipActionRegistry.RegisterAction(Instance: TIdSipAction): String;
-begin
-  repeat
-    Result := GRandomNumber.NextHexString;
-  until (Self.ActionRegistry.IndexOf(Result) = ItemNotFoundIndex);
-
-  Self.ActionRegistry.AddObject(Result, Instance);
-end;
-
-class function TIdSipActionRegistry.FindAction(const ActionID: String): TIdSipAction;
-var
-  Index: Integer;
-begin
-  Index := Self.ActionRegistry.IndexOf(ActionID);
-
-  if (Index = ItemNotFoundIndex) then
-    Result := nil
-  else
-    Result := Self.ActionAt(Index);
-end;
-
-class procedure TIdSipActionRegistry.UnregisterAction(const ActionID: String);
-var
-  Index: Integer;
-begin
-  Index := Self.ActionRegistry.IndexOf(ActionID);
-  if (Index <> ItemNotFoundIndex) then
-    Self.ActionRegistry.Delete(Index);
-end;
-
-//* TIdSipActionRegistry Private methods ***************************************
-
-class function TIdSipActionRegistry.ActionAt(Index: Integer): TIdSipAction;
-begin
-  Result := TIdSipAction(Self.ActionRegistry.Objects[Index]);
-end;
-
-class function TIdSipActionRegistry.ActionRegistry: TStrings;
-begin
-  Result := GActions;
-end;
-
-//******************************************************************************
 //* TIdSipActionAuthenticationChallengeMethod                                  *
 //******************************************************************************
 //* TIdSipActionAuthenticationChallengeMethod Public methods *******************
@@ -4048,13 +3990,4 @@ begin
                                                                        Self.Binding);
 end;
 
-initialization
-  GActions        := TStringList.Create;
-  GMessageModules := TStringList.Create;
-finalization
-// These objects are purely memory-based, so it's safe not to free them here.
-// Still, perhaps we need to review this methodology. How else do we get
-// something like class variables?
-//  GActions.Free;
-//  GMessageModules.Free;
 end.

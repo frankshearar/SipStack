@@ -194,7 +194,6 @@ type
     fInitialRequest:     TIdSipRequest;
     fState:              TIdSipTransactionState;
     fDispatcher:         TIdSipTransactionDispatcher;
-    fID:                 String;
     fLastResponse:       TIdSipResponse; // Used by server transactions
     fInitialDestination: TIdSipLocation; // Used by client transactions
     TranListeners:       TIdNotificationList;
@@ -257,7 +256,6 @@ type
     procedure Terminate(Quiet: Boolean);
 
     property Dispatcher:         TIdSipTransactionDispatcher read fDispatcher;
-    property ID:                 String                      read fID;
     property InitialRequest:     TIdSipRequest               read fInitialRequest;
     property InitialDestination: TIdSipLocation              read fInitialDestination;
     property LastResponse:       TIdSipResponse              read fLastResponse;
@@ -422,19 +420,6 @@ type
                        InitialRequest: TIdSipRequest); override;
 
     function IsNull: Boolean; override;
-  end;
-
-  // I provide facilities to unambiguously locate any transaction resident in
-  // memory, and to allow transactions to register and unregister from me as
-  // they instantiate and free.
-  TIdSipTransactionRegistry = class(TObject)
-  private
-    class function TransactionAt(Index: Integer): TIdSipTransaction;
-    class function TransactionRegistry: TStrings;
-  public
-    class function  RegisterTransaction(Instance: TIdSipTransaction): String;
-    class function  FindTransaction(const TransactionID: String): TIdSipTransaction;
-    class procedure UnregisterTransaction(const TransactionID: String);
   end;
 
   TIdSipTransactionWait = class(TIdWait)
@@ -610,11 +595,7 @@ const
 implementation
 
 uses
-  IdException, IdRandom, IdSipDialogID, Math;
-
-// Used by the TransactionRegistry.
-var
-  GTransactions: TStrings;
+  IdException, IdRegisteredObject, IdSipDialogID, Math;
 
 const
   AtLeastOneVia         = 'Messages must have at least one Via header';
@@ -1274,14 +1255,10 @@ begin
   Self.TranListeners := TIdNotificationList.Create;
 
   Self.FirstTime := true;
-
-  Self.fID := TIdSipTransactionRegistry.RegisterTransaction(Self);
 end;
 
 destructor TIdSipTransaction.Destroy;
 begin
-  TIdSipTransactionRegistry.UnregisterTransaction(Self.ID);
-
   Self.TranListeners.Free;
   Self.LastResponse.Free;
   Self.InitialRequest.Free;
@@ -2342,64 +2319,20 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipTransactionRegistry                                                  *
-//******************************************************************************
-//* TIdSipTransactionRegistry Public methods ***********************************
-
-class function TIdSipTransactionRegistry.RegisterTransaction(Instance: TIdSipTransaction): String;
-begin
-  repeat
-    Result := GRandomNumber.NextHexString;
-  until (Self.TransactionRegistry.IndexOf(Result) = ItemNotFoundIndex);
-
-  Self.TransactionRegistry.AddObject(Result, Instance);
-end;
-
-class function TIdSipTransactionRegistry.FindTransaction(const TransactionID: String): TIdSipTransaction;
-var
-  Index: Integer;
-begin
-  Index := Self.TransactionRegistry.IndexOf(TransactionID);
-
-  if (Index = ItemNotFoundIndex) then
-    Result := nil
-  else
-    Result := Self.TransactionAt(Index);
-end;
-
-class procedure TIdSipTransactionRegistry.UnregisterTransaction(const TransactionID: String);
-var
-  Index: Integer;
-begin
-  Index := Self.TransactionRegistry.IndexOf(TransactionID);
-  if (Index <> ItemNotFoundIndex) then
-    Self.TransactionRegistry.Delete(Index);
-end;
-
-//* TIdSipTransactionRegistry Private methods **********************************
-
-class function TIdSipTransactionRegistry.TransactionAt(Index: Integer): TIdSipTransaction;
-begin
-  Result := TIdSipTransaction(Self.TransactionRegistry.Objects[Index]);
-end;
-
-class function TIdSipTransactionRegistry.TransactionRegistry: TStrings;
-begin
-  Result := GTransactions;
-end;
-
-//******************************************************************************
 //* TIdSipTerminatingTransactionWait                                           *
 //******************************************************************************
 //* TIdSipTerminatingTransactionWait Public methods ****************************
 
 procedure TIdSipTerminatingTransactionWait.Trigger;
 var
-  Tran: TIdSipTransaction;
+  Target: TObject;
+  Tran:   TIdSipTransaction;
 begin
-  Tran := TIdSipTransactionRegistry.FindTransaction(Self.TransactionID);
+  Target := TIdObjectRegistry.FindObject(Self.TransactionID);
 
-  if Assigned(Tran) then begin
+  if Assigned(Target) and (Target is TIdSipTransaction) then begin
+    Tran := Target as TIdSipTransaction;
+
     Self.FireTerminatingTimer(Tran);
 
     // Sometimes a terminating timer won't terminate the transaction. For
@@ -2423,11 +2356,11 @@ end;
 
 procedure TIdSipServerInviteTransactionTimerGWait.Trigger;
 var
-  Tran: TIdSipTransaction;
+  Tran: TObject;
 begin
-  Tran := TIdSipTransactionRegistry.FindTransaction(Self.TransactionID);
+  Tran := TIdObjectRegistry.FindObject(Self.TransactionID);
 
-  if Assigned(Tran) then
+  if Assigned(Tran) and (Tran is TIdSipServerInviteTransaction) then
     (Tran as TIdSipServerInviteTransaction).FireTimerG;
 end;
 
@@ -2468,11 +2401,11 @@ end;
 
 procedure TIdSipClientInviteTransactionTimerAWait.Trigger;
 var
-  Tran: TIdSipTransaction;
+  Tran: TObject;
 begin
-  Tran := TIdSipTransactionRegistry.FindTransaction(Self.TransactionID);
+  Tran := TIdObjectRegistry.FindObject(Self.TransactionID);
 
-  if Assigned(Tran) then
+  if Assigned(Tran) and (Tran is TIdSipClientInviteTransaction) then
     (Tran as TIdSipClientInviteTransaction).FireTimerA;
 end;
 
@@ -2503,11 +2436,11 @@ end;
 
 procedure TIdSipClientNonInviteTransactionTimerEWait.Trigger;
 var
-  Tran: TIdSipTransaction;
+  Tran: TObject;
 begin
-  Tran := TIdSipTransactionRegistry.FindTransaction(Self.TransactionID);
+  Tran := TIdObjectRegistry.FindObject(Self.TransactionID);
 
-  if Assigned(Tran) then
+  if Assigned(Tran) and (Tran is TIdSipClientNonInviteTransaction) then
     (Tran as TIdSipClientNonInviteTransaction).FireTimerE;
 end;
 
@@ -2663,11 +2596,4 @@ begin
   (Subject as IIdSipTransactionListener).OnTerminated(Self.Transaction);
 end;
 
-initialization
-  GTransactions := TStringList.Create;
-finalization
-// These objects are purely memory-based, so it's safe not to free them here.
-// Still, perhaps we need to review this methodology. How else do we get
-// something like class variables?
-//  GTransactions.Free;
 end.

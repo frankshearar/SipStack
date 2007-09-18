@@ -919,7 +919,6 @@ type
   TIdBaseRTPAbstractPeer = class(TIdInterfacedObject,
                                  IIdAbstractRTPPeer)
   private
-    fID:            String;
     fLocalProfile:  TIdRTPProfile;
     fRemoteProfile: TIdRTPProfile;
     fSession:       TIdRTPSession;
@@ -955,7 +954,7 @@ type
     procedure SetRTPPort(Value: Cardinal); virtual;
     procedure SetTimer(Value: TIdTimerQueue); virtual;
   public
-    constructor Create; virtual;
+    constructor Create; override;
     destructor  Destroy; override;
 
     procedure AddListener(const Listener: IIdRTPListener);
@@ -971,7 +970,6 @@ type
     property Active:        Boolean          read GetActive write SetActive;
     property Address:       String           read GetAddress write SetAddress;
     property DefaultPort:   Integer          read GetDefaultPort write SetDefaultPort;
-    property ID:            String           read fID;
     property LocalProfile:  TIdRTPProfile    read fLocalProfile write SetLocalProfile;
     property RemoteProfile: TIdRTPProfile    read fRemoteProfile write SetRemoteProfile;
     property RTCPPort:      Cardinal         read GetRTCPPort write SetRTCPPort;
@@ -987,14 +985,11 @@ type
   // to, for instance, simulate the receipt of a packet.
   TIdRTPPeerRegistry = class(TObject)
   private
-    class function ServerAt(Index: Integer): TIdBaseRTPAbstractPeer;
-    class function ServerRegistry: TStrings;
+    class function GetAllServers: TStrings;
   public
-    class function  FindServer(const ServerID: String): TIdBaseRTPAbstractPeer;
-    class function  RegisterServer(Instance: TIdBaseRTPAbstractPeer): String;
-    class function  ServerOn(Host: String; Port: Cardinal): TIdBaseRTPAbstractPeer;
-    class function  ServerRunningOn(Host: String; Port: Cardinal): Boolean;
-    class procedure UnregisterServer(const ServerID: String);
+    class function FindServer(const ServerID: String): TIdBaseRTPAbstractPeer;
+    class function ServerOn(Host: String; Port: Cardinal): TIdBaseRTPAbstractPeer;
+    class function ServerRunningOn(Host: String; Port: Cardinal): Boolean;
   end;
 
   TIdBaseRTPAbstractPeerClass = class of TIdBaseRTPAbstractPeer;
@@ -1016,7 +1011,6 @@ type
     fAssumedMTU:                Cardinal;
     fAvgRTCPSize:               Cardinal;
     fCanonicalName:             String;
-    fID:                        String;
     fLocalProfile:              TIdRTPProfile;
     fNoControlSent:             Boolean;
     fMaxRTCPBandwidth:          Cardinal; // octets per second
@@ -1115,7 +1109,6 @@ type
     property AssumedMTU:                Cardinal      read fAssumedMTU write fAssumedMTU;
     property AvgRTCPSize:               Cardinal      read fAvgRTCPSize;
     property CanonicalName:             String        read fCanonicalName write fCanonicalName;
-    property ID:                        String        read fID;
     property LocalProfile:              TIdRTPProfile read fLocalProfile write fLocalProfile;
     property NoControlSent:             Boolean       read fNoControlSent;
     property MaxRTCPBandwidth:          Cardinal      read fMaxRTCPBandwidth write fMaxRTCPBandwidth;
@@ -1130,16 +1123,6 @@ type
     property SessionBandwith:           Cardinal      read fSessionBandwidth write fSessionBandwidth;
     property SyncSrcID:                 Cardinal      read fSyncSrcID;
     property Timer:                     TIdTimerQueue read fTimer write fTimer;
-  end;
-
-  TIdRTPSessionRegistry = class(TObject)
-  private
-    class function SessionAt(Index: Integer): TIdRTPSession;
-    class function SessionRegistry: TStrings;
-  public
-    class function  RegisterSession(Instance: TIdRTPSession): String;
-    class function  FindSession(const SessionID: String): TIdRTPSession;
-    class procedure UnregisterSession(const SessionID: String);
   end;
 
   // I provide a buffer to objects that receive RTP packets. I assemble these
@@ -1433,19 +1416,14 @@ const
 implementation
 
 uses
-  DateUtils, IdHash, IdHashMessageDigest, IdRandom, IdSimpleParser, IdSystem,
-  IdUnicode, Math;
+  DateUtils, IdHash, IdHashMessageDigest, IdRandom, IdRegisteredObject,
+  IdSimpleParser, IdSystem, IdUnicode, Math;
 
 const
   JanOne1900           = 2;
   NTPNegativeTimeError = 'DT < 1900/01/01';
   RTPNegativeTimeError = 'DateTimeToRTPTimestamp doesn''t support negative timestamps';
   RTPLoopDetected      = 'RTP loop detected';
-
-// Used by the SessionRegistry.
-var
-  GRTPPeers: TStrings;
-  GSessions: TStrings;
 
 //******************************************************************************
 //* Unit public functions & procedures                                         *
@@ -4887,14 +4865,10 @@ begin
 
   Self.fSession := TIdRTPSession.Create(Self);
   Self.AddListener(Self.Session);
-
-  Self.fID := TIdRTPPeerRegistry.RegisterServer(Self);
 end;
 
 destructor TIdBaseRTPAbstractPeer.Destroy;
 begin
-  TIdRTPPeerRegistry.UnregisterServer(Self.ID);
-
   Self.Session.Free;
   Self.SendListeners.Free;
   Self.Listeners.Free;
@@ -5114,74 +5088,74 @@ end;
 
 class function TIdRTPPeerRegistry.FindServer(const ServerID: String): TIdBaseRTPAbstractPeer;
 var
-  Index: Integer;
+  O: TObject;
 begin
-  Index := Self.ServerRegistry.IndexOf(ServerID);
+  O := TIdObjectRegistry.FindObject(ServerID);
 
-  if (Index = ItemNotFoundIndex) then
-    Result := nil
-  else
-    Result := Self.ServerAt(Index);
-end;
+  if not Assigned(O) then
+    raise ERegistry.Create(ServerID + ' does not point to a registered object');
 
-class function TIdRTPPeerRegistry.RegisterServer(Instance: TIdBaseRTPAbstractPeer): String;
-begin
-  repeat
-    Result := GRandomNumber.NextHexString;
-  until (Self.ServerRegistry.IndexOf(Result) = ItemNotFoundIndex);
+  if not (O is TIdBaseRTPAbstractPeer) then
+    raise ERegistry.Create(ServerID + ' points to a ' + O.ClassName + ', not a ' + TIdBaseRTPAbstractPeer.ClassName);
 
-  Self.ServerRegistry.AddObject(Result, Instance);
+  Result := O as TIdBaseRTPAbstractPeer;
 end;
 
 class function TIdRTPPeerRegistry.ServerOn(Host: String; Port: Cardinal): TIdBaseRTPAbstractPeer;
 var
-  I: Integer;
+  I:      Integer;
+  L:      TStrings;
+  Server: TIdBaseRTPAbstractPeer;
 begin
+  // Return the (first) server that's running on Host:Port, whether active or
+  // not.
   Result := nil;
 
-  for I := 0 to Self.ServerRegistry.Count - 1 do begin
-    if (Self.ServerAt(I).Address = Host) and (Self.ServerAt(I).RTPPort = Port) then begin
-      Result := Self.ServerAt(I);
-      Break;
+  L := Self.GetAllServers;
+  try
+    for I := 0 to L.Count - 1 do begin
+      Server := L.Objects[I] as TIdBaseRTPAbstractPeer;
+      if (Server.Address = Host) and (Server.RTPPort = Port) then begin
+        Result := Server;
+        Break;
+      end;
     end;
+  finally
+    L.Free;
   end;
 end;
 
 class function TIdRTPPeerRegistry.ServerRunningOn(Host: String; Port: Cardinal): Boolean;
 var
-  I: Integer;
-  S: TIdBaseRTPAbstractPeer;
+  I:      Integer;
+  L:      TStrings;
+  Server: TIdBaseRTPAbstractPeer;
 begin
+  // Return true if a TIdBaseRTPAbstractPeer is running on Host:Port.
   Result := false;
 
-  for I := 0 to Self.ServerRegistry.Count - 1 do begin
-    S := Self.ServerAt(I);
-    if (S.Address = Host) and (S.RTPPort = Port) and S.Active then begin
+  L := Self.GetAllServers;
+  try
+    for I := 0 to L.Count - 1 do begin
+      Server := L.Objects[I] as TIdBaseRTPAbstractPeer;
+
+    if (Server.Address = Host) and (Server.RTPPort = Port) and Server.Active then begin
       Result := true;
       Break;
     end;
+    end;
+  finally
+    L.Free;
   end;
-end;
-
-class procedure TIdRTPPeerRegistry.UnregisterServer(const ServerID: String);
-var
-  Index: Integer;
-begin
-  Index := Self.ServerRegistry.IndexOf(ServerID);
-  if (Index <> ItemNotFoundIndex) then
-    Self.ServerRegistry.Delete(Index);
 end;
 
 //* TIdRTPPeerRegistry Private methods *****************************************
 
-class function TIdRTPPeerRegistry.ServerAt(Index: Integer): TIdBaseRTPAbstractPeer;
+class function TIdRTPPeerRegistry.GetAllServers: TStrings;
 begin
-  Result := TIdBaseRTPAbstractPeer(Self.ServerRegistry.Objects[Index]);
-end;
+  Result := TStringList.Create;
 
-class function TIdRTPPeerRegistry.ServerRegistry: TStrings;
-begin
-  Result := GRTPPeers;
+  TIdObjectRegistry.CollectAllObjectsOfClass(TIdBaseRTPAbstractPeer, Result);
 end;
 
 //******************************************************************************
@@ -5209,14 +5183,10 @@ begin
   Self.MissedReportTolerance := Self.DefaultMissedReportTolerance;
 
   Self.Initialize;
-
-  Self.fID := TIdRTPSessionRegistry.RegisterSession(Self);
 end;
 
 destructor TIdRTPSession.Destroy;
 begin
-  TIdRTPSessionRegistry.UnregisterSession(Self.ID);
-
   Self.TransmissionLock.Free;
 
   Self.MemberLock.Acquire;
@@ -5957,53 +5927,6 @@ begin
 end;
 
 //******************************************************************************
-//* TIdRTPSessionRegistry                                                      *
-//******************************************************************************
-//* TIdRTPSessionRegistry Public methods ***************************************
-
-class function TIdRTPSessionRegistry.RegisterSession(Instance: TIdRTPSession): String;
-begin
-  repeat
-    Result := GRandomNumber.NextHexString;
-  until (Self.SessionRegistry.IndexOf(Result) = ItemNotFoundIndex);
-
-  Self.SessionRegistry.AddObject(Result, Instance);
-end;
-
-class function TIdRTPSessionRegistry.FindSession(const SessionID: String): TIdRTPSession;
-var
-  Index: Integer;
-begin
-  Index := Self.SessionRegistry.IndexOf(SessionID);
-
-  if (Index = ItemNotFoundIndex) then
-    Result := nil
-  else
-    Result := Self.SessionAt(Index);
-end;
-
-class procedure TIdRTPSessionRegistry.UnregisterSession(const SessionID: String);
-var
-  Index: Integer;
-begin
-  Index := Self.SessionRegistry.IndexOf(SessionID);
-  if (Index <> ItemNotFoundIndex) then
-    Self.SessionRegistry.Delete(Index);
-end;
-
-//* TIdRTPSessionRegistry Private methods **************************************
-
-class function TIdRTPSessionRegistry.SessionAt(Index: Integer): TIdRTPSession;
-begin
-  Result := TIdRTPSession(Self.SessionRegistry.Objects[Index]);
-end;
-
-class function TIdRTPSessionRegistry.SessionRegistry: TStrings;
-begin
-  Result := GSessions;
-end;
-
-//******************************************************************************
 //* TIdRTPPacketBuffer                                                         *
 //******************************************************************************
 //* TIdRTPPacketBuffer Public methods ******************************************
@@ -6123,11 +6046,14 @@ end;
 procedure TIdRTPReceivePacketWait.Trigger;
 var
   Binding: TIdConnection;
+  S:       TObject;
   Session: TIdRTPSession;
 begin
-  Session := TIdRTPSessionRegistry.FindSession(Self.SessionID);
+  S := TIdObjectRegistry.FindObject(Self.SessionID);
 
-  if Assigned(Session) then begin
+  if Assigned(S) and (S is TIdRTPSession) then begin
+    Session := S as TIdRTPSession;
+
     Binding.LocalIP   := Self.ReceivedFrom.LocalIP;
     Binding.LocalPort := Self.ReceivedFrom.LocalPort;
     Binding.PeerIP    := Self.ReceivedFrom.PeerIP;
@@ -6157,12 +6083,12 @@ end;
 
 procedure TIdRTPSendDataWait.Trigger;
 var
-  Session: TIdRTPSession;
+  Session: TObject;
 begin
-  Session := TIdRTPSessionRegistry.FindSession(Self.SessionID);
+  Session := TIdObjectRegistry.FindObject(Self.SessionID);
 
-  if Assigned(Session) then
-    Session.SendData(Self.Data);
+  if Assigned(Session) and (Session is TIdRTPSession) then
+    (Session as TIdRTPSession).SendData(Self.Data);
 end;
 
 //******************************************************************************
@@ -6172,12 +6098,12 @@ end;
 
 procedure TIdRTPTransmissionTimeExpire.Trigger;
 var
-  Session: TIdRTPSession;
+  Session: TObject;
 begin
-  Session := TIdRTPSessionRegistry.FindSession(Self.SessionID);
+  Session := TIdObjectRegistry.FindObject(Self.SessionID);
 
-  if Assigned(Session) then
-    Session.TransmissionTimeExpire;
+  if Assigned(Session) and (Session is TIdRTPSession) then
+    (Session as TIdRTPSession).TransmissionTimeExpire;
 end;
 
 //******************************************************************************
@@ -6187,21 +6113,12 @@ end;
 
 procedure TIdRTPSenderReportWait.Trigger;
 var
-  Session: TIdRTPSession;
+  Session: TObject;
 begin
-  Session := TIdRTPSessionRegistry.FindSession(Self.SessionID);
+  Session := TIdObjectRegistry.FindObject(Self.SessionID);
 
-  if Assigned(Session) then
-    Session.SendReport;
+  if Assigned(Session) and (Session is TIdRTPSession) then
+    (Session as TIdRTPSession).SendReport;
 end;
 
-initialization
-  GRTPPeers := TStringList.Create;
-  GSessions := TStringList.Create;
-finalization
-// These objects are purely memory-based, so it's safe not to free them here.
-// Still, perhaps we need to review this methodology. How else do we get
-// something like class variables?
-//  GRTPPeers.Free;
-//  GSessions.Free;
 end.

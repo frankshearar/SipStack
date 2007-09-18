@@ -104,7 +104,7 @@ type
     fDataParam:    TIdRTPPayload;
     fNewData:      Boolean;
   public
-    constructor Create;
+    constructor Create; override;
 
     procedure OnNewData(Data: TIdRTPPayload;
                         Binding: TIdConnection);
@@ -123,7 +123,7 @@ type
     fRTCPPacketParam: TIdRTCPPacket;
     fRTPPacketParam:  TIdRTPPacket;
   public
-    constructor Create;
+    constructor Create; override;
 
     procedure OnRTCP(Packet: TIdRTCPPacket;
                      Binding: TIdConnection);
@@ -146,7 +146,7 @@ type
     fRTCPPacketParam: TIdRTCPPacket;
     fRTPPacketParam:  TIdRTPPacket;
   public
-    constructor Create;
+    constructor Create; override;
 
     procedure OnSendRTCP(Packet: TIdRTCPPacket;
                          Binding: TIdConnection);

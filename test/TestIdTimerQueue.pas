@@ -123,7 +123,7 @@ type
 
     procedure OnException(Timer: TIdTimerQueue; Error: Exception; Wait: TIdWait);
   public
-    constructor Create;
+    constructor Create; override;
 
     property ContextParam:     TIdTimerQueue  read fContextParam;
     property ErrorParam:       Exception      read fErrorParam;
