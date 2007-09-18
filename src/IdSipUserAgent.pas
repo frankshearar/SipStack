@@ -31,6 +31,7 @@ type
     fFrom:                     TIdSipFromHeader;
     fRegisterModule:           TIdSipOutboundRegisterModule;
     fRoutePath:                TIdSipRoutePath;
+    fID:                       String;
     fInviteModule:             TIdSipInviteModule;
     HasRegistered:             Boolean;
 
@@ -78,12 +79,23 @@ type
     property DoNotDisturb:           Boolean                      read GetDoNotDisturb write SetDoNotDisturb;
     property DoNotDisturbMessage:    String                       read fDoNotDisturbMessage write fDoNotDisturbMessage;
     property From:                   TIdSipFromHeader             read fFrom write SetFrom;
+    property ID:                     String                       read fID;
     property InitialResendInterval:  Cardinal                     read GetInitialResendInterval write SetInitialResendInterval;
     property InviteModule:           TIdSipInviteModule           read fInviteModule;
     property ProgressResendInterval: Cardinal                     read GetProgressResendInterval write SetProgressResendInterval;
     property RegisterModule:         TIdSipOutboundRegisterModule read fRegisterModule;
     property RoutePath:              TIdSipRoutePath              read fRoutePath write SetRoutePath;
     property Username:               String                       read GetUsername write SetUsername;
+  end;
+
+  TIdSipUserAgentRegistry = class(TObject)
+  private
+    class function UserAgentAt(Index: Integer): TIdSipUserAgent;
+    class function UserAgentRegistry: TStrings;
+  public
+    class function  RegisterUserAgent(Instance: TIdSipUserAgent): String;
+    class function  FindUserAgent(const UserAgentID: String): TIdSipUserAgent;
+    class procedure UnregisterUserAgent(const UserAgentID: String);
   end;
 
   TIdSipPendingLocalResolutionAction = class;
@@ -400,7 +412,7 @@ type
   TIdSipReconfigureStackWait = class(TIdWait)
   private
     fConfiguration: TStrings;
-    fStack:         TIdSipUserAgent;
+    fUserAgentID:   String;
 
     procedure SetConfiguration(Value: TStrings);
   public
@@ -409,8 +421,8 @@ type
 
     procedure Trigger; override;
 
-    property Configuration: TStrings        read fConfiguration write SetConfiguration;
-    property Stack:         TIdSipUserAgent read fStack write fStack;
+    property Configuration: TStrings read fConfiguration write SetConfiguration;
+    property UserAgentID:   String   read fUserAgentID write fUserAgentID;
   end;
 
 // Configuration file constants
@@ -446,8 +458,12 @@ procedure EatDirective(var Line: String);
 implementation
 
 uses
-  IdMockRoutingTable, IdSimpleParser, IdSipDns, IdSipIndyLocator, IdSipLocation,
-  IdSipMockBindingDatabase, IdSipSubscribeModule, IdSystem, IdUnicode, SysUtils;
+  IdMockRoutingTable, IdRandom, IdSimpleParser, IdSipDns, IdSipIndyLocator,
+  IdSipLocation, IdSipMockBindingDatabase, IdSipSubscribeModule, IdSystem,
+  IdUnicode, SysUtils;
+
+var
+  GUserAgents: TStrings;
 
 //******************************************************************************
 //* Unit Public functions & procedures                                         *
@@ -484,6 +500,8 @@ begin
   Self.From.Value             := Self.DefaultFrom;
   Self.HasRegistered          := false;
   Self.InitialResendInterval  := DefaultT1;
+
+  Self.fID := TIdSipUserAgentRegistry.RegisterUserAgent(Self);
 end;
 
 destructor TIdSipUserAgent.Destroy;
@@ -494,6 +512,8 @@ begin
   //
   // Thus we destroy these objects AFTER the inherited Destroy, because the base
   // class could well expect these objects to still exist.
+
+  TIdSipUserAgentRegistry.UnregisterUserAgent(Self.ID);
 
   if Self.HasRegistered then
     Self.UnregisterFrom(Self.Registrar).Send;
@@ -775,6 +795,53 @@ end;
 procedure TIdSipUserAgent.SetUsername(Value: String);
 begin
   Self.From.DisplayName := Value;
+end;
+
+//******************************************************************************
+//* TIdSipUserAgentRegistry                                                    *
+//******************************************************************************
+//* TIdSipUserAgentRegistry Public methods *************************************
+
+class function TIdSipUserAgentRegistry.RegisterUserAgent(Instance: TIdSipUserAgent): String;
+begin
+  repeat
+    Result := GRandomNumber.NextHexString;
+  until (Self.UserAgentRegistry.IndexOf(Result) = ItemNotFoundIndex);
+
+  Self.UserAgentRegistry.AddObject(Result, Instance);
+end;
+
+class function TIdSipUserAgentRegistry.FindUserAgent(const UserAgentID: String): TIdSipUserAgent;
+var
+  Index: Integer;
+begin
+  Index := Self.UserAgentRegistry.IndexOf(UserAgentID);
+
+  if (Index = ItemNotFoundIndex) then
+    Result := nil
+  else
+    Result := Self.UserAgentAt(Index);
+end;
+
+class procedure TIdSipUserAgentRegistry.UnregisterUserAgent(const UserAgentID: String);
+var
+  Index: Integer;
+begin
+  Index := Self.UserAgentRegistry.IndexOf(UserAgentID);
+  if (Index <> ItemNotFoundIndex) then
+    Self.UserAgentRegistry.Delete(Index);
+end;
+
+//* TIdSipUserAgentRegistry Private methods ************************************
+
+class function TIdSipUserAgentRegistry.UserAgentAt(Index: Integer): TIdSipUserAgent;
+begin
+  Result := TIdSipUserAgent(Self.UserAgentRegistry.Objects[Index])
+end;
+
+class function TIdSipUserAgentRegistry.UserAgentRegistry: TStrings;
+begin
+  Result := GUserAgents;
 end;
 
 //******************************************************************************
@@ -1841,8 +1908,8 @@ begin
       PlaceholderContact.SipInstance := Self.UA.InstanceID;
 
     Wait := TIdSipReregisterWait.Create;
-    Wait.RegisterModule := Reg;
-    Wait.Registrar      := Self.Registrar;
+    Wait.RegisterModuleID := Reg.ID;
+    Wait.Registrar        := Self.Registrar;
     // We're not actually going to register the From: the Contact header will be
     // rewritten on its way to the network.
     Wait.Bindings.Add(PlaceholderContact);
@@ -1875,12 +1942,17 @@ end;
 procedure TIdSipReconfigureStackWait.Trigger;
 var
   Configurator: TIdSipStackConfigurator;
+  UA:           TIdSipUserAgent;
 begin
-  Configurator := TIdSipStackConfigurator.Create;
-  try
-    Configurator.UpdateConfiguration(Self.Stack, Self.Configuration);
-  finally
-    Configurator.Free;
+  UA := TIdSipUserAgentRegistry.FindUserAgent(Self.UserAgentID);
+
+  if Assigned(UA) and (UA is TIdSipUserAgent) then begin
+    Configurator := TIdSipStackConfigurator.Create;
+    try
+      Configurator.UpdateConfiguration(UA, Self.Configuration);
+    finally
+      Configurator.Free;
+    end;
   end;
 end;
 
@@ -1891,4 +1963,11 @@ begin
   Self.fConfiguration.Assign(Value);
 end;
 
+initialization
+  GUserAgents := TStringList.Create;
+finalization
+// These objects are purely memory-based, so it's safe not to free them here.
+// Still, perhaps we need to review this methodology. How else do we get
+// something like class variables?
+//  GUserAgents.Free;
 end.

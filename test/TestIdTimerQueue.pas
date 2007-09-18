@@ -57,7 +57,6 @@ type
   published
     procedure TestAddEvent;
     procedure TestBefore;
-    procedure TestRemoveEvent;
   end;
 
   TestTIdThreadedTimerQueue = class(TThreadingTestCase)
@@ -75,7 +74,6 @@ type
     T2:               TThreadEvent;
 
     procedure CheckNotifyEvent(Sender: TObject);
-    procedure CheckNotifyEventWithData(Sender: TObject);
     procedure NotifyEventOne(Sender: TObject);
     procedure NotifyEventTwo(Sender: TObject);
     procedure OnEventOneSet(Sender: TObject);
@@ -86,17 +84,9 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestNotifyEvent;
-    procedure TestNotifyEventWithData;
     procedure TestOneEvent;
-    procedure TestRemoveEvent;
-    procedure TestRemoveNonExistentEvent;
-    procedure TestRemoveNonExistentEventWithOtherEvents;
-    procedure TestRemoveNonExistentNotifyEventWithOtherNotifyEvents;
-    procedure TestRemoveNotifyEvent;
     procedure TestResume;
     procedure TestTwoEvents;
-    procedure TestTwoNotifyEvents;
     procedure TestTwoOutOfOrderEvents;
     procedure TestWaitForEarliestEvent;
   end;
@@ -165,13 +155,33 @@ uses
   IdGlobal;
 
 type
-  TIdFooEvent = class(TIdWait)
+  TIdTestWait = class(TIdWait)
   private
     fTriggered: Boolean;
   public
     procedure Trigger; override;
 
     property Triggered: Boolean read fTriggered;
+  end;
+
+  TIdEventWait = class(TIdWait)
+  private
+    fEvent: TEvent;
+  public
+    function  MatchEvent(Event: Pointer): Boolean; override;
+    procedure Trigger; override;
+
+    property Event: TEvent read fEvent write fEvent;
+  end;
+
+  TIdNotifyEventWait = class(TIdWait)
+  private
+    fEvent: TNotifyEvent;
+  public
+    function  MatchEvent(Event: Pointer): Boolean; override;
+    procedure Trigger; override;
+
+    property Event: TNotifyEvent read fEvent write fEvent;
   end;
 
   TIdNullWait = class(TIdWait)
@@ -191,11 +201,43 @@ begin
 end;
 
 //******************************************************************************
-//* TIdFooEvent                                                                *
+//* TIdEventWait                                                               *
 //******************************************************************************
-//* TIdFooEvent Public methods *************************************************
+//* TIdEventWait Public methods ************************************************
 
-procedure TIdFooEvent.Trigger;
+function TIdEventWait.MatchEvent(Event: Pointer): Boolean;
+begin
+  Result := Self.Event = Event;
+end;
+
+procedure TIdEventWait.Trigger;
+begin
+  if Assigned(Self.Event) then
+    Self.Event.SetEvent;
+end;
+
+//******************************************************************************
+//* TIdNotifyEventWait                                                         *
+//******************************************************************************
+//* TIdNotifyEventWait Public methods ******************************************
+
+function TIdNotifyEventWait.MatchEvent(Event: Pointer): Boolean;
+begin
+  Result := @Self.Event = Event;
+end;
+
+procedure TIdNotifyEventWait.Trigger;
+begin
+  if Assigned(Self.Event) then
+    Self.Event(Self);
+end;
+
+//******************************************************************************
+//* TIdTestWait                                                                *
+//******************************************************************************
+//* TIdTestWait Public methods *************************************************
+
+procedure TIdTestWait.Trigger;
 begin
   Self.fTriggered := true;
 end;
@@ -341,9 +383,9 @@ end;
 
 procedure TestTIdTimerQueue.TestAddEvent;
 var
-  Foo: TIdFooEvent;
+  Foo: TIdTestWait;
 begin
-  Foo := TIdFooEvent.Create;
+  Foo := TIdTestWait.Create;
   Self.Queue.AddEvent(WaitTime, Foo);
   CheckEquals(1, Self.Queue.EventCount, 'No event added');
   Check(Self.Queue.ScheduledEvent(Foo), 'No event scheduled');
@@ -373,16 +415,6 @@ begin
         'High(Cardinal) - 10, 10');
   Check(not Self.Queue.Before(10, High(Cardinal) - 10),
         '10, High(Cardinal) - 10');
-end;
-
-procedure TestTIdTimerQueue.TestRemoveEvent;
-var
-  Foo: TIdFooEvent;
-begin
-  Foo := TIdFooEvent.Create;
-  Self.Queue.AddEvent(WaitTime, Foo);
-  Self.Queue.RemoveEvent(Foo);
-  CheckEquals(0, Self.Queue.EventCount, 'No event removed');
 end;
 
 //******************************************************************************
@@ -451,25 +483,6 @@ begin
   Self.ThreadEvent.SetEvent;
 end;
 
-procedure TestTIdThreadedTimerQueue.CheckNotifyEventWithData(Sender: TObject);
-begin
-  try
-    CheckEquals(Sender.ClassName,
-                TIdNotifyEventWait.ClassName,
-                'Unexpected object in CheckNotifyEventWithData');
-
-    Check(Self.Data = (Sender as TIdNotifyEventWait).Data,
-          'Unexpected data object');
-  except
-    on E: Exception do begin
-      Self.ExceptionType    := ExceptClass(E.ClassType);
-      Self.ExceptionMessage := E.Message;
-    end;
-  end;
-
-  Self.CheckNotifyEvent(Sender);
-end;
-
 procedure TestTIdThreadedTimerQueue.NotifyEventOne(Sender: TObject);
 begin
   Self.Lock.Acquire;
@@ -532,109 +545,35 @@ end;
 
 //* TestTIdThreadedTimerQueue Published methods ********************************
 
-procedure TestTIdThreadedTimerQueue.TestNotifyEvent;
-begin
-  Self.Queue.AddEvent(ShortTimeout, Self.CheckNotifyEvent);
-
-  Self.WaitForSignaled(Self.ThreadEvent, 'Event didn''t fire');
-  Check(Self.Notified, 'TNotifyEvent didn''t fire');
-end;
-
-procedure TestTIdThreadedTimerQueue.TestNotifyEventWithData;
-begin
-  Self.Queue.AddEvent(ShortTimeout,
-                      Self.CheckNotifyEventWithData,
-                      Self.Data);
-
-  Self.WaitForSignaled(Self.ThreadEvent, 'Event didn''t fire');
-
-  Check(Self.Notified, 'TNotifyEvent didn''t fire');
-end;
-
 procedure TestTIdThreadedTimerQueue.TestOneEvent;
+var
+  Wait: TIdEventWait;
 begin
   TThreadEvent.Create(Self.EventOne,
                       Self.OnEventOneSet,
                       LongTimeout);
 
-  Self.Queue.AddEvent(ShortTimeout, Self.EventOne);
+  Wait := TIdEventWait.Create;
+  Wait.Event := Self.EventOne;
+
+  Self.Queue.AddEvent(ShortTimeout, Wait);
 
   Self.ExceptionMessage := 'Event didn''t fire';
 
   Self.WaitForSignaled(Self.EventOne);
-end;
-
-procedure TestTIdThreadedTimerQueue.TestRemoveEvent;
-begin
-  Self.Queue.AddEvent(ShortTimeout,   Self.EventOne);
-  Self.Queue.AddEvent(2*ShortTimeout, Self.EventOne);
-  Self.Queue.AddEvent(3*ShortTimeout, Self.EventTwo);
-  Self.Queue.RemoveEvent(Self.EventOne);
-
-  Self.ExceptionMessage := 'EventTwo didn''t fire';
-
-  Self.WaitForSignaled(Self.EventTwo);
-  CheckEquals(0,
-              Pos('1', Self.OrderOfFire),
-              'EventOne wasn''t removed (Order of fire was '
-            + Self.OrderOfFire + ')');
-end;
-
-procedure TestTIdThreadedTimerQueue.TestRemoveNonExistentEvent;
-begin
-  Self.Queue.AddEvent(ShortTimeout,   Self.EventOne);
-  Self.Queue.AddEvent(2*ShortTimeout, Self.EventTwo);
-
-  Self.ExceptionMessage := 'EventTwo didn''t fire';
-
-  Self.Queue.RemoveEvent(Self.EventOne);
-  Self.WaitForSignaled(Self.EventTwo);
-  CheckEquals(0,
-              Pos('1', Self.OrderOfFire),
-              'EventOne wasn''t removed (Order of fire was '
-            + Self.OrderOfFire + ')');
-end;
-
-procedure TestTIdThreadedTimerQueue.TestRemoveNonExistentEventWithOtherEvents;
-begin
-  // This catches a bug where if there were multiple TEvents
-  // and you removed a non-existent one you'd enter an infinite loop.
-  // Simple implementation bug.
-
-  Self.Queue.AddEvent(ShortTimeout, Self.EventOne);
-  Self.Queue.RemoveEvent(Self.EventTwo);
-end;
-
-procedure TestTIdThreadedTimerQueue.TestRemoveNonExistentNotifyEventWithOtherNotifyEvents;
-begin
-  // This catches a bug where if there were multiple TNotifyEvents
-  // and you removed a non-existent one you'd enter an infinite loop.
-  // Simple implementation bug.
-
-  Self.Queue.AddEvent(ShortTimeout, Self.NotifyEventOne);
-  Self.Queue.RemoveEvent(Self.NotifyEventTwo);
-end;
-
-procedure TestTIdThreadedTimerQueue.TestRemoveNotifyEvent;
-begin
-  Self.Queue.AddEvent(ShortTimeout,   Self.CheckNotifyEvent);
-  Self.Queue.AddEvent(2*ShortTimeout, Self.CheckNotifyEvent);
-  Self.Queue.AddEvent(3*ShortTimeout, Self.EventOne);
-  Self.Queue.RemoveEvent(Self.CheckNotifyEvent);
-
-  Self.ExceptionMessage := 'Event didn''t fire';
-
-  Self.WaitForSignaled(Self.EventOne);
-  Check(not Self.Notified, 'TNotifyEvent wasn''t removed');
 end;
 
 procedure TestTIdThreadedTimerQueue.TestResume;
 var
   NewTimer: TIdThreadedTimerQueue;
+  Wait:     TIdEventWait;
 begin
   NewTimer := TIdThreadedTimerQueue.Create(true);
   try
-    NewTimer.AddEvent(ShortTimeout, Self.EventOne);
+    Wait := TIdEventWait.Create;
+    Wait.Event := Self.EventOne;
+
+    NewTimer.AddEvent(ShortTimeout, Wait);
 
     NewTimer.Resume;
 
@@ -645,6 +584,9 @@ begin
 end;
 
 procedure TestTIdThreadedTimerQueue.TestTwoEvents;
+var
+  WaitOne,
+  WaitTwo: TIdEventWait;
 begin
   TThreadEvent.Create(Self.EventOne,
                       Self.OnEventOneSet,
@@ -653,8 +595,14 @@ begin
                       Self.OnEventTwoSet,
                       LongTimeout);
 
-  Self.Queue.AddEvent(ShortTimeout,   Self.EventOne);
-  Self.Queue.AddEvent(2*ShortTimeout, Self.EventTwo);
+  WaitOne := TIdEventWait.Create;
+  WaitOne.Event := Self.EventOne;
+
+  WaitTwo := TIdEventWait.Create;
+  WaitTwo.Event := Self.EventTwo;
+
+  Self.Queue.AddEvent(ShortTimeout,   WaitOne);
+  Self.Queue.AddEvent(2*ShortTimeout, WaitTwo);
 
   Self.WaitForAll([Self.CallbackEventOne, Self.CallbackEventTwo],
                   LongTimeout);
@@ -667,25 +615,19 @@ begin
   end;
 end;
 
-procedure TestTIdThreadedTimerQueue.TestTwoNotifyEvents;
-begin
-  Self.Queue.AddEvent(ShortTimeout,   Self.NotifyEventOne);
-  Self.Queue.AddEvent(2*ShortTimeout, Self.NotifyEventTwo);
-
-  Self.WaitForSignaled(Self.ThreadEvent);
-
-  Self.Lock.Acquire;
-  try
-    CheckEquals('ab', Self.OrderOfFire, 'Order of events');
-  finally
-    Self.Lock.Release;
-  end;
-end;
-
 procedure TestTIdThreadedTimerQueue.TestTwoOutOfOrderEvents;
+var
+  WaitOne,
+  WaitTwo: TIdEventWait;
 begin
-  Self.Queue.AddEvent(2*ShortTimeout, Self.EventOne);
-  Self.Queue.AddEvent(ShortTimeout,   Self.EventTwo);
+  WaitOne := TIdEventWait.Create;
+  WaitOne.Event := Self.EventOne;
+
+  WaitTwo := TIdEventWait.Create;
+  WaitTwo.Event := Self.EventTwo;
+
+  Self.Queue.AddEvent(2*ShortTimeout, WaitOne);
+  Self.Queue.AddEvent(ShortTimeout,   WaitTwo);
 
   Self.WaitForAll([Self.CallbackEventOne, Self.CallbackEventTwo],
                   LongTimeout);
@@ -699,9 +641,18 @@ begin
 end;
 
 procedure TestTIdThreadedTimerQueue.TestWaitForEarliestEvent;
+var
+  WaitOne,
+  WaitTwo: TIdEventWait;
 begin
-  Self.Queue.AddEvent(2*ShortTimeout, Self.EventOne);
-  Self.Queue.AddEvent(ShortTimeout,   Self.EventTwo);
+  WaitOne := TIdEventWait.Create;
+  WaitOne.Event := Self.EventOne;
+
+  WaitTwo := TIdEventWait.Create;
+  WaitTwo.Event := Self.EventTwo;
+
+  Self.Queue.AddEvent(2*ShortTimeout, WaitOne);
+  Self.Queue.AddEvent(ShortTimeout,   WaitTwo);
 
   Self.WaitForSignaled(Self.CallbackEventTwo);
 
@@ -762,14 +713,16 @@ end;
 
 procedure TestTIdDebugTimerQueue.TestAddEventWithZeroTimeToSuspendedTimer;
 var
-  EventCount: Integer;
-  SuspTimer:  TIdDebugTimerQueue;
+  EventCount:   Integer;
+  SuspTimer:    TIdDebugTimerQueue;
+  ZeroTimeWait: TIdWait;
 begin
   SuspTimer := TIdDebugTimerQueue.Create(true);
   try
+    ZeroTimeWait := TIdWait.Create;
     EventCount := SuspTimer.EventCount;
 
-    SuspTimer.AddEvent(0, Self.OnTimer, nil);
+    SuspTimer.AddEvent(0, ZeroTimeWait);
 
     Check(EventCount < SuspTimer.EventCount,
           'SuspTimer executed scheduled event despite not running');
@@ -780,10 +733,13 @@ end;
 
 procedure TestTIdDebugTimerQueue.TestCount;
 var
-  I: Integer;
+  I:    Integer;
+  Wait: TIdNotifyEventWait;
 begin
   for I := 1 to 10 do begin
-    Self.Timer.AddEvent(1000, Self.OnTimer, nil);
+    Wait := TIdNotifyEventWait.Create;
+    Wait.Event := Self.OnTimer;
+    Self.Timer.AddEvent(1000, Wait);
 
     CheckEquals(I, Self.Timer.EventCount, IntToStr(I) + 'th AddEvent');
   end;
@@ -793,12 +749,15 @@ procedure TestTIdDebugTimerQueue.TestDebugWaitTime;
 const
   ArbValue = 42;
 var
-  Event: TNotifyEvent;
+  Wait: TIdNotifyEventWait;
 begin
-  Event := Self.OnTimer;
+  Wait := TIdNotifyEventWait.Create;
+  Wait.Event := Self.OnTimer;
 
-  Self.Timer.AddEvent(ArbValue, Event, nil);
-  CheckEquals(ArbValue, Self.Timer.FirstEventScheduledFor(@Event).DebugWaitTime,
+  Self.Timer.AddEvent(ArbValue, Wait);
+  CheckEquals(1, Self.Timer.EventCount, 'Unexpected number of Waits scheduled');
+
+  CheckEquals(ArbValue, Self.Timer.LastEventScheduled.DebugWaitTime,
               'DebugWaitTime not set');
 end;
 
@@ -835,9 +794,15 @@ begin
 end;
 
 procedure TestTIdDebugTimerQueue.TestRemoveAllEvents;
+var
+  WaitOne: TIdWait;
+  WaitTwo: TIdWait;
 begin
-  Self.Timer.AddEvent(1000, Self.WaitEvent);
-  Self.Timer.AddEvent(2000, Self.OnTimer);
+  // The time frees these
+  WaitOne := TIdWait.Create;
+  WaitTwo := TIdWait.Create;
+  Self.Timer.AddEvent(1000, WaitOne);
+  Self.Timer.AddEvent(1000, WaitTwo);
 
   Self.Timer.RemoveAllEvents;
 
@@ -846,35 +811,36 @@ end;
 
 procedure TestTIdDebugTimerQueue.TestScheduledEvent;
 var
-  Callback: TNotifyEvent;
+  Wait: TIdWait;
 begin
-  Callback := Self.OnTimer;
+  // The timer frees this.
+  Wait := TIdWait.Create;
 
-  Check(not Self.Timer.ScheduledEvent(Callback),
-        'Empty timer');
+  Check(not Self.Timer.ScheduledEvent(Wait),
+        'TIdWait not yet scheduled');
 
-  Self.Timer.AddEvent(1000, Callback);
+  Self.Timer.AddEvent(1000, Wait);
 
-  Check(Self.Timer.ScheduledEvent(Callback),
-        'Scheduled event doesn''t appear as scheduled');
-
-  Check(not Self.Timer.ScheduledEvent(Self.WaitEvent),
-        'TEvent not yet scheduled');
-
-  Self.Timer.AddEvent(1000, Self.WaitEvent);
-
-  Check(Self.Timer.ScheduledEvent(Self.WaitEvent),
-        'TEvent scheduled');
+  Check(Self.Timer.ScheduledEvent(Wait),
+        'TEvent not scheduled');
 end;
 
 procedure TestTIdDebugTimerQueue.TestTriggerEarliestEvent;
+var
+  WaitOne,
+  WaitTwo: TIdNotifyEventWait;
 begin
-  Self.Timer.AddEvent(1000, Self.OnTimer);
-  Self.Timer.AddEvent(2000, Self.OnSecondTimer);
+  WaitOne := TIdNotifyEventWait.Create;
+  WaitOne.Event := Self.OnTimer;
+  WaitTwo := TIdNotifyEventWait.Create;
+  WaitTwo.Event := Self.OnSecondTimer;
+
+  Self.Timer.AddEvent(1000, WaitOne);
+  Self.Timer.AddEvent(2000, WaitTwo);
 
   Self.Timer.TriggerEarliestEvent;
 
-  Check(Self.OnTimerFired, 'TNotifyEvent not triggered');
+  Check(Self.OnTimerFired, 'First not triggered');
   Check(not Self.OnSecondTimerFired, 'Second event triggered');
 
   Self.Timer.TriggerEarliestEvent;
@@ -915,7 +881,7 @@ begin
 
   Self.Context     := TIdDebugTimerQueue.Create(false);
   Self.Error       := EAccessViolation.Create('Access Violation Occured Nowhere');
-  Self.ErrorSource := TIdFooEvent.Create;
+  Self.ErrorSource := TIdTestWait.Create;
   Self.Listener    := TTimerQueueListener.Create;
   Self.Method      := TIdOnExceptionMethod.Create;
 

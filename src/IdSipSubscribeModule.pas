@@ -672,15 +672,15 @@ type
 
   TIdSipInboundSubscriptionNotifyWait = class(TIdWait)
   private
-    fMimeType:     String;
-    fNotification: String;
-    fSubscription: TIdSipInboundSubscription;
+    fMimeType:       String;
+    fNotification:   String;
+    fSubscriptionID: String;
   public
     procedure Trigger; override;
 
-    property MimeType:     String                    read fMimeType write fMimeType;
-    property Notification: String                    read fNotification write fNotification;
-    property Subscription: TIdSipInboundSubscription read fSubscription write fSubscription;
+    property MimeType:       String read fMimeType write fMimeType;
+    property Notification:   String read fNotification write fNotification;
+    property SubscriptionID: String read fSubscriptionID write fSubscriptionID;
   end;
 
   // My subclasses represent the deferred notification of a referral: trying,
@@ -688,46 +688,50 @@ type
   TIdSipInboundReferralWait = class(TIdWait)
   private
     fHasResponse: Boolean;
-    fReferral:    TIdSipInboundReferral;
+    fReferralID:  String;
     fResponse:    TIdSipResponse;
 
     procedure SetResponse(Value: TIdSipResponse);
+  protected
+    procedure FireTimer(Referral: TIdSipInboundReferral); virtual;
   public
     constructor Create; override;
     destructor  Destroy; override;
 
-    property HasResponse: Boolean               read fHasResponse;
-    property Referral:    TIdSipInboundReferral read fReferral write fReferral;
-    property Response:    TIdSipResponse        read fResponse write SetResponse;
+    procedure Trigger; override;
+
+    property HasResponse: Boolean        read fHasResponse;
+    property ReferralID:  String         read fReferralID write fReferralID;
+    property Response:    TIdSipResponse read fResponse write SetResponse;
   end;
 
   TIdSipInboundReferralWaitClass = class of TIdSipInboundReferralWait;
 
   TIdSipNotifyReferralDeniedWait = class(TIdSipInboundReferralWait)
   public
-    procedure Trigger; override;
+    procedure FireTimer(Referral: TIdSipInboundReferral); override;
   end;
 
   TIdSipNotifyReferralFailedWait = class(TIdSipInboundReferralWait)
   public
-    procedure Trigger; override;
+    procedure FireTimer(Referral: TIdSipInboundReferral); override;
   end;
 
   TIdSipNotifyReferralSucceededWait = class(TIdSipInboundReferralWait)
   public
-    procedure Trigger; override;
+    procedure FireTimer(Referral: TIdSipInboundReferral); override;
   end;
 
   TIdSipNotifyReferralTryingWait = class(TIdSipInboundReferralWait)
   public
-    procedure Trigger; override;
+    procedure FireTimer(Referral: TIdSipInboundReferral); override;
   end;
 
   TIdSipSubscriptionRetryWait = class(TIdWait)
   private
     fEventPackage: String;
+    fModuleID:     String;
     fTarget:       TIdSipAddressHeader;
-    fUserAgent:    TIdSipAbstractCore;
 
     procedure SetTarget(Value: TIdSipAddressHeader);
   public
@@ -737,8 +741,8 @@ type
     procedure Trigger; override;
 
     property EventPackage: String              read fEventPackage write fEventPackage;
+    property ModuleID:     String              read fModuleID write fModuleID;
     property Target:       TIdSipAddressHeader read fTarget write SetTarget;
-    property UserAgent:    TIdSipAbstractCore  read fUserAgent write fUserAgent;
   end;
 
   TIdSipNotifyMethod = class(TIdNotification)
@@ -2810,7 +2814,7 @@ begin
   Wait := TIdSipSubscriptionRetryWait.Create;
   Wait.EventPackage := Self.EventPackage;
   Wait.Target       := Self.Target;
-  Wait.UserAgent    := Self.UA;
+  Wait.ModuleID     := Self.Module.ID;
   Self.UA.ScheduleEvent(Seconds*1000, Wait);
 end;
 
@@ -3161,8 +3165,13 @@ end;
 //* TIdSipInboundSubscriptionNotifyWait Public methods *************************
 
 procedure TIdSipInboundSubscriptionNotifyWait.Trigger;
+var
+  Action: TIdSipAction;
 begin
-  Self.Subscription.Notify(Self.Notification, Self.MimeType);
+  Action := TIdSipActionRegistry.FindAction(Self.SubscriptionID);
+
+  if Assigned(Action) and (Action is TIdSipInboundSubscription) then
+    (Action as TIdSipInboundSubscription).Notify(Self.Notification, Self.MimeType);
 end;
 
 //******************************************************************************
@@ -3187,7 +3196,24 @@ begin
   inherited Destroy;
 end;
 
-//* TIdSipInboundReferralWait Private methods *****************************
+procedure TIdSipInboundReferralWait.Trigger;
+var
+  Action: TIdSipAction;
+begin
+  Action := TIdSipActionRegistry.FindAction(Self.ReferralID);
+
+  if Assigned(Action) and (Action is TIdSipInboundReferral) then
+    Self.FireTimer(Action as TIdSipInboundReferral);
+end;
+
+//* TIdSipInboundReferralWait Protected methods ********************************
+
+procedure TIdSipInboundReferralWait.FireTimer(Referral: TIdSipInboundReferral);
+begin
+  // By default, do nothing.
+end;
+
+//* TIdSipInboundReferralWait Private methods **********************************
 
 procedure TIdSipInboundReferralWait.SetResponse(Value: TIdSipResponse);
 begin
@@ -3200,41 +3226,41 @@ end;
 //******************************************************************************
 //* TIdSipNotifyReferralDeniedWait                                             *
 //******************************************************************************
-//* TIdSipNotifyReferralDeniedWait Public methods ******************************
+//* TIdSipNotifyReferralDeniedWait Protected methods ***************************
 
-procedure TIdSipNotifyReferralDeniedWait.Trigger;
+procedure TIdSipNotifyReferralDeniedWait.FireTimer(Referral: TIdSipInboundReferral);
 begin
-  Self.Referral.ReferenceDenied;
+  Referral.ReferenceDenied;
 end;
 
 //******************************************************************************
 //* TIdSipNotifyReferralFailedWait                                             *
 //******************************************************************************
-//* TIdSipNotifyReferralFailedWait Public methods ******************************
+//* TIdSipNotifyReferralFailedWait Protected methods ***************************
 
-procedure TIdSipNotifyReferralFailedWait.Trigger;
+procedure TIdSipNotifyReferralFailedWait.FireTimer(Referral: TIdSipInboundReferral);
 begin
-  Self.Referral.ReferenceFailed(Self.Response);
+  Referral.ReferenceFailed(Self.Response);
 end;
 
 //******************************************************************************
 //* TIdSipNotifyReferralSucceededWait                                          *
 //******************************************************************************
-//* TIdSipNotifyReferralSucceededWait Public methods ***************************
+//* TIdSipNotifyReferralSucceededWait Protected methods ************************
 
-procedure TIdSipNotifyReferralSucceededWait.Trigger;
+procedure TIdSipNotifyReferralSucceededWait.FireTimer(Referral: TIdSipInboundReferral);
 begin
-  Self.Referral.ReferenceSucceeded;
+  Referral.ReferenceSucceeded;
 end;
 
 //******************************************************************************
 //* TIdSipNotifyReferralTryingWait                                             *
 //******************************************************************************
-//* TIdSipNotifyReferralTryingWait Public methods ******************************
+//* TIdSipNotifyReferralTryingWait Protected methods ***************************
 
-procedure TIdSipNotifyReferralTryingWait.Trigger;
+procedure TIdSipNotifyReferralTryingWait.FireTimer(Referral: TIdSipInboundReferral);
 begin
-  Self.Referral.ReferenceTrying;
+  Referral.ReferenceTrying;
 end;
 
 //******************************************************************************
@@ -3258,12 +3284,12 @@ end;
 
 procedure TIdSipSubscriptionRetryWait.Trigger;
 var
-  Module: TIdSipSubscribeModule;
+  Module: TIdSipMessageModule;
 begin
-  Module := Self.UserAgent.ModuleFor(MethodSubscribe) as TIdSipSubscribeModule;
+  Module := TIdSipMessageModuleRegistry.FindModule(Self.ModuleID);
 
-  if Assigned(Module) then
-    Module.Resubscribe(Self.Target, Self.EventPackage);
+  if Assigned(Module) and (Module is TIdSipSubscribeModule) then
+    (Module as TIdSipSubscribeModule).Resubscribe(Self.Target, Self.EventPackage);
 end;
 
 //* TIdSipSubscriptionRetryWait Private methods ********************************

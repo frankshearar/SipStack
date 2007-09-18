@@ -20,8 +20,8 @@ type
 
   // I represent something that will happen in the future. If you want an alarm
   // to go off in 10 seconds, you'd instantiate me (well, a subclass of me) with
-  // a TriggerTime of (Now + 10000) (milliseconds) and give me a TEvent or
-  // TNotifyEvent or the like to set/run when you call my Trigger.
+  // a TriggerTime of (Now + 10000) (milliseconds). Then my Trigger will run at
+  // the time offset you specify.
   // TimeToWait tells you how soon (in milliseconds) my timer expires.
   //
   // My DebugWaitTime property aids debugging by giving the wait time specified -
@@ -48,26 +48,6 @@ type
   end;
 
   TIdWaitClass = class of TIdWait;
-
-  TIdEventWait = class(TIdWait)
-  private
-    fEvent: TEvent;
-  public
-    function  MatchEvent(Event: Pointer): Boolean; override;
-    procedure Trigger; override;
-
-    property Event: TEvent read fEvent write fEvent;
-  end;
-
-  TIdNotifyEventWait = class(TIdWait)
-  private
-    fEvent: TNotifyEvent;
-  public
-    function  MatchEvent(Event: Pointer): Boolean; override;
-    procedure Trigger; override;
-
-    property Event: TNotifyEvent read fEvent write fEvent;
-  end;
 
   IIdTimerQueueListener = interface(IInterface)
     ['{29C82AC3-EA30-420D-9073-FA4D25EB7A47}']
@@ -127,19 +107,10 @@ type
     destructor  Destroy; override;
 
     procedure AddEvent(MillisecsWait: Cardinal;
-                       Event: TEvent;
-                       Data: TObject = nil); overload;
-    procedure AddEvent(MillisecsWait: Cardinal;
-                       Event: TNotifyEvent;
-                       Data: TObject = nil); overload;
-    procedure AddEvent(MillisecsWait: Cardinal;
-                       Event: TIdWait); overload; virtual;
+                       Event: TIdWait); virtual;
     procedure AddListener(Listener: IIdTimerQueueListener);
     function  Before(TimeA,
                      TimeB: Cardinal): Boolean;
-    procedure RemoveEvent(Event: TEvent); overload;
-    procedure RemoveEvent(Event: TNotifyEvent); overload;
-    procedure RemoveEvent(Event: TIdWait); overload;
     procedure RemoveListener(Listener: IIdTimerQueueListener);
     procedure Resume; virtual;
     procedure Terminate; virtual;
@@ -165,7 +136,7 @@ type
   TIdTimerEmptyProc = procedure(Sender: TIdTimerQueue) of object;
 
   // I provide a thread in which to execute my events. Obviously, all
-  // TNotifyEvents and such execute in BlockRunner's context.
+  // TIdWaits execute in BlockRunner's context.
   TIdThreadedTimerQueue = class(TIdTimerQueue)
   private
     BlockRunner: TIdBlockRunnerThread;
@@ -186,7 +157,7 @@ type
   private
     fTriggerImmediateEvents: Boolean;
 
-    function HasScheduledEvent(Event: Pointer): Boolean;
+    function HasScheduledEvent(Event: TIdWait): Boolean;
   public
     procedure AddEvent(MillisecsWait: Cardinal;
                        Event: TIdWait); override;
@@ -198,8 +169,7 @@ type
     function  LastEventScheduledFor(Event: Pointer): TIdWait;
     procedure LockTimer; override;
     procedure RemoveAllEvents;
-    function  ScheduledEvent(Event: TObject): Boolean; overload;
-    function  ScheduledEvent(Event: TNotifyEvent): Boolean; overload;
+    function  ScheduledEvent(Event: TIdWait): Boolean; overload;
     function  SecondLastEventScheduled: TIdWait;
     procedure Terminate; override;
     procedure TriggerAllEventsOfType(WaitType: TIdWaitClass);
@@ -296,7 +266,7 @@ end;
 
 function TIdWait.MatchEvent(Event: Pointer): Boolean;
 begin
-  Result := Self = Event;
+  Result := Self = TObject(Event);
 end;
 
 procedure TIdWait.Schedule(Timer: TIdTimerQueue; Data: TObject; Delay: Cardinal);
@@ -317,38 +287,6 @@ end;
 procedure TIdWait.Trigger;
 begin
   // By default, do nothing.
-end;
-
-//******************************************************************************
-//* TIdEventWait                                                               *
-//******************************************************************************
-//* TIdEventWait Public methods ************************************************
-
-function TIdEventWait.MatchEvent(Event: Pointer): Boolean;
-begin
-  Result := Self.Event = Event;
-end;
-
-procedure TIdEventWait.Trigger;
-begin
-  if Assigned(Self.Event) then
-    Self.Event.SetEvent;
-end;
-
-//******************************************************************************
-//* TIdNotifyEventWait                                                         *
-//******************************************************************************
-//* TIdNotifyEventWait Public methods ******************************************
-
-function TIdNotifyEventWait.MatchEvent(Event: Pointer): Boolean;
-begin
-  Result := @Self.Event = Event;
-end;
-
-procedure TIdNotifyEventWait.Trigger;
-begin
-  if Assigned(Self.Event) then
-    Self.Event(Self);
 end;
 
 //******************************************************************************
@@ -393,30 +331,6 @@ begin
 end;
 
 procedure TIdTimerQueue.AddEvent(MillisecsWait: Cardinal;
-                                 Event: TEvent;
-                                 Data: TObject = nil);
-var
-  EventWait: TIdEventWait;
-begin
-  // Add will free EventWait in the event of an exception
-  EventWait := TIdEventWait.Create;
-  EventWait.Event := Event;
-  Self.Add(MillisecsWait, EventWait, Data);
-end;
-
-procedure TIdTimerQueue.AddEvent(MillisecsWait: Cardinal;
-                                 Event: TNotifyEvent;
-                                 Data: TObject = nil);
-var
-  EventWait: TIdNotifyEventWait;
-begin
-  // Add will free EventWait in the event of an exception
-  EventWait := TIdNotifyEventWait.Create;
-  EventWait.Event := Event;
-  Self.Add(MillisecsWait, EventWait, Data);
-end;
-
-procedure TIdTimerQueue.AddEvent(MillisecsWait: Cardinal;
                                  Event: TIdWait);
 begin
   Self.Add(MillisecsWait, Event, nil);
@@ -433,21 +347,6 @@ begin
   // You can't use Before() to determine the ordering of ticks
   // if the ticks are more than a day apart (i.e., MSecsPerDay ticks).
   Result := GetTickDiff(TimeA, TimeB) < MSecsPerDay;
-end;
-
-procedure TIdTimerQueue.RemoveEvent(Event: TEvent);
-begin
-  Self.InternalRemove(Event);
-end;
-
-procedure TIdTimerQueue.RemoveEvent(Event: TNotifyEvent);
-begin
-  Self.InternalRemove(@Event);
-end;
-
-procedure TIdTimerQueue.RemoveEvent(Event: TIdWait);
-begin
-  Self.InternalRemove(Event);
 end;
 
 procedure TIdTimerQueue.RemoveListener(Listener: IIdTimerQueueListener);
@@ -866,14 +765,9 @@ begin
   Self.ClearEvents;
 end;
 
-function TIdDebugTimerQueue.ScheduledEvent(Event: TObject): Boolean;
+function TIdDebugTimerQueue.ScheduledEvent(Event: TIdWait): Boolean;
 begin
   Result := Self.HasScheduledEvent(Event);
-end;
-
-function TIdDebugTimerQueue.ScheduledEvent(Event: TNotifyEvent): Boolean;
-begin
-  Result := Self.HasScheduledEvent(@Event);
 end;
 
 function TIdDebugTimerQueue.SecondLastEventScheduled: TIdWait;
@@ -968,7 +862,7 @@ end;
 
 //* TIdDebugTimerQueue Protected methods ***************************************
 
-function TIdDebugTimerQueue.HasScheduledEvent(Event: Pointer): Boolean;
+function TIdDebugTimerQueue.HasScheduledEvent(Event: TIdWait): Boolean;
 begin
   Result := Self.IndexOfEvent(Event) <> ItemNotFoundIndex;
 end;

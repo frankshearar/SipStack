@@ -83,6 +83,15 @@ type
     property Processor:       TIdSDPMediaStream read fProcessor write SetProcessor;
   end;
 
+  TIdButtonEndFlashWait = class(TIdWait)
+  private
+    fButton: TIdColourButton;
+  public
+    procedure Trigger; override;
+
+    property Button: TIdColourButton read fButton write fButton;
+  end;
+
 implementation
 
 uses
@@ -262,17 +271,23 @@ begin
 end;
 
 procedure TIdDTMFPanel.Flash(Event: TIdRTPTelephoneEventPayload);
+var
+  EndFlash:       TIdButtonEndFlashWait;
+  FlashingButton: TIdColourButton;
 begin
   // We've received a DTMF event. Make the appropriate button flash
   // for the specified amount of time.
-  Self.Buttons[Event.Event].Flash;
+  FlashingButton := Self.Buttons[Event.Event];
+
+  FlashingButton.Flash;
 
   // wait Duration milliseconds
-  Self.Timer.AddEvent(Event.Duration,
-                      Self.Buttons[Event.Event].OnEndFlash);
+  EndFlash := TIdButtonEndFlashWait.Create;
+  EndFlash.Button := FlashingButton;
+  Self.Timer.AddEvent(Event.Duration, EndFlash);
 
   if Event.IsEnd then
-    Self.Buttons[Event.Event].EndFlash;
+    FlashingButton.EndFlash;
 end;
 
 procedure TIdDTMFPanel.OnNewData(Data: TIdRTPPayload;
@@ -395,6 +410,15 @@ begin
 
   if Assigned(Self.fProcessor) then
     Self.fProcessor.AddDataListener(Self);
+end;
+
+//*****************************************************************************
+//* TIdButtonEndFlashWait                                                     *
+//*****************************************************************************
+//* TIdButtonEndFlashWait Public methods **************************************
+
+procedure TIdButtonEndFlashWait.Trigger;
+begin
 end;
 
 end.

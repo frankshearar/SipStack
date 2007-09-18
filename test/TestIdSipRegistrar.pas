@@ -2273,7 +2273,7 @@ begin
 
   Self.Wait := TIdSipReregisterWait.Create;
   Self.Wait.Bindings.Add(ContactHeaderFull).Value := 'sip:case@hilton.tr';
-  Self.Wait.RegisterModule := Self.Core.RegisterModule;
+  Self.Wait.RegisterModuleID := Self.Core.RegisterModule.ID;
   Self.Wait.Registrar.Uri := 'sip:gw1.leo-ix.net';
 end;
 

@@ -681,9 +681,13 @@ type
 
   TIdSipSessionWait = class(TIdWait)
   private
-    fSession: TIdSipSession;
+    fSessionID: String;
+  protected
+    procedure FireTimer(Session: TIdSipSession); virtual;
   public
-    property Session: TIdSipSession read fSession write fSession;
+    procedure Trigger; override;
+
+    property SessionID: String read fSessionID write fSessionID;
   end;
 
   // My subclasses represent a (possibly deferred) event that affects the
@@ -699,19 +703,23 @@ type
 
   TIdSipSessionAcceptCallModify = class(TIdSipSessionModifyingWait)
   public
-    procedure Trigger; override;
+    procedure FireTimer(Session: TIdSipSession); override;
   end;
 
   TIdSipSessionModifyWait = class(TIdSipSessionModifyingWait)
   public
-    procedure Trigger; override;
+    procedure FireTimer(Session: TIdSipSession); override;
   end;
 
   TIdSipInboundSessionWait = class(TIdWait)
   private
-    fSession: TIdSipInboundSession;
+    fSessionID: String;
+  protected
+    procedure FireTimer(Session: TIdSipInboundSession); virtual;
   public
-    property Session: TIdSipInboundSession read fSession write fSession;
+    procedure Trigger; override;
+
+    property SessionID: String read fSessionID write fSessionID;
   end;
 
   TIdSipSessionAcceptWait = class(TIdSipInboundSessionWait)
@@ -719,7 +727,7 @@ type
     fContentType: String;
     fOffer:       String;
   public
-    procedure Trigger; override;
+    procedure FireTimer(Session: TIdSipInboundSession); override;
 
     property ContentType: String read fContentType write fContentType;
     property Offer:       String read fOffer write fOffer;
@@ -735,7 +743,7 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
-    procedure Trigger; override;
+    procedure FireTimer(Session: TIdSipInboundSession); override;
 
     property NewTarget: TIdSipAddressHeader read fNewTarget write SetNewTarget;
     property Temporary: Boolean             read fTemporary write fTemporary;
@@ -751,13 +759,13 @@ type
   end;
 
   TIdSipSessionRejectWait = class(TIdSipSendResponseWait)
-  public
-    procedure Trigger; override;
+  protected
+    procedure FireTimer(Session: TIdSipInboundSession); override;
   end;
 
   TIdSipSendProvisionalWait = class(TIdSipSendResponseWait)
-  public
-    procedure Trigger; override;
+  protected
+    procedure FireTimer(Session: TIdSipInboundSession); override;
   end;
 
   TIdSipInviteModuleInboundCallMethod = class(TIdNotification)
@@ -3505,13 +3513,36 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipSessionWait                                                          *
+//******************************************************************************
+//* TIdSipSessionWait Public methods *******************************************
+
+procedure TIdSipSessionWait.Trigger;
+var
+  Action: TIdSipAction;
+begin
+  Action := TIdSipActionRegistry.FindAction(Self.SessionID);
+
+  if Assigned(Action) and (Action is TIdSipSession) then begin
+    Self.FireTimer(Action as TIdSipSession);
+  end;
+end;
+
+//* TIdSipSessionWait Protected methods ****************************************
+
+procedure TIdSipSessionWait.FireTimer;
+begin
+  // By default, do nothing.
+end;
+
+//******************************************************************************
 //* TIdSipSessionAcceptCallModify                                              *
 //******************************************************************************
 //* TIdSipSessionAcceptCallModify Public methods *******************************
 
-procedure TIdSipSessionAcceptCallModify.Trigger;
+procedure TIdSipSessionAcceptCallModify.FireTimer(Session: TIdSipSession);
 begin
-  Self.Session.AcceptModify(Self.Offer, Self.ContentType);
+  Session.AcceptModify(Self.Offer, Self.ContentType);
 end;
 
 //******************************************************************************
@@ -3519,9 +3550,31 @@ end;
 //******************************************************************************
 //* TIdSipSessionModifyWait Public methods *************************************
 
-procedure TIdSipSessionModifyWait.Trigger;
+procedure TIdSipSessionModifyWait.FireTimer(Session: TIdSipSession);
 begin
-  Self.Session.Modify(Self.Offer, Self.ContentType);
+  Session.Modify(Self.Offer, Self.ContentType);
+end;
+
+//******************************************************************************
+//* TIdSipInboundSessionWait
+//******************************************************************************
+//* TIdSipInboundSessionWait Public methods ************************************
+
+procedure TIdSipInboundSessionWait.Trigger;
+var
+  Action: TIdSipAction;
+begin
+  Action := TIdSipActionRegistry.FindAction(Self.SessionID);
+
+  if Assigned(Action) and (Action is TIdSipInboundSession) then
+    Self.FireTimer(Action as TIdSipInboundSession);
+end;
+
+//* TIdSipInboundSessionWait Protected methods *********************************
+
+procedure TIdSipInboundSessionWait.FireTimer(Session: TIdSipInboundSession);
+begin
+  // By default, do nothing.
 end;
 
 //******************************************************************************
@@ -3529,9 +3582,9 @@ end;
 //******************************************************************************
 //* TIdSipSessionAcceptWait Public methods *************************************
 
-procedure TIdSipSessionAcceptWait.Trigger;
+procedure TIdSipSessionAcceptWait.FireTimer(Session: TIdSipInboundSession);
 begin
-  Self.Session.AcceptCall(Self.Offer, Self.ContentType);
+  Session.AcceptCall(Self.Offer, Self.ContentType);
 end;
 
 //******************************************************************************
@@ -3553,9 +3606,11 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipSessionRedirectWait.Trigger;
+//* TIdSipSessionRedirectWait Protected methods ********************************
+
+procedure TIdSipSessionRedirectWait.FireTimer(Session: TIdSipInboundSession);
 begin
-  Self.Session.RedirectCall(Self.NewTarget, Self.Temporary);
+  Session.RedirectCall(Self.NewTarget, Self.Temporary);
 end;
 
 //* TIdSipSessionRedirectWait Private methods **********************************
@@ -3568,21 +3623,21 @@ end;
 //******************************************************************************
 //* TIdSipSessionRejectWait                                                    *
 //******************************************************************************
-//* TIdSipSessionRejectWait Public methods *************************************
+//* TIdSipSessionRejectWait Protected methods **********************************
 
-procedure TIdSipSessionRejectWait.Trigger;
+procedure TIdSipSessionRejectWait.FireTimer(Session: TIdSipInboundSession);
 begin
-  Self.Session.RejectCall(Self.StatusCode, Self.StatusText);
+  Session.RejectCall(Self.StatusCode, Self.StatusText);
 end;
 
 //******************************************************************************
 //* TIdSipSendProvisionalWait                                                  *
 //******************************************************************************
-//* TIdSipSendProvisionalWait Public methods ***********************************
+//* TIdSipSendProvisionalWait Protected methods ********************************
 
-procedure TIdSipSendProvisionalWait.Trigger;
+procedure TIdSipSendProvisionalWait.FireTimer(Session: TIdSipInboundSession);
 begin
-  Self.Session.SendProvisional(Self.StatusCode, Self.StatusText);
+  Session.SendProvisional(Self.StatusCode, Self.StatusText);
 end;
 
 //******************************************************************************

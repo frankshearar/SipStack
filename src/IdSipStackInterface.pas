@@ -984,7 +984,7 @@ begin
     Wait   := TIdSipSessionAcceptCallModify.Create;
     Wait.ContentType := ContentType;
     Wait.Offer       := LocalSessionDescription;
-    Wait.Session     := Action as TIdSipSession;
+    Wait.SessionID   := Action.ID;
 
    Self.TimerQueue.AddEvent(TriggerImmediately, Wait);
   finally
@@ -1006,7 +1006,7 @@ begin
     Wait := TIdSipSessionAcceptWait.Create;
     Wait.ContentType := ContentType;
     Wait.Offer       := Offer;
-    Wait.Session     := Action as TIdSipInboundSession;
+    Wait.SessionID   := Action.ID;
 
     Self.TimerQueue.AddEvent(TriggerImmediately, Wait);
   finally
@@ -1234,7 +1234,7 @@ begin
     Action := Self.GetAndCheckAction(ActionHandle, TIdSipSession);
 
     Wait := TIdSipSessionModifyWait.Create;
-    Wait.Session := Action as TIdSipSession;
+    Wait.SessionID := Action.ID;
     Wait.ContentType := ContentType;
     Wait.Offer := Offer;
 
@@ -1289,9 +1289,9 @@ begin
     Action := Self.GetAndCheckAction(ActionHandle, TIdSipInboundSubscription);
 
     Wait := TIdSipInboundSubscriptionNotifyWait.Create;
-    Wait.MimeType     := MimeType;
-    Wait.Notification := Notification;
-    Wait.Subscription := Action as TIdSipInboundSubscription;
+    Wait.MimeType       := MimeType;
+    Wait.Notification   := Notification;
+    Wait.SubscriptionID := Action.ID;
 
     Self.TimerQueue.AddEvent(TriggerImmediately, Wait);
   finally
@@ -1323,7 +1323,7 @@ begin
 
     Wait := TIdSipSessionRedirectWait.Create;
     Wait.NewTarget := NewTarget;
-    Wait.Session   := Action as TIdSipInboundSession;
+    Wait.SessionID := Action.ID;
     Wait.Temporary := Temporary;
 
     Self.TimerQueue.AddEvent(TriggerImmediately, Wait);
@@ -1344,7 +1344,7 @@ begin
     Action := Self.GetAndCheckAction(ActionHandle, TIdSipInboundSession);
 
     Wait := TIdSipSessionRejectWait.Create;
-    Wait.Session    := Action as TIdSipInboundSession;
+    Wait.SessionID  := Action.ID;
     Wait.StatusCode := StatusCode;
     Wait.StatusText := StatusText;
 
@@ -1396,7 +1396,7 @@ begin
     Wait := TIdSipSendProvisionalWait.Create;
     Wait.StatusCode := StatusCode;
     Wait.StatusText := Description;
-    Wait.Session    := Action as TIdSipInboundSession;
+    Wait.SessionID  := Action.ID;
 
     Self.TimerQueue.AddEvent(TriggerImmediately, Wait);
   finally
@@ -1666,8 +1666,8 @@ begin
     Action := Self.GetAndCheckAction(ActionHandle, TIdSipInboundReferral);
 
     Wait := NotifyType.Create;
-    Wait.Referral := Action as TIdSipInboundReferral;
-    Wait.Response := Response;
+    Wait.ReferralID := Action.ID;
+    Wait.Response   := Response;
 
     Self.TimerQueue.AddEvent(TriggerImmediately, Wait);
   finally

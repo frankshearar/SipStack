@@ -146,6 +146,13 @@ type
     procedure TestViaMatchesTransportParameter;
   end;
 
+  TestTIdSipUserAgentRegistry = class(TTestCase)
+  published
+    procedure TestUserAgentsAddToRegistryAutomatically;
+    procedure TestUserAgentsGetUniqueIDs;
+    procedure TestUserAgentsAutomaticallyUnregister;
+  end;
+
   TStackConfigurationTestCase = class(TThreadingTestCase)
   protected
     Address:       String;
@@ -427,6 +434,7 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipUserAgent unit tests');
   Result.AddTest(TestTIdSipUserAgent.Suite);
+  Result.AddTest(TestTIdSipUserAgentRegistry.Suite);
   Result.AddTest(TestTIdSipStackConfigurator.Suite);
   Result.AddTest(TestConfigureRegistrar.Suite);
   Result.AddTest(TestConfigureMockRoutingTable.Suite);
@@ -2068,6 +2076,64 @@ begin
               Self.LastSentRequest.LastHop.Transport,
               'Transport parameter = '
             + Self.Destination.Address.Transport);
+end;
+
+//******************************************************************************
+//* TestTIdSipUserAgentRegistry                                                *
+//******************************************************************************
+//* TestTIdSipUserAgentRegistry Published methods ******************************
+
+procedure TestTIdSipUserAgentRegistry.TestUserAgentsAddToRegistryAutomatically;
+var
+  UA: TIdSipUserAgent;
+begin
+  UA := TIdSipUserAgent.Create;
+  try
+    CheckNotEquals('', UA.ID, 'UA has no ID');
+    Check(nil <> TIdSipUserAgentRegistry.FindUserAgent(UA.ID),
+          'UA not added to registry');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgentRegistry.TestUserAgentsGetUniqueIDs;
+var
+  UA1,
+  UA2: TIdSipUserAgent;
+begin
+  // This test isn't exactly thorough: it's not possible to write a test that
+  // proves the registry will never duplicate an existing Action's ID,
+  // but this at least demonstrates that the registry won't return the same
+  // ID twice in a row.
+
+  UA1 := TIdSipUserAgent.Create;
+  try
+    UA2 := TIdSipUserAgent.Create;
+    try
+      CheckNotEquals(UA1.ID, UA2.ID, 'The registry gave two Actions the same ID');
+    finally
+      UA2.Free;
+    end;
+  finally
+    UA1.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgentRegistry.TestUserAgentsAutomaticallyUnregister;
+var
+  UserAgent:   TIdSipUserAgent;
+  UserAgentID: String;
+begin
+  UserAgent := TIdSipUserAgent.Create;
+  try
+    UserAgentID := UserAgent.ID;
+  finally
+    UserAgent.Free;
+  end;
+
+  Check(nil = TIdSipUserAgentRegistry.FindUserAgent(UserAgentID),
+        'UserAgent not removed from registry');
 end;
 
 //******************************************************************************
@@ -4253,7 +4319,7 @@ begin
 
   Self.Wait := TIdSipReconfigureStackWait.Create;
   Self.Wait.Configuration := Self.Configuration;
-  Self.Wait.Stack         := Self.Stack;
+  Self.Wait.UserAgentID   := Self.Stack.ID;
 end;
 
 procedure TestTIdSipReconfigureStackWait.TearDown;

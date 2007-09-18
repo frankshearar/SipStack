@@ -151,6 +151,19 @@ type
     procedure TestIsNull;
   end;
 
+  TestTIdSipMessageModuleRegistry = class(TTestCase)
+  private
+    Core:    TIdSipUserAgent;
+    Request: TIdSipRequest;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestModulesAddToRegistryAutomatically;
+    procedure TestModulesGetUniqueIDs;
+    procedure TestModulesAutomaticallyUnregister;
+  end;
+
   TestTIdSipRedirectedAction = class(TTestCaseTU)
   private
     Action: TIdSipRedirectedAction;
@@ -355,6 +368,7 @@ begin
   Result.AddTest(TestTIdSipActions.Suite);
   Result.AddTest(TestTIdSipMessageModule.Suite);
   Result.AddTest(TestTIdSipNullModule.Suite);
+  Result.AddTest(TestTIdSipMessageModuleRegistry.Suite);
   Result.AddTest(TestTIdSipRedirectedAction.Suite);
   Result.AddTest(TestTIdSipActionRegistry.Suite);
   Result.AddTest(TestTIdSipActionSendWait.Suite);
@@ -2096,6 +2110,84 @@ begin
               'Wrong module');
   Check(Self.Module.IsNull,
         'Null message module not marked as null');
+end;
+
+//******************************************************************************
+//* TestTIdSipMessageModuleRegistry                                            *
+//******************************************************************************
+//* TestTIdSipMessageModuleRegistry Public methods *****************************
+
+procedure TestTIdSipMessageModuleRegistry.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Core    := TIdSipUserAgent.Create;
+  Self.Request := TIdSipTestResources.CreateBasicRequest;
+end;
+
+procedure TestTIdSipMessageModuleRegistry.TearDown;
+begin
+  Self.Request.Free;
+  Self.Core.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipMessageModuleRegistry Published methods **************************
+
+procedure TestTIdSipMessageModuleRegistry.TestModulesAddToRegistryAutomatically;
+var
+  Module: TIdSipMessageModule;
+begin
+  Module := TIdSipMessageModule.Create(Self.Core);
+  try
+    CheckNotEquals('', Module.ID, 'Action has no ID');
+    Check(nil <> TIdSipMessageModuleRegistry.FindModule(Module.ID),
+          'Module not added to registry');
+  finally
+    Module.Free;
+  end;
+end;
+
+procedure TestTIdSipMessageModuleRegistry.TestModulesGetUniqueIDs;
+var
+  InviteModule:  TIdSipMessageModule;
+  OptionsModule: TIdSipMessageModule;
+begin
+  // This test isn't exactly thorough: it's not possible to write a test that
+  // proves the registry will never duplicate an existing Module's ID,
+  // but this at least demonstrates that the registry won't return the same
+  // ID twice in a row.
+
+  InviteModule := TIdSipMessageModule.Create(Self.Core);
+  try
+    OptionsModule := TIdSipMessageModule.Create(Self.Core);
+    try
+      CheckNotEquals(InviteModule.ID,
+                     OptionsModule.ID,
+                     'The registry gave two Modules the same ID');
+    finally
+      OptionsModule.Free;
+    end;
+  finally
+    InviteModule.Free;
+  end;
+end;
+
+procedure TestTIdSipMessageModuleRegistry.TestModulesAutomaticallyUnregister;
+var
+  InviteModule: TIdSipMessageModule;
+  ModuleID:     String;
+begin
+  InviteModule := TIdSipMessageModule.Create(Self.Core);
+  try
+    ModuleID := InviteModule.ID;
+  finally
+    InviteModule.Free;
+  end;
+
+  Check(nil = TIdSipMessageModuleRegistry.FindModule(ModuleID),
+        'Module not removed from registry');
 end;
 
 //******************************************************************************

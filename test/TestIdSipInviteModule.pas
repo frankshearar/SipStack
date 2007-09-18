@@ -8425,7 +8425,7 @@ begin
 
   Self.Wait := TIdSipSessionRedirectWait.Create;
   Self.Wait.NewTarget := Self.Target;
-  Self.Wait.Session   := Self.Session;
+  Self.Wait.SessionID := Self.Session.ID;
 end;
 
 procedure TestTIdSipSessionRedirectWait.TearDown;
@@ -8486,7 +8486,7 @@ begin
   Self.Session := Self.L.SessionParam;
 
   Self.Wait := TIdSipSendProvisionalWait.Create;
-  Self.Wait.Session    := Self.Session;
+  Self.Wait.SessionID  := Self.Session.ID;
   Self.Wait.StatusCode := Self.StatusCode;
   Self.Wait.StatusText := Self.StatusText;
 end;
@@ -8530,7 +8530,7 @@ begin
   Self.Session := Self.L.SessionParam;
 
   Self.Wait := TIdSipSessionRejectWait.Create;
-  Self.Wait.Session   := Self.Session;
+  Self.Wait.SessionID  := Self.Session.ID;
   Self.Wait.StatusCode := Self.StatusCode;
   Self.Wait.StatusText := Self.ReasonPhrase;
 end;

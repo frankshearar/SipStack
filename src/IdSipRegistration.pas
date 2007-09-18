@@ -461,9 +461,9 @@ type
 
   TIdSipReregisterWait = class(TIdWait)
   private
-    fBindings:       TIdSipContacts;
-    fRegisterModule: TIdSipOutboundRegisterModule;
-    fRegistrar:      TIdSipUri;
+    fBindings:         TIdSipContacts;
+    fRegisterModuleID: String;
+    fRegistrar:        TIdSipUri;
 
     procedure SetBindings(Value: TIdSipContacts);
     procedure SetRegistrar(Value: TIdSipUri);
@@ -473,9 +473,9 @@ type
 
     procedure Trigger; override;
 
-    property Bindings:       TIdSipContacts               read fBindings write SetBindings;
-    property RegisterModule: TIdSipOutboundRegisterModule read fRegisterModule write fRegisterModule;
-    property Registrar:      TIdSipUri                    read fRegistrar write SetRegistrar;
+    property Bindings:         TIdSipContacts read fBindings write SetBindings;
+    property RegisterModuleID: String         read fRegisterModuleID write fRegisterModuleID;
+    property Registrar:        TIdSipUri      read fRegistrar write SetRegistrar;
   end;
 
   TIdSipRegistrationMethod = class(TIdNotification)
@@ -1979,9 +1979,9 @@ begin
   Self.Bindings.First;
 
   Reregister := TIdSipReregisterWait.Create;
-  Reregister.Bindings       := Self.Bindings;
-  Reregister.RegisterModule := Self.OutModule;
-  Reregister.Registrar      := Self.Registrar;
+  Reregister.Bindings         := Self.Bindings;
+  Reregister.RegisterModuleID := Self.OutModule.ID;
+  Reregister.Registrar        := Self.Registrar;
   Self.UA.ScheduleEvent(MillisecondsToWait, Reregister);
 end;
 
@@ -2048,8 +2048,13 @@ begin
 end;
 
 procedure TIdSipReregisterWait.Trigger;
+var
+  Module: TIdSipMessageModule;
 begin
-  Self.RegisterModule.RegisterWith(Self.Registrar, Self.Bindings).Send;
+  Module := TIdSipMessageModuleRegistry.FindModule(Self.RegisterModuleID);
+
+  if Assigned(Module) and (Module is TIdSipOutboundRegisterModule) then
+    (Module as TIdSipOutboundRegisterModule).RegisterWith(Self.Registrar, Self.Bindings).Send;
 end;
 
 //* TIdSipReregisterWait Private methods ***************************************

@@ -5272,7 +5272,7 @@ begin
   Self.Wait := TIdSipSubscriptionRetryWait.Create;
   Self.Wait.EventPackage := TIdSipTestPackage.EventPackage;
   Self.Wait.Target.Value := 'sip:foo@bar';
-  Self.Wait.UserAgent := Self.Core;
+  Self.Wait.ModuleID     := Self.Core.ModuleFor(MethodSubscribe).ID;
 end;
 
 procedure TestTIdSipSubscriptionRetryWait.TearDown;

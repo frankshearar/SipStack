@@ -1755,17 +1755,6 @@ type
 
   // Note: When you set the Message property, give it a COPY of the message. I
   // will free the copy.
-  TIdSipMessageNotifyEventWait = class(TIdNotifyEventWait)
-  private
-    fMessage: TIdSipMessage;
-  public
-    destructor Destroy; override;
-
-    property Message: TIdSipMessage read fMessage write fMessage;
-  end;
-
-  // Note: When you set the Message property, give it a COPY of the message. I
-  // will free the copy.
   TIdSipMessageWait = class(TIdWait)
   private
     fMessage: TIdSipMessage;
@@ -10625,18 +10614,6 @@ begin
 
       if not Result then Break;
     end;
-end;
-
-//******************************************************************************
-//* TIdSipMessageNotifyEventWait                                               *
-//******************************************************************************
-//* TIdSipMessageNotifyEventWait Public methods ********************************
-
-destructor TIdSipMessageNotifyEventWait.Destroy;
-begin
-  Self.Message.Free;
-
-  inherited Destroy;
 end;
 
 //******************************************************************************
