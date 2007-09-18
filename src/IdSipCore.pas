@@ -200,6 +200,8 @@ type
     property ActionID: String read fActionID write fActionID;
   end;
 
+  TIdSipActionWaitClass = class of TIdSipActionWait;
+
   // I represent the (possibly deferred) execution of something my Action needs
   // done. That is, when you invoke my Trigger, I call Action.Send.
   TIdSipActionSendWait = class(TIdSipActionWait)
@@ -980,6 +982,7 @@ const
 // Generally useful constants
 const
   BadAuthorizationTokens      = 'Bad Authorization tokens';
+  HighestInitialSequenceNo    = $7FFFFFFF; // cf. RFC 3261, section 19.3
   MalformedConfigurationLine  = 'Malformed configuration line: %s';
   MaxPrematureInviteRetry     = 10;
   MissingContactHeader        = 'Missing Contact Header';
@@ -1843,7 +1846,7 @@ var
 begin
   Result := '';
   for I := 0 to Self.Modules.Count - 1 do begin
-    ModulesMethods := (Self.Modules[I] as TIdSipMessageModule).AcceptsMethods;
+    ModulesMethods := Self.ModuleAt(I).AcceptsMethods;
     if (ModulesMethods <> '') then
       Result := Result + ModulesMethods + Delimiter;
   end;
@@ -1860,7 +1863,7 @@ begin
 
   I := 0;
   while (I < Self.Modules.Count) and Result.IsNull do
-    if (Self.Modules[I] as TIdSipMessageModule).WillAccept(Request) then
+    if Self.ModuleAt(I).WillAccept(Request) then
       Result := Self.Modules[I] as TIdSipMessageModule
     else
       Inc(I);
@@ -1914,7 +1917,7 @@ end;
 
 function TIdSipAbstractCore.NextInitialSequenceNo: Cardinal;
 begin
-  Result := GRandomNumber.NextCardinal($7FFFFFFF);
+  Result := GRandomNumber.NextCardinal(HighestInitialSequenceNo);
 end;
 
 function TIdSipAbstractCore.NextNonce: String;
@@ -1953,7 +1956,7 @@ var
 begin
   I := 0;
   while (I < Self.Modules.Count) do begin
-    if ((Self.Modules[I] as TIdSipMessageModule).ClassType = ModuleType) then begin
+    if (Self.ModuleAt(I).ClassType = ModuleType) then begin
       Self.Modules.Delete(I);
       Break;
     end
