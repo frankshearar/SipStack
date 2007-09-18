@@ -47,8 +47,15 @@ type
     function  FindTransport(const TransportType: String;
                             const Address: String;
                                   Port: Cardinal): TIdSipMockTransport;
+    procedure InitialiseBinding(Binding: TIdSipConnectionBindings;
+                                LocalBinding,
+                                PeerBinding: TIdSocketHandle;
+                                TransportType: String);
     procedure Log(Msg: String;
                   Direction: TIdMessageDirection);
+    procedure PossiblyAutoDispatch(M: TIdSipMessage;
+                                   Dest: TIdSipConnectionBindings);
+    procedure RecordSentMessage(M: TIdSipMessage);
     procedure ScheduleException(Msg: TIdSipMessage);
     procedure SetWriteLog(const Value: Boolean);
     function  TransportAt(Index: Integer): TIdSipMockTransport;
@@ -432,49 +439,33 @@ procedure TIdSipMockTransport.SendMessage(M: TIdSipMessage;
 var
   SendingBinding: TIdSocketHandle;
 begin
+  Assert(Self.BindingCount > 0,
+         'This MockTransport has no bindings on which to send this message');
+
   Self.Log(M.AsString, dirOut);
 
   SendingBinding := Self.FindBinding(Dest);
 
-  if Assigned(SendingBinding) then begin
-    Dest.LocalIP   := SendingBinding.IP;
-    Dest.LocalPort := SendingBinding.Port;
-
-    if M.LastHop.IsUnset then
-      M.RewriteLocationHeaders(Dest);
-  end
-  else begin
-    Assert(Self.BindingCount > 0, 'This MockTransport has no bindings on which to send this message');
-    // A Mock Transport will always appear to send messages from its first binding.
-    Dest.LocalIP   := Self.Bindings[0].IP;
-    Dest.LocalPort := Self.Bindings[0].Port;
+  if not Assigned(SendingBinding) then begin
+    // A Mock Transport will always appear to send messages from its first
+    // binding.
+    SendingBinding := Self.Bindings[0];
   end;
 
-  if M.IsAck then begin
-    Self.LastACK.Assign(M);
-    Inc(Self.fACKCount)
-  end
-  else if M.IsRequest then begin
-    Self.fRequests.AddCopy(M as TIdSipRequest);
-    Inc(Self.fSentRequestCount);
-  end
-  else if M.IsResponse then begin
-    Self.fResponses.AddCopy(M as TIdSipResponse);
-    Inc(Self.fSentResponseCount);
-  end;
+  Dest.LocalIP   := SendingBinding.IP;
+  Dest.LocalPort := SendingBinding.Port;
+
+  if M.LastHop.IsUnset then
+    M.RewriteLocationHeaders(Dest);
+
+  Self.RecordSentMessage(M);
 
   if Assigned(Self.FailWith) then begin
     Self.ScheduleException(M);
-
+  end
+  else begin
     // Never autodispatch a message that's "failed".
-    Exit;
-  end;
-
-  if Self.AutoDispatch then begin
-    if M.IsRequest then
-      Self.DispatchRequest(M as TIdSipRequest, Dest)
-    else
-      Self.DispatchResponse(M as TIdSipResponse, Dest);
+    Self.PossiblyAutoDispatch(M, Dest);
   end;
 end;
 
@@ -513,11 +504,10 @@ begin
     // transport sees.
     FakeBinding := TIdSipConnectionBindings.Create;
     try
-      FakeBinding.LocalIP   := T.Bindings[0].IP;
-      FakeBinding.LocalPort := T.Bindings[0].Port;
-      FakeBinding.PeerIP    := Self.Bindings[0].IP;
-      FakeBinding.PeerPort  := Self.Bindings[0].Port;
-      FakeBinding.Transport := T.GetTransportType;
+      Self.InitialiseBinding(FakeBinding,
+                             T.Bindings[0],
+                             Self.Bindings[0],
+                             T.GetTransportType);
 
       T.FireOnRequest(R, FakeBinding);
     finally
@@ -539,11 +529,10 @@ begin
     // transport sees.
     FakeBinding := TIdSipConnectionBindings.Create;
     try
-      FakeBinding.LocalIP   := T.Bindings[0].IP;
-      FakeBinding.LocalPort := T.Bindings[0].Port;
-      FakeBinding.PeerIP    := Self.Bindings[0].IP;
-      FakeBinding.PeerPort  := Self.Bindings[0].Port;
-      FakeBinding.Transport := T.GetTransportType;
+      Self.InitialiseBinding(FakeBinding,
+                             T.Bindings[0],
+                             Self.Bindings[0],
+                             T.GetTransportType);
 
       T.FireOnResponse(R, FakeBinding);
     finally
@@ -570,6 +559,18 @@ begin
       Inc(I);
 end;
 
+procedure TIdSipMockTransport.InitialiseBinding(Binding: TIdSipConnectionBindings;
+                                                LocalBinding,
+                                                PeerBinding: TIdSocketHandle;
+                                                TransportType: String);
+begin
+  Binding.LocalIP   := LocalBinding.IP;
+  Binding.LocalPort := LocalBinding.Port;
+  Binding.PeerIP    := PeerBinding.IP;
+  Binding.PeerPort  := PeerBinding.Port;
+  Binding.Transport := TransportType;
+end;
+
 procedure TIdSipMockTransport.Log(Msg: String;
                                   Direction: TIdMessageDirection);
 var
@@ -587,6 +588,33 @@ begin
   WriteString(GLog, Date);
   WriteString(GLog, Msg);
   WriteString(GLog, #13#10);
+end;
+
+procedure TIdSipMockTransport.PossiblyAutoDispatch(M: TIdSipMessage;
+                                                   Dest: TIdSipConnectionBindings);
+begin
+  if Self.AutoDispatch then begin
+    if M.IsRequest then
+      Self.DispatchRequest(M as TIdSipRequest, Dest)
+    else
+      Self.DispatchResponse(M as TIdSipResponse, Dest);
+  end;
+end;
+
+procedure TIdSipMockTransport.RecordSentMessage(M: TIdSipMessage);
+begin
+  if M.IsAck then begin
+    Self.LastACK.Assign(M);
+    Inc(Self.fACKCount)
+  end
+  else if M.IsRequest then begin
+    Self.fRequests.AddCopy(M as TIdSipRequest);
+    Inc(Self.fSentRequestCount);
+  end
+  else if M.IsResponse then begin
+    Self.fResponses.AddCopy(M as TIdSipResponse);
+    Inc(Self.fSentResponseCount);
+  end;
 end;
 
 procedure TIdSipMockTransport.ScheduleException(Msg: TIdSipMessage);
