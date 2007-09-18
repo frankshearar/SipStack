@@ -1465,15 +1465,19 @@ end;
 procedure TIdSipOutboundNotifyBase.Initialise(UA: TIdSipAbstractCore;
                                               Request: TIdSipRequest;
                                               Binding: TIdSipConnectionBindings);
+var
+  SubModule: TIdSipMessageModule;
 begin
   inherited Initialise(UA, Request, Binding);
 
   // NOTIFYs are always owned by a Subscription or Referral
   Self.fIsOwned := true;
 
-  Self.Module := Self.UA.ModuleFor(Self.Method) as TIdSipSubscribeModule;
-  Assert(Assigned(Self.Module),
+  SubModule := Self.UA.ModuleFor(Self.Method);
+  Assert(not SubModule.IsNull,
          'The Transaction-User layer cannot process NOTIFY methods without adding the Subscribe module to it');
+
+  Self.Module := SubModule as TIdSipSubscribeModule;
 
   Self.NotifyListeners := TIdNotificationList.Create;
 end;
@@ -2894,8 +2898,12 @@ procedure TIdSipInboundReferral.ReferenceFailed(Response: TIdSipResponse = nil);
 var
   NotifyBody: String;
 begin
-  if Assigned(Response) then
-    NotifyBody := Response.AsString
+  if Assigned(Response) then begin
+    // The Trim() is here in the case of no body being present in the response:
+    // it just looks slightly cleaner not having an unnecessary CRLF pair at
+    // the end of the fragment.
+    NotifyBody := Trim(Response.AsString)
+  end
   else
     NotifyBody := Self.ReferralFailedBody;
 
@@ -3151,7 +3159,7 @@ var
 begin
   Action := TIdSipActionRegistry.FindAction(Self.ActionID);
 
-  if Assigned(Action) then begin
+  if Assigned(Action) and (Action is TIdSipOutboundSubscription) then begin
     Subscription := Action as TIdSipOutboundSubscription;
 
     if not Subscription.IsTerminated then
