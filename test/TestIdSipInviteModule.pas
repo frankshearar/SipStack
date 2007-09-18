@@ -833,7 +833,7 @@ begin
   Result.AddTest(TestTIdSipSessionReferralMethod.Suite);
   Result.AddTest(TestTIdSipSessionRedirectWait.Suite);
   Result.AddTest(TestTIdSipSessionRejectWait.Suite);
-Result.AddTest(TestTIdSipSendProvisionalWait.Suite);  
+  Result.AddTest(TestTIdSipSendProvisionalWait.Suite);  
 end;
 
 //******************************************************************************

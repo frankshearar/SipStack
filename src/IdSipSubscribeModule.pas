@@ -736,9 +736,9 @@ type
 
     procedure Trigger; override;
 
-    property EventPackage: String                  read fEventPackage write fEventPackage;
-    property Target:       TIdSipAddressHeader     read fTarget write SetTarget;
-    property UserAgent:    TIdSipAbstractCore read fUserAgent write fUserAgent;
+    property EventPackage: String              read fEventPackage write fEventPackage;
+    property Target:       TIdSipAddressHeader read fTarget write SetTarget;
+    property UserAgent:    TIdSipAbstractCore  read fUserAgent write fUserAgent;
   end;
 
   TIdSipNotifyMethod = class(TIdNotification)
