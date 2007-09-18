@@ -1120,11 +1120,11 @@ type
 
     property Branch:     String   read GetBranch write SetBranch;
     property IsUnset:    Boolean  read fIsUnset write fIsUnset;
-    property SentBy:     String   read GetSentBy write SetSentBy;
     property Maddr:      String   read GetMaddr write SetMaddr;
     property Port:       Cardinal read GetPort write SetPort;
     property Received:   String   read GetReceived write SetReceived;
     property Rport:      Cardinal read GetRport write SetRport;
+    property SentBy:     String   read GetSentBy write SetSentBy;
     property SipVersion: String   read fSipVersion write fSipVersion;
     property Transport:  String   read fTransport write SetTransport;
     property TTL:        Byte     read GetTTL write SetTTL;
