@@ -757,12 +757,85 @@ type
     procedure TestRun;
   end;
 
-  TestTIdSipSessionRedirectWait = class(TTestCaseTU)
+  TIdSipSessionWaitClass = class of TIdSipSessionWait;
+
+  TIdSipSessionWaitTestCase = class(TTestCaseTU)
+  protected
+    Wait: TIdSipSessionWait;
+
+    procedure CheckTriggerDoesNothing(Wait: TIdSipSessionWait;
+                                      Msg: String); virtual;
+    function WaitType: TIdSipSessionWaitClass; virtual;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTriggerWithIDOfNonexistentObject;
+    procedure TestTriggerWithIDOfWrongTypeOfObject;
+  end;
+
+  TIdSipSessionModifyingWaitTestCase = class(TIdSipSessionWaitTestCase)
+  protected
+    Call:            TIdSipSession;
+    InitialMimeType: String;
+    InitialOffer:    String;
+    NewMimeType:     String;
+    NewOffer:        String;
+
+    function EstablishCall: TIdSipSession;
+  public
+    procedure SetUp; override;
+  end;
+
+  TestTIdSipSessionAcceptCallModify = class(TIdSipSessionModifyingWaitTestCase)
+  private
+    procedure ReceiveModify(LocalSession: TIdSipSession);
+  protected
+    procedure CheckTriggerDoesNothing(Wait: TIdSipSessionWait;
+                                      Msg: String); override;
+    function  WaitType: TIdSipSessionWaitClass; override;
+  published
+    procedure TestTrigger;
+  end;
+
+  TestTIdSipSessionModifyWait = class(TIdSipSessionModifyingWaitTestCase)
+  protected
+    procedure CheckTriggerDoesNothing(Wait: TIdSipSessionWait;
+                                      Msg: String); override;
+    function  WaitType: TIdSipSessionWaitClass; override;
+  published
+    procedure TestTrigger;
+  end;
+
+  TIdSipInboundSessionWaitTestCase = class(TIdSipSessionWaitTestCase)
   private
     L:       TIdSipTestInviteModuleListener;
     Session: TIdSipInboundSession;
+  protected
+    procedure CheckTriggerDoesNothing(Wait: TIdSipSessionWait;
+                                      Msg: String); override;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSipSessionAcceptWait = class(TIdSipInboundSessionWaitTestCase)
+  private
+    Answer:   String;
+    MimeType: String;
+  protected
+    function WaitType: TIdSipSessionWaitClass; override;
+  public
+    procedure SetUp; override;
+  published
+    procedure TestTrigger;
+  end;
+
+  TestTIdSipSessionRedirectWait = class(TIdSipInboundSessionWaitTestCase)
+  private
     Target:  TIdSipAddressHeader;
-    Wait:    TIdSipSessionRedirectWait;
+  protected
+    function WaitType: TIdSipSessionWaitClass; override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -771,30 +844,26 @@ type
     procedure TestTriggerWithTemporaryTrue;
   end;
 
-  TestTIdSipSendProvisionalWait = class(TTestCaseTU)
+  TestTIdSipSendProvisionalWait = class(TIdSipInboundSessionWaitTestCase)
   private
-    L:          TIdSipTestInviteModuleListener;
-    Session:    TIdSipInboundSession;
     StatusCode: Cardinal;
     StatusText: String;
-    Wait:       TIdSipSendProvisionalWait;
+  protected
+    function WaitType: TIdSipSessionWaitClass; override;
   public
     procedure SetUp; override;
-    procedure TearDown; override;
   published
     procedure TestTrigger;
   end;
-  
-  TestTIdSipSessionRejectWait = class(TTestCaseTU)
+
+  TestTIdSipSessionRejectWait = class(TIdSipInboundSessionWaitTestCase)
   private
-    L:            TIdSipTestInviteModuleListener;
     ReasonPhrase: String;
-    Session:      TIdSipInboundSession;
     StatusCode:   Cardinal;
-    Wait:         TIdSipSessionRejectWait;
+  protected
+    function WaitType: TIdSipSessionWaitClass; override;
   public
     procedure SetUp; override;
-    procedure TearDown; override;
   published
     procedure TestTrigger;
   end;
@@ -831,9 +900,12 @@ begin
   Result.AddTest(TestTIdSipSessionModifySessionMethod.Suite);
   Result.AddTest(TestTIdSipProgressedSessionMethod.Suite);
   Result.AddTest(TestTIdSipSessionReferralMethod.Suite);
+  Result.AddTest(TestTIdSipSessionAcceptCallModify.Suite);
+  Result.AddTest(TestTIdSipSessionModifyWait.Suite);
+  Result.AddTest(TestTIdSipSessionAcceptWait.Suite);
   Result.AddTest(TestTIdSipSessionRedirectWait.Suite);
+  Result.AddTest(TestTIdSipSendProvisionalWait.Suite);
   Result.AddTest(TestTIdSipSessionRejectWait.Suite);
-  Result.AddTest(TestTIdSipSendProvisionalWait.Suite);  
 end;
 
 //******************************************************************************
@@ -8407,11 +8479,204 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipSessionRedirectWait                                              *
+//* TIdSipSessionWaitTestCase                                                  *
 //******************************************************************************
-//* TestTIdSipSessionRedirectWait Public methods *******************************
+//* TIdSipSessionWaitTestCase Public methods ***********************************
 
-procedure TestTIdSipSessionRedirectWait.SetUp;
+procedure TIdSipSessionWaitTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Wait := Self.WaitType.Create;
+end;
+
+procedure TIdSipSessionWaitTestCase.TearDown;
+begin
+  Self.Wait.Free;
+
+  inherited TearDown;
+end;
+
+//* TIdSipSessionWaitTestCase Protected methods ********************************
+
+procedure TIdSipSessionWaitTestCase.CheckTriggerDoesNothing(Wait: TIdSipSessionWait;
+                                                            Msg: String);
+begin
+  Fail(Self.ClassName + ' must override this method');
+end;
+
+function TIdSipSessionWaitTestCase.WaitType: TIdSipSessionWaitClass;
+begin
+  Result := nil;
+  Fail(Self.ClassName + ' must override WaitType');
+end;
+
+//* TIdSipSessionWaitTestCase Published methods ********************************
+
+procedure TIdSipSessionWaitTestCase.TestTriggerWithIDOfNonexistentObject;
+begin
+  // Check that the Wait does nothing if its SessionID doesn't point to a
+  // registered object.
+
+  Self.Wait.SessionID := 'fake ID';
+  Self.CheckTriggerDoesNothing(Self.Wait, 'Wait didn''t check object type before triggering');
+end;
+
+procedure TIdSipSessionWaitTestCase.TestTriggerWithIDOfWrongTypeOfObject;
+var
+  ArbitraryObject: TIdSipAction;
+begin
+  // This test checks two things:
+  //   1. If you give the Wait the ID of an object that isn't a TIdSipSession,
+  //      the Wait does nothing, and
+  //   2. the Wait doesn't blow up.
+
+  ArbitraryObject := TIdSipOutboundCancel.Create(Self.Core);
+  try
+    TIdSipActionRegistry.RegisterAction(ArbitraryObject);
+    try
+      Self.Wait.SessionID := ArbitraryObject.ID;
+
+      CheckTriggerDoesNothing(Self.Wait, 'Wait didn''t check object type before triggering');
+    finally
+      TIdSipActionRegistry.UnregisterAction(ArbitraryObject.ID);
+    end;
+  finally
+    ArbitraryObject.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TIdSipSessionModifyingWaitTestCase                                         *
+//******************************************************************************
+//* TIdSipSessionModifyingWaitTestCase Public methods **************************
+
+procedure TIdSipSessionModifyingWaitTestCase.SetUp;
+var
+  W: TIdSipSessionModifyingWait;
+begin
+  inherited SetUp;
+
+  Self.InitialMimeType := 'text/plain';
+  Self.InitialOffer    := 'haha';
+  Self.NewMimeType     := 'text/html';
+  Self.NewOffer        := '<b>haha</b>';
+
+  // Self.Core will free this.
+  Self.Call := Self.EstablishCall;
+
+  W := Self.Wait as TIdSipSessionModifyingWait;
+  W.ContentType := Self.NewMimeType;
+  W.Offer       := Self.NewOffer;
+  W.SessionID   := Self.Call.ID;
+end;
+
+//* TIdSipSessionModifyingWaitTestCase Protected methods ***********************
+
+function TIdSipSessionModifyingWaitTestCase.EstablishCall: TIdSipSession;
+begin
+  Self.MarkSentRequestCount;
+  Result := Self.Core.InviteModule.Call(Self.Core.From,
+                                        Self.Destination,
+                                        Self.InitialOffer,
+                                        Self.InitialMimeType);
+  Result.Send;
+  CheckRequestSent('No INVITE sent');
+
+  Self.MarkSentAckCount;
+  Self.ReceiveOk(Self.LastSentRequest);
+  CheckAckSent('No ACK sent');
+end;
+
+//******************************************************************************
+//* TestTIdSipSessionAcceptCallModify                                          *
+//******************************************************************************
+//* TestTIdSipSessionAcceptCallModify Protected methods ************************
+
+procedure TestTIdSipSessionAcceptCallModify.CheckTriggerDoesNothing(Wait: TIdSipSessionWait;
+                                                                    Msg: String);
+begin
+  Self.MarkSentResponseCount;
+  Self.Wait.Trigger;
+  CheckNoResponseSent(Msg);
+end;
+
+function TestTIdSipSessionAcceptCallModify.WaitType: TIdSipSessionWaitClass;
+begin
+  Result := TIdSipSessionAcceptCallModify;
+end;
+
+//* TestTIdSipSessionAcceptCallModify Private methods **************************
+
+procedure TestTIdSipSessionAcceptCallModify.ReceiveModify(LocalSession: TIdSipSession);
+var
+  Modifier: TIdSipRequest;
+begin
+  Modifier := TIdSipRequest.Create;
+  try
+    Modifier.Assign(LocalSession.InitialRequest);
+    Modifier.From.Tag := LocalSession.Dialog.ID.RemoteTag;
+    Modifier.ToHeader.Tag := LocalSession.Dialog.ID.LocalTag;
+
+    Modifier.CSeq.SequenceNo := LocalSession.Dialog.RemoteSequenceNo + 1;
+
+    Self.ReceiveRequest(Modifier);
+  finally
+    Modifier.Free;
+  end;
+end;
+
+//* TestTIdSipSessionAcceptCallModify Published methods ************************
+
+procedure TestTIdSipSessionAcceptCallModify.TestTrigger;
+begin
+  Self.ReceiveModify(Self.Call);
+  Check(Self.Call.ModificationInProgress, 'Session didn''t receive modifying INVITE');
+
+  Self.MarkSentResponseCount;
+  Self.Wait.Trigger;
+  CheckResponseSent('No response sent');
+  CheckEquals(SIPOK, Self.LastSentResponse.StatusCode, 'Unexpected response sent');
+  CheckEquals(Self.NewMimeType, Self.LastSentResponse.ContentType, 'Content-Type');
+  CheckEquals(Self.NewOffer, Self.LastSentResponse.Body, 'Answer');
+end;
+
+//******************************************************************************
+//* TestTIdSipSessionModifyWait                                                *
+//******************************************************************************
+//* TestTIdSipSessionModifyWait Protected methods ******************************
+
+procedure TestTIdSipSessionModifyWait.CheckTriggerDoesNothing(Wait: TIdSipSessionWait;
+                                                              Msg: String);
+begin
+  Self.MarkSentRequestCount;
+  Self.Wait.Trigger;
+  CheckNoRequestSent(Msg);
+end;
+
+function TestTIdSipSessionModifyWait.WaitType: TIdSipSessionWaitClass;
+begin
+  Result := TIdSipSessionModifyWait;
+end;
+
+//* TestTIdSipSessionModifyWait Published methods ******************************
+
+procedure TestTIdSipSessionModifyWait.TestTrigger;
+begin
+  Self.MarkSentRequestCount;
+  Self.Wait.Trigger;
+  CheckRequestSent('No INVITE sent');
+  CheckEquals(MethodInvite, Self.LastSentRequest.Method, 'Unexpected request sent');
+  CheckEquals(Self.NewMimeType, Self.LastSentRequest.ContentType, 'Content-Type');
+  CheckEquals(Self.NewOffer, Self.LastSentRequest.Body, 'Offer');
+end;
+
+//******************************************************************************
+//* TIdSipInboundSessionWaitTestCase                                           *
+//******************************************************************************
+//* TIdSipInboundSessionWaitTestCase Public methods ****************************
+
+procedure TIdSipInboundSessionWaitTestCase.SetUp;
 begin
   inherited SetUp;
 
@@ -8420,34 +8685,111 @@ begin
 
   Self.ReceiveInvite;
   Self.Session := Self.L.SessionParam;
-  Self.Target  := TIdSipToHeader.Create;
-  Self.Target.Value := 'sip:charlie@example.com';
 
-  Self.Wait := TIdSipSessionRedirectWait.Create;
-  Self.Wait.NewTarget := Self.Target;
   Self.Wait.SessionID := Self.Session.ID;
 end;
 
-procedure TestTIdSipSessionRedirectWait.TearDown;
+procedure TIdSipInboundSessionWaitTestCase.TearDown;
 begin
-  Self.Wait.Free;
-  Self.Target.Free;
   Self.Core.InviteModule.RemoveListener(Self.L);
   Self.L.Free;
 
   inherited TearDown;
 end;
 
+//* TIdSipInboundSessionWaitTestCase Protected methods *************************
+
+procedure TIdSipInboundSessionWaitTestCase.CheckTriggerDoesNothing(Wait: TIdSipSessionWait;
+                                                                   Msg: String);
+begin
+  Self.MarkSentResponseCount;
+  Self.Wait.Trigger;
+  CheckNoResponseSent(Msg);
+end;
+
+//******************************************************************************
+//* TestTIdSipSessionAcceptWait                                                *
+//******************************************************************************
+//* TestTIdSipSessionAcceptWait Public methods *********************************
+
+procedure TestTIdSipSessionAcceptWait.SetUp;
+var
+  W: TIdSipSessionAcceptWait;
+begin
+  inherited SetUp;
+
+  Self.Answer   := 'haha';
+  Self.MimeType := 'text/plain';
+
+  W := Self.Wait as TIdSipSessionAcceptWait;
+  W.ContentType := Self.MimeType;
+  W.Offer       := Self.Answer;
+end;
+
+//* TestTIdSipSessionAcceptWait Protected methods ******************************
+
+function TestTIdSipSessionAcceptWait.WaitType: TIdSipSessionWaitClass;
+begin
+  Result := TIdSipSessionAcceptWait;
+end;
+
+//* TestTIdSipSessionAcceptWait Published methods ******************************
+
+procedure TestTIdSipSessionAcceptWait.TestTrigger;
+begin
+  Self.MarkSentResponseCount;
+  Self.Wait.Trigger;
+  CheckResponseSent('No 200 OK response sent');
+  CheckEquals(SIPOK, Self.LastSentResponse.StatusCode, 'Unexpected response');
+  CheckEquals(Self.MimeType, Self.LastSentResponse.ContentType, 'Answer MIME type');
+  CheckEquals(Self.Answer, Self.LastSentResponse.Body, 'Answer body');
+end;
+
+//******************************************************************************
+//* TestTIdSipSessionRedirectWait                                              *
+//******************************************************************************
+//* TestTIdSipSessionRedirectWait Public methods *******************************
+
+procedure TestTIdSipSessionRedirectWait.SetUp;
+var
+  W: TIdSipSessionRedirectWait;
+begin
+  inherited SetUp;
+
+  Self.Target  := TIdSipToHeader.Create;
+  Self.Target.Value := 'sip:charlie@example.com';
+
+  W := Self.Wait as TIdSipSessionRedirectWait;
+  W.NewTarget := Self.Target;
+end;
+
+procedure TestTIdSipSessionRedirectWait.TearDown;
+begin
+  Self.Target.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipSessionRedirectWait Protected methods ****************************
+
+function TestTIdSipSessionRedirectWait.WaitType: TIdSipSessionWaitClass;
+begin
+  Result := TIdSipSessionRedirectWait;
+end;
+
 //* TestTIdSipSessionRedirectWait Published methods ****************************
 
 procedure TestTIdSipSessionRedirectWait.TestTriggerWithTemporaryFalse;
+var
+  W: TIdSipSessionRedirectWait;
 begin
-  Self.Wait.Temporary := false;
+  W := Self.Wait as TIdSipSessionRedirectWait;
+  W.Temporary := false;
 
   Self.MarkSentResponseCount;
   Self.Wait.Trigger;
   CheckResponseSent('No response sent');
-  CheckEquals(TIdSipInboundInvite.RedirectStatusCode(Self.Wait.Temporary),
+  CheckEquals(TIdSipInboundInvite.RedirectStatusCode(W.Temporary),
               Self.LastSentResponse.StatusCode,
               'Unexpected response sent');
   CheckEquals(Self.Target.Address.AsString,
@@ -8456,15 +8798,21 @@ begin
 end;
 
 procedure TestTIdSipSessionRedirectWait.TestTriggerWithTemporaryTrue;
+var
+  W: TIdSipSessionRedirectWait;
 begin
-  Self.Wait.Temporary := true;
+  W := Self.Wait as TIdSipSessionRedirectWait;
+  W.Temporary := true;
 
   Self.MarkSentResponseCount;
   Self.Wait.Trigger;
   CheckResponseSent('No response sent');
-  CheckEquals(TIdSipInboundInvite.RedirectStatusCode(Self.Wait.Temporary),
+  CheckEquals(TIdSipInboundInvite.RedirectStatusCode(W.Temporary),
               Self.LastSentResponse.StatusCode,
               'Unexpected response sent');
+  CheckEquals(Self.Target.Address.AsString,
+              Self.LastSentResponse.FirstContact.Address.AsString,
+              'Contact doesn''t contain the redirect target');              
 end;
 
 //******************************************************************************
@@ -8473,31 +8821,24 @@ end;
 //* TestTIdSipSendProvisionalWait Public methods *******************************
 
 procedure TestTIdSipSendProvisionalWait.SetUp;
+var
+  W: TIdSipSendProvisionalWait;
 begin
   inherited SetUp;
 
   Self.StatusCode := SIPQueued;
   Self.StatusText := 'Far side is taking its time';
 
-  Self.L := TIdSipTestInviteModuleListener.Create;
-  Self.Core.InviteModule.AddListener(Self.L);
-
-  Self.ReceiveInvite;
-  Self.Session := Self.L.SessionParam;
-
-  Self.Wait := TIdSipSendProvisionalWait.Create;
-  Self.Wait.SessionID  := Self.Session.ID;
-  Self.Wait.StatusCode := Self.StatusCode;
-  Self.Wait.StatusText := Self.StatusText;
+  W := Self.Wait as TIdSipSendProvisionalWait;
+  W.StatusCode := Self.StatusCode;
+  W.StatusText := Self.StatusText;
 end;
 
-procedure TestTIdSipSendProvisionalWait.TearDown;
-begin
-  Self.Wait.Free;
-  Self.Core.InviteModule.RemoveListener(Self.L);
-  Self.L.Free;
+//* TestTIdSipSendProvisionalWait Protected methods ****************************
 
-  inherited TearDown;
+function TestTIdSipSendProvisionalWait.WaitType: TIdSipSessionWaitClass;
+begin
+  Result := TIdSipSendProvisionalWait;
 end;
 
 //* TestTIdSipSendProvisionalWait Published methods ****************************
@@ -8517,31 +8858,24 @@ end;
 //* TestTIdSipSessionRejectWait Public methods *********************************
 
 procedure TestTIdSipSessionRejectWait.SetUp;
+var
+  W: TIdSipSessionRejectWait;
 begin
   inherited SetUp;
 
   Self.StatusCode := SIPBusyHere;
   Self.ReasonPhrase := 'Call back later';
 
-  Self.L := TIdSipTestInviteModuleListener.Create;
-  Self.Core.InviteModule.AddListener(Self.L);
-
-  Self.ReceiveInvite;
-  Self.Session := Self.L.SessionParam;
-
-  Self.Wait := TIdSipSessionRejectWait.Create;
-  Self.Wait.SessionID  := Self.Session.ID;
-  Self.Wait.StatusCode := Self.StatusCode;
-  Self.Wait.StatusText := Self.ReasonPhrase;
+  W := Self.Wait as TIdSipSessionRejectWait;
+  W.StatusCode := Self.StatusCode;
+  W.StatusText := Self.ReasonPhrase;
 end;
 
-procedure TestTIdSipSessionRejectWait.TearDown;
-begin
-  Self.Wait.Free;
-  Self.Core.InviteModule.RemoveListener(Self.L);
-  Self.L.Free;
+//* TestTIdSipSessionRejectWait Protected methods ******************************
 
-  inherited TearDown;
+function TestTIdSipSessionRejectWait.WaitType: TIdSipSessionWaitClass;
+begin
+  Result := TIdSipSessionRejectWait;
 end;
 
 //* TestTIdSipSessionRejectWait Published methods ******************************

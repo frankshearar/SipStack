@@ -711,15 +711,11 @@ type
     procedure FireTimer(Session: TIdSipSession); override;
   end;
 
-  TIdSipInboundSessionWait = class(TIdWait)
-  private
-    fSessionID: String;
+  TIdSipInboundSessionWait = class(TIdSipSessionWait)
   protected
-    procedure FireTimer(Session: TIdSipInboundSession); virtual;
+    procedure FireTimer(Session: TIdSipInboundSession); reintroduce; virtual; 
   public
     procedure Trigger; override;
-
-    property SessionID: String read fSessionID write fSessionID;
   end;
 
   TIdSipSessionAcceptWait = class(TIdSipInboundSessionWait)
@@ -758,12 +754,12 @@ type
     property StatusText: String   read fStatusText write fStatusText;
   end;
 
-  TIdSipSessionRejectWait = class(TIdSipSendResponseWait)
+  TIdSipSendProvisionalWait = class(TIdSipSendResponseWait)
   protected
     procedure FireTimer(Session: TIdSipInboundSession); override;
   end;
 
-  TIdSipSendProvisionalWait = class(TIdSipSendResponseWait)
+  TIdSipSessionRejectWait = class(TIdSipSendResponseWait)
   protected
     procedure FireTimer(Session: TIdSipInboundSession); override;
   end;
@@ -3621,16 +3617,6 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipSessionRejectWait                                                    *
-//******************************************************************************
-//* TIdSipSessionRejectWait Protected methods **********************************
-
-procedure TIdSipSessionRejectWait.FireTimer(Session: TIdSipInboundSession);
-begin
-  Session.RejectCall(Self.StatusCode, Self.StatusText);
-end;
-
-//******************************************************************************
 //* TIdSipSendProvisionalWait                                                  *
 //******************************************************************************
 //* TIdSipSendProvisionalWait Protected methods ********************************
@@ -3638,6 +3624,16 @@ end;
 procedure TIdSipSendProvisionalWait.FireTimer(Session: TIdSipInboundSession);
 begin
   Session.SendProvisional(Self.StatusCode, Self.StatusText);
+end;
+
+//******************************************************************************
+//* TIdSipSessionRejectWait                                                    *
+//******************************************************************************
+//* TIdSipSessionRejectWait Protected methods **********************************
+
+procedure TIdSipSessionRejectWait.FireTimer(Session: TIdSipInboundSession);
+begin
+  Session.RejectCall(Self.StatusCode, Self.StatusText);
 end;
 
 //******************************************************************************
