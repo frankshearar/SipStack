@@ -670,25 +670,22 @@ type
     property NewDuration: Cardinal read fNewDuration write fNewDuration;
   end;
 
-  TIdSipInboundSubscriptionNotifyWait = class(TIdWait)
+  TIdSipInboundSubscriptionNotifyWait = class(TIdSipActionWait)
   private
-    fMimeType:       String;
-    fNotification:   String;
-    fSubscriptionID: String;
+    fMimeType:     String;
+    fNotification: String;
   public
     procedure Trigger; override;
 
-    property MimeType:       String read fMimeType write fMimeType;
-    property Notification:   String read fNotification write fNotification;
-    property SubscriptionID: String read fSubscriptionID write fSubscriptionID;
+    property MimeType:     String read fMimeType write fMimeType;
+    property Notification: String read fNotification write fNotification;
   end;
 
   // My subclasses represent the deferred notification of a referral: trying,
   // succeeded, etc.
-  TIdSipInboundReferralWait = class(TIdWait)
+  TIdSipInboundReferralWait = class(TIdSipActionWait)
   private
     fHasResponse: Boolean;
-    fReferralID:  String;
     fResponse:    TIdSipResponse;
 
     procedure SetResponse(Value: TIdSipResponse);
@@ -701,7 +698,6 @@ type
     procedure Trigger; override;
 
     property HasResponse: Boolean        read fHasResponse;
-    property ReferralID:  String         read fReferralID write fReferralID;
     property Response:    TIdSipResponse read fResponse write SetResponse;
   end;
 
@@ -3176,7 +3172,7 @@ procedure TIdSipInboundSubscriptionNotifyWait.Trigger;
 var
   Action: TIdSipAction;
 begin
-  Action := TIdSipActionRegistry.FindAction(Self.SubscriptionID);
+  Action := TIdSipActionRegistry.FindAction(Self.ActionID);
 
   if Assigned(Action) and (Action is TIdSipInboundSubscription) then
     (Action as TIdSipInboundSubscription).Notify(Self.Notification, Self.MimeType);
@@ -3208,7 +3204,7 @@ procedure TIdSipInboundReferralWait.Trigger;
 var
   Action: TIdSipAction;
 begin
-  Action := TIdSipActionRegistry.FindAction(Self.ReferralID);
+  Action := TIdSipActionRegistry.FindAction(Self.ActionID);
 
   if Assigned(Action) and (Action is TIdSipInboundReferral) then
     Self.FireTimer(Action as TIdSipInboundReferral);

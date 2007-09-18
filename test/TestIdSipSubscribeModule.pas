@@ -768,36 +768,42 @@ type
     procedure TestTriggerWithIDOfWrongTypeOfObject;
   end;
 
-  TestTIdSipInboundSubscriptionNotifyWait = class(TSubscribeTestCase)
+  TIdSipInboundSubscriptionTestCase = class(TSubscribeTestCase)
   private
-    MimeType:     String;
-    Notification: String;
-    Wait:         TIdSipInboundSubscriptionNotifyWait;
-
+    Wait: TIdSipActionWait;
+  protected
+    procedure AddRequiredPackage; virtual;
     procedure CheckTriggerDoesNothing(Wait: TIdWait;
                                       Msg: String);
+    procedure ReceiveSubscribeRequest; virtual;
+    function  WaitType: TIdSipActionWaitClass; virtual;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestTrigger;
     procedure TestTriggerWithIDOfNonexistentObject;
     procedure TestTriggerWithIDOfWrongTypeOfObject;
   end;
 
-  TIdSipInboundReferralWaitClass = class of TIdSipInboundReferralWait;
-
-  TestTIdSipInboundReferralWait = class(TSubscribeTestCase)
+  TestTIdSipInboundSubscriptionNotifyWait = class(TIdSipInboundSubscriptionTestCase)
   private
-    Wait: TIdSipInboundReferralWait;
+    MimeType:     String;
+    Notification: String;
   protected
-    procedure CheckReferralResponse(Msg: String); virtual;
-    procedure CheckTriggerDoesNothing(Wait: TIdSipInboundReferralWait;
-                                      Msg: String);
-    function  WaitType: TIdSipInboundReferralWaitClass; virtual;
+    function WaitType: TIdSipActionWaitClass; override;
   public
     procedure SetUp; override;
-    procedure TearDown; override;
+  published
+    procedure TestTrigger;
+  end;
+
+  TIdSipInboundReferralWaitClass = class of TIdSipInboundReferralWait;
+
+  TestTIdSipInboundReferralWait = class(TIdSipInboundSubscriptionTestCase)
+  protected
+    procedure AddRequiredPackage; override;
+    procedure CheckReferralResponse(Msg: String); virtual;
+    procedure ReceiveSubscribeRequest; override;
   published
     procedure TestHasResponse;
     procedure TestTrigger;
@@ -827,6 +833,30 @@ type
   protected
     procedure CheckReferralResponse(Msg: String); override;
     function  WaitType: TIdSipInboundReferralWaitClass; override;
+  end;
+
+  TestTIdSipNotifyReferralDeniedWait = class(TestTIdSipInboundReferralWait)
+  protected
+    procedure CheckReferralResponse(Msg: String); override;
+    function  WaitType: TIdSipActionWaitClass; override;
+  end;
+
+  TestTIdSipNotifyReferralFailedWait = class(TestTIdSipInboundReferralWait)
+  protected
+    procedure CheckReferralResponse(Msg: String); override;
+    function  WaitType: TIdSipActionWaitClass; override;
+  end;
+
+  TestTIdSipNotifyReferralSucceededWait = class(TestTIdSipInboundReferralWait)
+  protected
+    procedure CheckReferralResponse(Msg: String); override;
+    function  WaitType: TIdSipActionWaitClass; override;
+  end;
+
+  TestTIdSipNotifyReferralTryingWait = class(TestTIdSipInboundReferralWait)
+  protected
+    procedure CheckReferralResponse(Msg: String); override;
+    function  WaitType: TIdSipActionWaitClass; override;
   end;
 
   TestTIdSipSubscriptionRetryWait = class(TSubscribeTestCase)
@@ -994,14 +1024,14 @@ begin
   Result.AddTest(TestTIdSipOutboundSubscription.Suite);
   Result.AddTest(TestTIdSipInboundReferral.Suite);
   Result.AddTest(TestTIdSipOutboundReferral.Suite);
-  Result.AddTest(TestTIdSipNotifyReferralDeniedWait.Suite);
-  Result.AddTest(TestTIdSipNotifyReferralFailedWait.Suite);
-  Result.AddTest(TestTIdSipNotifyReferralSucceededWait.Suite);
-  Result.AddTest(TestTIdSipNotifyReferralTryingWait.Suite);
   Result.AddTest(TestTIdSipSubscriptionExpires.Suite);
   Result.AddTest(TestTIdSipSubscriptionRetryWait.Suite);
   Result.AddTest(TestTIdSipOutboundSubscriptionRefreshWait.Suite);
   Result.AddTest(TestTIdSipInboundSubscriptionNotifyWait.Suite);
+  Result.AddTest(TestTIdSipNotifyReferralDeniedWait.Suite);
+  Result.AddTest(TestTIdSipNotifyReferralFailedWait.Suite);
+  Result.AddTest(TestTIdSipNotifyReferralSucceededWait.Suite);
+  Result.AddTest(TestTIdSipNotifyReferralTryingWait.Suite);
   Result.AddTest(TestTIdSipNotifyFailedMethod.Suite);
   Result.AddTest(TestTIdSipNotifySucceededMethod.Suite);
   Result.AddTest(TestTIdSipEstablishedSubscriptionMethod.Suite);
@@ -5376,38 +5406,26 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipInboundSubscriptionNotifyWait                                    *
+//* TIdSipInboundSubscriptionTestCase                                          *
 //******************************************************************************
-//* TestTIdSipInboundSubscriptionNotifyWait Public methods *********************
+//* TIdSipInboundSubscriptionTestCase Public methods ***************************
 
-procedure TestTIdSipInboundSubscriptionNotifyWait.CheckTriggerDoesNothing(Wait: TIdWait;
-                                                                          Msg: String);
-begin
-  Self.MarkSentRequestCount;
-  Self.Wait.Trigger;
-  CheckNoRequestSent(Msg);
-end;
-
-procedure TestTIdSipInboundSubscriptionNotifyWait.SetUp;
+procedure TIdSipInboundSubscriptionTestCase.SetUp;
 var
   L: TIdSipTestSubscribeModuleListener;
 begin
   inherited SetUp;
 
-  Self.MimeType     := SipFragmentMimeType;
-  Self.Notification := TIdSipInboundReferral.ReferralSucceededBody;
+  Self.Wait := Self.WaitType.Create;
 
-  Self.Wait := TIdSipInboundSubscriptionNotifyWait.Create;
-  Self.Wait.MimeType     := Self.MimeType;
-  Self.Wait.Notification := Self.Notification;
-
+  Self.AddRequiredPackage;
   L := TIdSipTestSubscribeModuleListener.Create;
   try
     Self.Module.AddListener(L);
     try
-      Self.ReceiveSubscribe(Self.Package.EventPackage);
+      Self.ReceiveSubscribeRequest;
       Check(L.SubscriptionParam <> nil, 'SUBSCRIBE rejected');
-      Self.Wait.SubscriptionID := L.SubscriptionParam.ID;
+      Self.Wait.ActionID := L.SubscriptionParam.ID;
     finally
       Self.Module.RemoveListener(L);
     end;
@@ -5416,11 +5434,100 @@ begin
   end;
 end;
 
-procedure TestTIdSipInboundSubscriptionNotifyWait.TearDown;
+procedure TIdSipInboundSubscriptionTestCase.TearDown;
 begin
   Self.Wait.Free;
 
   inherited TearDown;
+end;
+
+//* TIdSipInboundSubscriptionTestCase Protected methods ************************
+
+procedure TIdSipInboundSubscriptionTestCase.AddRequiredPackage;
+begin
+  // Override this to add any packages the SubscribeModule needs to know about
+  // for this test.
+end;
+
+procedure TIdSipInboundSubscriptionTestCase.CheckTriggerDoesNothing(Wait: TIdWait;
+                                                                    Msg: String);
+begin
+  Self.MarkSentRequestCount;
+  Self.Wait.Trigger;
+  CheckNoRequestSent(Msg);
+end;
+
+procedure TIdSipInboundSubscriptionTestCase.ReceiveSubscribeRequest;
+begin
+  Self.ReceiveSubscribe(Self.Package.EventPackage);
+end;
+
+function TIdSipInboundSubscriptionTestCase.WaitType: TIdSipActionWaitClass;
+begin
+  Result := nil;
+
+  Fail(Self.ClassName + ' must override WaitType');
+end;
+
+//* TIdSipInboundSubscriptionTestCase Published methods ************************
+
+procedure TIdSipInboundSubscriptionTestCase.TestTriggerWithIDOfNonexistentObject;
+begin
+  // Check that the Wait does nothing if its SubscriptionID doesn't point to a
+  // registered object.
+
+  Self.Wait.ActionID := 'fake ID';
+  CheckTriggerDoesNothing(Self.Wait, 'Wait didn''t check object type before triggering');
+end;
+
+procedure TIdSipInboundSubscriptionTestCase.TestTriggerWithIDOfWrongTypeOfObject;
+var
+  ArbitraryObject: TIdSipAction;
+begin
+  // This test checks two things:
+  //   1. If you give the Wait the ID of an object that isn't a TIdSipInboundSubscription,
+  //      the Wait does nothing, and
+  //   2. the Wait doesn't blow up.
+
+  ArbitraryObject := TIdSipOutboundCancel.Create(Self.Core);
+  try
+    TIdSipActionRegistry.RegisterAction(ArbitraryObject);
+    try
+      Self.Wait.ActionID := ArbitraryObject.ID;
+
+      CheckTriggerDoesNothing(Self.Wait, 'Wait didn''t check object type before triggering');
+    finally
+      TIdSipActionRegistry.UnregisterAction(ArbitraryObject.ID);
+    end;
+  finally
+    ArbitraryObject.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipInboundSubscriptionNotifyWait                                    *
+//******************************************************************************
+//* TestTIdSipInboundSubscriptionNotifyWait Public methods *********************
+
+procedure TestTIdSipInboundSubscriptionNotifyWait.SetUp;
+var
+  W: TIdSipInboundSubscriptionNotifyWait;
+begin
+  inherited SetUp;
+
+  Self.MimeType     := SipFragmentMimeType;
+  Self.Notification := TIdSipInboundReferral.ReferralSucceededBody;
+
+  W := Self.Wait as TIdSipInboundSubscriptionNotifyWait;
+  W.MimeType     := Self.MimeType;
+  W.Notification := Self.Notification;
+end;
+
+//* TestTIdSipInboundSubscriptionNotifyWait Protected methods ******************
+
+function TestTIdSipInboundSubscriptionNotifyWait.WaitType: TIdSipActionWaitClass;
+begin
+  Result := TIdSipInboundSubscriptionNotifyWait;
 end;
 
 //* TestTIdSipInboundSubscriptionNotifyWait Published methods ******************
@@ -5435,95 +5542,25 @@ begin
   CheckEquals(Self.Notification, Self.LastSentRequest.Body, 'Message body');
 end;
 
-procedure TestTIdSipInboundSubscriptionNotifyWait.TestTriggerWithIDOfNonexistentObject;
-begin
-  // Check that the Wait does nothing if its SubscriptionID doesn't point to a
-  // registered object.
-
-  Self.Wait.SubscriptionID := 'fake ID';
-  CheckTriggerDoesNothing(Self.Wait, 'Wait didn''t check object type before triggering');
-end;
-
-procedure TestTIdSipInboundSubscriptionNotifyWait.TestTriggerWithIDOfWrongTypeOfObject;
-var
-  ArbitraryObject: TIdSipAction;
-begin
-  // This test checks two things:
-  //   1. If you give the Wait the ID of an object that isn't a TIdSipInboundSubscription,
-  //      the Wait does nothing, and
-  //   2. the Wait doesn't blow up.
-
-  ArbitraryObject := TIdSipOutboundCancel.Create(Self.Core);
-  try
-    TIdSipActionRegistry.RegisterAction(ArbitraryObject);
-    try
-      Self.Wait.SubscriptionID := ArbitraryObject.ID;
-
-      CheckTriggerDoesNothing(Self.Wait, 'Wait didn''t check object type before triggering');
-    finally
-      TIdSipActionRegistry.UnregisterAction(ArbitraryObject.ID);
-    end;
-  finally
-    ArbitraryObject.Free;
-  end;
-end;
-
 //******************************************************************************
 //* TestTIdSipInboundReferralWait                                              *
 //******************************************************************************
-//* TestTIdSipInboundReferralWait Public methods *******************************
-
-procedure TestTIdSipInboundReferralWait.SetUp;
-var
-  L: TIdSipTestSubscribeModuleListener;
-begin
-  inherited SetUp;
-
-  Self.Wait := Self.WaitType.Create;
-
-  Self.Module.AddPackage(TIdSipReferPackage);
-
-  L := TIdSipTestSubscribeModuleListener.Create;
-  try
-    Self.Module.AddListener(L);
-    try
-      Self.ReceiveRefer(Self.Core.From);
-      Self.Wait.ReferralID := L.SubscriptionParam.ID;
-    finally
-      Self.Module.RemoveListener(L);
-    end;
-  finally
-    L.Free;
-  end;
-end;
-
-procedure TestTIdSipInboundReferralWait.TearDown;
-begin
-  Self.Wait.Free;
-
-  inherited TearDown;
-end;
-
 //* TestTIdSipInboundReferralWait Protected methods ****************************
+
+procedure TestTIdSipInboundReferralWait.AddRequiredPackage;
+begin
+  Self.Module.AddPackage(TIdSipReferPackage);
+end;
 
 procedure TestTIdSipInboundReferralWait.CheckReferralResponse(Msg: String);
 begin
-  CheckRequestSent(Msg);
+  CheckRequestSent(Msg + ': no NOTIFY sent');
   CheckEquals(MethodNotify, Self.LastSentRequest.Method, Msg + ': Method');
 end;
 
-procedure TestTIdSipInboundReferralWait.CheckTriggerDoesNothing(Wait: TIdSipInboundReferralWait;
-                                                                Msg: String);
+procedure TestTIdSipInboundReferralWait.ReceiveSubscribeRequest;
 begin
-  Self.MarkSentResponseCount;
-  Wait.Trigger;
-  CheckNoResponseSent(Msg);
-end;
-
-function TestTIdSipInboundReferralWait.WaitType: TIdSipInboundReferralWaitClass;
-begin
-  Result := nil;
-  Fail(Self.ClassName + ' must override WaitType');
+  Self.ReceiveRefer(Self.Core.From);
 end;
 
 //* TestTIdSipInboundReferralWait Published methods ****************************
@@ -5531,16 +5568,19 @@ end;
 procedure TestTIdSipInboundReferralWait.TestHasResponse;
 var
   Response: TIdSipResponse;
+  W:        TIdSipInboundReferralWait;
 begin
+  W := Self.Wait as TIdSipInboundReferralWait;
+
   Response := TIdSipResponse.Create;
   try
-    Check(not Wait.HasResponse, 'Initial state of HasResponse');
+    Check(not W.HasResponse, 'Initial state of HasResponse');
 
-    Wait.Response := Response;
-    Check(Wait.HasResponse, 'After assigning a response to Response');
+    W.Response := Response;
+    Check(W.HasResponse, 'After assigning a response to Response');
 
-    Wait.Response := nil;
-    Check(not Wait.HasResponse, 'After assigning nil to Response');
+    W.Response := nil;
+    Check(not W.HasResponse, 'After assigning nil to Response');
   finally
     Response.Free
   end;
@@ -5552,39 +5592,6 @@ begin
   Self.MarkSentRequestCount;
   Self.Wait.Trigger;
   CheckReferralResponse('Unexpected NOTIFY sent');
-end;
-
-procedure TestTIdSipInboundReferralWait.TestTriggerWithIDOfNonexistentObject;
-begin
-  // Check that the Wait does nothing if its ReferralID doesn't point to a
-  // registered object.
-
-  Self.Wait.ReferralID := 'fake ID';
-  CheckTriggerDoesNothing(Self.Wait, 'Wait didn''t check object type before triggering');
-end;
-
-procedure TestTIdSipInboundReferralWait.TestTriggerWithIDOfWrongTypeOfObject;
-var
-  ArbitraryObject: TIdSipAction;
-begin
-  // This test checks two things:
-  //   1. If you give the Wait the ID of an object that isn't a TIdSipInboundReferral,
-  //      the Wait does nothing, and
-  //   2. the Wait doesn't blow up.
-
-  ArbitraryObject := TIdSipOutboundCancel.Create(Self.Core);
-  try
-    TIdSipActionRegistry.RegisterAction(ArbitraryObject);
-    try
-      Self.Wait.ReferralID := ArbitraryObject.ID;
-
-      CheckTriggerDoesNothing(Self.Wait, 'Wait didn''t check object type before triggering');
-    finally
-      TIdSipActionRegistry.UnregisterAction(ArbitraryObject.ID);
-    end;
-  finally
-    ArbitraryObject.Free;
-  end;
 end;
 
 //******************************************************************************
@@ -5601,7 +5608,7 @@ begin
               Msg + ': body');
 end;
 
-function TestTIdSipNotifyReferralDeniedWait.WaitType: TIdSipInboundReferralWaitClass;
+function TestTIdSipNotifyReferralDeniedWait.WaitType: TIdSipActionWaitClass;
 begin
   Result := TIdSipNotifyReferralDeniedWait;
 end;
@@ -5620,7 +5627,7 @@ begin
               Msg + ': body');
 end;
 
-function TestTIdSipNotifyReferralFailedWait.WaitType: TIdSipInboundReferralWaitClass;
+function TestTIdSipNotifyReferralFailedWait.WaitType: TIdSipActionWaitClass;
 begin
   Result := TIdSipNotifyReferralFailedWait;
 end;
@@ -5639,7 +5646,7 @@ begin
               Msg + ': body');
 end;
 
-function TestTIdSipNotifyReferralSucceededWait.WaitType: TIdSipInboundReferralWaitClass;
+function TestTIdSipNotifyReferralSucceededWait.WaitType: TIdSipActionWaitClass;
 begin
   Result := TIdSipNotifyReferralSucceededWait;
 end;
@@ -5658,7 +5665,7 @@ begin
               Msg + ': body');
 end;
 
-function TestTIdSipNotifyReferralTryingWait.WaitType: TIdSipInboundReferralWaitClass;
+function TestTIdSipNotifyReferralTryingWait.WaitType: TIdSipActionWaitClass;
 begin
   Result := TIdSipNotifyReferralTryingWait;
 end;

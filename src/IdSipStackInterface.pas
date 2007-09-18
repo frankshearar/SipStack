@@ -1289,9 +1289,9 @@ begin
     Action := Self.GetAndCheckAction(ActionHandle, TIdSipInboundSubscription);
 
     Wait := TIdSipInboundSubscriptionNotifyWait.Create;
-    Wait.MimeType       := MimeType;
-    Wait.Notification   := Notification;
-    Wait.SubscriptionID := Action.ID;
+    Wait.ActionID     := Action.ID;
+    Wait.MimeType     := MimeType;
+    Wait.Notification := Notification;
 
     Self.TimerQueue.AddEvent(TriggerImmediately, Wait);
   finally
@@ -1666,8 +1666,8 @@ begin
     Action := Self.GetAndCheckAction(ActionHandle, TIdSipInboundReferral);
 
     Wait := NotifyType.Create;
-    Wait.ReferralID := Action.ID;
-    Wait.Response   := Response;
+    Wait.ActionID := Action.ID;
+    Wait.Response := Response;
 
     Self.TimerQueue.AddEvent(TriggerImmediately, Wait);
   finally
