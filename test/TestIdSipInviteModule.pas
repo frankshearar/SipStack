@@ -12,9 +12,9 @@ unit TestIdSipInviteModule;
 interface
 
 uses
-  Classes, IdRtp, IdSdp, IdSipCore, IdSipDialog, IdSipInviteModule,
-  IdSipLocation, IdSipMessage, IdSipSubscribeModule, IdSipTransport,
-  IdSipUserAgent, IdTimerQueue, TestFrameworkSip, TestFrameworkSipTU;
+  Classes, IdRtp, IdSipCore, IdSipDialog, IdSipInviteModule, IdSipLocation,
+  IdSipMessage, IdSipSubscribeModule, IdSipTransport, IdSipUserAgent,
+  IdTimerQueue, TestFrameworkSip, TestFrameworkSipTU;
 
 type
   // This class attempts to isolate an intermittent bug that surfaces in the
@@ -200,6 +200,7 @@ type
     OnFailureFired:           Boolean;
     OnRedirectFired:          Boolean;
     OnSuccessFired:           Boolean;
+    SdpMimeType:              String;
     ToHeaderTag:              String;
 
     procedure CheckReceiveFailed(StatusCode: Cardinal);
@@ -320,7 +321,6 @@ type
     ErrorCode:                 Cardinal;
     MimeType:                  String;
     Module:                    TIdSipInviteModule;
-    MultiStreamSdp:            TIdSdpPayload;
     OnEndedSessionFired:       Boolean;
     OnEstablishedSessionFired: Boolean;
     OnModifiedSessionFired:    Boolean;
@@ -329,7 +329,7 @@ type
     Reason:                    String;
     ReceivingBinding:          TIdSipConnectionBindings;
     RemoteSessionDescription:  String;
-    SimpleSdp:                 TIdSdpPayload;
+    SdpMimeType:               String;
 
     procedure CheckHeadersEqual(ExpectedMessage: TIdSipMessage;
                                 ReceivedMessage: TIdSipMessage;
@@ -338,10 +338,9 @@ type
     procedure CheckResendWaitTime(Milliseconds: Cardinal;
                                   const Msg: String); virtual;
     function  CreateAndEstablishSession: TIdSipSession;
-    function  CreateMultiStreamSdp: TIdSdpPayload;
     function  CreateRemoteReInvite(LocalDialog: TIdSipDialog): TIdSipRequest;
-    function  CreateSimpleSdp: TIdSdpPayload;
     procedure EstablishSession(Session: TIdSipSession); virtual; abstract;
+    function  MultiStreamSdp: String;
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
                                         Binding: TIdSipConnectionBindings);
@@ -364,9 +363,9 @@ type
     procedure ReceiveRemoteReInvite(Session: TIdSipSession);
     procedure ResendWith(Session: TIdSipSession;
                          AuthenticationChallenge: TIdSipResponse);
+    function  SimpleSdp: String;
   public
     procedure SetUp; override;
-    procedure TearDown; override;
   published
     procedure TestAckToInDialogInviteMatchesInvite;
     procedure TestDontMatchResponseToModify;
@@ -865,7 +864,7 @@ type
   public
     procedure SetUp; override;
   published
-    procedure TestTrigger;
+//    procedure TestTrigger;
   end;
 
 implementation
@@ -2038,17 +2037,19 @@ end;
 
 procedure TestTIdSipInboundInvite.TestInviteWithNoOffer;
 var
-  Ack:    TIdSipRequest;
-  Action: TIdSipInboundInvite;
-  Answer: String;
-  Offer:  String;
+  Ack:      TIdSipRequest;
+  Action:   TIdSipInboundInvite;
+  Answer:   String;
+  MimeType: String;
+  Offer:    String;
 begin
   // <---       INVITE        ---
   //  --- 200 OK (with offer) --->
   // <---  ACK (with answer)  ---
 
-  Answer := TIdSipTestResources.BasicSDP('4.3.2.1');
-  Offer  := TIdSipTestResources.BasicSDP('1.2.3.4');
+  Answer   := TIdSipTestResources.BasicSDP('4.3.2.1');
+  Offer    := TIdSipTestResources.BasicSDP('1.2.3.4');
+  MimeType := 'application/sdp';
 
   Self.Invite.Body := '';
   Self.Invite.RemoveAllHeadersNamed(ContentTypeHeaderFull);
@@ -2058,13 +2059,13 @@ begin
 
   Self.MarkSentResponseCount;
   Action.Accept(Offer,
-                SdpMimeType);
+                MimeType);
 
   Self.CheckResponseSent('No 2xx sent');
   CheckEquals(Offer,
               Self.LastSentResponse.Body,
               'Body of 2xx');
-  CheckEquals(SdpMimeType,
+  CheckEquals(MimeType,
               Self.LastSentResponse.ContentType,
               'Content-Type of 2xx');
 
@@ -2659,8 +2660,10 @@ begin
 
   // We create Self.Dialog in Self.OnDialogEstablished
 
+  Self.SdpMimeType := 'application/sdp';
+
   Self.DroppedUnmatchedResponse := false;
-  Self.InviteMimeType           := SdpMimeType;
+  Self.InviteMimeType           := Self.SdpMimeType;
   Self.InviteOffer              := TIdSipTestResources.BasicSDP('1.2.3.4');
   Self.OnCallProgressFired      := false;
   Self.OnDialogEstablishedFired := false;
@@ -2863,7 +2866,7 @@ end;
 
 procedure TestTIdSipOutboundInvite.TestAnswerInAck;
 var
-  Invite: TIdSipOutboundInvite;
+  Invite:      TIdSipOutboundInvite;
 begin
   //  ---       INVITE        --->
   // <--- 200 OK (with offer) ---
@@ -2879,7 +2882,7 @@ begin
               Invite.ClassName + ': You just sent an INVITE with a body!');
 
   Invite.Offer    := TIdSipTestResources.BasicSDP('1.2.3.4');
-  Invite.MimeType := SdpMimeType;
+  Invite.MimeType := Self.SdpMimeType;
 
   Self.MarkSentAckCount;
   Self.ReceiveOkWithBody(Invite.InitialRequest,
@@ -3775,9 +3778,6 @@ begin
 
   Self.Module := Self.Core.ModuleFor(MethodInvite) as TIdSipInviteModule;
 
-  Self.MultiStreamSdp := Self.CreateMultiStreamSdp;
-  Self.SimpleSdp      := Self.CreateSimpleSdp;
-
   Self.MimeType                  := '';
   Self.OnEndedSessionFired       := false;
   Self.OnEstablishedSessionFired := false;
@@ -3785,14 +3785,7 @@ begin
   Self.OnModifySessionFired      := false;
   Self.OnReferralFired           := false;
   Self.RemoteSessionDescription  := '';
-end;
-
-procedure TestTIdSipSession.TearDown;
-begin
-  Self.SimpleSdp.Free;
-  Self.MultiStreamSdp.Free;
-
-  inherited TearDown;
+  Self.SdpMimeType               := 'application/sdp';
 end;
 
 //* TestTIdSipSession Protected methods ****************************************
@@ -3852,47 +3845,11 @@ begin
   Result := NewSession;
 end;
 
-function TestTIdSipSession.CreateMultiStreamSdp: TIdSdpPayload;
-var
-  Connection: TIdSdpConnection;
-  MD:         TIdSdpMediaDescription;
-begin
-  Result := TIdSdpPayload.Create;
-  Result.Version                := 0;
-
-  Result.Origin.Username        := 'wintermute';
-  Result.Origin.SessionID       := '2890844526';
-  Result.Origin.SessionVersion  := '2890842807';
-  Result.Origin.NetType         := Id_SDP_IN;
-  Result.Origin.AddressType     := Id_IPv4;
-  Result.Origin.Address         := '127.0.0.1';
-
-  Result.SessionName            := 'Minimum Session Info';
-
-  Connection := Result.AddConnection;
-  Connection.NetType     := Id_SDP_IN;
-  Connection.AddressType := Id_IPv4;
-  Connection.Address     := '127.0.0.1';
-
-  MD := Result.AddMediaDescription;
-  MD.MediaType := mtAudio;
-  MD.Port      := 10000;
-  MD.Transport := AudioVisualProfile;
-  MD.AddFormat('0');
-
-  MD := Result.AddMediaDescription;
-  MD.MediaType := mtText;
-  MD.Port      := 11000;
-  MD.Transport := AudioVisualProfile;
-  MD.AddFormat('98');
-  MD.AddAttribute(RTPMapAttribute, '98 t140/1000');
-end;
-
 function TestTIdSipSession.CreateRemoteReInvite(LocalDialog: TIdSipDialog): TIdSipRequest;
 begin
   Result := Self.Module.CreateReInvite(LocalDialog,
-                                       Self.SimpleSdp.AsString,
-                                       Self.SimpleSdp.MimeType);
+                                       Self.SimpleSdp,
+                                       SdpMimeType);
   try
     Result.ToHeader.Tag    := LocalDialog.ID.LocalTag;
     Result.From.Tag        := LocalDialog.ID.RemoteTag;
@@ -3904,35 +3861,16 @@ begin
   end;
 end;
 
-function TestTIdSipSession.CreateSimpleSdp: TIdSdpPayload;
-var
-  Connection: TIdSdpConnection;
-  MD:         TIdSdpMediaDescription;
+function TestTIdSipSession.MultiStreamSdp: String;
 begin
-  Result := TIdSdpPayload.Create;
-  Result.Version               := 0;
-
-  Result.Origin.Username       := 'wintermute';
-  Result.Origin.SessionID      := '2890844526';
-  Result.Origin.SessionVersion := '2890842807';
-  Result.Origin.NetType        := Id_SDP_IN;
-  Result.Origin.AddressType    := Id_IPv4;
-  Result.Origin.Address        := '127.0.0.1';
-
-  Result.SessionName           := 'Minimum Session Info';
-
-  MD := Result.AddMediaDescription;
-  MD.MediaType := mtText;
-  MD.Port      := 11000;
-  MD.Transport := AudioVisualProfile;
-  MD.AddFormat('98');
-  MD.AddAttribute(RTPMapAttribute, '98 t140/1000');
-
-  MD.Connections.Add(TIdSdpConnection.Create);
-  Connection := MD.Connections[0];
-  Connection.NetType     := Id_SDP_IN;
-  Connection.AddressType := Id_IPv4;
-  Connection.Address     := '127.0.0.1';
+  Result := 'v=0' + CRLF
+          + 'o=wintermute 2890844526 2890842807 IN IP4 127.0.0.1' + CRLF
+          + 's=Minimum Session Info' + CRLF
+          + 'm=audio 10000 RTP/AVP 0' + CRLF
+          + 'c=IN IP4 127.0.0.1' + CRLF
+          + 'm=text 11000 RTP/AVP 98' + CRLF
+          + 'c=IN IP4 127.0.0.1' + CRLF
+          + 'a=rtpmap:98 t140/1000';
 end;
 
 procedure TestTIdSipSession.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
@@ -4022,6 +3960,16 @@ begin
   end;
 end;
 
+function TestTIdSipSession.SimpleSdp: String;
+begin
+  Result := 'v=0' + CRLF
+          + 'o=wintermute 2890844526 2890842807 IN IP4 127.0.0.1' + CRLF
+          + 's=Minimum Session Info' + CRLF
+          + 'm=text 11000 RTP/AVP 98' + CRLF
+          + 'c=IN IP4 127.0.0.1' + CRLF
+          + 'a=rtpmap:98 t140/1000';
+end;
+
 //* TestTIdSipSession Published methods ****************************************
 
 procedure TestTIdSipSession.TestAckToInDialogInviteMatchesInvite;
@@ -4100,7 +4048,7 @@ begin
   LocalMimeType                 := SdpMimeType;
   LocalSessionDescription       := Format(DummySDP, ['127.0.0.1']);
   Self.MimeType                 := SdpMimeType;
-  Self.RemoteSessionDescription := Self.SimpleSdp.AsString;
+  Self.RemoteSessionDescription := Self.SimpleSdp;
 
   Self.ReceiveRemoteReInvite(Session);
 
@@ -4387,7 +4335,7 @@ begin
   Session := Self.CreateAndEstablishSession;
 
   Self.DebugTimer.TriggerAllEventsOfType(TIdSipActionsWait);
-  Session.Modify(Body, PlainTextMimeType);
+  Session.Modify(Body, 'text/plain');
 
   Self.DebugTimer.TriggerImmediateEvents := false;
   EventCount := Self.DebugTimer.EventCount;
@@ -4433,7 +4381,7 @@ begin
     OldSessionCount := Self.Core.SessionCount;
 
     Session.AddActionListener(L);
-    Session.Modify('new session desc', PlainTextMimeType);
+    Session.Modify('new session desc', 'text/plain');
     Self.Dispatcher.Transport.FireOnException(Self.LastSentRequest, EIdConnectTimeout, '10051', 'Host not found');
 
     Check(L.NetworkFailed, 'Listener not notified of failure: did the ReInvite notify the Session?');
@@ -4455,7 +4403,7 @@ begin
   OldSessionDescription := Session.LocalSessionDescription;
   OldSessionMimeType    := Session.LocalMimeType;
 
-  Session.Modify('new session desc', PlainTextMimeType);
+  Session.Modify('new session desc', 'text/plain');
   Self.ReceiveServiceUnavailable(Self.LastSentRequest);
 
   CheckEquals(OldSessionDescription,
@@ -4693,7 +4641,7 @@ begin
   Session := Self.CreateAndEstablishSession;
 
   Self.MarkSentRequestCount;
-  Session.Modify(Self.SimpleSdp.AsString, SdpMimeType);
+  Session.Modify(Self.SimpleSdp, SdpMimeType);
   CheckRequestSent(Session.ClassName + ': No INVITE sent');
 
   Self.ReceiveOkWithBody(Self.LastSentRequest,
@@ -4702,7 +4650,7 @@ begin
   Check(Self.OnModifiedSessionFired,
         Session.ClassName + ': OnModifiedSession didn''t fire');
 
-  CheckEquals(Self.SimpleSdp.AsString,
+  CheckEquals(Self.SimpleSdp,
               Session.LocalSessionDescription,
               'Session.LocalSessionDescription');
   CheckEquals(SdpMimeType,
@@ -4831,7 +4779,7 @@ begin
   //  ---       INVITE 2       ---> (with same body as INVITE 1)
 
   Session := Self.CreateAndEstablishSession;
-  Session.Modify(Body, PlainTextMimeType);
+  Session.Modify(Body, 'text/plain');
 
   // Inbound sessions can have a ModifyWaitTime of 0 - and the DebugTimer's
   // set so that it fires zero wait events immediately. Thus, for this test,
@@ -4868,8 +4816,8 @@ begin
   Self.SentRequestTerminated  := false;
 
   Self.Invite.ContentType   := SdpMimeType;
-  Self.Invite.Body          := Self.SimpleSdp.AsString;
-  Self.Invite.ContentLength := Length(Self.SimpleSdp.AsString);
+  Self.Invite.Body          := Self.SimpleSdp;
+  Self.Invite.ContentLength := Length(Self.Invite.Body);
 end;
 
 procedure TestTIdSipInboundSession.TearDown;
@@ -5096,13 +5044,13 @@ begin
               Self.Session.LocalSessionDescription,
               'Local session description known');
 
-  Self.Session.AcceptCall(Self.SimpleSdp.AsString, SdpMimeType);
-  CheckEquals(Self.SimpleSdp.AsString,
+  Self.Session.AcceptCall(Self.SimpleSdp, SdpMimeType);
+  CheckEquals(Self.SimpleSdp,
               Self.Session.LocalSessionDescription,
               'Local session description (offer) not known');
 
-  Self.ReceiveAckWithBody(Self.SimpleSdp.AsString, SdpMimeType);
-  CheckEquals(Self.SimpleSdp.AsString,
+  Self.ReceiveAckWithBody(Self.SimpleSdp, SdpMimeType);
+  CheckEquals(Self.SimpleSdp,
               Self.Session.RemoteSessionDescription,
               'Remote session description (answer) not known');
 end;
@@ -5122,9 +5070,9 @@ begin
   // <---  ACK with no SDP   ---
 
   Self.RemoteContentType := SdpMimeType;
-  Self.RemoteDesc        := Self.MultiStreamSdp.AsString;  
+  Self.RemoteDesc        := Self.MultiStreamSdp;
 
-  LocalDesc  := Self.SimpleSdp.AsString;
+  LocalDesc  := Self.SimpleSdp;
   RemoteDesc := Self.RemoteDesc;
 
   Self.CreateAction;
@@ -8874,7 +8822,7 @@ begin
 end;
 
 //* TestTIdSipSessionRejectWait Published methods ******************************
-
+{
 procedure TestTIdSipSessionRejectWait.TestTrigger;
 begin
   Self.MarkSentResponseCount;
@@ -8884,7 +8832,7 @@ begin
   CheckEquals(Self.StatusCode,   Self.LastSentResponse.StatusCode, 'Unexpected Status-Code');
   CheckEquals(Self.ReasonPhrase, Self.LastSentResponse.StatusText, 'Unexpected ReasonPhrase');
 end;
-
+}
 initialization
   RegisterTest('Invite Module tests', Suite);
 end.
