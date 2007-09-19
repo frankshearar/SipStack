@@ -472,7 +472,6 @@ type
   // requests involved with establishing a call.
   TIdSipMessageModule = class(TIdRegisteredObject)
   private
-    fID:        String;
     fUserAgent: TIdSipAbstractCore;
 
     function  ConvertToHeader(ValueList: TStrings): String;
@@ -518,18 +517,7 @@ type
     function  SupportsMimeType(const MimeType: String): Boolean;
     function  WillAccept(Request: TIdSipRequest): Boolean; virtual;
 
-    property ID:        String             read fID;
     property UserAgent: TIdSipAbstractCore read fUserAgent;
-  end;
-
-  TIdSipMessageModuleRegistry = class(TObject)
-  private
-    class function ModuleAt(Index: Integer): TIdSipMessageModule;
-    class function ModuleRegistry: TStrings;
-  public
-    class function  FindModule(const ModuleID: String): TIdSipMessageModule;
-    class function  RegisterModule(Instance: TIdSipMessageModule): String;
-    class procedure UnregisterModule(const ModuleID: String);
   end;
 
   // I represent the module selected when a request doesn't match any other
@@ -2554,14 +2542,10 @@ begin
   Self.AllowedContentTypeList := Self.CreateListWithoutDuplicates(false);
   Self.Listeners              := TIdNotificationList.Create;
   Self.fUserAgent             := UA;
-
-  Self.fID := TIdSipMessageModuleRegistry.RegisterModule(Self);
 end;
 
 destructor TIdSipMessageModule.Destroy;
 begin
-  TIdSipMessageModuleRegistry.UnregisterModule(Self.ID);
-
   Self.Listeners.Free;
   Self.AllowedContentTypeList.Free;
   Self.AcceptsMethodsList.Free;
@@ -2858,53 +2842,6 @@ begin
   finally
     Response.Free;
   end;
-end;
-
-//******************************************************************************
-//* TIdSipMessageModuleRegistry                                                *
-//******************************************************************************
-//* TIdSipMessageModuleRegistry Public methods *********************************
-
-class function TIdSipMessageModuleRegistry.FindModule(const ModuleID: String): TIdSipMessageModule;
-var
-  Index: Integer;
-begin
-  Index := Self.ModuleRegistry.IndexOf(ModuleID);
-
-  if (Index = ItemNotFoundIndex) then
-    Result := nil
-  else
-    Result := Self.ModuleAt(Index);
-end;
-
-class function TIdSipMessageModuleRegistry.RegisterModule(Instance: TIdSipMessageModule): String;
-begin
-  repeat
-    Result := GRandomNumber.NextHexString;
-  until (Self.ModuleRegistry.IndexOf(Result) = ItemNotFoundIndex);
-
-  Self.ModuleRegistry.AddObject(Result, Instance);
-end;
-
-class procedure TIdSipMessageModuleRegistry.UnregisterModule(const ModuleID: String);
-var
-  Index: Integer;
-begin
-  Index := Self.ModuleRegistry.IndexOf(ModuleID);
-  if (Index <> ItemNotFoundIndex) then
-    Self.ModuleRegistry.Delete(Index);
-end;
-
-//* TIdSipMessageModuleRegistry Private methods ********************************
-
-class function TIdSipMessageModuleRegistry.ModuleAt(Index: Integer): TIdSipMessageModule;
-begin
-  Result := TIdSipMessageModule(Self.ModuleRegistry.Objects[Index]);
-end;
-
-class function TIdSipMessageModuleRegistry.ModuleRegistry: TStrings;
-begin
-  Result := GMessageModules;
 end;
 
 //******************************************************************************

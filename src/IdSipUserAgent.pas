@@ -31,7 +31,6 @@ type
     fFrom:                     TIdSipFromHeader;
     fRegisterModule:           TIdSipOutboundRegisterModule;
     fRoutePath:                TIdSipRoutePath;
-    fID:                       String;
     fInviteModule:             TIdSipInviteModule;
     HasRegistered:             Boolean;
 
@@ -79,23 +78,12 @@ type
     property DoNotDisturb:           Boolean                      read GetDoNotDisturb write SetDoNotDisturb;
     property DoNotDisturbMessage:    String                       read fDoNotDisturbMessage write fDoNotDisturbMessage;
     property From:                   TIdSipFromHeader             read fFrom write SetFrom;
-    property ID:                     String                       read fID;
     property InitialResendInterval:  Cardinal                     read GetInitialResendInterval write SetInitialResendInterval;
     property InviteModule:           TIdSipInviteModule           read fInviteModule;
     property ProgressResendInterval: Cardinal                     read GetProgressResendInterval write SetProgressResendInterval;
     property RegisterModule:         TIdSipOutboundRegisterModule read fRegisterModule;
     property RoutePath:              TIdSipRoutePath              read fRoutePath write SetRoutePath;
     property Username:               String                       read GetUsername write SetUsername;
-  end;
-
-  TIdSipUserAgentRegistry = class(TObject)
-  private
-    class function UserAgentAt(Index: Integer): TIdSipUserAgent;
-    class function UserAgentRegistry: TStrings;
-  public
-    class function  RegisterUserAgent(Instance: TIdSipUserAgent): String;
-    class function  FindUserAgent(const UserAgentID: String): TIdSipUserAgent;
-    class procedure UnregisterUserAgent(const UserAgentID: String);
   end;
 
   TIdSipPendingLocalResolutionAction = class;
@@ -497,8 +485,6 @@ begin
   Self.From.Value             := Self.DefaultFrom;
   Self.HasRegistered          := false;
   Self.InitialResendInterval  := DefaultT1;
-
-  Self.fID := TIdSipUserAgentRegistry.RegisterUserAgent(Self);
 end;
 
 destructor TIdSipUserAgent.Destroy;
@@ -509,8 +495,6 @@ begin
   //
   // Thus we destroy these objects AFTER the inherited Destroy, because the base
   // class could well expect these objects to still exist.
-
-  TIdSipUserAgentRegistry.UnregisterUserAgent(Self.ID);
 
   if Self.HasRegistered then
     Self.UnregisterFrom(Self.Registrar).Send;
@@ -792,53 +776,6 @@ end;
 procedure TIdSipUserAgent.SetUsername(Value: String);
 begin
   Self.From.DisplayName := Value;
-end;
-
-//******************************************************************************
-//* TIdSipUserAgentRegistry                                                    *
-//******************************************************************************
-//* TIdSipUserAgentRegistry Public methods *************************************
-
-class function TIdSipUserAgentRegistry.RegisterUserAgent(Instance: TIdSipUserAgent): String;
-begin
-  repeat
-    Result := GRandomNumber.NextHexString;
-  until (Self.UserAgentRegistry.IndexOf(Result) = ItemNotFoundIndex);
-
-  Self.UserAgentRegistry.AddObject(Result, Instance);
-end;
-
-class function TIdSipUserAgentRegistry.FindUserAgent(const UserAgentID: String): TIdSipUserAgent;
-var
-  Index: Integer;
-begin
-  Index := Self.UserAgentRegistry.IndexOf(UserAgentID);
-
-  if (Index = ItemNotFoundIndex) then
-    Result := nil
-  else
-    Result := Self.UserAgentAt(Index);
-end;
-
-class procedure TIdSipUserAgentRegistry.UnregisterUserAgent(const UserAgentID: String);
-var
-  Index: Integer;
-begin
-  Index := Self.UserAgentRegistry.IndexOf(UserAgentID);
-  if (Index <> ItemNotFoundIndex) then
-    Self.UserAgentRegistry.Delete(Index);
-end;
-
-//* TIdSipUserAgentRegistry Private methods ************************************
-
-class function TIdSipUserAgentRegistry.UserAgentAt(Index: Integer): TIdSipUserAgent;
-begin
-  Result := TIdSipUserAgent(Self.UserAgentRegistry.Objects[Index])
-end;
-
-class function TIdSipUserAgentRegistry.UserAgentRegistry: TStrings;
-begin
-  Result := GUserAgents;
 end;
 
 //******************************************************************************
@@ -1960,11 +1897,4 @@ begin
   Self.fConfiguration.Assign(Value);
 end;
 
-initialization
-  GUserAgents := TStringList.Create;
-finalization
-// These objects are purely memory-based, so it's safe not to free them here.
-// Still, perhaps we need to review this methodology. How else do we get
-// something like class variables?
-//  GUserAgents.Free;
 end.

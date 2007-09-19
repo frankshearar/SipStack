@@ -779,19 +779,6 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestTriggerWithIDOfNonexistentObject;
-    procedure TestTriggerWithIDOfWrongTypeOfObject;
-  end;
-
-  TestTIdSipInboundSubscriptionNotifyWait = class(TIdSipInboundSubscriptionTestCase)
-  private
-    MimeType:     String;
-    Notification: String;
-  protected
-    function WaitType: TIdSipActionWaitClass; override;
-  public
-    procedure SetUp; override;
-  published
     procedure TestTrigger;
     procedure TestTriggerWithIDOfNonexistentObject;
     procedure TestTriggerWithIDOfWrongTypeOfObject;
