@@ -752,6 +752,21 @@ type
     procedure TestTriggerOutboundSubscription;
   end;
 
+  TestTIdSipSubscriptionRenotify = class(TSubscribeTestCase)
+  private
+    Block:        TIdSipSubscriptionRenotify;
+    Subscription: TIdSipInboundSubscription;
+  protected
+    procedure OnSubscriptionRequest(UserAgent: TIdSipAbstractCore;
+                                    Subscription: TIdSipInboundSubscription); override;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTrigger;
+    procedure TestTriggerOnWrongTypeOfAction;
+  end;
+
   TestTIdSipOutboundSubscriptionRefreshWait = class(TSubscribeTestCase)
   private
     NewDuration:  Cardinal;
@@ -763,6 +778,19 @@ type
   public
     procedure SetUp; override;
     procedure TearDown; override;
+  published
+    procedure TestTriggerWithIDOfNonexistentObject;
+    procedure TestTriggerWithIDOfWrongTypeOfObject;
+  end;
+
+  TestTIdSipInboundSubscriptionNotifyWait = class(TIdSipInboundSubscriptionTestCase)
+  private
+    MimeType:     String;
+    Notification: String;
+  protected
+    function WaitType: TIdSipActionWaitClass; override;
+  public
+    procedure SetUp; override;
   published
     procedure TestTrigger;
     procedure TestTriggerWithIDOfNonexistentObject;
@@ -1001,6 +1029,7 @@ begin
   Result.AddTest(TestTIdSipInboundReferral.Suite);
   Result.AddTest(TestTIdSipOutboundReferral.Suite);
   Result.AddTest(TestTIdSipSubscriptionExpires.Suite);
+  Result.AddTest(TestTIdSipSubscriptionRenotify.Suite);
   Result.AddTest(TestTIdSipSubscriptionRetryWait.Suite);
   Result.AddTest(TestTIdSipOutboundSubscriptionRefreshWait.Suite);
   Result.AddTest(TestTIdSipInboundSubscriptionNotifyWait.Suite);
@@ -5301,6 +5330,68 @@ begin
 
   Check(Self.OutSubscription.Terminating,
         'Subscription''s not terminating');
+end;
+
+//******************************************************************************
+//* TestTIdSipSubscriptionRenotify                                             *
+//******************************************************************************
+//* TestTIdSipSubscriptionRenotify Public methods ******************************
+
+procedure TestTIdSipSubscriptionRenotify.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Block := TIdSipSubscriptionRenotify.Create;
+
+  Self.ReceiveSubscribe(TIdSipTestPackage.EventPackage);
+end;
+
+procedure TestTIdSipSubscriptionRenotify.TearDown;
+begin
+  Self.Block.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipSubscriptionRenotify Protected methods ***************************
+
+procedure TestTIdSipSubscriptionRenotify.OnSubscriptionRequest(UserAgent: TIdSipAbstractCore;
+                                                               Subscription: TIdSipInboundSubscription);
+begin
+  Self.Subscription := Subscription;
+end;
+
+//* TestTIdSipSubscriptionRenotify Publishedr methods **************************
+
+procedure TestTIdSipSubscriptionRenotify.TestTrigger;
+var
+  OldPackageState: String;
+begin
+  Self.MarkSentRequestCount;
+  Check(Assigned(Self.Subscription), 'OnSubscriptionRequest didn''t fire');
+  Self.Subscription.Accept;
+  CheckRequestSent('No NOTIFY sent');
+  CheckEquals(MethodNotify, Self.LastSentRequest.Method, 'Unexpected request sent');
+
+  OldPackageState := Self.LastSentRequest.Body;
+
+  Self.MarkSentRequestCount;
+  Self.Block.Execute(Self.Subscription);
+  CheckRequestSent('No (re-)NOTIFY sent, so block didn''t execute properly');
+  CheckEquals(MethodNotify, Self.LastSentRequest.Method, 'Unexpected request sent for renotify');
+
+  CheckEquals(OldPackageState, Self.LastSentRequest.Body, 're-NOTIFY package state');
+end;
+
+procedure TestTIdSipSubscriptionRenotify.TestTriggerOnWrongTypeOfAction;
+var
+  Refer: TIdSipOutboundReferral;
+begin
+  Refer := Self.Module.Refer(Self.Destination, Self.Destination);
+
+  Self.MarkSentRequestCount;
+  Self.Block.Execute(Refer);
+  CheckNoRequestSent('Block didn''t abort execution');
 end;
 
 //******************************************************************************
