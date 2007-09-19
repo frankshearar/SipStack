@@ -635,6 +635,7 @@ procedure TestTIdSipStackInterface.SetUp;
 var
   BasicConf: TStrings;
   Conf:      TIdSipStackConfigurator;
+  T:         TIdSipTransport;
 begin
   inherited SetUp;
 
@@ -665,7 +666,9 @@ begin
     BasicConf.Free;
   end;
 
-  Self.RemoteMockTransport := TIdSipDebugTransportRegistry.TransportRunningOn(Self.TargetAddress, Self.TargetPort) as TIdSipMockTransport;
+  T := TIdSipDebugTransportRegistry.TransportRunningOn(Self.TargetAddress, Self.TargetPort);
+  Check(T is TIdSipMockTransport, 'Unexpected transport type (' + T.ClassName + ') running on ' + Self.TargetAddress + ':' + IntToStr(Self.TargetPort));
+  Self.RemoteMockTransport := T as TIdSipMockTransport;
   CheckEquals(Self.TargetAddress, Self.RemoteMockTransport.FirstIPBound, 'DebugTransportRegistry messed up finding RemoteMockTransport');
 
   Self.LocalAddress  := '10.0.0.6';
@@ -685,7 +688,9 @@ begin
   end;
   Self.Intf.Resume;
 
-  Self.MockTransport := TIdSipDebugTransportRegistry.TransportRunningOn(Self.LocalAddress, Self.LocalPort) as TIdSipMockTransport;
+  T := TIdSipDebugTransportRegistry.TransportRunningOn(Self.LocalAddress, Self.LocalPort);
+  Check(T is TIdSipMockTransport, 'Unexpected transport type (' + T.ClassName + ') running on ' + Self.LocalAddress + ':' + IntToStr(Self.LocalPort));
+  Self.MockTransport := T as TIdSipMockTransport;
   CheckEquals(Self.LocalAddress, Self.MockTransport.FirstIPBound, 'DebugTransportRegistry messed up finding MockTransport');
 
   // The registrar URI MUST NOT be that of RemoteUA, because RemoteUA will not
@@ -2169,12 +2174,16 @@ end;
 //* TestTIdSipColocatedRegistrarExtension Public methods ***********************
 
 procedure TestTIdSipColocatedRegistrarExtension.SetUp;
+var
+  T: TIdSipTransport;
 begin
   inherited SetUp;
 
   Self.Contacts := TIdSipContacts.Create;
 
-  Self.MockTransport := TIdSipDebugTransportRegistry.TransportRunningOn(Self.LocalAddress, Self.LocalPort) as TIdSipMockTransport;
+  T := TIdSipDebugTransportRegistry.TransportRunningOn(Self.LocalAddress, Self.LocalPort);
+  Check(T is TIdSipMockTransport, 'Unexpected transport type (' + T.ClassName + ') running on ' + Self.LocalAddress + ':' + IntToStr(Self.LocalPort));
+  Self.MockTransport := T as TIdSipMockTransport;
 
   Self.Reg    := Self.Iface.AttachExtension(TIdSipColocatedRegistrarExtension) as TIdSipColocatedRegistrarExtension;
   Self.Target := TIdSipUri.Create('sip:case@fried-neurons.org');

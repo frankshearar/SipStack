@@ -322,14 +322,12 @@ begin
   inherited SetUp;
 
   Self.Wait := TIdNullWait.Create;
-  Self.Wait.Data          := TObject.Create;
   Self.Wait.DebugWaitTime := $decafbad;
   Self.Wait.TriggerTime   := Now;
 end;
 
 procedure TestTIdWait.TearDown;
 begin
-  Self.Wait.Data.Free;
   Self.Wait.Free;
 
   inherited TearDown;
@@ -343,7 +341,6 @@ var
 begin
   Other := Self.Wait.Copy;
   try
-    Check(Self.Wait.Data = Other.Data, 'Data');
     CheckEquals(IntToHex(Self.Wait.DebugWaitTime, 8),
                 IntToHex(Other.DebugWaitTime, 8),
                 'DebugWaitTime');

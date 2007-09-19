@@ -8533,14 +8533,9 @@ begin
 
   ArbitraryObject := TIdSipOutboundCancel.Create(Self.Core);
   try
-    TIdObjectRegistry.RegisterObject(ArbitraryObject);
-    try
-      Self.Wait.SessionID := ArbitraryObject.ID;
+    Self.Wait.SessionID := ArbitraryObject.ID;
 
-      CheckTriggerDoesNothing(Self.Wait, 'Wait didn''t check object type before triggering');
-    finally
-      TIdObjectRegistry.UnregisterObject(ArbitraryObject.ID);
-    end;
+    CheckTriggerDoesNothing(Self.Wait, 'Wait didn''t check object type before triggering');
   finally
     ArbitraryObject.Free;
   end;

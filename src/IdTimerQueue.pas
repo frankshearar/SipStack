@@ -29,7 +29,6 @@ type
   // TriggerTime to (Now + 10000).
   TIdWait = class(TObject)
   private
-    fData:          TObject;
     fDebugWaitTime: Cardinal;
     fTriggerTime:   TDateTime;
   public
@@ -38,11 +37,10 @@ type
     function  Copy: TIdWait; virtual;
     function  Due: Boolean;
     function  MatchEvent(Event: Pointer): Boolean; virtual;
-    procedure Schedule(Timer: TIdTimerQueue; Data: TObject; Delay: Cardinal);
+    procedure Schedule(Timer: TIdTimerQueue; Delay: Cardinal);
     function  TimeToWait: Cardinal;
     procedure Trigger; virtual;
 
-    property Data:          TObject   read fData write fData;
     property DebugWaitTime: Cardinal  read fDebugWaitTime write fDebugWaitTime;
     property TriggerTime:   TDateTime read fTriggerTime write fTriggerTime;
   end;
@@ -79,9 +77,6 @@ type
     Listeners:        TIdNotificationList;
     WaitEvent:        TEvent;
 
-    procedure Add(MillisecsWait: Cardinal;
-                  Event: TIdWait;
-                  Data: TObject);
     procedure ClearEvents;
     function  EarliestEvent: TIdWait;
     function  GetDefaultTimeout: Cardinal;
@@ -253,7 +248,6 @@ end;
 function TIdWait.Copy: TIdWait;
 begin
   Result := TIdWaitClass(Self.ClassType).Create;
-  Result.Data          := Self.Data;
   Result.DebugWaitTime := Self.DebugWaitTime;
   Result.TriggerTime   := Self.TriggerTime;
 end;
@@ -268,9 +262,8 @@ begin
   Result := Self = TObject(Event);
 end;
 
-procedure TIdWait.Schedule(Timer: TIdTimerQueue; Data: TObject; Delay: Cardinal);
+procedure TIdWait.Schedule(Timer: TIdTimerQueue; Delay: Cardinal);
 begin
-  Self.Data          := Data;
   Self.DebugWaitTime := Delay;
   Self.TriggerTime   := Now + OneMillisecond*Delay;
 end;
@@ -332,7 +325,26 @@ end;
 procedure TIdTimerQueue.AddEvent(MillisecsWait: Cardinal;
                                  Event: TIdWait);
 begin
-  Self.Add(MillisecsWait, Event, nil);
+  Self.LockTimer;
+  try
+    try
+      Self.EventList.Add(Event);
+      Event.Schedule(Self, MillisecsWait);
+
+      Self.SortEvents;
+    except
+      if (Self.EventList.IndexOf(Event) <> ItemNotFoundIndex) then
+        Self.EventList.Remove(Event)
+      else
+        Event.Free;
+
+      raise;
+    end;
+
+    Self.WaitEvent.SetEvent;
+  finally
+    Self.UnlockTimer;
+  end;
 end;
 
 procedure TIdTimerQueue.AddListener(Listener: IIdTimerQueueListener);
@@ -446,32 +458,6 @@ begin
 end;
 
 //* TIdTimerQueue Private methods **********************************************
-
-procedure TIdTimerQueue.Add(MillisecsWait: Cardinal;
-                            Event: TIdWait;
-                            Data: TObject);
-begin
-  Self.LockTimer;
-  try
-    try
-      Self.EventList.Add(Event);
-      Event.Schedule(Self, Data, MillisecsWait);
-
-      Self.SortEvents;
-    except
-      if (Self.EventList.IndexOf(Event) <> ItemNotFoundIndex) then
-        Self.EventList.Remove(Event)
-      else
-        Event.Free;
-
-      raise;
-    end;
-
-    Self.WaitEvent.SetEvent;
-  finally
-    Self.UnlockTimer;
-  end;
-end;
 
 procedure TIdTimerQueue.ClearEvents;
 begin
