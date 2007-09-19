@@ -1513,7 +1513,7 @@ begin
   Desc.MediaType := mtText;
   Desc.Port := 666;
   Desc.PortCount := 6;
-  Desc.Transport := Id_SDP_RTPAVP;
+  Desc.Protocol := Id_SDP_RTPAVP;
 end;
 
 //* TestTIdSdpMediaDescription Published methods *******************************
@@ -1639,7 +1639,7 @@ begin
     MediaDesc.PortCount := Self.M.PortCount;
     Check(not Self.M.Equals(MediaDesc), 'Info added');
 
-    MediaDesc.Transport := Self.M.Transport;
+    MediaDesc.Protocol := Self.M.Protocol;
     Check(not Self.M.Equals(MediaDesc), 'Transport added');
   finally
     MediaDesc.Free;
@@ -1712,7 +1712,7 @@ var
 begin
   Self.M.MediaType := mtAudio;
   Self.M.Port      := 49230;
-  Self.M.Transport := 'RTP/AVP';
+  Self.M.Protocol := 'RTP/AVP';
 
   S := TStringStream.Create('');
   try
@@ -1754,7 +1754,7 @@ begin
   Self.M.Key.Value       := 'DEADBEEF';
   Self.M.MediaType       := mtAudio;
   Self.M.Port            := 49230;
-  Self.M.Transport       := 'RTP/AVP';
+  Self.M.Protocol        := 'RTP/AVP';
 
   S := TStringStream.Create('');
   try
@@ -1782,7 +1782,7 @@ begin
   Self.M.MediaType := mtAudio;
   Self.M.Port      := 49230;
   Self.M.PortCount := 4;
-  Self.M.Transport := 'RTP/AVP';
+  Self.M.Protocol  := 'RTP/AVP';
 
   S := TStringStream.Create('');
   try
@@ -1806,7 +1806,7 @@ begin
   // Stuff not relevant to the test per se, but just to make the m header well-formed.
   Self.M.AddFormat('0');
   Self.M.Port      := 49230;
-  Self.M.Transport := 'RTP/AVP';
+  Self.M.Protocol  := 'RTP/AVP';
 
   S := TStringStream.Create('');
   try
@@ -2877,10 +2877,10 @@ begin
   Self.M[0].MediaType := mtAudio;
   Self.M[0].AddFormat('0');
   Self.M[0].Port := 0;
-  Self.M[0].Transport := 'TCP';
+  Self.M[0].Protocol := 'TCP';
   Self.M[1].MediaType := mtText;
   Self.M[1].Port := 1;
-  Self.M[1].Transport := 'RTP/AVP';
+  Self.M[1].Protocol := 'RTP/AVP';
   Self.M[1].AddFormat('1');
   Self.M[1].AddFormat('2');
   Self.M[1].AddFormat('3');
@@ -3839,7 +3839,7 @@ begin
     MD.AddAttribute(RTPMapAttribute, '98 t140/1000');
 
     MD.MediaType := mtText;
-    MD.Transport := Id_SDP_RTPAVP;
+    MD.Protocol  := Id_SDP_RTPAVP;
     MD.Port      := 8000;
 
     Self.Payload.PrintOn(S);
@@ -5062,8 +5062,8 @@ begin
                 Self.Payload.MediaDescriptionAt(0).PortCount,
                 'MediaDescriptionAt(0).PortCount');
     CheckEquals('RTP/AVP',
-                Self.Payload.MediaDescriptionAt(0).Transport,
-                'MediaDescriptionAt(0).Transport');
+                Self.Payload.MediaDescriptionAt(0).Protocol,
+                'MediaDescriptionAt(0).Protocol');
     CheckEquals('Information',
                 Self.Payload.MediaDescriptionAt(0).Info,
                 'MediaDescriptionAt(0).Info');
@@ -5258,8 +5258,8 @@ begin
                 Self.Payload.MediaDescriptionAt(I).PortCount,
                 'MediaDescriptions[' + IntToStr(I) + '].PortCount');
     CheckEquals('RTP/AVP',
-                Self.Payload.MediaDescriptionAt(I).Transport,
-                'MediaDescriptions[' + IntToStr(I) + '].Transport');
+                Self.Payload.MediaDescriptionAt(I).Protocol,
+                'MediaDescriptions[' + IntToStr(I) + '].Protocol');
     CheckEquals('More information than you can shake a stick at',
                 Self.Payload.MediaDescriptionAt(I).Info,
                 'MediaDescriptions[' + IntToStr(I) + '].Info');
@@ -5533,8 +5533,8 @@ begin
                 Self.Payload.MediaDescriptionAt(0).PortCount,
                 'MediaDescriptionAt(0).PortCount');
     CheckEquals('RTP/AVP',
-                Self.Payload.MediaDescriptionAt(0).Transport,
-                'MediaDescriptionAt(0).Transport');
+                Self.Payload.MediaDescriptionAt(0).Protocol,
+                'MediaDescriptionAt(0).Protocol');
     CheckEquals('Information',
                 Self.Payload.MediaDescriptionAt(0).Info,
                 'MediaDescriptionAt(0).Info');
@@ -7282,10 +7282,10 @@ begin
   try
     CheckEquals(2, Desc.MediaDescriptionCount, 'Incorrect number of media descriptions');
 
-    CheckEquals('RTP/AVP', Desc.MediaDescriptionAt(0).Transport, 'Transport changed: 1st desc');
+    CheckEquals('RTP/AVP', Desc.MediaDescriptionAt(0).Protocol, 'Protocol changed: 1st desc');
     CheckEquals(RefusedPortSentinel, Desc.MediaDescriptionAt(0).Port, 'Port changed: 1st desc');
 
-    CheckEquals('RTP/AVP', Desc.MediaDescriptionAt(1).Transport, 'Transport changed: 2nd desc');
+    CheckEquals('RTP/AVP', Desc.MediaDescriptionAt(1).Protocol, 'Protocol changed: 2nd desc');
     CheckEquals(NormalPort, Desc.MediaDescriptionAt(1).Port, 'Port changed: 2nd desc');
   finally
     Desc.Free;

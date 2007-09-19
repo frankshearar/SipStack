@@ -159,7 +159,7 @@ type
     FormatList:        TStrings;
     fPort:             Cardinal;
     fPortCount:        Cardinal;
-    fTransport:        String;
+    fProtocol:         String;
 
     procedure ClearKey;
     function  GetAttributes: TIdSdpAttributes;
@@ -204,7 +204,7 @@ type
     property Port:                    Cardinal               read fPort write fPort;
     property PortCount:               Cardinal               read fPortCount write fPortCount;
     property RTPMapAttributes:        TIdSdpRTPMapAttributes read GetRTPMapAttributes;
-    property Transport:               String                 read fTransport write fTransport;
+    property Protocol:                String                 read fProtocol write fProtocol;
   end;
 
   TIdSdpOrigin = class(TIdPrintable)
@@ -1369,7 +1369,7 @@ begin
     Self.MediaType := Other.MediaType;
     Self.Port      := Other.Port;
     Self.PortCount := Other.PortCount;
-    Self.Transport := Other.Transport;
+    Self.Protocol := Other.Protocol;
   end
   else inherited Assign(Src);
 end;
@@ -1541,7 +1541,7 @@ begin
   if (Self.PortCount > 1) then
     S := S + '/' + IntToStr(PortCount);
 
-  S := S + ' ' + Self.Transport;
+  S := S + ' ' + Self.Protocol;
 
   for I := 0 to Self.FormatCount - 1 do
     S := S + ' ' + Self.Formats[I];
@@ -3148,7 +3148,7 @@ begin
       raise EParserError.Create(Format(MalformedToken,
                                        [RSSDPMediaDescriptionName,
                                         Name + '=' + OriginalValue]));
-    NewMediaDesc.Transport := Token;
+    NewMediaDesc.Protocol := Token;
 
     while (Value <> '') do begin
       Token := Fetch(Value, ' ');
