@@ -85,7 +85,6 @@ type
     procedure ClearEvents;
     function  EarliestEvent: TIdWait;
     function  GetDefaultTimeout: Cardinal;
-    procedure InternalRemove(Event: Pointer);
     procedure NotifyOfException(OffendingWait: TIdWait; Error: Exception);
     procedure SetDefaultTimeout(Value: Cardinal);
     procedure SortEvents;
@@ -503,28 +502,6 @@ begin
   Self.LockTimer;
   try
     Result := Self.fDefaultTimeout;
-  finally
-    Self.UnlockTimer;
-  end;
-end;
-
-procedure TIdTimerQueue.InternalRemove(Event: Pointer);
-var
-  I: Integer;
-begin
-  // This removes ALL matching wait events matching Event.
-  Self.LockTimer;
-  try
-    I := 0;
-    while (I < Self.EventList.Count) do
-      if Self.EventAt(I).MatchEvent(Event) then begin
-        Self.EventAt(I).Free;
-        Self.EventList.Delete(I);
-      end
-      else
-        Inc(I);
-
-    Self.WaitEvent.SetEvent;
   finally
     Self.UnlockTimer;
   end;

@@ -73,9 +73,6 @@ type
     T1:               TThreadEvent;
     T2:               TThreadEvent;
 
-    procedure CheckNotifyEvent(Sender: TObject);
-    procedure NotifyEventOne(Sender: TObject);
-    procedure NotifyEventTwo(Sender: TObject);
     procedure OnEventOneSet(Sender: TObject);
     procedure OnEventTwoSet(Sender: TObject);
     procedure WaitForAll(Events: array of TEvent;
@@ -476,33 +473,6 @@ begin
 end;
 
 //* TestTIdThreadedTimerQueue Private methods **********************************
-
-procedure TestTIdThreadedTimerQueue.CheckNotifyEvent(Sender: TObject);
-begin
-  Self.Notified := true;
-  Self.ThreadEvent.SetEvent;
-end;
-
-procedure TestTIdThreadedTimerQueue.NotifyEventOne(Sender: TObject);
-begin
-  Self.Lock.Acquire;
-  try
-    Self.OrderOfFire := Self.OrderOfFire + 'a';
-  finally
-    Self.Lock.Release;
-  end;
-end;
-
-procedure TestTIdThreadedTimerQueue.NotifyEventTwo(Sender: TObject);
-begin
-  Self.Lock.Acquire;
-  try
-    Self.OrderOfFire := Self.OrderOfFire + 'b';
-  finally
-    Self.Lock.Release;
-  end;
-  Self.ThreadEvent.SetEvent;
-end;
 
 procedure TestTIdThreadedTimerQueue.OnEventOneSet(Sender: TObject);
 begin

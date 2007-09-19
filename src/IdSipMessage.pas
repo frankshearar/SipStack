@@ -313,9 +313,6 @@ type
     function  GetTTL: Cardinal;
     function  GetUserParameter: String;
     function  HasValidHost: Boolean;
-    function  HasValidPassword: Boolean;
-    function  HasValidUser: Boolean;
-    function  HasValidUserInfo: Boolean;
     function  HeadersAsString: String;
     function  IsKnownParameter(const Name: String): Boolean;
     function  ParamsAsString: String;
@@ -3857,7 +3854,6 @@ var
   WellFormed: Boolean;
 begin
   WellFormed := Self.HasAcceptableScheme
-//        and Self.HasValidUserInfo
         and Self.HasValidHost
         and not Self.Parameters.IsMalformed
         and not Self.Headers.IsMalformed;
@@ -4112,21 +4108,6 @@ begin
     Result := TIdSimpleParser.IsFQDN(Self.Host)
            or TIdIPAddressParser.IsIPv4Address(Self.Host)
            or TIdIPAddressParser.IsIPv6Reference(Self.Host)
-end;
-
-function TIdSipUri.HasValidPassword: Boolean;
-begin
-  Result := Self.ValidPassword(Self.Password);
-end;
-
-function TIdSipUri.HasValidUser: Boolean;
-begin
-  Result := Self.ValidUser(Self.Username);
-end;
-
-function TIdSipUri.HasValidUserInfo: Boolean;
-begin
-  Result := Self.HasValidUser and Self.HasValidPassword;
 end;
 
 function TIdSipUri.HeadersAsString: String;
