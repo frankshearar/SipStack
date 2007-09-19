@@ -888,6 +888,8 @@ procedure TIdSipSubscribeModule.AddPackage(PackageType: TIdSipEventPackageClass)
 var
   NewPkg: TIdSipEventPackage;
 begin
+  if Self.KnowsEvent(PackageType.EventPackage) then Exit;
+
   NewPkg := PackageType.Create(Self);
   Self.PackagePrototypes.Add(NewPkg);
 

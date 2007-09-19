@@ -274,6 +274,7 @@ type
     procedure TestAcceptsMethodsWithReferPackage;
     procedure TestAddListener;
     procedure TestAddPackage;
+    procedure TestAddPackageTwice;
     procedure TestAddReferPackageTwice;
     procedure TestPackage;
     procedure TestPackageFor;
@@ -1321,7 +1322,18 @@ begin
   CheckEquals(TIdSipReferPackage.EventPackage + ', '
             + TIdSipTestPackage.EventPackage,
               Self.Module.AllowedEvents,
-              'After adding ' + TIdSipReferPackage.EventPackage + ' package');
+              'After adding ' + TIdSipTestPackage.EventPackage + ' package');
+end;
+
+procedure TestTIdSipSubscribeModule.TestAddPackageTwice;
+var
+  OldAllowedEvents: String;
+begin
+  Self.Module.AddPackage(TIdSipTestPackage);
+  OldAllowedEvents := Self.Module.AllowedEvents;
+
+  Self.Module.AddPackage(TIdSipTestPackage);
+  CheckEquals(OldAllowedEvents, Self.Module.AllowedEvents, 'Event package duplicate added'); 
 end;
 
 procedure TestTIdSipSubscribeModule.TestAddReferPackageTwice;
