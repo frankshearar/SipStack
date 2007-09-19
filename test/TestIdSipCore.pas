@@ -196,6 +196,17 @@ type
   public
     procedure SetUp; override;
   published
+    procedure TestTriggerOnNonExistentAction;
+    procedure TestTriggerOnWrongTypeOfObject;
+  end;
+
+  TestTIdSipActionSendWait = class(TIdSipActionWaitTestCase)
+  protected
+    procedure CheckTriggerDoesNothing(Msg: String); override;
+    function  WaitType: TIdSipActionWaitClass; override;
+  public
+    procedure SetUp; override;
+  published
     procedure TestTrigger;
   end;
 
