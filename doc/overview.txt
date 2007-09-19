@@ -175,11 +175,33 @@ stack executes in the context of this thread, except for the socket
 layer and the synchronization layer.
 
 The TimerQueue processes TIdWaits, objects that encapsulate a piece of
-code scheduled to run at a particular time.
+code scheduled to run at a particular time. The TimerQueue is not a
+real-time system, but tries to execute Wait objects as soon as
+possible after the Wait's scheduled time.
 
-In the case of the socket layer, servers (TIdSipTcpServer,
-TIdSipUdpServer, etc.) receive messages and add them to the TimerQueue
-for processing.
+When you schedule a Wait object, you give the TimerQueue an offset
+time (in milliseconds) when you want the Wait object to be
+processed. For instance, "TQ.AddEvent(1000, Wait)" schedules Wait to
+be processed one second from Now. The TimerQueue stores the Waits in
+order of execution time, (the order for Waits scheduled very close in
+time to each other is undefined.) and invokes each Wait's Trigger
+method in turn. When it runs out of Waits, it goes to sleep until
+you schedule another Wait, or after some (configurable) amount of
+time. The default timeout value is one second.
+
+Wait objects either store local copies of data they need, or if they
+have to refer to an external object, they store an ID that points into
+an object registry (TIdObjectRegistry). When the Wait triggers, it
+looks up the object. If the object is in the registry (hence not
+destroyed) and of the correct type, the Wait triggers, otherwise it
+does nothing. This allows one to schedule Wait objects (say for a
+TIdSipClientInviteTransaction's Timer D) and destroy the transaction
+without trying to find all scheduled Waits for that object.
+
+Each port on which the stack listens has a thread that waits for
+messages to arrive. When those messages arrive, the servers bundle (a
+copy of) the message into a TIdSipReceiveMessageWait and schedule that
+Wait in the TimerQueue.
 
 In the case of the synchronization layer, when you send a message (say
 through MakeRegistration/Send), you're creating a Wait that is
@@ -235,3 +257,29 @@ IdSipTransport implements the Transport Layer. SipTransports use Indy
 servers (TIdTCPServer, TIdUDPServer, etc) to bind to sockets, send
 data through the IP network, etc. SipTransports provide an
 encapsulated way to access network functionality.
+
+MESSAGE MODULES
+
+Message modules allow you to easily add or remove large chunks of
+functionality to/from a TIdSipAbstractCore. These chunks of
+functionality typically encapsulate all processing around a message
+type. For instance, TIdSipSubscribeModule allows a Transaction-User
+core (in other words, a TIdSipAbstractCore) to process SUBSCRIBE and
+NOTIFY requests, while a TIdSipOptionsModule does the same for the
+OPTIONS request. Note that this shows that a message module might add
+the ability to process multiple request types. NOTIFYs appear only in
+the context of SIP subscriptions, so it makes sense that a
+TIdSipSubscribeModule adds support for both request types.
+
+When a Transaction-User core receives a request it finds the first
+message module that will accept that request.
+
+This implies that message modules must process disjoint sets of
+requests - you must not add a new message module to a Transaction-User
+core that processes INVITEs, say, to a core that already uses a
+TIdSipInviteModule. (If you did, only the first found (probably the
+first added) message module  would process the request.)
+
+If the core can find no accepting message module, it uses the
+TIdSipNullModule. This module accepts all requests, and does nothing
+with them.

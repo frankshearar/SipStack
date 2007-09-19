@@ -38,15 +38,18 @@ v0.6 (2007/xx/yy)
   (instead of in the context of a TIdUdpListenerThread)
 * All methods called "Clone" are now called "Copy".
 * IdSipConsts removed.
-* All "object registries" have been replaced by a single
-  TIdObjectRegistry. All TIdRegisteredObjects (and TIdInterfacedObject
-  is a subclass) register and unregister automatically as they
-  instantiate and are freed.
+* TIdNotifyWait, TIdEventWait removed: these were pretty dangerous
+  (referring to objects that might not exist when the TIdWait finally
+  triggers)
 * All Wait objects that need to reference objects (as opposed to
   storing a copy of data) now use IDs pointing to objects in
   TIdObjectRegistry. Currently, all Waits also have tests verifying
   they behave well (by doing nothing) if given an invalid ID, or an ID
   that points to nothing.
+* All "object registries" have been replaced by a single
+  TIdObjectRegistry. All TIdRegisteredObjects (and TIdInterfacedObject
+  is a subclass) register and unregister automatically as they
+  instantiate and are freed.
 * bugfixes from the unreleased 0.5.4 version:
 ** The registrar returns a 400 Bad Request when it receives a wildcard
    Contact with an Expires header.
