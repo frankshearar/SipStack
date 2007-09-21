@@ -1456,6 +1456,7 @@ type
     function  Copy: TIdSipMessage;
     procedure CopyHeaders(Src: TIdSipMessage;
                           const HeaderName: String);
+    function  Description: String; virtual;
     function  FirstContact: TIdSipContactHeader;
     function  FirstHeader(const HeaderName: String): TIdSipHeader;
     function  HasBody: Boolean;
@@ -1566,6 +1567,7 @@ type
     function  CanEstablishDialog: Boolean; override;
     function  CreateCancel: TIdSipRequest;
     function  DefaultMaxForwards: Cardinal;
+    function  Description: String; override;
     function  DestinationUri: String;
     function  Equals(Msg: TIdSipMessage): Boolean; override;
     function  ExceedsMaximumUdpMessageSize: Boolean;
@@ -1657,7 +1659,7 @@ type
     function  AuthenticateHeader: TIdSipAuthenticateHeader;
     function  CanEstablishDialog: Boolean; override;
     function  CanRetryRequest: Boolean;
-    function  Description: String;
+    function  Description: String; override;
     function  Equals(Msg: TIdSipMessage): Boolean; override;
     function  FirstAuthenticationInfo: TIdSipAuthenticationInfoHeader;
     function  FirstProxyAuthenticate: TIdSipProxyAuthenticateHeader;
@@ -8263,6 +8265,12 @@ begin
   end;
 end;
 
+function TIdSipMessage.Description: String;
+begin
+  // All subclasses must implement this.
+  Result := Self.ClassName + ' needs to override Description';
+end;
+
 function TIdSipMessage.FirstContact: TIdSipContactHeader;
 begin
   Result := Self.FirstHeader(ContactHeaderFull) as TIdSipContactHeader;
@@ -9104,6 +9112,11 @@ end;
 function TIdSipRequest.DefaultMaxForwards: Cardinal;
 begin
   Result := 70;
+end;
+
+function TIdSipRequest.Description: String;
+begin
+  Result := Self.Method;
 end;
 
 function TIdSipRequest.DestinationUri: String;

@@ -160,6 +160,7 @@ type
     procedure TestCreateCancelWithProxyRequire;
     procedure TestCreateCancelWithRequire;
     procedure TestCreateCancelWithRoute;
+    procedure TestDescription;
     procedure TestDestinationUri;
     procedure TestEqualsComplexMessages;
     procedure TestEqualsDifferentBodies;
@@ -254,6 +255,7 @@ type
     procedure TestCanEstablishDialog;
     procedure TestCopy;
     procedure TestCopyMessageMutatedFromString;
+    procedure TestDescription;
     procedure TestEqualsComplexMessages;
     procedure TestEqualsDifferentBodies;
     procedure TestEqualsDifferentHeaders;
@@ -2297,6 +2299,17 @@ begin
   end;
 end;
 
+procedure TestTIdSipRequest.TestDescription;
+var
+  I: Integer;
+begin
+  for I := Low(AllMethods) to High(AllMethods) do begin
+    Self.Request.Method := AllMethods[I];
+
+    CheckEquals(Self.Request.Method, Self.Request.Description, 'Description of a/an ' + Self.Request.Method);
+  end;
+end;
+
 procedure TestTIdSipRequest.TestDestinationUri;
 const
   ProxyUri   = '';
@@ -3935,6 +3948,16 @@ begin
   finally
     Original.Free;
   end;
+end;
+
+procedure TestTIdSipResponse.TestDescription;
+begin
+  Self.Response.StatusCode := SIPRequestTimeout;
+  Self.Response.StatusText := 'You took too long';
+
+  CheckEquals(IntToStr(Self.Response.StatusCode) + ' ' + Self.Response.StatusText,
+              Self.Response.Description,
+              'Description');
 end;
 
 procedure TestTIdSipResponse.TestEqualsComplexMessages;
