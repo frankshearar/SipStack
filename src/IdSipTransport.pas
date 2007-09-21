@@ -14,7 +14,7 @@ interface
 uses
   Classes, Contnrs, IdException, IdInterfacedObject, IdNotification,
   IdRoutingTable, IdSipLocation, IdSipMessage, IdSocketHandle, IdSSLOpenSSL,
-  IdTCPConnection, IdTimerQueue, SyncObjs, SysUtils;
+  IdTCPConnection, IdTimerQueue, LoGGer, SyncObjs, SysUtils;
 
 type
   TIdSipTransport = class;
@@ -60,6 +60,7 @@ type
   private
     fAddress:                  String;
     fHostName:                 String;
+    fLogger:                   TLoGGerThread;
     fPort:                     Cardinal;
     fRoutingTable:             TIdRoutingTable;
     fTimeout:                  Cardinal;
@@ -75,6 +76,18 @@ type
     function  GetPort: Cardinal; virtual;
     function  IndexOfBinding(const Address: String; Port: Cardinal): Integer;
     procedure InstantiateServer; virtual;
+    procedure Log(Description: String;
+                  Severity: TLogVerbosityLevel);
+    procedure LogException(FailedMessage: TIdSipMessage;
+                           E: Exception;
+                           Reason: String);
+    procedure LogReceivedMessage(Msg: TIdSipMessage;
+                                 ReceivedFrom: TIdSipConnectionBindings);
+    procedure LogRejectedMessage(Msg: String;
+                                 Reason: String;
+                                 ReceivedFrom: TIdSipConnectionBindings);
+    procedure LogSentRequest(Request: TIdSipRequest; SentTo: TIdSipConnectionBindings);
+    procedure LogSentResponse(Response: TIdSipResponse; SentTo: TIdSipConnectionBindings);
     procedure NotifyOfReceivedRequest(Request: TIdSipRequest;
                                       ReceivedFrom: TIdSipConnectionBindings);
     procedure NotifyOfReceivedResponse(Response: TIdSipResponse;
@@ -155,6 +168,7 @@ type
     procedure Stop; virtual;
 
     property HostName:     String          read fHostName write fHostName;
+    property Logger:       TLoGGerThread   read fLogger write fLogger;
     property RoutingTable: TIdRoutingTable read fRoutingTable write fRoutingTable;
     property Timeout:      Cardinal        read fTimeout write SetTimeout;
     property Timer:        TIdTimerQueue   read fTimer write SetTimer;
@@ -379,7 +393,7 @@ const
 implementation
 
 uses
-  IdRegisteredObject, IdTCPServer, IdIOHandlerSocket;
+  IdRegisteredObject, IdTCPServer, IdIOHandlerSocket, LogVariables;
 
 var
   GTransportTypes: TStrings;
@@ -747,11 +761,72 @@ procedure TIdSipTransport.InstantiateServer;
 begin
 end;
 
+procedure TIdSipTransport.Log(Description: String;
+                              Severity: TLogVerbosityLevel);
+begin
+  if Assigned(Self.Logger) then
+    Self.Logger.Write(coSipStackLogName, Severity, coLogSourceRefSIPStack, Self.ClassName, 0, Description, '');
+end;
+
+procedure TIdSipTransport.LogException(FailedMessage: TIdSipMessage;
+                                       E: Exception;
+                                       Reason: String);
+const
+  LogMsg = '%s sending %s: %s';
+begin
+  Self.Log(Format(LogMsg, [FailedMessage.Description, E.ClassName, Reason]), LoGGerVerbosityLevelNormal);
+end;
+
+procedure TIdSipTransport.LogReceivedMessage(Msg: TIdSipMessage;
+                                             ReceivedFrom: TIdSipConnectionBindings);
+const
+  LogMsg = 'Received %s from %s:%d on %s:%d';
+begin
+  Self.Log(Format(LogMsg, [Msg.AsString, ReceivedFrom.PeerIP, ReceivedFrom.PeerPort, ReceivedFrom.LocalIP, ReceivedFrom.LocalPort]),
+           LoGGerVerbosityLevelNormal);
+  Self.Log(ReceivedFrom.AsString + CRLF + Msg.AsString,
+           LoGGerVerbosityLevelDebug);
+end;
+
+procedure TIdSipTransport.LogRejectedMessage(Msg: String;
+                                             Reason: String;
+                                             ReceivedFrom: TIdSipConnectionBindings);
+const
+  LogMsg = 'Rejected message starting "%s" from %s:%d on %s:%d: %s';
+begin
+  Self.Log(Format(LogMsg, [Copy(Msg, 1, 30), ReceivedFrom.PeerIP, ReceivedFrom.PeerPort, ReceivedFrom.LocalIP, ReceivedFrom.LocalPort, Reason]),
+           LoGGerVerbosityLevelNormal);
+  Self.Log(ReceivedFrom.AsString + CRLF + Reason + CRLF + Msg,
+           LoGGerVerbosityLevelDebug);
+end;
+
+procedure TIdSipTransport.LogSentRequest(Request: TIdSipRequest; SentTo: TIdSipConnectionBindings);
+const
+  Msg = 'Sent %s to %s:%d from %s:%d';
+begin
+  Self.Log(Format(Msg, [Request.Method, SentTo.PeerIP, SentTo.PeerPort, SentTo.LocalIP, SentTo.LocalPort]),
+           LoGGerVerbosityLevelNormal);
+  Self.Log(SentTo.AsString + CRLF + Request.AsString,
+           LoGGerVerbosityLevelDebug);
+end;
+
+procedure TIdSipTransport.LogSentResponse(Response: TIdSipResponse; SentTo: TIdSipConnectionBindings);
+const
+  Msg = 'Sent %s to %s:%d from %s:%d';
+begin
+  Self.Log(Format(Msg, [Response.Description, SentTo.PeerIP, SentTo.PeerPort, SentTo.LocalIP, SentTo.LocalPort]),
+           LoGGerVerbosityLevelNormal);
+  Self.Log(SentTo.AsString + CRLF + Response.AsString,
+           LoGGerVerbosityLevelDebug);
+end;
+
 procedure TIdSipTransport.NotifyOfReceivedRequest(Request: TIdSipRequest;
                                                   ReceivedFrom: TIdSipConnectionBindings);
 var
   Notification: TIdSipTransportReceiveRequestMethod;
 begin
+  Self.LogReceivedMessage(Request, ReceivedFrom);
+
   Assert(not Request.IsMalformed,
          'A Transport must NEVER send invalid requests up the stack ('
        + Request.ParseFailReason + ')');
@@ -773,6 +848,8 @@ procedure TIdSipTransport.NotifyOfReceivedResponse(Response: TIdSipResponse;
 var
   Notification: TIdSipTransportReceiveResponseMethod;
 begin
+  Self.LogReceivedMessage(Response, ReceivedFrom);
+
   Assert(not Response.IsMalformed,
          'A Transport must NEVER send invalid responses up the stack ('
        + Response.ParseFailReason + ')');
@@ -795,6 +872,8 @@ procedure TIdSipTransport.NotifyOfException(FailedMessage: TIdSipMessage;
 var
   Notification: TIdSipTransportExceptionMethod;
 begin
+  Self.LogException(FailedMessage, E, Reason);
+
   Notification := TIdSipTransportExceptionMethod.Create;
   try
     Notification.Exception     := E;
@@ -813,6 +892,8 @@ procedure TIdSipTransport.NotifyOfRejectedMessage(const Msg: String;
 var
   Notification: TIdSipTransportRejectedMessageMethod;
 begin
+  Self.LogRejectedMessage(Msg, Reason, ReceivedFrom);
+
   Notification := TIdSipTransportRejectedMessageMethod.Create;
   try
     Notification.Msg    := Msg;
@@ -830,6 +911,8 @@ procedure TIdSipTransport.NotifyOfSentRequest(Request: TIdSipRequest;
 var
   Notification: TIdSipTransportSendingRequestMethod;
 begin
+  Self.LogSentRequest(Request, Binding);
+
   Notification := TIdSipTransportSendingRequestMethod.Create;
   try
     Notification.Binding := Binding;
@@ -847,6 +930,8 @@ procedure TIdSipTransport.NotifyOfSentResponse(Response: TIdSipResponse;
 var
   Notification: TIdSipTransportSendingResponseMethod;
 begin
+  Self.LogSentResponse(Response, Binding);
+
   Notification := TIdSipTransportSendingResponseMethod.Create;
   try
     Notification.Binding  := Binding;
@@ -912,7 +997,7 @@ begin
   try
     LocalBinding.Assign(Dest);
 
-    // We expect the subclass to fill in the local IP and port.    
+    // We expect the subclass to fill in the local IP and port.
     Self.SendMessage(R, LocalBinding);
 
     Self.NotifyOfSentRequest(R, LocalBinding);

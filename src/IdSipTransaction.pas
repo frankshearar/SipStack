@@ -14,7 +14,7 @@ interface
 uses
   Classes, Contnrs, IdBaseThread, IdInterfacedObject, IdNotification,
   IdRoutingTable, IdSipAuthentication, IdSipLocation, IdSipLocator,
-  IdSipMessage, IdSipTransport, IdTimerQueue, SysUtils;
+  IdSipMessage, IdSipTransport, IdTimerQueue, LoGGer, SysUtils;
 
 type
   // This covers all states - INVITE, non-INVITE, client, server.
@@ -72,6 +72,7 @@ type
                                       IIdSipTransportListener)
   private
     fLocator:                 TIdSipAbstractLocator;
+    fLogger:                  TLoGGerThread;
     fRoutingTable:            TIdRoutingTable;
     fT1Interval:              Cardinal;
     fT2Interval:              Cardinal;
@@ -130,6 +131,7 @@ type
                                 const Reason: String;
                                 Source: TIdSipConnectionBindings);
     procedure SetLocator(Value: TIdSipAbstractLocator);
+    procedure SetLogger(Value: TLoGGerThread);
     procedure SetRoutingTable(Value: TIdRoutingTable);
     procedure SetTimer(Value: TIdTimerQueue);
   public
@@ -168,6 +170,7 @@ type
     function  WillUseReliableTranport(R: TIdSipMessage): Boolean;
 
     property Locator:      TIdSipAbstractLocator read fLocator write fLocator;
+    property Logger:       TLoGGerThread         read fLogger write SetLogger;
     property RoutingTable: TIdRoutingTable       read fRoutingTable write SetRoutingTable;
     property T1Interval:   Cardinal              read fT1Interval write fT1Interval;
     property T2Interval:   Cardinal              read fT2Interval write fT2Interval;
@@ -679,6 +682,7 @@ begin
   else begin
     T := TIdSipTransportRegistry.TransportTypeFor(Transport).Create;
     T.HostName     := Address;
+    T.Logger       := Self.Logger;
     T.Timer        := Self.Timer;
     T.RoutingTable := Self.RoutingTable;
 
@@ -1105,6 +1109,16 @@ end;
 procedure TIdSipTransactionDispatcher.SetLocator(Value: TIdSipAbstractLocator);
 begin
   Self.fLocator := Value;
+end;
+
+procedure TIdSipTransactionDispatcher.SetLogger(Value: TLoGGerThread);
+var
+  I: Integer;
+begin
+  Self.fLogger := Value;
+
+  for I := 0 to Self.TransportCount - 1 do
+    Self.Transports[I].Logger := Value;
 end;
 
 procedure TIdSipTransactionDispatcher.SetRoutingTable(Value: TIdRoutingTable);

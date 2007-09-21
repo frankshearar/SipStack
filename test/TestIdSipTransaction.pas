@@ -110,6 +110,7 @@ type
     procedure TestAddClientTransaction;
     procedure TestAddServerTransaction;
     procedure TestAddTransportBinding;
+    procedure TestAddTransportBindingAddsLoggerToTransport;
     procedure TestAddTransportBindingAddsTimerToTransport;
     procedure TestAddTransportBindingAddsRoutingTableToTransport;
     procedure TestClearAddAndCountTransports;
@@ -129,6 +130,7 @@ type
     procedure TestSendRequest;
     procedure TestSendRequestOverUdp;
     procedure TestServerInviteTransactionGetsAck;
+    procedure TestSetLoggerSetsTransports;
     procedure TestSetRoutingTableSetsTransports;
     procedure TestStartAllTranspors;
     procedure TestStopAllTranspors;
@@ -714,7 +716,7 @@ implementation
 
 uses
   Classes, IdException, IdRandom, IdRegisteredObject, IdRoutingTable, IdSdp,
-  Math, TypInfo;
+  LoGGer, Math, TypInfo;
 
 function Suite: ITestSuite;
 begin
@@ -1217,6 +1219,25 @@ begin
               'Binding on different transport not added to a new transport');
 end;
 
+procedure TestTIdSipTransactionDispatcher.TestAddTransportBindingAddsLoggerToTransport;
+var
+  L: TLoGGerThread;
+begin
+  // Let's start with a clean slate, as far as transports are concerned.
+  Self.D.Transports.Clear;
+
+  L := TLoGGerThread.Create;
+  try
+    Self.D.Logger := L;
+
+    Self.D.AddTransportBinding(TcpTransport, '127.0.0.1', 1);
+    Check(Self.D.Logger = Self.D.Transports[0].Logger,
+          'Newly-added transport doesn''t use the dispatcher''s Logger');
+  finally
+    L.Free;
+  end;
+end;
+
 procedure TestTIdSipTransactionDispatcher.TestAddTransportBindingAddsTimerToTransport;
 begin
   // Let's start with a clean slate, as far as transports are concerned.
@@ -1583,6 +1604,26 @@ begin
     end;
   finally
     Listener.Free;
+  end;
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestSetLoggerSetsTransports;
+var
+  I:    Integer;
+  NewL: TLoGGerThread;
+begin
+  Self.D.AddTransportBinding(TcpTransport, '127.0.0.1', 5060);
+  Self.D.AddTransportBinding(UdpTransport, '127.0.0.1', 5060);
+
+  NewL := TLoGGerThread.Create;
+  try
+    Self.D.Logger := NewL;
+
+    for I := 0 to Self.D.TransportCount - 1 do
+      Check(NewL = Self.D.Transports[I].Logger,
+            'Transport #' + IntToStr(I) + '''s logger not set');
+  finally
+    NewL.Free;
   end;
 end;
 

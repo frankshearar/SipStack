@@ -15,7 +15,7 @@ uses
   Contnrs, Classes, IdNotification, IdRoutingTable, IdSipAuthentication,
   IdSipCore, IdSipInviteModule, IdSipLocator, IdSipMockLocator,
   IdSipOptionsModule, IdSipMessage, IdSipRegistration, IdSipTransaction,
-  IdSipTransport, IdTimerQueue;
+  IdSipTransport, IdTimerQueue, LoGGer;
 
 type
   TIdSipUserAgent = class;
@@ -448,7 +448,7 @@ implementation
 uses
   IdMockRoutingTable, IdRegisteredObject, IdSimpleParser, IdSipDns,
   IdSipIndyLocator, IdSipLocation, IdSipMockBindingDatabase,
-  IdSipSubscribeModule, IdSystem, IdUnicode, SysUtils;
+  IdSipSubscribeModule, IdSystem, IdUnicode, LogVariables, SysUtils;
 
 //******************************************************************************
 //* Unit Public functions & procedures                                         *
@@ -1419,9 +1419,18 @@ end;
 
 function TIdSipStackConfigurator.CreateLayers(Context: TIdTimerQueue): TIdSipUserAgent;
 begin
+  // We don't give the dispatcher a locator yet, because the configuration file
+  // will tell us what kind of locator to create.
+
   Result := TIdSipUserAgent.Create;
   Result.Timer := Context;
   Result.Dispatcher := TIdSipTransactionDispatcher.Create(Result.Timer, nil);
+
+  Result.Logger := TLoGGerThread.Create;
+  Result.Dispatcher.Logger := Result.Logger;
+
+  Result.Logger.Add(coSipStackLogName);
+  Result.Logger.Logs.LogsByName[coSipStackLogName].FileName := 'debuglog.log';
 end;
 
 function TIdSipStackConfigurator.CreatePlatformRoutingTable: TIdRoutingTable;

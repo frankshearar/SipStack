@@ -72,7 +72,7 @@ uses
   Classes, Contnrs, IdSipDialog, IdException, IdInterfacedObject,
   IdNotification, IdObservable, IdRegisteredObject, IdRoutingTable,
   IdSipAuthentication, IdSipLocation, IdSipLocator, IdSipMessage,
-  IdSipTransaction, IdTimerQueue, SysUtils;
+  IdSipTransaction, IdTimerQueue, LoGGer, SysUtils;
 
 const
   SipStackVersion = '0.6pre';
@@ -300,6 +300,7 @@ type
     fInstanceID:             String;
     fKeyring:                TIdKeyRing;
     fLocator:                TIdSipAbstractLocator;
+    fLogger:                 TLoGGerThread;
     fRealm:                  String;
     fRequireAuthentication:  Boolean;
     fRoutingTable:           TIdRoutingTable;
@@ -455,6 +456,7 @@ type
     property InstanceID:            String                      read fInstanceID write SetInstanceID;
     property Keyring:               TIdKeyRing                  read fKeyring;
     property Locator:               TIdSipAbstractLocator       read fLocator write fLocator;
+    property Logger:                TLoGGerThread               read fLogger write fLogger;
     property Realm:                 String                      read fRealm write SetRealm;
     property RequireAuthentication: Boolean                     read fRequireAuthentication write fRequireAuthentication;
     property RoutingTable:          TIdRoutingTable             read fRoutingTable write fRoutingTable;

@@ -62,6 +62,8 @@ uses
   IdSystem in 'src\IdSystem.pas',
   IdTimerQueue in 'src\IdTimerQueue.pas',
   IdUnicode in 'src\IdUnicode.pas',
+  LoGGer in '..\Common\src\LoGGer.pas',
+  LogVariables in '..\Common\src\LogVariables.pas',
   StringDictionary in 'src\StringDictionary.pas',
   TestFrameworkEx in 'test\TestFrameworkEx.pas',
   TestFrameworkRtp in 'test\TestFrameworkRtp.pas',

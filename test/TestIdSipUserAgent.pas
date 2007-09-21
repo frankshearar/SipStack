@@ -2505,12 +2505,16 @@ begin
           'Transaction-User layer has no Authenticator');
     Check(Assigned(UA.Locator),
           'Transaction-User layer has no Locator');
+    Check(Assigned(UA.Logger),
+          'Transaction-User layer has no Logger');
     Check(Assigned(UA.RoutingTable),
           'Transaction-User layer has no RoutingTable');
     Check(Assigned(UA.Timer),
           'Transaction-User layer has no timer');
     Check(UA.Timer = UA.Dispatcher.Timer,
           'Transaction and Transaction-User layers have different timers');
+    Check(UA.Logger = UA.Dispatcher.Logger,
+          'Transaction and Transaction-User layers have different loggers');
   finally
     UA.Free;
   end;
@@ -2978,6 +2982,8 @@ procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithRegistrar;
 var
   UA: TIdSipUserAgent;
 begin
+  Self.DefaultTimeout := TwoSeconds;
+
   Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
   Self.Configuration.Add('NameServer: MOCK');
   Self.Configuration.Add('Register: sip:127.0.0.1:' + IntToStr(Self.Server.DefaultPort));
