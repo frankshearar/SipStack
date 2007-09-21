@@ -103,10 +103,12 @@ begin
 end;
 
 procedure TThreadingTestCase.SetUp;
+const
+  FiveSeconds = 5000;
 begin
   inherited SetUp;
 
-  Self.DefaultTimeout   := 5000;
+  Self.DefaultTimeout   := FiveSeconds;
   Self.ExceptionType    := Exception;
   Self.ExceptionMessage := 'The event waited for was never fired';
   Self.ThreadEvent      := TEvent.Create(nil, true, false, 'ThreadEvent');
