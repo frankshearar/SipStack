@@ -737,7 +737,7 @@ type
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Data:   TIdEventData         read fData write fData;
+    property Data:   TIdEventData         read fData  write fData;
     property Event:  Cardinal             read fEvent write fEvent;
     property Stack:  TIdSipStackInterface read fStack write fStack;
   end;
