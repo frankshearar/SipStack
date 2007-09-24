@@ -1429,6 +1429,9 @@ procedure TIdSipStackInterface.NotifyEvent(Event: Cardinal;
 var
   Notification: TIdSipStackInterfaceEventMethod;
 begin
+  // I create a COPY of the data in Data, and pass that to the message queue at
+  // Self.UiHandle.
+
   Notification := TIdSipStackInterfaceEventMethod.Create;
   Notification.Data   := Data.Copy;
   Notification.Event  := Event;
