@@ -86,8 +86,7 @@ type
     procedure LogRejectedMessage(Msg: String;
                                  Reason: String;
                                  ReceivedFrom: TIdSipConnectionBindings);
-    procedure LogSentRequest(Request: TIdSipRequest; SentTo: TIdSipConnectionBindings);
-    procedure LogSentResponse(Response: TIdSipResponse; SentTo: TIdSipConnectionBindings);
+    procedure LogSentMessage(Msg: TIdSipMessage; SentTo: TIdSipConnectionBindings);
     procedure NotifyOfReceivedRequest(Request: TIdSipRequest;
                                       ReceivedFrom: TIdSipConnectionBindings);
     procedure NotifyOfReceivedResponse(Response: TIdSipResponse;
@@ -782,7 +781,7 @@ procedure TIdSipTransport.LogReceivedMessage(Msg: TIdSipMessage;
 const
   LogMsg = 'Received %s from %s:%d on %s:%d';
 begin
-  Self.Log(Format(LogMsg, [Msg.AsString, ReceivedFrom.PeerIP, ReceivedFrom.PeerPort, ReceivedFrom.LocalIP, ReceivedFrom.LocalPort]),
+  Self.Log(Format(LogMsg, [Msg.Description, ReceivedFrom.PeerIP, ReceivedFrom.PeerPort, ReceivedFrom.LocalIP, ReceivedFrom.LocalPort]),
            LoGGerVerbosityLevelNormal);
   Self.Log(ReceivedFrom.AsString + CRLF + Msg.AsString,
            LoGGerVerbosityLevelDebug);
@@ -800,23 +799,13 @@ begin
            LoGGerVerbosityLevelDebug);
 end;
 
-procedure TIdSipTransport.LogSentRequest(Request: TIdSipRequest; SentTo: TIdSipConnectionBindings);
+procedure TIdSipTransport.LogSentMessage(Msg: TIdSipMessage; SentTo: TIdSipConnectionBindings);
 const
-  Msg = 'Sent %s to %s:%d from %s:%d';
+  LogMsg = 'Sent %s to %s:%d from %s:%d';
 begin
-  Self.Log(Format(Msg, [Request.Method, SentTo.PeerIP, SentTo.PeerPort, SentTo.LocalIP, SentTo.LocalPort]),
+  Self.Log(Format(LogMsg, [Msg.Description, SentTo.PeerIP, SentTo.PeerPort, SentTo.LocalIP, SentTo.LocalPort]),
            LoGGerVerbosityLevelNormal);
-  Self.Log(SentTo.AsString + CRLF + Request.AsString,
-           LoGGerVerbosityLevelDebug);
-end;
-
-procedure TIdSipTransport.LogSentResponse(Response: TIdSipResponse; SentTo: TIdSipConnectionBindings);
-const
-  Msg = 'Sent %s to %s:%d from %s:%d';
-begin
-  Self.Log(Format(Msg, [Response.Description, SentTo.PeerIP, SentTo.PeerPort, SentTo.LocalIP, SentTo.LocalPort]),
-           LoGGerVerbosityLevelNormal);
-  Self.Log(SentTo.AsString + CRLF + Response.AsString,
+  Self.Log(SentTo.AsString + CRLF + Msg.AsString,
            LoGGerVerbosityLevelDebug);
 end;
 
@@ -911,7 +900,7 @@ procedure TIdSipTransport.NotifyOfSentRequest(Request: TIdSipRequest;
 var
   Notification: TIdSipTransportSendingRequestMethod;
 begin
-  Self.LogSentRequest(Request, Binding);
+  Self.LogSentMessage(Request, Binding);
 
   Notification := TIdSipTransportSendingRequestMethod.Create;
   try
@@ -930,7 +919,7 @@ procedure TIdSipTransport.NotifyOfSentResponse(Response: TIdSipResponse;
 var
   Notification: TIdSipTransportSendingResponseMethod;
 begin
-  Self.LogSentResponse(Response, Binding);
+  Self.LogSentMessage(Response, Binding);
 
   Notification := TIdSipTransportSendingResponseMethod.Create;
   try
