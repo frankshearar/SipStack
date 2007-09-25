@@ -2979,6 +2979,8 @@ begin
 end;
 
 procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithRegistrar;
+const
+  TwoSeconds = 2000; // milliseconds
 var
   UA: TIdSipUserAgent;
 begin
