@@ -102,6 +102,8 @@ type
   //   Listen: UDP AUTO
   //   Listen: UDP 127.0.0.1
   //   Listen: TCP [::1]:5060
+  //   LogFileName: <filename>
+  //   LogVerbosityLevel: 0-8
   //   MappedRoute: <route>/<netmask|number of bits><SP><gateway>[<SP><port>]
   //   MappedRoute: 192.168.0.0/16 192.168.1.1 5060
   //   MappedRoute: 192.168.0.0/255.255.255.0 192.168.1.1
