@@ -12,9 +12,9 @@ unit IdSipStackInterface;
 interface
 
 uses
-  Classes, Contnrs, IdInterfacedObject, IdNotification, IdSipCore,
-  IdSipDialogID, IdSipDns, IdSipInviteModule, IdSipLocation, IdSipMessage,
-  IdSipOptionsModule, IdSipRegistration, IdSipSubscribeModule,
+  Classes, Contnrs, IdInterfacedObject, IdNotification, IdRegisteredObject,
+  IdSipCore, IdSipDialogID, IdSipDns, IdSipInviteModule, IdSipLocation,
+  IdSipMessage, IdSipOptionsModule, IdSipRegistration, IdSipSubscribeModule,
   IdSipTransaction, IdSipTransport, IdSipUserAgent, IdTimerQueue, SyncObjs,
   SysUtils, Messages, Windows;
 
@@ -47,6 +47,8 @@ type
   TIdSipStackInterfaceExtensionClass = class of TIdSipStackInterfaceExtension;
   TIdStackReconfiguredData = class;
   TIdStackReconfiguredDataClass = class of TIdStackReconfiguredData;
+
+  TIdAsynchronousMessageResultData = class;
 
   // I provide a high-level interface to a SIP stack.
   // On one hand, I make sure that messages are sent in the context of the
@@ -232,6 +234,7 @@ type
                          const Offer: String;
                          const ContentType: String);
     procedure NotifyOfReconfiguration;
+    procedure NotifyOfAsyncMessageResult(Data: TIdAsynchronousMessageResultData);
     procedure NotifyReferralDenied(ActionHandle: TIdSipHandle);
     procedure NotifyReferralFailed(ActionHandle: TIdSipHandle;
                                    Response: TIdSipResponse = nil);
@@ -249,6 +252,7 @@ type
                          StatusText: String = '');
     procedure Resume;
     procedure Send(ActionHandle: TIdSipHandle);
+    procedure SendAsyncCall(ReferenceID: String);
     procedure SendProvisional(ActionHandle: TIdSipHandle;
                               StatusCode: Cardinal = SIPSessionProgress;
                               Description: String = RSSIPSessionProgress);
@@ -281,6 +285,16 @@ type
   public
     function  LocalAddressFor(Destination: String): String;
     procedure ResolveNamesFor(Host: String; IPAddresses: TIdDomainNameRecords);
+  end;
+
+  // I allow access to various network data in the stack: what bindings the
+  // stack uses, the best local address to use to contact a remote host, etc.
+  //
+  // GetFoo methods return a ReferenceID String. Send(String) takes that
+  // reference ID and schedules the asynchronous message send.
+  TIdSipNetworkExtension = class(TIdSipStackInterfaceExtension)
+  public
+    function GetBindings(Bindings: TIdSipLocations): String;
   end;
 
   // I contain data relating to a particular event.
@@ -725,6 +739,37 @@ type
     property RoutingTableType: String read fRoutingTableType write fRoutingTableType;
   end;
 
+  // I contain the result of an asynchronous message send. That is, when you've
+  // sent a message that generates a response, the StackInterface uses me to
+  // return the data to you.
+  TIdAsynchronousMessageResultData = class(TIdEventData)
+  private
+    fReferenceID: String;
+  protected
+    function Data: String; override;
+    function EventName: String; override;
+  public
+    procedure Assign(Src: TPersistent); override;
+
+    property ReferenceID: String read fReferenceID write fReferenceID;
+  end;
+
+  TIdGetBindingsData = class(TIdAsynchronousMessageResultData)
+  private
+    fBindings: TIdSipLocations;
+
+    procedure SetBindings(Value: TIdSipLocations);
+  protected
+    function Data: String; override;
+  public
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    procedure Assign(Src: TPersistent); override;
+
+    property Bindings: TIdSipLocations read fBindings write SetBindings;
+  end;
+
   // I represent a reified method call, like my ancestor, that a
   // SipStackInterface uses to signal that something interesting happened (an
   // inbound call has arrived, a network failure occured, an action succeeded,
@@ -758,6 +803,33 @@ type
     property StackID:       String   read fStackID write fStackID;
   end;
 
+  // When you want to send a message to something running in the context of a
+  // TimerQueue, instantiate me. I generate a unique reference ID, which you
+  // can use to differentiate between multiple asynchronous message sends.
+  //
+  // It's important that every TIdSipAsynchronousMessageWait have a unique
+  // ReferenceID so that you can differentiate the results when you receive a
+  // notification (in the form of a TIdAsynchronousMessageResultData). I
+  // guarantee this by using a RegisteredObject to generate this ID.
+  TIdAsynchronousMessageWait = class(TIdWait)
+  private
+    fStackID: String;
+  protected
+    procedure FireWait(Stack: TIdSipStackInterface); virtual;
+  public
+    procedure Trigger; override;
+
+    property StackID: String read fStackID write fStackID;
+  end;
+
+  TIdGetBindingsWait = class(TIdAsynchronousMessageWait)
+  protected
+    procedure FireWait(Stack: TIdSipStackInterface); override;
+  end;
+
+  // Raise me whenever someone tries to execute an action with a handle
+  // referring to an object of the wrong type. (Example: calling
+  // TIdSipStackInterface.SendProvisional with the Handle of an OPTIONS query).
   EInvalidHandle = class(Exception);
 
   // Raise me when the UserAgent doesn't support an action (e.g., it doesn't use
@@ -793,6 +865,7 @@ const
   CM_SUBSCRIPTION_RESUBSCRIBED    = CM_BASE + 15;
   CM_QUERY_OPTIONS_RESPONSE       = CM_BASE + 16;
   CM_STACK_RECONFIGURED           = CM_BASE + 17;
+  CM_ASYNC_MSG_RESULT             = CM_BASE + 18;
 
   CM_DEBUG = CM_BASE + 10000;
 
@@ -828,8 +901,8 @@ function EventNames(Event: Cardinal): String;
 implementation
 
 uses
-  IdRandom, IdRegisteredObject, IdSimpleParser, IdSipAuthentication,
-  IdSipIndyLocator, IdSipMockLocator, IdStack, IdUDPServer;
+  IdRandom, IdSimpleParser, IdSipAuthentication, IdSipIndyLocator,
+  IdSipMockLocator, IdStack, IdUDPServer;
 
 const
   ActionNotAllowedForHandle = 'You cannot perform a %s action on a %s handle (%d)';
@@ -855,6 +928,7 @@ begin
     CM_SUCCESS:                      Result := 'CM_SUCCESS';
     CM_QUERY_OPTIONS_RESPONSE:       Result := 'CM_QUERY_OPTIONS_RESPONSE';
     CM_STACK_RECONFIGURED:           Result := 'CM_STACK_RECONFIGURED';
+    CM_ASYNC_MSG_RESULT:             Result := 'CM_ASYNC_MSG_RESULT';
 
     CM_DEBUG_DROPPED_MSG:            Result := 'CM_DEBUG_DROPPED_MSG';
     CM_DEBUG_EXCEPTION:              Result := 'CM_DEBUG_EXCEPTION';
@@ -1229,6 +1303,11 @@ begin
   end;
 end;
 
+procedure TIdSipStackInterface.NotifyOfAsyncMessageResult(Data: TIdAsynchronousMessageResultData);
+begin
+  Self.NotifyEvent(CM_ASYNC_MSG_RESULT, Data);
+end;
+
 procedure TIdSipStackInterface.NotifyReferralDenied(ActionHandle: TIdSipHandle);
 begin
   Self.NotifyReferral(ActionHandle, TIdSipNotifyReferralDeniedWait, nil);
@@ -1353,6 +1432,18 @@ begin
   finally
     Self.ActionLock.Release;
   end;
+end;
+
+procedure TIdSipStackInterface.SendAsyncCall(ReferenceID: String);
+var
+  Wait: TObject;
+begin
+  // Invoke an asynchronous function call identified by ReferenceID.
+
+  Wait := TIdObjectRegistry.FindObject(ReferenceID);
+
+  if Assigned(Wait) and (Wait is TIdWait) then
+    Self.TimerQueue.AddEvent(TriggerImmediately, Wait as TIdWait);
 end;
 
 procedure TIdSipStackInterface.SendProvisional(ActionHandle: TIdSipHandle;
@@ -2237,6 +2328,16 @@ end;
 procedure TIdSipNameServerExtension.ResolveNamesFor(Host: String; IPAddresses: TIdDomainNameRecords);
 begin
   Self.UserAgent.Locator.ResolveNameRecords(Host, IPAddresses);
+end;
+
+//******************************************************************************
+//* TIdSipNetworkExtension                                                     *
+//******************************************************************************
+//* TIdSipNetworkExtension Public methods **************************************
+
+function TIdSipNetworkExtension.GetBindings(Bindings: TIdSipLocations): String;
+begin
+  Self.UserAgent.Dispatcher.LocalBindings(Bindings);
 end;
 
 //******************************************************************************
@@ -3393,6 +3494,89 @@ begin
 end;
 
 //******************************************************************************
+//* TIdAsynchronousMessageResultData                                           *
+//******************************************************************************
+//* TIdAsynchronousMessageResultData Public methods ****************************
+
+procedure TIdAsynchronousMessageResultData.Assign(Src: TPersistent);
+var
+  Other: TIdAsynchronousMessageResultData;
+begin
+  inherited Assign(Src);
+
+  if (Src is TIdAsynchronousMessageResultData) then begin
+    Other := Src as TIdAsynchronousMessageResultData;
+
+    Self.ReferenceID := Other.ReferenceID;
+  end;
+end;
+
+//* TIdAsynchronousMessageResultData Protected methods *************************
+
+function TIdAsynchronousMessageResultData.Data: String;
+begin
+  Result := 'ReferenceID: ' + Self.ReferenceID + CRLF;
+end;
+
+function TIdAsynchronousMessageResultData.EventName: String;
+begin
+  Result := EventNames(CM_ASYNC_MSG_RESULT);
+end;
+
+//******************************************************************************
+//* TIdGetBindingsData                                                         *
+//******************************************************************************
+//* TIdGetBindingsData Public methods ******************************************
+
+constructor TIdGetBindingsData.Create;
+begin
+  inherited Create;
+
+  Self.fBindings := TIdSipLocations.Create;
+end;
+
+destructor TIdGetBindingsData.Destroy;
+begin
+  Self.Bindings.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdGetBindingsData.Assign(Src: TPersistent);
+var
+  Other: TIdGetBindingsData;
+begin
+  inherited Assign(Src);
+
+  if (Src is TIdGetBindingsData) then begin
+    Other := Src as TIdGetBindingsData;
+    
+    Self.Bindings := Other.Bindings;
+  end;
+end;
+
+//* TIdGetBindingsData Protected methods ***************************************
+
+function TIdGetBindingsData.Data: String;
+var
+  I: Integer;
+begin
+  Result := inherited Data;
+
+  for I := 0 to Self.Bindings.Count - 1 do
+    Result := Result
+            + 'Binding' + IntToStr(I) + ': ' + Self.Bindings[I].AsString + CRLF;
+end;
+
+//* TIdGetBindingsData Private methods *****************************************
+
+procedure TIdGetBindingsData.SetBindings(Value: TIdSipLocations);
+begin
+  Self.fBindings.Clear;
+  Self.fBindings.AddLocations(Value);
+end;
+
+//******************************************************************************
 //* TIdSipStackInterfaceEventMethod                                            *
 //******************************************************************************
 //* TIdSipStackInterfaceEventMethod Public methods *****************************
@@ -3468,6 +3652,49 @@ end;
 procedure TIdSipStackReconfigureStackInterfaceWait.SetConfiguration(Value: TStrings);
 begin
   Self.Configuration.Assign(Value);
+end;
+
+//******************************************************************************
+//* TIdAsynchronousMessageWait                                                 *
+//******************************************************************************
+//* TIdAsynchronousMessageWait Public methods **********************************
+
+procedure TIdAsynchronousMessageWait.Trigger;
+var
+  Stack: TObject;
+begin
+  Stack := TIdObjectRegistry.FindObject(Self.StackID);
+
+  if Assigned(Stack) and (Stack is TIdSipStackInterface) then
+    Self.FireWait(Stack as TIdSipStackInterface);
+end;
+
+//* TIdAsynchronousMessageWait Protected methods *******************************
+
+procedure TIdAsynchronousMessageWait.FireWait(Stack: TIdSipStackInterface);
+begin
+  // By default, do nothing.
+end;
+
+//******************************************************************************
+//* TIdGetBindingsWait                                                         *
+//******************************************************************************
+//* TIdGetBindingsWait Protected methods ***************************************
+
+procedure TIdGetBindingsWait.FireWait(Stack: TIdSipStackInterface);
+var
+  Data: TIdGetBindingsData;
+  E:    TIdSipNetworkExtension;
+begin
+  Data := TIdGetBindingsData.Create;
+  try
+    E := Stack.AttachExtension(TIdSipNetworkExtension) as TIdSipNetworkExtension;
+    E.GetBindings(Data.Bindings);
+
+    Stack.NotifyOfAsyncMessageResult(Data);
+  finally
+    Data.Free;
+  end;
 end;
 
 end.

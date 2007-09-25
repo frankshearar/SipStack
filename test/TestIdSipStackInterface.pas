@@ -145,6 +145,7 @@ type
     procedure TestModifyCallWithInvalidHandle;
     procedure TestModifyCallWithNonExistentHandle;
     procedure TestNetworkFailure;
+    procedure TestNotifyOfAsyncMessageResult;
     procedure TestOutboundCall;
     procedure TestOptionsQuery;
     procedure TestReconfigureAddsStackAsTransportListener;
@@ -515,12 +516,40 @@ type
     procedure TestCopy;
   end;
 
-  TestTIdSipStackReconfigureStackInterfaceWait = class(TTestCase)
+  TestTIdAsynchronousMessageResultData = class(TTestCase)
   private
+    Data: TIdAsynchronousMessageResultData;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAsString;
+    procedure TestCopy;
+  end;
+
+  TestTIdGetBindingsData = class(TTestCase)
+  private
+    Data: TIdGetBindingsData;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAsString;
+    procedure TestCopy;
+  end;
+
+  TStackWaitTestCase = class(TStackInterfaceTestCase)
+  protected
     Conf:       TStrings;
     Stack:      TIdSipStackInterface;
-    TimerQueue: TIdTimerQueue;
-    Wait:       TIdSipStackReconfigureStackInterfaceWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSipStackReconfigureStackInterfaceWait = class(TStackWaitTestCase)
+  private
+    Wait: TIdSipStackReconfigureStackInterfaceWait;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -531,6 +560,16 @@ type
   published
     procedure TestSetConfiguration;
     procedure TestTriggerStartsTransports;
+  end;
+
+  TestTIdGetBindingsWait = class(TStackWaitTestCase)
+  private
+    Wait: TIdGetBindingsWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTrigger;
   end;
 
 const
@@ -589,7 +628,10 @@ begin
   Result.AddTest(TestTIdSubscriptionNotifyData.Suite);
   Result.AddTest(TestTIdFailedSubscriptionData.Suite);
   Result.AddTest(TestTIdStackReconfiguredData.Suite);
+  Result.AddTest(TestTIdAsynchronousMessageResultData.Suite);
+  Result.AddTest(TestTIdGetBindingsData.Suite);
   Result.AddTest(TestTIdSipStackReconfigureStackInterfaceWait.Suite);
+  Result.AddTest(TestTIdGetBindingsWait.Suite);
 end;
 
 //******************************************************************************
@@ -1624,6 +1666,28 @@ begin
 //  CheckEquals(Format(OutboundActionFailed, [MethodInvite, Format(RSNoLocationSucceeded, [Self.Destination.Address.AsString])]), FailData.Reason, 'Reason');
   CheckEquals(NoLocationFound, FailData.ErrorCode, 'ErrorCode');
   CheckEquals(IntToHex(Call, 8), IntToHex(FailData.Handle, 8), 'Handle');
+end;
+
+procedure TestTIdSipStackInterface.TestNotifyOfAsyncMessageResult;
+var
+  FakeResult:   TIdAsynchronousMessageResultData;
+  Notification: TIdAsynchronousMessageResultData;
+begin
+  FakeResult := TIdAsynchronousMessageResultData.Create;
+  try
+    FakeResult.ReferenceID := 'fake ID';
+
+    Self.Intf.NotifyOfAsyncMessageResult(FakeResult);
+
+    Self.ProcessAllPendingNotifications;
+
+    CheckNotificationReceived(TIdAsynchronousMessageResultData, 'No async message result notification received');
+
+    Notification := Self.LastEventOfType(TIdAsynchronousMessageResultData) as TIdAsynchronousMessageResultData;
+    CheckEquals(FakeResult.ReferenceID, Notification.ReferenceID, 'Wrong result ID');
+  finally
+    FakeResult.Free;
+  end;
 end;
 
 procedure TestTIdSipStackInterface.TestOutboundCall;
@@ -4059,6 +4123,171 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdAsynchronousMessageResultData                                       *
+//******************************************************************************
+//* TestTIdAsynchronousMessageResultData Public methods ************************
+
+procedure TestTIdAsynchronousMessageResultData.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Data := TIdAsynchronousMessageResultData.Create;
+  Self.Data.Handle      := $decafbad;
+  Self.Data.ReferenceID := 'fake ID';
+end;
+
+procedure TestTIdAsynchronousMessageResultData.TearDown;
+begin
+  Self.Data.Free;
+
+  inherited TearDown;
+end;
+
+procedure TestTIdAsynchronousMessageResultData.TestAsString;
+var
+  Expected: TStrings;
+  Received: TStrings;
+begin
+  Expected := TStringList.Create;
+  try
+    Received := TStringList.Create;
+    try
+      Expected.Add('ReferenceID: ' + Self.Data.ReferenceID);
+      Expected.Insert(0, '');
+      Expected.Insert(1, EventNames(CM_ASYNC_MSG_RESULT));
+      Received.Text := Self.Data.AsString;
+
+      // We ignore the first line of the debug data (it's a timestamp & a
+      // handle)
+      Received[0] := '';
+
+      CheckEquals(Expected.Text,
+                  Received.Text,
+                  'Unexpected debug data');
+    finally
+      Received.Free;
+    end;
+  finally
+    Expected.Free;
+  end;
+end;
+
+procedure TestTIdAsynchronousMessageResultData.TestCopy;
+var
+  Copy: TIdAsynchronousMessageResultData;
+begin
+  Copy := Self.Data.Copy as TIdAsynchronousMessageResultData;
+  try
+    CheckEquals(IntToHex(Self.Data.Handle, 8), IntToHex(Copy.Handle, 8), 'Handle');
+    CheckEquals(Self.Data.ReferenceID,         Copy.ReferenceID,         'ReferenceID');
+  finally
+    Copy.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdGetBindingsData                                                     *
+//******************************************************************************
+//* TestTIdGetBindingsData Public methods **************************************
+
+procedure TestTIdGetBindingsData.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Data := TIdGetBindingsData.Create;
+  Self.Data.Handle := $decafbad;
+  Self.Data.ReferenceID := 'fake ID';
+  Self.Data.Bindings.AddLocation('TCP', '127.0.0.1', 5060);
+  Self.Data.Bindings.AddLocation('UDP', '127.0.0.1', 5060);
+end;
+
+procedure TestTIdGetBindingsData.TearDown;
+begin
+  Self.Data.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdGetBindingsData Published methods ***********************************
+
+procedure TestTIdGetBindingsData.TestAsString;
+var
+  Expected: TStrings;
+  I:        Integer;
+  Received: TStrings;
+begin
+  Expected := TStringList.Create;
+  try
+    Received := TStringList.Create;
+    try
+      Expected.Add('ReferenceID: ' + Self.Data.ReferenceID);
+      for I := 0 to Self.Data.Bindings.Count - 1 do
+        Expected.Add('Binding' + IntToStr(I) + ': ' + Self.Data.Bindings[I].AsString);
+      Expected.Insert(0, '');
+      Expected.Insert(1, EventNames(CM_ASYNC_MSG_RESULT));
+      Received.Text := Self.Data.AsString;
+
+      // We ignore the first line of the debug data (it's a timestamp & a
+      // handle)
+      Received[0] := '';
+
+      CheckEquals(Expected.Text,
+                  Received.Text,
+                  'Unexpected debug data');
+    finally
+      Received.Free;
+    end;
+  finally
+    Expected.Free;
+  end;
+end;
+
+procedure TestTIdGetBindingsData.TestCopy;
+var
+  Copy: TIdGetBindingsData;
+  I:    Integer;
+begin
+  Copy := Self.Data.Copy as TIdGetBindingsData;
+  try
+    CheckEquals(IntToHex(Self.Data.Handle, 8), IntToHex(Copy.Handle, 8), 'Handle');
+    CheckEquals(Self.Data.ReferenceID, Copy.ReferenceID, 'ReferenceID');
+    CheckEquals(Self.Data.Bindings.Count, Copy.Bindings.Count, 'Bindings size');
+
+    for I := 0 to Self.Data.Bindings.Count - 1 do
+      CheckEquals(Self.Data.Bindings[I].AsString, Copy.Bindings[I].AsString, 'Binding #' + IntToStr(I));
+  finally
+    Copy.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TStackWaitTestCase                                                         *
+//******************************************************************************
+//* TStackWaitTestCase Public methods ******************************************
+
+procedure TStackWaitTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipUdpTransport);
+
+  Self.Conf := TStringList.Create;
+  Self.Conf.Add('Listen: UDP 127.0.0.1:5060');
+
+  Self.Stack := TIdSipStackInterface.Create(Self.UI.Handle, Self.TimerQueue, Self.Conf);
+  Self.Stack.Resume;
+end;
+
+procedure TStackWaitTestCase.TearDown;
+begin
+  Self.Stack.Free;
+
+  TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
+
+  inherited TearDown;
+end;
+
+//******************************************************************************
 //* TestTIdSipStackReconfigureStackInterfaceWait                               *
 //******************************************************************************
 //* TestTIdSipStackReconfigureStackInterfaceWait Public methods ****************
@@ -4069,23 +4298,12 @@ const
 begin
   inherited SetUp;
 
-  TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipUdpTransport);
-
-  Self.Conf := TStringList.Create;
-  Self.Conf.Add('Listen: UDP 127.0.0.1:5060');
-
-  Self.TimerQueue := TIdDebugTimerQueue.Create(true);
-
-  Self.Stack := TIdSipStackInterface.Create(0, Self.TimerQueue, Self.Conf);
-  Self.Stack.Resume;
   Self.Wait := TIdSipStackReconfigureStackInterfaceWait.Create;
   Self.Wait.StackID := Self.Stack.ID;
 end;
 
 procedure TestTIdSipStackReconfigureStackInterfaceWait.TearDown;
 begin
-  Self.Stack.Free;
-  Self.TimerQueue.Terminate;
   Self.Wait.Free;
 
   inherited TearDown;
@@ -4155,6 +4373,58 @@ begin
     CheckUdpServerOnPort(Address, Port, 'Stack not reconfigured or transports not started');
   finally
     Conf.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdGetBindingsWait                                                     *
+//******************************************************************************
+//* TestTIdGetBindingsWait Public methods **************************************
+
+procedure TestTIdGetBindingsWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Wait := TIdGetBindingsWait.Create;
+  Self.Wait.StackID := Self.Stack.ID;
+end;
+
+procedure TestTIdGetBindingsWait.TearDown;
+begin
+  Self.Wait.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdGetBindingsWait Published methods ***********************************
+
+procedure TestTIdGetBindingsWait.TestTrigger;
+var
+  E:        TIdSipNetworkExtension;
+  Expected: TIdSipLocations;
+  I:        Integer;
+  Received: TIdSipLocations;
+begin
+  Self.Wait.Trigger;
+  Self.ProcessAllPendingNotifications;
+  CheckNotificationReceived(TIdGetBindingsData, 'No notification about GetBindings received');
+
+  E := Self.Stack.AttachExtension(TIdSipNetworkExtension) as TIdSipNetworkExtension;
+  try
+    Expected := TIdSipLocations.Create;
+    try
+      E.GetBindings(Expected);
+
+      Received := (Self.LastEventOfType(TIdGetBindingsData) as TIdGetBindingsData).Bindings;
+
+      CheckEquals(Expected.Count, Received.Count, 'Unexpected number of bindings');
+      for I := 0 to Expected.Count - 1 do
+        CheckEquals(Expected[I].AsString, Received[I].AsString, 'Binding #' + IntToStr(I));
+    finally
+      Expected.Free;
+    end;
+  finally
+    E.Free;
   end;
 end;
 

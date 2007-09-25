@@ -12,7 +12,8 @@ unit IdTimerQueue;
 interface
 
 uses
-  Classes, Contnrs, IdBaseThread, IdNotification, SyncObjs, SysUtils;
+  Classes, Contnrs, IdBaseThread, IdNotification, IdRegisteredObject, SyncObjs,
+  SysUtils;
 
 type
   TIdTimerQueue = class;
@@ -27,13 +28,11 @@ type
   // My DebugWaitTime property aids debugging by giving the wait time specified -
   // in our example, a TimerQueue would set DebugWaitTime to 10000, and the
   // TriggerTime to (Now + 10000).
-  TIdWait = class(TObject)
+  TIdWait = class(TIdRegisteredObject)
   private
     fDebugWaitTime: Cardinal;
     fTriggerTime:   TDateTime;
   public
-    constructor Create; virtual;
-
     function  Copy: TIdWait; virtual;
     function  Due: Boolean;
     function  MatchEvent(Event: Pointer): Boolean; virtual;
@@ -239,11 +238,6 @@ end;
 //* TIdWait                                                                    *
 //******************************************************************************
 //* TIdWait Public methods *****************************************************
-
-constructor TIdWait.Create;
-begin
-  inherited Create;
-end;
 
 function TIdWait.Copy: TIdWait;
 begin
