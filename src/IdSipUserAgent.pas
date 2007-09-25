@@ -156,6 +156,11 @@ type
                       const HostNameLine: String);
     procedure AddLocator(UserAgent: TIdSipAbstractCore;
                          const NameServerLine: String);
+    procedure AddLogFileName(UserAgent: TIdSipAbstractCore;
+                             const LogFileNameLine: String);
+    procedure AddLogger(UserAgent: TIdSipAbstractCore);
+    procedure AddLogVerbosityLevel(UserAgent: TIdSipAbstractCore;
+                                   const LogVerbosityLevelLine: String);
     procedure AddMappedRoute(UserAgent: TIdSipAbstractCore;
                              const MappedRouteLine: String;
                              PendingActions: TObjectList);
@@ -199,6 +204,7 @@ type
     procedure CheckUri(Uri: TIdSipUri;
                        const FailMsg: String);
     function  CreateLayers(Context: TIdTimerQueue): TIdSipUserAgent;
+    function  CreateLogger: TLoGGerThread;
     function  CreatePlatformRoutingTable: TIdRoutingTable;
     procedure InstantiateMissingObjectsAsDefaults(UserAgent: TIdSipUserAgent);
     function  InstantiateRegistrarModule(UserAgent: TIdSipUserAgent): TIdSipRegisterModule;
@@ -422,6 +428,8 @@ const
   FromDirective                           = FromHeaderFull;
   HostNameDirective                       = 'HostName';
   InstanceIDDirective                     = 'InstanceID';
+  LogFileNameDirective                    = 'LogFileName';
+  LogVerbosityLevelDirective              = 'LogVerbosityLevel';
   ListenDirective                         = 'Listen';
   MappedRouteDirective                    = 'MappedRoute';
   MatchOnlyUsernameOption                 = 'MatchOnlyUsername';
@@ -440,6 +448,9 @@ const
   SupportEventDirective                   = 'SupportEvent';
   UseGruuDirective                        = 'UseGruu';
   UserAgentNameDirective                  = 'UserAgentName';
+
+const
+  DefaultDebugLogFileName = 'debug.log';
 
 procedure EatDirective(var Line: String);
 
@@ -502,6 +513,8 @@ begin
   inherited Destroy;
 
   Self.RoutePath.Free;
+  if Assigned(Self.Logger) then
+    Self.Logger.Terminate;
   Self.Dispatcher.Free;
   Self.Authenticator.Free;
 
@@ -958,6 +971,47 @@ begin
 
   UserAgent.Locator := Self.CreateLocator(NameServerLine);
   UserAgent.Dispatcher.Locator := UserAgent.Locator;
+end;
+
+procedure TIdSipStackConfigurator.AddLogFileName(UserAgent: TIdSipAbstractCore;
+                                                 const LogFileNameLine: String);
+var
+  FileName: String;
+begin
+  // See class comment for the format for this directive.
+  FileName := LogFileNameLine;
+  EatDirective(FileName);
+
+  if (FileName = '') then FileName := 'debug.log';
+
+  Self.AddLogger(UserAgent);
+
+  UserAgent.Logger.Logs.LogsByName[coSipStackLogName].FileName := FileName;
+end;
+
+procedure TIdSipStackConfigurator.AddLogger(UserAgent: TIdSipAbstractCore);
+begin
+  if Assigned(UserAgent.Logger) then Exit;
+
+  UserAgent.Logger := Self.CreateLogger;
+  UserAgent.Dispatcher.Logger := UserAgent.Logger;
+end;
+
+procedure TIdSipStackConfigurator.AddLogVerbosityLevel(UserAgent: TIdSipAbstractCore;
+                                                  const LogVerbosityLevelLine: String);
+var
+  Line:      String;
+  Verbosity: TLogVerbosityLevel;
+begin
+  // See class comment for the format for this directive.
+  Line := LogVerbosityLevelLine;
+  EatDirective(Line);
+
+  Verbosity := StrToIntDef(Line, LoGGerVerbosityLevelNormal);
+
+  Self.AddLogger(UserAgent);
+
+  UserAgent.Logger.Logs.LogsByName[coSipStackLogName].VerbosityLevel := Verbosity;
 end;
 
 procedure TIdSipStackConfigurator.AddMappedRoute(UserAgent: TIdSipAbstractCore;
@@ -1425,12 +1479,21 @@ begin
   Result := TIdSipUserAgent.Create;
   Result.Timer := Context;
   Result.Dispatcher := TIdSipTransactionDispatcher.Create(Result.Timer, nil);
+end;
 
-  Result.Logger := TLoGGerThread.Create;
-  Result.Dispatcher.Logger := Result.Logger;
+function TIdSipStackConfigurator.CreateLogger: TLoGGerThread;
+begin
+  Result := TLoGGerThread.Create;
 
-  Result.Logger.Add(coSipStackLogName);
-  Result.Logger.Logs.LogsByName[coSipStackLogName].FileName := 'debuglog.log';
+  Result.Lock;
+  try
+    if not Result.Logs.LogExists(coSipStackLogName) then
+      Result.Add(coSipStackLogName);
+
+    Result.Logs.LogsByName[coSipStackLogName].FileName := DefaultDebugLogFileName;
+  finally
+    Result.Unlock;
+  end;
 end;
 
 function TIdSipStackConfigurator.CreatePlatformRoutingTable: TIdRoutingTable;
@@ -1500,6 +1563,10 @@ begin
     Self.SetInstanceID(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, ListenDirective) then
     Self.AddTransport(UserAgent.Dispatcher, ConfigurationLine)
+  else if IsEqual(FirstToken, LogFileNameDirective) then
+    Self.AddLogFileName(UserAgent, ConfigurationLine)
+  else if IsEqual(FirstToken, LogVerbosityLevelDirective) then
+    Self.AddLogVerbosityLevel(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, MappedRouteDirective) then
     Self.AddMappedRoute(UserAgent, ConfigurationLine, PendingActions)
   else if IsEqual(FirstToken, MockDnsDirective) then
@@ -1540,6 +1607,9 @@ begin
     if not Assigned(RegMod.BindingDB) then
       RegMod.BindingDB := TIdSipMockBindingDatabase.Create;
   end;
+
+  if Assigned(UA.Logger) then
+    UA.Logger.Resume;
 end;
 
 procedure TIdSipStackConfigurator.PreConfigurationActions(UA: TIdSipUserAgent);

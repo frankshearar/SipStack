@@ -171,6 +171,7 @@ type
     function  ARecords: String;
     procedure CheckAutoAddress(Address: TIdSipAddressHeader);
     procedure CheckAutoFrom(UserAgent: TIdSipUserAgent);
+    procedure CheckBasicLogging(UserAgent: TIdSipUserAgent);
     procedure CheckEventPackageRegistered(UA: TIdSipUserAgent;
                                           PackageName: String);
     procedure CheckLocalAddress(UA: TIdSipUserAgent; ExpectedLocalAddress, DestinationIP: String; Msg: String);
@@ -213,6 +214,9 @@ type
     procedure TestCreateUserAgentWithInstanceID;
     procedure TestCreateUserAgentWithInstanceIDThenRegister;
     procedure TestCreateUserAgentWithLocator;
+    procedure TestCreateUserAgentWithLogFileName;
+    procedure TestCreateUserAgentWithLogVerbosity;
+    procedure TestCreateUserAgentWithLogVerbosityBeforeFileName;
     procedure TestCreateUserAgentWithMalformedFrom;
     procedure TestCreateUserAgentWithMalformedLocator;
     procedure TestCreateUserAgentWithMalformedRoute;
@@ -381,7 +385,8 @@ uses
   IdSipAuthentication, IdSipIndyLocator, IdSipMockBindingDatabase,
   IdSipMockLocator, IdSipMockTransactionDispatcher, IdSipMockTransport,
   IdSipSubscribeModule, IdSipTCPTransport, IdSipUDPTransport, IdSystem,
-  IdTcpClient, IdUnicode, SysUtils, TestFrameworkSipTransport;
+  IdTcpClient, IdUnicode, LoGGer, LogVariables, SysUtils,
+  TestFrameworkSipTransport;
 
 const
   // SFTF: Sip Foundry Test Framework. cf. http://www.sipfoundry.org/sftf/
@@ -2230,6 +2235,18 @@ begin
   Self.CheckAutoAddress(UserAgent.From);
 end;
 
+procedure TestTIdSipStackConfigurator.CheckBasicLogging(UserAgent: TIdSipUserAgent);
+begin
+  Check(Assigned(UserAgent.Logger), 'No logger created');
+  Check(UserAgent.Logger.Logs.LogExists(coSipStackLogName), 'Logger doesn''t use right log name');
+
+  Check(Assigned(UserAgent.Dispatcher.Logger), 'Transaction layer has no logger');
+  Check(UserAgent.Logger = UserAgent.Dispatcher.Logger, 'Transaction and Transaction-User layers use different loggers');
+
+  Check(UserAgent.Dispatcher.Transports.Count > 0, 'Not enough transports to check Transport layer logging');
+  Check(UserAgent.Logger = UserAgent.Dispatcher.Transports[0].Logger, 'Transport and Transaction-User layers use different loggers');
+end;
+
 procedure TestTIdSipStackConfigurator.CheckEventPackageRegistered(UA: TIdSipUserAgent;
                                                                   PackageName: String);
 var
@@ -2505,16 +2522,14 @@ begin
           'Transaction-User layer has no Authenticator');
     Check(Assigned(UA.Locator),
           'Transaction-User layer has no Locator');
-    Check(Assigned(UA.Logger),
-          'Transaction-User layer has no Logger');
+    Check(not Assigned(UA.Logger),
+          'Transaction-User layer assigned a Logger');
     Check(Assigned(UA.RoutingTable),
           'Transaction-User layer has no RoutingTable');
     Check(Assigned(UA.Timer),
           'Transaction-User layer has no timer');
     Check(UA.Timer = UA.Dispatcher.Timer,
           'Transaction and Transaction-User layers have different timers');
-    Check(UA.Logger = UA.Dispatcher.Logger,
-          'Transaction and Transaction-User layers have different loggers');
   finally
     UA.Free;
   end;
@@ -2683,6 +2698,72 @@ begin
           'No Locator assigned to the Transaction layer');
     Check(UA.Locator = UA.Dispatcher.Locator,
           'Transaction and Transaction-User layers have different Locators');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithLogFileName;
+const
+  FileName = 'debug.log';
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('LogFileName: ' + FileName);
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckBasicLogging(UA);
+
+    CheckEquals(FileName, UA.Logger.Logs.LogsByName[coSipStackLogName].FileName, 'Log uses the wrong filename');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithLogVerbosity;
+const
+  Verbosity = LoGGerVerbosityLevelLow;
+var
+  Log: TLoGGerLog;
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('LogVerbosityLevel: ' + IntToStr(Verbosity));
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckBasicLogging(UA);
+
+    Log := UA.Logger.Logs.LogsByName[coSipStackLogName];
+    CheckEquals(DefaultDebugLogFileName, Log.FileName,       'Log uses the wrong (default) filename');
+    CheckEquals(Verbosity,               Log.VerbosityLevel, 'Log uses the wrong verbosity level');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithLogVerbosityBeforeFileName;
+const
+  FileName  = 'debug.log';
+  Verbosity = LoGGerVerbosityLevelLow;
+var
+  Log: TLoGGerLog;
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('LogVerbosityLevel: ' + IntToStr(Verbosity));
+  Self.Configuration.Add('LogFileName: ' + FileName);
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckBasicLogging(UA);
+
+    Log := UA.Logger.Logs.LogsByName[coSipStackLogName];
+    CheckEquals(DefaultDebugLogFileName, Log.FileName, 'Log uses the wrong (default) filename');
+    CheckEquals(Verbosity, Log.VerbosityLevel, 'Log uses the wrong verbosity level');
+    CheckEquals(FileName, UA.Logger.Logs.LogsByName[coSipStackLogName].FileName, 'Log uses the wrong filename');
   finally
     UA.Free;
   end;
