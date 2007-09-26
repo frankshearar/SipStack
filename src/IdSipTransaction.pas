@@ -2176,8 +2176,9 @@ end;
 
 procedure TIdSipClientNonInviteTransaction.FireTimerE;
 begin
-  if (Self.State in [itsTrying, itsProceeding]) then
-    Self.TryResendInitialRequest;
+  if not (Self.State in [itsTrying, itsProceeding]) then Exit;
+
+  Self.TryResendInitialRequest;
 
   Self.RecalculateTimerE;
   Self.ScheduleTimerE;
