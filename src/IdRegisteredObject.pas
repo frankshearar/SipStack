@@ -3,7 +3,7 @@ unit IdRegisteredObject;
 interface
 
 uses
-  Classes, SysUtils;
+  Classes, LoGGer, SysUtils;
 
 type
   // My subclasses and I automatically register/unregister ourselves to the
@@ -29,12 +29,16 @@ type
   private
     class procedure CollectAllObjectsOfClassOnly(SearchType: TClass; Results: TStrings);
     class procedure CollectAllObjectsOfClassOrSubtype(SearchType: TClass; Results: TStrings);
+    class procedure Log(Description: String);
     class function  ObjectAt(Index: Integer): TObject;
     class function  ObjectRegistry: TStrings;
   public
     class procedure CollectAllObjectsOfClass(SearchType: TClass; Results: TStrings; AllowSubclassTypes: Boolean = true);
     class function  FindObject(ObjectID: String): TObject;
     class function  RegisterObject(Instance: TObject): String;
+    class procedure SetLogger(Log: TLoGGerThread;
+                              LogName: String;
+                              SourceRef: Cardinal);
     class procedure UnregisterObject(ObjectID: String);
   end;
 
@@ -42,6 +46,10 @@ type
   // registry - perhaps a given string doesn't point to a registered object, or
   // to an object of an unexpected type.
   ERegistry = class(Exception);
+
+const
+  RegisterLogMsg   = '%s with ID %s instantiated';
+  UnregisterLogMsg = '%s with ID %s freed';
 
 implementation
 
@@ -52,7 +60,10 @@ const
   ItemNotFoundIndex = -1;
 
 var
+  GLog:            TLoGGerThread;
+  GLogName:        String;
   GObjectRegistry: TStringList;
+  GSourceRef:      Cardinal;
 
 function CreateSortedList: TStringList;
 begin
@@ -114,6 +125,16 @@ begin
   until (Self.ObjectRegistry.IndexOf(Result) = ItemNotFoundIndex);
 
   Self.ObjectRegistry.AddObject(Result, Instance);
+  Self.Log(Format(RegisterLogMsg, [Instance.ClassName, Result]));
+end;
+
+class procedure TIdObjectRegistry.SetLogger(Log: TLoGGerThread;
+                                            LogName: String;
+                                            SourceRef: Cardinal);
+begin
+  GLog       := Log;
+  GLogName   := LogName;
+  GSourceRef := SourceRef;
 end;
 
 class procedure TIdObjectRegistry.UnregisterObject(ObjectID: String);
@@ -121,8 +142,10 @@ var
   Index: Integer;
 begin
   Index := Self.ObjectRegistry.IndexOf(ObjectID);
-  if (Index <> ItemNotFoundIndex) then
+  if (Index <> ItemNotFoundIndex) then begin
+    Self.Log(Format(UnregisterLogMsg, [Self.ObjectRegistry.Objects[Index].ClassName, ObjectID]));
     Self.ObjectRegistry.Delete(Index);
+  end;
 end;
 
 //* TIdObjectRegistry Private methods ******************************************
@@ -151,6 +174,20 @@ begin
       Results.AddObject(Self.ObjectRegistry[I],
                         Self.ObjectRegistry.Objects[I]);
   end;
+end;
+
+class procedure TIdObjectRegistry.Log(Description: String);
+begin
+  if not Assigned(GLog) then Exit;
+
+  GLog.Lock;
+  try
+    if not GLog.Logs.LogExists(GLogName) then Exit;
+  finally
+    GLog.Unlock;
+  end;
+
+  GLog.Write(GLogName, LoGGerVerbosityLevelDebug, GSourceRef, '', 0, Description, '');
 end;
 
 class function TIdObjectRegistry.ObjectAt(Index: Integer): TObject;
