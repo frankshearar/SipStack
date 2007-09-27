@@ -125,23 +125,23 @@ type
                          Contact: TIdSipContactHeader;
                          const CallID: String;
                          SequenceNo: Cardinal;
-                         ExpiryTime: TDateTime): Boolean; virtual; abstract;
+                         ExpiryTime: TDateTime): Boolean; virtual;
     function  Binding(const AddressOfRecord: String;
-                      const CanonicalUri: String): TIdRegistrarBinding; virtual; abstract;
+                      const CanonicalUri: String): TIdRegistrarBinding; virtual;
     function  CollectBindingsFor(const AddressOfRecord: String;
                                  Bindings: TIdSipContacts;
                                  CollectGruus: Boolean): Boolean; virtual;
     function  CreateGruu(const AddressOfRecord: String;
                          const SipInstance: String): String; virtual;
-    procedure Commit; virtual; abstract;
-    procedure Rollback; virtual; abstract;
-    procedure StartTransaction; virtual; abstract;
+    procedure Commit; virtual;
+    procedure Rollback; virtual;
+    procedure StartTransaction; virtual;
   public
     constructor Create; override;
 
     function  AddBindings(Request: TIdSipRequest): Boolean;
     function  IsAuthorized(User: TIdSipAddressHeader;
-                           AddressOfRecord: TIdSipUri): Boolean; virtual; abstract;
+                           AddressOfRecord: TIdSipUri): Boolean; virtual;
     function  IsValid(Request: TIdSipRequest): Boolean; virtual;
     function  BindingExpires(const AddressOfRecord: String;
                              const CanonicalUri: String): TDateTime;
@@ -154,7 +154,7 @@ type
                             Contact: TIdSipContactHeader): Boolean;
     function  RemoveAllBindings(Request: TIdSipRequest): Boolean;
     function  RemoveBinding(Request: TIdSipRequest;
-                            Contact: TIdSipContactHeader): Boolean; virtual; abstract;
+                            Contact: TIdSipContactHeader): Boolean; virtual;
 
     property DefaultExpiryTime: Cardinal read fDefaultExpiryTime write fDefaultExpiryTime;
     property UseGruu:           Boolean  read fUseGruu write fUseGruu;
@@ -522,7 +522,7 @@ type
 implementation
 
 uses
-  IdRegisteredObject, IdSipAuthentication, Math, SysUtils;
+  IdRegisteredObject, IdSipAuthentication, Math, RuntimeSafety, SysUtils;
 
 const
   ItemNotFoundIndex = -1;
@@ -747,6 +747,12 @@ begin
   Self.NotifyListenersOfChange;
 end;
 
+function TIdSipAbstractBindingDatabase.IsAuthorized(User: TIdSipAddressHeader;
+                                                    AddressOfRecord: TIdSipUri): Boolean;
+begin
+  RaiseAbstractError(Self.ClassName, 'IsAuthorized');
+end;
+
 function TIdSipAbstractBindingDatabase.IsValid(Request: TIdSipRequest): Boolean;
 begin
   // Return true if the address-of-record in Request's To header is valid for
@@ -829,7 +835,29 @@ begin
   Self.NotifyListenersOfChange;
 end;
 
+function TIdSipAbstractBindingDatabase.RemoveBinding(Request: TIdSipRequest;
+                                                     Contact: TIdSipContactHeader): Boolean;
+begin
+  Result := false;
+  RaiseAbstractError(Self.ClassName, 'RemoveBinding');
+end;
+
 //* TIdSipAbstractBindingDatabase Protected methods ****************************
+
+function TIdSipAbstractBindingDatabase.AddBinding(const AddressOfRecord: String;
+                                                  Contact: TIdSipContactHeader;
+                                                  const CallID: String;
+                                                  SequenceNo: Cardinal;
+                                                  ExpiryTime: TDateTime): Boolean;
+begin
+  RaiseAbstractError(Self.ClassName, 'AddBinding');
+end;
+
+function TIdSipAbstractBindingDatabase.Binding(const AddressOfRecord: String;
+                                               const CanonicalUri: String): TIdRegistrarBinding;
+begin
+  RaiseAbstractError(Self.ClassName, 'Binding');
+end;
 
 function TIdSipAbstractBindingDatabase.CollectBindingsFor(const AddressOfRecord: String;
                                                           Bindings: TIdSipContacts;
@@ -856,6 +884,21 @@ begin
 
   Result := AddressOfRecord
           + ';opaque=' + MD5(AddressOfRecord + SipInstance);
+end;
+
+procedure TIdSipAbstractBindingDatabase.Commit;
+begin
+  RaiseAbstractError(Self.ClassName, 'Commit');
+end;
+
+procedure TIdSipAbstractBindingDatabase.Rollback;
+begin
+  RaiseAbstractError(Self.ClassName, 'Rollback');
+end;
+
+procedure TIdSipAbstractBindingDatabase.StartTransaction;
+begin
+  RaiseAbstractError(Self.ClassName, 'StartTransaction');
 end;
 
 //* TIdSipAbstractBindingDatabase Private methods ******************************

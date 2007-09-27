@@ -34,7 +34,7 @@ type
     constructor Create; virtual;
 
     function  AsString: String;
-    procedure PrintOn(Dest: TStream); virtual; abstract;
+    procedure PrintOn(Dest: TStream); virtual;
   end;
 
   TIdPrintableClass = class of TIdPrintable;
@@ -278,7 +278,7 @@ type
 
     function AddItem: TIdPrintable; overload;
     function AddItem(ToBeCopied: TIdPrintable): TIdPrintable; overload;
-    function ItemType: TIdPrintableClass; virtual; abstract;
+    function ItemType: TIdPrintableClass; virtual;
   public
     constructor Create; override;
     destructor  Destroy; override;
@@ -810,7 +810,7 @@ function StrToMediaType(const S: String): TIdSDPMediaType;
 implementation
 
 uses
-  IdRandom, IdSocketHandle, SysUtils;
+  IdRandom, IdSocketHandle, RuntimeSafety, SysUtils;
 
 const
   SessionHeaderOrder = 'vosiuepcbtka';
@@ -985,6 +985,11 @@ begin
   finally
     S.Free;
   end;
+end;
+
+procedure TIdPrintable.PrintOn(Dest: TStream);
+begin
+  RaiseAbstractError(Self.ClassName, 'PrintOn');
 end;
 
 //******************************************************************************
@@ -1807,6 +1812,12 @@ function TIdSdpList.AddItem(ToBeCopied: TIdPrintable): TIdPrintable;
 begin
   Result := Self.AddItem;
   Result.Assign(ToBeCopied);
+end;
+
+function TIdSdpList.ItemType: TIdPrintableClass;
+begin
+  Result := nil;
+  RaiseAbstractError(Self.ClassName, 'ItemType');
 end;
 
 //******************************************************************************

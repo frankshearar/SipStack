@@ -59,7 +59,7 @@ type
   protected
     Payload:  TIdRTPPayload;
 
-    function PayloadType: TIdRTPPayloadClass; virtual; abstract;
+    function PayloadType: TIdRTPPayloadClass; virtual;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -267,7 +267,7 @@ type
   protected
     Item: TIdSrcDescChunkItem;
 
-    function ItemType: TIdSrcDescChunkItemClass; virtual; abstract;
+    function ItemType: TIdSrcDescChunkItemClass; virtual;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -366,7 +366,7 @@ type
   protected
     Packet: TIdRTCPPacket;
 
-    function PacketType: Byte; virtual; abstract;
+    function PacketType: Byte; virtual;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -1603,6 +1603,13 @@ begin
   Self.Payload.Free;
 
   inherited TearDown;
+end;
+
+//* TPayloadTestCase Protected methods *****************************************
+
+function TPayloadTestCase.PayloadType: TIdRTPPayloadClass;
+begin
+  Fail(Self.ClassName + ' must override PayloadType');
 end;
 
 //* TPayloadTestCase Published methods *****************************************
@@ -3786,6 +3793,13 @@ begin
   inherited TearDown;
 end;
 
+//* TSrcDescChunkItemTestCase Protected methods ********************************
+
+function TSrcDescChunkItemTestCase.ItemType: TIdSrcDescChunkItemClass;
+begin
+  Fail(Self.ClassName + ' must override ItemType');
+end;
+
 //* TSrcDescChunkItemTestCase Published methods ********************************
 
 procedure TSrcDescChunkItemTestCase.TestPrintOn;
@@ -4390,6 +4404,13 @@ begin
   Self.Packet.Free;
 
   inherited TearDown;
+end;
+
+//* TRTCPPacketTestCase Protected methods **************************************
+
+function TRTCPPacketTestCase.PacketType: Byte;
+begin
+  Fail(Self.ClassName + ' must override PacketType');
 end;
 
 //* TRTCPPacketTestCase Published methods **************************************

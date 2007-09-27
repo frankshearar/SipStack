@@ -222,7 +222,7 @@ type
   public
     class function DefaultProbationRetryTime: Cardinal; virtual;
     class function DefaultSubscriptionDuration: Cardinal; virtual;
-    class function EventPackage: String; virtual; abstract;
+    class function EventPackage: String; virtual;
 
     constructor Create(Module: TIdSipSubscribeModule);
 
@@ -444,7 +444,7 @@ type
     Module:  TIdSipSubscribeModule;
     Package: TIdSipEventPackage;
 
-    function  CreateDialog(Response: TIdSipMessage): TIdSipDialog; virtual; abstract;
+    function  CreateDialog(Response: TIdSipMessage): TIdSipDialog; virtual;
     function  CreateNewAttempt: TIdSipRequest; override;
     procedure EstablishDialog(Response: TIdSipMessage); virtual;
     procedure Initialise(UA: TIdSipAbstractCore;
@@ -833,7 +833,7 @@ const
 implementation
 
 uses
-  IdRegisteredObject, IdSipLocator;
+  IdRegisteredObject, IdSipLocator, RuntimeSafety;
 
 const
   BadReferNotifyBody               = 'REFER NOTIFYs MUST have '
@@ -1270,6 +1270,11 @@ begin
   // This result just seems like a reasonable length of time to subscribe for.
   // It's just a thumb-suck.
   Result := OneHour;
+end;
+
+class function TIdSipEventPackage.EventPackage: String;
+begin
+  RaiseAbstractError(Self.ClassName, 'EventPackage');
 end;
 
 constructor TIdSipEventPackage.Create(Module: TIdSipSubscribeModule);
@@ -1887,6 +1892,11 @@ begin
 end;
 
 //* TIdSipSubscription Protected methods ***************************************
+
+function TIdSipSubscription.CreateDialog(Response: TIdSipMessage): TIdSipDialog;
+begin
+  RaiseAbstractError(Self.ClassName, 'CreateDialog');
+end;
 
 function TIdSipSubscription.CreateNewAttempt: TIdSipRequest;
 begin

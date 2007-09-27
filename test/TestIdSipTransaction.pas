@@ -253,7 +253,7 @@ type
     procedure TransactionFail(Sender: TObject;
                               const Reason: String);
     procedure Terminated(Sender: TIdSipTransaction);
-    function  TransactionType: TIdSipTransactionClass; virtual; abstract;
+    function  TransactionType: TIdSipTransactionClass; virtual;
     procedure UseReliableTransport;
   public
     procedure SetUp; override;
@@ -716,7 +716,7 @@ implementation
 
 uses
   Classes, IdException, IdRandom, IdRegisteredObject, IdRoutingTable, IdSdp,
-  LoGGer, Math, TypInfo;
+  LoGGer, Math, RuntimeSafety, TypInfo;
 
 function Suite: ITestSuite;
 begin
@@ -2732,6 +2732,11 @@ procedure TTestTransaction.Terminated(Sender: TIdSipTransaction);
 begin
   Self.TransactionTerminated := true;
   Self.ThreadEvent.SetEvent;
+end;
+
+function TTestTransaction.TransactionType: TIdSipTransactionClass;
+begin
+  Fail(Self.ClassName + 'must override TransactionType');
 end;
 
 procedure TTestTransaction.UseReliableTransport;

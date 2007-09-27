@@ -31,7 +31,7 @@ type
   protected
     P: TIdSipParameter;
 
-    function CreateParameter: TIdSipParameter; virtual; abstract;
+    function CreateParameter: TIdSipParameter; virtual;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -409,7 +409,7 @@ type
     procedure SetUp; override;
   published
     procedure TestDomain;
-    procedure TestName; virtual; abstract;
+    procedure TestName; virtual;
     procedure TestRemoveStaleResponse;
     procedure TestStale;
     procedure TestValue; override;
@@ -711,7 +711,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestAddInReverseOrder; virtual; abstract;
+    procedure TestAddInReverseOrder; virtual;
   end;
 
   TestTIdSipHeadersFilter = class(TTestHeadersList)
@@ -858,7 +858,8 @@ type
 implementation
 
 uses
-  Classes, IdSipMockTransport, IdSipTransport, IdSystem, IdUnicode, SysUtils;
+  Classes, IdSipMockTransport, IdSipTransport, IdSystem, IdUnicode,
+  RuntimeSafety, SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -1163,6 +1164,13 @@ begin
   Self.P.Free;
 
   inherited TearDown;
+end;
+
+//* TIdSipParameterTestCase Protected methods **********************************
+
+function TIdSipParameterTestCase.CreateParameter: TIdSipParameter;
+begin
+  RaiseAbstractError(Self.ClassName, 'CreateParameter');
 end;
 
 //* TIdSipParameterTestCase Published methods **********************************
@@ -4423,6 +4431,11 @@ begin
               Self.ClassName + ' Domain');
 end;
 
+procedure TestTIdSipAuthenticateHeader.TestName;
+begin
+  Fail(Self.ClassName + ' must override TestName');
+end;
+
 procedure TestTIdSipAuthenticateHeader.TestRemoveStaleResponse;
 begin
   Self.A.Stale := true;
@@ -6815,6 +6828,13 @@ begin
   Self.Headers.Free;
 
   inherited TearDown;
+end;
+
+//* TTestHeadersList Published methods *****************************************
+
+procedure TTestHeadersList.TestAddInReverseOrder;
+begin
+  Fail(Self.ClassName + ' must override TestAddInReverseOrder');
 end;
 
 //******************************************************************************

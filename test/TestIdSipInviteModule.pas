@@ -339,7 +339,7 @@ type
                                   const Msg: String); virtual;
     function  CreateAndEstablishSession: TIdSipSession;
     function  CreateRemoteReInvite(LocalDialog: TIdSipDialog): TIdSipRequest;
-    procedure EstablishSession(Session: TIdSipSession); virtual; abstract;
+    procedure EstablishSession(Session: TIdSipSession); virtual;
     function  MultiStreamSdp: String;
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
@@ -3859,6 +3859,11 @@ begin
 
     raise;
   end;
+end;
+
+procedure TestTIdSipSession.EstablishSession(Session: TIdSipSession);
+begin
+  Fail(Self.ClassName + ' must override EstablishSession');
 end;
 
 function TestTIdSipSession.MultiStreamSdp: String;

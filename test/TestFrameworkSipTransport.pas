@@ -117,7 +117,7 @@ type
                                    const Msg: String);
     procedure CheckServerOnPort(const Host: String;
                                 Port: Cardinal;
-                                const Msg: String); virtual; abstract;
+                                const Msg: String); virtual;
     procedure CheckUseRport(Sender: TObject;
                             R: TIdSipRequest;
                             ReceivedFrom: TIdSipConnectionBindings);
@@ -147,7 +147,7 @@ type
                              R: TIdSipRequest;
                              ReceivedFrom: TIdSipConnectionBindings);
     procedure SendFromLowTransport(Msg: String); virtual;
-    procedure SendMessage(Msg: String); virtual; abstract;
+    procedure SendMessage(Msg: String); virtual;
     procedure SendOkResponse(Transport: TIdSipTransport);
     procedure SetEvent(Sender: TObject;
                        R: TIdSipResponse;
@@ -752,6 +752,13 @@ begin
     Fail('Server running on ' + Host + ':' + IntToStr(Port) + '; ' + Msg);
 end;
 
+procedure TestTIdSipTransport.CheckServerOnPort(const Host: String;
+                                                Port: Cardinal;
+                                                const Msg: String);
+begin
+  Fail(Self.ClassName + ' must override CheckServerOnPort');
+end;
+
 procedure TestTIdSipTransport.CheckUseRport(Sender: TObject;
                                             R: TIdSipRequest;
                                             ReceivedFrom: TIdSipConnectionBindings);
@@ -897,6 +904,11 @@ begin
                        + IntToStr(Self.HighPortLocation.Port), [rfReplaceAll]);
 
   Self.SendMessage(Msg);
+end;
+
+procedure TestTIdSipTransport.SendMessage(Msg: String);
+begin
+  Fail(Self.ClassName + ' must override SendMessage');
 end;
 
 procedure TestTIdSipTransport.SendOkResponse(Transport: TIdSipTransport);

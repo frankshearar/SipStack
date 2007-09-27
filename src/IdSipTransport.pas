@@ -72,7 +72,7 @@ type
   protected
     procedure DestroyServer; virtual;
     function  GetAddress: String; virtual;
-    function  GetBindings: TIdSocketHandles; virtual; abstract;
+    function  GetBindings: TIdSocketHandles; virtual;
     function  GetPort: Cardinal; virtual;
     function  IndexOfBinding(const Address: String; Port: Cardinal): Integer;
     procedure InstantiateServer; virtual;
@@ -115,7 +115,7 @@ type
                                Target: TIdSipConnectionBindings;
                                const StatusText: String);
     procedure SendMessage(M: TIdSipMessage;
-                          Dest: TIdSipConnectionBindings); virtual; abstract;
+                          Dest: TIdSipConnectionBindings); virtual;
     procedure SendRequest(R: TIdSipRequest;
                           Dest: TIdSipLocation);
     procedure SendResponse(R: TIdSipResponse;
@@ -129,7 +129,7 @@ type
     property Bindings: TIdSocketHandles read GetBindings;
   public
     class function  DefaultPort: Cardinal; virtual;
-    class function  GetTransportType: String; virtual; abstract;
+    class function  GetTransportType: String; virtual;
     class function  IsSecure: Boolean; virtual;
     class function  SrvPrefix: String; virtual;
     class function  SrvQuery(const Domain: String): String;
@@ -393,7 +393,8 @@ const
 implementation
 
 uses
-  IdRegisteredObject, IdTCPServer, IdIOHandlerSocket, LogVariables;
+  IdRegisteredObject, IdTCPServer, IdIOHandlerSocket, LogVariables,
+  RuntimeSafety;
 
 var
   GTransportTypes: TStrings;
@@ -406,6 +407,12 @@ var
 class function TIdSipTransport.DefaultPort: Cardinal;
 begin
   Result := DefaultSipPort;
+end;
+
+class function TIdSipTransport.GetTransportType: String;
+begin
+  Result := '';
+  RaiseAbstractError(Self.ClassName, 'GetTransportType');
 end;
 
 class function TIdSipTransport.IsSecure: Boolean;
@@ -735,6 +742,12 @@ begin
   Result := Self.fAddress;
 end;
 
+function TIdSipTransport.GetBindings: TIdSocketHandles;
+begin
+  Result := nil;
+  RaiseAbstractError(Self.ClassName, 'GetBindings');
+end;
+
 function TIdSipTransport.GetPort: Cardinal;
 begin
   Result := Self.fPort;
@@ -973,6 +986,12 @@ begin
   finally
     Res.Free;
   end;
+end;
+
+procedure TIdSipTransport.SendMessage(M: TIdSipMessage;
+                                      Dest: TIdSipConnectionBindings);
+begin
+  RaiseAbstractError(Self.ClassName, 'SendMessage');
 end;
 
 procedure TIdSipTransport.SendRequest(R: TIdSipRequest;

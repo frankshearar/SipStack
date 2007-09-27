@@ -249,7 +249,7 @@ type
 
   TIdSipPendingConfigurationAction = class(TObject)
   public
-    procedure Execute; virtual; abstract;
+    procedure Execute; virtual;
   end;
 
   TIdSipPendingCoreConfigurationAction = class(TIdSipPendingConfigurationAction)
@@ -461,7 +461,8 @@ implementation
 uses
   IdMockRoutingTable, IdRegisteredObject, IdSimpleParser, IdSipDns,
   IdSipIndyLocator, IdSipLocation, IdSipMockBindingDatabase,
-  IdSipSubscribeModule, IdSystem, IdUnicode, LogVariables, SysUtils;
+  IdSipSubscribeModule, IdSystem, IdUnicode, LogVariables, RuntimeSafety,
+  SysUtils;
 
 //******************************************************************************
 //* Unit Public functions & procedures                                         *
@@ -1740,6 +1741,16 @@ begin
   EatDirective(Line);
 
   UserAgent.InstanceID := Line;
+end;
+
+//******************************************************************************
+//* TIdSipPendingConfigurationAction                                           *
+//******************************************************************************
+//* TIdSipPendingConfigurationAction Public methods ****************************
+
+procedure TIdSipPendingConfigurationAction.Execute;
+begin
+  RaiseAbstractError(Self.ClassName, 'Execute');
 end;
 
 //******************************************************************************

@@ -457,7 +457,7 @@ type
     Module:           TIdSipInviteModule;
 
     procedure ActionSucceeded(Response: TIdSipResponse); override;
-    function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID; virtual; abstract;
+    function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID; virtual;
     function  CreateNewAttempt: TIdSipRequest; override;
     function  GetDialog: TIdSipDialog; virtual;
     function  GetFullyEstablished: Boolean; virtual;
@@ -888,7 +888,7 @@ implementation
 
 uses
   IdRandom, IdRegisteredObject, IdSdp, IdSipSubscribeModule, IdSipUserAgent,
-  IdSipTransaction, SysUtils;
+  IdSipTransaction, RuntimeSafety, SysUtils;
 
 // Exception messages
 const
@@ -2373,6 +2373,12 @@ procedure TIdSipSession.ActionSucceeded(Response: TIdSipResponse);
 begin
   if Self.DialogEstablished then
     Self.Dialog.ReceiveResponse(Response);
+end;
+
+function TIdSipSession.CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID;
+begin
+  Result := nil;
+  RaiseAbstractError(Self.ClassName, 'CreateDialogIDFrom');
 end;
 
 function TIdSipSession.CreateNewAttempt: TIdSipRequest;

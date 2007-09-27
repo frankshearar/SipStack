@@ -25,10 +25,10 @@ type
     function NextHexString: String;
     function NextHighestPowerOf2(N: Cardinal): Cardinal;
     function NextRandomBits(NumBits: Cardinal): Cardinal;
-    function NextSipUserAgentTag: String; virtual; abstract;
+    function NextSipUserAgentTag: String; virtual;
     function NextWord: Word;
     function NumBitsNeeded(N: Cardinal): Cardinal;
-    function Next128bitNumber: String; virtual; abstract;
+    function Next128bitNumber: String; virtual;
   end;
 
   // I do NOT supply you with cryptographically adequate random numbers!
@@ -56,8 +56,7 @@ function  MultiplyCardinal(FirstValue, SecondValue: Cardinal): Cardinal;
 implementation
 
 uses
-
-  IdSimpleParser, IdSystem, SysUtils;
+  IdSimpleParser, IdSystem, RuntimeSafety, SysUtils;
 
 //******************************************************************************
 //* Unit public functions & procedures                                         *
@@ -151,6 +150,12 @@ begin
     Result := Random(1 shl NumBits);
 end;
 
+function TIdRandomNumber.NextSipUserAgentTag: String;
+begin
+  Result := '';
+  RaiseAbstractError(Self.ClassName, 'NextSipUserAgentTag');
+end;
+
 function TIdRandomNumber.NextWord: Word;
 begin
   Result := Self.NextRandomBits(Self.NumBitsNeeded(High(Word)));
@@ -163,6 +168,12 @@ begin
     N := N div 2;
     Inc(Result);
   end;
+end;
+
+function TIdRandomNumber.Next128bitNumber: String;
+begin
+  Result := '';
+  RaiseAbstractError(Self.ClassName, 'Next128bitNumber');
 end;
 
 //******************************************************************************

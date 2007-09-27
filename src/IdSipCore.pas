@@ -591,7 +591,7 @@ type
     TargetLocations: TIdSipLocations;
 
     procedure ActionSucceeded(Response: TIdSipResponse); virtual;
-    function  CreateNewAttempt: TIdSipRequest; virtual; abstract;
+    function  CreateNewAttempt: TIdSipRequest; virtual;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
                          Binding: TIdSipConnectionBindings); virtual;
@@ -632,7 +632,7 @@ type
     function  IsRegistration: Boolean; virtual;
     function  IsSession: Boolean; virtual;
     function  Match(Msg: TIdSipMessage): Boolean; virtual;
-    function  Method: String; virtual; abstract;
+    function  Method: String; virtual;
     procedure NetworkFailureSending(Msg: TIdSipMessage); virtual;
     procedure ReceiveRequest(Request: TIdSipRequest;
                              Binding: TIdSipConnectionBindings); virtual;
@@ -985,7 +985,7 @@ implementation
 
 uses
   IdRandom, IdSdp, IdSipInviteModule, IdSipOptionsModule, IdSipRegistration,
-  IdSipSubscribeModule, IdSipTransport;
+  IdSipSubscribeModule, IdSipTransport, RuntimeSafety;
 
 const
   ItemNotFoundIndex = -1;
@@ -2939,6 +2939,11 @@ begin
     Result := Self.InitialRequest.Match(Msg);
 end;
 
+function TIdSipAction.Method: String;
+begin
+  RaiseAbstractError(Self.ClassName, 'Method');
+end;
+
 procedure TIdSipAction.NetworkFailureSending(Msg: TIdSipMessage);
 var
   FailReason: String;
@@ -3068,6 +3073,12 @@ procedure TIdSipAction.ActionSucceeded(Response: TIdSipResponse);
 begin
   // By default do nothing.
   Self.State := asFinished;
+end;
+
+function TIdSipAction.CreateNewAttempt: TIdSipRequest;
+begin
+  Result := nil;
+  RaiseAbstractError(Self.ClassName, 'CreateNewAttempt');
 end;
 
 procedure TIdSipAction.Initialise(UA: TIdSipAbstractCore;

@@ -216,7 +216,7 @@ type
                                  Binding: TIdSipConnectionBindings); overload; virtual;
     procedure DoOnTimeout(Request: TIdSipRequest;
                           const Reason: String);
-    procedure NotifyOfFailure(const Reason: String); overload; virtual; abstract;
+    procedure NotifyOfFailure(const Reason: String); overload; virtual;
     procedure NotifyOfFailure(FailedMessage: TIdSipMessage;
                               const Reason: String); overload;
     procedure NotifyOfRequest(R: TIdSipRequest;
@@ -598,7 +598,7 @@ const
 implementation
 
 uses
-  IdException, IdRegisteredObject, IdSipDialogID, Math;
+  IdException, IdRegisteredObject, IdSipDialogID, Math, RuntimeSafety;
 
 const
   AtLeastOneVia         = 'Messages must have at least one Via header';
@@ -1449,6 +1449,11 @@ begin
   end;
 
   Self.ChangeToTerminated(false);
+end;
+
+procedure TIdSipTransaction.NotifyOfFailure(const Reason: String);
+begin
+  RaiseAbstractError(Self.ClassName, 'NotifyOfFailure(String)');
 end;
 
 procedure TIdSipTransaction.NotifyOfFailure(FailedMessage: TIdSipMessage;

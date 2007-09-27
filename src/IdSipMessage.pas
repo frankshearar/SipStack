@@ -1168,25 +1168,25 @@ type
   // External Iterator methods.
   TIdSipHeaderList = class(TObject)
   protected
-    function GetItems(I: Integer): TIdSipHeader; virtual; abstract;
+    function GetItems(I: Integer): TIdSipHeader; virtual;
   public
-    function  Add(const HeaderName: String): TIdSipHeader; overload; virtual; abstract;
-    procedure Add(Copy: TIdSipHeader); overload; virtual; abstract;
-    procedure Add(Headers: TIdSipHeaderList); overload; virtual; abstract;
+    function  Add(const HeaderName: String): TIdSipHeader; overload; virtual;
+    procedure Add(Copy: TIdSipHeader); overload; virtual;
+    procedure Add(Headers: TIdSipHeaderList); overload; virtual;
     procedure AddInReverseOrder(Headers: TIdSipHeaderList);
     function  AsString: String;
-    procedure Clear; virtual; abstract;
-    function  Count: Integer; virtual; abstract;
-    function  CurrentHeader: TIdSipHeader; virtual; abstract;
-    procedure First; virtual; abstract;
+    procedure Clear; virtual;
+    function  Count: Integer; virtual;
+    function  CurrentHeader: TIdSipHeader; virtual;
+    procedure First; virtual;
     function  FirstMalformedHeader: TIdSipHeader;
     function  HasEqualValues(const OtherHeaders: TIdSipHeaderList): Boolean;
     function  IsMalformed: Boolean;
-    function  HasNext: Boolean; virtual; abstract;
+    function  HasNext: Boolean; virtual;
     function  Equals(OtherHeaders: TIdSipHeaderList): Boolean;
     function  IsEmpty: Boolean; virtual;
-    procedure Next; virtual; abstract;
-    procedure Remove(Header: TIdSipHeader); virtual; abstract;
+    procedure Next; virtual;
+    procedure Remove(Header: TIdSipHeader); virtual;
 
     property Items[I: Integer]: TIdSipHeader read GetItems;
   end;
@@ -1412,15 +1412,15 @@ type
     procedure SetTo(Value: TIdSipToHeader);
   protected
     procedure FailParse(const Reason: String);
-    function  FirstLine: String; virtual; abstract;
+    function  FirstLine: String; virtual;
     function  HasMalformedHeaders: Boolean;
     function  HasMalformedFirstLine: Boolean; virtual;
     function  MatchRequest(InitialRequest: TIdSipRequest;
                            UseCSeqMethod: Boolean): Boolean;
     function  MatchRFC2543Request(InitialRequest: TIdSipRequest;
-                                     UseCSeqMethod: Boolean): Boolean; virtual; abstract;
+                                     UseCSeqMethod: Boolean): Boolean; virtual;
     function  MatchRFC3261Request(InitialRequest: TIdSipRequest;
-                                     UseCSeqMethod: Boolean): Boolean; virtual; abstract;
+                                     UseCSeqMethod: Boolean): Boolean; virtual;
     function  MissingRequiredHeaders: Boolean; virtual;
     procedure ParseCompoundHeader(const Header: String;
                                   Parms: String);
@@ -1428,7 +1428,7 @@ type
     procedure ParseHeader(Parser: TIdSipParser;
                           const RawHeader: String);
     procedure ParseHeaders(Parser: TIdSipParser);
-    procedure ParseStartLine(Parser: TIdSipParser); virtual; abstract;
+    procedure ParseStartLine(Parser: TIdSipParser); virtual;
 
     property RawFirstLine: String read fRawFirstLine;
   public
@@ -1467,13 +1467,13 @@ type
     function  IsMalformed: Boolean; virtual;
     function  HeaderCount: Integer;
     function  QuickestExpiry: Cardinal;
-    function  Equals(Msg: TIdSipMessage): Boolean; virtual; abstract;
+    function  Equals(Msg: TIdSipMessage): Boolean; virtual;
     function  IsAck: Boolean; virtual;
     function  IsOK: Boolean; overload; virtual;
-    function  IsRequest: Boolean; virtual; abstract;
+    function  IsRequest: Boolean; virtual;
     function  IsResponse: Boolean;
     function  LastHop: TIdSipViaHeader;
-    function  MalformedException: EBadMessageClass; virtual; abstract;
+    function  MalformedException: EBadMessageClass; virtual;
     procedure MarkAsInvalid(const Reason: String);
     function  ParseFailReason: String;
     procedure Parse(Parser: TIdSipParser); virtual;
@@ -2264,7 +2264,7 @@ const
 implementation
 
 uses
-  IdSipDialog, IdSipTransport, IdUnicode, Math;
+  IdSipDialog, IdSipTransport, IdUnicode, Math, RuntimeSafety;
 
 const
   OffsetMustBeNonNegative = 'Offset must be greater or equal to zero';
@@ -7301,6 +7301,22 @@ end;
 //******************************************************************************
 //* TIdSipHeaderList Public methods ********************************************
 
+function TIdSipHeaderList.Add(const HeaderName: String): TIdSipHeader;
+begin
+  Result := nil;
+  RaiseAbstractError(Self.ClassName, 'Add(String)');
+end;
+
+procedure TIdSipHeaderList.Add(Copy: TIdSipHeader);
+begin
+  RaiseAbstractError(Self.ClassName, 'Add(TIdSipHeader)');
+end;
+
+procedure TIdSipHeaderList.Add(Headers: TIdSipHeaderList);
+begin
+  RaiseAbstractError(Self.ClassName, 'Add(TIdSipHeaderList)');
+end;
+
 procedure TIdSipHeaderList.AddInReverseOrder(Headers: TIdSipHeaderList);
 var
   I: Integer;
@@ -7318,6 +7334,28 @@ begin
     Result := Result + Self.CurrentHeader.AsString + EOL;
     Self.Next;
   end;
+end;
+
+procedure TIdSipHeaderList.Clear;
+begin
+  RaiseAbstractError(Self.ClassName, 'Clear');
+end;
+
+function TIdSipHeaderList.Count: Integer;
+begin
+  Result := 0;
+  RaiseAbstractError(Self.ClassName, 'Count');
+end;
+
+function TIdSipHeaderList.CurrentHeader: TIdSipHeader;
+begin
+  Result := nil;
+  RaiseAbstractError(Self.ClassName, 'CurrentHeader');
+end;
+
+procedure TIdSipHeaderList.First;
+begin
+  RaiseAbstractError(Self.ClassName, 'First');
 end;
 
 function TIdSipHeaderList.FirstMalformedHeader: TIdSipHeader;
@@ -7353,6 +7391,12 @@ end;
 function TIdSipHeaderList.IsMalformed: Boolean;
 begin
   Result := Self.FirstMalformedHeader <> nil;
+end;
+
+function TIdSipHeaderList.HasNext: Boolean;
+begin
+  Result := false;
+  RaiseAbstractError(Self.ClassName, 'HasNext');
 end;
 
 function TIdSipHeaderList.Equals(OtherHeaders: TIdSipHeaderList): Boolean;
@@ -7400,6 +7444,24 @@ end;
 function TIdSipHeaderList.IsEmpty: Boolean;
 begin
   Result := Self.Count = 0;
+end;
+
+procedure TIdSipHeaderList.Next;
+begin
+  RaiseAbstractError(Self.ClassName, 'Next');
+end;
+
+procedure TIdSipHeaderList.Remove(Header: TIdSipHeader);
+begin
+  RaiseAbstractError(Self.ClassName, 'Remove');
+end;
+
+//* TIdSipHeaderList Protected methods *****************************************
+
+function TIdSipHeaderList.GetItems(I: Integer): TIdSipHeader;
+begin
+  Result := nil;
+  RaiseAbstractError(Self.ClassName, 'GetItems');
 end;
 
 //******************************************************************************
@@ -8349,12 +8411,23 @@ begin
   end;
 end;
 
+function TIdSipMessage.Equals(Msg: TIdSipMessage): Boolean;
+begin
+  Result := false;
+  RaiseAbstractError(Self.ClassName, 'Equals');
+end;
+
 function TIdSipMessage.IsAck: Boolean;
 begin
   Result := false;
 end;
 
 function TIdSipMessage.IsOK: Boolean;
+begin
+  Result := false;
+end;
+
+function TIdSipMessage.IsRequest: Boolean;
 begin
   Result := false;
 end;
@@ -8367,6 +8440,12 @@ end;
 function TIdSipMessage.LastHop: TIdSipViaHeader;
 begin
   Result := Self.Path.LastHop;
+end;
+
+function TIdSipMessage.MalformedException: EBadMessageClass;
+begin
+  Result := nil;
+  RaiseAbstractError(Self.ClassName, 'MalformedException');
 end;
 
 procedure TIdSipMessage.MarkAsInvalid(const Reason: String);
@@ -8537,6 +8616,12 @@ begin
   raise Self.MalformedException.Create(Reason, Self.RawMessage);
 end;
 
+function TIdSipMessage.FirstLine: String;
+begin
+  Result := '';
+  RaiseAbstractError(Self.ClassName, 'FirstLine');
+end;
+
 function TIdSipMessage.HasMalformedHeaders: Boolean;
 begin
   Result := Self.Headers.IsMalformed;
@@ -8575,6 +8660,20 @@ begin
     Result := Self.MatchRFC3261Request(InitialRequest, UseCSeqMethod)
   else
     Result := Self.MatchRFC2543Request(InitialRequest, UseCSeqMethod);
+end;
+
+function TIdSipMessage.MatchRFC2543Request(InitialRequest: TIdSipRequest;
+                                           UseCSeqMethod: Boolean): Boolean;
+begin
+  Result := false;
+  RaiseAbstractError(Self.ClassName, 'MatchRFC2543Request');
+end;
+
+function TIdSipMessage.MatchRFC3261Request(InitialRequest: TIdSipRequest;
+                                           UseCSeqMethod: Boolean): Boolean;
+begin
+  Result := false;
+  RaiseAbstractError(Self.ClassName, 'MatchRFC3261Request');
 end;
 
 function TIdSipMessage.MissingRequiredHeaders: Boolean;
@@ -8667,6 +8766,11 @@ begin
     if (FoldedHeader <> '') then
       Self.ParseHeader(Parser, FoldedHeader);
   end;
+end;
+
+procedure TIdSipMessage.ParseStartLine(Parser: TIdSipParser);
+begin
+  RaiseAbstractError(Self.ClassName, 'ParseStartLine');
 end;
 
 //* TIdSipMessage Private methods **********************************************

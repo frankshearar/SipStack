@@ -64,7 +64,7 @@ type
     procedure AddRequiredHeaders(Msg: TIdSipMessage);
     procedure CheckBasicMessage(Msg: TIdSipMessage;
                                 CheckBody: Boolean = true);
-    function  MessageType: TIdSipMessageClass; virtual; abstract;
+    function  MessageType: TIdSipMessageClass; virtual;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -405,7 +405,8 @@ type
 implementation
 
 uses
-  Classes, IdSimpleParser, IdSipMockTransport, IdSipTransport, TestMessages;
+  Classes, IdSimpleParser, IdSipMockTransport, IdSipTransport, RuntimeSafety,
+  TestMessages;
 
 const
   AllMethods: array[1..9] of String = (MethodAck, MethodBye, MethodCancel,
@@ -812,6 +813,11 @@ begin
 
   if CheckBody then
     CheckEquals(BasicBody, Msg.Body, 'message-body');
+end;
+
+function TestTIdSipMessage.MessageType: TIdSipMessageClass;
+begin
+  RaiseAbstractError(Self.ClassName, 'MessageType');
 end;
 
 //* TestTIdSipMessage Published methods ****************************************

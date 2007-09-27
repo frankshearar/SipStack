@@ -319,14 +319,14 @@ type
     constructor Create;
 
     procedure Assign(Src: TPersistent); override;
-    function  Copy: TIdRTPBasePacket; virtual; abstract;
+    function  Copy: TIdRTPBasePacket; virtual;
     function  IsRTCP: Boolean; virtual;
     function  IsRTP: Boolean; virtual;
     function  IsValid: Boolean; virtual;
     procedure PrepareForTransmission(Session: TIdRTPSession); virtual;
-    procedure PrintOn(Dest: TStream); virtual; abstract;
-    procedure ReadFrom(Src: TStream); virtual; abstract;
-    function  RealLength: Word; virtual; abstract;
+    procedure PrintOn(Dest: TStream); virtual;
+    procedure ReadFrom(Src: TStream); virtual;
+    function  RealLength: Word; virtual;
 
     property HasPadding: Boolean       read fHasPadding write fHasPadding;
     property Length:     Word          read GetLength write SetLength;
@@ -396,7 +396,7 @@ type
   TIdRTCPPacket = class(TIdRTPBasePacket)
   protected
     procedure AssertPacketType(PT: Byte);
-    function  GetPacketType: Byte; virtual; abstract;
+    function  GetPacketType: Byte; virtual;
   public
     class function RTCPType(PacketType: Byte): TIdRTCPPacketClass;
 
@@ -415,7 +415,7 @@ type
 
   TIdRTCPMultiSSRCPacket = class(TIdRTCPPacket)
   public
-    function GetAllSrcIDs: TCardinalDynArray; virtual; abstract;
+    function GetAllSrcIDs: TCardinalDynArray; virtual;
   end;
 
   TIdRTCPReceiverReport = class(TIdRTCPMultiSSRCPacket)
@@ -489,7 +489,7 @@ type
   public
     class function ItemType(ID: Byte): TIdSrcDescChunkItemClass;
 
-    function  ID: Byte; virtual; abstract;
+    function  ID: Byte; virtual;
     function  Length: Byte;
     procedure PrintOn(Dest: TStream); virtual;
     procedure ReadFrom(Src: TStream); virtual;
@@ -1417,7 +1417,7 @@ implementation
 
 uses
   DateUtils, IdHash, IdHashMessageDigest, IdRandom, IdRegisteredObject,
-  IdSimpleParser, IdSystem, IdUnicode, Math;
+  IdSimpleParser, IdSystem, IdUnicode, Math, RuntimeSafety;
 
 const
   JanOne1900           = 2;
@@ -2510,6 +2510,12 @@ begin
   end;
 end;
 
+function TIdRTPBasePacket.Copy: TIdRTPBasePacket;
+begin
+  Result := nil;
+  RaiseAbstractError(Self.ClassName, 'Copy');
+end;
+
 function TIdRTPBasePacket.IsRTCP: Boolean;
 begin
   Result := false;
@@ -2528,6 +2534,22 @@ end;
 procedure TIdRTPBasePacket.PrepareForTransmission(Session: TIdRTPSession);
 begin
   Self.SyncSrcID := Session.SyncSrcID;
+end;
+
+procedure TIdRTPBasePacket.PrintOn(Dest: TStream);
+begin
+  RaiseAbstractError(Self.ClassName, 'PrintOn');
+end;
+
+procedure TIdRTPBasePacket.ReadFrom(Src: TStream);
+begin
+  RaiseAbstractError(Self.ClassName, 'ReadFrom');
+end;
+
+function TIdRTPBasePacket.RealLength: Word;
+begin
+  Result := 0;
+  RaiseAbstractError(Self.ClassName, 'RealLength');
 end;
 
 //* TIdRTPBasePacket Protected methods *****************************************
@@ -2917,6 +2939,23 @@ begin
          Self.ClassName + ' packet type');
 end;
 
+function TIdRTCPPacket.GetPacketType: Byte;
+begin
+  Result := 0;
+  RaiseAbstractError(Self.ClassName, 'GetPacketType');
+end;
+
+//******************************************************************************
+//* TIdRTCPMultiSSRCPacket                                                     *
+//******************************************************************************
+//* TIdRTCPMultiSSRCPacket Public methods **************************************
+
+function TIdRTCPMultiSSRCPacket.GetAllSrcIDs: TCardinalDynArray;
+begin
+  Result := nil;
+  RaiseAbstractError(Self.ClassName, 'GetAllSrcIDs');
+end;
+
 //******************************************************************************
 //* TIdRTCPReceiverReport                                                      *
 //******************************************************************************
@@ -3146,6 +3185,12 @@ begin
   else
     raise EUnknownSDES.Create('Unknown SDES type ' + IntToStr(ID));
   end;
+end;
+
+function TIdSrcDescChunkItem.ID: Byte;
+begin
+  Result := 0;
+  RaiseAbstractError(Self.ClassName, 'ID');
 end;
 
 function TIdSrcDescChunkItem.Length: Byte;

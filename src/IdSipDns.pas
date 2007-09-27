@@ -32,7 +32,7 @@ type
 
   TIdResourceRecord = class(TObject)
   public
-    function ResourceType: String; virtual; abstract;
+    function ResourceType: String; virtual;
   end;
 
   // I represent a name record of some sort. I might contain an A (RFC 1034) or
@@ -323,7 +323,7 @@ function SrvSort(Item1, Item2: Pointer): Integer;
 implementation
 
 uses
-  IdSimpleParser, IdSipMessage, SysUtils;
+  IdSimpleParser, IdSipMessage, RuntimeSafety, SysUtils;
 
 const
   ItemNotFoundIndex = -1;
@@ -605,6 +605,16 @@ end;
 function TIdBaseList.IsEmpty: Boolean;
 begin
   Result := Self.Count = 0;
+end;
+
+//******************************************************************************
+//* TIdResourceRecord                                                          *
+//******************************************************************************
+//* TIdResourceRecord Public methods *******************************************
+
+function TIdResourceRecord.ResourceType: String;
+begin
+  RaiseAbstractError(Self.ClassName, 'Method');
 end;
 
 //******************************************************************************
