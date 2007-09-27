@@ -210,6 +210,7 @@ type
     function  CreatePlatformRoutingTable: TIdRoutingTable;
     procedure InstantiateMissingObjectsAsDefaults(UserAgent: TIdSipUserAgent);
     function  InstantiateRegistrarModule(UserAgent: TIdSipUserAgent): TIdSipRegisterModule;
+    function  VerbosityNameToLevel(S: String): TLogVerbosityLevel;
     procedure ParseFile(UserAgent: TIdSipUserAgent;
                         Configuration: TStrings;
                         PendingActions: TObjectList);
@@ -998,6 +999,10 @@ begin
 
   UserAgent.Logger := Self.CreateLogger;
   UserAgent.Dispatcher.Logger := UserAgent.Logger;
+
+  TIdObjectRegistry.SetLogger(UserAgent.Logger,
+                              coSipStackLogName,
+                              coLogSourceRefSIPStack);
 end;
 
 procedure TIdSipStackConfigurator.AddLogVerbosityLevel(UserAgent: TIdSipAbstractCore;
@@ -1010,7 +1015,12 @@ begin
   Line := LogVerbosityLevelLine;
   EatDirective(Line);
 
-  Verbosity := StrToIntDef(Line, LoGGerVerbosityLevelNormal);
+  if TIdSimpleParser.IsNumber(Line) then begin
+    Verbosity := StrToIntDef(Line, LoGGerVerbosityLevelNormal);
+  end
+  else begin
+    Verbosity := Self.VerbosityNameToLevel(Line);
+  end;
 
   Self.AddLogger(UserAgent);
 
@@ -1527,6 +1537,24 @@ begin
     Result := UserAgent.AddModule(TIdSipRegisterModule) as TIdSipRegisterModule
   else
     Result := UserAgent.ModuleFor(TIdSipRegisterModule) as TIdSipRegisterModule;
+end;
+
+function TIdSipStackConfigurator.VerbosityNameToLevel(S: String): TLogVerbosityLevel;
+begin
+       if IsEqual(S, 'debug') then
+    Result := LoGGerVerbosityLevelDebug
+  else if IsEqual(S, 'highest') then
+    Result := LoGGerVerbosityLevelHighest
+  else if IsEqual(S, 'high') then
+    Result := LoGGerVerbosityLevelHigh
+  else if IsEqual(S, 'normal') then
+    Result := LoGGerVerbosityLevelNormal
+  else if IsEqual(S, 'low') then
+    Result := LoGGerVerbosityLevelLow
+  else if IsEqual(S, 'lowest') then
+    Result := LoGGerVerbosityLevelLowest
+  else
+    Result := LoGGerVerbosityLevelNormal;
 end;
 
 procedure TIdSipStackConfigurator.ParseFile(UserAgent: TIdSipUserAgent;

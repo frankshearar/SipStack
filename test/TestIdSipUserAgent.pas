@@ -15,7 +15,7 @@ uses
   Classes, IdObservable, IdRoutingTable, IdSipCore, IdSipDialog, IdSipDialogID,
   IdSipDns, IdSipInviteModule, IdSipLocation, IdSipMessage, IdSipRegistration,
   IdSipTransport, IdSipUserAgent,  IdSocketHandle, IdUdpServer, IdTimerQueue,
-  SyncObjs, TestFrameworkEx, TestFramework, TestFrameworkSip,
+  LoGGer, SyncObjs, TestFrameworkEx, TestFramework, TestFrameworkSip,
   TestFrameworkSipTU;
 
 type
@@ -247,6 +247,19 @@ type
     procedure TestUpdateConfigurationWithTransport;
   end;
 
+  TestConfigureLogging = class(TStackConfigurationTestCase)
+  private
+    procedure TestLogVerbosityLevel(Name: String; ExpectedLevel: TLogVerbosityLevel);
+  published
+    procedure TestLogVerbosityLevelDebug;
+    procedure TestLogVerbosityLevelHigh;
+    procedure TestLogVerbosityLevelHighest;
+    procedure TestLogVerbosityLevelLow;
+    procedure TestLogVerbosityLevelLowest;
+    procedure TestLogVerbosityLevelNormal;
+    procedure TestLogVerbosityLevelUnknownName;
+  end;
+
   TestConfigureRegistrar = class(TStackConfigurationTestCase)
   private
     procedure CheckDatabaseType(ExpectedDatabase: TIdSipAbstractBindingDatabaseClass;
@@ -385,8 +398,7 @@ uses
   IdSipAuthentication, IdSipIndyLocator, IdSipMockBindingDatabase,
   IdSipMockLocator, IdSipMockTransactionDispatcher, IdSipMockTransport,
   IdSipSubscribeModule, IdSipTCPTransport, IdSipUDPTransport, IdSystem,
-  IdTcpClient, IdUnicode, LoGGer, LogVariables, SysUtils,
-  TestFrameworkSipTransport;
+  IdTcpClient, IdUnicode, LogVariables, SysUtils, TestFrameworkSipTransport;
 
 const
   // SFTF: Sip Foundry Test Framework. cf. http://www.sipfoundry.org/sftf/
@@ -438,6 +450,7 @@ begin
   Result := TTestSuite.Create('IdSipUserAgent unit tests');
   Result.AddTest(TestTIdSipUserAgent.Suite);
   Result.AddTest(TestTIdSipStackConfigurator.Suite);
+  Result.AddTest(TestConfigureLogging.Suite);
   Result.AddTest(TestConfigureRegistrar.Suite);
   Result.AddTest(TestConfigureMockRoutingTable.Suite);
   Result.AddTest(TestConfigureMockLocator.Suite);
@@ -3523,6 +3536,70 @@ begin
   finally
     UA.Free;
   end;
+end;
+
+//******************************************************************************
+//* TestConfigureLogging                                                       *
+//******************************************************************************
+//* TestConfigureLogging Private methods ***************************************
+
+procedure TestConfigureLogging.TestLogVerbosityLevel(Name: String; ExpectedLevel: TLogVerbosityLevel);
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add(LogVerbosityLevelDirective + ': ' + Name);
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(ExpectedLevel,
+                UA.Logger.Logs.LogsByName[coSipStackLogName].VerbosityLevel,
+                Name + ' resulted in incorrect verbosity level');
+  finally
+    UA.Free;
+  end;
+end;
+
+//* TestConfigureLogging Published methods *************************************
+
+procedure TestConfigureLogging.TestLogVerbosityLevelDebug;
+begin
+  Self.TestLogVerbosityLevel('debug', LoGGerVerbosityLevelDebug);
+  Self.TestLogVerbosityLevel('DEBUG', LoGGerVerbosityLevelDebug);
+end;
+
+procedure TestConfigureLogging.TestLogVerbosityLevelHigh;
+begin
+  Self.TestLogVerbosityLevel('high', LoGGerVerbosityLevelHigh);
+  Self.TestLogVerbosityLevel('HIGH', LoGGerVerbosityLevelHigh);
+end;
+
+procedure TestConfigureLogging.TestLogVerbosityLevelHighest;
+begin
+  Self.TestLogVerbosityLevel('highest', LoGGerVerbosityLevelHighest);
+  Self.TestLogVerbosityLevel('HIGHEST', LoGGerVerbosityLevelHighest);
+end;
+
+procedure TestConfigureLogging.TestLogVerbosityLevelLow;
+begin
+  Self.TestLogVerbosityLevel('low', LoGGerVerbosityLevelLow);
+  Self.TestLogVerbosityLevel('LOW', LoGGerVerbosityLevelLow);
+end;
+
+procedure TestConfigureLogging.TestLogVerbosityLevelLowest;
+begin
+  Self.TestLogVerbosityLevel('lowest', LoGGerVerbosityLevelLowest);
+  Self.TestLogVerbosityLevel('LOWEST', LoGGerVerbosityLevelLowest);
+end;
+
+procedure TestConfigureLogging.TestLogVerbosityLevelNormal;
+begin
+  Self.TestLogVerbosityLevel('normal', LoGGerVerbosityLevelNormal);
+  Self.TestLogVerbosityLevel('NORMAL', LoGGerVerbosityLevelNormal);
+end;
+
+procedure TestConfigureLogging.TestLogVerbosityLevelUnknownName;
+begin
+  Self.TestLogVerbosityLevel('unknown', LoGGerVerbosityLevelNormal);
 end;
 
 //******************************************************************************
