@@ -1895,6 +1895,7 @@ end;
 
 function TIdSipSubscription.CreateDialog(Response: TIdSipMessage): TIdSipDialog;
 begin
+  Result := nil;
   RaiseAbstractError(Self.ClassName, 'CreateDialog');
 end;
 

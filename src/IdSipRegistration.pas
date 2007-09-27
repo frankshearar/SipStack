@@ -750,6 +750,7 @@ end;
 function TIdSipAbstractBindingDatabase.IsAuthorized(User: TIdSipAddressHeader;
                                                     AddressOfRecord: TIdSipUri): Boolean;
 begin
+  Result := false;
   RaiseAbstractError(Self.ClassName, 'IsAuthorized');
 end;
 
@@ -850,12 +851,14 @@ function TIdSipAbstractBindingDatabase.AddBinding(const AddressOfRecord: String;
                                                   SequenceNo: Cardinal;
                                                   ExpiryTime: TDateTime): Boolean;
 begin
+  Result := false;
   RaiseAbstractError(Self.ClassName, 'AddBinding');
 end;
 
 function TIdSipAbstractBindingDatabase.Binding(const AddressOfRecord: String;
                                                const CanonicalUri: String): TIdRegistrarBinding;
 begin
+  Result := nil;
   RaiseAbstractError(Self.ClassName, 'Binding');
 end;
 
