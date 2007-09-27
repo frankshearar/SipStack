@@ -77,7 +77,8 @@ type
     function  IndexOfBinding(const Address: String; Port: Cardinal): Integer;
     procedure InstantiateServer; virtual;
     procedure Log(Description: String;
-                  Severity: TLogVerbosityLevel);
+                  Severity: TLogVerbosityLevel;
+                  DebugInfo: String);
     procedure LogException(FailedMessage: TIdSipMessage;
                            E: Exception;
                            Reason: String);
@@ -761,10 +762,11 @@ begin
 end;
 
 procedure TIdSipTransport.Log(Description: String;
-                              Severity: TLogVerbosityLevel);
+                              Severity: TLogVerbosityLevel;
+                              DebugInfo: String);
 begin
   if Assigned(Self.Logger) then
-    Self.Logger.Write(coSipStackLogName, Severity, coLogSourceRefSIPStack, Self.ClassName, 0, Description, '');
+    Self.Logger.Write(coSipStackLogName, Severity, coLogSourceRefSIPStack, Self.ClassName, 0, Description, DebugInfo);
 end;
 
 procedure TIdSipTransport.LogException(FailedMessage: TIdSipMessage;
@@ -773,7 +775,9 @@ procedure TIdSipTransport.LogException(FailedMessage: TIdSipMessage;
 const
   LogMsg = '%s sending %s: %s';
 begin
-  Self.Log(Format(LogMsg, [FailedMessage.Description, E.ClassName, Reason]), LoGGerVerbosityLevelNormal);
+  Self.Log(Format(LogMsg, [FailedMessage.Description, E.ClassName, Reason]),
+           LoGGerVerbosityLevelHigh,
+           FailedMessage.AsString);
 end;
 
 procedure TIdSipTransport.LogReceivedMessage(Msg: TIdSipMessage;
@@ -782,9 +786,8 @@ const
   LogMsg = 'Received %s from %s:%d on %s:%d';
 begin
   Self.Log(Format(LogMsg, [Msg.Description, ReceivedFrom.PeerIP, ReceivedFrom.PeerPort, ReceivedFrom.LocalIP, ReceivedFrom.LocalPort]),
-           LoGGerVerbosityLevelNormal);
-  Self.Log(ReceivedFrom.AsString + CRLF + Msg.AsString,
-           LoGGerVerbosityLevelDebug);
+           LoGGerVerbosityLevelLowest,
+           ReceivedFrom.AsString + CRLF + Msg.AsString);
 end;
 
 procedure TIdSipTransport.LogRejectedMessage(Msg: String;
@@ -794,9 +797,8 @@ const
   LogMsg = 'Rejected message starting "%s" from %s:%d on %s:%d: %s';
 begin
   Self.Log(Format(LogMsg, [Copy(Msg, 1, 30), ReceivedFrom.PeerIP, ReceivedFrom.PeerPort, ReceivedFrom.LocalIP, ReceivedFrom.LocalPort, Reason]),
-           LoGGerVerbosityLevelNormal);
-  Self.Log(ReceivedFrom.AsString + CRLF + Reason + CRLF + Msg,
-           LoGGerVerbosityLevelDebug);
+           LoGGerVerbosityLevelNormal,
+           ReceivedFrom.AsString + CRLF + Reason + CRLF + Msg);
 end;
 
 procedure TIdSipTransport.LogSentMessage(Msg: TIdSipMessage; SentTo: TIdSipConnectionBindings);
@@ -804,9 +806,8 @@ const
   LogMsg = 'Sent %s to %s:%d from %s:%d';
 begin
   Self.Log(Format(LogMsg, [Msg.Description, SentTo.PeerIP, SentTo.PeerPort, SentTo.LocalIP, SentTo.LocalPort]),
-           LoGGerVerbosityLevelNormal);
-  Self.Log(SentTo.AsString + CRLF + Msg.AsString,
-           LoGGerVerbosityLevelDebug);
+           LoGGerVerbosityLevelLowest,
+           SentTo.AsString + CRLF + Msg.AsString);
 end;
 
 procedure TIdSipTransport.NotifyOfReceivedRequest(Request: TIdSipRequest;
