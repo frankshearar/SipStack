@@ -789,7 +789,7 @@ const
   LogMsg = '%s sending %s: %s';
 begin
   Self.Log(Format(LogMsg, [FailedMessage.Description, E.ClassName, Reason]),
-           LoGGerVerbosityLevelHigh,
+           LoGGerVerbosityLevelLow,
            FailedMessage.AsString);
 end;
 
@@ -799,7 +799,7 @@ const
   LogMsg = 'Received %s from %s:%d on %s:%d';
 begin
   Self.Log(Format(LogMsg, [Msg.Description, ReceivedFrom.PeerIP, ReceivedFrom.PeerPort, ReceivedFrom.LocalIP, ReceivedFrom.LocalPort]),
-           LoGGerVerbosityLevelLowest,
+           LoGGerVerbosityLevelHigh,
            ReceivedFrom.AsString + CRLF + Msg.AsString);
 end;
 
@@ -819,7 +819,7 @@ const
   LogMsg = 'Sent %s to %s:%d from %s:%d';
 begin
   Self.Log(Format(LogMsg, [Msg.Description, SentTo.PeerIP, SentTo.PeerPort, SentTo.LocalIP, SentTo.LocalPort]),
-           LoGGerVerbosityLevelLowest,
+           LoGGerVerbosityLevelHigh,
            SentTo.AsString + CRLF + Msg.AsString);
 end;
 
