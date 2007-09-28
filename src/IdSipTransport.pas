@@ -78,6 +78,7 @@ type
     procedure InstantiateServer; virtual;
     procedure Log(Description: String;
                   Severity: TLogVerbosityLevel;
+                  EventRef: Cardinal;
                   DebugInfo: String);
     procedure LogException(FailedMessage: TIdSipMessage;
                            E: Exception;
@@ -776,10 +777,11 @@ end;
 
 procedure TIdSipTransport.Log(Description: String;
                               Severity: TLogVerbosityLevel;
+                              EventRef: Cardinal;
                               DebugInfo: String);
 begin
   if Assigned(Self.Logger) then
-    Self.Logger.Write(coSipStackLogName, Severity, coLogSourceRefSIPStack, Self.ClassName, 0, Description, DebugInfo);
+    Self.Logger.Write(coSipStackLogName, Severity, coLogSourceRefSIPStack, Self.ClassName, EventRef, Description, DebugInfo);
 end;
 
 procedure TIdSipTransport.LogException(FailedMessage: TIdSipMessage;
@@ -790,6 +792,7 @@ const
 begin
   Self.Log(Format(LogMsg, [FailedMessage.Description, E.ClassName, Reason]),
            LoGGerVerbosityLevelLow,
+           coLogEventException,
            FailedMessage.AsString);
 end;
 
@@ -800,6 +803,7 @@ const
 begin
   Self.Log(Format(LogMsg, [Msg.Description, ReceivedFrom.PeerIP, ReceivedFrom.PeerPort, ReceivedFrom.LocalIP, ReceivedFrom.LocalPort]),
            LoGGerVerbosityLevelHigh,
+           0,
            ReceivedFrom.AsString + CRLF + Msg.AsString);
 end;
 
@@ -811,6 +815,7 @@ const
 begin
   Self.Log(Format(LogMsg, [Copy(Msg, 1, 30), ReceivedFrom.PeerIP, ReceivedFrom.PeerPort, ReceivedFrom.LocalIP, ReceivedFrom.LocalPort, Reason]),
            LoGGerVerbosityLevelNormal,
+           0,
            ReceivedFrom.AsString + CRLF + Reason + CRLF + Msg);
 end;
 
@@ -820,6 +825,7 @@ const
 begin
   Self.Log(Format(LogMsg, [Msg.Description, SentTo.PeerIP, SentTo.PeerPort, SentTo.LocalIP, SentTo.LocalPort]),
            LoGGerVerbosityLevelHigh,
+           0,
            SentTo.AsString + CRLF + Msg.AsString);
 end;
 
