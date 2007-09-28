@@ -15,8 +15,8 @@ uses
   Classes, Contnrs, IdInterfacedObject, IdNotification, IdRegisteredObject,
   IdSipCore, IdSipDialogID, IdSipDns, IdSipInviteModule, IdSipLocation,
   IdSipMessage, IdSipOptionsModule, IdSipRegistration, IdSipSubscribeModule,
-  IdSipTransaction, IdSipTransport, IdSipUserAgent, IdTimerQueue, SyncObjs,
-  SysUtils, Messages, Windows;
+  IdSipTransaction, IdSipTransport, IdSipUserAgent, IdTimerQueue, LoGGer,
+  Messages, SyncObjs, SysUtils, Windows;
 
 type
   TIdSipHandle = Cardinal;
@@ -260,6 +260,11 @@ type
     procedure Terminate(ActionHandle: TIdSipHandle); overload;
   end;
 
+  // My subclasses allow you to extend the TIdSipStackInterface's interface
+  // without cluttering up the core interface. Note that I give unrestricted
+  // access to the StackInterface's internal UserAgent. That means that you
+  // don't usually want to create my subclasses outside of Wait objects, because
+  // of concurrency issues.
   TIdSipStackInterfaceExtension = class(TObject)
   private
     fUserAgent: TIdSipUserAgent;
@@ -278,6 +283,20 @@ type
     constructor Create(UA: TIdSipUserAgent); override;
 
     procedure TargetsFor(URI: TIdSipUri; Targets: TIdSipContacts);
+  end;
+
+  // You may instantiate me in the context of any thread, because my Log method
+  // is fully reentrant.
+  TIdLoggingExtension = class(TIdSipStackInterfaceExtension)
+  public
+    procedure Log(LogName: String;
+                  VerbosityLevel: TLogVerbosityLevel;
+                  SourceRef: Cardinal;
+                  SourceDescription: String;
+                  RefCode: Cardinal;
+                  Description,
+                  BinaryData: String);
+    procedure SetLogger(Log: TLoGGerThread);
   end;
 
   // I allow access to the UserAgent's TIdSipLocator.
@@ -2283,6 +2302,51 @@ begin
     // For now, do nothing: just return no valid targets.
     Targets.Clear;
   end;
+end;
+
+//******************************************************************************
+//* TIdLoggingExtension                                                        *
+//******************************************************************************
+//* TIdLoggingExtension Public methods *****************************************
+
+procedure TIdLoggingExtension.Log(LogName: String;
+                                  VerbosityLevel: TLogVerbosityLevel;
+                                  SourceRef: Cardinal;
+                                  SourceDescription: String;
+                                  RefCode: Cardinal;
+                                  Description,
+                                  BinaryData: String);
+var
+  L: TLoGGerThread;
+begin
+  if not Assigned(Self.UserAgent.Logger) then Exit;
+
+  L := Self.UserAgent.Logger;
+  L.Lock;
+  try
+    if not L.Logs.LogExists(LogName) then
+      L.Add(LogName);
+
+    L.Write(LogName,
+            VerbosityLevel,
+            SourceRef,
+            SourceDescription,
+            RefCode,
+            Description,
+            BinaryData);
+  finally
+    L.Unlock;
+  end;
+end;
+
+procedure TIdLoggingExtension.SetLogger(Log: TLoGGerThread);
+begin
+  // WARNING: If you configured the stack to log (through, say, the
+  // LogFileName or LogVerbosityLevel directives), DO NOT use this method!
+  // If you do, the TIdSipUserAgent will terminate Log! Plus, you'll have a
+  // TLoGGerThread running without being terminated.
+
+  Self.UserAgent.Logger := Log;
 end;
 
 //******************************************************************************
