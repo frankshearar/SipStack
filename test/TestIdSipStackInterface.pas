@@ -137,6 +137,7 @@ type
     procedure TestMakeOptionsQueryMalformedAddress;
     procedure TestMakeRegistration;
     procedure TestMakeRegistrationMultiple;
+    procedure TestMakeRegistrationMultipleMalformedContact;
     procedure TestMakeSubscription;
     procedure TestMakeSubscriptionMalformedTarget;
     procedure TestMakeSubscriptionNoSubscribeSupport;
@@ -1584,6 +1585,23 @@ begin
       Contacts.Next;
       SentContacts.Next;
     end;
+  finally
+    Contacts.Free;
+  end;
+end;
+
+procedure TestTIdSipStackInterface.TestMakeRegistrationMultipleMalformedContact;
+var
+  Contacts: TIdSipContacts;
+  Handle:   TIdSipHandle;
+begin
+  Contacts := TIdSipContacts.Create;
+  try
+    Contacts.Add(ContactHeaderFull).Value := 'sip::';
+
+    CheckEquals(IntToHex(InvalidHandle, 8),
+                IntToHex(Self.Intf.MakeRegistration(Self.Registrar, Contacts), 8),
+                'Valid handle returned when trying to register with a malformed Contact');
   finally
     Contacts.Free;
   end;
