@@ -301,6 +301,7 @@ type
     fKeyring:                TIdKeyRing;
     fLocator:                TIdSipAbstractLocator;
     fLogger:                 TLoGGerThread;
+    fLogName:                String;
     fRealm:                  String;
     fRequireAuthentication:  Boolean;
     fRoutingTable:           TIdRoutingTable;
@@ -337,6 +338,8 @@ type
     procedure RejectRequestMethodNotSupported(Request: TIdSipRequest);
     procedure RejectUnsupportedSipVersion(Request: TIdSipRequest);
     procedure SetDispatcher(Value: TIdSipTransactionDispatcher);
+    procedure SetLogger(Value: TLoGGerThread);
+    procedure SetLogName(Value: String);
     procedure SetInstanceID(Value: String);
     procedure SetRealm(const Value: String);
   protected
@@ -456,7 +459,8 @@ type
     property InstanceID:            String                      read fInstanceID write SetInstanceID;
     property Keyring:               TIdKeyRing                  read fKeyring;
     property Locator:               TIdSipAbstractLocator       read fLocator write fLocator;
-    property Logger:                TLoGGerThread               read fLogger write fLogger;
+    property Logger:                TLoGGerThread               read fLogger write SetLogger;
+    property LogName:               String                      read fLogName write SetLogName;
     property Realm:                 String                      read fRealm write SetRealm;
     property RequireAuthentication: Boolean                     read fRequireAuthentication write fRequireAuthentication;
     property RoutingTable:          TIdRoutingTable             read fRoutingTable write fRoutingTable;
@@ -2513,6 +2517,29 @@ begin
   Self.fDispatcher := Value;
 
   Self.fDispatcher.AddTransactionDispatcherListener(Self);
+
+  Self.fDispatcher.Logger  := Self.Logger;
+  Self.fDispatcher.LogName := Self.LogName;
+end;
+
+procedure TIdSipAbstractCore.SetLogger(Value: TLoGGerThread);
+begin
+  if (Value = Self.fLogger) then Exit;
+
+  Self.fLogger := Value;
+
+  if Assigned(Self.Dispatcher) then
+    Self.Dispatcher.Logger := Value;
+end;
+
+procedure TIdSipAbstractCore.SetLogName(Value: String);
+begin
+  if (Value = Self.fLogName) then Exit;
+
+  Self.fLogName := Value;
+
+  if Assigned(Self.Dispatcher) then
+    Self.Dispatcher.LogName := Value;
 end;
 
 procedure TIdSipAbstractCore.SetInstanceID(Value: String);

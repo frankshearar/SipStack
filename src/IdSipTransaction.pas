@@ -73,6 +73,7 @@ type
   private
     fLocator:                 TIdSipAbstractLocator;
     fLogger:                  TLoGGerThread;
+    fLogName:                 String;
     fRoutingTable:            TIdRoutingTable;
     fT1Interval:              Cardinal;
     fT2Interval:              Cardinal;
@@ -132,6 +133,7 @@ type
                                 Source: TIdSipConnectionBindings);
     procedure SetLocator(Value: TIdSipAbstractLocator);
     procedure SetLogger(Value: TLoGGerThread);
+    procedure SetLogName(Value: String);
     procedure SetRoutingTable(Value: TIdRoutingTable);
     procedure SetTimer(Value: TIdTimerQueue);
   public
@@ -171,6 +173,7 @@ type
 
     property Locator:      TIdSipAbstractLocator read fLocator write fLocator;
     property Logger:       TLoGGerThread         read fLogger write SetLogger;
+    property LogName:      String                read fLogName write SetLogName;
     property RoutingTable: TIdRoutingTable       read fRoutingTable write SetRoutingTable;
     property T1Interval:   Cardinal              read fT1Interval write fT1Interval;
     property T2Interval:   Cardinal              read fT2Interval write fT2Interval;
@@ -640,6 +643,7 @@ begin
 
   Self.Transactions := TObjectList.Create(true);
 
+  Self.LogName    := coSipStackLogName;
   Self.T1Interval := DefaultT1;
   Self.T2Interval := DefaultT2;
   Self.T4Interval := DefaultT4;
@@ -683,6 +687,7 @@ begin
     T := TIdSipTransportRegistry.TransportTypeFor(Transport).Create;
     T.HostName     := Address;
     T.Logger       := Self.Logger;
+    T.LogName      := Self.LogName;
     T.Timer        := Self.Timer;
     T.RoutingTable := Self.RoutingTable;
 
@@ -1119,6 +1124,16 @@ begin
 
   for I := 0 to Self.TransportCount - 1 do
     Self.Transports[I].Logger := Value;
+end;
+
+procedure TIdSipTransactionDispatcher.SetLogName(Value: String);
+var
+  I: Integer;
+begin
+  Self.fLogName := Value;
+
+  for I := 0 to Self.TransportCount - 1 do
+    Self.Transports[I].LogName := Value;
 end;
 
 procedure TIdSipTransactionDispatcher.SetRoutingTable(Value: TIdRoutingTable);

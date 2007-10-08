@@ -296,7 +296,7 @@ type
                   RefCode: Cardinal;
                   Description,
                   BinaryData: String);
-    procedure SetLogger(Log: TLoGGerThread);
+    procedure SetLogger(Log: TLoGGerThread; LogName: String);
   end;
 
   // I allow access to the UserAgent's TIdSipLocator.
@@ -921,7 +921,7 @@ implementation
 
 uses
   IdRandom, IdSimpleParser, IdSipAuthentication, IdSipIndyLocator,
-  IdSipMockLocator, IdStack, IdUDPServer;
+  IdSipMockLocator, IdStack, IdUDPServer, LogVariables;
 
 const
   ActionNotAllowedForHandle = 'You cannot perform a %s action on a %s handle (%d)';
@@ -2339,14 +2339,19 @@ begin
   end;
 end;
 
-procedure TIdLoggingExtension.SetLogger(Log: TLoGGerThread);
+procedure TIdLoggingExtension.SetLogger(Log: TLoGGerThread; LogName: String);
 begin
   // WARNING: If you configured the stack to log (through, say, the
   // LogFileName or LogVerbosityLevel directives), DO NOT use this method!
   // If you do, the TIdSipUserAgent will terminate Log! Plus, you'll have a
   // TLoGGerThread running without being terminated.
 
-  Self.UserAgent.Logger := Log;
+  Self.UserAgent.Logger  := Log;
+  Self.UserAgent.LogName := LogName;
+
+  TIdObjectRegistry.SetLogger(Self.UserAgent.Logger,
+                              LogName,
+                              coLogSourceRefSIPStack);
 end;
 
 //******************************************************************************

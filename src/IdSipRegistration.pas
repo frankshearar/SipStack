@@ -238,10 +238,10 @@ type
                              Contact: TIdSipContactHeader): TIdSipOutboundUnregistration;
     function  WillAccept(Request: TIdSipRequest): Boolean; override;
 
-    property AutoReRegister: Boolean             read fAutoReRegister write fAutoReRegister;
-    property HasRegistrar:   Boolean             read fHasRegistrar write fHasRegistrar;
-    property Registrar:      TIdSipUri           read fRegistrar write SetRegistrar;
-    property RequireGRUU:    Boolean             read fRequireGRUU write fRequireGRUU;
+    property AutoReRegister: Boolean   read fAutoReRegister write fAutoReRegister;
+    property HasRegistrar:   Boolean   read fHasRegistrar write fHasRegistrar;
+    property Registrar:      TIdSipUri read fRegistrar write SetRegistrar;
+    property RequireGRUU:    Boolean   read fRequireGRUU write fRequireGRUU;
   end;
 
   // I implement that functionality necessary for a User Agent to respond to

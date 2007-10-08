@@ -998,10 +998,10 @@ begin
   if Assigned(UserAgent.Logger) then Exit;
 
   UserAgent.Logger := Self.CreateLogger;
-  UserAgent.Dispatcher.Logger := UserAgent.Logger;
+  UserAgent.LogName := coSipStackLogName;
 
   TIdObjectRegistry.SetLogger(UserAgent.Logger,
-                              coSipStackLogName,
+                              UserAgent.LogName,
                               coLogSourceRefSIPStack);
 end;
 

@@ -61,6 +61,7 @@ type
     fAddress:                  String;
     fHostName:                 String;
     fLogger:                   TLoGGerThread;
+    fLogName:                  String;
     fPort:                     Cardinal;
     fRoutingTable:             TIdRoutingTable;
     fTimeout:                  Cardinal;
@@ -170,6 +171,7 @@ type
 
     property HostName:     String          read fHostName write fHostName;
     property Logger:       TLoGGerThread   read fLogger write fLogger;
+    property LogName:      String          read fLogName write fLogName;
     property RoutingTable: TIdRoutingTable read fRoutingTable write fRoutingTable;
     property Timeout:      Cardinal        read fTimeout write SetTimeout;
     property Timer:        TIdTimerQueue   read fTimer write SetTimer;
@@ -448,6 +450,7 @@ begin
 
   Self.InstantiateServer;
 
+  Self.LogName  := coSipStackLogName;
   Self.Timeout  := Self.DefaultTimeout;
   Self.UseRport := false;
 end;
@@ -781,7 +784,7 @@ procedure TIdSipTransport.Log(Description: String;
                               DebugInfo: String);
 begin
   if Assigned(Self.Logger) then
-    Self.Logger.Write(coSipStackLogName, Severity, coLogSourceRefSIPStack, Self.ClassName, EventRef, Description, DebugInfo);
+    Self.Logger.Write(Self.LogName, Severity, coLogSourceRefSIPStack, Self.ClassName, EventRef, Description, DebugInfo);
 end;
 
 procedure TIdSipTransport.LogException(FailedMessage: TIdSipMessage;

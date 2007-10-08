@@ -135,8 +135,12 @@ type
     procedure TestRemoveUserAgentListener;
     procedure TestRFC2543InviteCallFlow;
     procedure TestScheduleEventActionClosure;
+    procedure TestSetDispatcherSetsDispatchersLogger;
+    procedure TestSetDispatcherSetsDispatchersLogName;
     procedure TestSetFrom;
     procedure TestSetFromMailto;
+    procedure TestSetLoggerSetsDispatchersLogger;
+    procedure TestSetLogNameSetsDispatchersLogName;
     procedure TestSimultaneousInAndOutboundCall;
     procedure TestTerminateAllCalls;
 //    procedure TestUnknownAcceptValue;
@@ -1880,6 +1884,54 @@ begin
         'Event not scheduled');
 end;
 
+procedure TestTIdSipUserAgent.TestSetDispatcherSetsDispatchersLogger;
+var
+  D:      TIdSipMockTransactionDispatcher;
+  Logger: TLoGGerThread;
+begin
+  try
+    D := TIdSipMockTransactionDispatcher.Create;
+    try
+      Logger := TLoGGerThread.Create;
+      try
+        Self.Core.Logger := Logger;
+
+        Self.Core.Dispatcher := D;
+        Check(Self.Core.Logger = D.Logger, 'Dispatcher''s logger not set');
+      finally
+        // Remember that Self.Core terminates its logger.
+        Self.Core.Logger := nil;
+        Logger.Free;
+      end;
+    finally
+      D.Free;
+    end;
+  finally
+    // Remember that Self.Core frees its dispatcher.
+    Self.Core.Dispatcher := Self.Dispatcher;
+  end;
+end;
+
+procedure TestTIdSipUserAgent.TestSetDispatcherSetsDispatchersLogName;
+var
+  D: TIdSipMockTransactionDispatcher;
+begin
+  try
+    D := TIdSipMockTransactionDispatcher.Create;
+    try
+      Self.Core.LogName := 'foo';
+
+      Self.Core.Dispatcher := D;
+      CheckEquals(Self.Core.LogName, D.LogName, 'Dispatcher''s LogName not set');
+    finally
+      D.Free;
+    end;
+  finally
+    // Remember that Self.Core frees its dispatcher.
+    Self.Core.Dispatcher := Self.Dispatcher;
+  end;
+end;
+
 procedure TestTIdSipUserAgent.TestSetFrom;
 var
   F: TIdSipFromHeader;
@@ -1912,6 +1964,28 @@ begin
   finally
     F.Free;
   end;
+end;
+
+procedure TestTIdSipUserAgent.TestSetLoggerSetsDispatchersLogger;
+var
+  Logger: TLoGGerThread;
+begin
+  Logger := TLoGGerThread.Create;
+  try
+    Self.Core.Logger := Logger;
+
+    Check(Self.Core.Logger = Self.Core.Dispatcher.Logger, 'Dispatcher''s Logger not set');
+  finally
+    // Remember that Self.Core terminates its logger.
+    Self.Core.Logger := nil;
+    Logger.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgent.TestSetLogNameSetsDispatchersLogName;
+begin
+  Self.Core.LogName := 'foo';
+  CheckEquals(Self.Core.LogName, Self.Core.Dispatcher.LogName, 'Dispatcher''s LogName not set');
 end;
 
 procedure TestTIdSipUserAgent.TestSimultaneousInAndOutboundCall;
