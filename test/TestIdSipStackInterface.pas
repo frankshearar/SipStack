@@ -136,6 +136,7 @@ type
     procedure TestMakeOptionsQuery;
     procedure TestMakeOptionsQueryMalformedAddress;
     procedure TestMakeRegistration;
+    procedure TestMakeRegistrationMultiple;
     procedure TestMakeSubscription;
     procedure TestMakeSubscriptionMalformedTarget;
     procedure TestMakeSubscriptionNoSubscribeSupport;
@@ -1547,6 +1548,45 @@ begin
   Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
   CheckRequestSent('No request sent');
   CheckEquals(MethodRegister, Self.LastSentRequest.Method, 'Unexpected request sent');
+end;
+
+procedure TestTIdSipStackInterface.TestMakeRegistrationMultiple;
+const
+  FirstContact  = 'sip:case@1.2.3.4';
+  SecondContact = 'sip:anon@jakes-cafe.net';
+var
+  Contacts:     TIdSipContacts;
+  Handle:       TIdSipHandle;
+  SentContacts: TIdSipContacts;
+begin
+  Contacts := TIdSipContacts.Create;
+  try
+    Contacts.Add(ContactHeaderFull).Value := FirstContact;
+    Contacts.Add(ContactHeaderFull).Value := SecondContact;
+
+    Handle := Self.Intf.MakeRegistration(Self.Registrar, Contacts);
+
+    Self.MarkSentRequestCount;
+    Self.Intf.Send(Handle);
+    Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
+    CheckRequestSent('No request sent');
+    CheckEquals(MethodRegister, Self.LastSentRequest.Method, 'Unexpected request sent');
+
+    SentContacts := Self.LastSentRequest.Contacts;
+    CheckEquals(Contacts.Count, SentContacts.Count, 'Incorrect number of contacts sent');
+    Contacts.First;
+    SentContacts.First;
+    while Contacts.HasNext do begin
+      CheckEquals(Contacts.CurrentContact.FullValue,
+                  SentContacts.CurrentContact.FullValue,
+                  'Unexpected Contact');
+
+      Contacts.Next;
+      SentContacts.Next;
+    end;
+  finally
+    Contacts.Free;
+  end;
 end;
 
 procedure TestTIdSipStackInterface.TestMakeSubscription;

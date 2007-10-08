@@ -224,7 +224,9 @@ type
     function  MakeOptionsQuery(Dest: TIdSipAddressHeader): TIdSipHandle;
     function  MakeRefer(Target: TIdSipAddressHeader;
                         Resource: TIdSipAddressHeader): TIdSipHandle;
-    function  MakeRegistration(Registrar: TIdSipUri): TIdSipHandle;
+    function  MakeRegistration(Registrar: TIdSipUri): TIdSipHandle; overload;
+    function  MakeRegistration(Registrar: TIdSipUri;
+                               Contacts: TIdSipContacts): TIdSipHandle; overload;
     function  MakeSubscription(Target: TIdSipAddressHeader;
                                const EventPackage: String): TIdSipHandle;
     function  MakeTransfer(Transferee: TIdSipAddressHeader;
@@ -1219,6 +1221,31 @@ begin
   end;
 
   Reg := Self.UserAgent.RegisterWith(Registrar, Self.UserAgent.From);
+  Result := Self.AddAction(Reg);
+  Reg.AddListener(Self);
+end;
+
+function TIdSipStackInterface.MakeRegistration(Registrar: TIdSipUri;
+                                               Contacts: TIdSipContacts): TIdSipHandle;
+var
+  Reg: TIdSipOutboundRegistrationBase;
+begin
+  if Registrar.IsMalformed then begin
+    Result := InvalidHandle;
+    Exit;
+  end;
+
+  if Contacts.IsMalformed then begin
+    Result := InvalidHandle;
+    Exit;
+  end;
+
+  if not Self.UserAgent.UsesModule(TIdSipOutboundRegisterModule) then begin
+    Result := InvalidHandle;
+    Exit;
+  end;
+
+  Reg := Self.UserAgent.RegisterModule.RegisterWith(Registrar, Contacts);
   Result := Self.AddAction(Reg);
   Reg.AddListener(Self);
 end;
