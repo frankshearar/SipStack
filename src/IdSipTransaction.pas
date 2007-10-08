@@ -601,7 +601,8 @@ const
 implementation
 
 uses
-  IdException, IdRegisteredObject, IdSipDialogID, Math, RuntimeSafety;
+  IdException, IdRegisteredObject, IdSipDialogID, Math, LogVariables,
+  RuntimeSafety;
 
 const
   AtLeastOneVia         = 'Messages must have at least one Via header';
