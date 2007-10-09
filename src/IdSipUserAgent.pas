@@ -1388,10 +1388,13 @@ begin
   end;
 
   Uri := TIdSipUri.Create(Trim(Line));
+  try
+    UserAgent.RoutePath.AddRoute(Uri);
 
-  UserAgent.RoutePath.AddRoute(Uri);
-
-  Self.CheckUri(Uri, Format(MalformedConfigurationLine, [RouteHeaderLine]));
+    Self.CheckUri(Uri, Format(MalformedConfigurationLine, [RouteHeaderLine]));
+  finally
+    Uri.Free;
+  end;
 end;
 
 procedure TIdSipStackConfigurator.AddRoutingTable(UserAgent: TIdSipAbstractCore;
