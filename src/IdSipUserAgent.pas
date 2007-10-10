@@ -13,9 +13,9 @@ interface
 
 uses
   Contnrs, Classes, IdNotification, IdRoutingTable, IdSipAuthentication,
-  IdSipCore, IdSipInviteModule, IdSipLocator, IdSipMockLocator,
-  IdSipOptionsModule, IdSipMessage, IdSipRegistration, IdSipTransaction,
-  IdSipTransport, IdTimerQueue, LoGGer;
+  IdSipCore, IdSipInviteModule, IdSipLocator, IdSipMessage, IdSipMockLocator,
+  IdSipOptionsModule, IdSipProxyDescription, IdSipRegistration,
+  IdSipTransaction, IdSipTransport, IdTimerQueue, LoGGer;
 
 type
   TIdSipUserAgent = class;
@@ -30,15 +30,16 @@ type
     fDoNotDisturbMessage:      String;
     fFrom:                     TIdSipFromHeader;
     fRegisterModule:           TIdSipOutboundRegisterModule;
-    fRoutePath:                TIdSipRoutePath;
     fInviteModule:             TIdSipInviteModule;
     HasRegistered:             Boolean;
+    Proxies:                   TIdProxyDescriptions;
 
     function  DefaultFrom: String;
     function  DefaultPort(SecureTransport: Boolean): Cardinal;
     function  GetDoNotDisturb: Boolean;
     function  GetInitialResendInterval: Cardinal;
     function  GetProgressResendInterval: Cardinal;
+    function  GetRoutePath: TIdSipRoutePath;
     function  GetUsername: String;
     function  FirstResolvedName(FQDN: String): String;
     function  LocalContactNeverSet: Boolean;
@@ -66,12 +67,14 @@ type
 
     procedure AddLocalHeaders(OutboundRequest: TIdSipRequest; InDialogRequest: Boolean); override;
     function  AddOutboundAction(ActionType: TIdSipActionClass): TIdSipAction; override;
+    procedure AddRoute(AddressSpace: String; SipEntity: TIdSipUri);
     procedure AddTransportListener(Listener: IIdSipTransportListener);
     function  UsingDefaultFrom: Boolean;
     procedure RemoveTransportListener(Listener: IIdSipTransportListener);
     function  RegisterWith(Registrar: TIdSipUri;
                            From: TIdSipFromHeader): TIdSipOutboundRegistration;
     function  ResponseForInvite: Cardinal; override;
+    function  RoutePathFor(Request: TIdSipRequest): TIdSipRoutePath;
     function  SessionCount: Integer;
     function  UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundUnregistration;
 
@@ -82,7 +85,7 @@ type
     property InviteModule:           TIdSipInviteModule           read fInviteModule;
     property ProgressResendInterval: Cardinal                     read GetProgressResendInterval write SetProgressResendInterval;
     property RegisterModule:         TIdSipOutboundRegisterModule read fRegisterModule;
-    property RoutePath:              TIdSipRoutePath              read fRoutePath write SetRoutePath;
+    property RoutePath:              TIdSipRoutePath              read GetRoutePath write SetRoutePath;
     property Username:               String                       read GetUsername write SetUsername;
   end;
 
@@ -112,7 +115,10 @@ type
   //   NameServer: MOCK [;ReturnOnlySpecifiedRecords]
   //   Register: <SIP/S URI>
   //   ResolveNamesLocallyFirst: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
-  //   Route: <SIP/S URI>
+  //   Route: "<"<SIP/S URI>">"<SP>[<route>/<netmask|number of bits>]
+  //   Route: <sip:internet_gw;lr>
+  //   Route: <sip:localsubnet> 10.0.0.0/8
+  //   Route: <sip:specialproxy> example.com
   //   RoutingTable: MOCK
   //   SupportEvent: refer
   //   UseGruu: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
@@ -196,13 +202,15 @@ type
     procedure AddRegistrarModule(UserAgent: TIdSipUserAgent;
                                  const RegistrarModuleLine: String);
     procedure AddRouteHeader(UserAgent: TIdSipUserAgent;
-                       const RouteHeaderLine: String);
+                             const RouteHeaderLine: String);
     procedure AddRoutingTable(UserAgent: TIdSipAbstractCore;
                               const RoutingTableLine: String);
     procedure AddSupportForEventPackage(UserAgent: TIdSipAbstractCore;
                                         const SupportEventLine: String);
     procedure AddTransport(Dispatcher: TIdSipTransactionDispatcher;
                            const TransportLine: String);
+    procedure CheckAddressSpace(AddressSpace: String;
+                                const FailMsg: String);
     procedure CheckUri(Uri: TIdSipUri;
                        const FailMsg: String);
     function  CreateLayers(Context: TIdTimerQueue): TIdSipUserAgent;
@@ -491,7 +499,7 @@ begin
   Self.fFrom           := TIdSipFromHeader.Create;
   Self.fInviteModule   := Self.AddModule(TIdSipInviteModule) as TIdSipInviteModule;
   Self.fRegisterModule := Self.AddModule(TIdSipOutboundRegisterModule) as TIdSipOutboundRegisterModule;
-  Self.fRoutePath      := TIdSipRoutePath.Create;
+  Self.Proxies         := TIdProxyDescriptions.Create;
 
   Self.InviteModule.AddListener(Self);
 
@@ -516,7 +524,7 @@ begin
 
   inherited Destroy;
 
-  Self.RoutePath.Free;
+  Self.Proxies.Free;
   if Assigned(Self.Logger) then
     Self.Logger.Terminate;
   Self.Dispatcher.Free;
@@ -549,14 +557,14 @@ begin
 
     OutboundRequest.AddHeader(LocalContact);
   finally
-    LocalContact.Free;
+    LocalContact.Free;                       
   end;
 
   if OutboundRequest.HasSipsUri then
     OutboundRequest.FirstContact.Address.Scheme := SipsScheme;
 
   if not InDialogRequest then
-    OutboundRequest.AddHeaders(Self.RoutePath);
+    OutboundRequest.AddHeaders(Self.RoutePathFor(OutboundRequest));
 end;
 
 function TIdSipUserAgent.AddOutboundAction(ActionType: TIdSipActionClass): TIdSipAction;
@@ -565,6 +573,13 @@ begin
 
   if not Self.ContactClosestToRegistrar.IsUnset then
     Result.LocalGruu := Self.ContactClosestToRegistrar;
+end;
+
+procedure TIdSipUserAgent.AddRoute(AddressSpace: String; SipEntity: TIdSipUri);
+begin
+  // Make sure that requests sent to targets in AddressSpace pass through
+  // SipEntity.
+  Self.Proxies.AddRouteFor(AddressSpace, SipEntity);
 end;
 
 procedure TIdSipUserAgent.AddTransportListener(Listener: IIdSipTransportListener);
@@ -631,6 +646,11 @@ begin
     Result := inherited ResponseForInvite;
 end;
 
+function TIdSipUserAgent.RoutePathFor(Request: TIdSipRequest): TIdSipRoutePath;
+begin
+  Result := Self.Proxies.RoutePathFor(Request.ToHeader.Address.Host);
+end;
+
 function TIdSipUserAgent.SessionCount: Integer;
 begin
   Result := Self.Actions.SessionCount;
@@ -677,6 +697,11 @@ end;
 function TIdSipUserAgent.GetProgressResendInterval: Cardinal;
 begin
   Result := Self.InviteModule.ProgressResendInterval;
+end;
+
+function TIdSipUserAgent.GetRoutePath: TIdSipRoutePath;
+begin
+  Result := Self.Proxies.DefaultRoutePath;
 end;
 
 function TIdSipUserAgent.GetUsername: String;
@@ -1373,8 +1398,9 @@ end;
 procedure TIdSipStackConfigurator.AddRouteHeader(UserAgent: TIdSipUserAgent;
                                                  const RouteHeaderLine: String);
 var
-  Line: String;
-  Uri:  TIdSipUri;
+  AddressSpace: String;
+  Line:         String;
+  Uri:          TIdSipUri;
 begin
   // See class comment for the format for this directive.
   Line := RouteHeaderLine;
@@ -1387,11 +1413,19 @@ begin
     Self.FirstRouteDirective := false;
   end;
 
-  Uri := TIdSipUri.Create(Trim(Line));
+  Fetch(Line, '<');
+  Uri := TIdSipUri.Create(Trim(Fetch(Line, '>')));
   try
-    UserAgent.RoutePath.AddRoute(Uri);
+    AddressSpace := Trim(Line);
 
     Self.CheckUri(Uri, Format(MalformedConfigurationLine, [RouteHeaderLine]));
+
+    if (AddressSpace = '') then
+      UserAgent.RoutePath.Add(RouteHeader).Value := '<' + Uri.AsString + '>'
+    else begin
+      Self.CheckAddressSpace(AddressSpace, Format(MalformedConfigurationLine, [RouteHeaderLine]));
+      UserAgent.AddRoute(AddressSpace, Uri);
+    end;
   finally
     Uri.Free;
   end;
@@ -1475,6 +1509,20 @@ begin
     Dispatcher.AddTransportBinding(Transport, HostAndPort.Host, HostAndPort.Port);
   finally
     HostAndPort.Free;
+  end;
+end;
+
+procedure TIdSipStackConfigurator.CheckAddressSpace(AddressSpace: String;
+                                                    const FailMsg: String);
+var
+  A: TIdAddressSpace;
+begin
+  A := TIdAddressSpace.Create;
+  try
+    if (A.IdentifySpaceType(AddressSpace) = asUnknown) then
+      raise EParserError.Create(FailMsg);
+  finally
+    A.Free;
   end;
 end;
 

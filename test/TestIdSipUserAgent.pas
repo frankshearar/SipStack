@@ -94,6 +94,7 @@ type
     procedure TestAcceptCallSchedulesResendOk;
     procedure TestActionsNotifyUAObservers;
     procedure TestAddListener;
+    procedure TestAddRoute;
 //    procedure TestByeWithAuthentication;
     procedure TestCallUsingRoutePath;
     procedure TestCancelNotifiesTU;
@@ -232,7 +233,6 @@ type
     procedure TestCreateUserAgentWithRegisterAndInstanceID;
     procedure TestCreateUserAgentWithRegistrar;
     procedure TestCreateUserAgentWithResolveNamesLocallyFirst;
-    procedure TestCreateUserAgentWithRouteHeaders;
     procedure TestCreateUserAgentWithoutResolveNamesLocallyFirst;
     procedure TestCreateUserAgentWithUseGruu;
     procedure TestCreateUserAgentWithUserAgentName;
@@ -241,7 +241,6 @@ type
     procedure TestUpdateConfigurationWithLocator;
     procedure TestUpdateConfigurationWithNewRegistrar;
     procedure TestUpdateConfigurationWithRegistrar;
-    procedure TestUpdateConfigurationWithRouteHeaders;
     procedure TestUpdateConfigurationWithSupportEvent;
     procedure TestUpdateConfigurationWithBlankSupportEvent;
     procedure TestUpdateConfigurationWithTransport;
@@ -262,6 +261,25 @@ type
     procedure TestLogVerbosityLevelLowest;
     procedure TestLogVerbosityLevelNormal;
     procedure TestLogVerbosityLevelUnknownName;
+  end;
+
+  TestConfigureProxies = class(TStackConfigurationTestCase)
+  private
+    EmptyRoutePath: TIdSipRoutePath;
+
+    procedure CheckEmptyRoutePath(RoutePath: TIdSipRoutePath; Msg: String);
+    procedure CheckEquals(Expected, Received: TIdSipRoutePath; Msg: String); overload;
+    procedure CheckRoutePath(Expected: TIdSipRoutePath;
+                             UA: TIdSipUserAgent;
+                             Target,
+                             Msg: String);
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestDefaultRoutePath;
+    procedure TestNoRoutePaths;
+    procedure TestTwoAddressSpaces;
   end;
 
   TestConfigureRegistrar = class(TStackConfigurationTestCase)
@@ -455,6 +473,7 @@ begin
   Result.AddTest(TestTIdSipUserAgent.Suite);
   Result.AddTest(TestTIdSipStackConfigurator.Suite);
   Result.AddTest(TestConfigureLogging.Suite);
+  Result.AddTest(TestConfigureProxies.Suite);
   Result.AddTest(TestConfigureRegistrar.Suite);
   Result.AddTest(TestConfigureMockRoutingTable.Suite);
   Result.AddTest(TestConfigureMockLocator.Suite);
@@ -796,6 +815,31 @@ begin
     end;
   finally
     L1.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgent.TestAddRoute;
+const
+  LocalAddressSpace = '127.0.0.0/8';
+var
+  Entity: TIdSipUri;
+begin
+  Entity := TIdSipUri.Create('sip:gw.tessier-ashpool.co.luna');
+  try
+    Self.Core.AddRoute(LocalAddressSpace, Entity);
+
+    // This makes sure that the INVITE goes to the localhost, and avoids any
+    // influence from the Locator.
+    Self.Destination.Address.Host := '127.0.0.1';
+    Self.Destination.Address.Port := 5060;
+
+    Self.MarkSentRequestCount;
+    Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '').Send;
+    CheckRequestSent('No INVITE sent');
+    Check(Self.LastSentRequest.HasRoute, 'No Route header added');
+    CheckEquals(Entity.AsString, Self.LastSentRequest.FirstRoute.Address.AsString, 'Unexpected Route');
+  finally
+    Entity.Free;
   end;
 end;
 {
@@ -3124,31 +3168,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithRouteHeaders;
-const
-  RouteOne = 'sip:proxy.tessier-ashpool.co.luna;lr';
-  RouteTwo = 'sip:gw1.leo-ix.net;lr';
-var
-  UA: TIdSipUserAgent;
-begin
-  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
-  Self.Configuration.Add('NameServer: MOCK');
-  Self.Configuration.Add('Route: ' + RouteOne);
-  Self.Configuration.Add('Route: ' + RouteTwo);
-
-  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
-  try
-    Check(not UA.RoutePath.IsEmpty, 'No routes added');
-
-    UA.RoutePath.First;
-    CheckEquals(RouteOne, UA.RoutePath.CurrentRoute.Address.Uri, 'First Route');
-    UA.RoutePath.Next;
-    CheckEquals(RouteTwo, UA.RoutePath.CurrentRoute.Address.Uri, 'Second Route');
-  finally
-    UA.Free;
-  end;
-end;
-
 procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithoutResolveNamesLocallyFirst;
 var
   UA: TIdSipUserAgent;
@@ -3372,34 +3391,6 @@ begin
 
       Self.WaitForSignaled(Self.NewRegistrarEvent, 'Waiting for REGISTER to new registrar');
       Check(Self.NewRegistrarReceivedPacket, 'No REGISTER sent to new registrar');
-    finally
-      NewConfig.Free;
-    end;
-  finally
-    UA.Free;
-  end;
-end;
-
-procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithRouteHeaders;
-const
-  OldRoute = 'sip:proxy.leo-ix.net';
-  NewRoute = 'sip:gw1.leo-ix.net;lr';
-var
-  NewConfig: TStrings;
-  UA:        TIdSipUserAgent;
-begin
-  Self.SetBasicConfiguration(Self.Configuration);
-  Self.Configuration.Add('Route: ' + OldRoute);
-  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
-  try
-    NewConfig := TStringList.Create;
-    try
-      NewConfig.Add('Route: ' + NewRoute);
-
-      Self.Conf.UpdateConfiguration(UA, NewConfig);
-      Check(not UA.RoutePath.IsEmpty, 'Route path is empty - nothing added');
-      UA.RoutePath.First;
-      CheckEquals(NewRoute, UA.RoutePath.CurrentRoute.Address.AsString, 'Route not updated');
     finally
       NewConfig.Free;
     end;
@@ -3674,6 +3665,142 @@ end;
 procedure TestConfigureLogging.TestLogVerbosityLevelUnknownName;
 begin
   CheckLogVerbosityLevel('unknown', LoGGerVerbosityLevelNormal);
+end;
+
+//******************************************************************************
+//* TestConfigureProxies                                                       *
+//******************************************************************************
+
+procedure TestConfigureProxies.SetUp;
+begin
+  inherited SetUp;
+
+  Self.EmptyRoutePath := TIdSipRoutePath.Create;
+end;
+
+procedure TestConfigureProxies.TearDown;
+begin
+  Self.EmptyRoutePath.Free;
+
+  inherited TearDown;
+end;
+
+//* TestConfigureProxies Private methods ***************************************
+
+procedure TestConfigureProxies.CheckEmptyRoutePath(RoutePath: TIdSipRoutePath; Msg: String);
+begin
+  Check(RoutePath.IsEmpty, Msg);
+end;
+
+procedure TestConfigureProxies.CheckEquals(Expected, Received: TIdSipRoutePath; Msg: String);
+begin
+  CheckEquals(Expected.Count, Received.Count, Msg + ': route path length');
+
+  Expected.First;
+  Received.First;
+  while (Expected.HasNext) do begin
+    CheckEquals(Expected.CurrentRoute.FullValue, Received.CurrentRoute.FullValue, Msg + ': unexpected Route');
+
+    Expected.Next;
+    Received.Next;
+  end;
+end;
+
+procedure TestConfigureProxies.CheckRoutePath(Expected: TIdSipRoutePath;
+                                              UA: TIdSipUserAgent;
+                                              Target,
+                                              Msg: String);
+var
+  Invite: TIdSipRequest;
+begin
+  Invite := TIdSipRequest.Create;
+  try
+    Invite.ToHeader.Value := 'sip:' + Target;
+    CheckEquals(Expected, UA.RoutePathFor(Invite), Msg);
+  finally
+    Invite.Free;
+  end;
+end;
+
+//* TestConfigureProxies Published methods *************************************
+
+procedure TestConfigureProxies.TestDefaultRoutePath;
+const
+  FirstProxy  = 'sip:first';
+  SecondProxy = 'sip:second;lr';
+var
+  Expected: TIdSipRoutePath;
+  UA:       TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Route: <' + FirstProxy + '>');
+  Self.Configuration.Add('Route: <' + SecondProxy + '>');
+
+  Expected := TIdSipRoutePath.Create;
+  try
+    Expected.Add(RouteHeader).Value := '<' + FirstProxy + '>';
+    Expected.Add(RouteHeader).Value := '<' + SecondProxy + '>';
+    UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+    try
+      CheckEquals(Expected, UA.RoutePath, 'Default Route path');
+      CheckRoutePath(Expected, UA, 'roke.local', 'a FQDN');
+      CheckRoutePath(Expected, UA, '127.0.0.1', 'an IPv4 address');
+      CheckRoutePath(Expected, UA, '[2002::1]', 'an IPv6 reference');
+    finally
+      UA.Free;
+    end;
+  finally
+    Expected.Free;
+  end;
+end;
+
+procedure TestConfigureProxies.TestNoRoutePaths;
+var
+  UA: TIdSipUserAgent;
+begin
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckEmptyRoutePath(UA.RoutePath, 'No Route directives means no Route path');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestConfigureProxies.TestTwoAddressSpaces;
+const
+  FirstAddressSpace  = 'local';
+  FirstProxy         = 'sip:proxy.local';
+  SecondAddressSpace = '10.0.0.0/8';
+  SecondProxy        = 'sip:10.0.0.1';
+var
+  ExpectedLocal:  TIdSipRoutePath;
+  ExpectedSubnet: TIdSipRoutePath;
+  UA:             TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Route: <' + FirstProxy + '> ' + FirstAddressSpace);
+  Self.Configuration.Add('Route: <' + SecondProxy + '> ' + SecondAddressSpace);
+
+  ExpectedLocal := TIdSipRoutePath.Create;
+  try
+    ExpectedLocal.Add(RouteHeader).Value := '<' + FirstProxy + '>';
+
+    ExpectedSubnet := TIdSipRoutePath.Create;
+    try
+      ExpectedSubnet.Add(RouteHeader).Value := '<' + SecondProxy + '>';
+
+      UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+      try
+        CheckRoutePath(ExpectedLocal,       UA, 'roke.local',  'First address space');
+        CheckRoutePath(ExpectedSubnet,      UA, '10.0.0.2',    'Second address space');
+        CheckRoutePath(Self.EmptyRoutePath, UA, 'example.com', 'Default');
+      finally
+        UA.Free;
+      end;
+    finally
+      ExpectedSubnet.Free;
+    end;
+  finally
+    ExpectedLocal.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -4482,7 +4609,7 @@ begin
   Self.OldRoute := 'sip:proxy.tessier-ashpool.co.luna';
 
   Self.Configuration := TStringList.Create;
-  Self.Configuration.Add(RouteHeaderDirective + ': ' + Self.NewRoute);
+  Self.Configuration.Add(RouteHeaderDirective + ': <' + Self.NewRoute + '>');
 
   Self.Timer := TIdDebugTimerQueue.Create(true);
   Self.Stack := Self.CreateUserAgent(Self.Timer);
@@ -4521,7 +4648,7 @@ begin
   try
     Configuration := TStringList.Create;
     try
-      Configuration.Add(RouteHeaderDirective + ': ' + Self.OldRoute);
+      Configuration.Add(RouteHeaderDirective + ': <' + Self.OldRoute + '>');
 
       Result := Conf.CreateUserAgent(Configuration, Self.Timer);
     finally
