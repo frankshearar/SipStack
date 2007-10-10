@@ -25,6 +25,7 @@ type
                                           Subnet: String): Boolean;
   protected
     function  InternalContains(Address: String): Boolean; virtual;
+    function  GetDescription: String; virtual;
     procedure SetDescription(Value: String); virtual;
     function  SpaceType: TIdAddressSpaceType; virtual;
   public
@@ -35,7 +36,7 @@ type
     function Contains(Address: String): Boolean;
     function IdentifySpaceType(Address: String): TIdAddressSpaceType;
 
-    property Description: String read fDescription write SetDescription;
+    property Description: String read GetDescription write SetDescription;
   end;
 
   TIdAddressSpaceClass = class of TIdAddressSpace;
@@ -45,6 +46,7 @@ type
     Mask:   String;
     Subnet: String;
 
+    function  GetDescription: String; override;
     function  InternalContains(Address: String): Boolean; override;
     procedure SetDescription(Value: String); override;
   end;
@@ -108,6 +110,7 @@ type
     procedure AddDescription(AddressSpace: String; RoutePath: TIdSipRoutePath);
     procedure AddRouteFor(AddressSpace: String; Route: TIdSipRouteHeader); overload;
     procedure AddRouteFor(AddressSpace: String; Route: TIdSipUri); overload;
+    function  Count: Integer;
     procedure RemoveDescription(AddressSpace: String);
     function  RoutePathFor(Address: String): TIdSipRoutePath;
 
@@ -223,6 +226,11 @@ begin
   Result := false;
 end;
 
+function TIdAddressSpace.GetDescription: String;
+begin
+  Result := Self.fDescription;
+end;
+
 procedure TIdAddressSpace.SetDescription(Value: String);
 begin
   Self.fDescription := Value;
@@ -258,6 +266,11 @@ end;
 //* TIdIPAddressSpace                                                          *
 //******************************************************************************
 //* TIdIPAddressSpace Public methods *******************************************
+
+function TIdIPAddressSpace.GetDescription: String;
+begin
+  Result := Self.Subnet + '/' + Self.Mask;
+end;
 
 function TIdIPAddressSpace.InternalContains(Address: String): Boolean;
 begin
@@ -409,7 +422,7 @@ var
 begin
   // Either append Route to AddressSpace's Route path or, if AddressSpace is a
   // new address space, add AddressSpace and then append Route to its (empty)
-  // Route path. 
+  // Route path.
 
   Proxy := Self.FindProxyForAddressSpace(AddressSpace);
 
@@ -424,6 +437,11 @@ begin
       NewPath.Free;
     end;
   end;
+end;
+
+function TIdProxyDescriptions.Count: Integer;
+begin
+  Result := Self.Descs.Count;
 end;
 
 procedure TIdProxyDescriptions.RemoveDescription(AddressSpace: String);

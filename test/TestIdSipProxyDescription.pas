@@ -62,6 +62,7 @@ type
   published
     procedure TestAddressSpaceAndProxyFor;
     procedure TestContainsBeforeSettingDescription;
+    procedure TestNumBitsAndNetmaskIdentical;
   end;
 
   TestTIdProxyDescriptions = class(TTestCase)
@@ -83,6 +84,7 @@ type
     procedure TestAddDescriptionAndRoutePathFor;
     procedure TestAddRoute;
     procedure TestAddRouteNoProxyPresent;
+    procedure TestAddRouteCanonicalisesNetmask;
     procedure TestRemoveDescription;
     procedure TestRoutePathForDefaultRoute;
   end;
@@ -369,6 +371,18 @@ begin
   Check(not Self.Desc.ProxyFor(LanClient),        'No description set: FQDN');
 end;
 
+procedure TestTIdProxyDescription.TestNumBitsAndNetmaskIdentical;
+const
+  LanAddress = '10.0.0.1';
+  LanNetwork = '10.0.0.0';
+begin
+  Self.Desc.AddressSpace := LanNetwork + '/8';
+  Check(Self.Desc.ProxyFor(LanAddress), 'LAN address, Description a number of significant bits');
+
+  Self.Desc.AddressSpace := LanNetwork + '/255.0.0.0';
+  Check(Self.Desc.ProxyFor(LanAddress), 'LAN address, Description a netmask');
+end;
+
 //******************************************************************************
 //* TestTIdProxyDescriptions                                                   *
 //******************************************************************************
@@ -461,6 +475,14 @@ begin
   end;
 
   CheckEquals(Self.LanRoute, Self.Proxies.RoutePathFor(Self.LanTarget), 'LAN routes not all added');
+end;
+
+procedure TestTIdProxyDescriptions.TestAddRouteCanonicalisesNetmask;
+begin
+  Self.Proxies.AddDescription('10.0.0.0/8', Self.LanRoute);
+  Self.Proxies.AddDescription('10.0.0.0/255.0.0.0', Self.LocalhostRoute);
+
+  CheckEquals(1, Self.Proxies.Count, '10.0.0.0/8 and 10.0.0.0/255.0.0.0 are the same address space, but the ProxyDescriptions doesn''t recognise this');
 end;
 
 procedure TestTIdProxyDescriptions.TestRemoveDescription;
