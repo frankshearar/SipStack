@@ -50,6 +50,11 @@ v0.6 (2007/xx/yy)
   TIdObjectRegistry. All TIdRegisteredObjects (and TIdInterfacedObject
   is a subclass) register and unregister automatically as they
   instantiate and are freed.
+* You may now configure different proxies for address spaces, for
+  instance using one proxy (or chain of proxies) to contact one
+  particular domain or subnet, and another proxy to contact
+  another. Further, one can specify a default Route path, for those
+  URIs that do not fall within any address space.
 * bugfixes from the unreleased 0.5.4 version:
 ** The registrar returns a 400 Bad Request when it receives a wildcard
    Contact with an Expires header.
