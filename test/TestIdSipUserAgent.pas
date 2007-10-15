@@ -595,11 +595,11 @@ begin
               Contact.DisplayName,
               'Contact header incorrectly set');
 
-  CheckEquals(Request.From.DisplayName,
-              Self.Core.From.DisplayName,
+  CheckEquals(Self.Core.From.DisplayName,
+              Request.From.DisplayName,
               'From.DisplayName');
-  CheckEquals(Request.From.Address,
-              Self.Core.From.Address,
+  CheckEquals(Self.Core.From.Address,
+              Request.From.Address,
               'From.Address');
     Check(Request.From.HasTag,
           'Requests MUST have a From tag; cf. RFC 3261 section 8.1.1.3');
