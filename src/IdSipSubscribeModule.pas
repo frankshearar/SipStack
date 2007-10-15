@@ -153,10 +153,12 @@ type
                            const SubscriptionState: String): TIdSipRequest;
     function  CreateRefer(From: TIdSipAddressHeader;
                           Dest: TIdSipAddressHeader;
-                          ReferTo: TIdSipAddressHeader): TIdSipRequest;
+                          ReferTo: TIdSipAddressHeader;
+                          MaxForwards: Cardinal): TIdSipRequest;
     function  CreateSubscribe(From: TIdSipAddressHeader;
                               Dest: TIdSipAddressHeader;
-                              const EventPackage: String): TIdSipRequest; overload;
+                              const EventPackage: String;
+                              MaxForwards: Cardinal): TIdSipRequest; overload;
     function  CreateSubscribe(Dialog: TIdSipDialog;
                               const EventPackage: String): TIdSipRequest; overload;
     function  DefaultSubscriptionDuration: Cardinal;
@@ -935,9 +937,10 @@ end;
 
 function TIdSipSubscribeModule.CreateRefer(From: TIdSipAddressHeader;
                                            Dest: TIdSipAddressHeader;
-                                           ReferTo: TIdSipAddressHeader): TIdSipRequest;
+                                           ReferTo: TIdSipAddressHeader;
+                                           MaxForwards: Cardinal): TIdSipRequest;
 begin
-  Result := Self.UserAgent.CreateRequest(MethodRefer, From, Dest);
+  Result := Self.UserAgent.CreateRequest(MethodRefer, From, Dest, MaxForwards);
   try
     // draft-ietf-sip-gruu-10, section 8.1
     if Result.FirstContact.IsGruu then
@@ -954,9 +957,10 @@ end;
 
 function TIdSipSubscribeModule.CreateSubscribe(From: TIdSipAddressHeader;
                                                Dest: TIdSipAddressHeader;
-                                               const EventPackage: String): TIdSipRequest;
+                                               const EventPackage: String;
+                                               MaxForwards: Cardinal): TIdSipRequest;
 begin
-  Result := Self.UserAgent.CreateRequest(MethodSubscribe, From, Dest);
+  Result := Self.UserAgent.CreateRequest(MethodSubscribe, From, Dest, MaxForwards);
   try
     // draft-ietf-sip-gruu-10, section 8.1
     if Result.FirstContact.IsGruu then
@@ -1583,7 +1587,7 @@ begin
   try
     TempTo.Address := Self.InitialRequest.RequestUri;
 
-    Result := Self.Module.CreateSubscribe(Self.LocalParty, TempTo, Self.EventPackage);
+    Result := Self.Module.CreateSubscribe(Self.LocalParty, TempTo, Self.EventPackage, Self.MaxForwards);
     Result.Event.ID := Self.EventID;
   finally
     TempTo.Free;
@@ -1655,7 +1659,7 @@ end;
 
 function TIdSipOutboundSubscribe.CreateNewAttempt: TIdSipRequest;
 begin
-  Result := Self.Module.CreateSubscribe(Self.LocalParty, Self.Target, Self.EventPackage);
+  Result := Self.Module.CreateSubscribe(Self.LocalParty, Self.Target, Self.EventPackage, Self.MaxForwards);
   Result.Event.ID             := Self.EventID;
   Result.Expires.NumericValue := Self.Duration;
 
@@ -1733,7 +1737,7 @@ end;
 
 function TIdSipOutboundUnsubscribe.CreateNewAttempt: TIdSipRequest;
 begin
-  Result := Self.Module.CreateSubscribe(Self.LocalParty, Self.Target, Self.EventPackage);
+  Result := Self.Module.CreateSubscribe(Self.LocalParty, Self.Target, Self.EventPackage, Self.MaxForwards);
   Result.CallID               := Self.CallID;
   Result.Event.ID             := Self.EventID;
   Result.Expires.NumericValue := 0;
@@ -1810,7 +1814,7 @@ end;
 
 function TIdSipOutboundRefer.CreateNewAttempt: TIdSipRequest;
 begin
-  Result := Self.Module.CreateRefer(Self.LocalParty, Self.Target, Self.ReferTo);
+  Result := Self.Module.CreateRefer(Self.LocalParty, Self.Target, Self.ReferTo, Self.MaxForwards);
   Result.Event.ID             := Self.EventID;
   Result.Expires.NumericValue := Self.Duration;
 
@@ -1901,7 +1905,7 @@ end;
 
 function TIdSipSubscription.CreateNewAttempt: TIdSipRequest;
 begin
-  Result := Self.Module.CreateSubscribe(Self.LocalParty, Self.Target, Self.EventPackage);
+  Result := Self.Module.CreateSubscribe(Self.LocalParty, Self.Target, Self.EventPackage, Self.MaxForwards);
   Result.Event.ID             := Self.EventID;
   Result.Expires.NumericValue := Self.Duration;
 end;
@@ -2519,6 +2523,7 @@ begin
   Sub.EventPackage := Self.EventPackage;
   Sub.EventID      := Self.EventID;
   Sub.LocalParty   := Self.LocalParty;
+  Sub.MaxForwards  := Self.MaxForwards;
   Sub.Target       := Self.Target;
 end;
 
@@ -3070,7 +3075,7 @@ end;
 
 function TIdSipOutboundReferral.CreateNewAttempt: TIdSipRequest;
 begin
-  Result := Self.Module.CreateRefer(Self.LocalParty, Self.Target, Self.ReferredResource);
+  Result := Self.Module.CreateRefer(Self.LocalParty, Self.Target, Self.ReferredResource, Self.MaxForwards);
   Result.Event.ID             := Self.EventID;
   Result.Expires.NumericValue := Self.Duration;
 

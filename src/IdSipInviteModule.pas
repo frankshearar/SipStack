@@ -126,7 +126,8 @@ type
     function  CreateInvite(From: TIdSipAddressHeader;
                            Dest: TIdSipAddressHeader;
                            const Body: String;
-                           const MimeType: String): TIdSipRequest;
+                           const MimeType: String;
+                           MaxForwards: Cardinal): TIdSipRequest;
     function  CreateReInvite(Dialog: TIdSipDialog;
                              const Body: String;
                              const MimeType: String): TIdSipRequest;
@@ -988,9 +989,10 @@ end;
 function TIdSipInviteModule.CreateInvite(From: TIdSipAddressHeader;
                                          Dest: TIdSipAddressHeader;
                                          const Body: String;
-                                         const MimeType: String): TIdSipRequest;
+                                         const MimeType: String;
+                                         MaxForwards: Cardinal): TIdSipRequest;
 begin
-  Result := Self.UserAgent.CreateRequest(MethodInvite, From, Dest);
+  Result := Self.UserAgent.CreateRequest(MethodInvite, From, Dest, MaxForwards);
   try
     Self.TurnIntoInvite(Result, Body, MimeType);
   except
@@ -1271,7 +1273,8 @@ begin
     Result := Self.Module.CreateInvite(Self.LocalParty,
                                        TempTo,
                                        Self.InitialRequest.Body,
-                                       Self.InitialRequest.ContentType);
+                                       Self.InitialRequest.ContentType,
+                                       Self.MaxForwards);
   finally
     TempTo.Free;
   end;
@@ -2066,7 +2069,7 @@ begin
   // If making a SIPS call, we need to use a SIPS URI.
   Self.LocalGruu.Address.Scheme := Self.Destination.Address.Scheme;
 
-  Result := Self.Module.CreateInvite(Self.LocalParty, Self.Destination, Self.Offer, Self.MimeType);
+  Result := Self.Module.CreateInvite(Self.LocalParty, Self.Destination, Self.Offer, Self.MimeType, Self.MaxForwards);
   Result.FirstContact.Assign(Self.LocalGruu);
 
   if Result.FirstContact.IsGruu then begin
@@ -2196,7 +2199,7 @@ begin
   // If making a SIPS call, we need to use a SIPS URI.
   Self.LocalGruu.Address.Scheme := Self.Destination.Address.Scheme;
 
-  Result := Self.Module.CreateInvite(Self.LocalParty, Self.Destination, Self.Offer, Self.MimeType);
+  Result := Self.Module.CreateInvite(Self.LocalParty, Self.Destination, Self.Offer, Self.MimeType, Self.MaxForwards);
   Result.AddHeader(ReplacesHeader);
   Result.Replaces.CallID  := Self.CallID;
   Result.Replaces.FromTag := Self.FromTag;
@@ -2386,7 +2389,8 @@ begin
   Result := Self.Module.CreateInvite(Self.InitialRequest.From,
                                      Self.InitialRequest.ToHeader,
                                      Self.InitialRequest.Body,
-                                     Self.InitialRequest.ContentType);
+                                     Self.InitialRequest.ContentType,
+                                     Self.MaxForwards);
 end;
 
 function TIdSipSession.GetDialog: TIdSipDialog;
@@ -3157,6 +3161,7 @@ begin
 
   Initial.Destination := Self.Destination;
   Initial.LocalParty  := Self.LocalParty;
+  Initial.MaxForwards := Self.MaxForwards;
   Initial.Offer       := Self.LocalSessionDescription;
   Initial.MimeType    := Self.LocalMimeType;
 
@@ -3170,6 +3175,7 @@ var
 begin
   Redirect := Self.UA.AddOutboundAction(TIdSipOutboundRedirectedInvite) as TIdSipOutboundRedirectedInvite;
   Redirect.Contact         := Contact;
+  Redirect.MaxForwards     := Self.MaxForwards;
   Redirect.OriginalRequest := OriginalRequest;
 
   Result := Redirect;

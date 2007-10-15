@@ -276,6 +276,8 @@ type
     procedure TestAddPackage;
     procedure TestAddPackageTwice;
     procedure TestAddReferPackageTwice;
+    procedure TestCreateRefer;
+    procedure TestCreateSubscribe;
     procedure TestPackage;
     procedure TestPackageFor;
     procedure TestReceiveReferWithNoReferTo;
@@ -592,6 +594,7 @@ type
                            Response: TIdSipResponse;
                            const State: String): TIdSipRequest;
     function  CreateSubscription: TIdSipOutboundSubscription; virtual;
+    function  CreateSubscriptionWithoutSend: TIdSipOutboundSubscription;
     function  EstablishSubscription: TIdSipOutboundSubscription; overload;
     procedure EstablishSubscription(Sub: TIdSipOutboundSubscription); overload;
     procedure OnEstablishedSubscription(Subscription: TIdSipOutboundSubscription;
@@ -649,6 +652,7 @@ type
     procedure TestReceiveTerminatingNotifyWithUnknownReason; virtual;
     procedure TestReceiveTerminatingNotifyWithUnknownReasonAndRetryAfter; virtual;
     procedure TestRedirectWithMultipleContacts;
+    procedure TestRedirectWithMaxForwards;
     procedure TestRefresh;
     procedure TestRefreshReceives423;
     procedure TestRefreshReceives481;
@@ -656,6 +660,7 @@ type
     procedure TestRefreshUpdatesExpiryTime;
     procedure TestRemoveListener;
     procedure TestSendWithGruu;
+    procedure TestSendWithMaxForwards;
     procedure TestTerminate;
     procedure TestTerminateBeforeEstablished;
     procedure TestUnsubscribe;
@@ -1085,7 +1090,7 @@ procedure TSubscribeTestCase.ReceiveRefer(Target: TIdSipAddressHeader);
 var
   Refer: TIdSipRequest;
 begin
-  Refer := Self.Module.CreateRefer(Self.Core.From, Self.Destination, Target);
+  Refer := Self.Module.CreateRefer(Self.Core.From, Self.Destination, Target, TIdSipRequest.DefaultMaxForwards);
   try
     // See the comment in TSubscribeTestCase.ReceiveSubscribe.
     Refer.FirstContact.Address := Self.Destination.Address;
@@ -1100,7 +1105,7 @@ procedure TSubscribeTestCase.ReceiveSubscribe(const EventPackage: String;
 var
   Sub: TIdSipRequest;
 begin
-  Sub := Self.Core.CreateRequest(MethodSubscribe, Self.Core.From, Self.Destination);
+  Sub := Self.Core.CreateRequest(MethodSubscribe, Self.Core.From, Self.Destination, TIdSipRequest.DefaultMaxForwards);
   try
     // Self.Core will use "localhost" here, and as a result of the mock
     // infrastructure this will access violate - the stack assumes that
@@ -1219,7 +1224,7 @@ var
   Ok:           TIdSipResponse;
   Sub:          TIdSipRequest;
 begin
-  Sub := Self.Module.CreateSubscribe(Self.Core.From, Self.Destination, EventPackage);
+  Sub := Self.Module.CreateSubscribe(Self.Core.From, Self.Destination, EventPackage, TIdSipRequest.DefaultMaxForwards);
   try
     Ok := TIdSipResponse.InResponseTo(Sub, SIPOK, Sub.FirstContact);
     try
@@ -1248,7 +1253,7 @@ procedure TestTIdSipSubscribeModule.ReceiveReferWithNoReferToHeader;
 var
   Refer: TIdSipRequest;
 begin
-  Refer := Self.Module.CreateRefer(Self.Core.From, Self.Destination, Self.Core.From);
+  Refer := Self.Module.CreateRefer(Self.Core.From, Self.Destination, Self.Core.From, TIdSipRequest.DefaultMaxForwards);
   try
     // See the comment in TSubscribeTestCase.ReceiveSubscribe.
     Refer.FirstContact.Address := Self.Destination.Address;
@@ -1265,7 +1270,7 @@ var
 begin
   MalformedSub := Self.Module.CreateSubscribe(Self.Core.From,
                                               Self.Destination,
-                                              TIdSipTestPackage.EventPackage);
+                                              TIdSipTestPackage.EventPackage, TIdSipRequest.DefaultMaxForwards);
   try
     MalformedSub.RemoveAllHeadersNamed(EventHeaderFull);
 
@@ -1366,6 +1371,61 @@ begin
   CheckEquals(OldAllowedMethods,
               Self.Module.AcceptsMethods,
               'Re-adding the "refer" package messed up AcceptsMethods');
+end;
+
+procedure TestTIdSipSubscribeModule.TestCreateRefer;
+const
+  MaxForwards = 42;
+var
+  Refer: TIdSipRequest;
+begin
+  Refer := Self.Module.CreateRefer(Self.Core.From, Self.Destination, Self.Destination, MaxForwards);
+  try
+    Check(Refer.HasHeader(ReferToHeaderFull), 'No Refer-To header');
+
+    CheckEquals(Self.Core.From.DisplayName,
+                Refer.From.DisplayName,
+                'From.DisplayName');
+    CheckEquals(Self.Core.From.Address,
+                Refer.From.Address,
+                'From.Address');
+    Check(Refer.From.HasTag,
+          'Requests MUST have a From tag; cf. RFC 3261 section 8.1.1.3');
+
+    CheckEquals(MaxForwards,                Refer.MaxForwards,        'Max-Forwards');
+    CheckEquals(Self.Destination.FullValue, Refer.ReferTo.FullValue,  'Refer-To');
+    CheckEquals(Self.Destination.FullValue, Refer.ToHeader.FullValue, 'To');
+  finally
+    Refer.Free;
+  end;
+end;
+
+procedure TestTIdSipSubscribeModule.TestCreateSubscribe;
+const
+  MaxForwards = 42;
+var
+  Subscribe: TIdSipRequest;
+begin
+  Subscribe := Self.Module.CreateSubscribe(Self.Core.From, Self.Destination, TIdSipTestPackage.EventPackage, MaxForwards);
+  try
+    Check(Subscribe.HasHeader(EventHeaderFull), 'No Event header');
+
+    CheckEquals(TIdSipTestPackage.EventPackage, Subscribe.Event.EventPackage, 'Event');
+
+    CheckEquals(Self.Core.From.DisplayName,
+                Subscribe.From.DisplayName,
+                'From.DisplayName');
+    CheckEquals(Self.Core.From.Address,
+                Subscribe.From.Address,
+                'From.Address');
+    Check(Subscribe.From.HasTag,
+          'Requests MUST have a From tag; cf. RFC 3261 section 8.1.1.3');
+
+    CheckEquals(MaxForwards,                    Subscribe.MaxForwards,        'Max-Forwards');
+    CheckEquals(Self.Destination.FullValue,     Subscribe.ToHeader.FullValue, 'To');
+  finally
+    Subscribe.Free;
+  end;
 end;
 
 procedure TestTIdSipSubscribeModule.TestPackage;
@@ -1640,7 +1700,7 @@ var
 begin
   Module := Self.Core.ModuleFor(MethodOptions) as TIdSipOptionsModule;
 
-  Options := Module.CreateOptions(Self.Core.From, Self.Destination);
+  Options := Module.CreateOptions(Self.Core.From, Self.Destination, TIdSipRequest.DefaultMaxForwards);
   try
     // Swop To & From because this comes from the network
     Temp := Options.From.FullValue;
@@ -1660,7 +1720,7 @@ var
   Notify:   TIdSipRequest;
   Response: TIdSipResponse;
 begin
-  Notify := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Self.Destination);
+  Notify := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Self.Destination, TIdSipRequest.DefaultMaxForwards);
   try
     Notify.Method          := MethodNotify;
     Notify.CSeq.SequenceNo := $deadbeef;
@@ -1870,7 +1930,8 @@ begin
     RemoteParty.Assign(Self.Destination);
     Self.Subscribe := Self.Module.CreateSubscribe(RemoteParty,
                                                   Self.Destination,
-                                                  TIdSipTestPackage.EventPackage);
+                                                  TIdSipTestPackage.EventPackage,
+                                                  TIdSipRequest.DefaultMaxForwards);
   finally
     RemoteParty.Free;
   end;
@@ -2311,7 +2372,7 @@ begin
 
   Self.ExpiresValue := 1000;
 
-  Subscribe := Self.Module.CreateSubscribe(Self.Core.From, Self.Destination, TIdSipTestPackage.EventPackage);
+  Subscribe := Self.Module.CreateSubscribe(Self.Core.From, Self.Destination, TIdSipTestPackage.EventPackage, TIdSipRequest.DefaultMaxForwards);
   try
     OK := TIdSipResponse.InResponseTo(Subscribe, SIPOK);
     try
@@ -3023,7 +3084,7 @@ procedure TestTIdSipInboundSubscription.ReceiveSubscribeWithoutExpires(const Eve
 var
   Subscribe: TIdSipRequest;
 begin
-  Subscribe := Self.Module.CreateSubscribe(RemoteParty, Self.Destination, EventPackage);
+  Subscribe := Self.Module.CreateSubscribe(RemoteParty, Self.Destination, EventPackage, TIdSipRequest.DefaultMaxForwards);
   try
     // See the comment in TSubscribeTestCase.ReceiveSubscribe.
     Subscribe.FirstContact.Address := Self.Destination.Address;
@@ -3040,7 +3101,7 @@ procedure TestTIdSipInboundSubscription.ReceiveSubscribe(const EventPackage: Str
 var
   Sub: TIdSipRequest;
 begin
-  Sub := Self.Module.CreateSubscribe(Self.RemoteParty, Self.Core.From, EventPackage);
+  Sub := Self.Module.CreateSubscribe(Self.RemoteParty, Self.Core.From, EventPackage, TIdSipRequest.DefaultMaxForwards);
   try
     Sub.From.Address         := Self.Destination.Address;
     Sub.FirstContact.Address := Self.Destination.Address;
@@ -3059,7 +3120,7 @@ procedure TestTIdSipInboundSubscription.ReceiveSubscribeWithExpiresInContact(Dur
 var
   Subscribe: TIdSipRequest;
 begin
-  Subscribe := Self.Module.CreateSubscribe(RemoteParty, Self.Destination, TIdSipTestPackage.EventPackage);
+  Subscribe := Self.Module.CreateSubscribe(RemoteParty, Self.Destination, TIdSipTestPackage.EventPackage, TIdSipRequest.DefaultMaxForwards);
   try
     // See the comment in TSubscribeTestCase.ReceiveSubscribe.
     Subscribe.FirstContact.Address := Self.Destination.Address;
@@ -3098,7 +3159,7 @@ var
 begin
   Self.Package.MinimumExpiryTime := MinExpTime;
 
-  Sub := Self.Module.CreateSubscribe(RemoteParty, Self.Destination, TIdSipTestPackage.EventPackage);
+  Sub := Self.Module.CreateSubscribe(RemoteParty, Self.Destination, TIdSipTestPackage.EventPackage, TIdSipRequest.DefaultMaxForwards);
   try
     // See the comment in TSubscribeTestCase.ReceiveSubscribe.
     Sub.FirstContact.Address := Self.Destination.Address;
@@ -3208,7 +3269,7 @@ begin
   // Set us up to support GRUU
   Self.UseGruu;
 
-  Sub := Self.Module.CreateSubscribe(Self.Core.From, Self.Destination, TIdSipTestPackage.EventPackage);
+  Sub := Self.Module.CreateSubscribe(Self.Core.From, Self.Destination, TIdSipTestPackage.EventPackage, TIdSipRequest.DefaultMaxForwards);
   try
     // See the comment in TSubscribeTestCase.ReceiveSubscribe.
     Sub.FirstContact.Address := Self.Destination.Address;
@@ -3537,11 +3598,16 @@ end;
 
 function TestTIdSipOutboundSubscriptionBase.CreateSubscription: TIdSipOutboundSubscription;
 begin
+  Result := Self.CreateSubscriptionWithoutSend;
+  Result.Send;
+end;
+
+function TestTIdSipOutboundSubscriptionBase.CreateSubscriptionWithoutSend: TIdSipOutboundSubscription;
+begin
   Result := Self.Module.Subscribe(Self.Destination,
                                   TIdSipTestPackage.EventPackage) as TIdSipOutboundSubscription;
   Result.AddActionListener(Self);
   Result.AddListener(Self);
-  Result.Send;
 end;
 
 procedure TestTIdSipOutboundSubscriptionBase.CheckExpires(ExpectedRefreshTime: Cardinal);
@@ -4265,6 +4331,23 @@ begin
               ClassName + ' didn''t attempt to contact all Contacts: ' + Self.FailReason);
 end;
 
+procedure TestTIdSipOutboundSubscriptionBase.TestRedirectWithMaxForwards;
+const
+  MaxForwards = 42;
+var
+  Subscribe: TIdSipOutboundSubscription;
+begin
+  Subscribe := Self.CreateSubscriptionWithoutSend;
+  Subscribe.MaxForwards := MaxForwards;
+  Subscribe.Send;
+
+  Self.MarkSentRequestCount;
+  Self.ReceiveMovedTemporarily('sip:foo');
+  CheckRequestSent('No ' + Subscribe.Method + ' sent');
+
+  CheckEquals(MaxForwards, Self.LastSentRequest.MaxForwards, 'Max-Forwards not overridden');
+end;
+
 procedure TestTIdSipOutboundSubscriptionBase.TestRefresh;
 const
   ExpiryTime = 1000;
@@ -4439,6 +4522,21 @@ begin
         Sub.Method + ' didn''t use GRUU');
   Check(Sub.FirstContact.Address.HasGrid,
         Sub.Method + ' doesn''t have a "grid" parameter');
+end;
+
+procedure TestTIdSipOutboundSubscriptionBase.TestSendWithMaxForwards;
+const
+  MaxForwards = 42;
+var
+  Subscribe: TIdSipOutboundSubscription;
+begin
+  Subscribe := Self.CreateSubscriptionWithoutSend;
+  Subscribe.MaxForwards := MaxForwards;
+
+  Self.MarkSentRequestCount;
+  Subscribe.Send;
+  CheckRequestSent('No ' + Subscribe.Method + ' sent');
+  CheckEquals(MaxForwards, Self.LastSentRequest.MaxForwards, 'Max-Forwards not overidden');
 end;
 
 procedure TestTIdSipOutboundSubscriptionBase.TestTerminate;
@@ -4704,7 +4802,7 @@ begin
   // cf. TestTIdSipInboundSubscription.ReceiveSubscribeRequestWithGruu.
   Self.Module.AddPackage(TIdSipReferPackage);
 
-  Refer := Self.Module.CreateRefer(Self.Core.From, Self.Destination, Self.Core.From);
+  Refer := Self.Module.CreateRefer(Self.Core.From, Self.Destination, Self.Core.From, TIdSipRequest.DefaultMaxForwards);
   try
     // See the comment in TSubscribeTestCase.ReceiveSubscribe.
     Refer.FirstContact.Address := Self.Destination.Address;
@@ -4722,7 +4820,7 @@ procedure TestTIdSipInboundReferral.ReceiveRefer(Target: TIdSipAddressHeader);
 var
   Refer: TIdSipRequest;
 begin
-  Refer := Self.Module.CreateRefer(Self.RemoteParty, Self.Core.From, Target);
+  Refer := Self.Module.CreateRefer(Self.RemoteParty, Self.Core.From, Target, TIdSipRequest.DefaultMaxForwards);
   try
     Refer.From.Address         := Self.Destination.Address;
     Refer.FirstContact.Address := Self.Destination.Address;
@@ -4758,7 +4856,7 @@ begin
   // Set us up to support GRUU
   Self.UseGruu;
 
-  Refer := Self.Module.CreateRefer(Self.RemoteParty, Self.Destination, Self.Core.From);
+  Refer := Self.Module.CreateRefer(Self.RemoteParty, Self.Destination, Self.Core.From, TIdSipRequest.DefaultMaxForwards);
   try
     // See the comment in TSubscribeTestCase.ReceiveSubscribe.
     Refer.FirstContact.Address := Self.Destination.Address;

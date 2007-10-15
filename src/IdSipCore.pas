@@ -395,7 +395,8 @@ type
                                       Contact: TIdSipAddressHeader): TIdSipRequest;
     function  CreateRequest(const Method: String;
                             From: TIdSipAddressHeader;
-                            Dest: TIdSipAddressHeader): TIdSipRequest; overload;
+                            Dest: TIdSipAddressHeader;
+                            MaxForwards: Cardinal): TIdSipRequest; overload;
     function  CreateRequest(const Method: String;
                             Dialog: TIdSipDialog): TIdSipRequest; overload;
     function  CreateResponse(Request: TIdSipRequest;
@@ -575,6 +576,7 @@ type
     fIsTerminated:   Boolean;
     fLocalGruu:      TIdSipContactHeader;
     fLocalParty:     TIdSipAddressHeader;
+    fMaxForwards:    Cardinal;
     fResult:         TIdSipActionResult;
     fUA:             TIdSipAbstractCore;
     NonceCount:      Cardinal;
@@ -652,6 +654,7 @@ type
     property IsTerminated:   Boolean             read fIsTerminated;
     property LocalGruu:      TIdSipContactHeader read fLocalGruu write SetLocalGruu;
     property LocalParty:     TIdSipAddressHeader read fLocalParty write SetLocalParty;
+    property MaxForwards:    Cardinal            read fMaxForwards write fMaxForwards;
     property Result:         TIdSipActionResult  read fResult;
     property UA:             TIdSipAbstractCore  read fUA;
     property UseGruu:        Boolean             read GetUseGruu write SetUseGruu;
@@ -1691,7 +1694,8 @@ end;
 
 function TIdSipAbstractCore.CreateRequest(const Method: String;
                                           From: TIdSipAddressHeader;
-                                          Dest: TIdSipAddressHeader): TIdSipRequest;
+                                          Dest: TIdSipAddressHeader;
+                                          MaxForwards: Cardinal): TIdSipRequest;
 begin
   if Dest.Address.HasMethod then begin
     if (Method <> Dest.Address.Method) then
@@ -1704,6 +1708,7 @@ begin
     Result.CallID         := Self.NextCallID;
     Result.From.Value     := From.FullValue;
     Result.From.Tag       := Self.NextTag;
+    Result.MaxForwards    := MaxForwards;
     Result.Method         := Method;
     Result.ToHeader.Value := Dest.FullValue;
 
@@ -3120,6 +3125,7 @@ begin
   Self.fIsOwned        := false;
   Self.fIsTerminated   := false;
   Self.fLocalGruu      := TIdSipContactHeader.Create;
+  Self.fMaxForwards    := TIdSipRequest.DefaultMaxForwards;
   Self.NonceCount      := 0;
   Self.State           := asInitialised;
   Self.TargetLocations := TIdSipLocations.Create;
@@ -3589,6 +3595,7 @@ var
 begin
   Redir := Self.UA.AddOutboundAction(TIdSipRedirectedAction) as TIdSipRedirectedAction;
   Redir.Contact         := Contact;
+  Redir.MaxForwards     := Self.MaxForwards;
   Redir.OriginalRequest := OriginalRequest;
   Redir.SetMethod(Self.Method);
 

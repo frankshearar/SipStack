@@ -840,7 +840,7 @@ end;
 }
 function TestTIdSipStackInterface.CreateRemoteInvite: TIdSipRequest;
 begin
-  Result := Self.RemoteUA.InviteModule.CreateInvite(Self.RemoteUA.From, Self.Destination, '', '');
+  Result := Self.RemoteUA.InviteModule.CreateInvite(Self.RemoteUA.From, Self.Destination, '', '', TIdSipRequest.DefaultMaxForwards);
 end;
 
 function TestTIdSipStackInterface.CreateRemoteNotify(RemoteDialog: TIdSipDialog; Subscribe: TIdSipRequest): TIdSipRequest;
@@ -870,7 +870,8 @@ begin
   Result := Self.Intf.MakeCall(Self.From,
                                Self.Destination,
                                Self.LocalOffer,
-                               Self.LocalMimeType);
+                               Self.LocalMimeType,
+                               TIdSipRequest.DefaultMaxForwards);
 
   Self.MarkSentRequestCount;
   Self.Intf.Send(Result);
@@ -1130,7 +1131,7 @@ begin
   try
     LocalFrom.Value := 'sip:' + Self.LocalAddress + ':' + IntToStr(Self.LocalPort);
 
-    Subscribe := SubMod.CreateSubscribe(Self.RemoteUA.From, LocalFrom, EventPackage);
+    Subscribe := SubMod.CreateSubscribe(Self.RemoteUA.From, LocalFrom, EventPackage, TIdSipRequest.DefaultMaxForwards);
     try
       Self.ReceiveRequest(Subscribe);
     finally
@@ -1210,7 +1211,7 @@ procedure TestTIdSipStackInterface.TestAcceptCallWithInvalidHandle;
 var
   H: TIdSipHandle;
 begin
-  H := Self.Intf.MakeCall(Self.From, Self.Destination, '', '');
+  H := Self.Intf.MakeCall(Self.From, Self.Destination, '', '', TIdSipRequest.DefaultMaxForwards);
 
   try
     // Of course, you can't answer an outbound call.
@@ -1346,7 +1347,7 @@ procedure TestTIdSipStackInterface.TestEstablishedSessionOutboundCall;
 var
   Call: TIdSipHandle;
 begin
-  Call := Self.Intf.MakeCall(Self.From, Self.Destination, Self.LocalOffer, Self.LocalMimeType);
+  Call := Self.Intf.MakeCall(Self.From, Self.Destination, Self.LocalOffer, Self.LocalMimeType, TIdSipRequest.DefaultMaxForwards);
   Self.Intf.Send(Call);
   Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
   Self.ProcessAllPendingNotifications;
@@ -1451,17 +1452,20 @@ begin
 end;
 
 procedure TestTIdSipStackInterface.TestMakeCall;
+const
+  MaxForwards = 42;
 var
   ActualFrom: TIdSipFromHeader;
   Handle:     TIdSipHandle;
 begin
-  Handle := Self.Intf.MakeCall(Self.From, Self.Destination, '', '');
+  Handle := Self.Intf.MakeCall(Self.From, Self.Destination, '', '', MaxForwards);
 
   Self.MarkSentRequestCount;
   Self.Intf.Send(Handle);
   Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
   CheckRequestSent('No request sent');
   CheckEquals(MethodInvite, Self.MockTransport.LastRequest.Method, 'Unexpected request sent');
+  CheckEquals(MaxForwards, Self.MockTransport.LastRequest.MaxForwards, 'Max-Forwards');
 
   ActualFrom := TIdSipFromHeader.Create;
   try
@@ -1484,7 +1488,7 @@ begin
     MalformedAddress.Address.Uri := 'sip:::1';
     Check(MalformedAddress.IsMalformed, 'Sanity check: the URI must be malformed');
 
-    Handle := Self.Intf.MakeCall(Self.From, MalformedAddress, '', '');
+    Handle := Self.Intf.MakeCall(Self.From, MalformedAddress, '', '', TIdSipRequest.DefaultMaxForwards);
     CheckEquals(InvalidHandle, Handle, 'MakeCall didn''t return the invalid handle');
   finally
     MalformedAddress.Free;
@@ -1501,7 +1505,7 @@ begin
     MalformedAddress.Address.Uri := 'sip:::1';
     Check(MalformedAddress.IsMalformed, 'Sanity check: the URI must be malformed');
 
-    Handle := Self.Intf.MakeCall(MalformedAddress, Self.Destination, '', '');
+    Handle := Self.Intf.MakeCall(MalformedAddress, Self.Destination, '', '', TIdSipRequest.DefaultMaxForwards);
     CheckEquals(InvalidHandle, Handle, 'MakeCall didn''t return the invalid handle');
   finally
     MalformedAddress.Free;
@@ -1712,7 +1716,7 @@ var
   FailData: TIdNetworkFailureData;
 begin
   Self.Destination.Address.Host := 'does.not.exist.com';
-  Call := Self.Intf.MakeCall(Self.From, Self.Destination, '', '');
+  Call := Self.Intf.MakeCall(Self.From, Self.Destination, '', '', TIdSipRequest.DefaultMaxForwards);
   Check(Call > 0, 'Invalid handle');
   Self.Intf.Send(Call);
   Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
@@ -1756,7 +1760,8 @@ begin
   H := Self.Intf.MakeCall(Self.From,
                           Self.Destination,
                           Self.LocalOffer,
-                          Self.LocalMimeType);
+                          Self.LocalMimeType,
+                          TIdSipRequest.DefaultMaxForwards);
   // Send the INVITE
   Self.Intf.Send(H);
   Self.MarkSentRequestCount;
@@ -2099,7 +2104,7 @@ procedure TestTIdSipStackInterface.TestSendProvisionalWithInvalidHandle;
 var
   H: TIdSipHandle;
 begin
-  H := Self.Intf.MakeCall(Self.From, Self.Destination, '', '');
+  H := Self.Intf.MakeCall(Self.From, Self.Destination, '', '', TIdSipRequest.DefaultMaxForwards);
 
   try
     // Of course, you can't send a progress response for an outbound call.

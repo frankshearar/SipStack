@@ -220,7 +220,8 @@ type
     function  MakeCall(From: TIdSipAddressHeader;
                        Dest: TIdSipAddressHeader;
                        const LocalSessionDescription: String;
-                       const MimeType: String): TIdSipHandle; virtual;
+                       const MimeType: String;
+                       MaxForwards: Cardinal): TIdSipHandle; virtual;
     function  MakeOptionsQuery(Dest: TIdSipAddressHeader): TIdSipHandle;
     function  MakeRefer(Target: TIdSipAddressHeader;
                         Resource: TIdSipAddressHeader): TIdSipHandle;
@@ -1152,7 +1153,8 @@ end;
 function TIdSipStackInterface.MakeCall(From: TIdSipAddressHeader;
                                        Dest: TIdSipAddressHeader;
                                        const LocalSessionDescription: String;
-                                       const MimeType: String): TIdSipHandle;
+                                       const MimeType: String;
+                                       MaxForwards: Cardinal): TIdSipHandle;
 var
   Sess: TIdSipOutboundSession;
 begin
@@ -1167,6 +1169,7 @@ begin
   end;
 
   Sess := Self.UserAgent.InviteModule.Call(From, Dest, LocalSessionDescription, MimeType);
+  Sess.MaxForwards := MaxForwards;
   Result := Self.AddAction(Sess);
   Sess.AddSessionListener(Self);
 end;

@@ -71,6 +71,7 @@ type
     procedure TestIsOptions; override;
     procedure TestReceiveResponse;
     procedure TestRemoveListener;
+    procedure TestSendWithMaxForwards;
   end;
 
   TestTIdSipOptionsResponseMethod = class(TActionMethodTestCase)
@@ -116,7 +117,7 @@ procedure TestTIdSipOptionsModule.ReceiveOptions;
 var
   Options: TIdSipRequest;
 begin
-  Options := Self.Module.CreateOptions(Self.Core.From, Self.Core.From);
+  Options := Self.Module.CreateOptions(Self.Core.From, Self.Core.From, TIdSipRequest.DefaultMaxForwards);
   try
     Self.ReceiveRequest(Options);
   finally
@@ -127,11 +128,14 @@ end;
 //* TestTIdSipOptionsModule Published methods **********************************
 
 procedure TestTIdSipOptionsModule.TestCreateOptions;
+const
+  MaxForwards = 42;
 var
   Options: TIdSipRequest;
 begin
-  Options := Self.Module.CreateOptions(Self.Core.From, Self.Destination);
+  Options := Self.Module.CreateOptions(Self.Core.From, Self.Destination, MaxForwards);
   try
+    CheckEquals(MaxForwards,   Options.MaxForwards, 'Max-Forwards');
     CheckEquals(MethodOptions, Options.Method,      'Incorrect method');
     CheckEquals(MethodOptions, Options.CSeq.Method, 'Incorrect CSeq method');
     Check(Options.HasHeader(AcceptHeader),          'Missing Accept header');
@@ -207,7 +211,7 @@ procedure TestTIdSipOptionsModule.TestRejectOptionsWithReplacesHeader;
 var
   Options: TIdSipRequest;
 begin
-  Options := Self.Module.CreateOptions(Self.Core.From, Self.Destination);
+  Options := Self.Module.CreateOptions(Self.Core.From, Self.Destination, TIdSipRequest.DefaultMaxForwards);
   try
     Options.AddHeader(ReplacesHeader).Value := '1;from-tag=2;to-tag=3';
 
@@ -243,7 +247,7 @@ procedure TestTIdSipInboundOptions.SetUp;
 begin
   inherited SetUp;
 
-  Self.OptionsRequest := Self.Module.CreateOptions(Self.Core.From, Self.Destination);
+  Self.OptionsRequest := Self.Module.CreateOptions(Self.Core.From, Self.Destination, TIdSipRequest.DefaultMaxForwards);
 
   Self.Options := TIdSipInboundOptions.CreateInbound(Self.Core,
                                                      Self.OptionsRequest,
@@ -489,6 +493,21 @@ begin
   finally
     L1.Free;
   end;
+end;
+
+procedure TestTIdSipOutboundOptions.TestSendWithMaxForwards;
+const
+  MaxForwards = 42;
+var
+  Options: TIdSipOutboundOptions;
+begin
+  Options := Self.Module.QueryOptions(Self.Core.From);
+  Options.MaxForwards := MaxForwards;
+
+  Self.MarkSentRequestCount;
+  Options.Send;
+  CheckRequestSent('No OPTIONS sent');
+  CheckEquals(MaxForwards, Self.LastSentRequest.MaxForwards, 'Max-Forwards not overridden');
 end;
 
 //******************************************************************************

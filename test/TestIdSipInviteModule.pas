@@ -261,10 +261,13 @@ type
   end;
 
   TestTIdSipOutboundInitialInvite = class(TestTIdSipOutboundInvite)
+  private
+    function CreateInvite: TIdSipOutboundInitialInvite;
   protected
     function CreateAction: TIdSipAction; override;
   published
     procedure TestSendWithGruu; override;
+    procedure TestSendWithMaxForwards;
   end;
 
   TestTIdSipOutboundRedirectedInvite = class(TestTIdSipOutboundInvite)
@@ -539,6 +542,7 @@ type
     procedure TestCallSecure;
     procedure TestCallSipsUriUsesTls;
     procedure TestCallWithGruu;
+    procedure TestCallWithMaxForwards;
     procedure TestCallWithOffer;
     procedure TestCallWithoutOffer;
     procedure TestCancelReceiveInviteOkBeforeCancelOk;
@@ -568,6 +572,7 @@ type
     procedure TestRedirectAndAccept;
     procedure TestRedirectMultipleOks;
     procedure TestRedirectNoMoreTargets;
+    procedure TestRedirectWithMaxForwards;
     procedure TestRedirectWithMultipleContacts;
     procedure TestRedirectWithNoSuccess;
     procedure TestSendSetsInitialRequest;
@@ -1210,6 +1215,8 @@ begin
 end;
 
 procedure TestTIdSipInviteModule.TestCreateInvite;
+const
+  MaxForwards = 42;
 var
   Dest:    TIdSipToHeader;
   Request: TIdSipRequest;
@@ -1217,9 +1224,10 @@ begin
   Dest := TIdSipToHeader.Create;
   try
     Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna';
-    Request := Self.Module.CreateInvite(Self.Core.From, Dest, '', '');
+    Request := Self.Module.CreateInvite(Self.Core.From, Dest, '', '', MaxForwards);
     try
       Self.CheckCreateRequest(Dest, Request);
+      CheckEquals(MaxForwards, Request.MaxForwards, 'Max-Forwards');
       CheckEquals(MethodInvite, Request.Method, 'Incorrect method');
 
       Check(not Request.ToHeader.HasTag,
@@ -1288,7 +1296,7 @@ var
 begin
   Body := 'foo fighters';
 
-  Invite := Self.Module.CreateInvite(Self.Core.From, Self.Destination, Body, 'text/plain');
+  Invite := Self.Module.CreateInvite(Self.Core.From, Self.Destination, Body, 'text/plain', TIdSipRequest.DefaultMaxForwards);
   try
     CheckEquals(Length(Body), Invite.ContentLength, 'Content-Length');
     CheckEquals(Body,         Invite.Body,          'Body');
@@ -1309,7 +1317,7 @@ var
 begin
   Self.UseGruu;
 
-  Invite := Self.Module.CreateInvite(Self.Core.From, Self.Destination, '', '');
+  Invite := Self.Module.CreateInvite(Self.Core.From, Self.Destination, '', '', TIdSipRequest.DefaultMaxForwards);
   try
     Self.CheckCreateRequest(Self.Destination, Invite);
     Check(not Invite.FirstContact.Address.HasGrid,
@@ -1373,7 +1381,7 @@ var
   Bye:      TIdSipRequest;
   Response: TIdSipResponse;
 begin
-  Bye := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Self.Destination);
+  Bye := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Self.Destination, TIdSipRequest.DefaultMaxForwards);
   try
     Bye.Method          := MethodBye;
     Bye.CSeq.SequenceNo := $deadbeef;
@@ -1399,7 +1407,7 @@ var
   Bye:      TIdSipRequest;
   Response: TIdSipResponse;
 begin
-  Bye := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Self.Destination);
+  Bye := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Self.Destination, TIdSipRequest.DefaultMaxForwards);
   try
     Bye.Method          := MethodBye;
     Bye.From.Value      := Bye.From.Address.URI;     // strip the tag
@@ -3483,16 +3491,27 @@ function TestTIdSipOutboundInitialInvite.CreateAction: TIdSipAction;
 var
   Invite: TIdSipOutboundInitialInvite;
 begin
-  Result := Self.Core.AddOutboundAction(TIdSipOutboundInitialInvite);
+  Invite := Self.CreateInvite as TIdSipOutboundInitialInvite;
+  Invite.Send;
 
-  Invite := Result as TIdSipOutboundInitialInvite;
+  Result := Invite;
+end;
+
+//* TestTIdSipOutboundInitialInvite Private methods ****************************
+
+function TestTIdSipOutboundInitialInvite.CreateInvite: TIdSipOutboundInitialInvite;
+var
+  Invite: TIdSipOutboundInitialInvite;
+begin
+  Invite := Self.Core.AddOutboundAction(TIdSipOutboundInitialInvite) as TIdSipOutboundInitialInvite;
   Invite.Destination := Self.Destination;
   Invite.MimeType    := Self.InviteMimeType;
   Invite.Offer       := Self.InviteOffer;
   Invite.AddActionListener(Self);
   Invite.AddOwnedActionListener(Self);
   Invite.AddInviteListener(Self);
-  Invite.Send;
+
+  Result := Invite;
 end;
 
 //* TestTIdSipOutboundInitialInvite Published methods **************************
@@ -3500,6 +3519,25 @@ end;
 procedure TestTIdSipOutboundInitialInvite.TestSendWithGruu;
 begin
   Self.CheckSendDialogEstablishingRequestWithGruu;
+end;
+
+procedure TestTIdSipOutboundInitialInvite.TestSendWithMaxForwards;
+const
+  NewMaxForwards = 42;
+var
+  Invite: TIdSipOutboundInitialInvite;
+begin
+
+  // This horrible code creates a TIdSipOutboundInvite of the same type as the
+  // other tests in this test suite.
+  Invite := Self.CreateInvite;
+  Invite.MaxForwards := NewMaxForwards;
+
+  Self.MarkSentRequestCount;
+  Invite.MaxForwards := NewMaxForwards;
+  Invite.Send;
+  CheckRequestSent('No INVITE sent');
+  CheckEquals(NewMaxForwards, Self.LastSentRequest.MaxForwards, 'Max-Forwards not overridden');
 end;
 
 //******************************************************************************
@@ -4208,7 +4246,7 @@ begin
   Self.EstablishSession(Session);
 
   SubMod := Self.Core.AddModule(TIdSipSubscribeModule) as TIdSipSubscribeModule;
-  Refer := SubMod.CreateRefer(Self.Core.From, Self.Destination, Self.Destination);
+  Refer := SubMod.CreateRefer(Self.Core.From, Self.Destination, Self.Destination, TIdSipRequest.DefaultMaxForwards);
   try
     Refer.RequestUri.Grid := Session.LocalGruu.Grid;
 
@@ -4230,7 +4268,7 @@ begin
   Self.EstablishSession(Session);
 
   SubMod := Self.Core.AddModule(TIdSipSubscribeModule) as TIdSipSubscribeModule;
-  Refer := SubMod.CreateRefer(Self.Destination, Self.Destination, Self.Destination);
+  Refer := SubMod.CreateRefer(Self.Destination, Self.Destination, Self.Destination, TIdSipRequest.DefaultMaxForwards);
   try
     if Session.IsInbound then
       Refer.RequestUri := Session.InitialRequest.FirstContact.Address
@@ -4257,7 +4295,7 @@ begin
   Self.EstablishSession(Session);
 
   SubMod := Self.Core.AddModule(TIdSipSubscribeModule) as TIdSipSubscribeModule;
-  TDRefer := SubMod.CreateRefer(Self.Destination, Self.Destination, Self.Destination);
+  TDRefer := SubMod.CreateRefer(Self.Destination, Self.Destination, Self.Destination, TIdSipRequest.DefaultMaxForwards);
   try
     Check(not Session.Match(TDRefer),
           Session.ClassName + ': shouldn''t match an arbitrary (out-of-dialog) REFER');
@@ -4549,7 +4587,7 @@ begin
 
   SubMod := TIdSipSubscribeModule.Create(Self.Core);
   try
-    Refer := SubMod.CreateRefer(Them, Us, Self.Destination);
+    Refer := SubMod.CreateRefer(Them, Us, Self.Destination, TIdSipRequest.DefaultMaxForwards);
     try
       Refer.CallID       := Session.Dialog.ID.CallID;
       Refer.From.Tag     := Session.Dialog.ID.RemoteTag;
@@ -4594,7 +4632,7 @@ begin
   Us.RemoveParameter(TagParam);
 
   SubMod := Self.Core.AddModule(TIdSipSubscribeModule) as TIdSipSubscribeModule;
-  Refer := SubMod.CreateRefer(Them, Us, Self.Destination);
+  Refer := SubMod.CreateRefer(Them, Us, Self.Destination, TIdSipRequest.DefaultMaxForwards);
   try
     Refer.CallID       := Session.Dialog.ID.CallID;
     Refer.From.Tag     := Session.Dialog.ID.RemoteTag;
@@ -4623,7 +4661,7 @@ begin
 
   Session := Self.CreateAndEstablishSession;
 
-  Bye := Self.Core.CreateRequest(MethodBye, Self.Core.From, Session.LocalGruu);
+  Bye := Self.Core.CreateRequest(MethodBye, Self.Core.From, Session.LocalGruu, TIdSipRequest.DefaultMaxForwards);
   try
     Self.MarkSentResponseCount;
     Self.ReceiveRequest(Bye);
@@ -5386,7 +5424,7 @@ var
 begin
   Self.CreateAction;
 
-  Replaces := Self.Core.InviteModule.CreateInvite(Self.Core.From, Self.Destination, '', '');
+  Replaces := Self.Core.InviteModule.CreateInvite(Self.Core.From, Self.Destination, '', '', TIdSipRequest.DefaultMaxForwards);
   try
     Replaces.Replaces.CallID  := Self.Session.Dialog.ID.CallID;
     Replaces.Replaces.FromTag := Self.Session.Dialog.ID.RemoteTag;
@@ -6695,6 +6733,23 @@ begin
         'GRUUs sent out in INVITEs should have a "grid" parameter');
 end;
 
+procedure TestTIdSipOutboundSession.TestCallWithMaxForwards;
+const
+  MaxForwards = 42;
+var
+  Session: TIdSipOutboundSession;
+begin
+  Session := Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, Self.SDP, Self.MimeType);
+  Session.AddActionListener(Self);
+  Session.AddSessionListener(Self);
+  Session.MaxForwards := 42;
+
+  Self.MarkSentRequestCount;
+  Session.Send;
+  CheckRequestSent('No INVITE sent');
+  CheckEquals(MaxForwards, Self.LastSentRequest.MaxForwards, 'Max-Forwards not overridden');
+end;
+
 procedure TestTIdSipOutboundSession.TestCallWithOffer;
 var
   Answer:      String;
@@ -7488,6 +7543,26 @@ begin
   CheckNotEquals('',
                  Self.Reason,
                  'Reason param not set');
+end;
+
+procedure TestTIdSipOutboundSession.TestRedirectWithMaxForwards;
+const
+  MaxForwards = 42;
+var
+  Session: TIdSipOutboundSession;
+begin
+  Session := Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, Self.SDP, Self.MimeType);
+  Session.MaxForwards := MaxForwards;
+
+  Session.AddActionListener(Self);
+  Session.AddSessionListener(Self);
+  Session.Send;
+
+  Self.MarkSentRequestCount;
+  Self.ReceiveMovedTemporarily('sip:foo');
+  CheckRequestSent('No INVITE sent');
+
+  CheckEquals(MaxForwards, Self.LastSentRequest.MaxForwards, 'Max-Forwards not overridden');
 end;
 
 procedure TestTIdSipOutboundSession.TestRedirectWithMultipleContacts;

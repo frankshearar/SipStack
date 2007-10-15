@@ -184,6 +184,8 @@ type
     Reason:    String;
     Registrar: TIdSipRegistrar;
 
+    function  CreateRegistrationWithoutSend: TIdSipOutboundRegistrationBase; virtual;
+    function  CreateAction: TIdSipAction; override;
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistrationBase;
                         ErrorCode: Cardinal;
                         const Reason: String);
@@ -199,8 +201,10 @@ type
     procedure TestDoubleRedirect;
     procedure TestRedirectMultipleOks;
     procedure TestRedirectNoMoreTargets;
+    procedure TestRedirectWithMaxForwards;
     procedure TestRedirectWithMultipleContacts;
     procedure TestRedirectWithNoSuccess;
+    procedure TestRegisterWithMaxForwards;
     procedure TestRemoveListener;
   end;
 
@@ -212,8 +216,6 @@ type
     procedure ReceiveOkWithContactExpiresOf(ExpiryTime: Cardinal);
     procedure ReceiveOkWithExpiresOf(ExpiryTime: Cardinal);
     procedure ReceiveOkWithNoExpires(ExpiryTime: Cardinal);
-  protected
-    function CreateAction: TIdSipAction; override;
   published
     procedure TestAutoReregister;
     procedure TestAutoReregisterContactHasExpires;
@@ -226,7 +228,7 @@ type
 
   TestTIdSipOutboundRegistrationQuery = class(TOutboundRegistrationBaseTestCase)
   protected
-    function CreateAction: TIdSipAction; override;
+    function CreateRegistrationWithoutSend: TIdSipOutboundRegistrationBase; override;
   end;
 
   TestRegistrationMethod = class(TActionMethodTestCase)
@@ -874,11 +876,14 @@ begin
 end;
 
 procedure TestTIdSipOutboundRegisterModule.TestCreateRegister;
+const
+  MaxForwards = 42;
 var
   Reg: TIdSipRequest;
 begin
-  Reg := Self.Module.CreateRegister(Self.Core.From, Self.Destination);
+  Reg := Self.Module.CreateRegister(Self.Core.From, Self.Destination, MaxForwards);
   try
+    CheckEquals(MaxForwards,    Reg.MaxForwards,         'Max-Forwards');
     CheckEquals(MethodRegister, Reg.Method,              'Incorrect method');
     CheckEquals(MethodRegister, Reg.CSeq.Method,         'Incorrect CSeq method');
     CheckEquals('',             Reg.RequestUri.Username, 'Request-URI Username');
@@ -904,14 +909,14 @@ var
   Reg:          TIdSipRequest;
   SecondCallID: String;
 begin
-  Reg := Self.Module.CreateRegister(Self.Core.From, Self.Destination);
+  Reg := Self.Module.CreateRegister(Self.Core.From, Self.Destination, TIdSipRequest.DefaultMaxForwards);
   try
     FirstCallID := Reg.CallID;
   finally
     Reg.Free;
   end;
 
-  Reg := Self.Module.CreateRegister(Self.Core.From, Self.Destination);
+  Reg := Self.Module.CreateRegister(Self.Core.From, Self.Destination, TIdSipRequest.DefaultMaxForwards);
   try
     SecondCallID := Reg.CallID;
   finally
@@ -923,7 +928,7 @@ begin
               'Call-ID SHOULD be the same for same registrar');
 
   Self.Destination.Address.Uri := 'sip:enki.org';
-  Reg := Self.Module.CreateRegister(Self.Core.From, Self.Destination);
+  Reg := Self.Module.CreateRegister(Self.Core.From, Self.Destination, TIdSipRequest.DefaultMaxForwards);
   try
     CheckNotEquals(FirstCallID,
                    Reg.CallID,
@@ -943,7 +948,7 @@ begin
   Self.Module.UserAgent.InstanceID := ZeroURN;
 
   // cf. draft-ietf-sip-gruu-10, section 7.1.1.1
-  Reg := Self.Module.CreateRegister(Self.Core.From, Self.Destination);
+  Reg := Self.Module.CreateRegister(Self.Core.From, Self.Destination, TIdSipRequest.DefaultMaxForwards);
   try
     Check(Reg.FirstContact.HasParameter(SipInstanceParam),
           'Contact doesn''t have the "' + SipInstanceParam + '" parameter');
@@ -971,7 +976,7 @@ begin
   Self.Module.UserAgent.UseGruu := true;
   Self.Module.RequireGRUU       := true;
 
-  Reg := Self.Module.CreateRegister(Self.Core.From, Self.Destination);
+  Reg := Self.Module.CreateRegister(Self.Core.From, Self.Destination, TIdSipRequest.DefaultMaxForwards);
   try
     Check(Reg.HasHeader(RequireHeader),
           'REGISTER lacks a Require header');
@@ -1611,6 +1616,22 @@ end;
 
 //* TOutboundRegistrationBaseTestCase Protected methods ************************
 
+function TOutboundRegistrationBaseTestCase.CreateRegistrationWithoutSend: TIdSipOutboundRegistrationBase;
+begin
+  Result := Self.Core.RegisterModule.RegisterWith(Self.RegistrarAddress, Self.Contacts);
+
+  Result.AddActionListener(Self);
+  Result.AddListener(Self);
+  Result.Bindings  := Self.Contacts;
+  Result.Registrar := Self.RegistrarAddress;
+end;
+
+function TOutboundRegistrationBaseTestCase.CreateAction: TIdSipAction;
+begin
+  Result := Self.CreateRegistrationWithoutSend;
+  Result.Send;
+end;
+
 procedure TOutboundRegistrationBaseTestCase.OnFailure(RegisterAgent: TIdSipOutboundRegistrationBase;
                                                       ErrorCode: Cardinal;
                                                       const Reason: String);
@@ -1811,6 +1832,21 @@ begin
                  'Reason param not set');
 end;
 
+procedure TOutboundRegistrationBaseTestCase.TestRedirectWithMaxForwards;
+const
+  MaxForwards = 42;
+var
+  Reg: TIdSipOutboundRegistrationBase;
+begin
+  Reg := Self.CreateRegistrationWithoutSend;
+  Reg.MaxForwards := MaxForwards;
+
+  Self.MarkSentRequestCount;
+  Reg.Send;
+  CheckRequestSent('No REGISTER sent');
+  CheckEquals(MaxForwards, Self.LastSentRequest.MaxForwards, 'Max-Forwards not overridden');
+end;
+
 procedure TOutboundRegistrationBaseTestCase.TestRedirectWithMultipleContacts;
 var
   Action:    TIdSipAction;
@@ -1872,6 +1908,21 @@ begin
                  'Reason param not set');
 end;
 
+procedure TOutboundRegistrationBaseTestCase.TestRegisterWithMaxForwards;
+const
+  MaxForwards = 42;
+var
+  Reg: TIdSipOutboundRegistrationBase;
+begin
+  Reg := Self.CreateRegistrationWithoutSend;
+  Reg.MaxForwards := MaxForwards;
+
+  Self.MarkSentRequestCount;
+  Reg.Send;
+  CheckRequestSent('No REGISTER sent');
+  CheckEquals(MaxForwards, Self.LastSentRequest.MaxForwards, 'Max-Forwards not overridden');
+end;
+
 procedure TOutboundRegistrationBaseTestCase.TestRemoveListener;
 var
   L1, L2:       TIdSipTestRegistrationListener;
@@ -1903,23 +1954,6 @@ end;
 //******************************************************************************
 //* TestTIdSipOutboundRegistration                                             *
 //******************************************************************************
-//* TestTIdSipOutboundRegistration Protected methods ***************************
-
-function TestTIdSipOutboundRegistration.CreateAction: TIdSipAction;
-var
-  Reg: TIdSipOutboundRegistration;
-begin
-  Reg := Self.Core.RegisterModule.RegisterWith(Self.RegistrarAddress, Self.Contacts);
-
-  Reg.AddActionListener(Self);
-  Reg.AddListener(Self);
-  Reg.Bindings  := Self.Contacts;
-  Reg.Registrar := Self.RegistrarAddress;
-  Reg.Send;
-
-  Result := Reg;
-end;
-
 //* TestTIdSipOutboundRegistration Private methods *****************************
 
 procedure TestTIdSipOutboundRegistration.CheckAutoReregister(ReceiveResponse: TExpiryProc;
@@ -2144,19 +2178,14 @@ end;
 //******************************************************************************
 //* TestTIdSipOutboundRegistrationQuery Public methods *************************
 
-function TestTIdSipOutboundRegistrationQuery.CreateAction: TIdSipAction;
-var
-  Reg: TIdSipOutboundRegistrationQuery;
+function TestTIdSipOutboundRegistrationQuery.CreateRegistrationWithoutSend: TIdSipOutboundRegistrationBase;
 begin
-  Reg := Self.Core.RegisterModule.CurrentRegistrationWith(Self.RegistrarAddress);
+  Result := Self.Core.RegisterModule.CurrentRegistrationWith(Self.RegistrarAddress);
 
-  Reg.AddActionListener(Self);
-  Reg.AddListener(Self);
-  Reg.Bindings  := Self.Contacts;
-  Reg.Registrar := Self.RegistrarAddress;
-  Reg.Send;
-
-  Result := Reg;
+  Result.AddActionListener(Self);
+  Result.AddListener(Self);
+  Result.Bindings  := Self.Contacts;
+  Result.Registrar := Self.RegistrarAddress;
 end;
 
 //******************************************************************************

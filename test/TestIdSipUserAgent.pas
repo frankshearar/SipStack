@@ -1066,6 +1066,7 @@ end;
 
 procedure TestTIdSipUserAgent.TestCreateRequest;
 const
+  MaxForwards   = 42;
   UnknownMethod = 'Foo';
 var
   Request: TIdSipRequest;
@@ -1074,9 +1075,10 @@ begin
   Dest := TIdSipToHeader.Create;
   try
     Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna';
-    Request := Self.Core.CreateRequest(UnknownMethod, Self.Core.From, Dest);
+    Request := Self.Core.CreateRequest(UnknownMethod, Self.Core.From, Dest, MaxForwards);
     try
-      CheckEquals(UnknownMethod, Request.Method, 'Requet-Method');
+      CheckEquals(MaxForwards,   Request.MaxForwards, 'Max-Forwards');
+      CheckEquals(UnknownMethod, Request.Method,      'Request-Method');
       Self.CheckCreateRequest(Dest, Request);
     finally
       Request.Free;
@@ -1126,7 +1128,7 @@ begin
   Dest := TIdSipToHeader.Create;
   try
     Dest.Address.URI := 'sips:wintermute@tessier-ashpool.co.luna';
-    Request := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Dest);
+    Request := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Dest, TIdSipRequest.DefaultMaxForwards);
     try
       Contact := Request.FirstContact;
       CheckEquals(SipsScheme,
@@ -1150,7 +1152,7 @@ begin
   Dest := TIdSipToHeader.Create;
   try
     Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna';
-    Request := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Dest);
+    Request := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Dest, TIdSipRequest.DefaultMaxForwards);
     try
       CheckEquals(Self.Core.UserAgentName,
                   Request.FirstHeader(UserAgentHeader).Value,
@@ -1171,7 +1173,7 @@ begin
   Dest := TIdSipToHeader.Create;
   try
     Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna;transport=udp';
-    Request := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Dest);
+    Request := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Dest, TIdSipRequest.DefaultMaxForwards);
     try
       CheckEquals(UdpTransport,
                   Request.LastHop.Transport,
@@ -1181,7 +1183,7 @@ begin
     end;
 
     Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna;transport=tcp';
-    Request := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Dest);
+    Request := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Dest, TIdSipRequest.DefaultMaxForwards);
     try
       CheckEquals(TcpTransport,
                   Request.LastHop.Transport,
@@ -1191,7 +1193,7 @@ begin
     end;
 
     Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna;transport=foo';
-    Request := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Dest);
+    Request := Self.Core.CreateRequest(MethodInvite, Self.Core.From, Dest, TIdSipRequest.DefaultMaxForwards);
     try
       CheckEquals('FOO',
                   Request.LastHop.Transport,

@@ -33,7 +33,8 @@ type
                     Binding: TIdSipConnectionBindings): TIdSipAction; override;
     function AcceptsMethods: String; override;
     function CreateOptions(From: TIdSipAddressHeader;
-                           Dest: TIdSipAddressHeader): TIdSipRequest;
+                           Dest: TIdSipAddressHeader;
+                           MaxForwards: Cardinal): TIdSipRequest;
     function QueryOptions(Server: TIdSipAddressHeader): TIdSipOutboundOptions;
   end;
 
@@ -125,9 +126,10 @@ begin
 end;
 
 function TIdSipOptionsModule.CreateOptions(From: TIdSipAddressHeader;
-                                           Dest: TIdSipAddressHeader): TIdSipRequest;
+                                           Dest: TIdSipAddressHeader;
+                                           MaxForwards: Cardinal): TIdSipRequest;
 begin
-  Result := Self.UserAgent.CreateRequest(MethodOptions, From, Dest);
+  Result := Self.UserAgent.CreateRequest(MethodOptions, From, Dest, MaxForwards);
   try
     Result.AddHeader(AcceptHeader).Value := Self.UserAgent.AllowedContentTypes;
   except
@@ -175,7 +177,7 @@ begin
   try
     TempTo.Address := Self.InitialRequest.RequestUri;
 
-    Result := Self.Module.CreateOptions(Self.LocalParty, TempTo);
+    Result := Self.Module.CreateOptions(Self.LocalParty, TempTo, Self.MaxForwards);
   finally
     TempTo.Free;
   end;
@@ -267,7 +269,7 @@ end;
 
 function TIdSipOutboundOptions.CreateNewAttempt: TIdSipRequest;
 begin
-  Result := Self.Module.CreateOptions(Self.LocalParty, Self.Server);
+  Result := Self.Module.CreateOptions(Self.LocalParty, Self.Server, Self.MaxForwards);
 end;
 
 procedure TIdSipOutboundOptions.Initialise(UA: TIdSipAbstractCore;
