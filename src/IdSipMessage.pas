@@ -1554,6 +1554,7 @@ type
     function  MissingRequiredHeaders: Boolean; override;
     procedure ParseStartLine(Parser: TIdSipParser); override;
   public
+    class function DefaultMaxForwards: Cardinal;
     class function DialogFormingMethods: TStrings;
 
     constructor Create; override;
@@ -1566,7 +1567,6 @@ type
     function  AuthorizationFor(const Realm: String): TIdSipAuthorizationHeader;
     function  CanEstablishDialog: Boolean; override;
     function  CreateCancel: TIdSipRequest;
-    function  DefaultMaxForwards: Cardinal;
     function  Description: String; override;
     function  DestinationUri: String;
     function  Equals(Msg: TIdSipMessage): Boolean; override;
@@ -9076,6 +9076,11 @@ end;
 //*******************************************************************************
 //* TIdSipRequest Public methods ************************************************
 
+class function TIdSipRequest.DefaultMaxForwards: Cardinal;
+begin
+  Result := 70;
+end;
+
 class function TIdSipRequest.DialogFormingMethods: TStrings;
 begin
   if not Assigned(GDialogFormingMethods) then begin
@@ -9211,11 +9216,6 @@ begin
 
     raise;
   end;
-end;
-
-function TIdSipRequest.DefaultMaxForwards: Cardinal;
-begin
-  Result := 70;
 end;
 
 function TIdSipRequest.Description: String;
