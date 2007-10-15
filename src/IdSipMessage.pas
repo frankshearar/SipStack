@@ -2278,7 +2278,7 @@ var
 //******************************************************************************
 //* Unit procedures & functions                                                *
 //******************************************************************************
-//* Unit private procedures & functions ****************************************
+//* Unit public procedures & functions *****************************************
 
 function DecodeQuotedStr(const S: String; var Dest: String): Boolean;
 var
