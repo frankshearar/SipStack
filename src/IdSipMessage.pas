@@ -1521,7 +1521,7 @@ type
     function  FindAuthorizationHeader(const Realm: String;
                                       const HeaderType: String): TIdSipHeader;
     function  GetEvent: TIdSipEventHeader;
-    function  GetMaxForwards: Byte;
+    function  GetMaxForwards: Cardinal;
     function  GetProxyRequire: TIdSipCommaSeparatedHeader;
     function  GetReferTo: TIdSipReferToHeader;
     function  GetReplaces: TIdSipReplacesHeader;
@@ -1535,7 +1535,7 @@ type
     procedure ParseSipVersion(Parser: TIdSipParser;
                               var FirstLine: String);
     procedure SetEvent(Value: TIdSipEventHeader);
-    procedure SetMaxForwards(Value: Byte);
+    procedure SetMaxForwards(Value: Cardinal);
     procedure SetProxyRequire(Value: TIdSipCommaSeparatedHeader);
     procedure SetReferTo(Value: TIdSipReferToHeader);
     procedure SetReplaces(Value: TIdSipReplacesHeader);
@@ -1602,7 +1602,7 @@ type
     function  WantsAllowEventsHeader: Boolean; override;
 
     property Event:             TIdSipEventHeader             read GetEvent write SetEvent;
-    property MaxForwards:       Byte                          read GetMaxForwards write SetMaxForwards;
+    property MaxForwards:       Cardinal                      read GetMaxForwards write SetMaxForwards;
     property Method:            String                        read fMethod write fMethod;
     property ProxyRequire:      TIdSipCommaSeparatedHeader    read GetProxyRequire write SetProxyRequire;
     property ReferTo:           TIdSipReferToHeader           read GetReferTo write SetReferTo;
@@ -9641,7 +9641,7 @@ begin
   Result := Self.FirstHeader(EventHeaderFull) as TIdSipEventHeader;
 end;
 
-function TIdSipRequest.GetMaxForwards: Byte;
+function TIdSipRequest.GetMaxForwards: Cardinal;
 begin
   if not Self.HasHeader(MaxForwardsHeader)
      or (Self.FirstHeader(MaxForwardsHeader).Value = '') then
@@ -9728,7 +9728,7 @@ begin
   Self.FirstHeader(EventHeaderFull).Assign(Value);
 end;
 
-procedure TIdSipRequest.SetMaxForwards(Value: Byte);
+procedure TIdSipRequest.SetMaxForwards(Value: Cardinal);
 begin
   Self.FirstHeader(MaxForwardsHeader).Value := IntToStr(Value);
 end;
