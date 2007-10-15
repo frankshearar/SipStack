@@ -1912,7 +1912,7 @@ procedure TOutboundRegistrationBaseTestCase.TestRegisterWithMaxForwards;
 const
   MaxForwards = 42;
 var
-  Reg: TIdSipOutboundRegistrationBase;
+  Reg: TIdSipOutboundRegistration;
 begin
   Reg := Self.CreateRegistrationWithoutSend;
   Reg.MaxForwards := MaxForwards;
