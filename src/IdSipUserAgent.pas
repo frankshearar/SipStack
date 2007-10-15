@@ -55,6 +55,7 @@ type
                                const Reason: String);
     procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistrationBase;
                         CurrentBindings: TIdSipContacts);
+    function  RoutePathFor(Request: TIdSipRequest): TIdSipRoutePath; 
     procedure SetDoNotDisturb(Value: Boolean);
     procedure SetFrom(Value: TIdSipFromHeader);
     procedure SetInitialResendInterval(Value: Cardinal);
@@ -66,15 +67,17 @@ type
     destructor  Destroy; override;
 
     procedure AddLocalHeaders(OutboundRequest: TIdSipRequest; InDialogRequest: Boolean); override;
+    procedure AddNullRoutePath(AddressSpace: String);
     function  AddOutboundAction(ActionType: TIdSipActionClass): TIdSipAction; override;
     procedure AddRoute(AddressSpace: String; SipEntity: TIdSipUri);
     procedure AddTransportListener(Listener: IIdSipTransportListener);
+    procedure ClearAllRoutePaths;
     function  UsingDefaultFrom: Boolean;
+    procedure RemoveRoutePathTo(AddressSpace: String);
     procedure RemoveTransportListener(Listener: IIdSipTransportListener);
     function  RegisterWith(Registrar: TIdSipUri;
                            From: TIdSipFromHeader): TIdSipOutboundRegistration;
     function  ResponseForInvite: Cardinal; override;
-    function  RoutePathFor(Request: TIdSipRequest): TIdSipRoutePath;
     function  SessionCount: Integer;
     function  UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundUnregistration;
 
@@ -449,6 +452,7 @@ const
   MockLocalAddressDirective               = 'MockLocalAddress';
   MockRouteDirective                      = 'MockRoute';
   NameServerDirective                     = 'NameServer';
+  NullRouteKeyword                        = 'null';
   RegisterDirective                       = 'Register';
   RegistrarDatabaseDirective              = 'RegistrarDatabase';
   RegistrarUseGruuDirective               = 'RegistrarUseGruu';
@@ -557,7 +561,7 @@ begin
 
     OutboundRequest.AddHeader(LocalContact);
   finally
-    LocalContact.Free;                       
+    LocalContact.Free;
   end;
 
   if OutboundRequest.HasSipsUri then
@@ -565,6 +569,18 @@ begin
 
   if not InDialogRequest then
     OutboundRequest.AddHeaders(Self.RoutePathFor(OutboundRequest));
+end;
+
+procedure TIdSipUserAgent.AddNullRoutePath(AddressSpace: String);
+var
+  EmptyPath: TIdSipRoutePath;
+begin
+  EmptyPath := TIdSipRoutePath.Create;
+  try
+    Self.Proxies.AddDescription(AddressSpace, EmptyPath);
+  finally
+    EmptyPath.Free;
+  end;
 end;
 
 function TIdSipUserAgent.AddOutboundAction(ActionType: TIdSipActionClass): TIdSipAction;
@@ -587,9 +603,19 @@ begin
   Self.Dispatcher.AddTransportListener(Listener);
 end;
 
+procedure TIdSipUserAgent.ClearAllRoutePaths;
+begin
+  Self.Proxies.ClearAllDescriptions;
+end;
+
 function TIdSipUserAgent.UsingDefaultFrom: Boolean;
 begin
   Result := Pos(Self.From.Address.Uri, Self.DefaultFrom) > 0;
+end;
+
+procedure TIdSipUserAgent.RemoveRoutePathTo(AddressSpace: String);
+begin
+  Self.Proxies.RemoveDescription(AddressSpace);
 end;
 
 procedure TIdSipUserAgent.RemoveTransportListener(Listener: IIdSipTransportListener);
@@ -644,11 +670,6 @@ begin
     Result := SIPTemporarilyUnavailable
   else
     Result := inherited ResponseForInvite;
-end;
-
-function TIdSipUserAgent.RoutePathFor(Request: TIdSipRequest): TIdSipRoutePath;
-begin
-  Result := Self.Proxies.RoutePathFor(Request.ToHeader.Address.Host);
 end;
 
 function TIdSipUserAgent.SessionCount: Integer;
@@ -781,6 +802,11 @@ begin
       Self.ContactClosestToRegistrar.IsUnset     := false;
     end;
   end;
+end;
+
+function TIdSipUserAgent.RoutePathFor(Request: TIdSipRequest): TIdSipRoutePath;
+begin
+  Result := Self.Proxies.RoutePathFor(Request.ToHeader.Address.Host);
 end;
 
 procedure TIdSipUserAgent.SetDoNotDisturb(Value: Boolean);
@@ -1400,7 +1426,8 @@ procedure TIdSipStackConfigurator.AddRouteHeader(UserAgent: TIdSipUserAgent;
 var
   AddressSpace: String;
   Line:         String;
-  Uri:          TIdSipUri;
+  U:            TIdSipUri;
+  Uri:          String;
 begin
   // See class comment for the format for this directive.
   Line := RouteHeaderLine;
@@ -1409,25 +1436,38 @@ begin
   // If the configuration file contains any Route directives, make sure we
   // clear the existing Route path.
   if Self.FirstRouteDirective then begin
-    UserAgent.RoutePath.Clear;
+    UserAgent.ClearAllRoutePaths;
     Self.FirstRouteDirective := false;
   end;
 
   Fetch(Line, '<');
-  Uri := TIdSipUri.Create(Trim(Fetch(Line, '>')));
-  try
-    AddressSpace := Trim(Line);
+  Uri := Trim(Fetch(Line, '>'));
+  AddressSpace := Trim(Line);
 
-    Self.CheckUri(Uri, Format(MalformedConfigurationLine, [RouteHeaderLine]));
+  if (AddressSpace <> '') then
+    Self.CheckAddressSpace(AddressSpace, Format(MalformedConfigurationLine, [RouteHeaderLine]));
 
-    if (AddressSpace = '') then
-      UserAgent.RoutePath.Add(RouteHeader).Value := '<' + Uri.AsString + '>'
-    else begin
-      Self.CheckAddressSpace(AddressSpace, Format(MalformedConfigurationLine, [RouteHeaderLine]));
-      UserAgent.AddRoute(AddressSpace, Uri);
+  if (Uri = NullRouteKeyword) then begin
+    // Add an empty Route path to AddressSpace. If we've already processed a
+    // Route directive for AddressSpace, no "empty Route" header will be added.
+    // We want this! If AddressSpace = '' then we don't care: the default Route
+    // path always exists and is, by default, the empty Route path.
+    if (AddressSpace <> '') then
+      UserAgent.AddNullRoutePath(AddressSpace);
+  end
+  else begin
+    U := TIdSipUri.Create(Uri);
+    try
+      Self.CheckUri(U, Format(MalformedConfigurationLine, [RouteHeaderLine]));
+
+      if (AddressSpace = '') then
+        UserAgent.RoutePath.Add(RouteHeader).Value := '<' + U.AsString + '>'
+      else begin
+        UserAgent.AddRoute(AddressSpace, U);
+      end;
+    finally
+      U.Free;
     end;
-  finally
-    Uri.Free;
   end;
 end;
 

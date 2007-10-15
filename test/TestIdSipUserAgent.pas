@@ -163,6 +163,12 @@ type
     procedure TearDown; override;
   end;
 
+  TStackConfigurationTestCaseWithMockTransport = class(TStackConfigurationTestCase)
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
   TestTIdSipStackConfigurator = class(TStackConfigurationTestCase)
   private
     NewRegistrar:               TIdUdpServer;
@@ -246,7 +252,7 @@ type
     procedure TestUpdateConfigurationWithTransport;
   end;
 
-  TestConfigureLogging = class(TStackConfigurationTestCase)
+  TestConfigureLogging = class(TStackConfigurationTestCaseWithMockTransport)
   private
     procedure CheckBasicLogging(UserAgent: TIdSipUserAgent);
     procedure CheckLogVerbosityLevel(Name: String; ExpectedLevel: TLogVerbosityLevel);
@@ -263,7 +269,7 @@ type
     procedure TestLogVerbosityLevelUnknownName;
   end;
 
-  TestConfigureProxies = class(TStackConfigurationTestCase)
+  TestConfigureProxies = class(TStackConfigurationTestCaseWithMockTransport)
   private
     EmptyRoutePath: TIdSipRoutePath;
 
@@ -278,11 +284,16 @@ type
     procedure TearDown; override;
   published
     procedure TestDefaultRoutePath;
+    procedure TestNoProxyAsDefault;
+    procedure TestNoProxyToAddressSpace;
     procedure TestNoRoutePaths;
+    procedure TestNullRoutesFirstInPathIgnored;
+    procedure TestNullRoutesInPathIgnored;
+    procedure TestReconfigureCanClearRoutePath;
     procedure TestTwoAddressSpaces;
   end;
 
-  TestConfigureRegistrar = class(TStackConfigurationTestCase)
+  TestConfigureRegistrar = class(TStackConfigurationTestCaseWithMockTransport)
   private
     procedure CheckDatabaseType(ExpectedDatabase: TIdSipAbstractBindingDatabaseClass;
                                 Configuration: TStrings);
@@ -304,14 +315,14 @@ type
     procedure TestUseGruuDirective;
   end;
 
-  TestConfigureMockRoutingTable = class(TStackConfigurationTestCase)
+  TestConfigureMockRoutingTable = class(TStackConfigurationTestCaseWithMockTransport)
   published
-    procedure TestAddLocalAddress;  
+    procedure TestAddLocalAddress;
     procedure TestMockRoute;
     procedure TestMockRoutingTable;
   end;
 
-  TestConfigureMockLocator = class(TStackConfigurationTestCase)
+  TestConfigureMockLocator = class(TStackConfigurationTestCaseWithMockTransport)
   private
     NameRecords: TIdDomainNameRecords;
     Naptr:       TIdNaptrRecords;
@@ -2220,9 +2231,6 @@ procedure TStackConfigurationTestCase.SetUp;
 begin
   inherited SetUp;
 
-  TIdSipTransportRegistry.RegisterTransportType(TcpTransport, TIdSipTCPTransport);
-  TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipUDPTransport);
-
   Self.Address       := '127.0.0.1';
   Self.Conf          := TIdSipStackConfigurator.Create;
   Self.Configuration := TStringList.Create;
@@ -2236,6 +2244,24 @@ begin
   Self.Conf.Free;
   Self.Timer.Terminate;
 
+  inherited TearDown;
+end;
+
+//******************************************************************************
+//* TStackConfigurationTestCaseWithMockTransport                               *
+//******************************************************************************
+//* TStackConfigurationTestCaseWithMockTransport Public methods ****************
+
+procedure TStackConfigurationTestCaseWithMockTransport.SetUp;
+begin
+  inherited SetUp;
+
+  TIdSipTransportRegistry.RegisterTransportType(TcpTransport, TIdSipMockTCPTransport);
+  TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipMockUDPTransport);
+end;
+
+procedure TStackConfigurationTestCaseWithMockTransport.TearDown;
+begin
   TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
   TIdSipTransportRegistry.UnregisterTransportType(TcpTransport);
 
@@ -2250,6 +2276,9 @@ end;
 procedure TestTIdSipStackConfigurator.SetUp;
 begin
   inherited SetUp;
+
+  TIdSipTransportRegistry.RegisterTransportType(TcpTransport, TIdSipTCPTransport);
+  TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipUDPTransport);
 
   Self.NewRegistrarEvent := TSimpleEvent.Create;
 
@@ -2285,6 +2314,9 @@ begin
   Self.Server.Free;
   Self.NewRegistrar.Free;
   Self.NewRegistrarEvent.Free;
+
+  TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
+  TIdSipTransportRegistry.UnregisterTransportType(TcpTransport);
 
   inherited TearDown;
 end;
@@ -3675,6 +3707,9 @@ procedure TestConfigureProxies.SetUp;
 begin
   inherited SetUp;
 
+  Self.Configuration.Add('Listen: UDP AUTO:5060');
+  Self.Configuration.Add('NameServer: MOCK');
+
   Self.EmptyRoutePath := TIdSipRoutePath.Create;
 end;
 
@@ -3711,14 +3746,21 @@ procedure TestConfigureProxies.CheckRoutePath(Expected: TIdSipRoutePath;
                                               Target,
                                               Msg: String);
 var
-  Invite: TIdSipRequest;
+  Dest:      TIdSipToHeader;
+  Transport: TIdSipMockTransport;
 begin
-  Invite := TIdSipRequest.Create;
+  Dest := TIdSipToHeader.Create;
   try
-    Invite.ToHeader.Value := 'sip:' + Target;
-    CheckEquals(Expected, UA.RoutePathFor(Invite), Msg);
+    Dest.Value := 'sip:' + Target;
+
+    UA.InviteModule.Call(UA.From, Dest, '', '').Send;
+    Check(UA.Dispatcher.Transports.Count > 0, 'Insufficient transports?');
+
+    Transport := UA.Dispatcher.Transports[0] as TIdSipMockTransport;
+    Check(Transport.SentRequestCount > 0, 'No request sent');
+    CheckEquals(Expected, Transport.LastRequest.Route, Msg);
   finally
-    Invite.Free;
+    Dest.Free;
   end;
 end;
 
@@ -3744,12 +3786,54 @@ begin
       CheckEquals(Expected, UA.RoutePath, 'Default Route path');
       CheckRoutePath(Expected, UA, 'roke.local', 'a FQDN');
       CheckRoutePath(Expected, UA, '127.0.0.1', 'an IPv4 address');
-      CheckRoutePath(Expected, UA, '[2002::1]', 'an IPv6 reference');
     finally
       UA.Free;
     end;
   finally
     Expected.Free;
+  end;
+end;
+
+procedure TestConfigureProxies.TestNoProxyAsDefault;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Route: <null>');
+  Self.Configuration.Add('Route: <null>');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckEmptyRoutePath(UA.RoutePath, 'Only null Route directives means no Route path');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestConfigureProxies.TestNoProxyToAddressSpace;
+const
+  Proxy = 'sip:proxy';
+var
+  Default: TIdSipRoutePath;
+  UA:      TIdSipUserAgent;
+begin
+  // Check that one can configure the UA to NOT use a proxy to an address space.
+
+  Self.Configuration.Add('Route: <null> 10.0.0.0/8');
+  Self.Configuration.Add('Route: <' + Proxy + '>');
+
+  Default := TIdSipRoutePath.Create;
+  try
+    Default.Add(RouteHeader).Value := '<' + Proxy + '>';
+
+    UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+    try
+      CheckRoutePath(Self.EmptyRoutePath, UA, '10.0.0.1', 'Directly reachable address space');
+      CheckRoutePath(Default, UA, 'tessier-ashpool.co.luna', 'Default Route path');
+    finally
+      UA.Free;
+    end;
+  finally
+    Default.Free;
   end;
 end;
 
@@ -3762,6 +3846,108 @@ begin
     CheckEmptyRoutePath(UA.RoutePath, 'No Route directives means no Route path');
   finally
     UA.Free;
+  end;
+end;
+
+procedure TestConfigureProxies.TestNullRoutesFirstInPathIgnored;
+const
+  AddressSpace = 'local';
+  FirstProxy   = 'sip:proxy.local';
+  SecondProxy  = 'sip:10.0.0.1';
+var
+  Expected: TIdSipRoutePath;
+  UA:       TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Route: <null> ' + AddressSpace);
+  Self.Configuration.Add('Route: <' + FirstProxy + '> ' + AddressSpace);
+  Self.Configuration.Add('Route: <' + SecondProxy + '> ' + AddressSpace);
+
+  Expected := TIdSipRoutePath.Create;
+  try
+    Expected.Add(RouteHeader).Value := '<' + FirstProxy + '>';
+    Expected.Add(RouteHeader).Value := '<' + SecondProxy + '>';
+
+    UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+    try
+      CheckRoutePath(Expected, UA, 'roke.local', 'Null Route directives not ignored?');
+    finally
+      UA.Free;
+    end;
+  finally
+    Expected.Free;
+  end;
+end;
+
+procedure TestConfigureProxies.TestNullRoutesInPathIgnored;
+const
+  AddressSpace = 'local';
+  FirstProxy   = 'sip:proxy.local';
+  SecondProxy  = 'sip:10.0.0.1';
+var
+  Expected: TIdSipRoutePath;
+  UA:       TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Route: <' + FirstProxy + '> ' + AddressSpace);
+  Self.Configuration.Add('Route: <null> ' + AddressSpace);
+  Self.Configuration.Add('Route: <' + SecondProxy + '> ' + AddressSpace);
+
+  Expected := TIdSipRoutePath.Create;
+  try
+    Expected.Add(RouteHeader).Value := '<' + FirstProxy + '>';
+    Expected.Add(RouteHeader).Value := '<' + SecondProxy + '>';
+
+    UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+    try
+      CheckRoutePath(Expected, UA, 'roke.local', 'Null Route directives not ignored?');
+    finally
+      UA.Free;
+    end;
+  finally
+    Expected.Free;
+  end;
+end;
+
+procedure TestConfigureProxies.TestReconfigureCanClearRoutePath;
+const
+  FirstAddressSpace  = 'local';
+  FirstProxy         = 'sip:proxy.local';
+  SecondAddressSpace = '10.0.0.0/8';
+  SecondProxy        = 'sip:10.0.0.1';
+var
+  Expected:  TIdSipRoutePath;
+  ExpectedReconfigured: TIdSipRoutePath;
+  UA:             TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Route: <' + FirstProxy + '> ' + FirstAddressSpace);
+
+  Expected := TIdSipRoutePath.Create;
+  try
+    Expected.Add(RouteHeader).Value := '<' + FirstProxy + '>';
+
+    ExpectedReconfigured := TIdSipRoutePath.Create;
+    try
+      ExpectedReconfigured.Add(RouteHeader).Value := '<' + SecondProxy + '>';
+
+      UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+      try
+        CheckRoutePath(Expected,             UA, 'roke.local',  'First address space');
+        CheckRoutePath(Self.EmptyRoutePath,  UA, '10.0.0.2',    'Second address space');
+        CheckRoutePath(Self.EmptyRoutePath,  UA, 'example.com', 'Default');
+
+        Self.Configuration[Self.Configuration.Count - 1] := 'Route: <' + SecondProxy + '> ' + SecondAddressSpace;
+
+        Self.Conf.UpdateConfiguration(UA, Self.Configuration);
+        CheckRoutePath(Self.EmptyRoutePath,  UA, 'roke.local',  'First address space');
+        CheckRoutePath(ExpectedReconfigured, UA, '10.0.0.2',    'Second address space');
+        CheckRoutePath(Self.EmptyRoutePath,  UA, 'example.com', 'Default');
+      finally
+        UA.Free;
+      end;
+    finally
+      ExpectedReconfigured.Free;
+    end;
+  finally
+    Expected.Free;
   end;
 end;
 

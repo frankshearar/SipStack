@@ -79,7 +79,7 @@ type
     constructor Create; virtual;
     destructor  Destroy; override;
 
-    function ProxyFor(Address: String): Boolean;
+    function  ProxyFor(Address: String): Boolean;
 
     property AddressSpace: String          read GetAddressSpace write SetAddressSpace;
     property RoutePath:    TIdSipRoutePath read fRoutePath write SetRoutePath;
@@ -110,6 +110,7 @@ type
     procedure AddDescription(AddressSpace: String; RoutePath: TIdSipRoutePath);
     procedure AddRouteFor(AddressSpace: String; Route: TIdSipRouteHeader); overload;
     procedure AddRouteFor(AddressSpace: String; Route: TIdSipUri); overload;
+    procedure ClearAllDescriptions;
     function  Count: Integer;
     procedure RemoveDescription(AddressSpace: String);
     function  RoutePathFor(Address: String): TIdSipRoutePath;
@@ -350,7 +351,7 @@ end;
 
 function TIdProxyDescription.ProxyFor(Address: String): Boolean;
 begin
-  // Is Address a member of the set of addresses in Self.Space?  
+  // Is Address a member of the set of addresses in Self.Space?
 
   Result := Self.Space.Contains(Address);
 end;
@@ -437,6 +438,12 @@ begin
       NewPath.Free;
     end;
   end;
+end;
+
+procedure TIdProxyDescriptions.ClearAllDescriptions;
+begin
+  Self.Descs.Clear;
+  Self.DefaultRoutePath.Clear;
 end;
 
 function TIdProxyDescriptions.Count: Integer;

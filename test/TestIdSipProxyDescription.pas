@@ -68,6 +68,7 @@ type
   TestTIdProxyDescriptions = class(TTestCase)
   private
     DefaultRoute:          TIdSipRoutePath;
+    EmptyRoute:            TIdSipRoutePath;
     LanAddressSpace:       String;
     LanRoute:              TIdSipRoutePath;
     LanTarget:             String;
@@ -85,6 +86,7 @@ type
     procedure TestAddRoute;
     procedure TestAddRouteNoProxyPresent;
     procedure TestAddRouteCanonicalisesNetmask;
+    procedure TestClearAllDescriptions;
     procedure TestRemoveDescription;
     procedure TestRoutePathForDefaultRoute;
   end;
@@ -397,6 +399,8 @@ begin
   Self.DefaultRoute := TIdSipRoutePath.Create;
   Self.DefaultRoute.Add(RouteHeader).Value := '<sip:default_gateway>';
 
+  Self.EmptyRoute := TIdSipRoutePath.Create;
+
   Self.LanAddressSpace := 'local';
   Self.LanRoute := TIdSipRoutePath.Create;
   Self.LanRoute.Add(RouteHeader).Value := '<sip:roke.local;lr>';
@@ -413,6 +417,7 @@ procedure TestTIdProxyDescriptions.TearDown;
 begin
   Self.LocalhostRoute.Free;
   Self.LanRoute.Free;
+  Self.EmptyRoute.Free;
   Self.DefaultRoute.Free;
   Self.Proxies.Free;
 
@@ -483,6 +488,19 @@ begin
   Self.Proxies.AddDescription('10.0.0.0/255.0.0.0', Self.LocalhostRoute);
 
   CheckEquals(1, Self.Proxies.Count, '10.0.0.0/8 and 10.0.0.0/255.0.0.0 are the same address space, but the ProxyDescriptions doesn''t recognise this');
+end;
+
+procedure TestTIdProxyDescriptions.TestClearAllDescriptions;
+begin
+  Self.Proxies.DefaultRoutePath := Self.DefaultRoute;
+  Self.Proxies.AddDescription(Self.LanAddressSpace, Self.LanRoute);
+  Self.Proxies.AddDescription(Self.LocalhostAddressSpace, Self.LocalhostRoute);
+
+  Self.Proxies.ClearAllDescriptions;
+
+  CheckEquals(Self.EmptyRoute, Self.Proxies.RoutePathFor(Self.LanTarget),       'LAN address space');
+  CheckEquals(Self.EmptyRoute, Self.Proxies.RoutePathFor(Self.LocalhostTarget), 'Localhost address space');
+  CheckEquals(Self.EmptyRoute, Self.Proxies.RoutePathFor('example.com'),        'Default address space');
 end;
 
 procedure TestTIdProxyDescriptions.TestRemoveDescription;
