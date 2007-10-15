@@ -2763,6 +2763,7 @@ end;
 
 function TTestTransaction.TransactionType: TIdSipTransactionClass;
 begin
+  Result := nil;
   Fail(Self.ClassName + 'must override TransactionType');
 end;
 

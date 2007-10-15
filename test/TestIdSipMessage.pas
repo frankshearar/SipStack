@@ -817,6 +817,7 @@ end;
 
 function TestTIdSipMessage.MessageType: TIdSipMessageClass;
 begin
+  Result := nil;
   RaiseAbstractError(Self.ClassName, 'MessageType');
 end;
 

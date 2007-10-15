@@ -1170,6 +1170,7 @@ end;
 
 function TIdSipParameterTestCase.CreateParameter: TIdSipParameter;
 begin
+  Result := nil;
   RaiseAbstractError(Self.ClassName, 'CreateParameter');
 end;
 
