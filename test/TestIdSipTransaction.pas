@@ -260,6 +260,8 @@ type
   public
     procedure SetUp; override;
     procedure TearDown; override;
+
+    procedure CheckEquals(Expected, Received: TIdSipTransactionState; Msg: String); overload;
   published
     procedure TestIsNull;
   end;
@@ -2683,6 +2685,11 @@ begin
   inherited TearDown;
 end;
 
+procedure TTestTransaction.CheckEquals(Expected, Received: TIdSipTransactionState; Msg: String);
+begin
+  CheckEquals(Transaction(Expected), Transaction(Received), Msg);
+end;
+
 //* TTestTransaction Protected methods *****************************************
 
 procedure TTestTransaction.CheckEventNotScheduled(Msg: String);
@@ -2810,29 +2817,25 @@ end;
 
 procedure TestTIdSipServerInviteTransaction.MoveToCompletedState(Tran: TIdSipTransaction);
 begin
-  CheckEquals(Transaction(itsProceeding),
-              Transaction(Tran.State),
+  CheckEquals(itsProceeding, Tran.State,
               'MoveToCompletedState precondition');
 
   Self.Response.StatusCode := SIPMultipleChoices;
   Tran.SendResponse(Self.Response);
 
-  CheckEquals(Transaction(itsCompleted),
-              Transaction(Tran.State),
+  CheckEquals(itsCompleted, Tran.State,
               'MoveToCompletedState postcondition');
 end;
 
 procedure TestTIdSipServerInviteTransaction.MoveToConfirmedState;
 begin
-  CheckEquals(Transaction(itsCompleted),
-              Transaction(Tran.State),
+  CheckEquals(itsCompleted, Tran.State,
               'MoveToCompletedState precondition');
 
   Self.Request.Method := MethodAck;
   Self.Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
 
-  CheckEquals(Transaction(itsConfirmed),
-              Transaction(Self.Tran.State),
+  CheckEquals(itsConfirmed, Self.Tran.State,
               'MoveToCompletedState postcondition');
 end;
 
@@ -2840,8 +2843,7 @@ procedure TestTIdSipServerInviteTransaction.MoveToTerminatedState;
 begin
   Self.ServerTran.FireTimerI;
 
-  CheckEquals(Transaction(itsTerminated),
-              Transaction(Self.ServerTran.State),
+  CheckEquals(itsTerminated, Self.ServerTran.State,
               'MoveToTerminatedState postcondition');
 end;
 
@@ -2904,8 +2906,7 @@ end;
 
 procedure TestTIdSipServerInviteTransaction.FireTimerHInProceedingState;
 begin
-  CheckEquals(Transaction(itsProceeding),
-              Transaction(Self.ServerTran.State),
+  CheckEquals(itsProceeding, Self.ServerTran.State,
               'Test precondition');
 
   Self.ServerTran.FireTimerH;
@@ -2925,8 +2926,7 @@ end;
 
 procedure TestTIdSipServerInviteTransaction.FireTimerIInProceedingState;
 begin
-  CheckEquals(Transaction(itsProceeding),
-              Transaction(Self.ServerTran.State),
+  CheckEquals(itsProceeding, Self.ServerTran.State,
               'Test precondition');
 
   Self.ServerTran.FireTimerI;
@@ -2967,8 +2967,7 @@ begin
   Tran := Self.TransactionType.Create(Self.MockDispatcher,
                                       Self.Request);
   try
-    CheckEquals(Transaction(itsProceeding),
-                Transaction(Tran.State),
+    CheckEquals(itsProceeding, Tran.State,
                 'Incorrect initial state');
   finally
     Tran.Free;
@@ -2997,8 +2996,7 @@ begin
   Self.Response.StatusCode := SIPOK;
   Self.Tran.SendResponse(Self.Response);
 
-  CheckEquals(Transaction(itsTerminated),
-              Transaction(Self.Tran.State),
+  CheckEquals(itsTerminated, Self.Tran.State,
               '200 from TU');
 
   CheckResponseSent('No response sent to transport layer');
@@ -3014,8 +3012,7 @@ begin
   Self.Request.Method := MethodAck;
   Self.Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
 
-  CheckEquals(Transaction(itsConfirmed),
-              Transaction(Self.Tran.State),
+  CheckEquals(itsConfirmed, Self.Tran.State,
               '200 from TU');
 end;
 
@@ -3026,8 +3023,7 @@ begin
   Self.CheckReceiveResponse := Self.Completed;
   Self.ReceiveInvite;
 
-  CheckEquals(Transaction(itsCompleted),
-              Transaction(Tran.State),
+  CheckEquals(itsCompleted, Tran.State,
               'Received an INVITE');
 
   Check(not Self.TransactionCompleted, 'Event was needlessly fired');
@@ -3042,8 +3038,7 @@ begin
 
   Self.Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
 
-  CheckEquals(Transaction(itsConfirmed),
-              Transaction(Tran.State),
+  CheckEquals(itsConfirmed, Tran.State,
               'Received an INVITE');
 
   CheckNoResponseSent('After receiving an INVITE');
@@ -3064,8 +3059,7 @@ begin
   Self.CheckReceiveResponse := Self.Proceeding;
   Self.ReceiveInvite;
 
-  CheckEquals(Transaction(itsProceeding),
-              Transaction(Tran.State),
+  CheckEquals(itsProceeding, Tran.State,
               'Received an INVITE');
 
   Check(not Self.TransactionProceeding, 'Event was needlessly fired');
@@ -3078,16 +3072,14 @@ begin
   Self.Tran.SendResponse(Self.Response);
   Self.Tran.DoOnTransportError(Self.Tran.LastResponse, 'Connection refused');
 
-  CheckEquals(Transaction(itsTerminated),
-              Transaction(Self.Tran.State),
+  CheckEquals(itsTerminated, Self.Tran.State,
               IntToStr(Self.Response.StatusCode) + ' from TU');
 
   Self.MarkSentResponseCount;
 
   Self.Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
 
-  CheckEquals(Transaction(itsTerminated),
-              Transaction(Self.Tran.State),
+  CheckEquals(itsTerminated, Self.Tran.State,
               'Received an INVITE');
 
   CheckNoResponseSent('Response count after receiving an INVITE');
@@ -3111,8 +3103,7 @@ begin
       Self.Response.StatusCode := StatusCode*100;
       Tran.SendResponse(Self.Response);
 
-      CheckEquals(Transaction(itsCompleted),
-                  Transaction(Tran.State),
+      CheckEquals(itsCompleted, Tran.State,
                   'Received a ' + IntToStr(StatusCode) + ' from TU');
       CheckResponseSent('Response not sent to transport layer');
     finally
@@ -3128,8 +3119,7 @@ begin
   Self.Response.StatusCode := SIPRinging;
   Self.Tran.SendResponse(Self.Response);
 
-  CheckEquals(Transaction(itsProceeding),
-              Transaction(Self.Tran.State),
+  CheckEquals(itsProceeding, Self.Tran.State,
               'Non-trying provisional');
 
   CheckResponseSent('No response was sent to the transport layer');
@@ -3403,8 +3393,7 @@ begin
 
     Tran.FireTimerH;
 
-    CheckEquals(Transaction(itsTerminated),
-                Transaction(Tran.State),
+    CheckEquals(itsTerminated, Tran.State,
                 'Timeout');
     Check(Self.TransactionFailed,
           'Listener not told about failure');
@@ -3455,8 +3444,7 @@ begin
 
   Self.ServerTran.FireTimerI;
 
-  CheckEquals(Transaction(itsTerminated),
-              Transaction(Self.Tran.State),
+  CheckEquals(itsTerminated, Self.Tran.State,
               'Terminated');
 
   CheckEquals('', Self.FailMsg, 'Unexpected fail');
@@ -3472,8 +3460,7 @@ begin
   Self.Tran.SendResponse(Self.Response);
   Self.Tran.DoOnTransportError(Self.Tran.LastResponse, 'Connection refused');
 
-  CheckEquals(Transaction(itsTerminated),
-              Transaction(Self.Tran.State),
+  CheckEquals(itsTerminated, Self.Tran.State,
               IntToStr(Self.Response.StatusCode) + ' from TU');
 
   Check(Self.TransactionFailed,
@@ -3487,8 +3474,7 @@ begin
   Self.Tran.SendResponse(Self.Response);
   Self.Tran.DoOnTransportError(Self.Tran.LastResponse, 'Connection refused');
 
-  CheckEquals(Transaction(itsTerminated),
-              Transaction(Self.Tran.State),
+  CheckEquals(itsTerminated, Self.Tran.State,
               IntToStr(Self.Response.StatusCode) + ' from TU');
 
   Check(Self.TransactionFailed,
@@ -3532,30 +3518,26 @@ end;
 
 procedure TestTIdSipServerNonInviteTransaction.MoveToCompletedState(Tran: TIdSipTransaction);
 begin
-  CheckEquals(Transaction(itsProceeding),
-              Transaction(Tran.State),
+  CheckEquals(itsProceeding, Tran.State,
               'MoveToCompletedState precondition');
 
   Self.Response.StatusCode := SIPMultipleChoices;
   Tran.SendResponse(Self.Response);
 
-  CheckEquals(Transaction(itsCompleted),
-              Transaction(Tran.State),
+  CheckEquals(itsCompleted, Tran.State,
               'MoveToCompletedState postcondition');
 
 end;
 
 procedure TestTIdSipServerNonInviteTransaction.MoveToProceedingState(Tran: TIdSipTransaction);
 begin
-  CheckEquals(Transaction(itsTrying),
-              Transaction(Tran.State),
+  CheckEquals(itsTrying, Tran.State,
               'MoveToProceedingState precondition');
 
   Self.Response.StatusCode := SIPTrying;
   Tran.SendResponse(Self.Response);
 
-  CheckEquals(Transaction(itsProceeding),
-              Transaction(Tran.State),
+  CheckEquals(itsProceeding, Tran.State,
               'MoveToProceedingState postcondition');
 end;
 
@@ -3579,8 +3561,7 @@ end;
 
 procedure TestTIdSipServerNonInviteTransaction.TestFireTimerJInTryingState;
 begin
-  CheckEquals(Transaction(itsTrying),
-              Transaction(Self.ServerTran.State),
+  CheckEquals(itsTrying, Self.ServerTran.State,
               'Test precondition');
 
   Self.ServerTran.FireTimerJ;
@@ -3613,8 +3594,7 @@ begin
   Tran := Self.TransactionType.Create(Self.MockDispatcher,
                                       Self.Request);
   try
-    CheckEquals(Transaction(itsTrying),
-                Transaction(Tran.State),
+    CheckEquals(itsTrying, Tran.State,
                 'Incorrect initial state');
   finally
     Tran.Free;
@@ -3647,8 +3627,7 @@ begin
 
   Self.Tran.SendResponse(Self.Response);
 
-  CheckEquals(Transaction(itsCompleted),
-              Transaction(Self.Tran.State),
+  CheckEquals(itsCompleted, Self.Tran.State,
               'State - response from the TU not simply ignored');
 
   CheckNoResponseSent('SentResponseCount - response from the TU not simply ignored');
@@ -3670,8 +3649,7 @@ begin
       Self.MockTransport.ResetSentResponseCount;
       Tran.SendResponse(Self.Response);
 
-      CheckEquals(Transaction(itsCompleted),
-                  Transaction(Tran.State),
+      CheckEquals(itsCompleted, Tran.State,
                   'TU gave us a ' + IntToStr(Self.Response.StatusCode) + ' Response');
 
       CheckEquals(1,
@@ -3698,8 +3676,7 @@ begin
 
     Tran.FireTimerJ;
 
-    CheckEquals(Transaction(itsTerminated),
-                Transaction(Tran.State),
+    CheckEquals(itsTerminated, Tran.State,
                 'Transaction not yet timed out');
 
     Self.MarkSentResponseCount;
@@ -3709,8 +3686,7 @@ begin
     Tran.SendResponse(Self.Response);
     Tran.DoOnTransportError(Self.Tran.LastResponse, 'Connection refused');
 
-    CheckEquals(Transaction(itsTerminated),
-                Transaction(Tran.State),
+    CheckEquals(itsTerminated, Tran.State,
                 'State - response not simply ignored');
 
     CheckNoResponseSent('SentResponseCount - response not simply ignored');
@@ -3734,8 +3710,7 @@ begin
       Self.Response.StatusCode := I*100;
       Tran.SendResponse(Self.Response);
 
-      CheckEquals(Transaction(itsCompleted),
-                  Transaction(Tran.State),
+      CheckEquals(itsCompleted, Tran.State,
                   'TU gave us a ' + IntToStr(Self.Response.StatusCode) + ' Response');
 
       CheckEquals(1,
@@ -3759,8 +3734,7 @@ begin
   Self.Response.StatusCode := SIPSessionProgress;
   Self.Tran.SendResponse(Self.Response);
 
-  CheckEquals(Transaction(itsProceeding),
-              Transaction(Self.Tran.State),
+  CheckEquals(itsProceeding, Self.Tran.State,
               'TU gave us a ' + IntToStr(Self.Response.StatusCode) + ' Response');
 
   CheckEquals(1,
@@ -3776,8 +3750,7 @@ begin
   Self.Response.StatusCode := SIPTrying;
   Self.Tran.SendResponse(Self.Response);
 
-  CheckEquals(Transaction(itsProceeding),
-              Transaction(Self.Tran.State),
+  CheckEquals(itsProceeding, Self.Tran.State,
               'TU gave us a ' + IntToStr(Self.Response.StatusCode) + ' Response');
 
   CheckEquals(1,
@@ -3911,8 +3884,7 @@ begin
 
     (Tran as TIdSipServerNonInviteTransaction).FireTimerJ;
 
-    CheckEquals(Transaction(itsTerminated),
-                Transaction(Tran.State),
+    CheckEquals(itsTerminated, Tran.State,
                 'Terminated');
 
     CheckEquals('', Self.FailMsg, 'Unexpected fail');
@@ -3930,8 +3902,7 @@ begin
   Self.Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
   Self.Tran.DoOnTransportError(Self.Tran.LastResponse, 'Connection refused');
 
-  CheckEquals(Transaction(itsTerminated),
-              Transaction(Self.Tran.State),
+  CheckEquals(itsTerminated, Self.Tran.State,
               'Error trying to send a response');
   Check(Self.TransactionFailed,
         'Listener not told about failure');
@@ -3946,8 +3917,7 @@ begin
   Self.Tran.SendResponse(Self.Response);
   Self.Tran.DoOnTransportError(Self.Tran.LastResponse, 'Connection refused');
 
-  CheckEquals(Transaction(itsTerminated),
-              Transaction(Self.Tran.State),
+  CheckEquals(itsTerminated, Self.Tran.State,
               'Error trying to send a response');
   Check(Self.TransactionFailed,
         'Listener not told about failure');
@@ -4020,29 +3990,25 @@ end;
 
 procedure TestTIdSipClientInviteTransaction.MoveToCompletedState(Tran: TIdSipTransaction);
 begin
-  CheckEquals(Transaction(itsProceeding),
-              Transaction(Tran.State),
+  CheckEquals(itsProceeding, Tran.State,
               'MoveToCompletedState precondition');
 
   Self.Response.StatusCode := SIPMultipleChoices;
   Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
 
-  CheckEquals(Transaction(itsCompleted),
-              Transaction(Tran.State),
+  CheckEquals(itsCompleted, Tran.State,
               'MoveToCompletedState postcondition');
 end;
 
 procedure TestTIdSipClientInviteTransaction.MoveToProceedingState(Tran: TIdSipTransaction);
 begin
-  CheckEquals(Transaction(itsCalling),
-              Transaction(Tran.State),
+  CheckEquals(itsCalling, Tran.State,
               'MoveToProceedingState precondition');
 
   Self.Response.StatusCode := SIPTrying;
   Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
 
-  CheckEquals(Transaction(itsProceeding),
-              Transaction(Tran.State),
+  CheckEquals(itsProceeding, Tran.State,
               'MoveToCompletedState postcondition');
 end;
 
@@ -4057,8 +4023,7 @@ begin
   Self.MoveToProceedingState(Self.Tran);
   Self.MoveToCompletedState(Self.Tran);
 
-  CheckEquals(Transaction(itsCompleted),
-              Transaction(Self.Tran.State),
+  CheckEquals(itsCompleted, Self.Tran.State,
               'Sent ack');
 
   CheckAckSent('No ACK sent');
@@ -4121,8 +4086,7 @@ begin
   Self.MarkSentACKCount;
   Self.ClientTran.FireTimerB;
 
-  CheckEquals(Transaction(itsTerminated),
-              Transaction(Self.Tran.State),
+  CheckEquals(itsTerminated, Self.Tran.State,
               'Timer B didn''t fire in Calling state');
   CheckNoACKSent('RFC 3261 section 17.1.1.2: MUST NOT generate an ACK if Timer '
                + 'B fires in the Calling state.')
@@ -4134,8 +4098,7 @@ begin
   Self.MoveToCompletedState(Self.ClientTran);
   Self.ClientTran.FireTimerB;
 
-  CheckEquals(Transaction(itsCompleted),
-              Transaction(Self.ClientTran.State),
+  CheckEquals(itsCompleted, Self.ClientTran.State,
               'Timer B fired in Completed state');
 end;
 
@@ -4144,8 +4107,7 @@ begin
   Self.MoveToProceedingState(Self.ClientTran);
   Self.ClientTran.FireTimerB;
 
-  CheckEquals(Transaction(itsProceeding),
-              Transaction(Self.ClientTran.State),
+  CheckEquals(itsProceeding, Self.ClientTran.State,
               'Timer B fired in Proceeding state');
 end;
 
@@ -4177,8 +4139,7 @@ begin
   Tran := Self.TransactionType.Create(Self.MockDispatcher,
                                       Self.Request);
   try
-    CheckEquals(Transaction(itsCalling),
-                Transaction(Tran.State),
+    CheckEquals(itsCalling, Tran.State,
                 'Incorrect initial state');
   finally
     Tran.Free;
@@ -4199,8 +4160,7 @@ begin
 
     Tran.DoOnTransportError(Tran.InitialRequest, 'Host unreachable');
 
-    CheckEquals(Transaction(itsTerminated),
-                Transaction(Tran.State),
+    CheckEquals(itsTerminated, Tran.State,
                 'Connection timed out');
 
     Check(Self.TransactionFailed,
@@ -4270,8 +4230,7 @@ begin
 
   Self.MoveToProceedingState(Self.Tran);
 
-  CheckEquals(Transaction(itsProceeding),
-              Transaction(Self.Tran.State),
+  CheckEquals(itsProceeding, Self.Tran.State,
               'State on receiving a 100');
   Check(Self.TransactionProceeding, 'Event didn''t fire');
 end;
@@ -4284,8 +4243,7 @@ begin
   Self.Response.StatusCode := SIPTrying;
   Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
 
-  CheckEquals(Transaction(itsCompleted),
-              Transaction(Self.Tran.State),
+  CheckEquals(itsCompleted, Self.Tran.State,
               'Received a 1xx in the Completed state');
 end;
 
@@ -4297,8 +4255,7 @@ begin
   Self.Response.StatusCode := SIPRinging;
   Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
 
-  CheckEquals(Transaction(itsProceeding),
-              Transaction(Self.Tran.State),
+  CheckEquals(itsProceeding, Self.Tran.State,
               'State on receiving a 100');
   Check(Self.TransactionProceeding, 'Event didn''t fire');
 end;
@@ -4315,15 +4272,13 @@ begin
   Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
   Self.Tran.DoOnTransportError(Self.Tran.InitialRequest, 'Connection refused');
 
-  CheckEquals(Transaction(itsTerminated),
-              Transaction(Self.Tran.State),
+  CheckEquals(itsTerminated, Self.Tran.State,
               'Transport layer failed');
 
   Self.Response.StatusCode := SIPTrying;
   Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
 
-  CheckEquals(Transaction(itsTerminated),
-              Transaction(Self.Tran.State),
+  CheckEquals(itsTerminated, Self.Tran.State,
               'Received a 1xx in the Terminated state');
 end;
 
@@ -4344,8 +4299,7 @@ begin
 
     CheckNoACKSent('ACK sending arrogated by transaction');
 
-    CheckEquals(Transaction(itsTerminated),
-                Transaction(Self.Tran.State),
+    CheckEquals(itsTerminated, Self.Tran.State,
                 'State on receiving a 200');
   finally
     Listener.Free;
@@ -4363,8 +4317,7 @@ begin
   Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
   CheckNoRequestSent('Transactions MUST NOT send an ACK to a 2xx - the TU does that');
 
-  CheckEquals(Transaction(itsCompleted),
-              Transaction(Self.Tran.State),
+  CheckEquals(itsCompleted, Self.Tran.State,
               'Received a 2xx in the Completed state');
 end;
 
@@ -4386,8 +4339,7 @@ begin
 
     CheckNoACKSent('ACK sending arrogated by transaction');
 
-    CheckEquals(Transaction(itsTerminated),
-                Transaction(Self.Tran.State),
+    CheckEquals(itsTerminated, Self.Tran.State,
                 'State on receiving a 200');
   finally
     Listener.Free;
@@ -4402,8 +4354,7 @@ begin
   Self.Response.StatusCode := SIPMultipleChoices;
   Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
 
-  CheckEquals(Transaction(itsCompleted),
-              Transaction(Self.Tran.State),
+  CheckEquals(itsCompleted, Self.Tran.State,
               'State on receiving a 300');
   CheckAckSent('Incorrect ACK count');
   Check(Self.TransactionCompleted, 'Event didn''t fire');
@@ -4418,8 +4369,7 @@ begin
   Self.Response.StatusCode := SIPMultipleChoices;
   Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
 
-  CheckEquals(Transaction(itsCompleted),
-              Transaction(Self.Tran.State),
+  CheckEquals(itsCompleted, Self.Tran.State,
               'State on receiving a 300');
   CheckEquals(2, Self.MockTransport.ACKCount, 'Incorrect ACK count');
   Check(Self.TransactionCompleted, 'Event didn''t fire');
@@ -4434,8 +4384,7 @@ begin
   Self.Response.StatusCode := SIPMultipleChoices;
   Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
 
-  CheckEquals(Transaction(itsCompleted),
-              Transaction(Self.Tran.State),
+  CheckEquals(itsCompleted, Self.Tran.State,
               'State on receiving a 300');
   CheckACKSent('Incorrect ACK count');
   Check(Self.TransactionCompleted, 'Event didn''t fire');
@@ -4529,8 +4478,7 @@ begin
   for I := 1 to 6 do
     Self.DebugTimer.TriggerEarliestEvent;
 
-  CheckEquals(Transaction(itsCalling),
-              Transaction(Self.ClientTran.State),
+  CheckEquals(itsCalling, Self.ClientTran.State,
               'After 6 resends');
 
   // Then Timer B should be scheduled, which this next line should do.
@@ -4569,8 +4517,7 @@ begin
   Self.MoveToCompletedState(Self.ClientTran);
   Self.ClientTran.FireTimerD;
 
-  CheckEquals(Transaction(itsTerminated),
-              Transaction(Self.ClientTran.State),
+  CheckEquals(itsTerminated, Self.ClientTran.State,
               'Terminated');
 
   CheckEquals('', Self.FailMsg, 'Unexpected fail');
@@ -4611,8 +4558,7 @@ begin
 
     Tran.FireTimerB;
 
-    CheckEquals(Transaction(itsTerminated),
-                Transaction(Tran.State),
+    CheckEquals(itsTerminated, Tran.State,
                 'Timeout');
 
     Check(Self.TransactionFailed,
@@ -4633,8 +4579,7 @@ begin
     Tran.SendRequest(Self.Destination);
     Tran.DoOnTransportError(Self.LastSentRequest, 'Connection refused');
 
-    CheckEquals(Transaction(itsTerminated),
-                Transaction(Tran.State),
+    CheckEquals(itsTerminated, Tran.State,
                 'Connection timed out');
     Check(Self.TransactionFailed,
           'Listener not told about failure');
@@ -4653,8 +4598,7 @@ begin
   Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
   Self.Tran.DoOnTransportError(Self.LastSentRequest, 'Connection refused');
 
-  CheckEquals(Transaction(itsTerminated),
-              Transaction(Self.Tran.State),
+  CheckEquals(itsTerminated, Self.Tran.State,
               'Connection timed out');
   Check(Self.TransactionFailed,
         'Listener not told about failure');
@@ -4701,15 +4645,13 @@ end;
 
 procedure TestTIdSipClientNonInviteTransaction.MoveToProceedingState(Tran: TIdSipTransaction);
 begin
-  CheckEquals(Transaction(itsTrying),
-              Transaction(Tran.State),
+  CheckEquals(itsTrying, Tran.State,
               'MoveToProceedingState precondition');
 
   Self.Response.StatusCode := SIPTrying;
   Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
 
-  CheckEquals(Transaction(itsProceeding),
-              Transaction(Tran.State),
+  CheckEquals(itsProceeding, Tran.State,
               'MoveToProceedingState postcondition');
 end;
 
@@ -4723,8 +4665,7 @@ begin
   Self.Response.StatusCode := SIPOK;
   Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
 
-  CheckEquals(Transaction(itsCompleted),
-              Transaction(Tran.State),
+  CheckEquals(itsCompleted, Tran.State,
               'MoveToCompletedState postcondition');
 end;
 
@@ -4738,8 +4679,7 @@ begin
   Tran.FireTimerE;
   Tran.DoOnTransportError(Self.LastSentRequest, 'Connection refused');
 
-  CheckEquals(Transaction(itsTerminated),
-              Transaction(Tran.State),
+  CheckEquals(itsTerminated, Tran.State,
               'MoveToTerminatedState postcondition');
 end;
 
@@ -4852,8 +4792,7 @@ begin
   Tran := Self.TransactionType.Create(Self.MockDispatcher,
                                       Self.Request);
   try
-    CheckEquals(Transaction(itsTrying),
-                Transaction(Tran.State),
+    CheckEquals(itsTrying, Tran.State,
                 'Incorrect initial state');
   finally
     Tran.Free;
@@ -4938,8 +4877,7 @@ begin
   Self.Response.StatusCode := SIPTrying;
   Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
 
-  CheckEquals(Transaction(itsProceeding),
-              Transaction(Self.Tran.State),
+  CheckEquals(itsProceeding, Self.Tran.State,
               'Received a ' + IntToStr(Self.Response.StatusCode) + ' in Trying state');
 
   Check(Self.TransactionProceeding, 'Event didn''t fire');
@@ -4970,8 +4908,7 @@ begin
   Self.CheckReceiveResponse := Self.Proceeding;
   Self.MoveToProceedingState(Self.Tran);
 
-  CheckEquals(Transaction(itsProceeding),
-              Transaction(Self.Tran.State),
+  CheckEquals(itsProceeding, Self.Tran.State,
               'Received a ' + IntToStr(Self.Response.StatusCode) + ' in Trying state');
 
   Check(Self.TransactionProceeding, 'Event didn''t fire');
@@ -4995,8 +4932,7 @@ begin
       Self.Response.StatusCode := 100*I;
       Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
 
-      CheckEquals(Transaction(itsCompleted),
-                  Transaction(Tran.State),
+      CheckEquals(itsCompleted, Tran.State,
                   'Received a ' + IntToStr(Self.Response.StatusCode)
                 + ' in Trying state');
 
@@ -5026,8 +4962,7 @@ begin
       Self.Response.StatusCode := 100*I;
       Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Binding);
 
-      CheckEquals(Transaction(itsCompleted),
-                  Transaction(Tran.State),
+      CheckEquals(itsCompleted, Tran.State,
                   'Received a ' + IntToStr(Self.Response.StatusCode) + ' in Trying state');
 
       Check(Self.TransactionCompleted,
@@ -5164,8 +5099,7 @@ begin
 
   Self.ClientTran.FireTimerK;
 
-  CheckEquals(Transaction(itsTerminated),
-              Transaction(Self.ClientTran.State),
+  CheckEquals(itsTerminated, Self.ClientTran.State,
               'Terminated');
 
   CheckEquals('', Self.FailMsg, 'Unexpected fail');
@@ -5204,8 +5138,7 @@ begin
   Self.ClientTran.DoOnTransportError(Self.LastSentRequest,
                                      'Connection refused');
 
-  CheckEquals(Transaction(itsTerminated),
-              Transaction(Self.ClientTran.State),
+  CheckEquals(itsTerminated, Self.ClientTran.State,
               'Connection timed out');
   Check(Self.TransactionFailed,
         'Listener not told about failure');
@@ -5224,8 +5157,7 @@ begin
     Tran.DoOnTransportError(Self.LastSentRequest,
                             'Connection refused');
 
-    CheckEquals(Transaction(itsTerminated),
-                Transaction(Tran.State),
+    CheckEquals(itsTerminated, Tran.State,
                 'Connection timed out');
     Check(Self.TransactionFailed,
           'Listener not told about failure');
