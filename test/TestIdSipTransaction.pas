@@ -732,12 +732,6 @@ begin
   Result.AddTest(TestTIdSipClientInviteTransaction.Suite);
   Result.AddTest(TestTIdSipClientNonInviteTransaction.Suite);
   Result.AddTest(TestTIdSipResponseLocationsList.Suite);
-  Result.AddTest(TestTIdSipTransactionDispatcherListenerReceiveRequestMethod.Suite);
-  Result.AddTest(TestTIdSipTransactionDispatcherListenerReceiveResponseMethod.Suite);
-  Result.AddTest(TestTIdSipTransactionListenerFailMethod.Suite);
-  Result.AddTest(TestTIdSipTransactionListenerReceiveRequestMethod.Suite);
-  Result.AddTest(TestTIdSipTransactionListenerReceiveResponseMethod.Suite);
-  Result.AddTest(TestTIdSipTransactionListenerTerminatedMethod.Suite);
   Result.AddTest(TestTIdSipClientInviteTransactionTimerAWait.Suite);
   Result.AddTest(TestTIdSipClientInviteTransactionTimerBWait.Suite);
   Result.AddTest(TestTIdSipClientInviteTransactionTimerDWait.Suite);
@@ -748,6 +742,12 @@ begin
   Result.AddTest(TestTIdSipServerInviteTransactionTimerIWait.Suite);
   Result.AddTest(TestTIdSipServerNonInviteTransactionTimerJWait.Suite);
   Result.AddTest(TestTIdSipClientNonInviteTransactionTimerKWait.Suite);
+  Result.AddTest(TestTIdSipTransactionDispatcherListenerReceiveRequestMethod.Suite);
+  Result.AddTest(TestTIdSipTransactionDispatcherListenerReceiveResponseMethod.Suite);
+  Result.AddTest(TestTIdSipTransactionListenerFailMethod.Suite);
+  Result.AddTest(TestTIdSipTransactionListenerReceiveRequestMethod.Suite);
+  Result.AddTest(TestTIdSipTransactionListenerReceiveResponseMethod.Suite);
+  Result.AddTest(TestTIdSipTransactionListenerTerminatedMethod.Suite);
 end;
 
 function Transaction(S: TIdSipTransactionState): String;
