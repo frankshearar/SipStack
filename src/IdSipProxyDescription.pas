@@ -1,3 +1,9 @@
+{
+  (c) 2007 Directorate of New Technologies, Royal National Institute for Deaf people (RNID)
+
+  This unit contains code written by:
+    * Frank Shearar
+}
 unit IdSipProxyDescription;
 
 interface
