@@ -666,6 +666,7 @@ type
   TTransactionListenerMethodTestCase = class(TTestCase)
   protected
     Dispatcher:  TIdSipMockTransactionDispatcher;
+    Listener:    TIdSipTestTransactionListener;
     Request:     TIdSipRequest;
     Transaction: TIdSipTransaction;
   public
@@ -5985,6 +5986,8 @@ begin
 
   Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
 
+  Self.Listener := TIdSipTestTransactionListener.Create;
+
   Self.Request := TIdSipTestResources.CreateLocalLoopRequest;
   Self.Request.Method := MethodOptions;
 
@@ -5996,6 +5999,7 @@ procedure TTransactionListenerMethodTestCase.TearDown;
 begin
   Self.Transaction.Free;
   Self.Request.Free;
+  Self.Listener.Free;
   Self.Dispatcher.Free;
 
   inherited TearDown;
@@ -6025,23 +6029,16 @@ end;
 //* TestTIdSipTransactionListenerFailMethod Published methods ******************
 
 procedure TestTIdSipTransactionListenerFailMethod.TestRun;
-var
-  Listener: TIdSipTestTransactionListener;
 begin
-  Listener := TIdSipTestTransactionListener.Create;
-  try
-    Self.Method.Run(Listener);
+  Self.Method.Run(Listener);
 
-    Check(Listener.Failed,
-          Self.ClassName + ': Listener not notified');
-    Check(Self.Method.Transaction = Listener.TransactionParam,
-          Self.ClassName + ': Transaction param');
-    CheckEquals(Self.Method.Reason,
-                Listener.ReasonParam,
-                Self.ClassName + ': Reason param');
-  finally
-    Listener.Free;
-  end;
+  Check(Self.Listener.Failed,
+        Self.ClassName + ': Listener not notified');
+  Check(Self.Method.Transaction = Self.Listener.TransactionParam,
+        Self.ClassName + ': Transaction param');
+  CheckEquals(Self.Method.Reason,
+              Self.Listener.ReasonParam,
+              Self.ClassName + ': Reason param');
 end;
 
 //******************************************************************************
@@ -6069,24 +6066,17 @@ end;
 //* TestTIdSipTransactionListenerReceiveRequestMethod Published methods ********
 
 procedure TestTIdSipTransactionListenerReceiveRequestMethod.TestRun;
-var
-  Listener: TIdSipTestTransactionListener;
 begin
-  Listener := TIdSipTestTransactionListener.Create;
-  try
-    Self.Method.Run(Listener);
+  Self.Method.Run(Self.Listener);
 
-    Check(Listener.ReceivedRequest,
-          Self.ClassName + ': Listener not notified');
-    Check(Self.Method.Binding = Listener.BindingParam,
-          Self.ClassName + ': Binding param');
-    Check(Self.Method.Transaction = Listener.TransactionParam,
-          Self.ClassName + ': Transaction param');
-    Check(Self.Method.Request = Listener.RequestParam,
-          Self.ClassName + ': Request param');
-  finally
-    Listener.Free;
-  end;
+  Check(Self.Listener.ReceivedRequest,
+        Self.ClassName + ': Listener not notified');
+  Check(Self.Method.Binding = Self.Listener.BindingParam,
+        Self.ClassName + ': Binding param');
+  Check(Self.Method.Transaction = Self.Listener.TransactionParam,
+        Self.ClassName + ': Transaction param');
+  Check(Self.Method.Request = Self.Listener.RequestParam,
+        Self.ClassName + ': Request param');
 end;
 
 //******************************************************************************
@@ -6117,24 +6107,17 @@ end;
 //* TestTIdSipTransactionListenerReceiveResponseMethod Published methods *******
 
 procedure TestTIdSipTransactionListenerReceiveResponseMethod.TestRun;
-var
-  Listener: TIdSipTestTransactionListener;
 begin
-  Listener := TIdSipTestTransactionListener.Create;
-  try
-    Self.Method.Run(Listener);
+  Self.Method.Run(Self.Listener);
 
-    Check(Listener.ReceivedResponse,
-          Self.ClassName + ': Listener not notified');
-    Check(Self.Method.Binding = Listener.BindingParam,
-          Self.ClassName + ': Binding param');
-    Check(Self.Method.Transaction = Listener.TransactionParam,
-          Self.ClassName + ': Transaction param');
-    Check(Self.Method.Response = Listener.ResponseParam,
-          Self.ClassName + ': Response param');
-  finally
-    Listener.Free;
-  end;
+  Check(Listener.ReceivedResponse,
+        Self.ClassName + ': Listener not notified');
+  Check(Self.Method.Binding = Self.Listener.BindingParam,
+        Self.ClassName + ': Binding param');
+  Check(Self.Method.Transaction = Self.Listener.TransactionParam,
+        Self.ClassName + ': Transaction param');
+  Check(Self.Method.Response = Self.Listener.ResponseParam,
+        Self.ClassName + ': Response param');
 end;
 
 //******************************************************************************
@@ -6160,20 +6143,13 @@ end;
 //* TestTIdSipTransactionListenerTerminatedMethod Published methods ******************
 
 procedure TestTIdSipTransactionListenerTerminatedMethod.TestRun;
-var
-  Listener: TIdSipTestTransactionListener;
 begin
-  Listener := TIdSipTestTransactionListener.Create;
-  try
-    Self.Method.Run(Listener);
+  Self.Method.Run(Self.Listener);
 
-    Check(Listener.Terminated,
-          Self.ClassName + ': Listener not notified');
-    Check(Self.Method.Transaction = Listener.TransactionParam,
-          Self.ClassName + ': Transaction param');
-  finally
-    Listener.Free;
-  end;
+  Check(Self.Listener.Terminated,
+        Self.ClassName + ': Listener not notified');
+  Check(Self.Method.Transaction = Self.Listener.TransactionParam,
+        Self.ClassName + ': Transaction param');
 end;
 
 initialization
