@@ -62,18 +62,13 @@ type
   end;
 
   TTestCaseTU = class(TTestCaseSip,
+                      IIdSipTransportListener,
                       IIdSipTransportSendingListener)
   private
     SentAcks:       TIdSipRequestList;
     SentRequests:   TIdSipRequestList;
     SentResponses:  TIdSipResponseList;
 
-    procedure OnSendRequest(Request: TIdSipRequest;
-                            Sender: TIdSipTransport;
-                            Destination: TIdSipConnectionBindings);
-    procedure OnSendResponse(Response: TIdSipResponse;
-                             Sender: TIdSipTransport;
-                             Destination: TIdSipConnectionBindings);
     procedure RemoveBody(Msg: TIdSipMessage);
   protected
     AckCount:       Cardinal;
@@ -108,6 +103,24 @@ type
     procedure MarkSentAckCount;
     procedure MarkSentRequestCount;
     procedure MarkSentResponseCount;
+    procedure OnException(FailedMessage: TIdSipMessage;
+                          E: Exception;
+                          const Reason: String); virtual;
+    procedure OnReceiveRequest(Request: TIdSipRequest;
+                               Receiver: TIdSipTransport;
+                               Source: TIdSipConnectionBindings); virtual;
+    procedure OnReceiveResponse(Response: TIdSipResponse;
+                                Receiver: TIdSipTransport;
+                                Source: TIdSipConnectionBindings); virtual;
+    procedure OnRejectedMessage(const Msg: String;
+                                const Reason: String;
+                                Source: TIdSipConnectionBindings); virtual;
+    procedure OnSendRequest(Request: TIdSipRequest;
+                            Sender: TIdSipTransport;
+                            Destination: TIdSipConnectionBindings); virtual;
+    procedure OnSendResponse(Response: TIdSipResponse;
+                             Sender: TIdSipTransport;
+                             Destination: TIdSipConnectionBindings); virtual;
     procedure ReceiveAck;
     procedure ReceiveAckFor(Request: TIdSipRequest;
                             Response: TIdSipResponse);
@@ -958,8 +971,6 @@ end;
 //* TTestCaseTU Public methods *************************************************
 
 procedure TTestCaseTU.SetUp;
-var
-  I: Integer;
 begin
   inherited SetUp;
 
@@ -981,6 +992,7 @@ begin
   Self.Dispatcher    := Self.Core.Dispatcher as TIdSipMockTransactionDispatcher;
   Self.RoutingTable  := Self.Core.RoutingTable as TIdMockRoutingTable;
 
+  Self.Dispatcher.AddTransportListener(Self);
   Self.Dispatcher.AddTransportSendingListener(Self);
 
   Self.DebugTimer := Self.Dispatcher.DebugTimer;
@@ -1169,6 +1181,52 @@ end;
 procedure TTestCaseTU.MarkSentResponseCount;
 begin
   Self.ResponseCount := Self.SentResponseCount;
+end;
+
+procedure TTestCaseTU.OnException(FailedMessage: TIdSipMessage;
+                                  E: Exception;
+                                  const Reason: String);
+begin
+end;
+
+procedure TTestCaseTU.OnReceiveRequest(Request: TIdSipRequest;
+                                       Receiver: TIdSipTransport;
+                                       Source: TIdSipConnectionBindings);
+begin
+  if Request.IsAck then
+    Self.SentAcks.AddCopy(Request)
+  else
+    Self.SentRequests.AddCopy(Request);
+end;
+
+procedure TTestCaseTU.OnReceiveResponse(Response: TIdSipResponse;
+                                        Receiver: TIdSipTransport;
+                                        Source: TIdSipConnectionBindings);
+begin
+  Self.SentResponses.AddCopy(Response);
+end;
+
+procedure TTestCaseTU.OnRejectedMessage(const Msg: String;
+                                        const Reason: String;
+                                        Source: TIdSipConnectionBindings);
+begin
+end;
+
+procedure TTestCaseTU.OnSendRequest(Request: TIdSipRequest;
+                                    Sender: TIdSipTransport;
+                                    Destination: TIdSipConnectionBindings);
+begin
+  if Request.IsAck then
+    Self.SentAcks.AddCopy(Request)
+  else
+    Self.SentRequests.AddCopy(Request);
+end;
+
+procedure TTestCaseTU.OnSendResponse(Response: TIdSipResponse;
+                                     Sender: TIdSipTransport;
+                                     Destination: TIdSipConnectionBindings);
+begin
+  Self.SentResponses.AddCopy(Response);
 end;
 
 procedure TTestCaseTU.ReceiveAck;
@@ -1400,7 +1458,7 @@ end;
 
 function TTestCaseTU.SentRequestAt(Index: Integer): TIdSipRequest;
 begin
-  Result := Self.Dispatcher.Transport.RequestAt(Index);
+  Result := Self.SentRequests[Index];
 end;
 
 procedure TTestCaseTU.SetRoutingTableForSingleLanIP;
@@ -1419,23 +1477,6 @@ begin
 end;
 
 //* TTestCaseTU Private methods ************************************************
-
-procedure TTestCaseTU.OnSendRequest(Request: TIdSipRequest;
-                                    Sender: TIdSipTransport;
-                                    Destination: TIdSipConnectionBindings);
-begin
-  if Request.IsAck then
-    Self.SentAcks.AddCopy(Request)
-  else
-    Self.SentRequests.AddCopy(Request);
-end;
-
-procedure TTestCaseTU.OnSendResponse(Response: TIdSipResponse;
-                                     Sender: TIdSipTransport;
-                                     Destination: TIdSipConnectionBindings);
-begin
-  Self.SentResponses.AddCopy(Response);
-end;
 
 procedure TTestCaseTU.RemoveBody(Msg: TIdSipMessage);
 begin
