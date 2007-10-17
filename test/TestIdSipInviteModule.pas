@@ -405,8 +405,7 @@ type
   TestTIdSipInboundSession = class(TestTIdSipSession,
                                    IIdRTPDataListener,
                                    IIdSipInviteModuleListener,
-                                   IIdSipMessageModuleListener,
-                                   IIdSipTransportSendingListener)
+                                   IIdSipMessageModuleListener)
   private
     RemoteContentType:      String;
     RemoteDesc:             String;
@@ -418,12 +417,6 @@ type
                                                  StatusCode: Cardinal);
     procedure OnNewData(Data: TIdRTPPayload;
                         Binding: TIdConnection);
-    procedure OnSendRequest(Request: TIdSipRequest;
-                            Sender: TIdSipTransport;
-                            Binding: TIdSipConnectionBindings);
-    procedure OnSendResponse(Response: TIdSipResponse;
-                             Sender: TIdSipTransport;
-                             Binding: TIdSipConnectionBindings);
     procedure ReceiveAckWithBody(const SessionDesc,
                                  ContentType: String);
   protected
@@ -436,6 +429,9 @@ type
                              const Reason: String); override;
     procedure OnInboundCall(UserAgent: TIdSipInviteModule;
                             Session: TIdSipInboundSession);
+    procedure OnSendResponse(Response: TIdSipResponse;
+                             Sender: TIdSipTransport;
+                             Binding: TIdSipConnectionBindings); override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -488,8 +484,7 @@ type
   end;
 
   TestTIdSipOutboundSession = class(TestTIdSipSession,
-                                    IIdSipInviteModuleListener,
-                                    IIdSipTransportSendingListener)
+                                    IIdSipInviteModuleListener)
   private
     FailFirstInviteSend:      Boolean;
     HairpinCall:              TIdSipInboundSession;
@@ -502,12 +497,6 @@ type
 
     procedure OnInboundCall(UserAgent: TIdSipInviteModule;
                             Session: TIdSipInboundSession);
-    procedure OnSendRequest(Request: TIdSipRequest;
-                            Sender: TIdSipTransport;
-                            Binding: TIdSipConnectionBindings);
-    procedure OnSendResponse(Response: TIdSipResponse;
-                             Sender: TIdSipTransport;
-                             Binding: TIdSipConnectionBindings);
     procedure ReceiveForbidden;
     procedure ReceiveOKWithRecordRoute;
     procedure ReceiveProvisionalResponse(StatusCode: Cardinal; SDP: String);
@@ -525,6 +514,9 @@ type
                                    const MimeType: String); override;
     procedure OnProgressedSession(Session: TIdSipSession;
                                   Progress: TIdSipResponse); override;
+    procedure OnSendRequest(Request: TIdSipRequest;
+                            Sender: TIdSipTransport;
+                            Binding: TIdSipConnectionBindings); override;
   public
     procedure SetUp; override;
   published
@@ -1045,9 +1037,8 @@ begin
   Self.MarkSentRequestCount;
   Self.Session.Terminate;
 
-  // ARG! Why do they make Length return an INTEGER? And WHY Abs() too?
   CheckEquals(Self.RequestCount + Cardinal(Length(Contacts)),
-              Self.Dispatcher.Transport.SentRequestCount,
+              Self.SentRequestCount,
               'Session didn''t attempt to terminate all INVITEs');
 
   Check(Self.SentRequestCount >= 5,
@@ -1669,7 +1660,7 @@ begin
 
     Self.MarkSentRequestCount;
 
-    AuthCreds := Self.CreateAuthorization(Self.Dispatcher.Transport.LastResponse);
+    AuthCreds := Self.CreateAuthorization(Self.LastSentResponse);
     try
       Action.Resend(AuthCreds);
       CheckNoRequestSent('You cannot resubmit a CANCEL: Resend must be a no-op.');
@@ -1699,7 +1690,7 @@ begin
 
   Self.MarkSentRequestCount;
 
-  AuthCreds := Self.CreateAuthorization(Self.Dispatcher.Transport.LastResponse);
+  AuthCreds := Self.CreateAuthorization(Self.LastSentResponse);
   try
     Action.Resend(AuthCreds);
   finally
@@ -1762,7 +1753,7 @@ begin
   Action := Self.CreateAction;
 
   Self.ReceiveUnauthorized(WWWAuthenticateHeader, '');
-  AuthCreds := Self.CreateAuthorization(Self.Dispatcher.Transport.LastResponse);
+  AuthCreds := Self.CreateAuthorization(Self.LastSentResponse);
   try
     Self.MarkSentRequestCount;
     Action.Resend(AuthCreds);
@@ -1796,7 +1787,7 @@ begin
   Action := Self.Core.AddOutboundAction(TIdSipActionClass(ThrowawayAction.ClassType));
 
   Self.MarkSentRequestCount;
-  AuthCreds := Self.CreateAuthorization(Self.Dispatcher.Transport.LastResponse);
+  AuthCreds := Self.CreateAuthorization(Self.LastSentResponse);
   Action.Resend(AuthCreds);
   Self.CheckNoRequestSent('You cannot resubmit a CANCEL: Resend must be a no-op.');
 end;
@@ -1809,7 +1800,7 @@ begin
   Action := Self.CreateAction;
   Self.ReceiveUnauthorized(ProxyAuthenticateHeader, '');
 
-  ProxyAuth := Self.CreateAuthorization(Self.Dispatcher.Transport.LastResponse);
+  ProxyAuth := Self.CreateAuthorization(Self.LastSentResponse);
   try
     Self.MarkSentRequestCount;
 
@@ -2003,7 +1994,7 @@ begin
   CheckResponseSent('No response sent');
 
   CancelResponse := Self.LastSentResponse;
-  InviteResponse := Self.Dispatcher.Transport.SecondLastResponse;
+  InviteResponse := Self.SecondLastSentResponse;
 
   CheckEquals(SIPOK,
               CancelResponse.StatusCode,
@@ -4029,7 +4020,7 @@ begin
   Session.AcceptModify('', '');
 
   // The last request was the inbound re-INVITE.
-  Ack := Self.Dispatcher.Transport.LastRequest.AckFor(Self.LastSentResponse);
+  Ack := Self.LastSentRequest.AckFor(Self.LastSentResponse);
   try
     Check(not Session.Match(Ack),
           Session.ClassName + ': ACK mustn''t match the Session');
@@ -4220,7 +4211,7 @@ begin
   Session.AcceptModify('', '');
 
   Self.DroppedUnmatchedResponse := false;
-  Ack := Self.Dispatcher.Transport.LastRequest.AckFor(Self.LastSentResponse);
+  Ack := Self.LastSentRequest.AckFor(Self.LastSentResponse);
   try
     Check(not Session.Match(Ack),
           Session.ClassName
@@ -4358,7 +4349,7 @@ begin
   Self.ReceiveRemoteReInvite(Session);
   CheckResponseSent(Session.ClassName + ': No response sent');
   CheckEquals(SIPRequestPending,
-              Dispatcher.Transport.LastResponse.StatusCode,
+              Self.LastSentResponse.StatusCode,
               Session.ClassName + ': Unexpected response');
 end;
 
@@ -4731,7 +4722,7 @@ begin
     Session := Self.CreateAndEstablishSession;
 
     Self.ReceiveRemoteReInvite(Session);
-    FirstInvite.Assign(Self.Dispatcher.Transport.LastRequest);
+    FirstInvite.Assign(Self.LastSentRequest);
     Check(Self.OnModifySessionFired,
           Session.ClassName + ': OnModifySession didn''t fire');
 
@@ -4921,6 +4912,16 @@ begin
   Self.Session.AddSessionListener(Self);
 end;
 
+procedure TestTIdSipInboundSession.OnSendResponse(Response: TIdSipResponse;
+                                                  Sender: TIdSipTransport;
+                                                  Binding: TIdSipConnectionBindings);
+begin
+  inherited OnSendResponse(Response, Sender, Binding);
+
+  if (Response.StatusCode = SIPRequestTerminated) then
+    Self.SentRequestTerminated := true;
+end;
+
 //* TestTIdSipInboundSession Private methods ***********************************
 
 procedure TestTIdSipInboundSession.CheckRedirectCall(TemporaryMove: Boolean);
@@ -4976,20 +4977,6 @@ begin
   Self.ThreadEvent.SetEvent;
 end;
 
-procedure TestTIdSipInboundSession.OnSendRequest(Request: TIdSipRequest;
-                                                 Sender: TIdSipTransport;
-                                                 Binding: TIdSipConnectionBindings);
-begin
-end;
-
-procedure TestTIdSipInboundSession.OnSendResponse(Response: TIdSipResponse;
-                                                  Sender: TIdSipTransport;
-                                                  Binding: TIdSipConnectionBindings);
-begin
-  if (Response.StatusCode = SIPRequestTerminated) then
-    Self.SentRequestTerminated := true;
-end;
-
 procedure TestTIdSipInboundSession.ReceiveAckWithBody(const SessionDesc,
                                                       ContentType: String);
 var
@@ -5016,12 +5003,13 @@ var
 begin
   Self.RemoteContentType := SdpMimeType;
   Self.RemoteDesc        := TIdSipTestResources.BasicSDP('proxy.tessier-ashpool.co.luna');
+
   Self.CreateAction;
 
-  CheckEquals(Self.Dispatcher.Transport.LastRequest.FirstContact.AsString,
+  CheckEquals(Self.LastSentRequest.FirstContact.AsString,
               Self.Session.RemoteContact.AsString,
               'RemoteContact');
-  CheckEquals(Self.Dispatcher.Transport.LastRequest.From.Value,
+  CheckEquals(Self.LastSentRequest.From.Value,
               Self.Session.RemoteParty.Value,
               'RemoteParty');
 
@@ -5193,7 +5181,7 @@ begin
   CheckResponseSent('No response sent');
 
   CancelResponse := Self.LastSentResponse;
-  InviteResponse := Self.Dispatcher.Transport.SecondLastResponse;
+  InviteResponse := Self.SecondLastSentResponse;
 
   CheckEquals(SIPOK,
               CancelResponse.StatusCode,
@@ -5662,7 +5650,7 @@ begin
 
   Self.MarkSentResponseCount;
   AlicesDialog := TIdSipDialog.CreateInboundDialog(BobsSession.InitialRequest,
-                                                   Self.Dispatcher.Transport.LastResponse,
+                                                   Self.LastSentResponse,
                                                    false);
   try
     Self.ReceiveBye(AlicesDialog);
@@ -5804,10 +5792,10 @@ begin
               Self.SentResponseCount,
               'Session should have sent a 100 Trying and a 180 Ringing');
   CheckEquals(SIPTrying,
-              Self.Dispatcher.Transport.SecondLastResponse.StatusCode,
+              Self.SecondLastSentResponse.StatusCode,
               'First response should be a 100 Trying');
   CheckEquals(SIPRinging,
-              Self.Dispatcher.Transport.LastResponse.StatusCode,
+              Self.LastSentResponse.StatusCode,
               'Second response should be a 180 Ringing');
 end;
 
@@ -6099,6 +6087,7 @@ begin
   SessionCount := Self.Core.SessionCount;
 
   // Until we receive an ACK to our INVITE, our session has not fully established.
+  Self.MarkSentRequestCount;
   Self.Session.Terminate;
 
   CheckNoRequestSent('BYE sent prematurely');
@@ -6215,18 +6204,12 @@ begin
   Self.OnProgressedSessionFired := true;
 end;
 
-//* TestTIdSipOutboundSession Private methods **********************************
-
-procedure TestTIdSipOutboundSession.OnInboundCall(UserAgent: TIdSipInviteModule;
-                                                  Session: TIdSipInboundSession);
-begin
-  Self.HairpinCall := Session;
-end;
-
 procedure TestTIdSipOutboundSession.OnSendRequest(Request: TIdSipRequest;
                                                   Sender: TIdSipTransport;
                                                   Binding: TIdSipConnectionBindings);
 begin
+  inherited OnSendRequest(Request, Sender, Binding);
+
   if Request.IsInvite then begin
     if Self.FailFirstInviteSend then begin
       Self.FailFirstInviteSend := false;
@@ -6236,10 +6219,12 @@ begin
   end;
 end;
 
-procedure TestTIdSipOutboundSession.OnSendResponse(Response: TIdSipResponse;
-                                                   Sender: TIdSipTransport;
-                                                   Binding: TIdSipConnectionBindings);
+//* TestTIdSipOutboundSession Private methods **********************************
+
+procedure TestTIdSipOutboundSession.OnInboundCall(UserAgent: TIdSipInviteModule;
+                                                  Session: TIdSipInboundSession);
 begin
+  Self.HairpinCall := Session;
 end;
 
 procedure TestTIdSipOutboundSession.ReceiveForbidden;
@@ -6318,7 +6303,7 @@ begin
 
     Self.ReceiveOk(Self.LastSentRequest);
 
-    Ack := Self.Dispatcher.Transport.LastACK;
+    Ack := Self.LastSentACK;
 
     CheckEquals(Self.Session.Dialog.RemoteTarget,
                 Ack.RequestUri,
@@ -6355,7 +6340,7 @@ var
   Ack: TIdSipRequest;
 begin
   Self.ReceiveOKWithRecordRoute;
-  Ack := Self.Dispatcher.Transport.LastACK;
+  Ack := Self.LastSentACK;
 
   Check(not Ack.Route.IsEmpty, 'No Route headers');
 end;
@@ -6370,7 +6355,7 @@ begin
   Self.ReceiveUnauthorized(WWWAuthenticateHeader, '');
   CheckAckSent('No ACK sent for the challenge');
 
-  AuthCreds := Self.CreateAuthorization(Self.Dispatcher.Transport.LastResponse);
+  AuthCreds := Self.CreateAuthorization(Self.LastSentResponse);
   try
     Self.Session.Resend(AuthCreds);
   finally
@@ -6445,7 +6430,7 @@ begin
   Self.ReceiveUnauthorized(ProxyAuthenticateHeader, '');
   CheckAckSent('No ACK sent for the challenge');
 
-  AuthCreds := Self.CreateAuthorization(Self.Dispatcher.Transport.LastResponse);
+  AuthCreds := Self.CreateAuthorization(Self.LastSentResponse);
   try
     Self.Session.Resend(AuthCreds);
   finally
@@ -6501,18 +6486,18 @@ begin
         'First 407 Proxy Authentication Required dropped');
 
   // 2nd proxy challenge
-  Self.ResendWith(Session, Self.Dispatcher.Transport.LastResponse);
+  Self.ResendWith(Session, Self.LastSentResponse);
   Self.ReceiveUnauthorized(ProxyAuthenticateHeader, QopAuthInt);
   Check(not Self.DroppedUnmatchedResponse,
         'Second 407 Proxy Authentication Required dropped');
 
   // UA challenge
-  Self.ResendWith(Session, Self.Dispatcher.Transport.LastResponse);
+  Self.ResendWith(Session, Self.LastSentResponse);
   Self.ReceiveUnauthorized(WWWAuthenticateHeader, '');
   Check(not Self.DroppedUnmatchedResponse,
         '401 Unauthorized dropped');
 
-  Self.ResendWith(Session, Self.Dispatcher.Transport.LastResponse);
+  Self.ResendWith(Session, Self.LastSentResponse);
   Self.ReceiveOk(Self.LastSentRequest);
   Check(not Self.DroppedUnmatchedResponse,
         '200 OK dropped');
@@ -6583,13 +6568,13 @@ begin
   Check(not Session.Dialog.IsSecure,
         'Dialog secure when TLS not used');
 
-  CheckEquals(Self.Dispatcher.Transport.LastResponse.CallID,
+  CheckEquals(Self.LastSentResponse.CallID,
               Session.Dialog.ID.CallID,
               'Dialog''s Call-ID');
-  CheckEquals(Self.Dispatcher.Transport.LastResponse.From.Tag,
+  CheckEquals(Self.LastSentResponse.From.Tag,
               Session.Dialog.ID.LocalTag,
               'Dialog''s Local Tag');
-  CheckEquals(Self.Dispatcher.Transport.LastResponse.ToHeader.Tag,
+  CheckEquals(Self.LastSentResponse.ToHeader.Tag,
               Session.Dialog.ID.RemoteTag,
               'Dialog''s Remote Tag');
 
@@ -6597,7 +6582,7 @@ begin
   AnswerType := SdpMimeType;
   Self.ReceiveOkWithBody(Invite, Answer, AnswerType);
 
-  CheckEquals(Self.Dispatcher.Transport.LastResponse.FirstContact.AsString,
+  CheckEquals(Self.LastSentResponse.FirstContact.AsString,
               Session.RemoteContact.AsString,
               'RemoteContact');
   CheckEquals(Self.LastSentRequest.ToHeader.Value,
@@ -6977,7 +6962,7 @@ end;
 procedure TestTIdSipOutboundSession.TestEstablishedSessionSetsInitialRequestToTag;
 begin
   Self.ReceiveRinging(Self.LastSentRequest);
-  CheckEquals(Self.Dispatcher.Transport.LastResponse.ToHeader.Tag,
+  CheckEquals(Self.LastSentResponse.ToHeader.Tag,
               Self.Session.InitialRequest.ToHeader.Tag,
               'Session.InitialRequest''s To tag not set');
 end;
@@ -7056,7 +7041,7 @@ begin
 
     Self.MarkSentRequestCount;
 
-    AuthCreds := Self.CreateAuthorization(Self.Dispatcher.Transport.LastResponse);
+    AuthCreds := Self.CreateAuthorization(Self.LastSentResponse);
     try
       Self.Session.Resend(AuthCreds);
     finally
@@ -7118,7 +7103,7 @@ begin
 
   // ARG! Why do they make Length return an INTEGER? And WHY Abs() too?
   CheckEquals(Self.RequestCount + Cardinal(Length(Contacts)),
-              Self.Dispatcher.Transport.SentRequestCount,
+              Self.SentRequestCount,
               'Session didn''t attempt to contact all Contacts: ' + Self.FailReason);
 
   // Receive a 200 OK to the 2nd, successfully sent, INVITE.
@@ -7478,7 +7463,7 @@ begin
 
   // ARG! Why do they make Length return an INTEGER? And WHY Abs() too?
   CheckEquals(Self.RequestCount + Cardinal(Length(Contacts)),
-              Self.Dispatcher.Transport.SentRequestCount,
+              Self.SentRequestCount,
               'Session didn''t attempt to contact all Contacts: ' + Self.FailReason);
 
   Self.MarkSentRequestCount;
@@ -7491,7 +7476,7 @@ begin
 
   // ARG! Why do they make Length return an INTEGER? And WHY Abs() too?
   CheckEquals(Self.RequestCount + Cardinal(Length(Contacts) - 1),
-              Self.Dispatcher.Transport.SentRequestCount,
+              Self.SentRequestCount,
               'Session didn''t try to kill all but one of the redirected INVITEs');
 
   CheckRequestSent('We expect the session to send _something_');
@@ -7579,7 +7564,7 @@ begin
 
   // ARG! Why do they make Length return an INTEGER? And WHY Abs() too?
   CheckEquals(Self.RequestCount + Cardinal(Length(Contacts)),
-              Self.Dispatcher.Transport.SentRequestCount,
+              Self.SentRequestCount,
               'Session didn''t attempt to contact all Contacts: ' + Self.FailReason);
 end;
 
@@ -7726,7 +7711,7 @@ begin
 
   // ARG! Why do they make Length return an INTEGER? And WHY Abs() too?
   CheckEquals(Self.RequestCount + Cardinal(Length(Contacts)),
-              Self.Dispatcher.Transport.SentRequestCount,
+              Self.SentRequestCount,
               'Session didn''t attempt to terminate all INVITEs');
 
   Check(Self.SentRequestCount >= 5,
@@ -7779,7 +7764,7 @@ begin
   Check(Self.Core.SessionCount < SessionCount,
         'Session not marked as terminated');
   CheckEquals(MethodBye,
-              Self.Dispatcher.Transport.LastRequest.Method,
+              Self.LastSentRequest.Method,
               'Last request we attempted to send');
 end;
 
