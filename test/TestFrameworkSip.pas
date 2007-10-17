@@ -61,8 +61,19 @@ type
     procedure TearDown; override;
   end;
 
-  TTestCaseTU = class(TTestCaseSip)
+  TTestCaseTU = class(TTestCaseSip,
+                      IIdSipTransportSendingListener)
   private
+    SentAcks:       TIdSipRequestList;
+    SentRequests:   TIdSipRequestList;
+    SentResponses:  TIdSipResponseList;
+
+    procedure OnSendRequest(Request: TIdSipRequest;
+                            Sender: TIdSipTransport;
+                            Destination: TIdSipConnectionBindings);
+    procedure OnSendResponse(Response: TIdSipResponse;
+                             Sender: TIdSipTransport;
+                             Destination: TIdSipConnectionBindings);
     procedure RemoveBody(Msg: TIdSipMessage);
   protected
     AckCount:       Cardinal;
@@ -947,6 +958,8 @@ end;
 //* TTestCaseTU Public methods *************************************************
 
 procedure TTestCaseTU.SetUp;
+var
+  I: Integer;
 begin
   inherited SetUp;
 
@@ -959,10 +972,16 @@ begin
   Self.Destination := TIdSipToHeader.Create;
   Self.Destination.Value := 'sip:franks@remotehost';
 
+  Self.SentAcks      := TIdSipRequestList.Create;
+  Self.SentRequests  := TIdSipRequestList.Create;
+  Self.SentResponses := TIdSipResponseList.Create;
+
   Self.Core := Self.CreateUserAgent('sip:case@localhost');
   Self.Authenticator := Self.Core.Authenticator as TIdSipAuthenticator;
   Self.Dispatcher    := Self.Core.Dispatcher as TIdSipMockTransactionDispatcher;
   Self.RoutingTable  := Self.Core.RoutingTable as TIdMockRoutingTable;
+
+  Self.Dispatcher.AddTransportSendingListener(Self);
 
   Self.DebugTimer := Self.Dispatcher.DebugTimer;
   Self.DebugTimer.TriggerImmediateEvents := true;
@@ -985,6 +1004,9 @@ procedure TTestCaseTU.TearDown;
 begin
   Self.Invite.Free;
   Self.Core.Free;
+  Self.SentResponses.Free;
+  Self.SentRequests.Free;  
+  Self.SentAcks.Free;
   Self.Destination.Free;
 
   // The UserAgent kills the Dispatcher, Authenticator
@@ -1116,17 +1138,17 @@ end;
 
 function TTestCaseTU.LastSentAck: TIdSipRequest;
 begin
-  Result := Self.Dispatcher.LastACK;
+  Result := Self.SentAcks.Last;
 end;
 
 function TTestCaseTU.LastSentRequest: TIdSipRequest;
 begin
-  Result := Self.Dispatcher.LastRequest;
+  Result := Self.SentRequests.Last;
 end;
 
 function TTestCaseTU.LastSentResponse: TIdSipResponse;
 begin
-  Result := Self.Dispatcher.LastResponse;
+  Result := Self.SentResponses.Last;
 end;
 
 function TTestCaseTU.Locator: TIdSipMockLocator;
@@ -1353,27 +1375,27 @@ end;
 
 function TTestCaseTU.SecondLastSentRequest: TIdSipRequest;
 begin
-  Result := Self.Dispatcher.Transport.SecondLastRequest;
+  Result := Self.SentRequests.SecondLast;
 end;
 
 function TTestCaseTU.SecondLastSentResponse: TIdSipResponse;
 begin
-  Result := Self.Dispatcher.Transport.SecondLastResponse;
+  Result := Self.SentResponses.SecondLast;
 end;
 
 function TTestCaseTU.SentAckCount: Cardinal;
 begin
-  Result := Self.Dispatcher.SentAckCount;
+  Result := Self.SentAcks.Count;
 end;
 
 function TTestCaseTU.SentRequestCount: Cardinal;
 begin
-  Result := Self.Dispatcher.SentRequestCount;
+  Result := Self.SentRequests.Count;
 end;
 
 function TTestCaseTU.SentResponseCount: Cardinal;
 begin
-  Result := Self.Dispatcher.SentResponseCount;
+  Result := Self.SentResponses.Count;
 end;
 
 function TTestCaseTU.SentRequestAt(Index: Integer): TIdSipRequest;
@@ -1397,6 +1419,23 @@ begin
 end;
 
 //* TTestCaseTU Private methods ************************************************
+
+procedure TTestCaseTU.OnSendRequest(Request: TIdSipRequest;
+                                    Sender: TIdSipTransport;
+                                    Destination: TIdSipConnectionBindings);
+begin
+  if Request.IsAck then
+    Self.SentAcks.AddCopy(Request)
+  else
+    Self.SentRequests.AddCopy(Request);
+end;
+
+procedure TTestCaseTU.OnSendResponse(Response: TIdSipResponse;
+                                     Sender: TIdSipTransport;
+                                     Destination: TIdSipConnectionBindings);
+begin
+  Self.SentResponses.AddCopy(Response);
+end;
 
 procedure TTestCaseTU.RemoveBody(Msg: TIdSipMessage);
 begin
