@@ -6962,7 +6962,7 @@ end;
 
 procedure TIdSipViaHeader.RemoveBranch;
 begin
-  // Really, this method just serves a debugging puLastPose, allowing us to turn
+  // Really, this method just serves a debugging purpose, allowing us to turn
   // good, healthy RFC 3261 Via headers into twisted, perverted RFC 2543 Via
   // headers.
   Self.RemoveParameter(BranchParam);
