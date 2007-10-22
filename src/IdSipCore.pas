@@ -291,7 +291,6 @@ type
                              IIdSipTransactionDispatcherListener)
   private
     fActions:                TIdSipActions;
-    fAllowedContentTypeList: TStrings;
     fAllowedLanguageList:    TStrings;
     fAllowedSchemeList:      TStrings;
     fAuthenticator:          TIdSipAbstractAuthenticator;
@@ -364,7 +363,6 @@ type
     function  WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; virtual;
     function  WillAcceptResponse(Response: TIdSipResponse): TIdSipUserAgentReaction; virtual;
 
-    property AllowedContentTypeList: TStrings read fAllowedContentTypeList;
     property AllowedLanguageList:    TStrings read fAllowedLanguageList;
     property AllowedSchemeList:      TStrings read fAllowedSchemeList;
   public
@@ -1453,9 +1451,12 @@ constructor TIdSipAbstractCore.Create;
 begin
   inherited Create;
 
-  Self.fAllowedContentTypeList := TStringList.Create;
-  Self.fAllowedLanguageList    := TStringList.Create;
-  Self.fAllowedSchemeList      := TStringList.Create;
+  Self.fActions := TIdSipActions.Create;
+  Self.Actions.AddObserver(Self);
+
+  Self.fAllowedLanguageList := TStringList.Create;
+  Self.fAllowedSchemeList   := TStringList.Create;
+  Self.fKeyring             := TIdKeyRing.Create;
 
   Self.Listeners  := TIdNotificationList.Create;
   Self.Listeners.AddExpectedException(EParserError);
@@ -1464,19 +1465,10 @@ begin
   Self.NullModule := TIdSipNullModule.Create(Self);
   Self.Observed   := TIdObservable.Create;
 
-  Self.fActions                := TIdSipActions.Create;
-  Self.fAllowedContentTypeList := TStringList.Create;
-  Self.fAllowedLanguageList    := TStringList.Create;
-  Self.fKeyring                := TIdKeyRing.Create;
-
-  Self.Actions.AddObserver(Self);
-
   Self.AddModule(TIdSipOptionsModule);
-
   Self.AddAllowedScheme(SipScheme);
 
-  Self.HostName := Self.DefaultHostName;
-
+  Self.HostName              := Self.DefaultHostName;
   Self.Realm                 := Self.HostName;
   Self.RequireAuthentication := false;
   Self.UserAgentName         := Self.DefaultUserAgent;
@@ -1486,16 +1478,14 @@ destructor TIdSipAbstractCore.Destroy;
 begin
   Self.NotifyModulesOfFree;
 
-  Self.Keyring.Free;
-  Self.AllowedSchemeList.Free;
-  Self.AllowedLanguageList.Free;
-  Self.AllowedContentTypeList.Free;
-  Self.Actions.Free;
-
   Self.Observed.Free;
   Self.NullModule.Free;
   Self.Modules.Free;
   Self.Listeners.Free;
+  Self.Keyring.Free;
+  Self.AllowedSchemeList.Free;
+  Self.AllowedLanguageList.Free;
+  Self.Actions.Free;
 
   inherited Destroy;
 end;
@@ -1598,25 +1588,25 @@ end;
 
 function TIdSipAbstractCore.AllowedContentTypes: String;
 var
-  CTs:             TStrings;
-  CurrentMimeType: String;
-  I, J:            Integer;
+  ContentTypes: TStringList;
+  I:            Integer;
 begin
-  CTs := TStringList.Create;
-  try
-    // Collect a list of all known MIME types from the modules, and ensure
-    // there're no duplicates.
-    for I := 0 to Self.Modules.Count - 1 do begin
-      for J := 0 to Self.ModuleAt(I).AllowedContentTypeList.Count - 1 do begin
-        CurrentMimeType := Self.ModuleAt(I).AllowedContentTypeList[J];
-        if (CTs.IndexOf(CurrentMimeType) = ItemNotFoundIndex) then
-          CTs.Add(CurrentMimeType);
-      end;
-    end;
+  // Collect a list of all known MIME types from the modules, and ensure there
+  // are no duplicates.
 
-    Result := Self.ConvertToHeader(CTs);
+  ContentTypes := TStringList.Create;
+  try
+    ContentTypes.Duplicates := dupIgnore;
+    ContentTypes.Sorted     := true;
+
+    for I := 0 to Self.Modules.Count - 1 do
+      ContentTypes.AddStrings(Self.ModuleAt(I).AllowedContentTypes);
+
+    ContentTypes.Add(SdpMimeType);
+
+    Result := Self.ConvertToHeader(ContentTypes);
   finally
-    CTs.Free;
+    ContentTypes.Free;
   end;
 end;
 
