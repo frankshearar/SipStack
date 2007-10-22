@@ -1481,7 +1481,7 @@ begin
   if not Self.SentFinalResponse then begin
     Self.SendSimpleResponse(StatusCode, Description);
 
-    // cf RFC 3261, section 13.3.1.1. We resend periodic provisional responses
+    // cf. RFC 3261, section 13.3.1.1. We resend periodic provisional responses
     // to keep SIP proxies from cancelling a transaction that's taking a long
     // while to complete.
     Self.UA.ScheduleEvent(TIdSipInboundInviteSessionProgress,
