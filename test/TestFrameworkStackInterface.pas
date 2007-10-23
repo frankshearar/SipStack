@@ -152,8 +152,8 @@ end;
 //* TIdDataList Private methods ************************************************
 
 procedure TIdDataList.OnEvent(Stack: TIdSipStackInterface;
-                            Event: Cardinal;
-                            Data:  TIdEventData);
+                              Event: Cardinal;
+                              Data:  TIdEventData);
 begin
   Self.DataList.Add(Data);
 end;
