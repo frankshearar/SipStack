@@ -173,7 +173,7 @@ begin
 
     Self.MarkSentRequestCount;
 
-    AuthCreds := Self.CreateAuthorization(Self.Dispatcher.Transport.LastResponse);
+    AuthCreds := Self.CreateAuthorization(Self.LastSentResponse);
     try
       Action.Resend(AuthCreds);
       CheckRequestSent(Self.ClassName + ': qop=' + QopType + ': no re-issue of '
@@ -209,7 +209,7 @@ var
   ExpectedResponse: String;
   Qop:              TIdQopFunction;
 begin
-  Challenge := Self.Dispatcher.Transport.LastResponse.FirstHeader(AuthenticationHeaderName) as TIdSipAuthenticateHeader;
+  Challenge := Self.LastSentResponse.FirstHeader(AuthenticationHeaderName) as TIdSipAuthenticateHeader;
   Auth      := ReAttempt.FirstHeader(AuthorizationHeaderName) as TIdSipAuthorizationHeader;
 
   CheckNotEquals(InitialAttempt.LastHop.Branch,
@@ -491,7 +491,7 @@ begin
 
   Self.MarkSentRequestCount;
 
-  AuthCreds := Self.CreateAuthorization(Self.Dispatcher.Transport.LastResponse);
+  AuthCreds := Self.CreateAuthorization(Self.LastSentResponse);
   try
     Action.Resend(AuthCreds);
   finally
@@ -608,12 +608,12 @@ begin
   Action := Self.CreateAction;
   Self.ReceiveUnauthorized(ProxyAuthenticateHeader, '');
 
-  ProxyAuth := Self.CreateAuthorization(Self.Dispatcher.Transport.LastResponse);
+  ProxyAuth := Self.CreateAuthorization(Self.LastSentResponse);
   try
     Action.Resend(ProxyAuth);
     Self.ReceiveUnauthorized(WWWAuthenticateHeader, '');
 
-    UAAuth := Self.CreateAuthorization(Self.Dispatcher.Transport.LastResponse);
+    UAAuth := Self.CreateAuthorization(Self.LastSentResponse);
     try
       Self.MarkSentRequestCount;
       Action.Resend(UAAuth);
@@ -672,7 +672,7 @@ begin
   Action := Self.CreateAction;
 
   Self.ReceiveUnauthorized(WWWAuthenticateHeader, '');
-  AuthCreds := Self.CreateAuthorization(Self.Dispatcher.Transport.LastResponse);
+  AuthCreds := Self.CreateAuthorization(Self.LastSentResponse);
   try
     Self.MarkSentRequestCount;
     Action.Resend(AuthCreds);
@@ -711,7 +711,7 @@ begin
 
   Action := Self.Core.AddOutboundAction(TIdSipActionClass(ThrowawayAction.ClassType));
 
-  AuthCreds := Self.CreateAuthorization(Self.Dispatcher.Transport.LastResponse);
+  AuthCreds := Self.CreateAuthorization(Self.LastSentResponse);
   try
     Action.Resend(AuthCreds);
     Fail('Failed to reject attempt to Resend(AuthCreds) without having first '
@@ -732,7 +732,7 @@ begin
   Action := Self.CreateAction;
   Self.ReceiveUnauthorized(ProxyAuthenticateHeader, '');
 
-  ProxyAuth := Self.CreateAuthorization(Self.Dispatcher.Transport.LastResponse);
+  ProxyAuth := Self.CreateAuthorization(Self.LastSentResponse);
   try
     Self.MarkSentRequestCount;
 
