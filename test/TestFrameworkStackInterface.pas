@@ -15,7 +15,7 @@ type
   // for details). I'm hacked like this to provide access to the context-free
   // tests like Check, CheckEquals that TTestCase provides.
   TIdDataList = class(TTestCase,
-                    IIdSipStackInterface)
+                      IIdSipStackInterface)
   private
     DataList: TObjectList; // Holds all the data received from the stack
 
