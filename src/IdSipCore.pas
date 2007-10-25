@@ -169,6 +169,7 @@ type
                                      FoundBlock: TIdSipActionClosure;
                                      NotFoundBlock: TIdSipActionClosure);
     function  FindActionForGruu(const LocalGruu: String): TIdSipAction;
+    function  FindActionWithInitialRequest(Request: TIdSipRequest): TIdSipAction;
     function  InviteCount: Integer;
     function  OptionsCount: Integer;
     procedure Perform(Msg: TIdSipMessage; Block: TIdSipActionClosure; ClientAction: Boolean);
@@ -415,6 +416,7 @@ type
                               const Method: String): Boolean;
     function  IsMethodSupported(const Method: String): Boolean;
     function  IsSchemeAllowed(const Scheme: String): Boolean;
+    function  IsSourceOf(Request: TIdSipRequest): Boolean;
     function  KnownMethods: String;
     function  ModuleFor(Request: TIdSipRequest): TIdSipMessageModule; overload;
     function  ModuleFor(const Method: String): TIdSipMessageModule; overload;
@@ -1201,6 +1203,19 @@ begin
   end;
 end;
 
+function TIdSipActions.FindActionWithInitialRequest(Request: TIdSipRequest): TIdSipAction;
+var
+  I: Integer;
+begin
+  Result := nil;
+  for I := 0 to Self.Actions.Count - 1 do begin
+    if Self.ActionAt(I).InitialRequest.Equals(Request) then begin
+      Result := Self.ActionAt(I);
+      Break;
+    end;
+  end;
+end;
+
 function TIdSipActions.InviteCount: Integer;
 begin
   Result := Self.CountOf(MethodInvite);
@@ -1816,6 +1831,11 @@ end;
 function TIdSipAbstractCore.IsSchemeAllowed(const Scheme: String): Boolean;
 begin
   Result := Self.AllowedSchemeList.IndexOf(Scheme) >= 0;
+end;
+
+function TIdSipAbstractCore.IsSourceOf(Request: TIdSipRequest): Boolean;
+begin
+  Result := Assigned(Self.Actions.FindActionWithInitialRequest(Request));
 end;
 
 function TIdSipAbstractCore.KnownMethods: String;

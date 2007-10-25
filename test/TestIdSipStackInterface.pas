@@ -574,6 +574,17 @@ type
     procedure TestTrigger;
   end;
 
+  TestTIdIsSourceOfWait = class(TStackWaitTestCase)
+  private
+    Wait: TIdIsSourceOfWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTriggerIsSource;
+    procedure TestTriggerIsNotSource;
+  end;
+
 const
   DummySdp = 'v=0'#13#10
            + 'o=sc 1105373135 1105373135 IN IP4 %s'#13#10
@@ -634,6 +645,7 @@ begin
   Result.AddTest(TestTIdGetBindingsData.Suite);
   Result.AddTest(TestTIdSipStackReconfigureStackInterfaceWait.Suite);
   Result.AddTest(TestTIdGetBindingsWait.Suite);
+  Result.AddTest(TestTIdIsSourceOfWait.Suite);
 end;
 
 //******************************************************************************
@@ -4488,6 +4500,61 @@ begin
     end;
   finally
     E.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdIsSourceOfWait                                                      *
+//******************************************************************************
+//* TestTIdIsSourceOfWait Public methods ***************************************
+
+procedure TestTIdIsSourceOfWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Wait := TIdIsSourceOfWait.Create;
+  Self.Wait.StackID := Self.Stack.ID;
+end;
+
+procedure TestTIdIsSourceOfWait.TearDown;
+begin
+  Self.Wait.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdIsSourceOfWait Published methods ************************************
+
+procedure TestTIdIsSourceOfWait.TestTriggerIsSource;
+var
+  Received: TIdBooleanResultData;
+begin
+  Fail('ImplementMe');
+  Self.Stack.MakeCall(nil, nil, '', '', TIdSipRequest.DefaultMaxForwards);
+
+  Self.Wait.Trigger;
+  Self.ProcessAllPendingNotifications;
+  CheckNotificationReceived(TIdBooleanResultData, 'No notification about IsSourceOf received');
+end;
+
+procedure TestTIdIsSourceOfWait.TestTriggerIsNotSource;
+var
+  ArbitraryRequest: TIdSipRequest;
+  Received:         TIdBooleanResultData;
+begin
+  ArbitraryRequest := TIdSipTestResources.CreateBasicRequest;
+  try
+    Self.Wait.Request := ArbitraryRequest;
+
+    Self.Wait.Trigger;
+    Self.ProcessAllPendingNotifications;
+    CheckNotificationReceived(TIdBooleanResultData, 'No notification about IsSourceOf received');
+
+    Received := Self.LastEventOfType(TIdBooleanResultData) as TIdBooleanResultData;
+    Check(not Received.Result, 'Stack claims to be source of request');
+    CheckEquals(Self.Wait.ID, Received.ReferenceID, 'ReferenceID not set');
+  finally
+    ArbitraryRequest.Free;
   end;
 end;
 

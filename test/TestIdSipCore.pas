@@ -101,6 +101,9 @@ type
     DidntFindActionName: String;
     FoundActionName:     String;
     Options:             TIdSipRequest;
+
+    function CreateOutboundInvite: TIdSipAction;
+    function CreateOutboundOptions: TIdSipAction;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -117,6 +120,7 @@ type
     procedure TestFindActionAndPerformBlockNoMatch;
     procedure TestFindActionAndPerformOrBlock;
     procedure TestFindActionAndPerformOrBlockNoMatch;
+    procedure TestFindActionWithInitialRequest;
     procedure TestInviteCount;
     procedure TestRemoveObserver;
     procedure TestTerminateAllActions;
@@ -1532,6 +1536,28 @@ begin
   inherited TearDown;
 end;
 
+//* TestTIdSipActions Private methods ******************************************
+
+function TestTIdSipActions.CreateOutboundInvite: TIdSipAction;
+var
+  I: TIdSipOutboundInitialInvite;
+begin
+  I := Self.Actions.Add(TIdSipOutboundInitialInvite.Create(Self.Core)) as TIdSipOutboundInitialInvite;
+  I.Destination.Value := 'sip:case@fried-neurons.org';
+
+  Result := I;
+end;
+
+function TestTIdSipActions.CreateOutboundOptions: TIdSipAction;
+var
+  O: TIdSipOutboundOptions;
+begin
+  O := Self.Actions.Add(TIdSipOutboundOptions.Create(Self.Core)) as TIdSipOutboundOptions;
+  O.Server.Value := 'sip:case@fried-neurons.org';
+
+  Result := O;
+end;
+
 //* TestTIdSipActions Published methods ****************************************
 
 procedure TestTIdSipActions.TestActionCount;
@@ -1778,6 +1804,44 @@ begin
     end;
   finally
     Finder.Free;
+  end;
+end;
+
+procedure TestTIdSipActions.TestFindActionWithInitialRequest;
+var
+  InboundInvite,
+  InboundOptions,
+  OutboundInvite,
+  OutboundOptions: TIdSipAction;
+  SentInvite,
+  SentOptions,
+  UnknownInvite:   TIdSipRequest;
+begin
+  InboundInvite   := Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, Self.Binding));
+  InboundOptions  := Self.Actions.Add(TIdSipInboundOptions.CreateInbound(Self.Core, Self.Options, Self.Binding));
+  OutboundInvite  := Self.CreateOutboundInvite;
+  OutboundOptions := Self.CreateOutboundOptions;
+
+  Self.MarkSentRequestCount;
+  OutboundInvite.Send;
+  CheckRequestSent('No INVITE sent');
+  SentInvite := Self.LastSentRequest;
+
+  Self.MarkSentRequestCount;
+  OutboundOptions.Send;
+  CheckRequestSent('No OPTIONS sent');
+  SentOptions := Self.LastSentRequest;
+
+  Check(InboundInvite   = Self.Actions.FindActionWithInitialRequest(Self.Invite),  'Inbound INVITE not found');
+  Check(InboundOptions  = Self.Actions.FindActionWithInitialRequest(Self.Options), 'Inbound OPTIONS not found');
+  Check(OutboundInvite  = Self.Actions.FindActionWithInitialRequest(SentInvite),   'Outbound INVITE not found');
+  Check(OutboundOptions = Self.Actions.FindActionWithInitialRequest(SentOptions),  'Outbound Options not found');
+
+  UnknownInvite := TIdSipRequest.Create;
+  try
+    Check(nil = Self.Actions.FindActionWithInitialRequest(UnknownInvite), 'Action found for unknown request');
+  finally
+    UnknownInvite.Free;
   end;
 end;
 

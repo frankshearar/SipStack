@@ -776,6 +776,13 @@ type
     property ReferenceID: String read fReferenceID write fReferenceID;
   end;
 
+  TIdBooleanResultData = class(TIdAsynchronousMessageResultData)
+  private
+    fResult: Boolean;
+  public
+    property Result: Boolean read fResult write fResult;
+  end;
+
   TIdGetBindingsData = class(TIdAsynchronousMessageResultData)
   private
     fBindings: TIdSipLocations;
@@ -847,6 +854,23 @@ type
   TIdGetBindingsWait = class(TIdAsynchronousMessageWait)
   protected
     procedure FireWait(Stack: TIdSipStackInterface); override;
+  end;
+
+  // Use me to find out if the stack identified by StackID is the source of a
+  // request. That is, did an outbound action created by the stack send this
+  // request?
+  TIdIsSourceOfWait = class(TIdAsynchronousMessageWait)
+  private
+    fRequest: TIdSipRequest;
+
+    procedure SetRequest(Value: TIdSipRequest);
+  protected
+    procedure FireWait(Stack: TIdSipStackInterface); override;
+  public
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    property Request: TIdSipRequest read fRequest write SetRequest;
   end;
 
   // Raise me whenever someone tries to execute an action with a handle
@@ -3795,5 +3819,49 @@ begin
     Data.Free;
   end;
 end;
+
+//******************************************************************************
+//* TIdIsSourceOfWait                                                          *
+//******************************************************************************
+//* TIdIsSourceOfWait Public methods *******************************************
+
+constructor TIdIsSourceOfWait.Create;
+begin
+  inherited Create;
+
+  Self.fRequest := TIdSipRequest.Create;
+end;
+
+destructor TIdIsSourceOfWait.Destroy;
+begin
+  Self.fRequest.Free;
+
+  inherited Destroy;
+end;
+
+//* TIdIsSourceOfWait Protected methods ****************************************
+
+procedure TIdIsSourceOfWait.FireWait(Stack: TIdSipStackInterface);
+var
+  Result: TIdBooleanResultData;
+begin
+  Result := TIdBooleanResultData.Create;
+  try
+    Result.ReferenceID := Self.ID;
+    Result.Result      := Stack.UserAgent.IsSourceOf(Self.Request);
+
+    Stack.NotifyOfAsyncMessageResult(Result);
+  finally
+    Result.Free;
+  end;
+end;
+
+//* TIdIsSourceOfWait Private methods ******************************************
+
+procedure TIdIsSourceOfWait.SetRequest(Value: TIdSipRequest);
+begin
+  Self.fRequest.Assign(Value);
+end;
+
 
 end.
