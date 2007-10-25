@@ -79,13 +79,14 @@ type
     procedure OnReferral(Session: TIdSipSession;
                          Refer: TIdSipRequest;
                          Binding: TIdSipConnectionBindings);
+    procedure ReceiveBye(Dialog: TIdSipDialog);
+  protected
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport;
-                            Binding: TIdSipConnectionBindings);
+                            Binding: TIdSipConnectionBindings); override;
     procedure OnSendResponse(Response: TIdSipResponse;
                              Sender: TIdSipTransport;
-                             Binding: TIdSipConnectionBindings);
-    procedure ReceiveBye(Dialog: TIdSipDialog);
+                             Binding: TIdSipConnectionBindings); override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -573,6 +574,25 @@ begin
   inherited TearDown;
 end;
 
+//* TestTIdSipUserAgent Protected methods **************************************
+
+procedure TestTIdSipUserAgent.OnSendRequest(Request: TIdSipRequest;
+                                            Sender: TIdSipTransport;
+                                            Binding: TIdSipConnectionBindings);
+begin
+  inherited OnSendRequest(Request, Sender, Binding);
+end;
+
+procedure TestTIdSipUserAgent.OnSendResponse(Response: TIdSipResponse;
+                                             Sender: TIdSipTransport;
+                                             Binding: TIdSipConnectionBindings);
+begin
+  inherited OnSendResponse(Response, Sender, Binding);
+
+  if (Response.StatusCode = SIPSessionProgress) then
+    Self.SendEvent.SetEvent;
+end;
+
 //* TestTIdSipUserAgent Private methods ****************************************
 
 procedure TestTIdSipUserAgent.CheckCreateRequest(Dest: TIdSipToHeader;
@@ -707,20 +727,6 @@ procedure TestTIdSipUserAgent.OnReferral(Session: TIdSipSession;
                                          Refer: TIdSipRequest;
                                          Binding: TIdSipConnectionBindings);
 begin
-end;
-
-procedure TestTIdSipUserAgent.OnSendRequest(Request: TIdSipRequest;
-                                            Sender: TIdSipTransport;
-                                            Binding: TIdSipConnectionBindings);
-begin
-end;
-
-procedure TestTIdSipUserAgent.OnSendResponse(Response: TIdSipResponse;
-                                             Sender: TIdSipTransport;
-                                             Binding: TIdSipConnectionBindings);
-begin
-  if (Response.StatusCode = SIPSessionProgress) then
-    Self.SendEvent.SetEvent;
 end;
 
 procedure TestTIdSipUserAgent.ReceiveBye(Dialog: TIdSipDialog);
