@@ -149,8 +149,6 @@ type
   TIdDebugTimerQueue = class(TIdTimerQueue)
   private
     fTriggerImmediateEvents: Boolean;
-
-    function HasScheduledEvent(Event: TIdWait): Boolean;
   public
     procedure AddEvent(MillisecsWait: Cardinal;
                        Event: TIdWait); override;
@@ -724,7 +722,7 @@ end;
 
 function TIdDebugTimerQueue.ScheduledEvent(Event: TIdWait): Boolean;
 begin
-  Result := Self.HasScheduledEvent(Event);
+  Result := Self.IndexOfEvent(Event) <> ItemNotFoundIndex;
 end;
 
 function TIdDebugTimerQueue.SecondLastEventScheduled: TIdWait;
@@ -815,13 +813,6 @@ begin
   // Expose for debugging purposes.
 
   inherited UnlockTimer;
-end;
-
-//* TIdDebugTimerQueue Protected methods ***************************************
-
-function TIdDebugTimerQueue.HasScheduledEvent(Event: TIdWait): Boolean;
-begin
-  Result := Self.IndexOfEvent(Event) <> ItemNotFoundIndex;
 end;
 
 //******************************************************************************
