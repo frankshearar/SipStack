@@ -1772,7 +1772,7 @@ begin
 
   // ARG! Why do they make Length return an INTEGER? And WHY Abs() too?
   CheckEquals(Self.RequestCount + Cardinal(Length(Contacts)),
-              Self.Dispatcher.Transport.SentRequestCount,
+              Self.SentRequestCount,
               ClassName + ' didn''t attempt to contact all Contacts: ' + Self.FailReason);
 
   Self.MarkSentRequestCount;
@@ -1780,7 +1780,7 @@ begin
 
   ExpectedResponse := TIdSipResponse.Create;
   try
-    ExpectedResponse.Assign(Self.Dispatcher.Transport.LastResponse);
+    ExpectedResponse.Assign(Self.LastSentResponse);
 
     Self.ReceiveOkFrom(Self.SentRequestAt(FirstRedirect),  Contacts[0]);
 
@@ -1865,7 +1865,7 @@ begin
 
   // ARG! Why do they make Length return an INTEGER? And WHY Abs() too?
   CheckEquals(Self.RequestCount + Cardinal(Length(Contacts)),
-              Self.Dispatcher.Transport.SentRequestCount,
+              Self.SentRequestCount,
               ClassName + ' didn''t attempt to contact all Contacts: ' + Self.FailReason);
 end;
 

@@ -1316,8 +1316,8 @@ begin
     //
     // We also use .Match() instead of .Equals() because the transport layer can
     // add a received param to the topmost Via.
-    Self.Dispatcher.Transport.SecondLastRequest.ToHeader.Tag := Self.Dispatcher.Transport.LastResponse.ToHeader.Tag;
-    Check(Self.Dispatcher.Transport.SecondLastRequest.Match(L.SubscriptionParam.InitialRequest),
+    Self.SecondLastSentRequest.ToHeader.Tag := Self.LastSentResponse.ToHeader.Tag;
+    Check(Self.SecondLastSentRequest.Match(L.SubscriptionParam.InitialRequest),
           'Subscription param');
     Check(L.UserAgentParam = Self.Core,
           'UserAgent param');
@@ -2823,7 +2823,7 @@ var
   RemoteDialog: TIdSipDialog;
 begin
   RemoteDialog := TIdSipDialog.CreateInboundDialog(Self.Action.InitialRequest,
-                                                   Self.Dispatcher.Transport.LastResponse,
+                                                   Self.LastSentResponse,
                                                    false);
   try
     Invite := Self.Core.InviteModule.CreateReInvite(RemoteDialog, '', '');
@@ -2899,7 +2899,7 @@ begin
   Self.MarkSentRequestCount;
   Self.MarkSentResponseCount;
   Self.ReceiveRefreshingSubscribe(Self.Action,
-                                  Self.Dispatcher.Transport.LastResponse,
+                                  Self.LastSentResponse,
                                   ArbExpiresValue);
 
   CheckResponseSent('No response sent');
@@ -2999,7 +2999,7 @@ begin
   Self.MarkSentRequestCount;
   Self.MarkSentResponseCount;
   Self.ReceiveRefreshingSubscribe(Self.Action,
-                                  Self.Dispatcher.Transport.LastResponse,
+                                  Self.LastSentResponse,
                                   0);
   CheckResponseSent('No response sent');
   CheckEquals(SIPOK,
@@ -3221,7 +3221,7 @@ var
   Refresh: TIdSipRequest;
 begin
   Refresh := Self.CreateRefresh(Self.Action,
-                                Self.Dispatcher.Transport.LastResponse,
+                                Self.LastSentResponse,
                                 1000);
   try
     Check(Self.Action.Match(Refresh),
@@ -3378,7 +3378,7 @@ begin
   Self.MarkSentRequestCount;
 
   Self.ReceiveRefreshingSubscribe(Self.Action,
-                                  Self.Dispatcher.Transport.LastResponse,
+                                  Self.LastSentResponse,
                                   Self.Package.MinimumExpiryTime - 1);
 
   CheckResponseSent('No response sent');
@@ -3765,7 +3765,7 @@ procedure TestTIdSipOutboundSubscriptionBase.EstablishSubscription(Sub: TIdSipOu
 begin
   Self.ReceiveOkFor(Sub, Self.ArbExpiresValue);
   Self.ReceiveNotify(Sub.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateActive);
 end;
 
@@ -3848,7 +3848,7 @@ end;
 procedure TestTIdSipOutboundSubscriptionBase.ReceiveNotifyTerminated(Sub: TIdSipOutboundSubscription);
 begin
   Self.ReceiveNotify(Sub.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateTerminated,
                      EventReasonRejected);
 end;
@@ -4055,7 +4055,7 @@ begin
       + ': No subscription''s established until a NOTIFY says so');
 
   Self.ReceiveNotify(Sub.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateActive);
 
   Check(Self.SubscriptionEstablished,
@@ -4083,7 +4083,7 @@ begin
   Self.MarkSentResponseCount;
 
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateActive);
 
   Check(Self.SubscriptionNotified,
@@ -4091,7 +4091,7 @@ begin
 
   // We would use .Equals() here, but remember that the transport could alter
   // the message, putting a received param on the topmost Via header.
-  Check(Self.ReceivedNotify.Match(Self.Dispatcher.Transport.LastRequest),
+  Check(Self.ReceivedNotify.Match(Self.LastSentRequest),
         Self.ClassName + ': Wrong NOTIFY in the notification');
 
   CheckResponseSent(Self.ClassName + ': No response to the NOTIFY sent');
@@ -4137,7 +4137,7 @@ end;
 procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyDeactivated;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateTerminated,
                      EventReasonDeactivated);
 
@@ -4147,7 +4147,7 @@ end;
 procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyDeactivatedWithRetryAfter;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateTerminated,
                      EventReasonDeactivated,
                      Self.ArbRetryAfterValue);
@@ -4158,7 +4158,7 @@ end;
 procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyGiveUp;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateTerminated,
                      EventReasonGiveUp);
 
@@ -4168,7 +4168,7 @@ end;
 procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyGiveUpWithRetryAfter;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateTerminated,
                      EventReasonGiveUp);
 
@@ -4178,7 +4178,7 @@ end;
 procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyWithNoReason;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateTerminated);
 
   Self.CheckTerminatedSubscriptionWithNoResubscribe('no reason');
@@ -4188,7 +4188,7 @@ end;
 procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyWithNoReasonAndRetryAfter;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateTerminated,
                      '',
                      Self.ArbRetryAfterValue);
@@ -4200,7 +4200,7 @@ end;
 procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyNoResource;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateTerminated,
                      EventReasonNoResource);
 
@@ -4211,7 +4211,7 @@ end;
 procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyNoResourceWithRetryAfter;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateTerminated,
                      EventReasonNoResource);
 
@@ -4222,7 +4222,7 @@ end;
 procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyProbation;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateTerminated,
                      EventReasonProbation);
 
@@ -4233,7 +4233,7 @@ end;
 procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyProbationWithRetryAfter;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateTerminated,
                      EventReasonProbation,
                      Self.ArbRetryAfterValue);
@@ -4245,7 +4245,7 @@ end;
 procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyRejected;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateTerminated,
                      EventReasonRejected);
 
@@ -4256,7 +4256,7 @@ end;
 procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyRejectedWithRetryAfter;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateTerminated,
                      EventReasonRejected);
 
@@ -4267,7 +4267,7 @@ end;
 procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyTimeout;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateTerminated,
                      EventReasonTimeout);
 
@@ -4277,7 +4277,7 @@ end;
 procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyTimeoutWithRetryAfter;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateTerminated,
                      EventReasonTimeout,
                      Self.ArbRetryAfterValue);
@@ -4289,7 +4289,7 @@ end;
 procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyWithUnknownReason;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateTerminated,
                      Self.UnknownReason);
 
@@ -4300,7 +4300,7 @@ end;
 procedure TestTIdSipOutboundSubscriptionBase.TestReceiveTerminatingNotifyWithUnknownReasonAndRetryAfter;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateTerminated,
                      Self.UnknownReason,
                      Self.ArbRetryAfterValue);
@@ -4327,7 +4327,7 @@ begin
 
   // ARG! Why do they make Length return an INTEGER? And WHY Abs() too?
   CheckEquals(Self.RequestCount + Cardinal(Length(Contacts)),
-              Self.Dispatcher.Transport.SentRequestCount,
+              Self.SentRequestCount,
               ClassName + ' didn''t attempt to contact all Contacts: ' + Self.FailReason);
 end;
 
@@ -4695,7 +4695,7 @@ end;
 procedure TestTIdSipOutboundSubscription.TestReceiveActiveNotifyWithExpires;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateActive,
                      '',
                      0,
@@ -4710,7 +4710,7 @@ begin
   Self.MarkSentResponseCount;
 
   Self.ReceiveNotifyNoAuth(Self.Subscription.InitialRequest,
-                           Self.Dispatcher.Transport.LastResponse,
+                           Self.LastSentResponse,
                            SubscriptionSubstateActive);
 
   CheckResponseSent('No response to the NOTIFY sent');
@@ -4727,7 +4727,7 @@ begin
   Self.MarkSentResponseCount;
 
   Self.ReceiveNotifyWrongAuth(Self.Subscription.InitialRequest,
-                             Self.Dispatcher.Transport.LastResponse,
+                             Self.LastSentResponse,
                              SubscriptionSubstateActive);
 
   CheckResponseSent('No response to the NOTIFY sent');
@@ -4741,7 +4741,7 @@ end;
 procedure TestTIdSipOutboundSubscription.TestReceivePendingNotifyWithExpires;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstatePending,
                      '',
                      0,
@@ -5160,7 +5160,7 @@ end;
 procedure TestTIdSipOutboundReferral.TestReceiveTerminatingNotifyDeactivated;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateTerminated,
                      EventReasonDeactivated);
 
@@ -5171,7 +5171,7 @@ end;
 procedure TestTIdSipOutboundReferral.TestReceiveTerminatingNotifyGiveUp;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateTerminated,
                      EventReasonGiveUp);
 
@@ -5182,7 +5182,7 @@ end;
 procedure TestTIdSipOutboundReferral.TestReceiveTerminatingNotifyGiveUpWithRetryAfter;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateTerminated,
                      EventReasonGiveUp);
 
@@ -5193,7 +5193,7 @@ end;
 procedure TestTIdSipOutboundReferral.TestReceiveTerminatingNotifyWithNoReason;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateTerminated);
 
   Self.CheckTerminatedSubscriptionWithNoResubscribe('no reason');
@@ -5203,7 +5203,7 @@ end;
 procedure TestTIdSipOutboundReferral.TestReceiveTerminatingNotifyWithNoReasonAndRetryAfter;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateTerminated,
                      '',
                      Self.ArbRetryAfterValue);
@@ -5215,7 +5215,7 @@ end;
 procedure TestTIdSipOutboundReferral.TestReceiveTerminatingNotifyProbation;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateTerminated,
                      EventReasonProbation);
 
@@ -5226,7 +5226,7 @@ end;
 procedure TestTIdSipOutboundReferral.TestReceiveTerminatingNotifyProbationWithRetryAfter;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateTerminated,
                      EventReasonProbation,
                      Self.ArbRetryAfterValue);
@@ -5238,7 +5238,7 @@ end;
 procedure TestTIdSipOutboundReferral.TestReceiveTerminatingNotifyTimeout;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateTerminated,
                      EventReasonTimeout);
 
@@ -5249,7 +5249,7 @@ end;
 procedure TestTIdSipOutboundReferral.TestReceiveTerminatingNotifyTimeoutWithRetryAfter;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateTerminated,
                      EventReasonTimeout,
                      Self.ArbRetryAfterValue);
@@ -5261,7 +5261,7 @@ end;
 procedure TestTIdSipOutboundReferral.TestReceiveTerminatingNotifyWithUnknownReason;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateTerminated,
                      Self.UnknownReason);
 
@@ -5272,7 +5272,7 @@ end;
 procedure TestTIdSipOutboundReferral.TestReceiveTerminatingNotifyWithUnknownReasonAndRetryAfter;
 begin
   Self.ReceiveNotify(Self.Subscription.InitialRequest,
-                     Self.Dispatcher.Transport.LastResponse,
+                     Self.LastSentResponse,
                      SubscriptionSubstateTerminated,
                      Self.UnknownReason,
                      Self.ArbRetryAfterValue);
