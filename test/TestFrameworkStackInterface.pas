@@ -110,11 +110,11 @@ type
   // Application.ProcessMessages before the test can know about the response.
   TStackInterfaceTestCase = class(TTestCase)
   private
-    DataList:      TIdWindowAttachedDataList;
-    TransportTest: TTransportChecking;
+    DataList: TIdWindowAttachedDataList;
   protected
     MockTransport: TIdSipMockTransport;
     TimerQueue:    TIdDebugTimerQueue;
+    TransportTest: TTransportChecking;
     UI:            TCustomForm;
 
     procedure CheckNotificationReceived(EventType: TIdEventDataClass; Msg: String);
