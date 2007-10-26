@@ -780,6 +780,8 @@ type
   private
     fResult: Boolean;
   public
+    procedure Assign(Src: TPersistent); override;
+
     property Result: Boolean read fResult write fResult;
   end;
 
@@ -3644,6 +3646,24 @@ end;
 function TIdAsynchronousMessageResultData.EventName: String;
 begin
   Result := EventNames(CM_ASYNC_MSG_RESULT);
+end;
+
+//******************************************************************************
+//* TIdBooleanResultData                                                       *
+//******************************************************************************
+//* TIdBooleanResultData Public methods ****************************************
+
+procedure TIdBooleanResultData.Assign(Src: TPersistent);
+var
+  Other: TIdBooleanResultData;
+begin
+  inherited Assign(Src);
+
+  if (Src is TIdBooleanResultData) then begin
+    Other := Src as TIdBooleanResultData;
+
+    Self.Result := Other.Result;
+  end;
 end;
 
 //******************************************************************************
