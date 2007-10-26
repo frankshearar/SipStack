@@ -257,7 +257,7 @@ const
 implementation
 
 uses
-  IdException, IdRegisteredObject, IdSipDns;
+  IdException, IdIndyUtils, IdRegisteredObject, IdSipDns;
 
 //******************************************************************************
 //* TIdSipTCPTransport                                                         *
@@ -320,7 +320,12 @@ procedure TIdSipTCPTransport.Start;
 begin
   inherited Start;
 
-  Self.Transport.Active := true;
+  try
+    Self.Transport.Active := true;
+  except
+    on E: EIdCouldNotBindSocket do
+      RaiseCouldNotBindSocketException(Self.Transport.Bindings);
+  end;
 end;
 
 procedure TIdSipTCPTransport.Stop;

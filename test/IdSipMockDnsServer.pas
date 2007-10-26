@@ -46,6 +46,9 @@ type
 
 implementation
 
+uses
+  IdIndyUtils;
+
 //******************************************************************************
 //* TIdSipMockDnsServer                                                        *
 //******************************************************************************
@@ -405,7 +408,12 @@ end;
 
 procedure TIdSipMockDnsServer.Start;
 begin
-  Self.NameServer.Active := true;
+  try
+    Self.NameServer.Active := true;
+  except
+    on EIdCouldNotBindSocket do
+      RaiseCouldNotBindSocketException(Self.NameServer.Bindings);
+  end;
 end;
 
 procedure TIdSipMockDnsServer.Stop;

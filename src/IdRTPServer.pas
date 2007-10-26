@@ -103,6 +103,9 @@ type
 
 implementation
 
+uses
+  IdIndyUtils;
+
 //******************************************************************************
 //* TIdRTPServer                                                               *
 //******************************************************************************
@@ -279,8 +282,19 @@ end;
 
 procedure TIdRTPServer.SetActive(Value: Boolean);
 begin
-  Self.RTCP.Active := Value;
-  Self.RTP.Active  := Value;
+  try
+    Self.RTCP.Active := Value;
+  except
+    on E: EIdCouldNotBindSocket do
+      RaiseCouldNotBindSocketException(Self.RTCP.Bindings);
+  end;
+
+  try
+    Self.RTP.Active := Value;
+  except
+    on E: EIdCouldNotBindSocket do
+      RaiseCouldNotBindSocketException(Self.RTP.Bindings);
+  end;
 end;
 
 procedure TIdRTPServer.SetAddress(Value: String);
