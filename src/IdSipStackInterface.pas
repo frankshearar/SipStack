@@ -3811,10 +3811,16 @@ var
 begin
   Data := TIdGetBindingsData.Create;
   try
-    E := Stack.AttachExtension(TIdSipNetworkExtension) as TIdSipNetworkExtension;
-    E.GetBindings(Data.Bindings);
+    Data.ReferenceID := Self.ID;
 
-    Stack.NotifyOfAsyncMessageResult(Data);
+    E := Stack.AttachExtension(TIdSipNetworkExtension) as TIdSipNetworkExtension;
+    try
+      E.GetBindings(Data.Bindings);
+
+      Stack.NotifyOfAsyncMessageResult(Data);
+    finally
+      E.Free;
+    end;
   finally
     Data.Free;
   end;

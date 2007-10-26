@@ -4478,7 +4478,7 @@ var
   E:        TIdSipNetworkExtension;
   Expected: TIdSipLocations;
   I:        Integer;
-  Received: TIdSipLocations;
+  Received: TIdGetBindingsData;
 begin
   Self.Wait.Trigger;
   Self.ProcessAllPendingNotifications;
@@ -4490,11 +4490,13 @@ begin
     try
       E.GetBindings(Expected);
 
-      Received := (Self.LastEventOfType(TIdGetBindingsData) as TIdGetBindingsData).Bindings;
+      Received := Self.LastEventOfType(TIdGetBindingsData) as TIdGetBindingsData;
 
-      CheckEquals(Expected.Count, Received.Count, 'Unexpected number of bindings');
+      CheckEquals(Expected.Count, Received.Bindings.Count, 'Unexpected number of bindings');
       for I := 0 to Expected.Count - 1 do
-        CheckEquals(Expected[I].AsString, Received[I].AsString, 'Binding #' + IntToStr(I));
+        CheckEquals(Expected[I].AsString, Received.Bindings[I].AsString, 'Binding #' + IntToStr(I));
+
+      CheckEquals(Self.Wait.ID, Received.ReferenceID, 'ReferenceID not set');
     finally
       Expected.Free;
     end;
