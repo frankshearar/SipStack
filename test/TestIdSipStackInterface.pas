@@ -540,6 +540,17 @@ type
     procedure TestCopy;
   end;
 
+  TestTIdBooleanResultData = class(TTestCase)
+  private
+    Data: TIdBooleanResultData;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAsString;
+    procedure TestCopy;
+  end;
+
   TStackWaitTestCase = class(TStackInterfaceTestCase)
   protected
     Conf:       TStrings;
@@ -576,6 +587,8 @@ type
 
   TestTIdIsSourceOfWait = class(TStackWaitTestCase)
   private
+    Dest: TIdSipAddressHeader;
+    From: TIdSipAddressHeader;
     Wait: TIdIsSourceOfWait;
   public
     procedure SetUp; override;
@@ -643,6 +656,7 @@ begin
   Result.AddTest(TestTIdStackReconfiguredData.Suite);
   Result.AddTest(TestTIdAsynchronousMessageResultData.Suite);
   Result.AddTest(TestTIdGetBindingsData.Suite);
+  Result.AddTest(TestTIdBooleanResultData.Suite);
   Result.AddTest(TestTIdSipStackReconfigureStackInterfaceWait.Suite);
   Result.AddTest(TestTIdGetBindingsWait.Suite);
   Result.AddTest(TestTIdIsSourceOfWait.Suite);
@@ -748,6 +762,8 @@ begin
   Check(T is TIdSipMockTransport, 'Unexpected transport type (' + T.ClassName + ') running on ' + Self.LocalAddress + ':' + IntToStr(Self.LocalPort));
   Self.MockTransport := T as TIdSipMockTransport;
   CheckEquals(Self.LocalAddress, Self.MockTransport.FirstIPBound, 'DebugTransportRegistry messed up finding MockTransport');
+  Self.MockTransport.AddTransportListener(Self.TransportTest);
+  Self.MockTransport.AddTransportSendingListener(Self.TransportTest);
 
   // The registrar URI MUST NOT be that of RemoteUA, because RemoteUA will not
   // process REGISTER messages.
@@ -2405,15 +2421,19 @@ var
   N:  TIdSipStackInterfaceNullExtension;
 begin
   N := Self.Iface.AttachExtension(TIdSipStackInterfaceNullExtension) as TIdSipStackInterfaceNullExtension;
-  Check(N.UA.UsesModule(TIdSipRegisterModule), 'UA doesn''t support REGISTER method');
-  DB := (N.UA.ModuleFor(TIdSipRegisterModule) as TIdSipRegisterModule).BindingDB as TIdSipMockBindingDatabase;
+  try
+    Check(N.UA.UsesModule(TIdSipRegisterModule), 'UA doesn''t support REGISTER method');
+    DB := (N.UA.ModuleFor(TIdSipRegisterModule) as TIdSipRegisterModule).BindingDB as TIdSipMockBindingDatabase;
 
-  Self.ReceiveRegister(Self.Target, Self.Contact);
+    Self.ReceiveRegister(Self.Target, Self.Contact);
 
-  DB.FailBindingsFor := true;
+    DB.FailBindingsFor := true;
 
-  Self.Reg.TargetsFor(Self.Target, Self.Contacts);
-  Check(Self.Contacts.IsEmpty, 'TargetsFor returned targets when the DB failed');
+    Self.Reg.TargetsFor(Self.Target, Self.Contacts);
+    Check(Self.Contacts.IsEmpty, 'TargetsFor returned targets when the DB failed');
+  finally
+    N.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -4336,21 +4356,76 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdBooleanResultData                                                   *
+//******************************************************************************
+//* TestTIdBooleanResultData Public methods ************************************
+
+procedure TestTIdBooleanResultData.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Data := TIdBooleanResultData.Create;
+  Self.Data.Handle := $decafbad;
+  Self.Data.Result := true;
+  Self.Data.ReferenceID := 'badf00d';
+end;
+
+procedure TestTIdBooleanResultData.TearDown;
+begin
+  Self.Data.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdBooleanResultData Published methods *********************************
+
+procedure TestTIdBooleanResultData.TestAsString;
+begin
+end;
+
+procedure TestTIdBooleanResultData.TestCopy;
+var
+  Copy: TIdBooleanResultData;
+begin
+  Copy := Self.Data.Copy as TIdBooleanResultData;
+  try
+    CheckEquals(IntToHex(Self.Data.Handle, 8),
+                IntToHex(Copy.Handle, 8),
+                'Handle');
+    CheckEquals(Self.Data.Result, Copy.Result, 'Result');
+    CheckEquals(Self.Data.ReferenceID, Copy.ReferenceID, 'ReferenceID');
+  finally
+    Copy.Free;
+  end;
+end;
+
+//******************************************************************************
 //* TStackWaitTestCase                                                         *
 //******************************************************************************
 //* TStackWaitTestCase Public methods ******************************************
 
 procedure TStackWaitTestCase.SetUp;
+const
+  LocalHost = '127.0.0.1';
+  LocalPort = 5060;
+var
+  T: TIdSipTransport;
 begin
   inherited SetUp;
 
   TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipUdpTransport);
 
   Self.Conf := TStringList.Create;
-  Self.Conf.Add('Listen: UDP 127.0.0.1:5060');
+  Self.Conf.Add('Listen: UDP ' + LocalHost + ':' + IntToStr(LocalPort));
+  Self.Conf.Add('NameServer: MOCK');
 
   Self.Stack := TIdSipStackInterface.Create(Self.UI.Handle, Self.TimerQueue, Self.Conf);
   Self.Stack.Resume;
+
+  T := TIdSipDebugTransportRegistry.TransportRunningOn(LocalHost, LocalPort);
+  Check(nil <> T, 'No transport running on ' + LocalHost + ':' + IntToStr(LocalPort));
+  T.AddTransportListener(Self.TransportTest);
+  T.AddTransportSendingListener(Self.TransportTest);
 end;
 
 procedure TStackWaitTestCase.TearDown;
@@ -4514,6 +4589,12 @@ procedure TestTIdIsSourceOfWait.SetUp;
 begin
   inherited SetUp;
 
+  Self.Dest := TIdSipToHeader.Create;
+  Self.From := TIdSipFromHeader.Create;
+
+  Self.Dest.Value := 'sip:case@fried-neurons.org';
+  Self.From.Value := 'sip:wintermute@tessier-ashpool.co.luna';
+
   Self.Wait := TIdIsSourceOfWait.Create;
   Self.Wait.StackID := Self.Stack.ID;
 end;
@@ -4531,12 +4612,19 @@ procedure TestTIdIsSourceOfWait.TestTriggerIsSource;
 var
   Received: TIdBooleanResultData;
 begin
-  Fail('ImplementMe');
-  Self.Stack.MakeCall(nil, nil, '', '', TIdSipRequest.DefaultMaxForwards);
+  Self.MarkSentRequestCount;
+  Self.Stack.Send(Self.Stack.MakeCall(Self.From, Self.Dest, '', '', TIdSipRequest.DefaultMaxForwards));
+  Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
+  CheckRequestSent('No INVITE sent');
+  Self.Wait.Request := Self.LastSentRequest;
 
   Self.Wait.Trigger;
   Self.ProcessAllPendingNotifications;
   CheckNotificationReceived(TIdBooleanResultData, 'No notification about IsSourceOf received');
+
+  Received := Self.LastEventOfType(TIdBooleanResultData) as TIdBooleanResultData;
+  Check(Received.Result, 'Stack claims to NOT be source of request');
+  CheckEquals(Self.Wait.ID, Received.ReferenceID, 'ReferenceID not set');
 end;
 
 procedure TestTIdIsSourceOfWait.TestTriggerIsNotSource;
