@@ -613,7 +613,7 @@ implementation
 uses
   IdRandom, IdSimpleParser, IdSipCore, IdSipDns, IdSipLocation,
   IdSipMockBindingDatabase, IdSipRegistration, IdSipTransport,
-  IdSipUdpTransport, IdSocketHandle, IdUdpServer, SysUtils, TestMessages;
+  IdSipUdpTransport, SysUtils, TestMessages;
 
 type
   TIdSipStackInterfaceNullExtension = class(TIdSipStackInterfaceExtension)
@@ -762,8 +762,6 @@ begin
   Check(T is TIdSipMockTransport, 'Unexpected transport type (' + T.ClassName + ') running on ' + Self.LocalAddress + ':' + IntToStr(Self.LocalPort));
   Self.MockTransport := T as TIdSipMockTransport;
   CheckEquals(Self.LocalAddress, Self.MockTransport.FirstIPBound, 'DebugTransportRegistry messed up finding MockTransport');
-  Self.MockTransport.AddTransportListener(Self.TransportTest);
-  Self.MockTransport.AddTransportSendingListener(Self.TransportTest);
 
   // The registrar URI MUST NOT be that of RemoteUA, because RemoteUA will not
   // process REGISTER messages.
@@ -4413,7 +4411,7 @@ var
 begin
   inherited SetUp;
 
-  TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipUdpTransport);
+  TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipMockUdpTransport);
 
   Self.Conf := TStringList.Create;
   Self.Conf.Add('Listen: UDP ' + LocalHost + ':' + IntToStr(LocalPort));
@@ -4424,8 +4422,7 @@ begin
 
   T := TIdSipDebugTransportRegistry.TransportRunningOn(LocalHost, LocalPort);
   Check(nil <> T, 'No transport running on ' + LocalHost + ':' + IntToStr(LocalPort));
-  T.AddTransportListener(Self.TransportTest);
-  T.AddTransportSendingListener(Self.TransportTest);
+  Self.MockTransport := T as TIdSipMockTransport;
 end;
 
 procedure TStackWaitTestCase.TearDown;
@@ -4462,29 +4459,8 @@ end;
 procedure TestTIdSipStackReconfigureStackInterfaceWait.CheckUdpServerOnPort(const Host: String;
                                                                             Port: Cardinal;
                                                                             const Msg: String);
-var
-  Binding: TIdSocketHandle;
-  Server:  TIdUdpServer;
 begin
-  try
-    Server := TIdUdpServer.Create(nil);
-    try
-      Binding := Server.Bindings.Add;
-      Binding.IP    := Host;
-      Binding.Port  := Port;
-      Server.Active := true;
-      try
-        // Do nothing
-      finally
-        Server.Active := false;
-      end;
-    finally
-      Server.Free;
-    end;
-    Fail('No UDP server running on ' + Host + ': ' + IntToStr(Port) + '; ' + Msg);
-  except
-    on EIdCouldNotBindSocket do;
-  end;
+  Check(nil <> TIdSipDebugTransportRegistry.TransportRunningOn(Host, Port), 'No UDP server running on ' + Host + ':' + IntToStr(Port) + '; Msg');
 end;
 
 //* TestTIdSipStackReconfigureStackInterfaceWait Published methods *************

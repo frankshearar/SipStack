@@ -110,12 +110,14 @@ type
   // Application.ProcessMessages before the test can know about the response.
   TStackInterfaceTestCase = class(TTestCase)
   private
-    DataList: TIdWindowAttachedDataList;
+    DataList:       TIdWindowAttachedDataList;
+    fMockTransport: TIdSipMockTransport;
+    TransportTest:  TTransportChecking;
+
+    procedure SetMockTransport(Value: TIdSipMockTransport);
   protected
-    MockTransport: TIdSipMockTransport;
-    TimerQueue:    TIdDebugTimerQueue;
-    TransportTest: TTransportChecking;
-    UI:            TCustomForm;
+    TimerQueue: TIdDebugTimerQueue;
+    UI:         TCustomForm;
 
     procedure CheckNotificationReceived(EventType: TIdEventDataClass; Msg: String);
     procedure CheckRequestSent(Msg: String);
@@ -130,6 +132,8 @@ type
     procedure ReceiveRegister(AOR, Contact: String);
     function  SecondLastEventData: TIdEventData;
     function  ThirdLastEventData: TIdEventData;
+
+    property MockTransport: TIdSipMockTransport read fMockTransport write SetMockTransport;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -483,6 +487,15 @@ end;
 function TStackInterfaceTestCase.ThirdLastEventData: TIdEventData;
 begin
   Result := Self.DataList.ThirdLastEventData;
+end;
+
+//* TStackInterfaceTestCase Private methods ************************************
+
+procedure TStackInterfaceTestCase.SetMockTransport(Value: TIdSipMockTransport);
+begin
+  Self.fMockTransport := Value;
+  Self.fMockTransport.AddTransportListener(Self.TransportTest);
+  Self.fMockTransport.AddTransportSendingListener(Self.TransportTest);
 end;
 
 end.
