@@ -8,25 +8,11 @@ uses
   TestFrameworkSip, SysUtils;
 
 type
-  // I provide all the tests necessary to check on notifications sent by a
-  // TIdSipStackInterface or the like - anything that produces TIdEventData
-  // objects.
-  //
-  // I am a bit of a hack played on the DUnit framework: when instantiated,
-  // I use the aptly-named Unused method's name as my MethodName (see TTestCase
-  // for details). I'm hacked like this to provide access to the context-free
-  // tests like Check, CheckEquals that TTestCase provides.
-  TDelegatedChecking = class(TTestCase)
-  public
-    constructor Create; reintroduce; virtual;
-  published
-    procedure Unused;
-  end;
-
-  TIdDataList = class(TDelegatedChecking)
+  TIdDataList = class(TIdInterfacedObject)
   private
     DataList: TObjectList; // Holds all the data received from the stack
 
+    procedure Fail(Msg: String);
   public
     constructor Create; override;
     destructor  Destroy; override;
@@ -142,24 +128,6 @@ type
 implementation
 
 //******************************************************************************
-//* TDelegatedChecking                                                         *
-//******************************************************************************
-//* TDelegatedChecking Public methods ******************************************
-
-constructor TDelegatedChecking.Create;
-begin
-  inherited Create('Unused');
-end;
-
-//* TDelegatedChecking Published methods ***************************************
-
-procedure TDelegatedChecking.Unused;
-begin
-  // This method exists solely to provide a method name with which to create
-  // an instance of this class.
-end;
-
-//******************************************************************************
 //* TIdDataList                                                                *
 //******************************************************************************
 //* TIdDataList Public methods *************************************************
@@ -232,6 +200,13 @@ end;
 function TIdDataList.ThirdLastEventData: TIdEventData;
 begin
   Result := Self.DataList[Self.DataList.Count - 3] as TIdEventData;
+end;
+
+//* TIdDataList Private methods ************************************************
+
+procedure TIdDataList.Fail(Msg: String);
+begin
+  raise ETestFailure.Create(Msg);
 end;
 
 //******************************************************************************
@@ -402,9 +377,10 @@ procedure TStackInterfaceTestCase.TearDown;
 begin
   Self.ProcessAllPendingNotifications;
   Self.UI.Release;
+  Application.ProcessMessages; // Ensure that Self.UI is gone.
   Self.TransportTest.Free;
   Self.TimerQueue.Terminate;
-  Self.DataList := nil; // TIdDataList is a TInterfacedObject, and so is reference counted.
+  Self.DataList.Free;
 
   inherited TearDown;
 end;
