@@ -47,7 +47,7 @@ type
 implementation
 
 uses
-  IdIndyUtils;
+  IdException, IdIndyUtils;
 
 //******************************************************************************
 //* TIdSipMockDnsServer                                                        *
@@ -412,7 +412,9 @@ begin
     Self.NameServer.Active := true;
   except
     on EIdCouldNotBindSocket do
-      RaiseCouldNotBindSocketException(Self.NameServer.Bindings);
+      RaiseSocketError(Self.NameServer.Bindings);
+    on EIdSocketError do
+      RaiseSocketError(Self.NameServer.Bindings);
   end;
 end;
 

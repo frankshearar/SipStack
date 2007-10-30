@@ -323,8 +323,10 @@ begin
   try
     Self.Transport.Active := true;
   except
-    on E: EIdCouldNotBindSocket do
-      RaiseCouldNotBindSocketException(Self.Transport.Bindings);
+    on EIdCouldNotBindSocket do
+      RaiseSocketError(Self.Transport.Bindings);
+    on E: EIdSocketError do
+      RaiseSocketError(Self.Transport.Bindings);
   end;
 end;
 

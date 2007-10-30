@@ -17,12 +17,12 @@ uses
   IdSocketHandle;
 
 function  BindingsToStr(Bindings: TIdSocketHandles): String;
-procedure RaiseCouldNotBindSocketException(Bindings: TIdSocketHandles);
+procedure RaiseSocketError(Bindings: TIdSocketHandles);
 
 implementation
 
 uses
-  SysUtils;
+  IdException, SysUtils;
 
 //******************************************************************************
 //* Unit Public functions & procedures                                         *
@@ -48,9 +48,9 @@ begin
   Result := Copy(Result, 1, Length(Result) - Length(Separator));
 end;
 
-procedure RaiseCouldNotBindSocketException(Bindings: TIdSocketHandles);
+procedure RaiseSocketError(Bindings: TIdSocketHandles);
 begin
-  raise EIdCouldNotBindSocket.Create('Could not open socket on one of (' + BindingsToStr(Bindings) + ')');
+  raise EIdSocketError.Create('Could not open socket on one of (' + BindingsToStr(Bindings) + ')');
 end;
 
 end.

@@ -104,7 +104,7 @@ type
 implementation
 
 uses
-  IdIndyUtils;
+  IdException, IdIndyUtils;
 
 //******************************************************************************
 //* TIdRTPServer                                                               *
@@ -285,15 +285,19 @@ begin
   try
     Self.RTCP.Active := Value;
   except
-    on E: EIdCouldNotBindSocket do
-      RaiseCouldNotBindSocketException(Self.RTCP.Bindings);
+    on EIdCouldNotBindSocket do
+      RaiseSocketError(Self.RTP.Bindings);
+    on EIdSocketError do
+      RaiseSocketError(Self.RTCP.Bindings);
   end;
 
   try
     Self.RTP.Active := Value;
   except
-    on E: EIdCouldNotBindSocket do
-      RaiseCouldNotBindSocketException(Self.RTP.Bindings);
+    on EIdCouldNotBindSocket do
+      RaiseSocketError(Self.RTP.Bindings);
+    on EIdSocketError do
+      RaiseSocketError(Self.RTP.Bindings);
   end;
 end;
 

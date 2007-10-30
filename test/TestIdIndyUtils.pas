@@ -16,13 +16,13 @@ type
     procedure TestBindingsToStrEmptyList;
     procedure TestBindingsToStrMultipleSockets;
     procedure TestBindingsToStrOneSocket;
-    procedure TestRaiseCouldNotBindSocketException;
+    procedure TestRaiseSocketError;
   end;
 
 implementation
 
 uses
-  SysUtils;
+  IdException, SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -80,13 +80,13 @@ begin
   CheckEquals('127.0.0.1:9', BindingsToStr(Self.Sockets), 'One-entry socket list');
 end;
 
-procedure TestFunctions.TestRaiseCouldNotBindSocketException;
+procedure TestFunctions.TestRaiseSocketError;
 begin
   try
-    RaiseCouldNotBindSocketException(Self.Sockets);
+    RaiseSocketError(Self.Sockets);
     Fail('No exception raised');
   except
-    on EIdCouldNotBindSocket do;
+    on EIdSocketError do;
   end;
 end;
 
