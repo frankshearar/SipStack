@@ -75,8 +75,6 @@ type
   TIdRoutingTable = class(TObject)
   private
     Routes: TObjectList;
-
-    function WillUseDefaultRoute(DestinationIP: String; var LocalIP: String): Boolean;
   protected
     function  BestRouteIsDefaultRoute(DestinationIP, LocalIP: String): Boolean; virtual;
     function  InternalHasRoute(RouteList: TObjectList; Route: TIdRouteEntry): Boolean;
@@ -701,16 +699,6 @@ end;
 function TIdRoutingTable.RouteAt(Index: Integer): TIdRouteEntry;
 begin
   Result := TIdRouteEntry(Self.Routes[Index]);
-end;
-
-//* TIdRoutingTable Private methods ********************************************
-
-function TIdRoutingTable.WillUseDefaultRoute(DestinationIP: String; var LocalIP: String): Boolean;
-begin
-  LocalIP := Self.GetBestLocalAddress(DestinationIP);
-  Assert(LocalIP <> '', 'GetBestLocalAddress must return _something_');
-
-  Result := Self.BestRouteIsDefaultRoute(DestinationIP, LocalIP);
 end;
 
 //******************************************************************************
