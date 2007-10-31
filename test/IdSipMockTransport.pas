@@ -39,6 +39,7 @@ type
     fWriteLog:          Boolean;
 
     procedure AddIndyStyleDefaultBinding;
+    procedure CheckNoOtherMockTransportUsesBindings(Bindings: TIdSocketHandles);
     function  CreateFakeBinding: TIdSipConnectionBindings;
     procedure DispatchRequest(R: TidSipRequest;
                               Dest: TIdSipConnectionBindings);
@@ -405,17 +406,8 @@ begin
 end;
 
 procedure TIdSipMockTransport.Start;
-var
-  I: Integer;
-  T: TIdSipTransport;
 begin
-  for I := 0 to Self.BindingCount - 1 do begin
-    T := TIdSipDebugTransportRegistry.TransportRunningOn(Self.Bindings[I].IP, Self.Bindings[I].Port);
-
-    if Assigned(T) then
-      raise Exception.Create('There''s already a MockTransport running on '
-                           + Self.Bindings[I].IP + ':' + IntToStr(Self.Bindings[I].Port));
-  end;
+  Self.CheckNoOtherMockTransportUsesBindings(Self.Bindings);
 
 //  if (Self.Bindings.Count = 0) then
 //    Self.AddIndyStyleDefaultBinding;
@@ -489,6 +481,20 @@ begin
   Binding := Self.Bindings.Add;
   Binding.IP   := '127.0.0.1';
   Binding.Port := Self.DefaultPort;
+end;
+
+procedure TIdSipMockTransport.CheckNoOtherMockTransportUsesBindings(Bindings: TIdSocketHandles);
+var
+  I: Integer;
+  T: TIdSipTransport;
+begin
+  for I := 0 to Bindings.Count - 1 do begin
+    T := TIdSipDebugTransportRegistry.TransportRunningOn(Bindings[I].IP, Bindings[I].Port);
+
+    if Assigned(T) then
+      raise Exception.Create('There''s already a MockTransport running on '
+                           + Bindings[I].IP + ':' + IntToStr(Bindings[I].Port));
+  end;
 end;
 
 function TIdSipMockTransport.CreateFakeBinding: TIdSipConnectionBindings;
