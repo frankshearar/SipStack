@@ -405,7 +405,18 @@ begin
 end;
 
 procedure TIdSipMockTransport.Start;
+var
+  I: Integer;
+  T: TIdSipTransport;
 begin
+  for I := 0 to Self.BindingCount - 1 do begin
+    T := TIdSipDebugTransportRegistry.TransportRunningOn(Self.Bindings[I].IP, Self.Bindings[I].Port);
+
+    if Assigned(T) then
+      raise Exception.Create('There''s already a MockTransport running on '
+                           + Self.Bindings[I].IP + ':' + IntToStr(Self.Bindings[I].Port));
+  end;
+
 //  if (Self.Bindings.Count = 0) then
 //    Self.AddIndyStyleDefaultBinding;
 
