@@ -681,15 +681,21 @@ procedure TestTIdSipStackInterfaceCreation.TestCreateStackWithNoSubscribeSupport
 var
   EmptyConf: TStrings;
   Stack:     TIdSipStackInterface;
+  Timer:     TIdDebugTimerQueue;
 begin
   EmptyConf := TStringList.Create;
   try
-    Stack := TIdSipStackInterface.Create(0, TIdDebugTimerQueue.Create(true), EmptyConf);
+    Timer := TIdDebugTimerQueue.Create(true);
     try
-      // This test tries catches a (now squashed) bug: when no subscribe module
-      // was attached to the stack we'd get an Invalid Cast exception.
+      Stack := TIdSipStackInterface.Create(0, Timer, EmptyConf);
+      try
+        // This test tries catches a (now squashed) bug: when no subscribe module
+        // was attached to the stack we'd get an Invalid Cast exception.
+      finally
+        Stack.Free;
+      end;
     finally
-      Stack.Free;
+      Timer.Terminate;
     end;
   finally
     EmptyConf.Free;
