@@ -178,8 +178,11 @@ type
   protected
     Configuration: TStrings;
     Iface:         TIdSipStackInterface;
+    LocalAddress:  String;
+    LocalPort:     Integer;
 
-    function CreateStackInterface: TIdSipStackInterface; virtual;
+    procedure GetConfiguration(Conf: TStrings); virtual;
+    function  CreateStackInterface: TIdSipStackInterface;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -189,14 +192,12 @@ type
   private
     Contact:      String;
     Contacts:     TIdSipContacts;
-    LocalAddress: String;
-    LocalPort:    Integer;
     Reg:          TIdSipColocatedRegistrarExtension;
     Target:       TIdSipUri;
 
     procedure ReceiveRegister(FromUri: TIdSipUri; Contact: String);
   protected
-    function CreateStackInterface: TIdSipStackInterface; override;
+    procedure GetConfiguration(Conf: TStrings); override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -212,8 +213,6 @@ type
     NS: TIdSipNameServerExtension;
 
     procedure ReconfigureStack(Intf: TIdSipStackInterface);
-  protected
-    function CreateStackInterface: TIdSipStackInterface; override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -2301,14 +2300,22 @@ end;
 //* TStackInterfaceExtensionTestCase Public methods ****************************
 
 procedure TStackInterfaceExtensionTestCase.SetUp;
+var
+  T: TIdSipTransport;
 begin
   inherited SetUp;
 
   TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipMockUdpTransport);
 
-  Self.Configuration := TStringList.Create;
+  Self.LocalAddress := '127.0.0.1';
+  Self.LocalPort    := 5060;
 
-  Self.Iface := Self.CreateStackInterface;
+  Self.Configuration := TStringList.Create;
+  Self.Iface         := Self.CreateStackInterface;
+
+  T := TIdSipDebugTransportRegistry.TransportRunningOn(Self.LocalAddress, Self.LocalPort);
+  Check(T is TIdSipMockTransport, 'Unexpected transport type (' + T.ClassName + ') running on ' + Self.LocalAddress + ':' + IntToStr(Self.LocalPort));
+  Self.MockTransport := T as TIdSipMockTransport;
 end;
 
 procedure TStackInterfaceExtensionTestCase.TearDown;
@@ -2323,8 +2330,18 @@ end;
 
 //* TStackInterfaceExtensionTestCase Protected methods *************************
 
+procedure TStackInterfaceExtensionTestCase.GetConfiguration(Conf: TStrings);
+begin
+  Self.Configuration.Add(ListenDirective           + ': UDP ' + Self.LocalAddress + ':' + IntToStr(Self.LocalPort));
+  Self.Configuration.Add(NameServerDirective       + ': ' + MockKeyword);
+  Self.Configuration.Add(RoutingTableDirective     + ': ' + MockKeyword);
+  Self.Configuration.Add(MockLocalAddressDirective + ': ' + Self.LocalAddress);
+end;
+
 function TStackInterfaceExtensionTestCase.CreateStackInterface: TIdSipStackInterface;
 begin
+  Self.GetConfiguration(Self.Configuration);
+
   Result := TIdSipStackInterface.Create(Self.UI.Handle, Self.TimerQueue, Self.Configuration);
 end;
 
@@ -2334,16 +2351,10 @@ end;
 //* TestTIdSipColocatedRegistrarExtension Public methods ***********************
 
 procedure TestTIdSipColocatedRegistrarExtension.SetUp;
-var
-  T: TIdSipTransport;
 begin
   inherited SetUp;
 
   Self.Contacts := TIdSipContacts.Create;
-
-  T := TIdSipDebugTransportRegistry.TransportRunningOn(Self.LocalAddress, Self.LocalPort);
-  Check(T is TIdSipMockTransport, 'Unexpected transport type (' + T.ClassName + ') running on ' + Self.LocalAddress + ':' + IntToStr(Self.LocalPort));
-  Self.MockTransport := T as TIdSipMockTransport;
 
   Self.Reg    := Self.Iface.AttachExtension(TIdSipColocatedRegistrarExtension) as TIdSipColocatedRegistrarExtension;
   Self.Target := TIdSipUri.Create('sip:case@fried-neurons.org');
@@ -2362,17 +2373,12 @@ end;
 
 //* TestTIdSipColocatedRegistrarExtension Protected methods ********************
 
-function TestTIdSipColocatedRegistrarExtension.CreateStackInterface: TIdSipStackInterface;
+procedure TestTIdSipColocatedRegistrarExtension.GetConfiguration(Conf: TStrings);
 begin
-  Self.LocalAddress := '127.0.0.1';
-  Self.LocalPort    := 5060;
+  inherited GetConfiguration(Conf);
 
-  Self.Configuration.Add(ListenDirective            + ': UDP ' + Self.LocalAddress + ':' + IntToStr(Self.LocalPort));
-  Self.Configuration.Add(NameServerDirective        + ': ' + MockKeyword);
   Self.Configuration.Add(ActAsRegistrarDirective    + ': yes');
   Self.Configuration.Add(RegistrarDatabaseDirective + ': ' + MockKeyword);
-
-  Result := inherited CreateStackInterface;
 end;
 
 //* TestTIdSipColocatedRegistrarExtension Private methods **********************
@@ -2460,20 +2466,6 @@ begin
   Self.NS.Free;
 
   inherited TearDown;
-end;
-
-//* TestTIdSipNameServerExtension Protected methods ****************************
-
-function TestTIdSipNameServerExtension.CreateStackInterface: TIdSipStackInterface;
-begin
-  Self.LocalAddress := '172.1.2.3';
-
-  Self.Configuration.Add(ListenDirective           + ': UDP 127.0.0.1:5060');
-  Self.Configuration.Add(NameServerDirective       + ': ' + MockKeyword);
-  Self.Configuration.Add(RoutingTableDirective     + ': ' + MockKeyword);
-  Self.Configuration.Add(MockLocalAddressDirective + ': ' + Self.LocalAddress);
-
-  Result := inherited CreateStackInterface;
 end;
 
 //* TestTIdSipNameServerExtension Private methods ******************************
