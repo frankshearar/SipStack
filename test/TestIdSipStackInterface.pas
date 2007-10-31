@@ -2365,7 +2365,6 @@ end;
 procedure TestTIdSipColocatedRegistrarExtension.TearDown;
 begin
   Self.Target.Free;
-  Self.Iface.Free;
   Self.Contacts.Free;
 
   inherited TearDown;
