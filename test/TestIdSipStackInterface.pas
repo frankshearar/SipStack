@@ -2313,6 +2313,7 @@ end;
 
 procedure TStackInterfaceExtensionTestCase.TearDown;
 begin
+  Self.Iface.Free;
   Self.Configuration.Free;
 
   TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
