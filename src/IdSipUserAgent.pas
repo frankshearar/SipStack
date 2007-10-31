@@ -700,9 +700,9 @@ end;
 function TIdSipUserAgent.DefaultPort(SecureTransport: Boolean): Cardinal;
 begin
   if SecureTransport then
-    DefaultPort := DefaultSipsPort
+    Result := DefaultSipsPort
   else
-    DefaultPort := DefaultSipPort;
+    Result := DefaultSipPort;
 end;
 
 function TIdSipUserAgent.GetDoNotDisturb: Boolean;
