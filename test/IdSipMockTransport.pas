@@ -491,7 +491,7 @@ begin
   for I := 0 to Bindings.Count - 1 do begin
     T := TIdSipDebugTransportRegistry.TransportRunningOn(Bindings[I].IP, Bindings[I].Port);
 
-    if Assigned(T) then
+    if Assigned(T) and (T <> Self) then
       raise Exception.Create('There''s already a MockTransport running on '
                            + Bindings[I].IP + ':' + IntToStr(Bindings[I].Port));
   end;
