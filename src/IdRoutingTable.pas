@@ -593,15 +593,15 @@ end;
 
 procedure TIdRoutingTable.LocalAddressFor(DestinationIP: String; LocalAddress: TIdSipLocation; DefaultPort: Cardinal = 0);
 var
-  DefaultRoute: Boolean;
-  LocalIP:      String;
+  LocalIP: String;
 begin
   // Return not only the gateway needed for a (mapped) route, but also the port
   // needed to allow remote parties to contact you via that gateway.
 
-  DefaultRoute := Self.WillUseDefaultRoute(DestinationIP, LocalIP);
+  LocalIP := Self.GetBestLocalAddress(DestinationIP);
+  Assert(LocalIP <> '', 'GetBestLocalAddress must return _something_');
 
-  if DefaultRoute then begin
+  if Self.BestRouteIsDefaultRoute(DestinationIP, LocalIP) then begin
     Self.MappedAddressFor(DestinationIP, LocalAddress);
 
     if (LocalAddress.IPAddress = '') then begin
