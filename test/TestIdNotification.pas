@@ -23,7 +23,7 @@ type
   TIdFoo = class(TIdInterfacedObject,
                  IIdFoo)
   private
-    fBarCalled:   Boolean;
+    fBarCalled: Boolean;
   public
     constructor Create; override;
 
