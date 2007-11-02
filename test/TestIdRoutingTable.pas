@@ -777,15 +777,15 @@ procedure TestTIdRoutingTable.CheckLocalAddress(Expected: String; Destination: S
 var
   NewDefaultPort: Cardinal;
 begin
-  Self.RT.LocalAddressFor(Destination, LocalAddress);
+  Self.RT.LocalOrMappedAddressFor(Destination, LocalAddress);
   CheckEquals(Expected, LocalAddress.IPAddress, Msg);
 
-  Self.RT.LocalAddressFor(Destination, LocalAddress, DefaultPort);
+  Self.RT.LocalOrMappedAddressFor(Destination, LocalAddress, DefaultPort);
   CheckEquals(Expected, LocalAddress.IPAddress, Msg + ' with default port ' + IntToStr(DefaultPort) + ', address');
   CheckEquals(DefaultPort, LocalAddress.Port, Msg + ' with port ' + IntToStr(DefaultPort) + ', port');
 
   NewDefaultPort := DefaultPort + 1;
-  Self.RT.LocalAddressFor(Destination, LocalAddress, NewDefaultPort);
+  Self.RT.LocalOrMappedAddressFor(Destination, LocalAddress, NewDefaultPort);
 
   CheckEquals(Expected, LocalAddress.IPAddress, Msg + ' with default port ' + IntToStr(DefaultPort) + ', address');
 
@@ -863,11 +863,11 @@ begin
   Self.AddLanRoute;
   Self.AddDefaultRoute(Self.LanGateway, Self.LanIP);
 
-  CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LoopbackDestination), 'Local destination');
-  CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LanIP),               'Local (LAN) destination');
-  CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.LanDestination),      'LAN destination');
-  CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.InternetDestination), 'Internet destination');
-  CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.VpnDestination),      'VPN destination');
+  CheckEquals(Self.LoopbackIP, Self.RT.LocalOrMappedAddressFor(Self.LoopbackDestination), 'Local destination');
+  CheckEquals(Self.LoopbackIP, Self.RT.LocalOrMappedAddressFor(Self.LanIP),               'Local (LAN) destination');
+  CheckEquals(Self.LanIP,      Self.RT.LocalOrMappedAddressFor(Self.LanDestination),      'LAN destination');
+  CheckEquals(Self.LanIP,      Self.RT.LocalOrMappedAddressFor(Self.InternetDestination), 'Internet destination');
+  CheckEquals(Self.LanIP,      Self.RT.LocalOrMappedAddressFor(Self.VpnDestination),      'VPN destination');
 end;
 
 procedure TestTIdRoutingTable.TestLocalAddressForLocationMappedRouteToInternet;
@@ -1048,11 +1048,11 @@ begin
 
   Self.RT.AddMappedRoute(Self.InternetRoute, Self.InternetMask, Self.InternetIP);
 
-  CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LoopbackDestination), 'Local destination');
-  CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LanIP),               'Local (LAN) destination');
-  CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.LanDestination),      'LAN destination');
-  CheckEquals(Self.InternetIP, Self.RT.LocalAddressFor(Self.InternetDestination), 'Internet destination');
-  CheckEquals(Self.InternetIP, Self.RT.LocalAddressFor(Self.VpnDestination),      'VPN destination');
+  CheckEquals(Self.LoopbackIP, Self.RT.LocalOrMappedAddressFor(Self.LoopbackDestination), 'Local destination');
+  CheckEquals(Self.LoopbackIP, Self.RT.LocalOrMappedAddressFor(Self.LanIP),               'Local (LAN) destination');
+  CheckEquals(Self.LanIP,      Self.RT.LocalOrMappedAddressFor(Self.LanDestination),      'LAN destination');
+  CheckEquals(Self.InternetIP, Self.RT.LocalOrMappedAddressFor(Self.InternetDestination), 'Internet destination');
+  CheckEquals(Self.InternetIP, Self.RT.LocalOrMappedAddressFor(Self.VpnDestination),      'VPN destination');
 end;
 
 procedure TestTIdRoutingTable.TestLocalAddressForMappedRouteToInternetAndVpn;
@@ -1067,11 +1067,11 @@ begin
   Self.RT.AddMappedRoute(Self.InternetRoute, Self.InternetMask, Self.InternetIP);
   Self.RT.AddMappedRoute(Self.VpnRoute, Self.VpnMask, Self.VpnIP);
 
-  CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LoopbackDestination), 'Local destination');
-  CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LanIP),               'Local (LAN) destination');
-  CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.LanDestination),      'LAN destination');
-  CheckEquals(Self.InternetIP, Self.RT.LocalAddressFor(Self.InternetDestination), 'Internet destination');
-  CheckEquals(Self.VpnIP,      Self.RT.LocalAddressFor(Self.VpnDestination),      'VPN destination');
+  CheckEquals(Self.LoopbackIP, Self.RT.LocalOrMappedAddressFor(Self.LoopbackDestination), 'Local destination');
+  CheckEquals(Self.LoopbackIP, Self.RT.LocalOrMappedAddressFor(Self.LanIP),               'Local (LAN) destination');
+  CheckEquals(Self.LanIP,      Self.RT.LocalOrMappedAddressFor(Self.LanDestination),      'LAN destination');
+  CheckEquals(Self.InternetIP, Self.RT.LocalOrMappedAddressFor(Self.InternetDestination), 'Internet destination');
+  CheckEquals(Self.VpnIP,      Self.RT.LocalOrMappedAddressFor(Self.VpnDestination),      'VPN destination');
 end;
 
 procedure TestTIdRoutingTable.TestLocalAddressForMappedRouteToVpn;
@@ -1084,11 +1084,11 @@ begin
 
   Self.RT.AddMappedRoute(Self.VpnRoute, Self.VpnMask, Self.VpnIP);
 
-  CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LoopbackDestination), 'Local destination');
-  CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LanIP),               'Local (LAN) destination');
-  CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.LanDestination),      'LAN destination');
-  CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.InternetDestination), 'Internet destination');
-  CheckEquals(Self.VpnIP,      Self.RT.LocalAddressFor(Self.VpnDestination),      'VPN destination');
+  CheckEquals(Self.LoopbackIP, Self.RT.LocalOrMappedAddressFor(Self.LoopbackDestination), 'Local destination');
+  CheckEquals(Self.LoopbackIP, Self.RT.LocalOrMappedAddressFor(Self.LanIP),               'Local (LAN) destination');
+  CheckEquals(Self.LanIP,      Self.RT.LocalOrMappedAddressFor(Self.LanDestination),      'LAN destination');
+  CheckEquals(Self.LanIP,      Self.RT.LocalOrMappedAddressFor(Self.InternetDestination), 'Internet destination');
+  CheckEquals(Self.VpnIP,      Self.RT.LocalOrMappedAddressFor(Self.VpnDestination),      'VPN destination');
 end;
 
 procedure TestTIdRoutingTable.TestLocalAddressForMultipleLansPlusMultipleMappedRoutes;
@@ -1112,12 +1112,12 @@ begin
   Self.RT.AddMappedRoute(Self.InternetRoute, Self.InternetMask, Self.InternetIP);
   Self.RT.AddMappedRoute(Self.VpnRoute, Self.VpnMask, Self.VpnIP);
 
-  CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LoopbackDestination), 'Local destination');
-  CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LanIP),               'Local (LAN) destination');
-  CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.LanDestination),      'LAN destination');
-  CheckEquals(SecondLanIP,     Self.RT.LocalAddressFor(SecondLanDestination),     'LAN #2 destination');
-  CheckEquals(Self.InternetIP, Self.RT.LocalAddressFor(Self.InternetDestination), 'Internet destination');
-  CheckEquals(Self.VpnIP,      Self.RT.LocalAddressFor(Self.VpnDestination),      'VPN destination');
+  CheckEquals(Self.LoopbackIP, Self.RT.LocalOrMappedAddressFor(Self.LoopbackDestination), 'Local destination');
+  CheckEquals(Self.LoopbackIP, Self.RT.LocalOrMappedAddressFor(Self.LanIP),               'Local (LAN) destination');
+  CheckEquals(Self.LanIP,      Self.RT.LocalOrMappedAddressFor(Self.LanDestination),      'LAN destination');
+  CheckEquals(SecondLanIP,     Self.RT.LocalOrMappedAddressFor(SecondLanDestination),     'LAN #2 destination');
+  CheckEquals(Self.InternetIP, Self.RT.LocalOrMappedAddressFor(Self.InternetDestination), 'Internet destination');
+  CheckEquals(Self.VpnIP,      Self.RT.LocalOrMappedAddressFor(Self.VpnDestination),      'VPN destination');
 end;
 
 procedure TestTIdRoutingTable.TestLocalAddressForNoMappedRoutes;
@@ -1127,21 +1127,21 @@ begin
   Self.AddLanRoute;
   Self.AddDefaultRoute(Self.LanGateway, Self.LanIP);
 
-  CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LoopbackDestination), 'Local destination');
-  CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LanIP),               'Local (LAN) destination');
-  CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.LanDestination),      'LAN destination');
-  CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.InternetDestination), 'Internet destination');
-  CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.VpnDestination),      'VPN destination');
+  CheckEquals(Self.LoopbackIP, Self.RT.LocalOrMappedAddressFor(Self.LoopbackDestination), 'Local destination');
+  CheckEquals(Self.LoopbackIP, Self.RT.LocalOrMappedAddressFor(Self.LanIP),               'Local (LAN) destination');
+  CheckEquals(Self.LanIP,      Self.RT.LocalOrMappedAddressFor(Self.LanDestination),      'LAN destination');
+  CheckEquals(Self.LanIP,      Self.RT.LocalOrMappedAddressFor(Self.InternetDestination), 'Internet destination');
+  CheckEquals(Self.LanIP,      Self.RT.LocalOrMappedAddressFor(Self.VpnDestination),      'VPN destination');
 end;
 
 procedure TestTIdRoutingTable.TestLocalAddressForNoRoutes;
 var
   IPv6Destination: String;
 begin
-  CheckEquals(LocalHost(Id_IPv4), Self.RT.LocalAddressFor(Self.LanDestination), 'LAN destination, no routes');
+  CheckEquals(LocalHost(Id_IPv4), Self.RT.LocalOrMappedAddressFor(Self.LanDestination), 'LAN destination, no routes');
 
   IPv6Destination := '2002:deca:fbad::1';
-  CheckEquals(LocalHost(Id_IPv6), Self.RT.LocalAddressFor(IPv6Destination), 'IPv6 destination, no routes');
+  CheckEquals(LocalHost(Id_IPv6), Self.RT.LocalOrMappedAddressFor(IPv6Destination), 'IPv6 destination, no routes');
 end;
 
 procedure TestTIdRoutingTable.TestLocalAddressForPublicInternetAddress;
@@ -1152,11 +1152,11 @@ begin
   Self.AddInternetRoute;
   Self.AddDefaultRoute(Self.InternetGateway, Self.InternetIP);
 
-  CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LoopbackDestination), 'Local destination');
-  CheckEquals(Self.LoopbackIP, Self.RT.LocalAddressFor(Self.LanIP),               'Local (LAN) destination');
-  CheckEquals(Self.LanIP,      Self.RT.LocalAddressFor(Self.LanDestination),      'LAN destination');
-  CheckEquals(Self.InternetIP, Self.RT.LocalAddressFor(Self.InternetDestination), 'Internet destination');
-  CheckEquals(Self.InternetIP, Self.RT.LocalAddressFor(Self.VpnDestination),      'VPN destination');
+  CheckEquals(Self.LoopbackIP, Self.RT.LocalOrMappedAddressFor(Self.LoopbackDestination), 'Local destination');
+  CheckEquals(Self.LoopbackIP, Self.RT.LocalOrMappedAddressFor(Self.LanIP),               'Local (LAN) destination');
+  CheckEquals(Self.LanIP,      Self.RT.LocalOrMappedAddressFor(Self.LanDestination),      'LAN destination');
+  CheckEquals(Self.InternetIP, Self.RT.LocalOrMappedAddressFor(Self.InternetDestination), 'Internet destination');
+  CheckEquals(Self.InternetIP, Self.RT.LocalOrMappedAddressFor(Self.VpnDestination),      'VPN destination');
 end;
 
 procedure TestTIdRoutingTable.TestPlatformRoutingTable;
@@ -1207,7 +1207,7 @@ const
   LanIP   = '10.0.0.6';
 begin
   Self.RT.AddDefaultOsRoute(Gateway, 1, '1', LanIP);
-  CheckEquals(LanIP, Self.RT.LocalAddressFor(InetIP), 'Default route not added');
+  CheckEquals(LanIP, Self.RT.LocalOrMappedAddressFor(InetIP), 'Default route not added');
 end;
 
 procedure TestTIdMockRoutingTable.TestAddOsRouteAndCount;

@@ -633,9 +633,9 @@ begin
   try
     RegistrarAddress := Self.FirstResolvedName(Registrar.Host);
 
-    Self.RoutingTable.LocalAddressFor(RegistrarAddress,
-                                      LocalAddress,
-                                      Self.DefaultPort(Registrar.IsSecure));
+    Self.RoutingTable.LocalOrMappedAddressFor(RegistrarAddress,
+                                              LocalAddress,
+                                              Self.DefaultPort(Registrar.IsSecure));
 
     // We can only regard ContactClosestToRegistrar as "set" when we receive a
     // successful response to the REGISTER.

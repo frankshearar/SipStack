@@ -94,8 +94,8 @@ type
     procedure GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation; DefaultPort: Cardinal); overload; virtual;
     function  HasRoute(Route: TIdRouteEntry): Boolean;
     function  HasRouteThrough(Gateway: String): Boolean;
-    function  LocalAddressFor(DestinationIP: String): String; overload;
-    procedure LocalAddressFor(DestinationIP: String; LocalAddress: TIdSipLocation; DefaultPort: Cardinal = 0); overload;
+    function  LocalOrMappedAddressFor(DestinationIP: String): String; overload;
+    procedure LocalOrMappedAddressFor(DestinationIP: String; LocalAddress: TIdSipLocation; DefaultPort: Cardinal = 0); overload;
     function  MappedAddressFor(DestinationIP: String): String; overload;
     procedure MappedAddressFor(DestinationIP: String; LocalAddress: TIdSipLocation); overload;
     procedure RemoveRoute(Destination, Mask, Gateway: String);
@@ -502,7 +502,7 @@ begin
   // in other words) URIs.
 
   DefaultPort := TIdSipTransportRegistry.DefaultPortFor(Destination.Transport);
-  Self.LocalAddressFor(Destination.IPAddress, LocalAddress, DefaultPort);
+  Self.LocalOrMappedAddressFor(Destination.IPAddress, LocalAddress, DefaultPort);
   LocalAddress.Transport := Destination.Transport;
 
   ActualAddress := LocalBindings.FirstAddressMatch(LocalAddress);
@@ -575,13 +575,13 @@ begin
   end;
 end;
 
-function TIdRoutingTable.LocalAddressFor(DestinationIP: String): String;
+function TIdRoutingTable.LocalOrMappedAddressFor(DestinationIP: String): String;
 var
   LocalAddress: TIdSipLocation;
 begin
   LocalAddress := TIdSipLocation.Create;
   try
-    Self.LocalAddressFor(DestinationIP, LocalAddress);
+    Self.LocalOrMappedAddressFor(DestinationIP, LocalAddress);
 
     Result := LocalAddress.IPAddress;
   finally
@@ -589,7 +589,7 @@ begin
   end;
 end;
 
-procedure TIdRoutingTable.LocalAddressFor(DestinationIP: String; LocalAddress: TIdSipLocation; DefaultPort: Cardinal = 0);
+procedure TIdRoutingTable.LocalOrMappedAddressFor(DestinationIP: String; LocalAddress: TIdSipLocation; DefaultPort: Cardinal = 0);
 var
   LocalIP: String;
 begin

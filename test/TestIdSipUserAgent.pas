@@ -2937,7 +2937,7 @@ begin
     LanDestination := TIdIPAddressParser.IncIPAddress(LanIP);
 
     CheckEquals(GetBestLocalAddress(LanDestination),
-                UA.RoutingTable.LocalAddressFor(LanDestination),
+                UA.RoutingTable.LocalOrMappedAddressFor(LanDestination),
                 'UA routing table not consulting OS');
     CheckLocalAddress(UA, InternetGateway, InternetDestination, 'Internet mapped route not used');
     CheckLocalAddress(UA, VpnGateway, VpnDestination, 'Vpn mapped route not used');
@@ -4251,7 +4251,7 @@ begin
     CheckEquals(TIdMockRoutingTable, UA.RoutingTable.ClassType, 'RoutingTable type');
 
     CheckEquals(Localhost(TIdIPAddressParser.IPVersion(LocalAddress)),
-                UA.RoutingTable.LocalAddressFor(LocalAddress),
+                UA.RoutingTable.LocalOrMappedAddressFor(LocalAddress),
                 'Local address not stored in the routing table');
   finally
     UA.Free;
@@ -4284,10 +4284,10 @@ begin
     CheckEquals(2, RT.OsRouteCount, 'Not all routes added');
 
     CheckEquals(LocalAddress,
-                RT.LocalAddressFor(TIdIPAddressParser.IncIPAddress(Self.Address)),
+                RT.LocalOrMappedAddressFor(TIdIPAddressParser.IncIPAddress(Self.Address)),
                 'Local address not set for LAN route');
     CheckEquals(LocalAddress,
-                RT.LocalAddressFor(InternetAddress),
+                RT.LocalOrMappedAddressFor(InternetAddress),
                 'Local address not set for default route');
 
     RT.RemoveOsRoute('10.0.0.0', '255.255.255.0', '10.0.0.1');

@@ -54,7 +54,7 @@ implementation
 
 uses
   IdMockRoutingTable, IdGlobal, IdSimpleParser, IdStack, IdUDPServer, SyncObjs,
-  SysUtils, Windows, Winsock;
+  SysUtils, Windows, Winsock, IdRoutingTable;
 
 const
   ANY_SIZE = 100;
@@ -344,7 +344,7 @@ begin
   RT := TIdMockRoutingTable.Create;
   try
     LoadRoutingTable(RT);
-    Result := RT.LocalAddressFor(DestinationAddress);
+    Result := RT.GetBestLocalAddress(DestinationAddress);
   finally
     RT.Free;
   end;

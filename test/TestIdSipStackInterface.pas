@@ -209,7 +209,6 @@ type
 
   TestTIdSipNameServerExtension = class(TStackInterfaceExtensionTestCase)
   private
-    LocalAddress: String;
     NS: TIdSipNameServerExtension;
 
     procedure ReconfigureStack(Intf: TIdSipStackInterface);
@@ -220,6 +219,9 @@ type
     procedure TestLocalAddressForEmptyString;
     procedure TestLocalAddressForFQDN;
     procedure TestLocalAddressForNonFQDN;
+    procedure TestLocalOrMappedAddressForEmptyString;
+    procedure TestLocalOrMappedAddressForFQDN;
+    procedure TestLocalOrMappedAddressForNonFQDN;
     procedure TestResolveNamesFor;
   end;
 
@@ -2487,7 +2489,9 @@ procedure TestTIdSipNameServerExtension.TestLocalAddressForFQDN;
 const
   InternetHost = 'tessier-ashpool.co.luna';
   InternetIP   = '1.2.3.4';
+  LanAddress   = '10.0.0.1';
   LocalAddress = '10.0.0.6';
+  NatAddress   = '1.2.3.4';
   VpnAddress   = '192.168.1.42';
   VpnHost      = 'giftshop.local';
   VpnIP        = '192.168.1.22';
@@ -2499,16 +2503,56 @@ begin
   Self.Configuration.Add(MockRouteDirective + ': 0.0.0.0/0 10.0.0.1 1 1 ' + LocalAddress);
   Self.Configuration.Add(MockRouteDirective + ': 10.0.0.0/24 10.0.0.1 1 1 ' + LocalAddress);
   Self.Configuration.Add(MockRouteDirective + ': 192.168.1.0/24 192.168.1.1 1 1 ' + VpnAddress);
+  Self.Configuration.Add(MappedRouteDirective + ': 0.0.0.0/0 ' + NatAddress);
   Self.ReconfigureStack(Self.Iface);
 
-  CheckEquals(LocalAddress, Self.NS.LocalAddressFor(InternetHost), 'Internet address');
-  CheckEquals(VpnAddress,   Self.NS.LocalAddressFor(VpnHost),      'VPN address');
+  CheckEquals(LocalAddress, Self.NS.LocalOrMappedAddressFor(LanAddress), 'LAN address');
+  CheckEquals(LocalAddress, Self.NS.LocalAddressFor(InternetHost),       'Internet host');
+  CheckEquals(VpnAddress,   Self.NS.LocalAddressFor(VpnHost),            'VPN host');
 end;
 
 procedure TestTIdSipNameServerExtension.TestLocalAddressForNonFQDN;
 begin
   Self.ExpectedException := EBadParameter;
   Self.NS.LocalAddressFor('::G');
+end;
+
+procedure TestTIdSipNameServerExtension.TestLocalOrMappedAddressForEmptyString;
+begin
+  Self.ExpectedException := EBadParameter;
+  Self.NS.LocalOrMappedAddressFor('');
+end;
+
+procedure TestTIdSipNameServerExtension.TestLocalOrMappedAddressForFQDN;
+const
+  InternetHost = 'tessier-ashpool.co.luna';
+  InternetIP   = '1.2.3.4';
+  LanAddress   = '10.0.0.1';
+  LocalAddress = '10.0.0.6';
+  NatAddress   = '1.2.3.4';
+  VpnAddress   = '192.168.1.42';
+  VpnHost      = 'giftshop.local';
+  VpnIP        = '192.168.1.22';
+begin
+  Self.Configuration.Clear;
+  Self.Configuration.Add(RoutingTableDirective + ': ' + MockKeyword);
+  Self.Configuration.Add(Format('MockDns: A %s %s', [InternetHost, InternetIP]));
+  Self.Configuration.Add(Format('MockDns: A %s %s', [VpnHost, VpnIP]));
+  Self.Configuration.Add(MockRouteDirective + ': 0.0.0.0/0 10.0.0.1 1 1 ' + LocalAddress);
+  Self.Configuration.Add(MockRouteDirective + ': 10.0.0.0/24 10.0.0.1 1 1 ' + LocalAddress);
+  Self.Configuration.Add(MockRouteDirective + ': 192.168.1.0/24 192.168.1.1 1 1 ' + VpnAddress);
+  Self.Configuration.Add(MappedRouteDirective + ': 0.0.0.0/0 ' + NatAddress);
+  Self.ReconfigureStack(Self.Iface);
+
+  CheckEquals(LocalAddress, Self.NS.LocalOrMappedAddressFor(LanAddress),   'LAN address');
+  CheckEquals(NatAddress,   Self.NS.LocalOrMappedAddressFor(InternetHost), 'Internet host');
+  CheckEquals(VpnAddress,   Self.NS.LocalOrMappedAddressFor(VpnHost),      'VPN host');
+end;
+
+procedure TestTIdSipNameServerExtension.TestLocalOrMappedAddressForNonFQDN;
+begin
+  Self.ExpectedException := EBadParameter;
+  Self.NS.LocalOrMappedAddressFor('::G');
 end;
 
 procedure TestTIdSipNameServerExtension.TestResolveNamesFor;

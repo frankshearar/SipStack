@@ -304,8 +304,12 @@ type
 
   // I allow access to the UserAgent's TIdSipLocator.
   TIdSipNameServerExtension = class(TIdSipStackInterfaceExtension)
+  private
+    procedure AssertAddressWellFormed(IPAddressOrHost: String);
+    function  ResolveAddress(IPAddressOrHost: String): String;
   public
     function  LocalAddressFor(Destination: String): String;
+    function  LocalOrMappedAddressFor(Destination: String): String;
     procedure ResolveNamesFor(Host: String; IPAddresses: TIdDomainNameRecords);
   end;
 
@@ -950,7 +954,7 @@ implementation
 
 uses
   IdRandom, IdSimpleParser, IdSipAuthentication, IdSipIndyLocator,
-  IdSipMockLocator, IdStack, IdUDPServer, LogVariables;
+  IdSipMockLocator, IdStack, IdUDPServer, LogVariables, IdRoutingTable;
 
 const
   ActionNotAllowedForHandle = 'You cannot perform a %s action on a %s handle (%d)';
@@ -2416,43 +2420,59 @@ end;
 //* TIdSipNameServerExtension Public methods ***********************************
 
 function TIdSipNameServerExtension.LocalAddressFor(Destination: String): String;
-const
-  BadParameter     = '''%s'' is neither a domain name nor IP address';
-  UnresolvableName = 'Could not resolve name ''%s''';
-var
-  IPAddress: String;
-  Names:     TIdDomainNameRecords;
 begin
   // Destination may contain either a fully qualified domain name or an IPv4 or
   // IPv6 address.
 
-  if (Destination = '') then
-    raise EBadParameter.Create(Format(BadParameter, [Destination]));
+  Self.AssertAddressWellFormed(Destination);
 
-  if TIdIPAddressParser.IsIPAddress(Destination) then begin
-    IPAddress := Destination
-  end
-  else if TIdSimpleParser.IsFQDN(Destination) then begin
-    Names := TIdDomainNameRecords.Create;
-    try
-      Self.ResolveNamesFor(Destination, Names);
-      if Names.IsEmpty then
-        raise ENetworkError.Create(Format(UnresolvableName, [Destination]));
+  Result := Self.UserAgent.RoutingTable.GetBestLocalAddress(Self.ResolveAddress(Destination));
+end;
 
-      IPAddress := Names[0].IPAddress;
-    finally
-      Names.Free;
-    end;
-  end
-  else
-    raise EBadParameter.Create(Format(BadParameter, [Destination]));
+function TIdSipNameServerExtension.LocalOrMappedAddressFor(Destination: String): String;
+begin
+  Self.AssertAddressWellFormed(Destination);
 
-  Result := Self.UserAgent.RoutingTable.LocalAddressFor(IPAddress);
+  Result := Self.UserAgent.RoutingTable.LocalOrMappedAddressFor(Self.ResolveAddress(Destination));
 end;
 
 procedure TIdSipNameServerExtension.ResolveNamesFor(Host: String; IPAddresses: TIdDomainNameRecords);
 begin
   Self.UserAgent.Locator.ResolveNameRecords(Host, IPAddresses);
+end;
+
+procedure TIdSipNameServerExtension.AssertAddressWellFormed(IPAddressOrHost: String);
+const
+  BadParameter     = '''%s'' is neither a domain name nor IP address';
+begin
+  if (IPAddressOrHost = '') then
+    raise EBadParameter.Create(Format(BadParameter, [IPAddressOrHost]));
+
+  if not TIdIPAddressParser.IsIPAddress(IPAddressOrHost) and not TIdSimpleParser.IsFQDN(IPAddressOrHost) then
+    raise EBadParameter.Create(Format(BadParameter, [IPAddressOrHost]));
+end;
+
+function TIdSipNameServerExtension.ResolveAddress(IPAddressOrHost: String): String;
+const
+  UnresolvableName = 'Could not resolve name ''%s''';
+var
+  Names: TIdDomainNameRecords;
+begin
+  if TIdIPAddressParser.IsIPAddress(IPAddressOrHost) then begin
+    Result := IPAddressOrHost
+  end
+  else if TIdSimpleParser.IsFQDN(IPAddressOrHost) then begin
+    Names := TIdDomainNameRecords.Create;
+    try
+      Self.ResolveNamesFor(IPAddressOrHost, Names);
+      if Names.IsEmpty then
+        raise ENetworkError.Create(Format(UnresolvableName, [IPAddressOrHost]));
+
+      Result := Names[0].IPAddress;
+    finally
+      Names.Free;
+    end;
+  end
 end;
 
 //******************************************************************************
