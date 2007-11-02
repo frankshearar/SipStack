@@ -289,7 +289,7 @@ end;
 
 procedure TestTIdNotificationList.TestListSwallowsExpectedExceptions;
 var
-  Failure:       TIdRaiseException;
+  Failure: TIdRaiseException;
 begin
   Failure := TIdRaiseException.Create;
   try
