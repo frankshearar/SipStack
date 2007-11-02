@@ -141,8 +141,8 @@ type
     destructor  Destroy; override;
 
     procedure AddBinding(const Address: String; Port: Cardinal); virtual;
-    procedure AddTransportListener(const Listener: IIdSipTransportListener);
-    procedure AddTransportSendingListener(const Listener: IIdSipTransportSendingListener);
+    procedure AddTransportListener(const Listener: IIdSipTransportListener; Priority: Integer = 0);
+    procedure AddTransportSendingListener(const Listener: IIdSipTransportSendingListener; Priority: Integer = 0);
     function  BindingCount: Integer;
     procedure ClearBindings;
     function  DefaultTimeout: Cardinal; virtual;
@@ -208,7 +208,8 @@ type
   private
     class function GetAllTransports: TStrings;
   public
-    class function TransportRunningOn(Host: String; Port: Cardinal): TIdSipTransport;
+    class function TransportRunningOn(Host: String; Port: Cardinal): TIdSipTransport; overload;
+    class function TransportRunningOn(Transport, Host: String; Port: Cardinal): TIdSipTransport; overload;
     class function TransportCount: Integer;
   end;
 
@@ -481,14 +482,14 @@ begin
     Self.Start;
 end;
 
-procedure TIdSipTransport.AddTransportListener(const Listener: IIdSipTransportListener);
+procedure TIdSipTransport.AddTransportListener(const Listener: IIdSipTransportListener; Priority: Integer = 0);
 begin
-  Self.TransportListeners.AddListener(Listener);
+  Self.TransportListeners.AddListener(Listener, Priority);
 end;
 
-procedure TIdSipTransport.AddTransportSendingListener(const Listener: IIdSipTransportSendingListener);
+procedure TIdSipTransport.AddTransportSendingListener(const Listener: IIdSipTransportSendingListener; Priority: Integer = 0);
 begin
-  Self.TransportSendingListeners.AddListener(Listener);
+  Self.TransportSendingListeners.AddListener(Listener, Priority);
 end;
 
 function TIdSipTransport.BindingCount: Integer;
@@ -1201,6 +1202,29 @@ begin
       T := L.Objects[I] as TIdSipTransport;
 
       if T.HasBinding(Host, Port) then begin
+        Result := T;
+        Break;
+      end;
+    end;
+  finally
+    L.Free;
+  end;
+end;
+
+class function TIdSipDebugTransportRegistry.TransportRunningOn(Transport, Host: String; Port: Cardinal): TIdSipTransport;
+var
+  I: Integer;
+  L: TStrings;
+  T: TIdSipTransport;
+begin
+  L := Self.GetAllTransports;
+  try
+    Result := nil;
+
+    for I := 0 to L.Count - 1 do begin
+      T := L.Objects[I] as TIdSipTransport;
+
+      if T.HasBinding(Host, Port) and (T.GetTransportType = Transport) then begin
         Result := T;
         Break;
       end;

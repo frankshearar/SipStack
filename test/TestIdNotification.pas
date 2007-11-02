@@ -12,12 +12,15 @@ unit TestIdNotification;
 interface
 
 uses
-  IdInterfacedObject, IdNotification, SysUtils, TestFramework;
+  Contnrs, IdInterfacedObject, IdNotification, SysUtils, TestFramework;
 
 type
+  TestTIdNotificationList = class;
+
   IIdFoo = interface
     ['{0B189835-280E-41B6-9D93-EEDED5BA7EA3}']
     procedure Bar;
+    procedure Callback(TestCase: TestTIdNotificationList);
   end;
 
   TIdFoo = class(TIdInterfacedObject,
@@ -28,6 +31,7 @@ type
     constructor Create; override;
 
     procedure Bar; virtual;
+    procedure Callback(TestCase: TestTIdNotificationList);
 
     property BarCalled: Boolean read fBarCalled;
   end;
@@ -35,6 +39,15 @@ type
   TIdCallBar = class(TIdNotification)
   public
     procedure Run(const Subject: IInterface); override;
+  end;
+
+  TIdCallCallback = class(TIdNotification)
+  private
+    fTestCase: TestTIdNotificationList;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property TestCase: TestTIdNotificationList read fTestCase write fTestCase;
   end;
 
   TIdRaiseException = class(TIdFoo)
@@ -55,17 +68,31 @@ type
     property Observed: TIdNotificationList read fObserved write fObserved;
   end;
 
-  TestTIdNotificationList = class(TTestCase)
+  TestFunctions = class(TTestCase)
   private
-    BarCaller: TIdCallBar;
-    F1:        TIdFoo;
-    F2:        TIdFoo;
-    F3:        TIdFoo;
-    F4:        TIdFoo;
-    List:      TIdNotificationList;
+    One, Two: TIdNotificationRecord;
   public
     procedure SetUp; override;
     procedure TearDown; override;
+  published
+    procedure TestTIdNotificationRecordCompare;
+  end;
+
+  TestTIdNotificationList = class(TTestCase)
+  private
+    BarCaller:      TIdCallBar;
+    CallbackCaller: TIdCallCallback;
+    F1:             TIdFoo;
+    F2:             TIdFoo;
+    F3:             TIdFoo;
+    F4:             TIdFoo;
+    List:           TIdNotificationList;
+    TriggeredFoos:  TObjectList;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+
+    procedure NotifyOfTrigger(Triggered: TIdFoo);
   published
     procedure TestAddRemoveCount;
     procedure TestAddNil;
@@ -74,6 +101,7 @@ type
     procedure TestAssignNonList;
     procedure TestNotify;
     procedure TestListenerRaisesException;
+    procedure TestListenersNotifiedInOrderOfPriority;
     procedure TestListSwallowsExpectedExceptions;
     procedure TestSelfRemovingListener;
   end;
@@ -86,6 +114,7 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdNotification unit tests');
+  Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdNotificationList.Suite);
 end;
 
@@ -108,6 +137,11 @@ begin
   Self.fBarCalled := true;
 end;
 
+procedure TIdFoo.Callback(TestCase: TestTIdNotificationList);
+begin
+  TestCase.NotifyOfTrigger(Self);
+end;
+
 //******************************************************************************
 //* TIdCallBar                                                                 *
 //******************************************************************************
@@ -116,6 +150,16 @@ end;
 procedure TIdCallBar.Run(const Subject: IInterface);
 begin
   (Subject as IIdFoo).Bar;
+end;
+
+//******************************************************************************
+//* TIdCallCallback                                                            *
+//******************************************************************************
+//* TIdCallCallback Public methods *********************************************
+
+procedure TIdCallCallback.Run(const Subject: IInterface);
+begin
+  (Subject as IIdFoo).Callback(Self.TestCase);
 end;
 
 //******************************************************************************
@@ -143,6 +187,39 @@ begin
 end;
 
 //******************************************************************************
+//* TestFunctions                                                              *
+//******************************************************************************
+//* TestFunctions Public methods ***********************************************
+
+procedure TestFunctions.SetUp;
+begin
+  inherited SetUp;
+
+  Self.One := TIdNotificationRecord.Create;
+  Self.Two := TIdNotificationRecord.Create;
+
+  Self.One.Priority := 1;
+  Self.Two.Priority := 2;
+end;
+
+procedure TestFunctions.TearDown;
+begin
+  Self.Two.Free;
+  Self.One.Free;
+
+  inherited TearDown;
+end;
+
+//* TestFunctions Published methods ********************************************
+
+procedure TestFunctions.TestTIdNotificationRecordCompare;
+begin
+  CheckEquals(-1, TIdNotificationRecordCompare(Self.Two, Self.One), '2 < 1');
+  CheckEquals(1,  TIdNotificationRecordCompare(Self.One, Self.Two), '1 > 2');
+  CheckEquals(0,  TIdNotificationRecordCompare(Self.One, Self.One), '1 = 1');
+end;
+
+//******************************************************************************
 //* TestTIdNotificationList                                                    *
 //******************************************************************************
 //* TestTIdNotificationList Public methods *************************************
@@ -151,16 +228,20 @@ procedure TestTIdNotificationList.SetUp;
 begin
   inherited SetUp;
 
-  Self.BarCaller := TIdCallBar.Create;
-  Self.F1        := TIdFoo.Create;
-  Self.F2        := TIdFoo.Create;
-  Self.F3        := TIdFoo.Create;
-  Self.F4        := TIdFoo.Create;
-  Self.List      := TIdNotificationList.Create;
+  Self.BarCaller      := TIdCallBar.Create;
+  Self.CallbackCaller := TIdCallCallback.Create;
+  Self.CallbackCaller.TestCase := Self;
+  Self.F1             := TIdFoo.Create;
+  Self.F2             := TIdFoo.Create;
+  Self.F3             := TIdFoo.Create;
+  Self.F4             := TIdFoo.Create;
+  Self.List           := TIdNotificationList.Create;
+  Self.TriggeredFoos  := TObjectList.Create(false);
 end;
 
 procedure TestTIdNotificationList.TearDown;
 begin
+  Self.TriggeredFoos.Free;
   Self.List.Free;
   Self.F4.Free;
   Self.F3.Free;
@@ -169,6 +250,11 @@ begin
   Self.BarCaller.Free;
 
   inherited TearDown;
+end;
+
+procedure TestTIdNotificationList.NotifyOfTrigger(Triggered: TIdFoo);
+begin
+  Self.TriggeredFoos.Add(Triggered);
 end;
 
 //* TestTIdNotificationList Published methods **********************************
@@ -285,6 +371,22 @@ begin
   finally
     Failure.Free;
   end;
+end;
+
+procedure TestTIdNotificationList.TestListenersNotifiedInOrderOfPriority;
+begin
+  Self.List.AddListener(Self.F1, 1);
+  Self.List.AddListener(Self.F2, 2);
+  Self.List.AddListener(Self.F3, 3);
+  Self.List.AddListener(Self.F4, 4);
+
+  Self.List.Notify(Self.CallbackCaller);
+
+  CheckEquals(4, Self.TriggeredFoos.Count, 'Incorrect number of notified listeners');
+  Check(Self.F4 = Self.TriggeredFoos[0], 'First listener');
+  Check(Self.F3 = Self.TriggeredFoos[1], 'Second listener');
+  Check(Self.F2 = Self.TriggeredFoos[2], 'Third listener');
+  Check(Self.F1 = Self.TriggeredFoos[3], 'Fourth listener');
 end;
 
 procedure TestTIdNotificationList.TestListSwallowsExpectedExceptions;

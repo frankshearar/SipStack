@@ -767,7 +767,7 @@ const
 implementation
 
 uses
-  IdSipMockTransport;
+  IdNotification, IdSipMockTransport;
 
 //******************************************************************************
 //* TIdSipTestResources                                                        *
@@ -992,8 +992,8 @@ begin
   Self.Dispatcher    := Self.Core.Dispatcher as TIdSipMockTransactionDispatcher;
   Self.RoutingTable  := Self.Core.RoutingTable as TIdMockRoutingTable;
 
-  Self.Dispatcher.AddTransportListener(Self);
-  Self.Dispatcher.AddTransportSendingListener(Self);
+  Self.Dispatcher.AddTransportListener(Self, FirstNotified);
+  Self.Dispatcher.AddTransportSendingListener(Self, FirstNotified);
 
   Self.DebugTimer := Self.Dispatcher.DebugTimer;
   Self.DebugTimer.TriggerImmediateEvents := true;

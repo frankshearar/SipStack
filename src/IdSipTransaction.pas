@@ -145,7 +145,7 @@ type
     procedure AddTransportBinding(const Transport: String;
                                   const Address: String;
                                   Port: Cardinal);
-    procedure AddTransportListener(Listener: IIdSipTransportListener);
+    procedure AddTransportListener(Listener: IIdSipTransportListener; Priority: Integer = 0);
     function  AddClientTransaction(InitialRequest: TIdSipRequest): TIdSipTransaction;
     function  AddServerTransaction(InitialRequest: TIdSipRequest): TIdSipTransaction;
     procedure ClearTransports;
@@ -700,12 +700,12 @@ begin
   end;
 end;
 
-procedure TIdSipTransactionDispatcher.AddTransportListener(Listener: IIdSipTransportListener);
+procedure TIdSipTransactionDispatcher.AddTransportListener(Listener: IIdSipTransportListener; Priority: Integer = 0);
 var
   I: Integer;
 begin
   for I := 0 to Self.Transports.Count - 1 do
-    Self.Transports[I].AddTransportListener(Listener);
+    Self.Transports[I].AddTransportListener(Listener, Priority);
 end;
 
 function TIdSipTransactionDispatcher.AddClientTransaction(InitialRequest: TIdSipRequest): TIdSipTransaction;

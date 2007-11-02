@@ -38,7 +38,7 @@ type
     constructor Create; reintroduce;
     destructor  Destroy; override;
 
-    procedure AddTransportSendingListener(Listener: IIdSipTransportSendingListener);
+    procedure AddTransportSendingListener(Listener: IIdSipTransportSendingListener; Priority: Integer = 0);
     function  LastAck: TIdSipRequest;
     function  LastRequest: TIdSipRequest;
     function  LastResponse: TIdSipResponse;
@@ -131,12 +131,12 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipMockTransactionDispatcher.AddTransportSendingListener(Listener: IIdSipTransportSendingListener);
+procedure TIdSipMockTransactionDispatcher.AddTransportSendingListener(Listener: IIdSipTransportSendingListener; Priority: Integer = 0);
 var
   I: Integer;
 begin
   for I := 0 to Self.Transports.Count - 1 do
-    Self.Transports[I].AddTransportSendingListener(Listener);
+    Self.Transports[I].AddTransportSendingListener(Listener, Priority);
 end;
 
 function TIdSipMockTransactionDispatcher.LastAck: TIdSipRequest;
