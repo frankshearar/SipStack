@@ -1609,6 +1609,7 @@ end;
 
 function TPayloadTestCase.PayloadType: TIdRTPPayloadClass;
 begin
+  Result := TIdRTPPayload;
   Fail(Self.ClassName + ' must override PayloadType');
 end;
 
@@ -3797,6 +3798,7 @@ end;
 
 function TSrcDescChunkItemTestCase.ItemType: TIdSrcDescChunkItemClass;
 begin
+  Result := TIdSrcDescChunkItem;
   Fail(Self.ClassName + ' must override ItemType');
 end;
 
@@ -4410,6 +4412,7 @@ end;
 
 function TRTCPPacketTestCase.PacketType: Byte;
 begin
+  Result := 0;
   Fail(Self.ClassName + ' must override PacketType');
 end;
 
