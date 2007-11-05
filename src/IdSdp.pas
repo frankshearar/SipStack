@@ -692,16 +692,6 @@ type
     property Username:                String            read fUsername write fUsername;
   end;
 
-  TIdSdpNatMasquerader = class(TObject)
-  private
-    fExternalIP: String;
-  public
-//    procedure DeNatify(Payload: TIdSdpPayload);
-//    procedure Natify(Payload: TIdSdpPayload);
-
-    property ExternalIP: String read fExternalIP write fExternalIP;
-  end;
-
 const
   BadHeaderOrder        = 'Headers in the wrong order: found %s after %s';
   ConvertEnumErrorMsg   = 'Couldn''t convert a %s with Ord() = %d to type %s';

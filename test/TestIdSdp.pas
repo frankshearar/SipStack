@@ -602,16 +602,6 @@ type
     procedure TestTakeOffHold;
   end;
 
-  TestTIdSdpNatMasquerader = class(TTestCase)
-  private
-    Payload: TIdSdpPayload;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestNatify;
-  end;
-
 const
   MinimumPayloadSansConnection = 'v=0'#13#10
                  + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
@@ -651,9 +641,6 @@ begin
   Result.AddTest(TestTIdSdpPayload.Suite);
   Result.AddTest(TestTIdSDPMediaStream.Suite);
   Result.AddTest(TestTIdSDPMultimediaSession.Suite);
-{
-  Result.AddTest(TestTIdSdpNatMasquerader.Suite);
-}
 end;
 
 const
@@ -7680,23 +7667,6 @@ begin
         'Stream #1 not taken off hold');
 
   CheckEquals(OldSessionVersion + 1, Self.MS.LocalSessionVersion, 'sess-version not incremented');
-end;
-
-//******************************************************************************
-//* TestTIdSdpNatMasquerader                                                   *
-//******************************************************************************
-//* TestTIdSdpNatMasquerader Public methods ************************************
-
-procedure TestTIdSdpNatMasquerader.SetUp;
-begin
-end;
-
-procedure TestTIdSdpNatMasquerader.TearDown;
-begin
-end;
-
-procedure TestTIdSdpNatMasquerader.TestNatify;
-begin
 end;
 
 initialization
