@@ -259,8 +259,6 @@ begin
 end;
 
 procedure TIdNotificationList.RemoveListener(const L: IInterface);
-var
-  Index: Integer;
 begin
   Self.Lock.Acquire;
   try
