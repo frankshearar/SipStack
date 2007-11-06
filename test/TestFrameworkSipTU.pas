@@ -12,7 +12,7 @@ unit TestFrameworkSipTU;
 interface
 
 uses
-  IdSipCore, IdSipMessage, SysUtils, TestFrameworkSip;
+  IdConnectionBindings, IdSipCore, IdSipMessage, SysUtils, TestFrameworkSip;
 
 type
   TestTIdSipAction = class(TTestCaseTU,
@@ -21,7 +21,7 @@ type
     ActionFailed:             Boolean;
     ActionParam:              TIdSipAction;
     AuthenticationChallenged: Boolean;
-    Binding:                  TIdSipConnectionBindings;
+    Binding:                  TIdConnectionBindings;
     FailReason:               String;
     Password:                 String;
 
@@ -102,7 +102,7 @@ procedure TestTIdSipAction.SetUp;
 begin
   inherited SetUp;
 
-  Self.Binding := TIdSipConnectionBindings.Create;
+  Self.Binding := TIdConnectionBindings.Create;
   Self.Binding.LocalIP   := Self.LanIP;
   Self.Binding.LocalPort := 5060;
   Self.Binding.PeerIP    := Self.LanDestination;

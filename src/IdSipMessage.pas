@@ -12,8 +12,8 @@ unit IdSipMessage;
 interface
 
 uses
-  Classes, Contnrs, IdDateTimeStamp, IdSimpleParser, IdSipLocation, IdTimerQueue,
-  StringDictionary, SysUtils;
+  Classes, Contnrs, IdConnectionBindings, IdDateTimeStamp, IdSimpleParser,
+  IdSipLocation, IdTimerQueue, StringDictionary, SysUtils;
 
 type
   TIdSipQValue = 0..1000;
@@ -23,47 +23,26 @@ type
   TIdSipRequest = class;
   TIdSipResponse = class;
 
-  TIdSipConnectionBindings = class(TPersistent)
-  private
-    fLocalIP:   String;
-    fLocalPort: Integer;
-    fPeerIP:    String;
-    fPeerPort:  Integer;
-    fTransport: String;
-  public
-    procedure Assign(Src: TPersistent); override;
-    function  AsString: String;
-    function  Copy: TIdSipConnectionBindings;
-    function  Equals(Other: TIdSipConnectionBindings): Boolean;
-    function  IsSecureTransport: Boolean;
-
-    property LocalIP:   String  read fLocalIP write fLocalIP;
-    property LocalPort: Integer read fLocalPort write fLocalPort;
-    property PeerIP:    String  read fPeerIP write fPeerIP;
-    property PeerPort:  Integer read fPeerPort write fPeerPort;
-    property Transport: String  read fTransport write fTransport;
-  end;
-
   IIdSipMessageListener = interface
     ['{941E4681-89F9-4491-825C-F6458F7E663C}']
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnMalformedMessage(const Msg: String;
                                  const Reason: String;
-                                 ReceivedFrom: TIdSipConnectionBindings);
+                                 ReceivedFrom: TIdConnectionBindings);
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               ReceivedFrom: TIdSipConnectionBindings);
+                               ReceivedFrom: TIdConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                ReceivedFrom: TIdSipConnectionBindings);
+                                ReceivedFrom: TIdConnectionBindings);
   end;
 
   TIdSipNotifyEvent = TNotifyEvent;
   TIdSipRequestEvent = procedure(Sender: TObject;
                                  R: TIdSipRequest;
-                                 ReceivedFrom: TIdSipConnectionBindings) of object;
+                                 ReceivedFrom: TIdConnectionBindings) of object;
   TIdSipResponseEvent = procedure(Sender: TObject;
                                   R: TIdSipResponse;
-                                  ReceivedFrom: TIdSipConnectionBindings) of object;
+                                  ReceivedFrom: TIdConnectionBindings) of object;
 
   IIdSipMessageVisitor = interface
     ['{E2900B55-A1CA-47F1-9DB0-D72D6A846EA0}']
@@ -1482,7 +1461,7 @@ type
     procedure RemoveHeader(Header: TIdSipHeader);
     procedure RemoveAllHeadersNamed(const Name: String);
     procedure RewriteLocationHeaders(LocalAddress: TIdSipLocation); overload;
-    procedure RewriteLocationHeaders(Binding: TIdSipConnectionBindings); overload; virtual;
+    procedure RewriteLocationHeaders(Binding: TIdConnectionBindings); overload; virtual;
     function  RequiresExtension(const Extension: String): Boolean;
     function  SupportsExtension(const Extension: String): Boolean;
     function  WantsAllowEventsHeader: Boolean; virtual;
@@ -1598,7 +1577,7 @@ type
     function  MatchCancel(Cancel: TIdSipRequest): Boolean;
     function  ProxyAuthorizationFor(const Realm: String): TIdSipProxyAuthorizationHeader;
     function  RequiresResponse: Boolean;
-    procedure RewriteLocationHeaders(Binding: TIdSipConnectionBindings); override;
+    procedure RewriteLocationHeaders(Binding: TIdConnectionBindings); override;
     function  WantsAllowEventsHeader: Boolean; override;
 
     property Event:             TIdSipEventHeader             read GetEvent write SetEvent;
@@ -1678,7 +1657,7 @@ type
     function  IsRequest: Boolean; override;
     function  IsTrying: Boolean;
     function  MalformedException: EBadMessageClass; override;
-    procedure RewriteLocationHeaders(Binding: TIdSipConnectionBindings); override;
+    procedure RewriteLocationHeaders(Binding: TIdConnectionBindings); override;
     function  WantsAllowEventsHeader: Boolean; override;
     function  WillEstablishDialog(Request: TIdSipRequest): Boolean; overload;
 
@@ -2257,10 +2236,6 @@ const
   UnmatchedQuotesForParameter = 'Unmatched quotes around a parameter';
   UnsupportedScheme           = 'Unsupported URI scheme';
 
-// Miscellaneous constants
-const
-  BindingTuple = '(connection-bindings local-ip: %s local-port: %d peer-ip: %s peer-port: %d transport: %s)';
-
 implementation
 
 uses
@@ -2545,66 +2520,6 @@ end;
 function WithoutFirstAndLastCharsW(const W: WideString): WideString;
 begin
   Result := Copy(W, 2, Length(W) - 2);
-end;
-
-//******************************************************************************
-//* TIdSipConnectionBindings                                                   *
-//******************************************************************************
-//* TIdSipConnectionBindings Public methods ************************************
-
-procedure TIdSipConnectionBindings.Assign(Src: TPersistent);
-var
-  Loc:   TIdSipLocation;
-  Other: TIdSipConnectionBindings;
-begin
-  if (Src is TIdSipConnectionBindings) then begin
-    Other := Src as TIdSipConnectionBindings;
-
-    Self.LocalIP   := Other.LocalIP;
-    Self.LocalPort := Other.LocalPort;
-    Self.PeerIP    := Other.PeerIP;
-    Self.PeerPort  := Other.PeerPort;
-    Self.Transport := Other.Transport;
-  end
-  else if (Src is TIdSipLocation) then begin
-    Loc := Src as TIdSipLocation;
-    Self.LocalIP   := '';
-    Self.LocalPort := 0;
-    Self.PeerIP    := Loc.IPAddress;
-    Self.PeerPort  := Loc.Port;
-    Self.Transport := Loc.Transport;
-  end
-  else
-    inherited Assign(Src);
-end;
-
-function TIdSipConnectionBindings.AsString: String;
-begin
-  Result := Format(BindingTuple, [Self.LocalIP,
-                                  Self.LocalPort,
-                                  Self.PeerIP,
-                                  Self.PeerPort,
-                                  Self.Transport]);
-end;
-
-function TIdSipConnectionBindings.Copy: TIdSipConnectionBindings;
-begin
-  Result := TIdSipConnectionBindings.Create;
-  Result.Assign(Self);
-end;
-
-function TIdSipConnectionBindings.Equals(Other: TIdSipConnectionBindings): Boolean;
-begin
-  Result := (Self.LocalIP = Other.LocalIP)
-        and (Self.LocalPort = Other.LocalPort)
-        and (Self.PeerIP = Other.PeerIP)
-        and (Self.PeerPort = Other.PeerPort)
-        and (Self.Transport = Other.Transport);
-end;
-
-function TIdSipConnectionBindings.IsSecureTransport: Boolean;
-begin
-  Result := TIdSipTransportRegistry.IsSecure(Self.Transport);
 end;
 
 //******************************************************************************
@@ -8562,9 +8477,9 @@ end;
 
 procedure TIdSipMessage.RewriteLocationHeaders(LocalAddress: TIdSipLocation);
 var
-  Binding: TIdSipConnectionBindings;
+  Binding: TIdConnectionBindings;
 begin
-  Binding := TIdSipConnectionBindings.Create;
+  Binding := TIdConnectionBindings.Create;
   try
     Binding.LocalIP   := LocalAddress.IPAddress;
     Binding.LocalPort := LocalAddress.Port;
@@ -8575,7 +8490,7 @@ begin
   end;
 end;
 
-procedure TIdSipMessage.RewriteLocationHeaders(Binding: TIdSipConnectionBindings);
+procedure TIdSipMessage.RewriteLocationHeaders(Binding: TIdConnectionBindings);
 begin
 end;
 
@@ -9447,7 +9362,7 @@ begin
   Result := not Self.IsAck;
 end;
 
-procedure TIdSipRequest.RewriteLocationHeaders(Binding: TIdSipConnectionBindings);
+procedure TIdSipRequest.RewriteLocationHeaders(Binding: TIdConnectionBindings);
 begin
   // Some messages (like CANCEL) don't have Contact headers.
   if Self.HasContact then begin
@@ -10096,7 +10011,7 @@ begin
   Result := EBadResponse;
 end;
 
-procedure TIdSipResponse.RewriteLocationHeaders(Binding: TIdSipConnectionBindings);
+procedure TIdSipResponse.RewriteLocationHeaders(Binding: TIdConnectionBindings);
 begin
   // Some messages (like CANCEL) don't have Contact headers.
   //

@@ -12,9 +12,9 @@ unit IdSipTransport;
 interface
 
 uses
-  Classes, Contnrs, IdException, IdInterfacedObject, IdNotification,
-  IdRoutingTable, IdSipLocation, IdSipMessage, IdSocketHandle, IdSSLOpenSSL,
-  IdTCPConnection, IdTimerQueue, LoGGer, SyncObjs, SysUtils;
+  Classes, Contnrs, IdConnectionBindings, IdException, IdInterfacedObject,
+  IdNotification,  IdRoutingTable, IdSipLocation, IdSipMessage, IdSocketHandle,
+  IdSSLOpenSSL, IdTCPConnection, IdTimerQueue, LoGGer, SyncObjs, SysUtils;
 
 type
   TIdSipTransport = class;
@@ -28,13 +28,13 @@ type
                           const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport;
-                               Source: TIdSipConnectionBindings);
+                               Source: TIdConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Receiver: TIdSipTransport;
-                                Source: TIdSipConnectionBindings);
+                                Source: TIdConnectionBindings);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String;
-                                Source: TIdSipConnectionBindings);
+                                Source: TIdConnectionBindings);
   end;
 
   // I listen for when messages are sent, rather than received. You could use
@@ -43,10 +43,10 @@ type
     ['{2E451F5D-5053-4A2C-BE5F-BB68E5CB3A6D}']
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport;
-                            Destination: TIdSipConnectionBindings);
+                            Destination: TIdConnectionBindings);
     procedure OnSendResponse(Response: TIdSipResponse;
                              Sender: TIdSipTransport;
-                             Destination: TIdSipConnectionBindings);
+                             Destination: TIdConnectionBindings);
   end;
 
   // I provide functionality common to all transports.
@@ -85,45 +85,45 @@ type
                            E: Exception;
                            Reason: String);
     procedure LogReceivedMessage(Msg: TIdSipMessage;
-                                 ReceivedFrom: TIdSipConnectionBindings);
+                                 ReceivedFrom: TIdConnectionBindings);
     procedure LogRejectedMessage(Msg: String;
                                  Reason: String;
-                                 ReceivedFrom: TIdSipConnectionBindings);
-    procedure LogSentMessage(Msg: TIdSipMessage; SentTo: TIdSipConnectionBindings);
+                                 ReceivedFrom: TIdConnectionBindings);
+    procedure LogSentMessage(Msg: TIdSipMessage; SentTo: TIdConnectionBindings);
     procedure NotifyOfReceivedRequest(Request: TIdSipRequest;
-                                      ReceivedFrom: TIdSipConnectionBindings);
+                                      ReceivedFrom: TIdConnectionBindings);
     procedure NotifyOfReceivedResponse(Response: TIdSipResponse;
-                                       ReceivedFrom: TIdSipConnectionBindings);
+                                       ReceivedFrom: TIdConnectionBindings);
     procedure NotifyOfException(FailedMessage: TIdSipMessage;
                                 E: Exception;
                                 const Reason: String);
     procedure NotifyOfRejectedMessage(const Msg: String;
                                       const Reason: String;
-                                      ReceivedFrom: TIdSipConnectionBindings);
+                                      ReceivedFrom: TIdConnectionBindings);
     procedure NotifyOfSentRequest(Request: TIdSipRequest;
-                                  Binding: TIdSipConnectionBindings);
+                                  Binding: TIdConnectionBindings);
     procedure NotifyOfSentResponse(Response: TIdSipResponse;
-                                   Binding: TIdSipConnectionBindings);
+                                   Binding: TIdConnectionBindings);
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnMalformedMessage(const Msg: String;
                                  const Reason: String;
-                                 ReceivedFrom: TIdSipConnectionBindings);
+                                 ReceivedFrom: TIdConnectionBindings);
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               ReceivedFrom: TIdSipConnectionBindings);
+                               ReceivedFrom: TIdConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                ReceivedFrom: TIdSipConnectionBindings);
+                                ReceivedFrom: TIdConnectionBindings);
     procedure ReturnBadRequest(Request: TIdSipRequest;
-                               Target: TIdSipConnectionBindings;
+                               Target: TIdConnectionBindings;
                                const StatusText: String);
     procedure SendMessage(M: TIdSipMessage;
-                          Dest: TIdSipConnectionBindings); virtual;
+                          Dest: TIdConnectionBindings); virtual;
     procedure SendRequest(R: TIdSipRequest;
                           Dest: TIdSipLocation);
     procedure SendResponse(R: TIdSipResponse;
                            Dest: TIdSipLocation); overload;
     procedure SendResponse(R: TIdSipResponse;
-                           Binding: TIdSipConnectionBindings); overload;
+                           Binding: TIdConnectionBindings); overload;
     function  SentByIsRecognised(Via: TIdSipViaHeader): Boolean; virtual;
     procedure SetTimeout(Value: Cardinal); virtual;
     procedure SetTimer(Value: TIdTimerQueue); virtual;
@@ -146,7 +146,7 @@ type
     function  BindingCount: Integer;
     procedure ClearBindings;
     function  DefaultTimeout: Cardinal; virtual;
-    function  FindBinding(Dest: TIdSipConnectionBindings): TIdSocketHandle;
+    function  FindBinding(Dest: TIdConnectionBindings): TIdSocketHandle;
     function  FirstIPBound: String;
     function  HasBinding(const Address: String; Port: Cardinal): Boolean;
     function  IsNull: Boolean; virtual;
@@ -157,9 +157,9 @@ type
                                E: Exception;
                                const Reason: String); virtual;
     procedure ReceiveRequest(Request: TIdSipRequest;
-                             ReceivedFrom: TIdSipConnectionBindings); virtual;
+                             ReceivedFrom: TIdConnectionBindings); virtual;
     procedure ReceiveResponse(Response: TIdSipResponse;
-                              ReceivedFrom: TIdSipConnectionBindings); virtual;
+                              ReceivedFrom: TIdConnectionBindings); virtual;
     procedure RemoveBinding(const Address: String; Port: Cardinal);
     procedure RemoveTransportListener(const Listener: IIdSipTransportListener);
     procedure RemoveTransportSendingListener(const Listener: IIdSipTransportSendingListener);
@@ -240,17 +240,17 @@ type
   end;
 
   // I represent the (possibly) deferred handling of an inbound message.
-  // Give me a COPY of a TIdSipConnectionBindings and I'll free it for you.
+  // Give me a COPY of a TIdConnectionBindings and I'll free it for you.
   TIdSipReceiveMessageWait = class(TIdSipMessageWait)
   private
-    fReceivedFrom: TIdSipConnectionBindings;
+    fReceivedFrom: TIdConnectionBindings;
     fTransportID:  String;
   public
     destructor Destroy; override;
 
     procedure Trigger; override;
 
-    property ReceivedFrom: TIdSipConnectionBindings read fReceivedFrom write fReceivedFrom;
+    property ReceivedFrom: TIdConnectionBindings read fReceivedFrom write fReceivedFrom;
     property TransportID:  String                   read fTransportID write fTransportID;
   end;
 
@@ -293,10 +293,10 @@ type
   TIdSipTransportReceiveMethod = class(TIdNotification)
   private
     fReceiver: TIdSipTransport;
-    fSource:   TIdSipConnectionBindings;
+    fSource:   TIdConnectionBindings;
   public
     property Receiver: TIdSipTransport          read fReceiver write fReceiver;
-    property Source:   TIdSipConnectionBindings read fSource write fSource;
+    property Source:   TIdConnectionBindings read fSource write fSource;
   end;
 
   // Look at IIdSipTransportListener's declaration.
@@ -324,21 +324,21 @@ type
   private
     fMsg:    String;
     fReason: String;
-    fSource: TIdSipConnectionBindings;
+    fSource: TIdConnectionBindings;
   public
     procedure Run(const Subject: IInterface); override;
 
     property Msg:    String                   read fMsg write fMsg;
     property Reason: String                   read fReason write fReason;
-    property Source: TIdSipConnectionBindings read fSource write fSource;
+    property Source: TIdConnectionBindings read fSource write fSource;
   end;
 
   TIdSipTransportSendingMethod = class(TIdNotification)
   private
-    fBinding: TIdSipConnectionBindings;
+    fBinding: TIdConnectionBindings;
     fSender:  TIdSipTransport;
   public
-    property Binding: TIdSipConnectionBindings read fBinding write fBinding;
+    property Binding: TIdConnectionBindings read fBinding write fBinding;
     property Sender:  TIdSipTransport          read fSender write fSender;
   end;
 
@@ -520,7 +520,7 @@ begin
   Result := 5000;
 end;
 
-function TIdSipTransport.FindBinding(Dest: TIdSipConnectionBindings): TIdSocketHandle;
+function TIdSipTransport.FindBinding(Dest: TIdConnectionBindings): TIdSocketHandle;
 var
   DefaultPort:  Cardinal;
   I:            Integer;
@@ -617,7 +617,7 @@ begin
 end;
 
 procedure TIdSipTransport.ReceiveRequest(Request: TIdSipRequest;
-                                         ReceivedFrom: TIdSipConnectionBindings);
+                                         ReceivedFrom: TIdConnectionBindings);
 begin
   if Request.IsMalformed then begin
     Self.NotifyOfRejectedMessage(Request.AsString,
@@ -647,7 +647,7 @@ begin
 end;
 
 procedure TIdSipTransport.ReceiveResponse(Response: TIdSipResponse;
-                                          ReceivedFrom: TIdSipConnectionBindings);
+                                          ReceivedFrom: TIdConnectionBindings);
 begin
   if Response.IsMalformed then begin
     Self.NotifyOfRejectedMessage(Response.AsString,
@@ -801,7 +801,7 @@ begin
 end;
 
 procedure TIdSipTransport.LogReceivedMessage(Msg: TIdSipMessage;
-                                             ReceivedFrom: TIdSipConnectionBindings);
+                                             ReceivedFrom: TIdConnectionBindings);
 const
   LogMsg = 'Received %s from %s:%d on %s:%d';
 begin
@@ -813,7 +813,7 @@ end;
 
 procedure TIdSipTransport.LogRejectedMessage(Msg: String;
                                              Reason: String;
-                                             ReceivedFrom: TIdSipConnectionBindings);
+                                             ReceivedFrom: TIdConnectionBindings);
 const
   LogMsg = 'Rejected message starting "%s" from %s:%d on %s:%d: %s';
 begin
@@ -823,7 +823,7 @@ begin
            ReceivedFrom.AsString + CRLF + Reason + CRLF + Msg);
 end;
 
-procedure TIdSipTransport.LogSentMessage(Msg: TIdSipMessage; SentTo: TIdSipConnectionBindings);
+procedure TIdSipTransport.LogSentMessage(Msg: TIdSipMessage; SentTo: TIdConnectionBindings);
 const
   LogMsg = 'Sent %s to %s:%d from %s:%d';
 begin
@@ -834,7 +834,7 @@ begin
 end;
 
 procedure TIdSipTransport.NotifyOfReceivedRequest(Request: TIdSipRequest;
-                                                  ReceivedFrom: TIdSipConnectionBindings);
+                                                  ReceivedFrom: TIdConnectionBindings);
 var
   Notification: TIdSipTransportReceiveRequestMethod;
 begin
@@ -857,7 +857,7 @@ begin
 end;
 
 procedure TIdSipTransport.NotifyOfReceivedResponse(Response: TIdSipResponse;
-                                                   ReceivedFrom: TIdSipConnectionBindings);
+                                                   ReceivedFrom: TIdConnectionBindings);
 var
   Notification: TIdSipTransportReceiveResponseMethod;
 begin
@@ -901,7 +901,7 @@ end;
 
 procedure TIdSipTransport.NotifyOfRejectedMessage(const Msg: String;
                                                   const Reason: String;
-                                                  ReceivedFrom: TIdSipConnectionBindings);
+                                                  ReceivedFrom: TIdConnectionBindings);
 var
   Notification: TIdSipTransportRejectedMessageMethod;
 begin
@@ -920,7 +920,7 @@ begin
 end;
 
 procedure TIdSipTransport.NotifyOfSentRequest(Request: TIdSipRequest;
-                                              Binding: TIdSipConnectionBindings);
+                                              Binding: TIdConnectionBindings);
 var
   Notification: TIdSipTransportSendingRequestMethod;
 begin
@@ -939,7 +939,7 @@ begin
 end;
 
 procedure TIdSipTransport.NotifyOfSentResponse(Response: TIdSipResponse;
-                                               Binding: TIdSipConnectionBindings);
+                                               Binding: TIdConnectionBindings);
 var
   Notification: TIdSipTransportSendingResponseMethod;
 begin
@@ -965,25 +965,25 @@ end;
 
 procedure TIdSipTransport.OnMalformedMessage(const Msg: String;
                                              const Reason: String;
-                                             ReceivedFrom: TIdSipConnectionBindings);
+                                             ReceivedFrom: TIdConnectionBindings);
 begin
   Self.NotifyOfRejectedMessage(Msg, Reason, ReceivedFrom);
 end;
 
 procedure TIdSipTransport.OnReceiveRequest(Request: TIdSipRequest;
-                                           ReceivedFrom: TIdSipConnectionBindings);
+                                           ReceivedFrom: TIdConnectionBindings);
 begin
   Self.ReceiveRequest(Request, ReceivedFrom);
 end;
 
 procedure TIdSipTransport.OnReceiveResponse(Response: TIdSipResponse;
-                                            ReceivedFrom: TIdSipConnectionBindings);
+                                            ReceivedFrom: TIdConnectionBindings);
 begin
   Self.ReceiveResponse(Response, ReceivedFrom);
 end;
 
 procedure TIdSipTransport.ReturnBadRequest(Request: TIdSipRequest;
-                                           Target: TIdSipConnectionBindings;
+                                           Target: TIdConnectionBindings;
                                            const StatusText: String);
 var
   Res: TIdSipResponse;
@@ -999,7 +999,7 @@ begin
 end;
 
 procedure TIdSipTransport.SendMessage(M: TIdSipMessage;
-                                      Dest: TIdSipConnectionBindings);
+                                      Dest: TIdConnectionBindings);
 begin
   RaiseAbstractError(Self.ClassName, 'SendMessage');
 end;
@@ -1007,12 +1007,12 @@ end;
 procedure TIdSipTransport.SendRequest(R: TIdSipRequest;
                                       Dest: TIdSipLocation);
 var
-  LocalBinding: TIdSipConnectionBindings;
+  LocalBinding: TIdConnectionBindings;
 begin
   if Self.UseRport then
     R.LastHop.Params[RportParam] := '';
 
-  LocalBinding := TIdSipConnectionBindings.Create;
+  LocalBinding := TIdConnectionBindings.Create;
   try
     LocalBinding.Assign(Dest);
 
@@ -1028,11 +1028,11 @@ end;
 procedure TIdSipTransport.SendResponse(R: TIdSipResponse;
                                        Dest: TIdSipLocation);
 var
-  LocalBinding: TIdSipConnectionBindings;
+  LocalBinding: TIdConnectionBindings;
 begin
   // Send a response to a machine identified by a transport/ip-address/port
   // triple.
-  LocalBinding := TIdSipConnectionBindings.Create;
+  LocalBinding := TIdConnectionBindings.Create;
   try
     LocalBinding.Assign(Dest);
 
@@ -1043,7 +1043,7 @@ begin
 end;
 
 procedure TIdSipTransport.SendResponse(R: TIdSipResponse;
-                                       Binding: TIdSipConnectionBindings);
+                                       Binding: TIdConnectionBindings);
 begin
   // Send a response to a machine when you already know exactly what binding to
   // use.

@@ -214,9 +214,10 @@ end;
 }
 
 uses
-  IdSipAuthentication, IdSipCore, IdSipDialog, IdSipInviteModule, IdSipMessage,
-  IdSipSubscribeModule, IdSipTransport, IdSipUserAgent, IdTimerQueue,
-  TestFramework, TestFrameworkSip, TestFrameworkSipTU;
+  IdConnectionBindings, IdSipAuthentication, IdSipCore, IdSipDialog,
+  IdSipInviteModule, IdSipMessage, IdSipSubscribeModule, IdSipTransport,
+  IdSipUserAgent, IdTimerQueue, TestFramework, TestFrameworkSip,
+  TestFrameworkSipTU;
 
 type
   TSubscribeTestCase = class(TTestCaseTU,
@@ -262,7 +263,7 @@ type
                                         Challenge: TIdSipResponse); overload;
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
-                                        Binding: TIdSipConnectionBindings);
+                                        Binding: TIdConnectionBindings);
     procedure OnInboundCall(UserAgent: TIdSipInviteModule;
                             Session: TIdSipInboundSession);
     procedure ReceiveNotify(const EventPackage: String);
@@ -1197,7 +1198,7 @@ end;
 
 procedure TestTIdSipSubscribeModule.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                                               Message: TIdSipMessage;
-                                                              Binding: TIdSipConnectionBindings);
+                                                              Binding: TIdConnectionBindings);
 begin
   // Do nothing.
 end;

@@ -612,8 +612,8 @@ const
 implementation
 
 uses
-  IdRandom, IdSimpleParser, IdSipCore, IdSipDns, IdSipLocation,
-  IdSipMockBindingDatabase, IdSipRegistration, IdSipTransport,
+  IdConnectionBindings, IdRandom, IdSimpleParser, IdSipCore, IdSipDns,
+  IdSipLocation, IdSipMockBindingDatabase, IdSipRegistration, IdSipTransport,
   IdSipUdpTransport, SysUtils, TestMessages;
 
 type
@@ -1109,11 +1109,11 @@ end;
 }
 procedure TestTIdSipStackInterface.ReceiveRequest(Request: TIdSipRequest);
 var
-  Target: TIdSipConnectionBindings;
+  Target: TIdConnectionBindings;
 begin
   Self.Requests.AddCopy(Request);
 
-  Target := TIdSipConnectionBindings.Create;
+  Target := TIdConnectionBindings.Create;
   try
     Target.LocalIP   := Self.LocalAddress;
     Target.LocalPort := Self.LocalPort;
@@ -1129,11 +1129,11 @@ end;
 
 procedure TestTIdSipStackInterface.ReceiveResponse(Response: TIdSipResponse);
 var
-  Target: TIdSipConnectionBindings;
+  Target: TIdConnectionBindings;
 begin
   Self.Responses.AddCopy(Response);
 
-  Target := TIdSipConnectionBindings.Create;
+  Target := TIdConnectionBindings.Create;
   try
     Target.LocalIP   := Self.LocalAddress;
     Target.LocalPort := Self.LocalPort;
@@ -2816,7 +2816,7 @@ begin
 
   Self.Data := TIdDebugDroppedMessageData.Create;
 
-  Self.Data.Binding := TIdSipConnectionBindings.Create;
+  Self.Data.Binding := TIdConnectionBindings.Create;
   Self.Data.Message := TIdSipResponse.Create;
 end;
 
@@ -2889,7 +2889,7 @@ begin
   inherited SetUp;
 
   Self.Data := TIdDebugReceiveMessageData.Create;
-  Self.Data.Binding := TIdSipConnectionBindings.Create;
+  Self.Data.Binding := TIdConnectionBindings.Create;
   Self.Data.Message := TIdSipRequest.Create;
 end;
 
@@ -2964,7 +2964,7 @@ begin
   inherited SetUp;
 
   Self.Data := TIdDebugSendMessageData.Create;
-  Self.Data.Binding := TIdSipConnectionBindings.Create;
+  Self.Data.Binding := TIdConnectionBindings.Create;
   Self.Data.Binding.LocalIP   := '127.0.0.1';
   Self.Data.Binding.LocalPort := 5060;
   Self.Data.Binding.PeerIP    := '127.0.0.2';
@@ -3315,7 +3315,7 @@ begin
 
   Self.Data := TIdDebugTransportRejectedMessageData.Create;
   Self.Data.Handle  := $decafbad;
-  Self.Data.Binding := TIdSipConnectionBindings.Create;
+  Self.Data.Binding := TIdConnectionBindings.Create;
   Self.Data.Msg     := 'This contains a (malformed) SIP message';
   Self.Data.Reason  := 'Here''s why it''s malformed';
 

@@ -12,8 +12,8 @@ unit TestIdSipMessage;
 interface
 
 uses
-  IdMockRoutingTable, IdSipDialogID, IdSipLocation, IdSipMessage, SysUtils,
-  TestFramework, TestFrameworkSip;
+  IdConnectionBindings, IdMockRoutingTable, IdSipDialogID, IdSipLocation,
+  IdSipMessage, SysUtils, TestFramework, TestFrameworkSip;
 
 type
   TestFunctions = class(TTestCase)
@@ -39,21 +39,6 @@ type
     function  Equals(Msg: TIdSipMessage): Boolean; override;
     function  IsRequest: Boolean; override;
     function  MalformedException: EBadMessageClass; override;
-  end;
-
-  TestTIdSipConnectionBindings = class(TTestCase)
-  private
-    Binding: TIdSipConnectionBindings;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestAssign;
-    procedure TestAssignFromLocation;
-    procedure TestAsString;
-    procedure TestCopy;
-    procedure TestEquals;
-    procedure TestIsSecure;
   end;
 
   TestTIdSipMessage = class(TTestCaseSip)
@@ -378,7 +363,7 @@ type
                                                    LocalAddress: TIdSipLocation;
                                                    Msg: String);
     procedure CheckAgainstDestinationUsingConnectionBindings(ExpectedBinding: TIdSipLocation;
-                                                             LocalAddress: TIdSipConnectionBindings;
+                                                             LocalAddress: TIdConnectionBindings;
                                                              Msg: String);
     procedure CheckContact(ExpectedBinding: TIdSipLocation; SipMsg: TIdSipMessage; Msg: String = '');
     procedure CheckRequest(ExpectedBinding: TIdSipLocation; Request: TIdSipRequest; Msg: String = '');
@@ -438,7 +423,6 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipMessage tests (Messages)');
   Result.AddTest(TestFunctions.Suite);
-  Result.AddTest(TestTIdSipConnectionBindings.Suite);
   Result.AddTest(TestTIdSipRequest.Suite);
   Result.AddTest(TestTIdSipResponse.Suite);
   Result.AddTest(TestTIdSipRequestList.Suite);
@@ -579,167 +563,6 @@ end;
 
 procedure TIdSipTrivialMessage.ParseStartLine(Parser: TIdSipParser);
 begin
-end;
-
-//******************************************************************************
-//* TestTIdSipConnectionBindings                                               *
-//******************************************************************************
-//* TestTIdSipConnectionBindings Public methods ********************************
-
-procedure TestTIdSipConnectionBindings.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Binding := TIdSipConnectionBindings.Create;
-  Self.Binding.LocalIP   := '127.0.0.1';
-  Self.Binding.LocalPort := 5060;
-  Self.Binding.PeerIP    := '::1';
-  Self.Binding.PeerPort  := 4444;
-  Self.Binding.Transport := TlsOverSctpTransport;
-end;
-
-procedure TestTIdSipConnectionBindings.TearDown;
-begin
-  Self.Binding.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipConnectionBindings Public methods ********************************
-
-procedure TestTIdSipConnectionBindings.TestAssign;
-var
-  Other: TIdSipConnectionBindings;
-begin
-  Other := TIdSipConnectionBindings.Create;
-  try
-    Other.Assign(Self.Binding);
-    CheckEquals(Self.Binding.LocalIP,
-                Other.LocalIP,
-                'LocalIP');
-    CheckEquals(Self.Binding.LocalPort,
-                Other.LocalPort,
-                'LocalPort');
-    CheckEquals(Self.Binding.PeerIP,
-                Other.PeerIP,
-                'PeerIP');
-    CheckEquals(Self.Binding.PeerPort,
-                Other.PeerPort,
-                'PeerPort');
-    CheckEquals(Self.Binding.Transport,
-                Other.Transport,
-                'Transport');
-  finally
-    Other.Free;
-  end;
-end;
-
-procedure TestTIdSipConnectionBindings.TestAssignFromLocation;
-var
-  Loc: TIdSipLocation;
-begin
-  Loc := TIdSipLocation.Create(TlsTransport, '10.0.0.1', 10000);
-  try
-    Self.Binding.Assign(Loc);
-    CheckEquals('',            Self.Binding.LocalIP,   'LocalIP');
-    CheckEquals(0,             Self.Binding.LocalPort, 'LocalPort');
-    CheckEquals(Loc.IPAddress, Self.Binding.PeerIP,    'PeerIP');
-    CheckEquals(Loc.Port,      Self.Binding.PeerPort,  'PeerPort');
-    CheckEquals(Loc.Transport, Self.Binding.Transport, 'Transport');
-  finally
-    Loc.Free;
-  end;
-end;
-
-procedure TestTIdSipConnectionBindings.TestAsString;
-var
-  Expected: String;
-begin
-  Expected := Format(BindingTuple, [Self.Binding.LocalIP,
-                                    Self.Binding.LocalPort,
-                                    Self.Binding.PeerIP,
-                                    Self.Binding.PeerPort,
-                                    Self.Binding.Transport]);
-
-  CheckEquals(Expected,
-              Self.Binding.AsString,
-              'AsString');
-end;
-
-procedure TestTIdSipConnectionBindings.TestCopy;
-var
-  Other: TIdSipConnectionBindings;
-begin
-  Other := Self.Binding.Copy;
-  try
-    Check(Other.Equals(Self.Binding),
-          'Copy doesn''t contain a copy of the binding''s values');
-  finally
-    Other.Free;
-  end;
-end;
-
-procedure TestTIdSipConnectionBindings.TestEquals;
-var
-  Other: TIdSipConnectionBindings;
-begin
-  Other := TIdSipConnectionBindings.Create;
-  try
-    Other.LocalIP   := Self.Binding.LocalIP + '1';
-    Other.LocalPort := Self.Binding.LocalPort + 1;
-    Other.PeerIP    := Self.Binding.PeerIP + '1';
-    Other.PeerPort  := Self.Binding.PeerPort + 1;
-
-    Check(not Other.Equals(Self.Binding),
-          'No values equal');
-
-    Other.LocalIP := Self.Binding.LocalIP;
-    Check(not Other.Equals(Self.Binding),
-          'LocalIP equal');
-
-    Other.LocalPort := Self.Binding.LocalPort;
-    Check(not Other.Equals(Self.Binding),
-          'LocalPort, LocalPort equal');
-
-    Other.PeerIP := Self.Binding.PeerIP;
-    Check(not Other.Equals(Self.Binding),
-          'LocalPort, LocalPort, PeerIP equal');
-
-    Other.PeerPort := Self.Binding.PeerPort;
-    Check(not Other.Equals(Self.Binding),
-          'LocalPort, LocalPort, PeerIP, PeerPort equal, transports not equal');
-
-    Other.Transport := Self.Binding.Transport;
-    Check(Other.Equals(Self.Binding),
-          'LocalPort, LocalPort, PeerIP, PeerPort, Transport equal');
-  finally
-    Other.Free;
-  end;
-end;
-
-procedure TestTIdSipConnectionBindings.TestIsSecure;
-var
-  I:          Integer;
-  Transports: TStrings;
-begin
-  Transports := TStringList.Create;
-  try
-    TIdSipTransportRegistry.SecureTransports(Transports);
-
-    for I := 0 to Transports.Count -1 do begin
-      Self.Binding.Transport := Transports[I];
-      Check(Self.Binding.IsSecureTransport, Self.Binding.Transport + ' is not marked as being secure');
-    end;
-
-    TIdSipTransportRegistry.InsecureTransports(Transports);
-
-    for I := 0 to Transports.Count -1 do begin
-      Self.Binding.Transport := Transports[I];
-      Check(not Self.Binding.IsSecureTransport, Self.Binding.Transport + ' is not marked as being insecure');
-    end;
-  finally
-    Transports.Free;
-  end;
 end;
 
 //******************************************************************************
@@ -5585,7 +5408,7 @@ procedure TRewriteLocationTestCase.CheckAgainstDestination(ExpectedBinding: TIdS
 var
   LocalAddress: TIdSipLocation;
   Msg:          String;
-  SocketDesc:   TIdSipConnectionBindings;
+  SocketDesc:   TIdConnectionBindings;
 begin
   Msg := 'From ' + ExpectedBinding.IPAddress + ' to ' + Destination.IPAddress;
 
@@ -5595,7 +5418,7 @@ begin
 
     CheckAgainstDestinationUsingLocation(ExpectedBinding, LocalAddress, Msg);
 
-    SocketDesc := TIdSipConnectionBindings.Create;
+    SocketDesc := TIdConnectionBindings.Create;
     try
       SocketDesc.LocalIP   := LocalAddress.IPAddress;
       SocketDesc.LocalPort := LocalAddress.Port;
@@ -5635,7 +5458,7 @@ begin
 end;
 
 procedure TRewriteLocationTestCase.CheckAgainstDestinationUsingConnectionBindings(ExpectedBinding: TIdSipLocation;
-                                                                                  LocalAddress: TIdSipConnectionBindings;
+                                                                                  LocalAddress: TIdConnectionBindings;
                                                                                   Msg: String);
 var
   Request:  TIdSipRequest;

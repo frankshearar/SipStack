@@ -3,9 +3,9 @@ unit TestFrameworkStackInterface;
 interface
 
 uses
-  Contnrs, Forms, IdInterfacedObject, IdSipMessage, IdSipMockTransport,
-  IdSipStackInterface, IdSipTransport, IdTimerQueue, TestFramework,
-  TestFrameworkSip, SysUtils;
+  Contnrs, Forms, IdConnectionBindings, IdInterfacedObject, IdSipMessage,
+  IdSipMockTransport, IdSipStackInterface, IdSipTransport, IdTimerQueue,
+  TestFramework, TestFrameworkSip, SysUtils;
 
 type
   TIdDataList = class(TIdInterfacedObject)
@@ -51,19 +51,19 @@ type
                           const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport;
-                               Source: TIdSipConnectionBindings);
+                               Source: TIdConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Receiver: TIdSipTransport;
-                                Source: TIdSipConnectionBindings);
+                                Source: TIdConnectionBindings);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String;
-                                Source: TIdSipConnectionBindings);
+                                Source: TIdConnectionBindings);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport;
-                            Destination: TIdSipConnectionBindings);
+                            Destination: TIdConnectionBindings);
     procedure OnSendResponse(Response: TIdSipResponse;
                              Sender: TIdSipTransport;
-                             Destination: TIdSipConnectionBindings);
+                             Destination: TIdConnectionBindings);
   public
     constructor Create; override;
     destructor  Destroy; override;
@@ -319,7 +319,7 @@ end;
 
 procedure TTransportChecking.OnReceiveRequest(Request: TIdSipRequest;
                                               Receiver: TIdSipTransport;
-                                              Source: TIdSipConnectionBindings);
+                                              Source: TIdConnectionBindings);
 begin
   if Request.IsAck then
     Self.Acks.AddCopy(Request)
@@ -329,21 +329,21 @@ end;
 
 procedure TTransportChecking.OnReceiveResponse(Response: TIdSipResponse;
                                                Receiver: TIdSipTransport;
-                                               Source: TIdSipConnectionBindings);
+                                               Source: TIdConnectionBindings);
 begin
   Self.Responses.AddCopy(Response);
 end;
 
 procedure TTransportChecking.OnRejectedMessage(const Msg: String;
                                                const Reason: String;
-                                               Source: TIdSipConnectionBindings);
+                                               Source: TIdConnectionBindings);
 begin
   // Do nothing.
 end;
 
 procedure TTransportChecking.OnSendRequest(Request: TIdSipRequest;
                                            Sender: TIdSipTransport;
-                                           Destination: TIdSipConnectionBindings);
+                                           Destination: TIdConnectionBindings);
 begin
   if Request.IsAck then
     Self.Acks.AddCopy(Request)
@@ -353,7 +353,7 @@ end;
 
 procedure TTransportChecking.OnSendResponse(Response: TIdSipResponse;
                                             Sender: TIdSipTransport;
-                                            Destination: TIdSipConnectionBindings);
+                                            Destination: TIdConnectionBindings);
 begin
   Self.Responses.AddCopy(Response);
 end;

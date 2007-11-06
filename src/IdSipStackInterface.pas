@@ -12,11 +12,11 @@ unit IdSipStackInterface;
 interface
 
 uses
-  Classes, Contnrs, IdInterfacedObject, IdNotification, IdRegisteredObject,
-  IdSipCore, IdSipDialogID, IdSipDns, IdSipInviteModule, IdSipLocation,
-  IdSipMessage, IdSipOptionsModule, IdSipRegistration, IdSipSubscribeModule,
-  IdSipTransaction, IdSipTransport, IdSipUserAgent, IdTimerQueue, LoGGer,
-  Messages, SyncObjs, SysUtils, Windows;
+  Classes, Contnrs, IdConnectionBindings, IdInterfacedObject, IdNotification,
+  IdRegisteredObject, IdSipCore, IdSipDialogID, IdSipDns, IdSipInviteModule,
+  IdSipLocation, IdSipMessage, IdSipOptionsModule, IdSipRegistration,
+  IdSipSubscribeModule, IdSipTransaction, IdSipTransport, IdSipUserAgent,
+  IdTimerQueue, LoGGer, Messages, SyncObjs, SysUtils, Windows;
 
 type
   TIdSipHandle = Cardinal;
@@ -100,7 +100,7 @@ type
     procedure ListenToAllTransports;
     function  NewHandle: TIdSipHandle;
     procedure NotifyOfSentMessage(Msg: TIdSipMessage;
-                                  Binding: TIdSipConnectionBindings);
+                                  Binding: TIdConnectionBindings);
     procedure NotifyOfStackShutdown;
     procedure NotifyOfStackStartup;
     procedure NotifyReferral(ActionHandle: TIdSipHandle;
@@ -121,7 +121,7 @@ type
                                         Challenge: TIdSipResponse); overload;
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
-                                        Binding: TIdSipConnectionBindings);
+                                        Binding: TIdConnectionBindings);
     procedure OnEndedSession(Session: TIdSipSession;
                              ErrorCode: Cardinal;
                              const Reason: String);
@@ -159,26 +159,26 @@ type
                                   Progress: TIdSipResponse);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport;
-                               Source: TIdSipConnectionBindings);
+                               Source: TIdConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Receiver: TIdSipTransport;
-                                Source: TIdSipConnectionBindings);
+                                Source: TIdConnectionBindings);
     procedure OnReferral(Session: TIdSipSession;
                          Refer: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings);
+                         Binding: TIdConnectionBindings);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String;
-                                Source: TIdSipConnectionBindings);
+                                Source: TIdConnectionBindings);
     procedure OnRenewedSubscription(UserAgent: TIdSipAbstractCore;
                                     Subscription: TIdSipOutboundSubscription);
     procedure OnResponse(OptionsAgent: TIdSipOutboundOptions;
                          Response: TIdSipResponse);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport;
-                            Destination: TIdSipConnectionBindings);
+                            Destination: TIdConnectionBindings);
     procedure OnSendResponse(Response: TIdSipResponse;
                              Sender: TIdSipTransport;
-                             Destination: TIdSipConnectionBindings);
+                             Destination: TIdConnectionBindings);
     procedure OnSubscriptionRequest(UserAgent: TIdSipAbstractCore;
                                     Subscription: TIdSipInboundSubscription);
     procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistrationBase;
@@ -426,7 +426,7 @@ type
 
   TIdDebugDroppedMessageData = class(TIdDebugMessageData)
   private
-    fBinding: TIdSipConnectionBindings;
+    fBinding: TIdConnectionBindings;
 
   protected
     function Data: String; override;
@@ -436,12 +436,12 @@ type
 
     procedure Assign(Src: TPersistent); override;
 
-    property Binding: TIdSipConnectionBindings read fBinding write fBinding;
+    property Binding: TIdConnectionBindings read fBinding write fBinding;
   end;
 
   TIdDebugReceiveMessageData = class(TIdDebugMessageData)
   private
-    fBinding: TIdSipConnectionBindings;
+    fBinding: TIdConnectionBindings;
   protected
     function Data: String; override;
     function EventName: String; override;
@@ -450,12 +450,12 @@ type
 
     procedure Assign(Src: TPersistent); override;
 
-    property Binding: TIdSipConnectionBindings read fBinding write fBinding;
+    property Binding: TIdConnectionBindings read fBinding write fBinding;
   end;
 
   TIdDebugSendMessageData = class(TIdDebugMessageData)
   private
-    fBinding: TIdSipConnectionBindings;
+    fBinding: TIdConnectionBindings;
   protected
     function Data: String; override;
     function EventName: String; override;
@@ -464,7 +464,7 @@ type
 
     procedure Assign(Src: TPersistent); override;
 
-    property Binding: TIdSipConnectionBindings read fBinding write fBinding;
+    property Binding: TIdConnectionBindings read fBinding write fBinding;
   end;
 
   TIdDebugExceptionData = class(TIdDebugData)
@@ -504,7 +504,7 @@ type
 
   TIdDebugTransportRejectedMessageData = class(TIdDebugData)
   private
-    fBinding: TIdSipConnectionBindings;
+    fBinding: TIdConnectionBindings;
     fMsg:     String;
     fReason:  String;
   protected
@@ -515,7 +515,7 @@ type
 
     procedure Assign(Src: TPersistent); override;
 
-    property Binding: TIdSipConnectionBindings read fBinding write fBinding;
+    property Binding: TIdConnectionBindings read fBinding write fBinding;
     property Msg:     String                   read fMsg write fMsg;
     property Reason:  String                   read fReason write fReason;
   end;
@@ -1753,7 +1753,7 @@ begin
 end;
 
 procedure TIdSipStackInterface.NotifyOfSentMessage(Msg: TIdSipMessage;
-                                                   Binding: TIdSipConnectionBindings);
+                                                   Binding: TIdConnectionBindings);
 
 var
   Data: TIdDebugSendMessageData;
@@ -1874,7 +1874,7 @@ end;
 
 procedure TIdSipStackInterface.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                                          Message: TIdSipMessage;
-                                                         Binding: TIdSipConnectionBindings);
+                                                         Binding: TIdConnectionBindings);
 var
   Data: TIdDebugDroppedMessageData;
 begin
@@ -2142,7 +2142,7 @@ end;
 
 procedure TIdSipStackInterface.OnReceiveRequest(Request: TIdSipRequest;
                                                 Receiver: TIdSipTransport;
-                                                Source: TIdSipConnectionBindings);
+                                                Source: TIdConnectionBindings);
 var
   Data: TIdDebugReceiveMessageData;
 begin
@@ -2160,7 +2160,7 @@ end;
 
 procedure TIdSipStackInterface.OnReceiveResponse(Response: TIdSipResponse;
                                                  Receiver: TIdSipTransport;
-                                                 Source: TIdSipConnectionBindings);
+                                                 Source: TIdConnectionBindings);
 var
   Data: TIdDebugReceiveMessageData;
 begin
@@ -2178,7 +2178,7 @@ end;
 
 procedure TIdSipStackInterface.OnReferral(Session: TIdSipSession;
                                           Refer: TIdSipRequest;
-                                          Binding: TIdSipConnectionBindings);
+                                          Binding: TIdConnectionBindings);
 begin
   // We receive notifications of REFER messages sent to Session's GRUU through
   // Session. Specifically, REFERs outside of Session's dialog will end up here.
@@ -2190,7 +2190,7 @@ end;
 
 procedure TIdSipStackInterface.OnRejectedMessage(const Msg: String;
                                                  const Reason: String;
-                                                 Source: TIdSipConnectionBindings);
+                                                 Source: TIdConnectionBindings);
 var
   Data: TIdDebugTransportRejectedMessageData;
 begin
@@ -2245,14 +2245,14 @@ end;
 
 procedure TIdSipStackInterface.OnSendRequest(Request: TIdSipRequest;
                                              Sender: TIdSipTransport;
-                                             Destination: TIdSipConnectionBindings);
+                                             Destination: TIdConnectionBindings);
 begin
   Self.NotifyOfSentMessage(Request, Destination);
 end;
 
 procedure TIdSipStackInterface.OnSendResponse(Response: TIdSipResponse;
                                               Sender: TIdSipTransport;
-                                              Destination: TIdSipConnectionBindings);
+                                              Destination: TIdConnectionBindings);
 begin
   Self.NotifyOfSentMessage(Response, Destination);
 end;

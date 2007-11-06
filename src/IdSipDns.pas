@@ -422,6 +422,11 @@ begin
     Result := Equal;
 end;
 
+function IsEqual(S1, S2: String): Boolean;
+begin
+  Result := Lowercase(S1) = Lowercase(S2);
+end;
+
 //* Unit Public functions & procedures *****************************************
 
 function AliasSort(Item1, Item2: Pointer): Integer;

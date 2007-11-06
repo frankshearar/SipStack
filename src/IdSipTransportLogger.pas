@@ -12,8 +12,8 @@ unit IdSipTransportLogger;
 interface
 
 uses
-  Classes, IdInterfacedObject, IdSipLocation, IdSipMessage, IdSipTransport,
-  SysUtils;
+  Classes, IdConnectionBindings, IdInterfacedObject, IdSipLocation,
+  IdSipMessage, IdSipTransport, SysUtils;
 
 type
   TIdMessageDirection = (dirError, dirIn, dirOut);
@@ -32,19 +32,19 @@ type
                           const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport;
-                               Source: TIdSipConnectionBindings);
+                               Source: TIdConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Receiver: TIdSipTransport;
-                                Source: TIdSipConnectionBindings);
+                                Source: TIdConnectionBindings);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String;
-                                Source: TIdSipConnectionBindings);
+                                Source: TIdConnectionBindings);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport;
-                            Binding: TIdSipConnectionBindings);
+                            Binding: TIdConnectionBindings);
     procedure OnSendResponse(Response: TIdSipResponse;
                              Sender: TIdSipTransport;
-                             Binding: TIdSipConnectionBindings);
+                             Binding: TIdConnectionBindings);
     function Timestamp(Direction: TIdMessageDirection): String;
   public
     procedure LogTransport(T: TIdSipTransport);
@@ -127,35 +127,35 @@ end;
 
 procedure TIdSipTransportLogger.OnReceiveRequest(Request: TIdSipRequest;
                                                  Receiver: TIdSipTransport;
-                                                 Source: TIdSipConnectionBindings);
+                                                 Source: TIdConnectionBindings);
 begin
   Self.Log(Request.AsString, dirIn);
 end;
 
 procedure TIdSipTransportLogger.OnReceiveResponse(Response: TIdSipResponse;
                                                   Receiver: TIdSipTransport;
-                                                  Source: TIdSipConnectionBindings);
+                                                  Source: TIdConnectionBindings);
 begin
   Self.Log(Response.AsString, dirIn);
 end;
 
 procedure TIdSipTransportLogger.OnRejectedMessage(const Msg: String;
                                                   const Reason: String;
-                                                  Source: TIdSipConnectionBindings);
+                                                  Source: TIdConnectionBindings);
 begin
   Self.Log(RejectedMsg + Reason + #13#10 + Msg, dirError);
 end;
 
 procedure TIdSipTransportLogger.OnSendRequest(Request: TIdSipRequest;
                                               Sender: TIdSipTransport;
-                                              Binding: TIdSipConnectionBindings);
+                                              Binding: TIdConnectionBindings);
 begin
   Self.Log(Request.AsString, dirOut);
 end;
 
 procedure TIdSipTransportLogger.OnSendResponse(Response: TIdSipResponse;
                                                Sender: TIdSipTransport;
-                                               Binding: TIdSipConnectionBindings);
+                                               Binding: TIdConnectionBindings);
 begin
   Self.Log(Response.AsString, dirOut);
 end;

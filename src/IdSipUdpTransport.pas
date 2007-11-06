@@ -12,8 +12,8 @@ unit IdSipUdpTransport;
 interface
 
 uses
-  Classes, IdSipLocation, IdSipMessage, IdSipTransport, IdSocketHandle,
-  IdTimerQueue, IdUDPServer, SysUtils;
+  Classes, IdConnectionBindings, IdSipLocation, IdSipMessage, IdSipTransport,
+  IdSocketHandle, IdTimerQueue, IdUDPServer, SysUtils;
 
 type
   TIdSipUdpServer = class;
@@ -28,7 +28,7 @@ type
     function  GetBindings: TIdSocketHandles; override;
     procedure InstantiateServer; override;
     procedure SendMessage(M: TIdSipMessage;
-                          Dest: TIdSipConnectionBindings); override;
+                          Dest: TIdConnectionBindings); override;
     procedure SetTimer(Value: TIdTimerQueue); override;
   public
     class function GetTransportType: String; override;
@@ -39,7 +39,7 @@ type
     function  IsReliable: Boolean; override;
     function  IsRunning: Boolean; override;
     procedure ReceiveRequest(Request: TIdSipRequest;
-                             ReceivedFrom: TIdSipConnectionBindings); override;
+                             ReceivedFrom: TIdConnectionBindings); override;
     procedure Start; override;
     procedure Stop; override;
   end;
@@ -112,7 +112,7 @@ begin
 end;
 
 procedure TIdSipUDPTransport.ReceiveRequest(Request: TIdSipRequest;
-                                            ReceivedFrom: TIdSipConnectionBindings);
+                                            ReceivedFrom: TIdConnectionBindings);
 begin
   // RFC 3581 section 4
   if Request.LastHop.HasRPort then begin
@@ -165,7 +165,7 @@ begin
 end;
 
 procedure TIdSipUDPTransport.SendMessage(M: TIdSipMessage;
-                                         Dest: TIdSipConnectionBindings);
+                                         Dest: TIdConnectionBindings);
 var
   B: TIdSocketHandle;
   S: String;
@@ -281,7 +281,7 @@ begin
   Wait := TIdSipReceiveMessageWait.Create;
   Wait.Message   := Msg.Copy;
 
-  Wait.ReceivedFrom := TIdSipConnectionBindings.Create;
+  Wait.ReceivedFrom := TIdConnectionBindings.Create;
   Wait.ReceivedFrom.LocalIP   := Binding.IP;
   Wait.ReceivedFrom.LocalPort := Binding.Port;
   Wait.ReceivedFrom.PeerIP    := Binding.PeerIP;

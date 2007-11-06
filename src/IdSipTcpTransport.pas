@@ -12,9 +12,9 @@ unit IdSipTcpTransport;
 interface
 
 uses
-  Classes, Contnrs, IdBaseThread, IdSipLocation, IdSipMessage, IdSipTransport,
-  IdSocketHandle, IdTCPConnection, IdTCPClient, IdTCPServer, IdTimerQueue,
-  SyncObjs, SysUtils;
+  Classes, Contnrs, IdBaseThread, IdConnectionBindings, IdSipLocation,
+  IdSipMessage, IdSipTransport, IdSocketHandle, IdTCPConnection, IdTCPClient,
+  IdTCPServer, IdTimerQueue, SyncObjs, SysUtils;
 
 type
   TIdSipConnectionTableLock = class;
@@ -32,7 +32,7 @@ type
     RunningClients:     TThreadList;
 
     procedure SendMessageTo(Msg: TIdSipMessage;
-                            Dest: TIdSipConnectionBindings);
+                            Dest: TIdConnectionBindings);
     procedure StopAllClientConnections;
   protected
     ConnectionMap: TIdSipConnectionTableLock;
@@ -44,7 +44,7 @@ type
     function  GetBindings: TIdSocketHandles; override;
     procedure InstantiateServer; override;
     procedure SendMessage(Msg: TIdSipMessage;
-                          Dest: TIdSipConnectionBindings); override;
+                          Dest: TIdConnectionBindings); override;
     function  ServerType: TIdSipTcpServerClass; virtual;
     procedure SetTimeout(Value: Cardinal); override;
     procedure SetTimer(Value: TIdTimerQueue); override;
@@ -112,7 +112,7 @@ type
     procedure ReadMessage(Connection: TIdTCPConnection;
                           Dest: TStringStream);
     procedure ReceiveMessageInTimerContext(Msg: TIdSipMessage;
-                                           Binding: TIdSipConnectionBindings);
+                                           Binding: TIdConnectionBindings);
     procedure ReturnInternalServerError(Connection: TIdTCPConnection;
                                         const Reason: String);
   public
@@ -234,7 +234,7 @@ type
     procedure Add(Connection: TIdTCPConnection;
                   Request:    TIdSipRequest);
     function  ConnectionFor(Msg: TIdSipMessage): TIdTCPConnection; overload;
-    function  ConnectionFor(Destination: TIdSipConnectionBindings): TIdTCPConnection; overload;
+    function  ConnectionFor(Destination: TIdConnectionBindings): TIdTCPConnection; overload;
     function  Count: Integer;
     procedure Remove(Connection: TIdTCPConnection);
   end;
@@ -377,7 +377,7 @@ begin
 end;
 
 procedure TIdSipTCPTransport.SendMessage(Msg: TIdSipMessage;
-                                         Dest: TIdSipConnectionBindings);
+                                         Dest: TIdConnectionBindings);
 var
   Connection:  TIdTCPConnection;
   Table:       TIdSipConnectionTable;
@@ -433,7 +433,7 @@ end;
 //* TIdSipTCPTransport Protected methods ***************************************
 
 procedure TIdSipTCPTransport.SendMessageTo(Msg: TIdSipMessage;
-                                           Dest: TIdSipConnectionBindings);
+                                           Dest: TIdConnectionBindings);
 var
   NewConnection: TIdSipTcpClient;
 begin
@@ -574,14 +574,14 @@ procedure TIdSipTcpMessageReader.ReadMessages(Connection: TIdTCPConnection);
 var
   ConnClosedOrTimedOut: Boolean;
   Msg:                  TIdSipMessage;
-  ReceivedFrom:         TIdSipConnectionBindings;
+  ReceivedFrom:         TIdConnectionBindings;
   S:                    TStringStream;
 begin
   ConnClosedOrTimedOut := false;
 
   Connection.ReadTimeout := Self.ReadTimeout;
   while Connection.Connected and not ConnClosedOrTimedOut do begin
-    ReceivedFrom := TIdSipConnectionBindings.Create;
+    ReceivedFrom := TIdConnectionBindings.Create;
     try
       ReceivedFrom.LocalIP   := Connection.Socket.Binding.IP;
       ReceivedFrom.LocalPort := Connection.Socket.Binding.Port;
@@ -684,7 +684,7 @@ begin
 end;
 
 procedure TIdSipTcpMessageReader.ReceiveMessageInTimerContext(Msg: TIdSipMessage;
-                                                              Binding: TIdSipConnectionBindings);
+                                                              Binding: TIdConnectionBindings);
 var
   RecvWait: TIdSipReceiveMessageWait;
 begin
@@ -987,7 +987,7 @@ begin
     Result := Self.EntryAt(I).Connection;
 end;
 
-function TIdSipConnectionTable.ConnectionFor(Destination: TIdSipConnectionBindings): TIdTCPConnection;
+function TIdSipConnectionTable.ConnectionFor(Destination: TIdConnectionBindings): TIdTCPConnection;
 var
   Count: Integer;
   I:     Integer;

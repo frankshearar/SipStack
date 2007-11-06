@@ -12,9 +12,9 @@ unit TestIdSipUdpTransport;
 interface
 
 uses
-  IdSipMessage, IdSipMockTransport, IdSipTransport, IdSipUdpTransport,
-  IdTimerQueue, IdUdpClient, SyncObjs, SysUtils, TestFrameworkSip,
-  TestFrameworkSipTransport;
+  IdConnectionBindings, IdSipMessage, IdSipMockTransport, IdSipTransport,
+  IdSipUdpTransport, IdTimerQueue, IdUdpClient, SyncObjs, SysUtils,
+  TestFrameworkSip, TestFrameworkSipTransport;
 
 type
   TestTIdSipUDPTransport = class(TestTIdSipTransport)
@@ -23,16 +23,16 @@ type
 
     procedure CheckMessageWithTrailingGarbage(Sender: TObject;
                                               R: TIdSipRequest;
-                                              ReceivedFrom: TIdSipConnectionBindings);
+                                              ReceivedFrom: TIdConnectionBindings);
     procedure CheckRportParamFilledIn(Sender: TObject;
                                       R: TIdSipRequest;
-                                      ReceivedFrom: TIdSipConnectionBindings);
+                                      ReceivedFrom: TIdConnectionBindings);
     procedure CheckLeaveNonRportRequestsUntouched(Sender: TObject;
                                                   R: TIdSipRequest;
-                                                  ReceivedFrom: TIdSipConnectionBindings);
+                                                  ReceivedFrom: TIdConnectionBindings);
     procedure NoteSourcePort(Sender: TObject;
                              R: TIdSipRequest;
-                             ReceivedFrom: TIdSipConnectionBindings);
+                             ReceivedFrom: TIdConnectionBindings);
   protected
     procedure CheckServerOnPort(const Host: String;
                                 Port: Cardinal;
@@ -67,29 +67,29 @@ type
 
     procedure AcknowledgeEvent(Sender: TObject;
                                Request: TIdSipRequest;
-                               ReceivedFrom: TIdSipConnectionBindings); overload;
+                               ReceivedFrom: TIdConnectionBindings); overload;
     procedure AcknowledgeEvent(Sender: TObject;
                                Response: TIdSipResponse;
-                               ReceivedFrom: TIdSipConnectionBindings); overload;
+                               ReceivedFrom: TIdConnectionBindings); overload;
     procedure CheckRejectFragmentedRequestProperly(Sender: TObject;
                                                    Request: TIdSipRequest;
-                                                   ReceivedFrom: TIdSipConnectionBindings);
+                                                   ReceivedFrom: TIdConnectionBindings);
     procedure CheckRejectFragmentedResponseProperly(Sender: TObject;
                                                     Response: TIdSipResponse;
-                                                    ReceivedFrom: TIdSipConnectionBindings);
+                                                    ReceivedFrom: TIdConnectionBindings);
     procedure OnEmpty(Sender: TIdTimerQueue);
     procedure OnException(FailedMessage: TIdSipMessage;
                           E: Exception;
                           const Reason: String); overload;
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport;
-                               Source: TIdSipConnectionBindings);
+                               Source: TIdConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Receiver: TIdSipTransport;
-                                Source: TIdSipConnectionBindings);
+                                Source: TIdConnectionBindings);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String;
-                                Source: TIdSipConnectionBindings);
+                                Source: TIdConnectionBindings);
 
   public
     procedure SetUp; override;
@@ -187,7 +187,7 @@ end;
 
 procedure TestTIdSipUDPTransport.CheckMessageWithTrailingGarbage(Sender: TObject;
                                                                  R: TIdSipRequest;
-                                                                 ReceivedFrom: TIdSipConnectionBindings);
+                                                                 ReceivedFrom: TIdConnectionBindings);
 begin
   Self.Request.Body := R.Body;
   
@@ -196,7 +196,7 @@ end;
 
 procedure TestTIdSipUDPTransport.CheckRportParamFilledIn(Sender: TObject;
                                                          R: TIdSipRequest;
-                                                         ReceivedFrom: TIdSipConnectionBindings);
+                                                         ReceivedFrom: TIdConnectionBindings);
 begin
   CheckNotEquals('',
                  R.LastHop.Params[RPortParam],
@@ -207,7 +207,7 @@ end;
 
 procedure TestTIdSipUDPTransport.CheckLeaveNonRportRequestsUntouched(Sender: TObject;
                                                                      R: TIdSipRequest;
-                                                                     ReceivedFrom: TIdSipConnectionBindings);
+                                                                     ReceivedFrom: TIdConnectionBindings);
 begin
   try
     Check(not R.LastHop.HasRport, 'rport param added by transport');
@@ -222,7 +222,7 @@ end;
 
 procedure TestTIdSipUDPTransport.NoteSourcePort(Sender: TObject;
                                                 R: TIdSipRequest;
-                                                ReceivedFrom: TIdSipConnectionBindings);
+                                                ReceivedFrom: TIdConnectionBindings);
 begin
   try
     Self.RPort := R.LastHop.RPort;
@@ -497,21 +497,21 @@ end;
 
 procedure TestTIdSipUdpServer.AcknowledgeEvent(Sender: TObject;
                                                Request: TIdSipRequest;
-                                               ReceivedFrom: TIdSipConnectionBindings);
+                                               ReceivedFrom: TIdConnectionBindings);
 begin
   Self.ThreadEvent.SetEvent;
 end;
 
 procedure TestTIdSipUdpServer.AcknowledgeEvent(Sender: TObject;
                                                Response: TIdSipResponse;
-                                               ReceivedFrom: TIdSipConnectionBindings);
+                                               ReceivedFrom: TIdConnectionBindings);
 begin
   Self.ThreadEvent.SetEvent;
 end;
 
 procedure TestTIdSipUdpServer.CheckRejectFragmentedRequestProperly(Sender: TObject;
                                                                    Request: TIdSipRequest;
-                                                                   ReceivedFrom: TIdSipConnectionBindings);
+                                                                   ReceivedFrom: TIdConnectionBindings);
 begin
   try
     Check(Request.IsMalformed,
@@ -528,7 +528,7 @@ end;
 
 procedure TestTIdSipUdpServer.CheckRejectFragmentedResponseProperly(Sender: TObject;
                                                                     Response: TIdSipResponse;
-                                                                    ReceivedFrom: TIdSipConnectionBindings);
+                                                                    ReceivedFrom: TIdConnectionBindings);
 begin
   try
     Check(Response.IsMalformed,
@@ -556,7 +556,7 @@ end;
 
 procedure TestTIdSipUdpServer.OnReceiveRequest(Request: TIdSipRequest;
                                                Receiver: TIdSipTransport;
-                                               Source: TIdSipConnectionBindings);
+                                               Source: TIdConnectionBindings);
 begin
   if Assigned(Self.CheckReceivedRequest) then
     Self.CheckReceivedRequest(Self, Request, Source);
@@ -564,7 +564,7 @@ end;
 
 procedure TestTIdSipUdpServer.OnReceiveResponse(Response: TIdSipResponse;
                                                 Receiver: TIdSipTransport;
-                                                Source: TIdSipConnectionBindings);
+                                                Source: TIdConnectionBindings);
 begin
   if Assigned(Self.CheckReceivedResponse) then
     Self.CheckReceivedResponse(Self, Response, Source);
@@ -575,7 +575,7 @@ end;
 
 procedure TestTIdSipUdpServer.OnRejectedMessage(const Msg: String;
                                                 const Reason: String;
-                                                Source: TIdSipConnectionBindings);
+                                                Source: TIdConnectionBindings);
 begin
   Self.NotifiedMalformedMessage := true;
   Self.ThreadEvent.SetEvent;

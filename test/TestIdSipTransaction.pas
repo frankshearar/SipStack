@@ -12,10 +12,11 @@ unit TestIdSipTransaction;
 interface
 
 uses
-  IdMockRoutingTable, IdSipAuthentication, IdSipCore, IdSipDialog, IdSipDns,
-  IdSipLocation, IdSipMessage, IdSipMockCore, IdSipMockLocator,
-  IdSipMockTransactionDispatcher, IdSipMockTransport, IdSipTransaction,
-  IdSipTransport, IdTimerQueue, SysUtils, TestFramework, TestFrameworkSip;
+  IdConnectionBindings, IdMockRoutingTable, IdSipAuthentication, IdSipCore,
+  IdSipDialog, IdSipDns, IdSipLocation, IdSipMessage, IdSipMockCore,
+  IdSipMockLocator, IdSipMockTransactionDispatcher, IdSipMockTransport,
+  IdSipTransaction, IdSipTransport, IdTimerQueue, SysUtils, TestFramework,
+  TestFrameworkSip;
 
 type
   TMessageCountingTestCase = class(TTestCaseSip)
@@ -82,14 +83,14 @@ type
                      const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transaction: TIdSipTransaction;
-                               Binding: TIdSipConnectionBindings); overload;
+                               Binding: TIdConnectionBindings); overload;
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               Binding: TIdSipConnectionBindings); overload;
+                               Binding: TIdConnectionBindings); overload;
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Transaction: TIdSipTransaction;
-                                Binding: TIdSipConnectionBindings); overload;
+                                Binding: TIdConnectionBindings); overload;
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                Binding: TIdSipConnectionBindings); overload;
+                                Binding: TIdConnectionBindings); overload;
     procedure OnTerminated(Transaction: TIdSipTransaction);
     procedure OnTransportException(FailedMessage: TIdSipMessage;
                                    Error: Exception;
@@ -245,10 +246,10 @@ type
                      const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transaction: TIdSipTransaction;
-                               Binding: TIdSipConnectionBindings);
+                               Binding: TIdConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Transaction: TIdSipTransaction;
-                                Binding: TIdSipConnectionBindings); virtual;
+                                Binding: TIdConnectionBindings); virtual;
     procedure OnTerminated(Transaction: TIdSipTransaction);
     procedure Proceeding(Sender: TObject;
                          R: TIdSipResponse);
@@ -479,7 +480,7 @@ type
   private
     SentRequestCount: Cardinal;
   protected
-    Binding:     TIdSipConnectionBindings;
+    Binding:     TIdConnectionBindings;
     Destination: TIdSipContactHeader;
     Dispatcher:  TIdSipMockTransactionDispatcher;
     Invite:      TIdSipRequest;
@@ -637,7 +638,7 @@ type
 
   TTransactionDispatcherListenerMethodTestCase = class(TTestCase)
   protected
-    Binding: TIdSipConnectionBindings;
+    Binding: TIdConnectionBindings;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -1019,27 +1020,27 @@ end;
 
 procedure TestTIdSipTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
                                                            Transaction: TIdSipTransaction;
-                                                           Binding: TIdSipConnectionBindings);
+                                                           Binding: TIdConnectionBindings);
 begin
   // Do nothing
 end;
 
 procedure TestTIdSipTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
-                                                           Binding: TIdSipConnectionBindings);
+                                                           Binding: TIdConnectionBindings);
 begin
   // Do nothing
 end;
 
 procedure TestTIdSipTransactionDispatcher.OnReceiveResponse(Response: TIdSipResponse;
                                                             Transaction: TIdSipTransaction;
-                                                            Binding: TIdSipConnectionBindings);
+                                                            Binding: TIdConnectionBindings);
 begin
   Check(not Transaction.IsClient, 'Client tran got the response - from the TU!');
   Self.OnReceiveResponseFired := true;
 end;
 
 procedure TestTIdSipTransactionDispatcher.OnReceiveResponse(Response: TIdSipResponse;
-                                                            Binding: TIdSipConnectionBindings);
+                                                            Binding: TIdConnectionBindings);
 begin
   // Do nothing
 end;
@@ -2729,7 +2730,7 @@ end;
 
 procedure TTestTransaction.OnReceiveRequest(Request: TIdSipRequest;
                                             Transaction: TIdSipTransaction;
-                                            Binding: TIdSipConnectionBindings);
+                                            Binding: TIdConnectionBindings);
 begin
   if Assigned(Self.CheckReceiveRequest) then
     Self.CheckReceiveRequest(Self, Request);
@@ -2737,7 +2738,7 @@ end;
 
 procedure TTestTransaction.OnReceiveResponse(Response: TIdSipResponse;
                                              Transaction: TIdSipTransaction;
-                                             Binding: TIdSipConnectionBindings);
+                                             Binding: TIdConnectionBindings);
 begin
   if Assigned(Self.CheckReceiveResponse) then
     Self.CheckReceiveResponse(Self, Response);
@@ -5253,7 +5254,7 @@ procedure TTransactionWaitTestCase.SetUp;
 begin
   inherited SetUp;
 
-  Self.Binding := TIdSipConnectionBindings.Create;
+  Self.Binding := TIdConnectionBindings.Create;
   Self.Destination := TIdSipContactHeader.Create;
   Self.Destination.Value := 'sip:cthulhu@rlyeh.org';
 
@@ -5807,7 +5808,7 @@ procedure TTransactionDispatcherListenerMethodTestCase.SetUp;
 begin
   inherited SetUp;
 
-  Self.Binding := TIdSipConnectionBindings.Create;
+  Self.Binding := TIdConnectionBindings.Create;
 end;
 
 procedure TTransactionDispatcherListenerMethodTestCase.TearDown;

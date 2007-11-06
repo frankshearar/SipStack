@@ -12,8 +12,8 @@ unit IdSipRegistration;
 interface
 
 uses
-  Classes, Contnrs, IdException, IdObservable, IdSipCore, IdSipMessage,
-  IdNotification, IdTimerQueue;
+  Classes, Contnrs, IdConnectionBindings, IdException, IdObservable, IdSipCore,
+  IdSipMessage, IdNotification, IdTimerQueue;
 
 type
   TIdSipRegistrationInfo = class(TObject)
@@ -224,7 +224,7 @@ type
     destructor  Destroy; override;
 
     function  Accept(Request: TIdSipRequest;
-                     Binding: TIdSipConnectionBindings): TIdSipAction; override;
+                     Binding: TIdConnectionBindings): TIdSipAction; override;
     procedure CleanUp; override;
     function  CreateRegister(From: TIdSipAddressHeader;
                              Registrar: TIdSipToHeader;
@@ -265,7 +265,7 @@ type
     destructor  Destroy; override;
 
     function Accept(Request: TIdSipRequest;
-                    Binding: TIdSipConnectionBindings): TIdSipAction; override;
+                    Binding: TIdConnectionBindings): TIdSipAction; override;
     function AcceptsMethods: String; override;
 
     property BindingDB:         TIdSipAbstractBindingDatabase read fBindingDB write SetBindingDB;
@@ -306,11 +306,11 @@ type
     function  CreateNewAttempt: TIdSipRequest; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
+                         Binding: TIdConnectionBindings); override;
   public
     function  IsInbound: Boolean; override;
     procedure ReceiveRequest(Register: TIdSipRequest;
-                             Binding: TIdSipConnectionBindings); override;
+                             Binding: TIdConnectionBindings); override;
   end;
 
   // I piggyback on a transaction in a blocking I/O fashion to provide a UAC
@@ -339,10 +339,10 @@ type
                              Bindings: TIdSipContacts): TIdSipRequest; virtual;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
+                         Binding: TIdConnectionBindings); override;
     function  ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionResult; override;
     function  ReceiveOKResponse(Response: TIdSipResponse;
-                                Binding: TIdSipConnectionBindings): TIdSipActionResult; override;
+                                Binding: TIdConnectionBindings): TIdSipActionResult; override;
     procedure RegisterWith(Registrar: TIdSipUri;
                            Bindings: TIdSipContacts); overload;
     procedure RegisterWith(Registrar: TIdSipUri;
@@ -372,7 +372,7 @@ type
     function  CreateNewAttempt: TIdSipRequest; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
+                         Binding: TIdConnectionBindings); override;
   public
     property IsWildCard: Boolean read fIsWildCard write fIsWildCard;
   end;
@@ -417,7 +417,7 @@ type
     procedure ConfigureRequest(Action: TIdSipOutboundRegisterBase); virtual;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
+                         Binding: TIdConnectionBindings); override;
     procedure NotifyOfFailure(ErrorCode: Cardinal;
                               const Reason: String); reintroduce; // TODO: Not all Actions will fail from a Response
     procedure NotifyOfSuccess(Response: TIdSipMessage); virtual;
@@ -1004,7 +1004,7 @@ begin
 end;
 
 function TIdSipOutboundRegisterModule.Accept(Request: TIdSipRequest;
-                                             Binding: TIdSipConnectionBindings): TIdSipAction;
+                                             Binding: TIdConnectionBindings): TIdSipAction;
 begin
   // As a purely UAC module, don't accept ANY requests.
   Result := nil;
@@ -1122,7 +1122,7 @@ begin
 end;
 
 function TIdSipRegisterModule.Accept(Request: TIdSipRequest;
-                                     Binding: TIdSipConnectionBindings): TIdSipAction;
+                                     Binding: TIdConnectionBindings): TIdSipAction;
 begin
   Result := inherited Accept(Request, Binding);
 
@@ -1218,7 +1218,7 @@ begin
 end;
 
 procedure TIdSipInboundRegistration.ReceiveRequest(Register: TIdSipRequest;
-                                                   Binding: TIdSipConnectionBindings);
+                                                   Binding: TIdConnectionBindings);
 begin
   Assert(Register.IsRegister,
          'TIdSipAction.ReceiveRegister must only receive REGISTERs');
@@ -1265,7 +1265,7 @@ end;
 
 procedure TIdSipInboundRegistration.Initialise(UA: TIdSipAbstractCore;
                                                Request: TIdSipRequest;
-                                               Binding: TIdSipConnectionBindings);
+                                               Binding: TIdConnectionBindings);
 var
   RegModule: TIdSipMessageModule;
 begin
@@ -1504,7 +1504,7 @@ end;
 
 procedure TIdSipOutboundRegisterBase.Initialise(UA: TIdSipAbstractCore;
                                                 Request: TIdSipRequest;
-                                                Binding: TIdSipConnectionBindings);
+                                                Binding: TIdConnectionBindings);
 var
   RegModule: TIdSipMessageModule;
 begin
@@ -1549,7 +1549,7 @@ begin
 end;
 
 function TIdSipOutboundRegisterBase.ReceiveOKResponse(Response: TIdSipResponse;
-                                                      Binding: TIdSipConnectionBindings): TIdSipActionResult;
+                                                      Binding: TIdConnectionBindings): TIdSipActionResult;
 begin
   Result := inherited ReceiveOKResponse(Response, Binding);
 
@@ -1741,7 +1741,7 @@ end;
 
 procedure TIdSipOutboundUnregister.Initialise(UA: TIdSipAbstractCore;
                                               Request: TIdSipRequest;
-                                              Binding: TIdSipConnectionBindings);
+                                              Binding: TIdConnectionBindings);
 begin
   inherited Initialise(UA, Request, Binding);
 
@@ -1814,7 +1814,7 @@ end;
 
 procedure TIdSipOutboundRegistrationBase.Initialise(UA: TIdSipAbstractCore;
                                                     Request: TIdSipRequest;
-                                                    Binding: TIdSipConnectionBindings);
+                                                    Binding: TIdConnectionBindings);
 var
   RegModule: TIdSipMessageModule;
 begin

@@ -61,8 +61,8 @@ end;
 }
 
 uses
-  Classes, Contnrs, IdNotification, IdSipCore, IdSipDialog, IdSipDialogID,
-  IdSipMessage, IdTimerQueue, SyncObjs, SysUtils;
+  Classes, Contnrs, IdConnectionBindings, IdNotification, IdSipCore,
+  IdSipDialog, IdSipDialogID, IdSipMessage, IdTimerQueue, SyncObjs, SysUtils;
 
 type
   TIdSipOutboundNotify = class;
@@ -137,7 +137,7 @@ type
     function  SubscriptionMakingRequests: String;
   protected
     function AcceptRequest(Request: TIdSipRequest;
-                           Binding: TIdSipConnectionBindings): TIdSipAction; override;
+                           Binding: TIdConnectionBindings): TIdSipAction; override;
     function WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; override;
   public
     constructor Create(UA: TIdSipAbstractCore); override;
@@ -217,7 +217,7 @@ type
   protected
     function  CreateSubscription(UA: TIdSipAbstractCore;
                                  Request: TIdSipRequest;
-                                 Binding: TIdSipConnectionBindings): TIdSipInboundSubscription; virtual;
+                                 Binding: TIdConnectionBindings): TIdSipInboundSubscription; virtual;
     procedure Reject(Request: TIdSipRequest); virtual;
     function  UserAgent: TIdSipAbstractCore;
     function  WillAccept(Request: TIdSipRequest): Boolean; virtual;
@@ -229,7 +229,7 @@ type
     constructor Create(Module: TIdSipSubscribeModule);
 
     function  Accept(Request: TIdSipRequest;
-                     Binding: TIdSipConnectionBindings): TIdSipAction; virtual;
+                     Binding: TIdConnectionBindings): TIdSipAction; virtual;
     function Copy: TIdSipEventPackage;
     function MimeType: String; virtual;
 
@@ -247,7 +247,7 @@ type
   protected
     function  CreateSubscription(UA: TIdSipAbstractCore;
                                  Request: TIdSipRequest;
-                                 Binding: TIdSipConnectionBindings): TIdSipInboundSubscription; override;
+                                 Binding: TIdConnectionBindings): TIdSipInboundSubscription; override;
     procedure Reject(Request: TIdSipRequest); override;
     function  WillAccept(Request: TIdSipRequest): Boolean; override;
   public
@@ -282,7 +282,7 @@ type
     function  CreateNewAttempt: TIdSipRequest; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
+                         Binding: TIdConnectionBindings); override;
   public
     destructor Destroy; override;
 
@@ -327,14 +327,14 @@ type
     function  CreateNewAttempt: TIdSipRequest; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
+                         Binding: TIdConnectionBindings); override;
     procedure ReceiveNotify(Notify: TIdSipRequest); virtual;
     procedure ReceiveRefer(Refer: TIdSipRequest); virtual;
     procedure ReceiveSubscribe(Subscribe: TIdSipRequest); virtual;
   public
     function  Method: String; override;
     procedure ReceiveRequest(Request: TIdSipRequest;
-                             Binding: TIdSipConnectionBindings); override;
+                             Binding: TIdConnectionBindings); override;
 
     property EventPackage: String   read fEventPackage write fEventPackage;
     property Duration:     Cardinal read fDuration write fDuration;
@@ -350,7 +350,7 @@ type
     function  CreateNewAttempt: TIdSipRequest; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
+                         Binding: TIdConnectionBindings); override;
   public
     destructor  Destroy; override;
 
@@ -397,7 +397,7 @@ type
     function  WrongNumberOfReferTos(Refer: TIdSipRequest): Boolean;
   protected
     procedure ReceiveOtherRequest(Request: TIdSipRequest;
-                                  Binding: TIdSipConnectionBindings); override;
+                                  Binding: TIdConnectionBindings); override;
   end;
 
   TIdSipOutboundRefer = class(TIdSipOutboundSubscribe)
@@ -451,7 +451,7 @@ type
     procedure EstablishDialog(Response: TIdSipMessage); virtual;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
+                         Binding: TIdConnectionBindings); override;
     procedure ReceiveNotify(Notify: TIdSipRequest); virtual;
     procedure ReceiveRefer(Refer: TIdSipRequest); virtual;
     procedure ReceiveSubscribe(Subscribe: TIdSipRequest); virtual;
@@ -468,7 +468,7 @@ type
     function  ExpiryTimeInSeconds: Integer;
     function  Method: String; override;
     procedure ReceiveRequest(Request: TIdSipRequest;
-                             Binding: TIdSipConnectionBindings); override;
+                             Binding: TIdConnectionBindings); override;
 
     property Duration:          Cardinal            read fDuration write fDuration;
     property EventPackage:      String              read fEventPackage write SetEventPackage;
@@ -521,7 +521,7 @@ type
     function  GetID(Request: TIdSipRequest): String; virtual;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
+                         Binding: TIdConnectionBindings); override;
     procedure ReceiveSubscribe(Request: TIdSipRequest); override;
     procedure SendResponse(Response: TIdSipResponse); override;
     function  WillAccept(Subscribe: TIdSipRequest): Boolean; virtual;
@@ -581,7 +581,7 @@ type
     function  CreateOutboundSubscribe: TIdSipOutboundSubscribe; virtual;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
+                         Binding: TIdConnectionBindings); override;
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
     procedure ReceiveNotify(Notify: TIdSipRequest); override;
     procedure SetEventPackage(const Value: String); override;
@@ -642,7 +642,7 @@ type
     function  CreateOutboundSubscribe: TIdSipOutboundSubscribe; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
+                         Binding: TIdConnectionBindings); override;
     procedure StartNewSubscription(Notify: TIdSipRequest); override;
   public
     function  CreateInitialAction: TIdSipOwnedAction; override;
@@ -835,7 +835,7 @@ const
 implementation
 
 uses
-  IdRegisteredObject, IdSipLocator, RuntimeSafety;
+  IdRegisteredObject, IdSipLocator, IdSipTransport, RuntimeSafety;
 
 const
   BadReferNotifyBody               = 'REFER NOTIFYs MUST have '
@@ -1120,7 +1120,7 @@ end;
 //* TIdSipSubscribeModule Private methods **************************************
 
 function TIdSipSubscribeModule.AcceptRequest(Request: TIdSipRequest;
-                                             Binding: TIdSipConnectionBindings): TIdSipAction;
+                                             Binding: TIdConnectionBindings): TIdSipAction;
 var
   Package: TIdSipEventPackage;
 begin
@@ -1293,7 +1293,7 @@ begin
 end;
 
 function TIdSipEventPackage.Accept(Request: TIdSipRequest;
-                                   Binding: TIdSipConnectionBindings): TIdSipAction;
+                                   Binding: TIdConnectionBindings): TIdSipAction;
 var
   Subscription: TIdSipInboundSubscription;
 begin
@@ -1324,7 +1324,7 @@ end;
 
 function TIdSipEventPackage.CreateSubscription(UA: TIdSipAbstractCore;
                                                Request: TIdSipRequest;
-                                               Binding: TIdSipConnectionBindings): TIdSipInboundSubscription;
+                                               Binding: TIdConnectionBindings): TIdSipInboundSubscription;
 begin
   Result := TIdSipInboundSubscription.CreateInbound(UA, Request, Binding);
 end;
@@ -1375,7 +1375,7 @@ end;
 
 function TIdSipReferPackage.CreateSubscription(UA: TIdSipAbstractCore;
                                                Request: TIdSipRequest;
-                                               Binding: TIdSipConnectionBindings): TIdSipInboundSubscription;
+                                               Binding: TIdConnectionBindings): TIdSipInboundSubscription;
 begin
   Result := TIdSipInboundReferral.CreateInbound(Self.UserAgent, Request, Binding);
 end;
@@ -1471,7 +1471,7 @@ end;
 
 procedure TIdSipOutboundNotifyBase.Initialise(UA: TIdSipAbstractCore;
                                               Request: TIdSipRequest;
-                                              Binding: TIdSipConnectionBindings);
+                                              Binding: TIdConnectionBindings);
 var
   SubModule: TIdSipMessageModule;
 begin
@@ -1568,7 +1568,7 @@ begin
 end;
 
 procedure TIdSipSubscribe.ReceiveRequest(Request: TIdSipRequest;
-                             Binding: TIdSipConnectionBindings);
+                             Binding: TIdConnectionBindings);
 begin
        if Request.IsNotify    then Self.ReceiveNotify(Request)
   else if Request.IsRefer     then Self.ReceiveRefer(Request)
@@ -1596,7 +1596,7 @@ end;
 
 procedure TIdSipSubscribe.Initialise(UA: TIdSipAbstractCore;
                                      Request: TIdSipRequest;
-                                     Binding: TIdSipConnectionBindings);
+                                     Binding: TIdConnectionBindings);
 begin
   inherited Initialise(UA, Request, Binding);
 
@@ -1672,7 +1672,7 @@ end;
 
 procedure TIdSipOutboundSubscribe.Initialise(UA: TIdSipAbstractCore;
                                              Request: TIdSipRequest;
-                                             Binding: TIdSipConnectionBindings);
+                                             Binding: TIdConnectionBindings);
 begin
   inherited Initialise(UA, Request, Binding);
 
@@ -1767,7 +1767,7 @@ end;
 //* TIdSipInboundRefer Protected methods ***************************************
 
 procedure TIdSipInboundRefer.ReceiveOtherRequest(Request: TIdSipRequest;
-                                                 Binding: TIdSipConnectionBindings);
+                                                 Binding: TIdConnectionBindings);
 begin
   if Self.WrongNumberOfReferTos(Request) then begin
     Self.RejectBadRequest(Request);
@@ -1886,7 +1886,7 @@ begin
 end;
 
 procedure TIdSipSubscription.ReceiveRequest(Request: TIdSipRequest;
-                                            Binding: TIdSipConnectionBindings);
+                                            Binding: TIdConnectionBindings);
 begin
        if Request.IsNotify    then Self.ReceiveNotify(Request)
   else if Request.IsRefer     then Self.ReceiveRefer(Request)
@@ -1918,7 +1918,7 @@ end;
 
 procedure TIdSipSubscription.Initialise(UA: TIdSipAbstractCore;
                                         Request: TIdSipRequest;
-                                        Binding: TIdSipConnectionBindings);
+                                        Binding: TIdConnectionBindings);
 begin
   inherited Initialise(UA, Request, Binding);
 
@@ -2119,11 +2119,11 @@ end;
 
 procedure TIdSipInboundSubscription.Initialise(UA: TIdSipAbstractCore;
                                                Request: TIdSipRequest;
-                                               Binding: TIdSipConnectionBindings);
+                                               Binding: TIdConnectionBindings);
 begin
   inherited Initialise(UA, Request, Binding);
 
-  Self.UsingSecureTransport := Binding.IsSecureTransport;
+  Self.UsingSecureTransport := TIdSipTransportRegistry.IsSecure(Binding.Transport);
   Self.EventPackage := Self.GetEventPackage(Self.InitialRequest);
   Self.EventID      := Self.GetID(Self.InitialRequest);
 
@@ -2543,7 +2543,7 @@ end;
 
 procedure TIdSipOutboundSubscription.Initialise(UA: TIdSipAbstractCore;
                                                 Request: TIdSipRequest;
-                                                Binding: TIdSipConnectionBindings);
+                                                Binding: TIdConnectionBindings);
 begin
   inherited Initialise(UA, Request, Binding);
 
@@ -3095,7 +3095,7 @@ end;
 
 procedure TIdSipOutboundReferral.Initialise(UA: TIdSipAbstractCore;
                                             Request: TIdSipRequest;
-                                            Binding: TIdSipConnectionBindings);
+                                            Binding: TIdConnectionBindings);
 begin
   inherited Initialise(UA, Request, Binding);
 

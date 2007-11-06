@@ -12,7 +12,7 @@ unit IdSipOptionsModule;
 interface
 
 uses
-  IdNotification, IdSipCore, IdSipMessage;
+  IdConnectionBindings, IdNotification, IdSipCore, IdSipMessage;
 
 type
   TIdSipOutboundOptions = class;
@@ -30,7 +30,7 @@ type
     constructor Create(UA: TIdSipAbstractCore); override;
 
     function Accept(Request: TIdSipRequest;
-                    Binding: TIdSipConnectionBindings): TIdSipAction; override;
+                    Binding: TIdConnectionBindings): TIdSipAction; override;
     function AcceptsMethods: String; override;
     function CreateOptions(From: TIdSipAddressHeader;
                            Dest: TIdSipAddressHeader;
@@ -45,7 +45,7 @@ type
     function  CreateNewAttempt: TIdSipRequest; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
+                         Binding: TIdConnectionBindings); override;
   public
     function IsOptions: Boolean; override;
     function Method: String; override;
@@ -55,7 +55,7 @@ type
   public
     function  IsInbound: Boolean; override;
     procedure ReceiveRequest(Options: TIdSipRequest;
-                             Binding: TIdSipConnectionBindings); override;
+                             Binding: TIdConnectionBindings); override;
   end;
 
   TIdSipOutboundOptions = class(TIdSipOptions)
@@ -69,7 +69,7 @@ type
     function  CreateNewAttempt: TIdSipRequest; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
+                         Binding: TIdConnectionBindings); override;
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
   public
     destructor Destroy; override;
@@ -110,7 +110,7 @@ begin
 end;
 
 function TIdSipOptionsModule.Accept(Request: TIdSipRequest;
-                                    Binding: TIdSipConnectionBindings): TIdSipAction;
+                                    Binding: TIdConnectionBindings): TIdSipAction;
 begin
   Result := inherited Accept(Request, Binding);
 
@@ -185,7 +185,7 @@ end;
 
 procedure TIdSipOptions.Initialise(UA: TIdSipAbstractCore;
                                    Request: TIdSipRequest;
-                                   Binding: TIdSipConnectionBindings);
+                                   Binding: TIdConnectionBindings);
 begin
   inherited Initialise(UA, Request, Binding);
 
@@ -203,7 +203,7 @@ begin
 end;
 
 procedure TIdSipInboundOptions.ReceiveRequest(Options: TIdSipRequest;
-                                              Binding: TIdSipConnectionBindings);
+                                              Binding: TIdConnectionBindings);
 var
   Response: TIdSipResponse;
 begin
@@ -274,7 +274,7 @@ end;
 
 procedure TIdSipOutboundOptions.Initialise(UA: TIdSipAbstractCore;
                                            Request: TIdSipRequest;
-                                           Binding: TIdSipConnectionBindings);
+                                           Binding: TIdConnectionBindings);
 begin
   inherited Initialise(UA, Request, Binding);
 

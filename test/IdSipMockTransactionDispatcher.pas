@@ -12,13 +12,13 @@ unit IdSipMockTransactionDispatcher;
 interface
 
 uses
-  Classes, IdSipLocation, IdSipMessage, IdSipMockLocator, IdSipMockTransport,
-  IdSipTransaction, IdSipTransport, IdTimerQueue;
+  Classes, IdConnectionBindings, IdSipLocation, IdSipMessage, IdSipMockLocator,
+  IdSipMockTransport, IdSipTransaction, IdSipTransport, IdTimerQueue;
 
 type
   TIdSipMockTransactionDispatcher = class(TIdSipTransactionDispatcher)
   private
-    fBinding:       TIdSipConnectionBindings;
+    fBinding:       TIdConnectionBindings;
     fTransportType: String;
     SentAcks:       TIdSipRequestList;
     SentRequests:   TIdSipRequestList;
@@ -30,10 +30,10 @@ type
   protected
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport;
-                               Source: TIdSipConnectionBindings); overload; override;
+                               Source: TIdConnectionBindings); overload; override;
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Receiver: TIdSipTransport;
-                                Source: TIdSipConnectionBindings); overload; override;
+                                Source: TIdConnectionBindings); overload; override;
   public
     constructor Create; reintroduce;
     destructor  Destroy; override;
@@ -48,7 +48,7 @@ type
     function  SentRequestCount:  Cardinal;
     function  SentResponseCount: Cardinal;
 
-    property Binding:       TIdSipConnectionBindings read fBinding;
+    property Binding:       TIdConnectionBindings read fBinding;
     property DebugTimer:    TIdDebugTimerQueue       read GetDebugTimer;
     property MockLocator:   TIdSipMockLocator        read GetMockLocator;
     property Transport:     TIdSipMockTransport      read GetTransport;
@@ -105,7 +105,7 @@ begin
     SupportedTrans.Free;
   end;
 
-  Self.fBinding := TIdSipConnectionBindings.Create;
+  Self.fBinding := TIdConnectionBindings.Create;
   Self.fBinding.LocalIP   := '127.0.0.1';
   Self.fBinding.LocalPort := TIdSipTransportRegistry.TransportTypeFor(Self.TransportType).DefaultPort;
   Self.fBinding.PeerIP    := '127.0.0.2';
@@ -199,7 +199,7 @@ end;
 
 procedure TIdSipMockTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
                                                            Receiver: TIdSipTransport;
-                                                           Source: TIdSipConnectionBindings);
+                                                           Source: TIdConnectionBindings);
 begin
   if Request.IsAck then
     Self.SentAcks.AddCopy(Request)
@@ -211,7 +211,7 @@ end;
 
 procedure TIdSipMockTransactionDispatcher.OnReceiveResponse(Response: TIdSipResponse;
                                                             Receiver: TIdSipTransport;
-                                                            Source: TIdSipConnectionBindings);
+                                                            Source: TIdConnectionBindings);
 begin
   Self.SentResponses.AddCopy(Response);
 

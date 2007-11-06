@@ -12,7 +12,8 @@ unit IdSipMockCore;
 interface
 
 uses
-  IdSipCore, IdSipInviteModule, IdSipMessage, IdSipTransaction, IdSipUserAgent;
+  IdConnectionBindings, IdSipCore, IdSipInviteModule, IdSipMessage,
+  IdSipTransaction, IdSipUserAgent;
 
 type
   TIdSipMockCore = class(TIdSipAbstractCore)
@@ -21,9 +22,9 @@ type
     fReceiveResponseCalled: Boolean;
   protected
     procedure ActOnRequest(Request: TIdSipRequest;
-                           Binding: TIdSipConnectionBindings); override;
+                           Binding: TIdConnectionBindings); override;
     procedure ActOnResponse(Response: TIdSipResponse;
-                            Binding: TIdSipConnectionBindings); override;
+                            Binding: TIdConnectionBindings); override;
     function  WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; override;
   public
     procedure Reset;
@@ -39,7 +40,7 @@ type
   protected
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
+                         Binding: TIdConnectionBindings); override;
   public
     function  IsInbound: Boolean; override;
     procedure SetIsInbound(Value: Boolean);
@@ -63,13 +64,13 @@ end;
 //* TIdSipMockCore Protected methods *******************************************
 
 procedure TIdSipMockCore.ActOnRequest(Request: TIdSipRequest;
-                                      Binding: TIdSipConnectionBindings);
+                                      Binding: TIdConnectionBindings);
 begin
   fReceiveRequestCalled := true;
 end;
 
 procedure TIdSipMockCore.ActOnResponse(Response: TIdSipResponse;
-                                      Binding: TIdSipConnectionBindings);
+                                      Binding: TIdConnectionBindings);
 begin
   fReceiveResponseCalled := true;
 end;
@@ -98,7 +99,7 @@ end;
 
 procedure TIdSipMockSession.Initialise(UA: TIdSipAbstractCore;
                                        Request: TIdSipRequest;
-                                       Binding: TIdSipConnectionBindings);
+                                       Binding: TIdConnectionBindings);
 begin
   inherited Initialise(UA, Request, Binding);
 

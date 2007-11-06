@@ -12,7 +12,8 @@ unit IdSipMockTransport;
 interface
 
 uses
-  IdSipLocation, IdSipMessage, IdSipTransport, IdSocketHandle, SysUtils;
+  IdConnectionBindings, IdSipLocation, IdSipMessage, IdSipTransport,
+  IdSocketHandle, SysUtils;
 
 type
   TIdMessageDirection = (dirIn, dirOut);
@@ -40,22 +41,22 @@ type
 
     procedure AddIndyStyleDefaultBinding;
     procedure CheckNoOtherMockTransportUsesBindings(Bindings: TIdSocketHandles);
-    function  CreateFakeBinding: TIdSipConnectionBindings;
+    function  CreateFakeBinding: TIdConnectionBindings;
     procedure DispatchRequest(R: TidSipRequest;
-                              Dest: TIdSipConnectionBindings);
+                              Dest: TIdConnectionBindings);
     procedure DispatchResponse(R: TidSipResponse;
-                               Dest: TIdSipConnectionBindings);
+                               Dest: TIdConnectionBindings);
     function  FindTransport(const TransportType: String;
                             const Address: String;
                                   Port: Cardinal): TIdSipMockTransport;
-    procedure InitialiseBinding(Binding: TIdSipConnectionBindings;
+    procedure InitialiseBinding(Binding: TIdConnectionBindings;
                                 LocalBinding,
                                 PeerBinding: TIdSocketHandle;
                                 TransportType: String);
     procedure Log(Msg: String;
                   Direction: TIdMessageDirection);
     procedure PossiblyAutoDispatch(M: TIdSipMessage;
-                                   Dest: TIdSipConnectionBindings);
+                                   Dest: TIdConnectionBindings);
     procedure RecordSentMessage(M: TIdSipMessage);
     procedure ScheduleException(Msg: TIdSipMessage);
     procedure SetWriteLog(const Value: Boolean);
@@ -63,7 +64,7 @@ type
   protected
     function  GetBindings: TIdSocketHandles; override;
     procedure SendMessage(M: TIdSipMessage;
-                          Dest: TIdSipConnectionBindings); override;
+                          Dest: TIdConnectionBindings); override;
   public
     class function DefaultPort: Cardinal; override;
     class function GetTransportType: String; override;
@@ -80,12 +81,12 @@ type
                               const Reason: String);
     procedure FireOnRequest(R: TIdSipRequest); overload;
     procedure FireOnRequest(R: TIdSipRequest;
-                            Peer: TIdSipConnectionBindings); overload;
+                            Peer: TIdConnectionBindings); overload;
     procedure FireOnRejectedMessage(Msg: TIdSipMessage;
                                     const Reason: String);
     procedure FireOnResponse(R: TIdSipResponse); overload;
     procedure FireOnResponse(R: TIdSipResponse;
-                             Peer: TIdSipConnectionBindings); overload;
+                             Peer: TIdConnectionBindings); overload;
     function  IsReliable: Boolean; override;
     function  IsRunning: Boolean; override;
     function  LastRequest: TIdSipRequest;
@@ -94,9 +95,9 @@ type
     function  PeerPort: Integer;
     procedure RaiseException(E: ExceptClass);
     procedure ReceiveRequest(Request: TIdSipRequest;
-                             ReceivedFrom: TIdSipConnectionBindings); override;
+                             ReceivedFrom: TIdConnectionBindings); override;
     procedure ReceiveResponse(Response: TIdSipResponse;
-                              ReceivedFrom: TIdSipConnectionBindings); override;
+                              ReceivedFrom: TIdConnectionBindings); override;
     function  RequestAt(Index: Integer): TIdSipRequest;
     procedure ResetACKCount;
     procedure ResetSentRequestCount;
@@ -238,7 +239,7 @@ end;
 
 procedure TIdSipMockTransport.FireOnRequest(R: TIdSipRequest);
 var
-  FakeBinding: TIdSipConnectionBindings;
+  FakeBinding: TIdConnectionBindings;
 begin
   FakeBinding := Self.CreateFakeBinding;
   try
@@ -249,7 +250,7 @@ begin
 end;
 
 procedure TIdSipMockTransport.FireOnRequest(R: TIdSipRequest;
-                                            Peer: TIdSipConnectionBindings);
+                                            Peer: TIdConnectionBindings);
 var
   CopyOfMessage: TIdSipRequest;
 begin
@@ -269,7 +270,7 @@ procedure TIdSipMockTransport.FireOnRejectedMessage(Msg: TIdSipMessage;
                                                     const Reason: String);
 var
   CopyOfMessage: TIdSipMessage;
-  FakeBinding:   TIdSipConnectionBindings;
+  FakeBinding:   TIdConnectionBindings;
 begin
   Self.Log(Msg.AsString, dirIn);
 
@@ -295,7 +296,7 @@ end;
 
 procedure TIdSipMockTransport.FireOnResponse(R: TIdSipResponse);
 var
-  FakeBinding: TIdSipConnectionBindings;
+  FakeBinding: TIdConnectionBindings;
 begin
   FakeBinding := Self.CreateFakeBinding;
   try
@@ -306,7 +307,7 @@ begin
 end;
 
 procedure TIdSipMockTransport.FireOnResponse(R: TIdSipResponse;
-                                             Peer: TIdSipConnectionBindings);
+                                             Peer: TIdConnectionBindings);
 var
   CopyOfMessage: TIdSipResponse;
 begin
@@ -358,7 +359,7 @@ begin
 end;
 
 procedure TIdSipMockTransport.ReceiveRequest(Request: TIdSipRequest;
-                                             ReceivedFrom: TIdSipConnectionBindings);
+                                             ReceivedFrom: TIdConnectionBindings);
 begin
   Self.Log(Request.AsString, dirIn);
   Self.fRequests.AddCopy(Request);
@@ -367,7 +368,7 @@ begin
 end;
 
 procedure TIdSipMockTransport.ReceiveResponse(Response: TIdSipResponse;
-                                              ReceivedFrom: TIdSipConnectionBindings);
+                                              ReceivedFrom: TIdConnectionBindings);
 begin
   Self.Log(Response.AsString, dirIn);
   Self.fResponses.AddCopy(Response);
@@ -438,7 +439,7 @@ begin
 end;
 
 procedure TIdSipMockTransport.SendMessage(M: TIdSipMessage;
-                                          Dest: TIdSipConnectionBindings);
+                                          Dest: TIdConnectionBindings);
 var
   SendingBinding: TIdSocketHandle;
 begin
@@ -497,9 +498,9 @@ begin
   end;
 end;
 
-function TIdSipMockTransport.CreateFakeBinding: TIdSipConnectionBindings;
+function TIdSipMockTransport.CreateFakeBinding: TIdConnectionBindings;
 begin
-  Result := TIdSipConnectionBindings.Create;
+  Result := TIdConnectionBindings.Create;
 
   Result.LocalIP   := Self.Bindings[0].IP;
   Result.LocalPort := Self.Bindings[0].Port;
@@ -509,9 +510,9 @@ begin
 end;
 
 procedure TIdSipMockTransport.DispatchRequest(R: TidSipRequest;
-                                              Dest: TIdSipConnectionBindings);
+                                              Dest: TIdConnectionBindings);
 var
-  FakeBinding: TIdSipConnectionBindings;
+  FakeBinding: TIdConnectionBindings;
   T:           TIdSipMockTransport;
 begin
   T := Self.FindTransport(Dest.Transport, Dest.PeerIP, Dest.PeerPort);
@@ -519,7 +520,7 @@ begin
   if Assigned(T) then begin
     // FakeBinding represents the socket binding information that the remote
     // transport sees.
-    FakeBinding := TIdSipConnectionBindings.Create;
+    FakeBinding := TIdConnectionBindings.Create;
     try
       Self.InitialiseBinding(FakeBinding,
                              T.Bindings[0],
@@ -534,9 +535,9 @@ begin
 end;
 
 procedure TIdSipMockTransport.DispatchResponse(R: TidSipResponse;
-                                               Dest: TIdSipConnectionBindings);
+                                               Dest: TIdConnectionBindings);
 var
-  FakeBinding: TIdSipConnectionBindings;
+  FakeBinding: TIdConnectionBindings;
   T:           TIdSipMockTransport;
 begin
   T := Self.FindTransport(Dest.Transport, Dest.PeerIP, Dest.PeerPort);
@@ -544,7 +545,7 @@ begin
   if Assigned(T) then begin
     // FakeBinding represents the socket binding information that the remote
     // transport sees.
-    FakeBinding := TIdSipConnectionBindings.Create;
+    FakeBinding := TIdConnectionBindings.Create;
     try
       Self.InitialiseBinding(FakeBinding,
                              T.Bindings[0],
@@ -576,7 +577,7 @@ begin
       Inc(I);
 end;
 
-procedure TIdSipMockTransport.InitialiseBinding(Binding: TIdSipConnectionBindings;
+procedure TIdSipMockTransport.InitialiseBinding(Binding: TIdConnectionBindings;
                                                 LocalBinding,
                                                 PeerBinding: TIdSocketHandle;
                                                 TransportType: String);
@@ -608,7 +609,7 @@ begin
 end;
 
 procedure TIdSipMockTransport.PossiblyAutoDispatch(M: TIdSipMessage;
-                                                   Dest: TIdSipConnectionBindings);
+                                                   Dest: TIdConnectionBindings);
 begin
   if Self.AutoDispatch then begin
     if M.IsRequest then

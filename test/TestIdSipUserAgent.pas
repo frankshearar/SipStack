@@ -12,11 +12,11 @@ unit TestIdSipUserAgent;
 interface
 
 uses
-  Classes, IdObservable, IdRoutingTable, IdSipCore, IdSipDialog, IdSipDialogID,
-  IdSipDns, IdSipInviteModule, IdSipLocation, IdSipMessage, IdSipRegistration,
-  IdSipTransport, IdSipUserAgent,  IdSocketHandle, IdUdpServer, IdTimerQueue,
-  LoGGer, SyncObjs, TestFrameworkEx, TestFramework, TestFrameworkSip,
-  TestFrameworkSipTU;
+  Classes, IdConnectionBindings, IdObservable, IdRoutingTable, IdSipCore,
+  IdSipDialog, IdSipDialogID, IdSipDns, IdSipInviteModule, IdSipLocation,
+  IdSipMessage, IdSipRegistration, IdSipTransport, IdSipUserAgent,
+  IdSocketHandle, IdUdpServer, IdTimerQueue, LoGGer, SyncObjs, TestFrameworkEx,
+  TestFramework, TestFrameworkSip, TestFrameworkSipTU;
 
 type
   TestTIdSipUserAgent = class(TTestCaseTU,
@@ -57,7 +57,7 @@ type
     procedure OnChanged(Observed: TObject);
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
-                                        Binding: TIdSipConnectionBindings);
+                                        Binding: TIdConnectionBindings);
     procedure OnEndedSession(Session: TIdSipSession;
                              ErrorCode: Cardinal;
                              const Reason: String);
@@ -78,15 +78,15 @@ type
                                   Progress: TIdSipResponse);
     procedure OnReferral(Session: TIdSipSession;
                          Refer: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings);
+                         Binding: TIdConnectionBindings);
     procedure ReceiveBye(Dialog: TIdSipDialog);
   protected
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport;
-                            Binding: TIdSipConnectionBindings); override;
+                            Binding: TIdConnectionBindings); override;
     procedure OnSendResponse(Response: TIdSipResponse;
                              Sender: TIdSipTransport;
-                             Binding: TIdSipConnectionBindings); override;
+                             Binding: TIdConnectionBindings); override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -578,14 +578,14 @@ end;
 
 procedure TestTIdSipUserAgent.OnSendRequest(Request: TIdSipRequest;
                                             Sender: TIdSipTransport;
-                                            Binding: TIdSipConnectionBindings);
+                                            Binding: TIdConnectionBindings);
 begin
   inherited OnSendRequest(Request, Sender, Binding);
 end;
 
 procedure TestTIdSipUserAgent.OnSendResponse(Response: TIdSipResponse;
                                              Sender: TIdSipTransport;
-                                             Binding: TIdSipConnectionBindings);
+                                             Binding: TIdConnectionBindings);
 begin
   inherited OnSendResponse(Response, Sender, Binding);
 
@@ -666,7 +666,7 @@ end;
 
 procedure TestTIdSipUserAgent.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                                         Message: TIdSipMessage;
-                                                        Binding: TIdSipConnectionBindings);
+                                                        Binding: TIdConnectionBindings);
 begin
 end;
 
@@ -725,7 +725,7 @@ end;
 
 procedure TestTIdSipUserAgent.OnReferral(Session: TIdSipSession;
                                          Refer: TIdSipRequest;
-                                         Binding: TIdSipConnectionBindings);
+                                         Binding: TIdConnectionBindings);
 begin
 end;
 

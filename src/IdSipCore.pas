@@ -69,10 +69,10 @@ end;
 interface
 
 uses
-  Classes, Contnrs, IdSipDialog, IdException, IdInterfacedObject,
-  IdNotification, IdObservable, IdRegisteredObject, IdRoutingTable,
-  IdSipAuthentication, IdSipLocation, IdSipLocator, IdSipMessage,
-  IdSipTransaction, IdTimerQueue, LoGGer, SysUtils;
+  Classes, Contnrs, IdConnectionBindings, IdSipDialog, IdException,
+  IdInterfacedObject, IdNotification, IdObservable, IdRegisteredObject,
+  IdRoutingTable, IdSipAuthentication, IdSipLocation, IdSipLocator,
+  IdSipMessage, IdSipTransaction, IdTimerQueue, LoGGer, SysUtils;
 
 const
   SipStackVersion = '0.6pre';
@@ -125,7 +125,7 @@ type
     ['{0AE275B0-4C4D-470B-821B-7F88719E822D}']
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
-                                        Binding: TIdSipConnectionBindings);
+                                        Binding: TIdConnectionBindings);
   end;
 
   // I represent a closure that contains some block of code involving an Action.
@@ -237,16 +237,16 @@ type
   // request or response.
   TIdUserAgentClosure = class(TIdSipActionClosure)
   private
-    fBinding:   TIdSipConnectionBindings;
+    fBinding:   TIdConnectionBindings;
     fRequest:   TIdSipRequest;
     fUserAgent: TIdSipAbstractCore;
 
-    procedure SetBinding(Value: TIdSipConnectionBindings);
+    procedure SetBinding(Value: TIdConnectionBindings);
   public
     constructor Create; override;
     destructor  Destroy; override;
 
-    property Binding:   TIdSipConnectionBindings read fBinding write SetBinding;
+    property Binding:   TIdConnectionBindings read fBinding write SetBinding;
     property Request:   TIdSipRequest            read fRequest write fRequest;
     property UserAgent: TIdSipAbstractCore       read fUserAgent write fUserAgent;
   end;
@@ -317,18 +317,18 @@ type
     procedure CollectAllowedExtensions(ExtensionList: TStrings);
     function  ConvertToHeader(ValueList: TStrings): String;
     function  CreateRequestHandler(Request: TIdSipRequest;
-                                   Binding: TIdSipConnectionBindings): TIdSipUserAgentActOnRequest;
+                                   Binding: TIdConnectionBindings): TIdSipUserAgentActOnRequest;
     function  CreateResponseHandler(Response: TIdSipResponse;
-                                    Binding: TIdSipConnectionBindings): TIdSipUserAgentActOnResponse;
+                                    Binding: TIdConnectionBindings): TIdSipUserAgentActOnResponse;
     function  DefaultHostName: String;
     function  DefaultUserAgent: String;
     function  ModuleAt(Index: Integer): TIdSipMessageModule;
     procedure NotifyModulesOfFree;
     procedure OnChanged(Observed: TObject);
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               Binding: TIdSipConnectionBindings); virtual;
+                               Binding: TIdConnectionBindings); virtual;
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                Binding: TIdSipConnectionBindings); virtual;
+                                Binding: TIdConnectionBindings); virtual;
     procedure OnTransportException(FailedMessage: TIdSipMessage;
                                    Error: Exception;
                                    const Reason: String); virtual;
@@ -344,9 +344,9 @@ type
     procedure SetRealm(const Value: String);
   protected
     procedure ActOnRequest(Request: TIdSipRequest;
-                           Binding: TIdSipConnectionBindings); virtual;
+                           Binding: TIdConnectionBindings); virtual;
     procedure ActOnResponse(Response: TIdSipResponse;
-                            Binding: TIdSipConnectionBindings); virtual;
+                            Binding: TIdConnectionBindings); virtual;
     function  CreateActionsClosure(ClosureType: TIdSipActionsWaitClass;
                                    Msg: TIdSipMessage): TIdSipActionsWait;
     function  ListHasUnknownValue(Request: TIdSipRequest;
@@ -354,7 +354,7 @@ type
                                   const HeaderName: String): Boolean;
     procedure NotifyOfChange;
     procedure NotifyOfDroppedMessage(Message: TIdSipMessage;
-                                     Binding: TIdSipConnectionBindings); virtual;
+                                     Binding: TIdConnectionBindings); virtual;
     procedure PrepareResponse(Response: TIdSipResponse;
                               Request: TIdSipRequest);
     procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
@@ -374,7 +374,7 @@ type
     procedure AddAllowedLanguage(const LanguageID: String);
     procedure AddAllowedScheme(const Scheme: String);
     function  AddInboundAction(Request: TIdSipRequest;
-                               Binding: TIdSipConnectionBindings): TIdSipAction;
+                               Binding: TIdConnectionBindings): TIdSipAction;
     procedure AddLocalHeaders(OutboundRequest: TIdSipRequest; InDialogRequest: Boolean); virtual;
     function  AddModule(ModuleType: TIdSipMessageModuleClass): TIdSipMessageModule;
     procedure AddObserver(const Listener: IIdObserver);
@@ -494,7 +494,7 @@ type
     Listeners:              TIdNotificationList;
 
     function  AcceptRequest(Request: TIdSipRequest;
-                            Binding: TIdSipConnectionBindings): TIdSipAction; virtual;
+                            Binding: TIdConnectionBindings): TIdSipAction; virtual;
     function  ListHasUnknownValue(Request: TIdSipRequest;
                                   ValueList: TStrings;
                                   const HeaderName: String): Boolean;
@@ -510,7 +510,7 @@ type
     destructor  Destroy; override;
 
     function  Accept(Request: TIdSipRequest;
-                     Binding: TIdSipConnectionBindings): TIdSipAction; virtual;
+                     Binding: TIdConnectionBindings): TIdSipAction; virtual;
     procedure AddAllowedContentType(const MimeType: String);
     procedure AddAllowedContentTypes(MimeTypes: TStrings);
     procedure AddLocalHeaders(OutboundMessage: TIdSipMessage); virtual;
@@ -600,7 +600,7 @@ type
     function  CreateNewAttempt: TIdSipRequest; virtual;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); virtual;
+                         Binding: TIdConnectionBindings); virtual;
     procedure MarkAsTerminated; virtual;
     procedure NotifyOfAuthenticationChallenge(Challenge: TIdSipResponse); virtual;
     procedure NotifyOfFailure(Response: TIdSipResponse); virtual;
@@ -610,13 +610,13 @@ type
     function  ReceiveGlobalFailureResponse(Response: TIdSipResponse): TIdSipActionResult; virtual;
 
     function  ReceiveOKResponse(Response: TIdSipResponse;
-                                Binding: TIdSipConnectionBindings): TIdSipActionResult; virtual;
+                                Binding: TIdConnectionBindings): TIdSipActionResult; virtual;
     procedure ReceiveOtherRequest(Request: TIdSipRequest;
-                                  Binding: TIdSipConnectionBindings); virtual;
+                                  Binding: TIdConnectionBindings); virtual;
     function  ReceiveProvisionalResponse(Response: TIdSipResponse;
-                                         Binding: TIdSipConnectionBindings): TIdSipActionResult; virtual;
+                                         Binding: TIdConnectionBindings): TIdSipActionResult; virtual;
     function  ReceiveRedirectionResponse(Response: TIdSipResponse;
-                                         Binding: TIdSipConnectionBindings): TIdSipActionResult; virtual;
+                                         Binding: TIdConnectionBindings): TIdSipActionResult; virtual;
     function  ReceiveServerFailureResponse(Response: TIdSipResponse): TIdSipActionResult; virtual;
     procedure SendRequest(Request: TIdSipRequest);
     procedure SendResponse(Response: TIdSipResponse); virtual;
@@ -628,7 +628,7 @@ type
     constructor Create(UA: TIdSipAbstractCore); overload; virtual;
     constructor CreateInbound(UA: TIdSipAbstractCore;
                               Request: TIdSipRequest;
-                              Binding: TIdSipConnectionBindings); virtual;
+                              Binding: TIdConnectionBindings); virtual;
     destructor  Destroy; override;
 
     procedure AddActionListener(Listener: IIdSipActionListener);
@@ -641,9 +641,9 @@ type
     function  Method: String; virtual;
     procedure NetworkFailureSending(Msg: TIdSipMessage); virtual;
     procedure ReceiveRequest(Request: TIdSipRequest;
-                             Binding: TIdSipConnectionBindings); virtual;
+                             Binding: TIdConnectionBindings); virtual;
     procedure ReceiveResponse(Response: TIdSipResponse;
-                              Binding: TIdSipConnectionBindings); virtual;
+                              Binding: TIdConnectionBindings); virtual;
     procedure RemoveActionListener(Listener: IIdSipActionListener);
     procedure Resend(AuthorizationCredentials: TIdSipAuthorizationHeader); virtual;
     procedure Send; virtual;
@@ -669,12 +669,12 @@ type
     procedure ActionSucceeded(Response: TIdSipResponse); override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
+                         Binding: TIdConnectionBindings); override;
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
     procedure NotifyOfRedirect(Response: TIdSipResponse);
     procedure NotifyOfSuccess(Msg: TIdSipMessage); virtual;
     function  ReceiveRedirectionResponse(Response: TIdSipResponse;
-                                         Binding: TIdSipConnectionBindings): TIdSipActionResult; override;
+                                         Binding: TIdConnectionBindings): TIdSipActionResult; override;
   public
     destructor Destroy; override;
 
@@ -695,7 +695,7 @@ type
     function  CreateNewAttempt: TIdSipRequest; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
+                         Binding: TIdConnectionBindings); override;
   public
     destructor Destroy; override;
 
@@ -907,12 +907,12 @@ type
 
   TIdSipUserAgentDroppedUnmatchedMessageMethod = class(TIdSipAbstractCoreMethod)
   private
-    fBinding: TIdSipConnectionBindings;
+    fBinding: TIdConnectionBindings;
     fMessage: TIdSipMessage;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Binding: TIdSipConnectionBindings read fBinding write fBinding;
+    property Binding: TIdConnectionBindings read fBinding write fBinding;
     property Message: TIdSipMessage            read fMessage write fMessage;
   end;
 
@@ -1389,7 +1389,7 @@ constructor TIdUserAgentClosure.Create;
 begin
   inherited Create;
 
-  Self.fBinding := TIdSipConnectionBindings.Create;
+  Self.fBinding := TIdConnectionBindings.Create;
 end;
 
 destructor TIdUserAgentClosure.Destroy;
@@ -1401,7 +1401,7 @@ end;
 
 //* TIdUserAgentClosure Public methods *****************************************
 
-procedure TIdUserAgentClosure.SetBinding(Value: TIdSipConnectionBindings);
+procedure TIdUserAgentClosure.SetBinding(Value: TIdConnectionBindings);
 begin
   Self.Binding.Assign(Value);
 end;
@@ -1529,7 +1529,7 @@ begin
 end;
 
 function TIdSipAbstractCore.AddInboundAction(Request: TIdSipRequest;
-                                             Binding: TIdSipConnectionBindings): TIdSipAction;
+                                             Binding: TIdConnectionBindings): TIdSipAction;
 var
   Module: TIdSipMessageModule;
 begin
@@ -2107,7 +2107,7 @@ end;
 //* TIdSipAbstractCore Protected methods ***************************************
 
 procedure TIdSipAbstractCore.ActOnRequest(Request: TIdSipRequest;
-                                          Binding: TIdSipConnectionBindings);
+                                          Binding: TIdConnectionBindings);
 var
   Actor: TIdSipUserAgentActOnRequest;
 begin
@@ -2120,7 +2120,7 @@ begin
 end;
 
 procedure TIdSipAbstractCore.ActOnResponse(Response: TIdSipResponse;
-                                           Binding: TIdSipConnectionBindings);
+                                           Binding: TIdConnectionBindings);
 var
   Actor: TIdSipUserAgentActOnResponse;
 begin
@@ -2154,7 +2154,7 @@ begin
 end;
 
 procedure TIdSipAbstractCore.NotifyOfDroppedMessage(Message: TIdSipMessage;
-                                                    Binding: TIdSipConnectionBindings);
+                                                    Binding: TIdConnectionBindings);
 var
   Notification: TIdSipUserAgentDroppedUnmatchedMessageMethod;
 begin
@@ -2372,7 +2372,7 @@ begin
 end;
 
 function TIdSipAbstractCore.CreateRequestHandler(Request: TIdSipRequest;
-                                                 Binding: TIdSipConnectionBindings): TIdSipUserAgentActOnRequest;
+                                                 Binding: TIdConnectionBindings): TIdSipUserAgentActOnRequest;
 begin
   Result := TIdSipUserAgentActOnRequest.Create;
 
@@ -2382,7 +2382,7 @@ begin
 end;
 
 function TIdSipAbstractCore.CreateResponseHandler(Response: TIdSipResponse;
-                                                  Binding: TIdSipConnectionBindings): TIdSipUserAgentActOnResponse;
+                                                  Binding: TIdConnectionBindings): TIdSipUserAgentActOnResponse;
 begin
   Result := TIdSipUserAgentActOnResponse.Create;
 
@@ -2420,7 +2420,7 @@ begin
 end;
 
 procedure TIdSipAbstractCore.OnReceiveRequest(Request: TIdSipRequest;
-                                              Binding: TIdSipConnectionBindings);
+                                              Binding: TIdConnectionBindings);
 var
   Reaction: TIdSipUserAgentReaction;
 begin
@@ -2432,7 +2432,7 @@ begin
 end;
 
 procedure TIdSipAbstractCore.OnReceiveResponse(Response: TIdSipResponse;
-                                               Binding: TIdSipConnectionBindings);
+                                               Binding: TIdConnectionBindings);
 begin
   if (Self.WillAcceptResponse(Response) = uarAccept) then
     Self.ActOnResponse(Response, Binding);
@@ -2598,7 +2598,7 @@ begin
 end;
 
 function TIdSipMessageModule.Accept(Request: TIdSipRequest;
-                                    Binding: TIdSipConnectionBindings): TIdSipAction;
+                                    Binding: TIdConnectionBindings): TIdSipAction;
 var
   WillAccept: TIdSipUserAgentReaction;
 begin
@@ -2701,7 +2701,7 @@ end;
 //* TIdSipMessageModule Protected methods **************************************
 
 function TIdSipMessageModule.AcceptRequest(Request: TIdSipRequest;
-                                           Binding: TIdSipConnectionBindings): TIdSipAction;
+                                           Binding: TIdConnectionBindings): TIdSipAction;
 begin
   Result := nil;
 end;
@@ -2924,7 +2924,7 @@ end;
 
 constructor TIdSipAction.CreateInbound(UA: TIdSipAbstractCore;
                                        Request: TIdSipRequest;
-                                       Binding: TIdSipConnectionBindings);
+                                       Binding: TIdConnectionBindings);
 begin
   inherited Create;
 
@@ -3021,13 +3021,13 @@ begin
 end;
 
 procedure TIdSipAction.ReceiveRequest(Request: TIdSipRequest;
-                                      Binding: TIdSipConnectionBindings);
+                                      Binding: TIdConnectionBindings);
 begin
   Self.ReceiveOtherRequest(Request, Binding);
 end;
 
 procedure TIdSipAction.ReceiveResponse(Response: TIdSipResponse;
-                                       Binding: TIdSipConnectionBindings);
+                                       Binding: TIdConnectionBindings);
 var
   Succeeded: TIdSipActionResult;
 begin
@@ -3125,7 +3125,7 @@ end;
 
 procedure TIdSipAction.Initialise(UA: TIdSipAbstractCore;
                                   Request: TIdSipRequest;
-                                  Binding: TIdSipConnectionBindings);
+                                  Binding: TIdConnectionBindings);
 begin
   Self.fUA := UA;
 
@@ -3227,25 +3227,25 @@ begin
 end;
 
 function TIdSipAction.ReceiveOKResponse(Response: TIdSipResponse;
-                                        Binding: TIdSipConnectionBindings): TIdSipActionResult;
+                                        Binding: TIdConnectionBindings): TIdSipActionResult;
 begin
   Result := arSuccess;
   Self.SetStateToFinished;
 end;
 
 procedure TIdSipAction.ReceiveOtherRequest(Request: TIdSipRequest;
-                                           Binding: TIdSipConnectionBindings);
+                                           Binding: TIdConnectionBindings);
 begin
 end;
 
 function TIdSipAction.ReceiveProvisionalResponse(Response: TIdSipResponse;
-                                                 Binding: TIdSipConnectionBindings): TIdSipActionResult;
+                                                 Binding: TIdConnectionBindings): TIdSipActionResult;
 begin
   Result := arFailure;
 end;
 
 function TIdSipAction.ReceiveRedirectionResponse(Response: TIdSipResponse;
-                                                 Binding: TIdSipConnectionBindings): TIdSipActionResult;
+                                                 Binding: TIdConnectionBindings): TIdSipActionResult;
 begin
   Result := arFailure;
   Self.SetStateToFinished;
@@ -3466,7 +3466,7 @@ end;
 
 procedure TIdSipOwnedAction.Initialise(UA: TIdSipAbstractCore;
                                        Request: TIdSipRequest;
-                                       Binding: TIdSipConnectionBindings);
+                                       Binding: TIdConnectionBindings);
 begin
   inherited Initialise(UA, Request, Binding);
 
@@ -3524,7 +3524,7 @@ begin
 end;
 
 function TIdSipOwnedAction.ReceiveRedirectionResponse(Response: TIdSipResponse;
-                                                      Binding: TIdSipConnectionBindings): TIdSipActionResult;
+                                                      Binding: TIdConnectionBindings): TIdSipActionResult;
 begin
   Result := inherited ReceiveRedirectionResponse(Response, Binding);
 
@@ -3567,7 +3567,7 @@ end;
 
 procedure TIdSipRedirectedAction.Initialise(UA: TIdSipAbstractCore;
                                             Request: TIdSipRequest;
-                                            Binding: TIdSipConnectionBindings);
+                                            Binding: TIdConnectionBindings);
 begin
   inherited Initialise(UA, Request, Binding);
 

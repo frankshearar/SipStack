@@ -12,8 +12,8 @@ unit IdSipInviteModule;
 interface
 
 uses
-  Classes, Contnrs, IdInterfacedObject, IdNotification, IdSipCore, IdSipDialog,
-  IdSipDialogID, IdSipMessage, IdTimerQueue;
+  Classes, Contnrs, IdConnectionBindings, IdInterfacedObject, IdNotification,
+  IdSipCore, IdSipDialog, IdSipDialogID, IdSipMessage, IdTimerQueue;
 
 type
   TIdSipInboundInvite = class;
@@ -75,7 +75,7 @@ type
                                   Progress: TIdSipResponse);
     procedure OnReferral(Session: TIdSipSession;
                          Refer: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings);
+                         Binding: TIdConnectionBindings);
   end;
 
   TIdSipInboundSession = class;
@@ -99,20 +99,20 @@ type
     function  ConvertToHeader(ValueList: TStrings): String;
     function  HasTooManyReplaces(Request: TIdSipRequest): Boolean;
     function  MaybeAcceptReplaces(Request: TIdSipRequest;
-                                  Binding: TIdSipConnectionBindings): TIdSipAction;
+                                  Binding: TIdConnectionBindings): TIdSipAction;
     procedure NotifyOfInboundCall(Session: TIdSipInboundSession);
     procedure TurnIntoInvite(OutboundRequest: TIdSipRequest;
                              const Offer: String;
                              const OfferMimeType: String);
   protected
     function AcceptRequest(Request: TIdSipRequest;
-                           Binding: TIdSipConnectionBindings): TIdSipAction; override;
+                           Binding: TIdConnectionBindings): TIdSipAction; override;
     function WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; override;
   public
     constructor Create(UA: TIdSipAbstractCore); override;
 
     function  AddInboundInvite(Invite: TIdSipRequest;
-                               Binding: TIdSipConnectionBindings): TIdSipInboundInvite;
+                               Binding: TIdConnectionBindings): TIdSipInboundInvite;
     procedure AddListener(Listener: IIdSipInviteModuleListener);
     function  AddOutboundSession: TIdSipOutboundSession;
     function  AddOutboundSessionReplacer(Invite: TIdSipRequest): TIdSipOutboundSession;
@@ -158,7 +158,7 @@ type
     function  CreateNewAttempt: TIdSipRequest; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
+                         Binding: TIdConnectionBindings); override;
   public
     function  Method: String; override;
 
@@ -175,7 +175,7 @@ type
     function  CreateNewAttempt: TIdSipRequest; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
+                         Binding: TIdConnectionBindings); override;
     procedure NotifyOfAuthenticationChallenge(Challenge: TIdSipResponse); override;
   public
     function  Method: String; override;
@@ -195,7 +195,7 @@ type
     function  CreateNewAttempt: TIdSipRequest; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
+                         Binding: TIdConnectionBindings); override;
     function  AckMatchesInvite(Msg: TIdSipMessage): Boolean;
     procedure ReceiveAck(Ack: TIdSipRequest); virtual;
     procedure ReceiveBye(Bye: TIdSipRequest); virtual;
@@ -205,7 +205,7 @@ type
     function  IsInvite: Boolean; override;
     function  Method: String; override;
     procedure ReceiveRequest(Request: TIdSipRequest;
-                             Binding: TIdSipConnectionBindings); override;
+                             Binding: TIdConnectionBindings); override;
 
     property LocalTag: String read fLocalTag write fLocalTag;
   end;
@@ -240,7 +240,7 @@ type
   protected
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
+                         Binding: TIdConnectionBindings); override;
     procedure NotifyOfSuccess(Ack: TIdSipMessage); override;
     procedure ReceiveAck(Ack: TIdSipRequest); override;
     procedure ReceiveCancel(Cancel: TIdSipRequest); override;
@@ -300,12 +300,12 @@ type
 
     procedure NotifyOfCallProgress(Response: TIdSipResponse);
     procedure NotifyOfDialogEstablished(Response: TIdSipResponse;
-                                        Binding: TIdSipConnectionBindings);
+                                        Binding: TIdConnectionBindings);
     procedure RegisterFinalResponse(Response: TIdSipResponse);
     procedure SendAckFor(Response: TIdSipResponse;
-                         Binding: TIdSipConnectionBindings);
+                         Binding: TIdConnectionBindings);
     procedure SendBye(Response: TIdSipResponse;
-                      Binding: TIdSipConnectionBindings);
+                      Binding: TIdConnectionBindings);
     procedure SendCancel;
     procedure SetAckBody(Ack: TIdSipRequest);
   protected
@@ -314,15 +314,15 @@ type
     function  CreateNewAttempt: TIdSipRequest; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
+                         Binding: TIdConnectionBindings); override;
     function  ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionResult; override;
     function  ReceiveGlobalFailureResponse(Response: TIdSipResponse): TIdSipActionResult; override;
     function  ReceiveOKResponse(Response: TIdSipResponse;
-                                Binding: TIdSipConnectionBindings): TIdSipActionResult; override;
+                                Binding: TIdConnectionBindings): TIdSipActionResult; override;
     function  ReceiveProvisionalResponse(Response: TIdSipResponse;
-                                         Binding: TIdSipConnectionBindings): TIdSipActionResult; override;
+                                         Binding: TIdConnectionBindings): TIdSipActionResult; override;
     function  ReceiveRedirectionResponse(Response: TIdSipResponse;
-                                         Binding: TIdSipConnectionBindings): TIdSipActionResult; override;
+                                         Binding: TIdConnectionBindings): TIdSipActionResult; override;
     function  ReceiveServerFailureResponse(Response: TIdSipResponse): TIdSipActionResult; override;
   public
     destructor Destroy; override;
@@ -355,7 +355,7 @@ type
     function  CreateNewAttempt: TIdSipRequest; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
+                         Binding: TIdConnectionBindings); override;
   public
     destructor Destroy; override;
 
@@ -373,7 +373,7 @@ type
     function  CreateNewAttempt: TIdSipRequest; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
+                         Binding: TIdConnectionBindings); override;
   public
     destructor Destroy; override;
 
@@ -393,7 +393,7 @@ type
     function  CreateNewAttempt: TIdSipRequest; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
+                         Binding: TIdConnectionBindings); override;
   public
     destructor Destroy; override;
 
@@ -465,7 +465,7 @@ type
     function  GetInvite: TIdSipRequest; virtual;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
+                         Binding: TIdConnectionBindings); override;
     function  MatchesLocalGruu(Msg: TIdSipMessage): Boolean;
     function  MatchesTargetDialog(Request: TIdSipRequest): Boolean;
     procedure NotifyOfEndedSession(ErrorCode: Cardinal;
@@ -498,9 +498,9 @@ type
     procedure ReceiveCancel(Cancel: TIdSipRequest);
     procedure ReceiveInitialInvite(Invite: TIdSipRequest); virtual;
     procedure ReceiveInvite(Invite: TIdSipRequest;
-                            Binding: TIdSipConnectionBindings);
+                            Binding: TIdConnectionBindings);
     procedure ReceiveRefer(Refer: TIdSipRequest;
-                           Binding: TIdSipConnectionBindings); virtual;
+                           Binding: TIdConnectionBindings); virtual;
     procedure SendBye; virtual;
     procedure SetFullyEstablished(Value: Boolean); virtual;
 
@@ -522,7 +522,7 @@ type
     procedure Modify(const Offer, ContentType: String);
     function  ModifyWaitTime: Cardinal; virtual;
     procedure ReceiveRequest(Request: TIdSipRequest;
-                             Binding: TIdSipConnectionBindings); override;
+                             Binding: TIdConnectionBindings); override;
     procedure Remodify;
     procedure RemoveSessionListener(const Listener: IIdSipSessionListener);
     procedure Resend(AuthorizationCredentials: TIdSipAuthorizationHeader); override;
@@ -549,7 +549,7 @@ type
     function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
+                         Binding: TIdConnectionBindings); override;
     procedure OnFailure(InviteAgent: TIdSipInboundInvite); override;
     procedure OnSuccess(InviteAgent: TIdSipInboundInvite;
                         Ack: TIdSipMessage); override;
@@ -607,7 +607,7 @@ type
     function  GetFullyEstablished: Boolean; override;
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
+                         Binding: TIdConnectionBindings); override;
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Response: TIdSipResponse); override;
     procedure OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
@@ -646,7 +646,7 @@ type
   protected
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings); override;
+                         Binding: TIdConnectionBindings); override;
   public
     destructor Destroy; override;
 
@@ -869,13 +869,13 @@ type
 
   TIdSipSessionReferralMethod = class(TIdSipSessionMethod)
   private
-    fBinding: TIdSipConnectionBindings;
+    fBinding: TIdConnectionBindings;
     fRefer:   TIdSipRequest;
   public
     procedure Run(const Subject: IInterface); override;
 
     property Refer:   TIdSipRequest            read fRefer write fRefer;
-    property Binding: TIdSipConnectionBindings read fBinding write fBinding;
+    property Binding: TIdConnectionBindings read fBinding write fBinding;
   end;
 
   // We subclass TIdSipEstablishedSessionMethod solely for reusing
@@ -888,8 +888,8 @@ type
 implementation
 
 uses
-  IdRandom, IdRegisteredObject, IdSdp, IdSipSubscribeModule, IdSipUserAgent,
-  IdSipTransaction, RuntimeSafety, SysUtils;
+  IdRandom, IdRegisteredObject, IdSdp, IdSipSubscribeModule, IdSipTransport,
+  IdSipUserAgent, IdSipTransaction, RuntimeSafety, SysUtils;
 
 // Exception messages
 const
@@ -918,7 +918,7 @@ begin
 end;
 
 function TIdSipInviteModule.AddInboundInvite(Invite: TIdSipRequest;
-                                             Binding: TIdSipConnectionBindings): TIdSipInboundInvite;
+                                             Binding: TIdConnectionBindings): TIdSipInboundInvite;
 begin
   Result := Self.UserAgent.AddAction(TIdSipInboundInvite.CreateInbound(Self.UserAgent, Invite, Binding)) as TIdSipInboundInvite;
 end;
@@ -1037,7 +1037,7 @@ end;
 //* TIdSipInviteModule Protected methods ***************************************
 
 function TIdSipInviteModule.AcceptRequest(Request: TIdSipRequest;
-                                          Binding: TIdSipConnectionBindings): TIdSipAction;
+                                          Binding: TIdConnectionBindings): TIdSipAction;
 var
   ExpectedStatusCode: Cardinal;
   Session:            TIdSipInboundSession;
@@ -1106,7 +1106,7 @@ begin
 end;
 
 function TIdSipInviteModule.MaybeAcceptReplaces(Request: TIdSipRequest;
-                                                Binding: TIdSipConnectionBindings): TIdSipAction;
+                                                Binding: TIdConnectionBindings): TIdSipAction;
 begin
   Result := nil;
 
@@ -1169,7 +1169,7 @@ end;
 
 procedure TIdSipOutboundBye.Initialise(UA: TIdSipAbstractCore;
                                        Request: TIdSipRequest;
-                             Binding: TIdSipConnectionBindings);
+                             Binding: TIdConnectionBindings);
 begin
   inherited Initialise(UA, Request, Binding);
 
@@ -1213,7 +1213,7 @@ end;
 
 procedure TIdSipOutboundCancel.Initialise(UA: TIdSipAbstractCore;
                                           Request: TIdSipRequest;
-                                          Binding: TIdSipConnectionBindings);
+                                          Binding: TIdConnectionBindings);
 begin
   inherited Initialise(UA, Request, Binding);
 
@@ -1250,7 +1250,7 @@ begin
 end;
 
 procedure TIdSipInvite.ReceiveRequest(Request: TIdSipRequest;
-                             Binding: TIdSipConnectionBindings);
+                             Binding: TIdConnectionBindings);
 begin
        if Request.IsAck       then Self.ReceiveAck(Request)
   else if Request.IsBye       then Self.ReceiveBye(Request)
@@ -1282,7 +1282,7 @@ end;
 
 procedure TIdSipInvite.Initialise(UA: TIdSipAbstractCore;
                                   Request: TIdSipRequest;
-                                  Binding: TIdSipConnectionBindings);
+                                  Binding: TIdConnectionBindings);
 begin
   inherited Initialise(UA, Request, Binding);
 
@@ -1519,7 +1519,7 @@ end;
 
 procedure TIdSipInboundInvite.Initialise(UA: TIdSipAbstractCore;
                                          Request: TIdSipRequest;
-                                         Binding: TIdSipConnectionBindings);
+                                         Binding: TIdConnectionBindings);
 begin
   inherited Initialise(UA, Request, Binding);
 
@@ -1795,7 +1795,7 @@ end;
 
 procedure TIdSipOutboundInvite.Initialise(UA: TIdSipAbstractCore;
                                           Request: TIdSipRequest;
-                                          Binding: TIdSipConnectionBindings);
+                                          Binding: TIdConnectionBindings);
 begin
   inherited Initialise(UA, Request, Binding);
 
@@ -1823,7 +1823,7 @@ begin
 end;
 
 function TIdSipOutboundInvite.ReceiveOKResponse(Response: TIdSipResponse;
-                                                Binding: TIdSipConnectionBindings): TIdSipActionResult;
+                                                Binding: TIdConnectionBindings): TIdSipActionResult;
 begin
   // REMEMBER: A 2xx response to an INVITE DOES NOT take place in a transaction!
   // A 2xx response immediately terminates a client INVITE transaction so that
@@ -1875,7 +1875,7 @@ begin
 end;
 
 function TIdSipOutboundInvite.ReceiveProvisionalResponse(Response: TIdSipResponse;
-                                                         Binding: TIdSipConnectionBindings): TIdSipActionResult;
+                                                         Binding: TIdConnectionBindings): TIdSipActionResult;
 begin
   Result := arSuccess;
 
@@ -1892,7 +1892,7 @@ begin
 end;
 
 function TIdSipOutboundInvite.ReceiveRedirectionResponse(Response: TIdSipResponse;
-                                                         Binding: TIdSipConnectionBindings): TIdSipActionResult;
+                                                         Binding: TIdConnectionBindings): TIdSipActionResult;
 begin
   Result := inherited ReceiveRedirectionResponse(Response, Binding);
 
@@ -1926,7 +1926,7 @@ begin
 end;
 
 procedure TIdSipOutboundInvite.NotifyOfDialogEstablished(Response: TIdSipResponse;
-                                                         Binding: TIdSipConnectionBindings);
+                                                         Binding: TIdConnectionBindings);
 var
   Dialog:       TIdSipDialog;
   Notification: TIdSipInviteDialogEstablishedMethod;
@@ -1936,7 +1936,7 @@ begin
 
     Dialog := TIdSipDialog.CreateOutboundDialog(Self.InitialRequest,
                                                 Response,
-                                                Binding.IsSecureTransport);
+                                                TIdSipTransportRegistry.IsSecure(Binding.Transport));
     try
       Dialog.ReceiveRequest(Self.InitialRequest);
       Dialog.ReceiveResponse(Response);
@@ -1965,7 +1965,7 @@ begin
 end;
 
 procedure TIdSipOutboundInvite.SendAckFor(Response: TIdSipResponse;
-                                          Binding: TIdSipConnectionBindings);
+                                          Binding: TIdConnectionBindings);
 var
   Ack: TIdSipRequest;
   Dlg: TIdSipDialog;
@@ -1974,7 +1974,7 @@ begin
   // we get a 2xx to our INVITE after sending a CANCEL.
   Dlg := TIdSipDialog.CreateOutboundDialog(Self.InitialRequest,
                                            Response,
-                                           Binding.IsSecureTransport);
+                                           TIdSipTransportRegistry.IsSecure(Binding.Transport));
   try
     Ack := Self.Module.CreateAck(Dlg);
     try
@@ -1993,7 +1993,7 @@ begin
 end;
 
 procedure TIdSipOutboundInvite.SendBye(Response: TIdSipResponse;
-                                       Binding: TIdSipConnectionBindings);
+                                       Binding: TIdConnectionBindings);
 var
   Bye: TIdSipOutboundBye;
   Dlg: TIdSipDialog;
@@ -2005,7 +2005,7 @@ begin
 
   Dlg := TIdSipDialog.CreateOutboundDialog(Self.InitialRequest,
                                            Response,
-                                           Binding.IsSecureTransport);
+                                           TIdSipTransportRegistry.IsSecure(Binding.Transport));
   try
     Bye := Self.UA.AddOutboundAction(TIdSipOutboundBye) as TIdSipOutboundBye;
     Bye.Dialog := Dlg;
@@ -2079,7 +2079,7 @@ end;
 
 procedure TIdSipOutboundInitialInvite.Initialise(UA: TIdSipAbstractCore;
                                                  Request: TIdSipRequest;
-                                                 Binding: TIdSipConnectionBindings);
+                                                 Binding: TIdConnectionBindings);
 begin
   inherited Initialise(UA, Request, Binding);
 
@@ -2119,7 +2119,7 @@ end;
 
 procedure TIdSipOutboundRedirectedInvite.Initialise(UA: TIdSipAbstractCore;
                                                     Request: TIdSipRequest;
-                                                    Binding: TIdSipConnectionBindings);
+                                                    Binding: TIdConnectionBindings);
 begin
   inherited Initialise(UA, Request, Binding);
 
@@ -2175,7 +2175,7 @@ end;
 
 procedure TIdSipOutboundReInvite.Initialise(UA: TIdSipAbstractCore;
                                             Request: TIdSipRequest;
-                                            Binding: TIdSipConnectionBindings);
+                                            Binding: TIdConnectionBindings);
 begin
   inherited Initialise(UA, Request, Binding);
 
@@ -2320,7 +2320,7 @@ begin
 end;
 
 procedure TIdSipSession.ReceiveRequest(Request: TIdSipRequest;
-                                       Binding: TIdSipConnectionBindings);
+                                       Binding: TIdConnectionBindings);
 begin
   if Self.IsTerminated then begin
     Self.RejectRequest(Request);
@@ -2410,7 +2410,7 @@ end;
 
 procedure TIdSipSession.Initialise(UA: TIdSipAbstractCore;
                                    Request: TIdSipRequest;
-                                   Binding: TIdSipConnectionBindings);
+                                   Binding: TIdConnectionBindings);
 begin
   inherited Initialise(UA, Request, Binding);
 
@@ -2659,7 +2659,7 @@ begin
 end;
 
 procedure TIdSipSession.ReceiveInvite(Invite: TIdSipRequest;
-                                      Binding: TIdSipConnectionBindings);
+                                      Binding: TIdConnectionBindings);
 var
   Modify: TIdSipInboundInvite;
 begin
@@ -2697,7 +2697,7 @@ begin
 end;
 
 procedure TIdSipSession.ReceiveRefer(Refer: TIdSipRequest;
-                                     Binding: TIdSipConnectionBindings);
+                                     Binding: TIdConnectionBindings);
 var
   Module:       TIdSipSubscribeModule;
   Notification: TIdSipSessionReferralMethod;
@@ -3004,7 +3004,7 @@ end;
 
 procedure TIdSipInboundSession.Initialise(UA: TIdSipAbstractCore;
                                           Request: TIdSipRequest;
-                                          Binding: TIdSipConnectionBindings);
+                                          Binding: TIdConnectionBindings);
 begin
   inherited Initialise(UA, Request, Binding);
 
@@ -3289,7 +3289,7 @@ end;
 
 procedure TIdSipOutboundSession.Initialise(UA: TIdSipAbstractCore;
                                            Request: TIdSipRequest;
-                                           Binding: TIdSipConnectionBindings);
+                                           Binding: TIdConnectionBindings);
 begin
   inherited Initialise(UA, Request, Binding);
 
@@ -3445,7 +3445,7 @@ end;
 
 procedure TIdSipOutboundReplacingSession.Initialise(UA: TIdSipAbstractCore;
                                                     Request: TIdSipRequest;
-                                                    Binding: TIdSipConnectionBindings);
+                                                    Binding: TIdConnectionBindings);
 begin
   inherited Initialise(UA, Request, Binding);
 

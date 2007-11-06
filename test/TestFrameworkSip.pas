@@ -12,12 +12,13 @@ unit TestFrameworkSip;
 interface
 
 uses
-  Classes, Forms, IdInterfacedObject, IdMockRoutingTable, IdObservable, IdRTP,
-  IdSdp, IdSipAuthentication, IdSipInviteModule, IdSipLocation, IdSipMessage,
-  IdSipOptionsModule, IdSipCore, IdSipDialog, IdSipMockLocator,
-  IdSipMockTransactionDispatcher, IdSipRegistration, IdSipStackInterface,
-  IdSipSubscribeModule, IdSipTransaction, IdSipTransport, IdTimerQueue,
-  IdSipUserAgent, Messages, SysUtils, TestFramework, TestFrameworkEx;
+  Classes, Forms, IdConnectionBindings, IdInterfacedObject, IdMockRoutingTable,
+  IdObservable, IdRTP, IdSdp, IdSipAuthentication, IdSipInviteModule,
+  IdSipLocation, IdSipMessage, IdSipOptionsModule, IdSipCore, IdSipDialog,
+  IdSipMockLocator, IdSipMockTransactionDispatcher, IdSipRegistration,
+  IdSipStackInterface, IdSipSubscribeModule, IdSipTransaction, IdSipTransport,
+  IdTimerQueue, IdSipUserAgent, Messages, SysUtils, TestFramework,
+  TestFrameworkEx;
 
 type
   // I provide an interface that allows a TIdSipStackWindow to dispatch
@@ -108,19 +109,19 @@ type
                           const Reason: String); virtual;
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport;
-                               Source: TIdSipConnectionBindings); virtual;
+                               Source: TIdConnectionBindings); virtual;
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Receiver: TIdSipTransport;
-                                Source: TIdSipConnectionBindings); virtual;
+                                Source: TIdConnectionBindings); virtual;
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String;
-                                Source: TIdSipConnectionBindings); virtual;
+                                Source: TIdConnectionBindings); virtual;
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport;
-                            Destination: TIdSipConnectionBindings); virtual;
+                            Destination: TIdConnectionBindings); virtual;
     procedure OnSendResponse(Response: TIdSipResponse;
                              Sender: TIdSipTransport;
-                             Destination: TIdSipConnectionBindings); virtual;
+                             Destination: TIdConnectionBindings); virtual;
     procedure ReceiveAck;
     procedure ReceiveAckFor(Request: TIdSipRequest;
                             Response: TIdSipResponse);
@@ -166,7 +167,7 @@ type
 
   TActionMethodTestCase = class(TTestCase)
   protected
-    Binding:    TIdSipConnectionBindings;
+    Binding:    TIdConnectionBindings;
     Dispatcher: TIdSipMockTransactionDispatcher;
     Response:   TIdSipResponse;
     UA:         TIdSipUserAgent;
@@ -232,7 +233,7 @@ type
     fExceptionParam:        Exception;
     fMalformedMessage:      Boolean;
     fMalformedMessageParam: String;
-    fReceivedFromParam:     TIdSipConnectionBindings;
+    fReceivedFromParam:     TIdConnectionBindings;
     fReceivedRequest:       Boolean;
     fReceivedResponse:      Boolean;
     fRequestParam:          TIdSipRequest;
@@ -242,11 +243,11 @@ type
                           const Reason: String);
     procedure OnMalformedMessage(const Msg: String;
                                  const Reason: String;
-                                 Source: TIdSipConnectionBindings);
+                                 Source: TIdConnectionBindings);
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               ReceivedFrom: TIdSipConnectionBindings);
+                               ReceivedFrom: TIdConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                ReceivedFrom: TIdSipConnectionBindings);
+                                ReceivedFrom: TIdConnectionBindings);
   public
     constructor Create; override;
 
@@ -254,7 +255,7 @@ type
     property ExceptionParam:        Exception                read fExceptionParam;
     property MalformedMessage:      Boolean                  read fMalformedMessage;
     property MalformedMessageParam: String                   read fMalformedMessageParam;
-    property ReceivedFromParam:     TIdSipConnectionBindings read fReceivedFromParam;
+    property ReceivedFromParam:     TIdConnectionBindings read fReceivedFromParam;
     property ReceivedRequest:       Boolean                  read fReceivedRequest;
     property ReceivedResponse:      Boolean                  read fReceivedResponse;
     property RequestParam:          TIdSipRequest            read fRequestParam;
@@ -470,7 +471,7 @@ type
                                     IIdSipSessionListener)
   private
     fAnswerParam:              TIdSipResponse;
-    fBindingParam:             TIdSipConnectionBindings;
+    fBindingParam:             TIdConnectionBindings;
     fEndedSession:             Boolean;
     fErrorCodeParam:           Cardinal;
     fEstablishedSession:       Boolean;
@@ -507,10 +508,10 @@ type
                                   Progress: TIdSipResponse);
     procedure OnReferral(Session: TIdSipSession;
                          Refer: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings);
+                         Binding: TIdConnectionBindings);
 
     property AnswerParam:              TIdSipResponse           read fAnswerParam;
-    property BindingParam:             TIdSipConnectionBindings read fBindingParam;
+    property BindingParam:             TIdConnectionBindings read fBindingParam;
     property EndedSession:             Boolean                  read fEndedSession;
     property ErrorCodeParam:           Cardinal                 read fErrorCodeParam;
     property EstablishedSession:       Boolean                  read fEstablishedSession;
@@ -577,7 +578,7 @@ type
   TIdSipTestTransactionListener = class(TIdSipTestActionListener,
                                         IIdSipTransactionListener)
   private
-    fBindingParam:       TIdSipConnectionBindings;
+    fBindingParam:       TIdConnectionBindings;
     fFailed:             Boolean;
     fFailedMessageParam: TIdSipMessage;
     fReasonParam:        String;
@@ -593,15 +594,15 @@ type
                      const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transaction: TIdSipTransaction;
-                               Binding: TIdSipConnectionBindings);
+                               Binding: TIdConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Transaction: TIdSipTransaction;
-                                Binding: TIdSipConnectionBindings);
+                                Binding: TIdConnectionBindings);
     procedure OnTerminated(Transaction: TIdSipTransaction);
   public
     constructor Create; override;
 
-    property BindingParam:       TIdSipConnectionBindings read fBindingParam;
+    property BindingParam:       TIdConnectionBindings read fBindingParam;
     property Failed:             Boolean                  read fFailed;
     property FailedMessageParam: TIdSipMessage            read fFailedMessageParam;
     property ReasonParam:        String                   read fReasonParam;
@@ -617,7 +618,7 @@ type
   TIdSipTestTransactionDispatcherListener = class(TIdSipTestActionListener,
                                                   IIdSipTransactionDispatcherListener)
   private
-    fBindingParam:              TIdSipConnectionBindings;
+    fBindingParam:              TIdConnectionBindings;
     fDispatcherParam:           TIdSipTransactionDispatcher;
     fExceptionParam:            Exception;
     fFailedMessageParam:        TIdSipMessage;
@@ -631,16 +632,16 @@ type
     fResponseParam:             TIdSipResponse;
 
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               Binding: TIdSipConnectionBindings);
+                               Binding: TIdConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                Binding: TIdSipConnectionBindings);
+                                Binding: TIdConnectionBindings);
     procedure OnTransportException(FailedMessage: TIdSipMessage;
                                    Error: Exception;
                                    const Reason: String);
   public
     constructor Create; override;
 
-    property BindingParam:              TIdSipConnectionBindings    read fBindingParam;
+    property BindingParam:              TIdConnectionBindings    read fBindingParam;
     property DispatcherParam:           TIdSipTransactionDispatcher read fDispatcherParam;
     property FailedMessageParam:        TIdSipMessage               read fFailedMessageParam;
     property RaisedException:           Boolean                     read fRaisedException;
@@ -657,7 +658,7 @@ type
   private
     fAbstractUserAgentParam:  TIdSipAbstractCore;
     fAuthenticationChallenge: Boolean;
-    fBindingParam:            TIdSipConnectionBindings;
+    fBindingParam:            TIdConnectionBindings;
     fChallengedRequestParam:  TIdSipRequest;
     fDroppedUnmatchedMessage: Boolean;
     fMessageParam:            TIdSipMessage;
@@ -676,13 +677,13 @@ type
                                         Challenge: TIdSipResponse); overload;
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
-                                        Binding: TIdSipConnectionBindings);
+                                        Binding: TIdConnectionBindings);
   public
     constructor Create; override;
 
     property AbstractUserAgentParam:  TIdSipAbstractCore       read fAbstractUserAgentParam;
     property AuthenticationChallenge: Boolean                  read fAuthenticationChallenge;
-    property BindingParam:            TIdSipConnectionBindings read fBindingParam;
+    property BindingParam:            TIdConnectionBindings read fBindingParam;
     property ChallengedRequestParam:  TIdSipRequest            read fChallengedRequestParam;
     property DroppedUnmatchedMessage: Boolean                  read fDroppedUnmatchedMessage;
     property MessageParam:            TIdSipMessage            read fMessageParam;
@@ -1191,7 +1192,7 @@ end;
 
 procedure TTestCaseTU.OnReceiveRequest(Request: TIdSipRequest;
                                        Receiver: TIdSipTransport;
-                                       Source: TIdSipConnectionBindings);
+                                       Source: TIdConnectionBindings);
 begin
   if Request.IsAck then
     Self.SentAcks.AddCopy(Request)
@@ -1201,20 +1202,20 @@ end;
 
 procedure TTestCaseTU.OnReceiveResponse(Response: TIdSipResponse;
                                         Receiver: TIdSipTransport;
-                                        Source: TIdSipConnectionBindings);
+                                        Source: TIdConnectionBindings);
 begin
   Self.SentResponses.AddCopy(Response);
 end;
 
 procedure TTestCaseTU.OnRejectedMessage(const Msg: String;
                                         const Reason: String;
-                                        Source: TIdSipConnectionBindings);
+                                        Source: TIdConnectionBindings);
 begin
 end;
 
 procedure TTestCaseTU.OnSendRequest(Request: TIdSipRequest;
                                     Sender: TIdSipTransport;
-                                    Destination: TIdSipConnectionBindings);
+                                    Destination: TIdConnectionBindings);
 begin
   if Request.IsAck then
     Self.SentAcks.AddCopy(Request)
@@ -1224,7 +1225,7 @@ end;
 
 procedure TTestCaseTU.OnSendResponse(Response: TIdSipResponse;
                                      Sender: TIdSipTransport;
-                                     Destination: TIdSipConnectionBindings);
+                                     Destination: TIdConnectionBindings);
 begin
   Self.SentResponses.AddCopy(Response);
 end;
@@ -1497,7 +1498,7 @@ procedure TActionMethodTestCase.SetUp;
 begin
   inherited SetUp;
 
-  Self.Binding           := TIdSipConnectionBindings.Create;
+  Self.Binding           := TIdConnectionBindings.Create;
   Self.Binding.LocalIP   := '127.0.0.1';
   Self.Binding.LocalPort := 5060;
   Self.Binding.PeerIP    := '127.0.0.1';
@@ -1629,7 +1630,7 @@ end;
 
 procedure TIdSipTestMessageListener.OnMalformedMessage(const Msg: String;
                                                        const Reason: String;
-                                                       Source: TIdSipConnectionBindings);
+                                                       Source: TIdConnectionBindings);
 begin
   Self.fMalformedMessage      := true;
   Self.fMalformedMessageParam := Msg;
@@ -1641,7 +1642,7 @@ begin
 end;
 
 procedure TIdSipTestMessageListener.OnReceiveRequest(Request: TIdSipRequest;
-                                                     ReceivedFrom: TIdSipConnectionBindings);
+                                                     ReceivedFrom: TIdConnectionBindings);
 begin
   Self.fReceivedRequest   := true;
   Self.fRequestParam      := Request;
@@ -1652,7 +1653,7 @@ begin
 end;
 
 procedure TIdSipTestMessageListener.OnReceiveResponse(Response: TIdSipResponse;
-                                                      ReceivedFrom: TIdSipConnectionBindings);
+                                                      ReceivedFrom: TIdConnectionBindings);
 begin
   Self.fReceivedResponse  := true;
   Self.fResponseParam     := Response;
@@ -2092,7 +2093,7 @@ end;
 
 procedure TIdSipTestSessionListener.OnReferral(Session: TIdSipSession;
                                                Refer: TIdSipRequest;
-                                               Binding: TIdSipConnectionBindings);
+                                               Binding: TIdConnectionBindings);
 begin
   Self.fBindingParam         := Binding;
   Self.fReferral             := true;
@@ -2218,7 +2219,7 @@ end;
 
 procedure TIdSipTestTransactionListener.OnReceiveRequest(Request: TIdSipRequest;
                                                          Transaction: TIdSipTransaction;
-                                                         Binding: TIdSipConnectionBindings);
+                                                         Binding: TIdConnectionBindings);
 begin
   Self.fBindingParam     := Binding;
   Self.fReceivedRequest  := true;
@@ -2231,7 +2232,7 @@ end;
 
 procedure TIdSipTestTransactionListener.OnReceiveResponse(Response: TIdSipResponse;
                                                           Transaction: TIdSipTransaction;
-                                                          Binding: TIdSipConnectionBindings);
+                                                          Binding: TIdConnectionBindings);
 begin
   Self.fBindingParam     := Binding;
   Self.fReceivedResponse := true;
@@ -2270,7 +2271,7 @@ end;
 //* TIdSipTestTransactionDispatcherListener Private methods ********************
 
 procedure TIdSipTestTransactionDispatcherListener.OnReceiveRequest(Request: TIdSipRequest;
-                                                                   Binding: TIdSipConnectionBindings);
+                                                                   Binding: TIdConnectionBindings);
 begin
   Self.fBindingParam    := Binding;
   Self.fReceivedRequest := true;
@@ -2281,7 +2282,7 @@ begin
 end;
 
 procedure TIdSipTestTransactionDispatcherListener.OnReceiveResponse(Response: TIdSipResponse;
-                                                                    Binding: TIdSipConnectionBindings);
+                                                                    Binding: TIdConnectionBindings);
 begin
   Self.fBindingParam     := Binding;
   Self.fReceivedResponse := true;
@@ -2353,7 +2354,7 @@ end;
 
 procedure TIdSipTestTransactionUserListener.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                                                       Message: TIdSipMessage;
-                                                                      Binding: TIdSipConnectionBindings);
+                                                                      Binding: TIdConnectionBindings);
 begin
   Self.fAbstractUserAgentParam  := UserAgent;
   Self.fBindingParam            := Binding;

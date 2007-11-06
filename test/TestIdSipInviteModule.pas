@@ -12,9 +12,10 @@ unit TestIdSipInviteModule;
 interface
 
 uses
-  Classes, IdRtp, IdSipCore, IdSipDialog, IdSipInviteModule, IdSipLocation,
-  IdSipMessage, IdSipSubscribeModule, IdSipTransport, IdSipUserAgent,
-  IdTimerQueue, TestFrameworkSip, TestFrameworkSipTU;
+  Classes, IdConnectionBindings, IdRtp, IdSipCore, IdSipDialog,
+  IdSipInviteModule, IdSipLocation, IdSipMessage, IdSipSubscribeModule,
+  IdSipTransport, IdSipUserAgent, IdTimerQueue, TestFrameworkSip,
+  TestFrameworkSipTU;
 
 type
   // This class attempts to isolate an intermittent bug that surfaces in the
@@ -46,7 +47,7 @@ type
                                   Progress: TIdSipResponse);
     procedure OnReferral(Session: TIdSipSession;
                          Refer: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings);
+                         Binding: TIdConnectionBindings);
     procedure ReceiveMovedTemporarily(Invite: TIdSipRequest;
                                       const Contacts: array of String); overload;
     procedure ReceiveMovedTemporarily(const Contacts: array of String); overload;
@@ -214,7 +215,7 @@ type
                                   NewDialog: TidSipDialog);
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
-                                        Binding: TIdSipConnectionBindings);
+                                        Binding: TIdConnectionBindings);
     procedure OnFailure(Action: TIdSipAction;
                         Response: TIdSipResponse;
                         const Reason: String);
@@ -330,7 +331,7 @@ type
     OnModifySessionFired:      Boolean;
     OnReferralFired:           Boolean;
     Reason:                    String;
-    ReceivingBinding:          TIdSipConnectionBindings;
+    ReceivingBinding:          TIdConnectionBindings;
     RemoteSessionDescription:  String;
     SdpMimeType:               String;
 
@@ -346,7 +347,7 @@ type
     function  MultiStreamSdp: String;
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
-                                        Binding: TIdSipConnectionBindings);
+                                        Binding: TIdConnectionBindings);
     procedure OnEndedSession(Session: TIdSipSession;
                              ErrorCode: Cardinal;
                              const Reason: String); virtual;
@@ -362,7 +363,7 @@ type
                                   Progress: TIdSipResponse); virtual;
     procedure OnReferral(Session: TIdSipSession;
                          Refer: TIdSipRequest;
-                         Binding: TIdSipConnectionBindings);
+                         Binding: TIdConnectionBindings);
     procedure ReceiveRemoteReInvite(Session: TIdSipSession);
     procedure ResendWith(Session: TIdSipSession;
                          AuthenticationChallenge: TIdSipResponse);
@@ -431,7 +432,7 @@ type
                             Session: TIdSipInboundSession);
     procedure OnSendResponse(Response: TIdSipResponse;
                              Sender: TIdSipTransport;
-                             Binding: TIdSipConnectionBindings); override;
+                             Binding: TIdConnectionBindings); override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -516,7 +517,7 @@ type
                                   Progress: TIdSipResponse); override;
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport;
-                            Binding: TIdSipConnectionBindings); override;
+                            Binding: TIdConnectionBindings); override;
   public
     procedure SetUp; override;
   published
@@ -593,7 +594,7 @@ type
     function  CreateTransferringUA(const Address: String): TIdSipUserAgent;
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
-                                        Binding: TIdSipConnectionBindings);
+                                        Binding: TIdConnectionBindings);
     procedure OnInboundCall(UserAgent: TIdSipInviteModule;
                             Session: TIdSipInboundSession);
     procedure OnRenewedSubscription(UserAgent: TIdSipAbstractCore;
@@ -944,7 +945,7 @@ end;
 
 procedure TestDebug.OnReferral(Session: TIdSipSession;
                                Refer: TIdSipRequest;
-                               Binding: TIdSipConnectionBindings);
+                               Binding: TIdConnectionBindings);
 begin
 end;
 
@@ -2791,7 +2792,7 @@ end;
 
 procedure TestTIdSipOutboundInvite.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                                              Message: TIdSipMessage;
-                                                             Binding: TIdSipConnectionBindings);
+                                                             Binding: TIdConnectionBindings);
 begin
   Self.DroppedUnmatchedResponse := true;
 end;
@@ -3909,7 +3910,7 @@ end;
 
 procedure TestTIdSipSession.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                                       Message: TIdSipMessage;
-                                                      Binding: TIdSipConnectionBindings);
+                                                      Binding: TIdConnectionBindings);
 begin
   Self.DroppedUnmatchedResponse := true;
 end;
@@ -3957,7 +3958,7 @@ end;
 
 procedure TestTIdSipSession.OnReferral(Session: TIdSipSession;
                                        Refer: TIdSipRequest;
-                                       Binding: TIdSipConnectionBindings);
+                                       Binding: TIdConnectionBindings);
 begin
   Self.ReceivingBinding := Binding;
 
@@ -4914,7 +4915,7 @@ end;
 
 procedure TestTIdSipInboundSession.OnSendResponse(Response: TIdSipResponse;
                                                   Sender: TIdSipTransport;
-                                                  Binding: TIdSipConnectionBindings);
+                                                  Binding: TIdConnectionBindings);
 begin
   inherited OnSendResponse(Response, Sender, Binding);
 
@@ -6206,7 +6207,7 @@ end;
 
 procedure TestTIdSipOutboundSession.OnSendRequest(Request: TIdSipRequest;
                                                   Sender: TIdSipTransport;
-                                                  Binding: TIdSipConnectionBindings);
+                                                  Binding: TIdConnectionBindings);
 begin
   inherited OnSendRequest(Request, Sender, Binding);
 
@@ -7864,7 +7865,7 @@ end;
 
 procedure TestSessionReplacer.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                                         Message: TIdSipMessage;
-                                                        Binding: TIdSipConnectionBindings);
+                                                        Binding: TIdConnectionBindings);
 begin
   // It'd be nice to fail here, but three UAs all use this same procedure; for
   // each response, two of the three will drop the response as unmatched.

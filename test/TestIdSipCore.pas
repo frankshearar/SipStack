@@ -12,9 +12,10 @@ unit TestIdSipCore;
 interface
 
 uses
-  IdObservable, IdSipCore, IdSipDialog, IdSipInviteModule, IdSipMessage,
-  IdSipMockTransactionDispatcher, IdSipTransport, IdSipUserAgent,
-  TestFramework, TestFrameworkSip, TestFrameworkSipTU;
+  IdConnectionBindings, IdObservable, IdSipCore, IdSipDialog,
+  IdSipInviteModule, IdSipMessage, IdSipMockTransactionDispatcher,
+  IdSipTransport, IdSipUserAgent, TestFramework, TestFrameworkSip,
+  TestFrameworkSipTU;
 
 type
   TestTIdSipAbstractCore = class(TTestCaseTU,
@@ -33,7 +34,7 @@ type
                                         Challenge: TIdSipResponse); overload;
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
-                                        Binding: TIdSipConnectionBindings);
+                                        Binding: TIdConnectionBindings);
   published
     procedure TestAddAllowedLanguage;
     procedure TestAddAllowedLanguageLanguageAlreadyPresent;
@@ -97,7 +98,7 @@ type
   private
     ActionProcUsed:      String;
     Actions:             TIdSipActions;
-    Binding:             TIdSipConnectionBindings;
+    Binding:             TIdConnectionBindings;
     DidntFindActionName: String;
     FoundActionName:     String;
     Options:             TIdSipRequest;
@@ -312,7 +313,7 @@ type
   TestTIdSipUserAgentDroppedUnmatchedMessageMethod = class(TTestCase)
   private
     Method:   TIdSipUserAgentDroppedUnmatchedMessageMethod;
-    Binding:  TIdSipConnectionBindings;
+    Binding:  TIdConnectionBindings;
     Response: TIdSipResponse;
   public
     procedure SetUp; override;
@@ -446,7 +447,7 @@ end;
 
 procedure TestTIdSipAbstractCore.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                                            Message: TIdSipMessage;
-                                                           Binding: TIdSipConnectionBindings);
+                                                           Binding: TIdConnectionBindings);
 begin
 end;
 
@@ -1511,7 +1512,7 @@ begin
   inherited SetUp;
 
   Self.Actions := TIdSipActions.Create;
-  Self.Binding := TIdSipConnectionBindings.Create;
+  Self.Binding := TIdConnectionBindings.Create;
   Self.Binding.LocalIP   := '127.0.0.1';
   Self.Binding.LocalPort := 5060;
   Self.Binding.PeerIP    := '127.0.0.2';
@@ -2729,7 +2730,7 @@ procedure TestTIdSipUserAgentDroppedUnmatchedMessageMethod.SetUp;
 begin
   inherited SetUp;
 
-  Self.Binding := TIdSipConnectionBindings.Create;
+  Self.Binding := TIdConnectionBindings.Create;
   Self.Response := TIdSipResponse.Create;
 
   Self.Method := TIdSipUserAgentDroppedUnmatchedMessageMethod.Create;
