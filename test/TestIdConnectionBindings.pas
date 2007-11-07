@@ -29,21 +29,45 @@ type
     procedure TestEquals;
   end;
 
+  TestTIdConnectionBindingsSet = class(TTestCase)
+  private
+    BindingSet:   TIdConnectionBindingsSet;
+    NewBinding:   TIdConnectionBindings;
+    OtherBinding: TIdConnectionBindings;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAddAndCount;
+    procedure TestAssign;
+    procedure TestAsString;
+    procedure TestAsStringWithPrefix;
+    procedure TestClear;
+    procedure TestGetBindings;
+    procedure TestHasBinding;
+    procedure TestNoDuplicates;
+    procedure TestRemoveBinding;
+  end;
+
 implementation
 
 uses
   Classes, IdSipLocation, SysUtils;
 
+const
+  CRLF = #$D#$A;
+
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('TIdConnectionBindings tests');
   Result.AddTest(TestTIdConnectionBindings.Suite);
+  Result.AddTest(TestTIdConnectionBindingsSet.Suite);
 end;
 
 //******************************************************************************
-//* TestTIdConnectionBindings                                               *
+//* TestTIdConnectionBindings                                                  *
 //******************************************************************************
-//* TestTIdConnectionBindings Public methods ********************************
+//* TestTIdConnectionBindings Public methods ***********************************
 
 procedure TestTIdConnectionBindings.SetUp;
 begin
@@ -64,7 +88,7 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdConnectionBindings Public methods ********************************
+//* TestTIdConnectionBindings Published methods ********************************
 
 procedure TestTIdConnectionBindings.TestAssign;
 var
@@ -174,6 +198,154 @@ begin
   finally
     Other.Free;
   end;
+end;
+
+//******************************************************************************
+//* TestTIdConnectionBindingsSet                                               *
+//******************************************************************************
+//* TestTIdConnectionBindingsSet Public methods ********************************
+
+procedure TestTIdConnectionBindingsSet.SetUp;
+begin
+  inherited SetUp;
+
+  Self.BindingSet := TIdConnectionBindingsSet.Create;
+
+  Self.NewBinding := TIdConnectionBindings.Create;
+  Self.NewBinding.LocalIP   := '127.0.0.1';
+  Self.NewBinding.LocalPort := 5060;
+  Self.NewBinding.Transport := 'TCP';
+
+  Self.OtherBinding := TIdConnectionBindings.Create;
+  Self.OtherBinding.LocalIP   := '10.0.0.1';
+  Self.OtherBinding.LocalPort := 5060;
+  Self.OtherBinding.Transport := 'TCP';
+end;
+
+procedure TestTIdConnectionBindingsSet.TearDown;
+begin
+  Self.NewBinding.Free;
+  Self.BindingSet.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdConnectionBindingsSet Published methods *****************************
+
+procedure TestTIdConnectionBindingsSet.TestAddAndCount;
+begin
+  CheckEquals(0, Self.BindingSet.Count, 'Empty set');
+
+  Self.BindingSet.Add(Self.NewBinding);
+  CheckEquals(1, Self.BindingSet.Count, 'One element set');
+
+  Self.BindingSet.Add(Self.OtherBinding);
+  CheckEquals(2, Self.BindingSet.Count, 'Two element set');
+end;
+
+procedure TestTIdConnectionBindingsSet.TestAssign;
+var
+  Other: TIdConnectionBindingsSet;
+begin
+  Other := TIdConnectionBindingsSet.Create;
+  try
+    Self.BindingSet.Add(Self.NewBinding);
+
+    Other.Assign(Self.BindingSet);
+    CheckEquals(Other.AsString, Self.BindingSet.AsString, 'Set not assigned');
+
+    Self.BindingSet.Remove(Self.NewBinding);
+    Self.BindingSet.Add(Self.OtherBinding);
+    Other.Assign(Self.BindingSet);
+    CheckEquals(Other.AsString, Self.BindingSet.AsString, 'Set not cleared, then assigned');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TestTIdConnectionBindingsSet.TestAsString;
+begin
+  CheckEquals('', Self.BindingSet.AsString, 'Empty set');
+
+  Self.BindingSet.Add(Self.NewBinding);
+  CheckEquals(Self.NewBinding.AsString, Self.BindingSet.AsString, 'One element set');
+
+  Self.BindingSet.Add(Self.OtherBinding);
+  CheckEquals(Self.NewBinding.AsString + CRLF + Self.OtherBinding.AsString,
+              Self.BindingSet.AsString, 'Two element set');
+end;
+
+procedure TestTIdConnectionBindingsSet.TestAsStringWithPrefix;
+const
+  Prefix = 'Binding: ';
+begin
+  CheckEquals('', Self.BindingSet.AsStringWithPrefix(Prefix), 'Empty set');
+
+  Self.BindingSet.Add(Self.NewBinding);
+  CheckEquals(Prefix + Self.NewBinding.AsString, Self.BindingSet.AsStringWithPrefix(Prefix), 'One element set');
+
+  Self.BindingSet.Add(Self.OtherBinding);
+  CheckEquals(Prefix + Self.NewBinding.AsString + CRLF + Prefix + Self.OtherBinding.AsString,
+              Self.BindingSet.AsStringWithPrefix(Prefix), 'Two element set');
+end;
+
+procedure TestTIdConnectionBindingsSet.TestClear;
+begin
+  Self.BindingSet.Clear;
+  CheckEquals(0, Self.BindingSet.Count, 'Clearing an empty set is a no-op');
+
+  Self.BindingSet.Add(Self.NewBinding);
+  Self.BindingSet.Add(Self.OtherBinding);
+
+  Self.BindingSet.Clear;
+  CheckEquals(0, Self.BindingSet.Count, 'Set not cleared');
+end;
+
+procedure TestTIdConnectionBindingsSet.TestGetBindings;
+begin
+  Self.BindingSet.Add(Self.NewBinding);
+  Self.BindingSet.Add(Self.OtherBinding);
+
+  Check(Self.BindingSet[0].Equals(Self.NewBinding),   'Binding at index 0');
+  Check(Self.BindingSet[1].Equals(Self.OtherBinding), 'Binding at index 1');
+end;
+
+procedure TestTIdConnectionBindingsSet.TestHasBinding;
+begin
+  Check(not Self.BindingSet.HasBinding(Self.NewBinding), 'Empty set');
+  Check(not Self.BindingSet.HasBinding(Self.OtherBinding), 'Empty set');
+
+  Self.BindingSet.Add(Self.NewBinding);
+  Check(    Self.BindingSet.HasBinding(Self.NewBinding),   'Binding not added');
+  Check(not Self.BindingSet.HasBinding(Self.OtherBinding), 'Unknown binding added');
+
+  Self.BindingSet.Add(Self.OtherBinding);
+  Check(Self.BindingSet.HasBinding(Self.NewBinding),   'Binding removed');
+  Check(Self.BindingSet.HasBinding(Self.OtherBinding), 'Unknown binding not added');
+end;
+
+procedure TestTIdConnectionBindingsSet.TestNoDuplicates;
+begin
+  Self.BindingSet.Add(Self.NewBinding);
+  Self.BindingSet.Add(Self.NewBinding);
+  CheckEquals(1, Self.BindingSet.Count, 'Sets don''t allow duplicates');
+end;
+
+procedure TestTIdConnectionBindingsSet.TestRemoveBinding;
+begin
+  Self.BindingSet.Remove(Self.NewBinding);
+  CheckEquals(0, Self.BindingSet.Count, 'Removing from an empty set is a no-op');
+
+  Self.BindingSet.Add(Self.OtherBinding);
+  Self.BindingSet.Remove(Self.NewBinding);
+  CheckEquals(1, Self.BindingSet.Count, 'Removing a non-element from a set is a no-op');
+
+  Self.BindingSet.Add(Self.NewBinding);
+
+  Self.BindingSet.Remove(Self.NewBinding);
+  CheckEquals(1, Self.BindingSet.Count, 'No binding removed');
+  Check(not Self.BindingSet.HasBinding(Self.NewBinding),   'Correct binding not removed');
+  Check(    Self.BindingSet.HasBinding(Self.OtherBinding), 'Incorrect binding removed');
 end;
 
 initialization

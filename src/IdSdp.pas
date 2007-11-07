@@ -800,7 +800,7 @@ function StrToMediaType(const S: String): TIdSDPMediaType;
 implementation
 
 uses
-  IdRandom, IdSocketHandle, RuntimeSafety, SysUtils;
+  IdException, IdRandom, IdSocketHandle, RuntimeSafety, SysUtils;
 
 const
   SessionHeaderOrder = 'vosiuepcbtka';
@@ -3690,7 +3690,7 @@ begin
       Self.StartServers;
       SocketBound := true;
     except
-      on EIdCouldNotBindSocket do begin
+      on EIdSocketError do begin
         Self.LocalDescription.Port := Self.LocalDescription.Port + 2; // One for RTP, one for RTCP.
         Self.InitializeLocalRTPServers;
       end;
