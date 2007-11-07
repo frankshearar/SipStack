@@ -11,6 +11,9 @@ type
     fTransport: String;
     fIPAddress: String;
     fPort:      Cardinal;
+  protected
+  protected
+    procedure AssignTo(Dest: TPersistent); override;
   public
     constructor Create(const Transport: String;
                        const IPAddress:   String;
@@ -55,7 +58,7 @@ const
 implementation
 
 uses
-  SysUtils;
+  IdConnectionBindings, SysUtils;
 
 //******************************************************************************
 //* TIdSipLocation                                                             *
@@ -103,6 +106,24 @@ begin
   Result := (Self.Transport = Other.Transport)
         and (Self.IPAddress = Other.IPAddress)
         and (Self.Port = Other.Port);
+end;
+
+//* TIdSipLocation Protected methods *******************************************
+
+procedure TIdSipLocation.AssignTo(Dest: TPersistent);
+var
+  B: TIdConnectionBindings;
+begin
+  if (Dest is TIdConnectionBindings) then begin
+    B := Dest as TIdConnectionBindings;
+    B.LocalIP   := '';
+    B.LocalPort := 0;
+    B.PeerIP    := Self.IPAddress;
+    B.PeerPort  := Self.Port;
+    B.Transport := Self.Transport;
+  end
+  else
+    inherited AssignTo(Dest);
 end;
 
 //******************************************************************************
