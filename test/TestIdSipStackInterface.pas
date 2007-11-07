@@ -4197,12 +4197,25 @@ end;
 //* TestTIdStackReconfiguredData Public methods ********************************
 
 procedure TestTIdStackReconfiguredData.SetUp;
+var
+  Binding: TIdConnectionBindings;
 begin
   inherited SetUp;
 
   Self.Data := TIdStackReconfiguredData.Create;
   Self.Data.ActsAsRegistrar := true;
   Self.Data.RoutingTableType := 'TIdWindowsRoutingTable';
+
+  Binding := TIdConnectionBindings.Create;
+  try
+    Binding.LocalIP   := '127.0.0.1';
+    Binding.LocalPort := 5060;
+    Binding.Transport := 'UDP';
+
+    Self.Data.Bindings.Add(Binding);
+  finally
+    Binding.Free;
+  end;
 end;
 
 procedure TestTIdStackReconfiguredData.TearDown;
@@ -4224,6 +4237,7 @@ begin
     Received := TStringList.Create;
     try
       Expected.Add('ActsAsRegistrar: True');
+      Expected.Add(Self.Data.Bindings.AsStringWithPrefix('Binding: '));
       Expected.Add('RoutingTableType: ' + Self.Data.RoutingTableType);
       Expected.Insert(0, '');
       Expected.Insert(1, EventNames(CM_STACK_RECONFIGURED));
@@ -4250,8 +4264,9 @@ var
 begin
   Copy := Self.Data.Copy as TIdStackReconfiguredData;
   try
-    CheckEquals(Self.Data.ActsAsRegistrar,  Copy.ActsAsRegistrar,  'ActsAsRegistrar');
-    CheckEquals(Self.Data.RoutingTableType, Copy.RoutingTableType, 'RoutingTableType');
+    CheckEquals(Self.Data.ActsAsRegistrar,   Copy.ActsAsRegistrar,   'ActsAsRegistrar');
+    CheckEquals(Self.Data.Bindings.AsString, Copy.Bindings.AsString, 'Bindings');
+    CheckEquals(Self.Data.RoutingTableType,  Copy.RoutingTableType,  'RoutingTableType');
   finally
     Copy.Free;
   end;

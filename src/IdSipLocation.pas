@@ -42,6 +42,8 @@ type
                                     Port: Cardinal;
                                     Names: TIdDomainNameRecords);
     procedure AddLocationsFromSRVs(SRV: TIdSrvRecords);
+    function  AsString: String;
+    function  AsStringWithPrefix(Prefix: String): String;
     function  Contains(Loc: TIdSipLocation): Boolean;
     function  First: TIdSipLocation;
     function  FirstAddressMatch(SearchLocation: TIdSipLocation): TIdSipLocation;
@@ -171,6 +173,25 @@ begin
       Self.AddLocation(Srv[I].SipTransport,
                        Srv[I].NameRecords[J].IPAddress,
                        Srv[I].Port);
+end;
+
+function TIdSipLocations.AsString: String;
+begin
+  Result := Self.AsStringWithPrefix('');
+end;
+
+function TIdSipLocations.AsStringWithPrefix(Prefix: String): String;
+const
+  Terminator = #$D#$A;
+var
+  I: Integer;
+begin
+  Result := '';
+
+  for I := 0 to Self.Count - 1 do
+    Result := Result + Prefix + Self[I].AsString + Terminator;
+
+  Result := Copy(Result, 1, Length(Result) - Length(Terminator));
 end;
 
 function TIdSipLocations.Contains(Loc: TIdSipLocation): Boolean;

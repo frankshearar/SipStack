@@ -33,6 +33,8 @@ type
     procedure TestAddLocation;
     procedure TestAddLocations;
     procedure TestAddLocationsFromNames;
+    procedure TestAsString;
+    procedure TestAsStringWithPrefix;
     procedure TestContains;
     procedure TestCount;
     procedure TestFirst;
@@ -261,6 +263,55 @@ begin
   finally
     Names.Free;
   end;
+end;
+
+procedure TestTIdSipLocations.TestAsString;
+const
+  FirstTransport  = 'UDP';
+  FirstAddress    = '127.0.0.1';
+  FirstPort       = 5060;
+  SecondTransport = 'TLS';
+  SecondAddress   = '10.0.0.1';
+  SecondPort      = 5061;
+var
+  FirstLoc: String;
+  SecondLoc: String;
+begin
+  FirstLoc  := Format(LocationTuple, [FirstTransport, FirstAddress, FirstPort]);
+  SecondLoc := Format(LocationTuple, [SecondTransport, SecondAddress, SecondPort]);
+
+  CheckEquals('', Self.Locs.AsString, 'Empty list');
+
+  Self.Locs.AddLocation(FirstTransport, FirstAddress, FirstPort);
+  CheckEquals(FirstLoc, Self.Locs.AsString, 'One element list');
+
+  Self.Locs.AddLocation(SecondTransport, SecondAddress, SecondPort);
+  CheckEquals(FirstLoc + CRLF + SecondLoc, Self.Locs.AsString, 'Two element list');
+end;
+
+procedure TestTIdSipLocations.TestAsStringWithPrefix;
+const
+  FirstTransport  = 'UDP';
+  FirstAddress    = '127.0.0.1';
+  FirstPort       = 5060;
+  Prefix          = 'Bindings: ';
+  SecondTransport = 'TLS';
+  SecondAddress   = '10.0.0.1';
+  SecondPort      = 5061;
+var
+  FirstLoc: String;
+  SecondLoc: String;
+begin
+  FirstLoc  := Prefix + Format(LocationTuple, [FirstTransport, FirstAddress, FirstPort]);
+  SecondLoc := Prefix + Format(LocationTuple, [SecondTransport, SecondAddress, SecondPort]);
+
+  CheckEquals('', Self.Locs.AsStringWithPrefix(Prefix), 'Empty list');
+
+  Self.Locs.AddLocation(FirstTransport, FirstAddress, FirstPort);
+  CheckEquals(FirstLoc, Self.Locs.AsStringWithPrefix(Prefix), 'One element list');
+
+  Self.Locs.AddLocation(SecondTransport, SecondAddress, SecondPort);
+  CheckEquals(FirstLoc + CRLF + SecondLoc, Self.Locs.AsStringWithPrefix(Prefix), 'Two element list');
 end;
 
 procedure TestTIdSipLocations.TestContains;

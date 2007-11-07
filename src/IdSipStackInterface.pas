@@ -754,15 +754,22 @@ type
   TIdStackReconfiguredData = class(TIdEventData)
   private
     fActsAsRegistrar:  Boolean;
+    fBindings:         TIdSipLocations;
     fRoutingTableType: String;
+
+    procedure SetBindings(Value: TIdSipLocations);
   protected
     function Data: String; override;
     function EventName: String; override;
   public
+    constructor Create; override;
+    destructor  Destroy; override;
+
     procedure Assign(Src: TPersistent); override;
 
-    property ActsAsRegistrar: Boolean read fActsAsRegistrar write fActsAsRegistrar;
-    property RoutingTableType: String read fRoutingTableType write fRoutingTableType;
+    property ActsAsRegistrar:  Boolean         read fActsAsRegistrar write fActsAsRegistrar;
+    property Bindings:         TIdSipLocations read fBindings write SetBindings;
+    property RoutingTableType: String          read fRoutingTableType write fRoutingTableType;
   end;
 
   // I contain the result of an asynchronous message send. That is, when you've
@@ -1592,6 +1599,8 @@ begin
   Result.ActsAsRegistrar  := Self.UserAgent.UsesModule(TIdSipRegisterModule);
   Result.Handle           := InvalidHandle;
   Result.RoutingTableType := Self.UserAgent.RoutingTable.ClassName;
+
+  Self.UserAgent.Dispatcher.LocalBindings(Result.Bindings);
 end;
 
 procedure TIdSipStackInterface.NotifyEvent(Event: Cardinal;
@@ -3611,6 +3620,20 @@ end;
 //******************************************************************************
 //* TIdStackReconfiguredData Public methods ************************************
 
+constructor TIdStackReconfiguredData.Create;
+begin
+  inherited Create;
+
+  Self.fBindings := TIdSipLocations.Create;
+end;
+
+destructor TIdStackReconfiguredData.Destroy;
+begin
+  Self.fBindings.Free;
+
+  inherited Destroy;
+end;
+
 procedure TIdStackReconfiguredData.Assign(Src: TPersistent);
 var
   Other: TIdStackReconfiguredData;
@@ -3621,6 +3644,7 @@ begin
     Other := Src as TIdStackReconfiguredData;
 
     Self.ActsAsRegistrar  := Other.ActsAsRegistrar;
+    Self.Bindings         := Other.Bindings;
     Self.RoutingTableType := Other.RoutingTableType;
   end;
 end;
@@ -3630,12 +3654,21 @@ end;
 function TIdStackReconfiguredData.Data: String;
 begin
   Result := 'ActsAsRegistrar: ' + BoolToStr(Self.ActsAsRegistrar, true) + CRLF
+          + Self.Bindings.AsStringWithPrefix('Binding: ') + CRLF
           + 'RoutingTableType: ' + Self.RoutingTableType + CRLF;
 end;
 
 function TIdStackReconfiguredData.EventName: String;
 begin
   Result := EventNames(CM_STACK_RECONFIGURED);
+end;
+
+//* TIdStackReconfiguredData Private methods ***********************************
+
+procedure TIdStackReconfiguredData.SetBindings(Value: TIdSipLocations);
+begin
+  Self.Bindings.Clear;
+  Self.Bindings.AddLocations(Value);
 end;
 
 //******************************************************************************
