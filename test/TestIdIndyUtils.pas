@@ -8,7 +8,7 @@ uses
 type
   TestFunctions = class(TTestCase)
   private
-     Sockets: TIdSocketHandles;
+    Sockets: TIdSocketHandles;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -81,9 +81,17 @@ begin
 end;
 
 procedure TestFunctions.TestRaiseSocketError;
+var
+  OriginalException: Exception;
 begin
   try
-    RaiseSocketError(Self.Sockets);
+    OriginalException := Exception.Create('');
+    try
+      RaiseSocketError(OriginalException, Self.Sockets);
+    finally
+      OriginalException.Free;
+    end;
+
     Fail('No exception raised');
   except
     on EIdSocketError do;

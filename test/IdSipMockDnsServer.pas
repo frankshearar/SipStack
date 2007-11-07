@@ -411,10 +411,8 @@ begin
   try
     Self.NameServer.Active := true;
   except
-    on EIdCouldNotBindSocket do
-      RaiseSocketError(Self.NameServer.Bindings);
-    on EIdSocketError do
-      RaiseSocketError(Self.NameServer.Bindings);
+    on E: EIdException do
+      RaiseSocketError(E, Self.NameServer.Bindings);
   end;
 end;
 

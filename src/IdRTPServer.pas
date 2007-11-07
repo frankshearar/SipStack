@@ -285,19 +285,15 @@ begin
   try
     Self.RTCP.Active := Value;
   except
-    on EIdCouldNotBindSocket do
-      RaiseSocketError(Self.RTP.Bindings);
-    on EIdSocketError do
-      RaiseSocketError(Self.RTCP.Bindings);
+    on E: EIdException do
+      RaiseSocketError(E, Self.RTCP.Bindings);
   end;
 
   try
     Self.RTP.Active := Value;
   except
-    on EIdCouldNotBindSocket do
-      RaiseSocketError(Self.RTP.Bindings);
-    on EIdSocketError do
-      RaiseSocketError(Self.RTP.Bindings);
+    on E: EIdException do
+      RaiseSocketError(E, Self.RTP.Bindings);
   end;
 end;
 

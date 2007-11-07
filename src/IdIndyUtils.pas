@@ -14,15 +14,15 @@ unit IdIndyUtils;
 interface
 
 uses
-  IdSocketHandle;
+  IdSocketHandle, SysUtils;
 
 function  BindingsToStr(Bindings: TIdSocketHandles): String;
-procedure RaiseSocketError(Bindings: TIdSocketHandles);
+procedure RaiseSocketError(OriginalException: Exception; Bindings: TIdSocketHandles); 
 
 implementation
 
 uses
-  IdException, SysUtils;
+  IdException;
 
 //******************************************************************************
 //* Unit Public functions & procedures                                         *
@@ -48,9 +48,11 @@ begin
   Result := Copy(Result, 1, Length(Result) - Length(Separator));
 end;
 
-procedure RaiseSocketError(Bindings: TIdSocketHandles);
+procedure RaiseSocketError(OriginalException: Exception; Bindings: TIdSocketHandles);
+const
+  Msg = 'Could not open socket on one of (%s) (%s: %s)';
 begin
-  raise EIdSocketError.Create('Could not open socket on one of (' + BindingsToStr(Bindings) + ')');
+  raise EIdSocketError.Create(Format(Msg, [BindingsToStr(Bindings), OriginalException.ClassName, OriginalException.Message]));
 end;
 
 end.
