@@ -13,9 +13,9 @@ interface
 
 uses
   Contnrs, Classes, IdNotification, IdRoutingTable, IdSipAuthentication,
-  IdSipCore, IdSipInviteModule, IdSipLocator, IdSipMessage, IdSipMockLocator,
-  IdSipOptionsModule, IdSipProxyDescription, IdSipRegistration,
-  IdSipTransaction, IdSipTransport, IdTimerQueue, LoGGer;
+  IdSipCore, IdSipInviteModule, IdSipLocator, IdSipMessage, IdSipOptionsModule,
+  IdSipProxyDescription, IdSipRegistration, IdSipTransaction, IdSipTransport,
+  IdTimerQueue, LoGGer;
 
 type
   TIdSipUserAgent = class;
@@ -473,7 +473,7 @@ implementation
 
 uses
   IdMockRoutingTable, IdRegisteredObject, IdSimpleParser, IdSipDns,
-  IdSipIndyLocator, IdSipLocation, IdSipMockBindingDatabase,
+  IdSipIndyLocator, IdSipLocation, IdSipMockBindingDatabase, IdSipMockLocator,
   IdSipSubscribeModule, IdSystem, IdUnicode, LogVariables, RuntimeSafety,
   SysUtils;
 
