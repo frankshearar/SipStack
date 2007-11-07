@@ -545,12 +545,13 @@ type
 
   TestTIdSDPMultimediaSession = class(TIdSdpTestCase)
   private
-    Payload:    TClass;
-    LocalPort:  Cardinal;
-    MS:         TIdSDPMultimediaSession;
-    Profile:    TIdRTPProfile;
-    RemotePort: Cardinal;
-    Server:     TIdUDPServer;
+    Payload:     TClass;
+    LocalPort:   Cardinal;
+    MS:          TIdSDPMultimediaSession;
+    PortBlocker: TIdMockRTPPeer;
+    Profile:     TIdRTPProfile;
+    RemotePort:  Cardinal;
+    Server:      TIdUDPServer;
 
     procedure CheckOrigin(ExpectedNetType: String;
                           ExpectedAddressType: TIdIPVersion;
@@ -566,6 +567,7 @@ type
     function  RefusedStreamSDP(Port: Cardinal): String;
     function  SingleStreamSDP(Port: Cardinal;
                               PayloadType: Cardinal = 96): String;
+    procedure StartServerOnPort(Port: Integer);
   protected
     procedure OnNewData(Data: TIdRTPPayload;
                         Binding: TIdConnection); override;
@@ -597,6 +599,7 @@ type
     procedure TestStartListeningSingleStream;
     procedure TestStartListeningMalformedSdp;
     procedure TestStartListeningMultipleStreams;
+    procedure TestStartListeningNoAvailablePorts;
     procedure TestStartListeningPortsOutsideAllowedRange;
     procedure TestStopListening;
     procedure TestTakeOffHold;
@@ -7045,6 +7048,8 @@ begin
 
   Self.MS := TIdSDPMultimediaSession.Create(Self.Profile, TIdMockRTPPeer);
 
+  Self.PortBlocker := TIdMockRTPPeer.Create;
+
   // We only instantiate Server so that we know that GStack points to an
   // instantiated stack.
   Self.Server := TIdUdpServer.Create(nil);
@@ -7053,6 +7058,7 @@ end;
 procedure TestTIdSDPMultimediaSession.TearDown;
 begin
   Self.Server.Free;
+  Self.PortBlocker.Free;
   Self.MS.Free;
   Self.Profile.Free;
 
@@ -7177,6 +7183,21 @@ begin
           + 'c=IN IP4 127.0.0.1'#13#10
           + 'm=text ' + IntToStr(Port) + ' RTP/AVP ' + IntToStr(PayloadType) + #13#10
           + 'a=rtpmap:' + IntToStr(PayloadType) + ' t140/1000'#13#10
+end;
+
+procedure TestTIdSDPMultimediaSession.StartServerOnPort(Port: Integer);
+begin
+  Self.PortBlocker.Active := false;
+
+  Self.PortBlocker.Address := Localhost(Id_IPv4);
+  Self.PortBlocker.RTPPort  := Port;
+  Self.PortBlocker.RTCPPort := Self.PortBlocker.RTPPort;
+
+  Self.PortBlocker.Active := true;
+
+  CheckPortActive(Self.PortBlocker.Address, Self.PortBlocker.RTPPort,
+                  'StartServerOnPort didn''t bind to '
+                + Self.PortBlocker.Address + IntToStr(Self.PortBlocker.RTPPort));
 end;
 
 //* TestTIdSDPMultimediaSession Published methods ******************************
@@ -7605,6 +7626,25 @@ begin
                        HighPort,
                        'Server not listening on '
                      + GStack.LocalAddress + ':' + IntToStr(HighPort));
+end;
+
+procedure TestTIdSDPMultimediaSession.TestStartListeningNoAvailablePorts;
+var
+  SDP: TIdSdpPayload;
+begin
+  Self.MS.LowestAllowedPort  := 8000;
+  Self.MS.HighestAllowedPort := Self.MS.LowestAllowedPort + 2;
+
+  Self.StartServerOnPort(Self.MS.LowestAllowedPort);
+
+  SDP := TIdSdpPayload.CreateFrom(Self.MS.StartListening(Self.SingleStreamSDP(Self.MS.LowestAllowedPort)));
+  try
+    CheckEquals(0,
+                SDP.MediaDescriptionAt(0).Port,
+                'Unavailable port not marked as refused');
+  finally
+    SDP.Free;
+  end;
 end;
 
 procedure TestTIdSDPMultimediaSession.TestStartListeningPortsOutsideAllowedRange;

@@ -168,7 +168,7 @@ type
 implementation
 
 uses
-  IdSocketHandle;
+  IdException, IdSocketHandle;
 
 function Suite: ITestSuite;
 begin
@@ -341,7 +341,9 @@ procedure TIdMockRTPPeer.SetActive(Value: Boolean);
 begin
   if Value then begin
     if TIdRTPPeerRegistry.ServerRunningOn(Self.Address, Self.RTPPort) then
-      raise EIdCouldNotBindSocket.Create('');
+      raise EIdSocketError.Create('');
+    if TIdRTPPeerRegistry.ServerRunningOn(Self.Address, Self.RTCPPort) then
+      raise EIdSocketError.Create('');
   end;
   
   Self.fActive := Value;
