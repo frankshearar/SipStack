@@ -19,6 +19,11 @@ type
   // describe the local and remote ip:ports; for connectionless transports
   // (UDP), I don't describe a connection, but I can tell you the sending
   // and receiving ip:ports.
+  //
+  // Bear in mind that I don't prescribe how you use the Transport property: a
+  // SIP stack might populate it with well-known SIP transports ('UDP', 'TLS',
+  // 'TLS-SCTP', etc.) while an SDP stream might use the protocol in the m
+  // header ('RTP/AVP', 'vat', 'TCP', etc.).
   TIdConnectionBindings = class(TPersistent)
   private
     fLocalIP:   String;
