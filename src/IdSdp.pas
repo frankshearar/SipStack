@@ -2735,12 +2735,10 @@ end;
 
 class function TIdSdpParser.IsDirection(const Token: String): Boolean;
 begin
-  try
-    StrToDirection(Token);
-    Result := true;
-  except
-    on EConvertError do Result := false;
-  end;
+  Result := Trim(Token) <> '';
+
+  if Result then
+    Result := StrToDirection(Token) <> sdUnknown;
 end;
 
 class function TIdSdpParser.IsKeyData(const Token: String): Boolean;
