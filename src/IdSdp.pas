@@ -16,18 +16,20 @@ interface
 // string containing an SDP description, and you'll use a TIdSdpParser on it.
 
 uses
-  Classes, Contnrs, IdEmailAddress, IdInterfacedObject, IdNotification, IdRTP,
-  IdRTPServer, IdSimpleParser, IdTimerQueue, SyncObjs;
+  Classes, Contnrs, IdEmailAddress, IdConnectionBindings, IdInterfacedObject,
+  IdNotification, IdRTP, IdRTPServer, IdSimpleParser, IdTimerQueue, SyncObjs;
 
 type
-  TIdNtpTimestamp     = Int64;
-  TIdSdpBandwidthType = (btConferenceTotal, btApplicationSpecific, btRS, btRR, btUnknown);
-  TIdSdpDirection     = (sdInactive, sdRecvOnly, sdSendOnly, sdSendRecv); // RFC 3264
-  TIdSdpKeyType       = (ktClear, ktBase64, ktURI, ktPrompt, ktUnknown);
+  TIdNtpTimestamp      = Int64;
+  TIdSdpBandwidthType  = (btConferenceTotal, btApplicationSpecific, btRS, btRR, btUnknown);
+  TIdSdpConnectionType = (ctExisting, ctNew, ctUnknown); // RFC 4145
+  TIdSdpDirection      = (sdInactive, sdRecvOnly, sdSendOnly, sdSendRecv, sdUnknown);
+  TIdSdpKeyType        = (ktClear, ktBase64, ktURI, ktPrompt, ktUnknown);
   // Technically, Text doesn't exist. However, it will once
   // draft-ietf-sip-callee-caps gets an RFC number.
-  TIdSdpMediaType     = (mtAudio, mtVideo, mtApplication, mtData, mtControl,
-                         mtText, mtUnknown);
+  TIdSdpMediaType      = (mtAudio, mtVideo, mtApplication, mtData, mtControl,
+                          mtText, mtUnknown);
+  TIdSdpSetupType      = (stActive, stActPass, stHoldConn, stPassive, stUnknown); // RFC 4145
 
   TIdPrintable = class(TPersistent)
   public
@@ -539,6 +541,19 @@ type
     procedure Parse(Payload: TIdSdpPayload);
   end;
 
+  TIdSdpMediaStream = class;
+
+  IIdSdpMediaListener = interface
+    ['{5BD6E9C8-45BA-49AD-AD99-D655CD6FFDA6}']
+    procedure OnData(Stream: TIdSdpMediaStream;
+                     Chunk: TStream;
+                     Format: String;
+                     Binding: TIdConnectionBindings);
+  end;
+
+  TIdSdpBaseMediaStream = class(TIdInterfacedObject)
+  end;
+
   // I manage the sending and receiving of one media stream, as set out by an
   // offer and answer (RFC 3264) of SDP payloads (RFC 2327).
   //
@@ -546,7 +561,7 @@ type
   // figure out what layer a packet belongs to (by using the Binding property
   // of the Notification), and you have to specify what layer to use when
   // sending data by setting the LayerID parameter to the port that layer uses.
-  TIdSDPMediaStream = class(TIdInterfacedObject,
+  TIdSDPMediaStream = class(TIdSdpBaseMediaStream,
                             IIdRTPDataListener,
                             IIdRTPListener,
                             IIdRTPSendListener)
@@ -600,7 +615,7 @@ type
     constructor Create(ServerType: TIdBaseRTPAbstractPeerClass); overload;
     destructor  Destroy; override;
 
-    procedure AddDataListener(const Listener: IIdRTPDataListener);
+    procedure AddDataListener(const Listener: IIdSdpMediaListener);
     procedure AddRTPListener(const Listener: IIdRTPListener);
     procedure AddRTPSendListener(const Listener: IIdRTPSendListener);
     function  AllowedPort(Port: Cardinal): Boolean;
@@ -611,7 +626,7 @@ type
     procedure JoinSession;
     function  MatchPort(Port: Cardinal): Boolean;
     procedure PutOnHold;
-    procedure RemoveDataListener(const Listener: IIdRTPDataListener);
+    procedure RemoveDataListener(const Listener: IIdSdpMediaListener);
     procedure RemoveRTPListener(const Listener: IIdRTPListener);
     procedure RemoveRTPSendListener(const Listener: IIdRTPSendListener);
     procedure SendData(Payload: TIdRTPPayload; LayerID: Integer = 0);
@@ -692,6 +707,27 @@ type
     property Username:                String            read fUsername write fUsername;
   end;
 
+  TIdSdpMediaListenerOnDataMethod = class(TIdNotification)
+  private
+    fBinding: TIdConnectionBindings;
+    fChunk:   TStream;
+    fFormat:  String;
+    fStream:  TIdSdpMediaStream;
+
+    procedure SetBinding(Value: TIdConnectionBindings);
+    procedure SetChunk(Value: TStream);
+  public
+    constructor Create;
+    destructor  Destroy; override;
+
+    procedure Run(const Subject: IInterface); override;
+
+    property Binding: TIdConnectionBindings read fBinding write SetBinding;
+    property Chunk:   TStream               read fChunk write SetChunk;
+    property Format:  String                read fFormat write fFormat;
+    property Stream:  TIdSdpMediaStream     read fStream write fStream;
+  end;
+
 const
   BadHeaderOrder        = 'Headers in the wrong order: found %s after %s';
   ConvertEnumErrorMsg   = 'Couldn''t convert a %s with Ord() = %d to type %s';
@@ -746,11 +782,20 @@ const
   Id_SDP_vat    = 'vat';
   Id_SDP_rtp    = 'rtp';
   Id_SDP_UDPTL  = 'UDPTL';
-  Id_SDP_TCP    = 'TCP';
+  Id_SDP_TCP    = 'TCP'; // RFC 4145
+
+  RSSDPSetupActive        = 'active';   // RFC 4145
+  RSSDPSetupActPass       = 'actpass';  // RFC 4145
+  RSSDPConnectionExisting = 'existing'; // RFC 4145
+  RSSDPSetupHoldConn      = 'holdconn'; // RFC 4145
+  RSSDPConnectionNew      = 'new';      // RFC 4145
+  RSSDPSetupPassive       = 'passive';  // RFC 4145
 
 const
   // Attribute names
+  ConnectionAttribute = 'connection'; // RFC 4145
   RTPMapAttribute     = 'rtpmap';
+  SetupAttribute      = 'setup';      // RFC 4145
 
   // SDP header names
   RSSDPAttributeName         = 'a';
@@ -790,14 +835,18 @@ const
 
 function AddressTypeToStr(Version: TIdIPVersion): String;
 function BandwidthTypeToStr(BwType: TIdSdpBandwidthType): String;
+function ConnectionTypeToStr(ConnType: TIdSdpConnectionType): String;
 function DirectionToStr(Direction: TIdSdpDirection): String;
 function KeyTypeToStr(KeyType: TIdSdpKeyType): String;
 function MediaTypeToStr(MediaType: TIdSdpMediaType): String;
+function SetupTypeToStr(SetupType: TIdSdpSetupType): String;
 function StrToAddressType(const S: String): TIdIPVersion;
 function StrToBandwidthType(const S: String): TIdSdpBandwidthType;
+function StrToConnectionType(const S: String): TIdSdpConnectionType;
 function StrToDirection(const S: String): TIdSdpDirection;
 function StrToKeyType(const S: String): TIdSDPKeyType;
 function StrToMediaType(const S: String): TIdSDPMediaType;
+function StrToSetupType(const S: String): TIdSDPSetupType;
 
 implementation
 
@@ -858,6 +907,20 @@ begin
   end;
 end;
 
+function ConnectionTypeToStr(ConnType: TIdSdpConnectionType): String;
+begin
+  case ConnType of
+    ctExisting: Result := RSSDPConnectionExisting;
+    ctNew:      Result := RSSDPConnectionNew;
+    ctUnknown:  Result := Id_SDP_Unknown;
+  else
+    raise EConvertError.Create(Format(ConvertEnumErrorMsg,
+                                      ['TIdSdpConnectionType',
+                                       Ord(ConnType),
+                                       'String']));
+  end;
+end;
+
 function KeyTypeToStr(KeyType: TIdSdpKeyType): String;
 begin
   case KeyType of
@@ -892,6 +955,22 @@ begin
   end;
 end;
 
+function SetupTypeToStr(SetupType: TIdSdpSetupType): String;
+begin
+  case SetupType of
+    stActive:   Result := RSSDPSetupActive;
+    stActPass:  Result := RSSDPSetupActPass;
+    stHoldConn: Result := RSSDPSetupHoldConn;
+    stPassive:  Result := RSSDPSetupPassive;
+    stUnknown:  Result := Id_SDP_Unknown;
+  else
+    raise EConvertError.Create(Format(ConvertEnumErrorMsg,
+                                      ['TIdSdpSetupType',
+                                       Ord(SetupType),
+                                       'String']));
+  end;
+end;
+
 function StrToAddressType(const S: String): TIdIPVersion;
 begin
   if (Trim(S) = '') then
@@ -917,6 +996,18 @@ begin
   else if (S = Id_SDP_RR)                  then Result := btRR
   else
     Result := btUnknown;
+end;
+
+function StrToConnectionType(const S: String): TIdSdpConnectionType;
+begin
+  if not TIdSdpParser.IsToken(S) then
+    raise EConvertError.Create(Format(ConvertStrErrorMsg,
+                                      [S, 'TIdSdpConnectionType']));
+
+       if (S = RSSDPConnectionExisting) then Result := ctExisting
+  else if (S = RSSDPConnectionNew)      then Result := ctNew
+  else
+    Result := ctUnknown;
 end;
 
 function StrToDirection(const S: String): TIdSdpDirection;
@@ -961,6 +1052,23 @@ begin
   else if (S = RSSDPMediaTypeText)        then Result := mtText
   else
     Result := mtUnknown;
+end;
+
+function StrToSetupType(const S: String): TIdSDPSetupType;
+begin
+  // This is more generous than RFC 4145, which only allows "active", "actpass",
+  // "holdconn" and "passive". We seek to protect ourselves against malicious
+  // or careless UAs though.
+  if not TIdSdpParser.IsToken(S) then
+    raise EConvertError.Create(Format(ConvertStrErrorMsg,
+                                      [S, 'TIdSdpSetupType']));
+
+       if (S = RSSDPSetupActive)   then Result := stActive
+  else if (S = RSSDPSetupActPass)  then Result := stActPass
+  else if (S = RSSDPSetupHoldConn) then Result := stHoldConn
+  else if (S = RSSDPSetupPassive)  then Result := stPassive
+  else
+    Result := stUnknown;
 end;
 
 //******************************************************************************
@@ -2600,12 +2708,10 @@ end;
 
 class function TIdSdpParser.IsAddressType(const Token: String): Boolean;
 begin
-  try
-    StrToAddressType(Token);
-    Result := true;
-  except
-    on EConvertError do Result := false;
-  end;
+  Result := Trim(Token) <> '';
+
+  if Result then
+    Result := StrToAddressType(Token) <> Id_IPUnknown;
 end;
 
 class function TIdSdpParser.IsBandwidthType(const Token: String): Boolean;
@@ -3581,7 +3687,7 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSDPMediaStream.AddDataListener(const Listener: IIdRTPDataListener);
+procedure TIdSDPMediaStream.AddDataListener(const Listener: IIdSdpMediaListener);
 begin
   Self.DataListeners.AddListener(Listener);
 end;
@@ -3657,7 +3763,7 @@ begin
   end;
 end;
 
-procedure TIdSDPMediaStream.RemoveDataListener(const Listener: IIdRTPDataListener);
+procedure TIdSDPMediaStream.RemoveDataListener(const Listener: IIdSdpMediaListener);
 begin
   Self.DataListeners.RemoveListener(Listener);
 end;
@@ -3846,13 +3952,23 @@ end;
 procedure TIdSDPMediaStream.OnNewData(Data: TIdRTPPayload;
                                       Binding: TIdConnection);
 var
-  Notification: TIdRTPDataListenerNewDataMethod;
+  Notification: TIdSdpMediaListenerOnDataMethod;
 begin
   if Self.IsReceiver then begin
-    Notification := TIdRTPDataListenerNewDataMethod.Create;
+    Notification := TIdSdpMediaListenerOnDataMethod.Create;
     try
-      Notification.Binding := Binding;
-      Notification.Data    := Data;
+      Notification.Binding.LocalIP   := Binding.LocalIP;
+      Notification.Binding.LocalPort := Binding.LocalPort;
+      Notification.Binding.PeerIP    := Binding.PeerIP;
+      Notification.Binding.PeerPort  := Binding.PeerPort;
+      Notification.Binding.Transport := Self.LocalDescription.Protocol;
+
+      // TODO This might not be correct!
+      Data.PrintOn(Notification.Chunk);
+      Notification.Chunk.Seek(soFromBeginning, 0);
+
+      Notification.Format  := IntToStr(Self.RemoteProfile.PayloadTypeFor(Data));
+      Notification.Stream  := Self;
 
       Self.DataListeners.Notify(Notification);
     finally
@@ -4376,6 +4492,44 @@ begin
   else begin
     Inc(Self.fLocalSessionVersion);
   end;
+end;
+
+//******************************************************************************
+//* TIdSdpMediaListenerOnDataMethod                                            *
+//******************************************************************************
+//* TIdSdpMediaListenerOnDataMethod Public methods *****************************
+
+constructor TIdSdpMediaListenerOnDataMethod.Create;
+begin
+  inherited Create;
+
+  Self.fBinding := TIdConnectionBindings.Create;
+  Self.fChunk   := TMemoryStream.Create;
+end;
+
+destructor TIdSdpMediaListenerOnDataMethod.Destroy;
+begin
+  Self.fChunk.Free;
+  Self.fBinding.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSdpMediaListenerOnDataMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSdpMediaListener).OnData(Self.Stream, Self.Chunk, Self.Format, Self.Binding);
+end;
+
+//* TIdSdpMediaListenerOnDataMethod Private methods ****************************
+
+procedure TIdSdpMediaListenerOnDataMethod.SetBinding(Value: TIdConnectionBindings);
+begin
+  Self.fBinding.Assign(Value);
+end;
+
+procedure TIdSdpMediaListenerOnDataMethod.SetChunk(Value: TStream);
+begin
+  Self.Chunk.CopyFrom(Value, 0);
 end;
 
 end.

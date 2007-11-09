@@ -1,4 +1,3 @@
-
 {
   (c) 2004 Directorate of New Technologies, Royal National Institute for Deaf people (RNID)
 
@@ -13,22 +12,50 @@ unit TestIdSdp;
 interface
 
 uses
-  Classes, IdRTP, IdRTPServer, IdSdp, IdSimpleParser, IdTimerQueue, IdUDPServer,
-  SyncObjs, TestFramework, TestFrameworkEx, TestFrameworkRtp;
+  Classes, IdConnectionBindings, IdInterfacedObject, IdRTP, IdRTPServer, IdSdp,
+  IdSimpleParser, IdTimerQueue, IdUDPServer, SyncObjs, TestFramework,
+  TestFrameworkEx, TestFrameworkRtp;
 
 type
+  TIdSdpTestMediaListener = class(TIdInterfacedObject,
+                                  IIdSdpMediaListener)
+  private
+    fBindingParam: TIdConnectionBindings;
+    fChunkParam:   TStream;
+    fFormatParam:  String;
+    fReceivedData: Boolean;
+    fStreamParam:  TIdSdpMediaStream;
+
+    procedure OnData(Stream: TIdSdpMediaStream;
+                     Chunk: TStream;
+                     Format: String;
+                     Binding: TIdConnectionBindings);
+  public
+    constructor Create; override;
+
+    property BindingParam: TIdConnectionBindings read fBindingParam;
+    property ChunkParam:   TStream               read fChunkParam;
+    property FormatParam:  String                read fFormatParam;
+    property ReceivedData: Boolean               read fReceivedData;
+    property StreamParam:  TIdSdpMediaStream     read fStreamParam;
+  end;
+
   TestFunctions = class(TTestCase)
   published
     procedure TestAddressTypeToStr;
     procedure TestBandwidthTypeToStr;
+    procedure TestConnectionTypeToStr;
     procedure TestDirectionToStr;
     procedure TestKeyTypeToStr;
     procedure TestMediaTypeToStr;
+    procedure TestSetupTypeToStr;
     procedure TestStrToAddressType;
     procedure TestStrToBandwidthType;
-    procedure TestStrToDirection;    
+    procedure TestStrToConnectionType;
+    procedure TestStrToDirection;
     procedure TestStrToKeyType;
     procedure TestStrToMediaType;
+    procedure TestStrToSetupType;
   end;
 
   TestTIdSdpAttribute = class(TTestCase)
@@ -474,12 +501,14 @@ type
   end;
 
   TIdSdpTestCase = class(TTestCase,
-                         IIdRTPDataListener)
+                         IIdSdpMediaListener)
   protected
     ReceivedData: Boolean;
 
-    procedure OnNewData(Data: TIdRTPPayload;
-                        Binding: TIdConnection); virtual;
+    procedure OnData(Stream: TIdSdpMediaStream;
+                     Chunk: TStream;
+                     Format: String;
+                     Binding: TIdConnectionBindings); virtual;
   public
     procedure SetUp; override;
 
@@ -546,7 +575,6 @@ type
 
   TestTIdSDPMultimediaSession = class(TIdSdpTestCase)
   private
-    Payload:     TClass;
     LocalPort:   Cardinal;
     MS:          TIdSDPMultimediaSession;
     PortBlocker: TIdMockRTPPeer;
@@ -569,9 +597,6 @@ type
     function  SingleStreamSDP(Port: Cardinal;
                               PayloadType: Cardinal = 96): String;
     procedure StartServerOnPort(Port: Integer);
-  protected
-    procedure OnNewData(Data: TIdRTPPayload;
-                        Binding: TIdConnection); override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -606,6 +631,21 @@ type
     procedure TestTakeOffHold;
   end;
 
+  TestTIdSdpMediaListenerOnDataMethod = class(TTestCase)
+  private
+    Binding:  TIdConnectionBindings;
+    Chunk:    TStream;
+    Format:   String;
+    Listener: TIdSdpTestMediaListener;
+    Method:   TIdSdpMediaListenerOnDataMethod;
+    Stream:   TIdSdpMediaStream;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
 const
   MinimumPayloadSansConnection = 'v=0'#13#10
                  + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
@@ -623,6 +663,7 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSdpParser unit tests');
+{
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSdpAttribute.Suite);
   Result.AddTest(TestTIdSdpRTPMapAttribute.Suite);
@@ -645,12 +686,40 @@ begin
   Result.AddTest(TestTIdSdpPayload.Suite);
   Result.AddTest(TestTIdSDPMediaStream.Suite);
   Result.AddTest(TestTIdSDPMultimediaSession.Suite);
+}
+  Result.AddTest(TestTIdSdpMediaListenerOnDataMethod.Suite);
 end;
 
 const
   ArbitraryPort = 8000;
   IPv4LocalHost = '127.0.0.1';
   IPv6LocalHost = '::1';
+
+//******************************************************************************
+//* TIdSdpTestMediaListener                                                    *
+//******************************************************************************
+//* TIdSdpTestMediaListener Public methods *************************************
+
+constructor TIdSdpTestMediaListener.Create;
+begin
+  inherited Create;
+
+  Self.fReceivedData := false;
+end;
+
+//* TIdSdpTestMediaListener Private methods ************************************
+
+procedure TIdSdpTestMediaListener.OnData(Stream: TIdSdpMediaStream;
+                                         Chunk: TStream;
+                                         Format: String;
+                                         Binding: TIdConnectionBindings);
+begin
+  Self.fReceivedData := true;
+  Self.fBindingParam := Binding;
+  Self.fChunkParam   := Chunk;
+  Self.fFormatParam  := Format;
+  Self.fStreamParam  := Stream;
+end;
 
 //******************************************************************************
 //* TestFunctions                                                              *
@@ -681,6 +750,18 @@ begin
   // To check that ALL TIdSdpBandwidthTypes can be converted
   for B := Low(TIdSdpBandwidthType) to High(TIdSdpBandwidthType) do
     BandwidthTypeToStr(B);
+end;
+
+procedure TestFunctions.TestConnectionTypeToStr;
+var
+  C: TIdSdpConnectionType;
+begin
+  CheckEquals(RSSDPConnectionExisting, ConnectionTypeToStr(ctExisting), 'ctExisting');
+  CheckEquals(RSSDPConnectionNew,      ConnectionTypeToStr(ctNew),      'ctNew');
+
+  // To check that ALL TIdSdpConnectionTypes can be converted
+  for C := Low(TIdSdpConnectionType) to High(TIdSdpConnectionType) do
+    ConnectionTypeToStr(C);
 end;
 
 procedure TestFunctions.TestDirectionToStr;
@@ -725,6 +806,20 @@ begin
   // To check that ALL TIdSdpMediaTypes can be converted
   for M := Low(TIdSdpMediaType) to High(TIdSdpMediaType) do
     MediaTypeToStr(M);
+end;
+
+procedure TestFunctions.TestSetupTypeToStr;
+var
+  ST: TIdSdpSetupType;
+begin
+  CheckEquals(RSSDPSetupActive,   SetupTypeToStr(stActive),   'stActive');
+  CheckEquals(RSSDPSetupActPass,  SetupTypeToStr(stActPass),  'stActPass');
+  CheckEquals(RSSDPSetupHoldConn, SetupTypeToStr(stHoldConn), 'stHoldConn');
+  CheckEquals(RSSDPSetupPassive,  SetupTypeToStr(stPassive),  'stPassive');
+
+  // To check that ALL TIdSdpSetupTypes can be converted
+  for ST := Low(TIdSdpSetupType) to High(TIdSdpSetupType) do
+    SetupTypeToStr(ST);
 end;
 
 procedure TestFunctions.TestStrToAddressType;
@@ -785,6 +880,30 @@ begin
   except
     on E: EConvertError do
       CheckEquals('Couldn''t convert '' '' to type TIdSdpBandwidthType',
+                  E.Message,
+                  'Unexpected exception: '' ''');
+  end;
+end;
+
+procedure TestFunctions.TestStrToConnectionType;
+var
+  CT: TIdSdpConnectionType;
+begin
+  for CT := Low(TIdSdpConnectionType) to High(TIdSdpConnectionType) do
+    if (CT <> CTUnknown) then
+      Check(CT = StrToConnectionType(ConnectionTypeToStr(CT)),
+            'Ord(CT) = ' + IntToStr(Ord(CT)));
+
+  Check(ctExisting = StrToConnectionType(RSSDPConnectionExisting),     RSSDPConnectionExisting);
+  Check(ctNew      = StrToConnectionType(RSSDPConnectionNew),          RSSDPConnectionNew);
+  Check(ctUnknown  = StrToConnectionType('unknownValue'), 'unknownValue');
+
+  try
+    StrToConnectionType(' ');
+    Fail('Failed to bail out: '' ''');
+  except
+    on E: EConvertError do
+      CheckEquals('Couldn''t convert '' '' to type TIdSdpConnectionType',
                   E.Message,
                   'Unexpected exception: '' ''');
   end;
@@ -858,6 +977,32 @@ begin
                   E.Message,
                   'Unexpected exception: '' ''');
   end;
+end;
+
+procedure TestFunctions.TestStrToSetupType;
+var
+  ST: TIdSdpSetupType;
+begin
+  for ST := Low(TIdSdpSetupType) to High(TIdSdpSetupType) do
+    if (ST <> stUnknown) then
+      Check(ST = StrToSetupType(SetupTypeToStr(ST)),
+            'Ord(ST) = ' + IntToStr(Ord(ST)));
+
+  Check(stActive   = StrToSetupType(RSSDPSetupActive),   RSSDPSetupActive);
+  Check(stActPass  = StrToSetupType(RSSDPSetupActPass),  RSSDPSetupActPass);
+  Check(stHoldConn = StrToSetupType(RSSDPSetupHoldConn), RSSDPSetupHoldConn);
+  Check(stPassive  = StrToSetupType(RSSDPSetupPassive),  RSSDPSetupPassive);
+  Check(stUnknown  = StrToSetupType('unknownValue'),     'unknownValue');
+
+  try
+    StrToSetupType(' ');
+    Fail('Failed to bail out: '' ''');
+  except
+    on E: EConvertError do
+      CheckEquals('Couldn''t convert '' '' to type TIdSdpSetupType',
+                  E.Message,
+                  'Unexpected exception: '' ''');
+  end;               
 end;
 
 //******************************************************************************
@@ -6177,8 +6322,10 @@ end;
 
 //* TIdSdpTestCase Protected methods *******************************************
 
-procedure TIdSdpTestCase.OnNewData(Data: TIdRTPPayload;
-                                   Binding: TIdConnection);
+procedure TIdSdpTestCase.OnData(Stream: TIdSdpMediaStream;
+                                Chunk: TStream;
+                                Format: String;
+                                Binding: TIdConnectionBindings);
 begin
   Self.ReceivedData := true;
 end;
@@ -6362,12 +6509,12 @@ end;
 
 procedure TestTIdSDPMediaStream.TestAddDataListener;
 var
-  L1: TIdRTPTestRTPDataListener;
-  L2: TIdRTPTestRTPDataListener;
+  L1: TIdSdpTestMediaListener;
+  L2: TIdSdpTestMediaListener;
 begin
-  L1 := TIdRTPTestRTPDataListener.Create;
+  L1 := TIdSdpTestMediaListener.Create;
   try
-    L2 := TIdRTPTestRTPDataListener.Create;
+    L2 := TIdSdpTestMediaListener.Create;
     try
       Self.Media.AddDataListener(L1);
       Self.Media.AddDataListener(L2);
@@ -6375,8 +6522,8 @@ begin
 
       Self.ReceiveDataOn(Self.Media);
 
-      Check(L1.NewData, 'L1 not notified');
-      Check(L2.NewData, 'L2 not notified');
+      Check(L1.ReceivedData, 'L1 not notified');
+      Check(L2.ReceivedData, 'L2 not notified');
     finally
       L2.Free;
     end;
@@ -7053,16 +7200,6 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdSDPMultimediaSession Protected methods ******************************
-
-procedure TestTIdSDPMultimediaSession.OnNewData(Data: TIdRTPPayload;
-                                                Binding: TIdConnection);
-begin
-  Self.Payload := Data.ClassType;
-
-  inherited OnNewData(Data, Binding);
-end;
-
 //* TestTIdSDPMultimediaSession Private methods ********************************
 
 procedure TestTIdSDPMultimediaSession.CheckOrigin(ExpectedNetType: String;
@@ -7221,10 +7358,6 @@ begin
   Self.ReceiveDataOfType(RemotePT);
 
   Check(Self.ReceivedData, 'No RTP data received');
-
-  CheckEquals(TIdRTPT140Payload.ClassName,
-              Self.Payload.ClassName,
-              'Remote profile not used to determine payload');
 end;
 
 procedure TestTIdSDPMultimediaSession.TestIsListening;
@@ -7695,6 +7828,52 @@ begin
         'Stream #1 not taken off hold');
 
   CheckEquals(OldSessionVersion + 1, Self.MS.LocalSessionVersion, 'sess-version not incremented');
+end;
+
+//******************************************************************************
+//* TestTIdSdpMediaListenerOnDataMethod                                        *
+//******************************************************************************
+//* TestTIdSdpMediaListenerOnDataMethod Public methods *************************
+
+procedure TestTIdSdpMediaListenerOnDataMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Binding  := TIdConnectionBindings.Create;
+  Self.Chunk    := TMemoryStream.Create;
+  Self.Format   := '96';
+  Self.Listener := TIdSdpTestMediaListener.Create;
+  Self.Method   := TIdSdpMediaListenerOnDataMethod.Create;
+  Self.Stream   := TIdSdpMediaStream.Create;
+
+  Self.Method.Binding := Self.Binding;
+  Self.Method.Chunk   := Self.Chunk;
+  Self.Method.Stream  := Self.Stream;
+end;
+
+procedure TestTIdSdpMediaListenerOnDataMethod.TearDown;
+begin
+  Self.Stream.Free;
+  Self.Method.Free;
+  Self.Listener.Free;
+  Self.Chunk.Free;
+  Self.Binding.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSdpMediaListenerOnDataMethod Published methods **********************
+
+procedure TestTIdSdpMediaListenerOnDataMethod.TestRun;
+begin
+  Self.Method.Run(Self.Listener);
+
+  Check(Self.Listener.ReceivedData, 'Listener not notified');
+
+  Check(Self.Method.Binding = Self.Listener.BindingParam,    'BindingParam');
+  Check(Self.Method.Chunk   = Self.Listener.ChunkParam,      'ChunkParam');
+  CheckEquals(Self.Method.Format, Self.Listener.FormatParam, 'FormatParam');
+  Check(Self.Method.Stream  = Self.Listener.StreamParam,     'StreamParam');
 end;
 
 initialization

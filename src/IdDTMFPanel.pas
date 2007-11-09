@@ -12,7 +12,8 @@ unit IdDTMFPanel;
 interface
 
 uses
-  Classes, Controls, ExtCtrls, Graphics, IdRTP, IdSdp, IdTimerQueue, StdCtrls;
+  Classes, Controls, ExtCtrls, Graphics, IdConnectionBindings, IdRTP, IdSdp,
+  IdTimerQueue, StdCtrls;
 
 type
   TIdColourButton = class(TPanel)
@@ -38,7 +39,7 @@ type
   // Still needs: flashing of buttons; maybe playing of tones, too, on receipt
   // of DTMF
   TIdDTMFPanel = class(TPanel,
-                       IIdRTPDataListener)
+                       IIdSdpMediaListener)
   private
     Buttons:          TIdDTMFButtonArray;
     ButtonHeight:     Integer;
@@ -53,8 +54,10 @@ type
     procedure ResizeButtons;
     procedure DoOnResize(Sender: TObject);
     procedure Flash(Event: TIdRTPTelephoneEventPayload);
-    procedure OnNewData(Data: TIdRTPPayload;
-                        Binding: TIdConnection);
+    procedure OnData(Stream: TIdSdpMediaStream;
+                     Chunk: TStream;
+                     Format: String;
+                     Binding: TIdConnectionBindings);
     procedure SendDTMF(Event: Byte);
     procedure SendDTMF0(Sender: TObject);
     procedure SendDTMF1(Sender: TObject);
@@ -290,12 +293,24 @@ begin
     FlashingButton.EndFlash;
 end;
 
-procedure TIdDTMFPanel.OnNewData(Data: TIdRTPPayload;
-                                 Binding: TIdConnection);
+procedure TIdDTMFPanel.OnData(Stream: TIdSdpMediaStream;
+                              Chunk: TStream;
+                              Format: String;
+                              Binding: TIdConnectionBindings);
+var
+  TelephoneEvent: TIdRTPTelephoneEventPayload;
 begin
-  // TODO: Could this indicate the need for a Visitor pattern?
-  if Data is TIdRTPTelephoneEventPayload then
-    Self.Flash(Data as TIdRTPTelephoneEventPayload);
+  // TODO: We have no way of here knowing what Chunk contains.
+
+  TelephoneEvent := TIdRTPTelephoneEventPayload.Create;
+  try
+    TelephoneEvent.ReadFrom(Chunk);
+
+    // TODO: Could this indicate the need for a Visitor pattern?
+      Self.Flash(TelephoneEvent);
+  finally
+    TelephoneEvent.Free;
+  end;
 end;
 
 procedure TIdDTMFPanel.SendDTMF(Event: Byte);
