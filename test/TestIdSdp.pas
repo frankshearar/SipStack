@@ -1,3 +1,4 @@
+
 {
   (c) 2004 Directorate of New Technologies, Royal National Institute for Deaf people (RNID)
 
@@ -731,7 +732,13 @@ var
   AT: TIdIPVersion;
 begin
   for AT := Low(TIdIPVersion) to High(TIdIPVersion) do
-    StrToAddressType(AddressTypeToStr(AT));
+    if (AT <> Id_IPUnknown) then
+      Check(AT = StrToAddressType(AddressTypeToStr(AT)),
+            'Ord(AT) = ' + IntToStr(Ord(AT)));
+
+  Check(Id_IPv4      = StrToAddressType(Id_SDP_IP4),     Id_SDP_IP4);
+  Check(Id_IPv6      = StrToAddressType(Id_SDP_IP6),     Id_SDP_IP6);
+  Check(Id_IPUnknown = StrToAddressType('unknownValue'), 'unknownValue');
 
   try
     StrToAddressType('');
@@ -741,36 +748,6 @@ begin
       CheckEquals('Couldn''t convert '''' to type TIdIPVersion',
                   E.Message,
                   'Unexpected exception: ''''');
-  end;
-
-  try
-    StrToAddressType('ip4');
-    Fail('Failed to bail out: ''ip4''');
-  except
-    on E: EConvertError do
-      CheckEquals('Couldn''t convert ''ip4'' to type TIdIPVersion',
-                  E.Message,
-                  'Unexpected exception: ''ip4''');
-  end;
-
-  try
-    StrToAddressType('IP5');
-    Fail('Failed to bail out: ''IP5''');
-  except
-    on E: EConvertError do
-      CheckEquals('Couldn''t convert ''IP5'' to type TIdIPVersion',
-                  E.Message,
-                  'Unexpected exception: ''IP5''');
-  end;
-
-  try
-    StrToAddressType('halloo');
-    Fail('Failed to bail out: ''halloo''');
-  except
-    on E: EConvertError do
-      CheckEquals('Couldn''t convert ''halloo'' to type TIdIPVersion',
-                  E.Message,
-                  'Unexpected exception: ''halloo''');
   end;
 
   try
@@ -793,6 +770,13 @@ begin
       Check(BT = StrToBandwidthType(BandwidthTypeToStr(BT)),
             'Ord(BT) = ' + IntToStr(Ord(BT)));
 
+  Check(btConferenceTotal     = StrToBandwidthType(Id_SDP_ConferenceTotal),     Id_SDP_ConferenceTotal);
+  Check(btApplicationSpecific = StrToBandwidthType(Id_SDP_ApplicationSpecific), Id_SDP_ApplicationSpecific);
+  Check(btRS                  = StrToBandwidthType(Id_SDP_RS),                  Id_SDP_RS);
+  Check(btRR                  = StrToBandwidthType(Id_SDP_RR),                  Id_SDP_RR);
+  Check(btUnknown             = StrToBandwidthType('unknownValue'),             'unknownValue');
+
+
   Check(btUnknown = StrToBandwidthType('halloo'), 'Converting ''halloo''');
 
   try
@@ -808,21 +792,15 @@ end;
 
 procedure TestFunctions.TestStrToDirection;
 begin
-  Check(sdInactive = StrToDirection('inactive'), 'inactive');
-  Check(sdRecvOnly = StrToDirection('recvonly'), 'recvonly');
-  Check(sdSendOnly = StrToDirection('sendonly'), 'sendonly');
-  Check(sdSendRecv = StrToDirection('sendrecv'), 'sendrecv');
+  Check(sdInactive = StrToDirection(RSSDPDirectionInactive), RSSDPDirectionInactive);
+  Check(sdRecvOnly = StrToDirection(RSSDPDirectionRecvOnly), RSSDPDirectionRecvOnly);
+  Check(sdSendOnly = StrToDirection(RSSDPDirectionSendOnly), RSSDPDirectionSendOnly);
+  Check(sdSendRecv = StrToDirection(RSSDPDirectionSendRecv), RSSDPDirectionSendRecv);
+  Check(sdUnknown  = StrToDirection('unknownValue'),         'unknownValue');
 
   try
     StrToDirection('');
     Fail('Failed to bail out on empty string');
-  except
-    on EConvertError do;
-  end;
-
-  try
-    StrToDirection('foo');
-    Fail('Failed to bail out on ''foo''');
   except
     on EConvertError do;
   end;
@@ -837,7 +815,11 @@ begin
       Check(KT = StrToKeyType(KeyTypeToStr(KT)),
             'Ord(KT) = ' + IntToStr(Ord(KT)));
 
-  Check(ktUnknown = StrToKeyType('halloo'), 'Converting ''halloo''');
+  Check(ktClear   = StrToKeyType(Id_SDP_Clear),   Id_SDP_Clear);
+  Check(ktBase64  = StrToKeyType(Id_SDP_Base64),  Id_SDP_Base64);
+  Check(ktURI     = StrToKeyType(Id_SDP_URI),     Id_SDP_URI);
+  Check(ktPrompt  = StrToKeyType(Id_SDP_Prompt),  Id_SDP_Prompt);
+  Check(ktUnknown = StrToKeyType('unknownValue'), 'unknownValue');
 
   try
     StrToKeyType(' ');
@@ -859,7 +841,13 @@ begin
       Check(MT = StrToMediaType(MediaTypeToStr(MT)),
             'Ord(MT) = ' + IntToStr(Ord(MT)));
 
-  Check(mtUnknown = StrToMediaType('halloo'), 'Converting ''halloo''');
+  Check(mtAudio       = StrToMediaType(RSSDPMediaTypeAudio),       RSSDPMediaTypeAudio);
+  Check(mtVideo       = StrToMediaType(RSSDPMediaTypeVideo),       RSSDPMediaTypeVideo);
+  Check(mtApplication = StrToMediaType(RSSDPMediaTypeApplication), RSSDPMediaTypeApplication);
+  Check(mtData        = StrToMediaType(RSSDPMediaTypeData),        RSSDPMediaTypeData);
+  Check(mtControl     = StrToMediaType(RSSDPMediaTypeControl),     RSSDPMediaTypeControl);
+  Check(mtText        = StrToMediaType(RSSDPMediaTypeText),        RSSDPMediaTypeText);
+  Check(mtUnknown     = StrToMediaType('unknownValue'),            'unknownValue');
 
   try
     StrToMediaType(' ');

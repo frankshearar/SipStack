@@ -22,7 +22,7 @@ uses
 type
   TIdNtpTimestamp     = Int64;
   TIdSdpBandwidthType = (btConferenceTotal, btApplicationSpecific, btRS, btRR, btUnknown);
-  TIdSdpDirection     = (sdInactive, sdRecvOnly, sdSendOnly, sdSendRecv);
+  TIdSdpDirection     = (sdInactive, sdRecvOnly, sdSendOnly, sdSendRecv); // RFC 3264
   TIdSdpKeyType       = (ktClear, ktBase64, ktURI, ktPrompt, ktUnknown);
   // Technically, Text doesn't exist. However, it will once
   // draft-ietf-sip-callee-caps gets an RFC number.
@@ -711,13 +711,12 @@ const
                '}', '+', '~', '"'];
   EmailSafeChars = SafeChars + [' ', #9];
   IllegalByteStringChars = [#0, #10, #13];
-  RTPMapAttribute    = 'rtpmap';
   TimeTypes          = ['d', 'h', 'm', 's'];
   TokenChars         = ['!', '#', '$', '%', '&', '''', '*', '+', '-', '.', '^',
                         '_', '`', '{', '|', '}', '~'] + AlphanumericChars;
   AllTokenChars = '!#$%&''*+-.0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ^_`abcdefhijklmnopqrstuvwxyz{|}~';
 
-  // MIME types etc
+// MIME types etc
 const
   PlainTextMimeType = 'text/plain';
   SdpMimeType       = 'application/sdp';
@@ -749,8 +748,11 @@ const
   Id_SDP_UDPTL  = 'UDPTL';
   Id_SDP_TCP    = 'TCP';
 
-// for IdResourceStrings
 const
+  // Attribute names
+  RTPMapAttribute     = 'rtpmap';
+
+  // SDP header names
   RSSDPAttributeName         = 'a';
   RSSDPBandwidthName         = 'b';
   RSSDPConnectionName        = 'c';
@@ -787,13 +789,13 @@ const
   LowestPossiblePort  = 0;
 
 function AddressTypeToStr(Version: TIdIPVersion): String;
-function DirectionToStr(Direction: TIdSdpDirection): String;
 function BandwidthTypeToStr(BwType: TIdSdpBandwidthType): String;
+function DirectionToStr(Direction: TIdSdpDirection): String;
 function KeyTypeToStr(KeyType: TIdSdpKeyType): String;
 function MediaTypeToStr(MediaType: TIdSdpMediaType): String;
 function StrToAddressType(const S: String): TIdIPVersion;
-function StrToDirection(const S: String): TIdSdpDirection;
 function StrToBandwidthType(const S: String): TIdSdpBandwidthType;
+function StrToDirection(const S: String): TIdSdpDirection;
 function StrToKeyType(const S: String): TIdSDPKeyType;
 function StrToMediaType(const S: String): TIdSDPMediaType;
 
@@ -831,6 +833,7 @@ begin
     sdRecvOnly: Result := RSSDPDirectionRecvOnly;
     sdSendOnly: Result := RSSDPDirectionSendOnly;
     sdSendRecv: Result := RSSDPDirectionSendRecv;
+    sdUnknown:  Result := Id_SDP_Unknown;
   else
     raise EConvertError.Create(Format(ConvertEnumErrorMsg,
                                       ['TIdSdpDirection',
@@ -891,23 +894,15 @@ end;
 
 function StrToAddressType(const S: String): TIdIPVersion;
 begin
+  if (Trim(S) = '') then
+    raise EConvertError.Create(Format(ConvertStrErrorMsg,
+                                      [S, 'TIdIPVersion']));
+
        if (S = Id_SDP_IP4)       then Result := Id_IPv4
   else if (S = Id_SDP_IP6)       then Result := Id_IPv6
   else if (S = Id_SDP_IPUnknown) then Result := Id_IPUnknown
   else
-    raise EConvertError.Create(Format(ConvertStrErrorMsg,
-                                      [S, 'TIdIPVersion']));
-end;
-
-function StrToDirection(const S: String): TIdSdpDirection;
-begin
-       if (S = RSSDPDirectionInactive) then Result := sdInactive
-  else if (S = RSSDPDirectionRecvOnly) then Result := sdRecvOnly
-  else if (S = RSSDPDirectionSendOnly) then Result := sdSendOnly
-  else if (S = RSSDPDirectionSendRecv) then Result := sdSendRecv
-  else
-    raise EConvertError.Create(Format(ConvertStrErrorMsg,
-                                      [S, 'TIdSdpDirection']));
+    Result := Id_IPUnknown;
 end;
 
 function StrToBandwidthType(const S: String): TIdSdpBandwidthType;
@@ -922,6 +917,20 @@ begin
   else if (S = Id_SDP_RR)                  then Result := btRR
   else
     Result := btUnknown;
+end;
+
+function StrToDirection(const S: String): TIdSdpDirection;
+begin
+  if (Trim(S) = '') then
+    raise EConvertError.Create(Format(ConvertStrErrorMsg,
+                                      [S, 'TIdSdpDirection']));
+
+       if (S = RSSDPDirectionInactive) then Result := sdInactive
+  else if (S = RSSDPDirectionRecvOnly) then Result := sdRecvOnly
+  else if (S = RSSDPDirectionSendOnly) then Result := sdSendOnly
+  else if (S = RSSDPDirectionSendRecv) then Result := sdSendRecv
+  else
+    Result := sdUnknown;
 end;
 
 function StrToKeyType(const S: String): TIdSDPKeyType;
