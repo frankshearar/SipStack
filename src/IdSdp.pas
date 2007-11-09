@@ -109,7 +109,7 @@ type
   private
     fAddress:           String;
     fAddressType:       TIdIPVersion;
-    fRoutableAddress:     String; // If you're behind a NAT, this will hold the NAT's external IP.
+    fRoutableAddress:   String; // If you're behind a NAT, this will hold the NAT's external IP.
     fNetType:           String;
     fNumberOfAddresses: Cardinal;
     fTTL:               Byte;
