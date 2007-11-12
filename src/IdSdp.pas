@@ -193,7 +193,7 @@ type
     function  IsRefusedStream: Boolean;
     function  IsText: Boolean;
     procedure PrintOn(Dest: TStream); override;
-    function  UsesBinding(Binding: TIdConnection): Boolean;
+    function  UsesBinding(Binding: TIdConnectionBindings): Boolean;
 
     property Attributes:              TIdSdpAttributes       read GetAttributes;
     property Bandwidths:              TIdSdpBandwidths       read GetBandwidths;
@@ -588,15 +588,15 @@ type
     procedure InitializeLocalRTPServers;
     procedure InitializeRemoteRTPServers;
     procedure OnNewData(Data: TIdRTPPayload;
-                        Binding: TIdConnection);
+                        Binding: TIdConnectionBindings);
     procedure OnRTCP(Packet: TIdRTCPPacket;
-                     Binding: TIdConnection);
+                     Binding: TIdConnectionBindings);
     procedure OnRTP(Packet: TIdRTPPacket;
-                    Binding: TIdConnection);
+                    Binding: TIdConnectionBindings);
     procedure OnSendRTCP(Packet: TIdRTCPPacket;
-                         Binding: TIdConnection);
+                         Binding: TIdConnectionBindings);
     procedure OnSendRTP(Packet: TIdRTPPacket;
-                        Binding: TIdConnection);
+                        Binding: TIdConnectionBindings);
     procedure RecreateServers(NumberOfServers: Cardinal);
     procedure RegisterEncodingMaps(Profile: TIdRTPProfile;
                                    Maps: TIdSdpRTPMapAttributes);
@@ -633,7 +633,7 @@ type
     procedure StartListening;
     procedure StopListening;
     procedure TakeOffHold;
-    function  UsesBinding(Binding: TIdConnection): Boolean;
+    function  UsesBinding(Binding: TIdConnectionBindings): Boolean;
 
     property Direction:          TIdSdpDirection        read GetDirection write SetDirection;
     property HighestAllowedPort: Cardinal               read fHighestAllowedPort write fHighestAllowedPort;
@@ -1558,7 +1558,7 @@ begin
   Self.Attributes.PrintOn(Dest);
 end;
 
-function TIdSdpMediaDescription.UsesBinding(Binding: TIdConnection): Boolean;
+function TIdSdpMediaDescription.UsesBinding(Binding: TIdConnectionBindings): Boolean;
 var
   I: Integer;
   J: Integer;
@@ -3835,7 +3835,7 @@ begin
   end;
 end;
 
-function TIdSDPMediaStream.UsesBinding(Binding: TIdConnection): Boolean;
+function TIdSDPMediaStream.UsesBinding(Binding: TIdConnectionBindings): Boolean;
 begin
   Result := Self.LocalDescription.UsesBinding(Binding);
 end;
@@ -3948,7 +3948,7 @@ begin
 end;
 
 procedure TIdSDPMediaStream.OnNewData(Data: TIdRTPPayload;
-                                      Binding: TIdConnection);
+                                      Binding: TIdConnectionBindings);
 var
   Notification: TIdSdpMediaListenerOnDataMethod;
 begin
@@ -3976,7 +3976,7 @@ begin
 end;
 
 procedure TIdSDPMediaStream.OnRTCP(Packet: TIdRTCPPacket;
-                                   Binding: TIdConnection);
+                                   Binding: TIdConnectionBindings);
 var
   Notification: TIdRTPListenerReceiveRTCPMethod;
 begin
@@ -3992,7 +3992,7 @@ begin
 end;
 
 procedure TIdSDPMediaStream.OnRTP(Packet: TIdRTPPacket;
-                                  Binding: TIdConnection);
+                                  Binding: TIdConnectionBindings);
 var
   Notification: TIdRTPListenerReceiveRTPMethod;
 begin
@@ -4008,7 +4008,7 @@ begin
 end;
 
 procedure TIdSDPMediaStream.OnSendRTCP(Packet: TIdRTCPPacket;
-                                       Binding: TIdConnection);
+                                       Binding: TIdConnectionBindings);
 var
   Notification: TIdRTPSendListenerSendRTCPMethod;
 begin
@@ -4024,7 +4024,7 @@ begin
 end;
 
 procedure TIdSDPMediaStream.OnSendRTP(Packet: TIdRTPPacket;
-                                      Binding: TIdConnection);
+                                      Binding: TIdConnectionBindings);
 var
   Notification: TIdRTPSendListenerSendRTPMethod;
 begin

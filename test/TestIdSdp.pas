@@ -526,7 +526,7 @@ type
     AVP:            TIdRTPProfile;
     Media:          TIdSDPMediaStream;
     Sender:         TIdSDPMediaStream;
-    SendingBinding: TIdConnection;
+    SendingBinding: TIdConnectionBindings;
     SentBye:        Boolean;
     SentData:       Boolean;
     SentControl:    Boolean;
@@ -535,9 +535,9 @@ type
     Timer:          TIdDebugTimerQueue;
 
     procedure OnSendRTCP(Packet: TIdRTCPPacket;
-                         Binding: TIdConnection);
+                         Binding: TIdConnectionBindings);
     procedure OnSendRTP(Packet: TIdRTPPacket;
-                        Binding: TIdConnection);
+                        Binding: TIdConnectionBindings);
     procedure ReceiveControlOn(S: TIdSDPMediaStream);
     procedure ReceiveDataOn(S: TIdSDPMediaStream);
     procedure SetLocalMediaDesc(Stream: TIdSDPMediaStream;
@@ -1945,49 +1945,54 @@ end;
 
 procedure TestTIdSdpMediaDescription.TestUsesBinding;
 var
-  Binding: TIdConnection;
+  Binding: TIdConnectionBindings;
 begin
   Self.ConfigureComplicatedly(Self.M);
 
-  Binding.LocalIP   := Self.M.Connections[0].Address;
-  Binding.LocalPort := Self.M.Port;
-  Check(Self.M.UsesBinding(Binding), 'IPv4 binding');
+  Binding := TIdConnectionBindings.Create;
+  try
+    Binding.LocalIP   := Self.M.Connections[0].Address;
+    Binding.LocalPort := Self.M.Port;
+    Check(Self.M.UsesBinding(Binding), 'IPv4 binding');
 
-  Binding.LocalIP   := Self.M.Connections[0].Address;
-  Binding.LocalPort := Self.M.Port + 1;
-  Check(not Self.M.UsesBinding(Binding), 'IPv4 binding with unused port');
+    Binding.LocalIP   := Self.M.Connections[0].Address;
+    Binding.LocalPort := Self.M.Port + 1;
+    Check(not Self.M.UsesBinding(Binding), 'IPv4 binding with unused port');
 
-  Binding.LocalIP   := TIdIPAddressParser.IncIPAddress(Self.M.Connections[0].Address);
-  Binding.LocalPort := Self.M.Port;
-  Check(not Self.M.UsesBinding(Binding), 'IPv4 binding with unused address');
+    Binding.LocalIP   := TIdIPAddressParser.IncIPAddress(Self.M.Connections[0].Address);
+    Binding.LocalPort := Self.M.Port;
+    Check(not Self.M.UsesBinding(Binding), 'IPv4 binding with unused address');
 
-  Binding.LocalIP   := Self.M.Connections[1].Address;
-  Binding.LocalPort := Self.M.Port;
-  Check(Self.M.UsesBinding(Binding), 'IPv6 binding');
+    Binding.LocalIP   := Self.M.Connections[1].Address;
+    Binding.LocalPort := Self.M.Port;
+    Check(Self.M.UsesBinding(Binding), 'IPv6 binding');
 
-  Binding.LocalIP   := Self.M.Connections[1].Address;
-  Binding.LocalPort := Self.M.Port + 1;
-  Check(not Self.M.UsesBinding(Binding), 'IPv6 binding with unused port');
+    Binding.LocalIP   := Self.M.Connections[1].Address;
+    Binding.LocalPort := Self.M.Port + 1;
+    Check(not Self.M.UsesBinding(Binding), 'IPv6 binding with unused port');
 
-  Binding.LocalIP   := TIdIPAddressParser.IncIPAddress(Self.M.Connections[1].Address);
-  Binding.LocalPort := Self.M.Port;
-  Check(not Self.M.UsesBinding(Binding), 'IPv6 binding with unused address');
+    Binding.LocalIP   := TIdIPAddressParser.IncIPAddress(Self.M.Connections[1].Address);
+    Binding.LocalPort := Self.M.Port;
+    Check(not Self.M.UsesBinding(Binding), 'IPv6 binding with unused address');
 
-  Self.M.Connections.Remove(Self.M.Connections[1]);
-  Self.M.PortCount := 2;
+    Self.M.Connections.Remove(Self.M.Connections[1]);
+    Self.M.PortCount := 2;
 
-  Binding.LocalIP   := Self.M.Connections[0].Address;
-  Binding.LocalPort := Self.M.Port;
-  Check(Self.M.UsesBinding(Binding), 'IPv4 binding (with port count)');
+    Binding.LocalIP   := Self.M.Connections[0].Address;
+    Binding.LocalPort := Self.M.Port;
+    Check(Self.M.UsesBinding(Binding), 'IPv4 binding (with port count)');
 
-  Binding.LocalPort := Self.M.Port + 2;
-  Check(Self.M.UsesBinding(Binding), 'IPv4 binding (with port count), 2nd port');
-  Binding.LocalPort := Self.M.Port + 1;
-  Check(not Self.M.UsesBinding(Binding), 'IPv4 binding (with port count), on RTCP port ');
-  Binding.LocalPort := Self.M.Port + 3;
-  Check(not Self.M.UsesBinding(Binding), 'IPv4 binding (with port count), on 2nd RTCP port');
-  Binding.LocalPort := Self.M.Port + 4;
-  Check(not Self.M.UsesBinding(Binding), 'IPv4 binding (with port count), unused port');
+    Binding.LocalPort := Self.M.Port + 2;
+    Check(Self.M.UsesBinding(Binding), 'IPv4 binding (with port count), 2nd port');
+    Binding.LocalPort := Self.M.Port + 1;
+    Check(not Self.M.UsesBinding(Binding), 'IPv4 binding (with port count), on RTCP port ');
+    Binding.LocalPort := Self.M.Port + 3;
+    Check(not Self.M.UsesBinding(Binding), 'IPv4 binding (with port count), on 2nd RTCP port');
+    Binding.LocalPort := Self.M.Port + 4;
+    Check(not Self.M.UsesBinding(Binding), 'IPv4 binding (with port count), unused port');
+  finally
+    Binding.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -6406,7 +6411,7 @@ end;
 //* TestTIdSDPMediaStream Private methods **************************************
 
 procedure TestTIdSDPMediaStream.OnSendRTCP(Packet: TIdRTCPPacket;
-                                           Binding: TIdConnection);
+                                           Binding: TIdConnectionBindings);
 begin
   Self.SendingBinding.LocalIP   := Binding.LocalIP;
   Self.SendingBinding.LocalPort := Binding.LocalPort;
@@ -6418,7 +6423,7 @@ begin
 end;
 
 procedure TestTIdSDPMediaStream.OnSendRTP(Packet: TIdRTPPacket;
-                                          Binding: TIdConnection);
+                                          Binding: TIdConnectionBindings);
 begin
   Self.SendingBinding.LocalIP   := Binding.LocalIP;
   Self.SendingBinding.LocalPort := Binding.LocalPort;
@@ -6430,61 +6435,71 @@ end;
 
 procedure TestTIdSDPMediaStream.ReceiveControlOn(S: TIdSDPMediaStream);
 var
-  Binding: TIdConnection;
+  Binding: TIdConnectionBindings;
   RTCP:    TIdRTCPPacket;
   Server:  TIdBaseRTPAbstractPeer;
 begin
-  Binding.LocalIP   := S.LocalDescription.Connections[0].Address;
-  Binding.LocalPort := S.LocalDescription.Port;
-  Binding.PeerIP    := Self.Sender.LocalDescription.Connections[0].Address;
-  Binding.PeerPort  := Self.Sender.LocalDescription.Port;
-
-  Server := TIdRTPPeerRegistry.ServerOn(Binding.LocalIP, Binding.LocalPort);
-
-  Check(Assigned(Server), 'RTP peer not found running on ' + Binding.LocalIP + ':' + IntToStr(Binding.LocalPort));
-
-  RTCP := TIdRTCPSenderReport.Create;
+  Binding := TIdConnectionBindings.Create;
   try
-    RTCP.SyncSrcID := TIdRTPPeerRegistry.ServerOn(Binding.PeerIP, Binding.PeerPort).Session.SyncSrcID;
+    Binding.LocalIP   := S.LocalDescription.Connections[0].Address;
+    Binding.LocalPort := S.LocalDescription.Port;
+    Binding.PeerIP    := Self.Sender.LocalDescription.Connections[0].Address;
+    Binding.PeerPort  := Self.Sender.LocalDescription.Port;
 
-    Server.ReceivePacket(RTCP, Binding);
+    Server := TIdRTPPeerRegistry.ServerOn(Binding.LocalIP, Binding.LocalPort);
+
+    Check(Assigned(Server), 'RTP peer not found running on ' + Binding.LocalIP + ':' + IntToStr(Binding.LocalPort));
+
+    RTCP := TIdRTCPSenderReport.Create;
+    try
+      RTCP.SyncSrcID := TIdRTPPeerRegistry.ServerOn(Binding.PeerIP, Binding.PeerPort).Session.SyncSrcID;
+
+      Server.ReceivePacket(RTCP, Binding);
+    finally
+      RTCP.Free;
+    end;
   finally
-    RTCP.Free;
+    Binding.Free;
   end;
 end;
 
 procedure TestTIdSDPMediaStream.ReceiveDataOn(S: TIdSDPMediaStream);
 var
-  Binding: TIdConnection;
+  Binding: TIdConnectionBindings;
   Host:    String;
   Port:    Cardinal;
   RTP:     TIdRTPPacket;
   Server:  TIdBaseRTPAbstractPeer;
   Text:    TIdRTPT140Payload;
 begin
-  Host := S.LocalDescription.Connections[0].Address;
-  Port := S.LocalDescription.Port;
-
-  Server := TIdRTPPeerRegistry.ServerOn(Host, Port);
-
-  Check(Assigned(Server), 'RTP peer not found running on ' + Host + ':' + IntToStr(Port));
-
-  Binding.PeerIP   := Host;
-  Binding.PeerPort := Port;
-
-  RTP := TIdRTPPacket.Create(Server.LocalProfile);
+  Binding := TIdConnectionBindings.Create;
   try
-    Text := TIdRTPT140Payload.Create;
-    try
-      Text.Block := '1234';
-      RTP.Payload := Text;
+    Host := S.LocalDescription.Connections[0].Address;
+    Port := S.LocalDescription.Port;
 
-      Server.ReceivePacket(RTP, Binding);
+    Server := TIdRTPPeerRegistry.ServerOn(Host, Port);
+
+    Check(Assigned(Server), 'RTP peer not found running on ' + Host + ':' + IntToStr(Port));
+
+    Binding.PeerIP   := Host;
+    Binding.PeerPort := Port;
+
+    RTP := TIdRTPPacket.Create(Server.LocalProfile);
+    try
+      Text := TIdRTPT140Payload.Create;
+      try
+        Text.Block := '1234';
+        RTP.Payload := Text;
+
+        Server.ReceivePacket(RTP, Binding);
+      finally
+        Text.Free;
+      end;
     finally
-      Text.Free;
+      RTP.Free;
     end;
   finally
-    RTP.Free;
+    Binding.Free;
   end;
 end;
 
@@ -7270,20 +7285,25 @@ end;
 
 procedure TestTIdSDPMultimediaSession.ReceiveDataOfType(PayloadType: Cardinal);
 var
-  Binding: TIdConnection;
+  Binding: TIdConnectionBindings;
   NoData:  TIdRTPPacket;
 begin
-  Binding.LocalIP   := '127.0.0.1';
-  Binding.LocalPort := Self.LocalPort;
-  Binding.PeerIP    := Binding.LocalIP;
-  Binding.PeerPort  := Self.RemotePort;
-
-  NoData := TIdRTPPacket.Create(Self.Profile);
+  Binding := TIdConnectionBindings.Create;
   try
-    NoData.PayloadType := PayloadType;
-    TIdRTPPeerRegistry.ServerOn(Binding.LocalIP, Self.LocalPort).ReceivePacket(NoData, Binding);
+    Binding.LocalIP   := '127.0.0.1';
+    Binding.LocalPort := Self.LocalPort;
+    Binding.PeerIP    := Binding.LocalIP;
+    Binding.PeerPort  := Self.RemotePort;
+
+    NoData := TIdRTPPacket.Create(Self.Profile);
+    try
+      NoData.PayloadType := PayloadType;
+      TIdRTPPeerRegistry.ServerOn(Binding.LocalIP, Self.LocalPort).ReceivePacket(NoData, Binding);
+    finally
+      NoData.Free;
+    end;
   finally
-    NoData.Free;
+    Binding.Free;
   end;
 end;
 

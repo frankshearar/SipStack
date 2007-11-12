@@ -12,7 +12,7 @@ unit TestIdRTP;
 interface
 
 uses
-  IdRTP, IdTimerQueue, TestFramework, TestFrameworkRtp;
+  IdConnectionBindings, IdRTP, IdTimerQueue, TestFramework, TestFrameworkRtp;
 
 type
   TestFunctions = class(TTestRTP)
@@ -558,7 +558,7 @@ type
 
   TestTIdRTPMemberTable = class(TTestCase)
   private
-    Binding: TIdConnection;
+    Binding: TIdConnectionBindings;
     Host:    String;
     Members: TIdRTPMemberTable;
     Port:    Cardinal;
@@ -659,9 +659,9 @@ type
 
   TSessionDataTestCase = class(TRTPSessionTestCase)
   protected
-    Binding:     TIdConnection;
+    Binding:     TIdConnectionBindings;
     Data:        TIdRTPPacket;
-    RTCPBinding: TIdConnection;
+    RTCPBinding: TIdConnectionBindings;
     RR:          TIdRTCPReceiverReport;
 
     procedure ValidateSource(Member: TIdRTPMember);
@@ -677,7 +677,7 @@ type
     NewDataArrived: Boolean;
 
     procedure OnNewData(Data: TIdRTPPayload;
-                        Binding: TIdConnection);
+                        Binding: TIdConnectionBindings);
   public
     procedure SetUp; override;
   published
@@ -768,16 +768,18 @@ type
 
   TRTPListenerTestCase = class(TTestCase)
   protected
-    Binding: TIdConnection;
+    Binding: TIdConnectionBindings;
 
     procedure CheckEquals(Expected,
-                          Received: TIdConnection;
+                          Received: TIdConnectionBindings;
                           Msg: String); overload;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
   end;
 
   TestTIdRTPListenerReceiveRTCPMethod = class(TRTPListenerTestCase)
   private
-    Binding: TIdConnection;
     Method:  TIdRTPListenerReceiveRTCPMethod;
     Packet:  TIdRTCPPacket;
   public
@@ -789,7 +791,6 @@ type
 
   TestTIdRTPListenerReceiveRTPMethod = class(TRTPListenerTestCase)
   private
-    Binding: TIdConnection;
     Method:  TIdRTPListenerReceiveRTPMethod;
     Packet:  TIdRTPPacket;
   public
@@ -832,7 +833,7 @@ type
 
   TestTIdRTPReceivePacketWait = class(TTestCaseRTP)
   private
-    Binding:     TIdConnection;
+    Binding:     TIdConnectionBindings;
     Control:     TIdRTCPPacket;
     Data:        TIdRTPPacket;
     Listener:    TIdRTPTestRTPDataListener;
@@ -6563,36 +6564,48 @@ end;
 
 procedure TestTIdRTPMember.TestSetControlBinding;
 var
-  Binding: TIdConnection;
+  Binding: TIdConnectionBindings;
 begin
   Self.Member.SentControl := false;
 
-  Binding.LocalIP   := '127.0.0.1';
-  Binding.LocalPort := 8001;
-  Binding.PeerIP    := '127.0.0.2';
-  Binding.PeerPort  := 9001;
+  Binding := TIdConnectionBindings.Create;
+  try
+    Binding.LocalIP   := '127.0.0.1';
+    Binding.LocalPort := 8001;
+    Binding.PeerIP    := '127.0.0.2';
+    Binding.PeerPort  := 9001;
+    Binding.Transport := UdpTransport;
 
-  Self.Member.SetControlBinding(Binding);
-  CheckEquals(Binding.PeerPort, Self.Member.ControlPort,    'ControlPort');
-  CheckEquals(Binding.PeerIP,   Self.Member.ControlAddress, 'ControlAddress');
-  Check(Self.Member.SentControl, 'SentControl');
+    Self.Member.SetControlBinding(Binding);
+    CheckEquals(Binding.PeerPort, Self.Member.ControlPort,    'ControlPort');
+    CheckEquals(Binding.PeerIP,   Self.Member.ControlAddress, 'ControlAddress');
+    Check(Self.Member.SentControl, 'SentControl');
+  finally
+    Binding.Free;
+  end;
 end;
 
 procedure TestTIdRTPMember.TestSetDataBinding;
 var
-  Binding: TIdConnection;
+  Binding: TIdConnectionBindings;
 begin
   Self.Member.SentData := false;
 
-  Binding.LocalIP   := '127.0.0.1';
-  Binding.LocalPort := 8001;
-  Binding.PeerIP    := '127.0.0.2';
-  Binding.PeerPort  := 9001;
+  Binding := TIdConnectionBindings.Create;
+  try
+    Binding.LocalIP   := '127.0.0.1';
+    Binding.LocalPort := 8001;
+    Binding.PeerIP    := '127.0.0.2';
+    Binding.PeerPort  := 9001;
+    Binding.Transport := UdpTransport;
 
-  Self.Member.SetDataBinding(Binding);
-  CheckEquals(Binding.PeerPort, Self.Member.SourcePort,    'SourcePort');
-  CheckEquals(Binding.PeerIP,   Self.Member.SourceAddress, 'SourceAddress');
-  Check(Self.Member.IsSender, 'IsSender');
+    Self.Member.SetDataBinding(Binding);
+    CheckEquals(Binding.PeerPort, Self.Member.SourcePort,    'SourcePort');
+    CheckEquals(Binding.PeerIP,   Self.Member.SourceAddress, 'SourceAddress');
+    Check(Self.Member.IsSender, 'IsSender');
+  finally
+    Binding.Free;
+  end;
 end;
 
 procedure TestTIdRTPMember.TestUpdateJitter;
@@ -6650,10 +6663,12 @@ procedure TestTIdRTPMemberTable.SetUp;
 begin
   inherited SetUp;
 
+  Self.Binding := TIdConnectionBindings.Create;
   Self.Binding.LocalIP   := '127.0.0.1';
   Self.Binding.LocalPort := 5000;
   Self.Binding.PeerIP    := '127.0.0.1';
   Self.Binding.PeerPort  := 5002;
+  Self.Binding.Transport := UdpTransport;
 
   Self.Host    := '127.0.0.1';
   Self.Members := TIdRTPMemberTable.Create;
@@ -6664,6 +6679,7 @@ end;
 procedure TestTIdRTPMemberTable.TearDown;
 begin
   Self.Members.Free;
+  Self.Binding.Free;
 
   inherited TearDown;
 end;
@@ -6902,7 +6918,7 @@ begin
   Check(Member.SentControl, 'Control binding not set');
 
   // We can't check the binding itself becausewe can't change the Peer(IP|Port)
-  // of the TIdConnection
+  // of the TIdConnectionBindings
 end;
 
 procedure TestTIdRTPMemberTable.TestSetDataBinding;
@@ -6916,7 +6932,7 @@ begin
   Check(Member.SentData, 'Data binding not set');
 
   // We can't check the binding itself becausewe can't change the Peer(IP|Port)
-  // of the TIdConnection
+  // of the TIdConnectionBindings
 end;
 
 //******************************************************************************
@@ -7075,7 +7091,7 @@ end;
 procedure TestTIdBaseRTPAbstractPeer.TestAddListener;
 var
   L1, L2:        TIdRTPTestRTPListener;
-  UnusedBinding: TIdConnection;
+  UnusedBinding: TIdConnectionBindings;
 begin
   L1 := TIdRTPTestRTPListener.Create;
   try
@@ -7085,13 +7101,18 @@ begin
     try
       Self.Peer.AddListener(L2);
 
-      Self.Peer.NotifyListenersOfRTCP(Self.RTCP, UnusedBinding);
-      Check(L1.ReceivedRTCP, 'First listener didn''t receive RTCP');
-      Check(L2.ReceivedRTCP, 'Second listener didn''t receive RTCP');
+      UnusedBinding := TIdConnectionBindings.Create;
+      try
+        Self.Peer.NotifyListenersOfRTCP(Self.RTCP, UnusedBinding);
+        Check(L1.ReceivedRTCP, 'First listener didn''t receive RTCP');
+        Check(L2.ReceivedRTCP, 'Second listener didn''t receive RTCP');
 
-      Self.Peer.NotifyListenersOfRTP(Self.RTP, UnusedBinding);
-      Check(L1.ReceivedRTP,  'First listener didn''t receive RTP');
-      Check(L2.ReceivedRTCP, 'Second listener didn''t receive RTP');
+        Self.Peer.NotifyListenersOfRTP(Self.RTP, UnusedBinding);
+        Check(L1.ReceivedRTP,  'First listener didn''t receive RTP');
+        Check(L2.ReceivedRTCP, 'Second listener didn''t receive RTP');
+      finally
+        UnusedBinding.Free;
+      end;
     finally
       L2.Free;
     end;
@@ -7103,7 +7124,7 @@ end;
 procedure TestTIdBaseRTPAbstractPeer.TestAddSendListener;
 var
   L1, L2:        TIdRTPTestRTPSendListener;
-  UnusedBinding: TIdConnection;
+  UnusedBinding: TIdConnectionBindings;
 begin
   L1 := TIdRTPTestRTPSendListener.Create;
   try
@@ -7113,13 +7134,18 @@ begin
     try
       Self.Peer.AddSendListener(L2);
 
-      Self.Peer.NotifyListenersOfSentRTCP(Self.RTCP, UnusedBinding);
-      Check(L1.SentRTCP, 'First listener didn''t receive notification of sent RTCP');
-      Check(L2.SentRTCP, 'Second listener didn''t receive notification of sent RTCP');
+      UnusedBinding := TIdConnectionBindings.Create;
+      try
+        Self.Peer.NotifyListenersOfSentRTCP(Self.RTCP, UnusedBinding);
+        Check(L1.SentRTCP, 'First listener didn''t receive notification of sent RTCP');
+        Check(L2.SentRTCP, 'Second listener didn''t receive notification of sent RTCP');
 
-      Self.Peer.NotifyListenersOfSentRTP(Self.RTP, UnusedBinding);
-      Check(L1.SentRTP,  'First listener didn''t receive notification of sent RTP');
-      Check(L2.SentRTCP, 'Second listener didn''t receive notification of sent RTP');
+        Self.Peer.NotifyListenersOfSentRTP(Self.RTP, UnusedBinding);
+        Check(L1.SentRTP,  'First listener didn''t receive notification of sent RTP');
+        Check(L2.SentRTCP, 'Second listener didn''t receive notification of sent RTP');
+      finally
+        UnusedBinding.Free;
+      end;
     finally
       L2.Free;
     end;
@@ -7131,20 +7157,25 @@ end;
 procedure TestTIdBaseRTPAbstractPeer.TestRemoveListener;
 var
   Listener:      TIdRTPTestRTPListener;
-  UnusedBinding: TIdConnection;
+  UnusedBinding: TIdConnectionBindings;
 begin
   Listener := TIdRTPTestRTPListener.Create;
   try
     Self.Peer.AddListener(Listener);
     Self.Peer.RemoveListener(Listener);
 
-    Self.Peer.NotifyListenersOfRTCP(Self.RTCP, UnusedBinding);
-    Check(not Listener.ReceivedRTCP,
-          'Listener received RTCP');
+    UnusedBinding := TIdConnectionBindings.Create;
+    try
+      Self.Peer.NotifyListenersOfRTCP(Self.RTCP, UnusedBinding);
+      Check(not Listener.ReceivedRTCP,
+            'Listener received RTCP');
 
-    Self.Peer.NotifyListenersOfRTP(Self.RTP, UnusedBinding);
-    Check(not Listener.ReceivedRTP,
-          'Listener received RTP');
+      Self.Peer.NotifyListenersOfRTP(Self.RTP, UnusedBinding);
+      Check(not Listener.ReceivedRTP,
+            'Listener received RTP');
+    finally
+      UnusedBinding.Free;
+    end;
   finally
     Listener.Free;
   end;
@@ -7153,20 +7184,25 @@ end;
 procedure TestTIdBaseRTPAbstractPeer.TestRemoveSendListener;
 var
   Listener:      TIdRTPTestRTPSendListener;
-  UnusedBinding: TIdConnection;
+  UnusedBinding: TIdConnectionBindings;
 begin
   Listener := TIdRTPTestRTPSendListener.Create;
   try
     Self.Peer.AddSendListener(Listener);
     Self.Peer.RemoveSendListener(Listener);
 
-    Self.Peer.NotifyListenersOfSentRTCP(Self.RTCP, UnusedBinding);
-    Check(not Listener.SentRTCP,
-          'Listener received sent RTCP notification');
+    UnusedBinding := TIdConnectionBindings.Create;
+    try
+      Self.Peer.NotifyListenersOfSentRTCP(Self.RTCP, UnusedBinding);
+      Check(not Listener.SentRTCP,
+            'Listener received sent RTCP notification');
 
-    Self.Peer.NotifyListenersOfSentRTP(Self.RTP, UnusedBinding);
-    Check(not Listener.SentRTP,
-          'Listener received sent RTP notification');
+      Self.Peer.NotifyListenersOfSentRTP(Self.RTP, UnusedBinding);
+      Check(not Listener.SentRTP,
+            'Listener received sent RTP notification');
+    finally
+      UnusedBinding.Free;
+    end;
   finally
     Listener.Free;
   end;
@@ -7479,11 +7515,14 @@ procedure TSessionDataTestCase.SetUp;
 begin
   inherited SetUp;
 
+  Self.Binding := TIdConnectionBindings.Create;
   Self.Binding.LocalIP   := '127.0.0.1';
   Self.Binding.LocalPort := 4321;
   Self.Binding.PeerIP    := '1.2.3.4';
   Self.Binding.PeerPort  := 4321;
+  Self.Binding.Transport := UdpTransport;
 
+  Self.RTCPBinding := TIdConnectionBindings.Create;
   Self.RTCPBinding.LocalIP   := Self.Binding.LocalIP;
   Self.RTCPBinding.LocalPort := Self.Binding.LocalPort + 1;
   Self.RTCPBinding.PeerIP    := Self.Binding.PeerIP;
@@ -7502,6 +7541,8 @@ procedure TSessionDataTestCase.TearDown;
 begin
   Self.RR.Free;
   Self.Data.Free;
+  Self.RTCPBinding.Free;
+  Self.Binding.Free;
 
   inherited TearDown;
 end;
@@ -7538,7 +7579,7 @@ end;
 //* TestTIdRTPSession Private methods ******************************************
 
 procedure TestTIdRTPSession.OnNewData(Data: TIdRTPPayload;
-                                      Binding: TIdConnection);
+                                      Binding: TIdConnectionBindings);
 begin
   Self.NewDataArrived := true;
 end;
@@ -8526,14 +8567,29 @@ end;
 //******************************************************************************
 //* TRTPListenerTestCase Public methods ****************************************
 
+procedure TRTPListenerTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Binding := TIdConnectionBindings.Create;
+end;
+
+procedure TRTPListenerTestCase.TearDown;
+begin
+  Self.Binding.Free;
+
+  inherited TearDown;
+end;
+
 procedure TRTPListenerTestCase.CheckEquals(Expected,
-                                           Received: TIdConnection;
+                                           Received: TIdConnectionBindings;
                                            Msg: String);
 begin
   CheckEquals(Expected.LocalIP,   Received.LocalIP,   Msg + ' (LocalIP)');
   CheckEquals(Expected.LocalPort, Received.LocalPort, Msg + ' (LocalPort)');
   CheckEquals(Expected.PeerIP,    Received.PeerIP,    Msg + ' (PeerIP)');
   CheckEquals(Expected.PeerPort,  Received.PeerPort,  Msg + ' (PeerPort)');
+  CheckEquals(Expected.Transport, Received.Transport, Msg + ' (Transport)');
 end;
 
 //******************************************************************************
@@ -8639,7 +8695,8 @@ begin
 
   Self.Data := TIdRTPRawPayload.Create;
   Self.Method := TIdRTPDataListenerNewDataMethod.Create;
-  Self.Method.Data := Self.Data;
+  Self.Method.Binding := Self.Binding;
+  Self.Method.Data    := Self.Data;
 end;
 
 procedure TestTIdRTPDataListenerNewDataMethod.TearDown;
@@ -8762,6 +8819,7 @@ begin
 
   Self.Profile.AddEncoding(Self.Payload, T140PT);
 
+  Self.Binding := TIdConnectionBindings.Create;
   Self.Binding.LocalIP   := '127.0.0.1';
   Self.Binding.LocalPort := 8000;
   Self.Binding.PeerIP    := '127.0.0.2';
@@ -8796,6 +8854,8 @@ begin
   Self.Listener.Free;
   Self.Data.Free;
   Self.Control.Free;
+  Self.Binding.Free;
+  Self.Payload.Free;
 
   inherited TearDown;
 end;
@@ -8954,3 +9014,4 @@ end;
 initialization
   RegisterTest('RTP', Suite);
 end.
+

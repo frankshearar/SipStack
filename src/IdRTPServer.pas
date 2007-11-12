@@ -12,16 +12,16 @@ unit IdRTPServer;
 interface
 
 uses
-  Classes, IdInterfacedObject, IdRTP, IdTimerQueue, IdSocketHandle, IdUDPServer,
-  SyncObjs;
+  Classes, IdConnectionBindings, IdInterfacedObject, IdRTP, IdTimerQueue,
+  IdSocketHandle, IdUDPServer, SyncObjs;
 
 type
   TIdRTCPReadEvent = procedure(Sender: TObject;
                                APacket: TIdRTCPPacket;
-                               ABinding: TIdConnection) of object;
+                               ABinding: TIdConnectionBindings) of object;
   TIdRTPReadEvent = procedure(Sender: TObject;
                               APacket: TIdRTPPacket;
-                              ABinding: TIdConnection) of object;
+                              ABinding: TIdConnectionBindings) of object;
 
   // I represent a peer in an RTP session. You may use me not only to receive
   // RTP/RTCP data, but also to send data.
@@ -62,9 +62,9 @@ type
 
     function  CreateServer(const DefaultAddress: String; DefaultPort: Integer): TIdUDPServer;
     procedure ReceiveInTimerContext(Packet: TIdRTPBasePacket;
-                                    Binding: TIdConnection);
+                                    Binding: TIdConnectionBindings);
     procedure ReceiveRTCPInTimerContext(Packet: TIdRTCPPacket;
-                                       Binding: TIdConnection);
+                                       Binding: TIdConnectionBindings);
     procedure SetPort(Server: TIdUdpServer; Port: Cardinal);
   protected
     procedure DoUDPRead(Sender: TObject;
@@ -85,7 +85,7 @@ type
     destructor  Destroy; override;
 
     procedure ReceivePacket(Packet: TIdRTPBasePacket;
-                            Binding: TIdConnection); override;
+                            Binding: TIdConnectionBindings); override;
     procedure Send(const Host: String;
                    Port: Integer;
                    const Buffer: String); // This method only exists for some tests
@@ -131,7 +131,7 @@ begin
 end;
 
 procedure TIdRTPServer.ReceivePacket(Packet: TIdRTPBasePacket;
-                                     Binding: TIdConnection);
+                                     Binding: TIdConnectionBindings);
 begin
   if Self.NotifyListeners then
     inherited ReceivePacket(Packet, Binding);
@@ -155,26 +155,32 @@ procedure TIdRTPServer.SendPacket(const Host: String;
                                   Port: Cardinal;
                                   Packet: TIdRTPBasePacket);
 var
-  Binding: TIdConnection;
+  Binding: TIdConnectionBindings;
   S: TStringStream;
 begin
   S := TStringStream.Create('');
   try
     Packet.PrintOn(S);
 
-    Binding.LocalIP  := Self.Address;
-    Binding.PeerIP   := Host;
-    Binding.PeerPort := Port;
+    Binding := TIdConnectionBindings.Create;
+    try
+      Binding.LocalIP   := Self.Address;
+      Binding.PeerIP    := Host;
+      Binding.PeerPort  := Port;
+      Binding.Transport := UdpTransport;
 
-    if Packet.IsRTCP then begin
-      Binding.LocalPort := Self.RTCPPort;
-      Self.NotifyListenersOfSentRTCP(Packet as TIdRTCPPacket, Binding);
-      Self.RTCP.Send(Host, Port, S.DataString)
-    end
-    else begin
-      Binding.LocalPort := Self.RTPPort;
-      Self.NotifyListenersOfSentRTP(Packet as TIdRTPPacket, Binding);
-      Self.RTP.Send(Host, Port, S.DataString);
+      if Packet.IsRTCP then begin
+        Binding.LocalPort := Self.RTCPPort;
+        Self.NotifyListenersOfSentRTCP(Packet as TIdRTCPPacket, Binding);
+        Self.RTCP.Send(Host, Port, S.DataString)
+      end
+      else begin
+        Binding.LocalPort := Self.RTPPort;
+        Self.NotifyListenersOfSentRTP(Packet as TIdRTPPacket, Binding);
+        Self.RTP.Send(Host, Port, S.DataString);
+      end;
+    finally
+      Binding.Free;
     end;
   finally
     S.Free;
@@ -187,23 +193,29 @@ procedure TIdRTPServer.DoUDPRead(Sender: TObject;
                                  AData: TStream;
                                  ABinding: TIdSocketHandle);
 var
-  Binding: TIdConnection;
+  Binding: TIdConnectionBindings;
   Pkt:     TIdRTPBasePacket;
 begin
   AData.Seek(0, soFromBeginning);
 
-  Binding.LocalIP   := ABinding.IP;
-  Binding.LocalPort := ABinding.Port;
-  Binding.PeerIP    := ABinding.PeerIP;
-  Binding.PeerPort  := ABinding.PeerPort;
-
-  Pkt := Self.RemoteProfile.CreatePacket(AData);
+  Binding := TIdConnectionBindings.Create;
   try
-    Pkt.ReadFrom(AData);
+    Binding.LocalIP   := ABinding.IP;
+    Binding.LocalPort := ABinding.Port;
+    Binding.PeerIP    := ABinding.PeerIP;
+    Binding.PeerPort  := ABinding.PeerPort;
+    Binding.Transport := UdpTransport;
 
-    Self.ReceivePacket(Pkt, Binding);
+    Pkt := Self.RemoteProfile.CreatePacket(AData);
+    try
+      Pkt.ReadFrom(AData);
+
+      Self.ReceivePacket(Pkt, Binding);
+    finally
+      Pkt.Free;
+    end;
   finally
-    Pkt.Free;
+    Binding.Free;
   end;
 end;
 
@@ -249,7 +261,7 @@ begin
 end;
 
 procedure TIdRTPServer.ReceiveInTimerContext(Packet: TIdRTPBasePacket;
-                                             Binding: TIdConnection);
+                                             Binding: TIdConnectionBindings);
 var
   Wait: TIdRTPReceivePacketWait;
 begin
@@ -263,7 +275,7 @@ begin
 end;
 
 procedure TIdRTPServer.ReceiveRTCPInTimerContext(Packet: TIdRTCPPacket;
-                                                 Binding: TIdConnection);
+                                                 Binding: TIdConnectionBindings);
 var
   Compound: TIdCompoundRTCPPacket;
   I:        Integer;

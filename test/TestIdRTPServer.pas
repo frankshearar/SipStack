@@ -12,7 +12,7 @@ unit TestIdRTPServer;
 interface
 
 uses
-  Classes, IdRTP, IdRTPServer, IdSocketHandle, IdTimerQueue, IdUDPServer,
+  Classes, IdConnectionBindings, IdRTP, IdRTPServer, IdSocketHandle, IdTimerQueue, IdUDPServer,
   SyncObjs, TestFramework, TestFrameworkEx, TestFrameworkRtp;
 
 type
@@ -23,7 +23,7 @@ type
     EventCount:       Integer;
     Packet:           TIdRTPPacket;
     Profile:          TIdRTPProfile;
-    ReceivingBinding: TIdConnection;
+    ReceivingBinding: TIdConnectionBindings;
     RTCPPacket:       TIdRTCPPacket;
     Server:           TIdRTPServer;
     Session:          TIdRTPSession;
@@ -34,10 +34,10 @@ type
     procedure CheckWaitTriggered(Msg: String);
     procedure MarkEventCount;
     procedure OnRTCP(Packet: TIdRTCPPacket;
-                     Binding: TIdConnection);
+                     Binding: TIdConnectionBindings);
     procedure OnRTP(Packet: TIdRTPPacket;
-                    Binding: TIdConnection);
-    procedure SetBinding(Binding: TIdConnection; RTCP: Boolean);
+                    Binding: TIdConnectionBindings);
+    procedure SetBinding(Binding: TIdConnectionBindings; RTCP: Boolean);
     procedure SetEvent;
   public
     procedure SetUp; override;
@@ -75,7 +75,7 @@ type
     Timer:     TIdTimerQueue;
 
     procedure OnNewData(Data: TIdRTPPayload;
-                        Binding: TIdConnection);
+                        Binding: TIdConnectionBindings);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -112,9 +112,10 @@ begin
 
   Self.Timer := TIdDebugTimerQueue.Create(false);
 
-  Self.Profile := TIdAudioVisualProfile.Create;
-  Self.Server  := TIdRTPServer.Create;
-  Self.Session := Self.Server.Session;
+  Self.Profile          := TIdAudioVisualProfile.Create;
+  Self.ReceivingBinding := TIdConnectionBindings.Create;
+  Self.Server           := TIdRTPServer.Create;
+  Self.Session          := Self.Server.Session;
 
   NoEncoding := TIdRTPPayload.CreatePayload('No encoding/0');
   try
@@ -174,6 +175,7 @@ begin
   Self.Packet.Free;
   Self.Client.Free;
   Self.Server.Free;
+  Self.ReceivingBinding.Free;
   Self.Profile.Free;
 
   Self.Timer.Terminate;
@@ -274,39 +276,33 @@ begin
 end;
 
 procedure TestTIdRTPServer.OnRTCP(Packet: TIdRTCPPacket;
-                                  Binding: TIdConnection);
+                                  Binding: TIdConnectionBindings);
 begin
-  Self.ReceivingBinding.LocalIP   := Binding.LocalIP;
-  Self.ReceivingBinding.LocalPort := Binding.LocalPort;
-  Self.ReceivingBinding.PeerIP    := Binding.PeerIP;
-  Self.ReceivingBinding.PeerPort  := Binding.PeerPort;
+  Self.ReceivingBinding.Assign(Binding);
 
   Self.SetEvent;
 end;
 
 procedure TestTIdRTPServer.OnRTP(Packet: TIdRTPPacket;
-                                 Binding: TIdConnection);
+                                 Binding: TIdConnectionBindings);
 begin
-  Self.ReceivingBinding.LocalIP   := Binding.LocalIP;
-  Self.ReceivingBinding.LocalPort := Binding.LocalPort;
-  Self.ReceivingBinding.PeerIP    := Binding.PeerIP;
-  Self.ReceivingBinding.PeerPort  := Binding.PeerPort;
+  Self.ReceivingBinding.Assign(Binding);
 
   Self.SetEvent;
 end;
 
-procedure TestTIdRTPServer.SetBinding(Binding: TIdConnection; RTCP: Boolean);
+procedure TestTIdRTPServer.SetBinding(Binding: TIdConnectionBindings; RTCP: Boolean);
 begin
-  Self.ReceivingBinding.LocalIP   := Self.Server.Address;
-  Self.ReceivingBinding.PeerIP    := Self.Client.Address;
+  Binding.LocalIP   := Self.Server.Address;
+  Binding.PeerIP    := Self.Client.Address;
 
   if RTCP then begin
-    Self.ReceivingBinding.LocalPort := Self.Server.RTCPPort;
-    Self.ReceivingBinding.PeerPort  := Self.Client.RTCPPort;
+    Binding.LocalPort := Self.Server.RTCPPort;
+    Binding.PeerPort  := Self.Client.RTCPPort;
   end
   else begin
-    Self.ReceivingBinding.LocalPort := Self.Server.RTPPort;
-    Self.ReceivingBinding.PeerPort  := Self.Client.RTPPort;
+    Binding.LocalPort := Self.Server.RTPPort;
+    Binding.PeerPort  := Self.Client.RTPPort;
   end;
 end;
 
@@ -675,7 +671,7 @@ end;
 //* TestT140 Private methods ***************************************************
 
 procedure TestT140.OnNewData(Data: TIdRTPPayload;
-                             Binding: TIdConnection);
+                             Binding: TIdConnectionBindings);
 begin
   try
     CheckEquals(TIdRTPT140Payload.ClassName,

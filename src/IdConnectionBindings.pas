@@ -27,9 +27,9 @@ type
   TIdConnectionBindings = class(TPersistent)
   private
     fLocalIP:   String;
-    fLocalPort: Integer;
+    fLocalPort: Cardinal;
     fPeerIP:    String;
-    fPeerPort:  Integer;
+    fPeerPort:  Cardinal;
     fTransport: String;
   public
     procedure Assign(Src: TPersistent); override;
@@ -37,11 +37,11 @@ type
     function  Copy: TIdConnectionBindings;
     function  Equals(Other: TIdConnectionBindings): Boolean;
 
-    property LocalIP:   String  read fLocalIP write fLocalIP;
-    property LocalPort: Integer read fLocalPort write fLocalPort;
-    property PeerIP:    String  read fPeerIP write fPeerIP;
-    property PeerPort:  Integer read fPeerPort write fPeerPort;
-    property Transport: String  read fTransport write fTransport;
+    property LocalIP:   String   read fLocalIP write fLocalIP;
+    property LocalPort: Cardinal read fLocalPort write fLocalPort;
+    property PeerIP:    String   read fPeerIP write fPeerIP;
+    property PeerPort:  Cardinal read fPeerPort write fPeerPort;
+    property Transport: String   read fTransport write fTransport;
   end;
 
   TIdConnectionBindingsSet = class(TPersistent)
@@ -69,6 +69,8 @@ type
 // Miscellaneous constants
 const
   BindingTuple = '(connection-bindings local-ip: %s local-port: %d peer-ip: %s peer-port: %d transport: %s)';
+  TcpTransport = 'TCP';
+  UdpTransport = 'UDP';
 
 implementation
 

@@ -12,7 +12,8 @@ unit IdRTPDiagnostics;
 interface
 
 uses
-  Classes, Contnrs, ExtCtrls, Graphics, IdObservable, IdRTP, SyncObjs;
+  Classes, Contnrs, ExtCtrls, Graphics, IdConnectionBindings, IdObservable,
+  IdRTP, SyncObjs;
 
 type
   TIdHistogramEntry = class(TObject)
@@ -84,9 +85,9 @@ type
     Data: TIdHistogram;
 
     procedure OnRTCP(Packet: TIdRTCPPacket;
-                     Binding: TIdConnection);
+                     Binding: TIdConnectionBindings);
     procedure OnRTP(Packet: TIdRTPPacket;
-                    Binding: TIdConnection);
+                    Binding: TIdConnectionBindings);
   public
     constructor Create; override;
     destructor  Destroy; override;
@@ -421,12 +422,12 @@ end;
 //* TIdRTPPayloadHistogram Private methods *************************************
 
 procedure TIdRTPPayloadHistogram.OnRTCP(Packet: TIdRTCPPacket;
-                                        Binding: TIdConnection);
+                                        Binding: TIdConnectionBindings);
 begin
 end;
 
 procedure TIdRTPPayloadHistogram.OnRTP(Packet: TIdRTPPacket;
-                                       Binding: TIdConnection);
+                                       Binding: TIdConnectionBindings);
 begin
   Self.RecordEvent(Packet.Payload.EncodingName);
 end;

@@ -219,7 +219,7 @@ type
     constructor Create; override;
 
     procedure OnNewData(Data: TIdRTPPayload;
-                        Binding: TIdConnection);
+                        Binding: TIdConnectionBindings);
     procedure OnNewUdpData(Data: TStream);
 
     property NewData:    Boolean read fNewData;
@@ -1584,7 +1584,7 @@ begin
 end;
 
 procedure TIdSipTestDataListener.OnNewData(Data: TIdRTPPayload;
-                                           Binding: TIdConnection);
+                                           Binding: TIdConnectionBindings);
 begin
   Self.fNewData := true;
 
