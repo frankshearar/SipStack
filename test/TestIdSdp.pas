@@ -24,9 +24,9 @@ type
     fChunkParam:   TStream;
     fFormatParam:  String;
     fReceivedData: Boolean;
-    fStreamParam:  TIdSdpMediaStream;
+    fStreamParam:  TIdSdpBaseMediaStream;
 
-    procedure OnData(Stream: TIdSdpMediaStream;
+    procedure OnData(Stream: TIdSdpBaseMediaStream;
                      Chunk: TStream;
                      Format: String;
                      Binding: TIdConnectionBindings);
@@ -37,7 +37,7 @@ type
     property ChunkParam:   TStream               read fChunkParam;
     property FormatParam:  String                read fFormatParam;
     property ReceivedData: Boolean               read fReceivedData;
-    property StreamParam:  TIdSdpMediaStream     read fStreamParam;
+    property StreamParam:  TIdSdpBaseMediaStream read fStreamParam;
   end;
 
   TestFunctions = class(TTestCase)
@@ -505,7 +505,7 @@ type
   protected
     ReceivedData: Boolean;
 
-    procedure OnData(Stream: TIdSdpMediaStream;
+    procedure OnData(Stream: TIdSdpBaseMediaStream;
                      Chunk: TStream;
                      Format: String;
                      Binding: TIdConnectionBindings); virtual;
@@ -707,7 +707,7 @@ end;
 
 //* TIdSdpTestMediaListener Private methods ************************************
 
-procedure TIdSdpTestMediaListener.OnData(Stream: TIdSdpMediaStream;
+procedure TIdSdpTestMediaListener.OnData(Stream: TIdSdpBaseMediaStream;
                                          Chunk: TStream;
                                          Format: String;
                                          Binding: TIdConnectionBindings);
@@ -6325,7 +6325,7 @@ end;
 
 //* TIdSdpTestCase Protected methods *******************************************
 
-procedure TIdSdpTestCase.OnData(Stream: TIdSdpMediaStream;
+procedure TIdSdpTestCase.OnData(Stream: TIdSdpBaseMediaStream;
                                 Chunk: TStream;
                                 Format: String;
                                 Binding: TIdConnectionBindings);

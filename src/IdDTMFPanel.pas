@@ -54,7 +54,7 @@ type
     procedure ResizeButtons;
     procedure DoOnResize(Sender: TObject);
     procedure Flash(Event: TIdRTPTelephoneEventPayload);
-    procedure OnData(Stream: TIdSdpMediaStream;
+    procedure OnData(Stream: TIdSdpBaseMediaStream;
                      Chunk: TStream;
                      Format: String;
                      Binding: TIdConnectionBindings);
@@ -293,7 +293,7 @@ begin
     FlashingButton.EndFlash;
 end;
 
-procedure TIdDTMFPanel.OnData(Stream: TIdSdpMediaStream;
+procedure TIdDTMFPanel.OnData(Stream: TIdSdpBaseMediaStream;
                               Chunk: TStream;
                               Format: String;
                               Binding: TIdConnectionBindings);

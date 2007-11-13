@@ -541,17 +541,60 @@ type
     procedure Parse(Payload: TIdSdpPayload);
   end;
 
-  TIdSdpMediaStream = class;
+  TIdSdpBaseMediaStream = class;
 
   IIdSdpMediaListener = interface
     ['{5BD6E9C8-45BA-49AD-AD99-D655CD6FFDA6}']
-    procedure OnData(Stream: TIdSdpMediaStream;
+    procedure OnData(Stream: TIdSdpBaseMediaStream;
                      Chunk: TStream;
                      Format: String;
                      Binding: TIdConnectionBindings);
   end;
 
   TIdSdpBaseMediaStream = class(TIdInterfacedObject)
+  private
+    DataListeners:       TIdNotificationList;
+    fHighestAllowedPort: Cardinal;
+    fOnHold:             Boolean;
+    fRemoteDescription:  TIdSdpMediaDescription;
+    fLocalDescription:   TIdSdpMediaDescription;
+    fLowestAllowedPort:  Cardinal;
+    fTimer:              TIdTimerQueue;
+    PreHoldDirection:    TIdSdpDirection;
+
+    function  GetDirection: TIdSdpDirection;
+    procedure SetDirection(Value: TIdSdpDirection);
+    procedure SetLocalDescription(Value: TIdSdpMediaDescription);
+    procedure SetRemoteDescription(const Value: TIdSdpMediaDescription);
+  protected
+    procedure AfterSetLocalDescription(Value: TIdSdpMediaDescription); virtual;
+    procedure AfterSetRemoteDescription(Value: TIdSdpMediaDescription); virtual;
+    procedure BeforeSetLocalDescription(Value: TIdSdpMediaDescription); virtual;
+    procedure BeforeSetRemoteDescription(Value: TIdSdpMediaDescription); virtual;
+    procedure InternalCreate; virtual;
+    procedure NotifyOfData(Binding: TIdConnectionBindings; Data: TStream; Format: String);
+    procedure SetTimer(Value: TIdTimerQueue); virtual;
+  public
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    procedure AddDataListener(const Listener: IIdSdpMediaListener);
+    function  IsListening: Boolean; virtual;
+    function  IsReceiver: Boolean;
+    function  IsSender: Boolean;
+    procedure PutOnHold;
+    procedure RemoveDataListener(const Listener: IIdSdpMediaListener);
+    procedure StartListening; virtual;
+    procedure StopListening; virtual;
+    procedure TakeOffHold;
+
+    property Direction:          TIdSdpDirection        read GetDirection write SetDirection;
+    property HighestAllowedPort: Cardinal               read fHighestAllowedPort write fHighestAllowedPort;
+    property LocalDescription:   TIdSdpMediaDescription read fLocalDescription write SetLocalDescription;
+    property LowestAllowedPort:  Cardinal               read fLowestAllowedPort write fLowestAllowedPort;
+    property OnHold:             Boolean                read fOnHold;
+    property RemoteDescription:  TIdSdpMediaDescription read fRemoteDescription write SetRemoteDescription;
+    property Timer:              TIdTimerQueue          read fTimer write SetTimer;
   end;
 
   // I manage the sending and receiving of one media stream, as set out by an
@@ -566,25 +609,15 @@ type
                             IIdRTPListener,
                             IIdRTPSendListener)
   private
-    DataListeners:       TIdNotificationList;
-    fHighestAllowedPort: Cardinal;
-    fLocalDescription:   TIdSdpMediaDescription;
     fLocalProfile:       TIdRTPProfile;
-    fLowestAllowedPort:  Cardinal;
-    fOnHold:             Boolean;
-    fRemoteDescription:  TIdSdpMediaDescription;
     fRemoteProfile:      TIdRTPProfile;
-    fTimer:              TIdTimerQueue;
-    PreHoldDirection:    TIdSdpDirection;
     RTPListeners:        TIdNotificationList;
     RTPSendListeners:    TIdNotificationList;
     Servers:             TObjectList;
     ServerType:          TIdBaseRTPAbstractPeerClass;
 
-    procedure InternalCreate;
     function  CreateServer: TIdBaseRTPAbstractPeer;
     function  FindServer(LayerID: Cardinal): TIdBaseRTPAbstractPeer;
-    function  GetDirection: TIdSdpDirection;
     procedure InitializeLocalRTPServers;
     procedure InitializeRemoteRTPServers;
     procedure OnNewData(Data: TIdRTPPayload;
@@ -601,49 +634,39 @@ type
     procedure RegisterEncodingMaps(Profile: TIdRTPProfile;
                                    Maps: TIdSdpRTPMapAttributes);
     function  ServerAt(Index: Integer): TIdBaseRTPAbstractPeer;
-    procedure SetDirection(Value: TIdSdpDirection);
-    procedure SetLocalDescription(const Value: TIdSdpMediaDescription);
     procedure SetLocalProfile(Value: TIdRTPProfile);
-    procedure SetRemoteDescription(const Value: TIdSdpMediaDescription);
     procedure SetRemoteProfile(Value: TIdRTPProfile);
-    procedure SetTimer(Value: TIdTimerQueue);
     procedure StartServers;
     procedure UnregisterEncodingMaps(Profile: TIdRTPProfile;
                                      Maps: TIdSdpRTPMapAttributes);
+  protected
+    procedure AfterSetLocalDescription(Value: TIdSdpMediaDescription); override;
+    procedure AfterSetRemoteDescription(Value: TIdSdpMediaDescription); override;
+    procedure BeforeSetLocalDescription(Value: TIdSdpMediaDescription); override;
+    procedure BeforeSetRemoteDescription(Value: TIdSdpMediaDescription); override;
+    procedure InternalCreate; override;
+    procedure SetTimer(Value: TIdTimerQueue); override;
   public
     constructor Create; override;
     constructor Create(ServerType: TIdBaseRTPAbstractPeerClass); overload;
     destructor  Destroy; override;
 
-    procedure AddDataListener(const Listener: IIdSdpMediaListener);
     procedure AddRTPListener(const Listener: IIdRTPListener);
     procedure AddRTPSendListener(const Listener: IIdRTPSendListener);
     function  AllowedPort(Port: Cardinal): Boolean;
     procedure Initialize;
-    function  IsListening: Boolean;
-    function  IsReceiver: Boolean;
-    function  IsSender: Boolean;
+    function  IsListening: Boolean; override;
     procedure JoinSession;
     function  MatchPort(Port: Cardinal): Boolean;
-    procedure PutOnHold;
-    procedure RemoveDataListener(const Listener: IIdSdpMediaListener);
     procedure RemoveRTPListener(const Listener: IIdRTPListener);
     procedure RemoveRTPSendListener(const Listener: IIdRTPSendListener);
     procedure SendData(Payload: TIdRTPPayload; LayerID: Integer = 0);
-    procedure StartListening;
-    procedure StopListening;
-    procedure TakeOffHold;
+    procedure StartListening; override;
+    procedure StopListening; override;
     function  UsesBinding(Binding: TIdConnectionBindings): Boolean;
 
-    property Direction:          TIdSdpDirection        read GetDirection write SetDirection;
-    property HighestAllowedPort: Cardinal               read fHighestAllowedPort write fHighestAllowedPort;
-    property LocalDescription:   TIdSdpMediaDescription read fLocalDescription write SetLocalDescription;
-    property LocalProfile:       TIdRTPProfile          read fLocalProfile write SetLocalProfile;
-    property LowestAllowedPort:  Cardinal               read fLowestAllowedPort write fLowestAllowedPort;
-    property OnHold:             Boolean                read fOnHold;
-    property RemoteDescription:  TIdSdpMediaDescription read fRemoteDescription write SetRemoteDescription;
-    property RemoteProfile:      TIdRTPProfile          read fRemoteProfile write SetRemoteProfile;
-    property Timer:              TIdTimerQueue          read fTimer write SetTimer;
+    property LocalProfile:  TIdRTPProfile read fLocalProfile write SetLocalProfile;
+    property RemoteProfile: TIdRTPProfile read fRemoteProfile write SetRemoteProfile;
   end;
 
   // I process SDP (RFC 2327) payloads. This means that I instantiate (RTP)
@@ -712,7 +735,7 @@ type
     fBinding: TIdConnectionBindings;
     fChunk:   TStream;
     fFormat:  String;
-    fStream:  TIdSdpMediaStream;
+    fStream:  TIdSdpBaseMediaStream;
 
     procedure SetBinding(Value: TIdConnectionBindings);
     procedure SetChunk(Value: TStream);
@@ -725,7 +748,7 @@ type
     property Binding: TIdConnectionBindings read fBinding write SetBinding;
     property Chunk:   TStream               read fChunk write SetChunk;
     property Format:  String                read fFormat write fFormat;
-    property Stream:  TIdSdpMediaStream     read fStream write fStream;
+    property Stream:  TIdSdpBaseMediaStream read fStream write fStream;
   end;
 
 const
@@ -3646,6 +3669,182 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSdpBaseMediaStream                                                      *
+//******************************************************************************
+//* TIdSdpBaseMediaStream Public methods ***************************************
+
+constructor TIdSdpBaseMediaStream.Create;
+begin
+  inherited Create;
+
+  Self.InternalCreate;
+end;
+
+destructor TIdSdpBaseMediaStream.Destroy;
+begin
+  Self.RemoteDescription.Free;
+  Self.LocalDescription.Free;
+  Self.DataListeners.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSdpBaseMediaStream.AddDataListener(const Listener: IIdSdpMediaListener);
+begin
+  Self.DataListeners.AddListener(Listener);
+end;
+
+function TIdSdpBaseMediaStream.IsListening: Boolean;
+begin
+  Result := false;
+end;
+
+function TIdSdpBaseMediaStream.IsReceiver: Boolean;
+begin
+  Result := Self.LocalDescription.Attributes.Direction in [sdRecvOnly, sdSendRecv];
+end;
+
+function TIdSdpBaseMediaStream.IsSender: Boolean;
+begin
+  Result := Self.LocalDescription.Attributes.Direction in [sdSendOnly, sdSendRecv];
+end;
+
+procedure TIdSdpBaseMediaStream.PutOnHold;
+begin
+  if not Self.OnHold then begin
+    Self.PreHoldDirection := Self.Direction;
+    case Self.Direction of
+      sdRecvOnly: Self.Direction := sdInactive;
+      sdSendRecv: Self.Direction := sdSendOnly;
+    end;
+    Self.fOnHold := true;
+  end;
+end;
+
+procedure TIdSdpBaseMediaStream.RemoveDataListener(const Listener: IIdSdpMediaListener);
+begin
+  Self.DataListeners.RemoveListener(Listener);
+end;
+
+procedure TIdSdpBaseMediaStream.StartListening;
+begin
+end;
+
+procedure TIdSdpBaseMediaStream.StopListening;
+begin
+end;
+
+procedure TIdSdpBaseMediaStream.TakeOffHold;
+begin
+  if Self.OnHold then begin
+    Self.Direction := Self.PreHoldDirection;
+    Self.fOnHold   := false;
+  end;
+end;
+
+//* TIdSdpBaseMediaStream Protected methods ************************************
+
+procedure TIdSdpBaseMediaStream.AfterSetLocalDescription(Value: TIdSdpMediaDescription);
+begin
+  // Any initialisation operations associated with changing the local session
+  // description go here.
+  //
+  // By default do nothing.
+end;
+
+procedure TIdSdpBaseMediaStream.AfterSetRemoteDescription(Value: TIdSdpMediaDescription);
+begin
+  // Any initialisation operations associated with changing the remote session
+  // description go here.
+  //
+  // By default do nothing.
+end;
+
+procedure TIdSdpBaseMediaStream.BeforeSetLocalDescription(Value: TIdSdpMediaDescription);
+begin
+  // Any cleanup operations associated with changing the local session
+  // description go here.
+  //
+  // By default do nothing.
+end;
+
+procedure TIdSdpBaseMediaStream.BeforeSetRemoteDescription(Value: TIdSdpMediaDescription);
+begin
+  // Any cleanup operations associated with changing the remote session
+  // description go here.
+  //
+  // By default do nothing.
+end;
+
+procedure TIdSdpBaseMediaStream.InternalCreate;
+begin
+  Self.DataListeners := TIdNotificationList.Create;
+
+  Self.fLocalDescription  := TIdSdpMediaDescription.Create;
+  Self.fOnHold            := false;
+  Self.fRemoteDescription := TIdSdpMediaDescription.Create;
+
+  Self.LowestAllowedPort  := LowestPossiblePort;
+  Self.HighestAllowedPort := HighestPossiblePort;
+end;
+
+procedure TIdSdpBaseMediaStream.NotifyOfData(Binding: TIdConnectionBindings; Data: TStream; Format: String);
+var
+  Notification: TIdSdpMediaListenerOnDataMethod;
+begin
+  if Self.IsReceiver then begin
+    Notification := TIdSdpMediaListenerOnDataMethod.Create;
+    try
+      Notification.Binding := Binding;
+      Notification.Chunk   := Data;
+      Notification.Format  := Format;
+      Notification.Stream  := Self;
+
+      Self.DataListeners.Notify(Notification);
+    finally
+      Notification.Free;
+    end;
+  end;
+end;
+
+procedure TIdSdpBaseMediaStream.SetTimer(Value: TIdTimerQueue);
+begin
+  Self.fTimer := Value;
+end;
+
+//* TIdSdpBaseMediaStream Private methods **************************************
+
+function TIdSDPBaseMediaStream.GetDirection: TIdSdpDirection;
+begin
+  Result := Self.LocalDescription.Attributes.Direction;
+end;
+
+procedure TIdSDPBaseMediaStream.SetDirection(Value: TIdSdpDirection);
+begin
+  Self.LocalDescription.Attributes.Direction := Value;
+end;
+
+procedure TIdSdpBaseMediaStream.SetLocalDescription(Value: TIdSdpMediaDescription);
+begin
+  Assert(Value.PortCount > 0, 'You have to have a PortCount of at least 1.');
+
+  Self.BeforeSetLocalDescription(Value);
+
+  Self.fLocalDescription.Assign(Value);
+
+  Self.AfterSetLocalDescription(Value);
+end;
+
+procedure TIdSdpBaseMediaStream.SetRemoteDescription(const Value: TIdSdpMediaDescription);
+begin
+  Self.BeforeSetRemoteDescription(Value);
+
+  Self.fRemoteDescription.Assign(Value);
+
+  Self.AfterSetRemoteDescription(Value);
+end;
+
+//******************************************************************************
 //* TIdSDPMediaStream                                                          *
 //******************************************************************************
 //* TIdSDPMediaStream Public methods *******************************************
@@ -3655,8 +3854,6 @@ begin
   inherited Create;
 
   Self.ServerType := TIdRTPServer;
-
-  Self.InternalCreate;
 end;
 
 constructor TIdSDPMediaStream.Create(ServerType: TIdBaseRTPAbstractPeerClass);
@@ -3664,8 +3861,6 @@ begin
   inherited Create;
 
   Self.ServerType := ServerType;
-
-  Self.InternalCreate;
 end;
 
 destructor TIdSDPMediaStream.Destroy;
@@ -3675,19 +3870,11 @@ begin
   Self.Servers.Free;
   Self.RTPSendListeners.Free;
   Self.RTPListeners.Free;
-  Self.DataListeners.Free;
 
   Self.RemoteProfile.Free;
-  Self.RemoteDescription.Free;
   Self.LocalProfile.Free;
-  Self.LocalDescription.Free;
 
   inherited Destroy;
-end;
-
-procedure TIdSDPMediaStream.AddDataListener(const Listener: IIdSdpMediaListener);
-begin
-  Self.DataListeners.AddListener(Listener);
 end;
 
 procedure TIdSDPMediaStream.AddRTPListener(const Listener: IIdRTPListener);
@@ -3719,16 +3906,6 @@ begin
   Result := (Self.Servers.Count > 0) and Self.ServerAt(0).Active;
 end;
 
-function TIdSDPMediaStream.IsReceiver: Boolean;
-begin
-  Result := Self.LocalDescription.Attributes.Direction in [sdRecvOnly, sdSendRecv];
-end;
-
-function TIdSDPMediaStream.IsSender: Boolean;
-begin
-  Result := Self.LocalDescription.Attributes.Direction in [sdSendOnly, sdSendRecv];
-end;
-
 procedure TIdSDPMediaStream.JoinSession;
 var
   I: Integer;
@@ -3747,23 +3924,6 @@ begin
       Result := true;
       Break;
     end;
-end;
-
-procedure TIdSDPMediaStream.PutOnHold;
-begin
-  if not Self.OnHold then begin
-    Self.PreHoldDirection := Self.Direction;
-    case Self.Direction of
-      sdRecvOnly: Self.Direction := sdInactive;
-      sdSendRecv: Self.Direction := sdSendOnly;
-    end;
-    Self.fOnHold := true;
-  end;
-end;
-
-procedure TIdSDPMediaStream.RemoveDataListener(const Listener: IIdSdpMediaListener);
-begin
-  Self.DataListeners.RemoveListener(Listener);
 end;
 
 procedure TIdSDPMediaStream.RemoveRTPListener(const Listener: IIdRTPListener);
@@ -3827,38 +3987,64 @@ begin
     end;
 end;
 
-procedure TIdSDPMediaStream.TakeOffHold;
-begin
-  if Self.OnHold then begin
-    Self.Direction := Self.PreHoldDirection;
-    Self.fOnHold   := false;
-  end;
-end;
-
 function TIdSDPMediaStream.UsesBinding(Binding: TIdConnectionBindings): Boolean;
 begin
   Result := Self.LocalDescription.UsesBinding(Binding);
 end;
 
-//* TIdSDPMediaStream Private methods ******************************************
+//* TIdSDPMediaStream Protected methods ****************************************
+
+procedure TIdSDPMediaStream.AfterSetLocalDescription(Value: TIdSdpMediaDescription);
+begin
+  Self.RegisterEncodingMaps(Self.LocalProfile,
+                            Value.RTPMapAttributes);
+
+  Self.InitializeLocalRTPServers;
+end;
+
+procedure TIdSDPMediaStream.AfterSetRemoteDescription(Value: TIdSdpMediaDescription);
+begin
+  Self.RegisterEncodingMaps(Self.RemoteProfile,
+                            Value.RTPMapAttributes);
+
+  Self.InitializeRemoteRTPServers;
+end;
+
+procedure TIdSDPMediaStream.BeforeSetLocalDescription(Value: TIdSdpMediaDescription);
+begin
+  Self.UnregisterEncodingMaps(Self.LocalProfile,
+                              Self.LocalDescription.RTPMapAttributes);
+end;
+
+procedure TIdSDPMediaStream.BeforeSetRemoteDescription(Value: TIdSdpMediaDescription);
+begin
+//  Self.UnregisterEncodingMaps(Self.RemoteProfile,
+//                              Self.RemoteDescription.RTPMapAttributes);
+end;
 
 procedure TIdSDPMediaStream.InternalCreate;
 begin
-  Self.fOnHold := false;
+  inherited InternalCreate;
 
-  Self.fLocalDescription  := TIdSdpMediaDescription.Create;
-  Self.fLocalProfile      := TIdRTPProfile.Create;
-  Self.fRemoteDescription := TIdSdpMediaDescription.Create;
-  Self.fRemoteProfile     := TIdRTPProfile.Create;
+  Self.fLocalProfile  := TIdRTPProfile.Create;
+  Self.fRemoteProfile := TIdRTPProfile.Create;
 
-  Self.DataListeners    := TIdNotificationList.Create;
   Self.RTPListeners     := TIdNotificationList.Create;
   Self.RTPSendListeners := TIdNotificationList.Create;
   Self.Servers          := TObjectList.Create(true);
-
-  Self.LowestAllowedPort  := LowestPossiblePort;
-  Self.HighestAllowedPort := HighestPossiblePort;
 end;
+
+procedure TIdSDPMediaStream.SetTimer(Value: TIdTimerQueue);
+var
+  I: Integer;
+begin
+  inherited SetTimer(Value);
+
+  for I := 0 to Self.Servers.Count - 1 do
+    Self.ServerAt(I).Timer := Value;
+end;
+
+//* TIdSDPMediaStream Private methods ******************************************
 
 function TIdSDPMediaStream.CreateServer: TIdBaseRTPAbstractPeer;
 begin
@@ -3888,11 +4074,6 @@ begin
 
   if (Result = nil) then
     Result := Self.ServerAt(0);
-end;
-
-function TIdSDPMediaStream.GetDirection: TIdSdpDirection;
-begin
-  Result := Self.LocalDescription.Attributes.Direction;
 end;
 
 procedure TIdSDPMediaStream.InitializeLocalRTPServers;
@@ -3950,28 +4131,35 @@ end;
 procedure TIdSDPMediaStream.OnNewData(Data: TIdRTPPayload;
                                       Binding: TIdConnectionBindings);
 var
-  Notification: TIdSdpMediaListenerOnDataMethod;
+  Chunk:       TStream;
+  ReceivedOn: TIdConnectionBindings;
 begin
-  if Self.IsReceiver then begin
-    Notification := TIdSdpMediaListenerOnDataMethod.Create;
+  ReceivedOn := TIdConnectionBindings.Create;
+  try
+    ReceivedOn.LocalIP   := Binding.LocalIP;
+    ReceivedOn.LocalPort := Binding.LocalPort;
+    ReceivedOn.PeerIP    := Binding.PeerIP;
+    ReceivedOn.PeerPort  := Binding.PeerPort;
+    ReceivedOn.Transport := Self.LocalDescription.Protocol;
+
+    Chunk := TMemoryStream.Create;
     try
-      Notification.Binding.LocalIP   := Binding.LocalIP;
-      Notification.Binding.LocalPort := Binding.LocalPort;
-      Notification.Binding.PeerIP    := Binding.PeerIP;
-      Notification.Binding.PeerPort  := Binding.PeerPort;
-      Notification.Binding.Transport := Self.LocalDescription.Protocol;
+      // TODO This might not be correct! (A TIdRTPPayload might, in its PrintOn,
+      // print metadata or framing information or something silly.
+      // TIdRTPT140Payloads without redundancy write just a chunk of text, which
+      // is fine, but if the payload uses redundancy, naively printing out the
+      // below will result in those previous generations of text being printed
+      // out.)
 
-      // TODO This might not be correct!
-      Data.PrintOn(Notification.Chunk);
-      Notification.Chunk.Seek(soFromBeginning, 0);
+      Data.PrintOn(Chunk);
+      Chunk.Seek(soFromBeginning, 0);
 
-      Notification.Format  := IntToStr(Self.RemoteProfile.PayloadTypeFor(Data));
-      Notification.Stream  := Self;
-
-      Self.DataListeners.Notify(Notification);
+      Self.NotifyOfData(ReceivedOn, Chunk, IntToStr(Self.RemoteProfile.PayloadTypeFor(Data)));
     finally
-      Notification.Free;
+      Chunk.Free;
     end;
+  finally
+    ReceivedOn.Free;
   end;
 end;
 
@@ -4063,53 +4251,14 @@ begin
   Result := Self.Servers[Index] as TIdBaseRTPAbstractPeer;
 end;
 
-procedure TIdSDPMediaStream.SetDirection(Value: TIdSdpDirection);
-begin
-  Self.LocalDescription.Attributes.Direction := Value;
-end;
-
-procedure TIdSDPMediaStream.SetLocalDescription(const Value: TIdSdpMediaDescription);
-begin
-  Assert(Value.PortCount > 0, 'You have to have a PortCount of at least 1.');
-
-  Self.UnregisterEncodingMaps(Self.LocalProfile,
-                              Self.LocalDescription.RTPMapAttributes);
-
-  Self.fLocalDescription.Assign(Value);
-  Self.RegisterEncodingMaps(Self.LocalProfile,
-                            Value.RTPMapAttributes);
-
-  Self.InitializeLocalRTPServers;
-end;
-
 procedure TIdSDPMediaStream.SetLocalProfile(Value: TIdRTPProfile);
 begin
   Self.LocalProfile.Assign(Value);
 end;
 
-procedure TIdSDPMediaStream.SetRemoteDescription(const Value: TIdSdpMediaDescription);
-begin
-  Self.fRemoteDescription.Assign(Value);
-
-  Self.RegisterEncodingMaps(Self.RemoteProfile,
-                            Value.RTPMapAttributes);
-
-  Self.InitializeRemoteRTPServers;
-end;
-
 procedure TIdSDPMediaStream.SetRemoteProfile(Value: TIdRTPProfile);
 begin
   Self.RemoteProfile.Assign(Value);
-end;
-
-procedure TIdSDPMediaStream.SetTimer(Value: TIdTimerQueue);
-var
-  I: Integer;
-begin
-  Self.fTimer := Value;
-
-  for I := 0 to Self.Servers.Count - 1 do
-    Self.ServerAt(I).Timer := Value;
 end;
 
 procedure TIdSDPMediaStream.StartServers;
