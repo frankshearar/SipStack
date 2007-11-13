@@ -6352,6 +6352,7 @@ begin
   Self.AVP.AddEncoding(T140EncodingName, T140ClockRate, '', T140PT);
 
   Self.Timer := TIdDebugTimerQueue.Create(false);
+  Self.SendingBinding := TIdConnectionBindings.Create;
 
   Self.Media := TIdSDPMediaStream.Create(TIdMockRTPPeer);
   Self.Media.LocalProfile  := Self.AVP;
@@ -6401,6 +6402,7 @@ begin
   Self.Media.Free;
   Self.AVP.Free;
 
+  Self.SendingBinding.Free;
   Self.Timer.Terminate;
 
   inherited TearDown;
