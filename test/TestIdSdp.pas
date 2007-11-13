@@ -565,9 +565,9 @@ type
     procedure TestSendData;
     procedure TestSendDataWhenNotSender;
     procedure TestSetRemoteDescriptionSendsNoPackets;
+    procedure TestSetRemoteDescriptionRegistersRemoteRtpMaps;
     procedure TestStartListening;
     procedure TestStartListeningRegistersLocalRtpMaps;
-    procedure TestStartListeningRegistersRemoteRtpMaps;
     procedure TestStartListeningTriesConsecutivePorts;
     procedure TestStopListeningStopsListening;
     procedure TestTakeOffHold;
@@ -7007,6 +7007,39 @@ begin
   end;
 end;
 
+procedure TestTIdSDPMediaStream.TestSetRemoteDescriptionRegistersRemoteRtpMaps;
+const
+  TEEncodingName = TelephoneEventEncoding;
+  TEPayloadType  = 97;
+var
+  P:   TIdSdpPayload;
+  SDP: String;
+begin
+  SDP :=  'v=0'#13#10
+        + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
+        + 's=-'#13#10
+        + 'c=IN IP4 127.0.0.1'#13#10
+        + 'm=audio 8000 RTP/AVP ' + IntToStr(TEPayloadType) + #13#10
+        + 'a=rtpmap:' + IntToStr(TEPayloadType) + ' ' + TEEncodingName + #13#10;
+
+  Check(Self.Media.RemoteProfile.HasPayloadType(Self.T140PT),
+        'Sanity check: profile already knows about ' + Self.Text.EncodingName + '!');
+  Check(not Self.Media.RemoteProfile.HasPayloadType(TEPayloadType),
+        'Sanity check: profile doesn''t already know about ' + TEEncodingName + '!');
+
+  P := TIdSdpPayload.CreateFrom(SDP);
+  try
+    Self.Media.RemoteDescription := P.MediaDescriptionAt(0);
+  finally
+    P.Free;
+  end;
+
+  Check(Self.Media.RemoteProfile.HasPayloadType(Self.T140PT),
+        Self.Text.EncodingName + ' not unregistered');
+  Check(Self.Media.RemoteProfile.HasPayloadType(TEPayloadType),
+        TEEncodingName + ' not registered');
+end;
+
 procedure TestTIdSDPMediaStream.TestStartListening;
 begin
   Self.Media.StopListening;
@@ -7076,39 +7109,6 @@ begin
   Check(not Self.Media.LocalProfile.HasPayloadType(Self.T140PT),
         Self.Text.EncodingName + ' not unregistered');
   Check(Self.Media.LocalProfile.HasPayloadType(TEPayloadType),
-        TEEncodingName + ' not registered');
-end;
-
-procedure TestTIdSDPMediaStream.TestStartListeningRegistersRemoteRtpMaps;
-const
-  TEEncodingName = TelephoneEventEncoding;
-  TEPayloadType  = 97;
-var
-  P:   TIdSdpPayload;
-  SDP: String;
-begin
-  SDP :=  'v=0'#13#10
-        + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
-        + 's=-'#13#10
-        + 'c=IN IP4 127.0.0.1'#13#10
-        + 'm=audio 8000 RTP/AVP ' + IntToStr(TEPayloadType) + #13#10
-        + 'a=rtpmap:' + IntToStr(TEPayloadType) + ' ' + TEEncodingName + #13#10;
-
-  Check(Self.Media.RemoteProfile.HasPayloadType(Self.T140PT),
-        'Sanity check: profile already knows about ' + Self.Text.EncodingName + '!');
-  Check(not Self.Media.RemoteProfile.HasPayloadType(TEPayloadType),
-        'Sanity check: profile doesn''t already know about ' + TEEncodingName + '!');
-
-  P := TIdSdpPayload.CreateFrom(SDP);
-  try
-    Self.Media.RemoteDescription := P.MediaDescriptionAt(0);
-  finally
-    P.Free;
-  end;
-
-  Check(Self.Media.RemoteProfile.HasPayloadType(Self.T140PT),
-        Self.Text.EncodingName + ' not unregistered');
-  Check(Self.Media.RemoteProfile.HasPayloadType(TEPayloadType),
         TEEncodingName + ' not registered');
 end;
 
