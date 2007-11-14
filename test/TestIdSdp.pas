@@ -241,6 +241,7 @@ type
     procedure TestAssign;
     procedure TestClear;
     procedure TestEquals;
+    procedure TestFormatFor;
     procedure TestPrintOn;
   end;
 
@@ -531,7 +532,7 @@ type
     SentData:       Boolean;
     SentControl:    Boolean;
     T140PT:         TIdRTPPayloadType;
-    Text:           TIdRTPT140Payload;
+    Text:           TStream;
     Timer:          TIdDebugTimerQueue;
 
     procedure OnSendRTCP(Packet: TIdRTCPPacket;
@@ -2593,6 +2594,24 @@ begin
   finally
     Other.Free;
   end;
+end;
+
+procedure TestTIdSdpRTPMapAttributes.TestFormatFor;
+const
+  T140                 = 't140/1000';
+  T140Format           = '96';
+  TelephoneEvent       = 'telephone-event/8000';
+  TelephoneEventFormat = '97';
+begin
+  CheckEquals('', Self.A.FormatFor(''), 'Blank encoding name, empty list');
+  CheckEquals('', Self.A.FormatFor(T140), 'Empty list');
+
+  Self.A.Add(TelephoneEventFormat + ' ' + TelephoneEvent);
+  CheckEquals('', Self.A.FormatFor(T140), 'No such rtpmap');
+
+  Self.A.Add(T140Format + ' ' + T140);
+  CheckEquals(T140Format,           Self.A.FormatFor(T140),           T140 + ' format');
+  CheckEquals(TelephoneEventFormat, Self.A.FormatFor(TelephoneEvent), TelephoneEvent + ' format');
 end;
 
 procedure TestTIdSdpRTPMapAttributes.TestPrintOn;
@@ -6342,7 +6361,8 @@ procedure TestTIdSDPMediaStream.SetUp;
 const
   OneSecond = 1000; // milliseconds
 var
-  SDP:    TIdSDPPayload;
+  SDP:  TIdSDPPayload;
+  T140: TIdRTPT140Payload;
 begin
   inherited SetUp;
 
@@ -6384,8 +6404,16 @@ begin
     SDP.Free;
   end;
 
-  Self.Text := TIdRTPT140Payload.Create;
-  Self.Text.Block := '1234';
+  Self.Text := TStringStream.Create('');
+
+  T140 := TIdRTPT140Payload.Create;
+  try
+    T140.Block := '1234';
+    T140.PrintOn(Self.Text);
+    Self.Text.Seek(0, soFromBeginning);
+  finally
+    T140.Free;
+  end;
 
   Self.Media.StartListening;
   Self.Sender.StartListening;
@@ -6585,7 +6613,7 @@ begin
       Self.Media.AddRTPSendListener(L1);
       Self.Media.AddRTPSendListener(L2);
 
-      Self.Media.SendData(Self.Text);
+      Self.Media.SendData(Self.Text, IntToStr(Self.T140PT));
       Self.Timer.TriggerAllEventsUpToFirst(TIdRTPSendDataWait);
 
       Check(L1.SentRTP, 'L1 not notified of RTP');
@@ -6638,7 +6666,7 @@ begin
                     SenderLayerID,
                     IntToStr(Offset + 1) + 'th port not active on the sender');
 
-    Self.Media.SendData(Self.Text, SenderLayerID);
+    Self.Media.SendData(Self.Text, IntToStr(Self.T140PT), SenderLayerID);
 
     Self.SentData := false;
     Self.Timer.TriggerAllEventsUpToFirst(TIdRTPSendDataWait);
@@ -6905,7 +6933,7 @@ begin
   try
     Self.Media.AddRTPSendListener(L);
     Self.Media.RemoveRTPSendListener(L);
-    Self.Media.SendData(Self.Text);
+    Self.Media.SendData(Self.Text, IntToStr(Self.T140PT));
 
     Check(not L.SentRTP, 'L notified, thus not removed');
   finally
@@ -6969,7 +6997,7 @@ procedure TestTIdSDPMediaStream.TestSendData;
 begin
   Self.Media.AddRTPSendListener(Self);
 
-  Self.Media.SendData(Self.Text);
+  Self.Media.SendData(Self.Text, IntToStr(Self.T140PT));
   Self.Timer.TriggerAllEventsUpToFirst(TIdRTPSendDataWait);
 
   Check(Self.SentData, 'No data sent');
@@ -6983,7 +7011,7 @@ begin
                        + 'a=rtpmap:96 t140/1000'#13#10
                        + 'a=inactive');
 
-  Self.Media.SendData(Self.Text);
+  Self.Media.SendData(Self.Text, IntToStr(Self.T140PT));
   Self.Timer.TriggerAllEventsUpToFirst(TIdRTPSendDataWait);
 
   Check(not Self.SentData, 'Server sent data when not a sender');
@@ -7023,7 +7051,7 @@ begin
         + 'a=rtpmap:' + IntToStr(TEPayloadType) + ' ' + TEEncodingName + #13#10;
 
   Check(Self.Media.RemoteProfile.HasPayloadType(Self.T140PT),
-        'Sanity check: profile already knows about ' + Self.Text.EncodingName + '!');
+        'Sanity check: profile already knows about ' + T140EncodingName + '!');
   Check(not Self.Media.RemoteProfile.HasPayloadType(TEPayloadType),
         'Sanity check: profile doesn''t already know about ' + TEEncodingName + '!');
 
@@ -7035,7 +7063,7 @@ begin
   end;
 
   Check(Self.Media.RemoteProfile.HasPayloadType(Self.T140PT),
-        Self.Text.EncodingName + ' not unregistered');
+        T140EncodingName + ' not unregistered');
   Check(Self.Media.RemoteProfile.HasPayloadType(TEPayloadType),
         TEEncodingName + ' not registered');
 end;
@@ -7071,7 +7099,7 @@ begin
 
   Check(Self.SentControl, 'No RTCP sent');
 
-  Self.Media.SendData(Self.Text);
+  Self.Media.SendData(Self.Text, IntToStr(Self.T140PT));
   Self.Timer.TriggerAllEventsUpToFirst(TIdRTPSendDataWait);
 
   Check(Self.SentData, 'No RTP sent');
@@ -7093,7 +7121,7 @@ begin
         + 'a=rtpmap:' + IntToStr(TEPayloadType) + ' ' + TEEncodingName + #13#10;
 
   Check(Self.Media.RemoteProfile.HasPayloadType(Self.T140PT),
-        'Sanity check: profile already knows about ' + Self.Text.EncodingName + '!');
+        'Sanity check: profile already knows about ' + T140EncodingName + '!');
   Check(not Self.Media.LocalProfile.HasPayloadType(TEPayloadType),
         'Sanity check: profile doesn''t already know about ' + TEEncodingName + '!');
 
@@ -7107,7 +7135,7 @@ begin
   Self.Media.StartListening;
 
   Check(not Self.Media.LocalProfile.HasPayloadType(Self.T140PT),
-        Self.Text.EncodingName + ' not unregistered');
+        T140EncodingName + ' not unregistered');
   Check(Self.Media.LocalProfile.HasPayloadType(TEPayloadType),
         TEEncodingName + ' not registered');
 end;

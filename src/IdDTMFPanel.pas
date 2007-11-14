@@ -316,6 +316,7 @@ end;
 procedure TIdDTMFPanel.SendDTMF(Event: Byte);
 var
   TE: TIdRTPTelephoneEventPayload;
+  S:  TStream;
 begin
   if Assigned(Self.Processor) then begin
     TE := Self.Processor.LocalProfile.EncodingFor(TelephoneEventEncoding).Copy as TIdRTPTelephoneEventPayload;
@@ -324,7 +325,14 @@ begin
       TE.Duration  := 100;
       TE.StartTime := Now;
 
-      Processor.SendData(TE);
+      S := TMemoryStream.Create;
+      try
+        TE.PrintOn(S);
+        S.Seek(0, soFromBeginning);
+        Processor.SendData(S, IntToStr(Self.Processor.LocalProfile.PayloadTypeFor(TelephoneEventEncoding)));
+      finally
+        S.Free;
+      end;
     finally
       TE.Free;
     end;

@@ -323,6 +323,7 @@ type
     function  Add(Att: TIdSdpRTPMapAttribute): TIdSdpRTPMapAttribute; overload;
     procedure Add(A: TIdSdpRTPMapAttributes); overload;
     function  Add(const Value: String): TIdSdpRTPMapAttribute; overload;
+    function  FormatFor(EncodingName: String): String;
     function  HasAttribute(Att: TIdSdpAttribute): Boolean;
 
     property Items[Index: Integer]: TIdSdpRTPMapAttribute read GetItems; default;
@@ -573,6 +574,7 @@ type
     procedure BeforeSetRemoteDescription(Value: TIdSdpMediaDescription); virtual;
     procedure InternalCreate; virtual;
     procedure NotifyOfData(Binding: TIdConnectionBindings; Data: TStream; Format: String);
+    procedure ReallySendData(Data: TStream; Format: String; LayerID: Integer = 0); virtual;
     procedure SetTimer(Value: TIdTimerQueue); virtual;
   public
     constructor Create; override;
@@ -584,6 +586,7 @@ type
     function  IsSender: Boolean;
     procedure PutOnHold;
     procedure RemoveDataListener(const Listener: IIdSdpMediaListener);
+    procedure SendData(Data: TStream; Format: String; LayerID: Integer = 0);
     procedure StartListening; virtual;
     procedure StopListening; virtual;
     procedure TakeOffHold;
@@ -645,6 +648,7 @@ type
     procedure BeforeSetLocalDescription(Value: TIdSdpMediaDescription); override;
     procedure BeforeSetRemoteDescription(Value: TIdSdpMediaDescription); override;
     procedure InternalCreate; override;
+    procedure ReallySendData(Data: TStream; Format: String; LayerID: Integer = 0); override;
     procedure SetTimer(Value: TIdTimerQueue); override;
   public
     constructor Create; override;
@@ -660,7 +664,6 @@ type
     function  MatchPort(Port: Cardinal): Boolean;
     procedure RemoveRTPListener(const Listener: IIdRTPListener);
     procedure RemoveRTPSendListener(const Listener: IIdRTPSendListener);
-    procedure SendData(Payload: TIdRTPPayload; LayerID: Integer = 0);
     procedure StartListening; override;
     procedure StopListening; override;
     function  UsesBinding(Binding: TIdConnectionBindings): Boolean;
@@ -2084,6 +2087,20 @@ function TIdSdpRTPMapAttributes.Add(const Value: String): TIdSdpRTPMapAttribute;
 begin
   Result := Self.Add;
   Result.Value := Value;
+end;
+
+function TIdSdpRTPMapAttributes.FormatFor(EncodingName: String): String;
+var
+  I: Integer;
+begin
+  Result := '';
+
+  for I := 0 to Self.Count - 1 do begin
+    if (Self[I].Encoding.EncodingName = EncodingName) then begin
+      Result := IntToStr(Self[I].PayloadType);
+      Break;
+    end;
+  end;
 end;
 
 function TIdSdpRTPMapAttributes.HasAttribute(Att: TIdSdpAttribute): Boolean;
@@ -3726,6 +3743,12 @@ begin
   Self.DataListeners.RemoveListener(Listener);
 end;
 
+procedure TIdSdpBaseMediaStream.SendData(Data: TStream; Format: String; LayerID: Integer = 0);
+begin
+  if Self.IsSender and not Self.OnHold then
+    Self.ReallySendData(Data, Format, LayerID);
+end;
+
 procedure TIdSdpBaseMediaStream.StartListening;
 begin
 end;
@@ -3805,6 +3828,10 @@ begin
       Notification.Free;
     end;
   end;
+end;
+
+procedure TIdSdpBaseMediaStream.ReallySendData(Data: TStream; Format: String; LayerID: Integer = 0);
+begin
 end;
 
 procedure TIdSdpBaseMediaStream.SetTimer(Value: TIdTimerQueue);
@@ -3936,19 +3963,6 @@ begin
   Self.RTPSendListeners.RemoveListener(Listener);
 end;
 
-procedure TIdSDPMediaStream.SendData(Payload: TIdRTPPayload; LayerID: Integer = 0);
-var
-  Wait: TIdRTPSendDataWait;
-begin
-  if Self.IsSender and not Self.OnHold then begin
-    Wait := TIdRTPSendDataWait.Create;
-    Wait.Data      := Payload.Copy;
-    Wait.SessionID := Self.FindServer(LayerID).Session.ID;
-
-    Self.Timer.AddEvent(TriggerImmediately, Wait);
-  end;
-end;
-
 procedure TIdSDPMediaStream.StartListening;
 var
   SocketBound: Boolean;
@@ -4032,6 +4046,26 @@ begin
   Self.RTPListeners     := TIdNotificationList.Create;
   Self.RTPSendListeners := TIdNotificationList.Create;
   Self.Servers          := TObjectList.Create(true);
+end;
+
+procedure TIdSDPMediaStream.ReallySendData(Data: TStream; Format: String; LayerID: Integer = 0);
+var
+  Payload: TIdRTPPayload;
+  Wait:    TIdRTPSendDataWait;
+begin
+  Payload := Self.LocalProfile.EncodingFor(StrToInt(Format)).Copy;
+  try
+    Payload.ReadFrom(Data);
+    Payload.StartTime := Now;
+
+    Wait := TIdRTPSendDataWait.Create;
+    Wait.Data      := Payload.Copy;
+    Wait.SessionID := Self.FindServer(LayerID).Session.ID;
+
+    Self.Timer.AddEvent(TriggerImmediately, Wait);
+  finally
+    Payload.Free;
+  end;
 end;
 
 procedure TIdSDPMediaStream.SetTimer(Value: TIdTimerQueue);
