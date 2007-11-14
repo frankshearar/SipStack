@@ -417,7 +417,7 @@ type
     procedure CheckSendProvisionalWithInappropriateStatusCode(Session: TIdSipInboundSession;
                                                  StatusCode: Cardinal);
     procedure OnNewData(Data: TIdRTPPayload;
-                        Binding: TIdConnection);
+                        Binding: TIdConnectionBindings);
     procedure ReceiveAckWithBody(const SessionDesc,
                                  ContentType: String);
   protected
@@ -4973,7 +4973,7 @@ begin
 end;
 
 procedure TestTIdSipInboundSession.OnNewData(Data: TIdRTPPayload;
-                                             Binding: TIdConnection);
+                                             Binding: TIdConnectionBindings);
 begin
   Self.ThreadEvent.SetEvent;
 end;

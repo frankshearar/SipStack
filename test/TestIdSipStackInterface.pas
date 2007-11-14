@@ -4198,7 +4198,7 @@ end;
 
 procedure TestTIdStackReconfiguredData.SetUp;
 var
-  Binding: TIdConnectionBindings;
+  Binding: TIdSipLocation;
 begin
   inherited SetUp;
 
@@ -4206,13 +4206,13 @@ begin
   Self.Data.ActsAsRegistrar := true;
   Self.Data.RoutingTableType := 'TIdWindowsRoutingTable';
 
-  Binding := TIdConnectionBindings.Create;
+  Binding := TIdSipLocation.Create;
   try
-    Binding.LocalIP   := '127.0.0.1';
-    Binding.LocalPort := 5060;
+    Binding.IPAddress := '127.0.0.1';
+    Binding.Port      := 5060;
     Binding.Transport := 'UDP';
 
-    Self.Data.Bindings.Add(Binding);
+    Self.Data.Bindings.AddLocation(Binding);
   finally
     Binding.Free;
   end;
