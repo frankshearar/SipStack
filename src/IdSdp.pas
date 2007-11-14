@@ -69,7 +69,7 @@ type
 
   TIdSdpRTPMapAttribute = class(TIdSdpAttribute)
   private
-    fPayloadType: TIdRTPPayloadType;
+    fPayloadType: String;
     fEncoding:    TIdRTPPayload;
 
     procedure SetEncoding(Value: TIdRTPPayload);
@@ -83,8 +83,8 @@ type
 
     function IsRTPMap: Boolean; override;
 
-    property PayloadType: TIdRTPPayloadType read fPayloadType write fPayloadType;
-    property Encoding:    TIdRTPPayload     read fEncoding;
+    property Format:   String        read fPayloadType write fPayloadType;
+    property Encoding: TIdRTPPayload read fEncoding;
   end;
 
   // Usually you need only look at my BandwidthType property. However, if you
@@ -581,6 +581,7 @@ type
     destructor  Destroy; override;
 
     procedure AddDataListener(const Listener: IIdSdpMediaListener);
+    function  AllowedPort(Port: Cardinal): Boolean;
     function  IsListening: Boolean; virtual;
     function  IsReceiver: Boolean;
     function  IsSender: Boolean;
@@ -590,6 +591,7 @@ type
     procedure StartListening; virtual;
     procedure StopListening; virtual;
     procedure TakeOffHold;
+    function  UsesBinding(Binding: TIdConnectionBindings): Boolean;
 
     property Direction:          TIdSdpDirection        read GetDirection write SetDirection;
     property HighestAllowedPort: Cardinal               read fHighestAllowedPort write fHighestAllowedPort;
@@ -657,7 +659,6 @@ type
 
     procedure AddRTPListener(const Listener: IIdRTPListener);
     procedure AddRTPSendListener(const Listener: IIdRTPSendListener);
-    function  AllowedPort(Port: Cardinal): Boolean;
     procedure Initialize;
     function  IsListening: Boolean; override;
     procedure JoinSession;
@@ -666,7 +667,6 @@ type
     procedure RemoveRTPSendListener(const Listener: IIdRTPSendListener);
     procedure StartListening; override;
     procedure StopListening; override;
-    function  UsesBinding(Binding: TIdConnectionBindings): Boolean;
 
     property LocalProfile:  TIdRTPProfile read fLocalProfile write SetLocalProfile;
     property RemoteProfile: TIdRTPProfile read fRemoteProfile write SetRemoteProfile;
@@ -1255,14 +1255,12 @@ end;
 
 function TIdSdpRTPMapAttribute.GetValue: String;
 begin
-  Result := IntToStr(Self.PayloadType) + ' ' + Self.Encoding.EncodingName;
+  Result := Self.Format + ' ' + Self.Encoding.EncodingName;
 end;
 
 procedure TIdSdpRTPMapAttribute.SetValue(const Value: String);
 var
   EncodingDesc: String;
-  PayloadType:  String;
-  E, N:         Integer;
 begin
   // cf RFC 2327 page 21:
   // a=rtpmap:<payload type> <encoding name>/<clock rate>[/<encoding
@@ -1270,12 +1268,7 @@ begin
   inherited SetValue(Value);
 
   EncodingDesc := Value;
-  PayloadType  := Fetch(EncodingDesc, ' ');
-
-  Val(PayloadType, N, E);
-  if (E <> 0) then
-    raise EParserError.Create(Format(MalformedToken, [RTPMapAttribute, Value]));
-  Self.PayloadType := N;
+  Self.Format := Fetch(EncodingDesc, ' ');
 
   Self.SetEncoding(TIdRTPPayload.CreatePayload(EncodingDesc));
 end;
@@ -2097,7 +2090,7 @@ begin
 
   for I := 0 to Self.Count - 1 do begin
     if (Self[I].Encoding.EncodingName = EncodingName) then begin
-      Result := IntToStr(Self[I].PayloadType);
+      Result := Self[I].Format;
       Break;
     end;
   end;
@@ -2526,7 +2519,7 @@ begin
 
     for I := 0 to RTPMaps.Count - 1 do begin
       Profile.AddEncoding(RTPMaps[I].Encoding,
-                          RTPMaps[I].PayloadType);
+                          StrToInt(RTPMaps[I].Format));
     end;
   finally
     RTPMaps.Free;
@@ -3711,6 +3704,11 @@ begin
   Self.DataListeners.AddListener(Listener);
 end;
 
+function TIdSdpBaseMediaStream.AllowedPort(Port: Cardinal): Boolean;
+begin
+  Result := (Self.LowestAllowedPort <= Port) and (Port < Self.HighestAllowedPort);
+end;
+
 function TIdSdpBaseMediaStream.IsListening: Boolean;
 begin
   Result := false;
@@ -3763,6 +3761,11 @@ begin
     Self.Direction := Self.PreHoldDirection;
     Self.fOnHold   := false;
   end;
+end;
+
+function TIdSdpBaseMediaStream.UsesBinding(Binding: TIdConnectionBindings): Boolean;
+begin
+  Result := Self.LocalDescription.UsesBinding(Binding);
 end;
 
 //* TIdSdpBaseMediaStream Protected methods ************************************
@@ -3914,11 +3917,6 @@ begin
   Self.RTPSendListeners.AddListener(Listener);
 end;
 
-function TIdSDPMediaStream.AllowedPort(Port: Cardinal): Boolean;
-begin
-  Result := (Self.LowestAllowedPort <= Port) and (Port < Self.HighestAllowedPort);
-end;
-
 procedure TIdSDPMediaStream.Initialize;
 begin
   // Initialize prepares the RTP session/s, binding sockets and such. It DOES
@@ -3999,11 +3997,6 @@ begin
       Self.ServerAt(I).Session.LeaveSession('Goodbye');
       Self.ServerAt(I).Active := false;
     end;
-end;
-
-function TIdSDPMediaStream.UsesBinding(Binding: TIdConnectionBindings): Boolean;
-begin
-  Result := Self.LocalDescription.UsesBinding(Binding);
 end;
 
 //* TIdSDPMediaStream Protected methods ****************************************
@@ -4277,7 +4270,7 @@ var
   I: Integer;
 begin
   for I := 0 to Maps.Count - 1 do
-    Profile.AddEncoding(Maps.Items[I].Encoding, Maps.Items[I].PayloadType);
+    Profile.AddEncoding(Maps.Items[I].Encoding, StrToInt(Maps.Items[I].Format));
 end;
 
 function TIdSDPMediaStream.ServerAt(Index: Integer): TIdBaseRTPAbstractPeer;
@@ -4312,7 +4305,7 @@ begin
   Null := TIdNullPayload.Create;
   try
     for I := 0 to Maps.Count - 1 do
-      Profile.AddEncoding(Null, Maps.Items[I].PayloadType);
+      Profile.AddEncoding(Null, StrToInt(Maps.Items[I].Format));
   finally
     Null.Free;
   end;

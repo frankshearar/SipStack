@@ -521,19 +521,26 @@ type
                               Msg: String);
   end;
 
-  TestTIdSDPMediaStream = class(TIdSdpTestCase,
+  TestTIdSdpBaseMediaStream = class(TIdSdpTestCase)
+  protected
+    SendingBinding: TIdConnectionBindings;
+    Timer:          TIdDebugTimerQueue;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSDPMediaStream = class(TestTIdSdpBaseMediaStream,
                                 IIdRTPSendListener)
   private
     AVP:            TIdRTPProfile;
     Media:          TIdSDPMediaStream;
     Sender:         TIdSDPMediaStream;
-    SendingBinding: TIdConnectionBindings;
     SentBye:        Boolean;
     SentData:       Boolean;
     SentControl:    Boolean;
     T140PT:         TIdRTPPayloadType;
     Text:           TStream;
-    Timer:          TIdDebugTimerQueue;
 
     procedure OnSendRTCP(Packet: TIdRTCPPacket;
                          Binding: TIdConnectionBindings);
@@ -1189,10 +1196,10 @@ end;
 
 procedure TestTIdSdpRTPMapAttribute.TestGetValue;
 begin
-  Self.A.Value := '98 T140/1000';
-  Self.A.PayloadType := 99;
+  Self.A.Value  := '98 T140/1000';
+  Self.A.Format := '99';
 
-  CheckEquals(IntToStr(Self.A.PayloadType) + ' ' + Self.A.Encoding.EncodingName,
+  CheckEquals(Self.A.Format + ' ' + Self.A.Encoding.EncodingName,
               Self.A.Value,
               'Value');
 end;
@@ -1218,9 +1225,9 @@ begin
   CheckEquals('',
               Self.A.Encoding.Parameters,
               'Encoding parameters');
-  CheckEquals(98,
-              Self.A.PayloadType,
-              'Payload type');
+  CheckEquals('98',
+              Self.A.Format,
+              'Format');
 end;
 
 procedure TestTIdSdpRTPMapAttribute.TestSetValueWithParameters;
@@ -1660,7 +1667,7 @@ begin
   try
     A.Value := '66 foo/42';
 
-    Self.M.AddRTPMapAttribute(A.Encoding.EncodingName, A.PayloadType);
+    Self.M.AddRTPMapAttribute(A.Encoding.EncodingName, StrToInt(A.Format));
 
     CheckEquals(1, Self.M.RTPMapAttributes.Count, 'Attribute not added');
     CheckEquals(A.AsString,
@@ -2522,7 +2529,7 @@ begin
     Atts.Add;
 
     for I := 0 to Atts.Count - 1 do
-      Atts[I].PayloadType := I;
+      Atts[I].Format := IntToStr(I);
 
     Self.A.Add(Atts);
     CheckEquals(Atts.Count,
@@ -2530,8 +2537,8 @@ begin
                 'Not all RTPMapAttributes added');
 
     for I := 0 to Self.A.Count - 1 do
-      CheckEquals(I,
-                  Self.A[I].PayloadType,
+      CheckEquals(IntToStr(I),
+                  Self.A[I].Format,
                   'PayloadType of RTPMapAttribute ' + IntToStr(I));
   finally
     Atts.Free;
@@ -2580,8 +2587,8 @@ begin
     Check(Self.A.Equals(Other), 'Self.A = Other; empty list');
     Check(Self.A.Equals(Other), 'Other = Self.A; empty list');
 
-    Self.A.Add.PayloadType := 2;
-    Self.A.Add.PayloadType := 4;
+    Self.A.Add.Format := '2';
+    Self.A.Add.Format := '4';
 
     Other.Add(Self.A[1]);
     Check(not Self.A.Equals(Other), 'Self.A <> Other');
@@ -6353,6 +6360,27 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSdpBaseMediaStream                                                  *
+//******************************************************************************
+//* TestTIdSdpBaseMediaStream Public methods ***********************************
+
+procedure TestTIdSdpBaseMediaStream.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Timer := TIdDebugTimerQueue.Create(false);
+  Self.SendingBinding := TIdConnectionBindings.Create;
+end;
+
+procedure TestTIdSdpBaseMediaStream.TearDown;
+begin
+  Self.SendingBinding.Free;
+  Self.Timer.Terminate;
+
+  inherited TearDown;
+end;
+
+//******************************************************************************
 //* TestTIdSDPMediaStream                                                      *
 //******************************************************************************
 //* TestTIdSDPMediaStream Public methods ***************************************
@@ -6370,9 +6398,6 @@ begin
 
   Self.AVP := TIdRTPProfile.Create;
   Self.AVP.AddEncoding(T140EncodingName, T140ClockRate, '', T140PT);
-
-  Self.Timer := TIdDebugTimerQueue.Create(false);
-  Self.SendingBinding := TIdConnectionBindings.Create;
 
   Self.Media := TIdSDPMediaStream.Create(TIdMockRTPPeer);
   Self.Media.LocalProfile  := Self.AVP;
@@ -6429,9 +6454,6 @@ begin
   Self.Sender.Free;
   Self.Media.Free;
   Self.AVP.Free;
-
-  Self.SendingBinding.Free;
-  Self.Timer.Terminate;
 
   inherited TearDown;
 end;
