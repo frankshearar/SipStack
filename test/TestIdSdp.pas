@@ -224,9 +224,11 @@ type
     procedure TestDirection;
     procedure TestEquals;
     procedure TestHasAttribute;
+    procedure TestHasAttributeNamed;
     procedure TestPrintOn;
     procedure TestSetDirection;
     procedure TestInitialSetDirection;
+    procedure TestValueFor;
   end;
 
   TestTIdSdpRTPMapAttributes = class(TTestCase)
@@ -581,6 +583,12 @@ type
     procedure TestTakeOffHold;
   end;
 
+  TestTIdSdpNullMediaStream = class(TestTIdSdpBaseMediaStream)
+  end;
+
+  TestTIdSdpTcpMediaStream = class(TestTIdSdpBaseMediaStream)
+  end;
+
   TestTIdSDPMultimediaSession = class(TIdSdpTestCase)
   private
     LocalPort:   Cardinal;
@@ -624,6 +632,8 @@ type
     procedure TestPortBelowLowestAllowedPort;
     procedure TestPortThreePortRange;
     procedure TestPutOnHold;
+    procedure TestSetIsOffer;
+    procedure TestSetIsOfferSetsStreamsIsOffer;
     procedure TestSetLocalMachineName;
     procedure TestSetLocalSessionName;
     procedure TestSetRemoteDescription;
@@ -692,6 +702,8 @@ begin
   Result.AddTest(TestTIdSdpParser.Suite);
   Result.AddTest(TestTIdSdpPayload.Suite);
   Result.AddTest(TestTIdSDPMediaStream.Suite);
+  Result.AddTest(TestTIdSdpNullMediaStream.Suite);
+  Result.AddTest(TestTIdSdpTcpMediaStream.Suite);
   Result.AddTest(TestTIdSDPMultimediaSession.Suite);
   Result.AddTest(TestTIdSdpMediaListenerOnDataMethod.Suite);
 end;
@@ -2434,6 +2446,23 @@ begin
   end;
 end;
 
+procedure TestTIdSdpAttributes.TestHasAttributeNamed;
+const
+  AttributeName        = 'foo';
+  AnotherAttributeName = 'bar';
+begin
+  Check(not Self.A.HasAttributeNamed(AttributeName), 'Empty list');
+
+  Self.A.Add(AnotherAttributeName);
+  Check(not Self.A.HasAttributeNamed(AttributeName), 'Non-empty list without the ' + AttributeName + ' attribute');
+
+  Self.A.Add(AttributeName);
+  Check(Self.A.HasAttributeNamed(AttributeName), 'Non-empty list with the ' + AttributeName + ' attribute');
+
+  Self.A.Remove(Self.A[1]);
+  Check(not Self.A.HasAttributeNamed(AttributeName), 'Non-empty list with the ' + AttributeName + ' attribute removed');
+end;
+
 procedure TestTIdSdpAttributes.TestPrintOn;
 var
   S: TStringStream;
@@ -2473,10 +2502,25 @@ begin
 
   Self.A.Direction := sdInactive;
   CheckEquals(1, Self.A.Count, 'Direction attribute not added');
-  
+
   CheckEquals(DirectionToStr(sdInactive),
               DirectionToStr(Self.A.Direction),
               'Direction attribute incorrect');
+end;
+
+procedure TestTIdSdpAttributes.TestValueFor;
+const
+  AttributeName        = 'foo';
+  AttributeValue       = 'baz';
+  AnotherAttributeName = 'bar';
+begin
+  CheckEquals('', Self.A.ValueFor(AttributeName), 'Empty list');
+
+  Self.A.Add(AnotherAttributeName);
+  CheckEquals('', Self.A.ValueFor(AttributeName), 'No such attribute');
+
+  Self.A.Add(AttributeName + ':' + AttributeValue);
+  CheckEquals(AttributeValue, Self.A.ValueFor(AttributeName), 'Attribute present');
 end;
 
 //******************************************************************************
@@ -7665,6 +7709,29 @@ begin
               'Stream #2 changed its media type');
 
   CheckEquals(OldSessionVersion + 1, Self.MS.LocalSessionVersion, 'sess-version not incremented');
+end;
+
+procedure TestTIdSDPMultimediaSession.TestSetIsOffer;
+begin
+  Self.MS.IsOffer := false;
+  Self.MS.StartListening(Self.MultiStreamSDP(ArbitraryPort, ArbitraryPort));
+  CheckEquals(Self.MS.IsOffer, Self.MS.Streams[0].IsOffer, 'Stream''s IsOffer not set to false');
+
+  Self.MS.StopListening;
+  Self.MS.IsOffer := true;
+  Self.MS.StartListening(Self.MultiStreamSDP(ArbitraryPort, ArbitraryPort));
+  CheckEquals(Self.MS.IsOffer, Self.MS.Streams[0].IsOffer, 'Stream''s IsOffer not set to true');
+end;
+
+procedure TestTIdSDPMultimediaSession.TestSetIsOfferSetsStreamsIsOffer;
+begin
+  Self.MS.StartListening(Self.MultiStreamSDP(ArbitraryPort, ArbitraryPort));
+
+  Self.MS.IsOffer := true;
+  CheckEquals(Self.MS.IsOffer, Self.MS.Streams[0].IsOffer, 'Stream''s IsOffer not set to true');
+
+  Self.MS.IsOffer := false;
+  CheckEquals(Self.MS.IsOffer, Self.MS.Streams[0].IsOffer, 'Stream''s IsOffer not set to false');
 end;
 
 procedure TestTIdSDPMultimediaSession.TestSetLocalMachineName;

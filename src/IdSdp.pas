@@ -299,6 +299,7 @@ type
   private
     function  GetDirection: TIdSdpDirection;
     function  GetItems(Index: Integer): TIdSdpAttribute;
+    function  IndexOfAttributeNamed(Name: String): Integer;
     procedure SetDirection(Value: TIdSdpDirection);
   protected
     function ItemType: TIdPrintableClass; override;
@@ -308,6 +309,8 @@ type
     procedure Add(A: TIdSdpAttributes); overload;
     procedure Add(const NameAndValue: String); overload;
     function  HasAttribute(Att: TIdSdpAttribute): Boolean;
+    function  HasAttributeNamed(Name: String): Boolean;
+    function  ValueFor(AttributeName: String): String;
 
     property Direction:             TIdSdpDirection read GetDirection write SetDirection;
     property Items[Index: Integer]: TIdSdpAttribute read GetItems; default;
@@ -558,6 +561,7 @@ type
   private
     DataListeners:       TIdNotificationList;
     fHighestAllowedPort: Cardinal;
+    fIsOffer:            Boolean;
     fOnHold:             Boolean;
     fRemoteDescription:  TIdSdpMediaDescription;
     fLocalDescription:   TIdSdpMediaDescription;
@@ -597,6 +601,7 @@ type
 
     property Direction:          TIdSdpDirection        read GetDirection write SetDirection;
     property HighestAllowedPort: Cardinal               read fHighestAllowedPort write fHighestAllowedPort;
+    property IsOffer:            Boolean                read fIsOffer write fIsOffer;
     property LocalDescription:   TIdSdpMediaDescription read fLocalDescription write SetLocalDescription;
     property LowestAllowedPort:  Cardinal               read fLowestAllowedPort write fLowestAllowedPort;
     property OnHold:             Boolean                read fOnHold;
@@ -674,6 +679,22 @@ type
     property RemoteProfile: TIdRTPProfile read fRemoteProfile write SetRemoteProfile;
   end;
 
+  // I represent a stream that's being refused because, for instance, the media
+  // description refers to an unknown protocol.
+  TIdSdpNullMediaStream = class(TIdSdpBaseMediaStream)
+    procedure AfterSetLocalDescription(Value: TIdSdpMediaDescription); override;
+  end;
+
+  // I implement the streams defined by RFC 4145 "TCP-Based Media Transport in
+  // the Session Description Protocol (SDP)".
+  TIdSdpTcpMediaStream = class(TIdSdpBaseMediaStream)
+  protected
+    procedure AfterSetLocalDescription(Value: TIdSdpMediaDescription); override;
+    procedure AfterSetRemoteDescription(Value: TIdSdpMediaDescription); override;
+    procedure BeforeSetLocalDescription(Value: TIdSdpMediaDescription); override;
+    procedure BeforeSetRemoteDescription(Value: TIdSdpMediaDescription); override;
+  end;
+
   // I process SDP (RFC 2327) payloads. This means that I instantiate (RTP)
   // servers on appropriate ports based on a local session description.
   // You can give me a remote session description too, which allows you to
@@ -682,7 +703,8 @@ type
   private
     fHighestAllowedPort:  Cardinal;
     FirstLocalSessDesc:   Boolean;
-    fLocalMachineName:      String;
+    fIsOffer:             Boolean;
+    fLocalMachineName:    String;
     fLowestAllowedPort:   Cardinal;
     fLocalSessionID:      String;
     fLocalSessionName:    String;
@@ -695,10 +717,11 @@ type
     Timer:                TIdThreadedTimerQueue;
 
     procedure ClearStreams;
-    function  CreateStream: TIdSDPMediaStream;
+    function  CreateStream(Protocol: String): TIdSDPBaseMediaStream;
     procedure InternalCreate(Profile: TIdRTPProfile);
+    procedure SetIsOffer(Value: Boolean);
     function  GetStreams(Index: Integer): TIdSDPMediaStream;
-    procedure RecreateStreams(NumberOfStreams: Cardinal);
+    procedure RecreateStreams(LocalDescription: TIdSdpPayload);
     procedure SetHighestAllowedPort(Value: Cardinal);
     procedure SetLocalMachineName(Value: String);
     procedure SetLowestAllowedPort(Value: Cardinal);
@@ -726,6 +749,7 @@ type
     procedure TakeOffHold;
 
     property HighestAllowedPort:      Cardinal          read fHighestAllowedPort write SetHighestAllowedPort;
+    property IsOffer:                 Boolean           read fIsOffer write SetIsOffer;
     property LocalMachineName:        String            read fLocalMachineName write SetLocalMachineName;
     property LocalSessionID:          String            read fLocalSessionID write fLocalSessionID;
     property LowestAllowedPort:       Cardinal          read fLowestAllowedPort write SetLowestAllowedPort;
@@ -1998,6 +2022,23 @@ begin
   end;
 end;
 
+function TIdSdpAttributes.HasAttributeNamed(Name: String): Boolean;
+begin
+  Result := Self.IndexOfAttributeNamed(Name) <> ItemNotFoundIndex;
+end;
+
+function TIdSdpAttributes.ValueFor(AttributeName: String): String;
+var
+  Index: Integer;
+begin
+  Result := '';
+
+  Index := Self.IndexOfAttributeNamed(AttributeName);
+
+  if (Index <> ItemNotFoundIndex) then
+    Result := Self[Index].Value;
+end;
+
 //* TIdSdpAttributes Protected methods *****************************************
 
 function TIdSdpAttributes.ItemType: TIdPrintableClass;
@@ -2029,6 +2070,20 @@ end;
 function TIdSdpAttributes.GetItems(Index: Integer): TIdSdpAttribute;
 begin
   Result := Self.List[Index] as TIdSdpAttribute;
+end;
+
+function TIdSdpAttributes.IndexOfAttributeNamed(Name: String): Integer;
+var
+  I: Integer;
+begin
+  Result := ItemNotFoundIndex;
+
+  for I := 0 to Self.Count - 1 do begin
+    if (Self[I].Name = Name) then begin
+      Result := I;
+      Break;
+    end;
+  end;
 end;
 
 procedure TIdSdpAttributes.SetDirection(Value: TIdSdpDirection);
@@ -3828,12 +3883,11 @@ end;
 
 procedure TIdSdpBaseMediaStream.InternalCreate;
 begin
-  Self.DataListeners := TIdNotificationList.Create;
-
+  Self.DataListeners      := TIdNotificationList.Create;
+  Self.fIsOffer           := true;
   Self.fLocalDescription  := TIdSdpMediaDescription.Create;
   Self.fOnHold            := false;
   Self.fRemoteDescription := TIdSdpMediaDescription.Create;
-
   Self.LowestAllowedPort  := LowestPossiblePort;
   Self.HighestAllowedPort := HighestPossiblePort;
 end;
@@ -4336,6 +4390,51 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSdpNullMediaStream                                                      *
+//******************************************************************************
+//* TIdSdpNullMediaStream Protected methods ************************************
+
+procedure TIdSdpNullMediaStream.AfterSetLocalDescription(Value: TIdSdpMediaDescription);
+begin
+end;
+
+//******************************************************************************
+//* TIdSdpTcpMediaStream                                                       *
+//******************************************************************************
+//* TIdSdpTcpMediaStream Protected methods *************************************
+
+procedure TIdSdpTcpMediaStream.AfterSetLocalDescription(Value: TIdSdpMediaDescription);
+begin
+  if Self.LocalDescription.Attributes.HasAttributeNamed(SetupAttribute) then begin
+    case StrToSetupType(Self.LocalDescription.Attributes.ValueFor(SetupAttribute)) of
+      stActive:;
+      stPassive:;
+      stActpass:;
+      stHoldConn:;                                              
+    else
+      // Something terribly wrong happened. Perhaps treat as the default?
+    end;
+  end
+  else begin
+    // If we're an offer, we want to default to "active"; if an answer, we
+    // default to "passive". That means the stream must know it's part of an
+    // offer or answer!
+  end;
+end;
+
+procedure TIdSdpTcpMediaStream.AfterSetRemoteDescription(Value: TIdSdpMediaDescription);
+begin
+end;
+
+procedure TIdSdpTcpMediaStream.BeforeSetLocalDescription(Value: TIdSdpMediaDescription);
+begin
+end;
+
+procedure TIdSdpTcpMediaStream.BeforeSetRemoteDescription(Value: TIdSdpMediaDescription);
+begin
+end;
+
+//******************************************************************************
 //* TIdSDPMultimediaSession                                                    *
 //******************************************************************************
 //* TIdSDPMultimediaSession Public methods *************************************
@@ -4495,7 +4594,7 @@ begin
   Self.StreamLock.Acquire;
   try
     if (Self.StreamCount <> RemoteSessionDesc.MediaDescriptionCount) then
-      Self.RecreateStreams(RemoteSessionDesc.MediaDescriptionCount);
+      Self.RecreateStreams(RemoteSessionDesc);
 
     for I := 0 to RemoteSessionDesc.MediaDescriptionCount - 1 do
       Self.Streams[I].RemoteDescription := RemoteSessionDesc.MediaDescriptionAt(I);
@@ -4543,7 +4642,7 @@ begin
   Self.StreamLock.Acquire;
   try
     if (Self.StreamCount <> LocalSessionDesc.MediaDescriptionCount) then
-      Self.RecreateStreams(LocalSessionDesc.MediaDescriptionCount);
+      Self.RecreateStreams(LocalSessionDesc);
 
     for I := 0 to LocalSessionDesc.MediaDescriptionCount - 1 do begin
       Self.Streams[I].LocalDescription := LocalSessionDesc.MediaDescriptionAt(I);
@@ -4600,10 +4699,11 @@ begin
   Self.fStreams.Clear;
 end;
 
-function TIdSDPMultimediaSession.CreateStream: TIdSDPMediaStream;
+function TIdSDPMultimediaSession.CreateStream(Protocol: String): TIdSDPBaseMediaStream;
 begin
   Result := TIdSDPMediaStream.Create(Self.ServerType);
   Result.HighestAllowedPort := Self.HighestAllowedPort;
+  Result.IsOffer            := Self.IsOffer;
   Result.LowestAllowedPort  := Self.LowestAllowedPort;
   Result.Timer := Self.Timer;
   Self.fStreams.Add(Result);
@@ -4618,12 +4718,23 @@ begin
 
   Self.FirstLocalSessDesc   := true;
   Self.fLocalSessionVersion := 0;
+  Self.IsOffer              := true;
   Self.LocalMachineName     := '127.0.0.1';
   Self.LocalSessionID       := IntToStr(GRandomNumber.NextCardinal);
   Self.LocalSessionName     := BlankSessionName;
   Self.LowestAllowedPort    := LowestPossiblePort;
   Self.HighestAllowedPort   := HighestPossiblePort;
   Self.Username             := BlankUsername;
+end;
+
+procedure TIdSDPMultimediaSession.SetIsOffer(Value: Boolean);
+var
+  I: Integer;
+begin
+  Self.fIsOffer := Value;
+
+  for I := 0 to Self.StreamCount - 1 do
+    Self.Streams[I].IsOffer := Value;
 end;
 
 //* TIdSDPMultimediaSession Private methods ************************************
@@ -4638,14 +4749,14 @@ begin
   end;
 end;
 
-procedure TIdSDPMultimediaSession.RecreateStreams(NumberOfStreams: Cardinal);
+procedure TIdSDPMultimediaSession.RecreateStreams(LocalDescription: TIdSdpPayload);
 var
   I: Integer;
 begin
   // Precondition: you've acquired StreamLock
   Self.ClearStreams;
-  for I := 1 to NumberOfStreams do
-    Self.CreateStream;
+  for I := 0 to LocalDescription.MediaDescriptionCount - 1 do
+    Self.CreateStream(LocalDescription.MediaDescriptions[I].Protocol);
 end;
 
 procedure TIdSDPMultimediaSession.SetHighestAllowedPort(Value: Cardinal);
