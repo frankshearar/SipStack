@@ -407,10 +407,10 @@ type
     procedure TestIsPhone;
     procedure TestIsPhoneNumber;
     procedure TestIsPort;
+    procedure TestIsProtocol;
     procedure TestIsText;
     procedure TestIsTime;
     procedure TestIsToken;
-    procedure TestIsTransport;
     procedure TestParseAttribute;
     procedure TestParseAttributeWithValue;
     procedure TestParseAttributeMalformedName;
@@ -451,6 +451,7 @@ type
     procedure TestParseMediaDescriptionWithSessionConnections;
     procedure TestParseMediaDescriptionMalformedFormatList;
     procedure TestParseMediaDescriptionMalformedPort;
+    procedure TestParseMediaDescriptionMalformedTransport;
     procedure TestParseMediaDescriptionMissingFormatList;
     procedure TestParseMediaDescriptionMissingInformation;
     procedure TestParseMediaDescriptionMissingKey;
@@ -459,7 +460,6 @@ type
     procedure TestParseMediaDescriptions;
     procedure TestParseMediaDescriptionUnknownBandwidthType;
     procedure TestParseMediaDescriptionUnknownMediaType;
-    procedure TestParseMediaDescriptionUnknownTransport;
     procedure TestParseMediaDescriptionWithAttributes;
     procedure TestParseMediaDescriptionWithBandwidth;
     procedure TestParseMediaDescriptionWithConnection;
@@ -4483,6 +4483,28 @@ begin
   Check(    TIdSdpParser.IsPort('666'), '666');
 end;
 
+procedure TestTIdSdpParser.TestIsProtocol;
+begin
+  Check(not TIdSdpParser.IsProtocol(''),            '''''');
+  Check(not TIdSdpParser.IsProtocol('/'),           '/');
+  Check(not TIdSdpParser.IsProtocol('/AVP'),        '/AVP');
+  Check(not TIdSdpParser.IsProtocol('RTP/'),        'RTP/');
+  Check(not TIdSdpParser.IsProtocol('RTP//AVP'),    'RTP//AVP');
+  Check(    TIdSdpParser.IsProtocol('vAt'),         'vAt');
+  Check(    TIdSdpParser.IsProtocol('rapunzel'),    'rapunzel');
+  Check(    TIdSdpParser.IsProtocol('RTP/AVP'),     'RTP/AVP');
+  Check(    TIdSdpParser.IsProtocol(Id_SDP_RTPAVP), 'Id_SDP_RTPAVP constant');
+  Check(    TIdSdpParser.IsProtocol('vat'),         'vat');
+  Check(    TIdSdpParser.IsProtocol(Id_SDP_vat),    'Id_SDP_vat constant');
+  Check(    TIdSdpParser.IsProtocol('rtp'),         'rtp');
+  Check(    TIdSdpParser.IsProtocol(Id_SDP_rtp),    'Id_SDP_rtp constant');
+  Check(    TIdSdpParser.IsProtocol('UDPTL'),       'UDPTL');
+  Check(    TIdSdpParser.IsProtocol(Id_SDP_UDPTL),  'Id_SDP_UDPTL constant');
+  Check(    TIdSdpParser.IsProtocol('TCP'),         'TCP');
+  Check(    TIdSdpParser.IsProtocol(Id_SDP_TCP),    'Id_SDP_TCP constant');
+  Check(    TIdSdpParser.IsProtocol('1/2/3/4'),     '1/2/3/4');
+end;
+
 procedure TestTIdSdpParser.TestIsText;
 var
   C: Char;
@@ -4531,23 +4553,6 @@ begin
   Check(not TIdSdpParser.IsToken('nodelete'#$7f),    'nodelete#$7f');
 
   Check(TIdSdpParser.IsToken(AllTokenChars), AllTokenChars);
-end;
-
-procedure TestTIdSdpParser.TestIsTransport;
-begin
-  Check(not TIdSdpParser.IsTransport(''),            '''''');
-  Check(not TIdSdpParser.IsTransport('vAt'),         'vAt');
-  Check(not TIdSdpParser.IsTransport('rapunzel'),    'rapunzel');
-  Check(    TIdSdpParser.IsTransport('RTP/AVP'),     'RTP/AVP');
-  Check(    TIdSdpParser.IsTransport(Id_SDP_RTPAVP), 'Id_SDP_RTPAVP constant');
-  Check(    TIdSdpParser.IsTransport('vat'),         'vat');
-  Check(    TIdSdpParser.IsTransport(Id_SDP_vat),    'Id_SDP_vat constant');
-  Check(    TIdSdpParser.IsTransport('rtp'),         'rtp');
-  Check(    TIdSdpParser.IsTransport(Id_SDP_rtp),    'Id_SDP_rtp constant');
-  Check(    TIdSdpParser.IsTransport('UDPTL'),       'UDPTL');
-  Check(    TIdSdpParser.IsTransport(Id_SDP_UDPTL),  'Id_SDP_UDPTL constant');
-  Check(    TIdSdpParser.IsTransport('TCP'),         'TCP');
-  Check(    TIdSdpParser.IsTransport(Id_SDP_TCP),    'Id_SDP_TCP constant');
 end;
 
 procedure TestTIdSdpParser.TestParseAttribute;
@@ -5335,6 +5340,11 @@ begin
   end;
 end;
 
+procedure TestTIdSdpParser.TestParseMediaDescriptionMalformedTransport;
+begin
+  Self.CheckMalformedMediaDescription('data 6666 RtP//AVP 1');
+end;
+
 procedure TestTIdSdpParser.TestParseMediaDescriptionMissingFormatList;
 begin
   Self.CheckMalformedMediaDescription('data 65535 RTP/AVP');
@@ -5474,11 +5484,6 @@ begin
   finally
     S.Free;
   end;
-end;
-
-procedure TestTIdSdpParser.TestParseMediaDescriptionUnknownTransport;
-begin
-  Self.CheckMalformedMediaDescription('data 6666 RtP/AVP 1');
 end;
 
 procedure TestTIdSdpParser.TestParseMediaDescriptionWithAttributes;

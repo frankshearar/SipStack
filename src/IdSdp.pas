@@ -497,6 +497,8 @@ type
     LastSessionHeader:     Char;
     ParsingSessionHeaders: Boolean;
 
+    class function ContainsOnly(Token: String; AllowedChars: TCharSet): Boolean;
+    class function ContainsNoneOf(Token: String; DisallowedChars: TCharSet): Boolean;
     procedure AssertHeaderOrder;
     function  GetAndCheckInfo: String;
     procedure ParseAttribute(Attributes: TIdSdpAttributes);
@@ -534,10 +536,10 @@ type
     class function IsPhone(const Token: String): Boolean;
     class function IsPhoneNumber(const Header: String): Boolean;
     class function IsPort(const Token: String): Boolean;
+    class function IsProtocol(const Token: String): Boolean;
     class function IsText(const Token: String): Boolean;
     class function IsTime(const Token: String): Boolean;
     class function IsToken(const S: String): Boolean;
-    class function IsTransport(const Token: String): Boolean;
 
     procedure Parse(Payload: TIdSdpPayload);
   end;
@@ -774,8 +776,9 @@ const
   EmailSafeChars = SafeChars + [' ', #9];
   IllegalByteStringChars = [#0, #10, #13];
   TimeTypes          = ['d', 'h', 'm', 's'];
-  TokenChars         = ['!', '#', '$', '%', '&', '''', '*', '+', '-', '.', '^',
-                        '_', '`', '{', '|', '}', '~'] + AlphanumericChars;
+//  TokenChars         = ['!', '#', '$', '%', '&', '''', '*', '+', '-', '.', '^',
+//                        '_', '`', '{', '|', '}', '~'] + AlphanumericChars;
+  TokenChars = [#$21, #$23..#$27, #$2a..#$2b, #$2d..#$2e, #$30..#$39, #$41..#$5a, #$5e..#$7e]; // RFC 4566
   AllTokenChars = '!#$%&''*+-.0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ^_`abcdefhijklmnopqrstuvwxyz{|}~';
 
 // MIME types etc
@@ -2759,11 +2762,7 @@ begin
 //   byte-string =         1*(0x01..0x09|0x0b|0x0c|0x0e..0xff)
 //                         ;any byte except NUL, CR or LF
 
-  Result := Token <> '';
-
-  if Result then
-    for I := 1 to Length(Token) do
-      Result := Result and not (Token[I] in IllegalByteStringChars);
+  Result := Self.ContainsNoneOf(Token, IllegalByteStringChars);
 end;
 
 class function TIdSdpParser.IsDirection(const Token: String): Boolean;
@@ -2842,8 +2841,7 @@ begin
     Result := Result and (Token[1] = '+');
     Result := Result and (Token[2] in ['1'..'9']);
 
-    for I := 3 to Length(Token) do
-      Result := Result and (Token[I] in ['0'..'9', '-', ' ']);
+      Result := Result and Self.ContainsOnly(Copy(Token, 3, Length(Token)), ['0'..'9', '-', ' ']);
   end;
 end;
 
@@ -2889,16 +2887,33 @@ begin
   end;
 end;
 
-class function TIdSdpParser.IsText(const Token: String): Boolean;
-var
-  I: Integer;
+class function TIdSdpParser.IsProtocol(const Token: String): Boolean;
 begin
-  Result := (Token <> '');
+  // See the BNF in RFC 4566, section 9. Note that the production for this
+  // entity in RFC 2327's BNF is broken - it cannot produce "RTP/AVP".
 
-  if Result then
-    for I := 1 to Length(Token) do begin
-      Result := Result and not (Token[I] in [#0, #10, #13]);
-    end;
+  if (Token = '') then begin
+    Result := false;
+    Exit;
+  end;
+
+  if (Token[1] = '/') then begin
+    Result := false;
+    Exit;
+  end;
+
+  if (Token[Length(Token)] = '/') then begin
+    Result := false;
+    Exit;
+  end;
+
+  Result := (Pos('//', Token) = 0) and
+            Self.ContainsOnly(Token, TokenChars + ['/']);
+end;
+
+class function TIdSdpParser.IsText(const Token: String): Boolean;
+begin
+  Result := Self.ContainsNoneOf(Token, [#0, #10, #13]);
 end;
 
 class function TIdSdpParser.IsTime(const Token: String): Boolean;
@@ -2920,23 +2935,8 @@ begin
 end;
 
 class function TIdSdpParser.IsToken(const S: String): Boolean;
-var
-  I: Integer;
 begin
-  Result := S <> '';
-
-  if Result then
-    for I := 1 to Length(S) do
-      Result := Result and (S[I] in TokenChars);
-end;
-
-class function TIdSdpParser.IsTransport(const Token: String): Boolean;
-begin
-  Result := (Token = Id_SDP_RTPAVP)
-         or (Token = Id_SDP_vat)
-         or (Token = Id_SDP_rtp)
-         or (Token = Id_SDP_UDPTL)
-         or (Token = Id_SDP_TCP);
+  Result := Self.ContainsOnly(S, TokenChars);
 end;
 
 procedure TIdSdpParser.Parse(Payload: TIdSdpPayload);
@@ -2953,6 +2953,30 @@ begin
 end;
 
 //* TIdSdpParser Private methods ***********************************************
+
+class function TIdSdpParser.ContainsOnly(Token: String; AllowedChars: TCharSet): Boolean;
+var
+  I: Integer;
+begin
+  Result := (Token <> '');
+
+  if Result then
+    for I := 1 to Length(Token) do begin
+      Result := Result and (Token[I] in AllowedChars);
+    end;
+end;
+
+class function TIdSdpParser.ContainsNoneOf(Token: String; DisallowedChars: TCharSet): Boolean;
+var
+  I: Integer;
+begin
+  Result := (Token <> '');
+
+  if Result then
+    for I := 1 to Length(Token) do begin
+      Result := Result and not (Token[I] in DisallowedChars);
+    end;
+end;
 
 procedure TIdSdpParser.AssertHeaderOrder;
 var
@@ -3291,7 +3315,7 @@ begin
     NewMediaDesc.PortCount := StrToIntDef(Count, 1);
 
     Token := Fetch(Value, ' ');
-    if not Self.IsTransport(Token) then
+    if not Self.IsProtocol(Token) then
       raise EParserError.Create(Format(MalformedToken,
                                        [RSSDPMediaDescriptionName,
                                         Name + '=' + OriginalValue]));
