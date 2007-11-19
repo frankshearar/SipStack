@@ -527,9 +527,26 @@ type
   protected
     SendingBinding: TIdConnectionBindings;
     Timer:          TIdDebugTimerQueue;
+
+    procedure AddSendingChecking(Stream: TIdSdpBaseMediaStream); virtual;
+    function  BasicMediaDesc: String; virtual;
+    function  CreateStream: TIdSdpBaseMediaStream; virtual;
+    function  InactiveMediaDesc: String;
+    procedure RemoveSendingChecking(Stream: TIdSdpBaseMediaStream); virtual;
+    procedure SetLocalMediaDesc(Stream: TIdSdpBaseMediaStream;
+                                const MediaDesc: String);
   public
     procedure SetUp; override;
     procedure TearDown; override;
+  published
+    procedure TestIsReceiver;
+    procedure TestIsSender;
+    procedure TestPutOnHoldRecvOnly;
+    procedure TestPutOnHoldSendRecv;
+    procedure TestPutOnHoldWhileOnHold;
+    procedure TestSendData; virtual;
+    procedure TestSendDataWhenNotSender; virtual;
+    procedure TestTakeOffHold;
   end;
 
   TestTIdSDPMediaStream = class(TestTIdSdpBaseMediaStream,
@@ -549,9 +566,12 @@ type
     procedure OnSendRTP(Packet: TIdRTPPacket;
                         Binding: TIdConnectionBindings);
     procedure ReceiveControlOn(S: TIdSDPMediaStream);
-    procedure ReceiveDataOn(S: TIdSDPMediaStream);
-    procedure SetLocalMediaDesc(Stream: TIdSDPMediaStream;
-                                const MediaDesc: String);
+    procedure ReceiveDataOn(S: TIdSdpBaseMediaStream);
+  protected
+    procedure AddSendingChecking(Stream: TIdSdpBaseMediaStream); override;
+    function  BasicMediaDesc: String; override;
+    function  CreateStream: TIdSdpBaseMediaStream; override;
+    procedure RemoveSendingChecking(Stream: TIdSdpBaseMediaStream); override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -560,33 +580,39 @@ type
     procedure TestAddRTPListener;
     procedure TestAddRTPSendListener;
     procedure TestHierarchicallyEncodedStream;
-    procedure TestIsReceiver;
-    procedure TestIsSender;
     procedure TestLayeredCodecAddressesAndPorts;
     procedure TestMatchPort;
-    procedure TestPutOnHoldRecvOnly;
-    procedure TestPutOnHoldSendRecv;
-    procedure TestPutOnHoldWhileOnHold;
     procedure TestReceiveDataWhenNotReceiver;
     procedure TestRemoteMembersControlAddressAndPortSet;
     procedure TestRemoveRTPSendListener;
     procedure TestRTPListenersGetRTCP;
     procedure TestRTPListenersGetRTP;
-    procedure TestSendData;
-    procedure TestSendDataWhenNotSender;
+    procedure TestSendData; override;
+    procedure TestSendDataWhenNotSender; override;
     procedure TestSetRemoteDescriptionSendsNoPackets;
     procedure TestSetRemoteDescriptionRegistersRemoteRtpMaps;
     procedure TestStartListening;
     procedure TestStartListeningRegistersLocalRtpMaps;
     procedure TestStartListeningTriesConsecutivePorts;
     procedure TestStopListeningStopsListening;
-    procedure TestTakeOffHold;
   end;
 
   TestTIdSdpNullMediaStream = class(TestTIdSdpBaseMediaStream)
+  protected
+    function BasicMediaDesc: String; override;
+    function CreateStream: TIdSdpBaseMediaStream; override;
+  published
+    procedure TestSendData; override;
+    procedure TestSendDataWhenNotSender; override;
   end;
 
   TestTIdSdpTcpMediaStream = class(TestTIdSdpBaseMediaStream)
+  protected
+    function BasicMediaDesc: String; override;
+    function CreateStream: TIdSdpBaseMediaStream; override;
+  published
+    procedure TestSendData; override;
+    procedure TestSendDataWhenNotSender; override;
   end;
 
   TestTIdSDPMultimediaSession = class(TIdSdpTestCase)
@@ -6429,6 +6455,243 @@ begin
   inherited TearDown;
 end;
 
+//* TestTIdSdpBaseMediaStream Protected methods ********************************
+
+procedure TestTIdSdpBaseMediaStream.AddSendingChecking(Stream: TIdSdpBaseMediaStream);
+begin
+  // Subclasses put code here such that they can check that Stream actually
+  // sends data, for instance by adding Listeners to the Stream.
+end;
+
+function TestTIdSdpBaseMediaStream.BasicMediaDesc: String;
+begin
+  Result := '';
+  Fail(Self.ClassName + ' MUST override BasicMediaDesc');
+end;
+
+function TestTIdSdpBaseMediaStream.CreateStream: TIdSdpBaseMediaStream;
+begin
+  Result := nil;
+  Fail(Self.ClassName + ' MUST override CreateStream');
+end;
+
+function TestTIdSdpBaseMediaStream.InactiveMediaDesc: String;
+begin
+  Result := Self.BasicMediaDesc
+          + 'a=' + RSSDPDirectionInactive + #13#10;
+end;
+
+procedure TestTIdSdpBaseMediaStream.RemoveSendingChecking(Stream: TIdSdpBaseMediaStream);
+begin
+  // Subclasses put code here to clean up any resources allocated in
+  // AddSendingChecking.
+end;
+
+procedure TestTIdSdpBaseMediaStream.SetLocalMediaDesc(Stream: TIdSdpBaseMediaStream;
+                                                      const MediaDesc: String);
+var
+  SDP: TIdSdpPayload;
+begin
+  SDP := TIdSdpPayload.CreateFrom('v=0'#13#10
+                                + 'o=foo 1 2 IN IP4 127.0.0.1'#13#10
+                                + 's=-'#13#10
+                                + 'c=IN IP4 127.0.0.1'#13#10
+                                + MediaDesc);
+  try
+    Stream.LocalDescription := SDP.MediaDescriptionAt(0);
+  finally
+    SDP.Free;
+  end;
+end;
+
+//* TestTIdSdpBaseMediaStream Published methods ********************************
+
+procedure TestTIdSdpBaseMediaStream.TestIsReceiver;
+var
+  Stream: TIdSdpBaseMediaStream;
+begin
+  Stream := Self.CreateStream;
+  try
+    Self.SetLocalMediaDesc(Stream,
+                           Self.BasicMediaDesc);
+    Check(Stream.IsReceiver,
+          'Not Receiver by default');
+
+    Self.SetLocalMediaDesc(Stream,
+                           Self.BasicMediaDesc
+                         + 'a=recvonly');
+    Check(Stream.IsReceiver,
+          'Not Receiver when recvonly');
+
+    Self.SetLocalMediaDesc(Stream,
+                           Self.BasicMediaDesc
+                         + 'a=sendrecv');
+    Check(Stream.IsReceiver,
+          'Not Receiver when sendrecv');
+
+    Self.SetLocalMediaDesc(Stream,
+                           Self.BasicMediaDesc
+                         + 'a=sendonly');
+    Check(not Stream.IsReceiver,
+          'Receiver when sendonly');
+
+    Self.SetLocalMediaDesc(Stream,
+                           Self.BasicMediaDesc
+                         + 'a=inactive');
+    Check(not Stream.IsReceiver,
+          'Receiver when inactive');
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TestTIdSdpBaseMediaStream.TestIsSender;
+var
+  Stream: TIdSdpBaseMediaStream;
+begin
+  Stream := Self.CreateStream;
+  try
+    Self.SetLocalMediaDesc(Stream,
+                           Self.BasicMediaDesc);
+    Check(Stream.IsSender,
+          'Not Sender by default');
+
+    Self.SetLocalMediaDesc(Stream,
+                           Self.BasicMediaDesc
+                         + 'a=sendrecv');
+    Check(Stream.IsSender,
+          'Not Sender when sendrecv');
+
+    Self.SetLocalMediaDesc(Stream,
+                           Self.BasicMediaDesc
+                         + 'a=sendonly');
+    Check(Stream.IsSender,
+          'Not Sender when sendonly');
+
+    Self.SetLocalMediaDesc(Stream,
+                           Self.BasicMediaDesc
+                         + 'a=recvonly');
+    Check(not Stream.IsSender,
+          'Sender when recvonly');
+
+    Self.SetLocalMediaDesc(Stream,
+                           Self.BasicMediaDesc
+                         + 'a=inactive');
+    Check(not Stream.IsSender,
+          'Sender when inactive');
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TestTIdSdpBaseMediaStream.TestPutOnHoldRecvOnly;
+var
+  LocalMediaType: TIdSdpMediaType;
+  Stream:         TIdSdpBaseMediaStream;
+begin
+  Stream := Self.CreateStream;
+  try
+    Check(not Stream.OnHold,
+          'OnHold set before PutOnHold');
+
+    Self.SetLocalMediaDesc(Stream,
+                           Self.BasicMediaDesc
+                         + 'a=recvonly');
+    LocalMediaType := Stream.LocalDescription.MediaType;
+    Stream.PutOnHold;
+
+    CheckEquals(DirectionToStr(sdInactive),
+                DirectionToStr(Stream.Direction),
+                'Stream not put on hold');
+    Check(Stream.OnHold,
+          'OnHold not set');
+    CheckEquals(MediaTypeToStr(LocalMediaType),
+                MediaTypeToStr(Stream.LocalDescription.MediaType),
+          'Stream''s MediaType changed');
+  finally
+    Stream.Free
+  end;
+end;
+
+procedure TestTIdSdpBaseMediaStream.TestPutOnHoldSendRecv;
+var
+  LocalMediaType: TIdSdpMediaType;
+  Stream:         TIdSdpBaseMediaStream;
+begin
+  Stream := Self.CreateStream;
+  try
+    Check(not Stream.OnHold,
+          'OnHold set before PutOnHold');
+
+    Self.SetLocalMediaDesc(Stream,
+                           'm=text 8000 RTP/AVP 96'#13#10
+                         + 'a=rtpmap:96 t140/1000'#13#10
+                         + 'a=sendrecv');
+    LocalMediaType := Stream.LocalDescription.MediaType;
+    Stream.PutOnHold;
+
+    CheckEquals(DirectionToStr(sdSendOnly),
+                DirectionToStr(Stream.Direction),
+                'Stream not put on hold');
+    Check(Stream.OnHold,
+          'OnHold not set');
+    CheckEquals(MediaTypeToStr(LocalMediaType),
+                MediaTypeToStr(Stream.LocalDescription.MediaType),
+          'Stream''s MediaType changed');
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TestTIdSdpBaseMediaStream.TestPutOnHoldWhileOnHold;
+var
+  Stream: TIdSdpBaseMediaStream;
+begin
+  Stream := Self.CreateStream;
+  try
+    Stream.PutOnHold;
+    Stream.PutOnHold;
+    Check(Stream.OnHold,
+          'OnHold not set');
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TestTIdSdpBaseMediaStream.TestSendData;
+begin
+  Fail(Self.ClassName + ' MUST override TestSendData');
+end;
+
+procedure TestTIdSdpBaseMediaStream.TestSendDataWhenNotSender;
+begin
+  Fail(Self.ClassName + ' MUST override TestSendDataWhenNotSender');
+end;
+
+procedure TestTIdSdpBaseMediaStream.TestTakeOffHold;
+var
+  PreHoldDirection: TIdSdpDirection;
+  Stream:           TIdSdpBaseMediaStream;
+begin
+  Stream := Self.CreateStream;
+  try
+    PreHoldDirection := sdRecvOnly;
+    Self.SetLocalMediaDesc(Stream,
+                           Self.BasicMediaDesc
+                         + 'a=' + DirectionToStr(PreHoldDirection));
+    Stream.PutOnHold;
+    Stream.TakeOffHold;
+
+    CheckEquals(DirectionToStr(PreHoldDirection),
+                DirectionToStr(Stream.Direction),
+                'Stream not taken off hold');
+    Check(not Stream.OnHold,
+          'OnHold not unset');
+  finally
+    Stream.Free;
+  end;
+end;
+
 //******************************************************************************
 //* TestTIdSDPMediaStream                                                      *
 //******************************************************************************
@@ -6448,15 +6711,8 @@ begin
   Self.AVP := TIdRTPProfile.Create;
   Self.AVP.AddEncoding(T140EncodingName, T140ClockRate, '', T140PT);
 
-  Self.Media := TIdSDPMediaStream.Create(TIdMockRTPPeer);
-  Self.Media.LocalProfile  := Self.AVP;
-  Self.Media.RemoteProfile := Self.AVP;
-  Self.Media.Timer         := Self.Timer;
-
-  Self.Sender := TIdSDPMediaStream.Create(TIdMockRTPPeer);
-  Self.Sender.LocalProfile  := Self.AVP;
-  Self.Sender.RemoteProfile := Self.AVP;
-  Self.Sender.Timer         := Self.Timer;
+  Self.Media  := Self.CreateStream as TIdSDPMediaStream;
+  Self.Sender := Self.CreateStream as TIdSDPMediaStream;
 
   // Sender has a nice high port number because some tests use ports just above
   // Self.Media's port (8000).
@@ -6505,6 +6761,35 @@ begin
   Self.AVP.Free;
 
   inherited TearDown;
+end;
+
+//* TestTIdSDPMediaStream Protected methods ************************************
+
+procedure TestTIdSDPMediaStream.AddSendingChecking(Stream: TIdSdpBaseMediaStream);
+begin
+  (Stream as TIdSDPMediaStream).AddRTPSendListener(Self);
+end;
+
+function TestTIdSDPMediaStream.BasicMediaDesc: String;
+begin
+  Result := 'm=audio 8000 RTP/AVP 0'#13#10;
+end;
+
+function TestTIdSDPMediaStream.CreateStream: TIdSdpBaseMediaStream;
+var
+  S: TIdSDPMediaStream;
+begin
+  S := TIdSDPMediaStream.Create(TIdMockRTPPeer);
+  S.LocalProfile  := Self.AVP;
+  S.RemoteProfile := Self.AVP;
+  S.Timer         := Self.Timer;
+
+  Result := S;
+end;
+
+procedure TestTIdSDPMediaStream.RemoveSendingChecking(Stream: TIdSdpBaseMediaStream);
+begin
+  (Stream as TIdSDPMediaStream).RemoveRTPSendListener(Self);
 end;
 
 //* TestTIdSDPMediaStream Private methods **************************************
@@ -6562,7 +6847,7 @@ begin
   end;
 end;
 
-procedure TestTIdSDPMediaStream.ReceiveDataOn(S: TIdSDPMediaStream);
+procedure TestTIdSDPMediaStream.ReceiveDataOn(S: TIdSdpBaseMediaStream);
 var
   Binding: TIdConnectionBindings;
   Host:    String;
@@ -6599,23 +6884,6 @@ begin
     end;
   finally
     Binding.Free;
-  end;
-end;
-
-procedure TestTIdSDPMediaStream.SetLocalMediaDesc(Stream: TIdSDPMediaStream;
-                                                  const MediaDesc: String);
-var
-  SDP: TIdSdpPayload;
-begin
-  SDP := TIdSdpPayload.CreateFrom('v=0'#13#10
-                                + 'o=foo 1 2 IN IP4 127.0.0.1'#13#10
-                                + 's=-'#13#10
-                                + 'c=IN IP4 127.0.0.1'#13#10
-                                + MediaDesc);
-  try
-    Stream.LocalDescription := SDP.MediaDescriptionAt(0);
-  finally
-    SDP.Free;
   end;
 end;
 
@@ -6752,70 +7020,6 @@ begin
   end;
 end;
 
-procedure TestTIdSDPMediaStream.TestIsReceiver;
-begin
-  Self.SetLocalMediaDesc(Self.Media,
-                    'm=audio 8000 RTP/AVP 0'#13#10);
-  Check(Self.Media.IsReceiver,
-        'Not Receiver by default');
-
-  Self.SetLocalMediaDesc(Self.Media,
-                    'm=audio 8000 RTP/AVP 0'#13#10
-                  + 'a=recvonly');
-  Check(Self.Media.IsReceiver,
-        'Not Receiver when recvonly');
-
-  Self.SetLocalMediaDesc(Self.Media,
-                    'm=audio 8000 RTP/AVP 0'#13#10
-                  + 'a=sendrecv');
-  Check(Self.Media.IsReceiver,
-        'Not Receiver when sendrecv');
-
-  Self.SetLocalMediaDesc(Self.Media,
-                    'm=audio 8000 RTP/AVP 0'#13#10
-                  + 'a=sendonly');
-  Check(not Self.Media.IsReceiver,
-        'Receiver when sendonly');
-
-  Self.SetLocalMediaDesc(Self.Media,
-                    'm=audio 8000 RTP/AVP 0'#13#10
-                  + 'a=inactive');
-  Check(not Self.Media.IsReceiver,
-        'Receiver when inactive');
-end;
-
-procedure TestTIdSDPMediaStream.TestIsSender;
-begin
-  Self.SetLocalMediaDesc(Self.Media,
-                    'm=audio 8000 RTP/AVP 0'#13#10);
-  Check(Self.Media.IsSender,
-        'Not Sender by default');
-
-  Self.SetLocalMediaDesc(Self.Media,
-                    'm=audio 8000 RTP/AVP 0'#13#10
-                  + 'a=sendrecv');
-  Check(Self.Media.IsSender,
-        'Not Sender when sendrecv');
-
-  Self.SetLocalMediaDesc(Self.Media,
-                    'm=audio 8000 RTP/AVP 0'#13#10
-                  + 'a=sendonly');
-  Check(Self.Media.IsSender,
-        'Not Sender when sendonly');
-
-  Self.SetLocalMediaDesc(Self.Media,
-                    'm=audio 8000 RTP/AVP 0'#13#10
-                  + 'a=recvonly');
-  Check(not Self.Media.IsSender,
-        'Sender when recvonly');
-
-  Self.SetLocalMediaDesc(Self.Media,
-                    'm=audio 8000 RTP/AVP 0'#13#10
-                  + 'a=inactive');
-  Check(not Self.Media.IsSender,
-        'Sender when inactive');
-end;
-
 procedure TestTIdSDPMediaStream.TestLayeredCodecAddressesAndPorts;
 var
   FirstPort:               Cardinal;
@@ -6905,62 +7109,6 @@ begin
   end;
   ActualPort := Port + PortCount*2 + 2;
   Check(not Self.Media.MatchPort(Port + PortCount*2 + 2), 'Single hierarchically encoded stream, wrong port (' + IntToStr(ActualPort) + ')');
-end;
-
-procedure TestTIdSDPMediaStream.TestPutOnHoldRecvOnly;
-var
-  LocalMediaType: TIdSdpMediaType;
-begin
-  Check(not Self.Media.OnHold,
-        'OnHold set before PutOnHold');
-
-  Self.SetLocalMediaDesc(Self.Media,
-                         'm=text 8000 RTP/AVP 96'#13#10
-                       + 'a=rtpmap:96 t140/1000'#13#10
-                       + 'a=recvonly');
-  LocalMediaType := Self.Media.LocalDescription.MediaType;
-  Self.Media.PutOnHold;
-
-  CheckEquals(DirectionToStr(sdInactive),
-              DirectionToStr(Self.Media.Direction),
-              'Stream not put on hold');
-  Check(Self.Media.OnHold,
-        'OnHold not set');
-  CheckEquals(MediaTypeToStr(LocalMediaType),
-              MediaTypeToStr(Self.Media.LocalDescription.MediaType),
-        'Stream''s MediaType changed');
-end;
-
-procedure TestTIdSDPMediaStream.TestPutOnHoldSendRecv;
-var
-  LocalMediaType: TIdSdpMediaType;
-begin
-  Check(not Self.Media.OnHold,
-        'OnHold set before PutOnHold');
-
-  Self.SetLocalMediaDesc(Self.Media,
-                         'm=text 8000 RTP/AVP 96'#13#10
-                       + 'a=rtpmap:96 t140/1000'#13#10
-                       + 'a=sendrecv');
-  LocalMediaType := Self.Media.LocalDescription.MediaType;
-  Self.Media.PutOnHold;
-
-  CheckEquals(DirectionToStr(sdSendOnly),
-              DirectionToStr(Self.Media.Direction),
-              'Stream not put on hold');
-  Check(Self.Media.OnHold,
-        'OnHold not set');
-  CheckEquals(MediaTypeToStr(LocalMediaType),
-              MediaTypeToStr(Self.Media.LocalDescription.MediaType),
-        'Stream''s MediaType changed');
-end;
-
-procedure TestTIdSDPMediaStream.TestPutOnHoldWhileOnHold;
-begin
-  Self.Media.PutOnHold;
-  Self.Media.PutOnHold;
-  Check(Self.Media.OnHold,
-        'OnHold not set');
 end;
 
 procedure TestTIdSDPMediaStream.TestReceiveDataWhenNotReceiver;
@@ -7066,26 +7214,32 @@ end;
 
 procedure TestTIdSDPMediaStream.TestSendData;
 begin
-  Self.Media.AddRTPSendListener(Self);
+  Self.AddSendingChecking(Self.Media);
+  try
+    Self.Media.SendData(Self.Text, IntToStr(Self.T140PT));
+    Self.Timer.TriggerAllEventsUpToFirst(TIdRTPSendDataWait);
 
-  Self.Media.SendData(Self.Text, IntToStr(Self.T140PT));
-  Self.Timer.TriggerAllEventsUpToFirst(TIdRTPSendDataWait);
-
-  Check(Self.SentData, 'No data sent');
+    Check(Self.SentData, 'No data sent');
+  finally
+    Self.RemoveSendingChecking(Self.Media);
+  end;
 end;
 
 procedure TestTIdSDPMediaStream.TestSendDataWhenNotSender;
 begin
-  Self.Media.AddRTPSendListener(Self);
-  Self.SetLocalMediaDesc(Self.Media,
-                         'm=text 8002 RTP/AVP 96'#13#10
-                       + 'a=rtpmap:96 t140/1000'#13#10
-                       + 'a=inactive');
+  Self.AddSendingChecking(Self.Media);
+  try
+    Self.AddSendingChecking(Self.Media);
+    Self.SetLocalMediaDesc(Self.Media,
+                           Self.InactiveMediaDesc);
 
-  Self.Media.SendData(Self.Text, IntToStr(Self.T140PT));
-  Self.Timer.TriggerAllEventsUpToFirst(TIdRTPSendDataWait);
+    Self.Media.SendData(Self.Text, IntToStr(Self.T140PT));
+    Self.Timer.TriggerAllEventsUpToFirst(TIdRTPSendDataWait);
 
-  Check(not Self.SentData, 'Server sent data when not a sender');
+    Check(not Self.SentData, 'Server sent data when not a sender');
+  finally
+    Self.RemoveSendingChecking(Self.Media);
+  end;
 end;
 
 procedure TestTIdSDPMediaStream.TestSetRemoteDescriptionSendsNoPackets;
@@ -7265,23 +7419,58 @@ begin
   Check(Self.SentBye, 'Server didn''t send an RTCP BYE');
 end;
 
-procedure TestTIdSDPMediaStream.TestTakeOffHold;
-var
-  PreHoldDirection: TIdSdpDirection;
-begin
-  PreHoldDirection := sdRecvOnly;
-  Self.SetLocalMediaDesc(Self.Media,
-                         'm=text 8000 RTP/AVP 96'#13#10
-                       + 'a=rtpmap:96 t140/1000'#13#10
-                       + 'a=' + DirectionToStr(PreHoldDirection));
-  Self.Media.PutOnHold;
-  Self.Media.TakeOffHold;
+//******************************************************************************
+//* TestTIdSdpNullMediaStream                                                  *
+//******************************************************************************
+//* TestTIdSdpNullMediaStream Protected methods ********************************
 
-  CheckEquals(DirectionToStr(PreHoldDirection),
-              DirectionToStr(Self.Media.Direction),
-              'Stream not taken off hold');
-  Check(not Self.Media.OnHold,
-        'OnHold not unset');
+function TestTIdSdpNullMediaStream.BasicMediaDesc: String;
+begin
+  Result := 'm=audio 8000 unknown 0'#13#10;
+end;
+
+function TestTIdSdpNullMediaStream.CreateStream: TIdSdpBaseMediaStream;
+begin
+  Result := TIdSdpNullMediaStream.Create;
+end;
+
+//* TestTIdSdpNullMediaStream Published methods ********************************
+
+procedure TestTIdSdpNullMediaStream.TestSendData;
+begin
+  Fail('ImplementMe: ' + Self.ClassName);
+end;
+
+procedure TestTIdSdpNullMediaStream.TestSendDataWhenNotSender;
+begin
+  Fail('ImplementMe: ' + Self.ClassName);
+end;
+
+//******************************************************************************
+//* TestTIdSdpTcpMediaStream                                                   *
+//******************************************************************************
+//* TestTIdSdpTcpMediaStream Protected methods *********************************
+
+function TestTIdSdpTcpMediaStream.BasicMediaDesc: String;
+begin
+  Result := 'm=audio 8000 TCP 0'#13#10;
+end;
+
+function TestTIdSdpTcpMediaStream.CreateStream: TIdSdpBaseMediaStream;
+begin
+  Result := TIdSdpTcpMediaStream.Create;
+end;
+
+//* TestTIdSdpTcpMediaStream Published methods *********************************
+
+procedure TestTIdSdpTcpMediaStream.TestSendData;
+begin
+  Fail('ImplementMe: ' + Self.ClassName);
+end;
+
+procedure TestTIdSdpTcpMediaStream.TestSendDataWhenNotSender;
+begin
+  Fail('ImplementMe: ' + Self.ClassName);
 end;
 
 //******************************************************************************
