@@ -624,7 +624,11 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestFindServer;
+    procedure TestFindServerNoSuchRegisteredObject;
+    procedure TestFindServerNotAnRTPPeer;
     procedure TestServerOn;
+    procedure TestServerRunningOn;
   end;
 
   TRTPSessionTestCase = class(TTestCase)
@@ -7229,6 +7233,33 @@ end;
 
 //* TestTIdRTPPeerRegistry Published methods ***********************************
 
+procedure TestTIdRTPPeerRegistry.TestFindServer;
+begin
+  Check(Self.Agent = TIdRTPPeerRegistry.FindServer(Self.Agent.ID),
+        'FindServer: registered TcpConnection');
+end;
+
+procedure TestTIdRTPPeerRegistry.TestFindServerNoSuchRegisteredObject;
+const
+  NotARegisteredObject = 'Registered objects don''t have an ID like this';
+begin
+  Self.ExpectedException := ERegistry;
+  TIdRTPPeerRegistry.FindServer(NotARegisteredObject);
+end;
+
+procedure TestTIdRTPPeerRegistry.TestFindServerNotAnRTPPeer;
+var
+  RandomRegisteredObject: TIdRegisteredObject;
+begin
+  RandomRegisteredObject := TIdRegisteredObject.Create;
+  try
+    Self.ExpectedException := ERegistry;
+    TIdRTPPeerRegistry.FindServer(RandomRegisteredObject.ID);
+  finally
+    RandomRegisteredObject.Free;
+  end;
+end;
+
 procedure TestTIdRTPPeerRegistry.TestServerOn;
 const
   ArbitraryAddress = '1.2.3.4';
@@ -7251,6 +7282,27 @@ begin
         'Server found in registry after moving');
   Check(Self.Agent = TIdRTPPeerRegistry.ServerOn(ArbitraryAddress, AnotherPort),
         'Server not found in registry after moving');
+end;
+
+procedure TestTIdRTPPeerRegistry.TestServerRunningOn;
+const
+  Address = '127.0.0.1';
+  Port    = 8000;
+begin
+  Check(not TIdRTPPeerRegistry.ServerRunningOn(Address, Port),
+        'There''s a server running where there should be no server');
+
+  Self.Agent.Address := Address;
+  Self.Agent.RTPPort := Port;
+
+  Check(not TIdRTPPeerRegistry.ServerRunningOn(Address, Port),
+        'While there''s a server on this address:port, it isn''t running');
+
+  // Then we make start running the server.
+  Self.Agent.Active := true;
+
+  Check(TIdRTPPeerRegistry.ServerRunningOn(Address, Port),
+        'There''s no running server');
 end;
 
 //******************************************************************************
