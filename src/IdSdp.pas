@@ -1000,7 +1000,7 @@ const
 
 // Transport-specific constants, and similar.
 const
-  RejectedPort   = 0;
+  RefusedPort    = 0;
   TcpDiscardPort = 9;
 
 const
@@ -1703,7 +1703,7 @@ end;
 
 function TIdSdpMediaDescription.IsRefusedStream: Boolean;
 begin
-  Result := Self.Port = 0;
+  Result := Self.Port = RefusedPort;
 end;
 
 function TIdSdpMediaDescription.IsText: Boolean;
@@ -4558,7 +4558,7 @@ end;
 
 procedure TIdSdpNullMediaStream.AfterSetLocalDescription(Value: TIdSdpMediaDescription);
 begin
-  Self.LocalDescription.Port := RejectedPort;
+  Self.LocalDescription.Port := RefusedPort;
 end;
 
 //******************************************************************************
