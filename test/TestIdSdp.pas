@@ -18,25 +18,34 @@ uses
 
 type
   TIdSdpTestMediaListener = class(TIdInterfacedObject,
-                                  IIdSdpMediaListener)
+                                  IIdSdpMediaListener,
+                                  IIdSdpMediaSendListener)
   private
     fBindingParam: TIdConnectionBindings;
     fChunkParam:   TStream;
     fFormatParam:  String;
+    fLayerIDParam: Integer;
     fReceivedData: Boolean;
+    fSentData:     Boolean;
     fStreamParam:  TIdSdpBaseMediaStream;
 
     procedure OnData(Stream: TIdSdpBaseMediaStream;
                      Chunk: TStream;
                      Format: String;
                      Binding: TIdConnectionBindings);
+    procedure OnSentData(Stream: TIdSdpBaseMediaStream;
+                         Chunk: TStream;
+                         Format: String;
+                         LayerID: Integer);
   public
     constructor Create; override;
 
     property BindingParam: TIdConnectionBindings read fBindingParam;
     property ChunkParam:   TStream               read fChunkParam;
     property FormatParam:  String                read fFormatParam;
+    property LayerIDParam: Integer               read fLayerIDParam;
     property ReceivedData: Boolean               read fReceivedData;
+    property SentData:     Boolean               read fSentData;
     property StreamParam:  TIdSdpBaseMediaStream read fStreamParam;
   end;
 
@@ -504,14 +513,22 @@ type
   end;
 
   TIdSdpTestCase = class(TTestCase,
-                         IIdSdpMediaListener)
+                         IIdSdpMediaListener,
+                         IIdSdpMediaSendListener)
   protected
     ReceivedData: Boolean;
+    SentData:     Boolean;
 
+    procedure CheckDataSent(Msg: String);
+    procedure CheckNoDataSent(Msg: String);
     procedure OnData(Stream: TIdSdpBaseMediaStream;
                      Chunk: TStream;
                      Format: String;
                      Binding: TIdConnectionBindings); virtual;
+    procedure OnSentData(Stream: TIdSdpBaseMediaStream;
+                         Chunk: TStream;
+                         Format: String;
+                         LayerID: Integer); virtual;
   public
     procedure SetUp; override;
 
@@ -525,27 +542,35 @@ type
 
   TestTIdSdpBaseMediaStream = class(TIdSdpTestCase)
   protected
+    DataFormat:     String;
+    Desc:           TIdSdpPayload;
     SendingBinding: TIdConnectionBindings;
     Timer:          TIdDebugTimerQueue;
 
     procedure AddSendingChecking(Stream: TIdSdpBaseMediaStream); virtual;
-    function  BasicMediaDesc: String; virtual;
+    function  BasicMediaDesc(Port: Cardinal = 8000): String; virtual;
     function  CreateStream: TIdSdpBaseMediaStream; virtual;
     function  InactiveMediaDesc: String;
+    function  LocalDescription: TIdSdpMediaDescription;
+    procedure ReceiveDataOn(S: TIdSdpBaseMediaStream); virtual;
+    function  RemoteDescription: TIdSdpMediaDescription;
     procedure RemoveSendingChecking(Stream: TIdSdpBaseMediaStream); virtual;
+    procedure SendData(Stream: TIdSdpBaseMediaStream); virtual;
     procedure SetLocalMediaDesc(Stream: TIdSdpBaseMediaStream;
                                 const MediaDesc: String);
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAddDataListener;
+    procedure TestAddDataSendListener;
     procedure TestIsReceiver;
     procedure TestIsSender;
     procedure TestPutOnHoldRecvOnly;
     procedure TestPutOnHoldSendRecv;
     procedure TestPutOnHoldWhileOnHold;
     procedure TestSendData; virtual;
-    procedure TestSendDataWhenNotSender; virtual;
+    procedure TestSendDataWhenNotSender;
     procedure TestTakeOffHold;
   end;
 
@@ -558,7 +583,6 @@ type
     SentBye:        Boolean;
     SentData:       Boolean;
     SentControl:    Boolean;
-    T140PT:         TIdRTPPayloadType;
     Text:           TStream;
 
     procedure OnSendRTCP(Packet: TIdRTCPPacket;
@@ -566,17 +590,16 @@ type
     procedure OnSendRTP(Packet: TIdRTPPacket;
                         Binding: TIdConnectionBindings);
     procedure ReceiveControlOn(S: TIdSDPMediaStream);
-    procedure ReceiveDataOn(S: TIdSdpBaseMediaStream);
+    function  T140PT: TIdRTPPayloadType;
   protected
-    procedure AddSendingChecking(Stream: TIdSdpBaseMediaStream); override;
-    function  BasicMediaDesc: String; override;
+    function  BasicMediaDesc(Port: Cardinal = 8000): String; override;
     function  CreateStream: TIdSdpBaseMediaStream; override;
-    procedure RemoveSendingChecking(Stream: TIdSdpBaseMediaStream); override;
+    procedure ReceiveDataOn(S: TIdSdpBaseMediaStream); override;
+    procedure SendData(Stream: TIdSdpBaseMediaStream); override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestAddDataListener;
     procedure TestAddRTPListener;
     procedure TestAddRTPSendListener;
     procedure TestHierarchicallyEncodedStream;
@@ -584,11 +607,11 @@ type
     procedure TestMatchPort;
     procedure TestReceiveDataWhenNotReceiver;
     procedure TestRemoteMembersControlAddressAndPortSet;
+    procedure TestRemoveDataListener;
+    procedure TestRemoveDataSendListener;
     procedure TestRemoveRTPSendListener;
     procedure TestRTPListenersGetRTCP;
     procedure TestRTPListenersGetRTP;
-    procedure TestSendData; override;
-    procedure TestSendDataWhenNotSender; override;
     procedure TestSetRemoteDescriptionSendsNoPackets;
     procedure TestSetRemoteDescriptionRegistersRemoteRtpMaps;
     procedure TestStartListening;
@@ -599,20 +622,56 @@ type
 
   TestTIdSdpNullMediaStream = class(TestTIdSdpBaseMediaStream)
   protected
-    function BasicMediaDesc: String; override;
-    function CreateStream: TIdSdpBaseMediaStream; override;
+    function  BasicMediaDesc(Port: Cardinal = 8000): String; override;
+    function  CreateStream: TIdSdpBaseMediaStream; override;
+    procedure ReceiveDataOn(S: TIdSdpBaseMediaStream); override;
+    procedure SendData(Stream: TIdSdpBaseMediaStream); override;
   published
     procedure TestSendData; override;
-    procedure TestSendDataWhenNotSender; override;
+  end;
+
+  TestTIdSdpTcpConnectionRegistry = class(TTestCase)
+  private
+    Agent: TIdSdpMockTcpConnection;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestFindServer;
+    procedure TestFindServerNoSuchRegisteredObject;
+    procedure TestFindServerNotATcpConnection;
+    procedure TestServerOn;
+    procedure TestServerRunningOn;
+  end;
+
+  TestTIdSdpMockTcpConnection = class(TTestCase)
+  private
+    Conn: TIdSdpMockTcpConnection;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestConnectTo;
   end;
 
   TestTIdSdpTcpMediaStream = class(TestTIdSdpBaseMediaStream)
+  private
+    Media: TIdSdpTcpMediaStream;
+    Text:  TStringStream;
+
+    function FindMockServer(Desc: TIdSdpMediaDescription): TIdSdpMockTcpConnection;
   protected
-    function BasicMediaDesc: String; override;
-    function CreateStream: TIdSdpBaseMediaStream; override;
+    function  ActiveMediaDesc(Port: Cardinal = 8000): String;
+    function  BasicMediaDesc(Port: Cardinal = 8000): String; override;
+    function  CreateStream: TIdSdpBaseMediaStream; override;
+    procedure SendData(Stream: TIdSdpBaseMediaStream); override;
+  public
+    procedure Setup; override;
+    procedure TearDown; override;
   published
-    procedure TestSendData; override;
-    procedure TestSendDataWhenNotSender; override;
+    procedure TestActiveSetupInitiatesConnection;
+    procedure TestActiveSetupStartListeningWhenAnswer;
+    procedure TestActiveSetupStartListeningWhenOffer;
   end;
 
   TestTIdSDPMultimediaSession = class(TIdSdpTestCase)
@@ -675,14 +734,31 @@ type
     procedure TestTakeOffHold;
   end;
 
-  TestTIdSdpMediaListenerOnDataMethod = class(TTestCase)
-  private
-    Binding:  TIdConnectionBindings;
+  TIdSdpMediaListenerMethodTestCase = class(TTestCase)
+  protected
     Chunk:    TStream;
     Format:   String;
     Listener: TIdSdpTestMediaListener;
-    Method:   TIdSdpMediaListenerOnDataMethod;
     Stream:   TIdSdpMediaStream;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSdpMediaListenerOnDataMethod = class(TIdSdpMediaListenerMethodTestCase)
+  private
+    Binding:  TIdConnectionBindings;
+    Method:   TIdSdpMediaListenerOnDataMethod;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TestTIdSdpMediaListenerOnSentDataMethod = class(TIdSdpMediaListenerMethodTestCase)
+  private
+    Method: TIdSdpMediaListenerOnSentDataMethod;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -702,11 +778,12 @@ const
 implementation
 
 uses
-  IdSocketHandle, IdStack, IdUnicode, SysUtils;
+  IdRegisteredObject, IdSocketHandle, IdStack, IdUnicode, SysUtils;
 
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSdpParser unit tests');
+{
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSdpAttribute.Suite);
   Result.AddTest(TestTIdSdpRTPMapAttribute.Suite);
@@ -727,11 +804,17 @@ begin
   Result.AddTest(TestTIdSdpZoneAdjustments.Suite);
   Result.AddTest(TestTIdSdpParser.Suite);
   Result.AddTest(TestTIdSdpPayload.Suite);
+}
   Result.AddTest(TestTIdSDPMediaStream.Suite);
   Result.AddTest(TestTIdSdpNullMediaStream.Suite);
+  Result.AddTest(TestTIdSdpMockTcpConnection.Suite);
+  Result.AddTest(TestTIdSdpTcpConnectionRegistry.Suite);
   Result.AddTest(TestTIdSdpTcpMediaStream.Suite);
+{
   Result.AddTest(TestTIdSDPMultimediaSession.Suite);
   Result.AddTest(TestTIdSdpMediaListenerOnDataMethod.Suite);
+}
+  Result.AddTest(TestTIdSdpMediaListenerOnSentDataMethod.Suite);
 end;
 
 const
@@ -762,6 +845,18 @@ begin
   Self.fBindingParam := Binding;
   Self.fChunkParam   := Chunk;
   Self.fFormatParam  := Format;
+  Self.fStreamParam  := Stream;
+end;
+
+procedure TIdSdpTestMediaListener.OnSentData(Stream: TIdSdpBaseMediaStream;
+                                             Chunk: TStream;
+                                             Format: String;
+                                             LayerID: Integer);
+begin
+  Self.fSentData     := true;
+  Self.fChunkParam   := Chunk;
+  Self.fFormatParam  := Format;
+  Self.fLayerIDParam := LayerID;
   Self.fStreamParam  := Stream;
 end;
 
@@ -6426,12 +6521,30 @@ end;
 
 //* TIdSdpTestCase Protected methods *******************************************
 
+procedure TIdSdpTestCase.CheckDataSent(Msg: String);
+begin
+  Check(Self.SentData, Msg);
+end;
+
+procedure TIdSdpTestCase.CheckNoDataSent(Msg: String);
+begin
+  Check(not Self.SentData, Msg);
+end;
+
 procedure TIdSdpTestCase.OnData(Stream: TIdSdpBaseMediaStream;
                                 Chunk: TStream;
                                 Format: String;
                                 Binding: TIdConnectionBindings);
 begin
   Self.ReceivedData := true;
+end;
+
+procedure TIdSdpTestCase.OnSentData(Stream: TIdSdpBaseMediaStream;
+                                    Chunk: TStream;
+                                    Format: String;
+                                    LayerID: Integer);
+begin
+  Self.SentData := true;
 end;
 
 //******************************************************************************
@@ -6443,14 +6556,23 @@ procedure TestTIdSdpBaseMediaStream.SetUp;
 begin
   inherited SetUp;
 
-  Self.Timer := TIdDebugTimerQueue.Create(false);
+  // This is a dynamically assigned payload type in RTP/AVP.
+  Self.DataFormat := '96';
+  Self.Desc := TIdSdpPayload.CreateFrom('v=0'#13#10
+                                      + 'o=foo 1 2 IN IP4 127.0.0.1'#13#10
+                                      + 's=-'#13#10
+                                      + 'c=IN IP4 127.0.0.1'#13#10
+                                      + Self.BasicMediaDesc(8000)
+                                      + Self.BasicMediaDesc(9000));
   Self.SendingBinding := TIdConnectionBindings.Create;
+  Self.Timer := TIdDebugTimerQueue.Create(false);
 end;
 
 procedure TestTIdSdpBaseMediaStream.TearDown;
 begin
-  Self.SendingBinding.Free;
   Self.Timer.Terminate;
+  Self.SendingBinding.Free;
+  Self.Desc.Free;
 
   inherited TearDown;
 end;
@@ -6461,9 +6583,10 @@ procedure TestTIdSdpBaseMediaStream.AddSendingChecking(Stream: TIdSdpBaseMediaSt
 begin
   // Subclasses put code here such that they can check that Stream actually
   // sends data, for instance by adding Listeners to the Stream.
+  Stream.AddDataSendListener(Self);
 end;
 
-function TestTIdSdpBaseMediaStream.BasicMediaDesc: String;
+function TestTIdSdpBaseMediaStream.BasicMediaDesc(Port: Cardinal = 8000): String;
 begin
   Result := '';
   Fail(Self.ClassName + ' MUST override BasicMediaDesc');
@@ -6481,10 +6604,37 @@ begin
           + 'a=' + RSSDPDirectionInactive + #13#10;
 end;
 
+function TestTIdSdpBaseMediaStream.LocalDescription: TIdSdpMediaDescription;
+begin
+  CheckEquals(2, Self.Desc.MediaDescriptionCount,
+              Self.ClassName + 'LocalDescription: Someone''s damaged Self.Desc: it needs two media descriptions');
+
+  Result := Self.Desc.MediaDescriptionAt(0);
+end;
+
+procedure TestTIdSdpBaseMediaStream.ReceiveDataOn(S: TIdSdpBaseMediaStream);
+begin
+  Fail(Self.ClassName + ' MUST override ReceiveDataOn');
+end;
+
+function TestTIdSdpBaseMediaStream.RemoteDescription: TIdSdpMediaDescription;
+begin
+  CheckEquals(2, Self.Desc.MediaDescriptionCount,
+              Self.ClassName + 'RemoteDescription: Someone''s damaged Self.Desc: it needs two media descriptions');
+
+  Result := Self.Desc.MediaDescriptionAt(1);
+end;
+
 procedure TestTIdSdpBaseMediaStream.RemoveSendingChecking(Stream: TIdSdpBaseMediaStream);
 begin
   // Subclasses put code here to clean up any resources allocated in
   // AddSendingChecking.
+  Stream.RemoveDataSendListener(Self);
+end;
+
+procedure TestTIdSdpBaseMediaStream.SendData(Stream: TIdSdpBaseMediaStream);
+begin
+  Fail(Self.ClassName + ' MUST override SendData');
 end;
 
 procedure TestTIdSdpBaseMediaStream.SetLocalMediaDesc(Stream: TIdSdpBaseMediaStream;
@@ -6505,6 +6655,69 @@ begin
 end;
 
 //* TestTIdSdpBaseMediaStream Published methods ********************************
+
+procedure TestTIdSdpBaseMediaStream.TestAddDataListener;
+var
+  L1:     TIdSdpTestMediaListener;
+  L2:     TIdSdpTestMediaListener;
+  Stream: TIdSdpBaseMediaStream;
+begin
+  Stream := Self.CreateStream;
+  try
+    Stream.StartListening;
+    L1 := TIdSdpTestMediaListener.Create;
+    try
+      L2 := TIdSdpTestMediaListener.Create;
+      try
+        Stream.AddDataListener(L1);
+        Stream.AddDataListener(L2);
+
+        Self.ReceiveDataOn(Stream);
+
+        // Only non-null streams can receive data
+        CheckEquals(not Stream.IsNull, L1.ReceivedData, Self.ClassName + ': L1 notified?');
+        CheckEquals(not Stream.IsNull, L2.ReceivedData, Self.ClassName + ': L2 notified?');
+      finally
+        L2.Free;
+      end;
+    finally
+      L1.Free;
+    end;
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TestTIdSdpBaseMediaStream.TestAddDataSendListener;
+var
+  L1:     TIdSdpTestMediaListener;
+  L2:     TIdSdpTestMediaListener;
+  Stream: TIdSdpBaseMediaStream;
+begin
+  Stream := Self.CreateStream;
+  try
+    L1 := TIdSdpTestMediaListener.Create;
+    try
+      L2 := TIdSdpTestMediaListener.Create;
+      try
+        Stream.AddDataSendListener(L1);
+        Stream.AddDataSendListener(L2);
+
+        Self.SendData(Stream);
+
+        // Only non-null streams can send data
+        CheckEquals(not Stream.IsNull, L1.SentData, Self.ClassName + ': L1 notified?');
+        CheckEquals(not Stream.IsNull, L2.SentData, Self.ClassName + ': L2 notified?');
+      finally
+        L2.Free;
+      end;
+    finally
+      L1.Free;
+    end;
+  finally
+    Stream.Free;
+  end;
+end;
 
 procedure TestTIdSdpBaseMediaStream.TestIsReceiver;
 var
@@ -6659,13 +6872,45 @@ begin
 end;
 
 procedure TestTIdSdpBaseMediaStream.TestSendData;
+var
+  Stream: TIdSdpBaseMediaStream;
 begin
-  Fail(Self.ClassName + ' MUST override TestSendData');
+  Stream := Self.CreateStream;
+  try
+    Self.AddSendingChecking(Stream);
+    try
+      Self.SendData(Stream);
+
+      CheckDataSent(Stream.ClassName + ': No data sent');
+    finally
+      Self.RemoveSendingChecking(Stream);
+    end;
+  finally
+    Stream.Free;
+  end;
 end;
 
 procedure TestTIdSdpBaseMediaStream.TestSendDataWhenNotSender;
+var
+  Stream: TIdSdpBaseMediaStream;
 begin
-  Fail(Self.ClassName + ' MUST override TestSendDataWhenNotSender');
+  Stream := Self.CreateStream;
+  try
+    Self.AddSendingChecking(Stream);
+    try
+      Self.AddSendingChecking(Stream);
+      Self.SetLocalMediaDesc(Stream,
+                             Self.InactiveMediaDesc);
+
+      Self.SendData(Stream);
+
+      CheckNoDataSent('Data sent');
+    finally
+      Self.RemoveSendingChecking(Stream);
+    end;
+  finally
+    Stream.Free;
+  end;
 end;
 
 procedure TestTIdSdpBaseMediaStream.TestTakeOffHold;
@@ -6701,38 +6946,21 @@ procedure TestTIdSDPMediaStream.SetUp;
 const
   OneSecond = 1000; // milliseconds
 var
-  SDP:  TIdSDPPayload;
   T140: TIdRTPT140Payload;
 begin
   inherited SetUp;
 
-  Self.T140PT := 96;
-
   Self.AVP := TIdRTPProfile.Create;
-  Self.AVP.AddEncoding(T140EncodingName, T140ClockRate, '', T140PT);
+  Self.AVP.AddEncoding(T140EncodingName, T140ClockRate, '', Self.T140PT);
 
   Self.Media  := Self.CreateStream as TIdSDPMediaStream;
   Self.Sender := Self.CreateStream as TIdSDPMediaStream;
 
-  // Sender has a nice high port number because some tests use ports just above
-  // Self.Media's port (8000).
-  SDP := TIdSdpPayload.CreateFrom('v=0'#13#10
-                                + 'o=foo 1 2 IN IP4 127.0.0.1'#13#10
-                                + 's=-'#13#10
-                                + 'c=IN IP4 127.0.0.1'#13#10
-                                + 'm=text 8000 RTP/AVP 96'#13#10
-                                + 'a=rtpmap:' + IntToStr(T140PT) + ' T140/8000'#13#10
-                                + 'm=text 9000 RTP/AVP 96'#13#10
-                                + 'a=rtpmap:' + IntToStr(T140PT) + ' T140/8000'#13#10);
-  try
-    Self.Media.LocalDescription  := SDP.MediaDescriptionAt(0);
-    Self.Sender.LocalDescription := SDP.MediaDescriptionAt(1);
+  Self.Media.LocalDescription  := Self.LocalDescription;
+  Self.Media.RemoteDescription := Self.RemoteDescription;
 
-    Self.Media.RemoteDescription  := Self.Sender.LocalDescription;
-    Self.Sender.RemoteDescription := Self.Media.LocalDescription;
-  finally
-    SDP.Free;
-  end;
+  Self.Sender.LocalDescription  := Self.Media.RemoteDescription;
+  Self.Sender.RemoteDescription := Self.Media.LocalDescription;
 
   Self.Text := TStringStream.Create('');
 
@@ -6765,14 +6993,11 @@ end;
 
 //* TestTIdSDPMediaStream Protected methods ************************************
 
-procedure TestTIdSDPMediaStream.AddSendingChecking(Stream: TIdSdpBaseMediaStream);
+function TestTIdSDPMediaStream.BasicMediaDesc(Port: Cardinal = 8000): String;
 begin
-  (Stream as TIdSDPMediaStream).AddRTPSendListener(Self);
-end;
-
-function TestTIdSDPMediaStream.BasicMediaDesc: String;
-begin
-  Result := 'm=audio 8000 RTP/AVP 0'#13#10;
+  Result := Format('m=text %d RTP/AVP %d'#13#10
+                 + 'a=rtpmap:%d T140/8000'#13#10,
+                   [Port, Self.T140PT, Self.T140PT]);
 end;
 
 function TestTIdSDPMediaStream.CreateStream: TIdSdpBaseMediaStream;
@@ -6780,16 +7005,59 @@ var
   S: TIdSDPMediaStream;
 begin
   S := TIdSDPMediaStream.Create(TIdMockRTPPeer);
-  S.LocalProfile  := Self.AVP;
-  S.RemoteProfile := Self.AVP;
-  S.Timer         := Self.Timer;
+  S.LocalDescription  := Self.LocalDescription;
+  S.LocalProfile      := Self.AVP;
+  S.RemoteDescription := Self.RemoteDescription;
+  S.RemoteProfile     := Self.AVP;
+  S.Timer             := Self.Timer;
 
   Result := S;
 end;
 
-procedure TestTIdSDPMediaStream.RemoveSendingChecking(Stream: TIdSdpBaseMediaStream);
+procedure TestTIdSDPMediaStream.ReceiveDataOn(S: TIdSdpBaseMediaStream);
+var
+  Binding: TIdConnectionBindings;
+  Host:    String;
+  Port:    Cardinal;
+  RTP:     TIdRTPPacket;
+  Server:  TIdBaseRTPAbstractPeer;
+  Text:    TIdRTPT140Payload;
 begin
-  (Stream as TIdSDPMediaStream).RemoveRTPSendListener(Self);
+  Binding := TIdConnectionBindings.Create;
+  try
+    Host := S.LocalDescription.Connections[0].Address;
+    Port := S.LocalDescription.Port;
+
+    Server := TIdRTPPeerRegistry.ServerOn(Host, Port);
+
+    Check(Assigned(Server), 'RTP peer not found running on ' + Host + ':' + IntToStr(Port));
+
+    Binding.PeerIP   := Host;
+    Binding.PeerPort := Port;
+
+    RTP := TIdRTPPacket.Create(Server.LocalProfile);
+    try
+      Text := TIdRTPT140Payload.Create;
+      try
+        Text.Block := '1234';
+        RTP.Payload := Text;
+
+        Server.ReceivePacket(RTP, Binding);
+      finally
+        Text.Free;
+      end;
+    finally
+      RTP.Free;
+    end;
+  finally
+    Binding.Free;
+  end;
+end;
+
+procedure TestTIdSDPMediaStream.SendData(Stream: TIdSdpBaseMediaStream);
+begin
+  Stream.SendData(Self.Text, IntToStr(Self.T140PT));
+  Self.Timer.TriggerAllEventsUpToFirst(TIdRTPSendDataWait);
 end;
 
 //* TestTIdSDPMediaStream Private methods **************************************
@@ -6847,72 +7115,12 @@ begin
   end;
 end;
 
-procedure TestTIdSDPMediaStream.ReceiveDataOn(S: TIdSdpBaseMediaStream);
-var
-  Binding: TIdConnectionBindings;
-  Host:    String;
-  Port:    Cardinal;
-  RTP:     TIdRTPPacket;
-  Server:  TIdBaseRTPAbstractPeer;
-  Text:    TIdRTPT140Payload;
+function TestTIdSDPMediaStream.T140PT: TIdRTPPayloadType;
 begin
-  Binding := TIdConnectionBindings.Create;
-  try
-    Host := S.LocalDescription.Connections[0].Address;
-    Port := S.LocalDescription.Port;
-
-    Server := TIdRTPPeerRegistry.ServerOn(Host, Port);
-
-    Check(Assigned(Server), 'RTP peer not found running on ' + Host + ':' + IntToStr(Port));
-
-    Binding.PeerIP   := Host;
-    Binding.PeerPort := Port;
-
-    RTP := TIdRTPPacket.Create(Server.LocalProfile);
-    try
-      Text := TIdRTPT140Payload.Create;
-      try
-        Text.Block := '1234';
-        RTP.Payload := Text;
-
-        Server.ReceivePacket(RTP, Binding);
-      finally
-        Text.Free;
-      end;
-    finally
-      RTP.Free;
-    end;
-  finally
-    Binding.Free;
-  end;
+  Result := StrToInt(Self.DataFormat);
 end;
 
 //* TestTIdSDPMediaStream Published methods ************************************
-
-procedure TestTIdSDPMediaStream.TestAddDataListener;
-var
-  L1: TIdSdpTestMediaListener;
-  L2: TIdSdpTestMediaListener;
-begin
-  L1 := TIdSdpTestMediaListener.Create;
-  try
-    L2 := TIdSdpTestMediaListener.Create;
-    try
-      Self.Media.AddDataListener(L1);
-      Self.Media.AddDataListener(L2);
-      Self.Media.AddDataListener(Self);
-
-      Self.ReceiveDataOn(Self.Media);
-
-      Check(L1.ReceivedData, 'L1 not notified');
-      Check(L2.ReceivedData, 'L2 not notified');
-    finally
-      L2.Free;
-    end;
-  finally
-    L1.Free;
-  end;
-end;
 
 procedure TestTIdSDPMediaStream.TestAddRTPListener;
 var
@@ -7144,6 +7352,56 @@ begin
   CheckEquals(Self.Sender.LocalDescription.Port + 1, Self.SendingBinding.PeerPort, 'The RTCP arrived at an unexpected port');
 end;
 
+procedure TestTIdSDPMediaStream.TestRemoveDataListener;
+var
+  L1: TIdSdpTestMediaListener;
+  L2: TIdSdpTestMediaListener;
+begin
+  L1 := TIdSdpTestMediaListener.Create;
+  try
+    L2 := TIdSdpTestMediaListener.Create;
+    try
+      Self.Media.AddDataListener(L1);
+      Self.Media.AddDataListener(L2);
+      Self.Media.RemoveDataListener(L1);
+
+      Self.ReceiveDataOn(Self.Media);
+
+      Check(not L1.ReceivedData, 'L1 notified, hence not removed');
+      Check(    L2.ReceivedData, 'L2 not notified');
+    finally
+      L2.Free;
+    end;
+  finally
+    L1.Free;
+  end;
+end;
+
+procedure TestTIdSDPMediaStream.TestRemoveDataSendListener;
+var
+  L1: TIdSdpTestMediaListener;
+  L2: TIdSdpTestMediaListener;
+begin
+  L1 := TIdSdpTestMediaListener.Create;
+  try
+    L2 := TIdSdpTestMediaListener.Create;
+    try
+      Self.Media.AddDataSendListener(L1);
+      Self.Media.AddDataSendListener(L2);
+      Self.Media.RemoveDataSendListener(L1);
+
+      Self.SendData(Self.Media);
+
+      Check(not L1.SentData, 'L1 notified, hence not removed');
+      Check(    L2.SentData, 'L2 not notified');
+    finally
+      L2.Free;
+    end;
+  finally
+    L1.Free;
+  end;
+end;
+
 procedure TestTIdSDPMediaStream.TestRemoveRTPSendListener;
 var
   L: TIdRTPTestRTPSendListener;
@@ -7209,36 +7467,6 @@ begin
   finally
     Self.Media.RemoveRTPListener(L1);
     L1.Free;
-  end;
-end;
-
-procedure TestTIdSDPMediaStream.TestSendData;
-begin
-  Self.AddSendingChecking(Self.Media);
-  try
-    Self.Media.SendData(Self.Text, IntToStr(Self.T140PT));
-    Self.Timer.TriggerAllEventsUpToFirst(TIdRTPSendDataWait);
-
-    Check(Self.SentData, 'No data sent');
-  finally
-    Self.RemoveSendingChecking(Self.Media);
-  end;
-end;
-
-procedure TestTIdSDPMediaStream.TestSendDataWhenNotSender;
-begin
-  Self.AddSendingChecking(Self.Media);
-  try
-    Self.AddSendingChecking(Self.Media);
-    Self.SetLocalMediaDesc(Self.Media,
-                           Self.InactiveMediaDesc);
-
-    Self.Media.SendData(Self.Text, IntToStr(Self.T140PT));
-    Self.Timer.TriggerAllEventsUpToFirst(TIdRTPSendDataWait);
-
-    Check(not Self.SentData, 'Server sent data when not a sender');
-  finally
-    Self.RemoveSendingChecking(Self.Media);
   end;
 end;
 
@@ -7424,9 +7652,9 @@ end;
 //******************************************************************************
 //* TestTIdSdpNullMediaStream Protected methods ********************************
 
-function TestTIdSdpNullMediaStream.BasicMediaDesc: String;
+function TestTIdSdpNullMediaStream.BasicMediaDesc(Port: Cardinal = 8000): String;
 begin
-  Result := 'm=audio 8000 unknown 0'#13#10;
+  Result := Format('m=audio %d unknown 0'#13#10, [Port]);
 end;
 
 function TestTIdSdpNullMediaStream.CreateStream: TIdSdpBaseMediaStream;
@@ -7434,43 +7662,293 @@ begin
   Result := TIdSdpNullMediaStream.Create;
 end;
 
+procedure TestTIdSdpNullMediaStream.ReceiveDataOn(S: TIdSdpBaseMediaStream);
+begin
+  // Null streams don't even instantiate servers - there's nothing that
+  // can receive data!
+end;
+
+procedure TestTIdSdpNullMediaStream.SendData(Stream: TIdSdpBaseMediaStream);
+var
+  S: TStream;
+begin
+  S := TStringStream.Create('foo');
+  try
+    Stream.SendData(S, Self.DataFormat);
+    Self.Timer.TriggerAllEventsUpToFirst(TIdRTPSendDataWait);
+  finally
+    S.Free;
+  end;
+end;
+
 //* TestTIdSdpNullMediaStream Published methods ********************************
 
 procedure TestTIdSdpNullMediaStream.TestSendData;
+var
+  Stream: TIdSdpBaseMediaStream;
 begin
-  Fail('ImplementMe: ' + Self.ClassName);
+  Stream := Self.CreateStream;
+  try
+    Self.AddSendingChecking(Stream);
+    try
+      Self.SendData(Stream);
+
+      CheckNoDataSent('Data sent on a null stream');
+    finally
+      Self.RemoveSendingChecking(Stream);
+    end;
+  finally
+    Stream.Free;
+  end;
 end;
 
-procedure TestTIdSdpNullMediaStream.TestSendDataWhenNotSender;
+//******************************************************************************
+//* TestTIdSdpTcpConnectionRegistry                                            *
+//******************************************************************************
+//* TestTIdSdpTcpConnectionRegistry Public methods *****************************
+
+procedure TestTIdSdpTcpConnectionRegistry.SetUp;
 begin
-  Fail('ImplementMe: ' + Self.ClassName);
+  inherited SetUp;
+
+  Self.Agent := TIdSdpMockTcpConnection.Create;
+end;
+
+procedure TestTIdSdpTcpConnectionRegistry.TearDown;
+begin
+  Self.Agent.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSdpTcpConnectionRegistry Private methods ****************************
+
+procedure TestTIdSdpTcpConnectionRegistry.TestFindServer;
+begin
+  Check(Self.Agent = TIdSdpTcpConnectionRegistry.FindServer(Self.Agent.ID),
+        'FindServer: registered TcpConnection');
+end;
+
+procedure TestTIdSdpTcpConnectionRegistry.TestFindServerNoSuchRegisteredObject;
+const
+  NotARegisteredObject = 'Registered objects don''t have an ID like this';
+begin
+  Self.ExpectedException := ERegistry;
+  TIdSdpTcpConnectionRegistry.FindServer(NotARegisteredObject);
+end;
+
+procedure TestTIdSdpTcpConnectionRegistry.TestFindServerNotATcpConnection;
+var
+  RandomRegisteredObject: TIdRegisteredObject;
+begin
+  RandomRegisteredObject := TIdRegisteredObject.Create;
+  try
+    Self.ExpectedException := ERegistry;
+    TIdSdpTcpConnectionRegistry.FindServer(RandomRegisteredObject.ID);
+  finally
+    RandomRegisteredObject.Free;
+  end;
+end;
+
+procedure TestTIdSdpTcpConnectionRegistry.TestServerOn;
+const
+  ArbitraryAddress = '1.2.3.4';
+  ArbitraryPort    = 8000;
+  AnotherPort      = 9000;
+begin
+  Self.Agent.Address := ArbitraryAddress;
+  Self.Agent.Port    := ArbitraryPort;
+
+  Check(Self.Agent = TIdSdpTcpConnectionRegistry.ServerOn(ArbitraryAddress, ArbitraryPort),
+        'Server not found in registry');
+
+  Check(nil = TIdSdpTcpConnectionRegistry.ServerOn(TIdIPAddressParser.IncIPAddress(ArbitraryAddress), ArbitraryPort),
+        'Server found in registry (no such host');
+  Check(nil = TIdSdpTcpConnectionRegistry.ServerOn(ArbitraryAddress, ArbitraryPort + 1),
+        'Server found in registry (no such port');
+
+  Self.Agent.Port := AnotherPort;
+  Check(nil = TIdSdpTcpConnectionRegistry.ServerOn(ArbitraryAddress, ArbitraryPort),
+        'Server found in registry after moving');
+  Check(Self.Agent = TIdSdpTcpConnectionRegistry.ServerOn(ArbitraryAddress, AnotherPort),
+        'Server not found in registry after moving');
+end;
+
+procedure TestTIdSdpTcpConnectionRegistry.TestServerRunningOn;
+const
+  Address = '127.0.0.1';
+  Port    = 8000;
+begin
+
+  Check(not TIdSdpTcpConnectionRegistry.ServerRunningOn(Address, Port),
+        'There''s a server running where there should be no server');
+
+  Self.Agent.Address := Address;
+  Self.Agent.Port    := Port;
+
+  Check(not TIdSdpTcpConnectionRegistry.ServerRunningOn(Address, Port),
+        'While there''s a server on this address:port, it isn''t running');
+
+  // Then we make start running the server.
+  Self.Agent.ConnectTo(Address, Port);
+  Check(Self.Agent.IsActive, 'Agent isn''t active');
+
+  Check(TIdSdpTcpConnectionRegistry.ServerRunningOn(Address, Port),
+        'There''s no running server');
+end;
+
+//******************************************************************************
+//* TestTIdSdpMockTcpConnection                                                *
+//******************************************************************************
+//* TestTIdSdpMockTcpConnection Public methods *********************************
+
+procedure TestTIdSdpMockTcpConnection.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Conn := TIdSdpMockTcpConnection.Create;
+end;
+
+procedure TestTIdSdpMockTcpConnection.TearDown;
+begin
+  Self.Conn.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSdpMockTcpConnection Published methods ******************************
+
+procedure TestTIdSdpMockTcpConnection.TestConnectTo;
+const
+  Address = '1.2.3.4';
+  Port    = 1234;
+begin
+  Self.Conn.ConnectTo(Address, Port);
+
+  Check(Self.Conn.ConnectToCalled, 'ConnectTo flag not set');
+  Check(Self.Conn.IsActive,        'Connection not marked as active');
+  CheckEquals(Address, Self.Conn.ConnectToAddress, 'Tried to connect to wrong address');
+  CheckEquals(Port, Self.Conn.ConnectToPort, 'Tried to connect to wrong port');
 end;
 
 //******************************************************************************
 //* TestTIdSdpTcpMediaStream                                                   *
 //******************************************************************************
+//* TestTIdSdpTcpMediaStream Public methods ************************************
+
+procedure TestTIdSdpTcpMediaStream.Setup;
+var
+  Nihongo: Widestring;
+begin
+  inherited SetUp;
+
+  // The Nihongo variable points to a string containing the kanji of what,
+  // romanised, would be "nihongo".
+  Nihongo := WideChar($65E5);
+  Nihongo := Nihongo + WideChar($672C) + WideChar($8A9E);
+
+  Self.Media := Self.CreateStream as TIdSdpTcpMediaStream;
+  Self.Text := TStringStream.Create(UTF16LEToUTF8(Nihongo));
+end;
+
+procedure TestTIdSdpTcpMediaStream.TearDown;
+begin
+  Self.Text.Free;
+  Self.Media.Free;
+
+  inherited TearDown;
+end;
+
 //* TestTIdSdpTcpMediaStream Protected methods *********************************
 
-function TestTIdSdpTcpMediaStream.BasicMediaDesc: String;
+function TestTIdSdpTcpMediaStream.ActiveMediaDesc(Port: Cardinal = 8000): String;
 begin
-  Result := 'm=audio 8000 TCP 0'#13#10;
+  Result := Self.BasicMediaDesc(Port)
+          + 'a=setup:active'#13#10;
+end;
+
+function TestTIdSdpTcpMediaStream.BasicMediaDesc(Port: Cardinal = 8000): String;
+begin
+  Result := Format('m=audio %d TCP %s'#13#10, [Port, Self.DataFormat]);
 end;
 
 function TestTIdSdpTcpMediaStream.CreateStream: TIdSdpBaseMediaStream;
 begin
-  Result := TIdSdpTcpMediaStream.Create;
+  Result := TIdSdpTcpMediaStream.Create(TIdSdpMockTcpConnection);
+  Result.IsOffer           := true;
+  Result.LocalDescription  := Self.LocalDescription;
+  Result.RemoteDescription := Self.RemoteDescription;
+end;
+
+procedure TestTIdSdpTcpMediaStream.SendData(Stream: TIdSdpBaseMediaStream);
+begin
+  Stream.SendData(Self.Text, Self.DataFormat);
+end;
+
+//* TestTIdSdpTcpMediaStream Protected methods *********************************
+
+function TestTIdSdpTcpMediaStream.FindMockServer(Desc: TIdSdpMediaDescription): TIdSdpMockTcpConnection;
+var
+  Address: String;
+  Port:    Cardinal;
+  S:       TIdSdpBaseTcpConnection;
+begin
+  Address := Desc.Connections[0].Address;
+  Port    := Desc.Port;
+  S := TIdSdpTcpConnectionRegistry.ServerOn(Address, Port);
+
+  Check(Assigned(S), Format('FindMockServer: No server found on %s:%d', [Address, Port]));
+  CheckEquals(TIdSdpMockTcpConnection, S.ClassType, 'FindMockServer: Server of the incorrect type');
+
+  Result := S as TIdSdpMockTcpConnection;
 end;
 
 //* TestTIdSdpTcpMediaStream Published methods *********************************
 
-procedure TestTIdSdpTcpMediaStream.TestSendData;
+procedure TestTIdSdpTcpMediaStream.TestActiveSetupInitiatesConnection;
+var
+  Server: TIdSdpMockTcpConnection;
 begin
-  Fail('ImplementMe: ' + Self.ClassName);
+  // A media description marked "a=setup:active" initiates a TCP connection.
+  Self.SetLocalMediaDesc(Self.Media, Self.ActiveMediaDesc);
+  Self.Media.StartListening;
+
+  // cf. RFC 4145, section 4.1 (page 4, second half of first paragraph)
+  CheckEquals(TcpDiscardPort, Self.Media.LocalDescription.Port, 'Local port');
+
+  Server := Self.FindMockServer(Self.Media.LocalDescription);
+  Check(Server.ConnectToCalled, 'Server didn''t initiate a TCP connection');
+  CheckEquals(Self.Media.RemoteDescription.Connections[0].Address, Server.ConnectToAddress,
+              'Server tried to connect to wrong address');
+  CheckEquals(Self.Media.RemoteDescription.Port, Server.ConnectToPort,
+              'Server tried to connect to wrong port');
+
+  // Check that Self.Media attempted to open a TCP connection to the
+  // destination.
+
+  Fail('How do we access the mock TCP connection in Self.Media? Use a Registry like the RTP peer thing?');
 end;
 
-procedure TestTIdSdpTcpMediaStream.TestSendDataWhenNotSender;
+procedure TestTIdSdpTcpMediaStream.TestActiveSetupStartListeningWhenAnswer;
 begin
-  Fail('ImplementMe: ' + Self.ClassName);
+  // With "a=setup:active", if we receive an offer (say, with "a=setup:passive")
+  // then we can initiate our TCP connection as soon as we invoke
+  // StartListening.
+  Self.Media.IsOffer := false;
+
+  Fail('ImplementMe');
+end;
+
+procedure TestTIdSdpTcpMediaStream.TestActiveSetupStartListeningWhenOffer;
+begin
+  // With "a=setup:active", when we StartListening as an offer, we do not know
+  // who to connect to. We only find out when we receive the answer.
+  //
+  // This test shows that the TCP connection is only started, in this case, once
+  // we receive the answer.
+  Self.Media.IsOffer := true;
+
+  Fail('ImplementMe');
 end;
 
 //******************************************************************************
@@ -8162,6 +8640,30 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSdpMediaListenerMethodTestCase                                          *
+//******************************************************************************
+//* TIdSdpMediaListenerMethodTestCase Public methods ***************************
+
+procedure TIdSdpMediaListenerMethodTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Chunk    := TMemoryStream.Create;
+  Self.Format   := '96';
+  Self.Listener := TIdSdpTestMediaListener.Create;
+  Self.Stream   := TIdSdpMediaStream.Create;
+end;
+
+procedure TIdSdpMediaListenerMethodTestCase.TearDown;
+begin
+  Self.Stream.Free;
+  Self.Listener.Free;
+  Self.Chunk.Free;
+
+  inherited TearDown;
+end;
+
+//******************************************************************************
 //* TestTIdSdpMediaListenerOnDataMethod                                        *
 //******************************************************************************
 //* TestTIdSdpMediaListenerOnDataMethod Public methods *************************
@@ -8171,11 +8673,7 @@ begin
   inherited SetUp;
 
   Self.Binding  := TIdConnectionBindings.Create;
-  Self.Chunk    := TMemoryStream.Create;
-  Self.Format   := '96';
-  Self.Listener := TIdSdpTestMediaListener.Create;
   Self.Method   := TIdSdpMediaListenerOnDataMethod.Create;
-  Self.Stream   := TIdSdpMediaStream.Create;
 
   Self.Method.Binding := Self.Binding;
   Self.Method.Chunk   := Self.Chunk;
@@ -8184,10 +8682,7 @@ end;
 
 procedure TestTIdSdpMediaListenerOnDataMethod.TearDown;
 begin
-  Self.Stream.Free;
   Self.Method.Free;
-  Self.Listener.Free;
-  Self.Chunk.Free;
   Self.Binding.Free;
 
   inherited TearDown;
@@ -8205,6 +8700,50 @@ begin
   Check(Self.Method.Chunk   = Self.Listener.ChunkParam,      'ChunkParam');
   CheckEquals(Self.Method.Format, Self.Listener.FormatParam, 'FormatParam');
   Check(Self.Method.Stream  = Self.Listener.StreamParam,     'StreamParam');
+end;
+
+//******************************************************************************
+//* TestTIdSdpMediaListenerOnSentDataMethod                                    *
+//******************************************************************************
+//* TestTIdSdpMediaListenerOnSentDataMethod Public methods *********************
+
+{
+    Chunk:    TStream;
+    Format:   String;
+    Listener: TIdSdpTestMediaListener;
+    Method:   TIdSdpMediaListenerOnDataMethod;
+    Stream:   TIdSdpMediaStream;
+}
+procedure TestTIdSdpMediaListenerOnSentDataMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Method := TIdSdpMediaListenerOnSentDataMethod.Create;
+
+  Self.Method.Chunk   := Self.Chunk;
+  Self.Method.LayerID := 42;
+  Self.Method.Stream  := Self.Stream;
+end;
+
+procedure TestTIdSdpMediaListenerOnSentDataMethod.TearDown;
+begin
+  Self.Method.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSdpMediaListenerOnSentDataMethod Published methods ******************
+
+procedure TestTIdSdpMediaListenerOnSentDataMethod.TestRun;
+begin
+  Self.Method.Run(Self.Listener);
+
+  Check(Self.Listener.SentData, 'Listener not notified');
+
+  Check(Self.Method.Chunk   = Self.Listener.ChunkParam,        'ChunkParam');
+  CheckEquals(Self.Method.Format,  Self.Listener.FormatParam,  'FormatParam');
+  CheckEquals(Self.Method.LayerID, Self.Listener.LayerIDParam, 'LayerIDParam');
+  Check(Self.Method.Stream  = Self.Listener.StreamParam,       'StreamParam');
 end;
 
 initialization
