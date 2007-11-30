@@ -123,6 +123,7 @@ function HexToInt(const HexValue: String): Cardinal;
 function LastPos(const Needle, Haystack: String; Start: Integer = -1): Integer;
 function Localhost(IPType: TIdIPVersion): String;
 function StartsWith(const S, Prefix: String): Boolean;
+function StreamToStr(Data: TStream): String;
 function StripLeadingZeroes(const S: String): String;
 function WithoutFirstAndLastChars(const S: String): String;
 
@@ -348,6 +349,31 @@ begin
   // Returns true iff a string starts with a specified prefix.
 
   Result := Copy(S, 1, Length(Prefix)) = Prefix;
+end;
+
+function StreamToStr(Data: TStream): String;
+var
+  OriginalPosition: Int64;
+  S:                TStringStream;
+begin
+  if not Assigned(Data) then begin
+    Result := '';
+    Exit;
+  end;
+
+  OriginalPosition := Data.Position;
+  Data.Seek(0, soFromBeginning);
+  try
+    S := TStringStream.Create('');
+    try
+      S.CopyFrom(Data, 0);
+      Result := S.DataString;
+    finally
+      S.Free;
+    end;
+  finally
+    Data.Seek(OriginalPosition, soFromBeginning);
+  end;
 end;
 
 function StripLeadingZeroes(const S: String): String;

@@ -1770,7 +1770,6 @@ function ReadDigit(var Src: String): String;
 function QuoteStringIfNecessary(const S: String): String;
 function QValueToStr(const Q: TIdSipQValue): String;
 function ShortMonthToInt(const Month: String): Integer;
-function StreamToStr(Data: TStream): String;
 function StrToQValue(const S: String): TIdSipQValue;
 function StrToQValueDef(const S: String; const DefaultValue: TIdSipQValue): TIdSipQValue;
 function WithoutFirstAndLastCharsW(const W: WideString): WideString;
@@ -2437,31 +2436,6 @@ begin
 
   if not Found then
     raise EConvertError.Create('Failed to convert ''' + Month + ''' to type Integer');
-end;
-
-function StreamToStr(Data: TStream): String;
-var
-  OriginalPosition: Int64;
-  S:                TStringStream;
-begin
-  if not Assigned(Data) then begin
-    Result := '';
-    Exit;
-  end;
-
-  OriginalPosition := Data.Position;
-  Data.Seek(0, soFromBeginning);
-  try
-    S := TStringStream.Create('');
-    try
-      S.CopyFrom(Data, 0);
-      Result := S.DataString;
-    finally
-      S.Free;
-    end;
-  finally
-    Data.Seek(OriginalPosition, soFromBeginning);
-  end;
 end;
 
 function StrToQValue(const S: String): TIdSipQValue;
