@@ -300,8 +300,10 @@ type
   private
     function  GetDirection: TIdSdpDirection;
     function  GetItems(Index: Integer): TIdSdpAttribute;
+    function  GetSetupType: TIdSdpSetupType;
     function  IndexOfAttributeNamed(Name: String): Integer;
     procedure SetDirection(Value: TIdSdpDirection);
+    procedure SetSetupType(Value: TIdSdpSetupType);
   protected
     function ItemType: TIdPrintableClass; override;
   public
@@ -315,6 +317,7 @@ type
 
     property Direction:             TIdSdpDirection read GetDirection write SetDirection;
     property Items[Index: Integer]: TIdSdpAttribute read GetItems; default;
+    property SetupType:             TIdSdpSetupType read GetSetupType write SetSetupType;
   end;
 
   TIdSdpRTPMapAttributes = class(TIdSdpList)
@@ -704,22 +707,60 @@ type
     function IsNull: Boolean; override;
   end;
 
+  TIdSdpBaseTcpConnection = class;
+  TIdSdpBaseTcpConnectionClass = class of TIdSdpBaseTcpConnection;
+
+  // OnConnect tells you that a client has connected to this (server)
+  // connection, or that this (client) connection has successfully connected to
+  // a server connection.
+  // OnDisconnect tells you that the remote end terminated the connection, or
+  // the network did (pulled-out cable, say).
+  IIdSdpTcpConnectionListener = interface
+    ['{3CF32F0D-557E-4590-B467-CE99A65C480F}']
+    procedure OnConnect(Connection: TIdSdpBaseTcpConnection);
+    procedure OnData(Connection: TIdSdpBaseTcpConnection; Data: TStream);
+    procedure OnDisconnect(Connection: TIdSdpBaseTcpConnection);
+  end;
+
   // I represent a TCP connection. I have both client and server protocols
   // (ConnectTo and ListenOn, respectively) because, other than how the
-  // connection's set up, there's no difference.
+  // connection's set up, there's no difference between the two.
+  //
+  // Server connections only accept one client. You can tell when a client has
+  // connected by inspecting the IsConnected property, or by listening for the
+  // OnConnected notification in IIdSdpTcpConnectionListener.
   TIdSdpBaseTcpConnection = class(TIdRegisteredObject)
+  private
+    DataListeners: TIdNotificationList;
   protected
-    function GetAddress: String; virtual;
-    function GetPort: Cardinal; virtual;
+    function  GetAddress: String; virtual;
+    function  GetPeerAddress: String; virtual;
+    function  GetPeerPort: Cardinal; virtual;
+    function  GetPort: Cardinal; virtual;
+    procedure NotifyOfConnection;
+    procedure NotifyOfDisconnection;
   public
+    class function ClientConnectionType: TIdSdpBaseTcpConnectionClass; virtual;
+    class function NullConnectionType: TIdSdpBaseTcpConnectionClass; virtual;
+    class function ServerConnectionType: TIdSdpBaseTcpConnectionClass; virtual;
+
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    procedure AddDataListener(Listener: IIdSdpTcpConnectionListener);
     procedure ConnectTo(Address: String; Port: Cardinal); virtual;
     function  IsActive: Boolean; virtual;
+    function  IsConnected: Boolean; virtual;
     function  IsServer: Boolean; virtual;
     procedure ListenOn(Address: String; Port: Cardinal); virtual;
     procedure ReceiveData(Data: TStream; ReceivedOn: TIdConnectionBindings); virtual;
+    procedure RemoveDataListener(Listener: IIdSdpTcpConnectionListener);
+    procedure SendData(Data: TStream); virtual;
 
-    property Address: String   read GetAddress;
-    property Port:    Cardinal read GetPort;
+    property Address:     String   read GetAddress;
+    property Port:        Cardinal read GetPort;
+    property PeerAddress: String   read GetPeerAddress;
+    property PeerPort:    Cardinal read GetPeerPort;
   end;
 
   // I provide a way for tests to reference BaseTcpConnections without exposing
@@ -730,69 +771,124 @@ type
   // packet.
   TIdSdpTcpConnectionRegistry = class(TObject)
   private
-    class function GetAllServers: TStrings;
+    class function GetAllConnections: TStrings;
   public
-    class function FindServer(const ServerID: String): TIdSdpBaseTcpConnection;
+    class function ClientConnectedTo(Host: String; Port: Cardinal): TIdSdpBaseTcpConnection;
+    class function FindConnection(const ServerID: String): TIdSdpBaseTcpConnection;
     class function ServerOn(Host: String; Port: Cardinal): TIdSdpBaseTcpConnection;
     class function ServerRunningOn(Host: String; Port: Cardinal): Boolean;
+  end;
+
+  // I represent a real TCP connection, but one that's a "holdconn" stream - a
+  // placeholder for a future connection.
+  TIdSdpTcpNullConnection = class(TIdSdpBaseTcpConnection)
+  end;
+
+  TIdSdpTcpClientConnection = class(TIdSdpBaseTcpConnection)
+  end;
+
+  TIdSdpTcpServerConnection = class(TIdSdpBaseTcpConnection)
+  public
+    function IsServer: Boolean; override;
   end;
 
   TIdSdpMockTcpConnection = class(TIdSdpBaseTcpConnection)
   private
     fAddress:          String;
-    fConnectToAddress: String;
     fConnectToCalled:  Boolean;
-    fConnectToPort:    Cardinal;
     fIsActive:         Boolean;
+    fIsConnected:      Boolean;
     fIsServer:         Boolean;
     fListenOnCalled:   Boolean;
+    fPeerAddress:      String;
+    fPeerPort:         Cardinal;
     fPort:             Cardinal;
+    fSentData:         String;
   protected
-    function  GetAddress: String; override;
-    function  GetPort: Cardinal; override;
+    function GetAddress: String; override;
+    function GetPeerAddress: String; override;
+    function GetPeerPort: Cardinal; override;
+    function GetPort: Cardinal; override;
   public
+    class function ClientConnectionType: TIdSdpBaseTcpConnectionClass; override;
+    class function NullConnectionType: TIdSdpBaseTcpConnectionClass; override;
+    class function ServerConnectionType: TIdSdpBaseTcpConnectionClass; override;
+
     constructor Create; override;
 
-    procedure ConnectTo(Address: String; Port: Cardinal); override;
+    procedure ForceDisconnect; virtual;
     function  IsActive: Boolean; override;
+    function  IsConnected: Boolean; override;
+    function  IsServer: Boolean; override;
+    procedure RemotePartyAccepts; virtual;
+    procedure SendData(Data: TStream); override;
+
+    property ConnectToCalled: Boolean  read fConnectToCalled;
+    property ListenOnCalled:  Boolean  read fListenOnCalled;
+    property SentData:        String   read fSentData;
+  end;
+
+  TIdSdpMockTcpNullConnection = class(TIdSdpMockTcpConnection)
+  public
+    procedure ConnectTo(Address: String; Port: Cardinal); override;
+    procedure ForceDisconnect; override;
+    procedure ListenOn(Address: String; Port: Cardinal); override;
+    procedure ReceiveData(Data: TStream; ReceivedOn: TIdConnectionBindings); override;
+    procedure RemotePartyAccepts; override;
+  end;
+
+  TIdSdpMockTcpClientConnection = class(TIdSdpMockTcpConnection)
+  public
+    procedure ConnectTo(Address: String; Port: Cardinal); override;
+    function  IsServer: Boolean; override;
+  end;
+
+  TIdSdpMockTcpServerConnection = class(TIdSdpMockTcpConnection)
+  public
     function  IsServer: Boolean; override;
     procedure ListenOn(Address: String; Port: Cardinal); override;
-
-    property ConnectToAddress: String   read fConnectToAddress;
-    property ConnectToCalled:  Boolean  read fConnectToCalled;
-    property ConnectToPort:    Cardinal read fConnectToPort;
-    property ListenOnCalled:   Boolean  read fListenOnCalled;
   end;
-
-  TIdSdpTcpConnection = class(TIdSdpBaseTcpConnection)
-  end;
-
-  TIdSdpBaseTcpConnectionClass = class of TIdSdpBaseTcpConnection;
 
   // I implement the streams defined by RFC 4145 "TCP-Based Media Transport in
   // the Session Description Protocol (SDP)".
-  TIdSdpTcpMediaStream = class(TIdSdpBaseMediaStream)
+  TIdSdpTcpMediaStream = class(TIdSdpBaseMediaStream,
+                               IIdSdpTcpConnectionListener)
   private
-    Servers:    TObjectList;
-    ServerType: TIdSdpBaseTcpConnectionClass;
+    AnswerConnectionType:  array[stActive..stUnknown, stActive..stUnknown] of TIdSdpBaseTcpConnectionClass;
+    OfferConnectionType:   array[stActive..stUnknown, stActive..stUnknown] of TIdSdpBaseTcpConnectionClass;
+    HaveLocalDescription:  Boolean;
+    HaveRemoteDescription: Boolean;
+    Servers:               TObjectList;
+    ServerType:            TIdSdpBaseTcpConnectionClass;
 
-    function  CreateServer: TIdSdpBaseTcpConnection;
+    procedure BindListeningStreams;
+    function  CreateServer(OfferSetupType, AnswerSetupType: TIdSdpSetupType): TIdSdpBaseTcpConnection;
+    function  DefaultSetupType(ForOffer: Boolean): TIdSdpSetupType;
     function  FindServer(LayerID: Cardinal): TIdSdpBaseTcpConnection;
+    procedure InitializeConnectionTypeTable(ServerType: TIdSdpBaseTcpConnectionClass);
     procedure InitializeLocalServers;
     procedure InitializeRemoteServers;
+    procedure OnConnect(Connection: TIdSdpBaseTcpConnection);
+    procedure OnData(Connection: TIdSdpBaseTcpConnection; Data: TStream);
+    procedure OnDisconnect(Connection: TIdSdpBaseTcpConnection);
     procedure RecreateServers(NumberOfServers: Cardinal);
+    procedure ResetHaveDescriptionFlags;
     function  ServerAt(Index: Integer): TIdSdpBaseTcpConnection;
+    function  LocalSetupType: TIdSdpSetupType;
+    function  RemoteSetupType: TIdSdpSetupType;
+    procedure StartConnectingStreams;
+    procedure StartServers;
   protected
     procedure AfterSetLocalDescription(Value: TIdSdpMediaDescription); override;
     procedure AfterSetRemoteDescription(Value: TIdSdpMediaDescription); override;
-    procedure BeforeSetLocalDescription(Value: TIdSdpMediaDescription); override;
-    procedure BeforeSetRemoteDescription(Value: TIdSdpMediaDescription); override;
     procedure InternalCreate; override;
+    procedure ReallySendData(Data: TStream; Format: String; LayerID: Integer = 0); override;
   public
     constructor Create; override;
     constructor Create(ServerType: TIdSdpBaseTcpConnectionClass); overload;
     destructor  Destroy; override;
 
+    function  IsActiveConnection: Boolean;
     procedure StartListening; override;
   end;
 
@@ -860,6 +956,22 @@ type
     property Username:                String            read fUsername write fUsername;
   end;
 
+  TIdSdpTcpSendDataWait = class(TIdWait)
+  private
+    fConnectionID: String;
+    fData:         TStream;
+
+    procedure SetData(Value: TStream);
+  public
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    procedure Trigger; override;
+
+    property ConnectionID: String  read fConnectionID write fConnectionID;
+    property Data:         TStream read fData write SetData;
+  end;
+
   TIdSdpMediaListener = class(TIdNotification)
   private
     fChunk:   TStream;
@@ -897,6 +1009,37 @@ type
     procedure Run(const Subject: IInterface); override;
 
     property LayerID: Integer read fLayerID write fLayerID;
+  end;
+
+  TIdSdpTcpConnection = class(TIdNotification)
+  private
+    fConnection: TIdSdpBaseTcpConnection;
+  public
+    property Connection: TIdSdpBaseTcpConnection read fConnection write fConnection;
+  end;
+
+  TIdSdpTcpConnectionOnConnectMethod = class(TIdSdpTcpConnection)
+  public
+    procedure Run(const Subject: IInterface); override;
+  end;
+
+  TIdSdpTcpConnectionOnDataMethod = class(TIdSdpTcpConnection)
+  private
+    fData: TStream;
+
+    procedure SetData(Value: TStream);
+  public
+    constructor Create;
+    destructor  Destroy; override;
+
+    procedure Run(const Subject: IInterface); override;
+
+    property Data: TStream read fData write SetData;
+  end;
+
+  TIdSdpTcpConnectionOnDisconnectMethod = class(TIdSdpTcpConnection)
+  public
+    procedure Run(const Subject: IInterface); override;
   end;
 
 const
@@ -2196,6 +2339,18 @@ begin
   Result := Self.List[Index] as TIdSdpAttribute;
 end;
 
+function TIdSdpAttributes.GetSetupType: TIdSdpSetupType;
+var
+  Index: Integer;
+begin
+  Index := Self.IndexOfAttributeNamed(SetupAttribute);
+
+  if (Index = ItemNotFoundIndex) then
+    Result := stHoldConn
+  else
+    Result := StrToSetupType(Self[Index].Value);
+end;
+
 function TIdSdpAttributes.IndexOfAttributeNamed(Name: String): Integer;
 var
   I: Integer;
@@ -2231,6 +2386,22 @@ begin
   else begin
     Direction := Self.Add;
     Direction.Name := DirectionToStr(Value);
+  end;
+end;
+
+procedure TIdSdpAttributes.SetSetupType(Value: TIdSdpSetupType);
+var
+  Index: Integer;
+  ST:    TIdSdpAttribute;
+begin
+  Index := Self.IndexOfAttributeNamed(SetupAttribute);
+
+  if (Index <> ItemNotFoundIndex) then
+    Self[Index].Value := SetupTypeToStr(Value)
+  else begin
+    ST       := Self.Add;
+    ST.Name  := SetupAttribute;
+    ST.Value := SetupTypeToStr(Value);
   end;
 end;
 
@@ -4566,6 +4737,40 @@ end;
 //******************************************************************************
 //* TIdSdpBaseTcpConnection Public methods *************************************
 
+class function TIdSdpBaseTcpConnection.ClientConnectionType: TIdSdpBaseTcpConnectionClass;
+begin
+  Result := TIdSdpTcpClientConnection;
+end;
+
+class function TIdSdpBaseTcpConnection.NullConnectionType: TIdSdpBaseTcpConnectionClass;
+begin
+  Result := TIdSdpTcpNullConnection;
+end;
+
+class function TIdSdpBaseTcpConnection.ServerConnectionType: TIdSdpBaseTcpConnectionClass;
+begin
+  Result := TIdSdpTcpServerConnection;
+end;
+
+constructor TIdSdpBaseTcpConnection.Create;
+begin
+  inherited Create;
+
+  Self.DataListeners := TIdNotificationList.Create;
+end;
+
+destructor TIdSdpBaseTcpConnection.Destroy;
+begin
+  Self.DataListeners.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSdpBaseTcpConnection.AddDataListener(Listener: IIdSdpTcpConnectionListener);
+begin
+  Self.DataListeners.AddListener(Listener);
+end;
+
 procedure TIdSdpBaseTcpConnection.ConnectTo(Address: String; Port: Cardinal);
 begin
   RaiseAbstractError(Self.ClassName, 'ConnectTo');
@@ -4573,8 +4778,23 @@ end;
 
 function TIdSdpBaseTcpConnection.IsActive: Boolean;
 begin
+  // Return true if this connection is in the process of establishing a
+  // connection. For instance, a client connection might have started connecting
+  // to a server, but hasn't yet sent an ACK. Or, a server connection is
+  // listening on a socket, but a client has not yet connected to it.
   Result := false;
   RaiseAbstractError(Self.ClassName, 'IsActive');
+end;
+
+function TIdSdpBaseTcpConnection.IsConnected: Boolean;
+begin
+  // A server connection starts listening, so is active, but until a client
+  // connects, the connection doesn't really exist. When that client actually
+  // connects (and the connection is hence fully established), this function
+  // returns true.
+
+  Result := false;
+  RaiseAbstractError(Self.ClassName, 'IsConnected');
 end;
 
 function TIdSdpBaseTcpConnection.IsServer: Boolean;
@@ -4590,8 +4810,28 @@ begin
 end;
 
 procedure TIdSdpBaseTcpConnection.ReceiveData(Data: TStream; ReceivedOn: TIdConnectionBindings);
+var
+  Notification: TIdSdpTcpConnectionOnDataMethod;
 begin
-  RaiseAbstractError(Self.ClassName, 'ReceiveData');
+  Notification := TIdSdpTcpConnectionOnDataMethod.Create;
+  try
+    Notification.Connection := Self;
+    Notification.Data       := Data;
+
+    Self.DataListeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
+end;
+
+procedure TIdSdpBaseTcpConnection.RemoveDataListener(Listener: IIdSdpTcpConnectionListener);
+begin
+  Self.DataListeners.RemoveListener(Listener);
+end;
+
+procedure TIdSdpBaseTcpConnection.SendData(Data: TStream);
+begin
+  RaiseAbstractError(Self.ClassName, 'SendData');
 end;
 
 //* TIdSdpBaseTcpConnection Protected methods **********************************
@@ -4602,10 +4842,50 @@ begin
   RaiseAbstractError(Self.ClassName, 'GetAddress');
 end;
 
+function TIdSdpBaseTcpConnection.GetPeerAddress: String;
+begin
+  Result := '';
+  RaiseAbstractError(Self.ClassName, 'GetPeerAddress');
+end;
+
+function TIdSdpBaseTcpConnection.GetPeerPort: Cardinal;
+begin
+  Result := 0;
+  RaiseAbstractError(Self.ClassName, 'GetPeerPort');
+end;
+
 function TIdSdpBaseTcpConnection.GetPort: Cardinal;
 begin
   Result := 0;
   RaiseAbstractError(Self.ClassName, 'GetPort');
+end;
+
+procedure TIdSdpBaseTcpConnection.NotifyOfConnection;
+var
+  Notification: TIdSdpTcpConnectionOnConnectMethod;
+begin
+  Notification := TIdSdpTcpConnectionOnConnectMethod.Create;
+  try
+    Notification.Connection := Self;
+
+    Self.DataListeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
+end;
+
+procedure TIdSdpBaseTcpConnection.NotifyOfDisconnection;
+var
+  Notification: TIdSdpTcpConnectionOnDisconnectMethod;
+begin
+  Notification := TIdSdpTcpConnectionOnDisconnectMethod.Create;
+  try
+    Notification.Connection := Self;
+
+    Self.DataListeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -4613,7 +4893,31 @@ end;
 //******************************************************************************
 //* TIdSdpTcpConnectionRegistry Public methods *********************************
 
-class function TIdSdpTcpConnectionRegistry.FindServer(const ServerID: String): TIdSdpBaseTcpConnection;
+class function TIdSdpTcpConnectionRegistry.ClientConnectedTo(Host: String; Port: Cardinal): TIdSdpBaseTcpConnection;
+var
+  I:      Integer;
+  L:      TStrings;
+  Client: TIdSdpBaseTcpConnection;
+begin
+  // Return the (first) connection that's connected to Host:Port, whether active or
+  // not.
+  Result := nil;
+
+  L := Self.GetAllConnections;
+  try
+    for I := 0 to L.Count - 1 do begin
+      Client := L.Objects[I] as TIdSdpBaseTcpConnection;
+      if (Client.PeerAddress = Host) and (Client.PeerPort = Port) then begin
+        Result := Client;
+        Break;
+      end;
+    end;
+  finally
+    L.Free;
+  end;
+end;
+
+class function TIdSdpTcpConnectionRegistry.FindConnection(const ServerID: String): TIdSdpBaseTcpConnection;
 var
   O: TObject;
 begin
@@ -4638,7 +4942,7 @@ begin
   // not.
   Result := nil;
 
-  L := Self.GetAllServers;
+  L := Self.GetAllConnections;
   try
     for I := 0 to L.Count - 1 do begin
       Server := L.Objects[I] as TIdSdpBaseTcpConnection;
@@ -4661,7 +4965,7 @@ begin
   // Return true if a TIdSdpBaseTcpConnection is running on Host:Port.
   Result := false;
 
-  L := Self.GetAllServers;
+  L := Self.GetAllConnections;
   try
     for I := 0 to L.Count - 1 do begin
       Server := L.Objects[I] as TIdSdpBaseTcpConnection;
@@ -4678,7 +4982,7 @@ end;
 
 //* TIdSdpTcpConnectionRegistry Private methods ********************************
 
-class function TIdSdpTcpConnectionRegistry.GetAllServers: TStrings;
+class function TIdSdpTcpConnectionRegistry.GetAllConnections: TStrings;
 begin
   Result := TStringList.Create;
 
@@ -4686,30 +4990,56 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSdpTcpServerConnection
+//******************************************************************************
+//* TIdSdpTcpServerConnection Public methods ***********************************
+
+function TIdSdpTcpServerConnection.IsServer: Boolean;
+begin
+  Result := true;
+end;
+
+//******************************************************************************
 //* TIdSdpMockTcpConnection                                                    *
 //******************************************************************************
 //* TIdSdpMockTcpConnection Public methods *************************************
+
+class function TIdSdpMockTcpConnection.ClientConnectionType: TIdSdpBaseTcpConnectionClass;
+begin
+  Result := TIdSdpMockTcpClientConnection;
+end;
+
+class function TIdSdpMockTcpConnection.NullConnectionType: TIdSdpBaseTcpConnectionClass;
+begin
+  Result := TIdSdpMockTcpNullConnection;
+end;
+
+class function TIdSdpMockTcpConnection.ServerConnectionType: TIdSdpBaseTcpConnectionClass;
+begin
+  Result := TIdSdpMockTcpServerConnection;
+end;
 
 constructor TIdSdpMockTcpConnection.Create;
 begin
   inherited Create;
 
   Self.fAddress          := '0.0.0.0';
-  Self.fConnectToAddress := '0.0.0.0';
+  Self.fPeerAddress := '0.0.0.0';
   Self.fConnectToCalled  := false;
-  Self.fConnectToPort    := 0;
+  Self.fPeerPort    := 0;
   Self.fIsActive         := false;
   Self.fIsServer         := false;
   Self.fListenOnCalled   := false;
   Self.fPort             := 0;
 end;
 
-procedure TIdSdpMockTcpConnection.ConnectTo(Address: String; Port: Cardinal);
+procedure TIdSdpMockTcpConnection.ForceDisconnect;
 begin
-  Self.fConnectToAddress := Address;
-  Self.fConnectToCalled  := true;
-  Self.fConnectToPort    := Port;
-  Self.fIsActive         := true;
+  // Use this method to simulate a network failure, or the remote end
+  // disconnecting the connection.
+
+  Self.fIsActive := false;
+  Self.NotifyOfDisconnection;
 end;
 
 function TIdSdpMockTcpConnection.IsActive: Boolean;
@@ -4717,18 +5047,29 @@ begin
   Result := Self.fIsActive;
 end;
 
+function TIdSdpMockTcpConnection.IsConnected: Boolean;
+begin
+  Result := Self.fIsConnected;
+end;
+
 function TIdSdpMockTcpConnection.IsServer: Boolean;
 begin
   Result := Self.fIsServer;
 end;
 
-procedure TIdSdpMockTcpConnection.ListenOn(Address: String; Port: Cardinal);
+procedure TIdSdpMockTcpConnection.RemotePartyAccepts;
 begin
-  Self.fAddress        := Address;
-  Self.fIsActive       := true;
-  Self.fIsServer       := true;
-  Self.fListenOnCalled := true;
-  Self.fPort           := Port;
+  // Use this method to simulate the remote party establishing their side of the
+  // connection.
+
+  Self.fIsConnected := true;
+  Self.NotifyOfConnection;
+end;
+
+procedure TIdSdpMockTcpConnection.SendData(Data: TStream);
+begin
+  if Self.IsActive then
+    Self.fSentData := Self.fSentData + StreamToStr(Data);
 end;
 
 //* TIdSdpMockTcpConnection Protected methods **********************************
@@ -4738,9 +5079,87 @@ begin
   Result := Self.fAddress;
 end;
 
+function TIdSdpMockTcpConnection.GetPeerAddress: String;
+begin
+  Result := Self.fPeerAddress;
+end;
+
+function TIdSdpMockTcpConnection.GetPeerPort: Cardinal;
+begin
+  Result := Self.fPeerPort;
+end;
+
 function TIdSdpMockTcpConnection.GetPort: Cardinal;
 begin
   Result := Self.fPort;
+end;
+
+//******************************************************************************
+//* TIdSdpMockTcpNullConnection                                                *
+//******************************************************************************
+//* TIdSdpMockTcpNullConnection Public methods *********************************
+
+procedure TIdSdpMockTcpNullConnection.ConnectTo(Address: String; Port: Cardinal);
+begin
+  // Do nothing.
+end;
+
+procedure TIdSdpMockTcpNullConnection.ForceDisconnect;
+begin
+  // Do nothing.
+end;
+
+procedure TIdSdpMockTcpNullConnection.ListenOn(Address: String; Port: Cardinal);
+begin
+  // Do nothing.
+end;
+
+procedure TIdSdpMockTcpNullConnection.ReceiveData(Data: TStream; ReceivedOn: TIdConnectionBindings);
+begin
+  // Do nothing.
+end;
+
+procedure TIdSdpMockTcpNullConnection.RemotePartyAccepts;
+begin
+  // Do nothing.
+end;
+
+//******************************************************************************
+//* TIdSdpMockTcpClientConnection                                              *
+//******************************************************************************
+//* TIdSdpMockTcpClientConnection Public methods *******************************
+
+procedure TIdSdpMockTcpClientConnection.ConnectTo(Address: String; Port: Cardinal);
+begin
+  Self.fPeerAddress     := Address;
+  Self.fConnectToCalled := true;
+  Self.fPeerPort        := Port;
+  Self.fIsActive        := true;
+  Self.fIsServer        := false;
+end;
+
+function TIdSdpMockTcpClientConnection.IsServer: Boolean;
+begin
+  Result := false;
+end;
+
+//******************************************************************************
+//* TIdSdpMockTcpServerConnection                                              *
+//******************************************************************************
+//* TIdSdpMockTcpServerConnection Public methods *******************************
+
+function TIdSdpMockTcpServerConnection.IsServer: Boolean;
+begin
+  Result := true;
+end;
+
+procedure TIdSdpMockTcpServerConnection.ListenOn(Address: String; Port: Cardinal);
+begin
+  Self.fAddress        := Address;
+  Self.fIsActive       := true;
+  Self.fIsServer       := true;
+  Self.fListenOnCalled := true;
+  Self.fPort           := Port;
 end;
 
 //******************************************************************************
@@ -4750,16 +5169,16 @@ end;
 
 constructor TIdSdpTcpMediaStream.Create;
 begin
-  inherited Create;
+  Self.ServerType := TIdSdpTcpClientConnection;
 
-  Self.ServerType := TIdSdpTcpConnection;
+  inherited Create;
 end;
 
 constructor TIdSdpTcpMediaStream.Create(ServerType: TIdSdpBaseTcpConnectionClass);
 begin
-  inherited Create;
-
   Self.ServerType := ServerType;
+
+  inherited Create;
 end;
 
 destructor TIdSdpTcpMediaStream.Destroy;
@@ -4769,59 +5188,147 @@ begin
   inherited Destroy;
 end;
 
+function TIdSdpTcpMediaStream.IsActiveConnection: Boolean;
+begin
+  // Did this stream initiate the TCP connection?
+
+  Result := Self.Servers.Count > 0;
+
+  if Result then
+    Result := not Self.ServerAt(0).IsServer;
+end;
+
 procedure TIdSdpTcpMediaStream.StartListening;
 begin
+  if Self.LocalDescription.IsRefusedStream then Exit;
+
+  if Self.HaveLocalDescription and Self.HaveRemoteDescription then begin
+    Self.InitializeLocalServers;
+
+    if (Self.LocalSetupType = stPassive) then
+      Self.BindListeningStreams
+    else
+      Self.StartConnectingStreams;
+  end;
 end;
 
 //* TIdSdpTcpMediaStream Protected methods *************************************
 
 procedure TIdSdpTcpMediaStream.AfterSetLocalDescription(Value: TIdSdpMediaDescription);
 begin
+  if Self.HaveLocalDescription and Self.HaveRemoteDescription then
+   Self.ResetHaveDescriptionFlags;
+
+  Self.HaveLocalDescription := true;
+
   Self.InitializeLocalServers;
 
-  if Self.LocalDescription.Attributes.HasAttributeNamed(SetupAttribute) then begin
-    case StrToSetupType(Self.LocalDescription.Attributes.ValueFor(SetupAttribute)) of
-      stActive:;
-      stPassive:;
-      stActpass:;
-      stHoldConn:;
-    else
-      // Something terribly wrong happened. Perhaps treat as the default?
+  case Self.LocalSetupType of
+    stActive: begin
+      Self.LocalDescription.Port := TcpDiscardPort; // cf. RFC 4145, section 4.1 (page 4, second half of first paragraph)
+      // We don't know what to connect to.
     end;
-  end
-  else begin
-    // If we're an offer, we want to default to "active"; if an answer, we
-    // default to "passive". That means the stream must know it's part of an
-    // offer or answer!
+    stActPass, stPassive: Self.BindListeningStreams;
+    stHoldConn: // We do nothing.
+  else
   end;
 end;
 
 procedure TIdSdpTcpMediaStream.AfterSetRemoteDescription(Value: TIdSdpMediaDescription);
 begin
+  if Self.HaveLocalDescription and Self.HaveRemoteDescription then
+   Self.ResetHaveDescriptionFlags;
+
+  Self.HaveRemoteDescription := true;
+
   Self.InitializeRemoteServers;
-end;
 
-procedure TIdSdpTcpMediaStream.BeforeSetLocalDescription(Value: TIdSdpMediaDescription);
-begin
-end;
-
-procedure TIdSdpTcpMediaStream.BeforeSetRemoteDescription(Value: TIdSdpMediaDescription);
-begin
+  case Self.LocalSetupType of
+    stActive: Self.StartConnectingStreams;
+    stActPass:
+      case Self.RemoteSetupType of
+        stActive:  Self.BindListeningStreams;
+        stPassive: Self.StartConnectingStreams;
+      end;
+    stPassive: Self.BindListeningStreams;
+  end;
 end;
 
 procedure TIdSdpTcpMediaStream.InternalCreate;
 begin
   inherited InternalCreate;
 
+  Self.InitializeConnectionTypeTable(Self.ServerType);
+
+  Self.ResetHaveDescriptionFlags;
+
   Self.Servers := TObjectList.Create(true);
+end;
+
+procedure TIdSdpTcpMediaStream.ReallySendData(Data: TStream; Format: String; LayerID: Integer = 0);
+var
+  Wait: TIdSdpTcpSendDataWait;
+begin
+  Wait := TIdSdpTcpSendDataWait.Create;
+  Wait.ConnectionID := Self.FindServer(LayerID).ID;
+  Wait.Data         := Data;
+
+  Self.Timer.AddEvent(TriggerImmediately, Wait);
+
+  Self.NotifyOfSentData(Data, Format, LayerID);
 end;
 
 //* TIdSdpTcpMediaStream Private methods ***************************************
 
-function TIdSdpTcpMediaStream.CreateServer: TIdSdpBaseTcpConnection;
+procedure TIdSdpTcpMediaStream.BindListeningStreams;
+var
+  SocketBound: Boolean;
 begin
-  Result := Self.ServerType.Create;
+  SocketBound := false;
+  while not SocketBound and Self.AllowedPort(Self.LocalDescription.Port) do begin
+    try
+      Self.StartServers;
+      SocketBound := true;
+    except
+      on EIdSocketError do begin
+        Self.LocalDescription.Port := Self.LocalDescription.Port + 1;
+        Self.InitializeLocalServers;
+      end;
+    end;
+  end;
+
+  // If the stream doesn't bind to a port, we indicate that we won't be using
+  // the stream.
+  if not SocketBound then
+    Self.LocalDescription.Port := RefusedPort;
+end;
+
+function TIdSdpTcpMediaStream.CreateServer(OfferSetupType, AnswerSetupType: TIdSdpSetupType): TIdSdpBaseTcpConnection;
+var
+  ServType: TIdSdpBaseTcpConnectionClass;
+begin
+  if Self.IsOffer then
+    ServType := Self.OfferConnectionType[OfferSetupType, AnswerSetupType]
+  else
+    ServType := Self.AnswerConnectionType[OfferSetupType, AnswerSetupType];
+
+  if (ServType = TIdSdpBaseTcpConnection) then
+    ServType := Self.ServerType.NullConnectionType;
+//    raise Exception.Create(Format('Invalid answer setup type - offer: %s, answer: %s',
+//                                  [SetupTypeToStr(OfferSetupType), SetupTypeToStr(AnswerSetupType)]));
+
+  Result := ServType.Create;
+  Result.AddDataListener(Self);
   Self.Servers.Add(Result);
+end;
+
+function TIdSdpTcpMediaStream.DefaultSetupType(ForOffer: Boolean): TIdSdpSetupType;
+begin
+  // cf. RFC 4145, section 4.1, last paragraph.
+  if ForOffer then
+    Result := stActive
+  else
+    Result := stPassive;
 end;
 
 function TIdSdpTcpMediaStream.FindServer(LayerID: Cardinal): TIdSdpBaseTcpConnection;
@@ -4841,46 +5348,106 @@ begin
     Result := Self.ServerAt(0);
 end;
 
+procedure TIdSdpTcpMediaStream.InitializeConnectionTypeTable(ServerType: TIdSdpBaseTcpConnectionClass);
+begin
+  Self.OfferConnectionType[stActive, stActive]    := TIdSdpBaseTcpConnection;
+  Self.OfferConnectionType[stActive, stActPass]   := TIdSdpBaseTcpConnection;
+  Self.OfferConnectionType[stActive, stPassive]   := ServerType.ClientConnectionType;
+  Self.OfferConnectionType[stActive, stHoldConn]  := ServerType.NullConnectionType;
+  Self.OfferConnectionType[stActive, stUnknown]   := TIdSdpBaseTcpConnection;
+
+  Self.OfferConnectionType[stActPass, stActive]   := ServerType.ServerConnectionType;
+  Self.OfferConnectionType[stActPass, stActPass]  := TIdSdpBaseTcpConnection;
+  Self.OfferConnectionType[stActPass, stPassive]  := ServerType.ClientConnectionType;
+  Self.OfferConnectionType[stActPass, stHoldConn] := ServerType.NullConnectionType;
+  Self.OfferConnectionType[stActPass, stUnknown]  := TIdSdpBaseTcpConnection;
+
+  Self.OfferConnectionType[stPassive, stActive]   := ServerType.ServerConnectionType;
+  Self.OfferConnectionType[stPassive, stActPass]  := TIdSdpBaseTcpConnection;
+  Self.OfferConnectionType[stPassive, stPassive]  := TIdSdpBaseTcpConnection;
+  Self.OfferConnectionType[stPassive, stHoldConn] := ServerType.NullConnectionType;
+  Self.OfferConnectionType[stPassive, stUnknown]  := TIdSdpBaseTcpConnection;
+
+  Self.OfferConnectionType[stHoldConn, stActive]   := TIdSdpBaseTcpConnection;
+  Self.OfferConnectionType[stHoldConn, stActPass]  := TIdSdpBaseTcpConnection;
+  Self.OfferConnectionType[stHoldConn, stPassive]  := TIdSdpBaseTcpConnection;
+  Self.OfferConnectionType[stHoldConn, stHoldConn] := ServerType.NullConnectionType;
+  Self.OfferConnectionType[stHoldConn, stUnknown]  := TIdSdpBaseTcpConnection;
+
+  Self.OfferConnectionType[stUnknown, stActive]   := TIdSdpBaseTcpConnection;
+  Self.OfferConnectionType[stUnknown, stActPass]  := TIdSdpBaseTcpConnection;
+  Self.OfferConnectionType[stUnknown, stPassive]  := TIdSdpBaseTcpConnection;
+  Self.OfferConnectionType[stUnknown, stHoldConn] := TIdSdpBaseTcpConnection;
+  Self.OfferConnectionType[stUnknown, stUnknown]  := TIdSdpBaseTcpConnection;
+
+  //
+  Self.AnswerConnectionType[stActive, stActive]    := TIdSdpBaseTcpConnection;
+  Self.AnswerConnectionType[stActive, stActPass]   := TIdSdpBaseTcpConnection;
+  Self.AnswerConnectionType[stActive, stPassive]   := ServerType.ServerConnectionType;
+  Self.AnswerConnectionType[stActive, stHoldConn]  := ServerType.NullConnectionType;
+  Self.AnswerConnectionType[stActive, stUnknown]   := TIdSdpBaseTcpConnection;
+
+  Self.AnswerConnectionType[stActPass, stActive]   := ServerType.ClientConnectionType;
+  Self.AnswerConnectionType[stActPass, stActPass]  := TIdSdpBaseTcpConnection;
+  Self.AnswerConnectionType[stActPass, stPassive]  := ServerType.ServerConnectionType;
+  Self.AnswerConnectionType[stActPass, stHoldConn] := ServerType.NullConnectionType;
+  Self.AnswerConnectionType[stActPass, stUnknown]  := TIdSdpBaseTcpConnection;
+
+  Self.AnswerConnectionType[stPassive, stActive]   := ServerType.ClientConnectionType;
+  Self.AnswerConnectionType[stPassive, stActPass]  := TIdSdpBaseTcpConnection;
+  Self.AnswerConnectionType[stPassive, stPassive]  := TIdSdpBaseTcpConnection;
+  Self.AnswerConnectionType[stPassive, stHoldConn] := ServerType.NullConnectionType;
+  Self.AnswerConnectionType[stPassive, stUnknown]  := TIdSdpBaseTcpConnection;
+
+  Self.AnswerConnectionType[stHoldConn, stActive]   := TIdSdpBaseTcpConnection;
+  Self.AnswerConnectionType[stHoldConn, stActPass]  := TIdSdpBaseTcpConnection;
+  Self.AnswerConnectionType[stHoldConn, stPassive]  := TIdSdpBaseTcpConnection;
+  Self.AnswerConnectionType[stHoldConn, stHoldConn] := ServerType.NullConnectionType;
+  Self.AnswerConnectionType[stHoldConn, stUnknown]  := TIdSdpBaseTcpConnection;
+
+  Self.AnswerConnectionType[stUnknown, stActive]   := TIdSdpBaseTcpConnection;
+  Self.AnswerConnectionType[stUnknown, stActPass]  := TIdSdpBaseTcpConnection;
+  Self.AnswerConnectionType[stUnknown, stPassive]  := TIdSdpBaseTcpConnection;
+  Self.AnswerConnectionType[stUnknown, stHoldConn] := TIdSdpBaseTcpConnection;
+  Self.AnswerConnectionType[stUnknown, stUnknown]  := TIdSdpBaseTcpConnection;
+end;
+
 procedure TIdSdpTcpMediaStream.InitializeLocalServers;
-var
-  I:           Cardinal;
-  Server:      TIdSdpBaseTcpConnection;
-  ServerCount: Cardinal;
 begin
   // Given our local session description, instantiate the "servers" we need.
 
   Self.StopListening;
 
-  ServerCount := Self.Servers.Count;
-
-  if (ServerCount <> Self.LocalDescription.PortCount) then
-    Self.RecreateServers(Self.LocalDescription.PortCount);
-
-  for I := 0 to Self.LocalDescription.PortCount - 1 do begin
-    Server := Self.ServerAt(I);
-
-    if Server.IsServer then begin
-      Server.ListenOn(Self.LocalDescription.Connections[0].Address,
-                      Self.LocalDescription.Port + I);
-    end
-    else begin
-      raise Exception.Create('Clients can''t connect to anything yet');
-    end;
-  end;
+  Self.RecreateServers(Self.LocalDescription.PortCount);
 end;
 
 procedure TIdSdpTcpMediaStream.InitializeRemoteServers;
-var
-  I:           Cardinal;
-  NextPort:    Cardinal;
-  Peer:        TIdRTPMember;
-  ServerCount: Cardinal;
 begin
   if (Self.RemoteDescription.PortCount = 0) then Exit;
 
-  ServerCount := Self.Servers.Count;
-  if (ServerCount <> Self.RemoteDescription.PortCount) then
-    Self.RecreateServers(Self.RemoteDescription.PortCount);
+  Self.RecreateServers(Self.RemoteDescription.PortCount);
+end;
+
+procedure TIdSdpTcpMediaStream.OnConnect(Connection: TIdSdpBaseTcpConnection);
+begin
+  // TODO: What to do here?
+end;
+
+procedure TIdSdpTcpMediaStream.OnData(Connection: TIdSdpBaseTcpConnection; Data: TStream);
+var
+  ReceivedOn: TIdConnectionBindings;
+begin
+  ReceivedOn := TIdConnectionBindings.Create(Connection.Address, Connection.Port, Connection.PeerAddress, Connection.PeerPort, Id_SDP_TCP);
+  try
+    Self.NotifyOfData(ReceivedOn, Data, '');
+  finally
+    ReceivedOn.Free;
+  end;
+end;
+
+procedure TIdSdpTcpMediaStream.OnDisconnect(Connection: TIdSdpBaseTcpConnection);
+begin
+  // TODO: What to do here?
 end;
 
 procedure TIdSdpTcpMediaStream.RecreateServers(NumberOfServers: Cardinal);
@@ -4890,12 +5457,77 @@ begin
   Self.Servers.Clear;
 
   for I := 1 to NumberOfServers do
-    Self.CreateServer;
+    if Self.IsOffer then
+      Self.CreateServer(Self.LocalSetupType, Self.RemoteSetupType)
+    else
+      Self.CreateServer(Self.RemoteSetupType, Self.LocalSetupType);
+end;
+
+procedure TIdSdpTcpMediaStream.ResetHaveDescriptionFlags;
+begin
+  Self.HaveLocalDescription  := false;
+  Self.HaveRemoteDescription := false;
 end;
 
 function TIdSdpTcpMediaStream.ServerAt(Index: Integer): TIdSdpBaseTcpConnection;
 begin
   Result := Self.Servers[Index] as TIdSdpBaseTcpConnection;
+end;
+
+function TIdSdpTcpMediaStream.LocalSetupType: TIdSdpSetupType;
+begin
+  if Self.HaveLocalDescription then begin
+    if Self.LocalDescription.Attributes.HasAttributeNamed(SetupAttribute) then
+      Result := Self.LocalDescription.Attributes.SetupType
+    else
+      Result := Self.DefaultSetupType(Self.IsOffer);
+  end
+  else
+    Result := stHoldConn;
+end;
+
+function TIdSdpTcpMediaStream.RemoteSetupType: TIdSdpSetupType;
+begin
+  if Self.HaveRemoteDescription then begin
+    if Self.RemoteDescription.Attributes.HasAttributeNamed(SetupAttribute) then
+      Result := Self.RemoteDescription.Attributes.SetupType
+    else
+      Result := Self.DefaultSetupType(not Self.IsOffer);
+  end
+  else
+    Result := stHoldConn;
+end;
+
+procedure TIdSdpTcpMediaStream.StartConnectingStreams;
+var
+  I: Cardinal;
+begin
+  if (Self.Servers.Count = 0) then
+    Exit;
+
+  // cf. RFC 4145, section 4.1 (page 4, second half of first paragraph)
+  Self.LocalDescription.Port := TcpDiscardPort;
+
+  for I := 0 to Self.Servers.Count - 1 do
+    Self.ServerAt(I).ConnectTo(Self.RemoteDescription.Connections[0].Address, Self.RemoteDescription.Port + I);
+end;
+
+procedure TIdSdpTcpMediaStream.StartServers;
+var
+  I: Cardinal;
+  S: TIdSdpBaseTcpConnection;
+begin
+  if (Self.Servers.Count = 0) then
+    Exit;
+
+  for I := 0 to Self.Servers.Count - 1 do begin
+    S := Self.ServerAt(I);
+
+    if S.IsServer then
+      S.ListenOn(Self.LocalDescription.Connections[0].Address, Self.LocalDescription.Port + I)
+    else
+      S.ConnectTo(Self.RemoteDescription.Connections[0].Address, Self.RemoteDescription.Port + I);
+  end;
 end;
 
 //******************************************************************************
@@ -5268,6 +5900,45 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSdpTcpSendDataWait                                                      *
+//******************************************************************************
+//* TIdSdpTcpSendDataWait Public methods ***************************************
+
+constructor TIdSdpTcpSendDataWait.Create;
+begin
+  inherited Create;
+
+  Self.fData := TMemoryStream.Create;
+end;
+
+destructor TIdSdpTcpSendDataWait.Destroy;
+begin
+  Self.fData.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSdpTcpSendDataWait.Trigger;
+var
+  C:          TObject;
+  Connection: TIdSdpBaseTcpConnection;
+begin
+  C := TIdObjectRegistry.FindObject(Self.ConnectionID);
+
+  if Assigned(C) and (C is TIdSdpBaseTcpConnection) then begin
+    Connection := C as TIdSdpBaseTcpConnection;
+    Connection.SendData(Self.Data);
+  end;
+end;
+
+//* TIdSdpTcpSendDataWait Private methods **************************************
+
+procedure TIdSdpTcpSendDataWait.SetData(Value: TStream);
+begin
+  Self.fData.CopyFrom(Value, 0);
+end;
+
+//******************************************************************************
 //* TIdSdpMediaListener                                                        *
 //******************************************************************************
 //* TIdSdpMediaListener Public methods *****************************************
@@ -5332,6 +6003,57 @@ end;
 procedure TIdSdpMediaListenerOnSentDataMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSdpMediaSendListener).OnSentData(Self.Stream, Self.Chunk, Self.Format, Self.LayerID);
+end;
+
+//******************************************************************************
+//* TIdSdpTcpConnectionOnConnectMethod                                         *
+//******************************************************************************
+//* TIdSdpTcpConnectionOnConnectMethod Public methods **************************
+
+procedure TIdSdpTcpConnectionOnConnectMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSdpTcpConnectionListener).OnConnect(Self.Connection);
+end;
+
+//******************************************************************************
+//* TIdSdpTcpConnectionOnDataMethod                                            *
+//******************************************************************************
+//* TIdSdpTcpConnectionOnDataMethod Public methods *****************************
+
+constructor TIdSdpTcpConnectionOnDataMethod.Create;
+begin
+  inherited Create;
+
+  Self.fData := TMemoryStream.Create;
+end;
+
+destructor TIdSdpTcpConnectionOnDataMethod.Destroy;
+begin
+  Self.fData.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSdpTcpConnectionOnDataMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSdpTcpConnectionListener).OnData(Self.Connection, Self.Data);
+end;
+
+//* TIdSdpTcpConnectionOnDataMethod Private methods ****************************
+
+procedure TIdSdpTcpConnectionOnDataMethod.SetData(Value: TStream);
+begin
+  Self.fData.CopyFrom(Value, 0);
+end;
+
+//******************************************************************************
+//* TIdSdpTcpConnectionOnDisconnectMethod                                      *
+//******************************************************************************
+//* TIdSdpTcpConnectionOnDisconnectMethod Public methods ***********************
+
+procedure TIdSdpTcpConnectionOnDisconnectMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSdpTcpConnectionListener).OnDisconnect(Self.Connection);
 end;
 
 end.
