@@ -32,6 +32,9 @@ type
     fPeerPort:  Cardinal;
     fTransport: String;
   public
+    constructor Create; overload;
+    constructor Create(LocalIP: String; LocalPort: Cardinal; PeerIP: String; PeerPort: Cardinal; Transport: String); overload;
+
     procedure Assign(Src: TPersistent); override;
     function  AsString: String;
     function  Copy: TIdConnectionBindings;
@@ -84,6 +87,22 @@ const
 //* TIdConnectionBindings                                                      *
 //******************************************************************************
 //* TIdConnectionBindings Public methods ***************************************
+
+constructor TIdConnectionBindings.Create;
+begin
+  inherited Create;
+end;
+
+constructor TIdConnectionBindings.Create(LocalIP: String; LocalPort: Cardinal; PeerIP: String; PeerPort: Cardinal; Transport: String); 
+begin
+  inherited Create;
+
+  Self.LocalIP   := LocalIP;
+  Self.LocalPort := LocalPort;
+  Self.PeerIP    := PeerIP;
+  Self.PeerPort  := PeerPort;
+  Self.Transport := Transport;
+end;
 
 procedure TIdConnectionBindings.Assign(Src: TPersistent);
 var

@@ -26,6 +26,7 @@ type
     procedure TestAssignFromLocation;
     procedure TestAsString;
     procedure TestCopy;
+    procedure TestCreateWithParameters;
     procedure TestEquals;
   end;
 
@@ -159,6 +160,26 @@ begin
           'Copy doesn''t contain a copy of the binding''s values');
   finally
     Other.Free;
+  end;
+end;
+
+procedure TestTIdConnectionBindings.TestCreateWithParameters;
+var
+  C: TIdConnectionBindings;
+begin
+  C := TIdConnectionBindings.Create(Self.Binding.LocalIP,
+                                    Self.Binding.LocalPort,
+                                    Self.Binding.PeerIP,
+                                    Self.Binding.PeerPort,
+                                    Self.Binding.Transport);
+  try
+    CheckEquals(Self.Binding.LocalIP,   C.LocalIP,   'LocalIP');
+    CheckEquals(Self.Binding.LocalPort, C.LocalPort, 'LocalPort');
+    CheckEquals(Self.Binding.PeerIP,    C.PeerIP,    'PeerIP');
+    CheckEquals(Self.Binding.PeerPort,  C.PeerPort,  'PeerPort');
+    CheckEquals(Self.Binding.Transport, C.Transport, 'Transport');
+  finally
+    C.Free;
   end;
 end;
 
