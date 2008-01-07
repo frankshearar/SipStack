@@ -748,7 +748,7 @@ type
     destructor  Destroy; override;
 
     procedure AddDataListener(Listener: IIdSdpTcpConnectionListener);
-    procedure ConnectTo(Address: String; Port: Cardinal); virtual;
+    procedure ConnectTo(LocalAddress: String; PeerAddress: String; PeerPort: Cardinal); virtual;
     function  IsActive: Boolean; virtual;
     function  IsConnected: Boolean; virtual;
     function  IsServer: Boolean; virtual;
@@ -830,7 +830,7 @@ type
 
   TIdSdpMockTcpNullConnection = class(TIdSdpMockTcpConnection)
   public
-    procedure ConnectTo(Address: String; Port: Cardinal); override;
+    procedure ConnectTo(LocalAddress: String; PeerAddress: String; PeerPort: Cardinal); override;
     procedure ForceDisconnect; override;
     procedure ListenOn(Address: String; Port: Cardinal); override;
     procedure ReceiveData(Data: TStream; ReceivedOn: TIdConnectionBindings); override;
@@ -838,8 +838,10 @@ type
   end;
 
   TIdSdpMockTcpClientConnection = class(TIdSdpMockTcpConnection)
+  private
+    function EphemeralPort: Cardinal;
   public
-    procedure ConnectTo(Address: String; Port: Cardinal); override;
+    procedure ConnectTo(LocalAddress: String; PeerAddress: String; PeerPort: Cardinal); override;
     function  IsServer: Boolean; override;
   end;
 
@@ -875,6 +877,7 @@ type
     procedure ResetHaveDescriptionFlags;
     function  ServerAt(Index: Integer): TIdSdpBaseTcpConnection;
     function  LocalSetupType: TIdSdpSetupType;
+    procedure PossiblyConnect(HaveCompleteSessionDescription: Boolean);
     function  RemoteSetupType: TIdSdpSetupType;
     procedure StartConnectingStreams;
     procedure StartServers;
@@ -4771,8 +4774,13 @@ begin
   Self.DataListeners.AddListener(Listener);
 end;
 
-procedure TIdSdpBaseTcpConnection.ConnectTo(Address: String; Port: Cardinal);
+procedure TIdSdpBaseTcpConnection.ConnectTo(LocalAddress: String; PeerAddress: String; PeerPort: Cardinal);
 begin
+  // We force the user to specify a local address so that the actual address
+  // used can match the address in the relevant connection header. On a
+  // multihomed machine there might be several appropriate IP addresses, so this
+  // method cannot itself determine the correct address.
+
   RaiseAbstractError(Self.ClassName, 'ConnectTo');
 end;
 
@@ -5099,7 +5107,7 @@ end;
 //******************************************************************************
 //* TIdSdpMockTcpNullConnection Public methods *********************************
 
-procedure TIdSdpMockTcpNullConnection.ConnectTo(Address: String; Port: Cardinal);
+procedure TIdSdpMockTcpNullConnection.ConnectTo(LocalAddress: String; PeerAddress: String; PeerPort: Cardinal);
 begin
   // Do nothing.
 end;
@@ -5129,11 +5137,13 @@ end;
 //******************************************************************************
 //* TIdSdpMockTcpClientConnection Public methods *******************************
 
-procedure TIdSdpMockTcpClientConnection.ConnectTo(Address: String; Port: Cardinal);
+procedure TIdSdpMockTcpClientConnection.ConnectTo(LocalAddress: String; PeerAddress: String; PeerPort: Cardinal);
 begin
-  Self.fPeerAddress     := Address;
+  Self.fAddress         := LocalAddress;
   Self.fConnectToCalled := true;
-  Self.fPeerPort        := Port;
+  Self.fPeerAddress     := PeerAddress;
+  Self.fPeerPort        := PeerPort;
+  Self.fPort            := Self.EphemeralPort;
   Self.fIsActive        := true;
   Self.fIsServer        := false;
 end;
@@ -5141,6 +5151,15 @@ end;
 function TIdSdpMockTcpClientConnection.IsServer: Boolean;
 begin
   Result := false;
+end;
+
+//* TIdSdpMockTcpClientConnection Private methods ******************************
+
+function TIdSdpMockTcpClientConnection.EphemeralPort: Cardinal;
+begin
+  repeat
+    Result := GRandomNumber.NextCardinal
+  until (Result >= 1024) and (Result <= 65535);
 end;
 
 //******************************************************************************
@@ -5223,15 +5242,7 @@ begin
 
   Self.InitializeLocalServers;
 
-  case Self.LocalSetupType of
-    stActive: begin
-      Self.LocalDescription.Port := TcpDiscardPort; // cf. RFC 4145, section 4.1 (page 4, second half of first paragraph)
-      // We don't know what to connect to.
-    end;
-    stActPass, stPassive: Self.BindListeningStreams;
-    stHoldConn: // We do nothing.
-  else
-  end;
+  Self.PossiblyConnect(Self.HaveRemoteDescription);
 end;
 
 procedure TIdSdpTcpMediaStream.AfterSetRemoteDescription(Value: TIdSdpMediaDescription);
@@ -5243,15 +5254,7 @@ begin
 
   Self.InitializeRemoteServers;
 
-  case Self.LocalSetupType of
-    stActive: Self.StartConnectingStreams;
-    stActPass:
-      case Self.RemoteSetupType of
-        stActive:  Self.BindListeningStreams;
-        stPassive: Self.StartConnectingStreams;
-      end;
-    stPassive: Self.BindListeningStreams;
-  end;
+  Self.PossiblyConnect(Self.HaveLocalDescription);
 end;
 
 procedure TIdSdpTcpMediaStream.InternalCreate;
@@ -5486,6 +5489,25 @@ begin
     Result := stHoldConn;
 end;
 
+procedure TIdSdpTcpMediaStream.PossiblyConnect(HaveCompleteSessionDescription: Boolean);
+begin
+  case Self.LocalSetupType of
+    stActive: begin
+      if HaveCompleteSessionDescription then
+        Self.StartConnectingStreams;
+    end;
+    stActPass: begin
+      if HaveCompleteSessionDescription then begin
+        case Self.RemoteSetupType of
+          stActive:  Self.BindListeningStreams;
+          stPassive: Self.StartConnectingStreams;
+        end;
+      end;
+    end;
+    stPassive: Self.BindListeningStreams;
+  end;
+end;
+
 function TIdSdpTcpMediaStream.RemoteSetupType: TIdSdpSetupType;
 begin
   if Self.HaveRemoteDescription then begin
@@ -5508,8 +5530,12 @@ begin
   // cf. RFC 4145, section 4.1 (page 4, second half of first paragraph)
   Self.LocalDescription.Port := TcpDiscardPort;
 
+  // Note that this doesn't work properly if the media description has multiple
+  // connection headers - it will only use the first.
   for I := 0 to Self.Servers.Count - 1 do
-    Self.ServerAt(I).ConnectTo(Self.RemoteDescription.Connections[0].Address, Self.RemoteDescription.Port + I);
+    Self.ServerAt(I).ConnectTo(Self.LocalDescription.Connections[0].Address,
+                               Self.RemoteDescription.Connections[0].Address,
+                               Self.RemoteDescription.Port + I);
 end;
 
 procedure TIdSdpTcpMediaStream.StartServers;
@@ -5525,8 +5551,13 @@ begin
 
     if S.IsServer then
       S.ListenOn(Self.LocalDescription.Connections[0].Address, Self.LocalDescription.Port + I)
-    else
-      S.ConnectTo(Self.RemoteDescription.Connections[0].Address, Self.RemoteDescription.Port + I);
+    else begin
+      // Note that this doesn't work properly if the media description has multiple
+      // connection headers - it will only use the first.
+      S.ConnectTo(Self.LocalDescription.Connections[0].Address,
+                  Self.RemoteDescription.Connections[0].Address,
+                  Self.RemoteDescription.Port + I);
+    end;
   end;
 end;
 

@@ -675,6 +675,16 @@ type
     procedure TestServerRunningOn;
   end;
 
+  TestTIdSdpTcpClientConnection = class(TTestCase)
+  private
+    Connection: TIdSdpTcpClientConnection;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestConnectTo;
+  end;
+
   TestTIdSdpMockTcpConnection = class(TTestCase)
   private
     Conn:       TIdSdpMockTcpConnection;
@@ -736,16 +746,20 @@ type
     function  ActPassMediaDesc(Port: Cardinal = 8000): String;
     procedure CheckAtLeastOneNullConnectionCreated;
     procedure CheckClientConnectionFormed(WhenOffer: Boolean; Offer, Answer: String);
+    procedure CheckClientConnectionFormedEx(WhenOffer, SetLocalDescFirst: Boolean; Offer, Answer: String);
     procedure CheckNullConnectionFormed(WhenOffer: Boolean; Offer, Answer: String);
+    procedure CheckNullConnectionFormedEx(WhenOffer, SetLocalDescFirst: Boolean; Offer, Answer: String);
     procedure CheckNullConnectionFormedForInvalidResponse(WhenOffer: Boolean; Offer, Answer: String);
+    procedure CheckNullConnectionFormedForInvalidResponseEx(WhenOffer, SetLocalDescFirst: Boolean; Offer, Answer: String);
     procedure CheckServerConnectionFormed(WhenOffer: Boolean; Offer, Answer: String);
+    procedure CheckServerConnectionFormedEx(WhenOffer, SetLocalDescFirst: Boolean; Offer, Answer: String);
     function  FindMockClient(Desc: TIdSdpMediaDescription): TIdSdpMockTcpConnection;
     function  FindMockServer(Desc: TIdSdpMediaDescription): TIdSdpMockTcpConnection;
     function  FindSoleMockClient: TIdSdpMockTcpConnection;
     function  FindSoleMockServer: TIdSdpMockTcpConnection;
     function  HoldConnMediaDesc(Port: Cardinal = 8000): String;
     function  PassiveMediaDesc(Port: Cardinal = 8000): String;
-    procedure SetMediaDescriptions(S: TIdSdpBaseMediaStream; IsOffer: Boolean; Offer, Answer: String);
+    procedure SetMediaDescriptions(S: TIdSdpBaseMediaStream; IsOffer, SetLocalDescFirst: Boolean; Offer, Answer: String);
     function  SetupMediaDesc(SetupType: TIdSdpSetupType; Port: Cardinal = 8000): String;
     function  UnknownMediaDesc(Port: Cardinal = 8000): String;
   protected
@@ -1020,6 +1034,7 @@ begin
   Result.AddTest(TestTIdSdpMockTcpClientConnection.Suite);
   Result.AddTest(TestTIdSdpMockTcpServerConnection.Suite);
   Result.AddTest(TestTIdSdpTcpConnectionRegistry.Suite);
+  Result.AddTest(TestTIdSdpTcpClientConnection.Suite);
   Result.AddTest(TestTIdSdpTcpMediaStream.Suite);
   Result.AddTest(TestTIdSDPMultimediaSession.Suite);
   Result.AddTest(TestTIdSdpTcpSendDataWait.Suite);
@@ -8054,7 +8069,7 @@ var
 begin
   Client := TIdSdpMockTcpClientConnection.Create;
   try
-    Client.ConnectTo(ArbitraryAddress, ArbitraryPort);
+    Client.ConnectTo('127.0.0.1', ArbitraryAddress, ArbitraryPort);
 
     Check(Client = TIdSdpTcpConnectionRegistry.ClientConnectedTo(ArbitraryAddress, ArbitraryPort),
           'Client not found in registry');
@@ -8064,7 +8079,7 @@ begin
     Check(nil = TIdSdpTcpConnectionRegistry.ClientConnectedTo(ArbitraryAddress, ArbitraryPort + 1),
           'Client found in registry (no such port');
 
-    Client.ConnectTo(ArbitraryAddress, AnotherPort);
+    Client.ConnectTo('127.0.0.1', ArbitraryAddress, AnotherPort);
     Check(nil = TIdSdpTcpConnectionRegistry.ClientConnectedTo(ArbitraryAddress, ArbitraryPort),
           'Client found in registry after moving');
     Check(Client = TIdSdpTcpConnectionRegistry.ClientConnectedTo(ArbitraryAddress, AnotherPort),
@@ -8151,6 +8166,30 @@ begin
   finally
     Server.Free;
   end;
+end;
+
+//******************************************************************************
+//* TestTIdSdpTcpClientConnection                                              *
+//******************************************************************************
+//* TestTIdSdpTcpClientConnection Public methods *******************************
+
+procedure TestTIdSdpTcpClientConnection.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Connection := TIdSdpTcpClientConnection.Create;
+end;
+
+procedure TestTIdSdpTcpClientConnection.TearDown;
+begin
+  Self.Connection.Free;
+
+  inherited TearDown;
+end;
+
+procedure TestTIdSdpTcpClientConnection.TestConnectTo;
+begin
+  Fail('Start here');
 end;
 
 //******************************************************************************
@@ -8303,7 +8342,7 @@ end;
 
 procedure TestTIdSdpMockTcpNullConnection.Activate(Connection: TIdSdpMockTcpConnection);
 begin
-  Connection.ConnectTo('1.2.3.4', 1234);
+  Connection.ConnectTo('127.0.0.1', '1.2.3.4', 1234);
 end;
 
 function TestTIdSdpMockTcpNullConnection.CreateConnection: TIdSdpMockTcpConnection;
@@ -8340,7 +8379,7 @@ end;
 
 procedure TestTIdSdpMockTcpNullConnection.TestConnectTo;
 begin
-  Self.Conn.ConnectTo('1.2.3.4', 1234);
+  Self.Conn.ConnectTo('127.0.0.1', '1.2.3.4', 1234);
   Check(not Self.Conn.IsActive,    'Null connections can''t be active');
   Check(not Self.Conn.IsConnected, 'Null connections can''t be connected');
 end;
@@ -8353,7 +8392,7 @@ begin
   try
     Self.Conn.AddDataListener(L);
 
-    Self.Conn.ConnectTo('1.2.3.4', 1234);
+    Self.Conn.ConnectTo('127.0.0.1', '1.2.3.4', 1234);
     Self.Conn.ForceDisconnect;
 
     Check(not Self.Conn.IsActive,    'Null connections can''t be active');
@@ -8406,7 +8445,7 @@ begin
 
     Check(not Self.Conn.IsConnected, 'New connection can''t be connected');
 
-    Self.Conn.ConnectTo('1.2.3.4', 1234);
+    Self.Conn.ConnectTo('127.0.0.1', '1.2.3.4', 1234);
     Check(not Self.Conn.IsConnected, 'Remote party has yet to establish their end');
 
     Self.Conn.RemotePartyAccepts;
@@ -8430,7 +8469,7 @@ begin
 
     CheckEquals('', Self.Conn.SentData, 'Cannot send data when not active');
 
-    Self.Conn.ConnectTo('127.0.0.1', 8000);
+    Self.Conn.ConnectTo('127.0.0.1', '127.0.0.1', 8000);
 
     Self.Conn.SendData(Data);
     CheckEquals('', Self.Conn.SentData, 'Null connections can''t send data');
@@ -8446,7 +8485,7 @@ end;
 
 procedure TestTIdSdpMockTcpClientConnection.Activate(Connection: TIdSdpMockTcpConnection);
 begin
-  (Connection as TIdSdpMockTcpClientConnection).ConnectTo('1.2.3.4', 1234);
+  (Connection as TIdSdpMockTcpClientConnection).ConnectTo('127.0.0.1', '1.2.3.4', 1234);
 end;
 
 function TestTIdSdpMockTcpClientConnection.CreateConnection: TIdSdpMockTcpConnection;
@@ -8461,7 +8500,7 @@ const
   Address = '1.2.3.4';
   Port    = 1234;
 begin
-  Self.Conn.ConnectTo(Address, Port);
+  Self.Conn.ConnectTo('127.0.0.1', Address, Port);
 
   Check(Self.Conn.ConnectToCalled, 'ConnectTo flag not set');
   Check(Self.Conn.IsActive,        'Connection not marked as active');
@@ -8478,7 +8517,7 @@ begin
   try
     Self.Conn.AddDataListener(L);
 
-    Self.Conn.ConnectTo('1.2.3.4', 1234);
+    Self.Conn.ConnectTo('127.0.0.1', '1.2.3.4', 1234);
     Self.Conn.RemotePartyAccepts;
 
     Check(Self.Conn.IsConnected, 'Connection not marked as connected');
@@ -8664,13 +8703,19 @@ begin
 end;
 
 procedure TestTIdSdpTcpMediaStream.CheckClientConnectionFormed(WhenOffer: Boolean; Offer, Answer: String);
+begin
+  CheckClientConnectionFormedEx(WhenOffer, true,  Offer, Answer);
+//  CheckClientConnectionFormedEx(WhenOffer, false, Offer, Answer);
+end;
+
+procedure TestTIdSdpTcpMediaStream.CheckClientConnectionFormedEx(WhenOffer, SetLocalDescFirst: Boolean; Offer, Answer: String);
 var
   Connection: TIdSdpMockTcpConnection;
   Stream:     TIdSdpBaseMediaStream;
 begin
   Stream := Self.CreateStream;
   try
-    Self.SetMediaDescriptions(Stream, WhenOffer, Offer, Answer);
+    Self.SetMediaDescriptions(Stream, WhenOffer, SetLocalDescFirst, Offer, Answer);
 
     Connection := Self.FindSoleMockClient;
     Check(Connection.ConnectToCalled, 'Connection not connecting');
@@ -8681,6 +8726,8 @@ begin
     Check(Connection.IsConnected, 'Connection not connected');
     CheckEquals(Stream.RemoteDescription.Connections[0].Address, Connection.PeerAddress, 'Connected to wrong address');
     CheckEquals(Stream.RemoteDescription.Port,                   Connection.PeerPort,    'Connected to wrong port');
+    CheckEquals(Stream.LocalDescription.Connections[0].Address,  Connection.Address,     'Connected from wrong address');
+    CheckNotEquals(0,                                            Connection.Port,        'Connected from invalid port');
 
     // cf. RFC 4145, section 4.1 (page 4, second half of first paragraph)
     CheckEquals(TcpDiscardPort, Stream.LocalDescription.Port, 'Local port');
@@ -8690,12 +8737,18 @@ begin
 end;
 
 procedure TestTIdSdpTcpMediaStream.CheckNullConnectionFormed(WhenOffer: Boolean; Offer, Answer: String);
+begin
+  CheckNullConnectionFormedEx(WhenOffer, true,  Offer, Answer);
+  CheckNullConnectionFormedEx(WhenOffer, false, Offer, Answer);
+end;
+
+procedure TestTIdSdpTcpMediaStream.CheckNullConnectionFormedEx(WhenOffer, SetLocalDescFirst: Boolean; Offer, Answer: String);
 var
   Stream: TIdSdpBaseMediaStream;
 begin
   Stream := Self.CreateStream;
   try
-    Self.SetMediaDescriptions(Stream, WhenOffer, Offer, Answer);
+    Self.SetMediaDescriptions(Stream, WhenOffer, SetLocalDescFirst, Offer, Answer);
 
     CheckAtLeastOneNullConnectionCreated;
   finally
@@ -8705,21 +8758,33 @@ end;
 
 procedure TestTIdSdpTcpMediaStream.CheckNullConnectionFormedForInvalidResponse(WhenOffer: Boolean; Offer, Answer: String);
 begin
+  CheckNullConnectionFormedForInvalidResponseEx(WhenOffer, true,  Offer, Answer);
+  CheckNullConnectionFormedForInvalidResponseEx(WhenOffer, false, Offer, Answer);
+end;
+
+procedure TestTIdSdpTcpMediaStream.CheckNullConnectionFormedForInvalidResponseEx(WhenOffer, SetLocalDescFirst: Boolean; Offer, Answer: String);
+begin
   // This test shows we behave well when we send an inappropriate reply.
 
-  CheckNullConnectionFormed(WhenOffer, Offer, Answer);
+  CheckNullConnectionFormedEx(WhenOffer, SetLocalDescFirst, Offer, Answer);
 
   // Add possible other stuff here.
 end;
 
 procedure TestTIdSdpTcpMediaStream.CheckServerConnectionFormed(WhenOffer: Boolean; Offer, Answer: String);
+begin
+  CheckServerConnectionFormedEx(WhenOffer, true,  Offer, Answer);
+  CheckServerConnectionFormedEx(WhenOffer, false, Offer, Answer);
+end;
+
+procedure TestTIdSdpTcpMediaStream.CheckServerConnectionFormedEx(WhenOffer, SetLocalDescFirst: Boolean; Offer, Answer: String);
 var
   Connection: TIdSdpMockTcpConnection;
   Stream:     TIdSdpBaseMediaStream;
 begin
   Stream := Self.CreateStream;
   try
-    Self.SetMediaDescriptions(Stream, WhenOffer, Offer, Answer);
+    Self.SetMediaDescriptions(Stream, WhenOffer, SetLocalDescFirst, Offer, Answer);
 
     Connection := Self.FindSoleMockServer;
     Check(Connection.ListenOnCalled,  'Connection not listening');
@@ -8804,17 +8869,32 @@ begin
   Result := Self.SetupMediaDesc(stPassive);
 end;
 
-procedure TestTIdSdpTcpMediaStream.SetMediaDescriptions(S: TIdSdpBaseMediaStream; IsOffer: Boolean; Offer, Answer: String);
+procedure TestTIdSdpTcpMediaStream.SetMediaDescriptions(S: TIdSdpBaseMediaStream; IsOffer, SetLocalDescFirst: Boolean; Offer, Answer: String);
 begin
+  // The SetLocalDescFirst flag ensures that we test that the stream works 
+  // correctly regardless of which description you set first.
+
   S.IsOffer := IsOffer;
 
   if S.IsOffer then begin
-    Self.SetLocalMediaDesc(S,  Offer);
-    Self.SetRemoteMediaDesc(S, Answer);
+    if SetLocalDescFirst then begin
+      Self.SetLocalMediaDesc(S,  Offer);
+      Self.SetRemoteMediaDesc(S, Answer);
+    end
+    else begin
+      Self.SetRemoteMediaDesc(S, Answer);
+      Self.SetLocalMediaDesc(S,  Offer);
+    end;
   end
   else begin
-    Self.SetLocalMediaDesc(S,  Answer);
-    Self.SetRemoteMediaDesc(S, Offer);
+    if SetLocalDescFirst then begin
+      Self.SetLocalMediaDesc(S,  Answer);
+      Self.SetRemoteMediaDesc(S, Offer);
+    end
+    else begin
+      Self.SetRemoteMediaDesc(S, Offer);
+      Self.SetLocalMediaDesc(S,  Answer);
+    end;
   end;
 end;
 
@@ -9896,7 +9976,7 @@ begin
   Self.Wait.ConnectionID := Self.Connection.ID;
   Self.Wait.Data         := Self.Data;
 
-  Self.Connection.ConnectTo('127.0.0.1', 8000);
+  Self.Connection.ConnectTo('127.0.0.1', '127.0.0.1', 8000);
 end;
 
 procedure TestTIdSdpTcpSendDataWait.TearDown;
