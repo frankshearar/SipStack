@@ -81,7 +81,7 @@ type
     function  GetDefaultTimeout: Cardinal;
     procedure NotifyOfException(OffendingWait: TIdWait; Error: Exception);
     procedure SetDefaultTimeout(Value: Cardinal);
-    procedure SortEvents;
+//    procedure SortEvents;
     function  ShortestWait: Cardinal;
   protected
     function  EventAt(Index: Integer): TIdWait; virtual;
@@ -316,14 +316,61 @@ end;
 
 procedure TIdTimerQueue.AddEvent(MillisecsWait: Cardinal;
                                  Event: TIdWait);
+var
+  InsertPosition, LookAhead: Integer;
 begin
   Self.LockTimer;
   try
     try
-      Self.EventList.Add(Event);
+      {GG: I had to change this algorithm because it does not respect the order of
+       media where all the media has the same timestamp}
+{      Self.EventList.Add(Event);
       Event.Schedule(Self, MillisecsWait);
 
-      Self.SortEvents;
+      Self.SortEvents;}
+
+      //The new code must schedule the event first so that we have a valid Triggertime value
+      //We maintain the list in sorted order by always inserting new events in the appropriate
+      //place, after the last event with the same or earlier time - thus creating a fifo sequence
+      //for all events with the same triggertime
+      Event.Schedule(Self, MillisecsWait);
+      //Next, decide on what method to use to find the right insert position in the queue
+      case Self.EventList.Count of
+        //if the queue is empty, just add the event
+        0: Self.EventList.Add(Event);
+        //If the queue only contains a few items, we find the appropriate position
+        //by a simple backwards scanning algorithm
+        1..7: begin
+            InsertPosition:=Self.EventList.Count;
+            repeat
+              if Self.EventAt(InsertPosition-1).TriggerTime<=Event.TriggerTime then
+                 Break;
+              dec(InsertPosition);
+            until InsertPosition=0;
+            Self.EventList.Insert(InsertPosition, Event);
+          end;
+      else
+        //otherwise we use a slightly more intelligent approach by using a lookahead algorithm that
+        //jumps larger blocks of items, so that even with a few thousand items in the queue,
+        //it only takes 10-15 iterations to find the appropriate insert position
+        //This is a forward scan, it needs to look for the first event with a later triggertime.
+        InsertPosition:=0; //test first item first
+        LookAhead:=Self.EventList.Count-1;  //then last item
+        repeat
+          if Self.EventAt(InsertPosition).TriggerTime>Event.TriggerTime then
+             Break;
+          if (LookAhead>0) and (Self.EventAt(InsertPosition+LookAhead).TriggerTime<=Event.TriggerTime) then
+             InsertPosition:=InsertPosition+LookAhead
+          else
+             inc(InsertPosition);
+          LookAhead:=(Self.EventList.Count-InsertPosition) div 2;
+        until InsertPosition>=Self.EventList.Count;
+        if InsertPosition>=Self.EventList.Count then
+           Self.EventList.Add(Event)
+        else
+           Self.EventList.Insert(InsertPosition, Event);
+      end;
+
     except
       if (Self.EventList.IndexOf(Event) <> ItemNotFoundIndex) then
         Self.EventList.Remove(Event)
@@ -511,11 +558,11 @@ begin
   end;
 end;
 
-procedure TIdTimerQueue.SortEvents;
+{procedure TIdTimerQueue.SortEvents;
 begin
   // Precondition: You've locked the list
   Self.EventList.Sort(TimeSort);
-end;
+end;}
 
 function TIdTimerQueue.ShortestWait: Cardinal;
 var
