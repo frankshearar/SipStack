@@ -2438,7 +2438,7 @@ begin
     raise EConvertError.Create('Failed to convert ''' + Month + ''' to type Integer');
 end;
 
-function StrToQValue(const S: String): TIdSipQValue;
+function ParseQValue(const S: String; var Qval: TIdSipQValue): Boolean;
 var
   Fraction, Int: String;
   Malformed:     Boolean;
@@ -2447,6 +2447,9 @@ var
   F:             Cardinal; // Fractional part of the Q value
   Q:             Cardinal;
 begin
+  // Return true if S contains a well-formed qvalue; false otherwise.
+  Qval := High(TIdSipQValue);
+
   Q         := 0;
   F         := 0;
   Fraction  := S;
@@ -2457,38 +2460,44 @@ begin
 
     Int := Fetch(Fraction, '.');
 
+    // Integer part too big?
     Val(Int, I, E);
     Malformed := Malformed or (E <> 0) or (I > 1);
 
+    // Too many significant digits in the fractional part?
     Malformed := Malformed or (Length(Fraction) > 3);
+
     if (Fraction <> '') then begin
       while (Length(Fraction) < 3) do
         Fraction := Fraction + '0';
 
       Val(Fraction, F, E);
-      Malformed := Malformed or (E <> 0) or (F > High(TIdSipQValue));
+      Malformed := Malformed or (E <> 0);
     end;
 
     Q := High(TIdSipQValue)*I + Trunc(F);
     Malformed := Malformed or (Q > High(TIdSipQValue));
   end;
 
-  if Malformed then
-    raise EConvertError.Create(Format(ConvertErrorMsg, [S, 'TIdSipQValue']));
+  // Integer part + fractional part > 1.000
+  Malformed := Malformed or (Q > High(TIdSipQValue));
 
-  Assert(Q <= High(TIdSipQValue),
-         'Sanity check assigning a Cardinal to a TIdSipQValue');
-  Result := Q;
+  Result := not Malformed;
+
+  if Result then
+    Qval := Q;
+end;
+
+function StrToQValue(const S: String): TIdSipQValue;
+begin
+  if not ParseQValue(S, Result) then
+    raise EConvertError.Create(Format(ConvertErrorMsg, [S, 'TIdSipQValue']));
 end;
 
 function StrToQValueDef(const S: String; const DefaultValue: TIdSipQValue): TIdSipQValue;
 begin
-  try
-    Result := StrToQValue(S);
-  except
-    on EConvertError do
-      Result := DefaultValue;
-  end;
+  if not ParseQValue(S, Result) then
+    Result := DefaultValue;
 end;
 
 function WithoutFirstAndLastCharsW(const W: WideString): WideString;
