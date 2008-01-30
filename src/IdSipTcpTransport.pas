@@ -14,7 +14,7 @@ interface
 uses
   Classes, Contnrs, IdBaseThread, IdConnectionBindings, IdSipLocation,
   IdSipMessage, IdSipTransport, IdSocketHandle, IdTCPConnection, IdTCPClient,
-  IdTCPServer, IdTimerQueue, SyncObjs, SysUtils;
+  IdTCPServer, IdThreadableTcpClient, IdTimerQueue, SyncObjs, SysUtils;
 
 type
   TIdSipConnectionTableLock = class;
@@ -70,23 +70,25 @@ type
   // context, I instantiate a TCP client, send a request, and receive
   // messages, usually responses. I schedule Waits for each of these messages so
   // that my Transport handles the response in the context of its Timer.
-  TIdSipTcpClientThread = class(TIdBaseThread)
+  TIdSipTcpClientThread = class(TIdThreadedTcpClient)
   private
-    Client:    TIdSipTcpClient;
     FirstMsg:  TIdSipMessage;
     Transport: TIdSipTCPTransport;
 
-    procedure NotifyOfException(E: Exception);
+    function SipClient: TIdSipTcpClient;
+
   protected
+    procedure AfterRun; override;
     function  ClientType: TIdSipTcpClientClass; virtual;
+    function  GetTimer: TIdTimerQueue; override;
+    procedure NotifyOfException(E: Exception); override;
     procedure Run; override;
+    procedure SetTimer(Value: TIdTimerQueue); override;
   public
     constructor Create(Connection: TIdSipTCPClient;
                        FirstMsg: TIdSipMessage;
                        Transport: TIdSipTCPTransport); reintroduce;
     destructor Destroy; override;
-
-    procedure Terminate; override;
   end;
 
   TIdSipAddConnectionEvent = procedure(Connection: TIdTCPConnection;
@@ -172,29 +174,23 @@ type
   // wait for the next line of data to arrive.
   // Through my MessageReader, I read messages from the network and feed them to
   // a TimerQueue. That, and I send messages to the network.
-  TIdSipTcpClient = class(TIdTCPClient)
+  TIdSipTcpClient = class(TIdThreadableTcpClient)
   private
-    fTerminated:   Boolean;
     MessageReader: TIdSipTcpMessageReader;
 
-    function  GetTimer: TIdTimerQueue;
     function  GetTransportID: String;
-    procedure MarkAsTerminated(Sender: TObject);
-    procedure SetTerminated(Value: Boolean);
-    procedure SetTimer(Value: TIdTimerQueue);
     procedure SetTransportID(const Value: String);
   protected
-    function DefaultTimeout: Cardinal; virtual;
+    function  GetTimer: TIdTimerQueue; override;
+    procedure SetTimer(Value: TIdTimerQueue); override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
 
-    procedure ReceiveMessages;
+    procedure ReceiveMessages; override;
     procedure Send(Msg: TIdSipMessage);
 
-    property Terminated:  Boolean       read fTerminated write SetTerminated;
-    property Timer:       TIdTimerQueue read GetTimer write SetTimer;
-    property TransportID: String        read GetTransportID write SetTransportID;
+    property TransportID: String read GetTransportID write SetTransportID;
   end;
 
   // I relate a request with a TCP connection. I store a COPY of a request
@@ -202,7 +198,7 @@ type
   // and so bear responsibility for destroying them, and I need to remember
   // these requests.
   // I represent a (possibly) deferred handling of an exception by using a
-  // TNotifyEvent.  
+  // TNotifyEvent.
   TIdSipConnectionTableEntry = class(TObject)
   private
     fConnection: TIdTCPConnection;
@@ -250,9 +246,6 @@ type
     function  LockList: TIdSipConnectionTable;
     procedure UnlockList;
   end;
-
-const
-  FiveSeconds = 5000; // milliseconds
 
 implementation
 
@@ -483,12 +476,10 @@ constructor TIdSipTcpClientThread.Create(Connection: TIdSipTCPClient;
                                          FirstMsg: TIdSipMessage;
                                          Transport: TIdSipTCPTransport);
 begin
-  Self.FreeOnTerminate := true;
-  Self.Client    := Connection;
+  inherited Create(Connection);
+
   Self.FirstMsg  := FirstMsg.Copy;
   Self.Transport := Transport;
-
-  inherited Create(false);
 end;
 
 destructor TIdSipTcpClientThread.Destroy;
@@ -499,40 +490,22 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipTcpClientThread.Terminate;
-begin
-  Self.Client.Terminated := true;
-
-  inherited Terminate;
-end;
-
 //* TIdSipTcpClientThread Protected methods ************************************
+
+procedure TIdSipTcpClientThread.AfterRun;
+begin
+  Self.Transport.RemoveClient(Self);
+end;
 
 function TIdSipTcpClientThread.ClientType: TIdSipTcpClientClass;
 begin
   Result := TIdSipTcpClient;
 end;
 
-procedure TIdSipTcpClientThread.Run;
+function TIdSipTcpClientThread.GetTimer: TIdTimerQueue;
 begin
-  try
-    try
-      Self.Client.Send(Self.FirstMsg);
-      Self.Client.ReceiveMessages;
-    finally
-      Self.Client.Disconnect;
-    end;
-  except
-    on EIdConnClosedGracefully do;
-    on EIdConnectTimeout do;
-    on E: Exception do
-      Self.NotifyOfException(E);
-  end;
-
-  Self.Transport.RemoveClient(Self);
+  Result := Self.Transport.Timer;
 end;
-
-//* TIdSipTcpClientThread Private methods **************************************
 
 procedure TIdSipTcpClientThread.NotifyOfException(E: Exception);
 var
@@ -547,7 +520,36 @@ begin
   Wait.Reason           := ExceptionDuringTcpClientRequestSend;
   Wait.TransportID      := Self.Transport.ID;
 
-  Self.Transport.Timer.AddEvent(TriggerImmediately, Wait);
+  Self.Timer.AddEvent(TriggerImmediately, Wait);
+end;
+
+procedure TIdSipTcpClientThread.Run;
+begin
+  try
+    try
+      Self.SipClient.Send(Self.FirstMsg);
+      Self.SipClient.ReceiveMessages;
+    finally
+      Self.SipClient.Disconnect;
+    end;
+  except
+    on EIdConnClosedGracefully do;
+    on EIdConnectTimeout do;
+    on E: Exception do
+      Self.NotifyOfException(E);
+  end;
+end;
+
+procedure TIdSipTcpClientThread.SetTimer(Value: TIdTimerQueue);
+begin
+  // Ignore attempts to change the Timer.
+end;
+
+//* TIdSipTcpClientThread Private methods **************************************
+
+function TIdSipTcpClientThread.SipClient: TIdSipTcpClient;
+begin
+  Result := Self.Client as TIdSipTcpClient;
 end;
 
 //******************************************************************************
@@ -844,12 +846,7 @@ constructor TIdSipTcpClient.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
-  Self.OnDisconnected := Self.MarkAsTerminated;
-  Self.ReadTimeout    := Self.DefaultTimeout;
-
   Self.MessageReader := TIdSipTcpMessageReader.Create;
-
-  Self.Terminated  := false;
 end;
 
 destructor TIdSipTcpClient.Destroy;
@@ -870,13 +867,6 @@ begin
   Self.Write(Msg.AsString);
 end;
 
-//* TIdSipTcpClient Protected methods ******************************************
-
-function TIdSipTcpClient.DefaultTimeout: Cardinal;
-begin
-  Result := FiveSeconds;
-end;
-
 //* TIdSipTcpClient Private methods ********************************************
 
 function TIdSipTcpClient.GetTimer: TIdTimerQueue;
@@ -887,19 +877,6 @@ end;
 function TIdSipTcpClient.GetTransportID: String;
 begin
   Result := Self.MessageReader.TransportID;
-end;
-
-procedure TIdSipTcpClient.MarkAsTerminated(Sender: TObject);
-begin
-  Self.Terminated := true;
-end;
-
-procedure TIdSipTcpClient.SetTerminated(Value: Boolean);
-begin
-  Self.fTerminated := Value;
-
-  if Self.fTerminated and Self.Connected then
-    Self.Disconnect;
 end;
 
 procedure TIdSipTcpClient.SetTimer(Value: TIdTimerQueue);

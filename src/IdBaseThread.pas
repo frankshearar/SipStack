@@ -26,6 +26,8 @@ type
 
     procedure DoOnException(E: Exception);
   protected
+    procedure AfterRun; virtual;
+    procedure BeforeRun; virtual;
     procedure Execute; override;
     procedure Run; virtual;
   public
@@ -68,10 +70,25 @@ end;
 
 //* TIdBaseThread Protected methods ********************************************
 
+procedure TIdBaseThread.AfterRun;
+begin
+  // By default do nothing.
+end;
+
+procedure TIdBaseThread.BeforeRun;
+begin
+  // By default do nothing.
+end;
+
 procedure TIdBaseThread.Execute;
 begin
   try
-    Self.Run;
+    Self.BeforeRun;
+    try
+      Self.Run;
+    finally
+      Self.AfterRun;
+    end;
   except
     on E: Exception do
       Self.DoOnException(E);

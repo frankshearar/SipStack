@@ -13,8 +13,8 @@ interface
 
 uses
   Classes, IdConnectionBindings, IdInterfacedObject, IdRTP, IdRTPServer, IdSdp,
-  IdSimpleParser, IdTimerQueue, IdUDPServer, SyncObjs, TestFramework,
-  TestFrameworkEx, TestFrameworkRtp;
+  IdSimpleParser, IdTcpClient, IdTcpServer, IdTimerQueue, IdUDPServer, SyncObjs,
+  SysUtils, TestFramework, TestFrameworkEx, TestFrameworkRtp;
 
 type
   TIdSdpTestMediaListener = class(TIdInterfacedObject,
@@ -54,6 +54,9 @@ type
   private
     fConnectionParam:    TIdSdpBaseTcpConnection;
     fDataParam:          TStream;
+    fOnExceptionCalled:  Boolean;
+    fExceptionMessage:   String;
+    fExceptionType:      ExceptClass;
     fOnConnectCalled:    Boolean;
     fOnDataCalled:       Boolean;
     fOnDisconnectCalled: Boolean;
@@ -62,15 +65,21 @@ type
     procedure OnData(Connection: TIdSdpBaseTcpConnection;
                      Data: TStream);
     procedure OnDisconnect(Connection: TIdSdpBaseTcpConnection);
+    procedure OnException(Connection: TIdSdpBaseTcpConnection;
+                          ExceptionType: ExceptClass;
+                          ExceptionMessage: String);
   public
     constructor Create; override;
     destructor  Destroy; override;
 
     property ConnectionParam:    TIdSdpBaseTcpConnection read fConnectionParam;
     property DataParam:          TStream                 read fDataParam;
+    property ExceptionMessage:   String                  read fExceptionMessage;
+    property ExceptionType:      ExceptClass             read fExceptionType;
     property OnConnectCalled:    Boolean                 read fOnConnectCalled;
     property OnDataCalled:       Boolean                 read fOnDataCalled;
     property OnDisconnectCalled: Boolean                 read fOnDisconnectCalled;
+    property OnExceptionCalled:  Boolean                 read fOnExceptionCalled;
   end;
 
   TestFunctions = class(TTestCase)
@@ -581,6 +590,7 @@ type
     function  InactiveMediaDesc: String;
     function  LocalDescription: TIdSdpMediaDescription;
     procedure ReceiveDataOn(S: TIdSdpBaseMediaStream); virtual;
+    function  RefusedMediaDesc: String;
     function  RemoteDescription: TIdSdpMediaDescription;
     procedure RemoveSendingChecking(Stream: TIdSdpBaseMediaStream); virtual;
     procedure SendData(Stream: TIdSdpBaseMediaStream); virtual;
@@ -601,6 +611,7 @@ type
     procedure TestPutOnHoldWhileOnHold;
     procedure TestSendData; virtual;
     procedure TestSendDataWhenNotSender;
+    procedure TestStartListeningRefusedStream;
     procedure TestTakeOffHold;
   end;
 
@@ -675,16 +686,6 @@ type
     procedure TestServerRunningOn;
   end;
 
-  TestTIdSdpTcpClientConnection = class(TTestCase)
-  private
-    Connection: TIdSdpTcpClientConnection;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestConnectTo;
-  end;
-
   TestTIdSdpMockTcpConnection = class(TTestCase)
   private
     Conn:       TIdSdpMockTcpConnection;
@@ -735,6 +736,102 @@ type
     procedure TestForceDisconnect; override;
     procedure TestListenOn;
     procedure TestRemotePartyAccepts; override;
+  end;
+
+  TestTIdSdpTcpClientConnection = class(TThreadingTestCase,
+                                        IIdSdpTcpConnectionListener)
+  private
+    CollectedReceivedData: String;
+    Connected:             Boolean;
+    Connection:            TIdSdpTcpClientConnection;
+    ConnectionAddress:     String;
+    ConnectionPort:        Cardinal;
+    DisconnectEvent:       TEvent;
+    ExceptionMessage:      String;
+    ExceptionType:         ExceptClass;
+    FirstExecute:          Boolean;
+    Listener:              TIdSdpTestConnectionListener;
+    ReceivedData:          String;
+    Server:                TIdTcpServer;
+    ServerEvent:           TEvent;
+    TestData:              TStringStream;
+    Timer:                 TIdTimerQueue;
+
+    procedure DisconnectClient;
+    procedure DoNothing(Thread: TIdPeerThread);
+    procedure OnConnect(Connection: TIdSdpBaseTcpConnection);
+    procedure OnData(Connection: TIdSdpBaseTcpConnection; Data: TStream);
+    procedure OnDisconnect(Connection: TIdSdpBaseTcpConnection);
+    procedure OnException(Connection: TIdSdpBaseTcpConnection;
+                          ExceptionType: ExceptClass;
+                          ExceptionMessage: String);
+    procedure ReadTestData(Thread: TIdPeerThread);
+    procedure RegisterConnectionAttempt(Thread: TIdPeerThread);
+    function  ServerIP: String;
+    function  ServerPort: Integer;
+    procedure WriteTestData; overload;
+    procedure WriteTestData(Chunk: TStream); overload;
+    procedure WriteTestData(Thread: TIdPeerThread); overload;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestConnectTo;
+    procedure TestConnectToNonexistentPeer;
+    procedure TestConnectToTwice;
+    procedure TestDisconnect;
+    procedure TestDisconnectTwice;
+    procedure TestLocalDisconnectNotifiesListeners;
+    procedure TestReceiveData;
+    procedure TestReceiveDataMultipleTimes;
+    procedure TestRemoteDisconnectionNotifiesListeners;
+    procedure TestSendData;
+  end;
+
+  TestTIdSdpTcpServerConnection = class(TThreadingTestCase,
+                                        IIdSdpTcpConnectionListener)
+  private
+    Client:            TIdTcpClient;
+    Connected:         Boolean;
+    Connection:        TIdSdpTcpServerConnection;
+    LocalIP:           String;
+    LocalPort:         Integer;
+    ReceivedData:      String;
+    TestData:          TStringStream;
+    Timer:             TIdTimerQueue;
+
+    procedure CheckPortFree(Address: String; Port: Integer);
+    procedure CheckPortUsed(Address: String; Port: Integer);
+    procedure OnConnect(Connection: TIdSdpBaseTcpConnection);
+    procedure OnData(Connection: TIdSdpBaseTcpConnection; Data: TStream);
+    procedure OnDisconnect(Connection: TIdSdpBaseTcpConnection);
+    procedure OnException(Connection: TIdSdpBaseTcpConnection;
+                          ExceptionType: ExceptClass;
+                          ExceptionMessage: String);
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAddressAndPort;
+    procedure TestConnectionNotifiesListeners;
+    procedure TestDisconnect;
+    procedure TestLocalDisconnectionNotifiesListeners;
+    procedure TestListenOn;
+    procedure TestPeerAddressAndPort;
+    procedure TestReceiveData;
+    procedure TestRemoteDisconnectionNotifiesListeners;
+    procedure TestSendData;
+  end;
+
+  TestTIdSdpTcpNullConnection = class(TTestCase)
+  private
+    Connection: TIdSdpTcpNullConnection;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAddressAndPort;
+    procedure TestPeerAddressAndPort;
   end;
 
   TestTIdSdpTcpMediaStream = class(TestTIdSdpBaseMediaStream)
@@ -864,7 +961,7 @@ type
                                Msg: String);
     procedure CheckOriginUsername(ExpectedUsername: String;
                                   SessionDescription: String);
-    function  MultiStreamSDP(LowPort, HighPort: Cardinal): String;
+    function  MultiStreamSDP(LowPort, HighPort: Cardinal; Protocol: String = Id_SDP_RTPAVP): String;
     procedure ReceiveDataOfType(PayloadType: Cardinal);
     function  RefusedStreamSDP(Port: Cardinal): String;
     function  SingleStreamSDP(Port: Cardinal;
@@ -902,20 +999,89 @@ type
     procedure TestStartListeningMultipleStreams;
     procedure TestStartListeningNoAvailablePorts;
     procedure TestStartListeningPortsOutsideAllowedRange;
+    procedure TestStartListeningTCP;
     procedure TestStopListening;
     procedure TestTakeOffHold;
   end;
 
-  TestTIdSdpTcpSendDataWait = class(TTestCase)
-  private
+  TIdSdpTcpConnectionWaitTestCase = class(TTestCase)
+  protected
     Connection: TIdSdpMockTcpConnection;
     Data:       TStringStream;
-    Wait:       TIdSdpTcpSendDataWait;
+    Wait:       TIdSdpTcpConnectionWait;
+
+    procedure CheckTriggerDoesNothing(Msg: String); virtual;
+    procedure CheckTriggerFired; virtual;
+    function  CreateWait: TIdSdpTcpConnectionWait; virtual;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
     procedure TestTrigger;
+    procedure TestTriggerWithNonexistentConnection;
+    procedure TestTriggerWithWrongTypeOfObject;
+  end;
+
+  TestTIdSdpTcpReceiveDataWait = class(TIdSdpTcpConnectionWaitTestCase)
+  private
+    Binding:  TIdConnectionBindings;
+    RecvWait: TIdSdpTcpReceiveDataWait;
+  protected
+    procedure CheckTriggerDoesNothing(Msg: String); override;
+    procedure CheckTriggerFired; override;
+    function  CreateWait: TIdSdpTcpConnectionWait; override;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSdpTcpSendDataWait = class(TIdSdpTcpConnectionWaitTestCase)
+  private
+    SendWait: TIdSdpTcpSendDataWait;
+  protected
+    procedure CheckTriggerDoesNothing(Msg: String); override;
+    procedure CheckTriggerFired; override;
+    function  CreateWait: TIdSdpTcpConnectionWait; override;
+  public
+    procedure SetUp; override;
+  end;
+
+  TestTIdSdpTcpConnectionConnectedWait = class(TIdSdpTcpConnectionWaitTestCase)
+  private
+    Listener: TIdSdpTestConnectionListener;
+  protected
+    procedure CheckTriggerDoesNothing(Msg: String); override;
+    procedure CheckTriggerFired; override;
+    function  CreateWait: TIdSdpTcpConnectionWait; override;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSdpTcpConnectionDisconnectedWait = class(TIdSdpTcpConnectionWaitTestCase)
+  private
+    Listener: TIdSdpTestConnectionListener;
+  protected
+    procedure CheckTriggerDoesNothing(Msg: String); override;
+    procedure CheckTriggerFired; override;
+    function  CreateWait: TIdSdpTcpConnectionWait; override;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSdpTcpConnectionExceptionWait = class(TIdSdpTcpConnectionWaitTestCase)
+  private
+    ExceptionType:    ExceptClass;
+    ExceptionMessage: String;
+    Listener:         TIdSdpTestConnectionListener;
+  protected
+    procedure CheckTriggerDoesNothing(Msg: String); override;
+    procedure CheckTriggerFired; override;
+    function  CreateWait: TIdSdpTcpConnectionWait; override;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
   end;
 
   TIdSdpMediaListenerMethodTestCase = class(TTestCase)
@@ -990,6 +1156,16 @@ type
     procedure TestRun;
   end;
 
+  TestTIdSdpTcpConnectionOnExceptionMethod = class(TIdSdpTcpConnectionMethodTestCase)
+  private
+    Method: TIdSdpTcpConnectionOnExceptionMethod;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
 const
   MinimumPayloadSansConnection = 'v=0'#13#10
                  + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
@@ -1003,7 +1179,11 @@ const
 implementation
 
 uses
-  IdRegisteredObject, IdSocketHandle, IdStack, IdUnicode, SysUtils;
+  IdException, IdRegisteredObject, IdSocketHandle, IdStack, IdUnicode,
+  IdTCPConnection;
+
+const
+  OneSecond = 1000; // milliseconds
 
 function Suite: ITestSuite;
 begin
@@ -1030,19 +1210,26 @@ begin
   Result.AddTest(TestTIdSdpPayload.Suite);
   Result.AddTest(TestTIdSDPMediaStream.Suite);
   Result.AddTest(TestTIdSdpNullMediaStream.Suite);
+  Result.AddTest(TestTIdSdpTcpConnectionRegistry.Suite);
+  Result.AddTest(TestTIdSdpTcpClientConnection.Suite);
+  Result.AddTest(TestTIdSdpTcpServerConnection.Suite);
+  Result.AddTest(TestTIdSdpTcpNullConnection.Suite);
   Result.AddTest(TestTIdSdpMockTcpNullConnection.Suite);
   Result.AddTest(TestTIdSdpMockTcpClientConnection.Suite);
   Result.AddTest(TestTIdSdpMockTcpServerConnection.Suite);
-  Result.AddTest(TestTIdSdpTcpConnectionRegistry.Suite);
-  Result.AddTest(TestTIdSdpTcpClientConnection.Suite);
   Result.AddTest(TestTIdSdpTcpMediaStream.Suite);
   Result.AddTest(TestTIdSDPMultimediaSession.Suite);
+  Result.AddTest(TestTIdSdpTcpConnectionConnectedWait.Suite);
+  Result.AddTest(TestTIdSdpTcpConnectionDisconnectedWait.Suite);
+  Result.AddTest(TestTIdSdpTcpConnectionExceptionWait.Suite);
+  Result.AddTest(TestTIdSdpTcpReceiveDataWait.Suite);
   Result.AddTest(TestTIdSdpTcpSendDataWait.Suite);
   Result.AddTest(TestTIdSdpMediaListenerOnDataMethod.Suite);
   Result.AddTest(TestTIdSdpMediaListenerOnSentDataMethod.Suite);
   Result.AddTest(TestTIdSdpTcpConnectionOnConnectMethod.Suite);
   Result.AddTest(TestTIdSdpTcpConnectionOnDataMethod.Suite);
   Result.AddTest(TestTIdSdpTcpConnectionOnDisconnectMethod.Suite);
+  Result.AddTest(TestTIdSdpTcpConnectionOnExceptionMethod.Suite);
 end;
 
 const
@@ -1101,6 +1288,7 @@ begin
   Self.fOnConnectCalled    := false;
   Self.fOnDataCalled       := false;
   Self.fOnDisconnectCalled := false;
+  Self.fOnExceptionCalled  := false;
 end;
 
 destructor TIdSdpTestConnectionListener.Destroy;
@@ -1130,6 +1318,16 @@ procedure TIdSdpTestConnectionListener.OnDisconnect(Connection: TIdSdpBaseTcpCon
 begin
   Self.fConnectionParam    := Connection;
   Self.fOnDisconnectCalled := true;
+end;
+
+procedure TIdSdpTestConnectionListener.OnException(Connection: TIdSdpBaseTcpConnection;
+                                                   ExceptionType: ExceptClass;
+                                                   ExceptionMessage: String);
+begin
+  Self.fOnExceptionCalled := true;
+  Self.fConnectionParam   := Connection;
+  Self.fExceptionMessage  := ExceptionMessage;
+  Self.fExceptionType     := ExceptionType;
 end;
 
 //******************************************************************************
@@ -6942,6 +7140,11 @@ begin
   Fail(Self.ClassName + ' MUST override ReceiveDataOn');
 end;
 
+function TestTIdSdpBaseMediaStream.RefusedMediaDesc: String;
+begin
+  Result := Self.BasicMediaDesc(RefusedPort);
+end;
+
 function TestTIdSdpBaseMediaStream.RemoteDescription: TIdSdpMediaDescription;
 begin
   CheckEquals(2, Self.Desc.MediaDescriptionCount,
@@ -7249,6 +7452,22 @@ begin
   end;
 end;
 
+procedure TestTIdSdpBaseMediaStream.TestStartListeningRefusedStream;
+var
+  Stream: TIdSdpBaseMediaStream;
+begin
+  Stream := Self.CreateStream;
+  try
+    Self.SetLocalMediaDesc(Stream,
+                           Self.RefusedMediaDesc);
+
+    Stream.StartListening;
+    Check(not Stream.IsListening, 'Stream listening, but has been refused');
+  finally
+    Stream.Free;
+  end;
+end;
+
 procedure TestTIdSdpBaseMediaStream.TestTakeOffHold;
 var
   PreHoldDirection: TIdSdpDirection;
@@ -7279,8 +7498,6 @@ end;
 //* TestTIdSDPMediaStream Public methods ***************************************
 
 procedure TestTIdSDPMediaStream.SetUp;
-const
-  OneSecond = 1000; // milliseconds
 var
   T140: TIdRTPT140Payload;
 begin
@@ -7586,7 +7803,6 @@ begin
   Self.Media.RemoteDescription := Self.Sender.LocalDescription;
   Self.Sender.RemoteDescription := Self.Media.LocalDescription;
 
-  Self.Media.Initialize;
   Self.Media.AddRTPSendListener(Self);
 
   // Self.Media sends off two RTCP packets (one per layer).
@@ -7673,8 +7889,6 @@ begin
   // We check that the SDP sets the RTCP address/port of the remote party
   // by "joining a session" - that will send a Receiver Report to the
   // control port of the remote party.
-  Self.Media.Initialize;
-  Self.Timer.RemoveAllEvents;
 
   // This schedules the joining of the RTP session.
   Self.Media.JoinSession;
@@ -8069,7 +8283,7 @@ var
 begin
   Client := TIdSdpMockTcpClientConnection.Create;
   try
-    Client.ConnectTo('127.0.0.1', ArbitraryAddress, ArbitraryPort);
+    Client.ConnectTo(ArbitraryAddress, ArbitraryPort);
 
     Check(Client = TIdSdpTcpConnectionRegistry.ClientConnectedTo(ArbitraryAddress, ArbitraryPort),
           'Client not found in registry');
@@ -8079,7 +8293,7 @@ begin
     Check(nil = TIdSdpTcpConnectionRegistry.ClientConnectedTo(ArbitraryAddress, ArbitraryPort + 1),
           'Client found in registry (no such port');
 
-    Client.ConnectTo('127.0.0.1', ArbitraryAddress, AnotherPort);
+    Client.ConnectTo(ArbitraryAddress, AnotherPort);
     Check(nil = TIdSdpTcpConnectionRegistry.ClientConnectedTo(ArbitraryAddress, ArbitraryPort),
           'Client found in registry after moving');
     Check(Client = TIdSdpTcpConnectionRegistry.ClientConnectedTo(ArbitraryAddress, AnotherPort),
@@ -8169,27 +8383,859 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSdpMockTcpNullConnection                                            *
+//******************************************************************************
+//* TestTIdSdpMockTcpNullConnection Protected methods **************************
+
+procedure TestTIdSdpMockTcpNullConnection.Activate(Connection: TIdSdpMockTcpConnection);
+begin
+  Connection.ConnectTo('1.2.3.4', 1234);
+end;
+
+function TestTIdSdpMockTcpNullConnection.CreateConnection: TIdSdpMockTcpConnection;
+begin
+  Result := TIdSdpMockTcpNullConnection.Create;
+end;
+
+//* TestTIdSdpMockTcpNullConnection Published methods **************************
+
+procedure TestTIdSdpMockTcpNullConnection.TestAddDataListener;
+var
+  L1, L2: TIdSdpTestConnectionListener;
+begin
+  L1 := TIdSdpTestConnectionListener.Create;
+  try
+    L2 := TIdSdpTestConnectionListener.Create;
+    try
+      Self.Conn.AddDataListener(L1);
+      Self.Conn.AddDataListener(L2);
+
+      Self.Conn.ReceiveData(Self.Data, Self.ReceivedOn);
+
+      Check(not L1.OnDataCalled, 'L1 notified (null connections don''t receive data!)');
+      Check(not L2.OnDataCalled, 'L2 notified (null connections don''t receive data!)');
+    finally
+      Self.Conn.RemoveDataListener(L2);
+      L2.Free;
+    end;
+  finally
+    Self.Conn.RemoveDataListener(L1);
+    L1.Free;
+  end;
+end;
+
+procedure TestTIdSdpMockTcpNullConnection.TestConnectTo;
+begin
+  Self.Conn.ConnectTo('1.2.3.4', 1234);
+  Check(not Self.Conn.IsActive,    'Null connections can''t be active');
+  Check(not Self.Conn.IsConnected, 'Null connections can''t be connected');
+end;
+
+procedure TestTIdSdpMockTcpNullConnection.TestForceDisconnect;
+var
+  L: TIdSdpTestConnectionListener;
+begin
+  L := TIdSdpTestConnectionListener.Create;
+  try
+    Self.Conn.AddDataListener(L);
+
+    Self.Conn.ConnectTo('1.2.3.4', 1234);
+    Self.Conn.ForceDisconnect;
+
+    Check(not Self.Conn.IsActive,    'Null connections can''t be active');
+    Check(not Self.Conn.IsConnected, 'Null connections can''t be connected');
+    Check(not L.OnDisconnectCalled,  'Null connections can''t be disconnected');
+  finally
+    Self.Conn.RemoveDataListener(L);
+    L.Free;
+  end;
+end;
+
+procedure TestTIdSdpMockTcpNullConnection.TestListenOn;
+begin
+  Self.Conn.ListenOn('1.2.3.4', 1234);
+  Check(not Self.Conn.IsActive, 'Null connections can''t be active');
+end;
+
+procedure TestTIdSdpMockTcpNullConnection.TestRemoveDataListener;
+var
+  L1, L2: TIdSdpTestConnectionListener;
+begin
+  L1 := TIdSdpTestConnectionListener.Create;
+  try
+    L2 := TIdSdpTestConnectionListener.Create;
+    try
+      Self.Conn.AddDataListener(L1);
+      Self.Conn.AddDataListener(L2);
+      Self.Conn.RemoveDataListener(L2);
+
+      Self.Conn.ReceiveData(Self.Data, Self.ReceivedOn);
+
+      Check(not L1.OnDataCalled, 'L1 notified (null connections don''t receive data!)');
+      Check(not L2.OnDataCalled, 'L2 notified (null connections don''t receive data!)');
+    finally
+      L2.Free;
+    end;
+  finally
+    Self.Conn.RemoveDataListener(L1);
+    L1.Free;
+  end;
+end;
+
+procedure TestTIdSdpMockTcpNullConnection.TestRemotePartyAccepts;
+var
+  L: TIdSdpTestConnectionListener;
+begin
+  L := TIdSdpTestConnectionListener.Create;
+  try
+    Self.Conn.AddDataListener(L);
+
+    Check(not Self.Conn.IsConnected, 'New connection can''t be connected');
+
+    Self.Conn.ConnectTo('1.2.3.4', 1234);
+    Check(not Self.Conn.IsConnected, 'Remote party has yet to establish their end');
+
+    Self.Conn.RemotePartyAccepts;
+    Check(not Self.Conn.IsConnected, 'Remote party established their end, but null connections can''t be connected');
+    Check(not L.OnConnectCalled, 'L notified: null connections can''t connect');
+  finally
+    Self.Conn.RemoveDataListener(L);
+    L.Free;
+  end;
+end;
+
+procedure TestTIdSdpMockTcpNullConnection.TestSendData;
+var
+  Data: TStringStream;
+begin
+  CheckEquals('', Self.Conn.SentData, 'New connection can''t have sent data');
+
+  Data := TStringStream.Create('foo');
+  try
+    Self.Conn.SendData(Data);
+
+    CheckEquals('', Self.Conn.SentData, 'Cannot send data when not active');
+
+    Self.Conn.ConnectTo('127.0.0.1', 8000);
+
+    Self.Conn.SendData(Data);
+    CheckEquals('', Self.Conn.SentData, 'Null connections can''t send data');
+  finally
+    Data.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSdpMockTcpClientConnection                                          *
+//******************************************************************************
+//* TestTIdSdpMockTcpClientConnection Protected methods ************************
+
+procedure TestTIdSdpMockTcpClientConnection.Activate(Connection: TIdSdpMockTcpConnection);
+begin
+  (Connection as TIdSdpMockTcpClientConnection).ConnectTo('1.2.3.4', 1234);
+end;
+
+function TestTIdSdpMockTcpClientConnection.CreateConnection: TIdSdpMockTcpConnection;
+begin
+  Result := TIdSdpMockTcpClientConnection.Create;
+end;
+
+//* TestTIdSdpMockTcpClientConnection Published methods ************************
+
+procedure TestTIdSdpMockTcpClientConnection.TestConnectTo;
+const
+  Address = '1.2.3.4';
+  Port    = 1234;
+begin
+  Self.Conn.ConnectTo(Address, Port);
+
+  Check(Self.Conn.ConnectToCalled, 'ConnectTo flag not set');
+  Check(Self.Conn.IsActive,        'Connection not marked as active');
+  Check(not Self.Conn.IsServer,    'Connection thinks it''s a server');
+  CheckEquals(Address, Self.Conn.PeerAddress, 'Tried to connect to wrong address');
+  CheckEquals(Port,    Self.Conn.PeerPort,    'Tried to connect to wrong port');
+end;
+
+procedure TestTIdSdpMockTcpClientConnection.TestForceDisconnect;
+var
+  L: TIdSdpTestConnectionListener;
+begin
+  L := TIdSdpTestConnectionListener.Create;
+  try
+    Self.Conn.AddDataListener(L);
+
+    Self.Conn.ConnectTo('1.2.3.4', 1234);
+    Self.Conn.RemotePartyAccepts;
+
+    Check(Self.Conn.IsConnected, 'Connection not marked as connected');
+
+    Self.Conn.ForceDisconnect;
+    Check(not Self.Conn.IsActive, 'Connection not marked as inactive');
+    Check(L.OnDisconnectCalled, 'Listener not notified of disconnection');
+    Check(Self.Conn = L.ConnectionParam, 'Connection param');
+  finally
+    Self.Conn.RemoveDataListener(L);
+    L.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSdpMockTcpServerConnection                                          *
+//******************************************************************************
+//* TestTIdSdpMockTcpServerConnection Protected methods ************************
+
+procedure TestTIdSdpMockTcpServerConnection.Activate(Connection: TIdSdpMockTcpConnection);
+begin
+  (Connection as TIdSdpMockTcpServerConnection).ListenOn('1.2.3.4', 1234);
+end;
+
+function TestTIdSdpMockTcpServerConnection.CreateConnection: TIdSdpMockTcpConnection;
+begin
+  Result := TIdSdpMockTcpServerConnection.Create;
+end;
+
+//* TestTIdSdpMockTcpServerConnection Published methods ************************
+
+procedure TestTIdSdpMockTcpServerConnection.TestForceDisconnect;
+var
+  L: TIdSdpTestConnectionListener;
+begin
+  L := TIdSdpTestConnectionListener.Create;
+  try
+    Self.Conn.AddDataListener(L);
+
+    Self.Conn.ListenOn('1.2.3.4', 1234);
+    Self.Conn.RemotePartyAccepts;
+
+    Check(Self.Conn.IsActive, 'Connection not marked as active');
+
+    Self.Conn.ForceDisconnect;
+    Check(not Self.Conn.IsActive, 'Connection not marked as inactive');
+    Check(L.OnDisconnectCalled, 'Listener not notified of disconnection');
+    Check(Self.Conn = L.ConnectionParam, 'Connection param');
+  finally
+    Self.Conn.RemoveDataListener(L);
+    L.Free;
+  end;
+end;
+
+procedure TestTIdSdpMockTcpServerConnection.TestListenOn;
+const
+  Address = '1.2.3.4';
+  Port    = 1234;
+begin
+  Self.Conn.ListenOn(Address, Port);
+
+  Check(Self.Conn.ListenOnCalled, 'ListenOn flag not set');
+  Check(Self.Conn.IsActive,       'Connection not marked as active');
+  Check(Self.Conn.IsServer,       'Connection thinks it''s a client');
+
+  CheckEquals(Address, Self.Conn.Address, 'Listening on wrong address');
+  CheckEquals(Port,    Self.Conn.Port,    'Listening on wrong port');
+end;
+
+procedure TestTIdSdpMockTcpServerConnection.TestRemotePartyAccepts;
+begin
+  Check(not Self.Conn.IsConnected, 'New connection can''t be connected');
+
+  Self.Conn.ListenOn('1.2.3.4', 1234);
+  Check(not Self.Conn.IsConnected, 'Remote party has yet to establish their end');
+
+  Self.Conn.RemotePartyAccepts;
+  Check(Self.Conn.IsConnected, 'Remote party established their end, but no connection');
+end;
+
+//******************************************************************************
 //* TestTIdSdpTcpClientConnection                                              *
 //******************************************************************************
 //* TestTIdSdpTcpClientConnection Public methods *******************************
 
 procedure TestTIdSdpTcpClientConnection.SetUp;
+var
+  Binding: TIdSocketHandle;
 begin
   inherited SetUp;
 
+  Self.Timer := TIdThreadedTimerQueue.Create(false);
+
+  Self.Connected         := false;
+  Self.ConnectionAddress := '';
+  Self.ConnectionPort    := 0;
+  Self.FirstExecute      := true;
+
   Self.Connection := TIdSdpTcpClientConnection.Create;
+  Self.Connection.Timeout := Self.DefaultTimeout div 2;
+  Self.Connection.Timer   := Self.Timer;
+
+  Self.Listener := TIdSdpTestConnectionListener.Create;
+
+  Self.Connection.AddDataListener(Self.Listener);
+  Self.Connection.AddDataListener(Self);
+
+  Self.DisconnectEvent := TSimpleEvent.Create;
+  Self.ServerEvent     := TSimpleEvent.Create;
+
+  Self.Server := TIdTCPServer.Create(nil);
+  Binding := Self.Server.Bindings.Add;
+  Binding.IP   := '127.0.0.1';
+  Binding.Port := 9000;
+  Self.Server.OnConnect := Self.RegisterConnectionAttempt;
+  Self.Server.OnExecute := Self.DoNothing;
+  Self.Server.Active    := true;
+
+  Self.TestData := TStringStream.Create('In R''lyeh dead Cthulhu lies dreaming');
 end;
 
 procedure TestTIdSdpTcpClientConnection.TearDown;
+begin
+  Self.Connection.RemoveDataListener(Self);
+  Self.Connection.RemoveDataListener(Self.Listener);
+
+  Self.TestData.Free;
+  Self.Server.Free;
+  Self.ServerEvent.Free;
+  Self.DisconnectEvent.Free;
+  Self.Listener.Free;
+  Self.Connection.Free;
+
+  Self.Timer.Terminate;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSdpTcpClientConnection Published methods ****************************
+
+procedure TestTIdSdpTcpClientConnection.DisconnectClient;
+var
+  Connections: TList;
+  I:           Integer;
+begin
+  Connections := Self.Server.Threads.LockList;
+  try
+    for I := 0 to Connections.Count - 1 do
+      TIdPeerThread(Connections[I]).Connection.Disconnect;
+  finally
+    Self.Server.Threads.UnlockList;
+  end;
+end;
+
+procedure TestTIdSdpTcpClientConnection.DoNothing(Thread: TIdPeerThread);
+begin
+end;
+
+procedure TestTIdSdpTcpClientConnection.OnConnect(Connection: TIdSdpBaseTcpConnection);
+begin
+  Self.ThreadEvent.SetEvent;
+end;
+
+procedure TestTIdSdpTcpClientConnection.OnData(Connection: TIdSdpBaseTcpConnection; Data: TStream);
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create('');
+  try
+    S.CopyFrom(Data, 0);
+
+    Self.ReceivedData := S.DataString;
+    
+    Self.CollectedReceivedData := Self.CollectedReceivedData + Self.ReceivedData;
+  finally
+    S.Free;
+  end;
+
+  Self.ThreadEvent.SetEvent;
+end;
+
+procedure TestTIdSdpTcpClientConnection.OnDisconnect(Connection: TIdSdpBaseTcpConnection);
+begin
+  Self.ThreadEvent.SetEvent;
+  Self.DisconnectEvent.SetEvent;
+end;
+
+procedure TestTIdSdpTcpClientConnection.OnException(Connection: TIdSdpBaseTcpConnection;
+                                                    ExceptionType: ExceptClass;
+                                                    ExceptionMessage: String);
+begin
+  Self.ExceptionMessage := ExceptionMessage;
+  Self.ExceptionType    := ExceptionType;
+end;
+
+procedure TestTIdSdpTcpClientConnection.ReadTestData(Thread: TIdPeerThread);
+begin
+  Self.ReceivedData := Thread.Connection.ReadString(Length(Self.TestData.DataString));
+
+  Self.ThreadEvent.SetEvent;
+end;
+
+procedure TestTIdSdpTcpClientConnection.RegisterConnectionAttempt(Thread: TIdPeerThread);
+begin
+  Self.Connected := true;
+  Self.ConnectionAddress := Thread.Connection.Socket.Binding.PeerIP;
+  Self.ConnectionPort    := Thread.Connection.Socket.Binding.PeerPort;
+
+  Self.ServerEvent.SetEvent;
+end;
+
+function TestTIdSdpTcpClientConnection.ServerIP: String;
+begin
+  Result := Self.Server.Bindings[0].IP;
+end;
+
+function TestTIdSdpTcpClientConnection.ServerPort: Integer;
+begin
+  Result := Self.Server.Bindings[0].Port;
+end;
+
+procedure TestTIdSdpTcpClientConnection.WriteTestData;
+begin
+  Self.WriteTestData(Self.TestData);
+end;
+
+procedure TestTIdSdpTcpClientConnection.WriteTestData(Chunk: TStream);
+var
+  Connections: TList;
+  I:           Integer;
+begin
+  Connections := Self.Server.Threads.LockList;
+  try
+    for I := 0 to Connections.Count - 1 do
+      TIdPeerThread(Connections[I]).Connection.WriteStream(Chunk);
+  finally
+    Self.Server.Threads.UnlockList;
+  end;
+end;
+
+procedure TestTIdSdpTcpClientConnection.WriteTestData(Thread: TIdPeerThread);
+begin
+  // This executes in the context of the server thread.
+  Thread.Connection.ReadString(Length(Self.TestData.DataString));
+  if Self.FirstExecute then
+    Thread.Connection.WriteStream(Self.TestData);
+
+  Self.FirstExecute := false;
+end;
+
+//* TestTIdSdpTcpClientConnection Private methods ******************************
+
+procedure TestTIdSdpTcpClientConnection.TestConnectTo;
+begin
+  Check(not Self.Connection.IsActive,    'Connection active before connection attempt');
+  Check(not Self.Connection.IsConnected, 'Connection connected before connection attempt');
+  Self.Connection.ConnectTo(Self.ServerIP, Self.ServerPort);
+
+  Self.WaitForSignaled(Self.ServerEvent, 'No connection made');
+
+  Check(Self.Connected,                'No connection made: flag not set');
+  Check(Self.Listener.OnConnectCalled, 'Listener not notified of connection');
+
+  Check(Self.Connection.IsActive,    'Connection not active');
+  Check(Self.Connection.IsConnected, 'Connection not connected');
+  CheckNotEquals('',                   Self.Connection.Address,     'Connection address not set');
+  CheckNotEquals(0,                    Self.Connection.Port,        'Connection port not set');
+  CheckEquals(Self.Connection.Address, Self.ConnectionAddress,      'Connection address');
+  CheckEquals(Self.Connection.Port,    Self.ConnectionPort,         'Port discrepancy');
+  CheckEquals(ServerIP,                Self.Connection.PeerAddress, 'Connection peer address not set');
+  CheckEquals(ServerPort,              Self.Connection.PeerPort,    'Connection peer port not set');
+end;
+
+procedure TestTIdSdpTcpClientConnection.TestConnectToNonexistentPeer;
+begin
+  Self.Server.Active := false;
+
+  Self.Connection.ConnectTo(Self.ServerIP, Self.ServerPort);
+
+  CheckEquals(EIdConnectException, Self.ExceptionType, 'Unexpected exception type');
+end;
+
+procedure TestTIdSdpTcpClientConnection.TestConnectToTwice;
+begin
+  Self.Connection.ConnectTo(Self.ServerIP, Self.ServerPort);
+
+  Self.ServerEvent.ResetEvent;
+  Self.Connection.ConnectTo(Self.ServerIP, Self.ServerPort);
+
+  Self.WaitForSignaled(Self.DisconnectEvent, 'No disconnection made');
+  Self.WaitForSignaled(Self.ServerEvent,     'No re-connection made');
+end;
+
+procedure TestTIdSdpTcpClientConnection.TestDisconnect;
+begin
+  Self.Connection.ConnectTo(Self.ServerIP, Self.ServerPort);
+
+  Self.WaitForSignaled(Self.ServerEvent, 'No connection made');
+
+  Self.Connection.Disconnect;
+
+  Check(not Self.Connection.IsActive,    'Connection still thinks it''s active');
+  Check(not Self.Connection.IsConnected, 'Connection still thinks it''s connected');
+end;
+
+procedure TestTIdSdpTcpClientConnection.TestDisconnectTwice;
+begin
+  Self.Connection.ConnectTo(Self.ServerIP, Self.ServerPort);
+
+  Self.WaitForSignaled(Self.ServerEvent, 'No connection made');
+
+  Self.Connection.Disconnect;
+
+  Self.DefaultTimeout := OneSecond;
+  Self.ServerEvent.ResetEvent;
+  Self.Connection.Disconnect;
+  Self.WaitForTimeout(Self.ServerEvent, 'Disconnection notification received');
+end;
+
+procedure TestTIdSdpTcpClientConnection.TestLocalDisconnectNotifiesListeners;
+begin
+  Self.Connection.ConnectTo(Self.ServerIP, Self.ServerPort);
+
+  Self.WaitForSignaled(Self.ServerEvent, 'No connection made');
+
+  Self.ThreadEvent.ResetEvent;
+  Self.Connection.Disconnect;
+
+  Self.WaitForSignaled('No disconnection notification');
+  Check(Self.Listener.OnDisconnectCalled, 'Listener not notified of disconnection');
+  Check(not Self.Connection.IsActive,     'Connection still thinks it''s active');
+  Check(not Self.Connection.IsConnected,  'Connection still thinks it''s connected');
+end;
+
+procedure TestTIdSdpTcpClientConnection.TestReceiveData;
+begin
+  Self.Server.OnExecute := Self.WriteTestData;
+
+  Self.Connection.ConnectTo(Self.ServerIP, Self.ServerPort);
+  Self.WaitForSignaled(Self.ServerEvent, 'No connection made');
+
+  Self.ThreadEvent.ResetEvent;
+  Self.WriteTestData;
+  Self.WaitForSignaled('Data not received');
+
+  Self.DisconnectClient;
+  Self.WaitForSignaled(Self.DisconnectEvent, 'No disconnection');
+
+  CheckEquals(Self.TestData.DataString, Self.CollectedReceivedData, 'Data not received correctly');
+end;
+
+procedure TestTIdSdpTcpClientConnection.TestReceiveDataMultipleTimes;
+var
+  ChunkOne, ChunkTwo: TStringStream;
+begin
+  Self.Server.OnExecute := Self.WriteTestData;
+
+  ChunkOne := TStringStream.Create('1');
+  try
+    ChunkTwo := TStringStream.Create('2');
+    try
+      Self.Connection.ConnectTo(Self.ServerIP, Self.ServerPort);
+      Self.WaitForSignaled(Self.ServerEvent, 'No connection made');
+
+      Self.ThreadEvent.ResetEvent;
+      Self.WriteTestData(ChunkOne);
+      Self.WaitForSignaled('ChunkOne not received');
+      CheckEquals(ChunkOne.DataString, Self.ReceivedData, 'First chunk received');
+
+      Self.ThreadEvent.ResetEvent;
+      Self.WriteTestData(ChunkTwo);
+      Self.WaitForSignaled('ChunkTwo not received');
+      CheckEquals(ChunkTwo.DataString, Self.ReceivedData, 'Second chunk received');
+    finally
+      ChunkTwo.Free;
+    end;
+  finally
+    ChunkOne.Free;
+  end;
+end;
+
+procedure TestTIdSdpTcpClientConnection.TestRemoteDisconnectionNotifiesListeners;
+begin
+  Self.Connection.ConnectTo(Self.ServerIP, Self.ServerPort);
+  Self.WaitForSignaled(Self.ServerEvent, 'No connection made');
+
+  Self.DisconnectClient;
+  Self.WaitForSignaled(Self.DisconnectEvent, 'No disconnection notification for server');
+
+  Check(Self.Listener.OnDisconnectCalled, 'Listener not notified of disconnection');
+  Check(not Self.Connection.IsActive,     'Connection still thinks it''s active');
+  Check(not Self.Connection.IsConnected,  'Connection still thinks it''s connected');
+end;
+
+procedure TestTIdSdpTcpClientConnection.TestSendData;
+begin
+  Self.Server.OnExecute := Self.ReadTestData;
+
+  Self.Connection.ConnectTo(Self.ServerIP, Self.ServerPort);
+  Self.WaitForSignaled(Self.ServerEvent, 'No connection made');
+
+  Self.ThreadEvent.ResetEvent;
+  Self.Connection.SendData(Self.TestData);
+
+  Self.WaitForSignaled('No connection made');
+  CheckEquals(Self.TestData.DataString, Self.ReceivedData, 'Data not sent');
+end;
+
+//******************************************************************************
+//* TestTIdSdpTcpServerConnection                                              *
+//******************************************************************************
+//* TestTIdSdpTcpServerConnection Public methods *******************************
+
+procedure TestTIdSdpTcpServerConnection.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Connected := false;
+  Self.LocalIP   := '127.0.0.1';
+  Self.LocalPort := 8000;
+
+  Self.Timer := TIdThreadedTimerQueue.Create(false);
+
+  Self.Client := TIdTcpClient.Create(nil);
+  Self.Client.Host        := Self.LocalIP;
+  Self.Client.Port        := Self.LocalPort;
+  Self.Client.ReadTimeout := Self.DefaultTimeout;
+
+  Self.Connection := TIdSdpTcpServerConnection.Create;
+  Self.Connection.AddDataListener(Self);
+  Self.Connection.Timer := Self.Timer;
+  Self.Connection.AddDataListener(Self);
+
+  Self.TestData := TStringStream.Create('In R''lyeh dead Cthulhu lies dreaming');
+end;
+
+procedure TestTIdSdpTcpServerConnection.TearDown;
+begin
+  Self.Connection.RemoveDataListener(Self);
+
+  Self.TestData.Free;
+  Self.Connection.Free;
+  Self.Client.Free;
+  Self.Timer.Terminate;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSdpTcpServerConnection Private methods ******************************
+
+procedure TestTIdSdpTcpServerConnection.CheckPortFree(Address: String; Port: Integer);
+var
+  B: TIdSocketHandle;
+  S: TIdTCPServer;
+begin
+  S := TIdTCPServer.Create(nil);
+  try
+    B := S.Bindings.Add;
+    B.IP   := Address;
+    B.Port := Port;
+
+    try
+      S.Active := true;
+    except
+      Fail('Something is blocking TCP/' + Address + '/' + IntToStr(Port));
+    end;
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdSdpTcpServerConnection.CheckPortUsed(Address: String; Port: Integer);
+var
+  B: TIdSocketHandle;
+  S: TIdTCPServer;
+begin
+  S := TIdTCPServer.Create(nil);
+  try
+    B := S.Bindings.Add;
+    B.IP   := Address;
+    B.Port := Port;
+
+    try
+      S.Active := true;
+      Fail('Nothing is running on TCP/' + Address + '/' + IntToStr(Port));
+    except
+      on EIdCouldNotBindSocket do;
+    end;
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdSdpTcpServerConnection.OnConnect(Connection: TIdSdpBaseTcpConnection);
+begin
+  Self.ThreadEvent.SetEvent;
+end;
+
+procedure TestTIdSdpTcpServerConnection.OnData(Connection: TIdSdpBaseTcpConnection; Data: TStream);
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create('');
+  try
+    S.CopyFrom(Data, 0);
+
+    Self.ReceivedData := S.DataString;
+  finally
+    S.Free;
+  end;
+
+  Self.ThreadEvent.SetEvent;
+end;
+
+procedure TestTIdSdpTcpServerConnection.OnDisconnect(Connection: TIdSdpBaseTcpConnection);
+begin
+  Self.ThreadEvent.SetEvent;
+end;
+
+procedure TestTIdSdpTcpServerConnection.OnException(Connection: TIdSdpBaseTcpConnection;
+                                                    ExceptionType: ExceptClass;
+                                                    ExceptionMessage: String);
+begin
+end;
+
+//* TestTIdSdpTcpServerConnection Published methods ****************************
+
+procedure TestTIdSdpTcpServerConnection.TestAddressAndPort;
+begin
+  Self.Connection.ListenOn(Self.LocalIP, Self.LocalPort);
+  Self.Client.Connect(Self.DefaultTimeout);
+  Self.WaitForSignaled('No connection');
+
+  CheckEquals(Self.LocalIP,   Self.Connection.Address, 'Address');
+  CheckEquals(Self.LocalPort, Self.Connection.Port,    'Port');
+end;
+
+procedure TestTIdSdpTcpServerConnection.TestConnectionNotifiesListeners;
+begin
+  Self.Connection.ListenOn(Self.LocalIP, Self.LocalPort);
+  Self.Client.Connect(Self.DefaultTimeout);
+  Self.WaitForSignaled('No connection');
+end;
+
+procedure TestTIdSdpTcpServerConnection.TestDisconnect;
+begin
+  Self.Connection.ListenOn(Self.LocalIP, Self.LocalPort);
+  Self.Client.Connect(Self.DefaultTimeout);
+  Self.WaitForSignaled('No connection');
+
+  Self.Connection.Disconnect;
+
+  Check(not Self.Connection.IsActive,    'Disconnecting means the connection stop listening');
+  Check(not Self.Connection.IsConnected, 'Connection still connected');
+  CheckPortFree(Self.LocalIP, Self.LocalPort);
+end;
+
+procedure TestTIdSdpTcpServerConnection.TestLocalDisconnectionNotifiesListeners;
+begin
+  Self.Connection.ListenOn(Self.LocalIP, Self.LocalPort);
+  Self.Client.Connect(Self.DefaultTimeout);
+  Self.WaitForSignaled('No connection');
+
+  Self.ThreadEvent.ResetEvent;
+  Self.Connection.Disconnect;
+
+  Self.WaitForSignaled('No disconnection notification');
+end;
+
+procedure TestTIdSdpTcpServerConnection.TestListenOn;
+begin
+  Check(not Self.Connection.IsActive,    'Connection marked as active before listening');
+  Check(not Self.Connection.IsConnected, 'Connection marked as connected before listening');
+  CheckPortFree(Self.LocalIP, Self.LocalPort);
+  Self.Connection.ListenOn(Self.LocalIP, Self.LocalPort);
+  CheckPortUsed(Self.LocalIP, Self.LocalPort);
+
+  Check(Self.Connection.IsActive,        'Connection not marked as active after listening');
+  Check(not Self.Connection.IsConnected, 'Connection marked as connected before a connect');
+
+  Self.ThreadEvent.ResetEvent;
+  Self.Client.Connect(Self.DefaultTimeout);
+  Self.WaitForSignaled('No connection notification');
+
+  Check(Self.Connection.IsActive,    'Connection not marked as active after a connect');
+  Check(Self.Connection.IsConnected, 'Connection not marked as connected after a connect');
+end;
+
+procedure TestTIdSdpTcpServerConnection.TestPeerAddressAndPort;
+begin
+  Self.Connection.ListenOn(Self.LocalIP, Self.LocalPort);
+  Self.Client.Connect(Self.DefaultTimeout);
+  Self.WaitForSignaled('No connection');
+
+  CheckEquals(Self.Client.Socket.Binding.IP, Self.Connection.PeerAddress, 'PeerAddress');
+  CheckEquals(Self.Client.Socket.Binding.Port, Self.Connection.PeerPort, 'PeerPort');
+end;
+
+procedure TestTIdSdpTcpServerConnection.TestReceiveData;
+begin
+  Self.Connection.ListenOn(Self.LocalIP, Self.LocalPort);
+  Self.Client.Connect(Self.DefaultTimeout);
+  Self.WaitForSignaled('No connection');
+
+  Self.ThreadEvent.ResetEvent;
+  Self.Client.WriteStream(Self.TestData);
+
+  Self.WaitForSignaled('No data arrived');
+end;
+
+procedure TestTIdSdpTcpServerConnection.TestRemoteDisconnectionNotifiesListeners;
+begin
+  Self.Connection.ListenOn(Self.LocalIP, Self.LocalPort);
+  Self.Client.Connect(Self.DefaultTimeout);
+  Self.WaitForSignaled('No connection');
+
+  Self.ThreadEvent.ResetEvent;
+  Self.Client.Disconnect;
+
+  Self.WaitForSignaled('No disconnection');
+end;
+
+procedure TestTIdSdpTcpServerConnection.TestSendData;
+var
+  Received: String;
+begin
+  Self.Connection.ListenOn(Self.LocalIP, Self.LocalPort);
+  Self.Client.Connect(Self.DefaultTimeout);
+
+  Self.Connection.SendData(Self.TestData);
+
+  try
+    Received := Self.Client.ReadString(Length(Self.TestData.DataString));
+  except
+    on EIdConnClosedGracefully do;
+  end;
+
+  CheckEquals(Self.TestData.DataString, Received, 'Data not sent');
+end;
+
+//******************************************************************************
+//* TestTIdSdpTcpNullConnection                                                *
+//******************************************************************************
+//* TestTIdSdpTcpNullConnection Public methods *********************************
+
+procedure TestTIdSdpTcpNullConnection.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Connection := TIdSdpTcpNullConnection.Create;
+end;
+
+procedure TestTIdSdpTcpNullConnection.TearDown;
 begin
   Self.Connection.Free;
 
   inherited TearDown;
 end;
 
-procedure TestTIdSdpTcpClientConnection.TestConnectTo;
+//* TestTIdSdpTcpNullConnection Published methods ******************************
+
+procedure TestTIdSdpTcpNullConnection.TestAddressAndPort;
 begin
-  Fail('Start here');
+  CheckEquals(IPv4ZeroAddress, Self.Connection.Address, 'Address');
+  CheckEquals(TcpDiscardPort,  Self.Connection.Port,    'Port');
+end;
+
+procedure TestTIdSdpTcpNullConnection.TestPeerAddressAndPort;
+begin
+  CheckEquals(IPv4ZeroAddress, Self.Connection.PeerAddress, 'PeerAddress');
+  CheckEquals(TcpDiscardPort,  Self.Connection.PeerPort,    'PeerPort');
 end;
 
 //******************************************************************************
@@ -8333,269 +9379,6 @@ begin
   finally
     Data.Free;
   end;
-end;
-
-//******************************************************************************
-//* TestTIdSdpMockTcpNullConnection                                            *
-//******************************************************************************
-//* TestTIdSdpMockTcpNullConnection Protected methods **************************
-
-procedure TestTIdSdpMockTcpNullConnection.Activate(Connection: TIdSdpMockTcpConnection);
-begin
-  Connection.ConnectTo('127.0.0.1', '1.2.3.4', 1234);
-end;
-
-function TestTIdSdpMockTcpNullConnection.CreateConnection: TIdSdpMockTcpConnection;
-begin
-  Result := TIdSdpMockTcpNullConnection.Create;
-end;
-
-//* TestTIdSdpMockTcpNullConnection Published methods **************************
-
-procedure TestTIdSdpMockTcpNullConnection.TestAddDataListener;
-var
-  L1, L2: TIdSdpTestConnectionListener;
-begin
-  L1 := TIdSdpTestConnectionListener.Create;
-  try
-    L2 := TIdSdpTestConnectionListener.Create;
-    try
-      Self.Conn.AddDataListener(L1);
-      Self.Conn.AddDataListener(L2);
-
-      Self.Conn.ReceiveData(Self.Data, Self.ReceivedOn);
-
-      Check(not L1.OnDataCalled, 'L1 notified (null connections don''t receive data!)');
-      Check(not L2.OnDataCalled, 'L2 notified (null connections don''t receive data!)');
-    finally
-      Self.Conn.RemoveDataListener(L2);
-      L2.Free;
-    end;
-  finally
-    Self.Conn.RemoveDataListener(L1);
-    L1.Free;
-  end;
-end;
-
-procedure TestTIdSdpMockTcpNullConnection.TestConnectTo;
-begin
-  Self.Conn.ConnectTo('127.0.0.1', '1.2.3.4', 1234);
-  Check(not Self.Conn.IsActive,    'Null connections can''t be active');
-  Check(not Self.Conn.IsConnected, 'Null connections can''t be connected');
-end;
-
-procedure TestTIdSdpMockTcpNullConnection.TestForceDisconnect;
-var
-  L: TIdSdpTestConnectionListener;
-begin
-  L := TIdSdpTestConnectionListener.Create;
-  try
-    Self.Conn.AddDataListener(L);
-
-    Self.Conn.ConnectTo('127.0.0.1', '1.2.3.4', 1234);
-    Self.Conn.ForceDisconnect;
-
-    Check(not Self.Conn.IsActive,    'Null connections can''t be active');
-    Check(not Self.Conn.IsConnected, 'Null connections can''t be connected');
-    Check(not L.OnDisconnectCalled,  'Null connections can''t be disconnected');
-  finally
-    Self.Conn.RemoveDataListener(L);
-    L.Free;
-  end;
-end;
-
-procedure TestTIdSdpMockTcpNullConnection.TestListenOn;
-begin
-  Self.Conn.ListenOn('1.2.3.4', 1234);
-  Check(not Self.Conn.IsActive, 'Null connections can''t be active');
-end;
-
-procedure TestTIdSdpMockTcpNullConnection.TestRemoveDataListener;
-var
-  L1, L2: TIdSdpTestConnectionListener;
-begin
-  L1 := TIdSdpTestConnectionListener.Create;
-  try
-    L2 := TIdSdpTestConnectionListener.Create;
-    try
-      Self.Conn.AddDataListener(L1);
-      Self.Conn.AddDataListener(L2);
-      Self.Conn.RemoveDataListener(L2);
-
-      Self.Conn.ReceiveData(Self.Data, Self.ReceivedOn);
-
-      Check(not L1.OnDataCalled, 'L1 notified (null connections don''t receive data!)');
-      Check(not L2.OnDataCalled, 'L2 notified (null connections don''t receive data!)');
-    finally
-      L2.Free;
-    end;
-  finally
-    Self.Conn.RemoveDataListener(L1);
-    L1.Free;
-  end;
-end;
-
-procedure TestTIdSdpMockTcpNullConnection.TestRemotePartyAccepts;
-var
-  L: TIdSdpTestConnectionListener;
-begin
-  L := TIdSdpTestConnectionListener.Create;
-  try
-    Self.Conn.AddDataListener(L);
-
-    Check(not Self.Conn.IsConnected, 'New connection can''t be connected');
-
-    Self.Conn.ConnectTo('127.0.0.1', '1.2.3.4', 1234);
-    Check(not Self.Conn.IsConnected, 'Remote party has yet to establish their end');
-
-    Self.Conn.RemotePartyAccepts;
-    Check(not Self.Conn.IsConnected, 'Remote party established their end, but null connections can''t be connected');
-    Check(not L.OnConnectCalled, 'L notified: null connections can''t connect');
-  finally
-    Self.Conn.RemoveDataListener(L);
-    L.Free;
-  end;
-end;
-
-procedure TestTIdSdpMockTcpNullConnection.TestSendData;
-var
-  Data: TStringStream;
-begin
-  CheckEquals('', Self.Conn.SentData, 'New connection can''t have sent data');
-
-  Data := TStringStream.Create('foo');
-  try
-    Self.Conn.SendData(Data);
-
-    CheckEquals('', Self.Conn.SentData, 'Cannot send data when not active');
-
-    Self.Conn.ConnectTo('127.0.0.1', '127.0.0.1', 8000);
-
-    Self.Conn.SendData(Data);
-    CheckEquals('', Self.Conn.SentData, 'Null connections can''t send data');
-  finally
-    Data.Free;
-  end;
-end;
-
-//******************************************************************************
-//* TestTIdSdpMockTcpClientConnection                                          *
-//******************************************************************************
-//* TestTIdSdpMockTcpClientConnection Protected methods ************************
-
-procedure TestTIdSdpMockTcpClientConnection.Activate(Connection: TIdSdpMockTcpConnection);
-begin
-  (Connection as TIdSdpMockTcpClientConnection).ConnectTo('127.0.0.1', '1.2.3.4', 1234);
-end;
-
-function TestTIdSdpMockTcpClientConnection.CreateConnection: TIdSdpMockTcpConnection;
-begin
-  Result := TIdSdpMockTcpClientConnection.Create;
-end;
-
-//* TestTIdSdpMockTcpClientConnection Published methods ************************
-
-procedure TestTIdSdpMockTcpClientConnection.TestConnectTo;
-const
-  Address = '1.2.3.4';
-  Port    = 1234;
-begin
-  Self.Conn.ConnectTo('127.0.0.1', Address, Port);
-
-  Check(Self.Conn.ConnectToCalled, 'ConnectTo flag not set');
-  Check(Self.Conn.IsActive,        'Connection not marked as active');
-  Check(not Self.Conn.IsServer,    'Connection thinks it''s a server');
-  CheckEquals(Address, Self.Conn.PeerAddress, 'Tried to connect to wrong address');
-  CheckEquals(Port,    Self.Conn.PeerPort,    'Tried to connect to wrong port');
-end;
-
-procedure TestTIdSdpMockTcpClientConnection.TestForceDisconnect;
-var
-  L: TIdSdpTestConnectionListener;
-begin
-  L := TIdSdpTestConnectionListener.Create;
-  try
-    Self.Conn.AddDataListener(L);
-
-    Self.Conn.ConnectTo('127.0.0.1', '1.2.3.4', 1234);
-    Self.Conn.RemotePartyAccepts;
-
-    Check(Self.Conn.IsConnected, 'Connection not marked as connected');
-
-    Self.Conn.ForceDisconnect;
-    Check(not Self.Conn.IsActive, 'Connection not marked as inactive');
-    Check(L.OnDisconnectCalled, 'Listener not notified of disconnection');
-    Check(Self.Conn = L.ConnectionParam, 'Connection param');
-  finally
-    Self.Conn.RemoveDataListener(L);
-    L.Free;
-  end;
-end;
-
-//******************************************************************************
-//* TestTIdSdpMockTcpServerConnection                                          *
-//******************************************************************************
-//* TestTIdSdpMockTcpServerConnection Protected methods ************************
-
-procedure TestTIdSdpMockTcpServerConnection.Activate(Connection: TIdSdpMockTcpConnection);
-begin
-  (Connection as TIdSdpMockTcpServerConnection).ListenOn('1.2.3.4', 1234);
-end;
-
-function TestTIdSdpMockTcpServerConnection.CreateConnection: TIdSdpMockTcpConnection;
-begin
-  Result := TIdSdpMockTcpServerConnection.Create;
-end;
-
-//* TestTIdSdpMockTcpServerConnection Published methods ************************
-
-procedure TestTIdSdpMockTcpServerConnection.TestForceDisconnect;
-var
-  L: TIdSdpTestConnectionListener;
-begin
-  L := TIdSdpTestConnectionListener.Create;
-  try
-    Self.Conn.AddDataListener(L);
-
-    Self.Conn.ListenOn('1.2.3.4', 1234);
-    Self.Conn.RemotePartyAccepts;
-
-    Check(Self.Conn.IsActive, 'Connection not marked as active');
-
-    Self.Conn.ForceDisconnect;
-    Check(not Self.Conn.IsActive, 'Connection not marked as inactive');
-    Check(L.OnDisconnectCalled, 'Listener not notified of disconnection');
-    Check(Self.Conn = L.ConnectionParam, 'Connection param');
-  finally
-    Self.Conn.RemoveDataListener(L);
-    L.Free;
-  end;
-end;
-
-procedure TestTIdSdpMockTcpServerConnection.TestListenOn;
-const
-  Address = '1.2.3.4';
-  Port    = 1234;
-begin
-  Self.Conn.ListenOn(Address, Port);
-
-  Check(Self.Conn.ListenOnCalled,  'ListenOn flag not set');
-  Check(Self.Conn.IsActive,        'Connection not marked as active');
-  Check(Self.Conn.IsServer,        'Connection thinks it''s a client');
-
-  CheckEquals(Address, Self.Conn.Address, 'Listening on wrong address');
-  CheckEquals(Port,    Self.Conn.Port,    'Listening on wrong port');
-end;
-
-procedure TestTIdSdpMockTcpServerConnection.TestRemotePartyAccepts;
-begin
-  Check(not Self.Conn.IsConnected, 'New connection can''t be connected');
-
-  Self.Conn.ListenOn('1.2.3.4', 1234);
-  Check(not Self.Conn.IsConnected, 'Remote party has yet to establish their end');
-
-  Self.Conn.RemotePartyAccepts;
-  Check(Self.Conn.IsConnected, 'Remote party established their end, but no connection');
 end;
 
 //******************************************************************************
@@ -9356,16 +10139,16 @@ begin
   end;
 end;
 
-function TestTIdSDPMultimediaSession.MultiStreamSDP(LowPort, HighPort: Cardinal): String;
+function TestTIdSDPMultimediaSession.MultiStreamSDP(LowPort, HighPort: Cardinal; Protocol: String = Id_SDP_RTPAVP): String;
 begin
   // One stream on loopback:LowPort; one stream on NIC:HighPort
   Result := 'v=0'#13#10
           + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
           + 's=-'#13#10
-          + 'm=text ' + IntToStr(LowPort) + ' RTP/AVP 96'#13#10
+          + 'm=text ' + IntToStr(LowPort) + ' ' + Protocol + ' 96'#13#10
           + 'c=IN IP4 127.0.0.1'#13#10
           + 'a=rtpmap:96 t140/1000'#13#10
-          + 'm=text ' + IntToStr(HighPort) + ' RTP/AVP 96'#13#10
+          + 'm=text ' + IntToStr(HighPort) + ' ' + Protocol + ' 96'#13#10
           + 'c=IN IP4 ' + GStack.LocalAddress + #13#10
           + 'a=rtpmap:96 t140/1000'#13#10
 end;
@@ -9918,6 +10701,18 @@ begin
   end;
 end;
 
+procedure TestTIdSDPMultimediaSession.TestStartListeningTCP;
+begin
+  Self.MS.StartListening(Self.MultiStreamSDP(8000, 9000, Id_SDP_TCP));
+
+  CheckEquals(TIdSdpTcpMediaStream,
+              Self.MS.Streams[0].ClassType,
+              'Type of first stream');
+  CheckEquals(TIdSdpTcpMediaStream,
+              Self.MS.Streams[1].ClassType,
+              'Type of first stream');
+end;
+
 procedure TestTIdSDPMultimediaSession.TestStopListening;
 var
   LowPort:  Cardinal;
@@ -9961,6 +10756,124 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSdpTcpConnectionWaitTestCase                                            *
+//******************************************************************************
+//* TIdSdpTcpConnectionWaitTestCase Public methods *****************************
+
+procedure TIdSdpTcpConnectionWaitTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Connection := TIdSdpMockTcpClientConnection.Create;
+  Self.Data       := TStringStream.Create('foo');
+
+  Self.Connection.ConnectTo('127.0.0.1', 8000);
+
+  Self.Wait := Self.CreateWait;
+  Self.Wait.ConnectionID := Self.Connection.ID;
+end;
+
+procedure TIdSdpTcpConnectionWaitTestCase.TearDown;
+begin
+  Self.Data.Free;
+  Self.Connection.Free;
+  Self.Wait.Free;
+
+  inherited TearDown;
+end;
+
+//* TIdSdpTcpConnectionWaitTestCase Protected methods **************************
+
+procedure TIdSdpTcpConnectionWaitTestCase.CheckTriggerDoesNothing(Msg: String);
+begin
+  Fail(Self.ClassName + ' MUST override CheckTriggerDoesNothing');
+end;
+
+procedure TIdSdpTcpConnectionWaitTestCase.CheckTriggerFired;
+begin
+  Fail(Self.ClassName + ' MUST override CheckTriggerFired');
+end;
+
+function TIdSdpTcpConnectionWaitTestCase.CreateWait: TIdSdpTcpConnectionWait;
+begin
+  Result := nil;
+  Fail(Self.ClassName + ' MUST override CreateWait');
+end;
+
+//* TIdSdpTcpConnectionWaitTestCase Published methods **************************
+
+procedure TIdSdpTcpConnectionWaitTestCase.TestTrigger;
+begin
+  Self.Wait.Trigger;
+  CheckTriggerFired;
+end;
+
+procedure TIdSdpTcpConnectionWaitTestCase.TestTriggerWithNonexistentConnection;
+begin
+  Self.Wait.ConnectionID := 'fake ID';
+  Self.Wait.Trigger;
+  CheckTriggerDoesNothing('Triggered using a nonexistent object ID');
+end;
+
+procedure TIdSdpTcpConnectionWaitTestCase.TestTriggerWithWrongTypeOfObject;
+var
+  R: TIdRegisteredObject;
+begin
+  R := TIdRegisteredObject.Create;
+  try
+    Self.Wait.ConnectionID := R.ID;
+    Self.Wait.Trigger;
+    CheckTriggerDoesNothing('Triggered using the ID of some inappropriate object');
+  finally
+    R.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSdpTcpReceiveDataWait                                               *
+//******************************************************************************
+//* TestTIdSdpTcpReceiveDataWait Public methods ********************************
+
+procedure TestTIdSdpTcpReceiveDataWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Binding := TIdConnectionBindings.Create(Self.Connection.Address,
+                                               Self.Connection.Port,
+                                               Self.Connection.PeerAddress,
+                                               Self.Connection.PeerPort,
+                                               Id_SDP_TCP);
+
+  Self.RecvWait := Self.Wait as TIdSdpTcpReceiveDataWait;
+  Self.RecvWait.Data       := Self.Data;
+  Self.RecvWait.ReceivedOn := Self.Binding;
+end;
+
+procedure TestTIdSdpTcpReceiveDataWait.TearDown;
+begin
+  Self.Binding.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSdpTcpReceiveDataWait Protected methods *****************************
+
+procedure TestTIdSdpTcpReceiveDataWait.CheckTriggerDoesNothing(Msg: String);
+begin
+  CheckEquals('', Self.Connection.ReceivedData, Msg);
+end;
+
+procedure TestTIdSdpTcpReceiveDataWait.CheckTriggerFired;
+begin
+  CheckEquals(Self.Data.DataString, Self.Connection.ReceivedData, 'Data not received, so Wait didn''t Trigger');
+end;
+
+function TestTIdSdpTcpReceiveDataWait.CreateWait: TIdSdpTcpConnectionWait;
+begin
+  Result := TIdSdpTcpReceiveDataWait.Create;
+end;
+
+//******************************************************************************
 //* TestTIdSdpTcpSendDataWait                                                  *
 //******************************************************************************
 //* TestTIdSdpTcpSendDataWait Public methods ***********************************
@@ -9969,32 +10882,148 @@ procedure TestTIdSdpTcpSendDataWait.SetUp;
 begin
   inherited SetUp;
 
-  Self.Connection := TIdSdpMockTcpClientConnection.Create;
-  Self.Data       := TStringStream.Create('foo');
-  Self.Wait       := TIdSdpTcpSendDataWait.Create;
-
-  Self.Wait.ConnectionID := Self.Connection.ID;
-  Self.Wait.Data         := Self.Data;
-
-  Self.Connection.ConnectTo('127.0.0.1', '127.0.0.1', 8000);
+  Self.SendWait := Self.Wait as TIdSdpTcpSendDataWait;
+  Self.SendWait.Data := Self.Data;
 end;
 
-procedure TestTIdSdpTcpSendDataWait.TearDown;
+//* TestTIdSdpTcpSendDataWait Protected methods ********************************
+
+procedure TestTIdSdpTcpSendDataWait.CheckTriggerDoesNothing(Msg: String);
 begin
-  Self.Wait.Free;
-  Self.Data.Free;
-  Self.Connection.Free;
+  CheckEquals('', Self.Connection.SentData, Msg);
+end;
+
+procedure TestTIdSdpTcpSendDataWait.CheckTriggerFired;
+begin
+  CheckEquals(Self.Data.DataString, Self.Connection.SentData, 'Data not sent, so Wait didn''t Trigger');
+end;
+
+function TestTIdSdpTcpSendDataWait.CreateWait: TIdSdpTcpConnectionWait;
+begin
+  Result := TIdSdpTcpSendDataWait.Create;
+end;
+
+//******************************************************************************
+//* TestTIdSdpTcpConnectionConnectedWait                                       *
+//******************************************************************************
+//* TestTIdSdpTcpConnectionConnectedWait Public methods ************************
+
+procedure TestTIdSdpTcpConnectionConnectedWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Listener := TIdSdpTestConnectionListener.Create;
+  Self.Connection.AddDataListener(Self.Listener);
+end;
+
+procedure TestTIdSdpTcpConnectionConnectedWait.TearDown;
+begin
+  inherited TearDown;
+
+//  Self.Connection.RemoveDataListener(Self.Listener);
+
+  Self.Listener.Free;
+end;
+
+//* TestTIdSdpTcpConnectionConnectedWait Protected methods *********************
+
+procedure TestTIdSdpTcpConnectionConnectedWait.CheckTriggerDoesNothing(Msg: String);
+begin
+  Check(not Self.Listener.OnConnectCalled, Msg);
+end;
+
+procedure TestTIdSdpTcpConnectionConnectedWait.CheckTriggerFired;
+begin
+  Check(Self.Listener.OnConnectCalled, 'Listener not notified - Wait didn''t trigger');
+end;
+
+function TestTIdSdpTcpConnectionConnectedWait.CreateWait: TIdSdpTcpConnectionWait;
+begin
+  Result := TIdSdpTcpConnectionConnectedWait.Create;
+end;
+
+//******************************************************************************
+//* TestTIdSdpTcpConnectionDisconnectedWait                                    *
+//******************************************************************************
+//* TestTIdSdpTcpConnectionDisconnectedWait Public methods *********************
+
+procedure TestTIdSdpTcpConnectionDisconnectedWait.CheckTriggerDoesNothing(Msg: String);
+begin
+  Check(not Self.Listener.OnDisconnectCalled, Msg);
+end;
+
+procedure TestTIdSdpTcpConnectionDisconnectedWait.CheckTriggerFired;
+begin
+  Check(Self.Listener.OnDisconnectCalled, 'Listener not notified - Wait didn''t trigger');
+end;
+
+function TestTIdSdpTcpConnectionDisconnectedWait.CreateWait: TIdSdpTcpConnectionWait;
+begin
+  Result := TIdSdpTcpConnectionDisconnectedWait.Create;
+end;
+
+procedure TestTIdSdpTcpConnectionDisconnectedWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Listener := TIdSdpTestConnectionListener.Create;
+  Self.Connection.AddDataListener(Self.Listener);
+end;
+
+procedure TestTIdSdpTcpConnectionDisconnectedWait.TearDown;
+begin
+  Self.Listener.Free;
 
   inherited TearDown;
 end;
 
-//* TestTIdSdpTcpSendDataWait Published methods ********************************
+//******************************************************************************
+//* TestTIdSdpTcpConnectionExceptionWait                                       *
+//******************************************************************************
+//* TestTIdSdpTcpConnectionExceptionWait Public methods ************************
 
-procedure TestTIdSdpTcpSendDataWait.TestTrigger;
+procedure TestTIdSdpTcpConnectionExceptionWait.SetUp;
 begin
-  Self.Wait.Trigger;
+  Self.ExceptionMessage := 'Access violation reading address 00000000';
+  Self.ExceptionType    := EAccessViolation;
 
-  CheckEquals(Self.Data.DataString, Self.Connection.SentData, 'Data not sent, so Wait didn''t Trigger');
+  inherited SetUp;
+
+  Self.Listener := TIdSdpTestConnectionListener.Create;
+  Self.Connection.AddDataListener(Self.Listener);
+end;
+
+procedure TestTIdSdpTcpConnectionExceptionWait.TearDown;
+begin
+  Self.Listener.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSdpTcpConnectionExceptionWait Protected methods *********************
+
+procedure TestTIdSdpTcpConnectionExceptionWait.CheckTriggerDoesNothing(Msg: String);
+begin
+  Check(not Self.Listener.OnExceptionCalled, Msg);
+end;
+
+procedure TestTIdSdpTcpConnectionExceptionWait.CheckTriggerFired;
+begin
+  Check(Self.Listener.OnExceptionCalled, 'Listener not notified - Wait didn''t trigger');
+
+  CheckEquals(Self.ExceptionType,    Self.Listener.ExceptionType,    'ExceptionType parameter');
+  CheckEquals(Self.ExceptionMessage, Self.Listener.ExceptionMessage, 'ExceptionMessage parameter');
+end;
+
+function TestTIdSdpTcpConnectionExceptionWait.CreateWait: TIdSdpTcpConnectionWait;
+var
+  W: TIdSdpTcpConnectionExceptionWait;
+begin
+  W := TIdSdpTcpConnectionExceptionWait.Create;
+  W.ExceptionMessage := Self.ExceptionMessage;
+  W.ExceptionType    := Self.ExceptionType;
+
+  Result := W;
 end;
 
 //******************************************************************************
@@ -10220,6 +11249,44 @@ begin
         'Listener not notified');
   Check(Self.Connection = Self.Listener.ConnectionParam,
         'Connection parameter');
+end;
+
+//******************************************************************************
+//* TestTIdSdpTcpConnectionOnExceptionMethod                                   *
+//******************************************************************************
+//* TestTIdSdpTcpConnectionOnExceptionMethod Public methods ********************
+
+procedure TestTIdSdpTcpConnectionOnExceptionMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Method := TIdSdpTcpConnectionOnExceptionMethod.Create;
+  Self.Method.Connection       := Self.Connection;
+  Self.Method.ExceptionMessage := 'Access violation read of address 00000000';
+  Self.Method.ExceptionType    := EAccessViolation;
+end;
+
+procedure TestTIdSdpTcpConnectionOnExceptionMethod.TearDown;
+begin
+  Self.Method.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSdpTcpConnectionOnExceptionMethod Published methods *****************
+
+procedure TestTIdSdpTcpConnectionOnExceptionMethod.TestRun;
+begin
+  Self.Method.Run(Self.Listener);
+
+  Check(Self.Listener.OnExceptionCalled,
+        'Listener not notified');
+  Check(Self.Method.Connection = Self.Listener.ConnectionParam,
+        'Connection param');
+  CheckEquals(Self.Method.ExceptionMessage, Self.Listener.ExceptionMessage,
+              'ExceptionMessage param');
+  CheckEquals(Self.Method.ExceptionType, Self.Listener.ExceptionType,
+              'ExceptionType param');
 end;
 
 initialization
