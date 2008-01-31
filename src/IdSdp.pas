@@ -697,6 +697,7 @@ type
     function  IsListening: Boolean; override;
     procedure JoinSession; override;
     function  MatchPort(Port: Cardinal): Boolean;
+   
     procedure RemoveRTPListener(const Listener: IIdRTPListener);
     procedure RemoveRTPSendListener(const Listener: IIdRTPSendListener);
     procedure StartListening; override;
@@ -1058,6 +1059,7 @@ type
     destructor  Destroy; override;
 
     function  AddressTypeFor(Address: String): TIdIPVersion;
+    function  IndexOfStream(S: TIdSdpBaseMediaStream): Integer;
     function  IsListening: Boolean;
     procedure JoinSession;
     function  LocalSessionDescription: String;
@@ -6445,6 +6447,19 @@ begin
     Result := Id_IPv6
   else
     Result := Id_IPUnknown;
+end;
+
+function TIdSDPMultimediaSession.IndexOfStream(S: TIdSdpBaseMediaStream): Integer;
+begin
+  // If S is not a stream that belongs to Self, then return -1.
+  // Otherwise, return the index of the stream.
+
+  Self.StreamLock.Acquire;
+  try
+    Result := Self.fStreams.IndexOf(S);
+  finally
+    Self.StreamLock.Release;
+  end;
 end;
 
 function TIdSDPMultimediaSession.IsListening: Boolean;

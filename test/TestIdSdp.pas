@@ -585,7 +585,7 @@ type
 
     procedure AddSendingChecking(Stream: TIdSdpBaseMediaStream); virtual;
     procedure Activate(Stream: TIdSdpBaseMediaStream); virtual;
-    function  BasicMediaDesc(Port: Cardinal = 8000): String; virtual;
+    function  BasicMediaDesc(Port: Cardinal = 8000; PortCount: Cardinal = 1): String; virtual;
     function  CreateStream: TIdSdpBaseMediaStream; virtual;
     function  InactiveMediaDesc: String;
     function  LocalDescription: TIdSdpMediaDescription;
@@ -633,7 +633,7 @@ type
     procedure ReceiveControlOn(S: TIdSDPMediaStream);
     function  T140PT: TIdRTPPayloadType;
   protected
-    function  BasicMediaDesc(Port: Cardinal = 8000): String; override;
+    function  BasicMediaDesc(Port: Cardinal = 8000; PortCount: Cardinal = 1): String; override;
     function  CreateStream: TIdSdpBaseMediaStream; override;
     procedure ReceiveDataOn(S: TIdSdpBaseMediaStream); override;
     procedure SendData(Stream: TIdSdpBaseMediaStream); override;
@@ -663,7 +663,7 @@ type
 
   TestTIdSdpNullMediaStream = class(TestTIdSdpBaseMediaStream)
   protected
-    function  BasicMediaDesc(Port: Cardinal = 8000): String; override;
+    function  BasicMediaDesc(Port: Cardinal = 8000; PortCount: Cardinal = 1): String; override;
     function  CreateStream: TIdSdpBaseMediaStream; override;
     procedure ReceiveDataOn(S: TIdSdpBaseMediaStream); override;
     procedure SendData(Stream: TIdSdpBaseMediaStream); override;
@@ -839,7 +839,8 @@ type
     ReceivingBinding: TIdConnectionBindings;
     Text:             TStringStream;
 
-    function  ActiveMediaDesc(Port: Cardinal = 8000): String;
+    function  ActiveMediaDesc(Port: Cardinal = 8000;
+                              PortCount: Cardinal = 1): String;
     function  ActPassMediaDesc(Port: Cardinal = 8000): String;
     procedure CheckAtLeastOneNullConnectionCreated;
     procedure CheckClientConnectionFormed(WhenOffer: Boolean; Offer, Answer: String);
@@ -855,13 +856,16 @@ type
     function  FindSoleMockClient: TIdSdpMockTcpConnection;
     function  FindSoleMockServer: TIdSdpMockTcpConnection;
     function  HoldConnMediaDesc(Port: Cardinal = 8000): String;
-    function  PassiveMediaDesc(Port: Cardinal = 8000): String;
+    function  PassiveMediaDesc(Port: Cardinal = 8000;
+                               PortCount: Cardinal = 1): String;
     procedure SetMediaDescriptions(S: TIdSdpBaseMediaStream; IsOffer, SetLocalDescFirst: Boolean; Offer, Answer: String);
-    function  SetupMediaDesc(SetupType: TIdSdpSetupType; Port: Cardinal = 8000): String;
+    function  SetupMediaDesc(SetupType: TIdSdpSetupType;
+                             Port: Cardinal = 8000;
+                             PortCount: Cardinal = 1): String;
     function  UnknownMediaDesc(Port: Cardinal = 8000): String;
   protected
     procedure Activate(Stream: TIdSdpBaseMediaStream); override;
-    function  BasicMediaDesc(Port: Cardinal = 8000): String; override;
+    function  BasicMediaDesc(Port: Cardinal = 8000; PortCount: Cardinal = 1): String; override;
     function  CreateStream: TIdSdpBaseMediaStream; override;
     procedure ReceiveDataOn(S: TIdSdpBaseMediaStream); override;
     procedure SendData(Stream: TIdSdpBaseMediaStream); override;
@@ -973,6 +977,7 @@ type
   published
     procedure TestAddressTypeFor;
     procedure TestDifferentPayloadTypesForSameEncoding;
+    procedure TestIndexOfStream;
     procedure TestIsListening;
     procedure TestLocalSessionDescription;
     procedure TestLocalSessionDescriptionWithRefusedStream;
@@ -7109,7 +7114,7 @@ begin
   Stream.StartListening;
 end;
 
-function TestTIdSdpBaseMediaStream.BasicMediaDesc(Port: Cardinal = 8000): String;
+function TestTIdSdpBaseMediaStream.BasicMediaDesc(Port: Cardinal = 8000; PortCount: Cardinal = 1): String;
 begin
   Result := '';
   Fail(Self.ClassName + ' MUST override BasicMediaDesc');
@@ -7546,11 +7551,16 @@ end;
 
 //* TestTIdSDPMediaStream Protected methods ************************************
 
-function TestTIdSDPMediaStream.BasicMediaDesc(Port: Cardinal = 8000): String;
+function TestTIdSDPMediaStream.BasicMediaDesc(Port: Cardinal = 8000; PortCount: Cardinal = 1): String;
 begin
-  Result := Format('m=text %d RTP/AVP %d'#13#10
-                 + 'a=rtpmap:%d T140/8000'#13#10,
-                   [Port, Self.T140PT, Self.T140PT]);
+  if (PortCount > 1) then
+    Result := Format('m=text %d/%d RTP/AVP %d'#13#10
+                   + 'a=rtpmap:%d T140/8000'#13#10,
+                     [Port, PortCount, Self.T140PT, Self.T140PT])
+  else
+    Result := Format('m=text %d RTP/AVP %d'#13#10
+                   + 'a=rtpmap:%d T140/8000'#13#10,
+                     [Port, Self.T140PT, Self.T140PT]);
 end;
 
 function TestTIdSDPMediaStream.CreateStream: TIdSdpBaseMediaStream;
@@ -7855,20 +7865,18 @@ var
   I:          Integer;
 begin
   Self.SetLocalMediaDesc(Self.Media,
-                         'm=text ' + IntToStr(Port) + ' RTP/AVP 96'#13#10
-                       + 'a=rtpmap:96 t140/1000'#13#10);
+                         Self.BasicMediaDesc(Port));
   Check(Self.Media.MatchPort(8000), 'Single stream');
   Check(not Self.Media.MatchPort(8002), 'Single stream, wrong port');
 
   Self.SetLocalMediaDesc(Self.Media,
-                         'm=text ' + IntToStr(Port) + '/' + IntToStr(PortCount) + ' RTP/AVP 96'#13#10
-                       + 'a=rtpmap:96 t140/1000'#13#10);
+                         'm=text ' + IntToStr(Port) + '/' + IntToStr(PortCount) + ' TCP 0'#13#10);
   for I := 0 to PortCount - 1 do begin
     ActualPort := Port + I*2;
     Check(Self.Media.MatchPort(ActualPort), 'Single hierarchically encoded stream; port = ' + IntToStr(ActualPort));
   end;
   ActualPort := Port + PortCount*2 + 2;
-  Check(not Self.Media.MatchPort(Port + PortCount*2 + 2), 'Single hierarchically encoded stream, wrong port (' + IntToStr(ActualPort) + ')');
+  Check(not Self.Media.MatchPort(ActualPort), 'Single hierarchically encoded stream, wrong port (' + IntToStr(ActualPort) + ')');
 end;
 
 procedure TestTIdSDPMediaStream.TestReceiveDataWhenNotReceiver;
@@ -8202,9 +8210,12 @@ end;
 //******************************************************************************
 //* TestTIdSdpNullMediaStream Protected methods ********************************
 
-function TestTIdSdpNullMediaStream.BasicMediaDesc(Port: Cardinal = 8000): String;
+function TestTIdSdpNullMediaStream.BasicMediaDesc(Port: Cardinal = 8000; PortCount: Cardinal = 1): String;
 begin
-  Result := Format('m=audio %d unknown 0'#13#10, [Port]);
+  if (PortCount > 1) then
+    Result := Format('m=audio %d/%d unknown 0'#13#10, [Port])
+  else
+    Result := Format('m=audio %d unknown 0'#13#10, [Port]);
 end;
 
 function TestTIdSdpNullMediaStream.CreateStream: TIdSdpBaseMediaStream;
@@ -9423,9 +9434,12 @@ begin
     Self.FindMockServer(S.LocalDescription).RemotePartyAccepts
 end;
 
-function TestTIdSdpTcpMediaStream.BasicMediaDesc(Port: Cardinal = 8000): String;
+function TestTIdSdpTcpMediaStream.BasicMediaDesc(Port: Cardinal = 8000; PortCount: Cardinal = 1): String;
 begin
-  Result := Format('m=audio %d TCP %s'#13#10, [Port, Self.DataFormat]);
+  if (PortCount > 1) then
+    Result := Format('m=audio %d/%d TCP %s'#13#10, [Port, PortCount, Self.DataFormat])
+  else
+    Result := Format('m=audio %d TCP %s'#13#10, [Port, Self.DataFormat]);
 end;
 
 function TestTIdSdpTcpMediaStream.CreateStream: TIdSdpBaseMediaStream;
@@ -9461,14 +9475,15 @@ end;
 
 //* TestTIdSdpTcpMediaStream Protected methods *********************************
 
-function TestTIdSdpTcpMediaStream.ActiveMediaDesc(Port: Cardinal = 8000): String;
+function TestTIdSdpTcpMediaStream.ActiveMediaDesc(Port: Cardinal = 8000;
+                                                  PortCount: Cardinal = 1): String;
 begin
-  Result := Self.SetupMediaDesc(stActive);
+  Result := Self.SetupMediaDesc(stActive, Port, PortCount);
 end;
 
 function TestTIdSdpTcpMediaStream.ActPassMediaDesc(Port: Cardinal = 8000): String;
 begin
-  Result := Self.SetupMediaDesc(stActPass);
+  Result := Self.SetupMediaDesc(stActPass, Port);
 end;
 
 procedure TestTIdSdpTcpMediaStream.CheckAtLeastOneNullConnectionCreated;
@@ -9644,12 +9659,13 @@ end;
 
 function TestTIdSdpTcpMediaStream.HoldConnMediaDesc(Port: Cardinal = 8000): String;
 begin
-  Result := Self.SetupMediaDesc(stHoldConn);
+  Result := Self.SetupMediaDesc(stHoldConn, Port);
 end;
 
-function TestTIdSdpTcpMediaStream.PassiveMediaDesc(Port: Cardinal = 8000): String;
+function TestTIdSdpTcpMediaStream.PassiveMediaDesc(Port: Cardinal = 8000;
+                                                   PortCount: Cardinal = 1): String;
 begin
-  Result := Self.SetupMediaDesc(stPassive);
+  Result := Self.SetupMediaDesc(stPassive, Port, PortCount);
 end;
 
 procedure TestTIdSdpTcpMediaStream.SetMediaDescriptions(S: TIdSdpBaseMediaStream; IsOffer, SetLocalDescFirst: Boolean; Offer, Answer: String);
@@ -9681,9 +9697,11 @@ begin
   end;
 end;
 
-function TestTIdSdpTcpMediaStream.SetupMediaDesc(SetupType: TIdSdpSetupType; Port: Cardinal = 8000): String;
+function TestTIdSdpTcpMediaStream.SetupMediaDesc(SetupType: TIdSdpSetupType;
+                                                 Port: Cardinal = 8000;
+                                                 PortCount: Cardinal = 1): String;
 begin
-  Result := Self.BasicMediaDesc(Port)
+  Result := Self.BasicMediaDesc(Port, PortCount)
           + Format('a=setup:%s'#13#10, [SetupTypeToStr(SetupType)]);
 end;
 
@@ -10248,6 +10266,25 @@ begin
   Self.ReceiveDataOfType(RemotePT);
 
   Check(Self.ReceivedData, 'No RTP data received');
+end;
+
+procedure TestTIdSDPMultimediaSession.TestIndexOfStream;
+var
+  I:        Integer;
+  UnownedS: TIdSdpBaseMediaStream;
+begin
+  UnownedS := TIdSDPMediaStream.Create;
+  try
+    CheckEquals(-1, Self.MS.IndexOfStream(UnownedS), 'Unowned stream');
+  finally
+    UnownedS.Free;
+  end;
+
+  CheckEquals(-1, Self.MS.IndexOfStream(nil), 'Unowned stream (nil)');
+
+  Self.MS.StartListening(Self.MultiStreamSDP(8000, 8010));
+  for I := 0 to Self.MS.StreamCount - 1 do
+    CheckEquals(I, Self.MS.IndexOfStream(Self.MS.Streams[I]), 'Stream #' + IntToStr(I));
 end;
 
 procedure TestTIdSDPMultimediaSession.TestIsListening;
