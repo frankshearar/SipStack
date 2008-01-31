@@ -63,6 +63,7 @@ uses
   IdSipUdpTransport in 'src\IdSipUdpTransport.pas',
   IdSipUserAgent in 'src\IdSipUserAgent.pas',
   IdSystem in 'src\IdSystem.pas',
+  IdThreadableTcpClient in 'src\IdThreadableTcpClient.pas',
   IdTimerQueue in 'src\IdTimerQueue.pas',
   IdUnicode in 'src\IdUnicode.pas',
   LoGGer in '..\Common\src\LoGGer.pas',
