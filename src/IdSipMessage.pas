@@ -10547,13 +10547,10 @@ begin
 end;
 
 class function TIdSipParser.IsQValue(const Token: String): Boolean;
+var
+  Q: TIdSipQValue;
 begin
-  try
-    StrToQValue(Token);
-    Result := true;
-  except
-    Result := false;
-  end;
+  Result := ParseQValue(Token, Q);
 end;
 
 class function TIdSipParser.IsRequest(FirstLine: String): Boolean;
