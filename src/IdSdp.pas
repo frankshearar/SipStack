@@ -4296,7 +4296,7 @@ end;
 
 function TIdSdpBaseMediaStream.IsRefusedStream: Boolean;
 begin
-  Result := Self.LocalDescription.IsRefusedStream or Self.LocalDescription.IsRefusedStream;
+  Result := Self.LocalDescription.IsRefusedStream or Self.RemoteDescription.IsRefusedStream;
 end;
 
 function TIdSdpBaseMediaStream.IsSender: Boolean;
