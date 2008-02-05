@@ -99,6 +99,7 @@ const
 const
   Alphabet        = ['a'..'z', 'A'..'Z'];
   Digits          = ['0'..'9'];
+  HexDigits       = Digits + ['a'..'f', 'A'..'F'];
   MarkChars       = ['-', '_', '.', '!', '~', '*', '''', '(', ')'];
   UnreservedChars = Alphabet + Digits + MarkChars;
 
@@ -108,6 +109,7 @@ const
   BitsInIPv6Address = SizeOf(TIdIPv6AddressRec)*SizeOf(Word);
 
 function BitsInCardinal: Cardinal;
+function ContainsOnly(const Token: String; LegalChars: TCharSet): Boolean;
 function EncodeNonLineUnprintableChars(S: String): String;
 function EndsWith(const S, Suffix: String): Boolean;
 function Fetch(var Source: String;
@@ -164,6 +166,17 @@ end;
 function BitsInCardinal: Cardinal;
 begin
   Result := SizeOf(Cardinal)*8;
+end;
+
+function ContainsOnly(const Token: String; LegalChars: TCharSet): Boolean;
+var
+  I: Integer;
+begin
+  Result := true;
+  for I := 1 to Length(Token) do begin
+    Result := Result and (Token[I] in LegalChars);
+    if not Result then Break;
+  end;
 end;
 
 function EncodeNonLineUnprintableChars(S: String): String;
@@ -894,17 +907,11 @@ end;
 //* TIdSimpleParser Public methods *********************************************
 
 class function TIdSimpleParser.IsAlphaNumeric(const Token: String): Boolean;
-var
-  I: Integer;
 begin
   Result := Token <> '';
 
-  if (Result) then
-    for I := 1 to Length(Token) do begin
-      Result := Result and (Self.IsDigit(Token[I])
-                        or (Token[I] in Alphabet));
-      if not Result then Break;
-    end;
+  if Result then
+    Result := ContainsOnly(Token, Alphabet + Digits);
 end;
 
 class function TIdSimpleParser.IsByte(const Token: String): Boolean;
@@ -951,17 +958,11 @@ begin
 end;
 
 class function TIdSimpleParser.IsHexNumber(const Number: String): Boolean;
-var
-  I: Integer;
 begin
   Result := Number <> '';
 
-  if (Result) then
-    for I := 1 to Length(Number) do begin
-      Result := Result and (Self.IsDigit(Number[I]) or (Number[I] in ['a'..'f', 'A'..'F']));
-
-      if not Result then Break;
-    end;
+  if Result then
+    Result := ContainsOnly(Number, HexDigits);
 end;
 
 class function TIdSimpleParser.IsLetter(C: Char): Boolean;
@@ -970,17 +971,11 @@ begin
 end;
 
 class function TIdSimpleParser.IsNumber(const Number: String): Boolean;
-var
-  I: Integer;
 begin
   Result := Number <> '';
 
-  if (Result) then
-    for I := 1 to Length(Number) do begin
-      Result := Result and Self.IsDigit(Number[I]);
-
-      if not Result then Break;
-    end;
+  if Result then
+    Result := ContainsOnly(Number, Digits);
 end;
 
 constructor TIdSimpleParser.Create;

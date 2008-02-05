@@ -193,8 +193,6 @@ type
     fUserInfo:        String;
     HostAndPort:      TIdSipHostAndPort;
 
-    class function ContainsOnly(const Token: String; LegalChars: TCharSet): Boolean;
-
     function  GetHost: String;
     function  GetPort: Cardinal;
     procedure ParseFragment(Fragment: String);
@@ -3223,7 +3221,7 @@ begin
     Result := Self.WellFormedPercentEncoding(Token);
 
   if Result then
-    Result := Self.ContainsOnly(Token, Self.FragmentChars);
+    Result := ContainsOnly(Token, Self.FragmentChars);
 end;
 
 class function TIdUri.IsPChar(const Token: String): Boolean;
@@ -3234,7 +3232,7 @@ begin
     Result := Self.WellFormedPercentEncoding(Token);
 
   if Result then
-    Result := Self.ContainsOnly(Token, Self.PCharChars);
+    Result := ContainsOnly(Token, Self.PCharChars);
 end;
 
 class function TIdUri.IsQuery(const Token: String): Boolean;
@@ -3248,7 +3246,7 @@ begin
 
   if Result then begin
     Result := TIdSipParser.IsLetter(Scheme[1])
-          and Self.ContainsOnly(Scheme, Self.SchemeChars);
+          and ContainsOnly(Scheme, Self.SchemeChars);
   end;
 end;
 
@@ -3456,17 +3454,6 @@ begin
 end;
 
 //* TIdUri Private methods *****************************************************
-
-class function TIdUri.ContainsOnly(const Token: String; LegalChars: TCharSet): Boolean;
-var
-  I: Integer;
-begin
-  Result := true;
-  for I := 1 to Length(Token) do begin
-    Result := Result and (Token[I] in LegalChars);
-    if not Result then Break;
-  end;
-end;
 
 function TIdUri.GetHost: String;
 begin
@@ -10487,7 +10474,7 @@ var
 begin
   // A URN is a string that looks like this:
   //            12345678 1234 1234 1234 123456789012
-  //   urn:uuid:xxxxxxxx–xxxx–xxxx–xxxx–xxxxxxxxxxxx
+  //   urn:uuid:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
   // where "x" represents any (lowercase) hexademical digit: 0-9, a-f
 
   Result := false;
