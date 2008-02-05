@@ -194,8 +194,10 @@ type
     function  HasKey: Boolean;
     function  IsRefusedStream: Boolean;
     function  IsText: Boolean;
+    function  IsValidFormat(Token: String): Boolean;
     procedure PrintOn(Dest: TStream); override;
     function  UsesBinding(Binding: TIdConnectionBindings): Boolean;
+    function  UsesRtpProtocol: Boolean;
 
     property Attributes:              TIdSdpAttributes       read GetAttributes;
     property Bandwidths:              TIdSdpBandwidths       read GetBandwidths;
@@ -538,6 +540,7 @@ type
     class function IsKeyData(const Token: String): Boolean;
     class function IsKeyType(const Token: String): Boolean;
     class function IsMediaType(const Token: String): Boolean;
+    class function IsMimeType(const Token: String): Boolean;
     class function IsMulticastAddress(IpVersion: TIdIPVersion;
                                       const Token: String): Boolean;
     class function IsNetType(const Token: String): Boolean;
@@ -1269,21 +1272,22 @@ const
   // IANA assigned nettype
   Id_SDP_IN = 'IN';
   // IANA assigned addrtype
-  Id_SDP_IP4 = 'IP4';
-  Id_SDP_IP6 = 'IP6';
+  Id_SDP_IP4       = 'IP4';
+  Id_SDP_IP6       = 'IP6';
   Id_SDP_IPUnknown = 'UNKNOWN_IP_VERSION'; // NOT IANA assigned!
   // IANA assigned keytype
-  Id_SDP_Clear  = 'clear';
-  Id_SDP_Base64 = 'base64';
-  Id_SDP_URI    = 'uri';
-  Id_SDP_Prompt = 'prompt';
+  Id_SDP_Clear   = 'clear';
+  Id_SDP_Base64  = 'base64';
+  Id_SDP_URI     = 'uri';
+  Id_SDP_Prompt  = 'prompt';
   // IANA assigned protos
-  Id_SDP_RTPAVP = 'RTP/AVP';
-  Id_SDP_udp    = 'udp';
-  Id_SDP_vat    = 'vat';
-  Id_SDP_rtp    = 'rtp';
-  Id_SDP_UDPTL  = 'UDPTL';
-  Id_SDP_TCP    = 'TCP'; // RFC 4145
+  Id_SDP_RTPAVP  = 'RTP/AVP'; // RFC 3551
+  Id_SDP_RTPSAVP = 'RTP/SAVP'; // RFC 3711
+  Id_SDP_udp     = 'udp';
+  Id_SDP_vat     = 'vat';
+  Id_SDP_rtp     = 'rtp';
+  Id_SDP_UDPTL   = 'UDPTL';
+  Id_SDP_TCP     = 'TCP'; // RFC 4145
 
   RSSDPSetupActive        = 'active';   // RFC 4145
   RSSDPSetupActPass       = 'actpass';  // RFC 4145
@@ -2042,6 +2046,34 @@ begin
   Result := Self.MediaType = mtText;
 end;
 
+function TIdSdpMediaDescription.IsValidFormat(Token: String): Boolean;
+begin
+  // RFC 4566 tells us (section 5.14) that
+  //      If the <proto> sub-field is "RTP/AVP" or "RTP/SAVP" the <fmt>
+  //      sub-fields contain RTP payload type numbers.
+  // and
+  //      If the <proto> sub-field is "udp" the <fmt> sub-fields MUST
+  //      reference a media type describing the format under the "audio",
+  //      "video", "text", "application", or "message" top-level media
+  //      types.  The media type registration SHOULD define the packet
+  //      format for use with UDP transport.
+  //
+  //      For media using other transport protocols, the <fmt> field is
+  //      protocol specific.  Rules for interpretation of the <fmt> sub-
+  //      field MUST be defined when registering new protocols (see Section
+  //      8.2.2).
+  // and RFC 4145 (section 10) tells us that
+  //      For the TCP protocol, new formats SHOULD have an associated
+  //      MIME registration.
+
+  if Self.UsesRtpProtocol then
+    Result := TIdSdpParser.IsByte(Token)
+  else if ((Self.Protocol = Id_SDP_TCP) or (Self.Protocol = Id_SDP_udp)) then
+  Result := TIdSdpParser.IsMimeType(Token)
+  else
+    Result := true;
+end;
+
 procedure TIdSdpMediaDescription.PrintOn(Dest: TStream);
 begin
   Self.PrintMediaField(Dest);
@@ -2077,6 +2109,11 @@ begin
       end;
     end;
   end;
+end;
+
+function TIdSdpMediaDescription.UsesRtpProtocol: Boolean;
+begin
+  Result := (Self.Protocol = Id_SDP_RTPAVP) or (Self.Protocol = Id_SDP_RTPSAVP);
 end;
 
 //* TIdSdpMediaDescription Private methods *************************************
@@ -3338,6 +3375,45 @@ begin
   Result := Self.IsToken(Token);
 end;
 
+class function TIdSdpParser.IsMimeType(const Token: String): Boolean;
+const
+  TSpecials = ['(', ')', '<', '>', '@', ',', ';', ':', '\', '"', '/', '[', ']', '?', '='];
+  MimeTokenCharset = [#33..#126] - TSpecials;
+var
+  MimeType: String;
+  SubType:  String;
+  WorkStr:  String;
+begin
+  // Return true if Token is a well-formed MIME type.
+
+  // From RFC 2045:
+  //     token := 1*<any (US-ASCII) CHAR except SPACE, CTLs,
+  //                 or tspecials>
+  //     tspecials :=  "(" / ")" / "<" / ">" / "@" /
+  //                   "," / ";" / ":" / "\" / <">
+  //                   "/" / "[" / "]" / "?" / "="
+  //                   ; Must be in quoted-string,
+  //                   ; to use within parameter values
+
+  Result := Token <> '';
+
+  if Result then begin
+    WorkStr := Token;
+
+    MimeType := Fetch(WorkStr, '/', true);
+
+    Result := Result and ContainsOnly(MimeType, MimeTokenCharset);
+
+    if Result then begin
+      SubType := Fetch(WorkStr, ';', true);
+
+      Result := Result and ContainsOnly(SubType, MimeTokenCharset);
+
+      // parse parameters
+    end;
+  end;
+end;
+
 class function TIdSdpParser.IsMulticastAddress(IpVersion: TIdIPVersion;
                                                const Token: String): Boolean;
 var
@@ -3861,7 +3937,7 @@ begin
 
     while (Value <> '') do begin
       Token := Fetch(Value, ' ');
-      if not Self.IsAlphaNumeric(Token) then
+      if not NewMediaDesc.IsValidFormat(Token) then
         raise EParserError.Create(Format(MalformedToken,
                                          [RSSDPMediaDescriptionName,
                                           Name + '=' + OriginalValue]));

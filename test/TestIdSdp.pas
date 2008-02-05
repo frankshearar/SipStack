@@ -204,11 +204,16 @@ type
     procedure TestInitialState;
     procedure TestIsRefusedStream;
     procedure TestIsText;
+    procedure TestIsValidFormatRtpAvp;
+    procedure TestIsValidFormatRtpSavp;
+    procedure TestIsValidFormatTcp;
+    procedure TestIsValidFormatUdp;
     procedure TestPrintOnBasic;
     procedure TestPrintOnFull;
     procedure TestPrintOnWithPortCount;
     procedure TestPrintOnWithUnknownMediaType;
     procedure TestUsesBinding;
+    procedure TestUsesRtpProtocol;
   end;
 
   TestTIdSdpOrigin = class(TTestCase)
@@ -449,6 +454,7 @@ type
     procedure TestIsKeyData;
     procedure TestIsKeyType;
     procedure TestIsMediaType;
+    procedure TestIsMimeType;
     procedure TestIsMulticastAddress;
     procedure TestIsNetType;
     procedure TestIsPhone;
@@ -497,6 +503,7 @@ type
     procedure TestParseMediaDescriptionWithSessionAttributes;
     procedure TestParseMediaDescriptionWithSessionConnections;
     procedure TestParseMediaDescriptionMalformedFormatList;
+    procedure TestParseMediaDescriptionNonRtpFormatList;
     procedure TestParseMediaDescriptionMalformedPort;
     procedure TestParseMediaDescriptionMalformedTransport;
     procedure TestParseMediaDescriptionMissingFormatList;
@@ -2443,6 +2450,50 @@ begin
   end;
 end;
 
+procedure TestTIdSdpMediaDescription.TestIsValidFormatRtpAvp;
+begin
+  Self.M.Protocol := Id_SDP_RTPAVP;
+  Check(Self.M.IsValidFormat('0'),              'Format: "0"');
+  Check(Self.M.IsValidFormat('96'),             'Format: "96"');
+  Check(not Self.M.IsValidFormat('256'),        'Format: "256"');
+  Check(not Self.M.IsValidFormat('-1'),         'Format: "-1"');
+  Check(not Self.M.IsValidFormat('text/plain'), 'Format: "text/plain"');
+end;
+
+procedure TestTIdSdpMediaDescription.TestIsValidFormatRtpSavp;
+begin
+  Self.M.Protocol := Id_SDP_RTPSAVP;
+  Check(Self.M.IsValidFormat('0'),              'Format: "0"');
+  Check(Self.M.IsValidFormat('96'),             'Format: "96"');
+  Check(not Self.M.IsValidFormat('256'),        'Format: "256"');
+  Check(not Self.M.IsValidFormat('-1'),         'Format: "-1"');
+  Check(not Self.M.IsValidFormat('text/plain'), 'Format: "text/plain"');
+end;
+
+procedure TestTIdSdpMediaDescription.TestIsValidFormatTcp;
+begin
+  Self.M.Protocol := Id_SDP_TCP;
+  Check(not Self.M.IsValidFormat('0'),        'Format: "0"');
+  Check(not Self.M.IsValidFormat('96'),       'Format: "96"');
+  Check(not Self.M.IsValidFormat('256'),      'Format: "256"');
+  Check(not Self.M.IsValidFormat('-1'),       'Format: "-1"');
+  Check(Self.M.IsValidFormat('text/plain'),   'Format: "text/plain"');
+  Check(Self.M.IsValidFormat('text/x-vcard'), 'Format: "text/x-vcard"');
+  Check(Self.M.IsValidFormat('video/mpeg'),   'Format: "video/mpeg"');
+end;
+
+procedure TestTIdSdpMediaDescription.TestIsValidFormatUdp;
+begin
+  Self.M.Protocol := Id_SDP_udp;
+  Check(not Self.M.IsValidFormat('0'),        'Format: "0"');
+  Check(not Self.M.IsValidFormat('96'),       'Format: "96"');
+  Check(not Self.M.IsValidFormat('256'),      'Format: "256"');
+  Check(not Self.M.IsValidFormat('-1'),       'Format: "-1"');
+  Check(Self.M.IsValidFormat('text/plain'),   'Format: "text/plain"');
+  Check(Self.M.IsValidFormat('text/x-vcard'), 'Format: "text/x-vcard"');
+  Check(Self.M.IsValidFormat('video/mpeg'),   'Format: "video/mpeg"');
+end;
+
 procedure TestTIdSdpMediaDescription.TestPrintOnBasic;
 var
   S: TStringStream;
@@ -2607,6 +2658,30 @@ begin
   finally
     Binding.Free;
   end;
+end;
+
+procedure TestTIdSdpMediaDescription.TestUsesRtpProtocol;
+begin
+  Self.M.Protocol := Id_SDP_RTPAVP;
+  Check(Self.M.UsesRtpProtocol, Id_SDP_RTPAVP);
+
+  Self.M.Protocol := Id_SDP_TCP;
+  Check(not Self.M.UsesRtpProtocol, Id_SDP_TCP);
+
+  Self.M.Protocol := Id_SDP_RTPSAVP;
+  Check(Self.M.UsesRtpProtocol, Id_SDP_RTPSAVP);
+
+  Self.M.Protocol := Id_SDP_udp;
+  Check(not Self.M.UsesRtpProtocol, Id_SDP_udp);
+
+  Self.M.Protocol := Id_SDP_vat;
+  Check(not Self.M.UsesRtpProtocol, Id_SDP_vat);
+
+  Self.M.Protocol := Id_SDP_rtp;
+  Check(Self.M.UsesRtpProtocol, Id_SDP_rtp);
+
+  Self.M.Protocol := Id_SDP_UDPTL;
+  Check(not Self.M.UsesRtpProtocol, Id_SDP_UDPTL);
 end;
 
 //******************************************************************************
@@ -5081,6 +5156,21 @@ begin
   Check(TIdSdpParser.IsMediaType(AllTokenChars), AllTokenChars);
 end;
 
+procedure TestTIdSdpParser.TestIsMimeType;
+begin
+  Check(not TIdSdpParser.IsMimeType(''), '''''');
+  Check(TIdSdpParser.IsMimeType('text/plain'), 'text/plain');
+  Check(TIdSdpParser.IsMimeType('text/plain;charset=UTF-8'), 'text/plain;charset=UTF-8');
+  Check(TIdSdpParser.IsMimeType('x-y/x-y'), 'x-y/x-y');
+  Check(TIdSdpParser.IsMimeType('x-''123''/x-#~%$&*!_+|{}^'), 'x-''123''/x-#~%$&*!_+|{}^');
+  Check(TIdSdpParser.IsMimeType('-/-'), '-/-');
+  Check(TIdSdpParser.IsMimeType('x-/x-'), 'x-/x-');
+
+  Check(TIdSdpParser.IsMimeType('text/plain;charset=UTF-8'), 'text/plain;charset=UTF-8');
+
+//  Check(not TIdSdpParser.IsMimeType('text/plain;charset'), 'text/plain;charset - parameters MUST have a value');
+end;
+
 procedure TestTIdSdpParser.TestIsMulticastAddress;
 var
   I: Integer;
@@ -5972,6 +6062,25 @@ begin
   Self.CheckMalformedMediaDescription('data 65536 RTP/AVP 1 2 3 -1');
 end;
 
+procedure TestTIdSdpParser.TestParseMediaDescriptionNonRtpFormatList;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(MinimumPayload
+                          + 'm=data 65536 TCP text/plain;charset=UTF-8 text/html'#13#10);
+  try
+    Self.P.Source := S;
+    Self.P.Parse(Self.Payload);
+
+    CheckEquals(1, Self.Payload.MediaDescriptionCount, 'Incorrect number of media descriptions');
+    CheckEquals(2, Self.Payload.MediaDescriptionAt(0).FormatCount, 'Incorrect number of formats');
+    CheckEquals('text/plain;charset=UTF-8', Self.Payload.MediaDescriptionAt(0).Formats[0],  'First format');
+    CheckEquals('text/html',                Self.Payload.MediaDescriptionAt(0).Formats[1],  'Second format');
+  finally
+    S.Free;
+  end;
+end;
+
 procedure TestTIdSdpParser.TestParseMediaDescriptionMissingInformation;
 var
   S: TStringStream;
@@ -6324,7 +6433,7 @@ var
   S: TStringStream;
 begin
   S := TStringStream.Create(MinimumPayload
-                          + 'm=video 49170/2 RTP/AVP 31 23 ape convolution 3vilution'#13#10
+                          + 'm=video 49170/2 RTP/AVP 31 23'#13#10
                           + 'i=Information'#13#10);
   try
     Self.P.Source := S;
@@ -6333,7 +6442,7 @@ begin
     CheckEquals(1,
                 Self.Payload.MediaDescriptionCount,
                 'MediaDescriptionCount');
-    CheckEquals(5,
+    CheckEquals(2,
                 Self.Payload.MediaDescriptionAt(0).FormatCount,
                 'MediaDescriptionAt(0).FormatCount');
     CheckEquals('31',
@@ -6342,15 +6451,6 @@ begin
     CheckEquals('23',
                 Self.Payload.MediaDescriptionAt(0).Formats[1],
                 'MediaDescriptionAt(0).Formats[1]');
-    CheckEquals('ape',
-                Self.Payload.MediaDescriptionAt(0).Formats[2],
-                'MediaDescriptionAt(0).Formats[2]');
-    CheckEquals('convolution',
-                Self.Payload.MediaDescriptionAt(0).Formats[3],
-                'MediaDescriptionAt(0).Formats[3]');
-    CheckEquals('3vilution',
-                Self.Payload.MediaDescriptionAt(0).Formats[4],
-                'MediaDescriptionAt(0).Formats[4]');
   finally
     S.Free;
   end;
@@ -7079,8 +7179,6 @@ procedure TestTIdSdpBaseMediaStream.SetUp;
 begin
   inherited SetUp;
 
-  // This is a dynamically assigned payload type in RTP/AVP.
-  Self.DataFormat := '96';
   Self.Desc := TIdSdpPayload.CreateFrom('v=0'#13#10
                                       + 'o=foo 1 2 IN IP4 127.0.0.1'#13#10
                                       + 's=-'#13#10
@@ -7506,6 +7604,9 @@ procedure TestTIdSDPMediaStream.SetUp;
 var
   T140: TIdRTPT140Payload;
 begin
+  // This is a dynamically assigned payload type in RTP/AVP.
+  Self.DataFormat := '96';
+
   inherited SetUp;
 
   Self.AVP := TIdRTPProfile.Create;
@@ -7870,7 +7971,7 @@ begin
   Check(not Self.Media.MatchPort(8002), 'Single stream, wrong port');
 
   Self.SetLocalMediaDesc(Self.Media,
-                         'm=text ' + IntToStr(Port) + '/' + IntToStr(PortCount) + ' TCP 0'#13#10);
+                         'm=text ' + IntToStr(Port) + '/' + IntToStr(PortCount) + ' TCP text/plain'#13#10);
   for I := 0 to PortCount - 1 do begin
     ActualPort := Port + I*2;
     Check(Self.Media.MatchPort(ActualPort), 'Single hierarchically encoded stream; port = ' + IntToStr(ActualPort));
@@ -9401,6 +9502,9 @@ procedure TestTIdSdpTcpMediaStream.Setup;
 var
   Nihongo: Widestring;
 begin
+  // The TCP transport for RTP (RFC 4145) uses MIME types as formats.
+  Self.DataFormat := 'text/plain;charset=UTF-8';
+
   inherited SetUp;
 
   // The Nihongo variable points to a string containing the kanji of what,
