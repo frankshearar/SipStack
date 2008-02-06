@@ -2069,7 +2069,7 @@ begin
   if Self.UsesRtpProtocol then
     Result := TIdSdpParser.IsByte(Token)
   else if ((Self.Protocol = Id_SDP_TCP) or (Self.Protocol = Id_SDP_udp)) then
-  Result := TIdSdpParser.IsMimeType(Token)
+    Result := TIdSdpParser.IsMimeType(Token)
   else
     Result := true;
 end;
