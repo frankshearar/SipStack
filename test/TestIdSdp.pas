@@ -593,6 +593,7 @@ type
     procedure AddSendingChecking(Stream: TIdSdpBaseMediaStream); virtual;
     procedure Activate(Stream: TIdSdpBaseMediaStream); virtual;
     function  BasicMediaDesc(Port: Cardinal = 8000; PortCount: Cardinal = 1): String; virtual;
+    procedure CheckPortAdjusted(Expected, Received: Cardinal; IsNullStream: Boolean; StreamClass: String);
     function  CreateStream: TIdSdpBaseMediaStream; virtual;
     function  InactiveMediaDesc: String;
     function  LocalDescription: TIdSdpMediaDescription;
@@ -618,6 +619,8 @@ type
     procedure TestPutOnHoldWhileOnHold;
     procedure TestSendData; virtual;
     procedure TestSendDataWhenNotSender;
+    procedure TestStartListeningPortAboveAllowedRange; virtual;
+    procedure TestStartListeningPortBelowAllowedRange; virtual;
     procedure TestStartListeningRefusedStream;
     procedure TestTakeOffHold;
   end;
@@ -880,6 +883,8 @@ type
     procedure Setup; override;
     procedure TearDown; override;
   published
+    procedure TestStartListeningPortAboveAllowedRange; override;
+    procedure TestStartListeningPortBelowAllowedRange; override;
     procedure TestWhenAnswerReceiveActiveSendActive;
     procedure TestWhenAnswerReceiveActiveSendActPass;
     procedure TestWhenAnswerReceiveActiveSendBlank;
@@ -972,7 +977,9 @@ type
                                Msg: String);
     procedure CheckOriginUsername(ExpectedUsername: String;
                                   SessionDescription: String);
+    function  MediaDescription(Address: String; Port: Cardinal; Protocol: String = Id_SDP_RTPAVP): String;
     function  MultiStreamSDP(LowPort, HighPort: Cardinal; Protocol: String = Id_SDP_RTPAVP): String;
+    function  MultiStreamSDPSameIP(LowPort, HighPort: Cardinal; Protocol: String = Id_SDP_RTPAVP): String;
     procedure ReceiveDataOfType(PayloadType: Cardinal);
     function  RefusedStreamSDP(Port: Cardinal): String;
     function  SingleStreamSDP(Port: Cardinal;
@@ -1013,6 +1020,7 @@ type
     procedure TestStartListeningPortsOutsideAllowedRange;
     procedure TestStartListeningTCP;
     procedure TestStopListening;
+    procedure TestStreamNeedsMorePortsThanAvailable;
     procedure TestTakeOffHold;
   end;
 
@@ -2665,23 +2673,14 @@ begin
   Self.M.Protocol := Id_SDP_RTPAVP;
   Check(Self.M.UsesRtpProtocol, Id_SDP_RTPAVP);
 
-  Self.M.Protocol := Id_SDP_TCP;
-  Check(not Self.M.UsesRtpProtocol, Id_SDP_TCP);
-
   Self.M.Protocol := Id_SDP_RTPSAVP;
   Check(Self.M.UsesRtpProtocol, Id_SDP_RTPSAVP);
 
-  Self.M.Protocol := Id_SDP_udp;
-  Check(not Self.M.UsesRtpProtocol, Id_SDP_udp);
+  Self.M.Protocol := 'RTP/unknown';
+  Check(Self.M.UsesRtpProtocol, 'RTP/unknown');
 
-  Self.M.Protocol := Id_SDP_vat;
-  Check(not Self.M.UsesRtpProtocol, Id_SDP_vat);
-
-  Self.M.Protocol := Id_SDP_rtp;
-  Check(Self.M.UsesRtpProtocol, Id_SDP_rtp);
-
-  Self.M.Protocol := Id_SDP_UDPTL;
-  Check(not Self.M.UsesRtpProtocol, Id_SDP_UDPTL);
+  Self.M.Protocol := Id_SDP_TCP;
+  Check(not Self.M.UsesRtpProtocol, Id_SDP_TCP);
 end;
 
 //******************************************************************************
@@ -5273,11 +5272,8 @@ begin
   Check(    TIdSdpParser.IsProtocol('RTP/AVP'),     'RTP/AVP');
   Check(    TIdSdpParser.IsProtocol(Id_SDP_RTPAVP), 'Id_SDP_RTPAVP constant');
   Check(    TIdSdpParser.IsProtocol('vat'),         'vat');
-  Check(    TIdSdpParser.IsProtocol(Id_SDP_vat),    'Id_SDP_vat constant');
   Check(    TIdSdpParser.IsProtocol('rtp'),         'rtp');
-  Check(    TIdSdpParser.IsProtocol(Id_SDP_rtp),    'Id_SDP_rtp constant');
   Check(    TIdSdpParser.IsProtocol('UDPTL'),       'UDPTL');
-  Check(    TIdSdpParser.IsProtocol(Id_SDP_UDPTL),  'Id_SDP_UDPTL constant');
   Check(    TIdSdpParser.IsProtocol('TCP'),         'TCP');
   Check(    TIdSdpParser.IsProtocol(Id_SDP_TCP),    'Id_SDP_TCP constant');
   Check(    TIdSdpParser.IsProtocol('1/2/3/4'),     '1/2/3/4');
@@ -7218,6 +7214,16 @@ begin
   Fail(Self.ClassName + ' MUST override BasicMediaDesc');
 end;
 
+procedure TestTIdSdpBaseMediaStream.CheckPortAdjusted(Expected, Received: Cardinal; IsNullStream: Boolean; StreamClass: String);
+begin
+  if IsNullStream then
+    CheckEquals(0, Received,
+                StreamClass + ': Stream not refused')
+  else
+    CheckEquals(Expected, Received,
+                StreamClass + ': Port not reset to lower limit');
+end;
+
 function TestTIdSdpBaseMediaStream.CreateStream: TIdSdpBaseMediaStream;
 begin
   Result := nil;
@@ -7550,6 +7556,55 @@ begin
     finally
       Self.RemoveSendingChecking(Stream);
     end;
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TestTIdSdpBaseMediaStream.TestStartListeningPortAboveAllowedRange;
+const
+  LowerLimit  = 15000;
+  HigherLimit = 16000;
+  TooHighPort = HigherLimit + 1000;
+var
+  Stream: TIdSdpBaseMediaStream;
+begin
+  Stream := Self.CreateStream;
+  try
+    Stream.LowestAllowedPort  := LowerLimit;
+    Stream.HighestAllowedPort := HigherLimit;
+
+    Stream.IsOffer := true;
+    Self.SetLocalMediaDesc(Stream, Self.BasicMediaDesc(TooHighPort));
+    CheckPortFree(Stream.LocalDescription.Connections[0].Address, Stream.LocalDescription.Port, 'Required port is not free');
+
+    Stream.StartListening;
+
+    CheckPortAdjusted(LowerLimit, Stream.LocalDescription.Port, Stream.IsNull, Stream.ClassName);
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TestTIdSdpBaseMediaStream.TestStartListeningPortBelowAllowedRange;
+const
+  LowerLimit  = 15000;
+  HigherLimit = 16000;
+  TooLowPort  = LowerLimit - 1000;
+var
+  Stream: TIdSdpBaseMediaStream;
+begin
+  Stream := Self.CreateStream;
+  try
+    Stream.LowestAllowedPort  := LowerLimit;
+    Stream.HighestAllowedPort := HigherLimit;
+
+    Self.SetLocalMediaDesc(Stream, Self.BasicMediaDesc(TooLowPort));
+    CheckPortFree(Stream.LocalDescription.Connections[0].Address, Stream.LocalDescription.Port, 'Required port is not free');
+
+    Stream.StartListening;
+
+    CheckPortAdjusted(LowerLimit, Stream.LocalDescription.Port, Stream.IsNull, Stream.ClassName);
   finally
     Stream.Free;
   end;
@@ -9817,6 +9872,56 @@ end;
 
 //* TestTIdSdpTcpMediaStream Published methods *********************************
 
+procedure TestTIdSdpTcpMediaStream.TestStartListeningPortAboveAllowedRange;
+const
+  LowerLimit  = 15000;
+  HigherLimit = 16000;
+  TooHighPort = HigherLimit + 1000;
+var
+  Stream: TIdSdpTcpMediaStream;
+begin
+  Stream := Self.CreateStream as TIdSdpTcpMediaStream;
+  try
+    Stream.LowestAllowedPort  := LowerLimit;
+    Stream.HighestAllowedPort := HigherLimit;
+
+    Stream.IsOffer := true;
+    Self.SetLocalMediaDesc(Stream, Self.PassiveMediaDesc(TooHighPort));
+    CheckPortFree(Stream.LocalDescription.Connections[0].Address, Stream.LocalDescription.Port, 'Required port is not free');
+
+    Stream.StartListening;
+
+    CheckPortAdjusted(LowerLimit, Stream.LocalDescription.Port, Stream.IsNull, Stream.ClassName);
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TestTIdSdpTcpMediaStream.TestStartListeningPortBelowAllowedRange;
+const
+  LowerLimit  = 15000;
+  HigherLimit = 16000;
+  TooLowPort = HigherLimit - 1000;
+var
+  Stream: TIdSdpTcpMediaStream;
+begin
+  Stream := Self.CreateStream as TIdSdpTcpMediaStream;
+  try
+    Stream.LowestAllowedPort  := LowerLimit;
+    Stream.HighestAllowedPort := HigherLimit;
+
+    Stream.IsOffer := true;
+    Self.SetLocalMediaDesc(Stream, Self.PassiveMediaDesc(TooLowPort));
+    CheckPortFree(Stream.LocalDescription.Connections[0].Address, Stream.LocalDescription.Port, 'Required port is not free');
+
+    Stream.StartListening;
+
+    CheckPortAdjusted(LowerLimit, Stream.LocalDescription.Port, Stream.IsNull, Stream.ClassName);
+  finally
+    Stream.Free;
+  end;
+end;
+
 procedure TestTIdSdpTcpMediaStream.TestWhenAnswerReceiveActiveSendActive;
 begin
   CheckNullConnectionFormedForInvalidResponse(false, Self.ActiveMediaDesc, Self.ActiveMediaDesc);
@@ -10261,18 +10366,43 @@ begin
   end;
 end;
 
+function TestTIdSDPMultimediaSession.MediaDescription(Address: String; Port: Cardinal; Protocol: String = Id_SDP_RTPAVP): String;
+var
+  Fmt:     String;
+  Attribs: String;
+begin
+  if (Protocol = Id_SDP_TCP) then begin
+    Fmt     := 'text/plain;charset=UTF-8';
+    Attribs := '';
+  end
+  else begin
+    Fmt     := '96';
+    Attribs := Format('a=rtpmap:%s t140/1000'#13#10, [Fmt]);
+  end;
+
+  Result := Format('m=text %d %s %s'#13#10, [Port, Protocol, Fmt])
+          + 'c=IN IP4 127.0.0.1'#13#10
+          + Attribs;
+end;
+
 function TestTIdSDPMultimediaSession.MultiStreamSDP(LowPort, HighPort: Cardinal; Protocol: String = Id_SDP_RTPAVP): String;
 begin
   // One stream on loopback:LowPort; one stream on NIC:HighPort
   Result := 'v=0'#13#10
           + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
           + 's=-'#13#10
-          + 'm=text ' + IntToStr(LowPort) + ' ' + Protocol + ' 96'#13#10
-          + 'c=IN IP4 127.0.0.1'#13#10
-          + 'a=rtpmap:96 t140/1000'#13#10
-          + 'm=text ' + IntToStr(HighPort) + ' ' + Protocol + ' 96'#13#10
-          + 'c=IN IP4 ' + GStack.LocalAddress + #13#10
-          + 'a=rtpmap:96 t140/1000'#13#10
+          + Self.MediaDescription('127.0.0.1', LowPort, Protocol)
+          + Self.MediaDescription(GStack.LocalAddress, HighPort, Protocol);
+end;
+
+function TestTIdSDPMultimediaSession.MultiStreamSDPSameIP(LowPort, HighPort: Cardinal; Protocol: String = Id_SDP_RTPAVP): String;
+begin
+  // One stream on loopback:LowPort; one stream on loopback:HighPort
+  Result := 'v=0'#13#10
+          + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
+          + 's=-'#13#10
+          + Self.MediaDescription('127.0.0.1', LowPort, Protocol)
+          + Self.MediaDescription('127.0.0.1', HighPort, Protocol);
 end;
 
 procedure TestTIdSDPMultimediaSession.ReceiveDataOfType(PayloadType: Cardinal);
@@ -10516,7 +10646,7 @@ begin
 
   Check(Self.MS.StreamCount > 0,
         'Not enough streams instantiated');
-  CheckEquals(0,
+  CheckEquals(Self.MS.LowestAllowedPort,
               Self.MS.Streams[0].LocalDescription.Port,
               'Port value');
 end;
@@ -10528,12 +10658,16 @@ var
 begin
   Self.MS.LowestAllowedPort  := 8000;
   Self.MS.HighestAllowedPort := 8100;
-  HighestPort := Self.MS.HighestAllowedPort;
+
+  // We can't start an RTP stream on port 8100, because we need to also open an
+  // RTCP port on 8101, which is OUTSIDE the range. Hence, the last port we
+  // could possibly try is 8099, even though that's an odd numbered port.
+  HighestPort := Self.MS.HighestAllowedPort - 1;
   Desc := Self.MS.StartListening(Self.SingleStreamSDP(HighestPort));
 
   Check(Self.MS.StreamCount > 0,
         'Not enough streams instantiated');
-  CheckEquals(0,
+  CheckEquals(HighestPort,
               Self.MS.Streams[0].LocalDescription.Port,
               'Port value');
 end;
@@ -10567,7 +10701,7 @@ begin
 
   Check(Self.MS.StreamCount > 0,
         'Not enough streams instantiated');
-  CheckEquals(0,
+  CheckEquals(Self.MS.LowestAllowedPort,
               Self.MS.Streams[0].LocalDescription.Port,
               'Port value');
 end;
@@ -10577,11 +10711,11 @@ const
   LowPort = 8000;
 begin
   // This gives us three allowed ports, and we're trying to open two media
-  // streams (which requires four ports).
+  // s0treams (which requires four ports).
   Self.MS.LowestAllowedPort  := LowPort;
   Self.MS.HighestAllowedPort := LowPort + 2;
 
-  Self.MS.StartListening(Self.MultiStreamSDP(LowPort, LowPort + 2));
+  Self.MS.StartListening(Self.MultiStreamSDPSameIP(LowPort, LowPort + 2));
 
   CheckEquals(2, Self.MS.StreamCount, 'Wrong number of streams');
   CheckEquals(LowPort,
@@ -10785,22 +10919,27 @@ end;
 
 procedure TestTIdSDPMultimediaSession.TestStartListeningMultipleStreams;
 var
+  Desc:     TIdSdpPayload;
   LowPort:  Cardinal;
   HighPort: Cardinal;
 begin
   LowPort  := 8000;
   HighPort := 9000;
 
-  Self.MS.StartListening(Self.MultiStreamSDP(LowPort, HighPort));
+  Desc := TIdSdpPayload.CreateFrom(Self.MultiStreamSDP(LowPort, HighPort));
+  try
+    Self.MS.StartListening(Desc.AsString);
 
-  CheckEquals(2, Self.MS.StreamCount, 'StreamCount');
-  Self.CheckPortActive('127.0.0.1',
-                       LowPort,
-                       'Server not listening on 127.0.0.7:' + IntToStr(LowPort));
-  Self.CheckPortActive(GStack.LocalAddress,
-                       HighPort,
-                       'Server not listening on '
-                     + GStack.LocalAddress + ':' + IntToStr(HighPort));
+    CheckEquals(2, Self.MS.StreamCount, 'StreamCount');
+    Self.CheckPortActive(Desc.MediaDescriptionAt(0).Connections[0].Address,
+                         LowPort,
+                         'Server not listening on ' + Desc.MediaDescriptionAt(0).Connections[0].AsString);
+    Self.CheckPortActive(Desc.MediaDescriptionAt(1).Connections[0].Address,
+                         HighPort,
+                         'Server not listening on ' + Desc.MediaDescriptionAt(1).Connections[0].AsString);
+  finally
+    Desc.Free;
+  end;
 end;
 
 procedure TestTIdSDPMultimediaSession.TestStartListeningNoAvailablePorts;
@@ -10873,6 +11012,26 @@ begin
                      HighPort,
                      'Server still listening on '
                    + GStack.LocalAddress + ':' + IntToStr(HighPort));
+end;
+
+procedure TestTIdSDPMultimediaSession.TestStreamNeedsMorePortsThanAvailable;
+var
+  Desc:        String;
+  HighestPort: Cardinal;
+begin
+  Self.MS.LowestAllowedPort  := 8000;
+  Self.MS.HighestAllowedPort := 8100;
+
+  // This port allocation is invalid, because the stream needs to open an RTCP
+  // port, on port 8101, which lies outside the permitted range.
+  HighestPort := Self.MS.HighestAllowedPort;
+  Desc := Self.MS.StartListening(Self.SingleStreamSDP(HighestPort));
+
+  Check(Self.MS.StreamCount > 0,
+        'Not enough streams instantiated');
+  CheckEquals(Self.MS.LowestAllowedPort,
+              Self.MS.Streams[0].LocalDescription.Port,
+              'Port value');
 end;
 
 procedure TestTIdSDPMultimediaSession.TestTakeOffHold;

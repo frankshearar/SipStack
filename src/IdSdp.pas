@@ -196,6 +196,7 @@ type
     function  IsText: Boolean;
     function  IsValidFormat(Token: String): Boolean;
     procedure PrintOn(Dest: TStream); override;
+    procedure RefuseStream;
     function  UsesBinding(Binding: TIdConnectionBindings): Boolean;
     function  UsesRtpProtocol: Boolean;
 
@@ -590,6 +591,7 @@ type
     procedure SetDirection(Value: TIdSdpDirection);
     procedure SetLocalDescription(Value: TIdSdpMediaDescription);
     procedure SetRemoteDescription(const Value: TIdSdpMediaDescription);
+    function  SufficientPortsFree(Port: Cardinal): Boolean;
   protected
     procedure AfterSetLocalDescription(Value: TIdSdpMediaDescription); virtual;
     procedure AfterSetRemoteDescription(Value: TIdSdpMediaDescription); virtual;
@@ -602,6 +604,7 @@ type
     procedure NotifyOfData(Binding: TIdConnectionBindings; Data: TStream; Format: String);
     procedure NotifyOfSentData(Data: TStream; Format: String; LayerID: Integer);
     procedure ReallySendData(Data: TStream; Format: String; LayerID: Integer = 0); virtual;
+    function  RequiredPorts: Cardinal; virtual;
     procedure SetTimer(Value: TIdTimerQueue); virtual;
     procedure StartServers; virtual;
   public
@@ -688,6 +691,7 @@ type
     procedure InternalCreate; override;
     function  NextPort(PreviousPort: Cardinal): Cardinal; override;
     procedure ReallySendData(Data: TStream; Format: String; LayerID: Integer = 0); override;
+    function  RequiredPorts: Cardinal; override;
     procedure SetTimer(Value: TIdTimerQueue); override;
     procedure StartServers; override;
   public
@@ -700,7 +704,7 @@ type
     function  IsListening: Boolean; override;
     procedure JoinSession; override;
     function  MatchPort(Port: Cardinal): Boolean;
-   
+
     procedure RemoveRTPListener(const Listener: IIdRTPListener);
     procedure RemoveRTPSendListener(const Listener: IIdRTPSendListener);
     procedure StartListening; override;
@@ -1283,10 +1287,7 @@ const
   // IANA assigned protos
   Id_SDP_RTPAVP  = 'RTP/AVP'; // RFC 3551
   Id_SDP_RTPSAVP = 'RTP/SAVP'; // RFC 3711
-  Id_SDP_udp     = 'udp';
-  Id_SDP_vat     = 'vat';
-  Id_SDP_rtp     = 'rtp';
-  Id_SDP_UDPTL   = 'UDPTL';
+  Id_SDP_udp     = 'udp'; // RFC 2327
   Id_SDP_TCP     = 'TCP'; // RFC 4145
 
   RSSDPSetupActive        = 'active';   // RFC 4145
@@ -2091,6 +2092,11 @@ begin
   Self.Attributes.PrintOn(Dest);
 end;
 
+procedure TIdSdpMediaDescription.RefuseStream;
+begin
+  Self.Port := RefusedPort;
+end;
+
 function TIdSdpMediaDescription.UsesBinding(Binding: TIdConnectionBindings): Boolean;
 var
   I: Integer;
@@ -2113,7 +2119,7 @@ end;
 
 function TIdSdpMediaDescription.UsesRtpProtocol: Boolean;
 begin
-  Result := (Self.Protocol = Id_SDP_RTPAVP) or (Self.Protocol = Id_SDP_RTPSAVP);
+  Result := Copy(Self.Protocol, 1, 3) = 'RTP';
 end;
 
 //* TIdSdpMediaDescription Private methods *************************************
@@ -4350,7 +4356,7 @@ end;
 
 function TIdSdpBaseMediaStream.AllowedPort(Port: Cardinal): Boolean;
 begin
-  Result := (Self.LowestAllowedPort <= Port) and (Port < Self.HighestAllowedPort);
+  Result := (Self.LowestAllowedPort <= Port) and (Port <= Self.HighestAllowedPort);
 end;
 
 function TIdSdpBaseMediaStream.IsListening: Boolean;
@@ -4477,30 +4483,39 @@ begin
 end;
 
 procedure TIdSdpBaseMediaStream.BindListeningStreams;
+  procedure SetPort(Port: Cardinal);
+  begin
+    Self.LocalDescription.Port := Port;
+    Self.InitializeLocalServers;
+  end;
 var
   SocketBound: Boolean;
 begin
+  if (Self.HighestAllowedPort < Self.LowestAllowedPort) then begin
+    Self.LocalDescription.RefuseStream;
+    Exit;
+  end;
+
+  if not Self.SufficientPortsFree(Self.LocalDescription.Port) then
+    SetPort(Self.LowestAllowedPort);
+
   SocketBound := false;
-  while not SocketBound and Self.AllowedPort(Self.LocalDescription.Port) do begin
+  while not SocketBound and Self.SufficientPortsFree(Self.LocalDescription.Port) do begin
     try
       Self.StartServers;
       SocketBound := true;
     except
-      on EIdCouldNotBindSocket do begin
-        Self.LocalDescription.Port := Self.NextPort(Self.LocalDescription.Port);
-        Self.InitializeLocalServers;
-      end;
-      on EIdSocketError do begin
-        Self.LocalDescription.Port := Self.NextPort(Self.LocalDescription.Port);
-        Self.InitializeLocalServers;
-      end;
+      on EIdCouldNotBindSocket do
+        SetPort(Self.NextPort(Self.LocalDescription.Port));
+      on EIdSocketError do
+        SetPort(Self.NextPort(Self.LocalDescription.Port));
     end;
   end;
 
   // If the stream doesn't bind to a port, we indicate that we won't be using
   // the stream.
   if not SocketBound then
-    Self.LocalDescription.Port := RefusedPort;
+    Self.LocalDescription.RefuseStream;
 end;
 
 procedure TIdSdpBaseMediaStream.InitializeLocalServers;
@@ -4522,6 +4537,8 @@ end;
 
 function TIdSdpBaseMediaStream.NextPort(PreviousPort: Cardinal): Cardinal;
 begin
+  // Return the next port to use for this kind of stream. Some streams require
+  // multiple ports!
   Result := PreviousPort + 1;
 end;
 
@@ -4565,6 +4582,12 @@ procedure TIdSdpBaseMediaStream.ReallySendData(Data: TStream; Format: String; La
 begin
 end;
 
+function TIdSdpBaseMediaStream.RequiredPorts: Cardinal;
+begin
+  // Return the number of ports that this stream requires.
+  Result := Self.LocalDescription.PortCount;
+end;
+
 procedure TIdSdpBaseMediaStream.SetTimer(Value: TIdTimerQueue);
 begin
   Self.fTimer := Value;
@@ -4605,6 +4628,14 @@ begin
   Self.fRemoteDescription.Assign(Value);
 
   Self.AfterSetRemoteDescription(Value);
+end;
+
+function TIdSdpBaseMediaStream.SufficientPortsFree(Port: Cardinal): Boolean;
+begin
+  // Return true if there are enough ports free between Port and
+  // HighestAllowedPort to start this stream. RTP, for instance, requires two
+  // ports, while TCP requires only one.
+  Result := Self.AllowedPort(Port + Self.RequiredPorts - 1);
 end;
 
 //******************************************************************************
@@ -4770,6 +4801,12 @@ begin
   finally
     Payload.Free;
   end;
+end;
+
+function TIdSDPMediaStream.RequiredPorts: Cardinal;
+begin
+  // One port for RTP, one for RTCP.
+  Result := Self.LocalDescription.PortCount * 2;
 end;
 
 procedure TIdSDPMediaStream.SetTimer(Value: TIdTimerQueue);
