@@ -794,7 +794,7 @@ procedure TIdSipTransport.LogException(FailedMessage: TIdSipMessage;
 const
   LogMsg = '%s sending %s: %s';
 begin
-  Self.Log(Format(LogMsg, [FailedMessage.Description, E.ClassName, Reason]),
+  Self.Log(Format(LogMsg, [E.ClassName, FailedMessage.Description, Reason]),
            LoGGerVerbosityLevelLow,
            coLogEventException,
            FailedMessage.AsString);
