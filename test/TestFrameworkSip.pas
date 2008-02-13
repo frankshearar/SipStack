@@ -721,7 +721,7 @@ type
     fExceptionMessage: String;
     fExceptionType:    ExceptClass;
     fTimerParam:       TIdTimerQueue;
-    fWaitParam:        TIdWait;
+    fWaitType:         TIdWaitClass;
 
     procedure OnException(Timer: TIdTimerQueue;
                           Error: Exception;
@@ -733,7 +733,7 @@ type
     property ExceptionMessage: String        read fExceptionMessage;
     property ExceptionType:    ExceptClass   read fExceptionType;
     property TimerParam:       TIdTimerQueue read fTimerParam;
-    property WaitParam:        TIdWait       read fWaitParam;
+    property WaitType:         TIdWaitClass  read fWaitType;
   end;
 
   TIdSipActionFinder = class(TIdSipActionClosure)
@@ -2447,7 +2447,7 @@ begin
   Self.fExceptionMessage := Error.Message;
   Self.fExceptionType    := ExceptClass(Error.ClassType);
   Self.fTimerParam       := Timer;
-  Self.fWaitParam     := Wait;
+  Self.fWaitType         := TIdWaitClass(Wait);
 end;
 
 //******************************************************************************
