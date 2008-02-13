@@ -401,6 +401,7 @@ type
     procedure TestRejectInviteWhenInboundModificationInProgress;
     procedure TestRejectInviteWhenOutboundModificationInProgress;
     procedure TestRemodify;
+    procedure TestTerminateByeTransactionTimesOut;
   end;
 
   TestTIdSipInboundSession = class(TestTIdSipSession,
@@ -869,7 +870,7 @@ implementation
 
 uses
   IdException, IdRegisteredObject, IdSimpleParser, IdSipDns,
-  IdSipMockTransactionDispatcher, SysUtils, TestFramework;
+  IdSipMockTransactionDispatcher, IdSipTransaction, SysUtils, TestFramework;
 
 function Suite: ITestSuite;
 begin
@@ -4832,6 +4833,41 @@ begin
   CheckEquals(Body,
               Self.LastSentRequest.Body,
               Self.ClassName + ': Unexpected body in request');
+end;
+
+procedure TestTIdSipSession.TestTerminateByeTransactionTimesOut;
+var
+  Session: TIdSipSession;
+  T:       TIdSipTestTimerQueueListener;
+begin
+  // The bug known as PR 404 manifested by an access violation during the
+  // running of a TIdSipClientNonInviteTransactionTimerFWait. A TIdSipSession
+  // listened to its TIdSipOutboundBye, but then terminated. When the BYE failed
+  // (because, say, the proxy connecting the two parties failed, or the remote
+  // party simply disappeared), that TIdSipOutboundBye notified its listeners -
+  // including the terminated and freed TIdSipSession. The TIdSipSession mustn't
+  // listen to the OutboundBye because as far as the local party's concerned it
+  // doesn't matter whether the BYE transaction succeeds or fails - the local
+  // end of the session is still torn down as soon as that BYE is sent.                                                                      
+
+  Session := Self.CreateAndEstablishSession;
+  Session.Terminate;
+  Self.DebugTimer.TriggerAllEventsOfType(TIdSipActionSendWait);
+  Self.Core.Actions.CleanOutTerminatedActions;
+
+  T := TIdSipTestTimerQueueListener.Create;
+  try
+    Self.DebugTimer.AddListener(T);
+    Self.DebugTimer.TriggerAllEventsOfType(TIdSipClientNonInviteTransactionTimerFWait);
+
+    if T.ExceptionFired then
+      Fail('Exception occured: ' + T.ExceptionType.ClassName + ': ' + T.ExceptionMessage
+         + ' while executing a ' + T.WaitType.ClassName);
+
+  finally
+    Self.DebugTimer.RemoveListener(T);
+    T.Free;
+  end;
 end;
 
 //******************************************************************************

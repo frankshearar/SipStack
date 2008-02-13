@@ -714,6 +714,28 @@ type
     property UserAgentParam:      TIdSipAbstractCore   read fUserAgentParam;
   end;
 
+  TIdSipTestTimerQueueListener = class(TIdInterfacedObject,
+                                       IIdTimerQueueListener)
+  private
+    fExceptionFired:   Boolean;
+    fExceptionMessage: String;
+    fExceptionType:    ExceptClass;
+    fTimerParam:       TIdTimerQueue;
+    fWaitParam:        TIdWait;
+
+    procedure OnException(Timer: TIdTimerQueue;
+                          Error: Exception;
+                          Wait: TIdWait);
+  public
+    constructor Create; override;
+
+    property ExceptionFired:   Boolean       read fExceptionFired;
+    property ExceptionMessage: String        read fExceptionMessage;
+    property ExceptionType:    ExceptClass   read fExceptionType;
+    property TimerParam:       TIdTimerQueue read fTimerParam;
+    property WaitParam:        TIdWait       read fWaitParam;
+  end;
+
   TIdSipActionFinder = class(TIdSipActionClosure)
   private
     fAction: TIdSipAction;
@@ -2401,6 +2423,31 @@ begin
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnInboundCall');
+end;
+
+//******************************************************************************
+//* TIdSipTestTimerQueueListener                                               *
+//******************************************************************************
+//* TIdSipTestTimerQueueListener Public methods ********************************
+
+constructor TIdSipTestTimerQueueListener.Create;
+begin
+  inherited Create;
+
+  Self.fExceptionFired := false;
+end;
+
+//* TIdSipTestTimerQueueListener Private methods *******************************
+
+procedure TIdSipTestTimerQueueListener.OnException(Timer: TIdTimerQueue;
+                                                   Error: Exception;
+                                                   Wait: TIdWait);
+begin
+  Self.fExceptionFired   := true;
+  Self.fExceptionMessage := Error.Message;
+  Self.fExceptionType    := ExceptClass(Error.ClassType);
+  Self.fTimerParam       := Timer;
+  Self.fWaitParam     := Wait;
 end;
 
 //******************************************************************************

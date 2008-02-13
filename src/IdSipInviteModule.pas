@@ -2731,7 +2731,6 @@ begin
   Bye := Self.UA.AddOutboundAction(TIdSipOutboundBye) as TIdSipOutboundBye;
   Bye.Dialog := Self.Dialog;
   Bye.OriginalInvite := Self.InitialRequest;
-  Bye.AddActionListener(Self);
   Bye.Send;
 end;
 
