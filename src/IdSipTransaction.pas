@@ -88,6 +88,9 @@ type
                                    Binding: TIdConnectionBindings); overload;
     procedure DeliverToTransaction(Response: TIdSipResponse;
                                    Binding: TIdConnectionBindings); overload;
+    procedure LogException(FailedMessage: TIdSipMessage;
+                           E: Exception;
+                           const Reason: String);
     function  TransactionAt(Index: Cardinal): TIdSipTransaction;
     function  TransportAt(Index: Cardinal): TIdSipTransport;
     procedure TryResendMessage(FailedMessage: TIdSipMessage;
@@ -154,6 +157,10 @@ type
     function  FindTransaction(R: TIdSipMessage;
                               ClientTran: Boolean): TIdSipTransaction;
     procedure LocalBindings(Bindings: TIdSipLocations);
+    procedure Log(Description: String;
+                  Severity: TLogVerbosityLevel;
+                  EventRef: Cardinal;
+                  DebugInfo: String);
     function  LoopDetected(Request: TIdSipRequest): Boolean;
     procedure RemoveTransaction(TerminatedTransaction: TIdSipTransaction);
     procedure RemoveTransactionDispatcherListener(const Listener: IIdSipTransactionDispatcherListener);
@@ -219,6 +226,12 @@ type
                                  Binding: TIdConnectionBindings); overload; virtual;
     procedure DoOnTimeout(Request: TIdSipRequest;
                           const Reason: String);
+    procedure LogCreation(InitialRequest: TIdSipRequest);
+    procedure LogReceivedMessage(Message: TIdSipMessage;
+                                 Binding: TIdConnectionBindings);
+    procedure LogSentMessage(Message: TIdSipMessage;
+                             Target: TIdSipLocation);
+    procedure LogStateChange(OldState, NewState: TIdSipTransactionState);
     procedure NotifyOfFailure(const Reason: String); overload; virtual;
     procedure NotifyOfFailure(FailedMessage: TIdSipMessage;
                               const Reason: String); overload;
@@ -598,11 +611,13 @@ const
 const
   SessionTimeoutMsg = 'Timed out';
 
+function StateToStr(S: TIdSipTransactionState): String;
+
 implementation
 
 uses
   IdException, IdRegisteredObject, IdSipDialogID, Math, LogVariables,
-  RuntimeSafety;
+  RuntimeSafety, TypInfo;
 
 const
   AtLeastOneVia         = 'Messages must have at least one Via header';
@@ -620,6 +635,15 @@ const
 const
   RSNoLocationFound     = 'No destination addresses found for URI %s';
   RSNoLocationSucceeded = 'Attempted message sends to all destination addresses failed for URI %s';
+
+//******************************************************************************
+//* Unit Public functions & procedures                                         *
+//******************************************************************************
+
+function StateToStr(S: TIdSipTransactionState): String;
+begin
+  Result := GetEnumName(TypeInfo(TIdSipTransactionState), Integer(S));
+end;
 
 //******************************************************************************
 //* TIdSipTransactionDispatcher                                                *
@@ -780,6 +804,15 @@ var
 begin
   for I := 0 to Self.TransportCount - 1 do
     Self.TransportAt(I).LocalBindings(Bindings);
+end;
+
+procedure TIdSipTransactionDispatcher.Log(Description: String;
+                                          Severity: TLogVerbosityLevel;
+                                          EventRef: Cardinal;
+                                          DebugInfo: String);
+begin
+  if Assigned(Self.Logger) then
+    Self.Logger.Write(Self.LogName, Severity, coLogSourceRefSIPStack, Self.ClassName, EventRef, Description, DebugInfo);
 end;
 
 function TIdSipTransactionDispatcher.LoopDetected(Request: TIdSipRequest): Boolean;
@@ -1016,6 +1049,8 @@ procedure TIdSipTransactionDispatcher.NotifyOfException(FailedMessage: TIdSipMes
 var
   Notification: TIdSipTransactionDispatcherListenerFailedSendMethod;
 begin
+  Self.LogException(FailedMessage, E, Reason);
+
   Notification := TIdSipTransactionDispatcherListenerFailedSendMethod.Create;
   try
     Notification.Exception     := E;
@@ -1201,6 +1236,18 @@ begin
   end;
 end;
 
+procedure TIdSipTransactionDispatcher.LogException(FailedMessage: TIdSipMessage;
+                                                   E: Exception;
+                                                   const Reason: String);
+const
+  LogMsg = '%s sending %s: %s';
+begin
+  Self.Log(Format(LogMsg, [E.ClassName, FailedMessage.Description, Reason]),
+           LoGGerVerbosityLevelLow,
+           coLogEventException,
+           FailedMessage.AsString);
+end;
+
 function TIdSipTransactionDispatcher.TransactionAt(Index: Cardinal): TIdSipTransaction;
 begin
   Result := Self.Transactions[Index] as TIdSipTransaction;
@@ -1285,6 +1332,7 @@ begin
   Self.TranListeners := TIdNotificationList.Create;
 
   Self.FirstTime := true;
+  Self.LogCreation(InitialRequest);
 end;
 
 destructor TIdSipTransaction.Destroy;
@@ -1467,6 +1515,50 @@ begin
   Self.ChangeToTerminated(false);
 end;
 
+procedure TIdSipTransaction.LogCreation(InitialRequest: TIdSipRequest);
+const
+  Msg = 'Transaction %s created with branch-id %s';
+begin
+  // '' because we'll immediately either LogReceivedMessage or LogSentMessage,
+  // which will log InitialRequest.AsString anyway.
+  Self.Dispatcher.Log(Format(Msg, [Self.ID, InitialRequest.LastHop.Branch]),
+                      LoGGerVerbosityLevelHigh,
+                      0,
+                      '');
+end;
+
+procedure TIdSipTransaction.LogReceivedMessage(Message: TIdSipMessage;
+                                               Binding: TIdConnectionBindings);
+const
+  Msg = 'Transaction %s received %s on %s';
+begin
+  Self.Dispatcher.Log(Format(Msg, [Self.ID, Message.Description, Binding.AsString]),
+                      LoGGerVerbosityLevelHigh,
+                      0,
+                      Message.AsString);
+end;
+
+procedure TIdSipTransaction.LogSentMessage(Message: TIdSipMessage;
+                                           Target: TIdSipLocation);
+const
+  Msg = 'Transaction %s sent %s to %s';
+begin
+  Self.Dispatcher.Log(Format(Msg, [Self.ID, Message.Description, Target.AsString]),
+                      LoGGerVerbosityLevelHigh,
+                      0,
+                      Message.AsString);
+end;
+
+procedure TIdSipTransaction.LogStateChange(OldState, NewState: TIdSipTransactionState);
+const
+  Msg = 'Transaction %s changed state: %s -> %s';
+begin
+  Self.Dispatcher.Log(Format(Msg, [Self.ID, StateToStr(OldState), StateToStr(NewState)]),
+                      LoGGerVerbosityLevelHigh,
+                      0,
+                      '');
+end;
+
 procedure TIdSipTransaction.NotifyOfFailure(const Reason: String);
 begin
   RaiseAbstractError(Self.ClassName, 'NotifyOfFailure(String)');
@@ -1540,7 +1632,10 @@ end;
 
 procedure TIdSipTransaction.SetState(Value: TIdSipTransactionState);
 begin
-  Self.fState := Value;
+  if (Self.fState <> Value) then begin
+    Self.LogStateChange(Self.fState, Value);
+    Self.fState := Value;
+  end;
 end;
 
 procedure TIdSipTransaction.TryResendInitialRequest;
@@ -1552,6 +1647,7 @@ end;
 procedure TIdSipTransaction.TrySendRequest(R: TIdSipRequest;
                                            Dest: TIdSipLocation);
 begin
+  Self.LogSentMessage(R, Dest);
   Self.Dispatcher.SendToTransport(R, Dest);
 end;
 
@@ -1647,6 +1743,8 @@ begin
   // locations, because the newly-edited response was never added to
   // SentResponses.
 
+  Self.LogSentMessage(R, Dest);
+
   Locations := Self.SentResponses.LocationsFor(R);
 
   LocalBindings := TIdSipLocations.Create;
@@ -1667,7 +1765,7 @@ begin
       Locations.Remove(Dest);
   finally
     LocalBindings.Free;
-  end;      
+  end;
 end;
 
 //* TIdSipServerTransaction Private methods ************************************
