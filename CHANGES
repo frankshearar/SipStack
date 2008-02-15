@@ -55,6 +55,7 @@ v0.6 (2007/xx/yy)
   particular domain or subnet, and another proxy to contact
   another. Further, one can specify a default Route path, for those
   URIs that do not fall within any address space.
+* Support for TCP media streams, using RFC 4145's setup parameters.
 * bugfixes from the unreleased 0.5.4 version:
 ** The registrar returns a 400 Bad Request when it receives a wildcard
    Contact with an Expires header.

@@ -18,6 +18,8 @@ The stack supports/implements the following RFCs:
 * RFC 3264 (An Offer/Answer Model with SDP)
 * RFC 3265 (SIP-Specific Event Notification)
 * RFC 3266 (Support for IPv6 in SDP)
+* RFC 3351 (User Requirements for SIP in support of Deaf, Hard of
+            Hearing and Speech-impaired Individuals)
 * RFC 3403 (DNS NAPTR Resource Record)
 * RFC 3420 (Internet Media Type message/sipfrag)
 * RFC 3515 (Refer Method)
@@ -26,6 +28,7 @@ The stack supports/implements the following RFCs:
 * RFC 3581 (Symmetric Response Routing)
 * RFC 4102 (text/red MIME Sub-Type)
 * RFC 4103 (RTP Payload for Text Conversation)
+* RFC 4145 (TCP-Based Media Transport in SIP)
 * draft-ietf-sip-gruu-06 (Globally Routable User Agent URIs)
 
 Present, but not completely implemented, are:
@@ -57,24 +60,14 @@ If you're interested in hacking the stack, take a look at the
 SingleCoreSpike class in tests\SingleCoreSpike.pas. It illustrates, in
 a basic way, how to use the SIP stack.
 
-Please note that this version, 0.5, has a radically different
-threading architecture to version 0.3 Please read the CHANGES file,
-doc\overview.txt and doc\architecture.txt!
-
 Todo:
 * We need to implement client-side authentication for certain classes
   of message. In particular, we need to make sure that NOTIFYs,
   INVITEs with a Replaces header, and probably SUBSCRIBE messages need
   authentication. These issues can be summed up as: we need a
   user-defined set of authentication profiles.
-* Finish support of the Target-Dialog and Replaces extensions.
 
 Known bugs:
 * TLS tests fail because of something to do with the certificates.
-* There are still some subtle race conditions in the transport. When
-  they occur, they're quite uncomfortable because the
-  TId(TCP|UDP)Servers then don't deactivate, and the program appears
-  to hang after you close it. These race conditions typically only
-  manifest in the tests, which work the code very hard.
 
-Frank Shearar, 2006/01/31
+Frank Shearar, 2008/02/15
