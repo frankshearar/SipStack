@@ -5640,9 +5640,15 @@ procedure TIdSdpTcpClientConnection.SendData(Data: TStream);
 begin
   // This executes in the context of a TimerQueue; see
   // * TIdSdpBaseTcpConnection.SendData
-  // * TIdSdpTcpMediaStream.ReallySendData  
+  // * TIdSdpTcpMediaStream.ReallySendData
 
-  Self.Client.WriteStream(Data, true);
+  try
+    Self.Client.WriteStream(Data);
+  except
+    on EIdReadTimeout do;
+    on EIdConnClosedGracefully do;
+    on EIdClosedSocket do;
+  end;
 end;
 
 //* TIdSdpTcpClientConnection Protected methods ********************************
