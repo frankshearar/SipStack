@@ -587,7 +587,7 @@ begin
       ReceivedFrom.LocalPort := Connection.Socket.Binding.Port;
       ReceivedFrom.PeerIP    := Connection.Socket.Binding.PeerIP;
       ReceivedFrom.PeerPort  := Connection.Socket.Binding.PeerPort;
-      ReceivedFrom.Transport := Self.TransportType;
+            ReceivedFrom.Transport := Self.TransportType;
 
       S := TStringStream.Create('');
       try
@@ -885,8 +885,15 @@ begin
 end;
 
 procedure TIdSipTcpClient.SetTransportID(const Value: String);
+var
+  Transport: TObject;
 begin
   Self.MessageReader.TransportID := Value;
+
+  Transport := TIdObjectRegistry.FindObject(Value);
+
+  if Assigned(Transport) and (Transport is TIdSipTransport) then
+    Self.MessageReader.TransportType := (Transport as TIdSipTransport).GetTransportType;
 end;
 
 //******************************************************************************

@@ -42,6 +42,11 @@ type
     property LowPortTransport:  TIdSipTransport read fLowPortTransport;
   end;
 
+  // I use two transports - LowPortTransport and HighPortTransport - to test
+  // that the transport works correctly. LowPortTransport sends
+  // HighPortTransport messages, and I listen to HighPortTransport. You may
+  // test that the receipt of messages matches your expectations by assigning
+  // a procedure to Checking(Request|Response)Event.
   TestTIdSipTransport = class(TThreadingTestCase,
                               IIdSipTransportListener,
                               IIdSipTransportSendingListener)
@@ -188,6 +193,7 @@ type
     procedure TestReceivedParamIPv4SentBy;
     procedure TestReceiveRequestShowsCorrectBinding;
     procedure TestReceiveResponseFromMappedRoute;
+    procedure TestReceiveResponseOnLocallyInitiatedConnectionShowsCorrectBinding;
     procedure TestReceiveResponseShowsCorrectBinding;
     procedure TestRemoveBinding;
     procedure TestRemoveBindingDoesntStartStoppedTransport;
@@ -1529,6 +1535,38 @@ begin
   Self.SendMessage(Self.Response.AsString);
 
   Self.WaitForSignaled('Message from a mapped route not accepted');
+end;
+
+procedure TestTIdSipTransport.TestReceiveResponseOnLocallyInitiatedConnectionShowsCorrectBinding;
+var
+  Trying: TIdSipResponse;
+begin
+  // HighPortTransport  --   INVITE   --> LowPortTransport
+  // HighPortTransport <-- 100 Trying --  LowPortTransport
+  //
+  // Does the receiving binding now hold the correct information?
+
+  Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
+  Self.HighPortTransport.Send(Self.Request, Self.LowPortLocation);
+  Self.WaitForSignaled('No ' + Self.Request.Method + ' received');
+
+  Self.CheckingRequestEvent := nil;
+  Trying := TIdSipResponse.InResponseTo(Self.Request, SIPTrying);
+  try
+    Self.CheckingResponseEvent := Self.CheckCanReceiveResponse;
+    Self.LowPortTransport.Send(Trying, Self.HighPortLocation);
+    Self.WaitForSignaled('No ' + Trying.Description + ' received');
+
+    CheckEquals(Self.LowPortLocation.IPAddress,  Self.ReceivingBinding.PeerIP,   'PeerIP incorrect');
+    CheckEquals(Self.LowPortLocation.Port,       Self.ReceivingBinding.PeerPort, 'PeerPort incorrect');
+    CheckEquals(Self.HighPortLocation.Transport, Self.ReceivingBinding.Transport, 'Transport incorrect');
+
+    // Remember, this local binding uses an ephemeral port.
+    CheckNotEquals('', Self.ReceivingBinding.LocalIP,   'LocalIP not filled in');
+    CheckNotEquals(0,  Self.ReceivingBinding.LocalPort, 'LocalPort not filled in');
+  finally
+    Trying.Free;
+  end;
 end;
 
 procedure TestTIdSipTransport.TestReceiveResponseShowsCorrectBinding;
