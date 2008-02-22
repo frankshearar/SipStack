@@ -12,12 +12,19 @@ unit IdTimerQueue;
 interface
 
 uses
-  Classes, Contnrs, IdBaseThread, IdNotification, IdRegisteredObject, SyncObjs,
-  SysUtils;
+  Classes, Contnrs, IdBaseThread, IdNotification, IdRegisteredObject, LoGGer,
+  SyncObjs, SysUtils;
 
 type
   TIdTimerQueue = class;
   TIdTimerQueueClass = class of TIdTimerQueue;
+
+  TIdLogProc = procedure(VerbosityLevel: Byte;
+                         SourceRef: Cardinal;
+                         SourceDescription: String;
+                         RefCode: Cardinal;
+                         Description,
+                         BinaryData: String) of object;
 
   // I represent something that will happen in the future. If you want an alarm
   // to go off in 10 seconds, you'd instantiate me (well, a subclass of me) with
@@ -31,7 +38,10 @@ type
   TIdWait = class(TIdRegisteredObject)
   private
     fDebugWaitTime: Cardinal;
+    fOnLog:         TIdLogProc;
     fTriggerTime:   TDateTime;
+  protected
+    procedure LogTrigger; virtual;
   public
     function  Copy: TIdWait; virtual;
     function  Due: Boolean;
@@ -40,8 +50,9 @@ type
     function  TimeToWait: Cardinal;
     procedure Trigger; virtual;
 
-    property DebugWaitTime: Cardinal  read fDebugWaitTime write fDebugWaitTime;
-    property TriggerTime:   TDateTime read fTriggerTime write fTriggerTime;
+    property DebugWaitTime: Cardinal   read fDebugWaitTime write fDebugWaitTime;
+    property OnLog:         TIdLogProc read fOnLog write fOnLog;
+    property TriggerTime:   TDateTime  read fTriggerTime write fTriggerTime;
   end;
 
   TIdWaitClass = class of TIdWait;
@@ -71,6 +82,8 @@ type
     fCreateSuspended: Boolean;
     fEventList:       TObjectList;
     fLock:            TCriticalSection;
+    fLogger:          TLoGGerThread;
+    fLogName:         String;
     fTerminated:      Boolean;
     fDefaultTimeout:  Cardinal;
     Listeners:        TIdNotificationList;
@@ -87,6 +100,12 @@ type
     function  EventAt(Index: Integer): TIdWait; virtual;
     function  IndexOfEvent(Event: Pointer): Integer;
     procedure LockTimer; virtual;
+    procedure LogTrigger(VerbosityLevel: Byte;
+                         SourceRef: Cardinal;
+                         SourceDescription: String;
+                         RefCode: Cardinal;
+                         Description,
+                         BinaryData: String);
     procedure TriggerEarliestEvent; virtual;
     procedure TriggerEvent(Event: TIdWait);
     procedure UnlockTimer; virtual;
@@ -108,7 +127,9 @@ type
     procedure Resume; virtual;
     procedure Terminate; virtual;
 
-    property DefaultTimeout: Cardinal read GetDefaultTimeout write SetDefaultTimeout;
+    property DefaultTimeout: Cardinal      read GetDefaultTimeout write SetDefaultTimeout;
+    property Logger:         TLoGGerThread read fLogger write fLogger;
+    property LogName:        String        read fLogName write fLogName;
   end;
 
   TIdThreadProc = procedure of object;
@@ -271,6 +292,15 @@ end;
 procedure TIdWait.Trigger;
 begin
   // By default, do nothing.
+  if Assigned(Self.fOnLog) then
+    Self.LogTrigger;
+end;
+
+//* TIdWait Protected methods **************************************************
+
+procedure TIdWait.LogTrigger;
+begin
+  // Log anything interesting here. By default, log nothing.
 end;
 
 //******************************************************************************
@@ -319,6 +349,8 @@ procedure TIdTimerQueue.AddEvent(MillisecsWait: Cardinal;
 var
   InsertPosition, LookAhead: Integer;
 begin
+  Event.OnLog := Self.LogTrigger;
+
   Self.LockTimer;
   try
     try
@@ -452,6 +484,16 @@ end;
 procedure TIdTimerQueue.LockTimer;
 begin
   Self.Lock.Acquire;
+end;
+
+procedure TIdTimerQueue.LogTrigger(VerbosityLevel: Byte;
+                                   SourceRef: Cardinal;
+                                   SourceDescription: String;
+                                   RefCode: Cardinal;
+                                   Description,
+                                   BinaryData: String);
+begin
+  Self.Logger.Write(Self.LogName, VerbosityLevel, SourceRef, SourceDescription, RefCode, Description, BinaryData);
 end;
 
 procedure TIdTimerQueue.TriggerEarliestEvent;

@@ -67,12 +67,21 @@ type
     EventOne:         TEvent;
     EventTwo:         TEvent;
     Lock:             TCriticalSection;
+    LogOutput:        String;
     Notified:         Boolean;
     OrderOfFire:      String;
     Queue:            TIdThreadedTimerQueue;
     T1:               TThreadEvent;
     T2:               TThreadEvent;
 
+    procedure AcknowledgeLog(Output: String);
+    procedure CheckLogOutput(VerbosityLevel: Byte;
+                             SourceRef: Cardinal;
+                             SourceDescription: String;
+                             EventRef: Cardinal;
+                             Description,
+                             BinaryData,
+                             Received: String);
     procedure OnEventOneSet(Sender: TObject);
     procedure OnEventTwoSet(Sender: TObject);
     procedure WaitForAll(Events: array of TEvent;
@@ -81,6 +90,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestLogging;
     procedure TestOneEvent;
     procedure TestResume;
     procedure TestTwoEvents;
@@ -149,7 +159,7 @@ const
 implementation
 
 uses
-  IdGlobal;
+  IdGlobal, LoGGer;
 
 type
   TIdTestWait = class(TIdWait)
@@ -422,6 +432,7 @@ begin
 
   Self.DefaultTimeout   := LongTimeout;
   Self.ExceptionMessage := 'The event waited for was never fired';
+  Self.LogOutput        := '';
   Self.Notified         := false;
   Self.OrderOfFire      := '';
 
@@ -471,6 +482,42 @@ end;
 
 //* TestTIdThreadedTimerQueue Private methods **********************************
 
+procedure TestTIdThreadedTimerQueue.AcknowledgeLog(Output: String);
+begin
+  Self.LogOutput := Output;
+  Self.EventOne.SetEvent;
+end;
+
+procedure TestTIdThreadedTimerQueue.CheckLogOutput(VerbosityLevel: Byte;
+                                                   SourceRef: Cardinal;
+                                                   SourceDescription: String;
+                                                   EventRef: Cardinal;
+                                                   Description,
+                                                   BinaryData,
+                                                   Received: String);
+  function EncodeNumber(N: Cardinal): String;
+  begin
+    Result := '$' + IntToHex(N, 8);
+  end;
+var
+  Tokens: TStrings;
+begin
+  Tokens := TStringList.Create;
+  try
+    Tokens.CommaText := Received;
+
+    CheckEquals(7, Tokens.Count, 'Wrong number of tokens in log entry');
+    CheckEquals(IntToStr(VerbosityLevel),     Tokens[1], 'Incorrect log param: VerbosityLevel');
+    CheckEquals(EncodeNumber(SourceRef),      Tokens[2], 'Incorrect log param: SourceRef');
+    CheckEquals(SourceDescription,            Tokens[3], 'Incorrect log param: SourceDescription');
+    CheckEquals(EncodeNumber(EventRef),       Tokens[4], 'Incorrect log param: EventRef');
+    CheckEquals(Description,                  Tokens[5], 'Incorrect log param: Description');
+    CheckEquals(BinaryData,                   Tokens[6], 'Incorrect log param: BinaryData');
+  finally
+    Tokens.Free;
+  end;
+end;
+
 procedure TestTIdThreadedTimerQueue.OnEventOneSet(Sender: TObject);
 begin
   Self.Lock.Acquire;
@@ -511,6 +558,55 @@ begin
 end;
 
 //* TestTIdThreadedTimerQueue Published methods ********************************
+
+procedure TestTIdThreadedTimerQueue.TestLogging;
+const
+  BinaryData        = 'BinaryData';
+  Description       = 'Description';
+  LogName           = 'ThisIsaTestLog';
+  RefCode           = 22;
+  SourceDescription = 'SourceDescription';
+  SourceRef         = 13;
+  VerbosityLevel    = High(TLogVerbosityLevel);
+var
+  Logger:  TLoGGerThread;
+  LogWait: TLoggingWait;
+  L:       TTimerQueueListener;
+begin
+  // This test is sensitive to the default logging style used in the LoGGer framework!
+  Logger := TLoGGerThread.Create;
+  try
+    Logger.Add(LogName);
+    Logger.Lock;
+    try
+      Logger.Logs.LogsByName[LogName].Enabled        := true;
+      Logger.Logs.LogsByName[LogName].OnOutput       := Self.AcknowledgeLog;
+      Logger.Logs.LogsByName[LogName].VerbosityLevel := LoGGerVerbosityLevelHighest;
+    finally
+      Logger.Unlock;
+    end;
+
+    Self.Queue.Logger  := Logger;
+    Self.Queue.LogName :=LogName;
+    try
+      LogWait := TLoggingWait.Create;
+      LogWait.BinaryData        := BinaryData;
+      LogWait.Description       := Description;
+      LogWait.RefCode           := RefCode;
+      LogWait.SourceDescription := SourceDescription;
+      LogWait.SourceRef         := SourceRef;
+      LogWait.VerbosityLevel    := VerbosityLevel;
+
+      Self.Queue.AddEvent(TriggerImmediately, LogWait);
+      Self.WaitForSignaled(Self.EventOne, 'No log message received');
+      Self.CheckLogOutput(VerbosityLevel, SourceRef, SourceDescription, RefCode, Description, BinaryData, Self.LogOutput);
+    finally
+      Self.Queue.Logger := nil;
+    end;
+  finally
+    Logger.Terminate;
+  end;
+end;
 
 procedure TestTIdThreadedTimerQueue.TestOneEvent;
 var
@@ -653,7 +749,7 @@ begin
   Self.Timer     := TIdDebugTimerQueue.Create(false);
 
   Self.OnSecondTimerFired := false;
-  Self.OnTimerFired := false;
+  Self.OnTimerFired       := false;
 end;
 
 procedure TestTIdDebugTimerQueue.TearDown;
@@ -745,7 +841,7 @@ begin
     try
       Self.Timer.AddListener(L1);
       Self.Timer.AddListener(L2);
-      
+
       Self.Timer.TriggerEarliestEvent;
 
       Check(L1.ExceptionRaised, 'Listener 1 not notified');
