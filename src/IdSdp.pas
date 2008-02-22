@@ -1144,6 +1144,8 @@ type
 
     procedure SetData(Value: TStream);
     procedure SetReceivedOn(Value: TIdConnectionBindings);
+  protected
+    procedure LogTrigger; override;
   public
     constructor Create; override;
     destructor  Destroy; override;
@@ -1364,7 +1366,7 @@ function StrToSetupType(const S: String): TIdSDPSetupType;
 implementation
 
 uses
-  IdException, IdRandom, IdSocketHandle, RuntimeSafety;
+  IdException, IdRandom, IdSocketHandle, LogVariables, RuntimeSafety;
 
 const
   SessionHeaderOrder = 'vosiuepcbtka';
@@ -7007,6 +7009,8 @@ var
   C:    TObject;
   Conn: TIdSdpBaseTcpConnection;
 begin
+  inherited Trigger;
+
   C := TIdObjectRegistry.FindObject(Self.ConnectionID);
 
   if Assigned(C) and (C is TIdSdpBaseTcpConnection) then begin
@@ -7014,6 +7018,20 @@ begin
 
     Conn.ReceiveData(Self.Data, Self.ReceivedOn);
   end;
+end;
+
+//* TIdSdpTcpReceiveDataWait Protected methods *********************************
+
+procedure TIdSdpTcpReceiveDataWait.LogTrigger;
+const
+  LogMsg = '%s with ID %s received data';
+begin
+  Self.OnLog(LoGGerVerbosityLevelDebug,
+             coLogSourceRefSIPStack,
+             '',
+             coLogEventRefTimerEvent,
+             Format(LogMsg, [Self.ClassName, Self.ID]),
+             EncodeQuotedStr(StreamToStr(Data)));
 end;
 
 //* TIdSdpTcpReceiveDataWait Private methods ***********************************
