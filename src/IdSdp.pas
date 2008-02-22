@@ -1366,7 +1366,7 @@ function StrToSetupType(const S: String): TIdSDPSetupType;
 implementation
 
 uses
-  IdException, IdRandom, IdSocketHandle, LogVariables, RuntimeSafety;
+  IdException, IdRandom, IdSocketHandle, LoGGer, LogVariables, RuntimeSafety;
 
 const
   SessionHeaderOrder = 'vosiuepcbtka';
