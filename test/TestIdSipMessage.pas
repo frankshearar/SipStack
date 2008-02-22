@@ -12,7 +12,7 @@ unit TestIdSipMessage;
 interface
 
 uses
-  IdConnectionBindings, IdMockRoutingTable, IdSipDialogID, IdSipLocation,
+  IdConnectionBindings, IdRoutingTable, IdSipDialogID, IdSipLocation,
   IdSipMessage, SysUtils, TestFramework, TestFrameworkSip;
 
 type

@@ -472,10 +472,9 @@ procedure EatDirective(var Line: String);
 implementation
 
 uses
-  IdMockRoutingTable, IdRegisteredObject, IdSimpleParser, IdSipDns,
-  IdSipIndyLocator, IdSipLocation, IdSipMockBindingDatabase, IdSipMockLocator,
-  IdSipSubscribeModule, IdSystem, IdUnicode, LogVariables, RuntimeSafety,
-  SysUtils;
+  IdRegisteredObject, IdSimpleParser, IdSipDns, IdSipIndyLocator, IdSipLocation,
+  IdSipMockBindingDatabase, IdSipMockLocator, IdSipSubscribeModule, IdSystem,
+  IdUnicode, LogVariables, RuntimeSafety, SysUtils;
 
 //******************************************************************************
 //* Unit Public functions & procedures                                         *

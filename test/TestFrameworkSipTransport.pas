@@ -12,7 +12,7 @@ unit TestFrameworkSipTransport;
 interface
 
 uses
-  IdConnectionBindings, IdMockRoutingTable, IdSipLocation, IdSipMessage,
+  IdConnectionBindings, IdRoutingTable, IdSipLocation, IdSipMessage,
   IdSipTransport, IdTimerQueue, SyncObjs, SysUtils, TestFrameworkEx,
   TestFrameworkSip;
 

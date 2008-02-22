@@ -58,7 +58,7 @@ type
 implementation
 
 uses
-  IdMockRoutingTable, SysUtils;
+  IdRoutingTable, SysUtils;
 
 const
   NoDestinationsForResponse = 'Couldn''t send the response because there are '

@@ -53,7 +53,7 @@ type
 implementation
 
 uses
-  IdMockRoutingTable, IdSipTransport, SysUtils, TestFrameworkSip;
+  IdSipTransport, SysUtils, TestFrameworkSip;
 
 function Suite: ITestSuite;
 begin

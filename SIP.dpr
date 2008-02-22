@@ -20,7 +20,6 @@ uses
   IdDTMFPanel in 'src\IdDTMFPanel.pas',
   IdIndyUtils in 'src\IdIndyUtils.pas',
   IdInterfacedObject in 'src\IdInterfacedObject.pas',
-  IdMockRoutingTable in 'test\IdMockRoutingTable.pas',
   IdNotification in 'src\IdNotification.pas',
   IdObservable in 'src\IdObservable.pas',
   IdRandom in 'src\IdRandom.pas',

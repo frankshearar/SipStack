@@ -12,7 +12,7 @@ unit TestIdSipTransaction;
 interface
 
 uses
-  IdConnectionBindings, IdMockRoutingTable, IdSipAuthentication, IdSipCore,
+  IdConnectionBindings, IdRoutingTable, IdSipAuthentication, IdSipCore,
   IdSipDialog, IdSipDns, IdSipLocation, IdSipMessage, IdSipMockCore,
   IdSipMockLocator, IdSipMockTransactionDispatcher, IdSipMockTransport,
   IdSipTransaction, IdSipTransport, IdTimerQueue, SysUtils, TestFramework,
@@ -721,8 +721,8 @@ type
 implementation
 
 uses
-  Classes, IdException, IdRandom, IdRegisteredObject, IdRoutingTable, IdSdp,
-  LoGGer, Math, RuntimeSafety, TypInfo;
+  Classes, IdException, IdRandom, IdRegisteredObject, IdSdp, LoGGer, Math,
+  RuntimeSafety, TypInfo;
 
 function Suite: ITestSuite;
 begin

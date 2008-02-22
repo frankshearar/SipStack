@@ -428,11 +428,11 @@ type
 implementation
 
 uses
-  IdException, IdMockRoutingTable, IdRegisteredObject, IdSdp, IdSimpleParser,
-  IdSipAuthentication, IdSipIndyLocator, IdSipMockBindingDatabase,
-  IdSipMockLocator, IdSipMockTransactionDispatcher, IdSipMockTransport,
-  IdSipSubscribeModule, IdSipTCPTransport, IdSipUDPTransport, IdSystem,
-  IdTcpClient, IdUnicode, LogVariables, SysUtils, TestFrameworkSipTransport;
+  IdException, IdRegisteredObject, IdSdp, IdSimpleParser, IdSipAuthentication,
+  IdSipIndyLocator, IdSipMockBindingDatabase, IdSipMockLocator,
+  IdSipMockTransactionDispatcher, IdSipMockTransport, IdSipSubscribeModule,
+  IdSipTCPTransport, IdSipUDPTransport, IdSystem, IdTcpClient, IdUnicode,
+  LogVariables, SysUtils, TestFrameworkSipTransport;
 
 const
   // SFTF: Sip Foundry Test Framework. cf. http://www.sipfoundry.org/sftf/

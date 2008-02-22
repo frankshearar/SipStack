@@ -12,8 +12,8 @@ unit TestFrameworkSip;
 interface
 
 uses
-  Classes, Forms, IdConnectionBindings, IdInterfacedObject, IdMockRoutingTable,
-  IdObservable, IdRTP, IdSdp, IdSipAuthentication, IdSipInviteModule,
+  Classes, Forms, IdConnectionBindings, IdInterfacedObject, IdObservable,
+  IdRoutingTable, IdRTP, IdSdp, IdSipAuthentication, IdSipInviteModule,
   IdSipLocation, IdSipMessage, IdSipOptionsModule, IdSipCore, IdSipDialog,
   IdSipMockLocator, IdSipMockTransactionDispatcher, IdSipRegistration,
   IdSipStackInterface, IdSipSubscribeModule, IdSipTransaction, IdSipTransport,
