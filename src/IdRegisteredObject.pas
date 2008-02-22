@@ -29,12 +29,17 @@ type
   private
     class procedure CollectAllObjectsOfClassOnly(SearchType: TClass; Results: TStrings);
     class procedure CollectAllObjectsOfClassOrSubtype(SearchType: TClass; Results: TStrings);
+    class procedure Lock;
     class procedure Log(Description: String);
     class function  ObjectAt(Index: Integer): TObject;
     class function  ObjectRegistry: TStrings;
+    class procedure Unlock;
   public
     class procedure CollectAllObjectsOfClass(SearchType: TClass; Results: TStrings; AllowSubclassTypes: Boolean = true);
     class function  FindObject(ObjectID: String): TObject;
+    class function  Logger: TLoGGerThread;
+    class function  LogName: String;
+    class function  LogSourceRef: Cardinal;
     class function  RegisterObject(Instance: TObject): String;
     class procedure SetLogger(Log: TLoGGerThread;
                               LogName: String;
@@ -54,12 +59,13 @@ const
 implementation
 
 uses
-  IdSystem;
+  IdSystem, SyncObjs;
 
 const
   ItemNotFoundIndex = -1;
 
 var
+  GLock:           TCriticalSection;
   GLog:            TLoGGerThread;
   GLogName:        String;
   GObjectRegistry: TStringList;
@@ -110,41 +116,91 @@ class function TIdObjectRegistry.FindObject(ObjectID: String): TObject;
 var
   Index: Integer;
 begin
-  Index := Self.ObjectRegistry.IndexOf(ObjectID);
+  Self.Lock;
+  try
+    Index := Self.ObjectRegistry.IndexOf(ObjectID);
 
-  if (Index = ItemNotFoundIndex) then
-    Result := nil
-  else
-    Result := Self.ObjectAt(Index);
+    if (Index = ItemNotFoundIndex) then
+      Result := nil
+    else
+      Result := Self.ObjectAt(Index);
+  finally
+    Self.Unlock;
+  end;
+end;
+
+class function TIdObjectRegistry.Logger: TLoGGerThread;
+begin
+  Self.Lock;
+  try
+    Result := GLog;
+  finally
+    Self.Unlock;
+  end;
+end;
+
+class function TIdObjectRegistry.LogName: String;
+begin
+  Self.Lock;
+  try
+    Result := GLogName;
+  finally
+    Self.Unlock;
+  end;
+end;
+
+class function TIdObjectRegistry.LogSourceRef: Cardinal;
+begin
+  Self.Lock;
+  try
+    Result := GSourceRef;
+  finally
+    Self.Unlock;
+  end;
 end;
 
 class function TIdObjectRegistry.RegisterObject(Instance: TObject): String;
 begin
-  repeat
-    Result := ConstructUUID;
-  until (Self.ObjectRegistry.IndexOf(Result) = ItemNotFoundIndex);
+  Self.Lock;
+  try
+    repeat
+      Result := ConstructUUID;
+    until (Self.ObjectRegistry.IndexOf(Result) = ItemNotFoundIndex);
 
-  Self.ObjectRegistry.AddObject(Result, Instance);
-  Self.Log(Format(RegisterLogMsg, [Instance.ClassName, Result]));
+    Self.ObjectRegistry.AddObject(Result, Instance);
+    Self.Log(Format(RegisterLogMsg, [Instance.ClassName, Result]));
+  finally
+    Self.Unlock;
+  end;
 end;
 
 class procedure TIdObjectRegistry.SetLogger(Log: TLoGGerThread;
                                             LogName: String;
                                             SourceRef: Cardinal);
 begin
-  GLog       := Log;
-  GLogName   := LogName;
-  GSourceRef := SourceRef;
+  Self.Lock;
+  try
+    GLog       := Log;
+    GLogName   := LogName;
+    GSourceRef := SourceRef;
+  finally
+    Self.Unlock;
+  end;
 end;
 
 class procedure TIdObjectRegistry.UnregisterObject(ObjectID: String);
 var
   Index: Integer;
 begin
-  Index := Self.ObjectRegistry.IndexOf(ObjectID);
-  if (Index <> ItemNotFoundIndex) then begin
-    Self.Log(Format(UnregisterLogMsg, [Self.ObjectRegistry.Objects[Index].ClassName, ObjectID]));
-    Self.ObjectRegistry.Delete(Index);
+  Self.Lock;
+  try
+    Index := Self.ObjectRegistry.IndexOf(ObjectID);
+    if (Index <> ItemNotFoundIndex) then begin
+      Self.Log(Format(UnregisterLogMsg, [Self.ObjectRegistry.Objects[Index].ClassName, ObjectID]));
+      Self.ObjectRegistry.Delete(Index);
+    end;
+  finally
+    Self.Unlock;
   end;
 end;
 
@@ -156,10 +212,15 @@ var
 begin
   Results.Clear;
 
-  for I := 0 to Self.ObjectRegistry.Count - 1 do begin
-    if (Self.ObjectAt(I).ClassType = SearchType) then
-      Results.AddObject(Self.ObjectRegistry[I],
-                        Self.ObjectRegistry.Objects[I]);
+  Self.Lock;
+  try
+    for I := 0 to Self.ObjectRegistry.Count - 1 do begin
+      if (Self.ObjectAt(I).ClassType = SearchType) then
+        Results.AddObject(Self.ObjectRegistry[I],
+                          Self.ObjectRegistry.Objects[I]);
+    end;
+  finally
+    Self.Unlock;
   end;
 end;
 
@@ -169,25 +230,35 @@ var
 begin
   Results.Clear;
 
-  for I := 0 to Self.ObjectRegistry.Count - 1 do begin
-    if (Self.ObjectAt(I) is SearchType) then
-      Results.AddObject(Self.ObjectRegistry[I],
-                        Self.ObjectRegistry.Objects[I]);
+  Self.Lock;
+  try
+    for I := 0 to Self.ObjectRegistry.Count - 1 do begin
+      if (Self.ObjectAt(I) is SearchType) then
+        Results.AddObject(Self.ObjectRegistry[I],
+                          Self.ObjectRegistry.Objects[I]);
+    end;
+  finally
+    Self.Unlock;
   end;
+end;
+
+class procedure TIdObjectRegistry.Lock;
+begin
+  GLock.Acquire;
 end;
 
 class procedure TIdObjectRegistry.Log(Description: String);
 begin
-  if not Assigned(GLog) then Exit;
+  if (Self.Logger = nil) then Exit;
 
-  GLog.Lock;
+  Self.Logger.Lock;
   try
-    if not GLog.Logs.LogExists(GLogName) then Exit;
+    if not Self.Logger.Logs.LogExists(Self.LogName) then Exit;
+    
+    Self.Logger.Write(Self.LogName, LoGGerVerbosityLevelDebug, Self.LogSourceRef, '', 0, Description, '');
   finally
-    GLog.Unlock;
+    Self.Logger.Unlock;
   end;
-
-  GLog.Write(GLogName, LoGGerVerbosityLevelDebug, GSourceRef, '', 0, Description, '');
 end;
 
 class function TIdObjectRegistry.ObjectAt(Index: Integer): TObject;
@@ -200,7 +271,13 @@ begin
   Result := GObjectRegistry;
 end;
 
+class procedure TIdObjectRegistry.Unlock;
+begin
+  GLock.Release;
+end;
+
 initialization
+  GLock           := TCriticalSection.Create;
   GObjectRegistry := CreateSortedList;
 finalization
 // These objects are purely memory-based, so it's safe not to free them here.
