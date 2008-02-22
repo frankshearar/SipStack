@@ -18,6 +18,7 @@ type
   TestFunctions = class(TTestCase)
   published
     procedure TestEncodeNonLineUnprintableChars;
+    procedure TestEncodeQuotedStr;
     procedure TestEndsWith;
     procedure TestFetch;
     procedure TestFetchDefaultParameters;
@@ -138,6 +139,28 @@ begin
   CheckEquals('abc#7F#7F#7F',
               EncodeNonLineUnprintableChars('abc'#$7f#$7f#$7f),
               '''abc''#$7f#$7f#$7f');
+end;
+
+procedure TestFunctions.TestEncodeQuotedStr;
+begin
+  CheckEquals('I am a ''normal'' string',
+              EncodeQuotedStr('I am a ''normal'' string'),
+              '''I am a ''''normal'''' string''');
+  CheckEquals('',
+              EncodeQuotedStr(''),
+              '''''');
+  CheckEquals('\\',
+              EncodeQuotedStr('\'),
+              '\');
+  CheckEquals('\"',
+              EncodeQuotedStr('"'),
+              '"');
+  CheckEquals('\\\"',
+              EncodeQuotedStr('\"'),
+              '\"');
+  CheckEquals('\"I am a ''normal'' string\"',
+              EncodeQuotedStr('"I am a ''normal'' string"'),
+              '''"I am a ''normal'' string"''');
 end;
 
 procedure TestFunctions.TestEndsWith;

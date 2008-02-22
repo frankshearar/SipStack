@@ -422,7 +422,6 @@ type
   public
     class function CanonicaliseName(HeaderName: String): String;
     class function ConstructHeader(HeaderName: String): TIdSipHeader;
-    class function EncodeQuotedStr(const S: String): String;
     class function GetHeaderName(Header: String): String;
     class function GetHeaderValue(Header: String): String;
     class function HeaderTypes: TObjectList;
@@ -2635,7 +2634,7 @@ begin
 
   if (Self.Value <> '') then
     Result := Result + '="'
-            + TIdSipContactHeader.EncodeQuotedStr(Self.Value) + '"';
+            + EncodeQuotedStr(Self.Value) + '"';
 end;
 
 //******************************************************************************
@@ -4149,12 +4148,6 @@ begin
     Result := TIdSipHeader.Create;
 end;
 
-class function TIdSipHeader.EncodeQuotedStr(const S: String): String;
-begin
-  Result := StringReplace(S,      '\', '\\', [rfReplaceAll, rfIgnoreCase]);
-  Result := StringReplace(Result, '"', '\"', [rfReplaceAll, rfIgnoreCase]);
-end;
-
 class function TIdSipHeader.GetHeaderName(Header: String): String;
 begin
   Result := Trim(Fetch(Header, ':'));
@@ -4647,7 +4640,7 @@ var
 begin
   Result := Self.DisplayName;
   if (FirstOf(['"', '\'], Result) > 0) then
-    Result := Self.EncodeQuotedStr(Result);
+    Result := EncodeQuotedStr(Result);
 
   Result := QuoteStringIfNecessary(Result);
 
@@ -7108,7 +7101,7 @@ end;
 
 function TIdSipWarningHeader.GetValue: String;
 begin
-  Result := Format('%d %s "%s"', [Self.Code, Self.Agent, Self.EncodeQuotedStr(Self.Text)]);
+  Result := Format('%d %s "%s"', [Self.Code, Self.Agent, EncodeQuotedStr(Self.Text)]);
 end;
 
 procedure TIdSipWarningHeader.Parse(const Value: String);

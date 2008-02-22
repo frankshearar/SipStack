@@ -139,7 +139,6 @@ type
     procedure TestAsString;
     procedure TestAssignCopiesParseInfo;
     procedure TestCanonicaliseName;
-    procedure TestEncodeQuotedStr;
     procedure TestFullValue;
     procedure TestGetHeaderName;
     procedure TestGetHeaderValue;
@@ -1352,7 +1351,7 @@ begin
   Self.P.Value := ParamValue;
 
   CheckEquals(Self.P.Name + '="'
-            + TIdSipContactHeader.EncodeQuotedStr(Self.P.Value) + '"',
+            + EncodeQuotedStr(Self.P.Value) + '"',
               Self.P.AsHeaderParameter,
               'quoted-string incorrectly encoded');
 end;
@@ -1365,7 +1364,7 @@ begin
   Self.P.Value := ParamValue;
 
   CheckEquals(Self.P.Name + '="'
-            + TIdSipContactHeader.EncodeQuotedStr(Self.P.Value) + '"',
+            + EncodeQuotedStr(Self.P.Value) + '"',
               Self.P.AsString,
               'quoted-string incorrectly encoded');
 end;
@@ -2302,28 +2301,6 @@ begin
   CheckEquals(WWWAuthenticateHeader, TIdSipHeader.CanonicaliseName('www-authenticate'),    'www-authenticate');
   CheckEquals(WWWAuthenticateHeader, TIdSipHeader.CanonicaliseName('WWW-Authenticate'),    'WWW-Authenticate');
   CheckEquals(WWWAuthenticateHeader, TIdSipHeader.CanonicaliseName(WWWAuthenticateHeader), 'WWWAuthenticateHeader constant');
-end;
-
-procedure TestTIdSipHeader.TestEncodeQuotedStr;
-begin
-  CheckEquals('I am a ''normal'' string',
-              Self.H.EncodeQuotedStr('I am a ''normal'' string'),
-              '''I am a ''''normal'''' string''');
-  CheckEquals('',
-              Self.H.EncodeQuotedStr(''),
-              '''''');
-  CheckEquals('\\',
-              Self.H.EncodeQuotedStr('\'),
-              '\');
-  CheckEquals('\"',
-              Self.H.EncodeQuotedStr('"'),
-              '"');
-  CheckEquals('\\\"',
-              Self.H.EncodeQuotedStr('\"'),
-              '\"');
-  CheckEquals('\"I am a ''normal'' string\"',
-              Self.H.EncodeQuotedStr('"I am a ''normal'' string"'),
-              '''"I am a ''normal'' string"''');
 end;
 
 procedure TestTIdSipHeader.TestFullValue;

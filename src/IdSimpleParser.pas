@@ -111,6 +111,7 @@ const
 function BitsInCardinal: Cardinal;
 function ContainsOnly(const Token: String; LegalChars: TCharSet): Boolean;
 function EncodeNonLineUnprintableChars(S: String): String;
+function EncodeQuotedStr(const S: String): String;
 function EndsWith(const S, Suffix: String): Boolean;
 function Fetch(var Source: String;
                const Delimiter: String = FetchDefaultDelimiter;
@@ -193,6 +194,12 @@ begin
       Result := Result + S[I]
     else
       Result := Result + '#' + IntToHex(Ord(S[I]), 2);
+end;
+
+function EncodeQuotedStr(const S: String): String;
+begin
+  Result := StringReplace(S,      '\', '\\', [rfReplaceAll, rfIgnoreCase]);
+  Result := StringReplace(Result, '"', '\"', [rfReplaceAll, rfIgnoreCase]);
 end;
 
 function EndsWith(const S, Suffix: String): Boolean;
