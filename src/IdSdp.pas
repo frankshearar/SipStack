@@ -5452,38 +5452,32 @@ procedure TIdSdpTcpClient.ReceiveMessages;
 var
   ConnClosedOrTimedOut: Boolean;
   ReceivedOn:           TIdConnectionBindings;
-  S:                    TStream;
 begin
-  S := TMemoryStream.Create;
+  ReceivedOn := TIdConnectionBindings.Create;
   try
-    ReceivedOn := TIdConnectionBindings.Create;
-    try
-      ConnClosedOrTimedOut := false;
+    ConnClosedOrTimedOut := false;
 
-      Self.ReadTimeout := Self.ReadTimeout;
-      while Self.Connected and not ConnClosedOrTimedOut do begin
-        try
-          S.Size     := 0;
-          S.Position := 0;
-          // We want to notify as soon as there's ANY data.
-          Self.ReadStream(S, 1);
-          Self.ReceiveInTimerContext(S, ReceivedOn);
-        except
-          // We just catch read timeouts and loop again: it just means that the
-          // remote party hasn't sent us data in a while, which could well be
-          // perfectly normal, depending on the nature of the media stream.
-          on EIdReadTimeout do;
-          on EIdConnClosedGracefully do
-            ConnClosedOrTimedOut := true;
-          on EIdClosedSocket do
-            ConnClosedOrTimedOut := true;
-        end;
+    Self.ReadTimeout := Self.ReadTimeout;
+    while Self.Connected and not ConnClosedOrTimedOut do begin
+      try
+        // We want to notify as soon as there's ANY data. When there is data, we
+        // want to read as much as we can.
+        Self.ReadFromStack;
+        Self.ReceiveInTimerContext(Self.InputBuffer, ReceivedOn);
+        Self.InputBuffer.Remove(Self.InputBuffer.Size);
+      except
+        // We just catch read timeouts and loop again: it just means that the
+        // remote party hasn't sent us data in a while, which could well be
+        // perfectly normal, depending on the nature of the media stream.
+        on EIdReadTimeout do;
+        on EIdConnClosedGracefully do
+          ConnClosedOrTimedOut := true;
+        on EIdClosedSocket do
+          ConnClosedOrTimedOut := true;
       end;
-    finally
-      ReceivedOn.Free;
     end;
   finally
-    S.Free;
+    ReceivedOn.Free;
   end;
 
   Self.NotifyOfDisconnectionInTimerContext;
