@@ -46,7 +46,7 @@ type
     function  Copy: TIdWait; virtual;
     function  Due: Boolean;
     function  MatchEvent(Event: Pointer): Boolean; virtual;
-    procedure Schedule(Timer: TIdTimerQueue; Delay: Cardinal);
+    procedure Schedule(Delay: Cardinal);
     function  TimeToWait: Cardinal;
     procedure Trigger; virtual;
 
@@ -275,7 +275,7 @@ begin
   Result := Self = TObject(Event);
 end;
 
-procedure TIdWait.Schedule(Timer: TIdTimerQueue; Delay: Cardinal);
+procedure TIdWait.Schedule(Delay: Cardinal);
 begin
   Self.DebugWaitTime := Delay;
   Self.TriggerTime   := Now + OneMillisecond*Delay;
@@ -365,7 +365,7 @@ begin
       //We maintain the list in sorted order by always inserting new events in the appropriate
       //place, after the last event with the same or earlier time - thus creating a fifo sequence
       //for all events with the same triggertime
-      Event.Schedule(Self, MillisecsWait);
+      Event.Schedule(MillisecsWait);
       //Next, decide on what method to use to find the right insert position in the queue
       case Self.EventList.Count of
         //if the queue is empty, just add the event
