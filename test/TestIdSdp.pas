@@ -291,6 +291,7 @@ type
     procedure TestAddMultipleAttributes;
     procedure TestAssign;
     procedure TestClear;
+    procedure TestEncodingFor;
     procedure TestEquals;
     procedure TestFormatFor;
     procedure TestPrintOn;
@@ -3325,6 +3326,24 @@ begin
 
   Self.A.Clear;
   CheckEquals(0, Self.A.Count, 'Count after clear');
+end;
+
+procedure TestTIdSdpRTPMapAttributes.TestEncodingFor;
+const
+  T140                 = 't140/1000';
+  T140Format           = '96';
+  TelephoneEvent       = 'telephone-event/8000';
+  TelephoneEventFormat = '97';
+begin
+  CheckEquals('', Self.A.EncodingFor(''), 'Blank encoding name, empty list');
+  CheckEquals('', Self.A.EncodingFor(T140Format), 'Empty list');
+
+  Self.A.Add(TelephoneEventFormat + ' ' + TelephoneEvent);
+  CheckEquals('', Self.A.EncodingFor(T140Format), 'No such rtpmap');
+
+  Self.A.Add(T140Format + ' ' + T140);
+  CheckEquals(T140,           Self.A.EncodingFor(T140Format),           T140 + ' format');
+  CheckEquals(TelephoneEvent, Self.A.EncodingFor(TelephoneEventFormat), TelephoneEvent + ' format');
 end;
 
 procedure TestTIdSdpRTPMapAttributes.TestEquals;

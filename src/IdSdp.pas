@@ -334,6 +334,7 @@ type
     function  Add(Att: TIdSdpRTPMapAttribute): TIdSdpRTPMapAttribute; overload;
     procedure Add(A: TIdSdpRTPMapAttributes); overload;
     function  Add(const Value: String): TIdSdpRTPMapAttribute; overload;
+    function  EncodingFor(Format: String): String;
     function  FormatFor(EncodingName: String): String;
     function  HasAttribute(Att: TIdSdpAttribute): Boolean;
 
@@ -2670,6 +2671,20 @@ function TIdSdpRTPMapAttributes.Add(const Value: String): TIdSdpRTPMapAttribute;
 begin
   Result := Self.Add;
   Result.Value := Value;
+end;
+
+function TIdSdpRTPMapAttributes.EncodingFor(Format: String): String;
+var
+  I: Integer;
+begin
+  Result := '';
+
+  for I := 0 to Self.Count - 1 do begin
+    if (Self[I].Format = Format) then begin
+      Result := Self[I].Encoding.EncodingName;
+      Break;
+    end;
+  end;
 end;
 
 function TIdSdpRTPMapAttributes.FormatFor(EncodingName: String): String;
