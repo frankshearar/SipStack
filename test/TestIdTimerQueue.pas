@@ -59,7 +59,8 @@ type
     procedure TestBefore;
   end;
 
-  TestTIdThreadedTimerQueue = class(TThreadingTestCase)
+  TestTIdThreadedTimerQueue = class(TThreadingTestCase,
+                                    IIdTimerQueueListener)
   private
     CallbackEventOne: TEvent;
     CallbackEventTwo: TEvent;
@@ -84,6 +85,7 @@ type
                              Received: String);
     procedure OnEventOneSet(Sender: TObject);
     procedure OnEventTwoSet(Sender: TObject);
+    procedure OnException(Timer: TIdTimerQueue; Error: Exception; Wait: TIdWait);
     procedure WaitForAll(Events: array of TEvent;
                          Timeout: Cardinal);
   public
@@ -91,6 +93,7 @@ type
     procedure TearDown; override;
   published
     procedure TestLogging;
+    procedure TestLoggingWithNoLog;
     procedure TestOneEvent;
     procedure TestResume;
     procedure TestTwoEvents;
@@ -540,6 +543,14 @@ begin
   Self.CallbackEventTwo.SetEvent;
 end;
 
+procedure TestTIdThreadedTimerQueue.OnException(Timer: TIdTimerQueue; Error: Exception; Wait: TIdWait);
+begin
+  Self.ExceptionMessage := Error.Message;
+  Self.ExceptionType    := ExceptClass(Error.ClassType);
+
+  Self.EventTwo.SetEvent;
+end;
+
 procedure TestTIdThreadedTimerQueue.WaitForAll(Events: array of TEvent;
                                        Timeout: Cardinal);
 var
@@ -571,7 +582,6 @@ const
 var
   Logger:  TLoGGerThread;
   LogWait: TLoggingWait;
-  L:       TTimerQueueListener;
 begin
   // This test is sensitive to the default logging style used in the LoGGer framework!
   Logger := TLoGGerThread.Create;
@@ -605,6 +615,26 @@ begin
     end;
   finally
     Logger.Terminate;
+  end;
+end;
+
+procedure TestTIdThreadedTimerQueue.TestLoggingWithNoLog;
+var
+  LogWait: TLoggingWait;
+begin
+  // If there is no logger attached, then logging simply does nothing.
+  //
+  // This test is sensitive to the default logging style used in the LoGGer framework!
+
+  Self.Queue.AddListener(Self);
+  try
+    LogWait := TLoggingWait.Create;
+
+    Self.Queue.AddEvent(TriggerImmediately, LogWait);
+    Self.WaitForTimeout(Self.EventOne, 'Log message received');
+    Self.WaitForTimeout(Self.EventTwo, 'Exception occured: ' + Self.ExceptionType.ClassName + ': ' + Self.ExceptionMessage);
+  finally
+    Self.Queue.RemoveListener(Self);
   end;
 end;
 

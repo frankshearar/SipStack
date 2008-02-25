@@ -493,7 +493,8 @@ procedure TIdTimerQueue.LogTrigger(VerbosityLevel: Byte;
                                    Description,
                                    BinaryData: String);
 begin
-  Self.Logger.Write(Self.LogName, VerbosityLevel, SourceRef, SourceDescription, RefCode, Description, BinaryData);
+  if Assigned(Self.Logger) then
+    Self.Logger.Write(Self.LogName, VerbosityLevel, SourceRef, SourceDescription, RefCode, Description, BinaryData);
 end;
 
 procedure TIdTimerQueue.TriggerEarliestEvent;
