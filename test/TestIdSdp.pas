@@ -578,10 +578,10 @@ type
 
     procedure CheckPortActive(Address: String;
                               Port: Cardinal;
-                              Msg: String);
+                              Msg: String); virtual;
     procedure CheckPortFree(Address: String;
                               Port: Cardinal;
-                              Msg: String);
+                              Msg: String); virtual;
   end;
 
   TestTIdSdpBaseMediaStream = class(TIdSdpTestCase)
@@ -624,6 +624,7 @@ type
     procedure TestStartListeningPortBelowAllowedRange; virtual;
     procedure TestStartListeningRefusedStream;
     procedure TestTakeOffHold;
+    procedure TestUnusedPortsSwitchOff; virtual;
   end;
 
   TestTIdSDPMediaStream = class(TestTIdSdpBaseMediaStream,
@@ -670,6 +671,7 @@ type
     procedure TestStartListeningRegistersLocalRtpMaps;
     procedure TestStartListeningTriesConsecutivePorts;
     procedure TestStopListeningStopsListening;
+    procedure TestUnusedPortsSwitchOff; override;
   end;
 
   TestTIdSdpNullMediaStream = class(TestTIdSdpBaseMediaStream)
@@ -883,9 +885,17 @@ type
   public
     procedure Setup; override;
     procedure TearDown; override;
+
+    procedure CheckPortActive(Address: String;
+                              Port: Cardinal;
+                              Msg: String); override;
+    procedure CheckPortFree(Address: String;
+                              Port: Cardinal;
+                              Msg: String); override;
   published
     procedure TestStartListeningPortAboveAllowedRange; override;
     procedure TestStartListeningPortBelowAllowedRange; override;
+    procedure TestUnusedPortsSwitchOff; override;
     procedure TestWhenAnswerReceiveActiveSendActive;
     procedure TestWhenAnswerReceiveActiveSendActPass;
     procedure TestWhenAnswerReceiveActiveSendBlank;
@@ -922,6 +932,11 @@ type
     procedure TestWhenAnswerReceiveUnknownSendHoldConn;
     procedure TestWhenAnswerReceiveUnknownSendPassive;
     procedure TestWhenAnswerReceiveUnknownSendUnknown;
+    procedure TestWhenOfferActPassStartsListening;
+    procedure TestWhenOfferActPassStopsListeningWhenAnswerHoldConn;
+    procedure TestWhenOfferActPassStopsListeningWhenAnswerPassive;
+    procedure TestWhenOfferPassiveStartsListening;
+    procedure TestWhenOfferPassiveStopsListeningWhenAnswerHoldConn;
     procedure TestWhenOfferSendActiveReceiveActive;
     procedure TestWhenOfferSendActiveReceiveActPass;
     procedure TestWhenOfferSendActiveReceiveBlank;
@@ -7669,6 +7684,12 @@ begin
   end;
 end;
 
+procedure TestTIdSdpBaseMediaStream.TestUnusedPortsSwitchOff;
+begin
+  // By default do nothing, but override me if the media stream has a way of
+  // being refused.
+end;
+
 //******************************************************************************
 //* TestTIdSDPMediaStream                                                      *
 //******************************************************************************
@@ -8378,6 +8399,24 @@ begin
 
   Check(not Self.ReceivedData, 'Server didn''t stop listening');
   Check(Self.SentBye, 'Server didn''t send an RTCP BYE');
+end;
+
+procedure TestTIdSDPMediaStream.TestUnusedPortsSwitchOff;
+var
+  Address: String;
+  Port:    Cardinal;
+begin
+  Address := Localhost(Id_IPv4);
+  Port    := 8000;
+
+  Self.SetLocalMediaDesc(Self.Media,
+                         'm=audio 8000 RTP/AVP 0'#13#10);
+  Self.Media.StartListening;
+  CheckPortActive(Address, Port, 'RTP/AVP port not listening');
+
+  Self.SetRemoteMediaDesc(Self.Media,
+                          'm=audio 0 RTP/AVP 0'#13#10);
+  CheckPortFree(Address, Port, 'Unused RTP/AVP port not freed');
 end;
 
 //******************************************************************************
@@ -9598,6 +9637,60 @@ begin
   inherited TearDown;
 end;
 
+procedure TestTIdSdpTcpMediaStream.CheckPortActive(Address: String;
+                                                   Port: Cardinal;
+                                                   Msg: String);
+var
+  C:           TIdSdpBaseTcpConnection;
+  Connections: TStringList;
+  Found:       Boolean;
+  I:           Integer;
+begin
+  Connections := TStringList.Create;
+  try
+    TIdObjectRegistry.CollectAllObjectsOfClass(TIdSdpBaseTcpConnection, Connections);
+
+    Found := false;
+    for I := 0 to Connections.Count - 1 do begin
+      C := TIdSdpBaseTcpConnection(Connections.Objects[I]);
+
+      Found := (C.Address = Address) and (C.Port = Port);
+      if Found then Break;
+    end;
+  finally
+    Connections.Free;
+  end;
+
+  Check(Found, Format(Msg + ': %s:%d', [Address, Port]));
+end;
+
+procedure TestTIdSdpTcpMediaStream.CheckPortFree(Address: String;
+                                                 Port: Cardinal;
+                                                 Msg: String);
+var
+  C:           TIdSdpBaseTcpConnection;
+  Connections: TStringList;
+  Found:       Boolean;
+  I:           Integer;
+begin
+  Connections := TStringList.Create;
+  try
+    TIdObjectRegistry.CollectAllObjectsOfClass(TIdSdpBaseTcpConnection, Connections);
+
+    Found := false;
+    for I := 0 to Connections.Count - 1 do begin
+      C := TIdSdpBaseTcpConnection(Connections.Objects[I]);
+
+      Found := (C.Address = Address) and (C.Port = Port);
+      if Found then Break;
+    end;
+  finally
+    Connections.Free;
+  end;
+
+  Check(not Found, Format(Msg + ': %s:%d', [Address, Port]));
+end;
+
 //* TestTIdSdpTcpMediaStream Protected methods *********************************
 
 procedure TestTIdSdpTcpMediaStream.Activate(Stream: TIdSdpBaseMediaStream);
@@ -9899,6 +9992,8 @@ const
 var
   Stream: TIdSdpTcpMediaStream;
 begin
+  CheckPortFree('127.0.0.1', LowerLimit, 'Required port is not free');
+
   Stream := Self.CreateStream as TIdSdpTcpMediaStream;
   try
     Stream.LowestAllowedPort  := LowerLimit;
@@ -9906,7 +10001,6 @@ begin
 
     Stream.IsOffer := true;
     Self.SetLocalMediaDesc(Stream, Self.PassiveMediaDesc(TooHighPort));
-    CheckPortFree(Stream.LocalDescription.Connections[0].Address, Stream.LocalDescription.Port, 'Required port is not free');
 
     Stream.StartListening;
 
@@ -9924,6 +10018,8 @@ const
 var
   Stream: TIdSdpTcpMediaStream;
 begin
+  CheckPortFree('127.0.0.1', LowerLimit, 'Required port is not free');
+
   Stream := Self.CreateStream as TIdSdpTcpMediaStream;
   try
     Stream.LowestAllowedPort  := LowerLimit;
@@ -9931,11 +10027,35 @@ begin
 
     Stream.IsOffer := true;
     Self.SetLocalMediaDesc(Stream, Self.PassiveMediaDesc(TooLowPort));
-    CheckPortFree(Stream.LocalDescription.Connections[0].Address, Stream.LocalDescription.Port, 'Required port is not free');
 
     Stream.StartListening;
 
     CheckPortAdjusted(LowerLimit, Stream.LocalDescription.Port, Stream.IsNull, Stream.ClassName);
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TestTIdSdpTcpMediaStream.TestUnusedPortsSwitchOff;
+var
+  Address: String;
+  Port:    Cardinal;
+  Stream:  TIdSdpTcpMediaStream;
+begin
+  Address := Localhost(Id_IPv4);
+  Port    := 8000;
+
+  Stream := Self.CreateStream as TIdSdpTcpMediaStream;
+  try
+    Stream.IsOffer := true;
+    Self.SetLocalMediaDesc(Stream,
+                           Self.PassiveMediaDesc(Port));
+    Stream.StartListening;
+    CheckPortActive(Address, Port, 'TCP port not listening');
+
+    Self.SetRemoteMediaDesc(Stream,
+                            Self.RefusedMediaDesc);
+    CheckPortFree(Address, Port, 'Unused TCP port not free');
   finally
     Stream.Free;
   end;
@@ -10119,6 +10239,131 @@ end;
 procedure TestTIdSdpTcpMediaStream.TestWhenAnswerReceiveUnknownSendUnknown;
 begin
   CheckNullConnectionFormedForInvalidResponse(false, Self.UnknownMediaDesc, Self.UnknownMediaDesc);
+end;
+
+procedure TestTIdSdpTcpMediaStream.TestWhenOfferActPassStartsListening;
+var
+  Address: String;
+  Port:    Cardinal;
+  Stream:  TIdSdpTcpMediaStream;
+begin
+  Address := Localhost(Id_IPv4);
+  Port    := 8000;
+
+  Stream := TIdSdpTcpMediaStream.Create(TIdSdpMockTcpConnection);
+  try
+    Stream.IsOffer := true;
+    Self.SetLocalMediaDesc(Stream,
+                           Self.ActPassMediaDesc(Port));
+    Stream.StartListening;
+
+    CheckPortActive(Address, Port, 'Actpass connection not listening');
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TestTIdSdpTcpMediaStream.TestWhenOfferActPassStopsListeningWhenAnswerHoldConn;
+var
+  Address: String;
+  Port:    Cardinal;
+  Stream:  TIdSdpTcpMediaStream;
+begin
+  Address := Localhost(Id_IPv4);
+  Port    := 8000;
+
+  Stream := TIdSdpTcpMediaStream.Create(TIdSdpMockTcpConnection);
+  try
+    Stream.IsOffer := true;
+    Self.SetLocalMediaDesc(Stream,
+                           Self.ActPassMediaDesc(Port));
+    Stream.StartListening;
+
+    CheckPortActive(Address, Port, 'Actpass connection not listening');
+
+    Self.SetRemoteMediaDesc(Stream,
+                            Self.HoldConnMediaDesc(Port + 1000));
+
+    CheckPortFree(Address, Port, 'Actpass connection still listening rather than doing nothing');
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TestTIdSdpTcpMediaStream.TestWhenOfferActPassStopsListeningWhenAnswerPassive;
+var
+  Address: String;
+  Port:    Cardinal;
+  Stream:  TIdSdpTcpMediaStream;
+begin
+  Address := Localhost(Id_IPv4);
+  Port    := 8000;
+
+  Stream := TIdSdpTcpMediaStream.Create(TIdSdpMockTcpConnection);
+  try
+    Stream.IsOffer := true;
+    Self.SetLocalMediaDesc(Stream,
+                           Self.ActPassMediaDesc(Port));
+    Stream.StartListening;
+
+    CheckPortActive(Address, Port, 'Actpass connection not listening');
+
+    Self.SetRemoteMediaDesc(Stream,
+                            Self.PassiveMediaDesc(Port + 1000));
+
+    CheckPortFree(Address, Port, 'Actpass connection still listening rather than initiating connection');
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TestTIdSdpTcpMediaStream.TestWhenOfferPassiveStartsListening;
+var
+  Address: String;
+  Port:    Cardinal;
+  Stream:  TIdSdpTcpMediaStream;
+begin
+  Address := Localhost(Id_IPv4);
+  Port    := 8000;
+
+  Stream := TIdSdpTcpMediaStream.Create(TIdSdpMockTcpConnection);
+  try
+    Stream.IsOffer := true;
+    Self.SetLocalMediaDesc(Stream,
+                           Self.PassiveMediaDesc(Port));
+    Stream.StartListening;
+
+    CheckPortActive(Address, Port, 'Passive connection not listening');
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TestTIdSdpTcpMediaStream.TestWhenOfferPassiveStopsListeningWhenAnswerHoldConn;
+var
+  Address: String;
+  Port:    Cardinal;
+  Stream:  TIdSdpTcpMediaStream;
+begin
+  Address := Localhost(Id_IPv4);
+  Port    := 8000;
+
+  Stream := TIdSdpTcpMediaStream.Create(TIdSdpMockTcpConnection);
+  try
+    Stream.IsOffer := true;
+    Self.SetLocalMediaDesc(Stream,
+                           Self.PassiveMediaDesc(Port));
+    Stream.StartListening;
+
+    CheckPortActive(Address, Port, 'Passive connection not listening');
+
+    Self.SetRemoteMediaDesc(Stream,
+                            Self.HoldConnMediaDesc(Port + 1000));
+
+    CheckPortFree(Address, Port, 'Passive connection still listening rather than doing nothing');
+  finally
+    Stream.Free;
+  end;
 end;
 
 procedure TestTIdSdpTcpMediaStream.TestWhenOfferSendActiveReceiveActive;

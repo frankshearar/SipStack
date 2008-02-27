@@ -1010,6 +1010,7 @@ type
     procedure PossiblyConnect(HaveCompleteSessionDescription: Boolean);
     function  RemoteSetupType: TIdSdpSetupType;
     procedure StartConnectingStreams;
+    function  UsesServerSockets: Boolean;
   protected
     procedure AfterSetLocalDescription(Value: TIdSdpMediaDescription); override;
     procedure AfterSetRemoteDescription(Value: TIdSdpMediaDescription); override;
@@ -4763,10 +4764,15 @@ end;
 
 procedure TIdSDPMediaStream.AfterSetRemoteDescription(Value: TIdSdpMediaDescription);
 begin
-  Self.RegisterEncodingMaps(Self.RemoteProfile,
-                            Value.RTPMapAttributes);
+  if Value.IsRefusedStream then begin
+    Self.RecreateServers(0);
+  end
+  else begin
+    Self.RegisterEncodingMaps(Self.RemoteProfile,
+                              Value.RTPMapAttributes);
 
-  Self.InitializeRemoteServers;
+    Self.InitializeRemoteServers;
+  end;
 end;
 
 procedure TIdSDPMediaStream.BeforeSetLocalDescription(Value: TIdSdpMediaDescription);
@@ -6170,13 +6176,17 @@ procedure TIdSdpTcpMediaStream.StartListening;
 begin
   if Self.LocalDescription.IsRefusedStream then Exit;
 
-  if Self.HaveLocalDescription and Self.HaveRemoteDescription then begin
+  if Self.HaveLocalDescription then begin
+
     Self.InitializeLocalServers;
 
-    if (Self.LocalSetupType = stPassive) then
+    if Self.UsesServerSockets then begin
       Self.BindListeningStreams
-    else
-      Self.StartConnectingStreams;
+    end
+    else begin
+      if Self.HaveRemoteDescription then 
+        Self.StartConnectingStreams;
+    end;
   end;
 end;
 
@@ -6264,13 +6274,17 @@ begin
     S := Self.ServerAt(I);
 
     if S.IsServer then
-      S.ListenOn(Self.LocalDescription.Connections[0].Address, Self.LocalDescription.Port + I)
+      S.ListenOn(Self.LocalDescription.Connections[0].Address, Self.LocalDescription.Port + I);
+{
     else begin
       // Note that this doesn't work properly if the media description has multiple
       // connection headers - it will only use the first.
+
+      // If we have no remote description we get a EListError.
       S.ConnectTo(Self.RemoteDescription.Connections[0].Address,
                   Self.RemoteDescription.Port + I);
     end;
+}
   end;
 end;
 
@@ -6484,8 +6498,15 @@ begin
     else
       Result := Self.DefaultSetupType(not Self.IsOffer);
   end
-  else
-    Result := stHoldConn;
+  else begin
+    // If we don't know what the far end will offer, but we're prepared to
+    // accept a connection, then we must start listening for a connection
+    // attempt.
+    if Self.HaveLocalDescription and Self.UsesServerSockets then
+      Result := stActive
+    else
+      Result := stHoldConn;
+  end;
 end;
 
 procedure TIdSdpTcpMediaStream.StartConnectingStreams;
@@ -6493,6 +6514,9 @@ var
   I: Cardinal;
 begin
   if (Self.Servers.Count = 0) then
+    Exit;
+
+  if not Self.HaveRemoteDescription then
     Exit;
 
   // cf. RFC 4145, section 4.1 (page 4, second half of first paragraph)
@@ -6503,6 +6527,11 @@ begin
   for I := 0 to Self.Servers.Count - 1 do
     Self.ServerAt(I).ConnectTo(Self.RemoteDescription.Connections[0].Address,
                                Self.RemoteDescription.Port + I);
+end;
+
+function TIdSdpTcpMediaStream.UsesServerSockets: Boolean;
+begin
+  Result := Self.LocalSetupType in [stActPass, stPassive]
 end;
 
 //******************************************************************************
