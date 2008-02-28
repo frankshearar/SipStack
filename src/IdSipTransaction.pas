@@ -48,7 +48,6 @@ type
   IIdSipTransactionDispatcherListener = interface
     ['{0CB5037D-B9B3-4FB6-9201-80A0F10DB23A}']
     procedure OnTransportException(FailedMessage: TIdSipMessage;
-                                   Error: Exception;
                                    const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Binding: TIdConnectionBindings);
@@ -528,13 +527,11 @@ type
 
   TIdSipTransactionDispatcherListenerFailedSendMethod = class(TIdSipTransactionDispatcherMethod)
   private
-    fException:     Exception;
     fFailedMessage: TIdSipMessage;
     fReason:        String;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Exception:     Exception     read fException write fException;
     property FailedMessage: TIdSipMessage read fFailedMessage write fFailedMessage;
     property Reason:        String        read fReason write fReason;
   end;
@@ -1035,10 +1032,14 @@ procedure TIdSipTransactionDispatcher.NotifyOfTransportException(FailedMessage: 
 var
   Tran: TIdSipTransaction;
 begin
+  Self.LogException(FailedMessage, E, Reason);
+
   Tran := Self.FindTransaction(FailedMessage, FailedMessage.IsRequest);
 
-  if Assigned(Tran) then
-    Tran.DoOnTransportError(FailedMessage, Reason)
+  if Assigned(Tran) then begin
+    Tran.DoOnTransportError(FailedMessage, Reason);
+    Self.NotifyOfException(FailedMessage, E, Reason);
+  end
   else
     Self.TryResendMessage(FailedMessage, E, Reason);
 end;
@@ -1049,11 +1050,8 @@ procedure TIdSipTransactionDispatcher.NotifyOfException(FailedMessage: TIdSipMes
 var
   Notification: TIdSipTransactionDispatcherListenerFailedSendMethod;
 begin
-  Self.LogException(FailedMessage, E, Reason);
-
   Notification := TIdSipTransactionDispatcherListenerFailedSendMethod.Create;
   try
-    Notification.Exception     := E;
     Notification.FailedMessage := FailedMessage;
     Notification.Reason        := Reason;
 
@@ -1099,7 +1097,6 @@ procedure TIdSipTransactionDispatcher.OnFail(Transaction: TIdSipTransaction;
                                              FailedMessage: TIdSipMessage;
                                              const Reason: String);
 begin
-  Self.NotifyOfException(FailedMessage, nil, Reason);
 end;
 
 procedure TIdSipTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
@@ -2658,7 +2655,6 @@ end;
 procedure TIdSipTransactionDispatcherListenerFailedSendMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipTransactionDispatcherListener).OnTransportException(Self.FailedMessage,
-                                                                        Self.Exception,
                                                                         Self.Reason);
 end;
 

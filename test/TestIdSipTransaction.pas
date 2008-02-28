@@ -93,7 +93,6 @@ type
                                 Binding: TIdConnectionBindings); overload;
     procedure OnTerminated(Transaction: TIdSipTransaction);
     procedure OnTransportException(FailedMessage: TIdSipMessage;
-                                   Error: Exception;
                                    const Reason: String);
     procedure ReceiveAck(Invite: TIdSipRequest; Reply: TIdSipResponse);
     procedure ReceiveRequest(Request: TIdSipRequest);
@@ -128,6 +127,7 @@ type
     procedure TestLocalBindings;
     procedure TestLoopDetected;
     procedure TestLoopDetectedRFC2543RequestWithNoBranch;
+    procedure TestNetworkFailure;
     procedure TestSendAckWontCreateTransaction;
     procedure TestSendRequest;
     procedure TestSendRequestOverUdp;
@@ -1052,7 +1052,6 @@ begin
 end;
 
 procedure TestTIdSipTransactionDispatcher.OnTransportException(FailedMessage: TIdSipMessage;
-                                                               Error: Exception;
                                                                const Reason: String);
 begin
   Self.TransportException := true;
@@ -1536,6 +1535,15 @@ begin
   Check(Self.D.LoopDetected(Self.Invite),
         'Loop should be detected - same From tag, Call-ID, CSeq but no match '
       + '(differing branch)');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestNetworkFailure;
+begin
+  Self.D.SendRequest(Self.Invite, Self.Destination);
+
+  Self.MockTcpTransport.FireOnException(Self.Invite, EIdConnectTimeout, 'Connection timeout', 'Induced failure');
+
+  Check(Self.TransportException, 'Listeners not notified');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestSendAckWontCreateTransaction;

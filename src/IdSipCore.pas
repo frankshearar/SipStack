@@ -222,14 +222,12 @@ type
   // the message, if appropriate.
   TIdSipActionNetworkFailure = class(TIdSipActionClosure)
   private
-    fError:         Exception;
     fFailedMessage: TIdSipMessage;
     fReason:        String;
   public
     procedure Execute(Action: TIdSipAction); override;
 
     property FailedMessage: TIdSipMessage read fFailedMessage write fFailedMessage;
-    property Error:         Exception     read fError write fError;
     property Reason:        String        read fReason write fReason;
   end;
 
@@ -330,7 +328,6 @@ type
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Binding: TIdConnectionBindings); virtual;
     procedure OnTransportException(FailedMessage: TIdSipMessage;
-                                   Error: Exception;
                                    const Reason: String); virtual;
     procedure RejectBadAuthorization(Request: TIdSipRequest);
     procedure RejectMethodNotAllowed(Request: TIdSipRequest);
@@ -2439,14 +2436,12 @@ begin
 end;
 
 procedure TIdSipAbstractCore.OnTransportException(FailedMessage: TIdSipMessage;
-                                                  Error: Exception;
                                                   const Reason: String);
 var
   SendFailed: TIdSipActionNetworkFailure;
 begin
   SendFailed := TIdSipActionNetworkFailure.Create;
   try
-    SendFailed.Error         := Error;
     SendFailed.FailedMessage := FailedMessage;
     SendFailed.Reason        := Reason;
 

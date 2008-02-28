@@ -620,7 +620,6 @@ type
   private
     fBindingParam:              TIdConnectionBindings;
     fDispatcherParam:           TIdSipTransactionDispatcher;
-    fExceptionParam:            Exception;
     fFailedMessageParam:        TIdSipMessage;
     fRaisedException:           Boolean;
     fReasonParam:               String;
@@ -636,12 +635,11 @@ type
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Binding: TIdConnectionBindings);
     procedure OnTransportException(FailedMessage: TIdSipMessage;
-                                   Error: Exception;
                                    const Reason: String);
   public
     constructor Create; override;
 
-    property BindingParam:              TIdConnectionBindings    read fBindingParam;
+    property BindingParam:              TIdConnectionBindings       read fBindingParam;
     property DispatcherParam:           TIdSipTransactionDispatcher read fDispatcherParam;
     property FailedMessageParam:        TIdSipMessage               read fFailedMessageParam;
     property RaisedException:           Boolean                     read fRaisedException;
@@ -2315,10 +2313,8 @@ begin
 end;
 
 procedure TIdSipTestTransactionDispatcherListener.OnTransportException(FailedMessage: TIdSipMessage;
-                                                                       Error: Exception;
                                                                        const Reason: String);
 begin
-  Self.fExceptionParam     := Error;
   Self.fFailedMessageParam := FailedMessage;
   Self.fRaisedException    := true;
   Self.fReasonParam        := Reason;
