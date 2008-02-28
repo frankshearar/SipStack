@@ -2257,7 +2257,7 @@ var
   R: TIdSipRequest;
   T: TIdSipTransaction;
 begin
-  R := TIdSipRequest.Create;
+  R := TIdSipTestResources.CreateBasicRequest;
   try
     R.Method := MethodInvite;
     T := TIdSipTransaction.CreateServerTransactionType(Self.Dispatcher, R);
