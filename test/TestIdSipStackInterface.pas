@@ -1630,7 +1630,6 @@ end;
 procedure TestTIdSipStackInterface.TestMakeRegistrationMultipleMalformedContact;
 var
   Contacts: TIdSipContacts;
-  Handle:   TIdSipHandle;
 begin
   Contacts := TIdSipContacts.Create;
   try
