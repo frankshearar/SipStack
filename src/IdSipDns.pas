@@ -50,6 +50,7 @@ type
                        const Domain: String;
                        const IPAddress: String);
 
+    function AsString: String;
     function Copy: TIdDomainNameRecord;
     function ResourceType: String; override;
 
@@ -636,6 +637,12 @@ begin
   Self.fDomain     := Domain;
   Self.fIPAddress  := IPAddress;
   Self.fRecordType := RecordType;
+end;
+
+function TIdDomainNameRecord.AsString: String;
+begin
+  // Output in BIND format
+  Result := Self.Domain + ' ' + Self.ResourceType + ' ' + Self.IPAddress;
 end;
 
 function TIdDomainNameRecord.Copy: TIdDomainNameRecord;

@@ -552,6 +552,28 @@ type
     procedure TestCopy;
   end;
 
+  TestTIdDomainNameRecordsResultData = class(TTestCase)
+  private
+    Data: TIdDomainNameRecordsResultData;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAsString;
+    procedure TestCopy;
+  end;
+
+  TestTIdStringResultData = class(TTestCase)
+  private
+    Data: TIdStringResultData;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAsString;
+    procedure TestCopy;
+  end;
+
   TStackWaitTestCase = class(TStackInterfaceTestCase)
   protected
     Conf:       TStrings;
@@ -597,6 +619,52 @@ type
   published
     procedure TestTriggerIsSource;
     procedure TestTriggerIsNotSource;
+  end;
+
+  TIdNetworkingMessageWaitTestCase = class(TStackWaitTestCase)
+  protected
+    LocalAddress: String;
+    NatAddress:   String;
+    VpnAddress:   String;
+
+    procedure ConfigureNat;
+  public
+    procedure SetUp; override;
+  end;
+
+  TestTIdLocalAddressForWait = class(TIdNetworkingMessageWaitTestCase)
+  private
+    Wait: TIdLocalAddressForWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTriggerWithNat;
+    procedure TestTriggerWithNoNat;
+  end;
+
+  TestTIdLocalOrMappedAddressForWait = class(TIdNetworkingMessageWaitTestCase)
+  private
+    Wait: TIdLocalOrMappedAddressForWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTriggerWithNat;
+    procedure TestTriggerWithNoNat;
+  end;
+
+  TestTIdResolveNamesForWait = class(TIdNetworkingMessageWaitTestCase)
+  private
+    Host:        String;
+    IPv4Address: String;
+    IPv6Address: String;
+    Wait:        TIdResolveNamesForWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTrigger;
   end;
 
 const
@@ -658,9 +726,14 @@ begin
   Result.AddTest(TestTIdAsynchronousMessageResultData.Suite);
   Result.AddTest(TestTIdGetBindingsData.Suite);
   Result.AddTest(TestTIdBooleanResultData.Suite);
+  Result.AddTest(TestTIdDomainNameRecordsResultData.Suite);
+  Result.AddTest(TestTIdStringResultData.Suite);
   Result.AddTest(TestTIdSipStackReconfigureStackInterfaceWait.Suite);
   Result.AddTest(TestTIdGetBindingsWait.Suite);
   Result.AddTest(TestTIdIsSourceOfWait.Suite);
+  Result.AddTest(TestTIdLocalAddressForWait.Suite);
+  Result.AddTest(TestTIdLocalOrMappedAddressForWait.Suite);
+  Result.AddTest(TestTIdResolveNamesForWait.Suite);
 end;
 
 //******************************************************************************
@@ -4454,6 +4527,159 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdDomainNameRecordsResultData                                         *
+//******************************************************************************
+//* TestTIdDomainNameRecordsResultData Public methods **************************
+
+procedure TestTIdDomainNameRecordsResultData.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Data := TIdDomainNameRecordsResultData.Create;
+  Self.Data.Handle := $decafbad;
+  Self.Data.ReferenceID := 'badf00d';
+
+  Self.Data.IPAddresses.Add('A',    'foo.bar', '1.2.3.4');
+  Self.Data.IPAddresses.Add('AAAA', 'foo.bar', '2002:deca:fbad::1');
+end;
+
+procedure TestTIdDomainNameRecordsResultData.TearDown;
+begin
+  Self.Data.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdDomainNameRecordsResultData Published methods ***********************
+
+procedure TestTIdDomainNameRecordsResultData.TestAsString;
+var
+  Expected: TStrings;
+  Received: TStrings;
+begin
+  Expected := TStringList.Create;
+  try
+    Received := TStringList.Create;
+    try
+      Expected.Add(''); // Timestamp + Handle
+      Expected.Add(''); // Event name
+      Expected.Add('ReferenceID: ' + Self.Data.ReferenceID);
+      Expected.Add('IPAddress0: ' + Self.Data.IPAddresses[0].AsString);
+      Expected.Add('IPAddress1: ' + Self.Data.IPAddresses[1].AsString);
+
+      Received.Text := Self.Data.AsString;
+
+      // We ignore the first two line of the debug data (timestamp & handle,
+      // and event name)
+      Received[0] := '';
+      Received[1] := '';
+
+      CheckEquals(Expected.Text,
+                  Received.Text,
+                  'Unexpected debug data');
+    finally
+      Received.Free;
+    end;
+  finally
+    Expected.Free;
+  end;
+end;
+
+procedure TestTIdDomainNameRecordsResultData.TestCopy;
+var
+  Copy: TIdDomainNameRecordsResultData;
+  I:    Integer;
+begin
+  Copy := Self.Data.Copy as TIdDomainNameRecordsResultData;
+  try
+    CheckEquals(IntToHex(Self.Data.Handle, 8),
+                IntToHex(Copy.Handle, 8),
+                'Handle');
+
+    CheckEquals(Self.Data.ReferenceID, Copy.ReferenceID, 'ReferenceID');
+
+    for I := 0 to Self.Data.IPAddresses.Count - 1 do
+      CheckEquals(Self.Data.IPAddresses[I].AsString,
+                  Copy.IPAddresses[I].AsString,
+                  'IP address #' + IntToStr(I + 1));
+  finally
+    Copy.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdStringResultData                                                    *
+//******************************************************************************
+//* TestTIdStringResultData Public methods *************************************
+
+procedure TestTIdStringResultData.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Data := TIdStringResultData.Create;
+  Self.Data.Handle := $decafbad;
+  Self.Data.Result := 'Your Answer';
+  Self.Data.ReferenceID := 'badf00d';
+end;
+
+procedure TestTIdStringResultData.TearDown;
+begin
+  Self.Data.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdStringResultData Published methods **********************************
+
+procedure TestTIdStringResultData.TestAsString;
+var
+  Expected: TStrings;
+  Received: TStrings;
+begin
+  Expected := TStringList.Create;
+  try
+    Received := TStringList.Create;
+    try
+      Expected.Add(''); // Timestamp + Handle
+      Expected.Add(''); // Event name
+      Expected.Add('ReferenceID: ' + Self.Data.ReferenceID);
+      Expected.Add('Result: ' + Self.Data.Result);
+
+      Received.Text := Self.Data.AsString;
+
+      // We ignore the first two line of the debug data (timestamp & handle,
+      // and event name)
+      Received[0] := '';
+      Received[1] := '';
+
+      CheckEquals(Expected.Text,
+                  Received.Text,
+                  'Unexpected debug data');
+    finally
+      Received.Free;
+    end;
+  finally
+    Expected.Free;
+  end;
+end;
+
+procedure TestTIdStringResultData.TestCopy;
+var
+  Copy: TIdStringResultData;
+begin
+  Copy := Self.Data.Copy as TIdStringResultData;
+  try
+    CheckEquals(IntToHex(Self.Data.Handle, 8),
+                IntToHex(Copy.Handle, 8),
+                'Handle');
+    CheckEquals(Self.Data.Result, Copy.Result, 'Result');
+    CheckEquals(Self.Data.ReferenceID, Copy.ReferenceID, 'ReferenceID');
+  finally
+    Copy.Free;
+  end;
+end;
+
+//******************************************************************************
 //* TStackWaitTestCase                                                         *
 //******************************************************************************
 //* TStackWaitTestCase Public methods ******************************************
@@ -4678,6 +4904,199 @@ begin
   finally
     ArbitraryRequest.Free;
   end;
+end;
+
+//******************************************************************************
+//* TIdNetworkingMessageWaitTestCase                                           *
+//******************************************************************************
+//* TIdNetworkingMessageWaitTestCase Public methods ****************************
+
+procedure TIdNetworkingMessageWaitTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  Self.LocalAddress := '10.0.0.6';
+  Self.NatAddress   := '1.2.3.4';
+  Self.VpnAddress   := '192.168.0.2';
+
+  Self.Conf.Clear;
+  Self.Conf.Add('MockLocalAddress: 127.0.0.1');
+  Self.Conf.Add('MockLocalAddress: ' + Self.LocalAddress);
+  Self.Conf.Add('MockLocalAddress: ' + Self.VpnAddress);
+  Self.Conf.Add('RoutingTable: MOCK');
+  Self.Conf.Add('MockRoute: 10.0.0.0/8 10.0.0.1 1 xl0 ' + Self.LocalAddress);
+  Self.Conf.Add('MockRoute: 0.0.0.0/0 10.0.0.1 1 xl0 ' + Self.LocalAddress);
+  Self.Conf.Add('MockRoute: 192.168.0.0/16 192.168.0.1 1 tun1 ' + Self.VpnAddress);
+  Self.Stack.ReconfigureStack(Self.Conf);
+  Self.TimerQueue.TriggerAllEventsOfType(TIdSipStackReconfigureStackInterfaceWait);
+end;
+
+//* TIdNetworkingMessageWaitTestCase Protected methods *************************
+
+procedure TIdNetworkingMessageWaitTestCase.ConfigureNat;
+begin
+  Self.Conf.Clear;
+  Self.Conf.Add('MappedRoute: 0.0.0.0/0 ' + Self.NatAddress);
+  Self.Stack.ReconfigureStack(Self.Conf);
+  Self.TimerQueue.TriggerAllEventsOfType(TIdSipStackReconfigureStackInterfaceWait);
+end;
+
+//******************************************************************************
+//* TestTIdLocalAddressForWait                                                 *
+//******************************************************************************
+//* TestTIdLocalAddressForWait Public methods **********************************
+
+procedure TestTIdLocalAddressForWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Wait := TIdLocalAddressForWait.Create;
+
+  Self.Wait.DestinationAddress := '196.25.1.1';
+  Self.Wait.StackID            := Self.Stack.ID;
+end;
+
+procedure TestTIdLocalAddressForWait.TearDown;
+begin
+  Self.Wait.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdLocalAddressForWait Published methods *******************************
+
+procedure TestTIdLocalAddressForWait.TestTriggerWithNat;
+var
+  Received: TIdStringResultData;
+begin
+  Self.ConfigureNat;
+
+  Self.Wait.Trigger;
+  Self.ProcessAllPendingNotifications;
+
+  CheckNotificationReceived(TIdStringResultData, 'No notification about LocalAddressFor received');
+
+  Received := Self.LastEventOfType(TIdStringResultData) as TIdStringResultData;
+  CheckEquals(Self.LocalAddress, Received.Result, 'Unexpected local address');
+  CheckEquals(Self.Wait.ID, Received.ReferenceID, 'ReferenceID not set');
+end;
+
+procedure TestTIdLocalAddressForWait.TestTriggerWithNoNat;
+var
+  Received: TIdStringResultData;
+begin
+  Self.Wait.Trigger;
+  Self.ProcessAllPendingNotifications;
+
+  CheckNotificationReceived(TIdStringResultData, 'No notification about LocalAddressFor received');
+
+  Received := Self.LastEventOfType(TIdStringResultData) as TIdStringResultData;
+  CheckEquals(Self.LocalAddress, Received.Result, 'Unexpected local address');
+  CheckEquals(Self.Wait.ID, Received.ReferenceID, 'ReferenceID not set');
+end;
+
+//******************************************************************************
+//* TestTIdLocalOrMappedAddressForWait                                         *
+//******************************************************************************
+//* TestTIdLocalOrMappedAddressForWait Public methods **************************
+
+procedure TestTIdLocalOrMappedAddressForWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Wait := TIdLocalOrMappedAddressForWait.Create;
+
+  Self.Wait.DestinationAddress := '196.25.1.1';
+  Self.Wait.StackID            := Self.Stack.ID;
+end;
+
+procedure TestTIdLocalOrMappedAddressForWait.TearDown;
+begin
+  Self.Wait.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdLocalOrMappedAddressForWait Published methods ***********************
+
+procedure TestTIdLocalOrMappedAddressForWait.TestTriggerWithNat;
+var
+  Received: TIdStringResultData;
+begin
+  Self.ConfigureNat;
+
+  Self.Wait.Trigger;
+  Self.ProcessAllPendingNotifications;
+
+  CheckNotificationReceived(TIdStringResultData, 'No notification about LocalOrMappedAddressFor received');
+
+  Received := Self.LastEventOfType(TIdStringResultData) as TIdStringResultData;
+  CheckEquals(Self.NatAddress, Received.Result, 'Unexpected local address');
+  CheckEquals(Self.Wait.ID, Received.ReferenceID, 'ReferenceID not set');
+end;
+
+procedure TestTIdLocalOrMappedAddressForWait.TestTriggerWithNoNat;
+var
+  Received: TIdStringResultData;
+begin
+  Self.Wait.Trigger;
+  Self.ProcessAllPendingNotifications;
+
+  CheckNotificationReceived(TIdStringResultData, 'No notification about LocalOrMappedAddressFor received');
+
+  Received := Self.LastEventOfType(TIdStringResultData) as TIdStringResultData;
+  CheckEquals(Self.LocalAddress, Received.Result, 'Unexpected local address');
+  CheckEquals(Self.Wait.ID, Received.ReferenceID, 'ReferenceID not set');
+end;
+
+//******************************************************************************
+//* TestTIdResolveNamesForWait                                                 *
+//******************************************************************************
+//* TestTIdResolveNamesForWait Public methods **********************************
+
+procedure TestTIdResolveNamesForWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Host        := 'foo.bar';
+  Self.IPv4Address := '1.2.3.4';
+  Self.IPv6Address := '2002:dead:beef::1';
+
+  Self.Conf.Clear;
+  Self.Conf.Add('NameServer: MOCK;ReturnOnlySpecifiedRecords');
+  Self.Conf.Add('MockDns: A ' + Self.Host + ' ' + Self.IPv4Address);
+  Self.Conf.Add('MockDns: AAAA ' + Self.Host + ' ' + Self.IPv6Address);
+  Self.Stack.ReconfigureStack(Self.Conf);
+  Self.TimerQueue.TriggerAllEventsOfType(TIdSipStackReconfigureStackInterfaceWait);
+
+  Self.Wait := TIdResolveNamesForWait.Create;
+  Self.Wait.HostName := Self.Host;
+  Self.Wait.StackID  := Self.Stack.ID;
+end;
+
+procedure TestTIdResolveNamesForWait.TearDown;
+begin
+  Self.Wait.Free;
+
+  inherited TearDown;
+end;
+
+procedure TestTIdResolveNamesForWait.TestTrigger;
+var
+  Received: TIdDomainNameRecordsResultData;
+begin
+  Self.Wait.Trigger;
+  Self.ProcessAllPendingNotifications;
+
+  CheckNotificationReceived(TIdDomainNameRecordsResultData, 'No notification about ResolveNamesFor received');
+
+  Received := Self.LastEventOfType(TIdDomainNameRecordsResultData) as TIdDomainNameRecordsResultData;
+
+  CheckEquals(Self.Wait.ID, Received.ReferenceID, 'ReferenceID not set');
+
+  CheckEquals(2, Received.IPAddresses.Count, 'Wrong number of resource records');
+  CheckEquals(Self.IPv4Address, Received.IPAddresses[0].IPAddress, 'First RR');
+  CheckEquals(Self.IPv6Address, Received.IPAddresses[1].IPAddress, 'Second RR');
 end;
 
 initialization

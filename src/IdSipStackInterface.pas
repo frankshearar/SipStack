@@ -775,6 +775,9 @@ type
   // I contain the result of an asynchronous message send. That is, when you've
   // sent a message that generates a response, the StackInterface uses me to
   // return the data to you.
+  //
+  // ReferenceID contains the (registered) ID you gave to the stack's
+  // SendAsyncCall.
   TIdAsynchronousMessageResultData = class(TIdEventData)
   private
     fReferenceID: String;
@@ -796,6 +799,20 @@ type
     property Result: Boolean read fResult write fResult;
   end;
 
+  TIdDomainNameRecordsResultData = class(TIdAsynchronousMessageResultData)
+  private
+    fIPAddresses: TIdDomainNameRecords;
+  protected
+    function Data: String; override;
+  public
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    procedure Assign(Src: TPersistent); override;
+
+    property IPAddresses: TIdDomainNameRecords read fIPAddresses write fIPAddresses;
+  end;
+
   TIdGetBindingsData = class(TIdAsynchronousMessageResultData)
   private
     fBindings: TIdSipLocations;
@@ -810,6 +827,17 @@ type
     procedure Assign(Src: TPersistent); override;
 
     property Bindings: TIdSipLocations read fBindings write SetBindings;
+  end;
+
+  TIdStringResultData = class(TIdAsynchronousMessageResultData)
+  private
+    fResult: String;
+  protected
+    function Data: String; override;
+  public
+    procedure Assign(Src: TPersistent); override;
+
+    property Result: String read fResult write fResult;
   end;
 
   // I represent a reified method call, like my ancestor, that a
@@ -884,6 +912,48 @@ type
     destructor  Destroy; override;
 
     property Request: TIdSipRequest read fRequest write SetRequest;
+  end;
+
+  TIdNetworkingMessageWait = class(TIdAsynchronousMessageWait)
+  protected
+    procedure FireWait(Stack: TIdSipStackInterface); override;
+    procedure Ask(Stack: TIdSipStackInterface;
+                  E: TIdSipNameServerExtension); virtual;
+  end;
+
+  // Given a DestinationAddress, I ask the stack to give the best local address
+  // to use to contact something at DestinationAddress.
+  TIdLocalAddressForWait = class(TIdNetworkingMessageWait)
+  private
+    fDestinationAddress: String;
+  protected
+    procedure Ask(Stack: TIdSipStackInterface;
+                  E: TIdSipNameServerExtension); override;
+  public
+    property DestinationAddress: String read fDestinationAddress write fDestinationAddress;
+  end;
+
+  // Given a DestinationAddress, I ask the stack to give the best local address
+  // or NATted address to use to contact something at DestinationAddress.
+  TIdLocalOrMappedAddressForWait = class(TIdNetworkingMessageWait)
+  private
+    fDestinationAddress: String;
+  protected
+    procedure Ask(Stack: TIdSipStackInterface;
+                  E: TIdSipNameServerExtension); override;
+  public
+    property DestinationAddress: String read fDestinationAddress write fDestinationAddress;
+  end;
+
+  // I do a name (A/AAAA) lookup on HostName.
+  TIdResolveNamesForWait = class(TIdNetworkingMessageWait)
+  private
+    fHostName: String;
+  protected
+    procedure Ask(Stack: TIdSipStackInterface;
+                  E: TIdSipNameServerExtension); override;
+  public
+    property HostName: String read fHostName write fHostName;
   end;
 
   // Raise me whenever someone tries to execute an action with a handle
@@ -3720,6 +3790,42 @@ begin
 end;
 
 //******************************************************************************
+//* TIdDomainNameRecordsResultData                                             *
+//******************************************************************************
+//* TIdDomainNameRecordsResultData Public methods ******************************
+
+constructor TIdDomainNameRecordsResultData.Create;
+begin
+  inherited Create;
+
+  Self.fIPAddresses := TIdDomainNameRecords.Create;
+end;
+
+destructor TIdDomainNameRecordsResultData.Destroy;
+begin
+  Self.IPAddresses.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdDomainNameRecordsResultData.Assign(Src: TPersistent);
+begin
+end;
+
+//* TIdDomainNameRecordsResultData Protected methods ***************************
+
+function TIdDomainNameRecordsResultData.Data: String;
+var
+  I: Integer;
+begin
+  Result := inherited Data;
+
+  for I := 0 to Self.IPAddresses.Count - 1 do
+    Result := Result
+            + 'Binding' + IntToStr(I) + ': ' + Self.IPAddresses[I].AsString + CRLF;
+end;
+
+//******************************************************************************
 //* TIdGetBindingsData                                                         *
 //******************************************************************************
 //* TIdGetBindingsData Public methods ******************************************
@@ -3746,7 +3852,7 @@ begin
 
   if (Src is TIdGetBindingsData) then begin
     Other := Src as TIdGetBindingsData;
-    
+
     Self.Bindings := Other.Bindings;
   end;
 end;
@@ -3770,6 +3876,32 @@ procedure TIdGetBindingsData.SetBindings(Value: TIdSipLocations);
 begin
   Self.fBindings.Clear;
   Self.fBindings.AddLocations(Value);
+end;
+
+//******************************************************************************
+//* TIdStringResultData                                                        *
+//******************************************************************************
+//* TIdStringResultData Public methods *****************************************
+
+procedure TIdStringResultData.Assign(Src: TPersistent);
+var
+  Other: TIdStringResultData;
+begin
+  inherited Assign(Src);
+
+  if (Src is TIdStringResultData) then begin
+    Other := Src as TIdStringResultData;
+
+    Self.Result := Other.Result;
+  end;
+end;
+
+//* TIdStringResultData Protected methods **************************************
+
+function TIdStringResultData.Data: String;
+begin
+  Result := inherited Data
+          + 'Result: ' + Self.Result + CRLF;
 end;
 
 //******************************************************************************
@@ -3942,5 +4074,91 @@ begin
   Self.fRequest.Assign(Value);
 end;
 
+//******************************************************************************
+//* TIdNetworkingMessageWait                                                   *
+//******************************************************************************
+//* TIdNetworkingMessageWait Protected methods *********************************
+
+procedure TIdNetworkingMessageWait.FireWait(Stack: TIdSipStackInterface);
+var
+  E: TIdSipNameServerExtension;
+begin
+  E := Stack.AttachExtension(TIdSipNameServerExtension) as TIdSipNameServerExtension;
+  try
+    Self.Ask(Stack, E);
+  finally
+    E.Free;
+  end;
+end;
+
+procedure TIdNetworkingMessageWait.Ask(Stack: TIdSipStackInterface;
+                                       E: TIdSipNameServerExtension);
+begin
+  // By default do nothing.
+end;
+
+//******************************************************************************
+//* TIdLocalAddressForWait                                                     *
+//******************************************************************************
+//* TIdLocalAddressForWait Protected methods ***********************************
+
+procedure TIdLocalAddressForWait.Ask(Stack: TIdSipStackInterface;
+                                     E: TIdSipNameServerExtension);
+var
+  Result: TIdStringResultData;
+begin
+  Result := TIdStringResultData.Create;
+  try
+    Result.ReferenceID := Self.ID;
+    Result.Result      := E.LocalAddressFor(Self.DestinationAddress);
+
+    Stack.NotifyOfAsyncMessageResult(Result);
+  finally
+    Result.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TIdLocalOrMappedAddressForWait                                             *
+//******************************************************************************
+//* TIdLocalOrMappedAddressForWait Protected methods ***************************
+
+procedure TIdLocalOrMappedAddressForWait.Ask(Stack: TIdSipStackInterface;
+                                             E: TIdSipNameServerExtension);
+var
+  Result: TIdStringResultData;
+begin
+  Result := TIdStringResultData.Create;
+  try
+    Result.ReferenceID := Self.ID;
+    Result.Result      := E.LocalOrMappedAddressFor(Self.DestinationAddress);
+
+    Stack.NotifyOfAsyncMessageResult(Result);
+  finally
+    Result.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TIdResolveNamesForWait                                                     *
+//******************************************************************************
+//* TIdResolveNamesForWait Protected methods ***********************************
+
+procedure TIdResolveNamesForWait.Ask(Stack: TIdSipStackInterface;
+                                     E: TIdSipNameServerExtension);
+var
+  Result: TIdDomainNameRecordsResultData;
+begin
+  Result := TIdDomainNameRecordsResultData.Create;
+  try
+    Result.ReferenceID := Self.ID;
+
+    E.ResolveNamesFor(Self.HostName, Result.IPAddresses);
+
+    Stack.NotifyOfAsyncMessageResult(Result);
+  finally
+    Result.Free;
+  end;
+end;
 
 end.
