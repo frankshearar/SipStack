@@ -4432,7 +4432,35 @@ end;
 //* TestTIdBooleanResultData Published methods *********************************
 
 procedure TestTIdBooleanResultData.TestAsString;
+var
+  Expected: TStrings;
+  Received: TStrings;
 begin
+  Expected := TStringList.Create;
+  try
+    Received := TStringList.Create;
+    try
+      Expected.Add(''); // Timestamp + Handle
+      Expected.Add(''); // Event name
+      Expected.Add('ReferenceID: ' + Self.Data.ReferenceID);
+      Expected.Add('Result: ' + BoolToStr(Self.Data.Result));
+
+      Received.Text := Self.Data.AsString;
+
+      // We ignore the first two line of the debug data (timestamp & handle,
+      // and event name)
+      Received[0] := '';
+      Received[1] := '';
+
+      CheckEquals(Expected.Text,
+                  Received.Text,
+                  'Unexpected debug data');
+    finally
+      Received.Free;
+    end;
+  finally
+    Expected.Free;
+  end;
 end;
 
 procedure TestTIdBooleanResultData.TestCopy;

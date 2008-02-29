@@ -793,6 +793,8 @@ type
   TIdBooleanResultData = class(TIdAsynchronousMessageResultData)
   private
     fResult: Boolean;
+  protected
+    function Data: String; override;
   public
     procedure Assign(Src: TPersistent); override;
 
@@ -802,6 +804,8 @@ type
   TIdDomainNameRecordsResultData = class(TIdAsynchronousMessageResultData)
   private
     fIPAddresses: TIdDomainNameRecords;
+
+    procedure SetIPAddresses(Value: TIdDomainNameRecords);
   protected
     function Data: String; override;
   public
@@ -810,7 +814,7 @@ type
 
     procedure Assign(Src: TPersistent); override;
 
-    property IPAddresses: TIdDomainNameRecords read fIPAddresses write fIPAddresses;
+    property IPAddresses: TIdDomainNameRecords read fIPAddresses write SetIPAddresses;
   end;
 
   TIdGetBindingsData = class(TIdAsynchronousMessageResultData)
@@ -3789,6 +3793,14 @@ begin
   end;
 end;
 
+//* TIdBooleanResultData Protected methods *************************************
+
+function TIdBooleanResultData.Data: String;
+begin
+  Result := inherited Data
+          + 'Result: ' + BoolToStr(Self.Result, true) + CRLF;
+end;
+
 //******************************************************************************
 //* TIdDomainNameRecordsResultData                                             *
 //******************************************************************************
@@ -3809,7 +3821,16 @@ begin
 end;
 
 procedure TIdDomainNameRecordsResultData.Assign(Src: TPersistent);
+var
+  Other: TIdDomainNameRecordsResultData;
 begin
+  inherited Assign(Src);
+
+  if (Src is TIdDomainNameRecordsResultData) then begin
+    Other := Src as TIdDomainNameRecordsResultData;
+
+    Self.IPAddresses := Other.IPAddresses;
+  end;
 end;
 
 //* TIdDomainNameRecordsResultData Protected methods ***************************
@@ -3822,7 +3843,17 @@ begin
 
   for I := 0 to Self.IPAddresses.Count - 1 do
     Result := Result
-            + 'Binding' + IntToStr(I) + ': ' + Self.IPAddresses[I].AsString + CRLF;
+            + 'IPAddress' + IntToStr(I) + ': ' + Self.IPAddresses[I].AsString + CRLF;
+end;
+
+//* TIdDomainNameRecordsResultData Private methods *****************************
+
+procedure TIdDomainNameRecordsResultData.SetIPAddresses(Value: TIdDomainNameRecords);
+var
+  I: Integer;
+begin
+  for I := 0 to Value.Count - 1 do
+    Self.fIPAddresses.Add(Value[I]);
 end;
 
 //******************************************************************************
