@@ -25,6 +25,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAsString;
     procedure TestCopy;
     procedure TestInstantiation;
     procedure TestResourceType;
@@ -54,6 +55,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAsString;
     procedure TestCopy;
     procedure TestInstantiation;
     procedure TestResourceType;
@@ -89,6 +91,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAsSipTransport;
+    procedure TestAsString;
     procedure TestCopy;
     procedure TestInstantiation;
     procedure TestIsSecureService;
@@ -213,6 +216,13 @@ begin
 end;
 
 //* TestTIdDomainNameRecord Published methods **********************************
+
+procedure TestTIdDomainNameRecord.TestAsString;
+begin
+  CheckEquals(Format('%s %s %s', [Self.Rec.Domain, Self.Rec.ResourceType, Self.Rec.IPAddress]),
+              Self.Rec.AsString,
+              'AsString');
+end;
 
 procedure TestTIdDomainNameRecord.TestCopy;
 var
@@ -435,6 +445,13 @@ begin
 end;
 
 //* TestTIdDomainNameAliasRecord Public methods ********************************
+
+procedure TestTIdDomainNameAliasRecord.TestAsString;
+begin
+  CheckEquals(Format('%s %s %s', [Self.Rec.Alias, Self.Rec.ResourceType, Self.Rec.CanonicalName]),
+              Self.Rec.AsString,
+              'AsString');
+end;
 
 procedure TestTIdDomainNameAliasRecord.TestCopy;
 var
@@ -659,6 +676,13 @@ begin
       N.Free;
     end;
   end;
+end;
+
+procedure TestTIdNaptrRecord.TestAsString;
+begin
+  CheckEquals(Format('%s %s %d %d %s %s %s %s', [Self.Rec.Key, Self.Rec.ResourceType, Self.Rec.Order, Self.Rec.Preference, Self.Rec.Flags, Self.Rec.Service, Self.Rec.Regex, Self.Rec.Service]),
+              Self.Rec.AsString,
+              'AsString');
 end;
 
 procedure TestTIdNaptrRecord.TestCopy;

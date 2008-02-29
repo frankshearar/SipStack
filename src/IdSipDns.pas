@@ -32,6 +32,7 @@ type
 
   TIdResourceRecord = class(TObject)
   public
+    function AsString: String; virtual;
     function ResourceType: String; virtual;
   end;
 
@@ -50,7 +51,7 @@ type
                        const Domain: String;
                        const IPAddress: String);
 
-    function AsString: String;
+    function AsString: String; override;
     function Copy: TIdDomainNameRecord;
     function ResourceType: String; override;
 
@@ -83,6 +84,7 @@ type
     constructor Create(const CanonicalName: String;
                        const Alias: String);
 
+    function AsString: String; override;
     function Copy: TIdDomainNameAliasRecord;
     function ResourceType: String; override;
 
@@ -141,6 +143,7 @@ type
     destructor Destroy; override;
 
     function AsSipTransport: String;
+    function AsString: String; override;
     function Copy: TIdNaptrRecord;
     function IsSecureService: Boolean;
     function ResourceType: String; override;
@@ -202,6 +205,7 @@ type
                        const Target: String);
     destructor  Destroy; override;
 
+    function AsString: String; override;
     function Copy: TIdSrvRecord;
     function QueryName: String;
     function ResourceType: String; override;
@@ -618,9 +622,14 @@ end;
 //******************************************************************************
 //* TIdResourceRecord Public methods *******************************************
 
+function TIdResourceRecord.AsString: String;
+begin
+  RaiseAbstractError(Self.ClassName, 'AsString');
+end;
+
 function TIdResourceRecord.ResourceType: String;
 begin
-  RaiseAbstractError(Self.ClassName, 'Method');
+  RaiseAbstractError(Self.ClassName, 'ResourceType');
 end;
 
 //******************************************************************************
@@ -641,8 +650,8 @@ end;
 
 function TIdDomainNameRecord.AsString: String;
 begin
-  // Output in BIND format
-  Result := Self.Domain + ' ' + Self.ResourceType + ' ' + Self.IPAddress;
+  // Display Self's data in BIND format.
+  Result := Format('%s %s %s', [Self.Domain, Self.ResourceType, Self.IPAddress]);
 end;
 
 function TIdDomainNameRecord.Copy: TIdDomainNameRecord;
@@ -711,6 +720,12 @@ begin
 
   Self.fAlias         := Alias;
   Self.fCanonicalName := CanonicalName;
+end;
+
+function TIdDomainNameAliasRecord.AsString: String;
+begin
+  // Display Self's data in BIND format.
+  Result := Format('%s %s %s', [Self.Alias, Self.ResourceType, Self.CanonicalName]);
 end;
 
 function TIdDomainNameAliasRecord.Copy: TIdDomainNameAliasRecord;
@@ -813,6 +828,12 @@ begin
     Result := TlsOverSctpTransport
   else
     raise Exception.Create('Don''t know what transport to use for a NAPTR service ''' + Self.Service + '''');
+end;
+
+function TIdNaptrRecord.AsString: String;
+begin
+  // Display Self's data in BIND format.
+  Result := Format('%s %s %d %d %s %s %s %s', [Self.Key, Self.ResourceType, Self.Order, Self.Preference, Self.Flags, Self.Service, Self.Regex, Self.Service]);
 end;
 
 function TIdNaptrRecord.Copy: TIdNaptrRecord;
@@ -944,6 +965,12 @@ begin
   Self.fNameRecords.Free;
 
   inherited Destroy;
+end;
+
+function TIdSrvRecord.AsString: String;
+begin
+  // Display Self's data in BIND format.
+  Result := Format('%s%s %s %d %d %d %s', [Self.Service, Self.Domain, Self.ResourceType, Self.Priority, Self.Weight, Self.Port, Self.Target]);
 end;
 
 function TIdSrvRecord.Copy: TIdSrvRecord;
