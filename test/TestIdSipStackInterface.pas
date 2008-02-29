@@ -530,17 +530,6 @@ type
     procedure TestCopy;
   end;
 
-  TestTIdGetBindingsData = class(TTestCase)
-  private
-    Data: TIdGetBindingsData;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestAsString;
-    procedure TestCopy;
-  end;
-
   TestTIdBooleanResultData = class(TTestCase)
   private
     Data: TIdBooleanResultData;
@@ -555,6 +544,17 @@ type
   TestTIdDomainNameRecordsResultData = class(TTestCase)
   private
     Data: TIdDomainNameRecordsResultData;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAsString;
+    procedure TestCopy;
+  end;
+
+  TestTIdGetBindingsData = class(TTestCase)
+  private
+    Data: TIdGetBindingsData;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -724,9 +724,9 @@ begin
   Result.AddTest(TestTIdFailedSubscriptionData.Suite);
   Result.AddTest(TestTIdStackReconfiguredData.Suite);
   Result.AddTest(TestTIdAsynchronousMessageResultData.Suite);
-  Result.AddTest(TestTIdGetBindingsData.Suite);
   Result.AddTest(TestTIdBooleanResultData.Suite);
   Result.AddTest(TestTIdDomainNameRecordsResultData.Suite);
+  Result.AddTest(TestTIdGetBindingsData.Suite);
   Result.AddTest(TestTIdStringResultData.Suite);
   Result.AddTest(TestTIdSipStackReconfigureStackInterfaceWait.Suite);
   Result.AddTest(TestTIdGetBindingsWait.Suite);
@@ -4408,81 +4408,6 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdGetBindingsData                                                     *
-//******************************************************************************
-//* TestTIdGetBindingsData Public methods **************************************
-
-procedure TestTIdGetBindingsData.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Data := TIdGetBindingsData.Create;
-  Self.Data.Handle := $decafbad;
-  Self.Data.ReferenceID := 'fake ID';
-  Self.Data.Bindings.AddLocation('TCP', '127.0.0.1', 5060);
-  Self.Data.Bindings.AddLocation('UDP', '127.0.0.1', 5060);
-end;
-
-procedure TestTIdGetBindingsData.TearDown;
-begin
-  Self.Data.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdGetBindingsData Published methods ***********************************
-
-procedure TestTIdGetBindingsData.TestAsString;
-var
-  Expected: TStrings;
-  I:        Integer;
-  Received: TStrings;
-begin
-  Expected := TStringList.Create;
-  try
-    Received := TStringList.Create;
-    try
-      Expected.Add('ReferenceID: ' + Self.Data.ReferenceID);
-      for I := 0 to Self.Data.Bindings.Count - 1 do
-        Expected.Add('Binding' + IntToStr(I) + ': ' + Self.Data.Bindings[I].AsString);
-      Expected.Insert(0, '');
-      Expected.Insert(1, EventNames(CM_ASYNC_MSG_RESULT));
-      Received.Text := Self.Data.AsString;
-
-      // We ignore the first line of the debug data (it's a timestamp & a
-      // handle)
-      Received[0] := '';
-
-      CheckEquals(Expected.Text,
-                  Received.Text,
-                  'Unexpected debug data');
-    finally
-      Received.Free;
-    end;
-  finally
-    Expected.Free;
-  end;
-end;
-
-procedure TestTIdGetBindingsData.TestCopy;
-var
-  Copy: TIdGetBindingsData;
-  I:    Integer;
-begin
-  Copy := Self.Data.Copy as TIdGetBindingsData;
-  try
-    CheckEquals(IntToHex(Self.Data.Handle, 8), IntToHex(Copy.Handle, 8), 'Handle');
-    CheckEquals(Self.Data.ReferenceID, Copy.ReferenceID, 'ReferenceID');
-    CheckEquals(Self.Data.Bindings.Count, Copy.Bindings.Count, 'Bindings size');
-
-    for I := 0 to Self.Data.Bindings.Count - 1 do
-      CheckEquals(Self.Data.Bindings[I].AsString, Copy.Bindings[I].AsString, 'Binding #' + IntToStr(I));
-  finally
-    Copy.Free;
-  end;
-end;
-
-//******************************************************************************
 //* TestTIdBooleanResultData                                                   *
 //******************************************************************************
 //* TestTIdBooleanResultData Public methods ************************************
@@ -4602,6 +4527,81 @@ begin
       CheckEquals(Self.Data.IPAddresses[I].AsString,
                   Copy.IPAddresses[I].AsString,
                   'IP address #' + IntToStr(I + 1));
+  finally
+    Copy.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdGetBindingsData                                                     *
+//******************************************************************************
+//* TestTIdGetBindingsData Public methods **************************************
+
+procedure TestTIdGetBindingsData.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Data := TIdGetBindingsData.Create;
+  Self.Data.Handle := $decafbad;
+  Self.Data.ReferenceID := 'fake ID';
+  Self.Data.Bindings.AddLocation('TCP', '127.0.0.1', 5060);
+  Self.Data.Bindings.AddLocation('UDP', '127.0.0.1', 5060);
+end;
+
+procedure TestTIdGetBindingsData.TearDown;
+begin
+  Self.Data.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdGetBindingsData Published methods ***********************************
+
+procedure TestTIdGetBindingsData.TestAsString;
+var
+  Expected: TStrings;
+  I:        Integer;
+  Received: TStrings;
+begin
+  Expected := TStringList.Create;
+  try
+    Received := TStringList.Create;
+    try
+      Expected.Add('ReferenceID: ' + Self.Data.ReferenceID);
+      for I := 0 to Self.Data.Bindings.Count - 1 do
+        Expected.Add('Binding' + IntToStr(I) + ': ' + Self.Data.Bindings[I].AsString);
+      Expected.Insert(0, '');
+      Expected.Insert(1, EventNames(CM_ASYNC_MSG_RESULT));
+      Received.Text := Self.Data.AsString;
+
+      // We ignore the first line of the debug data (it's a timestamp & a
+      // handle)
+      Received[0] := '';
+
+      CheckEquals(Expected.Text,
+                  Received.Text,
+                  'Unexpected debug data');
+    finally
+      Received.Free;
+    end;
+  finally
+    Expected.Free;
+  end;
+end;
+
+procedure TestTIdGetBindingsData.TestCopy;
+var
+  Copy: TIdGetBindingsData;
+  I:    Integer;
+begin
+  Copy := Self.Data.Copy as TIdGetBindingsData;
+  try
+    CheckEquals(IntToHex(Self.Data.Handle, 8), IntToHex(Copy.Handle, 8), 'Handle');
+    CheckEquals(Self.Data.ReferenceID, Copy.ReferenceID, 'ReferenceID');
+    CheckEquals(Self.Data.Bindings.Count, Copy.Bindings.Count, 'Bindings size');
+
+    for I := 0 to Self.Data.Bindings.Count - 1 do
+      CheckEquals(Self.Data.Bindings[I].AsString, Copy.Bindings[I].AsString, 'Binding #' + IntToStr(I));
   finally
     Copy.Free;
   end;
