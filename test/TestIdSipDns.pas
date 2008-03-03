@@ -40,6 +40,7 @@ type
   published
     procedure TestAdd;
     procedure TestAddWithParameters;
+    procedure TestAsString;
     procedure TestClear;
     procedure TestCopy;
     procedure TestIsEmpty;
@@ -70,6 +71,7 @@ type
   published
     procedure TestAdd;
     procedure TestAddWithParameters;
+    procedure TestAsString;
     procedure TestClear;
     procedure TestCopy;
     procedure TestIsEmpty;
@@ -108,6 +110,7 @@ type
     procedure TestAdd;
     procedure TestAddWithParameters;
     procedure TestAnyAppropriateRecord;
+    procedure TestAsString;
     procedure TestClear;
     procedure TestDelete;
     procedure TestIsEmpty;
@@ -129,6 +132,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAsString;
     procedure TestCopy;
     procedure TestInstantiation;
     procedure TestQueryName;
@@ -147,6 +151,7 @@ type
     procedure TestAddWithParameters;
     procedure TestAddNameRecord;
     procedure TestAddServiceRecords;
+    procedure TestAsString;
     procedure TestClear;
     procedure TestLast;
     procedure TestIsEmpty;
@@ -311,6 +316,16 @@ begin
   CheckEquals(RecordType, Self.List[0].RecordType, 'RecordType');
   CheckEquals(Domain,     Self.List[0].Domain,     'Domain');
   CheckEquals(IPAddress,  Self.List[0].IPAddress,  'IPAddress');
+end;
+
+procedure TestTIdDomainNameRecords.TestAsString;
+begin
+  Self.List.Add(DnsARecord,    'foo.bar', '127.0.0.1');
+  Self.List.Add(DnsAAAARecord, 'foo.bar', '2002:dead:f00d::1');
+
+  CheckEquals(Self.List[0].AsString + CRLF + Self.List[1].AsString,
+              Self.List.AsString,
+              'AsString');
 end;
 
 procedure TestTIdDomainNameRecords.TestClear;
@@ -522,6 +537,16 @@ begin
 
   CheckEquals(Alias,         Self.List[0].Alias,         'Alias');
   CheckEquals(CanonicalName, Self.List[0].CanonicalName, 'CanonicalName');
+end;
+
+procedure TestTIdDomainNameAliasRecords.TestAsString;
+begin
+  Self.List.Add('foo.bar', 'foo1.bar');
+  Self.List.Add('foo.bar', 'foo2.bar');
+
+  CheckEquals(Self.List[0].AsString + CRLF + Self.List[1].AsString,
+              Self.List.AsString,
+              'AsString');
 end;
 
 procedure TestTIdDomainNameAliasRecords.TestClear;
@@ -857,6 +882,16 @@ begin
   end;
 end;
 
+procedure TestTIdNaptrRecords.TestAsString;
+begin
+  Self.List.Add('foo', 0, 0, NaptrDefaultFlags, NaptrTlsService,  '', SrvTlsPrefix + '.foo');
+  Self.List.Add('foo', 1, 0, NaptrDefaultFlags, NaptrTcpService,  '', SrvTcpPrefix + '.foo');
+
+  CheckEquals(Self.List[0].AsString + CRLF + Self.List[1].AsString,
+              Self.List.AsString,
+              'AsString');
+end;
+
 procedure TestTIdNaptrRecords.TestClear;
 var
   NewRec: TIdNaptrRecord;
@@ -1006,6 +1041,13 @@ begin
 end;
 
 //* TestTIdSrvRecord Published methods *****************************************
+
+procedure TestTIdSrvRecord.TestAsString;
+begin
+  CheckEquals(Format('%s%s %s %d %d %d %s', [Self.Rec.Service, Self.Rec.Domain, Self.Rec.ResourceType, Self.Rec.Priority, Self.Rec.Weight, Self.Rec.Port, Self.Rec.Target]),
+              Self.Rec.AsString,
+              'AsString');
+end;
 
 procedure TestTIdSrvRecord.TestCopy;
 var
@@ -1196,6 +1238,16 @@ begin
   finally
     NewList.Free;
   end;
+end;
+
+procedure TestTIdSrvRecords.TestAsString;
+begin
+  Self.List.Add('leo-ix.net', '_sips._tcp', 1, 2, 5061, 'paranoid');
+  Self.List.Add('leo-ix.net', '_sip._tcp',  2, 0, 5060, 'sip-proxy');
+
+  CheckEquals(Self.List[0].AsString + CRLF + Self.List[1].AsString,
+              Self.List.AsString,
+              'AsString');
 end;
 
 procedure TestTIdSrvRecords.TestClear;

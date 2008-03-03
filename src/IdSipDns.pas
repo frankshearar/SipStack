@@ -15,25 +15,29 @@ uses
   Classes, Contnrs;
 
 type
-  TIdBaseList = class(TObject)
-  private
-    fList: TObjectList;
-  protected
-    property List: TObjectList read fList;
-  public
-    constructor Create;
-    destructor  Destroy; override;
-
-    procedure Clear;
-    function  Count: Integer;
-    procedure Delete(Index: Integer);
-    function  IsEmpty: Boolean;
-  end;
-
   TIdResourceRecord = class(TObject)
   public
     function AsString: String; virtual;
     function ResourceType: String; virtual;
+  end;
+
+  TIdBaseList = class(TObject)
+  private
+    fList: TObjectList;
+
+    function GetRR(Index: Integer): TIdResourceRecord;
+  protected
+    property List: TObjectList read fList;
+    property RR[Index: Integer]: TIdResourceRecord read GetRR;
+  public
+    constructor Create;
+    destructor  Destroy; override;
+
+    function  AsString: String;
+    procedure Clear;
+    function  Count: Integer;
+    procedure Delete(Index: Integer);
+    function  IsEmpty: Boolean;
   end;
 
   // I represent a name record of some sort. I might contain an A (RFC 1034) or
@@ -579,6 +583,21 @@ begin
 end;
 
 //******************************************************************************
+//* TIdResourceRecord                                                          *
+//******************************************************************************
+//* TIdResourceRecord Public methods *******************************************
+
+function TIdResourceRecord.AsString: String;
+begin
+  RaiseAbstractError(Self.ClassName, 'AsString');
+end;
+
+function TIdResourceRecord.ResourceType: String;
+begin
+  RaiseAbstractError(Self.ClassName, 'ResourceType');
+end;
+
+//******************************************************************************
 //* TIdBaseList                                                                *
 //******************************************************************************
 //* TIdBaseList Public methods *************************************************
@@ -595,6 +614,18 @@ begin
   Self.fList.Free;
 
   inherited Destroy;
+end;
+
+function TIdBaseList.AsString: String;
+var
+  I: Integer;
+begin
+  Result := '';
+
+  for I := 0 to Self.Count - 1 do
+    Result := Result + Self.RR[I].AsString + CRLF;
+
+  Result := Trim(Result);
 end;
 
 procedure TIdBaseList.Clear;
@@ -617,19 +648,11 @@ begin
   Result := Self.Count = 0;
 end;
 
-//******************************************************************************
-//* TIdResourceRecord                                                          *
-//******************************************************************************
-//* TIdResourceRecord Public methods *******************************************
+//* TIdBaseList Private methods ************************************************
 
-function TIdResourceRecord.AsString: String;
+function TIdBaseList.GetRR(Index: Integer): TIdResourceRecord;
 begin
-  RaiseAbstractError(Self.ClassName, 'AsString');
-end;
-
-function TIdResourceRecord.ResourceType: String;
-begin
-  RaiseAbstractError(Self.ClassName, 'ResourceType');
+  Result := Self.List[Index] as TIdResourceRecord;
 end;
 
 //******************************************************************************
@@ -1222,7 +1245,7 @@ end;
 
 function TIdResourceRecords.GetItems(Index: Integer): TIdResourceRecord;
 begin
-  Result := Self.List[Index] as TIdResourceRecord;
+  Result := Self.RR[Index];
 end;
 
 end.
