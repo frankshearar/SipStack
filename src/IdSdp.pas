@@ -1351,6 +1351,7 @@ const
   IPv4ZeroAddress     = '0.0.0.0';
 
 function AddressTypeToStr(Version: TIdIPVersion): String;
+function AppropriateSetupType(Offer: TIdSdpSetupType; EstablishStream, PreferActive: Boolean): TIdSdpSetupType;
 function BandwidthTypeToStr(BwType: TIdSdpBandwidthType): String;
 function ConnectionTypeToStr(ConnType: TIdSdpConnectionType): String;
 function DirectionToStr(Direction: TIdSdpDirection): String;
@@ -1389,6 +1390,31 @@ begin
                                       ['TIdIPVersion',
                                        Ord(Version),
                                        'String']));
+  end;
+end;
+
+function AppropriateSetupType(Offer: TIdSdpSetupType; EstablishStream, PreferActive: Boolean): TIdSdpSetupType;
+begin
+  // Given an Offer of a setup type, what would be the appropriate answering setup type?
+  // * If we want to actually establish the stream, set EstablishStream to true.
+  // * If the offer is "actpass" (in which case we get to decide), do we want to
+  //   initiate the TCP connection? Set PreferActive to true to initiate the
+  //   connection.
+
+  if not EstablishStream then begin
+    Result := stHoldConn;
+    Exit;
+  end;
+
+  case Offer of
+    stActive:  Result := stPassive;
+    stPassive: Result := stActive;
+    stActPass: if PreferActive then
+                 Result := stActive
+               else
+                 Result := stPassive;
+  else
+    Result := stHoldConn;
   end;
 end;
 

@@ -85,6 +85,7 @@ type
   TestFunctions = class(TTestCase)
   published
     procedure TestAddressTypeToStr;
+    procedure TestAppropriateSetupType;
     procedure TestBandwidthTypeToStr;
     procedure TestConnectionTypeToStr;
     procedure TestDirectionToStr;
@@ -1381,6 +1382,35 @@ begin
   // To check that ALL TIdIPVersions can be converted
   for A := Low(TIdIPVersion) to High(TIdIPVersion) do
     AddressTypeToStr(A);
+end;
+
+procedure TestFunctions.TestAppropriateSetupType;
+begin
+  CheckEquals(SetupTypeToStr(stHoldConn), SetupTypeToStr(AppropriateSetupType(stActive, false, false)),   'AppropriateSetupType(stActive, false, false)');
+  CheckEquals(SetupTypeToStr(stHoldConn), SetupTypeToStr(AppropriateSetupType(stActive, false, true)),    'AppropriateSetupType(stActive, false, true)');
+  CheckEquals(SetupTypeToStr(stPassive),  SetupTypeToStr(AppropriateSetupType(stActive, true, false)),    'AppropriateSetupType(stActive, true, false)');
+  CheckEquals(SetupTypeToStr(stPassive),  SetupTypeToStr(AppropriateSetupType(stActive, true, true)),     'AppropriateSetupType(stActive, true, true)');
+
+  CheckEquals(SetupTypeToStr(stHoldConn), SetupTypeToStr(AppropriateSetupType(stActPass, false, false)),  'AppropriateSetupType(stActPass, false, false)');
+  CheckEquals(SetupTypeToStr(stHoldConn), SetupTypeToStr(AppropriateSetupType(stActPass, false, true)),   'AppropriateSetupType(stActPass, false, true)');
+  CheckEquals(SetupTypeToStr(stPassive),  SetupTypeToStr(AppropriateSetupType(stActPass, true, false)),   'AppropriateSetupType(stActPass, true, false)');
+  CheckEquals(SetupTypeToStr(stActive),   SetupTypeToStr(AppropriateSetupType(stActPass, true, true)),    'AppropriateSetupType(stActPass, true, true)');
+
+  CheckEquals(SetupTypeToStr(stHoldConn), SetupTypeToStr(AppropriateSetupType(stPassive, false, false)),  'AppropriateSetupType(stPassive, false, false)');
+  CheckEquals(SetupTypeToStr(stHoldConn), SetupTypeToStr(AppropriateSetupType(stPassive, false, true)),   'AppropriateSetupType(stPassive, false, true)');
+  CheckEquals(SetupTypeToStr(stActive),   SetupTypeToStr(AppropriateSetupType(stPassive, true, false)),   'AppropriateSetupType(stPassive, true, false)');
+  CheckEquals(SetupTypeToStr(stActive),   SetupTypeToStr(AppropriateSetupType(stPassive, true, true)),    'AppropriateSetupType(stPassive, true, true)');
+
+  CheckEquals(SetupTypeToStr(stHoldConn), SetupTypeToStr(AppropriateSetupType(stHoldConn, false, false)), 'AppropriateSetupType(stHoldConn, false, false)');
+  CheckEquals(SetupTypeToStr(stHoldConn), SetupTypeToStr(AppropriateSetupType(stHoldConn, false, true)),  'AppropriateSetupType(stHoldConn, false, true)');
+  CheckEquals(SetupTypeToStr(stHoldConn), SetupTypeToStr(AppropriateSetupType(stHoldConn, true, false)),  'AppropriateSetupType(stHoldConn, true, false)');
+  CheckEquals(SetupTypeToStr(stHoldConn), SetupTypeToStr(AppropriateSetupType(stHoldConn, true, true)),   'AppropriateSetupType(stHoldConn, true, true)');
+
+  // And sanity check against malformed values:
+  CheckEquals(SetupTypeToStr(stHoldConn), SetupTypeToStr(AppropriateSetupType(stUnknown, false, false)),  'AppropriateSetupType(stUnknown, false, false)');
+  CheckEquals(SetupTypeToStr(stHoldConn), SetupTypeToStr(AppropriateSetupType(stUnknown, false, true)),   'AppropriateSetupType(stUnknown, false, true)');
+  CheckEquals(SetupTypeToStr(stHoldConn), SetupTypeToStr(AppropriateSetupType(stUnknown, true, false)),   'AppropriateSetupType(stUnknown, true, false)');
+  CheckEquals(SetupTypeToStr(stHoldConn), SetupTypeToStr(AppropriateSetupType(stUnknown, true, true)),    'AppropriateSetupType(stUnknown, true, true)');
 end;
 
 procedure TestFunctions.TestBandwidthTypeToStr;
