@@ -169,6 +169,7 @@ type
     procedure TestAddCNAMERecord;
     procedure TestAddNAPTRRecord;
     procedure TestAddSRVRecord;
+    procedure TestAsString;
     procedure TestCollectAliases;
     procedure TestCollectNamePointerRecords;
     procedure TestCollectNameRecords;
@@ -1443,6 +1444,17 @@ begin
   CheckEquals(Weight,   SRVRec.Weight,   'Weight');
   CheckEquals(Port,     SRVRec.Port,     'Port');
   CheckEquals(Target,   SRVRec.Target,   'Target');
+end;
+
+procedure TestTIdResourceRecords.TestAsString;
+begin
+  Self.List.AddARecord('foo', '127.0.0.1');
+  Self.List.AddARecord('bar', '127.0.0.1');
+  Self.List.AddSRVRecord('fakedomain', 'fakeservice', 42, 13, 666, 'faketarget');
+
+  CheckEquals(Self.List[0].AsString + CRLF + Self.List[1].AsString + CRLF + Self.List[2].AsString,
+              Self.List.AsString,
+              'AsString');
 end;
 
 procedure TestTIdResourceRecords.TestCollectAliases;
