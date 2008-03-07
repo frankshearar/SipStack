@@ -6315,6 +6315,7 @@ begin
 end;
 
 //* TIdSdpTcpMediaStream Private methods ***************************************
+
 function TIdSdpTcpMediaStream.CreateServer(OfferSetupType, AnswerSetupType: TIdSdpSetupType): TIdSdpBaseTcpConnection;
 var
   ServType: TIdSdpBaseTcpConnectionClass;
