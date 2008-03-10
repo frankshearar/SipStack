@@ -6203,7 +6203,6 @@ begin
   if Self.LocalDescription.IsRefusedStream then Exit;
 
   if Self.HaveLocalDescription then begin
-
     Self.InitializeLocalServers;
 
     if Self.UsesServerSockets then begin
