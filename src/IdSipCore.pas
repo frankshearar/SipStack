@@ -272,11 +272,9 @@ type
 
   TIdSipUserAgentReaction = Cardinal;
 
-  // I (usually) represent a human being in the SIP network. I:
-  // * inform any listeners when new sessions become established, modified or
-  //   terminated;
-  // * allow my users to make outgoing "calls";
-  // * clean up established Sessions
+  // I represent the Transaction-User core. I provide policy for the stack, and
+  // I keep track of the various chunks of the rest of the Transaction-User
+  // layer - modules, etc.
   //
   // I provide the canonical place to reject messages that have correct syntax
   // but that we don't or can't accept. This includes unsupported SIP versions,
@@ -1832,6 +1830,8 @@ end;
 
 function TIdSipAbstractCore.IsSourceOf(Request: TIdSipRequest): Boolean;
 begin
+  // Did an action of mine send Request?
+   
   Result := Assigned(Self.Actions.FindActionWithInitialRequest(Request));
 end;
 
@@ -1842,6 +1842,9 @@ var
   I:              Integer;
   ModulesMethods: String;
 begin
+  // I provide a comma-separated list of all the SIP methods I (i.e., my various
+  // modules) support.
+
   Result := '';
   for I := 0 to Self.Modules.Count - 1 do begin
     ModulesMethods := Self.ModuleAt(I).AcceptsMethods;
@@ -1972,16 +1975,12 @@ function TIdSipAbstractCore.RequiresUnsupportedExtension(Request: TIdSipRequest)
 var
   I: Integer;
 begin
-  if not Request.HasHeader(RequireHeader) then begin
-    Result := false;
-    Exit;
-  end;
+  Result := false;
 
-  Result := true;
+  if not Request.HasHeader(RequireHeader) then Exit;
+
   for I := 0 to Request.Require.Values.Count - 1 do
-    Result := Result and Self.IsExtensionAllowed(Request.Require.Values[I]);
-
-  Result := not Result;
+    Result := Result or not Self.IsExtensionAllowed(Request.Require.Values[I]);
 end;
 
 function TIdSipAbstractCore.ResponseForInvite: Cardinal;
