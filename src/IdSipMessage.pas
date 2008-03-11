@@ -590,6 +590,7 @@ type
   // I represent the credentials a client offers to a server to authenticate
   // itself.
   TIdSipAuthorizationHeader = class(TIdSipAuthNonceHeader)
+  private
     function  GetDigestUri: String;
     function  GetResponse: String; // The digest with which we authenticate
     function  GetUsername: String;
