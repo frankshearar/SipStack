@@ -454,13 +454,13 @@ begin
     Self.ReceivedResponse := false;
     Self.CreateAction;
 
-    OptionsCount := Self.Core.OptionsCount;
+    OptionsCount := Self.Core.CountOf(MethodOptions);
 
     Self.ReceiveResponse(StatusCode * 100);
 
     Check(Self.ReceivedResponse,
           'Listeners not notified of response ' + IntToStr(StatusCode * 100));
-    Check(Self.Core.OptionsCount < OptionsCount,
+    Check(Self.Core.CountOf(MethodOptions) < OptionsCount,
           'OPTIONS action not terminated for ' + IntToStr(StatusCode) + ' response');
   end;
 end;

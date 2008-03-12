@@ -424,7 +424,6 @@ type
     function  NextInitialSequenceNo: Cardinal;
     function  NextNonce: String;
     function  NextTag: String;
-    function  OptionsCount: Integer;
     function  QueryOptions(Server: TIdSipAddressHeader): TIdSipAction;
     procedure RemoveListener(Listener: IIdSipTransactionUserListener);
     procedure RemoveModule(ModuleType: TIdSipMessageModuleClass);
@@ -1931,11 +1930,6 @@ end;
 function TIdSipAbstractCore.NextTag: String;
 begin
   Result := GRandomNumber.NextSipUserAgentTag;
-end;
-
-function TIdSipAbstractCore.OptionsCount: Integer;
-begin
-  Result := Self.Actions.OptionsCount;
 end;
 
 function TIdSipAbstractCore.QueryOptions(Server: TIdSipAddressHeader): TIdSipAction;
