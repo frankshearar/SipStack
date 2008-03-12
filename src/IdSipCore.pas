@@ -280,6 +280,8 @@ type
   // but that we don't or can't accept. This includes unsupported SIP versions,
   // unrecognised methods, etc.
   //
+  // I also provide helper functionality for Actions.
+  //
   // TODO: there's redundance with this Hostname, and the Hostnames of the
   // transports attached to this core. It's not clear how to set up the
   // hostnames and bindings of the stack.
