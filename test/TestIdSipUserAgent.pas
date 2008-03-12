@@ -1756,7 +1756,6 @@ var
 begin
   Auth := TIdSipMockAuthenticator.Create;
   try
-    Self.Core.RequireAuthentication := true;
     Self.Core.Authenticator := Auth;
     Auth.FailWith := EAuthenticate;
 
@@ -1822,9 +1821,11 @@ end;
 
 procedure TestTIdSipUserAgent.TestRejectUnauthorizedRequest;
 var
+  Auth:     TIdSipMockAuthenticator;
   Response: TIdSipResponse;
 begin
-  Self.Core.RequireAuthentication := true;
+  Auth := Self.Core.Authenticator as TIdSipMockAuthenticator;
+  Auth.AuthenticateAllRequests := false;
 
   Self.MarkSentResponseCount;
   Self.ReceiveInvite;

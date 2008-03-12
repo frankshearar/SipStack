@@ -73,7 +73,7 @@ type
     procedure RemoveBody(Msg: TIdSipMessage);
   protected
     AckCount:       Cardinal;
-    Authenticator:  TIdSipAuthenticator;
+    Authenticator:  TIdSipAbstractAuthenticator;
     Core:           TIdSipUserAgent;
     DebugTimer:     TIdDebugTimerQueue;
     Destination:    TIdSipToHeader;
@@ -1151,15 +1151,20 @@ end;
 
 function TTestCaseTU.CreateUserAgent(const Address: String): TIdSipUserAgent;
 var
-  MockLocator: TIdSipMockLocator;
+  MockAuthenticator: TIdSipMockAuthenticator;
+  MockLocator:       TIdSipMockLocator;
 begin
+  MockAuthenticator := TIdSipMockAuthenticator.Create;
+
   Result := TIdSipUserAgent.Create;
-  Result.Authenticator := TIdSipAuthenticator.Create;
+  Result.Authenticator := MockAuthenticator;
   Result.Dispatcher    := TIdSipMockTransactionDispatcher.Create;
   Result.From.Value    := Address;
   Result.Locator       := Result.Dispatcher.Locator;
   Result.RoutingTable  := Result.Dispatcher.RoutingTable;
   Result.Timer         := Result.Dispatcher.Timer;
+
+  MockAuthenticator.AuthenticateAllRequests := true;
 
   // Make sure we have a sane DNS setup so that actions don't terminate
   // themselves after they try find locations to which to send their messages.

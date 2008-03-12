@@ -301,7 +301,6 @@ type
     fLogger:                 TLoGGerThread;
     fLogName:                String;
     fRealm:                  String;
-    fRequireAuthentication:  Boolean;
     fRoutingTable:           TIdRoutingTable;
     fTimer:                  TIdTimerQueue;
     fUseGruu:                Boolean;
@@ -383,7 +382,7 @@ type
     function  AllowedLanguages: String;
     function  AllowedMethods(RequestUri: TIdSipUri): String;
     function  AllowedSchemes: String;
-    function  Authenticate(Request: TIdSipRequest): Boolean;
+    function  Authenticate(Request: TIdSipRequest): TIdSipUserAgentReaction;
     function  CountOf(const MethodName: String): Integer;
     function  CreateChallengeResponse(Request: TIdSipRequest): TIdSipResponse;
     function  CreateChallengeResponseAsUserAgent(Request: TIdSipRequest): TIdSipResponse;
@@ -449,21 +448,20 @@ type
     // Move to UserAgent:
     procedure TerminateAllCalls; // move to InviteModule
 
-    property Actions:               TIdSipActions               read fActions;
-    property Authenticator:         TIdSipAbstractAuthenticator read fAuthenticator write SetAuthenticator;
-    property Dispatcher:            TIdSipTransactionDispatcher read fDispatcher write SetDispatcher;
-    property HostName:              String                      read fHostName write fHostName;
-    property InstanceID:            String                      read fInstanceID write SetInstanceID;
-    property Keyring:               TIdKeyRing                  read fKeyring;
-    property Locator:               TIdSipAbstractLocator       read fLocator write fLocator;
-    property Logger:                TLoGGerThread               read fLogger write SetLogger;
-    property LogName:               String                      read fLogName write SetLogName;
-    property Realm:                 String                      read fRealm write SetRealm;
-    property RequireAuthentication: Boolean                     read fRequireAuthentication write fRequireAuthentication;
-    property RoutingTable:          TIdRoutingTable             read fRoutingTable write fRoutingTable;
-    property Timer:                 TIdTimerQueue               read fTimer write fTimer;
-    property UseGruu:               Boolean                     read fUseGruu write fUseGruu;
-    property UserAgentName:         String                      read fUserAgentName write fUserAgentName;
+    property Actions:       TIdSipActions               read fActions;
+    property Authenticator: TIdSipAbstractAuthenticator read fAuthenticator write SetAuthenticator;
+    property Dispatcher:    TIdSipTransactionDispatcher read fDispatcher write SetDispatcher;
+    property HostName:      String                      read fHostName write fHostName;
+    property InstanceID:    String                      read fInstanceID write SetInstanceID;
+    property Keyring:       TIdKeyRing                  read fKeyring;
+    property Locator:       TIdSipAbstractLocator       read fLocator write fLocator;
+    property Logger:        TLoGGerThread               read fLogger write SetLogger;
+    property LogName:       String                      read fLogName write SetLogName;
+    property Realm:         String                      read fRealm write SetRealm;
+    property RoutingTable:  TIdRoutingTable             read fRoutingTable write fRoutingTable;
+    property Timer:         TIdTimerQueue               read fTimer write fTimer;
+    property UseGruu:       Boolean                     read fUseGruu write fUseGruu;
+    property UserAgentName: String                      read fUserAgentName write fUserAgentName;
   end;
 
   IIdSipMessageModuleListener = interface
@@ -1479,10 +1477,9 @@ begin
   Self.AddModule(TIdSipOptionsModule);
   Self.AddAllowedScheme(SipScheme);
 
-  Self.HostName              := Self.DefaultHostName;
-  Self.Realm                 := Self.HostName;
-  Self.RequireAuthentication := false;
-  Self.UserAgentName         := Self.DefaultUserAgent;
+  Self.HostName      := Self.DefaultHostName;
+  Self.Realm         := Self.HostName;
+  Self.UserAgentName := Self.DefaultUserAgent;
 end;
 
 destructor TIdSipAbstractCore.Destroy;
@@ -1660,10 +1657,18 @@ begin
   Result := Self.ConvertToHeader(Self.AllowedSchemeList);
 end;
 
-function TIdSipAbstractCore.Authenticate(Request: TIdSipRequest): Boolean;
+function TIdSipAbstractCore.Authenticate(Request: TIdSipRequest): TIdSipUserAgentReaction;
 begin
-  // We should ALWAYS have an authenticator attached: see TIdSipStackConfigurator.
-  Result := Assigned(Self.Authenticator) and Self.Authenticator.Authenticate(Request);
+  try
+    // We should ALWAYS have an authenticator attached: see TIdSipStackConfigurator.
+    if Assigned(Self.Authenticator) and Self.Authenticator.Authenticate(Request) then
+      Result := uarAccept
+    else
+      Result := uarUnauthorized;
+  except
+    on EAuthenticate do
+      Result := uarBadAuthorization;
+  end;
 end;
 
 function TIdSipAbstractCore.CountOf(const MethodName: String): Integer;
@@ -2294,24 +2299,13 @@ end;
 
 function TIdSipAbstractCore.WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction;
 begin
-  Result := uarAccept;
-
   // cf RFC 3261 section 8.2
-  // But this is a monkey authentication scheme: we really want a much more
-  // fine-grained system: "yes, you can INVITE, but you can only SUBSCRIBE if
-  // you're foo or bar."
-  if Self.RequireAuthentication then begin
-    try
-      if not Self.Authenticate(Request) then
-        Result := uarUnauthorized;
-    except
-      on EAuthenticate do
-        Result := uarBadAuthorization;
-    end;
-  end
+  Result := Self.Authenticate(Request);
+  if (Result <> uarAccept) then Exit;
+
   // inspect the method - 8.2.1
   // This result code means "I have no modules that can accept this method"
-  else if not Self.IsMethodSupported(Request.Method) then
+  if not Self.IsMethodSupported(Request.Method) then
     Result := uarUnsupportedMethod
   // Merged requests - 8.2.2.2
   else if not Request.ToHeader.HasTag and Self.Dispatcher.LoopDetected(Request) then

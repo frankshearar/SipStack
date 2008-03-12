@@ -95,6 +95,11 @@ type
     property Realm:     String  read fRealm write fRealm;
   end;
 
+  TIdSipNullAuthenticator = class(TIdSipAbstractAuthenticator)
+  public
+    function Authenticate(Request: TIdSipRequest): Boolean; override;
+  end;
+
   TIdSipAuthenticator = class(TIdSipAbstractAuthenticator)
   end;
 
@@ -610,6 +615,16 @@ begin
     Result := ProxyAuthenticateHeader
   else
     Result := WWWAuthenticateHeader;
+end;
+
+//*******************************************************************************
+//* TIdSipNullAuthenticator                                                     *
+//*******************************************************************************
+//* TIdSipNullAuthenticator Public methods **************************************
+
+function TIdSipNullAuthenticator.Authenticate(Request: TIdSipRequest): Boolean;
+begin
+  Result := true;
 end;
 
 //*******************************************************************************

@@ -59,6 +59,17 @@ type
     procedure TestDontAuthenticateNormalRequest;
   end;
 
+  TestTIdSipNullAuthenticator = class(TTestCase)
+  private
+    Auth:   TIdSipNullAuthenticator;
+    Invite: TIdSipRequest;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAuthenticate;
+  end;
+
   TestTIdRealmInfo = class(TTestCase)
   private
     Body:           String;
@@ -109,6 +120,7 @@ begin
   Result := TTestSuite.Create('IdSipAuthenication tests');
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSipAuthenticator.Suite);
+  Result.AddTest(TestTIdSipNullAuthenticator.Suite);
   Result.AddTest(TestTIdRealmInfo.Suite);
   Result.AddTest(TestTIdKeyRing.Suite);
 end;
@@ -534,6 +546,46 @@ begin
   // This INVITE has no Authorization or Proxy-Authorization header
   Check(not Self.Auth.Authenticate(Self.Invite),
         'No Authorization or Proxy-Authorization header');
+end;
+
+//*******************************************************************************
+//* TestTIdSipNullAuthenticator                                                 *
+//*******************************************************************************
+//* TestTIdSipNullAuthenticator Public methods **********************************
+
+procedure TestTIdSipNullAuthenticator.SetUp;
+begin
+ inherited SetUp;
+
+ Self.Auth   := TIdSipNullAuthenticator.Create;
+ Self.Invite := TIdSipTestResources.CreateBasicRequest;
+end;
+
+procedure TestTIdSipNullAuthenticator.TearDown;
+begin
+  Self.Invite.Free;
+  Self.Auth.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipNullAuthenticator Published methods ******************************
+
+procedure TestTIdSipNullAuthenticator.TestAuthenticate;
+begin
+  Check(Self.Auth.Authenticate(Self.Invite), 'Null authenticator: No Authorization or Proxy-Authorization header');
+
+  Self.Invite.AddHeader(AuthorizationHeader);
+  Self.Invite.FirstAuthorization.Realm     := 'fried-neurons.org';
+  Self.Invite.FirstAuthorization.Username  := 'case';
+  Self.Invite.FirstAuthorization.DigestUri := 'sip:case@fried-neurons.org';
+  Self.Invite.FirstAuthorization.Nonce     := 'cafebabe';
+  Self.Invite.FirstAuthorization.CNonce    := 'decafbad';
+
+  Check(Self.Auth.Authenticate(Self.Invite), 'Null authenticator: Authorization header');
+
+  Self.Invite.FirstAuthorization.Realm := 'tessier-ashpool.co.luna';
+  Check(Self.Auth.Authenticate(Self.Invite), 'Null authenticator: Authorization header with different realm');
 end;
 
 //*******************************************************************************

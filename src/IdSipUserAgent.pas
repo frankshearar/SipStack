@@ -100,6 +100,7 @@ type
   // settings for that Directive.
   //
   // Here's a summary of the formats for each directive:
+  //   Authentication: <policy name>[;policy specific param=value pairs]
   //   From: "Count Zero" <sip:countzero@jammer.org>
   //   HostName: talkinghead1.tessier-ashpool.co.luna
   //   HostName: 192.168.1.1
@@ -1607,7 +1608,7 @@ end;
 procedure TIdSipStackConfigurator.InstantiateMissingObjectsAsDefaults(UserAgent: TIdSipUserAgent);
 begin
   if not Assigned(UserAgent.Authenticator) then
-    UserAgent.Authenticator := TIdSipAuthenticator.Create;
+    UserAgent.Authenticator := TIdSipNullAuthenticator.Create;
 
   if not Assigned(UserAgent.Locator) then
     UserAgent.Locator := TIdSipIndyLocator.Create;
