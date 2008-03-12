@@ -115,8 +115,6 @@ type
     WintermutesAOR: TIdSipRequest;
 
     procedure AddBinding(AOR, ContactUri: String);
-    procedure AddCaseBinding(Uri: String);
-    procedure AddWintermuteBinding(Uri: String);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -1030,17 +1028,7 @@ begin
   Self.DB.AddBindings(Self.WintermutesAOR);
 end;
 
-procedure TestTIdSipNameMatchingMockBindingDatabase.AddCaseBinding(Uri: String);
-begin
-  Self.CasesAOR.FirstContact.Value := Uri;
-  Self.DB.AddBindings(Self.CasesAOR);
-end;
-
-procedure TestTIdSipNameMatchingMockBindingDatabase.AddWintermuteBinding(Uri: String);
-begin
-  Self.WintermutesAOR.FirstContact.Value := Uri;
-  Self.DB.AddBindings(Self.WintermutesAOR);
-end;
+//* TestTIdSipNameMatchingMockBindingDatabase Published methods ****************
 
 procedure TestTIdSipNameMatchingMockBindingDatabase.TestBindingsForNoBindings;
 begin
