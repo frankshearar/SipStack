@@ -548,10 +548,10 @@ begin
         'No Authorization or Proxy-Authorization header');
 end;
 
-//*******************************************************************************
-//* TestTIdSipNullAuthenticator                                                 *
-//*******************************************************************************
-//* TestTIdSipNullAuthenticator Public methods **********************************
+//******************************************************************************
+//* TestTIdSipNullAuthenticator                                                *
+//******************************************************************************
+//* TestTIdSipNullAuthenticator Public methods *********************************
 
 procedure TestTIdSipNullAuthenticator.SetUp;
 begin
@@ -588,10 +588,10 @@ begin
   Check(Self.Auth.Authenticate(Self.Invite), 'Null authenticator: Authorization header with different realm');
 end;
 
-//*******************************************************************************
-//* TestTIdRealmInfo                                                            *
-//*******************************************************************************
-//* TestTIdRealmInfo Public methods *********************************************
+//******************************************************************************
+//* TestTIdRealmInfo                                                           *
+//******************************************************************************
+//* TestTIdRealmInfo Public methods ********************************************
 
 procedure TestTIdRealmInfo.SetUp;
 begin
@@ -923,10 +923,10 @@ begin
   end;
 end;
 
-//*******************************************************************************
-//* TestTIdKeyRing                                                              *
-//*******************************************************************************
-//* TestTIdKeyRing Public methods ***********************************************
+//******************************************************************************
+//* TestTIdKeyRing                                                             *
+//******************************************************************************
+//* TestTIdKeyRing Public methods **********************************************
 
 procedure TestTIdKeyRing.SetUp;
 begin
@@ -942,7 +942,7 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdKeyRing Published methods ********************************************
+//* TestTIdKeyRing Published methods *******************************************
 
 procedure TestTIdKeyRing.TestAddKeyAndFind;
 var
