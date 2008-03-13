@@ -95,12 +95,12 @@ type
     property Realm:     String  read fRealm write fRealm;
   end;
 
+  TIdSipBasicAuthenticator = class(TIdSipAbstractAuthenticator)
+  end;
+
   TIdSipNullAuthenticator = class(TIdSipAbstractAuthenticator)
   public
     function Authenticate(Request: TIdSipRequest): Boolean; override;
-  end;
-
-  TIdSipAuthenticator = class(TIdSipAbstractAuthenticator)
   end;
 
   // I track the information a UAC needs to authenticate against a particular
@@ -162,7 +162,7 @@ type
   EAuthenticate = class(Exception);
   EAuthenticateClass = class of EAuthenticate;
 
-  TIdSipMockAuthenticator = class(TIdSipAuthenticator)
+  TIdSipMockAuthenticator = class(TIdSipAbstractAuthenticator)
   private
     fAuthenticateAllRequests: Boolean;
     fFailWith:                EAuthenticateClass;

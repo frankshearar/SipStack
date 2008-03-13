@@ -42,10 +42,12 @@ type
     procedure TestRequestDigestFor;
   end;
 
-  TestTIdSipAuthenticator = class(TTestCase)
+  TAuthenticatorTestCase = class(TTestCase)
   private
-    Auth:   TIdSipAuthenticator;
+    Auth:   TIdSipAbstractAuthenticator;
     Invite: TIdSipRequest;
+  protected
+    function CreateAuthenticator: TIdSipAbstractAuthenticator; virtual;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -56,18 +58,20 @@ type
     procedure TestCreateChallengeResponseAsProxy;
     procedure TestCreateChallengeResponseAsUserAgent;
     procedure TestDigest;
-    procedure TestDontAuthenticateNormalRequest;
+    procedure TestDontAuthenticateNormalRequest; virtual;
   end;
 
-  TestTIdSipNullAuthenticator = class(TTestCase)
-  private
-    Auth:   TIdSipNullAuthenticator;
-    Invite: TIdSipRequest;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
+  TestTIdSipBasicAuthenticator = class(TAuthenticatorTestCase)
+  protected
+    function CreateAuthenticator: TIdSipAbstractAuthenticator; override;
+  end;
+
+  TestTIdSipNullAuthenticator = class(TAuthenticatorTestCase)
+  protected
+    function CreateAuthenticator: TIdSipAbstractAuthenticator; override;
   published
     procedure TestAuthenticate;
+    procedure TestDontAuthenticateNormalRequest; override;
   end;
 
   TestTIdRealmInfo = class(TTestCase)
@@ -119,7 +123,7 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipAuthenication tests');
   Result.AddTest(TestFunctions.Suite);
-  Result.AddTest(TestTIdSipAuthenticator.Suite);
+  Result.AddTest(TestTIdSipBasicAuthenticator.Suite);
   Result.AddTest(TestTIdSipNullAuthenticator.Suite);
   Result.AddTest(TestTIdRealmInfo.Suite);
   Result.AddTest(TestTIdKeyRing.Suite);
@@ -374,20 +378,20 @@ begin
   Check(nil = Pointer(RequestDigestFor('unknown')), 'unknown');
 end;
 
-//*******************************************************************************
-//* TestTIdSipAuthenticator                                                     *
-//*******************************************************************************
-//* TestTIdSipAuthenticator Public methods **************************************
+//******************************************************************************
+//* TAuthenticatorTestCase                                                     *
+//******************************************************************************
+//* TAuthenticatorTestCase Public methods **************************************
 
-procedure TestTIdSipAuthenticator.SetUp;
+procedure TAuthenticatorTestCase.SetUp;
 begin
   inherited SetUp;
 
-  Self.Auth   := TIdSipAuthenticator.Create;
+  Self.Auth   := Self.CreateAuthenticator;
   Self.Invite := TIdSipTestResources.CreateBasicRequest;
 end;
 
-procedure TestTIdSipAuthenticator.TearDown;
+procedure TAuthenticatorTestCase.TearDown;
 begin
   Self.Invite.Free;
   Self.Auth.Free;
@@ -395,9 +399,17 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdSipAuthenticator Published methods ***********************************
+//* TAuthenticatorTestCase Protected methods ***********************************
 
-procedure TestTIdSipAuthenticator.TestAddUser;
+function TAuthenticatorTestCase.CreateAuthenticator: TIdSipAbstractAuthenticator;
+begin
+  Result := nil;
+  Fail(Self.ClassName + ' MUST override CreateAuthenticator');
+end;
+
+//* TAuthenticatorTestCase Published methods ***********************************
+
+procedure TAuthenticatorTestCase.TestAddUser;
 var
   Digest:   String;
   Realm:    String;
@@ -429,13 +441,13 @@ begin
               'New user info not added');
 end;
 
-procedure TestTIdSipAuthenticator.TestAuthenticateAsUserAgent;
+procedure TAuthenticatorTestCase.TestAuthenticateAsUserAgent;
 begin
   Self.Auth.IsProxy := true;
   Fail('Not implemented');
 end;
 
-procedure TestTIdSipAuthenticator.TestCreateChallengeResponse;
+procedure TAuthenticatorTestCase.TestCreateChallengeResponse;
 var
   Challenge: TIdSipResponse;
   Request:   TIdSipRequest;
@@ -474,7 +486,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipAuthenticator.TestCreateChallengeResponseAsProxy;
+procedure TAuthenticatorTestCase.TestCreateChallengeResponseAsProxy;
 var
   Challenge: TIdSipResponse;
   Request:   TIdSipRequest;
@@ -499,7 +511,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipAuthenticator.TestCreateChallengeResponseAsUserAgent;
+procedure TAuthenticatorTestCase.TestCreateChallengeResponseAsUserAgent;
 var
   Challenge: TIdSipResponse;
   Request:   TIdSipRequest;
@@ -526,7 +538,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipAuthenticator.TestDigest;
+procedure TAuthenticatorTestCase.TestDigest;
 var
   Digest: String;
   Md5:    TIdHashMessageDigest5;
@@ -541,7 +553,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipAuthenticator.TestDontAuthenticateNormalRequest;
+procedure TAuthenticatorTestCase.TestDontAuthenticateNormalRequest;
 begin
   // This INVITE has no Authorization or Proxy-Authorization header
   Check(not Self.Auth.Authenticate(Self.Invite),
@@ -549,32 +561,29 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipNullAuthenticator                                                *
+//* TestTIdSipBasicAuthenticator                                               *
 //******************************************************************************
-//* TestTIdSipNullAuthenticator Public methods *********************************
+//* TestTIdSipBasicAuthenticator Protected methods *****************************
 
-procedure TestTIdSipNullAuthenticator.SetUp;
+function TestTIdSipBasicAuthenticator.CreateAuthenticator: TIdSipAbstractAuthenticator;
 begin
- inherited SetUp;
-
- Self.Auth   := TIdSipNullAuthenticator.Create;
- Self.Invite := TIdSipTestResources.CreateBasicRequest;
+  Result :=TIdSipBasicAuthenticator.Create;
 end;
 
-procedure TestTIdSipNullAuthenticator.TearDown;
-begin
-  Self.Invite.Free;
-  Self.Auth.Free;
+//******************************************************************************
+//* TestTIdSipNullAuthenticator                                                *
+//******************************************************************************
+//* TestTIdSipNullAuthenticator Protected methods ******************************
 
-  inherited TearDown;
+function TestTIdSipNullAuthenticator.CreateAuthenticator: TIdSipAbstractAuthenticator;
+begin
+  Result :=TIdSipNullAuthenticator.Create;
 end;
 
 //* TestTIdSipNullAuthenticator Published methods ******************************
 
 procedure TestTIdSipNullAuthenticator.TestAuthenticate;
 begin
-  Check(Self.Auth.Authenticate(Self.Invite), 'Null authenticator: No Authorization or Proxy-Authorization header');
-
   Self.Invite.AddHeader(AuthorizationHeader);
   Self.Invite.FirstAuthorization.Realm     := 'fried-neurons.org';
   Self.Invite.FirstAuthorization.Username  := 'case';
@@ -586,6 +595,13 @@ begin
 
   Self.Invite.FirstAuthorization.Realm := 'tessier-ashpool.co.luna';
   Check(Self.Auth.Authenticate(Self.Invite), 'Null authenticator: Authorization header with different realm');
+end;
+
+procedure TestTIdSipNullAuthenticator.TestDontAuthenticateNormalRequest;
+begin
+  // Null authenticator authenticates everything.
+
+  Check(Self.Auth.Authenticate(Self.Invite), 'Null authenticator: No Authorization or Proxy-Authorization header');
 end;
 
 //******************************************************************************
