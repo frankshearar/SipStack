@@ -1818,14 +1818,26 @@ end;
 function TIdSipAbstractCore.IsMethodAllowed(RequestUri: TIdSipUri;
                                             const Method: String): Boolean;
 begin
+  // Return true iff a request of method Method may be issued against
+  // RequestUri.
+  //
+  // Compare with IsMethodSupported.
+  //
   // TODO: This is just a stub at the moment. Eventually we want to support
   // controlling rights for multiple URIs so that, for instance, we could allow a
   // non-User Agent to say "yes, you can SUBSCRIBE to A's state, but not to B's".
+  
   Result := Self.IsMethodSupported(Method);
 end;
 
 function TIdSipAbstractCore.IsMethodSupported(const Method: String): Boolean;
 begin
+  // Return true iff this stack can process a request of method Method,
+  // which is equivalent to "do we have a MessageModule that can or will process
+  // this method?
+  //
+  // Compare with IsMethodAllowed.
+
   Result := not Self.ModuleFor(Method).IsNull;
 end;
 
