@@ -1009,7 +1009,7 @@ begin
   Self.SentResponses := TIdSipResponseList.Create;
 
   Self.Core := Self.CreateUserAgent('sip:case@localhost');
-  Self.Authenticator := Self.Core.Authenticator as TIdSipAuthenticator;
+  Self.Authenticator := Self.Core.Authenticator;
   Self.Dispatcher    := Self.Core.Dispatcher as TIdSipMockTransactionDispatcher;
   Self.RoutingTable  := Self.Core.RoutingTable as TIdMockRoutingTable;
 
