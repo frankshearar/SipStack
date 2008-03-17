@@ -532,7 +532,13 @@ begin
   Self.LocalOrMappedAddressFor(Destination.IPAddress, LocalAddress, DefaultPort);
   LocalAddress.Transport := Destination.Transport;
 
-  ActualAddress := LocalBindings.FirstAddressMatch(LocalAddress);
+  // If the best local address to use to contact Destination is the localhost
+  // address, then it doesn't matter which local binding we use, as long as the
+  // transport matches.
+  if LocalAddress.IsLocalhost then
+    ActualAddress := LocalBindings.FirstTransportMatch(LocalAddress)
+  else
+    ActualAddress := LocalBindings.FirstAddressMatch(LocalAddress);
 
   if not Assigned(ActualAddress) then begin
     // There is no local binding that can be used to communicate with the UA

@@ -30,6 +30,7 @@ type
     procedure TestCopy;
     procedure TestCreate;
     procedure TestEquals;
+    procedure TestIsLocalhost;
   end;
 
   TestTIdSipLocations = class(TTestCase)
@@ -49,6 +50,8 @@ type
     procedure TestFirst;
     procedure TestFirstAddressMatch;
     procedure TestFirstAddressMatchTriesToMatchTransports;
+    procedure TestFirstTransportMatch;
+    procedure TestFirstTransportMatchEmptyList;
     procedure TestIsEmpty;
     procedure TestLast;
     procedure TestRemoveFirst;
@@ -165,6 +168,25 @@ begin
   finally
     Other.Free;
   end;
+end;
+
+procedure TestTIdSipLocation.TestIsLocalhost;
+begin
+  Self.Loc.IPAddress := '127.0.0.1';
+  Check(Self.Loc.IsLocalhost, '127.0.0.1');
+
+  Self.Loc.IPAddress := '10.0.0.6';
+  Check(not Self.Loc.IsLocalhost, '10.0.0.6');
+
+  Self.Loc.IPAddress := '2002:deca:fbad::1';
+  Check(not Self.Loc.IsLocalhost, '2002:deca:fbad::1');
+
+  Self.Loc.IPAddress := '::1';
+  Check(Self.Loc.IsLocalhost, '::1');
+
+  // I'm really not sure about this!
+  Self.Loc.IPAddress := '127.0.0.2';
+  Check(not Self.Loc.IsLocalhost, '127.0.0.2');
 end;
 
 //******************************************************************************
@@ -415,6 +437,40 @@ begin
     Found := Self.Locs.FirstAddressMatch(SearchLoc);
     CheckNotNull(Found, 'Same address, same transport, same port');
     CheckEquals('UDP', Found.Transport, 'Transport-matching location not used in preference');
+  finally
+    SearchLoc.Free;
+  end;
+end;
+
+procedure TestTIdSipLocations.TestFirstTransportMatch;
+const
+  LocalAddress  = '10.0.0.6';
+var
+  Found:     TIdSipLocation;
+  SearchLoc: TIdSipLocation;
+begin
+  SearchLoc := TIdSipLocation.Create('UDP', LocalAddress, 5060);
+  try
+    Self.Locs.AddLocation('TCP', LocalAddress, 5060);
+
+    Found := Self.Locs.FirstTransportMatch(SearchLoc);
+    Check(Found = nil, 'Different transport');
+
+    Self.Locs.AddLocation('UDP', LocalAddress, 5060);
+    Found := Self.Locs.FirstTransportMatch(SearchLoc);
+    Check(Found = Self.Locs[1], 'Same transport');
+  finally
+    SearchLoc.Free;
+  end;
+end;
+
+procedure TestTIdSipLocations.TestFirstTransportMatchEmptyList;
+var
+  SearchLoc: TIdSipLocation;
+begin
+  SearchLoc := TIdSipLocation.Create('UDP', '10.0.0.6', 5060);
+  try
+    Check(nil = Self.Locs.FirstTransportMatch(SearchLoc), 'Empty list');
   finally
     SearchLoc.Free;
   end;

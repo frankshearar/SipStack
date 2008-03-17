@@ -32,6 +32,7 @@ type
     function  AsString: String;
     function  Copy: TIdSipLocation;
     function  Equals(Other: TIdSipLocation): Boolean;
+    function  IsLocalhost: Boolean;
 
     property Transport: String   read fTransport write fTransport;
     property IPAddress: String   read fIPAddress write fIPAddress;
@@ -56,6 +57,7 @@ type
     function  Contains(Loc: TIdSipLocation): Boolean;
     function  First: TIdSipLocation;
     function  FirstAddressMatch(SearchLocation: TIdSipLocation): TIdSipLocation;
+    function  FirstTransportMatch(SearchLocation: TIdSipLocation): TIdSipLocation;
     function  Last: TIdSipLocation;
     procedure RemoveFirst;
     procedure Remove(Location: TIdSipLocation);
@@ -69,7 +71,7 @@ const
 implementation
 
 uses
-  IdConnectionBindings, SysUtils;
+  IdConnectionBindings, IdSimpleParser, SysUtils;
 
 //******************************************************************************
 //* TIdSipLocation                                                             *
@@ -117,6 +119,11 @@ begin
   Result := (Self.Transport = Other.Transport)
         and (Self.IPAddress = Other.IPAddress)
         and (Self.Port = Other.Port);
+end;
+
+function TIdSipLocation.IsLocalhost: Boolean;
+begin
+  Result := Self.IPAddress = Localhost(TIdIPAddressParser.IPVersion(Self.IPAddress))
 end;
 
 //* TIdSipLocation Protected methods *******************************************
@@ -235,6 +242,19 @@ begin
 
     if    (Self[I].Transport = SearchLocation.Transport)
       and (Self[I].IPAddress = SearchLocation.IPAddress) then begin
+      Result := Self[I];
+      Break;
+    end;
+  end;
+end;
+
+function TIdSipLocations.FirstTransportMatch(SearchLocation: TIdSipLocation): TIdSipLocation;
+var
+  I: Integer;
+begin
+  Result := nil;
+  for I := 0 to Self.Count - 1 do begin
+    if (Self[I].Transport = SearchLocation.Transport) then begin
       Result := Self[I];
       Break;
     end;
