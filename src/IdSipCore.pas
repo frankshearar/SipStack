@@ -319,6 +319,12 @@ type
                                     Binding: TIdConnectionBindings): TIdSipUserAgentActOnResponse;
     function  DefaultHostName: String;
     function  DefaultUserAgent: String;
+    procedure Log(Description: String;
+                  Severity: TLogVerbosityLevel;
+                  EventRef: Cardinal;
+                  DebugInfo: String);
+    procedure LogDroppedMessage(Message: TIdSipMessage;
+                                Binding: TIdConnectionBindings);
     function  ModuleAt(Index: Integer): TIdSipMessageModule;
     procedure NotifyModulesOfFree;
     procedure OnChanged(Observed: TObject);
@@ -986,7 +992,7 @@ implementation
 
 uses
   IdRandom, IdSdp, IdSipInviteModule, IdSipOptionsModule, IdSipRegistration,
-  IdSipSubscribeModule, IdSipTransport, RuntimeSafety;
+  IdSipSubscribeModule, IdSipTransport, LogVariables, RuntimeSafety;
 
 const
   ItemNotFoundIndex = -1;
@@ -2167,6 +2173,8 @@ procedure TIdSipAbstractCore.NotifyOfDroppedMessage(Message: TIdSipMessage;
 var
   Notification: TIdSipUserAgentDroppedUnmatchedMessageMethod;
 begin
+  Self.LogDroppedMessage(Message, Binding);
+
   Notification := TIdSipUserAgentDroppedUnmatchedMessageMethod.Create;
   try
     Notification.Binding   := Binding;
@@ -2397,6 +2405,35 @@ end;
 function TIdSipAbstractCore.DefaultUserAgent: String;
 begin
   Result := 'RNID SipStack v' + SipStackVersion;
+end;
+
+procedure TIdSipAbstractCore.Log(Description: String;
+                                 Severity: TLogVerbosityLevel;
+                                 EventRef: Cardinal;
+                                 DebugInfo: String);
+begin
+  if not Assigned(Self.Logger) then Exit;
+
+  Self.Logger.Lock;
+  try
+    if not Self.Logger.Logs.LogExists(LogName) then
+      Self.Logger.Add(Self.LogName);
+
+    Self.Logger.Write(Self.LogName, Severity, coLogSourceRefSIPStack, Self.ClassName, EventRef, Description, DebugInfo);
+  finally
+    Self.Logger.Unlock;
+  end;
+end;
+
+procedure TIdSipAbstractCore.LogDroppedMessage(Message: TIdSipMessage;
+                                               Binding: TIdConnectionBindings);
+const
+  LogMsg = 'Dropped %s from %s because it doesn''t match any ongoing actions';
+begin
+  Self.Log(Format(LogMsg, [Message.Description, Binding.AsString]),
+           LoGGerVerbosityLevelDebug,
+           coLogEventRefDroppedMessage,
+           Message.AsString);
 end;
 
 function TIdSipAbstractCore.ModuleAt(Index: Integer): TIdSipMessageModule;
