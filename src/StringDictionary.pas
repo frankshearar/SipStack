@@ -12,7 +12,7 @@ unit StringDictionary;
 interface
 
 uses
-  Contnrs;
+  Classes, Contnrs;
 
 type
   TKeyValuePair = class(TObject)
@@ -30,17 +30,21 @@ type
   private
     Associations: TObjectList;
 
-    function InternalFind(Key: String): TKeyValuePair;
-    procedure Sort; 
+    function  AssociationAt(Index: Integer): TKeyValuePair;
+    function  InternalFind(Key: String): TKeyValuePair;
+    procedure Sort;
   public
     constructor Create;
     destructor  Destroy; override;
 
     procedure Add(Key, Value: String);
+    procedure AddKeys(Keys: TStringDictionary);
     procedure Clear;
+    procedure CollectKeys(Result: TStrings);
     function  Count: Integer;
     function  Find(Key: String): String;
     function  HasKey(Key: String): Boolean;
+    function  IsEmpty: Boolean;
     procedure Remove(Key: String);
   end;
 
@@ -104,9 +108,35 @@ begin
   end;
 end;
 
+procedure TStringDictionary.AddKeys(Keys: TStringDictionary);
+var
+  I:        Integer;
+  KeyNames: TStrings;
+begin
+  KeyNames := TStringList.Create;
+  try
+    Keys.CollectKeys(KeyNames);
+
+    for I := 0 to Keys.Count - 1 do
+      Self.Add(KeyNames[I], Keys.Find(KeyNames[I]));
+  finally
+    KeyNames.Free;
+  end;
+end;
+
 procedure TStringDictionary.Clear;
 begin
   Self.Associations.Clear;
+end;
+
+procedure TStringDictionary.CollectKeys(Result: TStrings);
+var
+  I: Integer;
+begin
+  // Collect all key names. I do not guarantee order.
+
+  for I := 0 to Self.Associations.Count - 1 do
+    Result.Add(Self.AssociationAt(I).Key);
 end;
 
 function TStringDictionary.Count: Integer;
@@ -131,6 +161,11 @@ begin
   Result := Self.InternalFind(Key) <> nil;
 end;
 
+function TStringDictionary.IsEmpty: Boolean;
+begin
+  Result := Self.Count = 0;
+end;
+
 procedure TStringDictionary.Remove(Key: String);
 begin
   Self.Associations.Remove(Self.InternalFind(Key));
@@ -139,6 +174,11 @@ end;
 
 
 //* TStringDictionary Private methods ******************************************
+
+function TStringDictionary.AssociationAt(Index: Integer): TKeyValuePair;
+begin
+  Result := TKeyValuePair(Self.Associations[Index]);
+end;
 
 function TStringDictionary.InternalFind(Key: String): TKeyValuePair;
 var
@@ -160,7 +200,7 @@ begin
   MiddlePair := nil;
   while (StartIndex <= EndIndex) do begin
     Middle := (EndIndex + StartIndex) div 2;
-    MiddlePair := TKeyValuePair(Self.Associations[Middle]);
+    MiddlePair := Self.AssociationAt(Middle);
 
     C := CompareStr(Lowercase(Key), Lowercase(MiddlePair.Key));
 

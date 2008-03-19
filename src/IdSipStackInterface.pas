@@ -16,7 +16,7 @@ uses
   IdRegisteredObject, IdSipCore, IdSipDialogID, IdSipDns, IdSipInviteModule,
   IdSipLocation, IdSipMessage, IdSipOptionsModule, IdSipRegistration,
   IdSipSubscribeModule, IdSipTransaction, IdSipTransport, IdSipUserAgent,
-  IdTimerQueue, LoGGer, Messages, SyncObjs, SysUtils, Windows;
+  IdTimerQueue, LoGGer, Messages, StringDictionary, SyncObjs, SysUtils, Windows;
 
 type
   TIdSipHandle = Cardinal;
@@ -321,6 +321,16 @@ type
   TIdSipNetworkExtension = class(TIdSipStackInterfaceExtension)
   public
     function GetBindings(Bindings: TIdSipLocations): String;
+  end;
+
+  // I collect all "sysctl"-like settings, and various statistics
+  // generated/collected by the stack.
+  TIdSipStatisticsExtension = class(TIdSipStackInterfaceExtension)
+  public
+    procedure CollectTransactionStatistics(Keys: TStringDictionary);
+    procedure CollectTransactionUserStatistics(Keys: TStringDictionary);
+    procedure CollectTransportStatistics(Keys: TStringDictionary);
+    procedure CollectAllStatistics(Keys: TStringDictionary);
   end;
 
   // I contain data relating to a particular event.
@@ -844,6 +854,23 @@ type
     property Result: String read fResult write fResult;
   end;
 
+  TIdStringDictionaryResultData = class(TIdAsynchronousMessageResultData)
+  private
+    fResult: TStringDictionary;
+
+    function  DictionaryAsString(D: TStringDictionary): String;
+    procedure SetResult(Value: TStringDictionary);
+  protected
+    function Data: String; override;
+  public
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    procedure Assign(Src: TPersistent); override;
+
+    property Result: TStringDictionary read fResult write SetResult;
+  end;
+
   // I represent a reified method call, like my ancestor, that a
   // SipStackInterface uses to signal that something interesting happened (an
   // inbound call has arrived, a network failure occured, an action succeeded,
@@ -958,6 +985,11 @@ type
                   E: TIdSipNameServerExtension); override;
   public
     property HostName: String read fHostName write fHostName;
+  end;
+
+  TIdCollectStatisticsWait = class(TIdAsynchronousMessageWait)
+  protected
+    procedure FireWait(Stack: TIdSipStackInterface); override;
   end;
 
   // Raise me whenever someone tries to execute an action with a handle
@@ -2569,6 +2601,33 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipStatisticsExtension                                                  *
+//******************************************************************************
+//* TIdSipStatisticsExtension Public methods ***********************************
+
+procedure TIdSipStatisticsExtension.CollectTransactionStatistics(Keys: TStringDictionary);
+begin
+  // TODO: Implement me!
+end;
+
+procedure TIdSipStatisticsExtension.CollectTransactionUserStatistics(Keys: TStringDictionary);
+begin
+  Self.UserAgent.Actions.Status(Keys);
+end;
+
+procedure TIdSipStatisticsExtension.CollectTransportStatistics(Keys: TStringDictionary);
+begin
+  // TODO: Implement me!
+end;
+
+procedure TIdSipStatisticsExtension.CollectAllStatistics(Keys: TStringDictionary);
+begin
+  Self.CollectTransactionStatistics(Keys);
+  Self.CollectTransactionUserStatistics(Keys);
+  Self.CollectTransportStatistics(Keys);
+end;
+
+//******************************************************************************
 //* TIdEventData                                                               *
 //******************************************************************************
 //* TIdEventData Public methods ************************************************
@@ -3936,6 +3995,75 @@ begin
 end;
 
 //******************************************************************************
+//* TIdStringDictionaryResultData                                              *
+//******************************************************************************
+//* TIdStringDictionaryResultData Public methods *******************************
+
+constructor TIdStringDictionaryResultData.Create;
+begin
+  inherited Create;
+
+  Self.fResult := TStringDictionary.Create;
+end;
+
+destructor TIdStringDictionaryResultData.Destroy;
+begin
+  Self.fResult.Free;
+
+  inherited Create;
+end;
+
+procedure TIdStringDictionaryResultData.Assign(Src: TPersistent);
+var
+  Other: TIdStringDictionaryResultData;
+begin
+  inherited Assign(Src);
+
+  if (Src is TIdStringDictionaryResultData) then begin
+    Other := Src as TIdStringDictionaryResultData;
+
+    Self.Result := Other.Result;
+  end;
+end;
+
+//* TIdStringDictionaryResultData Protected methods ****************************
+
+function TIdStringDictionaryResultData.Data: String;
+begin
+  Result := inherited Data
+          + 'Result:' + CRLF
+          + Self.DictionaryAsString(Self.Result) + CRLF;
+end;
+
+//* TIdStringDictionaryResultData Private methods ******************************
+
+function TIdStringDictionaryResultData.DictionaryAsString(D: TStringDictionary): String;
+var
+  I:    Integer;
+  Keys: TStrings;
+begin
+  Result := '';
+
+  Keys := TStringList.Create;
+  try
+    D.CollectKeys(Keys);
+
+    for I := 0 to Keys.Count - 1 do
+      Result := Result + Format('  "%s": "%s"', [Keys[I], D.Find(Keys[I])]) + CRLF;
+  finally
+    Keys.Free;
+  end;
+
+  Result := System.Copy(Result, 1, Length(Result) - Length(CRLF));
+end;
+
+procedure TIdStringDictionaryResultData.SetResult(Value: TStringDictionary);
+begin
+  Self.Result.Clear;
+  Self.Result.AddKeys(Value);
+end;
+
+//******************************************************************************
 //* TIdSipStackInterfaceEventMethod                                            *
 //******************************************************************************
 //* TIdSipStackInterfaceEventMethod Public methods *****************************
@@ -4185,6 +4313,33 @@ begin
     Result.ReferenceID := Self.ID;
 
     E.ResolveNamesFor(Self.HostName, Result.IPAddresses);
+
+    Stack.NotifyOfAsyncMessageResult(Result);
+  finally
+    Result.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TIdCollectStatisticsWait                                                   *
+//******************************************************************************
+//* TIdCollectStatisticsWait Public methods ************************************
+
+procedure TIdCollectStatisticsWait.FireWait(Stack: TIdSipStackInterface);
+var
+  E:      TIdSipStatisticsExtension;
+  Result: TIdStringDictionaryResultData;
+begin
+  Result := TIdStringDictionaryResultData.Create;
+  try
+    Result.ReferenceID := Self.ID;
+
+    E := Stack.AttachExtension(TIdSipStatisticsExtension) as TIdSipStatisticsExtension;
+    try
+      E.CollectAllStatistics(Result.Result);
+    finally
+      E.Free;
+    end;
 
     Stack.NotifyOfAsyncMessageResult(Result);
   finally

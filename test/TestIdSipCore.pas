@@ -124,6 +124,8 @@ type
     procedure TestFindActionWithInitialRequest;
     procedure TestInviteCount;
     procedure TestRemoveObserver;
+    procedure TestStatus;
+    procedure TestStatusPreservesExistingAssociations;
     procedure TestTerminateAllActions;
   end;
 
@@ -327,7 +329,7 @@ implementation
 uses
   Classes, IdException, IdRegisteredObject, IdSdp, IdSimpleParser,
   IdSipLocation, IdSipMockTransport, IdSipOptionsModule, IdSipRegistration,
-  IdSipSubscribeModule, SysUtils;
+  IdSipSubscribeModule, StringDictionary, SysUtils;
 
 const
   DefaultTimeout = 5000;
@@ -1888,6 +1890,49 @@ begin
   finally
     Self.Actions.RemoveObserver(L1);
     L1.Free;
+  end;
+end;
+
+procedure TestTIdSipActions.TestStatus;
+var
+  FirstKey:  String;
+  SecondKey: String;
+  Status:    TStringDictionary;
+begin
+  FirstKey  := Self.Actions.Add(TIdSipInboundOptions.CreateInbound(Self.Core, Self.Options, Self.Binding)).IntrospectionCountKey;
+  SecondKey := Self.Actions.Add(TIdSipOutboundRegistration.Create(Self.Core)).IntrospectionCountKey;
+  Self.Actions.Add(TIdSipOutboundRegistration.Create(Self.Core));
+
+  Status := TStringDictionary.Create;
+  try
+    Self.Actions.Status(Status);
+
+    CheckEquals(2, Status.Count, 'Wrong count');
+
+    Check(Status.HasKey(FirstKey),  'Missing key for ' + FirstKey);
+    Check(Status.HasKey(SecondKey), 'Missing key for ' + SecondKey);
+
+    CheckEquals('1', Status.Find(FirstKey),  'Wrong value for ' + FirstKey);
+    CheckEquals('2', Status.Find(SecondKey), 'Wrong value for ' + SecondKey);
+  finally
+    Status.Free;
+  end;
+end;
+
+procedure TestTIdSipActions.TestStatusPreservesExistingAssociations;
+var
+  OriginalCount: Integer;
+  Status:        TStringDictionary;
+begin
+  Status := TStringDictionary.Create;
+  try
+    Status.Add('foo', 'bar');
+    OriginalCount := Status.Count;
+
+    Self.Actions.Status(Status);
+    CheckEquals(OriginalCount, Status.Count, 'Existing keys not preserved');
+  finally
+    Status.Free;
   end;
 end;
 

@@ -27,9 +27,12 @@ type
     procedure TearDown; override;
   published
     procedure TestAddAndCount;
+    procedure TestAddKeys;
     procedure TestClear;
+    procedure TestCollectKeys;
     procedure TestFind;
     procedure TestHasKey;
+    procedure TestIsEmpty;
     procedure TestRemove;
     procedure TestSort;
     procedure TestSortAndFindUseConsistentSorting;
@@ -38,7 +41,7 @@ type
 implementation
 
 uses
-  SysUtils;
+  Classes, SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -107,6 +110,29 @@ begin
   CheckEquals(2, Self.D.Count, 'Two Adds (of unique keys)');
 end;
 
+procedure TestTStringDictionary.TestAddKeys;
+var
+  Keys: TStringDictionary;
+begin
+  Keys := TStringDictionary.Create;
+  try
+    Keys.Add('foo', '1');
+    Keys.Add('bar', '2');
+    Keys.Add('baz', '3');
+    Keys.Add('quaax', '4');
+
+    Self.D.AddKeys(Keys);
+
+    CheckEquals(Keys.Count, Self.D.Count, 'Not all keys added');
+    Check(Self.D.HasKey('foo'),   '"foo" key not added');
+    Check(Self.D.HasKey('bar'),   '"bar" key not added');
+    Check(Self.D.HasKey('baz'),   '"baz" key not added');
+    Check(Self.D.HasKey('quaax'), '"quaax" key not added');
+  finally
+    Keys.Free;
+  end;
+end;
+
 procedure TestTStringDictionary.TestClear;
 begin
   Self.D.Add('foo', '1');
@@ -117,6 +143,30 @@ begin
   Self.D.Clear;
 
   CheckEquals(0, Self.D.Count, 'Dictionary not cleared');
+end;
+
+procedure TestTStringDictionary.TestCollectKeys;
+var
+  Keys: TStringList;
+begin
+  Self.D.Add('foo', '1');
+  Self.D.Add('bar', '2');
+  Self.D.Add('baz', '3');
+  Self.D.Add('quaax', '4');
+
+  Keys := TStringList.Create;
+  try
+    Self.D.CollectKeys(Keys);
+    Keys.Sort;
+
+    CheckEquals(Self.D.Count, Keys.Count, 'Wrong number of keys');
+    CheckEquals('bar',   Keys[0], 'First key');
+    CheckEquals('baz',   Keys[1], 'Second key');
+    CheckEquals('foo',   Keys[2], 'Third key');
+    CheckEquals('quaax', Keys[3], 'Fourth key');
+  finally
+    Keys.Free;
+  end;
 end;
 
 procedure TestTStringDictionary.TestFind;
@@ -143,6 +193,17 @@ begin
 
   Self.D.Remove('foo');
   Check(not Self.D.HasKey('foo'), '"foo" not removed');
+end;
+
+procedure TestTStringDictionary.TestIsEmpty;
+begin
+  Check(Self.D.IsEmpty, 'New, presumably empty, dictionary');
+
+  Self.D.Add('foo', 'bar');
+  Check(not Self.D.IsEmpty, 'Nonempty dictionary');
+
+  Self.D.Clear;
+  Check(Self.D.IsEmpty, 'Empty dictionary');
 end;
 
 procedure TestTStringDictionary.TestRemove;

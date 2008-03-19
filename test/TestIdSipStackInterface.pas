@@ -574,6 +574,17 @@ type
     procedure TestCopy;
   end;
 
+  TestTIdStringDictionaryResultData = class(TTestCase)
+  private
+    Data: TIdStringDictionaryResultData;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAsString;
+    procedure TestCopy;
+  end;
+
   TStackWaitTestCase = class(TStackInterfaceTestCase)
   protected
     Conf:       TStrings;
@@ -667,6 +678,18 @@ type
     procedure TestTrigger;
   end;
 
+  TestTIdCollectStatisticsWait = class(TStackWaitTestCase)
+  private
+    Wait: TIdCollectStatisticsWait;
+
+    procedure SendOptions;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTrigger;
+  end;
+
 const
   DummySdp = 'v=0'#13#10
            + 'o=sc 1105373135 1105373135 IN IP4 %s'#13#10
@@ -728,12 +751,14 @@ begin
   Result.AddTest(TestTIdDomainNameRecordsResultData.Suite);
   Result.AddTest(TestTIdGetBindingsData.Suite);
   Result.AddTest(TestTIdStringResultData.Suite);
+  Result.AddTest(TestTIdStringDictionaryResultData.Suite);
   Result.AddTest(TestTIdSipStackReconfigureStackInterfaceWait.Suite);
   Result.AddTest(TestTIdGetBindingsWait.Suite);
   Result.AddTest(TestTIdIsSourceOfWait.Suite);
   Result.AddTest(TestTIdLocalAddressForWait.Suite);
   Result.AddTest(TestTIdLocalOrMappedAddressForWait.Suite);
   Result.AddTest(TestTIdResolveNamesForWait.Suite);
+  Result.AddTest(TestTIdCollectStatisticsWait.Suite);
 end;
 
 //******************************************************************************
@@ -4708,6 +4733,103 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdStringDictionaryResultData                                          *
+//******************************************************************************
+//* TestTIdStringDictionaryResultData Public methods ***************************
+
+procedure TestTIdStringDictionaryResultData.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Data := TIdStringDictionaryResultData.Create;
+  Self.Data.Handle := $decafbad;
+  Self.Data.Result.Add('question', 'answer');
+  Self.Data.ReferenceID := 'badf00d';
+end;
+
+procedure TestTIdStringDictionaryResultData.TearDown;
+begin
+  Self.Data.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdStringDictionaryResultData Published methods ************************
+
+procedure TestTIdStringDictionaryResultData.TestAsString;
+var
+  Expected: TStrings;
+  I:        Integer;
+  KeyNames: TStrings;
+  Received: TStrings;
+begin
+  Expected := TStringList.Create;
+  try
+    Received := TStringList.Create;
+    try
+      Expected.Add(''); // Timestamp + Handle
+      Expected.Add(''); // Event name
+      Expected.Add('ReferenceID: ' + Self.Data.ReferenceID);
+      Expected.Add('Result:');
+
+      KeyNames := TStringList.Create;
+      try
+        Self.Data.Result.CollectKeys(KeyNames);
+        for I := 0 to KeyNames.Count - 1 do
+          Expected.Add(Format('  "%s": "%s"', [KeyNames[I], Self.Data.Result.Find(KeyNames[I])]));
+      finally
+        KeyNames.Free;
+      end;
+
+      Received.Text := Self.Data.AsString;
+
+      // We ignore the first two line of the debug data (timestamp & handle,
+      // and event name)
+      Received[0] := '';
+      Received[1] := '';
+
+      CheckEquals(Expected.Text,
+                  Received.Text,
+                  'Unexpected debug data');
+    finally
+      Received.Free;
+    end;
+  finally
+    Expected.Free;
+  end;
+end;
+
+procedure TestTIdStringDictionaryResultData.TestCopy;
+var
+  Copy:     TIdStringDictionaryResultData;
+  KeyNames: TStrings;
+  I:        Integer;
+begin
+  Copy := Self.Data.Copy as TIdStringDictionaryResultData;
+  try
+    CheckEquals(IntToHex(Self.Data.Handle, 8), IntToHex(Copy.Handle, 8), 'Handle');
+    CheckEquals(Self.Data.ReferenceID, Copy.ReferenceID, 'ReferenceID');
+    CheckEquals(Self.Data.Result.Count, Copy.Result.Count, 'Result size');
+
+    KeyNames := TStringList.Create;
+    try
+      Self.Data.Result.CollectKeys(KeyNames);
+
+      for I := 0 to KeyNames.Count - 1 do begin
+        Check(Copy.Result.HasKey(KeyNames[I]), 'Key ' + KeyNames[I] + ' not copied');
+        CheckEquals(Self.Data.Result.Find(KeyNames[I]),
+                    Copy.Result.Find(KeyNames[I]),
+                    'Key ' + KeyNames[I] + ' not copied correctly');
+      end;
+    finally
+      KeyNames.Free;
+    end;
+  finally
+    Copy.Free;
+  end;
+end;
+
+//******************************************************************************
 //* TStackWaitTestCase                                                         *
 //******************************************************************************
 //* TStackWaitTestCase Public methods ******************************************
@@ -5125,6 +5247,65 @@ begin
   CheckEquals(2, Received.IPAddresses.Count, 'Wrong number of resource records');
   CheckEquals(Self.IPv4Address, Received.IPAddresses[0].IPAddress, 'First RR');
   CheckEquals(Self.IPv6Address, Received.IPAddresses[1].IPAddress, 'Second RR');
+end;
+
+//******************************************************************************
+//* TestTIdCollectStatisticsWait                                               *
+//******************************************************************************
+//* TestTIdCollectStatisticsWait Public methods ********************************
+
+procedure TestTIdCollectStatisticsWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Wait := TIdCollectStatisticsWait.Create;
+  Self.Wait.StackID := Self.Stack.ID;
+end;
+
+procedure TestTIdCollectStatisticsWait.TearDown;
+begin
+  Self.Wait.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdCollectStatisticsWait Private methods *******************************
+
+procedure TestTIdCollectStatisticsWait.SendOptions;
+var
+  O:      TIdSipHandle;
+  Target: TIdSipToHeader;
+begin
+  Target := TIdSipToHeader.Create;
+  try
+    Target.Value := 'sip:127.0.0.1';
+    O := Self.Stack.MakeOptionsQuery(Target);
+    Self.Stack.Send(O);
+    Self.TimerQueue.TriggerAllEventsUpToFirst(TIdSipActionSendWait);
+  finally
+    Target.Free;
+  end;
+end;
+
+//* TestTIdCollectStatisticsWait Published methods *****************************
+
+procedure TestTIdCollectStatisticsWait.TestTrigger;
+var
+  Received: TIdStringDictionaryResultData;
+begin
+  // This ensures that the stack produces at least some data.
+  Self.SendOptions;
+
+  Self.Wait.Trigger;
+  Self.ProcessAllPendingNotifications;
+
+  CheckNotificationReceived(TIdStringDictionaryResultData, 'No notification about CollectStatistics received');
+
+  Received := Self.LastEventOfType(TIdStringDictionaryResultData) as TIdStringDictionaryResultData;
+
+  CheckEquals(Self.Wait.ID, Received.ReferenceID, 'ReferenceID not set');
+
+  Check(not Received.Result.IsEmpty, 'No data received, so stack not actually queried');
 end;
 
 initialization

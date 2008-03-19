@@ -72,7 +72,8 @@ uses
   Classes, Contnrs, IdConnectionBindings, IdSipDialog, IdException,
   IdInterfacedObject, IdNotification, IdObservable, IdRegisteredObject,
   IdRoutingTable, IdSipAuthentication, IdSipLocation, IdSipLocator,
-  IdSipMessage, IdSipTransaction, IdTimerQueue, LoGGer, SysUtils;
+  IdSipMessage, IdSipTransaction, IdTimerQueue, LoGGer, StringDictionary,
+  SysUtils;
 
 const
   SipStackVersion = '0.6pre';
@@ -150,6 +151,7 @@ type
     Observed: TIdObservable;
 
     function  ActionAt(Index: Integer): TIdSipAction;
+    procedure AddCurrentActionList(Keys: TStringDictionary);
     function  FindAction(Msg: TIdSipMessage; ClientAction: Boolean): TIdSipAction; overload;
     function  FindAction(const ActionID: String): TIdSipAction; overload;
   public
@@ -159,7 +161,7 @@ type
     function  Add(Action: TIdSipAction): TIdSipAction;
     procedure AddObserver(const Listener: IIdObserver);
     function  AddOutboundAction(UserAgent: TIdSipAbstractCore;
-                                ActionType: TIdSipActionClass): TIdSipAction; 
+                                ActionType: TIdSipActionClass): TIdSipAction;
     procedure CleanOutTerminatedActions;
     function  Count: Integer;
     function  CountOf(const MethodName: String): Integer;
@@ -176,6 +178,7 @@ type
     function  RegistrationCount: Integer;
     procedure RemoveObserver(const Listener: IIdObserver);
     function  SessionCount: Integer;
+    procedure Status(Keys: TStringDictionary);
     procedure TerminateAllActions;
   end;
 
@@ -632,6 +635,7 @@ type
     destructor  Destroy; override;
 
     procedure AddActionListener(Listener: IIdSipActionListener);
+    function  IntrospectionCountKey: String; virtual;
     function  IsInbound: Boolean; virtual;
     function  IsInvite: Boolean; virtual;
     function  IsOptions: Boolean; virtual;
@@ -884,7 +888,7 @@ type
 
     property ErrorCode: Cardinal read fErrorCode write fErrorCode;
     property Reason:    String   read fReason write fReason;
-  end;  
+  end;
 
   TIdSipRedirectorSuccessMethod = class(TIdSipActionRedirectorMethod)
   private
@@ -974,6 +978,11 @@ const
   FiveMinutes                 = 5*OneMinute;
   TwentyMinutes               = 20*OneMinute;
 
+// Introspection constants
+const
+  IntrospecTransactionUserNamespace = 'TransactionUser';
+  IntrospecSeparator                = '.';
+
 const
   RSBusyHere                  = 'Incoming call rejected - busy here';
   RSCallRedirected            = 'Incoming call redirected';
@@ -987,6 +996,8 @@ const
   RSRedirectWithNoSuccess     = 'Call redirected but no target answered';
   RSRemoteCancel              = 'Remote end cancelled call';
   RSRemoteHangUp              = 'Remote end hung up';
+
+function InNamespace(Namespace, Key: String): String;
 
 implementation
 
@@ -1009,6 +1020,18 @@ const
   MethodInProgress                     = 'A(n) %s is already in progress';
   NotAnUUIDURN                         = '"%s" is not a valid UUID URN';
   OutboundActionFailed                 = 'An outbound %s failed because: %s';
+
+//******************************************************************************
+//* Unit public functions & procedures                                         *
+//******************************************************************************
+
+function InNamespace(Namespace, Key: String): String;
+begin
+  // Given an introspection key, put the key in the namespace denoted by
+  // Namespace.
+
+  Result := Namespace + IntrospecSeparator + Key;
+end;
 
 //******************************************************************************
 //* Unit private functions & procedures                                        *
@@ -1263,6 +1286,11 @@ begin
       Inc(Result);
 end;
 
+procedure TIdSipActions.Status(Keys: TStringDictionary);
+begin
+  Self.AddCurrentActionList(Keys);
+end;
+
 procedure TIdSipActions.TerminateAllActions;
 var
   I: Integer;
@@ -1279,6 +1307,40 @@ function TIdSipActions.ActionAt(Index: Integer): TIdSipAction;
 begin
   // Precondition: you've invoked Self.LockActions
   Result := Self.Actions[Index] as TIdSipAction;
+end;
+
+procedure TIdSipActions.AddCurrentActionList(Keys: TStringDictionary);
+  procedure Increment(H: TStringList; Index: Integer);
+  begin
+    // Given H, a TStringList that stores a string key and a cardinal value (in
+    // Objects[Index]), increment the integer value of the key at index Index.
+    H.Objects[Index] := Pointer(Cardinal(H.Objects[Index]) + 1);
+  end;
+var
+  I:         Integer;
+  Key:       String;
+  Histogram: TStringList;
+begin
+  // Collect the number of each type of Action currently in progress.
+  Histogram := TStringList.Create;
+  try
+    Histogram.Duplicates := dupIgnore;
+    for I := 0 to Self.Actions.Count - 1 do begin
+      Key := Self.ActionAt(I).IntrospectionCountKey;
+
+      if (Histogram.IndexOf(Key) = ItemNotFoundIndex) then
+        Histogram.Add(Key);
+
+      Increment(Histogram, Histogram.IndexOf(Key));
+    end;
+
+    Histogram.Sort;
+
+    for I := 0 to Histogram.Count - 1 do
+      Keys.Add(Histogram[I], IntToStr(Cardinal(Histogram.Objects[I])));
+  finally
+    Histogram.Free;
+  end;
 end;
 
 function TIdSipActions.FindAction(Msg: TIdSipMessage; ClientAction: Boolean): TIdSipAction;
@@ -2979,6 +3041,20 @@ end;
 procedure TIdSipAction.AddActionListener(Listener: IIdSipActionListener);
 begin
   Self.ActionListeners.AddListener(Listener);
+end;
+
+function TIdSipAction.IntrospectionCountKey: String;
+const
+  Prefix = 'TIdSip';
+begin
+  Result := Self.ClassName;
+
+  // Strip the prefix, if it's there. It was a mistake on my (FrankShearar's)
+  // part to put the stack in the Indy namespace.
+  if (Copy(Result, 1, Length(Prefix)) = Prefix) then
+    Result := Copy(Result, Length(Prefix) + 1, Length(Result));
+
+  Result := InNamespace(IntrospecTransactionUserNamespace, Result + 'Count');
 end;
 
 function TIdSipAction.IsInbound: Boolean;
