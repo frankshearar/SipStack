@@ -18,7 +18,7 @@ uses
 type
   TestTIdSipProxy = class(TTestCase)
   private
-    Authenticator:    TIdSipAuthenticator;
+    Authenticator:    TIdSipMockAuthenticator;
     Dispatcher:       TIdSipMockTransactionDispatcher;
     Invite:           TIdSipRequest;
     Proxy:            TIdSipProxy;
@@ -59,7 +59,7 @@ procedure TestTIdSipProxy.SetUp;
 begin
   inherited SetUp;
 
-  Self.Authenticator := TIdSipAuthenticator.Create;
+  Self.Authenticator := TIdSipMockAuthenticator.Create;
 
   Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
   Self.Dispatcher.AddTransactionDispatcherListener(Self.Proxy);
@@ -125,7 +125,7 @@ var
   Response: TIdSipResponse;
   Retry:    TIdSipRequest;
 begin
-  Self.Proxy.RequireAuthentication := true;
+  Self.Authenticator.AuthenticateAllRequests := true;
 
   Self.MarkSentResponseCount;
   Self.SimulateRemoteInvite;
@@ -147,7 +147,7 @@ procedure TestTIdSipProxy.TestRejectUnauthorizedRequest;
 var
   Response: TIdSipResponse;
 begin
-  Self.Proxy.RequireAuthentication := true;
+  Self.Authenticator.AuthenticateAllRequests := true;
 
   Self.MarkSentResponseCount;
   Self.SimulateRemoteInvite;
