@@ -583,6 +583,8 @@ var
   Logger:  TLoGGerThread;
   LogWait: TLoggingWait;
 begin
+  Self.DefaultTimeout := 1000;
+
   // This test is sensitive to the default logging style used in the LoGGer framework!
   Logger := TLoGGerThread.Create;
   try
