@@ -100,6 +100,9 @@ begin
       Self.AddTransportBinding(SupportedTrans[I],
                                '10.0.0.6',
                                TIdSipTransportRegistry.TransportTypeFor(SupportedTrans[I]).DefaultPort);
+      Self.AddTransportBinding(SupportedTrans[I],
+                               '127.0.0.1',
+                               TIdSipTransportRegistry.TransportTypeFor(SupportedTrans[I]).DefaultPort);
     end;
   finally
     SupportedTrans.Free;
