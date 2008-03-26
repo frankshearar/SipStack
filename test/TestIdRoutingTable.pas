@@ -112,6 +112,7 @@ type
     procedure TestAddMappedRouteAndCount;
     procedure TestHasRoute;
     procedure TestHasRouteThrough;
+    procedure TestBestLocalAddressForOnlyLanIP;
     procedure TestBestLocalAddressToLocalhostForInternetGateway;
     procedure TestLocalAddressForInternetGateway;
     procedure TestLocalAddressForLocationMappedRouteToInternet;
@@ -855,6 +856,44 @@ begin
   Check(Self.RT.HasRouteThrough(Self.InternetGateway), 'Mapped route to Internet (and VPN)');
 end;
 
+procedure TestTIdRoutingTable.TestBestLocalAddressForOnlyLanIP;
+var
+  Result:        TIdSipLocation;
+  LocalBindings: TIdSipLocations;
+  LocalLoop:     TIdSipLocation;
+begin
+  Self.AddLoopbackRoute;
+  Self.AddLanRoute;
+
+  LocalBindings := TIdSipLocations.Create;
+  try
+    Result := TIdSipLocation.Create;
+    try
+      LocalLoop := TIdSipLocation.Create;
+      try
+        LocalBindings.AddLocation('TCP', Self.LanIP,      5060);
+        LocalBindings.AddLocation('UDP', Self.LanIP,      5060);
+//        LocalBindings.AddLocation('TCP', Self.LoopbackIP, 5060);
+//        LocalBindings.AddLocation('UDP', Self.LoopbackIP, 5060);
+
+        LocalLoop.IPAddress := '127.0.0.1';
+        LocalLoop.Port      := 15060;
+        LocalLoop.Transport := LocalBindings.Last.Transport;
+
+        Self.RT.BestLocalAddress(LocalBindings, LocalLoop, Result);
+
+        Check(Result.Equals(LocalBindings.Last), 'Didn''t use localhost even though it''s a local binding; matched on first transport');
+      finally
+        LocalLoop.Free;
+      end;
+    finally
+      Result.Free;
+    end;
+  finally
+    LocalBindings.Free;
+  end;
+end;
+
 procedure TestTIdRoutingTable.TestBestLocalAddressToLocalhostForInternetGateway;
 var
   Result:        TIdSipLocation;
@@ -876,6 +915,8 @@ begin
       try
         LocalBindings.AddLocation('TCP', Self.LanIP, 5060);
         LocalBindings.AddLocation('UDP', Self.LanIP, 5060);
+
+
         LocalLoop.IPAddress := '127.0.0.1';
         LocalLoop.Port      := 15060;
         LocalLoop.Transport := LocalBindings.Last.Transport;

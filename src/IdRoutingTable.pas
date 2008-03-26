@@ -535,8 +535,14 @@ begin
   // If the best local address to use to contact Destination is the localhost
   // address, then it doesn't matter which local binding we use, as long as the
   // transport matches.
-  if LocalAddress.IsLocalhost then
-    ActualAddress := LocalBindings.FirstTransportMatch(LocalAddress)
+  if LocalAddress.IsLocalhost then begin
+    ActualAddress := LocalBindings.FirstAddressMatch(LocalAddress);
+
+    // If we can't find LocalAddress among the actual local bindings, just use
+    // any local binding.
+    if not Assigned(ActualAddress) then
+      ActualAddress := LocalBindings.FirstTransportMatch(LocalAddress)
+  end
   else
     ActualAddress := LocalBindings.FirstAddressMatch(LocalAddress);
 
