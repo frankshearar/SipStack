@@ -14,6 +14,7 @@ uses
 type
   TestFunctions = class(TTestCase)
   published
+    procedure TestNumberOfOccurences;
     procedure TestSuffix;
   end;
 
@@ -36,6 +37,7 @@ type
     procedure TearDown; override;
   published
     procedure TestContains;
+    procedure MoreSpecificThan;
   end;
 
   TestTIdIPv6SubnetAddressSpace = class(TTestCase)
@@ -46,6 +48,7 @@ type
     procedure TearDown; override;
   published
     procedure TestContains;
+    procedure MoreSpecificThan;
   end;
 
   TestTIdDomainAddressSpace = class(TTestCase)
@@ -57,6 +60,7 @@ type
   published
     procedure TestContains;
     procedure TestEmptyStringContainsEveryDomain;
+    procedure MoreSpecificThan;
   end;
 
   TestTIdProxyDescription = class(TTestCase)
@@ -84,6 +88,8 @@ type
     Proxies:               TIdProxyDescriptions;
 
     procedure CheckEquals(Expected, Received: TIdSipRoutePath; Msg: String); overload;
+    procedure CheckExceptionAddedFirst;
+    procedure CheckExceptionAddedLast;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -93,6 +99,7 @@ type
     procedure TestAddRouteNoProxyPresent;
     procedure TestAddRouteCanonicalisesNetmask;
     procedure TestClearAllDescriptions;
+    procedure TestContainedRoutesOrderIndependent;
     procedure TestRemoveDescription;
     procedure TestRoutePathForDefaultRoute;
   end;
@@ -115,6 +122,17 @@ end;
 //* TestFunctions                                                              *
 //******************************************************************************
 //* TestFunctions Published methods ********************************************
+
+procedure TestFunctions.TestNumberOfOccurences;
+begin
+  CheckEquals(0, NumberOfOccurences('.', ''), 'Dots in the empty string');
+  CheckEquals(0, NumberOfOccurences(#0, ''), 'NULs in the empty string');
+
+  CheckEquals(1, NumberOfOccurences('.', '.'), 'Dots in ''.''');
+  CheckEquals(2, NumberOfOccurences('.', '.a.'), 'Dots in ''.a.''');
+
+  CheckEquals(0, NumberOfOccurences(';', '.'), 'Commas in ''.''');
+end;
 
 procedure TestFunctions.TestSuffix;
 begin
@@ -243,6 +261,44 @@ begin
   Check(not Self.Space.Contains(''),            'The empty string');
 end;
 
+procedure TestTIdIPv4SubnetAddressSpace.MoreSpecificThan;
+var
+  OtherSpace: TIdAddressSpace;
+begin
+  Check(not Self.Space.MoreSpecificThan(Self.Space), 'Not more specific than self!');
+
+  OtherSpace := TIdIPv4SubnetAddressSpace.Create;
+  try
+    OtherSpace.Description := '10.0.0.0/16';
+    Check(not Self.Space.MoreSpecificThan(OtherSpace), '/16 more specific than /8');
+    Check(    OtherSpace.MoreSpecificThan(Self.Space), '/8 less specific than /16');
+
+    OtherSpace.Description := '192.168.0.0/16';
+    Check(not Self.Space.MoreSpecificThan(OtherSpace), '/16 more specific than /8, even for different subnet');
+    Check(    OtherSpace.MoreSpecificThan(Self.Space), '/8 less specific than /16, even for different subnet');
+  finally
+    OtherSpace.Free;
+  end;
+
+  OtherSpace := TIdIPv6SubnetAddressSpace.Create;
+  try
+    OtherSpace.Description := '2002:1234:5678::/16';
+    Check(not Self.Space.MoreSpecificThan(OtherSpace), 'IPv6 subnet is not more specific than an IPv4 subnet');
+    Check(not OtherSpace.MoreSpecificThan(Self.Space), 'IPv4 subnet is not more specific than an IPv6 subnet');
+  finally
+    OtherSpace.Free;
+  end;
+
+  OtherSpace := TIdDomainAddressSpace.Create;
+  try
+    OtherSpace.Description := 'foo.bar';
+    Check(not Self.Space.MoreSpecificThan(OtherSpace), 'Domain is not more specific than an IPv4 subnet');
+    Check(not OtherSpace.MoreSpecificThan(Self.Space), 'IPv4 subnet is not more specific than a domain');
+  finally
+    OtherSpace.Free;
+  end;
+end;
+
 //******************************************************************************
 //* TestTIdIPv6SubnetAddressSpace                                              *
 //******************************************************************************
@@ -275,6 +331,44 @@ begin
   Check(not Self.Space.Contains('127.0.0.1'),   '127.0.0.1');
   Check(not Self.Space.Contains('example.com'), 'example.com');
   Check(not Self.Space.Contains(''),            'The empty string');
+end;
+
+procedure TestTIdIPv6SubnetAddressSpace.MoreSpecificThan;
+var
+  OtherSpace: TIdAddressSpace;
+begin
+  Check(not Self.Space.MoreSpecificThan(Self.Space), 'Not more specific than self!');
+
+  OtherSpace := TIdIPv6SubnetAddressSpace.Create;
+  try
+    OtherSpace.Description := '2002:1234:5678::/24';
+    Check(    OtherSpace.MoreSpecificThan(Self.Space), '/8 less specific than /24');
+    Check(not Self.Space.MoreSpecificThan(OtherSpace), '/24 more specific than /16');
+
+    OtherSpace.Description := '2001:1234:5678::/8';
+    Check(    Self.Space.MoreSpecificThan(OtherSpace), '/16 more specific than /8, even for different subnet');
+    Check(not OtherSpace.MoreSpecificThan(Self.Space), '/8 less specific than /16, even for different subnet');
+  finally
+    OtherSpace.Free;
+  end;
+
+  OtherSpace := TIdIPv4SubnetAddressSpace.Create;
+  try
+    OtherSpace.Description := '10.0.0.0/16';
+    Check(not Self.Space.MoreSpecificThan(OtherSpace), 'IPv6 subnet is not more specific than an IPv4 subnet');
+    Check(not OtherSpace.MoreSpecificThan(Self.Space), 'IPv4 subnet is not more specific than an IPv6 subnet');
+  finally
+    OtherSpace.Free;
+  end;
+
+  OtherSpace := TIdDomainAddressSpace.Create;
+  try
+    OtherSpace.Description := 'foo.bar';
+    Check(not Self.Space.MoreSpecificThan(OtherSpace), 'Domain is not more specific than an IPv6 subnet');
+    Check(not OtherSpace.MoreSpecificThan(Self.Space), 'IPv6 subnet is not more specific than a domain');
+  finally
+    OtherSpace.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -325,6 +419,53 @@ begin
   Check(    Self.Space.Contains('roke.local.com'), 'roke.local.com');
   Check(    Self.Space.Contains(''),               'The empty string');
   Check(not Self.Space.Contains('.local'),         'Malformed FQDN: .local');
+end;
+
+procedure TestTIdDomainAddressSpace.MoreSpecificThan;
+var
+  OtherSpace: TIdAddressSpace;
+begin
+  Check(not Self.Space.MoreSpecificThan(Self.Space), 'Not more specific than self!');
+
+
+  OtherSpace := TIdDomainAddressSpace.Create;
+  try
+    OtherSpace.Description := 'roke.local';
+    Check(not Self.Space.MoreSpecificThan(OtherSpace), 'subdomain is more specific than containing domain');
+    Check(    OtherSpace.MoreSpecificThan(Self.Space), 'Containing domain is less specific than subdomain');
+
+    OtherSpace.Description := 'foo.bar';
+    Check(not Self.Space.MoreSpecificThan(OtherSpace), 'Subdomain is more specific than NON-containing domain');
+    Check(    OtherSpace.MoreSpecificThan(Self.Space), 'NON-containing domain is more specific than subdomain');
+
+    OtherSpace.Description := 'localdomain';
+    Check(not Self.Space.MoreSpecificThan(OtherSpace), 'Top level domain is not more specific than another top level domain');
+    Check(not OtherSpace.MoreSpecificThan(Self.Space), 'Another top level domain is not more specific than top level domain');
+
+    OtherSpace.Description := '';
+    Check(    Self.Space.MoreSpecificThan(OtherSpace), 'Top level domain is more specific than the null domain');
+    Check(not OtherSpace.MoreSpecificThan(Self.Space), 'The null domain is more specific than top level domain');
+  finally
+    OtherSpace.Free;
+  end;
+
+  OtherSpace := TIdIPv4SubnetAddressSpace.Create;
+  try
+    OtherSpace.Description := '0.0.0.0/0';
+    Check(not Self.Space.MoreSpecificThan(OtherSpace), 'A domain is not more specific than an IPv4 address space');
+    Check(not OtherSpace.MoreSpecificThan(Self.Space), 'An IPv4 address space is not more specific than a domain');
+  finally
+    OtherSpace.Free;
+  end;
+
+  OtherSpace := TIdIPv6SubnetAddressSpace.Create;
+  try
+    OtherSpace.Description := '::/0';
+    Check(not Self.Space.MoreSpecificThan(OtherSpace), 'A domain is not more specific than an IPv6 address space');
+    Check(not OtherSpace.MoreSpecificThan(Self.Space), 'An IPv6 address space is not more specific than a domain');
+  finally
+    OtherSpace.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -446,6 +587,68 @@ begin
   end;
 end;
 
+procedure TestTIdProxyDescriptions.CheckExceptionAddedFirst;
+const
+  MainAddressSpace      = '10.0.0.0/8';
+  ExceptionalAddress    = '10.0.0.0/24';
+  MainSpaceAddress      = '10.0.1.1';
+  ExceptionSpaceAddress = '10.0.0.1';
+var
+  ExceptionRoute: TIdSipRoutePath;
+  MainRoute:      TIdSipRoutePath;
+begin
+  // Route: <null> 10.0.0.0/8
+  // Route: <sip:proxy;lr> 10.0.0.0/24
+  ExceptionRoute := TIdSipRoutePath.Create;
+  try
+    MainRoute := TIdSipRoutePath.Create;
+    try
+      MainRoute.Add(RouteHeader).Value := '<sip:proxy;lr>';
+
+      Self.Proxies.AddDescription(ExceptionalAddress, ExceptionRoute);
+      Self.Proxies.AddDescription(MainAddressSpace, MainRoute);
+
+      Check(not Self.Proxies.RoutePathFor(MainSpaceAddress).IsEmpty,   'Wrong route path for main address space; exception added first');
+      Check(    Self.Proxies.RoutePathFor(ExceptionSpaceAddress).IsEmpty, 'Wrong route path for exceptional address; exception added first');
+    finally
+      MainRoute.Free;
+    end;
+  finally
+    ExceptionRoute.Free;
+  end;
+end;
+
+procedure TestTIdProxyDescriptions.CheckExceptionAddedLast;
+const
+  MainAddressSpace      = 'tessier-ashpool.co.luna';
+  ExceptionalAddress    = 'proxy.' + MainAddressSpace;
+  MainSpaceAddress      = 'foo.' + MainAddressSpace;
+  ExceptionSpaceAddress = 'foo.' + ExceptionalAddress;
+var
+  ExceptionRoute: TIdSipRoutePath;
+  MainRoute:      TIdSipRoutePath;
+begin
+  // Route: <sip:proxy;lr> 10.0.0.0/24
+  // Route: <null> 10.0.0.0/8
+  ExceptionRoute := TIdSipRoutePath.Create;
+  try
+    MainRoute := TIdSipRoutePath.Create;
+    try
+      MainRoute.Add(RouteHeader).Value := '<sip:proxy;lr>';
+
+      Self.Proxies.AddDescription(MainAddressSpace, MainRoute);
+      Self.Proxies.AddDescription(ExceptionalAddress, ExceptionRoute);
+
+      Check(not Self.Proxies.RoutePathFor(MainSpaceAddress).IsEmpty,   'Wrong route path for main address space; exception added last');
+      Check(    Self.Proxies.RoutePathFor(ExceptionSpaceAddress).IsEmpty, 'Wrong route path for exceptional address; exception added last');
+    finally
+      MainRoute.Free;
+    end;
+  finally
+    ExceptionRoute.Free;
+  end;
+end;
+
 //* TestTIdProxyDescriptions Published methods *********************************
 
 procedure TestTIdProxyDescriptions.TestAddDescriptionAndRoutePathFor;
@@ -507,6 +710,17 @@ begin
   CheckEquals(Self.EmptyRoute, Self.Proxies.RoutePathFor(Self.LanTarget),       'LAN address space');
   CheckEquals(Self.EmptyRoute, Self.Proxies.RoutePathFor(Self.LocalhostTarget), 'Localhost address space');
   CheckEquals(Self.EmptyRoute, Self.Proxies.RoutePathFor('example.com'),        'Default address space');
+end;
+
+procedure TestTIdProxyDescriptions.TestContainedRoutesOrderIndependent;
+begin
+  // Previously, an address space for a destination was found on a first come,
+  // first served basis. That means that if one wanted to have a description
+  // like "all addresses in this address space, EXCEPT that address" one had to
+  // be very careful about the order of the address spaces.
+
+  Self.CheckExceptionAddedFirst;
+  Self.CheckExceptionAddedLast;
 end;
 
 procedure TestTIdProxyDescriptions.TestRemoveDescription;

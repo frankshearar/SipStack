@@ -41,6 +41,7 @@ type
 
     function Contains(Address: String): Boolean;
     function IdentifySpaceType(Address: String): TIdAddressSpaceType;
+    function MoreSpecificThan(OtherSpace: TIdAddressSpace): Boolean; virtual;
 
     property Description: String read GetDescription write SetDescription;
   end;
@@ -60,17 +61,23 @@ type
   TIdIPv4SubnetAddressSpace = class(TIdIPAddressSpace)
   protected
     function SpaceType: TIdAddressSpaceType; override;
+  public
+    function MoreSpecificThan(OtherSpace: TIdAddressSpace): Boolean; override;
   end;
 
   TIdIPv6SubnetAddressSpace = class(TIdIPAddressSpace)
   protected
     function SpaceType: TIdAddressSpaceType; override;
+  public
+    function MoreSpecificThan(OtherSpace: TIdAddressSpace): Boolean; override;
   end;
 
   TIdDomainAddressSpace = class(TIdAddressSpace)
   protected
     function InternalContains(Address: String): Boolean; override;
     function SpaceType: TIdAddressSpaceType; override;
+  public
+    function MoreSpecificThan(OtherSpace: TIdAddressSpace): Boolean; override;
   end;
 
   TIdProxyDescription = class(TObject)
@@ -124,12 +131,27 @@ type
     property DefaultRoutePath: TIdSipRoutePath read fDefaultRoutePath write SetDefaultRoutePath;
   end;
 
+function NumberOfOccurences(C: Char; S: String): Integer;
 function Suffix(S: String; Len: Cardinal): String;
 
 implementation
 
 uses
-  IdSimpleParser, IdSystem, SysUtils;
+  Classes, IdSimpleParser, IdSystem, SysUtils;
+
+//******************************************************************************
+//* Unit public functions & procedures                                         *
+//******************************************************************************
+
+function NumberOfOccurences(C: Char; S: String): Integer;
+var
+  I: Integer;
+begin
+  // Return the number of times C appears in S.
+  Result := 0;
+  for I := 1 to Length(S) do
+    if (S[I] = C) then Inc(Result);
+end;
 
 function Suffix(S: String; Len: Cardinal): String;
 var
@@ -144,6 +166,25 @@ begin
   else begin
     Result := Copy(S, StringLength - Len + 1, Len)
   end;
+end;
+
+//******************************************************************************
+//* Unit private functions & procedures                                        *
+//******************************************************************************
+
+function ProxyDescriptionSort(Item1, Item2: Pointer): Integer;
+var
+  A, B: TIdProxyDescription;
+begin
+  A := TIdProxyDescription(Item1);
+  B := TIdProxyDescription(Item2);
+
+  if A.Space.MoreSpecificThan(B.Space) then
+    Result := -1
+  else if B.Space.MoreSpecificThan(A.Space) then
+    Result := 1
+  else
+    Result := 0;
 end;
 
 //******************************************************************************
@@ -226,6 +267,27 @@ begin
   end;
 end;
 
+function TIdAddressSpace.MoreSpecificThan(OtherSpace: TIdAddressSpace): Boolean;
+begin
+  // A "more specific" address space is one that defines a smaller address space.
+  // This function returns true if and only if
+  // * Self and OtherSpace are of the same SpaceType and
+  // ** if Self is a domain address and OtherSpace is a suffix of Self or
+  // ** if Self is an IPv4/IPv6 address that is contained inside OtherSpace.
+  Result := false;
+{
+  Result := Self.SpaceType = OtherSpace.SpaceType;
+
+  if Result then begin
+    case Self.SpaceType of
+      asDomain: Result := Self.Contains(OtherSpace);
+      asIPv4Subnet: Result := false;
+      asIPv6Subnet: Result := false;
+    end;
+  end;
+}
+end;
+
 //* TIdAddressSpace Protected methods ******************************************
 
 function TIdAddressSpace.InternalContains(Address: String): Boolean;
@@ -272,7 +334,7 @@ end;
 //******************************************************************************
 //* TIdIPAddressSpace                                                          *
 //******************************************************************************
-//* TIdIPAddressSpace Public methods *******************************************
+//* TIdIPAddressSpace Protected methods ****************************************
 
 function TIdIPAddressSpace.GetDescription: String;
 begin
@@ -302,6 +364,25 @@ end;
 //******************************************************************************
 //* TIdIPv4SubnetAddressSpace                                                  *
 //******************************************************************************
+//* TIdIPv4SubnetAddressSpace Public methods ***********************************
+
+function TIdIPv4SubnetAddressSpace.MoreSpecificThan(OtherSpace: TIdAddressSpace): Boolean;
+var
+  OtherMask: String;
+begin
+  Result := Self.SpaceType = OtherSpace.SpaceType;
+
+  if Result then begin
+    OtherMask := OtherSpace.Description;
+    Fetch(OtherMask, '/');
+
+    if TIdSimpleParser.IsNumber(OtherMask) then
+      OtherMask := TIdIPAddressParser.MaskToAddress(StrToInt(OtherMask), TIdIPAddressParser.IPVersion(Self.Subnet));
+
+    Result := TIdIPAddressParser.InetAddr(Self.Mask) > TIdIPAddressParser.InetAddr(OtherMask);
+  end;
+end;
+
 //* TIdIPv4SubnetAddressSpace Protected methods ********************************
 
 function TIdIPv4SubnetAddressSpace.SpaceType: TIdAddressSpaceType;
@@ -312,6 +393,45 @@ end;
 //******************************************************************************
 //* TIdIPv6SubnetAddressSpace                                                  *
 //******************************************************************************
+//* TIdIPv6SubnetAddressSpace Public methods ***********************************
+
+function TIdIPv6SubnetAddressSpace.MoreSpecificThan(OtherSpace: TIdAddressSpace): Boolean;
+var
+  I:             Integer;
+  Larger:        Boolean;
+  MaskAddr:      TIdIPv6AddressRec;
+  OtherMask:     String;
+  OtherMaskAddr: TIdIPv6AddressRec;
+begin
+  if (Self.Mask = '') then begin
+    // The description of this address space is malformed, and nothing fruitful
+    // can be done with it.
+    Result := false;
+    Exit;
+  end;
+
+  Result := Self.SpaceType = OtherSpace.SpaceType;
+
+  if Result then begin
+    OtherMask := OtherSpace.Description;
+    Fetch(OtherMask, '/');
+
+    if TIdSimpleParser.IsNumber(OtherMask) then
+      OtherMask := TIdIPAddressParser.MaskToAddress(StrToInt(OtherMask), TIdIPAddressParser.IPVersion(Self.Subnet));
+
+    TIdIPAddressParser.ParseIPv6Address(Self.Mask, MaskAddr);
+    TIdIPAddressParser.ParseIPv6Address(OtherMask, OtherMaskAddr);
+
+    Larger := false;
+    I := 0;
+    while not Larger and (I <= High(MaskAddr)) do begin
+      Larger := MaskAddr[I] > OtherMaskAddr[I];
+      Inc(I);
+    end;
+    Result := Larger;
+  end;
+end;
+
 //* TIdIPv6SubnetAddressSpace Protected methods ********************************
 
 function TIdIPv6SubnetAddressSpace.SpaceType: TIdAddressSpaceType;
@@ -322,6 +442,26 @@ end;
 //******************************************************************************
 //* TIdDomainAddressSpace                                                      *
 //******************************************************************************
+//* TIdDomainAddressSpace Public methods ***************************************
+
+function TIdDomainAddressSpace.MoreSpecificThan(OtherSpace: TIdAddressSpace): Boolean;
+var
+  NumberOfLabels:      Integer;
+  OtherNumberOfLabels: Integer;
+begin
+  Result := Self.SpaceType = OtherSpace.SpaceType;
+
+  if Result then begin
+    NumberOfLabels      := NumberOfOccurences('.', Self.Description);
+    OtherNumberOfLabels := NumberOfOccurences('.', OtherSpace.Description);
+
+    if (NumberOfLabels = OtherNumberOfLabels) then
+      Result := (Self.Description <> '') and (OtherSpace.Description = '')
+    else
+      Result := NumberOfLabels > OtherNumberOfLabels;
+  end;
+end;
+
 //* TIdDomainAddressSpace Protected methods ************************************
 
 function TIdDomainAddressSpace.InternalContains(Address: String): Boolean;
@@ -415,6 +555,8 @@ begin
 
   Desc.AddressSpace := AddressSpace;
   Desc.RoutePath    := RoutePath;
+
+  Self.Descs.Sort(ProxyDescriptionSort);
 end;
 
 procedure TIdProxyDescriptions.AddRouteFor(AddressSpace: String; Route: TIdSipRouteHeader);
