@@ -518,6 +518,11 @@ var
   ActualAddress: TIdSipLocation;
   DefaultPort:   Cardinal;
 begin
+  // This function returns the best local address to use to contact Destination,
+  // from a set of local bindings. That local address might be capable of
+  // connecting directly to the remote party, or be the local address best
+  // suited for contacting the NAT between you and the remote party.
+  //
   // On a machine with multiple local addresses, and at least one gateway, you
   // need to be careful what IP address/hostname you put into certain headers,
   // since putting in a LAN IP address in your Contact when you're making a
