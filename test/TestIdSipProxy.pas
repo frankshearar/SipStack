@@ -147,7 +147,7 @@ procedure TestTIdSipProxy.TestRejectUnauthorizedRequest;
 var
   Response: TIdSipResponse;
 begin
-  Self.Authenticator.AuthenticateAllRequests := true;
+  Self.Authenticator.AuthenticateAllRequests := false;
 
   Self.MarkSentResponseCount;
   Self.SimulateRemoteInvite;

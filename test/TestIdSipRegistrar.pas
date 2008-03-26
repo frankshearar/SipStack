@@ -274,7 +274,7 @@ type
 implementation
 
 uses
-  Classes, DateUtils, IdTimerQueue, SysUtils;
+  Classes, DateUtils, IdSipAuthentication, IdTimerQueue, SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -310,6 +310,7 @@ begin
   Self.Dispatch := TIdSipMockTransactionDispatcher.Create;
 
   Self.Registrar := TIdSipRegistrar.Create;
+  Self.Registrar.Authenticator := TIdSipNullAuthenticator.Create;
   Self.Registrar.BindingDB := Self.DB;
   Self.Registrar.Dispatcher := Self.Dispatch;
   Self.Registrar.MinimumExpiryTime := 3600;
@@ -335,6 +336,7 @@ procedure TestTIdSipRegistrar.TearDown;
 begin
   // The registrar will free Self.DB.
   Self.Request.Free;
+  Self.Registrar.Authenticator.Free;
   Self.Registrar.Free;
   Self.Dispatch.Free;
 

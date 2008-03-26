@@ -3722,7 +3722,7 @@ end;
 
 function TestTIdSipOutboundSubscriptionBase.CreateChallengeResponse: TIdSipResponse;
 begin
-  (Self.Core.Authenticator as TIdSipMockAuthenticator).AuthenticateAllRequests := true;
+  (Self.Core.Authenticator as TIdSipMockAuthenticator).AuthenticateAllRequests := false;
   try
     Self.MarkSentResponseCount;
     Self.ReceiveInvite;
@@ -3732,7 +3732,7 @@ begin
     Result := TIdSipResponse.Create;
     Result.Assign(Self.LastSentResponse);
   finally
-    (Self.Core.Authenticator as TIdSipMockAuthenticator).AuthenticateAllRequests := false;
+    (Self.Core.Authenticator as TIdSipMockAuthenticator).AuthenticateAllRequests := true;
   end;
 end;
 
