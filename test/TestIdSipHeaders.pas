@@ -744,6 +744,7 @@ type
     procedure TestAddHeader;
     procedure TestAddHeaderName;
     procedure TestAddHeaders;
+    procedure TestAddHeadersEmptyList;
     procedure TestAddHeadersFilter;
     procedure TestAddInReverseOrder; override;
     procedure TestAddResultTypes;
@@ -7142,6 +7143,23 @@ begin
     NewHeaders.Add(ContentLanguageHeader).Value := 'fr';
 
     CheckEquals(0, Self.Headers.Count, 'Count before Add(Headers)');
+    Self.Headers.Add(NewHeaders);
+    CheckEquals(NewHeaders.Count, Self.Headers.Count, 'Count after Add(Headers)');
+
+    Check(Self.Headers.Equals(NewHeaders), 'Headers weren''t properly added');
+  finally
+    NewHeaders.Free;
+  end;
+end;
+
+procedure TestTIdSipHeaders.TestAddHeadersEmptyList;
+var
+  NewHeaders: TIdSipHeaders;
+begin
+  NewHeaders := TIdSipHeaders.Create;
+  try
+    CheckEquals(0, Self.Headers.Count, 'Count before Add(Headers)');
+
     Self.Headers.Add(NewHeaders);
     CheckEquals(NewHeaders.Count, Self.Headers.Count, 'Count after Add(Headers)');
 
