@@ -14,8 +14,7 @@ interface
 uses
   Contnrs, Classes, IdNotification, IdRoutingTable, IdSipAuthentication,
   IdSipCore, IdSipInviteModule, IdSipLocator, IdSipMessage, IdSipOptionsModule,
-  IdSipProxyDescription, IdSipRegistration, IdSipTransaction, IdSipTransport,
-  IdTimerQueue, LoGGer;
+  IdSipRegistration, IdSipTransaction, IdSipTransport, IdTimerQueue, LoGGer;
 
 type
   TIdSipUserAgent = class;
@@ -32,14 +31,12 @@ type
     fRegisterModule:           TIdSipOutboundRegisterModule;
     fInviteModule:             TIdSipInviteModule;
     HasRegistered:             Boolean;
-    Proxies:                   TIdProxyDescriptions;
 
     function  DefaultFrom: String;
     function  DefaultPort(SecureTransport: Boolean): Cardinal;
     function  GetDoNotDisturb: Boolean;
     function  GetInitialResendInterval: Cardinal;
     function  GetProgressResendInterval: Cardinal;
-    function  GetRoutePath: TIdSipRoutePath;
     function  GetUsername: String;
     function  FirstResolvedName(FQDN: String): String;
     function  LocalContactNeverSet: Boolean;
@@ -55,25 +52,19 @@ type
                                const Reason: String);
     procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistrationBase;
                         CurrentBindings: TIdSipContacts);
-    function  RoutePathFor(Request: TIdSipRequest): TIdSipRoutePath; 
     procedure SetDoNotDisturb(Value: Boolean);
     procedure SetFrom(Value: TIdSipFromHeader);
     procedure SetInitialResendInterval(Value: Cardinal);
     procedure SetProgressResendInterval(Value: Cardinal);
-    procedure SetRoutePath(Value: TIdSipRoutePath);
     procedure SetUsername(Value: String);
   public
     constructor Create; override;
     destructor  Destroy; override;
 
     procedure AddLocalHeaders(OutboundRequest: TIdSipRequest; InDialogRequest: Boolean); override;
-    procedure AddNullRoutePath(AddressSpace: String);
     function  AddOutboundAction(ActionType: TIdSipActionClass): TIdSipAction; override;
-    procedure AddRoute(AddressSpace: String; SipEntity: TIdSipUri);
     procedure AddTransportListener(Listener: IIdSipTransportListener);
-    procedure ClearAllRoutePaths;
     function  UsingDefaultFrom: Boolean;
-    procedure RemoveRoutePathTo(AddressSpace: String);
     procedure RemoveTransportListener(Listener: IIdSipTransportListener);
     function  RegisterWith(Registrar: TIdSipUri;
                            From: TIdSipFromHeader): TIdSipOutboundRegistration;
@@ -88,7 +79,6 @@ type
     property InviteModule:           TIdSipInviteModule           read fInviteModule;
     property ProgressResendInterval: Cardinal                     read GetProgressResendInterval write SetProgressResendInterval;
     property RegisterModule:         TIdSipOutboundRegisterModule read fRegisterModule;
-    property RoutePath:              TIdSipRoutePath              read GetRoutePath write SetRoutePath;
     property Username:               String                       read GetUsername write SetUsername;
   end;
 
@@ -474,8 +464,9 @@ implementation
 
 uses
   IdRegisteredObject, IdSimpleParser, IdSipDns, IdSipIndyLocator, IdSipLocation,
-  IdSipMockBindingDatabase, IdSipMockLocator, IdSipSubscribeModule, IdSystem,
-  IdUnicode, LogVariables, RuntimeSafety, SysUtils;
+  IdSipMockBindingDatabase, IdSipMockLocator, IdSipProxyDescription,
+  IdSipSubscribeModule, IdSystem, IdUnicode, LogVariables, RuntimeSafety,
+  SysUtils;
 
 //******************************************************************************
 //* Unit Public functions & procedures                                         *
@@ -503,7 +494,6 @@ begin
   Self.fFrom           := TIdSipFromHeader.Create;
   Self.fInviteModule   := Self.AddModule(TIdSipInviteModule) as TIdSipInviteModule;
   Self.fRegisterModule := Self.AddModule(TIdSipOutboundRegisterModule) as TIdSipOutboundRegisterModule;
-  Self.Proxies         := TIdProxyDescriptions.Create;
 
   Self.InviteModule.AddListener(Self);
 
@@ -528,7 +518,6 @@ begin
 
   inherited Destroy;
 
-  Self.Proxies.Free;
   if Assigned(Self.Logger) then
     Self.Logger.Terminate;
   Self.Dispatcher.Free;
@@ -567,20 +556,8 @@ begin
   if OutboundRequest.HasSipsUri then
     OutboundRequest.FirstContact.Address.Scheme := SipsScheme;
 
-  if not InDialogRequest then
-    OutboundRequest.AddHeaders(Self.RoutePathFor(OutboundRequest));
-end;
-
-procedure TIdSipUserAgent.AddNullRoutePath(AddressSpace: String);
-var
-  EmptyPath: TIdSipRoutePath;
-begin
-  EmptyPath := TIdSipRoutePath.Create;
-  try
-    Self.Proxies.AddDescription(AddressSpace, EmptyPath);
-  finally
-    EmptyPath.Free;
-  end;
+//  if not InDialogRequest then
+//    OutboundRequest.AddHeaders(Self.RoutePathFor(OutboundRequest));
 end;
 
 function TIdSipUserAgent.AddOutboundAction(ActionType: TIdSipActionClass): TIdSipAction;
@@ -591,31 +568,14 @@ begin
     Result.LocalGruu := Self.ContactClosestToRegistrar;
 end;
 
-procedure TIdSipUserAgent.AddRoute(AddressSpace: String; SipEntity: TIdSipUri);
-begin
-  // Make sure that requests sent to targets in AddressSpace pass through
-  // SipEntity.
-  Self.Proxies.AddRouteFor(AddressSpace, SipEntity);
-end;
-
 procedure TIdSipUserAgent.AddTransportListener(Listener: IIdSipTransportListener);
 begin
   Self.Dispatcher.AddTransportListener(Listener);
 end;
 
-procedure TIdSipUserAgent.ClearAllRoutePaths;
-begin
-  Self.Proxies.ClearAllDescriptions;
-end;
-
 function TIdSipUserAgent.UsingDefaultFrom: Boolean;
 begin
   Result := Pos(Self.From.Address.Uri, Self.DefaultFrom) > 0;
-end;
-
-procedure TIdSipUserAgent.RemoveRoutePathTo(AddressSpace: String);
-begin
-  Self.Proxies.RemoveDescription(AddressSpace);
 end;
 
 procedure TIdSipUserAgent.RemoveTransportListener(Listener: IIdSipTransportListener);
@@ -720,11 +680,6 @@ begin
   Result := Self.InviteModule.ProgressResendInterval;
 end;
 
-function TIdSipUserAgent.GetRoutePath: TIdSipRoutePath;
-begin
-  Result := Self.Proxies.DefaultRoutePath;
-end;
-
 function TIdSipUserAgent.GetUsername: String;
 begin
   Result := Self.From.DisplayName;
@@ -804,11 +759,6 @@ begin
   end;
 end;
 
-function TIdSipUserAgent.RoutePathFor(Request: TIdSipRequest): TIdSipRoutePath;
-begin
-  Result := Self.Proxies.RoutePathFor(Request.ToHeader.Address.Host);
-end;
-
 procedure TIdSipUserAgent.SetDoNotDisturb(Value: Boolean);
 begin
   Self.InviteModule.DoNotDisturb := Value;
@@ -833,12 +783,6 @@ end;
 procedure TIdSipUserAgent.SetProgressResendInterval(Value: Cardinal);
 begin
   Self.InviteModule.ProgressResendInterval := Value;
-end;
-
-procedure TIdSipUserAgent.SetRoutePath(Value: TIdSipRoutePath);
-begin
-  Self.RoutePath.Clear;
-  Self.RoutePath.Add(Value);
 end;
 
 procedure TIdSipUserAgent.SetUsername(Value: String);
@@ -1461,7 +1405,7 @@ begin
       Self.CheckUri(U, Format(MalformedConfigurationLine, [RouteHeaderLine]));
 
       if (AddressSpace = '') then
-        UserAgent.RoutePath.Add(RouteHeader).Value := '<' + U.AsString + '>'
+        UserAgent.DefaultRoutePath.Add(RouteHeader).Value := '<' + U.AsString + '>'
       else begin
         UserAgent.AddRoute(AddressSpace, U);
       end;

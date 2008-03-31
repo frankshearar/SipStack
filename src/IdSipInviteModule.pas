@@ -397,6 +397,8 @@ type
   public
     destructor Destroy; override;
 
+    function OutOfDialog: Boolean; override;
+
     property OriginalInvite: TIdSipRequest read fOriginalInvite write SetOriginalInvite;
   end;
 
@@ -2149,6 +2151,11 @@ begin
   Self.fOriginalInvite.Free;
 
   inherited Destroy;
+end;
+
+function TIdSipOutboundReInvite.OutOfDialog: Boolean;
+begin
+  Result := false;
 end;
 
 //* TIdSipOutboundReInvite Protected methods ***********************************

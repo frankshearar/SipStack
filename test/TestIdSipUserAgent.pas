@@ -907,8 +907,8 @@ begin
   try
     RouteUriTwo := TIdSipUri.Create(RouteTwo);
     try
-      Self.Core.RoutePath.AddRoute(RouteUriOne);
-      Self.Core.RoutePath.AddRoute(RouteUriTwo);
+      Self.Core.DefaultRoutePath.AddRoute(RouteUriOne);
+      Self.Core.DefaultRoutePath.AddRoute(RouteUriTwo);
 
       Self.MarkSentRequestCount;
       Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '').Send;
@@ -1107,8 +1107,8 @@ begin
   try
     RouteUriTwo := TIdSipUri.Create(RouteTwo);
     try
-      Self.Core.RoutePath.AddRoute(RouteUriOne);
-      Self.Core.RoutePath.AddRoute(RouteUriTwo);
+      Self.Core.DefaultRoutePath.AddRoute(RouteUriOne);
+      Self.Core.DefaultRoutePath.AddRoute(RouteUriTwo);
 
       Check(Self.Dlg.RouteSet.IsEmpty, 'Dialog doesn''t have an empty route set');
       Inv := Self.Core.CreateRequest(MethodInvite, Self.Dlg);
@@ -3792,7 +3792,7 @@ begin
     Expected.Add(RouteHeader).Value := '<' + SecondProxy + '>';
     UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
     try
-      CheckEquals(Expected, UA.RoutePath, 'Default Route path');
+      CheckEquals(Expected, UA.DefaultRoutePath, 'Default Route path');
       CheckRoutePath(Expected, UA, 'roke.local', 'a FQDN');
       CheckRoutePath(Expected, UA, '127.0.0.1', 'an IPv4 address');
     finally
@@ -3812,7 +3812,7 @@ begin
 
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
-    CheckEmptyRoutePath(UA.RoutePath, 'Only null Route directives means no Route path');
+    CheckEmptyRoutePath(UA.DefaultRoutePath, 'Only null Route directives means no Route path');
   finally
     UA.Free;
   end;
@@ -3852,7 +3852,7 @@ var
 begin
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
-    CheckEmptyRoutePath(UA.RoutePath, 'No Route directives means no Route path');
+    CheckEmptyRoutePath(UA.DefaultRoutePath, 'No Route directives means no Route path');
   finally
     UA.Free;
   end;
@@ -4662,14 +4662,13 @@ const
   ProxyTransport  = SctpTransport;
   ProxyUri        = 'sip:' + ProxyHost + ';lr';
 var
-  RequestUriTransport: String;
-  Uri:                 TIdSipUri;
+  Uri: TIdSipUri;
 begin
-  RequestUriTransport := Self.Invite.LastHop.Transport;
+  Self.Dispatcher.AddTransportBinding(ProxyTransport, Self.LanIP, 5060);
 
   Uri := TIdSipUri.Create(ProxyUri);
   try
-    Self.Core.RoutePath.AddRoute(Uri);
+    Self.Core.DefaultRoutePath.AddRoute(Uri);
 
     // Set so LastSentRequest uses the correct transport
     Self.Dispatcher.TransportType := ProxyTransport;
@@ -4677,7 +4676,7 @@ begin
     Self.Locator.AddSRV(ProxyHost, SrvSctpPrefix, 0, 0, 5060, ProxyHost);
     Self.Locator.AddAAAA(ProxyHost, ProxyAAAARecord);
 
-    Self.Locator.AddSRV(Self.Destination.Address.Host, SrvTcpPrefix, 0, 0,
+    Self.Locator.AddSRV(Self.Destination.Address.Host, SrvSctpPrefix, 0, 0,
                         5060, Self.Destination.Address.Host);
 
     Self.Locator.AddA(Self.Destination.Address.Host, '127.0.0.1');
@@ -4710,7 +4709,7 @@ begin
     Self.Destination.Address.Transport := TransportParamTCP;
     RequestUriTransport                := TcpTransport;
 
-    Self.Core.RoutePath.AddRoute(Uri);
+    Self.Core.DefaultRoutePath.AddRoute(Uri);
 
     Self.MarkSentRequestCount;
     Self.CreateAction;
@@ -4828,9 +4827,9 @@ end;
 
 procedure TestTIdSipReconfigureStackWait.CheckTriggerDoesNothing(Msg: String);
 begin
-  Self.Stack.RoutePath.First;
+  Self.Stack.DefaultRoutePath.First;
   CheckEquals(Self.OldRoute,
-              Self.Stack.RoutePath.CurrentRoute.Address.Uri,
+              Self.Stack.DefaultRoutePath.CurrentRoute.Address.Uri,
               Msg);
 end;
 
@@ -4860,9 +4859,9 @@ procedure TestTIdSipReconfigureStackWait.TestTrigger;
 begin
   Self.Wait.Trigger;
 
-  Self.Stack.RoutePath.First;
+  Self.Stack.DefaultRoutePath.First;
   CheckEquals(Self.NewRoute,
-              Self.Stack.RoutePath.CurrentRoute.Address.Uri,
+              Self.Stack.DefaultRoutePath.CurrentRoute.Address.Uri,
               'Route not changed, ergo Wait didn''t trigger');
 end;
 
