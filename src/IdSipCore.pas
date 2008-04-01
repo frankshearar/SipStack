@@ -1298,6 +1298,11 @@ end;
 
 procedure TIdSipActions.Status(Keys: TStringDictionary);
 begin
+  // Return a dictionary containing information about the current state of all
+  // actions.
+  //
+  // For now, this returns only a count of each kind of action currently
+  // executing. 
   Self.AddCurrentActionList(Keys);
 end;
 
@@ -3104,6 +3109,8 @@ function TIdSipAction.IntrospectionCountKey: String;
 const
   Prefix = 'TIdSip';
 begin
+  // Return the keyname for the current count of active actions of this type.
+
   Result := Self.ClassName;
 
   // Strip the prefix, if it's there. It was a mistake on my (FrankShearar's)
