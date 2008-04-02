@@ -38,9 +38,11 @@ type
     ConnectionMap: TIdSipConnectionTableLock;
     Transport:     TIdSipTcpServer;
 
+    procedure ConnectionDisconnected(Sender: TObject);
     procedure DestroyServer; override;
     procedure DoOnAddConnection(Connection: TIdTCPConnection;
                                 Request: TIdSipRequest);
+    procedure DoOnRemoveConnection(Connection: TIdTCPConnection);
     function  GetBindings: TIdSocketHandles; override;
     procedure InstantiateServer; override;
     procedure SendMessage(Msg: TIdSipMessage;
@@ -221,8 +223,7 @@ type
   private
     List: TObjectList;
 
-    procedure ConnectionDisconnected(Sender: TObject);
-    function  EntryAt(Index: Integer): TIdSipConnectionTableEntry;
+    function EntryAt(Index: Integer): TIdSipConnectionTableEntry;
   public
     constructor Create;
     destructor  Destroy; override;
@@ -336,6 +337,11 @@ end;
 
 //* TIdSipTCPTransport Protected methods ***************************************
 
+procedure TIdSipTCPTransport.ConnectionDisconnected(Sender: TObject);
+begin
+  Self.DoOnRemoveConnection(Sender as TIdTCPConnection);
+end;
+
 procedure TIdSipTCPTransport.DestroyServer;
 begin
   Self.Transport.Free;
@@ -349,6 +355,19 @@ begin
   Table := Self.ConnectionMap.LockList;
   try
     Table.Add(Connection, Request);
+    Connection.OnDisconnected := Self.ConnectionDisconnected;
+  finally
+    Self.ConnectionMap.UnlockList;
+  end;
+end;
+
+procedure TIdSipTCPTransport.DoOnRemoveConnection(Connection: TIdTCPConnection);
+var
+  Table: TIdSipConnectionTable;
+begin
+  Table := Self.ConnectionMap.LockList;
+  try
+    Table.Remove(Connection);
   finally
     Self.ConnectionMap.UnlockList;
   end;
@@ -364,7 +383,8 @@ begin
   Self.Transport := Self.ServerType.Create(nil);
   Self.Transport.TransportID := Self.ID;
 
-  Self.Transport.OnAddConnection := Self.DoOnAddConnection;
+  Self.Transport.OnAddConnection    := Self.DoOnAddConnection;
+  Self.Transport.OnRemoveConnection := Self.DoOnRemoveConnection;
 end;
 
 procedure TIdSipTCPTransport.SendMessage(Msg: TIdSipMessage;
@@ -941,7 +961,6 @@ procedure TIdSipConnectionTable.Add(Connection: TIdTCPConnection;
                                     Request:    TIdSipRequest);
 begin
   Self.List.Add(TIdSipConnectionTableEntry.Create(Connection, Request));
-  Connection.OnDisconnected := Self.ConnectionDisconnected;
 end;
 
 function TIdSipConnectionTable.ConnectionFor(Msg: TIdSipMessage): TIdTCPConnection;
@@ -1015,11 +1034,6 @@ begin
 end;
 
 //* TIdSipConnectionTable Private methods **************************************
-
-procedure TIdSipConnectionTable.ConnectionDisconnected(Sender: TObject);
-begin
-  Self.Remove(Sender as TIdTCPConnection);
-end;
 
 function TIdSipConnectionTable.EntryAt(Index: Integer): TIdSipConnectionTableEntry;
 begin
