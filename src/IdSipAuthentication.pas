@@ -52,9 +52,6 @@ type
                       const Digest: String); virtual;
     function  DigestFor(const Username: String;
                         const Realm: String): String; virtual;
-    function  Digest(const Username: String;
-                     const Realm: String;
-                     const Password: String): String;
     function  Usercount: Integer;
   end;
 
@@ -109,14 +106,11 @@ type
   // Note that in order to create an authorization header, you need to give
   // me a password. I don't store this password anywhere, so any caching of
   // passwords is up to whoever uses me.
-  TIdRealmInfo = class(TObject)
+  TIdRealmInfo = class(TIdUserInfo)
   private
     fDigestUri:  String;
-    fDigest:     String;
     fNonce:      String;
     fNonceCount: Cardinal;
-    fRealm:      String;
-    fUsername:   String;
 
     procedure CalculateCredentials(Authorization: TIdSipAuthorizationHeader;
                                    Challenge: TIdSipAuthenticateHeader;
@@ -134,11 +128,8 @@ type
                                  const Password: String): TIdSipAuthorizationHeader;
 
     property DigestUri:  String   read fDigestUri write fDigestUri;
-    property Digest:     String   read fDigest write fDigest;
     property Nonce:      String   read fNonce write SetNonce;
     property NonceCount: Cardinal read fNonceCount write fNonceCount;
-    property Realm:      String   read fRealm write fRealm;
-    property Username:   String   read fUsername write fUsername;
   end;
 
   // Use me to store authentication information.
@@ -185,7 +176,7 @@ type
                                       Auth: TIdSipAuthorizationHeader): String;
 
 const
-  ItemNotFoundIndex = -1;                                      
+  ItemNotFoundIndex = -1;
 
 function  A1For(const Algorithm: String): TIdAlgorithmFunction;
 function  A2For(const QopType: String): TIdQopFunction;
@@ -221,15 +212,20 @@ procedure RegisterHash(const Name: String; Func: TIdHashFunction);
 procedure RegisterQop(const Name: String; Func: TIdQopFunction);
 procedure RegisterRequestDigest(const QopType: String; Func: TIdRequestDigestFunction);
 function  RequestDigestFor(const QopType: String): TIdRequestDigestFunction;
+procedure UnregisterAlgorithm(const Name: String);
+procedure UnregisterHash(const HashName: String);
+procedure UnregisterQop(const Name: String);
+procedure UnregisterRequestDigest(const Name: String);
 
 implementation
 
 uses
-  Classes, IdRandom;
+  Classes, IdRandom, SyncObjs;
 
 var
   GAlgorithmFunctions:     TStrings;
   GHashFunctions:          TStrings;
+  GLock:                   TCriticalSection;
   GQopFunctions:           TStrings;
   GRequestDigestFunctions: TStrings;
 
@@ -243,20 +239,53 @@ function FunctionAt(FuncList: TStrings;
 var
   Index: Integer;
 begin
+//  Result := nil; 
+  GLock.Acquire;
+  try
+    Index := FuncList.IndexOf(Lowercase(Name));
 
-  Index := FuncList.IndexOf(Lowercase(Name));
-
-  if (Index >= 0) then
-    Result := FuncList.Objects[Index]
-  else
-    Result := nil;
+    if (Index >= 0) then
+      Result := FuncList.Objects[Index]
+    else
+      Result := nil;
+  finally
+     GLock.Release;
+  end;
 end;
 
 procedure RegisterFunction(FuncList: TStrings;
                            const Name: String;
                            Func: Pointer);
+var
+  Index: Integer;
 begin
-  FuncList.AddObject(Lowercase(Name), Func)
+  GLock.Acquire;
+  try
+    Index := FuncList.IndexOf(Lowercase(Name));
+
+    if (Index = ItemNotFoundIndex) then
+      FuncList.AddObject(Lowercase(Name), Func)
+    else
+      FuncList.Objects[Index] := Func;
+  finally
+     GLock.Release;
+  end;
+end;
+
+procedure UnregisterFunction(FuncList: TStrings;
+                             const Name: String);
+var
+  Index: Integer;
+begin
+  GLock.Acquire;
+  try
+    Index := FuncList.IndexOf(Name);
+
+    if (Index <> ItemNotFoundIndex) then
+      FuncList.Delete(Index);
+  finally
+     GLock.Release;
+  end;
 end;
 
 //* Unit Public functions & procedures ******************************************
@@ -402,6 +431,26 @@ begin
   Result := TIdRequestDigestFunction(FunctionAt(GRequestDigestFunctions, QopType));
 end;
 
+procedure UnregisterAlgorithm(const Name: String);
+begin
+  UnregisterFunction(GAlgorithmFunctions, Name);
+end;
+
+procedure UnregisterHash(const HashName: String);
+begin
+  UnregisterFunction(GHashFunctions, HashName);
+end;
+
+procedure UnregisterQop(const Name: String);
+begin
+  UnregisterFunction(GQopFunctions, Name);
+end;
+
+procedure UnregisterRequestDigest(const Name: String);
+begin
+  UnregisterFunction(GRequestDigestFunctions, Name);
+end;
+
 //*******************************************************************************
 //* TIdSipUserList                                                              *
 //*******************************************************************************
@@ -447,16 +496,6 @@ begin
         NewInfo.Free;
     end;
   end;
-end;
-
-function TIdSipUserList.Digest(const Username: String;
-                               const Realm: String;
-                               const Password: String): String;
-begin
-  Result := Self.Coder.AsHex(Self.Coder.HashValue(Username + ':' +
-                                                  Realm + ':' +
-                                                  Password));
-  Result := Lowercase(Result);
 end;
 
 function TIdSipUserList.DigestFor(const Username: String;
@@ -815,6 +854,8 @@ begin
 end;
 
 initialization
+  GLock := TCriticalSection.Create;
+
   GAlgorithmFunctions     := TStringList.Create;
   GHashFunctions          := TStringList.Create;
   GQopFunctions           := TStringList.Create;
@@ -843,4 +884,6 @@ finalization
 //  GQopFunctions.Free;
 //  GHashFunctions.Free;
 //  GAlgorithmFunctions.Free;
+
+  GLock.Free;
 end.
