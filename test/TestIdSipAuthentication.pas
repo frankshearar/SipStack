@@ -40,6 +40,12 @@ type
     procedure TestRegisterHash;
     procedure TestRegisterQop;
     procedure TestRequestDigestFor;
+    procedure TestReregisterHash;
+    procedure TestUnregisterAlgorithm;
+    procedure TestUnregisterHash;
+    procedure TestUnregisterQop;
+    procedure TestUnregisterRequestDigest;
+    procedure TestUseUnregisteredHash;
   end;
 
   TAuthenticatorTestCase = class(TTestCase)
@@ -57,7 +63,6 @@ type
     procedure TestCreateChallengeResponse;
     procedure TestCreateChallengeResponseAsProxy;
     procedure TestCreateChallengeResponseAsUserAgent;
-    procedure TestDigest;
     procedure TestDontAuthenticateNormalRequest; virtual;
   end;
 
@@ -127,6 +132,35 @@ begin
   Result.AddTest(TestTIdSipNullAuthenticator.Suite);
   Result.AddTest(TestTIdRealmInfo.Suite);
   Result.AddTest(TestTIdKeyRing.Suite);
+end;
+
+//*******************************************************************************
+//* Unit Private functions & procedures                                         *
+//*******************************************************************************
+
+function Identity(const S: String): String;
+begin
+  Result := S;
+end;
+
+function NoQop(Auth: TIdSipAuthorizationHeader;
+               const Method: String;
+               const Body: String): String;
+begin
+  Result := '';
+end;
+
+function NullAlgorithm(Auth: TIdSipAuthorizationHeader;
+                       const Password: String): String;
+begin
+  Result := '';
+end;
+
+function NullRequestDigest(const A1: String;
+                           const A2: String;
+                           Auth: TIdSipAuthorizationHeader): String;
+begin
+  Result := '';
 end;
 
 //*******************************************************************************
@@ -378,6 +412,71 @@ begin
   Check(nil = Pointer(RequestDigestFor('unknown')), 'unknown');
 end;
 
+procedure TestFunctions.TestReregisterHash;
+const
+  NewHash = 'foo';
+begin
+  RegisterHash(NewHash, MD5);
+  RegisterHash(NewHash, Identity);
+  try
+    Check(@Identity = Pointer(HashFor(NewHash)), 'Hash entry not replaced');
+  finally
+    UnregisterHash(NewHash);
+  end;
+end;
+
+procedure TestFunctions.TestUnregisterAlgorithm;
+const
+  Null = 'null';
+var
+  Auth: TIdSipAuthorizationHeader;
+begin
+  Auth := TIdSipAuthorizationHeader.Create;
+  try
+    RegisterAlgorithm(Null, NullAlgorithm);
+    UnregisterAlgorithm(Null);
+
+    Check(nil = Pointer(A1For(Null)), 'Algorithm not unregistered');
+  finally
+    Auth.Free;
+  end;
+end;
+
+procedure TestFunctions.TestUnregisterHash;
+const
+  IdentityHash = 'identity';
+begin
+  RegisterHash(IdentityHash, Identity);
+  UnregisterHash(IdentityHash);
+
+  Check(nil = Pointer(HashFor(IdentityHash)), 'Hash not unregistered');
+end;
+
+procedure TestFunctions.TestUnregisterQop;
+const
+  None = 'none';
+begin
+  RegisterQop(None, NoQop);
+  UnregisterQop(None);
+
+  Check(nil = Pointer(A2For(None)), 'Qop function not unregistered');
+end;
+
+procedure TestFunctions.TestUnregisterRequestDigest;
+const
+  None = 'none';
+begin
+  RegisterRequestDigest(None, NullRequestDigest);
+  UnregisterRequestDigest(None);
+
+  Check(nil = Pointer(RequestDigestFor(None)), 'Qop function not unregistered');
+end;
+
+procedure TestFunctions.TestUseUnregisteredHash;
+begin
+  Check(nil = Pointer(HashFor('foo')), 'HashFor returned something unexpected');
+end;
+
 //******************************************************************************
 //* TAuthenticatorTestCase                                                     *
 //******************************************************************************
@@ -535,21 +634,6 @@ begin
     end;
   finally
     Request.Free;
-  end;
-end;
-
-procedure TAuthenticatorTestCase.TestDigest;
-var
-  Digest: String;
-  Md5:    TIdHashMessageDigest5;
-begin
-  Md5 := TIdHashMessageDigest5.Create;
-  try
-    Digest := Lowercase(Md5.AsHex(Md5.HashValue('Foo:Bar:Baz')));
-
-    CheckEquals(Digest, Self.Auth.Digest('Foo', 'Bar', 'Baz'), 'Digest');
-  finally
-    Md5.Free;
   end;
 end;
 
