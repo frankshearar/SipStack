@@ -370,7 +370,7 @@ type
     procedure Assign(Src: TPersistent); override;
 
     property ErrorCode: Cardinal read fErrorCode write SetErrorCode;
-    property Reason: String read fReason write fReason;
+    property Reason:    String   read fReason write fReason;
   end;
 
   TIdAuthenticationChallengeData = class(TIdEventData)
