@@ -243,6 +243,7 @@ type
     procedure TearDown; override;
   published
     procedure TestCopy;
+    procedure TestNotAnError;
   end;
 
   TestTIdAuthenticationChallengeData = class(TTestCase)
@@ -2747,6 +2748,18 @@ begin
   finally
     Copy.Free;
   end;
+end;
+
+procedure TestTIdInformationalData.TestNotAnError;
+begin
+  Self.Data.ErrorCode := 0;
+  Check(Self.Data.NotAnError, 'Data thinks it''s an error');
+
+  Self.Data.ErrorCode := 1;
+  Check(not Self.Data.NotAnError, 'Data doesn''t think it''s an error');
+
+  Self.Data.ErrorCode := $ffffffff;
+  Check(not Self.Data.NotAnError, 'Data doesn''t think it''s an error');
 end;
 
 //******************************************************************************

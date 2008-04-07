@@ -368,6 +368,7 @@ type
     constructor Create; override;
 
     procedure Assign(Src: TPersistent); override;
+    function  NotAnError: Boolean;
 
     property ErrorCode: Cardinal read fErrorCode write SetErrorCode;
     property Reason:    String   read fReason write fReason;
@@ -2706,6 +2707,11 @@ begin
     Self.ErrorCode := Other.ErrorCode;
     Self.Reason    := Other.Reason;
   end;
+end;
+
+function TIdInformationalData.NotAnError: Boolean;
+begin
+  Result := Self.ErrorCode = 0;
 end;
 
 //* TIdInformationalData Protected methods *************************************
