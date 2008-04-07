@@ -383,11 +383,11 @@ type
     procedure AddAllowedScheme(const Scheme: String);
     function  AddInboundAction(Request: TIdSipRequest;
                                Binding: TIdConnectionBindings): TIdSipAction;
+    procedure AddListener(Listener: IIdSipTransactionUserListener);
     procedure AddLocalHeaders(OutboundRequest: TIdSipRequest; InDialogRequest: Boolean); virtual;
     function  AddModule(ModuleType: TIdSipMessageModuleClass): TIdSipMessageModule;
-    procedure AddObserver(const Listener: IIdObserver);
-    procedure AddListener(Listener: IIdSipTransactionUserListener);
     procedure AddNullRoutePath(AddressSpace: String);
+    procedure AddObserver(const Listener: IIdObserver);
     function  AddOutboundAction(ActionType: TIdSipActionClass): TIdSipAction; virtual;
     procedure AddRoute(AddressSpace: String; SipEntity: TIdSipUri);
     function  AllowedContentTypes: String;
@@ -1624,6 +1624,11 @@ begin
     Result := nil;
 end;
 
+procedure TIdSipAbstractCore.AddListener(Listener: IIdSipTransactionUserListener);
+begin
+  Self.Listeners.AddListener(Listener);
+end;
+
 procedure TIdSipAbstractCore.AddLocalHeaders(OutboundRequest: TIdSipRequest; InDialogRequest: Boolean);
 var
   Transport: String;
@@ -1664,16 +1669,6 @@ begin
   end;
 end;
 
-procedure TIdSipAbstractCore.AddObserver(const Listener: IIdObserver);
-begin
-  Self.Observed.AddObserver(Listener);
-end;
-
-procedure TIdSipAbstractCore.AddListener(Listener: IIdSipTransactionUserListener);
-begin
-  Self.Listeners.AddListener(Listener);
-end;
-
 procedure TIdSipAbstractCore.AddNullRoutePath(AddressSpace: String);
 var
   EmptyPath: TIdSipRoutePath;
@@ -1684,6 +1679,11 @@ begin
   finally
     EmptyPath.Free;
   end;
+end;
+
+procedure TIdSipAbstractCore.AddObserver(const Listener: IIdObserver);
+begin
+  Self.Observed.AddObserver(Listener);
 end;
 
 function TIdSipAbstractCore.AddOutboundAction(ActionType: TIdSipActionClass): TIdSipAction;
