@@ -241,6 +241,7 @@ type
     procedure TestCreateUserAgentWithRegistrar;
     procedure TestCreateUserAgentWithResolveNamesLocallyFirst;
     procedure TestCreateUserAgentWithoutResolveNamesLocallyFirst;
+    procedure TestCreateUserAgentWithSuppressLocalResponses;
     procedure TestCreateUserAgentWithUseGruu;
     procedure TestCreateUserAgentWithUserAgentName;
     procedure TestStrToBool;
@@ -250,6 +251,7 @@ type
     procedure TestUpdateConfigurationWithRegistrar;
     procedure TestUpdateConfigurationWithSupportEvent;
     procedure TestUpdateConfigurationWithBlankSupportEvent;
+    procedure TestUpdateConfigurationWithSuppressLocalResponses;
     procedure TestUpdateConfigurationWithTransport;
   end;
 
@@ -3240,6 +3242,20 @@ begin
   end;
 end;
 
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithSuppressLocalResponses;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add(SuppressLocalResponsesDirective + ': true');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Check(UA.InviteModule.SuppressLocalResponses, SuppressLocalResponsesDirective + ' directive ignored');
+  finally
+    UA.Free;
+  end;
+end;
+
 procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithUseGruu;
 begin
   Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
@@ -3508,6 +3524,25 @@ begin
     finally
       NewConfig.Free;
     end;
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithSuppressLocalResponses;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add(SuppressLocalResponsesDirective + ': true');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Self.Configuration.Delete(Self.Configuration.Count - 1);
+    Self.Configuration.Add(SuppressLocalResponsesDirective + ': false');
+
+    Self.Conf.UpdateConfiguration(UA, Self.Configuration);
+
+    Check(not UA.InviteModule.SuppressLocalResponses, SuppressLocalResponsesDirective + ' directive ignored');
   finally
     UA.Free;
   end;

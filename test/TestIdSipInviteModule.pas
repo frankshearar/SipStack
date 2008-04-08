@@ -178,9 +178,12 @@ type
     procedure TestResendOk;
     procedure TestRing;
     procedure TestRingWithGruu;
+    procedure TestRingWithSuppressLocalResponses;
     procedure TestSendProvisional;
     procedure TestSendProvisionalWithGruu;
+    procedure TestSendProvisionalWithSuppressLocalResponses;
     procedure TestSendTrying;
+    procedure TestSendTryingWithSuppressLocalResponses;
     procedure TestTerminateAfterAccept;
     procedure TestTerminateBeforeAccept;
     procedure TestTimeOut;
@@ -473,6 +476,7 @@ type
     procedure TestRemoveSessionListener;
     procedure TestRing;
     procedure TestRingWithGruu;
+    procedure TestRingWithSuppressLocalResponses;
     procedure TestSendProvisional;
     procedure TestSendProvisionalAfterDialogEstablished;
     procedure TestSendProvisionalAfterEarlyDialogEstablished;
@@ -480,6 +484,7 @@ type
     procedure TestSendProvisionalWithGruu;
     procedure TestSendProvisionalWithInappropriateStatusCode;
     procedure TestSupportsExtension;
+    procedure TestSuppressLocalResponses;
     procedure TestTerminate;
     procedure TestTerminateAlmostEstablishedSession;
     procedure TestTerminateUnestablishedSession;
@@ -2529,6 +2534,16 @@ begin
         '180 Ringing lacks a Contact with a "grid" parameter');
 end;
 
+procedure TestTIdSipInboundInvite.TestRingWithSuppressLocalResponses;
+begin
+  Self.InviteAction.SuppressLocalResponses := true;
+
+  Self.MarkSentResponseCount;
+  Self.InviteAction.Ring;
+
+  CheckNoResponseSent('Ringing response not suppressed');
+end;
+
 procedure TestTIdSipInboundInvite.TestSendProvisional;
 const
   ReasonPhrase = 'Progress of some kind has been made';
@@ -2569,6 +2584,15 @@ begin
         'Response lacks a Contact with a "grid" parameter');
 end;
 
+procedure TestTIdSipInboundInvite.TestSendProvisionalWithSuppressLocalResponses;
+begin
+  Self.InviteAction.SuppressLocalResponses := true;
+
+  Self.MarkSentResponseCount;
+  Self.InviteAction.Ring;
+  CheckNoResponseSent('Provisional response not suppressed');
+end;
+
 procedure TestTIdSipInboundInvite.TestSendTrying;
 begin
   Self.MarkSentResponseCount;
@@ -2579,6 +2603,16 @@ begin
   CheckEquals(SIPTrying,
               Self.LastSentResponse.StatusCode,
               'Unexpected Status-Code');
+end;
+
+procedure TestTIdSipInboundInvite.TestSendTryingWithSuppressLocalResponses;
+begin
+  Self.InviteAction.SuppressLocalResponses := true;
+
+  Self.MarkSentResponseCount;
+  Self.InviteAction.SendTrying;
+
+  CheckResponseSent('Trying response was suppressed');
 end;
 
 procedure TestTIdSipInboundInvite.TestTerminateAfterAccept;
@@ -5978,6 +6012,16 @@ begin
         'Dialog-creating response (180 Ringing) has no "grid" parameter');
 end;
 
+procedure TestTIdSipInboundSession.TestRingWithSuppressLocalResponses;
+begin
+  Self.Module.SuppressLocalResponses := true;
+
+  Self.MarkSentResponseCount;
+  Self.CreateAction;
+  CheckResponseSent('No response sent');
+  CheckNotEquals(SIPRinging, Self.LastSentResponse.StatusCode, 'Ringing response not suppressed');
+end;
+
 procedure TestTIdSipInboundSession.TestSendProvisional;
 const
   ReasonPhrase = 'Progress of some kind has been made';
@@ -6099,6 +6143,18 @@ begin
         Self.ClassName + ': '
       + ExtensionFoo + ' must not be supported, since only the remote '
       + 'party supports it');
+end;
+
+procedure TestTIdSipInboundSession.TestSuppressLocalResponses;
+var
+  Session: TIdSipInboundSession;
+begin
+  Self.Module.SuppressLocalResponses := true;
+
+  Session := Self.CreateAction as TIdSipInboundSession;
+  Check(Session.SuppressLocalResponses, 'Session not told to suppress 180 Ringing');
+
+  CheckNotEquals(SIPRinging, Self.LastSentResponse.StatusCode, '180 Ringing sent');
 end;
 
 procedure TestTIdSipInboundSession.TestTerminate;

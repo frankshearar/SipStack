@@ -95,6 +95,7 @@ type
     fDoNotDisturb:           Boolean;
     fInitialResendInterval:  Cardinal; // in milliseconds
     fProgressResendInterval: Cardinal; // in milliseconds
+    fSuppressLocalResponses: Boolean;  // Suppress the sending of locally-generated responses.
 
     function  ConvertToHeader(ValueList: TStrings): String;
     function  HasTooManyReplaces(Request: TIdSipRequest): Boolean;
@@ -140,6 +141,7 @@ type
     property DoNotDisturb:           Boolean  read fDoNotDisturb write fDoNotDisturb;
     property InitialResendInterval:  Cardinal read fInitialResendInterval write fInitialResendInterval;
     property ProgressResendInterval: Cardinal read fProgressResendInterval write fProgressResendInterval;
+    property SuppressLocalResponses: Boolean  read fSuppressLocalResponses write fSuppressLocalResponses;
   end;
 
   // I encapsulate the call flow around a BYE request. BYEs always occur in the
@@ -226,6 +228,7 @@ type
     fLocalMimeType:           String;
     fLocalSessionDescription: String;
     fMaxResendInterval:       Cardinal; // in milliseconds
+    fSuppressLocalResponses:  Boolean;
     Grid:                     String;
     InviteListeners:          TIdNotificationList;
     ReceivedAck:              Boolean;
@@ -274,6 +277,7 @@ type
     property InitialResendInterval:   Cardinal       read GetInitialResendInterval;
     property MaxResendInterval:       Cardinal       read fMaxResendInterval write fMaxResendInterval;
     property ProgressResendInterval:  Cardinal       read GetProgressResendInterval;
+    property SuppressLocalResponses:  Boolean        read fSuppressLocalResponses write fSuppressLocalResponses;
   end;
 
   // I encapsulate the call flows around an outbound INVITE, both in-dialog
@@ -542,8 +546,9 @@ type
 
   TIdSipInboundSession = class(TIdSipSession)
   private
-    InitialInvite: TIdSipInboundInvite;
-    Terminating:   Boolean;
+    fSuppressLocalResponses: Boolean;
+    InitialInvite:           TIdSipInboundInvite;
+    Terminating:             Boolean;
 
     function CreateInboundDialog(Response: TIdSipResponse): TIdSipDialog;
     function MatchReplaces(Request: TIdSipRequest): Boolean;
@@ -572,6 +577,8 @@ type
     procedure SendProvisional(StatusCode: Cardinal = SIPSessionProgress;
                               Description: String = RSSIPSessionProgress);
     procedure Terminate; override;
+
+    property SuppressLocalResponses: Boolean read fSuppressLocalResponses write fSuppressLocalResponses;
   end;
 
   // Outbound Sessions behave somewhat differently to inbound Sessions, even
@@ -1480,6 +1487,8 @@ begin
   if not TIdSipResponse.IsProvisionalStatusCode(StatusCode) then
     raise EIdSipTransactionUser.Create('SendProvisional only accepts provisional response status codes. Attempted Status-Code was ' + IntToStr(StatusCode));
 
+  if Self.SuppressLocalResponses then Exit;
+
   if not Self.SentFinalResponse then begin
     Self.SendSimpleResponse(StatusCode, Description);
 
@@ -1527,9 +1536,10 @@ begin
 
   Self.InviteListeners := TIdNotificationList.Create;
 
-  Self.fLastResponse     := TIdSipResponse.Create;
-  Self.ReceivedAck       := false;
-  Self.ResendInterval    := Self.InitialResendInterval;
+  Self.fLastResponse           := TIdSipResponse.Create;
+  Self.ReceivedAck             := false;
+  Self.ResendInterval          := Self.InitialResendInterval;
+  Self.SuppressLocalResponses  := Self.Module.SuppressLocalResponses;
 
   Self.LocalTag := Self.UA.NextTag;
 
@@ -2949,6 +2959,12 @@ end;
 
 procedure TIdSipInboundSession.Ring;
 begin
+  // Self.InitialInvite can also suppress the sending of locally generated
+  // responses. This method, though, assumes that InitialInvite.Ring does
+  // actually send a dialog-establishing response, when it might not. Hence
+  // the guard clause. 
+  if Self.SuppressLocalResponses then Exit;
+
   if not Self.DialogEstablished then begin
     Self.InitialInvite.Ring;
     Self.fDialog := Self.CreateInboundDialog(Self.InitialInvite.LastResponse);
@@ -2961,8 +2977,6 @@ end;
 procedure TIdSipInboundSession.SendProvisional(StatusCode: Cardinal = SIPSessionProgress;
                                                Description: String = RSSIPSessionProgress);
 begin
-
-
   if Assigned(Self.InitialInvite) then
     Self.InitialInvite.SendProvisional(StatusCode, Description);
 end;
@@ -3024,6 +3038,7 @@ begin
   Self.RemoteMimeType           := Request.ContentType;
   Self.RemoteParty              := Request.From;
   Self.RemoteSessionDescription := Request.Body;
+  Self.SuppressLocalResponses   := Self.Module.SuppressLocalResponses;
 
   if Request.HasHeader(ExpiresHeader) then
     Self.UA.ScheduleEvent(TIdSipInboundInviteExpire,

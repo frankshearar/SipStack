@@ -115,6 +115,7 @@ type
   //   Route: <sip:specialproxy> example.com
   //   RoutingTable: MOCK
   //   SupportEvent: refer
+  //   SuppressLocalResponses: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
   //   UseGruu: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
   //
   // Registrar-specific directives are:
@@ -210,6 +211,7 @@ type
     function  CreateLayers(Context: TIdTimerQueue): TIdSipUserAgent;
     function  CreateLogger: TLoGGerThread;
     function  CreatePlatformRoutingTable: TIdRoutingTable;
+    function  InstantiateInviteModule(UserAgent: TIdSipUserAgent): TIdSipInviteModule;
     procedure InstantiateMissingObjectsAsDefaults(UserAgent: TIdSipUserAgent);
     function  InstantiateRegistrarModule(UserAgent: TIdSipUserAgent): TIdSipRegisterModule;
     function  VerbosityNameToLevel(S: String): TLogVerbosityLevel;
@@ -228,6 +230,8 @@ type
                                    const RegistrarDatabaseLine: String);
     procedure SetRegistrarUseGruu(UserAgent: TIdSipUserAgent;
                                   const UseGruuLine: String);
+    procedure SetSuppressLocalResponses(UserAgent: TIdSipUserAgent;
+                                        const SuppressLocalResponsesLine: String);
     procedure UseGruu(UserAgent: TIdSipAbstractCore;
                       const UseGruuLine: String);
     procedure UseLocalResolution(UserAgent: TIdSipAbstractCore;
@@ -452,6 +456,7 @@ const
   RouteHeaderDirective                    = 'Route';
   RoutingTableDirective                   = 'RoutingTable';
   SupportEventDirective                   = 'SupportEvent';
+  SuppressLocalResponsesDirective         = 'SuppressLocalResponses';
   UseGruuDirective                        = 'UseGruu';
   UserAgentNameDirective                  = 'UserAgentName';
 
@@ -1549,6 +1554,14 @@ begin
   Result := TIdRoutingTable.PlatformRoutingTable(OsType).Create;
 end;
 
+function TIdSipStackConfigurator.InstantiateInviteModule(UserAgent: TIdSipUserAgent): TIdSipInviteModule;
+begin
+  if not UserAgent.UsesModule(TIdSipInviteModule) then
+    Result := UserAgent.AddModule(TIdSipInviteModule) as TIdSipInviteModule
+  else
+    Result := UserAgent.ModuleFor(TIdSipInviteModule) as TIdSipInviteModule;
+end;
+
 procedure TIdSipStackConfigurator.InstantiateMissingObjectsAsDefaults(UserAgent: TIdSipUserAgent);
 begin
   if not Assigned(UserAgent.Authenticator) then
@@ -1657,6 +1670,8 @@ begin
     Self.AddRoutingTable(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, SupportEventDirective) then
     Self.AddSupportForEventPackage(UserAgent, ConfigurationLine)
+  else if IsEqual(FirstToken, SuppressLocalResponsesDirective) then
+    Self.SetSuppressLocalResponses(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, UseGruuDirective) then
     Self.UseGruu(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, UserAgentNameDirective) then
@@ -1679,7 +1694,18 @@ begin
 end;
 
 procedure TIdSipStackConfigurator.PreConfigurationActions(UA: TIdSipUserAgent);
+var
+  RegMod: TIdSipRegisterModule;
 begin
+  if UA.UsesModule(TIdSipRegisterModule) then begin
+    RegMod := UA.ModuleFor(TIdSipRegisterModule) as TIdSipRegisterModule;
+
+    if not Assigned(RegMod.BindingDB) then
+      RegMod.BindingDB := TIdSipMockBindingDatabase.Create;
+  end;
+
+  if Assigned(UA.Logger) then
+    UA.Logger.Resume;
 end;
 
 procedure TIdSipStackConfigurator.RegisterUA(UserAgent: TIdSipUserAgent;
@@ -1746,6 +1772,20 @@ begin
   RegMod := Self.InstantiateRegistrarModule(UserAgent);
 
   RegMod.UseGruu := Self.StrToBool(Line);
+end;
+
+procedure TIdSipStackConfigurator.SetSuppressLocalResponses(UserAgent: TIdSipUserAgent;
+                                                            const SuppressLocalResponsesLine: String);
+var
+  Line:   String;
+  InviteMod: TIdSipInviteModule;
+begin
+  Line := SuppressLocalResponsesLine;
+  EatDirective(Line);
+
+  InviteMod := Self.InstantiateInviteModule(UserAgent);
+
+  InviteMod.SuppressLocalResponses := Self.StrToBool(Line);
 end;
 
 procedure TIdSipStackConfigurator.UseGruu(UserAgent: TIdSipAbstractCore;
