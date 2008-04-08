@@ -1477,6 +1477,8 @@ end;
 
 procedure TIdSipInboundInvite.Ring;
 begin
+  if Self.SuppressLocalResponses then Exit;
+
   if not Self.SentFinalResponse then
     Self.SendProvisional(SIPRinging, RSSIPRinging);
 end;
@@ -1487,18 +1489,18 @@ begin
   if not TIdSipResponse.IsProvisionalStatusCode(StatusCode) then
     raise EIdSipTransactionUser.Create('SendProvisional only accepts provisional response status codes. Attempted Status-Code was ' + IntToStr(StatusCode));
 
-  if Self.SuppressLocalResponses then Exit;
-
   if not Self.SentFinalResponse then begin
     Self.SendSimpleResponse(StatusCode, Description);
 
-    // cf. RFC 3261, section 13.3.1.1. We resend periodic provisional responses
-    // to keep SIP proxies from cancelling a transaction that's taking a long
-    // while to complete.
-    Self.UA.ScheduleEvent(TIdSipInboundInviteSessionProgress,
-                          Self.ProgressResendInterval,
-                          Self.InitialRequest,
-                          Self.ID);
+    if Self.SuppressLocalResponses then begin
+      // cf. RFC 3261, section 13.3.1.1. We resend periodic provisional responses
+      // to keep SIP proxies from cancelling a transaction that's taking a long
+      // while to complete.
+      Self.UA.ScheduleEvent(TIdSipInboundInviteSessionProgress,
+                            Self.ProgressResendInterval,
+                            Self.InitialRequest,
+                            Self.ID);
+    end;                        
   end;
 end;
 

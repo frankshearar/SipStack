@@ -2589,8 +2589,8 @@ begin
   Self.InviteAction.SuppressLocalResponses := true;
 
   Self.MarkSentResponseCount;
-  Self.InviteAction.Ring;
-  CheckNoResponseSent('Provisional response not suppressed');
+  Self.InviteAction.SendProvisional(SIPSessionProgress, 'Progress');
+  CheckResponseSent('Provisional response suppressed');
 end;
 
 procedure TestTIdSipInboundInvite.TestSendTrying;
