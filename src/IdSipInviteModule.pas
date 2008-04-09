@@ -1477,8 +1477,6 @@ end;
 
 procedure TIdSipInboundInvite.Ring;
 begin
-  if Self.SuppressLocalResponses then Exit;
-
   if not Self.SentFinalResponse then
     Self.SendProvisional(SIPRinging, RSSIPRinging);
 end;
@@ -1492,7 +1490,7 @@ begin
   if not Self.SentFinalResponse then begin
     Self.SendSimpleResponse(StatusCode, Description);
 
-    if Self.SuppressLocalResponses then begin
+    if not Self.SuppressLocalResponses then begin
       // cf. RFC 3261, section 13.3.1.1. We resend periodic provisional responses
       // to keep SIP proxies from cancelling a transaction that's taking a long
       // while to complete.
@@ -2874,6 +2872,8 @@ end;
 //* TIdSipInboundSession Public methods ****************************************
 
 procedure TIdSipInboundSession.AcceptCall(const Offer, ContentType: String);
+var
+  Ok: TIdSipResponse;
 begin
   if not Assigned(Self.InitialInvite) then
     raise EIdSipTransactionUser.Create('You have already invoked AcceptCall');
@@ -2884,7 +2884,12 @@ begin
   Self.InitialInvite.Accept(Offer, ContentType);
   Self.LocalGruu := Self.InitialInvite.LocalGruu;
 
-  Self.Dialog.ReceiveResponse(Self.InitialInvite.LastResponse);
+  Ok := Self.InitialInvite.LastResponse;
+
+  if not Self.DialogEstablished then 
+    Self.fDialog := Self.CreateInboundDialog(Ok);
+
+  Self.Dialog.ReceiveResponse(Ok);
 end;
 
 function TIdSipInboundSession.IsInbound: Boolean;
@@ -2961,12 +2966,6 @@ end;
 
 procedure TIdSipInboundSession.Ring;
 begin
-  // Self.InitialInvite can also suppress the sending of locally generated
-  // responses. This method, though, assumes that InitialInvite.Ring does
-  // actually send a dialog-establishing response, when it might not. Hence
-  // the guard clause. 
-  if Self.SuppressLocalResponses then Exit;
-
   if not Self.DialogEstablished then begin
     Self.InitialInvite.Ring;
     Self.fDialog := Self.CreateInboundDialog(Self.InitialInvite.LastResponse);
@@ -3096,7 +3095,8 @@ begin
   Self.RemoteSessionDescription := Invite.Body;
   Self.RemoteMimeType           := Invite.ContentType;
 
-  Self.Ring;
+  if not Self.SuppressLocalResponses then
+    Self.Ring;
 end;
 
 procedure TIdSipInboundSession.ReceiveInvite(Invite: TIdSipRequest);

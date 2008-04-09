@@ -2540,8 +2540,7 @@ begin
 
   Self.MarkSentResponseCount;
   Self.InviteAction.Ring;
-
-  CheckNoResponseSent('Ringing response not suppressed');
+  CheckResponseSent('(Manually requested) ringing response suppressed');
 end;
 
 procedure TestTIdSipInboundInvite.TestSendProvisional;
@@ -2585,12 +2584,20 @@ begin
 end;
 
 procedure TestTIdSipInboundInvite.TestSendProvisionalWithSuppressLocalResponses;
+var
+  W: TIdSipActionsWait;
 begin
   Self.InviteAction.SuppressLocalResponses := true;
 
   Self.MarkSentResponseCount;
   Self.InviteAction.SendProvisional(SIPSessionProgress, 'Progress');
-  CheckResponseSent('Provisional response suppressed');
+  CheckResponseSent('(Manually requested) provisional response suppressed');
+
+  W := Self.DebugTimer.LastEventScheduled(TIdSipActionsWait) as TIdSipActionsWait;
+
+  if (W <> nil) then
+    CheckNotEquals(TIdSipInboundInviteSessionProgress.ClassName, W.BlockType.ClassName,
+                   'Automatic session progress responses scheduled');
 end;
 
 procedure TestTIdSipInboundInvite.TestSendTrying;
