@@ -592,6 +592,7 @@ type
     fResult:         TIdSipActionResult;
     fUA:             TIdSipAbstractCore;
     NonceCount:      Cardinal;
+    TargetLocations: TIdSipLocations;    
 
     function  CreateResend(AuthorizationCredentials: TIdSipAuthorizationHeader): TIdSipRequest;
     function  GetUseGruu: Boolean;
@@ -606,7 +607,6 @@ type
     ActionListeners: TIdNotificationList;
     fIsOwned:        Boolean;
     State:           TIdSipActionState;
-    TargetLocations: TIdSipLocations;
 
     procedure ActionSucceeded(Response: TIdSipResponse); virtual;
     function  CreateNewAttempt: TIdSipRequest; virtual;
