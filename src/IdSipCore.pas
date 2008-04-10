@@ -3163,13 +3163,15 @@ procedure TIdSipAction.NetworkFailureSending(Msg: TIdSipMessage);
 var
   FailReason: String;
   NewAttempt: TIdSipRequest;
+  Request:    TIdSipRequest;
 begin
   // You tried to send a request. It failed. The UA core invokes this method to
   // try the next possible location.
 
   if Msg.IsRequest then begin
-    if (Msg as TIdSipRequest).IsAck then begin
-      FailReason := Format(RSNoLocationSucceeded, [(Msg as TIdSipRequest).DestinationUri]);
+    Request := Msg as TIdSipRequest;
+    if Request.IsAck then begin
+      FailReason := Format(RSNoLocationSucceeded, [Request.DestinationUri]);
       Self.NotifyOfNetworkFailure(NoLocationSucceeded,
                                   Format(OutboundActionFailed,
                                          [Self.Method, FailReason]));
@@ -3184,7 +3186,7 @@ begin
         end;
       end
       else begin
-        FailReason := Format(RSNoLocationSucceeded, [(Msg as TIdSipRequest).DestinationUri]);
+        FailReason := Format(RSNoLocationSucceeded, [Request.DestinationUri]);
         Self.NotifyOfNetworkFailure(NoLocationSucceeded,
                                   Format(OutboundActionFailed,
                                          [Self.Method, FailReason]));
