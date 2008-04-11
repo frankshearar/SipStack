@@ -447,7 +447,8 @@ type
     function  ResponseForInvite: Cardinal; virtual;
     procedure ReturnResponse(Request: TIdSipRequest;
                              Reason: Cardinal);
-    function  RoutePathFor(Request: TIdSipRequest): TIdSipRoutePath;
+    function  RoutePathFor(Request: TIdSipRequest): TIdSipRoutePath; overload;
+    function  RoutePathFor(Target: TIdSipLocation): TIdSipRoutePath; overload;
     procedure ScheduleEvent(BlockType: TIdSipActionClosureClass;
                             WaitTime: Cardinal;
                             Copy: TIdSipMessage;
@@ -584,15 +585,17 @@ type
   TIdSipActionState = (asInitialised, asSent, asResent, asFinished);
   TIdSipAction = class(TIdInterfacedObject)
   private
-    fInitialRequest: TIdSipRequest;
-    fIsTerminated:   Boolean;
-    fLocalGruu:      TIdSipContactHeader;
-    fLocalParty:     TIdSipAddressHeader;
-    fMaxForwards:    Cardinal;
-    fResult:         TIdSipActionResult;
-    fUA:             TIdSipAbstractCore;
-    NonceCount:      Cardinal;
-    TargetLocations: TIdSipLocations;    
+    AddressSpaceLocations: TIdSipLocations;
+    AttemptedLocations:    TIdSipLocations;
+    fInitialRequest:       TIdSipRequest;
+    fIsTerminated:         Boolean;
+    fLocalGruu:            TIdSipContactHeader;
+    fLocalParty:           TIdSipAddressHeader;
+    fMaxForwards:          Cardinal;
+    fResult:               TIdSipActionResult;
+    fUA:                   TIdSipAbstractCore;
+    NonceCount:            Cardinal;
+    TargetLocations:       TIdSipLocations;
 
     function  CreateResend(AuthorizationCredentials: TIdSipAuthorizationHeader): TIdSipRequest;
     function  GetUseGruu: Boolean;
@@ -601,8 +604,12 @@ type
     procedure SetLocalParty(Value: TIdSipAddressHeader);
     procedure SetUseGruu(Value: Boolean);
     procedure SetUsername(Value: String);
+    procedure TryAnotherRoutePath(Request: TIdSipRequest;
+                                  Targets: TIdSipLocations);
     procedure TrySendRequest(Request: TIdSipRequest;
                              Targets: TIdSipLocations);
+    procedure TrySendRequestAgain(Request: TIdSipRequest;
+                                  Targets: TIdSipLocations);
   protected
     ActionListeners: TIdNotificationList;
     fIsOwned:        Boolean;
@@ -2144,6 +2151,11 @@ begin
   Result := Self.Proxies.RoutePathFor(Request.ToHeader.Address.Host);
 end;
 
+function TIdSipAbstractCore.RoutePathFor(Target: TIdSipLocation): TIdSipRoutePath;
+begin
+  Result := Self.Proxies.RoutePathFor(Target.IPAddress);
+end;
+
 procedure TIdSipAbstractCore.ScheduleEvent(BlockType: TIdSipActionClosureClass;
                                            WaitTime: Cardinal;
                                            Copy: TIdSipMessage;
@@ -3095,6 +3107,8 @@ begin
   Self.LocalParty.Free;
   Self.LocalGruu.Free;
   Self.InitialRequest.Free;
+  Self.AttemptedLocations.Free;
+  Self.AddressSpaceLocations.Free;
   Self.ActionListeners.Free;
 
   inherited Destroy;
@@ -3167,6 +3181,9 @@ var
 begin
   // You tried to send a request. It failed. The UA core invokes this method to
   // try the next possible location.
+  //
+  // If all possible locations have failed, it's time to try find another
+  // address space that could apply. See the comment in SendRequest.
 
   if Msg.IsRequest then begin
     Request := Msg as TIdSipRequest;
@@ -3177,20 +3194,16 @@ begin
                                          [Self.Method, FailReason]));
     end
     else begin
-      if not Self.TargetLocations.IsEmpty then begin
+      if not Self.AddressSpaceLocations.IsEmpty then begin
         NewAttempt := Self.CreateNewAttempt;
         try
-          Self.TrySendRequest(NewAttempt, Self.TargetLocations);
+          Self.TrySendRequest(NewAttempt, Self.AddressSpaceLocations);
         finally
           NewAttempt.Free;
         end;
       end
-      else begin
-        FailReason := Format(RSNoLocationSucceeded, [Request.DestinationUri]);
-        Self.NotifyOfNetworkFailure(NoLocationSucceeded,
-                                  Format(OutboundActionFailed,
-                                         [Self.Method, FailReason]));
-      end;
+      else
+        Self.TrySendRequestAgain(Request, Self.TargetLocations);
     end;
   end;
 end;
@@ -3311,16 +3324,18 @@ procedure TIdSipAction.Initialise(UA: TIdSipAbstractCore;
 begin
   Self.fUA := UA;
 
-  Self.ActionListeners := TIdNotificationList.Create;
-  Self.fLocalParty     := TIdSipAddressHeader.Create;
-  Self.fInitialRequest := TIdSipRequest.Create;
-  Self.fIsOwned        := false;
-  Self.fIsTerminated   := false;
-  Self.fLocalGruu      := TIdSipContactHeader.Create;
-  Self.fMaxForwards    := TIdSipRequest.DefaultMaxForwards;
-  Self.NonceCount      := 0;
-  Self.State           := asInitialised;
-  Self.TargetLocations := TIdSipLocations.Create;
+  Self.ActionListeners       := TIdNotificationList.Create;
+  Self.AddressSpaceLocations := TIdSipLocations.Create;
+  Self.AttemptedLocations    := TIdSipLocations.Create;
+  Self.fLocalParty           := TIdSipAddressHeader.Create;
+  Self.fInitialRequest       := TIdSipRequest.Create;
+  Self.fIsOwned              := false;
+  Self.fIsTerminated         := false;
+  Self.fLocalGruu            := TIdSipContactHeader.Create;
+  Self.fMaxForwards          := TIdSipRequest.DefaultMaxForwards;
+  Self.NonceCount            := 0;
+  Self.State                 := asInitialised;
+  Self.TargetLocations       := TIdSipLocations.Create;
 
   // It's good practice to keep LocalGruu containing a valid URI, even though
   // the Contact will be altered just before it hits the network. We signal our
@@ -3446,6 +3461,19 @@ begin
   if (Self.NonceCount = 0) then
     Inc(Self.NonceCount);
 
+  Self.AttemptedLocations.Clear;
+
+  // We have a two-step process. First, we apply RFC 3263 to the request. Since
+  // the request has no Route headers (yet), we resolve the Request-URI for its
+  // target locations. Then, for each location, we
+  //   (*) add any necessary Route headers (as determined by the address spaces
+  //       in Self.UA.ProxyDescriptions);
+  //   (*) apply RFC 3263 to the request;
+  //   (*) try contact any location we haven't already tried.
+  // Should all locations for the Route-enhanced request fail, we try the next
+  // location for the NON-Route-enhanced request (i.e., the original request).
+  // Only if ALL locations fail for ALL Route-enhanced requests, do we give up.
+
   // cf RFC 3263, section 4.3
   Self.UA.FindServersFor(Request, Self.TargetLocations);
 
@@ -3467,7 +3495,7 @@ begin
                                        [Self.Method, FailReason]));
   end
   else begin
-    Self.TrySendRequest(Request, Self.TargetLocations);
+    Self.TryAnotherRoutePath(Request, Self.TargetLocations);
   end;
 end;
 
@@ -3561,6 +3589,18 @@ begin
   Self.LocalGruu.DisplayName := Value;
 end;
 
+procedure TIdSipAction.TryAnotherRoutePath(Request: TIdSipRequest;
+                                           Targets: TIdSipLocations);
+begin
+  Request.Route.Clear;
+  if Self.OutOfDialog and not Request.IsCancel then
+    Request.AddHeaders(Self.UA.RoutePathFor(Targets.First));
+  Targets.RemoveFirst;
+
+  Self.UA.FindServersFor(Request, Self.AddressSpaceLocations);
+  Self.TrySendRequest(Request, Self.AddressSpaceLocations);
+end;
+
 procedure TIdSipAction.TrySendRequest(Request: TIdSipRequest;
                                       Targets: TIdSipLocations);
 var
@@ -3573,8 +3613,20 @@ begin
   // sending to try the next location, we must ensure that we don't retry
   // sending the message to an already-attempted location.
 
+  // Don't try to contact any already-attempted locations!
+  while (not Targets.IsEmpty) and Self.AttemptedLocations.Contains(Targets.First) do
+    Targets.RemoveFirst;
+
+  // It's possible that we've already tried ALL locations originally listed in
+  // Targets. If so, there's nothing more to be done!
+  if Targets.IsEmpty then begin
+    Self.NetworkFailureSending(Request);
+    Exit;
+  end;
+
   CurrentTarget := Targets.First.Copy;
   try
+    Self.AttemptedLocations.AddLocation(CurrentTarget);
     Targets.Remove(CurrentTarget);
 
     LocalBindings := TIdSipLocations.Create;
@@ -3596,10 +3648,6 @@ begin
         LocalAddress.Free;
       end;
 
-      // CANCELs get their Route path from the INVITEs they cancel.
-      if Self.OutOfDialog and not Request.IsCancel then
-        Request.AddHeaders(Self.UA.RoutePathFor(Request));
-
       // Synchronise our state to what actually went down to the network.
       // The condition means that an INVITE won't set its InitialRequest to an
       // ACK it's just sent.
@@ -3613,6 +3661,25 @@ begin
   finally
     CurrentTarget.Free;
   end;
+end;
+
+procedure TIdSipAction.TrySendRequestAgain(Request: TIdSipRequest;
+                                           Targets: TIdSipLocations);
+var
+  FailReason: String;
+begin
+  // All the locations for this Route-enhanced request have failed. It's
+  // time to try the next address space, if we have one. Targets contains
+  // the locations we will look up in the UA's proxy descriptions.
+
+  if Targets.IsEmpty then begin
+    FailReason := Format(RSNoLocationSucceeded, [Request.DestinationUri]);
+    Self.NotifyOfNetworkFailure(NoLocationSucceeded,
+                                Format(OutboundActionFailed,
+                                       [Self.Method, FailReason]));
+  end
+  else
+    Self.TryAnotherRoutePath(Request, Targets);
 end;
 
 //******************************************************************************

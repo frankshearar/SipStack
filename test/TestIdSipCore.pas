@@ -98,6 +98,9 @@ type
     NetworkFailure: Boolean;
     TransportParam: String;
 
+    procedure AddDefaultRoute(Proxy: String);
+    procedure AddRoute(AddressSpace, Proxy: String);
+    function  AsCIDR(Block, Netmask: String): String;
     function  CreateAction: TIdSipOutboundInitialInvite;
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Response: TIdSipResponse);
@@ -120,6 +123,10 @@ type
   published
     procedure TestAllLocationsFail;
     procedure TestLooseRoutingProxy;
+    procedure TestDomainNameToSubnetAddressSpace;
+    procedure TestDomainNameToDomainNameAddressSpace;
+    procedure TestDomainNameToDomainNameAddressSpaceInternetAddress;
+    procedure TestDomainNameWithLanAndInternetAddress;
     procedure TestStrictRoutingProxy;
     procedure TestUseCorrectTransport;
     procedure TestUseTransportParam;
@@ -1541,9 +1548,41 @@ begin
   Self.InviteOffer    := '';
   Self.NetworkFailure := false;
   Self.TransportParam := SctpTransport;
+
+  Self.Locator.Clear;
+  Self.Core.ClearAllRoutePaths;
 end;
 
 //* TestLocation Private methods ***********************************************
+
+procedure TestLocation.AddDefaultRoute(Proxy: String);
+var
+  U: TIdSipUri;
+begin
+  U := TIdSipUri.Create(Proxy);
+  try
+    Self.Core.DefaultRoutePath.AddRoute(U);
+  finally
+    U.Free;
+  end;
+end;
+
+procedure TestLocation.AddRoute(AddressSpace, Proxy: String);
+var
+  U: TIdSipUri;
+begin
+  U := TIdSipUri.Create(Proxy);
+  try
+    Self.Core.AddRoute(AddressSpace, U);
+  finally
+    U.Free;
+  end;
+end;
+
+function TestLocation.AsCIDR(Block, Netmask: String): String;
+begin
+  Result := Block + '/' + IntToStr(TIdIPAddressParser.AddressToMask(Netmask, TIdIPAddressParser.IPVersion(Netmask)));
+end;
 
 function TestLocation.CreateAction: TIdSipOutboundInitialInvite;
 begin
@@ -1603,6 +1642,18 @@ var
 begin
   // SRV records point to Self.Destination.Address.Host;
   // Self.Destination.Address.Host resolves to two name records.
+
+//  Fail('This test fails because it retries already-attempted locations');
+  // This is because the first lookup yields the two locations in the name
+  // records below. Then, for the first, the action finds the appropriate route
+  // set. There isn't one. The action does an RFC 3263 lookup on the request
+  // (which yields the same two records: no loose router Routes so it uses the
+  // Request-URI). Then TrySendRequest tries the two locations below. Both fail.
+  // Then it tries the next location from the FIRST lookup (::2), and repeats
+  // THE SAME STORY: it tries the A location, then the AAAA location!
+  //
+  // Instead, the action must track what locations it's already tried, and not
+  // retry those locations.
 
   Self.Locator.AddSRV(Self.Destination.Address.Host,
                       SrvUdpPrefix,
@@ -1676,6 +1727,142 @@ begin
   finally
     Uri.Free;
   end;
+end;
+
+procedure TestLocation.TestDomainNameToSubnetAddressSpace;
+const
+  DefaultProxy = 'sip:foo;lr';
+var
+  LanProxy: String;
+begin
+  // We try contact someone at a domain that resolves to an address in our LAN.
+  // We must use the LAN proxy, even though we have only defined a subnet
+  // address space.
+  LanProxy := Format('sip:%s;lr', [Self.LanGateway]);
+
+  Self.AddDefaultRoute(DefaultProxy);
+  Self.AddRoute(AsCIDR(Self.LanNetwork, Self.LanNetmask), LanProxy);
+
+  Self.Locator.AddA(Self.Destination.Address.Host, Self.LanDestination);
+
+  Self.MarkSentRequestCount;
+  Self.CreateAction;
+  CheckRequestSent('No request sent');
+
+  Check(Self.LastSentRequest.HasRoute, 'Request has no Route header');
+  CheckEquals(LanProxy, Self.LastSentRequest.FirstRoute.Address.AsString,
+              'Wrong route used, hence wrong address space');
+
+  Self.Dispatcher.Transport.FireOnException(Self.LastSentRequest,
+                                            EIdConnectException,
+                                            '10061',
+                                            'Connection refused');
+
+  Check(Self.NetworkFailure, 'No network failure notification');
+end;
+
+procedure TestLocation.TestDomainNameToDomainNameAddressSpace;
+const
+  DefaultProxy = 'sip:foo;lr';
+var
+  DomainProxy: String;
+begin
+  // We try contact someone at a domain that resolves to a LAN address. We must
+  // use the domain proxy, regardless of the fact that that machine's on our
+  // LAN.
+  DomainProxy := Format('sip:%s;lr', [Self.LanGateway]);
+
+  Self.AddDefaultRoute(DefaultProxy);
+  Self.AddRoute(AsCIDR(Self.LanNetwork, Self.LanNetmask), DomainProxy);
+
+  Self.Locator.AddA(Self.Destination.Address.Host, Self.LanDestination);
+
+  Self.MarkSentRequestCount;
+  Self.CreateAction;
+  CheckRequestSent('No request sent');
+
+  Check(Self.LastSentRequest.HasRoute, 'Request has no Route header');
+  CheckEquals(DomainProxy, Self.LastSentRequest.FirstRoute.Address.AsString,
+              'Wrong route used, hence wrong address space');
+end;
+
+procedure TestLocation.TestDomainNameToDomainNameAddressSpaceInternetAddress;
+const
+  DefaultProxy = 'sip:foo;lr';
+var
+  DomainProxy: String;
+begin
+  // We try contact someone at a domain that resolves to a LAN address. We must
+  // use the domain proxy, regardless of the fact that that machine's on the
+  // Internet.
+  DomainProxy := Format('sip:%s;lr', [Self.LanGateway]);
+
+  Self.AddDefaultRoute(DefaultProxy);
+  Self.AddRoute(AsCIDR(Self.LanNetwork, Self.LanNetmask), DomainProxy);
+
+  Self.Locator.AddA(Self.Destination.Address.Host, '1.2.3.4');
+
+  Self.MarkSentRequestCount;
+  Self.CreateAction;
+  CheckRequestSent('No request sent');
+
+  Check(Self.LastSentRequest.HasRoute, 'Request has no Route header');
+  CheckEquals(DefaultProxy, Self.LastSentRequest.FirstRoute.Address.AsString,
+              'Wrong route used, hence wrong address space');
+end;
+
+procedure TestLocation.TestDomainNameWithLanAndInternetAddress;
+const
+  ProxyHost           = 'foo';
+  DefaultProxy        = 'sip:' + ProxyHost + ';lr';
+  InternetDestination = '1.2.3.4';
+var
+  LanProxy: String;
+begin
+  // We try contact someone at a domain that resolves to a LAN address and an
+  // Internet address (in that order, for this particular name lookup). We first
+  // try the first location (the LAN address), and then the second location.
+  // When both fail, we signal an error.
+  LanProxy := Format('sip:%s;lr', [Self.LanGateway]);
+
+  Self.AddDefaultRoute(DefaultProxy);
+  Self.AddRoute(AsCIDR(Self.LanNetwork, Self.LanNetmask), LanProxy);
+
+  Self.Locator.AddA(Self.Destination.Address.Host, Self.LanDestination);
+  Self.Locator.AddA(Self.Destination.Address.Host, InternetDestination);
+  Self.Locator.AddA(ProxyHost, '2.3.4.5');
+  Self.Locator.AddA(ProxyHost, '3.4.5.6');
+
+  Self.MarkSentRequestCount;
+  Self.CreateAction;
+  CheckRequestSent('No request sent');
+
+  Check(Self.LastSentRequest.HasRoute, 'Request has no Route header');
+  CheckEquals(LanProxy, Self.LastSentRequest.FirstRoute.Address.AsString,
+              'Wrong route used, hence wrong address space: LAN address');
+
+  Self.Dispatcher.Transport.FireOnException(Self.LastSentRequest,
+                                            EIdConnectException,
+                                            '10061',
+                                            'Connection refused');
+  Check(not Self.NetworkFailure,
+        'Network failure, despite all the locations _only_for_this_address_space_ failing');
+
+  Self.Dispatcher.Transport.FireOnException(Self.LastSentRequest,
+                                            EIdConnectException,
+                                            '10061',
+                                            'Connection refused');
+
+  Check(not Self.NetworkFailure,
+        'Network failure, despite there still being another location to try in the default address space');
+
+  Self.Dispatcher.Transport.FireOnException(Self.LastSentRequest,
+                                            EIdConnectException,
+                                            '10061',
+                                            'Connection refused');
+
+  Check(Self.NetworkFailure,
+        'Network failure, for all locations in all address spaces');
 end;
 
 procedure TestLocation.TestStrictRoutingProxy;

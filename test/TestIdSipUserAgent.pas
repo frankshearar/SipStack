@@ -3854,9 +3854,10 @@ end;
 
 procedure TestConfigureProxies.TestNullRoutesFirstInPathIgnored;
 const
-  AddressSpace = 'local';
+  AddressSpace = '10.0.0.0/8';
   FirstProxy   = 'sip:proxy.local';
   SecondProxy  = 'sip:10.0.0.1';
+  Target       = 'roke.local';
 var
   Expected: TIdSipRoutePath;
   UA:       TIdSipUserAgent;
@@ -3864,6 +3865,8 @@ begin
   Self.Configuration.Add('Route: <null> ' + AddressSpace);
   Self.Configuration.Add('Route: <' + FirstProxy + '> ' + AddressSpace);
   Self.Configuration.Add('Route: <' + SecondProxy + '> ' + AddressSpace);
+  Self.Configuration.Add('NameServer: MOCK;ReturnOnlySpecifiedRecords');
+  Self.Configuration.Add('MockDns: A ' + Target + ' 10.0.0.2');
 
   Expected := TIdSipRoutePath.Create;
   try
@@ -3872,7 +3875,7 @@ begin
 
     UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
     try
-      CheckRoutePath(Expected, UA, 'roke.local', 'Null Route directives not ignored?');
+      CheckRoutePath(Expected, UA, Target, 'Null Route directives not ignored?');
     finally
       UA.Free;
     end;
@@ -3883,9 +3886,10 @@ end;
 
 procedure TestConfigureProxies.TestNullRoutesInPathIgnored;
 const
-  AddressSpace = 'local';
+  AddressSpace = '10.0.0.0/8';
   FirstProxy   = 'sip:proxy.local';
   SecondProxy  = 'sip:10.0.0.1';
+  Target       = 'roke.local';
 var
   Expected: TIdSipRoutePath;
   UA:       TIdSipUserAgent;
@@ -3893,6 +3897,8 @@ begin
   Self.Configuration.Add('Route: <' + FirstProxy + '> ' + AddressSpace);
   Self.Configuration.Add('Route: <null> ' + AddressSpace);
   Self.Configuration.Add('Route: <' + SecondProxy + '> ' + AddressSpace);
+  Self.Configuration.Add('NameServer: MOCK;ReturnOnlySpecifiedRecords');
+  Self.Configuration.Add('MockDns: A ' + Target + ' 10.0.0.2');
 
   Expected := TIdSipRoutePath.Create;
   try
@@ -3901,7 +3907,7 @@ begin
 
     UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
     try
-      CheckRoutePath(Expected, UA, 'roke.local', 'Null Route directives not ignored?');
+      CheckRoutePath(Expected, UA, Target, 'Null Route directives not ignored?');
     finally
       UA.Free;
     end;
@@ -3912,17 +3918,17 @@ end;
 
 procedure TestConfigureProxies.TestReconfigureCanClearRoutePath;
 const
-  FirstAddressSpace  = 'local';
+  FirstAddressSpace  = '10.0.0.0/8';
   FirstProxy         = 'sip:proxy.local';
-  SecondAddressSpace = '10.0.0.0/8';
+  LocalTarget        = 'roke.local';
+  OtherNetTarget     = '192.168.1.1';
+  SecondAddressSpace = '192.168.1.0/24';
   SecondProxy        = 'sip:10.0.0.1';
 var
   Expected:  TIdSipRoutePath;
   ExpectedReconfigured: TIdSipRoutePath;
   UA:             TIdSipUserAgent;
 begin
-  Self.Configuration.Add('Route: <' + FirstProxy + '> ' + FirstAddressSpace);
-
   Expected := TIdSipRoutePath.Create;
   try
     Expected.Add(RouteHeader).Value := '<' + FirstProxy + '>';
@@ -3931,18 +3937,22 @@ begin
     try
       ExpectedReconfigured.Add(RouteHeader).Value := '<' + SecondProxy + '>';
 
+      Self.Configuration.Add('Route: <' + FirstProxy + '> ' + FirstAddressSpace);
+      Self.Configuration.Add('NameServer: MOCK');
+      Self.Configuration.Add('MockDns: A ' + LocalTarget + ' 10.0.0.2');
+
       UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
       try
-        CheckRoutePath(Expected,             UA, 'roke.local',  'First address space');
-        CheckRoutePath(Self.EmptyRoutePath,  UA, '10.0.0.2',    'Second address space');
-        CheckRoutePath(Self.EmptyRoutePath,  UA, 'example.com', 'Default');
+        CheckRoutePath(Expected,             UA, LocalTarget,    'First address space');
+        CheckRoutePath(Self.EmptyRoutePath,  UA, OtherNetTarget, 'Second address space');
+        CheckRoutePath(Self.EmptyRoutePath,  UA, 'example.com',  'Default');
 
         Self.Configuration[Self.Configuration.Count - 1] := 'Route: <' + SecondProxy + '> ' + SecondAddressSpace;
 
         Self.Conf.UpdateConfiguration(UA, Self.Configuration);
-        CheckRoutePath(Self.EmptyRoutePath,  UA, 'roke.local',  'First address space');
-        CheckRoutePath(ExpectedReconfigured, UA, '10.0.0.2',    'Second address space');
-        CheckRoutePath(Self.EmptyRoutePath,  UA, 'example.com', 'Default');
+        CheckRoutePath(Self.EmptyRoutePath,  UA, LocalTarget,    'Post-reconfiguration: First address space');
+        CheckRoutePath(ExpectedReconfigured, UA, OtherNetTarget, 'Post-reconfiguration: Second address space');
+        CheckRoutePath(Self.EmptyRoutePath,  UA, 'example.com',  'Post-reconfiguration: Default');
       finally
         UA.Free;
       end;
@@ -3956,10 +3966,12 @@ end;
 
 procedure TestConfigureProxies.TestTwoAddressSpaces;
 const
-  FirstAddressSpace  = 'local';
+  FirstAddressSpace  = '10.0.0.0/8';
   FirstProxy         = 'sip:proxy.local';
-  SecondAddressSpace = '10.0.0.0/8';
+  FirstTarget        = '10.0.0.2';
+  SecondAddressSpace = '192.168.0.0/24';
   SecondProxy        = 'sip:10.0.0.1';
+  SecondTarget       = '192.168.0.1';
 var
   ExpectedLocal:  TIdSipRoutePath;
   ExpectedSubnet: TIdSipRoutePath;
@@ -3978,8 +3990,8 @@ begin
 
       UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
       try
-        CheckRoutePath(ExpectedLocal,       UA, 'roke.local',  'First address space');
-        CheckRoutePath(ExpectedSubnet,      UA, '10.0.0.2',    'Second address space');
+        CheckRoutePath(ExpectedLocal,       UA, FirstTarget,   'First address space');
+        CheckRoutePath(ExpectedSubnet,      UA, SecondTarget,  'Second address space');
         CheckRoutePath(Self.EmptyRoutePath, UA, 'example.com', 'Default');
       finally
         UA.Free;

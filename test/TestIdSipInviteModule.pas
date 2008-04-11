@@ -3162,8 +3162,12 @@ begin
 
     Self.MarkSentRequestCount;
     Invite.Terminate;
-    CheckRequestSent('No CANCEL sent');
-    Check(Self.LastSentRequest.HasRoute, 'Route header not added to (out-of-dialog) INVITE');
+    CheckRequestSent(Self.ClassName + ': No CANCEL sent');
+    CheckEquals(MethodCancel, Self.LastSentRequest.Method, Self.ClassName + ': Unexpected request sent');
+
+    Check(Self.LastSentRequest.HasRoute, Self.ClassName + ': Route header not added to CANCEL of (out-of-dialog) INVITE');
+    Check(Invite.InitialRequest.Route.Equals(Self.LastSentRequest.Route),
+          Self.ClassName + ': RFC 3261, section 9.1: To support stateless proxies, the CANCEL MUST have the same route path as the INVITE it''s cancelling');
   finally
     Uri.Free;
   end;
@@ -3700,7 +3704,7 @@ var
   ProxyUri: TIdSipUri;
 begin
   Check(Self.Dialog.RouteSet.IsEmpty,
-        'For the purposes of this test the dialog''s route set must be empty');
+        Self.ClassName + ': For the purposes of this test the dialog''s route set must be empty');
 
   ProxyUri := TIdSipUri.Create(Uri);
   try
@@ -3714,10 +3718,10 @@ begin
 
   Self.MarkSentRequestCount;
   Invite.Terminate;
-  CheckRequestSent('No request sent');
-  CheckEquals(MethodCancel, Self.LastSentRequest.Method, 'No CANCEL sent');
+  CheckRequestSent(Self.ClassName + ': No request sent');
+  CheckEquals(MethodCancel, Self.LastSentRequest.Method, Self.ClassName + ': No CANCEL sent');
   Check(Self.Dialog.RouteSet.Equals(Self.LastSentRequest.Route),
-        'RFC 3261, section 9.1: To support stateless proxies, the CANCEL MUST have the same route path as the INVITE it''s cancelling');
+        Self.ClassName + ': RFC 3261, section 9.1: To support stateless proxies, the CANCEL MUST have the same route path as the INVITE it''s cancelling');
 end;
 
 procedure TestTIdSipOutboundReInvite.TestSendInInboundSessionWithAuthentication;
