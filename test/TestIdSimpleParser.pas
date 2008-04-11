@@ -46,6 +46,7 @@ type
                                   Increment: Cardinal = 1);
     procedure Clear(var Address: TIdIPv6AddressRec);
   published
+    procedure TestAddressToMask;
     procedure TestExpandIPv6Address;
     procedure TestIncIPAddress;
     procedure TestIncIPv4Address;
@@ -515,6 +516,39 @@ end;
 //* TestTIdIPAddressParser                                                     *
 //******************************************************************************
 //* TestTIdIPAddressParser Public methods **************************************
+
+procedure TestTIdIPAddressParser.TestAddressToMask;
+begin
+  CheckEquals(0,  TIdIPAddressParser.AddressToMask('0.0.0.0', Id_IPv4),         '0.0.0.0');
+  CheckEquals(8,  TIdIPAddressParser.AddressToMask('255.0.0.0', Id_IPv4),       '255.0.0.0');
+  CheckEquals(7,  TIdIPAddressParser.AddressToMask('254.0.0.0', Id_IPv4),       '254.0.0.0');
+  CheckEquals(32, TIdIPAddressParser.AddressToMask('255.255.255.255', Id_IPv4), '255.255.255.255');
+
+  CheckEquals(0, TIdIPAddressParser.AddressToMask('::', Id_IPv6),           '::');
+  CheckEquals(8, TIdIPAddressParser.AddressToMask('ff00::', Id_IPv6),       'ff00::');
+  CheckEquals(32, TIdIPAddressParser.AddressToMask('ffff:ffff::', Id_IPv6), 'ffff:ffff::');
+  CheckEquals(128, TIdIPAddressParser.AddressToMask('FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF', Id_IPv6),
+              'FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF');
+
+  // Don't do these things: they're here to document fully the behaviour of the
+  // function.
+  CheckEquals(0, TIdIPAddressParser.AddressToMask('7FFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF', Id_IPv6), '7FFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF');
+  CheckEquals(0, TIdIPAddressParser.AddressToMask('127.255.255.255', Id_IPv4), '127.255.255.255');
+
+  try
+    TIdIPAddressParser.AddressToMask('', Id_IPv4);
+    Fail('Failed to bail out on bad address '''' for an IPv4 address');
+  except
+    on EBadParameter do;
+  end;
+
+  try
+    TIdIPAddressParser.AddressToMask(':?', Id_IPv6);
+    Fail('Failed to bail out on bad address '''' for an IPv6 address');
+  except
+    on EBadParameter do;
+  end;
+end;
 
 procedure TestTIdIPAddressParser.TestExpandIPv6Address;
 begin

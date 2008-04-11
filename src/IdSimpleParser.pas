@@ -24,6 +24,7 @@ type
   TIdIPv6AddressRec = array[0..7] of Word;
 
   TIdIPAddressParser = class(TObject)
+    class function  AddressToMask(Netmask: String; IPVersion: TIdIPVersion): Cardinal;
     class function  ExpandIPv6Address(const IPAddress: String): String;
     class function  IncIPAddress(const IPAddress: String;
                                  N: Cardinal = 1): String;
@@ -417,6 +418,48 @@ end;
 //******************************************************************************
 //* TIdIPAddressParser Public methods ******************************************
 
+class function TIdIPAddressParser.AddressToMask(Netmask: String; IPVersion: TIdIPVersion): Cardinal;
+var
+  Addr4: Cardinal;
+  Addr6: TIdIPv6AddressRec;
+  I:     Integer;
+begin
+  // Given a netmask ("255.0.0.0", "ffff::", etc.), return the number of
+  // significant bits, such as one might use to describe a CIDR block. For
+  // instance, this function will convert something like "255.255.255.0" to
+  // "24", or "ffff:ffff:ffff::" to "96".
+  //
+  // See MaskToAddress for the inverse function.
+
+  Result := 0;
+
+  if Self.IsIPv4Address(Netmask) then begin
+    Addr4 := Self.InetAddr(Netmask);
+
+    while ((Addr4 and $80000000) <> 0) do begin
+      Inc(Result);
+      Addr4 := (Addr4 and $7fffffff) shl 1;
+    end;
+  end
+  else begin
+    try
+      Self.ParseIPv6Address(Netmask, Addr6);
+
+      for I := Low(Addr6) to High(Addr6) do begin
+        if ((Addr6[I] and $8000) = 0) then Break;
+        
+        while ((Addr6[I] and $8000) <> 0) do begin
+          Inc(Result);
+          Addr6[I] := (Addr6[I] and $7fff) shl 1;
+        end;
+      end;
+    except
+      on EConvertError do
+        raise EBadParameter.Create(Format('''%s'' is not an IPv4 or IPv6 netmask', [Netmask]));
+    end;
+  end;
+end;
+
 class function TIdIPAddressParser.ExpandIPv6Address(const IPAddress: String): String;
 var
   Address: TIdIPv6AddressRec;
@@ -720,6 +763,8 @@ var
   Shift: Integer;
 begin
   // Convert something like "24" to "255.255.255.0", or "96" to "ffff:ffff:ffff::"
+  //
+  // See AddressToMask for the inverse function.
 
   Result := '';
   if (IPVersion = Id_IPv4) then begin
