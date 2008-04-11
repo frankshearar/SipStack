@@ -9074,6 +9074,8 @@ end;
 
 function TIdSipRequest.CreateCancel: TIdSipRequest;
 begin
+  // See RFC 3261, section 9.1.
+
   Assert(Self.IsInvite,
          Format(OnlyCancelInvites, [Self.Method]));
   Result := TIdSipRequest.Create;
