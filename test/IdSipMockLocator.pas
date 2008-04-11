@@ -67,6 +67,7 @@ type
                      Weight: Word;
                      Port: Cardinal;
                      const Target: String);
+    procedure Clear;
     procedure RemoveNameRecords(const DomainName: String);
     procedure ResetLookupCount;
 
@@ -186,6 +187,13 @@ begin
   finally
     NewSrv.Free;
   end;
+end;
+
+procedure TIdSipMockLocator.Clear;
+begin
+  Self.SRV.Clear;
+  Self.NameRecords.Clear;  
+  Self.NAPTR.Clear;
 end;
 
 procedure TIdSipMockLocator.RemoveNameRecords(const DomainName: String);
