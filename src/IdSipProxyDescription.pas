@@ -112,6 +112,7 @@ type
     Descs:             TObjectList;
     fDefaultRoutePath: TIdSipRoutePath;
 
+    function  CanonicaliseAddressSpace(AddressSpace: String): String;
     function  FindProxyFor(Address: String): TIdProxyDescription;
     function  FindProxyForAddressSpace(AddressSpace: String): TIdProxyDescription;
     function  HasProxyForAddressSpace(AddressSpace: String): Boolean;
@@ -127,6 +128,7 @@ type
     function  Count: Integer;
     procedure RemoveDescription(AddressSpace: String);
     function  RoutePathFor(Address: String): TIdSipRoutePath;
+    function  RoutePathForAddressSpace(AddressSpace: String): TIdSipRoutePath;
 
     property DefaultRoutePath: TIdSipRoutePath read fDefaultRoutePath write SetDefaultRoutePath;
   end;
@@ -256,9 +258,7 @@ begin
 
     Result := Self.AddressToAddressSpaceType(Address);
 
-    if Self.SubnetTypeMatchesAddressType(Result, Subnet) then
-      Result := Result
-    else
+    if not Self.SubnetTypeMatchesAddressType(Result, Subnet) then
       Result := asUnknown;
   end
   else begin
@@ -628,7 +628,31 @@ begin
     Result := Self.DefaultRoutePath;
 end;
 
+function TIdProxyDescriptions.RoutePathForAddressSpace(AddressSpace: String): TIdSipRoutePath;
+var
+  Desc: TIdProxyDescription;
+begin
+  Desc := Self.FindProxyForAddressSpace(AddressSpace);
+
+  if Assigned(Desc) then
+    Result := Desc.RoutePath
+  else
+    Result := Self.DefaultRoutePath;
+end;
+
 //* TIdProxyDescriptions Private methods ***************************************
+
+function TIdProxyDescriptions.CanonicaliseAddressSpace(AddressSpace: String): String;
+var
+  S: TIdAddressSpace;
+begin
+  S := TIdAddressSpace.CreateAddressSpace(AddressSpace);
+  try
+    Result := S.Description;
+  finally
+    S.Free;
+  end;
+end;
 
 function TIdProxyDescriptions.FindProxyFor(Address: String): TIdProxyDescription;
 var
@@ -645,11 +669,14 @@ end;
 
 function TIdProxyDescriptions.FindProxyForAddressSpace(AddressSpace: String): TIdProxyDescription;
 var
-  I: Integer;
+  CanonicalAddressSpace: String;
+  I:                     Integer;
 begin
+  CanonicalAddressSpace := Self.CanonicaliseAddressSpace(AddressSpace);
+
   Result := nil;
   for I := 0 to Self.Descs.Count - 1 do begin
-    if (TIdProxyDescription(Self.Descs[I]).AddressSpace = AddressSpace) then begin
+    if (TIdProxyDescription(Self.Descs[I]).AddressSpace = CanonicalAddressSpace) then begin
       Result := TIdProxyDescription(Self.Descs[I]);
       Break;
     end;

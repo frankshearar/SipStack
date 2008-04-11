@@ -97,6 +97,7 @@ type
     procedure TestAddDescriptionAndRoutePathFor;
     procedure TestAddRoute;
     procedure TestAddRouteNoProxyPresent;
+    procedure TestAddRouteForCanonicalisesNetmask;
     procedure TestAddRouteCanonicalisesNetmask;
     procedure TestClearAllDescriptions;
     procedure TestContainedRoutesOrderIndependent;
@@ -689,6 +690,20 @@ begin
   end;
 
   CheckEquals(Self.LanRoute, Self.Proxies.RoutePathFor(Self.LanTarget), 'LAN routes not all added');
+end;
+
+procedure TestTIdProxyDescriptions.TestAddRouteForCanonicalisesNetmask;
+const
+  CIDRFormat = '10.0.0.0/8';
+begin
+  // The first AddRouteFor adds a new address space.
+  // The second AddRouteFor should match against the first address space added.
+
+  Self.Proxies.AddRouteFor(CIDRFormat, Self.LanRoute.Items[0] as TIdSipRouteHeader);
+  Self.Proxies.AddRouteFor(CIDRFormat, Self.LanRoute.Items[1] as TIdSipRouteHeader);
+
+  CheckEquals(1, Self.Proxies.Count, 'AddRouteFor doesn''t canonicalise a netmask, if present');
+  CheckEquals(Self.LanRoute, Self.Proxies.RoutePathFor('10.0.0.1'), 'Route path incorrect');
 end;
 
 procedure TestTIdProxyDescriptions.TestAddRouteCanonicalisesNetmask;
