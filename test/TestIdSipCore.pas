@@ -1643,18 +1643,6 @@ begin
   // SRV records point to Self.Destination.Address.Host;
   // Self.Destination.Address.Host resolves to two name records.
 
-//  Fail('This test fails because it retries already-attempted locations');
-  // This is because the first lookup yields the two locations in the name
-  // records below. Then, for the first, the action finds the appropriate route
-  // set. There isn't one. The action does an RFC 3263 lookup on the request
-  // (which yields the same two records: no loose router Routes so it uses the
-  // Request-URI). Then TrySendRequest tries the two locations below. Both fail.
-  // Then it tries the next location from the FIRST lookup (::2), and repeats
-  // THE SAME STORY: it tries the A location, then the AAAA location!
-  //
-  // Instead, the action must track what locations it's already tried, and not
-  // retry those locations.
-
   Self.Locator.AddSRV(Self.Destination.Address.Host,
                       SrvUdpPrefix,
                       0,
