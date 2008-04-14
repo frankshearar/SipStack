@@ -78,7 +78,6 @@ type
     Transport: TIdSipTCPTransport;
 
     function SipClient: TIdSipTcpClient;
-
   protected
     procedure AfterRun; override;
     function  ClientType: TIdSipTcpClientClass; virtual;
