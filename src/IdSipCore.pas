@@ -3592,9 +3592,15 @@ end;
 procedure TIdSipAction.TryAnotherRoutePath(Request: TIdSipRequest;
                                            Targets: TIdSipLocations);
 begin
-  Request.Route.Clear;
-  if Self.OutOfDialog and not Request.IsCancel then
-    Request.AddHeaders(Self.UA.RoutePathFor(Targets.First));
+  // A CANCEL always has the same Route headers as the request it's cancelling.
+  // An ACK is a special case. It's constructed much like an in-dialog, when sent
+  // in response to a 200 OK. See RFC 3261, sections 13.2.2.4 and 17.1.1.3.
+  if not Request.IsCancel then begin
+    if Self.OutOfDialog and not Request.IsAck then begin
+      Request.Route.Clear;
+      Request.AddHeaders(Self.UA.RoutePathFor(Targets.First));
+    end;
+  end;
   Targets.RemoveFirst;
 
   Self.UA.FindServersFor(Request, Self.AddressSpaceLocations);
