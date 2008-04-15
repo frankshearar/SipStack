@@ -655,15 +655,9 @@ type
                                             IIdSipTransactionUserListener)
   private
     fAbstractUserAgentParam:  TIdSipAbstractCore;
-    fAuthenticationChallenge: Boolean;
     fBindingParam:            TIdConnectionBindings;
-    fChallengedRequestParam:  TIdSipRequest;
     fDroppedUnmatchedMessage: Boolean;
     fMessageParam:            TIdSipMessage;
-    fPassword:                String;
-    fResponseParam:           TIdSipResponse;
-    fTryAgain:                Boolean;
-    fUsername:                String;
 
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
@@ -671,16 +665,10 @@ type
   public
     constructor Create; override;
 
-    property AbstractUserAgentParam:  TIdSipAbstractCore       read fAbstractUserAgentParam;
-    property AuthenticationChallenge: Boolean                  read fAuthenticationChallenge;
+    property AbstractUserAgentParam:  TIdSipAbstractCore    read fAbstractUserAgentParam;
     property BindingParam:            TIdConnectionBindings read fBindingParam;
-    property ChallengedRequestParam:  TIdSipRequest            read fChallengedRequestParam;
-    property DroppedUnmatchedMessage: Boolean                  read fDroppedUnmatchedMessage;
-    property MessageParam:            TIdSipMessage            read fMessageParam;
-    property Password:                String                   read fPassword write fPassword;
-    property ResponseParam:           TIdSipResponse           read fResponseParam;
-    property TryAgain:                Boolean                  read fTryAgain write fTryAgain;
-    property Username:                String                   read fUsername write fUsername;
+    property DroppedUnmatchedMessage: Boolean               read fDroppedUnmatchedMessage;
+    property MessageParam:            TIdSipMessage         read fMessageParam;
   end;
 
   TIdSipTestSubscribeModuleListener = class(TIdSipTestActionListener,
@@ -2329,7 +2317,6 @@ constructor TIdSipTestTransactionUserListener.Create;
 begin
   inherited Create;
 
-  Self.fAuthenticationChallenge := false;
   Self.fDroppedUnmatchedMessage := false;
 end;
 
