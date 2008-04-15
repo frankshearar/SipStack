@@ -253,14 +253,6 @@ type
     procedure CheckBadEventResponseSent(const UnknownEvent: String);
     procedure CheckNoPackageFound(PackageType: TIdSipEventPackageClass);
     procedure CheckPackageFound(PackageType: TIdSipEventPackageClass);
-    procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractCore;
-                                        Challenge: TIdSipResponse;
-                                        var Username: String;
-                                        var Password: String;
-                                        var TryAgain: Boolean); overload;
-    procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractCore;
-                                        ChallengedRequest: TIdSipRequest;
-                                        Challenge: TIdSipResponse); overload;
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
                                         Binding: TIdConnectionBindings);
@@ -1178,22 +1170,6 @@ procedure TestTIdSipSubscribeModule.CheckNoPackageFound(PackageType: TIdSipEvent
 begin
   Check(not Assigned(Self.Module.Package(PackageType.EventPackage)),
         PackageType.EventPackage + ' found');
-end;
-
-procedure TestTIdSipSubscribeModule.OnAuthenticationChallenge(UserAgent: TIdSipAbstractCore;
-                                                              Challenge: TIdSipResponse;
-                                                              var Username: String;
-                                                              var Password: String;
-                                                              var TryAgain: Boolean);
-begin
-  // Do nothing.
-end;
-
-procedure TestTIdSipSubscribeModule.OnAuthenticationChallenge(UserAgent: TIdSipAbstractCore;
-                                                              ChallengedRequest: TIdSipRequest;
-                                                              Challenge: TIdSipResponse);
-begin
-  // Do nothing.
 end;
 
 procedure TestTIdSipSubscribeModule.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;

@@ -665,14 +665,6 @@ type
     fTryAgain:                Boolean;
     fUsername:                String;
 
-    procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractCore;
-                                        Challenge: TIdSipResponse;
-                                        var Username: String;
-                                        var Password: String;
-                                        var TryAgain: Boolean); overload;
-    procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractCore;
-                                        ChallengedRequest: TIdSipRequest;
-                                        Challenge: TIdSipResponse); overload;
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
                                         Binding: TIdConnectionBindings);
@@ -2342,38 +2334,6 @@ begin
 end;
 
 //* TIdSipTestTransactionUserListener Private methods **************************
-
-procedure TIdSipTestTransactionUserListener.OnAuthenticationChallenge(UserAgent: TIdSipAbstractCore;
-                                                                      Challenge: TIdSipResponse;
-                                                                      var Username: String;
-                                                                      var Password: String;
-                                                                      var TryAgain: Boolean);
-begin
-  Self.fAbstractUserAgentParam  := UserAgent;
-  Self.fAuthenticationChallenge := true;
-  Self.fResponseParam           := Challenge;
-
-  // We set the var parameter, not our instance variable!
-  Password := Self.Password;
-  TryAgain := Self.TryAgain;
-  Username := Self.Username;
-
-  if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create(Self.ClassName + '.OnAuthenticationChallenge');
-end;
-
-procedure TIdSipTestTransactionUserListener.OnAuthenticationChallenge(UserAgent: TIdSipAbstractCore;
-                                                                      ChallengedRequest: TIdSipRequest;
-                                                                      Challenge: TIdSipResponse);
-begin
-  Self.fAbstractUserAgentParam  := UserAgent;
-  Self.fAuthenticationChallenge := true;
-  Self.fChallengedRequestParam  := ChallengedRequest;
-  Self.fResponseParam           := Challenge;
-
-  if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create(Self.ClassName + '.OnAuthenticationChallenge');
-end;
 
 procedure TIdSipTestTransactionUserListener.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                                                       Message: TIdSipMessage;

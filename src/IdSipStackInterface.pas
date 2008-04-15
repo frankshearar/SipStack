@@ -111,14 +111,6 @@ type
                                       Notify: TIdSipRequest);
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Response: TIdSipResponse); overload;
-    procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractCore;
-                                        Challenge: TIdSipResponse;
-                                        var Username: String;
-                                        var Password: String;
-                                        var TryAgain: Boolean); overload;
-    procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractCore;
-                                        ChallengedRequest: TIdSipRequest;
-                                        Challenge: TIdSipResponse); overload;
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
                                         Binding: TIdConnectionBindings);
@@ -1973,20 +1965,6 @@ begin
     Data.Free;
   end;
 end;
-
-procedure TIdSipStackInterface.OnAuthenticationChallenge(UserAgent: TIdSipAbstractCore;
-                                                         Challenge: TIdSipResponse;
-                                                         var Username: String;
-                                                         var Password: String;
-                                                         var TryAgain: Boolean);
-begin
-end;
-
-procedure TIdSipStackInterface.OnAuthenticationChallenge(UserAgent: TIdSipAbstractCore;
-                                                         ChallengedRequest: TIdSipRequest;
-                                                         Challenge: TIdSipResponse);
-begin
-end;                                                         
 
 procedure TIdSipStackInterface.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                                          Message: TIdSipMessage;

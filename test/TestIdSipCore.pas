@@ -24,14 +24,6 @@ type
     procedure CheckCommaSeparatedHeaders(const ExpectedValues: String;
                                          Header: TIdSipHeader;
                                          const Msg: String);
-    procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractCore;
-                                        Challenge: TIdSipResponse;
-                                        var Username: String;
-                                        var Password: String;
-                                        var TryAgain: Boolean); overload;
-    procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractCore;
-                                        ChallengedRequest: TIdSipRequest;
-                                        Challenge: TIdSipResponse); overload;
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
                                         Binding: TIdConnectionBindings);
@@ -479,21 +471,6 @@ begin
     Values.Free;
   end;
 end;
-
-procedure TestTIdSipAbstractCore.OnAuthenticationChallenge(UserAgent: TIdSipAbstractCore;
-                                                           Challenge: TIdSipResponse;
-                                                           var Username: String;
-                                                           var Password: String;
-                                                           var TryAgain: Boolean);
-begin
-end;
-
-procedure TestTIdSipAbstractCore.OnAuthenticationChallenge(UserAgent: TIdSipAbstractCore;
-                                                           ChallengedRequest: TIdSipRequest;
-                                                           Challenge: TIdSipResponse);
-begin
-end;
-
 
 procedure TestTIdSipAbstractCore.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                                            Message: TIdSipMessage;
