@@ -273,8 +273,8 @@ type
     TransactionConfirmed: Boolean;
 
     procedure MoveToCompletedState(Tran: TIdSipTransaction);
-    procedure MoveToConfirmedState;
-    procedure MoveToTerminatedState;
+    procedure MoveToConfirmedState(Tran: TIdSipTransaction);
+    procedure MoveToTerminatedState(Tran: TIdSipServerInviteTransaction);
     procedure OnInitialRequestSentToTU(Sender: TObject;
                                        R: TIdSipRequest);
     procedure ReceiveInvite;
@@ -2836,23 +2836,23 @@ begin
               'MoveToCompletedState postcondition');
 end;
 
-procedure TestTIdSipServerInviteTransaction.MoveToConfirmedState;
+procedure TestTIdSipServerInviteTransaction.MoveToConfirmedState(Tran: TIdSipTransaction);
 begin
   CheckEquals(itsCompleted, Tran.State,
               'MoveToCompletedState precondition');
 
   Self.Request.Method := MethodAck;
-  Self.Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
+  Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
 
-  CheckEquals(itsConfirmed, Self.Tran.State,
+  CheckEquals(itsConfirmed, Tran.State,
               'MoveToCompletedState postcondition');
 end;
 
-procedure TestTIdSipServerInviteTransaction.MoveToTerminatedState;
+procedure TestTIdSipServerInviteTransaction.MoveToTerminatedState(Tran: TIdSipServerInviteTransaction);
 begin
-  Self.ServerTran.FireTimerI;
+  Tran.FireTimerI;
 
-  CheckEquals(itsTerminated, Self.ServerTran.State,
+  CheckEquals(itsTerminated, Tran.State,
               'MoveToTerminatedState postcondition');
 end;
 
@@ -2926,7 +2926,7 @@ end;
 procedure TestTIdSipServerInviteTransaction.FireTimerHInConfirmedState;
 begin
   Self.MoveToCompletedState(Self.ServerTran);
-  Self.MoveToConfirmedState;
+  Self.MoveToConfirmedState(Self.ServerTran);
 
   Self.ServerTran.FireTimerH;
 
@@ -3041,7 +3041,7 @@ end;
 procedure TestTIdSipServerInviteTransaction.TestReceiveInviteInConfirmedState;
 begin
   Self.MoveToCompletedState(Self.Tran);
-  Self.MoveToConfirmedState;
+  Self.MoveToConfirmedState(Self.Tran);
 
   Self.MarkSentResponseCount;
 
@@ -3335,23 +3335,23 @@ begin
               Self.DebugTimer.EventCount,
               'Timer G fired in Proceeding');
 
-  Self.MoveToCompletedState(Self.Tran);
-  Self.MoveToConfirmedState;
+  Self.MoveToCompletedState(Self.ServerTran);
+  Self.MoveToConfirmedState(Self.ServerTran);
 
   Self.MarkEventCount;
   Self.ServerTran.FireTimerG;
   CheckEventNotScheduled('Timer G fired in Confirmed');
 
   Self.MarkEventCount;
-  Self.MoveToTerminatedState;
+  Self.MoveToTerminatedState(Self.ServerTran);
   Self.ServerTran.FireTimerG;
   CheckEventNotScheduled('Timer G fired in Terminated');
 end;
 
 procedure TestTIdSipServerInviteTransaction.TestTimerGStops;
 begin
-  Self.MoveToCompletedState(Self.Tran);
-  Self.MoveToConfirmedState;
+  Self.MoveToCompletedState(Self.ServerTran);
+  Self.MoveToConfirmedState(Self.ServerTran);
 
   Self.MockTransport.ResetSentResponseCount;
   Self.ServerTran.FireTimerG;
@@ -3418,7 +3418,7 @@ begin
   Self.MarkEventCount;
 
   Self.MoveToCompletedState(Self.Tran);
-  Self.MoveToConfirmedState;
+  Self.MoveToConfirmedState(Self.Tran);
 
   CheckEventScheduled('No event scheduled');
 
@@ -3449,7 +3449,7 @@ begin
   Self.CheckTerminated := Self.Terminated;
 
   Self.MoveToCompletedState(Self.Tran);
-  Self.MoveToConfirmedState;
+  Self.MoveToConfirmedState(Self.Tran);
 
   Self.ServerTran.FireTimerI;
 
