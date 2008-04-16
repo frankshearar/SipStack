@@ -621,6 +621,7 @@ type
     procedure TestPutOnHoldWhileOnHold;
     procedure TestSendData; virtual;
     procedure TestSendDataWhenNotSender;
+    procedure TestSetTimer; virtual;
     procedure TestStartListeningPortAboveAllowedRange; virtual;
     procedure TestStartListeningPortBelowAllowedRange; virtual;
     procedure TestStartListeningRefusedStream;
@@ -668,6 +669,7 @@ type
     procedure TestRTPListenersGetRTP;
     procedure TestSetRemoteDescriptionSendsNoPackets;
     procedure TestSetRemoteDescriptionRegistersRemoteRtpMaps;
+    procedure TestSetTimer; override;
     procedure TestStartListening;
     procedure TestStartListeningRegistersLocalRtpMaps;
     procedure TestStartListeningTriesConsecutivePorts;
@@ -683,6 +685,7 @@ type
     procedure SendData(Stream: TIdSdpBaseMediaStream); override;
   published
     procedure TestSendData; override;
+    procedure TestSetTimer; override;
   end;
 
   TestTIdSdpTcpConnectionRegistry = class(TTestCase)
@@ -894,6 +897,7 @@ type
                               Port: Cardinal;
                               Msg: String); override;
   published
+    procedure TestSetTimer; override;
     procedure TestStartListeningPortAboveAllowedRange; override;
     procedure TestStartListeningPortBelowAllowedRange; override;
     procedure TestUnusedPortsSwitchOff; override;
@@ -7625,6 +7629,12 @@ begin
   end;
 end;
 
+procedure TestTIdSdpBaseMediaStream.TestSetTimer;
+begin
+  // Setting the Timer property must set the Timer property of each Connection.
+  Fail(Self.ClassName + ' MUST override TestSetTimer');
+end;
+
 procedure TestTIdSdpBaseMediaStream.TestStartListeningPortAboveAllowedRange;
 const
   LowerLimit  = 15000;
@@ -8305,6 +8315,26 @@ begin
         TEEncodingName + ' not registered');
 end;
 
+procedure TestTIdSDPMediaStream.TestSetTimer;
+var
+  NewTimer: TIdDebugTimerQueue;
+  OldTimer: TIdDebugTimerQueue;
+begin
+  OldTimer := Self.Media.Timer as TIdDebugTimerQueue;
+
+  NewTimer := TIdDebugTimerQueue.Create(false);
+  try
+    Self.Media.Timer := NewTimer;
+
+    Self.Media.JoinSession;
+    Check(nil =  OldTimer.LastEventScheduled(TIdRTPTransmissionTimeExpire), 'Connection used the old timer');
+    Check(nil <> NewTimer.LastEventScheduled(TIdRTPTransmissionTimeExpire), 'Connection didn''t use the new timer');
+  finally
+    Self.Media.Timer := OldTimer;
+    NewTimer.Terminate;
+  end;
+end;
+
 procedure TestTIdSDPMediaStream.TestStartListening;
 begin
   Self.Media.StopListening;
@@ -8505,6 +8535,11 @@ begin
   finally
     Stream.Free;
   end;
+end;
+
+procedure TestTIdSdpNullMediaStream.TestSetTimer;
+begin
+  // Null timers don't do anything.
 end;
 
 //******************************************************************************
@@ -10013,6 +10048,39 @@ begin
 end;
 
 //* TestTIdSdpTcpMediaStream Published methods *********************************
+
+procedure TestTIdSdpTcpMediaStream.TestSetTimer;
+var
+  NewTimer: TIdDebugTimerQueue;
+  NullData: TStream;
+  OldTimer: TIdDebugTimerQueue;
+  Stream:   TIdSdpTcpMediaStream;
+begin
+  Stream := Self.CreateStream as TIdSdpTcpMediaStream;
+  try
+    OldTimer := Stream.Timer as TIdDebugTimerQueue;
+    
+    NewTimer := TIdDebugTimerQueue.Create(false);
+    try
+      Stream.Timer := NewTimer;
+
+      NullData := TMemoryStream.Create;
+      try
+        Stream.SendData(NullData, '', 0);
+      finally
+        NullData.Free;
+      end;
+
+      Check(nil =  OldTimer.LastEventScheduled(TIdSdpTcpSendDataWait), 'Connection used the old timer');
+      Check(nil <> NewTimer.LastEventScheduled(TIdSdpTcpSendDataWait), 'Connection didn''t use the new timer');
+    finally
+      Stream.Timer := OldTimer;
+      NewTimer.Terminate;
+    end;
+  finally
+    Stream.Free;
+  end;
+end;
 
 procedure TestTIdSdpTcpMediaStream.TestStartListeningPortAboveAllowedRange;
 const
