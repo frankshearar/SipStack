@@ -99,6 +99,7 @@ type
     function  HasHandle(H: TIdSipHandle): Boolean;
     procedure ListenToAllTransports;
     function  NewHandle: TIdSipHandle;
+    procedure NotifyOfReconfiguration;
     procedure NotifyOfSentMessage(Msg: TIdSipMessage;
                                   Binding: TIdConnectionBindings);
     procedure NotifyOfStackShutdown;
@@ -228,7 +229,6 @@ type
     procedure ModifyCall(ActionHandle: TIdSipHandle;
                          const Offer: String;
                          const ContentType: String);
-    procedure NotifyOfReconfiguration;
     procedure NotifyOfAsyncMessageResult(Data: TIdAsynchronousMessageResultData);
     procedure NotifyReferralDenied(ActionHandle: TIdSipHandle);
     procedure NotifyReferralFailed(ActionHandle: TIdSipHandle;
@@ -1158,8 +1158,6 @@ begin
   end;
 
   Self.Configure(Configuration);
-
-  Self.NotifyOfReconfiguration;
 end;
 
 destructor TIdSipStackInterface.Destroy;
@@ -1476,18 +1474,6 @@ begin
   end;
 end;
 
-procedure TIdSipStackInterface.NotifyOfReconfiguration;
-var
-  Data: TIdStackReconfiguredData;
-begin
-  Data := Self.CreateReconfigureNotificationData;
-  try
-    Self.NotifyEvent(CM_STACK_RECONFIGURED, Data);
-  finally
-    Data.Free;
-  end;
-end;
-
 procedure TIdSipStackInterface.NotifyOfAsyncMessageResult(Data: TIdAsynchronousMessageResultData);
 begin
   Self.NotifyEvent(CM_ASYNC_MSG_RESULT, Data);
@@ -1778,6 +1764,7 @@ begin
     end;
   finally
     Self.PostConfigurationActions;
+    Self.NotifyOfReconfiguration;
   end;
 end;
 
@@ -1858,6 +1845,18 @@ begin
   repeat
     Result := GRandomNumber.NextCardinal;
   until not Self.HasHandle(Result);
+end;
+
+procedure TIdSipStackInterface.NotifyOfReconfiguration;
+var
+  Data: TIdStackReconfiguredData;
+begin
+  Data := Self.CreateReconfigureNotificationData;
+  try
+    Self.NotifyEvent(CM_STACK_RECONFIGURED, Data);
+  finally
+    Data.Free;
+  end;
 end;
 
 procedure TIdSipStackInterface.NotifyOfSentMessage(Msg: TIdSipMessage;
@@ -4113,8 +4112,6 @@ begin
     end;
 
     Stack.Configure(Self.Configuration);
-
-    Stack.NotifyOfReconfiguration;
   end;
 end;
 
