@@ -71,6 +71,7 @@ type
     TransportSendingListeners: TIdNotificationList;
 
   protected
+    procedure Assert(Condition: Boolean; ProblemDescription: String);
     procedure DestroyServer; virtual;
     function  GetAddress: String; virtual;
     function  GetBindings: TIdSocketHandles; virtual;
@@ -535,9 +536,9 @@ begin
   // because port numbers don't exist in the network (i.e., IP) layer, so we
   // simply return the first one.
 
-  Assert(Dest.Transport = Self.GetTransportType,
-         Format(TransportMismatch, [Self.GetTransportType, Dest.Transport]));
-  Assert(Self.Bindings.Count > 0, NoBindings);
+  Self.Assert(Dest.Transport = Self.GetTransportType,
+              Format(TransportMismatch, [Self.GetTransportType, Dest.Transport]));
+  Self.Assert(Self.Bindings.Count > 0, NoBindings);
 
   // A subtlety: this method will select the binding on the default port if
   // it can.
@@ -569,7 +570,7 @@ begin
   if (Result = nil) then
     Result := Self.Bindings[0];
 
-  Assert(Result <> nil, 'No binding found for the destination ' + Dest.AsString);
+  Self.Assert(Result <> nil, 'No binding found for the destination ' + Dest.AsString);
 end;
 
 
@@ -709,9 +710,9 @@ procedure TIdSipTransport.Send(Msg: TIdSipMessage;
                                Dest: TIdSipLocation);
 begin
   try
-    Assert(not Msg.IsMalformed,
-           'A Transport must NEVER send invalid messages onto the network ('
-         + Msg.ParseFailReason + ')');
+    Self.Assert(not Msg.IsMalformed,
+                'A Transport must NEVER send invalid messages onto the network ('
+              + Msg.ParseFailReason + ')');
     if Msg.IsRequest then
       Self.SendRequest(Msg as TIdSipRequest, Dest)
     else
@@ -737,6 +738,14 @@ begin
 end;
 
 //* TIdSipTransport Protected methods ******************************************
+
+procedure TIdSipTransport.Assert(Condition: Boolean; ProblemDescription: String);
+begin
+  if Condition then
+    Self.Log('Assertion violation', LoGGerVerbosityLevelLow, coLogEventException, ProblemDescription);
+
+  System.Assert(Condition, ProblemDescription);
+end;
 
 procedure TIdSipTransport.DestroyServer;
 begin
@@ -840,9 +849,9 @@ var
 begin
   Self.LogReceivedMessage(Request, ReceivedFrom);
 
-  Assert(not Request.IsMalformed,
-         'A Transport must NEVER send invalid requests up the stack ('
-       + Request.ParseFailReason + ')');
+  Self.Assert(not Request.IsMalformed,
+              'A Transport must NEVER send invalid requests up the stack ('
+            + Request.ParseFailReason + ')');
 
   Notification := TIdSipTransportReceiveRequestMethod.Create;
   try
@@ -863,9 +872,9 @@ var
 begin
   Self.LogReceivedMessage(Response, ReceivedFrom);
 
-  Assert(not Response.IsMalformed,
-         'A Transport must NEVER send invalid responses up the stack ('
-       + Response.ParseFailReason + ')');
+  Self.Assert(not Response.IsMalformed,
+              'A Transport must NEVER send invalid responses up the stack ('
+            + Response.ParseFailReason + ')');
 
   Notification := TIdSipTransportReceiveResponseMethod.Create;
   try
