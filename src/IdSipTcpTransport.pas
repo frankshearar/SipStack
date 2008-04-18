@@ -34,6 +34,8 @@ type
     procedure SendMessageTo(Msg: TIdSipMessage;
                             Dest: TIdConnectionBindings);
     procedure StopAllClientConnections;
+    procedure WriteMessageTo(Msg: TIdSipMessage;
+                             Connection: TIdTCPConnection);
   protected
     ConnectionMap: TIdSipConnectionTableLock;
     Transport:     TIdSipTcpServer;
@@ -62,8 +64,6 @@ type
     procedure RemoveClient(ClientThread: TObject);
     procedure Start; override;
     procedure Stop; override;
-    procedure WriteMessageTo(Msg: TIdSipMessage;
-                             Connection: TIdTCPConnection);
 
     property ConnectionTimeout: Cardinal read fConnectionTimeout write fConnectionTimeout;
   end;
@@ -328,12 +328,6 @@ begin
   Self.StopAllClientConnections;
 end;
 
-procedure TIdSipTCPTransport.WriteMessageTo(Msg: TIdSipMessage;
-                                            Connection: TIdTCPConnection);
-begin
-  Connection.Write(Msg.AsString);
-end;
-
 //* TIdSipTCPTransport Protected methods ***************************************
 
 procedure TIdSipTCPTransport.ConnectionDisconnected(Sender: TObject);
@@ -484,6 +478,12 @@ begin
   finally
     Self.RunningClients.UnlockList;
   end;
+end;
+
+procedure TIdSipTCPTransport.WriteMessageTo(Msg: TIdSipMessage;
+                                            Connection: TIdTCPConnection);
+begin
+  Connection.Write(Msg.AsString);
 end;
 
 //******************************************************************************
