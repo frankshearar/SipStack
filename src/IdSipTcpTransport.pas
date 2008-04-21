@@ -269,10 +269,12 @@ end;
 
 constructor TIdSipTCPTransport.Create;
 begin
+  // The superclass sets Timeout, which uses RunningClients.
+  Self.RunningClients := TThreadList.Create;
+
   inherited Create;
 
   Self.ConnectionMap  := TIdSipConnectionTableLock.Create;
-  Self.RunningClients := TThreadList.Create;
 
   Self.ConnectionTimeout := FiveSeconds;
 
