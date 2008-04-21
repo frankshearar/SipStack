@@ -44,14 +44,13 @@ type
     function  GetTimer: TIdTimerQueue; virtual;
     procedure NotifyOfException(E: Exception); virtual;
     procedure SetTimer(Value: TIdTimerQueue); virtual;
-
-    property Client: TIdThreadableTcpClient read fClient write fClient;
   public
     constructor Create(Connection: TIdThreadableTcpClient); reintroduce;
 
     procedure Terminate; override;
 
-    property Timer: TIdTimerQueue read GetTimer write SetTimer;
+    property Client: TIdThreadableTcpClient read fClient;
+    property Timer:  TIdTimerQueue          read GetTimer write SetTimer;
   end;
 
 const
@@ -122,7 +121,7 @@ end;
 constructor TIdThreadedTcpClient.Create(Connection: TIdThreadableTcpClient);
 begin
   Self.FreeOnTerminate := true;
-  Self.Client := Connection;
+  Self.fClient := Connection;
 
   inherited Create(false);
 end;

@@ -420,11 +420,22 @@ begin
 end;
 
 procedure TIdSipTCPTransport.SetTimeout(Value: Cardinal);
+var
+  Clients: TList;
+  I:       Integer;
 begin
   inherited SetTimeout(Value);
 
   Self.Transport.ReadTimeout       := Value;
   Self.Transport.ConnectionTimeout := Value;
+
+  Clients := Self.RunningClients.LockList;
+  try
+    for I := 0 to Clients.Count - 1 do
+      TIdSipTcpClientThread(Clients[I]).Client.ReadTimeout := Value;
+  finally
+    Self.RunningClients.UnlockList;
+  end;
 end;
 
 procedure TIdSipTCPTransport.SetTimer(Value: TIdTimerQueue);
@@ -444,6 +455,7 @@ begin
   NewConnection := Self.ClientType.Create(nil);
   NewConnection.Host        := Dest.PeerIP;
   NewConnection.Port        := Dest.PeerPort;
+  NewConnection.ReadTimeout := Self.Timeout;
   NewConnection.Timer       := Self.Timer;
   NewConnection.TransportID := Self.ID;
 
