@@ -113,8 +113,11 @@ type
     procedure ReadBodyInto(Connection: TIdTCPConnection;
                            Msg: TIdSipMessage;
                            Dest: TStringStream);
-    procedure ReadMessage(Connection: TIdTCPConnection;
+    procedure ReadHeaders(Connection: TIdTCPConnection;
                           Dest: TStringStream);
+    function  ReadMessage(Connection: TIdTCPConnection;
+                          ConserveConnections: Boolean;
+                          var ConnClosedOrTimedOut: Boolean): TIdSipMessage;
     procedure ReceiveMessageInTimerContext(Msg: TIdSipMessage;
                                            Binding: TIdConnectionBindings);
     procedure ReturnInternalServerError(Connection: TIdTCPConnection;
@@ -638,7 +641,6 @@ var
   ConnClosedOrTimedOut: Boolean;
   Msg:                  TIdSipMessage;
   ReceivedFrom:         TIdConnectionBindings;
-  S:                    TStringStream;
 begin
   ConnClosedOrTimedOut := false;
 
@@ -650,60 +652,35 @@ begin
       ReceivedFrom.LocalPort := Connection.Socket.Binding.Port;
       ReceivedFrom.PeerIP    := Connection.Socket.Binding.PeerIP;
       ReceivedFrom.PeerPort  := Connection.Socket.Binding.PeerPort;
-            ReceivedFrom.Transport := Self.TransportType;
+      ReceivedFrom.Transport := Self.TransportType;
 
-      S := TStringStream.Create('');
+      Msg := Self.ReadMessage(Connection, ConserveConnections, ConnClosedOrTimedOut);
       try
+        // ReadMessage returns nil only if the connection broke before the
+        // message could be fully read. We can't do anything with half a
+        // message, so we abort.
+        if not Assigned(Msg) then Exit;
+
         try
-          Self.ReadMessage(Connection, S);
+          // If Self.ReadBody closes the connection, we don't want to AddConnection!
+          if Msg.IsRequest and not ConnClosedOrTimedOut then
+            Self.AddConnection(Connection, Msg as TIdSipRequest);
+
+          Self.ReceiveMessageInTimerContext(Msg, ReceivedFrom);
         except
-          on EIdReadTimeout do
-            ConnClosedOrTimedOut := not ConserveConnections;
-          on EIdConnClosedGracefully do
-            ConnClosedOrTimedOut := true;
-          on EIdClosedSocket do
-            ConnClosedOrTimedOut := true;
-        end;
-
-        if not ConnClosedOrTimedOut then begin
-          Msg := TIdSipMessage.ReadMessageFrom(S);
-          try
-            try
-              try
-                Self.ReadBodyInto(Connection, Msg, S);
-                Msg.ReadBody(S);
-              except
-                on EIdReadTimeout do
-                  ConnClosedOrTimedOut := true;
-                on EIdConnClosedGracefully do
-                  ConnClosedOrTimedOut := true;
-                on EIdClosedSocket do
-                  ConnClosedOrTimedOut := true;
-              end;
-
-              // If Self.ReadBody closes the connection, we don't want to AddConnection!
-              if Msg.IsRequest and not ConnClosedOrTimedOut then
-                Self.AddConnection(Connection, Msg as TIdSipRequest);
-
-              Self.ReceiveMessageInTimerContext(Msg, ReceivedFrom);
-            except
-              on E: Exception do begin
-                // This results in returning a 500 Internal Server Error to a response!
-                if Connection.Connected then begin
-                  Self.ReturnInternalServerError(Connection, E.Message);
-                  Connection.DisconnectSocket;
-                end;
-
-                Self.NotifyOfException(ExceptClass(E.ClassType),
-                                                   E.Message);
-              end;
+          on E: Exception do begin
+            // This results in returning a 500 Internal Server Error to a response!
+            if Connection.Connected then begin
+              Self.ReturnInternalServerError(Connection, E.Message);
+              Connection.DisconnectSocket;
             end;
-          finally
-            Msg.Free;
+
+            Self.NotifyOfException(ExceptClass(E.ClassType),
+                                               E.Message);
           end;
         end;
       finally
-        S.Free;
+        Msg.Free;
       end;
     finally
       ReceivedFrom.Free;
@@ -730,7 +707,7 @@ begin
   Dest.Seek(-Msg.ContentLength, soFromCurrent);
 end;
 
-procedure TIdSipTcpMessageReader.ReadMessage(Connection: TIdTCPConnection;
+procedure TIdSipTcpMessageReader.ReadHeaders(Connection: TIdTCPConnection;
                                              Dest: TStringStream);
 const
   CrLf = #$D#$A;
@@ -744,6 +721,51 @@ begin
   // manually.
   Dest.Write(CrLf, Length(CrLf));
   Dest.Seek(0, soFromBeginning);
+end;
+
+function TIdSipTcpMessageReader.ReadMessage(Connection: TIdTCPConnection;
+                                            ConserveConnections: Boolean;
+                                            var ConnClosedOrTimedOut: Boolean): TIdSipMessage;
+var
+  S: TStringStream;
+begin
+  // Read in a SIP message from Connection, instantiate a TIdSipMessage
+  // subclass, and return the reified message. THE CALLER FREES THE MESSAGE.
+  //
+  // As a side effect, set ConnClosedOrTimedOut to true if necessary.
+
+  Result := nil;
+  S := TStringStream.Create('');
+  try
+    try
+      Self.ReadHeaders(Connection, S);
+    except
+      on EIdReadTimeout do
+        ConnClosedOrTimedOut := not ConserveConnections;
+      on EIdConnClosedGracefully do
+        ConnClosedOrTimedOut := true;
+      on EIdClosedSocket do
+        ConnClosedOrTimedOut := true;
+    end;
+
+    if not ConnClosedOrTimedOut then begin
+      Result := TIdSipMessage.ReadMessageFrom(S);
+
+      try
+        Self.ReadBodyInto(Connection, Result, S);
+        Result.ReadBody(S);
+      except
+        on EIdReadTimeout do
+          ConnClosedOrTimedOut := true;
+        on EIdConnClosedGracefully do
+          ConnClosedOrTimedOut := true;
+        on EIdClosedSocket do
+          ConnClosedOrTimedOut := true;
+      end;
+    end;
+  finally
+    S.Free;
+  end;
 end;
 
 procedure TIdSipTcpMessageReader.ReceiveMessageInTimerContext(Msg: TIdSipMessage;
