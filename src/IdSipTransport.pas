@@ -59,6 +59,7 @@ type
                           IIdSipMessageListener)
   private
     fAddress:                  String;
+    fConserveConnections:      Boolean; // This is actually only used by connection-oriented transports.
     fHostName:                 String;
     fLogger:                   TLoGGerThread;
     fLogName:                  String;
@@ -75,6 +76,7 @@ type
     procedure DestroyServer; virtual;
     function  GetAddress: String; virtual;
     function  GetBindings: TIdSocketHandles; virtual;
+    function  GetConserveConnections: Boolean; virtual;
     function  GetPort: Cardinal; virtual;
     function  IndexOfBinding(const Address: String; Port: Cardinal): Integer;
     procedure InstantiateServer; virtual;
@@ -126,6 +128,7 @@ type
     procedure SendResponse(R: TIdSipResponse;
                            Binding: TIdConnectionBindings); overload;
     function  SentByIsRecognised(Via: TIdSipViaHeader): Boolean; virtual;
+    procedure SetConserveConnections(Value: Boolean); virtual;
     procedure SetTimeout(Value: Cardinal); virtual;
     procedure SetTimer(Value: TIdTimerQueue); virtual;
 
@@ -170,13 +173,14 @@ type
     procedure Start; virtual;
     procedure Stop; virtual;
 
-    property HostName:     String          read fHostName write fHostName;
-    property Logger:       TLoGGerThread   read fLogger write fLogger;
-    property LogName:      String          read fLogName write fLogName;
-    property RoutingTable: TIdRoutingTable read fRoutingTable write fRoutingTable;
-    property Timeout:      Cardinal        read fTimeout write SetTimeout;
-    property Timer:        TIdTimerQueue   read fTimer write SetTimer;
-    property UseRport:     Boolean         read fUseRport write fUseRport;
+    property ConserveConnections: Boolean         read GetConserveConnections write SetConserveConnections;
+    property HostName:            String          read fHostName write fHostName;
+    property Logger:              TLoGGerThread   read fLogger write fLogger;
+    property LogName:             String          read fLogName write fLogName;
+    property RoutingTable:        TIdRoutingTable read fRoutingTable write fRoutingTable;
+    property Timeout:             Cardinal        read fTimeout write SetTimeout;
+    property Timer:               TIdTimerQueue   read fTimer write SetTimer;
+    property UseRport:            Boolean         read fUseRport write fUseRport;
   end;
 
   // I supply methods for objects to find out what transports the stack knows
@@ -762,6 +766,11 @@ begin
   RaiseAbstractError(Self.ClassName, 'GetBindings');
 end;
 
+function TIdSipTransport.GetConserveConnections: Boolean;
+begin
+  Result := Self.fConserveConnections;
+end;
+
 function TIdSipTransport.GetPort: Cardinal;
 begin
   Result := Self.fPort;
@@ -1085,6 +1094,11 @@ begin
     // Or does it match a mapped route?
     Result := Self.RoutingTable.HasRouteThrough(Via.SentBy)
   end;
+end;
+
+procedure TIdSipTransport.SetConserveConnections(Value: Boolean);
+begin
+  Self.fConserveConnections := Value;
 end;
 
 procedure TIdSipTransport.SetTimeout(Value: Cardinal);

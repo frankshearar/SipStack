@@ -58,6 +58,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestConserveConnectionsOutbound;
     procedure TestGetTransportType;
     procedure TestIsReliable;
     procedure TestIsSecure;
@@ -200,6 +201,8 @@ type
     procedure TestSendResponseReceiveOptions;
     procedure TestSendTwoInvites;
     procedure TestSendWithServerDisconnect;
+    procedure TestSetConserveConnectionsAfterConnect;
+    procedure TestSetConserveConnectionsThenConnect;
   end;
 
   TestTIdSipConnectionTableEntry = class(TTestCase)
@@ -242,10 +245,11 @@ const
                + 'Content-Length: 29'#13#10
                + #13#10
                + 'I am a message. Hear me roar!';
+  OneSecond      = 1000;
   ViaFQDN        = 'gw1.leo-ix.org';
   ViaIP          = '127.0.0.1';
   ViaDifferentIP = '196.25.1.1';
-  DefaultTimeout = 1000;
+  DefaultTimeout = OneSecond;
   LocalHost      = '127.0.0.1';
 
 implementation
@@ -331,6 +335,7 @@ end;
 function TestTIdSipTCPTransport.CreateClient: TIdSipTcpClient;
 begin
   Result := TIdSipTcpClient.Create(nil);
+  Result.ConserveConnections := false;
   Result.TransportID := Self.MockTransport.ID;
 end;
 
@@ -484,6 +489,35 @@ end;
 
 //* TestTIdSipTCPTransport Published methods ***********************************
 
+procedure TestTIdSipTCPTransport.TestConserveConnectionsOutbound;
+var
+  FirstBinding: TIdConnectionBindings;
+begin
+  Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
+
+  FirstBinding := TIdConnectionBindings.Create;
+  try
+    (Self.LowPortTransport as TIdSipTcpTransport).ConserveConnections := true;
+    (Self.HighPortTransport as TIdSipTcpTransport).ConserveConnections := true;
+    Self.LowPortTransport.Send(Request, Self.HighPortLocation);
+    Self.WaitForSignaled;
+    FirstBinding.Assign(Self.ReceivingBinding);
+
+    // Let the connection time out on a read.
+    Sleep(2*Self.LowPortTransport.Timeout);
+
+    Self.ReceivedRequest := false;
+    Self.LowPortTransport.Send(Request, Self.HighPortLocation);
+    Self.WaitForSignaled;
+
+    CheckEquals(FirstBinding.AsString,
+                Self.ReceivingBinding.AsString,
+                'Same binding (hence connection) not used');
+  finally
+    FirstBinding.Free;
+  end;
+end;
+
 procedure TestTIdSipTCPTransport.TestGetTransportType;
 begin
   CheckEquals(TcpTransport,
@@ -554,7 +588,7 @@ begin
     Self.SipClient.Port        := Self.LowPortLocation.Port;
     Self.SipClient.ReadTimeout := 100;
 
-    Self.SipClient.Connect;
+    Self.SipClient.Connect(OneSecond);
     try
       Self.SipClient.Send(Request);
     finally
@@ -606,7 +640,7 @@ begin
         Self.SipClient.Port             := Self.HighPortLocation.Port;
         Self.SipClient.ReadTimeout      := 100;
 
-        Self.SipClient.Connect;
+        Self.SipClient.Connect(OneSecond);
         try
           Self.SipClient.Send(Request);
         finally
@@ -663,7 +697,7 @@ begin
       SipClient.ReadTimeout := 1000;
       SipClient.Timer       := Self.Timer;
 
-      SipClient.Connect;
+      SipClient.Connect(OneSecond);
       try
         SipClient.Send(Request);
         SipClient.ReceiveMessages;
@@ -914,7 +948,7 @@ begin
     SipClient.Port        := LowPortServer.DefaultPort;
     SipClient.ReadTimeout := 1000;
 
-    SipClient.Connect;
+    SipClient.Connect(OneSecond);
     try
       SipClient.Send(Request);
     finally
@@ -1342,7 +1376,7 @@ procedure TestTIdSipTcpClient.TestConnectAndDisconnect;
 begin
   Self.Client.Host := '127.0.0.1';
   Self.Client.Port := DefaultSipPort;
-  Self.Client.Connect(1000);
+  Self.Client.Connect(OneSecond);
   try
     Check(Self.Client.Connected, 'Client didn''t connect');
   finally
@@ -1457,6 +1491,30 @@ begin
   Self.CheckingRequestEvent := Self.CutConnection;
 
   Self.Client.Connect(DefaultTimeout);
+  Self.Client.Send(Self.Invite);
+
+  Self.WaitForSignaled;
+end;
+
+procedure TestTIdSipTcpClient.TestSetConserveConnectionsAfterConnect;
+begin
+  Self.CheckingRequestEvent := Self.CheckSendInvite;
+
+  Self.Client.Connect(DefaultTimeout);
+  Self.Client.ConserveConnections := true;
+
+  Self.Client.Send(Self.Invite);
+
+  Self.WaitForSignaled;
+end;
+
+procedure TestTIdSipTcpClient.TestSetConserveConnectionsThenConnect;
+begin
+  Self.CheckingRequestEvent := Self.CheckSendInvite;
+
+  Self.Client.ConserveConnections := true;
+  Self.Client.Connect(DefaultTimeout);
+
   Self.Client.Send(Self.Invite);
 
   Self.WaitForSignaled;

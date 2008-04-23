@@ -91,6 +91,7 @@ type
   //
   // Here's a summary of the formats for each directive:
   //   Authentication: <policy name>[;policy specific param=value pairs]
+  //   ConserveConnections: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
   //   From: "Count Zero" <sip:countzero@jammer.org>
   //   HostName: talkinghead1.tessier-ashpool.co.luna
   //   HostName: 192.168.1.1
@@ -226,6 +227,9 @@ type
     procedure RegisterUA(UserAgent: TIdSipUserAgent;
                          const RegisterLine: String;
                          PendingActions: TObjectList);
+    procedure SetConserveConnections(UserAgent: TIdSipUserAgent;
+                                     const ConserveConnectionsLine: String;
+                                     PendingActions: TObjectList);
     procedure SetRegistrarDatabase(UserAgent: TIdSipUserAgent;
                                    const RegistrarDatabaseLine: String);
     procedure SetRegistrarUseGruu(UserAgent: TIdSipUserAgent;
@@ -409,7 +413,15 @@ type
 
     property UA:        TIdSipUserAgent read fUA;
     property Registrar: TIdSipUri       read fRegistrar;
+  end;
 
+  TIdSipPendingTcpTransportConfiguration = class(TIdSipPendingCoreConfigurationAction)
+  private
+    fConserveConnections: Boolean;
+  public
+    procedure Execute; override;
+
+    property ConserveConnections: Boolean read fConserveConnections write fConserveConnections;
   end;
 
   TIdSipReconfigureStackWait = class(TIdWait)
@@ -433,6 +445,7 @@ const
   ActAsRegistrarDirective                 = 'ActAsRegistrar';
   AuthenticationDirective                 = 'Authentication';
   AutoKeyword                             = 'AUTO';
+  ConserveConnectionsDirective         = 'ConserveConnections';
   DebugMessageLogDirective                = 'DebugMessageLog';
   FromDirective                           = FromHeaderFull;
   HostNameDirective                       = 'HostName';
@@ -1634,6 +1647,8 @@ begin
     Self.AddRegistrarModule(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, AuthenticationDirective) then
     Self.AddAuthentication(UserAgent, ConfigurationLine)
+  else if IsEqual(FirstToken, ConserveConnectionsDirective) then
+    Self.SetConserveConnections(UserAgent, ConfigurationLine, PendingActions)
   else if IsEqual(FirstToken, FromDirective) then
     Self.AddFrom(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, HostNameDirective) then
@@ -1730,6 +1745,22 @@ begin
   finally
     Registrar.Free;
   end;
+end;
+
+procedure TIdSipStackConfigurator.SetConserveConnections(UserAgent: TIdSipUserAgent;
+                                                         const ConserveConnectionsLine: String;
+                                                         PendingActions: TObjectList);
+var
+  Line: String;
+  Setter: TIdSipPendingTcpTransportConfiguration;
+begin
+  Line := ConserveConnectionsLine;
+  EatDirective(Line);
+
+  Setter := TIdSipPendingTcpTransportConfiguration.Create(UserAgent);
+  Setter.ConserveConnections := Self.StrToBool(Line);
+
+  PendingActions.Add(Setter);
 end;
 
 procedure TIdSipStackConfigurator.SetRegistrarDatabase(UserAgent: TIdSipUserAgent;
@@ -2047,6 +2078,19 @@ begin
   end;
 
   Self.UA.Timer.AddEvent(TriggerImmediately, Wait);
+end;
+
+//******************************************************************************
+//* TIdSipPendingTcpTransportConfiguration                                     *
+//******************************************************************************
+//* TIdSipPendingTcpTransportConfiguration Public methods **********************
+
+procedure TIdSipPendingTcpTransportConfiguration.Execute;
+var
+  I: Integer;
+begin
+  for I := 0 to Self.Core.Dispatcher.TransportCount - 1 do
+    Self.Core.Dispatcher.Transports[I].ConserveConnections := Self.ConserveConnections;
 end;
 
 //******************************************************************************

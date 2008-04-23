@@ -220,6 +220,7 @@ type
     procedure TestCreateUserAgentTransportHasMalformedPort;
     procedure TestCreateUserAgentWithAutoFrom;
     procedure TestCreateUserAgentWithAutoTransport;
+    procedure TestCreateUserAgentWithConserveConnections;
     procedure TestCreateUserAgentWithFrom;
     procedure TestCreateUserAgentWithHostName;
     procedure TestCreateUserAgentWithInstanceID;
@@ -387,6 +388,16 @@ type
     procedure TestExecuteSchedulesWait;
   end;
 
+  TestTIdSipPendingTcpTransportConfiguration = class(TTestCaseTU)
+  private
+    Pending: TIdSipPendingTcpTransportConfiguration;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestExecuteSchedulesWait;
+  end;
+
 implementation
 
 uses
@@ -452,6 +463,8 @@ begin
   Result.AddTest(TestConfigureMockRoutingTable.Suite);
   Result.AddTest(TestConfigureMockLocator.Suite);
   Result.AddTest(TestTIdSipReconfigureStackWait.Suite);
+  Result.AddTest(TestTIdSipPendingRegistration.Suite);
+  Result.AddTest(TestTIdSipPendingTcpTransportConfiguration.Suite);
 end;
 
 //******************************************************************************
@@ -2717,6 +2730,21 @@ begin
   end;
 end;
 
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithConserveConnections;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add(ConserveConnectionsDirective + ': true');
+  Self.Configuration.Add(ListenDirective + ': TCP 127.0.0.1:5060');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Check(UA.Dispatcher.Transports[0].ConserveConnections, 'Transport not configured');
+  finally
+    UA.Free;
+  end;
+end;
+
 procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithFrom;
 const
   DisplayName = 'Count Zero';
@@ -4679,6 +4707,47 @@ begin
   CheckEquals(MethodRegister,
               Self.LastSentRequest.Method,
               'Unexpected request sent');
+end;
+
+//******************************************************************************
+//* TestTIdSipPendingTcpTransportConfiguration                                 *
+//******************************************************************************
+//* TestTIdSipPendingTcpTransportConfiguration Public methods ******************
+//* TestTIdSipPendingTcpTransportConfiguration Published methods ***************
+
+procedure TestTIdSipPendingTcpTransportConfiguration.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Pending := TIdSipPendingTcpTransportConfiguration.Create(Self.Core);
+end;
+
+procedure TestTIdSipPendingTcpTransportConfiguration.TearDown;
+begin
+  Self.Pending.Free;
+
+  inherited TearDown;
+end;
+
+procedure TestTIdSipPendingTcpTransportConfiguration.TestExecuteSchedulesWait;
+var
+  I: Integer;
+begin
+  Self.Pending.ConserveConnections := true;
+
+  Self.Pending.Execute;
+
+  for I := 0 to Self.Core.Dispatcher.TransportCount - 1 do
+    Check(Self.Core.Dispatcher.Transports[I].ConserveConnections,
+          'Transport not configured; pending action didn''t execute');
+
+  Self.Pending.ConserveConnections := false;
+
+  Self.Pending.Execute;
+
+  for I := 0 to Self.Core.Dispatcher.TransportCount - 1 do
+    Check(not Self.Core.Dispatcher.Transports[I].ConserveConnections,
+          'Transport not reconfigured; pending action didn''t execute');
 end;
 
 initialization
