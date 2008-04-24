@@ -248,8 +248,8 @@ type
     destructor  Destroy; override;
 
     property Binding:   TIdConnectionBindings read fBinding write SetBinding;
-    property Request:   TIdSipRequest            read fRequest write fRequest;
-    property UserAgent: TIdSipAbstractCore       read fUserAgent write fUserAgent;
+    property Request:   TIdSipRequest         read fRequest write fRequest;
+    property UserAgent: TIdSipAbstractCore    read fUserAgent write fUserAgent;
   end;
 
   // I give my Request to the Action or create a new Action to which I give the
