@@ -372,8 +372,8 @@ type
     function  WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; virtual;
     function  WillAcceptResponse(Response: TIdSipResponse): TIdSipUserAgentReaction; virtual;
 
-    property AllowedLanguageList:    TStrings read fAllowedLanguageList;
-    property AllowedSchemeList:      TStrings read fAllowedSchemeList;
+    property AllowedLanguageList: TStrings read fAllowedLanguageList;
+    property AllowedSchemeList:   TStrings read fAllowedSchemeList;
   public
     constructor Create; override;
     destructor  Destroy; override;
