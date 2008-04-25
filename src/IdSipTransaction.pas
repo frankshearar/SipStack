@@ -47,12 +47,12 @@ type
   // match any current transactions.
   IIdSipTransactionDispatcherListener = interface
     ['{0CB5037D-B9B3-4FB6-9201-80A0F10DB23A}']
-    procedure OnTransportException(FailedMessage: TIdSipMessage;
-                                   const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Binding: TIdConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Binding: TIdConnectionBindings);
+    procedure OnTransportException(FailedMessage: TIdSipMessage;
+                                   const Reason: String);
   end;
 
   TIdSipTransactionProc = procedure(Tran: TIdSipTransaction) of object;
