@@ -29,6 +29,7 @@ type
     procedure TestAsString;
     procedure TestCopy;
     procedure TestCreate;
+    procedure TestCreatePeerLocation;
     procedure TestEquals;
     procedure TestIsLocalhost;
   end;
@@ -43,6 +44,7 @@ type
     procedure TestAddLocation;
     procedure TestAddLocations;
     procedure TestAddLocationsFromNames;
+    procedure TestAddLocationToFront;
     procedure TestAsString;
     procedure TestAsStringWithPrefix;
     procedure TestContains;
@@ -64,7 +66,7 @@ type
 implementation
 
 uses
-  IdSimpleParser, IdSipDns, IdSipMessage, Math, SysUtils;
+  IdConnectionBindings, IdSimpleParser, IdSipDns, IdSipMessage, Math, SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -141,6 +143,26 @@ begin
   CheckEquals(Self.Address,   Self.Loc.IPAddress, 'IPAddress');
   CheckEquals(Self.Port,      Self.Loc.Port,      'Port');
   CheckEquals(Self.Transport, Self.Loc.Transport, 'Transport');
+end;
+
+procedure TestTIdSipLocation.TestCreatePeerLocation;
+var
+  Conn: TIdConnectionBindings;
+  Loc:  TIdSipLocation;
+begin
+  Conn := TIdConnectionBindings.Create('127.0.0.1', 5060, '1.2.3.4', 1234, 'SCTP');
+  try
+    Loc := TIdSipLocation.CreatePeerLocation(Conn);
+    try
+      CheckEquals(Conn.PeerIP,    Loc.IPAddress, 'IPAddress');
+      CheckEquals(Conn.PeerPort,  Loc.Port,      'Port');
+      CheckEquals(Conn.Transport, Loc.Transport, 'Transport');
+    finally
+      Loc.Free;
+    end;
+  finally
+    Conn.Free;
+  end;
 end;
 
 procedure TestTIdSipLocation.TestEquals;
@@ -294,6 +316,37 @@ begin
   finally
     Names.Free;
   end;
+end;
+
+procedure TestTIdSipLocations.TestAddLocationToFront;
+const
+  Transport = TcpTransport;
+  Address   = '127.0.0.1';
+  Port      = DefaultSipPort;
+var
+  NewAddress: String;
+  Result:     TIdSipLocation;
+begin
+  Result := Self.Locs.AddLocationToFront(Transport, Address, Port);
+
+  CheckEquals(Address,   Self.Locs.First.IPAddress, 'IPAddress');
+  CheckEquals(Port,      Self.Locs.First.Port,      'Port');
+  CheckEquals(Transport, Self.Locs.First.Transport, 'Transport');
+  Check(Result = Self.Locs[0], 'AddLocation(String, Cardinal, String) returned unexpected location');
+
+  Result := Self.Locs.AddLocationToFront(Self.Locs[0]);
+  CheckEquals(2, Self.Locs.Count, 'Location not added');
+  CheckEquals(Address,   Self.Locs[0].IPAddress, 'IPAddress of 2nd location (in order of addition)');
+  CheckEquals(Port,      Self.Locs[0].Port,      'Port of 2nd location (in order of addition)');
+  CheckEquals(Transport, Self.Locs[0].Transport, 'Transport of 2nd location (in order of addition)');
+  Check(Result = Self.Locs[0], 'AddLocationToFront(TIdSipLocation) returned unexpected location');
+
+  Check(Self.Locs[0] <> Self.Locs[1],
+        'Locations added the location, not a COPY of the location');
+
+  NewAddress := TIdIPAddressParser.IncIPv4Address(Address);
+  Result := Self.Locs.AddLocationToFront(Transport, NewAddress, Port);
+  CheckEquals(NewAddress, Self.Locs[0].IPAddress, 'Location not added to FRONT of list');
 end;
 
 procedure TestTIdSipLocations.TestAsString;

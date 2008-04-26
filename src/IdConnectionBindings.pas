@@ -64,6 +64,7 @@ type
     procedure Clear;
     function  Count: Integer;
     function  HasBinding(Binding: TIdConnectionBindings): Boolean;
+    function  IsEmpty: Boolean;
     procedure Remove(Binding: TIdConnectionBindings);
 
     property Bindings[Index: Integer]: TIdConnectionBindings read GetBindings; default;
@@ -219,6 +220,11 @@ end;
 function TIdConnectionBindingsSet.HasBinding(Binding: TIdConnectionBindings): Boolean;
 begin
   Result := Self.IndexOfBinding(Binding) <> ItemNotFoundIndex;
+end;
+
+function TIdConnectionBindingsSet.IsEmpty: Boolean;
+begin
+  Result := Self.Count = 0;
 end;
 
 procedure TIdConnectionBindingsSet.Remove(Binding: TIdConnectionBindings);

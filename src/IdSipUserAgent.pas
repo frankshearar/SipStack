@@ -118,6 +118,7 @@ type
   //   SupportEvent: refer
   //   SuppressLocalResponses: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
   //   UseGruu: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
+  //   UseInboundConnections: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
   //
   // Registrar-specific directives are:
   //   ActAsRegistrar: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
@@ -238,6 +239,8 @@ type
                                         const SuppressLocalResponsesLine: String);
     procedure UseGruu(UserAgent: TIdSipAbstractCore;
                       const UseGruuLine: String);
+    procedure UseInboundConnections(UserAgent: TIdSipAbstractCore;
+                                    const UseInboundConnectionsLine: String);
     procedure UseLocalResolution(UserAgent: TIdSipAbstractCore;
                                  const ResolveNamesLocallyFirstLine: String;
                                  PendingActions: TObjectList);
@@ -471,6 +474,7 @@ const
   SupportEventDirective                   = 'SupportEvent';
   SuppressLocalResponsesDirective         = 'SuppressLocalResponses';
   UseGruuDirective                        = 'UseGruu';
+  UseInboundConnectionsDirective          = 'UseInboundConnections';
   UserAgentNameDirective                  = 'UserAgentName';
 
 const
@@ -1689,6 +1693,8 @@ begin
     Self.SetSuppressLocalResponses(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, UseGruuDirective) then
     Self.UseGruu(UserAgent, ConfigurationLine)
+  else if IsEqual(FirstToken, UseInboundConnectionsDirective) then
+    Self.UseInboundConnections(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, UserAgentNameDirective) then
     Self.UserAgentName(UserAgent, ConfigurationLine);
 end;
@@ -1828,6 +1834,17 @@ begin
   EatDirective(Line);
 
   UserAgent.UseGruu := StrToBool(Line);
+end;
+
+procedure TIdSipStackConfigurator.UseInboundConnections(UserAgent: TIdSipAbstractCore;
+                                                        const UseInboundConnectionsLine: String);
+var
+  Line: String;
+begin
+  Line := UseInboundConnectionsLine;
+  EatDirective(Line);
+
+  UserAgent.UseInboundConnections := StrToBool(Line);
 end;
 
 procedure TIdSipStackConfigurator.UseLocalResolution(UserAgent: TIdSipAbstractCore;

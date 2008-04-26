@@ -49,6 +49,16 @@ type
                              Destination: TIdConnectionBindings);
   end;
 
+  // I provide the protocol for objects that want to know when connection
+  // oriented transports (TCP, TLS, SCTP, etc.) open or close connections.
+  IIdSipConnectionListener = interface
+    ['{D6E40048-731A-414E-B547-8D683FDD02F0}']
+    procedure OnConnection(Transport: TIdSipTransport;
+                           Connection: TIdConnectionBindings);
+    procedure OnDisconnection(Transport: TIdSipTransport;
+                              Connection: TIdConnectionBindings);
+  end;
+
   // I provide functionality common to all transports.
   // Instances of my subclasses may bind to a single IP/port. (Of course,
   // UDP/localhost/5060 != TCP/localhost/5060.). I receive messages from
@@ -58,6 +68,7 @@ type
   TIdSipTransport = class(TIdInterfacedObject,
                           IIdSipMessageListener)
   private
+    ConnectionListeners:      TIdNotificationList;
     fAddress:                  String;
     fConserveConnections:      Boolean; // This is actually only used by connection-oriented transports.
     fHostName:                 String;
@@ -93,6 +104,8 @@ type
                                  Reason: String;
                                  ReceivedFrom: TIdConnectionBindings);
     procedure LogSentMessage(Msg: TIdSipMessage; SentTo: TIdConnectionBindings);
+    procedure NotifyOfConnection(Connection: TIdConnectionBindings);
+    procedure NotifyOfDisconnection(Connection: TIdConnectionBindings);
     procedure NotifyOfReceivedRequest(Request: TIdSipRequest;
                                       ReceivedFrom: TIdConnectionBindings);
     procedure NotifyOfReceivedResponse(Response: TIdSipResponse;
@@ -145,6 +158,7 @@ type
     destructor  Destroy; override;
 
     procedure AddBinding(const Address: String; Port: Cardinal); virtual;
+    procedure AddConnectionListener(Listener: IIdSipConnectionListener);
     procedure AddTransportListener(const Listener: IIdSipTransportListener; Priority: Integer = 0);
     procedure AddTransportSendingListener(const Listener: IIdSipTransportSendingListener; Priority: Integer = 0);
     function  BindingCount: Integer;
@@ -165,6 +179,7 @@ type
     procedure ReceiveResponse(Response: TIdSipResponse;
                               ReceivedFrom: TIdConnectionBindings); virtual;
     procedure RemoveBinding(const Address: String; Port: Cardinal);
+    procedure RemoveConnectionListener(Listener: IIdSipConnectionListener);
     procedure RemoveTransportListener(const Listener: IIdSipTransportListener);
     procedure RemoveTransportSendingListener(const Listener: IIdSipTransportSendingListener);
     procedure Send(Msg: TIdSipMessage;
@@ -218,45 +233,56 @@ type
     class function TransportCount: Integer;
   end;
 
+  TIdSipTransportWait = class(TIdWait)
+  private
+    fTransportID: String;
+  protected
+    procedure TriggerOn(Transport: TIdSipTransport); virtual;
+  public
+    procedure Trigger; override;
+
+    property TransportID: String read fTransportID write fTransportID;
+  end;
+
   // I represent the (possibly) deferred handling of an exception raised in the
   // process of sending or receiving a message.
   //
   // I store a COPY of the message that we were sending/processing when the
   // exception occured. I free this copy.
-  TIdSipMessageExceptionWait = class(TIdWait)
+  TIdSipMessageExceptionWait = class(TIdSipTransportWait)
   private
     fExceptionMessage: String;
     fExceptionType:    ExceptClass;
     fFailedMessage:    TIdSipMessage;
     fReason:           String;
-    fTransportID:      String;
 
     procedure SetFailedMessage(Value: TIdSipMessage);
+  protected
+    procedure TriggerOn(Transport: TIdSipTransport); override;
   public
     destructor Destroy; override;
-
-    procedure Trigger; override;
 
     property ExceptionType:    ExceptClass   read fExceptionType write fExceptionType;
     property ExceptionMessage: String        read fExceptionMessage write fExceptionMessage;
     property FailedMessage:    TIdSipMessage read fFailedMessage write SetFailedMessage;
     property Reason:           String        read fReason write fReason;
-    property TransportID:      String        read fTransportID write fTransportID;
   end;
 
   // I represent the (possibly) deferred handling of an inbound message.
-  // Give me a COPY of a TIdConnectionBindings and I'll free it for you.
   TIdSipReceiveMessageWait = class(TIdSipMessageWait)
   private
     fReceivedFrom: TIdConnectionBindings;
     fTransportID:  String;
+
+    procedure SetReceivedFrom(Value: TIdConnectionBindings);
   public
+    constructor Create; override;
     destructor Destroy; override;
 
     procedure Trigger; override;
 
-    property ReceivedFrom: TIdConnectionBindings read fReceivedFrom write fReceivedFrom;
-    property TransportID:  String                   read fTransportID write fTransportID;
+    property ReceivedFrom: TIdConnectionBindings read fReceivedFrom write SetReceivedFrom;
+    property TransportID:  String                read fTransportID write fTransportID;
   end;
 
   // I represent a collection of Transports. I own, and hence manage the
@@ -367,6 +393,25 @@ type
     property Response: TIdSipResponse read fResponse write fResponse;
   end;
 
+  TIdSipConnectionOrientedTransportMethod = class(TIdNotification)
+  private
+    fConnection: TIdConnectionBindings;
+    fTransport:  TIdSipTransport;
+  public
+    property Connection: TIdConnectionBindings read fConnection write fConnection;
+    property Transport:  TIdSipTransport       read fTransport write fTransport;
+  end;
+
+  TIdSipTransportConnectionMethod = class(TIdSipConnectionOrientedTransportMethod)
+  public
+    procedure Run(const Subject: IInterface); override;
+  end;
+
+  TIdSipTransportDisconnectionMethod = class(TIdSipConnectionOrientedTransportMethod)
+  public
+    procedure Run(const Subject: IInterface); override;
+  end;
+
   EIdSipTransport = class(Exception)
   private
     fSipMessage: TIdSipMessage;
@@ -451,6 +496,7 @@ constructor TIdSipTransport.Create;
 begin
   inherited Create;
 
+  Self.ConnectionListeners       := TIdNotificationList.Create;
   Self.TransportListeners        := TIdNotificationList.Create;
   Self.TransportSendingListeners := TIdNotificationList.Create;
 
@@ -465,6 +511,7 @@ destructor TIdSipTransport.Destroy;
 begin
   Self.TransportSendingListeners.Free;
   Self.TransportListeners.Free;
+  Self.ConnectionListeners.Free;
 
   Self.DestroyServer;
 
@@ -485,6 +532,11 @@ begin
 
   if WasRunning then
     Self.Start;
+end;
+
+procedure TIdSipTransport.AddConnectionListener(Listener: IIdSipConnectionListener);
+begin
+  Self.ConnectionListeners.AddListener(Listener);
 end;
 
 procedure TIdSipTransport.AddTransportListener(const Listener: IIdSipTransportListener; Priority: Integer = 0);
@@ -697,7 +749,12 @@ begin
     Self.Bindings.Delete(Index);
 
   if WasRunning then
-    Self.Start;  
+    Self.Start;
+end;
+
+procedure TIdSipTransport.RemoveConnectionListener(Listener: IIdSipConnectionListener);
+begin
+  Self.ConnectionListeners.RemoveListener(Listener);
 end;
 
 procedure TIdSipTransport.RemoveTransportListener(const Listener: IIdSipTransportListener);
@@ -849,6 +906,36 @@ begin
            LoGGerVerbosityLevelHigh,
            0,
            SentTo.AsString + CRLF + Msg.AsString);
+end;
+
+procedure TIdSipTransport.NotifyOfConnection(Connection: TIdConnectionBindings);
+var
+  Notification: TIdSipTransportConnectionMethod;
+begin
+  Notification := TIdSipTransportConnectionMethod.Create;
+  try
+    Notification.Connection := Connection;
+    Notification.Transport  := Self;
+
+    Self.ConnectionListeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
+end;
+
+procedure TIdSipTransport.NotifyOfDisconnection(Connection: TIdConnectionBindings);
+var
+  Notification: TIdSipTransportDisconnectionMethod;
+begin
+  Notification := TIdSipTransportDisconnectionMethod.Create;
+  try
+    Notification.Connection := Connection;
+    Notification.Transport  := Self;
+
+    Self.ConnectionListeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
 end;
 
 procedure TIdSipTransport.NotifyOfReceivedRequest(Request: TIdSipRequest;
@@ -1278,6 +1365,26 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipTransportWait                                                        *
+//******************************************************************************
+//* TIdSipTransportWait Public methods *****************************************
+
+procedure TIdSipTransportWait.TriggerOn(Transport: TIdSipTransport);
+begin
+  // By default, do nothing.
+end;
+
+procedure TIdSipTransportWait.Trigger;
+var
+  O: TObject;
+begin
+  O := TIdObjectRegistry.FindObject(Self.TransportID);
+
+  if Assigned(O) and (O is TIdSipTransport) then
+    Self.TriggerOn(O as TIdSipTransport);
+end;
+
+//******************************************************************************
 //* TIdSipMessageExceptionWait                                                 *
 //******************************************************************************
 //* TIdSipMessageExceptionWait Public methods **********************************
@@ -1289,19 +1396,17 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipMessageExceptionWait.Trigger;
+//* TIdSipMessageExceptionWait Protected methods *******************************
+
+procedure TIdSipMessageExceptionWait.TriggerOn(Transport: TIdSipTransport);
 var
   FakeException: Exception;
-  Receiver:      TObject;
 begin
   FakeException := Self.ExceptionType.Create(Self.ExceptionMessage);
   try
-    Receiver := TIdObjectRegistry.FindObject(Self.TransportID);
-
-    if Assigned(Receiver) and (Receiver is TIdSipTransport) then
-      (Receiver as TIdSipTransport).ReceiveException(Self.FailedMessage,
-                                                     FakeException,
-                                                     Self.Reason);
+    Transport.ReceiveException(Self.FailedMessage,
+                               FakeException,
+                               Self.Reason);
   finally
     FakeException.Free;
   end;
@@ -1321,6 +1426,13 @@ end;
 //* TIdSipReceiveMessageWait                                                   *
 //******************************************************************************
 //* TIdSipReceiveMessageWait Public methods ************************************
+
+constructor TIdSipReceiveMessageWait.Create;
+begin
+  inherited Create;
+
+  Self.fReceivedFrom := TIdConnectionBindings.Create;
+end;
 
 destructor TIdSipReceiveMessageWait.Destroy;
 begin
@@ -1343,6 +1455,11 @@ begin
       (Receiver as TIdSipTransport).ReceiveResponse(Self.Message as TIdSipResponse,
                                                     Self.ReceivedFrom);
   end;
+end;
+
+procedure TIdSipReceiveMessageWait.SetReceivedFrom(Value: TIdConnectionBindings);
+begin
+  Self.fReceivedFrom.Assign(Value);
 end;
 
 //******************************************************************************
@@ -1473,6 +1590,26 @@ begin
   (Subject as IIdSipTransportSendingListener).OnSendResponse(Self.Response,
                                                              Self.Sender,
                                                              Self.Binding);
+end;
+
+//******************************************************************************
+//* TIdSipTransportConnectionMethod                                            *
+//******************************************************************************
+//* TIdSipTransportConnectionMethod Public methods *****************************
+
+procedure TIdSipTransportConnectionMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipConnectionListener).OnConnection(Self.Transport, Self.Connection);
+end;
+
+//******************************************************************************
+//* TIdSipTransportDisconnectionMethod                                         *
+//******************************************************************************
+//* TIdSipTransportDisconnectionMethod Public methods **************************
+
+procedure TIdSipTransportDisconnectionMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipConnectionListener).OnDisconnection(Self.Transport, Self.Connection);
 end;
 
 //******************************************************************************

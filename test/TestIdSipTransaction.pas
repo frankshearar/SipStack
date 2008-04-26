@@ -12,13 +12,33 @@ unit TestIdSipTransaction;
 interface
 
 uses
-  IdConnectionBindings, IdRoutingTable, IdSipAuthentication, IdSipCore,
-  IdSipDialog, IdSipDns, IdSipLocation, IdSipMessage, IdSipMockCore,
-  IdSipMockLocator, IdSipMockTransactionDispatcher, IdSipMockTransport,
-  IdSipTransaction, IdSipTransport, IdTimerQueue, SysUtils, TestFramework,
-  TestFrameworkSip;
+  Classes, IdConnectionBindings, IdInterfacedObject, IdRoutingTable,
+  IdSipAuthentication, IdSipCore, IdSipDialog, IdSipDns, IdSipLocation,
+  IdSipMessage, IdSipMockCore, IdSipMockLocator, IdSipMockTransactionDispatcher,
+  IdSipMockTransport, IdSipTransaction, IdSipTransport, IdTimerQueue, SysUtils,
+  TestFramework, TestFrameworkSip;
 
 type
+  TTransportManagementListener = class(TIdInterfacedObject,
+                                       IIdSipTransportManagementListener)
+  private
+    fRemovedTransports: TStrings;
+    fTransportAdded:    Boolean;
+    fTransportRemoved:  Boolean;
+    fTransportParam:    TIdSipTransport;
+
+    procedure OnAddedTransport(Transport: TIdSipTransport);
+    procedure OnRemovedTransport(Transport: TIdSipTransport);
+  public
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    property RemovedTransports: TStrings        read fRemovedTransports;
+    property TransportAdded:    Boolean         read fTransportAdded;
+    property TransportParam:    TIdSipTransport read fTransportParam;
+    property TransportRemoved:  Boolean         read fTransportRemoved;
+  end;
+
   TMessageCountingTestCase = class(TTestCaseSip)
   protected
     AckCount:      Cardinal;
@@ -108,6 +128,7 @@ type
     procedure TestAckForInviteWontCreateTransaction;
     procedure TestAckHandedUpToTU;
     procedure TestAddClientTransaction;
+    procedure TestAddManagementListener;
     procedure TestAddServerTransaction;
     procedure TestAddTransportBinding;
     procedure TestAddTransportBindingAddsLoggerToTransport;
@@ -115,6 +136,7 @@ type
     procedure TestAddTransportBindingAddsRoutingTableToTransport;
     procedure TestAddTransportBindingSetsTransportLogName;
     procedure TestClearAddAndCountTransports;
+    procedure TestClearTransportsNotifiesListeners;
     procedure TestCreateNewTransaction;
     procedure TestDispatchToCorrectTransaction;
     procedure TestDispatcherDoesntGetTransactionRequests;
@@ -128,6 +150,7 @@ type
     procedure TestLoopDetected;
     procedure TestLoopDetectedRFC2543RequestWithNoBranch;
     procedure TestNetworkFailure;
+    procedure TestRemoveManagementListener;
     procedure TestSendAckWontCreateTransaction;
     procedure TestSendRequest;
     procedure TestSendRequestOverUdp;
@@ -666,6 +689,35 @@ type
     procedure TestRun;
   end;
 
+  TIdSipTransportManagementMethodTestCase = class(TTestCase)
+  protected
+    Listener:  TTransportManagementListener;
+    Transport: TIdSipTransport;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSipTransportAddedMethod = class(TIdSipTransportManagementMethodTestCase)
+  private
+    Method: TIdSipTransportAddedMethod;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TestTIdSipTransportRemovedMethod = class(TIdSipTransportManagementMethodTestCase)
+  private
+    Method: TIdSipTransportRemovedMethod;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
   TTransactionListenerMethodTestCase = class(TTestCase)
   protected
     Dispatcher:  TIdSipMockTransactionDispatcher;
@@ -721,8 +773,8 @@ type
 implementation
 
 uses
-  Classes, IdException, IdRandom, IdRegisteredObject, IdSdp, LoGGer, Math,
-  RuntimeSafety, TypInfo;
+  IdException, IdRandom, IdRegisteredObject, IdSdp, LoGGer, Math, RuntimeSafety,
+  TypInfo;
 
 function Suite: ITestSuite;
 begin
@@ -747,6 +799,8 @@ begin
   Result.AddTest(TestTIdSipClientNonInviteTransactionTimerKWait.Suite);
   Result.AddTest(TestTIdSipTransactionDispatcherListenerReceiveRequestMethod.Suite);
   Result.AddTest(TestTIdSipTransactionDispatcherListenerReceiveResponseMethod.Suite);
+  Result.AddTest(TestTIdSipTransportAddedMethod.Suite);
+  Result.AddTest(TestTIdSipTransportRemovedMethod.Suite);
   Result.AddTest(TestTIdSipTransactionListenerFailMethod.Suite);
   Result.AddTest(TestTIdSipTransactionListenerReceiveRequestMethod.Suite);
   Result.AddTest(TestTIdSipTransactionListenerReceiveResponseMethod.Suite);
@@ -756,6 +810,43 @@ end;
 function Transaction(S: TIdSipTransactionState): String;
 begin
   Result := GetEnumName(TypeInfo(TIdSipTransactionState), Integer(S));
+end;
+
+//******************************************************************************
+//* TTransportManagementListener                                               *
+//******************************************************************************
+//* TTransportManagementListener Public methods ********************************
+
+constructor TTransportManagementListener.Create;
+begin
+  inherited Create;
+
+  Self.fRemovedTransports := TStringList.Create;
+  Self.fTransportAdded   := false;
+  Self.fTransportRemoved := false;
+end;
+
+destructor TTransportManagementListener.Destroy;
+begin
+  Self.fRemovedTransports.Free;
+
+  inherited Destroy;
+end;
+
+//* TTransportManagementListener Private methods *******************************
+
+procedure TTransportManagementListener.OnAddedTransport(Transport: TIdSipTransport);
+begin
+  Self.fTransportAdded := true;
+  Self.fTransportParam := Transport;
+end;
+
+procedure TTransportManagementListener.OnRemovedTransport(Transport: TIdSipTransport);
+begin
+  Self.fTransportRemoved := true;
+  Self.fTransportParam   := Transport;
+
+  Self.fRemovedTransports.Add(Transport.GetTransportType);
 end;
 
 //******************************************************************************
@@ -1181,6 +1272,24 @@ begin
               'Transaction wasn''t added');
 end;
 
+procedure TestTIdSipTransactionDispatcher.TestAddManagementListener;
+var
+  L: TTransportManagementListener;
+begin
+  L := TTransportManagementListener.Create;
+  try
+    Self.D.AddManagementListener(L);
+
+    Self.D.AddTransportBinding(TlsTransport, '127.0.0.1', DefaultSipPort);
+
+    Check(L.TransportAdded, 'Listeners not notified of new transport');
+    Check(nil <> L.TransportParam, 'Transport param');
+  finally
+    Self.D.RemoveManagementListener(L);
+    L.Free;
+  end;
+end;
+
 procedure TestTIdSipTransactionDispatcher.TestAddServerTransaction;
 var
   Tran:      TIdSipTransaction;
@@ -1288,6 +1397,27 @@ begin
                              '127.0.0.1',
                              DefaultSipPort);
   CheckEquals(2, Self.D.TransportCount, 'After two AddTransports');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestClearTransportsNotifiesListeners;
+var
+  L:              TTransportManagementListener;
+  TransportCount: Cardinal;
+begin
+  L := TTransportManagementListener.Create;
+  try
+    Self.D.AddManagementListener(L);
+
+    TransportCount := Self.D.TransportCount;
+
+    Self.D.ClearTransports;
+    CheckEquals(TransportCount, L.RemovedTransports.Count,
+                'Listeners not notified of each transport removal');
+
+  finally
+    Self.D.RemoveManagementListener(L);
+    L.Free;
+  end;
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestCreateNewTransaction;
@@ -1544,6 +1674,23 @@ begin
   Self.MockTcpTransport.FireOnException(Self.Invite, EIdConnectTimeout, 'Connection timeout', 'Induced failure');
 
   Check(Self.TransportException, 'Listeners not notified');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestRemoveManagementListener;
+var
+  L: TTransportManagementListener;
+begin
+  L := TTransportManagementListener.Create;
+  try
+    Self.D.AddManagementListener(L);
+    Self.D.RemoveManagementListener(L);
+
+    Self.D.AddTransportBinding(TlsTransport, '127.0.0.1', DefaultSipPort);
+
+    Check(not L.TransportAdded, 'Listener not removed');
+  finally
+    L.Free;
+  end;
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestSendAckWontCreateTransaction;
@@ -5914,6 +6061,87 @@ begin
   finally
     Listener.Free;
   end;
+end;
+
+//******************************************************************************
+//* TIdSipTransportManagementMethodTestCase                                    *
+//******************************************************************************
+//* TIdSipTransportManagementMethodTestCase Public methods *********************
+
+procedure TIdSipTransportManagementMethodTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Listener  := TTransportManagementListener.Create;
+  Self.Transport := TIdSipMockTcpTransport.Create;
+end;
+
+procedure TIdSipTransportManagementMethodTestCase.TearDown;
+begin
+  inherited TearDown;
+
+  Self.Transport.Free;
+  Self.Listener.Free;
+end;
+
+//******************************************************************************
+//* TestTIdSipTransportAddedMethod                                             *
+//******************************************************************************
+//* TestTIdSipTransportAddedMethod Public methods ******************************
+
+procedure TestTIdSipTransportAddedMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Method := TIdSipTransportAddedMethod.Create;
+  Self.Method.Transport := Self.Transport;
+end;
+
+procedure TestTIdSipTransportAddedMethod.TearDown;
+begin
+  Self.Method.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipTransportAddedMethod Published methods ***************************
+
+procedure TestTIdSipTransportAddedMethod.TestRun;
+begin
+  Self.Method.Run(Self.Listener);
+
+  Check(Self.Listener.TransportAdded,                  'Listeners not notified');
+  Check(Self.Transport = Self.Listener.TransportParam, 'Transport param');
+end;
+
+//******************************************************************************
+//* TestTIdSipTransportRemovedMethod                                           *
+//******************************************************************************
+//* TestTIdSipTransportRemovedMethod Public methods ****************************
+
+procedure TestTIdSipTransportRemovedMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Method := TIdSipTransportRemovedMethod.Create;
+  Self.Method.Transport := Self.Transport;
+end;
+
+procedure TestTIdSipTransportRemovedMethod.TearDown;
+begin
+  Self.Method.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipTransportRemovedMethod Published methods *************************
+
+procedure TestTIdSipTransportRemovedMethod.TestRun;
+begin
+  Self.Method.Run(Self.Listener);
+
+  Check(Self.Listener.TransportRemoved,                  'Listeners not notified');
+  Check(Self.Transport = Self.Listener.TransportParam, 'Transport param');
 end;
 
 //******************************************************************************

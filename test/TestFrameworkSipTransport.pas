@@ -12,9 +12,9 @@ unit TestFrameworkSipTransport;
 interface
 
 uses
-  IdConnectionBindings, IdRoutingTable, IdSipLocation, IdSipMessage,
-  IdSipTransport, IdTimerQueue, SyncObjs, SysUtils, TestFrameworkEx,
-  TestFrameworkSip;
+  IdConnectionBindings, IdInterfacedObject, IdRoutingTable, IdSipLocation,
+  IdSipMessage, IdSipTransport, IdTimerQueue, SyncObjs, SysUtils,
+  TestFrameworkEx, TestFrameworkSip;
 
 type
   TestTIdSipTransport = class;
@@ -289,7 +289,27 @@ type
     property SenderParam:   TIdSipTransport read fSenderParam;
     property SentRequest:   Boolean         read fSentRequest;
     property SentResponse:  Boolean         read fSentResponse;
+  end;
 
+  TConnectionListener = class(TIdInterfacedObject, IIdSipConnectionListener)
+  private
+    fConnectionClosed: Boolean;
+    fConnectionOpened: Boolean;
+    fConnectionParam:  TIdConnectionBindings;
+    fTransportParam:   TIdSipTransport;
+
+    procedure OnConnection(Transport: TIdSipTransport;
+                           Connection: TIdConnectionBindings);
+    procedure OnDisconnection(Transport: TIdSipTransport;
+                              Connection: TIdConnectionBindings);
+  public
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    property ConnectionClosed: Boolean read fConnectionClosed;
+    property ConnectionOpened: Boolean read fConnectionOpened;
+    property ConnectionParam:  TIdConnectionBindings read fConnectionParam;
+    property TransportParam:   TIdSipTransport read fTransportParam;
   end;
 
 implementation
@@ -2232,6 +2252,46 @@ begin
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnSendResponse');
+end;
+
+//******************************************************************************
+//* TConnectionListener                                                        *
+//******************************************************************************
+//* TConnectionListener Public methods *****************************************
+
+constructor TConnectionListener.Create;
+begin
+  inherited Create;
+
+  Self.fConnectionClosed := false;
+  Self.fConnectionOpened := false;
+
+  Self.fConnectionParam := TIdConnectionBindings.Create;
+end;
+
+destructor TConnectionListener.Destroy;
+begin
+  Self.fConnectionParam.Free;
+
+  inherited Destroy;
+end;
+
+//* TConnectionListener Private methods ****************************************
+
+procedure TConnectionListener.OnConnection(Transport: TIdSipTransport;
+                                           Connection: TIdConnectionBindings);
+begin
+  Self.fConnectionOpened := true;
+  Self.fConnectionParam.Assign(Connection);
+  Self.fTransportParam    := Transport;
+end;
+
+procedure TConnectionListener.OnDisconnection(Transport: TIdSipTransport;
+                                              Connection: TIdConnectionBindings);
+begin
+  Self.fConnectionClosed := true;
+  Self.fConnectionParam.Assign(Connection);
+  Self.fTransportParam    := Transport;
 end;
 
 initialization

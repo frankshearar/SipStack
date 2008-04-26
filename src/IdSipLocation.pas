@@ -12,7 +12,7 @@ unit IdSipLocation;
 interface
 
 uses
-  Classes, IdSipDns;
+  Classes, IdConnectionBindings, IdSipDns;
 
 type
   TIdSipLocation = class(TPersistent)
@@ -24,6 +24,7 @@ type
   protected
     procedure AssignTo(Dest: TPersistent); override;
   public
+    constructor CreatePeerLocation(Connection: TIdConnectionBindings);
     constructor Create(const Transport: String;
                        const IPAddress:   String;
                              Port: Cardinal); overload;
@@ -52,6 +53,10 @@ type
                                     Port: Cardinal;
                                     Names: TIdDomainNameRecords);
     procedure AddLocationsFromSRVs(SRV: TIdSrvRecords);
+    function  AddLocationToFront(Location: TIdSipLocation): TIdSipLocation; overload;
+    function  AddLocationToFront(const Transport: String;
+                                 const Address: String;
+                                 Port: Cardinal): TIdSipLocation; overload;
     function  AsString: String;
     function  AsStringWithPrefix(Prefix: String): String;
     function  Contains(Loc: TIdSipLocation): Boolean;
@@ -71,12 +76,21 @@ const
 implementation
 
 uses
-  IdConnectionBindings, IdSimpleParser, SysUtils;
+  IdSimpleParser, SysUtils;
 
 //******************************************************************************
 //* TIdSipLocation                                                             *
 //******************************************************************************
 //* TIdSipLocation Public methods **********************************************
+
+constructor TIdSipLocation.CreatePeerLocation(Connection: TIdConnectionBindings);
+begin
+  inherited Create;
+
+  Self.fTransport := Connection.Transport;
+  Self.fIPAddress := Connection.PeerIP;
+  Self.fPort      := Connection.PeerPort;
+end;
 
 constructor TIdSipLocation.Create(const Transport: String;
                                   const IPAddress: String;
@@ -151,15 +165,15 @@ end;
 
 function TIdSipLocations.AddLocation(Location: TIdSipLocation): TIdSipLocation;
 begin
-  Result := Location.Copy;
-  Self.List.Add(Result);
+  Result := Self.AddLocation(Location.Transport, Location.IPAddress, Location.Port);
 end;
 
 function TIdSipLocations.AddLocation(const Transport: String;
                                      const Address: String;
                                      Port: Cardinal): TIdSipLocation;
 begin
-  Result := Self.AddLocation(TIdSipLocation.Create(Transport, Address, Port));
+  Result := TIdSipLocation.Create(Transport, Address, Port);
+  Self.List.Add(Result);
 end;
 
 procedure TIdSipLocations.AddLocations(Locations: TIdSipLocations);
@@ -190,6 +204,19 @@ begin
                        Srv[I].NameRecords[J].IPAddress,
                        Srv[I].Port);
 end;
+
+function TIdSipLocations.AddLocationToFront(Location: TIdSipLocation): TIdSipLocation;
+begin
+  Result := Self.AddLocationToFront(Location.Transport, Location.IPAddress, Location.Port);
+end;
+
+function TIdSipLocations.AddLocationToFront(const Transport: String;
+                                            const Address: String;
+                                            Port: Cardinal): TIdSipLocation;
+begin
+  Result := TIdSipLocation.Create(Transport, Address, Port);
+  Self.List.Insert(0, Result);
+end;                                            
 
 function TIdSipLocations.AsString: String;
 begin

@@ -46,6 +46,7 @@ type
     procedure TestClear;
     procedure TestGetBindings;
     procedure TestHasBinding;
+    procedure TestIsEmpty;
     procedure TestNoDuplicates;
     procedure TestRemoveBinding;
   end;
@@ -343,6 +344,17 @@ begin
   Self.BindingSet.Add(Self.OtherBinding);
   Check(Self.BindingSet.HasBinding(Self.NewBinding),   'Binding removed');
   Check(Self.BindingSet.HasBinding(Self.OtherBinding), 'Unknown binding not added');
+end;
+
+procedure TestTIdConnectionBindingsSet.TestIsEmpty;
+begin
+  Check(Self.BindingSet.IsEmpty, 'Empty set');
+
+  Self.BindingSet.Add(Self.NewBinding);
+  Check(not Self.BindingSet.IsEmpty, 'Non-empty set');
+
+  Self.BindingSet.Clear;
+  Check(Self.BindingSet.IsEmpty, 'Cleared set');
 end;
 
 procedure TestTIdConnectionBindingsSet.TestNoDuplicates;

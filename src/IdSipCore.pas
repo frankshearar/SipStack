@@ -72,8 +72,8 @@ uses
   Classes, Contnrs, IdConnectionBindings, IdSipDialog, IdException,
   IdInterfacedObject, IdNotification, IdObservable, IdRegisteredObject,
   IdRoutingTable, IdSipAuthentication, IdSipLocation, IdSipLocator,
-  IdSipMessage, IdSipProxyDescription, IdSipTransaction, IdTimerQueue, LoGGer,
-  StringDictionary, SysUtils;
+  IdSipMessage, IdSipProxyDescription, IdSipTransaction, IdSipTransport,
+  IdTimerQueue, LoGGer, StringDictionary, SysUtils;
 
 const
   SipStackVersion = '0.6pre';
@@ -275,6 +275,46 @@ type
 
   TIdSipUserAgentReaction = Cardinal;
 
+  TIdAddressOfRecordConnectionList = class(TObject)
+  private
+    fAddressOfRecord: TIdSipUri;
+    fConnections:     TIdConnectionBindingsSet;
+
+    procedure SetAddressOfRecord(Value: TIdSipUri);
+  public
+    constructor Create;
+    destructor  Destroy; override;
+
+    procedure Add(Connection: TIdConnectionBindings);
+    function  Count: Integer;
+    procedure Remove(Connection: TIdConnectionBindings);
+
+    property AddressOfRecord: TIdSipUri                read fAddressOfRecord write SetAddressOfRecord;
+    property Connections:     TIdConnectionBindingsSet read fConnections;
+  end;
+
+  // I hold (AOR, ConnectionBindings) pairs.
+  TIdConnectionAssociationSet = class(TObject)
+  private
+    AORs: TObjectList;
+
+    function  CreateNewEntry(AOR: TIdSipUri): TIdAddressOfRecordConnectionList;
+    function  BindingsContaining(Connection: TIdConnectionBindings): TIdAddressOfRecordConnectionList;
+    function  BindingsFor(AOR: TIdSipUri): TIdAddressOfRecordConnectionList;
+    function  EntryAt(Index: Integer): TIdAddressOfRecordConnectionList;
+    procedure InternalRemove(Entry: TIdAddressOfRecordConnectionList;
+                             Binding: TIdConnectionBindings);
+  public
+    constructor Create;
+    destructor  Destroy; override;
+
+    procedure Add(AOR: TIdSipUri; Binding: TIdConnectionBindings);
+    procedure ConnectionsFor(AOR: TIdSipUri; Bindings: TIdConnectionBindingsSet);
+    function  Count: Integer;
+    procedure Remove(AOR: TIdSipUri; Binding: TIdConnectionBindings);
+    procedure RemoveConnection(Binding: TIdConnectionBindings);
+  end;
+
   // I represent the Transaction-User core. I provide policy for the stack, and
   // I keep track of the various chunks of the rest of the Transaction-User
   // layer - modules, etc.
@@ -290,30 +330,35 @@ type
   // hostnames and bindings of the stack.
   TIdSipAbstractCore = class(TIdInterfacedObject,
                              IIdObserver,
-                             IIdSipTransactionDispatcherListener)
+                             IIdSipConnectionListener,
+                             IIdSipTransactionDispatcherListener,
+                             IIdSipTransportManagementListener)
   private
-    fActions:                TIdSipActions;
-    fAllowedLanguageList:    TStrings;
-    fAllowedSchemeList:      TStrings;
-    fAuthenticator:          TIdSipAbstractAuthenticator;
-    fDispatcher:             TIdSipTransactionDispatcher;
-    fHostName:               String;
-    fInstanceID:             String;
-    fKeyring:                TIdKeyRing;
-    fLocator:                TIdSipAbstractLocator;
-    fLogger:                 TLoGGerThread;
-    fLogName:                String;
-    fRealm:                  String;
-    fRoutingTable:           TIdRoutingTable;
-    fTimer:                  TIdTimerQueue;
-    fUseGruu:                Boolean;
-    fUserAgentName:          String;
-    Listeners:               TIdNotificationList;
-    Modules:                 TObjectList;
-    NullModule:              TIdSipMessageModule;
-    Observed:                TIdObservable;
-    Proxies:                 TIdProxyDescriptions;
+    fActions:               TIdSipActions;
+    fAllowedLanguageList:   TStrings;
+    fAllowedSchemeList:     TStrings;
+    fAuthenticator:         TIdSipAbstractAuthenticator;
+    fDispatcher:            TIdSipTransactionDispatcher;
+    fHostName:              String;
+    fInstanceID:            String;
+    fKeyring:               TIdKeyRing;
+    fLocator:               TIdSipAbstractLocator;
+    fLogger:                TLoGGerThread;
+    fLogName:               String;
+    fRealm:                 String;
+    fRoutingTable:          TIdRoutingTable;
+    fTimer:                 TIdTimerQueue;
+    fUseInboundConnections: Boolean;
+    fUseGruu:               Boolean;
+    fUserAgentName:         String;
+    Listeners:              TIdNotificationList;
+    Modules:                TObjectList;
+    NullModule:             TIdSipMessageModule;
+    Observed:               TIdObservable;
+    OpenInboundConnections: TIdConnectionAssociationSet;
+    Proxies:                TIdProxyDescriptions;
 
+    procedure AddConnection(Msg: TIdSipMessage; Binding: TIdConnectionBindings);
     procedure AddModuleSpecificHeaders(OutboundMessage: TIdSipMessage);
     procedure CollectAllowedExtensions(ExtensionList: TStrings);
     function  ConvertToHeader(ValueList: TStrings): String;
@@ -332,13 +377,20 @@ type
                                 Binding: TIdConnectionBindings);
     function  ModuleAt(Index: Integer): TIdSipMessageModule;
     procedure NotifyModulesOfFree;
+    procedure OnAddedTransport(Transport: TIdSipTransport);
     procedure OnChanged(Observed: TObject);
+    procedure OnConnection(Transport: TIdSipTransport;
+                           Connection: TIdConnectionBindings);
+    procedure OnDisconnection(Transport: TIdSipTransport;
+                              Connection: TIdConnectionBindings);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Binding: TIdConnectionBindings); virtual;
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Binding: TIdConnectionBindings); virtual;
+    procedure OnRemovedTransport(Transport: TIdSipTransport);
     procedure OnTransportException(FailedMessage: TIdSipMessage;
                                    const Reason: String); virtual;
+    procedure PrependConnectionLocations(Msg: TIdSipMessage; Targets: TIdSipLocations);
     procedure RejectBadAuthorization(Request: TIdSipRequest);
     procedure RejectMethodNotAllowed(Request: TIdSipRequest);
     procedure RejectRequestBadExtension(Request: TIdSipRequest);
@@ -466,21 +518,22 @@ type
     // Move to UserAgent:
     procedure TerminateAllCalls; // move to InviteModule
 
-    property Actions:          TIdSipActions               read fActions;
-    property Authenticator:    TIdSipAbstractAuthenticator read fAuthenticator write SetAuthenticator;
-    property DefaultRoutePath: TIdSipRoutePath             read GetDefaultRoutePath write SetDefaultRoutePath;
-    property Dispatcher:       TIdSipTransactionDispatcher read fDispatcher write SetDispatcher;
-    property HostName:         String                      read fHostName write fHostName;
-    property InstanceID:       String                      read fInstanceID write SetInstanceID;
-    property Keyring:          TIdKeyRing                  read fKeyring;
-    property Locator:          TIdSipAbstractLocator       read fLocator write fLocator;
-    property Logger:           TLoGGerThread               read fLogger write SetLogger;
-    property LogName:          String                      read fLogName write SetLogName;
-    property Realm:            String                      read fRealm write SetRealm;
-    property RoutingTable:     TIdRoutingTable             read fRoutingTable write fRoutingTable;
-    property Timer:            TIdTimerQueue               read fTimer write fTimer;
-    property UseGruu:          Boolean                     read fUseGruu write fUseGruu;
-    property UserAgentName:    String                      read fUserAgentName write fUserAgentName;
+    property Actions:               TIdSipActions               read fActions;
+    property Authenticator:         TIdSipAbstractAuthenticator read fAuthenticator write SetAuthenticator;
+    property DefaultRoutePath:      TIdSipRoutePath             read GetDefaultRoutePath write SetDefaultRoutePath;
+    property Dispatcher:            TIdSipTransactionDispatcher read fDispatcher write SetDispatcher;
+    property HostName:              String                      read fHostName write fHostName;
+    property InstanceID:            String                      read fInstanceID write SetInstanceID;
+    property Keyring:               TIdKeyRing                  read fKeyring;
+    property Locator:               TIdSipAbstractLocator       read fLocator write fLocator;
+    property Logger:                TLoGGerThread               read fLogger write SetLogger;
+    property LogName:               String                      read fLogName write SetLogName;
+    property Realm:                 String                      read fRealm write SetRealm;
+    property RoutingTable:          TIdRoutingTable             read fRoutingTable write fRoutingTable;
+    property Timer:                 TIdTimerQueue               read fTimer write fTimer;
+    property UseGruu:               Boolean                     read fUseGruu write fUseGruu;
+    property UseInboundConnections: Boolean                     read fUseInboundConnections write fUseInboundConnections;
+    property UserAgentName:         String                      read fUserAgentName write fUserAgentName;
   end;
 
   IIdSipMessageModuleListener = interface
@@ -1020,7 +1073,7 @@ implementation
 
 uses
   IdRandom, IdSdp, IdSipInviteModule, IdSipOptionsModule, IdSipRegistration,
-  IdSipSubscribeModule, IdSipTransport, LogVariables, RuntimeSafety;
+  IdSipSubscribeModule, LogVariables, RuntimeSafety;
 
 const
   ItemNotFoundIndex = -1;
@@ -1526,8 +1579,7 @@ begin
   if Assigned(Action) then
     Action.ReceiveResponse(Self.Response, Self.Binding)
   else
-
-  Self.UserAgent.NotifyOfDroppedMessage(Self.Response, Self.Binding);
+    Self.UserAgent.NotifyOfDroppedMessage(Self.Response, Self.Binding);
 end;
 
 //******************************************************************************
@@ -1539,6 +1591,161 @@ procedure TIdSipActionNetworkFailure.Execute(Action: TIdSipAction);
 begin
   if Assigned(Action) then
     Action.NetworkFailureSending(Self.FailedMessage);
+end;
+
+//******************************************************************************
+//* TIdAddressOfRecordConnectionList                                           *
+//******************************************************************************
+//* TIdAddressOfRecordConnectionList Public methods ****************************
+
+constructor TIdAddressOfRecordConnectionList.Create;
+begin
+  inherited Create;
+
+  Self.fAddressOfRecord := TIdSipUri.Create('');
+  Self.fConnections     := TIdConnectionBindingsSet.Create;
+end;
+
+destructor TIdAddressOfRecordConnectionList.Destroy;
+begin
+  Self.fConnections.Free;
+  Self.fAddressOfRecord.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdAddressOfRecordConnectionList.Add(Connection: TIdConnectionBindings);
+begin
+  Self.Connections.Add(Connection);
+end;
+
+function TIdAddressOfRecordConnectionList.Count: Integer;
+begin
+  Result := Self.Connections.Count;
+end;
+
+procedure TIdAddressOfRecordConnectionList.Remove(Connection: TIdConnectionBindings);
+begin
+  Self.Connections.Remove(Connection);
+end;
+
+//* TIdAddressOfRecordConnectionList Private methods ***************************
+
+procedure TIdAddressOfRecordConnectionList.SetAddressOfRecord(Value: TIdSipUri);
+begin
+  Self.fAddressOfRecord.Uri := Value.AsString;
+end;
+
+//******************************************************************************
+//* TIdConnectionAssociationSet                                                *
+//******************************************************************************
+//* TIdConnectionAssociationSet Public methods *********************************
+
+constructor TIdConnectionAssociationSet.Create;
+begin
+  inherited Create;
+
+  Self.AORs := TObjectList.Create(true);
+end;
+
+destructor TIdConnectionAssociationSet.Destroy;
+begin
+  Self.AORs.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdConnectionAssociationSet.Add(AOR: TIdSipUri; Binding: TIdConnectionBindings);
+var
+  Entry: TIdAddressOfRecordConnectionList;
+begin
+  Entry := Self.BindingsFor(AOR);
+
+  if not Assigned(Entry) then
+    Entry := Self.CreateNewEntry(AOR);
+
+  if not Entry.Connections.HasBinding(Binding) then
+    Entry.Add(Binding);
+end;
+
+procedure TIdConnectionAssociationSet.ConnectionsFor(AOR: TIdSipUri; Bindings: TIdConnectionBindingsSet);
+var
+  Entry: TIdAddressOfRecordConnectionList;
+begin
+  Entry := Self.BindingsFor(AOR);
+
+  if not Assigned(Entry) then Exit;
+
+  Bindings.Clear;
+  Bindings.Assign(Entry.Connections);
+end;
+
+function TIdConnectionAssociationSet.Count: Integer;
+begin
+  Result := Self.AORs.Count;
+end;
+
+procedure TIdConnectionAssociationSet.Remove(AOR: TIdSipUri; Binding: TIdConnectionBindings);
+begin
+  Self.InternalRemove(Self.BindingsFor(AOR), Binding);
+end;
+
+procedure TIdConnectionAssociationSet.RemoveConnection(Binding: TIdConnectionBindings);
+begin
+  Self.InternalRemove(Self.BindingsContaining(Binding), Binding);
+end;
+
+//* TIdConnectionAssociationSet Private methods ********************************
+
+function TIdConnectionAssociationSet.CreateNewEntry(AOR: TIdSipUri): TIdAddressOfRecordConnectionList;
+begin
+  Result := TIdAddressOfRecordConnectionList.Create;
+  Self.AORs.Add(Result);
+  Result.AddressOfRecord.Uri := AOR.AsString;
+end;
+
+function TIdConnectionAssociationSet.BindingsContaining(Connection: TIdConnectionBindings): TIdAddressOfRecordConnectionList;
+var
+  I: Integer;
+begin
+  Result := nil;
+
+  for I := 0 to Self.AORs.Count - 1 do begin
+    if Self.EntryAt(I).Connections.HasBinding(Connection) then begin
+      Result := Self.EntryAt(I);
+      Break;
+    end;
+  end;
+end;
+
+function TIdConnectionAssociationSet.BindingsFor(AOR: TIdSipUri): TIdAddressOfRecordConnectionList;
+var
+  I: Integer;
+begin
+  Result := nil;
+
+  for I := 0 to Self.AORs.Count - 1 do begin
+    if Self.EntryAt(I).AddressOfRecord.Equals(AOR) then begin
+      Result := Self.EntryAt(I);
+      Break;
+    end;
+  end;
+end;
+
+function TIdConnectionAssociationSet.EntryAt(Index: Integer): TIdAddressOfRecordConnectionList;
+begin
+  Result := Self.AORs[Index] as TIdAddressOfRecordConnectionList;
+end;
+
+procedure TIdConnectionAssociationSet.InternalRemove(Entry: TIdAddressOfRecordConnectionList;
+                                                     Binding: TIdConnectionBindings);
+begin
+  if not Assigned(Entry) then Exit;
+
+  Entry.Remove(Binding);
+
+  if Entry.Connections.IsEmpty then
+    Self.AORs.Remove(Entry);
 end;
 
 //******************************************************************************
@@ -1560,10 +1767,11 @@ begin
   Self.Listeners  := TIdNotificationList.Create;
   Self.Listeners.AddExpectedException(EParserError);
 
-  Self.Modules    := TObjectList.Create(true);
-  Self.NullModule := TIdSipNullModule.Create(Self);
-  Self.Observed   := TIdObservable.Create;
-  Self.Proxies    := TIdProxyDescriptions.Create;
+  Self.Modules                := TObjectList.Create(true);
+  Self.NullModule             := TIdSipNullModule.Create(Self);
+  Self.Observed               := TIdObservable.Create;
+  Self.OpenInboundConnections := TIdConnectionAssociationSet.Create;
+  Self.Proxies                := TIdProxyDescriptions.Create;
 
   Self.AddModule(TIdSipOptionsModule);
   Self.AddAllowedScheme(SipScheme);
@@ -1577,7 +1785,8 @@ destructor TIdSipAbstractCore.Destroy;
 begin
   Self.NotifyModulesOfFree;
 
-  Self.Proxies.Free;  
+  Self.Proxies.Free;
+  Self.OpenInboundConnections.Free;
   Self.Observed.Free;
   Self.NullModule.Free;
   Self.Modules.Free;
@@ -1890,6 +2099,9 @@ procedure TIdSipAbstractCore.FindServersFor(Request: TIdSipRequest;
                                             Result: TIdSipLocations);
 begin
   Self.Locator.FindServersFor(Request.DestinationUri, Result);
+
+  if Self.UseInboundConnections then
+    Self.PrependConnectionLocations(Request, Result);
 end;
 
 procedure TIdSipAbstractCore.FindServersFor(Response: TIdSipResponse;
@@ -2257,6 +2469,8 @@ begin
   finally
     Actor.Free;
   end;
+
+  Self.AddConnection(Request, Binding);
 end;
 
 procedure TIdSipAbstractCore.ActOnResponse(Response: TIdSipResponse;
@@ -2270,6 +2484,8 @@ begin
   finally
     Actor.Free;
   end;
+
+  Self.AddConnection(Response, Binding);
 end;
 
 function TIdSipAbstractCore.CreateActionsClosure(ClosureType: TIdSipActionsWaitClass;
@@ -2471,6 +2687,21 @@ end;
 
 //* TIdSipAbstractCore Private methods *****************************************
 
+procedure TIdSipAbstractCore.AddConnection(Msg: TIdSipMessage; Binding: TIdConnectionBindings);
+var
+  RemoteAOR: TIdSipUri;
+begin
+  // Something's possibly made a new connection to us. We note the AOR of the
+  // message sender, and the binding on which we received the message.
+
+  if Msg.IsRequest then
+    RemoteAOR := Msg.From.Address
+  else
+    RemoteAOR := Msg.ToHeader.Address;
+
+  Self.OpenInboundConnections.Add(RemoteAOR, Binding);
+end;
+
 procedure TIdSipAbstractCore.AddModuleSpecificHeaders(OutboundMessage: TIdSipMessage);
 var
   I: Integer;
@@ -2579,9 +2810,28 @@ begin
     Self.ModuleAt(I).CleanUp;
 end;
 
+procedure TIdSipAbstractCore.OnAddedTransport(Transport: TIdSipTransport);
+begin
+  Transport.AddConnectionListener(Self);
+end;
+
 procedure TIdSipAbstractCore.OnChanged(Observed: TObject);
 begin
   Self.NotifyOfChange;
+end;
+
+procedure TIdSipAbstractCore.OnConnection(Transport: TIdSipTransport;
+                                          Connection: TIdConnectionBindings);
+begin
+  // Do nothing: ActOn(Request|Response) adds the inbound connections (and we
+  // don't care about outbound connections, because those go to targets (peers)
+  // found through RFC 3263.
+end;
+
+procedure TIdSipAbstractCore.OnDisconnection(Transport: TIdSipTransport;
+                                             Connection: TIdConnectionBindings);
+begin
+  Self.OpenInboundConnections.RemoveConnection(Connection);
 end;
 
 procedure TIdSipAbstractCore.OnReceiveRequest(Request: TIdSipRequest;
@@ -2603,6 +2853,11 @@ begin
     Self.ActOnResponse(Response, Binding);
 end;
 
+procedure TIdSipAbstractCore.OnRemovedTransport(Transport: TIdSipTransport);
+begin
+  Transport.RemoveConnectionListener(Self);
+end;
+
 procedure TIdSipAbstractCore.OnTransportException(FailedMessage: TIdSipMessage;
                                                   const Reason: String);
 var
@@ -2617,6 +2872,47 @@ begin
     Self.Actions.Perform(FailedMessage, SendFailed, FailedMessage.IsRequest);
   finally
     SendFailed.Free;
+  end;
+end;
+
+procedure TIdSipAbstractCore.PrependConnectionLocations(Msg: TIdSipMessage; Targets: TIdSipLocations);
+var
+  Conns:     TIdConnectionBindingsSet;
+  I:         Integer;
+  Loc:       TIdSipLocation;
+  RemoteAOR: String;
+  URI:       TIdSipUri;
+begin
+  // Targets contains the possible machines to contact for an AOR. We look in
+  // our list of open connections for any connections to any of those machines.
+  // If there are any, we add Locations representing the peer end of those
+  // connections to the front of Targets. (Thus, the transport layer will try
+  // send Msg down those open connections first.)
+
+  if Msg.IsRequest then
+    RemoteAOR := Msg.ToHeader.AsAddressOfRecord
+  else
+    RemoteAOR := Msg.From.AsAddressOfRecord;
+
+  URI := TIdSipUri.Create(RemoteAOR);
+  try
+    Conns := TIdConnectionBindingsSet.Create;
+    try
+      Self.OpenInboundConnections.ConnectionsFor(URI, Conns);
+
+      for I := 0 to Conns.Count - 1 do begin
+        Loc := TIdSipLocation.CreatePeerLocation(Conns[I]);
+        try
+          Targets.AddLocationToFront(Loc);
+        finally
+          Loc.Free;
+        end;
+      end;
+    finally
+      Conns.Free;
+    end;
+  finally
+    URI.Free;
   end;
 end;
 
@@ -2697,10 +2993,15 @@ begin
 end;
 
 procedure TIdSipAbstractCore.SetDispatcher(Value: TIdSipTransactionDispatcher);
+var
+  I: Integer;
 begin
   Self.fDispatcher := Value;
 
   Self.fDispatcher.AddTransactionDispatcherListener(Self);
+
+  for I := 0 to Self.fDispatcher.TransportCount - 1 do
+    Self.fDispatcher.Transports[I].AddConnectionListener(Self);
 
   Self.fDispatcher.Logger  := Self.Logger;
   Self.fDispatcher.LogName := Self.LogName;

@@ -58,10 +58,14 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAddConnection;
     procedure TestConserveConnectionsOutbound;
     procedure TestGetTransportType;
     procedure TestIsReliable;
     procedure TestIsSecure;
+    procedure TestNotifyOfConnectionInbound;
+    procedure TestNotifyOfConnectionOutbound;
+    procedure TestNotifyOfDisconnection;
     procedure TestSendRequestOverExistingConnection;
     procedure TestSendResponsesClosedConnection;
     procedure TestSendResponsesClosedConnectionReceivedParam;
@@ -206,6 +210,15 @@ type
   end;
 
   TestTIdSipConnectionTableEntry = class(TTestCase)
+  private
+    Connection: TIdTCPConnection;
+    Request:    TIdSipRequest;
+    Server:     TIdTCPServer;
+
+    procedure DoOnExecute(Thread: TIdPeerThread);
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
   published
     procedure TestCreate;
   end;
@@ -232,6 +245,40 @@ type
     procedure TestRemoveOnNonEmptyList;
   end;
 
+  TTcpTransportWaitTestCase = class(TTestCase)
+  protected
+    Conn:      TIdTCPConnection;
+    Invite:    TIdSipRequest;
+    Transport: TIdSipTcpTransport;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSipTcpConnectionOpenWait = class(TTcpTransportWaitTestCase)
+  private
+    Wait: TIdSipTcpConnectionOpenWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTrigger;
+    procedure TestTriggerOnNonExistentAction;
+    procedure TestTriggerOnWrongTypeOfObject;
+  end;
+
+  TestTIdSipTcpConnectionCloseWait = class(TTcpTransportWaitTestCase)
+  private
+    Wait: TIdSipTcpConnectionCloseWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTrigger;
+    procedure TestTriggerOnNonExistentAction;
+    procedure TestTriggerOnWrongTypeOfObject;
+  end;
+
 const
   BasicRequest = 'INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
                + 'Via: SIP/2.0/TCP %s;branch=z9hG4bK776asdhds'#13#10
@@ -255,8 +302,8 @@ const
 implementation
 
 uses
-  Classes, IdException, IdGlobal, IdSimpleParser, IdSocketHandle, IdStack,
-  TestMessages;
+  Classes, IdException, IdGlobal, IdRegisteredObject, IdSimpleParser,
+  IdSocketHandle, IdStack, TestMessages;
 
 function Suite: ITestSuite;
 begin
@@ -266,6 +313,8 @@ begin
   Result.AddTest(TestTIdSipTcpClient.Suite);
   Result.AddSuite(TestTIdSipConnectionTableEntry.Suite);
   Result.AddSuite(TestTIdSipConnectionTable.Suite);
+  Result.AddSuite(TestTIdSipTcpConnectionOpenWait.Suite);
+  Result.AddSuite(TestTIdSipTcpConnectionCloseWait.Suite);
 end;
 
 //******************************************************************************
@@ -489,6 +538,46 @@ end;
 
 //* TestTIdSipTCPTransport Published methods ***********************************
 
+procedure TestTIdSipTCPTransport.TestAddConnection;
+var
+  L:        TConnectionListener;
+  TcpTrans: TIdSipTcpTransport;
+begin
+  Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
+  TcpTrans := Self.HighPortTransport as TIdSipTcpTransport;
+
+  L := TConnectionListener.Create;
+  try
+    Self.HighPortTransport.AddConnectionListener(L);
+
+    Self.SipClient.Host := Self.HighPortLocation.IPAddress;
+    Self.SipClient.Port := Self.HighPortLocation.Port;
+
+    Self.SipClient.Connect(DefaultTimeout);
+    try
+      TcpTrans.AddConnection(Self.SipClient, Self.RecvdRequest);
+
+      Check(L.ConnectionOpened, 'Listeners not notified');
+      Check(TcpTrans = L.TransportParam, 'Transport param');
+
+      // We reverse the meaning of peer and local in the below because when
+      // TcpTrans adds its INBOUND connection, this OUTBOUND connection's
+      // meanings will be transposed. That is, SipClient's local ip/port is
+      // the TcpTrans.AddConnection's peer ip/port.
+      CheckEquals(Self.HighPortLocation.Transport,    L.ConnectionParam.Transport, 'Connection param; transport');
+      CheckEquals(Self.SipClient.Socket.Binding.IP,   L.ConnectionParam.LocalIP,    'Connection param; peer IP');
+      CheckEquals(Self.SipClient.Socket.Binding.Port, L.ConnectionParam.LocalPort,  'Connection param; peer port');
+      CheckEquals(Self.HighPortLocation.IPAddress,    L.ConnectionParam.PeerIP,   'Connection param; local IP');
+      CheckEquals(Self.HighPortLocation.Port,         L.ConnectionParam.PeerPort, 'Connection param; local port');
+    finally
+      Self.SipClient.Disconnect;
+    end;
+  finally
+    Self.HighPortTransport.RemoveConnectionListener(L);
+    L.Free;
+  end;
+end;
+
 procedure TestTIdSipTCPTransport.TestConserveConnectionsOutbound;
 var
   FirstBinding: TIdConnectionBindings;
@@ -534,6 +623,91 @@ end;
 procedure TestTIdSipTCPTransport.TestIsSecure;
 begin
   Check(not Self.HighPortTransport.IsSecure, 'TCP transport marked as secure');
+end;
+
+procedure TestTIdSipTCPTransport.TestNotifyOfConnectionInbound;
+var
+  L: TConnectionListener;
+begin
+  Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
+
+  L := TConnectionListener.Create;
+  try
+    Self.HighPortTransport.AddConnectionListener(L);
+    Self.LowPortTransport.Send(Self.Request, Self.HighPortLocation);
+    Self.WaitForSignaled;
+
+    Check(L.ConnectionOpened, 'Listeners not notified');
+    Check(Self.HighPortTransport = L.TransportParam, 'Transport param');
+
+    CheckEquals(Self.LowPortLocation.Transport,  L.ConnectionParam.Transport, 'Connection param; transport');
+    CheckEquals(Self.HighPortLocation.IPAddress, L.ConnectionParam.LocalIP,   'Connection param; local IP');
+    CheckEquals(Self.HighPortLocation.Port,      L.ConnectionParam.LocalPort, 'Connection param; local port');
+    CheckEquals(Self.LowPortLocation.IPAddress,  L.ConnectionParam.PeerIP,    'Connection param; peer IP');
+    CheckNotEquals(0,                            L.ConnectionParam.PeerPort,  'Connection param; peer port');    
+  finally
+    Self.HighPortTransport.RemoveConnectionListener(L);
+    L.Free;
+  end;
+end;
+
+procedure TestTIdSipTCPTransport.TestNotifyOfConnectionOutbound;
+var
+  L: TConnectionListener;
+begin
+  L := TConnectionListener.Create;
+  try
+    Self.HighPortTransport.AddConnectionListener(L);
+    Self.HighPortTransport.Send(Self.Request, Self.LowPortLocation);
+
+    Check(L.ConnectionOpened, 'Listeners not notified');
+    Check(Self.HighPortTransport = L.TransportParam, 'Transport param');
+
+    CheckEquals(Self.LowPortLocation.Transport,  L.ConnectionParam.Transport, 'Connection param; transport');
+    CheckEquals(Self.LowPortLocation.IPAddress,  L.ConnectionParam.PeerIP,    'Connection param; peer IP');
+    CheckEquals(Self.LowPortLocation.Port,       L.ConnectionParam.PeerPort,  'Connection param; peer port');
+    CheckEquals(Self.HighPortLocation.IPAddress, L.ConnectionParam.LocalIP,   'Connection param; local IP');
+    CheckNotEquals(0,                            L.ConnectionParam.LocalPort, 'Connection param; local port');
+  finally
+    Self.HighPortTransport.RemoveConnectionListener(L);
+    L.Free;
+  end;
+end;
+
+procedure TestTIdSipTCPTransport.TestNotifyOfDisconnection;
+var
+  L:         TConnectionListener;
+  LocalIP:   String;
+  LocalPort: Integer;
+begin
+  Self.SipClient.Host := Self.HighPortLocation.IPAddress;
+  Self.SipClient.Port := Self.HighPortLocation.Port;
+
+  L := TConnectionListener.Create;
+  try
+    Self.HighPortTransport.AddConnectionListener(L);
+
+    Self.SipClient.Connect(DefaultTimeout);
+    try
+      LocalIP   := Self.SipClient.Socket.Binding.IP;
+      LocalPort := Self.SipClient.Socket.Binding.Port;
+      Self.SipClient.Write(Self.Request.AsString);
+    finally
+      Self.SipClient.Disconnect;
+    end;
+
+    Check(L.ConnectionClosed, 'Listeners not notified');
+    Check(Self.HighPortTransport = L.TransportParam, 'Transport param');
+
+    CheckEquals(Self.LowPortLocation.Transport,  L.ConnectionParam.Transport, 'Connection param; transport');
+    CheckEquals(LocalIP,                         L.ConnectionParam.PeerIP,    'Connection param; peer IP');
+    CheckEquals(LocalPort,                       L.ConnectionParam.PeerPort,  'Connection param; peer port');
+    CheckEquals(Self.HighPortLocation.IPAddress, L.ConnectionParam.LocalIP,   'Connection param; local IP');
+    CheckEquals(Self.HighPortLocation.Port,      L.ConnectionParam.LocalPort, 'Connection param; local port');
+  finally
+    Self.HighPortTransport.RemoveConnectionListener(L);
+    L.Free;
+  end;
 end;
 
 procedure TestTIdSipTCPTransport.TestSendRequestOverExistingConnection;
@@ -1521,32 +1695,69 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipConnectionTableEntry
+//* TestTIdSipConnectionTableEntry                                             *
 //******************************************************************************
+//* TestTIdSipConnectionTableEntry Private methods *****************************
+
+procedure TestTIdSipConnectionTableEntry.SetUp;
+var
+  Binding: TIdSocketHandle;
+  Client:  TIdTcpClient;
+begin
+  inherited SetUp;
+
+  Client := TIdTcpClient.Create(nil);
+  Self.Connection := Client;
+
+  Self.Request := TIdSipRequest.Create;
+
+  Self.Server := TIdTcpServer.Create(nil);
+  Self.Server.OnExecute := Self.DoOnExecute;
+  Binding := Self.Server.Bindings.Add;
+  Binding.IP   := '127.0.0.1';
+  Binding.Port := 5060;
+
+  Self.Server.Active := true;
+
+  Client.Host := Binding.IP;
+  Client.Port := Binding.Port;
+  Client.Connect(DefaultTimeout);
+end;
+
+procedure TestTIdSipConnectionTableEntry.TearDown;
+begin
+  Self.Server.Free;
+  Self.Request.Free;
+  Self.Connection.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipConnectionTableEntry Private methods *****************************
+
+procedure TestTIdSipConnectionTableEntry.DoOnExecute(Thread: TIdPeerThread);
+begin
+  // Do nothing.
+end;
+
 //* TestTIdSipConnectionTableEntry Published methods ***************************
 
 procedure TestTIdSipConnectionTableEntry.TestCreate;
 var
-  Conn: TIdTCPConnection;
-  E:    TIdSipConnectionTableEntry;
-  Req:  TIdSipRequest;
+  E: TIdSipConnectionTableEntry;
 begin
-  Conn := TIdTCPConnection.Create(nil);
+  E := TIdSipConnectionTableEntry.Create(Self.Connection, Self.Request);
   try
-    Req := TIdSipRequest.Create;
-    try
-      E := TIdSipConnectionTableEntry.Create(Conn, Req);
-      try
-        Check(Conn = E.Connection,   'Connection not set');
-        Check(Req.Equals(E.Request), 'Request not set');
-      finally
-        E.Free;
-      end;
-    finally
-      Req.Free;
-    end;
+    Check(Self.Connection = E.Connection,   'Connection not set');
+    Check(Self.Request.Equals(E.Request), 'Request not set');
+
+    CheckEquals(Self.Connection.Socket.Binding.IP,       E.Binding.LocalIP,   'Binding LocalIP');
+    CheckEquals(Self.Connection.Socket.Binding.Port,     E.Binding.LocalPort, 'Binding LocalPort');
+    CheckEquals(Self.Connection.Socket.Binding.PeerIP,   E.Binding.PeerIP,    'Binding PeerIP');
+    CheckEquals(Self.Connection.Socket.Binding.PeerPort, E.Binding.PeerPort,  'Binding PeerPort');
+    CheckEquals(TcpTransport,                            E.Binding.Transport, 'Binding Transport');
   finally
-    Conn.Free;
+    E.Free;
   end;
 end;
 
@@ -1673,6 +1884,157 @@ begin
 
   CheckEquals(Count - 1, Self.Table.Count, 'Nothing was removed');
   Check(Self.Table.ConnectionFor(Self.Req) = Self.Conn, 'Wrong entry removed (ConnectionFor)');
+end;
+
+//******************************************************************************
+//* TTcpTransportWaitTestCase                                                  *
+//******************************************************************************
+//* TTcpTransportWaitTestCase Public methods ***********************************
+
+procedure TTcpTransportWaitTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Conn      := TIdTCPConnection.Create(nil);
+  Self.Invite    := TIdSipRequest.Create;
+  Self.Transport := TIdSipTCPTransport.Create;
+end;
+
+procedure TTcpTransportWaitTestCase.TearDown;
+begin
+  Self.Transport.Free;
+  Self.Invite.Free;
+  Self.Conn.Free;
+
+  inherited TearDown;
+end;
+
+//******************************************************************************
+//* TestTIdSipTcpConnectionOpenWait                                            *
+//******************************************************************************
+//* TestTIdSipTcpConnectionOpenWait Public methods *****************************
+
+procedure TestTIdSipTcpConnectionOpenWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Wait := TIdSipTcpConnectionOpenWait.Create;
+  Self.Wait.Binding        := Self.Conn;
+  Self.Wait.OpeningRequest := Self.Invite;
+  Self.Wait.TransportID    := Self.Transport.ID;
+end;
+
+procedure TestTIdSipTcpConnectionOpenWait.TearDown;
+begin
+  Self.Wait.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipTcpConnectionOpenWait Published methods **************************
+
+procedure TestTIdSipTcpConnectionOpenWait.TestTrigger;
+var
+  L: TConnectionListener;
+begin
+  L := TConnectionListener.Create;
+  try
+    Self.Transport.AddConnectionListener(L);
+
+    Self.Wait.Trigger;
+
+    Check(L.ConnectionOpened, 'Listener not notified: Wait didn''t Trigger');
+  finally
+    Self.Transport.RemoveConnectionListener(L);
+    L.Free;
+  end;
+end;
+
+procedure TestTIdSipTcpConnectionOpenWait.TestTriggerOnNonExistentAction;
+begin
+  // Check that the Wait doesn't blow up when given the ID of a nonexistent
+  // transport.
+  Self.Wait.TransportID := 'fake ID';
+  Self.Wait.Trigger;
+end;
+
+procedure TestTIdSipTcpConnectionOpenWait.TestTriggerOnWrongTypeOfObject;
+var
+  R: TIdRegisteredObject;
+begin
+  // Check that the Wait doesn't blow up when given the ID of a non-transport
+  // object.
+  R := TIdRegisteredObject.Create;
+  try
+    Self.Wait.TransportID := R.ID;
+    Self.Wait.Trigger;
+  finally
+    R.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipTcpConnectionCloseWait                                           *
+//******************************************************************************
+//* TestTIdSipTcpConnectionCloseWait Public methods ****************************
+
+procedure TestTIdSipTcpConnectionCloseWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Wait := TIdSipTcpConnectionCloseWait.Create;
+  Self.Wait.Binding     := Self.Conn;
+  Self.Wait.TransportID := Self.Transport.ID;
+end;
+
+procedure TestTIdSipTcpConnectionCloseWait.TearDown;
+begin
+  Self.Wait.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipTcpConnectionCloseWait Published methods **************************
+
+procedure TestTIdSipTcpConnectionCloseWait.TestTrigger;
+var
+  L: TConnectionListener;
+begin
+  L := TConnectionListener.Create;
+  try
+    Self.Transport.AddConnectionListener(L);
+
+    Self.Transport.AddConnection(Self.Conn, Self.Invite);
+    Self.Wait.Trigger;
+
+    Check(L.ConnectionClosed, 'Listener not notified: Wait didn''t Trigger');
+  finally
+    Self.Transport.RemoveConnectionListener(L);
+    L.Free;
+  end;
+end;
+
+procedure TestTIdSipTcpConnectionCloseWait.TestTriggerOnNonExistentAction;
+begin
+  // Check that the Wait doesn't blow up when given the ID of a nonexistent
+  // transport.
+  Self.Wait.TransportID := 'fake ID';
+  Self.Wait.Trigger;
+end;
+
+procedure TestTIdSipTcpConnectionCloseWait.TestTriggerOnWrongTypeOfObject;
+var
+  R: TIdRegisteredObject;
+begin
+  // Check that the Wait doesn't blow up when given the ID of a non-transport
+  // object.
+  R := TIdRegisteredObject.Create;
+  try
+    Self.Wait.TransportID := R.ID;
+    Self.Wait.Trigger;
+  finally
+    R.Free;
+  end;
 end;
 
 initialization

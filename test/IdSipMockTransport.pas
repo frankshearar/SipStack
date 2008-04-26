@@ -118,25 +118,31 @@ type
     property WriteLog:          Boolean       read fWriteLog write SetWriteLog;
   end;
 
-  TIdSipMockSctpTransport = class(TIdSipMockTransport)
+  TIdSipMockConnectionOrientedTransport = class(TIdSipMockTransport)
+  public
+    procedure TriggerNotifyOfConnection(Connection: TIdConnectionBindings);
+    procedure TriggerNotifyOfDisonnection(Connection: TIdConnectionBindings);
+  end;
+
+  TIdSipMockSctpTransport = class(TIdSipMockConnectionOrientedTransport)
   public
     class function GetTransportType: String; override;
     class function MockedClass: TIdSipTransportClass; override;
   end;
 
-  TIdSipMockTcpTransport = class(TIdSipMockTransport)
+  TIdSipMockTcpTransport = class(TIdSipMockConnectionOrientedTransport)
   public
     class function GetTransportType: String; override;
     class function MockedClass: TIdSipTransportClass; override;
   end;
 
-  TIdSipMockTlsTransport = class(TIdSipMockTransport)
+  TIdSipMockTlsTransport = class(TIdSipMockConnectionOrientedTransport)
   public
     class function GetTransportType: String; override;
     class function MockedClass: TIdSipTransportClass; override;
   end;
 
-  TIdSipMockTlsOverSctpTransport = class(TIdSipMockTransport)
+  TIdSipMockTlsOverSctpTransport = class(TIdSipMockConnectionOrientedTransport)
   public
     class function GetTransportType: String; override;
     class function MockedClass: TIdSipTransportClass; override;
@@ -661,6 +667,21 @@ end;
 function TIdSipMockTransport.TransportAt(Index: Integer): TIdSipMockTransport;
 begin
   Result := GAllTransports[Index] as TIdSipMockTransport;
+end;
+
+//******************************************************************************
+//* TIdSipMockConnectionOrientedTransport                                      *
+//******************************************************************************
+//* TIdSipMockConnectionOrientedTransport Public methods ***********************
+
+procedure TIdSipMockConnectionOrientedTransport.TriggerNotifyOfConnection(Connection: TIdConnectionBindings);
+begin
+  Self.NotifyOfConnection(Connection);
+end;
+
+procedure TIdSipMockConnectionOrientedTransport.TriggerNotifyOfDisonnection(Connection: TIdConnectionBindings);
+begin
+  Self.NotifyOfDisconnection(Connection);
 end;
 
 //******************************************************************************

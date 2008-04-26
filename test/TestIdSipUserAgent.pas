@@ -244,6 +244,7 @@ type
     procedure TestCreateUserAgentWithoutResolveNamesLocallyFirst;
     procedure TestCreateUserAgentWithSuppressLocalResponses;
     procedure TestCreateUserAgentWithUseGruu;
+    procedure TestCreateUserAgentWithUseInboundConnections;
     procedure TestCreateUserAgentWithUserAgentName;
     procedure TestStrToBool;
     procedure TestUpdateConfigurationWithFrom;
@@ -254,6 +255,7 @@ type
     procedure TestUpdateConfigurationWithBlankSupportEvent;
     procedure TestUpdateConfigurationWithSuppressLocalResponses;
     procedure TestUpdateConfigurationWithTransport;
+    procedure TestUpdateConfigurationWithUseInboundConnections;
   end;
 
   TestConfigureLogging = class(TStackConfigurationTestCaseWithMockTransport)
@@ -3264,6 +3266,21 @@ begin
   CheckUserAgentUsesGruu(Self.Configuration, 'OFF',   false);
 end;
 
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithUseInboundConnections;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add(UseInboundConnectionsDirective + ': true');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Check(UA.UseInboundConnections, 'UseInboundConnections directive ignored');
+  finally
+    UA.Free;
+  end;
+end;
+
 procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithUserAgentName;
 const
   UserAgentName = 'FooBar/1.1';
@@ -3583,6 +3600,25 @@ begin
     finally
       NewConfig.Free;
     end;
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithUseInboundConnections;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add(UseInboundConnectionsDirective + ': true');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Self.Configuration.Delete(Self.Configuration.Count - 1);
+    Self.Configuration.Add(UseInboundConnectionsDirective + ': false');
+
+    Self.Conf.UpdateConfiguration(UA, Self.Configuration);
+
+    Check(not UA.UseInboundConnections, UseInboundConnectionsDirective + ' directive ignored');
   finally
     UA.Free;
   end;

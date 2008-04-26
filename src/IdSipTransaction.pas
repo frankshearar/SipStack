@@ -55,6 +55,14 @@ type
                                    const Reason: String);
   end;
 
+  // I allow interested parties to track the addition and removal of transports
+  // from some container.
+  IIdSipTransportManagementListener = interface
+    ['{333DD25E-A77F-49EE-B197-1231686B3FF4}']
+    procedure OnAddedTransport(Transport: TIdSipTransport);
+    procedure OnRemovedTransport(Transport: TIdSipTransport);
+  end;
+
   TIdSipTransactionProc = procedure(Tran: TIdSipTransaction) of object;
   TIdSipResponseLocationsList = class;
 
@@ -78,6 +86,7 @@ type
     fT2Interval:              Cardinal;
     fT4Interval:              Cardinal;
     fTimer:                   TIdTimerQueue;
+    ManagementListeners:      TIdNotificationList;
     MsgListeners:             TIdNotificationList;
     fTransports:              TIdSipTransports;
     TransactionlessResponses: TIdSipResponseLocationsList;
@@ -90,6 +99,8 @@ type
     procedure LogException(FailedMessage: TIdSipMessage;
                            E: Exception;
                            const Reason: String);
+    procedure NotifyOfTransportAddition(Transport: TIdSipTransport);
+    procedure NotifyOfTransportRemoval(Transport: TIdSipTransport);
     function  TransactionAt(Index: Cardinal): TIdSipTransaction;
     function  TransportAt(Index: Cardinal): TIdSipTransport;
     procedure TryResendMessage(FailedMessage: TIdSipMessage;
@@ -149,6 +160,7 @@ type
                                   Port: Cardinal);
     procedure AddTransportListener(Listener: IIdSipTransportListener; Priority: Integer = 0);
     function  AddClientTransaction(InitialRequest: TIdSipRequest): TIdSipTransaction;
+    procedure AddManagementListener(Listener: IIdSipTransportManagementListener);
     function  AddServerTransaction(InitialRequest: TIdSipRequest): TIdSipTransaction;
     procedure ClearTransports;
     procedure FindServersFor(Response: TIdSipResponse;
@@ -161,6 +173,7 @@ type
                   EventRef: Cardinal;
                   DebugInfo: String);
     function  LoopDetected(Request: TIdSipRequest): Boolean;
+    procedure RemoveManagementListener(Listener: IIdSipTransportManagementListener);
     procedure RemoveTransaction(TerminatedTransaction: TIdSipTransaction);
     procedure RemoveTransactionDispatcherListener(const Listener: IIdSipTransactionDispatcherListener);
     procedure RemoveTransportListener(Listener: IIdSipTransportListener);
@@ -554,6 +567,24 @@ type
     property Response: TIdSipResponse read fResponse write fResponse;
   end;
 
+  TIdSipTransportManagementMethod = class(TIdNotification)
+  private
+    fTransport: TIdSipTransport;
+  public
+    property Transport: TIdSipTransport read fTransport write fTransport;
+  end;
+
+  TIdSipTransportAddedMethod = class(TIdSipTransportManagementMethod)
+  public
+    procedure Run(const Subject: IInterface); override;
+  end;
+
+  TIdSipTransportRemovedMethod = class(TIdSipTransportManagementMethod)
+  public
+    procedure Run(const Subject: IInterface); override;
+  end;
+
+
   TIdSipTransactionMethod = class(TIdNotification)
   private
     fTransaction: TIdSipTransaction;
@@ -655,7 +686,8 @@ begin
   Self.SetLocator(Locator);
   Self.SetTimer(Timer);
 
-  Self.MsgListeners := TIdNotificationList.Create;
+  Self.ManagementListeners := TIdNotificationList.Create;
+  Self.MsgListeners        := TIdNotificationList.Create;
 
   Self.fTransports := TIdSipTransports.Create;
 
@@ -678,6 +710,7 @@ begin
   Self.Transports.Free;
 
   Self.MsgListeners.Free;
+  Self.ManagementListeners.Free;
 
   inherited Destroy;
 end;
@@ -718,6 +751,7 @@ begin
 
     Self.Transports.Add(T);
     T.AddTransportListener(Self);
+    Self.NotifyOfTransportAddition(T);
   end;
 end;
 
@@ -747,6 +781,11 @@ begin
   end;
 end;
 
+procedure TIdSipTransactionDispatcher.AddManagementListener(Listener: IIdSipTransportManagementListener);
+begin
+  Self.ManagementListeners.AddListener(Listener);
+end;
+
 function TIdSipTransactionDispatcher.AddServerTransaction(InitialRequest: TIdSipRequest): TIdSipTransaction;
 begin
   Result := nil;
@@ -766,7 +805,14 @@ begin
 end;
 
 procedure TIdSipTransactionDispatcher.ClearTransports;
+var
+  I: Integer;
 begin
+  // This looks a tad lame. We don't have a Self.RemoveTransportBinding though,
+  // which would otherwise be the better place for a notification.
+  for I := 0 to Self.Transports.Count - 1 do
+    Self.NotifyOfTransportRemoval(Self.Transports[I]);
+
   Self.Transports.Clear;
 end;
 
@@ -825,6 +871,11 @@ begin
       Result := Self.TransactionAt(I).LoopDetected(Request);
     Inc(I);
   end;
+end;
+
+procedure TIdSipTransactionDispatcher.RemoveManagementListener(Listener: IIdSipTransportManagementListener);
+begin
+  Self.ManagementListeners.RemoveListener(Listener);
 end;
 
 procedure TIdSipTransactionDispatcher.RemoveTransaction(TerminatedTransaction: TIdSipTransaction);
@@ -1244,6 +1295,35 @@ begin
            coLogEventException,
            FailedMessage.AsString);
 end;
+
+procedure TIdSipTransactionDispatcher.NotifyOfTransportAddition(Transport: TIdSipTransport);
+var
+  Notification: TIdSipTransportAddedMethod;
+begin
+  Notification := TIdSipTransportAddedMethod.Create;
+  try
+    Notification.Transport := Transport;
+
+    Self.ManagementListeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
+end;
+
+procedure TIdSipTransactionDispatcher.NotifyOfTransportRemoval(Transport: TIdSipTransport);
+var
+  Notification: TIdSipTransportRemovedMethod;
+begin
+  Notification := TIdSipTransportRemovedMethod.Create;
+  try
+    Notification.Transport := Transport;
+
+    Self.ManagementListeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
+end;
+
 
 function TIdSipTransactionDispatcher.TransactionAt(Index: Cardinal): TIdSipTransaction;
 begin
@@ -2678,6 +2758,26 @@ procedure TIdSipTransactionDispatcherListenerReceiveResponseMethod.Run(const Sub
 begin
   (Subject as IIdSipTransactionDispatcherListener).OnReceiveResponse(Self.Response,
                                                                      Self.Binding);
+end;
+
+//******************************************************************************
+//* TIdSipTransportAddedMethod                                                 *
+//******************************************************************************
+//* TIdSipTransportAddedMethod Public methods **********************************
+
+procedure TIdSipTransportAddedMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipTransportManagementListener).OnAddedTransport(Self.Transport);
+end;
+
+//******************************************************************************
+//* TIdSipTransportRemovedMethod                                               *
+//******************************************************************************
+//* TIdSipTransportRemovedMethod Public methods ********************************
+
+procedure TIdSipTransportRemovedMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipTransportManagementListener).OnRemovedTransport(Self.Transport);
 end;
 
 //******************************************************************************

@@ -12,10 +12,10 @@ unit TestIdSipCore;
 interface
 
 uses
-  IdConnectionBindings, IdObservable, IdSipCore, IdSipDialog,
+  IdConnectionBindings, IdObservable, IdSipCore, IdSipDialog, IdSipLocation,
   IdSipInviteModule, IdSipMessage, IdSipMockTransactionDispatcher,
-  IdSipTransport, IdSipUserAgent, TestFramework, TestFrameworkSip,
-  TestFrameworkSipTU;
+  IdSipMockTransport, IdSipTransport, IdSipUserAgent, TestFramework,
+  TestFrameworkSip, TestFrameworkSipTU;
 
 type
   TestTIdSipAbstractCore = class(TTestCaseTU,
@@ -124,6 +124,25 @@ type
     procedure TestUseTransportParam;
     procedure TestUseUdpByDefault;
     procedure TestVeryLargeMessagesUseAReliableTransport;
+  end;
+
+  // These tests show the ins and outs of using pre-existing inbound
+  // connections.
+  TestUseInboundConnections = class(TTestCaseTU)
+  private
+    FakeBinding: TIdConnectionBindings;
+    Peer:        TIdSipLocation;
+    Targets:     TIdSipLocations;
+    TcpTrans:    TIdSipMockTcpTransport;
+
+    function  MakeCall: TIdSipRequest;
+    procedure MakeInboundConnection;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestUseInboundConnections;
+    procedure TestUseInboundConnectionsConnectionCloses;
   end;
 
   TIdSipNullAction = class(TIdSipAction)
@@ -363,12 +382,32 @@ type
     procedure TestRun;
   end;
 
+  TestTIdConnectionAssociationSet = class(TTestCase)
+  private
+    Alice:          TIdSipUri;
+    AssociationSet: TIdConnectionAssociationSet;
+    Bob:            TIdSipUri;
+    ConnectionOne:  TIdConnectionBindings;
+    ConnectionTwo:  TIdConnectionBindings;
+
+    procedure CheckBindingCount(ExpectedCount: Integer; AOR: TIdSipUri; Msg: String);
+    procedure CheckFirstBinding(Expected: TIdConnectionBindings; AOR: TIdSipUri; Msg: String);
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAdd;
+    procedure TestConnectionsFor;
+    procedure TestRemove;
+    procedure TestRemoveConnection;
+  end;
+
 implementation
 
 uses
-  Classes, IdException, IdRegisteredObject, IdSdp, IdSimpleParser, IdSipDns, 
-  IdSipLocation, IdSipMockTransport, IdSipOptionsModule, IdSipRegistration,
-  IdSipSubscribeModule, StringDictionary, SysUtils;
+  Classes, IdException, IdRegisteredObject, IdSdp, IdSimpleParser, IdSipDns,
+  IdSipOptionsModule, IdSipRegistration, IdSipSubscribeModule, StringDictionary,
+  SysUtils;
 
 const
   DefaultTimeout = 5000;
@@ -394,6 +433,7 @@ begin
   Result := TTestSuite.Create('IdSipCore unit tests');
   Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestLocation.Suite);
+  Result.AddTest(TestUseInboundConnections.Suite);
   Result.AddTest(TestTIdSipActions.Suite);
   Result.AddTest(TestTIdSipMessageModule.Suite);
   Result.AddTest(TestTIdSipNullModule.Suite);
@@ -409,6 +449,7 @@ begin
   Result.AddTest(TestTIdSipRedirectorNewActionMethod.Suite);
   Result.AddTest(TestTIdSipRedirectorSuccessMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentDroppedUnmatchedMessageMethod.Suite);
+  Result.AddTest(TestTIdConnectionAssociationSet.Suite);
 end;
 
 //******************************************************************************
@@ -1928,6 +1969,78 @@ begin
 end;
 
 //******************************************************************************
+//* TestUseInboundConnections                                                  *
+//******************************************************************************
+//* TestUseInboundConnections Public methods ***********************************
+
+procedure TestUseInboundConnections.SetUp;
+begin
+  inherited SetUp;
+
+  Self.FakeBinding := TIdConnectionBindings.Create('127.0.0.1', 5060, '127.0.0.1', 1234, TcpTransport);
+  Self.Peer        := TIdSipLocation.CreatePeerLocation(Self.FakeBinding);
+  Self.Targets     := TIdSipLocations.Create;
+
+  Self.Core.UseInboundConnections := true;
+  Self.Dispatcher.TransportType := TcpTransport;
+  Self.TcpTrans := Self.Dispatcher.Transport as TIdSipMockTcpTransport;
+
+  Self.Invite.LastHop.Transport := Self.TcpTrans.GetTransportType;
+end;
+
+procedure TestUseInboundConnections.TearDown;
+begin
+  Self.Targets.Free;
+  Self.Peer.Free;
+  Self.FakeBinding.Free;
+
+  inherited TearDown;
+end;
+
+//* TestUseInboundConnections Private methods **********************************
+
+function TestUseInboundConnections.MakeCall: TIdSipRequest;
+var
+  Call: TIdSipAction;
+begin
+  Call := Self.Core.InviteModule.Call(Self.Core.From, Self.Invite.From, '', '');
+  Call.Send;
+  Result := Call.InitialRequest;
+end;
+
+procedure TestUseInboundConnections.MakeInboundConnection;
+begin
+  // This creates an association between Self.Invite.From and Self.FakeBinding.
+  Self.TcpTrans.ReceiveRequest(Self.Invite, Self.FakeBinding);
+end;
+
+//* TestUseInboundConnections Published methods ********************************
+
+procedure TestUseInboundConnections.TestUseInboundConnections;
+var
+  Invite: TIdSipRequest;
+begin
+  Self.MakeInboundConnection;
+  Invite := Self.MakeCall;
+
+  Self.Core.FindServersFor(Invite, Self.Targets);
+  CheckEquals(Self.Peer.AsString, Self.Targets[0].AsString, 'Existing connection not added as target');
+end;
+
+procedure TestUseInboundConnections.TestUseInboundConnectionsConnectionCloses;
+var
+  Invite: TIdSipRequest;
+begin
+  Self.MakeInboundConnection;
+  Invite := Self.MakeCall;
+
+  Self.TcpTrans.TriggerNotifyOfDisonnection(Self.FakeBinding);
+
+  Self.Core.FindServersFor(Invite, Self.Targets);
+  CheckNotEquals(Self.Peer.AsString, Self.Targets[0].AsString, 'Closed connection not removed');
+end;
+
+//******************************************************************************
 //* TIdSipNullAction                                                           *
 //******************************************************************************
 //* TIdSipNullAction Public methods ********************************************
@@ -3254,7 +3367,134 @@ begin
   end;
 end;
 
+//******************************************************************************
+//* TestTIdConnectionAssociationSet                                            *
+//******************************************************************************
+//* TestTIdConnectionAssociationSet Public methods *****************************
+
+procedure TestTIdConnectionAssociationSet.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Alice := TIdSipUri.Create('sip:alice@example.com');
+  Self.Bob   := TIdSipUri.Create('sip:bob@biloxi.com');
+
+  Self.AssociationSet := TIdConnectionAssociationSet.Create;
+  Self.ConnectionOne := TIdConnectionBindings.Create('127.0.0.1', 5060, '1.2.3.4', 1234, 'TCP');
+  Self.ConnectionTwo := TIdConnectionBindings.Create('127.0.0.1', 2345, '1.2.3.4', 5060, 'UDP');
+end;
+
+procedure TestTIdConnectionAssociationSet.TearDown;
+begin
+  Self.ConnectionTwo.Free;
+  Self.ConnectionOne.Free;
+  Self.AssociationSet.Free;
+  Self.Bob.Free;
+  Self.Alice.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdConnectionAssociationSet Private methods ****************************
+
+procedure TestTIdConnectionAssociationSet.CheckBindingCount(ExpectedCount: Integer; AOR: TIdSipUri; Msg: String);
+var
+  Bindings: TIdConnectionBindingsSet;
+begin
+  Bindings := TIdConnectionBindingsSet.Create;
+  try
+    Self.AssociationSet.ConnectionsFor(AOR, Bindings);
+
+    CheckEquals(ExpectedCount, Bindings.Count, Msg);
+  finally
+    Bindings.Free;
+  end;
+end;
+
+procedure TestTIdConnectionAssociationSet.CheckFirstBinding(Expected: TIdConnectionBindings; AOR: TIdSipUri; Msg: String);
+var
+  Bindings: TIdConnectionBindingsSet;
+begin
+  Bindings := TIdConnectionBindingsSet.Create;
+  try
+    Self.AssociationSet.ConnectionsFor(AOR, Bindings);
+
+    CheckEquals(Expected.AsString, Bindings[0].AsString, Msg);
+  finally
+    Bindings.Free;
+  end;
+end;
+
+//* TestTIdConnectionAssociationSet Published methods **************************
+
+procedure TestTIdConnectionAssociationSet.TestAdd;
+begin
+  Self.AssociationSet.Add(Self.Alice, Self.ConnectionOne);
+  CheckEquals(1, Self.AssociationSet.Count, 'Association not added');
+  CheckBindingCount(1, Self.Alice, 'Connection for AOR not added');
+  CheckFirstBinding(Self.ConnectionOne, Self.Alice, 'Wrong binding added');
+
+  Self.AssociationSet.Add(Self.Alice, Self.ConnectionTwo);
+  CheckEquals(1, Self.AssociationSet.Count, 'AOR added again');
+  CheckBindingCount(2, Self.Alice, 'New connection for AOR not added');
+
+  Self.AssociationSet.Add(Self.Bob, Self.ConnectionOne);
+  CheckEquals(2, Self.AssociationSet.Count, 'New association not added');
+  CheckBindingCount(1, Self.Bob, 'Bob''s connection not added');
+end;
+
+procedure TestTIdConnectionAssociationSet.TestConnectionsFor;
+var
+  Bindings: TIdConnectionBindingsSet;
+begin
+  Bindings := TIdConnectionBindingsSet.Create;
+  try
+    Bindings.Add(Self.ConnectionOne);
+
+    Self.AssociationSet.Add(Self.Alice, Self.ConnectionOne);
+
+    Self.AssociationSet.ConnectionsFor(Self.Alice, Bindings);
+    CheckEquals(1, Bindings.Count, 'Bindings parameter not cleared first');
+
+    Self.AssociationSet.Add(Self.Alice, Self.ConnectionTwo);
+
+    Self.AssociationSet.ConnectionsFor(Self.Alice, Bindings);
+    CheckEquals(2, Bindings.Count, 'Not all connections returned');
+  finally
+    Bindings.Free;
+  end;
+end;
+
+procedure TestTIdConnectionAssociationSet.TestRemove;
+begin
+  Self.AssociationSet.Remove(Self.Alice, Self.ConnectionOne);
+  CheckBindingCount(0, Self.Alice, 'Non-extant connection removed from empty list');
+
+  Self.AssociationSet.Add(Self.Alice, Self.ConnectionOne);
+  Self.AssociationSet.Remove(Self.Alice, Self.ConnectionTwo);
+  CheckBindingCount(1, Self.Alice, 'Non-extant connection removed');
+  CheckFirstBinding(Self.ConnectionOne, Self.Alice, 'Wrong binding removed');
+
+  // No more connections for that AOR? Remove the entry.
+  Self.AssociationSet.Remove(Self.Alice, Self.ConnectionOne);
+  CheckEquals(0, Self.AssociationSet.Count, 'Entry not removed');
+end;
+
+procedure TestTIdConnectionAssociationSet.TestRemoveConnection;
+begin
+  Self.AssociationSet.RemoveConnection(Self.ConnectionOne);
+  CheckBindingCount(0, Self.Alice, 'Non-extant connection removed from empty list');
+
+  Self.AssociationSet.Add(Self.Alice, Self.ConnectionOne);
+  Self.AssociationSet.RemoveConnection(Self.ConnectionTwo);
+  CheckBindingCount(1, Self.Alice, 'Non-extant connection removed');
+  CheckFirstBinding(Self.ConnectionOne, Self.Alice, 'Wrong binding removed');
+
+  // No more connections for that AOR? Remove the entry.
+  Self.AssociationSet.RemoveConnection(Self.ConnectionOne);
+  CheckEquals(0, Self.AssociationSet.Count, 'Entry not removed');
+end;
+
 initialization
   RegisterTest('Transaction User Cores', Suite);
 end.
-

@@ -161,10 +161,17 @@ type
     function TransportType: TIdSipTransportClass; override;
   end;
 
-  TestTIdSipMessageExceptionWait = class(TTestCase)
-  private
+  TTransportWaitTestCase = class(TTestCase)
+  protected
     Transport: TIdSipMockTransport;
-    Wait:      TIdSipMessageExceptionWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSipMessageExceptionWait = class(TTransportWaitTestCase)
+  private
+    Wait: TIdSipMessageExceptionWait;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -174,10 +181,9 @@ type
     procedure TestTriggerOnWrongTypeOfObject;
   end;
 
-  TestTIdSipReceiveMessageWait = class(TTestCase)
+  TestTIdSipReceiveMessageWait = class(TTransportWaitTestCase)
   private
-    Transport: TIdSipMockTransport;
-    Wait:      TIdSipReceiveMessageWait;
+    Wait: TIdSipReceiveMessageWait;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -1144,13 +1150,12 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipMessageExceptionWait                                             *
+//* TTransportWaitTestCase                                                     *
 //******************************************************************************
-//* TestTIdSipMessageExceptionWait Public methods ******************************
+//* TTransportWaitTestCase Public methods **************************************
 
-procedure TestTIdSipMessageExceptionWait.SetUp;
+procedure TTransportWaitTestCase.SetUp;
 var
-  Msg:           TIdSipMessage;
   TransportType: String;
 begin
   inherited SetUp;
@@ -1159,6 +1164,27 @@ begin
 
   TIdSipTransportRegistry.RegisterTransportType(TransportType, TIdSipMockUdpTransport);
   Self.Transport := TIdSipTransportRegistry.TransportTypeFor(TransportType).Create as TIdSipMockTransport;
+end;
+
+procedure TTransportWaitTestCase.TearDown;
+begin
+  Self.Transport.Free;
+
+  TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
+
+  inherited TearDown;
+end;
+
+//******************************************************************************
+//* TestTIdSipMessageExceptionWait                                             *
+//******************************************************************************
+//* TestTIdSipMessageExceptionWait Public methods ******************************
+
+procedure TestTIdSipMessageExceptionWait.SetUp;
+var
+  Msg: TIdSipMessage;
+begin
+  inherited SetUp;
 
   Msg := TIdSipTestResources.CreateBasicRequest;
   try
@@ -1176,8 +1202,6 @@ end;
 procedure TestTIdSipMessageExceptionWait.TearDown;
 begin
   Self.Wait.Free;
-
-  TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
 
   inherited TearDown;
 end;
@@ -1230,19 +1254,12 @@ end;
 //* TestTIdSipReceiveMessageWait Public methods ********************************
 
 procedure TestTIdSipReceiveMessageWait.SetUp;
-var
-  TransportType: String;
 begin
   inherited SetUp;
-
-  TransportType := UdpTransport;
-  TIdSipTransportRegistry.RegisterTransportType(TransportType, TIdSipMockUdpTransport);
-  Self.Transport := TIdSipTransportRegistry.TransportTypeFor(TransportType).Create as TIdSipMockTransport;
 
   Self.Wait := TIdSipReceiveMessageWait.Create;
   Self.Wait.Message      := TIdSipTestResources.CreateBasicRequest;
   Self.Wait.TransportID  := Self.Transport.ID;
-  Self.Wait.ReceivedFrom := TIdConnectionBindings.Create;
 
   Self.Wait.ReceivedFrom.LocalIP   := '127.0.0.1';
   Self.Wait.ReceivedFrom.LocalPort := 5060;
