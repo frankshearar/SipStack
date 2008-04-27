@@ -476,6 +476,7 @@ const
   UseGruuDirective                        = 'UseGruu';
   UseInboundConnectionsDirective          = 'UseInboundConnections';
   UserAgentNameDirective                  = 'UserAgentName';
+  UseTransportDirective                   = 'UseTransport';
 
 const
   DefaultDebugLogFileName = 'debug.log';
