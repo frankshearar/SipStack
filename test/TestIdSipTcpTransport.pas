@@ -579,6 +579,14 @@ begin
 end;
 
 procedure TestTIdSipTCPTransport.TestConserveConnectionsOutbound;
+  function ShortAsString(B: TIdConnectionBindings): String;
+  const
+    Form = '%s:%d/%s';
+  begin
+    Result := Format(Form, [B.LocalIP, B.LocalPort, B.Transport])
+            + '-->'
+            + Format(Form, [B.PeerIP, B.PeerPort, B.Transport])
+  end;
 var
   FirstBinding: TIdConnectionBindings;
 begin
@@ -599,8 +607,8 @@ begin
     Self.LowPortTransport.Send(Request, Self.HighPortLocation);
     Self.WaitForSignaled;
 
-    CheckEquals(FirstBinding.AsString,
-                Self.ReceivingBinding.AsString,
+    CheckEquals(ShortAsString(FirstBinding),
+                ShortAsString(Self.ReceivingBinding),
                 'Same binding (hence connection) not used');
   finally
     FirstBinding.Free;
