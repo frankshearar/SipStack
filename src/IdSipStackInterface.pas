@@ -2045,7 +2045,7 @@ begin
   try
     Data.Handle := InvalidHandle;
     Data.Error  := E.ClassName;
-    Data.Reason := E.Message;
+    Data.Reason := Format('%s (%s)', [E.Message, Reason]);
 
     Self.NotifyEvent(CM_DEBUG_TRANSPORT_EXCEPTION, Data);
   finally

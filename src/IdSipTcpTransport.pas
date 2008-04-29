@@ -573,6 +573,8 @@ begin
 
     Self.RunningClients.Add(TIdSipTcpClientThread.Create(NewConnection, Msg, Self));
   except
+    on E: EIdConnectException do
+      Self.NotifyOfException(Msg, E, Dest.AsString);
     on E: EIdException do
       Self.NotifyOfException(Msg, E, E.Message);
   end;
