@@ -63,6 +63,7 @@ type
     procedure TestGetTransportType;
     procedure TestIsReliable;
     procedure TestIsSecure;
+    procedure TestNormalReadTimeoutDoesntNotify;
     procedure TestNotifyOfConnectionInbound;
     procedure TestNotifyOfConnectionOutbound;
     procedure TestNotifyOfDisconnection;
@@ -631,6 +632,32 @@ end;
 procedure TestTIdSipTCPTransport.TestIsSecure;
 begin
   Check(not Self.HighPortTransport.IsSecure, 'TCP transport marked as secure');
+end;
+
+procedure TestTIdSipTCPTransport.TestNormalReadTimeoutDoesntNotify;
+var
+  L: TIdSipTestTransportListener;
+begin
+  Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
+
+  L := TIdSipTestTransportListener.Create;
+  try
+    Self.LowPortTransport.AddTransportListener(L);
+    // Set up the TCP connection.
+    Self.LowPortTransport.ConserveConnections := true;
+    Self.LowPortTransport.Send(Self.Request, Self.HighPortLocation);
+
+    Self.WaitForSignaled;
+
+    // Time out waiting for a message to arrive.
+    Sleep(2*Self.DefaultTimeout);
+
+    // Show that there's no spurious "rejection" of a malformed message.
+    Check(not L.RejectedMessage, 'Transport "rejected" a message that actually never arrived');
+  finally
+    Self.LowPortTransport.RemoveTransportListener(L);
+    L.Free;
+  end;
 end;
 
 procedure TestTIdSipTCPTransport.TestNotifyOfConnectionInbound;

@@ -841,7 +841,7 @@ begin
         ConnClosedOrTimedOut := true;
     end;
 
-    if not ConnClosedOrTimedOut then begin
+    if not ConnClosedOrTimedOut and (S.DataString <> '') then begin
       Result := TIdSipMessage.ReadMessageFrom(S);
 
       try
