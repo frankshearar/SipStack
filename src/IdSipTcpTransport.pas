@@ -827,6 +827,10 @@ begin
   // Read in a SIP message from Connection, instantiate a TIdSipMessage
   // subclass, and return the reified message. THE CALLER FREES THE MESSAGE.
   //
+  // In the event of an unimportant timeout ("unimportant" means "not in the
+  // middle of reading a message" - a timeout between reading the headers of a
+  // message and reading the body), return nil.
+  //
   // As a side effect, set ConnClosedOrTimedOut to true if necessary.
 
   Result := nil;
