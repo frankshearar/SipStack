@@ -123,7 +123,7 @@ type
                           Dest: TStringStream);
     function  ReadMessage(Connection: TIdTCPConnection;
                           ConserveConnections: Boolean;
-                          var ConnClosedOrTimedOut: Boolean): TIdSipMessage;
+                          var AbnormalTermination: Boolean): TIdSipMessage;
     procedure ReceiveMessageInTimerContext(Msg: TIdSipMessage;
                                            Binding: TIdConnectionBindings);
     procedure ReturnInternalServerError(Connection: TIdTCPConnection;
@@ -397,15 +397,8 @@ begin
 end;
 
 procedure TIdSipTCPTransport.RemoveClient(ClientThread: TObject);
-var
-  Clients: TList;
 begin
-  Clients := Self.RunningClients.LockList;
-  try
-    Clients.Remove(ClientThread);
-  finally
-    Self.RunningClients.UnlockList;
-  end;
+  Self.RunningClients.Remove(ClientThread);
 end;
 
 procedure TIdSipTCPTransport.Start;
@@ -706,56 +699,57 @@ end;
 procedure TIdSipTcpMessageReader.ReadMessages(Connection: TIdTCPConnection;
                                               ConserveConnections: Boolean);
 var
-  ConnClosedOrTimedOut: Boolean;
-  Msg:                  TIdSipMessage;
-  ReceivedFrom:         TIdConnectionBindings;
+  AbnormalTermination: Boolean;
+  Msg:                 TIdSipMessage;
+  ReceivedFrom:        TIdConnectionBindings;
 begin
-  ConnClosedOrTimedOut := false;
+  AbnormalTermination := false;
 
   Connection.ReadTimeout := Self.ReadTimeout;
-  while Connection.Connected and not ConnClosedOrTimedOut do begin
-    ReceivedFrom := TIdConnectionBindings.Create;
-    try
+
+  ReceivedFrom := TIdConnectionBindings.Create;
+  try
+    if Connection.Connected then begin
       ReceivedFrom.LocalIP   := Connection.Socket.Binding.IP;
       ReceivedFrom.LocalPort := Connection.Socket.Binding.Port;
       ReceivedFrom.PeerIP    := Connection.Socket.Binding.PeerIP;
       ReceivedFrom.PeerPort  := Connection.Socket.Binding.PeerPort;
       ReceivedFrom.Transport := Self.TransportType;
+    end;
 
-      Msg := Self.ReadMessage(Connection, ConserveConnections, ConnClosedOrTimedOut);
+    while Connection.Connected and not AbnormalTermination do begin
+      Msg := Self.ReadMessage(Connection, ConserveConnections, AbnormalTermination);
       try
-        // ReadMessage returns nil only if the connection broke before the
-        // message could be fully read. We can't do anything with half a
-        // message, so we abort.
-        if not Assigned(Msg) then Exit;
-
         try
-          // If we don't read a message from the network, we don't want to
-          // AddConnection!
-          if Msg.IsRequest and not ConnClosedOrTimedOut then
-            Self.NotifyOfConnectionInTimerContext(Connection, Msg as TIdSipRequest);
-//            Self.AddConnection(Connection, Msg as TIdSipRequest);
+          if Assigned(Msg) then begin
+            // We've read something off the network. If it's a request, and if
+            // we're still connected, the TCP transport will want to know of this
+            // new connection.
+            if Msg.IsRequest and Connection.Connected then
+              Self.AddConnection(Connection, Msg as TIdSipRequest);
 
-          Self.ReceiveMessageInTimerContext(Msg, ReceivedFrom);
+            // Always tell the TCP transport of the received message, even if
+            // malformed (say, because Content-Length has a positive value and we
+            // timed out reading the message's body).
+            Self.ReceiveMessageInTimerContext(Msg, ReceivedFrom);
+          end;
         except
+          // Catch-all: ReadMessage should catch any exceptions it's interested
+          // in, so any other exceptions indicate Something Bad. Just notify the
+          // transport, and close the connection (if not already closed).
           on E: Exception do begin
-            // This results in returning a 500 Internal Server Error to a response!
-            if Connection.Connected then begin
-              Self.ReturnInternalServerError(Connection, E.Message);
-              Connection.DisconnectSocket;
-            end;
+            Self.NotifyOfException(ExceptClass(E.ClassType), E.Message);
 
-            Self.NotifyOfDisconnectionInTimerContext(Connection);
-            Self.NotifyOfException(ExceptClass(E.ClassType),
-                                               E.Message);
+            if Connection.Connected then
+              Connection.DisconnectSocket;
           end;
         end;
       finally
         Msg.Free;
       end;
-    finally
-      ReceivedFrom.Free;
     end;
+  finally
+    ReceivedFrom.Free;
   end;
 end;
 
@@ -820,7 +814,7 @@ end;
 
 function TIdSipTcpMessageReader.ReadMessage(Connection: TIdTCPConnection;
                                             ConserveConnections: Boolean;
-                                            var ConnClosedOrTimedOut: Boolean): TIdSipMessage;
+                                            var AbnormalTermination: Boolean): TIdSipMessage;
 var
   S: TStringStream;
 begin
@@ -831,23 +825,23 @@ begin
   // middle of reading a message" - a timeout between reading the headers of a
   // message and reading the body), return nil.
   //
-  // As a side effect, set ConnClosedOrTimedOut to true if necessary.
+  // As a side effect, set AbnormalTermination to true if necessary.
 
+  AbnormalTermination := false;
   Result := nil;
+
   S := TStringStream.Create('');
   try
     try
       Self.ReadHeaders(Connection, S);
     except
       on EIdReadTimeout do
-        ConnClosedOrTimedOut := not ConserveConnections;
-      on EIdConnClosedGracefully do
-        ConnClosedOrTimedOut := true;
-      on EIdClosedSocket do
-        ConnClosedOrTimedOut := true;
+        AbnormalTermination := not ConserveConnections;
+      on EIdConnClosedGracefully do;
+      on EIdClosedSocket do;
     end;
 
-    if not ConnClosedOrTimedOut and (S.DataString <> '') then begin
+    if not AbnormalTermination and (S.DataString <> '') then begin
       Result := TIdSipMessage.ReadMessageFrom(S);
 
       try
@@ -855,11 +849,9 @@ begin
         Result.ReadBody(S);
       except
         on EIdReadTimeout do
-          ConnClosedOrTimedOut := true;
-        on EIdConnClosedGracefully do
-          ConnClosedOrTimedOut := true;
-        on EIdClosedSocket do
-          ConnClosedOrTimedOut := true;
+          AbnormalTermination := true;
+        on EIdConnClosedGracefully do;
+        on EIdClosedSocket do;
       end;
     end;
   finally
@@ -1330,7 +1322,8 @@ end;
 
 procedure TIdSipTcpConnectionOpenWait.TriggerOn(Transport: TIdSipTransport);
 begin
-  (Transport as TIdSipTcpTransport).AddConnection(Self.Binding, Self.OpeningRequest);
+  if not Transport.IsMock then
+    (Transport as TIdSipTcpTransport).AddConnection(Self.Binding, Self.OpeningRequest);
 end;
 
 //* TIdSipTcpConnectionOpenWait Private methods ********************************
@@ -1347,7 +1340,8 @@ end;
 
 procedure TIdSipTcpConnectionCloseWait.TriggerOn(Transport: TIdSipTransport);
 begin
-  (Transport as TIdSipTcpTransport).RemoveConnection(Self.Binding);
+  if not Transport.IsMock then
+    (Transport as TIdSipTcpTransport).RemoveConnection(Self.Binding);
 end;
 
 end.
