@@ -87,6 +87,7 @@ type
     procedure FireOnResponse(R: TIdSipResponse); overload;
     procedure FireOnResponse(R: TIdSipResponse;
                              Peer: TIdConnectionBindings); overload;
+    function  IsMock: Boolean; override;
     function  IsReliable: Boolean; override;
     function  IsRunning: Boolean; override;
     function  LastRequest: TIdSipRequest;
@@ -327,6 +328,11 @@ begin
   finally
     CopyOfMessage.Free;
   end;
+end;
+
+function TIdSipMockTransport.IsMock: Boolean;
+begin
+  Result := true;
 end;
 
 function TIdSipMockTransport.IsReliable: Boolean;

@@ -167,6 +167,7 @@ type
     function  FindBinding(Dest: TIdConnectionBindings): TIdSocketHandle;
     function  FirstIPBound: String;
     function  HasBinding(const Address: String; Port: Cardinal): Boolean;
+    function  IsMock: Boolean; virtual;
     function  IsNull: Boolean; virtual;
     function  IsReliable: Boolean; virtual;
     function  IsRunning: Boolean; virtual;
@@ -641,6 +642,12 @@ end;
 function TIdSipTransport.HasBinding(const Address: String; Port: Cardinal): Boolean;
 begin
   Result := Self.IndexOfBinding(Address, Port) <> ItemNotFoundIndex;
+end;
+
+function TIdSipTransport.IsMock: Boolean;
+begin
+  // Return true if and only if I am a mock transport.
+  Result := false;
 end;
 
 function TIdSipTransport.IsNull: Boolean;
