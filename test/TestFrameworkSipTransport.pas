@@ -1143,7 +1143,7 @@ begin
     // message before we send the response. Thus, the test could fail because
     // we didn't have enough time to register the sending of the 400 Bad
     // Request.
-    Self.WaitForSignaled(Self.SendEvent);
+    Self.WaitForSignaled(Self.SendEvent, 'Waiting to send message');
 
     Check(not Self.ReceivedRequest,
           Self.HighPortTransport.ClassName
@@ -1214,7 +1214,7 @@ begin
 
     // Self.SendEvent is set by OnSendResponse: that is, it is set after
     // HighPortTransport has received the request and rejected it.               
-    Self.WaitForSignaled(Self.SendEvent);
+    Self.WaitForSignaled(Self.SendEvent, 'Waiting for send event');
 
     Check(not Self.ReceivedRequest,
           Self.HighPortTransport.ClassName
