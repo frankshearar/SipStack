@@ -73,7 +73,7 @@ uses
   IdInterfacedObject, IdNotification, IdObservable, IdRegisteredObject,
   IdRoutingTable, IdSipAuthentication, IdSipLocation, IdSipLocator,
   IdSipMessage, IdSipProxyDescription, IdSipTransaction, IdSipTransport,
-  IdTimerQueue, LoGGer, StringDictionary, SysUtils;
+  IdSipTransportAddressSpace, IdTimerQueue, LoGGer, StringDictionary, SysUtils;
 
 const
   SipStackVersion = '0.6pre';
@@ -357,6 +357,7 @@ type
     Observed:               TIdObservable;
     OpenInboundConnections: TIdConnectionAssociationSet;
     Proxies:                TIdProxyDescriptions;
+    TransportTypes:         TIdSipTransportSpecifiers;
 
     procedure AddConnection(Msg: TIdSipMessage; Binding: TIdConnectionBindings);
     procedure AddModuleSpecificHeaders(OutboundMessage: TIdSipMessage);
@@ -367,6 +368,7 @@ type
     function  CreateResponseHandler(Response: TIdSipResponse;
                                     Binding: TIdConnectionBindings): TIdSipUserAgentActOnResponse;
     function  DefaultHostName: String;
+    function  GetDefaultPreferredTransportType: String;
     function  DefaultUserAgent: String;
     function  GetDefaultRoutePath: TIdSipRoutePath;
     procedure Log(Description: String;
@@ -396,6 +398,7 @@ type
     procedure RejectRequestBadExtension(Request: TIdSipRequest);
     procedure RejectRequestMethodNotSupported(Request: TIdSipRequest);
     procedure RejectUnsupportedSipVersion(Request: TIdSipRequest);
+    procedure SetDefaultPreferredTransportType(Value: String);
     procedure SetDefaultRoutePath(Value: TIdSipRoutePath);
     procedure SetDispatcher(Value: TIdSipTransactionDispatcher);
     procedure SetLogger(Value: TLoGGerThread);
@@ -449,6 +452,7 @@ type
     function  AllowedMethods(RequestUri: TIdSipUri): String;
     function  AllowedSchemes: String;
     function  Authenticate(Request: TIdSipRequest): TIdSipUserAgentReaction;
+    procedure ClearAllPreferredTransportTypes;
     procedure ClearAllRoutePaths;
     function  CountOf(const MethodName: String): Integer;
     function  CreateChallengeResponse(Request: TIdSipRequest): TIdSipResponse;
@@ -490,10 +494,12 @@ type
     function  NextInitialSequenceNo: Cardinal;
     function  NextNonce: String;
     function  NextTag: String;
+    function  PreferredTransportTypeFor(Address: String): String;
     function  QueryOptions(Server: TIdSipAddressHeader): TIdSipAction;
     procedure RemoveListener(Listener: IIdSipTransactionUserListener);
     procedure RemoveModule(ModuleType: TIdSipMessageModuleClass);
     procedure RemoveObserver(const Listener: IIdObserver);
+    procedure RemovePreferredTransportTypeFor(AddressSpace: String);
     procedure RemoveRoutePathTo(AddressSpace: String);
     function  RequiresUnsupportedExtension(Request: TIdSipRequest): Boolean;
     function  ResponseForInvite: Cardinal; virtual;
@@ -510,6 +516,7 @@ type
     procedure SendRequest(Request: TIdSipRequest;
                           Dest: TIdSipLocation);
     procedure SendResponse(Response: TIdSipResponse);
+    procedure SetPreferredTransportTypeFor(AddressSpace: String; TransportType: String);
     procedure StartAllTransports;
     procedure StopAllTransports;
     function  UsesModule(ModuleType: TIdSipMessageModuleClass): Boolean; overload;
@@ -518,22 +525,23 @@ type
     // Move to UserAgent:
     procedure TerminateAllCalls; // move to InviteModule
 
-    property Actions:               TIdSipActions               read fActions;
-    property Authenticator:         TIdSipAbstractAuthenticator read fAuthenticator write SetAuthenticator;
-    property DefaultRoutePath:      TIdSipRoutePath             read GetDefaultRoutePath write SetDefaultRoutePath;
-    property Dispatcher:            TIdSipTransactionDispatcher read fDispatcher write SetDispatcher;
-    property HostName:              String                      read fHostName write fHostName;
-    property InstanceID:            String                      read fInstanceID write SetInstanceID;
-    property Keyring:               TIdKeyRing                  read fKeyring;
-    property Locator:               TIdSipAbstractLocator       read fLocator write fLocator;
-    property Logger:                TLoGGerThread               read fLogger write SetLogger;
-    property LogName:               String                      read fLogName write SetLogName;
-    property Realm:                 String                      read fRealm write SetRealm;
-    property RoutingTable:          TIdRoutingTable             read fRoutingTable write fRoutingTable;
-    property Timer:                 TIdTimerQueue               read fTimer write fTimer;
-    property UseGruu:               Boolean                     read fUseGruu write fUseGruu;
-    property UseInboundConnections: Boolean                     read fUseInboundConnections write fUseInboundConnections;
-    property UserAgentName:         String                      read fUserAgentName write fUserAgentName;
+    property Actions:                       TIdSipActions               read fActions;
+    property Authenticator:                 TIdSipAbstractAuthenticator read fAuthenticator write SetAuthenticator;
+    property DefaultRoutePath:              TIdSipRoutePath             read GetDefaultRoutePath write SetDefaultRoutePath;
+    property DefaultPreferredTransportType: String                      read GetDefaultPreferredTransportType write SetDefaultPreferredTransportType;
+    property Dispatcher:                    TIdSipTransactionDispatcher read fDispatcher write SetDispatcher;
+    property HostName:                      String                      read fHostName write fHostName;
+    property InstanceID:                    String                      read fInstanceID write SetInstanceID;
+    property Keyring:                       TIdKeyRing                  read fKeyring;
+    property Locator:                       TIdSipAbstractLocator       read fLocator write fLocator;
+    property Logger:                        TLoGGerThread               read fLogger write SetLogger;
+    property LogName:                       String                      read fLogName write SetLogName;
+    property Realm:                         String                      read fRealm write SetRealm;
+    property RoutingTable:                  TIdRoutingTable             read fRoutingTable write fRoutingTable;
+    property Timer:                         TIdTimerQueue               read fTimer write fTimer;
+    property UseGruu:                       Boolean                     read fUseGruu write fUseGruu;
+    property UseInboundConnections:         Boolean                     read fUseInboundConnections write fUseInboundConnections;
+    property UserAgentName:                 String                      read fUserAgentName write fUserAgentName;
   end;
 
   IIdSipMessageModuleListener = interface
@@ -691,7 +699,8 @@ type
                                          Binding: TIdConnectionBindings): TIdSipActionResult; virtual;
     function  ReceiveServerFailureResponse(Response: TIdSipResponse): TIdSipActionResult; virtual;
     procedure SendRequest(Request: TIdSipRequest);
-    procedure SendResponse(Response: TIdSipResponse); virtual;
+    procedure SendResponse(Response: TIdSipResponse); overload; virtual;
+    procedure SetContactUri(Request: TIdSipRequest; Target: TIdSipLocation); virtual;
     procedure SetResult(Value: TIdSipActionResult);
     procedure SetStateToFinished;
     procedure SetStateToResent;
@@ -1772,6 +1781,7 @@ begin
   Self.Observed               := TIdObservable.Create;
   Self.OpenInboundConnections := TIdConnectionAssociationSet.Create;
   Self.Proxies                := TIdProxyDescriptions.Create;
+  Self.TransportTypes         := TIdSipTransportSpecifiers.Create;
 
   Self.AddModule(TIdSipOptionsModule);
   Self.AddAllowedScheme(SipScheme);
@@ -1785,6 +1795,7 @@ destructor TIdSipAbstractCore.Destroy;
 begin
   Self.NotifyModulesOfFree;
 
+  Self.TransportTypes.Free;
   Self.Proxies.Free;
   Self.OpenInboundConnections.Free;
   Self.Observed.Free;
@@ -1991,9 +2002,14 @@ begin
   end;
 end;
 
+procedure TIdSipAbstractCore.ClearAllPreferredTransportTypes;
+begin
+  Self.TransportTypes.ClearAllParameters;
+end;
+
 procedure TIdSipAbstractCore.ClearAllRoutePaths;
 begin
-  Self.Proxies.ClearAllDescriptions;
+  Self.Proxies.ClearAllParameters;
 end;
 
 function TIdSipAbstractCore.CountOf(const MethodName: String): Integer;
@@ -2277,6 +2293,11 @@ begin
   Result := GRandomNumber.NextSipUserAgentTag;
 end;
 
+function TIdSipAbstractCore.PreferredTransportTypeFor(Address: String): String;
+begin
+  Result := Self.TransportTypes.TransportTypeFor(Address)
+end;
+
 function TIdSipAbstractCore.QueryOptions(Server: TIdSipAddressHeader): TIdSipAction;
 var
   Module: TIdSipMessageModule;
@@ -2310,6 +2331,10 @@ end;
 procedure TIdSipAbstractCore.RemoveObserver(const Listener: IIdObserver);
 begin
   Self.Observed.RemoveObserver(Listener);
+end;
+
+procedure TIdSipAbstractCore.RemovePreferredTransportTypeFor(AddressSpace: String);
+begin
 end;
 
 procedure TIdSipAbstractCore.RemoveRoutePathTo(AddressSpace: String);
@@ -2434,6 +2459,12 @@ begin
                                               [Response.ParseFailReason]));
 
   Self.Dispatcher.SendResponse(Response);
+end;
+
+procedure TIdSipAbstractCore.SetPreferredTransportTypeFor(AddressSpace: String; TransportType: String);
+begin
+  // TransportType contains any value valid for a URI "transport" parameter.
+  Self.TransportTypes.SetTransportFor(AddressSpace, TransportType);
 end;
 
 procedure TIdSipAbstractCore.StartAllTransports;
@@ -2758,6 +2789,11 @@ begin
   Result := 'localhost';
 end;
 
+function TIdSipAbstractCore.GetDefaultPreferredTransportType: String;
+begin
+  Result := Self.TransportTypes.DefaultTransportType;
+end;
+
 function TIdSipAbstractCore.DefaultUserAgent: String;
 begin
   Result := 'RNID SipStack v' + SipStackVersion;
@@ -2984,6 +3020,11 @@ begin
   finally
     Response.Free;
   end;
+end;
+
+procedure TIdSipAbstractCore.SetDefaultPreferredTransportType(Value: String);
+begin
+  Self.TransportTypes.DefaultTransportType := Value;
 end;
 
 procedure TIdSipAbstractCore.SetDefaultRoutePath(Value: TIdSipRoutePath);
@@ -3812,6 +3853,15 @@ begin
   end;
 end;
 
+procedure TIdSipAction.SetContactUri(Request: TIdSipRequest; Target: TIdSipLocation);
+begin
+  // Some Actions use Contacts, and want those Contacts to indicate, say, a
+  // preferred transport that they'd like other UAs to use when sending them
+  // requests.
+  //
+  // By default, do nothing.
+end;
+
 procedure TIdSipAction.SetResult(Value: TIdSipActionResult);
 begin
   Self.fResult := Value;
@@ -3954,6 +4004,8 @@ begin
       finally
         LocalAddress.Free;
       end;
+
+      Self.SetContactUri(Request, CurrentTarget);
 
       // Synchronise our state to what actually went down to the network.
       // The condition means that an INVITE won't set its InitialRequest to an

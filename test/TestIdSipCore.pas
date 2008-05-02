@@ -38,6 +38,7 @@ type
     procedure TestAddObserver;
     procedure TestAllowedExtensionsCollectsExtensionsFromInstalledModules;
     procedure TestAllowedExtensionsRemovesDuplicateExtensions;
+    procedure TestClearAllPreferredTransportTypes;
     procedure TestCreateRequestFromUriWithDangerousHeaders;
     procedure TestCreateRequestFromUriWithDifferentMethod;
     procedure TestCreateRequestFromUriWithFalseAdvertising;
@@ -64,6 +65,7 @@ type
     procedure TestRejectUnsupportedMethod;
     procedure TestRejectUnsupportedSipVersion;
     procedure TestRemoveObserver;
+    procedure TestRemovePreferredTransportTypeTo;
     procedure TestRequiresUnsupportedExtension;
     procedure TestSendRequest;
     procedure TestSendRequestMalformedRequest;
@@ -75,6 +77,7 @@ type
     procedure TestSendResponseMalformedResponse;
     procedure TestSendResponseUnknownSupportedExtension;
     procedure TestSetInstanceID;
+    procedure TestSetPreferredTransportTypeFor;
     procedure TestUsesModuleClassType;
     procedure TestUsesModuleString;
   end;
@@ -124,6 +127,17 @@ type
     procedure TestUseTransportParam;
     procedure TestUseUdpByDefault;
     procedure TestVeryLargeMessagesUseAReliableTransport;
+  end;
+
+  // These tests show how to ask remote UAs in certain address spaces to contact
+  // you on a certain trasnport
+  TestPreferredTransport = class(TTestCaseTU)
+  private
+    procedure CheckTransportType(Target, ExpectedTransportType, AddressSpaceName: String);
+  published
+    procedure TestDefaultPreferredTransportType;
+    procedure TestNoPreference;
+    procedure TestPreferredTransportTypeForAnAddressSpace;
   end;
 
   // These tests show the ins and outs of using pre-existing inbound
@@ -433,6 +447,7 @@ begin
   Result := TTestSuite.Create('IdSipCore unit tests');
   Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestLocation.Suite);
+  Result.AddTest(TestPreferredTransport.Suite);
   Result.AddTest(TestUseInboundConnections.Suite);
   Result.AddTest(TestTIdSipActions.Suite);
   Result.AddTest(TestTIdSipMessageModule.Suite);
@@ -740,6 +755,14 @@ begin
   finally
     ExpectedExtensions.Free;
   end;
+end;
+
+procedure TestTIdSipAbstractCore.TestClearAllPreferredTransportTypes;
+begin
+  Self.Core.SetPreferredTransportTypeFor('127.0.0.0/8', 'tcp');
+  Self.Core.SetPreferredTransportTypeFor('::/0', 'udp');
+  Self.Core.ClearAllPreferredTransportTypes;
+  CheckEquals('', Self.Core.PreferredTransportTypeFor('::1'), 'Preferences not cleared');
 end;
 
 procedure TestTIdSipAbstractCore.TestCreateRequestFromUriWithDangerousHeaders;
@@ -1305,6 +1328,18 @@ begin
   end;
 end;
 
+procedure TestTIdSipAbstractCore.TestRemovePreferredTransportTypeTo;
+const
+  AddressSpace = '127.0.0.0/8';
+begin
+  Self.Core.DefaultPreferredTransportType := TlsOverSctpTransport;
+  Self.Core.SetPreferredTransportTypeFor(AddressSpace, TcpTransport);
+  Self.Core.RemovePreferredTransportTypeFor(AddressSpace);
+
+  CheckEquals(TlsOverSctpTransport, Self.Core.PreferredTransportTypeFor(AddressSpace),
+              'Preference not removed');
+end;
+
 procedure TestTIdSipAbstractCore.TestRequiresUnsupportedExtension;
 var
   InviteExtensions: TStrings;
@@ -1535,6 +1570,18 @@ begin
   CheckEquals(ValidUrn,
               Self.Core.InstanceID,
               'InstanceID');
+end;
+
+procedure TestTIdSipAbstractCore.TestSetPreferredTransportTypeFor;
+const
+  AddressSpace = '192.168.0.0/16';
+  Target       = '192.168.0.1';
+begin
+  Self.Core.SetPreferredTransportTypeFor(AddressSpace, TcpTransport);
+  CheckEquals(TcpTransport, Self.Core.PreferredTransportTypeFor(Target), 'Preference not set');
+
+  Self.Core.SetPreferredTransportTypeFor(AddressSpace, UdpTransport);
+  CheckEquals(UdpTransport, Self.Core.PreferredTransportTypeFor(Target), 'Preference not reset');
 end;
 
 procedure TestTIdSipAbstractCore.TestUsesModuleClassType;
@@ -1966,6 +2013,68 @@ begin
               Self.LastSentRequest.LastHop.Transport,
               'INVITE didn''t use a reliable transport despite the large size '
             + 'of the message');
+end;
+
+//******************************************************************************
+//* TestPreferredTransport                                                     *
+//******************************************************************************
+//* TestPreferredTransport Private methods *************************************
+
+procedure TestPreferredTransport.CheckTransportType(Target, ExpectedTransportType, AddressSpaceName: String);
+var
+  Suffix: String;
+begin
+  Suffix := Format('(%s target)', [AddressSpaceName]);
+  Self.Destination.Address.Host := Target;
+  Self.MarkSentRequestCount;
+  Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '').Send;
+  CheckRequestSent('No INVITE sent ' + Suffix);
+  Check(Self.LastSentRequest.FirstContact.Address.HasParameter(TransportParam),
+        'Contact URI has no transport parameter ' + Suffix);
+  CheckEquals(ExpectedTransportType, Self.LastSentRequest.FirstContact.Address.Transport,
+              'Incorrect transport parameter value ' + Suffix);
+end;
+
+//* TestPreferredTransport Published methods ***********************************
+
+procedure TestPreferredTransport.TestDefaultPreferredTransportType;
+const
+  DefaultTransportType = TcpTransport;
+begin
+  Self.Core.DefaultPreferredTransportType := DefaultTransportType;
+
+  Self.MarkSentRequestCount;
+  Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '').Send;
+  CheckRequestSent('No INVITE sent');
+  Check(Self.LastSentRequest.FirstContact.Address.HasParameter(TransportParam),
+        'Contact URI has no transport parameter');
+  CheckEquals(DefaultTransportType, Self.LastSentRequest.FirstContact.Address.Transport,
+              'Incorrect transport parameter value');
+end;
+
+procedure TestPreferredTransport.TestNoPreference;
+begin
+  Self.MarkSentRequestCount;
+  Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '').Send;
+  CheckRequestSent('No INVITE sent');
+
+  Check(not Self.LastSentRequest.FirstContact.Address.HasParameter(TransportParam),
+        'Contact URI has a transport parameter');
+end;
+
+procedure TestPreferredTransport.TestPreferredTransportTypeForAnAddressSpace;
+const
+  DefaultTransport = UdpTransport;
+  Lan              = '10.0.0.0/8';
+  LanTarget        = '10.0.0.1';
+  LanTransport     = TcpTransport;
+  OutsideTarget    = '1.2.3.4';
+begin
+  Self.Core.DefaultPreferredTransportType := DefaultTransport;
+  Self.Core.SetPreferredTransportTypeFor(Lan, LanTransport);
+
+  CheckTransportType(LanTarget, LanTransport, 'LAN');
+  CheckTransportType(OutsideTarget, DefaultTransport, 'Outside');
 end;
 
 //******************************************************************************

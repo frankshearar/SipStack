@@ -13,7 +13,8 @@ interface
 
 uses
   Classes, Contnrs, IdConnectionBindings, IdInterfacedObject, IdNotification,
-  IdSipCore, IdSipDialog, IdSipDialogID, IdSipMessage, IdTimerQueue;
+  IdSipCore, IdSipDialog, IdSipDialogID, IdSipLocation, IdSipMessage,
+  IdTimerQueue;
 
 type
   TIdSipInboundInvite = class;
@@ -360,6 +361,7 @@ type
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
                          Binding: TIdConnectionBindings); override;
+    procedure SetContactUri(Request: TIdSipRequest; Target: TIdSipLocation); override;
   public
     destructor Destroy; override;
 
@@ -2096,6 +2098,18 @@ begin
   inherited Initialise(UA, Request, Binding);
 
   Self.fDestination := TIdSipAddressHeader.Create;
+end;
+
+procedure TIdSipOutboundInitialInvite.SetContactUri(Request: TIdSipRequest; Target: TIdSipLocation);
+var
+  PreferredTransport: String;
+begin
+  inherited SetContactUri(Request, Target);
+
+  PreferredTransport := Self.UA.PreferredTransportTypeFor(Target.IPAddress);
+
+  if (PreferredTransport <> '') then
+    Request.FirstContact.Address.Transport := PreferredTransport;
 end;
 
 //* TIdSipOutboundInitialInvite Private methods ********************************

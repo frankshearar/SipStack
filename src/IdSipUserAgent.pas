@@ -145,9 +145,10 @@ type
   // configuration are always processed BEFORE message-sending pending actions.
   TIdSipStackConfigurator = class(TObject)
   private
-    FalseValues:             TStrings;
-    FirstRouteDirective:     Boolean;
-    FirstTransportDirective: Boolean;
+    FalseValues:                TStrings;
+    FirstRouteDirective:        Boolean;
+    FirstTransportDirective:    Boolean;
+    FirstUseTransportDirective: Boolean;
 
     procedure AddAddress(UserAgent: TIdSipAbstractCore;
                          AddressHeader: TIdSipAddressHeader;
@@ -206,6 +207,8 @@ type
                                         const SupportEventLine: String);
     procedure AddTransport(Dispatcher: TIdSipTransactionDispatcher;
                            const TransportLine: String);
+    procedure AddUseTransport(UserAgent: TIdSipAbstractCore;
+                              const UseTransportLine: String);
     procedure CheckAddressSpace(AddressSpace: String;
                                 const FailMsg: String);
     procedure CheckUri(Uri: TIdSipUri;
@@ -486,10 +489,10 @@ procedure EatDirective(var Line: String);
 implementation
 
 uses
-  IdRegisteredObject, IdSimpleParser, IdSipDns, IdSipIndyLocator, IdSipLocation,
-  IdSipMockBindingDatabase, IdSipMockLocator, IdSipProxyDescription,
-  IdSipSubscribeModule, IdSystem, IdUnicode, LogVariables, RuntimeSafety,
-  SysUtils;
+  IdAddressSpace, IdRegisteredObject, IdSimpleParser, IdSipDns,
+  IdSipIndyLocator, IdSipLocation, IdSipMockBindingDatabase, IdSipMockLocator,
+  IdSipProxyDescription, IdSipSubscribeModule, IdSystem, IdUnicode,
+  LogVariables, RuntimeSafety, SysUtils;
 
 //******************************************************************************
 //* Unit Public functions & procedures                                         *
@@ -906,6 +909,7 @@ begin
 
   Self.FirstTransportDirective := true;
   Self.FirstRouteDirective     := true;
+  FirstUseTransportDirective   := true;
 
 //  UserAgent.Dispatcher.ClearTransports;
 
@@ -1519,6 +1523,29 @@ begin
   end;
 end;
 
+procedure TIdSipStackConfigurator.AddUseTransport(UserAgent: TIdSipAbstractCore;
+                                                  const UseTransportLine: String);
+var
+  AddressSpace: String;
+  Line:         String;
+  TransportType: String;
+begin
+  Line := UseTransportLine;
+  EatDirective(Line);
+
+  if FirstUseTransportDirective then begin
+    FirstUseTransportDirective := false;
+    UserAgent.ClearAllPreferredTransportTypes;
+  end;
+
+  AddressSpace := Trim(Fetch(Line, ' '));
+  Self.CheckAddressSpace(AddressSpace, Format(MalformedConfigurationLine, [UseTransportLine]));
+
+  TransportType := Trim(Line);
+
+  UserAgent.SetPreferredTransportTypeFor(AddressSpace, TransportType);
+end;
+
 procedure TIdSipStackConfigurator.CheckAddressSpace(AddressSpace: String;
                                                     const FailMsg: String);
 var
@@ -1697,7 +1724,9 @@ begin
   else if IsEqual(FirstToken, UseInboundConnectionsDirective) then
     Self.UseInboundConnections(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, UserAgentNameDirective) then
-    Self.UserAgentName(UserAgent, ConfigurationLine);
+    Self.UserAgentName(UserAgent, ConfigurationLine)
+  else if IsEqual(FirstToken, UseTransportDirective) then
+    Self.AddUseTransport(UserAgent, ConfigurationLine);
 end;
 
 procedure TIdSipStackConfigurator.PostConfigurationActions(UA: TIdSipUserAgent);

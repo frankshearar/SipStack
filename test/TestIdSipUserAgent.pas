@@ -244,6 +244,7 @@ type
     procedure TestCreateUserAgentWithoutResolveNamesLocallyFirst;
     procedure TestCreateUserAgentWithSuppressLocalResponses;
     procedure TestCreateUserAgentWithUseGruu;
+    procedure TestCreateUserAgentWithUseTransport;
     procedure TestCreateUserAgentWithUseInboundConnections;
     procedure TestCreateUserAgentWithUserAgentName;
     procedure TestStrToBool;
@@ -256,6 +257,7 @@ type
     procedure TestUpdateConfigurationWithSuppressLocalResponses;
     procedure TestUpdateConfigurationWithTransport;
     procedure TestUpdateConfigurationWithUseInboundConnections;
+    procedure TestUpdateConfigurationWithUseTransport;
   end;
 
   TestConfigureLogging = class(TStackConfigurationTestCaseWithMockTransport)
@@ -3266,6 +3268,32 @@ begin
   CheckUserAgentUsesGruu(Self.Configuration, 'OFF',   false);
 end;
 
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithUseTransport;
+const
+  DefaultTransport = TlsTransport;
+  IPv6Target       = '::1';
+  InternetTarget   = '1.2.3.4';
+  LanAddressSpace  = '10.0.0.0/8';
+  LanTarget        = '10.0.0.1';
+  LanTransport     = SctpTransport;
+  ZeroAddressSpace = '0.0.0.0/0';
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add(Format('%s: %s %s', [UseTransportDirective, LanAddressSpace, LanTransport]));
+  Self.Configuration.Add(Format('%s: %s %s', [UseTransportDirective, ZeroAddressSpace, DefaultTransport]));
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(LanTransport,     UA.PreferredTransportTypeFor(LanTarget),      'LAN preferences not configured');
+    CheckEquals(DefaultTransport, UA.PreferredTransportTypeFor(InternetTarget), 'Internet preferences not configured');
+    CheckEquals('',               UA.PreferredTransportTypeFor(IPv6Target),     'Other preferences not left alone');
+  finally
+    UA.Free;
+  end;
+end;
+
 procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithUseInboundConnections;
 var
   UA: TIdSipUserAgent;
@@ -3619,6 +3647,28 @@ begin
     Self.Conf.UpdateConfiguration(UA, Self.Configuration);
 
     Check(not UA.UseInboundConnections, UseInboundConnectionsDirective + ' directive ignored');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithUseTransport;
+const
+  Transport = TcpTransport;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add(Format('%s: %s %s', [UseTransportDirective, '127.0.0.0/8', Transport]));
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Self.Configuration.Delete(Self.Configuration.Count - 1);
+    Self.Configuration.Add(Format('%s: %s %s', [UseTransportDirective, '::/0', Transport]));
+
+    Self.Conf.UpdateConfiguration(UA, Self.Configuration);
+
+    CheckEquals('',        UA.PreferredTransportTypeFor('127.0.0.1'), 'Old preferences not cleared');
+    CheckEquals(Transport, UA.PreferredTransportTypeFor('::1'),       'New preferences not set');
   finally
     UA.Free;
   end;
