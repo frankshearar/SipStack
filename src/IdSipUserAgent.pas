@@ -119,6 +119,7 @@ type
   //   SuppressLocalResponses: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
   //   UseGruu: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
   //   UseInboundConnections: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
+  //   UseTransport: <address space> <transport>
   //
   // Registrar-specific directives are:
   //   ActAsRegistrar: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
