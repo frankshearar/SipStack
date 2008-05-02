@@ -1811,10 +1811,6 @@ end;
 
 procedure TIdSipServerTransaction.TrySendLastResponse;
 begin
-  // Since we're effectively retransmitting a response, we need to try send the
-  // response to the locations we'd previously attempted.
-  Self.StoreResponseLocations(Self.LastResponseSent);
-
   Self.TrySendResponse(Self.LastResponseSent);
 end;
 
