@@ -284,11 +284,11 @@ type
     destructor  Destroy; override;
 
     property BindingParam:  TIdConnectionBindings  read fBindingParam;
-    property RequestParam:  TIdSipRequest   read fRequestParam;
-    property ResponseParam: TIdSipResponse  read fResponseParam;
-    property SenderParam:   TIdSipTransport read fSenderParam;
-    property SentRequest:   Boolean         read fSentRequest;
-    property SentResponse:  Boolean         read fSentResponse;
+    property RequestParam:  TIdSipRequest          read fRequestParam;
+    property ResponseParam: TIdSipResponse         read fResponseParam;
+    property SenderParam:   TIdSipTransport        read fSenderParam;
+    property SentRequest:   Boolean                read fSentRequest;
+    property SentResponse:  Boolean                read fSentResponse;
   end;
 
   TConnectionListener = class(TIdInterfacedObject, IIdSipConnectionListener)
