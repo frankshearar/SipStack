@@ -809,7 +809,7 @@ end;
 
 procedure TIdSipTransport.Assert(Condition: Boolean; ProblemDescription: String);
 begin
-  if Condition then
+  if not Condition then
     Self.Log('Assertion violation', LoGGerVerbosityLevelLow, coLogEventException, ProblemDescription);
 
   System.Assert(Condition, ProblemDescription);
