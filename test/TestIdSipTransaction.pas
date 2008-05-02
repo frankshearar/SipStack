@@ -290,8 +290,15 @@ type
     procedure TestIsNull;
   end;
 
-  TestTIdSipServerInviteTransaction = class(TTestTransaction)
+  TTestServerTransaction = class(TTestTransaction)
+  published
+    procedure TestNetworkFailureTriesAlternateDestinations;
+  end;
+
+  TestTIdSipServerInviteTransaction = class(TTestServerTransaction,
+                                            IIdSipTransportSendingListener)
   private
+    LastAttemptedIP:      String;
     ServerTran:           TIdSipServerInviteTransaction;
     TransactionConfirmed: Boolean;
 
@@ -300,6 +307,12 @@ type
     procedure MoveToTerminatedState(Tran: TIdSipServerInviteTransaction);
     procedure OnInitialRequestSentToTU(Sender: TObject;
                                        R: TIdSipRequest);
+    procedure OnSendRequest(Request: TIdSipRequest;
+                            Sender: TIdSipTransport;
+                            Destination: TIdConnectionBindings);
+    procedure OnSendResponse(Response: TIdSipResponse;
+                             Sender: TIdSipTransport;
+                             Destination: TIdConnectionBindings);
     procedure ReceiveInvite;
     procedure Terminate(Tran: TIdSipTransaction);
   protected
@@ -342,7 +355,7 @@ type
     procedure TestTransactionUserResponsesSentToTransport;
   end;
 
-  TestTIdSipServerNonInviteTransaction = class(TTestTransaction)
+  TestTIdSipServerNonInviteTransaction = class(TTestServerTransaction)
   private
     ServerTran:        TIdSipServerNonInviteTransaction;
     TransactionTrying: Boolean;
@@ -2148,7 +2161,6 @@ end;
 procedure TestLocation.TestNetworkFailureTriesAlternateDestinations;
 var
   DnsLookupCount: Cardinal;
-  I:              Integer;
   Tran:           TIdSipTransaction;
 begin
   // The transaction should try send the response to all the IPs returned by
@@ -2161,17 +2173,15 @@ begin
   DnsLookupCount := Self.L.LookupCount;
   Self.MarkSentResponseCount;
 
-  for I := 0 to Self.L.NameRecords.Count - 1 do begin
-    Tran.SendResponse(Self.Response);
-    Tran.DoOnTransportError(Self.Response, 'Connection refused');
-  end;
+  Self.MockTransport.FailWith := EIdConnectException;
+  Tran.SendResponse(Self.Response);
 
   CheckEquals(Self.ResponseCount + Cardinal(Self.L.NameRecords.Count),
               Self.UdpTransport.SentResponseCount,
-              'Number of locations tried');
+              Tran.ClassName + ': Number of locations tried');
   CheckEquals(DnsLookupCount + 1,
               Self.L.LookupCount,
-              'DNS lookups');
+              Tran.ClassName + ': DNS lookups');
 end;
 
 procedure TestLocation.TestNormalOperation;
@@ -2946,6 +2956,42 @@ begin
 end;
 
 //******************************************************************************
+//* TTestServerTransaction                                                     *
+//******************************************************************************
+//* TTestServerTransaction Published methods ***********************************
+
+procedure TTestServerTransaction.TestNetworkFailureTriesAlternateDestinations;
+const
+  TargetName = 'localhost';
+var
+  DnsLookupCount: Cardinal;
+  Tran:           TIdSipTransaction;
+begin
+  // The transaction should try send the response to all the IPs returned by
+  // the A/AAAA lookup of the SRV of the sent-by (phew!).
+
+  Self.MockLocator.Clear;
+  Self.MockLocator.AddSRV(Self.Response.LastHop.SentBy, SrvUdpPrefix,  0, 0, DefaultSipPort, TargetName);
+  Self.MockLocator.AddA(TargetName, '127.0.0.1');
+  Self.MockLocator.AddA(TargetName, '127.0.0.2');
+
+  Tran := Self.MockDispatcher.AddServerTransaction(Self.Request);
+
+  DnsLookupCount := Self.MockLocator.LookupCount;
+  Self.MarkSentResponseCount;
+
+  Self.MockTransport.FailWith := EIdConnectException;
+  Tran.SendResponse(Self.Response);
+
+  CheckEquals(Self.ResponseCount + Cardinal(Self.MockLocator.NameRecords.Count),
+              Self.MockTransport.SentResponseCount,
+              Tran.ClassName + ': Number of locations tried');
+  CheckEquals(DnsLookupCount + 1,
+              Self.MockLocator.LookupCount,
+              Tran.ClassName + ': DNS lookups');
+end;
+
+//******************************************************************************
 //* TestTIdSipServerInviteTransaction                                          *
 //******************************************************************************
 //* TestTIdSipServerInviteTransaction Public methods ***************************
@@ -3007,6 +3053,19 @@ procedure TestTIdSipServerInviteTransaction.OnInitialRequestSentToTU(Sender: TOb
                                                                      R: TIdSipRequest);
 begin
   Self.TransactionProceeding := true;
+end;
+
+procedure TestTIdSipServerInviteTransaction.OnSendRequest(Request: TIdSipRequest;
+                                                          Sender: TIdSipTransport;
+                                                          Destination: TIdConnectionBindings);
+begin
+end;
+
+procedure TestTIdSipServerInviteTransaction.OnSendResponse(Response: TIdSipResponse;
+                                                           Sender: TIdSipTransport;
+                                                           Destination: TIdConnectionBindings);
+begin
+  Self.LastAttemptedIP := Destination.PeerIP;
 end;
 
 procedure TestTIdSipServerInviteTransaction.ReceiveInvite;

@@ -1784,6 +1784,7 @@ end;
 procedure TIdSipServerTransaction.TrySendResponse(R: TIdSipResponse);
 var
   PossibleLocations: TIdSipLocations;
+  Target:            TIdSipLocation;
 begin
   if Self.TargetLocations.IsEmpty then
     Self.Dispatcher.FindServersFor(R, Self.TargetLocations);
@@ -1799,8 +1800,16 @@ begin
 
     Self.NotifyOfFailure(R, Format(RSNoLocationFound, [R.LastHop.SentBy]));
   end
-  else
-    Self.TrySendResponseTo(R, PossibleLocations.First);
+  else begin
+    Target := PossibleLocations.First.Copy;
+    try
+      PossibleLocations.RemoveFirst;
+
+      Self.TrySendResponseTo(R, Target);
+    finally
+      Target.Free;
+    end;
+  end;
 end;
 
 procedure TIdSipServerTransaction.TrySendResponseTo(R: TIdSipResponse;
@@ -1808,7 +1817,6 @@ procedure TIdSipServerTransaction.TrySendResponseTo(R: TIdSipResponse;
 var
   LocalAddress:  TIdSipLocation;
   LocalBindings: TIdSipLocations;
-  Locations:     TIdSipLocations;
 begin
   // Some explanation: SentResponses contains a bunch of responses that we've
   // sent. (We might have sent several because we sent some provisional
@@ -1821,8 +1829,6 @@ begin
   // SentResponses.
 
   Self.LogSentMessage(R, Dest);
-
-  Locations := Self.SentResponses.LocationsFor(R);
 
   LocalBindings := TIdSipLocations.Create;
   try
@@ -1837,9 +1843,6 @@ begin
     end;
 
     Self.Dispatcher.SendToTransport(R, Dest);
-
-    if not Locations.IsEmpty then
-      Locations.Remove(Dest);
   finally
     LocalBindings.Free;
   end;
@@ -1874,6 +1877,7 @@ procedure TIdSipServerInviteTransaction.DoOnTransportError(Msg: TIdSipMessage;
                                                            const Reason: String);
 var
   ResponseLocations: TIdSipLocations;
+  Destination:       TIdSipLocation;
 begin
   // You tried to send a response. It failed. The TransactionDispatcher invokes
   // this method to try the next possible location.
@@ -1883,7 +1887,17 @@ begin
 
   ResponseLocations := Self.SentResponses.LocationsFor(Msg as TIdSipResponse);
   if not ResponseLocations.IsEmpty then begin
-    Self.TrySendResponseTo(Msg as TIdSipResponse, ResponseLocations.First);
+    // It's important to remove the location BEFORE sending the response,
+    // because if a transport exception occurs we will try send to the first
+    // location in our list. If we haven't already removed the last-attempted
+    // location we will simply loop infinitely.
+    Destination := ResponseLocations.First.Copy;
+    try
+      ResponseLocations.RemoveFirst;
+      Self.TrySendResponseTo(Msg as TIdSipResponse, Destination);
+    finally
+      Destination.Free;
+    end;
   end
   else begin
     Self.NotifyOfFailure(Msg,
