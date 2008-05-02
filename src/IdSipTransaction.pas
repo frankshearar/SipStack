@@ -328,6 +328,8 @@ type
                        InitialRequest: TIdSipRequest); override;
     destructor  Destroy; override;
 
+    procedure DoOnTransportError(Msg: TIdSipMessage;
+                                 const Reason: String); override;
     function  Match(Msg: TIdSipMessage): Boolean; override;
     procedure NotifyOfFailure(const Reason: String); overload; override;
     procedure SendResponse(R: TIdSipResponse); override;
@@ -350,9 +352,6 @@ type
   public
     constructor Create(Dispatcher: TIdSipTransactionDispatcher;
                        InitialRequest: TIdSipRequest); override;
-
-    procedure DoOnTransportError(Msg: TIdSipMessage;
-                                 const Reason: String); override;
     procedure FireTimerG;
     procedure FireTimerH;
     procedure FireTimerI;
@@ -1751,6 +1750,44 @@ begin
   inherited Destroy;
 end;
 
+procedure TIdSipServerTransaction.DoOnTransportError(Msg: TIdSipMessage;
+                                                           const Reason: String);
+var
+  Destination:       TIdSipLocation;
+  ResponseLocations: TIdSipLocations;
+  Response:          TIdSipResponse;
+begin
+  // You tried to send a response. It failed. The TransactionDispatcher invokes
+  // this method to try the next possible location.
+
+  // A request should NEVER end up here.
+  if Msg.IsRequest then Exit;
+
+  Response := Msg as TIdSipResponse;
+
+  if not Self.SentResponses.Contains(Response) then Exit;
+
+  ResponseLocations := Self.SentResponses.LocationsFor(Response);
+  if not ResponseLocations.IsEmpty then begin
+    // It's important to remove the location BEFORE sending the response,
+    // because if a transport exception occurs we will try send to the first
+    // location in our list. If we haven't already removed the last-attempted
+    // location we will simply loop infinitely.
+    Destination := ResponseLocations.First.Copy;
+    try
+      ResponseLocations.RemoveFirst;
+      Self.TrySendResponseTo(Response, Destination);
+    finally
+      Destination.Free;
+    end;
+  end
+  else begin
+    Self.NotifyOfFailure(Response,
+                         Format(RSNoLocationSucceeded, [Response.LastHop.SentBy]));
+    Self.Terminate(true);
+  end;
+end;
+
 function TIdSipServerTransaction.Match(Msg: TIdSipMessage): Boolean;
 begin
   Result := inherited Match(Msg);
@@ -1871,39 +1908,6 @@ begin
   Self.HasSentResponse := false;
   
   Self.ChangeToProceeding;
-end;
-
-procedure TIdSipServerInviteTransaction.DoOnTransportError(Msg: TIdSipMessage;
-                                                           const Reason: String);
-var
-  ResponseLocations: TIdSipLocations;
-  Destination:       TIdSipLocation;
-begin
-  // You tried to send a response. It failed. The TransactionDispatcher invokes
-  // this method to try the next possible location.
-
-  // A request should NEVER end up here.
-  if Msg.IsRequest then Exit;
-
-  ResponseLocations := Self.SentResponses.LocationsFor(Msg as TIdSipResponse);
-  if not ResponseLocations.IsEmpty then begin
-    // It's important to remove the location BEFORE sending the response,
-    // because if a transport exception occurs we will try send to the first
-    // location in our list. If we haven't already removed the last-attempted
-    // location we will simply loop infinitely.
-    Destination := ResponseLocations.First.Copy;
-    try
-      ResponseLocations.RemoveFirst;
-      Self.TrySendResponseTo(Msg as TIdSipResponse, Destination);
-    finally
-      Destination.Free;
-    end;
-  end
-  else begin
-    Self.NotifyOfFailure(Msg,
-                         Format(RSNoLocationSucceeded, [Msg.LastHop.SentBy]));
-    Self.Terminate(true);
-  end;
 end;
 
 procedure TIdSipServerInviteTransaction.FireTimerG;

@@ -3714,7 +3714,10 @@ procedure TestTIdSipServerNonInviteTransaction.SetUp;
 begin
   inherited SetUp;
 
-  Self.Request.Method := MethodOptions;
+  Self.Request.Method       := MethodOptions;
+  Self.Request.CSeq.Method  := Self.Request.Method;
+  Self.Response.CSeq.Method := Self.Request.Method;
+
   Self.Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Binding);
 
   Self.ServerTran := Self.Tran as TIdSipServerNonInviteTransaction;

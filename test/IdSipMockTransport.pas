@@ -453,6 +453,7 @@ end;
 procedure TIdSipMockTransport.SendMessage(M: TIdSipMessage;
                                           Dest: TIdConnectionBindings);
 var
+  E:              Exception;
   SendingBinding: TIdSocketHandle;
 begin
   Assert(Self.BindingCount > 0,
@@ -477,7 +478,12 @@ begin
   Self.RecordSentMessage(M);
 
   if Assigned(Self.FailWith) then begin
-    Self.ScheduleException(M);
+    E := Self.FailWith.Create('Invoked failure');
+    try
+      Self.NotifyOfException(M, E, 'Invoked failure');
+    finally
+      E.Free;
+    end;
   end
   else begin
     // Never autodispatch a message that's "failed".
