@@ -220,15 +220,16 @@ end;
 function TIdSipMockBindingDatabase.Binding(const AddressOfRecord: String;
                                            const CanonicalUri: String): TIdRegistrarBinding;
 var
-  I: Integer;
+  I:       Integer;
+  Binding: TIdRegistrarBinding;
 begin
   Result := nil;
-  I := 0;
 
+  I := 0;
   while (I < Self.BindingCount) and not Assigned(Result) do begin
-    if (Self.Bindings[I].AddressOfRecord = AddressOfRecord) and
-      (Self.Bindings[I].Uri = CanonicalUri) then
-      Result := Self.Bindings[I]
+    Binding := Self.Bindings[I];
+    if (Binding.AddressOfRecord = AddressOfRecord) and (Binding.Uri = CanonicalUri) then
+      Result := Binding
     else
       Inc(I);
   end;

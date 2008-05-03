@@ -3603,6 +3603,7 @@ function TIdSipUri.CanonicaliseAsAddressOfRecord: String;
 var
   ResultUri: TIdSipUri;
 begin
+  // cf. RFC 3261, section 10.3, step 5.
   ResultUri := TIdSipUri.Create(Self.Uri);
   try
     ResultUri.Password := '';
@@ -4601,6 +4602,13 @@ function TIdSipAddressHeader.AsCanonicalAddress: String;
 var
   CanonicalAddress: TIdSipAddressHeader;
 begin
+  // This returns an address header in text form, with the URI massages into
+  // canonical form (as per RFC 3261, section 10.3, step 5 of REGISTER
+  // processing). It differs from TIdSipUri.CanonicaliseAsAddressOfRecord in
+  // that this result contains a username. For instance, this function would
+  // return "Foo Bar" <sip:foo.bar@example.com> whereas the TIdSipUri function
+  // would return only "sip:foo.bar@example.com".
+
   CanonicalAddress := TIdSipAddressHeaderClass(Self.ClassType).Create;
   try
     CanonicalAddress.Assign(Self);

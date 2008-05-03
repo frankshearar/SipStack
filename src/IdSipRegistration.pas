@@ -712,7 +712,7 @@ begin
     Contacts.First;
     while Contacts.HasNext do begin
       Binding := Self.Binding(AddressOfRecord,
-                              Contacts.CurrentContact.AsCanonicalAddress);
+                              Contacts.CurrentContact.AsAddressOfRecord);
       Expiry := Self.CorrectExpiry(Request,
                                    Contacts.CurrentContact);
 

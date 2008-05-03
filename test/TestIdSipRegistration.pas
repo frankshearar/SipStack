@@ -87,6 +87,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAddBindings;
+    procedure TestAddBindingsAgain;
     procedure TestBindingsFor;
     procedure TestBindingsForClearsListParam;
     procedure TestBindingsForWithGruus;
@@ -627,6 +628,21 @@ begin
   finally
     Bindings.Free;
   end;
+end;
+
+procedure TestTIdSipMockBindingDatabase.TestAddBindingsAgain;
+var
+  OriginalCount: Integer;
+begin
+  Self.WintermutesAOR.AddHeader(Self.CaseContact);
+  Self.DB.AddBindings(Self.WintermutesAOR);
+
+  OriginalCount := Self.DB.BindingCount;
+
+  Self.WintermutesAOR.CSeq.Increment;
+  Self.DB.AddBindings(Self.WintermutesAOR);
+
+  CheckEquals(OriginalCount, Self.DB.BindingCount, 'Old bindings re-added');
 end;
 
 procedure TestTIdSipMockBindingDatabase.TestBindingsFor;

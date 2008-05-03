@@ -94,6 +94,10 @@ type
                              ReceivedFrom: TIdConnectionBindings);
     procedure CheckForSIPVersionNotSupported(Sender: TObject;
                                              R: TIdSipResponse);
+    procedure CheckHasPort(Transport: TIdSipTransport;
+                           IPAddress: String;
+                           Port: Cardinal;
+                           Msg: String);
     procedure CheckReceivedParamDifferentIPv4SentBy(Sender: TObject;
                                                     Request: TIdSipRequest;
                                                     ReceivedFrom: TIdConnectionBindings);
@@ -578,6 +582,34 @@ begin
   Self.CheckResponse(R, SIPSIPVersionNotSupported);
 end;
 
+procedure TestTIdSipTransport.CheckHasPort(Transport: TIdSipTransport;
+                                           IPAddress: String;
+                                           Port: Cardinal;
+                                           Msg: String);
+var
+  Bindings: TIdSipLocations;
+  Found: Boolean;
+  I:     Integer;
+begin
+  Found := false;
+
+  Bindings := TIdSipLocations.Create;
+  try
+    Transport.LocalBindings(Bindings);
+
+    for I := 0 to Bindings.Count - 1 do begin
+      if (Bindings[I].IPAddress = IPAddress) and (Bindings[I].Port = Port) then begin
+        Found := true;
+        Break;
+      end;
+    end;
+  finally
+    Bindings.Free;
+  end;
+
+  Check(Found, Msg);
+end;
+
 procedure TestTIdSipTransport.CheckReceivedParamDifferentIPv4SentBy(Sender: TObject;
                                                                     Request: TIdSipRequest;
                                                                     ReceivedFrom: TIdConnectionBindings);
@@ -695,10 +727,15 @@ begin
                 R.LastHop.SentBy,
                 Self.HighPortTransport.ClassName
              + ': Topmost Via header''s sent-by doesn''t match sending IP');
+    CheckHasPort(Self.LowPortTransport, ReceivedFrom.PeerIP, R.LastHop.Port,
+                Self.HighPortTransport.ClassName
+             + ': Topmost Via header''s port must be one that can accept connections');
+{
     CheckEquals(ReceivedFrom.PeerPort,
                 R.LastHop.Port,
                 Self.HighPortTransport.ClassName
-             + ': Topmost Via header''s port doesn''t match sending port');
+             + ': Topmost Via header''s port mustn''t match sending port (RFC 3261, section 18.1.1)');
+}
     CheckEquals(ReceivedFrom.Transport,
                 R.LastHop.Transport,
                 Self.HighPortTransport.ClassName
