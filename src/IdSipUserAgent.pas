@@ -908,9 +908,9 @@ begin
   // Update any settings in Configuration
   // Register to a new registrar if necessary
 
-  Self.FirstTransportDirective := true;
-  Self.FirstRouteDirective     := true;
-  FirstUseTransportDirective   := true;
+  Self.FirstRouteDirective        := true;
+  Self.FirstTransportDirective    := true;
+  Self.FirstUseTransportDirective := true;
 
 //  UserAgent.Dispatcher.ClearTransports;
 
