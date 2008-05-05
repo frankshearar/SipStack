@@ -206,7 +206,7 @@ begin
     if (Expiry = 0) then begin
       // We should never even enter this clause; the superclass should call
       // RemoveBinding for this binding.
-      Self.DeleteBinding(Index)
+      Self.RemoveBinding(Request, Contact);
     end
     else if (ExpiryTime(Expiry) > Self.Bindings[Index].ValidUntil) then begin
       Self.Binding(Request.AddressOfRecord, Contact.AsAddressOfRecord).ValidUntil := ExpiryTime(Expiry);
