@@ -31,6 +31,8 @@ type
     fConnectionTimeout: Cardinal;
     RunningClients:     TThreadList;
 
+    function  FirstServerPortFor(IPAddress: String): Cardinal;
+    function  OutboundConnection(Connection: TIdTCPConnection): Boolean;
     procedure SendMessageTo(Msg: TIdSipMessage;
                             Dest: TIdConnectionBindings);
     procedure StopAllClientConnections;
@@ -472,7 +474,15 @@ begin
 
     if Assigned(Connection) and Connection.Connected then begin
       Dest.LocalIP   := Connection.Socket.Binding.IP;
-      Dest.LocalPort := Connection.Socket.Binding.Port;
+
+      // Outbound connections have an ephemeral local port, and we MUST be
+      // prepared to accept connections at the port listed in a Via header
+      // we generate (cf. RFC 3261, section 18.1.1). We don't really care which
+      // binding's port we use, as long as the port's on the same IP address.
+      if Self.OutboundConnection(Connection) then
+        Dest.LocalPort := Self.FirstServerPortFor(Dest.LocalIP)
+      else
+        Dest.LocalPort := Connection.Socket.Binding.Port;
 
       if Msg.LastHop.IsUnset then
         Msg.RewriteLocationHeaders(Dest);
@@ -539,6 +549,40 @@ end;
 
 //* TIdSipTCPTransport Protected methods ***************************************
 
+function TIdSipTCPTransport.FirstServerPortFor(IPAddress: String): Cardinal;
+var
+  I: Integer;
+begin
+  Result := Self.DefaultPort;
+
+  for I := 0 to Self.BindingCount - 1 do begin
+    if (Self.Bindings[I].IP = IPAddress) then begin
+      Result := Self.Bindings[I].Port;
+      Break;
+    end;
+  end;
+end;
+
+function TIdSipTCPTransport.OutboundConnection(Connection: TIdTCPConnection): Boolean;
+var
+  Clients: TList;
+  I:       Integer;
+begin
+  Result := false;
+
+  Clients := Self.RunningClients.LockList;
+  try
+    for I := 0 to Clients.Count - 1 do begin
+      if (TIdSipTcpClientThread(Clients[I]).Client = Connection) then begin
+        Result := true;
+        Break;
+      end;
+    end;
+  finally
+    Self.RunningClients.UnlockList;
+  end;
+end;
+
 procedure TIdSipTCPTransport.SendMessageTo(Msg: TIdSipMessage;
                                            Dest: TIdConnectionBindings);
 var
@@ -558,8 +602,12 @@ begin
     if Msg.IsRequest then
       Self.AddConnection(NewConnection, Msg as TIdSipRequest);
 
+    // Outbound connections have an ephemeral local port, and we MUST be
+    // prepared to accept connections at the port listed in a Via header
+    // we generate (cf. RFC 3261, section 18.1.1). We don't really care which
+    // binding's port we use, as long as the port's on the same IP address.
     Dest.LocalIP   := NewConnection.Socket.Binding.IP;
-    Dest.LocalPort := NewConnection.Socket.Binding.Port;
+    Dest.LocalPort := Self.FirstServerPortFor(Dest.LocalIP);
 
     if Msg.LastHop.IsUnset then
       Msg.RewriteLocationHeaders(Dest);
