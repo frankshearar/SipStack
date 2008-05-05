@@ -118,8 +118,6 @@ type
     fDefaultExpiryTime: Cardinal;
     fUseGruu:           Boolean;
 
-    function CorrectExpiry(Request: TIdSipRequest;
-                           Contact: TIdSipContactHeader): Cardinal;
   protected
     function  AddBinding(const AddressOfRecord: String;
                          Contact: TIdSipContactHeader;
@@ -131,6 +129,8 @@ type
     function  CollectBindingsFor(const AddressOfRecord: String;
                                  Bindings: TIdSipContacts;
                                  CollectGruus: Boolean): Boolean; virtual;
+    function CorrectExpiry(Request: TIdSipRequest;
+                           Contact: TIdSipContactHeader): Cardinal;
     function  CreateGruu(const AddressOfRecord: String;
                          const SipInstance: String): String; virtual;
     procedure Commit; virtual;
@@ -154,6 +154,8 @@ type
                             Contact: TIdSipContactHeader): Boolean;
     function  RemoveAllBindings(Request: TIdSipRequest): Boolean;
     function  RemoveBinding(Request: TIdSipRequest;
+                            Contact: TIdSipContactHeader): Boolean; virtual;
+    function  UpdateBinding(Request: TIdSipRequest;
                             Contact: TIdSipContactHeader): Boolean; virtual;
 
     property DefaultExpiryTime: Cardinal read fDefaultExpiryTime write fDefaultExpiryTime;
@@ -717,12 +719,16 @@ begin
                                    Contacts.CurrentContact);
 
       if Assigned(Binding) then begin
-        Result := Result
-              and Self.NotOutOfOrder(Request,
-                                     Contacts.CurrentContact);
-        if Result and (Expiry = 0) then begin
-          Result := Result and Self.RemoveBinding(Request,
-                                                  Contacts.CurrentContact);
+        Result := Result and Self.NotOutOfOrder(Request,
+                                                Contacts.CurrentContact);
+        if Result then begin
+          if (Expiry = 0) then
+            Result := Result and Self.RemoveBinding(Request,
+                                                    Contacts.CurrentContact)
+          else
+            // update the expiry time on the registration?
+            Result := Result and Self.UpdateBinding(Request,
+                                                    Contacts.CurrentContact);
         end;
       end
       else begin
@@ -844,6 +850,13 @@ begin
   RaiseAbstractError(Self.ClassName, 'RemoveBinding');
 end;
 
+function TIdSipAbstractBindingDatabase.UpdateBinding(Request: TIdSipRequest;
+                                                     Contact: TIdSipContactHeader): Boolean;
+begin
+  Result := false;
+  RaiseAbstractError(Self.ClassName, 'UpdateBinding');
+end;
+
 //* TIdSipAbstractBindingDatabase Protected methods ****************************
 
 function TIdSipAbstractBindingDatabase.AddBinding(const AddressOfRecord: String;
@@ -872,6 +885,19 @@ begin
   // Bindings, if that Contact has a "+sip.instance" parameter.
 
   Result := true;
+end;
+
+function TIdSipAbstractBindingDatabase.CorrectExpiry(Request: TIdSipRequest;
+                                                     Contact: TIdSipContactHeader): Cardinal;
+begin
+  if Contact.WillExpire then
+    Result := Contact.Expires
+  else begin
+    if Request.HasHeader(ExpiresHeader) then
+      Result := Request.Expires.NumericValue
+    else
+      Result := Self.DefaultExpiryTime;
+  end;
 end;
 
 function TIdSipAbstractBindingDatabase.CreateGruu(const AddressOfRecord: String;
@@ -903,21 +929,6 @@ end;
 procedure TIdSipAbstractBindingDatabase.StartTransaction;
 begin
   RaiseAbstractError(Self.ClassName, 'StartTransaction');
-end;
-
-//* TIdSipAbstractBindingDatabase Private methods ******************************
-
-function TIdSipAbstractBindingDatabase.CorrectExpiry(Request: TIdSipRequest;
-                                                     Contact: TIdSipContactHeader): Cardinal;
-begin
-  if Contact.WillExpire then
-    Result := Contact.Expires
-  else begin
-    if Request.HasHeader(ExpiresHeader) then
-      Result := Request.Expires.NumericValue
-    else
-      Result := Self.DefaultExpiryTime;
-  end;
 end;
 
 //******************************************************************************

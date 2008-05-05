@@ -82,6 +82,7 @@ type
 
     procedure SetDBForTwoWintermuteContacts;
     procedure SetDBForTwoWintermuteContactsWithGruus;
+    procedure SetExpiryTime(Contacts: TIdSipContacts; ExpiryTime: Cardinal);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -104,6 +105,9 @@ type
     procedure TestRemoveAllBindings;
     procedure TestRemoveBinding;
     procedure TestRemoveBindingWhenNotPresent;
+    procedure TestUpdateBinding;
+    procedure TestUpdateBindingWithShorterExpires;
+    procedure TestUpdateBindingWithZeroExpires;
   end;
 
   TestTIdSipNameMatchingMockBindingDatabase = class(TTestCase)
@@ -604,6 +608,16 @@ begin
   Self.DB.AddBindings(Self.CasesAOR);
 end;
 
+procedure TestTIdSipMockBindingDatabase.SetExpiryTime(Contacts: TIdSipContacts; ExpiryTime: Cardinal);
+begin
+  Contacts.First;
+
+  while Contacts.HasNext do begin
+    Contacts.CurrentContact.Expires := ExpiryTime;
+    Contacts.Next;
+  end;
+end;
+
 //* TestTIdSipMockBindingDatabase Published methods ****************************
 
 procedure TestTIdSipMockBindingDatabase.TestAddBindings;
@@ -996,6 +1010,77 @@ begin
   Self.DB.AddBindings(Self.WintermutesAOR);
   Self.DB.RemoveBinding(Self.CasesAOR, Self.CaseContact);
   CheckEquals(1, Self.DB.BindingCount, 'Binding not in DB');
+end;
+
+procedure TestTIdSipMockBindingDatabase.TestUpdateBinding;
+var
+  Expected:  TDateTime;
+  LongTime:  Cardinal;
+  Received:  TDateTime;
+  ShortTime: Cardinal;
+begin
+  // Given a binding due to expire at time T, if the registrar receives a
+  // REGISTER with a Contact that will expire at time T + t (t > 0), then
+  // let the binding be valid until time T + t.
+  ShortTime := Self.DB.DefaultExpiryTime;
+  LongTime  := ShortTime * 2;
+
+  Self.SetExpiryTime(Self.WintermutesAOR.Contacts, ShortTime);
+  Self.DB.AddBindings(Self.WintermutesAOR);
+
+  Self.WintermutesAOR.CSeq.Increment;
+  Self.SetExpiryTime(Self.WintermutesAOR.Contacts, LongTime);
+  Self.DB.AddBindings(Self.WintermutesAOR);
+
+  Expected := LongTime*OneSecond;
+  Received := Self.DB.BindingExpires(Self.WintermutesAOR.AddressOfRecord,
+                                     Self.Wintermute.Address.CanonicaliseAsAddress) - Now;
+  Check(Abs(Expected - Received) < OneSecond,
+        Format('Bindings'' expiry time not updated; expected %s left but was %s',
+               [FormatDateTime('nn:ss', Expected), FormatDateTime('nn:ss', Received)]));
+end;
+
+procedure TestTIdSipMockBindingDatabase.TestUpdateBindingWithShorterExpires;
+var
+  Expected:  TDateTime;
+  LongTime:  Cardinal;
+  Received:  TDateTime;
+  ShortTime: Cardinal;
+begin
+  // Updating the binding should not shorten the registration period, but only
+  // extend it.
+
+  ShortTime := Self.DB.DefaultExpiryTime;
+  LongTime  := ShortTime * 2;
+
+  Self.SetExpiryTime(Self.WintermutesAOR.Contacts, LongTime);
+  Self.DB.AddBindings(Self.WintermutesAOR);
+
+  Self.WintermutesAOR.CSeq.Increment;
+  Self.SetExpiryTime(Self.WintermutesAOR.Contacts, ShortTime);
+  Self.DB.AddBindings(Self.WintermutesAOR);
+
+  Expected := LongTime*OneSecond;
+  Received := Self.DB.BindingExpires(Self.WintermutesAOR.AddressOfRecord,
+                                     Self.Wintermute.Address.CanonicaliseAsAddress) - Now;
+  Check(Abs(Expected - Received) < OneSecond,
+        Format('Bindings'' expiry time not updated; expected %s left but was %s',
+               [FormatDateTime('nn:ss', Expected), FormatDateTime('nn:ss', Received)]));
+end;
+
+procedure TestTIdSipMockBindingDatabase.TestUpdateBindingWithZeroExpires;
+begin
+  // You should really use RemoveBindings (to reveal your intentions more
+  // clearly), but updating a binding with a zero expires will also remove
+  // bindings.
+
+  Self.DB.AddBindings(Self.WintermutesAOR);
+
+  Self.WintermutesAOR.CSeq.Increment;
+  Self.SetExpiryTime(Self.WintermutesAOR.Contacts, 0);
+  Self.DB.AddBindings(Self.WintermutesAOR);
+  
+  CheckEquals(0, Self.DB.BindingCount, 'Bindings not removed');
 end;
 
 //******************************************************************************

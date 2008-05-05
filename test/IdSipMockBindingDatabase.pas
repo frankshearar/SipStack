@@ -28,6 +28,7 @@ type
     fFailBindingsFor:   Boolean;
     fFailIsValid:       Boolean;
     fFailRemoveBinding: Boolean;
+    fFailUpdateBinding: Boolean;
     Lock:               TCriticalSection;
 
     procedure DeleteBinding(Index: Integer);
@@ -62,12 +63,15 @@ type
     function  IsValid(Request: TIdSipRequest): Boolean; override;
     function  RemoveBinding(Request: TIdSipRequest;
                             Contact: TIdSipContactHeader): Boolean; override;
+    function  UpdateBinding(Request: TIdSipRequest;
+                            Contact: TIdSipContactHeader): Boolean; override;
 
     property Authorized:               Boolean             read fAuthorized write fAuthorized;
     property Bindings[Index: Integer]: TIdRegistrarBinding read GetBindings;
     property FailAddBinding:           Boolean             read fFailAddBinding write fFailAddBinding;
     property FailBindingsFor:          Boolean             read fFailBindingsFor write fFailBindingsFor;
     property FailRemoveBinding:        Boolean             read fFailRemoveBinding write fFailRemoveBinding;
+    property FailUpdateBinding:        Boolean             read fFailUpdateBinding write fFailUpdateBinding;
     property FailIsValid:              Boolean             read fFailIsValid write fFailIsValid;
   end;
 
@@ -174,12 +178,41 @@ function TIdSipMockBindingDatabase.RemoveBinding(Request: TIdSipRequest;
 begin
   Self.Lock.Acquire;
   try
-    Self.NotifyListenersOfChange;
-
     Self.DeleteBinding(Self.IndexOfBinding(Request.AddressOfRecord,
                                            Contact));
 
     Result := not Self.FailRemoveBinding;
+  finally
+    Self.Lock.Release;
+  end;
+end;
+
+function TIdSipMockBindingDatabase.UpdateBinding(Request: TIdSipRequest;
+                                                 Contact: TIdSipContactHeader): Boolean;
+function ExpiryTime(Expires: Cardinal): TDateTime;
+begin
+  Result := Now + OneSecond * Expires;
+end;
+var
+  Expiry:        Cardinal;
+  Index:         Integer;
+  NewExpiryTime: TDateTime;
+begin
+  Self.Lock.Acquire;
+  try
+    Expiry := Self.CorrectExpiry(Request, Contact);
+    Index  := Self.IndexOfBinding(Request.AddressOfRecord, Contact);
+
+    if (Expiry = 0) then begin
+      // We should never even enter this clause; the superclass should call
+      // RemoveBinding for this binding.
+      Self.DeleteBinding(Index)
+    end
+    else if (ExpiryTime(Expiry) > Self.Bindings[Index].ValidUntil) then begin
+      Self.Binding(Request.AddressOfRecord, Contact.AsAddressOfRecord).ValidUntil := ExpiryTime(Expiry);
+    end;
+
+    Result := not Self.FailUpdateBinding;
   finally
     Self.Lock.Release;
   end;
