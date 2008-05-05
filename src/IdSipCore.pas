@@ -1527,6 +1527,17 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipActionNetworkFailure                                                 *
+//******************************************************************************
+//* TIdSipActionNetworkFailure Public methods **********************************
+
+procedure TIdSipActionNetworkFailure.Execute(Action: TIdSipAction);
+begin
+  if Assigned(Action) then
+    Action.NetworkFailureSending(Self.FailedMessage);
+end;
+
+//******************************************************************************
 //* TIdUserAgentClosure                                                        *
 //******************************************************************************
 //* TIdUserAgentClosure Public methods *****************************************
@@ -1589,17 +1600,6 @@ begin
     Action.ReceiveResponse(Self.Response, Self.Binding)
   else
     Self.UserAgent.NotifyOfDroppedMessage(Self.Response, Self.Binding);
-end;
-
-//******************************************************************************
-//* TIdSipActionNetworkFailure                                                 *
-//******************************************************************************
-//* TIdSipActionNetworkFailure Public methods **********************************
-
-procedure TIdSipActionNetworkFailure.Execute(Action: TIdSipAction);
-begin
-  if Assigned(Action) then
-    Action.NetworkFailureSending(Self.FailedMessage);
 end;
 
 //******************************************************************************
