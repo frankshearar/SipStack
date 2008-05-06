@@ -452,7 +452,7 @@ const
   ActAsRegistrarDirective                 = 'ActAsRegistrar';
   AuthenticationDirective                 = 'Authentication';
   AutoKeyword                             = 'AUTO';
-  ConserveConnectionsDirective         = 'ConserveConnections';
+  ConserveConnectionsDirective            = 'ConserveConnections';
   DebugMessageLogDirective                = 'DebugMessageLog';
   FromDirective                           = FromHeaderFull;
   HostNameDirective                       = 'HostName';
