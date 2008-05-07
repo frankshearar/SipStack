@@ -455,65 +455,88 @@ type
   TIdSipTransactionWait = class(TIdWait)
   private
     fTransactionID: String;
+    Transaction:    TIdSipTransaction;
+
+    procedure LogToTransactionLayer(VerbosityLevel: Byte;
+                                    SourceRef: Cardinal;
+                                    SourceDescription: String;
+                                    RefCode: Cardinal;
+                                    Description,
+                                    BinaryData: String);
+  protected
+    procedure AfterFiredTimer(Tran: TIdSipTransaction); virtual;
+    procedure LogTrigger; override;
+    function  TimerName: String; virtual;
+    procedure FireTimer(Tran: TIdSipTransaction); virtual;
   public
+    procedure Trigger; override;
+
     property TransactionID: String read fTransactionID write fTransactionID;
   end;
 
   TIdSipTerminatingTransactionWait = class(TIdSipTransactionWait)
   protected
-    procedure FireTerminatingTimer(Tran: TIdSipTransaction); virtual;
-  public
-    procedure Trigger; override;
+    procedure AfterFiredTimer(Tran: TIdSipTransaction); override;
   end;
 
   TIdSipServerInviteTransactionTimerGWait = class(TIdSipTransactionWait)
-  public
-    procedure Trigger; override;
+  protected
+    procedure FireTimer(Tran: TIdSipTransaction); override;
+    function TimerName: String; override;
   end;
 
   TIdSipServerInviteTransactionTimerHWait = class(TIdSipTerminatingTransactionWait)
   protected
-    procedure FireTerminatingTimer(Tran: TIdSipTransaction); override;
+    procedure FireTimer(Tran: TIdSipTransaction); override;
+    function  TimerName: String; override;
   end;
 
   TIdSipServerInviteTransactionTimerIWait = class(TIdSipTerminatingTransactionWait)
   protected
-    procedure FireTerminatingTimer(Tran: TIdSipTransaction); override;
+    procedure FireTimer(Tran: TIdSipTransaction); override;
+    function  TimerName: String; override;
   end;
 
   TIdSipServerNonInviteTransactionTimerJWait = class(TIdSipTerminatingTransactionWait)
   protected
-    procedure FireTerminatingTimer(Tran: TIdSipTransaction); override;
+    procedure FireTimer(Tran: TIdSipTransaction); override;
+    function  TimerName: String; override;
   end;
 
   TIdSipClientInviteTransactionTimerAWait = class(TIdSipTransactionWait)
-  public
-    procedure Trigger; override;
+  protected
+    procedure FireTimer(Tran: TIdSipTransaction); override;
+    function  TimerName: String; override;
   end;
 
   TIdSipClientInviteTransactionTimerBWait = class(TIdSipTerminatingTransactionWait)
   protected
-    procedure FireTerminatingTimer(Tran: TIdSipTransaction); override;
+    procedure FireTimer(Tran: TIdSipTransaction); override;
+    function  TimerName: String; override;
   end;
 
   TIdSipClientInviteTransactionTimerDWait = class(TIdSipTerminatingTransactionWait)
   protected
-    procedure FireTerminatingTimer(Tran: TIdSipTransaction); override;
+    procedure FireTimer(Tran: TIdSipTransaction); override;
+    function  TimerName: String; override;
   end;
 
   TIdSipClientNonInviteTransactionTimerEWait = class(TIdSipTransactionWait)
   public
-    procedure Trigger; override;
+    procedure FireTimer(Tran: TIdSipTransaction); override;
+    function  TimerName: String; override;
   end;
 
   TIdSipClientNonInviteTransactionTimerFWait = class(TIdSipTerminatingTransactionWait)
   protected
-    procedure FireTerminatingTimer(Tran: TIdSipTransaction); override;
+    procedure FireTimer(Tran: TIdSipTransaction); override;
+    function  TimerName: String; override;
   end;
 
   TIdSipClientNonInviteTransactionTimerKWait = class(TIdSipTerminatingTransactionWait)
   protected
-    procedure FireTerminatingTimer(Tran: TIdSipTransaction); override;
+    procedure FireTimer(Tran: TIdSipTransaction); override;
+    function  TimerName: String; override;
   end;
 
   TIdSipResponseLocationsList = class(TObject)
@@ -2544,49 +2567,108 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipTerminatingTransactionWait                                           *
+//* TIdSipTransactionWait                                                      *
 //******************************************************************************
-//* TIdSipTerminatingTransactionWait Public methods ****************************
+//* TIdSipTransactionWait Public methods ***************************************
 
-procedure TIdSipTerminatingTransactionWait.Trigger;
+procedure TIdSipTransactionWait.Trigger;
 var
   Target: TObject;
-  Tran:   TIdSipTransaction;
 begin
+  // Wait objects usually log to the TIdTimerQueue's logger. This overrides that
+  // behaviour, routing the logging to the Transaction's logger.
+
+  inherited Trigger;
+
   Target := TIdObjectRegistry.FindObject(Self.TransactionID);
 
   if Assigned(Target) and (Target is TIdSipTransaction) then begin
-    Tran := Target as TIdSipTransaction;
-
-    Self.FireTerminatingTimer(Tran);
-
-    // Sometimes a terminating timer won't terminate the transaction. For
-    // instance, a client INVITE in the Proceeding state mustn't terminate if
-    // a scheduled TimerBWait triggers.
-    if Tran.IsTerminated then
-      Tran.Dispatcher.RemoveTransaction(Tran);
+    Self.Transaction := Target as TIdSipTransaction;
+    Self.OnLog := Self.LogToTransactionLayer;
+    try
+      Self.FireTimer(Self.Transaction);
+    finally
+      Self.AfterFiredTimer(Self.Transaction);
+    end;
   end;
 end;
 
+//* TIdSipTransactionWait Protected methods ************************************
+
+procedure TIdSipTransactionWait.AfterFiredTimer(Tran: TIdSipTransaction);
+begin
+  // By default, do nothing.
+end;
+
+procedure TIdSipTransactionWait.LogTrigger;
+const
+  LogMsg = 'Transaction %s timer %s triggered';
+begin
+  Self.OnLog(LoGGerVerbosityLevelDebug,
+             coLogSourceRefSIPStack,
+             '',
+             coLogEventRefTimerEvent,
+             Format(LogMsg, [Self.TransactionID, Self.TimerName]),
+             '');
+end;
+
+function TIdSipTransactionWait.TimerName: String;
+begin
+  Result := '';
+  RaiseAbstractError(Self.ClassName, 'TimerName');
+end;
+
+procedure TIdSipTransactionWait.FireTimer(Tran: TIdSipTransaction);
+begin
+  RaiseAbstractError(Self.ClassName, 'FireTimer');
+end;
+
+//* TIdSipTransactionWait Private methods **************************************
+
+procedure TIdSipTransactionWait.LogToTransactionLayer(VerbosityLevel: Byte;
+                                                      SourceRef: Cardinal;
+                                                      SourceDescription: String;
+                                                      RefCode: Cardinal;
+                                                      Description,
+                                                      BinaryData: String);
+var
+  D: TIdSipTransactionDispatcher;
+begin
+  if not Assigned(Self.Transaction) then Exit;
+  if not Assigned(Self.Transaction.Dispatcher) then Exit;
+  if not Assigned(Self.Transaction.Dispatcher.Logger) then Exit;
+
+  D := Self.Transaction.Dispatcher;
+  D.Logger.Write(D.LogName, VerbosityLevel, SourceRef, SourceDescription, RefCode, Description, BinaryData);
+end;
+
+//******************************************************************************
+//* TIdSipTerminatingTransactionWait                                           *
+//******************************************************************************
 //* TIdSipTerminatingTransactionWait Protected methods *************************
 
-procedure TIdSipTerminatingTransactionWait.FireTerminatingTimer(Tran: TIdSipTransaction);
+procedure TIdSipTerminatingTransactionWait.AfterFiredTimer(Tran: TIdSipTransaction);
 begin
+  // Sometimes a terminating timer won't terminate the transaction. For
+  // instance, a client INVITE in the Proceeding state mustn't terminate if
+  // a scheduled TimerBWait triggers.
+  if Tran.IsTerminated then
+    Tran.Dispatcher.RemoveTransaction(Tran);
 end;
 
 //******************************************************************************
 //* TIdSipServerInviteTransactionTimerGWait                                    *
 //******************************************************************************
-//* TIdSipServerInviteTransactionTimerGWait Public methods *********************
+//* TIdSipServerInviteTransactionTimerGWait Protected methods ******************
 
-procedure TIdSipServerInviteTransactionTimerGWait.Trigger;
-var
-  Tran: TObject;
+procedure TIdSipServerInviteTransactionTimerGWait.FireTimer(Tran: TIdSipTransaction);
 begin
-  Tran := TIdObjectRegistry.FindObject(Self.TransactionID);
+  (Tran as TIdSipServerInviteTransaction).FireTimerG;
+end;
 
-  if Assigned(Tran) and (Tran is TIdSipServerInviteTransaction) then
-    (Tran as TIdSipServerInviteTransaction).FireTimerG;
+function TIdSipServerInviteTransactionTimerGWait.TimerName: String;
+begin
+  Result := 'G';
 end;
 
 //******************************************************************************
@@ -2594,9 +2676,14 @@ end;
 //******************************************************************************
 //* TIdSipServerInviteTransactionTimerHWait Protected methods ******************
 
-procedure TIdSipServerInviteTransactionTimerHWait.FireTerminatingTimer(Tran: TIdSipTransaction);
+procedure TIdSipServerInviteTransactionTimerHWait.FireTimer(Tran: TIdSipTransaction);
 begin
   (Tran as TIdSipServerInviteTransaction).FireTimerH;
+end;
+
+function TIdSipServerInviteTransactionTimerHWait.TimerName: String;
+begin
+  Result := 'H';
 end;
 
 //******************************************************************************
@@ -2604,9 +2691,14 @@ end;
 //******************************************************************************
 //* TIdSipServerInviteTransactionTimerIWait Protected methods ******************
 
-procedure TIdSipServerInviteTransactionTimerIWait.FireTerminatingTimer(Tran: TIdSipTransaction);
+procedure TIdSipServerInviteTransactionTimerIWait.FireTimer(Tran: TIdSipTransaction);
 begin
   (Tran as TIdSipServerInviteTransaction).FireTimerI;
+end;
+
+function TIdSipServerInviteTransactionTimerIWait.TimerName: String;
+begin
+  Result := 'I';
 end;
 
 //******************************************************************************
@@ -2614,24 +2706,29 @@ end;
 //******************************************************************************
 //* TIdSipServerNonInviteTransactionTimerJWait Protected methods ***************
 
-procedure TIdSipServerNonInviteTransactionTimerJWait.FireTerminatingTimer(Tran: TIdSipTransaction);
+procedure TIdSipServerNonInviteTransactionTimerJWait.FireTimer(Tran: TIdSipTransaction);
 begin
   (Tran as TIdSipServerNonInviteTransaction).FireTimerJ;
+end;
+
+function TIdSipServerNonInviteTransactionTimerJWait.TimerName: String;
+begin
+  Result := 'J';
 end;
 
 //******************************************************************************
 //* TIdSipClientInviteTransactionTimerAWait                                    *
 //******************************************************************************
-//* TIdSipClientInviteTransactionTimerAWait Public methods *********************
+//* TIdSipClientInviteTransactionTimerAWait Protected methods ******************
 
-procedure TIdSipClientInviteTransactionTimerAWait.Trigger;
-var
-  Tran: TObject;
+procedure TIdSipClientInviteTransactionTimerAWait.FireTimer(Tran: TIdSipTransaction);
 begin
-  Tran := TIdObjectRegistry.FindObject(Self.TransactionID);
+  (Tran as TIdSipClientInviteTransaction).FireTimerA;
+end;
 
-  if Assigned(Tran) and (Tran is TIdSipClientInviteTransaction) then
-    (Tran as TIdSipClientInviteTransaction).FireTimerA;
+function TIdSipClientInviteTransactionTimerAWait.TimerName: String;
+begin
+  Result := 'A';
 end;
 
 //******************************************************************************
@@ -2639,9 +2736,14 @@ end;
 //******************************************************************************
 //* TIdSipClientInviteTransactionTimerBWait Protected methods ******************
 
-procedure TIdSipClientInviteTransactionTimerBWait.FireTerminatingTimer(Tran: TIdSipTransaction);
+procedure TIdSipClientInviteTransactionTimerBWait.FireTimer(Tran: TIdSipTransaction);
 begin
   (Tran as TIdSipClientInviteTransaction).FireTimerB;
+end;
+
+function TIdSipClientInviteTransactionTimerBWait.TimerName: String;
+begin
+  Result := 'B';
 end;
 
 //******************************************************************************
@@ -2649,24 +2751,29 @@ end;
 //******************************************************************************
 //* TIdSipClientInviteTransactionTimerDWait Protected methods ******************
 
-procedure TIdSipClientInviteTransactionTimerDWait.FireTerminatingTimer(Tran: TIdSipTransaction);
+procedure TIdSipClientInviteTransactionTimerDWait.FireTimer(Tran: TIdSipTransaction);
 begin
   (Tran as TIdSipClientInviteTransaction).FireTimerD;
+end;
+
+function TIdSipClientInviteTransactionTimerDWait.TimerName: String;
+begin
+  Result := 'D';
 end;
 
 //******************************************************************************
 //* TIdSipClientNonInviteTransactionTimerEWait                                 *
 //******************************************************************************
-//* TIdSipClientNonInviteTransactionTimerEWait Public methods ******************
+//* TIdSipClientNonInviteTransactionTimerEWait Protected methods ***************
 
-procedure TIdSipClientNonInviteTransactionTimerEWait.Trigger;
-var
-  Tran: TObject;
+procedure TIdSipClientNonInviteTransactionTimerEWait.FireTimer(Tran: TIdSipTransaction);
 begin
-  Tran := TIdObjectRegistry.FindObject(Self.TransactionID);
+  (Tran as TIdSipClientNonInviteTransaction).FireTimerE;
+end;
 
-  if Assigned(Tran) and (Tran is TIdSipClientNonInviteTransaction) then
-    (Tran as TIdSipClientNonInviteTransaction).FireTimerE;
+function TIdSipClientNonInviteTransactionTimerEWait.TimerName: String;
+begin
+  Result := 'E';
 end;
 
 //******************************************************************************
@@ -2674,9 +2781,14 @@ end;
 //******************************************************************************
 //* TIdSipClientNonInviteTransactionTimerFWait Protected methods ***************
 
-procedure TIdSipClientNonInviteTransactionTimerFWait.FireTerminatingTimer(Tran: TIdSipTransaction);
+procedure TIdSipClientNonInviteTransactionTimerFWait.FireTimer(Tran: TIdSipTransaction);
 begin
   (Tran as TIdSipClientNonInviteTransaction).FireTimerF;
+end;
+
+function TIdSipClientNonInviteTransactionTimerFWait.TimerName: String;
+begin
+  Result := 'F';
 end;
 
 //******************************************************************************
@@ -2684,9 +2796,14 @@ end;
 //******************************************************************************
 //* TIdSipClientNonInviteTransactionTimerKWait Protected methods ***************
 
-procedure TIdSipClientNonInviteTransactionTimerKWait.FireTerminatingTimer(Tran: TIdSipTransaction);
+procedure TIdSipClientNonInviteTransactionTimerKWait.FireTimer(Tran: TIdSipTransaction);
 begin
   (Tran as TIdSipClientNonInviteTransaction).FireTimerK;
+end;
+
+function TIdSipClientNonInviteTransactionTimerKWait.TimerName: String;
+begin
+  Result := 'K';
 end;
 
 //******************************************************************************
