@@ -276,6 +276,10 @@ type
     function  IsServer: Boolean;
     function  IsTerminated: Boolean;
     function  Match(Msg: TIdSipMessage): Boolean; virtual;
+    procedure Log(Description: String;
+                  Severity: TLogVerbosityLevel;
+                  EventRef: Cardinal;
+                  DebugInfo: String);
     function  LoopDetected(Request: TIdSipRequest): Boolean;
     procedure ReceiveRequest(R: TIdSipRequest;
                              Binding: TIdConnectionBindings); virtual;
@@ -1492,6 +1496,14 @@ begin
   Result := Self.InitialRequest.Match(Msg);
 end;
 
+procedure TIdSipTransaction.Log(Description: String;
+                                Severity: TLogVerbosityLevel;
+                                EventRef: Cardinal;
+                                DebugInfo: String);
+begin
+  Self.Dispatcher.Log(Description, Severity, EventRef, DebugInfo);
+end;
+
 function TIdSipTransaction.LoopDetected(Request: TIdSipRequest): Boolean;
 begin
   Result := Request.From.Equals(Self.InitialRequest.From)
@@ -1620,10 +1632,10 @@ const
 begin
   // '' because we'll immediately either LogReceivedMessage or LogSentMessage,
   // which will log InitialRequest.AsString anyway.
-  Self.Dispatcher.Log(Format(Msg, [Self.ID, InitialRequest.LastHop.Branch]),
-                      LoGGerVerbosityLevelHigh,
-                      0,
-                      '');
+  Self.Log(Format(Msg, [Self.ID, InitialRequest.LastHop.Branch]),
+           LoGGerVerbosityLevelHigh,
+           0,
+           '');
 end;
 
 procedure TIdSipTransaction.LogReceivedMessage(Message: TIdSipMessage;
@@ -1631,10 +1643,10 @@ procedure TIdSipTransaction.LogReceivedMessage(Message: TIdSipMessage;
 const
   Msg = 'Transaction %s received %s on %s';
 begin
-  Self.Dispatcher.Log(Format(Msg, [Self.ID, Message.Description, Binding.AsString]),
-                      LoGGerVerbosityLevelHigh,
-                      0,
-                      Message.AsString);
+  Self.Log(Format(Msg, [Self.ID, Message.Description, Binding.AsString]),
+           LoGGerVerbosityLevelHigh,
+           0,
+           Message.AsString);
 end;
 
 procedure TIdSipTransaction.LogSentMessage(Message: TIdSipMessage;
@@ -1642,20 +1654,20 @@ procedure TIdSipTransaction.LogSentMessage(Message: TIdSipMessage;
 const
   Msg = 'Transaction %s sent %s to %s';
 begin
-  Self.Dispatcher.Log(Format(Msg, [Self.ID, Message.Description, Target.AsString]),
-                      LoGGerVerbosityLevelHigh,
-                      0,
-                      Message.AsString);
+  Self.Log(Format(Msg, [Self.ID, Message.Description, Target.AsString]),
+           LoGGerVerbosityLevelHigh,
+           0,
+           Message.AsString);
 end;
 
 procedure TIdSipTransaction.LogStateChange(OldState, NewState: TIdSipTransactionState);
 const
   Msg = 'Transaction %s changed state: %s -> %s';
 begin
-  Self.Dispatcher.Log(Format(Msg, [Self.ID, StateToStr(OldState), StateToStr(NewState)]),
-                      LoGGerVerbosityLevelHigh,
-                      0,
-                      '');
+  Self.Log(Format(Msg, [Self.ID, StateToStr(OldState), StateToStr(NewState)]),
+           LoGGerVerbosityLevelHigh,
+           0,
+           '');
 end;
 
 procedure TIdSipTransaction.NotifyOfFailure(const Reason: String);
@@ -2575,18 +2587,19 @@ procedure TIdSipTransactionWait.Trigger;
 var
   Target: TObject;
 begin
-  // Wait objects usually log to the TIdTimerQueue's logger. This overrides that
-  // behaviour, routing the logging to the Transaction's logger.
-
+  // Wait objects usually log to the TIdTimerQueue's logger:
   inherited Trigger;
 
   Target := TIdObjectRegistry.FindObject(Self.TransactionID);
 
   if Assigned(Target) and (Target is TIdSipTransaction) then begin
     Self.Transaction := Target as TIdSipTransaction;
+
+    // Log the Trigger to the log the Transaction uses.
     Self.OnLog := Self.LogToTransactionLayer;
     try
       Self.FireTimer(Self.Transaction);
+      Self.LogTrigger;
     finally
       Self.AfterFiredTimer(Self.Transaction);
     end;
@@ -2631,15 +2644,10 @@ procedure TIdSipTransactionWait.LogToTransactionLayer(VerbosityLevel: Byte;
                                                       RefCode: Cardinal;
                                                       Description,
                                                       BinaryData: String);
-var
-  D: TIdSipTransactionDispatcher;
 begin
   if not Assigned(Self.Transaction) then Exit;
-  if not Assigned(Self.Transaction.Dispatcher) then Exit;
-  if not Assigned(Self.Transaction.Dispatcher.Logger) then Exit;
 
-  D := Self.Transaction.Dispatcher;
-  D.Logger.Write(D.LogName, VerbosityLevel, SourceRef, SourceDescription, RefCode, Description, BinaryData);
+  Self.Transaction.Log(Description, VerbosityLevel, coLogEventRefTimerEvent, '');
 end;
 
 //******************************************************************************
