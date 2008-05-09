@@ -307,12 +307,9 @@ type
 
   // I allow access to various network data in the stack: what bindings the
   // stack uses, the best local address to use to contact a remote host, etc.
-  //
-  // GetFoo methods return a ReferenceID String. Send(String) takes that
-  // reference ID and schedules the asynchronous message send.
   TIdSipNetworkExtension = class(TIdSipStackInterfaceExtension)
   public
-    function GetBindings(Bindings: TIdSipLocations): String;
+    procedure GetBindings(Bindings: TIdSipLocations);
   end;
 
   // I collect all "sysctl"-like settings, and various statistics
@@ -2573,7 +2570,7 @@ end;
 //******************************************************************************
 //* TIdSipNetworkExtension Public methods **************************************
 
-function TIdSipNetworkExtension.GetBindings(Bindings: TIdSipLocations): String;
+procedure TIdSipNetworkExtension.GetBindings(Bindings: TIdSipLocations);
 begin
   Self.UserAgent.Dispatcher.LocalBindings(Bindings);
 end;
