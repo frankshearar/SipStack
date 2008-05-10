@@ -107,6 +107,7 @@ type
     procedure TestIsInbound; override;
     procedure TestIsInvite; override;
     procedure TestIsOptions; override;
+    procedure TestIsOutbound; override;
     procedure TestIsOwned; override;
     procedure TestIsRegistration; override;
     procedure TestIsSession; override;
@@ -1142,6 +1143,12 @@ procedure TestTIdSipInboundRegistration.TestIsOptions;
 begin
   Check(not Self.RegisterAction.IsOptions,
         Self.RegisterAction.ClassName + ' marked as an Options');
+end;
+
+procedure TestTIdSipInboundRegistration.TestIsOutbound;
+begin
+  Check(not Self.RegisterAction.IsOutbound,
+        Self.RegisterAction.ClassName + ' marked as outbound');
 end;
 
 procedure TestTIdSipInboundRegistration.TestIsOwned;

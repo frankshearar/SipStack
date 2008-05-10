@@ -68,6 +68,7 @@ type
     procedure TestAuthentication; virtual;
     procedure TestAuthenticationChallenge; virtual;
     procedure TestIsInbound; virtual;
+    procedure TestIsOutbound; virtual;
     procedure TestIsInvite; virtual;
     procedure TestIsOptions; virtual;
     procedure TestIsOwned; virtual;
@@ -508,6 +509,16 @@ begin
   // Self.UA owns the action!
   Action := Self.CreateAction;
   Check(not Action.IsInbound,
+        Action.ClassName + ' marked as an inbound action');
+end;
+
+procedure TestTIdSipAction.TestIsOutbound;
+var
+  Action: TIdSipAction;
+begin
+  // Self.UA owns the action!
+  Action := Self.CreateAction;
+  Check(Action.IsOutbound,
         Action.ClassName + ' marked as an inbound action');
 end;
 

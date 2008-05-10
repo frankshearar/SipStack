@@ -155,6 +155,7 @@ type
     procedure TestIsInbound; override;
     procedure TestIsInvite; override;
     procedure TestIsOptions; override;
+    procedure TestIsOutbound; override;
     procedure TestIsOwned; override;
     procedure TestIsRegistration; override;
     procedure TestIsSession; override;
@@ -454,6 +455,7 @@ type
     procedure TestInviteHasNoOffer;
     procedure TestInviteHasOffer;
     procedure TestIsInbound; override;
+    procedure TestIsOutbound; override;
     procedure TestIsOutboundCall;
     procedure TestInviteWithReplaces;
     procedure TestLocalGruu; override;
@@ -2114,6 +2116,12 @@ procedure TestTIdSipInboundInvite.TestIsOptions;
 begin
   Check(not Self.InviteAction.IsOptions,
         Self.InviteAction.ClassName + ' marked as an Options');
+end;
+
+procedure TestTIdSipInboundInvite.TestIsOutbound;
+begin
+  Check(not Self.InviteAction.IsOutbound,
+        Self.InviteAction.ClassName + ' marked as outbound');
 end;
 
 procedure TestTIdSipInboundInvite.TestIsOwned;
@@ -5486,6 +5494,13 @@ begin
   Self.CreateAction;
   Check(Self.Session.IsInbound,
         Self.Session.ClassName + ' not marked as inbound');
+end;
+
+procedure TestTIdSipInboundSession.TestIsOutbound;
+begin
+  Self.CreateAction;
+  Check(not Self.Session.IsOutbound,
+        Self.Session.ClassName + ' marked as outbound');
 end;
 
 procedure TestTIdSipInboundSession.TestIsOutboundCall;

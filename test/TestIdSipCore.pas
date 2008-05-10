@@ -193,6 +193,7 @@ type
     procedure TestFindActionAndPerformBlockNoMatch;
     procedure TestFindActionAndPerformOrBlock;
     procedure TestFindActionAndPerformOrBlockNoMatch;
+    procedure TestFindActionThatSent;
     procedure TestFindActionWithInitialRequest;
     procedure TestInviteCount;
     procedure TestRemoveObserver;
@@ -2469,6 +2470,44 @@ begin
     end;
   finally
     Finder.Free;
+  end;
+end;
+
+procedure TestTIdSipActions.TestFindActionThatSent;
+var
+  InboundInvite,
+  InboundOptions,
+  OutboundInvite,
+  OutboundOptions: TIdSipAction;
+  SentInvite,
+  SentOptions,
+  UnknownInvite:   TIdSipRequest;
+begin
+  InboundInvite   := Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, Self.Binding));
+  InboundOptions  := Self.Actions.Add(TIdSipInboundOptions.CreateInbound(Self.Core, Self.Options, Self.Binding));
+  OutboundInvite  := Self.CreateOutboundInvite;
+  OutboundOptions := Self.CreateOutboundOptions;
+
+  Self.MarkSentRequestCount;
+  OutboundInvite.Send;
+  CheckRequestSent('No INVITE sent');
+  SentInvite := Self.LastSentRequest;
+
+  Self.MarkSentRequestCount;
+  OutboundOptions.Send;
+  CheckRequestSent('No OPTIONS sent');
+  SentOptions := Self.LastSentRequest;
+
+  Check(nil             = Self.Actions.FindActionThatSent(Self.Invite),  'Inbound INVITE found');
+  Check(nil             = Self.Actions.FindActionThatSent(Self.Options), 'Inbound OPTIONS found');
+  Check(OutboundInvite  = Self.Actions.FindActionThatSent(SentInvite),   'Outbound INVITE not found');
+  Check(OutboundOptions = Self.Actions.FindActionThatSent(SentOptions),  'Outbound Options not found');
+
+  UnknownInvite := TIdSipRequest.Create;
+  try
+    Check(nil = Self.Actions.FindActionThatSent(UnknownInvite), 'Action found for unknown request');
+  finally
+    UnknownInvite.Free;
   end;
 end;
 

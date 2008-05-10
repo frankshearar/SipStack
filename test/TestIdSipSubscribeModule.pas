@@ -503,6 +503,7 @@ type
     procedure TestIsInvite; override;
     procedure TestIsOptions; override;
     procedure TestIsOwned; override;
+    procedure TestIsOutbound; override;
     procedure TestIsRegistration; override;
     procedure TestIsSession; override;
     procedure TestNotify; virtual;
@@ -2837,6 +2838,12 @@ procedure TestTIdSipInboundSubscriptionBase.TestIsOwned;
 begin
   Check(not Self.Action.IsOwned,
         Self.Action.ClassName + ' marked as being owned');
+end;
+
+procedure TestTIdSipInboundSubscriptionBase.TestIsOutbound;
+begin
+  Check(not Self.Action.IsOutbound,
+        Self.Action.ClassName + ' marked as outbound');
 end;
 
 procedure TestTIdSipInboundSubscriptionBase.TestIsRegistration;

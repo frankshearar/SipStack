@@ -171,6 +171,7 @@ type
                                      FoundBlock: TIdSipActionClosure;
                                      NotFoundBlock: TIdSipActionClosure);
     function  FindActionForGruu(const LocalGruu: String): TIdSipAction;
+    function  FindActionThatSent(Request: TIdSipRequest): TIdSipAction;
     function  FindActionWithInitialRequest(Request: TIdSipRequest): TIdSipAction;
     function  InviteCount: Integer;
     function  OptionsCount: Integer;
@@ -717,6 +718,7 @@ type
     function  IsInbound: Boolean; virtual;
     function  IsInvite: Boolean; virtual;
     function  IsOptions: Boolean; virtual;
+    function  IsOutbound: Boolean;
     function  IsRegistration: Boolean; virtual;
     function  IsSession: Boolean; virtual;
     function  Match(Msg: TIdSipMessage): Boolean; virtual;
@@ -1305,10 +1307,29 @@ begin
   end;
 end;
 
+function TIdSipActions.FindActionThatSent(Request: TIdSipRequest): TIdSipAction;
+var
+  A: TIdSipAction;
+  I: Integer;
+begin
+  // Find the action that SENT request.
+
+  Result := nil;
+  for I := 0 to Self.Actions.Count - 1 do begin
+    A := Self.ActionAt(I);
+    if A.IsOutbound and A.InitialRequest.Equals(Request) then begin
+      Result := A;
+      Break;
+    end;
+  end;
+end;
+
 function TIdSipActions.FindActionWithInitialRequest(Request: TIdSipRequest): TIdSipAction;
 var
   I: Integer;
 begin
+  // Find the action that SENT OR RECEIVED request.
+
   Result := nil;
   for I := 0 to Self.Actions.Count - 1 do begin
     if Self.ActionAt(I).InitialRequest.Equals(Request) then begin
@@ -2194,7 +2215,7 @@ function TIdSipAbstractCore.IsSourceOf(Request: TIdSipRequest): Boolean;
 begin
   // Did an action of mine send Request?
    
-  Result := Assigned(Self.Actions.FindActionWithInitialRequest(Request));
+  Result := Assigned(Self.Actions.FindActionThatSent(Request));
 end;
 
 function TIdSipAbstractCore.KnownMethods: String;
@@ -3490,6 +3511,11 @@ end;
 function TIdSipAction.IsOptions: Boolean;
 begin
   Result := false;
+end;
+
+function TIdSipAction.IsOutbound: Boolean;
+begin
+  Result := not Self.IsInbound;
 end;
 
 function TIdSipAction.IsRegistration: Boolean;

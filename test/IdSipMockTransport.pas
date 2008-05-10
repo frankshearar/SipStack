@@ -100,9 +100,11 @@ type
     procedure ReceiveResponse(Response: TIdSipResponse;
                               ReceivedFrom: TIdConnectionBindings); override;
     function  RequestAt(Index: Integer): TIdSipRequest;
+    function  RequestCount: Integer;
     procedure ResetACKCount;
     procedure ResetSentRequestCount;
     procedure ResetSentResponseCount;
+    function  ResponseCount: Integer;
     function  SecondLastRequest: TIdSipRequest;
     function  SecondLastResponse: TIdSipResponse;
     procedure Start; override;
@@ -393,6 +395,11 @@ begin
   Result := Self.fRequests.Items[Index];
 end;
 
+function TIdSipMockTransport.RequestCount: Integer;
+begin
+  Result := Self.fRequests.Count;
+end;
+
 procedure TIdSipMockTransport.ResetACKCount;
 begin
   Self.fACKCount := 0;
@@ -406,6 +413,11 @@ end;
 procedure TIdSipMockTransport.ResetSentResponseCount;
 begin
   Self.fSentResponseCount := 0;
+end;
+
+function TIdSipMockTransport.ResponseCount: Integer;
+begin
+  Result := Self.fResponses.Count;
 end;
 
 function TIdSipMockTransport.SecondLastRequest: TIdSipRequest;
