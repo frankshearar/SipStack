@@ -1878,23 +1878,15 @@ begin
 end;
 
 procedure TIdSipAbstractCore.AddLocalHeaders(OutboundRequest: TIdSipRequest; InDialogRequest: Boolean);
-var
-  Transport: String;
 begin
   // You might think we need to find out the appropriate transport to use before
   // we send the message. Yes, we do. We do so when the Action actually sends
   // the request in Action.Send(Request|Response).
 
-  // cf RFC 3263, section 4.1
-  if OutboundRequest.ToHeader.Address.HasParameter(TransportParam) then
-    Transport := OutboundRequest.ToHeader.Address.Transport
-  else
-    Transport := TransportParamUDP;
-
   if not OutboundRequest.IsAck and OutboundRequest.Path.IsEmpty then begin
     OutboundRequest.AddHeader(ViaHeaderFull);
     OutboundRequest.LastHop.SipVersion := SipVersion;
-    OutboundRequest.LastHop.Transport  := ParamToTransport(Transport);
+    OutboundRequest.LastHop.Transport  := OutboundRequest.DefaultTransport;
     OutboundRequest.LastHop.SentBy     := Self.HostName;
     OutboundRequest.LastHop.Branch     := Self.NextBranch;
   end;

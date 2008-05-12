@@ -1544,6 +1544,7 @@ type
     function  AuthorizationFor(const Realm: String): TIdSipAuthorizationHeader;
     function  CanEstablishDialog: Boolean; override;
     function  CreateCancel: TIdSipRequest;
+    function  DefaultTransport: String;
     function  Description: String; override;
     function  DestinationUri: String;
     function  Equals(Msg: TIdSipMessage): Boolean; override;
@@ -9105,6 +9106,12 @@ begin
 
     raise;
   end;
+end;
+
+function TIdSipRequest.DefaultTransport: String;
+begin
+  // cf RFC 3263, section 4.1
+  Result := ParamToTransport(Self.ToHeader.Address.Transport);
 end;
 
 function TIdSipRequest.Description: String;
