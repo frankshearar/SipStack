@@ -218,6 +218,7 @@ type
     procedure TestCreateUserAgentRegisterDirectiveBeforeTransport;
     procedure TestCreateUserAgentReturnsSomething;
     procedure TestCreateUserAgentTransportHasMalformedPort;
+    procedure TestCreateUserAgentWithAuthentication;
     procedure TestCreateUserAgentWithAutoFrom;
     procedure TestCreateUserAgentWithAutoTransport;
     procedure TestCreateUserAgentWithConserveConnections;
@@ -235,6 +236,7 @@ type
     procedure TestCreateUserAgentWithMockLocatorConfigured;
     procedure TestCreateUserAgentWithMultipleEventPackageSupport;
     procedure TestCreateUserAgentWithMultipleTransports;
+    procedure TestCreateUserAgentWithNoAuthentication;
     procedure TestCreateUserAgentWithNoFrom;
     procedure TestCreateUserAgentWithOneTransport;
     procedure TestCreateUserAgentWithReferSupport;
@@ -243,6 +245,7 @@ type
     procedure TestCreateUserAgentWithResolveNamesLocallyFirst;
     procedure TestCreateUserAgentWithoutResolveNamesLocallyFirst;
     procedure TestCreateUserAgentWithSuppressLocalResponses;
+    procedure TestCreateUserAgentWithUnknownAuthentication;
     procedure TestCreateUserAgentWithUseGruu;
     procedure TestCreateUserAgentWithUseTransport;
     procedure TestCreateUserAgentWithUseInboundConnections;
@@ -2687,6 +2690,27 @@ begin
   end;
 end;
 
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithAuthentication;
+const
+  FooName = 'foo';
+var
+  UA: TIdSipUserAgent;
+begin
+  RegisterAuthenticationPolicy(FooName, TIdSipBasicAuthenticator);
+  try
+    Self.Configuration.Add('Authentication: ' + FooName);
+
+    UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+    try
+      CheckEquals(TIdSipBasicAuthenticator, UA.Authenticator.ClassType, 'Authentication directive ignored');
+    finally
+      UA.Free;
+    end;
+  finally
+    UnregisterAuthenticationPolicy(FooName);
+  end;
+end;
+
 procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithAutoFrom;
 var
   UA: TIdSipUserAgent;
@@ -3041,6 +3065,20 @@ begin
   end;
 end;
 
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithNoAuthentication;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(TIdSipNullAuthenticator, UA.Authenticator.ClassType, 'Default authenticator');
+  finally
+    UA.Free;
+  end;
+end;
+
 procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithNoFrom;
 var
   UA: TIdSipUserAgent;
@@ -3242,6 +3280,22 @@ begin
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
     Check(UA.InviteModule.SuppressLocalResponses, SuppressLocalResponsesDirective + ' directive ignored');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithUnknownAuthentication;
+const
+  FooName = 'foo';
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Authentication: ' + FooName);
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(TIdSipNullAuthenticator, UA.Authenticator.ClassType, 'Authentication directive with unknown policy');
   finally
     UA.Free;
   end;

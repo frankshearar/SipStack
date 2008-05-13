@@ -37,6 +37,7 @@ type
     procedure TestPreregisteredHashFors;
     procedure TestPreregisteredRequestDigestFors;
     procedure TestRegisterAlgorithm;
+    procedure TestRegisterAndUnregisterAuthenticationPolicy;
     procedure TestRegisterHash;
     procedure TestRegisterQop;
     procedure TestRequestDigestFor;
@@ -123,6 +124,10 @@ implementation
 
 uses
   IdHashMessageDigest, SysUtils;
+
+type
+  TFooAuthenticator = class(TIdSipAbstractAuthenticator);
+  TBarAuthenticator = class(TIdSipAbstractAuthenticator);
 
 function Suite: ITestSuite;
 begin
@@ -359,6 +364,24 @@ begin
   RegisterAlgorithm(NullAlgorithmName, @NullAlgorithm);
   Check(@NullAlgorithm = Pointer(A1For(NullAlgorithmName)),
         NullAlgorithmName + 'not registered');
+end;
+
+procedure TestFunctions.TestRegisterAndUnregisterAuthenticationPolicy;
+const
+  FooName = 'Foo';
+begin
+  CheckEquals(TIdSipNullAuthenticator, AuthenticationPolicyFor(FooName), 'Default authentication policy');
+
+  RegisterAuthenticationPolicy(FooName, TFooAuthenticator);
+  try
+    CheckEquals(TFooAuthenticator, AuthenticationPolicyFor(FooName), 'Authentication policy not registered');
+
+    RegisterAuthenticationPolicy(FooName, TBarAuthenticator);
+    CheckEquals(TBarAuthenticator, AuthenticationPolicyFor(FooName), 'Authentication policy registration not overwritten');
+  finally
+    UnregisterAuthenticationPolicy(FooName);
+  end;
+  CheckEquals(TIdSipNullAuthenticator, AuthenticationPolicyFor(FooName), 'Authentication policy not unregistered');
 end;
 
 procedure TestFunctions.TestRegisterHash;

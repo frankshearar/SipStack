@@ -12,7 +12,7 @@ unit IdSipAuthentication;
 interface
 
 uses
-  Contnrs, IdHashMessageDigest, IdSipMessage, SysUtils;
+  Classes, Contnrs, IdHashMessageDigest, IdSipMessage, SysUtils;
 
 type
   TIdUserInfo = class(TObject)
@@ -84,12 +84,15 @@ type
     function  AuthenticateAsUserAgent(Request: TIdSipRequest): Boolean;
     function  CreateChallengeResponse(Request: TIdSipRequest): TIdSipResponse;
     function  CreateChallengeResponseAsUserAgent(Request: TIdSipRequest): TIdSipResponse;
+    procedure SetParameters(ParameterList: TIdSipHeaderParameters); virtual;
 
     property Algorithm: String  read fAlgorithm write fAlgorithm;
     property IsProxy:   Boolean read fIsProxy write fIsProxy;
     property Qop:       String  read fQop write fQop;
     property Realm:     String  read fRealm write fRealm;
   end;
+
+  TIdSipAbstractAuthenticatorClass = class of TIdSipAbstractAuthenticator;
 
   TIdSipBasicAuthenticator = class(TIdSipAbstractAuthenticator)
   end;
@@ -111,16 +114,16 @@ type
     fNonce:      String;
     fNonceCount: Cardinal;
 
-    procedure IncNonceCount;
-    procedure ResetNonceCount;
-    procedure SetNonce(const Value: String);
-  public
     procedure CalculateCredentials(Authorization: TIdSipAuthorizationHeader;
                                    Challenge: TIdSipAuthenticateHeader;
                                    Info: TIdSipAuthenticationInfoHeader;
                                    const Method: String;
                                    const Body: String;
                                    const Password: String);
+    procedure IncNonceCount;
+    procedure ResetNonceCount;
+    procedure SetNonce(const Value: String);
+  public
     function CreateAuthorization(Challenge: TIdSipResponse;
                                  const Method: String;
                                  const Body: String;
@@ -156,11 +159,17 @@ type
   private
     fAuthenticateAllRequests: Boolean;
     fFailWith:                EAuthenticateClass;
+    fParameters:              TIdSipHeaderParameters;
   public
-    function Authenticate(Request: TIdSipRequest): Boolean; override;
+    constructor Create; override;
+    destructor  Destroy; override;
 
-    property AuthenticateAllRequests: Boolean            read fAuthenticateAllRequests write fAuthenticateAllRequests;
-    property FailWith:                EAuthenticateClass read fFailWith write fFailWith;
+    function  Authenticate(Request: TIdSipRequest): Boolean; override;
+    procedure SetParameters(ParameterList: TIdSipHeaderParameters); override;
+
+    property AuthenticateAllRequests: Boolean                read fAuthenticateAllRequests write fAuthenticateAllRequests;
+    property FailWith:                EAuthenticateClass     read fFailWith write fFailWith;
+    property Parameters:              TIdSipHeaderParameters read fParameters;
   end;
 
 type
@@ -181,6 +190,7 @@ function  A1For(const Algorithm: String): TIdAlgorithmFunction;
 function  A2For(const QopType: String): TIdQopFunction;
 function  AlgorithmNotSpecifiedA1(Auth: TIdSipAuthorizationHeader;
                                   const Password: String): String;
+function  AuthenticationPolicyFor(const PolicyName: String): TIdSipAbstractAuthenticatorClass;
 function  HashFor(const AlgorithmName: String): TIdHashFunction;
 function  KD(const Secret, Data: String; HashFunc: TIdHashFunction): String;
 function  MD5(const S: String): String;
@@ -207,22 +217,28 @@ function  QopNotSpecifiedRequestDigest(const A1: String;
                                        const A2: String;
                                        Auth: TIdSipAuthorizationHeader): String;
 procedure RegisterAlgorithm(const Name: String; Func: TIdAlgorithmFunction);
+procedure RegisterAuthenticationPolicy(const Name: String; PolicyInstantiation: TIdSipAbstractAuthenticatorClass);
 procedure RegisterHash(const Name: String; Func: TIdHashFunction);
 procedure RegisterQop(const Name: String; Func: TIdQopFunction);
 procedure RegisterRequestDigest(const QopType: String; Func: TIdRequestDigestFunction);
 function  RequestDigestFor(const QopType: String): TIdRequestDigestFunction;
 procedure UnregisterAlgorithm(const Name: String);
+procedure UnregisterAuthenticationPolicy(const Name: String);
 procedure UnregisterHash(const HashName: String);
 procedure UnregisterQop(const Name: String);
 procedure UnregisterRequestDigest(const Name: String);
 
+const
+  NullAuthenticationPolicy = 'Null';
+
 implementation
 
 uses
-  Classes, IdRandom, SyncObjs;
+  IdRandom, SyncObjs;
 
 var
   GAlgorithmFunctions:     TStrings;
+  GAuthPolicies:           TStrings;
   GHashFunctions:          TStrings;
   GLock:                   TCriticalSection;
   GQopFunctions:           TStrings;
@@ -303,6 +319,23 @@ function AlgorithmNotSpecifiedA1(Auth: TIdSipAuthorizationHeader;
                                  const Password: String): String;
 begin
   Result := MD5A1(Auth, Password);
+end;
+
+function AuthenticationPolicyFor(const PolicyName: String): TIdSipAbstractAuthenticatorClass;
+var
+  Index: Integer;
+begin
+  GLock.Acquire;
+  try
+    Index := GAuthPolicies.IndexOf(Lowercase(PolicyName));
+
+    if (Index = ItemNotFoundIndex) then
+      Result := TIdSipNullAuthenticator
+    else
+      Result := TIdSipAbstractAuthenticatorClass(GAuthPolicies.Objects[Index]);
+  finally
+    GLock.Release;
+  end;
 end;
 
 function HashFor(const AlgorithmName: String): TIdHashFunction;
@@ -410,6 +443,26 @@ begin
   RegisterFunction(GAlgorithmFunctions, Name, @Func);
 end;
 
+procedure RegisterAuthenticationPolicy(const Name: String; PolicyInstantiation: TIdSipAbstractAuthenticatorClass);
+var
+  FakeObject: TObject;
+  Index: Integer;
+begin
+  GLock.Acquire;
+  try
+    FakeObject := Pointer(PolicyInstantiation);
+
+    Index := GAuthPolicies.IndexOf(Lowercase(Name));
+
+    if (Index = ItemNotFoundIndex) then
+      GAuthPolicies.AddObject(Lowercase(Name), FakeObject)
+    else
+      GAuthPolicies.Objects[Index] := FakeObject;
+  finally
+    GLock.Release;
+  end;
+end;
+
 procedure RegisterHash(const Name: String; Func: TIdHashFunction);
 begin
   RegisterFunction(GHashFunctions, Name, @Func);
@@ -433,6 +486,21 @@ end;
 procedure UnregisterAlgorithm(const Name: String);
 begin
   UnregisterFunction(GAlgorithmFunctions, Name);
+end;
+
+procedure UnregisterAuthenticationPolicy(const Name: String);
+var
+  Index: Integer;
+begin
+  GLock.Acquire;
+  try
+    Index := GAuthPolicies.IndexOf(Lowercase(Name));
+
+    if (Index <> ItemNotFoundIndex) then
+      GAuthPolicies.Delete(Index);
+  finally
+    GLock.Release;
+  end;
 end;
 
 procedure UnregisterHash(const HashName: String);
@@ -567,6 +635,11 @@ begin
   Result := Self.CreateChallenge(Request, false);
 end;
 
+procedure TIdSipAbstractAuthenticator.SetParameters(ParameterList: TIdSipHeaderParameters);
+begin
+  // This method exists to support easy runtime configuration.
+end;
+
 //* TIdSipAbstractAuthenticator Private methods ********************************
 
 function TIdSipAbstractAuthenticator.Authenticate(Request: TIdSipRequest;
@@ -669,6 +742,39 @@ end;
 //*******************************************************************************
 //* TIdRealmInfo Public methods *************************************************
 
+function TIdRealmInfo.CreateAuthorization(Challenge: TIdSipResponse;
+                                          const Method: String;
+                                          const Body: String;
+                                          const Password: String): TIdSipAuthorizationHeader;
+var
+  ChallengeHeader: TIdSipAuthenticateHeader;
+  InfoHeader:      TIdSipAuthenticationInfoHeader;
+begin
+  Assert(Challenge.HasWWWAuthenticate or Challenge.HasProxyAuthenticate,
+         'You can''t generate authorization credentials with no authentication request');
+
+  if Challenge.HasWWWAuthenticate then
+    ChallengeHeader := Challenge.FirstWWWAuthenticate
+  else
+    ChallengeHeader := Challenge.FirstProxyAuthenticate;
+
+  Result := ChallengeHeader.CredentialHeaderType.Create;
+
+  if Challenge.HasAuthenticationInfo then
+    InfoHeader := Challenge.FirstAuthenticationInfo
+  else
+    InfoHeader := nil;
+
+  Self.CalculateCredentials(Result,
+                            ChallengeHeader,
+                            InfoHeader,
+                            Method,
+                            Body,
+                            Password);
+end;
+
+//* TIdRealmInfo Private methods ***********************************************
+
 procedure TIdRealmInfo.CalculateCredentials(Authorization: TIdSipAuthorizationHeader;
                                             Challenge: TIdSipAuthenticateHeader;
                                             Info: TIdSipAuthenticationInfoHeader;
@@ -709,39 +815,6 @@ begin
     Self.Nonce := Info.NextNonce;
   end;
 end;
-
-function TIdRealmInfo.CreateAuthorization(Challenge: TIdSipResponse;
-                                          const Method: String;
-                                          const Body: String;
-                                          const Password: String): TIdSipAuthorizationHeader;
-var
-  ChallengeHeader: TIdSipAuthenticateHeader;
-  InfoHeader:      TIdSipAuthenticationInfoHeader;
-begin
-  Assert(Challenge.HasWWWAuthenticate or Challenge.HasProxyAuthenticate,
-         'You can''t generate authorization credentials with no authentication request');
-
-  if Challenge.HasWWWAuthenticate then
-    ChallengeHeader := Challenge.FirstWWWAuthenticate
-  else
-    ChallengeHeader := Challenge.FirstProxyAuthenticate;
-
-  Result := ChallengeHeader.CredentialHeaderType.Create;
-
-  if Challenge.HasAuthenticationInfo then
-    InfoHeader := Challenge.FirstAuthenticationInfo
-  else
-    InfoHeader := nil;
-
-  Self.CalculateCredentials(Result,
-                            ChallengeHeader,
-                            InfoHeader,
-                            Method,
-                            Body,
-                            Password);
-end;
-
-//* TIdRealmInfo Private methods ***********************************************
 
 procedure TIdRealmInfo.IncNonceCount;
 begin
@@ -841,6 +914,20 @@ end;
 //*******************************************************************************
 //* TIdSipMockAuthenticator Public methods **************************************
 
+constructor TIdSipMockAuthenticator.Create;
+begin
+  inherited Create;
+
+  Self.fParameters := TIdSipHeaderParameters.Create;
+end;
+
+destructor TIdSipMockAuthenticator.Destroy;
+begin
+  Self.fParameters.Free;
+
+  inherited Destroy;
+end;
+
 function TIdSipMockAuthenticator.Authenticate(Request: TIdSipRequest): Boolean;
 begin
   if (Self.FailWith <> nil) then
@@ -851,10 +938,17 @@ begin
     Result := inherited Authenticate(Request);
 end;
 
+procedure TIdSipMockAuthenticator.SetParameters(ParameterList: TIdSipHeaderParameters);
+begin
+  Self.Parameters.Clear;
+  Self.Parameters.Assign(ParameterList);
+end;
+
 initialization
   GLock := TCriticalSection.Create;
 
   GAlgorithmFunctions     := TStringList.Create;
+  GAuthPolicies           := TStringList.Create;
   GHashFunctions          := TStringList.Create;
   GQopFunctions           := TStringList.Create;
   GRequestDigestFunctions := TStringList.Create;
@@ -862,6 +956,8 @@ initialization
   RegisterAlgorithm('',             AlgorithmNotSpecifiedA1);
   RegisterAlgorithm(MD5Name,        MD5A1);
   RegisterAlgorithm(MD5SessionName, MD5SessionA1);
+
+  RegisterAuthenticationPolicy(NullAuthenticationPolicy, TIdSipNullAuthenticator);
 
   RegisterHash('',             MD5);
   RegisterHash(MD5Name,        MD5);
@@ -881,6 +977,7 @@ finalization
 //  GRequestDigestFunctions.Free;
 //  GQopFunctions.Free;
 //  GHashFunctions.Free;
+//  GAuthPolicies.Free;
 //  GAlgorithmFunctions.Free;
 
   GLock.Free;

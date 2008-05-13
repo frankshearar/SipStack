@@ -949,14 +949,30 @@ end;
 procedure TIdSipStackConfigurator.AddAuthentication(UserAgent: TIdSipAbstractCore;
                                                     const AuthenticationLine: String);
 var
-  Line: String;
+  Policy: String;
+  Line:   String;
+  Params: TIdSipHeaderParameters;
 begin
   // See class comment for the format for this directive.
   Line := AuthenticationLine;
   EatDirective(Line);
 
-  if IsEqual(Trim(Line), MockKeyword) then
-    UserAgent.Authenticator := TIdSipMockAuthenticator.Create;
+  Policy := Trim(Fetch(Line, ';'));
+
+  if IsEqual(Policy, MockKeyword) then
+    UserAgent.Authenticator := TIdSipMockAuthenticator.Create
+  else
+    UserAgent.Authenticator := AuthenticationPolicyFor(Policy).Create;
+
+  if (Line <> '') then begin
+    Params := TIdSipHeaderParameters.Create;
+    try
+      Params.Parse(';' + Line); // Restore the ; eaten by Fetch.
+      UserAgent.Authenticator.SetParameters(Params);
+    finally
+      Params.Free;
+    end;
+  end;
 end;
 
 procedure TIdSipStackConfigurator.AddAutoAddress(AddressHeader: TIdSipAddressHeader);
