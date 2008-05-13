@@ -607,10 +607,11 @@ begin
 
   AuthenticateHeader := Result.AddHeader(Self.AuthenticationHeader(AsProxy)) as TIdSipAuthenticateHeader;
 
-  AuthenticateHeader.Algorithm := Self.Algorithm;
-  AuthenticateHeader.Nonce     := Self.NextNonce;
-  AuthenticateHeader.Qop       := Self.Qop;
-  AuthenticateHeader.Realm     := Self.Realm;
+  AuthenticateHeader.Algorithm           := Self.Algorithm;
+  AuthenticateHeader.AuthorizationScheme := DigestAuthorizationScheme;
+  AuthenticateHeader.Nonce               := Self.NextNonce;
+  AuthenticateHeader.Qop                 := Self.Qop;
+  AuthenticateHeader.Realm               := Self.Realm;
 end;
 
 function TIdSipAbstractAuthenticator.HasAuthorization(Request: TIdSipRequest;

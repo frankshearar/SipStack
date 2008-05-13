@@ -568,6 +568,9 @@ begin
       CheckEquals(Self.Auth.Algorithm,
                   Challenge.FirstWWWAuthenticate.Algorithm,
                   'Algorithm');
+      CheckEquals(DigestAuthorizationScheme,
+                  Challenge.FirstWWWAuthenticate.AuthorizationScheme,
+                  'Authorization scheme');
       CheckNotEquals('',
                      Challenge.FirstWWWAuthenticate.Nonce,
                      'Nonce value');
