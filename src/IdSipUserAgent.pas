@@ -2121,8 +2121,8 @@ begin
   Reg := Self.UA.RegisterModule;
 
   Reg.AutoReRegister := true;
-  Reg.HasRegistrar := true;
-  Reg.Registrar := Self.Registrar;
+  Reg.HasRegistrar   := true;
+  Reg.Registrar      := Self.Registrar;
 
   PlaceholderContact := TIdSipContactHeader.Create;
   try
