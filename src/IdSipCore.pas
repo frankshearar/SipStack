@@ -998,7 +998,7 @@ type
     procedure Run(const Subject: IInterface); override;
 
     property Binding: TIdConnectionBindings read fBinding write fBinding;
-    property Message: TIdSipMessage            read fMessage write fMessage;
+    property Message: TIdSipMessage         read fMessage write fMessage;
   end;
 
   EIdSipBadSyntax = class(EIdException);
