@@ -2475,16 +2475,12 @@ end;
 
 procedure TestTIdSipActions.TestFindActionThatSent;
 var
-  InboundInvite,
-  InboundOptions,
   OutboundInvite,
   OutboundOptions: TIdSipAction;
   SentInvite,
   SentOptions,
   UnknownInvite:   TIdSipRequest;
 begin
-  InboundInvite   := Self.Actions.Add(TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, Self.Binding));
-  InboundOptions  := Self.Actions.Add(TIdSipInboundOptions.CreateInbound(Self.Core, Self.Options, Self.Binding));
   OutboundInvite  := Self.CreateOutboundInvite;
   OutboundOptions := Self.CreateOutboundOptions;
 
