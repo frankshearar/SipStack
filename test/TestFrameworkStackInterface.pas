@@ -21,6 +21,7 @@ type
   private
     DataList: TObjectList; // Holds all the data received from the stack
 
+    procedure CheckEquals(Expected, Actual: Cardinal; Msg: String);
     procedure Fail(Msg: String);
   public
     constructor Create; override;
@@ -28,6 +29,7 @@ type
 
     procedure AddNotification(Data: TIdEventData); virtual;
     procedure CheckNotificationReceived(EventType: TIdEventDataClass; Msg: String);
+    procedure CheckNotificationsReceived(EventType: TIdEventDataClass; ExpectedCount: Cardinal; Msg: String);
     function  EventAt(Index: Integer): TIdEventData;
     function  LastEventOfType(EventType: TIdEventDataClass): TIdEventData;
     function  SecondLastEventData: TIdEventData;
@@ -115,6 +117,7 @@ type
     UI:         TCustomForm;
 
     procedure CheckNotificationReceived(EventType: TIdEventDataClass; Msg: String);
+    procedure CheckNotificationsReceived(EventType: TIdEventDataClass; ExpectedCount: Cardinal; Msg: String);
     procedure CheckRequestSent(Msg: String);
     procedure CheckResponseSent(Msg: String);
     function  EventAt(Index: Integer): TIdEventData;
@@ -175,6 +178,19 @@ begin
   if not Found then Fail(Msg);
 end;
 
+procedure TIdDataList.CheckNotificationsReceived(EventType: TIdEventDataClass; ExpectedCount: Cardinal; Msg: String);
+var
+  ActualCount: Cardinal;
+  I:           Integer;
+begin
+  ActualCount := 0;
+  for I := 0 to Self.DataList.Count - 1 do
+    if (Self.EventAt(I) is EventType) then
+      Inc(ActualCount);
+
+  CheckEquals(ExpectedCount, ActualCount, Msg);
+end;
+
 function TIdDataList.EventAt(Index: Integer): TIdEventData;
 begin
   Result := Self.DataList[Index] as TIdEventData;
@@ -212,6 +228,12 @@ begin
 end;
 
 //* TIdDataList Private methods ************************************************
+
+procedure TIdDataList.CheckEquals(Expected, Actual: Cardinal; Msg: String);
+begin
+  if (Expected <> Actual) then
+    Fail(Format(Msg + ', expected <%d> but was <%d>', [Expected, Actual]));
+end;
 
 procedure TIdDataList.Fail(Msg: String);
 begin
@@ -399,6 +421,11 @@ end;
 procedure TStackInterfaceTestCase.CheckNotificationReceived(EventType: TIdEventDataClass; Msg: String);
 begin
   Self.DataList.CheckNotificationReceived(EventType, Msg);
+end;
+
+procedure TStackInterfaceTestCase.CheckNotificationsReceived(EventType: TIdEventDataClass; ExpectedCount: Cardinal; Msg: String);
+begin
+  Self.DataList.CheckNotificationsReceived(EventType, ExpectedCount, Msg);
 end;
 
 procedure TStackInterfaceTestCase.CheckRequestSent(Msg: String);

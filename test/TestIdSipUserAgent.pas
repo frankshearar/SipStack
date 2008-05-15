@@ -52,6 +52,8 @@ type
                                  Request: TIdSipRequest);
     procedure CheckGruuSet(ExpectedGruu: String; Msg: String);
     procedure CheckIsUnregister(Request: TIdSipRequest);
+    procedure OnAddAction(UserAgent: TIdSipAbstractCore;
+                          Action: TIdSipAction);
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Response: TIdSipResponse); overload;
     procedure OnChanged(Observed: TObject);
@@ -79,6 +81,8 @@ type
     procedure OnReferral(Session: TIdSipSession;
                          Refer: TIdSipRequest;
                          Binding: TIdConnectionBindings);
+    procedure OnRemoveAction(UserAgent: TIdSipAbstractCore;
+                             Action: TIdSipAction);
     procedure ReceiveBye(Dialog: TIdSipDialog);
   protected
     procedure OnSendRequest(Request: TIdSipRequest;
@@ -634,6 +638,12 @@ begin
   CheckEquals(0, Request.FirstContact.Expires, 'Request not a deregistration');
 end;
 
+procedure TestTIdSipUserAgent.OnAddAction(UserAgent: TIdSipAbstractCore;
+                                          Action: TIdSipAction);
+begin
+  // Do nothing.
+end;
+
 procedure TestTIdSipUserAgent.OnAuthenticationChallenge(Action: TIdSipAction;
                                                         Response: TIdSipResponse);
 begin
@@ -649,6 +659,7 @@ procedure TestTIdSipUserAgent.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstrac
                                                         Message: TIdSipMessage;
                                                         Binding: TIdConnectionBindings);
 begin
+  // Do nothing.
 end;
 
 procedure TestTIdSipUserAgent.OnEndedSession(Session: TIdSipSession;
@@ -708,6 +719,12 @@ procedure TestTIdSipUserAgent.OnReferral(Session: TIdSipSession;
                                          Refer: TIdSipRequest;
                                          Binding: TIdConnectionBindings);
 begin
+end;
+
+procedure TestTIdSipUserAgent.OnRemoveAction(UserAgent: TIdSipAbstractCore;
+                                             Action: TIdSipAction);
+begin
+  // Do nothing.
 end;
 
 procedure TestTIdSipUserAgent.ReceiveBye(Dialog: TIdSipDialog);

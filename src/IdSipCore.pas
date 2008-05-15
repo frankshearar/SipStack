@@ -124,9 +124,13 @@ type
 
   IIdSipTransactionUserListener = interface
     ['{0AE275B0-4C4D-470B-821B-7F88719E822D}']
+    procedure OnAddAction(UserAgent: TIdSipAbstractCore;
+                          Action: TIdSipAction);
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
                                         Binding: TIdConnectionBindings);
+    procedure OnRemoveAction(UserAgent: TIdSipAbstractCore;
+                             Action: TIdSipAction);
   end;
 
   // I represent a closure that contains some block of code involving an Action.
@@ -140,6 +144,8 @@ type
 
   TIdSipActionClosureClass = class of TIdSipActionClosure;
 
+  TIdSipActionProc = procedure(Action: TIdSipAction) of object;
+
   // I maintain a list of Actions. You may query me for various statistics, as
   // well as do things to particular actions.
   // The FindFooAndPerform methods require some explanation. The Event
@@ -147,11 +153,14 @@ type
   // FindFooAndPerform will destroy the Request.
   TIdSipActions = class(TObject)
   private
-    Actions:  TObjectList;
-    Observed: TIdObservable;
+    Actions:         TObjectList;
+    fOnAddAction:    TIdSipActionProc; // We use callbacks here because this class is
+    fOnRemoveAction: TIdSipActionProc; // meant to be completely hidden by the Core.
+    Observed:        TIdObservable;
 
     function  ActionAt(Index: Integer): TIdSipAction;
     procedure AddCurrentActionList(Keys: TStringDictionary);
+    procedure DeleteAction(Index: Integer);
     function  FindAction(Msg: TIdSipMessage; ClientAction: Boolean): TIdSipAction; overload;
     function  FindAction(const ActionID: String): TIdSipAction; overload;
   public
@@ -181,6 +190,9 @@ type
     function  SessionCount: Integer;
     procedure Status(Keys: TStringDictionary);
     procedure TerminateAllActions;
+
+    property OnAddAction:    TIdSipActionProc read fOnAddAction write fOnAddAction;
+    property OnRemoveAction: TIdSipActionProc read fOnRemoveAction write fOnRemoveAction;
   end;
 
   // I represent an event that will execute a block (BlockType) on an action in
@@ -380,6 +392,8 @@ type
                                 Binding: TIdConnectionBindings);
     function  ModuleAt(Index: Integer): TIdSipMessageModule;
     procedure NotifyModulesOfFree;
+    procedure NotifyOfAddedAction(Action: TIdSipAction);
+    procedure NotifyOfRemovedAction(Action: TIdSipAction);
     procedure OnAddedTransport(Transport: TIdSipTransport);
     procedure OnChanged(Observed: TObject);
     procedure OnConnection(Transport: TIdSipTransport;
@@ -990,6 +1004,15 @@ type
     property UserAgent: TIdSipAbstractCore read fUserAgent write fUserAgent;
   end;
 
+  TIdSipUserAgentAddActionMethod = class(TIdSipAbstractCoreMethod)
+  private
+    fAction: TIdSipAction;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Action: TIdSipAction read fAction write fAction;
+  end;
+
   TIdSipUserAgentDroppedUnmatchedMessageMethod = class(TIdSipAbstractCoreMethod)
   private
     fBinding: TIdConnectionBindings;
@@ -999,6 +1022,15 @@ type
 
     property Binding: TIdConnectionBindings read fBinding write fBinding;
     property Message: TIdSipMessage         read fMessage write fMessage;
+  end;
+
+  TIdSipUserAgentRemoveActionMethod = class(TIdSipAbstractCoreMethod)
+  private
+    fAction: TIdSipAction;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Action: TIdSipAction read fAction write fAction;
   end;
 
   EIdSipBadSyntax = class(EIdException);
@@ -1190,6 +1222,9 @@ begin
 
   try
     Self.Actions.Add(Action);
+
+    if Assigned(Self.OnAddAction) then
+      Self.OnAddAction(Action);
   except
     if (Self.Actions.IndexOf(Action) <> ItemNotFoundIndex) then
       Self.Actions.Remove(Action)
@@ -1214,20 +1249,18 @@ end;
 
 procedure TIdSipActions.CleanOutTerminatedActions;
 var
-  Changed:      Boolean;
-  I:            Integer;
-  InitialCount: Integer;
+  Changed: Boolean;
+  I:       Integer;
 begin
-  InitialCount := Self.Actions.Count;
-
-  I := 0;
-  while (I < Self.Actions.Count) do
-    if Self.ActionAt(I).IsTerminated then
-      Self.Actions.Delete(I)
+  Changed := false;
+  I       := 0;
+  while (I < Self.Count) do
+    if Self.ActionAt(I).IsTerminated then begin
+      Self.DeleteAction(I);
+      Changed := true;
+    end
     else
       Inc(I);
-
-  Changed := InitialCount <> Self.Actions.Count;
 
   if Changed then
     Self.Observed.NotifyListenersOfChange;
@@ -1446,6 +1479,14 @@ begin
   finally
     Histogram.Free;
   end;
+end;
+
+procedure TIdSipActions.DeleteAction(Index: Integer);
+begin
+  if Assigned(Self.OnRemoveAction) then
+    Self.OnRemoveAction(Self.ActionAt(Index));
+
+  Self.Actions.Delete(Index)
 end;
 
 function TIdSipActions.FindAction(Msg: TIdSipMessage; ClientAction: Boolean): TIdSipAction;
@@ -1789,6 +1830,8 @@ begin
 
   Self.fActions := TIdSipActions.Create;
   Self.Actions.AddObserver(Self);
+  Self.Actions.OnAddAction    := Self.NotifyOfAddedAction;
+  Self.Actions.OnRemoveAction := Self.NotifyOfRemovedAction;
 
   Self.fAllowedLanguageList := TStringList.Create;
   Self.fAllowedSchemeList   := TStringList.Create;
@@ -1865,7 +1908,7 @@ begin
     Result := Module.Accept(Request, Binding);
 
     if Assigned(Result) then begin
-      Self.Actions.Add(Result);
+      Self.AddAction(Result);
     end;
   end
   else
@@ -2857,6 +2900,36 @@ var
 begin
   for I := 0 to Self.Modules.Count - 1 do
     Self.ModuleAt(I).CleanUp;
+end;
+
+procedure TIdSipAbstractCore.NotifyOfAddedAction(Action: TIdSipAction);
+var
+  Notification: TIdSipUserAgentAddActionMethod;
+begin
+  Notification := TIdSipUserAgentAddActionMethod.Create;
+  try
+    Notification.Action    := Action;
+    Notification.UserAgent := Self;
+
+    Self.Listeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
+end;
+
+procedure TIdSipAbstractCore.NotifyOfRemovedAction(Action: TIdSipAction);
+var
+  Notification: TIdSipUserAgentRemoveActionMethod;
+begin
+  Notification := TIdSipUserAgentRemoveActionMethod.Create;
+  try
+    Notification.Action    := Action;
+    Notification.UserAgent := Self;
+
+    Self.Listeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
 end;
 
 procedure TIdSipAbstractCore.OnAddedTransport(Transport: TIdSipTransport);
@@ -4603,6 +4676,17 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipUserAgentAddActionMethod                                             *
+//******************************************************************************
+//* TIdSipUserAgentAddActionMethod Public methods ******************************
+
+procedure TIdSipUserAgentAddActionMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipTransactionUserListener).OnAddAction(Self.UserAgent,
+                                                         Self.Action);
+end;
+
+//******************************************************************************
 //* TIdSipUserAgentDroppedUnmatchedMessageMethod                               *
 //******************************************************************************
 //* TIdSipUserAgentDroppedUnmatchedMessageMethod Public methods ****************
@@ -4612,6 +4696,17 @@ begin
   (Subject as IIdSipTransactionUserListener).OnDroppedUnmatchedMessage(Self.UserAgent,
                                                                        Self.Message,
                                                                        Self.Binding);
+end;
+
+//******************************************************************************
+//* TIdSipUserAgentRemoveActionMethod                                          *
+//******************************************************************************
+//* TIdSipUserAgentRemoveActionMethod Public methods ***************************
+
+procedure TIdSipUserAgentRemoveActionMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipTransactionUserListener).OnRemoveAction(Self.UserAgent,
+                                                            Self.Action);
 end;
 
 end.

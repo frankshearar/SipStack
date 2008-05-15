@@ -110,6 +110,8 @@ type
     procedure NotifySubscriptionEvent(Event: Cardinal;
                                       Subscription: TIdSipSubscription;
                                       Notify: TIdSipRequest);
+    procedure OnAddAction(UserAgent: TIdSipAbstractCore;
+                          Action: TIdSipAction);
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Response: TIdSipResponse); overload;
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
@@ -162,6 +164,8 @@ type
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String;
                                 Source: TIdConnectionBindings);
+    procedure OnRemoveAction(UserAgent: TIdSipAbstractCore;
+                             Action: TIdSipAction);
     procedure OnRenewedSubscription(UserAgent: TIdSipAbstractCore;
                                     Subscription: TIdSipOutboundSubscription);
     procedure OnResponse(OptionsAgent: TIdSipOutboundOptions;
@@ -1945,11 +1949,20 @@ begin
   end;
 end;
 
+procedure TIdSipStackInterface.OnAddAction(UserAgent: TIdSipAbstractCore;
+                                           Action: TIdSipAction);
+begin
+  Action.AddActionListener(Self);
+end;
+
 procedure TIdSipStackInterface.OnAuthenticationChallenge(Action: TIdSipAction;
                                                          Response: TIdSipResponse);
 var
   Data: TIdAuthenticationChallengeData;
 begin
+  // Owning actions take care of authentication.
+  if Action.IsOwned then Exit;
+
   Data := TIdAuthenticationChallengeData.Create;
   try
     Data.Challenge         := Response;
@@ -2185,6 +2198,9 @@ procedure TIdSipStackInterface.OnNetworkFailure(Action: TIdSipAction;
 var
   Data: TIdNetworkFailureData;
 begin
+  // Owning actions take care of notifying of network failure.
+  if Action.IsOwned then Exit;
+
   Data := TIdNetworkFailureData.Create;
   try
     Data.Handle    := Self.HandleFor(Action);
@@ -2295,6 +2311,12 @@ begin
   finally
     Data.Free;
   end;
+end;
+
+procedure TIdSipStackInterface.OnRemoveAction(UserAgent: TIdSipAbstractCore;
+                                              Action: TIdSipAction);
+begin
+  Action.RemoveActionListener(Self);
 end;
 
 procedure TIdSipStackInterface.OnRenewedSubscription(UserAgent: TIdSipAbstractCore;

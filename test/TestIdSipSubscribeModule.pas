@@ -253,11 +253,15 @@ type
     procedure CheckBadEventResponseSent(const UnknownEvent: String);
     procedure CheckNoPackageFound(PackageType: TIdSipEventPackageClass);
     procedure CheckPackageFound(PackageType: TIdSipEventPackageClass);
+    procedure OnAddAction(UserAgent: TIdSipAbstractCore;
+                          Action: TIdSipAction);
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
                                         Binding: TIdConnectionBindings);
     procedure OnInboundCall(UserAgent: TIdSipInviteModule;
                             Session: TIdSipInboundSession);
+    procedure OnRemoveAction(UserAgent: TIdSipAbstractCore;
+                             Action: TIdSipAction);
     procedure ReceiveNotify(const EventPackage: String);
     procedure ReceiveReferWithNoReferToHeader;
     procedure ReceiveSubscribeWithNoEventHeader;
@@ -1189,10 +1193,22 @@ begin
               'Wrong package found for package ' + PackageType.EventPackage);
 end;
 
+procedure TestTIdSipSubscribeModule.OnAddAction(UserAgent: TIdSipAbstractCore;
+                                                Action: TIdSipAction);
+begin
+  // Do nothing.
+end;
+
 procedure TestTIdSipSubscribeModule.OnInboundCall(UserAgent: TIdSipInviteModule;
                                                   Session: TIdSipInboundSession);
 begin
   Self.InboundCall := Session;
+end;
+
+procedure TestTIdSipSubscribeModule.OnRemoveAction(UserAgent: TIdSipAbstractCore;
+                                                   Action: TIdSipAction);
+begin
+  // Do nothing.
 end;
 
 procedure TestTIdSipSubscribeModule.ReceiveNotify(const EventPackage: String);

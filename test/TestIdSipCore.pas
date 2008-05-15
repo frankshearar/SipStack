@@ -18,24 +18,23 @@ uses
   TestFrameworkSip, TestFrameworkSipTU;
 
 type
-  TestTIdSipAbstractCore = class(TTestCaseTU,
-                                 IIdSipTransactionUserListener)
+  TestTIdSipAbstractCore = class(TTestCaseTU)
   private
     procedure CheckCommaSeparatedHeaders(const ExpectedValues: String;
                                          Header: TIdSipHeader;
                                          const Msg: String);
-    procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
-                                        Message: TIdSipMessage;
-                                        Binding: TIdConnectionBindings);
   published
+    procedure TestAddActionNotifiesListeners;
     procedure TestAddAllowedLanguage;
     procedure TestAddAllowedLanguageLanguageAlreadyPresent;
     procedure TestAddAllowedMethod;
     procedure TestAddAllowedMethodMethodAlreadyPresent;
     procedure TestAddAllowedScheme;
     procedure TestAddAllowedSchemeSchemeAlreadyPresent;
+    procedure TestAddInboundActionNotifiesListeners;
     procedure TestAddModule;
     procedure TestAddObserver;
+    procedure TestAddOutboundActionNotifiesListeners;
     procedure TestAllowedExtensionsCollectsExtensionsFromInstalledModules;
     procedure TestAllowedExtensionsRemovesDuplicateExtensions;
     procedure TestClearAllPreferredTransportTypes;
@@ -64,6 +63,7 @@ type
     procedure TestRejectUnknownScheme;
     procedure TestRejectUnsupportedMethod;
     procedure TestRejectUnsupportedSipVersion;
+    procedure TestRemovedActionsNotifyListeners;
     procedure TestRemoveObserver;
     procedure TestRemovePreferredTransportTypeTo;
     procedure TestRequiresUnsupportedExtension;
@@ -385,11 +385,42 @@ type
     procedure TestRun;
   end;
 
-  TestTIdSipUserAgentDroppedUnmatchedMessageMethod = class(TTestCase)
+  TUserAgentMethodTestCase = class(TTestCase)
+  protected
+    Core:     TIdSipUserAgent;
+    Listener: TIdSipTestTransactionUserListener;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSipUserAgentAddActionMethod = class(TUserAgentMethodTestCase)
   private
-    Method:   TIdSipUserAgentDroppedUnmatchedMessageMethod;
+    Action: TIdSipAction;
+    Method: TIdSipUserAgentAddActionMethod;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TestTIdSipUserAgentDroppedUnmatchedMessageMethod = class(TUserAgentMethodTestCase)
+  private
     Binding:  TIdConnectionBindings;
+    Method:   TIdSipUserAgentDroppedUnmatchedMessageMethod;
     Response: TIdSipResponse;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TestTIdSipUserAgentRemoveActionMethod = class(TUserAgentMethodTestCase)
+  private
+    Action: TIdSipAction;
+    Method: TIdSipUserAgentRemoveActionMethod;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -464,7 +495,9 @@ begin
   Result.AddTest(TestTIdSipRedirectorRedirectFailureMethod.Suite);
   Result.AddTest(TestTIdSipRedirectorNewActionMethod.Suite);
   Result.AddTest(TestTIdSipRedirectorSuccessMethod.Suite);
+  Result.AddTest(TestTIdSipUserAgentAddActionMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentDroppedUnmatchedMessageMethod.Suite);
+  Result.AddTest(TestTIdSipUserAgentRemoveActionMethod.Suite);
   Result.AddTest(TestTIdConnectionAssociationSet.Suite);
 end;
 
@@ -529,13 +562,26 @@ begin
   end;
 end;
 
-procedure TestTIdSipAbstractCore.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
-                                                           Message: TIdSipMessage;
-                                                           Binding: TIdConnectionBindings);
-begin
-end;
-
 //* TestTIdSipAbstractCore Published methods ***********************************
+
+procedure TestTIdSipAbstractCore.TestAddActionNotifiesListeners;
+var
+  A: TIdSipAction;
+  L: TIdSipTestTransactionUserListener;
+begin
+  A := TIdSipOutboundInvite.Create(Self.Core);
+
+  L := TIdSipTestTransactionUserListener.Create;
+  try
+    Self.Core.AddListener(L);
+    Self.Core.AddAction(A);  // Self.Core is now responsible for freeing A.
+
+    Check(L.ActionAdded, 'Listener not notified');
+  finally
+    Self.Core.RemoveListener(L);
+    L.Free;
+  end;
+end;
 
 procedure TestTIdSipAbstractCore.TestAddAllowedLanguage;
 var
@@ -665,6 +711,28 @@ begin
   end;
 end;
 
+procedure TestTIdSipAbstractCore.TestAddInboundActionNotifiesListeners;
+var
+  FakeBinding: TIdConnectionBindings;
+  L:           TIdSipTestTransactionUserListener;
+begin
+  FakeBinding := TIdConnectionBindings.Create;
+  try
+    L := TIdSipTestTransactionUserListener.Create;
+    try
+      Self.Core.AddListener(L);
+      Self.Core.AddInboundAction(Self.Invite, FakeBinding);
+
+      Check(L.ActionAdded, 'Listener not notified');
+    finally
+      Self.Core.RemoveListener(L);
+      L.Free;
+    end;
+  finally
+    FakeBinding.Free;
+  end;
+end;
+
 procedure TestTIdSipAbstractCore.TestAddModule;
 var
   Module:     TIdSipMessageModule;
@@ -703,6 +771,28 @@ begin
     end;
   finally
     L1.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestAddOutboundActionNotifiesListeners;
+var
+  FakeBinding: TIdConnectionBindings;
+  L:           TIdSipTestTransactionUserListener;
+begin
+  FakeBinding := TIdConnectionBindings.Create;
+  try
+    L := TIdSipTestTransactionUserListener.Create;
+    try
+      Self.Core.AddListener(L);
+      Self.Core.AddOutboundAction(TIdSipOutboundInvite);
+
+      Check(L.ActionAdded, 'Listener not notified');
+    finally
+      Self.Core.RemoveListener(L);
+      L.Free;
+    end;
+  finally
+    FakeBinding.Free;
   end;
 end;
 
@@ -1303,6 +1393,24 @@ begin
   CheckEquals(SIPSIPVersionNotSupported,
               Response.StatusCode,
               'Status-Code');
+end;
+
+procedure TestTIdSipAbstractCore.TestRemovedActionsNotifyListeners;
+var
+  L: TIdSipTestTransactionUserListener;
+begin
+  L := TIdSipTestTransactionUserListener.Create;
+  try
+    Self.Core.AddListener(L);
+
+    Self.Core.QueryOptions(Self.Destination).Send;
+    Self.ReceiveResponse(SIPOK);
+
+    Check(L.ActionRemoved, 'Listener not notified');
+  finally
+    Self.Core.RemoveListener(L);
+    L.Free;
+  end;
 end;
 
 procedure TestTIdSipAbstractCore.TestRemoveObserver;
@@ -3464,6 +3572,62 @@ begin
 end;
 
 //******************************************************************************
+//* TUserAgentMethodTestCase                                                   *
+//******************************************************************************
+//* TUserAgentMethodTestCase Public methods ************************************
+
+procedure TUserAgentMethodTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Core     := TIdSipUserAgent.Create;
+  Self.Listener := TIdSipTestTransactionUserListener.Create;
+end;
+
+procedure TUserAgentMethodTestCase.TearDown;
+begin
+  Self.Listener.Free;
+  Self.Core.Free;
+
+  inherited TearDown;
+end;
+
+//******************************************************************************
+//* TestTIdSipUserAgentAddActionMethod                                         *
+//******************************************************************************
+//* TestTIdSipUserAgentAddActionMethod Public methods **************************
+
+procedure TestTIdSipUserAgentAddActionMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Action := TIdSipNullAction.Create(Self.Core);
+
+  Self.Method := TIdSipUserAgentAddActionMethod.Create;
+
+  Self.Method.Action    := Self.Action;
+  Self.Method.UserAgent := Self.Core;
+end;
+
+procedure TestTIdSipUserAgentAddActionMethod.TearDown;
+begin
+  Self.Action.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipUserAgentAddActionMethod Published methods ***********************
+
+procedure TestTIdSipUserAgentAddActionMethod.TestRun;
+begin
+  Self.Method.Run(Self.Listener);
+
+  Check(Self.Listener.ActionAdded, 'Listener not notified');
+  Check(Self.Method.Action = Self.Listener.ActionParam, 'Action param');
+  Check(Self.Method.UserAgent = Self.Listener.AbstractUserAgentParam, 'UserAgent param');
+end;
+
+//******************************************************************************
 //* TestTIdSipUserAgentDroppedUnmatchedMessageMethod                           *
 //******************************************************************************
 //* TestTIdSipUserAgentDroppedUnmatchedMessageMethod Public methods ************
@@ -3472,12 +3636,13 @@ procedure TestTIdSipUserAgentDroppedUnmatchedMessageMethod.SetUp;
 begin
   inherited SetUp;
 
-  Self.Binding := TIdConnectionBindings.Create;
+  Self.Binding  := TIdConnectionBindings.Create;
   Self.Response := TIdSipResponse.Create;
 
   Self.Method := TIdSipUserAgentDroppedUnmatchedMessageMethod.Create;
   Self.Method.Binding := Self.Binding;
   Self.Method.Message := Self.Response.Copy;
+  Self.Method.UserAgent := Self.Core;
 end;
 
 procedure TestTIdSipUserAgentDroppedUnmatchedMessageMethod.TearDown;
@@ -3492,23 +3657,51 @@ end;
 //* TestTIdSipUserAgentDroppedUnmatchedMessageMethod Published methods *********
 
 procedure TestTIdSipUserAgentDroppedUnmatchedMessageMethod.TestRun;
-var
-  L: TIdSipTestTransactionUserListener;
 begin
-  L := TIdSipTestTransactionUserListener.Create;
-  try
-    Self.Method.Run(L);
+  Self.Method.Run(Self.Listener);
 
-    Check(L.DroppedUnmatchedMessage, 'Listener not notified');
-    Check(Self.Method.Binding = L.BindingParam,
-          'Binding param');
-    Check(Self.Method.Message = L.MessageParam,
-          'Message param');
-    Check(Self.Method.UserAgent = L.AbstractUserAgentParam,
-          'UserAgent param');
-  finally
-    L.Free;
-  end;
+  Check(Self.Listener.DroppedUnmatchedMessage, 'Listener not notified');
+  Check(Self.Method.Binding = Self.Listener.BindingParam,
+        'Binding param');
+  Check(Self.Method.Message = Self.Listener.MessageParam,
+        'Message param');
+  Check(Self.Method.UserAgent = Self.Listener.AbstractUserAgentParam,
+        'UserAgent param');
+end;
+
+//******************************************************************************
+//* TestTIdSipUserAgentRemoveActionMethod                                      *
+//******************************************************************************
+//* TestTIdSipUserAgentRemoveActionMethod Public methods ***********************
+
+procedure TestTIdSipUserAgentRemoveActionMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Action := TIdSipNullAction.Create(Self.Core);
+
+  Self.Method := TIdSipUserAgentRemoveActionMethod.Create;
+
+  Self.Method.Action    := Self.Action;
+  Self.Method.UserAgent := Self.Core;
+end;
+
+procedure TestTIdSipUserAgentRemoveActionMethod.TearDown;
+begin
+  Self.Action.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipUserAgentRemoveActionMethod Published methods ********************
+
+procedure TestTIdSipUserAgentRemoveActionMethod.TestRun;
+begin
+  Self.Method.Run(Self.Listener);
+
+  Check(Self.Listener.ActionRemoved, 'Listener not notified');
+  Check(Self.Method.Action = Self.Listener.ActionParam, 'Action param');
+  Check(Self.Method.UserAgent = Self.Listener.AbstractUserAgentParam, 'UserAgent param');
 end;
 
 //******************************************************************************

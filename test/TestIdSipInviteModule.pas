@@ -214,6 +214,8 @@ type
     procedure CheckReceiveProvisional(StatusCode: Cardinal);
     procedure CheckReceiveRedirect(StatusCode: Cardinal);
     function  CreateArbitraryDialog: TIdSipDialog;
+    procedure OnAddAction(UserAgent: TIdSipAbstractCore;
+                          Action: TIdSipAction);
     procedure OnCallProgress(InviteAgent: TIdSipOutboundInvite;
                         Response: TIdSipResponse);
     procedure OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
@@ -226,6 +228,8 @@ type
                         const Reason: String);
     procedure OnRedirect(Action: TIdSipAction;
                          Response: TIdSipResponse);
+    procedure OnRemoveAction(UserAgent: TIdSipAbstractCore;
+                             Action: TIdSipAction);
     procedure OnSuccess(Action: TIdSipAction;
                         Msg: TIdSipMessage);
   protected
@@ -350,6 +354,8 @@ type
     function  CreateRemoteReInvite(LocalDialog: TIdSipDialog): TIdSipRequest;
     procedure EstablishSession(Session: TIdSipSession); virtual;
     function  MultiStreamSdp: String;
+    procedure OnAddAction(UserAgent: TIdSipAbstractCore;
+                          Action: TIdSipAction);
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
                                         Binding: TIdConnectionBindings);
@@ -369,6 +375,8 @@ type
     procedure OnReferral(Session: TIdSipSession;
                          Refer: TIdSipRequest;
                          Binding: TIdConnectionBindings);
+    procedure OnRemoveAction(UserAgent: TIdSipAbstractCore;
+                             Action: TIdSipAction);
     procedure ReceiveRemoteReInvite(Session: TIdSipSession);
     procedure ResendWith(Session: TIdSipSession;
                          AuthenticationChallenge: TIdSipResponse);
@@ -604,11 +612,15 @@ type
     Refer:          TIdSipInboundSubscription;
 
     function  CreateTransferringUA(const Address: String): TIdSipUserAgent;
+    procedure OnAddAction(UserAgent: TIdSipAbstractCore;
+                          Action: TIdSipAction);
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
                                         Binding: TIdConnectionBindings);
     procedure OnInboundCall(UserAgent: TIdSipInviteModule;
                             Session: TIdSipInboundSession);
+    procedure OnRemoveAction(UserAgent: TIdSipAbstractCore;
+                             Action: TIdSipAction);
     procedure OnRenewedSubscription(UserAgent: TIdSipAbstractCore;
                                     Subscription: TIdSipOutboundSubscription);
     procedure OnSubscriptionRequest(UserAgent: TIdSipAbstractCore;
@@ -2846,6 +2858,12 @@ begin
   end;
 end;
 
+procedure TestTIdSipOutboundInvite.OnAddAction(UserAgent: TIdSipAbstractCore;
+                                               Action: TIdSipAction);
+begin
+  // Do nothing.
+end;
+
 procedure TestTIdSipOutboundInvite.OnCallProgress(InviteAgent: TIdSipOutboundInvite;
                                                   Response: TIdSipResponse);
 begin
@@ -2880,6 +2898,12 @@ procedure TestTIdSipOutboundInvite.OnRedirect(Action: TIdSipAction;
                                               Response: TIdSipResponse);
 begin
   Self.OnRedirectFired := true;
+end;
+
+procedure TestTIdSipOutboundInvite.OnRemoveAction(UserAgent: TIdSipAbstractCore;
+                                                  Action: TIdSipAction);
+begin
+  // Do nothing.
 end;
 
 procedure TestTIdSipOutboundInvite.OnSuccess(Action: TIdSipAction;
@@ -3991,6 +4015,12 @@ begin
           + 'a=rtpmap:98 t140/1000';
 end;
 
+procedure TestTIdSipSession.OnAddAction(UserAgent: TIdSipAbstractCore;
+                                        Action: TIdSipAction);
+begin
+  // Do nothing.
+end;
+
 procedure TestTIdSipSession.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                                       Message: TIdSipMessage;
                                                       Binding: TIdConnectionBindings);
@@ -4046,6 +4076,12 @@ begin
   Self.ReceivingBinding := Binding;
 
   Self.OnReferralFired := true;
+end;
+
+procedure TestTIdSipSession.OnRemoveAction(UserAgent: TIdSipAbstractCore;
+                                           Action: TIdSipAction);
+begin
+  // Do nothing.
 end;
 
 procedure TestTIdSipSession.ReceiveRemoteReInvite(Session: TIdSipSession);
@@ -8070,6 +8106,12 @@ begin
   SubMod.AddListener(Self);
 end;
 
+procedure TestSessionReplacer.OnAddAction(UserAgent: TIdSipAbstractCore;
+                                          Action: TIdSipAction);
+begin
+  // Do nothing.
+end;
+
 procedure TestSessionReplacer.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                                         Message: TIdSipMessage;
                                                         Binding: TIdConnectionBindings);
@@ -8083,6 +8125,12 @@ procedure TestSessionReplacer.OnInboundCall(UserAgent: TIdSipInviteModule;
 begin
   Self.InboundCall := Session;
   Self.ReceivingUA := UserAgent.UserAgent;
+end;
+
+procedure TestSessionReplacer.OnRemoveAction(UserAgent: TIdSipAbstractCore;
+                                             Action: TIdSipAction);
+begin
+  // Do nothing.
 end;
 
 procedure TestSessionReplacer.OnRenewedSubscription(UserAgent: TIdSipAbstractCore;

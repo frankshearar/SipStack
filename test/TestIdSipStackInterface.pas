@@ -86,6 +86,7 @@ type
     procedure ProcessAllPendingTerminationActions;
     procedure ReceiveAck;
     procedure ReceiveBusyHereFromRegistrar(Register: TIdSipRequest);
+    procedure ReceiveChallenge(Register: TIdSipRequest);
 {
     procedure ReceiveBye(LocalDialog: TIdSipDialog);
     procedure ReceiveByeForOutboundCall;
@@ -122,6 +123,7 @@ type
     procedure TestAcceptCallWithInvalidHandle;
     procedure TestAcceptCallWithNoExistentHandle;
     procedure TestAttachExtension;
+    procedure TestAutoregistrationNotifiesOfAuthenticationChallenge;
     procedure TestCreateNotifiesOfReconfiguration;
     procedure TestEndedSession;
     procedure TestEstablishedSessionInboundCall;
@@ -130,6 +132,7 @@ type
     procedure TestHangUpWithInvalidHandle;
     procedure TestHangUpWithNonExistentHandle;
     procedure TestInboundCall;
+    procedure TestInviteChallengeDoesntNotifyTwice;
     procedure TestMakeCall;
     procedure TestMakeCallMalformedAddress;
     procedure TestMakeCallMalformedFrom;
@@ -1061,6 +1064,21 @@ begin
     Response.Free;
   end;
 end;
+
+procedure TestTIdSipStackInterface.ReceiveChallenge(Register: TIdSipRequest);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.CreateRemoteOk(Register);
+  try
+    Response.StatusCode := SIPUnauthorized;
+    Response.Contacts.Clear;
+
+    Self.ReceiveResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
 {
 procedure TestTIdSipStackInterface.ReceiveBye(LocalDialog: TIdSipDialog);
 var
@@ -1383,6 +1401,32 @@ begin
             + 'StackInterface, and thus the UserAgent property is not properly set');
 end;
 
+procedure TestTIdSipStackInterface.TestAutoregistrationNotifiesOfAuthenticationChallenge;
+var
+  Reg: TStrings;
+begin
+  // The StackInterface doesn't create autoregistration actions (actions
+  // generated as a result of the Register directive), but when these
+  // REGISTERs are challenged, the user still needs to know of the
+  // challenge. This test shows that the user will receive a
+  // CM_AUTHENTICATION_CHALLENGE.
+
+  Reg := TStringList.Create;
+  try
+    Reg.Add(RegisterDirective + ': ' + Self.Registrar.AsString);
+    Self.Intf.ReconfigureStack(Reg);
+
+    // Fire off the REGISTER
+    Self.TimerQueue.TriggerAllEventsUpToFirst(TIdSipReregisterWait);
+    Self.ReceiveChallenge(Self.LastSentRequest);
+    Self.ProcessAllPendingNotifications;
+
+  CheckNotificationReceived(TIdAuthenticationChallengeData, 'Authentication challenge notification not received');
+  finally
+    Reg.Free;
+  end;
+end;
+
 procedure TestTIdSipStackInterface.TestCreateNotifiesOfReconfiguration;
 begin
   CheckNotificationReceived(TIdStackReconfiguredData, 'No reconfigure notification received');
@@ -1581,6 +1625,26 @@ begin
   finally
     DatasInvite.Free;
   end;
+end;
+
+procedure TestTIdSipStackInterface.TestInviteChallengeDoesntNotifyTwice;
+var
+  Handle: TIdSipHandle;
+begin
+  // Make a call. Receive a 401 Unauthorized. Show that the stack interface
+  // receives only one challenge notification.
+
+  Handle := Self.Intf.MakeCall(Self.From, Self.Destination, '', '', TIdSipRequest.DefaultMaxForwards);
+  Self.MarkSentRequestCount;
+  Self.Intf.Send(Handle);
+  Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
+  CheckRequestSent('No request sent');
+
+  Self.ReceiveChallenge(Self.LastSentRequest);
+  Self.ProcessAllPendingNotifications;
+
+  CheckNotificationsReceived(TIdAuthenticationChallengeData, 1,
+                             'Authentication challenge notification received for owned and owning action');
 end;
 
 procedure TestTIdSipStackInterface.TestMakeCall;

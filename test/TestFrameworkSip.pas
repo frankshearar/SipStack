@@ -181,13 +181,19 @@ type
     procedure Parse(const Value: String); override;
   end;
 
-  TIdSipTestActionListener = class(TIdInterfacedObject,
+  TIdSipFailableListener = class(TIdInterfacedObject)
+  private
+    fFailWith: ExceptClass;
+  public
+    property FailWith: ExceptClass read fFailWith write fFailWith;
+  end;
+
+  TIdSipTestActionListener = class(TIdSipFailableListener,
                                    IIdSipActionListener)
   private
     fActionParam:              TIdSipAction;
     fAuthenticationChallenged: Boolean;
     fErrorCodeParam:           Cardinal;
-    fFailWith:                 ExceptClass;
     fNetworkFailed:            Boolean;
     fResponseParam:            TIdSipResponse;
 
@@ -204,7 +210,6 @@ type
     property ActionParam:              TIdSipAction   read fActionParam;
     property AuthenticationChallenged: Boolean        read fAuthenticationChallenged;
     property ErrorCodeParam:           Cardinal       read fErrorCodeParam;
-    property FailWith:                 ExceptClass    read fFailWith write fFailWith;
     property NetworkFailed:            Boolean        read fNetworkFailed;
     property ReasonParam:              String         read fReasonParam;
     property ResponseParam:            TIdSipResponse read fResponseParam;
@@ -651,21 +656,31 @@ type
     property ResponseParam:             TIdSipResponse              read fResponseParam;
   end;
 
-  TIdSipTestTransactionUserListener = class(TIdSipTestActionListener,
+  TIdSipTestTransactionUserListener = class(TIdSipFailableListener,
                                             IIdSipTransactionUserListener)
   private
     fAbstractUserAgentParam:  TIdSipAbstractCore;
+    fActionAdded:             Boolean;
+    fActionParam:             TIdSipAction;
+    fActionRemoved:           Boolean;
     fBindingParam:            TIdConnectionBindings;
     fDroppedUnmatchedMessage: Boolean;
     fMessageParam:            TIdSipMessage;
 
+    procedure OnAddAction(UserAgent: TIdSipAbstractCore;
+                          Action: TIdSipAction);
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                         Message: TIdSipMessage;
                                         Binding: TIdConnectionBindings);
+    procedure OnRemoveAction(UserAgent: TIdSipAbstractCore;
+                             Action: TIdSipAction);
   public
     constructor Create; override;
 
     property AbstractUserAgentParam:  TIdSipAbstractCore    read fAbstractUserAgentParam;
+    property ActionAdded:             Boolean               read fActionAdded;
+    property ActionParam:             TIdSipAction          read fActionParam;
+    property ActionRemoved:           Boolean               read fActionRemoved;
     property BindingParam:            TIdConnectionBindings read fBindingParam;
     property DroppedUnmatchedMessage: Boolean               read fDroppedUnmatchedMessage;
     property MessageParam:            TIdSipMessage         read fMessageParam;
@@ -2317,10 +2332,24 @@ constructor TIdSipTestTransactionUserListener.Create;
 begin
   inherited Create;
 
+  Self.fActionAdded             := false;
   Self.fDroppedUnmatchedMessage := false;
+  Self.fActionRemoved           := false;
 end;
 
 //* TIdSipTestTransactionUserListener Private methods **************************
+
+procedure TIdSipTestTransactionUserListener.OnAddAction(UserAgent: TIdSipAbstractCore;
+                                                        Action: TIdSipAction);
+begin
+  Self.fAbstractUserAgentParam := UserAgent;
+  Self.fActionAdded            := true;
+  Self.fActionParam            := Action;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create(Self.ClassName + '.OnAddAction');
+end;
+
 
 procedure TIdSipTestTransactionUserListener.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
                                                                       Message: TIdSipMessage;
@@ -2335,6 +2364,16 @@ begin
     raise Self.FailWith.Create(Self.ClassName + '.OnDroppedUnmatchedMessage');
 end;
 
+procedure TIdSipTestTransactionUserListener.OnRemoveAction(UserAgent: TIdSipAbstractCore;
+                                                           Action: TIdSipAction);
+begin
+  Self.fAbstractUserAgentParam := UserAgent;
+  Self.fActionRemoved          := true;
+  Self.fActionParam            := Action;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create(Self.ClassName + '.OnRemoveAction');
+end;
 //******************************************************************************
 //* TIdSipTestSubscribeModuleListener                                          *
 //******************************************************************************
