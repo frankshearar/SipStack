@@ -176,6 +176,7 @@ type
     procedure TestRejectCallBusy;
     procedure TestRejectCallStatusCode;
     procedure TestRejectCallStatusCodeAndText;
+    procedure TestRemoveListener;
     procedure TestResendOk;
     procedure TestRing;
     procedure TestRingWithGruu;
@@ -405,6 +406,7 @@ type
     procedure TestRejectInviteWhenInboundModificationInProgress;
     procedure TestRejectInviteWhenOutboundModificationInProgress;
     procedure TestRemodify;
+    procedure TestRemoveSessionListener; virtual;
     procedure TestTerminateByeTransactionTimesOut;
   end;
 
@@ -475,7 +477,7 @@ type
     procedure TestRejectCallBusy;
     procedure TestRejectCallStatusCode;
     procedure TestRejectCallStatusCodeAndText;
-    procedure TestRemoveSessionListener;
+    procedure TestRemoveSessionListener; override;
     procedure TestRing;
     procedure TestRingWithGruu;
     procedure TestRingWithSuppressLocalResponses;
@@ -535,6 +537,7 @@ type
     procedure TestAckWithAuthorization;
     procedure TestAckWithMultipleAuthorization;
     procedure TestAckWithProxyAuthorization;
+    procedure TestActionListenersArentNotifiedReSessionEvents;
     procedure TestByeCarriesInviteAuthorization;
     procedure TestCall;
     procedure TestCallFlowToGateway;
@@ -576,6 +579,7 @@ type
     procedure TestRedirectWithMaxForwards;
     procedure TestRedirectWithMultipleContacts;
     procedure TestRedirectWithNoSuccess;
+    procedure TestRemoveSessionListener; override;
     procedure TestSendSetsInitialRequest;
     procedure TestSendWithGruu;
     procedure TestSupportsExtension;
@@ -2460,6 +2464,24 @@ begin
               'Unexpected Status-Text');
   Check(Self.InviteAction.IsTerminated,
         'Action not terminated');
+end;
+
+procedure TestTIdSipInboundInvite.TestRemoveListener;
+var
+  L: TIdSipTestInboundInviteListener;
+begin
+  L := TIdSipTestInboundInviteListener.Create;
+  try
+    Self.InviteAction.AddListener(L);
+    Self.InviteAction.RemoveListener(L);
+
+    Self.InviteAction.Accept('', '');
+    Self.ReceiveAck;
+
+    Check(not L.Succeeded, 'Listener notified, hence not removed');
+  finally
+    L.Free;
+  end;
 end;
 
 procedure TestTIdSipInboundInvite.TestResendOk;
@@ -4895,6 +4917,11 @@ begin
               Self.ClassName + ': Unexpected body in request');
 end;
 
+procedure TestTIdSipSession.TestRemoveSessionListener;
+begin
+  Fail(Self.ClassName + ' MUST override this test');
+end;
+
 procedure TestTIdSipSession.TestTerminateByeTransactionTimesOut;
 var
   Session: TIdSipSession;
@@ -6581,6 +6608,30 @@ begin
   end;
 end;
 
+procedure TestTIdSipOutboundSession.TestActionListenersArentNotifiedReSessionEvents;
+var
+  L: TIdSipTestActionListener;
+begin
+  // PR 544: Sessions used their superclass's ActionListeners, which are not
+  // necessarily IIdSipSessionListeners. This test simply raises an
+  // EIntfCastError should the bug crop up again.
+
+  L := TIdSipTestActionListener.Create;
+  try
+    Self.Session.AddActionListener(L);
+
+    try
+      Self.ReceiveProvisionalResponse(SIPSessionProgress, '');
+    except
+      on EIntfCastError do
+        Fail('Session''s using TIdSipAction.ActionListeners to notify, rather than its own SessionListeners');
+    end;
+  finally
+    Self.Session.RemoveActionListener(L);
+    L.Free;
+  end;
+end;
+
 procedure TestTIdSipOutboundSession.TestByeCarriesInviteAuthorization;
 var
   Invite:  TIdSipRequest;
@@ -7728,6 +7779,37 @@ begin
   CheckNotEquals('',
                  Self.Reason,
                  'Reason param not set');
+end;
+
+procedure TestTIdSipOutboundSession.TestRemoveSessionListener;
+var
+  L1, L2: TIdSipTestSessionListener;
+begin
+  Self.CreateAction;
+  Check(Assigned(Self.Session), 'OnInboundCall not called');
+
+  Self.ReceiveOk(Self.Session.InitialRequest);
+
+  L1 := TIdSipTestSessionListener.Create;
+  try
+    L2 := TIdSipTestSessionListener.Create;
+    try
+      Self.Session.AddSessionListener(L1);
+      Self.Session.AddSessionListener(L2);
+      Self.Session.RemoveSessionListener(L2);
+
+      Self.Session.Terminate;
+
+      Check(L1.EndedSession,
+            'First listener not notified');
+      Check(not L2.EndedSession,
+            'Second listener erroneously notified, ergo not removed');
+    finally
+      L2.Free
+    end;
+  finally
+    L1.Free;
+  end;
 end;
 
 procedure TestTIdSipOutboundSession.TestSendSetsInitialRequest;

@@ -449,6 +449,7 @@ type
     fRemoteSessionDescription: String;
     LastModifyDescription:     String;
     LastModifyMimeType:        String;
+    SessionListeners:          TIdNotificationList;
     UsingSecureTransport:      Boolean;
 
     procedure NotifyOfModifiedSession(Answer: TIdSipResponse);
@@ -1461,7 +1462,7 @@ end;
 
 procedure TIdSipInboundInvite.RemoveListener(const Listener: IIdSipInboundInviteListener);
 begin
-  Self.ActionListeners.RemoveListener(Listener);
+  Self.InviteListeners.RemoveListener(Listener);
 end;
 
 procedure TIdSipInboundInvite.ResendOk;
@@ -2247,6 +2248,7 @@ begin
   Self.fRemoteParty.Free;
   Self.fRemoteContact.Free;
   Self.fDialog.Free;
+  Self.SessionListeners.Free;
 
   inherited Destroy;
 end;
@@ -2262,7 +2264,7 @@ end;
 
 procedure TIdSipSession.AddSessionListener(const Listener: IIdSipSessionListener);
 begin
-  Self.ActionListeners.AddListener(Listener);
+  Self.SessionListeners.AddListener(Listener);
 end;
 
 function TIdSipSession.DialogEstablished: Boolean;
@@ -2377,7 +2379,7 @@ end;
 
 procedure TIdSipSession.RemoveSessionListener(const Listener: IIdSipSessionListener);
 begin
-  Self.ActionListeners.RemoveListener(Listener);
+  Self.SessionListeners.RemoveListener(Listener);
 end;
 
 procedure TIdSipSession.Resend(AuthorizationCredentials: TIdSipAuthorizationHeader);
@@ -2445,6 +2447,7 @@ procedure TIdSipSession.Initialise(UA: TIdSipAbstractCore;
 begin
   inherited Initialise(UA, Request, Binding);
 
+  Self.SessionListeners := TIdNotificationList.Create;
   Self.Module := Self.UA.ModuleFor(Self.Method) as TIdSipInviteModule;
 
   Self.fReceivedAck := false;
@@ -2489,7 +2492,7 @@ begin
     Notification.Reason    := Reason;
     Notification.Session   := Self;
 
-    Self.ActionListeners.Notify(Notification);
+    Self.SessionListeners.Notify(Notification);
   finally
     Notification.Free;
   end;
@@ -2506,7 +2509,7 @@ begin
     Notification.RemoteSessionDescription := RemoteSessionDescription;
     Notification.MimeType                 := MimeType;
 
-    Self.ActionListeners.Notify(Notification);
+    Self.SessionListeners.Notify(Notification);
   finally
     Notification.Free;
   end;
@@ -2529,7 +2532,7 @@ begin
     Notification.RemoteSessionDescription := Modify.InitialRequest.Body;
     Notification.Session                  := Self;
 
-    Self.ActionListeners.Notify(Notification);
+    Self.SessionListeners.Notify(Notification);
   finally
     Notification.Free;
   end;
@@ -2554,7 +2557,7 @@ begin
     Notification.Progress := Response;
     Notification.Session  := Self;
 
-    Self.ActionListeners.Notify(Notification);
+    Self.SessionListeners.Notify(Notification);
   finally
     Notification.Free;
   end;
@@ -2748,7 +2751,7 @@ begin
       Notification.Refer   := Refer;
       Notification.Session := Self;
 
-      Self.ActionListeners.Notify(Notification);
+      Self.SessionListeners.Notify(Notification);
     finally
       Notification.Free;
     end;
@@ -2781,7 +2784,7 @@ begin
     Notification.Session := Self;
     Notification.Answer  := Answer;
 
-    Self.ActionListeners.Notify(Notification);
+    Self.SessionListeners.Notify(Notification);
   finally
     Notification.Free;
   end;

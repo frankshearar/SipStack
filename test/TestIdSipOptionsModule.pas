@@ -400,6 +400,7 @@ var
   Options: TIdSipOutboundOptions;
 begin
   Options := Self.Module.QueryOptions(Self.Destination);
+  Options.AddActionListener(Self);
   Options.AddListener(Self);
   Options.Send;
   Result := Options;

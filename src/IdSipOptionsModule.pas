@@ -60,7 +60,8 @@ type
 
   TIdSipOutboundOptions = class(TIdSipOptions)
   private
-    fServer: TIdSipAddressHeader;
+    fServer:          TIdSipAddressHeader;
+    OptionsListeners: TIdNotificationList;
 
     procedure NotifyOfResponse(Response: TIdSipResponse);
     procedure SetServer(Value: TIdSipAddressHeader);
@@ -246,18 +247,19 @@ end;
 destructor TIdSipOutboundOptions.Destroy;
 begin
   Self.fServer.Free;
+  Self.OptionsListeners.Free;
 
   inherited Destroy;
 end;
 
 procedure TIdSipOutboundOptions.AddListener(const Listener: IIdSipOptionsListener);
 begin
-  Self.ActionListeners.AddListener(Listener);
+  Self.OptionsListeners.AddListener(Listener);
 end;
 
 procedure TIdSipOutboundOptions.RemoveListener(const Listener: IIdSipOptionsListener);
 begin
-  Self.ActionListeners.RemoveListener(Listener);
+  Self.OptionsListeners.RemoveListener(Listener);
 end;
 
 //* TIdSipOutboundOptions Protected methods ************************************
@@ -278,6 +280,8 @@ procedure TIdSipOutboundOptions.Initialise(UA: TIdSipAbstractCore;
 begin
   inherited Initialise(UA, Request, Binding);
 
+  Self.OptionsListeners := TIdNotificationList.Create;
+
   Self.fServer := TIdSipAddressHeader.Create;
 end;
 
@@ -297,7 +301,7 @@ begin
     Notification.Options  := Self;
     Notification.Response := Response;
 
-    Self.ActionListeners.Notify(Notification);
+    Self.OptionsListeners.Notify(Notification);
   finally
     Notification.Free;
   end;

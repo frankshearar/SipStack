@@ -647,6 +647,7 @@ type
   TIdSipActionState = (asInitialised, asSent, asResent, asFinished);
   TIdSipAction = class(TIdInterfacedObject)
   private
+    ActionListeners:       TIdNotificationList;
     AddressSpaceLocations: TIdSipLocations;
     AttemptedLocations:    TIdSipLocations;
     fInitialRequest:       TIdSipRequest;
@@ -673,9 +674,8 @@ type
     procedure TrySendRequestAgain(Request: TIdSipRequest;
                                   Targets: TIdSipLocations);
   protected
-    ActionListeners: TIdNotificationList;
-    fIsOwned:        Boolean;
-    State:           TIdSipActionState;
+    fIsOwned: Boolean;
+    State:    TIdSipActionState;
 
     procedure ActionSucceeded(Response: TIdSipResponse); virtual;
     function  CreateNewAttempt: TIdSipRequest; virtual;
