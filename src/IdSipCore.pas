@@ -656,6 +656,11 @@ type
   // authenticate to multiple proxies, and possibly the remote User Agent too,
   // resending the request with its collection of authorisation credentials each
   // time.
+  //
+  // LocalParty contains the address-of-record of the user on this side of the
+  // dialog. For an inbound INVITE, that means LocalParty contains the address
+  // in the To header; for an outbound INVITE, LocalParty contains the address
+  // that will go in the From header.
 
   TIdSipActionResult = (arUnknown, arSuccess, arFailure, arInterim);
   TIdSipActionState = (asInitialised, asSent, asResent, asFinished);
@@ -3776,18 +3781,17 @@ begin
   Self.LocalGruu.Value   := 'sip:127.0.0.1';
   Self.LocalGruu.IsUnset := true;
 
-  // A sensible default.
-  if Self.IsInbound then
-    Self.LocalParty := Request.From
-  else
-    Self.LocalParty.Value := Self.LocalGruu.FullValue;
-
   Self.UseGruu := UA.UseGruu;
 
   Self.SetResult(arUnknown);
 
-  if Self.IsInbound then
+  if Self.IsInbound then begin
     Self.InitialRequest.Assign(Request);
+    Self.LocalParty := Request.ToHeader
+  end
+  else begin
+    Self.LocalParty.Value := Self.LocalGruu.FullValue;
+  end;
 end;
 
 procedure TIdSipAction.MarkAsTerminated;
