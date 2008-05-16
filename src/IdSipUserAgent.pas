@@ -2132,6 +2132,7 @@ begin
       PlaceholderContact.SipInstance := Self.UA.InstanceID;
 
     Wait := TIdSipReregisterWait.Create;
+    Wait.AddressOfRecord  := Self.UA.From;
     Wait.RegisterModuleID := Reg.ID;
     Wait.Registrar        := Self.Registrar;
     // We're not actually going to register the From: the Contact header will be

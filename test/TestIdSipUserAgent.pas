@@ -397,6 +397,7 @@ type
     procedure TearDown; override;
   published
     procedure TestExecuteSchedulesWait;
+    procedure TestRegisterContainsUserAgentsFrom;
   end;
 
   TestTIdSipPendingTcpTransportConfiguration = class(TTestCaseTU)
@@ -4864,6 +4865,17 @@ begin
   CheckEquals(MethodRegister,
               Self.LastSentRequest.Method,
               'Unexpected request sent');
+end;
+
+procedure TestTIdSipPendingRegistration.TestRegisterContainsUserAgentsFrom;
+begin
+  Self.MarkSentRequestCount;
+  Self.Pending.Execute;
+  Self.DebugTimer.TriggerAllEventsUpToFirst(TIdSipReregisterWait);
+  Self.CheckRequestSent('No REGISTER sent');
+
+  CheckEquals(Self.Core.From.Address.AsString, Self.LastSentRequest.From.Address.AsString,
+              'From header isn''t the UserAgent''s From');
 end;
 
 //******************************************************************************

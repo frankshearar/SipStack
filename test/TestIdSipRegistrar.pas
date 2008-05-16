@@ -224,6 +224,7 @@ type
     procedure TestAutoReregisterSwitchedOff;
     procedure TestReceiveGruu;
     procedure TestReceiveNoGruu;
+    procedure TestRegisterUsesUAsFrom;
     procedure TestReregisterTime;
   end;
 
@@ -264,6 +265,7 @@ type
 
   TestTIdSipReregisterWait = class(TTestCaseTU)
   private
+    AOR:  TIdSipAddressHeader;
     Wait: TIdSipReregisterWait;
   public
     procedure SetUp; override;
@@ -1631,8 +1633,9 @@ begin
 
   Result.AddActionListener(Self);
   Result.AddListener(Self);
-  Result.Bindings  := Self.Contacts;
-  Result.Registrar := Self.RegistrarAddress;
+  Result.Bindings   := Self.Contacts;
+  Result.LocalParty := Self.Core.From;
+  Result.Registrar  := Self.RegistrarAddress;
 end;
 
 function TOutboundRegistrationBaseTestCase.CreateAction: TIdSipAction;
@@ -2156,6 +2159,17 @@ begin
   CheckEquals(OldContact, Self.LastSentRequest.FirstContact.AsString, 'UserAgent''s Contact not protected');
 end;
 
+procedure TestTIdSipOutboundRegistration.TestRegisterUsesUAsFrom;
+var
+  R: TIdSipAction;
+begin
+  Self.MarkSentRequestCount;
+  R := Self.CreateAction;
+  CheckRequestSent('No REGISTER sent');
+
+  CheckEquals(R.LocalParty.Value, Self.LastSentRequest.From.Value, 'From header');
+end;
+
 procedure TestTIdSipOutboundRegistration.TestReregisterTime;
 const
   OneMinute     = 60;
@@ -2309,7 +2323,11 @@ procedure TestTIdSipReregisterWait.SetUp;
 begin
   inherited SetUp;
 
+  Self.AOR := TIdSipFromHeader.Create;
+  Self.AOR.Value := 'sip:case@fried-neurons.org';
+
   Self.Wait := TIdSipReregisterWait.Create;
+  Self.Wait.AddressOfRecord := Self.AOR;
   Self.Wait.Bindings.Add(ContactHeaderFull).Value := 'sip:case@hilton.tr';
   Self.Wait.RegisterModuleID := Self.Core.RegisterModule.ID;
   Self.Wait.Registrar.Uri := 'sip:gw1.leo-ix.net';
@@ -2317,6 +2335,7 @@ end;
 
 procedure TestTIdSipReregisterWait.TearDown;
 begin
+  Self.AOR.Free;
   Self.Wait.Free;
 
   inherited TearDown;
@@ -2335,6 +2354,9 @@ begin
   CheckEquals(Self.Wait.Registrar.Uri,
               Self.LastSentRequest.RequestUri.Uri,
               'Request-URI');
+  CheckEquals(Self.Wait.AddressOfRecord.Address.AsString,
+              Self.LastSentRequest.From.Address.AsString,
+              'From URI');
 end;
 
 initialization

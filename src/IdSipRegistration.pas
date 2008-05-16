@@ -464,10 +464,12 @@ type
 
   TIdSipReregisterWait = class(TIdWait)
   private
+    fAddressOfRecord:  TIdSipAddressHeader;
     fBindings:         TIdSipContacts;
     fRegisterModuleID: String;
     fRegistrar:        TIdSipUri;
 
+    procedure SetAddressOfRecord(Value: TIdSipAddressHeader);
     procedure SetBindings(Value: TIdSipContacts);
     procedure SetRegistrar(Value: TIdSipUri);
   public
@@ -476,9 +478,10 @@ type
 
     procedure Trigger; override;
 
-    property Bindings:         TIdSipContacts read fBindings write SetBindings;
-    property RegisterModuleID: String         read fRegisterModuleID write fRegisterModuleID;
-    property Registrar:        TIdSipUri      read fRegistrar write SetRegistrar;
+    property AddressOfRecord:  TIdSipAddressHeader read fAddressOfRecord write SetAddressOfRecord;
+    property Bindings:         TIdSipContacts      read fBindings write SetBindings;
+    property RegisterModuleID: String              read fRegisterModuleID write fRegisterModuleID;
+    property Registrar:        TIdSipUri           read fRegistrar write SetRegistrar;
   end;
 
   TIdSipRegistrationMethod = class(TIdNotification)
@@ -1083,7 +1086,7 @@ function TIdSipOutboundRegisterModule.RegisterWith(Registrar: TIdSipUri;
 begin
   Result := Self.UserAgent.AddOutboundAction(TIdSipOutboundRegistration) as TIdSipOutboundRegistration;
   Result.Bindings.Add(Contacts);
-  Result.Registrar := Registrar;
+  Result.Registrar  := Registrar;
 end;
 
 function TIdSipOutboundRegisterModule.RegistrationCount: Integer;
@@ -2039,6 +2042,7 @@ begin
   Self.Bindings.First;
 
   Reregister := TIdSipReregisterWait.Create;
+  Reregister.AddressOfRecord  := Self.LocalParty;
   Reregister.Bindings         := Self.Bindings;
   Reregister.RegisterModuleID := Self.OutModule.ID;
   Reregister.Registrar        := Self.Registrar;
@@ -2092,29 +2096,40 @@ constructor TIdSipReregisterWait.Create;
 begin
   inherited Create;
 
-  Self.fBindings  := TIdSipContacts.Create;
-  Self.fRegistrar := TIdSipUri.Create('');
+  Self.fAddressOfRecord := TIdSipAddressHeader.Create;
+  Self.fBindings        := TIdSipContacts.Create;
+  Self.fRegistrar       := TIdSipUri.Create('');
 end;
 
 destructor TIdSipReregisterWait.Destroy;
 begin
   Self.fRegistrar.Free;
   Self.fBindings.Free;
+  Self.fAddressOfRecord.Free;
 
   inherited Destroy;
 end;
 
 procedure TIdSipReregisterWait.Trigger;
 var
+  Action: TIdSipAction;
   Module: TObject;
 begin
   Module := TIdObjectRegistry.FindObject(Self.RegisterModuleID);
 
-  if Assigned(Module) and (Module is TIdSipOutboundRegisterModule) then
-    (Module as TIdSipOutboundRegisterModule).RegisterWith(Self.Registrar, Self.Bindings).Send;
+  if Assigned(Module) and (Module is TIdSipOutboundRegisterModule) then begin
+    Action := (Module as TIdSipOutboundRegisterModule).RegisterWith(Self.Registrar, Self.Bindings);
+    Action.LocalParty := Self.AddressOfRecord;
+    Action.Send;
+  end;
 end;
 
 //* TIdSipReregisterWait Private methods ***************************************
+
+procedure TIdSipReregisterWait.SetAddressOfRecord(Value: TIdSipAddressHeader);
+begin
+  Self.fAddressOfRecord.Assign(Value);
+end;
 
 procedure TIdSipReregisterWait.SetBindings(Value: TIdSipContacts);
 begin
