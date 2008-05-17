@@ -1025,7 +1025,7 @@ begin
   FileName := LogFileNameLine;
   EatDirective(FileName);
 
-  if (FileName = '') then FileName := DefaultDebugLogFileName;;
+  if (FileName = '') then FileName := DefaultDebugLogFileName;
 
   Self.AddLogger(UserAgent);
 
