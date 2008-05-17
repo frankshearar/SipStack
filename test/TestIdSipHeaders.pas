@@ -612,6 +612,11 @@ type
   public
     procedure SetUp; override;
   published
+    procedure TestEqualsDifferentHeader;
+    procedure TestEqualsDifferentURI;
+    procedure TestEqualsSameHeaderValueDifferentClass;
+    procedure TestEqualsSameURINoParams;
+    procedure TestEqualsSameURIWithParams;
     procedure TestIsGruu;
     procedure TestValue; override;
     procedure TestValueWithParams;
@@ -5860,6 +5865,7 @@ begin
   inherited SetUp;
 
   Self.U := Self.Header as TIdSipUriHeader;
+  Self.U.Name := FromHeaderFull; // Just a random URI-using header.
 end;
 
 //* TestTIdSipUriHeader Protected methods **************************************
@@ -5870,6 +5876,103 @@ begin
 end;
 
 //* TestTIdSipUriHeader Published methods **************************************
+
+procedure TestTIdSipUriHeader.TestEqualsDifferentHeader;
+var
+  Other: TIdSipUriHeader;
+begin
+  Self.U.Value := '<sip:example.com>';
+
+  Other := TIdSipUriHeader.Create;
+  try
+    Other.Name := 'X-' + Self.U.Name;
+    Other.Value := Self.U.Value;
+
+    Check(not Self.U.Equals(Other), 'This = Other');
+    Check(not Other.Equals(Self.U), 'Other = This');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TestTIdSipUriHeader.TestEqualsDifferentURI;
+var
+  Other: TIdSipUriHeader;
+begin
+  Self.U.Value := '<sip:example.com>';
+
+  Other := TIdSipUriHeader.Create;
+  try
+    Other.Name  := Self.U.Name;
+    Other.Value := Self.U.Value;
+    Other.Address.Username := Other.Address.Username + '-1';
+
+    Check(not Self.U.Equals(Other), 'This = Other');
+    Check(not Other.Equals(Self.U), 'Other = This');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TestTIdSipUriHeader.TestEqualsSameHeaderValueDifferentClass;
+var
+  Other: TIdSipHeader;
+begin
+  Self.U.Value := '<sip:example.com>';
+
+  Other := TIdSipHeader.Create;
+  try
+    Other.Name  := Self.U.Name;
+    Other.Value := Self.U.Value;
+
+    Check(Self.U.Equals(Other), 'This <> Other');
+    Check(Other.Equals(Self.U), 'Other <> This');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TestTIdSipUriHeader.TestEqualsSameURINoParams;
+var
+  Other: TIdSipUriHeader;
+begin
+  Self.U.Value := '<sip:example.com>';
+
+  Other := TIdSipUriHeader.Create;
+  try
+    Other.Name  := Self.U.Name;
+    Other.Value := Self.U.Value;
+
+    Check(Self.U.Equals(Other), 'This <> Other');
+    Check(Other.Equals(Self.U), 'Other <> This');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TestTIdSipUriHeader.TestEqualsSameURIWithParams;
+var
+  Other: TIdSipUriHeader;
+begin
+  Self.U.Value := '<sip:example.com>';
+
+  Other := TIdSipUriHeader.Create;
+  try
+    Other.Name  := Self.U.Name;
+    Other.Value := Self.U.Value;
+
+    // Same parameters, but different order.
+    Self.U.Params['foo'] := '1';
+    Self.U.Params['bar'] := '1';
+    Other.Params['bar']  := '1';
+    Other.Params['foo']  := '1';
+
+    Check(Self.U.Equals(Other), 'This <> Other');
+    Check(Other.Equals(Self.U), 'Other <> This');
+  finally
+    Other.Free;
+  end;
+end;
 
 procedure TestTIdSipUriHeader.TestIsGruu;
 const

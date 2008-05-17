@@ -474,6 +474,8 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
+    function  Equals(Header: TIdSipHeader): Boolean; override;
+
     property Address: TIdSipUri read fAddress write SetAddress;
     property IsGruu:  Boolean   read GetIsGruu write SetIsGruu;
     property Grid:    String    read GetGrid write SetGrid;
@@ -4533,6 +4535,27 @@ begin
 
   inherited Destroy;
 end;
+
+function TIdSipUriHeader.Equals(Header: TIdSipHeader): Boolean;
+var
+  Other: TIdSipHeader;
+begin
+  Other := Self.ConstructHeader(Header.Name);
+  try
+    Other.Value := Header.FullValue;
+
+    Result := Other is TIdSipUriHeader;
+
+    if Result then begin
+      Result := (Self.Name = Header.Name)
+             and Self.Address.Equals((Other as TIdSipUriHeader).Address)
+    end;
+  finally
+    Other.Free;
+  end;
+end;
+
+//* TIdSipUriHeader Protected methods ******************************************
 
 function TIdSipUriHeader.GetValue: String;
 begin
