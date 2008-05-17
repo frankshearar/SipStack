@@ -39,7 +39,6 @@ type
     fSentResponseCount: Cardinal;
     fWriteLog:          Boolean;
 
-    procedure AddIndyStyleDefaultBinding;
     procedure CheckNoOtherMockTransportUsesBindings(Bindings: TIdSocketHandles);
     function  CreateFakeBinding: TIdConnectionBindings;
     procedure DispatchRequest(R: TidSipRequest;
@@ -58,7 +57,6 @@ type
     procedure PossiblyAutoDispatch(M: TIdSipMessage;
                                    Dest: TIdConnectionBindings);
     procedure RecordSentMessage(M: TIdSipMessage);
-    procedure ScheduleException(Msg: TIdSipMessage);
     procedure SetWriteLog(const Value: Boolean);
     function  TransportAt(Index: Integer): TIdSipMockTransport;
   protected
@@ -505,15 +503,6 @@ end;
 
 //* TIdSipMockTransport Private methods ****************************************
 
-procedure TIdSipMockTransport.AddIndyStyleDefaultBinding;
-var
-  Binding: TIdSocketHandle;
-begin
-  Binding := Self.Bindings.Add;
-  Binding.IP   := '127.0.0.1';
-  Binding.Port := Self.DefaultPort;
-end;
-
 procedure TIdSipMockTransport.CheckNoOtherMockTransportUsesBindings(Bindings: TIdSocketHandles);
 var
   I: Integer;
@@ -663,20 +652,6 @@ begin
     Self.fResponses.AddCopy(M as TIdSipResponse);
     Inc(Self.fSentResponseCount);
   end;
-end;
-
-procedure TIdSipMockTransport.ScheduleException(Msg: TIdSipMessage);
-var
-  Wait: TIdSipMessageExceptionWait;
-begin
-  Wait := TIdSipMessageExceptionWait.Create;
-  Wait.ExceptionType    := Self.FailWith;
-  Wait.ExceptionMessage := 'Error injection';
-  Wait.FailedMessage    := Msg;
-  Wait.Reason           := 'TIdSipMockTransport.SendRequest (' + Self.FailWith.ClassName + ')';
-  Wait.TransportID      := Self.ID;
-
-  Self.Timer.AddEvent(TriggerImmediately, Wait);
 end;
 
 procedure TIdSipMockTransport.SetWriteLog(const Value: Boolean);

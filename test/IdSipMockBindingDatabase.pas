@@ -194,9 +194,8 @@ begin
   Result := Now + OneSecond * Expires;
 end;
 var
-  Expiry:        Cardinal;
-  Index:         Integer;
-  NewExpiryTime: TDateTime;
+  Expiry: Cardinal;
+  Index:  Integer;
 begin
   Self.Lock.Acquire;
   try
