@@ -345,7 +345,7 @@ begin
         'Locations added the location, not a COPY of the location');
 
   NewAddress := TIdIPAddressParser.IncIPv4Address(Address);
-  Result := Self.Locs.AddLocationToFront(Transport, NewAddress, Port);
+  Self.Locs.AddLocationToFront(Transport, NewAddress, Port);
   CheckEquals(NewAddress, Self.Locs[0].IPAddress, 'Location not added to FRONT of list');
 end;
 
