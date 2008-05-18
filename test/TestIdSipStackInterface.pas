@@ -70,6 +70,7 @@ type
     procedure AddSubscribeSupport(Stack: TIdSipStackInterface; EventPackage: String);
     procedure CheckRedirectCall(Temporary: Boolean);
     procedure ClearPendingStackStartedNotification;
+    procedure ConfigureToUseRegistrar(Intf: TIdSipStackInterface; RegistrarUri: String);
 {
     function  CreateBindings: TIdSipContacts;
     function  CreateRemoteBye(LocalDialog: TIdSipDialog): TIdSipRequest;
@@ -132,6 +133,7 @@ type
     procedure TestHangUpWithInvalidHandle;
     procedure TestHangUpWithNonExistentHandle;
     procedure TestInboundCall;
+    procedure TestInternallyGeneratedActionsHaveHandles;
     procedure TestInviteChallengeDoesntNotifyTwice;
     procedure TestMakeCall;
     procedure TestMakeCallMalformedAddress;
@@ -951,6 +953,21 @@ procedure TestTIdSipStackInterface.ClearPendingStackStartedNotification;
 begin
   Self.ProcessAllPendingNotifications;
 end;
+
+procedure TestTIdSipStackInterface.ConfigureToUseRegistrar(Intf: TIdSipStackInterface; RegistrarUri: String);
+var
+  Conf: TStrings;
+begin
+  Conf := TStringList.Create;
+  try
+    Conf.Add(RegisterDirective + ': ' + RegistrarUri);
+
+    Intf.ReconfigureStack(Conf);
+    Self.TimerQueue.TriggerAllEventsUpToFirst(TIdSipStackReconfigureStackInterfaceWait);
+  finally
+    Conf.Free;
+  end;
+end;
 {
 function TestTIdSipStackInterface.CreateBindings: TIdSipContacts;
 begin
@@ -1625,6 +1642,26 @@ begin
   finally
     DatasInvite.Free;
   end;
+end;
+
+procedure TestTIdSipStackInterface.TestInternallyGeneratedActionsHaveHandles;
+const
+  RegistrarUri = 'sip:10.0.0.1';//gw1.leo-ix.net';
+var
+  Data: TIdAuthenticationChallengeData;
+begin
+  Self.ConfigureToUseRegistrar(Self.Intf, RegistrarUri);
+
+  Self.MarkSentRequestCount;
+  Self.TimerQueue.TriggerAllEventsUpToFirst(TIdSipReregisterWait);
+  CheckRequestSent('No request sent - Wait didn''t fire?');
+
+  Self.ReceiveChallenge(Self.LastSentRequest);
+  Self.ProcessAllPendingNotifications;
+
+  CheckNotificationReceived(TIdAuthenticationChallengeData, 'No challenge notification received');
+  Data := Self.LastEventOfType(TIdAuthenticationChallengeData) as TIdAuthenticationChallengeData;
+  CheckNotEquals(InvalidHandle, Data.Handle, 'Internally-generated action has no handle');
 end;
 
 procedure TestTIdSipStackInterface.TestInviteChallengeDoesntNotifyTwice;

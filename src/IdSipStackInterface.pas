@@ -210,7 +210,7 @@ type
                          const ContentType: String);
     function  AttachExtension(EType: TIdSipStackInterfaceExtensionClass): TIdSipStackInterfaceExtension;
     procedure Authenticate(ActionHandle: TIdSipHandle;
-                           Credentials: TIdSipAuthorizationHeader);
+                           Credentials: TIdSipAuthorizationHeader); 
     function  GruuOf(ActionHandle: TIdSipHandle): String;
     function  HandleOf(const LocalGruu: String): TIdSipHandle;
     procedure HangUp(ActionHandle: TIdSipHandle);
@@ -1305,7 +1305,7 @@ begin
 
   Sess := Self.UserAgent.InviteModule.Call(From, Dest, LocalSessionDescription, MimeType);
   Sess.MaxForwards := MaxForwards;
-  Result := Self.AddAction(Sess);
+  Result := Self.HandleFor(Sess);
   Sess.AddSessionListener(Self);
 end;
 
@@ -1319,7 +1319,7 @@ begin
   end;
 
   Options := Self.UserAgent.QueryOptions(Dest) as TIdSipOutboundOptions;
-  Result := Self.AddAction(Options);
+  Result := Self.HandleFor(Options);
   Options.AddListener(Self);
 end;
 
@@ -1340,7 +1340,7 @@ begin
     raise ENotSupported.Create(MethodRefer);
 
   Ref := Self.SubscribeModule.Refer(Target, Resource);
-  Result := Self.AddAction(Ref);
+  Result := Self.HandleFor(Ref);
   Ref.AddListener(Self);
 end;
 
@@ -1359,7 +1359,7 @@ begin
   end;
 
   Reg := Self.UserAgent.RegisterWith(Registrar, Self.UserAgent.From);
-  Result := Self.AddAction(Reg);
+  Result := Self.HandleFor(Reg);
   Reg.AddListener(Self);
 end;
 
@@ -1384,7 +1384,7 @@ begin
   end;
 
   Reg := Self.UserAgent.RegisterModule.RegisterWith(Registrar, Contacts);
-  Result := Self.AddAction(Reg);
+  Result := Self.HandleFor(Reg);
   Reg.AddListener(Self);
 end;
 
@@ -1406,7 +1406,7 @@ begin
 
   SubMod := Self.UserAgent.ModuleFor(MethodSubscribe) as TIdSipSubscribeModule;
   Sub := SubMod.Subscribe(Target, EventPackage);
-  Result := Self.AddAction(Sub);
+  Result := Self.HandleFor(Sub);
   Sub.AddListener(Self);
 end;
 
@@ -1443,7 +1443,7 @@ begin
       Ref := Self.SubscribeModule.Transfer(Transferee,
                                            TransferTarget,
                                            TargetDialog);
-      Result := Self.AddAction(Ref);
+      Result := Self.HandleFor(Ref);
       Ref.AddListener(Self);
     finally
       TargetDialog.Free;
@@ -1953,6 +1953,7 @@ procedure TIdSipStackInterface.OnAddAction(UserAgent: TIdSipAbstractCore;
                                            Action: TIdSipAction);
 begin
   Action.AddActionListener(Self);
+  Self.AddAction(Action);
 end;
 
 procedure TIdSipStackInterface.OnAuthenticationChallenge(Action: TIdSipAction;
@@ -2317,6 +2318,7 @@ procedure TIdSipStackInterface.OnRemoveAction(UserAgent: TIdSipAbstractCore;
                                               Action: TIdSipAction);
 begin
   Action.RemoveActionListener(Self);
+  Self.RemoveAction(Self.HandleFor(Action));
 end;
 
 procedure TIdSipStackInterface.OnRenewedSubscription(UserAgent: TIdSipAbstractCore;
