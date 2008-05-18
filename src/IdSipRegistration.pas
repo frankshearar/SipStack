@@ -922,10 +922,17 @@ end;
 
 function TIdSipAbstractBindingDatabase.BindingsFor(Request: TIdSipRequest;
                                                    Contacts: TIdSipContacts): Boolean;
+var
+  AOR: TIdSipUri;
 begin
-  Result := Self.BindingsFor(Request.ToHeader.Address,
-                             Contacts,
-                             Request.SupportsExtension(ExtensionGruu) and Self.UseGruu)
+  AOR := TIdSipUri.Create(Request.AddressOfRecord);
+  try
+    Result := Self.BindingsFor(AOR,
+                               Contacts,
+                               Request.SupportsExtension(ExtensionGruu) and Self.UseGruu)
+  finally
+    AOR.Free;
+  end;
 end;
 
 function TIdSipAbstractBindingDatabase.BindingsFor(Target: TIdSipURI;

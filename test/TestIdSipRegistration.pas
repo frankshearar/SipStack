@@ -80,6 +80,7 @@ type
     procedure TestAddBindingWithExpiryParam;
     procedure TestAddBindingWithExpiryHeader;
     procedure TestAddBindingWithNoExpiries;
+    procedure TestAddBindingWithPassword;
     procedure TestAddBindingWithZeroExpiresRemovesBinding;
     procedure TestAddExistingBindingOutOfOrderSeqNo;
     procedure TestBindingExpires;
@@ -776,6 +777,22 @@ begin
   Self.DB.AddBindings(Self.Request);
 
   Self.CheckExpiry(Self.DB.DefaultExpiryTime, 'No expiry param or header');
+end;
+
+procedure TestTIdSipAbstractBindingDatabase.TestAddBindingWithPassword;
+var
+  Contacts: TIdSipContacts;
+begin
+  Self.Request.ToHeader.Address.Password := 'foo';
+  Self.DB.AddBindings(Self.Request);
+
+  Contacts := TIdSipContacts.Create;
+  try
+    Self.DB.BindingsFor(Self.Request, Contacts);
+    Check(not Contacts.IsEmpty, 'Bindings not added, or not collected');
+  finally
+    Contacts.Free;
+  end;
 end;
 
 procedure TestTIdSipAbstractBindingDatabase.TestAddBindingWithZeroExpiresRemovesBinding;
