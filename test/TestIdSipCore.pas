@@ -1185,8 +1185,8 @@ begin
               MethodRegister + ' but no module added');
 
   Self.Core.AddModule(TIdSipRegisterModule);
-  CheckNotNull(Self.Core.ModuleFor(MethodRegister),
-               MethodRegister + ' but no module added');
+  Check(nil <> Self.Core.ModuleFor(MethodRegister),
+              MethodRegister + ' but no module added');
   CheckEquals(TIdSipRegisterModule.ClassName,
               Self.Core.ModuleFor(MethodRegister).ClassName,
               MethodRegister + ' after module added: wrong type');

@@ -566,7 +566,7 @@ type
   // I and my subclasses represent chunks of Transaction-User Core
   // functionality: the ability to process REGISTERs, say, or OPTIONS, or the
   // requests involved with establishing a call.
-  TIdSipMessageModule = class(TIdRegisteredObject)
+  TIdSipMessageModule = class(TIdInterfacedObject)
   private
     fUserAgent: TIdSipAbstractCore;
 

@@ -18,18 +18,21 @@ uses
 type
   TIdSipRegistrationInfo = class(TObject)
   private
+    fBindings:   TIdSipContacts;
     fCallID:     String;
     fRegistrar:  TIdSipUri;
     fSequenceNo: Cardinal;
 
+    procedure SetBindings(Value: TIdSipContacts);
     procedure SetRegistrar(Value: TIdSipUri);
   public
     constructor Create;
     destructor  Destroy; override;
 
-    property CallID:     String    read fCallID write fCallID;
-    property Registrar:  TIdSipUri read fRegistrar write SetRegistrar;
-    property SequenceNo: Cardinal  read fSequenceNo write fSequenceNo;
+    property Bindings:   TIdSipContacts read fBindings write SetBindings;
+    property CallID:     String         read fCallID write fCallID;
+    property Registrar:  TIdSipUri      read fRegistrar write SetRegistrar;
+    property SequenceNo: Cardinal       read fSequenceNo write fSequenceNo;
   end;
 
   // I keep track of information a User Agent needs when making a REGISTER to
@@ -40,18 +43,29 @@ type
   private
     KnownRegistrars: TObjectList;
 
-    function IndexOfRegistrar(Registrar: TIdSipUri): Integer;
-    function KnowsRegistrar(Registrar: TIdSipUri): Boolean;
-    function RegistrarAt(Index: Integer): TIdSipRegistrationInfo;
+    function  GetRegistrars(Index: Integer): TIdSipUri;
+    function  IndexOfRegistrar(Registrar: TIdSipUri): Integer;
+    function  KnowsRegistrar(Registrar: TIdSipUri): Boolean;
+    procedure MergeBindings(Left, Right, Result: TIdSipContacts);
+    function  RegistrarAt(Index: Integer): TIdSipRegistrationInfo;
   public
     constructor Create;
     destructor  Destroy; override;
 
+    procedure AddBindings(Registrar: TIdSipUri; NewBindings: TIdSipContacts);
     procedure AddKnownRegistrar(Registrar: TIdSipUri;
                                 const CallID: String;
                                 SequenceNo: Cardinal);
+    procedure BindingsFor(Registrar: TIdSipUri; Result: TIdSipContacts);
     function  CallIDFor(Registrar: TIdSipUri): String;
+    function  Count: Integer;
+    function  IsEmpty: Boolean;
+    function  KnownRegistrar(Registrar: TIdSipUri): Boolean;
     function  NextSequenceNoFor(Registrar: TIdSipUri): Cardinal;
+    procedure RemoveBindings(Registrar: TIdSipUri; OldBindings: TIdSipContacts);
+    procedure SetBindings(Registrar: TIdSipUri; Bindings: TIdSipContacts);
+
+    property Registrars[Index: Integer]: TIdSipUri read GetRegistrars; default;
   end;
 
   // I represent a binding between and address-of-record and a URI. A SIP
@@ -212,7 +226,9 @@ type
 
   // I implement that functionality necessary for a User Agent to issue REGISTER
   // messages, that is, to register with a registrar.
-  TIdSipOutboundRegisterModule = class(TIdSipMessageModule)
+  TIdSipOutboundRegisterModule = class(TIdSipMessageModule,
+                                       IIdSipActionListener,
+                                       IIdSipRegistrationListener)
   private
     fAutoReRegister: Boolean;
     fHasRegistrar:   Boolean;
@@ -220,6 +236,16 @@ type
     fRequireGRUU:    Boolean;
     KnownRegistrars: TIdSipRegistrations;
 
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Challenge: TIdSipResponse);
+    procedure OnFailure(RegisterAgent: TIdSipOutboundRegistrationBase;
+                        ErrorCode: Cardinal;
+                        const Reason: String);
+    procedure OnNetworkFailure(Action: TIdSipAction;
+                               ErrorCode: Cardinal;
+                               const Reason: String);
+    procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistrationBase;
+                        CurrentBindings: TIdSipContacts);
     procedure SetRegistrar(Value: TIdSipUri);
   public
     constructor Create(UA: TIdSipAbstractCore); override;
@@ -238,7 +264,9 @@ type
                            Contacts: TIdSipContacts): TIdSipOutboundRegistration; overload;
     function  RegistrationCount: Integer;
     function  UnregisterFrom(Registrar: TIdSipUri;
-                             Contact: TIdSipContactHeader): TIdSipOutboundUnregistration;
+                             Contact: TIdSipContactHeader): TIdSipOutboundUnregistration; overload;
+    function  UnregisterFrom(Registrar: TIdSipUri;
+                             Contacts: TIdSipContacts): TIdSipOutboundUnregistration; overload;
     function  WillAccept(Request: TIdSipRequest): Boolean; override;
 
     property AutoReRegister: Boolean   read fAutoReRegister write fAutoReRegister;
@@ -546,17 +574,25 @@ constructor TIdSipRegistrationInfo.Create;
 begin
   inherited Create;
 
+  Self.fBindings  := TIdSipContacts.Create;
   Self.fRegistrar := TIdSipUri.Create;
 end;
 
 destructor TIdSipRegistrationInfo.Destroy;
 begin
   Self.Registrar.Free;
+  Self.Bindings.Free;
 
   inherited Destroy;
 end;
 
 //* TIdSipRegistrationInfo Private methods *************************************
+
+procedure TIdSipRegistrationInfo.SetBindings(Value: TIdSipContacts);
+begin
+  Self.fBindings.Clear;
+  Self.fBindings.Add(Value);
+end;
 
 procedure TIdSipRegistrationInfo.SetRegistrar(Value: TIdSipUri);
 begin
@@ -582,6 +618,27 @@ begin
   inherited Destroy;
 end;
 
+procedure TIdSipRegistrations.AddBindings(Registrar: TIdSipUri; NewBindings: TIdSipContacts);
+var
+  Index:          Integer;
+  MergedBindings: TIdSipContacts;
+begin
+  // Add _new_ bindings from NewBindings to those stored against Registrar.
+
+  Index := Self.IndexOfRegistrar(Registrar);
+
+  if (Index = ItemNotFoundIndex) then
+    raise EIdSipRegistrarNotFound.Create(Registrar.Uri);
+
+  MergedBindings := TIdSipContacts.Create;
+  try
+    Self.MergeBindings(Self.RegistrarAt(Index).Bindings, NewBindings, MergedBindings);
+    Self.SetBindings(Registrar, MergedBindings);
+  finally
+    MergedBindings.Free;
+  end;
+end;
+
 procedure TIdSipRegistrations.AddKnownRegistrar(Registrar: TIdSipUri;
                                                 const CallID: String;
                                                 SequenceNo: Cardinal);
@@ -598,6 +655,19 @@ begin
   end;
 end;
 
+procedure TIdSipRegistrations.BindingsFor(Registrar: TIdSipUri; Result: TIdSipContacts);
+var
+  Index: Integer;
+begin
+  Index := Self.IndexOfRegistrar(Registrar);
+
+  if (Index = ItemNotFoundIndex) then
+    raise EIdSipRegistrarNotFound.Create(Registrar.Uri);
+
+  Result.Clear;
+  Result.Add(Self.RegistrarAt(Index).Bindings);
+end;
+
 function TIdSipRegistrations.CallIDFor(Registrar: TIdSipUri): String;
 var
   Index: Integer;
@@ -608,6 +678,21 @@ begin
     raise EIdSipRegistrarNotFound.Create(Registrar.Uri);
 
   Result := Self.RegistrarAt(Index).CallID;
+end;
+
+function TIdSipRegistrations.Count: Integer;
+begin
+  Result := Self.KnownRegistrars.Count;
+end;
+
+function TIdSipRegistrations.IsEmpty: Boolean;
+begin
+  Result := Self.Count = 0;
+end;
+
+function TIdSipRegistrations.KnownRegistrar(Registrar: TIdSipUri): Boolean;
+begin
+  Result := Self.IndexOfRegistrar(Registrar) <> ItemNotFoundIndex;
 end;
 
 function TIdSipRegistrations.NextSequenceNoFor(Registrar: TIdSipUri): Cardinal;
@@ -625,7 +710,45 @@ begin
   RegInfo.SequenceNo := Result + 1;
 end;
 
+procedure TIdSipRegistrations.RemoveBindings(Registrar: TIdSipUri; OldBindings: TIdSipContacts);
+var
+  Current: TIdSipContacts;
+  Index: Integer;
+begin
+  // Remove any bindings in OldBindings stored against Registrar.
+
+  Index := Self.IndexOfRegistrar(Registrar);
+
+  if (Index = ItemNotFoundIndex) then
+    raise EIdSipRegistrarNotFound.Create(Registrar.Uri);
+
+  Current := Self.RegistrarAt(Index).Bindings;
+
+  OldBindings.First;
+  while OldBindings.HasNext do begin
+    Current.RemoveContact(OldBindings.CurrentContact);
+    OldBindings.Next;
+  end;
+end;
+
+procedure TIdSipRegistrations.SetBindings(Registrar: TIdSipUri; Bindings: TIdSipContacts);
+var
+  Index: Integer;
+begin
+  Index := Self.IndexOfRegistrar(Registrar);
+
+  if (Index = ItemNotFoundIndex) then
+    raise EIdSipRegistrarNotFound.Create(Registrar.Uri);
+
+  Self.RegistrarAt(Index).Bindings := Bindings;
+end;
+
 //* TIdSipRegistrations Private methods ****************************************
+
+function TIdSipRegistrations.GetRegistrars(Index: Integer): TIdSipUri;
+begin
+  Result := Self.RegistrarAt(Index).Registrar;
+end;
 
 function TIdSipRegistrations.IndexOfRegistrar(Registrar: TIdSipUri): Integer;
 begin
@@ -643,6 +766,25 @@ end;
 function TIdSipRegistrations.KnowsRegistrar(Registrar: TIdSipUri): Boolean;
 begin
   Result := Self.IndexOfRegistrar(Registrar) <> ItemNotFoundIndex;
+end;
+
+procedure TIdSipRegistrations.MergeBindings(Left, Right, Result: TIdSipContacts);
+begin
+  // Given two sets of Contacts, Result contains the union, with no duplicates,
+  // of Left and Right.
+
+  Left.First;
+  while Left.HasNext do begin
+    Result.Add(Left.CurrentContact);
+    Left.Next;
+  end;
+
+  Right.First;
+  while Right.HasNext do begin
+    if not Result.HasContact(Right.CurrentContact) then
+      Result.Add(Right.CurrentContact);
+    Right.Next;
+  end;
 end;
 
 function TIdSipRegistrations.RegistrarAt(Index: Integer): TIdSipRegistrationInfo;
@@ -1025,9 +1167,25 @@ begin
 end;
 
 procedure TIdSipOutboundRegisterModule.CleanUp;
+var
+  Bindings: TIdSipContacts;
+  I:        Integer;
+  R:        TIdSipUri;
 begin
-//  if Self.HasRegistrar then
-//    Self.UnregisterFrom(Self.Registrar, Self.Contact).Send;
+  if not Self.KnownRegistrars.IsEmpty then begin
+    Bindings := TIdSipContacts.Create;
+    try
+      for I := 0 to Self.KnownRegistrars.Count - 1 do begin
+        R := Self.KnownRegistrars[I];
+        Self.KnownRegistrars.BindingsFor(R, Bindings);
+
+        if not Bindings.IsEmpty then
+          Self.UnregisterFrom(R, Bindings).Send;
+      end;
+    finally
+      Bindings.Free;
+    end;
+  end;
 end;
 
 function TIdSipOutboundRegisterModule.CreateRegister(From: TIdSipAddressHeader;
@@ -1085,6 +1243,8 @@ function TIdSipOutboundRegisterModule.RegisterWith(Registrar: TIdSipUri;
                                                    Contacts: TIdSipContacts): TIdSipOutboundRegistration;
 begin
   Result := Self.UserAgent.AddOutboundAction(TIdSipOutboundRegistration) as TIdSipOutboundRegistration;
+  Result.AddListener(Self);
+  
   Result.Bindings.Add(Contacts);
   Result.Registrar  := Registrar;
 end;
@@ -1096,9 +1256,25 @@ end;
 
 function TIdSipOutboundRegisterModule.UnregisterFrom(Registrar: TIdSipUri;
                                                      Contact: TIdSipContactHeader): TIdSipOutboundUnregistration;
+var
+  C: TIdSipContacts;
+begin
+  C := TIdSipContacts.Create;
+  try
+    C.Add(Contact);
+    Result := Self.UnregisterFrom(Registrar, C);
+  finally
+    C.Free;
+  end;
+end;
+
+function TIdSipOutboundRegisterModule.UnregisterFrom(Registrar: TIdSipUri;
+                                                     Contacts: TIdSipContacts): TIdSipOutboundUnregistration;
 begin
   Result := Self.UserAgent.AddOutboundAction(TIdSipOutboundUnregistration) as TIdSipOutboundUnregistration;
-  Result.Bindings.Add(Contact);
+  Result.AddListener(Self);
+
+  Result.Bindings.Add(Contacts);
   Result.Registrar := Registrar;
 end;
 
@@ -1109,6 +1285,42 @@ begin
 end;
 
 //* TIdSipOutboundRegisterModule Private methods *******************************
+
+procedure TIdSipOutboundRegisterModule.OnAuthenticationChallenge(Action: TIdSipAction;
+                                                                 Challenge: TIdSipResponse);
+begin
+  // Do nothing.
+end;
+
+procedure TIdSipOutboundRegisterModule.OnFailure(RegisterAgent: TIdSipOutboundRegistrationBase;
+                                                 ErrorCode: Cardinal;
+                                                 const Reason: String);
+begin
+  // Do nothing: only successful REGISTERs alter bindings.
+  RegisterAgent.RemoveListener(Self);
+end;
+
+procedure TIdSipOutboundRegisterModule.OnNetworkFailure(Action: TIdSipAction;
+                                                        ErrorCode: Cardinal;
+                                                        const Reason: String);
+begin
+  // Do nothing.
+end;
+
+procedure TIdSipOutboundRegisterModule.OnSuccess(RegisterAgent: TIdSipOutboundRegistrationBase;
+                                                 CurrentBindings: TIdSipContacts);
+var
+  R: TIdSipRequest;
+begin
+  RegisterAgent.RemoveListener(Self);
+
+  R := RegisterAgent.InitialRequest;
+
+  if not Self.KnownRegistrars.KnowsRegistrar(RegisterAgent.Registrar) then
+    Self.KnownRegistrars.AddKnownRegistrar(RegisterAgent.Registrar, R.CallID, R.CSeq.SequenceNo);
+
+  Self.KnownRegistrars.SetBindings(RegisterAgent.Registrar, CurrentBindings);
+end;
 
 procedure TIdSipOutboundRegisterModule.SetRegistrar(Value: TIdSipUri);
 begin

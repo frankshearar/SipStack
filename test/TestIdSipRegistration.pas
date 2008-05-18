@@ -12,8 +12,8 @@ unit TestIdSipRegistration;
 interface
 
 uses
-  IdSipMessage, IdSipRegistration, IdSipMockBindingDatabase, TestFramework,
-  TestFrameworkSip;
+  Classes, IdSipMessage, IdSipRegistration, IdSipMockBindingDatabase,
+  TestFramework, TestFrameworkSip;
 
 type
   TestFunctions = class(TTestCase)
@@ -35,13 +35,31 @@ type
   private
     Regs: TIdSipRegistrations;
     Uri:  TIdSipUri;
+
+    procedure AsString(Contacts: TIdSipContacts; Result: TStringList);
+    procedure CheckBindings(Expected: TIdSipContacts; Registrar: TIdSipUri; Msg: String);
+    procedure CheckEquals(Expected, Received: TIdSipContacts; MsgPrefix: String); overload;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAddBindings;
+    procedure TestAddBindingsDuplicateBindings;
+    procedure TestAddBindingsForUnknownRegistrar;
     procedure TestAddKnownRegistrar;
+    procedure TestBindingsForClearsParameter;
+    procedure TestBindingsForUnknownRegistrar;
     procedure TestCallIDFor;
+    procedure TestCount;
+    procedure TestIsEmpty;
+    procedure TestKnownRegistrar;
     procedure TestNextSequenceNoFor;
+    procedure TestRegistrars;
+    procedure TestRemoveBindings;
+    procedure TestRemoveBindingsForUnknownRegistrar;
+    procedure TestRemoveBindingsNonExtantBindings;
+    procedure TestSetBindingsAndBindingsFor;
+    procedure TestSetBindingsForUnknownRegistrar;
   end;
 
   // We test binding rules here. We test those things that could cause a
@@ -132,7 +150,7 @@ type
 implementation
 
 uses
-  Classes, DateUtils, SysUtils;
+  DateUtils, SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -224,7 +242,117 @@ begin
   inherited TearDown;
 end;
 
+//* TestTIdSipRegistrations Private methods ************************************
+
+procedure TestTIdSipRegistrations.AsString(Contacts: TIdSipContacts; Result: TStringList);
+begin
+  Result.Clear;
+  Contacts.First;
+  while Contacts.HasNext do begin
+    Result.Add(Contacts.CurrentContact.AsString);
+    Contacts.Next;
+  end;
+
+  Result.Sort;
+end;
+
+procedure TestTIdSipRegistrations.CheckBindings(Expected: TIdSipContacts; Registrar: TIdSipUri; Msg: String);
+var
+  Actual: TIdSipContacts;
+begin
+  Actual := TIdSipContacts.Create;
+  try
+    Self.Regs.BindingsFor(Registrar, Actual);
+
+    CheckEquals(Expected, Actual, Msg);
+  finally
+    Actual.Free;
+  end;
+end;
+
+procedure TestTIdSipRegistrations.CheckEquals(Expected, Received: TIdSipContacts; MsgPrefix: String);
+var
+  ExpectedAsString: TStringList;
+  I:                Integer;
+  ReceivedAsString: TStringList;
+begin
+  ExpectedAsString := TStringList.Create;
+  try
+    ReceivedAsString := TStringList.Create;
+    try
+      Self.AsString(Expected, ExpectedAsString);
+      Self.AsString(Received, ReceivedAsString);
+
+      if (ExpectedAsString.Count < ReceivedAsString.Count) then
+        Fail('Too few Contacts')
+      else if (ExpectedAsString.Count > ReceivedAsString.Count) then
+        Fail('Too many Contacts');
+
+      for I := 0 to ExpectedAsString.Count - 1 do
+        CheckEquals(ExpectedAsString[I], ReceivedAsString[I], Format('Contact #%d differs', [I + 1]));
+    finally
+      ReceivedAsString.Free;
+    end;
+  finally
+    ExpectedAsString.Free;
+  end;
+end;
+
 //* TestTIdSipRegistrations Published methods **********************************
+
+procedure TestTIdSipRegistrations.TestAddBindings;
+var
+  Bindings: TIdSipContacts;
+begin
+  Bindings := TIdSipContacts.Create;
+  try
+    Self.Regs.AddKnownRegistrar(Self.Uri, '', 0);
+
+    Bindings.Add(ContactHeaderFull).Value := 'sip:foo@example.com';
+    Bindings.Add(ContactHeaderFull).Value := 'sip:bar@example.com';
+
+    Self.Regs.AddBindings(Self.Uri, Bindings);
+    CheckBindings(Bindings, Self.Uri, 'AddBindings');
+  finally
+    Bindings.Free;
+  end;
+end;
+
+procedure TestTIdSipRegistrations.TestAddBindingsDuplicateBindings;
+var
+  Bindings: TIdSipContacts;
+begin
+  Bindings := TIdSipContacts.Create;
+  try
+    Self.Regs.AddKnownRegistrar(Self.Uri, '', 0);
+
+    Bindings.Add(ContactHeaderFull).Value := 'sip:foo@example.com';
+    Bindings.Add(ContactHeaderFull).Value := 'sip:bar@example.com';
+
+    Self.Regs.AddBindings(Self.Uri, Bindings);
+    Self.Regs.AddBindings(Self.Uri, Bindings);
+    CheckBindings(Bindings, Self.Uri, 'Second AddBindings added duplicate bindings');
+  finally
+    Bindings.Free;
+  end;
+end;
+
+procedure TestTIdSipRegistrations.TestAddBindingsForUnknownRegistrar;
+var
+  Bindings: TIdSipContacts;
+begin
+  Bindings := TIdSipContacts.Create;
+  try
+    try
+      Self.Regs.AddBindings(Self.Uri, Bindings);
+      Fail('Failed to bail out on AddBindings for unknown registrar');
+    except
+      on EIdSipRegistrarNotFound do;
+    end;
+  finally
+    Bindings.Free;
+  end;
+end;
 
 procedure TestTIdSipRegistrations.TestAddKnownRegistrar;
 begin
@@ -239,6 +367,40 @@ begin
   Self.Regs.CallIDFor(Self.Uri);
 end;
 
+procedure TestTIdSipRegistrations.TestBindingsForClearsParameter;
+var
+  Bindings: TIdSipContacts;
+begin
+  Bindings := TIdSipContacts.Create;
+  try
+    Self.Regs.AddKnownRegistrar(Self.Uri, '', 0);
+
+    Bindings.Add(ContactHeaderFull).Value := 'sip:example.com';
+    Self.Regs.BindingsFor(Self.Uri, Bindings);
+
+    Check(Bindings.IsEmpty, 'Bindings not cleared');
+  finally
+    Bindings.Free;
+  end;
+end;
+
+procedure TestTIdSipRegistrations.TestBindingsForUnknownRegistrar;
+var
+  Bindings: TIdSipContacts;
+begin
+  Bindings := TIdSipContacts.Create;
+  try
+    try
+      Self.Regs.BindingsFor(Self.Uri, Bindings);
+      Fail('Failed to bail out on BindingsFor for unknown registrar');
+    except
+      on EIdSipRegistrarNotFound do;
+    end;
+  finally
+    Bindings.Free;
+  end;
+end;
+
 procedure TestTIdSipRegistrations.TestCallIDFor;
 const
   CallID = '329087234@casephone.fried-neurons.org';
@@ -246,6 +408,7 @@ begin
   // Registrar not known:
   try
     Self.Regs.CallIDFor(Self.Uri);
+      Fail('Failed to bail out on CallIDFor for unknown registrar');
   except
     on EIdSipRegistrarNotFound do;
   end;
@@ -254,6 +417,36 @@ begin
   CheckEquals(CallID,
               Self.Regs.CallIDFor(Self.Uri),
               'Call-ID');
+end;
+
+procedure TestTIdSipRegistrations.TestCount;
+begin
+  CheckEquals(0, Self.Regs.Count, 'New Registrations');
+
+  Self.Regs.AddKnownRegistrar(Self.Uri, '', 0);
+  CheckEquals(1, Self.Regs.Count, 'After AddKnownRegistrar');
+
+  Self.Uri.Uri := 'sip:another-registrar.tessier-ashpool.co.luna';
+  Self.Regs.AddKnownRegistrar(Self.Uri, '', 0);
+  CheckEquals(2, Self.Regs.Count, 'After another AddKnownRegistrar');
+end;
+
+procedure TestTIdSipRegistrations.TestIsEmpty;
+begin
+  Check(Self.Regs.IsEmpty, 'New Registrations');
+
+  Self.Regs.AddKnownRegistrar(Self.Uri, '', 0);
+
+  Check(not Self.Regs.IsEmpty, 'After AddKnownRegistrar');
+end;
+
+procedure TestTIdSipRegistrations.TestKnownRegistrar;
+begin
+  Check(not Self.Regs.KnownRegistrar(Self.Uri), 'Empty Registrations');
+
+  Self.Regs.AddKnownRegistrar(Self.Uri, '', 0);
+
+  Check(Self.Regs.KnownRegistrar(Self.Uri), 'Registrar wasn''t added?');
 end;
 
 procedure TestTIdSipRegistrations.TestNextSequenceNoFor;
@@ -275,6 +468,170 @@ begin
   CheckEquals(IntToHex(SequenceNo + I, 8),
               IntToHex(Self.Regs.NextSequenceNoFor(Self.Uri), 8),
               'Next sequence number #' + IntToStr(I + 1));
+end;
+
+procedure TestTIdSipRegistrations.TestRegistrars;
+var
+  OtherRegistrar: TIdSipUri;
+begin
+  OtherRegistrar := TIdSipUri.Create('sip:example.com');
+  try
+    Self.Regs.AddKnownRegistrar(Self.Uri, '', 0);
+    Self.Regs.AddKnownRegistrar(OtherRegistrar, '', 0);
+
+    CheckEquals(Self.Uri.AsString,       Self.Regs[0].AsString, 'First registrar URI');
+    CheckEquals(OtherRegistrar.AsString, Self.Regs[1].AsString, 'Second registrar URI');
+  finally
+    OtherRegistrar.Free;
+  end;
+end;
+
+procedure TestTIdSipRegistrations.TestRemoveBindings;
+const
+  UriOne = 'sip:bob@cubicle10a.biloxi.com';
+  UriTwo = 'sip:bob@freephone.example.com';
+var
+  NewBindings:        TIdSipContacts;
+  OldBindings:        TIdSipContacts;
+  RegisteredBindings: TIdSipContacts;
+begin
+  Self.Regs.AddKnownRegistrar(Self.Uri, '', 0);
+
+  NewBindings := TIdSipContacts.Create;
+  try
+    OldBindings := TIdSipContacts.Create;
+    try
+      RegisteredBindings := TIdSipContacts.Create;
+      try
+        RegisteredBindings.Add(ContactHeaderFull).Value := UriOne;
+        RegisteredBindings.Add(ContactHeaderFull).Value := UriTwo;
+
+        Self.Regs.SetBindings(Self.Uri, RegisteredBindings);
+
+        OldBindings.Add(ContactHeaderFull).Value := UriOne;
+
+        Self.Regs.RemoveBindings(Self.Uri, OldBindings);
+
+        // Remove the first Contact
+        RegisteredBindings.First;
+        RegisteredBindings.Remove(RegisteredBindings.CurrentContact);
+
+        Self.Regs.BindingsFor(Self.Uri, NewBindings);
+        CheckEquals(RegisteredBindings, NewBindings, 'Bindings not removed');
+      finally
+        RegisteredBindings.Free;
+      end;
+    finally
+      OldBindings.Free;
+    end;
+  finally
+    NewBindings.Free;
+  end;
+end;
+
+procedure TestTIdSipRegistrations.TestRemoveBindingsForUnknownRegistrar;
+var
+  Bindings: TIdSipContacts;
+begin
+  Bindings := TIdSipContacts.Create;
+  try
+    try
+      Self.Regs.RemoveBindings(Self.Uri, Bindings);
+      Fail('Failed to bail out on RemoveBindings for unknown registrar');
+    except
+      on EIdSipRegistrarNotFound do;
+    end;
+  finally
+    Bindings.Free;
+  end;
+end;
+
+procedure TestTIdSipRegistrations.TestRemoveBindingsNonExtantBindings;
+const
+  UnknownUri = 'sip:case@unit55.jakes.example.com';
+  UriOne     = 'sip:bob@cubicle10a.biloxi.com';
+  UriTwo     = 'sip:bob@freephone.example.com';
+var
+  NewBindings:        TIdSipContacts;
+  OldBindings:        TIdSipContacts;
+  UnknownBindings: TIdSipContacts;
+begin
+  Self.Regs.AddKnownRegistrar(Self.Uri, '', 0);
+
+  NewBindings := TIdSipContacts.Create;
+  try
+    OldBindings := TIdSipContacts.Create;
+    try
+      UnknownBindings := TIdSipContacts.Create;
+      try
+        OldBindings.Add(ContactHeaderFull).Value := UriOne;
+        OldBindings.Add(ContactHeaderFull).Value := UriTwo;
+        UnknownBindings.Add(ContactHeaderFull).Value := UnknownUri;
+
+        Self.Regs.SetBindings(Self.Uri, OldBindings);
+
+        Self.Regs.RemoveBindings(Self.Uri, UnknownBindings);
+
+        Self.Regs.BindingsFor(Self.Uri, NewBindings);
+        CheckEquals(OldBindings, NewBindings, 'Unknown Bindings not removed');
+      finally
+        UnknownBindings.Free;
+      end;
+    finally
+      OldBindings.Free;
+    end;
+  finally
+    NewBindings.Free;
+  end;
+end;
+
+procedure TestTIdSipRegistrations.TestSetBindingsAndBindingsFor;
+var
+  ActualBindings:   TIdSipContacts;
+  ExpectedBindings: TIdSipContacts;
+begin
+  ActualBindings := TIdSipContacts.Create;
+  try
+    ExpectedBindings := TIdSipContacts.Create;
+    try
+      Self.Regs.AddKnownRegistrar(Self.Uri, '', 0);
+
+      Self.Regs.SetBindings(Self.Uri, ExpectedBindings);
+      Self.Regs.BindingsFor(Self.Uri, ActualBindings);
+      CheckEquals(ExpectedBindings, ActualBindings, 'Empty Contacts');
+
+      ExpectedBindings.Add(ContactHeaderFull).Value := Self.Uri.AsString;
+      Self.Regs.SetBindings(Self.Uri, ExpectedBindings);
+      Self.Regs.BindingsFor(Self.Uri, ActualBindings);
+      CheckEquals(ExpectedBindings, ActualBindings, 'Single Contact');
+
+      ExpectedBindings.Add(ContactHeaderFull).Value := 'sip:example.com';
+      Self.Regs.SetBindings(Self.Uri, ExpectedBindings);
+      Self.Regs.BindingsFor(Self.Uri, ActualBindings);
+      CheckEquals(ExpectedBindings, ActualBindings, 'Multiple Contacts');
+    finally
+      ExpectedBindings.Free;
+    end;
+  finally
+    ActualBindings.Free;
+  end;
+end;
+
+procedure TestTIdSipRegistrations.TestSetBindingsForUnknownRegistrar;
+var
+  Bindings: TIdSipContacts;
+begin
+  Bindings := TIdSipContacts.Create;
+  try
+    try
+      Self.Regs.SetBindings(Self.Uri, Bindings);
+      Fail('Failed to bail out on SetBindings for unknown registrar');
+    except
+      on EIdSipRegistrarNotFound do;
+    end;
+  finally
+    Bindings.Free;
+  end;
 end;
 
 //******************************************************************************

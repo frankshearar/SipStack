@@ -1270,6 +1270,7 @@ type
     function CurrentContact: TIdSipContactHeader;
     function GruuFor(Contact: TIdSipContactHeader): String;
     function HasContact(Address: TIdSipAddressHeader): Boolean;
+    procedure RemoveContact(Contact: TIdSipAddressHeader);
   end;
 
   TIdSipExpiresHeaders = class(TIdSipHeadersFilter)
@@ -7816,6 +7817,20 @@ begin
     Result := Self.CurrentContact.Address.Equals(Address.Address);
 
     Self.Next;
+  end;
+end;
+
+procedure TIdSipContacts.RemoveContact(Contact: TIdSipAddressHeader);
+begin
+  // Remove any headers that are equal to Contact, equality defined as per
+  // RFC 3261 section 19.1.4
+
+  Self.First;
+  while Self.HasNext do begin
+    if Self.CurrentContact.Equals(Contact) then
+      Self.Remove(Self.CurrentContact)
+    else
+      Self.Next;
   end;
 end;
 

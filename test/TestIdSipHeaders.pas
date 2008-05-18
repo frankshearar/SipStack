@@ -807,6 +807,8 @@ type
     procedure TestCurrentContact;
     procedure TestGruuFor;
     procedure TestHasContact;
+    procedure TestRemoveContact;
+    procedure TestRemoveContactWithDuplicates;
   end;
 
   TestTIdSipExpiresHeaders = class(TTestCase)
@@ -8047,6 +8049,52 @@ begin
           'Contains header with same address');
   finally
     NewContact.Free;
+  end;
+end;
+
+procedure TestTIdSipContacts.TestRemoveContact;
+const
+  UriOne = 'sip:bob@cubicle10a.biloxi.com';
+  UriTwo = 'sip:bob@freephone.example.com';
+var
+  C:             TIdSipAddressHeader;
+  OriginalCount: Integer;
+begin
+  Self.Contacts.Add(ContactHeaderFull).Value := UriOne;
+  Self.Contacts.Add(ContactHeaderFull).Value := UriTwo;
+
+  OriginalCount := Self.Contacts.Count;
+
+  C := TIdSipContactHeader.Create;
+  try
+    C.Value := UriTwo;
+
+    Self.Contacts.RemoveContact(C);
+
+    Self.Contacts.First;
+    CheckEquals(UriOne, Self.Contacts.CurrentContact.Address.AsString,
+                'Wrong Contact removed');
+
+    Check(Self.Contacts.Count < OriginalCount, 'No Contact removed');
+  finally
+    C.Free;
+  end;
+end;
+
+procedure TestTIdSipContacts.TestRemoveContactWithDuplicates;
+var
+  C: TIdSipContactHeader;
+begin
+  C := TIdSipContactHeader.Create;
+  try
+    C.Value := 'sip:case@unit55.jacks.example.com';
+    Self.Contacts.Add(C);
+    Self.Contacts.Add(C);
+
+    Self.Contacts.RemoveContact(C);
+    Check(Self.Contacts.IsEmpty, 'All matching Contacts not removed');
+  finally
+    C.Free;
   end;
 end;
 

@@ -67,20 +67,38 @@ type
 
   TestTIdSipOutboundRegisterModule = class(TTestCaseTU)
   private
-    Module:    TIdSipOutboundRegisterModule;
-    RemoteUri: TIdSipURI;
+    Module:       TIdSipOutboundRegisterModule;
+    Registrars:   TIdSipRegistrations;
+    RegistrarOne: TIdSipUri;
+    RegistrarTwo: TIdSipUri;
+    RemoteUri:    TIdSipURI;
 
-    function ActualContact: TIdSipContactHeader;
+    function  ActualContact: TIdSipContactHeader;
+    procedure CheckEquals(Expected, Received: TIdSipContacts); overload;
+    procedure CheckRequestsSent(ExpectedCount: Cardinal; Msg: String);
+    procedure CheckUnregister(Expected: TIdSipContactHeader; Reg: TIdSipRequest; MsgPrefix: String);
+    procedure ReceiveOkFromRegistrar(Reg: TIdSipRequest;
+                                     Contacts: TIdSipContacts);
+    procedure RegisterWith(Registrar: TIdSipUri;
+                           Contact: TIdSipContactHeader); overload;
+    procedure RegisterWith(Registrar: TIdSipUri;
+                           Contacts: TIdSipContacts); overload;
+    procedure UnregisterFrom(Registrar: TIdSipUri;
+                             Contact: TIdSipContactHeader); overload;
+    procedure UnregisterFrom(Registrar: TIdSipUri;
+                             Contacts: TIdSipContacts); overload;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
     procedure TestCleanUpUnregisters;
+    procedure TestCleanUpUnregistersOnlyCurrentlyRegisteredContacts;
     procedure TestCreateRegister;
     procedure TestCreateRegisterReusesCallIDForSameRegistrar;
     procedure TestCreateRegisterWithGruu;
     procedure TestCreateRegisterWithRequiredGruu;
     procedure TestUnregisterFrom;
+    procedure TestUnregisterFromMultipleBindings;
   end;
 
   TestTIdSipRegistration = class(TestTIdSipAction)
@@ -833,16 +851,26 @@ end;
 //* TestTIdSipOutboundRegisterModule Public methods ****************************
 
 procedure TestTIdSipOutboundRegisterModule.SetUp;
+const
+  RegistrarOneUri = 'sip:reg1@tessier-ashpool.co.luna';
+  RegistrarTwoUri = 'sip:proxy.leo-ix.net';
 begin
   inherited SetUp;
 
-  Self.Module    := Self.Core.RegisterModule;
-  Self.RemoteUri := TIdSipURI.Create('sip:wintermute@tessier-ashpool.co.luna');
+  Self.Module       := Self.Core.RegisterModule;
+  Self.RegistrarOne := TIdSipUri.Create(RegistrarOneUri);
+  Self.Registrars   := TIdSipRegistrations.Create;
+  Self.RegistrarTwo := TIdSipUri.Create(RegistrarTwoUri);
+  Self.RemoteUri    := TIdSipURI.Create('sip:wintermute@tessier-ashpool.co.luna');
 end;
 
 procedure TestTIdSipOutboundRegisterModule.TearDown;
 begin
   Self.RemoteUri.Free;
+  Self.RegistrarTwo.Free;
+  Self.Registrars.Free;
+  Self.RegistrarOne.Free;
+  // Self.Module is freed by Self.Core.
 
   inherited TearDown;
 end;
@@ -856,28 +884,190 @@ begin
   Result := Self.LastSentRequest.FirstContact;
 end;
 
+procedure TestTIdSipOutboundRegisterModule.CheckEquals(Expected, Received: TIdSipContacts);
+begin
+  Expected.First;
+  Received.First;
+
+  while (Expected.HasNext and Received.HasNext) do begin
+    CheckEquals(Expected.CurrentContact.Address.AsString,
+                Received.CurrentContact.Address.AsString,
+                'Incorrect Contact');
+
+    Expected.Next;
+    Received.Next;
+  end;
+  Check(Expected.HasNext = Received.HasNext,
+        'Either not all Contacts in the un-REGISTER, or too many contacts');
+end;
+
+procedure TestTIdSipOutboundRegisterModule.CheckRequestsSent(ExpectedCount: Cardinal; Msg: String);
+begin
+  CheckEquals(ExpectedCount, Self.SentRequestCount - Self.RequestCount, Msg);
+end;
+
+procedure TestTIdSipOutboundRegisterModule.CheckUnregister(Expected: TIdSipContactHeader; Reg: TIdSipRequest; MsgPrefix: String);
+begin
+  CheckEquals(MethodRegister, Reg.Method,
+              MsgPrefix + ': Unexpected request sent');
+  CheckEquals(0, Reg.QuickestExpiry,
+              MsgPrefix + ': Expiry time indicates this isn''t an un-REGISTER');
+  CheckEquals(1, Reg.Contacts.Count,
+              MsgPrefix + ': Unexpected Contact count');
+  CheckEquals(Expected.Address, Reg.FirstContact.Address,
+              MsgPrefix + ': Unexpected Contact');
+end;
+
+procedure TestTIdSipOutboundRegisterModule.ReceiveOkFromRegistrar(Reg: TIdSipRequest;
+                                                                  Contacts: TIdSipContacts);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.CreateRemoteOk(Reg);
+  try
+    Response.Contacts := Contacts;
+
+    Self.ReceiveResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundRegisterModule.RegisterWith(Registrar: TIdSipUri;
+                                                        Contact: TIdSipContactHeader);
+var
+  C: TIdSipContacts;
+begin
+  C := TIdSipContacts.Create;
+  try
+    C.Add(Contact);
+
+    Self.RegisterWith(Registrar, C);
+  finally
+    C.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundRegisterModule.RegisterWith(Registrar: TIdSipUri;
+                                                        Contacts: TIdSipContacts);
+var
+  CurrentBindings: TIdSipContacts;
+begin
+  // Register Contacts with Registrar and receive a 200 OK from Registrar.
+  // In other words, this is the call flow around a successful registration.
+
+  Self.Registrars.AddKnownRegistrar(Registrar, '', 0);
+
+  Self.MarkSentRequestCount;
+  Self.Module.RegisterWith(Registrar, Contacts).Send;
+  CheckRequestSent(Format('No REGISTER sent to <%s>', [Registrar.AsString]));
+
+  Self.Registrars.AddBindings(Registrar, Contacts);
+
+  CurrentBindings := TIdSipContacts.Create;
+  try
+    Self.Registrars.BindingsFor(Registrar, CurrentBindings);
+
+    Self.ReceiveOkFromRegistrar(Self.LastSentRequest, CurrentBindings);
+  finally
+    CurrentBindings.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundRegisterModule.UnregisterFrom(Registrar: TIdSipUri;
+                                                          Contact: TIdSipContactHeader);
+var
+  C: TIdSipContacts;
+begin
+  C := TIdSipContacts.Create;
+  try
+    C.Add(Contact);
+
+    Self.UnregisterFrom(Registrar, C);
+  finally
+    C.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundRegisterModule.UnregisterFrom(Registrar: TIdSipUri;
+                                                          Contacts: TIdSipContacts);
+var
+  RemainingBindings: TIdSipContacts;
+begin
+  // This is the call flow around a successful UNregistration.
+
+  Self.Registrars.AddKnownRegistrar(Registrar, '', 0);
+
+  Self.MarkSentRequestCount;
+  Self.Module.UnregisterFrom(Registrar, Contacts).Send;
+  CheckRequestSent(Format('No (un)REGISTER sent to <%s>', [Registrar.AsString]));
+
+  Self.Registrars.RemoveBindings(Registrar, Contacts);
+
+  RemainingBindings := TIdSipContacts.Create;
+  try
+    Self.Registrars.BindingsFor(Registrar, RemainingBindings);
+    Self.ReceiveOkFromRegistrar(Self.LastSentRequest, RemainingBindings);
+  finally
+    RemainingBindings.Free;
+  end;
+end;
+
 //* TestTIdSipOutboundRegisterModule Published methods *************************
 
 procedure TestTIdSipOutboundRegisterModule.TestCleanUpUnregisters;
+var
+  ArbitraryContact: TIdSipContactHeader;
 begin
-  // For the moment, the UserAgent takes care of unregistering: the
-  // OutboundRegisterModule just provides an API that allows unregistering.
+  // Registering to multiple registrars results in un-REGISTERs being sent to
+  // each registrar.
 
-{
-  Self.Module.HasRegistrar := true;
-  Self.Module.Registrar.Uri := 'sip:remotehost';
-  Self.MarkSentRequestCount;
+  ArbitraryContact := TIdSipContactHeader.Create;
+  try
+    ArbitraryContact.Value := 'sip:wintermute@talking-head.tessier-ashpool.co.luna';
 
-  Self.Module.CleanUp;
+    Self.RegisterWith(Self.RegistrarOne, ArbitraryContact);
+    Self.RegisterWith(Self.RegistrarTwo, ArbitraryContact);
 
-  CheckRequestSent('No REGISTER sent');
-  CheckEquals(MethodRegister,
-              Self.LastSentRequest.Method,
-              'Unexpected request sent');
-  CheckEquals(0,
-              Self.LastSentRequest.QuickestExpiry,
-              'Expiry time indicates this wasn''t an un-REGISTER');
-}
+    Self.MarkSentRequestCount;
+    Self.Module.CleanUp;
+    CheckRequestsSent(2, 'No REGISTERs sent');
+    CheckUnregister(ArbitraryContact, Self.LastSentRequest, 'Last REGISTER');
+    CheckUnregister(ArbitraryContact, Self.SecondLastSentRequest, '2nd last REGISTER');
+  finally
+    ArbitraryContact.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundRegisterModule.TestCleanUpUnregistersOnlyCurrentlyRegisteredContacts;
+const
+  BaseUri = 'sip:%s@example.com';
+var
+  Contacts: TIdSipContacts;
+begin
+  // Registering to a registrar, and unregistering only SOME of those Contacts
+  // means that when the module cleans up, only the REMAINING Contacts are
+  // unregistered.
+
+  Contacts := TIdSipContacts.Create;
+  try
+    Contacts.Add(ContactHeaderFull).Value := Format(BaseUri, ['one']);
+    Contacts.Add(ContactHeaderFull).Value := Format(BaseUri, ['two']);
+
+    Self.RegisterWith(Self.RegistrarOne, Contacts);
+
+    Contacts.First;
+    Self.UnregisterFrom(Self.RegistrarOne, Contacts.CurrentContact);
+
+    Self.MarkSentRequestCount;
+    Self.Module.CleanUp;
+    CheckRequestsSent(1, 'Wrong number of REGISTERs sent');
+
+    Contacts.Next;
+    CheckUnregister(Contacts.CurrentContact, Self.LastSentRequest, 'Unregister');
+  finally
+    Contacts.Free;
+  end;
 end;
 
 procedure TestTIdSipOutboundRegisterModule.TestCreateRegister;
@@ -997,34 +1187,40 @@ procedure TestTIdSipOutboundRegisterModule.TestUnregisterFrom;
 var
   OurBindings: TIdSipContacts;
 begin
-  Self.MarkSentRequestCount;
-  Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '').Send;
-  CheckRequestSent('No INVITE sent');
-
-  Self.MarkSentRequestCount;
-  Self.Module.UnregisterFrom(Self.RemoteUri, Self.LastSentRequest.FirstContact).Send;
-  CheckRequestSent('No REGISTER sent');
-  CheckEquals(MethodRegister,
-              Self.LastSentRequest.Method,
-              'Unexpected sent request');
-
   OurBindings := TIdSipContacts.Create;
   try
     OurBindings.Add(Self.ActualContact);
 
-    OurBindings.First;
-    Self.LastSentRequest.Contacts.First;
+    Self.MarkSentRequestCount;
+    Self.Module.UnregisterFrom(Self.RemoteUri, Self.LastSentRequest.FirstContact).Send;
+    CheckRequestSent('No REGISTER sent');
+    CheckEquals(MethodRegister,
+                Self.LastSentRequest.Method,
+                'Unexpected sent request');
 
-    while (OurBindings.HasNext and Self.LastSentRequest.Contacts.HasNext) do begin
-      CheckEquals(OurBindings.CurrentContact.Address.AsString,
-                  Self.LastSentRequest.Contacts.CurrentContact.Address.AsString,
-                  'Incorrect Contact');
+    CheckEquals(OurBindings, Self.LastSentRequest.Contacts);
+  finally
+    OurBindings.Free;
+  end;
+end;
 
-      OurBindings.Next;
-      Self.LastSentRequest.Contacts.Next;
-    end;
-    Check(OurBindings.HasNext = Self.LastSentRequest.Contacts.HasNext,
-          'Either not all Contacts in the un-REGISTER, or too many contacts');
+procedure TestTIdSipOutboundRegisterModule.TestUnregisterFromMultipleBindings;
+var
+  OurBindings: TIdSipContacts;
+begin
+  OurBindings := TIdSipContacts.Create;
+  try
+    OurBindings.Add(Self.ActualContact);
+    OurBindings.Add(ContactHeaderFull).Value := 'sip:wintermute@silver-bust.tessier-ashpool.co.luna';
+
+    Self.MarkSentRequestCount;
+    Self.Module.UnregisterFrom(Self.RemoteUri, OurBindings).Send;
+    CheckRequestSent('No REGISTER sent');
+    CheckEquals(MethodRegister,
+                Self.LastSentRequest.Method,
+                'Unexpected sent request');
+
+    CheckEquals(OurBindings, Self.LastSentRequest.Contacts);
   finally
     OurBindings.Free;
   end;
