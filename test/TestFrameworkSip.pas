@@ -184,8 +184,13 @@ type
   TIdSipFailableListener = class(TIdInterfacedObject)
   private
     fFailWith: ExceptClass;
+  protected
+    fReasonParam: String;
   public
-    property FailWith: ExceptClass read fFailWith write fFailWith;
+    constructor Create; override;
+
+    property FailWith:    ExceptClass read fFailWith write fFailWith;
+    property ReasonParam: String      read fReasonParam;
   end;
 
   TIdSipTestActionListener = class(TIdSipFailableListener,
@@ -202,8 +207,6 @@ type
     procedure OnNetworkFailure(Action: TIdSipAction;
                                ErrorCode: Cardinal;
                                const Reason: String);
-  protected
-    fReasonParam: String;
   public
     constructor Create; override;
 
@@ -211,11 +214,10 @@ type
     property AuthenticationChallenged: Boolean        read fAuthenticationChallenged;
     property ErrorCodeParam:           Cardinal       read fErrorCodeParam;
     property NetworkFailed:            Boolean        read fNetworkFailed;
-    property ReasonParam:              String         read fReasonParam;
     property ResponseParam:            TIdSipResponse read fResponseParam;
   end;
 
-  TIdSipTestDataListener = class(TIdSipTestActionListener,
+  TIdSipTestDataListener = class(TIdSipFailableListener,
                                  IIdRtpDataListener)
   private
     fNewData:    Boolean;
@@ -231,7 +233,7 @@ type
     property NewUdpData: Boolean read fNewUdpData;
   end;
 
-  TIdSipTestMessageListener = class(TIdSipTestActionListener,
+  TIdSipTestMessageListener = class(TIdSipFailableListener,
                                     IIdSipMessageListener)
   private
     fException:             Boolean;
@@ -267,7 +269,7 @@ type
     property ResponseParam:         TIdSipResponse           read fResponseParam;
   end;
 
-  TIdSipTestObserver = class(TIdSipTestActionListener,
+  TIdSipTestObserver = class(TIdSipFailableListener,
                              IIdObserver)
   private
     fChanged: Boolean;
@@ -350,7 +352,7 @@ type
     property ResponseParam:     TIdSipResponse       read fResponseParam;
   end;
 
-  TIdSipTestInviteModuleListener = class(TIdSipTestActionListener,
+  TIdSipTestInviteModuleListener = class(TIdSipFailableListener,
                                          IIdSipMessageModuleListener,
                                          IIdSipInviteModuleListener)
   private
@@ -433,7 +435,7 @@ type
     property Success:              Boolean                        read fSuccess;
   end;
 
-  TIdSipTestActionRedirectorListener = class(TIdSipTestActionListener,
+  TIdSipTestActionRedirectorListener = class(TIdSipFailableListener,
                                              IIdSipActionRedirectorListener)
   private
     fErrorCodeParam:        Cardinal;
@@ -547,7 +549,7 @@ type
     property EndedNotificationCount: Integer read fEndedNotificationCount;
   end;
 
-  TIdSipTestSubscriptionListener = class(TIdSipTestActionListener,
+  TIdSipTestSubscriptionListener = class(TIdSipFailableListener,
                                          IIdSipSubscriptionListener)
   private
     fEstablishedSubscription: Boolean;
@@ -580,7 +582,7 @@ type
     property SubscriptionParam:       TIdSipOutboundSubscription read fSubscriptionParam;
   end;
 
-  TIdSipTestTransactionListener = class(TIdSipTestActionListener,
+  TIdSipTestTransactionListener = class(TIdSipFailableListener,
                                         IIdSipTransactionListener)
   private
     fBindingParam:       TIdConnectionBindings;
@@ -620,7 +622,7 @@ type
   end;
 
 
-  TIdSipTestTransactionDispatcherListener = class(TIdSipTestActionListener,
+  TIdSipTestTransactionDispatcherListener = class(TIdSipFailableListener,
                                                   IIdSipTransactionDispatcherListener)
   private
     fBindingParam:              TIdConnectionBindings;
@@ -686,7 +688,7 @@ type
     property MessageParam:            TIdSipMessage         read fMessageParam;
   end;
 
-  TIdSipTestSubscribeModuleListener = class(TIdSipTestActionListener,
+  TIdSipTestSubscribeModuleListener = class(TIdSipFailableListener,
                                             IIdSipSubscribeModuleListener)
   private
     fRenewedSubscription: Boolean;
@@ -1553,6 +1555,18 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipFailableListener                                                     *
+//******************************************************************************
+//* TIdSipFailableListener Public methods **************************************
+
+constructor TIdSipFailableListener.Create;
+begin
+  inherited Create;
+
+  Self.fReasonParam := '';
+end;
+
+//******************************************************************************
 //* TIdSipTestActionListener                                                   *
 //******************************************************************************
 //* TIdSipTestActionListener Public methods ************************************
@@ -1564,7 +1578,6 @@ begin
   Self.FailWith                  := nil;
   Self.fAuthenticationChallenged := false;
   Self.fNetworkFailed            := false;
-  Self.fReasonParam              := '';
 end;
 
 //* TIdSipTestActionListener Private methods ***********************************
