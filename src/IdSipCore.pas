@@ -4003,6 +4003,8 @@ begin
   Result.CopyHeaders(Self.InitialRequest, AuthorizationHeader);
   Result.CopyHeaders(Self.InitialRequest, ProxyAuthorizationHeader);
 
+  Result.RemoveAllAuthorizationsFor(AuthorizationCredentials.Realm);
+
   Result.AddHeader(AuthorizationCredentials);
 end;
 

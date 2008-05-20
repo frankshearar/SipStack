@@ -80,6 +80,7 @@ type
     procedure TestSendUsesMappedRoutes; virtual;
     procedure TestResend; virtual;
     procedure TestResendBeforeSend; virtual;
+    procedure TestResendWithAuthForSameRealm; virtual;
     procedure TestResendWithProxyAuth; virtual;
 {
     procedure TestReceiveResponseBadExtension; // Currently our stack can't sent Requires; ergo we can't test in the usual fashion
@@ -102,6 +103,8 @@ uses
 procedure TestTIdSipAction.SetUp;
 begin
   inherited SetUp;
+
+  Self.Core.Username := 'Case';
 
   Self.Binding := TIdConnectionBindings.Create;
   Self.Binding.LocalIP   := Self.LanIP;
@@ -695,7 +698,7 @@ begin
           Self.ClassName + ': Incorrect Authorization header');
 
     Check(Action.InitialRequest.HasAuthorizationFor(AuthCreds.Realm),
-          'Action''s InitialRequest has no record of the authentication');      
+          'Action''s InitialRequest has no record of the authentication');
   finally
     AuthCreds.Free;
   end;
@@ -729,6 +732,45 @@ begin
        + 'invoked Send');
   except
     on EIdSipTransactionUser do;
+  end;
+end;
+
+procedure TestTIdSipAction.TestResendWithAuthForSameRealm;
+
+var
+  Action:      TIdSipAction;
+  AuthCreds:   TIdSipAuthorizationHeader;
+  NewUsername: String;
+begin
+  // This test only makes sense for OUTbound actions.
+  if Self.IsInboundTest then Exit;
+
+  Action := Self.CreateAction;
+
+  Self.ReceiveUnauthorized(WWWAuthenticateHeader, '');
+  AuthCreds := Self.CreateAuthorization(Self.LastSentResponse);
+  try
+    Self.MarkSentRequestCount;
+    Action.Resend(AuthCreds);
+    CheckRequestSent(Self.ClassName + ': Resend didn''t send a request');
+
+    Self.ReceiveUnauthorized(WWWAuthenticateHeader, '');
+
+    NewUsername := AuthCreds.Username + '-1';
+    AuthCreds.Username := NewUsername;
+    Self.MarkSentRequestCount;
+    Action.Resend(AuthCreds);
+    CheckRequestSent(Self.ClassName + ': RE-Resend didn''t send a request');
+
+    Check(Self.LastSentRequest.HasHeader(AuthCreds.Name),
+          Self.ClassName + ': Resent request has no ' + AuthCreds.Name + ' header');
+    CheckEquals(NewUsername, Self.LastSentRequest.AuthorizationFor(AuthCreds.Realm).Username,
+          Self.ClassName + ': Incorrect credentials (username)');
+
+    Check(Action.InitialRequest.HasAuthorizationFor(AuthCreds.Realm),
+          'Action''s InitialRequest has no record of the authentication');
+  finally
+    AuthCreds.Free;
   end;
 end;
 

@@ -1579,6 +1579,7 @@ type
     function  MatchCancel(Cancel: TIdSipRequest): Boolean;
     function  ProxyAuthorizationFor(const Realm: String): TIdSipProxyAuthorizationHeader;
     function  RequiresResponse: Boolean;
+    procedure RemoveAllAuthorizationsFor(const Realm: String);
     procedure RewriteLocationHeaders(Binding: TIdConnectionBindings); override;
     function  WantsAllowEventsHeader: Boolean; override;
 
@@ -9379,6 +9380,17 @@ end;
 function TIdSipRequest.RequiresResponse: Boolean;
 begin
   Result := not Self.IsAck;
+end;
+
+procedure TIdSipRequest.RemoveAllAuthorizationsFor(const Realm: String);
+var
+  A: TIdSipAuthorizationHeader;
+begin
+  A := Self.AuthorizationFor(Realm);
+  while Assigned(A) do begin
+    Self.RemoveHeader(A);
+    A := Self.AuthorizationFor(Realm);
+  end;
 end;
 
 procedure TIdSipRequest.RewriteLocationHeaders(Binding: TIdConnectionBindings);

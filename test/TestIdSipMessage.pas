@@ -117,6 +117,9 @@ type
     Response:               TIdSipResponse;
     Transport:              String;
 
+    procedure AddAuthorizationFor(Request: TIdSipRequest;
+                                  HeaderType: TIdSipAuthorizationHeaderClass;
+                                  Realm: String);
     procedure CheckBasicRequest(Msg: TIdSipMessage;
                                 CheckBody: Boolean = true);
     procedure TurnIntoNotify(Request: TIdSipRequest);
@@ -202,6 +205,7 @@ type
     procedure TestProxyAuthorizationFor;
     procedure TestProxyRequire;
     procedure TestReferTo;
+    procedure TestRemoveAllAuthorizationsFor;
     procedure TestReplaces;
     procedure TestRequiresResponse;
     procedure TestRewriteLocationHeadersNoContact;
@@ -1719,6 +1723,17 @@ begin
 end;
 
 //* TestTIdSipRequest Private methods ******************************************
+
+procedure TestTIdSipRequest.AddAuthorizationFor(Request: TIdSipRequest;
+                                                HeaderType: TIdSipAuthorizationHeaderClass;
+                                                Realm: String);
+var
+  Auth: TIdSipAuthorizationHeader;
+begin
+  Auth := HeaderType.Create;
+  Self.Request.AddHeader(Auth);
+  Auth.Realm := Realm;
+end;
 
 procedure TestTIdSipRequest.CheckBasicRequest(Msg: TIdSipMessage;
                                              CheckBody: Boolean = true);
@@ -3278,6 +3293,23 @@ begin
   finally
     ReferTo.Free;
   end;
+end;
+
+procedure TestTIdSipRequest.TestRemoveAllAuthorizationsFor;
+const
+  OtherRealm  = 'leo-ix.net';
+  TargetRealm = 'tessier-ashpool.co.luna';
+var
+  Auth: TIdSipAuthorizationHeader;
+begin
+  Self.AddAuthorizationFor(Self.Request, TIdSipAuthorizationHeader, TargetRealm);
+  Self.AddAuthorizationFor(Self.Request, TIdSipProxyAuthorizationHeader, TargetRealm);
+  Self.AddAuthorizationFor(Self.Request, TIdSipAuthorizationHeader, OtherRealm);
+  Self.AddAuthorizationFor(Self.Request, TIdSipProxyAuthorizationHeader, OtherRealm);
+
+  Self.Request.RemoveAllAuthorizationsFor(TargetRealm);
+  Check(not Self.Request.HasAuthorizationFor(TargetRealm),
+        'Not all authorization headers removed for the target realm');
 end;
 
 procedure TestTIdSipRequest.TestReplaces;
