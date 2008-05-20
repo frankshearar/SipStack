@@ -384,10 +384,6 @@ type
     function  GetDefaultPreferredTransportType: String;
     function  DefaultUserAgent: String;
     function  GetDefaultRoutePath: TIdSipRoutePath;
-    procedure Log(Description: String;
-                  Severity: TLogVerbosityLevel;
-                  EventRef: Cardinal;
-                  DebugInfo: String);
     procedure LogDroppedMessage(Message: TIdSipMessage;
                                 Binding: TIdConnectionBindings);
     function  ModuleAt(Index: Integer): TIdSipMessageModule;
@@ -500,6 +496,10 @@ type
     function  IsSchemeAllowed(const Scheme: String): Boolean;
     function  IsSourceOf(Request: TIdSipRequest): Boolean;
     function  KnownMethods: String;
+    procedure Log(Description: String;
+                  Severity: TLogVerbosityLevel;
+                  EventRef: Cardinal;
+                  DebugInfo: String);
     function  ModuleFor(Request: TIdSipRequest): TIdSipMessageModule; overload;
     function  ModuleFor(const Method: String): TIdSipMessageModule; overload;
     function  ModuleFor(ModuleType: TIdSipMessageModuleClass): TIdSipMessageModule; overload;
@@ -2279,6 +2279,24 @@ begin
     Delete(Result, Length(Result) - 1, Length(Delimiter));
 end;
 
+procedure TIdSipAbstractCore.Log(Description: String;
+                                 Severity: TLogVerbosityLevel;
+                                 EventRef: Cardinal;
+                                 DebugInfo: String);
+begin
+  if not Assigned(Self.Logger) then Exit;
+
+  Self.Logger.Lock;
+  try
+    if not Self.Logger.Logs.LogExists(LogName) then
+      Self.Logger.Add(Self.LogName);
+
+    Self.Logger.Write(Self.LogName, Severity, coLogSourceRefSIPStack, Self.ClassName, EventRef, Description, DebugInfo);
+  finally
+    Self.Logger.Unlock;
+  end;
+end;
+
 function TIdSipAbstractCore.ModuleFor(Request: TIdSipRequest): TIdSipMessageModule;
 var
   I: Integer;
@@ -2863,24 +2881,6 @@ end;
 function TIdSipAbstractCore.GetDefaultRoutePath: TIdSipRoutePath;
 begin
   Result := Self.Proxies.DefaultRoutePath;
-end;
-
-procedure TIdSipAbstractCore.Log(Description: String;
-                                 Severity: TLogVerbosityLevel;
-                                 EventRef: Cardinal;
-                                 DebugInfo: String);
-begin
-  if not Assigned(Self.Logger) then Exit;
-
-  Self.Logger.Lock;
-  try
-    if not Self.Logger.Logs.LogExists(LogName) then
-      Self.Logger.Add(Self.LogName);
-
-    Self.Logger.Write(Self.LogName, Severity, coLogSourceRefSIPStack, Self.ClassName, EventRef, Description, DebugInfo);
-  finally
-    Self.Logger.Unlock;
-  end;
 end;
 
 procedure TIdSipAbstractCore.LogDroppedMessage(Message: TIdSipMessage;
@@ -4002,6 +4002,7 @@ begin
 
   Result.CopyHeaders(Self.InitialRequest, AuthorizationHeader);
   Result.CopyHeaders(Self.InitialRequest, ProxyAuthorizationHeader);
+
   Result.AddHeader(AuthorizationCredentials);
 end;
 

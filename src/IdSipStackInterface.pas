@@ -1702,6 +1702,8 @@ begin
   Notification.Event  := Event;
   Notification.Stack  := Self;
 
+  Self.UserAgent.Log(Format('Message %s sent to application', [EventNames(Event)]), LoGGerVerbosityLevelDebug, Event, Data.AsString);
+
   // The receiver of this message must free the Notification.
   PostMessage(Self.UiHandle, UINT(Notification.Event), WPARAM(Notification), 0)
 end;
