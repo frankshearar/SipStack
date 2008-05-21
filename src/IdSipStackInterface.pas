@@ -1953,9 +1953,15 @@ end;
 
 procedure TIdSipStackInterface.OnAddAction(UserAgent: TIdSipAbstractCore;
                                            Action: TIdSipAction);
+const
+  LogMsg = '%s with ID %s given handle %s';
+var
+  H: TIdSipHandle;
 begin
   Action.AddActionListener(Self);
-  Self.AddAction(Action);
+  H := Self.AddAction(Action);
+
+  Self.UserAgent.Log(Format(LogMsg, [Action.ClassName, Action.ID, IntToHex(H, 8)]), LoGGerVerbosityLevelDebug, 0, '');
 end;
 
 procedure TIdSipStackInterface.OnAuthenticationChallenge(Action: TIdSipAction;
@@ -2318,9 +2324,17 @@ end;
 
 procedure TIdSipStackInterface.OnRemoveAction(UserAgent: TIdSipAbstractCore;
                                               Action: TIdSipAction);
+const
+  LogMsg = '%s with ID %s and handle %s removed';
+var
+  H: TIdSipHandle;
 begin
+  H := Self.HandleFor(Action);
+
   Action.RemoveActionListener(Self);
-  Self.RemoveAction(Self.HandleFor(Action));
+  Self.RemoveAction(H);
+
+  Self.UserAgent.Log(Format(LogMsg, [Action.ClassName, Action.ID, IntToHex(H, 8)]), LoGGerVerbosityLevelDebug, 0, '');
 end;
 
 procedure TIdSipStackInterface.OnRenewedSubscription(UserAgent: TIdSipAbstractCore;
