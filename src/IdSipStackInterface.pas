@@ -1141,8 +1141,7 @@ begin
 
   Configurator := TIdSipStackConfigurator.Create;
   try
-    Self.fUserAgent := Configurator.CreateUserAgent(Configuration, Self.TimerQueue);
-    Self.UserAgent.AddListener(Self);
+    Self.fUserAgent := Configurator.CreateUserAgent(Configuration, Self.TimerQueue, [Self]);
     Self.UserAgent.InviteModule.AddListener(Self);
 //    Self.UserAgent.AddTransportListener(Self);
 

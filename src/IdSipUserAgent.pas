@@ -260,6 +260,9 @@ type
     function CreateLocator(Configuration: String): TIdSipAbstractLocator;
     function CreateUserAgent(Configuration: TStrings;
                              Context: TIdTimerQueue): TIdSipUserAgent; overload;
+    function CreateUserAgent(Configuration: TStrings;
+                             Context: TIdTimerQueue;
+                             Listeners: array of IIdSipTransactionUserListener): TIdSipUserAgent; overload;
     function  StrToBool(B: String): Boolean;
     procedure UpdateConfiguration(UserAgent: TIdSipUserAgent;
                                   Configuration: TStrings);
@@ -884,8 +887,30 @@ end;
 function TIdSipStackConfigurator.CreateUserAgent(Configuration: TStrings;
                                                  Context: TIdTimerQueue): TIdSipUserAgent;
 begin
+  // There is a race condition in code like this:
+  //   UA := Configurator.CreateUserAgent(Conf, Context);
+  //   UA.AddListener(MyApp);
+  // because if Conf contains Register directives, UA will create Wait objects
+  // that will, in the context of Context, create TIdSipActions. That means that
+  // MyApp may or may not have its OnAddAction executed.
+  //
+  // This method is DANGEROUS. It's here as a convenience method for TESTING
+  // purposes.
+  Result := Self.CreateUserAgent(Configuration, Context, []);
+end;
+
+function TIdSipStackConfigurator.CreateUserAgent(Configuration: TStrings;
+                                                 Context: TIdTimerQueue;
+                                                 Listeners: array of IIdSipTransactionUserListener): TIdSipUserAgent;
+var
+  I: Integer;
+begin
   try
     Result := Self.CreateLayers(Context);
+
+    for I := Low(Listeners) to High(Listeners) do
+      Result.AddListener(Listeners[I]);
+
     Self.UpdateConfiguration(Result, Configuration);
   except
     FreeAndNil(Result);

@@ -230,6 +230,7 @@ type
     procedure TestCreateUserAgentWithHostName;
     procedure TestCreateUserAgentWithInstanceID;
     procedure TestCreateUserAgentWithInstanceIDThenRegister;
+    procedure TestCreateUserAgentWithListeners;
     procedure TestCreateUserAgentWithLocator;
     procedure TestCreateUserAgentWithMalformedFrom;
     procedure TestCreateUserAgentWithMalformedLocator;
@@ -2859,6 +2860,30 @@ begin
     Self.CheckConfigurationInstanceIdAndRegister(InstanceIDThenRegister, InstanceID);
   finally
     InstanceIDThenRegister.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithListeners;
+var
+  L1, L2: TIdSipTestTransactionUserListener;
+  UA:     TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+
+  L1 := TIdSipTestTransactionUserListener.Create;
+  try
+    L2 := TIdSipTestTransactionUserListener.Create;
+    try
+      UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer, [L1, L2]);
+      UA.InviteModule.Call(UA.From, UA.From, '', '');
+
+      Check(L1.ActionAdded, 'First listener not notified');
+      Check(L2.ActionAdded, 'Second listener not notified');
+    finally
+      L2.Free;
+    end;
+  finally
+    L1.Free;
   end;
 end;
 
