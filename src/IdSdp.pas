@@ -157,7 +157,7 @@ type
     fConnections:      TIdSdpConnections;
     fInfo:             String;
     fKey:              TIdSdpKey;
-    fMediaName:        String;
+    fMediaName:        String; // If MediaType is mtUnknown, MediaName holds the unrecognised media type.
     fMediaType:        TIdSdpMediaType;
     fRTPMapAttributes: TIdSdpRTPMapAttributes;
     FormatList:        TStrings;
