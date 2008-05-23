@@ -209,6 +209,7 @@ type
     procedure TestIsValidFormatRtpSavp;
     procedure TestIsValidFormatTcp;
     procedure TestIsValidFormatUdp;
+    procedure TestMediaTypeAsString;
     procedure TestPrintOnBasic;
     procedure TestPrintOnFull;
     procedure TestPrintOnWithPortCount;
@@ -2550,6 +2551,24 @@ begin
   Check(Self.M.IsValidFormat('text/plain'),   'Format: "text/plain"');
   Check(Self.M.IsValidFormat('text/x-vcard'), 'Format: "text/x-vcard"');
   Check(Self.M.IsValidFormat('video/mpeg'),   'Format: "video/mpeg"');
+end;
+
+procedure TestTIdSdpMediaDescription.TestMediaTypeAsString;
+begin
+  Self.M.MediaType := mtText;
+  CheckEquals(MediaTypeToStr(Self.M.MediaType), Self.M.MediaTypeAsString, 'Known media type');
+
+  Self.M.MediaType := mtAudio;
+  CheckEquals(MediaTypeToStr(Self.M.MediaType), Self.M.MediaTypeAsString, 'Changed media type');
+
+  Self.M.MediaName := 'foo';
+  CheckEquals(MediaTypeToStr(Self.M.MediaType), Self.M.MediaTypeAsString, 'Known media type, MediaName not empty');
+
+  Self.M.MediaType := mtUnknown;
+  CheckEquals(Self.M.MediaName, Self.M.MediaTypeAsString, 'Unknown media type, MediaName not empty');
+
+  Self.M.MediaName := '';
+  CheckEquals(Self.M.MediaName, Self.M.MediaTypeAsString, 'Unknown media type, MediaName empty (an invalid case)');
 end;
 
 procedure TestTIdSdpMediaDescription.TestPrintOnBasic;

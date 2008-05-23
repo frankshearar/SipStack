@@ -195,6 +195,7 @@ type
     function  IsRefusedStream: Boolean;
     function  IsText: Boolean;
     function  IsValidFormat(Token: String): Boolean;
+    function  MediaTypeAsString: String;
     procedure PrintOn(Dest: TStream); override;
     procedure RefuseStream;
     function  UsesBinding(Binding: TIdConnectionBindings): Boolean;
@@ -2105,6 +2106,14 @@ begin
     Result := true;
 end;
 
+function TIdSdpMediaDescription.MediaTypeAsString: String;
+begin
+  if (Self.MediaType <> mtUnknown) then
+    Result := MediaTypeToStr(Self.MediaType)
+  else
+    Result := Self.MediaName;
+end;
+
 procedure TIdSdpMediaDescription.PrintOn(Dest: TStream);
 begin
   Self.PrintMediaField(Dest);
@@ -2217,16 +2226,10 @@ end;
 
 procedure TIdSdpMediaDescription.PrintMediaField(Dest: TStream);
 var
-  I:     Integer;
-  MName: String;
-  S:     String;
+  I: Integer;
+  S: String;
 begin
-  if (Self.MediaType <> mtUnknown) then
-    MName := MediaTypeToStr(Self.MediaType)
-  else
-    MName := Self.MediaName;
-
-  S := 'm=' + MName + ' ' + IntToStr(Self.Port);
+  S := 'm=' + Self.MediaTypeAsString + ' ' + IntToStr(Self.Port);
 
   if (Self.PortCount > 1) then
     S := S + '/' + IntToStr(PortCount);
