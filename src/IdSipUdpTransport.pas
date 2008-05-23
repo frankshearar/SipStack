@@ -279,7 +279,6 @@ begin
   Wait := TIdSipReceiveMessageWait.Create;
   Wait.Message   := Msg.Copy;
 
-  Wait.ReceivedFrom := TIdConnectionBindings.Create;
   Wait.ReceivedFrom.LocalIP   := Binding.IP;
   Wait.ReceivedFrom.LocalPort := Binding.Port;
   Wait.ReceivedFrom.PeerIP    := Binding.PeerIP;
