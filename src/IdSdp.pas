@@ -590,6 +590,7 @@ type
     PreHoldDirection:    TIdSdpDirection;
 
     function  GetDirection: TIdSdpDirection;
+    function  GetPortCount: Cardinal;
     procedure SetDirection(Value: TIdSdpDirection);
     procedure SetLocalDescription(Value: TIdSdpMediaDescription);
     procedure SetRemoteDescription(const Value: TIdSdpMediaDescription);
@@ -600,6 +601,7 @@ type
     procedure BeforeSetLocalDescription(Value: TIdSdpMediaDescription); virtual;
     procedure BeforeSetRemoteDescription(Value: TIdSdpMediaDescription); virtual;
     procedure BindListeningStreams;
+    function  GetPort(Index: Integer): Cardinal; virtual;
     procedure InitializeLocalServers; virtual;
     procedure InternalCreate; virtual;
     function  NextPort(PreviousPort: Cardinal): Cardinal; virtual;
@@ -632,14 +634,16 @@ type
     procedure TakeOffHold;
     function  UsesBinding(Binding: TIdConnectionBindings): Boolean;
 
-    property Direction:          TIdSdpDirection        read GetDirection write SetDirection;
-    property HighestAllowedPort: Cardinal               read fHighestAllowedPort write fHighestAllowedPort;
-    property IsOffer:            Boolean                read fIsOffer write fIsOffer;
-    property LocalDescription:   TIdSdpMediaDescription read fLocalDescription write SetLocalDescription;
-    property LowestAllowedPort:  Cardinal               read fLowestAllowedPort write fLowestAllowedPort;
-    property OnHold:             Boolean                read fOnHold;
-    property RemoteDescription:  TIdSdpMediaDescription read fRemoteDescription write SetRemoteDescription;
-    property Timer:              TIdTimerQueue          read fTimer write SetTimer;
+    property Direction:             TIdSdpDirection        read GetDirection write SetDirection;
+    property HighestAllowedPort:    Cardinal               read fHighestAllowedPort write fHighestAllowedPort;
+    property IsOffer:               Boolean                read fIsOffer write fIsOffer;
+    property LocalDescription:      TIdSdpMediaDescription read fLocalDescription write SetLocalDescription;
+    property LowestAllowedPort:     Cardinal               read fLowestAllowedPort write fLowestAllowedPort;
+    property OnHold:                Boolean                read fOnHold;
+    property PortCount:             Cardinal               read GetPortCount;
+    property Ports[Index: Integer]: Cardinal               read GetPort;
+    property RemoteDescription:     TIdSdpMediaDescription read fRemoteDescription write SetRemoteDescription;
+    property Timer:                 TIdTimerQueue          read fTimer write SetTimer;
   end;
 
   // I manage the sending and receiving of one media stream, as set out by an
@@ -689,6 +693,7 @@ type
     procedure AfterSetRemoteDescription(Value: TIdSdpMediaDescription); override;
     procedure BeforeSetLocalDescription(Value: TIdSdpMediaDescription); override;
     procedure BeforeSetRemoteDescription(Value: TIdSdpMediaDescription); override;
+    function  GetPort(Index: Integer): Cardinal; override;
     procedure InitializeLocalServers; override;
     procedure InternalCreate; override;
     function  NextPort(PreviousPort: Cardinal): Cardinal; override;
@@ -1015,6 +1020,7 @@ type
   protected
     procedure AfterSetLocalDescription(Value: TIdSdpMediaDescription); override;
     procedure AfterSetRemoteDescription(Value: TIdSdpMediaDescription); override;
+    function  GetPort(Index: Integer): Cardinal; override;
     procedure InitializeLocalServers; override;
     procedure InternalCreate; override;
     procedure ReallySendData(Data: TStream; Format: String; LayerID: Integer = 0); override;
@@ -4565,6 +4571,12 @@ begin
     Self.LocalDescription.RefuseStream;
 end;
 
+function TIdSDPBaseMediaStream.GetPort(Index: Integer): Cardinal;
+begin
+  Result := 0;
+  RaiseAbstractError(Self.ClassName, 'GetPort');
+end;
+
 procedure TIdSdpBaseMediaStream.InitializeLocalServers;
 begin
   RaiseAbstractError(Self.ClassName, 'InitializeLocalServers');
@@ -4650,6 +4662,11 @@ end;
 function TIdSDPBaseMediaStream.GetDirection: TIdSdpDirection;
 begin
   Result := Self.LocalDescription.Attributes.Direction;
+end;
+
+function TIdSDPBaseMediaStream.GetPortCount: Cardinal;
+begin
+  Result := Self.LocalDescription.PortCount;
 end;
 
 procedure TIdSDPBaseMediaStream.SetDirection(Value: TIdSdpDirection);
@@ -4814,6 +4831,11 @@ procedure TIdSDPMediaStream.BeforeSetRemoteDescription(Value: TIdSdpMediaDescrip
 begin
 //  Self.UnregisterEncodingMaps(Self.RemoteProfile,
 //                              Self.RemoteDescription.RTPMapAttributes);
+end;
+
+function TIdSDPMediaStream.GetPort(Index: Integer): Cardinal;
+begin
+  Result := Self.ServerAt(Index).RTPPort;
 end;
 
 procedure TIdSDPMediaStream.InternalCreate;
@@ -6242,6 +6264,11 @@ begin
   Self.InitializeRemoteServers;
 
   Self.PossiblyConnect(Self.HaveLocalDescription);
+end;
+
+function TIdSdpTcpMediaStream.GetPort(Index: Integer): Cardinal;
+begin
+  Result := Self.ServerAt(Index).Port;
 end;
 
 procedure TIdSdpTcpMediaStream.InitializeLocalServers;

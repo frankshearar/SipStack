@@ -661,6 +661,7 @@ type
     procedure TestHierarchicallyEncodedStream;
     procedure TestLayeredCodecAddressesAndPorts;
     procedure TestMatchPort;
+    procedure TestPortsAndPortCount;
     procedure TestReceiveDataWhenNotReceiver;
     procedure TestRemoteMembersControlAddressAndPortSet;
     procedure TestRemoveDataListener;
@@ -898,6 +899,7 @@ type
                               Port: Cardinal;
                               Msg: String); override;
   published
+    procedure TestPortsAndPortCount;
     procedure TestSetTimer; override;
     procedure TestStartListeningPortAboveAllowedRange; override;
     procedure TestStartListeningPortBelowAllowedRange; override;
@@ -1230,6 +1232,7 @@ const
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSdp unit tests');
+
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSdpAttribute.Suite);
   Result.AddTest(TestTIdSdpRTPMapAttribute.Suite);
@@ -8134,6 +8137,24 @@ begin
   Check(not Self.Media.MatchPort(ActualPort), 'Single hierarchically encoded stream, wrong port (' + IntToStr(ActualPort) + ')');
 end;
 
+procedure TestTIdSDPMediaStream.TestPortsAndPortCount;
+const
+  PortCount = 5;
+var
+  I: Integer;
+begin
+  Self.SetLocalMediaDesc(Self.Sender,
+                         'm=audio 9000/' + IntToStr(PortCount) + ' RTP/AVP 0'#13#10);
+  Self.Sender.StartListening;
+
+  CheckEquals(5, Self.Sender.PortCount, 'Port count');
+
+  for I := 0 to PortCount - 1 do
+   CheckEquals(Self.Sender.LocalDescription.Port + Cardinal(I)*2,
+               Self.Sender.Ports[I],
+               Format('Ports[%d]', [I]));
+end;
+
 procedure TestTIdSDPMediaStream.TestReceiveDataWhenNotReceiver;
 begin
   Self.Media.AddDataListener(Self);
@@ -10068,6 +10089,34 @@ end;
 
 //* TestTIdSdpTcpMediaStream Published methods *********************************
 
+procedure TestTIdSdpTcpMediaStream.TestPortsAndPortCount;
+const
+  PortCount = 5;
+var
+  I: Integer;
+  Stream:   TIdSdpTcpMediaStream;
+begin
+  Stream := Self.CreateStream as TIdSdpTcpMediaStream;
+  try
+    // We use passive setup here because Ports tells us the ACTUAL ports used,
+    // which means sockets have to be bound. We could also use active, and then
+    // connect to a server.
+    Self.SetLocalMediaDesc(Stream,
+                           'm=audio 9000/' + IntToStr(PortCount) + ' TCP audio/x-hierarchically-encoded'#13#10
+                         + 'a=setup:passive'#13#10);
+    Stream.StartListening;
+
+    CheckEquals(5, Stream.PortCount, 'Port count');
+
+    for I := 0 to PortCount - 1 do
+     CheckEquals(Stream.LocalDescription.Port + Cardinal(I),
+                 Stream.Ports[I],
+                 Format('Ports[%d]', [I]));
+  finally
+    Stream.Free;
+  end;
+end;
+
 procedure TestTIdSdpTcpMediaStream.TestSetTimer;
 var
   NewTimer: TIdDebugTimerQueue;
@@ -10078,7 +10127,7 @@ begin
   Stream := Self.CreateStream as TIdSdpTcpMediaStream;
   try
     OldTimer := Stream.Timer as TIdDebugTimerQueue;
-    
+
     NewTimer := TIdDebugTimerQueue.Create(false);
     try
       Stream.Timer := NewTimer;
