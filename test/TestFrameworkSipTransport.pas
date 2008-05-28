@@ -36,8 +36,6 @@ type
                        FinishedEvent: TEvent); reintroduce;
     destructor  Destroy; override;
 
-    procedure Terminate; override;
-
     property HighPortTransport: TIdSipTransport read fHighPortTransport;
     property LowPortTransport:  TIdSipTransport read fLowPortTransport;
   end;
@@ -367,14 +365,6 @@ begin
   Self.FinishedEvent.SetEvent;
 
   inherited Destroy;
-end;
-
-procedure TTransportTestTimerQueue.Terminate;
-begin
-  Self.LowPortTransport.Stop;
-  Self.HighPortTransport.Stop;
-
-  inherited Terminate;
 end;
 
 //* TTransportTestTimerQueue Private methods ***********************************
