@@ -745,6 +745,10 @@ begin
   // This test only makes sense for OUTbound actions.
   if Self.IsInboundTest then Exit;
 
+  // We send a request. It's challenged, and we supply credentials but mess up
+  // the username. That request, too, is challenged, so we change the username
+  // and send again: we check that the (first) (Proxy-)Authorization header
+  // uses the NEW username.
   Action := Self.CreateAction;
 
   Self.ReceiveUnauthorized(WWWAuthenticateHeader, '');
