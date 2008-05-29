@@ -180,7 +180,6 @@ type
     function  Transfer(Transferee: TIdSipAddressHeader;
                        TransferTarget: TIdSipAddressHeader;
                        TargetDialog: TIdSipDialogID): TIdSipOutboundReferral;
-    function  WillAccept(Request: TIdSipRequest): Boolean; override;
 
     property MinimumExpiryTime:           Cardinal read fMinimumExpiryTime write fMinimumExpiryTime;
     property InboundSubscriptionDuration: Cardinal read fInboundSubscriptionDuration write fInboundSubscriptionDuration;
@@ -1110,11 +1109,6 @@ begin
   Refer.TargetDialog     := TargetDialog;
 
   Result := Refer;
-end;
-
-function TIdSipSubscribeModule.WillAccept(Request: TIdSipRequest): Boolean;
-begin
-  Result := Request.IsSubscribe or Request.IsNotify or Request.IsRefer;
 end;
 
 //* TIdSipSubscribeModule Private methods **************************************

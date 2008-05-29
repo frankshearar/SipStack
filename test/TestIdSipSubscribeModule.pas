@@ -5470,13 +5470,16 @@ end;
 
 procedure TestTIdSipSubscriptionRenotify.TestTriggerOnWrongTypeOfAction;
 var
-  Refer: TIdSipOutboundReferral;
+  Invite: TIdSipOutboundSession;
 begin
-  Refer := Self.Module.Refer(Self.Destination, Self.Destination);
-
-  Self.MarkSentRequestCount;
-  Self.Block.Execute(Refer);
-  CheckNoRequestSent('Block didn''t abort execution');
+  Invite := TIdSipOutboundSession.Create(Self.Core);
+  try
+    Self.MarkSentRequestCount;
+    Self.Block.Execute(Invite);
+    CheckNoRequestSent('Block didn''t abort execution');
+  finally
+    Invite.Free;
+  end;
 end;
 
 //******************************************************************************
