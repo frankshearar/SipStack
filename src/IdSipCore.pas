@@ -768,7 +768,7 @@ type
   // I encapsulate the call flow around a single request send and response.
   TIdSipOwnedAction = class(TIdSipAction)
   private
-    OwningActionListeners: TIdNotificationList;
+    OwnedActionListeners: TIdNotificationList;
   protected
     procedure ActionSucceeded(Response: TIdSipResponse); override;
     procedure Initialise(UA: TIdSipAbstractCore;
@@ -4147,14 +4147,14 @@ end;
 
 destructor TIdSipOwnedAction.Destroy;
 begin
-  Self.OwningActionListeners.Free;
+  Self.OwnedActionListeners.Free;
 
   inherited Destroy;
 end;
 
 procedure TIdSipOwnedAction.AddOwnedActionListener(Listener: IIdSipOwnedActionListener);
 begin
-  Self.OwningActionListeners.AddListener(Listener);
+  Self.OwnedActionListeners.AddListener(Listener);
 end;
 
 procedure TIdSipOwnedAction.Cancel;
@@ -4165,7 +4165,7 @@ end;
 
 procedure TIdSipOwnedAction.RemoveOwnedActionListener(Listener: IIdSipOwnedActionListener);
 begin
-  Self.OwningActionListeners.RemoveListener(Listener);
+  Self.OwnedActionListeners.RemoveListener(Listener);
 end;
 
 //* TIdSipOwnedAction Protected methods ****************************************
@@ -4183,7 +4183,7 @@ begin
 
   Self.fIsOwned := true;
 
-  Self.OwningActionListeners := TIdNotificationList.Create;
+  Self.OwnedActionListeners := TIdNotificationList.Create;
 end;
 
 procedure TIdSipOwnedAction.NotifyOfFailure(Response: TIdSipResponse);
@@ -4196,7 +4196,7 @@ begin
     Notification.Reason      := Response.Description;
     Notification.Response    := Response;
 
-    Self.OwningActionListeners.Notify(Notification);
+    Self.OwnedActionListeners.Notify(Notification);
   finally
     Notification.Free;
   end;
@@ -4213,7 +4213,7 @@ begin
     Notification.ActionAgent := Self;
     Notification.Response    := Response;
 
-    Self.OwningActionListeners.Notify(Notification);
+    Self.OwnedActionListeners.Notify(Notification);
   finally
     Notification.Free;
   end;
@@ -4228,7 +4228,7 @@ begin
     Notification.ActionAgent := Self;
     Notification.Msg         := Msg;
 
-    Self.OwningActionListeners.Notify(Notification);
+    Self.OwnedActionListeners.Notify(Notification);
   finally
     Notification.Free;
   end;
