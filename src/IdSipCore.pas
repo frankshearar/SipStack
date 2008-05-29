@@ -2500,6 +2500,7 @@ end;
 procedure TIdSipAbstractCore.SendRequest(Request: TIdSipRequest;
                                          Dest: TIdSipLocation);
 begin
+  // cf. RFC 3261, section 18.1.1
   if Request.ExceedsMaximumUdpMessageSize and (Request.LastHop.Transport = UdpTransport) then
     Dest.Transport := TcpTransport;
 
