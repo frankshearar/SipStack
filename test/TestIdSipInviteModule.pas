@@ -124,6 +124,7 @@ type
     procedure TestMultipleAuthentication; override;
     procedure TestResend; override;
     procedure TestResendBeforeSend; override;
+    procedure TestResendWithAuthForSameRealm; override;
     procedure TestResendWithProxyAuth; override;
   end;
 
@@ -1815,6 +1816,12 @@ begin
   AuthCreds := Self.CreateAuthorization(Self.LastSentResponse);
   Action.Resend(AuthCreds);
   Self.CheckNoRequestSent('You cannot resubmit a CANCEL: Resend must be a no-op.');
+end;
+
+procedure TestTIdSipOutboundCancel.TestResendWithAuthForSameRealm;
+begin
+  // CANCELs MUST NOT be challenged, and if they are we mustn't resubmit them.
+  // This test's behaviour would just copy TestResend anyway.
 end;
 
 procedure TestTIdSipOutboundCancel.TestResendWithProxyAuth;
@@ -4743,6 +4750,7 @@ begin
   Us.RemoveParameter(TagParam);
 
   SubMod := Self.Core.AddModule(TIdSipSubscribeModule) as TIdSipSubscribeModule;
+  SubMod.AddPackage(TIdSipReferPackage);
   Refer := SubMod.CreateRefer(Them, Us, Self.Destination, TIdSipRequest.DefaultMaxForwards);
   try
     Refer.CallID       := Session.Dialog.ID.CallID;
