@@ -97,6 +97,11 @@ type
                                        const AuthHeaderName: String;
                                        const Qop: String): TIdSipResponse;
     function  CreateUserAgent(const Address: String): TIdSipUserAgent;
+    procedure FireConnectionException(Msg: TIdSipMessage);
+    procedure FireOnException(Msg: TIdSipMessage;
+                              ExceptionType: ExceptClass;
+                              ExceptionMessage: String;
+                              Reason: String);
     function  LastSentAck: TIdSipRequest; virtual;
     function  LastSentRequest: TIdSipRequest; virtual;
     function  LastSentResponse: TIdSipResponse; virtual;
@@ -785,7 +790,7 @@ const
 implementation
 
 uses
-  IdNotification, IdSipMockTransport;
+  IdException, IdNotification, IdSipMockTransport;
 
 //******************************************************************************
 //* TIdSipTestResources                                                        *
@@ -1169,6 +1174,25 @@ begin
   MockLocator.AddA(Self.Destination.Address.Host, '10.0.0.2');
   MockLocator.AddA(Result.From.Address.Host,      Self.LanIP);
   MockLocator.AddA('localhost',                   '127.0.0.1');
+end;
+
+procedure TTestCaseTU.FireConnectionException(Msg: TIdSipMessage);
+begin
+  Self.FireOnException(Msg,
+                       EIdConnectException,
+                       '10061',
+                       'Connection refused');
+end;
+
+procedure TTestCaseTU.FireOnException(Msg: TIdSipMessage;
+                                      ExceptionType: ExceptClass;
+                                      ExceptionMessage: String;
+                                      Reason: String);
+begin
+  Self.Dispatcher.Transport.FireOnException(Msg,
+                                            ExceptionType,
+                                            ExceptionMessage,
+                                            Reason);
 end;
 
 function TTestCaseTU.LastSentAck: TIdSipRequest;

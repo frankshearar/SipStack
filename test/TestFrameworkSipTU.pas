@@ -93,7 +93,7 @@ type
 implementation
 
 uses
-  IdException, IdSipAuthentication;
+  IdSipAuthentication;
 
 //******************************************************************************
 //* TestTIdSipAction                                                           *
@@ -660,10 +660,7 @@ begin
   Method    := Action.Method;
 
   PreExceptionCount := Self.Core.CountOf(Method);
-  Self.Dispatcher.Transport.FireOnException(Self.LastSentRequest,
-                                            EIdConnectException,
-                                            '10061',
-                                            'Connection refused');
+  Self.FireConnectionException(Self.LastSentRequest);
 
   Check(Self.Core.CountOf(Method) < PreExceptionCount,
         ClassName + ' didn''t terminate after a network failure');
