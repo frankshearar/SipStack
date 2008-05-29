@@ -27,6 +27,8 @@ type
     property ID: String read fID;
   end;
 
+  TIdCollectBlock = function(O: TObject; C: TClass): Boolean;
+
   // I provide facilities to unambiguously locate any (registered) object
   // resident in memory, and to allow these objects to register and unregister
   // from me as they are instantiate and freed.
@@ -36,8 +38,7 @@ type
   // store the object ID yourself.
   TIdObjectRegistry = class(TObject)
   private
-    class procedure CollectAllObjectsOfClassOnly(SearchType: TClass; Results: TStrings);
-    class procedure CollectAllObjectsOfClassOrSubtype(SearchType: TClass; Results: TStrings);
+    class procedure Collect(SearchType: TClass; SearchBlock: TIdCollectBlock; Results: TStrings);
     class procedure Lock;
     class procedure Log(Description: String);
     class function  ObjectAt(Index: Integer): TObject;
@@ -80,11 +81,25 @@ var
   GObjectRegistry: TStringList;
   GSourceRef:      Cardinal;
 
+//******************************************************************************
+//* Unit local procedures/functions                                            *
+//******************************************************************************
+
 function CreateSortedList: TStringList;
 begin
   Result := TStringList.Create;
   Result.Duplicates := dupError;
   Result.Sorted     := true;
+end;
+
+function ClassCollector(O: TObject; C: TClass): Boolean;
+begin
+  Result := O.ClassType = C;
+end;
+
+function ClassOrSubclassCollector(O: TObject; C: TClass): Boolean;
+begin
+  Result := O is C;
 end;
 
 //******************************************************************************
@@ -115,10 +130,15 @@ class procedure TIdObjectRegistry.CollectAllObjectsOfClass(SearchType: TClass; R
 begin
   Results.Clear;
 
-  if AllowSubclassTypes then
-    Self.CollectAllObjectsOfClassOrSubtype(SearchType, Results)
-  else
-    Self.CollectAllObjectsOfClassOnly(SearchType, Results);
+  Self.Lock;
+  try
+    if AllowSubclassTypes then
+      Self.Collect(SearchType, ClassOrSubclassCollector, Results)
+    else
+      Self.Collect(SearchType, ClassCollector, Results);
+  finally
+    Self.Unlock;
+  end;
 end;
 
 class function TIdObjectRegistry.FindObject(ObjectID: String): TObject;
@@ -215,39 +235,16 @@ end;
 
 //* TIdObjectRegistry Private methods ******************************************
 
-class procedure TIdObjectRegistry.CollectAllObjectsOfClassOnly(SearchType: TClass; Results: TStrings);
+class procedure TIdObjectRegistry.Collect(SearchType: TClass; SearchBlock: TIdCollectBlock; Results: TStrings);
 var
   I: Integer;
 begin
-  Results.Clear;
+  // PRECONDITION: You've acquired Self.Lock.
 
-  Self.Lock;
-  try
-    for I := 0 to Self.ObjectRegistry.Count - 1 do begin
-      if (Self.ObjectAt(I).ClassType = SearchType) then
-        Results.AddObject(Self.ObjectRegistry[I],
-                          Self.ObjectRegistry.Objects[I]);
-    end;
-  finally
-    Self.Unlock;
-  end;
-end;
-
-class procedure TIdObjectRegistry.CollectAllObjectsOfClassOrSubtype(SearchType: TClass; Results: TStrings);
-var
-  I: Integer;
-begin
-  Results.Clear;
-
-  Self.Lock;
-  try
-    for I := 0 to Self.ObjectRegistry.Count - 1 do begin
-      if (Self.ObjectAt(I) is SearchType) then
-        Results.AddObject(Self.ObjectRegistry[I],
-                          Self.ObjectRegistry.Objects[I]);
-    end;
-  finally
-    Self.Unlock;
+  for I := 0 to Self.ObjectRegistry.Count - 1 do begin
+    if SearchBlock(Self.ObjectAt(I), SearchType) then
+      Results.AddObject(Self.ObjectRegistry[I],
+                        Self.ObjectRegistry.Objects[I]);
   end;
 end;
 
