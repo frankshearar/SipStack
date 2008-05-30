@@ -12,9 +12,9 @@ unit TestIdSipRegistrar;
 interface
 
 uses
-  IdSipCore, IdSipMessage, IdSipMockBindingDatabase,
-  IdSipMockTransactionDispatcher, IdSipRegistration, TestFramework,
-  TestFrameworkSip, TestFrameworkSipTU;
+  IdConnectionBindings, IdInterfacedObject, IdSipCore, IdSipMessage,
+  IdSipMockBindingDatabase, IdSipMockTransactionDispatcher, IdSipRegistration,
+  SysUtils, TestFramework, TestFrameworkSip, TestFrameworkSipTU;
 
 type
   // We test that the registrar returns the responses it should. The nitty
@@ -240,10 +240,13 @@ type
     procedure TestAutoReregisterContactHasExpires;
     procedure TestAutoReregisterNoExpiresValue;
     procedure TestAutoReregisterSwitchedOff;
+    procedure TestFailWithMultipleListeners;
+    procedure TestNetworkFailureWithMultipleListeners;
     procedure TestReceiveGruu;
     procedure TestReceiveNoGruu;
     procedure TestRegisterUsesUAsFrom;
     procedure TestReregisterTime;
+    procedure TestSuccessWithMultipleListeners;
   end;
 
   TestTIdSipOutboundRegistrationQuery = class(TOutboundRegistrationBaseTestCase)
@@ -292,10 +295,36 @@ type
     procedure TestTrigger;
   end;
 
+  TExceptionCatchingActionListener = class(TIdInterfacedObject,
+                                           IIdSipActionListener,
+                                           IIdSipTransactionUserListener)
+  private
+    fExceptionType:    ExceptClass;
+    fExceptionMessage: String;
+
+    procedure OnAddAction(UserAgent: TIdSipAbstractCore;
+                          Action: TIdSipAction);
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Challenge: TIdSipResponse);
+    procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
+                                        Message: TIdSipMessage;
+                                        Binding: TIdConnectionBindings);
+    procedure OnNetworkFailure(Action: TIdSipAction;
+                               ErrorCode: Cardinal;
+                               const Reason: String);
+    procedure OnRemoveAction(UserAgent: TIdSipAbstractCore;
+                             Action: TIdSipAction);
+  public
+    constructor Create; override;
+
+    property ExceptionType:    ExceptClass read fExceptionType;
+    property ExceptionMessage: String      read fExceptionMessage;
+  end;
+
 implementation
 
 uses
-  Classes, DateUtils, IdSipAuthentication, IdTimerQueue, SysUtils;
+  Classes, DateUtils, IdSipAuthentication, IdTimerQueue;
 
 function Suite: ITestSuite;
 begin
@@ -2283,6 +2312,56 @@ begin
                            'Expires header; Autoreregister = false');
 end;
 
+procedure TestTIdSipOutboundRegistration.TestFailWithMultipleListeners;
+var
+  L: TExceptionCatchingActionListener;
+begin
+  // See the comment in TestNetworkFailureWithMultipleListeners.
+
+  L := TExceptionCatchingActionListener.Create;
+  try
+    Self.Core.AddListener(L);
+
+    Self.MarkSentRequestCount;
+    Self.CreateAction;
+    CheckRequestSent('No REGISTER sent');
+    Self.ReceiveResponse(SIPBadGateway); // The exact code doesn't matter.
+
+    if (L.ExceptionMessage <> '') then
+      Fail(Format('%s raised while removing a listener: %s', [L.ExceptionType.ClassName, L.ExceptionMessage]));
+  finally
+    Self.Core.RemoveListener(L);
+    L.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundRegistration.TestNetworkFailureWithMultipleListeners;
+var
+  L: TExceptionCatchingActionListener;
+begin
+  // The underlying TIdSipOutboundRegister ends up having two listeners - first,
+  // the TIdSipOutboundRegistration that created it, and second, this TestCase.
+  // This test demonstrates that the TIdSipOutboundRegistration removes itself
+  // as a listener from the TIdSipOutboundRegister by not blowing up when this
+  // TestCase tries to remove itself as a listener from the
+  // TIdSipOutboundRegister. This is reported as PR 566.
+
+  L := TExceptionCatchingActionListener.Create;
+  try
+    Self.Core.AddListener(L);
+    Self.MarkSentRequestCount;
+    Self.CreateAction;
+    CheckRequestSent('No REGISTER sent');
+    Self.FireConnectionException(Self.LastSentRequest);
+
+    if (L.ExceptionMessage <> '') then
+      Fail(Format('%s raised while removing a listener: %s', [L.ExceptionType.ClassName, L.ExceptionMessage]));
+  finally
+    Self.Core.RemoveListener(L);
+    L.Free;
+  end;
+end;
+
 procedure TestTIdSipOutboundRegistration.TestReceiveGruu;
 var
   LocalContact: TIdSipContactHeader;
@@ -2390,6 +2469,29 @@ begin
   CheckEquals(4*30 div 5, Reg.ReregisterTime(30), '30 seconds');
   CheckEquals(1,          Reg.ReregisterTime(1), '1 second');
   CheckEquals(1,          Reg.ReregisterTime(0), 'Zero');
+end;
+
+procedure TestTIdSipOutboundRegistration.TestSuccessWithMultipleListeners;
+var
+  L: TExceptionCatchingActionListener;
+begin
+  // See the comment in TestNetworkFailureWithMultipleListeners.
+
+  L := TExceptionCatchingActionListener.Create;
+  try
+    Self.Core.AddListener(L);
+
+    Self.MarkSentRequestCount;
+    Self.CreateAction;
+    CheckRequestSent('No REGISTER sent');
+    Self.ReceiveResponse(SIPOK);
+
+    if (L.ExceptionMessage <> '') then
+      Fail(Format('%s raised while removing a listener: %s', [L.ExceptionType.ClassName, L.ExceptionMessage]));
+  finally
+    Self.Core.RemoveListener(L);
+    L.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -2553,6 +2655,60 @@ begin
   CheckEquals(Self.Wait.AddressOfRecord.Address.AsString,
               Self.LastSentRequest.From.Address.AsString,
               'From URI');
+end;
+
+//******************************************************************************
+//* TExceptionCatchingActionListener                                           *
+//******************************************************************************
+//* TExceptionCatchingActionListener Public methods ****************************
+
+constructor TExceptionCatchingActionListener.Create;
+begin
+  inherited Create;
+
+  Self.fExceptionType    := nil;
+  Self.fExceptionMessage := '';
+end;
+
+//* TExceptionCatchingActionListener Private methods ***************************
+
+procedure TExceptionCatchingActionListener.OnAddAction(UserAgent: TIdSipAbstractCore;
+                                                       Action: TIdSipAction);
+begin
+  Action.AddActionListener(Self);
+end;
+
+procedure TExceptionCatchingActionListener.OnAuthenticationChallenge(Action: TIdSipAction;
+                                                                     Challenge: TIdSipResponse);
+begin
+  // Do nothing.
+end;
+
+procedure TExceptionCatchingActionListener.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractCore;
+                                                                     Message: TIdSipMessage;
+                                                                     Binding: TIdConnectionBindings);
+begin
+  // Do nothing.
+end;
+
+procedure TExceptionCatchingActionListener.OnNetworkFailure(Action: TIdSipAction;
+                                                            ErrorCode: Cardinal;
+                                                            const Reason: String);
+begin
+  // Do nothing.
+end;
+
+procedure TExceptionCatchingActionListener.OnRemoveAction(UserAgent: TIdSipAbstractCore;
+                                                          Action: TIdSipAction);
+begin
+  try
+    Action.RemoveActionListener(Self);
+  except
+    on E: EAccessViolation do begin
+      Self.fExceptionType    := ExceptClass(E.ClassType);
+      Self.fExceptionMessage := E.Message;
+    end;
+  end;
 end;
 
 initialization

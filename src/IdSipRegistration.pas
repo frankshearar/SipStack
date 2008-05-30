@@ -2123,7 +2123,7 @@ procedure TIdSipOutboundRegistrationBase.OnFailure(Action: TIdSipAction;
                                                    Response: TIdSipResponse;
                                                    const Reason: String);
 begin
-  // Do nothing. The Redirector handles this stuff.
+  Action.RemoveActionListener(Self);
 end;
 
 procedure TIdSipOutboundRegistrationBase.OnFailure(Redirector: TIdSipActionRedirector;
@@ -2136,6 +2136,8 @@ procedure TIdSipOutboundRegistrationBase.OnNetworkFailure(Action: TIdSipAction;
                                                           ErrorCode: Cardinal;
                                                           const Reason: String);
 begin
+  Action.RemoveActionListener(Self);
+
   Self.NotifyOfNetworkFailure(ErrorCode, Reason);
 end;
 
@@ -2162,7 +2164,7 @@ end;
 procedure TIdSipOutboundRegistrationBase.OnSuccess(Action: TIdSipAction;
                                                    Msg: TIdSipMessage);
 begin
-  // Do nothing. The Redirector handles this stuff.
+  Action.RemoveActionListener(Self);
 end;
 
 procedure TIdSipOutboundRegistrationBase.OnSuccess(Redirector: TIdSipActionRedirector;
