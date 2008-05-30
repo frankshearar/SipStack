@@ -44,9 +44,6 @@ type
 
     procedure ConnectionDisconnected(Sender: TObject);
     procedure DestroyServer; override;
-    procedure DoOnAddConnection(Connection: TIdTCPConnection;
-                                Request: TIdSipRequest);
-    procedure DoOnRemoveConnection(Connection: TIdTCPConnection);
     function  GetBindings: TIdSocketHandles; override;
     procedure InstantiateServer; override;
     procedure SendMessage(Msg: TIdSipMessage;
@@ -98,16 +95,10 @@ type
     destructor Destroy; override;
   end;
 
-  TIdSipAddConnectionEvent = procedure(Connection: TIdTCPConnection;
-                                       Request: TIdSipRequest) of object;
-  TIdSipRemoveConnectionEvent = procedure(Connection: TIdTCPConnection) of object;
-
   // Given a TCP connection, I read messages off the connection and dispatch
   // them to a TimerQueue until I die or something severs the connection.
   TIdSipTcpMessageReader = class(TObject)
   private
-    fOnAddConnection:    TIdSipAddConnectionEvent;
-    fOnRemoveConnection: TIdSipRemoveConnectionEvent;
     fReadTimeout:        Integer;
     fTimer:              TIdTimerQueue;
     fTransportID:        String;
@@ -136,12 +127,10 @@ type
     procedure ReadMessages(Connection: TIdTCPConnection;
                            ConserveConnections: Boolean);
 
-    property OnAddConnection:    TIdSipAddConnectionEvent    read fOnAddConnection write fOnAddConnection;
-    property OnRemoveConnection: TIdSipRemoveConnectionEvent read fOnRemoveConnection write fOnRemoveConnection;
-    property ReadTimeout:        Integer                     read fReadTimeout write fReadTimeout;
-    property Timer:              TIdTimerQueue               read fTimer write fTimer;
-    property TransportID:        String                      read fTransportID write fTransportID;
-    property TransportType:      String                      read fTransportType write fTransportType;
+    property ReadTimeout:   Integer       read fReadTimeout write fReadTimeout;
+    property Timer:         TIdTimerQueue read fTimer write fTimer;
+    property TransportID:   String        read fTransportID write fTransportID;
+    property TransportType: String        read fTransportType write fTransportType;
   end;
 
   // ReadTimeout = -1 implies that we never timeout the body wait. We do not
@@ -156,18 +145,13 @@ type
 
     procedure DoOnException(Thread: TIdPeerThread;
                             Exception: Exception); overload;
-    function  GetOnAddConnection: TIdSipAddConnectionEvent;
-    function  GetOnRemoveConnection: TIdSipRemoveConnectionEvent;
     function  GetReadTimeout: Integer;
     function  GetTimer: TIdTimerQueue;
     function  GetTransportID: String;
-    procedure SetOnAddConnection(Value: TIdSipAddConnectionEvent);
-    procedure SetOnRemoveConnection(Value: TIdSipRemoveConnectionEvent);
     procedure SetReadTimeout(Value: Integer);
     procedure SetTimer(Value: TIdTimerQueue);
     procedure SetTransportID(const Value: String);
   protected
-    procedure DoDisconnect(Thread: TIdPeerThread); override;
     procedure DoOnExecute(Thread: TIdPeerThread);
   public
     constructor Create(AOwner: TComponent); override;
@@ -179,8 +163,6 @@ type
   published
     property ConnectionTimeout:   Integer                     read fConnectionTimeout write fConnectionTimeout;
     property ConserveConnections: Boolean                     read fConserveConnections write fConserveConnections;
-    property OnAddConnection:     TIdSipAddConnectionEvent    read GetOnAddConnection write SetOnAddConnection;
-    property OnRemoveConnection:  TIdSipRemoveConnectionEvent read GetOnRemoveConnection write SetOnRemoveConnection;
     property ReadTimeout:         Integer                     read GetReadTimeout write SetReadTimeout;
     property Timer:               TIdTimerQueue               read GetTimer write SetTimer;
     property TransportID:         String                      read GetTransportID write SetTransportID;
@@ -426,23 +408,12 @@ end;
 
 procedure TIdSipTCPTransport.ConnectionDisconnected(Sender: TObject);
 begin
-  Self.DoOnRemoveConnection(Sender as TIdTCPConnection);
+  Self.RemoveConnection(Sender as TIdTCPConnection);
 end;
 
 procedure TIdSipTCPTransport.DestroyServer;
 begin
   Self.Transport.Free;
-end;
-
-procedure TIdSipTCPTransport.DoOnAddConnection(Connection: TIdTCPConnection;
-                                               Request: TIdSipRequest);
-begin
-  Self.AddConnection(Connection, Request);
-end;
-
-procedure TIdSipTCPTransport.DoOnRemoveConnection(Connection: TIdTCPConnection);
-begin
-  Self.RemoveConnection(Connection);
 end;
 
 function TIdSipTCPTransport.GetBindings: TIdSocketHandles;
@@ -799,6 +770,8 @@ begin
   finally
     ReceivedFrom.Free;
   end;
+
+  Self.NotifyOfDisconnectionInTimerContext(Connection);
 end;
 
 //* TIdSipTcpMessageReader Private methods *************************************
@@ -806,9 +779,6 @@ end;
 procedure TIdSipTcpMessageReader.AddConnection(Connection: TIdTCPConnection;
                                                Request: TIdSipRequest);
 begin
-  if Assigned(Self.OnAddConnection) then
-    Self.OnAddConnection(Connection, Request);
-
   Self.NotifyOfConnectionInTimerContext(Connection, Request);
 end;
 
@@ -981,14 +951,6 @@ end;
 
 //* TIdSipTcpServer Protected methods ******************************************
 
-procedure TIdSipTcpServer.DoDisconnect(Thread: TIdPeerThread);
-begin
-  if Assigned(Self.OnRemoveConnection) then
-    Self.OnRemoveConnection(Thread.Connection);
-
-  inherited DoDisconnect(Thread);
-end;
-
 procedure TIdSipTcpServer.DoOnExecute(Thread: TIdPeerThread);
 begin
   Self.MessageReader.ReadTimeout := Self.DefaultTimeout;
@@ -1004,16 +966,6 @@ begin
                                        Exception.Message);
 end;
 
-function TIdSipTcpServer.GetOnAddConnection: TIdSipAddConnectionEvent;
-begin
-  Result := Self.MessageReader.OnAddConnection;
-end;
-
-function TIdSipTcpServer.GetOnRemoveConnection: TIdSipRemoveConnectionEvent;
-begin
-  Result := Self.MessageReader.OnRemoveConnection;
-end;
-
 function TIdSipTcpServer.GetReadTimeout: Integer;
 begin
   Result := Self.MessageReader.ReadTimeout;
@@ -1027,16 +979,6 @@ end;
 function TIdSipTcpServer.GetTransportID: String;
 begin
   Result := Self.MessageReader.TransportID;
-end;
-
-procedure TIdSipTcpServer.SetOnAddConnection(Value: TIdSipAddConnectionEvent);
-begin
-  Self.MessageReader.OnAddConnection := Value;
-end;
-
-procedure TIdSipTcpServer.SetOnRemoveConnection(Value: TIdSipRemoveConnectionEvent);
-begin
-  Self.MessageReader.OnRemoveConnection := Value;
 end;
 
 procedure TIdSipTcpServer.SetReadTimeout(Value: Integer);
