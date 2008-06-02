@@ -33,6 +33,9 @@ type
 
     function  FirstServerPortFor(IPAddress: String): Cardinal;
     function  OutboundConnection(Connection: TIdTCPConnection): Boolean;
+    procedure ScheduleExceptionNotification(E: Exception;
+                                            Msg: TIdSipMessage;
+                                            Dest: TIdConnectionBindings);
     procedure SendMessageTo(Msg: TIdSipMessage;
                             Dest: TIdConnectionBindings);
     procedure StopAllClientConnections;
@@ -554,6 +557,22 @@ begin
   end;
 end;
 
+procedure TIdSipTCPTransport.ScheduleExceptionNotification(E: Exception;
+                                                           Msg: TIdSipMessage;
+                                                           Dest: TIdConnectionBindings);
+var
+  Wait: TIdSipMessageExceptionWait;
+begin
+  Wait := TIdSipMessageExceptionWait.Create;
+  Wait.ExceptionType    := ExceptClass(E.ClassType);
+  Wait.ExceptionMessage := E.Message;
+  Wait.FailedMessage    := Msg.Copy;
+  Wait.Reason           := Format('Something went wrong connecting to %s:%d/%s', [Dest.PeerIP, Dest.PeerPort, Dest.Transport]);
+  Wait.TransportID      := Self.ID;
+
+  Self.Timer.AddEvent(TriggerImmediately, Wait);
+end;
+
 procedure TIdSipTCPTransport.SendMessageTo(Msg: TIdSipMessage;
                                            Dest: TIdConnectionBindings);
 var
@@ -586,9 +605,9 @@ begin
     Self.RunningClients.Add(TIdSipTcpClientThread.Create(NewConnection, Msg, Self));
   except
     on E: EIdConnectException do
-      Self.NotifyOfException(Msg, E, Dest.AsString);
+      Self.ScheduleExceptionNotification(E, Msg, Dest);
     on E: EIdException do
-      Self.NotifyOfException(Msg, E, E.Message);
+      Self.ScheduleExceptionNotification(E, Msg, Dest);
   end;
 end;
 

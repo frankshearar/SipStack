@@ -71,6 +71,7 @@ type
     procedure TestSendResponsesClosedConnection;
     procedure TestSendResponsesClosedConnectionReceivedParam;
     procedure TestSendResponsesOpenConnection;
+    procedure TestTransportExceptionSchedulesWait;
   end;
 
   TIdSipRequestEvent = procedure(Sender: TObject;
@@ -923,6 +924,45 @@ begin
     end;
   finally
     Request.Free;
+  end;
+end;
+
+procedure TestTIdSipTCPTransport.TestTransportExceptionSchedulesWait;
+var
+  ExceptionWait: TIdSipMessageExceptionWait;
+  NoServer:      TIdSipLocation;
+  DebugTimer:    TIdDebugTimerQueue;
+  OldTimer:      TIdTimerQueue;
+begin
+  // This test demonstrates that should a transport-level exception occur in
+  // the sending of a message (there's no target server, in this case), that the
+  // notification of failure is scheduled as a Wait object, and not just
+  // propogated up the stack.
+
+  NoServer := TIdSipLocation.Create(Self.HighPortLocation.Transport,
+                                    Self.HighPortLocation.IPAddress,
+                                    Self.HighPortLocation.Port + 1);
+  try
+    CheckServerNotOnPort(NoServer.IPAddress, NoServer.Port, 'This test cannot work with something running on ' + NoServer.AsString);
+
+    DebugTimer := TIdDebugTimerQueue.Create(false);
+    try
+      OldTimer := Self.LowPortTransport.Timer;
+      Self.LowPortTransport.Timer := DebugTimer;
+      try
+        Self.LowPortTransport.Send(Self.Request, NoServer);
+
+        ExceptionWait := DebugTimer.LastEventScheduled(TIdSipMessageExceptionWait) as TIdSipMessageExceptionWait;
+        Check(ExceptionWait <> nil, 'No Wait scheduled');
+        Check(Self.Request.Equals(ExceptionWait.FailedMessage), 'Wait has incorrect message');
+      finally
+        Self.LowPortTransport.Timer := OldTimer;
+      end;
+    finally
+      DebugTimer.Free;
+    end;
+  finally
+    NoServer.Free;
   end;
 end;
 
