@@ -4907,7 +4907,6 @@ end;
 //* TestTIdSipPendingTcpTransportConfiguration                                 *
 //******************************************************************************
 //* TestTIdSipPendingTcpTransportConfiguration Public methods ******************
-//* TestTIdSipPendingTcpTransportConfiguration Published methods ***************
 
 procedure TestTIdSipPendingTcpTransportConfiguration.SetUp;
 begin
@@ -4922,6 +4921,8 @@ begin
 
   inherited TearDown;
 end;
+
+//* TestTIdSipPendingTcpTransportConfiguration Published methods ***************
 
 procedure TestTIdSipPendingTcpTransportConfiguration.TestExecuteSchedulesWait;
 var
