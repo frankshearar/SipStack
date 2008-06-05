@@ -360,8 +360,8 @@ type
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Msg:    String                   read fMsg write fMsg;
-    property Reason: String                   read fReason write fReason;
+    property Msg:    String                read fMsg write fMsg;
+    property Reason: String                read fReason write fReason;
     property Source: TIdConnectionBindings read fSource write fSource;
   end;
 
