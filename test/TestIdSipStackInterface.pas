@@ -175,6 +175,7 @@ type
     procedure TestStackListensToSubscribeModule;
     procedure TestStackListensToSubscribeModuleAfterReconfigure;
     procedure TestStackReceivesExceptionNotifications;
+    procedure TestTerminateOccursInStackThread;
     procedure TestTerminateAction;
     procedure TestTerminateActionWithNonExistentHandle;
   end;
@@ -593,11 +594,30 @@ type
 
   TStackWaitTestCase = class(TStackInterfaceTestCase)
   protected
-    Conf:       TStrings;
-    Stack:      TIdSipStackInterface;
+    BindingIP:   String;
+    BindingPort: Cardinal;
+    Conf:        TStrings;
+    Stack:       TIdSipStackInterface;
   public
     procedure SetUp; override;
     procedure TearDown; override;
+
+    procedure CheckNoUdpServerOnPort(Host: String;
+                                     Port: Cardinal;
+                                     Msg: String);
+    procedure CheckUdpServerOnPort(Host: String;
+                                   Port: Cardinal;
+                                   Msg: String);
+ end;
+
+  TestTIdStackShutdownWait = class(TStackWaitTestCase)
+  private
+    Wait:  TIdStackShutdownWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTrigger;
   end;
 
   TestTIdSipStackReconfigureStackInterfaceWait = class(TStackWaitTestCase)
@@ -606,10 +626,6 @@ type
   public
     procedure SetUp; override;
     procedure TearDown; override;
-
-    procedure CheckUdpServerOnPort(const Host: String;
-                                   Port: Cardinal;
-                                   const Msg: String);
   published
     procedure TestSetConfiguration;
     procedure TestTriggerStartsTransports;
@@ -758,6 +774,7 @@ begin
   Result.AddTest(TestTIdGetBindingsData.Suite);
   Result.AddTest(TestTIdStringResultData.Suite);
   Result.AddTest(TestTIdStringDictionaryResultData.Suite);
+  Result.AddTest(TestTIdStackShutdownWait.Suite);
   Result.AddTest(TestTIdSipStackReconfigureStackInterfaceWait.Suite);
   Result.AddTest(TestTIdGetBindingsWait.Suite);
   Result.AddTest(TestTIdIsSourceOfWait.Suite);
@@ -2447,6 +2464,30 @@ begin
   Self.ProcessAllPendingNotifications;
 
   CheckNotificationReceived(TIdDebugWaitExceptionData, 'No exception notification received');
+end;
+
+procedure TestTIdSipStackInterface.TestTerminateOccursInStackThread;
+var
+  NoConf: TStrings;
+  S:      TIdSipStackInterface;
+  W:      TIdWait;
+begin
+  NoConf := TStringList.Create;
+  try
+    S := TIdSipStackInterface.Create(Self.UI.Handle, Self.TimerQueue, NoConf);
+    try
+      S.Terminate;
+      W := Self.TimerQueue.LastEventScheduled(TIdStackShutdownWait);
+      Check(W <> nil, 'No shutdown Wait scheduled');
+
+      // Remove the shutdown event so we can free S ourselves.
+      Self.TimerQueue.RemoveAllEvents;
+    finally
+      S.Free;
+    end;
+  finally
+    NoConf.Free;
+  end;
 end;
 
 procedure TestTIdSipStackInterface.TestTerminateAction;
@@ -4949,25 +4990,25 @@ end;
 //* TStackWaitTestCase Public methods ******************************************
 
 procedure TStackWaitTestCase.SetUp;
-const
-  LocalHost = '127.0.0.1';
-  LocalPort = 5060;
 var
   T: TIdSipTransport;
 begin
   inherited SetUp;
 
+  Self.BindingIP   := '127.0.0.1';
+  Self.BindingPort := 5060;
+
   TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipMockUdpTransport);
 
   Self.Conf := TStringList.Create;
-  Self.Conf.Add('Listen: UDP ' + LocalHost + ':' + IntToStr(LocalPort));
+  Self.Conf.Add('Listen: UDP ' + Self.BindingIP + ':' + IntToStr(Self.BindingPort));
   Self.Conf.Add('NameServer: MOCK');
 
   Self.Stack := TIdSipStackInterface.Create(Self.UI.Handle, Self.TimerQueue, Self.Conf);
   Self.Stack.Resume;
 
-  T := TIdSipDebugTransportRegistry.TransportRunningOn(LocalHost, LocalPort);
-  Check(nil <> T, 'No transport running on ' + LocalHost + ':' + IntToStr(LocalPort));
+  T := TIdSipDebugTransportRegistry.TransportRunningOn(Self.BindingIP, Self.BindingPort);
+  Check(nil <> T, 'No transport running on ' + Self.BindingIP + ':' + IntToStr(Self.BindingPort));
   Self.MockTransport := T as TIdSipMockTransport;
 end;
 
@@ -4978,6 +5019,57 @@ begin
   TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
 
   inherited TearDown;
+end;
+
+procedure TStackWaitTestCase.CheckNoUdpServerOnPort(Host: String;
+                                                    Port: Cardinal;
+                                                    Msg: String);
+begin
+  Check(nil = TIdSipDebugTransportRegistry.TransportRunningOn(Host, Port),
+        'UDP server running on ' + Host + ':' + IntToStr(Port) + '; Msg');
+end;
+
+procedure TStackWaitTestCase.CheckUdpServerOnPort(Host: String;
+                                                  Port: Cardinal;
+                                                  Msg: String);
+begin
+  Check(nil <> TIdSipDebugTransportRegistry.TransportRunningOn(Host, Port),
+        'No UDP server running on ' + Host + ':' + IntToStr(Port) + '; Msg');
+end;
+
+//******************************************************************************
+//* TestTIdStackShutdownWait                                                   *
+//******************************************************************************
+//* TestTIdStackShutdownWait Public methods ************************************
+
+procedure TestTIdStackShutdownWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Wait := TIdStackShutdownWait.Create;
+  Self.Wait.StackID := Self.Stack.ID;
+end;
+
+procedure TestTIdStackShutdownWait.TearDown;
+begin
+  Self.Wait.Free;
+
+  // Remember, this test shows that Stack is freed; setting Self.Stack to nil
+  // means that inherited TearDown can call Self.Stack.Free without blowing up.
+  Self.Stack := nil;
+
+  inherited TearDown;
+end;
+
+//* TestTIdStackShutdownWait Published methods *********************************
+
+procedure TestTIdStackShutdownWait.TestTrigger;
+begin
+  CheckUdpServerOnPort(Self.BindingIP, Self.BindingPort, 'Stack not configured correctly');
+
+  Self.Wait.Trigger;
+
+  CheckNoUdpServerOnPort(Self.BindingIP, Self.BindingPort, 'Stack not shut down');
 end;
 
 //******************************************************************************
@@ -5000,13 +5092,6 @@ begin
   Self.Wait.Free;
 
   inherited TearDown;
-end;
-
-procedure TestTIdSipStackReconfigureStackInterfaceWait.CheckUdpServerOnPort(const Host: String;
-                                                                            Port: Cardinal;
-                                                                            const Msg: String);
-begin
-  Check(nil <> TIdSipDebugTransportRegistry.TransportRunningOn(Host, Port), 'No UDP server running on ' + Host + ':' + IntToStr(Port) + '; Msg');
 end;
 
 //* TestTIdSipStackReconfigureStackInterfaceWait Published methods *************

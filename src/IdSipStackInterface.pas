@@ -882,20 +882,34 @@ type
     property Stack:  TIdSipStackInterface read fStack write fStack;
   end;
 
-  TIdSipStackReconfigureStackInterfaceWait = class(TIdWait)
+  TIdStackWait = class(TIdWait)
+  private
+    fStackID: String;
+  protected
+    procedure TriggerOnStack(Stack: TIdSipStackInterface); virtual;
+  public
+    procedure Trigger; override;
+
+    property StackID: String read fStackID write fStackID;
+  end;
+
+  TIdStackShutdownWait = class(TIdStackWait)
+  protected
+    procedure TriggerOnStack(Stack: TIdSipStackInterface); override;
+  end;
+
+  TIdSipStackReconfigureStackInterfaceWait = class(TIdStackWait)
   private
     fConfiguration: TStrings;
-    fStackID:       String;
 
     procedure SetConfiguration(Value: TStrings);
+  protected
+    procedure TriggerOnStack(Stack: TIdSipStackInterface); override;
   public
     constructor Create; override;
     destructor  Destroy; override;
 
-    procedure Trigger; override;
-
     property Configuration: TStrings read fConfiguration write SetConfiguration;
-    property StackID:       String   read fStackID write fStackID;
   end;
 
   // When you want to send a message to something running in the context of a
@@ -1640,8 +1654,13 @@ begin
 end;
 
 procedure TIdSipStackInterface.Terminate;
+var
+  Wait: TIdStackShutdownWait;
 begin
-  Self.Free;
+  Wait := TIdStackShutdownWait.Create;
+  Wait.StackID := Self.ID;
+
+  Self.TimerQueue.AddEvent(TriggerImmediately, Wait);
 end;
 
 procedure TIdSipStackInterface.Terminate(ActionHandle: TIdSipHandle);
@@ -4095,6 +4114,39 @@ begin
 end;
 
 //******************************************************************************
+//* TIdStackWait                                                               *
+//******************************************************************************
+//* TIdStackWait Public methods ************************************************
+
+procedure TIdStackWait.Trigger;
+var
+  O:     TObject;
+  Stack: TIdSipStackInterface;
+begin
+  O := TIdObjectRegistry.FindObject(Self.StackID);
+
+  if Assigned(O) and (O is TIdSipStackInterface) then
+    Self.TriggerOnStack(O as TIdSipStackInterface);
+end;
+
+//* TIdStackWait Protected methods *********************************************
+
+procedure TIdStackWait.TriggerOnStack(Stack: TIdSipStackInterface);
+begin
+  // By default, do nothing.
+end;
+
+//******************************************************************************
+//* TIdStackShutdownWait                                                       *
+//******************************************************************************
+//* TIdStackShutdownWait Protected methods *************************************
+
+procedure TIdStackShutdownWait.TriggerOnStack(Stack: TIdSipStackInterface);
+begin
+  Stack.Free;
+end;
+
+//******************************************************************************
 //* TIdSipStackReconfigureStackInterfaceWait                                   *
 //******************************************************************************
 //* TIdSipStackReconfigureStackInterfaceWait Public methods ********************
@@ -4113,42 +4165,37 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipStackReconfigureStackInterfaceWait.Trigger;
+//* TIdSipStackReconfigureStackInterfaceWait Protected methods *****************
+
+procedure TIdSipStackReconfigureStackInterfaceWait.TriggerOnStack(Stack: TIdSipStackInterface);
 var
-  O:            TObject;
-  Stack:        TIdSipStackInterface;
   SubMod:       TIdSipSubscribeModule;
   Configurator: TIdSipStackConfigurator;
 begin
   // The configuration file can contain both configuration details defined by
   // TIdSipStackInterface and TIdSipUserAgent.
 
-  O := TIdObjectRegistry.FindObject(Self.StackID);
+  Configurator := TIdSipStackConfigurator.Create;
+  try
+    Configurator.UpdateConfiguration(Stack.UserAgent, Self.Configuration);
 
-  if Assigned(O) and (O is TIdSipStackInterface) then begin
-    Stack := O as TIdSipStackInterface;
-    Configurator := TIdSipStackConfigurator.Create;
-    try
-      Configurator.UpdateConfiguration(Stack.UserAgent, Self.Configuration);
+    if Stack.UserAgent.UsesModule(TIdSipSubscribeModule) then begin
+      SubMod := Stack.UserAgent.ModuleFor(TIdSipSubscribeModule) as TIdSipSubscribeModule;
 
-      if Stack.UserAgent.UsesModule(TIdSipSubscribeModule) then begin
-        SubMod := Stack.UserAgent.ModuleFor(TIdSipSubscribeModule) as TIdSipSubscribeModule;
-
-        // "RemoveListener" first because SubMod may have existed before this
-        // update. If it did, then Stack is already a Listener, and we wouldn't
-        // want to re-add it. However, we've no way of knowing if Stack is
-        // already a Listener.
-        SubMod.RemoveListener(Stack);
-        SubMod.AddListener(Stack);
-      end;
-
-      Stack.UserAgent.Dispatcher.StartAllTransports;
-    finally
-      Configurator.Free;
+      // "RemoveListener" first because SubMod may have existed before this
+      // update. If it did, then Stack is already a Listener, and we wouldn't
+      // want to re-add it. However, we've no way of knowing if Stack is
+      // already a Listener.
+      SubMod.RemoveListener(Stack);
+      SubMod.AddListener(Stack);
     end;
 
-    Stack.Configure(Self.Configuration);
+    Stack.UserAgent.Dispatcher.StartAllTransports;
+  finally
+    Configurator.Free;
   end;
+
+  Stack.Configure(Self.Configuration);
 end;
 
 //* TIdSipStackReconfigureStackInterfaceWait Private methods *******************
