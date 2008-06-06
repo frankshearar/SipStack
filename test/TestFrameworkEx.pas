@@ -134,9 +134,22 @@ begin
 end;
 
 procedure TThreadingTestCase.WaitForSignaled(Event: TEvent; Msg: String);
+var
+  FullMsg: String;
 begin
-  if (wrSignaled <> Event.WaitFor(Self.DefaultTimeout)) then
-    raise Self.ExceptionType.Create(Msg);
+  if (wrSignaled <> Event.WaitFor(Self.DefaultTimeout)) then begin
+    if (Self.ExceptionType <> Exception) then begin
+      // We've timed out, and ExceptionType/Message contains details of the
+      // exception that resulted in the timeout.
+      FullMsg := Format('%s (%s)', [Msg, Self.ExceptionMessage])
+    end
+    else begin
+      // We've timed out, but have no additional information. 
+      FullMsg := Msg;
+    end;
+
+    raise Self.ExceptionType.Create(FullMsg);
+  end;
 
   Event.ResetEvent;
 end;
