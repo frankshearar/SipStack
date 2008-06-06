@@ -4120,8 +4120,7 @@ end;
 
 procedure TIdStackWait.Trigger;
 var
-  O:     TObject;
-  Stack: TIdSipStackInterface;
+  O: TObject;
 begin
   O := TIdObjectRegistry.FindObject(Self.StackID);
 
