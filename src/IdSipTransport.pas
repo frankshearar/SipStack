@@ -327,7 +327,7 @@ type
     fReceiver: TIdSipTransport;
     fSource:   TIdConnectionBindings;
   public
-    property Receiver: TIdSipTransport          read fReceiver write fReceiver;
+    property Receiver: TIdSipTransport       read fReceiver write fReceiver;
     property Source:   TIdConnectionBindings read fSource write fSource;
   end;
 
@@ -348,7 +348,7 @@ type
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Response: TIdSipResponse  read fResponse write fResponse;
+    property Response: TIdSipResponse read fResponse write fResponse;
   end;
 
   // Look at IIdSipTransportListener's declaration.
@@ -371,7 +371,7 @@ type
     fSender:  TIdSipTransport;
   public
     property Binding: TIdConnectionBindings read fBinding write fBinding;
-    property Sender:  TIdSipTransport          read fSender write fSender;
+    property Sender:  TIdSipTransport       read fSender write fSender;
   end;
 
   // Look at IIdSipTransportSendingListener's declaration.
