@@ -2801,15 +2801,8 @@ begin
 end;
 
 function TIdSipParameters.ParamValue(const Name: String): String;
-var
-  Param: TIdSipParameter;
 begin
-  Param := Self.FindParameter(Name);
-
-  if Assigned(Param) then
-    Result := Param.Value
-  else
-    Result := '';
+  Result := Self[Name];
 end;
 
 procedure TIdSipParameters.Parse(ParamList: String);
