@@ -255,7 +255,6 @@ type
     procedure TestCreateUserAgentWithUseTransport;
     procedure TestCreateUserAgentWithUseInboundConnections;
     procedure TestCreateUserAgentWithUserAgentName;
-    procedure TestStrToBool;
     procedure TestUpdateConfigurationWithFrom;
     procedure TestUpdateConfigurationWithLocator;
     procedure TestUpdateConfigurationWithNewRegistrar;
@@ -3421,28 +3420,6 @@ begin
   finally
     UA.Free;
   end;
-end;
-
-procedure TestTIdSipStackConfigurator.TestStrToBool;
-begin
-  Check(Self.Conf.StrToBool('true'), 'true');
-  Check(Self.Conf.StrToBool('TRUE'), 'TRUE');
-  Check(Self.Conf.StrToBool('yes'),  'yes');
-  Check(Self.Conf.StrToBool('YES'),  'YES');
-  Check(Self.Conf.StrToBool('1'),    '1');
-  Check(Self.Conf.StrToBool('on'),   'on');
-  Check(Self.Conf.StrToBool('ON'),   'ON');
-
-  Check(not Self.Conf.StrToBool('false'), 'false');
-  Check(not Self.Conf.StrToBool('FALSE'), 'FALSE');
-  Check(not Self.Conf.StrToBool('no'), 'no');
-  Check(not Self.Conf.StrToBool('NO'), 'NO');
-  Check(not Self.Conf.StrToBool('0'), '0');
-  Check(not Self.Conf.StrToBool('off'), 'off');
-  Check(not Self.Conf.StrToBool('OFF'), 'OFF');
-
-  Check(Self.Conf.StrToBool(''), 'The empty string defaults to "true"');
-  Check(Self.Conf.StrToBool('random'), 'Non-false strings default to "true"');
 end;
 
 procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithFrom;

@@ -146,7 +146,6 @@ type
   // configuration are always processed BEFORE message-sending pending actions.
   TIdSipStackConfigurator = class(TObject)
   private
-    FalseValues:                TStrings;
     FirstRouteDirective:        Boolean;
     FirstTransportDirective:    Boolean;
     FirstUseTransportDirective: Boolean;
@@ -254,16 +253,12 @@ type
     procedure SetInstanceID(UserAgent: TIdSipUserAgent;
                             const InstanceIDLine: String);
   public
-    constructor Create;
-    destructor  Destroy; override;
-
     function CreateLocator(Configuration: String): TIdSipAbstractLocator;
     function CreateUserAgent(Configuration: TStrings;
                              Context: TIdTimerQueue): TIdSipUserAgent; overload;
     function CreateUserAgent(Configuration: TStrings;
                              Context: TIdTimerQueue;
                              Listeners: array of IIdSipTransactionUserListener): TIdSipUserAgent; overload;
-    function  StrToBool(B: String): Boolean;
     procedure UpdateConfiguration(UserAgent: TIdSipUserAgent;
                                   Configuration: TStrings);
   end;
@@ -493,7 +488,7 @@ procedure EatDirective(var Line: String);
 implementation
 
 uses
-  IdAddressSpace, IdRegisteredObject, IdSimpleParser, IdSipDns,
+  ConfigUtils, IdAddressSpace, IdRegisteredObject, IdSimpleParser, IdSipDns,
   IdSipIndyLocator, IdSipLocation, IdSipMockBindingDatabase, IdSipMockLocator,
   IdSipProxyDescription, IdSipSubscribeModule, IdSystem, IdUnicode,
   LogVariables, RuntimeSafety, SysUtils;
@@ -825,27 +820,6 @@ end;
 //******************************************************************************
 //* TIdSipStackConfigurator Public methods *************************************
 
-constructor TIdSipStackConfigurator.Create;
-begin
-  inherited Create;
-
-  Self.FalseValues := TStringList.Create;
-  Self.FalseValues.Add('false');
-  Self.FalseValues.Add('FALSE');
-  Self.FalseValues.Add('no');
-  Self.FalseValues.Add('NO');
-  Self.FalseValues.Add('off');
-  Self.FalseValues.Add('OFF');
-  Self.FalseValues.Add('0');
-end;
-
-destructor TIdSipStackConfigurator.Destroy;
-begin
-  Self.FalseValues.Free;
-
-  inherited Destroy;
-end;
-
 function TIdSipStackConfigurator.CreateLocator(Configuration: String): TIdSipAbstractLocator;
 var
   Host: String;
@@ -917,11 +891,6 @@ begin
 
     raise;
   end;
-end;
-
-function TIdSipStackConfigurator.StrToBool(B: String): Boolean;
-begin
-  Result := Self.FalseValues.IndexOf(B) = ItemNotFoundIndex;
 end;
 
 procedure TIdSipStackConfigurator.UpdateConfiguration(UserAgent: TIdSipUserAgent;
@@ -1418,19 +1387,33 @@ end;
 procedure TIdSipStackConfigurator.AddRegistrarModule(UserAgent: TIdSipUserAgent;
                                                      const RegistrarModuleLine: String);
 var
-  Line: String;
+  Answer: String;
+  Line:   String;
+  Params: TIdSipHeaderParameters;
 begin
   // See class comment for the format for this directive.
   Line := RegistrarModuleLine;
   EatDirective(Line);
 
+  Answer := Fetch(Line, ';');
+
   if not UserAgent.UsesModule(TIdSipRegisterModule) then begin
-    if Self.StrToBool(Line) then
+    if StrAsBool(Answer) then
       UserAgent.AddModule(TIdSipRegisterModule)
   end
   else begin
-    if not Self.StrToBool(Line) then
+    if not StrAsBool(Answer) then
       UserAgent.RemoveModule(TIdSipRegisterModule);
+  end;
+
+  if UserAgent.UsesModule(TIdSipRegisterModule) then begin
+    Params := TIdSipHeaderParameters.Create;
+    try
+      Params.Parse(Line);
+      UserAgent.ModuleFor(TIdSipRegisterModule).Configure(Params);
+    finally
+      Params.Free;
+    end;
   end;
 end;
 
@@ -1836,7 +1819,7 @@ begin
   EatDirective(Line);
 
   Setter := TIdSipPendingTcpTransportConfiguration.Create(UserAgent);
-  Setter.ConserveConnections := Self.StrToBool(Line);
+  Setter.ConserveConnections := StrAsBool(Line);
 
   PendingActions.Add(Setter);
 end;
@@ -1880,7 +1863,7 @@ begin
 
   RegMod := Self.InstantiateRegistrarModule(UserAgent);
 
-  RegMod.UseGruu := Self.StrToBool(Line);
+  RegMod.UseGruu := StrAsBool(Line);
 end;
 
 procedure TIdSipStackConfigurator.SetSuppressLocalResponses(UserAgent: TIdSipUserAgent;
@@ -1894,7 +1877,7 @@ begin
 
   InviteMod := Self.InstantiateInviteModule(UserAgent);
 
-  InviteMod.SuppressLocalResponses := Self.StrToBool(Line);
+  InviteMod.SuppressLocalResponses := StrAsBool(Line);
 end;
 
 procedure TIdSipStackConfigurator.UseGruu(UserAgent: TIdSipAbstractCore;
@@ -1932,7 +1915,7 @@ begin
 
   Line := Trim(Line);
 
-  Pending := TIdSipPendingLocalResolutionAction.Create(UserAgent, Self.StrToBool(Line));
+  Pending := TIdSipPendingLocalResolutionAction.Create(UserAgent, StrAsBool(Line));
   Self.AddPendingConfiguration(PendingActions, Pending);
 end;
 

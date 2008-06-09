@@ -15,6 +15,7 @@ uses
   SysUtils,
   TextTestRunner,
   audioclasses in 'src\audioclasses.pas',
+  ConfigUtils in '..\Common\src\ConfigUtils.pas',
   IdAddressSpace in 'src\IdAddressSpace.pas',
   IdBaseThread in 'src\IdBaseThread.pas',
   IdConnectionBindings in 'src\IdConnectionBindings.pas',
