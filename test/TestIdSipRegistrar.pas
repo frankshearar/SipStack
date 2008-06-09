@@ -101,6 +101,22 @@ type
     procedure TestUnregisterFromMultipleBindings;
   end;
 
+  TestTIdSipRegisterModule = class(TTestCaseTU)
+  private
+    Module: TIdSipRegisterModule;
+    Params: TIdSipHeaderParameters;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestConfigureMinTime;
+    procedure TestConfigureMinTimeBadValue;
+    procedure TestConfigureRegTime;
+    procedure TestConfigureRegTimeBadValue;
+    procedure TestConfigureUseGruu;
+    procedure TestConfigureUseGruuBadValue;
+  end;
+
   TestTIdSipRegistration = class(TestTIdSipAction)
   private
     RegisterModule: TIdSipRegisterModule;
@@ -331,6 +347,7 @@ begin
   Result := TTestSuite.Create('IdSipRegistrar unit tests');
   Result.AddTest(TestTIdSipRegistrar.Suite);
   Result.AddTest(TestTIdSipOutboundRegisterModule.Suite);
+  Result.AddTest(TestTIdSipRegisterModule.Suite);
   Result.AddTest(TestTIdSipInboundRegistration.Suite);
   Result.AddTest(TestTIdSipOutboundRegister.Suite);
   Result.AddTest(TestTIdSipOutboundRegisterQuery.Suite);
@@ -341,6 +358,9 @@ begin
   Result.AddTest(TestTIdSipRegistrationSucceededMethod.Suite);
   Result.AddTest(TestTIdSipReregisterWait.Suite);
 end;
+
+const
+  FortyTwoSeconds = '42';
 
 //******************************************************************************
 //* TestTIdSipRegistrar                                                        *
@@ -1253,6 +1273,106 @@ begin
   finally
     OurBindings.Free;
   end;
+end;
+
+//******************************************************************************
+//* TestTIdSipRegisterModule                                                   *
+//******************************************************************************
+//* TestTIdSipRegisterModule Public methods ************************************
+
+procedure TestTIdSipRegisterModule.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Module := Self.Core.AddModule(TIdSipRegisterModule) as TIdSipRegisterModule;
+  Self.Params := TIdSipHeaderParameters.Create;
+
+  Self.Module.BindingDB := TIdSipMockBindingDatabase.Create;
+end;
+
+procedure TestTIdSipRegisterModule.TearDown;
+begin
+  Self.Params.Free;
+  // Core will free Self.Module.
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipRegisterModule Published methods *********************************
+
+procedure TestTIdSipRegisterModule.TestConfigureMinTime;
+begin
+  Self.Params.AddParam(MinTimeParam, FortyTwoSeconds);
+  Self.Module.Configure(Self.Params);
+
+  CheckEquals(StrToInt(FortyTwoSeconds), Self.Module.MinimumExpiryTime,
+              'mintime parameter ignored');
+end;
+
+procedure TestTIdSipRegisterModule.TestConfigureMinTimeBadValue;
+var
+  OriginalExpiryTime: Cardinal;
+begin
+  Self.Params.AddParam(MinTimeParam, FortyTwoSeconds);
+  Self.Module.Configure(Self.Params);
+
+  OriginalExpiryTime := Self.Module.MinimumExpiryTime;
+  Self.Params[MinTimeParam] := 'foo';
+  Self.Module.Configure(Self.Params);
+
+  CheckEquals(OriginalExpiryTime, Self.Module.MinimumExpiryTime,
+              'Expiry time changed even though mintime had bad value');
+end;
+
+procedure TestTIdSipRegisterModule.TestConfigureRegTime;
+begin
+  Self.Params.AddParam(RegTimeParam, FortyTwoSeconds);
+  Self.Module.Configure(Self.Params);
+
+  CheckEquals(StrToInt(FortyTwoSeconds), Self.Module.BindingDB.DefaultExpiryTime,
+              'regtime parameter ignored');
+end;
+
+procedure TestTIdSipRegisterModule.TestConfigureRegTimeBadValue;
+var
+  OriginalExpiryTime: Cardinal;
+begin
+  Self.Params.AddParam(RegTimeParam, FortyTwoSeconds);
+  Self.Module.Configure(Self.Params);
+
+  OriginalExpiryTime := Self.Module.BindingDB.DefaultExpiryTime;
+  Self.Params[RegTimeParam] := 'foo';
+  Self.Module.Configure(Self.Params);
+
+  CheckEquals(OriginalExpiryTime, Self.Module.BindingDB.DefaultExpiryTime,
+              'Expiry time changed even though regtime had bad value');
+end;
+
+procedure TestTIdSipRegisterModule.TestConfigureUseGruu;
+var
+  I: Integer;
+begin
+  for I := Low(TrueBoolStrs) to High(TrueBoolStrs) do begin
+    Self.Params[UseGruuParam] := TrueBoolStrs[I];
+    Self.Module.Configure(Self.Params);
+    Check(Self.Module.UseGruu, 'usegruu=' + TrueBoolStrs[I]);
+
+    Self.Params[UseGruuParam] := FalseBoolStrs[I];
+    Self.Module.Configure(Self.Params);
+    Check(not Self.Module.UseGruu, 'usegruu=' + FalseBoolStrs[I]);
+  end;
+end;
+
+procedure TestTIdSipRegisterModule.TestConfigureUseGruuBadValue;
+begin
+  Self.Params.AddParam(UseGruuParam, 'true');
+  Self.Module.Configure(Self.Params);
+  Check(Self.Module.UseGruu, 'usegruu=true');
+
+  Self.Params[UseGruuParam] := 'ture'; // typo!
+  Self.Module.Configure(Self.Params);
+  Check(Self.Module.UseGruu, 'usegruu changed; bad-valued parameter not ignored');
+
 end;
 
 //******************************************************************************

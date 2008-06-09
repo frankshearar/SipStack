@@ -607,6 +607,7 @@ type
     function  AllowedContentTypes: TStrings; overload;
     function  AllowedExtensions: String; virtual;
     procedure CleanUp; virtual;
+    procedure Configure(Params: TIdSipHeaderParameters); virtual;
     function  HasKnownAccept(Request: TIdSipRequest): Boolean;
     function  HasUnknownContentType(Request: TIdSipRequest): Boolean;
     function  IsNull: Boolean; virtual;
@@ -3254,6 +3255,13 @@ procedure TIdSipMessageModule.CleanUp;
 begin
   // When the User Agent frees, it calls this method. Put any cleanup stuff
   // here.
+end;
+
+procedure TIdSipMessageModule.Configure(Params: TIdSipHeaderParameters);
+begin
+  // This method allows subclasses to configure themselves based on Params.
+  // The idea is that this allows the user of the stack to control the
+  // module's configuration through a configuration file.
 end;
 
 function TIdSipMessageModule.HasKnownAccept(Request: TIdSipRequest): Boolean;

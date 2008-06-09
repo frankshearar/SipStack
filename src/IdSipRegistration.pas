@@ -282,11 +282,17 @@ type
   TIdSipRegisterModule = class(TIdSipMessageModule)
   private
     fBindingDB:         TIdSipAbstractBindingDatabase;
+    fDefaultExpiryTime: Cardinal;
     fMinimumExpiryTime: Cardinal; // in seconds
     fUseGruu:           Boolean;
 
+    function  GetDefaultExpiryTime: Cardinal;
+    function  GetMinimumExpiryTime(Params: TIdSipHeaderParameters): Cardinal;
+    function  GetRegistrationTime(Params: TIdSipHeaderParameters): Cardinal;
     function  GetUseGruu: Boolean;
+    function  GetUseGruuValue(Params: TIdSipHeaderParameters): Boolean;
     procedure SetBindingDB(Value: TIdSipAbstractBindingDatabase);
+    procedure SetDefaultExpiryTime(Value: Cardinal);
     procedure SetUseGruu(Value: Boolean);
   protected
     function WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; override;
@@ -294,11 +300,13 @@ type
     constructor Create(UA: TIdSipAbstractCore); override;
     destructor  Destroy; override;
 
-    function Accept(Request: TIdSipRequest;
-                    Binding: TIdConnectionBindings): TIdSipAction; override;
-    function AcceptsMethods: String; override;
+    function  Accept(Request: TIdSipRequest;
+                     Binding: TIdConnectionBindings): TIdSipAction; override;
+    function  AcceptsMethods: String; override;
+    procedure Configure(Params: TIdSipHeaderParameters); override;
 
     property BindingDB:         TIdSipAbstractBindingDatabase read fBindingDB write SetBindingDB;
+    property DefaultExpiryTime: Cardinal                      read GetDefaultExpiryTime write SetDefaultExpiryTime;
     property MinimumExpiryTime: Cardinal                      read fMinimumExpiryTime write fMinimumExpiryTime;
     property UseGruu:           Boolean                       read GetUseGruu write SetUseGruu;
   end;
@@ -553,14 +561,27 @@ type
     constructor Create(const Msg: string); reintroduce;
   end;
 
+// Well-known parameters for the TIdSipRegisterModule.
+const
+  MinTimeParam = 'mintime';
+  RegTimeParam = 'regtime';
+  UseGruuParam = 'usegruu';
+
+// Defaults
+const
+  FiveMinutes              = 5*60;
+  TenMinutes               = 10*60;
+  DefaultMinimumExpiryTime = FiveMinutes;
+  DefaultRegistrationTime  = TenMinutes;
+
 implementation
 
 uses
-  IdRegisteredObject, IdSipAuthentication, Math, RuntimeSafety, SysUtils;
+  ConfigUtils, IdRegisteredObject, IdSipAuthentication, Math, RuntimeSafety,
+  SysUtils;
 
 const
   ItemNotFoundIndex = -1;
-  TenMinutes        = 600; // seconds
 
 resourcestring
   NoSuchRegistrar = 'No such registrar known: %s';
@@ -1344,6 +1365,7 @@ begin
   inherited Create(UA);
 
   Self.AcceptsMethodsList.Add(MethodRegister);
+  Self.DefaultExpiryTime := TenMinutes;
 end;
 
 destructor TIdSipRegisterModule.Destroy;
@@ -1370,6 +1392,18 @@ begin
   Result := MethodRegister;
 end;
 
+procedure TIdSipRegisterModule.Configure(Params: TIdSipHeaderParameters);
+begin
+  // Parameters:
+  // * regtime: registration period (integer value, in seconds)
+  // * mintime: minimum allowed expiry time (integer value, in seconds)
+  // * usegree: use GRUU or not? (boolean string: yes|no|true|false|1|0)
+
+  Self.DefaultExpiryTime := Self.GetRegistrationTime(Params);
+  Self.MinimumExpiryTime := Self.GetMinimumExpiryTime(Params);
+  Self.UseGruu           := Self.GetUseGruuValue(Params);
+end;
+
 //* TIdSipRegisterModule Protected methods *************************************
 
 function TIdSipRegisterModule.WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction;
@@ -1386,6 +1420,30 @@ end;
 
 //* TIdSipRegisterModule Private methods ***************************************
 
+function TIdSipRegisterModule.GetDefaultExpiryTime: Cardinal;
+begin
+  if Assigned(Self.BindingDB) then
+    Result := Self.BindingDB.DefaultExpiryTime
+  else
+    Result := Self.fDefaultExpiryTime;
+end;
+
+function TIdSipRegisterModule.GetMinimumExpiryTime(Params: TIdSipHeaderParameters): Cardinal;
+begin
+  if Params.HasParameter(MinTimeParam) then
+    Result := StrToIntDef(Params[MinTimeParam], Self.MinimumExpiryTime)
+  else
+    Result := Self.MinimumExpiryTime;
+end;
+
+function TIdSipRegisterModule.GetRegistrationTime(Params: TIdSipHeaderParameters): Cardinal;
+begin
+  if Params.HasParameter(RegTimeParam) then
+    Result := StrToIntDef(Params[RegTimeParam], Self.DefaultExpiryTime)
+  else
+    Result := Self.DefaultExpiryTime;
+end;
+
 function TIdSipRegisterModule.GetUseGruu: Boolean;
 begin
   if Assigned(Self.BindingDB) then
@@ -1394,12 +1452,30 @@ begin
     Result := Self.fUseGruu;
 end;
 
+function TIdSipRegisterModule.GetUseGruuValue(Params: TIdSipHeaderParameters): Boolean;
+begin
+  if Params.HasParameter(UseGruuParam) then
+    Result := StrAsBoolDef(Params[UseGruuParam], Self.UseGruu)
+  else
+    Result := Self.UseGruu;
+end;
+
 procedure TIdSipRegisterModule.SetBindingDB(Value: TIdSipAbstractBindingDatabase);
 begin
   Self.fBindingDB := Value;
 
-  if Assigned(Value) then
-    Self.fBindingDB.UseGruu := Self.fUseGruu;
+  if Assigned(Self.fBindingDB) then begin
+    Self.fBindingDB.DefaultExpiryTime := Self.fDefaultExpiryTime;
+    Self.fBindingDB.UseGruu           := Self.fUseGruu;    
+  end;
+end;
+
+procedure TIdSipRegisterModule.SetDefaultExpiryTime(Value: Cardinal);
+begin
+  Self.fDefaultExpiryTime := Value;
+
+  if Assigned(Self.BindingDB) then
+    Self.BindingDB.DefaultExpiryTime := Value;
 end;
 
 procedure TIdSipRegisterModule.SetUseGruu(Value: Boolean);

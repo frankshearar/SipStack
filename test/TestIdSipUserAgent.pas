@@ -319,6 +319,7 @@ type
     procedure TestActAsRegistrarDirectiveCreatesRegistrarModule;
     procedure TestActAsRegistrarDirectiveFalse;
     procedure TestActAsRegistrarDirectiveFalseThenTrue;
+    procedure TestActAsRegistrarDirectiveParameters;
     procedure TestActAsRegistrarDirectiveTrueThenFalse;
     procedure TestDatabaseDirectiveImpliesActAsRegistrarDirective;
     procedure TestDatabaseDirectiveMock;
@@ -4313,6 +4314,26 @@ begin
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
     Check(UA.UsesModule(TIdSipRegisterModule), 'User agent can''t act as a registrar');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestConfigureRegistrar.TestActAsRegistrarDirectiveParameters;
+var
+  Module: TIdSipRegisterModule;
+  UA:     TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('NameServer: MOCK');
+  Self.Configuration.Add('ActAsRegistrar: true;mintime=42');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Check(UA.UsesModule(TIdSipRegisterModule), 'User agent doesn''t act as a registrar');
+
+    Module := UA.ModuleFor(TIdSipRegisterModule) as TIdSipRegisterModule;
+    CheckEquals(42, Module.MinimumExpiryTime, 'Directive parameters not passed to module');
   finally
     UA.Free;
   end;
