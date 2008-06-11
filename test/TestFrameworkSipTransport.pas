@@ -13,7 +13,7 @@ interface
 
 uses
   IdConnectionBindings, IdInterfacedObject, IdRoutingTable, IdSipLocation,
-  IdSipMessage, IdSipTransport, IdTimerQueue, SyncObjs, SysUtils,
+  IdSipMessage, IdSipTransport, IdTimerQueue, LoGGer, SyncObjs, SysUtils,
   TestFrameworkEx, TestFrameworkSip;
 
 type
@@ -28,12 +28,16 @@ type
                                  const HostName: String;
                                  const Address: String;
                                  Port: Cardinal;
-                                 TestCase: TestTIdSipTransport);
+                                 TestCase: TestTIdSipTransport;
+                                 Logger: TLoGGerThread;
+                                 LogName: String);
 
   public
     constructor Create(TransportType: TIdSipTransportClass;
                        TestCase: TestTIdSipTransport;
-                       FinishedEvent: TEvent); reintroduce;
+                       FinishedEvent: TEvent;
+                       Logger: TLoGGerThread;
+                       LogName: String); reintroduce;
     destructor  Destroy; override;
 
     property HighPortTransport: TIdSipTransport read fHighPortTransport;
@@ -57,6 +61,8 @@ type
     FinishedTimer:          TEvent;
     HighPortLocation:       TIdSipLocation;
     Lock:                   TCriticalSection;
+    Logger:                 TLoGGerThread;
+    LogName:                String;
     LowPortLocation:        TIdSipLocation;
     ReceivedRequest:        Boolean;
     ReceivedResponse:       Boolean;
@@ -71,6 +77,7 @@ type
     ResponseSendingBinding: TIdConnectionBindings;
     SendEvent:              TEvent;
     SentBy:                 String;
+    TestRef:                Cardinal;
     Timer:                  TTransportTestTimerQueue;
     WrongServer:            Boolean;
 
@@ -130,7 +137,9 @@ type
                             R: TIdSipRequest;
                             ReceivedFrom: TIdConnectionBindings);
     function  CopyFirstLocation(Transport: TIdSipTransport): TIdSipLocation;
+    function  CreateLogger(LogName: String): TLoGGerThread;
     function  HighPortTransport: TIdSipTransport;
+    procedure LogException(E: Exception; Method: String);
     function  LowPortTransport: TIdSipTransport;
     procedure OnException(FailedMessage: TIdSipMessage;
                           E: Exception;
@@ -317,7 +326,8 @@ type
 implementation
 
 uses
-  IdSimpleParser, IdStack, IdTcpServer, TestFramework, TestMessages;
+  IdRegisteredObject, IdSimpleParser, IdStack, IdTcpServer, TestFramework,
+  TestMessages;
 
 var
   ServerThatInstantiatesGStack: TIdTcpServer;
@@ -329,7 +339,9 @@ var
 
 constructor TTransportTestTimerQueue.Create(TransportType: TIdSipTransportClass;
                                             TestCase: TestTIdSipTransport;
-                                            FinishedEvent: TEvent);
+                                            FinishedEvent: TEvent;
+                                            Logger: TLoGGerThread;
+                                            LogName: String);
 begin
   inherited Create(false);
 
@@ -340,14 +352,18 @@ begin
                           'localhost',
                           '127.0.0.1',
                           TestCase.DefaultPort + 10000,
-                          TestCase);
+                          TestCase,
+                          Logger,
+                          LogName);
 
   Self.fLowPortTransport  := TransportType.Create;
   Self.ConfigureTransport(Self.LowPortTransport,
                           'localhost',
                           '127.0.0.1',
                           TestCase.DefaultPort,
-                          TestCase);
+                          TestCase,
+                          Logger,
+                          LogName);
 
   Self.HighPortTransport.Start;
   Self.LowPortTransport.Start;
@@ -373,7 +389,9 @@ procedure TTransportTestTimerQueue.ConfigureTransport(Transport: TIdSipTransport
                                                       const HostName: String;
                                                       const Address: String;
                                                       Port: Cardinal;
-                                                      TestCase: TestTIdSipTransport);
+                                                      TestCase: TestTIdSipTransport;
+                                                      Logger: TLoGGerThread;
+                                                      LogName: String);
 begin
   Transport.AddTransportListener(TestCase);
   Transport.AddTransportSendingListener(TestCase);
@@ -382,6 +400,8 @@ begin
   Transport.Timeout      := TestCase.DefaultTimeout div 10;
   Transport.Timer        := Self;
   Transport.HostName     := HostName;
+  Transport.Logger       := Logger;
+  Transport.LogName      := LogName;
 
   Transport.SetFirstBinding(Address, Port);
 end;
@@ -399,24 +419,35 @@ begin
     raise Exception.Create('GStack isn''t instantiated - you need something '
                          + 'that opens a socket');
 
+  Self.ExceptionMessage       := Self.TransportType.ClassName + ': ' + Self.ExceptionMessage;
+  Self.EmptyListEvent         := TSimpleEvent.Create;
+  Self.Lock                   := TCriticalSection.Create;
+  Self.LastSentResponse       := TIdSipResponse.Create;
+  Self.FinishedTimer          := TSimpleEvent.Create;
+  Self.ReceivingBinding       := TIdConnectionBindings.Create;
+  Self.RecvdRequest           := TIdSipRequest.Create;
+  Self.RejectedMessageEvent   := TSimpleEvent.Create;
+  Self.Request                := TIdSipTestResources.CreateLocalLoopRequest;
+  Self.RequestSendingBinding  := TIdConnectionBindings.Create;
+  Self.Response               := TIdSipTestResources.CreateLocalLoopResponse;
+  Self.ResponseSendingBinding := TIdConnectionBindings.Create;
+  Self.SendEvent              := TSimpleEvent.Create;
+
+  Self.LogName := Self.FTestName + 'Log';
+  Self.TestRef := $decafbad;
+  Self.Logger  := Self.CreateLogger(Self.LogName);
+  TIdObjectRegistry.SetLogger(Self.Logger,
+                              LogName,
+                              Self.TestRef);
+
   TIdSipTransportRegistry.RegisterTransportType(Self.TransportType.GetTransportType,
                                                 Self.TransportType);
 
-  Self.ExceptionMessage := Self.TransportType.ClassName + ': ' + Self.ExceptionMessage;
-
-  Self.EmptyListEvent       := TSimpleEvent.Create;
-  Self.FinishedTimer        := TSimpleEvent.Create;
-  Self.RejectedMessageEvent := TSimpleEvent.Create;
-  Self.SendEvent            := TSimpleEvent.Create;
-
-  Self.Timer := TTransportTestTimerQueue.Create(Self.TransportType, Self, Self.FinishedTimer);
+  Self.Timer := TTransportTestTimerQueue.Create(Self.TransportType, Self, Self.FinishedTimer, Self.Logger, LogName);
   Check(Self.Timer <> nil,
         'Timer didn''t instantiate: the previous test likely failed without '
       + 'killing the transports');
   Self.Timer.OnEmpty := Self.OnEmpty;
-
-  Self.Lock             := TCriticalSection.Create;
-  Self.LastSentResponse := TIdSipResponse.Create;
 
   Check(Self.HighPortTransport <> nil,
         'Something went wrong creating the TTransportTestTimerQueue');
@@ -424,21 +455,13 @@ begin
   Self.HighPortLocation := Self.CopyFirstLocation(Self.HighPortTransport);
   Self.LowPortLocation  :=  Self.CopyFirstLocation(Self.LowPortTransport);
 
-  Self.ReceivingBinding       := TIdConnectionBindings.Create;
-  Self.RequestSendingBinding  := TIdConnectionBindings.Create;
-  Self.ResponseSendingBinding := TIdConnectionBindings.Create;
-
-  Self.Request := TIdSipTestResources.CreateLocalLoopRequest;
   Self.Request.LastHop.SentBy    := Self.LowPortLocation.IPAddress;
   Self.Request.LastHop.Transport := Self.LowPortLocation.Transport;
   Self.Request.RequestUri.Host   := Self.HighPortTransport.HostName;
   Self.Request.RequestUri.Port   := Self.HighPortLocation.Port;
 
-  Self.Response := TIdSipTestResources.CreateLocalLoopResponse;
   Self.Response.LastHop.Transport := Self.HighPortLocation.Transport;
   Self.Response.LastHop.Port      := Self.HighPortLocation.Port;
-
-  Self.RecvdRequest := TIdSipRequest.Create;
 
   Self.ReceivedRequest       := false;
   Self.ReceivedResponse      := false;
@@ -446,6 +469,8 @@ begin
   Self.RejectedMessageReason := '';
   Self.SentBy                := '';
   Self.WrongServer           := false;
+
+  Self.Logger.Resume;
 end;
 
 procedure TestTIdSipTransport.TearDown;
@@ -464,16 +489,6 @@ begin
     // structures like TIdSipTransportRegistry.
     Self.Timer := nil;
 
-    Self.RecvdRequest.Free;
-    Self.Response.Free;
-    Self.Request.Free;
-    Self.ResponseSendingBinding.Free;
-    Self.RequestSendingBinding.Free;
-    Self.ReceivingBinding.Free;
-
-    Self.HighPortLocation.Free;
-    Self.LowPortLocation.Free;
-
     Self.Lock.Acquire;
     try
       FreeAndNil(Self.LastSentResponse);
@@ -485,12 +500,23 @@ begin
     end;
     Self.Lock.Free;
 
+    Self.HighPortLocation.Free;
+    Self.LowPortLocation.Free;
+
+    Self.ResponseSendingBinding.Free;
+    Self.Response.Free;
+    Self.RequestSendingBinding.Free;
+    Self.Request.Free;
+    Self.RecvdRequest.Free;
+    Self.ReceivingBinding.Free;
     Self.FinishedTimer.Free;
 
     TIdSipTransportRegistry.UnregisterTransportType(Self.TransportType.GetTransportType);
 
     inherited TearDown;
   end;
+
+  Self.Logger.Terminate;
 end;
 
 function TestTIdSipTransport.DefaultPort: Cardinal;
@@ -847,9 +873,38 @@ begin
   end;
 end;
 
+function TestTIdSipTransport.CreateLogger(LogName: String): TLoGGerThread;
+begin
+  Result := TLoGGerThread.Create;
+  Result.Lock;
+  try
+    if not Result.Logs.LogExists(LogName) then
+      Result.Add(LogName);
+
+    Result.Logs.LogsByName[LogName].VerbosityLevel := LoGGerVerbosityLevelDebug;
+    Result.Logs.LogsByName[LogName].FileName       := LogName;
+  finally
+    Result.Unlock;
+  end;
+
+end;
+
 function TestTIdSipTransport.HighPortTransport: TIdSipTransport;
 begin
   Result := Self.Timer.HighPortTransport;
+end;
+
+procedure TestTIdSipTransport.LogException(E: Exception; Method: String);
+const
+  LogMsg = 'Exception %s occured in %s: %s';
+begin
+  Self.Logger.Write(Self.LogName,
+                    LoGGerVerbosityLevelDebug,
+                    Self.TestRef,
+                    Self.FTestName,
+                    0,
+                    Format(LogMsg, [E.ClassName, Method, E.Message]),
+                    '');
 end;
 
 function TestTIdSipTransport.LowPortTransport: TIdSipTransport;
@@ -924,10 +979,15 @@ procedure TestTIdSipTransport.OnSendResponse(Response: TIdSipResponse;
 begin
   Self.Lock.Acquire;
   try
-    Self.ResponseSendingBinding.Assign(Binding);
-    if Assigned(Self.LastSentResponse) then begin
-      Self.LastSentResponse.Assign(Response);
-      Self.SendEvent.SetEvent;
+    try
+      Self.ResponseSendingBinding.Assign(Binding);
+      if Assigned(Self.LastSentResponse) then begin
+        Self.LastSentResponse.Assign(Response);
+        Self.SendEvent.SetEvent;
+      end;
+    except
+      on E: Exception do
+        Self.LogException(E, Self.ClassName + '.OnSendResponse');
     end;
   finally
     Self.Lock.Release;
