@@ -2619,8 +2619,12 @@ var
 begin
   Index := Self.IndexOfAttributeNamed(SetupAttribute);
 
-  if (Index = ItemNotFoundIndex) then
-    Result := stHoldConn
+  if (Index = ItemNotFoundIndex) then begin
+    // Actually, Result should be stActive or stPassive, depending on whether
+    // the session description's an offer or an answer. We have no context here
+    // though, thus we default to a safe option.
+    Result := stHoldConn;
+  end
   else
     Result := StrToSetupType(Self[Index].Value);
 end;
