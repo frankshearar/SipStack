@@ -1240,12 +1240,17 @@ procedure TIdSipStackInterface.Authenticate(ActionHandle: TIdSipHandle;
                                             Credentials: TIdSipAuthorizationHeader);
 var
   Action: TIdSipAction;
+  Wait:   TIdSipActionAuthenticateWait;
 begin
   Self.ActionLock.Acquire;
   try
     Action := Self.GetAndCheckAction(ActionHandle, TIdSipAction);
 
-    Action.Resend(Credentials);
+    Wait := TIdSipActionAuthenticateWait.Create;
+    Wait.SetCredentials(Credentials);
+    Wait.ActionID := Action.ID;
+
+    Self.TimerQueue.AddEvent(TriggerImmediately, Wait);
   finally
     Self.ActionLock.Release;
   end;

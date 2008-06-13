@@ -219,6 +219,19 @@ type
 
   TIdSipActionWaitClass = class of TIdSipActionWait;
 
+  // I represent the scheduled execution of an Action authenticating against a
+  // UAS.
+
+  TIdSipActionAuthenticateWait = class(TIdSipActionWait)
+  private
+    Credentials: TIdSipAuthorizationHeader;
+  public
+    destructor  Destroy; override;
+
+    procedure SetCredentials(Credentials: TIdSipAuthorizationHeader);
+    procedure Trigger; override;
+  end;
+
   // I represent the (possibly deferred) execution of something my Action needs
   // done. That is, when you invoke my Trigger, I call Action.Send.
   TIdSipActionSendWait = class(TIdSipActionWait)
@@ -1561,6 +1574,36 @@ begin
     Self.Actions.FindActionAndPerform(Self.ActionID, Block);
   finally
     Block.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TIdSipActionAuthenticateWait                                               *
+//******************************************************************************
+//* TIdSipActionAuthenticateWait Public methods ********************************
+
+destructor TIdSipActionAuthenticateWait.Destroy;
+begin
+  Self.Credentials.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipActionAuthenticateWait.SetCredentials(Credentials: TIdSipAuthorizationHeader);
+begin
+  Self.Credentials := TIdSipHeader.ConstructHeader(Credentials.Name) as TIdSipAuthorizationHeader;
+  Self.Credentials.Assign(Credentials);
+end;
+
+procedure TIdSipActionAuthenticateWait.Trigger;
+var
+  Action: TObject;
+begin
+  Action := TIdObjectRegistry.FindObject(Self.ActionID);
+
+  if Assigned(Action) and (Action is TIdSipAction) then begin
+    if Assigned(Self.Credentials) then
+      (Action as TIdSipAction).Resend(Self.Credentials);
   end;
 end;
 

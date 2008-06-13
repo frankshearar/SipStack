@@ -116,6 +116,7 @@ type
     TimerQueue: TIdDebugTimerQueue;
     UI:         TCustomForm;
 
+    procedure CheckNoRequestSent(Msg: String);
     procedure CheckNotificationReceived(EventType: TIdEventDataClass; Msg: String);
     procedure CheckNotificationsReceived(EventType: TIdEventDataClass; ExpectedCount: Cardinal; Msg: String);
     procedure CheckRequestSent(Msg: String);
@@ -417,6 +418,11 @@ begin
 end;
 
 //* TStackInterfaceTestCase Protected methods **********************************
+
+procedure TStackInterfaceTestCase.CheckNoRequestSent(Msg: String);
+begin
+  Self.TransportTest.CheckNoRequestSent(Msg);
+end;
 
 procedure TStackInterfaceTestCase.CheckNotificationReceived(EventType: TIdEventDataClass; Msg: String);
 begin

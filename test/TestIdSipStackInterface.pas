@@ -68,6 +68,7 @@ type
     TargetPort:          Cardinal;
 
     procedure AddSubscribeSupport(Stack: TIdSipStackInterface; EventPackage: String);
+    procedure CheckAuthentication(AuthType: TIdSipAuthorizationHeaderClass);
     procedure CheckRedirectCall(Temporary: Boolean);
     procedure ClearPendingStackStartedNotification;
     procedure ConfigureToUseRegistrar(Intf: TIdSipStackInterface; RegistrarUri: String);
@@ -124,6 +125,8 @@ type
     procedure TestAcceptCallWithInvalidHandle;
     procedure TestAcceptCallWithNoExistentHandle;
     procedure TestAttachExtension;
+    procedure TestAuthenticateSchedulesWait;
+    procedure TestAuthenticateWithProxySchedulesWait;
     procedure TestAutoregistrationNotifiesOfAuthenticationChallenge;
     procedure TestCreateNotifiesOfReconfiguration;
     procedure TestEndedSession;
@@ -937,6 +940,41 @@ begin
   end;
 end;
 
+procedure TestTIdSipStackInterface.CheckAuthentication(AuthType: TIdSipAuthorizationHeaderClass);
+var
+  Creds: TIdSipAuthorizationHeader;
+  H:     TIdSipHandle;
+begin
+  // Send an INVITE. Get a challenge. Make sure that the resent INVITE+creds is
+  // actually sent in the context of the stack thread.
+  H := Self.Intf.MakeCall(Self.From, Self.Destination, '', '', 70);
+  Self.MarkSentRequestCount;
+  Self.Intf.Send(H);
+  Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
+  CheckRequestSent('No request sent');
+
+  // Really, this should EITHER be a 401 OR a 407, but we're testing the sending
+  // of a request; we don't particularly care WHICH kind of challenge we've
+  // received.
+  Self.ReceiveChallenge(Self.LastSentRequest);
+  Self.ProcessAllPendingNotifications;
+
+  Creds := AuthType.Create;
+  try
+    Self.MarkSentRequestCount;
+    Self.Intf.Authenticate(H, Creds);
+    CheckNoRequestSent('Request sent, hence sending did NOT occur in context of stack thread');
+
+    Check(nil <> Self.TimerQueue.LastEventScheduled(TIdSipActionAuthenticateWait),
+          'No authentication wait scheduled');
+    Self.TimerQueue.TriggerAllEventsUpToFirst(TIdSipActionAuthenticateWait);
+    Check(Self.LastSentRequest.HasHeader(Creds.Name),
+          Format('No %s header', [Creds.Name]));
+  finally
+    Creds.Free;
+  end;
+end;
+
 procedure TestTIdSipStackInterface.CheckRedirectCall(Temporary: Boolean);
 var
   NewTarget: TIdSipAddressHeader;
@@ -1435,6 +1473,16 @@ begin
             + 'StackInterface, and thus the UserAgent property is not properly set');
 end;
 
+procedure TestTIdSipStackInterface.TestAuthenticateSchedulesWait;
+begin
+  Self.CheckAuthentication(TIdSipAuthorizationHeader);
+end;
+
+procedure TestTIdSipStackInterface.TestAuthenticateWithProxySchedulesWait;
+begin
+  Self.CheckAuthentication(TIdSipProxyAuthorizationHeader);
+end;
+
 procedure TestTIdSipStackInterface.TestAutoregistrationNotifiesOfAuthenticationChallenge;
 var
   Reg: TStrings;
@@ -1455,7 +1503,7 @@ begin
     Self.ReceiveChallenge(Self.LastSentRequest);
     Self.ProcessAllPendingNotifications;
 
-  CheckNotificationReceived(TIdAuthenticationChallengeData, 'Authentication challenge notification not received');
+    CheckNotificationReceived(TIdAuthenticationChallengeData, 'Authentication challenge notification not received');
   finally
     Reg.Free;
   end;

@@ -256,6 +256,20 @@ type
     procedure TestTriggerOnWrongTypeOfObject;
   end;
 
+  TestTIdSipActionAuthenticateWait = class(TIdSipActionWaitTestCase)
+  private
+    Creds: TIdSipAuthorizationHeader;
+  protected
+    procedure CheckTriggerDoesNothing(Msg: String); override;
+    function  WaitType: TIdSipActionWaitClass; override;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTriggerNoCredentials;
+    procedure TestTrigger;
+  end;
+
   TestTIdSipActionSendWait = class(TIdSipActionWaitTestCase)
   protected
     procedure CheckTriggerDoesNothing(Msg: String); override;
@@ -485,6 +499,7 @@ begin
   Result.AddTest(TestTIdSipMessageModule.Suite);
   Result.AddTest(TestTIdSipNullModule.Suite);
   Result.AddTest(TestTIdSipRedirectedAction.Suite);
+  Result.AddTest(TestTIdSipActionAuthenticateWait.Suite);
   Result.AddTest(TestTIdSipActionSendWait.Suite);
   Result.AddTest(TestTIdSipActionTerminateWait.Suite);
   Result.AddTest(TestTIdSipActionAuthenticationChallengeMethod.Suite);
@@ -3094,6 +3109,69 @@ begin
   finally
     R.Free;
   end;
+end;
+
+//******************************************************************************
+//* TestTIdSipActionAuthenticateWait                                           *
+//******************************************************************************
+//* TestTIdSipActionAuthenticateWait Public methods ****************************
+
+procedure TestTIdSipActionAuthenticateWait.SetUp;
+var
+  S: TIdSipOutboundSession;
+begin
+  inherited SetUp;
+
+  Self.Creds := TIdSipAuthorizationHeader.Create;
+  Self.Creds.Username := 'foo';
+
+  S := Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '');
+  S.Send;
+  Self.ReceiveUnauthorized(WWWAuthenticateHeader, QopAuth);
+
+  Self.Wait.ActionID := S.ID;
+end;
+
+procedure TestTIdSipActionAuthenticateWait.TearDown;
+begin
+  Self.Creds.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipActionAuthenticateWait Protected methods *************************
+
+procedure TestTIdSipActionAuthenticateWait.CheckTriggerDoesNothing(Msg: String);
+begin
+  (Self.Wait as TIdSipActionAuthenticateWait).SetCredentials(Self.Creds);
+
+  Self.MarkSentRequestCount;
+  Self.Wait.Trigger;
+  CheckNoRequestSent(Msg);
+end;
+
+function TestTIdSipActionAuthenticateWait.WaitType: TIdSipActionWaitClass;
+begin
+  Result := TIdSipActionAuthenticateWait;
+end;
+
+//* TestTIdSipActionAuthenticateWait Published methods *************************
+
+procedure TestTIdSipActionAuthenticateWait.TestTriggerNoCredentials;
+begin
+  Self.MarkSentRequestCount;
+  Self.Wait.Trigger;
+  CheckNoRequestSent('No credentials, but request sent anyway');
+end;
+
+procedure TestTIdSipActionAuthenticateWait.TestTrigger;
+begin
+  (Self.Wait as TIdSipActionAuthenticateWait).SetCredentials(Self.Creds);
+
+  Self.MarkSentRequestCount;
+  Self.Wait.Trigger;
+  CheckRequestSent('No request sent, so Wait didn''t Trigger');
+  Check(Self.LastSentRequest.HasAuthorization, 'No Authorization header');
 end;
 
 //******************************************************************************
