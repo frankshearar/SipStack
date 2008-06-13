@@ -1282,7 +1282,7 @@ end;
 
 procedure TIdSipStackInterface.HangUp(ActionHandle: TIdSipHandle);
 var
-  Action: TIdSipAction;
+  Action:        TIdSipAction;
   TerminateWait: TIdSipActionTerminateWait;
 begin
   Self.ActionLock.Acquire;
