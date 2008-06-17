@@ -1605,6 +1605,8 @@ begin
 end;
 
 procedure TIdSipInboundInvite.SendResponse(Response: TIdSipResponse);
+var
+  PreferredTransport: String;
 begin
   if Self.InitialRequest.Match(Response) then begin
     if not Self.SentFinalResponse then
@@ -1613,6 +1615,10 @@ begin
     if not Response.IsOK and Response.IsFinal then
       Self.MarkAsTerminated;
   end;
+
+  // NOTE WELL: THIS DOES NOT WORK if SentBy is a FQDN!
+  PreferredTransport := Self.UA.PreferredTransportTypeFor(Response.LastHop.SentBy);
+  Response.FirstContact.Address.Transport := PreferredTransport;
 
   inherited SendResponse(Response);
 
@@ -1670,7 +1676,7 @@ begin
   try
     if (StatusText <> '') then
       Response.StatusText := StatusText;
-      
+
     if Response.FirstContact.IsGruu then begin
       Response.FirstContact.Grid := Self.Grid;
       Self.LocalGruu := Response.FirstContact;

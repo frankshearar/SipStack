@@ -141,6 +141,7 @@ type
 
     procedure CheckAck(InviteAction: TIdSipInboundInvite);
     procedure CheckAckWithDifferentCSeq(InviteAction: TIdSipInboundInvite);
+    procedure CheckPreferredTransport(PreferredTransport: String);
     procedure OnFailure(InviteAgent: TIdSipInboundInvite);
     procedure OnSuccess(InviteAgent: TIdSipInboundInvite;
                         Ack: TIdSipMessage);
@@ -170,6 +171,8 @@ type
     procedure TestMethod;
     procedure TestNotifyOfNetworkFailure;
     procedure TestNotifyOfSuccess;
+    procedure TestProvisionalResponseContactUsesPreferredTransportToFQDN;
+    procedure TestProvisionalResponseContactUsesPreferredTransportToIpAddress;
     procedure TestReceiveAck;
     procedure TestReceiveResentAck;
     procedure TestRedirectCall;
@@ -900,10 +903,13 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipInviteModule unit tests');
 //  Result.AddTest(TestDebug.Suite);
+{
   Result.AddTest(TestTIdSipInviteModule.Suite);
   Result.AddTest(TestTIdSipOutboundBye.Suite);
   Result.AddTest(TestTIdSipOutboundCancel.Suite);
+}
   Result.AddTest(TestTIdSipInboundInvite.Suite);
+{
   Result.AddTest(TestTIdSipOutboundInitialInvite.Suite);
   Result.AddTest(TestTIdSipOutboundRedirectedInvite.Suite);
   Result.AddTest(TestTIdSipOutboundReInvite.Suite);
@@ -928,6 +934,7 @@ begin
   Result.AddTest(TestTIdSipSessionRedirectWait.Suite);
   Result.AddTest(TestTIdSipSendProvisionalWait.Suite);
   Result.AddTest(TestTIdSipSessionRejectWait.Suite);
+}
 end;
 
 //******************************************************************************
@@ -1937,6 +1944,29 @@ begin
   end;
 end;
 
+procedure TestTIdSipInboundInvite.CheckPreferredTransport(PreferredTransport: String);
+begin
+  Self.Core.SetPreferredTransportTypeFor(Format('%s/%s', [Self.LanNetwork, Self.LanNetmask]), PreferredTransport);
+
+  Self.MarkSentResponseCount;
+  Self.InviteAction.SendTrying;
+  CheckResponseSent('No 100 Trying sent');
+  Check(Self.LastSentResponse.HasContact, 'No Contact header: 100 Trying');
+  CheckEquals(PreferredTransport, Self.LastSentResponse.FirstContact.Address.Transport, 'Transport param not set: 100 Trying');
+
+  Self.MarkSentResponseCount;
+  Self.InviteAction.Ring;
+  CheckResponseSent('No 180 Ringing sent');
+  Check(Self.LastSentResponse.HasContact, 'No Contact header: 180 Ringing');
+  CheckEquals(PreferredTransport, Self.LastSentResponse.FirstContact.Address.Transport, 'Transport param not set: 180 Ringing');
+
+  Self.MarkSentResponseCount;
+  Self.InviteAction.Accept('', '');
+  CheckResponseSent('No 200 OK sent');
+  Check(Self.LastSentResponse.HasContact, 'No Contact header: 200 OK');
+  CheckEquals(PreferredTransport, Self.LastSentResponse.FirstContact.Address.Transport, 'Transport param not set: 200 OK');
+end;
+
 procedure TestTIdSipInboundInvite.OnFailure(InviteAgent: TIdSipInboundInvite);
 begin
   Self.Failed := true;
@@ -2321,6 +2351,32 @@ begin
      Self.InviteAction.RemoveListener(L1);
     L1.Free;
   end;
+end;
+
+procedure TestTIdSipInboundInvite.TestProvisionalResponseContactUsesPreferredTransportToFQDN;
+var
+  Target: String;
+begin
+  // Test that Contact URIs in response to requests from a particular fully
+  // qualified domain name address space obeys the PreferredTransportType for
+  // the network block to which that name resolves. (A name can resolve to more
+  // than one IP address!
+  
+  Target := Self.InviteAction.InitialRequest.LastHop.SentBy;
+
+  Self.Locator.RemoveNameRecords(Target);
+  Self.Locator.AddA(Target, Self.LanIP);
+
+  Self.CheckPreferredTransport(TcpTransport);
+end;
+
+procedure TestTIdSipInboundInvite.TestProvisionalResponseContactUsesPreferredTransportToIpAddress;
+begin
+  // Test that Contact URIs in response to requests from a particular network
+  // address space obey the PreferredTransportType for that address space.
+
+  Self.InviteAction.InitialRequest.LastHop.SentBy := Self.LanIP;
+  Self.CheckPreferredTransport(TcpTransport);
 end;
 
 procedure TestTIdSipInboundInvite.TestReceiveAck;
