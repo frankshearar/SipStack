@@ -1618,7 +1618,9 @@ begin
 
   // NOTE WELL: THIS DOES NOT WORK if SentBy is a FQDN!
   PreferredTransport := Self.UA.PreferredTransportTypeFor(Response.LastHop.SentBy);
-  Response.FirstContact.Address.Transport := PreferredTransport;
+
+  if (PreferredTransport <> '') then
+    Response.FirstContact.Address.Transport := PreferredTransport;
 
   inherited SendResponse(Response);
 
