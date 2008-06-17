@@ -141,7 +141,9 @@ type
 
     procedure CheckAck(InviteAction: TIdSipInboundInvite);
     procedure CheckAckWithDifferentCSeq(InviteAction: TIdSipInboundInvite);
-    procedure CheckPreferredTransport(PreferredTransport: String);
+    procedure CheckDefaultPreferredTransport(ExpectParam: Boolean; MsgPrefix: String);
+    procedure CheckPreferredTransport(PreferredTransport: String; MsgPrefix: String);
+    procedure CheckPreferredTransportWithoutSettingPreferredTransport(ExpectedTransport: String; MsgPrefix: String);
     procedure OnFailure(InviteAgent: TIdSipInboundInvite);
     procedure OnSuccess(InviteAgent: TIdSipInboundInvite;
                         Ack: TIdSipMessage);
@@ -173,6 +175,7 @@ type
     procedure TestNotifyOfSuccess;
     procedure TestProvisionalResponseContactUsesPreferredTransportToFQDN;
     procedure TestProvisionalResponseContactUsesPreferredTransportToIpAddress;
+    procedure TestProvisionalResponseContactForAddressWithNoPreferredTransport;
     procedure TestReceiveAck;
     procedure TestReceiveResentAck;
     procedure TestRedirectCall;
@@ -1944,27 +1947,45 @@ begin
   end;
 end;
 
-procedure TestTIdSipInboundInvite.CheckPreferredTransport(PreferredTransport: String);
+procedure TestTIdSipInboundInvite.CheckDefaultPreferredTransport(ExpectParam: Boolean; MsgPrefix: String);
+begin
+  Self.MarkSentResponseCount;
+  Self.InviteAction.SendTrying;
+  CheckResponseSent(MsgPrefix + ': No 100 Trying sent');
+  Check(Self.LastSentResponse.HasContact, MsgPrefix + ': No Contact header: 100 Trying');
+  CheckEquals(ExpectParam, Self.LastSentResponse.FirstContact.Address.HasParameter(TransportParam),
+              MsgPrefix + ': Transport param presence');
+end;
+
+procedure TestTIdSipInboundInvite.CheckPreferredTransport(PreferredTransport: String; MsgPrefix: String);
 begin
   Self.Core.SetPreferredTransportTypeFor(Format('%s/%s', [Self.LanNetwork, Self.LanNetmask]), PreferredTransport);
 
+  Self.CheckPreferredTransportWithoutSettingPreferredTransport(PreferredTransport, MsgPrefix);
+end;
+
+procedure TestTIdSipInboundInvite.CheckPreferredTransportWithoutSettingPreferredTransport(ExpectedTransport: String; MsgPrefix: String);
+begin
   Self.MarkSentResponseCount;
   Self.InviteAction.SendTrying;
-  CheckResponseSent('No 100 Trying sent');
-  Check(Self.LastSentResponse.HasContact, 'No Contact header: 100 Trying');
-  CheckEquals(PreferredTransport, Self.LastSentResponse.FirstContact.Address.Transport, 'Transport param not set: 100 Trying');
+  CheckResponseSent(MsgPrefix + ': No 100 Trying sent');
+  Check(Self.LastSentResponse.HasContact, MsgPrefix + ': No Contact header: 100 Trying');
+  CheckEquals(ExpectedTransport, Self.LastSentResponse.FirstContact.Address.Transport,
+              MsgPrefix + ': Transport param not set: 100 Trying');
 
   Self.MarkSentResponseCount;
   Self.InviteAction.Ring;
-  CheckResponseSent('No 180 Ringing sent');
-  Check(Self.LastSentResponse.HasContact, 'No Contact header: 180 Ringing');
-  CheckEquals(PreferredTransport, Self.LastSentResponse.FirstContact.Address.Transport, 'Transport param not set: 180 Ringing');
+  CheckResponseSent(MsgPrefix + ': No 180 Ringing sent');
+  Check(Self.LastSentResponse.HasContact, MsgPrefix + ': No Contact header: 180 Ringing');
+  CheckEquals(ExpectedTransport, Self.LastSentResponse.FirstContact.Address.Transport,
+              MsgPrefix + ': Transport param not set: 180 Ringing');
 
   Self.MarkSentResponseCount;
   Self.InviteAction.Accept('', '');
-  CheckResponseSent('No 200 OK sent');
-  Check(Self.LastSentResponse.HasContact, 'No Contact header: 200 OK');
-  CheckEquals(PreferredTransport, Self.LastSentResponse.FirstContact.Address.Transport, 'Transport param not set: 200 OK');
+  CheckResponseSent(MsgPrefix + ': No 200 OK sent');
+  Check(Self.LastSentResponse.HasContact, MsgPrefix + ': No Contact header: 200 OK');
+  CheckEquals(ExpectedTransport, Self.LastSentResponse.FirstContact.Address.Transport,
+              MsgPrefix + ': Transport param not set: 200 OK');
 end;
 
 procedure TestTIdSipInboundInvite.OnFailure(InviteAgent: TIdSipInboundInvite);
@@ -2367,7 +2388,7 @@ begin
   Self.Locator.RemoveNameRecords(Target);
   Self.Locator.AddA(Target, Self.LanIP);
 
-  Self.CheckPreferredTransport(TcpTransport);
+  Self.CheckPreferredTransport(TcpTransport, 'FQDN sent-by');
 end;
 
 procedure TestTIdSipInboundInvite.TestProvisionalResponseContactUsesPreferredTransportToIpAddress;
@@ -2376,7 +2397,18 @@ begin
   // address space obey the PreferredTransportType for that address space.
 
   Self.InviteAction.InitialRequest.LastHop.SentBy := Self.LanIP;
-  Self.CheckPreferredTransport(TcpTransport);
+  Self.CheckPreferredTransport(TcpTransport, 'IP address sent-by');
+end;
+
+procedure TestTIdSipInboundInvite.TestProvisionalResponseContactForAddressWithNoPreferredTransport;
+begin
+  Self.InviteAction.InitialRequest.LastHop.SentBy := Self.LanIP;
+
+  Self.Core.DefaultPreferredTransportType := '';
+  CheckDefaultPreferredTransport(false, 'Default default transport');
+
+  Self.Core.DefaultPreferredTransportType := SctpTransport;
+  CheckDefaultPreferredTransport(true, 'Changed default transport');
 end;
 
 procedure TestTIdSipInboundInvite.TestReceiveAck;
