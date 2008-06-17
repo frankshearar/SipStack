@@ -906,13 +906,10 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipInviteModule unit tests');
 //  Result.AddTest(TestDebug.Suite);
-{
   Result.AddTest(TestTIdSipInviteModule.Suite);
   Result.AddTest(TestTIdSipOutboundBye.Suite);
   Result.AddTest(TestTIdSipOutboundCancel.Suite);
-}
   Result.AddTest(TestTIdSipInboundInvite.Suite);
-{
   Result.AddTest(TestTIdSipOutboundInitialInvite.Suite);
   Result.AddTest(TestTIdSipOutboundRedirectedInvite.Suite);
   Result.AddTest(TestTIdSipOutboundReInvite.Suite);
@@ -937,7 +934,6 @@ begin
   Result.AddTest(TestTIdSipSessionRedirectWait.Suite);
   Result.AddTest(TestTIdSipSendProvisionalWait.Suite);
   Result.AddTest(TestTIdSipSessionRejectWait.Suite);
-}
 end;
 
 //******************************************************************************
