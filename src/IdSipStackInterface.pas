@@ -88,6 +88,7 @@ type
     fUserAgent:      TIdSipUserAgent;
     SubscribeModule: TIdSipSubscribeModule;
     TimerQueue:      TIdTimerQueue;
+    FHasBeenFreed:   PBoolean;
 
     function  ActionFor(Handle: TIdSipHandle): TIdSipAction;
     function  AssociationAt(Index: Integer): TIdActionAssociation;
@@ -257,6 +258,7 @@ type
                               Description: String = RSSIPSessionProgress);
     procedure Terminate; overload;
     procedure Terminate(ActionHandle: TIdSipHandle); overload;
+    procedure Terminate(HasBeenFreed: PBoolean); overload;
   end;
 
   // My subclasses allow you to extend the TIdSipStackInterface's interface
@@ -1145,6 +1147,8 @@ var
 begin
   inherited Create;
 
+  Self.FHasBeenFreed:=nil;
+
   Self.TimerQueue := TimerQueue;
   Self.TimerQueue.AddListener(Self);
 
@@ -1184,6 +1188,9 @@ begin
 
   Self.Actions.Free;
   Self.ActionLock.Free;
+
+  if Assigned(Self.FHasBeenFreed) then
+     Self.FHasBeenFreed^:=True;
 
   inherited Destroy;
 end;
@@ -1680,10 +1687,19 @@ begin
     Wait := TIdSipActionTerminateWait.Create;
     Wait.ActionID := Action.ID;
 
-    Self.TimerQueue.AddEvent(TriggerImmediately, Wait);    
+    Self.TimerQueue.AddEvent(TriggerImmediately, Wait);
   finally
     Self.ActionLock.Release;
   end;
+end;
+
+procedure TIdSipStackInterface.Terminate(HasBeenFreed: PBoolean);
+begin
+  Self.FHasBeenFreed:=HasBeenFreed;
+  if Assigned(Self.FHasBeenFreed) then
+     Self.FHasBeenFreed^:=False;
+
+  Self.Terminate;
 end;
 
 //* TIdSipStackInterface Protected methods *************************************

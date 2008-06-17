@@ -576,6 +576,7 @@ var
   I, J:     Integer;
   AString:  String;
 begin
+  PossiblyInitialiseWinsock;
   ResolvedList.Clear;
   AHostEnt := GetHostByName(PChar(Name));
   if (AHostEnt <> nil) then begin
