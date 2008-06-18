@@ -524,11 +524,16 @@ begin
   CheckEquals(7,  TIdIPAddressParser.AddressToMask('254.0.0.0', Id_IPv4),       '254.0.0.0');
   CheckEquals(32, TIdIPAddressParser.AddressToMask('255.255.255.255', Id_IPv4), '255.255.255.255');
 
-  CheckEquals(0, TIdIPAddressParser.AddressToMask('::', Id_IPv6),           '::');
-  CheckEquals(8, TIdIPAddressParser.AddressToMask('ff00::', Id_IPv6),       'ff00::');
-  CheckEquals(32, TIdIPAddressParser.AddressToMask('ffff:ffff::', Id_IPv6), 'ffff:ffff::');
+  CheckEquals(0,   TIdIPAddressParser.AddressToMask('::', Id_IPv6),          '::');
+  CheckEquals(8,   TIdIPAddressParser.AddressToMask('ff00::', Id_IPv6),      'ff00::');
+  CheckEquals(32,  TIdIPAddressParser.AddressToMask('ffff:ffff::', Id_IPv6), 'ffff:ffff::');
   CheckEquals(128, TIdIPAddressParser.AddressToMask('FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF', Id_IPv6),
               'FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF');
+
+  CheckEquals(0,  TIdIPAddressParser.AddressToMask('0', Id_IPv4),  '0');
+  CheckEquals(8,  TIdIPAddressParser.AddressToMask('8', Id_IPv4),  '8');
+  CheckEquals(7,  TIdIPAddressParser.AddressToMask('7', Id_IPv4),  '7');
+  CheckEquals(32, TIdIPAddressParser.AddressToMask('32', Id_IPv4), '32');
 
   // Don't do these things: they're here to document fully the behaviour of the
   // function.
