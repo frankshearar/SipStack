@@ -433,6 +433,13 @@ begin
 
   Result := 0;
 
+  if TIdSimpleParser.IsNumber(Netmask) then begin
+    // Netmask is already a number of significant bits, like you might get in
+    // "192.168.0.0/24".
+    Result := StrToInt(Netmask);
+    Exit;
+  end;
+
   if Self.IsIPv4Address(Netmask) then begin
     Addr4 := Self.InetAddr(Netmask);
 

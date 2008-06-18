@@ -136,6 +136,7 @@ type
     procedure TestAddTransportBindingAddsRoutingTableToTransport;
     procedure TestAddTransportBindingSetsTransportLogName;
     procedure TestClearAddAndCountTransports;
+    procedure TestClearAllPreferredTransportTypes;
     procedure TestClearTransportsNotifiesListeners;
     procedure TestCreateNewTransaction;
     procedure TestDispatchToCorrectTransaction;
@@ -151,12 +152,14 @@ type
     procedure TestLoopDetectedRFC2543RequestWithNoBranch;
     procedure TestNetworkFailure;
     procedure TestRemoveManagementListener;
+    procedure TestRemovePreferredTransportTypeTo;
     procedure TestSendAckWontCreateTransaction;
     procedure TestSendRequest;
     procedure TestSendRequestOverUdp;
     procedure TestServerInviteTransactionGetsAck;
     procedure TestSetLoggerSetsTransports;
     procedure TestSetLogNameSetsTransports;
+    procedure TestSetPreferredTransportTypeFor;
     procedure TestSetRoutingTableSetsTransports;
     procedure TestStartAllTranspors;
     procedure TestStopAllTranspors;
@@ -1412,6 +1415,14 @@ begin
   CheckEquals(2, Self.D.TransportCount, 'After two AddTransports');
 end;
 
+procedure TestTIdSipTransactionDispatcher.TestClearAllPreferredTransportTypes;
+begin
+  Self.D.SetPreferredTransportTypeFor('127.0.0.0/8', 'tcp');
+  Self.D.SetPreferredTransportTypeFor('::/0', 'udp');
+  Self.D.ClearAllPreferredTransportTypes;
+  CheckEquals('', Self.D.PreferredTransportTypeFor('::1'), 'Preferences not cleared');
+end;
+
 procedure TestTIdSipTransactionDispatcher.TestClearTransportsNotifiesListeners;
 var
   L:              TTransportManagementListener;
@@ -1706,6 +1717,23 @@ begin
   end;
 end;
 
+procedure TestTIdSipTransactionDispatcher.TestRemovePreferredTransportTypeTo;
+const
+  AddressSpace = '127.0.0.0/8';
+  Target       = '127.0.0.1';
+begin
+  Self.D.DefaultPreferredTransportType := TlsOverSctpTransport;
+  Self.D.SetPreferredTransportTypeFor(AddressSpace, TcpTransport);
+
+  CheckEquals(TcpTransport, Self.D.PreferredTransportTypeFor(Target),
+              'Preference not added');
+
+  Self.D.RemovePreferredTransportTypeFor(AddressSpace);
+
+  CheckEquals(Self.D.DefaultPreferredTransportType, Self.D.PreferredTransportTypeFor(Target),
+              'Preference not removed');
+end;
+
 procedure TestTIdSipTransactionDispatcher.TestSendAckWontCreateTransaction;
 var
   Ack:       TIdSipRequest;
@@ -1824,6 +1852,18 @@ begin
   for I := 0 to Self.D.TransportCount - 1 do
     CheckEquals(NewL, Self.D.Transports[I].LogName,
           'Transport #' + IntToStr(I) + '''s LogName not set');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestSetPreferredTransportTypeFor;
+const
+  AddressSpace = '192.168.0.0/16';
+  Target       = '192.168.0.1';
+begin
+  Self.D.SetPreferredTransportTypeFor(AddressSpace, TcpTransport);
+  CheckEquals(TcpTransport, Self.D.PreferredTransportTypeFor(Target), 'Preference not set');
+
+  Self.D.SetPreferredTransportTypeFor(AddressSpace, UdpTransport);
+  CheckEquals(UdpTransport, Self.D.PreferredTransportTypeFor(Target), 'Preference not reset');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestSetRoutingTableSetsTransports;

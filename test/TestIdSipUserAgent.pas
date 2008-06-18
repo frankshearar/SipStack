@@ -3383,9 +3383,9 @@ begin
 
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
-    CheckEquals(LanTransport,     UA.PreferredTransportTypeFor(LanTarget),      'LAN preferences not configured');
-    CheckEquals(DefaultTransport, UA.PreferredTransportTypeFor(InternetTarget), 'Internet preferences not configured');
-    CheckEquals('',               UA.PreferredTransportTypeFor(IPv6Target),     'Other preferences not left alone');
+    CheckEquals(LanTransport,     UA.Dispatcher.PreferredTransportTypeFor(LanTarget),      'LAN preferences not configured');
+    CheckEquals(DefaultTransport, UA.Dispatcher.PreferredTransportTypeFor(InternetTarget), 'Internet preferences not configured');
+    CheckEquals('',               UA.Dispatcher.PreferredTransportTypeFor(IPv6Target),     'Other preferences not left alone');
   finally
     UA.Free;
   end;
@@ -3742,8 +3742,8 @@ begin
 
     Self.Conf.UpdateConfiguration(UA, Self.Configuration);
 
-    CheckEquals('',        UA.PreferredTransportTypeFor('127.0.0.1'), 'Old preferences not cleared');
-    CheckEquals(Transport, UA.PreferredTransportTypeFor('::1'),       'New preferences not set');
+    CheckEquals('',        UA.Dispatcher.PreferredTransportTypeFor('127.0.0.1'), 'Old preferences not cleared');
+    CheckEquals(Transport, UA.Dispatcher.PreferredTransportTypeFor('::1'),       'New preferences not set');
   finally
     UA.Free;
   end;

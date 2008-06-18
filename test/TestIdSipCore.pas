@@ -37,7 +37,6 @@ type
     procedure TestAddOutboundActionNotifiesListeners;
     procedure TestAllowedExtensionsCollectsExtensionsFromInstalledModules;
     procedure TestAllowedExtensionsRemovesDuplicateExtensions;
-    procedure TestClearAllPreferredTransportTypes;
     procedure TestCreateRequestFromUriWithDangerousHeaders;
     procedure TestCreateRequestFromUriWithDifferentMethod;
     procedure TestCreateRequestFromUriWithFalseAdvertising;
@@ -65,7 +64,6 @@ type
     procedure TestRejectUnsupportedSipVersion;
     procedure TestRemovedActionsNotifyListeners;
     procedure TestRemoveObserver;
-    procedure TestRemovePreferredTransportTypeTo;
     procedure TestRequiresUnsupportedExtension;
     procedure TestSendRequest;
     procedure TestSendRequestMalformedRequest;
@@ -77,7 +75,6 @@ type
     procedure TestSendResponseMalformedResponse;
     procedure TestSendResponseUnknownSupportedExtension;
     procedure TestSetInstanceID;
-    procedure TestSetPreferredTransportTypeFor;
     procedure TestUsesModuleClassType;
     procedure TestUsesModuleString;
   end;
@@ -863,14 +860,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipAbstractCore.TestClearAllPreferredTransportTypes;
-begin
-  Self.Core.SetPreferredTransportTypeFor('127.0.0.0/8', 'tcp');
-  Self.Core.SetPreferredTransportTypeFor('::/0', 'udp');
-  Self.Core.ClearAllPreferredTransportTypes;
-  CheckEquals('', Self.Core.PreferredTransportTypeFor('::1'), 'Preferences not cleared');
-end;
-
 procedure TestTIdSipAbstractCore.TestCreateRequestFromUriWithDangerousHeaders;
 const
   ViaHeader = 'SIP/2.0/TCP nether.hells.com';
@@ -1452,18 +1441,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipAbstractCore.TestRemovePreferredTransportTypeTo;
-const
-  AddressSpace = '127.0.0.0/8';
-begin
-  Self.Core.DefaultPreferredTransportType := TlsOverSctpTransport;
-  Self.Core.SetPreferredTransportTypeFor(AddressSpace, TcpTransport);
-  Self.Core.RemovePreferredTransportTypeFor(AddressSpace);
-
-  CheckEquals(TlsOverSctpTransport, Self.Core.PreferredTransportTypeFor(AddressSpace),
-              'Preference not removed');
-end;
-
 procedure TestTIdSipAbstractCore.TestRequiresUnsupportedExtension;
 var
   InviteExtensions: TStrings;
@@ -1694,18 +1671,6 @@ begin
   CheckEquals(ValidUrn,
               Self.Core.InstanceID,
               'InstanceID');
-end;
-
-procedure TestTIdSipAbstractCore.TestSetPreferredTransportTypeFor;
-const
-  AddressSpace = '192.168.0.0/16';
-  Target       = '192.168.0.1';
-begin
-  Self.Core.SetPreferredTransportTypeFor(AddressSpace, TcpTransport);
-  CheckEquals(TcpTransport, Self.Core.PreferredTransportTypeFor(Target), 'Preference not set');
-
-  Self.Core.SetPreferredTransportTypeFor(AddressSpace, UdpTransport);
-  CheckEquals(UdpTransport, Self.Core.PreferredTransportTypeFor(Target), 'Preference not reset');
 end;
 
 procedure TestTIdSipAbstractCore.TestUsesModuleClassType;
@@ -2165,7 +2130,7 @@ procedure TestPreferredTransport.TestDefaultPreferredTransportType;
 const
   DefaultTransportType = TcpTransport;
 begin
-  Self.Core.DefaultPreferredTransportType := DefaultTransportType;
+  Self.Core.Dispatcher.DefaultPreferredTransportType := DefaultTransportType;
 
   Self.MarkSentRequestCount;
   Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '').Send;
@@ -2194,8 +2159,8 @@ const
   LanTransport     = TcpTransport;
   OutsideTarget    = '1.2.3.4';
 begin
-  Self.Core.DefaultPreferredTransportType := DefaultTransport;
-  Self.Core.SetPreferredTransportTypeFor(Lan, LanTransport);
+  Self.Core.Dispatcher.DefaultPreferredTransportType := DefaultTransport;
+  Self.Core.Dispatcher.SetPreferredTransportTypeFor(Lan, LanTransport);
 
   CheckTransportType(LanTarget, LanTransport, 'LAN');
   CheckTransportType(OutsideTarget, DefaultTransport, 'Outside');

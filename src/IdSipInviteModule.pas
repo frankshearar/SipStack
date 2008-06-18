@@ -1617,7 +1617,7 @@ begin
   end;
 
   // NOTE WELL: THIS DOES NOT WORK if SentBy is a FQDN!
-  PreferredTransport := Self.UA.PreferredTransportTypeFor(Response.LastHop.SentBy);
+  PreferredTransport := Self.UA.Dispatcher.PreferredTransportTypeFor(Response.LastHop.SentBy);
 
   if (PreferredTransport <> '') then
     Response.FirstContact.Address.Transport := PreferredTransport;
@@ -2115,7 +2115,7 @@ var
 begin
   inherited SetContactUri(Request, Target);
 
-  PreferredTransport := Self.UA.PreferredTransportTypeFor(Target.IPAddress);
+  PreferredTransport := Self.UA.Dispatcher.PreferredTransportTypeFor(Target.IPAddress);
 
   if (PreferredTransport <> '') then
     Request.FirstContact.Address.Transport := PreferredTransport;

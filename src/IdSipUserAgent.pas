@@ -1568,7 +1568,7 @@ begin
 
   TransportType := Trim(Line);
 
-  UserAgent.SetPreferredTransportTypeFor(AddressSpace, TransportType);
+  UserAgent.Dispatcher.SetPreferredTransportTypeFor(AddressSpace, TransportType);
 end;
 
 procedure TIdSipStackConfigurator.CheckAddressSpace(AddressSpace: String;

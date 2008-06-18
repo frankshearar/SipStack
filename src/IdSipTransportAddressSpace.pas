@@ -23,6 +23,7 @@ type
     function  GetDefaultTransportType: String;
     procedure SetDefaultTransportType(Value: String);
   public
+    procedure RemoveTransportFor(AddressSpace: String);
     procedure SetTransportFor(AddressSpace: String; TransportType: String);
     function  TransportTypeFor(Address: String): String;
 
@@ -38,6 +39,11 @@ implementation
 //* TIdSipTransportSpecifiers                                                  *
 //******************************************************************************
 //* TIdSipTransportSpecifiers Public methods ***********************************
+
+procedure TIdSipTransportSpecifiers.RemoveTransportFor(AddressSpace: String);
+begin
+  Self.RemoveParameter(Self.CanonicaliseAddressSpace(AddressSpace));
+end;
 
 procedure TIdSipTransportSpecifiers.SetTransportFor(AddressSpace: String; TransportType: String);
 var

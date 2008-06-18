@@ -14,7 +14,8 @@ interface
 uses
   Classes, Contnrs, IdBaseThread, IdConnectionBindings, IdInterfacedObject,
   IdNotification, IdRoutingTable, IdSipAuthentication, IdSipLocation,
-  IdSipLocator, IdSipMessage, IdSipTransport, IdTimerQueue, LoGGer, SysUtils;
+  IdSipLocator, IdSipMessage, IdSipTransport, IdSipTransportAddressSpace,
+  IdTimerQueue, LoGGer, SysUtils;
 
 type
   // This covers all states - INVITE, non-INVITE, client, server.
@@ -91,16 +92,19 @@ type
     fTransports:              TIdSipTransports;
     TransactionlessResponses: TIdSipResponseLocationsList;
     Transactions:             TObjectList;
+    TransportTypes:           TIdSipTransportSpecifiers;
 
     procedure DeliverToTransaction(Request: TIdSipRequest;
                                    Binding: TIdConnectionBindings); overload;
     procedure DeliverToTransaction(Response: TIdSipResponse;
                                    Binding: TIdConnectionBindings); overload;
+    function  GetDefaultPreferredTransportType: String;
     procedure LogException(FailedMessage: TIdSipMessage;
                            E: Exception;
                            const Reason: String);
     procedure NotifyOfTransportAddition(Transport: TIdSipTransport);
     procedure NotifyOfTransportRemoval(Transport: TIdSipTransport);
+    procedure SetDefaultPreferredTransportType(Value: String);
     function  TransactionAt(Index: Cardinal): TIdSipTransaction;
     function  TransportAt(Index: Cardinal): TIdSipTransport;
     procedure TryResendMessage(FailedMessage: TIdSipMessage;
@@ -162,6 +166,7 @@ type
     function  AddClientTransaction(InitialRequest: TIdSipRequest): TIdSipTransaction;
     procedure AddManagementListener(Listener: IIdSipTransportManagementListener);
     function  AddServerTransaction(InitialRequest: TIdSipRequest): TIdSipTransaction;
+    procedure ClearAllPreferredTransportTypes;
     procedure ClearTransports;
     procedure FindServersFor(Response: TIdSipResponse;
                              Result: TIdSipLocations);
@@ -173,7 +178,9 @@ type
                   EventRef: Cardinal;
                   DebugInfo: String);
     function  LoopDetected(Request: TIdSipRequest): Boolean;
+    function  PreferredTransportTypeFor(Address: String): String;
     procedure RemoveManagementListener(Listener: IIdSipTransportManagementListener);
+    procedure RemovePreferredTransportTypeFor(AddressSpace: String);
     procedure RemoveTransaction(TerminatedTransaction: TIdSipTransaction);
     procedure RemoveTransactionDispatcherListener(const Listener: IIdSipTransactionDispatcherListener);
     procedure RemoveTransportListener(Listener: IIdSipTransportListener);
@@ -184,21 +191,23 @@ type
     procedure SendRequest(Request: TIdSipRequest;
                           Dest: TIdSipLocation); virtual;
     procedure SendResponse(Response: TIdSipResponse); virtual;
+    procedure SetPreferredTransportTypeFor(AddressSpace: String; TransportType: String);
     procedure StartAllTransports;
     procedure StopAllTransports;
     function  TransactionCount: Integer;
     function  TransportCount: Integer;
     function  WillUseReliableTranport(R: TIdSipMessage): Boolean;
 
-    property Locator:      TIdSipAbstractLocator read fLocator write fLocator;
-    property Logger:       TLoGGerThread         read fLogger write SetLogger;
-    property LogName:      String                read fLogName write SetLogName;
-    property RoutingTable: TIdRoutingTable       read fRoutingTable write SetRoutingTable;
-    property T1Interval:   Cardinal              read fT1Interval write fT1Interval;
-    property T2Interval:   Cardinal              read fT2Interval write fT2Interval;
-    property T4Interval:   Cardinal              read fT4Interval write fT4Interval;
-    property Timer:        TIdTimerQueue         read fTimer;
-    property Transports:   TIdSipTransports      read fTransports;
+    property DefaultPreferredTransportType: String                read GetDefaultPreferredTransportType write SetDefaultPreferredTransportType;
+    property Locator:                       TIdSipAbstractLocator read fLocator write fLocator;
+    property Logger:                        TLoGGerThread         read fLogger write SetLogger;
+    property LogName:                       String                read fLogName write SetLogName;
+    property RoutingTable:                  TIdRoutingTable       read fRoutingTable write SetRoutingTable;
+    property T1Interval:                    Cardinal              read fT1Interval write fT1Interval;
+    property T2Interval:                    Cardinal              read fT2Interval write fT2Interval;
+    property T4Interval:                    Cardinal              read fT4Interval write fT4Interval;
+    property Timer:                         TIdTimerQueue         read fTimer;
+    property Transports:                    TIdSipTransports      read fTransports;
   end;
 
   // I am a SIP Transaction. As such, I am a finite state machine. I swallow
@@ -313,8 +322,8 @@ type
   // TrySendResponseTo. If no locations succeed, the transaction fails, and is
   // terminated.
   //
-  // This algorithm is the same algorithm as the Transaction-User TIdSipAction
-  // uses to send requests.
+  // This algorithm is almostthe same algorithm as the Transaction-User
+  // TIdSipAction uses to send requests.
   TIdSipServerTransaction = class(TIdSipTransaction)
   private
     procedure StoreResponseLocations(R: TIdSipResponse);
@@ -721,7 +730,8 @@ begin
   // retransmissions of 200 OKs to INVITEs).
   Self.TransactionlessResponses := TIdSipResponseLocationsList.Create;
 
-  Self.Transactions := TObjectList.Create(true);
+  Self.Transactions   := TObjectList.Create(true);
+  Self.TransportTypes := TIdSipTransportSpecifiers.Create;
 
   Self.LogName    := coSipStackLogName;
   Self.T1Interval := DefaultT1;
@@ -731,6 +741,7 @@ end;
 
 destructor TIdSipTransactionDispatcher.Destroy;
 begin
+  Self.TransportTypes.Free;
   Self.Transactions.Free;
   Self.TransactionlessResponses.Free;
   Self.Transports.Free;
@@ -830,6 +841,11 @@ begin
   end;
 end;
 
+procedure TIdSipTransactionDispatcher.ClearAllPreferredTransportTypes;
+begin
+  Self.TransportTypes.ClearAllParameters;
+end;
+
 procedure TIdSipTransactionDispatcher.ClearTransports;
 var
   I: Integer;
@@ -899,9 +915,19 @@ begin
   end;
 end;
 
+function TIdSipTransactionDispatcher.PreferredTransportTypeFor(Address: String): String;
+begin
+  Result := Self.TransportTypes.TransportTypeFor(Address)
+end;
+
 procedure TIdSipTransactionDispatcher.RemoveManagementListener(Listener: IIdSipTransportManagementListener);
 begin
   Self.ManagementListeners.RemoveListener(Listener);
+end;
+
+procedure TIdSipTransactionDispatcher.RemovePreferredTransportTypeFor(AddressSpace: String);
+begin
+  Self.TransportTypes.RemoveTransportFor(AddressSpace);
 end;
 
 procedure TIdSipTransactionDispatcher.RemoveTransaction(TerminatedTransaction: TIdSipTransaction);
@@ -1046,6 +1072,12 @@ begin
       end;
     end;
   end;
+end;
+
+procedure TIdSipTransactionDispatcher.SetPreferredTransportTypeFor(AddressSpace: String; TransportType: String);
+begin
+  // TransportType contains any value valid for a URI "transport" parameter.
+  Self.TransportTypes.SetTransportFor(AddressSpace, TransportType);
 end;
 
 procedure TIdSipTransactionDispatcher.StartAllTransports;
@@ -1310,6 +1342,11 @@ begin
   end;
 end;
 
+function TIdSipTransactionDispatcher.GetDefaultPreferredTransportType: String;
+begin
+  Result := Self.TransportTypes.DefaultTransportType;
+end;
+
 procedure TIdSipTransactionDispatcher.LogException(FailedMessage: TIdSipMessage;
                                                    E: Exception;
                                                    const Reason: String);
@@ -1350,6 +1387,10 @@ begin
   end;
 end;
 
+procedure TIdSipTransactionDispatcher.SetDefaultPreferredTransportType(Value: String);
+begin
+  Self.TransportTypes.DefaultTransportType := Value;
+end;
 
 function TIdSipTransactionDispatcher.TransactionAt(Index: Cardinal): TIdSipTransaction;
 begin
@@ -1883,8 +1924,9 @@ end;
 procedure TIdSipServerTransaction.TrySendResponseTo(R: TIdSipResponse;
                                                     Dest: TIdSipLocation);
 var
-  LocalAddress:  TIdSipLocation;
-  LocalBindings: TIdSipLocations;
+  LocalAddress:       TIdSipLocation;
+  LocalBindings:      TIdSipLocations;
+  PreferredTransport: String;
 begin
   // Some explanation: SentResponses contains a bunch of responses that we've
   // sent. (We might have sent several because we sent some provisional
@@ -1901,6 +1943,13 @@ begin
   LocalBindings := TIdSipLocations.Create;
   try
     Self.Dispatcher.LocalBindings(LocalBindings);
+
+    // We're changing the Contact URI, but just adding a transport parameter is
+    // harmless, so we don't worry about the Contact being set through a
+    // directive.
+    PreferredTransport := Self.Dispatcher.PreferredTransportTypeFor(Dest.IPAddress);
+    if (PreferredTransport <> '') then
+      R.FirstContact.Address.Transport := PreferredTransport;
 
     LocalAddress := TIdSipLocation.Create;
     try
