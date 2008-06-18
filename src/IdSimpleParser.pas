@@ -548,7 +548,7 @@ end;
 
 class function TIdIPAddressParser.InetAddr(const IPv4Address: String): Cardinal;
 var
-  B1, B2, B3, B4: Byte;
+  B1, B2, B3, B4: Cardinal;
   Work:           String;
 begin
   // Return a Cardinal representing a IPv4 address. The most significant bits of
@@ -556,19 +556,23 @@ begin
   // returns $01020304
 
   Work := IPv4Address;
+
   try
     B1 := StrToInt(Fetch(Work, '.'));
     B2 := StrToInt(Fetch(Work, '.'));
     B3 := StrToInt(Fetch(Work, '.'));
     B4 := StrToInt(Work);
-
-    Result := (B1 shl 24)
-           or (B2 shl 16)
-           or (B3 shl 8)
-           or  B4;
   except
     raise EConvertError.Create(Format(IPv4AddrError, [IPv4Address]));
   end;
+
+  if (B1 > 255) or (B2 > 255) or (B3 > 255) or (B4 > 255) then
+    raise EConvertError.Create(Format(IPv4AddrError, [IPv4Address]));
+
+  Result := (B1 shl 24)
+         or (B2 shl 16)
+         or (B3 shl 8)
+         or  B4;
 end;
 
 class function TIdIPAddressParser.IPv4AddressToStr(Address: Cardinal): String;
