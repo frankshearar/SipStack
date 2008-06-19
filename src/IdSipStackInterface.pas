@@ -100,7 +100,7 @@ type
     function  HasHandle(H: TIdSipHandle): Boolean;
     procedure ListenToAllTransports;
     function  NewHandle: TIdSipHandle;
-    procedure NotifyOfReconfiguration;
+    procedure NotifyOfReconfiguration(Configuration: TStrings);
     procedure NotifyOfSentMessage(Msg: TIdSipMessage;
                                   Binding: TIdConnectionBindings);
     procedure NotifyOfStackShutdown;
@@ -187,7 +187,7 @@ type
     procedure StopListeningToAllTransports;
   protected
     function  AddAction(Action: TIdSipAction): TIdSipHandle;
-    function  CreateReconfigureNotificationData: TIdStackReconfiguredData; virtual;
+    function  CreateReconfigureNotificationData(Configuration: TStrings): TIdStackReconfiguredData; virtual;
     procedure NotifyEvent(Event: Cardinal;
                           Data: TIdEventData);
     procedure ParseLine(Directive, Configuration: String); virtual;
@@ -761,9 +761,11 @@ type
   private
     fActsAsRegistrar:  Boolean;
     fBindings:         TIdSipLocations;
+    fRawConfiguration: TStrings;
     fRoutingTableType: String;
 
     procedure SetBindings(Value: TIdSipLocations);
+    procedure SetRawConfiguration(Value: TStrings);
   protected
     function Data: String; override;
     function EventName: String; override;
@@ -775,6 +777,7 @@ type
 
     property ActsAsRegistrar:  Boolean         read fActsAsRegistrar write fActsAsRegistrar;
     property Bindings:         TIdSipLocations read fBindings write SetBindings;
+    property RawConfiguration: TStrings        read fRawConfiguration write SetRawConfiguration;
     property RoutingTableType: String          read fRoutingTableType write fRoutingTableType;
   end;
 
@@ -1718,11 +1721,12 @@ begin
   end;
 end;
 
-function TIdSipStackInterface.CreateReconfigureNotificationData: TIdStackReconfiguredData;
+function TIdSipStackInterface.CreateReconfigureNotificationData(Configuration: TStrings): TIdStackReconfiguredData;
 begin
   Result := Self.ReconfiguredNotificationDataType.Create;
   Result.ActsAsRegistrar  := Self.UserAgent.UsesModule(TIdSipRegisterModule);
   Result.Handle           := InvalidHandle;
+  Result.RawConfiguration := Configuration;
   Result.RoutingTableType := Self.UserAgent.RoutingTable.ClassName;
 
   Self.UserAgent.Dispatcher.LocalBindings(Result.Bindings);
@@ -1806,7 +1810,7 @@ begin
     end;
   finally
     Self.PostConfigurationActions;
-    Self.NotifyOfReconfiguration;
+    Self.NotifyOfReconfiguration(Configuration);
   end;
 end;
 
@@ -1889,11 +1893,11 @@ begin
   until not Self.HasHandle(Result);
 end;
 
-procedure TIdSipStackInterface.NotifyOfReconfiguration;
+procedure TIdSipStackInterface.NotifyOfReconfiguration(Configuration: TStrings);
 var
   Data: TIdStackReconfiguredData;
 begin
-  Data := Self.CreateReconfigureNotificationData;
+  Data := Self.CreateReconfigureNotificationData(Configuration);
   try
     Self.NotifyEvent(CM_STACK_RECONFIGURED, Data);
   finally
@@ -3816,11 +3820,13 @@ constructor TIdStackReconfiguredData.Create;
 begin
   inherited Create;
 
-  Self.fBindings := TIdSipLocations.Create;
+  Self.fBindings         := TIdSipLocations.Create;
+  Self.fRawConfiguration := TStringList.Create;
 end;
 
 destructor TIdStackReconfiguredData.Destroy;
 begin
+  Self.fRawConfiguration.Free;
   Self.fBindings.Free;
 
   inherited Destroy;
@@ -3837,6 +3843,7 @@ begin
 
     Self.ActsAsRegistrar  := Other.ActsAsRegistrar;
     Self.Bindings         := Other.Bindings;
+    Self.RawConfiguration := Other.RawConfiguration;
     Self.RoutingTableType := Other.RoutingTableType;
   end;
 end;
@@ -3845,7 +3852,9 @@ end;
 
 function TIdStackReconfiguredData.Data: String;
 begin
-  Result := 'ActsAsRegistrar: ' + BoolToStr(Self.ActsAsRegistrar, true) + CRLF
+  Result := 'RawConfiguration:' + CRLF
+          + Self.RawConfiguration.Text + CRLF
+          + 'ActsAsRegistrar: ' + BoolToStr(Self.ActsAsRegistrar, true) + CRLF
           + Self.Bindings.AsStringWithPrefix('Binding: ') + CRLF
           + 'RoutingTableType: ' + Self.RoutingTableType + CRLF;
 end;
@@ -3861,6 +3870,11 @@ procedure TIdStackReconfiguredData.SetBindings(Value: TIdSipLocations);
 begin
   Self.Bindings.Clear;
   Self.Bindings.AddLocations(Value);
+end;
+
+procedure TIdStackReconfiguredData.SetRawConfiguration(Value: TStrings);
+begin
+  Self.fRawConfiguration.Assign(Value);
 end;
 
 //******************************************************************************

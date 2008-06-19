@@ -1726,7 +1726,7 @@ begin
 
   CheckNotificationReceived(TIdAuthenticationChallengeData, 'No challenge notification received');
   Data := Self.LastEventOfType(TIdAuthenticationChallengeData) as TIdAuthenticationChallengeData;
-  CheckNotEquals(InvalidHandle, Data.Handle, 'Internally-generated action has no handle');
+  CheckNotEquals(IntToHex(InvalidHandle, 8), IntToHex(Data.Handle, 8), 'Internally-generated action has no handle');
 end;
 
 procedure TestTIdSipStackInterface.TestInviteChallengeDoesntNotifyTwice;
@@ -2174,6 +2174,7 @@ begin
     Check(Assigned(E), 'No TIdStackReconfiguredData found (2)');
     Recon := E as TIdStackReconfiguredData;
     Check(Recon.ActsAsRegistrar, 'Stack doesn''t think it should act as a registrar');
+    CheckEquals(NewConf.Count, Recon.RawConfiguration.Count, 'RawConfiguration data missing');
   finally
     NewConf.Free;
   end;
@@ -4505,6 +4506,8 @@ begin
   Self.Data := TIdStackReconfiguredData.Create;
   Self.Data.ActsAsRegistrar := true;
   Self.Data.RoutingTableType := 'TIdWindowsRoutingTable';
+  Self.Data.RawConfiguration.Add('Raw config goes here');
+  Self.Data.RawConfiguration.Add('In many lines');
 
   Binding := TIdSipLocation.Create;
   try
@@ -4536,6 +4539,8 @@ begin
   try
     Received := TStringList.Create;
     try
+      Expected.Add('RawConfiguration:');
+      Expected.Add(Self.Data.RawConfiguration.Text);
       Expected.Add('ActsAsRegistrar: True');
       Expected.Add(Self.Data.Bindings.AsStringWithPrefix('Binding: '));
       Expected.Add('RoutingTableType: ' + Self.Data.RoutingTableType);
@@ -4561,12 +4566,17 @@ end;
 procedure TestTIdStackReconfiguredData.TestCopy;
 var
   Copy: TIdStackReconfiguredData;
+  I:    Integer;
 begin
   Copy := Self.Data.Copy as TIdStackReconfiguredData;
   try
     CheckEquals(Self.Data.ActsAsRegistrar,   Copy.ActsAsRegistrar,   'ActsAsRegistrar');
     CheckEquals(Self.Data.Bindings.AsString, Copy.Bindings.AsString, 'Bindings');
     CheckEquals(Self.Data.RoutingTableType,  Copy.RoutingTableType,  'RoutingTableType');
+
+    CheckEquals(Self.Data.RawConfiguration.Count, Copy.RawConfiguration.Count, 'RawConfiguration line count');
+    for I := 0 to Self.Data.RawConfiguration.Count - 1 do
+      CheckEquals(Self.Data.RawConfiguration[I], Copy.RawConfiguration[I], Format('RawConfiguration line %d', [I]));
   finally
     Copy.Free;
   end;
