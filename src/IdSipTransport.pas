@@ -84,6 +84,9 @@ type
 
   protected
     procedure Assert(Condition: Boolean; ProblemDescription: String);
+    procedure AssertReceiveWellFormed(Msg: TIdSipMessage);
+    procedure AssertSendWellFormed(Msg: TIdSipMessage);
+    procedure AssertWellFormed(Msg: TIdSipMessage; LogMsgTemplate: String);
     procedure DestroyServer; virtual;
     function  GetAddress: String; virtual;
     function  GetBindings: TIdSocketHandles; virtual;
@@ -778,9 +781,8 @@ procedure TIdSipTransport.Send(Msg: TIdSipMessage;
                                Dest: TIdSipLocation);
 begin
   try
-    Self.Assert(not Msg.IsMalformed,
-                'A Transport must NEVER send invalid messages onto the network ('
-              + Msg.ParseFailReason + ')');
+    Self.AssertSendWellFormed(Msg);
+    
     if Msg.IsRequest then
       Self.SendRequest(Msg as TIdSipRequest, Dest)
     else
@@ -813,6 +815,27 @@ begin
     Self.Log('Assertion violation', LoGGerVerbosityLevelLow, coLogEventException, ProblemDescription);
 
   System.Assert(Condition, ProblemDescription);
+end;
+
+procedure TIdSipTransport.AssertReceiveWellFormed(Msg: TIdSipMessage);
+const
+  LogMsg = 'A Transport must NEVER send invalid messages up the stack (%s): %s';
+begin
+  Self.AssertWellFormed(Msg, LogMsg);
+end;
+
+procedure TIdSipTransport.AssertSendWellFormed(Msg: TIdSipMessage);
+const
+  LogMsg = 'A Transport must NEVER send invalid messages onto the network (%s): %s';
+begin
+  Self.AssertWellFormed(Msg, LogMsg);
+end;
+
+procedure TIdSipTransport.AssertWellFormed(Msg: TIdSipMessage; LogMsgTemplate: String);
+begin
+  // PRECONDITION: There must be (at least) two %s occurences in LogMsgTemplate.
+
+  Self.Assert(not Msg.IsMalformed, Format(LogMsgTemplate, [Msg.ParseFailReason, Msg.AsString]));
 end;
 
 procedure TIdSipTransport.DestroyServer;
@@ -952,9 +975,7 @@ var
 begin
   Self.LogReceivedMessage(Request, ReceivedFrom);
 
-  Self.Assert(not Request.IsMalformed,
-              'A Transport must NEVER send invalid requests up the stack ('
-            + Request.ParseFailReason + ')');
+  Self.AssertReceiveWellFormed(Request);
 
   Notification := TIdSipTransportReceiveRequestMethod.Create;
   try
@@ -975,9 +996,7 @@ var
 begin
   Self.LogReceivedMessage(Response, ReceivedFrom);
 
-  Self.Assert(not Response.IsMalformed,
-              'A Transport must NEVER send invalid responses up the stack ('
-            + Response.ParseFailReason + ')');
+  Self.AssertReceiveWellFormed(Response);
 
   Notification := TIdSipTransportReceiveResponseMethod.Create;
   try
