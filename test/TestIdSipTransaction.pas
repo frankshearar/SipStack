@@ -175,9 +175,8 @@ type
     procedure TestWillUseReliableTransport;
   end;
 
-  // Test the location-using code in SendResponse
-  TestLocation = class(TMessageCountingTestCase)
-  private
+  TTransactionLayerTestCase = class(TMessageCountingTestCase)
+  protected
     D:            TIdSipTransactionDispatcher;
     L:            TIdSipMockLocator;
     Timer:        TIdDebugTimerQueue;
@@ -189,12 +188,30 @@ type
   public
     procedure SetUp; override;
     procedure TearDown; override;
+  end;
+
+  // Test the location-using code in SendResponse
+  TestLocation = class(TTransactionLayerTestCase)
   published
     procedure TestCompleteNetworkFailure;
     procedure TestNetworkFailureTriesAlternateDestinations;
     procedure TestNormalOperation;
     procedure TestTransactionsWontRelookupDnsForRetransmittedResponses;
     procedure TestTransactionsWontRelookupDns;
+  end;
+
+  TestUseTransportWithResponses = class(TTransactionLayerTestCase)
+  private
+    LanAddressSpace: String;
+    LanIP:           String;
+
+    procedure SetMethod(Request: TIdSipRequest; Method: String);
+  public
+    procedure SetUp; override;
+  published
+    procedure TestAddTransportParamWhenRequired;
+    procedure TestContactlessResponse;
+    procedure TestNoPreferredTransport;
   end;
 
   TestTIdSipTransaction = class(TTestCase)
@@ -797,6 +814,7 @@ begin
   Result := TTestSuite.Create('IdSipTransaction unit tests');
   Result.AddTest(TestTIdSipTransactionDispatcher.Suite);
   Result.AddTest(TestLocation.Suite);
+  Result.AddTest(TestUseTransportWithResponses.Suite);
   Result.AddTest(TestTIdSipTransaction.Suite);
   Result.AddTest(TestTIdSipServerInviteTransaction.Suite);
   Result.AddTest(TestTIdSipServerNonInviteTransaction.Suite);
@@ -2143,11 +2161,11 @@ begin
 end;
 
 //******************************************************************************
-//* TestLocation                                                               *
+//* TTransactionLayerTestCase                                                  *
 //******************************************************************************
-//* TestLocation Public methods ************************************************
+//* TTransactionLayerTestCase Public methods ***********************************
 
-procedure TestLocation.SetUp;
+procedure TTransactionLayerTestCase.SetUp;
 begin
   inherited SetUp;
 
@@ -2173,7 +2191,7 @@ begin
   Self.L.AddA('localhost', '127.0.0.1');
 end;
 
-procedure TestLocation.TearDown;
+procedure TTransactionLayerTestCase.TearDown;
 begin
   Self.Response.Free;
   Self.Request.Free;
@@ -2186,6 +2204,9 @@ begin
   inherited TearDown;
 end;
 
+//******************************************************************************
+//* TestLocation                                                               *
+//******************************************************************************
 //* TestLocation Published methods *********************************************
 
 procedure TestLocation.TestCompleteNetworkFailure;
@@ -2280,6 +2301,103 @@ begin
   CheckEquals(DnsLookupCount + 1,
               Self.L.LookupCount,
               'Transaction used fresh DNS queries for each response');
+end;
+
+//******************************************************************************
+//* TestUseTransportWithResponses                                              *
+//******************************************************************************
+
+procedure TestUseTransportWithResponses.SetUp;
+begin
+  inherited SetUp;
+
+  Self.LanAddressSpace := '10.0.0.0/8';
+  Self.LanIP           := '10.0.0.1';
+end;
+
+//* TestUseTransportWithResponses Private methods ******************************
+
+procedure TestUseTransportWithResponses.SetMethod(Request: TIdSipRequest; Method: String);
+begin
+  Request.Method      := Method;
+  Request.CSeq.Method := Method;
+end;
+
+//* TestUseTransportWithResponses Published methods ****************************
+
+procedure TestUseTransportWithResponses.TestAddTransportParamWhenRequired;
+const
+  PreferredTransport = IdSipMessage.TcpTransport;
+var
+  Trying: TIdSipResponse;
+begin
+  Self.D.SetPreferredTransportTypeFor(LanAddressSpace, PreferredTransport);
+  Self.L.Clear;
+  Self.L.AddA(Self.Request.LastHop.SentBy, LanIP);
+
+  Self.SetMethod(Self.Request, MethodInvite);
+  Self.MockTransport.FireOnRequest(Self.Request);
+
+
+  Trying := TIdSipResponse.InResponseTo(Self.Request, SIPTrying);
+  try
+    Trying.FirstContact.Value := 'sip:foo';
+
+    Self.MarkSentResponseCount;
+    Self.D.SendResponse(Trying);
+    Self.CheckResponseSent('No 100 Trying sent');
+    Check(Self.LastSentResponse.HasContact, 'No Contact header');
+    Check(Self.LastSentResponse.FirstContact.Address.TransportIsSpecified, 'No transport parameter');
+    CheckEquals(PreferredTransport, Self.LastSentResponse.FirstContact.Address.Transport, 'Wrong transport');
+  finally
+    Trying.Free;
+  end;
+end;
+
+procedure TestUseTransportWithResponses.TestContactlessResponse;
+const
+  PreferredTransport = IdSipMessage.TcpTransport;
+var
+  Reject: TIdSipResponse;
+begin
+  Self.D.SetPreferredTransportTypeFor(LanAddressSpace, PreferredTransport);
+  Self.L.Clear;
+  Self.L.AddA(Self.Request.LastHop.SentBy, LanIP);
+
+  Self.SetMethod(Self.Request, MethodCancel);
+  Self.MockTransport.FireOnRequest(Self.Request);
+
+  Reject := TIdSipResponse.InResponseTo(Self.Request, SIPRequestTerminated);
+  try
+    Self.MarkSentResponseCount;
+    Self.D.SendResponse(Reject);
+    Self.CheckResponseSent('No response sent');
+    Check(not Self.LastSentResponse.HasContact, 'Contact header added');
+  finally
+    Reject.Free;
+  end;
+end;
+
+procedure TestUseTransportWithResponses.TestNoPreferredTransport;
+var
+  Trying: TIdSipResponse;
+begin
+  Self.SetMethod(Self.Request, MethodInvite);
+  Self.MockTransport.FireOnRequest(Self.Request);
+
+  Trying := TIdSipResponse.InResponseTo(Self.Request, SIPTrying);
+  try
+    Trying.FirstContact.Value := 'sip:foo';
+
+    Self.MarkSentResponseCount;
+    Self.D.SendResponse(Trying);
+    Self.CheckResponseSent('No 100 Trying sent');
+    Check(Self.LastSentResponse.HasContact, 'No Contact header');
+    Check(not Self.LastSentResponse.FirstContact.Address.TransportIsSpecified,
+          'Transport parameter added with value' + Self.LastSentResponse.FirstContact.Address.Transport);
+  finally
+    Trying.Free;
+  end;
 end;
 
 //******************************************************************************

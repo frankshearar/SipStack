@@ -1924,9 +1924,8 @@ end;
 procedure TIdSipServerTransaction.TrySendResponseTo(R: TIdSipResponse;
                                                     Dest: TIdSipLocation);
 var
-  LocalAddress:       TIdSipLocation;
-  LocalBindings:      TIdSipLocations;
-  PreferredTransport: String;
+  LocalAddress:  TIdSipLocation;
+  LocalBindings: TIdSipLocations;
 begin
   // Some explanation: SentResponses contains a bunch of responses that we've
   // sent. (We might have sent several because we sent some provisional
@@ -1947,9 +1946,8 @@ begin
     // We're changing the Contact URI, but just adding a transport parameter is
     // harmless, so we don't worry about the Contact being set through a
     // directive.
-    PreferredTransport := Self.Dispatcher.PreferredTransportTypeFor(Dest.IPAddress);
-    if (PreferredTransport <> '') then
-      R.FirstContact.Address.Transport := PreferredTransport;
+
+    R.SetPreferredTransport(Self.Dispatcher.PreferredTransportTypeFor(Dest.IPAddress));
 
     LocalAddress := TIdSipLocation.Create;
     try

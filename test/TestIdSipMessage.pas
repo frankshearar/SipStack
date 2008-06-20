@@ -101,6 +101,10 @@ type
     procedure TestSetCSeq;
     procedure TestSetFrom;
     procedure TestSetPath;
+    procedure TestPreferredTransport;
+    procedure TestPreferredTransportNoContact;
+    procedure TestPreferredTransportNoContactNoPreference;
+    procedure TestPreferredTransportNoPreference;
     procedure TestSetRecordRoute;
     procedure TestSetSipVersion;
     procedure TestSetTo;
@@ -1546,6 +1550,38 @@ begin
   finally
     H.Free;
   end;
+end;
+
+procedure TestTIdSipMessage.TestPreferredTransport;
+begin
+  Self.Msg.FirstContact.Value := 'sip:foo';
+  Self.Msg.SetPreferredTransport(TcpTransport);
+  Check(Self.Msg.FirstContact.Address.TransportIsSpecified, 'No transport parameter (TCP)');
+  CheckEquals(TcpTransport, Self.Msg.FirstContact.Address.Transport, 'Wrong transport (TCP)');
+
+  Self.Msg.SetPreferredTransport(UdpTransport);
+  Check(Self.Msg.FirstContact.Address.TransportIsSpecified, 'No transport parameter (UDP)');
+  CheckEquals(UDPTransport, Self.Msg.FirstContact.Address.Transport, 'Wrong transport (UDP)');
+end;
+
+procedure TestTIdSipMessage.TestPreferredTransportNoContact;
+begin
+  Self.Msg.SetPreferredTransport(TcpTransport);
+  Check(not Self.Msg.HasContact, 'Contact header added');
+end;
+
+procedure TestTIdSipMessage.TestPreferredTransportNoContactNoPreference;
+begin
+  Self.Msg.SetPreferredTransport('');
+  Check(not Self.Msg.HasContact, 'Contact header added');
+end;
+
+procedure TestTIdSipMessage.TestPreferredTransportNoPreference;
+begin
+  Self.Msg.FirstContact.Value := 'sip:foo';
+  Self.Msg.SetPreferredTransport('');
+  Check(Self.Msg.HasContact, 'Contact header removed');
+  Check(not Self.Msg.FirstContact.Address.TransportIsSpecified, 'Transport specified');  
 end;
 
 procedure TestTIdSipMessage.TestSetRecordRoute;

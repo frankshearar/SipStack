@@ -1464,6 +1464,7 @@ type
     procedure RewriteLocationHeaders(LocalAddress: TIdSipLocation); overload;
     procedure RewriteLocationHeaders(Binding: TIdConnectionBindings); overload; virtual;
     function  RequiresExtension(const Extension: String): Boolean;
+    procedure SetPreferredTransport(PreferredTransport: String);
     function  SupportsExtension(const Extension: String): Boolean;
     function  WantsAllowEventsHeader: Boolean; virtual;
 
@@ -8506,6 +8507,12 @@ begin
   end
   else
     Result := false;
+end;
+
+procedure TIdSipMessage.SetPreferredTransport(PreferredTransport: String);
+begin
+  if (PreferredTransport <> '') and Self.HasContact then
+    Self.FirstContact.Address.Transport := PreferredTransport;
 end;
 
 function TIdSipMessage.SupportsExtension(const Extension: String): Boolean;

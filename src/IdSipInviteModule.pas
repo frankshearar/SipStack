@@ -2110,15 +2110,10 @@ begin
 end;
 
 procedure TIdSipOutboundInitialInvite.SetContactUri(Request: TIdSipRequest; Target: TIdSipLocation);
-var
-  PreferredTransport: String;
 begin
   inherited SetContactUri(Request, Target);
 
-  PreferredTransport := Self.UA.Dispatcher.PreferredTransportTypeFor(Target.IPAddress);
-
-  if (PreferredTransport <> '') then
-    Request.FirstContact.Address.Transport := PreferredTransport;
+  Request.SetPreferredTransport(Self.UA.Dispatcher.PreferredTransportTypeFor(Target.IPAddress));
 end;
 
 //* TIdSipOutboundInitialInvite Private methods ********************************
