@@ -795,6 +795,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAddressAndPortWithNoConnection;
     procedure TestConnectTo;
     procedure TestConnectToNonexistentPeer;
     procedure TestConnectToTwice;
@@ -832,11 +833,13 @@ type
     procedure TearDown; override;
   published
     procedure TestAddressAndPort;
+    procedure TestAddressAndPortWithNoConnection;
     procedure TestConnectionNotifiesListeners;
     procedure TestDisconnect;
     procedure TestLocalDisconnectionNotifiesListeners;
     procedure TestListenOn;
     procedure TestPeerAddressAndPort;
+    procedure TestPeerAddressAndPortNoConnection;
     procedure TestReceiveData;
     procedure TestRemoteDisconnectionNotifiesListeners;
     procedure TestSendData;
@@ -9146,6 +9149,14 @@ end;
 
 //* TestTIdSdpTcpClientConnection Private methods ******************************
 
+procedure TestTIdSdpTcpClientConnection.TestAddressAndPortWithNoConnection;
+begin
+  CheckEquals(IPv4ZeroAddress, Self.Connection.Address,     'Address');
+  CheckEquals(TcpDiscardPort,  Self.Connection.Port,        'Port');
+  CheckEquals(IPv4ZeroAddress, Self.Connection.PeerAddress, 'PeerAddress');
+  CheckEquals(TcpDiscardPort,  Self.Connection.PeerPort,    'PeerPort');
+end;
+
 procedure TestTIdSdpTcpClientConnection.TestConnectTo;
 begin
   Check(not Self.Connection.IsActive,    'Connection active before connection attempt');
@@ -9160,13 +9171,15 @@ begin
   Check(Self.Connection.IsActive,    'Connection not active');
   Check(Self.Connection.IsConnected, 'Connection not connected');
   CheckNotEquals('',                   Self.Connection.Address,     'Connection address not set');
+  CheckNotEquals(IPv4ZeroAddress,      Self.Connection.Address,     'Connection address not set');
   CheckNotEquals(0,                    Self.Connection.Port,        'Connection port not set');
+  CheckNotEquals(TcpDiscardPort,       Self.Connection.Port,        'Connection port not set');
   CheckEquals(Self.Connection.Address, Self.ConnectionAddress,      'Connection address');
   CheckEquals(Self.Connection.Port,    Self.ConnectionPort,         'Port discrepancy');
   CheckEquals(ServerIP,                Self.Connection.PeerAddress, 'Connection peer address not set');
   CheckEquals(ServerPort,              Self.Connection.PeerPort,    'Connection peer port not set');
 end;
-
+                      
 procedure TestTIdSdpTcpClientConnection.TestConnectToNonexistentPeer;
 begin
   Self.Server.Active := false;
@@ -9431,6 +9444,14 @@ begin
   CheckEquals(Self.LocalPort, Self.Connection.Port,    'Port');
 end;
 
+procedure TestTIdSdpTcpServerConnection.TestAddressAndPortWithNoConnection;
+begin
+  Self.Connection.ListenOn(Self.LocalIP, Self.LocalPort);
+
+  CheckEquals(Self.LocalIP,   Self.Connection.Address, 'Address');
+  CheckEquals(Self.LocalPort, Self.Connection.Port,    'Port');
+end;
+
 procedure TestTIdSdpTcpServerConnection.TestConnectionNotifiesListeners;
 begin
   Self.Connection.ListenOn(Self.LocalIP, Self.LocalPort);
@@ -9488,8 +9509,16 @@ begin
   Self.Client.Connect(Self.DefaultTimeout);
   Self.WaitForSignaled('No connection');
 
-  CheckEquals(Self.Client.Socket.Binding.IP, Self.Connection.PeerAddress, 'PeerAddress');
-  CheckEquals(Self.Client.Socket.Binding.Port, Self.Connection.PeerPort, 'PeerPort');
+  CheckEquals(Self.Client.Socket.Binding.IP,   Self.Connection.PeerAddress, 'PeerAddress');
+  CheckEquals(Self.Client.Socket.Binding.Port, Self.Connection.PeerPort,    'PeerPort');
+end;
+
+procedure TestTIdSdpTcpServerConnection.TestPeerAddressAndPortNoConnection;
+begin
+  Self.Connection.ListenOn(Self.LocalIP, Self.LocalPort);
+
+  CheckEquals(IPv4ZeroAddress, Self.Connection.PeerAddress, 'PeerAddress');
+  CheckEquals(TcpDiscardPort,  Self.Connection.PeerPort,    'PeerPort');
 end;
 
 procedure TestTIdSdpTcpServerConnection.TestReceiveData;

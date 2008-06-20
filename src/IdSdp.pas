@@ -5727,22 +5727,34 @@ end;
 
 function TIdSdpTcpClientConnection.GetAddress: String;
 begin
-  Result := Self.Client.Socket.Binding.IP;
+  if Self.Client.Connected then
+    Result := Self.Client.Socket.Binding.IP
+  else
+    Result := IPv4ZeroAddress;
 end;
 
 function TIdSdpTcpClientConnection.GetPeerAddress: String;
 begin
-  Result := Self.Client.Socket.Binding.PeerIP;
+  if Self.Client.Connected then
+    Result := Self.Client.Socket.Binding.PeerIP
+  else
+    Result := IPv4ZeroAddress;
 end;
 
 function TIdSdpTcpClientConnection.GetPeerPort: Cardinal;
 begin
-  Result := Self.Client.Socket.Binding.PeerPort;
+  if Self.Client.Connected then
+    Result := Self.Client.Socket.Binding.PeerPort
+  else
+    Result := TcpDiscardPort;
 end;
 
 function TIdSdpTcpClientConnection.GetPort: Cardinal;
 begin
-  Result := Self.Client.Socket.Binding.Port;
+  if Self.Client.Connected then
+    Result := Self.Client.Socket.Binding.Port
+  else
+    Result := TcpDiscardPort;
 end;
 
 procedure TIdSdpTcpClientConnection.SetTimer(Value: TIdTimerQueue);
@@ -5881,18 +5893,8 @@ end;
 //* TIdSdpTcpServerConnection Protected methods ********************************
 
 function TIdSdpTcpServerConnection.GetAddress: String;
-var
-  Connections: TList;
 begin
-  Connections := Self.Connection.Threads.LockList;
-  try
-    if (Connections.Count >= 0) then
-      Result := TIdPeerThread(Connections[0]).Connection.Socket.Binding.IP
-    else
-      Result := IPv4ZeroAddress;
-  finally
-    Self.Connection.Threads.UnlockList;
-  end;
+  Result := Self.Connection.Bindings[0].IP;
 end;
 
 function TIdSdpTcpServerConnection.GetPeerAddress: String;
@@ -5901,7 +5903,7 @@ var
 begin
   Connections := Self.Connection.Threads.LockList;
   try
-    if (Connections.Count >= 0) then
+    if (Connections.Count > 0) then
       Result := TIdPeerThread(Connections[0]).Connection.Socket.Binding.PeerIP
     else
       Result := IPv4ZeroAddress;
@@ -5916,7 +5918,7 @@ var
 begin
   Connections := Self.Connection.Threads.LockList;
   try
-    if (Connections.Count >= 0) then
+    if (Connections.Count > 0) then
       Result := TIdPeerThread(Connections[0]).Connection.Socket.Binding.PeerPort
     else
       Result := TcpDiscardPort;
@@ -5926,18 +5928,8 @@ begin
 end;
 
 function TIdSdpTcpServerConnection.GetPort: Cardinal;
-var
-  Connections: TList;
 begin
-  Connections := Self.Connection.Threads.LockList;
-  try
-    if (Connections.Count >= 0) then
-      Result := TIdPeerThread(Connections[0]).Connection.Socket.Binding.Port
-    else
-      Result := TcpDiscardPort;
-  finally
-    Self.Connection.Threads.UnlockList;
-  end;
+  Result := Self.Connection.Bindings[0].Port;
 end;
 
 //* TIdSdpTcpServerConnection Private methods **********************************
