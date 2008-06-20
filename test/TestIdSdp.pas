@@ -7748,8 +7748,7 @@ end;
 
 procedure TestTIdSdpBaseMediaStream.TestUnusedPortsSwitchOff;
 begin
-  // By default do nothing, but override me if the media stream has a way of
-  // being refused.
+  Check(true, 'By default do nothing, but override me if the media stream has a way of being refused.');
 end;
 
 //******************************************************************************
@@ -8579,7 +8578,7 @@ end;
 
 procedure TestTIdSdpNullMediaStream.TestSetTimer;
 begin
-  // Null timers don't do anything.
+  Check(true, 'Null timers don''t do anything.');
 end;
 
 //******************************************************************************
