@@ -305,6 +305,7 @@ type
     procedure TestNullRoutesFirstInPathIgnored;
     procedure TestNullRoutesInPathIgnored;
     procedure TestReconfigureCanClearRoutePath;
+    procedure TestReconfigureWithNullRoute;
     procedure TestTwoAddressSpaces;
   end;
 
@@ -4150,6 +4151,37 @@ begin
     end;
   finally
     Expected.Free;
+  end;
+end;
+
+procedure TestConfigureProxies.TestReconfigureWithNullRoute;
+const
+  FirstAddressSpace  = '10.0.0.0/8';
+  FirstProxy         = 'sip:proxy.local';
+  FirstTarget        = '10.0.0.2';
+  SecondAddressSpace = '192.168.0.0/24';
+  SecondProxy        = 'sip:10.0.0.1';
+  SecondTarget       = '192.168.0.1';
+var
+  ExpectedLocal:  TIdSipRoutePath;
+  ExpectedSubnet: TIdSipRoutePath;
+  UA:             TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Route: <' + FirstProxy + '> ' + FirstAddressSpace);
+  Self.Configuration.Add('Route: <' + SecondProxy + '> ' + SecondAddressSpace);
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Self.Configuration.Clear;
+    Self.Configuration.Add('Route: <null>');
+
+    Self.Conf.UpdateConfiguration(UA, Self.Configuration);
+
+    CheckRoutePath(Self.EmptyRoutePath, UA, FirstTarget,   'First address space not removed');
+    CheckRoutePath(Self.EmptyRoutePath, UA, SecondTarget,  'Second address space not removed');
+    CheckRoutePath(Self.EmptyRoutePath, UA, 'example.com', 'Default');
+  finally
+    UA.Free;
   end;
 end;
 
