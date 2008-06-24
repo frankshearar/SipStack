@@ -903,6 +903,8 @@ type
                               Msg: String); override;
   published
     procedure TestPortsAndPortCount;
+    procedure TestReceivedDataFormat;
+    procedure TestReceivedDataFormatMultipleFormats;
     procedure TestSetTimer; override;
     procedure TestStartListeningPortAboveAllowedRange; override;
     procedure TestStartListeningPortBelowAllowedRange; override;
@@ -1235,7 +1237,6 @@ const
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSdp unit tests');
-
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSdpAttribute.Suite);
   Result.AddTest(TestTIdSdpRTPMapAttribute.Suite);
@@ -10121,8 +10122,8 @@ procedure TestTIdSdpTcpMediaStream.TestPortsAndPortCount;
 const
   PortCount = 5;
 var
-  I: Integer;
-  Stream:   TIdSdpTcpMediaStream;
+  I:      Integer;
+  Stream: TIdSdpTcpMediaStream;
 begin
   Stream := Self.CreateStream as TIdSdpTcpMediaStream;
   try
@@ -10142,6 +10143,63 @@ begin
                  Format('Ports[%d]', [I]));
   finally
     Stream.Free;
+  end;
+end;
+
+procedure TestTIdSdpTcpMediaStream.TestReceivedDataFormat;
+var
+  L:      TIdSdpTestMediaListener;
+  Stream: TIdSdpTcpMediaStream;
+begin
+  L := TIdSdpTestMediaListener.Create;
+  try
+    Stream := Self.CreateStream as TIdSdpTcpMediaStream;
+    try
+      Stream.AddDataListener(L);
+      Self.ReceiveDataOn(Stream);
+
+      CheckEquals(Self.LocalDescription.Formats[0], L.FormatParam,
+                  'Format not set');
+    finally
+      Stream.RemoveDataListener(L);
+      Stream.Free;
+    end;
+  finally
+    L.Free;
+  end;
+end;
+
+procedure TestTIdSdpTcpMediaStream.TestReceivedDataFormatMultipleFormats;
+const
+  SecondFormat = 'text/html';
+var
+  FirstFormat: String;
+  L:           TIdSdpTestMediaListener;
+  Stream:      TIdSdpTcpMediaStream;
+begin
+  // I can't think of any general way of TIdSdpTcpMediaStream being able to
+  // determine the format of data it receives should the stream allow multiple
+  // formats. Thus, should the stream declare multiple formats, the stream uses
+  // just the first format.
+
+  L := TIdSdpTestMediaListener.Create;
+  try
+    Stream := Self.CreateStream as TIdSdpTcpMediaStream;
+    try
+      Stream.AddDataListener(L);
+      FirstFormat := Stream.LocalDescription.Formats[0];
+      Stream.LocalDescription.AddFormat(SecondFormat);
+
+      Self.ReceiveDataOn(Stream);
+
+      CheckEquals(Self.LocalDescription.Formats[0], L.FormatParam,
+                  'Format not set');
+    finally
+      Stream.RemoveDataListener(L);
+      Stream.Free;
+    end;
+  finally
+    L.Free;
   end;
 end;
 

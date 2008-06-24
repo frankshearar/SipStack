@@ -988,6 +988,10 @@ type
 
   // I implement the streams defined by RFC 4145 "TCP-Based Media Transport in
   // the Session Description Protocol (SDP)".
+  //
+  // Note that if this stream uses multiple formats, the data notification will
+  // notify having received data of the FIRST format ONLY. Listeners will have
+  // to reassemble the stream and demultiplex the stream themselves.
   TIdSdpTcpMediaStream = class(TIdSdpBaseMediaStream,
                                IIdSdpTcpConnectionListener)
   private
@@ -6465,11 +6469,24 @@ end;
 
 procedure TIdSdpTcpMediaStream.OnData(Connection: TIdSdpBaseTcpConnection; Data: TStream);
 var
+  GuessedFormat: String;
   ReceivedOn: TIdConnectionBindings;
 begin
+  if (Self.LocalDescription.FormatCount = 0) then begin
+    // We should never enter this clause.
+    GuessedFormat := ''
+  end
+  else begin
+    // This works when FormatCount = 1. It's misleading when FormatCount > 1,
+    // but without parsing Data I can't think of any way to determine the
+    // Format. (And what if Data contains some of one format, and some of
+    // another format?)
+    GuessedFormat := Self.LocalDescription.Formats[0];
+  end;
+
   ReceivedOn := TIdConnectionBindings.Create(Connection.Address, Connection.Port, Connection.PeerAddress, Connection.PeerPort, Id_SDP_TCP);
   try
-    Self.NotifyOfData(ReceivedOn, Data, '');
+    Self.NotifyOfData(ReceivedOn, Data, GuessedFormat);
   finally
     ReceivedOn.Free;
   end;
