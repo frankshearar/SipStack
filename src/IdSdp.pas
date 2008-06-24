@@ -6470,7 +6470,7 @@ end;
 procedure TIdSdpTcpMediaStream.OnData(Connection: TIdSdpBaseTcpConnection; Data: TStream);
 var
   GuessedFormat: String;
-  ReceivedOn: TIdConnectionBindings;
+  ReceivedOn:    TIdConnectionBindings;
 begin
   if (Self.LocalDescription.FormatCount = 0) then begin
     // We should never enter this clause.
