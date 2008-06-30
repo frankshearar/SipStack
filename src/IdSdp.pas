@@ -5911,7 +5911,10 @@ end;
 
 function TIdSdpTcpServerConnection.GetAddress: String;
 begin
-  Result := Self.Connection.Bindings[0].IP;
+  if Self.Connection.Active and (Self.Connection.Bindings.Count > 0) then
+    Result := Self.Connection.Bindings[0].IP
+  else
+    Result := IPv4ZeroAddress;
 end;
 
 function TIdSdpTcpServerConnection.GetPeerAddress: String;
@@ -5946,7 +5949,10 @@ end;
 
 function TIdSdpTcpServerConnection.GetPort: Cardinal;
 begin
-  Result := Self.Connection.Bindings[0].Port;
+  if Self.Connection.Active and (Self.Connection.Bindings.Count > 0) then
+    Result := Self.Connection.Bindings[0].Port
+  else
+    Result := TcpDiscardPort;
 end;
 
 //* TIdSdpTcpServerConnection Private methods **********************************

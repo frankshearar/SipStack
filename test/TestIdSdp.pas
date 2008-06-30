@@ -835,6 +835,7 @@ type
   published
     procedure TestAddressAndPort;
     procedure TestAddressAndPortWithNoConnection;
+    procedure TestAddressAndPortWhenNotListening;
     procedure TestConnectionNotifiesListeners;
     procedure TestDisconnect;
     procedure TestLocalDisconnectionNotifiesListeners;
@@ -9483,6 +9484,12 @@ begin
   CheckEquals(Self.LocalPort, Self.Connection.Port,    'Port');
 end;
 
+procedure TestTIdSdpTcpServerConnection.TestAddressAndPortWhenNotListening;
+begin
+  CheckEquals(IPv4ZeroAddress, Self.Connection.Address, 'Address');
+  CheckEquals(TcpDiscardPort , Self.Connection.Port,    'Port');
+end;
+
 procedure TestTIdSdpTcpServerConnection.TestConnectionNotifiesListeners;
 begin
   Self.Connection.ListenOn(Self.LocalIP, Self.LocalPort);
@@ -9938,7 +9945,7 @@ end;
 procedure TestTIdSdpTcpMediaStream.CheckClientConnectionFormed(WhenOffer: Boolean; Offer, Answer: String);
 begin
   CheckClientConnectionFormedEx(WhenOffer, true,  Offer, Answer);
-//  CheckClientConnectionFormedEx(WhenOffer, false, Offer, Answer);
+  CheckClientConnectionFormedEx(WhenOffer, false, Offer, Answer);
 end;
 
 procedure TestTIdSdpTcpMediaStream.CheckClientConnectionFormedEx(WhenOffer, SetLocalDescFirst: Boolean; Offer, Answer: String);
