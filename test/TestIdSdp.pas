@@ -431,6 +431,7 @@ type
     procedure TestPrintOnWithUri;
     procedure TestReadFromString;
     procedure TestReadFromStringEmpty;
+    procedure TestSetConnectionAddress;
   end;
 
   TestTIdSdpParser = class(TTestCase)
@@ -4963,6 +4964,35 @@ begin
     Fail('Failed to bail out on empty input stream');
   except
     on EParserError do;
+  end;
+end;
+
+procedure TestTIdSdpPayload.TestSetConnectionAddress;
+const
+  Address = '1.2.3.4';
+var
+  I, J: Integer;
+begin
+  Self.Payload.ReadFrom('v=0'#13#10
+                      + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
+                      + 's=Minimum Session Info'#13#10
+                      + 'c=IN IP4 127.0.0.1'#13#10
+                      + 'c=IN IP4 5.6.7.8'#13#10
+                      + 'm=audio 8000 RTP/AVP 0'#13#10
+                      + 'c=IN IP4 127.0.0.1'#13#10
+                      + 'c=IN IP4 5.6.7.8'#13#10
+                      + 'm=audio 8002 RTP/AVP 0'#13#10);
+
+  Self.Payload.SetConnectionAddress(Address);
+
+  for I := 0 to Self.Payload.ConnectionCount - 1 do
+    CheckEquals(Address, Self.Payload.ConnectionAt(I).Address, Format('Connection #%d', [I]));
+
+  for I := 0 to Self.Payload.MediaDescriptionCount - 1 do begin
+    for J := 0 to Self.Payload.MediaDescriptionAt(I).Connections.Count - 1 do begin
+      CheckEquals(Address, Self.Payload.MediaDescriptionAt(I).Connections[J].Address,
+                  Format('Connection #%d of media description #%d', [J, I]));
+    end;
   end;
 end;
 

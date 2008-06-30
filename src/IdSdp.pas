@@ -481,6 +481,7 @@ type
     procedure PrintOn(Dest: TStream);
     procedure ReadFrom(Src: TStream); overload;
     procedure ReadFrom(Src: String); overload;
+    procedure SetConnectionAddress(NewAddress: String);
 
     property Attributes:       TIdSdpAttributes       read GetAttributes;
     property Bandwidths:       TIdSdpBandwidths       read GetBandwidths;
@@ -3240,6 +3241,18 @@ begin
   finally
     S.Free;
   end;
+end;
+
+procedure TIdSdpPayload.SetConnectionAddress(NewAddress: String);
+var
+  I, J: Integer;
+begin
+  for I := 0 to Self.ConnectionCount - 1 do
+    Self.Connections[I].Address := NewAddress;
+
+  for I := 0 to Self.MediaDescriptionCount -1 do
+    for J := 0 to Self.MediaDescriptionAt(I).Connections.Count - 1 do
+      Self.MediaDescriptionAt(I).Connections[J].Address := NewAddress;
 end;
 
 //* TIdSdpPayload Private methods **********************************************
