@@ -997,16 +997,16 @@ type
                                IIdSdpTcpConnectionListener)
   private
     AnswerConnectionType:  TConnectionTypeArray;
+    BaseServerType:        TIdSdpBaseTcpConnectionClass;
     OfferConnectionType:   TConnectionTypeArray;
     HaveLocalDescription:  Boolean;
     HaveRemoteDescription: Boolean;
     Servers:               TObjectList;
-    ServerType:            TIdSdpBaseTcpConnectionClass;
 
     function  CreateServer(OfferSetupType, AnswerSetupType: TIdSdpSetupType): TIdSdpBaseTcpConnection;
     function  DefaultSetupType(ForOffer: Boolean): TIdSdpSetupType;
     function  FindServer(LayerID: Cardinal): TIdSdpBaseTcpConnection;
-    procedure InitializeConnectionTypeTable(ServerType: TIdSdpBaseTcpConnectionClass);
+    procedure InitializeConnectionTypeTable(BaseServerType: TIdSdpBaseTcpConnectionClass);
     procedure InitializeRemoteServers;
     procedure OnConnect(Connection: TIdSdpBaseTcpConnection);
     procedure OnData(Connection: TIdSdpBaseTcpConnection; Data: TStream);
@@ -1020,6 +1020,7 @@ type
     function  LocalSetupType: TIdSdpSetupType;
     procedure PossiblyConnect(HaveCompleteSessionDescription: Boolean);
     function  RemoteSetupType: TIdSdpSetupType;
+    function  ServerType(OfferSetupType, AnswerSetupType: TIdSdpSetupType): TIdSdpBaseTcpConnectionClass;
     procedure StartConnectingStreams;
     function  UsesServerSockets: Boolean;
   protected
@@ -6213,14 +6214,14 @@ end;
 
 constructor TIdSdpTcpMediaStream.Create;
 begin
-  Self.ServerType := TIdSdpTcpClientConnection;
+  Self.BaseServerType := TIdSdpTcpClientConnection;
 
   inherited Create;
 end;
 
 constructor TIdSdpTcpMediaStream.Create(ServerType: TIdSdpBaseTcpConnectionClass);
 begin
-  Self.ServerType := ServerType;
+  Self.BaseServerType := ServerType;
 
   inherited Create;
 end;
@@ -6303,7 +6304,7 @@ procedure TIdSdpTcpMediaStream.InternalCreate;
 begin
   inherited InternalCreate;
 
-  Self.InitializeConnectionTypeTable(Self.ServerType);
+  Self.InitializeConnectionTypeTable(Self.BaseServerType);
 
   Self.ResetHaveDescriptionFlags;
 
@@ -6368,13 +6369,10 @@ function TIdSdpTcpMediaStream.CreateServer(OfferSetupType, AnswerSetupType: TIdS
 var
   ServType: TIdSdpBaseTcpConnectionClass;
 begin
-  if Self.IsOffer then
-    ServType := Self.OfferConnectionType[OfferSetupType, AnswerSetupType]
-  else
-    ServType := Self.AnswerConnectionType[OfferSetupType, AnswerSetupType];
+  ServType := Self.ServerType(OfferSetupType, AnswerSetupType);
 
   if (ServType = TIdSdpBaseTcpConnection) then
-    ServType := Self.ServerType.NullConnectionType;
+    ServType := Self.BaseServerType.NullConnectionType;
 //    raise Exception.Create(Format('Invalid answer setup type - offer: %s, answer: %s',
 //                                  [SetupTypeToStr(OfferSetupType), SetupTypeToStr(AnswerSetupType)]));
 
@@ -6410,30 +6408,30 @@ begin
     Result := Self.ServerAt(0);
 end;
 
-procedure TIdSdpTcpMediaStream.InitializeConnectionTypeTable(ServerType: TIdSdpBaseTcpConnectionClass);
+procedure TIdSdpTcpMediaStream.InitializeConnectionTypeTable(BaseServerType: TIdSdpBaseTcpConnectionClass);
 begin
   Self.OfferConnectionType[stActive, stActive]    := TIdSdpBaseTcpConnection;
   Self.OfferConnectionType[stActive, stActPass]   := TIdSdpBaseTcpConnection;
-  Self.OfferConnectionType[stActive, stPassive]   := ServerType.ClientConnectionType;
-  Self.OfferConnectionType[stActive, stHoldConn]  := ServerType.NullConnectionType;
+  Self.OfferConnectionType[stActive, stPassive]   := BaseServerType.ClientConnectionType;
+  Self.OfferConnectionType[stActive, stHoldConn]  := BaseServerType.NullConnectionType;
   Self.OfferConnectionType[stActive, stUnknown]   := TIdSdpBaseTcpConnection;
 
-  Self.OfferConnectionType[stActPass, stActive]   := ServerType.ServerConnectionType;
+  Self.OfferConnectionType[stActPass, stActive]   := BaseServerType.ServerConnectionType;
   Self.OfferConnectionType[stActPass, stActPass]  := TIdSdpBaseTcpConnection;
-  Self.OfferConnectionType[stActPass, stPassive]  := ServerType.ClientConnectionType;
-  Self.OfferConnectionType[stActPass, stHoldConn] := ServerType.NullConnectionType;
+  Self.OfferConnectionType[stActPass, stPassive]  := BaseServerType.ClientConnectionType;
+  Self.OfferConnectionType[stActPass, stHoldConn] := BaseServerType.NullConnectionType;
   Self.OfferConnectionType[stActPass, stUnknown]  := TIdSdpBaseTcpConnection;
 
-  Self.OfferConnectionType[stPassive, stActive]   := ServerType.ServerConnectionType;
+  Self.OfferConnectionType[stPassive, stActive]   := BaseServerType.ServerConnectionType;
   Self.OfferConnectionType[stPassive, stActPass]  := TIdSdpBaseTcpConnection;
   Self.OfferConnectionType[stPassive, stPassive]  := TIdSdpBaseTcpConnection;
-  Self.OfferConnectionType[stPassive, stHoldConn] := ServerType.NullConnectionType;
+  Self.OfferConnectionType[stPassive, stHoldConn] := BaseServerType.NullConnectionType;
   Self.OfferConnectionType[stPassive, stUnknown]  := TIdSdpBaseTcpConnection;
 
   Self.OfferConnectionType[stHoldConn, stActive]   := TIdSdpBaseTcpConnection;
   Self.OfferConnectionType[stHoldConn, stActPass]  := TIdSdpBaseTcpConnection;
   Self.OfferConnectionType[stHoldConn, stPassive]  := TIdSdpBaseTcpConnection;
-  Self.OfferConnectionType[stHoldConn, stHoldConn] := ServerType.NullConnectionType;
+  Self.OfferConnectionType[stHoldConn, stHoldConn] := BaseServerType.NullConnectionType;
   Self.OfferConnectionType[stHoldConn, stUnknown]  := TIdSdpBaseTcpConnection;
 
   Self.OfferConnectionType[stUnknown, stActive]   := TIdSdpBaseTcpConnection;
@@ -6445,26 +6443,26 @@ begin
   //
   Self.AnswerConnectionType[stActive, stActive]    := TIdSdpBaseTcpConnection;
   Self.AnswerConnectionType[stActive, stActPass]   := TIdSdpBaseTcpConnection;
-  Self.AnswerConnectionType[stActive, stPassive]   := ServerType.ServerConnectionType;
-  Self.AnswerConnectionType[stActive, stHoldConn]  := ServerType.NullConnectionType;
+  Self.AnswerConnectionType[stActive, stPassive]   := BaseServerType.ServerConnectionType;
+  Self.AnswerConnectionType[stActive, stHoldConn]  := BaseServerType.NullConnectionType;
   Self.AnswerConnectionType[stActive, stUnknown]   := TIdSdpBaseTcpConnection;
 
-  Self.AnswerConnectionType[stActPass, stActive]   := ServerType.ClientConnectionType;
+  Self.AnswerConnectionType[stActPass, stActive]   := BaseServerType.ClientConnectionType;
   Self.AnswerConnectionType[stActPass, stActPass]  := TIdSdpBaseTcpConnection;
-  Self.AnswerConnectionType[stActPass, stPassive]  := ServerType.ServerConnectionType;
-  Self.AnswerConnectionType[stActPass, stHoldConn] := ServerType.NullConnectionType;
+  Self.AnswerConnectionType[stActPass, stPassive]  := BaseServerType.ServerConnectionType;
+  Self.AnswerConnectionType[stActPass, stHoldConn] := BaseServerType.NullConnectionType;
   Self.AnswerConnectionType[stActPass, stUnknown]  := TIdSdpBaseTcpConnection;
 
-  Self.AnswerConnectionType[stPassive, stActive]   := ServerType.ClientConnectionType;
+  Self.AnswerConnectionType[stPassive, stActive]   := BaseServerType.ClientConnectionType;
   Self.AnswerConnectionType[stPassive, stActPass]  := TIdSdpBaseTcpConnection;
   Self.AnswerConnectionType[stPassive, stPassive]  := TIdSdpBaseTcpConnection;
-  Self.AnswerConnectionType[stPassive, stHoldConn] := ServerType.NullConnectionType;
+  Self.AnswerConnectionType[stPassive, stHoldConn] := BaseServerType.NullConnectionType;
   Self.AnswerConnectionType[stPassive, stUnknown]  := TIdSdpBaseTcpConnection;
 
   Self.AnswerConnectionType[stHoldConn, stActive]   := TIdSdpBaseTcpConnection;
   Self.AnswerConnectionType[stHoldConn, stActPass]  := TIdSdpBaseTcpConnection;
   Self.AnswerConnectionType[stHoldConn, stPassive]  := TIdSdpBaseTcpConnection;
-  Self.AnswerConnectionType[stHoldConn, stHoldConn] := ServerType.NullConnectionType;
+  Self.AnswerConnectionType[stHoldConn, stHoldConn] := BaseServerType.NullConnectionType;
   Self.AnswerConnectionType[stHoldConn, stUnknown]  := TIdSdpBaseTcpConnection;
 
   Self.AnswerConnectionType[stUnknown, stActive]   := TIdSdpBaseTcpConnection;
@@ -6595,6 +6593,14 @@ begin
     else
       Result := stHoldConn;
   end;
+end;
+
+function TIdSdpTcpMediaStream.ServerType(OfferSetupType, AnswerSetupType: TIdSdpSetupType): TIdSdpBaseTcpConnectionClass;
+begin
+  if Self.IsOffer then
+    Result := Self.OfferConnectionType[OfferSetupType, AnswerSetupType]
+  else
+    Result := Self.AnswerConnectionType[OfferSetupType, AnswerSetupType];
 end;
 
 procedure TIdSdpTcpMediaStream.StartConnectingStreams;
