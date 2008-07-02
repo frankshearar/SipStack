@@ -32,8 +32,8 @@ type
 
     procedure ReceiveMessages; virtual;
 
-    property Terminated:  Boolean       read fTerminated write SetTerminated;
-    property Timer:       TIdTimerQueue read GetTimer write SetTimer;
+    property Terminated: Boolean       read fTerminated write SetTerminated;
+    property Timer:      TIdTimerQueue read GetTimer write SetTimer;
   end;
 
   // I allow a TIdThreadableTcpClient to run in the context of its own thread.
