@@ -948,6 +948,7 @@ type
 
     constructor Create; override;
 
+    procedure Disconnect; override;
     procedure ForceDisconnect; virtual;
     function  IsActive: Boolean; override;
     function  IsConnected: Boolean; override;
@@ -977,10 +978,12 @@ type
   public
     procedure ConnectTo(PeerAddress: String; PeerPort: Cardinal); override;
     function  IsServer: Boolean; override;
+    procedure ListenOn(Address: String; Port: Cardinal); override;
   end;
 
   TIdSdpMockTcpServerConnection = class(TIdSdpMockTcpConnection)
   public
+    procedure ConnectTo(PeerAddress: String; PeerPort: Cardinal); override;
     function  IsServer: Boolean; override;
     procedure ListenOn(Address: String; Port: Cardinal); override;
   end;
@@ -1006,6 +1009,8 @@ type
     function  CreateServer(OfferSetupType, AnswerSetupType: TIdSdpSetupType): TIdSdpBaseTcpConnection;
     function  DefaultSetupType(ForOffer: Boolean): TIdSdpSetupType;
     function  FindServer(LayerID: Cardinal): TIdSdpBaseTcpConnection;
+    function  HaveCompleteDescription: Boolean;
+    function  HaveCorrectConnections(NumberOfServers: Integer): Boolean;
     procedure InitializeConnectionTypeTable(BaseServerType: TIdSdpBaseTcpConnectionClass);
     procedure InitializeRemoteServers;
     procedure OnConnect(Connection: TIdSdpBaseTcpConnection);
@@ -1020,7 +1025,7 @@ type
     function  LocalSetupType: TIdSdpSetupType;
     procedure PossiblyConnect(HaveCompleteSessionDescription: Boolean);
     function  RemoteSetupType: TIdSdpSetupType;
-    function  ServerType(OfferSetupType, AnswerSetupType: TIdSdpSetupType): TIdSdpBaseTcpConnectionClass;
+    function  ServerType(IsOffer: Boolean; OfferSetupType, AnswerSetupType: TIdSdpSetupType): TIdSdpBaseTcpConnectionClass;
     procedure StartConnectingStreams;
     function  UsesServerSockets: Boolean;
   protected
@@ -1038,7 +1043,9 @@ type
     destructor  Destroy; override;
 
     function  IsActiveConnection: Boolean;
+    function  IsListening: Boolean; override;
     procedure StartListening; override;
+    procedure StopListening; override;
   end;
 
   // I process SDP (RFC 2327) payloads. This means that I instantiate (RTP)
@@ -4504,10 +4511,12 @@ end;
 
 procedure TIdSdpBaseMediaStream.StartListening;
 begin
+  // Subclasses implement this.
 end;
 
 procedure TIdSdpBaseMediaStream.StopListening;
 begin
+  // Subclasses implement this.
 end;
 
 procedure TIdSdpBaseMediaStream.TakeOffHold;
@@ -6059,13 +6068,19 @@ begin
   Self.fPort             := 0;
 end;
 
+procedure TIdSdpMockTcpConnection.Disconnect;
+begin
+  Self.fIsActive    := false;
+  Self.fIsConnected := false;
+  Self.NotifyOfDisconnection;
+end;
+
 procedure TIdSdpMockTcpConnection.ForceDisconnect;
 begin
   // Use this method to simulate a network failure, or the remote end
   // disconnecting the connection.
 
-  Self.fIsActive := false;
-  Self.NotifyOfDisconnection;
+  Self.Disconnect;
 end;
 
 function TIdSdpMockTcpConnection.IsActive: Boolean;
@@ -6094,10 +6109,11 @@ end;
 
 procedure TIdSdpMockTcpConnection.ReceiveData(Data: TStream; ReceivedOn: TIdConnectionBindings);
 begin
-  inherited ReceiveData(Data, ReceivedOn);
+  if Self.IsActive then begin
+    inherited ReceiveData(Data, ReceivedOn);
 
-  if Self.IsActive then
     Self.fReceivedData := Self.fReceivedData + StreamToStr(Data);
+  end;
 end;
 
 procedure TIdSdpMockTcpConnection.SendData(Data: TStream);
@@ -6179,6 +6195,11 @@ begin
   Result := false;
 end;
 
+procedure TIdSdpMockTcpClientConnection.ListenOn(Address: String; Port: Cardinal);
+begin
+  raise ESdpException.Create('Do not call ListenOn on a client connection');
+end;
+
 //* TIdSdpMockTcpClientConnection Private methods ******************************
 
 function TIdSdpMockTcpClientConnection.EphemeralPort: Cardinal;
@@ -6192,6 +6213,11 @@ end;
 //* TIdSdpMockTcpServerConnection                                              *
 //******************************************************************************
 //* TIdSdpMockTcpServerConnection Public methods *******************************
+
+procedure TIdSdpMockTcpServerConnection.ConnectTo(PeerAddress: String; PeerPort: Cardinal);
+begin
+  raise ESdpException.Create('Do not call ConnectTo on a server connection');
+end;
 
 function TIdSdpMockTcpServerConnection.IsServer: Boolean;
 begin
@@ -6243,21 +6269,29 @@ begin
     Result := not Self.ServerAt(0).IsServer;
 end;
 
+function TIdSdpTcpMediaStream.IsListening: Boolean;
+begin
+  Result := Self.Servers.Count > 0;
+
+  if Result then
+    Result := Self.ServerAt(0).IsActive;
+end;
+
 procedure TIdSdpTcpMediaStream.StartListening;
 begin
+  Assert(Self.HaveLocalDescription, 'You MUST set the local description before calling StartListening');
+  if not Self.IsOffer and not Self.HaveCompleteDescription then Exit;
   if Self.LocalDescription.IsRefusedStream then Exit;
 
-  if Self.HaveLocalDescription then begin
-    Self.InitializeLocalServers;
+  Self.PossiblyConnect(Self.HaveRemoteDescription);
+end;
 
-    if Self.UsesServerSockets then begin
-      Self.BindListeningStreams
-    end
-    else begin
-      if Self.HaveRemoteDescription then 
-        Self.StartConnectingStreams;
-    end;
-  end;
+procedure TIdSdpTcpMediaStream.StopListening;
+var
+  I: Integer;
+begin
+  for I := 0 to Self.Servers.Count - 1 do
+    Self.ServerAt(I).Disconnect;
 end;
 
 //* TIdSdpTcpMediaStream Protected methods *************************************
@@ -6293,9 +6327,7 @@ end;
 
 procedure TIdSdpTcpMediaStream.InitializeLocalServers;
 begin
-  // Given our local session description, instantiate the "servers" we need.
-
-  Self.StopListening;
+//  Self.StopListening;
 
   Self.RecreateServers(Self.LocalDescription.PortCount);
 end;
@@ -6350,16 +6382,6 @@ begin
 
     if S.IsServer then
       S.ListenOn(Self.LocalDescription.Connections[0].Address, Self.LocalDescription.Port + I);
-{
-    else begin
-      // Note that this doesn't work properly if the media description has multiple
-      // connection headers - it will only use the first.
-
-      // If we have no remote description we get a EListError.
-      S.ConnectTo(Self.RemoteDescription.Connections[0].Address,
-                  Self.RemoteDescription.Port + I);
-    end;
-}
   end;
 end;
 
@@ -6369,7 +6391,7 @@ function TIdSdpTcpMediaStream.CreateServer(OfferSetupType, AnswerSetupType: TIdS
 var
   ServType: TIdSdpBaseTcpConnectionClass;
 begin
-  ServType := Self.ServerType(OfferSetupType, AnswerSetupType);
+  ServType := Self.ServerType(Self.IsOffer, OfferSetupType, AnswerSetupType);
 
   if (ServType = TIdSdpBaseTcpConnection) then
     ServType := Self.BaseServerType.NullConnectionType;
@@ -6406,6 +6428,28 @@ begin
 
   if (Result = nil) then
     Result := Self.ServerAt(0);
+end;
+
+function TIdSdpTcpMediaStream.HaveCompleteDescription: Boolean;
+begin
+  Result := Self.HaveLocalDescription and Self.HaveRemoteDescription;
+end;
+
+function TIdSdpTcpMediaStream.HaveCorrectConnections(NumberOfServers: Integer): Boolean;
+var
+  CorrectConnectionType: TIdSdpBaseTcpConnectionClass;
+begin
+  // Return true if we have already instantiated the correct number of the
+  // correct type of connections.
+
+  if Self.IsOffer then
+    CorrectConnectionType := Self.ServerType(Self.IsOffer, Self.LocalSetupType, Self.RemoteSetupType)
+  else
+    CorrectConnectionType := Self.ServerType(Self.IsOffer, Self.RemoteSetupType, Self.LocalSetupType);
+
+  Result := (Self.Servers.Count = NumberOfServers)
+        and (Self.Servers.Count > 0)
+        and (Self.ServerAt(0).ClassType = CorrectConnectionType);
 end;
 
 procedure TIdSdpTcpMediaStream.InitializeConnectionTypeTable(BaseServerType: TIdSdpBaseTcpConnectionClass);
@@ -6525,6 +6569,8 @@ procedure TIdSdpTcpMediaStream.RecreateServers(NumberOfServers: Cardinal);
 var
   I: Integer;
 begin
+  if Self.HaveCorrectConnections(NumberOfServers) then Exit;
+
   Self.Servers.Clear;
 
   for I := 1 to NumberOfServers do
@@ -6559,6 +6605,8 @@ end;
 
 procedure TIdSdpTcpMediaStream.PossiblyConnect(HaveCompleteSessionDescription: Boolean);
 begin
+  if Self.IsListening then Exit;
+
   case Self.LocalSetupType of
     stActive: begin
       if HaveCompleteSessionDescription then
@@ -6567,9 +6615,17 @@ begin
     stActPass: begin
       if HaveCompleteSessionDescription then begin
         case Self.RemoteSetupType of
-          stActive:  Self.BindListeningStreams;
-          stPassive: Self.StartConnectingStreams;
+          stActive: Self.BindListeningStreams;
+          stPassive: begin
+                       Self.StopListening;
+                       Self.StartConnectingStreams;
+                     end;
+        else
+          Self.StopListening;
         end;
+      end
+      else begin
+        Self.BindListeningStreams;
       end;
     end;
     stPassive: Self.BindListeningStreams;
@@ -6587,7 +6643,8 @@ begin
   else begin
     // If we don't know what the far end will offer, but we're prepared to
     // accept a connection, then we must start listening for a connection
-    // attempt.
+    // attempt. Answering stActive tells other methods to create a listening
+    // stream.
     if Self.HaveLocalDescription and Self.UsesServerSockets then
       Result := stActive
     else
@@ -6595,9 +6652,9 @@ begin
   end;
 end;
 
-function TIdSdpTcpMediaStream.ServerType(OfferSetupType, AnswerSetupType: TIdSdpSetupType): TIdSdpBaseTcpConnectionClass;
+function TIdSdpTcpMediaStream.ServerType(IsOffer: Boolean; OfferSetupType, AnswerSetupType: TIdSdpSetupType): TIdSdpBaseTcpConnectionClass;
 begin
-  if Self.IsOffer then
+  if IsOffer then
     Result := Self.OfferConnectionType[OfferSetupType, AnswerSetupType]
   else
     Result := Self.AnswerConnectionType[OfferSetupType, AnswerSetupType];

@@ -719,6 +719,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAddDataListener; virtual;
+    procedure TestDisconnect; virtual;
     procedure TestForceDisconnect; virtual;
     procedure TestRemotePartyAccepts; virtual;
     procedure TestRemoveDataListener; virtual;
@@ -732,6 +733,7 @@ type
   published
     procedure TestAddDataListener; override;
     procedure TestConnectTo;
+    procedure TestDisconnect; override;
     procedure TestForceDisconnect; override;
     procedure TestListenOn;
     procedure TestRemoveDataListener; override;
@@ -745,6 +747,7 @@ type
     function  CreateConnection: TIdSdpMockTcpConnection; override;
   published
     procedure TestConnectTo;
+    procedure TestDisconnect; override;
     procedure TestForceDisconnect; override;
   end;
 
@@ -753,6 +756,7 @@ type
     procedure Activate(Connection: TIdSdpMockTcpConnection); override;
     function  CreateConnection: TIdSdpMockTcpConnection; override;
   published
+    procedure TestDisconnect; override;
     procedure TestForceDisconnect; override;
     procedure TestListenOn;
     procedure TestRemotePartyAccepts; override;
@@ -907,9 +911,11 @@ type
     procedure TestPortsAndPortCount;
     procedure TestReceivedDataFormat;
     procedure TestReceivedDataFormatMultipleFormats;
+    procedure TestSetRemoteDescriptionDoesntTerminateExistingConnections;
     procedure TestSetTimer; override;
     procedure TestStartListeningPortAboveAllowedRange; override;
     procedure TestStartListeningPortBelowAllowedRange; override;
+    procedure TestStopListening;
     procedure TestUnusedPortsSwitchOff; override;
     procedure TestWhenAnswerReceiveActiveSendActive;
     procedure TestWhenAnswerReceiveActiveSendActPass;
@@ -8795,6 +8801,14 @@ begin
   Check(not Self.Conn.IsConnected, 'Null connections can''t be connected');
 end;
 
+procedure TestTIdSdpMockTcpNullConnection.TestDisconnect;
+begin
+  Self.Conn.ConnectTo('1.2.3.4', 1234);
+  Self.Conn.Disconnect;
+  Check(not Self.Conn.IsActive,    'Null connections can''t be active');
+  Check(not Self.Conn.IsConnected, 'Null connections can''t be connected');
+end;
+
 procedure TestTIdSdpMockTcpNullConnection.TestForceDisconnect;
 var
   L: TIdSdpTestConnectionListener;
@@ -8920,6 +8934,14 @@ begin
   CheckEquals(Port,    Self.Conn.PeerPort,    'Tried to connect to wrong port');
 end;
 
+procedure TestTIdSdpMockTcpClientConnection.TestDisconnect;
+begin
+  Self.Conn.ConnectTo('1.2.3.4', 1234);
+  Self.Conn.Disconnect;
+  Check(not Self.Conn.IsActive,    'Connection still active after Disconnect');
+  Check(not Self.Conn.IsConnected, 'Connection still connected after Disconnect');
+end;
+
 procedure TestTIdSdpMockTcpClientConnection.TestForceDisconnect;
 var
   L: TIdSdpTestConnectionListener;
@@ -8959,6 +8981,18 @@ begin
 end;
 
 //* TestTIdSdpMockTcpServerConnection Published methods ************************
+
+procedure TestTIdSdpMockTcpServerConnection.TestDisconnect;
+begin
+  Self.Conn.ListenOn('1.2.3.4', 1234);
+  Self.Conn.RemotePartyAccepts;
+  Check(Self.Conn.IsConnected, 'Connection not connected');
+
+  Self.Conn.Disconnect;
+  
+  Check(not Self.Conn.IsActive,    'Connection still active after Disconnect');
+  Check(not Self.Conn.IsConnected, 'Connection still connected after Disconnect');
+end;
 
 procedure TestTIdSdpMockTcpServerConnection.TestForceDisconnect;
 var
@@ -9701,6 +9735,11 @@ begin
   end;
 end;
 
+procedure TestTIdSdpMockTcpConnection.TestDisconnect;
+begin
+  Fail(Self.ClassName + ' MUST override TestDisconnect');
+end;
+
 procedure TestTIdSdpMockTcpConnection.TestForceDisconnect;
 begin
   Fail(Self.ClassName + ' MUST override TestForceDisconnect');
@@ -9957,6 +9996,8 @@ begin
   try
     Self.SetMediaDescriptions(Stream, WhenOffer, SetLocalDescFirst, Offer, Answer);
 
+    Stream.StartListening;
+
     Connection := Self.FindSoleMockClient;
     Check(Connection.ConnectToCalled, 'Connection not connecting');
     Check(Connection.IsActive,        'Connection not active');
@@ -9989,6 +10030,8 @@ begin
   Stream := Self.CreateStream;
   try
     Self.SetMediaDescriptions(Stream, WhenOffer, SetLocalDescFirst, Offer, Answer);
+
+    Stream.StartListening;
 
     CheckAtLeastOneNullConnectionCreated;
   finally
@@ -10025,6 +10068,8 @@ begin
   Stream := Self.CreateStream;
   try
     Self.SetMediaDescriptions(Stream, WhenOffer, SetLocalDescFirst, Offer, Answer);
+
+    Stream.StartListening;
 
     Connection := Self.FindSoleMockServer;
     Check(Connection.ListenOnCalled,  'Connection not listening');
@@ -10240,6 +10285,39 @@ begin
   end;
 end;
 
+procedure TestTIdSdpTcpMediaStream.TestSetRemoteDescriptionDoesntTerminateExistingConnections;
+var
+  L:      TIdSdpTestConnectionListener;
+  Server: TIdSdpMockTcpConnection;
+  S:      TIdSdpTcpMediaStream;
+begin
+  S := TIdSdpTcpMediaStream.Create(TIdSdpMockTcpConnection);
+  try
+    S.IsOffer := true;
+    S.Timer   := Self.Timer;
+    Self.SetLocalMediaDesc(S, Self.PassiveMediaDesc);
+    S.StartListening;
+
+    Server := Self.FindMockServer(S.LocalDescription);
+    L := TIdSdpTestConnectionListener.Create;
+    try
+      Server.AddDataListener(L);
+      Self.SetRemoteMediaDesc(S, Self.ActiveMediaDesc);
+      Check(Server = Self.FindMockServer(S.LocalDescription),
+            'Server recreated - which could disconnect remote party''s connections');
+      Check(not L.OnDisconnectCalled, 'Connection disconnected');
+
+      Server.RemotePartyAccepts;
+      Self.SetRemoteMediaDesc(S, Self.ActiveMediaDesc);
+      Check(not L.OnDisconnectCalled, 'Connection disconnected after client connected');
+    finally
+      L.Free;
+    end;
+  finally
+    S.Free;
+  end;
+end;
+
 procedure TestTIdSdpTcpMediaStream.TestSetTimer;
 var
   NewTimer: TIdDebugTimerQueue;
@@ -10320,6 +10398,31 @@ begin
     Stream.StartListening;
 
     CheckPortAdjusted(LowerLimit, Stream.LocalDescription.Port, Stream.IsNull, Stream.ClassName);
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TestTIdSdpTcpMediaStream.TestStopListening;
+var
+  L:      TIdSdpTestMediaListener;
+  Stream: TIdSdpTcpMediaStream;
+begin
+  Stream := Self.CreateStream as TIdSdpTcpMediaStream;
+  try
+    Stream.StartListening;
+
+    Stream.StopListening;
+
+    L := TIdSdpTestMediaListener.Create;
+    try
+      Stream.AddDataListener(L);
+      Self.ReceiveDataOn(Stream);
+      Check(not L.ReceivedData, 'Server didn''t stop listening');
+    finally
+      Stream.RemoveDataListener(L);
+      L.Free;
+    end;
   finally
     Stream.Free;
   end;
