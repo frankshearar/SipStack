@@ -1389,8 +1389,8 @@ function StrToSetupType(const S: String): TIdSDPSetupType;
 implementation
 
 uses
-  IdException, IdIndyUtils, IdRandom, IdSocketHandle, LoGGer, LogVariables,
-  RuntimeSafety;
+  IdException, IdIndyUtils, IdRandom, IdSocketHandle, IdTCPConnection, LoGGer,
+  LogVariables, RuntimeSafety;
 
 const
   SessionHeaderOrder = 'vosiuepcbtka';
@@ -5931,13 +5931,18 @@ end;
 function TIdSdpTcpServerConnection.GetPeerAddress: String;
 var
   Connections: TList;
+  C:           TIdTCPConnection;
 begin
+  Result := IPv4ZeroAddress;
+
   Connections := Self.Connection.Threads.LockList;
   try
-    if (Connections.Count > 0) then
-      Result := TIdPeerThread(Connections[0]).Connection.Socket.Binding.PeerIP
-    else
-      Result := IPv4ZeroAddress;
+    if (Connections.Count > 0) then begin
+      C := TIdPeerThread(Connections[0]).Connection;
+
+      if C.Connected then
+        Result := C.Socket.Binding.PeerIP;
+    end;
   finally
     Self.Connection.Threads.UnlockList;
   end;
@@ -5946,13 +5951,18 @@ end;
 function TIdSdpTcpServerConnection.GetPeerPort: Cardinal;
 var
   Connections: TList;
+  C:           TIdTCPConnection;
 begin
+  Result := TcpDiscardPort;
+
   Connections := Self.Connection.Threads.LockList;
   try
-    if (Connections.Count > 0) then
-      Result := TIdPeerThread(Connections[0]).Connection.Socket.Binding.PeerPort
-    else
-      Result := TcpDiscardPort;
+    if (Connections.Count > 0) then begin
+      C := TIdPeerThread(Connections[0]).Connection;
+
+      if C.Connected then
+        Result := C.Socket.Binding.PeerPort
+    end;
   finally
     Self.Connection.Threads.UnlockList;
   end;
@@ -6012,21 +6022,22 @@ var
   ReceivedOn: TIdConnectionBindings;
 begin
 //ReceiveData(Data: TStream; ReceivedOn: TIdConnectionBindings)
-  NewText := TStringStream.Create(Thread.Connection.CurrentReadBuffer);
+  Binding := Thread.Connection.Socket.Binding;
+  
+  ReceivedOn := TIdConnectionBindings.Create(Binding.IP,
+                                             Binding.Port,
+                                             Binding.PeerIP,
+                                             Binding.PeerPort,
+                                             Id_SDP_TCP);
   try
-    Binding := Thread.Connection.Socket.Binding;
-    ReceivedOn := TIdConnectionBindings.Create(Binding.IP,
-                                               Binding.Port,
-                                               Binding.PeerIP,
-                                               Binding.PeerPort,
-                                               Id_SDP_TCP);
+    NewText := TStringStream.Create(Thread.Connection.CurrentReadBuffer);
     try
       Self.ReceiveData(NewText, ReceivedOn);
     finally
-      ReceivedOn.Free;
+      NewText.Free;
     end;
   finally
-    NewText.Free;
+    ReceivedOn.Free;
   end;
 end;
 
