@@ -19,9 +19,11 @@ type
   // schedule TIdWaits in the TimerQueue.
   TIdThreadableTcpClient = class(TIdTCPClient)
   private
-    fTerminated: Boolean;
+    fConserveConnections: Boolean;
+    fTerminated:          Boolean;
 
     procedure MarkAsTerminated(Sender: TObject);
+    procedure SetConserveConnections(Value: Boolean);
     procedure SetTerminated(Value: Boolean);
   protected
     function  DefaultTimeout: Cardinal; virtual;
@@ -30,10 +32,12 @@ type
   public
    constructor Create(AOwner: TComponent); override;
 
+    procedure Connect(const Timeout: Integer); override;
     procedure ReceiveMessages; virtual;
 
-    property Terminated: Boolean       read fTerminated write SetTerminated;
-    property Timer:      TIdTimerQueue read GetTimer write SetTimer;
+    property ConserveConnections: Boolean       read fConserveConnections write SetConserveConnections;
+    property Terminated:          Boolean       read fTerminated write SetTerminated;
+    property Timer:               TIdTimerQueue read GetTimer write SetTimer;
   end;
 
   // I allow a TIdThreadableTcpClient to run in the context of its own thread.
@@ -59,7 +63,7 @@ const
 implementation
 
 uses
-  RuntimeSafety;
+  IdIndyUtils, RuntimeSafety;
 
 //******************************************************************************
 //* TIdThreadableTcpClient                                                     *
@@ -70,9 +74,17 @@ constructor TIdThreadableTcpClient.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
-  Self.OnDisconnected := Self.MarkAsTerminated;
-  Self.ReadTimeout    := Self.DefaultTimeout;
-  Self.Terminated     := false;
+  Self.ConserveConnections := true;
+  Self.OnDisconnected      := Self.MarkAsTerminated;
+  Self.ReadTimeout         := Self.DefaultTimeout;
+  Self.Terminated          := false;
+end;
+
+procedure TIdThreadableTcpClient.Connect(const Timeout: Integer);
+begin
+  inherited Connect(Timeout);
+
+  KeepAliveSocket(Self, Self.ConserveConnections);
 end;
 
 procedure TIdThreadableTcpClient.ReceiveMessages;
@@ -103,6 +115,13 @@ end;
 procedure TIdThreadableTcpClient.MarkAsTerminated(Sender: TObject);
 begin
   Self.Terminated := true;
+end;
+
+procedure TIdThreadableTcpClient.SetConserveConnections(Value: Boolean);
+begin
+  Self.fConserveConnections := Value;
+
+  KeepAliveSocket(Self, Value);
 end;
 
 procedure TIdThreadableTcpClient.SetTerminated(Value: Boolean);

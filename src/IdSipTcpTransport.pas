@@ -177,14 +177,10 @@ type
   // a TimerQueue. That, and I send messages to the network.
   TIdSipTcpClient = class(TIdThreadableTcpClient)
   private
-    fConserveConnections: Boolean;
-    MessageReader:        TIdSipTcpMessageReader;
+    MessageReader: TIdSipTcpMessageReader;
 
-    function  BoolToSockOpt(B: Boolean): Integer;
-    procedure SetConserveConnections(Value: Boolean);
     function  GetTransportID: String;
     procedure SetTransportID(const Value: String);
-    procedure SetKeepAlive(UseKeepAlive: Boolean);
   protected
     function  GetTimer: TIdTimerQueue; override;
     procedure SetTimer(Value: TIdTimerQueue); override;
@@ -192,12 +188,10 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
 
-    procedure Connect(const Timeout: Integer); override;
     procedure ReceiveMessages; override;
     procedure Send(Msg: TIdSipMessage);
 
-    property ConserveConnections: Boolean read fConserveConnections write SetConserveConnections;
-    property TransportID:         String  read GetTransportID write SetTransportID;
+    property TransportID: String  read GetTransportID write SetTransportID;
   end;
 
   // I relate a request with a TCP connection. I store a COPY of a request
@@ -972,6 +966,8 @@ end;
 
 procedure TIdSipTcpServer.DoOnExecute(Thread: TIdPeerThread);
 begin
+  KeepAliveSocket(Thread.Connection, Self.ConserveConnections);
+
   Self.MessageReader.ReadTimeout := Self.DefaultTimeout;
   Self.MessageReader.ReadMessages(Thread.Connection, Self.ConserveConnections);
 end;
@@ -1041,13 +1037,6 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipTcpClient.Connect(const Timeout: Integer);
-begin
-  inherited Connect(Timeout);
-
-  Self.SetKeepAlive(Self.ConserveConnections);
-end;
-
 procedure TIdSipTcpClient.ReceiveMessages;
 begin
   Self.MessageReader.ReadTimeout := Self.ReadTimeout;
@@ -1064,21 +1053,6 @@ end;
 function TIdSipTcpClient.GetTimer: TIdTimerQueue;
 begin
   Result := Self.MessageReader.Timer;
-end;
-
-function TIdSipTcpClient.BoolToSockOpt(B: Boolean): Integer;
-begin
-  if B then
-    Result := Id_SO_True
-  else
-    Result := Id_SO_False;
-end;
-
-procedure TIdSipTcpClient.SetConserveConnections(Value: Boolean);
-begin
-  Self.fConserveConnections := Value;
-
-  Self.SetKeepAlive(Value);
 end;
 
 function TIdSipTcpClient.GetTransportID: String;
@@ -1101,16 +1075,6 @@ begin
 
   if Assigned(Transport) and (Transport is TIdSipTransport) then
     Self.MessageReader.TransportType := (Transport as TIdSipTransport).GetTransportType;
-end;
-
-procedure TIdSipTcpClient.SetKeepAlive(UseKeepAlive: Boolean);
-var
-  SetKeepalive: Integer;
-begin
-  if Self.Connected then begin
-    SetKeepalive := BoolToSockOpt(UseKeepAlive);
-    Self.Socket.Binding.SetSockOpt(Id_SOL_SOCKET, Id_SO_KEEPALIVE, @SetKeepalive, Sizeof(SetKeepalive));
-  end;
 end;
 
 //******************************************************************************

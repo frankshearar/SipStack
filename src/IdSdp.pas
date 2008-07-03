@@ -1389,7 +1389,8 @@ function StrToSetupType(const S: String): TIdSDPSetupType;
 implementation
 
 uses
-  IdException, IdRandom, IdSocketHandle, LoGGer, LogVariables, RuntimeSafety;
+  IdException, IdIndyUtils, IdRandom, IdSocketHandle, LoGGer, LogVariables,
+  RuntimeSafety;
 
 const
   SessionHeaderOrder = 'vosiuepcbtka';
@@ -5969,6 +5970,7 @@ end;
 
 procedure TIdSdpTcpServerConnection.ClientConnected(Thread: TIdPeerThread);
 begin
+  KeepAliveSocket(Thread.Connection, true);
   Self.NotifyOfConnectionInTimerContext;
 end;
 

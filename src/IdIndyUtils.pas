@@ -14,15 +14,17 @@ unit IdIndyUtils;
 interface
 
 uses
-  IdSocketHandle, SysUtils;
+  IdSocketHandle, IdTCPConnection, SysUtils;
 
 function  BindingsToStr(Bindings: TIdSocketHandles): String;
-procedure RaiseSocketError(OriginalException: Exception; Bindings: TIdSocketHandles); 
+function  BoolToSockOpt(B: Boolean): Integer;
+procedure KeepAliveSocket(C: TIdTCPConnection; KeepAlive: Boolean);
+procedure RaiseSocketError(OriginalException: Exception; Bindings: TIdSocketHandles);
 
 implementation
 
 uses
-  IdException;
+  IdException, IdStackConsts;
 
 //******************************************************************************
 //* Unit Public functions & procedures                                         *
@@ -46,6 +48,24 @@ begin
   end;
 
   Result := Copy(Result, 1, Length(Result) - Length(Separator));
+end;
+
+function BoolToSockOpt(B: Boolean): Integer;
+begin
+  if B then
+    Result := Id_SO_True
+  else
+    Result := Id_SO_False;
+end;
+
+procedure KeepAliveSocket(C: TIdTCPConnection; KeepAlive: Boolean);
+var
+  SetKeepalive: Integer;
+begin
+  if C.Connected then begin
+    SetKeepalive := BoolToSockOpt(KeepAlive);
+    C.Socket.Binding.SetSockOpt(Id_SOL_SOCKET, Id_SO_KEEPALIVE, @SetKeepalive, Sizeof(SetKeepalive));
+  end;
 end;
 
 procedure RaiseSocketError(OriginalException: Exception; Bindings: TIdSocketHandles);
