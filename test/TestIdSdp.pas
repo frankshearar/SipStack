@@ -762,6 +762,23 @@ type
     procedure TestRemotePartyAccepts; override;
   end;
 
+  TestTIdSdpTcpClient = class(TThreadingTestCase)
+  private
+    Client: TIdSdpTcpClient;
+    Runner: TIdSdpThreadedTcpClient;
+    Server: TIdTcpServer;
+    Timer:  TIdDebugTimerQueue;
+
+    procedure ClientConnected(Sender: TObject);
+    procedure ClientDisconnected(Sender: TObject);
+    procedure SendData(Thread: TIdPeerThread);
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestReceiveMessageRecordsBinding;
+  end;
+
   TestTIdSdpTcpClientConnection = class(TThreadingTestCase,
                                         IIdSdpTcpConnectionListener)
   private
@@ -784,7 +801,7 @@ type
     procedure DisconnectClient;
     procedure DoNothing(Thread: TIdPeerThread);
     procedure OnConnect(Connection: TIdSdpBaseTcpConnection);
-    procedure OnData(Connection: TIdSdpBaseTcpConnection; Data: TStream);
+    procedure OnData(Connection: TIdSdpBaseTcpConnection; Data: TStream); 
     procedure OnDisconnect(Connection: TIdSdpBaseTcpConnection);
     procedure OnException(Connection: TIdSdpBaseTcpConnection;
                           ExceptionType: ExceptClass;
@@ -1268,6 +1285,7 @@ begin
   Result.AddTest(TestTIdSDPMediaStream.Suite);
   Result.AddTest(TestTIdSdpNullMediaStream.Suite);
   Result.AddTest(TestTIdSdpTcpConnectionRegistry.Suite);
+  Result.AddTest(TestTIdSdpTcpClient.Suite);
   Result.AddTest(TestTIdSdpTcpClientConnection.Suite);
   Result.AddTest(TestTIdSdpTcpServerConnection.Suite);
   Result.AddTest(TestTIdSdpTcpNullConnection.Suite);
@@ -9044,6 +9062,84 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSdpTcpClient                                                        *
+//******************************************************************************
+//* TestTIdSdpTcpClient Public methods *****************************************
+
+procedure TestTIdSdpTcpClient.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Timer := TIdDebugTimerQueue.Create(false);
+
+  Self.Server := TIdTCPServer.Create(nil);
+  Self.Server.OnExecute := Self.SendData;
+  Self.Server.Bindings.Add;
+  Self.Server.Bindings[0].IP   := Localhost(Id_IPv4);
+  Self.Server.Bindings[0].Port := 8000;
+
+  try
+    Self.Server.Active := true;
+  except
+    Fail(Format('Shut down the service using %s:%d/tcp', [Self.Server.Bindings[0].IP, Self.Server.Bindings[0].Port]));
+  end;
+
+  Self.Client := TIdSdpTcpClient.Create(nil);
+  Self.Client.Host           := Self.Server.Bindings[0].IP;
+  Self.Client.OnConnected    := Self.ClientConnected;
+  Self.Client.OnDisconnected := Self.ClientDisconnected;
+  Self.Client.Port           := Self.Server.Bindings[0].Port;
+  Self.Client.Timer          := Self.Timer;
+end;
+
+procedure TestTIdSdpTcpClient.TearDown;
+begin
+  Self.Client.Free;
+  Self.Server.Free;
+  Self.Timer.Terminate;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSdpTcpClient Private methods ****************************************
+
+procedure TestTIdSdpTcpClient.ClientConnected(Sender: TObject);
+begin
+  Self.Runner := TIdSdpThreadedTcpClient.Create(Self.Client);
+end;
+
+procedure TestTIdSdpTcpClient.ClientDisconnected(Sender: TObject);
+begin
+  Self.Runner.Terminate;
+  Self.Runner := nil;
+end;
+
+procedure TestTIdSdpTcpClient.SendData(Thread: TIdPeerThread);
+begin
+  Thread.Connection.Write('foo');
+end;
+
+//* TestTIdSdpTcpClient Published methods **************************************
+
+procedure TestTIdSdpTcpClient.TestReceiveMessageRecordsBinding;
+var
+  RecvWait: TIdSdpTcpReceiveDataWait;
+begin
+  Self.Client.Connect(Self.DefaultTimeout);
+
+  Sleep(250);
+
+  RecvWait := Self.Timer.LastEventScheduled(TIdSdpTcpReceiveDataWait) as TIdSdpTcpReceiveDataWait;
+  Check(Assigned(RecvWait), 'No Wait scheduled');
+
+  CheckEquals(Self.Client.Socket.Binding.IP,       RecvWait.ReceivedOn.LocalIP,   'Wait''s LocalIP');
+  CheckEquals(Self.Client.Socket.Binding.Port,     RecvWait.ReceivedOn.LocalPort, 'Wait''s LocalPort');
+  CheckEquals(Self.Client.Socket.Binding.PeerIP,   RecvWait.ReceivedOn.PeerIP,    'Wait''s PeerIP');
+  CheckEquals(Self.Client.Socket.Binding.PeerPort, RecvWait.ReceivedOn.PeerPort,  'Wait''s PeerPort');
+  CheckEquals(TcpTransport,                        RecvWait.ReceivedOn.Transport, 'Wait''s Transport');
+end;
+
+//******************************************************************************
 //* TestTIdSdpTcpClientConnection                                              *
 //******************************************************************************
 //* TestTIdSdpTcpClientConnection Public methods *******************************
@@ -9135,7 +9231,7 @@ begin
     S.CopyFrom(Data, 0);
 
     Self.ReceivedData := S.DataString;
-    
+
     Self.CollectedReceivedData := Self.CollectedReceivedData + Self.ReceivedData;
   finally
     S.Free;
@@ -9245,7 +9341,7 @@ begin
   CheckEquals(ServerIP,                Self.Connection.PeerAddress, 'Connection peer address not set');
   CheckEquals(ServerPort,              Self.Connection.PeerPort,    'Connection peer port not set');
 end;
-                      
+
 procedure TestTIdSdpTcpClientConnection.TestConnectToNonexistentPeer;
 begin
   Self.Server.Active := false;

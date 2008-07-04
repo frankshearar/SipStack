@@ -5564,6 +5564,13 @@ begin
     Self.ReadTimeout := Self.ReadTimeout;
     while Self.Connected and not ConnClosedOrTimedOut do begin
       try
+
+        ReceivedOn.LocalIP   := Self.Socket.Binding.IP;
+        ReceivedOn.LocalPort := Self.Socket.Binding.Port;
+        ReceivedOn.PeerIP    := Self.Socket.Binding.PeerIP;
+        ReceivedOn.PeerPort  := Self.Socket.Binding.PeerPort;
+        ReceivedOn.Transport := TcpTransport;
+
         // We want to notify as soon as there's ANY data. When there is data, we
         // want to read as much as we can.
         Self.ReadFromStack;
