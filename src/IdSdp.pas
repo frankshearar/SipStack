@@ -481,6 +481,7 @@ type
     procedure PrintOn(Dest: TStream);
     procedure ReadFrom(Src: TStream); overload;
     procedure ReadFrom(Src: String); overload;
+    procedure RemoveLastMediaDescription;
     procedure SetConnectionAddress(NewAddress: String);
 
     property Attributes:       TIdSdpAttributes       read GetAttributes;
@@ -3250,6 +3251,11 @@ begin
   finally
     S.Free;
   end;
+end;
+
+procedure TIdSdpPayload.RemoveLastMediaDescription;
+begin
+  Self.MediaDescriptions.Remove(Self.MediaDescriptionAt(Self.MediaDescriptionCount - 1));
 end;
 
 procedure TIdSdpPayload.SetConnectionAddress(NewAddress: String);

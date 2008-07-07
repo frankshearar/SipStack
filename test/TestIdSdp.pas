@@ -431,6 +431,7 @@ type
     procedure TestPrintOnWithUri;
     procedure TestReadFromString;
     procedure TestReadFromStringEmpty;
+    procedure TestRemoveLastMediaDescription;
     procedure TestSetConnectionAddress;
   end;
 
@@ -4990,6 +4991,34 @@ begin
   except
     on EParserError do;
   end;
+end;
+
+procedure TestTIdSdpPayload.TestRemoveLastMediaDescription;
+var
+  ExpectedFormat: String;
+  OldStreamCount: Integer;
+begin
+  Self.Payload.ReadFrom('v=0'#13#10
+                      + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
+                      + 's=Minimum Session Info'#13#10
+                      + 'c=IN IP4 5.6.7.8'#13#10
+                      + 'm=audio 8000 RTP/AVP 0'#13#10
+                      + 'm=audio 8002 RTP/AVP 1'#13#10);
+
+  ExpectedFormat := Self.Payload.MediaDescriptionAt(0).Formats[0];
+  OldStreamCount := Self.Payload.MediaDescriptionCount;
+
+  Self.Payload.RemoveLastMediaDescription;
+
+  CheckEquals(OldStreamCount - 1, Self.Payload.MediaDescriptionCount,            'No stream removed');
+  CheckEquals(ExpectedFormat,     Self.Payload.MediaDescriptionAt(0).Formats[0], 'Wrong stream removed');
+
+  Self.Payload.RemoveLastMediaDescription;
+  CheckEquals(OldStreamCount - 2, Self.Payload.MediaDescriptionCount, 'No stream removed (again)');
+
+
+  Self.Payload.RemoveLastMediaDescription;
+  CheckEquals(0, Self.Payload.MediaDescriptionCount, 'Can''t remove streams from a description with no streams');
 end;
 
 procedure TestTIdSdpPayload.TestSetConnectionAddress;
