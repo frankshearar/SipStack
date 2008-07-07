@@ -743,11 +743,11 @@ begin
   try
     if Connection.Connected then begin
       try
-      ReceivedFrom.LocalIP   := Connection.Socket.Binding.IP;
-      ReceivedFrom.LocalPort := Connection.Socket.Binding.Port;
-      ReceivedFrom.PeerIP    := Connection.Socket.Binding.PeerIP;
-      ReceivedFrom.PeerPort  := Connection.Socket.Binding.PeerPort;
-      ReceivedFrom.Transport := Self.TransportType;
+        ReceivedFrom.LocalIP   := Connection.Socket.Binding.IP;
+        ReceivedFrom.LocalPort := Connection.Socket.Binding.Port;
+        ReceivedFrom.PeerIP    := Connection.Socket.Binding.PeerIP;
+        ReceivedFrom.PeerPort  := Connection.Socket.Binding.PeerPort;
+        ReceivedFrom.Transport := Self.TransportType;
       except
         on E: Exception do begin
           Self.NotifyOfException(ExceptClass(E.ClassType), Format('%s while copying binding information for a SIP message off a TCP connection', [E.Message]));
