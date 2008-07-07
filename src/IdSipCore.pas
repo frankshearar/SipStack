@@ -1494,11 +1494,20 @@ begin
 end;
 
 procedure TIdSipActions.DeleteAction(Index: Integer);
+var
+  TypeOfClass: String;
 begin
-  if Assigned(Self.OnRemoveAction) then
-    Self.OnRemoveAction(Self.ActionAt(Index));
+  try
+    TypeOfClass := Self.ActionAt(Index).ClassName;
+    if Assigned(Self.OnRemoveAction) then
+      Self.OnRemoveAction(Self.ActionAt(Index));
 
-  Self.Actions.Delete(Index)
+    Self.Actions.Delete(Index)
+  except
+    on E: Exception do begin
+      raise ExceptClass(E.ClassType).Create(Format('%s (While trying to delete %s)', [E.Message, TypeOfClass]));
+    end;
+  end;
 end;
 
 function TIdSipActions.FindAction(Msg: TIdSipMessage; ClientAction: Boolean): TIdSipAction;
