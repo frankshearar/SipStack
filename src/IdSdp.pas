@@ -5567,16 +5567,16 @@ begin
   try
     ConnClosedOrTimedOut := false;
 
-    Self.ReadTimeout := Self.ReadTimeout;
-    while Self.Connected and not ConnClosedOrTimedOut do begin
+    if not Self.Terminated and Self.Connected then begin
+      ReceivedOn.LocalIP   := Self.Socket.Binding.IP;
+      ReceivedOn.LocalPort := Self.Socket.Binding.Port;
+      ReceivedOn.PeerIP    := Self.Socket.Binding.PeerIP;
+      ReceivedOn.PeerPort  := Self.Socket.Binding.PeerPort;
+      ReceivedOn.Transport := TcpTransport;
+    end;
+
+    while not Self.Terminated and Self.Connected and not ConnClosedOrTimedOut do begin
       try
-
-        ReceivedOn.LocalIP   := Self.Socket.Binding.IP;
-        ReceivedOn.LocalPort := Self.Socket.Binding.Port;
-        ReceivedOn.PeerIP    := Self.Socket.Binding.PeerIP;
-        ReceivedOn.PeerPort  := Self.Socket.Binding.PeerPort;
-        ReceivedOn.Transport := TcpTransport;
-
         // We want to notify as soon as there's ANY data. When there is data, we
         // want to read as much as we can.
         Self.ReadFromStack;
@@ -5590,6 +5590,8 @@ begin
         on EIdConnClosedGracefully do
           ConnClosedOrTimedOut := true;
         on EIdClosedSocket do
+          ConnClosedOrTimedOut := true;
+        on EIdNotConnected do
           ConnClosedOrTimedOut := true;
       end;
     end;
@@ -5669,8 +5671,10 @@ begin
   except
     on EIdConnClosedGracefully do;
     on EIdConnectTimeout do;
-    on E: Exception do
+    on E: Exception do begin
       Self.NotifyOfException(E);
+      raise E;
+    end;
   end;
 end;
 
