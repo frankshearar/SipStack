@@ -1782,7 +1782,8 @@ procedure TestTIdSipUserAgent.TestRejectMethodNotAllowed;
 begin
   // This blank test serves as a reminder of missing functionality: we want to
   // support permissions on our URIs, so that we can express the fact that we
-  // allow someone to subscribe to URI-A's state, but not to URI-B's. 
+  // allow someone to subscribe to URI-A's state, but not to URI-B's.
+  Fail('This blank test serves as a reminder of missing functionality.');
 {
   Self.MarkSentResponseCount;
 
