@@ -67,7 +67,6 @@ type
     procedure TestRequiresUnsupportedExtension;
     procedure TestSendRequest;
     procedure TestSendRequestMalformedRequest;
-    procedure TestSendRequestRewritesContactUri;
     procedure TestSendRequestUnknownMethod;
     procedure TestSendRequestUnknownRequiredExtension;
     procedure TestSendRequestUnknownSupportedExtension;
@@ -110,6 +109,7 @@ type
                          Redirect: TIdSipResponse);
     procedure OnSuccess(Action: TIdSipAction;
                         Msg: TIdSipMessage);
+    procedure OnTerminated(Action: TIdSipAction);
   public
     procedure SetUp; override;
   published
@@ -1519,10 +1519,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipAbstractCore.TestSendRequestRewritesContactUri;
-begin
-end;
-
 procedure TestTIdSipAbstractCore.TestSendRequestUnknownMethod;
 var
   Dest:   TIdSipLocation;
@@ -1784,6 +1780,10 @@ end;
 
 procedure TestLocation.OnSuccess(Action: TIdSipAction;
                                  Msg: TIdSipMessage);
+begin
+end;
+
+procedure TestLocation.OnTerminated(Action: TIdSipAction);
 begin
 end;
 

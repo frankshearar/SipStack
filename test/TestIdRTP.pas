@@ -523,7 +523,6 @@ type
     procedure TestHasBye;
     procedure TestHasReceiverReport;
     procedure TestHasSourceDescription;
-    procedure TestIsBye;
     procedure TestIsRTCP;
     procedure TestIsRTP;
     procedure TestIsValidFirstPacketAnAppDef;
@@ -6264,10 +6263,6 @@ begin
   Check(not Self.Packet.HasSourceDescription, 'One SR');
   Self.Packet.AddSourceDescription;
   Check(Self.Packet.HasSourceDescription, 'One SR, one SDES');
-end;
-
-procedure TestTIdCompoundRTCPPacket.TestIsBye;
-begin
 end;
 
 procedure TestTIdCompoundRTCPPacket.TestIsRTCP;
