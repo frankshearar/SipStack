@@ -1888,7 +1888,7 @@ begin
   Line := UseGruuLine;
   EatDirective(Line);
 
-  UserAgent.UseGruu := StrToBool(Line);
+  UserAgent.UseGruu := StrAsBool(Line);
 end;
 
 procedure TIdSipStackConfigurator.UseInboundConnections(UserAgent: TIdSipAbstractCore;
