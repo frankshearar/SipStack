@@ -48,6 +48,7 @@ type
     procedure OnReferral(Session: TIdSipSession;
                          Refer: TIdSipRequest;
                          Binding: TIdConnectionBindings);
+    procedure OnTerminated(Action: TIdSipAction);
     procedure ReceiveMovedTemporarily(Invite: TIdSipRequest;
                                       const Contacts: array of String); overload;
     procedure ReceiveMovedTemporarily(const Contacts: array of String); overload;
@@ -970,6 +971,13 @@ procedure TestDebug.OnModifiedSession(Session: TIdSipSession;
 begin
 end;
 
+procedure TestDebug.OnNetworkFailure(Action: TIdSipAction;
+                                     ErrorCode: Cardinal;
+                                     const Reason: String);
+begin
+  Self.FailReason := Reason;
+end;
+
 procedure TestDebug.OnProgressedSession(Session: TIdSipSession;
                                         Progress: TIdSipResponse);
 begin
@@ -981,11 +989,8 @@ procedure TestDebug.OnReferral(Session: TIdSipSession;
 begin
 end;
 
-procedure TestDebug.OnNetworkFailure(Action: TIdSipAction;
-                                     ErrorCode: Cardinal;
-                                     const Reason: String);
+procedure TestDebug.OnTerminated(Action: TIdSipAction);
 begin
-  Self.FailReason := Reason;
 end;
 
 procedure TestDebug.ReceiveMovedTemporarily(Invite: TIdSipRequest;
@@ -1830,6 +1835,7 @@ procedure TestTIdSipOutboundCancel.TestResendWithAuthForSameRealm;
 begin
   // CANCELs MUST NOT be challenged, and if they are we mustn't resubmit them.
   // This test's behaviour would just copy TestResend anyway.
+  Check(true, 'This check simply stops "Empty Test" failures');
 end;
 
 procedure TestTIdSipOutboundCancel.TestResendWithProxyAuth;
