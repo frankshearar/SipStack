@@ -175,6 +175,7 @@ type
                        Event: TIdWait); override;
     function  EventAt(Index: Integer): TIdWait; override;
     function  EventCount: Integer;
+    function  EventCountFor(WaitType: TIdWaitClass; CountSubclasses: Boolean = false): Integer;
     function  FirstEventScheduledFor(Event: Pointer): TIdWait;
     function  LastEventScheduled: TIdWait; overload;
     function  LastEventScheduled(WaitType: TIdWaitClass): TIdWait; overload;
@@ -725,6 +726,29 @@ function TIdDebugTimerQueue.EventCount: Integer;
 begin
   Self.LockTimer;
   try
+    Result := Self.EventList.Count;
+  finally
+    Self.UnlockTimer;
+  end;
+end;
+
+function TIdDebugTimerQueue.EventCountFor(WaitType: TIdWaitClass; CountSubclasses: Boolean = false): Integer;
+var
+  I: Integer;
+begin
+  Result := 0;
+
+  Self.LockTimer;
+  try
+    for I := 0 to Self.EventList.Count - 1 do
+      if CountSubclasses then begin
+        if (Self.EventAt(I) is WaitType) then
+          Inc(Result);
+      end
+      else begin
+        if (Self.EventAt(I).ClassName = WaitType.ClassName) then
+          Inc(Result);
+      end;
     Result := Self.EventList.Count;
   finally
     Self.UnlockTimer;
