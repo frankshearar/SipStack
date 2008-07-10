@@ -236,6 +236,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAddAndCount;
+    procedure TestAddPreventsDuplicates;
     procedure TestConnectionFor;
     procedure TestConnectionForOneEntry;
     procedure TestConnectionForOnEmptyList;
@@ -244,6 +245,7 @@ type
     procedure TestRemove;
     procedure TestRemoveOnEmptyList;
     procedure TestRemoveOnNonEmptyList;
+    procedure TestRemoveWithMultipleRequests;
   end;
 
   TTcpTransportWaitTestCase = class(TTestCase)
@@ -1890,6 +1892,18 @@ begin
   CheckEquals(Count + 1, Self.Table.Count, 'No entry added');
 end;
 
+procedure TestTIdSipConnectionTable.TestAddPreventsDuplicates;
+var
+  Count: Integer;
+begin
+  Count := Self.Table.Count;
+
+  Self.Table.Add(Self.Conn, Self.Req);
+  Self.Table.Add(Self.Conn, Self.Req);
+
+  CheckEquals(Count + 1, Self.Table.Count, 'Duplicate entry added');
+end;
+
 procedure TestTIdSipConnectionTable.TestConnectionFor;
 begin
   Self.Table.Add(Self.Conn,    Self.Req);
@@ -1947,8 +1961,8 @@ var
 begin
   Count := Self.Table.Count;
 
-  Self.Table.Add(Conn, Req);
-  Self.Table.Remove(Conn);
+  Self.Table.Add(Self.Conn, Self.Req);
+  Self.Table.Remove(Self.Conn);
   CheckEquals(Count, Self.Table.Count, 'No entry removed');
 end;
 
@@ -1962,14 +1976,27 @@ var
   Count: Integer;
 begin
   Self.Table.Add(Self.Conn, Self.Req);
-  Self.Table.Add(NewConn, NewReq);
+  Self.Table.Add(Self.NewConn, NewReq);
 
   Count := Self.Table.Count;
 
-  Self.Table.Remove(NewConn);
+  Self.Table.Remove(Self.NewConn);
 
   CheckEquals(Count - 1, Self.Table.Count, 'Nothing was removed');
   Check(Self.Table.ConnectionFor(Self.Req) = Self.Conn, 'Wrong entry removed (ConnectionFor)');
+end;
+
+procedure TestTIdSipConnectionTable.TestRemoveWithMultipleRequests;
+var
+  OldCount: Integer;
+begin
+  OldCount := Self.Table.Count;
+
+  Self.Table.Add(Self.Conn, Self.Req);
+  Self.Table.Add(Self.Conn, Self.NewReq);
+
+  Self.Table.Remove(Self.Conn);
+  CheckEquals(OldCount, Self.Table.Count, 'Not all request-connection associations removed');
 end;
 
 //******************************************************************************

@@ -237,6 +237,8 @@ type
     List: TObjectList;
 
     function EntryAt(Index: Integer): TIdSipConnectionTableEntry;
+    function FindEntry(Connection: TIdTCPConnection;
+                       Request:    TIdSipRequest): TIdSipConnectionTableEntry;
   public
     constructor Create;
     destructor  Destroy; override;
@@ -1161,8 +1163,12 @@ end;
 function TIdSipConnectionTable.Add(Connection: TIdTCPConnection;
                                    Request:    TIdSipRequest): TIdSipConnectionTableEntry;
 begin
-  Result := TIdSipConnectionTableEntry.Create(Connection, Request);
-  Self.List.Add(Result);
+  Result := Self.FindEntry(Connection, Request);
+
+  if not Assigned(Result) then begin
+    Result := TIdSipConnectionTableEntry.Create(Connection, Request);
+    Self.List.Add(Result);
+  end;
 end;
 
 function TIdSipConnectionTable.ConnectionEntry(Connection: TIdTCPConnection): TIdSipConnectionTableEntry;
@@ -1235,17 +1241,14 @@ end;
 
 procedure TIdSipConnectionTable.Remove(Connection: TIdTCPConnection);
 var
-  Count: Integer;
   I: Integer;
 begin
   I := 0;
-  Count := Self.List.Count;
-  while (I < Count)
-    and (Self.EntryAt(I).Connection <> Connection) do
-    Inc(I);
-
-  if (I < Count) then
-    Self.List.Delete(I);
+  while (I < Self.List.Count) do begin
+    if (Self.EntryAt(I).Connection = Connection) then
+      Self.List.Delete(I)
+    else Inc(I);
+  end;
 end;
 
 //* TIdSipConnectionTable Private methods **************************************
@@ -1253,6 +1256,24 @@ end;
 function TIdSipConnectionTable.EntryAt(Index: Integer): TIdSipConnectionTableEntry;
 begin
   Result := Self.List[Index] as TIdSipConnectionTableEntry;
+end;
+
+function TIdSipConnectionTable.FindEntry(Connection: TIdTCPConnection;
+                                         Request:    TIdSipRequest): TIdSipConnectionTableEntry;
+var
+  E: TIdSipConnectionTableEntry;
+  I: Integer;
+begin
+  Result := nil;
+
+  I := 0;
+  while (Result = nil) and (I < Self.List.Count) do begin
+    E := Self.EntryAt(I);
+    if E.Request.Equals(Request) and (E.Connection = Connection) then
+      Result := E;
+
+    Inc(I);
+  end;
 end;
 
 //******************************************************************************
