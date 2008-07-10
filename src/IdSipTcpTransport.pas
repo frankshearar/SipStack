@@ -428,41 +428,54 @@ procedure TIdSipTCPTransport.SendMessage(Msg: TIdSipMessage;
                                          Dest: TIdConnectionBindings);
 var
   Connection:  TIdTCPConnection;
+  LocBinding:  TIdConnectionBindings;
   Table:       TIdSipConnectionTable;
 begin
-  Table := Self.ConnectionMap.LockList;
+  LocBinding := Dest.Copy;
   try
-    // Try send the response down the same connection on which we received the
-    // request.
-    Connection := Table.ConnectionFor(Msg);
+    Table := Self.ConnectionMap.LockList;
+    try
+      // Try send the response down the same connection on which we received the
+      // request.
+      Connection := Table.ConnectionFor(Msg);
 
-    // Otherwise, try find an existing connection to Dest.
-    if not Assigned(Connection) then
-      Connection := Table.ConnectionFor(Dest);
+      // Otherwise, try find an existing connection to Dest.
+      if not Assigned(Connection) then
+        Connection := Table.ConnectionFor(Dest);
 
-    if Assigned(Connection) and Connection.Connected then begin
-      Dest.LocalIP   := Connection.Socket.Binding.IP;
-
-      // Outbound connections have an ephemeral local port, and we MUST be
-      // prepared to accept connections at the port listed in a Via header
-      // we generate (cf. RFC 3261, section 18.1.1). We don't really care which
-      // binding's port we use, as long as the port's on the same IP address.
-      if Self.OutboundConnection(Connection) then
-        Dest.LocalPort := Self.FirstServerPortFor(Dest.LocalIP)
-      else
+      if Assigned(Connection) and Connection.Connected then begin
+        Dest.LocalIP   := Connection.Socket.Binding.IP;
         Dest.LocalPort := Connection.Socket.Binding.Port;
 
-      if Msg.LastHop.IsUnset then
-        Msg.RewriteLocationHeaders(Dest);
+        LocBinding.LocalIP := Connection.Socket.Binding.IP;
 
-      Self.WriteMessageTo(Msg, Connection)
-    end
-    else begin
-      // Last resort: make a new connection to Dest.
-      Self.SendMessageTo(Msg, Dest);
+        // Outbound connections have an ephemeral local port, and we MUST be
+        // prepared to accept connections at the port listed in a Via header
+        // we generate (cf. RFC 3261, section 18.1.1). We don't really care which
+        // binding's port we use, as long as the port's on the same IP address.
+        //
+        // We use a special local variable - LocBinding - for storing this info
+        // because Dest contains the real binding info that the superclass uses
+        // to log the message send.
+        if Self.OutboundConnection(Connection) then
+          LocBinding.LocalPort := Self.FirstServerPortFor(Dest.LocalIP)
+        else
+          LocBinding.LocalPort := Connection.Socket.Binding.Port;
+
+        if Msg.LastHop.IsUnset then
+          Msg.RewriteLocationHeaders(LocBinding);
+
+        Self.WriteMessageTo(Msg, Connection)
+      end
+      else begin
+        // Last resort: make a new connection to Dest.
+        Self.SendMessageTo(Msg, Dest);
+      end;
+    finally
+      Self.ConnectionMap.UnlockList;
     end;
   finally
-    Self.ConnectionMap.UnlockList;
+    LocBinding.Free;
   end;
 end;
 
