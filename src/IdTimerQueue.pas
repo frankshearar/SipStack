@@ -749,7 +749,6 @@ begin
         if (Self.EventAt(I).ClassName = WaitType.ClassName) then
           Inc(Result);
       end;
-    Result := Self.EventList.Count;
   finally
     Self.UnlockTimer;
   end;
