@@ -4164,9 +4164,7 @@ const
   SecondProxy        = 'sip:10.0.0.1';
   SecondTarget       = '192.168.0.1';
 var
-  ExpectedLocal:  TIdSipRoutePath;
-  ExpectedSubnet: TIdSipRoutePath;
-  UA:             TIdSipUserAgent;
+  UA: TIdSipUserAgent;
 begin
   Self.Configuration.Add('Route: <' + FirstProxy + '> ' + FirstAddressSpace);
   Self.Configuration.Add('Route: <' + SecondProxy + '> ' + SecondAddressSpace);
