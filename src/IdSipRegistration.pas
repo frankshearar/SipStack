@@ -186,7 +186,7 @@ type
   // OnFailure and OnSuccess, apart from the obvious, tell you that the
   // registration agent has terminated, and that you should remove all
   // of your references to it.
-  IIdSipRegistrationListener = interface(IIdSipActionListener)
+  IIdSipRegistrationListener = interface
     ['{D3FA9A3D-ED8A-48D3-8068-38E8F9EE2140}']
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistrationBase;
                         ErrorCode: Cardinal;
@@ -227,7 +227,6 @@ type
   // I implement that functionality necessary for a User Agent to issue REGISTER
   // messages, that is, to register with a registrar.
   TIdSipOutboundRegisterModule = class(TIdSipMessageModule,
-                                       IIdSipActionListener,
                                        IIdSipRegistrationListener)
   private
     fAutoReRegister: Boolean;
@@ -236,14 +235,9 @@ type
     fRequireGRUU:    Boolean;
     KnownRegistrars: TIdSipRegistrations;
 
-    procedure OnAuthenticationChallenge(Action: TIdSipAction;
-                                        Challenge: TIdSipResponse);
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistrationBase;
                         ErrorCode: Cardinal;
                         const Reason: String);
-    procedure OnNetworkFailure(Action: TIdSipAction;
-                               ErrorCode: Cardinal;
-                               const Reason: String);
     procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistrationBase;
                         CurrentBindings: TIdSipContacts);
     procedure SetRegistrar(Value: TIdSipUri);
@@ -1314,25 +1308,12 @@ end;
 
 //* TIdSipOutboundRegisterModule Private methods *******************************
 
-procedure TIdSipOutboundRegisterModule.OnAuthenticationChallenge(Action: TIdSipAction;
-                                                                 Challenge: TIdSipResponse);
-begin
-  // Do nothing.
-end;
-
 procedure TIdSipOutboundRegisterModule.OnFailure(RegisterAgent: TIdSipOutboundRegistrationBase;
                                                  ErrorCode: Cardinal;
                                                  const Reason: String);
 begin
   // Do nothing: only successful REGISTERs alter bindings.
   RegisterAgent.RemoveListener(Self);
-end;
-
-procedure TIdSipOutboundRegisterModule.OnNetworkFailure(Action: TIdSipAction;
-                                                        ErrorCode: Cardinal;
-                                                        const Reason: String);
-begin
-  // Do nothing.
 end;
 
 procedure TIdSipOutboundRegisterModule.OnSuccess(RegisterAgent: TIdSipOutboundRegistrationBase;
