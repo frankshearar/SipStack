@@ -21,7 +21,6 @@ type
 
   TIdSipUserAgent = class(TIdSipAbstractCore,
                           IIdSipInviteModuleListener,
-                          IIdSipActionListener,
                           IIdSipRegistrationListener)
   private
     ContactClosestToRegistrar: TIdSipContactHeader;
@@ -40,16 +39,11 @@ type
     function  GetUsername: String;
     function  FirstResolvedName(FQDN: String): String;
     function  LocalContactNeverSet: Boolean;
-    procedure OnAuthenticationChallenge(Action: TIdSipAction;
-                                        Challenge: TIdSipResponse);
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistrationBase;
                         ErrorCode: Cardinal;
                         const Reason: String);
     procedure OnInboundCall(UserAgent: TIdSipInviteModule;
                             Session: TIdSipInboundSession);
-    procedure OnNetworkFailure(Action: TIdSipAction;
-                               ErrorCode: Cardinal;
-                               const Reason: String);
     procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistrationBase;
                         CurrentBindings: TIdSipContacts);
     procedure SetDoNotDisturb(Value: Boolean);
@@ -744,12 +738,6 @@ begin
   Result := Self.ContactClosestToRegistrar.IsUnset;
 end;
 
-procedure TIdSipUserAgent.OnAuthenticationChallenge(Action: TIdSipAction;
-                                                    Challenge: TIdSipResponse);
-begin
-  // Do nothing.
-end;
-
 procedure TIdSipUserAgent.OnFailure(RegisterAgent: TIdSipOutboundRegistrationBase;
                                     ErrorCode: Cardinal;
                                     const Reason: String);
@@ -760,13 +748,6 @@ procedure TIdSipUserAgent.OnInboundCall(UserAgent: TIdSipInviteModule;
                                         Session: TIdSipInboundSession);
 begin
   // For now, do nothing.
-end;
-
-procedure TIdSipUserAgent.OnNetworkFailure(Action: TIdSipAction;
-                                           ErrorCode: Cardinal;
-                                           const Reason: String);
-begin
-  // Do nothing.
 end;
 
 procedure TIdSipUserAgent.OnSuccess(RegisterAgent: TIdSipOutboundRegistrationBase;
