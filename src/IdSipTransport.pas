@@ -1285,7 +1285,7 @@ begin
   if (Index <> ItemNotFoundIndex) then
     Result := Self.TransportTypeAt(Index)
   else
-    raise EUnknownTransport.Create('TIdSipTransportRegistry.TransportTypeFor: ' + Transport);
+    raise EUnknownTransport.Create(Format('TIdSipTransportRegistry.TransportTypeFor: "%s"', [Transport]));
 end;
 
 class procedure TIdSipTransportRegistry.UnregisterTransportType(const Name: String);
