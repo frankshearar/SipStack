@@ -146,6 +146,7 @@ type
     procedure TestIsRegistration; override;
     procedure TestIsSession; override;
     procedure TestMethod;
+    procedure TestTerminateSignalled; override;
   end;
 
   TestTIdSipOutboundRegisterBase = class(TestTIdSipRegistration,
@@ -330,6 +331,7 @@ type
                                const Reason: String);
     procedure OnRemoveAction(UserAgent: TIdSipAbstractCore;
                              Action: TIdSipAction);
+    procedure OnTerminated(Action: TIdSipAction);
   public
     constructor Create; override;
 
@@ -1521,6 +1523,11 @@ begin
   CheckEquals(MethodRegister,
               Self.RegisterAction.Method,
               'Inbound registration; Method');
+end;
+
+procedure TestTIdSipInboundRegistration.TestTerminateSignalled;
+begin
+  Check(true, 'TIdSipInboundRegistration terminates as soon as it receives a message: you can''t attach a listener to it. Thus this test makes no sense.');
 end;
 
 //******************************************************************************
@@ -2829,6 +2836,10 @@ begin
       Self.fExceptionMessage := E.Message;
     end;
   end;
+end;
+
+procedure TExceptionCatchingActionListener.OnTerminated(Action: TIdSipAction);
+begin
 end;
 
 initialization

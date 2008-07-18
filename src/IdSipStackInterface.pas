@@ -181,7 +181,7 @@ type
                                     Subscription: TIdSipInboundSubscription);
     procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistrationBase;
                         CurrentBindings: TIdSipContacts);
-
+    procedure OnTerminated(Action: TIdSipAction);
     procedure RemoveAction(Handle: TIdSipHandle);
     procedure SendAction(Action: TIdSipAction);
     procedure StopListeningToAllTransports;
@@ -2463,6 +2463,10 @@ begin
   finally
     Data.Free;
   end;
+end;
+
+procedure TIdSipStackInterface.OnTerminated(Action: TIdSipAction);
+begin
 end;
 
 procedure TIdSipStackInterface.RemoveAction(Handle: TIdSipHandle);

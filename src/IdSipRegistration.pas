@@ -409,10 +409,7 @@ type
     property IsWildCard: Boolean read fIsWildCard write fIsWildCard;
   end;
 
-  TIdSipOutboundRegistrationBase = class(TIdSipRegistration,
-                                         IIdSipActionListener,
-                                         IIdSipOwnedActionListener,
-                                         IIdSipActionRedirectorListener)
+  TIdSipOutboundRegistrationBase = class(TIdSipRegistration)
   private
     ChallengedAction:      TIdSipAction;
     fBindings:             TIdSipContacts;
@@ -421,28 +418,6 @@ type
     Redirector:            TIdSipActionRedirector;
     RegistrationListeners: TIdNotificationList;
 
-    procedure OnAuthenticationChallenge(Action: TIdSipAction;
-                                        Challenge: TIdSipResponse);
-    procedure OnFailure(Action: TIdSipAction;
-                        Response: TIdSipResponse;
-                        const Reason: String); overload;
-    procedure OnFailure(Redirector: TIdSipActionRedirector;
-                        Response: TIdSipResponse); overload;
-    procedure OnNetworkFailure(Action: TIdSipAction;
-                               ErrorCode: Cardinal;
-                               const Reason: String); overload;
-    procedure OnNewAction(Redirector: TIdSipActionRedirector;
-                          NewAction: TIdSipAction);
-    procedure OnRedirect(Action: TIdSipAction;
-                         Redirect: TIdSipResponse);
-    procedure OnRedirectFailure(Redirector: TIdSipActionRedirector;
-                                ErrorCode: Cardinal;
-                                const Reason: String); overload;
-    procedure OnSuccess(Action: TIdSipAction;
-                        Msg: TIdSipMessage); overload;
-    procedure OnSuccess(Redirector: TIdSipActionRedirector;
-                        SuccessfulAction: TIdSipAction;
-                        Response: TIdSipResponse); overload;
     procedure SetBindings(Value: TIdSipContacts);
     procedure SetRegistrar(Value: TIdSipUri);
   protected
@@ -453,6 +428,21 @@ type
     procedure NotifyOfFailure(ErrorCode: Cardinal;
                               const Reason: String); reintroduce; // TODO: Not all Actions will fail from a Response
     procedure NotifyOfSuccess(Response: TIdSipMessage); virtual;
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Challenge: TIdSipResponse); override;
+    procedure OnFailure(Redirector: TIdSipActionRedirector;
+                        Response: TIdSipResponse); override;
+    procedure OnNetworkFailure(Action: TIdSipAction;
+                               ErrorCode: Cardinal;
+                               const Reason: String); override;
+    procedure OnRedirect(Action: TIdSipAction;
+                         Redirect: TIdSipResponse); override;
+    procedure OnRedirectFailure(Redirector: TIdSipActionRedirector;
+                                ErrorCode: Cardinal;
+                                const Reason: String); override;
+    procedure OnSuccess(Redirector: TIdSipActionRedirector;
+                        SuccessfulAction: TIdSipAction;
+                        Response: TIdSipResponse); overload; override;
   public
     destructor Destroy; override;
 
@@ -2167,20 +2157,11 @@ begin
   Self.Terminate;
 end;
 
-//* TIdSipOutboundRegistrationBase Private methods *****************************
-
 procedure TIdSipOutboundRegistrationBase.OnAuthenticationChallenge(Action: TIdSipAction;
                                                                    Challenge: TIdSipResponse);
 begin
   Self.ChallengedAction := Action;
   Self.NotifyOfAuthenticationChallenge(Challenge);
-end;
-
-procedure TIdSipOutboundRegistrationBase.OnFailure(Action: TIdSipAction;
-                                                   Response: TIdSipResponse;
-                                                   const Reason: String);
-begin
-  Action.RemoveActionListener(Self);
 end;
 
 procedure TIdSipOutboundRegistrationBase.OnFailure(Redirector: TIdSipActionRedirector;
@@ -2193,16 +2174,7 @@ procedure TIdSipOutboundRegistrationBase.OnNetworkFailure(Action: TIdSipAction;
                                                           ErrorCode: Cardinal;
                                                           const Reason: String);
 begin
-  Action.RemoveActionListener(Self);
-
   Self.NotifyOfNetworkFailure(ErrorCode, Reason);
-end;
-
-procedure TIdSipOutboundRegistrationBase.OnNewAction(Redirector: TIdSipActionRedirector;
-                                                     NewAction: TIdSipAction);
-begin
-  NewAction.AddActionListener(Self);
-  (NewAction as TIdSipOwnedAction).AddOwnedActionListener(Self);
 end;
 
 procedure TIdSipOutboundRegistrationBase.OnRedirect(Action: TIdSipAction;
@@ -2218,18 +2190,14 @@ begin
   Self.NotifyOfFailure(ErrorCode, Reason);
 end;
 
-procedure TIdSipOutboundRegistrationBase.OnSuccess(Action: TIdSipAction;
-                                                   Msg: TIdSipMessage);
-begin
-  Action.RemoveActionListener(Self);
-end;
-
 procedure TIdSipOutboundRegistrationBase.OnSuccess(Redirector: TIdSipActionRedirector;
                                                    SuccessfulAction: TIdSipAction;
                                                    Response: TIdSipResponse);
 begin
   Self.NotifyOfSuccess(Response);
 end;
+
+//* TIdSipOutboundRegistrationBase Private methods *****************************
 
 procedure TIdSipOutboundRegistrationBase.SetBindings(Value: TIdSipContacts);
 begin

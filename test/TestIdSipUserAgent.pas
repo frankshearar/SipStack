@@ -83,6 +83,7 @@ type
                          Binding: TIdConnectionBindings);
     procedure OnRemoveAction(UserAgent: TIdSipAbstractCore;
                              Action: TIdSipAction);
+    procedure OnTerminated(Action: TIdSipAction);
     procedure ReceiveBye(Dialog: TIdSipDialog);
   protected
     procedure OnSendRequest(Request: TIdSipRequest;
@@ -728,6 +729,10 @@ procedure TestTIdSipUserAgent.OnRemoveAction(UserAgent: TIdSipAbstractCore;
                                              Action: TIdSipAction);
 begin
   // Do nothing.
+end;
+
+procedure TestTIdSipUserAgent.OnTerminated(Action: TIdSipAction);
+begin
 end;
 
 procedure TestTIdSipUserAgent.ReceiveBye(Dialog: TIdSipDialog);

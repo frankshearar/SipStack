@@ -287,11 +287,18 @@ type
     procedure TestTrigger;
   end;
 
-  TestTIdSipActionAuthenticationChallengeMethod = class(TActionMethodTestCase)
-  private
+  TPlainActionMethodTestCase = class(TActionMethodTestCase)
+  protected
     Action:   TIdSipAction;
     Listener: TIdSipTestActionListener;
-    Method:   TIdSipActionAuthenticationChallengeMethod;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSipActionAuthenticationChallengeMethod = class(TPlainActionMethodTestCase)
+  private
+    Method: TIdSipActionAuthenticationChallengeMethod;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -299,13 +306,21 @@ type
     procedure TestRun;
   end;
 
-  TestTIdSipActionNetworkFailureMethod = class(TActionMethodTestCase)
+  TestTIdSipActionNetworkFailureMethod = class(TPlainActionMethodTestCase)
   private
-    Action:    TIdSipAction;
     ErrorCode: Cardinal;
-    Listener:  TIdSipTestActionListener;
     Method:    TIdSipActionNetworkFailureMethod;
     Reason:    String;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TestTIdSipActionTerminatedMethod = class(TPlainActionMethodTestCase)
+  private
+    Method: TIdSipActionTerminatedMethod;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -501,6 +516,7 @@ begin
   Result.AddTest(TestTIdSipActionTerminateWait.Suite);
   Result.AddTest(TestTIdSipActionAuthenticationChallengeMethod.Suite);
   Result.AddTest(TestTIdSipActionNetworkFailureMethod.Suite);
+  Result.AddTest(TestTIdSipActionTerminatedMethod.Suite);
   Result.AddTest(TestTIdSipOwnedActionFailureMethod.Suite);
   Result.AddTest(TestTIdSipOwnedActionRedirectMethod.Suite);
   Result.AddTest(TestTIdSipOwnedActionSuccessMethod.Suite);
@@ -3230,11 +3246,11 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipActionAuthenticationChallengeMethod                              *
+//* TPlainActionMethodTestCase                                                 *
 //******************************************************************************
-//* TestTIdSipActionAuthenticationChallengeMethod Public methods ***************
+//* TPlainActionMethodTestCase Public methods **********************************
 
-procedure TestTIdSipActionAuthenticationChallengeMethod.SetUp;
+procedure TPlainActionMethodTestCase.SetUp;
 var
   Nowhere: TIdSipAddressHeader;
 begin
@@ -3248,6 +3264,23 @@ begin
   end;
 
   Self.Listener := TIdSipTestActionListener.Create;
+end;
+
+procedure TPlainActionMethodTestCase.TearDown;
+begin
+  Self.Listener.Free;
+
+  inherited TearDown;
+end;
+
+//******************************************************************************
+//* TestTIdSipActionAuthenticationChallengeMethod                              *
+//******************************************************************************
+//* TestTIdSipActionAuthenticationChallengeMethod Public methods ***************
+
+procedure TestTIdSipActionAuthenticationChallengeMethod.SetUp;
+begin
+  inherited SetUp;
 
   Self.Method := TIdSipActionAuthenticationChallengeMethod.Create;
   Self.Method.ActionAgent := Self.Action;
@@ -3257,7 +3290,6 @@ end;
 procedure TestTIdSipActionAuthenticationChallengeMethod.TearDown;
 begin
   Self.Method.Free;
-  Self.Listener.Free;
 
   inherited TearDown;
 end;
@@ -3282,20 +3314,10 @@ end;
 //* TestTIdSipActionNetworkFailureMethod Public methods ************************
 
 procedure TestTIdSipActionNetworkFailureMethod.SetUp;
-var
-  Nowhere: TIdSipAddressHeader;
 begin
   inherited SetUp;
 
-  Nowhere := TIdSipAddressHeader.Create;
-  try
-    Self.Action := Self.UA.QueryOptions(Nowhere);
-  finally
-    Nowhere.Free;
-  end;
-
-  Self.Listener := TIdSipTestActionListener.Create;
-  Self.Method   := TIdSipActionNetworkFailureMethod.Create;
+  Self.Method := TIdSipActionNetworkFailureMethod.Create;
 
   Self.ErrorCode := 13;
   Self.Reason    := 'The most random number';
@@ -3308,7 +3330,6 @@ end;
 procedure TestTIdSipActionNetworkFailureMethod.TearDown;
 begin
   Self.Method.Free;
-  Self.Listener.Free;
 
   inherited TearDown;
 end;
@@ -3329,6 +3350,37 @@ begin
   CheckEquals(Self.Reason,
               Self.Listener.ReasonParam,
             'Reason');
+end;
+
+//******************************************************************************
+//* TestTIdSipActionTerminatedMethod                                           *
+//******************************************************************************
+//* TestTIdSipActionTerminatedMethod Public methods ****************************
+
+procedure TestTIdSipActionTerminatedMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Method := TIdSipActionTerminatedMethod.Create;
+  Self.Method.ActionAgent := Self.Action;
+end;
+
+procedure TestTIdSipActionTerminatedMethod.TearDown;
+begin
+  Self.Method.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipActionTerminatedMethod Published methods *************************
+
+procedure TestTIdSipActionTerminatedMethod.TestRun;
+begin
+  Self.Method.Run(Self.Listener);
+
+  Check(Self.Listener.Terminated, 'Listener not notified of termination');
+  Check(Self.Action = Self.Listener.ActionParam,
+        'Action param');
 end;
 
 //******************************************************************************

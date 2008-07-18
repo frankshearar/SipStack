@@ -54,6 +54,7 @@ type
     procedure TestIsSession; override;
     procedure TestOptions;
     procedure TestOptionsWhenDoNotDisturb;
+    procedure TestTerminateSignalled; override;
   end;
 
   TestTIdSipOutboundOptions = class(TestTIdSipOptionsAction,
@@ -379,6 +380,11 @@ begin
   finally
     NewOptions.Free;
   end;
+end;
+
+procedure TestTIdSipInboundOptions.TestTerminateSignalled;
+begin
+  Check(true, 'TIdSipInboundOptions terminates as soon as it receives a message: you can''t attach a listener to it. Thus this test makes no sense.');
 end;
 
 //******************************************************************************

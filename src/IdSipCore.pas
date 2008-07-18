@@ -92,6 +92,7 @@ type
     procedure OnNetworkFailure(Action: TIdSipAction;
                                ErrorCode: Cardinal;
                                const Reason: String);
+    procedure OnTerminated(Action: TIdSipAction);
   end;
 
   // In OnSuccess we use a TIdSipMessage because, for instance,
@@ -163,6 +164,7 @@ type
     procedure DeleteAction(Index: Integer);
     function  FindAction(Msg: TIdSipMessage; ClientAction: Boolean): TIdSipAction; overload;
     function  FindAction(const ActionID: String): TIdSipAction; overload;
+    procedure MarkAllActionsAsTerminated;
   public
     constructor Create;
     destructor  Destroy; override;
@@ -713,6 +715,7 @@ type
     procedure NotifyOfFailure(Response: TIdSipResponse); virtual;
     procedure NotifyOfNetworkFailure(ErrorCode: Cardinal;
                                      const Reason: String); virtual;
+    procedure NotifyOfTermination;
     function  ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionResult; virtual;
     function  ReceiveGlobalFailureResponse(Response: TIdSipResponse): TIdSipActionResult; virtual;
 
@@ -817,16 +820,6 @@ type
     property OriginalRequest: TIdSipRequest       read fOriginalRequest write SetOriginalRequest;
   end;
 
-  // I represent an action that uses owned actions to accomplish something. My
-  // subclasses, for instance, use owned actions to handle redirection
-  // responses.
-  TIdSipOwningAction = class(TIdSipAction)
-  public
-    function CreateInitialAction: TIdSipOwnedAction; virtual;
-    function CreateRedirectedAction(OriginalRequest: TIdSipRequest;
-                                    Contact: TIdSipContactHeader): TIdSipOwnedAction; virtual;
-  end;
-
   TIdSipActionRedirector = class;
   // * OnNewAction allows you to manipulate the new attempt to send a message.
   //   For instance, it allows you to listen for OnDialogEstablished
@@ -851,6 +844,52 @@ type
     procedure OnSuccess(Redirector: TIdSipActionRedirector;
                         SuccessfulAction: TIdSipAction;
                         Response: TIdSipResponse);
+  end;
+
+  // I represent an action that uses owned actions to accomplish something. My
+  // subclasses, for instance, use owned actions to handle redirection
+  // responses.
+  TIdSipOwningAction = class(TIdSipAction,
+                             IIdSipActionListener,
+                             IIdSipActionRedirectorListener,
+                             IIdSipOwnedActionListener)
+  private
+    ListeningTo: TObjectList;
+  protected
+    procedure AddSelfAsListenerTo(Action: TIdSipAction); virtual;
+    procedure Initialise(UA: TIdSipAbstractCore;
+                         Request: TIdSipRequest;
+                         Binding: TIdConnectionBindings); override;
+
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Response: TIdSipResponse); virtual;
+    procedure OnFailure(Action: TIdSipAction;
+                        Response: TIdSipResponse;
+                        const Reason: String); overload; virtual;
+    procedure OnFailure(Redirector: TIdSipActionRedirector;
+                        Response: TIdSipResponse); overload; virtual;
+    procedure OnNetworkFailure(Action: TIdSipAction;
+                               ErrorCode: Cardinal;
+                               const Reason: String); virtual;
+    procedure OnNewAction(Redirector: TIdSipActionRedirector;
+                          NewAction: TIdSipAction); virtual;
+    procedure OnRedirect(Action: TIdSipAction;
+                         Redirect: TIdSipResponse); virtual;
+    procedure OnRedirectFailure(Redirector: TIdSipActionRedirector;
+                                ErrorCode: Cardinal;
+                                const Reason: String); virtual;
+    procedure OnSuccess(Action: TIdSipAction;
+                        Msg: TIdSipMessage); overload; virtual;
+    procedure OnSuccess(Redirector: TIdSipActionRedirector;
+                        SuccessfulAction: TIdSipAction;
+                        Response: TIdSipResponse); overload; virtual;
+    procedure OnTerminated(Action: TIdSipAction); virtual;
+  public
+    destructor Destroy; override;
+
+    function CreateInitialAction: TIdSipOwnedAction; virtual;
+    function CreateRedirectedAction(OriginalRequest: TIdSipRequest;
+                                    Contact: TIdSipContactHeader): TIdSipOwnedAction; virtual;
   end;
 
   // I encapsulate the logic surrounding receiving 3xx class responses to a
@@ -891,6 +930,7 @@ type
                          Redirect: TIdSipResponse);
     procedure OnSuccess(Action: TIdSipAction;
                         Response: TIdSipMessage);
+    procedure OnTerminated(Action: TIdSipAction);
     procedure RemoveFinishedRedirectedInvite(Agent: TIdSipAction);
     procedure TerminateAllRedirects;
   public
@@ -936,6 +976,11 @@ type
 
     property ErrorCode: Cardinal read fErrorCode write fErrorCode;
     property Reason:    String   read fReason write fReason;
+  end;
+
+  TIdSipActionTerminatedMethod = class(TIdSipActionMethod)
+  public
+    procedure Run(const Subject: IInterface); override;
   end;
 
   TIdSipOwnedActionMethod = class(TIdSipActionMethod)
@@ -1223,6 +1268,8 @@ end;
 destructor TIdSipActions.Destroy;
 begin
   Self.Observed.Free;
+
+  Self.MarkAllActionsAsTerminated;
   Self.Actions.Free;
 
   inherited Destroy;
@@ -1560,6 +1607,25 @@ begin
     raise ERegistry.Create(ActionID + ' does not point to a TIdSipAction, but a ' + Action.ClassName);
 
   Result := Action as TIdSipAction;
+end;
+
+procedure TIdSipActions.MarkAllActionsAsTerminated;
+var
+  I: Integer;
+begin
+  // Some Actions listen to others. By first marking all Actions as Terminated,
+  // the listened-to Actions can tell their Listeners to _stop_ listening. Thus,
+  // those Actions that need to keep track of which actions they listen to, can
+  // safely remove themselves as Listeners.
+  //
+  // Another possibility is keeping the Actions in "reverse topological order" -
+  // the Action at index N listens only to Actions with index > N. Sounds
+  // horrible! Hm, one could REMOVE actions in reverse topological order: while
+  // we still have actions, remove those actions which have no listeners. Each
+  // iteration causes a cascade of Listener removal.
+
+  for I := 0 to Self.Count - 1 do
+    Self.ActionAt(I).MarkAsTerminated;
 end;
 
 //******************************************************************************
@@ -3824,6 +3890,8 @@ end;
 procedure TIdSipAction.MarkAsTerminated;
 begin
   Self.fIsTerminated := true;
+
+  Self.NotifyOfTermination;
 end;
 
 procedure TIdSipAction.NotifyOfAuthenticationChallenge(Challenge: TIdSipResponse);
@@ -3864,6 +3932,20 @@ begin
   end;
 
   Self.MarkAsTerminated;
+end;
+
+procedure TIdSipAction.NotifyOfTermination;
+var
+  Notification: TIdSipActionTerminatedMethod;
+begin
+  Notification := TIdSipActionTerminatedMethod.Create;
+  try
+    Notification.ActionAgent := Self;
+
+    Self.ActionListeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
 end;
 
 function TIdSipAction.ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionResult;
@@ -4329,6 +4411,18 @@ end;
 //******************************************************************************
 //* TIdSipOwningAction Public methods ******************************************
 
+destructor TIdSipOwningAction.Destroy;
+var
+  I: Integer;
+begin
+  for I := 0 to Self.ListeningTo.Count - 1 do
+    (Self.ListeningTo[I] as TIdSipAction).RemoveActionListener(Self);
+
+  Self.ListeningTo.Free;
+
+  inherited Destroy;
+end;
+
 function TIdSipOwningAction.CreateInitialAction: TIdSipOwnedAction;
 begin
   raise Exception.Create(Self.ClassName
@@ -4347,6 +4441,94 @@ begin
   Redir.SetMethod(Self.Method);
 
   Result := Redir;
+end;
+
+//* TIdSipOwningAction Protected methods ***************************************
+
+procedure TIdSipOwningAction.AddSelfAsListenerTo(Action: TIdSipAction);
+begin
+  Action.AddActionListener(Self);
+  
+  if Action.IsOwned then
+  (Action as TIdSipOwnedAction).AddOwnedActionListener(Self);
+
+  Self.ListeningTo.Add(Action);
+end;
+
+procedure TIdSipOwningAction.Initialise(UA: TIdSipAbstractCore;
+                                        Request: TIdSipRequest;
+                                        Binding: TIdConnectionBindings);
+begin
+  inherited Initialise(UA, Request, Binding);
+
+  Self.ListeningTo := TObjectList.Create(false);
+end;
+
+procedure TIdSipOwningAction.OnAuthenticationChallenge(Action: TIdSipAction;
+                                                       Response: TIdSipResponse);
+begin
+  // By default, do nothing.
+end;
+
+procedure TIdSipOwningAction.OnFailure(Action: TIdSipAction;
+                                       Response: TIdSipResponse;
+                                       const Reason: String);
+begin
+  // By default, do nothing.
+end;
+
+procedure TIdSipOwningAction.OnFailure(Redirector: TIdSipActionRedirector;
+                                       Response: TIdSipResponse);
+begin
+  // By default, do nothing.
+end;
+
+procedure TIdSipOwningAction.OnNetworkFailure(Action: TIdSipAction;
+                                              ErrorCode: Cardinal;
+                                              const Reason: String);
+begin
+  // By default, do nothing.
+end;
+
+procedure TIdSipOwningAction.OnNewAction(Redirector: TIdSipActionRedirector;
+                                         NewAction: TIdSipAction);
+begin
+  Self.AddSelfAsListenerTo(NewAction);
+end;
+
+procedure TIdSipOwningAction.OnRedirect(Action: TIdSipAction;
+                                        Redirect: TIdSipResponse);
+begin
+  // By default, do nothing.
+end;
+
+procedure TIdSipOwningAction.OnRedirectFailure(Redirector: TIdSipActionRedirector;
+                                               ErrorCode: Cardinal;
+                                               const Reason: String);
+begin
+  // By default, do nothing.
+end;
+
+procedure TIdSipOwningAction.OnSuccess(Action: TIdSipAction;
+                                       Msg: TIdSipMessage);
+begin
+  // By default, do nothing.
+end;
+
+procedure TIdSipOwningAction.OnSuccess(Redirector: TIdSipActionRedirector;
+                                       SuccessfulAction: TIdSipAction;
+                                       Response: TIdSipResponse);
+begin
+  // By default, do nothing.
+end;
+
+procedure TIdSipOwningAction.OnTerminated(Action: TIdSipAction);
+begin
+  Self.ListeningTo.Remove(Action);
+  Action.RemoveActionListener(Self);
+
+  if Action.IsOwned then
+    (Action as TIdSipOwnedAction).RemoveOwnedActionListener(Self);
 end;
 
 //******************************************************************************
@@ -4601,6 +4783,11 @@ begin
   end;
 end;
 
+procedure TIdSipActionRedirector.OnTerminated(Action: TIdSipAction);
+begin
+  (Action as TIdSipOwnedAction).RemoveOwnedActionListener(Self);
+end;
+
 procedure TIdSipActionRedirector.RemoveFinishedRedirectedInvite(Agent: TIdSipAction);
 begin
   Self.RedirectedActions.Remove(Agent);
@@ -4638,6 +4825,16 @@ begin
   (Subject as IIdSipActionListener).OnNetworkFailure(Self.ActionAgent,
                                                      Self.ErrorCode,
                                                      Self.Reason);
+end;
+
+//******************************************************************************
+//* TIdSipActionTerminatedMethod                                               *
+//******************************************************************************
+//* TIdSipActionTerminatedMethod Public methods ********************************
+
+procedure TIdSipActionTerminatedMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipActionListener).OnTerminated(Self.ActionAgent);
 end;
 
 //******************************************************************************

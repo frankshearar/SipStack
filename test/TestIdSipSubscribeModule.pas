@@ -518,6 +518,7 @@ type
     procedure TestReceiveRequestSendsNotify;
     procedure TestReceiveRequestWithGruu;
     procedure TestReceiveSubscribeWithZeroExpires;
+    procedure TestTerminateSignalled; override;
   end;
 
   TestTIdSipInboundSubscription = class(TestTIdSipInboundSubscriptionBase)
@@ -661,6 +662,7 @@ type
     procedure TestSendWithMaxForwards;
     procedure TestTerminate;
     procedure TestTerminateBeforeEstablished;
+    procedure TestTerminateSignalled; override;
     procedure TestUnsubscribe;
   end;
 
@@ -3023,6 +3025,25 @@ begin
         'Subscription not terminated');
 end;
 
+procedure TestTIdSipInboundSubscriptionBase.TestTerminateSignalled;
+var
+  L: TIdSipTestActionListener;
+begin
+  L := TIdSipTestActionListener.Create;
+  try
+    Self.Action.AddActionListener(L);
+    try
+      Self.Action.Terminate;
+
+      Check(L.Terminated, Self.ClassName + ': Listener not notified of termination');
+    finally
+      Self.Action.RemoveActionListener(L);
+    end;
+  finally
+    L.Free;
+  end;
+end;
+
 //******************************************************************************
 //* TestTIdSipInboundSubscription                                              *
 //******************************************************************************
@@ -4556,6 +4577,25 @@ begin
   Sub.Terminate;
   Self.CheckTerminatedSubscription(Sub, 'Terminate before established');
 end;
+
+procedure TestTIdSipOutboundSubscriptionBase.TestTerminateSignalled;
+var
+  L: TIdSipTestActionListener;
+begin
+  L := TIdSipTestActionListener.Create;
+  try
+    Self.Subscription.AddActionListener(L);
+
+    Self.Subscription.Terminate;
+    Self.ReceiveNotifyTerminated(Self.Subscription);
+
+    Check(L.Terminated, Self.ClassName + ': Listener not notified of termination');
+
+    // No removal of listener necessary, since Self.Subscription is now freed.
+  finally
+    L.Free;
+  end;
+end; 
 
 procedure TestTIdSipOutboundSubscriptionBase.TestUnsubscribe;
 begin

@@ -44,6 +44,7 @@ type
     procedure OnNetworkFailure(Action: TIdSipAction;
                                ErrorCode: Cardinal;
                                const Reason: String);
+    procedure OnTerminated(Action: TIdSipAction);
     procedure ReceiveBadExtensionResponse;
     procedure ReceiveBusyHere(Invite: TIdSipRequest);
     procedure ReceiveIntervalTooBrief(Subscribe: TIdSipRequest;
@@ -82,6 +83,7 @@ type
     procedure TestResendBeforeSend; virtual;
     procedure TestResendWithAuthForSameRealm; virtual;
     procedure TestResendWithProxyAuth; virtual;
+    procedure TestTerminateSignalled; virtual;
 {
     procedure TestReceiveResponseBadExtension; // Currently our stack can't sent Requires; ergo we can't test in the usual fashion
     procedure TestReceiveResponseBadExtensionWithoutRequires;
@@ -369,6 +371,10 @@ procedure TestTIdSipAction.OnNetworkFailure(Action: TIdSipAction;
 begin
   Self.FailReason  := Reason;
   Self.ActionParam := Action;
+end;
+
+procedure TestTIdSipAction.OnTerminated(Action: TIdSipAction);
+begin
 end;
 
 procedure TestTIdSipAction.ReceiveBadExtensionResponse;
@@ -791,14 +797,38 @@ begin
     Self.MarkSentRequestCount;
 
     Action.Resend(ProxyAuth);
-    CheckRequestSent('Resend didn''t send a request');
+    CheckRequestSent(Self.ClassName + ': Resend didn''t send a request');
 
     Check(Self.LastSentRequest.HasHeader(ProxyAuth.Name),
-          'Resent request has no ' + ProxyAuth.Name + ' header');
+          Self.ClassName + ': Resent request has no ' + ProxyAuth.Name + ' header');
     Check(Self.LastSentRequest.ProxyAuthorizationFor(ProxyAuth.Realm).Equals(ProxyAuth),
-          'Incorrect Proxy-Authorization header');
+          Self.ClassName + ': Incorrect Proxy-Authorization header');
   finally
     ProxyAuth.Free;
+  end;
+end;
+
+procedure TestTIdSipAction.TestTerminateSignalled;
+var
+  Action: TIdSipAction;
+  L:      TIdSipTestActionListener;
+begin
+  Check(not Self.IsInboundTest, Self.ClassName + ' MUST override TestTerminateSignalled');
+
+  Action := Self.CreateAction;
+
+  L := TIdSipTestActionListener.Create;
+  try
+    Action.AddActionListener(L);
+    try
+      Action.Terminate;
+
+      Check(L.Terminated, Self.ClassName + ': Listener not notified of termination');
+    finally
+      Action.RemoveActionListener(L);
+    end;
+  finally
+    L.Free;
   end;
 end;
 {
@@ -839,5 +869,4 @@ begin
   Check(Self.ActionFailed, ActionClassName + ' failure not reported');
 end;
 }
-
 end.

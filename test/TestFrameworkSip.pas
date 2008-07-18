@@ -206,12 +206,14 @@ type
     fErrorCodeParam:           Cardinal;
     fNetworkFailed:            Boolean;
     fResponseParam:            TIdSipResponse;
+    fTerminated:               Boolean;
 
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Response: TIdSipResponse);
     procedure OnNetworkFailure(Action: TIdSipAction;
                                ErrorCode: Cardinal;
                                const Reason: String);
+    procedure OnTerminated(Action: TIdSipAction);
   public
     constructor Create; override;
 
@@ -220,6 +222,7 @@ type
     property ErrorCodeParam:           Cardinal       read fErrorCodeParam;
     property NetworkFailed:            Boolean        read fNetworkFailed;
     property ResponseParam:            TIdSipResponse read fResponseParam;
+    property Terminated:               Boolean        read fTerminated;
   end;
 
   TIdSipTestDataListener = class(TIdSipFailableListener,
@@ -1602,6 +1605,7 @@ begin
   Self.FailWith                  := nil;
   Self.fAuthenticationChallenged := false;
   Self.fNetworkFailed            := false;
+  Self.fTerminated               := false;
 end;
 
 //* TIdSipTestActionListener Private methods ***********************************
@@ -1625,6 +1629,15 @@ begin
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnFailure');
+end;
+
+procedure TIdSipTestActionListener.OnTerminated(Action: TIdSipAction);
+begin
+  Self.fActionParam := Action;
+  Self.fTerminated  := true;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create(Self.ClassName + '.OnTerminated');
 end;
 
 //******************************************************************************

@@ -190,6 +190,7 @@ type
     procedure TestSendTryingWithSuppressLocalResponses;
     procedure TestTerminateAfterAccept;
     procedure TestTerminateBeforeAccept;
+    procedure TestTerminateSignalled; override;
     procedure TestTimeOut;
   end;
 
@@ -269,6 +270,7 @@ type
     procedure TestSendWithGruu; virtual;
     procedure TestTerminateBeforeAccept;
     procedure TestTerminateAfterAccept;
+    procedure TestTerminateSignalled; override;
     procedure TestTransactionCompleted;
   end;
 
@@ -508,6 +510,7 @@ type
     procedure TestSuppressLocalResponses;
     procedure TestTerminate;
     procedure TestTerminateAlmostEstablishedSession;
+    procedure TestTerminateSignalled; override;
     procedure TestTerminateUnestablishedSession;
   end;
 
@@ -603,6 +606,7 @@ type
     procedure TestTerminateDuringRedirect;
     procedure TestTerminateEstablishedSession;
     procedure TestTerminateNetworkFailure;
+    procedure TestTerminateSignalled; override;
     procedure TestTerminateUnestablishedSession;
   end;
 
@@ -2734,6 +2738,25 @@ begin
         Self.ClassName + ': Action not marked as terminated');
 end;
 
+procedure TestTIdSipInboundInvite.TestTerminateSignalled;
+var
+  L: TIdSipTestActionListener;
+begin
+  L := TIdSipTestActionListener.Create;
+  try
+    Self.InviteAction.AddActionListener(L);
+    try
+      Self.InviteAction.TimeOut;
+      Check(L.Terminated,
+            Self.ClassName + ': Listeners not notified of termination');
+    finally
+      Self.InviteAction.RemoveActionListener(L);
+    end;
+  finally
+    L.Free;
+  end;
+end;
+
 procedure TestTIdSipInboundInvite.TestTimeOut;
 begin
   Self.MarkSentResponseCount;
@@ -3583,6 +3606,29 @@ begin
 
   CheckNoRequestSent(Self.ClassName
                    + ': Action sent a CANCEL for a fully established call');
+end;
+
+procedure TestTIdSipOutboundInvite.TestTerminateSignalled;
+var
+  L:              TIdSipTestActionListener;
+  OutboundInvite: TIdSipOutboundInvite;
+begin
+  OutboundInvite := Self.CreateAction as TIdSipOutboundInvite;
+
+  L := TIdSipTestActionListener.Create;
+  try
+    OutboundInvite.AddActionListener(L);
+    try
+      Self.ReceiveOk(Self.LastSentRequest);
+      OutboundInvite.Terminate;
+      Check(L.Terminated,
+            Self.ClassName + ': Listeners not notified of termination');
+    finally
+      OutboundInvite.RemoveActionListener(L);
+    end;
+  finally
+    L.Free;
+  end;
 end;
 
 procedure TestTIdSipOutboundInvite.TestTransactionCompleted;
@@ -6444,6 +6490,28 @@ begin
         'Session not marked as terminated');
 end;
 
+procedure TestTIdSipInboundSession.TestTerminateSignalled;
+var
+  L: TIdSipTestActionListener;
+  Session: TIdSipSession;
+begin
+  L := TIdSipTestActionListener.Create;
+  try
+    Session := Self.CreateAndEstablishSession;
+
+    Session.AddActionListener(L);
+    try
+      Self.Session.Terminate;
+
+      Check(L.Terminated, Self.ClassName + ': Listeners not notified of termination');
+    finally
+      Session.RemoveActionListener(L);
+    end;
+  finally
+    L.Free;
+  end;
+end;
+
 procedure TestTIdSipInboundSession.TestTerminateUnestablishedSession;
 var
   Response:     TIdSipResponse;
@@ -8162,6 +8230,27 @@ begin
   CheckEquals(MethodBye,
               Self.LastSentRequest.Method,
               'Last request we attempted to send');
+end;
+
+procedure TestTIdSipOutboundSession.TestTerminateSignalled;
+var
+  L: TIdSipTestActionListener;
+begin
+  L := TIdSipTestActionListener.Create;
+  try
+    Self.Session.AddActionListener(L);
+    try
+      Self.EstablishSession(Self.Session);
+      Self.Session.Terminate;
+
+      Check(L.Terminated,
+            Self.ClassName + ': Listeners not notified of termination');
+    finally
+      Self.Session.RemoveActionListener(L);
+    end;
+  finally
+    L.Free;
+  end;
 end;
 
 procedure TestTIdSipOutboundSession.TestTerminateUnestablishedSession;
