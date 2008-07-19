@@ -521,8 +521,8 @@ type
     procedure Initialise(UA: TIdSipAbstractCore;
                          Request: TIdSipRequest;
                          Binding: TIdConnectionBindings); override;
-    procedure OnTerminated(Action: TIdSipAction); override;
     procedure ReceiveSubscribe(Request: TIdSipRequest); override;
+    procedure RemoveSelfAsListenerFrom(Action: TIdSipAction); override;
     procedure SendResponse(Response: TIdSipResponse); override;
     function  WillAccept(Subscribe: TIdSipRequest): Boolean; virtual;
   public
@@ -2127,14 +2127,6 @@ begin
   Self.Grid := Self.UA.NextGrid;
 end;
 
-procedure TIdSipInboundSubscription.OnTerminated(Action: TIdSipAction);
-begin
-  inherited OnTerminated(Action);
-
-  if Action is TIdSipOutboundNotifyBase then
-    (Action as TIdSipOutboundNotifyBase).RemoveNotifyListener(Self);
-end;
-
 procedure TIdSipInboundSubscription.ReceiveSubscribe(Request: TIdSipRequest);
 begin
   // At this stage, we know we've a SUBSCRIBE request for a known event.
@@ -2163,6 +2155,14 @@ begin
         Self.ScheduleTermination(Request.Expires.NumericValue);
     end;
   end;
+end;
+
+procedure TIdSipInboundSubscription.RemoveSelfAsListenerFrom(Action: TIdSipAction);
+begin
+  inherited RemoveSelfAsListenerFrom(Action);
+
+  if (Action is TIdSipOutboundNotifyBase) then
+    (Action as TIdSipOutboundNotifyBase).RemoveNotifyListener(Self);
 end;
 
 procedure TIdSipInboundSubscription.SendResponse(Response: TIdSipResponse);

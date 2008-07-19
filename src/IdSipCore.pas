@@ -884,6 +884,7 @@ type
                         SuccessfulAction: TIdSipAction;
                         Response: TIdSipResponse); overload; virtual;
     procedure OnTerminated(Action: TIdSipAction); virtual;
+    procedure RemoveSelfAsListenerFrom(Action: TIdSipAction); virtual;
   public
     destructor Destroy; override;
 
@@ -4523,6 +4524,11 @@ begin
 end;
 
 procedure TIdSipOwningAction.OnTerminated(Action: TIdSipAction);
+begin
+  Self.RemoveSelfAsListenerFrom(Action);
+end;
+
+procedure TIdSipOwningAction.RemoveSelfAsListenerFrom(Action: TIdSipAction);
 begin
   Self.ListeningTo.Remove(Action);
   Action.RemoveActionListener(Self);

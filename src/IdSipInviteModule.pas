@@ -499,7 +499,6 @@ type
                         Ack: TIdSipMessage); overload; virtual;
     procedure OnSuccess(Action: TIdSipAction;
                         Response: TIdSipMessage); overload; override;
-    procedure OnTerminated(Action: TIdSipAction); override;
     procedure ReceiveAck(Ack: TIdSipRequest);
     procedure ReceiveBye(Bye: TIdSipRequest);
     procedure ReceiveCancel(Cancel: TIdSipRequest);
@@ -508,6 +507,7 @@ type
                             Binding: TIdConnectionBindings);
     procedure ReceiveRefer(Refer: TIdSipRequest;
                            Binding: TIdConnectionBindings); virtual;
+    procedure RemoveSelfAsListenerFrom(Action: TIdSipAction); override;
     procedure SendBye; virtual;
     procedure SetFullyEstablished(Value: Boolean); virtual;
 
@@ -2642,14 +2642,6 @@ begin
   end;
 end;
 
-procedure TIdSipSession.OnTerminated(Action: TIdSipAction);
-begin
-  inherited OnTerminated(Action);
-
-  if Action.IsInvite and Action.IsOutbound then
-   (Action as TIdSipOutboundInvite).AddInviteListener(Self);
-end;
-
 procedure TIdSipSession.ReceiveAck(Ack: TIdSipRequest);
 begin
   Assert(Ack.IsAck,
@@ -2763,6 +2755,14 @@ begin
       Notification.Free;
     end;
   end;
+end;
+
+procedure TIdSipSession.RemoveSelfAsListenerFrom(Action: TIdSipAction);
+begin
+  inherited RemoveSelfAsListenerFrom(Action);
+
+  if (Action is TIdSipOutboundInvite) then
+   (Action as TIdSipOutboundInvite).RemoveInviteListener(Self);
 end;
 
 procedure TIdSipSession.SendBye;
