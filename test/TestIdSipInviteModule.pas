@@ -560,6 +560,7 @@ type
     procedure TestActionListenersArentNotifiedReSessionEvents;
     procedure TestByeCarriesInviteAuthorization;
     procedure TestCall;
+    procedure TestCallDoesntClaimToModifySession;
     procedure TestCallFlowToGateway;
     procedure TestCallNetworkFailure;
     procedure TestCallRemoteRefusal;
@@ -7029,6 +7030,27 @@ begin
               'RemoteMimeType');
 
   Check(not Session.IsEarly, 'Dialog in incorrect state: shouldn''t be early');
+end;
+
+procedure TestTIdSipOutboundSession.TestCallDoesntClaimToModifySession;
+var
+  Session: TIdSipOutboundSession;
+  L:       TIdSipTestSessionListener;
+begin
+  Session := Self.CreateAction as TIdSipOutboundSession;
+  L := TIdSipTestSessionListener.Create;
+  try
+    Session.AddSessionListener(L);
+    try
+      Self.EstablishSession(Session);
+
+      Check(not L.ModifiedSession, 'Listener told the session was modified, on initial INVITE');
+    finally
+      Session.RemoveSessionListener(L);
+    end;
+  finally
+    L.Free;
+  end;
 end;
 
 procedure TestTIdSipOutboundSession.TestCallFlowToGateway;

@@ -561,8 +561,6 @@ type
     procedure OnFailure(InviteAgent: TIdSipInboundInvite); override;
     procedure OnSuccess(InviteAgent: TIdSipInboundInvite;
                         Ack: TIdSipMessage); override;
-    procedure OnSuccess(Action: TIdSipAction;
-                        Response: TIdSipMessage); override;
     procedure ReceiveInitialInvite(Invite: TIdSipRequest); override;
     procedure ReceiveInvite(Invite: TIdSipRequest);
   public
@@ -621,8 +619,6 @@ type
     procedure OnRedirectFailure(Redirector: TIdSipActionRedirector;
                                 ErrorCode: Cardinal;
                                 const Reason: String); override;
-    procedure OnSuccess(Action: TIdSipAction;
-                        Response: TIdSipMessage); overload; override;
     procedure OnSuccess(Redirector: TIdSipActionRedirector;
                         SuccessfulAction: TIdSipAction;
                         Response: TIdSipResponse); overload; override;
@@ -2639,6 +2635,8 @@ begin
     Self.LocalMimeType            := Action.InitialRequest.ContentType;
     Self.RemoteSessionDescription := Response.Body;
     Self.RemoteMimeType           := Response.ContentType;
+
+    Self.NotifyOfModifiedSession(Response as TIdSipResponse);
   end;
 end;
 
@@ -3106,14 +3104,6 @@ begin
   end;
 end;
 
-procedure TIdSipInboundSession.OnSuccess(Action: TIdSipAction;
-                                         Response: TIdSipMessage);
-begin
-  inherited OnSuccess(Action, Response);
-
-  Self.NotifyOfModifiedSession(Response as TIdSipResponse);
-end;
-
 procedure TIdSipInboundSession.ReceiveInitialInvite(Invite: TIdSipRequest);
 begin
   Self.RemoteSessionDescription := Invite.Body;
@@ -3402,14 +3392,6 @@ begin
     Self.NotifyOfEndedSession(ErrorCode, Reason);
 
   Self.MarkAsTerminated;
-end;
-
-procedure TIdSipOutboundSession.OnSuccess(Action: TIdSipAction;
-                                          Response: TIdSipMessage);
-begin
-  inherited OnSuccess(Action, Response);
-
-  Self.NotifyOfModifiedSession(Response as TIdSipResponse);
 end;
 
 procedure TIdSipOutboundSession.OnSuccess(Redirector: TIdSipActionRedirector;
