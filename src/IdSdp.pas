@@ -861,17 +861,28 @@ type
   end;
 
   TIdSdpThreadedTcpClient = class(TIdThreadedTcpClient)
+  private
+    ConnectionLock: TCriticalSection;
+
+    procedure DisconnectClient(C: TIdThreadableTcpClient;
+                               L: TCriticalSection);
+    procedure FreeClient(C: TIdThreadableTcpClient;
+                         L: TCriticalSection);
   protected
     function  GetTimer: TIdTimerQueue; override;
     procedure NotifyOfException(E: Exception); override;
     procedure Run; override;
     procedure SetTimer(Value: TIdTimerQueue); override;
+  public
+    constructor Create(Connection: TIdThreadableTcpClient;
+                       ConnectionLock: TCriticalSection); reintroduce;
   end;
 
   TIdSdpTcpClientConnection = class(TIdSdpBaseTcpConnection)
   private
     Client:       TIdSdpTcpClient;
     ClientThread: TIdSdpThreadedTcpClient;
+    ThreadLock:   TCriticalSection;
 
     procedure ClientConnected(Client: TObject);
     procedure ClientDisconnected(Client: TObject);
@@ -5554,7 +5565,7 @@ const
 begin
   inherited Create(AOwner);
 
-  Self.BufferSize := 100;
+  Self.BufferSize  := 100;
   Self.ReadTimeout := OneSecond;
 end;
 
@@ -5642,6 +5653,16 @@ end;
 //******************************************************************************
 //* TIdSdpThreadedTcpClient                                                    *
 //******************************************************************************
+//* TIdSdpThreadedTcpClient Public methods *************************************
+
+constructor TIdSdpThreadedTcpClient.Create(Connection: TIdThreadableTcpClient;
+                                           ConnectionLock: TCriticalSection);
+begin
+  inherited Create(Connection);
+
+  Self.ConnectionLock := ConnectionLock;
+end;
+
 //* TIdSdpThreadedTcpClient Protected methods **********************************
 
 function TIdSdpThreadedTcpClient.GetTimer: TIdTimerQueue;
@@ -5657,16 +5678,25 @@ begin
   Wait.ExceptionMessage := E.Message;
   Wait.ExceptionType    := ExceptClass(E.ClassType);
 
-  Self.Timer.AddEvent(TriggerImmediately, Wait);
+  Self.ConnectionLock.Acquire;
+  try
+    Self.Timer.AddEvent(TriggerImmediately, Wait);
+  finally
+    Self.ConnectionLock.Release;
+  end;
 end;
 
 procedure TIdSdpThreadedTcpClient.Run;
 begin
   try
     try
-      Self.Client.ReceiveMessages;
+      try
+        Self.Client.ReceiveMessages;
+      finally
+        Self.DisconnectClient(Self.Client, Self.ConnectionLock);
+      end;
     finally
-      Self.Client.Disconnect;
+      Self.FreeClient(Self.Client, Self.ConnectionLock);
     end;
   except
     on EIdConnClosedGracefully do;
@@ -5683,6 +5713,28 @@ begin
   Self.Client.Timer := Value;
 end;
 
+procedure TIdSdpThreadedTcpClient.DisconnectClient(C: TIdThreadableTcpClient;
+                                                   L: TCriticalSection);
+begin
+  L.Acquire;
+  try
+    C.Disconnect;
+  finally
+    L.Release;
+  end;
+end;
+
+procedure TIdSdpThreadedTcpClient.FreeClient(C: TIdThreadableTcpClient;
+                                             L: TCriticalSection);
+begin
+  L.Acquire;
+  try
+    C.Free;
+  finally
+    L.Release;
+  end;
+end;
+
 //******************************************************************************
 //* TIdSdpTcpClientConnection                                                  *
 //******************************************************************************
@@ -5692,6 +5744,8 @@ constructor TIdSdpTcpClientConnection.Create;
 begin
   inherited Create;
 
+  Self.ThreadLock := TCriticalSection.Create;
+
   Self.Client := TIdSdpTcpClient.Create(nil);
   Self.Client.ConnectionID   := Self.ID;
   Self.Client.OnConnected    := Self.ClientConnected;
@@ -5700,7 +5754,14 @@ end;
 
 destructor TIdSdpTcpClientConnection.Destroy;
 begin
-  Self.Client.Free;
+  Self.ThreadLock.Acquire;
+  try
+    if Assigned(Self.ClientThread) then
+      Self.ClientThread.Terminate;
+  finally
+    Self.ThreadLock.Release;
+  end;
+  Self.ThreadLock.Free;
 
   inherited Destroy;
 end;
@@ -5709,29 +5770,40 @@ procedure TIdSdpTcpClientConnection.ConnectTo(PeerAddress: String; PeerPort: Car
 begin
   // If we're already connected somewhere, disconnect, terminate the listening
   // thread. Then reconnect, and instantiate a new listening thread.
-  if Self.IsConnected then
-    Self.Disconnect;
-
-  Self.Client.Host := PeerAddress;
-  Self.Client.Port := PeerPort;
-
+  Self.ThreadLock.Acquire;
   try
-    Self.Client.Connect(Self.Timeout);
+    if Self.IsConnected then
+      Self.Disconnect;
 
-    Self.NotifyOfConnection;
-  except
-    on E: EIdAlreadyConnected do
-      Self.NotifyOfException(ExceptClass(E.ClassType), E.Message);
-    on E: EIdConnectTimeout do
-      Self.NotifyOfException(ExceptClass(E.ClassType), E.Message);
-    on E: EIdConnectException do
-      Self.NotifyOfException(ExceptClass(E.ClassType), E.Message);
+    Self.Client.Host := PeerAddress;
+    Self.Client.Port := PeerPort;
+
+    try
+      Self.Client.Connect(Self.Timeout);
+
+      Self.NotifyOfConnection;
+    except
+      on E: EIdAlreadyConnected do
+        Self.NotifyOfException(ExceptClass(E.ClassType), E.Message);
+      on E: EIdConnectTimeout do
+        Self.NotifyOfException(ExceptClass(E.ClassType), E.Message);
+      on E: EIdConnectException do
+        Self.NotifyOfException(ExceptClass(E.ClassType), E.Message);
+    end;
+  finally
+    Self.ThreadLock.Release;
   end;
 end;
 
 procedure TIdSdpTcpClientConnection.Disconnect;
 begin
-  Self.Client.Disconnect;
+  Self.ThreadLock.Acquire;
+  try
+    if Assigned(Self.Client) then
+      Self.Client.Disconnect;
+  finally
+    Self.ThreadLock.Release;
+  end;
 
   Self.NotifyOfDisconnection;
 end;
@@ -5760,7 +5832,13 @@ begin
   // * TIdSdpTcpMediaStream.ReallySendData
 
   try
-    Self.Client.WriteStream(Data);
+    Self.ThreadLock.Acquire;
+    try
+      if Assigned(Self.ClientThread) and Self.Client.Connected then
+        Self.Client.WriteStream(Data);
+    finally
+      Self.ThreadLock.Release;
+    end;
   except
     on EIdReadTimeout do;
     on EIdConnClosedGracefully do;
@@ -5772,41 +5850,67 @@ end;
 
 function TIdSdpTcpClientConnection.GetAddress: String;
 begin
-  if Self.Client.Connected then
-    Result := Self.Client.Socket.Binding.IP
-  else
-    Result := IPv4ZeroAddress;
+  Result := IPv4ZeroAddress;
+
+  Self.ThreadLock.Acquire;
+  try
+    if Assigned(Self.ClientThread) and Self.Client.Connected then
+      Result := Self.Client.Socket.Binding.IP;
+  finally
+    Self.ThreadLock.Release;
+  end;
 end;
 
 function TIdSdpTcpClientConnection.GetPeerAddress: String;
 begin
-  if Self.Client.Connected then
-    Result := Self.Client.Socket.Binding.PeerIP
-  else
-    Result := IPv4ZeroAddress;
+  Result := IPv4ZeroAddress;
+
+  Self.ThreadLock.Acquire;
+  try
+    if Assigned(Self.ClientThread) and Self.Client.Connected then
+      Result := Self.Client.Socket.Binding.PeerIP;
+  finally
+    Self.ThreadLock.Release;
+  end;
 end;
 
 function TIdSdpTcpClientConnection.GetPeerPort: Cardinal;
 begin
-  if Self.Client.Connected then
-    Result := Self.Client.Socket.Binding.PeerPort
-  else
-    Result := TcpDiscardPort;
+  Result := TcpDiscardPort;
+
+  Self.ThreadLock.Acquire;
+  try
+    if Assigned(Self.ClientThread) and Self.Client.Connected then
+      Result := Self.Client.Socket.Binding.PeerPort
+  finally
+    Self.ThreadLock.Release;
+  end;
 end;
 
 function TIdSdpTcpClientConnection.GetPort: Cardinal;
 begin
-  if Self.Client.Connected then
-    Result := Self.Client.Socket.Binding.Port
-  else
-    Result := TcpDiscardPort;
+  Result := TcpDiscardPort;
+
+  Self.ThreadLock.Acquire;
+  try
+    if Assigned(Self.ClientThread) and Self.Client.Connected then
+      Result := Self.Client.Socket.Binding.Port
+  finally
+    Self.ThreadLock.Release;
+  end;
 end;
 
 procedure TIdSdpTcpClientConnection.SetTimer(Value: TIdTimerQueue);
 begin
   inherited SetTimer(Value);
 
-  Self.Client.Timer := Value;
+  Self.ThreadLock.Acquire;
+  try
+    if Assigned(Self.Client) then
+      Self.Client.Timer := Value;
+  finally
+    Self.ThreadLock.Release;
+  end;
 end;
 
 //* TIdSdpTcpClientConnection Private methods **********************************
@@ -5815,18 +5919,33 @@ procedure TIdSdpTcpClientConnection.ClientConnected(Client: TObject);
 begin
   // ClientThread will loop, reading data off Self.Client, for as long as
   // Client is Connected.
+  //
+  // This executes in ClientThread's context.
 
-  Self.ClientThread := TIdSdpThreadedTcpClient.Create(Self.Client);
+  Self.ThreadLock.Acquire;
+  try
+    Self.ClientThread := TIdSdpThreadedTcpClient.Create(Self.Client, Self.ThreadLock);
+  finally
+    Self.ThreadLock.Release;
+  end;
 end;
 
 procedure TIdSdpTcpClientConnection.ClientDisconnected(Client: TObject);
 begin
-  Self.ClientThread.Terminate;
-  Self.ClientThread := nil;
+  // This executes in ClientThread's context.
+
+  Self.ThreadLock.Acquire;
+  try
+    Self.ClientThread.Terminate;
+    Self.ClientThread := nil;
+    Self.Client       := nil;
+  finally
+    Self.ThreadLock.Release;
+  end;
 end;
 
 //******************************************************************************
-//* TIdSdpTcpServerConnection
+//* TIdSdpTcpServerConnection                                                  *
 //******************************************************************************
 //* TIdSdpTcpServerConnection Public methods ***********************************
 
