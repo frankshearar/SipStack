@@ -12,7 +12,7 @@ unit IdRegisteredObject;
 interface
 
 uses
-  Classes, LoGGer, SysUtils;
+  Classes, SysUtils;
 
 type
   // My subclasses and I automatically register/unregister ourselves to the
@@ -47,12 +47,10 @@ type
   public
     class procedure CollectAllObjectsOfClass(SearchType: TClass; Results: TStrings; AllowSubclassTypes: Boolean = true);
     class function  FindObject(ObjectID: String): TObject;
-    class function  Logger: TLoGGerThread;
     class function  LogName: String;
     class function  LogSourceRef: Cardinal;
     class function  RegisterObject(Instance: TObject): String;
-    class procedure SetLogger(Log: TLoGGerThread;
-                              LogName: String;
+    class procedure SetLogger(LogName: String;
                               SourceRef: Cardinal);
     class procedure UnregisterObject(ObjectID: String);
   end;
@@ -63,20 +61,20 @@ type
   ERegistry = class(Exception);
 
 const
+  DefaultLogName   = 'debug.log';
   RegisterLogMsg   = '%s with ID %s instantiated';
   UnregisterLogMsg = '%s with ID %s freed';
 
 implementation
 
 uses
-  IdSystem, SyncObjs;
+  IdSystem, PluggableLogging, SyncObjs;
 
 const
   ItemNotFoundIndex = -1;
 
 var
   GLock:           TCriticalSection;
-  GLog:            TLoGGerThread;
   GLogName:        String;
   GObjectRegistry: TStringList;
   GSourceRef:      Cardinal;
@@ -158,16 +156,6 @@ begin
   end;
 end;
 
-class function TIdObjectRegistry.Logger: TLoGGerThread;
-begin
-  Self.Lock;
-  try
-    Result := GLog;
-  finally
-    Self.Unlock;
-  end;
-end;
-
 class function TIdObjectRegistry.LogName: String;
 begin
   Self.Lock;
@@ -203,13 +191,11 @@ begin
   end;
 end;
 
-class procedure TIdObjectRegistry.SetLogger(Log: TLoGGerThread;
-                                            LogName: String;
+class procedure TIdObjectRegistry.SetLogger(LogName: String;
                                             SourceRef: Cardinal);
 begin
   Self.Lock;
   try
-    GLog       := Log;
     GLogName   := LogName;
     GSourceRef := SourceRef;
   finally
@@ -255,16 +241,7 @@ end;
 
 class procedure TIdObjectRegistry.Log(Description: String);
 begin
-  if (Self.Logger = nil) then Exit;
-
-  Self.Logger.Lock;
-  try
-    if not Self.Logger.Logs.LogExists(Self.LogName) then Exit;
-    
-    Self.Logger.Write(Self.LogName, LoGGerVerbosityLevelDebug, Self.LogSourceRef, '', 0, Description, '');
-  finally
-    Self.Logger.Unlock;
-  end;
+  LogEntry(Self.LogName, Description, Self.LogSourceRef, '', slDebug, 0, '');
 end;
 
 class function TIdObjectRegistry.ObjectAt(Index: Integer): TObject;
@@ -284,6 +261,7 @@ end;
 
 initialization
   GLock           := TCriticalSection.Create;
+  GLogName        := DefaultLogName;
   GObjectRegistry := CreateSortedList;
 finalization
 // These objects are purely memory-based, so it's safe not to free them here.

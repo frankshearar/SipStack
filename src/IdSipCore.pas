@@ -73,7 +73,8 @@ uses
   IdInterfacedObject, IdNotification, IdObservable, IdRegisteredObject,
   IdRoutingTable, IdSipAuthentication, IdSipLocation, IdSipLocator,
   IdSipMessage, IdSipProxyDescription, IdSipTransaction, IdSipTransport,
-  IdSipTransportAddressSpace, IdTimerQueue, LoGGer, StringDictionary, SysUtils;
+  IdSipTransportAddressSpace, IdTimerQueue, PluggableLogging, StringDictionary,
+  SysUtils;
 
 const
   SipStackVersion = '0.6pre';
@@ -371,7 +372,6 @@ type
     fInstanceID:            String;
     fKeyring:               TIdKeyRing;
     fLocator:               TIdSipAbstractLocator;
-    fLogger:                TLoGGerThread;
     fLogName:               String;
     fRealm:                 String;
     fRoutingTable:          TIdRoutingTable;
@@ -424,7 +424,6 @@ type
     procedure RejectUnsupportedSipVersion(Request: TIdSipRequest);
     procedure SetDefaultRoutePath(Value: TIdSipRoutePath);
     procedure SetDispatcher(Value: TIdSipTransactionDispatcher);
-    procedure SetLogger(Value: TLoGGerThread);
     procedure SetLogName(Value: String);
     procedure SetInstanceID(Value: String);
     procedure SetRealm(const Value: String);
@@ -509,7 +508,7 @@ type
     function  IsSourceOf(Request: TIdSipRequest): Boolean;
     function  KnownMethods: String;
     procedure Log(Description: String;
-                  Severity: TLogVerbosityLevel;
+                  Severity: TSeverityLevel;
                   EventRef: Cardinal;
                   DebugInfo: String);
     function  ModuleFor(Request: TIdSipRequest): TIdSipMessageModule; overload;
@@ -557,7 +556,6 @@ type
     property InstanceID:                    String                      read fInstanceID write SetInstanceID;
     property Keyring:                       TIdKeyRing                  read fKeyring;
     property Locator:                       TIdSipAbstractLocator       read fLocator write fLocator;
-    property Logger:                        TLoGGerThread               read fLogger write SetLogger;
     property LogName:                       String                      read fLogName write SetLogName;
     property Realm:                         String                      read fRealm write SetRealm;
     property RoutingTable:                  TIdRoutingTable             read fRoutingTable write fRoutingTable;
@@ -1968,6 +1966,7 @@ begin
   Self.AddAllowedScheme(SipScheme);
 
   Self.HostName      := Self.DefaultHostName;
+  Self.LogName       := coSipStackLogName;
   Self.Realm         := Self.HostName;
   Self.UserAgentName := Self.DefaultUserAgent;
 end;
@@ -2391,21 +2390,11 @@ begin
 end;
 
 procedure TIdSipAbstractCore.Log(Description: String;
-                                 Severity: TLogVerbosityLevel;
+                                 Severity: TSeverityLevel;
                                  EventRef: Cardinal;
                                  DebugInfo: String);
 begin
-  if not Assigned(Self.Logger) then Exit;
-
-  Self.Logger.Lock;
-  try
-    if not Self.Logger.Logs.LogExists(LogName) then
-      Self.Logger.Add(Self.LogName);
-
-    Self.Logger.Write(Self.LogName, Severity, coLogSourceRefSIPStack, Self.ClassName, EventRef, Description, DebugInfo);
-  finally
-    Self.Logger.Unlock;
-  end;
+  LogEntry(Self.LogName, Description, coLogSourceRefSIPStack, Self.ClassName, Severity, EventRef, DebugInfo);
 end;
 
 function TIdSipAbstractCore.ModuleFor(Request: TIdSipRequest): TIdSipMessageModule;
@@ -2981,7 +2970,7 @@ const
   LogMsg = 'Dropped %s from %s because it doesn''t match any ongoing actions';
 begin
   Self.Log(Format(LogMsg, [Message.Description, Binding.AsString]),
-           LoGGerVerbosityLevelDebug,
+           slDebug,
            coLogEventRefDroppedMessage,
            Message.AsString);
 end;
@@ -3222,18 +3211,7 @@ begin
   for I := 0 to Self.fDispatcher.TransportCount - 1 do
     Self.fDispatcher.Transports[I].AddConnectionListener(Self);
 
-  Self.fDispatcher.Logger  := Self.Logger;
   Self.fDispatcher.LogName := Self.LogName;
-end;
-
-procedure TIdSipAbstractCore.SetLogger(Value: TLoGGerThread);
-begin
-  if (Value = Self.fLogger) then Exit;
-
-  Self.fLogger := Value;
-
-  if Assigned(Self.Dispatcher) then
-    Self.Dispatcher.Logger := Value;
 end;
 
 procedure TIdSipAbstractCore.SetLogName(Value: String);

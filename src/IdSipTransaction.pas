@@ -15,7 +15,7 @@ uses
   Classes, Contnrs, IdBaseThread, IdConnectionBindings, IdInterfacedObject,
   IdNotification, IdRoutingTable, IdSipAuthentication, IdSipLocation,
   IdSipLocator, IdSipMessage, IdSipTransport, IdSipTransportAddressSpace,
-  IdTimerQueue, LoGGer, SysUtils;
+  IdTimerQueue, PluggableLogging, SysUtils;
 
 type
   // This covers all states - INVITE, non-INVITE, client, server.
@@ -80,7 +80,6 @@ type
                                       IIdSipTransportListener)
   private
     fLocator:                 TIdSipAbstractLocator;
-    fLogger:                  TLoGGerThread;
     fLogName:                 String;
     fRoutingTable:            TIdRoutingTable;
     fT1Interval:              Cardinal;
@@ -149,7 +148,6 @@ type
                                 const Reason: String;
                                 Source: TIdConnectionBindings);
     procedure SetLocator(Value: TIdSipAbstractLocator);
-    procedure SetLogger(Value: TLoGGerThread);
     procedure SetLogName(Value: String);
     procedure SetRoutingTable(Value: TIdRoutingTable);
     procedure SetTimer(Value: TIdTimerQueue);
@@ -174,7 +172,7 @@ type
                               ClientTran: Boolean): TIdSipTransaction;
     procedure LocalBindings(Bindings: TIdSipLocations);
     procedure Log(Description: String;
-                  Severity: TLogVerbosityLevel;
+                  Severity: TSeverityLevel;
                   EventRef: Cardinal;
                   DebugInfo: String);
     function  LoopDetected(Request: TIdSipRequest): Boolean;
@@ -200,7 +198,6 @@ type
 
     property DefaultPreferredTransportType: String                read GetDefaultPreferredTransportType write SetDefaultPreferredTransportType;
     property Locator:                       TIdSipAbstractLocator read fLocator write fLocator;
-    property Logger:                        TLoGGerThread         read fLogger write SetLogger;
     property LogName:                       String                read fLogName write SetLogName;
     property RoutingTable:                  TIdRoutingTable       read fRoutingTable write SetRoutingTable;
     property T1Interval:                    Cardinal              read fT1Interval write fT1Interval;
@@ -286,7 +283,7 @@ type
     function  IsTerminated: Boolean;
     function  Match(Msg: TIdSipMessage): Boolean; virtual;
     procedure Log(Description: String;
-                  Severity: TLogVerbosityLevel;
+                  Severity: TSeverityLevel;
                   EventRef: Cardinal;
                   DebugInfo: String);
     function  LoopDetected(Request: TIdSipRequest): Boolean;
@@ -470,7 +467,7 @@ type
     fTransactionID: String;
     Transaction:    TIdSipTransaction;
 
-    procedure LogToTransactionLayer(VerbosityLevel: Byte;
+    procedure LogToTransactionLayer(Severity: TSeverityLevel;
                                     SourceRef: Cardinal;
                                     SourceDescription: String;
                                     RefCode: Cardinal;
@@ -778,7 +775,6 @@ begin
   else begin
     T := TIdSipTransportRegistry.TransportTypeFor(Transport).Create;
     T.HostName     := Address;
-    T.Logger       := Self.Logger;
     T.LogName      := Self.LogName;
     T.Timer        := Self.Timer;
     T.RoutingTable := Self.RoutingTable;
@@ -892,12 +888,11 @@ begin
 end;
 
 procedure TIdSipTransactionDispatcher.Log(Description: String;
-                                          Severity: TLogVerbosityLevel;
+                                          Severity: TSeverityLevel;
                                           EventRef: Cardinal;
                                           DebugInfo: String);
 begin
-  if Assigned(Self.Logger) then
-    Self.Logger.Write(Self.LogName, Severity, coLogSourceRefSIPStack, Self.ClassName, EventRef, Description, DebugInfo);
+  LogEntry(Self.LogName, Description, coLogSourceRefSIPStack, Self.ClassName, Severity, EventRef, DebugInfo);
 end;
 
 function TIdSipTransactionDispatcher.LoopDetected(Request: TIdSipRequest): Boolean;
@@ -1258,16 +1253,6 @@ begin
   Self.fLocator := Value;
 end;
 
-procedure TIdSipTransactionDispatcher.SetLogger(Value: TLoGGerThread);
-var
-  I: Integer;
-begin
-  Self.fLogger := Value;
-
-  for I := 0 to Self.TransportCount - 1 do
-    Self.Transports[I].Logger := Value;
-end;
-
 procedure TIdSipTransactionDispatcher.SetLogName(Value: String);
 var
   I: Integer;
@@ -1354,7 +1339,7 @@ const
   LogMsg = '%s sending %s: %s';
 begin
   Self.Log(Format(LogMsg, [E.ClassName, FailedMessage.Description, Reason]),
-           LoGGerVerbosityLevelLow,
+           slError,
            coLogEventException,
            FailedMessage.AsString);
 end;
@@ -1538,7 +1523,7 @@ begin
 end;
 
 procedure TIdSipTransaction.Log(Description: String;
-                                Severity: TLogVerbosityLevel;
+                                Severity: TSeverityLevel;
                                 EventRef: Cardinal;
                                 DebugInfo: String);
 begin
@@ -1674,7 +1659,7 @@ begin
   // '' because we'll immediately either LogReceivedMessage or LogSentMessage,
   // which will log InitialRequest.AsString anyway.
   Self.Log(Format(Msg, [Self.ID, InitialRequest.LastHop.Branch]),
-           LoGGerVerbosityLevelHigh,
+           slDebug,
            0,
            '');
 end;
@@ -1685,7 +1670,7 @@ const
   Msg = 'Transaction %s received %s on %s';
 begin
   Self.Log(Format(Msg, [Self.ID, Message.Description, Binding.AsString]),
-           LoGGerVerbosityLevelHigh,
+           slDebug,
            0,
            Message.AsString);
 end;
@@ -1696,7 +1681,7 @@ const
   Msg = 'Transaction %s sent %s to %s';
 begin
   Self.Log(Format(Msg, [Self.ID, Message.Description, Target.AsString]),
-           LoGGerVerbosityLevelHigh,
+           slDebug,
            0,
            Message.AsString);
 end;
@@ -1706,7 +1691,7 @@ const
   Msg = 'Transaction %s changed state: %s -> %s';
 begin
   Self.Log(Format(Msg, [Self.ID, StateToStr(OldState), StateToStr(NewState)]),
-           LoGGerVerbosityLevelHigh,
+           slDebug,
            0,
            '');
 end;
@@ -2664,7 +2649,7 @@ procedure TIdSipTransactionWait.LogTrigger;
 const
   LogMsg = 'Transaction %s timer %s triggered';
 begin
-  Self.OnLog(LoGGerVerbosityLevelDebug,
+  Self.OnLog(slDebug,
              coLogSourceRefSIPStack,
              '',
              coLogEventRefTimerEvent,
@@ -2685,7 +2670,7 @@ end;
 
 //* TIdSipTransactionWait Private methods **************************************
 
-procedure TIdSipTransactionWait.LogToTransactionLayer(VerbosityLevel: Byte;
+procedure TIdSipTransactionWait.LogToTransactionLayer(Severity: TSeverityLevel;
                                                       SourceRef: Cardinal;
                                                       SourceDescription: String;
                                                       RefCode: Cardinal;
@@ -2694,7 +2679,7 @@ procedure TIdSipTransactionWait.LogToTransactionLayer(VerbosityLevel: Byte;
 begin
   if not Assigned(Self.Transaction) then Exit;
 
-  Self.Transaction.Log(Description, VerbosityLevel, coLogEventRefTimerEvent, '');
+  Self.Transaction.Log(Description, Severity, coLogEventRefTimerEvent, '');
 end;
 
 //******************************************************************************

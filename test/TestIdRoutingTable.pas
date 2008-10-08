@@ -297,7 +297,35 @@ begin
 end;
 
 procedure TestFunctions.TestRouteSortOnlyGatewayDiffers;
+var
+  LowerAddress, HigherAddress: TIdRouteEntry;
 begin
+  // "Higher" addresses appear earlier in the sorted routing table.
+
+  LowerAddress  := Self.RouteA;
+  HigherAddress := Self.RouteB;
+
+  LowerAddress.Gateway  := '10.0.0.0';
+  HigherAddress.Gateway := '172.0.0.0';
+
+  CheckEquals(1,  RouteSort(LowerAddress, HigherAddress), '10.0.0.0/8 < 172.0.0.0/8');
+  CheckEquals(-1, RouteSort(HigherAddress, LowerAddress), '172.0.0.0/8 > 10.0.0.0/8');
+
+  LowerAddress.Gateway  := '0.0.0.0';
+  HigherAddress.Gateway := '172.0.0.0';
+
+  CheckEquals(1,  RouteSort(LowerAddress, HigherAddress), '0.0.0.0/8 < 172.0.0.0/8');
+  CheckEquals(-1, RouteSort(HigherAddress, LowerAddress), '172.0.0.0/8 > 0.0.0.0/8');
+
+  // Routes are IPv4 or IPv6 depending on the type of address in Destination.
+  LowerAddress.Destination  := '::';
+  HigherAddress.Destination := '::';
+
+  LowerAddress.Gateway  := '::';
+  HigherAddress.Gateway := '2002:0101:0101::';
+
+  CheckEquals(1,  RouteSort(LowerAddress, HigherAddress), '::/8 < 2002:0101:0101::/8');
+  CheckEquals(-1, RouteSort(HigherAddress, LowerAddress), '2002:0101:0101::/8 > ::/8');
 end;
 
 procedure TestFunctions.TestRouteSortOnlyMaskDiffers;

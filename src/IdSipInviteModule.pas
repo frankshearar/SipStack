@@ -892,7 +892,7 @@ implementation
 
 uses
   IdRandom, IdRegisteredObject, IdSdp, IdSipSubscribeModule, IdSipTransport,
-  IdSipUserAgent, IdSipTransaction, LoGGer, RuntimeSafety, SysUtils;
+  IdSipUserAgent, IdSipTransaction, RuntimeSafety, SysUtils;
 
 // Exception messages
 const

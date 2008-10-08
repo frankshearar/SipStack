@@ -13,7 +13,7 @@ interface
 
 uses
   IdConnectionBindings, IdInterfacedObject, IdRoutingTable, IdSipLocation,
-  IdSipMessage, IdSipTransport, IdTimerQueue, LoGGer, SyncObjs, SysUtils,
+  IdSipMessage, IdSipTransport, IdTimerQueue, SyncObjs, SysUtils,
   TestFrameworkEx, TestFrameworkSip;
 
 type
@@ -29,14 +29,12 @@ type
                                  const Address: String;
                                  Port: Cardinal;
                                  TestCase: TestTIdSipTransport;
-                                 Logger: TLoGGerThread;
                                  LogName: String);
 
   public
     constructor Create(TransportType: TIdSipTransportClass;
                        TestCase: TestTIdSipTransport;
                        FinishedEvent: TEvent;
-                       Logger: TLoGGerThread;
                        LogName: String); reintroduce;
     destructor  Destroy; override;
 
@@ -61,7 +59,6 @@ type
     FinishedTimer:          TEvent;
     HighPortLocation:       TIdSipLocation;
     Lock:                   TCriticalSection;
-    Logger:                 TLoGGerThread;
     LogName:                String;
     LowPortLocation:        TIdSipLocation;
     ReceivedRequest:        Boolean;
@@ -137,7 +134,6 @@ type
                             R: TIdSipRequest;
                             ReceivedFrom: TIdConnectionBindings);
     function  CopyFirstLocation(Transport: TIdSipTransport): TIdSipLocation;
-    function  CreateLogger(LogName: String): TLoGGerThread;
     function  HighPortTransport: TIdSipTransport;
     procedure LogException(E: Exception; Method: String);
     function  LowPortTransport: TIdSipTransport;
@@ -326,8 +322,8 @@ type
 implementation
 
 uses
-  IdRegisteredObject, IdSimpleParser, IdStack, IdTcpServer, TestFramework,
-  TestMessages;
+  IdRegisteredObject, IdSimpleParser, IdStack, IdTcpServer, PluggableLogging,
+  TestFramework, TestMessages;
 
 var
   ServerThatInstantiatesGStack: TIdTcpServer;
@@ -340,7 +336,6 @@ var
 constructor TTransportTestTimerQueue.Create(TransportType: TIdSipTransportClass;
                                             TestCase: TestTIdSipTransport;
                                             FinishedEvent: TEvent;
-                                            Logger: TLoGGerThread;
                                             LogName: String);
 begin
   inherited Create(false);
@@ -353,7 +348,6 @@ begin
                           '127.0.0.1',
                           TestCase.DefaultPort + 10000,
                           TestCase,
-                          Logger,
                           LogName);
 
   Self.fLowPortTransport  := TransportType.Create;
@@ -362,7 +356,6 @@ begin
                           '127.0.0.1',
                           TestCase.DefaultPort,
                           TestCase,
-                          Logger,
                           LogName);
 
   Self.HighPortTransport.Start;
@@ -390,7 +383,6 @@ procedure TTransportTestTimerQueue.ConfigureTransport(Transport: TIdSipTransport
                                                       const Address: String;
                                                       Port: Cardinal;
                                                       TestCase: TestTIdSipTransport;
-                                                      Logger: TLoGGerThread;
                                                       LogName: String);
 begin
   Transport.AddTransportListener(TestCase);
@@ -400,7 +392,6 @@ begin
   Transport.Timeout      := TestCase.DefaultTimeout div 10;
   Transport.Timer        := Self;
   Transport.HostName     := HostName;
-  Transport.Logger       := Logger;
   Transport.LogName      := LogName;
 
   Transport.SetFirstBinding(Address, Port);
@@ -435,15 +426,13 @@ begin
 
   Self.LogName := Self.FTestName + 'Log';
   Self.TestRef := $decafbad;
-  Self.Logger  := Self.CreateLogger(Self.LogName);
-  TIdObjectRegistry.SetLogger(Self.Logger,
-                              LogName,
+  TIdObjectRegistry.SetLogger(LogName,
                               Self.TestRef);
 
   TIdSipTransportRegistry.RegisterTransportType(Self.TransportType.GetTransportType,
                                                 Self.TransportType);
 
-  Self.Timer := TTransportTestTimerQueue.Create(Self.TransportType, Self, Self.FinishedTimer, Self.Logger, LogName);
+  Self.Timer := TTransportTestTimerQueue.Create(Self.TransportType, Self, Self.FinishedTimer, LogName);
   Check(Self.Timer <> nil,
         'Timer didn''t instantiate: the previous test likely failed without '
       + 'killing the transports');
@@ -469,8 +458,6 @@ begin
   Self.RejectedMessageReason := '';
   Self.SentBy                := '';
   Self.WrongServer           := false;
-
-  Self.Logger.Resume;
 end;
 
 procedure TestTIdSipTransport.TearDown;
@@ -515,8 +502,6 @@ begin
 
     inherited TearDown;
   end;
-
-  Self.Logger.Terminate;
 end;
 
 function TestTIdSipTransport.DefaultPort: Cardinal;
@@ -873,22 +858,6 @@ begin
   end;
 end;
 
-function TestTIdSipTransport.CreateLogger(LogName: String): TLoGGerThread;
-begin
-  Result := TLoGGerThread.Create;
-  Result.Lock;
-  try
-    if not Result.Logs.LogExists(LogName) then
-      Result.Add(LogName);
-
-    Result.Logs.LogsByName[LogName].VerbosityLevel := LoGGerVerbosityLevelDebug;
-    Result.Logs.LogsByName[LogName].FileName       := LogName;
-  finally
-    Result.Unlock;
-  end;
-
-end;
-
 function TestTIdSipTransport.HighPortTransport: TIdSipTransport;
 begin
   Result := Self.Timer.HighPortTransport;
@@ -898,13 +867,7 @@ procedure TestTIdSipTransport.LogException(E: Exception; Method: String);
 const
   LogMsg = 'Exception %s occured in %s: %s';
 begin
-  Self.Logger.Write(Self.LogName,
-                    LoGGerVerbosityLevelDebug,
-                    Self.TestRef,
-                    Self.FTestName,
-                    0,
-                    Format(LogMsg, [E.ClassName, Method, E.Message]),
-                    '');
+  LogEntry(Self.LogName, Format(LogMsg, [E.ClassName, Method, E.Message]), Self.TestRef, Self.FTestName, slDebug, 0, '');
 end;
 
 function TestTIdSipTransport.LowPortTransport: TIdSipTransport;

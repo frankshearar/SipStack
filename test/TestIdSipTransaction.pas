@@ -131,7 +131,7 @@ type
     procedure TestAddManagementListener;
     procedure TestAddServerTransaction;
     procedure TestAddTransportBinding;
-    procedure TestAddTransportBindingAddsLoggerToTransport;
+    procedure TestAddTransportBindingAddsLogNameToTransport;
     procedure TestAddTransportBindingAddsTimerToTransport;
     procedure TestAddTransportBindingAddsRoutingTableToTransport;
     procedure TestAddTransportBindingSetsTransportLogName;
@@ -157,7 +157,6 @@ type
     procedure TestSendRequest;
     procedure TestSendRequestOverUdp;
     procedure TestServerInviteTransactionGetsAck;
-    procedure TestSetLoggerSetsTransports;
     procedure TestSetLogNameSetsTransports;
     procedure TestSetPreferredTransportTypeFor;
     procedure TestSetRoutingTableSetsTransports;
@@ -806,7 +805,7 @@ type
 implementation
 
 uses
-  IdException, IdRandom, IdRegisteredObject, IdSdp, LoGGer, Math, RuntimeSafety,
+  IdException, IdRandom, IdRegisteredObject, IdSdp, Math, RuntimeSafety,
   TypInfo;
 
 function Suite: ITestSuite;
@@ -1367,23 +1366,16 @@ begin
               'Binding on different transport not added to a new transport');
 end;
 
-procedure TestTIdSipTransactionDispatcher.TestAddTransportBindingAddsLoggerToTransport;
-var
-  L: TLoGGerThread;
+procedure TestTIdSipTransactionDispatcher.TestAddTransportBindingAddsLogNameToTransport;
 begin
   // Let's start with a clean slate, as far as transports are concerned.
   Self.D.Transports.Clear;
 
-  L := TLoGGerThread.Create;
-  try
-    Self.D.Logger := L;
+  Self.D.LogName := 'foo';
 
-    Self.D.AddTransportBinding(TcpTransport, '127.0.0.1', 1);
-    Check(Self.D.Logger = Self.D.Transports[0].Logger,
-          'Newly-added transport doesn''t use the dispatcher''s Logger');
-  finally
-    L.Free;
-  end;
+  Self.D.AddTransportBinding(TcpTransport, '127.0.0.1', 1);
+  CheckEquals(Self.D.LogName, Self.D.Transports[0].LogName,
+              'Newly-added transport doesn''t use the dispatcher''s LogName');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestAddTransportBindingAddsTimerToTransport;
@@ -1833,26 +1825,6 @@ begin
     end;
   finally
     Listener.Free;
-  end;
-end;
-
-procedure TestTIdSipTransactionDispatcher.TestSetLoggerSetsTransports;
-var
-  I:    Integer;
-  NewL: TLoGGerThread;
-begin
-  Self.D.AddTransportBinding(TcpTransport, '127.0.0.1', 5060);
-  Self.D.AddTransportBinding(UdpTransport, '127.0.0.1', 5060);
-
-  NewL := TLoGGerThread.Create;
-  try
-    Self.D.Logger := NewL;
-
-    for I := 0 to Self.D.TransportCount - 1 do
-      Check(NewL = Self.D.Transports[I].Logger,
-            'Transport #' + IntToStr(I) + '''s logger not set');
-  finally
-    NewL.Free;
   end;
 end;
 

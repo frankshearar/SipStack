@@ -886,6 +886,7 @@ type
 
     procedure ClientConnected(Client: TObject);
     procedure ClientDisconnected(Client: TObject);
+    function  CreateClient: TIdSdpTcpClient;
   protected
     function  GetAddress: String; override;
     function  GetPeerAddress: String; override;
@@ -1401,8 +1402,8 @@ function StrToSetupType(const S: String): TIdSDPSetupType;
 implementation
 
 uses
-  IdException, IdIndyUtils, IdRandom, IdSocketHandle, IdTCPConnection, LoGGer,
-  LogVariables, RuntimeSafety;
+  IdException, IdIndyUtils, IdRandom, IdSocketHandle, IdTCPConnection,
+  LogVariables, PluggableLogging, RuntimeSafety;
 
 const
   SessionHeaderOrder = 'vosiuepcbtka';
@@ -5746,10 +5747,7 @@ begin
 
   Self.ThreadLock := TCriticalSection.Create;
 
-  Self.Client := TIdSdpTcpClient.Create(nil);
-  Self.Client.ConnectionID   := Self.ID;
-  Self.Client.OnConnected    := Self.ClientConnected;
-  Self.Client.OnDisconnected := Self.ClientDisconnected;
+  Self.Client := Self.CreateClient;
 end;
 
 destructor TIdSdpTcpClientConnection.Destroy;
@@ -5774,6 +5772,9 @@ begin
   try
     if Self.IsConnected then
       Self.Disconnect;
+
+    if not Assigned(Self.Client) then
+      Self.Client := Self.CreateClient;
 
     Self.Client.Host := PeerAddress;
     Self.Client.Port := PeerPort;
@@ -5942,6 +5943,14 @@ begin
   finally
     Self.ThreadLock.Release;
   end;
+end;
+
+function TIdSdpTcpClientConnection.CreateClient: TIdSdpTcpClient;
+begin
+  Result := TIdSdpTcpClient.Create(nil);
+  Result.ConnectionID   := Self.ID;
+  Result.OnConnected    := Self.ClientConnected;
+  Result.OnDisconnected := Self.ClientDisconnected;
 end;
 
 //******************************************************************************
@@ -7364,7 +7373,7 @@ procedure TIdSdpTcpReceiveDataWait.LogTrigger;
 const
   LogMsg = '%s with ID %s received data';
 begin
-  Self.OnLog(LoGGerVerbosityLevelDebug,
+  Self.OnLog(slDebug,
              coLogSourceRefSIPStack,
              '',
              coLogEventRefTimerEvent,

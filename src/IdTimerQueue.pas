@@ -12,14 +12,14 @@ unit IdTimerQueue;
 interface
 
 uses
-  Classes, Contnrs, IdBaseThread, IdNotification, IdRegisteredObject, LoGGer,
-  SyncObjs, SysUtils;
+  Classes, Contnrs, IdBaseThread, IdNotification, IdRegisteredObject,
+  PluggableLogging, SyncObjs, SysUtils;
 
 type
   TIdTimerQueue = class;
   TIdTimerQueueClass = class of TIdTimerQueue;
 
-  TIdLogProc = procedure(VerbosityLevel: Byte;
+  TIdLogProc = procedure(Severity: TSeverityLevel;
                          SourceRef: Cardinal;
                          SourceDescription: String;
                          RefCode: Cardinal;
@@ -82,7 +82,6 @@ type
     fCreateSuspended: Boolean;
     fEventList:       TObjectList;
     fLock:            TCriticalSection;
-    fLogger:          TLoGGerThread;
     fLogName:         String;
     fTerminated:      Boolean;
     fDefaultTimeout:  Cardinal;
@@ -100,7 +99,7 @@ type
     function  EventAt(Index: Integer): TIdWait; virtual;
     function  IndexOfEvent(Event: Pointer): Integer;
     procedure LockTimer; virtual;
-    procedure LogTrigger(VerbosityLevel: Byte;
+    procedure LogTrigger(Severity: TSeverityLevel;
                          SourceRef: Cardinal;
                          SourceDescription: String;
                          RefCode: Cardinal;
@@ -127,9 +126,8 @@ type
     procedure Resume; virtual;
     procedure Terminate; virtual;
 
-    property DefaultTimeout: Cardinal      read GetDefaultTimeout write SetDefaultTimeout;
-    property Logger:         TLoGGerThread read fLogger write fLogger;
-    property LogName:        String        read fLogName write fLogName;
+    property DefaultTimeout: Cardinal read GetDefaultTimeout write SetDefaultTimeout;
+    property LogName:        String   read fLogName write fLogName;
   end;
 
   TIdThreadProc = procedure of object;
@@ -487,15 +485,14 @@ begin
   Self.Lock.Acquire;
 end;
 
-procedure TIdTimerQueue.LogTrigger(VerbosityLevel: Byte;
+procedure TIdTimerQueue.LogTrigger(Severity: TSeverityLevel;
                                    SourceRef: Cardinal;
                                    SourceDescription: String;
                                    RefCode: Cardinal;
                                    Description,
                                    BinaryData: String);
 begin
-  if Assigned(Self.Logger) then
-    Self.Logger.Write(Self.LogName, VerbosityLevel, SourceRef, SourceDescription, RefCode, Description, BinaryData);
+  LogEntry(Self.LogName, Description, SourceRef, SourceDescription, Severity, RefCode, BinaryData);
 end;
 
 procedure TIdTimerQueue.TriggerEarliestEvent;

@@ -9134,7 +9134,7 @@ end;
 
 procedure TestTIdSdpTcpClient.ClientConnected(Sender: TObject);
 begin
-  Self.Runner := TIdSdpThreadedTcpClient.Create(Self.Client);
+  Self.Runner := TIdSdpThreadedTcpClient.Create(Self.Client, ThreadLock);
 end;
 
 procedure TestTIdSdpTcpClient.ClientDisconnected(Sender: TObject);

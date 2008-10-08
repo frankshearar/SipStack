@@ -171,6 +171,22 @@ begin
     Result := 0;
 end;
 
+function HighestIPv4GatewayFirst(RouteA, RouteB: TIdRouteEntry): Integer;
+begin
+  Assert(RouteA.IsIPv4Route and RouteB.IsIPv4Route,
+         'The routes must be both IPv4 routes');
+
+  // Routes with "higher" addresses appear earlier in the routing table.
+  if (RouteA.Gateway <> RouteB.Gateway) then begin
+    if (TIdIPAddressParser.InetAddr(RouteA.Gateway) < TIdIPAddressParser.InetAddr(RouteB.Gateway)) then
+      Result := 1
+    else
+      Result := -1;
+  end
+  else
+    Result := 0;
+end;
+
 function HighestIPv6AddressFirst(RouteA, RouteB: TIdRouteEntry): Integer;
   function ReverseCompareWord(A, B: Word): Integer;
   begin
@@ -197,6 +213,37 @@ begin
   // Routes with "higher" addresses appear earlier in the routing table.
   for I := Low(TIdIPv6AddressRec) to High(TIdIPv6AddressRec) do begin
     Result := ReverseCompareWord(AddressA[I], AddressB[I]);
+
+    if (Result <> 0) then Break;
+  end;
+end;
+
+function HighestIPv6GatewayFirst(RouteA, RouteB: TIdRouteEntry): Integer;
+  function ReverseCompareWord(A, B: Word): Integer;
+  begin
+    // "Reverse" because usually compare functions return -1 if A < B;
+    // here we return -1 if A > B.
+    if (A < B) then
+      Result := 1
+    else if (A > B) then
+      Result := -1
+    else
+      Result := 0;
+  end;
+
+var
+  GatewayA, GatewayB: TIdIPv6AddressRec;
+  I:                  Integer;
+begin
+  Assert(not RouteA.IsIPv4Route and not RouteB.IsIPv4Route,
+         'The routes must be both IPv6 routes');
+
+  TIdIPAddressParser.ParseIPv6Address(RouteA.Gateway, GatewayA);
+  TIdIPAddressParser.ParseIPv6Address(RouteB.Gateway, GatewayB);
+
+  // Routes with "higher" Gatewayes appear earlier in the routing table.
+  for I := Low(TIdIPv6AddressRec) to High(TIdIPv6AddressRec) do begin
+    Result := ReverseCompareWord(GatewayA[I], GatewayB[I]);
 
     if (Result <> 0) then Break;
   end;
@@ -229,16 +276,16 @@ begin
     Result := 0;
 end;
 
-function LowestGatewayFirst(RouteA, RouteB: TIdRouteEntry): Integer;
+function HighestGatewayFirst(RouteA, RouteB: TIdRouteEntry): Integer;
 begin
     Assert(RouteA.IsIPv4Route = RouteB.IsIPv4Route,
            'The routes must be either both IPv4 or both IPv6 routes');
 
   if (RouteA.Gateway <> RouteB.Gateway) then begin
-    if (RouteA.Gateway < RouteB.Gateway) then
-      Result := -1
+    if RouteA.IsIPv4Route then
+      Result := HighestIPv4GatewayFirst(RouteA, RouteB)
     else
-      Result := 1;
+      Result := HighestIPv6GatewayFirst(RouteA, RouteB)
   end
   else
     Result := 0;
@@ -319,7 +366,7 @@ begin
     Result := LowestMetricFirst(RouteA, RouteB);
 
   if (Result = 0) then
-    Result := LowestGatewayFirst(RouteA, RouteB);
+    Result := HighestGatewayFirst(RouteA, RouteB);
 end;
 
 //******************************************************************************

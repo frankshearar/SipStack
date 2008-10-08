@@ -13,8 +13,9 @@ interface
 
 uses
   Classes, Contnrs, IdConnectionBindings, IdException, IdInterfacedObject,
-  IdNotification,  IdRoutingTable, IdSipLocation, IdSipMessage, IdSocketHandle,
-  IdSSLOpenSSL, IdTCPConnection, IdTimerQueue, LoGGer, SyncObjs, SysUtils;
+  IdNotification, IdRoutingTable, IdSipLocation, IdSipMessage, IdSocketHandle,
+  IdSSLOpenSSL, IdTCPConnection, IdTimerQueue, PluggableLogging, SyncObjs,
+  SysUtils;
 
 type
   TIdSipTransport = class;
@@ -72,7 +73,6 @@ type
     fAddress:                  String;
     fConserveConnections:      Boolean; // This is actually only used by connection-oriented transports.
     fHostName:                 String;
-    fLogger:                   TLoGGerThread;
     fLogName:                  String;
     fPort:                     Cardinal;
     fRoutingTable:             TIdRoutingTable;
@@ -95,7 +95,7 @@ type
     function  IndexOfBinding(const Address: String; Port: Cardinal): Integer;
     procedure InstantiateServer; virtual;
     procedure Log(Description: String;
-                  Severity: TLogVerbosityLevel;
+                  Severity: TSeverityLevel;
                   EventRef: Cardinal;
                   DebugInfo: String);
     procedure LogException(FailedMessage: TIdSipMessage;
@@ -194,7 +194,6 @@ type
 
     property ConserveConnections: Boolean         read GetConserveConnections write SetConserveConnections;
     property HostName:            String          read fHostName write fHostName;
-    property Logger:              TLoGGerThread   read fLogger write fLogger;
     property LogName:             String          read fLogName write fLogName;
     property RoutingTable:        TIdRoutingTable read fRoutingTable write fRoutingTable;
     property Timeout:             Cardinal        read fTimeout write SetTimeout;
@@ -812,7 +811,7 @@ end;
 procedure TIdSipTransport.Assert(Condition: Boolean; ProblemDescription: String);
 begin
   if not Condition then
-    Self.Log('Assertion violation', LoGGerVerbosityLevelLow, coLogEventException, ProblemDescription);
+    Self.Log('Assertion violation', slError, coLogEventException, ProblemDescription);
 
   System.Assert(Condition, ProblemDescription);
 end;
@@ -885,12 +884,11 @@ begin
 end;
 
 procedure TIdSipTransport.Log(Description: String;
-                              Severity: TLogVerbosityLevel;
+                              Severity: TSeverityLevel;
                               EventRef: Cardinal;
                               DebugInfo: String);
 begin
-  if Assigned(Self.Logger) then
-    Self.Logger.Write(Self.LogName, Severity, coLogSourceRefSIPStack, Self.ClassName, EventRef, Description, DebugInfo);
+  LogEntry(Self.LogName, Description, coLogSourceRefSIPStack, Self.ClassName, Severity, EventRef, DebugInfo);
 end;
 
 procedure TIdSipTransport.LogException(FailedMessage: TIdSipMessage;
@@ -900,7 +898,7 @@ const
   LogMsg = '%s sending %s: %s';
 begin
   Self.Log(Format(LogMsg, [E.ClassName, FailedMessage.Description, Reason]),
-           LoGGerVerbosityLevelLow,
+           slError,
            coLogEventException,
            FailedMessage.AsString);
 end;
@@ -911,7 +909,7 @@ const
   LogMsg = 'Received %s from %s:%d on %s:%d';
 begin
   Self.Log(Format(LogMsg, [Msg.Description, ReceivedFrom.PeerIP, ReceivedFrom.PeerPort, ReceivedFrom.LocalIP, ReceivedFrom.LocalPort]),
-           LoGGerVerbosityLevelHigh,
+           slDebug,
            0,
            ReceivedFrom.AsString + CRLF + Msg.AsString);
 end;
@@ -923,7 +921,7 @@ const
   LogMsg = 'Rejected message starting "%s" from %s:%d on %s:%d: %s';
 begin
   Self.Log(Format(LogMsg, [Copy(Msg, 1, 30), ReceivedFrom.PeerIP, ReceivedFrom.PeerPort, ReceivedFrom.LocalIP, ReceivedFrom.LocalPort, Reason]),
-           LoGGerVerbosityLevelNormal,
+           slDebug,
            0,
            ReceivedFrom.AsString + CRLF + Reason + CRLF + Msg);
 end;
@@ -933,7 +931,7 @@ const
   LogMsg = 'Sent %s to %s:%d from %s:%d';
 begin
   Self.Log(Format(LogMsg, [Msg.Description, SentTo.PeerIP, SentTo.PeerPort, SentTo.LocalIP, SentTo.LocalPort]),
-           LoGGerVerbosityLevelHigh,
+           slDebug,
            0,
            SentTo.AsString + CRLF + Msg.AsString);
 end;

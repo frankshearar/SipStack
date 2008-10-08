@@ -12,7 +12,7 @@ unit TestFrameworkTimerQueue;
 interface
 
 uses
-  IdTimerQueue, SysUtils;
+  IdTimerQueue, PluggableLogging, SysUtils;
 
 type
   TExceptionRaisingWait = class(TIdWait)
@@ -35,16 +35,16 @@ type
     fRefCode:           Cardinal;
     fSourceDescription: String;
     fSourceRef:         Cardinal;
-    fVerbosityLevel:    Byte;
+    fSeverity:          TSeverityLevel;
   protected
     procedure LogTrigger; override;
   public
-    property BinaryData:        String   read fBinaryData write fBinaryData;
-    property Description:       String   read fDescription write fDescription;
-    property RefCode:           Cardinal read fRefCode write fRefCode;
-    property SourceDescription: String   read fSourceDescription write fSourceDescription;
-    property SourceRef:         Cardinal read fSourceRef write fSourceRef;
-    property VerbosityLevel:    Byte     read fVerbosityLevel write fVerbosityLevel;
+    property BinaryData:        String         read fBinaryData write fBinaryData;
+    property Description:       String         read fDescription write fDescription;
+    property RefCode:           Cardinal       read fRefCode write fRefCode;
+    property SourceDescription: String         read fSourceDescription write fSourceDescription;
+    property SourceRef:         Cardinal       read fSourceRef write fSourceRef;
+    property Severity:          TSeverityLevel read fSeverity write fSeverity;
   end;
 
 implementation
@@ -74,7 +74,7 @@ end;
 
 procedure TLoggingWait.LogTrigger;
 begin
-  Self.OnLog(Self.VerbosityLevel, Self.SourceRef, Self.SourceDescription, Self.RefCode, Self.Description, Self.BinaryData);
+  Self.OnLog(Self.Severity, Self.SourceRef, Self.SourceDescription, Self.RefCode, Self.Description, Self.BinaryData);
 end;
 
 end.

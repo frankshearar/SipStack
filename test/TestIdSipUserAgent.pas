@@ -15,7 +15,7 @@ uses
   Classes, IdConnectionBindings, IdObservable, IdRoutingTable, IdSipCore,
   IdSipDialog, IdSipDialogID, IdSipDns, IdSipInviteModule, IdSipLocation,
   IdSipMessage, IdSipRegistration, IdSipTransport, IdSipUserAgent,
-  IdSocketHandle, IdUdpServer, IdTimerQueue, LoGGer, SyncObjs, TestFrameworkEx,
+  IdSocketHandle, IdUdpServer, IdTimerQueue, SyncObjs, TestFrameworkEx,
   TestFramework, TestFrameworkSip, TestFrameworkSipTU;
 
 type
@@ -142,11 +142,9 @@ type
     procedure TestRemoveUserAgentListener;
     procedure TestRFC2543InviteCallFlow;
     procedure TestScheduleEventActionClosure;
-    procedure TestSetDispatcherSetsDispatchersLogger;
     procedure TestSetDispatcherSetsDispatchersLogName;
     procedure TestSetFrom;
     procedure TestSetFromMailto;
-    procedure TestSetLoggerSetsDispatchersLogger;
     procedure TestSetLogNameSetsDispatchersLogName;
     procedure TestSimultaneousInAndOutboundCall;
     procedure TestTerminateAllCalls;
@@ -266,23 +264,6 @@ type
     procedure TestUpdateConfigurationWithTransport;
     procedure TestUpdateConfigurationWithUseInboundConnections;
     procedure TestUpdateConfigurationWithUseTransport;
-  end;
-
-  TestConfigureLogging = class(TStackConfigurationTestCaseWithMockTransport)
-  private
-    procedure CheckBasicLogging(UserAgent: TIdSipUserAgent);
-    procedure CheckLogVerbosityLevel(Name: String; ExpectedLevel: TLogVerbosityLevel);
-  published
-    procedure TestCreateUserAgentWithLogFileName;
-    procedure TestCreateUserAgentWithLogVerbosity;
-    procedure TestCreateUserAgentWithLogVerbosityBeforeFileName;
-    procedure TestLogVerbosityLevelDebug;
-    procedure TestLogVerbosityLevelHigh;
-    procedure TestLogVerbosityLevelHighest;
-    procedure TestLogVerbosityLevelLow;
-    procedure TestLogVerbosityLevelLowest;
-    procedure TestLogVerbosityLevelNormal;
-    procedure TestLogVerbosityLevelUnknownName;
   end;
 
   TestConfigureProxies = class(TStackConfigurationTestCaseWithMockTransport)
@@ -472,7 +453,6 @@ begin
   Result := TTestSuite.Create('IdSipUserAgent unit tests');
   Result.AddTest(TestTIdSipUserAgent.Suite);
   Result.AddTest(TestTIdSipStackConfigurator.Suite);
-  Result.AddTest(TestConfigureLogging.Suite);
   Result.AddTest(TestConfigureProxies.Suite);
   Result.AddTest(TestConfigureRegistrar.Suite);
   Result.AddTest(TestConfigureMockRoutingTable.Suite);
@@ -1955,34 +1935,6 @@ begin
         'Event not scheduled');
 end;
 
-procedure TestTIdSipUserAgent.TestSetDispatcherSetsDispatchersLogger;
-var
-  D:      TIdSipMockTransactionDispatcher;
-  Logger: TLoGGerThread;
-begin
-  try
-    D := TIdSipMockTransactionDispatcher.Create;
-    try
-      Logger := TLoGGerThread.Create;
-      try
-        Self.Core.Logger := Logger;
-
-        Self.Core.Dispatcher := D;
-        Check(Self.Core.Logger = D.Logger, 'Dispatcher''s logger not set');
-      finally
-        // Remember that Self.Core terminates its logger.
-        Self.Core.Logger := nil;
-        Logger.Free;
-      end;
-    finally
-      D.Free;
-    end;
-  finally
-    // Remember that Self.Core frees its dispatcher.
-    Self.Core.Dispatcher := Self.Dispatcher;
-  end;
-end;
-
 procedure TestTIdSipUserAgent.TestSetDispatcherSetsDispatchersLogName;
 var
   D: TIdSipMockTransactionDispatcher;
@@ -2034,22 +1986,6 @@ begin
     end;
   finally
     F.Free;
-  end;
-end;
-
-procedure TestTIdSipUserAgent.TestSetLoggerSetsDispatchersLogger;
-var
-  Logger: TLoGGerThread;
-begin
-  Logger := TLoGGerThread.Create;
-  try
-    Self.Core.Logger := Logger;
-
-    Check(Self.Core.Logger = Self.Core.Dispatcher.Logger, 'Dispatcher''s Logger not set');
-  finally
-    // Remember that Self.Core terminates its logger.
-    Self.Core.Logger := nil;
-    Logger.Free;
   end;
 end;
 
@@ -2689,8 +2625,6 @@ begin
           'Transaction-User layer has no Authenticator');
     Check(Assigned(UA.Locator),
           'Transaction-User layer has no Locator');
-    Check(not Assigned(UA.Logger),
-          'Transaction-User layer assigned a Logger');
     Check(Assigned(UA.RoutingTable),
           'Transaction-User layer has no RoutingTable');
     Check(Assigned(UA.Timer),
@@ -3754,148 +3688,6 @@ begin
   finally
     UA.Free;
   end;
-end;
-
-//******************************************************************************
-//* TestConfigureLogging                                                       *
-//******************************************************************************
-//* TestConfigureLogging Private methods ***************************************
-
-procedure TestConfigureLogging.CheckBasicLogging(UserAgent: TIdSipUserAgent);
-begin
-  Check(Assigned(UserAgent.Logger), 'No logger created');
-  Check(UserAgent.Logger.Logs.LogExists(coSipStackLogName), 'Logger doesn''t use right log name');
-
-  Check(Assigned(UserAgent.Dispatcher.Logger), 'Transaction layer has no logger');
-  Check(UserAgent.Logger = UserAgent.Dispatcher.Logger, 'Transaction and Transaction-User layers use different loggers');
-
-  Check(UserAgent.Dispatcher.Transports.Count > 0, 'Not enough transports to check Transport layer logging');
-  Check(UserAgent.Logger = UserAgent.Dispatcher.Transports[0].Logger, 'Transport and Transaction-User layers use different loggers');
-end;
-
-procedure TestConfigureLogging.CheckLogVerbosityLevel(Name: String; ExpectedLevel: TLogVerbosityLevel);
-var
-  UA: TIdSipUserAgent;
-begin
-  Self.Configuration.Add(LogVerbosityLevelDirective + ': ' + Name);
-
-  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
-  try
-    CheckEquals(ExpectedLevel,
-                UA.Logger.Logs.LogsByName[coSipStackLogName].VerbosityLevel,
-                Name + ' resulted in incorrect verbosity level');
-  finally
-    UA.Free;
-  end;
-end;
-
-//* TestConfigureLogging Published methods *************************************
-
-procedure TestConfigureLogging.TestCreateUserAgentWithLogFileName;
-const
-  FileName = 'debug.log';
-var
-  UA: TIdSipUserAgent;
-begin
-  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
-  Self.Configuration.Add('LogFileName: ' + FileName);
-
-  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
-  try
-    CheckBasicLogging(UA);
-
-    CheckEquals(FileName, UA.Logger.Logs.LogsByName[coSipStackLogName].FileName, 'Log uses the wrong filename');
-  finally
-    UA.Free;
-  end;
-end;
-
-procedure TestConfigureLogging.TestCreateUserAgentWithLogVerbosity;
-const
-  Verbosity = LoGGerVerbosityLevelLow;
-var
-  Log: TLoGGerLog;
-  UA: TIdSipUserAgent;
-begin
-  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
-  Self.Configuration.Add('LogVerbosityLevel: ' + IntToStr(Verbosity));
-
-  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
-  try
-    CheckBasicLogging(UA);
-
-    Log := UA.Logger.Logs.LogsByName[coSipStackLogName];
-    CheckEquals(DefaultDebugLogFileName, Log.FileName,       'Log uses the wrong (default) filename');
-    CheckEquals(Verbosity,               Log.VerbosityLevel, 'Log uses the wrong verbosity level');
-  finally
-    UA.Free;
-  end;
-end;
-
-procedure TestConfigureLogging.TestCreateUserAgentWithLogVerbosityBeforeFileName;
-const
-  FileName  = 'debug.log';
-  Verbosity = LoGGerVerbosityLevelLow;
-var
-  Log: TLoGGerLog;
-  UA: TIdSipUserAgent;
-begin
-  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
-  Self.Configuration.Add('LogVerbosityLevel: ' + IntToStr(Verbosity));
-  Self.Configuration.Add('LogFileName: ' + FileName);
-
-  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
-  try
-    CheckBasicLogging(UA);
-
-    Log := UA.Logger.Logs.LogsByName[coSipStackLogName];
-    CheckEquals(DefaultDebugLogFileName, Log.FileName, 'Log uses the wrong (default) filename');
-    CheckEquals(Verbosity, Log.VerbosityLevel, 'Log uses the wrong verbosity level');
-    CheckEquals(FileName, UA.Logger.Logs.LogsByName[coSipStackLogName].FileName, 'Log uses the wrong filename');
-  finally
-    UA.Free;
-  end;
-end;
-
-procedure TestConfigureLogging.TestLogVerbosityLevelDebug;
-begin
-  CheckLogVerbosityLevel('debug', LoGGerVerbosityLevelDebug);
-  CheckLogVerbosityLevel('DEBUG', LoGGerVerbosityLevelDebug);
-end;
-
-procedure TestConfigureLogging.TestLogVerbosityLevelHigh;
-begin
-  CheckLogVerbosityLevel('high', LoGGerVerbosityLevelHigh);
-  CheckLogVerbosityLevel('HIGH', LoGGerVerbosityLevelHigh);
-end;
-
-procedure TestConfigureLogging.TestLogVerbosityLevelHighest;
-begin
-  CheckLogVerbosityLevel('highest', LoGGerVerbosityLevelHighest);
-  CheckLogVerbosityLevel('HIGHEST', LoGGerVerbosityLevelHighest);
-end;
-
-procedure TestConfigureLogging.TestLogVerbosityLevelLow;
-begin
-  CheckLogVerbosityLevel('low', LoGGerVerbosityLevelLow);
-  CheckLogVerbosityLevel('LOW', LoGGerVerbosityLevelLow);
-end;
-
-procedure TestConfigureLogging.TestLogVerbosityLevelLowest;
-begin
-  CheckLogVerbosityLevel('lowest', LoGGerVerbosityLevelLowest);
-  CheckLogVerbosityLevel('LOWEST', LoGGerVerbosityLevelLowest);
-end;
-
-procedure TestConfigureLogging.TestLogVerbosityLevelNormal;
-begin
-  CheckLogVerbosityLevel('normal', LoGGerVerbosityLevelNormal);
-  CheckLogVerbosityLevel('NORMAL', LoGGerVerbosityLevelNormal);
-end;
-
-procedure TestConfigureLogging.TestLogVerbosityLevelUnknownName;
-begin
-  CheckLogVerbosityLevel('unknown', LoGGerVerbosityLevelNormal);
 end;
 
 //******************************************************************************

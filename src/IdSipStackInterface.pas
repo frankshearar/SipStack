@@ -16,7 +16,8 @@ uses
   IdRegisteredObject, IdSipCore, IdSipDialogID, IdSipDns, IdSipInviteModule,
   IdSipLocation, IdSipMessage, IdSipOptionsModule, IdSipRegistration,
   IdSipSubscribeModule, IdSipTransaction, IdSipTransport, IdSipUserAgent,
-  IdTimerQueue, LoGGer, Messages, StringDictionary, SyncObjs, SysUtils, Windows;
+  IdTimerQueue, Messages, PluggableLogging, StringDictionary, SyncObjs,
+  SysUtils, Windows;
 
 type
   TIdSipHandle = Cardinal;
@@ -287,17 +288,18 @@ type
   end;
 
   // You may instantiate me in the context of any thread, because my Log method
-  // is fully reentrant.
+  // is fully reentrant. (More accurately: it'd fully reentrant if the logging
+  // callback in PluggableLogging, is fully reentrant.)
   TIdLoggingExtension = class(TIdSipStackInterfaceExtension)
   public
     procedure Log(LogName: String;
-                  VerbosityLevel: TLogVerbosityLevel;
+                  Severity: TSeverityLevel;
                   SourceRef: Cardinal;
                   SourceDescription: String;
                   RefCode: Cardinal;
                   Description,
                   BinaryData: String);
-    procedure SetLogger(Log: TLoGGerThread; LogName: String);
+    procedure SetLogger(LogName: String);
   end;
 
   // I allow access to the UserAgent's TIdSipLocator.
@@ -1745,7 +1747,7 @@ begin
   Notification.Event  := Event;
   Notification.Stack  := Self;
 
-  Self.UserAgent.Log(Format('Message %s sent to application', [EventNames(Event)]), LoGGerVerbosityLevelDebug, Event, Data.AsString);
+  Self.UserAgent.Log(Format('Message %s sent to application', [EventNames(Event)]), slDebug, Event, Data.AsString);
 
   // The receiver of this message must free the Notification.
   PostMessage(Self.UiHandle, UINT(Notification.Event), WPARAM(Notification), 0)
@@ -2004,7 +2006,7 @@ begin
   Action.AddActionListener(Self);
   H := Self.AddAction(Action);
 
-  Self.UserAgent.Log(Format(LogMsg, [Action.ClassName, Action.ID, IntToHex(H, 8)]), LoGGerVerbosityLevelDebug, 0, '');
+  Self.UserAgent.Log(Format(LogMsg, [Action.ClassName, Action.ID, IntToHex(H, 8)]), slDebug, 0, '');
 end;
 
 procedure TIdSipStackInterface.OnAuthenticationChallenge(Action: TIdSipAction;
@@ -2377,7 +2379,7 @@ begin
   Action.RemoveActionListener(Self);
   Self.RemoveAction(H);
 
-  Self.UserAgent.Log(Format(LogMsg, [Action.ClassName, Action.ID, IntToHex(H, 8)]), LoGGerVerbosityLevelDebug, 0, '');
+  Self.UserAgent.Log(Format(LogMsg, [Action.ClassName, Action.ID, IntToHex(H, 8)]), slDebug, 0, '');
 end;
 
 procedure TIdSipStackInterface.OnRenewedSubscription(UserAgent: TIdSipAbstractCore;
@@ -2547,47 +2549,21 @@ end;
 //* TIdLoggingExtension Public methods *****************************************
 
 procedure TIdLoggingExtension.Log(LogName: String;
-                                  VerbosityLevel: TLogVerbosityLevel;
+                                  Severity: TSeverityLevel;
                                   SourceRef: Cardinal;
                                   SourceDescription: String;
                                   RefCode: Cardinal;
                                   Description,
                                   BinaryData: String);
-var
-  L: TLoGGerThread;
 begin
-  if not Assigned(Self.UserAgent.Logger) then Exit;
-
-  L := Self.UserAgent.Logger;
-  L.Lock;
-  try
-    if not L.Logs.LogExists(LogName) then
-      L.Add(LogName);
-
-    L.Write(LogName,
-            VerbosityLevel,
-            SourceRef,
-            SourceDescription,
-            RefCode,
-            Description,
-            BinaryData);
-  finally
-    L.Unlock;
-  end;
+  LogEntry(LogName, Description, SourceRef, SourceDescription, Severity, RefCode, BinaryData);
 end;
 
-procedure TIdLoggingExtension.SetLogger(Log: TLoGGerThread; LogName: String);
+procedure TIdLoggingExtension.SetLogger(LogName: String);
 begin
-  // WARNING: If you configured the stack to log (through, say, the
-  // LogFileName or LogVerbosityLevel directives), DO NOT use this method!
-  // If you do, the TIdSipUserAgent will terminate Log! Plus, you'll have a
-  // TLoGGerThread running without being terminated.
-
-  Self.UserAgent.Logger  := Log;
   Self.UserAgent.LogName := LogName;
 
-  TIdObjectRegistry.SetLogger(Self.UserAgent.Logger,
-                              LogName,
+  TIdObjectRegistry.SetLogger(LogName,
                               coLogSourceRefSIPStack);
 end;
 
