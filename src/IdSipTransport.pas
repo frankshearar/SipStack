@@ -73,7 +73,6 @@ type
     fAddress:                  String;
     fConserveConnections:      Boolean; // This is actually only used by connection-oriented transports.
     fHostName:                 String;
-    fLogName:                  String;
     fPort:                     Cardinal;
     fRoutingTable:             TIdRoutingTable;
     fTimeout:                  Cardinal;
@@ -194,7 +193,6 @@ type
 
     property ConserveConnections: Boolean         read GetConserveConnections write SetConserveConnections;
     property HostName:            String          read fHostName write fHostName;
-    property LogName:             String          read fLogName write fLogName;
     property RoutingTable:        TIdRoutingTable read fRoutingTable write fRoutingTable;
     property Timeout:             Cardinal        read fTimeout write SetTimeout;
     property Timer:               TIdTimerQueue   read fTimer write SetTimer;
@@ -505,7 +503,6 @@ begin
 
   Self.InstantiateServer;
 
-  Self.LogName  := coSipStackLogName;
   Self.Timeout  := Self.DefaultTimeout;
   Self.UseRport := false;
 end;
@@ -888,7 +885,7 @@ procedure TIdSipTransport.Log(Description: String;
                               EventRef: Cardinal;
                               DebugInfo: String);
 begin
-  LogEntry(Self.LogName, Description, coLogSourceRefSIPStack, Self.ClassName, Severity, EventRef, DebugInfo);
+  LogEntry(Description, coLogSourceRefSIPStack, Self.ClassName, Severity, EventRef, DebugInfo);
 end;
 
 procedure TIdSipTransport.LogException(FailedMessage: TIdSipMessage;

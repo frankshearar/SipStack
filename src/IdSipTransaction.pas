@@ -80,7 +80,6 @@ type
                                       IIdSipTransportListener)
   private
     fLocator:                 TIdSipAbstractLocator;
-    fLogName:                 String;
     fRoutingTable:            TIdRoutingTable;
     fT1Interval:              Cardinal;
     fT2Interval:              Cardinal;
@@ -148,7 +147,6 @@ type
                                 const Reason: String;
                                 Source: TIdConnectionBindings);
     procedure SetLocator(Value: TIdSipAbstractLocator);
-    procedure SetLogName(Value: String);
     procedure SetRoutingTable(Value: TIdRoutingTable);
     procedure SetTimer(Value: TIdTimerQueue);
   public
@@ -198,7 +196,6 @@ type
 
     property DefaultPreferredTransportType: String                read GetDefaultPreferredTransportType write SetDefaultPreferredTransportType;
     property Locator:                       TIdSipAbstractLocator read fLocator write fLocator;
-    property LogName:                       String                read fLogName write SetLogName;
     property RoutingTable:                  TIdRoutingTable       read fRoutingTable write SetRoutingTable;
     property T1Interval:                    Cardinal              read fT1Interval write fT1Interval;
     property T2Interval:                    Cardinal              read fT2Interval write fT2Interval;
@@ -730,7 +727,6 @@ begin
   Self.Transactions   := TObjectList.Create(true);
   Self.TransportTypes := TIdSipTransportSpecifiers.Create;
 
-  Self.LogName    := coSipStackLogName;
   Self.T1Interval := DefaultT1;
   Self.T2Interval := DefaultT2;
   Self.T4Interval := DefaultT4;
@@ -775,7 +771,6 @@ begin
   else begin
     T := TIdSipTransportRegistry.TransportTypeFor(Transport).Create;
     T.HostName     := Address;
-    T.LogName      := Self.LogName;
     T.Timer        := Self.Timer;
     T.RoutingTable := Self.RoutingTable;
 
@@ -892,7 +887,7 @@ procedure TIdSipTransactionDispatcher.Log(Description: String;
                                           EventRef: Cardinal;
                                           DebugInfo: String);
 begin
-  LogEntry(Self.LogName, Description, coLogSourceRefSIPStack, Self.ClassName, Severity, EventRef, DebugInfo);
+  LogEntry(Description, coLogSourceRefSIPStack, Self.ClassName, Severity, EventRef, DebugInfo);
 end;
 
 function TIdSipTransactionDispatcher.LoopDetected(Request: TIdSipRequest): Boolean;
@@ -1251,16 +1246,6 @@ end;
 procedure TIdSipTransactionDispatcher.SetLocator(Value: TIdSipAbstractLocator);
 begin
   Self.fLocator := Value;
-end;
-
-procedure TIdSipTransactionDispatcher.SetLogName(Value: String);
-var
-  I: Integer;
-begin
-  Self.fLogName := Value;
-
-  for I := 0 to Self.TransportCount - 1 do
-    Self.Transports[I].LogName := Value;
 end;
 
 procedure TIdSipTransactionDispatcher.SetRoutingTable(Value: TIdRoutingTable);

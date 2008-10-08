@@ -492,7 +492,7 @@ procedure TIdTimerQueue.LogTrigger(Severity: TSeverityLevel;
                                    Description,
                                    BinaryData: String);
 begin
-  LogEntry(Self.LogName, Description, SourceRef, SourceDescription, Severity, RefCode, BinaryData);
+  LogEntry(Description, SourceRef, SourceDescription, Severity, RefCode, BinaryData);
 end;
 
 procedure TIdTimerQueue.TriggerEarliestEvent;

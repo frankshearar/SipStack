@@ -219,8 +219,6 @@ type
     procedure SetConserveConnections(UserAgent: TIdSipUserAgent;
                                      const ConserveConnectionsLine: String;
                                      PendingActions: TObjectList);
-    procedure SetLogName(UserAgent: TIdSipUserAgent;
-                         LogNameLine: String);
     procedure SetRegistrarDatabase(UserAgent: TIdSipUserAgent;
                                    const RegistrarDatabaseLine: String);
     procedure SetRegistrarUseGruu(UserAgent: TIdSipUserAgent;
@@ -445,7 +443,6 @@ const
   LogFileNameDirective                    = 'LogFileName';
   LogVerbosityLevelDirective              = 'LogVerbosityLevel';
   ListenDirective                         = 'Listen';
-  LogNameDirective                        = 'LogName';
   MappedRouteDirective                    = 'MappedRoute';
   MatchOnlyUsernameOption                 = 'MatchOnlyUsername';
   MockKeyword                             = 'MOCK';
@@ -1604,8 +1601,6 @@ begin
     Self.SetInstanceID(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, ListenDirective) then
     Self.AddTransport(UserAgent.Dispatcher, ConfigurationLine)
-  else if IsEqual(FirstToken, LogNameDirective) then
-    Self.SetLogName(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, MappedRouteDirective) then
     Self.AddMappedRoute(UserAgent, ConfigurationLine, PendingActions)
   else if IsEqual(FirstToken, MockDnsDirective) then
@@ -1704,17 +1699,6 @@ begin
   Setter.ConserveConnections := StrAsBool(Line);
 
   PendingActions.Add(Setter);
-end;
-
-procedure TIdSipStackConfigurator.SetLogName(UserAgent: TIdSipUserAgent;
-                                             LogNameLine: String);
-var
-  Line: String;
-begin
-  Line := LogNameLine;
-  EatDirective(Line);
-
-  UserAgent.LogName := Line;
 end;
 
 procedure TIdSipStackConfigurator.SetRegistrarDatabase(UserAgent: TIdSipUserAgent;

@@ -292,14 +292,12 @@ type
   // callback in PluggableLogging, is fully reentrant.)
   TIdLoggingExtension = class(TIdSipStackInterfaceExtension)
   public
-    procedure Log(LogName: String;
-                  Severity: TSeverityLevel;
+    procedure Log(Severity: TSeverityLevel;
                   SourceRef: Cardinal;
                   SourceDescription: String;
                   RefCode: Cardinal;
                   Description,
                   BinaryData: String);
-    procedure SetLogger(LogName: String);
   end;
 
   // I allow access to the UserAgent's TIdSipLocator.
@@ -2548,23 +2546,14 @@ end;
 //******************************************************************************
 //* TIdLoggingExtension Public methods *****************************************
 
-procedure TIdLoggingExtension.Log(LogName: String;
-                                  Severity: TSeverityLevel;
+procedure TIdLoggingExtension.Log(Severity: TSeverityLevel;
                                   SourceRef: Cardinal;
                                   SourceDescription: String;
                                   RefCode: Cardinal;
                                   Description,
                                   BinaryData: String);
 begin
-  LogEntry(LogName, Description, SourceRef, SourceDescription, Severity, RefCode, BinaryData);
-end;
-
-procedure TIdLoggingExtension.SetLogger(LogName: String);
-begin
-  Self.UserAgent.LogName := LogName;
-
-  TIdObjectRegistry.SetLogger(LogName,
-                              coLogSourceRefSIPStack);
+  LogEntry(Description, SourceRef, SourceDescription, Severity, RefCode, BinaryData);
 end;
 
 //******************************************************************************

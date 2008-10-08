@@ -372,7 +372,6 @@ type
     fInstanceID:            String;
     fKeyring:               TIdKeyRing;
     fLocator:               TIdSipAbstractLocator;
-    fLogName:               String;
     fRealm:                 String;
     fRoutingTable:          TIdRoutingTable;
     fTimer:                 TIdTimerQueue;
@@ -424,7 +423,6 @@ type
     procedure RejectUnsupportedSipVersion(Request: TIdSipRequest);
     procedure SetDefaultRoutePath(Value: TIdSipRoutePath);
     procedure SetDispatcher(Value: TIdSipTransactionDispatcher);
-    procedure SetLogName(Value: String);
     procedure SetInstanceID(Value: String);
     procedure SetRealm(const Value: String);
   protected
@@ -556,7 +554,6 @@ type
     property InstanceID:                    String                      read fInstanceID write SetInstanceID;
     property Keyring:                       TIdKeyRing                  read fKeyring;
     property Locator:                       TIdSipAbstractLocator       read fLocator write fLocator;
-    property LogName:                       String                      read fLogName write SetLogName;
     property Realm:                         String                      read fRealm write SetRealm;
     property RoutingTable:                  TIdRoutingTable             read fRoutingTable write fRoutingTable;
     property Timer:                         TIdTimerQueue               read fTimer write fTimer;
@@ -1966,7 +1963,6 @@ begin
   Self.AddAllowedScheme(SipScheme);
 
   Self.HostName      := Self.DefaultHostName;
-  Self.LogName       := coSipStackLogName;
   Self.Realm         := Self.HostName;
   Self.UserAgentName := Self.DefaultUserAgent;
 end;
@@ -2394,7 +2390,7 @@ procedure TIdSipAbstractCore.Log(Description: String;
                                  EventRef: Cardinal;
                                  DebugInfo: String);
 begin
-  LogEntry(Self.LogName, Description, coLogSourceRefSIPStack, Self.ClassName, Severity, EventRef, DebugInfo);
+  LogEntry(Description, coLogSourceRefSIPStack, Self.ClassName, Severity, EventRef, DebugInfo);
 end;
 
 function TIdSipAbstractCore.ModuleFor(Request: TIdSipRequest): TIdSipMessageModule;
@@ -3210,18 +3206,6 @@ begin
 
   for I := 0 to Self.fDispatcher.TransportCount - 1 do
     Self.fDispatcher.Transports[I].AddConnectionListener(Self);
-
-  Self.fDispatcher.LogName := Self.LogName;
-end;
-
-procedure TIdSipAbstractCore.SetLogName(Value: String);
-begin
-  if (Value = Self.fLogName) then Exit;
-
-  Self.fLogName := Value;
-
-  if Assigned(Self.Dispatcher) then
-    Self.Dispatcher.LogName := Value;
 end;
 
 procedure TIdSipAbstractCore.SetInstanceID(Value: String);

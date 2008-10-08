@@ -47,11 +47,9 @@ type
   public
     class procedure CollectAllObjectsOfClass(SearchType: TClass; Results: TStrings; AllowSubclassTypes: Boolean = true);
     class function  FindObject(ObjectID: String): TObject;
-    class function  LogName: String;
     class function  LogSourceRef: Cardinal;
     class function  RegisterObject(Instance: TObject): String;
-    class procedure SetLogger(LogName: String;
-                              SourceRef: Cardinal);
+    class procedure SetLogger(SourceRef: Cardinal);
     class procedure UnregisterObject(ObjectID: String);
   end;
 
@@ -61,7 +59,6 @@ type
   ERegistry = class(Exception);
 
 const
-  DefaultLogName   = 'debug.log';
   RegisterLogMsg   = '%s with ID %s instantiated';
   UnregisterLogMsg = '%s with ID %s freed';
 
@@ -75,7 +72,6 @@ const
 
 var
   GLock:           TCriticalSection;
-  GLogName:        String;
   GObjectRegistry: TStringList;
   GSourceRef:      Cardinal;
 
@@ -156,16 +152,6 @@ begin
   end;
 end;
 
-class function TIdObjectRegistry.LogName: String;
-begin
-  Self.Lock;
-  try
-    Result := GLogName;
-  finally
-    Self.Unlock;
-  end;
-end;
-
 class function TIdObjectRegistry.LogSourceRef: Cardinal;
 begin
   Self.Lock;
@@ -191,12 +177,10 @@ begin
   end;
 end;
 
-class procedure TIdObjectRegistry.SetLogger(LogName: String;
-                                            SourceRef: Cardinal);
+class procedure TIdObjectRegistry.SetLogger(SourceRef: Cardinal);
 begin
   Self.Lock;
   try
-    GLogName   := LogName;
     GSourceRef := SourceRef;
   finally
     Self.Unlock;
@@ -241,7 +225,7 @@ end;
 
 class procedure TIdObjectRegistry.Log(Description: String);
 begin
-  LogEntry(Self.LogName, Description, Self.LogSourceRef, '', slDebug, 0, '');
+  LogEntry(Description, Self.LogSourceRef, '', slDebug, 0, '');
 end;
 
 class function TIdObjectRegistry.ObjectAt(Index: Integer): TObject;
@@ -261,7 +245,6 @@ end;
 
 initialization
   GLock           := TCriticalSection.Create;
-  GLogName        := DefaultLogName;
   GObjectRegistry := CreateSortedList;
 finalization
 // These objects are purely memory-based, so it's safe not to free them here.
