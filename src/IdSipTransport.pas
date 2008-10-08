@@ -448,8 +448,7 @@ const
 implementation
 
 uses
-  IdRegisteredObject, IdTCPServer, IdIOHandlerSocket, LogVariables,
-  RuntimeSafety;
+  IdRegisteredObject, IdTCPServer, IdIOHandlerSocket, RuntimeSafety;
 
 var
   GTransportTypes: TStrings;
@@ -808,7 +807,7 @@ end;
 procedure TIdSipTransport.Assert(Condition: Boolean; ProblemDescription: String);
 begin
   if not Condition then
-    Self.Log('Assertion violation', slError, coLogEventException, ProblemDescription);
+    Self.Log('Assertion violation', slError, LogEventException, ProblemDescription);
 
   System.Assert(Condition, ProblemDescription);
 end;
@@ -885,7 +884,7 @@ procedure TIdSipTransport.Log(Description: String;
                               EventRef: Cardinal;
                               DebugInfo: String);
 begin
-  LogEntry(Description, coLogSourceRefSIPStack, Self.ClassName, Severity, EventRef, DebugInfo);
+  LogEntry(Description, Self.ClassName, Severity, EventRef, DebugInfo);
 end;
 
 procedure TIdSipTransport.LogException(FailedMessage: TIdSipMessage;
@@ -896,7 +895,7 @@ const
 begin
   Self.Log(Format(LogMsg, [E.ClassName, FailedMessage.Description, Reason]),
            slError,
-           coLogEventException,
+           LogEventException,
            FailedMessage.AsString);
 end;
 

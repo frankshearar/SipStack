@@ -293,7 +293,6 @@ type
   TIdLoggingExtension = class(TIdSipStackInterfaceExtension)
   public
     procedure Log(Severity: TSeverityLevel;
-                  SourceRef: Cardinal;
                   SourceDescription: String;
                   RefCode: Cardinal;
                   Description,
@@ -1080,7 +1079,7 @@ implementation
 
 uses
   IdRandom, IdSimpleParser, IdSipAuthentication, IdSipIndyLocator,
-  IdSipMockLocator, IdStack, IdUDPServer, LogVariables, IdRoutingTable;
+  IdSipMockLocator, IdStack, IdUDPServer, IdRoutingTable;
 
 const
   ActionNotAllowedForHandle = 'You cannot perform a %s action on a %s handle (%d)';
@@ -2547,13 +2546,12 @@ end;
 //* TIdLoggingExtension Public methods *****************************************
 
 procedure TIdLoggingExtension.Log(Severity: TSeverityLevel;
-                                  SourceRef: Cardinal;
                                   SourceDescription: String;
                                   RefCode: Cardinal;
                                   Description,
                                   BinaryData: String);
 begin
-  LogEntry(Description, SourceRef, SourceDescription, Severity, RefCode, BinaryData);
+  LogEntry(Description, SourceDescription, Severity, RefCode, BinaryData);
 end;
 
 //******************************************************************************

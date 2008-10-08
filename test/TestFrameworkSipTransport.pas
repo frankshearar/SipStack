@@ -392,7 +392,6 @@ begin
   Transport.Timeout      := TestCase.DefaultTimeout div 10;
   Transport.Timer        := Self;
   Transport.HostName     := HostName;
-  Transport.LogName      := LogName;
 
   Transport.SetFirstBinding(Address, Port);
 end;
@@ -426,8 +425,7 @@ begin
 
   Self.LogName := Self.FTestName + 'Log';
   Self.TestRef := $decafbad;
-  TIdObjectRegistry.SetLogger(LogName,
-                              Self.TestRef);
+  TIdObjectRegistry.SetLogger(Self.TestRef);
 
   TIdSipTransportRegistry.RegisterTransportType(Self.TransportType.GetTransportType,
                                                 Self.TransportType);
@@ -867,7 +865,7 @@ procedure TestTIdSipTransport.LogException(E: Exception; Method: String);
 const
   LogMsg = 'Exception %s occured in %s: %s';
 begin
-  LogEntry(Self.LogName, Format(LogMsg, [E.ClassName, Method, E.Message]), Self.TestRef, Self.FTestName, slDebug, 0, '');
+  LogEntry(Format(LogMsg, [E.ClassName, Method, E.Message]), Self.FTestName, slDebug, 0, '');
 end;
 
 function TestTIdSipTransport.LowPortTransport: TIdSipTransport;

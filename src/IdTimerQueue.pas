@@ -20,7 +20,6 @@ type
   TIdTimerQueueClass = class of TIdTimerQueue;
 
   TIdLogProc = procedure(Severity: TSeverityLevel;
-                         SourceRef: Cardinal;
                          SourceDescription: String;
                          RefCode: Cardinal;
                          Description,
@@ -100,7 +99,6 @@ type
     function  IndexOfEvent(Event: Pointer): Integer;
     procedure LockTimer; virtual;
     procedure LogTrigger(Severity: TSeverityLevel;
-                         SourceRef: Cardinal;
                          SourceDescription: String;
                          RefCode: Cardinal;
                          Description,
@@ -486,13 +484,12 @@ begin
 end;
 
 procedure TIdTimerQueue.LogTrigger(Severity: TSeverityLevel;
-                                   SourceRef: Cardinal;
                                    SourceDescription: String;
                                    RefCode: Cardinal;
                                    Description,
                                    BinaryData: String);
 begin
-  LogEntry(Description, SourceRef, SourceDescription, Severity, RefCode, BinaryData);
+  LogEntry(Description, SourceDescription, Severity, RefCode, BinaryData);
 end;
 
 procedure TIdTimerQueue.TriggerEarliestEvent;

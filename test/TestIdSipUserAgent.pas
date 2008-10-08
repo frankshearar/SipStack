@@ -142,10 +142,8 @@ type
     procedure TestRemoveUserAgentListener;
     procedure TestRFC2543InviteCallFlow;
     procedure TestScheduleEventActionClosure;
-    procedure TestSetDispatcherSetsDispatchersLogName;
     procedure TestSetFrom;
     procedure TestSetFromMailto;
-    procedure TestSetLogNameSetsDispatchersLogName;
     procedure TestSimultaneousInAndOutboundCall;
     procedure TestTerminateAllCalls;
 //    procedure TestUnknownAcceptValue;
@@ -401,7 +399,7 @@ uses
   IdSipIndyLocator, IdSipMockBindingDatabase, IdSipMockLocator,
   IdSipMockTransactionDispatcher, IdSipMockTransport, IdSipSubscribeModule,
   IdSipTCPTransport, IdSipUDPTransport, IdSystem, IdTcpClient, IdUnicode,
-  LogVariables, SysUtils, TestFrameworkSipTransport;
+  SysUtils, TestFrameworkSipTransport;
 
 const
   // SFTF: Sip Foundry Test Framework. cf. http://www.sipfoundry.org/sftf/
@@ -1935,26 +1933,6 @@ begin
         'Event not scheduled');
 end;
 
-procedure TestTIdSipUserAgent.TestSetDispatcherSetsDispatchersLogName;
-var
-  D: TIdSipMockTransactionDispatcher;
-begin
-  try
-    D := TIdSipMockTransactionDispatcher.Create;
-    try
-      Self.Core.LogName := 'foo';
-
-      Self.Core.Dispatcher := D;
-      CheckEquals(Self.Core.LogName, D.LogName, 'Dispatcher''s LogName not set');
-    finally
-      D.Free;
-    end;
-  finally
-    // Remember that Self.Core frees its dispatcher.
-    Self.Core.Dispatcher := Self.Dispatcher;
-  end;
-end;
-
 procedure TestTIdSipUserAgent.TestSetFrom;
 var
   F: TIdSipFromHeader;
@@ -1987,12 +1965,6 @@ begin
   finally
     F.Free;
   end;
-end;
-
-procedure TestTIdSipUserAgent.TestSetLogNameSetsDispatchersLogName;
-begin
-  Self.Core.LogName := 'foo';
-  CheckEquals(Self.Core.LogName, Self.Core.Dispatcher.LogName, 'Dispatcher''s LogName not set');
 end;
 
 procedure TestTIdSipUserAgent.TestSimultaneousInAndOutboundCall;

@@ -68,7 +68,6 @@ uses
   IdThreadableTcpClient in 'src\IdThreadableTcpClient.pas',
   IdTimerQueue in 'src\IdTimerQueue.pas',
   IdUnicode in 'src\IdUnicode.pas',
-  LogVariables in '..\Common\src\LogVariables.pas',
   PluggableLogging in 'src\PluggableLogging.pas',
   RuntimeSafety in 'src\RuntimeSafety.pas',
   StringDictionary in 'src\StringDictionary.pas',

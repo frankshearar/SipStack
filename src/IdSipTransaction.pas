@@ -465,7 +465,6 @@ type
     Transaction:    TIdSipTransaction;
 
     procedure LogToTransactionLayer(Severity: TSeverityLevel;
-                                    SourceRef: Cardinal;
                                     SourceDescription: String;
                                     RefCode: Cardinal;
                                     Description,
@@ -673,8 +672,7 @@ function StateToStr(S: TIdSipTransactionState): String;
 implementation
 
 uses
-  IdException, IdRegisteredObject, IdSipDialogID, Math, LogVariables,
-  RuntimeSafety, TypInfo;
+  IdException, IdRegisteredObject, IdSipDialogID, Math, RuntimeSafety, TypInfo;
 
 const
   AtLeastOneVia         = 'Messages must have at least one Via header';
@@ -887,7 +885,7 @@ procedure TIdSipTransactionDispatcher.Log(Description: String;
                                           EventRef: Cardinal;
                                           DebugInfo: String);
 begin
-  LogEntry(Description, coLogSourceRefSIPStack, Self.ClassName, Severity, EventRef, DebugInfo);
+  LogEntry(Description, Self.ClassName, Severity, EventRef, DebugInfo);
 end;
 
 function TIdSipTransactionDispatcher.LoopDetected(Request: TIdSipRequest): Boolean;
@@ -1325,7 +1323,7 @@ const
 begin
   Self.Log(Format(LogMsg, [E.ClassName, FailedMessage.Description, Reason]),
            slError,
-           coLogEventException,
+           LogEventException,
            FailedMessage.AsString);
 end;
 
@@ -2635,9 +2633,8 @@ const
   LogMsg = 'Transaction %s timer %s triggered';
 begin
   Self.OnLog(slDebug,
-             coLogSourceRefSIPStack,
              '',
-             coLogEventRefTimerEvent,
+             LogEventRefTimerEvent,
              Format(LogMsg, [Self.TransactionID, Self.TimerName]),
              '');
 end;
@@ -2656,7 +2653,6 @@ end;
 //* TIdSipTransactionWait Private methods **************************************
 
 procedure TIdSipTransactionWait.LogToTransactionLayer(Severity: TSeverityLevel;
-                                                      SourceRef: Cardinal;
                                                       SourceDescription: String;
                                                       RefCode: Cardinal;
                                                       Description,
@@ -2664,7 +2660,7 @@ procedure TIdSipTransactionWait.LogToTransactionLayer(Severity: TSeverityLevel;
 begin
   if not Assigned(Self.Transaction) then Exit;
 
-  Self.Transaction.Log(Description, Severity, coLogEventRefTimerEvent, '');
+  Self.Transaction.Log(Description, Severity, LogEventRefTimerEvent, '');
 end;
 
 //******************************************************************************

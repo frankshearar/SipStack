@@ -1169,7 +1169,7 @@ implementation
 
 uses
   IdRandom, IdSdp, IdSipInviteModule, IdSipOptionsModule, IdSipRegistration,
-  IdSipSubscribeModule, LogVariables, RuntimeSafety;
+  IdSipSubscribeModule, RuntimeSafety;
 
 const
   ItemNotFoundIndex = -1;
@@ -2390,7 +2390,7 @@ procedure TIdSipAbstractCore.Log(Description: String;
                                  EventRef: Cardinal;
                                  DebugInfo: String);
 begin
-  LogEntry(Description, coLogSourceRefSIPStack, Self.ClassName, Severity, EventRef, DebugInfo);
+  LogEntry(Description, Self.ClassName, Severity, EventRef, DebugInfo);
 end;
 
 function TIdSipAbstractCore.ModuleFor(Request: TIdSipRequest): TIdSipMessageModule;
@@ -2967,7 +2967,7 @@ const
 begin
   Self.Log(Format(LogMsg, [Message.Description, Binding.AsString]),
            slDebug,
-           coLogEventRefDroppedMessage,
+           LogEventRefDroppedMessage,
            Message.AsString);
 end;
 

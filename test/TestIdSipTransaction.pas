@@ -131,10 +131,8 @@ type
     procedure TestAddManagementListener;
     procedure TestAddServerTransaction;
     procedure TestAddTransportBinding;
-    procedure TestAddTransportBindingAddsLogNameToTransport;
     procedure TestAddTransportBindingAddsTimerToTransport;
     procedure TestAddTransportBindingAddsRoutingTableToTransport;
-    procedure TestAddTransportBindingSetsTransportLogName;
     procedure TestClearAddAndCountTransports;
     procedure TestClearAllPreferredTransportTypes;
     procedure TestClearTransportsNotifiesListeners;
@@ -157,7 +155,6 @@ type
     procedure TestSendRequest;
     procedure TestSendRequestOverUdp;
     procedure TestServerInviteTransactionGetsAck;
-    procedure TestSetLogNameSetsTransports;
     procedure TestSetPreferredTransportTypeFor;
     procedure TestSetRoutingTableSetsTransports;
     procedure TestStartAllTranspors;
@@ -1366,18 +1363,6 @@ begin
               'Binding on different transport not added to a new transport');
 end;
 
-procedure TestTIdSipTransactionDispatcher.TestAddTransportBindingAddsLogNameToTransport;
-begin
-  // Let's start with a clean slate, as far as transports are concerned.
-  Self.D.Transports.Clear;
-
-  Self.D.LogName := 'foo';
-
-  Self.D.AddTransportBinding(TcpTransport, '127.0.0.1', 1);
-  CheckEquals(Self.D.LogName, Self.D.Transports[0].LogName,
-              'Newly-added transport doesn''t use the dispatcher''s LogName');
-end;
-
 procedure TestTIdSipTransactionDispatcher.TestAddTransportBindingAddsTimerToTransport;
 begin
   // Let's start with a clean slate, as far as transports are concerned.
@@ -1396,15 +1381,6 @@ begin
   Self.D.AddTransportBinding(TcpTransport, '127.0.0.1', 1);
   Check(Self.D.RoutingTable = Self.D.Transports[0].RoutingTable,
         'Newly-added transport doesn''t use the dispatcher''s routing table');
-end;
-
-procedure TestTIdSipTransactionDispatcher.TestAddTransportBindingSetsTransportLogName;
-begin
-  Self.D.Transports.Clear;
-
-  Self.D.LogName := 'foo';
-  Self.D.AddTransportBinding(SctpTransport, '127.0.0.1', 1);
-  CheckEquals(Self.D.LogName, Self.D.Transports[0].LogName, 'Transport''s LogName not set');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestClearAddAndCountTransports;
@@ -1826,22 +1802,6 @@ begin
   finally
     Listener.Free;
   end;
-end;
-
-procedure TestTIdSipTransactionDispatcher.TestSetLogNameSetsTransports;
-var
-  I:    Integer;
-  NewL: String;
-begin
-  Self.D.AddTransportBinding(TcpTransport, '127.0.0.1', 5060);
-  Self.D.AddTransportBinding(UdpTransport, '127.0.0.1', 5060);
-
-  NewL := 'foo';
-  Self.D.LogName := NewL;
-
-  for I := 0 to Self.D.TransportCount - 1 do
-    CheckEquals(NewL, Self.D.Transports[I].LogName,
-          'Transport #' + IntToStr(I) + '''s LogName not set');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestSetPreferredTransportTypeFor;

@@ -47,7 +47,6 @@ type
   public
     class procedure CollectAllObjectsOfClass(SearchType: TClass; Results: TStrings; AllowSubclassTypes: Boolean = true);
     class function  FindObject(ObjectID: String): TObject;
-    class function  LogSourceRef: Cardinal;
     class function  RegisterObject(Instance: TObject): String;
     class procedure SetLogger(SourceRef: Cardinal);
     class procedure UnregisterObject(ObjectID: String);
@@ -152,16 +151,6 @@ begin
   end;
 end;
 
-class function TIdObjectRegistry.LogSourceRef: Cardinal;
-begin
-  Self.Lock;
-  try
-    Result := GSourceRef;
-  finally
-    Self.Unlock;
-  end;
-end;
-
 class function TIdObjectRegistry.RegisterObject(Instance: TObject): String;
 begin
   Self.Lock;
@@ -225,7 +214,7 @@ end;
 
 class procedure TIdObjectRegistry.Log(Description: String);
 begin
-  LogEntry(Description, Self.LogSourceRef, '', slDebug, 0, '');
+  LogEntry(Description, '', slDebug, 0, '');
 end;
 
 class function TIdObjectRegistry.ObjectAt(Index: Integer): TObject;

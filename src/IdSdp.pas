@@ -1403,7 +1403,7 @@ implementation
 
 uses
   IdException, IdIndyUtils, IdRandom, IdSocketHandle, IdTCPConnection,
-  LogVariables, PluggableLogging, RuntimeSafety;
+  PluggableLogging, RuntimeSafety;
 
 const
   SessionHeaderOrder = 'vosiuepcbtka';
@@ -7374,9 +7374,8 @@ const
   LogMsg = '%s with ID %s received data';
 begin
   Self.OnLog(slDebug,
-             coLogSourceRefSIPStack,
              '',
-             coLogEventRefTimerEvent,
+             LogEventRefTimerEvent,
              Format(LogMsg, [Self.ClassName, Self.ID]),
              EncodeQuotedStr(StreamToStr(Data)));
 end;

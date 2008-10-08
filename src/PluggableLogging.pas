@@ -20,15 +20,13 @@ type
   TSeverityLevel = (slDebug, slError, slWarning, slInfo);
 
   TLoggerProcedure = procedure(Description: String;
-                               SourceRef: Cardinal;
                                SourceDesc: String;
                                Severity: TSeverityLevel;
                                EventRef: Cardinal;
                                DebugInfo: String);
 
-function IntToSeverityLevel(N: Integer): TSeverityLevel;                               
+function IntToSeverityLevel(N: Integer): TSeverityLevel;
 procedure LogEntry(Description: String;
-                   SourceRef: Cardinal;
                    SourceDesc: String;
                    Severity: TSeverityLevel;
                    EventRef: Cardinal;
@@ -37,6 +35,12 @@ function  NameToSeverityLevel(S: String): TSeverityLevel;
 
 var
   Logger: TLoggerProcedure;
+
+// Well-known event codes:
+const
+  LogEventRefDroppedMessage = 29;
+  LogEventRefTimerEvent     = 20;
+  LogEventException         = $FFFF;
 
 implementation
 
@@ -56,14 +60,13 @@ begin
 end;
 
 procedure LogEntry(Description: String;
-                   SourceRef: Cardinal;
                    SourceDesc: String;
                    Severity: TSeverityLevel;
                    EventRef: Cardinal;
                    DebugInfo: String);
 begin
   if Assigned(Logger) then
-    Logger(Description, SourceRef, SourceDesc, Severity, EventRef, DebugInfo);
+    Logger(Description, SourceDesc, Severity, EventRef, DebugInfo);
 end;
 
 function NameToSeverityLevel(S: String): TSeverityLevel;

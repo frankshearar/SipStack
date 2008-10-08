@@ -74,7 +74,7 @@ end;
 
 procedure TLoggingWait.LogTrigger;
 begin
-  Self.OnLog(Self.Severity, Self.SourceRef, Self.SourceDescription, Self.RefCode, Self.Description, Self.BinaryData);
+  Self.OnLog(Self.Severity, Self.SourceDescription, Self.RefCode, Self.Description, Self.BinaryData);
 end;
 
 end.

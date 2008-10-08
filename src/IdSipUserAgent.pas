@@ -476,7 +476,7 @@ uses
   ConfigUtils, IdAddressSpace, IdRegisteredObject, IdSimpleParser, IdSipDns,
   IdSipIndyLocator, IdSipLocation, IdSipMockBindingDatabase, IdSipMockLocator,
   IdSipProxyDescription, IdSipSubscribeModule, IdSystem, IdUnicode,
-  LogVariables, RuntimeSafety, SysUtils;
+  RuntimeSafety, SysUtils;
 
 //******************************************************************************
 //* Unit Public functions & procedures                                         *

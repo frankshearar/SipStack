@@ -1260,6 +1260,9 @@ uses
 const
   OneSecond = 1000; // milliseconds
 
+var
+  ThreadLock: TCriticalSection;
+
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSdp unit tests');
@@ -12371,5 +12374,6 @@ begin
 end;
 
 initialization
+  ThreadLock := TCriticalSection.Create;
   RegisterTest('SDP classes', Suite);
 end.
