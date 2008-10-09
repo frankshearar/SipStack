@@ -1050,6 +1050,8 @@ type
     procedure TestIsListening;
     procedure TestLocalSessionDescription;
     procedure TestLocalSessionDescriptionWithRefusedStream;
+    procedure TestLocalSessionDescriptionWithTimeHeader;
+    procedure TestLocalSessionDescriptionWithWeirdTimeHeader;
     procedure TestLocalSessionVersionIncrements;
     procedure TestMimeType;
     procedure TestNetTypeFor;
@@ -11363,6 +11365,64 @@ begin
     CheckEquals(NormalPort, Desc.MediaDescriptionAt(1).Port, 'Port changed: 2nd desc');
   finally
     Desc.Free;
+  end;
+end;
+
+procedure TestTIdSDPMultimediaSession.TestLocalSessionDescriptionWithTimeHeader;
+const
+  TimeHeader        = 't=0 0'#13#10;
+  SDPWithTimeHeader = 'v=0'#13#10
+                    + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
+                    + 's=-'#13#10
+                    + TimeHeader
+                    + 'm=text 0 RTP/AVP 0'#13#10
+                    + 'c=IN IP4 127.0.0.1'#13#10;
+var
+  ActualDesc: TIdSdpPayload;
+begin
+  // RFC 3264 says that an offer SHOULD have a "t=0 0" header (section 5) and
+  // that the answer MUST have a t header identical to that in the offer
+  // (section 6).
+  Self.MS.IsOffer := false;
+  Self.MS.SetRemoteDescription(SDPWithTimeHeader);
+
+  Self.MS.StartListening(SDPWithTimeHeader);
+
+  ActualDesc := TIdSdpPayload.CreateFrom(Self.MS.LocalSessionDescription);
+  try
+    Check(ActualDesc.Times.Count > 0, 'No time header in answer');
+    CheckEquals(TimeHeader, ActualDesc.Times[0].AsString, 'Wrong time header');
+  finally
+    ActualDesc.Free;
+  end;
+end;
+
+procedure TestTIdSDPMultimediaSession.TestLocalSessionDescriptionWithWeirdTimeHeader;
+const
+  TimeHeader        = 't=1 2'#13#10;
+  SDPWithTimeHeader = 'v=0'#13#10
+                    + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
+                    + 's=-'#13#10
+                    + TimeHeader
+                    + 'm=text 0 RTP/AVP 0'#13#10
+                    + 'c=IN IP4 127.0.0.1'#13#10;
+var
+  ActualDesc: TIdSdpPayload;
+begin
+  // The offer has a weird time header: this test demonstrates that the answer
+  // complies with RFC 3264 section 6's statement that the answer's time header
+  // MUST be identical to that of the offer's. 
+  Self.MS.IsOffer := false;
+  Self.MS.SetRemoteDescription(SDPWithTimeHeader);
+
+  Self.MS.StartListening(SDPWithTimeHeader);
+
+  ActualDesc := TIdSdpPayload.CreateFrom(Self.MS.LocalSessionDescription);
+  try
+    Check(ActualDesc.Times.Count > 0, 'No time header in answer');
+    CheckEquals(TimeHeader, ActualDesc.Times[0].AsString, 'Wrong time header');
+  finally
+    ActualDesc.Free;
   end;
 end;
 

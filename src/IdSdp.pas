@@ -1081,6 +1081,7 @@ type
     ServerType:           TIdBaseRTPAbstractPeerClass;
     StreamLock:           TCriticalSection;
     TcpServerType:        TIdSdpBaseTcpConnectionClass;
+    TimeHeader:           TIdSdpTime;
     Timer:                TIdThreadedTimerQueue;
 
     procedure ClearStreams;
@@ -6902,6 +6903,7 @@ begin
   end;
   Self.StreamLock.Free;
 
+  Self.TimeHeader.Free;
   Self.Timer.Terminate;
 
   inherited Destroy;
@@ -6960,6 +6962,9 @@ begin
     SDP.Origin.SessionID      := Self.LocalSessionID;
     SDP.Origin.SessionVersion := IntToStr(Self.LocalSessionVersion);
     SDP.SessionName := Self.LocalSessionName;
+
+    if Assigned(Self.TimeHeader) then
+      SDP.Times.Add(Self.TimeHeader);
 
     for I := 0 to Self.StreamCount - 1 do
       SDP.MediaDescriptions.Add(Self.Streams[I].LocalDescription);
@@ -7038,6 +7043,16 @@ begin
 
     for I := 0 to RemoteSessionDesc.MediaDescriptionCount - 1 do
       Self.Streams[I].RemoteDescription := RemoteSessionDesc.MediaDescriptionAt(I);
+
+    // RFC 3264 section 5 says that an offer SHOULD have a "t=0 0" header.
+    if (RemoteSessionDesc.Times.Count > 0) then begin
+      Self.TimeHeader := TIdSdpTime.Create;
+      Self.TimeHeader.Assign(RemoteSessionDesc.Times[0]);
+    end
+    else begin
+      if Assigned(Self.TimeHeader) then
+        FreeAndNil(Self.TimeHeader);
+    end;
   finally
     Self.StreamLock.Release;
   end;
