@@ -6961,7 +6961,7 @@ begin
     SDP.Origin.Username       := Self.Username;
     SDP.Origin.SessionID      := Self.LocalSessionID;
     SDP.Origin.SessionVersion := IntToStr(Self.LocalSessionVersion);
-    SDP.SessionName := Self.LocalSessionName;
+    SDP.SessionName           := Self.LocalSessionName;
 
     if Assigned(Self.TimeHeader) then
       SDP.Times.Add(Self.TimeHeader);
