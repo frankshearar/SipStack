@@ -28,7 +28,8 @@ The stack supports/implements the following RFCs:
 * RFC 3581 (Symmetric Response Routing)
 * RFC 4102 (text/red MIME Sub-Type)
 * RFC 4103 (RTP Payload for Text Conversation)
-* RFC 4145 (TCP-Based Media Transport in SIP)
+* RFC 4145 (TCP-Based Media Transport in SIP) (Note: the connection
+            parameter IS NOT yet supported.)
 * draft-ietf-sip-gruu-06 (Globally Routable User Agent URIs)
 
 Present, but not completely implemented, are:
@@ -70,4 +71,4 @@ Todo:
 Known bugs:
 * TLS tests fail because of something to do with the certificates.
 
-Frank Shearar, 2008/02/15
+Frank Shearar, 2008/10/10
