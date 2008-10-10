@@ -12,14 +12,18 @@ unit IdThreadableTcpClient;
 interface
 
 uses
-  Classes, IdBaseThread, IdTCPClient, IdTimerQueue, SysUtils;
+  Classes, IdBaseThread, IdConnectionBindings, IdTCPClient, IdTimerQueue,
+  SysUtils;
 
 type
+  TReceiveMessageProc = procedure(Sender: TObject; Msg: String; ReceivedOn: TIdConnectionBindings) of object;
+
   // I provide a way of receiving data and notifying a TimerQueue. My subclasses
   // schedule TIdWaits in the TimerQueue.
   TIdThreadableTcpClient = class(TIdTCPClient)
   private
     fConserveConnections: Boolean;
+    fOnReceiveMessage:    TReceiveMessageProc;
     fTerminated:          Boolean;
 
     procedure MarkAsTerminated(Sender: TObject);
@@ -28,22 +32,28 @@ type
   protected
     function  DefaultTimeout: Cardinal; virtual;
     function  GetTimer: TIdTimerQueue; virtual;
+    procedure ReceiveMessage(Msg: String; ReceivedOn: TIdConnectionBindings); overload; virtual;
+    procedure ReceiveMessage(Msg: TStream; ReceivedOn: TIdConnectionBindings); overload; virtual;
     procedure SetTimer(Value: TIdTimerQueue); virtual;
   public
-   constructor Create(AOwner: TComponent); override;
+    constructor Create(AOwner: TComponent); override;
 
     procedure Connect(const Timeout: Integer); override;
     procedure ReceiveMessages; virtual;
 
-    property ConserveConnections: Boolean       read fConserveConnections write SetConserveConnections;
-    property Terminated:          Boolean       read fTerminated write SetTerminated;
-    property Timer:               TIdTimerQueue read GetTimer write SetTimer;
+    property ConserveConnections: Boolean             read fConserveConnections write SetConserveConnections;
+    property OnReceiveMessage:    TReceiveMessageProc read fOnReceiveMessage write fOnReceiveMessage;
+    property Terminated:          Boolean             read fTerminated write SetTerminated;
+    property Timer:               TIdTimerQueue       read GetTimer write SetTimer;
   end;
+
+  TExceptionEvent = procedure(Sender: TObject; E: Exception) of object;
 
   // I allow a TIdThreadableTcpClient to run in the context of its own thread.
   TIdThreadedTcpClient = class(TIdBaseThread)
   private
-    fClient: TIdThreadableTcpClient;
+    fClient:      TIdThreadableTcpClient;
+    fOnException: TExceptionEvent;
   protected
     function  GetTimer: TIdTimerQueue; virtual;
     procedure NotifyOfException(E: Exception); virtual;
@@ -53,8 +63,9 @@ type
 
     procedure Terminate; override;
 
-    property Client: TIdThreadableTcpClient read fClient;
-    property Timer:  TIdTimerQueue          read GetTimer write SetTimer;
+    property OnException: TExceptionEvent        read fOnException write fOnException;
+    property Client:      TIdThreadableTcpClient read fClient;
+    property Timer:       TIdTimerQueue          read GetTimer write SetTimer;
   end;
 
 const
@@ -103,6 +114,27 @@ function TIdThreadableTcpClient.GetTimer: TIdTimerQueue;
 begin
   Result := nil;
   RaiseAbstractError(Self.ClassName, 'GetTimer');
+end;
+
+procedure TIdThreadableTcpClient.ReceiveMessage(Msg: String; ReceivedOn: TIdConnectionBindings);
+begin
+  if Assigned(Self.fOnReceiveMessage) then
+    Self.fOnReceiveMessage(Self, Msg, ReceivedOn);
+end;
+
+procedure TIdThreadableTcpClient.ReceiveMessage(Msg: TStream; ReceivedOn: TIdConnectionBindings);
+var
+  S: TStringStream;
+begin
+  if not Assigned(Self.fOnReceiveMessage) then Exit;
+
+  S := TStringStream.Create('');
+  try
+    S.CopyFrom(Msg, 0);
+    Self.fOnReceiveMessage(Self, S.DataString, ReceivedOn);
+  finally
+    S.Free;
+  end;
 end;
 
 procedure TIdThreadableTcpClient.SetTimer(Value: TIdTimerQueue);
@@ -162,7 +194,8 @@ end;
 
 procedure TIdThreadedTcpClient.NotifyOfException(E: Exception);
 begin
-  RaiseAbstractError(Self.ClassName, 'NotifyOfException');
+  if Assigned(Self.fOnException) then
+    Self.fOnException(Self, E);
 end;
 
 procedure TIdThreadedTcpClient.SetTimer(Value: TIdTimerQueue);

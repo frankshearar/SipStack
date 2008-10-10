@@ -765,13 +765,13 @@ type
 
   TestTIdSdpTcpClient = class(TThreadingTestCase)
   private
-    Client: TIdSdpTcpClient;
-    Runner: TIdSdpThreadedTcpClient;
-    Server: TIdTcpServer;
-    Timer:  TIdDebugTimerQueue;
+    Client:       TIdSdpTcpClient;
+    FireOnceFlag: Boolean;
+    Lock:         TCriticalSection;
+    RecvBinding:  TIdConnectionBindings;
+    Server:       TIdTcpServer;
 
-    procedure ClientConnected(Sender: TObject);
-    procedure ClientDisconnected(Sender: TObject);
+    procedure ReceiveMessage(Sender: TObject; Msg: String; ReceivedOn: TIdConnectionBindings);
     procedure SendData(Thread: TIdPeerThread);
   public
     procedure SetUp; override;
@@ -1261,9 +1261,6 @@ uses
 
 const
   OneSecond = 1000; // milliseconds
-
-var
-  ThreadLock: TCriticalSection;
 
 function Suite: ITestSuite;
 begin
@@ -9104,7 +9101,8 @@ procedure TestTIdSdpTcpClient.SetUp;
 begin
   inherited SetUp;
 
-  Self.Timer := TIdDebugTimerQueue.Create(false);
+  Self.Lock        := TCriticalSection.Create;
+  Self.RecvBinding := TIdConnectionBindings.Create;
 
   Self.Server := TIdTCPServer.Create(nil);
   Self.Server.OnExecute := Self.SendData;
@@ -9119,58 +9117,69 @@ begin
   end;
 
   Self.Client := TIdSdpTcpClient.Create(nil);
-  Self.Client.Host           := Self.Server.Bindings[0].IP;
-  Self.Client.OnConnected    := Self.ClientConnected;
-  Self.Client.OnDisconnected := Self.ClientDisconnected;
-  Self.Client.Port           := Self.Server.Bindings[0].Port;
-  Self.Client.Timer          := Self.Timer;
+  Self.Client.Host             := Self.Server.Bindings[0].IP;
+  Self.Client.OnReceiveMessage := Self.ReceiveMessage;
+  Self.Client.Port             := Self.Server.Bindings[0].Port;
+
+  Self.FireOnceFlag := false;
 end;
 
 procedure TestTIdSdpTcpClient.TearDown;
 begin
-  Self.Client.Free;
-  Self.Server.Free;
-  Self.Timer.Terminate;
+  Self.Lock.Acquire;
+  try
+    Self.Client.Free;
+    Self.Server.Free;
+    Self.RecvBinding.Free;
+  finally
+    Self.Lock.Release;
+  end;
 
   inherited TearDown;
 end;
 
 //* TestTIdSdpTcpClient Private methods ****************************************
 
-procedure TestTIdSdpTcpClient.ClientConnected(Sender: TObject);
+procedure TestTIdSdpTcpClient.ReceiveMessage(Sender: TObject; Msg: String; ReceivedOn: TIdConnectionBindings);
 begin
-  Self.Runner := TIdSdpThreadedTcpClient.Create(Self.Client, ThreadLock);
-end;
-
-procedure TestTIdSdpTcpClient.ClientDisconnected(Sender: TObject);
-begin
-  Self.Runner.Terminate;
-  Self.Runner := nil;
+  Self.Lock.Acquire;
+  try
+    Self.RecvBinding.Assign(ReceivedOn);
+    Self.ThreadEvent.SetEvent;
+  finally
+    Self.Lock.Release;
+  end;
 end;
 
 procedure TestTIdSdpTcpClient.SendData(Thread: TIdPeerThread);
 begin
-  Thread.Connection.Write('foo');
+  if not FireOnceFlag then begin
+    Thread.Connection.Write('foo');
+    Thread.Connection.DisconnectSocket;
+
+    FireOnceFlag := true;
+  end;
 end;
 
 //* TestTIdSdpTcpClient Published methods **************************************
 
 procedure TestTIdSdpTcpClient.TestReceiveMessageRecordsBinding;
-var
-  RecvWait: TIdSdpTcpReceiveDataWait;
 begin
   Self.Client.Connect(Self.DefaultTimeout);
+  Self.Client.ReceiveMessages;
 
-  Sleep(250);
+  Self.WaitForSignaled('No messages received');
 
-  RecvWait := Self.Timer.LastEventScheduled(TIdSdpTcpReceiveDataWait) as TIdSdpTcpReceiveDataWait;
-  Check(Assigned(RecvWait), 'No Wait scheduled');
-
-  CheckEquals(Self.Client.Socket.Binding.IP,       RecvWait.ReceivedOn.LocalIP,   'Wait''s LocalIP');
-  CheckEquals(Self.Client.Socket.Binding.Port,     RecvWait.ReceivedOn.LocalPort, 'Wait''s LocalPort');
-  CheckEquals(Self.Client.Socket.Binding.PeerIP,   RecvWait.ReceivedOn.PeerIP,    'Wait''s PeerIP');
-  CheckEquals(Self.Client.Socket.Binding.PeerPort, RecvWait.ReceivedOn.PeerPort,  'Wait''s PeerPort');
-  CheckEquals(TcpTransport,                        RecvWait.ReceivedOn.Transport, 'Wait''s Transport');
+  Self.Lock.Acquire;
+  try
+    CheckEquals(Self.Client.Socket.Binding.IP,       Self.RecvBinding.LocalIP,   'Wait''s LocalIP');
+    CheckEquals(Self.Client.Socket.Binding.Port,     Self.RecvBinding.LocalPort, 'Wait''s LocalPort');
+    CheckEquals(Self.Client.Socket.Binding.PeerIP,   Self.RecvBinding.PeerIP,    'Wait''s PeerIP');
+    CheckEquals(Self.Client.Socket.Binding.PeerPort, Self.RecvBinding.PeerPort,  'Wait''s PeerPort');
+    CheckEquals(TcpTransport,                        Self.RecvBinding.Transport, 'Wait''s Transport');
+  finally
+    Self.Lock.Release;
+  end;
 end;
 
 //******************************************************************************
@@ -12434,6 +12443,5 @@ begin
 end;
 
 initialization
-  ThreadLock := TCriticalSection.Create;
   RegisterTest('SDP classes', Suite);
 end.

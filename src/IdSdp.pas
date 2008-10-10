@@ -840,15 +840,15 @@ type
 
   TIdSdpTcpClientConnection = class;
 
+  TIdSdpDisconnectionProc = procedure(Sender: TObject; ConnectionID: String) of object;
+
   TIdSdpTcpClient = class(TIdThreadableTcpClient)
   private
-    BufferSize:    Integer;
-    fConnectionID: String;
-    fTimer:        TIdTimerQueue;
+    BufferSize:       Integer;
+    fConnectionID:    String;
+    fOnDisconnection: TIdSdpDisconnectionProc;
 
-    procedure NotifyOfDisconnectionInTimerContext;
-    procedure ReceiveInTimerContext(Data: TStream;
-                                    ReceivedOn: TIdConnectionBindings);
+    procedure NotifyOfDisconnection(Sender: TObject; ConnectionID: String);
   protected
     function  GetTimer: TIdTimerQueue; override;
     procedure SetTimer(Value: TIdTimerQueue); override;
@@ -857,7 +857,8 @@ type
 
     procedure ReceiveMessages; override;
 
-    property ConnectionID: String read fConnectionID write fConnectionID;
+    property ConnectionID:    String                  read fConnectionID write fConnectionID;
+    property OnDisconnection: TIdSdpDisconnectionProc read fOnDisconnection write fOnDisconnection;
   end;
 
   TIdSdpThreadedTcpClient = class(TIdThreadedTcpClient)
@@ -870,7 +871,6 @@ type
                          L: TCriticalSection);
   protected
     function  GetTimer: TIdTimerQueue; override;
-    procedure NotifyOfException(E: Exception); override;
     procedure Run; override;
     procedure SetTimer(Value: TIdTimerQueue); override;
   public
@@ -886,7 +886,9 @@ type
 
     procedure ClientConnected(Client: TObject);
     procedure ClientDisconnected(Client: TObject);
+    procedure ClientDisconnection(Sender: TObject; ConnectionID: String);
     function  CreateClient: TIdSdpTcpClient;
+    procedure ReceiveMessage(Sender: TObject; Msg: String; ReceivedOn: TIdConnectionBindings);
   protected
     function  GetAddress: String; override;
     function  GetPeerAddress: String; override;
@@ -1409,6 +1411,9 @@ uses
 const
   SessionHeaderOrder = 'vosiuepcbtka';
   MediaHeaderOrder   = 'micbka';
+
+const
+  OneSecond = 1000; // milliseconds  
 
 //******************************************************************************
 //* Unit public functions and procedures                                       *
@@ -5562,8 +5567,6 @@ end;
 //* TIdSdpTcpClient Public methods *********************************************
 
 constructor TIdSdpTcpClient.Create(AOwner: TComponent);
-const
-  OneSecond = 1000; // milliseconds
 begin
   inherited Create(AOwner);
 
@@ -5592,9 +5595,11 @@ begin
       try
         // We want to notify as soon as there's ANY data. When there is data, we
         // want to read as much as we can.
-        Self.ReadFromStack;
-        Self.ReceiveInTimerContext(Self.InputBuffer, ReceivedOn);
-        Self.InputBuffer.Remove(Self.InputBuffer.Size);
+
+        if (Self.ReadFromStack(true, OneSecond, false) > 0) then begin
+          Self.ReceiveMessage(Self.InputBuffer, ReceivedOn);
+          Self.InputBuffer.Remove(Self.InputBuffer.Size);
+        end;
       except
         // We just catch read timeouts and loop again: it just means that the
         // remote party hasn't sent us data in a while, which could well be
@@ -5612,44 +5617,27 @@ begin
     ReceivedOn.Free;
   end;
 
-  Self.NotifyOfDisconnectionInTimerContext;
+  Self.NotifyOfDisconnection(Self, Self.ConnectionID);
 end;
 
 //* TIdSdpTcpClient Protected methods ******************************************
 
 function TIdSdpTcpClient.GetTimer: TIdTimerQueue;
 begin
-  Result := Self.fTimer;
+  Result := nil;
 end;
 
 procedure TIdSdpTcpClient.SetTimer(Value: TIdTimerQueue);
 begin
-  Self.fTimer := Value;
+  // Do nothing.
 end;
 
 //* TIdSdpTcpClient Private methods ********************************************
 
-procedure TIdSdpTcpClient.NotifyOfDisconnectionInTimerContext;
-var
-  Wait: TIdSdpTcpConnectionDisconnectedWait;
+procedure TIdSdpTcpClient.NotifyOfDisconnection(Sender: TObject; ConnectionID: String);
 begin
-  Wait := TIdSdpTcpConnectionDisconnectedWait.Create;
-  Wait.ConnectionID := Self.ConnectionID;
-
-  Self.Timer.AddEvent(TriggerImmediately, Wait);
-end;
-
-procedure TIdSdpTcpClient.ReceiveInTimerContext(Data: TStream;
-                                                ReceivedOn: TIdConnectionBindings);
-var
-  Wait: TIdSdpTcpReceiveDataWait;
-begin
-  Wait := TIdSdpTcpReceiveDataWait.Create;
-  Wait.ConnectionID := Self.ConnectionID;
-  Wait.Data         := Data;
-  Wait.ReceivedOn   := ReceivedOn;
-
-  Self.Timer.AddEvent(TriggerImmediately, Wait);
+  if Assigned(Self.fOnDisconnection) then
+    Self.fOnDisconnection(Sender, ConnectionID);
 end;
 
 //******************************************************************************
@@ -5670,22 +5658,6 @@ end;
 function TIdSdpThreadedTcpClient.GetTimer: TIdTimerQueue;
 begin
   Result := Self.Client.Timer;
-end;
-
-procedure TIdSdpThreadedTcpClient.NotifyOfException(E: Exception);
-var
-  Wait: TIdSdpTcpConnectionExceptionWait;
-begin
-  Wait := TIdSdpTcpConnectionExceptionWait.Create;
-  Wait.ExceptionMessage := E.Message;
-  Wait.ExceptionType    := ExceptClass(E.ClassType);
-
-  Self.ConnectionLock.Acquire;
-  try
-    Self.Timer.AddEvent(TriggerImmediately, Wait);
-  finally
-    Self.ConnectionLock.Release;
-  end;
 end;
 
 procedure TIdSdpThreadedTcpClient.Run;
@@ -5755,8 +5727,10 @@ destructor TIdSdpTcpClientConnection.Destroy;
 begin
   Self.ThreadLock.Acquire;
   try
-    if Assigned(Self.ClientThread) then
+    if Assigned(Self.ClientThread) then begin
       Self.ClientThread.Terminate;
+      Self.ClientThread.WaitFor;
+    end;
   finally
     Self.ThreadLock.Release;
   end;
@@ -5812,7 +5786,7 @@ end;
 
 function TIdSdpTcpClientConnection.IsActive: Boolean;
 begin
-  Result := Self.Client.Connected;
+  Result := Assigned(Self.Client) and Self.Client.Connected;
 end;
 
 function TIdSdpTcpClientConnection.IsConnected: Boolean;
@@ -5946,12 +5920,47 @@ begin
   end;
 end;
 
+procedure TIdSdpTcpClientConnection.ClientDisconnection(Sender: TObject; ConnectionID: String);
+var
+  Wait: TIdSdpTcpConnectionDisconnectedWait;
+begin
+  Self.ThreadLock.Acquire;
+  try
+    Wait := TIdSdpTcpConnectionDisconnectedWait.Create;
+    Wait.ConnectionID := ConnectionID;
+
+    Self.Timer.AddEvent(TriggerImmediately, Wait);
+  finally
+    Self.ThreadLock.Release;
+  end;
+end;
+
 function TIdSdpTcpClientConnection.CreateClient: TIdSdpTcpClient;
 begin
   Result := TIdSdpTcpClient.Create(nil);
   Result.ConnectionID   := Self.ID;
   Result.OnConnected    := Self.ClientConnected;
   Result.OnDisconnected := Self.ClientDisconnected;
+  Result.OnDisconnection := Self.ClientDisconnection;
+  Result.OnReceiveMessage := Self.ReceiveMessage;
+end;
+
+procedure TIdSdpTcpClientConnection.ReceiveMessage(Sender: TObject; Msg: String; ReceivedOn: TIdConnectionBindings);
+var
+  Data: TStringStream;
+  Wait: TIdSdpTcpReceiveDataWait;
+begin
+  Data := TStringStream.Create(Msg);
+  try
+    Wait := TIdSdpTcpReceiveDataWait.Create;
+    Wait.ConnectionID := (Sender as TIdSdpTcpClient).ConnectionID;
+    Wait.Data         := Data;
+    Wait.ReceivedOn   := ReceivedOn;
+
+    Self.Timer.AddEvent(TriggerImmediately, Wait);
+  finally
+    Data.Free;
+  end;
 end;
 
 //******************************************************************************
