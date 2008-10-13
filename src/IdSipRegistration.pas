@@ -1368,7 +1368,7 @@ begin
   // Parameters:
   // * regtime: registration period (integer value, in seconds)
   // * mintime: minimum allowed expiry time (integer value, in seconds)
-  // * usegree: use GRUU or not? (boolean string: yes|no|true|false|1|0)
+  // * usegruu: use GRUU or not? (boolean string: yes|no|true|false|1|0)
 
   Self.DefaultExpiryTime := Self.GetRegistrationTime(Params);
   Self.MinimumExpiryTime := Self.GetMinimumExpiryTime(Params);
