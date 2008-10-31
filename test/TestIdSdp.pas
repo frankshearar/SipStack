@@ -14,7 +14,7 @@ interface
 uses
   Classes, IdConnectionBindings, IdInterfacedObject, IdRTP, IdRTPServer, IdSdp,
   IdSimpleParser, IdTcpClient, IdTcpServer, IdTimerQueue, IdUDPServer, SyncObjs,
-  SysUtils, TestFramework, TestFrameworkEx, TestFrameworkRtp;
+  SysUtils, TestFramework, TestFrameworkEx, TestFrameworkRtp, TestFrameworkSdp;
 
 type
   TIdSdpTestMediaListener = class(TIdInterfacedObject,
@@ -592,6 +592,7 @@ type
   protected
     DataFormat:     String;
     Desc:           TIdSdpPayload;
+    Factory:        TIdSdpMediaStreamFactory;
     SendingBinding: TIdConnectionBindings;
     Timer:          TIdDebugTimerQueue;
 
@@ -636,6 +637,7 @@ type
                                 IIdRTPSendListener)
   private
     AVP:            TIdRTPProfile;
+    Factory:        TIdSdpMediaStreamFactory;
     Media:          TIdSDPMediaStream;
     Sender:         TIdSDPMediaStream;
     SentBye:        Boolean;
@@ -802,7 +804,7 @@ type
     procedure DisconnectClient;
     procedure DoNothing(Thread: TIdPeerThread);
     procedure OnConnect(Connection: TIdSdpBaseTcpConnection);
-    procedure OnData(Connection: TIdSdpBaseTcpConnection; Data: TStream); 
+    procedure OnData(Connection: TIdSdpBaseTcpConnection; Data: TStream);
     procedure OnDisconnect(Connection: TIdSdpBaseTcpConnection);
     procedure OnException(Connection: TIdSdpBaseTcpConnection;
                           ExceptionType: ExceptClass;
@@ -1016,6 +1018,7 @@ type
 
   TestTIdSDPMultimediaSession = class(TIdSdpTestCase)
   private
+    Factory:     TIdSdpMediaStreamFactory;
     LocalPort:   Cardinal;
     MS:          TIdSDPMultimediaSession;
     PortBlocker: TIdMockRTPPeer;
@@ -1164,6 +1167,7 @@ type
   TIdSdpMediaListenerMethodTestCase = class(TTestCase)
   protected
     Chunk:    TStream;
+    Factory:  TIdSdpMediaStreamFactory;
     Format:   String;
     Listener: TIdSdpTestMediaListener;
     Stream:   TIdSdpMediaStream;
@@ -7361,8 +7365,9 @@ begin
                                       + 'c=IN IP4 127.0.0.1'#13#10
                                       + Self.BasicMediaDesc(8000)
                                       + Self.BasicMediaDesc(9000));
+  Self.Factory        := TMockMediaStreamFactory.Create;
   Self.SendingBinding := TIdConnectionBindings.Create;
-  Self.Timer := TIdDebugTimerQueue.Create(false);
+  Self.Timer          := TIdDebugTimerQueue.Create(false);
 end;
 
 procedure TestTIdSdpBaseMediaStream.TearDown;
@@ -7855,6 +7860,8 @@ begin
 
   inherited SetUp;
 
+  Self.Factory := TMockMediaStreamFactory.Create;
+
   Self.AVP := TIdRTPProfile.Create;
   Self.AVP.AddEncoding(T140EncodingName, T140ClockRate, '', Self.T140PT);
 
@@ -7892,6 +7899,7 @@ begin
   Self.Sender.Free;
   Self.Media.Free;
   Self.AVP.Free;
+  Self.Factory.Free;
 
   inherited TearDown;
 end;
@@ -7914,7 +7922,7 @@ function TestTIdSDPMediaStream.CreateStream: TIdSdpBaseMediaStream;
 var
   S: TIdSDPMediaStream;
 begin
-  S := TIdSDPMediaStream.Create(TIdMockRTPPeer);
+  S := TIdSDPMediaStream.Create(Self.Factory);
   S.LocalDescription  := Self.LocalDescription;
   S.LocalProfile      := Self.AVP;
   S.RemoteDescription := Self.RemoteDescription;
@@ -8623,7 +8631,7 @@ end;
 
 function TestTIdSdpNullMediaStream.CreateStream: TIdSdpBaseMediaStream;
 begin
-  Result := TIdSdpNullMediaStream.Create;
+  Result := TIdSdpNullMediaStream.Create(Self.Factory);
 end;
 
 procedure TestTIdSdpNullMediaStream.ReceiveDataOn(S: TIdSdpBaseMediaStream);
@@ -9225,6 +9233,8 @@ end;
 
 procedure TestTIdSdpTcpClientConnection.TearDown;
 begin
+  Self.Timer.Terminate;
+
   Self.Connection.RemoveDataListener(Self);
   Self.Connection.RemoveDataListener(Self.Listener);
 
@@ -9234,8 +9244,6 @@ begin
   Self.DisconnectEvent.Free;
   Self.Listener.Free;
   Self.Connection.Free;
-
-  Self.Timer.Terminate;
 
   inherited TearDown;
 end;
@@ -10064,7 +10072,7 @@ end;
 
 function TestTIdSdpTcpMediaStream.CreateStream: TIdSdpBaseMediaStream;
 begin
-  Result := TIdSdpTcpMediaStream.Create(TIdSdpMockTcpConnection);
+  Result := TIdSdpTcpMediaStream.Create(Self.Factory);
   Result.IsOffer           := true;
   Result.LocalDescription  := Self.LocalDescription;
   Result.RemoteDescription := Self.RemoteDescription;
@@ -10430,7 +10438,7 @@ var
   Server: TIdSdpMockTcpConnection;
   S:      TIdSdpTcpMediaStream;
 begin
-  S := TIdSdpTcpMediaStream.Create(TIdSdpMockTcpConnection);
+  S := TIdSdpTcpMediaStream.Create(Self.Factory);
   try
     S.IsOffer := true;
     S.Timer   := Self.Timer;
@@ -10781,7 +10789,7 @@ begin
   Address := Localhost(Id_IPv4);
   Port    := 8000;
 
-  Stream := TIdSdpTcpMediaStream.Create(TIdSdpMockTcpConnection);
+  Stream := TIdSdpTcpMediaStream.Create(Self.Factory);
   try
     Stream.IsOffer := true;
     Self.SetLocalMediaDesc(Stream,
@@ -10803,7 +10811,7 @@ begin
   Address := Localhost(Id_IPv4);
   Port    := 8000;
 
-  Stream := TIdSdpTcpMediaStream.Create(TIdSdpMockTcpConnection);
+  Stream := TIdSdpTcpMediaStream.Create(Self.Factory);
   try
     Stream.IsOffer := true;
     Self.SetLocalMediaDesc(Stream,
@@ -10830,7 +10838,7 @@ begin
   Address := Localhost(Id_IPv4);
   Port    := 8000;
 
-  Stream := TIdSdpTcpMediaStream.Create(TIdSdpMockTcpConnection);
+  Stream := TIdSdpTcpMediaStream.Create(Self.Factory);
   try
     Stream.IsOffer := true;
     Self.SetLocalMediaDesc(Stream,
@@ -10857,7 +10865,7 @@ begin
   Address := Localhost(Id_IPv4);
   Port    := 8000;
 
-  Stream := TIdSdpTcpMediaStream.Create(TIdSdpMockTcpConnection);
+  Stream := TIdSdpTcpMediaStream.Create(Self.Factory);
   try
     Stream.IsOffer := true;
     Self.SetLocalMediaDesc(Stream,
@@ -10879,7 +10887,7 @@ begin
   Address := Localhost(Id_IPv4);
   Port    := 8000;
 
-  Stream := TIdSdpTcpMediaStream.Create(TIdSdpMockTcpConnection);
+  Stream := TIdSdpTcpMediaStream.Create(Self.Factory);
   try
     Stream.IsOffer := true;
     Self.SetLocalMediaDesc(Stream,
@@ -11086,10 +11094,9 @@ procedure TestTIdSDPMultimediaSession.SetUp;
 begin
   inherited SetUp;
 
-  Self.Profile := TIdAudioVisualProfile.Create;
-
-  Self.MS := TIdSDPMultimediaSession.Create(Self.Profile, TIdMockRTPPeer);
-
+  Self.Factory     := TMockMediaStreamFactory.Create;
+  Self.Profile     := TIdAudioVisualProfile.Create;
+  Self.MS          := TIdSDPMultimediaSession.Create(Self.Profile, Self.Factory);
   Self.PortBlocker := TIdMockRTPPeer.Create;
 
   // We only instantiate Server so that we know that GStack points to an
@@ -11103,6 +11110,7 @@ begin
   Self.PortBlocker.Free;
   Self.MS.Free;
   Self.Profile.Free;
+  Self.Factory.Free;
 
   inherited TearDown;
 end;
@@ -11302,7 +11310,7 @@ var
   I:        Integer;
   UnownedS: TIdSdpBaseMediaStream;
 begin
-  UnownedS := TIdSDPMediaStream.Create;
+  UnownedS := TIdSDPMediaStream.Create(Self.Factory);
   try
     CheckEquals(-1, Self.MS.IndexOfStream(UnownedS), 'Unowned stream');
   finally
@@ -12189,15 +12197,17 @@ begin
   inherited SetUp;
 
   Self.Chunk    := TMemoryStream.Create;
+  Self.Factory  := TMockMediaStreamFactory.Create;
   Self.Format   := '96';
   Self.Listener := TIdSdpTestMediaListener.Create;
-  Self.Stream   := TIdSdpMediaStream.Create;
+  Self.Stream   := TIdSdpMediaStream.Create(Self.Factory);
 end;
 
 procedure TIdSdpMediaListenerMethodTestCase.TearDown;
 begin
   Self.Stream.Free;
   Self.Listener.Free;
+  Self.Factory.Free;
   Self.Chunk.Free;
 
   inherited TearDown;

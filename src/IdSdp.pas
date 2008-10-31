@@ -578,6 +578,8 @@ type
                          LayerID: Integer);
   end;
 
+  TIdSdpMediaStreamFactory = class;
+
   TIdSdpBaseMediaStream = class(TIdInterfacedObject)
   private
     DataListeners:       TIdNotificationList;
@@ -598,6 +600,8 @@ type
     procedure SetRemoteDescription(const Value: TIdSdpMediaDescription);
     function  SufficientPortsFree(Port: Cardinal): Boolean;
   protected
+    Factory: TIdSdpMediaStreamFactory;
+
     procedure AfterSetLocalDescription(Value: TIdSdpMediaDescription); virtual;
     procedure AfterSetRemoteDescription(Value: TIdSdpMediaDescription); virtual;
     procedure BeforeSetLocalDescription(Value: TIdSdpMediaDescription); virtual;
@@ -614,7 +618,7 @@ type
     procedure SetTimer(Value: TIdTimerQueue); virtual;
     procedure StartServers; virtual;
   public
-    constructor Create; override;
+    constructor Create(Factory: TIdSdpMediaStreamFactory); virtual;
     destructor  Destroy; override;
 
     procedure AddDataListener(const Listener: IIdSdpMediaListener);
@@ -667,7 +671,6 @@ type
     RTPListeners:     TIdNotificationList;
     RTPSendListeners: TIdNotificationList;
     Servers:          TObjectList;
-    ServerType:       TIdBaseRTPAbstractPeerClass;
 
     function  CreateServer: TIdBaseRTPAbstractPeer;
     function  FindServer(LayerID: Cardinal): TIdBaseRTPAbstractPeer;
@@ -704,9 +707,7 @@ type
     procedure SetTimer(Value: TIdTimerQueue); override;
     procedure StartServers; override;
   public
-    constructor Create; override;
-    constructor Create(ServerType: TIdBaseRTPAbstractPeerClass); overload;
-    destructor  Destroy; override;
+    destructor Destroy; override;
 
     procedure AddRTPListener(const Listener: IIdRTPListener);
     procedure AddRTPSendListener(const Listener: IIdRTPSendListener);
@@ -1015,7 +1016,6 @@ type
                                IIdSdpTcpConnectionListener)
   private
     AnswerConnectionType:  TConnectionTypeArray;
-    BaseServerType:        TIdSdpBaseTcpConnectionClass;
     OfferConnectionType:   TConnectionTypeArray;
     HaveLocalDescription:  Boolean;
     HaveRemoteDescription: Boolean;
@@ -1053,14 +1053,25 @@ type
     procedure SetTimer(Value: TIdTimerQueue); override;
     procedure StartServers; override;
   public
-    constructor Create; override;
-    constructor Create(ServerType: TIdSdpBaseTcpConnectionClass); overload;
-    destructor  Destroy; override;
+    destructor Destroy; override;
 
     function  IsActiveConnection: Boolean;
     function  IsListening: Boolean; override;
     procedure StartListening; override;
     procedure StopListening; override;
+  end;
+
+  TIdSdpMediaStreamFactory = class(TObject)
+  protected
+    fTcpServerType: TIdSdpBaseTcpConnectionClass;
+    fRtpServerType: TIdBaseRTPAbstractPeerClass;
+  public
+    constructor Create; virtual;
+
+    function CreateStream(Protocol: String): TIdSdpBaseMediaStream; virtual;
+
+    property TcpServerType: TIdSdpBaseTcpConnectionClass read fTcpServerType;
+    property RtpServerType: TIdBaseRTPAbstractPeerClass  read fRtpServerType;
   end;
 
   // I process SDP (RFC 2327) payloads. This means that I instantiate (RTP)
@@ -1070,6 +1081,7 @@ type
   TIdSDPMultimediaSession = class(TObject)
   private
     fHighestAllowedPort:  Cardinal;
+    Factory:              TIdSdpMediaStreamFactory;
     FirstLocalSessDesc:   Boolean;
     fIsOffer:             Boolean;
     fLocalMachineName:    String;
@@ -1080,9 +1092,7 @@ type
     fOnHold:              Boolean;
     fStreams:             TObjectList;
     fUsername:            String;
-    ServerType:           TIdBaseRTPAbstractPeerClass;
     StreamLock:           TCriticalSection;
-    TcpServerType:        TIdSdpBaseTcpConnectionClass;
     TimeHeader:           TIdSdpTime;
     Timer:                TIdThreadedTimerQueue;
 
@@ -1097,10 +1107,7 @@ type
     procedure SetLowestAllowedPort(Value: Cardinal);
     procedure UpdateSessionVersion;
   public
-    constructor Create(Profile: TIdRTPProfile); overload;
-    constructor Create(Profile: TIdRTPProfile; ServerType: TIdBaseRTPAbstractPeerClass); overload;
-    constructor Create(Profile: TIdRTPProfile; TcpServerType: TIdSdpBaseTcpConnectionClass); overload;
-    constructor Create(Profile: TIdRTPProfile; ServerType: TIdBaseRTPAbstractPeerClass; TcpServerType: TIdSdpBaseTcpConnectionClass); overload;
+    constructor Create(Profile: TIdRTPProfile; Factory: TIdSdpMediaStreamFactory); overload;
     destructor  Destroy; override;
 
     function  AddressTypeFor(Address: String): TIdIPVersion;
@@ -4434,9 +4441,11 @@ end;
 //******************************************************************************
 //* TIdSdpBaseMediaStream Public methods ***************************************
 
-constructor TIdSdpBaseMediaStream.Create;
+constructor TIdSdpBaseMediaStream.Create(Factory: TIdSdpMediaStreamFactory);
 begin
   inherited Create;
+
+  Self.Factory := Factory;
 
   Self.InternalCreate;
 end;
@@ -4763,20 +4772,6 @@ end;
 //******************************************************************************
 //* TIdSDPMediaStream Public methods *******************************************
 
-constructor TIdSDPMediaStream.Create;
-begin
-  inherited Create;
-
-  Self.ServerType := TIdRTPServer;
-end;
-
-constructor TIdSDPMediaStream.Create(ServerType: TIdBaseRTPAbstractPeerClass);
-begin
-  inherited Create;
-
-  Self.ServerType := ServerType;
-end;
-
 destructor TIdSDPMediaStream.Destroy;
 begin
   Self.StopListening;
@@ -4961,7 +4956,7 @@ end;
 
 function TIdSDPMediaStream.CreateServer: TIdBaseRTPAbstractPeer;
 begin
-  Result := Self.ServerType.Create;
+  Result := Self.Factory.RtpServerType.Create;
   Self.Servers.Add(Result);
 
   Result.AddListener(Self);
@@ -6406,20 +6401,6 @@ end;
 //******************************************************************************
 //* TIdSdpTcpMediaStream Public methods ****************************************
 
-constructor TIdSdpTcpMediaStream.Create;
-begin
-  Self.BaseServerType := TIdSdpTcpClientConnection;
-
-  inherited Create;
-end;
-
-constructor TIdSdpTcpMediaStream.Create(ServerType: TIdSdpBaseTcpConnectionClass);
-begin
-  Self.BaseServerType := ServerType;
-
-  inherited Create;
-end;
-
 destructor TIdSdpTcpMediaStream.Destroy;
 begin
   Self.Servers.Free;
@@ -6504,7 +6485,7 @@ procedure TIdSdpTcpMediaStream.InternalCreate;
 begin
   inherited InternalCreate;
 
-  Self.InitializeConnectionTypeTable(Self.BaseServerType);
+  Self.InitializeConnectionTypeTable(Self.Factory.TcpServerType);
 
   Self.ResetHaveDescriptionFlags;
 
@@ -6562,7 +6543,7 @@ begin
   ServType := Self.ServerType(Self.IsOffer, OfferSetupType, AnswerSetupType);
 
   if (ServType = TIdSdpBaseTcpConnection) then
-    ServType := Self.BaseServerType.NullConnectionType;
+    ServType := Self.Factory.TcpServerType.NullConnectionType;
 //    raise Exception.Create(Format('Invalid answer setup type - offer: %s, answer: %s',
 //                                  [SetupTypeToStr(OfferSetupType), SetupTypeToStr(AnswerSetupType)]));
 
@@ -6854,51 +6835,36 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSdpMediaStreamFactory                                                   *
+//******************************************************************************
+//* TIdSdpMediaStreamFactory Public methods ************************************
+
+constructor TIdSdpMediaStreamFactory.Create;
+begin
+  inherited Create;
+
+  Self.fRtpServerType := TIdRTPServer;
+  Self.fTcpServerType := TIdSdpBaseTcpConnection;
+end;
+
+function TIdSdpMediaStreamFactory.CreateStream(Protocol: String): TIdSdpBaseMediaStream;
+begin
+  if (Protocol = Id_SDP_TCP) then
+    Result := TIdSdpTcpMediaStream.Create(Self)
+  else
+    Result := TIdSDPMediaStream.Create(Self);
+end;
+
+//******************************************************************************
 //* TIdSDPMultimediaSession                                                    *
 //******************************************************************************
 //* TIdSDPMultimediaSession Public methods *************************************
 
-constructor TIdSDPMultimediaSession.Create(Profile: TIdRTPProfile);
+constructor TIdSDPMultimediaSession.Create(Profile: TIdRTPProfile; Factory: TIdSdpMediaStreamFactory);
 begin
   inherited Create;
 
-  Self.ServerType    := TIdRTPServer;
-  Self.TcpServerType := TIdSdpBaseTcpConnection;
-
-  Self.InternalCreate(Profile);
-end;
-
-constructor TIdSDPMultimediaSession.Create(Profile: TIdRTPProfile;
-                                           ServerType: TIdBaseRTPAbstractPeerClass);
-begin
-  inherited Create;
-
-  Self.ServerType    := ServerType;
-  Self.TcpServerType := TIdSdpBaseTcpConnection;
-
-  Self.InternalCreate(Profile);
-end;
-
-constructor TIdSDPMultimediaSession.Create(Profile: TIdRTPProfile;
-                                           TcpServerType: TIdSdpBaseTcpConnectionClass);
-begin
-  inherited Create;
-
-  Self.ServerType    := TIdRTPServer;
-  Self.TcpServerType := TcpServerType;
-
-  Self.InternalCreate(Profile);
-end;
-
-constructor TIdSDPMultimediaSession.Create(Profile: TIdRTPProfile;
-                                           ServerType: TIdBaseRTPAbstractPeerClass;
-                                           TcpServerType: TIdSdpBaseTcpConnectionClass);
-begin
-  inherited Create;
-
-  Self.ServerType    := ServerType;
-  Self.TcpServerType := TcpServerType;
-
+  Self.Factory := Factory;
   Self.InternalCreate(Profile);
 end;
 
@@ -7165,10 +7131,7 @@ end;
 
 function TIdSDPMultimediaSession.CreateStream(Protocol: String): TIdSDPBaseMediaStream;
 begin
-  if (Protocol = Id_SDP_TCP) then
-    Result := TIdSdpTcpMediaStream.Create(Self.TcpServerType)
-  else
-    Result := TIdSDPMediaStream.Create(Self.ServerType);
+  Result := Self.Factory.CreateStream(Protocol);
 
   Result.HighestAllowedPort := Self.HighestAllowedPort;
   Result.IsOffer            := Self.IsOffer;
