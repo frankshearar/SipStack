@@ -13,8 +13,8 @@ interface
 
 uses
   Contnrs, Forms, IdConnectionBindings, IdInterfacedObject, IdSipMessage,
-  IdSipMockTransport, IdSipStackInterface, IdSipTransport, IdTimerQueue,
-  TestFramework, TestFrameworkSip, SysUtils;
+  IdSipMockTransport, IdSipStackInterface, IdSipTransport, IdSipUserAgent,
+  IdTimerQueue, TestFramework, TestFrameworkSip, SysUtils;
 
 type
   TIdDataList = class(TIdInterfacedObject)
@@ -113,6 +113,7 @@ type
 
     procedure SetMockTransport(Value: TIdSipMockTransport);
   protected
+    Factory:    TIdSipUserAgentFactory;
     TimerQueue: TIdDebugTimerQueue;
     UI:         TCustomForm;
 
@@ -400,9 +401,12 @@ begin
   inherited SetUp;
 
   Self.DataList      := TIdWindowAttachedDataList.Create;
+  Self.Factory       := TIdSipUserAgentFactory.Create;
   Self.TimerQueue    := TIdDebugTimerQueue.Create(true);
   Self.TransportTest := TTransportChecking.Create;
   Self.UI            := TIdSipStackWindow.CreateNew(nil, Self.DataList);
+
+  Self.Factory.Timer := Self.TimerQueue;
 end;
 
 procedure TStackInterfaceTestCase.TearDown;
@@ -412,6 +416,7 @@ begin
   Application.ProcessMessages; // Ensure that Self.UI is gone.
   Self.TransportTest.Free;
   Self.TimerQueue.Terminate;
+  Self.Factory.Free;
   Self.DataList.Free;
 
   inherited TearDown;

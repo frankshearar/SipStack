@@ -1,0 +1,67 @@
+program CallDemo;
+
+uses
+  Forms,
+  UI in 'UI.pas' {UIForm},
+  StringDictionary in '..\src\StringDictionary.pas',
+  IdAddressSpace in '..\src\IdAddressSpace.pas',
+  IdBaseThread in '..\src\IdBaseThread.pas',
+  IdConnectionBindings in '..\src\IdConnectionBindings.pas',
+  IdDTMFPanel in '..\src\IdDTMFPanel.pas',
+  IdIndyUtils in '..\src\IdIndyUtils.pas',
+  IdInterfacedObject in '..\src\IdInterfacedObject.pas',
+  IdNotification in '..\src\IdNotification.pas',
+  IdObservable in '..\src\IdObservable.pas',
+  IdRandom in '..\src\IdRandom.pas',
+  IdRegisteredObject in '..\src\IdRegisteredObject.pas',
+  IdRoutingTable in '..\src\IdRoutingTable.pas',
+  IdRTP in '..\src\IdRTP.pas',
+  IdRTPDiagnostics in '..\src\IdRTPDiagnostics.pas',
+  IdRTPServer in '..\src\IdRTPServer.pas',
+  IdSdp in '..\src\IdSdp.pas',
+  IdSimpleParser in '..\src\IdSimpleParser.pas',
+  IdSipAuthentication in '..\src\IdSipAuthentication.pas',
+  IdSipConsts in '..\src\IdSipConsts.pas',
+  IdSipCore in '..\src\IdSipCore.pas',
+  IdSipDialog in '..\src\IdSipDialog.pas',
+  IdSipDialogID in '..\src\IdSipDialogID.pas',
+  IdSipDns in '..\src\IdSipDns.pas',
+  IdSipIndyLocator in '..\src\IdSipIndyLocator.pas',
+  IdSipInviteModule in '..\src\IdSipInviteModule.pas',
+  IdSipLocation in '..\src\IdSipLocation.pas',
+  IdSipLocator in '..\src\IdSipLocator.pas',
+  IdSipMessage in '..\src\IdSipMessage.pas',
+  IdSipOptionsModule in '..\src\IdSipOptionsModule.pas',
+  IdSipProxy in '..\src\IdSipProxy.pas',
+  IdSipProxyDescription in '..\src\IdSipProxyDescription.pas',
+  IdSipRegistration in '..\src\IdSipRegistration.pas',
+  IdSipSctpTransport in '..\src\IdSipSctpTransport.pas',
+  IdSipStackInterface in '..\src\IdSipStackInterface.pas',
+  IdSipSubscribeModule in '..\src\IdSipSubscribeModule.pas',
+  IdSipTcpTransport in '..\src\IdSipTcpTransport.pas',
+  IdSipTimer in '..\src\IdSipTimer.pas',
+  IdSipTlsOverSctpTransport in '..\src\IdSipTlsOverSctpTransport.pas',
+  IdSipTlsTransport in '..\src\IdSipTlsTransport.pas',
+  IdSipTransaction in '..\src\IdSipTransaction.pas',
+  IdSipTransport in '..\src\IdSipTransport.pas',
+  IdSipTransportAddressSpace in '..\src\IdSipTransportAddressSpace.pas',
+  IdSipTransportLogger in '..\src\IdSipTransportLogger.pas',
+  IdSipUdpTransport in '..\src\IdSipUdpTransport.pas',
+  IdSipUserAgent in '..\src\IdSipUserAgent.pas',
+  IdSystem in '..\src\IdSystem.pas',
+  IdThreadableTcpClient in '..\src\IdThreadableTcpClient.pas',
+  IdTimerQueue in '..\src\IdTimerQueue.pas',
+  IdUnicode in '..\src\IdUnicode.pas',
+  PluggableLogging in '..\src\PluggableLogging.pas',
+  RuntimeSafety in '..\src\RuntimeSafety.pas',
+  ConfigUtils in '..\src\ConfigUtils.pas',
+  IdSipMockLocator in '..\test\IdSipMockLocator.pas',
+  IdSipMockBindingDatabase in '..\test\IdSipMockBindingDatabase.pas';
+
+{$R *.res}
+
+begin
+  Application.Initialize;
+  Application.CreateForm(TUIForm, UIForm);
+  Application.Run;
+end.

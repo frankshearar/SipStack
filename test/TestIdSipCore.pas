@@ -18,6 +18,22 @@ uses
   TestFrameworkSip, TestFrameworkSipTU;
 
 type
+  TestTIdSipTransactionUserListeners = class(TTestCase)
+  private
+    I1: TIdSipTestTransactionUserListener;
+    I2: TIdSipTestTransactionUserListener;
+    L:  TIdSipTransactionUserListeners;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAddListener;
+    procedure TestAddListeners;
+    procedure TestAsArray;
+    procedure TestClear;
+    procedure TestCopy;
+  end;
+
   TestTIdSipAbstractCore = class(TTestCaseTU)
   private
     procedure CheckCommaSeparatedHeaders(const ExpectedValues: String;
@@ -503,6 +519,7 @@ type
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
+  Result.AddTest(TestTIdSipTransactionUserListeners.Suite);
   Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestLocation.Suite);
   Result.AddTest(TestPreferredTransport.Suite);
@@ -557,6 +574,119 @@ end;
 function TIdSipMultipleExtensionMessageModule.AllowedExtensions: String;
 begin
   Result := 'foo, bar, baz';
+end;
+
+//******************************************************************************
+//* TestTIdSipTransactionUserListeners                                         *
+//******************************************************************************
+//* TestTIdSipTransactionUserListeners Public methods **************************
+
+procedure TestTIdSipTransactionUserListeners.SetUp;
+begin
+  inherited SetUp;
+
+  Self.I1 := TIdSipTestTransactionUserListener.Create;
+  Self.I2 := TIdSipTestTransactionUserListener.Create;
+  Self.L  := TIdSipTransactionUserListeners.Create;
+end;
+
+procedure TestTIdSipTransactionUserListeners.TearDown;
+begin
+  Self.L.Free;
+  Self.I2.Free;
+  Self.I1.Free;
+
+  inherited SetUp;
+end;
+
+//* TestTIdSipTransactionUserListeners Published methods ***********************
+
+procedure TestTIdSipTransactionUserListeners.TestAddListener;
+begin
+  Self.L.Add(Self.I1);
+  CheckEquals(1, Self.L.Count, 'Nothing added');
+
+  Self.L.Add(Self.I2);
+  CheckEquals(2, Self.L.Count, 'Nothing added, second time');
+
+  Self.L[0].OnAddAction(nil, nil);
+  Check(Self.I1.ActionAdded, 'Wrong element in the first slot');
+
+  Self.L[1].OnAddAction(nil, nil);
+  Check(Self.I2.ActionAdded, 'Wrong element in the second slot');
+end;
+
+procedure TestTIdSipTransactionUserListeners.TestAddListeners;
+var
+  AnotherL: TIdSipTransactionUserListeners;
+begin
+  AnotherL := TIdSipTransactionUserListeners.Create;
+  try
+    AnotherL.Add(Self.I1);
+    AnotherL.Add(Self.I2);
+
+    Self.L.Add(AnotherL);
+  finally
+    AnotherL.Free;
+  end;
+
+  CheckEquals(2, Self.L.Count, 'Nothing added');
+  Self.L[0].OnAddAction(nil, nil);
+  Check(Self.I1.ActionAdded, 'Wrong element in the first slot');
+
+  Self.L[1].OnAddAction(nil, nil);
+  Check(Self.I2.ActionAdded, 'Wrong element in the second slot');
+end;
+
+procedure TestTIdSipTransactionUserListeners.TestAsArray;
+var
+  A: TIdSipTransactionUserListenerArray;
+begin
+  A := Self.L.AsArray;
+  CheckEquals(0, Length(A), 'Empty list count');
+
+  Self.L.Add(Self.I1);
+  Self.L.Add(Self.I2);
+
+  A := Self.L.AsArray;
+  CheckEquals(2, Length(A), 'Two-element list');
+
+  A[0].OnAddAction(nil, nil);
+  Check(Self.I1.ActionAdded, 'Wrong element in the first slot');
+
+  A[1].OnAddAction(nil, nil);
+  Check(Self.I2.ActionAdded, 'Wrong element in the second slot');
+end;
+
+procedure TestTIdSipTransactionUserListeners.TestClear;
+begin
+  Self.L.Add(Self.I1);
+  Self.L.Add(Self.I2);
+
+  Self.L.Clear;
+
+  CheckEquals(0, Self.L.Count, 'List not cleared');
+end;
+
+procedure TestTIdSipTransactionUserListeners.TestCopy;
+var
+  AnotherL: TIdSipTransactionUserListeners;
+begin
+  Self.L.Add(Self.I1);
+  Self.L.Add(Self.I2);
+
+  AnotherL := Self.L.Copy;
+  try
+    CheckEquals(2, AnotherL.Count, 'Two-element list');
+
+    AnotherL[0].OnAddAction(nil, nil);
+    Check(Self.I1.ActionAdded, 'Wrong element in the first slot');
+
+    AnotherL[1].OnAddAction(nil, nil);
+    Check(Self.I2.ActionAdded, 'Wrong element in the second slot');
+  finally
+    AnotherL.Free;
+  end;
 end;
 
 //******************************************************************************

@@ -1262,7 +1262,9 @@ begin
 
     // Self.SendEvent is set by OnSendResponse: that is, it is set after
     // HighPortTransport has received the request and rejected it.               
-    Self.WaitForSignaled(Self.SendEvent, 'Waiting for send event');
+    Self.WaitForSignaled(Self.SendEvent,
+                         Self.HighPortTransport.ClassName
+                       + ': Waiting for send event');
 
     Check(not Self.ReceivedRequest,
           Self.HighPortTransport.ClassName
@@ -1277,7 +1279,8 @@ begin
 
     CheckNotEquals(0,
                    Self.LastSentResponse.StatusCode,
-                   'We didn''t receive the "Bad Request" response');
+                   Self.HighPortTransport.ClassName
+                 + ': We didn''t receive the "Bad Request" response');
 
     // Check that the transport sends the 400 Bad Request.
     CheckEquals(SIPBadRequest,

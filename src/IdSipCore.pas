@@ -135,6 +135,27 @@ type
                              Action: TIdSipAction);
   end;
 
+  TIdSipTransactionUserListenerArray = array of IIdSipTransactionUserListener;
+
+  TIdSipTransactionUserListeners = class(TObject)
+  private
+    L: TList;
+
+    function GetListeners(Index: Integer): IIdSipTransactionUserListener;
+  public
+    constructor Create;
+    destructor  Destroy; override;
+
+    procedure Add(Listener: IIdSipTransactionUserListener); overload;
+    procedure Add(Listeners: TIdSipTransactionUserListeners); overload;
+    function  AsArray: TIdSipTransactionUserListenerArray;
+    procedure Clear;
+    function  Copy: TIdSipTransactionUserListeners;
+    function  Count: Integer;
+
+    property Listeners[Index: Integer]: IIdSipTransactionUserListener read GetListeners; default;
+  end;
+
   // I represent a closure that contains some block of code involving an Action.
   // I also represent the null action closure.
   TIdSipActionClosure = class(TObject)
@@ -1232,6 +1253,71 @@ begin
   else
     Result := IntToStr(Reaction);
   end;
+end;
+
+//******************************************************************************
+//* TIdSipTransactionUserListeners                                             *
+//******************************************************************************
+//* TIdSipTransactionUserListeners Public methods ******************************
+
+constructor TIdSipTransactionUserListeners.Create;
+begin
+  inherited Create;
+
+  Self.L := TList.Create;
+end;
+
+destructor TIdSipTransactionUserListeners.Destroy;
+begin
+  Self.L.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipTransactionUserListeners.Add(Listener: IIdSipTransactionUserListener);
+begin
+  Self.L.Add(Pointer(Listener));
+end;
+
+procedure TIdSipTransactionUserListeners.Add(Listeners: TIdSipTransactionUserListeners);
+var
+  I: Integer;
+begin
+  for I := 0 to Listeners.Count - 1 do
+    Self.Add(Listeners[I]);
+end;
+
+function TIdSipTransactionUserListeners.AsArray: TIdSipTransactionUserListenerArray;
+var
+  I: Integer;
+begin
+  SetLength(Result, Self.L.Count);
+
+  for I := 0 to Self.L.Count - 1 do
+    Result[I] := IIdSipTransactionUserListener(Self.L[I]);
+end;
+
+procedure TIdSipTransactionUserListeners.Clear;
+begin
+  Self.L.Clear;
+end;
+
+function TIdSipTransactionUserListeners.Copy: TIdSipTransactionUserListeners;
+begin
+  Result := TIdSipTransactionUserListeners.Create;
+  Result.Add(Self);
+end;
+
+function TIdSipTransactionUserListeners.Count: Integer;
+begin
+  Result := Self.L.Count;
+end;
+
+//* TIdSipTransactionUserListeners Private methods *****************************
+
+function TIdSipTransactionUserListeners.GetListeners(Index: Integer): IIdSipTransactionUserListener;
+begin
+  Result := IIdSipTransactionUserListener(Self.L[Index]);
 end;
 
 //******************************************************************************

@@ -176,6 +176,8 @@ type
     Dispatcher: TIdSipMockTransactionDispatcher;
     Response:   TIdSipResponse;
     UA:         TIdSipUserAgent;
+
+    procedure Fail(msg: string; errorAddr: Pointer = nil); //overload; override; <-- compiler rejects the attempt to override Fail!
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -1569,6 +1571,11 @@ begin
   Self.Binding.Free;
 
   inherited TearDown;
+end;
+
+procedure TActionMethodTestCase.Fail(msg: string; errorAddr: Pointer = nil);
+begin
+  inherited Fail(Self.ClassName + ': ' + msg, errorAddr);
 end;
 
 //******************************************************************************

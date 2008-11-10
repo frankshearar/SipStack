@@ -14,11 +14,9 @@ interface
 uses
   Contnrs, Classes, IdNotification, IdRoutingTable, IdSipAuthentication,
   IdSipCore, IdSipInviteModule, IdSipLocator, IdSipMessage, IdSipOptionsModule,
-  IdSipRegistration, IdSipTransaction, IdSipTransport, IdTimerQueue;
+  IdSipRegistration, IdSipTransaction, IdSipTransport, IdTimerQueue, Windows;
 
 type
-  TIdSipUserAgent = class;
-
   TIdSipUserAgent = class(TIdSipAbstractCore,
                           IIdSipInviteModuleListener,
                           IIdSipRegistrationListener)
@@ -247,6 +245,28 @@ type
     procedure UpdateConfiguration(UserAgent: TIdSipUserAgent;
                                   Configuration: TStrings);
   end;
+
+  TIdSipUserAgentFactory = class(TObject)
+  private
+    fConfiguration: TStrings;
+    fListeners:     TIdSipTransactionUserListeners;
+    fTimer:         TIdTimerQueue;
+
+    procedure SetConfiguration(Value: TStrings);
+    procedure SetListeners(Value: TIdSipTransactionUserListeners);
+  public
+    constructor Create;
+    destructor  Destroy; override;
+
+    function Copy: TIdSipUserAgentFactory;
+    function CreateUserAgent: TIdSipUserAgent;
+
+    property Configuration: TStrings                       read fConfiguration write SetConfiguration;
+    property Listeners:     TIdSipTransactionUserListeners read fListeners write SetListeners;
+    property Timer:         TIdTimerQueue                  read fTimer write fTimer;
+  end;
+
+  TIdSipUserAgentFactoryClass = class of TIdSipUserAgentFactory;
 
   TIdSipPendingConfigurationAction = class(TObject)
   public
@@ -1824,6 +1844,61 @@ begin
   EatDirective(Line);
 
   UserAgent.InstanceID := Line;
+end;
+
+//******************************************************************************
+//* TIdSipUserAgentFactory                                                     *
+//******************************************************************************
+//* TIdSipUserAgentFactory Public methods **************************************
+
+constructor TIdSipUserAgentFactory.Create;
+begin
+  inherited Create;
+
+  Self.fConfiguration := TStringList.Create;
+  Self.fListeners     := TIdSipTransactionUserListeners.Create;
+end;
+
+destructor TIdSipUserAgentFactory.Destroy;
+begin
+  Self.fListeners.Free;
+  Self.fConfiguration.Free;
+
+  inherited Destroy;
+end;
+
+function TIdSipUserAgentFactory.Copy: TIdSipUserAgentFactory;
+begin
+  Result := TIdSipUserAgentFactoryClass(Self.ClassType).Create;
+  Result.Configuration := Self.Configuration;
+  Result.Listeners     := Self.Listeners;
+  Result.Timer         := Self.Timer;
+end;
+
+function TIdSipUserAgentFactory.CreateUserAgent: TIdSipUserAgent;
+var
+  C: TIdSipStackConfigurator;
+begin
+  C := TIdSipStackConfigurator.Create;
+  try
+    Result := C.CreateUserAgent(Self.Configuration, Self.Timer, Self.Listeners.AsArray);
+  finally
+    C.Free;
+  end;
+end;
+
+//* TIdSipUserAgentFactory Private methods *************************************
+
+procedure TIdSipUserAgentFactory.SetConfiguration(Value: TStrings);
+begin
+  Self.fConfiguration.Clear;
+  Self.fConfiguration.AddStrings(Value);
+end;
+
+procedure TIdSipUserAgentFactory.SetListeners(Value: TIdSipTransactionUserListeners);
+begin
+  Self.Listeners.Clear;
+  Self.Listeners.Add(Value);
 end;
 
 //******************************************************************************

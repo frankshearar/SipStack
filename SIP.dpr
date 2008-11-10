@@ -73,6 +73,7 @@ uses
   StringDictionary in 'src\StringDictionary.pas',
   TestFrameworkEx in 'test\TestFrameworkEx.pas',
   TestFrameworkRtp in 'test\TestFrameworkRtp.pas',
+  TestFrameworkSdp in 'test\TestFrameworkSdp.pas',
   TestFrameworkSip in 'test\TestFrameworkSip.pas',
   TestFrameworkSipTransport in 'test\TestFrameworkSipTransport.pas',
   TestFrameworkSipTU in 'test\TestFrameworkSipTU.pas',

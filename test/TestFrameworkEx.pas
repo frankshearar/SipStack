@@ -18,10 +18,11 @@ type
   TThreadingTestCase = class(TTestCase)
   protected
     ExceptionMessage: String;
-    ExceptionType:    ExceptClass;    
+    ExceptionType:    ExceptClass;
     fDefaultTimeout:  Cardinal;
     ThreadEvent:      TEvent;
 
+    procedure Fail(msg: string; errorAddr: Pointer = nil); //overload; override; <-- compiler rejects the attempt to override Fail!
     procedure WaitForSignaled; overload;
     procedure WaitForSignaled(Event: TEvent); overload;
     procedure WaitForSignaled(Event: TEvent; Msg: String); overload;
@@ -122,6 +123,11 @@ begin
 end;
 
 //* TThreadingTestCase Protected methods ***************************************
+
+procedure TThreadingTestCase.Fail(msg: string; errorAddr: Pointer = nil);
+begin
+  inherited Fail(Self.ClassName + ': ' + msg, errorAddr);
+end;
 
 procedure TThreadingTestCase.WaitForSignaled;
 begin

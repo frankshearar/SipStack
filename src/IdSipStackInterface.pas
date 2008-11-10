@@ -64,6 +64,11 @@ type
   // using an otherwise valid handle (calling AcceptCall on an outbound call,
   // for instance) I will raise an EInvalidHandle exception.
   //
+  // To use this class:
+  // * Instantiate it;
+  // * Configure it;
+  // * Resume it.
+  //
   // My current implementation is Windows-specific. Ultimately, of course, we
   // want to be OS-agnostic (at least, as much as we can be).
   //
@@ -93,7 +98,6 @@ type
 
     function  ActionFor(Handle: TIdSipHandle): TIdSipAction;
     function  AssociationAt(Index: Integer): TIdActionAssociation;
-    procedure Configure(Configuration: TStrings);
     function  GetAndCheckAction(Handle: TIdSipHandle;
                                 ExpectedType: TIdSipActionClass): TIdSipAction;
     function  HandleFor(Action: TIdSipAction): TIdSipHandle;
@@ -200,10 +204,10 @@ type
     property UserAgent: TIdSipUserAgent read fUserAgent;
   public
     constructor Create(UiHandle: HWnd;
-                       TimerQueue: TIdTimerQueue;
-                       Configuration: TStrings); reintroduce; virtual;
+                       UAFactory: TIdSipUserAgentFactory); reintroduce; virtual;
     destructor  Destroy; override;
 
+    procedure AddListener(Listener: IIdSipTransactionUserListener);
     procedure AcceptCallModify(ActionHandle: TIdSipHandle;
                                const LocalSessionDescription: String;
                                const ContentType: String);
@@ -212,7 +216,8 @@ type
                          const ContentType: String);
     function  AttachExtension(EType: TIdSipStackInterfaceExtensionClass): TIdSipStackInterfaceExtension;
     procedure Authenticate(ActionHandle: TIdSipHandle;
-                           Credentials: TIdSipAuthorizationHeader); 
+                           Credentials: TIdSipAuthorizationHeader);
+    procedure Configure(Configuration: TStrings);
     function  GruuOf(ActionHandle: TIdSipHandle): String;
     function  HandleOf(const LocalGruu: String): TIdSipHandle;
     procedure HangUp(ActionHandle: TIdSipHandle);
@@ -1141,8 +1146,7 @@ end;
 //* TIdSipStackInterface Public methods ****************************************
 
 constructor TIdSipStackInterface.Create(UiHandle: HWnd;
-                                        TimerQueue: TIdTimerQueue;
-                                        Configuration: TStrings);
+                                        UAFactory: TIdSipUserAgentFactory);
 var
   Configurator: TIdSipStackConfigurator;
   Module:       TIdSipMessageModule;
@@ -1151,7 +1155,7 @@ begin
 
   Self.FHasBeenFreed:=nil;
 
-  Self.TimerQueue := TimerQueue;
+  Self.TimerQueue := UAFactory.Timer;
   Self.TimerQueue.AddListener(Self);
 
   Self.ActionLock := TCriticalSection.Create;
@@ -1159,25 +1163,22 @@ begin
 
   Self.fUiHandle := UiHandle;
 
-  Configurator := TIdSipStackConfigurator.Create;
-  try
-    Self.fUserAgent := Configurator.CreateUserAgent(Configuration, Self.TimerQueue, [Self]);
-    Self.UserAgent.InviteModule.AddListener(Self);
-//    Self.UserAgent.AddTransportListener(Self);
+  Self.fUserAgent := UAFactory.CreateUserAgent;
+  Self.fUserAgent.AddListener(Self);
 
-    Self.ListenToAllTransports;
+  Self.UserAgent.InviteModule.AddListener(Self);
+  //    Self.UserAgent.AddTransportListener(Self);
 
-    Module := Self.UserAgent.ModuleFor(TIdSipSubscribeModule);
+  Self.ListenToAllTransports;
 
-    if not Module.IsNull then begin
-      Self.SubscribeModule := Module as TIdSipSubscribeModule;
-      Self.SubscribeModule.AddListener(Self);
-    end;
-  finally
-    Configurator.Free;
+  Module := Self.UserAgent.ModuleFor(TIdSipSubscribeModule);
+
+  if not Module.IsNull then begin
+    Self.SubscribeModule := Module as TIdSipSubscribeModule;
+    Self.SubscribeModule.AddListener(Self);
   end;
 
-  Self.Configure(Configuration);
+  Self.Configure(UAFactory.Configuration);
 end;
 
 destructor TIdSipStackInterface.Destroy;
@@ -1216,6 +1217,11 @@ begin
   finally
     Self.ActionLock.Release;
   end;
+end;
+
+procedure TIdSipStackInterface.AddListener(Listener: IIdSipTransactionUserListener);
+begin
+  Self.UserAgent.AddListener(Listener);
 end;
 
 procedure TIdSipStackInterface.AnswerCall(ActionHandle: TIdSipHandle;
@@ -1262,6 +1268,26 @@ begin
     Self.TimerQueue.AddEvent(TriggerImmediately, Wait);
   finally
     Self.ActionLock.Release;
+  end;
+end;
+
+procedure TIdSipStackInterface.Configure(Configuration: TStrings);
+var
+  Config:    String;
+  Directive: String;
+  I:         Integer;
+begin
+  Self.PreConfigurationActions;
+  try
+    for I := 0 to Configuration.Count - 1 do begin
+      Config := Configuration[I];
+      Directive := Trim(Fetch(Config, ':'));
+
+      Self.ParseLine(Directive, Trim(Config));
+    end;
+  finally
+    Self.PostConfigurationActions;
+    Self.NotifyOfReconfiguration(Configuration);
   end;
 end;
 
@@ -1791,26 +1817,6 @@ end;
 function TIdSipStackInterface.AssociationAt(Index: Integer): TIdActionAssociation;
 begin
   Result := Self.Actions[Index] as TIdActionAssociation;
-end;
-
-procedure TIdSipStackInterface.Configure(Configuration: TStrings);
-var
-  Config:    String;
-  Directive: String;
-  I:         Integer;
-begin
-  Self.PreConfigurationActions;
-  try
-    for I := 0 to Configuration.Count - 1 do begin
-      Config := Configuration[I];
-      Directive := Trim(Fetch(Config, ':'));
-
-      Self.ParseLine(Directive, Trim(Config));
-    end;
-  finally
-    Self.PostConfigurationActions;
-    Self.NotifyOfReconfiguration(Configuration);
-  end;
 end;
 
 function TIdSipStackInterface.GetAndCheckAction(Handle: TIdSipHandle;

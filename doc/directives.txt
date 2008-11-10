@@ -1,0 +1,242 @@
+SIPSTACK USER AGENT DIRECTIVES
+==============================
+
+ActAsRegistrar
+--------------
+
+ActAsRegistrar allows one to toggle whether or not the stack acts as a
+registrar, that is, whether or not it accepts REGISTER requests. If
+not present, ActAsRegistrar is false.
+
+Grammar:
+  ActAsRegistrar: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>[<paramname=paramvalue>*]
+
+ActAsRegistrar accepts several parameters:
+* regtime: registration period (integer value, in seconds)
+* mintime: minimum allowed expiry time (integer value, in seconds)
+* usegruu: use GRUU or not? (boolean string: yes|no|true|false|1|0)
+
+Authentication
+--------------
+
+This directive controls how requests are authenticated, which requests
+are challenged.
+
+Grammar:
+
+  Authentication: <policy name>[sip-header-parameter-list]
+
+where sip-header-parameter-list contains parameters encoded as though
+they were SIP headers.
+
+You control which policy to use by registering a name using
+RegisterAuthenticationPolicy, mapping that name to a
+TIdSipAbstractAuthenticator subclass type. The parameters are passed
+to that authenticator, that configures itself accordingly.
+
+(This does mean that adding new policies requires a recompilation of
+the program.)
+
+Orthrus in particular defines the "Database" policy, which accepts the
+following parameters:
+* algorithm: the hashing function used in authentication (as
+  registered with RegisterHash);
+* db: the type of database interface used (currently hard-coded into
+  TDatabaseAuthenticator.CreateDB);
+* realm: the realm for which Orthrus authenticates, usually a public
+  domain name.
+
+ConserveConnections
+-------------------
+
+This directive tells the stack that, for connection-oriented
+transports (TCP, TLS, SCTP, ...), the stack must not terminate the
+connection just because the remote party hasn't sent data in a
+while. (The connection WILL be terminated, though, if there's a read
+timeout halfway through a message.)
+
+  ConserveConnections: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
+
+From
+----
+
+The From directive allows you to specify an "address of record" for
+your User Agent. For instance,
+
+  From: "Count Zero" <sip:countzero@jammer.org>
+
+tells the User Agent to use the given URI as the From header in
+SIP messages the User Agent sends.
+
+InstanceID
+----------
+
+Listen
+------
+
+The Listen directive controls the socket bindings of the User Agent. Its grammar is
+
+  Listen: <transport name><SP><host|IPv4 address|IPv6 reference|AUTO>:<port>
+  Listen: AUTO
+
+so for instance
+
+  Listen: UDP 10.0.0.6:5060
+  Listen: TCP 10.0.0.6:5060
+
+would be a reasonable minimum configuration. AUTO returns whatever the
+operating system calls its local address. In a multihomed environment,
+this may return different names for different Listens!
+
+MappedRoute
+-----------
+
+In a NATted environment you need to tell the User Agent the IP
+addresses of any NATting gateways, and what networks those gateways
+serve. Usually, you'll only need one of these.
+
+Grammar:
+  MappedRoute: <route>/<netmask|number of bits><SP><gateway>[<SP><port>]
+
+Example:
+
+  MappedRoute: 192.168.0.0/16 192.168.1.1 5060
+
+tells the User Agent (or Orthrus face) that any requests sent to the
+192.168.0.0/16 subnet must pass through the gateway 192.168.1.1, using
+port 5060. Other examples:
+
+  MappedRoute: ::/0 2002:deca:fbad::1 15060
+  MappedRoute: 10.0.0.0/255.0.0.0 10.0.0.1
+
+NameServer
+----------
+
+The name or IP, and the port, of your local name server. You can use a
+mock nameserver, which will return whatever you want it to return via
+the MockDns directive. Examples:
+
+  NameServer: roke.local:53
+  NameServer: 10.0.0.1:53
+  NameServer: MOCK
+  NameServer: MOCK;ReturnOnlySpecifiedRecords
+
+"ReturnOnlySpecifiedRecords" means that the mock nameserver will ONLY
+return records you've added through MockDns. Otherwise, the default
+behaviour for the mock nameserver is to return randomly generated (A)
+records.
+
+Route
+-----
+
+The Route directive allows you to specify a proxy (or chain of
+proxies) to use when contacting a URI in a certain address space. This
+address space may be an IPv4 or IPv6 subnet, or a domain.
+
+Grammar:
+   Route: ("<"<SIP/S URI>">"|"<null>")<SP>[<route>/<netmask|number of
+   bits>|<domain>]
+
+Example:
+   Route: <sip:internet_gw;lr>
+   Route: <sip:localsubnet> 10.0.0.0/8
+   Route: <sip:special> 10.0.0.0/8
+
+tells the User Agent (or Orthrus face) that any requests to the subnet
+10.0.0.0/8 should contain two Route headers ("Route:
+<sip:localsubnet>" and "Route: <sip:special>"), but that any other
+requests should contain the header "Route: <sip:internet_gw;lr>"
+
+Now, when the Transaction-User core adds its local headers, it adds a
+Route path based on the host of the To header's URI, allowing one to
+use different proxies for different target address spaces.
+
+One can also tell the UA _not_ to use proxies when contacting
+addresses in an address space. For instance, if one wanted to use a
+proxy to contact all addresses except local ones, one would do
+something like this:
+
+  Route: <sip:proxy>
+  Route: <null> 10.0.0./8
+
+where "local addresses" means "a particular subnet", or
+
+  Route: <sip:proxy>
+  Route: <null> local
+
+if you want "local addresses" to mean all FQDNs in the "local"
+domain.
+
+SuppressLocalResponses
+----------------------
+
+This directive suppresses locally generated provisional
+responses. User Agents typically won't use this directive; it's used
+to stop B2BUAs from sending (non-Trying) provisional responses back to
+the caller that don't represent anything sent by the callee.
+
+Grammar:
+  SuppressLocalResponses: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
+
+This directive has the side effect of instantiating an INVITE module:
+if your setup doesn't already process INVITEs, it will after this
+directive is followed.
+
+
+UseInboundConnections
+---------------------
+
+This directive controls whether a SIP stack will preferentially use
+inbound connections to a remote agent rather than making a new
+outbound connection. RFC 3261 section 18 describes the typical case of
+two UAs in a peering relationship by saying that each peer will
+connect to the other, thus forming two TCP connections (each UA acts
+as a UAC on one connection and UAS on the other). This directive will,
+instead, use the existing inbound connection to send messages
+(requests) to the remote party. This is very handy for middleboxes,
+where you will have multiple SIP UAs all making outbound connections
+to the middlebox. The middlebox, when sending messages to connected
+machines, will use those existing connections, and thus avoid the
+"client" UAs' NATs preventing inbound connections.
+
+Grammar:
+  UseInboundConnections: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
+
+UseTransport
+------------
+
+This directive allows you to request a remote party to use a certain
+transport when sending you messages. It works by putting a "transport"
+parameter in the address of any Contact you send out.
+
+Grammar:
+  UseTransport: <address space> <transport>
+
+Example:
+  UseTransport: 0.0.0.0/0 TCP
+
+says "Ask all IPv4 UAs to use TCP to contact me". Note that it says
+nothing about UAs identified by FQDNs or IPv6 stacks.
+
+  //   HostName: talkinghead1.tessier-ashpool.co.luna
+  //   HostName: 192.168.1.1
+  //   InstanceID: urn:uuid:00000000-0000-0000-0000-000000000000
+  //   Register: <SIP/S URI>
+  //   ResolveNamesLocallyFirst: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
+  //   RoutingTable: MOCK
+  //   SupportEvent: refer
+  //   UseGruu: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
+  //
+  // Registrar-specific directives are:
+  //   RegistrarDatabase: MOCK|<as yet undefined>[;MatchOnlyUsername]
+  //   RegistrarUseGruu: <true|TRUE|yes|YES|on|ON|1|false|FALSE|no|NO|off|OFF|0>
+  //
+  // Some directives only make sense for mock objects. For instance:
+  //   MockRoute: <destination network>/<mask|number of bits><SP><gateway><SP><metric><SP><interface><SP><local address>
+  //   MockDns: A <FQDN> <IPv4 address>
+  //   MockDns: AAAA <FQDN> <IPv6 address>
+  //   MockDns: NAPTR <key (domain name)> <order> <preference> <flags> <service> <regex> <replacement>
+  //   MockDns: NAPTR local 0 0 "s" "SIP+D2T" "" _sip._tcp
+  //   MockDns: SRV <service> <domain> <priority> <weight> <port> <FQDN>
+  //   MockDns: SRV _sips._tcp local 1 2 5061 roke
+  //   MockLocalAddress: <IPv4 address|IPv6 address>

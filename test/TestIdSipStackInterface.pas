@@ -50,6 +50,7 @@ type
   private
     fIntf:               TIdSipStackInterface;
     Destination:         TIdSipToHeader;
+    Factory:             TIdSipUserAgentFactory;
     From:                TIdSipFromHeader;
     LocalAddress:        String;
     LocalMimeType:       String;
@@ -187,6 +188,7 @@ type
   protected
     Configuration: TStrings;
     Iface:         TIdSipStackInterface;
+    Factory:       TIdSipUserAgentFactory;
     LocalAddress:  String;
     LocalPort:     Integer;
 
@@ -600,6 +602,7 @@ type
     BindingIP:   String;
     BindingPort: Cardinal;
     Conf:        TStrings;
+    Factory:     TIdSipUserAgentFactory;
     Stack:       TIdSipStackInterface;
   public
     procedure SetUp; override;
@@ -805,25 +808,34 @@ end;
 procedure TestTIdSipStackInterfaceCreation.TestCreateStackWithNoSubscribeSupport;
 var
   EmptyConf: TStrings;
+  F:         TIdSipUserAgentFactory;
   Stack:     TIdSipStackInterface;
   Timer:     TIdDebugTimerQueue;
 begin
-  EmptyConf := TStringList.Create;
+  F := TIdSipUserAgentFactory.Create;
   try
-    Timer := TIdDebugTimerQueue.Create(true);
+    EmptyConf := TStringList.Create;
     try
-      Stack := TIdSipStackInterface.Create(0, Timer, EmptyConf);
+      Timer := TIdDebugTimerQueue.Create(true);
       try
-        // This test tries catches a (now squashed) bug: when no subscribe module
-        // was attached to the stack we'd get an Invalid Cast exception.
+        F.Configuration := EmptyConf;
+        F.Timer         := Timer;
+
+        Stack := TIdSipStackInterface.Create(0, F);
+        try
+          // This test tries catches a (now squashed) bug: when no subscribe module
+          // was attached to the stack we'd get an Invalid Cast exception.
+        finally
+          Stack.Free;
+        end;
       finally
-        Stack.Free;
+        Timer.Terminate;
       end;
     finally
-      Timer.Terminate;
+      EmptyConf.Free;
     end;
   finally
-    EmptyConf.Free;
+    F.Free;
   end;
 end;
 
@@ -843,6 +855,7 @@ begin
   TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipMockUDPTransport);
 
   Self.Destination := TIdSipToHeader.Create;
+  Self.Factory     := TIdSipUserAgentFactory.Create;
   Self.From        := TIdSipFromHeader.Create;
   Self.Requests    := TIdSipRequestList.Create;
   Self.Responses   := TIdSipResponseList.Create;
@@ -856,13 +869,11 @@ begin
     BasicConf.Add('Contact: sip:' + Self.TargetAddress + ':' + IntToStr(Self.TargetPort));
     BasicConf.Add('From: sip:' + Self.TargetAddress + ':' + IntToStr(Self.TargetPort));
 
-    Conf := TIdSipStackConfigurator.Create;
-    try
-      Self.RemoteUA := Conf.CreateUserAgent(BasicConf, Self.TimerQueue);
-      Self.RemoteUA.InviteModule.AddListener(Self);
-    finally
-      Conf.Free;
-    end;
+    Self.Factory.Configuration := BasicConf;
+    Self.Factory.Timer         := Self.TimerQueue;
+
+    Self.RemoteUA := Self.Factory.CreateUserAgent;
+    Self.RemoteUA.InviteModule.AddListener(Self);
   finally
     BasicConf.Free;
   end;
@@ -883,7 +894,9 @@ begin
     BasicConf.Add('Contact: sip:foo@' + Self.LocalAddress + ':' + IntToStr(Self.LocalPort));
     BasicConf.Add(Self.From.AsString);
 
-    Self.Intf := TIdSipStackInterface.Create(Self.UI.Handle, Self.TimerQueue, BasicConf);
+    Self.Factory.Configuration := BasicConf;
+
+    Self.Intf := TIdSipStackInterface.Create(Self.UI.Handle, Self.Factory);
   finally
     BasicConf.Free;
   end;
@@ -917,6 +930,7 @@ begin
   Self.Requests.Free;
   Self.RemoteUA.Free;
   Self.From.Free;
+  Self.Factory.Free;
   Self.Destination.Free;
 
   TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
@@ -2456,7 +2470,9 @@ begin
       Conf.Add('From: sip:foo@' + Self.LocalAddress + ':' + IntToStr(LocalPort));
       Conf.Add('SupportEvent: ' + Package.EventPackage);
 
-      Stack := TIdSipStackInterface.Create(Self.UI.Handle, Self.TimerQueue, Conf);
+      Self.Factory.Configuration := Conf;
+
+      Stack := TIdSipStackInterface.Create(Self.UI.Handle, Self.Factory);
       try
         // This is expedient, but evil: it works because Self.MockTransport will
         // be reset in SetUp when the next test runs.
@@ -2523,7 +2539,9 @@ var
 begin
   NoConf := TStringList.Create;
   try
-    S := TIdSipStackInterface.Create(Self.UI.Handle, Self.TimerQueue, NoConf);
+    Self.Factory.Configuration := NoConf;
+
+    S := TIdSipStackInterface.Create(Self.UI.Handle, Self.Factory);
     try
       S.Terminate;
       W := Self.TimerQueue.LastEventScheduled(TIdStackShutdownWait);
@@ -2602,6 +2620,7 @@ begin
   Self.LocalPort    := 5060;
 
   Self.Configuration := TStringList.Create;
+  Self.Factory       := TIdSipUserAgentFactory.Create;
   Self.Iface         := Self.CreateStackInterface;
 
   T := TIdSipDebugTransportRegistry.TransportRunningOn(Self.LocalAddress, Self.LocalPort);
@@ -2612,6 +2631,7 @@ end;
 procedure TStackInterfaceExtensionTestCase.TearDown;
 begin
   Self.Iface.Free;
+  Self.Factory.Free;
   Self.Configuration.Free;
 
   TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
@@ -2633,7 +2653,10 @@ function TStackInterfaceExtensionTestCase.CreateStackInterface: TIdSipStackInter
 begin
   Self.GetConfiguration(Self.Configuration);
 
-  Result := TIdSipStackInterface.Create(Self.UI.Handle, Self.TimerQueue, Self.Configuration);
+  Self.Factory.Configuration := Self.Configuration;
+  Self.Factory.Timer         := Self.TimerQueue;
+
+  Result := TIdSipStackInterface.Create(Self.UI.Handle, Self.Factory);
 end;
 
 //******************************************************************************
@@ -5062,7 +5085,11 @@ begin
   Self.Conf.Add('Listen: UDP ' + Self.BindingIP + ':' + IntToStr(Self.BindingPort));
   Self.Conf.Add('NameServer: MOCK');
 
-  Self.Stack := TIdSipStackInterface.Create(Self.UI.Handle, Self.TimerQueue, Self.Conf);
+  Self.Factory := TIdSipUserAgentFactory.Create;
+  Self.Factory.Configuration := Self.Conf;
+  Self.Factory.Timer         := Self.TimerQueue;
+
+  Self.Stack := TIdSipStackInterface.Create(Self.UI.Handle, Self.Factory);
   Self.Stack.Resume;
 
   T := TIdSipDebugTransportRegistry.TransportRunningOn(Self.BindingIP, Self.BindingPort);
@@ -5073,6 +5100,7 @@ end;
 procedure TStackWaitTestCase.TearDown;
 begin
   Self.Stack.Free;
+  Self.Factory.Free;
 
   TIdSipTransportRegistry.UnregisterTransportType(UdpTransport);
 
