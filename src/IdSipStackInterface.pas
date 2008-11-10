@@ -1148,8 +1148,7 @@ end;
 constructor TIdSipStackInterface.Create(UiHandle: HWnd;
                                         UAFactory: TIdSipUserAgentFactory);
 var
-  Configurator: TIdSipStackConfigurator;
-  Module:       TIdSipMessageModule;
+  Module: TIdSipMessageModule;
 begin
   inherited Create;
 

@@ -847,7 +847,6 @@ end;
 procedure TestTIdSipStackInterface.SetUp;
 var
   BasicConf: TStrings;
-  Conf:      TIdSipStackConfigurator;
   T:         TIdSipTransport;
 begin
   inherited SetUp;
