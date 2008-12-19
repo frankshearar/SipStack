@@ -25,6 +25,7 @@ type
     procedure Fail(msg: string; errorAddr: Pointer = nil); //overload; override; <-- compiler rejects the attempt to override Fail!
     procedure WaitForSignaled; overload;
     procedure WaitForSignaled(Event: TEvent); overload;
+    procedure WaitForSignaled(Event: TEvent; Timeout: Cardinal; Msg: String); overload;
     procedure WaitForSignaled(Event: TEvent; Msg: String); overload;
     procedure WaitForSignaled(Msg: String); overload;
     procedure WaitForTimeout(Msg: String); overload;
@@ -139,18 +140,18 @@ begin
   Self.WaitForSignaled(Event, Self.ExceptionMessage);
 end;
 
-procedure TThreadingTestCase.WaitForSignaled(Event: TEvent; Msg: String);
+procedure TThreadingTestCase.WaitForSignaled(Event: TEvent; Timeout: Cardinal; Msg: String);
 var
   FullMsg: String;
 begin
-  if (wrSignaled <> Event.WaitFor(Self.DefaultTimeout)) then begin
+  if (wrSignaled <> Event.WaitFor(Timeout)) then begin
     if (Self.ExceptionType <> Exception) then begin
       // We've timed out, and ExceptionType/Message contains details of the
       // exception that resulted in the timeout.
       FullMsg := Format('%s (%s)', [Msg, Self.ExceptionMessage])
     end
     else begin
-      // We've timed out, but have no additional information. 
+      // We've timed out, but have no additional information.
       FullMsg := Msg;
     end;
 
@@ -158,6 +159,11 @@ begin
   end;
 
   Event.ResetEvent;
+end;
+
+procedure TThreadingTestCase.WaitForSignaled(Event: TEvent; Msg: String);
+begin
+  Self.WaitForSignaled(Event, Self.DefaultTimeout, Msg);
 end;
 
 procedure TThreadingTestCase.WaitForSignaled(Msg: String);
