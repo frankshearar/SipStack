@@ -267,6 +267,26 @@ type
     procedure Terminate(HasBeenFreed: PBoolean); overload;
   end;
 
+  TIdSipStackInterfaceClass = class of TIdSipStackInterface;
+
+  // I create a StackInterface configured with my properties. By default, the
+  // StackInterface I create is a TIdSipStackInterface, wrapping a
+  // TIdSipUserAgent.
+  TIdSipStackFactory = class(TObject)
+  private
+    fStackType: TIdSipStackInterfaceClass;
+    fUAFactory: TIdSipUserAgentFactory;
+    fWindow:    HWND;
+  public
+    constructor Create; virtual;
+
+    function CreateStack: TIdSipStackInterface; virtual;
+
+    property StackType: TIdSipStackInterfaceClass read fStackType write fStackType;
+    property UAFactory: TIdSipUserAgentFactory    read fUAFactory write fUAFactory;
+    property Window:    HWND                      read fWindow write fWindow;
+  end;
+
   // My subclasses allow you to extend the TIdSipStackInterface's interface
   // without cluttering up the core interface. Note that I give unrestricted
   // access to the StackInterface's internal UserAgent. That means that you
@@ -2508,6 +2528,23 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipStackFactory                                                         *
+//******************************************************************************
+//* TIdSipStackFactory Public methods ******************************************
+
+constructor TIdSipStackFactory.Create;
+begin
+  inherited Create;
+
+  Self.fStackType := TIdSipStackInterface;
+end;
+
+function TIdSipStackFactory.CreateStack: TIdSipStackInterface;
+begin
+  Result := Self.StackType.Create(Self.Window, Self.UAFactory);
+end;
+
+//******************************************************************************
 //* TIdSipStackInterfaceExtension                                              *
 //******************************************************************************
 //* TIdSipStackInterfaceExtension Public methods *******************************
@@ -2588,7 +2625,7 @@ end;
 
 procedure TIdSipNameServerExtension.AssertAddressWellFormed(IPAddressOrHost: String);
 const
-  BadParameter     = '''%s'' is neither a domain name nor IP address';
+  BadParameter = '''%s'' is neither a domain name nor IP address';
 begin
   if (IPAddressOrHost = '') then
     raise EBadParameter.Create(Format(BadParameter, [IPAddressOrHost]));
