@@ -33,9 +33,13 @@ implementation
 uses
   SysUtils;
 
+{$WARN SYMBOL_PLATFORM OFF}
 procedure RaiseAbstractError(ClassName, MethodName: String);
 begin
+  // Why EAbstractError should be platform-specific I don't know.
+
   raise EAbstractError.Create(Format(AbstractErrorMsg, [ClassName, MethodName]));
 end;
+{$WARN SYMBOL_PLATFORM ON}
 
 end.
