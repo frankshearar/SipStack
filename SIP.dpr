@@ -42,7 +42,7 @@ uses
   IdSipLocation in 'src\IdSipLocation.pas',
   IdSipLocator in 'src\IdSipLocator.pas',
   IdSipMessage in 'src\IdSipMessage.pas',
-  IdSipMockBindingDatabase in 'test\IdSipMockBindingDatabase.pas',
+  IdSipInMemoryBindingDatabase in 'src\IdSipInMemoryBindingDatabase.pas',
   IdSipMockCore in 'test\IdSipMockCore.pas',
   IdSipMockDnsServer in 'test\IdSipMockDnsServer.pas',
   IdSipMockLocator in 'test\IdSipMockLocator.pas',

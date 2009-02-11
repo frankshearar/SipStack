@@ -12,7 +12,7 @@ unit TestIdSipRegistration;
 interface
 
 uses
-  Classes, IdSipMessage, IdSipRegistration, IdSipMockBindingDatabase,
+  Classes, IdSipMessage, IdSipRegistration, IdSipInMemoryBindingDatabase,
   TestFramework, TestFrameworkSip;
 
 type
@@ -91,11 +91,11 @@ type
     procedure TestRemoveAllBindingsNotifiesListeners;
   end;
 
-  TestTIdSipMockBindingDatabase = class(TTestCase)
+  TestTIdSipInMemoryBindingDatabase = class(TTestCase)
   private
     CaseContact:    TIdSipContactHeader;
     CasesAOR:       TIdSipRequest;
-    DB:             TIdSipMockBindingDatabase;
+    DB:             TIdSipInMemoryBindingDatabase;
     Wintermute:     TIdSipContactHeader;
     WintermutesAOR: TIdSipRequest;
 
@@ -159,7 +159,7 @@ begin
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSipRegistrations.Suite);
   Result.AddTest(TestTIdSipAbstractBindingDatabase.Suite);
-  Result.AddTest(TestTIdSipMockBindingDatabase.Suite);
+  Result.AddTest(TestTIdSipInMemoryBindingDatabase.Suite);
   Result.AddTest(TestTIdSipNameMatchingMockBindingDatabase.Suite);
 end;
 
@@ -644,7 +644,7 @@ procedure TestTIdSipAbstractBindingDatabase.SetUp;
 begin
   inherited SetUp;
 
-  Self.DB := TIdSipMockBindingDatabase.Create;
+  Self.DB := TIdSipInMemoryBindingDatabase.Create;
 
   Self.Request := TIdSipRequest.Create;
   Self.Request.Method := MethodRegister;
@@ -927,15 +927,15 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipMockBindingDatabase                                              *
+//* TestTIdSipInMemoryBindingDatabase                                          *
 //******************************************************************************
-//* TestTIdSipMockBindingDatabase Public methods *******************************
+//* TestTIdSipInMemoryBindingDatabase Public methods ***************************
 
-procedure TestTIdSipMockBindingDatabase.SetUp;
+procedure TestTIdSipInMemoryBindingDatabase.SetUp;
 begin
   inherited SetUp;
 
-  Self.DB := TIdSipMockBindingDatabase.Create;
+  Self.DB := TIdSipInMemoryBindingDatabase.Create;
 
   Self.CasesAOR := TIdSipRequest.Create;
   Self.CasesAOR.Method         := MethodRegister;
@@ -952,7 +952,7 @@ begin
   Self.Wintermute.Value := 'Wintermute <sip:talking-head.tessier-ashpool.co.luna>';
 end;
 
-procedure TestTIdSipMockBindingDatabase.TearDown;
+procedure TestTIdSipInMemoryBindingDatabase.TearDown;
 begin
   Self.WintermutesAOR.Free;
   Self.CasesAOR.Free;
@@ -961,16 +961,16 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdSipMockBindingDatabase Private methods ******************************
+//* TestTIdSipInMemoryBindingDatabase Private methods **************************
 
-procedure TestTIdSipMockBindingDatabase.SetDBForTwoWintermuteContacts;
+procedure TestTIdSipInMemoryBindingDatabase.SetDBForTwoWintermuteContacts;
 begin
   Self.DB.AddBindings(Self.WintermutesAOR);
   Self.Wintermute.Value := 'Wintermute <sip:wintermute@talking-head.tessier-ashpool.co.luna>';
   Self.DB.AddBindings(Self.WintermutesAOR);
 end;
 
-procedure TestTIdSipMockBindingDatabase.SetDBForTwoWintermuteContactsWithGruus;
+procedure TestTIdSipInMemoryBindingDatabase.SetDBForTwoWintermuteContactsWithGruus;
 begin
   Self.DB.UseGruu := true;
   Self.WintermutesAOR.Supported.Values.Add(ExtensionGruu);
@@ -982,7 +982,7 @@ begin
   Self.DB.AddBindings(Self.CasesAOR);
 end;
 
-procedure TestTIdSipMockBindingDatabase.SetExpiryTime(Contacts: TIdSipContacts; ExpiryTime: Cardinal);
+procedure TestTIdSipInMemoryBindingDatabase.SetExpiryTime(Contacts: TIdSipContacts; ExpiryTime: Cardinal);
 begin
   Contacts.First;
 
@@ -992,9 +992,9 @@ begin
   end;
 end;
 
-//* TestTIdSipMockBindingDatabase Published methods ****************************
+//* TestTIdSipInMemoryBindingDatabase Published methods ************************
 
-procedure TestTIdSipMockBindingDatabase.TestAddBindings;
+procedure TestTIdSipInMemoryBindingDatabase.TestAddBindings;
 var
   Bindings: TIdSipContacts;
 begin
@@ -1018,7 +1018,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipMockBindingDatabase.TestAddBindingsAgain;
+procedure TestTIdSipInMemoryBindingDatabase.TestAddBindingsAgain;
 var
   OriginalCount: Integer;
 begin
@@ -1033,7 +1033,7 @@ begin
   CheckEquals(OriginalCount, Self.DB.BindingCount, 'Old bindings re-added');
 end;
 
-procedure TestTIdSipMockBindingDatabase.TestBindingsFor;
+procedure TestTIdSipInMemoryBindingDatabase.TestBindingsFor;
 var
   Bindings: TIdSipContacts;
 begin
@@ -1051,7 +1051,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipMockBindingDatabase.TestBindingsForClearsListParam;
+procedure TestTIdSipInMemoryBindingDatabase.TestBindingsForClearsListParam;
 var
   Bindings: TIdSipContacts;
 begin
@@ -1068,7 +1068,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipMockBindingDatabase.TestBindingsForWithGruus;
+procedure TestTIdSipInMemoryBindingDatabase.TestBindingsForWithGruus;
 var
   Bindings: TIdSipContacts;
   Gruu:     TIdSipUri;
@@ -1104,7 +1104,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipMockBindingDatabase.TestBindingsForUri;
+procedure TestTIdSipInMemoryBindingDatabase.TestBindingsForUri;
 var
   Bindings: TIdSipContacts;
 begin
@@ -1122,7 +1122,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipMockBindingDatabase.TestBindingsForUriClearsListParam;
+procedure TestTIdSipInMemoryBindingDatabase.TestBindingsForUriClearsListParam;
 var
   Bindings: TIdSipContacts;
 begin
@@ -1139,7 +1139,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipMockBindingDatabase.TestBindingsForUriWithGruus;
+procedure TestTIdSipInMemoryBindingDatabase.TestBindingsForUriWithGruus;
 var
   Bindings: TIdSipContacts;
   Gruu:     TIdSipUri;
@@ -1175,7 +1175,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipMockBindingDatabase.TestBindingsForWithGruusReusesCreatedGruus;
+procedure TestTIdSipInMemoryBindingDatabase.TestBindingsForWithGruusReusesCreatedGruus;
 var
   Bindings: TIdSipContacts;
   Gruu:     String;
@@ -1210,7 +1210,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipMockBindingDatabase.TestBindingsForWithGruusSips;
+procedure TestTIdSipInMemoryBindingDatabase.TestBindingsForWithGruusSips;
 var
   Bindings: TIdSipContacts;
 begin
@@ -1244,7 +1244,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipMockBindingDatabase.TestIsAuthorized;
+procedure TestTIdSipInMemoryBindingDatabase.TestIsAuthorized;
 begin
   Self.DB.Authorized := true;
   Check(Self.DB.IsAuthorized(Self.CaseContact,
@@ -1257,7 +1257,7 @@ begin
 end;
 
 
-procedure TestTIdSipMockBindingDatabase.TestIsValid;
+procedure TestTIdSipInMemoryBindingDatabase.TestIsValid;
 begin
   Self.DB.FailIsValid := true;
   Check(not Self.DB.IsValid(Self.WintermutesAOR), 'FailIsValid');
@@ -1266,7 +1266,7 @@ begin
   Check(Self.DB.IsValid(Self.WintermutesAOR), 'not FailIsValid');
 end;
 
-procedure TestTIdSipMockBindingDatabase.TestFailAddBinding;
+procedure TestTIdSipInMemoryBindingDatabase.TestFailAddBinding;
 begin
   Self.DB.FailAddBinding := false;
   Check(Self.DB.AddBindings(Self.WintermutesAOR),
@@ -1280,7 +1280,7 @@ begin
         'AddBindings succeeded');
 end;
 
-procedure TestTIdSipMockBindingDatabase.TestFailBindingsFor;
+procedure TestTIdSipInMemoryBindingDatabase.TestFailBindingsFor;
 var
   Bindings: TIdSipContacts;
 begin
@@ -1298,7 +1298,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipMockBindingDatabase.TestFailRemoveBinding;
+procedure TestTIdSipInMemoryBindingDatabase.TestFailRemoveBinding;
 begin
   Self.DB.FailRemoveBinding := false;
   Self.DB.AddBindings(Self.WintermutesAOR);
@@ -1314,7 +1314,7 @@ begin
         'RemoveAllBindings succeeded');
 end;
 
-procedure TestTIdSipMockBindingDatabase.TestRemoveAllBindings;
+procedure TestTIdSipInMemoryBindingDatabase.TestRemoveAllBindings;
 begin
   Self.DB.AddBindings(Self.WintermutesAOR);
   Self.DB.AddBindings(Self.WintermutesAOR);
@@ -1329,7 +1329,7 @@ begin
               'Wrong records removed');
 end;
 
-procedure TestTIdSipMockBindingDatabase.TestRemoveBinding;
+procedure TestTIdSipInMemoryBindingDatabase.TestRemoveBinding;
 var
   Bindings:    TIdSipContacts;
   ToBeDeleted: TIdSipContactHeader;
@@ -1376,7 +1376,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipMockBindingDatabase.TestRemoveBindingWhenNotPresent;
+procedure TestTIdSipInMemoryBindingDatabase.TestRemoveBindingWhenNotPresent;
 begin
   Self.DB.RemoveBinding(Self.CasesAOR, Self.CaseContact);
   CheckEquals(0, Self.DB.BindingCount, 'No bindings at all');
@@ -1386,7 +1386,7 @@ begin
   CheckEquals(1, Self.DB.BindingCount, 'Binding not in DB');
 end;
 
-procedure TestTIdSipMockBindingDatabase.TestUpdateBinding;
+procedure TestTIdSipInMemoryBindingDatabase.TestUpdateBinding;
 var
   Expected:  TDateTime;
   LongTime:  Cardinal;
@@ -1414,7 +1414,7 @@ begin
                [FormatDateTime('nn:ss', Expected), FormatDateTime('nn:ss', Received)]));
 end;
 
-procedure TestTIdSipMockBindingDatabase.TestUpdateBindingWithShorterExpires;
+procedure TestTIdSipInMemoryBindingDatabase.TestUpdateBindingWithShorterExpires;
 var
   Expected:  TDateTime;
   LongTime:  Cardinal;
@@ -1442,7 +1442,7 @@ begin
                [FormatDateTime('nn:ss', Expected), FormatDateTime('nn:ss', Received)]));
 end;
 
-procedure TestTIdSipMockBindingDatabase.TestUpdateBindingWithZeroExpires;
+procedure TestTIdSipInMemoryBindingDatabase.TestUpdateBindingWithZeroExpires;
 begin
   // You should really use RemoveBindings (to reveal your intentions more
   // clearly), but updating a binding with a zero expires will also remove

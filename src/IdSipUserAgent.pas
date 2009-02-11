@@ -494,9 +494,9 @@ implementation
 
 uses
   ConfigUtils, IdAddressSpace, IdRegisteredObject, IdSimpleParser, IdSipDns,
-  IdSipIndyLocator, IdSipLocation, IdSipMockBindingDatabase, IdSipMockLocator,
-  IdSipProxyDescription, IdSipSubscribeModule, IdSystem, IdUnicode,
-  RuntimeSafety, SysUtils;
+  IdSipIndyLocator, IdSipLocation, IdSipInMemoryBindingDatabase,
+  IdSipMockLocator, IdSipProxyDescription, IdSipSubscribeModule, IdSystem,
+  IdUnicode, RuntimeSafety, SysUtils;
 
 //******************************************************************************
 //* Unit Public functions & procedures                                         *
@@ -1665,7 +1665,7 @@ begin
     RegMod := UA.ModuleFor(TIdSipRegisterModule) as TIdSipRegisterModule;
 
     if not Assigned(RegMod.BindingDB) then
-      RegMod.BindingDB := TIdSipMockBindingDatabase.Create;
+      RegMod.BindingDB := TIdSipInMemoryBindingDatabase.Create;
   end;
 end;
 
@@ -1677,7 +1677,7 @@ begin
     RegMod := UA.ModuleFor(TIdSipRegisterModule) as TIdSipRegisterModule;
 
     if not Assigned(RegMod.BindingDB) then
-      RegMod.BindingDB := TIdSipMockBindingDatabase.Create;
+      RegMod.BindingDB := TIdSipInMemoryBindingDatabase.Create;
   end;
 end;
 
@@ -1739,14 +1739,14 @@ begin
     if IsEqual(Line, MatchOnlyUsernameOption) then
       RegMod.BindingDB := TIdSipNameMatchingMockBindingDatabase.Create
     else
-      RegMod.BindingDB := TIdSipMockBindingDatabase.Create;
+      RegMod.BindingDB := TIdSipInMemoryBindingDatabase.Create;
   end;
 
   // Insert your special database type creation code here.
 
   // Fallback position: it means someone specified an unknown database type.
   if not Assigned(RegMod.BindingDB) then
-    RegMod.BindingDB := TIdSipMockBindingDatabase.Create;
+    RegMod.BindingDB := TIdSipInMemoryBindingDatabase.Create;
 end;
 
 procedure TIdSipStackConfigurator.SetRegistrarUseGruu(UserAgent: TIdSipUserAgent;

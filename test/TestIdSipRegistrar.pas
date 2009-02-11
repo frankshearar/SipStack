@@ -13,8 +13,9 @@ interface
 
 uses
   IdConnectionBindings, IdInterfacedObject, IdSipCore, IdSipMessage,
-  IdSipMockBindingDatabase, IdSipMockTransactionDispatcher, IdSipRegistration,
-  SysUtils, TestFramework, TestFrameworkSip, TestFrameworkSipTU;
+  IdSipInMemoryBindingDatabase, IdSipMockTransactionDispatcher,
+  IdSipRegistration, SysUtils, TestFramework, TestFrameworkSip,
+  TestFrameworkSipTU;
 
 type
   // We test that the registrar returns the responses it should. The nitty
@@ -23,7 +24,7 @@ type
   // TestTIdSipAbstractBindingDatabase for that.
   TestTIdSipRegistrar = class(TTestCase)
   private
-    DB:           TIdSipMockBindingDatabase;
+    DB:           TIdSipInMemoryBindingDatabase;
     Dispatch:     TIdSipMockTransactionDispatcher;
     ExpireAll:    String;
     FirstContact: TIdSipContactHeader;
@@ -375,7 +376,7 @@ begin
 
   Self.ExpireAll := ContactWildCard + ';' + ExpiresParam + '=0';
 
-  Self.DB := TIdSipMockBindingDatabase.Create;
+  Self.DB := TIdSipInMemoryBindingDatabase.Create;
   Self.DB.FailIsValid := false;
 //  Self.DB.DefaultExpiryTime := 0;
 
@@ -1289,7 +1290,7 @@ begin
   Self.Module := Self.Core.AddModule(TIdSipRegisterModule) as TIdSipRegisterModule;
   Self.Params := TIdSipHeaderParameters.Create;
 
-  Self.Module.BindingDB := TIdSipMockBindingDatabase.Create;
+  Self.Module.BindingDB := TIdSipInMemoryBindingDatabase.Create;
 end;
 
 procedure TestTIdSipRegisterModule.TearDown;
@@ -1387,7 +1388,7 @@ begin
   inherited SetUp;
 
   Self.RegisterModule := Self.Core.AddModule(TIdSipRegisterModule) as TIdSipRegisterModule;
-  Self.RegisterModule.BindingDB := TIdSipMockBindingDatabase.Create;
+  Self.RegisterModule.BindingDB := TIdSipInMemoryBindingDatabase.Create;
 
   Self.Contacts := TIdSipContacts.Create;
   Self.Contacts.Add(ContactHeaderFull).Value := 'sip:wintermute@talking-head.tessier-ashpool.co.luna';
@@ -1543,7 +1544,7 @@ begin
 
   Self.Registrar := TIdSipRegistrar.Create;
   Self.Destination.Address.Uri := 'sip:talking-head.tessier-ashpool.co.luna';
-  Self.Registrar.BindingDB := TIdSipMockBindingDatabase.Create;
+  Self.Registrar.BindingDB := TIdSipInMemoryBindingDatabase.Create;
 
   Self.Redirected := false;
   Self.Succeeded  := false;
@@ -1965,7 +1966,7 @@ begin
 
   Self.Registrar := TIdSipRegistrar.Create;
   Self.Destination.Address.Uri := 'sip:talking-head.tessier-ashpool.co.luna';
-  Self.Registrar.BindingDB := TIdSipMockBindingDatabase.Create;
+  Self.Registrar.BindingDB := TIdSipInMemoryBindingDatabase.Create;
 
   Self.Failed := false;
 end;

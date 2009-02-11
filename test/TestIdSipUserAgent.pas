@@ -396,7 +396,7 @@ implementation
 
 uses
   IdException, IdRegisteredObject, IdSdp, IdSimpleParser, IdSipAuthentication,
-  IdSipIndyLocator, IdSipMockBindingDatabase, IdSipMockLocator,
+  IdSipIndyLocator, IdSipInMemoryBindingDatabase, IdSipMockLocator,
   IdSipMockTransactionDispatcher, IdSipMockTransport, IdSipSubscribeModule,
   IdSipTCPTransport, IdSipUDPTransport, IdSystem, IdTcpClient, IdUnicode,
   SysUtils, TestFrameworkSipTransport;
@@ -4021,7 +4021,7 @@ end;
 
 procedure TestConfigureRegistrar.CheckMockDatabase(Configuration: TStrings);
 begin
-  CheckDatabaseType(TIdSipMockBindingDatabase, Configuration);
+  CheckDatabaseType(TIdSipInMemoryBindingDatabase, Configuration);
 end;
 
 procedure TestConfigureRegistrar.CheckUseGruu(ExpectedUseGruu: Boolean);

@@ -732,8 +732,8 @@ implementation
 
 uses
   IdConnectionBindings, IdRandom, IdSimpleParser, IdSipCore, IdSipDns,
-  IdSipLocation, IdSipMockBindingDatabase, IdSipRegistration, IdSipTransport,
-  IdSipUdpTransport, SysUtils, TestMessages;
+  IdSipLocation, IdSipInMemoryBindingDatabase, IdSipRegistration,
+  IdSipTransport, IdSipUdpTransport, SysUtils, TestMessages;
 
 type
   TIdSipStackInterfaceNullExtension = class(TIdSipStackInterfaceExtension)
@@ -2740,13 +2740,13 @@ end;
 
 procedure TestTIdSipColocatedRegistrarExtension.TestTargetsForWithDBFailure;
 var
-  DB: TIdSipMockBindingDatabase;
+  DB: TIdSipInMemoryBindingDatabase;
   N:  TIdSipStackInterfaceNullExtension;
 begin
   N := Self.Iface.AttachExtension(TIdSipStackInterfaceNullExtension) as TIdSipStackInterfaceNullExtension;
   try
     Check(N.UA.UsesModule(TIdSipRegisterModule), 'UA doesn''t support REGISTER method');
-    DB := (N.UA.ModuleFor(TIdSipRegisterModule) as TIdSipRegisterModule).BindingDB as TIdSipMockBindingDatabase;
+    DB := (N.UA.ModuleFor(TIdSipRegisterModule) as TIdSipRegisterModule).BindingDB as TIdSipInMemoryBindingDatabase;
 
     Self.ReceiveRegister(Self.Target, Self.Contact);
 
