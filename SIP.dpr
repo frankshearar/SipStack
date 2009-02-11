@@ -70,6 +70,7 @@ uses
   IdUnicode in 'src\IdUnicode.pas',
   PluggableLogging in 'src\PluggableLogging.pas',
   RuntimeSafety in 'src\RuntimeSafety.pas',
+  SipConfigUtils in 'src\SipConfigUtils.pas',
   StringDictionary in 'src\StringDictionary.pas',
   TestFrameworkEx in 'test\TestFrameworkEx.pas',
   TestFrameworkRtp in 'test\TestFrameworkRtp.pas',
@@ -126,6 +127,7 @@ uses
   TestIdSystem in 'test\TestIdSystem.pas',
   TestIdTimerQueue in 'test\TestIdTimerQueue.pas',
   TestIdUnicode in 'test\TestIdUnicode.pas',
+  TestSipConfigUtils in 'test\TestSipConfigUtils.pas',
   TestStringDictionary in 'test\TestStringDictionary.pas';
 
 {,
@@ -133,7 +135,6 @@ uses
 
 //{$DEFINE SPIKE}
 //{$DEFINE GUI}
-
 {$IFNDEF GUI}
   {$APPTYPE CONSOLE}
 {$ENDIF}
