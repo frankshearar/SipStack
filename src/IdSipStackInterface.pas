@@ -274,16 +274,20 @@ type
   // TIdSipUserAgent.
   TIdSipStackFactory = class(TObject)
   private
-    fStackType: TIdSipStackInterfaceClass;
-    fUAFactory: TIdSipUserAgentFactory;
-    fWindow:    HWND;
+    DefaultFactory: TIdSipUserAgentFactory;
+    fStackType:     TIdSipStackInterfaceClass;
+    fUAFactory:     TIdSipUserAgentFactory;
+    fWindow:        HWND;
+
+    function GetUAFactory: TIdSipUserAgentFactory;
   public
     constructor Create; virtual;
+    destructor  Destroy; override;
 
     function CreateStack: TIdSipStackInterface; virtual;
 
     property StackType: TIdSipStackInterfaceClass read fStackType write fStackType;
-    property UAFactory: TIdSipUserAgentFactory    read fUAFactory write fUAFactory;
+    property UAFactory: TIdSipUserAgentFactory    read GetUAFactory write fUAFactory;
     property Window:    HWND                      read fWindow write fWindow;
   end;
 
@@ -2536,12 +2540,30 @@ constructor TIdSipStackFactory.Create;
 begin
   inherited Create;
 
-  Self.fStackType := TIdSipStackInterface;
+  Self.DefaultFactory := TIdSipUserAgentFactory.Create;
+  Self.fStackType     := TIdSipStackInterface;
+end;
+
+destructor TIdSipStackFactory.Destroy;
+begin
+  Self.DefaultFactory.Free;
+
+  inherited Destroy;
 end;
 
 function TIdSipStackFactory.CreateStack: TIdSipStackInterface;
 begin
   Result := Self.StackType.Create(Self.Window, Self.UAFactory);
+end;
+
+//* TIdSipStackFactory Private methods *****************************************
+
+function TIdSipStackFactory.GetUAFactory: TIdSipUserAgentFactory;
+begin
+  if Assigned(Self.fUAFactory) then
+    Result := Self.fUAFactory
+  else
+    Result := Self.DefaultFactory;
 end;
 
 //******************************************************************************
