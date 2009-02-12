@@ -571,10 +571,10 @@ begin
   // suited for contacting the NAT between you and the remote party.
   //
   // On a machine with multiple local addresses, and at least one gateway, you
-  // need to be careful what IP address/hostname you put into certain headers,
-  // since putting in a LAN IP address in your Contact when you're making a
-  // call to someone on the public Internet is going to result in the remote
-  // party's messages not reaching you.
+  // need to be careful what IP address/hostname you put into certain headers in
+  //  some protocols (like SIP), since putting in a LAN IP address in your
+  // Contact when you're making a call to someone on the public Internet is
+  // going to result in the remote party's messages not reaching you.
   //
   // Only messages involved in creating a dialog care: INVITE, SUBSCRIBE, REFER,
   // and their responses. In-dialog messages already have "correct" (routable,

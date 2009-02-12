@@ -85,6 +85,7 @@ type
     LoopbackIP:          String;
     LoopbackMask:        String;
     LoopbackRoute:       String;
+    OtherLanIP:          String;
     VpnDestination:      String;
     VpnGateway:          String;
     VpnIP:               String;
@@ -100,11 +101,14 @@ type
     procedure AddInternetRoute;
     procedure AddLanRoute;
     procedure AddLoopbackRoute;
+    procedure CheckBestLocalAddressForOnlyLanIP(LocalBindings: TIdSipLocations; Destination, Expected: TIdSipLocation; Msg: String);
     procedure CheckLocalAddress(Expected: String; Destination: String; LocalAddress: TIdSipLocation; DefaultPort: Cardinal; RouteHasPort: Boolean; Msg: String);
     procedure CheckLocalAddressIsLanForLocation(Destination: String; LocalAddress: TIdSipLocation; DefaultPort: Cardinal; RouteHasPort: Boolean; Msg: String);
     procedure CheckLocalAddressIsLoopbackForLocation(Destination: String; LocalAddress: TIdSipLocation; DefaultPort: Cardinal; RouteHasPort: Boolean; Msg: String);
     procedure CheckLocalAddressIsInternetForLocation(Destination: String; LocalAddress: TIdSipLocation; DefaultPort: Cardinal; RouteHasPort: Boolean; Msg: String);
     procedure CheckLocalAddressIsVpnForLocation(Destination: String; LocalAddress: TIdSipLocation; DefaultPort: Cardinal; RouteHasPort: Boolean; Msg: String);
+    function  CreateLocalBindingsOneLanIP: TIdSipLocations;
+    function  CreateLocalBindingsTwoLanIPs: TIdSipLocations;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -112,7 +116,10 @@ type
     procedure TestAddMappedRouteAndCount;
     procedure TestHasRoute;
     procedure TestHasRouteThrough;
-    procedure TestBestLocalAddressForOnlyLanIP;
+    procedure TestBestLocalAddressForOnlyLanIPToOwnLanIP;
+    procedure TestBestLocalAddressForOnlyLanIPToLocalhost;
+    procedure TestBestLocalAddressForTwoLanIPToLocalhost;
+    procedure TestBestLocalAddressForTwoLanIPToOwnLanIP;
     procedure TestBestLocalAddressToLocalhostForInternetGateway;
     procedure TestLocalAddressForInternetGateway;
     procedure TestLocalAddressForLocationMappedRouteToInternet;
@@ -763,6 +770,7 @@ begin
   Self.LoopbackIP          := '127.0.0.1';
   Self.LoopbackMask        := '255.0.0.0';
   Self.LoopbackRoute       := '127.0.0.0';
+  OtherLanIP               := TIdIPAddressParser.IncIPAddress(Self.LanIP);
   Self.VpnDestination      := '192.168.0.43';
   Self.VpnGateway          := '192.168.0.1';
   Self.VpnIP               := '192.168.0.42';
@@ -771,7 +779,7 @@ begin
   Self.VpnRoute            := '192.168.0.0';
 
   Self.RT.AddLocalAddress(Self.LoopbackIP);
-  Self.RT.AddLocalAddress(Self.LanIP);  
+  Self.RT.AddLocalAddress(Self.LanIP);
 end;
 
 procedure TestTIdRoutingTable.TearDown;
@@ -801,6 +809,23 @@ end;
 procedure TestTIdRoutingTable.AddLoopbackRoute;
 begin
   Self.RT.AddOsRoute(Self.LoopbackRoute, Self.LoopbackMask, Self.LoopbackGateway, 1, '1', Self.LoopbackIP);
+end;
+
+procedure TestTIdRoutingTable.CheckBestLocalAddressForOnlyLanIP(LocalBindings: TIdSipLocations; Destination, Expected: TIdSipLocation; Msg: String);
+var
+  Result: TIdSipLocation;
+begin
+  Self.AddLoopbackRoute;
+  Self.AddLanRoute;
+
+  Result := TIdSipLocation.Create;
+  try
+    Self.RT.BestLocalAddress(LocalBindings, Destination, Result);
+
+    Check(Result.Equals(Expected), Msg);
+  finally
+    Result.Free;
+  end;
 end;
 
 procedure TestTIdRoutingTable.CheckLocalAddress(Expected: String; Destination: String; LocalAddress: TIdSipLocation; DefaultPort: Cardinal; RouteHasPort: Boolean; Msg: String);
@@ -845,6 +870,28 @@ begin
   CheckLocalAddress(Self.VpnIP, Destination, LocalAddress, DefaultPort, RouteHasPort, Msg);
 end;
 
+function TestTIdRoutingTable.CreateLocalBindingsOneLanIP: TIdSipLocations;
+begin
+  Result := TIdSipLocations.Create;
+
+  Result.AddLocation('TCP', Self.LanIP,      5060);
+  Result.AddLocation('UDP', Self.LanIP,      5060);
+  Result.AddLocation('TCP', Self.LoopbackIP, 5060);
+  Result.AddLocation('UDP', Self.LoopbackIP, 5060);
+end;
+
+function TestTIdRoutingTable.CreateLocalBindingsTwoLanIPs: TIdSipLocations;
+begin
+  Result := TIdSipLocations.Create;
+
+  Result.AddLocation('TCP', Self.LanIP,      5060);
+  Result.AddLocation('UDP', Self.LanIP,      5060);
+  Result.AddLocation('TCP', Self.OtherLanIP, 5060);
+  Result.AddLocation('UDP', Self.OtherLanIP, 5060);
+  Result.AddLocation('TCP', Self.LoopbackIP, 5060);
+  Result.AddLocation('UDP', Self.LoopbackIP, 5060);
+end;
+
 //* TestTIdRoutingTable Published methods **************************************
 
 procedure TestTIdRoutingTable.TestAddMappedRouteAndCount;
@@ -884,38 +931,83 @@ begin
   Check(Self.RT.HasRouteThrough(Self.InternetGateway), 'Mapped route to Internet (and VPN)');
 end;
 
-procedure TestTIdRoutingTable.TestBestLocalAddressForOnlyLanIP;
+procedure TestTIdRoutingTable.TestBestLocalAddressForOnlyLanIPToOwnLanIP;
 var
-  Result:        TIdSipLocation;
+  Lan:           TIdSipLocation;
+  LocalBindings: TIdSipLocations;
+begin
+  LocalBindings := Self.CreateLocalBindingsOneLanIP;
+  try
+    Lan := TIdSipLocation.Create(LocalBindings.Last.Transport, Self.LanIP, 15060);
+    try
+      CheckBestLocalAddressForOnlyLanIP(LocalBindings, Lan, LocalBindings.Last, 'Didn''t use localhost even though it''s a local binding; matched on first transport');
+    finally
+      Lan.Free;
+    end;
+  finally
+    LocalBindings.Free;
+  end;
+end;
+
+procedure TestTIdRoutingTable.TestBestLocalAddressForOnlyLanIPToLocalhost;
+var
   LocalBindings: TIdSipLocations;
   LocalLoop:     TIdSipLocation;
 begin
-  Self.AddLoopbackRoute;
-  Self.AddLanRoute;
-
-  LocalBindings := TIdSipLocations.Create;
+  LocalBindings := Self.CreateLocalBindingsOneLanIP;
   try
-    Result := TIdSipLocation.Create;
+    LocalLoop := TIdSipLocation.Create(LocalBindings.Last.Transport, '127.0.0.1', 15060);
     try
-      LocalLoop := TIdSipLocation.Create;
-      try
-        LocalBindings.AddLocation('TCP', Self.LanIP,      5060);
-        LocalBindings.AddLocation('UDP', Self.LanIP,      5060);
-//        LocalBindings.AddLocation('TCP', Self.LoopbackIP, 5060);
-//        LocalBindings.AddLocation('UDP', Self.LoopbackIP, 5060);
-
-        LocalLoop.IPAddress := '127.0.0.1';
-        LocalLoop.Port      := 15060;
-        LocalLoop.Transport := LocalBindings.Last.Transport;
-
-        Self.RT.BestLocalAddress(LocalBindings, LocalLoop, Result);
-
-        Check(Result.Equals(LocalBindings.Last), 'Didn''t use localhost even though it''s a local binding; matched on first transport');
-      finally
-        LocalLoop.Free;
-      end;
+      CheckBestLocalAddressForOnlyLanIP(LocalBindings, LocalLoop, LocalBindings.Last, 'Didn''t use localhost even though it''s a local binding; matched on first transport');
     finally
-      Result.Free;
+      LocalLoop.Free;
+    end;
+  finally
+    LocalBindings.Free;
+  end;
+end;
+
+procedure TestTIdRoutingTable.TestBestLocalAddressForTwoLanIPToLocalhost;
+var
+  LocalBindings: TIdSipLocations;
+  LocalLoop:     TIdSipLocation;
+begin
+  LocalBindings := Self.CreateLocalBindingsTwoLanIPs;
+  try
+    LocalLoop := TIdSipLocation.Create(LocalBindings.Last.Transport, '127.0.0.1', 15060);
+    try
+      CheckBestLocalAddressForOnlyLanIP(LocalBindings, LocalLoop, LocalBindings.Last, 'Didn''t use localhost even though it''s a local binding; matched on first transport');
+    finally
+      LocalLoop.Free;
+    end;
+  finally
+    LocalBindings.Free;
+  end;
+end;
+
+procedure TestTIdRoutingTable.TestBestLocalAddressForTwoLanIPToOwnLanIP;
+var
+  LocalBindings: TIdSipLocations;
+  LanOne:        TIdSipLocation;
+  LanTwo:        TIdSipLocation;
+begin
+  Self.RT.AddOsRoute(Self.LanRoute, Self.LanMask, Self.LanGateway, 1, '1', Self.OtherLanIP);
+  Self.RT.AddLocalAddress(Self.OtherLanIP);
+
+  LocalBindings := Self.CreateLocalBindingsTwoLanIPs;
+  try
+    LanOne := TIdSipLocation.Create(LocalBindings.Last.Transport, Self.LanIP, 15060);
+    try
+      CheckBestLocalAddressForOnlyLanIP(LocalBindings, LanOne, LocalBindings.Last, 'Didn''t use localhost even though it''s a local binding (LAN IP 1)');
+    finally
+      LanOne.Free;
+    end;
+
+    LanTwo := TIdSipLocation.Create(LocalBindings.Last.Transport, Self.OtherLanIP, 15060);
+    try
+      CheckBestLocalAddressForOnlyLanIP(LocalBindings, LanTwo, LocalBindings.Last, 'Didn''t use localhost even though it''s a local binding (LAN IP 2)');
+    finally
+      LanTwo.Free;
     end;
   finally
     LocalBindings.Free;
