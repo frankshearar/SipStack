@@ -96,6 +96,7 @@ uses
   TestIdSdp in 'test\TestIdSdp.pas',
   TestIdSimpleParser in 'test\TestIdSimpleParser.pas',
   TestIdSipAuthentication in 'test\TestIdSipAuthentication.pas',
+  TestSipConfigUtils in 'test\TestSipConfigUtils.pas',
   TestIdSipCore in 'test\TestIdSipCore.pas',
   TestIdSipDialog in 'test\TestIdSipDialog.pas',
   TestIdSipDialogID in 'test\TestIdSipDialogID.pas',
@@ -127,7 +128,6 @@ uses
   TestIdSystem in 'test\TestIdSystem.pas',
   TestIdTimerQueue in 'test\TestIdTimerQueue.pas',
   TestIdUnicode in 'test\TestIdUnicode.pas',
-  TestSipConfigUtils in 'test\TestSipConfigUtils.pas',
   TestStringDictionary in 'test\TestStringDictionary.pas';
 
 {,
