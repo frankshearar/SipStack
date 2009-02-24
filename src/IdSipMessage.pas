@@ -566,6 +566,7 @@ type
     destructor  Destroy; override;
 
     function  HasParameter(const Name: String): Boolean; override;
+    function  UsesQop(QopType: String): Boolean;
 
     property Algorithm:           String   read GetAlgorithm write SetAlgorithm;
     property AuthorizationScheme: String   read fAuthorizationScheme write fAuthorizationScheme;
@@ -4917,6 +4918,20 @@ function TIdSipHttpAuthHeader.HasParameter(const Name: String): Boolean;
 begin
   Result := (Self.DigestResponses.IndexOfName(Name) <> ItemNotFoundIndex)
          or (Self.fUnknownResponses.IndexOfName(Name) <> ItemNotFoundIndex)
+end;
+
+function TIdSipHttpAuthHeader.UsesQop(QopType: String): Boolean;
+var
+  Qops: TStrings;
+begin
+  Qops := TStringList.Create;
+  try
+    Qops.CommaText := Self.Qop;
+
+    Result := Qops.IndexOf(QopType) <> -1;
+  finally
+    Qops.Free;
+  end;
 end;
 
 //* TIdSipHttpAuthHeader Protected methods *************************************

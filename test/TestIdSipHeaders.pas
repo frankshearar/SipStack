@@ -242,6 +242,7 @@ type
     procedure TestUnknownResponses;
     procedure TestUnquotedResponse;
     procedure TestUsername;
+    procedure TestUsesQop;
     procedure TestValue; override;
     procedure TestValueQuotedNonceCount;
     procedure TestValueQuotedQop;
@@ -3286,6 +3287,17 @@ begin
   CheckEquals(Value,
               Self.A.Username,
               'Username');
+end;
+
+procedure TestTIdSipAuthorizationHeader.TestUsesQop;
+begin
+  Check(not Self.A.UsesQop(QopAuth), 'Header thinks its uses qop');
+
+  Self.A.Qop := QopAuth;
+  Check(Self.A.UsesQop(QopAuth), 'Header thinks it doesn''t use qop');
+
+  Self.A.Qop := QopAuth + ',' + QopAuthInt;
+  Check(Self.A.UsesQop(QopAuth), 'Header thinks it doesn''t use qop (among others)');
 end;
 
 procedure TestTIdSipAuthorizationHeader.TestValue;
