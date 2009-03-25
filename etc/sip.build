@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<project name="SIP" default="build" basedir="..">
+  <description>The Hello World of build files.</description>
+  <property name="debug" value="true" overwrite="false" />
+  <target name="clean" description="remove all generated files">
+    <delete file="bin\SIP.exe" failonerror="false" />
+    <delete failonerror="false">
+      <fileset>
+        <include name="build\*.dcu" />
+	<include name="src\*.dcu" />
+	<include name="test\*.dcu" />
+      </fileset>
+    </delete>
+  </target>
+  <target name="build" description="compiles the source code" depends="clean">
+    <exec program="dcc32" basedir="\Program Files\Borland\Delphi7\bin">
+      <arg value="SIP.dpr" />
+      <arg value="-B" />
+      <arg value="-CC" />
+      <arg value="-N0build" />
+      <arg value="-Ebin" />
+      <arg value="-U&quot;\Program Files\Borland\Delphi7\Imports\dunit\src&quot;" />
+    </exec>
+  </target>
+</project>
