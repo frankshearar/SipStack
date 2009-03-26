@@ -145,12 +145,12 @@ begin
   {$IFDEF SPIKE}
   Forms.Application.Initialize;
 //  Forms.Application.CreateForm(TrnidSpike, rnidSpike);
-  Forms.Forms.Application.Run;
+  Forms.Application.Run;
   {$ELSE}
     {$IFDEF GUI}
     GuiTestRunner.RunRegisteredTests;
     {$ELSE}
-    TextTestRunner.RunRegisteredTests;
+    TextTestRunner.RunRegisteredTests(rxbHaltOnFailures);
     {$ENDIF}
   {$ENDIF}
 end.
