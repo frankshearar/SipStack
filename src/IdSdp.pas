@@ -5933,10 +5933,10 @@ end;
 function TIdSdpTcpClientConnection.CreateClient: TIdSdpTcpClient;
 begin
   Result := TIdSdpTcpClient.Create(nil);
-  Result.ConnectionID   := Self.ID;
-  Result.OnConnected    := Self.ClientConnected;
-  Result.OnDisconnected := Self.ClientDisconnected;
-  Result.OnDisconnection := Self.ClientDisconnection;
+  Result.ConnectionID     := Self.ID;
+  Result.OnConnected      := Self.ClientConnected;
+  Result.OnDisconnected   := Self.ClientDisconnected;
+  Result.OnDisconnection  := Self.ClientDisconnection;
   Result.OnReceiveMessage := Self.ReceiveMessage;
 end;
 
