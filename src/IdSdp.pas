@@ -5924,7 +5924,8 @@ begin
     Wait := TIdSdpTcpConnectionDisconnectedWait.Create;
     Wait.ConnectionID := ConnectionID;
 
-    Self.Timer.AddEvent(TriggerImmediately, Wait);
+    if Assigned(Self.Timer) then
+      Self.Timer.AddEvent(TriggerImmediately, Wait);
   finally
     Self.ThreadLock.Release;
   end;
