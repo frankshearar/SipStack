@@ -304,11 +304,11 @@ type
     fConnectionOpened: Boolean;
     fConnectionParam:  TIdConnectionBindings;
     fTransportParam:   TIdSipTransport;
-
+  protected
     procedure OnConnection(Transport: TIdSipTransport;
-                           Connection: TIdConnectionBindings);
+                           Connection: TIdConnectionBindings); virtual;
     procedure OnDisconnection(Transport: TIdSipTransport;
-                              Connection: TIdConnectionBindings);
+                              Connection: TIdConnectionBindings); virtual;
   public
     constructor Create; override;
     destructor  Destroy; override;
@@ -317,6 +317,19 @@ type
     property ConnectionOpened: Boolean read fConnectionOpened;
     property ConnectionParam:  TIdConnectionBindings read fConnectionParam;
     property TransportParam:   TIdSipTransport read fTransportParam;
+  end;
+
+  TEventConnectionListener = class(TConnectionListener)
+  private
+    fDisconnectionEvent: TEvent;
+  protected
+    procedure OnDisconnection(Transport: TIdSipTransport;
+                              Connection: TIdConnectionBindings); override;
+  public
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    property DisconnectionEvent: TEvent read fDisconnectionEvent;
   end;
 
 implementation
@@ -425,7 +438,7 @@ begin
 
   Self.LogName := Self.FTestName + 'Log';
   Self.TestRef := $decafbad;
-  TIdObjectRegistry.SetLogger(Self.TestRef);
+  TIdObjectRegistry.Singleton.SetLogger(Self.TestRef);
 
   TIdSipTransportRegistry.RegisterTransportType(Self.TransportType.GetTransportType,
                                                 Self.TransportType);
@@ -2327,7 +2340,7 @@ begin
   inherited Destroy;
 end;
 
-//* TConnectionListener Private methods ****************************************
+//* TConnectionListener Protected methods **************************************
 
 procedure TConnectionListener.OnConnection(Transport: TIdSipTransport;
                                            Connection: TIdConnectionBindings);
@@ -2343,6 +2356,35 @@ begin
   Self.fConnectionClosed := true;
   Self.fConnectionParam.Assign(Connection);
   Self.fTransportParam    := Transport;
+end;
+
+//******************************************************************************
+//* TEventConnectionListener                                                   *
+//******************************************************************************
+//* TEventConnectionListener Public methods ************************************
+
+constructor TEventConnectionListener.Create;
+begin
+  inherited Create;
+
+  Self.fDisconnectionEvent := TSimpleEvent.Create;
+end;
+
+destructor TEventConnectionListener.Destroy;
+begin
+  Self.fDisconnectionEvent.Free;
+
+  inherited Destroy;
+end;
+
+//* TEventConnectionListener Protected methods *********************************
+
+procedure TEventConnectionListener.OnDisconnection(Transport: TIdSipTransport;
+                                                   Connection: TIdConnectionBindings);
+begin
+  inherited OnDisconnection(Transport, Connection);
+
+  Self.DisconnectionEvent.SetEvent;
 end;
 
 initialization
