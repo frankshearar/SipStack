@@ -890,6 +890,9 @@ begin
   try
     BasicConf.Add('Listen: UDP ' + Self.LocalAddress + ':' + IntToStr(Self.LocalPort));
     BasicConf.Add('NameServer: MOCK;ReturnOnlySpecifiedRecords');
+    BasicConf.Add('RoutingTable: MOCK');
+    BasicConf.Add('MockRoute: 0.0.0.0/0 10.0.0.1 0 vl0 ' + Self.LocalAddress);
+    BasicConf.Add('MockLocalAddress: ' + Self.LocalAddress);
     BasicConf.Add('Contact: sip:foo@' + Self.LocalAddress + ':' + IntToStr(Self.LocalPort));
     BasicConf.Add(Self.From.AsString);
 
@@ -980,7 +983,11 @@ begin
 
     Check(nil <> Self.TimerQueue.LastEventScheduled(TIdSipActionAuthenticateWait),
           'No authentication wait scheduled');
+
+    Self.MarkSentRequestCount;
     Self.TimerQueue.TriggerAllEventsUpToFirst(TIdSipActionAuthenticateWait);
+    CheckRequestSent('No request with authentication credentials sent');
+        
     Check(Self.LastSentRequest.HasHeader(Creds.Name),
           Format('No %s header', [Creds.Name]));
   finally
@@ -2118,6 +2125,8 @@ begin
   Self.Intf.Send(H);
   // Send the OPTIONS
   Self.TimerQueue.TriggerAllEventsOfType(TIdSipActionSendWait);
+  CheckRequestSent('No request sent');
+  CheckEquals(MethodOptions, Self.LastSentRequest.Method, 'Unexpected request sent');
   Self.RemoteMockTransport.FireOnRequest(Self.MockTransport.LastRequest);
 
   // Receive the response
