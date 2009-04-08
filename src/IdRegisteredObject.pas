@@ -12,7 +12,7 @@ unit IdRegisteredObject;
 interface
 
 uses
-  Classes, SysUtils;
+  Classes, SyncObjs, SysUtils;
 
 type
   // My subclasses and I automatically register/unregister ourselves to the
@@ -38,18 +38,26 @@ type
   // store the object ID yourself.
   TIdObjectRegistry = class(TObject)
   private
-    class procedure Collect(SearchType: TClass; SearchBlock: TIdCollectBlock; Results: TStrings);
-    class procedure Lock;
-    class procedure Log(Description: String);
-    class function  ObjectAt(Index: Integer): TObject;
-    class function  ObjectRegistry: TStrings;
-    class procedure Unlock;
+    ObjectRegistry: TStrings;
+    RegLock:        TCriticalSection;
+    SourceRef:      Cardinal;
+
+    procedure Collect(SearchType: TClass; SearchBlock: TIdCollectBlock; Results: TStrings);
+    procedure Lock;
+    procedure Log(Description: String);
+    function  ObjectAt(Index: Integer): TObject;
+    procedure Unlock;
   public
-    class procedure CollectAllObjectsOfClass(SearchType: TClass; Results: TStrings; AllowSubclassTypes: Boolean = true);
-    class function  FindObject(ObjectID: String): TObject;
-    class function  RegisterObject(Instance: TObject): String;
-    class procedure SetLogger(SourceRef: Cardinal);
-    class procedure UnregisterObject(ObjectID: String);
+    constructor Create; virtual;
+    destructor  Destroy; override;
+
+    class function Singleton: TIdObjectRegistry;
+
+    procedure CollectAllObjectsOfClass(SearchType: TClass; Results: TStrings; AllowSubclassTypes: Boolean = true);
+    function  FindObject(ObjectID: String): TObject;
+    function  RegisterObject(Instance: TObject): String;
+    procedure SetLogger(SourceRef: Cardinal);
+    procedure UnregisterObject(ObjectID: String);
   end;
 
   // Throw me any time something goes unexpectedly wrong with the object
@@ -64,15 +72,13 @@ const
 implementation
 
 uses
-  IdSystem, PluggableLogging, SyncObjs;
+  IdSystem, PluggableLogging;
 
 const
   ItemNotFoundIndex = -1;
 
 var
-  GLock:           TCriticalSection;
-  GObjectRegistry: TStringList;
-  GSourceRef:      Cardinal;
+  GObjectRegistryInstance: TIdObjectRegistry;
 
 //******************************************************************************
 //* Unit local procedures/functions                                            *
@@ -104,12 +110,12 @@ constructor TIdRegisteredObject.Create;
 begin
   inherited Create;
 
-  Self.fID := TIdObjectRegistry.RegisterObject(Self);
+  Self.fID := TIdObjectRegistry.Singleton.RegisterObject(Self);
 end;
 
 destructor TIdRegisteredObject.Destroy;
 begin
-  TIdObjectRegistry.UnregisterObject(Self.ID);
+  TIdObjectRegistry.Singleton.UnregisterObject(Self.ID);
 
   inherited Destroy;
 end;
@@ -119,7 +125,33 @@ end;
 //******************************************************************************
 //* TIdObjectRegistry Public methods *******************************************
 
-class procedure TIdObjectRegistry.CollectAllObjectsOfClass(SearchType: TClass; Results: TStrings; AllowSubclassTypes: Boolean = true);
+constructor TIdObjectRegistry.Create;
+begin
+  inherited Create;
+
+  Self.ObjectRegistry := CreateSortedList;
+  Self.RegLock        := TCriticalSection.Create;
+end;
+
+destructor TIdObjectRegistry.Destroy;
+begin
+  Self.Lock;
+  try
+    Self.ObjectRegistry.Free;
+  finally
+    Self.Unlock;
+  end;
+  Self.RegLock.Free;
+
+  inherited Destroy;
+end;
+
+class function TIdObjectRegistry.Singleton: TIdObjectRegistry;
+begin
+  Result := GObjectRegistryInstance;
+end;
+
+procedure TIdObjectRegistry.CollectAllObjectsOfClass(SearchType: TClass; Results: TStrings; AllowSubclassTypes: Boolean = true);
 begin
   Results.Clear;
 
@@ -134,7 +166,7 @@ begin
   end;
 end;
 
-class function TIdObjectRegistry.FindObject(ObjectID: String): TObject;
+function TIdObjectRegistry.FindObject(ObjectID: String): TObject;
 var
   Index: Integer;
 begin
@@ -151,7 +183,7 @@ begin
   end;
 end;
 
-class function TIdObjectRegistry.RegisterObject(Instance: TObject): String;
+function TIdObjectRegistry.RegisterObject(Instance: TObject): String;
 begin
   Self.Lock;
   try
@@ -166,17 +198,17 @@ begin
   end;
 end;
 
-class procedure TIdObjectRegistry.SetLogger(SourceRef: Cardinal);
+procedure TIdObjectRegistry.SetLogger(SourceRef: Cardinal);
 begin
   Self.Lock;
   try
-    GSourceRef := SourceRef;
+    SourceRef := SourceRef;
   finally
     Self.Unlock;
   end;
 end;
 
-class procedure TIdObjectRegistry.UnregisterObject(ObjectID: String);
+procedure TIdObjectRegistry.UnregisterObject(ObjectID: String);
 var
   Index: Integer;
 begin
@@ -194,7 +226,7 @@ end;
 
 //* TIdObjectRegistry Private methods ******************************************
 
-class procedure TIdObjectRegistry.Collect(SearchType: TClass; SearchBlock: TIdCollectBlock; Results: TStrings);
+procedure TIdObjectRegistry.Collect(SearchType: TClass; SearchBlock: TIdCollectBlock; Results: TStrings);
 var
   I: Integer;
 begin
@@ -207,37 +239,31 @@ begin
   end;
 end;
 
-class procedure TIdObjectRegistry.Lock;
+procedure TIdObjectRegistry.Lock;
 begin
-  GLock.Acquire;
+  Self.RegLock.Acquire;
 end;
 
-class procedure TIdObjectRegistry.Log(Description: String);
+procedure TIdObjectRegistry.Log(Description: String);
 begin
   LogEntry(Description, '', slDebug, 0, '');
 end;
 
-class function TIdObjectRegistry.ObjectAt(Index: Integer): TObject;
+function TIdObjectRegistry.ObjectAt(Index: Integer): TObject;
 begin
   Result := Self.ObjectRegistry.Objects[Index];
 end;
 
-class function TIdObjectRegistry.ObjectRegistry: TStrings;
+procedure TIdObjectRegistry.Unlock;
 begin
-  Result := GObjectRegistry;
-end;
-
-class procedure TIdObjectRegistry.Unlock;
-begin
-  GLock.Release;
+  Self.RegLock.Release;
 end;
 
 initialization
-  GLock           := TCriticalSection.Create;
-  GObjectRegistry := CreateSortedList;
+  GObjectRegistryInstance := TIdObjectRegistry.Create;
 finalization
 // These objects are purely memory-based, so it's safe not to free them here.
 // Still, perhaps we need to review this methodology. How else do we get
 // something like class variables?
-//  GObjectRegistry.Free;
+//  GObjectRegistryInstance.Free;
 end.

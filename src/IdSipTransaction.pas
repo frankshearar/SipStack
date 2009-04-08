@@ -2605,7 +2605,7 @@ begin
   // Wait objects usually log to the TIdTimerQueue's logger:
   inherited Trigger;
 
-  Target := TIdObjectRegistry.FindObject(Self.TransactionID);
+  Target := TIdObjectRegistry.Singleton.FindObject(Self.TransactionID);
 
   if Assigned(Target) and (Target is TIdSipTransaction) then begin
     Self.Transaction := Target as TIdSipTransaction;

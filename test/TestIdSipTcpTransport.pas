@@ -712,14 +712,14 @@ end;
 
 procedure TestTIdSipTCPTransport.TestNotifyOfDisconnection;
 var
-  L:         TConnectionListener;
+  L:         TEventConnectionListener;
   LocalIP:   String;
   LocalPort: Integer;
 begin
   Self.SipClient.Host := Self.HighPortLocation.IPAddress;
   Self.SipClient.Port := Self.HighPortLocation.Port;
 
-  L := TConnectionListener.Create;
+  L := TEventConnectionListener.Create;
   try
     Self.HighPortTransport.AddConnectionListener(L);
 
@@ -731,6 +731,8 @@ begin
     finally
       Self.SipClient.Disconnect;
     end;
+
+    Self.WaitForSignaled(L.DisconnectionEvent, OneSecond, 'No disconnection event triggered');
 
     Check(L.ConnectionClosed, 'Listeners not notified');
     Check(Self.HighPortTransport = L.TransportParam, 'Transport param');

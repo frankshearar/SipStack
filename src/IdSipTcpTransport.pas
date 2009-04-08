@@ -1034,7 +1034,7 @@ var
 begin
   Self.MessageReader.TransportID := Value;
 
-  Transport := TIdObjectRegistry.FindObject(Value);
+  Transport := TIdObjectRegistry.Singleton.FindObject(Value);
 
   if Assigned(Transport) and (Transport is TIdSipTransport) then
     Self.MessageReader.TransportType := (Transport as TIdSipTransport).GetTransportType;
@@ -1093,7 +1093,7 @@ var
 begin
   Self.MessageReader.TransportID := Value;
 
-  Transport := TIdObjectRegistry.FindObject(Value);
+  Transport := TIdObjectRegistry.Singleton.FindObject(Value);
 
   if Assigned(Transport) and (Transport is TIdSipTransport) then
     Self.MessageReader.TransportType := (Transport as TIdSipTransport).GetTransportType;

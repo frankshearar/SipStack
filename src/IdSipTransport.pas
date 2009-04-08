@@ -1381,7 +1381,7 @@ end;
 class function TIdSipDebugTransportRegistry.GetAllTransports: TStrings;
 begin
   Result := TStringList.Create;
-  TIdObjectRegistry.CollectAllObjectsOfClass(TIdSipTransport, Result, true);
+  TIdObjectRegistry.Singleton.CollectAllObjectsOfClass(TIdSipTransport, Result, true);
 end;
 
 //******************************************************************************
@@ -1398,7 +1398,7 @@ procedure TIdSipTransportWait.Trigger;
 var
   O: TObject;
 begin
-  O := TIdObjectRegistry.FindObject(Self.TransportID);
+  O := TIdObjectRegistry.Singleton.FindObject(Self.TransportID);
 
   if Assigned(O) and (O is TIdSipTransport) then
     Self.TriggerOn(O as TIdSipTransport);
@@ -1465,7 +1465,7 @@ procedure TIdSipReceiveMessageWait.Trigger;
 var
   Receiver: TObject;
 begin
-  Receiver := TIdObjectRegistry.FindObject(Self.TransportID);
+  Receiver := TIdObjectRegistry.Singleton.FindObject(Self.TransportID);
 
   if Assigned(Receiver) and (Receiver is TIdSipTransport) then begin
     if Self.Message.IsRequest then

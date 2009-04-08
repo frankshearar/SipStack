@@ -5129,7 +5129,7 @@ class function TIdRTPPeerRegistry.FindServer(const ServerID: String): TIdBaseRTP
 var
   O: TObject;
 begin
-  O := TIdObjectRegistry.FindObject(ServerID);
+  O := TIdObjectRegistry.Singleton.FindObject(ServerID);
 
   if not Assigned(O) then
     raise ERegistry.Create(ServerID + ' does not point to a registered object');
@@ -5194,7 +5194,7 @@ class function TIdRTPPeerRegistry.GetAllServers: TStrings;
 begin
   Result := TStringList.Create;
 
-  TIdObjectRegistry.CollectAllObjectsOfClass(TIdBaseRTPAbstractPeer, Result);
+  TIdObjectRegistry.Singleton.CollectAllObjectsOfClass(TIdBaseRTPAbstractPeer, Result);
 end;
 
 //******************************************************************************
@@ -6095,7 +6095,7 @@ var
   S:       TObject;
   Session: TIdRTPSession;
 begin
-  S := TIdObjectRegistry.FindObject(Self.SessionID);
+  S := TIdObjectRegistry.Singleton.FindObject(Self.SessionID);
 
   if Assigned(S) and (S is TIdRTPSession) then begin
     Session := S as TIdRTPSession;
@@ -6123,7 +6123,7 @@ procedure TIdRTPSendDataWait.Trigger;
 var
   Session: TObject;
 begin
-  Session := TIdObjectRegistry.FindObject(Self.SessionID);
+  Session := TIdObjectRegistry.Singleton.FindObject(Self.SessionID);
 
   if Assigned(Session) and (Session is TIdRTPSession) then
     (Session as TIdRTPSession).SendData(Self.Data);
@@ -6138,7 +6138,7 @@ procedure TIdRTPTransmissionTimeExpire.Trigger;
 var
   Session: TObject;
 begin
-  Session := TIdObjectRegistry.FindObject(Self.SessionID);
+  Session := TIdObjectRegistry.Singleton.FindObject(Self.SessionID);
 
   if Assigned(Session) and (Session is TIdRTPSession) then
     (Session as TIdRTPSession).TransmissionTimeExpire;
@@ -6153,7 +6153,7 @@ procedure TIdRTPSenderReportWait.Trigger;
 var
   Session: TObject;
 begin
-  Session := TIdObjectRegistry.FindObject(Self.SessionID);
+  Session := TIdObjectRegistry.Singleton.FindObject(Self.SessionID);
 
   if Assigned(Session) and (Session is TIdRTPSession) then
     (Session as TIdRTPSession).SendReport;

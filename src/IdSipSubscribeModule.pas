@@ -3152,7 +3152,7 @@ var
   Action:       TObject;
   Subscription: TIdSipOutboundSubscription;
 begin
-  Action := TIdObjectRegistry.FindObject(Self.ActionID);
+  Action := TIdObjectRegistry.Singleton.FindObject(Self.ActionID);
 
   if Assigned(Action) and (Action is TIdSipOutboundSubscription) then begin
     Subscription := Action as TIdSipOutboundSubscription;
@@ -3171,7 +3171,7 @@ procedure TIdSipInboundSubscriptionNotifyWait.Trigger;
 var
   Action: TObject;
 begin
-  Action := TIdObjectRegistry.FindObject(Self.ActionID);
+  Action := TIdObjectRegistry.Singleton.FindObject(Self.ActionID);
 
   if Assigned(Action) and (Action is TIdSipInboundSubscription) then
     (Action as TIdSipInboundSubscription).Notify(Self.Notification, Self.MimeType);
@@ -3203,7 +3203,7 @@ procedure TIdSipInboundReferralWait.Trigger;
 var
   Action: TObject;
 begin
-  Action := TIdObjectRegistry.FindObject(Self.ActionID);
+  Action := TIdObjectRegistry.Singleton.FindObject(Self.ActionID);
 
   if Assigned(Action) and (Action is TIdSipInboundReferral) then
     Self.FireTimer(Action as TIdSipInboundReferral);
@@ -3289,7 +3289,7 @@ procedure TIdSipSubscriptionRetryWait.Trigger;
 var
   Module: TObject;
 begin
-  Module := TIdObjectRegistry.FindObject(Self.ModuleID);
+  Module := TIdObjectRegistry.Singleton.FindObject(Self.ModuleID);
 
   if Assigned(Module) and (Module is TIdSipSubscribeModule) then
     (Module as TIdSipSubscribeModule).Resubscribe(Self.Target, Self.EventPackage);

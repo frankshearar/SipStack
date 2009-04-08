@@ -1688,7 +1688,7 @@ var
 begin
   // Invoke an asynchronous function call identified by ReferenceID.
 
-  Wait := TIdObjectRegistry.FindObject(ReferenceID);
+  Wait := TIdObjectRegistry.Singleton.FindObject(ReferenceID);
 
   if Assigned(Wait) and (Wait is TIdWait) then
     Self.TimerQueue.AddEvent(TriggerImmediately, Wait as TIdWait);
@@ -4188,7 +4188,7 @@ procedure TIdStackWait.Trigger;
 var
   O: TObject;
 begin
-  O := TIdObjectRegistry.FindObject(Self.StackID);
+  O := TIdObjectRegistry.Singleton.FindObject(Self.StackID);
 
   if Assigned(O) and (O is TIdSipStackInterface) then
     Self.TriggerOnStack(O as TIdSipStackInterface);
@@ -4279,7 +4279,7 @@ procedure TIdAsynchronousMessageWait.Trigger;
 var
   Stack: TObject;
 begin
-  Stack := TIdObjectRegistry.FindObject(Self.StackID);
+  Stack := TIdObjectRegistry.Singleton.FindObject(Self.StackID);
 
   if Assigned(Stack) and (Stack is TIdSipStackInterface) then
     Self.FireWait(Stack as TIdSipStackInterface);

@@ -71,7 +71,7 @@ begin
     R.Free;
   end;
 
-  CheckNull(TIdObjectRegistry.FindObject(RID), 'Object not unregistered');
+  CheckNull(TIdObjectRegistry.Singleton.FindObject(RID), 'Object not unregistered');
 end;
 
 //******************************************************************************
@@ -87,7 +87,7 @@ begin
   try
     L.Add('Arbitrary entry');
 
-    TIdObjectRegistry.CollectAllObjectsOfClass(TestTIdObjectRegistry, L);
+    TIdObjectRegistry.Singleton.CollectAllObjectsOfClass(TestTIdObjectRegistry, L);
 
     CheckEquals(0, L.Count, 'Results parameter not first cleared');
   finally
@@ -108,10 +108,10 @@ begin
   // already so swamped by object instantiation boilerplate!
   O1 := TObject.Create;
   try
-    OID1 := TIdObjectRegistry.RegisterObject(O1);
+    OID1 := TIdObjectRegistry.Singleton.RegisterObject(O1);
     O2 := TObject.Create;
     try
-      OID2 := TIdObjectRegistry.RegisterObject(O2);
+      OID2 := TIdObjectRegistry.Singleton.RegisterObject(O2);
 
       R1 := TIdRegisteredObject.Create;
       try
@@ -119,10 +119,10 @@ begin
         try
           L := TStringList.Create;
           try
-            TIdObjectRegistry.CollectAllObjectsOfClass(TObject, L);
+            TIdObjectRegistry.Singleton.CollectAllObjectsOfClass(TObject, L);
             CheckEquals(4, L.Count, 'CollectAllObjectsOfClass didn''t return all instances of TObject and TIdRegisteredObject');
 
-            TIdObjectRegistry.CollectAllObjectsOfClass(TIdRegisteredObject, L);
+            TIdObjectRegistry.Singleton.CollectAllObjectsOfClass(TIdRegisteredObject, L);
             CheckEquals(2, L.Count, 'CollectAllObjectsOfClass didn''t return only instances of TIdRegisteredObject');
             CheckEquals(TIdRegisteredObject, L.Objects[0].ClassType, 'Wrong class in first slot');
             CheckEquals(TIdRegisteredObject, L.Objects[1].ClassType, 'Wrong class in second slot');
@@ -136,11 +136,11 @@ begin
         R1.Free;
       end;
     finally
-      TIdObjectRegistry.UnregisterObject(OID2);
+      TIdObjectRegistry.Singleton.UnregisterObject(OID2);
       O2.Free;
     end;
   finally
-    TIdObjectRegistry.UnregisterObject(OID1);
+    TIdObjectRegistry.Singleton.UnregisterObject(OID1);
     O1.Free;
   end;
 end;
@@ -154,13 +154,13 @@ var
 begin
   Super := TObject.Create;
   try
-    SuperID := TIdObjectRegistry.RegisterObject(Super);
+    SuperID := TIdObjectRegistry.Singleton.RegisterObject(Super);
     try
       Sub := TIdRegisteredObject.Create;
       try
         L := TStringList.Create;
         try
-          TIdObjectRegistry.CollectAllObjectsOfClass(TObject, L, false);
+          TIdObjectRegistry.Singleton.CollectAllObjectsOfClass(TObject, L, false);
 
           CheckEquals(1, L.Count, 'Subclasses were also collected');
           CheckEquals(TObject, L.Objects[0].ClassType, 'Wrong class type in first slot');
@@ -171,7 +171,7 @@ begin
         Sub.Free;
       end;
     finally
-      TIdObjectRegistry.UnregisterObject(SuperID);
+      TIdObjectRegistry.Singleton.UnregisterObject(SuperID);
     end;
   finally
     Super.Free;
@@ -184,10 +184,10 @@ var
 begin
   R := TIdRegisteredObject.Create;
   try
-    CheckNotNull(TIdObjectRegistry.FindObject(R.ID), 'Registered object not found');
-    Check(R = TIdObjectRegistry.FindObject(R.ID), 'Unexpected object found');
+    CheckNotNull(TIdObjectRegistry.Singleton.FindObject(R.ID), 'Registered object not found');
+    Check(R = TIdObjectRegistry.Singleton.FindObject(R.ID), 'Unexpected object found');
 
-    CheckNull(TIdObjectRegistry.FindObject(R.ID + 'fakeID'), 'Arbitrary ID returned something');
+    CheckNull(TIdObjectRegistry.Singleton.FindObject(R.ID + 'fakeID'), 'Arbitrary ID returned something');
     CheckNotEquals('', R.ID, 'Object didn''t register itself (or didn''t receive an ID');
   finally
     R.Free;
@@ -206,7 +206,7 @@ begin
     R.Free;
   end;
 
-  CheckNull(TIdObjectRegistry.FindObject(RID), 'Object not unregistered');
+  CheckNull(TIdObjectRegistry.Singleton.FindObject(RID), 'Object not unregistered');
 end;
 
 initialization

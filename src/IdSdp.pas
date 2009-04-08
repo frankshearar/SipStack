@@ -5426,7 +5426,7 @@ class function TIdSdpTcpConnectionRegistry.FindConnection(const ServerID: String
 var
   O: TObject;
 begin
-  O := TIdObjectRegistry.FindObject(ServerID);
+  O := TIdObjectRegistry.Singleton.FindObject(ServerID);
 
   if not Assigned(O) then
     raise ERegistry.Create(ServerID + ' does not point to a registered object');
@@ -5491,7 +5491,7 @@ class function TIdSdpTcpConnectionRegistry.GetAllConnections: TStrings;
 begin
   Result := TStringList.Create;
 
-  TIdObjectRegistry.CollectAllObjectsOfClass(TIdSdpBaseTcpConnection, Result);
+  TIdObjectRegistry.Singleton.CollectAllObjectsOfClass(TIdSdpBaseTcpConnection, Result);
 end;
 
 //******************************************************************************
@@ -7271,7 +7271,7 @@ var
   C: TObject;
   Conn: TIdSdpBaseTcpConnection;
 begin
-  C := TIdObjectRegistry.FindObject(Self.ConnectionID);
+  C := TIdObjectRegistry.Singleton.FindObject(Self.ConnectionID);
 
   if Assigned(C) and (C is TIdSdpBaseTcpConnection) then begin
     Conn := C as TIdSdpBaseTcpConnection;
@@ -7290,7 +7290,7 @@ var
   C: TObject;
   Conn: TIdSdpBaseTcpConnection;
 begin
-  C := TIdObjectRegistry.FindObject(Self.ConnectionID);
+  C := TIdObjectRegistry.Singleton.FindObject(Self.ConnectionID);
 
   if Assigned(C) and (C is TIdSdpBaseTcpConnection) then begin
     Conn := C as TIdSdpBaseTcpConnection;
@@ -7309,7 +7309,7 @@ var
   C: TObject;
   Conn: TIdSdpBaseTcpConnection;
 begin
-  C := TIdObjectRegistry.FindObject(Self.ConnectionID);
+  C := TIdObjectRegistry.Singleton.FindObject(Self.ConnectionID);
 
   if Assigned(C) and (C is TIdSdpBaseTcpConnection) then begin
     Conn := C as TIdSdpBaseTcpConnection;
@@ -7346,7 +7346,7 @@ var
 begin
   inherited Trigger;
 
-  C := TIdObjectRegistry.FindObject(Self.ConnectionID);
+  C := TIdObjectRegistry.Singleton.FindObject(Self.ConnectionID);
 
   if Assigned(C) and (C is TIdSdpBaseTcpConnection) then begin
     Conn := C as TIdSdpBaseTcpConnection;
@@ -7404,7 +7404,7 @@ var
   C:          TObject;
   Connection: TIdSdpBaseTcpConnection;
 begin
-  C := TIdObjectRegistry.FindObject(Self.ConnectionID);
+  C := TIdObjectRegistry.Singleton.FindObject(Self.ConnectionID);
 
   if Assigned(C) and (C is TIdSdpBaseTcpConnection) then begin
     Connection := C as TIdSdpBaseTcpConnection;

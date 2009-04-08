@@ -10005,7 +10005,7 @@ var
 begin
   Connections := TStringList.Create;
   try
-    TIdObjectRegistry.CollectAllObjectsOfClass(TIdSdpBaseTcpConnection, Connections);
+    TIdObjectRegistry.Singleton.CollectAllObjectsOfClass(TIdSdpBaseTcpConnection, Connections);
 
     Found := false;
     for I := 0 to Connections.Count - 1 do begin
@@ -10032,7 +10032,7 @@ var
 begin
   Connections := TStringList.Create;
   try
-    TIdObjectRegistry.CollectAllObjectsOfClass(TIdSdpBaseTcpConnection, Connections);
+    TIdObjectRegistry.Singleton.CollectAllObjectsOfClass(TIdSdpBaseTcpConnection, Connections);
 
     Found := false;
     for I := 0 to Connections.Count - 1 do begin
@@ -10120,7 +10120,7 @@ var
 begin
   Connections := TStringList.Create;
   try
-    TIdObjectRegistry.CollectAllObjectsOfClass(TIdSdpMockTcpNullConnection, Connections, false);
+    TIdObjectRegistry.Singleton.CollectAllObjectsOfClass(TIdSdpMockTcpNullConnection, Connections, false);
 
     Check(Connections.Count > 0, 'No null connections created');
   finally
@@ -10265,7 +10265,7 @@ var
 begin
   Connections := TStringList.Create;
   try
-    TIdObjectRegistry.CollectAllObjectsOfClass(TIdSdpMockTcpClientConnection, Connections, false);
+    TIdObjectRegistry.Singleton.CollectAllObjectsOfClass(TIdSdpMockTcpClientConnection, Connections, false);
 
     CheckEquals(1, Connections.Count, 'Unexpected number of TIdSdpMockTcpConnections');
 
@@ -10281,7 +10281,7 @@ var
 begin
   Connections := TStringList.Create;
   try
-    TIdObjectRegistry.CollectAllObjectsOfClass(TIdSdpMockTcpServerConnection, Connections, false);
+    TIdObjectRegistry.Singleton.CollectAllObjectsOfClass(TIdSdpMockTcpServerConnection, Connections, false);
 
     CheckEquals(1, Connections.Count, 'Unexpected number of TIdSdpMockTcpConnections');
 

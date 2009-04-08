@@ -2361,7 +2361,7 @@ var
   Action: TIdSipAction;
   Module: TObject;
 begin
-  Module := TIdObjectRegistry.FindObject(Self.RegisterModuleID);
+  Module := TIdObjectRegistry.Singleton.FindObject(Self.RegisterModuleID);
 
   if Assigned(Module) and (Module is TIdSipOutboundRegisterModule) then begin
     Action := (Module as TIdSipOutboundRegisterModule).RegisterWith(Self.Registrar, Self.Bindings);

@@ -1678,7 +1678,7 @@ function TIdSipActions.FindAction(const ActionID: String): TIdSipAction;
 var
   Action: TObject;
 begin
-  Action := TIdObjectRegistry.FindObject(ActionID);
+  Action := TIdObjectRegistry.Singleton.FindObject(ActionID);
 
   if not Assigned(Action) then begin
     Result := nil;
@@ -1749,7 +1749,7 @@ procedure TIdSipActionAuthenticateWait.Trigger;
 var
   Action: TObject;
 begin
-  Action := TIdObjectRegistry.FindObject(Self.ActionID);
+  Action := TIdObjectRegistry.Singleton.FindObject(Self.ActionID);
 
   if Assigned(Action) and (Action is TIdSipAction) then begin
     if Assigned(Self.Credentials) then
@@ -1766,7 +1766,7 @@ procedure TIdSipActionSendWait.Trigger;
 var
   Action: TObject;
 begin
-  Action := TIdObjectRegistry.FindObject(Self.ActionID);
+  Action := TIdObjectRegistry.Singleton.FindObject(Self.ActionID);
 
   if Assigned(Action) and (Action is TIdSipAction) then
     (Action as TIdSipAction).Send;
@@ -1781,7 +1781,7 @@ procedure TIdSipActionTerminateWait.Trigger;
 var
   Action: TObject;
 begin
-  Action := TIdObjectRegistry.FindObject(Self.ActionID);
+  Action := TIdObjectRegistry.Singleton.FindObject(Self.ActionID);
 
   if Assigned(Action) and (Action is TIdSipAction) then
     (Action as TIdSipAction).Terminate;

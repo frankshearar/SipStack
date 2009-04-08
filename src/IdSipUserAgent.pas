@@ -2142,7 +2142,7 @@ var
   Configurator: TIdSipStackConfigurator;
   UA:           TObject;
 begin
-  UA := TIdObjectRegistry.FindObject(Self.UserAgentID);
+  UA := TIdObjectRegistry.Singleton.FindObject(Self.UserAgentID);
 
   if Assigned(UA) and (UA is TIdSipUserAgent) then begin
     Configurator := TIdSipStackConfigurator.Create;

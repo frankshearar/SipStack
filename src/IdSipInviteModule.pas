@@ -3552,7 +3552,7 @@ procedure TIdSipSessionWait.Trigger;
 var
   Action: TObject;
 begin
-  Action := TIdObjectRegistry.FindObject(Self.SessionID);
+  Action := TIdObjectRegistry.Singleton.FindObject(Self.SessionID);
 
   if Assigned(Action) and (Action is TIdSipSession) then begin
     Self.FireTimer(Action as TIdSipSession);
@@ -3595,7 +3595,7 @@ procedure TIdSipInboundSessionWait.Trigger;
 var
   Action: TObject;
 begin
-  Action := TIdObjectRegistry.FindObject(Self.SessionID);
+  Action := TIdObjectRegistry.Singleton.FindObject(Self.SessionID);
 
   if Assigned(Action) and (Action is TIdSipInboundSession) then
     Self.FireTimer(Action as TIdSipInboundSession);
