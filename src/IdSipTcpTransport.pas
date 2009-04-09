@@ -23,6 +23,7 @@ type
 
   TIdSipTcpClient = class;
   TIdSipTcpClientClass = class of TIdSipTcpClient;
+  TIdSipTcpConnectionOpenWait = class;
 
   // I implement the Transmission Control Protocol (RFC 793) connections for the
   // SIP stack.
@@ -63,7 +64,8 @@ type
     destructor  Destroy; override;
 
     procedure AddConnection(Connection: TIdTCPConnection;
-                            Request: TIdSipRequest);
+                            Request: TIdSipRequest); overload;
+    procedure AddConnection(Closure: TIdSipTcpConnectionOpenWait); overload;
     function  ClientType: TIdSipTcpClientClass; virtual;
     function  IsRunning: Boolean; override;
     procedure RemoveClient(ClientThread: TObject);
@@ -210,6 +212,13 @@ type
   // OnDisconnect notification, but no OnConnection notification.) The latter
   // consequence shouldn't matter, since the TCP transport will remove me from
   // my table when Connection disconnects.
+  //
+  // Further note: should a client connect and then disconnect very quickly,
+  // we might receive a well-formed message but not know where that message came
+  // from, because the Connection's no longer connected. Thus, I provide an
+  // additional constructor that explicitly allows to store the connection's
+  // binding details. See TIdSipTcpConnectionOpenWait and
+  // TIdSipTCPTransport.AddConnection(Closure: TIdSipTcpConnectionOpenWait). 
   TIdSipConnectionTableEntry = class(TObject)
   private
     fBinding:    TIdConnectionBindings;
@@ -218,8 +227,11 @@ type
 
     function CreateBinding(Connection: TIdTCPConnection): TIdConnectionBindings;
   public
-    constructor Create(Connection:    TIdTCPConnection;
-                       CopyOfRequest: TIdSipRequest);
+    constructor Create(Connection: TIdTCPConnection;
+                       Request: TIdSipRequest); overload;
+    constructor Create(Connection: TIdTCPConnection;
+                       Binding: TIdConnectionBindings;
+                       Request: TIdSipRequest); overload;
     destructor  Destroy; override;
 
     property Binding:    TIdConnectionBindings read fBinding;
@@ -244,6 +256,7 @@ type
     destructor  Destroy; override;
 
     function  Add(Connection: TIdTCPConnection;
+                  Bindings:   TIdConnectionBindings;
                   Request:    TIdSipRequest): TIdSipConnectionTableEntry;
     function  ConnectionEntry(Connection: TIdTCPConnection): TIdSipConnectionTableEntry;
     function  ConnectionFor(Msg: TIdSipMessage): TIdTCPConnection; overload;
@@ -265,11 +278,23 @@ type
   end;
 
   // I store a REFERENCE to a TIdTCPConnection.
+  // My CachedBindings is an "ephemeral value object" - that is, since it is an
+  // immutable collection of data, CachedBindings will point to a new object
+  // every time you set the Binding property. If you want to remember the
+  // information in the CachedBindings, make a copy of the property.
   TIdSipTcpConnectionWait = class(TIdSipTransportWait)
   private
-    fBinding: TIdTCPConnection;
+    fBinding:        TIdTCPConnection;
+    fCachedBindings: TIdConnectionBindings;
+
+    function  CalculateBindings(C: TIdTCPConnection): TIdConnectionBindings;
+    procedure SetBinding(Value: TIdTCPConnection);
   public
-    property Binding: TIdTCPConnection read fBinding write fBinding;
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    property Binding:        TIdTCPConnection      read fBinding write SetBinding;
+    property CachedBindings: TIdConnectionBindings read fCachedBindings;
   end;
 
   TIdSipTcpConnectionOpenWait = class(TIdSipTcpConnectionWait)
@@ -336,13 +361,28 @@ end;
 procedure TIdSipTCPTransport.AddConnection(Connection: TIdTCPConnection;
                                            Request: TIdSipRequest);
 var
+  SimulatedEvent: TIdSipTcpConnectionOpenWait;
+begin
+  SimulatedEvent := TIdSipTcpConnectionOpenWait.Create;
+  try
+    SimulatedEvent.Binding        := Connection;
+    SimulatedEvent.OpeningRequest := Request;
+
+    Self.AddConnection(SimulatedEvent);
+  finally
+    SimulatedEvent.Free;
+  end;
+end;
+
+procedure TIdSipTCPTransport.AddConnection(Closure: TIdSipTcpConnectionOpenWait);
+var
   Entry: TIdSipConnectionTableEntry;
   Table: TIdSipConnectionTable;
 begin
   Table := Self.ConnectionMap.LockList;
   try
-    Entry := Table.Add(Connection, Request);
-    Connection.OnDisconnected := Self.ConnectionDisconnected;
+    Entry := Table.Add(Closure.Binding, Closure.CachedBindings, Closure.OpeningRequest);
+    Closure.Binding.OnDisconnected := Self.ConnectionDisconnected;
 
     Self.NotifyOfConnection(Entry.Binding);
   finally
@@ -1104,15 +1144,25 @@ end;
 //******************************************************************************
 //* TIdSipConnectionTableEntry Public methods **********************************
 
-constructor TIdSipConnectionTableEntry.Create(Connection:    TIdTCPConnection;
-                                              CopyOfRequest: TIdSipRequest);
+constructor TIdSipConnectionTableEntry.Create(Connection: TIdTCPConnection;
+                                              Request: TIdSipRequest);
 begin
   inherited Create;
 
   Self.fBinding    := Self.CreateBinding(Connection);
   Self.fConnection := Connection;
-  Self.fRequest := TIdSipRequest.Create;
-  Self.fRequest.Assign(CopyOfRequest);
+  Self.fRequest    := Request.Copy as TIdSipRequest;
+end;
+
+constructor TIdSipConnectionTableEntry.Create(Connection: TIdTCPConnection;
+                                              Binding: TIdConnectionBindings;
+                                              Request: TIdSipRequest);
+begin
+  inherited Create;
+
+  Self.fBinding    := Binding.Copy;
+  Self.fConnection := Connection;
+  Self.fRequest    := Request.Copy as TIdSipRequest;
 end;
 
 destructor TIdSipConnectionTableEntry.Destroy;
@@ -1161,12 +1211,13 @@ begin
 end;
 
 function TIdSipConnectionTable.Add(Connection: TIdTCPConnection;
+                                   Bindings:   TIdConnectionBindings;
                                    Request:    TIdSipRequest): TIdSipConnectionTableEntry;
 begin
   Result := Self.FindEntry(Connection, Request);
 
   if not Assigned(Result) then begin
-    Result := TIdSipConnectionTableEntry.Create(Connection, Request);
+    Result := TIdSipConnectionTableEntry.Create(Connection, Bindings, Request);
     Self.List.Add(Result);
   end;
 end;
@@ -1314,6 +1365,52 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipTcpConnectionWait                                                    *
+//******************************************************************************
+//* TIdSipTcpConnectionWait Public methods *************************************
+
+constructor TIdSipTcpConnectionWait.Create;
+begin
+  inherited Create;
+
+  Self.fCachedBindings := TIdConnectionBindings.Create;
+end;
+
+destructor TIdSipTcpConnectionWait.Destroy;
+begin
+  Self.fCachedBindings.Free;
+
+  inherited Destroy;
+end;
+
+//* TIdSipTcpConnectionWait Private methods ************************************
+
+function TIdSipTcpConnectionWait.CalculateBindings(C: TIdTCPConnection): TIdConnectionBindings;
+begin
+  if C.Connected then
+    Result := TIdConnectionBindings.Create(C.Socket.Binding.IP,
+                                           C.Socket.Binding.Port,
+                                           C.Socket.Binding.PeerIP,
+                                           C.Socket.Binding.PeerPort,
+                                           TcpTransport)
+  else begin
+    // We should never enter this clause, because disconnected Connections don't
+    // belong in a TIdSipConnectionTable. This clause is only here as a paranoid
+    // protection.
+    Result := TIdConnectionBindings.Create('', 0, '', 0, TcpTransport);
+  end;
+end;
+
+procedure TIdSipTcpConnectionWait.SetBinding(Value: TIdTCPConnection);
+begin
+  Self.fBinding := Value;
+
+  Self.fCachedBindings.Free;
+
+  Self.fCachedBindings := Self.CalculateBindings(Value);
+end;
+
+//******************************************************************************
 //* TIdSipTcpConnectionOpenWait                                                *
 //******************************************************************************
 //* TIdSipTcpConnectionOpenWait Public methods *********************************
@@ -1337,7 +1434,7 @@ end;
 procedure TIdSipTcpConnectionOpenWait.TriggerOn(Transport: TIdSipTransport);
 begin
   if not Transport.IsMock then
-    (Transport as TIdSipTcpTransport).AddConnection(Self.Binding, Self.OpeningRequest);
+    (Transport as TIdSipTcpTransport).AddConnection(Self);
 end;
 
 //* TIdSipTcpConnectionOpenWait Private methods ********************************

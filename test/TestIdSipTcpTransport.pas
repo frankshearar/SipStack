@@ -226,6 +226,7 @@ type
 
   TestTIdSipConnectionTable = class(TTestCaseSip)
   private
+    Binding: TIdConnectionBindings;
     Conn:    TIdTCPConnection;
     NewConn: TIdTCPConnection;
     NewReq:  TIdSipRequest;
@@ -1860,6 +1861,7 @@ procedure TestTIdSipConnectionTable.SetUp;
 begin
   inherited SetUp;
 
+  Self.Binding := TIdConnectionBindings.Create;
   Self.Conn    := TIdTCPConnection.Create(nil);
   Self.NewConn := TIdTCPConnection.Create(nil);
   Self.NewReq  := TIdSipRequest.Create;
@@ -1877,6 +1879,7 @@ begin
   Self.NewReq.Free;
   Self.NewConn.Free;
   Self.Conn.Free;
+  Self.Binding.Free;
 
   inherited TearDown;
 end;
@@ -1889,7 +1892,7 @@ var
 begin
   Count := Self.Table.Count;
 
-  Self.Table.Add(Self.Conn, Self.Req);
+  Self.Table.Add(Self.Conn, Self.Binding, Self.Req);
 
   CheckEquals(Count + 1, Self.Table.Count, 'No entry added');
 end;
@@ -1900,16 +1903,16 @@ var
 begin
   Count := Self.Table.Count;
 
-  Self.Table.Add(Self.Conn, Self.Req);
-  Self.Table.Add(Self.Conn, Self.Req);
+  Self.Table.Add(Self.Conn, Self.Binding, Self.Req);
+  Self.Table.Add(Self.Conn, Self.Binding, Self.Req);
 
   CheckEquals(Count + 1, Self.Table.Count, 'Duplicate entry added');
 end;
 
 procedure TestTIdSipConnectionTable.TestConnectionFor;
 begin
-  Self.Table.Add(Self.Conn,    Self.Req);
-  Self.Table.Add(Self.NewConn, Self.NewReq);
+  Self.Table.Add(Self.Conn,    Self.Binding, Self.Req);
+  Self.Table.Add(Self.NewConn, Self.Binding, Self.NewReq);
 
   Check(Self.Table.ConnectionFor(Self.Req) = Self.Conn,
         'Wrong Connection 1');
@@ -1919,7 +1922,7 @@ end;
 
 procedure TestTIdSipConnectionTable.TestConnectionForOneEntry;
 begin
-  Self.Table.Add(Self.Conn, Self.Req);
+  Self.Table.Add(Self.Conn, Self.Binding, Self.Req);
 
   Check(Self.Table.ConnectionFor(Self.Req) = Self.Conn,
         'Wrong Connection');
@@ -1932,7 +1935,7 @@ end;
 
 procedure TestTIdSipConnectionTable.TestConnectionForOnNoEntry;
 begin
-  Self.Table.Add(Self.Conn, Self.Req);
+  Self.Table.Add(Self.Conn, Self.Binding, Self.Req);
 
   Check(not Assigned(Self.Table.ConnectionFor(Self.NewReq)), 'non-nil result');
 end;
@@ -1944,7 +1947,7 @@ begin
   Self.Req.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/TCP localhost;' + BranchParam + '=' + BranchMagicCookie + 'f00';
   Self.Req.Method := MethodOptions;
 
-  Self.Table.Add(Self.Conn, Self.Req);
+  Self.Table.Add(Self.Conn, Self.Binding, Self.Req);
 
   Response := TIdSipResponse.Create;
   try
@@ -1963,7 +1966,7 @@ var
 begin
   Count := Self.Table.Count;
 
-  Self.Table.Add(Self.Conn, Self.Req);
+  Self.Table.Add(Self.Conn, Self.Binding, Self.Req);
   Self.Table.Remove(Self.Conn);
   CheckEquals(Count, Self.Table.Count, 'No entry removed');
 end;
@@ -1977,8 +1980,8 @@ procedure TestTIdSipConnectionTable.TestRemoveOnNonEmptyList;
 var
   Count: Integer;
 begin
-  Self.Table.Add(Self.Conn, Self.Req);
-  Self.Table.Add(Self.NewConn, NewReq);
+  Self.Table.Add(Self.Conn, Self.Binding, Self.Req);
+  Self.Table.Add(Self.NewConn, Self.Binding, NewReq);
 
   Count := Self.Table.Count;
 
@@ -1994,8 +1997,8 @@ var
 begin
   OldCount := Self.Table.Count;
 
-  Self.Table.Add(Self.Conn, Self.Req);
-  Self.Table.Add(Self.Conn, Self.NewReq);
+  Self.Table.Add(Self.Conn, Self.Binding, Self.Req);
+  Self.Table.Add(Self.Conn, Self.Binding, Self.NewReq);
 
   Self.Table.Remove(Self.Conn);
   CheckEquals(OldCount, Self.Table.Count, 'Not all request-connection associations removed');
