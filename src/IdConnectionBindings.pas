@@ -133,8 +133,7 @@ end;
 
 function TIdConnectionBindings.Copy: TIdConnectionBindings;
 begin
-  Result := TIdConnectionBindings.Create;
-  Result.Assign(Self);
+  Result := TIdConnectionBindings.Create(Self.LocalIP, Self.LocalPort, Self.PeerIP, Self.PeerPort, Self.Transport);
 end;
 
 function TIdConnectionBindings.Equals(Other: TIdConnectionBindings): Boolean;
