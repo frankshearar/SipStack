@@ -60,7 +60,9 @@ type
     procedure TearDown; override;
   published
     procedure TestAddUser;
+{$IFDEF MARKERTEST}
     procedure TestAuthenticateAsUserAgent;
+{$ENDIF}
     procedure TestCreateChallengeResponse;
     procedure TestCreateChallengeResponseAsProxy;
     procedure TestCreateChallengeResponseAsUserAgent;
@@ -562,13 +564,13 @@ begin
               Self.Auth.Usercount,
               'New user info not added');
 end;
-
+{$IFDEF MARKERTEST}
 procedure TAuthenticatorTestCase.TestAuthenticateAsUserAgent;
 begin
   Self.Auth.IsProxy := true;
   Fail('Not implemented');
 end;
-
+{$ENDIF}
 procedure TAuthenticatorTestCase.TestCreateChallengeResponse;
 var
   Challenge: TIdSipResponse;

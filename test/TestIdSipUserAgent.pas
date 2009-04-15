@@ -136,7 +136,9 @@ type
     procedure TestRegisterWithReceiveMultipleGruus;
     procedure TestRegisterWithRegistrarNameDoesntResolve;
     procedure TestRejectMalformedAuthorizedRequest;
+{$IFDEF MARKERTEST}
     procedure TestRejectMethodNotAllowed;
+{$ENDIF}
     procedure TestRejectNoContact;
     procedure TestRejectUnauthorizedRequest;
     procedure TestRemoveUserAgentListener;
@@ -1758,7 +1760,7 @@ begin
     Self.Core.Authenticator := Self.Authenticator;
   end;
 end;
-
+{$IFDEF MARKERTEST}
 procedure TestTIdSipUserAgent.TestRejectMethodNotAllowed;
 //var
 //  Response: TIdSipResponse;
@@ -1786,7 +1788,7 @@ begin
             + 'does. Obviously that''ll eventually change');
 }
 end;
-
+{$ENDIF}
 procedure TestTIdSipUserAgent.TestRejectNoContact;
 var
   Response: TIdSipResponse;

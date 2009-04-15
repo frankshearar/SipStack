@@ -713,7 +713,9 @@ type
     procedure TestReferenceFailedWithResponse;
     procedure TestReferenceSucceeded;
     procedure TestReferenceTrying;
+{$IFDEF MARKERTEST}
     procedure TestRejectUnsupportedReferToUri;
+{$ENDIF}
     procedure TestRenotifySendsCorrectState;
   end;
 
@@ -5105,7 +5107,7 @@ begin
   Check(not Self.Refer.IsTerminated,
         'Referral terminated');
 end;
-
+{$IFDEF MARKERTEST}
 procedure TestTIdSipInboundReferral.TestRejectUnsupportedReferToUri;
 var
   HttpReferTo: TIdSipAddressHeader;
@@ -5125,7 +5127,7 @@ begin
     HttpReferTo.Free;
   end;
 end;
-
+{$ENDIF}
 procedure TestTIdSipInboundReferral.TestRenotifySendsCorrectState;
 var
   ExpectedBody: String;
