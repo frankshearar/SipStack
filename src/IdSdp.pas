@@ -5637,6 +5637,9 @@ end;
 
 procedure TIdSdpTcpClient.NotifyOfDisconnection(Sender: TObject; ConnectionID: String);
 begin
+  // Notify that we have finished receiving messages and there will be no more
+  // data.
+
   if Assigned(Self.fOnDisconnection) then
     Self.fOnDisconnection(Sender, ConnectionID);
 end;
@@ -5925,6 +5928,8 @@ procedure TIdSdpTcpClientConnection.ClientDisconnection(Sender: TObject; Connect
 var
   Wait: TIdSdpTcpConnectionDisconnectedWait;
 begin
+  // This executes in ClientThread's context.
+
   Self.ThreadLock.Acquire;
   try
     Wait := TIdSdpTcpConnectionDisconnectedWait.Create;
@@ -5951,6 +5956,8 @@ var
   Data: TStringStream;
   Wait: TIdSdpTcpReceiveDataWait;
 begin
+  // This runs in the context of the socket-listening thread.
+
   Data := TStringStream.Create(Msg);
   try
     Wait := TIdSdpTcpReceiveDataWait.Create;
