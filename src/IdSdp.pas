@@ -775,6 +775,7 @@ type
     procedure NotifyOfConnection;
     procedure NotifyOfDisconnection;
     procedure NotifyOfException(ExceptionType: ExceptClass; ExceptionMessage: String);
+    procedure ScheduleNotification(WaitTime: Cardinal; Wait: TIdWait);
     procedure SetTimer(Value: TIdTimerQueue); virtual;
   public
     class function ClientConnectionType: TIdSdpBaseTcpConnectionClass; virtual;
@@ -920,7 +921,6 @@ type
     procedure NotifyOfConnectionInTimerContext;
     procedure NotifyOfDisconnectionInTimerContext;
     procedure ReadData(Thread: TIdPeerThread);
-    procedure ScheduleNotification(Wait: TIdWait);
   protected
     function  GetAddress: String; override;
     function  GetPeerAddress: String; override;
@@ -5388,6 +5388,12 @@ begin
   end;
 end;
 
+procedure TIdSdpBaseTcpConnection.ScheduleNotification(WaitTime: Cardinal; Wait: TIdWait);
+begin
+  if Assigned(Self.Timer) then
+    Self.Timer.AddEvent(TriggerImmediately, Wait);
+end;
+
 procedure TIdSdpBaseTcpConnection.SetTimer(Value: TIdTimerQueue);
 begin
   Self.fTimer := Value;
@@ -5924,8 +5930,7 @@ begin
     Wait := TIdSdpTcpConnectionDisconnectedWait.Create;
     Wait.ConnectionID := ConnectionID;
 
-    if Assigned(Self.Timer) then
-      Self.Timer.AddEvent(TriggerImmediately, Wait);
+    Self.ScheduleNotification(TriggerImmediately, Wait);
   finally
     Self.ThreadLock.Release;
   end;
@@ -5953,7 +5958,7 @@ begin
     Wait.Data         := Data;
     Wait.ReceivedOn   := ReceivedOn;
 
-    Self.Timer.AddEvent(TriggerImmediately, Wait);
+    Self.ScheduleNotification(TriggerImmediately, Wait);
   finally
     Data.Free;
   end;
@@ -6150,7 +6155,7 @@ begin
   Wait := TIdSdpTcpConnectionConnectedWait.Create;
   Wait.ConnectionID := Self.ID;
 
-  Self.ScheduleNotification(Wait);
+  Self.ScheduleNotification(TriggerImmediately, Wait);
 end;
 
 procedure TIdSdpTcpServerConnection.NotifyOfDisconnectionInTimerContext;
@@ -6163,7 +6168,7 @@ begin
   Wait := TIdSdpTcpConnectionDisconnectedWait.Create;
   Wait.ConnectionID := Self.ID;
 
-  Self.ScheduleNotification(Wait);
+  Self.ScheduleNotification(TriggerImmediately, Wait);
 end;
 
 procedure TIdSdpTcpServerConnection.ReadData(Thread: TIdPeerThread);
@@ -6190,12 +6195,6 @@ begin
   finally
     ReceivedOn.Free;
   end;
-end;
-
-procedure TIdSdpTcpServerConnection.ScheduleNotification(Wait: TIdWait);
-begin
-  if Assigned(Self.Timer) then
-    Self.Timer.AddEvent(TriggerImmediately, Wait);
 end;
 
 //******************************************************************************
