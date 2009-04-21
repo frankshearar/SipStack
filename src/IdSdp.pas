@@ -775,6 +775,7 @@ type
     procedure NotifyOfConnection;
     procedure NotifyOfDisconnection;
     procedure NotifyOfException(ExceptionType: ExceptClass; ExceptionMessage: String);
+    procedure RaiseSocketError(Msg: String);
     procedure ScheduleNotification(WaitTime: Cardinal; Wait: TIdWait);
     procedure SetTimer(Value: TIdTimerQueue); virtual;
   public
@@ -1567,9 +1568,10 @@ begin
     raise EConvertError.Create(Format(ConvertStrErrorMsg,
                                       [S, 'TIdIPVersion']));
 
-       if (S = Id_SDP_IP4)       then Result := Id_IPv4
-  else if (S = Id_SDP_IP6)       then Result := Id_IPv6
-  else if (S = Id_SDP_IPUnknown) then Result := Id_IPUnknown
+  if (S = Id_SDP_IP4) then
+    Result := Id_IPv4
+  else if (S = Id_SDP_IP6) then
+    Result := Id_IPv6
   else
     Result := Id_IPUnknown;
 end;
@@ -5388,6 +5390,13 @@ begin
   end;
 end;
 
+procedure TIdSdpBaseTcpConnection.RaiseSocketError(Msg: String);
+begin
+  // Make it look like this is a socket error; in a sense, it is!
+
+  raise EIdSocketError.Create(Msg);
+end;  
+
 procedure TIdSdpBaseTcpConnection.ScheduleNotification(WaitTime: Cardinal; Wait: TIdWait);
 begin
   if Assigned(Self.Timer) then
@@ -5802,7 +5811,7 @@ end;
 
 procedure TIdSdpTcpClientConnection.ListenOn(Address: String; Port: Cardinal);
 begin
-  raise ESdpException.Create('Do not call ListenOn on a client connection');
+  Self.RaiseSocketError('Do not call ListenOn on a client connection');
 end;
 
 procedure TIdSdpTcpClientConnection.SendData(Data: TStream);
@@ -5995,7 +6004,7 @@ end;
 
 procedure TIdSdpTcpServerConnection.ConnectTo(PeerAddress: String; PeerPort: Cardinal);
 begin
-  raise ESdpException.Create('Do not call ConnectTo on a server connection');
+  Self.RaiseSocketError('Do not call ConnectTo on a server connection');
 end;
 
 procedure TIdSdpTcpServerConnection.Disconnect;
@@ -6367,7 +6376,7 @@ end;
 
 procedure TIdSdpMockTcpClientConnection.ListenOn(Address: String; Port: Cardinal);
 begin
-  raise ESdpException.Create('Do not call ListenOn on a client connection');
+  Self.RaiseSocketError('Do not call ListenOn on a client connection');
 end;
 
 //* TIdSdpMockTcpClientConnection Private methods ******************************
@@ -6386,7 +6395,7 @@ end;
 
 procedure TIdSdpMockTcpServerConnection.ConnectTo(PeerAddress: String; PeerPort: Cardinal);
 begin
-  raise ESdpException.Create('Do not call ConnectTo on a server connection');
+  Self.RaiseSocketError('Do not call ConnectTo on a server connection');
 end;
 
 function TIdSdpMockTcpServerConnection.IsServer: Boolean;
