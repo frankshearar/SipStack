@@ -14,8 +14,7 @@ interface
 uses
   Classes, Contnrs, IdConnectionBindings, IdException, IdInterfacedObject,
   IdNotification, IdRoutingTable, IdSipLocation, IdSipMessage, IdSocketHandle,
-  IdSSLOpenSSL, IdTCPConnection, IdTimerQueue, PluggableLogging, SyncObjs,
-  SysUtils;
+  IdTimerQueue, PluggableLogging, SysUtils;
 
 type
   TIdSipTransport = class;
