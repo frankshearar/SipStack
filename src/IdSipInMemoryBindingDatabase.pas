@@ -91,7 +91,7 @@ function UsernameMatch(UriA, UriB: TIdSipUri): Boolean;
 implementation
 
 uses
-  DateUtils, IdRandom, IdSystem, SysUtils;
+  DateUtils, IdRandom, SysUtils;
 
 const
   ItemNotFoundIndex = -1;
