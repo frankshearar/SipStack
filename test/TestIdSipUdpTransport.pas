@@ -475,6 +475,7 @@ var
   WaitTime: Cardinal;
 begin
   // Wait for all scheduled events to execute
+
   WaitTime := Self.Timer.DefaultTimeout * 3 div 2;
 
   Self.Timer.Terminate;

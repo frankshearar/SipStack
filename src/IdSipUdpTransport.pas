@@ -200,6 +200,7 @@ begin
 
   Self.DefaultPort   := TIdSipTransportRegistry.DefaultPortFor(UdpTransport);
   Self.ThreadedEvent := true;
+  Self.TransportType := UdpTransport; // A sensible default.
 end;
 
 //* TIdSipUdpServer Protected methods ******************************************
