@@ -495,8 +495,8 @@ implementation
 uses
   ConfigUtils, IdAddressSpace, IdRegisteredObject, IdSimpleParser, IdSipDns,
   IdSipIndyLocator, IdSipLocation, IdSipInMemoryBindingDatabase,
-  IdSipMockLocator, IdSipProxyDescription, IdSipSubscribeModule, IdSystem,
-  IdUnicode, RuntimeSafety, SysUtils;
+  IdSipMockLocator, IdNetworking, IdSipProxyDescription, IdSipSubscribeModule,
+  IdSystem, IdUnicode, RuntimeSafety, SysUtils;
 
 //******************************************************************************
 //* Unit Public functions & procedures                                         *

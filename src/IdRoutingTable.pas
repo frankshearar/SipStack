@@ -12,7 +12,7 @@ unit IdRoutingTable;
 interface
 
 uses
-  Classes, Contnrs, IdSimpleParser, IdSipLocation, IdSystem;
+  Classes, Contnrs, IdNetworking, IdSimpleParser, IdSipLocation, IdSystem;
 
 type
   // I represent an entry in this machine's routing table, or a "mapped
@@ -111,8 +111,8 @@ type
   end;
 
   // Windows NT 4 doesn't support the IP Helper API's GetBestInterface function.
-  // IdSystem thus has a special version of GetBestInterface that doesn't rely
-  // on this function.
+  // The IdNetworking unit thus has a special version of GetBestInterface that doesn't
+  // rely on this function.
   TIdWindowsNT4RoutingTable = class(TIdWindowsRoutingTable)
   protected
     function  BestRouteIsDefaultRoute(DestinationIP, LocalIP: String): Boolean; override;
@@ -799,12 +799,12 @@ end;
 
 function TIdWindowsRoutingTable.GetBestLocalAddress(DestinationIP: String): String;
 begin
-  Result := IdSystem.GetBestLocalAddress(DestinationIP);
+  Result := IdNetworking.GetBestLocalAddress(DestinationIP);
 end;
 
 procedure TIdWindowsRoutingTable.GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation; DefaultPort: Cardinal);
 begin
-  LocalLocation.IPAddress := IdSystem.GetBestLocalAddress(DestinationIP);
+  LocalLocation.IPAddress := IdNetworking.GetBestLocalAddress(DestinationIP);
   LocalLocation.Port      := DefaultPort;
 end;
 
@@ -812,7 +812,7 @@ end;
 
 function TIdWindowsRoutingTable.BestRouteIsDefaultRoute(DestinationIP, LocalIP: String): Boolean;
 begin
-  Result := IdSystem.BestRouteIsDefaultRoute(DestinationIP, LocalIP);
+  Result := IdNetworking.BestRouteIsDefaultRoute(DestinationIP, LocalIP);
 end;
 
 //******************************************************************************
@@ -822,12 +822,12 @@ end;
 
 function TIdWindowsNT4RoutingTable.GetBestLocalAddress(DestinationIP: String): String;
 begin
-  Result := IdSystem.GetBestLocalAddressNT4(DestinationIP);
+  Result := IdNetworking.GetBestLocalAddressNT4(DestinationIP);
 end;
 
 procedure TIdWindowsNT4RoutingTable.GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation; DefaultPort: Cardinal);
 begin
-  LocalLocation.IPAddress := IdSystem.GetBestLocalAddressNT4(DestinationIP);
+  LocalLocation.IPAddress := IdNetworking.GetBestLocalAddressNT4(DestinationIP);
   LocalLocation.Port      := DefaultPort;
 end;
 
@@ -835,7 +835,7 @@ end;
 
 function TIdWindowsNT4RoutingTable.BestRouteIsDefaultRoute(DestinationIP, LocalIP: String): Boolean;
 begin
-  Result := IdSystem.BestRouteIsDefaultRouteNT4(DestinationIP, LocalIP);
+  Result := IdNetworking.BestRouteIsDefaultRouteNT4(DestinationIP, LocalIP);
 end;
 
 //******************************************************************************

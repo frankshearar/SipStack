@@ -125,7 +125,7 @@ function Suffix(S: String; Len: Cardinal): String;
 implementation
 
 uses
-  Classes, IdSimpleParser, IdSystem, RuntimeSafety, SysUtils;
+  Classes, IdNetworking, IdSimpleParser, RuntimeSafety, SysUtils;
 
 //******************************************************************************
 //* Unit public functions & procedures                                         *

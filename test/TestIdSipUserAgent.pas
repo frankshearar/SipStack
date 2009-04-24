@@ -399,9 +399,9 @@ implementation
 uses
   IdException, IdRegisteredObject, IdSdp, IdSimpleParser, IdSipAuthentication,
   IdSipIndyLocator, IdSipInMemoryBindingDatabase, IdSipMockLocator,
-  IdSipMockTransactionDispatcher, IdSipMockTransport, IdSipSubscribeModule,
-  IdSipTCPTransport, IdSipUDPTransport, IdSystem, IdTcpClient, IdUnicode,
-  SysUtils, TestFrameworkSipTransport;
+  IdSipMockTransactionDispatcher, IdSipMockTransport, IdNetworking,
+  IdSipSubscribeModule, IdSipTCPTransport, IdSipUDPTransport, IdSystem,
+  IdTcpClient, IdUnicode, SysUtils, TestFrameworkSipTransport;
 
 const
   // SFTF: Sip Foundry Test Framework. cf. http://www.sipfoundry.org/sftf/

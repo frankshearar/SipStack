@@ -64,7 +64,7 @@ const
 implementation
 
 uses
-  IdException, IdSimpleParser, IdSystem, SysUtils, WinSock;
+  IdException, IdNetworking, IdSimpleParser, SysUtils, WinSock;
 
 //******************************************************************************
 //* TIdSipIndyLocator                                                          *

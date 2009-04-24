@@ -1410,8 +1410,8 @@ const
 implementation
 
 uses
-  DateUtils, IdHash, IdHashMessageDigest, IdRandom, IdRegisteredObject,
-  IdSimpleParser, IdSystem, IdUnicode, Math, RuntimeSafety;
+  DateUtils, IdHash, IdHashMessageDigest, IdNetworking, IdRandom,
+  IdRegisteredObject, IdSimpleParser, IdSystem, IdUnicode, Math, RuntimeSafety;
 
 const
   JanOne1900           = 2;
