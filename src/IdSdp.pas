@@ -1095,7 +1095,7 @@ type
     fUsername:            String;
     StreamLock:           TCriticalSection;
     TimeHeader:           TIdSdpTime;
-    Timer:                TIdThreadedTimerQueue;
+    Timer:                TIdTimerQueue;
 
     procedure ClearStreams;
     function  CreateStream(Protocol: String): TIdSDPBaseMediaStream;
@@ -1108,7 +1108,7 @@ type
     procedure SetLowestAllowedPort(Value: Cardinal);
     procedure UpdateSessionVersion;
   public
-    constructor Create(Profile: TIdRTPProfile; Factory: TIdSdpMediaStreamFactory); overload;
+    constructor Create(Profile: TIdRTPProfile; Factory: TIdSdpMediaStreamFactory; ExecutionContext: TIdTimerQueue);
     destructor  Destroy; override;
 
     function  AddressTypeFor(Address: String): TIdIPVersion;
@@ -6876,11 +6876,12 @@ end;
 //******************************************************************************
 //* TIdSDPMultimediaSession Public methods *************************************
 
-constructor TIdSDPMultimediaSession.Create(Profile: TIdRTPProfile; Factory: TIdSdpMediaStreamFactory);
+constructor TIdSDPMultimediaSession.Create(Profile: TIdRTPProfile; Factory: TIdSdpMediaStreamFactory; ExecutionContext: TIdTimerQueue);
 begin
   inherited Create;
 
   Self.Factory := Factory;
+  Self.Timer   := ExecutionContext;
   Self.InternalCreate(Profile);
 end;
 
@@ -6895,7 +6896,6 @@ begin
   Self.StreamLock.Free;
 
   Self.TimeHeader.Free;
-  Self.Timer.Terminate;
 
   inherited Destroy;
 end;
@@ -7160,8 +7160,6 @@ procedure TIdSDPMultimediaSession.InternalCreate(Profile: TIdRTPProfile);
 begin
   Self.fStreams := TObjectList.Create;
   Self.StreamLock := TCriticalSection.Create;
-
-  Self.Timer := TIdThreadedTimerQueue.Create(false);
 
   Self.FirstLocalSessDesc   := true;
   Self.fLocalSessionVersion := 0;

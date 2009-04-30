@@ -1025,6 +1025,7 @@ type
     Profile:     TIdRTPProfile;
     RemotePort:  Cardinal;
     Server:      TIdUDPServer;
+    Timer:       TIdTimerQueue;
 
     procedure CheckOrigin(ExpectedNetType: String;
                           ExpectedAddressType: TIdIPVersion;
@@ -9233,8 +9234,6 @@ end;
 
 procedure TestTIdSdpTcpClientConnection.TearDown;
 begin
-  Self.Timer.Terminate;
-
   Self.Connection.RemoveDataListener(Self);
   Self.Connection.RemoveDataListener(Self.Listener);
 
@@ -9244,6 +9243,8 @@ begin
   Self.DisconnectEvent.Free;
   Self.Listener.Free;
   Self.Connection.Free;
+
+  Self.Timer.Terminate;
 
   inherited TearDown;
 end;
@@ -9307,18 +9308,24 @@ end;
 
 procedure TestTIdSdpTcpClientConnection.ReadTestData(Thread: TIdPeerThread);
 begin
-  Self.ReceivedData := Thread.Connection.ReadString(Length(Self.TestData.DataString));
+  try
+    Self.ReceivedData := Thread.Connection.ReadString(Length(Self.TestData.DataString));
+  except
+    on EIdConnClosedGracefully do;
+  end;
 
   Self.ThreadEvent.SetEvent;
 end;
 
 procedure TestTIdSdpTcpClientConnection.RegisterConnectionAttempt(Thread: TIdPeerThread);
 begin
-  Self.Connected := true;
-  Self.ConnectionAddress := Thread.Connection.Socket.Binding.PeerIP;
-  Self.ConnectionPort    := Thread.Connection.Socket.Binding.PeerPort;
+  if Thread.Connection.Connected then begin
+    Self.Connected := true;
+    Self.ConnectionAddress := Thread.Connection.Socket.Binding.PeerIP;
+    Self.ConnectionPort    := Thread.Connection.Socket.Binding.PeerPort;
 
-  Self.ServerEvent.SetEvent;
+    Self.ServerEvent.SetEvent;
+  end;
 end;
 
 function TestTIdSdpTcpClientConnection.ServerIP: String;
@@ -9343,8 +9350,13 @@ var
 begin
   Connections := Self.Server.Threads.LockList;
   try
-    for I := 0 to Connections.Count - 1 do
-      TIdPeerThread(Connections[I]).Connection.WriteStream(Chunk);
+    for I := 0 to Connections.Count - 1 do begin
+      try
+        TIdPeerThread(Connections[I]).Connection.WriteStream(Chunk);
+      except
+        on EIdConnClosedGracefully do;
+      end;
+    end;
   finally
     Self.Server.Threads.UnlockList;
   end;
@@ -11096,7 +11108,8 @@ begin
 
   Self.Factory     := TMockMediaStreamFactory.Create;
   Self.Profile     := TIdAudioVisualProfile.Create;
-  Self.MS          := TIdSDPMultimediaSession.Create(Self.Profile, Self.Factory);
+  Self.Timer       := TIdThreadedTimerQueue.Create(false);
+  Self.MS          := TIdSDPMultimediaSession.Create(Self.Profile, Self.Factory, Self.Timer);
   Self.PortBlocker := TIdMockRTPPeer.Create;
 
   // We only instantiate Server so that we know that GStack points to an
@@ -11111,6 +11124,7 @@ begin
   Self.MS.Free;
   Self.Profile.Free;
   Self.Factory.Free;
+  Self.Timer.Terminate;
 
   inherited TearDown;
 end;
