@@ -24,10 +24,10 @@ type
   private
     fOnException: TIdExceptionThreadEvent;
 
-    procedure DoOnException(E: Exception);
   protected
     procedure AfterRun; virtual;
     procedure BeforeRun; virtual;
+    procedure DoOnException(E: Exception); virtual;
     procedure Execute; override;
     procedure Run; virtual;
   public
@@ -80,6 +80,12 @@ begin
   // By default do nothing.
 end;
 
+procedure TIdBaseThread.DoOnException(E: Exception);
+begin
+  if Assigned(Self.OnException) then
+    Self.OnException(Self, E);
+end;
+
 procedure TIdBaseThread.Execute;
 begin
   try
@@ -99,14 +105,6 @@ procedure TIdBaseThread.Run;
 begin
   // By default, do nothing. If you don't override this method, the thread
   // simply terminates immediately.
-end;
-
-//* TIdBaseThread Private methods **********************************************
-
-procedure TIdBaseThread.DoOnException(E: Exception);
-begin
-  if Assigned(Self.OnException) then
-    Self.OnException(Self, E);
 end;
 
 end.

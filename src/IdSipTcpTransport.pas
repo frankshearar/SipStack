@@ -89,8 +89,8 @@ type
   protected
     procedure AfterRun; override;
     function  ClientType: TIdSipTcpClientClass; virtual;
+    procedure DoOnException(E: Exception); override;
     function  GetTimer: TIdTimerQueue; override;
-    procedure NotifyOfException(E: Exception); override;
     procedure Run; override;
     procedure SetTimer(Value: TIdTimerQueue); override;
   public
@@ -715,12 +715,7 @@ begin
   Result := TIdSipTcpClient;
 end;
 
-function TIdSipTcpClientThread.GetTimer: TIdTimerQueue;
-begin
-  Result := Self.Transport.Timer;
-end;
-
-procedure TIdSipTcpClientThread.NotifyOfException(E: Exception);
+procedure TIdSipTcpClientThread.DoOnException(E: Exception);
 var
   Wait: TIdSipMessageExceptionWait;
 begin
@@ -734,22 +729,23 @@ begin
   Wait.TransportID      := Self.Transport.ID;
 
   Self.Timer.AddEvent(TriggerImmediately, Wait);
+
+  inherited DoOnException(E);
+end;
+
+function TIdSipTcpClientThread.GetTimer: TIdTimerQueue;
+begin
+  Result := Self.Transport.Timer;
 end;
 
 procedure TIdSipTcpClientThread.Run;
 begin
   try
-    try
-      Self.SipClient.Send(Self.FirstMsg);
-      Self.SipClient.ReceiveMessages;
-    finally
-      Self.SipClient.Disconnect;
-    end;
+    Self.SipClient.Send(Self.FirstMsg);
+    Self.SipClient.ReceiveMessages;
   except
     on EIdConnClosedGracefully do;
     on EIdConnectTimeout do;
-    on E: Exception do
-      Self.NotifyOfException(E);
   end;
 end;
 

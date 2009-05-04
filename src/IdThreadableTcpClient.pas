@@ -16,13 +16,17 @@ uses
   SysUtils;
 
 type
+  TIdThreadableTcpClient = class;
+
   TReceiveMessageProc = procedure(Sender: TObject; Msg: String; ReceivedOn: TIdConnectionBindings) of object;
+  TIdSdpTcpClientProc = procedure(C: TIdThreadableTcpClient) of object;
 
   // I provide a way of receiving data and notifying a TimerQueue. My subclasses
   // schedule TIdWaits in the TimerQueue.
   TIdThreadableTcpClient = class(TIdTCPClient)
   private
     fConserveConnections: Boolean;
+    fOnIdle:              TIdSdpTcpClientProc;
     fOnReceiveMessage:    TReceiveMessageProc;
     fTerminated:          Boolean;
 
@@ -31,6 +35,7 @@ type
     procedure SetTerminated(Value: Boolean);
   protected
     function  DefaultTimeout: Cardinal; virtual;
+    procedure DoOnIdle(C: TIdThreadableTcpClient);
     function  GetTimer: TIdTimerQueue; virtual;
     procedure ReceiveMessage(Msg: String; ReceivedOn: TIdConnectionBindings); overload; virtual;
     procedure ReceiveMessage(Msg: TStream; ReceivedOn: TIdConnectionBindings); overload; virtual;
@@ -42,30 +47,26 @@ type
     procedure ReceiveMessages; virtual;
 
     property ConserveConnections: Boolean             read fConserveConnections write SetConserveConnections;
+    property OnIdle:              TIdSdpTcpClientProc read fOnIdle write fOnIdle;
     property OnReceiveMessage:    TReceiveMessageProc read fOnReceiveMessage write fOnReceiveMessage;
     property Terminated:          Boolean             read fTerminated write SetTerminated;
     property Timer:               TIdTimerQueue       read GetTimer write SetTimer;
   end;
 
-  TExceptionEvent = procedure(Sender: TObject; E: Exception) of object;
-
   // I allow a TIdThreadableTcpClient to run in the context of its own thread.
   TIdThreadedTcpClient = class(TIdBaseThread)
   private
-    fClient:      TIdThreadableTcpClient;
-    fOnException: TExceptionEvent;
+    fClient: TIdThreadableTcpClient;
   protected
     function  GetTimer: TIdTimerQueue; virtual;
-    procedure NotifyOfException(E: Exception); virtual;
     procedure SetTimer(Value: TIdTimerQueue); virtual;
   public
     constructor Create(Connection: TIdThreadableTcpClient); reintroduce;
 
     procedure Terminate; override;
 
-    property OnException: TExceptionEvent        read fOnException write fOnException;
-    property Client:      TIdThreadableTcpClient read fClient;
-    property Timer:       TIdTimerQueue          read GetTimer write SetTimer;
+    property Client: TIdThreadableTcpClient read fClient;
+    property Timer:  TIdTimerQueue          read GetTimer write SetTimer;
   end;
 
 const
@@ -108,6 +109,12 @@ end;
 function TIdThreadableTcpClient.DefaultTimeout: Cardinal;
 begin
   Result := FiveSeconds;
+end;
+
+procedure TIdThreadableTcpClient.DoOnIdle(C: TIdThreadableTcpClient);
+begin
+  if Assigned(Self.fOnIdle) then
+    Self.fOnIdle(C);
 end;
 
 function TIdThreadableTcpClient.GetTimer: TIdTimerQueue;
@@ -190,12 +197,6 @@ function TIdThreadedTcpClient.GetTimer: TIdTimerQueue;
 begin
   Result := nil;
   RaiseAbstractError(Self.ClassName, 'GetTimer');
-end;
-
-procedure TIdThreadedTcpClient.NotifyOfException(E: Exception);
-begin
-  if Assigned(Self.fOnException) then
-    Self.fOnException(Self, E);
 end;
 
 procedure TIdThreadedTcpClient.SetTimer(Value: TIdTimerQueue);
