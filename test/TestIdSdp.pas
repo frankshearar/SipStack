@@ -9204,10 +9204,14 @@ begin
 
   Self.Timer := TIdThreadedTimerQueue.Create(false);
 
-  Self.Connected         := false;
-  Self.ConnectionAddress := '';
-  Self.ConnectionPort    := 0;
-  Self.FirstExecute      := true;
+  Self.CollectedReceivedData := '';
+  Self.Connected             := false;
+  Self.ConnectionAddress     := '';
+  Self.ConnectionPort        := 0;
+  Self.ExceptionMessage      := '';
+  Self.ExceptionType         := nil;
+  Self.FirstExecute          := true;
+  Self.ReceivedData          := '';
 
   Self.Connection := TIdSdpTcpClientConnection.Create;
   Self.Connection.Timeout := Self.DefaultTimeout div 2;
