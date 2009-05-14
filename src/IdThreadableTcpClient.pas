@@ -61,7 +61,7 @@ type
     function  GetTimer: TIdTimerQueue; virtual;
     procedure SetTimer(Value: TIdTimerQueue); virtual;
   public
-    constructor Create(Connection: TIdThreadableTcpClient); reintroduce;
+    constructor Create(Connection: TIdThreadableTcpClient); reintroduce; virtual;
 
     procedure Terminate; override;
 
