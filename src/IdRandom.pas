@@ -206,13 +206,15 @@ begin
 end;
 
 function TIdBasicRandomNumber.Next128bitNumber: String;
+var
+  I: Integer;
 begin
   // This function returns something as cryptographically secure as the
   // operating system's UUID construction.
 
-  Result := StringReplace(ConstructUUID, '-', '', [rfReplaceAll]);
-
-  Result := StripLeadingZeroes(Result);
+  Result := '';
+  for I := 1 to (128 div 32) do
+    Result := Result + Self.NextHexString;
 end;
 
 //* TIdBasicRandomNumber Private methods ***************************************
