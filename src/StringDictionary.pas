@@ -26,6 +26,8 @@ type
     property Value: String read fValue write fValue;
   end;
 
+  // A dictionary containing String keys and values.
+  // It uses Quicksort to sort, and binary search to find keys.
   TStringDictionary = class(TObject)
   private
     Associations: TObjectList;
