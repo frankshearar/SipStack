@@ -5689,7 +5689,7 @@ begin
     on EIdConnClosedGracefully do;
     on EIdConnectTimeout do;
     on E: Exception do begin
-      Self.NotifyOfException(E);
+//      Self.NotifyOfException(E);
       raise E;
     end;
   end;
