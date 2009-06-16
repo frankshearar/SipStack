@@ -128,6 +128,8 @@ begin
 end;
 
 function TIdRandomNumber.NextRandomBits(NumBits: Cardinal): Cardinal;
+const
+  HighTwoBytes = 65536; // 2^16
 begin
   // Return a random Cardinal in the range 0 <= Result < 2^NumBits.
 
@@ -145,7 +147,7 @@ begin
   if (NumBits >= 32) then begin
     // Typecast because Random returns an Integer and shift-lefting the value
     // will often cause a range error (whenever the MSB is set).
-    Result := (Cardinal(Random(65536)) shl 16) or Cardinal(Random(65536));
+    Result := (Cardinal(Random(HighTwoBytes)) shl 16) or Cardinal(Random(HighTwoBytes));
   end
   else
     Result := Random(1 shl NumBits);
