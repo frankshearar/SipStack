@@ -145,7 +145,7 @@ begin
   if (NumBits >= 32) then begin
     // Typecast because Random returns an Integer and shift-lefting the value
     // will often cause a range error (whenever the MSB is set).
-    Result := (Cardinal(Random(65536)) shl 16) or Random(65536);
+    Result := (Cardinal(Random(65536)) shl 16) or Cardinal(Random(65536));
   end
   else
     Result := Random(1 shl NumBits);
