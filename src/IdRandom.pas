@@ -138,14 +138,15 @@ begin
 
   // This function lies a bit. You can easily ask for a number with 64 bits,
   // but you'll only get a 32 bit value.
-  // We have a funny typecast because Random returns an Integer less than or
-  // equal to High(Cardinal). What that means is that instead of
-  // 0 <= N < High(Cardinal) you actually get a number
-  // -High(Cardinal) <= N < High(Cardinal). Typecasting reinterprets these bits
-  // as a Cardinal, giving us a full 32-bit value & not a 31-bit value.
+  // Random takes an Integer for the range so the largest "random" number it
+  // could return is High(Integer), which is strictly less than High(Cardinal).
+  // Thus we construct a 32-bit random value from two 16-bit random values.
 
-  if (NumBits >= 32) then
-    Result := Cardinal(Random(High(Cardinal)))
+  if (NumBits >= 32) then begin
+    // Typecast because Random returns an Integer and shift-lefting the value
+    // will often cause a range error (whenever the MSB is set).
+    Result := (Cardinal(Random(65536)) shl 16) or Random(65536);
+  end
   else
     Result := Random(1 shl NumBits);
 end;
