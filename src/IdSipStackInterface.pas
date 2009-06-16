@@ -642,6 +642,7 @@ type
 
     procedure SetID(Value: TIdSipDialogID);
   protected
+    function Data: String; override;
     function EventName: String; override;
   public
     constructor Create; override;
@@ -3476,6 +3477,12 @@ begin
 end;
 
 //* TIdEstablishedSessionData Protected methods ********************************
+
+function TIdEstablishedSessionData.Data: String;
+begin
+  Result := inherited Data
+          + 'Dialog ID: ' + Self.ID.AsString + CRLF;
+end;
 
 function TIdEstablishedSessionData.EventName: String;
 begin
