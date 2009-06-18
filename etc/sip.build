@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <project name="SIP" default="build" basedir="..">
-  <description>The Hello World of build files.</description>
+  <description>SIP stack for Windows</description>
   <property name="debug" value="true" overwrite="false" />
   <target name="clean" description="remove all generated files">
     <delete file="bin\SIP.exe" failonerror="false" />
@@ -12,14 +12,49 @@
       </fileset>
     </delete>
   </target>
-  <target name="build" description="compiles the source code" depends="clean">
-    <exec program="dcc32" basedir="\Program Files\Borland\Delphi7\bin">
-      <arg value="SIP.dpr" />
+  <target name="build-d6" description="Compiles the source code for Delphi 6" depends="clean">
+    <exec program="dcc32" basedir="C:\Program Files\Borland\Delphi6\bin">
       <arg value="-B" />
       <arg value="-CC" />
-      <arg value="-N0build" />
-      <arg value="-Ebin" />
-      <arg value="-U&quot;\Program Files\Borland\Delphi7\Imports\dunit\src&quot;" />
+      <arg value="-E.\bin" />
+      <arg value="-IC:\Program Files\Borland\Delphi6\source\Indy9" />
+      <arg value="-LE.\bin" />
+      <arg value="-N0.\build" />
+      <arg value="-OC:\Program Files\Borland\Delphi6\source\Indy9" />
+      <arg value="-UC:\Program Files\Borland\Delphi6\source\Indy9" />
+      <arg value="-RC:\Program Files\Borland\Delphi6\source\Indy9;C:\Program Files\Borland\Delphi6\lib" />
+      <arg value="SIP.dpr" />
     </exec>
+  </target>
+  <target name="build-d7" description="Compiles the source code for Delphi 7" depends="clean">
+    <exec program="dcc32" basedir="C:\Program Files\Borland\Delphi7\bin">
+      <arg value="-B" />
+      <arg value="-CC" />
+      <arg value="-E.\bin" />
+      <arg value="-IC:\Program Files\Borland\Delphi7\source\Indy9" />
+      <arg value="-LE.\bin" />
+      <arg value="-N0.\build" />
+      <arg value="-OC:\Program Files\Borland\Delphi7\source\Indy9" />
+      <arg value="-UC:\Program Files\Borland\Delphi7\source\Indy9" />
+      <arg value="-RC:\Program Files\Borland\Delphi7\source\Indy9;C:\Program Files\Borland\Delphi7\lib" />
+      <arg value="SIP.dpr" />
+    </exec>
+  </target>
+  <target name="build-d2006" description="Compiles the source code for Delphi 2006" depends="clean">
+    <exec program="dcc32" basedir="C:\Program Files\Borland\BDS\4.0\bin">
+      <arg value="-B" />
+      <arg value="-CC" />
+      <arg value="-E.\bin" />
+      <arg value="-IC:\Program Files\Borland\BDS\4.0\source\Indy9" />
+      <arg value="-LE.\bin" />
+      <arg value="-N0.\build" />
+      <arg value="-OC:\Program Files\Borland\BDS\4.0\source\Indy9" />
+      <arg value="-UC:\Program Files\Borland\BDS\4.0\source\Indy9" />
+      <arg value="-RC:\Program Files\Borland\BDS\4.0\source\Indy9;C:\Program Files\Borland\BDS\4.0\lib" />
+      <arg value="SIP.dpr" />
+    </exec>
+  </target>
+  <target name="test" description="Test the application. Assumes $TEST.">
+    <exec program="SIP.exe" basedir="bin" />
   </target>
 </project>
