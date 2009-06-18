@@ -2578,9 +2578,14 @@ begin
   try
     with Server.Bindings.Add do begin
       Address := LocalAddress;
-      Port    := DefaultSipPort
+      Port    := DefaultSipPort;
     end;
-    Server.Active := true;
+    try
+      Server.Active := true;
+    except
+      on E: Exception do
+        Fail(Format('Failed to open port %s:%d (%s)', [LocalAddress, DefaultSipPort, E.ClassName + ' ' + E.Message])); 
+    end;
 
     Self.Configuration.Add(Format('Listen: UDP %s:%d', ['127.0.0.1', Server.Bindings[0].Port]));
 
