@@ -2218,7 +2218,9 @@ begin
   Self.NewRegistrar.Active        := true;
 
   Self.Server := TIdUDPServer.Create(nil);
-  Self.Server.DefaultPort   := Self.FirstFreeLocalIPv4Port(Self.Port + 10000);
+  Self.Server.Bindings.Add;
+  Self.Server.Bindings[0].IP := LocalAddress;
+  Self.Server.Bindings[0].Port   := Self.Port + 10000;
   Self.Server.OnUDPRead     := Self.NoteReceiptOfPacket;
   Self.Server.ThreadedEvent := true;
   Self.Server.Active        := true;
@@ -2605,7 +2607,7 @@ var
 begin
   // Any network actions (like registering) can only happen once we've
   // configured the Transport layer. Same goes for configuring the NameServer.
-  Self.Configuration.Add('Register: sip:127.0.0.1:' + IntToStr(Self.Server.DefaultPort));
+  Self.Configuration.Add(Format('Register: sip:%s:%d', [Self.Server.Bindings[0].IP, Self.Server.Bindings[0].Port]));
   Self.Configuration.Add('Listen: UDP 127.0.0.1:5060');
   Self.Configuration.Add('NameServer: MOCK');
 
@@ -2948,7 +2950,7 @@ begin
 
     CheckEquals(GetBestLocalAddress(LanDestination),
                 UA.RoutingTable.LocalOrMappedAddressFor(LanDestination),
-                'UA routing table not consulting OS (Localaddress = ' + LocalAddress + ')');
+                'UA routing table not consulting OS (LocalAddress = ' + LanIP + ')');
     CheckLocalAddress(UA, InternetGateway, InternetDestination, 'Internet mapped route not used');
     CheckLocalAddress(UA, VpnGateway, VpnDestination, 'Vpn mapped route not used');
   finally
