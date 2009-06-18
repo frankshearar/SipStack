@@ -165,11 +165,15 @@ const
   AddressOne = '1.2.3.4';
   AddressTwo = '2.4.6.8';
 begin
-  DefineLocalAddress(AddressOne);
-  CheckEquals(AddressOne, LocalAddress, 'LocalAddress not set to the defined local address');
+  try
+    DefineLocalAddress(AddressOne);
+    CheckEquals(AddressOne, LocalAddress, 'LocalAddress not set to the defined local address');
 
-  DefineLocalAddress(AddressTwo);
-  CheckEquals(AddressTwo, LocalAddress, 'LocalAddress not re-set');
+    DefineLocalAddress(AddressTwo);
+    CheckEquals(AddressTwo, LocalAddress, 'LocalAddress not re-set');
+  finally
+    DefineLocalAddress('');
+  end;
 end;
 
 procedure TestFunctions.TestDefineRoutableAddress;
