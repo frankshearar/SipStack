@@ -2584,7 +2584,7 @@ begin
       Server.Active := true;
     except
       on E: Exception do
-        Fail(Format('Failed to open port %s:%d (%s)', [LocalAddress, DefaultSipPort, E.ClassName + ' ' + E.Message])); 
+        Fail(Format('Failed to open port %s:%d/tcp (%s)', [LocalAddress, DefaultSipPort, E.ClassName + ' ' + E.Message]));
     end;
 
     Self.Configuration.Add(Format('Listen: UDP %s:%d', ['127.0.0.1', Server.Bindings[0].Port]));
@@ -2948,7 +2948,7 @@ begin
 
     CheckEquals(GetBestLocalAddress(LanDestination),
                 UA.RoutingTable.LocalOrMappedAddressFor(LanDestination),
-                'UA routing table not consulting OS');
+                'UA routing table not consulting OS (Localaddress = ' + LocalAddress + ')');
     CheckLocalAddress(UA, InternetGateway, InternetDestination, 'Internet mapped route not used');
     CheckLocalAddress(UA, VpnGateway, VpnDestination, 'Vpn mapped route not used');
   finally
