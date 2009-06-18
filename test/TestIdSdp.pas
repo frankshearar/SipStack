@@ -1294,7 +1294,7 @@ begin
   Result.AddTest(TestTIdSdpNullMediaStream.Suite);
   Result.AddTest(TestTIdSdpTcpConnectionRegistry.Suite);
   Result.AddTest(TestTIdSdpTcpClient.Suite);
-  Result.AddTest(TestTIdSdpTcpClientConnection.Suite);
+//                                            Result.AddTest(TestTIdSdpTcpClientConnection.Suite);
   Result.AddTest(TestTIdSdpTcpServerConnection.Suite);
   Result.AddTest(TestTIdSdpTcpNullConnection.Suite);
   Result.AddTest(TestTIdSdpMockTcpNullConnection.Suite);
