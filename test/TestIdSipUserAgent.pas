@@ -196,6 +196,7 @@ type
     function  CreateUserAgentWithUsesGruuDirective(Configuration: TStrings; Value: String): TIdSipUserAgent;
     procedure CheckConfigurationInstanceIdAndRegister(ExtraDirectives: TStrings;
                                                       InstanceID: String);
+    function  FirstFreeLocalIPv4Port(BasePort: Cardinal): Cardinal;
     procedure NoteReceiptOfPacket(Sender: TObject;
                                   AData: TStream;
                                   ABinding: TIdSocketHandle);
@@ -401,7 +402,7 @@ uses
   IdSipIndyLocator, IdSipInMemoryBindingDatabase, IdSipMockLocator,
   IdSipMockTransactionDispatcher, IdSipMockTransport, IdNetworking,
   IdSipSubscribeModule, IdSipTCPTransport, IdSipUDPTransport, IdSystem,
-  IdTcpClient, IdUnicode, SysUtils, TestFrameworkSipTransport;
+  IdTcpClient, IdTcpServer, IdUnicode, SysUtils, TestFrameworkSipTransport;
 
 const
   // SFTF: Sip Foundry Test Framework. cf. http://www.sipfoundry.org/sftf/
@@ -2208,16 +2209,16 @@ begin
 
   Self.NewRegistrarEvent := TSimpleEvent.Create;
 
-  Self.Port := 5060;
+  Self.Port := Self.FirstFreeLocalIPv4Port(5060);
 
   Self.NewRegistrar := TIdUDPServer.Create(nil);
-  Self.NewRegistrar.DefaultPort   := Self.Port + 11000;
+  Self.NewRegistrar.DefaultPort   := Self.FirstFreeLocalIPv4Port(Self.Port + 11000);
   Self.NewRegistrar.OnUDPRead     := Self.NoteReceiptOfPacketOldRegistrar;
   Self.NewRegistrar.ThreadedEvent := true;
   Self.NewRegistrar.Active        := true;
 
   Self.Server := TIdUDPServer.Create(nil);
-  Self.Server.DefaultPort   := Self.Port + 10000;
+  Self.Server.DefaultPort   := Self.FirstFreeLocalIPv4Port(Self.Port + 10000);
   Self.Server.OnUDPRead     := Self.NoteReceiptOfPacket;
   Self.Server.ThreadedEvent := true;
   Self.Server.Active        := true;
@@ -2433,6 +2434,34 @@ begin
     CheckEquals(InstanceID, Self.ReceivedRequest.FirstContact.SipInstance, '"sip.instance" parameter');
   finally
     UA.Free;
+  end;
+end;
+
+function TestTIdSipStackConfigurator.FirstFreeLocalIPv4Port(BasePort: Cardinal): Cardinal;
+const
+  HighestPort = 65535;
+var
+  S: TIdTcpServer;
+begin
+  S := TIdTcpServer.Create(nil);
+  try
+    S.Bindings.Add;
+    S.Bindings[0].IP := '127.0.0.1';
+    S.Bindings[0].Port := BasePort;
+    while (S.Bindings[0].Port <= HighestPort) do begin
+      try
+        S.Active := true;
+        Break;
+      except
+        on EIdCouldNotBindSocket do
+        S.Bindings[0].Port := S.Bindings[0].Port + 1;
+      end;
+      S.Active := false;
+    end;
+
+    Result := S.Bindings[0].Port;
+  finally
+    S.Free;
   end;
 end;
 
