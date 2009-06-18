@@ -30,7 +30,14 @@ function  NtoHL(N: Cardinal): Cardinal;
 function  OnSameNetwork(AAddress1, AAddress2: String): Boolean; overload;
 function  OnSameNetwork(Address1, Address2, Netmask: String): Boolean; overload;
 function  ResolveARecords(Name: String; ResolvedList: TStrings): Integer;
+procedure RestoreARecordsFunc;
 function  RoutableAddress: String;
+
+type
+  TResolverFunc = function(Name: String; ResolvedList: TStrings): Integer;
+
+var
+  ResolveARecordsFunc: TResolverFunc;
 
 implementation
 
@@ -219,6 +226,43 @@ begin
     end;
   finally
     FreeMem(Table);
+  end;
+end;
+
+function ResolveARecordsDefault(Name: String; ResolvedList: TStrings): Integer;
+var
+  AHostEnt: PHostEnt;
+  I, J:     Integer;
+  AString:  String;
+begin
+  // Given a domain name Name, ask the OS's nameserver to resolve Name and
+  // store the list of IPs, if any, in ResolvedList. If the call succeeds,
+  // return 0. Otherwise, return the Winsock error.
+
+  PossiblyInitialiseWinsock;
+  ResolvedList.Clear;
+  AHostEnt := GetHostByName(PChar(Name));
+  if (AHostEnt <> nil) then begin
+    if (AHostEnt.h_addrtype = AF_INET) then begin
+      I := 0;
+      while (AHostEnt^.h_addr_list[I] <> nil) do begin
+        AString := '';
+        for J := 0 to AHostEnt^.h_length - 1 do begin
+          if (J > 0) then
+             AString := AString + '.';
+          AString := AString + IntToStr(AHostEnt^.h_addr_list[I]^[J]);
+        end;
+        ResolvedList.Add(AString);
+        Inc(I);
+      end;
+      Result := 0;
+    end
+    else
+      Result := WSANO_DATA;
+  end
+  else
+  begin
+    Result := WSAGetLastError;
   end;
 end;
 
@@ -461,36 +505,13 @@ begin
 end;
 
 function ResolveARecords(Name: String; ResolvedList: TStrings): Integer;
-var
-  AHostEnt: PHostEnt;
-  I, J:     Integer;
-  AString:  String;
 begin
-  PossiblyInitialiseWinsock;
-  ResolvedList.Clear;
-  AHostEnt := GetHostByName(PChar(Name));
-  if (AHostEnt <> nil) then begin
-    if (AHostEnt.h_addrtype = AF_INET) then begin
-      I := 0;
-      while (AHostEnt^.h_addr_list[I] <> nil) do begin
-        AString := '';
-        for J := 0 to AHostEnt^.h_length - 1 do begin
-          if (J > 0) then
-             AString := AString + '.';
-          AString := AString + IntToStr(AHostEnt^.h_addr_list[I]^[J]);
-        end;
-        ResolvedList.Add(AString);
-        Inc(I);
-      end;
-      Result := 0;
-    end
-    else
-      Result := WSANO_DATA;
-  end
-  else
-  begin
-    Result := WSAGetLastError;
-  end;
+  Result := ResolveARecordsFunc(Name, ResolvedList);
+end;
+
+procedure RestoreARecordsFunc;
+begin
+  ResolveARecordsFunc := ResolveARecordsDefault;
 end;
 
 function RoutableAddress: String;
@@ -516,6 +537,7 @@ initialization
   idNetMask:='0.0.0.0';
 
   WinsockLock := TCriticalSection.Create;
+  RestoreARecordsFunc;
 finalization
   if WinsockStarted then
     WSACleanup;
