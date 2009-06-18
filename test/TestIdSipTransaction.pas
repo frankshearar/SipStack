@@ -96,8 +96,6 @@ type
                         Response: TIdSipResponse): TIdSipRequest; overload;
     function  CreateMultipleChoices(Request: TIdSipRequest): TIdSipResponse;
     procedure MarkSentRequestCount;
-    procedure MoveTranToCompleted(Tran: TIdSipClientTransaction); overload;
-    procedure MoveTranToCompleted(Tran: TIdSipServerTransaction); overload;
     procedure OnFail(Transaction: TIdSipTransaction;
                      FailedMessage: TIdSipMessage;
                      const Reason: String);
@@ -1106,30 +1104,6 @@ end;
 procedure TestTIdSipTransactionDispatcher.MarkSentRequestCount;
 begin
   Self.RequestCount := Self.SentRequestCount;
-end;
-
-procedure TestTIdSipTransactionDispatcher.MoveTranToCompleted(Tran: TIdSipClientTransaction);
-var
-  Ok: TIdSipResponse;
-begin
-  Ok := TIdSipResponse.InResponseTo(Tran.InitialRequest, SIPBadRequest);
-  try
-    Self.MockTransport.FireOnResponse(Ok);
-  finally
-    Ok.Free;
-  end;
-end;
-
-procedure TestTIdSipTransactionDispatcher.MoveTranToCompleted(Tran: TIdSipServerTransaction);
-var
-  Ok: TIdSipResponse;
-begin
-  Ok := TIdSipResponse.InResponseTo(Tran.InitialRequest, SIPBadRequest);
-  try
-    Self.D.SendResponse(Ok);
-  finally
-    Ok.Free;
-  end;
 end;
 
 procedure TestTIdSipTransactionDispatcher.OnFail(Transaction: TIdSipTransaction;
