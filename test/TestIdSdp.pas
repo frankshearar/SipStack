@@ -918,7 +918,7 @@ type
     procedure ReceiveDataOn(S: TIdSdpBaseMediaStream); override;
     procedure SendData(Stream: TIdSdpBaseMediaStream); override;
   public
-    procedure Setup; override;
+    procedure SetUp; override;
     procedure TearDown; override;
 
     procedure CheckPortActive(Address: String;
