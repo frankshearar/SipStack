@@ -1486,7 +1486,7 @@ begin
   CheckEquals(IntToHex(Low(Int64) + 1, 16),
               IntToHex(TwosComplement(High(Int64)), 16),
               'High(Int64)');
-  CheckEquals(IntToHex($fffffffffffffffb, 16),
+  CheckEquals(IntToHex(Int64($fffffffffffffffb), 16),
               IntToHex(TwosComplement(5), 16),
               '5');
 end;
