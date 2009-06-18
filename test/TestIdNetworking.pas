@@ -37,7 +37,7 @@ type
     procedure TestOnSameNetworkWithMixedAddresses;
     procedure TestOnSameNetworkWithNetmask;
     procedure TestOnSameNetworkWithNetmaskIPv6;
-    procedure TestResolveARecords;
+//    procedure TestResolveARecords;
   end;
 
 implementation
@@ -472,11 +472,16 @@ begin
   Check(not OnSameNetwork('::1', '::1:1:1:1:1:1:1', 'ff:ff:ff:ff:ff:ff:ff:ff::'), '::1/128 + ::1:1:1:1:1:1:1/128');
   Check(not OnSameNetwork('::1', '1:1:1:1:1:1:1:1', 'ff:ff:ff:ff:ff:ff:ff:ff::'), '::1/128 + 1:1:1:1:1:1:1:1/128');
 end;
-
+{
 procedure TestFunctions.TestResolveARecords;
 var
   Addresses: TStringList;
 begin
+  // Small problem: this test assumes, incorrectly, that ResolveARecords
+  // contacts Self.NameServer. It doesn't. It requires your local nameserver to
+  // have two A records for paranoid.leo-ix.net. The author is the only one with
+  // such a setup.
+
   CheckPortFree('127.0.0.1', 53, 'This test requires a free port: 127.0.0.1:53/udp');
 
   Self.NameServer.AddAnswer(Self.NameServer.ARecords);
@@ -494,7 +499,7 @@ begin
     Addresses.Free;
   end;
 end;
-
+}
 initialization
   RegisterTest('System-specific network functions', Suite);
 end.
