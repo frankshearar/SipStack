@@ -2212,15 +2212,13 @@ begin
   Self.Port := Self.FirstFreeLocalIPv4Port(5060);
 
   Self.NewRegistrar := TIdUDPServer.Create(nil);
-  Self.NewRegistrar.DefaultPort   := Self.FirstFreeLocalIPv4Port(Self.Port + 11000);
+  Self.NewRegistrar.DefaultPort   := Self.Port + 11000;
   Self.NewRegistrar.OnUDPRead     := Self.NoteReceiptOfPacketOldRegistrar;
   Self.NewRegistrar.ThreadedEvent := true;
   Self.NewRegistrar.Active        := true;
 
   Self.Server := TIdUDPServer.Create(nil);
-  Self.Server.Bindings.Add;
-  Self.Server.Bindings[0].IP := LocalAddress;
-  Self.Server.Bindings[0].Port   := Self.Port + 10000;
+  Self.Server.DefaultPort   := Self.Port + 10000;
   Self.Server.OnUDPRead     := Self.NoteReceiptOfPacket;
   Self.Server.ThreadedEvent := true;
   Self.Server.Active        := true;
@@ -2418,7 +2416,6 @@ var
 begin
   Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
   Self.Configuration.Add('NameServer: MOCK');
-  Self.Configuration.Add('Registrar: sip:gw1.leo-ix.net');
   Self.Configuration.Add('UseGruu: true');
   Self.Configuration.AddStrings(ExtraDirectives);
 
@@ -2607,7 +2604,7 @@ var
 begin
   // Any network actions (like registering) can only happen once we've
   // configured the Transport layer. Same goes for configuring the NameServer.
-  Self.Configuration.Add(Format('Register: sip:%s:%d', [Self.Server.Bindings[0].IP, Self.Server.Bindings[0].Port]));
+  Self.Configuration.Add(Format('Register: sip:%s:%d', [LocalAddress, Self.Server.DefaultPort]));
   Self.Configuration.Add('Listen: UDP 127.0.0.1:5060');
   Self.Configuration.Add('NameServer: MOCK');
 
