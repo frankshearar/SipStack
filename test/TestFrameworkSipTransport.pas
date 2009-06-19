@@ -438,7 +438,6 @@ begin
 
   Self.LogName := Self.FTestName + 'Log';
   Self.TestRef := $decafbad;
-  TIdObjectRegistry.Singleton.SetLogger(Self.TestRef);
 
   TIdSipTransportRegistry.RegisterTransportType(Self.TransportType.GetTransportType,
                                                 Self.TransportType);

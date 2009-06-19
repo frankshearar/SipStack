@@ -55,7 +55,6 @@ type
     procedure CollectAllObjectsOfClass(SearchType: TClass; Results: TStrings; AllowSubclassTypes: Boolean = true);
     function  FindObject(ObjectID: String): TObject;
     function  RegisterObject(Instance: TObject): String;
-    procedure SetLogger(SourceRef: Cardinal);
     procedure UnregisterObject(ObjectID: String);
   end;
 
@@ -192,16 +191,6 @@ begin
 
     Self.ObjectRegistry.AddObject(Result, Instance);
     Self.Log(Format(RegisterLogMsg, [Instance.ClassName, Result]));
-  finally
-    Self.Unlock;
-  end;
-end;
-
-procedure TIdObjectRegistry.SetLogger(SourceRef: Cardinal);
-begin
-  Self.Lock;
-  try
-    SourceRef := SourceRef;
   finally
     Self.Unlock;
   end;
