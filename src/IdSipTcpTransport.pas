@@ -319,7 +319,11 @@ type
 implementation
 
 uses
-  IdException, IdIndyUtils, IdRegisteredObject, IdSipDns, IdStackConsts;
+  IdException, IdIndyUtils, IdRegisteredObject, IdSipDns, IdStackConsts,
+  IdThreadMgr, IdThreadMgrDefault;
+
+var
+  ThreadMgr: TIdThreadMgr;
 
 //******************************************************************************
 //* TIdSipTCPTransport                                                         *
@@ -463,6 +467,7 @@ end;
 procedure TIdSipTCPTransport.InstantiateServer;
 begin
   Self.Transport := Self.ServerType.Create(nil);
+  Self.Transport.ThreadMgr := ThreadMgr;
   Self.Transport.TransportID := Self.ID;
 end;
 
@@ -1451,4 +1456,6 @@ begin
     (Transport as TIdSipTcpTransport).RemoveConnection(Self.Binding);
 end;
 
+initialization
+  ThreadMgr := TIdThreadMgrDefault.Create(nil);
 end.
