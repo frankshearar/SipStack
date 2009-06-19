@@ -40,7 +40,6 @@ type
   private
     ObjectRegistry: TStrings;
     RegLock:        TCriticalSection;
-    SourceRef:      Cardinal;
 
     procedure Collect(SearchType: TClass; SearchBlock: TIdCollectBlock; Results: TStrings);
     procedure Lock;
