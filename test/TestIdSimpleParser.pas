@@ -63,6 +63,7 @@ type
     procedure TestIsNumericAddress;
     procedure TestMaskToAddress;
     procedure TestNetworkFor;
+    procedure TestNetworkForBadAddress;
     procedure TestNetworkForNumBits;
     procedure TestParseIpv6Address;
   end;
@@ -945,6 +946,12 @@ begin
                 TIdIPAddressParser.NetworkFor('ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff', Mask),
                 'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff/' + Mask);
   end;
+end;
+
+procedure TestTIdIPAddressParser.TestNetworkForBadAddress;
+begin
+  Self.ExpectedException := EBadParameter;
+  TIdIPAddressParser.NetworkFor('not an address', 'not a mask');
 end;
 
 procedure TestTIdIPAddressParser.TestNetworkForNumBits;

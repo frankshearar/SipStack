@@ -839,7 +839,7 @@ begin
 
     Id_IPv6: Result := Self.NetworkForIPv6(Address, Mask);
   else
-    raise EBadParameter('''' + Address + ''' not an IPv4 or IPv6 address');
+    raise EBadParameter.Create('''' + Address + ''' not an IPv4 or IPv6 address');
   end;
 end;
 
