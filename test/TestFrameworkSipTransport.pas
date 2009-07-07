@@ -30,6 +30,9 @@ type
                                  Port: Cardinal;
                                  TestCase: TestTIdSipTransport;
                                  LogName: String);
+    procedure OpenOnFirstFreePort(Transport: TIdSipTransport;
+                                  const Address: String;
+                                  Port: Cardinal);
 
   public
     constructor Create(TransportType: TIdSipTransportClass;
@@ -335,8 +338,8 @@ type
 implementation
 
 uses
-  IdRegisteredObject, IdSimpleParser, IdStack, IdTcpServer, PluggableLogging,
-  TestFramework, TestMessages;
+  IdRegisteredObject, IdSimpleParser, IdSocketHandle, IdStack, IdTcpServer,
+  PluggableLogging, TestFramework, TestMessages;
 
 var
   ServerThatInstantiatesGStack: TIdTcpServer;
@@ -370,9 +373,6 @@ begin
                           TestCase.DefaultPort,
                           TestCase,
                           LogName);
-
-  Self.HighPortTransport.Start;
-  Self.LowPortTransport.Start;
 end;
 
 destructor TTransportTestTimerQueue.Destroy;
@@ -406,7 +406,27 @@ begin
   Transport.Timer        := Self;
   Transport.HostName     := HostName;
 
-  Transport.SetFirstBinding(Address, Port);
+  Self.OpenOnFirstFreePort(Transport, Address, Port);
+end;
+
+procedure TTransportTestTimerQueue.OpenOnFirstFreePort(Transport: TIdSipTransport;
+                                                       const Address: String;
+                                                       Port: Cardinal);
+var
+  PortStarted: Boolean;
+begin
+  PortStarted := false;
+  while not PortStarted and (Port < 65535) do begin
+    Transport.SetFirstBinding(Address, Port);
+
+    try
+      Transport.Start;
+      PortStarted := true;
+    except
+      on EIdCouldNotBindSocket do
+        Port := Port + 1;
+    end;
+  end;
 end;
 
 //******************************************************************************
