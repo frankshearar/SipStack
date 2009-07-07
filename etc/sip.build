@@ -18,11 +18,11 @@
       <arg value="-CC" />
       <arg value="-Q" />
       <arg value="-E.\bin" />
-      <arg value="-IC:\Program Files\Borland\Delphi6\source\Indy;C:\Program Files\Borland\Delphi6\source\dUnit\src" />
+      <arg value="-IC:\home\work\Indy;C:\home\work\dUnit\src" />
       <arg value="-LE.\bin" />
       <arg value="-N0.\build" />
-      <arg value="-OC:\Program Files\Borland\Delphi6\source\Indy;C:\Program Files\Borland\Delphi6\source\dUnit\src" />
-      <arg value="-UC:\Program Files\Borland\Delphi6\source\Indy;C:\Program Files\Borland\Delphi6\source\dUnit\src" />
+      <arg value="-OC:\home\work\Indy;C:\home\work\dUnit\src" />
+      <arg value="-UC:\home\work\Indy;C:\home\work\dUnit\src" />
       <arg value="-RC:\Program Files\Borland\Delphi6\source\Indy;C:\Program Files\Borland\Delphi6\lib" />
       <arg value="SIP.dpr" />
     </exec>
@@ -33,12 +33,12 @@
       <arg value="-CC" />
       <arg value="-Q" />
       <arg value="-E.\bin" />
-      <arg value="-IC:\Program Files\Borland\Delphi7\source\Indy;C:\Program Files\Borland\Delphi7\source\dUnit\src" />
+      <arg value="-IC:\home\work\Indy;C:\home\work\dUnit\src" />
       <arg value="-LE.\bin" />
       <arg value="-N0.\build" />
-      <arg value="-OC:\Program Files\Borland\Delphi7\source\Indy;C:\Program Files\Borland\Delphi7\source\dUnit\src" />
-      <arg value="-UC:\Program Files\Borland\Delphi7\source\Indy;C:\Program Files\Borland\Delphi7\source\dUnit\src" />
-      <arg value="-RC:\Program Files\Borland\Delphi7\source\Indy;C:\Program Files\Borland\Delphi7\lib" />
+      <arg value="-OC:\home\work\Indy;C:\home\work\dUnit\src" />
+      <arg value="-UC:\home\work\Indy;C:\home\work\dUnit\src" />
+      <arg value="-RC:\home\work\Indy;C:\Program Files\Borland\Delphi7\lib" />
       <arg value="SIP.dpr" />
     </exec>
   </target>
@@ -48,12 +48,12 @@
       <arg value="-CC" />
       <arg value="-Q" />
       <arg value="-E.\bin" />
-      <arg value="-IC:\Program Files\Borland\BDS\4.0\source\Indy;C:\Program Files\Borland\BDS\4.0\source\dUnit\src" />
+      <arg value="-IC:\home\work\Indy;C:\home\work\dUnit\src" />
       <arg value="-LE.\bin" />
       <arg value="-N0.\build" />
-      <arg value="-OC:\Program Files\Borland\BDS\4.0\source\Indy;C:\Program Files\Borland\BDS\4.0\source\dUnit\src" />
-      <arg value="-UC:\Program Files\Borland\BDS\4.0\source\Indy;C:\Program Files\Borland\BDS\4.0\source\dUnit\src" />
-      <arg value="-RC:\Program Files\Borland\BDS\4.0\source\Indy;C:\Program Files\Borland\BDS\4.0\lib" />
+      <arg value="-OC:\home\work\Indy;C:\home\work\dUnit\src" />
+      <arg value="-UC:\home\work\Indy;C:\home\work\dUnit\src" />
+      <arg value="-RC:\home\work\Indy;C:\Program Files\Borland\BDS\4.0\lib" />
       <arg value="SIP.dpr" />
     </exec>
   </target>
