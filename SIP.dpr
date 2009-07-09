@@ -13,6 +13,7 @@ uses
   Forms,
   GuiTestRunner,
   SysUtils,
+  TestFramework,
   TextTestRunner,
   audioclasses in 'src\audioclasses.pas',
   ConfigUtils in 'src\ConfigUtils.pas',
@@ -139,6 +140,8 @@ uses
 //{$DEFINE GUI}
 {$IFNDEF GUI}
   {$APPTYPE CONSOLE}
+  var
+    R: TTestResult;
 {$ENDIF}
 
 {$R *.res}
@@ -152,7 +155,8 @@ begin
     {$IFDEF GUI}
     GuiTestRunner.RunRegisteredTests;
     {$ELSE}
-    TextTestRunner.RunRegisteredTests(rxbHaltOnFailures);
+    R := TextTestRunner.RunRegisteredTests;
+    ExitCode := R.ErrorCount + R.FailureCount;
     {$ENDIF}
   {$ENDIF}
 end.
