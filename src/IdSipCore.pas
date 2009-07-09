@@ -158,11 +158,11 @@ type
 
   // I represent a closure that contains some block of code involving an Action.
   // I also represent the null action closure.
-  TIdSipActionClosure = class(TObject)
+  TIdSipActionClosure = class(TObjectClosure)
+  protected
+    procedure ExecuteOnAction(Action: TIdSipAction); virtual;
   public
-    constructor Create; virtual;
-
-    procedure Execute(Action: TIdSipAction); virtual;
+    procedure Execute(O :TObject); override;
   end;
 
   TIdSipActionClosureClass = class of TIdSipActionClosure;
@@ -185,7 +185,6 @@ type
     procedure AddCurrentActionList(Keys: TStringDictionary);
     procedure DeleteAction(Index: Integer);
     function  FindAction(Msg: TIdSipMessage; ClientAction: Boolean): TIdSipAction; overload;
-    function  FindAction(const ActionID: String): TIdSipAction; overload;
     procedure MarkAllActionsAsTerminated;
   public
     constructor Create;
@@ -237,7 +236,13 @@ type
   TIdSipActionWait = class(TIdWait)
   private
     fActionID: String;
+
+    procedure TriggerClosure(O: TObject);
+  protected
+    procedure ActOnTrigger(Action: TIdSipAction); virtual;
   public
+    procedure Trigger; override;
+
     property ActionID: String read fActionID write fActionID;
   end;
 
@@ -249,23 +254,24 @@ type
   TIdSipActionAuthenticateWait = class(TIdSipActionWait)
   private
     Credentials: TIdSipAuthorizationHeader;
+  protected
+    procedure ActOnTrigger(Action: TIdSipAction); override;
   public
     destructor  Destroy; override;
 
     procedure SetCredentials(Credentials: TIdSipAuthorizationHeader);
-    procedure Trigger; override;
   end;
 
   // I represent the (possibly deferred) execution of something my Action needs
   // done. That is, when you invoke my Trigger, I call Action.Send.
   TIdSipActionSendWait = class(TIdSipActionWait)
-  public
-    procedure Trigger; override;
+  protected
+    procedure ActOnTrigger(Action: TIdSipAction); override;
   end;
 
   TIdSipActionTerminateWait = class(TIdSipActionWait)
-  public
-    procedure Trigger; override;
+  protected
+    procedure ActOnTrigger(Action: TIdSipAction); override;
   end;
 
   TIdSipActionsWaitClass = class of TIdSipActionsWait;
@@ -277,9 +283,9 @@ type
   private
     fFailedMessage: TIdSipMessage;
     fReason:        String;
+  protected
+    procedure ExecuteOnAction(Action: TIdSipAction); override;
   public
-    procedure Execute(Action: TIdSipAction); override;
-
     property FailedMessage: TIdSipMessage read fFailedMessage write fFailedMessage;
     property Reason:        String        read fReason write fReason;
   end;
@@ -306,16 +312,16 @@ type
   // Request. I also drop an unmatched ACK, and respond with 481 Call Leg/
   // Transaction Does Not Exist as the case may be.
   TIdSipUserAgentActOnRequest = class(TIdUserAgentClosure)
-  public
-    procedure Execute(Action: TIdSipAction); override;
+  protected
+    procedure ExecuteOnAction(Action: TIdSipAction); override;
   end;
 
   // I give the affected Action my Response, or drop the (unmatched) response.
   TIdSipUserAgentActOnResponse = class(TIdUserAgentClosure)
   private
     fResponse: TIdSipResponse;
-  public
-    procedure Execute(Action: TIdSipAction); override;
+  protected
+    procedure ExecuteOnAction(Action: TIdSipAction); override;
 
     property Response: TIdSipResponse read fResponse write fResponse;
   end;
@@ -1325,13 +1331,29 @@ end;
 //******************************************************************************
 //* TIdSipActionClosure Public methods *****************************************
 
-constructor TIdSipActionClosure.Create;
+procedure TIdSipActionClosure.Execute(O: TObject);
+var
+  OID: String;
 begin
-  inherited Create;
+  // Some closures need to know if O is nil or not.
+
+  if Assigned(O) then begin
+    if not (O is TIdSipAction) then begin
+      if O is TIdRegisteredObject then
+        OID := (O as TIdRegisteredObject).ID
+      else
+        OID := O.ClassName;
+
+      raise ERegistry.Create(Format('%s does not point to a %s, but a %s', [OID, TIdSipAction.ClassName, O.ClassName]));
+    end;
+  end;
+
+  Self.ExecuteOnAction(O as TIdSipAction);
 end;
 
-procedure TIdSipActionClosure.Execute(Action: TIdSipAction);
+procedure TIdSipActionClosure.ExecuteOnAction(Action: TIdSipAction);
 begin
+  // By default do nothing
 end;
 
 //******************************************************************************
@@ -1445,14 +1467,14 @@ procedure TIdSipActions.FindActionAndPerformOr(const ID: String;
                                                FoundBlock: TIdSipActionClosure;
                                                NotFoundBlock: TIdSipActionClosure);
 var
-  Action: TIdSipAction;
+  C: TIfExistsClosure;
 begin
-  Action := Self.FindAction(ID);
-
-  if Assigned(Action) then
-    FoundBlock.Execute(Action)
-  else
-    NotFoundBlock.Execute(nil);
+  C := TIfExistsClosure.Create(FoundBlock, NotFoundBlock);
+  try
+    TIdObjectRegistry.Singleton.WithObjectDo(ID, C);
+  finally
+    C.Free;
+  end;
 
   Self.CleanOutTerminatedActions;
 end;
@@ -1674,23 +1696,6 @@ begin
   end;
 end;
 
-function TIdSipActions.FindAction(const ActionID: String): TIdSipAction;
-var
-  Action: TObject;
-begin
-  Action := TIdObjectRegistry.Singleton.FindObject(ActionID);
-
-  if not Assigned(Action) then begin
-    Result := nil;
-    Exit;
-  end;
-
-  if not (Action is TIdSipAction) then
-    raise ERegistry.Create(ActionID + ' does not point to a TIdSipAction, but a ' + Action.ClassName);
-
-  Result := Action as TIdSipAction;
-end;
-
 procedure TIdSipActions.MarkAllActionsAsTerminated;
 var
   I: Integer;
@@ -1728,6 +1733,31 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipActionWait                                                           *
+//******************************************************************************
+//* TIdSipActionWait Public methods ********************************************
+
+procedure TIdSipActionWait.Trigger;
+begin
+  TIdObjectRegistry.Singleton.WithExtantObjectDo(Self.ActionID, Self.TriggerClosure);
+end;
+
+//* TIdSipActionWait Protected methods *****************************************
+
+procedure TIdSipActionWait.ActOnTrigger(Action: TIdSipAction);
+begin
+  // By default do nothing.
+end;
+
+//* TIdSipActionWait Private methods *******************************************
+
+procedure TIdSipActionWait.TriggerClosure(O: TObject);
+begin
+  if (O is TIdSipAction) then
+    Self.ActOnTrigger(O as TIdSipAction);
+end;
+
+//******************************************************************************
 //* TIdSipActionAuthenticateWait                                               *
 //******************************************************************************
 //* TIdSipActionAuthenticateWait Public methods ********************************
@@ -1745,46 +1775,34 @@ begin
   Self.Credentials.Assign(Credentials);
 end;
 
-procedure TIdSipActionAuthenticateWait.Trigger;
-var
-  Action: TObject;
-begin
-  Action := TIdObjectRegistry.Singleton.FindObject(Self.ActionID);
+//* TIdSipActionAuthenticateWait Protected methods *****************************
 
-  if Assigned(Action) and (Action is TIdSipAction) then begin
-    if Assigned(Self.Credentials) then
-      (Action as TIdSipAction).Resend(Self.Credentials);
-  end;
+procedure TIdSipActionAuthenticateWait.ActOnTrigger(Action: TIdSipAction);
+begin
+  if Assigned(Self.Credentials) then
+    Action.Resend(Self.Credentials);
 end;
 
 //******************************************************************************
 //* TIdSipActionSendWait                                                       *
 //******************************************************************************
-//* TIdSipActionSendWait Public methods ****************************************
+//* TIdSipActionSendWait Protected methods *************************************
 
-procedure TIdSipActionSendWait.Trigger;
-var
-  Action: TObject;
+procedure TIdSipActionSendWait.ActOnTrigger(Action: TIdSipAction);
 begin
-  Action := TIdObjectRegistry.Singleton.FindObject(Self.ActionID);
-
-  if Assigned(Action) and (Action is TIdSipAction) then
-    (Action as TIdSipAction).Send;
+  if Assigned(Action) then
+    Action.Send;
 end;
 
 //******************************************************************************
 //* TIdSipActionTerminateWait                                                  *
 //******************************************************************************
-//* TIdSipActionTerminateWait **************************************************
+//* TIdSipActionTerminateWait Protected methods ********************************
 
-procedure TIdSipActionTerminateWait.Trigger;
-var
-  Action: TObject;
+procedure TIdSipActionTerminateWait.ActOnTrigger(Action: TIdSipAction);
 begin
-  Action := TIdObjectRegistry.Singleton.FindObject(Self.ActionID);
-
-  if Assigned(Action) and (Action is TIdSipAction) then
-    (Action as TIdSipAction).Terminate;
+  if Assigned(Action) then
+    Action.Terminate;
 end;
 
 //******************************************************************************
@@ -1792,7 +1810,7 @@ end;
 //******************************************************************************
 //* TIdSipActionNetworkFailure Public methods **********************************
 
-procedure TIdSipActionNetworkFailure.Execute(Action: TIdSipAction);
+procedure TIdSipActionNetworkFailure.ExecuteOnAction(Action: TIdSipAction);
 begin
   if Assigned(Action) then
     Action.NetworkFailureSending(Self.FailedMessage);
@@ -1827,9 +1845,9 @@ end;
 //******************************************************************************
 //* TIdSipUserAgentActOnRequest                                                *
 //******************************************************************************
-//* TIdSipUserAgentActOnRequest Public methods *********************************
+//* TIdSipUserAgentActOnRequest Protected methods ******************************
 
-procedure TIdSipUserAgentActOnRequest.Execute(Action: TIdSipAction);
+procedure TIdSipUserAgentActOnRequest.ExecuteOnAction(Action: TIdSipAction);
 begin
   // Processing the request - cf. RFC 3261, section 8.2.5
   // Action generates the response - cf. RFC 3261, section 8.2.6
@@ -1849,9 +1867,9 @@ end;
 //******************************************************************************
 //* TIdSipUserAgentActOnResponse                                               *
 //******************************************************************************
-//* TIdSipUserAgentActOnResponse Public methods ********************************
+//* TIdSipUserAgentActOnResponse Protected methods *****************************
 
-procedure TIdSipUserAgentActOnResponse.Execute(Action: TIdSipAction);
+procedure TIdSipUserAgentActOnResponse.ExecuteOnAction(Action: TIdSipAction);
 begin
   // User Agents drop unmatched responses on the floor.
   // Except for 2xx's on a client INVITE. And these no longer belong to

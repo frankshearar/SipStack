@@ -97,6 +97,7 @@ type
     FHasBeenFreed:   PBoolean;
 
     function  ActionFor(Handle: TIdSipHandle): TIdSipAction;
+    procedure AddEventClosure(O: TObject);
     function  AssociationAt(Index: Integer): TIdActionAssociation;
     function  GetAndCheckAction(Handle: TIdSipHandle;
                                 ExpectedType: TIdSipActionClass): TIdSipAction;
@@ -919,6 +920,8 @@ type
   TIdStackWait = class(TIdWait)
   private
     fStackID: String;
+
+    procedure TriggerClosure(O: TObject);
   protected
     procedure TriggerOnStack(Stack: TIdSipStackInterface); virtual;
   public
@@ -954,20 +957,11 @@ type
   // ReferenceID so that you can differentiate the results when you receive a
   // notification (in the form of a TIdAsynchronousMessageResultData). I
   // guarantee this by using a RegisteredObject to generate this ID.
-  TIdAsynchronousMessageWait = class(TIdWait)
-  private
-    fStackID: String;
-  protected
-    procedure FireWait(Stack: TIdSipStackInterface); virtual;
-  public
-    procedure Trigger; override;
-
-    property StackID: String read fStackID write fStackID;
-  end;
+  TIdAsynchronousMessageWait = class(TIdStackWait);
 
   TIdGetBindingsWait = class(TIdAsynchronousMessageWait)
   protected
-    procedure FireWait(Stack: TIdSipStackInterface); override;
+    procedure TriggerOnStack(Stack: TIdSipStackInterface); override;
   end;
 
   // Use me to find out if the stack identified by StackID is the source of a
@@ -979,7 +973,7 @@ type
 
     procedure SetRequest(Value: TIdSipRequest);
   protected
-    procedure FireWait(Stack: TIdSipStackInterface); override;
+    procedure TriggerOnStack(Stack: TIdSipStackInterface); override;
   public
     constructor Create; override;
     destructor  Destroy; override;
@@ -989,9 +983,9 @@ type
 
   TIdNetworkingMessageWait = class(TIdAsynchronousMessageWait)
   protected
-    procedure FireWait(Stack: TIdSipStackInterface); override;
     procedure Ask(Stack: TIdSipStackInterface;
                   E: TIdSipNameServerExtension); virtual;
+    procedure TriggerOnStack(Stack: TIdSipStackInterface); override;
   end;
 
   // Given a DestinationAddress, I ask the stack to give the best local address
@@ -1031,7 +1025,7 @@ type
 
   TIdCollectStatisticsWait = class(TIdAsynchronousMessageWait)
   protected
-    procedure FireWait(Stack: TIdSipStackInterface); override;
+    procedure TriggerOnStack(Stack: TIdSipStackInterface); override;
   end;
 
   // Raise me whenever someone tries to execute an action with a handle
@@ -1684,15 +1678,10 @@ begin
 end;
 
 procedure TIdSipStackInterface.SendAsyncCall(ReferenceID: String);
-var
-  Wait: TObject;
 begin
   // Invoke an asynchronous function call identified by ReferenceID.
 
-  Wait := TIdObjectRegistry.Singleton.FindObject(ReferenceID);
-
-  if Assigned(Wait) and (Wait is TIdWait) then
-    Self.TimerQueue.AddEvent(TriggerImmediately, Wait as TIdWait);
+  TIdObjectRegistry.Singleton.WithExtantObjectDo(ReferenceID, Self.AddEventClosure);
 end;
 
 procedure TIdSipStackInterface.SendProvisional(ActionHandle: TIdSipHandle;
@@ -1836,6 +1825,12 @@ begin
     else
       Inc(I);
   end;
+end;
+
+procedure TIdSipStackInterface.AddEventClosure(O: TObject);
+begin
+  if Assigned(O) and (O is TIdWait) then
+    Self.TimerQueue.AddEvent(TriggerImmediately, O as TIdWait);
 end;
 
 function TIdSipStackInterface.AssociationAt(Index: Integer): TIdActionAssociation;
@@ -4192,13 +4187,8 @@ end;
 //* TIdStackWait Public methods ************************************************
 
 procedure TIdStackWait.Trigger;
-var
-  O: TObject;
 begin
-  O := TIdObjectRegistry.Singleton.FindObject(Self.StackID);
-
-  if Assigned(O) and (O is TIdSipStackInterface) then
-    Self.TriggerOnStack(O as TIdSipStackInterface);
+  TIdObjectRegistry.Singleton.WithExtantObjectDo(Self.StackID, Self.TriggerClosure);
 end;
 
 //* TIdStackWait Protected methods *********************************************
@@ -4206,6 +4196,14 @@ end;
 procedure TIdStackWait.TriggerOnStack(Stack: TIdSipStackInterface);
 begin
   // By default, do nothing.
+end;
+
+//* TIdStackWait Private methods ***********************************************
+
+procedure TIdStackWait.TriggerClosure(O: TObject);
+begin
+  if Assigned(O) and (O is TIdSipStackInterface) then
+    Self.TriggerOnStack(O as TIdSipStackInterface);
 end;
 
 //******************************************************************************
@@ -4278,33 +4276,11 @@ begin
 end;
 
 //******************************************************************************
-//* TIdAsynchronousMessageWait                                                 *
-//******************************************************************************
-//* TIdAsynchronousMessageWait Public methods **********************************
-
-procedure TIdAsynchronousMessageWait.Trigger;
-var
-  Stack: TObject;
-begin
-  Stack := TIdObjectRegistry.Singleton.FindObject(Self.StackID);
-
-  if Assigned(Stack) and (Stack is TIdSipStackInterface) then
-    Self.FireWait(Stack as TIdSipStackInterface);
-end;
-
-//* TIdAsynchronousMessageWait Protected methods *******************************
-
-procedure TIdAsynchronousMessageWait.FireWait(Stack: TIdSipStackInterface);
-begin
-  // By default, do nothing.
-end;
-
-//******************************************************************************
 //* TIdGetBindingsWait                                                         *
 //******************************************************************************
 //* TIdGetBindingsWait Protected methods ***************************************
 
-procedure TIdGetBindingsWait.FireWait(Stack: TIdSipStackInterface);
+procedure TIdGetBindingsWait.TriggerOnStack(Stack: TIdSipStackInterface);
 var
   Data: TIdGetBindingsData;
   E:    TIdSipNetworkExtension;
@@ -4347,7 +4323,7 @@ end;
 
 //* TIdIsSourceOfWait Protected methods ****************************************
 
-procedure TIdIsSourceOfWait.FireWait(Stack: TIdSipStackInterface);
+procedure TIdIsSourceOfWait.TriggerOnStack(Stack: TIdSipStackInterface);
 var
   Result: TIdBooleanResultData;
 begin
@@ -4374,7 +4350,13 @@ end;
 //******************************************************************************
 //* TIdNetworkingMessageWait Protected methods *********************************
 
-procedure TIdNetworkingMessageWait.FireWait(Stack: TIdSipStackInterface);
+procedure TIdNetworkingMessageWait.Ask(Stack: TIdSipStackInterface;
+                                       E: TIdSipNameServerExtension);
+begin
+  // By default do nothing.
+end;
+
+procedure TIdNetworkingMessageWait.TriggerOnStack(Stack: TIdSipStackInterface);
 var
   E: TIdSipNameServerExtension;
 begin
@@ -4384,12 +4366,6 @@ begin
   finally
     E.Free;
   end;
-end;
-
-procedure TIdNetworkingMessageWait.Ask(Stack: TIdSipStackInterface;
-                                       E: TIdSipNameServerExtension);
-begin
-  // By default do nothing.
 end;
 
 //******************************************************************************
@@ -4461,7 +4437,7 @@ end;
 //******************************************************************************
 //* TIdCollectStatisticsWait Public methods ************************************
 
-procedure TIdCollectStatisticsWait.FireWait(Stack: TIdSipStackInterface);
+procedure TIdCollectStatisticsWait.TriggerOnStack(Stack: TIdSipStackInterface);
 var
   E:      TIdSipStatisticsExtension;
   Result: TIdStringDictionaryResultData;

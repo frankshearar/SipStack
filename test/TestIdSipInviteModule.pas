@@ -9212,6 +9212,7 @@ begin
 
   Self.ReceiveInvite;
   Self.Session := Self.L.SessionParam;
+  Check(Assigned(Self.Session), 'No Session object created in response to receiving an INVITE');  
 
   Self.Wait.SessionID := Self.Session.ID;
 end;

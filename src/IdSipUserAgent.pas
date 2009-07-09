@@ -439,6 +439,7 @@ type
     fConfiguration: TStrings;
     fUserAgentID:   String;
 
+    procedure ActOnUserAgent(O: TObject);
     procedure SetConfiguration(Value: TStrings);
   public
     constructor Create; override;
@@ -2138,23 +2139,26 @@ begin
 end;
 
 procedure TIdSipReconfigureStackWait.Trigger;
-var
-  Configurator: TIdSipStackConfigurator;
-  UA:           TObject;
 begin
-  UA := TIdObjectRegistry.Singleton.FindObject(Self.UserAgentID);
-
-  if Assigned(UA) and (UA is TIdSipUserAgent) then begin
-    Configurator := TIdSipStackConfigurator.Create;
-    try
-      Configurator.UpdateConfiguration(UA as TIdSipUserAgent, Self.Configuration);
-    finally
-      Configurator.Free;
-    end;
-  end;
+  TIdObjectRegistry.Singleton.WithExtantObjectDo(Self.UserAgentID, Self.ActOnUserAgent);
 end;
 
 //* TIdSipReconfigureStackWait Private methods *********************************
+
+procedure TIdSipReconfigureStackWait.ActOnUserAgent(O: TObject);
+var
+  Configurator: TIdSipStackConfigurator;
+begin
+  if not (O is TIdSipUserAgent) then
+    Exit;
+
+  Configurator := TIdSipStackConfigurator.Create;
+  try
+    Configurator.UpdateConfiguration(O as TIdSipUserAgent, Self.Configuration);
+  finally
+    Configurator.Free;
+  end;
+end;
 
 procedure TIdSipReconfigureStackWait.SetConfiguration(Value: TStrings);
 begin

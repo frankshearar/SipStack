@@ -646,21 +646,21 @@ type
   end;
 
   TIdSipSubscriptionExpires = class(TIdSipActionClosure)
-  public
-    procedure Execute(Action: TIdSipAction); override;
+  protected
+    procedure ExecuteOnAction(Action: TIdSipAction); override;
   end;
 
   TIdSipSubscriptionRenotify = class(TIdSipActionClosure)
-  public
-    procedure Execute(Action: TIdSipAction); override;
+  protected
+    procedure ExecuteOnAction(Action: TIdSipAction); override;
   end;
 
   TIdSipOutboundSubscriptionRefreshWait = class(TIdSipActionWait)
   private
     fNewDuration: Cardinal; // in seconds
+  protected
+    procedure ActOnTrigger(Action: TIdSipAction); override;
   public
-    procedure Trigger; override;
-
     property NewDuration: Cardinal read fNewDuration write fNewDuration;
   end;
 
@@ -668,9 +668,9 @@ type
   private
     fMimeType:     String;
     fNotification: String;
+  protected
+    procedure ActOnTrigger(Action: TIdSipAction); override;
   public
-    procedure Trigger; override;
-
     property MimeType:     String read fMimeType write fMimeType;
     property Notification: String read fNotification write fNotification;
   end;
@@ -684,12 +684,11 @@ type
 
     procedure SetResponse(Value: TIdSipResponse);
   protected
+    procedure ActOnTrigger(Action: TIdSipAction); override;
     procedure FireTimer(Referral: TIdSipInboundReferral); virtual;
   public
     constructor Create; override;
     destructor  Destroy; override;
-
-    procedure Trigger; override;
 
     property HasResponse: Boolean        read fHasResponse;
     property Response:    TIdSipResponse read fResponse write SetResponse;
@@ -723,6 +722,7 @@ type
     fModuleID:     String;
     fTarget:       TIdSipAddressHeader;
 
+    procedure Resubscribe(O: TObject);
     procedure SetTarget(Value: TIdSipAddressHeader);
   public
     constructor Create; override;
@@ -3112,9 +3112,9 @@ end;
 //******************************************************************************
 //* TIdSipSubscriptionExpires                                                  *
 //******************************************************************************
-//* TIdSipSubscriptionExpires Public methods ***********************************
+//* TIdSipSubscriptionExpires Protected methods ********************************
 
-procedure TIdSipSubscriptionExpires.Execute(Action: TIdSipAction);
+procedure TIdSipSubscriptionExpires.ExecuteOnAction(Action: TIdSipAction);
 var
   Sub: TIdSipSubscription;
 begin
@@ -3127,11 +3127,11 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipSubscriptionRenotify
+//* TIdSipSubscriptionRenotify                                                 *
 //******************************************************************************
-//* TIdSipSubscriptionRenotify Public methods **********************************
+//* TIdSipSubscriptionRenotify Protected methods *******************************
 
-procedure TIdSipSubscriptionRenotify.Execute(Action: TIdSipAction);
+procedure TIdSipSubscriptionRenotify.ExecuteOnAction(Action: TIdSipAction);
 var
   Sub: TIdSipInboundSubscription;
 begin
@@ -3145,15 +3145,12 @@ end;
 //******************************************************************************
 //* TIdSipOutboundSubscriptionRefreshWait                                      *
 //******************************************************************************
-//* TIdSipOutboundSubscriptionRefreshWait Public methods ***********************
+//* TIdSipOutboundSubscriptionRefreshWait Protected methods ********************
 
-procedure TIdSipOutboundSubscriptionRefreshWait.Trigger;
+procedure TIdSipOutboundSubscriptionRefreshWait.ActOnTrigger(Action: TIdSipAction);
 var
-  Action:       TObject;
   Subscription: TIdSipOutboundSubscription;
 begin
-  Action := TIdObjectRegistry.Singleton.FindObject(Self.ActionID);
-
   if Assigned(Action) and (Action is TIdSipOutboundSubscription) then begin
     Subscription := Action as TIdSipOutboundSubscription;
 
@@ -3165,14 +3162,10 @@ end;
 //******************************************************************************
 //* TIdSipInboundSubscriptionNotifyWait                                        *
 //******************************************************************************
-//* TIdSipInboundSubscriptionNotifyWait Public methods *************************
+//* TIdSipInboundSubscriptionNotifyWait Protected methods **********************
 
-procedure TIdSipInboundSubscriptionNotifyWait.Trigger;
-var
-  Action: TObject;
+procedure TIdSipInboundSubscriptionNotifyWait.ActOnTrigger(Action: TIdSipAction);
 begin
-  Action := TIdObjectRegistry.Singleton.FindObject(Self.ActionID);
-
   if Assigned(Action) and (Action is TIdSipInboundSubscription) then
     (Action as TIdSipInboundSubscription).Notify(Self.Notification, Self.MimeType);
 end;
@@ -3199,17 +3192,13 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipInboundReferralWait.Trigger;
-var
-  Action: TObject;
-begin
-  Action := TIdObjectRegistry.Singleton.FindObject(Self.ActionID);
+//* TIdSipInboundReferralWait Protected methods ********************************
 
+procedure TIdSipInboundReferralWait.ActOnTrigger(Action: TIdSipAction);
+begin
   if Assigned(Action) and (Action is TIdSipInboundReferral) then
     Self.FireTimer(Action as TIdSipInboundReferral);
 end;
-
-//* TIdSipInboundReferralWait Protected methods ********************************
 
 procedure TIdSipInboundReferralWait.FireTimer(Referral: TIdSipInboundReferral);
 begin
@@ -3286,16 +3275,17 @@ begin
 end;
 
 procedure TIdSipSubscriptionRetryWait.Trigger;
-var
-  Module: TObject;
 begin
-  Module := TIdObjectRegistry.Singleton.FindObject(Self.ModuleID);
-
-  if Assigned(Module) and (Module is TIdSipSubscribeModule) then
-    (Module as TIdSipSubscribeModule).Resubscribe(Self.Target, Self.EventPackage);
+  TIdObjectRegistry.Singleton.WithExtantObjectDo(Self.ModuleID, Self.Resubscribe);
 end;
 
 //* TIdSipSubscriptionRetryWait Private methods ********************************
+
+procedure TIdSipSubscriptionRetryWait.Resubscribe(O: TObject);
+begin
+  if Assigned(O) and (O is TIdSipSubscribeModule) then
+    (O as TIdSipSubscribeModule).Resubscribe(Self.Target, Self.EventPackage);
+end;
 
 procedure TIdSipSubscriptionRetryWait.SetTarget(Value: TIdSipAddressHeader);
 begin

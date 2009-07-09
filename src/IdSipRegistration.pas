@@ -489,6 +489,7 @@ type
     fRegisterModuleID: String;
     fRegistrar:        TIdSipUri;
 
+    procedure Reregister(O: TObject);
     procedure SetAddressOfRecord(Value: TIdSipAddressHeader);
     procedure SetBindings(Value: TIdSipContacts);
     procedure SetRegistrar(Value: TIdSipUri);
@@ -2357,20 +2358,22 @@ begin
 end;
 
 procedure TIdSipReregisterWait.Trigger;
+begin
+  TIdObjectRegistry.Singleton.WithExtantObjectDo(Self.RegisterModuleID, Self.Reregister);
+end;
+
+//* TIdSipReregisterWait Private methods ***************************************
+
+procedure TIdSipReregisterWait.Reregister(O: TObject);
 var
   Action: TIdSipAction;
-  Module: TObject;
 begin
-  Module := TIdObjectRegistry.Singleton.FindObject(Self.RegisterModuleID);
-
-  if Assigned(Module) and (Module is TIdSipOutboundRegisterModule) then begin
-    Action := (Module as TIdSipOutboundRegisterModule).RegisterWith(Self.Registrar, Self.Bindings);
+  if (O is TIdSipOutboundRegisterModule) then begin
+    Action := (O as TIdSipOutboundRegisterModule).RegisterWith(Self.Registrar, Self.Bindings);
     Action.LocalParty := Self.AddressOfRecord;
     Action.Send;
   end;
 end;
-
-//* TIdSipReregisterWait Private methods ***************************************
 
 procedure TIdSipReregisterWait.SetAddressOfRecord(Value: TIdSipAddressHeader);
 begin

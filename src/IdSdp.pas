@@ -811,6 +811,9 @@ type
   // objects except through TIdSdpTcpMediaStream's methods, but tests must ALSO
   // access the objects in order to, for instance, simulate the receipt of a
   // packet.
+  //
+  // Please note that I am _NOT_ thread-safe. Using FindConnection will likely
+  // cause time-of-use/time-of-check problems in a multithreaded environments.
   TIdSdpTcpConnectionRegistry = class(TObject)
   private
     function GetAllConnections: TStrings;
@@ -1160,27 +1163,32 @@ type
   TIdSdpTcpConnectionWait = class(TIdWait)
   private
     fConnectionID: String;
+
+    procedure TriggerClosure(O: TObject);
+  protected
+    procedure ActOnTrigger(C: TIdSdpBaseTcpConnection); virtual;
   public
+    procedure Trigger; override;
     property ConnectionID: String read fConnectionID write fConnectionID;
   end;
 
   TIdSdpTcpConnectionConnectedWait = class(TIdSdpTcpConnectionWait)
-  public
-    procedure Trigger; override;
+  protected
+    procedure ActOnTrigger(C: TIdSdpBaseTcpConnection); override;
   end;
 
   TIdSdpTcpConnectionDisconnectedWait = class(TIdSdpTcpConnectionWait)
-  public
-    procedure Trigger; override;
+  protected
+    procedure ActOnTrigger(C: TIdSdpBaseTcpConnection); override;
   end;
 
   TIdSdpTcpConnectionExceptionWait = class(TIdSdpTcpConnectionWait)
   private
     fExceptionMessage: String;
     fExceptionType:    ExceptClass;
+  protected
+    procedure ActOnTrigger(C: TIdSdpBaseTcpConnection); override;
   public
-    procedure Trigger; override;
-
     property ExceptionMessage: String      read fExceptionMessage write fExceptionMessage;
     property ExceptionType:    ExceptClass read fExceptionType write fExceptionType;
   end;
@@ -1193,12 +1201,11 @@ type
     procedure SetData(Value: TStream);
     procedure SetReceivedOn(Value: TIdConnectionBindings);
   protected
+    procedure ActOnTrigger(C: TIdSdpBaseTcpConnection); override;
     procedure LogTrigger; override;
   public
     constructor Create; override;
     destructor  Destroy; override;
-
-    procedure Trigger; override;
 
     property Data:       TStream               read fData write SetData;
     property ReceivedOn: TIdConnectionBindings read fReceivedOn write SetReceivedOn;
@@ -1209,11 +1216,11 @@ type
     fData: TStream;
 
     procedure SetData(Value: TStream);
+  protected
+    procedure ActOnTrigger(C: TIdSdpBaseTcpConnection); override;
   public
     constructor Create; override;
     destructor  Destroy; override;
-
-    procedure Trigger; override;
 
     property Data: TStream read fData write SetData;
   end;
@@ -7285,60 +7292,58 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSdpTcpConnectionWait                                                    *
+//******************************************************************************
+//* TIdSdpTcpConnectionWait Public methods *************************************
+
+procedure TIdSdpTcpConnectionWait.Trigger;
+begin
+  TIdObjectRegistry.Singleton.WithExtantObjectDo(Self.ConnectionID, Self.TriggerClosure);
+end;
+
+//* TIdSdpTcpConnectionWait Protected methods **********************************
+
+procedure TIdSdpTcpConnectionWait.ActOnTrigger(C: TIdSdpBaseTcpConnection);
+begin
+  // By default do nothing.
+end;
+
+//* TIdSdpTcpConnectionWait Private methods ************************************
+
+procedure TIdSdpTcpConnectionWait.TriggerClosure(O: TObject);
+begin
+  if (O is TIdSdpBaseTcpConnection) then
+    Self.ActOnTrigger(O as TIdSdpBaseTcpConnection);
+end;
+
+//******************************************************************************
 //* TIdSdpTcpConnectionConnectedWait                                           *
 //******************************************************************************
-//* TIdSdpTcpConnectionConnectedWait Public methods ****************************
+//* TIdSdpTcpConnectionConnectedWait Protected methods *************************
 
-procedure TIdSdpTcpConnectionConnectedWait.Trigger;
-var
-  C: TObject;
-  Conn: TIdSdpBaseTcpConnection;
+procedure TIdSdpTcpConnectionConnectedWait.ActOnTrigger(C: TIdSdpBaseTcpConnection);
 begin
-  C := TIdObjectRegistry.Singleton.FindObject(Self.ConnectionID);
-
-  if Assigned(C) and (C is TIdSdpBaseTcpConnection) then begin
-    Conn := C as TIdSdpBaseTcpConnection;
-
-    Conn.NotifyOfConnection;
-  end;
+  C.NotifyOfConnection;
 end;
 
 //******************************************************************************
 //* TIdSdpTcpConnectionDisconnectedWait                                        *
 //******************************************************************************
-//* TIdSdpTcpConnectionDisconnectedWait Public methods *************************
+//* TIdSdpTcpConnectionDisconnectedWait Protected methods **********************
 
-procedure TIdSdpTcpConnectionDisconnectedWait.Trigger;
-var
-  C: TObject;
-  Conn: TIdSdpBaseTcpConnection;
+procedure TIdSdpTcpConnectionDisconnectedWait.ActOnTrigger(C: TIdSdpBaseTcpConnection);
 begin
-  C := TIdObjectRegistry.Singleton.FindObject(Self.ConnectionID);
-
-  if Assigned(C) and (C is TIdSdpBaseTcpConnection) then begin
-    Conn := C as TIdSdpBaseTcpConnection;
-
-    Conn.NotifyOfDisconnection;
-  end;
+  C.NotifyOfDisconnection;
 end;
 
 //******************************************************************************
 //* TIdSdpTcpConnectionExceptionWait                                           *
 //******************************************************************************
-//* TIdSdpTcpConnectionExceptionWait Public methods ****************************
+//* TIdSdpTcpConnectionExceptionWait Protected methods *************************
 
-procedure TIdSdpTcpConnectionExceptionWait.Trigger;
-var
-  C: TObject;
-  Conn: TIdSdpBaseTcpConnection;
+procedure TIdSdpTcpConnectionExceptionWait.ActOnTrigger(C: TIdSdpBaseTcpConnection);
 begin
-  C := TIdObjectRegistry.Singleton.FindObject(Self.ConnectionID);
-
-  if Assigned(C) and (C is TIdSdpBaseTcpConnection) then begin
-    Conn := C as TIdSdpBaseTcpConnection;
-
-    Conn.NotifyOfException(Self.ExceptionType, Self.ExceptionMessage);
-  end;
+  C.NotifyOfException(Self.ExceptionType, Self.ExceptionMessage);
 end;
 
 //******************************************************************************
@@ -7362,23 +7367,12 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSdpTcpReceiveDataWait.Trigger;
-var
-  C:    TObject;
-  Conn: TIdSdpBaseTcpConnection;
-begin
-  inherited Trigger;
-
-  C := TIdObjectRegistry.Singleton.FindObject(Self.ConnectionID);
-
-  if Assigned(C) and (C is TIdSdpBaseTcpConnection) then begin
-    Conn := C as TIdSdpBaseTcpConnection;
-
-    Conn.ReceiveData(Self.Data, Self.ReceivedOn);
-  end;
-end;
-
 //* TIdSdpTcpReceiveDataWait Protected methods *********************************
+
+procedure TIdSdpTcpReceiveDataWait.ActOnTrigger(C: TIdSdpBaseTcpConnection);
+begin
+  C.ReceiveData(Self.Data, Self.ReceivedOn);
+end;
 
 procedure TIdSdpTcpReceiveDataWait.LogTrigger;
 const
@@ -7422,17 +7416,11 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSdpTcpSendDataWait.Trigger;
-var
-  C:          TObject;
-  Connection: TIdSdpBaseTcpConnection;
-begin
-  C := TIdObjectRegistry.Singleton.FindObject(Self.ConnectionID);
+//* TIdSdpTcpSendDataWait Protected methods ************************************
 
-  if Assigned(C) and (C is TIdSdpBaseTcpConnection) then begin
-    Connection := C as TIdSdpBaseTcpConnection;
-    Connection.SendData(Self.Data);
-  end;
+procedure TIdSdpTcpSendDataWait.ActOnTrigger(C: TIdSdpBaseTcpConnection);
+begin
+  C.SendData(Self.Data);
 end;
 
 //* TIdSdpTcpSendDataWait Private methods **************************************

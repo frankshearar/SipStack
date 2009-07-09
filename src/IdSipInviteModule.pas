@@ -659,34 +659,35 @@ type
   end;
 
   TIdSipInboundInviteExpire = class(TIdSipActionClosure)
-  public
-    procedure Execute(Action: TIdSipAction); override;
+  protected
+    procedure ExecuteOnAction(Action: TIdSipAction); override;
   end;
 
   TIdSipInboundInviteResendOk = class(TIdSipActionClosure)
-  public
-    procedure Execute(Action: TIdSipAction); override;
+  protected
+    procedure ExecuteOnAction(Action: TIdSipAction); override;
   end;
 
   TIdSipInboundInviteSessionProgress = class(TIdSipActionClosure)
-  public
-    procedure Execute(Action: TIdSipAction); override;
+  protected
+    procedure ExecuteOnAction(Action: TIdSipAction); override;
   end;
 
   TIdSipOutboundInviteTransactionComplete = class(TIdSipActionClosure)
-  public
-    procedure Execute(Action: TIdSipAction); override;
+  protected
+    procedure ExecuteOnAction(Action: TIdSipAction); override;
   end;
 
   TIdSipSessionResendReInvite = class(TIdSipActionClosure)
-  public
-    procedure Execute(Action: TIdSipAction); override;
+  protected
+    procedure ExecuteOnAction(Action: TIdSipAction); override;
   end;
 
   TIdSipSessionWait = class(TIdWait)
   private
     fSessionID: String;
   protected
+    procedure FireTimerClosure(O: TObject); virtual;
     procedure FireTimer(Session: TIdSipSession); virtual;
   public
     procedure Trigger; override;
@@ -717,9 +718,8 @@ type
 
   TIdSipInboundSessionWait = class(TIdSipSessionWait)
   protected
-    procedure FireTimer(Session: TIdSipInboundSession); reintroduce; virtual; 
-  public
-    procedure Trigger; override;
+    procedure FireInboundTimer(Session: TIdSipInboundSession); virtual;
+    procedure FireTimerClosure(O: TObject); override;
   end;
 
   TIdSipSessionAcceptWait = class(TIdSipInboundSessionWait)
@@ -727,7 +727,7 @@ type
     fContentType: String;
     fOffer:       String;
   public
-    procedure FireTimer(Session: TIdSipInboundSession); override;
+    procedure FireInboundTimer(Session: TIdSipInboundSession); override;
 
     property ContentType: String read fContentType write fContentType;
     property Offer:       String read fOffer write fOffer;
@@ -743,7 +743,7 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
-    procedure FireTimer(Session: TIdSipInboundSession); override;
+    procedure FireInboundTimer(Session: TIdSipInboundSession); override;
 
     property NewTarget: TIdSipAddressHeader read fNewTarget write SetNewTarget;
     property Temporary: Boolean             read fTemporary write fTemporary;
@@ -760,12 +760,12 @@ type
 
   TIdSipSendProvisionalWait = class(TIdSipSendResponseWait)
   protected
-    procedure FireTimer(Session: TIdSipInboundSession); override;
+    procedure FireInboundTimer(Session: TIdSipInboundSession); override;
   end;
 
   TIdSipSessionRejectWait = class(TIdSipSendResponseWait)
   protected
-    procedure FireTimer(Session: TIdSipInboundSession); override;
+    procedure FireInboundTimer(Session: TIdSipInboundSession); override;
   end;
 
   TIdSipInviteModuleInboundCallMethod = class(TIdNotification)
@@ -3484,9 +3484,9 @@ end;
 //******************************************************************************
 //* TIdSipInboundInviteExpire                                                  *
 //******************************************************************************
-//* TIdSipInboundInviteExpire Public methods ***********************************
+//* TIdSipInboundInviteExpire Protected methods ********************************
 
-procedure TIdSipInboundInviteExpire.Execute(Action: TIdSipAction);
+procedure TIdSipInboundInviteExpire.ExecuteOnAction(Action: TIdSipAction);
 begin
   if (Action is TIdSipInboundInvite) then
     (Action as TIdSipInboundInvite).TimeOut;
@@ -3495,9 +3495,9 @@ end;
 //******************************************************************************
 //* TIdSipInboundInviteResendOk                                                *
 //******************************************************************************
-//* TIdSipInboundInviteResendOk Public methods *********************************
+//* TIdSipInboundInviteResendOk Protected methods ******************************
 
-procedure TIdSipInboundInviteResendOk.Execute(Action: TIdSipAction);
+procedure TIdSipInboundInviteResendOk.ExecuteOnAction(Action: TIdSipAction);
 begin
   if (Action is TIdSipInboundInvite) then
     (Action as TIdSipInboundInvite).ResendOk;
@@ -3506,10 +3506,10 @@ end;
 //******************************************************************************
 //* TIdSipInboundInviteSessionProgress                                         *
 //******************************************************************************
-//* TIdSipInboundInviteSessionProgress Public methods **************************
+//* TIdSipInboundInviteSessionProgress Protected methods ***********************
 
 
-procedure TIdSipInboundInviteSessionProgress.Execute(Action: TIdSipAction);
+procedure TIdSipInboundInviteSessionProgress.ExecuteOnAction(Action: TIdSipAction);
 begin
   if (Action is TIdSipInboundInvite) then
     (Action as TIdSipInboundInvite).SendProvisional(SIPSessionProgress, RSSIPSessionProgress);
@@ -3518,9 +3518,9 @@ end;
 //******************************************************************************
 //* TIdSipOutboundInviteTransactionComplete                                    *
 //******************************************************************************
-//* TIdSipOutboundInviteTransactionComplete Public methods *********************
+//* TIdSipOutboundInviteTransactionComplete Protected methods ******************
 
-procedure TIdSipOutboundInviteTransactionComplete.Execute(Action: TIdSipAction);
+procedure TIdSipOutboundInviteTransactionComplete.ExecuteOnAction(Action: TIdSipAction);
 begin
   if (Action is TIdSipOutboundInvite) then
     (Action as TIdSipOutboundInvite).TransactionCompleted;
@@ -3529,9 +3529,9 @@ end;
 //******************************************************************************
 //* TIdSipSessionResendReInvite                                                *
 //******************************************************************************
-//* TIdSipSessionResendReInvite Public methods *********************************
+//* TIdSipSessionResendReInvite Protected methods ******************************
 
-procedure TIdSipSessionResendReInvite.Execute(Action: TIdSipAction);
+procedure TIdSipSessionResendReInvite.ExecuteOnAction(Action: TIdSipAction);
 var
   Session: TIdSipSession;
 begin
@@ -3549,17 +3549,18 @@ end;
 //* TIdSipSessionWait Public methods *******************************************
 
 procedure TIdSipSessionWait.Trigger;
-var
-  Action: TObject;
 begin
-  Action := TIdObjectRegistry.Singleton.FindObject(Self.SessionID);
-
-  if Assigned(Action) and (Action is TIdSipSession) then begin
-    Self.FireTimer(Action as TIdSipSession);
-  end;
+  TIdObjectRegistry.Singleton.WithExtantObjectDo(Self.SessionID, FireTimerClosure);
 end;
 
 //* TIdSipSessionWait Protected methods ****************************************
+
+procedure TIdSipSessionWait.FireTimerClosure(O: TObject);
+begin
+  if (O is TIdSipSession) then begin
+    Self.FireTimer(O as TIdSipSession);
+  end;
+end;
 
 procedure TIdSipSessionWait.FireTimer;
 begin
@@ -3589,23 +3590,17 @@ end;
 //******************************************************************************
 //* TIdSipInboundSessionWait
 //******************************************************************************
-//* TIdSipInboundSessionWait Public methods ************************************
-
-procedure TIdSipInboundSessionWait.Trigger;
-var
-  Action: TObject;
-begin
-  Action := TIdObjectRegistry.Singleton.FindObject(Self.SessionID);
-
-  if Assigned(Action) and (Action is TIdSipInboundSession) then
-    Self.FireTimer(Action as TIdSipInboundSession);
-end;
-
 //* TIdSipInboundSessionWait Protected methods *********************************
 
-procedure TIdSipInboundSessionWait.FireTimer(Session: TIdSipInboundSession);
+procedure TIdSipInboundSessionWait.FireInboundTimer(Session: TIdSipInboundSession);
 begin
   // By default, do nothing.
+end;
+
+procedure TIdSipInboundSessionWait.FireTimerClosure(O: TObject);
+begin
+  if (O is TIdSipInboundSession) then
+    Self.FireInboundTimer(O as TIdSipInboundSession);
 end;
 
 //******************************************************************************
@@ -3613,7 +3608,7 @@ end;
 //******************************************************************************
 //* TIdSipSessionAcceptWait Public methods *************************************
 
-procedure TIdSipSessionAcceptWait.FireTimer(Session: TIdSipInboundSession);
+procedure TIdSipSessionAcceptWait.FireInboundTimer(Session: TIdSipInboundSession);
 begin
   Session.AcceptCall(Self.Offer, Self.ContentType);
 end;
@@ -3639,7 +3634,7 @@ end;
 
 //* TIdSipSessionRedirectWait Protected methods ********************************
 
-procedure TIdSipSessionRedirectWait.FireTimer(Session: TIdSipInboundSession);
+procedure TIdSipSessionRedirectWait.FireInboundTimer(Session: TIdSipInboundSession);
 begin
   Session.RedirectCall(Self.NewTarget, Self.Temporary);
 end;
@@ -3656,7 +3651,7 @@ end;
 //******************************************************************************
 //* TIdSipSendProvisionalWait Protected methods ********************************
 
-procedure TIdSipSendProvisionalWait.FireTimer(Session: TIdSipInboundSession);
+procedure TIdSipSendProvisionalWait.FireInboundTimer(Session: TIdSipInboundSession);
 begin
   Session.SendProvisional(Self.StatusCode, Self.StatusText);
 end;
@@ -3666,7 +3661,7 @@ end;
 //******************************************************************************
 //* TIdSipSessionRejectWait Protected methods **********************************
 
-procedure TIdSipSessionRejectWait.FireTimer(Session: TIdSipInboundSession);
+procedure TIdSipSessionRejectWait.FireInboundTimer(Session: TIdSipInboundSession);
 begin
   Session.RejectCall(Self.StatusCode, Self.StatusText);
 end;

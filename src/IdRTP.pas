@@ -1183,7 +1183,13 @@ type
   TIdRTPWait = class(TIdWait)
   private
     fSessionID: String;
+
+    procedure TriggerClosure(O: TObject);
+  protected
+    procedure ActOnTrigger(S: TIdRTPSession); virtual;
   public
+    procedure Trigger; override;
+
     property SessionID: String read fSessionID write fSessionID;
   end;
 
@@ -1195,11 +1201,11 @@ type
     fReceivedFrom: TIdConnectionBindings;
 
     procedure SetReceivedFrom(Value: TIdConnectionBindings);
+  protected
+    procedure ActOnTrigger(S: TIdRTPSession); override;
   public
     constructor Create; override;
     destructor  Destroy; override;
-
-    procedure Trigger; override;
 
     property Packet:       TIdRTPBasePacket      read fPacket write fPacket;
     property ReceivedFrom: TIdConnectionBindings read fReceivedFrom write SetReceivedFrom;
@@ -1208,20 +1214,20 @@ type
   TIdRTPSendDataWait = class(TIdRTPWait)
   private
     fData: TIdRTPPayload;
+  protected
+    procedure ActOnTrigger(S: TIdRTPSession); override;
   public
-    procedure Trigger; override;
-
     property Data: TIdRTPPayload read fData write fData;
   end;
 
   TIdRTPTransmissionTimeExpire = class(TIdRTPWait)
-  public
-    procedure Trigger; override;
+  protected
+    procedure ActOnTrigger(S: TIdRTPSession); override;
   end;
 
   TIdRTPSenderReportWait = class(TIdRTPWait)
-  public
-    procedure Trigger; override;
+  protected
+    procedure ActOnTrigger(S: TIdRTPSession); override;
   end;
 
   EBadEncodingName = class(Exception);
@@ -6071,6 +6077,31 @@ begin
 end;
 
 //******************************************************************************
+//* TIdRTPWait                                                                 *
+//******************************************************************************
+//* TIdRTPWait Public methods **************************************************
+
+procedure TIdRTPWait.Trigger;
+begin
+  TIdObjectRegistry.Singleton.WithExtantObjectDo(Self.SessionID, Self.TriggerClosure);
+end;
+
+//* TIdRTPWait Protected methods ***********************************************
+
+procedure TIdRTPWait.ActOnTrigger(S: TIdRTPSession);
+begin
+  // By default, do nothing.
+end;
+
+//* TIdRTPWait Private methods *************************************************
+
+procedure TIdRTPWait.TriggerClosure(O: TObject);
+begin
+  if (O is TIdRTPSession) then
+    Self.ActOnTrigger(O as TIdRTPSession);
+end;
+
+//******************************************************************************
 //* TIdRTPReceivePacketWait                                                    *
 //******************************************************************************
 //* TIdRTPReceivePacketWait Public methods *************************************
@@ -6090,21 +6121,14 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdRTPReceivePacketWait.Trigger;
-var
-  S:       TObject;
-  Session: TIdRTPSession;
+//* TIdRTPReceivePacketWait Protected methods **********************************
+
+procedure TIdRTPReceivePacketWait.ActOnTrigger(S: TIdRTPSession);
 begin
-  S := TIdObjectRegistry.Singleton.FindObject(Self.SessionID);
-
-  if Assigned(S) and (S is TIdRTPSession) then begin
-    Session := S as TIdRTPSession;
-
-    if Self.Packet.IsRTCP then
-      Session.ReceiveControl(Self.Packet as TIdRTCPPacket, Self.ReceivedFrom)
-    else
-      Session.ReceiveData(Self.Packet as TIdRTPPacket, Self.ReceivedFrom)
-  end;
+  if Self.Packet.IsRTCP then
+    S.ReceiveControl(Self.Packet as TIdRTCPPacket, Self.ReceivedFrom)
+  else
+    S.ReceiveData(Self.Packet as TIdRTPPacket, Self.ReceivedFrom)
 end;
 
 //* TIdRTPReceivePacketWait Private methods ************************************
@@ -6117,31 +6141,22 @@ end;
 //******************************************************************************
 //* TIdRTPSendDataWait                                                         *
 //******************************************************************************
-//* TIdRTPSendDataWait Public methods ******************************************
+//* TIdRTPSendDataWait Protected methods ***************************************
 
-procedure TIdRTPSendDataWait.Trigger;
-var
-  Session: TObject;
+procedure TIdRTPSendDataWait.ActOnTrigger(S: TIdRTPSession);
 begin
-  Session := TIdObjectRegistry.Singleton.FindObject(Self.SessionID);
-
-  if Assigned(Session) and (Session is TIdRTPSession) then
-    (Session as TIdRTPSession).SendData(Self.Data);
+  S.SendData(Self.Data);
 end;
 
 //******************************************************************************
 //* TIdRTPTransmissionTimeExpire                                               *
 //******************************************************************************
-//* TIdRTPTransmissionTimeExpire Public methods ********************************
+//* TIdRTPTransmissionTimeExpire Protected methods *****************************
 
-procedure TIdRTPTransmissionTimeExpire.Trigger;
-var
-  Session: TObject;
+
+procedure TIdRTPTransmissionTimeExpire.ActOnTrigger(S: TIdRTPSession);
 begin
-  Session := TIdObjectRegistry.Singleton.FindObject(Self.SessionID);
-
-  if Assigned(Session) and (Session is TIdRTPSession) then
-    (Session as TIdRTPSession).TransmissionTimeExpire;
+  S.TransmissionTimeExpire;
 end;
 
 //******************************************************************************
@@ -6149,14 +6164,9 @@ end;
 //******************************************************************************
 //* TIdRTPSenderReportWait Public methods **************************************
 
-procedure TIdRTPSenderReportWait.Trigger;
-var
-  Session: TObject;
+procedure TIdRTPSenderReportWait.ActOnTrigger(S: TIdRTPSession);
 begin
-  Session := TIdObjectRegistry.Singleton.FindObject(Self.SessionID);
-
-  if Assigned(Session) and (Session is TIdRTPSession) then
-    (Session as TIdRTPSession).SendReport;
+  S.SendReport;
 end;
 
 end.

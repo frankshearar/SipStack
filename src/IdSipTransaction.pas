@@ -464,6 +464,7 @@ type
     fTransactionID: String;
     Transaction:    TIdSipTransaction;
 
+    procedure ActOnTransaction(O: TObject);
     procedure LogToTransactionLayer(Severity: TSeverityLevel;
                                     SourceDescription: String;
                                     RefCode: Cardinal;
@@ -2599,26 +2600,11 @@ end;
 //* TIdSipTransactionWait Public methods ***************************************
 
 procedure TIdSipTransactionWait.Trigger;
-var
-  Target: TObject;
 begin
   // Wait objects usually log to the TIdTimerQueue's logger:
   inherited Trigger;
 
-  Target := TIdObjectRegistry.Singleton.FindObject(Self.TransactionID);
-
-  if Assigned(Target) and (Target is TIdSipTransaction) then begin
-    Self.Transaction := Target as TIdSipTransaction;
-
-    // Log the Trigger to the log the Transaction uses.
-    Self.OnLog := Self.LogToTransactionLayer;
-    try
-      Self.FireTimer(Self.Transaction);
-      Self.LogTrigger;
-    finally
-      Self.AfterFiredTimer(Self.Transaction);
-    end;
-  end;
+  TIdObjectRegistry.Singleton.WithExtantObjectDo(Self.TransactionID, Self.ActOnTransaction);
 end;
 
 //* TIdSipTransactionWait Protected methods ************************************
@@ -2651,6 +2637,23 @@ begin
 end;
 
 //* TIdSipTransactionWait Private methods **************************************
+
+procedure TIdSipTransactionWait.ActOnTransaction(O: TObject);
+begin
+  if not (O is TIdSipTransaction) then
+    Exit;
+
+  Self.Transaction := O as TIdSipTransaction;
+
+  // Log the Trigger to the log the Transaction uses.
+  Self.OnLog := Self.LogToTransactionLayer;
+  try
+    Self.FireTimer(Self.Transaction);
+    Self.LogTrigger;
+  finally
+    Self.AfterFiredTimer(Self.Transaction);
+  end;
+end;
 
 procedure TIdSipTransactionWait.LogToTransactionLayer(Severity: TSeverityLevel;
                                                       SourceDescription: String;

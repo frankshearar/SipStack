@@ -155,6 +155,7 @@ type
     function  GetTransportID: String;
     procedure SetReadTimeout(Value: Integer);
     procedure SetTimer(Value: TIdTimerQueue);
+    procedure SetTransportType(O: TObject);
     procedure SetTransportID(const Value: String);
   protected
     procedure DoOnExecute(Thread: TIdPeerThread);
@@ -183,6 +184,7 @@ type
 
     function  GetTransportID: String;
     procedure SetTransportID(const Value: String);
+    procedure SetTransportType(O: TObject);
   protected
     function  GetTimer: TIdTimerQueue; override;
     procedure SetTimer(Value: TIdTimerQueue); override;
@@ -1069,16 +1071,17 @@ begin
   Self.MessageReader.Timer := Value;
 end;
 
+procedure TIdSipTcpServer.SetTransportType(O: TObject);
+begin
+  if Assigned(O) and (O is TIdSipTransport) then
+    Self.MessageReader.TransportType := (O as TIdSipTransport).GetTransportType;
+end;
+
 procedure TIdSipTcpServer.SetTransportID(const Value: String);
-var
-  Transport: TObject;
 begin
   Self.MessageReader.TransportID := Value;
 
-  Transport := TIdObjectRegistry.Singleton.FindObject(Value);
-
-  if Assigned(Transport) and (Transport is TIdSipTransport) then
-    Self.MessageReader.TransportType := (Transport as TIdSipTransport).GetTransportType;
+  TIdObjectRegistry.Singleton.WithExtantObjectDo(Value, Self.SetTransportType);
 end;
 
 //******************************************************************************
@@ -1129,15 +1132,16 @@ begin
 end;
 
 procedure TIdSipTcpClient.SetTransportID(const Value: String);
-var
-  Transport: TObject;
 begin
   Self.MessageReader.TransportID := Value;
 
-  Transport := TIdObjectRegistry.Singleton.FindObject(Value);
+  TIdObjectRegistry.Singleton.WithExtantObjectDo(Value, Self.SetTransportType);
+end;
 
-  if Assigned(Transport) and (Transport is TIdSipTransport) then
-    Self.MessageReader.TransportType := (Transport as TIdSipTransport).GetTransportType;
+procedure TIdSipTcpClient.SetTransportType(O: TObject);
+begin
+  if Assigned(O) and (O is TIdSipTransport) then
+    Self.MessageReader.TransportType := (O as TIdSipTransport).GetTransportType;
 end;
 
 //******************************************************************************

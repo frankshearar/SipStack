@@ -744,19 +744,20 @@ type
   TIdSipActionFinder = class(TIdSipActionClosure)
   private
     fAction: TIdSipAction;
+  protected
+    procedure ExecuteOnAction(Action: TIdSipAction); override;
   public
-    procedure Execute(Action: TIdSipAction); override;
-
     property Action: TIdSipAction read fAction;
   end;
 
   TIdSipActionSwitch = class(TIdSipActionClosure)
   private
     fExecuted: Boolean;
+
+  protected
+    procedure ExecuteOnAction(Action: TIdSipAction); override;
   public
     constructor Create; override;
-
-    procedure Execute(Action: TIdSipAction); override;
 
     property Executed: Boolean read fExecuted;
   end;
@@ -2497,9 +2498,9 @@ end;
 //******************************************************************************
 //* TIdSipActionFinder                                                         *
 //******************************************************************************
-//* TIdSipActionFinder Public methods ******************************************
+//* TIdSipActionFinder Protected methods ***************************************
 
-procedure TIdSipActionFinder.Execute(Action: TIdSipAction);
+procedure TIdSipActionFinder.ExecuteOnAction(Action: TIdSipAction);
 begin
   Self.fAction := Action;
 end;
@@ -2516,7 +2517,9 @@ begin
   Self.fExecuted := false;
 end;
 
-procedure TIdSipActionSwitch.Execute(Action: TIdSipAction);
+//* TIdSipActionSwitch Protected methods ***************************************
+
+procedure TIdSipActionSwitch.ExecuteOnAction(Action: TIdSipAction);
 begin
   Self.fExecuted := true;
 end;

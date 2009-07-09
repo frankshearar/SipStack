@@ -236,6 +236,8 @@ type
   TIdSipTransportWait = class(TIdWait)
   private
     fTransportID: String;
+
+    procedure TriggerClosure(O: TObject);
   protected
     procedure TriggerOn(Transport: TIdSipTransport); virtual;
   public
@@ -274,6 +276,7 @@ type
     fReceivedFrom: TIdConnectionBindings;
     fTransportID:  String;
 
+    procedure ReceiveMessage(O: TObject);
     procedure SetReceivedFrom(Value: TIdConnectionBindings);
   public
     constructor Create; override;
@@ -1386,7 +1389,7 @@ end;
 //******************************************************************************
 //* TIdSipTransportWait                                                        *
 //******************************************************************************
-//* TIdSipTransportWait Public methods *****************************************
+//* TIdSipTransportWait Protected methods **************************************
 
 procedure TIdSipTransportWait.TriggerOn(Transport: TIdSipTransport);
 begin
@@ -1394,11 +1397,14 @@ begin
 end;
 
 procedure TIdSipTransportWait.Trigger;
-var
-  O: TObject;
 begin
-  O := TIdObjectRegistry.Singleton.FindObject(Self.TransportID);
+  TIdObjectRegistry.Singleton.WithExtantObjectDo(Self.TransportID, Self.TriggerClosure);
+end;
 
+//* TIdSipTransportWait Private methods ****************************************
+
+procedure TIdSipTransportWait.TriggerClosure(O: TObject);
+begin
   if Assigned(O) and (O is TIdSipTransport) then
     Self.TriggerOn(O as TIdSipTransport);
 end;
@@ -1461,18 +1467,20 @@ begin
 end;
 
 procedure TIdSipReceiveMessageWait.Trigger;
-var
-  Receiver: TObject;
 begin
-  Receiver := TIdObjectRegistry.Singleton.FindObject(Self.TransportID);
+  TIdObjectRegistry.Singleton.WithExtantObjectDo(Self.TransportID, Self.ReceiveMessage);
+end;
 
-  if Assigned(Receiver) and (Receiver is TIdSipTransport) then begin
+procedure TIdSipReceiveMessageWait.ReceiveMessage(O: TObject);
+var
+  T: TIdSipTransport;
+begin
+  if Assigned(O) and (O is TIdSipTransport) then begin
+    T := O as TIdSipTransport;
     if Self.Message.IsRequest then
-      (Receiver as TIdSipTransport).ReceiveRequest(Self.Message as TIdSipRequest,
-                                                   Self.ReceivedFrom)
+      T.ReceiveRequest(Self.Message as TIdSipRequest, Self.ReceivedFrom)
     else
-      (Receiver as TIdSipTransport).ReceiveResponse(Self.Message as TIdSipResponse,
-                                                    Self.ReceivedFrom);
+      T.ReceiveResponse(Self.Message as TIdSipResponse, Self.ReceivedFrom);
   end;
 end;
 

@@ -29,6 +29,44 @@ type
 
   TIdCollectBlock = function(O: TObject; C: TClass): Boolean;
 
+  TObjectClosure = class(TObject)
+  public
+    constructor Create; virtual;
+
+    function  Copy: TObjectClosure; virtual;
+    procedure Execute(O: TObject); virtual;
+  end;
+
+  TObjectClosureClass = class of TObjectClosure;
+
+  // If the parameter to Execute, O, exists, then execute the IfExists closure.
+  // Otherwise, execute the IfNotExists closure. Either or both closures may be
+  // set to nil.
+  TIfExistsClosure = class(TObjectClosure)
+  private
+    IfExists:    TObjectClosure;
+    IfNotExists: TObjectClosure;
+  public
+    constructor Create(IfExists: TObjectClosure; IfNotExists: TObjectClosure); reintroduce;
+
+    function  Copy: TObjectClosure; override;
+    procedure Execute(O: TObject); override;
+  end;
+
+  TObjectMethod = procedure(O: TObject) of object;
+
+  // As TIfExistsClosure but with method pointers.
+  TIfExistsClosureWithMethods = class(TObjectClosure)
+  private
+    IfExists:    TObjectMethod;
+    IfNotExists: TObjectMethod;
+  public
+    constructor Create(IfExists: TObjectMethod; IfNotExists: TObjectMethod); reintroduce;
+
+    function  Copy: TObjectClosure; override;
+    procedure Execute(O: TObject); override;
+  end;
+
   // I provide facilities to unambiguously locate any (registered) object
   // resident in memory, and to allow these objects to register and unregister
   // from me as they are instantiate and freed.
@@ -56,6 +94,8 @@ type
     function  FindObject(ObjectID: String): TObject;
     function  RegisterObject(Instance: TObject): String;
     procedure UnregisterObject(ObjectID: String);
+    procedure WithExtantObjectDo(ObjectID: String; Closure: TObjectMethod);
+    procedure WithObjectDo(ObjectID: String; Closure: TObjectClosure);
   end;
 
   // Throw me any time something goes unexpectedly wrong with the object
@@ -119,6 +159,86 @@ begin
 end;
 
 //******************************************************************************
+//* TObjectClosure                                                             *
+//******************************************************************************
+//* TObjectClosure Public methods **********************************************
+
+constructor TObjectClosure.Create;
+begin
+  inherited Create;
+end;
+
+function TObjectClosure.Copy: TObjectClosure;
+begin
+  Result := TObjectClosureClass(Self.ClassType).Create;
+end;
+
+procedure TObjectClosure.Execute(O: TObject);
+begin
+  // By default do nothing.
+end;
+
+//******************************************************************************
+//* TIfExistsClosure                                                           *
+//******************************************************************************
+//* TIfExistsClosure Public methods ********************************************
+
+constructor TIfExistsClosure.Create(IfExists: TObjectClosure; IfNotExists: TObjectClosure);
+begin
+  inherited Create;
+
+  Self.IfExists    := IfExists;
+  Self.IfNotExists := IfNotExists;
+end;
+
+function TIfExistsClosure.Copy: TObjectClosure;
+begin
+  Result := TIfExistsClosure.Create(Self.IfExists, Self.IfNotExists);
+end;
+
+procedure TIfExistsClosure.Execute(O: TObject);
+begin
+  if Assigned(O) then begin
+    if Assigned(Self.IfExists) then
+      Self.IfExists.Execute(O);
+  end
+  else begin
+    if Assigned(Self.IfNotExists) then
+      Self.IfNotExists.Execute(O);
+  end;
+end;
+
+//******************************************************************************
+//* TIfExistsClosureWithMethods                                                *
+//******************************************************************************
+//* TIfExistsClosureWithMethods Public methods *********************************
+
+constructor TIfExistsClosureWithMethods.Create(IfExists: TObjectMethod; IfNotExists: TObjectMethod);
+begin
+  inherited Create;
+
+  Self.IfExists    := IfExists;
+  Self.IfNotExists := IfNotExists;
+end;
+
+function TIfExistsClosureWithMethods.Copy: TObjectClosure;
+begin
+  Result := TIfExistsClosureWithMethods.Create(Self.IfExists, Self.IfNotExists);
+end;
+
+procedure TIfExistsClosureWithMethods.Execute(O: TObject);
+begin
+  if Assigned(O) then begin
+    if Assigned(Self.IfExists) then
+      Self.IfExists(O);
+  end
+  else begin
+    if Assigned(Self.IfNotExists) then
+      Self.IfNotExists(O);
+  end;
+end;
+
+//******************************************************************************
 //* TIdObjectRegistry                                                          *
 //******************************************************************************
 //* TIdObjectRegistry Public methods *******************************************
@@ -168,6 +288,13 @@ function TIdObjectRegistry.FindObject(ObjectID: String): TObject;
 var
   Index: Integer;
 begin
+  // This, and all external objects that use it, have a time-of-use,
+  // time-of-check issue. Right now, a TIdObjectRegistry must not be accessible
+  // from multiple threads. It is in the SIP stack: transports are referenced
+  // both by socket listeners and the stack's timer!).
+  //
+  // Move your code to use WithObjectDo instead.
+
   Self.Lock;
   try
     Index := Self.ObjectRegistry.IndexOf(ObjectID);
@@ -207,6 +334,38 @@ begin
       Self.Log(Format(UnregisterLogMsg, [Self.ObjectRegistry.Objects[Index].ClassName, ObjectID]));
       Self.ObjectRegistry.Delete(Index);
     end;
+  finally
+    Self.Unlock;
+  end;
+end;
+
+procedure TIdObjectRegistry.WithExtantObjectDo(ObjectID: String; Closure: TObjectMethod);
+var
+  O: TObject;
+begin
+  // Atomically run Closure on the object with ObjectID.
+
+  Self.Lock;
+  try
+    O := Self.FindObject(ObjectID);
+
+    if Assigned(O) then
+      Closure(O);
+  finally
+    Self.Unlock;
+  end;
+end;
+
+procedure TIdObjectRegistry.WithObjectDo(ObjectID: String; Closure: TObjectClosure);
+var
+  O: TObject;
+begin
+  // Atomically run Closure on the object with ObjectID.
+
+  Self.Lock;
+  try
+    O := Self.FindObject(ObjectID);
+    Closure.Execute(O);
   finally
     Self.Unlock;
   end;
