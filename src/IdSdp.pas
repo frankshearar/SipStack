@@ -813,12 +813,14 @@ type
   // packet.
   TIdSdpTcpConnectionRegistry = class(TObject)
   private
-    class function GetAllConnections: TStrings;
+    function GetAllConnections: TStrings;
   public
-    class function ClientConnectedTo(Host: String; Port: Cardinal): TIdSdpBaseTcpConnection;
-    class function FindConnection(const ServerID: String): TIdSdpBaseTcpConnection;
-    class function ServerOn(Host: String; Port: Cardinal): TIdSdpBaseTcpConnection;
-    class function ServerRunningOn(Host: String; Port: Cardinal): Boolean;
+    class function Singleton: TIdSdpTcpConnectionRegistry;
+
+    function ClientConnectedTo(Host: String; Port: Cardinal): TIdSdpBaseTcpConnection;
+    function FindConnection(const ServerID: String): TIdSdpBaseTcpConnection;
+    function ServerOn(Host: String; Port: Cardinal): TIdSdpBaseTcpConnection;
+    function ServerRunningOn(Host: String; Port: Cardinal): Boolean;
   end;
 
   // I represent a real TCP connection, but one that's a "holdconn" stream - a
@@ -1421,7 +1423,10 @@ const
   MediaHeaderOrder   = 'micbka';
 
 const
-  OneSecond = 1000; // milliseconds  
+  OneSecond = 1000; // milliseconds
+
+var
+  GSdpTcpConnectionRegistry: TIdSdpTcpConnectionRegistry;  
 
 //******************************************************************************
 //* Unit public functions and procedures                                       *
@@ -5413,7 +5418,12 @@ end;
 //******************************************************************************
 //* TIdSdpTcpConnectionRegistry Public methods *********************************
 
-class function TIdSdpTcpConnectionRegistry.ClientConnectedTo(Host: String; Port: Cardinal): TIdSdpBaseTcpConnection;
+class function TIdSdpTcpConnectionRegistry.Singleton: TIdSdpTcpConnectionRegistry;
+begin
+  Result := GSdpTcpConnectionRegistry;
+end;
+
+function TIdSdpTcpConnectionRegistry.ClientConnectedTo(Host: String; Port: Cardinal): TIdSdpBaseTcpConnection;
 var
   I:      Integer;
   L:      TStrings;
@@ -5437,7 +5447,7 @@ begin
   end;
 end;
 
-class function TIdSdpTcpConnectionRegistry.FindConnection(const ServerID: String): TIdSdpBaseTcpConnection;
+function TIdSdpTcpConnectionRegistry.FindConnection(const ServerID: String): TIdSdpBaseTcpConnection;
 var
   O: TObject;
 begin
@@ -5452,7 +5462,7 @@ begin
   Result := O as TIdSdpBaseTcpConnection;
 end;
 
-class function TIdSdpTcpConnectionRegistry.ServerOn(Host: String; Port: Cardinal): TIdSdpBaseTcpConnection;
+function TIdSdpTcpConnectionRegistry.ServerOn(Host: String; Port: Cardinal): TIdSdpBaseTcpConnection;
 var
   I:      Integer;
   L:      TStrings;
@@ -5476,7 +5486,7 @@ begin
   end;
 end;
 
-class function TIdSdpTcpConnectionRegistry.ServerRunningOn(Host: String; Port: Cardinal): Boolean;
+function TIdSdpTcpConnectionRegistry.ServerRunningOn(Host: String; Port: Cardinal): Boolean;
 var
   I:      Integer;
   L:      TStrings;
@@ -5502,7 +5512,7 @@ end;
 
 //* TIdSdpTcpConnectionRegistry Private methods ********************************
 
-class function TIdSdpTcpConnectionRegistry.GetAllConnections: TStrings;
+function TIdSdpTcpConnectionRegistry.GetAllConnections: TStrings;
 begin
   Result := TStringList.Create;
 
@@ -7536,4 +7546,6 @@ begin
                                                        Self.ExceptionMessage);
 end;
 
+initialization
+  GSdpTcpConnectionRegistry := TIdSdpTcpConnectionRegistry.Create;
 end.

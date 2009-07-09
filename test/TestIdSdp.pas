@@ -1294,7 +1294,7 @@ begin
   Result.AddTest(TestTIdSdpNullMediaStream.Suite);
   Result.AddTest(TestTIdSdpTcpConnectionRegistry.Suite);
   Result.AddTest(TestTIdSdpTcpClient.Suite);
-//                                            Result.AddTest(TestTIdSdpTcpClientConnection.Suite);
+//  Result.AddTest(TestTIdSdpTcpClientConnection.Suite);
   Result.AddTest(TestTIdSdpTcpServerConnection.Suite);
   Result.AddTest(TestTIdSdpTcpNullConnection.Suite);
   Result.AddTest(TestTIdSdpMockTcpNullConnection.Suite);
@@ -8713,18 +8713,18 @@ begin
   try
     Client.ConnectTo(ArbitraryAddress, ArbitraryPort);
 
-    Check(Client = TIdSdpTcpConnectionRegistry.ClientConnectedTo(ArbitraryAddress, ArbitraryPort),
+    Check(Client = TIdSdpTcpConnectionRegistry.Singleton.ClientConnectedTo(ArbitraryAddress, ArbitraryPort),
           'Client not found in registry');
 
-    Check(nil = TIdSdpTcpConnectionRegistry.ClientConnectedTo(TIdIPAddressParser.IncIPAddress(ArbitraryAddress), ArbitraryPort),
+    Check(nil = TIdSdpTcpConnectionRegistry.Singleton.ClientConnectedTo(TIdIPAddressParser.IncIPAddress(ArbitraryAddress), ArbitraryPort),
           'Client found in registry (no such host');
-    Check(nil = TIdSdpTcpConnectionRegistry.ClientConnectedTo(ArbitraryAddress, ArbitraryPort + 1),
+    Check(nil = TIdSdpTcpConnectionRegistry.Singleton.ClientConnectedTo(ArbitraryAddress, ArbitraryPort + 1),
           'Client found in registry (no such port');
 
     Client.ConnectTo(ArbitraryAddress, AnotherPort);
-    Check(nil = TIdSdpTcpConnectionRegistry.ClientConnectedTo(ArbitraryAddress, ArbitraryPort),
+    Check(nil = TIdSdpTcpConnectionRegistry.Singleton.ClientConnectedTo(ArbitraryAddress, ArbitraryPort),
           'Client found in registry after moving');
-    Check(Client = TIdSdpTcpConnectionRegistry.ClientConnectedTo(ArbitraryAddress, AnotherPort),
+    Check(Client = TIdSdpTcpConnectionRegistry.Singleton.ClientConnectedTo(ArbitraryAddress, AnotherPort),
           'Client not found in registry after moving');
   finally
     Client.Free;
@@ -8733,7 +8733,7 @@ end;
 
 procedure TestTIdSdpTcpConnectionRegistry.TestFindConnection;
 begin
-  Check(Self.Agent = TIdSdpTcpConnectionRegistry.FindConnection(Self.Agent.ID),
+  Check(Self.Agent = TIdSdpTcpConnectionRegistry.Singleton.FindConnection(Self.Agent.ID),
         'FindConnection: registered TcpConnection');
 end;
 
@@ -8742,7 +8742,7 @@ const
   NotARegisteredObject = 'Registered objects don''t have an ID like this';
 begin
   Self.ExpectedException := ERegistry;
-  TIdSdpTcpConnectionRegistry.FindConnection(NotARegisteredObject);
+  TIdSdpTcpConnectionRegistry.Singleton.FindConnection(NotARegisteredObject);
 end;
 
 procedure TestTIdSdpTcpConnectionRegistry.TestFindConnectionNotATcpConnection;
@@ -8752,7 +8752,7 @@ begin
   RandomRegisteredObject := TIdRegisteredObject.Create;
   try
     Self.ExpectedException := ERegistry;
-    TIdSdpTcpConnectionRegistry.FindConnection(RandomRegisteredObject.ID);
+    TIdSdpTcpConnectionRegistry.Singleton.FindConnection(RandomRegisteredObject.ID);
   finally
     RandomRegisteredObject.Free;
   end;
@@ -8770,18 +8770,18 @@ begin
   try
     Server.ListenOn(ArbitraryAddress, ArbitraryPort);
 
-    Check(Server = TIdSdpTcpConnectionRegistry.ServerOn(ArbitraryAddress, ArbitraryPort),
+    Check(Server = TIdSdpTcpConnectionRegistry.Singleton.ServerOn(ArbitraryAddress, ArbitraryPort),
           'Server not found in registry');
 
-    Check(nil = TIdSdpTcpConnectionRegistry.ServerOn(TIdIPAddressParser.IncIPAddress(ArbitraryAddress), ArbitraryPort),
+    Check(nil = TIdSdpTcpConnectionRegistry.Singleton.ServerOn(TIdIPAddressParser.IncIPAddress(ArbitraryAddress), ArbitraryPort),
           'Server found in registry (no such host');
-    Check(nil = TIdSdpTcpConnectionRegistry.ServerOn(ArbitraryAddress, ArbitraryPort + 1),
+    Check(nil = TIdSdpTcpConnectionRegistry.Singleton.ServerOn(ArbitraryAddress, ArbitraryPort + 1),
           'Server found in registry (no such port');
 
     Server.ListenOn(ArbitraryAddress, AnotherPort);
-    Check(nil = TIdSdpTcpConnectionRegistry.ServerOn(ArbitraryAddress, ArbitraryPort),
+    Check(nil = TIdSdpTcpConnectionRegistry.Singleton.ServerOn(ArbitraryAddress, ArbitraryPort),
           'Server found in registry after moving');
-    Check(Server = TIdSdpTcpConnectionRegistry.ServerOn(ArbitraryAddress, AnotherPort),
+    Check(Server = TIdSdpTcpConnectionRegistry.Singleton.ServerOn(ArbitraryAddress, AnotherPort),
           'Server not found in registry after moving');
   finally
     Server.Free;
@@ -8797,13 +8797,13 @@ var
 begin
   Server := TIdSdpMockTcpServerConnection.Create;
   try
-    Check(not TIdSdpTcpConnectionRegistry.ServerRunningOn(Address, Port),
+    Check(not TIdSdpTcpConnectionRegistry.Singleton.ServerRunningOn(Address, Port),
           'There''s a server running where there should be no server');
 
     Server.ListenOn(Address, Port);
     Check(Server.IsActive, 'Agent isn''t active');
 
-    Check(TIdSdpTcpConnectionRegistry.ServerRunningOn(Address, Port),
+    Check(TIdSdpTcpConnectionRegistry.Singleton.ServerRunningOn(Address, Port),
           'There''s no running server');
   finally
     Server.Free;
@@ -10251,7 +10251,7 @@ var
 begin
   Address := Desc.Connections[0].Address;
   Port    := Desc.Port;
-  S := TIdSdpTcpConnectionRegistry.ClientConnectedTo(Address, Port);
+  S := TIdSdpTcpConnectionRegistry.Singleton.ClientConnectedTo(Address, Port);
 
   Check(Assigned(S), Format('FindMockClient: No client found connected to %s:%d', [Address, Port]));
   CheckEquals(TIdSdpMockTcpClientConnection, S.ClassType, 'FindMockClient: Client of the incorrect type');
@@ -10267,7 +10267,7 @@ var
 begin
   Address := Desc.Connections[0].Address;
   Port    := Desc.Port;
-  S := TIdSdpTcpConnectionRegistry.ServerOn(Address, Port);
+  S := TIdSdpTcpConnectionRegistry.Singleton.ServerOn(Address, Port);
 
   Check(Assigned(S), Format('FindMockServer: No server found on %s:%d', [Address, Port]));
   CheckEquals(TIdSdpMockTcpServerConnection, S.ClassType, 'FindMockServer: Server of the incorrect type');
