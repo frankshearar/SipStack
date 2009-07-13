@@ -173,8 +173,6 @@ begin
   Self.Associations.Remove(Self.InternalFind(Key));
 end;
 
-
-
 //* TStringDictionary Private methods ******************************************
 
 function TStringDictionary.AssociationAt(Index: Integer): TKeyValuePair;
