@@ -50,12 +50,14 @@ type
   TestTIdTimerQueue = class(TTestCase)
   private
     Queue:    TIdDebugTimerQueue;
+    RemoteQ:  TIdDebugTimerQueue;
     WaitTime: Cardinal;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
     procedure TestAddEvent;
+    procedure TestAddRemoteEvent;
     procedure TestBefore;
   end;
 
@@ -108,6 +110,7 @@ type
     procedure TestCount;
     procedure TestDebugWaitTime;
     procedure TestExceptionNotifiesListeners;
+    procedure TestLastEventScheduled;
     procedure TestRemoveAllEvents;
     procedure TestScheduledEvent;
     procedure TestTriggerEarliestEvent;
@@ -364,13 +367,15 @@ procedure TestTIdTimerQueue.SetUp;
 begin
   inherited SetUp;
 
-  Self.Queue := TIdDebugTimerQueue.Create(true);
+  Self.Queue   := TIdDebugTimerQueue.Create(true);
+  Self.RemoteQ := TIdDebugTimerQueue.Create(true);
 
   Self.WaitTime := 999;
 end;
 
 procedure TestTIdTimerQueue.TearDown;
 begin
+  Self.RemoteQ.Terminate;
   Self.Queue.Terminate;
 
   inherited TearDown;
@@ -387,6 +392,23 @@ begin
   CheckEquals(1, Self.Queue.EventCount, 'No event added');
   Check(Self.Queue.ScheduledEvent(Foo), 'No event scheduled');
   CheckNotEquals(0, Self.Queue.FirstEventScheduledFor(Foo).TimeToWait, 'TimeToWait not calculated');
+end;
+
+procedure TestTIdTimerQueue.TestAddRemoteEvent;
+const
+  ArbitraryWaitTime = 42;
+var
+  TestWait: TIdWait;
+begin
+  TestWait := TIdWait.Create;
+
+  Self.Queue.AddRemoteEvent(Self.RemoteQ.ID, ArbitraryWaitTime, TestWait);
+  Check(Self.RemoteQ.LastEventScheduled = nil, 'An event prematurely scheduled');
+
+  Self.Queue.TriggerAllEventsUpToFirst(TIdRemoteWait);
+  Check(Self.RemoteQ.LastEventScheduled = TestWait, 'Remote event not scheduled');
+  CheckEquals(ArbitraryWaitTime, Self.RemoteQ.LastEventScheduled.TimeToWait, 'TimeToWait not set');
+
 end;
 
 procedure TestTIdTimerQueue.TestBefore;
@@ -772,12 +794,30 @@ begin
   end;
 end;
 
+procedure TestTIdDebugTimerQueue.TestLastEventScheduled;
+var
+  WaitOne: TIdWait;
+  WaitTwo: TIdWait;
+begin
+  Check(nil = Self.Timer.LastEventScheduled, 'No events scheduled? This should return nil!');
+
+  // The timer frees these
+  WaitOne := TIdWait.Create;
+  WaitTwo := TIdWait.Create;
+
+  Self.Timer.AddEvent(1000, WaitOne);
+  Check(WaitOne = Self.Timer.LastEventScheduled, 'First event scheduled');
+
+  Self.Timer.AddEvent(1000, WaitTwo);
+  Check(WaitTwo = Self.Timer.LastEventScheduled, 'Second event scheduled');
+end;
+
 procedure TestTIdDebugTimerQueue.TestRemoveAllEvents;
 var
   WaitOne: TIdWait;
   WaitTwo: TIdWait;
 begin
-  // The time frees these
+  // The timer frees these
   WaitOne := TIdWait.Create;
   WaitTwo := TIdWait.Create;
   Self.Timer.AddEvent(1000, WaitOne);

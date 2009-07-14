@@ -56,6 +56,21 @@ type
 
   TIdWaitClass = class of TIdWait;
 
+  TIdRemoteWait = class(TIdWait)
+  private
+    fProcessID:      String;
+    fRemoteWaitTime: Cardinal;
+    fWait:           TIdWait;
+    procedure ActOnTrigger(O: TObject);
+    procedure NoRemoteTimerQueue(O: TObject);
+  public
+    procedure Trigger; override;
+
+    property ProcessID:      String   read fProcessID write fProcessID;
+    property RemoteWaitTime: Cardinal read fRemoteWaitTime write fRemoteWaitTime;
+    property Wait:           TIdWait  read fWait write fWait;
+  end;
+
   IIdTimerQueueListener = interface(IInterface)
     ['{29C82AC3-EA30-420D-9073-FA4D25EB7A47}']
     procedure OnException(Timer: TIdTimerQueue; Error: Exception; Wait: TIdWait);
@@ -76,7 +91,7 @@ type
   // This is a limitation of using TDateTimes for the Waits' TriggerTimes: the
   // Waits will have TriggerTimes so close together that they're effectively
   // equal.
-  TIdTimerQueue = class(TObject)
+  TIdTimerQueue = class(TIdRegisteredObject)
   private
     fCreateSuspended: Boolean;
     fEventList:       TObjectList;
@@ -118,6 +133,9 @@ type
     procedure AddEvent(MillisecsWait: Cardinal;
                        Event: TIdWait); virtual;
     procedure AddListener(Listener: IIdTimerQueueListener);
+    procedure AddRemoteEvent(ProcessID: String;
+                             MillisecsWait: Cardinal;
+                             Event: TIdWait);
     function  Before(TimeA,
                      TimeB: Cardinal): Boolean;
     procedure RemoveListener(Listener: IIdTimerQueueListener);
@@ -301,6 +319,44 @@ begin
 end;
 
 //******************************************************************************
+//* TIdRemoteWait                                                              *
+//******************************************************************************
+//* TIdRemoteWait Public methods ***********************************************
+
+procedure TIdRemoteWait.Trigger;
+var
+  C: TIfExistsClosureWithMethods;
+begin
+  C := TIfExistsClosureWithMethods.Create(Self.ActOnTrigger, Self.NoRemoteTimerQueue);
+  try
+    TIdObjectRegistry.Singleton.WithObjectDo(Self.ProcessID, C);
+  finally
+    C.Free;
+  end;
+end;
+
+//* TIdRemoteWait Private methods **********************************************
+
+procedure TIdRemoteWait.ActOnTrigger(O: TObject);
+var
+  TQ: TIdTimerQueue;
+begin
+  if (O is TIdTimerQueue) then begin
+    TQ := O as TIdTimerQueue;
+
+    TQ.AddEvent(Self.RemoteWaitTime, Self.Wait);
+  end;
+end;
+
+procedure TIdRemoteWait.NoRemoteTimerQueue(O: TObject);
+begin
+  // Waits are freed when they're Triggered. No remote timer means no
+  // reclamation.
+  Self.Wait.Free;
+  Self.Wait := nil;
+end;
+
+//******************************************************************************
 //* TIdTimerQueue                                                              *
 //******************************************************************************
 //* TIdTimerQueue Public methods ***********************************************
@@ -418,6 +474,20 @@ end;
 procedure TIdTimerQueue.AddListener(Listener: IIdTimerQueueListener);
 begin
   Self.Listeners.AddListener(Listener);
+end;
+
+procedure TIdTimerQueue.AddRemoteEvent(ProcessID: String;
+                                       MillisecsWait: Cardinal;
+                                       Event: TIdWait);
+var
+  RemotedEvent: TIdRemoteWait;
+begin
+  RemotedEvent := TIdRemoteWait.Create;
+  RemotedEvent.ProcessID      := ProcessID;
+  RemotedEvent.RemoteWaitTime := MillisecsWait;
+  RemotedEvent.Wait           := Event;
+
+  Self.AddEvent(TriggerImmediately, RemotedEvent);
 end;
 
 function TIdTimerQueue.Before(TimeA,
@@ -771,7 +841,10 @@ function TIdDebugTimerQueue.LastEventScheduled: TIdWait;
 begin
   Self.LockTimer;
   try
-    Result := Self.EventAt(Self.EventCount - 1);
+    if (Self.EventCount = 0) then
+      Result := nil
+    else
+      Result := Self.EventAt(Self.EventCount - 1);
   finally
     Self.UnlockTimer;
   end;
