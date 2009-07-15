@@ -59,6 +59,7 @@ type
     procedure TestAddEvent;
     procedure TestAddRemoteEvent;
     procedure TestBefore;
+    procedure TestDispatchEvent;
   end;
 
   TestTIdThreadedTimerQueue = class(TThreadingTestCase,
@@ -408,7 +409,6 @@ begin
   Self.Queue.TriggerAllEventsUpToFirst(TIdRemoteWait);
   Check(Self.RemoteQ.LastEventScheduled = TestWait, 'Remote event not scheduled');
   CheckEquals(ArbitraryWaitTime, Self.RemoteQ.LastEventScheduled.TimeToWait, 'TimeToWait not set');
-
 end;
 
 procedure TestTIdTimerQueue.TestBefore;
@@ -434,6 +434,19 @@ begin
         'High(Cardinal) - 10, 10');
   Check(not Self.Queue.Before(10, High(Cardinal) - 10),
         '10, High(Cardinal) - 10');
+end;
+
+procedure TestTIdTimerQueue.TestDispatchEvent;
+const
+  ArbitraryWaitTime = 42;
+var
+  TestWait: TIdWait;
+begin
+  TestWait := TIdWait.Create;
+
+  TIdTimerQueue.DispatchEvent(Self.RemoteQ.ID, ArbitraryWaitTime, TestWait);
+  Check(Self.RemoteQ.LastEventScheduled = TestWait, 'Remote event not scheduled');
+  CheckEquals(ArbitraryWaitTime, Self.RemoteQ.LastEventScheduled.TimeToWait, 'TimeToWait not set');
 end;
 
 //******************************************************************************

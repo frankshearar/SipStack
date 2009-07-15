@@ -127,6 +127,10 @@ type
     property Lock:            TCriticalSection read fLock;
     property Terminated:      Boolean          read fTerminated write fTerminated;
   public
+    class procedure DispatchEvent(ProcessID: String;
+                                  MillisecsWait: Cardinal;
+                                  Event: TIdWait);
+
     constructor Create(CreateSuspended: Boolean); virtual;
     destructor  Destroy; override;
 
@@ -360,6 +364,27 @@ end;
 //* TIdTimerQueue                                                              *
 //******************************************************************************
 //* TIdTimerQueue Public methods ***********************************************
+
+class procedure TIdTimerQueue.DispatchEvent(ProcessID: String;
+                                            MillisecsWait: Cardinal;
+                                            Event: TIdWait);
+var
+  RemoteWait: TIdRemoteWait;
+begin
+  // This is a utility method that allows objects to send closures to a
+  // TimerQueue without having a (direct) reference to a TimerQueue.
+
+  RemoteWait := TIdRemoteWait.Create;
+  try
+    RemoteWait.ProcessID      := ProcessID;
+    RemoteWait.RemoteWaitTime := MillisecsWait;
+    RemoteWait.Wait           := Event;
+
+    RemoteWait.Trigger;
+  finally
+    RemoteWait.Free;
+  end;
+end;
 
 constructor TIdTimerQueue.Create(CreateSuspended: Boolean);
 begin
