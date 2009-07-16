@@ -18,11 +18,11 @@ the action.
 
 BROAD STROKES
 
-At the very lowest level, we have servers TIdSipTcpServer,
+At the very lowest level, we have servers (TIdSipTcpServer,
 TIdSipUdpServer, etc.) listening to the OS's socket layer. These
 classes parse SIP (and RTP) packets and pass them to a TIdTimerQueue
 for processing. When these TIdWait objects are triggered,
-TIdSipTransports further process the messages, potentially rejected
+TIdSipTransports further process the messages, potentially rejecting
 malformed messages.
 
 We connect TIdSipTransports to a TIdSipTransactionDispatcher. The
@@ -174,38 +174,58 @@ TIdTimerQueue. Each layer has a reference to this thread. The entire
 stack executes in the context of this thread, except for the socket
 layer and the synchronization layer.
 
-The TimerQueue processes TIdWaits, objects that encapsulate a piece of
-code scheduled to run at a particular time. The TimerQueue is not a
-real-time system, but tries to execute Wait objects as soon as
-possible after the Wait's scheduled time.
+A TIdTimerQueue is a thread that processes TIdWaits, with a
+configurable delay. When you schedule a TIdWait object, you give the
+TIdTimerQueue an offset time (in milliseconds) when you want the
+TIdWait object to be processed. For instance, "TQ.AddEvent(1000,
+Wait)" schedules Wait to be processed one second from Now.
 
-When you schedule a Wait object, you give the TimerQueue an offset
-time (in milliseconds) when you want the Wait object to be
-processed. For instance, "TQ.AddEvent(1000, Wait)" schedules Wait to
-be processed one second from Now. The TimerQueue stores the Waits in
-order of execution time, (the order for Waits scheduled very close in
-time to each other is undefined.) and invokes each Wait's Trigger
-method in turn. When it runs out of Waits, it goes to sleep until
-you schedule another Wait, or after some (configurable) amount of
-time. The default timeout value is one second.
+A TIdWait is a reified closure: it's a function object that closes
+over objects. These objects are typically copies of data, or weak
+references to objects in the global store,
+TIdObjectRepository.Singleton.
 
-Wait objects either store local copies of data they need, or if they
-have to refer to an external object, they store an ID that points into
-an object registry (TIdObjectRegistry). When the Wait triggers, it
-looks up the object. If the object is in the registry (hence not
-destroyed) and of the correct type, the Wait triggers, otherwise it
-does nothing. This allows one to schedule Wait objects (say for a
+A TIdObjectRepository implements a "weak reference" dictionary mapping
+string IDs to objects. It does not manage the lifetime of any
+objects. TIdRegisteredObjects are automatically registered with and
+unregistered from TIdObjectRepository.Singleton. You can also register
+an arbitrary TObject O using TIdObjectRepository.RegisterObject(O), in
+which case you are responsible for unregistering O.
+
+The TIdTimerQueue is not a real-time system. It tries to execute
+TIdWait objects as soon as possible after the TIdWait's scheduled
+time. "As soon as possible" means that the TIdTimerQueue will finish
+executing a TIdWait and then check for the next scheduled event. It is
+thus possible for a scheduled TIdWait's execution to be delayed for an
+arbitrarily long period of time.
+
+The TIdTimerQueue stores the TIdWaits in order of execution time. The
+order for TIdWaits scheduled very close in time to each other (below
+the resolution of a TDateTime, in other words) is defined by the order
+in which the events are added). When a TIdWait is scheduled to
+execute, the TIdTimerQueue invokes that TIdWait's Trigger method. When
+it runs out of Waits, it goes to sleep until you schedule another
+TIdWait, or after some (configurable) amount of time. The default
+timeout value is one second.
+
+TIdWait objects either store local copies of data they need, or if
+they have to refer to an external object, they store an ID that points
+into TIdObjectRegistry.Singleton. When the TIdWait triggers, it looks
+up the object. If the object is in the registry (hence not destroyed)
+and of the correct type, the TIdWait triggers, otherwise it does
+nothing. This allows one to schedule TIdWait objects (say for a
 TIdSipClientInviteTransaction's Timer D) and destroy the transaction
-without trying to find all scheduled Waits for that object.
+without trying to find all scheduled TIdWaits for that
+object.
 
 Each port on which the stack listens has a thread that waits for
 messages to arrive. When those messages arrive, the servers bundle (a
 copy of) the message into a TIdSipReceiveMessageWait and schedule that
-Wait in the TimerQueue.
+TIdWait in the TIdTimerQueue.
 
 In the case of the synchronization layer, when you send a message (say
-through MakeRegistration/Send), you're creating a Wait that is
-scheduled to run in the context of the TimerQueue.
+through MakeRegistration/Send), you're creating a TIdWait that is
+scheduled to run in the context of the TIdTimerQueue.
 
 THE SYNCHRONIZATION LAYER
 
@@ -214,7 +234,7 @@ own thread. It notifies listeners of events (established sessions,
 network failures, successful/failed registrations, etc.) in the
 context of the main thread (in which the VCL runs) through Windows'
 PostMessage function. Any messages bound for the network run in the
-context of the TimerQueue. Thus, the synchronization layer
+context of the TIdTimerQueue. Thus, the synchronization layer
 synchronizes the stack thread and the main thread.
 
 THE TRANSACTION USER LAYER
