@@ -83,6 +83,7 @@ type
     procedure Lock;
     procedure Log(Description: String);
     function  ObjectAt(Index: Integer): TObject;
+    function  ObjectCalled(ObjectID: String): TObject;
     procedure Unlock;
   public
     constructor Create; virtual;
@@ -285,8 +286,6 @@ begin
 end;
 
 function TIdObjectRegistry.FindObject(ObjectID: String): TObject;
-var
-  Index: Integer;
 begin
   // This, and all external objects that use it, have a time-of-use,
   // time-of-check issue. Right now, a TIdObjectRegistry must not be accessible
@@ -297,12 +296,7 @@ begin
 
   Self.Lock;
   try
-    Index := Self.ObjectRegistry.IndexOf(ObjectID);
-
-    if (Index = ItemNotFoundIndex) then
-      Result := nil
-    else
-      Result := Self.ObjectAt(Index);
+    Result := Self.ObjectCalled(ObjectID);
   finally
     Self.Unlock;
   end;
@@ -399,6 +393,36 @@ end;
 function TIdObjectRegistry.ObjectAt(Index: Integer): TObject;
 begin
   Result := Self.ObjectRegistry.Objects[Index];
+end;
+
+function TIdObjectRegistry.ObjectCalled(ObjectID: String): TObject;
+var
+  C:          Integer;
+  Middle:     Integer;
+  StartIndex: Integer;
+  EndIndex:   Integer;
+begin
+  Result := nil;
+
+  StartIndex := 0;
+  EndIndex   := Self.ObjectRegistry.Count - 1;
+
+  if (StartIndex > EndIndex) then Exit;
+
+  while (StartIndex <= EndIndex) do begin
+    Middle := (EndIndex + StartIndex) div 2;
+
+    C := CompareStr(ObjectID, Self.ObjectRegistry[Middle]);
+
+    if (C < 0) then
+      EndIndex := Middle - 1
+    else if (C > 0) then
+      StartIndex := Middle + 1
+    else begin
+      Result := Self.ObjectRegistry.Objects[Middle];
+      Break;
+    end;
+  end;
 end;
 
 procedure TIdObjectRegistry.Unlock;
