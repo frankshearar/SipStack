@@ -149,11 +149,18 @@ constructor TIdRegisteredObject.Create;
 begin
   inherited Create;
 
+  // RACE CONDITION: Instances of subclasses may be referenced by their ID but
+  // may only be halfway through their creation process, before the initial
+  // call to Create has completed.
   Self.fID := TIdObjectRegistry.Singleton.RegisterObject(Self);
 end;
 
 destructor TIdRegisteredObject.Destroy;
 begin
+  // RACE CONDITION: Subclasses may be halfway through their destruction process
+  // before this next line unregisters them. Thus, closures may happily
+  // reference the object when all the interesting instvars (i.e., instvars
+  // defined in the subclass) have been destroyed.
   TIdObjectRegistry.Singleton.UnregisterObject(Self.ID);
 
   inherited Destroy;
