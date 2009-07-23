@@ -21,8 +21,11 @@ type
   private
     fID: String;
   public
+    // "overload" so subclasses can also declare constructors called Create.
     constructor Create; overload; virtual;
-    destructor  Destroy; override;
+
+    procedure AfterConstruction; override;
+    procedure BeforeDestruction; override;
 
     property ID: String read fID;
   end;
@@ -148,22 +151,20 @@ end;
 constructor TIdRegisteredObject.Create;
 begin
   inherited Create;
+end;
 
-  // RACE CONDITION: Instances of subclasses may be referenced by their ID but
-  // may only be halfway through their creation process, before the initial
-  // call to Create has completed.
+procedure TIdRegisteredObject.AfterConstruction;
+begin
+  inherited AfterConstruction;
+
   Self.fID := TIdObjectRegistry.Singleton.RegisterObject(Self);
 end;
 
-destructor TIdRegisteredObject.Destroy;
+procedure TIdRegisteredObject.BeforeDestruction;
 begin
-  // RACE CONDITION: Subclasses may be halfway through their destruction process
-  // before this next line unregisters them. Thus, closures may happily
-  // reference the object when all the interesting instvars (i.e., instvars
-  // defined in the subclass) have been destroyed.
   TIdObjectRegistry.Singleton.UnregisterObject(Self.ID);
 
-  inherited Destroy;
+  inherited BeforeDestruction;
 end;
 
 //******************************************************************************
