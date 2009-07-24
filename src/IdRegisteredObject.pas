@@ -76,18 +76,35 @@ type
   //
   // Note that you can register any instance of any kind of object, but if you
   // register an instance that isn't a TIdRegisteredObject then you have to
-  // store the object ID yourself.
+  // store the object ID yourself, and unregister the object.
+  //
+  // A note on reserving an ID versus registering an object: you reserve an ID
+  // when you want a unique, unused identifier. You might be halfway through
+  // initialising an object, and need that ID, but not want anything else to be
+  // able to actually _do_ anything to the object (say, through WithObjectDo).
+  //
+  // If you do reserve an ID and don't register the object, then you MUST
+  // unreserve the ID!
+  //
+  // Registering an object briefly reserves an ID if you haven't already
+  // reserved one for the object.
   TIdObjectRegistry = class(TObject)
   private
     ObjectRegistry: TStrings;
+    ReservedIDs:    TStrings;
     RegLock:        TCriticalSection;
 
     procedure Collect(SearchType: TClass; SearchBlock: TIdCollectBlock; Results: TStrings);
+    function  FindID(L: TStrings; O: TObject): String;
     procedure Lock;
     procedure Log(Description: String);
+    function  IndexOf(L: TStrings; ObjectID: String): Integer;
     function  ObjectAt(Index: Integer): TObject;
-    function  ObjectCalled(ObjectID: String): TObject;
+    function  ObjectCalled(L: TStrings; ObjectID: String): TObject;
+    function  RegisteredIDOf(O: TObject): String;
+    function  ReservedIDOf(O: TObject): String;
     procedure Unlock;
+    function  UnusedID: String;
   public
     constructor Create; virtual;
     destructor  Destroy; override;
@@ -97,7 +114,9 @@ type
     procedure CollectAllObjectsOfClass(SearchType: TClass; Results: TStrings; AllowSubclassTypes: Boolean = true);
     function  FindObject(ObjectID: String): TObject;
     function  RegisterObject(Instance: TObject): String;
+    function  ReserveID(Instance: TObject): String;
     procedure UnregisterObject(ObjectID: String);
+    procedure UnreserveID(ObjectID: String);
     procedure WithExtantObjectDo(ObjectID: String; Closure: TObjectMethod);
     procedure WithObjectDo(ObjectID: String; Closure: TObjectClosure);
   end;
@@ -109,7 +128,9 @@ type
 
 const
   RegisterLogMsg   = '%s with ID %s instantiated';
+  ReserveLogMsg    = '%s with ID %s reserved';
   UnregisterLogMsg = '%s with ID %s freed';
+  UnreserveLogMsg  = '%s with ID %s unreserved';
 
 implementation
 
@@ -150,14 +171,22 @@ end;
 
 constructor TIdRegisteredObject.Create;
 begin
+  // Reserve an ID so that subclasses may do interesting things like schedule
+  // TIdWaits with this ID. Merely reserve it so that no other instance can
+  // actually reference Self through Self.ID.
+
   inherited Create;
+
+  Self.fID := TIdObjectRegistry.Singleton.ReserveID(Self);
 end;
 
 procedure TIdRegisteredObject.AfterConstruction;
 begin
+  // Now that we have completely initialised Self, allow others to access Self.
+
   inherited AfterConstruction;
 
-  Self.fID := TIdObjectRegistry.Singleton.RegisterObject(Self);
+  TIdObjectRegistry.Singleton.RegisterObject(Self);
 end;
 
 procedure TIdRegisteredObject.BeforeDestruction;
@@ -258,12 +287,14 @@ begin
 
   Self.ObjectRegistry := CreateSortedList;
   Self.RegLock        := TCriticalSection.Create;
+  Self.ReservedIDs    := CreateSortedList;
 end;
 
 destructor TIdObjectRegistry.Destroy;
 begin
   Self.Lock;
   try
+    Self.ReservedIDs.Free;
     Self.ObjectRegistry.Free;
   finally
     Self.Unlock;
@@ -304,7 +335,7 @@ begin
 
   Self.Lock;
   try
-    Result := Self.ObjectCalled(ObjectID);
+    Result := Self.ObjectCalled(Self.ObjectRegistry, ObjectID);
   finally
     Self.Unlock;
   end;
@@ -314,12 +345,36 @@ function TIdObjectRegistry.RegisterObject(Instance: TObject): String;
 begin
   Self.Lock;
   try
-    repeat
-      Result := ConstructUUID;
-    until (Self.ObjectRegistry.IndexOf(Result) = ItemNotFoundIndex);
-
-    Self.ObjectRegistry.AddObject(Result, Instance);
+    Result := Self.ReserveID(Instance);
+    try
+      Self.ObjectRegistry.AddObject(Result, Instance);
+    finally
+      Self.UnreserveID(Result);
+    end;
     Self.Log(Format(RegisterLogMsg, [Instance.ClassName, Result]));
+  finally
+    Self.Unlock;
+  end;
+end;
+
+function TIdObjectRegistry.ReserveID(Instance: TObject): String;
+begin
+  // If Instance has already been reserved, just return its associated ID.
+  // If Instance has already been registered, just return its associated ID.
+  // Otherwise, reserve a unique identifier for Instance to use at some later
+  // stage.
+
+  Self.Lock;
+  try
+    Result := Self.ReservedIDOf(Instance);
+    if (Result <> '') then Exit;
+
+    Result := Self.RegisteredIDOf(Instance);
+    if (Result <> '') then Exit;
+
+    Result := Self.UnusedID;
+    Self.ReservedIDs.AddObject(Result, Instance);
+    Self.Log(Format(ReserveLogMsg, [Instance.ClassName, Result]));
   finally
     Self.Unlock;
   end;
@@ -331,10 +386,29 @@ var
 begin
   Self.Lock;
   try
-    Index := Self.ObjectRegistry.IndexOf(ObjectID);
+    Index := Self.IndexOf(Self.ObjectRegistry, ObjectID);
     if (Index <> ItemNotFoundIndex) then begin
       Self.Log(Format(UnregisterLogMsg, [Self.ObjectRegistry.Objects[Index].ClassName, ObjectID]));
       Self.ObjectRegistry.Delete(Index);
+    end;
+  finally
+    Self.Unlock;
+  end;
+end;
+
+procedure TIdObjectRegistry.UnreserveID(ObjectID: String);
+var
+  Index: Integer;
+begin
+  // If you've reserved an ID that you no longer need, and you haven't
+  // registered the object, then you need to manually unreserve the ID.
+
+  Self.Lock;
+  try
+    Index := Self.IndexOf(Self.ReservedIDs, ObjectID);
+    if (Index <> ItemNotFoundIndex) then begin
+      Self.Log(Format(UnreserveLogMsg, [Self.ReservedIDs.Objects[Index].ClassName, ObjectID]));
+      Self.ReservedIDs.Delete(Index);
     end;
   finally
     Self.Unlock;
@@ -388,6 +462,19 @@ begin
   end;
 end;
 
+function TIdObjectRegistry.FindID(L: TStrings; O: TObject): String;
+var
+  Index: Integer;
+begin
+  // If L contains O then return its associated ID. Otherwise, return the empty
+  // string.
+  Index := L.IndexOfObject(O);
+  if (Index = ItemNotFoundIndex) then
+    Result := ''
+  else
+    Result := L[Index];
+end;
+
 procedure TIdObjectRegistry.Lock;
 begin
   Self.RegLock.Acquire;
@@ -398,44 +485,73 @@ begin
   LogEntry(Description, '', slDebug, 0, '');
 end;
 
-function TIdObjectRegistry.ObjectAt(Index: Integer): TObject;
-begin
-  Result := Self.ObjectRegistry.Objects[Index];
-end;
-
-function TIdObjectRegistry.ObjectCalled(ObjectID: String): TObject;
+function TIdObjectRegistry.IndexOf(L: TStrings; ObjectID: String): Integer;
 var
   C:          Integer;
   Middle:     Integer;
   StartIndex: Integer;
   EndIndex:   Integer;
 begin
-  Result := nil;
-
   StartIndex := 0;
-  EndIndex   := Self.ObjectRegistry.Count - 1;
+  EndIndex   := L.Count - 1;
+  Result := ItemNotFoundIndex;
 
   if (StartIndex > EndIndex) then Exit;
 
   while (StartIndex <= EndIndex) do begin
     Middle := (EndIndex + StartIndex) div 2;
 
-    C := CompareStr(ObjectID, Self.ObjectRegistry[Middle]);
+    C := CompareStr(ObjectID, L[Middle]);
 
     if (C < 0) then
       EndIndex := Middle - 1
     else if (C > 0) then
       StartIndex := Middle + 1
     else begin
-      Result := Self.ObjectRegistry.Objects[Middle];
+      Result := Middle;
       Break;
     end;
   end;
 end;
 
+function TIdObjectRegistry.ObjectAt(Index: Integer): TObject;
+begin
+  Result := Self.ObjectRegistry.Objects[Index];
+end;
+
+function TIdObjectRegistry.ObjectCalled(L: TStrings; ObjectID: String): TObject;
+var
+  Index: Integer;
+begin
+  Index := Self.IndexOf(L, ObjectID);
+
+  if (Index = ItemNotFoundIndex) then
+    Result := nil
+  else
+    Result := L.Objects[Index];
+end;
+
+function TIdObjectRegistry.RegisteredIDOf(O: TObject): String;
+begin
+  Result := Self.FindID(Self.ObjectRegistry, O);
+end;
+
+function TIdObjectRegistry.ReservedIDOf(O: TObject): String;
+begin
+  Result := Self.FindID(Self.ReservedIDs, O);
+end;
+
 procedure TIdObjectRegistry.Unlock;
 begin
   Self.RegLock.Release;
+end;
+
+function TIdObjectRegistry.UnusedID: String;
+begin
+  repeat
+    Result := ConstructUUID;
+  until (Self.ObjectCalled(Self.ObjectRegistry, Result) = nil)
+    and (Self.ObjectCalled(Self.ReservedIDs,    Result) = nil);
 end;
 
 initialization
