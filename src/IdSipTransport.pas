@@ -1256,7 +1256,7 @@ begin
 end;
 
 class procedure TIdSipTransportRegistry.RegisterTransportType(const Name: String;
-                                                          const TransportType: TIdSipTransportClass);
+                                                              const TransportType: TIdSipTransportClass);
 begin
   if (Self.TransportTypeRegistry.IndexOf(Name) = ItemNotFoundIndex) then
     Self.TransportTypeRegistry.AddObject(Name, TObject(TransportType));
