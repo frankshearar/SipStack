@@ -40,6 +40,7 @@ type
     procedure TestFindObject;
     procedure TestRegisterObjectLogs;
     procedure TestRegisterObjectReservesAndUnreservesID;
+    procedure TestRegisterObjectTwice;
     procedure TestReserveIDDoesntRegister;
     procedure TestReserveIDThenRegister;
     procedure TestUnreserveIDDoesntUnregister;
@@ -289,6 +290,22 @@ begin
     ID := Self.Reg.RegisterObject(O);
     CheckReserved(O, ID, 'Object not reserved');
     CheckUnreserved(O, ID, 'Object not unreserved');
+  finally
+    O.Free;
+  end;
+end;
+
+procedure TestTIdObjectRegistry.TestRegisterObjectTwice;
+var
+  ID:    String;
+  NewID: String;
+  O:     TObject;
+begin
+  O := TObject.Create;
+  try
+    ID := Self.Reg.RegisterObject(O);
+    NewID := Self.Reg.RegisterObject(O);
+    CheckEquals(ID, NewID, 'Reregistering object returned different reference');
   finally
     O.Free;
   end;

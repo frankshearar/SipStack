@@ -345,6 +345,12 @@ function TIdObjectRegistry.RegisterObject(Instance: TObject): String;
 begin
   Self.Lock;
   try
+    // If Instance is already registered, we just return that ID.
+    Result := Self.FindID(Self.ObjectRegistry, Instance);
+    if (Result <> '') then begin
+      Exit;
+    end;
+
     Result := Self.ReserveID(Instance);
     try
       Self.ObjectRegistry.AddObject(Result, Instance);
@@ -492,6 +498,8 @@ var
   StartIndex: Integer;
   EndIndex:   Integer;
 begin
+  // Find the INDEX of the object identified by ObjectID in L.
+
   StartIndex := 0;
   EndIndex   := L.Count - 1;
   Result := ItemNotFoundIndex;

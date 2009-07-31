@@ -1226,13 +1226,15 @@ end;
 //* TIdSipTransportRegistry Public methods *************************************
 
 class function TIdSipTransportRegistry.DefaultPortFor(const Transport: String): Cardinal;
+var
+  Index: Integer;
 begin
-  try
-    Result := Self.TransportTypeFor(Transport).DefaultPort;
-  except
-    on EUnknownTransport do
-      Result := TIdSipTransport.DefaultPort;
-  end;
+  Index := Self.TransportTypeRegistry.IndexOf(Transport);
+
+  if (Index <> ItemNotFoundIndex) then
+    Result := Self.TransportTypeAt(Index).DefaultPort
+  else
+    Result := TIdSipTransport.DefaultPort;
 end;
 
 class procedure TIdSipTransportRegistry.InsecureTransports(Result: TStrings);
