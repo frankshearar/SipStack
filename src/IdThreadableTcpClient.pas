@@ -12,8 +12,8 @@ unit IdThreadableTcpClient;
 interface
 
 uses
-  Classes, IdBaseThread, IdConnectionBindings, IdTCPClient, IdTimerQueue,
-  SysUtils;
+  Classes, IdBaseThread, IdConnectionBindings, IdTCPClient, IdTCPConnection,
+  IdTimerQueue, SysUtils;
 
 type
   TIdThreadableTcpClient = class;
@@ -25,6 +25,7 @@ type
   // schedule TIdWaits in the TimerQueue.
   TIdThreadableTcpClient = class(TIdTCPClient)
   private
+    fCachedBindings:      TIdConnectionBindings;
     fConserveConnections: Boolean;
     fOnIdle:              TIdSdpTcpClientProc;
     fOnReceiveMessage:    TReceiveMessageProc;
@@ -42,15 +43,18 @@ type
     procedure SetTimer(Value: TIdTimerQueue); virtual;
   public
     constructor Create(AOwner: TComponent); override;
+    destructor  Destroy; override;
 
     procedure Connect(const Timeout: Integer); override;
+    function  Protocol: String; virtual;
     procedure ReceiveMessages; virtual;
 
-    property ConserveConnections: Boolean             read fConserveConnections write SetConserveConnections;
-    property OnIdle:              TIdSdpTcpClientProc read fOnIdle write fOnIdle;
-    property OnReceiveMessage:    TReceiveMessageProc read fOnReceiveMessage write fOnReceiveMessage;
-    property Terminated:          Boolean             read fTerminated write SetTerminated;
-    property Timer:               TIdTimerQueue       read GetTimer write SetTimer;
+    property CachedBindings:      TIdConnectionBindings read fCachedBindings write fCachedBindings;
+    property ConserveConnections: Boolean               read fConserveConnections write SetConserveConnections;
+    property OnIdle:              TIdSdpTcpClientProc   read fOnIdle write fOnIdle;
+    property OnReceiveMessage:    TReceiveMessageProc   read fOnReceiveMessage write fOnReceiveMessage;
+    property Terminated:          Boolean               read fTerminated write SetTerminated;
+    property Timer:               TIdTimerQueue         read GetTimer write SetTimer;
   end;
 
   // I allow a TIdThreadableTcpClient to run in the context of its own thread.
@@ -72,10 +76,27 @@ type
 const
   FiveSeconds = 5000; // milliseconds
 
+procedure StoreBindings(C: TIdTCPConnection; TransportType: String; Dest: TIdConnectionBindings);
+
 implementation
 
 uses
   IdIndyUtils, RuntimeSafety;
+
+//******************************************************************************
+//* Unit Public functions/procedures                                           *
+//******************************************************************************
+
+procedure StoreBindings(C: TIdTCPConnection; TransportType: String; Dest: TIdConnectionBindings);
+begin
+  if C.Connected then begin
+    Dest.LocalIP   := C.Socket.Binding.IP;
+    Dest.LocalPort := C.Socket.Binding.Port;
+    Dest.PeerIP    := C.Socket.Binding.PeerIP;
+    Dest.PeerPort  := C.Socket.Binding.PeerPort;
+    Dest.Transport := TransportType;
+  end;
+end;
 
 //******************************************************************************
 //* TIdThreadableTcpClient                                                     *
@@ -87,9 +108,17 @@ begin
   inherited Create(AOwner);
 
   Self.ConserveConnections := true;
+  Self.fCachedBindings     := TIdConnectionBindings.Create;
   Self.OnDisconnected      := Self.MarkAsTerminated;
   Self.ReadTimeout         := Self.DefaultTimeout;
   Self.Terminated          := false;
+end;
+
+destructor TIdThreadableTcpClient.Destroy;
+begin
+  Self.fCachedBindings.Free;
+
+  inherited Destroy;
 end;
 
 procedure TIdThreadableTcpClient.Connect(const Timeout: Integer);
@@ -97,6 +126,14 @@ begin
   inherited Connect(Timeout);
 
   KeepAliveSocket(Self, Self.ConserveConnections);
+  StoreBindings(Self, Self.Protocol, Self.CachedBindings);
+end;
+
+function TIdThreadableTcpClient.Protocol: String;
+begin
+  // What's the transport protocol represented this instance/class?
+
+  Result := TcpTransport;
 end;
 
 procedure TIdThreadableTcpClient.ReceiveMessages;
