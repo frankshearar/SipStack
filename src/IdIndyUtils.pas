@@ -14,7 +14,10 @@ unit IdIndyUtils;
 interface
 
 uses
-  IdSocketHandle, IdTCPConnection, SysUtils;
+  IdSocketHandle, IdTCPConnection, IdTcpServer, SysUtils;
+
+type
+  TIdTcpServerClass = class of TIdTcpServer;
 
 function  BindingsToStr(Bindings: TIdSocketHandles): String;
 function  BoolToSockOpt(B: Boolean): Integer;
