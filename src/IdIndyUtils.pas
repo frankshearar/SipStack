@@ -23,7 +23,12 @@ function  BindingsToStr(Bindings: TIdSocketHandles): String;
 function  BoolToSockOpt(B: Boolean): Integer;
 function  CreateTcpServer(ServerType: TIdTcpServerClass): TIdTcpServer;
 procedure KeepAliveSocket(C: TIdTCPConnection; KeepAlive: Boolean);
+procedure OpenOnFirstFreePort(S: TIdTcpServer;
+                              const Address: String;
+                              Port: Cardinal);
 procedure RaiseSocketError(OriginalException: Exception; Bindings: TIdSocketHandles);
+function  SocketUsesKeepAlive(C: TIdTCPConnection): Boolean;
+function  SockOptToBool(N: Integer): Boolean;
 
 implementation
 
@@ -90,11 +95,54 @@ begin
   end;
 end;
 
+procedure OpenOnFirstFreePort(S: TIdTcpServer;
+                              const Address: String;
+                              Port: Cardinal);
+const
+  HighestTcpPort = 65535;
+var
+  PortStarted: Boolean;
+begin
+  if (S.Bindings.Count = 0) then
+    S.Bindings.Add;
+
+  S.Bindings[0].IP := Address;
+
+  PortStarted := false;
+  while not PortStarted and (Port <= HighestTcpPort) do begin
+    S.Bindings[0].Port := Port;
+
+    try
+      S.Active := true;
+      PortStarted := true;
+    except
+      on EIdCouldNotBindSocket do
+        Port := Port + 1;
+    end;
+  end;
+end;
+
 procedure RaiseSocketError(OriginalException: Exception; Bindings: TIdSocketHandles);
 const
   Msg = 'Could not open socket on one of (%s) (%s: %s)';
 begin
   raise EIdSocketError.Create(Format(Msg, [BindingsToStr(Bindings), OriginalException.ClassName, OriginalException.Message]));
+end;
+
+function SocketUsesKeepAlive(C: TIdTCPConnection): Boolean;
+var
+  KeepAlive: Integer;
+begin
+  Result := false;
+  if C.Connected then begin
+    C.Socket.Binding.GetSockOpt(Id_SOL_SOCKET, Id_SO_KEEPALIVE, @KeepAlive, Sizeof(KeepAlive));
+    Result := SockOptToBool(KeepAlive);
+  end;
+end;
+
+function SockOptToBool(N: Integer): Boolean;
+begin
+  Result := (N <> Id_SO_False);
 end;
 
 initialization
