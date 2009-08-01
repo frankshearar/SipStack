@@ -990,8 +990,8 @@ begin
   Self.Transport.AddTransportListener(Self);
 
   Self.Client         := TIdTcpClient.Create(nil);
-  Self.HighPortServer := Self.ServerType.Create(nil);
-  Self.LowPortServer  := Self.ServerType.Create(nil);
+  Self.HighPortServer := CreateTcpServer(Self.ServerType) as TIdSipTcpServer;
+  Self.LowPortServer  := CreateTcpServer(Self.ServerType) as TIdSipTcpServer;
   Self.SipClient      := Self.HighPortServer.CreateClient;
   Self.SipClient.TransportID := Self.Transport.ID;
 
@@ -1802,7 +1802,7 @@ begin
 
   Self.Request := TIdSipRequest.Create;
 
-  Self.Server := TIdTcpServer.Create(nil);
+  Self.Server := CreateTcpServer(TIdTcpServer);
   Self.Server.OnExecute := Self.DoOnExecute;
   Binding := Self.Server.Bindings.Add;
   Binding.IP   := '127.0.0.1';
