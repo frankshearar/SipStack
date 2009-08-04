@@ -81,6 +81,81 @@ type
 
   TIdTcpClientClass = class of TIdTcpClient;
 
+  TIdTcpConnectionWaitTestCase = class(TTestCase)
+  protected
+    Connection:    TIdTcpClient;
+    ConnID:        String;
+    Server:        TIdTcpServer;
+    TransportID:   String;
+    TransportType: String;
+
+    procedure DoNothing(Thread: TIdPeerThread);
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSipTcpPacketReadWait = class(TIdTcpConnectionWaitTestCase)
+  private
+    OwnTimer:      TIdDebugTimerQueue;
+    Timer:         TIdDebugTimerQueue;
+    W:             TIdSipTcpPacketReadWait;
+
+    procedure CheckBinding(C: TIdTcpConnection;
+                           TransportType: String;
+                           Binding: TIdConnectionBindings;
+                           Msg: String);
+    procedure CheckMsgReceived(Expected: TIdSipMessage);
+    function  CreateBindings(C: TIdTcpConnection; TransportType: String): TIdConnectionBindings;
+    function  HalfOf(S: String): String;
+    function  TruncatedBody(SipMessage: String): String;
+    procedure WriteToClient(S: String);
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCopy;
+    procedure TestFirstTriggerNotifiesOfConnection;
+    procedure TestSecondTriggerDoesNotNotifyOfConnection;
+    procedure TestTrigger;
+    procedure TestTriggerSchedulesRead;
+    procedure TestTriggerConserveConnections;
+    procedure TestTriggerDisconnectedConnection;
+    procedure TestTriggerDontConserveConnections;
+  end;
+
+  TestTIdSipTcpSetConserveConnectionsWait = class(TIdTcpConnectionWaitTestCase)
+  private
+    W: TIdSipTcpSetConserveConnectionsWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTriggerFalse;
+    procedure TestTriggerTrue;
+  end;
+
+  TestTIdSipTcpSetReadTimeoutWait = class(TIdTcpConnectionWaitTestCase)
+  private
+    W: TIdSipTcpSetReadTimeoutWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTrigger;
+  end;
+
+  TestTIdSipTcpDisconnectWait = class(TIdTcpConnectionWaitTestCase)
+  private
+    W: TIdSipTcpDisconnectWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTrigger;
+    procedure TestTriggerClosedConnection;
+  end;
+
   TestTIdSipTcpServer = class(TTestCaseSip,
                               IIdSipTransportListener)
   private
@@ -243,6 +318,7 @@ type
     procedure TestConnectionForOnEmptyList;
     procedure TestConnectionForOnNoEntry;
     procedure TestConnectionForResponse;
+    procedure TestConnections;
     procedure TestRemove;
     procedure TestRemoveOnEmptyList;
     procedure TestRemoveOnNonEmptyList;
@@ -305,13 +381,17 @@ const
 implementation
 
 uses
-  Classes, IdException, IdGlobal, IdRegisteredObject, IdSimpleParser,
-  IdSocketHandle, IdStack, TestMessages;
+  Classes, IdException, IdGlobal, IdIndyUtils, IdRegisteredObject,
+  IdSimpleParser, IdSocketHandle, IdStack, IdThreadableTcpClient, TestMessages;
 
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipTcpTransport unit tests');
   Result.AddTest(TestTIdSipTCPTransport.Suite);
+  Result.AddSuite(TestTIdSipTcpPacketReadWait.Suite);
+  Result.AddSuite(TestTIdSipTcpSetConserveConnectionsWait.Suite);
+  Result.AddSuite(TestTIdSipTcpSetReadTimeoutWait.Suite);
+  Result.AddSuite(TestTIdSipTcpDisconnectWait.Suite);
   Result.AddSuite(TestTIdSipTcpServer.Suite);
   Result.AddTest(TestTIdSipTcpClient.Suite);
   Result.AddSuite(TestTIdSipConnectionTableEntry.Suite);
@@ -967,6 +1047,442 @@ begin
   finally
     NoServer.Free;
   end;
+end;
+
+//******************************************************************************
+//* TIdTcpConnectionWaitTestCase                                               *
+//******************************************************************************
+//* TIdTcpConnectionWaitTestCase Public methods ********************************
+
+procedure TIdTcpConnectionWaitTestCase.SetUp;
+const
+  Address = '127.0.0.1';
+  Port    = 5060;
+begin
+  inherited SetUp;
+
+  TIdSipTransportRegistry.RegisterTransportType(TcpTransport, TIdSipMockTcpTransport);
+
+  Self.Server := CreateTcpServer(TIdTcpServer);
+  Self.Server.OnExecute := Self.DoNothing;
+  OpenOnFirstFreePort(Self.Server, Address, Port);
+
+  Self.TransportID   := '0xdecafbad';
+  Self.TransportType := 'XYZ';
+
+  Self.Connection := TIdTCPClient.Create(nil);
+  Self.Connection.Host := Address;
+  Self.Connection.Port := Port;
+  Self.Connection.Connect(OneSecond);
+
+  Self.ConnID := TIdObjectRegistry.Singleton.RegisterObject(Self.Connection);
+end;
+
+procedure TIdTcpConnectionWaitTestCase.TearDown;
+begin
+  TIdObjectRegistry.Singleton.UnregisterObject(Self.ConnID);
+
+  Self.Connection.Free;
+  Self.Server.Free;
+
+  TIdSipTransportRegistry.UnregisterTransportType(TcpTransport);
+
+  inherited TearDown;
+end;
+
+//* TIdTcpConnectionWaitTestCase Private methods *******************************
+
+procedure TIdTcpConnectionWaitTestCase.DoNothing(Thread: TIdPeerThread);
+begin
+end;
+
+//******************************************************************************
+//* TestTIdSipTcpPacketReadWait                                                *
+//******************************************************************************
+//* TestTIdSipTcpPacketReadWait Public methods *********************************
+
+procedure TestTIdSipTcpPacketReadWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.OwnTimer := TIdDebugTimerQueue.Create(false);
+  Self.Timer    := TIdDebugTimerQueue.Create(false);
+
+  Self.W := TIdSipTcpPacketReadWait.Create;
+  StoreBindings(Self.Connection, Self.TransportType, Self.W.CachedBindings);
+  Self.W.ConnectionID  := Self.ConnID;
+  Self.W.NotifyTimerID := Self.Timer.ID;
+  Self.W.OwnTimerID    := Self.OwnTimer.ID;
+  Self.W.ReadTimeout   := OneSecond;
+  Self.W.TransportID   := Self.TransportID;
+  Self.W.TransportType := Self.TransportType;
+end;
+
+procedure TestTIdSipTcpPacketReadWait.TearDown;
+begin
+  Self.W.Free;
+  Self.Timer.Terminate;
+  Self.OwnTimer.Terminate;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipTcpPacketReadWait Private methods ********************************
+
+procedure TestTIdSipTcpPacketReadWait.CheckBinding(C: TIdTcpConnection;
+                                                   TransportType: String;
+                                                   Binding: TIdConnectionBindings; Msg: String);
+begin
+  CheckEquals(C.Socket.Binding.IP,       Binding.LocalIP,   Msg + ': Local IP');
+  CheckEquals(C.Socket.Binding.Port,     Binding.LocalPort, Msg + ': Local Port');
+  CheckEquals(C.Socket.Binding.PeerIP,   Binding.PeerIP,    Msg + ': Peer IP');
+  CheckEquals(C.Socket.Binding.PeerPort, Binding.PeerPort,  Msg + ': Peer Port');
+  CheckEquals(TransportType,             Binding.Transport, Msg + ': Transport Type');
+end;
+
+procedure TestTIdSipTcpPacketReadWait.CheckMsgReceived(Expected: TIdSipMessage);
+var
+  LastWait: TIdWait;
+  RecvWait: TIdSipReceiveMessageWait;
+begin
+  // Note that this implicitly checks that the NotifyTimerID property's used.
+  Check(Self.Timer.EventCount > 0, 'No events scheduled');
+  LastWait := Self.Timer.LastEventScheduled;
+  CheckEquals(TIdSipReceiveMessageWait, LastWait.ClassType, 'Wrong notification for closed connection');
+
+  RecvWait := LastWait as TIdSipReceiveMessageWait;
+  CheckEquals(Self.TransportID, RecvWait.TransportID, 'TransportID not set');
+  CheckBinding(Self.Connection, Self.TransportType, RecvWait.ReceivedFrom, 'Binding information not set');
+  Check(Expected.Equals(RecvWait.Message), 'Message not set');
+end;
+
+function TestTIdSipTcpPacketReadWait.CreateBindings(C: TIdTcpConnection; TransportType: String): TIdConnectionBindings;
+begin
+  Result := TIdConnectionBindings.Create(C.Socket.Binding.IP,
+                                         C.Socket.Binding.Port,
+                                         C.Socket.Binding.PeerIP,
+                                         C.Socket.Binding.PeerPort,
+                                         TransportType);
+end;                                           
+
+function TestTIdSipTcpPacketReadWait.HalfOf(S: String): String;
+begin
+  Result := Copy(S, 1, Length(S) div 2);
+end;
+
+function TestTIdSipTcpPacketReadWait.TruncatedBody(SipMessage: String): String;
+var
+  Msg: TIdSipMessage;
+begin
+  // Return a SIP message with a truncated body. (This is only meaningful when
+  // Content-Type > 0!
+  Msg := TIdSipMessage.ReadMessageFrom(SipMessage);
+  try
+    Msg.Body := Self.HalfOf(Msg.Body);
+  finally
+    Msg.Free;
+  end;
+end;
+
+procedure TestTIdSipTcpPacketReadWait.WriteToClient(S: String);
+var
+  C:           TIdTcpConnection;
+  Connections: TList;
+  I:           Integer;
+begin
+  Connections := Self.Server.Threads.LockList;
+  try
+    for I := 0 to Connections.Count - 1 do begin
+      C := TIdPeerThread(Connections[I]).Connection;
+
+      if C.Connected then
+        C.Write(S);
+    end;
+  finally
+    Self.Server.Threads.UnlockList;
+  end;
+end;
+
+//* TestTIdSipTcpPacketReadWait Published methods ******************************
+
+procedure TestTIdSipTcpPacketReadWait.TestCopy;
+var
+  NewWait: TIdSipTcpPacketReadWait;
+begin
+  NewWait := Self.W.Copy as TIdSipTcpPacketReadWait;
+  try
+    CheckEquals(Self.W.CachedBindings.AsString, NewWait.CachedBindings.AsString, 'CachedBindings');
+    CheckEquals(Self.W.ConnectionID,        NewWait.ConnectionID,                'ConnectionID');
+    CheckEquals(Self.W.ConserveConnections, NewWait.ConserveConnections,         'ConserveConnections');
+    CheckEquals(Self.W.FirstIteration,      NewWait.FirstIteration,              'FirstIteration');
+    CheckEquals(Self.W.NotifyTimerID,       NewWait.NotifyTimerID,               'NotifyTimerID');
+    CheckEquals(Self.W.OwnTimerID,          NewWait.OwnTimerID,                  'OwnTimerID');
+    CheckEquals(Self.W.ReadTimeout,         NewWait.ReadTimeout,                 'ReadTimeout');
+    CheckEquals(Self.W.TransportID,         NewWait.TransportID,                 'TransportID');
+    CheckEquals(Self.W.TransportType,       NewWait.TransportType,               'TransportType');
+  finally
+    NewWait.Free;
+  end;
+end;
+
+procedure TestTIdSipTcpPacketReadWait.TestFirstTriggerNotifiesOfConnection;
+var
+  ConnWait: TIdSipTcpConnectionOpenWait;
+  Msg:      TIdSipMessage;
+begin
+  Msg := TIdSipMessage.ReadMessageFrom(BasicRequest);
+  try
+    Self.WriteToClient(Msg.AsString);
+
+    Self.W.Trigger;
+
+    Check(Self.Timer.EventCount > 1, 'Not enough Waits scheduled');
+    CheckEquals(TIdSipTcpConnectionOpenWait, Self.Timer.SecondLastEventScheduled.ClassType,
+                'No connection open notification');
+    ConnWait := Self.Timer.SecondLastEventScheduled as TIdSipTcpConnectionOpenWait;
+
+    Check(Msg.Equals(ConnWait.OpeningRequest), 'Wait.OpeningRequest');
+  finally
+    Msg.Free;
+  end;
+end;
+
+procedure TestTIdSipTcpPacketReadWait.TestSecondTriggerDoesNotNotifyOfConnection;
+var
+  Msg: TIdSipMessage;
+begin
+  Msg := TIdSipMessage.ReadMessageFrom(BasicRequest);
+  try
+    Self.WriteToClient(Msg.AsString);
+    Self.W.Trigger;
+    // Remove the connection & packet-read notification: we don't care.
+    Self.Timer.RemoveAllEvents;
+
+    Self.WriteToClient(Msg.AsString);
+    Self.OwnTimer.TriggerAllEventsUpToFirst(TIdSipTcpPacketReadWait);
+
+    Check(Self.OwnTimer.EventCount > 0, 'No "read next packet" Wait');
+    CheckMsgReceived(Msg);
+  finally
+    Msg.Free;
+  end;
+end;
+
+procedure TestTIdSipTcpPacketReadWait.TestTrigger;
+var
+  Msg: TIdSipMessage;
+begin
+  Msg := TIdSipMessage.ReadMessageFrom(BasicRequest);
+  try
+    Self.WriteToClient(Msg.AsString);
+
+    Self.W.Trigger;
+    CheckMsgReceived(Msg);
+  finally
+    Msg.Free;
+  end;
+end;
+
+procedure TestTIdSipTcpPacketReadWait.TestTriggerSchedulesRead;
+var
+  ConserveConnections: Boolean;
+  ReadWait:            TIdSipTcpPacketReadWait;
+begin
+  ConserveConnections := true;
+  Self.W.ConserveConnections := ConserveConnections;
+
+  Self.WriteToClient(BasicRequest);
+
+  Self.W.Trigger;
+
+  Check(Self.OwnTimer.EventCount > 0, 'Read-next-packet Wait not scheduled');
+  CheckEquals(TIdSipTcpPacketReadWait, Self.OwnTimer.LastEventScheduled.ClassType,
+              'Unexpected Wait scheduled');
+
+  ReadWait := Self.OwnTimer.LastEventScheduled as TIdSipTcpPacketReadWait;
+  CheckEquals(TriggerImmediately, ReadWait.TimeToWait,                  'Wait.TimeToWait');
+  CheckEquals(Self.W.OwnTimerID,          ReadWait.OwnTimerID,          'Wait.OwnTimerID');
+  CheckEquals(Self.W.ConnectionID,        ReadWait.ConnectionID,        'Wait.ConnectionID');
+  CheckEquals(Self.W.ConserveConnections, ReadWait.ConserveConnections, 'Wait.ConserveConnections');
+  CheckEquals(Self.W.NotifyTimerID,       ReadWait.NotifyTimerID,       'Wait.NotifyTimerID');
+  CheckEquals(Self.W.ReadTimeout,         ReadWait.ReadTimeout,         'Wait.ReadTimeout');
+  CheckEquals(Self.W.TransportID,         ReadWait.TransportID,         'Wait.TransportID');
+  CheckEquals(Self.W.TransportType,       ReadWait.TransportType,       'Wait.TransportType');
+end;
+
+procedure TestTIdSipTcpPacketReadWait.TestTriggerConserveConnections;
+var
+  Msg: TIdSipMessage;
+begin
+  // Read the headers of a message. Time out reading the body. If
+  // ConserveConnections then keep the connection alive.
+  Msg := TIdSipMessage.ReadMessageFrom(BasicRequest);
+  try
+    Msg.Body := '';
+
+    Self.W.ConserveConnections := true;
+    Self.WriteToClient(Self.HalfOf(BasicRequest));
+    Self.W.Trigger;
+
+    Check(Self.Connection.Connected, 'Connection closed for no good reason');
+  finally
+    Msg.Free;
+  end;
+end;
+
+procedure TestTIdSipTcpPacketReadWait.TestTriggerDisconnectedConnection;
+var
+  Bindings:   TIdConnectionBindings;
+  LastWait:   TIdWait;
+  DisconWait: TIdSipTcpConnectionCloseWait;
+begin
+  Bindings := Self.CreateBindings(Self.Connection, Self.TransportType);
+  try
+    Self.Connection.Disconnect;
+    Self.W.Trigger;
+
+    CheckEquals(1, Self.Timer.EventCount, 'Too many Waits scheduled');
+    LastWait := Self.Timer.LastEventScheduled;
+    CheckEquals(TIdSipTcpConnectionCloseWait, LastWait.ClassType,
+                'Unexpected Wait scheduled');
+    DisconWait := LastWait as TIdSipTcpConnectionCloseWait;
+    Check(Self.Connection = DisconWait.Binding, 'DisconWait.Binding');
+
+    // Commented out because I don't know how to store the CachedBindings for a
+    // closed connection.
+    CheckEquals(Bindings.AsString, DisconWait.CachedBindings.AsString,
+          'DisconWait.CachedBindings');
+  finally
+    Bindings.Free;
+  end;
+end;
+
+procedure TestTIdSipTcpPacketReadWait.TestTriggerDontConserveConnections;
+var
+  Msg: TIdSipMessage;
+begin
+  // Read the headers of a message. Time out reading the body. If
+  // not ConserveConnections then kill the connection.
+  Msg := TIdSipMessage.ReadMessageFrom(Self.TruncatedBody(BasicRequest));
+  try
+    Self.W.ConserveConnections := false;
+    Self.WriteToClient(Msg.AsString);
+    Self.W.Trigger;
+
+    Check(Self.Connection.Connected, 'Connection closed');
+
+    CheckMsgReceived(Msg);
+  finally
+    Msg.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipTcpSetConserveConnectionsWait                                    *
+//******************************************************************************
+//* TestTIdSipTcpSetConserveConnectionsWait Public methods *********************
+
+procedure TestTIdSipTcpSetConserveConnectionsWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.W := TIdSipTcpSetConserveConnectionsWait.Create;
+  Self.W.ConnectionID := Self.ConnID;
+end;
+
+procedure TestTIdSipTcpSetConserveConnectionsWait.TearDown;
+begin
+  Self.W.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipTcpSetConserveConnectionsWait Published methods ******************
+
+procedure TestTIdSipTcpSetConserveConnectionsWait.TestTriggerFalse;
+begin
+  Self.W.ConserveConnections := false;
+  Self.W.Trigger;
+
+  Check(not SocketUsesKeepAlive(Self.Connection), 'Keep-alive not switched off');
+end;
+
+procedure TestTIdSipTcpSetConserveConnectionsWait.TestTriggerTrue;
+begin
+  Self.W.ConserveConnections := true;
+  Self.W.Trigger;
+
+  Check(SocketUsesKeepAlive(Self.Connection), 'Keep-alive not switched on');
+end;
+
+//******************************************************************************
+//* TestTIdSipTcpSetReadTimeoutWait                                            *
+//******************************************************************************
+//* TestTIdSipTcpSetReadTimeoutWait Public methods *****************************
+
+procedure TestTIdSipTcpSetReadTimeoutWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.W := TIdSipTcpSetReadTimeoutWait.Create;
+  Self.W.ConnectionID := Self.ConnID;
+  Self.W.ReadTimeout := 42;
+end;
+
+procedure TestTIdSipTcpSetReadTimeoutWait.TearDown;
+begin
+  Self.W.Free;
+
+  inherited TearDown;
+end;
+
+procedure TestTIdSipTcpSetReadTimeoutWait.TestTrigger;
+begin
+  Self.W.Trigger;
+
+  CheckEquals(Self.W.ReadTimeout, Self.Connection.ReadTimeout, 'ReadTimeout not set');
+end;
+
+//******************************************************************************
+//* TestTIdSipTcpDisconnectWait                                                *
+//******************************************************************************
+//* TestTIdSipTcpDisconnectWait Public methods *********************************
+
+procedure TestTIdSipTcpDisconnectWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.W := TIdSipTcpDisconnectWait.Create;
+  Self.W.ConnectionID := Self.ConnID;
+end;
+
+procedure TestTIdSipTcpDisconnectWait.TearDown;
+begin
+  Self.W.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipTcpDisconnectWait Published methods ******************************
+
+procedure TestTIdSipTcpDisconnectWait.TestTrigger;
+begin
+  Check(Self.Connection.Connected, 'Sanity check: Connection must be open!');
+
+  Self.W.Trigger;
+
+  Check(not Self.Connection.Connected, 'Wait didn''t close connection');
+end;
+
+procedure TestTIdSipTcpDisconnectWait.TestTriggerClosedConnection;
+begin
+  // This test shows that triggering on a closed connection is a no-op.
+
+  Self.Connection.Disconnect;
+
+  Self.W.Trigger;
+
+  Check(not Self.Connection.Connected, 'Connection open');
 end;
 
 //******************************************************************************
@@ -1958,6 +2474,15 @@ begin
   finally
     Response.Free;
   end;
+end;
+
+procedure TestTIdSipConnectionTable.TestConnections;
+begin
+  Self.Table.Add(Self.Conn,    Self.Binding, Self.Req);
+  Self.Table.Add(Self.NewConn, Self.Binding, Self.Req);
+
+  Check(Self.Table[0].Connection = Self.Conn,    'Connection at index 0');
+  Check(Self.Table[1].Connection = Self.NewConn, 'Connection at index 1');
 end;
 
 procedure TestTIdSipConnectionTable.TestRemove;
