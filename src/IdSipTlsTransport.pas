@@ -71,11 +71,6 @@ type
     property ServerKey:         TFileName read GetServerKey write SetServerKey;
   end;
 
-  TIdSipTlsClientThread = class(TIdSipTcpClientThread)
-  protected
-    function ClientType: TIdSipTcpClientClass; override;
-  end;
-
   TIdSipTlsClient = class(TIdSipTcpClient)
   public
     constructor Create(AOwner: TComponent); override;
@@ -244,16 +239,6 @@ end;
 procedure TIdSipTlsServer.SetServerKey(const Value: TFileName);
 begin
   Self.TLS.SSLOptions.KeyFile := Value;
-end;
-
-//******************************************************************************
-//* TIdSipTlsClientThread                                                      *
-//******************************************************************************
-//* TIdSipTlsClientThread Protected methods ************************************
-
-function TIdSipTlsClientThread.ClientType: TIdSipTcpClientClass;
-begin
-  Result := TIdSipTlsClient;
 end;
 
 //******************************************************************************

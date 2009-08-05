@@ -129,6 +129,7 @@ uses
   TestIdSipUserAgent in 'test\TestIdSipUserAgent.pas',
   TestIdSipUri in 'test\TestIdSipUri.pas',
   TestIdSystem in 'test\TestIdSystem.pas',
+  TestIdThreadableTcpClient in 'test\TestIdThreadableTcpClient.pas',
   TestIdTimerQueue in 'test\TestIdTimerQueue.pas',
   TestIdUnicode in 'test\TestIdUnicode.pas',
   TestStringDictionary in 'test\TestStringDictionary.pas';
