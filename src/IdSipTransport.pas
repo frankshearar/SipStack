@@ -270,7 +270,8 @@ type
     property Reason:           String        read fReason write fReason;
   end;
 
-  // I represent the (possibly) deferred handling of an inbound message.
+  // I represent the (possibly) deferred handling of an inbound message. In
+  // other words, when I trigger, a Transport receives a message.
   TIdSipReceiveMessageWait = class(TIdSipMessageWait)
   private
     fReceivedFrom: TIdConnectionBindings;
