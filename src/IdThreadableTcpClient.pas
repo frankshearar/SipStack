@@ -27,6 +27,7 @@ type
   private
     fCachedBindings:      TIdConnectionBindings;
     fConserveConnections: Boolean;
+    fID:                  String;
     fOnIdle:              TIdSdpTcpClientProc;
     fOnReceiveMessage:    TReceiveMessageProc;
     fTerminated:          Boolean;
@@ -45,12 +46,15 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
 
+    procedure AfterConstruction; override;
+    procedure BeforeDestruction; override;
     procedure Connect(const Timeout: Integer); override;
     function  Protocol: String; virtual;
     procedure ReceiveMessages; virtual;
 
     property CachedBindings:      TIdConnectionBindings read fCachedBindings write fCachedBindings;
     property ConserveConnections: Boolean               read fConserveConnections write SetConserveConnections;
+    property ID:                  String                read fID;
     property OnIdle:              TIdSdpTcpClientProc   read fOnIdle write fOnIdle;
     property OnReceiveMessage:    TReceiveMessageProc   read fOnReceiveMessage write fOnReceiveMessage;
     property Terminated:          Boolean               read fTerminated write SetTerminated;
@@ -81,7 +85,7 @@ procedure StoreBindings(C: TIdTCPConnection; TransportType: String; Dest: TIdCon
 implementation
 
 uses
-  IdIndyUtils, RuntimeSafety;
+  IdIndyUtils, IdRegisteredObject, RuntimeSafety;
 
 //******************************************************************************
 //* Unit Public functions/procedures                                           *
@@ -119,6 +123,20 @@ begin
   Self.fCachedBindings.Free;
 
   inherited Destroy;
+end;
+
+procedure TIdThreadableTcpClient.AfterConstruction;
+begin
+  inherited AfterConstruction;
+
+  Self.fID := TIdObjectRegistry.Singleton.RegisterObject(Self);
+end;
+
+procedure TIdThreadableTcpClient.BeforeDestruction;
+begin
+  TIdObjectRegistry.Singleton.UnregisterObject(Self.ID);
+
+  inherited BeforeDestruction;
 end;
 
 procedure TIdThreadableTcpClient.Connect(const Timeout: Integer);

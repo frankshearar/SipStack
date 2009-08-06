@@ -26,6 +26,7 @@ type
     procedure TearDown; override;
   published
     procedure TestConnectSetsCachedBindings;
+    procedure TestInstantiationSetsID;
   end;
 
 
@@ -100,6 +101,11 @@ begin
   finally
     B.Free;
   end;
+end;
+
+procedure TestTIdThreadableTcpClient.TestInstantiationSetsID;
+begin
+  CheckNotEquals('', Self.C.ID, 'ID not set');
 end;
 
 initialization
