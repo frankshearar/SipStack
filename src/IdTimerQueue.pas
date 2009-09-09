@@ -56,13 +56,17 @@ type
 
   TIdWaitClass = class of TIdWait;
 
+  // I represent a deferred computation in the context of the TimerQueue
+  // identified by ProcessID.
+  //
+  // Should that "remote process" have terminated, nothing happens.
   TIdRemoteWait = class(TIdWait)
   private
     fProcessID:      String;
     fRemoteWaitTime: Cardinal;
     fWait:           TIdWait;
-    procedure ActOnTrigger(O: TObject);
-    procedure NoRemoteTimerQueue(O: TObject);
+    procedure FreeWait(O: TObject);
+    procedure ScheduleWait(O: TObject);
   public
     procedure Trigger; override;
 
@@ -139,7 +143,7 @@ type
     procedure AddListener(Listener: IIdTimerQueueListener);
     procedure AddRemoteEvent(ProcessID: String;
                              MillisecsWait: Cardinal;
-                             Event: TIdWait);
+                             Event: TIdWait); virtual;
     function  Before(TimeA,
                      TimeB: Cardinal): Boolean;
     procedure RemoveListener(Listener: IIdTimerQueueListener);
@@ -331,7 +335,7 @@ procedure TIdRemoteWait.Trigger;
 var
   C: TIfExistsClosureWithMethods;
 begin
-  C := TIfExistsClosureWithMethods.Create(Self.ActOnTrigger, Self.NoRemoteTimerQueue);
+  C := TIfExistsClosureWithMethods.Create(Self.ScheduleWait, Self.FreeWait);
   try
     TIdObjectRegistry.Singleton.WithObjectDo(Self.ProcessID, C);
   finally
@@ -341,7 +345,7 @@ end;
 
 //* TIdRemoteWait Private methods **********************************************
 
-procedure TIdRemoteWait.ActOnTrigger(O: TObject);
+procedure TIdRemoteWait.ScheduleWait(O: TObject);
 var
   TQ: TIdTimerQueue;
 begin
@@ -352,7 +356,7 @@ begin
   end;
 end;
 
-procedure TIdRemoteWait.NoRemoteTimerQueue(O: TObject);
+procedure TIdRemoteWait.FreeWait(O: TObject);
 begin
   // Waits are freed when they're Triggered. No remote timer means no
   // reclamation.
