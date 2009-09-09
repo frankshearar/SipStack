@@ -15,10 +15,72 @@ uses
   IdRegisteredObject, PluggableLogging, TestFramework;
 
 type
+  TCallbackClosure = class(TObjectClosure)
+  private
+    Callback: TObjectMethod;
+  public
+    constructor Create(Callback: TObjectMethod); reintroduce;
+
+    procedure Execute(O: TObject); override;
+  end;
+
   TestTIdRegisteredObject = class(TTestCase)
   published
     procedure TestNewInstanceRegistersSelf;
     procedure TestInstanceUnregistersSelf;
+  end;
+
+  TestTIfThenClosureWithMethods = class(TTestCase)
+  private
+    RanElseBranch: Boolean;
+    RanIfBranch:   Boolean;
+
+    procedure ElseBranch(O: TObject);
+    procedure IfBranch(O: TObject);
+    function  ReturnFalse(O: TObject): Boolean;
+    function  ReturnTrue(O: TObject): Boolean;
+  public
+    procedure SetUp; override;
+  published
+    procedure TestCopy;
+    procedure TestElseBranch;
+    procedure TestIfBranch;
+  end;
+
+  TestTIfExistsClosure = class(TTestCase)
+  private
+    C:                    TIfExistsClosure;
+    IfExistsClosure:      TCallbackClosure;
+    IfNotExistsClosure:   TCallbackClosure;
+    RanIfExistsBranch:    Boolean;
+    RanIfNotExistsBranch: Boolean;
+
+    procedure IfExistsBranch(O: TObject);
+    procedure IfNotExistsBranch(O: TObject);
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCopy;
+    procedure TestIfExistsBranch;
+    procedure TestIfNotExistsBranch;
+  end;
+
+  TestTIfExistsClosureWithMethods = class(TTestCase)
+  private
+    C:                    TIfExistsClosureWithMethods;
+    RanIfExistsBranch:    Boolean;
+    RanIfNotExistsBranch: Boolean;
+
+    procedure IfExistsBranch(O: TObject);
+    procedure IfNotExistsBranch(O: TObject);
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCopy;
+    procedure TestIfExistsBranch;
+    procedure TestIfNotExistsBranch;
   end;
 
   TestTIdObjectRegistry = class(TTestCase)
@@ -60,6 +122,9 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdRegisteredObject unit tests');
   Result.AddTest(TestTIdRegisteredObject.Suite);
+  Result.AddTest(TestTIfThenClosureWithMethods.Suite);
+  Result.AddTest(TestTIfExistsClosure.Suite);
+  Result.AddTest(TestTIfExistsClosureWithMethods.Suite);
   Result.AddTest(TestTIdObjectRegistry.Suite);
 end;
 
@@ -70,6 +135,23 @@ procedure TestLog(Description: String;
                   DebugInfo: String);
 begin
   GLog.Add(Description);
+end;
+
+//******************************************************************************
+//* TCallbackClosure                                                           *
+//******************************************************************************
+//* TCallbackClosure Public methods ********************************************
+
+constructor TCallbackClosure.Create(Callback: TObjectMethod);
+begin
+  inherited Create;
+
+  Self.Callback := Callback;
+end;
+
+procedure TCallbackClosure.Execute(O: TObject);
+begin
+  Self.Callback(Self);
 end;
 
 //******************************************************************************
@@ -102,6 +184,259 @@ begin
   end;
 
   CheckNull(TIdObjectRegistry.Singleton.FindObject(RID), 'Object not unregistered');
+end;
+
+//******************************************************************************
+//* TestTIfThenClosureWithMethods                                              *
+//******************************************************************************
+//* TestTIfThenClosureWithMethods Public methods *******************************
+
+procedure TestTIfThenClosureWithMethods.SetUp;
+begin
+  inherited SetUp;
+
+  Self.RanElseBranch := false;
+  Self.RanIfBranch   := false;
+end;
+
+//* TestTIfThenClosureWithMethods Private methods ******************************
+
+procedure TestTIfThenClosureWithMethods.ElseBranch(O: TObject);
+begin
+  Self.RanElseBranch := true;
+end;
+
+procedure TestTIfThenClosureWithMethods.IfBranch(O: TObject);
+begin
+  Self.RanIfBranch := true;
+end;
+
+function TestTIfThenClosureWithMethods.ReturnFalse(O: TObject): Boolean;
+begin
+  Result := false;
+end;
+
+function TestTIfThenClosureWithMethods.ReturnTrue(O: TObject): Boolean;
+begin
+  Result := true;
+end;
+
+//* TestTIfThenClosureWithMethods Published methods ****************************
+
+procedure TestTIfThenClosureWithMethods.TestCopy;
+var
+  C:    TIfThenClosureWithMethods;
+  Copy: TObjectClosure;
+begin
+  C := TIfThenClosureWithMethods.Create(Self.ReturnFalse, Self.IfBranch, Self.ElseBranch);
+  try
+    Copy := C.Copy;
+    try
+      CheckEquals(C.ClassType, Copy.ClassType, 'Copy is wrong class');
+
+      C.Execute(C);
+      Check(Self.RanElseBranch, 'Copy didn''t copy correctly');
+    finally
+      Copy.Free;
+    end;
+  finally
+    C.Free;
+  end;
+end;
+
+procedure TestTIfThenClosureWithMethods.TestElseBranch;
+var
+  C: TIfThenClosureWithMethods;
+begin
+  C := TIfThenClosureWithMethods.Create(Self.ReturnFalse, Self.IfBranch, Self.ElseBranch);
+  try
+    C.Execute(C);
+    
+    Check(not Self.RanIfBranch,   'If branch method run');
+    Check(    Self.RanElseBranch, 'Else branch method not run');
+  finally
+    C.Free;
+  end;
+end;
+
+procedure TestTIfThenClosureWithMethods.TestIfBranch;
+var
+  C: TIfThenClosureWithMethods;
+begin
+  C := TIfThenClosureWithMethods.Create(Self.ReturnTrue, Self.IfBranch, Self.ElseBranch);
+  try
+    C.Execute(C);
+
+    Check(    Self.RanIfBranch,   'If branch method not run');
+    Check(not Self.RanElseBranch, 'Else branch method run');
+  finally
+    C.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIfExistsClosureWithMethods                                            *
+//******************************************************************************
+//* TestTIfExistsClosureWithMethods Public methods *****************************
+
+procedure TestTIfExistsClosureWithMethods.SetUp;
+begin
+  inherited SetUp;
+
+  Self.C := TIfExistsClosureWithMethods.Create(Self.IfExistsBranch, Self.IfNotExistsBranch);
+
+  Self.RanIfExistsBranch    := false;
+  Self.RanIfNotExistsBranch := false;
+end;
+
+procedure TestTIfExistsClosureWithMethods.TearDown;
+begin
+  Self.C.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIfExistsClosureWithMethods Private methods ****************************
+
+procedure TestTIfExistsClosureWithMethods.IfExistsBranch(O: TObject);
+begin
+  Self.RanIfExistsBranch := true;
+end;
+
+procedure TestTIfExistsClosureWithMethods.IfNotExistsBranch(O: TObject);
+begin
+  Self.RanIfNotExistsBranch := true;
+end;
+
+//* TestTIfExistsClosureWithMethods Published methods **************************
+
+procedure TestTIfExistsClosureWithMethods.TestCopy;
+var
+  Copy: TIfExistsClosureWithMethods;
+  R:    TIdRegisteredObject;
+begin
+  Copy := TIfExistsClosureWithMethods.Create(Self.IfExistsBranch, Self.IfNotExistsBranch);
+  try
+    CheckEquals(Self.C.ClassType, Copy.ClassType, 'Copy of the wrong type');
+
+    Copy.Execute(nil);
+    Check(Self.RanIfNotExistsBranch, 'If-not-exists branch not copied');
+
+    R := TIdRegisteredObject.Create;
+    try
+      Copy.Execute(R);
+      Check(Self.RanIfExistsBranch, 'If-exists branch not copied');
+    finally
+      R.Free;
+    end;
+  finally
+    Copy.Free;
+  end;
+end;
+
+procedure TestTIfExistsClosureWithMethods.TestIfExistsBranch;
+var
+  R: TIdRegisteredObject;
+begin
+  R := TIdRegisteredObject.Create;
+  try
+    Self.C.Execute(R);
+    Check(    Self.RanIfExistsBranch,    'If-exists branch not run');
+    Check(not Self.RanIfNotExistsBranch, 'If-not-exists branch run');
+
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TestTIfExistsClosureWithMethods.TestIfNotExistsBranch;
+begin
+  Self.C.Execute(nil);
+  Check(not Self.RanIfExistsBranch,    'If-exists branch run');
+  Check(    Self.RanIfNotExistsBranch, 'If-not-exists branch not run');
+end;
+
+//******************************************************************************
+//* TestTIfExistsClosure                                                       *
+//******************************************************************************
+//* TestTIfExistsClosure Public methods ****************************************
+
+procedure TestTIfExistsClosure.SetUp;
+begin
+  inherited SetUp;
+
+  Self.IfExistsClosure := TCallbackClosure.Create(Self.IfExistsBranch);
+  Self.IfNotExistsClosure := TCallbackClosure.Create(Self.IfNotExistsBranch);
+  Self.C := TIfExistsClosure.Create(Self.IfExistsClosure, Self.IfNotExistsClosure);
+
+  Self.RanIfExistsBranch    := false;
+  Self.RanIfNotExistsBranch := false;
+end;
+
+procedure TestTIfExistsClosure.TearDown;
+begin
+  Self.C.Free;
+  Self.IfNotExistsClosure.Free;
+  Self.IfExistsClosure.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIfExistsClosure Private methods ***************************************
+
+procedure TestTIfExistsClosure.IfExistsBranch(O: TObject);
+begin
+  Self.RanIfExistsBranch := true;
+end;
+
+procedure TestTIfExistsClosure.IfNotExistsBranch(O: TObject);
+begin
+  Self.RanIfNotExistsBranch := true;
+end;
+
+//* TestTIfExistsClosure Published methods *************************************
+
+procedure TestTIfExistsClosure.TestCopy;
+var
+  Copy: TObjectClosure;
+  R:    TIdRegisteredObject;
+begin
+  Copy := Self.C.Copy;
+  try
+    R := TIdRegisteredObject.Create;
+    try
+      Copy.Execute(R);
+      Check(Self.RanIfExistsBranch, 'If-exists branch not run');
+
+      Copy.Execute(nil);
+      Check(Self.RanIfNotExistsBranch, 'If-not-exists branch not run');
+    finally
+      R.Free;
+    end;
+  finally
+    Copy.Free;
+  end;
+end;
+
+procedure TestTIfExistsClosure.TestIfExistsBranch;
+var
+  R: TIdRegisteredObject;
+begin
+  R := TIdRegisteredObject.Create;
+  try
+    Self.C.Execute(R);
+    Check(Self.RanIfExistsBranch,        'If-exists branch not run');
+    Check(not Self.RanIfNotExistsBranch, 'If-not-exists branch run');
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TestTIfExistsClosure.TestIfNotExistsBranch;
+begin
+  Self.C.Execute(nil);
+  Check(not Self.RanIfExistsBranch,    'If-exists branch run');
+  Check(    Self.RanIfNotExistsBranch, 'If-not-exists branch not run');
 end;
 
 //******************************************************************************

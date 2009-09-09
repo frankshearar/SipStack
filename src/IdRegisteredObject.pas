@@ -57,6 +57,19 @@ type
   end;
 
   TObjectMethod = procedure(O: TObject) of object;
+  TUnaryPredicateMethod = function(O: TObject): Boolean of object;
+
+  TIfThenClosureWithMethods = class(TObjectClosure)
+  private
+    Condition:  TUnaryPredicateMethod;
+    IfBranch:   TObjectMethod;
+    ElseBranch: TObjectMethod;
+  public
+    constructor Create(Condition: TUnaryPredicateMethod; IfBranch, ElseBranch: TObjectMethod); reintroduce;
+
+    function  Copy: TObjectClosure; override;
+    procedure Execute(O: TObject); override;
+  end;
 
   // As TIfExistsClosure but with method pointers.
   TIfExistsClosureWithMethods = class(TObjectClosure)
@@ -244,6 +257,33 @@ begin
     if Assigned(Self.IfNotExists) then
       Self.IfNotExists.Execute(O);
   end;
+end;
+
+//******************************************************************************
+//* TIfThenClosureWithMethods                                                  *
+//******************************************************************************
+//* TIfThenClosureWithMethods Public methods ***********************************
+
+constructor TIfThenClosureWithMethods.Create(Condition: TUnaryPredicateMethod; IfBranch, ElseBranch: TObjectMethod);
+begin
+  inherited Create;
+
+  Self.Condition  := Condition;
+  Self.IfBranch   := IfBranch;
+  Self.ElseBranch := ElseBranch;
+end;
+
+function TIfThenClosureWithMethods.Copy: TObjectClosure;
+begin
+  Result := TIfThenClosureWithMethods.Create(Self.Condition, Self.IfBranch, Self.ElseBranch);
+end;
+
+procedure TIfThenClosureWithMethods.Execute(O: TObject);
+begin
+  if Self.Condition(O) then
+    Self.IfBranch(O)
+  else
+    Self.ElseBranch(O);
 end;
 
 //******************************************************************************
