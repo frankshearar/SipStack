@@ -299,10 +299,11 @@ type
   // TIdSipTCPTransport.AddConnection(Closure: TIdSipTcpConnectionOpenWait).
   TIdSipConnectionTableEntry = class(TObject)
   private
-    fBinding:      TIdConnectionBindings;
-    fConnection:   TIdTCPConnection;
-    fConnectionID: String;
-    fRequest:      TIdSipRequest;
+    fBinding:           TIdConnectionBindings;
+    fConnection:        TIdTCPConnection;
+    fConnectionID:      String;
+    fRequest:           TIdSipRequest;
+    HandleRegistration: Boolean; // Are we responsible for unregistering Connection?
 
     function CreateBinding(Connection: TIdTCPConnection): TIdConnectionBindings;
   public
@@ -1488,12 +1489,21 @@ begin
 
   Self.fBinding      := Binding.Copy;
   Self.fConnection   := Connection;
-  Self.fConnectionID := TIdObjectRegistry.Singleton.RegisterObject(Connection);
-  Self.fRequest      := Request.Copy as TIdSipRequest;
+
+  Self.HandleRegistration := not (Connection is TIdThreadableTcpClient);
+  if (Self.HandleRegistration) then
+    Self.fConnectionID := TIdObjectRegistry.Singleton.RegisterObject(Connection)
+  else
+    Self.fConnectionID := (Connection as TIdThreadableTcpClient).ID;
+
+  Self.fRequest := Request.Copy as TIdSipRequest;
 end;
 
 destructor TIdSipConnectionTableEntry.Destroy;
 begin
+  if Self.HandleRegistration then
+    TIdObjectRegistry.Singleton.UnregisterObject(Self.ConnectionID);
+
   Self.fRequest.Free;
   Self.fBinding.Free;
 
