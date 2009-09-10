@@ -29,6 +29,9 @@ type
   // SIP stack.
   TIdSipTCPTransport = class(TIdSipTransport)
   private
+    // Keep a reference of created clients so that we can free them at shutdown
+    // time.
+    Clients:            TObjectList;
     fConnectionTimeout: Cardinal;
 
     function  FirstServerPortFor(IPAddress: String): Cardinal;
@@ -47,6 +50,7 @@ type
     ConnectionMap: TIdSipConnectionTableLock;
     Transport:     TIdSipTcpServer;
 
+    function  CreateClient: TIdSipTcpClient;
     procedure ConnectionDisconnected(Sender: TObject);
     procedure DestroyServer; override;
     function  GetBindings: TIdSocketHandles; override;
@@ -416,6 +420,8 @@ end;
 
 constructor TIdSipTCPTransport.Create;
 begin
+  Self.Clients := TObjectList.Create(true);
+
   // The superclass sets Timeout, which uses ConnectionMap.
   Self.ConnectionMap := TIdSipConnectionTableLock.Create;
 
@@ -429,6 +435,7 @@ end;
 destructor TIdSipTCPTransport.Destroy;
 begin
   Self.ConnectionMap.Free;
+  Self.Clients.Free;
 
   inherited Destroy;
 end;
@@ -481,6 +488,7 @@ begin
       Self.NotifyOfDisconnection(Entry.Binding);
 
     Table.Remove(Connection);
+    Self.Clients.Remove(Connection);
   finally
     Self.ConnectionMap.UnlockList;
   end;
@@ -516,6 +524,12 @@ begin
 end;
 
 //* TIdSipTCPTransport Protected methods ***************************************
+
+function TIdSipTCPTransport.CreateClient: TIdSipTcpClient;
+begin
+  Result := Self.ClientType.Create(nil);
+  Self.Clients.Add(Result)
+end;
 
 procedure TIdSipTCPTransport.ConnectionDisconnected(Sender: TObject);
 begin
@@ -705,7 +719,7 @@ var
   FakeRequest:  TIdSipRequest;
   NewConnection: TIdSipTcpClient;
 begin
-  NewConnection := Self.ClientType.Create(nil);
+  NewConnection := Self.CreateClient;
   NewConnection.ConserveConnections := Self.ConserveConnections;
   NewConnection.Host                := Dest.PeerIP;
   NewConnection.Port                := Dest.PeerPort;
