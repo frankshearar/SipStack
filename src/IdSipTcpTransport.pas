@@ -489,6 +489,8 @@ begin
       Self.NotifyOfDisconnection(Entry.Binding);
 
     Table.Remove(Connection);
+    // Connection might not be one this transport created. If so, this does no
+    // harm.
     Self.Clients.Remove(Connection);
   finally
     Self.ConnectionMap.UnlockList;
@@ -529,7 +531,7 @@ end;
 function TIdSipTCPTransport.CreateClient: TIdSipTcpClient;
 begin
   Result := Self.ClientType.Create(nil);
-  Self.Clients.Add(Result)
+  Self.Clients.Add(Result);
 end;
 
 procedure TIdSipTCPTransport.ConnectionDisconnected(Sender: TObject);
