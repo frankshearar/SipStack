@@ -260,8 +260,7 @@ begin
     else
       Result := WSANO_DATA;
   end
-  else
-  begin
+  else begin
     Result := WSAGetLastError;
   end;
 end;
@@ -397,7 +396,7 @@ end;
 function  HtoNL(N: Cardinal): Cardinal;
 begin
   // Yes, this looks crazy. But WinSock's htonl is declared as taking a u_long -
-  // presumably an UNSIGNED value - and yes u_long is declared as Longint, a
+  // presumably an UNSIGNED value - and yet u_long is declared as Longint, a
   // SIGNED value. In the interests of not making the reader go blind with
   // twofold casting everywhere, this function hides the awfulness behind a
   // PROPERLY DECLARED htonl.
