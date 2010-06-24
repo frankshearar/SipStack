@@ -5581,12 +5581,19 @@ begin
 end;
 
 procedure TestTIdSipOutboundSubscriptionRefreshWait.TestTriggerWithIDOfNonexistentObject;
+var
+  NotARegisteredObject: TRegisteredObjectID;
 begin
   // Check that the Wait does nothing if its ActionID doesn't point to a
   // registered object.
 
-  Self.Wait.ActionID := 'fake ID';
-  CheckTriggerDoesNothing(Self.Wait, 'Wait didn''t check object type before triggering');
+  NotARegisteredObject := TIdObjectRegistry.Singleton.ReserveID(Self);
+  try
+    Self.Wait.ActionID := NotARegisteredObject;
+    CheckTriggerDoesNothing(Self.Wait, 'Wait didn''t check object type before triggering');
+  finally
+    TIdObjectRegistry.Singleton.UnreserveID(NotARegisteredObject);
+  end;
 end;
 
 procedure TestTIdSipOutboundSubscriptionRefreshWait.TestTriggerWithIDOfWrongTypeOfObject;
@@ -5675,12 +5682,19 @@ end;
 //* TIdSipInboundSubscriptionTestCase Published methods ************************
 
 procedure TIdSipInboundSubscriptionTestCase.TestTriggerWithIDOfNonexistentObject;
+var
+  NotARegisteredObject: TRegisteredObjectID;
 begin
   // Check that the Wait does nothing if its SubscriptionID doesn't point to a
   // registered object.
 
-  Self.Wait.ActionID := 'fake ID';
-  CheckTriggerDoesNothing(Self.Wait, 'Wait didn''t check object type before triggering');
+  NotARegisteredObject := TIdObjectRegistry.Singleton.ReserveID(Self);
+  try
+    Self.Wait.ActionID := NotARegisteredObject;
+    CheckTriggerDoesNothing(Self.Wait, 'Wait didn''t check object type before triggering');
+  finally
+    TIdObjectRegistry.Singleton.UnreserveID(NotARegisteredObject);
+  end;
 end;
 
 procedure TIdSipInboundSubscriptionTestCase.TestTriggerWithIDOfWrongTypeOfObject;
@@ -5910,12 +5924,19 @@ begin
 end;
 
 procedure TestTIdSipSubscriptionRetryWait.TestTriggerWithIDOfNonexistentObject;
+var
+  NotARegisteredObject: TRegisteredObjectID;
 begin
   // Check that the Wait does nothing if its ModuleID doesn't point to a
   // registered object.
 
-  Self.Wait.ModuleID := 'fake ID';
-  CheckTriggerDoesNothing(Self.Wait, 'Wait didn''t check object type before triggering');
+  NotARegisteredObject := TIdObjectRegistry.Singleton.ReserveID(Self);
+  try
+    Self.Wait.ModuleID := NotARegisteredObject;
+    CheckTriggerDoesNothing(Self.Wait, 'Wait didn''t check object type before triggering');
+  finally
+    TIdObjectRegistry.Singleton.UnreserveID(NotARegisteredObject);
+  end;
 end;
 
 procedure TestTIdSipSubscriptionRetryWait.TestTriggerWithIDOfWrongTypeOfObject;

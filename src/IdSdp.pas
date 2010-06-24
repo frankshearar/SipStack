@@ -821,7 +821,7 @@ type
     class function Singleton: TIdSdpTcpConnectionRegistry;
 
     function ClientConnectedTo(Host: String; Port: Cardinal): TIdSdpBaseTcpConnection;
-    function FindConnection(const ServerID: String): TIdSdpBaseTcpConnection;
+    function FindConnection(const ServerID: TRegisteredObjectID): TIdSdpBaseTcpConnection;
     function ServerOn(Host: String; Port: Cardinal): TIdSdpBaseTcpConnection;
     function ServerRunningOn(Host: String; Port: Cardinal): Boolean;
   end;
@@ -848,15 +848,15 @@ type
 
   TIdSdpTcpClientConnection = class;
 
-  TIdSdpDisconnectionProc = procedure(Sender: TObject; ConnectionID: String) of object;
+  TIdSdpDisconnectionProc = procedure(Sender: TObject; ConnectionID: TRegisteredObjectID) of object;
 
   TIdSdpTcpClient = class(TIdThreadableTcpClient)
   private
     BufferSize:       Integer;
-    fConnectionID:    String;
+    fConnectionID:    TRegisteredObjectID;
     fOnDisconnection: TIdSdpDisconnectionProc;
 
-    procedure NotifyOfDisconnection(Sender: TObject; ConnectionID: String);
+    procedure NotifyOfDisconnection(Sender: TObject; ConnectionID: TRegisteredObjectID);
   protected
     function  GetTimer: TIdTimerQueue; override;
     procedure SetTimer(Value: TIdTimerQueue); override;
@@ -865,7 +865,7 @@ type
 
     procedure ReceiveMessages; override;
 
-    property ConnectionID:    String                  read fConnectionID write fConnectionID;
+    property ConnectionID:    TRegisteredObjectID     read fConnectionID write fConnectionID;
     property OnDisconnection: TIdSdpDisconnectionProc read fOnDisconnection write fOnDisconnection;
   end;
 
@@ -894,7 +894,7 @@ type
 
     procedure ClientConnected(Client: TObject);
     procedure ClientDisconnected(Client: TObject);
-    procedure ClientDisconnection(Sender: TObject; ConnectionID: String);
+    procedure ClientDisconnection(Sender: TObject; ConnectionID: TRegisteredObjectID);
     function  CreateClient: TIdSdpTcpClient;
     procedure ReceiveMessage(Sender: TObject; Msg: String; ReceivedOn: TIdConnectionBindings);
   protected
@@ -1162,14 +1162,14 @@ type
 
   TIdSdpTcpConnectionWait = class(TIdWait)
   private
-    fConnectionID: String;
+    fConnectionID: TRegisteredObjectID;
 
     procedure TriggerClosure(O: TObject);
   protected
     procedure ActOnTrigger(C: TIdSdpBaseTcpConnection); virtual;
   public
     procedure Trigger; override;
-    property ConnectionID: String read fConnectionID write fConnectionID;
+    property ConnectionID: TRegisteredObjectID read fConnectionID write fConnectionID;
   end;
 
   TIdSdpTcpConnectionConnectedWait = class(TIdSdpTcpConnectionWait)
@@ -5454,17 +5454,17 @@ begin
   end;
 end;
 
-function TIdSdpTcpConnectionRegistry.FindConnection(const ServerID: String): TIdSdpBaseTcpConnection;
+function TIdSdpTcpConnectionRegistry.FindConnection(const ServerID: TRegisteredObjectID): TIdSdpBaseTcpConnection;
 var
   O: TObject;
 begin
   O := TIdObjectRegistry.Singleton.FindObject(ServerID);
 
   if not Assigned(O) then
-    raise ERegistry.Create(ServerID + ' does not point to a registered object');
+    raise ERegistry.Create(OidAsString(ServerID) + ' does not point to a registered object');
 
   if not (O is TIdSdpBaseTcpConnection) then
-    raise ERegistry.Create(ServerID + ' points to a ' + O.ClassName + ', not a ' + TIdSdpBaseTcpConnection.ClassName);
+    raise ERegistry.Create(OidAsString(ServerID) + ' points to a ' + O.ClassName + ', not a ' + TIdSdpBaseTcpConnection.ClassName);
 
   Result := O as TIdSdpBaseTcpConnection;
 end;
@@ -5661,7 +5661,7 @@ end;
 
 //* TIdSdpTcpClient Private methods ********************************************
 
-procedure TIdSdpTcpClient.NotifyOfDisconnection(Sender: TObject; ConnectionID: String);
+procedure TIdSdpTcpClient.NotifyOfDisconnection(Sender: TObject; ConnectionID: TRegisteredObjectID);
 begin
   // Notify that we have finished receiving messages and there will be no more
   // data.
@@ -5950,7 +5950,7 @@ begin
   end;
 end;
 
-procedure TIdSdpTcpClientConnection.ClientDisconnection(Sender: TObject; ConnectionID: String);
+procedure TIdSdpTcpClientConnection.ClientDisconnection(Sender: TObject; ConnectionID: TRegisteredObjectID);
 var
   Wait: TIdSdpTcpConnectionDisconnectedWait;
 begin
@@ -7381,7 +7381,7 @@ begin
   Self.OnLog(slDebug,
              '',
              LogEventRefTimerEvent,
-             Format(LogMsg, [Self.ClassName, Self.ID]),
+             Format(LogMsg, [Self.ClassName, OidAsString(Self.ID)]),
              EncodeQuotedStr(StreamToStr(Data)));
 end;
 

@@ -62,7 +62,7 @@ type
   // Should that "remote process" have terminated, nothing happens.
   TIdRemoteWait = class(TIdWait)
   private
-    fProcessID:      String;
+    fProcessID:      TRegisteredObjectID;
     fRemoteWaitTime: Cardinal;
     fWait:           TIdWait;
     procedure FreeWait(O: TObject);
@@ -70,9 +70,9 @@ type
   public
     procedure Trigger; override;
 
-    property ProcessID:      String   read fProcessID write fProcessID;
-    property RemoteWaitTime: Cardinal read fRemoteWaitTime write fRemoteWaitTime;
-    property Wait:           TIdWait  read fWait write fWait;
+    property ProcessID:      TRegisteredObjectID read fProcessID write fProcessID;
+    property RemoteWaitTime: Cardinal            read fRemoteWaitTime write fRemoteWaitTime;
+    property Wait:           TIdWait             read fWait write fWait;
   end;
 
   IIdTimerQueueListener = interface(IInterface)
@@ -131,7 +131,7 @@ type
     property Lock:            TCriticalSection read fLock;
     property Terminated:      Boolean          read fTerminated write fTerminated;
   public
-    class procedure DispatchEvent(ProcessID: String;
+    class procedure DispatchEvent(ProcessID: TRegisteredObjectID;
                                   MillisecsWait: Cardinal;
                                   Event: TIdWait);
 
@@ -141,7 +141,7 @@ type
     procedure AddEvent(MillisecsWait: Cardinal;
                        Event: TIdWait); virtual;
     procedure AddListener(Listener: IIdTimerQueueListener);
-    procedure AddRemoteEvent(ProcessID: String;
+    procedure AddRemoteEvent(ProcessID: TRegisteredObjectID;
                              MillisecsWait: Cardinal;
                              Event: TIdWait); virtual;
     function  Before(TimeA,
@@ -369,7 +369,7 @@ end;
 //******************************************************************************
 //* TIdTimerQueue Public methods ***********************************************
 
-class procedure TIdTimerQueue.DispatchEvent(ProcessID: String;
+class procedure TIdTimerQueue.DispatchEvent(ProcessID: TRegisteredObjectID;
                                             MillisecsWait: Cardinal;
                                             Event: TIdWait);
 var
@@ -505,7 +505,7 @@ begin
   Self.Listeners.AddListener(Listener);
 end;
 
-procedure TIdTimerQueue.AddRemoteEvent(ProcessID: String;
+procedure TIdTimerQueue.AddRemoteEvent(ProcessID: TRegisteredObjectID;
                                        MillisecsWait: Cardinal;
                                        Event: TIdWait);
 var

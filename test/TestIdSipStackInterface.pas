@@ -12,10 +12,10 @@ unit TestIdSipStackInterface;
 interface
 
 uses
-  Classes, IdSipDialog, IdSipInviteModule, IdSipMessage, IdSipMockTransport,
-  IdSipStackInterface, IdSipSubscribeModule, IdSipUserAgent, IdTimerQueue,
-  Messages, TestFramework, TestFrameworkSip, TestFrameworkStackInterface,
-  TestFrameworkTimerQueue;
+  Classes, IdRegisteredObject, IdSipDialog, IdSipInviteModule, IdSipMessage,
+  IdSipMockTransport, IdSipStackInterface, IdSipSubscribeModule, IdSipUserAgent,
+  IdTimerQueue, Messages, TestFramework, TestFrameworkSip,
+  TestFrameworkStackInterface, TestFrameworkTimerQueue;
 
 type
   // The testing of the StackInterface is not completely simple. The UI (or
@@ -531,7 +531,15 @@ type
     procedure TestCopy;
   end;
 
-  TestTIdAsynchronousMessageResultData = class(TTestCase)
+  TAsyncMessageResultTestCase = class(TTestCase)
+  protected
+    NotARegisteredObject: TRegisteredObjectID;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdAsynchronousMessageResultData = class(TAsyncMessageResultTestCase)
   private
     Data: TIdAsynchronousMessageResultData;
   public
@@ -542,7 +550,7 @@ type
     procedure TestCopy;
   end;
 
-  TestTIdBooleanResultData = class(TTestCase)
+  TestTIdBooleanResultData = class(TAsyncMessageResultTestCase)
   private
     Data: TIdBooleanResultData;
   public
@@ -553,7 +561,7 @@ type
     procedure TestCopy;
   end;
 
-  TestTIdDomainNameRecordsResultData = class(TTestCase)
+  TestTIdDomainNameRecordsResultData = class(TAsyncMessageResultTestCase)
   private
     Data: TIdDomainNameRecordsResultData;
   public
@@ -564,7 +572,7 @@ type
     procedure TestCopy;
   end;
 
-  TestTIdGetBindingsData = class(TTestCase)
+  TestTIdGetBindingsData = class(TAsyncMessageResultTestCase)
   private
     Data: TIdGetBindingsData;
   public
@@ -575,7 +583,7 @@ type
     procedure TestCopy;
   end;
 
-  TestTIdStringResultData = class(TTestCase)
+  TestTIdStringResultData = class(TAsyncMessageResultTestCase)
   private
     Data: TIdStringResultData;
   public
@@ -586,7 +594,7 @@ type
     procedure TestCopy;
   end;
 
-  TestTIdStringDictionaryResultData = class(TTestCase)
+  TestTIdStringDictionaryResultData = class(TAsyncMessageResultTestCase)
   private
     Data: TIdStringDictionaryResultData;
   public
@@ -1487,8 +1495,8 @@ begin
   CheckEquals(TIdSipStackInterfaceNullExtension, Null.ClassType, 'AttachExtension returned the wrong type object');
 
   E := Null as TIdSipStackInterfaceNullExtension;
-  CheckEquals(Self.MockTransport.ID,
-              E.UA.Dispatcher.Transports[0].ID,
+  CheckEquals(OidAsString(Self.MockTransport.ID),
+              OidAsString(E.UA.Dispatcher.Transports[0].ID),
               'Extension''s UserAgent isn''t using the same transport as the '
             + 'StackInterface, and thus the UserAgent property is not properly set');
 end;
@@ -2049,23 +2057,29 @@ end;
 
 procedure TestTIdSipStackInterface.TestNotifyOfAsyncMessageResult;
 var
-  FakeResult:   TIdAsynchronousMessageResultData;
-  Notification: TIdAsynchronousMessageResultData;
+  FakeResult:           TIdAsynchronousMessageResultData;
+  NotARegisteredObject: TRegisteredObjectID;
+  Notification:         TIdAsynchronousMessageResultData;
 begin
-  FakeResult := TIdAsynchronousMessageResultData.Create;
+  NotARegisteredObject := TIdObjectRegistry.Singleton.ReserveID(Self);
   try
-    FakeResult.ReferenceID := 'fake ID';
+    FakeResult := TIdAsynchronousMessageResultData.Create;
+    try
+      FakeResult.ReferenceID := NotARegisteredObject;
 
-    Self.Intf.NotifyOfAsyncMessageResult(FakeResult);
+      Self.Intf.NotifyOfAsyncMessageResult(FakeResult);
 
-    Self.ProcessAllPendingNotifications;
+      Self.ProcessAllPendingNotifications;
 
-    CheckNotificationReceived(TIdAsynchronousMessageResultData, 'No async message result notification received');
+      CheckNotificationReceived(TIdAsynchronousMessageResultData, 'No async message result notification received');
 
-    Notification := Self.LastEventOfType(TIdAsynchronousMessageResultData) as TIdAsynchronousMessageResultData;
-    CheckEquals(FakeResult.ReferenceID, Notification.ReferenceID, 'Wrong result ID');
+      Notification := Self.LastEventOfType(TIdAsynchronousMessageResultData) as TIdAsynchronousMessageResultData;
+      CheckEquals(OidAsString(FakeResult.ReferenceID), OidAsString(Notification.ReferenceID), 'Wrong result ID');
+    finally
+      FakeResult.Free;
+    end;
   finally
-    FakeResult.Free;
+    TIdObjectRegistry.Singleton.UnreserveID(NotARegisteredObject);
   end;
 end;
 
@@ -4614,6 +4628,25 @@ begin
 end;
 
 //******************************************************************************
+//* TAsyncMessageResultTestCase                                                *
+//******************************************************************************
+//* TAsyncMessageResultTestCase Public methods *********************************
+
+procedure TAsyncMessageResultTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  Self.NotARegisteredObject := TIdObjectRegistry.Singleton.ReserveID(Self);
+end;
+
+procedure TAsyncMessageResultTestCase.TearDown;
+begin
+  TIdObjectRegistry.Singleton.UnreserveID(Self.NotARegisteredObject);
+
+  inherited TearDown;
+end;
+
+//******************************************************************************
 //* TestTIdAsynchronousMessageResultData                                       *
 //******************************************************************************
 //* TestTIdAsynchronousMessageResultData Public methods ************************
@@ -4624,7 +4657,7 @@ begin
 
   Self.Data := TIdAsynchronousMessageResultData.Create;
   Self.Data.Handle      := $decafbad;
-  Self.Data.ReferenceID := 'fake ID';
+  Self.Data.ReferenceID := Self.NotARegisteredObject;
 end;
 
 procedure TestTIdAsynchronousMessageResultData.TearDown;
@@ -4643,7 +4676,7 @@ begin
   try
     Received := TStringList.Create;
     try
-      Expected.Add('ReferenceID: ' + Self.Data.ReferenceID);
+      Expected.Add('ReferenceID: ' + OidAsString(Self.Data.ReferenceID));
       Expected.Insert(0, '');
       Expected.Insert(1, EventNames(CM_ASYNC_MSG_RESULT));
       Received.Text := Self.Data.AsString;
@@ -4669,8 +4702,8 @@ var
 begin
   Copy := Self.Data.Copy as TIdAsynchronousMessageResultData;
   try
-    CheckEquals(IntToHex(Self.Data.Handle, 8), IntToHex(Copy.Handle, 8), 'Handle');
-    CheckEquals(Self.Data.ReferenceID,         Copy.ReferenceID,         'ReferenceID');
+    CheckEquals(IntToHex(Self.Data.Handle, 8),      IntToHex(Copy.Handle, 8),      'Handle');
+    CheckEquals(OidAsString(Self.Data.ReferenceID), OidAsString(Copy.ReferenceID), 'ReferenceID');
   finally
     Copy.Free;
   end;
@@ -4688,7 +4721,7 @@ begin
   Self.Data := TIdBooleanResultData.Create;
   Self.Data.Handle := $decafbad;
   Self.Data.Result := true;
-  Self.Data.ReferenceID := 'badf00d';
+  Self.Data.ReferenceID := Self.NotARegisteredObject;
 end;
 
 procedure TestTIdBooleanResultData.TearDown;
@@ -4711,7 +4744,7 @@ begin
     try
       Expected.Add(''); // Timestamp + Handle
       Expected.Add(''); // Event name
-      Expected.Add('ReferenceID: ' + Self.Data.ReferenceID);
+      Expected.Add('ReferenceID: ' + OidAsString(Self.Data.ReferenceID));
       Expected.Add('Result: ' + BoolToStr(Self.Data.Result));
 
       Received.Text := Self.Data.AsString;
@@ -4742,7 +4775,7 @@ begin
                 IntToHex(Copy.Handle, 8),
                 'Handle');
     CheckEquals(Self.Data.Result, Copy.Result, 'Result');
-    CheckEquals(Self.Data.ReferenceID, Copy.ReferenceID, 'ReferenceID');
+    CheckEquals(OidAsString(Self.Data.ReferenceID), OidAsString(Copy.ReferenceID), 'ReferenceID');
   finally
     Copy.Free;
   end;
@@ -4759,7 +4792,7 @@ begin
 
   Self.Data := TIdDomainNameRecordsResultData.Create;
   Self.Data.Handle := $decafbad;
-  Self.Data.ReferenceID := 'badf00d';
+  Self.Data.ReferenceID := Self.NotARegisteredObject;
 
   Self.Data.IPAddresses.Add('A',    'foo.bar', '1.2.3.4');
   Self.Data.IPAddresses.Add('AAAA', 'foo.bar', '2002:deca:fbad::1');
@@ -4785,7 +4818,7 @@ begin
     try
       Expected.Add(''); // Timestamp + Handle
       Expected.Add(''); // Event name
-      Expected.Add('ReferenceID: ' + Self.Data.ReferenceID);
+      Expected.Add('ReferenceID: ' + OidAsString(Self.Data.ReferenceID));
       Expected.Add('IPAddress0: ' + Self.Data.IPAddresses[0].AsString);
       Expected.Add('IPAddress1: ' + Self.Data.IPAddresses[1].AsString);
 
@@ -4818,7 +4851,7 @@ begin
                 IntToHex(Copy.Handle, 8),
                 'Handle');
 
-    CheckEquals(Self.Data.ReferenceID, Copy.ReferenceID, 'ReferenceID');
+    CheckEquals(OidAsString(Self.Data.ReferenceID), OidAsString(Copy.ReferenceID), 'ReferenceID');
 
     for I := 0 to Self.Data.IPAddresses.Count - 1 do
       CheckEquals(Self.Data.IPAddresses[I].AsString,
@@ -4840,7 +4873,7 @@ begin
 
   Self.Data := TIdGetBindingsData.Create;
   Self.Data.Handle := $decafbad;
-  Self.Data.ReferenceID := 'fake ID';
+  Self.Data.ReferenceID := Self.NotARegisteredObject;
   Self.Data.Bindings.AddLocation('TCP', '127.0.0.1', 5060);
   Self.Data.Bindings.AddLocation('UDP', '127.0.0.1', 5060);
 end;
@@ -4864,7 +4897,7 @@ begin
   try
     Received := TStringList.Create;
     try
-      Expected.Add('ReferenceID: ' + Self.Data.ReferenceID);
+      Expected.Add('ReferenceID: ' + OidAsString(Self.Data.ReferenceID));
       for I := 0 to Self.Data.Bindings.Count - 1 do
         Expected.Add('Binding' + IntToStr(I) + ': ' + Self.Data.Bindings[I].AsString);
       Expected.Insert(0, '');
@@ -4894,7 +4927,7 @@ begin
   Copy := Self.Data.Copy as TIdGetBindingsData;
   try
     CheckEquals(IntToHex(Self.Data.Handle, 8), IntToHex(Copy.Handle, 8), 'Handle');
-    CheckEquals(Self.Data.ReferenceID, Copy.ReferenceID, 'ReferenceID');
+    CheckEquals(OidAsString(Self.Data.ReferenceID), OidAsString(Copy.ReferenceID), 'ReferenceID');
     CheckEquals(Self.Data.Bindings.Count, Copy.Bindings.Count, 'Bindings size');
 
     for I := 0 to Self.Data.Bindings.Count - 1 do
@@ -4916,7 +4949,7 @@ begin
   Self.Data := TIdStringResultData.Create;
   Self.Data.Handle := $decafbad;
   Self.Data.Result := 'Your Answer';
-  Self.Data.ReferenceID := 'badf00d';
+  Self.Data.ReferenceID := Self.NotARegisteredObject;
 end;
 
 procedure TestTIdStringResultData.TearDown;
@@ -4939,7 +4972,7 @@ begin
     try
       Expected.Add(''); // Timestamp + Handle
       Expected.Add(''); // Event name
-      Expected.Add('ReferenceID: ' + Self.Data.ReferenceID);
+      Expected.Add('ReferenceID: ' + OidAsString(Self.Data.ReferenceID));
       Expected.Add('Result: ' + Self.Data.Result);
 
       Received.Text := Self.Data.AsString;
@@ -4970,7 +5003,7 @@ begin
                 IntToHex(Copy.Handle, 8),
                 'Handle');
     CheckEquals(Self.Data.Result, Copy.Result, 'Result');
-    CheckEquals(Self.Data.ReferenceID, Copy.ReferenceID, 'ReferenceID');
+    CheckEquals(OidAsString(Self.Data.ReferenceID), OidAsString(Copy.ReferenceID), 'ReferenceID');
   finally
     Copy.Free;
   end;
@@ -4988,7 +5021,7 @@ begin
   Self.Data := TIdStringDictionaryResultData.Create;
   Self.Data.Handle := $decafbad;
   Self.Data.Result.Add('question', 'answer');
-  Self.Data.ReferenceID := 'badf00d';
+  Self.Data.ReferenceID := Self.NotARegisteredObject;
 end;
 
 procedure TestTIdStringDictionaryResultData.TearDown;
@@ -5013,7 +5046,7 @@ begin
     try
       Expected.Add(''); // Timestamp + Handle
       Expected.Add(''); // Event name
-      Expected.Add('ReferenceID: ' + Self.Data.ReferenceID);
+      Expected.Add('ReferenceID: ' + OidAsString(Self.Data.ReferenceID));
       Expected.Add('Result:');
 
       KeyNames := TStringList.Create;
@@ -5052,7 +5085,7 @@ begin
   Copy := Self.Data.Copy as TIdStringDictionaryResultData;
   try
     CheckEquals(IntToHex(Self.Data.Handle, 8), IntToHex(Copy.Handle, 8), 'Handle');
-    CheckEquals(Self.Data.ReferenceID, Copy.ReferenceID, 'ReferenceID');
+    CheckEquals(OidAsString(Self.Data.ReferenceID), OidAsString(Copy.ReferenceID), 'ReferenceID');
     CheckEquals(Self.Data.Result.Count, Copy.Result.Count, 'Result size');
 
     KeyNames := TStringList.Create;
@@ -5272,7 +5305,7 @@ begin
       for I := 0 to Expected.Count - 1 do
         CheckEquals(Expected[I].AsString, Received.Bindings[I].AsString, 'Binding #' + IntToStr(I));
 
-      CheckEquals(Self.Wait.ID, Received.ReferenceID, 'ReferenceID not set');
+      CheckEquals(OidAsString(Self.Wait.ID), OidAsString(Received.ReferenceID), 'ReferenceID not set');
     finally
       Expected.Free;
     end;
@@ -5325,7 +5358,7 @@ begin
 
   Received := Self.LastEventOfType(TIdBooleanResultData) as TIdBooleanResultData;
   Check(Received.Result, 'Stack claims to NOT be source of request');
-  CheckEquals(Self.Wait.ID, Received.ReferenceID, 'ReferenceID not set');
+  CheckEquals(OidAsString(Self.Wait.ID), OidAsString(Received.ReferenceID), 'ReferenceID not set');
 end;
 
 procedure TestTIdIsSourceOfWait.TestTriggerIsNotSource;
@@ -5343,7 +5376,7 @@ begin
 
     Received := Self.LastEventOfType(TIdBooleanResultData) as TIdBooleanResultData;
     Check(not Received.Result, 'Stack claims to be source of request');
-    CheckEquals(Self.Wait.ID, Received.ReferenceID, 'ReferenceID not set');
+    CheckEquals(OidAsString(Self.Wait.ID), OidAsString(Received.ReferenceID), 'ReferenceID not set');
   finally
     ArbitraryRequest.Free;
   end;
@@ -5421,7 +5454,7 @@ begin
 
   Received := Self.LastEventOfType(TIdStringResultData) as TIdStringResultData;
   CheckEquals(Self.LocalAddress, Received.Result, 'Unexpected local address');
-  CheckEquals(Self.Wait.ID, Received.ReferenceID, 'ReferenceID not set');
+  CheckEquals(OidAsString(Self.Wait.ID), OidAsString(Received.ReferenceID), 'ReferenceID not set');
 end;
 
 procedure TestTIdLocalAddressForWait.TestTriggerWithNoNat;
@@ -5435,7 +5468,7 @@ begin
 
   Received := Self.LastEventOfType(TIdStringResultData) as TIdStringResultData;
   CheckEquals(Self.LocalAddress, Received.Result, 'Unexpected local address');
-  CheckEquals(Self.Wait.ID, Received.ReferenceID, 'ReferenceID not set');
+  CheckEquals(OidAsString(Self.Wait.ID), OidAsString(Received.ReferenceID), 'ReferenceID not set');
 end;
 
 //******************************************************************************
@@ -5475,7 +5508,7 @@ begin
 
   Received := Self.LastEventOfType(TIdStringResultData) as TIdStringResultData;
   CheckEquals(Self.NatAddress, Received.Result, 'Unexpected local address');
-  CheckEquals(Self.Wait.ID, Received.ReferenceID, 'ReferenceID not set');
+  CheckEquals(OidAsString(Self.Wait.ID), OidAsString(Received.ReferenceID), 'ReferenceID not set');
 end;
 
 procedure TestTIdLocalOrMappedAddressForWait.TestTriggerWithNoNat;
@@ -5489,7 +5522,7 @@ begin
 
   Received := Self.LastEventOfType(TIdStringResultData) as TIdStringResultData;
   CheckEquals(Self.LocalAddress, Received.Result, 'Unexpected local address');
-  CheckEquals(Self.Wait.ID, Received.ReferenceID, 'ReferenceID not set');
+  CheckEquals(OidAsString(Self.Wait.ID), OidAsString(Received.ReferenceID), 'ReferenceID not set');
 end;
 
 //******************************************************************************
@@ -5535,7 +5568,7 @@ begin
 
   Received := Self.LastEventOfType(TIdDomainNameRecordsResultData) as TIdDomainNameRecordsResultData;
 
-  CheckEquals(Self.Wait.ID, Received.ReferenceID, 'ReferenceID not set');
+  CheckEquals(OidAsString(Self.Wait.ID), OidAsString(Received.ReferenceID), 'ReferenceID not set');
 
   CheckEquals(2, Received.IPAddresses.Count, 'Wrong number of resource records');
   CheckEquals(Self.IPv4Address, Received.IPAddresses[0].IPAddress, 'First RR');
@@ -5596,7 +5629,7 @@ begin
 
   Received := Self.LastEventOfType(TIdStringDictionaryResultData) as TIdStringDictionaryResultData;
 
-  CheckEquals(Self.Wait.ID, Received.ReferenceID, 'ReferenceID not set');
+  CheckEquals(OidAsString(Self.Wait.ID), OidAsString(Received.ReferenceID), 'ReferenceID not set');
 
   Check(not Received.Result.IsEmpty, 'No data received, so stack not actually queried');
 end;

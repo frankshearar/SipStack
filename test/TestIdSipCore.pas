@@ -2616,13 +2616,19 @@ end;
 
 procedure TestTIdSipActions.TestFindActionAndPerformBlockNoActions;
 var
-  Finder: TIdSipActionFinder;
+  Finder:               TIdSipActionFinder;
+  NotARegisteredObject: TRegisteredObjectID;
 begin
   Finder := TIdSipActionFinder.Create;
   try
-    Self.Actions.FindActionAndPerform('', Finder);
+    NotARegisteredObject := TIdObjectRegistry.Singleton.ReserveID(Self);
+    try
+      Self.Actions.FindActionAndPerform(NotARegisteredObject, Finder);
 
-    Check(not Assigned(Finder.Action), 'An action found in an empty list');
+      Check(not Assigned(Finder.Action), 'An action found in an empty list');
+    finally
+      TIdObjectRegistry.Singleton.UnreserveID(NotARegisteredObject);
+    end;
   finally
     Finder.Free;
   end;
@@ -2631,21 +2637,24 @@ end;
 procedure TestTIdSipActions.TestFindActionAndPerformBlockNoMatch;
 var
   Action:    TIdSipAction;
-  AnotherID: String;
+  AnotherID: TRegisteredObjectID;
   Finder:    TIdSipActionFinder;
 begin
   Action := TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, Self.Binding);
   Self.Actions.Add(Action);
 
-  AnotherID := Action.ID + '1';
-
-  Finder := TIdSipActionFinder.Create;
+  AnotherID := TIdObjectRegistry.Singleton.ReserveID(Self);
   try
-    Self.Actions.FindActionAndPerform(AnotherID, Finder);
+    Finder := TIdSipActionFinder.Create;
+    try
+      Self.Actions.FindActionAndPerform(AnotherID, Finder);
 
-    Check(not Assigned(Finder.Action), 'An action found');
+      Check(not Assigned(Finder.Action), 'An action found');
+    finally
+      Finder.Free;
+    end;
   finally
-    Finder.Free;
+    TIdObjectRegistry.Singleton.UnreserveID(AnotherID);
   end;
 end;
 
@@ -2680,30 +2689,33 @@ end;
 procedure TestTIdSipActions.TestFindActionAndPerformOrBlockNoMatch;
 var
   Action:    TIdSipAction;
-  AnotherID: String;
+  AnotherID: TRegisteredObjectID;
   Finder:    TIdSipActionFinder;
   Switch:    TIdSipActionSwitch;
 begin
   Action := TIdSipInboundInvite.CreateInbound(Self.Core, Self.Invite, Self.Binding);
   Self.Actions.Add(Action);
 
-  AnotherID := Action.ID + '1';
-
-  Finder := TIdSipActionFinder.Create;
+  AnotherID := TIdObjectRegistry.Singleton.ReserveID(Self);
   try
-    Switch := TIdSipActionSwitch.Create;
+    Finder := TIdSipActionFinder.Create;
     try
-      Self.Actions.FindActionAndPerformOr(AnotherID,
-                                          Finder,
-                                          Switch);
+      Switch := TIdSipActionSwitch.Create;
+      try
+        Self.Actions.FindActionAndPerformOr(AnotherID,
+                                            Finder,
+                                            Switch);
 
-      Check(not Assigned(Finder.Action), 'Found action');
-      Check(Switch.Executed, 'Alternative block didn''t execute');
+        Check(not Assigned(Finder.Action), 'Found action');
+        Check(Switch.Executed, 'Alternative block didn''t execute');
+      finally
+        Switch.Free;
+      end;
     finally
-      Switch.Free;
+      Finder.Free;
     end;
   finally
-    Finder.Free;
+    TIdObjectRegistry.Singleton.UnreserveID(AnotherID);
   end;
 end;
 
@@ -3203,10 +3215,17 @@ begin
 end;
 
 procedure TIdSipActionWaitTestCase.TestTriggerOnNonExistentAction;
+var
+  NotARegisteredObject: TRegisteredObjectID;
 begin
-  Self.Wait.ActionID := 'fake ID';
+  NotARegisteredObject := TIdObjectRegistry.Singleton.ReserveID(Self);
+  try
+    Self.Wait.ActionID := NotARegisteredObject;
 
-  CheckTriggerDoesNothing('Wait triggered on nonexistent action');
+    CheckTriggerDoesNothing('Wait triggered on nonexistent action');
+  finally
+    TIdObjectRegistry.Singleton.UnreserveID(NotARegisteredObject);
+  end;
 end;
 
 procedure TIdSipActionWaitTestCase.TestTriggerOnWrongTypeOfObject;

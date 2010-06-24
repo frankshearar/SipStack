@@ -13,9 +13,9 @@ interface
 
 uses
   Classes, Contnrs, IdBaseThread, IdConnectionBindings, IdInterfacedObject,
-  IdNotification, IdRoutingTable, IdSipAuthentication, IdSipLocation,
-  IdSipLocator, IdSipMessage, IdSipTransport, IdSipTransportAddressSpace,
-  IdTimerQueue, PluggableLogging, SysUtils;
+  IdNotification, IdRegisteredObject, IdRoutingTable, IdSipAuthentication,
+  IdSipLocation, IdSipLocator, IdSipMessage, IdSipTransport,
+  IdSipTransportAddressSpace, IdTimerQueue, PluggableLogging, SysUtils;
 
 type
   // This covers all states - INVITE, non-INVITE, client, server.
@@ -461,7 +461,7 @@ type
 
   TIdSipTransactionWait = class(TIdWait)
   private
-    fTransactionID: String;
+    fTransactionID: TRegisteredObjectID;
     Transaction:    TIdSipTransaction;
 
     procedure ActOnTransaction(O: TObject);
@@ -478,7 +478,7 @@ type
   public
     procedure Trigger; override;
 
-    property TransactionID: String read fTransactionID write fTransactionID;
+    property TransactionID: TRegisteredObjectID read fTransactionID write fTransactionID;
   end;
 
   TIdSipTerminatingTransactionWait = class(TIdSipTransactionWait)
@@ -673,7 +673,7 @@ function StateToStr(S: TIdSipTransactionState): String;
 implementation
 
 uses
-  IdException, IdRegisteredObject, IdSipDialogID, Math, RuntimeSafety, TypInfo;
+  IdException, IdSipDialogID, Math, RuntimeSafety, TypInfo;
 
 const
   AtLeastOneVia         = 'Messages must have at least one Via header';
@@ -1642,7 +1642,7 @@ const
 begin
   // '' because we'll immediately either LogReceivedMessage or LogSentMessage,
   // which will log InitialRequest.AsString anyway.
-  Self.Log(Format(Msg, [Self.ID, InitialRequest.LastHop.Branch]),
+  Self.Log(Format(Msg, [OidAsString(Self.ID), InitialRequest.LastHop.Branch]),
            slDebug,
            0,
            '');
@@ -1653,7 +1653,7 @@ procedure TIdSipTransaction.LogReceivedMessage(Message: TIdSipMessage;
 const
   Msg = 'Transaction %s received %s on %s';
 begin
-  Self.Log(Format(Msg, [Self.ID, Message.Description, Binding.AsString]),
+  Self.Log(Format(Msg, [OidAsString(Self.ID), Message.Description, Binding.AsString]),
            slDebug,
            0,
            Message.AsString);
@@ -1664,7 +1664,7 @@ procedure TIdSipTransaction.LogSentMessage(Message: TIdSipMessage;
 const
   Msg = 'Transaction %s sent %s to %s';
 begin
-  Self.Log(Format(Msg, [Self.ID, Message.Description, Target.AsString]),
+  Self.Log(Format(Msg, [OidAsString(Self.ID), Message.Description, Target.AsString]),
            slDebug,
            0,
            Message.AsString);
@@ -1674,7 +1674,7 @@ procedure TIdSipTransaction.LogStateChange(OldState, NewState: TIdSipTransaction
 const
   Msg = 'Transaction %s changed state: %s -> %s';
 begin
-  Self.Log(Format(Msg, [Self.ID, StateToStr(OldState), StateToStr(NewState)]),
+  Self.Log(Format(Msg, [OidAsString(Self.ID), StateToStr(OldState), StateToStr(NewState)]),
            slDebug,
            0,
            '');
@@ -2621,7 +2621,7 @@ begin
   Self.OnLog(slDebug,
              '',
              LogEventRefTimerEvent,
-             Format(LogMsg, [Self.TransactionID, Self.TimerName]),
+             Format(LogMsg, [OidAsString(Self.TransactionID), Self.TimerName]),
              '');
 end;
 

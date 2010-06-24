@@ -12,8 +12,8 @@ unit IdThreadableTcpClient;
 interface
 
 uses
-  Classes, IdBaseThread, IdConnectionBindings, IdTCPClient, IdTCPConnection,
-  IdTimerQueue, SysUtils;
+  Classes, IdBaseThread, IdConnectionBindings, IdRegisteredObject, IdTCPClient,
+  IdTCPConnection, IdTimerQueue, SysUtils;
 
 type
   TIdThreadableTcpClient = class;
@@ -27,7 +27,7 @@ type
   private
     fCachedBindings:      TIdConnectionBindings;
     fConserveConnections: Boolean;
-    fID:                  String;
+    fID:                  TRegisteredObjectID;
     fOnIdle:              TIdSdpTcpClientProc;
     fOnReceiveMessage:    TReceiveMessageProc;
     fTerminated:          Boolean;
@@ -54,7 +54,7 @@ type
 
     property CachedBindings:      TIdConnectionBindings read fCachedBindings write fCachedBindings;
     property ConserveConnections: Boolean               read fConserveConnections write SetConserveConnections;
-    property ID:                  String                read fID;
+    property ID:                  TRegisteredObjectID   read fID;
     property OnIdle:              TIdSdpTcpClientProc   read fOnIdle write fOnIdle;
     property OnReceiveMessage:    TReceiveMessageProc   read fOnReceiveMessage write fOnReceiveMessage;
     property Terminated:          Boolean               read fTerminated write SetTerminated;
@@ -85,7 +85,7 @@ procedure StoreBindings(C: TIdTCPConnection; TransportType: String; Dest: TIdCon
 implementation
 
 uses
-  IdIndyUtils, IdRegisteredObject, RuntimeSafety;
+  IdIndyUtils, RuntimeSafety;
 
 //******************************************************************************
 //* Unit Public functions/procedures                                           *

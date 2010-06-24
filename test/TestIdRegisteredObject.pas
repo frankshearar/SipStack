@@ -88,10 +88,10 @@ type
     OldLogger: TLoggerProcedure;
     Reg:       TIdObjectRegistry;
 
-    procedure CheckRegistered(O: TObject; OID: String; Msg: String);
-    procedure CheckReserved(O: TObject; OID: String; Msg: String);
-    procedure CheckUnregistered(O: TObject; OID: String; Msg: String);
-    procedure CheckUnreserved(O: TObject; OID: String; Msg: String);
+    procedure CheckRegistered(O: TObject; OID: TRegisteredObjectID; Msg: String);
+    procedure CheckReserved(O: TObject; OID: TRegisteredObjectID; Msg: String);
+    procedure CheckUnregistered(O: TObject; OID: TRegisteredObjectID; Msg: String);
+    procedure CheckUnreserved(O: TObject; OID: TRegisteredObjectID; Msg: String);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -165,7 +165,7 @@ var
 begin
   R := TIdRegisteredObject.Create;
   try
-    CheckNotEquals('', R.ID, 'Object didn''t register itself (or didn''t receive an ID');
+    CheckNotEquals('', OidAsString(R.ID), 'Object didn''t register itself (or didn''t receive an ID');
   finally
     R.Free;
   end;
@@ -174,7 +174,7 @@ end;
 procedure TestTIdRegisteredObject.TestInstanceUnregistersSelf;
 var
   R:   TIdRegisteredObject;
-  RID: String;
+  RID: TRegisteredObjectID;
 begin
   R := TIdRegisteredObject.Create;
   try
@@ -464,24 +464,24 @@ end;
 
 //* TestTIdObjectRegistry Private methods **************************************
 
-procedure TestTIdObjectRegistry.CheckRegistered(O: TObject; OID: String; Msg: String);
+procedure TestTIdObjectRegistry.CheckRegistered(O: TObject; OID: TRegisteredObjectID; Msg: String);
 begin
-  CheckNotEquals(-1, GLog.IndexOf(Format(RegisterLogMsg, [O.ClassName, OID])), Msg);
+  CheckNotEquals(-1, GLog.IndexOf(Format(RegisterLogMsg, [O.ClassName, OidAsString(OID)])), Msg);
 end;
 
-procedure TestTIdObjectRegistry.CheckReserved(O: TObject; OID: String; Msg: String);
+procedure TestTIdObjectRegistry.CheckReserved(O: TObject; OID: TRegisteredObjectID; Msg: String);
 begin
-  CheckNotEquals(-1, GLog.IndexOf(Format(ReserveLogMsg, [O.ClassName, OID])), Msg);
+  CheckNotEquals(-1, GLog.IndexOf(Format(ReserveLogMsg, [O.ClassName, OidAsString(OID)])), Msg);
 end;
 
-procedure TestTIdObjectRegistry.CheckUnregistered(O: TObject; OID: String; Msg: String);
+procedure TestTIdObjectRegistry.CheckUnregistered(O: TObject; OID: TRegisteredObjectID; Msg: String);
 begin
-  CheckNotEquals(-1, GLog.IndexOf(Format(UnregisterLogMsg, [O.ClassName, OID])), Msg);
+  CheckNotEquals(-1, GLog.IndexOf(Format(UnregisterLogMsg, [O.ClassName, OidAsString(OID)])), Msg);
 end;
 
-procedure TestTIdObjectRegistry.CheckUnreserved(O: TObject; OID: String; Msg: String);
+procedure TestTIdObjectRegistry.CheckUnreserved(O: TObject; OID: TRegisteredObjectID; Msg: String);
 begin
-  CheckNotEquals(-1, GLog.IndexOf(Format(UnreserveLogMsg, [O.ClassName, OID])), Msg);
+  CheckNotEquals(-1, GLog.IndexOf(Format(UnreserveLogMsg, [O.ClassName, OidAsString(OID)])), Msg);
 end;
 
 //* TestTIdObjectRegistry Published methods ************************************
@@ -505,7 +505,7 @@ end;
 procedure TestTIdObjectRegistry.TestCollectAllObjectsOfClass;
 var
   L:          TStrings;
-  OID1, OID2: String;
+  OID1, OID2: TRegisteredObjectID;
   O1, O2:     TObject;
   R1, R2:     TIdRegisteredObject;
 begin
@@ -556,7 +556,7 @@ procedure TestTIdObjectRegistry.TestCollectAllObjectsOfClassNoSubclasses;
 var
   L:       TStrings;
   Super:   TObject;
-  SuperID: String;
+  SuperID: TRegisteredObjectID;
   Sub:     TIdRegisteredObject;
 begin
   Super := TObject.Create;
@@ -587,15 +587,18 @@ end;
 
 procedure TestTIdObjectRegistry.TestFindObject;
 var
-  R: TIdRegisteredObject;
+  R:         TIdRegisteredObject;
+  UnusedOID: TRegisteredObjectID;
 begin
+  UnusedOID := TIdObjectRegistry.Singleton.ReserveID(Self);
+
   R := TIdRegisteredObject.Create;
   try
     CheckNotNull(TIdObjectRegistry.Singleton.FindObject(R.ID), 'Registered object not found');
     Check(R = TIdObjectRegistry.Singleton.FindObject(R.ID), 'Unexpected object found');
 
-    CheckNull(TIdObjectRegistry.Singleton.FindObject(R.ID + 'fakeID'), 'Arbitrary ID returned something');
-    CheckNotEquals('', R.ID, 'Object didn''t register itself (or didn''t receive an ID');
+    CheckNull(TIdObjectRegistry.Singleton.FindObject(UnusedOID), 'Arbitrary ID returned something');
+    CheckNotEquals('', OidAsString(R.ID), 'Object didn''t register itself (or didn''t receive an ID');
   finally
     R.Free;
   end;
@@ -603,7 +606,7 @@ end;
 
 procedure TestTIdObjectRegistry.TestRegisterObjectLogs;
 var
-  ID: String;
+  ID: TRegisteredObjectID;
   O:  TObject;
 begin
   O := TObject.Create;
@@ -617,7 +620,7 @@ end;
 
 procedure TestTIdObjectRegistry.TestRegisterObjectReservesAndUnreservesID;
 var
-  ID: String;
+  ID: TRegisteredObjectID;
   O:  TObject;
 begin
   O := TObject.Create;
@@ -632,15 +635,15 @@ end;
 
 procedure TestTIdObjectRegistry.TestRegisterObjectTwice;
 var
-  ID:    String;
-  NewID: String;
+  ID:    TRegisteredObjectID;
+  NewID: TRegisteredObjectID;
   O:     TObject;
 begin
   O := TObject.Create;
   try
     ID := Self.Reg.RegisterObject(O);
     NewID := Self.Reg.RegisterObject(O);
-    CheckEquals(ID, NewID, 'Reregistering object returned different reference');
+    CheckEquals(OidAsString(ID), OidAsString(NewID), 'Reregistering object returned different reference');
   finally
     O.Free;
   end;
@@ -648,7 +651,7 @@ end;
 
 procedure TestTIdObjectRegistry.TestReserveIDDoesntRegister;
 var
-  ID: String;
+  ID: TRegisteredObjectID;
   O:  TObject;
 begin
   O := TObject.Create;
@@ -662,8 +665,8 @@ end;
 
 procedure TestTIdObjectRegistry.TestReserveIDThenRegister;
 var
-  ReservedID:   String;
-  RegisteredID: String;
+  ReservedID:   TRegisteredObjectID;
+  RegisteredID: TRegisteredObjectID;
   O:  TObject;
 begin
   O := TObject.Create;
@@ -672,7 +675,7 @@ begin
     CheckNull(Reg.FindObject(ReservedID), 'Object registered as well as ID reserved');
 
     RegisteredID := Reg.RegisterObject(O);
-    CheckEquals(ReservedID, RegisteredID, 'Reserved ID <> registered ID');
+    CheckEquals(OidAsString(ReservedID), OidAsString(RegisteredID), 'Reserved ID <> registered ID');
     CheckNotNull(Reg.FindObject(ReservedID), 'Object not registered');
   finally
     O.Free;
@@ -681,7 +684,7 @@ end;
 
 procedure TestTIdObjectRegistry.TestUnreserveIDDoesntUnregister;
 var
-  ID: String;
+  ID: TRegisteredObjectID;
   O:  TObject;
 begin
   O := TObject.Create;
@@ -698,8 +701,8 @@ end;
 
 procedure TestTIdObjectRegistry.TestUnregisterObject;
 var
-  R: TIdRegisteredObject;
-  RID: String;
+  R:   TIdRegisteredObject;
+  RID: TRegisteredObjectID;
 begin
   R := TIdRegisteredObject.Create;
   try
@@ -713,7 +716,7 @@ end;
 
 procedure TestTIdObjectRegistry.TestUnregisterObjectLogs;
 var
-  ID: String;
+  ID: TRegisteredObjectID;
   O:  TObject;
 begin
   O := TObject.Create;

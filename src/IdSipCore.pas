@@ -197,9 +197,9 @@ type
     procedure CleanOutTerminatedActions;
     function  Count: Integer;
     function  CountOf(const MethodName: String): Integer;
-    procedure FindActionAndPerform(const ID: String;
+    procedure FindActionAndPerform(const ID: TRegisteredObjectID;
                                    Block: TIdSipActionClosure);
-    procedure FindActionAndPerformOr(const ID: String;
+    procedure FindActionAndPerformOr(const ID: TRegisteredObjectID;
                                      FoundBlock: TIdSipActionClosure;
                                      NotFoundBlock: TIdSipActionClosure);
     function  FindActionForGruu(const LocalGruu: String): TIdSipAction;
@@ -222,20 +222,20 @@ type
   // a list of actions.
   TIdSipActionsWait = class(TIdSipMessageWait)
   private
-    fActionID:  String;
+    fActionID:  TRegisteredObjectID;
     fActions:   TIdSipActions;
     fBlockType: TIdSipActionClosureClass;
   public
     procedure Trigger; override;
 
-    property ActionID:  String                   read fActionID write fActionID;
+    property ActionID:  TRegisteredObjectID      read fActionID write fActionID;
     property Actions:   TIdSipActions            read fActions write fActions;
     property BlockType: TIdSipActionClosureClass read fBlockType write fBlockType;
   end;
 
   TIdSipActionWait = class(TIdWait)
   private
-    fActionID: String;
+    fActionID: TRegisteredObjectID;
 
     procedure TriggerClosure(O: TObject);
   protected
@@ -243,7 +243,7 @@ type
   public
     procedure Trigger; override;
 
-    property ActionID: String read fActionID write fActionID;
+    property ActionID: TRegisteredObjectID read fActionID write fActionID;
   end;
 
   TIdSipActionWaitClass = class of TIdSipActionWait;
@@ -559,7 +559,7 @@ type
     procedure ScheduleEvent(BlockType: TIdSipActionClosureClass;
                             WaitTime: Cardinal;
                             Copy: TIdSipMessage;
-                            const ActionID: String); overload;
+                            const ActionID: TRegisteredObjectID); overload;
     procedure ScheduleEvent(WaitTime: Cardinal;
                             Wait: TIdWait); overload;
     procedure SendRequest(Request: TIdSipRequest;
@@ -1333,18 +1333,18 @@ end;
 
 procedure TIdSipActionClosure.Execute(O: TObject);
 var
-  OID: String;
+  SupposedOID: String;
 begin
   // Some closures need to know if O is nil or not.
 
   if Assigned(O) then begin
     if not (O is TIdSipAction) then begin
       if O is TIdRegisteredObject then
-        OID := (O as TIdRegisteredObject).ID
+        SupposedOID := OidAsString((O as TIdRegisteredObject).ID)
       else
-        OID := O.ClassName;
+        SupposedOID := O.ClassName;
 
-      raise ERegistry.Create(Format('%s does not point to a %s, but a %s', [OID, TIdSipAction.ClassName, O.ClassName]));
+      raise ERegistry.Create(Format('%s does not point to a %s, but a %s', [SupposedOID, TIdSipAction.ClassName, O.ClassName]));
     end;
   end;
 
@@ -1450,7 +1450,7 @@ begin
       and not Self.ActionAt(I).IsTerminated then Inc(Result);
 end;
 
-procedure TIdSipActions.FindActionAndPerform(const ID: String;
+procedure TIdSipActions.FindActionAndPerform(const ID: TRegisteredObjectID;
                                              Block: TIdSipActionClosure);
 var
   NullBlock: TIdSipActionClosure;
@@ -1463,7 +1463,7 @@ begin
   end;
 end;
 
-procedure TIdSipActions.FindActionAndPerformOr(const ID: String;
+procedure TIdSipActions.FindActionAndPerformOr(const ID: TRegisteredObjectID;
                                                FoundBlock: TIdSipActionClosure;
                                                NotFoundBlock: TIdSipActionClosure);
 var
@@ -2666,7 +2666,7 @@ end;
 procedure TIdSipAbstractCore.ScheduleEvent(BlockType: TIdSipActionClosureClass;
                                            WaitTime: Cardinal;
                                            Copy: TIdSipMessage;
-                                           const ActionID: String);
+                                           const ActionID: TRegisteredObjectID);
 var
   Event: TIdSipActionsWait;
 begin

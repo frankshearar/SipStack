@@ -1453,13 +1453,13 @@ end;
 procedure TestTIdSipTransport.TestInstantiationRegistersTransport;
 begin
   CheckNotEquals('',
-                 Self.HighPortTransport.ID,
+                 OidAsString(Self.HighPortTransport.ID),
                  'HighPortTransport not registered');
   CheckNotEquals('',
-                 Self.LowPortTransport.ID,
+                 OidAsString(Self.LowPortTransport.ID),
                  'LowPortTransport not registered');
-  CheckNotEquals(Self.HighPortTransport.ID,
-                 Self.LowPortTransport.ID,
+  CheckNotEquals(OidAsString(Self.HighPortTransport.ID),
+                 OidAsString(Self.LowPortTransport.ID),
                  'HighPortTransport and LowPortTransport have same ID');
 end;
 

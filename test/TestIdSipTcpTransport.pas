@@ -12,10 +12,10 @@ unit TestIdSipTcpTransport;
 interface
 
 uses
-  IdConnectionBindings, IdSipLocation, IdSipMessage, IdSipMockTransport,
-  IdSipTcpTransport, IdSipTransport, IdTimerQueue, IdTCPClient, IdTCPConnection,
-  IdTCPServer, SyncObjs, SysUtils, TestFramework, TestFrameworkSip,
-  TestFrameworkSipTransport;
+  IdConnectionBindings, IdRegisteredObject, IdSipLocation, IdSipMessage,
+  IdSipMockTransport, IdSipTcpTransport, IdSipTransport, IdTimerQueue,
+  IdTCPClient, IdTCPConnection, IdTCPServer, SyncObjs, SysUtils, TestFramework,
+  TestFrameworkSip, TestFrameworkSipTransport;
 
 type
   TestTIdSipTCPTransport = class(TestTIdSipTransport)
@@ -83,11 +83,12 @@ type
 
   TIdTcpConnectionWaitTestCase = class(TTestCase)
   protected
-    Connection:    TIdTcpClient;
-    ConnID:        String;
-    Server:        TIdTcpServer;
-    TransportID:   String;
-    TransportType: String;
+    Connection:           TIdTcpClient;
+    ConnID:               TRegisteredObjectID;
+    NotARegisteredObject: TRegisteredObjectID;
+    Server:               TIdTcpServer;
+    TransportID:          TRegisteredObjectID;
+    TransportType:        String;
 
     procedure DoNothing(Thread: TIdPeerThread);
   public
@@ -381,8 +382,8 @@ const
 implementation
 
 uses
-  Classes, IdException, IdGlobal, IdIndyUtils, IdRegisteredObject,
-  IdSimpleParser, IdSocketHandle, IdStack, IdThreadableTcpClient, TestMessages;
+  Classes, IdException, IdGlobal, IdIndyUtils, IdSimpleParser, IdSocketHandle,
+  IdStack, IdThreadableTcpClient, TestMessages;
 
 function Suite: ITestSuite;
 begin
@@ -1061,13 +1062,15 @@ const
 begin
   inherited SetUp;
 
+  Self.NotARegisteredObject := TIdObjectRegistry.Singleton.ReserveID(Self);
+
   TIdSipTransportRegistry.RegisterTransportType(TcpTransport, TIdSipMockTcpTransport);
 
   Self.Server := CreateTcpServer(TIdTcpServer);
   Self.Server.OnExecute := Self.DoNothing;
   OpenOnFirstFreePort(Self.Server, Address, Port);
 
-  Self.TransportID   := '0xdecafbad';
+  Self.TransportID   := Self.NotARegisteredObject;
   Self.TransportType := 'XYZ';
 
   Self.Connection := TIdTCPClient.Create(nil);
@@ -1086,6 +1089,7 @@ begin
   Self.Server.Free;
 
   TIdSipTransportRegistry.UnregisterTransportType(TcpTransport);
+  TIdObjectRegistry.Singleton.UnreserveID(Self.NotARegisteredObject);
 
   inherited TearDown;
 end;
@@ -1151,7 +1155,7 @@ begin
   CheckEquals(TIdSipReceiveMessageWait, LastWait.ClassType, 'Wrong notification for closed connection');
 
   RecvWait := LastWait as TIdSipReceiveMessageWait;
-  CheckEquals(Self.TransportID, RecvWait.TransportID, 'TransportID not set');
+  CheckEquals(OidAsString(Self.TransportID), OidAsString(RecvWait.TransportID), 'TransportID not set');
   CheckBinding(Self.Connection, Self.TransportType, RecvWait.ReceivedFrom, 'Binding information not set');
   Check(Expected.Equals(RecvWait.Message), 'Message not set');
 end;
@@ -1211,15 +1215,15 @@ var
 begin
   NewWait := Self.W.Copy as TIdSipTcpPacketReadWait;
   try
-    CheckEquals(Self.W.CachedBindings.AsString, NewWait.CachedBindings.AsString, 'CachedBindings');
-    CheckEquals(Self.W.ConnectionID,        NewWait.ConnectionID,                'ConnectionID');
-    CheckEquals(Self.W.ConserveConnections, NewWait.ConserveConnections,         'ConserveConnections');
-    CheckEquals(Self.W.FirstIteration,      NewWait.FirstIteration,              'FirstIteration');
-    CheckEquals(Self.W.NotifyTimerID,       NewWait.NotifyTimerID,               'NotifyTimerID');
-    CheckEquals(Self.W.OwnTimerID,          NewWait.OwnTimerID,                  'OwnTimerID');
-    CheckEquals(Self.W.ReadTimeout,         NewWait.ReadTimeout,                 'ReadTimeout');
-    CheckEquals(Self.W.TransportID,         NewWait.TransportID,                 'TransportID');
-    CheckEquals(Self.W.TransportType,       NewWait.TransportType,               'TransportType');
+    CheckEquals(Self.W.CachedBindings.AsString,    NewWait.CachedBindings.AsString,    'CachedBindings');
+    CheckEquals(OidAsString(Self.W.ConnectionID),  OidAsString(NewWait.ConnectionID),  'ConnectionID');
+    CheckEquals(Self.W.ConserveConnections,        NewWait.ConserveConnections,        'ConserveConnections');
+    CheckEquals(Self.W.FirstIteration,             NewWait.FirstIteration,             'FirstIteration');
+    CheckEquals(OidAsString(Self.W.NotifyTimerID), OidAsString(NewWait.NotifyTimerID), 'NotifyTimerID');
+    CheckEquals(OidAsString(Self.W.OwnTimerID),    OidAsString(NewWait.OwnTimerID),    'OwnTimerID');
+    CheckEquals(Self.W.ReadTimeout,                NewWait.ReadTimeout,                'ReadTimeout');
+    CheckEquals(OidAsString(Self.W.TransportID),   OidAsString(NewWait.TransportID),   'TransportID');
+    CheckEquals(Self.W.TransportType,              NewWait.TransportType,              'TransportType');
   finally
     NewWait.Free;
   end;
@@ -1300,14 +1304,14 @@ begin
               'Unexpected Wait scheduled');
 
   ReadWait := Self.OwnTimer.LastEventScheduled as TIdSipTcpPacketReadWait;
-  CheckEquals(TriggerImmediately, ReadWait.TimeToWait,                  'Wait.TimeToWait');
-  CheckEquals(Self.W.OwnTimerID,          ReadWait.OwnTimerID,          'Wait.OwnTimerID');
-  CheckEquals(Self.W.ConnectionID,        ReadWait.ConnectionID,        'Wait.ConnectionID');
-  CheckEquals(Self.W.ConserveConnections, ReadWait.ConserveConnections, 'Wait.ConserveConnections');
-  CheckEquals(Self.W.NotifyTimerID,       ReadWait.NotifyTimerID,       'Wait.NotifyTimerID');
-  CheckEquals(Self.W.ReadTimeout,         ReadWait.ReadTimeout,         'Wait.ReadTimeout');
-  CheckEquals(Self.W.TransportID,         ReadWait.TransportID,         'Wait.TransportID');
-  CheckEquals(Self.W.TransportType,       ReadWait.TransportType,       'Wait.TransportType');
+  CheckEquals(TriggerImmediately, ReadWait.TimeToWait,                                'Wait.TimeToWait');
+  CheckEquals(OidAsString(Self.W.OwnTimerID),    OidAsString(ReadWait.OwnTimerID),    'Wait.OwnTimerID');
+  CheckEquals(OidAsString(Self.W.ConnectionID),  OidAsString(ReadWait.ConnectionID),  'Wait.ConnectionID');
+  CheckEquals(Self.W.ConserveConnections,        ReadWait.ConserveConnections,        'Wait.ConserveConnections');
+  CheckEquals(OidAsString(Self.W.NotifyTimerID), OidAsString(ReadWait.NotifyTimerID), 'Wait.NotifyTimerID');
+  CheckEquals(Self.W.ReadTimeout,                ReadWait.ReadTimeout,                'Wait.ReadTimeout');
+  CheckEquals(OidAsString(Self.W.TransportID),   OidAsString(ReadWait.TransportID),   'Wait.TransportID');
+  CheckEquals(Self.W.TransportType,              ReadWait.TransportType,              'Wait.TransportType');
 end;
 
 procedure TestTIdSipTcpPacketReadWait.TestTriggerConserveConnections;
@@ -2594,11 +2598,19 @@ begin
 end;
 
 procedure TestTIdSipTcpConnectionOpenWait.TestTriggerOnNonExistentAction;
+var
+  NotARegisteredObject: TRegisteredObjectID;
 begin
   // Check that the Wait doesn't blow up when given the ID of a nonexistent
   // transport.
-  Self.Wait.TransportID := 'fake ID';
-  Self.Wait.Trigger;
+
+  NotARegisteredObject := TIdObjectRegistry.Singleton.ReserveID(Self);
+  try
+    Self.Wait.TransportID := NotARegisteredObject;
+    Self.Wait.Trigger;
+  finally
+    TIdObjectRegistry.Singleton.UnreserveID(NotARegisteredObject);
+  end;
 end;
 
 procedure TestTIdSipTcpConnectionOpenWait.TestTriggerOnWrongTypeOfObject;
@@ -2658,11 +2670,19 @@ begin
 end;
 
 procedure TestTIdSipTcpConnectionCloseWait.TestTriggerOnNonExistentAction;
+var
+  NotARegisteredObject: TRegisteredObjectID;
 begin
   // Check that the Wait doesn't blow up when given the ID of a nonexistent
   // transport.
-  Self.Wait.TransportID := 'fake ID';
-  Self.Wait.Trigger;
+
+  NotARegisteredObject := TIdObjectRegistry.Singleton.ReserveID(Self);
+  try
+    Self.Wait.TransportID := NotARegisteredObject;
+    Self.Wait.Trigger;
+  finally
+    TIdObjectRegistry.Singleton.UnreserveID(NotARegisteredObject);
+  end;
 end;
 
 procedure TestTIdSipTcpConnectionCloseWait.TestTriggerOnWrongTypeOfObject;

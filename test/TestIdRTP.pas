@@ -7235,11 +7235,16 @@ begin
 end;
 
 procedure TestTIdRTPPeerRegistry.TestFindServerNoSuchRegisteredObject;
-const
-  NotARegisteredObject = 'Registered objects don''t have an ID like this';
+var
+  NotARegisteredObject: TRegisteredObjectID;
 begin
-  Self.ExpectedException := ERegistry;
-  TIdRTPPeerRegistry.FindServer(NotARegisteredObject);
+  NotARegisteredObject := TIdObjectRegistry.Singleton.ReserveID(Self);
+  try
+    Self.ExpectedException := ERegistry;
+    TIdRTPPeerRegistry.FindServer(NotARegisteredObject);
+  finally
+    TIdObjectRegistry.Singleton.UnreserveID(NotARegisteredObject);
+  end;
 end;
 
 procedure TestTIdRTPPeerRegistry.TestFindServerNotAnRTPPeer;
@@ -8825,10 +8830,17 @@ end;
 //* TTestCaseRTP Published methods *********************************************
 
 procedure TTestCaseRTP.TestTriggerWithNonexistentSession;
+var
+  NotARegisteredObject: TRegisteredObjectID;
 begin
-  Self.Wait.SessionID := 'fake ID';
-  Self.Wait.Trigger;
-  CheckTriggerDoesNothing('Triggered using a nonexistent object ID');
+  NotARegisteredObject := TIdObjectRegistry.Singleton.ReserveID(Self);
+  try
+    Self.Wait.SessionID := NotARegisteredObject;
+    Self.Wait.Trigger;
+    CheckTriggerDoesNothing('Triggered using a nonexistent object ID');
+  finally
+    TIdObjectRegistry.Singleton.UnreserveID(NotARegisteredObject);
+  end;
 end;
 
 procedure TTestCaseRTP.TestTriggerWithWrongTypeOfObject;

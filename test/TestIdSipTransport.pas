@@ -1226,11 +1226,19 @@ begin
 end;
 
 procedure TestTIdSipMessageExceptionWait.TestTriggerOnNonExistentAction;
+var
+  NotARegisteredObject: TRegisteredObjectID;
 begin
   // Check that the Wait doesn't blow up when given the ID of a nonexistent
   // transport.
-  Self.Wait.TransportID := 'fake ID';
-  Self.Wait.Trigger;
+
+  NotARegisteredObject := TIdObjectRegistry.Singleton.ReserveID(Self);
+  try
+    Self.Wait.TransportID := NotARegisteredObject;
+    Self.Wait.Trigger;
+  finally
+    TIdObjectRegistry.Singleton.UnreserveID(NotARegisteredObject);
+  end;
 end;
 
 procedure TestTIdSipMessageExceptionWait.TestTriggerOnWrongTypeOfObject;
@@ -1293,11 +1301,19 @@ begin
 end;
 
 procedure TestTIdSipReceiveMessageWait.TestTriggerOnNonExistentAction;
+var
+  NotARegisteredObject: TRegisteredObjectID;
 begin
   // Check that the Wait doesn't blow up when given the ID of a nonexistent
   // transport.
-  Self.Wait.TransportID := 'fake ID';
-  Self.Wait.Trigger;
+
+  NotARegisteredObject := TIdObjectRegistry.Singleton.ReserveID(Self);
+  try
+    Self.Wait.TransportID := NotARegisteredObject;
+    Self.Wait.Trigger;
+  finally
+    TIdObjectRegistry.Singleton.UnreserveID(NotARegisteredObject);
+  end;
 end;
 
 procedure TestTIdSipReceiveMessageWait.TestTriggerOnWrongTypeOfObject;

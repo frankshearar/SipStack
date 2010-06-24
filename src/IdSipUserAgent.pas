@@ -12,9 +12,10 @@ unit IdSipUserAgent;
 interface
 
 uses
-  Contnrs, Classes, IdNotification, IdRoutingTable, IdSipAuthentication,
-  IdSipCore, IdSipInviteModule, IdSipLocator, IdSipMessage, IdSipOptionsModule,
-  IdSipRegistration, IdSipTransaction, IdSipTransport, IdTimerQueue, Windows;
+  Contnrs, Classes, IdNotification, IdRegisteredObject, IdRoutingTable,
+  IdSipAuthentication, IdSipCore, IdSipInviteModule, IdSipLocator, IdSipMessage,
+  IdSipOptionsModule, IdSipRegistration, IdSipTransaction, IdSipTransport,
+  IdTimerQueue, Windows;
 
 type
   TIdSipUserAgent = class(TIdSipAbstractCore,
@@ -437,7 +438,7 @@ type
   TIdSipReconfigureStackWait = class(TIdWait)
   private
     fConfiguration: TStrings;
-    fUserAgentID:   String;
+    fUserAgentID:   TRegisteredObjectID;
 
     procedure ActOnUserAgent(O: TObject);
     procedure SetConfiguration(Value: TStrings);
@@ -447,8 +448,8 @@ type
 
     procedure Trigger; override;
 
-    property Configuration: TStrings read fConfiguration write SetConfiguration;
-    property UserAgentID:   String   read fUserAgentID write fUserAgentID;
+    property Configuration: TStrings            read fConfiguration write SetConfiguration;
+    property UserAgentID:   TRegisteredObjectID read fUserAgentID write fUserAgentID;
   end;
 
 // Configuration file constants
@@ -494,10 +495,10 @@ procedure EatDirective(var Line: String);
 implementation
 
 uses
-  ConfigUtils, IdAddressSpace, IdRegisteredObject, IdSimpleParser, IdSipDns,
-  IdSipIndyLocator, IdSipLocation, IdSipInMemoryBindingDatabase,
-  IdSipMockLocator, IdNetworking, IdSipProxyDescription, IdSipSubscribeModule,
-  IdSystem, IdUnicode, RuntimeSafety, SysUtils;
+  ConfigUtils, IdAddressSpace, IdSimpleParser, IdSipDns, IdSipIndyLocator,
+  IdSipLocation, IdSipInMemoryBindingDatabase, IdSipMockLocator, IdNetworking,
+  IdSipProxyDescription, IdSipSubscribeModule, IdSystem, IdUnicode,
+  RuntimeSafety, SysUtils;
 
 //******************************************************************************
 //* Unit Public functions & procedures                                         *

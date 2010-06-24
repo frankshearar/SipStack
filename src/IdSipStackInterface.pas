@@ -259,7 +259,7 @@ type
                          StatusText: String = '');
     procedure Resume;
     procedure Send(ActionHandle: TIdSipHandle);
-    procedure SendAsyncCall(ReferenceID: String);
+    procedure SendAsyncCall(ReferenceID: TRegisteredObjectID);
     procedure SendProvisional(ActionHandle: TIdSipHandle;
                               StatusCode: Cardinal = SIPSessionProgress;
                               Description: String = RSSIPSessionProgress);
@@ -819,14 +819,14 @@ type
   // SendAsyncCall.
   TIdAsynchronousMessageResultData = class(TIdEventData)
   private
-    fReferenceID: String;
+    fReferenceID: TRegisteredObjectID;
   protected
     function Data: String; override;
     function EventName: String; override;
   public
     procedure Assign(Src: TPersistent); override;
 
-    property ReferenceID: String read fReferenceID write fReferenceID;
+    property ReferenceID: TRegisteredObjectID read fReferenceID write fReferenceID;
   end;
 
   TIdBooleanResultData = class(TIdAsynchronousMessageResultData)
@@ -919,7 +919,7 @@ type
 
   TIdStackWait = class(TIdWait)
   private
-    fStackID: String;
+    fStackID: TRegisteredObjectID;
 
     procedure TriggerClosure(O: TObject);
   protected
@@ -927,7 +927,7 @@ type
   public
     procedure Trigger; override;
 
-    property StackID: String read fStackID write fStackID;
+    property StackID: TRegisteredObjectID read fStackID write fStackID;
   end;
 
   TIdStackShutdownWait = class(TIdStackWait)
@@ -1677,7 +1677,7 @@ begin
   end;
 end;
 
-procedure TIdSipStackInterface.SendAsyncCall(ReferenceID: String);
+procedure TIdSipStackInterface.SendAsyncCall(ReferenceID: TRegisteredObjectID);
 begin
   // Invoke an asynchronous function call identified by ReferenceID.
 
@@ -2028,7 +2028,7 @@ begin
   Action.AddActionListener(Self);
   H := Self.AddAction(Action);
 
-  Self.UserAgent.Log(Format(LogMsg, [Action.ClassName, Action.ID, IntToHex(H, 8)]), slDebug, 0, '');
+  Self.UserAgent.Log(Format(LogMsg, [Action.ClassName, OidAsString(Action.ID), IntToHex(H, 8)]), slDebug, 0, '');
 end;
 
 procedure TIdSipStackInterface.OnAuthenticationChallenge(Action: TIdSipAction;
@@ -2401,7 +2401,7 @@ begin
   Action.RemoveActionListener(Self);
   Self.RemoveAction(H);
 
-  Self.UserAgent.Log(Format(LogMsg, [Action.ClassName, Action.ID, IntToHex(H, 8)]), slDebug, 0, '');
+  Self.UserAgent.Log(Format(LogMsg, [Action.ClassName, OidAsString(Action.ID), IntToHex(H, 8)]), slDebug, 0, '');
 end;
 
 procedure TIdSipStackInterface.OnRenewedSubscription(UserAgent: TIdSipAbstractCore;
@@ -3932,7 +3932,7 @@ end;
 
 function TIdAsynchronousMessageResultData.Data: String;
 begin
-  Result := 'ReferenceID: ' + Self.ReferenceID + CRLF;
+  Result := 'ReferenceID: ' + OidAsString(Self.ReferenceID) + CRLF;
 end;
 
 function TIdAsynchronousMessageResultData.EventName: String;

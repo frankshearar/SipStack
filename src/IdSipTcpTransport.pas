@@ -12,9 +12,9 @@ unit IdSipTcpTransport;
 interface
 
 uses
-  Classes, Contnrs, IdConnectionBindings, IdSipMessage, IdSipTransport,
-  IdSocketHandle, IdTCPConnection, IdTCPServer, IdThreadableTcpClient,
-  IdTimerQueue, SyncObjs, SysUtils;
+  Classes, Contnrs, IdConnectionBindings, IdSipMessage, IdRegisteredObject,
+  IdSipTransport, IdSocketHandle, IdTCPConnection, IdTCPServer,
+  IdThreadableTcpClient, IdTimerQueue, SyncObjs, SysUtils;
 
 type
   TIdSipConnectionTableLock = class;
@@ -40,7 +40,7 @@ type
                                             Msg: TIdSipMessage;
                                             Dest: TIdConnectionBindings);
     procedure ScheduleRead(Connection: TIdTCPConnection;
-                           ConnectionID: String);
+                           ConnectionID: TRegisteredObjectID);
     procedure SendMessageTo(Msg: TIdSipMessage;
                             Dest: TIdConnectionBindings);
     procedure StopAllClientConnections;
@@ -69,8 +69,8 @@ type
     destructor  Destroy; override;
 
     function  AddConnection(Connection: TIdTCPConnection;
-                            Request: TIdSipRequest): String; overload;
-    function  AddConnection(Closure: TIdSipTcpConnectionOpenWait): String; overload;
+                            Request: TIdSipRequest): TRegisteredObjectID; overload;
+    function  AddConnection(Closure: TIdSipTcpConnectionOpenWait): TRegisteredObjectID; overload;
     function  ClientType: TIdSipTcpClientClass; virtual;
     function  IsRunning: Boolean; override;
     procedure RemoveConnection(Connection: TIdTCPConnection);
@@ -82,14 +82,14 @@ type
 
   TIdTcpConnectionWait = class(TIdWait)
   private
-    fConnectionID: String;
+    fConnectionID: TRegisteredObjectID;
     procedure ActOnTrigger(O: TObject);
   protected
     procedure ActOnConnection(C: TIdTcpConnection); virtual;
   public
     procedure Trigger; override;
 
-    property ConnectionID: String read fConnectionID write fConnectionID;
+    property ConnectionID: TRegisteredObjectID read fConnectionID write fConnectionID;
   end;
 
   // I represent the attempt to read a SIP message off a socket. I notify the
@@ -99,11 +99,11 @@ type
   TIdSipTcpPacketReadWait = class(TIdTcpConnectionWait)
   private
     fConserveConnections: Boolean;
-    fOwnTimerID:          String;
-    fNotifyTimerID:       String;   // The TimerQueue in which the scheduled notification will run.
-    fReadTimeout:         Cardinal; // Milliseconds.
-    fTransportID:         String;   // The Transport that owns the connection.
-    fTransportType:       String;   // This is probably 'TCP' but could be 'TLS'!
+    fOwnTimerID:          TRegisteredObjectID;
+    fNotifyTimerID:       TRegisteredObjectID;   // The TimerQueue in which the scheduled notification will run.
+    fReadTimeout:         Cardinal;              // Milliseconds.
+    fTransportID:         TRegisteredObjectID;   // The Transport that owns the connection.
+    fTransportType:       String;                // This is probably 'TCP' but could be 'TLS'!
 
     // These properties are used by the collection of TIdSipTcpPacketReadWait
     // instances that make up the process of reading packets. Don't use them
@@ -111,8 +111,8 @@ type
     fCachedBindings: TIdConnectionBindings;
     fFirstIteration: Boolean;
 
-    procedure NotifyOfConnection(ConnectionID: String; Request: TIdSipRequest);
-    procedure NotifyOfDisconnection(ConnectionID: String);
+    procedure NotifyOfConnection(ConnectionID: TRegisteredObjectID; Request: TIdSipRequest);
+    procedure NotifyOfDisconnection(ConnectionID: TRegisteredObjectID);
     procedure NotifyOfException(ExceptionType: ExceptClass;
                                 const Reason: String);
     procedure NotifyTimer(Wait: TIdWait);
@@ -136,12 +136,12 @@ type
 
     function  Copy: TIdWait; override;
 
-    property ConserveConnections: Boolean  read fConserveConnections write fConserveConnections;
-    property NotifyTimerID:       String   read fNotifyTimerID write fNotifyTimerID;
-    property OwnTimerID:          String   read fOwnTimerID write fOwnTimerID;
-    property ReadTimeout:         Cardinal read fReadTimeout write fReadTimeout;
-    property TransportID:         String   read fTransportID write fTransportID;
-    property TransportType:       String   read fTransportType write fTransportType;
+    property ConserveConnections: Boolean             read fConserveConnections write fConserveConnections;
+    property NotifyTimerID:       TRegisteredObjectID read fNotifyTimerID write fNotifyTimerID;
+    property OwnTimerID:          TRegisteredObjectID read fOwnTimerID write fOwnTimerID;
+    property ReadTimeout:         Cardinal            read fReadTimeout write fReadTimeout;
+    property TransportID:         TRegisteredObjectID read fTransportID write fTransportID;
+    property TransportType:       String              read fTransportType write fTransportType;
 
     // State used by this class' algorithm.
     property CachedBindings: TIdConnectionBindings read fCachedBindings write SetCachedBindings;
@@ -177,7 +177,7 @@ type
   private
     fReadTimeout:        Integer;
     fTimer:              TIdTimerQueue;
-    fTransportID:        String;
+    fTransportID:        TRegisteredObjectID;
     fTransportType:      String;
 
     procedure AddConnection(Connection: TIdTCPConnection;
@@ -203,10 +203,10 @@ type
     procedure ReadMessages(Connection: TIdTCPConnection;
                            ConserveConnections: Boolean);
 
-    property ReadTimeout:   Integer       read fReadTimeout write fReadTimeout;
-    property Timer:         TIdTimerQueue read fTimer write fTimer;
-    property TransportID:   String        read fTransportID write fTransportID;
-    property TransportType: String        read fTransportType write fTransportType;
+    property ReadTimeout:   Integer             read fReadTimeout write fReadTimeout;
+    property Timer:         TIdTimerQueue       read fTimer write fTimer;
+    property TransportID:   TRegisteredObjectID read fTransportID write fTransportID;
+    property TransportType: String              read fTransportType write fTransportType;
   end;
 
   // ReadTimeout = -1 implies that we never timeout the body wait. We do not
@@ -223,11 +223,11 @@ type
                             Exception: Exception); overload;
     function  GetReadTimeout: Integer;
     function  GetTimer: TIdTimerQueue;
-    function  GetTransportID: String;
+    function  GetTransportID: TRegisteredObjectID;
     function  GetTransportType: String;
     procedure SetReadTimeout(Value: Integer);
     procedure SetTimer(Value: TIdTimerQueue);
-    procedure SetTransportID(const Value: String);
+    procedure SetTransportID(const Value: TRegisteredObjectID);
     procedure SetTransportType(const Value: String);
   protected
     procedure DoOnExecute(Thread: TIdPeerThread);
@@ -243,7 +243,7 @@ type
     property ConserveConnections: Boolean                     read fConserveConnections write fConserveConnections;
     property ReadTimeout:         Integer                     read GetReadTimeout write SetReadTimeout;
     property Timer:               TIdTimerQueue               read GetTimer write SetTimer;
-    property TransportID:         String                      read GetTransportID write SetTransportID;
+    property TransportID:         TRegisteredObjectID         read GetTransportID write SetTransportID;
     property TransportType:       String                      read GetTransportType write SetTransportType;
   end;
 
@@ -255,9 +255,9 @@ type
   private
     MessageReader: TIdSipTcpMessageReader;
 
-    function  GetTransportID: String;
+    function  GetTransportID: TRegisteredObjectID;
     function  GetTransportType: String;
-    procedure SetTransportID(const Value: String);
+    procedure SetTransportID(const Value: TRegisteredObjectID);
     procedure SetTransportType(Value: String);
   protected
     function  GetTimer: TIdTimerQueue; override;
@@ -270,8 +270,8 @@ type
     procedure ReceiveMessages; override;
     procedure Send(Msg: TIdSipMessage);
 
-    property TransportID:   String read GetTransportID write SetTransportID;
-    property TransportType: String read GetTransportType write SetTransportType;
+    property TransportID:   TRegisteredObjectID read GetTransportID write SetTransportID;
+    property TransportType: String              read GetTransportType write SetTransportType;
   end;
 
   // I relate a request with a TCP connection. I store a COPY of a request
@@ -301,7 +301,7 @@ type
   private
     fBinding:           TIdConnectionBindings;
     fConnection:        TIdTCPConnection;
-    fConnectionID:      String;
+    fConnectionID:      TRegisteredObjectID;
     fRequest:           TIdSipRequest;
     HandleRegistration: Boolean; // Are we responsible for unregistering Connection?
 
@@ -316,7 +316,7 @@ type
 
     property Binding:      TIdConnectionBindings read fBinding;
     property Connection:   TIdTCPConnection      read fConnection;
-    property ConnectionID: String                read fConnectionID;
+    property ConnectionID: TRegisteredObjectID   read fConnectionID;
     property Request:      TIdSipRequest         read fRequest;
   end;
 
@@ -402,7 +402,7 @@ type
 implementation
 
 uses
-  IdException, IdIndyUtils, IdRegisteredObject, IdSipDns, IdTcpClient;
+  IdException, IdIndyUtils, IdSipDns, IdTcpClient;
 
 //******************************************************************************
 //* TIdSipTCPTransport                                                         *
@@ -442,7 +442,7 @@ begin
 end;
 
 function TIdSipTCPTransport.AddConnection(Connection: TIdTCPConnection;
-                                          Request: TIdSipRequest): String;
+                                          Request: TIdSipRequest): TRegisteredObjectID;
 var
   SimulatedEvent: TIdSipTcpConnectionOpenWait;
 begin
@@ -458,7 +458,7 @@ begin
   end;
 end;
 
-function TIdSipTCPTransport.AddConnection(Closure: TIdSipTcpConnectionOpenWait): String;
+function TIdSipTCPTransport.AddConnection(Closure: TIdSipTcpConnectionOpenWait): TRegisteredObjectID;
 var
   Entry: TIdSipConnectionTableEntry;
   Table: TIdSipConnectionTable;
@@ -698,7 +698,7 @@ begin
 end;
 
 procedure TIdSipTCPTransport.ScheduleRead(Connection: TIdTCPConnection;
-                                          ConnectionID: String);
+                                          ConnectionID: TRegisteredObjectID);
 var
   Wait: TIdSipTcpPacketReadWait;
 begin
@@ -718,8 +718,8 @@ end;
 procedure TIdSipTCPTransport.SendMessageTo(Msg: TIdSipMessage;
                                            Dest: TIdConnectionBindings);
 var
-  ConnectionID:  String;
-  FakeRequest:  TIdSipRequest;
+  ConnectionID:  TRegisteredObjectID;
+  FakeRequest:   TIdSipRequest;
   NewConnection: TIdSipTcpClient;
 begin
   NewConnection := Self.CreateClient;
@@ -911,7 +911,7 @@ end;
 
 //* TIdSipTcpPacketReadWait Private methods ************************************
 
-procedure TIdSipTcpPacketReadWait.NotifyOfConnection(ConnectionID: String; Request: TIdSipRequest);
+procedure TIdSipTcpPacketReadWait.NotifyOfConnection(ConnectionID: TRegisteredObjectID; Request: TIdSipRequest);
 var
   Wait: TIdSipTcpConnectionOpenWait;
 begin
@@ -923,7 +923,7 @@ begin
   Self.NotifyTimer(Wait);
 end;
 
-procedure TIdSipTcpPacketReadWait.NotifyOfDisconnection(ConnectionID: String);
+procedure TIdSipTcpPacketReadWait.NotifyOfDisconnection(ConnectionID: TRegisteredObjectID);
 var
   Wait: TIdSipTcpConnectionCloseWait;
 begin
@@ -1373,7 +1373,7 @@ begin
   Result := Self.MessageReader.Timer;
 end;
 
-function TIdSipTcpServer.GetTransportID: String;
+function TIdSipTcpServer.GetTransportID: TRegisteredObjectID;
 begin
   Result := Self.MessageReader.TransportID;
 end;
@@ -1393,7 +1393,7 @@ begin
   Self.MessageReader.Timer := Value;
 end;
 
-procedure TIdSipTcpServer.SetTransportID(const Value: String);
+procedure TIdSipTcpServer.SetTransportID(const Value: TRegisteredObjectID);
 begin
   Self.MessageReader.TransportID := Value;
 end;
@@ -1444,7 +1444,7 @@ begin
   Result := Self.MessageReader.Timer;
 end;
 
-function TIdSipTcpClient.GetTransportID: String;
+function TIdSipTcpClient.GetTransportID: TRegisteredObjectID;
 begin
   Result := Self.MessageReader.TransportID;
 end;
@@ -1459,7 +1459,7 @@ begin
   Self.MessageReader.Timer := Value;
 end;
 
-procedure TIdSipTcpClient.SetTransportID(const Value: String);
+procedure TIdSipTcpClient.SetTransportID(const Value: TRegisteredObjectID);
 begin
   Self.MessageReader.TransportID := Value;
 end;

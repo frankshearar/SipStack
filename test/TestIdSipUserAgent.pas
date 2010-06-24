@@ -1928,12 +1928,18 @@ end;
 
 procedure TestTIdSipUserAgent.TestScheduleEventActionClosure;
 var
-  EventCount: Integer;
+  ArbitraryOID: TRegisteredObjectID;
+  EventCount:   Integer;
 begin
-  EventCount := Self.DebugTimer.EventCount;
-  Self.Core.ScheduleEvent(TIdSipInboundInviteExpire, 50, Self.Invite.Copy, '');
-  Check(EventCount < DebugTimer.EventCount,
-        'Event not scheduled');
+  ArbitraryOID := TIdObjectRegistry.Singleton.ReserveID(Self);
+  try
+    EventCount := Self.DebugTimer.EventCount;
+    Self.Core.ScheduleEvent(TIdSipInboundInviteExpire, 50, Self.Invite.Copy, ArbitraryOID);
+    Check(EventCount < DebugTimer.EventCount,
+          'Event not scheduled');
+  finally
+    TIdObjectRegistry.Singleton.UnreserveID(ArbitraryOID);
+  end;
 end;
 
 procedure TestTIdSipUserAgent.TestSetFrom;
@@ -4683,10 +4689,17 @@ begin
 end;
 
 procedure TestTIdSipReconfigureStackWait.TestTriggerWithUnregisteredObjectID;
+var
+  NotARegisteredObject: TRegisteredObjectID;
 begin
-  Self.Wait.UserAgentID := 'fake ID';
-  Self.Wait.Trigger;
-  CheckTriggerDoesNothing('Wait triggered when given a non-existent ID');
+  NotARegisteredObject := TIdObjectRegistry.Singleton.ReserveID(Self);
+  try
+    Self.Wait.UserAgentID := NotARegisteredObject;
+    Self.Wait.Trigger;
+    CheckTriggerDoesNothing('Wait triggered when given a non-existent ID');
+  finally
+    TIdObjectRegistry.Singleton.UnreserveID(NotARegisteredObject);
+  end;
 end;
 
 //******************************************************************************

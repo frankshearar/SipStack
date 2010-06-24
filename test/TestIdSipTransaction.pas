@@ -3509,8 +3509,8 @@ begin
   CheckEquals(Self.MockDispatcher.T1Interval,
               TimerG.DebugWaitTime,
               'Wrong wait time');
-  CheckEquals(Self.Tran.ID,
-              TimerG.TransactionID,
+  CheckEquals(OidAsString(Self.Tran.ID),
+              OidAsString(TimerG.TransactionID),
               'Event scheduled for wrong transaction');
 
   // Usually we'd Self.DebugTimer.TriggerAllEventsOfType(TIdSipServerInviteTransactionTimerGWait)
@@ -3548,8 +3548,8 @@ begin
   CheckEquals(Self.MockDispatcher.T1Interval,
               TimerG.DebugWaitTime,
               'Wrong wait time');
-  CheckEquals(Self.Tran.ID,
-              TimerG.TransactionID,
+  CheckEquals(OidAsString(Self.Tran.ID),
+              OidAsString(TimerG.TransactionID),
               'Event scheduled for wrong transaction');
 
   FireCount := 2;
@@ -3567,8 +3567,8 @@ begin
     CheckEquals(ExpectedInterval,
                 TimerG.DebugWaitTime,
                 'Bad wait time (' + IntToStr(FireCount) + ')');
-    CheckEquals(Self.Tran.ID,
-                TimerG.TransactionID,
+    CheckEquals(OidAsString(Self.Tran.ID),
+                OidAsString(TimerG.TransactionID),
                 'Event scheduled for wrong transaction (' + IntToStr(FireCount) + ')');
 
     ExpectedInterval := 2 * ExpectedInterval;
@@ -3589,8 +3589,8 @@ begin
     CheckEquals(ExpectedInterval,
                 TimerG.DebugWaitTime,
                 'Bad wait time (' + IntToStr(FireCount) + ')');
-    CheckEquals(Self.Tran.ID,
-                TimerG.TransactionID,
+    CheckEquals(OidAsString(Self.Tran.ID),
+                OidAsString(TimerG.TransactionID),
                 'Event scheduled for wrong transaction (' + IntToStr(FireCount) + ')');
 
     Inc(FireCount);
@@ -3648,8 +3648,8 @@ begin
   CheckEquals(Self.ServerTran.TimerHInterval,
               TimerH.DebugWaitTime,
               'Wrong wait time');
-  CheckEquals(Self.ServerTran.ID,
-              TimerH.TransactionID,
+  CheckEquals(OidAsString(Self.ServerTran.ID),
+              OidAsString(TimerH.TransactionID),
               'Event scheduled for wrong transaction');
 
   // Finally, make sure Timer H does actually fire.
@@ -3699,8 +3699,8 @@ begin
   CheckEquals(Self.ServerTran.TimerIInterval,
               LatestEvent.DebugWaitTime,
               'Wrong wait time');
-  CheckEquals(Self.Tran.ID,
-              LatestEvent.TransactionID,
+  CheckEquals(OidAsString(Self.Tran.ID),
+              OidAsString(LatestEvent.TransactionID),
               'Event scheduled for wrong transaction');
 end;
 
@@ -4141,8 +4141,8 @@ begin
   CheckEquals(Tran.TimerJInterval,
               LatestEvent.DebugWaitTime,
               'Wrong wait time');
-  CheckEquals(Tran.ID,
-              LatestEvent.TransactionID,
+  CheckEquals(OidAsString(Tran.ID),
+              OidAsString(LatestEvent.TransactionID),
               'Event scheduled for wrong transaction');
 
   Self.DebugTimer.TriggerAllEventsOfType(TIdSipServerNonInviteTransactionTimerJWait);
@@ -4823,8 +4823,8 @@ begin
   CheckEquals(Self.ClientTran.TimerDInterval,
               LastEvent.DebugWaitTime,
               'Wrong time');
-  CheckEquals(Self.ClientTran.ID,
-              LastEvent.TransactionID,
+  CheckEquals(OidAsString(Self.ClientTran.ID),
+              OidAsString(LastEvent.TransactionID),
               'Event scheduled for wrong transaction');
 end;
 
@@ -5314,8 +5314,8 @@ begin
   CheckEquals(Self.ClientTran.TimerEInterval,
               TimerE.DebugWaitTime,
               'Wrong time');
-  CheckEquals(Self.ClientTran.ID,
-              TimerE.TransactionID,
+  CheckEquals(OidAsString(Self.ClientTran.ID),
+              OidAsString(TimerE.TransactionID),
               'Event scheduled for wrong transaction');
 end;
 
@@ -5343,8 +5343,8 @@ begin
     CheckEquals(Tran.TimerFInterval,
                 LastEvent.DebugWaitTime,
                 'Wrong time');
-    CheckEquals(Tran.ID,
-                LastEvent.TransactionID,
+    CheckEquals(OidAsString(Tran.ID),
+                OidAsString(LastEvent.TransactionID),
                 'Event scheduled for wrong transaction');
   finally
     Tran.Free;
@@ -5367,8 +5367,8 @@ begin
   CheckEquals(Self.ClientTran.TimerFInterval,
               LastEvent.DebugWaitTime,
               'Wrong time');
-  CheckEquals(Tran.ID,
-              LastEvent.TransactionID,
+  CheckEquals(OidAsString(Tran.ID),
+              OidAsString(LastEvent.TransactionID),
               'Event scheduled for wrong transaction');
 end;
 
@@ -5406,8 +5406,8 @@ begin
   CheckEquals(Self.ClientTran.TimerKInterval,
               TimerK.DebugWaitTime,
               'Wrong time');
-  CheckEquals(Tran.ID,
-              TimerK.TransactionID,
+  CheckEquals(OidAsString(Tran.ID),
+              OidAsString(TimerK.TransactionID),
               'Event scheduled for wrong transaction');
 end;
 
@@ -5607,10 +5607,17 @@ end;
 //* TTransactionWaitTestCase Published methods *********************************
 
 procedure TTransactionWaitTestCase.TestTriggerWithInappropriateObjectID;
+var
+  NotARegisteredObject: TRegisteredObjectID;
 begin
-  Self.Wait.TransactionID := 'fake ID';
-  Self.Wait.Trigger;
-  CheckTriggerDoesNothing('Triggered on unregistered object ID');
+  NotARegisteredObject := TIdObjectRegistry.Singleton.ReserveID(Self);
+  try
+    Self.Wait.TransactionID := NotARegisteredObject;
+    Self.Wait.Trigger;
+    CheckTriggerDoesNothing('Triggered on unregistered object ID');
+  finally
+    TIdObjectRegistry.Singleton.UnreserveID(NotARegisteredObject);
+  end;
 end;
 
 procedure TTransactionWaitTestCase.TestTriggerWithUnregisteredObjectID;

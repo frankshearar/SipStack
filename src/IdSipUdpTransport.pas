@@ -12,8 +12,9 @@ unit IdSipUdpTransport;
 interface
 
 uses
-  Classes, IdConnectionBindings, IdSipLocation, IdSipMessage, IdSipTransport,
-  IdSocketHandle, IdTimerQueue, IdUDPServer, SysUtils;
+  Classes, IdConnectionBindings, IdRegisteredObject, IdSipLocation,
+  IdSipMessage, IdSipTransport, IdSocketHandle, IdTimerQueue, IdUDPServer,
+  SysUtils;
 
 type
   TIdSipUdpServer = class;
@@ -47,7 +48,7 @@ type
   TIdSipUdpServer = class(TIdUDPServer)
   private
     fTimer:         TIdTimerQueue;
-    fTransportID:   String;
+    fTransportID:   TRegisteredObjectID;
     fTransportType: String;
   protected
     procedure DoUDPRead(AData: TStream; ABinding: TIdSocketHandle); override;
@@ -57,9 +58,9 @@ type
   public
     constructor Create(AOwner: TComponent); override;
 
-    property Timer:         TIdTimerQueue read fTimer write fTimer;
-    property TransportID:   String        read fTransportID write fTransportID;
-    property TransportType: String        read fTransportType write fTransportType;
+    property Timer:         TIdTimerQueue       read fTimer write fTimer;
+    property TransportID:   TRegisteredObjectID read fTransportID write fTransportID;
+    property TransportType: String              read fTransportType write fTransportType;
   end;
 
   TIdSipUdpClient = class(TIdSipUdpServer)

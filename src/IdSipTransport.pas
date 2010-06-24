@@ -13,8 +13,8 @@ interface
 
 uses
   Classes, Contnrs, IdConnectionBindings, IdException, IdInterfacedObject,
-  IdNotification, IdRoutingTable, IdSipLocation, IdSipMessage, IdSocketHandle,
-  IdTimerQueue, PluggableLogging, SysUtils;
+  IdNotification, IdRegisteredObject, IdRoutingTable, IdSipLocation,
+  IdSipMessage, IdSocketHandle, IdTimerQueue, PluggableLogging, SysUtils;
 
 type
   TIdSipTransport = class;
@@ -235,7 +235,7 @@ type
 
   TIdSipTransportWait = class(TIdWait)
   private
-    fTransportID: String;
+    fTransportID: TRegisteredObjectID;
 
     procedure TriggerClosure(O: TObject);
   protected
@@ -243,7 +243,7 @@ type
   public
     procedure Trigger; override;
 
-    property TransportID: String read fTransportID write fTransportID;
+    property TransportID: TRegisteredObjectID read fTransportID write fTransportID;
   end;
 
   // I represent the (possibly) deferred handling of an exception raised in the
@@ -275,7 +275,7 @@ type
   TIdSipReceiveMessageWait = class(TIdSipMessageWait)
   private
     fReceivedFrom: TIdConnectionBindings;
-    fTransportID:  String;
+    fTransportID:  TRegisteredObjectID;
 
     procedure ReceiveMessage(O: TObject);
     procedure SetReceivedFrom(Value: TIdConnectionBindings);
@@ -286,7 +286,7 @@ type
     procedure Trigger; override;
 
     property ReceivedFrom: TIdConnectionBindings read fReceivedFrom write SetReceivedFrom;
-    property TransportID:  String                read fTransportID write fTransportID;
+    property TransportID:  TRegisteredObjectID   read fTransportID write fTransportID;
   end;
 
   // I represent a collection of Transports. I own, and hence manage the
@@ -451,7 +451,7 @@ const
 implementation
 
 uses
-  IdRegisteredObject, IdTCPServer, IdIOHandlerSocket, RuntimeSafety;
+  IdTCPServer, IdIOHandlerSocket, RuntimeSafety;
 
 var
   GTransportTypes: TStrings;

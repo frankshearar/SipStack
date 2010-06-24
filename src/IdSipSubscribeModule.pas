@@ -61,8 +61,9 @@ end;
 }
 
 uses
-  Classes, Contnrs, IdConnectionBindings, IdNotification, IdSipCore,
-  IdSipDialog, IdSipDialogID, IdSipMessage, IdTimerQueue, SyncObjs, SysUtils;
+  Classes, Contnrs, IdConnectionBindings, IdNotification, IdRegisteredObject,
+  IdSipCore, IdSipDialog, IdSipDialogID, IdSipMessage, IdTimerQueue, SyncObjs,
+  SysUtils;
 
 type
   TIdSipOutboundNotify = class;
@@ -719,7 +720,7 @@ type
   TIdSipSubscriptionRetryWait = class(TIdWait)
   private
     fEventPackage: String;
-    fModuleID:     String;
+    fModuleID:     TRegisteredObjectID;
     fTarget:       TIdSipAddressHeader;
 
     procedure Resubscribe(O: TObject);
@@ -731,7 +732,7 @@ type
     procedure Trigger; override;
 
     property EventPackage: String              read fEventPackage write fEventPackage;
-    property ModuleID:     String              read fModuleID write fModuleID;
+    property ModuleID:     TRegisteredObjectID read fModuleID write fModuleID;
     property Target:       TIdSipAddressHeader read fTarget write SetTarget;
   end;
 
@@ -827,7 +828,7 @@ const
 implementation
 
 uses
-  IdRegisteredObject, IdSipLocator, IdSipTransport, RuntimeSafety;
+  IdSipLocator, IdSipTransport, RuntimeSafety;
 
 const
   BadReferNotifyBody               = 'REFER NOTIFYs MUST have '

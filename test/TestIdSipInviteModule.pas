@@ -9046,12 +9046,19 @@ end;
 //* TIdSipSessionWaitTestCase Published methods ********************************
 
 procedure TIdSipSessionWaitTestCase.TestTriggerWithIDOfNonexistentObject;
+var
+  NotARegisteredObject: TRegisteredObjectID;
 begin
   // Check that the Wait does nothing if its SessionID doesn't point to a
   // registered object.
 
-  Self.Wait.SessionID := 'fake ID';
-  Self.CheckTriggerDoesNothing(Self.Wait, 'Wait didn''t check object type before triggering');
+  NotARegisteredObject := TIdObjectRegistry.Singleton.ReserveID(Self);
+  try
+    Self.Wait.SessionID := NotARegisteredObject;
+    Self.CheckTriggerDoesNothing(Self.Wait, 'Wait didn''t check object type before triggering');
+  finally
+    TIdObjectRegistry.Singleton.UnreserveID(NotARegisteredObject);
+  end;
 end;
 
 procedure TIdSipSessionWaitTestCase.TestTriggerWithIDOfWrongTypeOfObject;

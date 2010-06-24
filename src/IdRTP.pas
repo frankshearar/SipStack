@@ -13,7 +13,7 @@ interface
 
 uses
   Classes, Contnrs, IdConnectionBindings, IdInterfacedObject, IdNotification,
-  IdTimerQueue, SyncObjs, SysUtils, Types;
+  IdRegisteredObject, IdTimerQueue, SyncObjs, SysUtils, Types;
 
 type
   TIdCardinalArray        = array of Cardinal;
@@ -980,7 +980,7 @@ type
   private
     class function GetAllServers: TStrings;
   public
-    class function FindServer(const ServerID: String): TIdBaseRTPAbstractPeer;
+    class function FindServer(const ServerID: TRegisteredObjectID): TIdBaseRTPAbstractPeer;
     class function ServerOn(Host: String; Port: Cardinal): TIdBaseRTPAbstractPeer;
     class function ServerRunningOn(Host: String; Port: Cardinal): Boolean;
   end;
@@ -1182,7 +1182,7 @@ type
 
   TIdRTPWait = class(TIdWait)
   private
-    fSessionID: String;
+    fSessionID: TRegisteredObjectID;
 
     procedure TriggerClosure(O: TObject);
   protected
@@ -1190,7 +1190,7 @@ type
   public
     procedure Trigger; override;
 
-    property SessionID: String read fSessionID write fSessionID;
+    property SessionID: TRegisteredObjectID read fSessionID write fSessionID;
   end;
 
   // I represent the (possibly) deferred handling of an inbound packet.
@@ -1417,7 +1417,7 @@ implementation
 
 uses
   DateUtils, IdHash, IdHashMessageDigest, IdNetworking, IdRandom,
-  IdRegisteredObject, IdSimpleParser, IdSystem, IdUnicode, Math, RuntimeSafety;
+  IdSimpleParser, IdSystem, IdUnicode, Math, RuntimeSafety;
 
 const
   JanOne1900           = 2;
@@ -5131,17 +5131,17 @@ end;
 //******************************************************************************
 //* TIdRTPPeerRegistry Public methods ******************************************
 
-class function TIdRTPPeerRegistry.FindServer(const ServerID: String): TIdBaseRTPAbstractPeer;
+class function TIdRTPPeerRegistry.FindServer(const ServerID: TRegisteredObjectID): TIdBaseRTPAbstractPeer;
 var
   O: TObject;
 begin
   O := TIdObjectRegistry.Singleton.FindObject(ServerID);
 
   if not Assigned(O) then
-    raise ERegistry.Create(ServerID + ' does not point to a registered object');
+    raise ERegistry.Create(OidAsString(ServerID) + ' does not point to a registered object');
 
   if not (O is TIdBaseRTPAbstractPeer) then
-    raise ERegistry.Create(ServerID + ' points to a ' + O.ClassName + ', not a ' + TIdBaseRTPAbstractPeer.ClassName);
+    raise ERegistry.Create(OidAsString(ServerID) + ' points to a ' + O.ClassName + ', not a ' + TIdBaseRTPAbstractPeer.ClassName);
 
   Result := O as TIdBaseRTPAbstractPeer;
 end;

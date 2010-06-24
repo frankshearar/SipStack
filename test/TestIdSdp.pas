@@ -8738,11 +8738,16 @@ begin
 end;
 
 procedure TestTIdSdpTcpConnectionRegistry.TestFindConnectionNoSuchRegisteredObject;
-const
-  NotARegisteredObject = 'Registered objects don''t have an ID like this';
+var
+  NotARegisteredObject: TRegisteredObjectID;
 begin
-  Self.ExpectedException := ERegistry;
-  TIdSdpTcpConnectionRegistry.Singleton.FindConnection(NotARegisteredObject);
+  NotARegisteredObject := TIdObjectRegistry.Singleton.ReserveID(Self);
+  try
+    Self.ExpectedException := ERegistry;
+    TIdSdpTcpConnectionRegistry.Singleton.FindConnection(NotARegisteredObject);
+  finally
+    TIdObjectRegistry.Singleton.UnreserveID(NotARegisteredObject);
+  end;
 end;
 
 procedure TestTIdSdpTcpConnectionRegistry.TestFindConnectionNotATcpConnection;
@@ -11988,10 +11993,17 @@ begin
 end;
 
 procedure TIdSdpTcpConnectionWaitTestCase.TestTriggerWithNonexistentConnection;
+var
+  NotARegisteredObject: TRegisteredObjectID;
 begin
-  Self.Wait.ConnectionID := 'fake ID';
-  Self.Wait.Trigger;
-  CheckTriggerDoesNothing('Triggered using a nonexistent object ID');
+  NotARegisteredObject := TIdObjectRegistry.Singleton.ReserveID(Self);
+  try
+    Self.Wait.ConnectionID := NotARegisteredObject;
+    Self.Wait.Trigger;
+    CheckTriggerDoesNothing('Triggered using a nonexistent object ID');
+  finally
+    TIdObjectRegistry.Singleton.UnreserveID(NotARegisteredObject);
+  end;
 end;
 
 procedure TIdSdpTcpConnectionWaitTestCase.TestTriggerWithWrongTypeOfObject;

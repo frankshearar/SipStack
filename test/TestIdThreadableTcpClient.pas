@@ -33,7 +33,7 @@ type
 implementation
 
 uses
-  IdConnectionBindings, IdIndyUtils, IdSocketHandle;
+  IdConnectionBindings, IdIndyUtils, IdRegisteredObject, IdSocketHandle;
 
 function Suite: ITestSuite;
 begin
@@ -105,7 +105,7 @@ end;
 
 procedure TestTIdThreadableTcpClient.TestInstantiationSetsID;
 begin
-  CheckNotEquals('', Self.C.ID, 'ID not set');
+  CheckNotEquals('', OidAsString(Self.C.ID), 'ID not set');
 end;
 
 initialization

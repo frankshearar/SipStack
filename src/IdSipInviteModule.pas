@@ -13,8 +13,8 @@ interface
 
 uses
   Classes, Contnrs, IdConnectionBindings, IdInterfacedObject, IdNotification,
-  IdSipCore, IdSipDialog, IdSipDialogID, IdSipLocation, IdSipMessage,
-  IdTimerQueue;
+  IdRegisteredObject, IdSipCore, IdSipDialog, IdSipDialogID, IdSipLocation,
+  IdSipMessage, IdTimerQueue;
 
 type
   TIdSipInboundInvite = class;
@@ -685,14 +685,14 @@ type
 
   TIdSipSessionWait = class(TIdWait)
   private
-    fSessionID: String;
+    fSessionID: TRegisteredObjectID;
   protected
     procedure FireTimerClosure(O: TObject); virtual;
     procedure FireTimer(Session: TIdSipSession); virtual;
   public
     procedure Trigger; override;
 
-    property SessionID: String read fSessionID write fSessionID;
+    property SessionID: TRegisteredObjectID read fSessionID write fSessionID;
   end;
 
   // My subclasses represent a (possibly deferred) event that affects the
@@ -891,8 +891,8 @@ type
 implementation
 
 uses
-  IdRandom, IdRegisteredObject, IdSdp, IdSipSubscribeModule, IdSipTransport,
-  IdSipUserAgent, IdSipTransaction, RuntimeSafety, SysUtils;
+  IdRandom, IdSdp, IdSipSubscribeModule, IdSipTransport, IdSipUserAgent,
+  IdSipTransaction, RuntimeSafety, SysUtils;
 
 // Exception messages
 const

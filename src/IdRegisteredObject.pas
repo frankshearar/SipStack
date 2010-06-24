@@ -15,11 +15,13 @@ uses
   Classes, SyncObjs, SysUtils;
 
 type
+  TRegisteredObjectID = type String;
+
   // My subclasses and I automatically register/unregister ourselves to the
   // TIdObjectRegistry.
   TIdRegisteredObject = class(TObject)
   private
-    fID: String;
+    fID: TRegisteredObjectID;
   public
     // "overload" so subclasses can also declare constructors called Create.
     constructor Create; overload; virtual;
@@ -27,7 +29,7 @@ type
     procedure AfterConstruction; override;
     procedure BeforeDestruction; override;
 
-    property ID: String read fID;
+    property ID: TRegisteredObjectID read fID;
   end;
 
   TIdCollectBlock = function(O: TObject; C: TClass): Boolean;
@@ -108,16 +110,16 @@ type
     RegLock:        TCriticalSection;
 
     procedure Collect(SearchType: TClass; SearchBlock: TIdCollectBlock; Results: TStrings);
-    function  FindID(L: TStrings; O: TObject): String;
+    function  FindID(L: TStrings; O: TObject): TRegisteredObjectID;
     procedure Lock;
     procedure Log(Description: String);
-    function  IndexOf(L: TStrings; ObjectID: String): Integer;
+    function  IndexOf(L: TStrings; ObjectID: TRegisteredObjectID): Integer;
     function  ObjectAt(Index: Integer): TObject;
-    function  ObjectCalled(L: TStrings; ObjectID: String): TObject;
-    function  RegisteredIDOf(O: TObject): String;
-    function  ReservedIDOf(O: TObject): String;
+    function  ObjectCalled(L: TStrings; ObjectID: TRegisteredObjectID): TObject;
+    function  RegisteredIDOf(O: TObject): TRegisteredObjectID;
+    function  ReservedIDOf(O: TObject): TRegisteredObjectID;
     procedure Unlock;
-    function  UnusedID: String;
+    function  UnusedID: TRegisteredObjectID;
   public
     constructor Create; virtual;
     destructor  Destroy; override;
@@ -125,13 +127,13 @@ type
     class function Singleton: TIdObjectRegistry;
 
     procedure CollectAllObjectsOfClass(SearchType: TClass; Results: TStrings; AllowSubclassTypes: Boolean = true);
-    function  FindObject(ObjectID: String): TObject;
-    function  RegisterObject(Instance: TObject): String;
-    function  ReserveID(Instance: TObject): String;
-    procedure UnregisterObject(ObjectID: String);
-    procedure UnreserveID(ObjectID: String);
-    procedure WithExtantObjectDo(ObjectID: String; Closure: TObjectMethod);
-    procedure WithObjectDo(ObjectID: String; Closure: TObjectClosure);
+    function  FindObject(ObjectID: TRegisteredObjectID): TObject;
+    function  RegisterObject(Instance: TObject): TRegisteredObjectID;
+    function  ReserveID(Instance: TObject): TRegisteredObjectID;
+    procedure UnregisterObject(ObjectID: TRegisteredObjectID);
+    procedure UnreserveID(ObjectID: TRegisteredObjectID);
+    procedure WithExtantObjectDo(ObjectID: TRegisteredObjectID; Closure: TObjectMethod);
+    procedure WithObjectDo(ObjectID: TRegisteredObjectID; Closure: TObjectClosure);
   end;
 
   // Throw me any time something goes unexpectedly wrong with the object
@@ -145,6 +147,8 @@ const
   UnregisterLogMsg = '%s with ID %s freed';
   UnreserveLogMsg  = '%s with ID %s unreserved';
 
+function OidAsString(OID: TRegisteredObjectID): String;
+
 implementation
 
 uses
@@ -155,6 +159,15 @@ const
 
 var
   GObjectRegistryInstance: TIdObjectRegistry;
+
+//******************************************************************************
+//* Unit Public procedures/functions                                           *
+//******************************************************************************
+
+function OidAsString(OID: TRegisteredObjectID): String;
+begin
+  Result := OID;
+end;
 
 //******************************************************************************
 //* Unit local procedures/functions                                            *
@@ -364,7 +377,7 @@ begin
   end;
 end;
 
-function TIdObjectRegistry.FindObject(ObjectID: String): TObject;
+function TIdObjectRegistry.FindObject(ObjectID: TRegisteredObjectID): TObject;
 begin
   // This, and all external objects that use it, have a time-of-use,
   // time-of-check issue. Right now, a TIdObjectRegistry must not be accessible
@@ -381,7 +394,7 @@ begin
   end;
 end;
 
-function TIdObjectRegistry.RegisterObject(Instance: TObject): String;
+function TIdObjectRegistry.RegisterObject(Instance: TObject): TRegisteredObjectID;
 begin
   Self.Lock;
   try
@@ -403,7 +416,7 @@ begin
   end;
 end;
 
-function TIdObjectRegistry.ReserveID(Instance: TObject): String;
+function TIdObjectRegistry.ReserveID(Instance: TObject): TRegisteredObjectID;
 begin
   // If Instance has already been reserved, just return its associated ID.
   // If Instance has already been registered, just return its associated ID.
@@ -426,7 +439,7 @@ begin
   end;
 end;
 
-procedure TIdObjectRegistry.UnregisterObject(ObjectID: String);
+procedure TIdObjectRegistry.UnregisterObject(ObjectID: TRegisteredObjectID);
 var
   Index: Integer;
 begin
@@ -442,7 +455,7 @@ begin
   end;
 end;
 
-procedure TIdObjectRegistry.UnreserveID(ObjectID: String);
+procedure TIdObjectRegistry.UnreserveID(ObjectID: TRegisteredObjectID);
 var
   Index: Integer;
 begin
@@ -461,7 +474,7 @@ begin
   end;
 end;
 
-procedure TIdObjectRegistry.WithExtantObjectDo(ObjectID: String; Closure: TObjectMethod);
+procedure TIdObjectRegistry.WithExtantObjectDo(ObjectID: TRegisteredObjectID; Closure: TObjectMethod);
 var
   O: TObject;
 begin
@@ -478,7 +491,7 @@ begin
   end;
 end;
 
-procedure TIdObjectRegistry.WithObjectDo(ObjectID: String; Closure: TObjectClosure);
+procedure TIdObjectRegistry.WithObjectDo(ObjectID: TRegisteredObjectID; Closure: TObjectClosure);
 var
   O: TObject;
 begin
@@ -508,7 +521,7 @@ begin
   end;
 end;
 
-function TIdObjectRegistry.FindID(L: TStrings; O: TObject): String;
+function TIdObjectRegistry.FindID(L: TStrings; O: TObject): TRegisteredObjectID;
 var
   Index: Integer;
 begin
@@ -531,7 +544,7 @@ begin
   LogEntry(Description, '', slDebug, 0, '');
 end;
 
-function TIdObjectRegistry.IndexOf(L: TStrings; ObjectID: String): Integer;
+function TIdObjectRegistry.IndexOf(L: TStrings; ObjectID: TRegisteredObjectID): Integer;
 var
   C:          Integer;
   Middle:     Integer;
@@ -567,7 +580,7 @@ begin
   Result := Self.ObjectRegistry.Objects[Index];
 end;
 
-function TIdObjectRegistry.ObjectCalled(L: TStrings; ObjectID: String): TObject;
+function TIdObjectRegistry.ObjectCalled(L: TStrings; ObjectID: TRegisteredObjectID): TObject;
 var
   Index: Integer;
 begin
@@ -579,12 +592,12 @@ begin
     Result := L.Objects[Index];
 end;
 
-function TIdObjectRegistry.RegisteredIDOf(O: TObject): String;
+function TIdObjectRegistry.RegisteredIDOf(O: TObject): TRegisteredObjectID;
 begin
   Result := Self.FindID(Self.ObjectRegistry, O);
 end;
 
-function TIdObjectRegistry.ReservedIDOf(O: TObject): String;
+function TIdObjectRegistry.ReservedIDOf(O: TObject): TRegisteredObjectID;
 begin
   Result := Self.FindID(Self.ReservedIDs, O);
 end;
@@ -594,10 +607,10 @@ begin
   Self.RegLock.Release;
 end;
 
-function TIdObjectRegistry.UnusedID: String;
+function TIdObjectRegistry.UnusedID: TRegisteredObjectID;
 begin
   repeat
-    Result := ConstructUUID;
+    Result := TRegisteredObjectID(ConstructUUID);
   until (Self.ObjectCalled(Self.ObjectRegistry, Result) = nil)
     and (Self.ObjectCalled(Self.ReservedIDs,    Result) = nil);
 end;

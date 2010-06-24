@@ -12,8 +12,8 @@ unit IdSipRegistration;
 interface
 
 uses
-  Classes, Contnrs, IdConnectionBindings, IdException, IdObservable, IdSipCore,
-  IdSipMessage, IdNotification, IdTimerQueue;
+  Classes, Contnrs, IdConnectionBindings, IdException, IdObservable,
+  IdRegisteredObject, IdSipCore, IdSipMessage, IdNotification, IdTimerQueue;
 
 type
   TIdSipRegistrationInfo = class(TObject)
@@ -486,7 +486,7 @@ type
   private
     fAddressOfRecord:  TIdSipAddressHeader;
     fBindings:         TIdSipContacts;
-    fRegisterModuleID: String;
+    fRegisterModuleID: TRegisteredObjectID;
     fRegistrar:        TIdSipUri;
 
     procedure Reregister(O: TObject);
@@ -501,7 +501,7 @@ type
 
     property AddressOfRecord:  TIdSipAddressHeader read fAddressOfRecord write SetAddressOfRecord;
     property Bindings:         TIdSipContacts      read fBindings write SetBindings;
-    property RegisterModuleID: String              read fRegisterModuleID write fRegisterModuleID;
+    property RegisterModuleID: TRegisteredObjectID read fRegisterModuleID write fRegisterModuleID;
     property Registrar:        TIdSipUri           read fRegistrar write SetRegistrar;
   end;
 
@@ -562,8 +562,7 @@ const
 implementation
 
 uses
-  ConfigUtils, IdRegisteredObject, IdSipAuthentication, Math, RuntimeSafety,
-  SysUtils;
+  ConfigUtils, IdSipAuthentication, Math, RuntimeSafety, SysUtils;
 
 const
   ItemNotFoundIndex = -1;
