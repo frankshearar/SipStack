@@ -87,7 +87,7 @@ type
 
   // I provide facilities to unambiguously locate any (registered) object
   // resident in memory, and to allow these objects to register and unregister
-  // from me as they are instantiate and freed.
+  // from me as they are instantiated and freed.
   //
   // Note that you can register any instance of any kind of object, but if you
   // register an instance that isn't a TIdRegisteredObject then you have to
