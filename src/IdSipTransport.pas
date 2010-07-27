@@ -14,7 +14,7 @@ interface
 uses
   Classes, Contnrs, IdConnectionBindings, IdException, IdInterfacedObject,
   IdNotification, IdRegisteredObject, IdRoutingTable, IdSipLocation,
-  IdSipMessage, IdSocketHandle, IdTimerQueue, PluggableLogging, SysUtils;
+  IdSipMessage, IdTimerQueue, PluggableLogging, SysUtils;
 
 type
   TIdSipTransport = class;
@@ -70,6 +70,7 @@ type
   private
     ConnectionListeners:      TIdNotificationList;
     fAddress:                  String;
+    fBindings:                 TIdSipLocations;
     fConserveConnections:      Boolean; // This is actually only used by connection-oriented transports.
     fHostName:                 String;
     fPort:                     Cardinal;
@@ -87,7 +88,7 @@ type
     procedure AssertWellFormed(Msg: TIdSipMessage; LogMsgTemplate: String);
     procedure DestroyServer; virtual;
     function  GetAddress: String; virtual;
-    function  GetBindings: TIdSocketHandles; virtual;
+    function  GetBindings: TIdSipLocations; virtual;
     function  GetConserveConnections: Boolean; virtual;
     function  GetPort: Cardinal; virtual;
     function  IndexOfBinding(const Address: String; Port: Cardinal): Integer;
@@ -146,7 +147,7 @@ type
     procedure SetTimeout(Value: Cardinal); virtual;
     procedure SetTimer(Value: TIdTimerQueue); virtual;
 
-    property Bindings: TIdSocketHandles read GetBindings;
+    property Bindings: TIdSipLocations read GetBindings;
   public
     class function  DefaultPort: Cardinal; virtual;
     class function  GetTransportType: String; virtual;
@@ -165,7 +166,7 @@ type
     function  BindingCount: Integer;
     procedure ClearBindings;
     function  DefaultTimeout: Cardinal; virtual;
-    function  FindBinding(Dest: TIdConnectionBindings): TIdSocketHandle;
+    function  FindBinding(Dest: TIdConnectionBindings): TIdSipLocation;
     function  FirstIPBound: String;
     function  HasBinding(const Address: String; Port: Cardinal): Boolean;
     function  IsMock: Boolean; virtual;
@@ -499,6 +500,8 @@ constructor TIdSipTransport.Create;
 begin
   inherited Create;
 
+  Self.fBindings := TIdSipLocations.Create;
+
   Self.ConnectionListeners       := TIdNotificationList.Create;
   Self.TransportListeners        := TIdNotificationList.Create;
   Self.TransportSendingListeners := TIdNotificationList.Create;
@@ -511,26 +514,25 @@ end;
 
 destructor TIdSipTransport.Destroy;
 begin
+  Self.DestroyServer;
+
   Self.TransportSendingListeners.Free;
   Self.TransportListeners.Free;
   Self.ConnectionListeners.Free;
 
-  Self.DestroyServer;
+  Self.Bindings.Free;
 
   inherited Destroy;
 end;
 
 procedure TIdSipTransport.AddBinding(const Address: String; Port: Cardinal);
 var
-  Handle:     TIdSocketHandle;
   WasRunning: Boolean;
 begin
   WasRunning := Self.IsRunning;
   Self.Stop;
 
-  Handle := Self.Bindings.Add;
-  Handle.IP   := Address;
-  Handle.Port := Port;
+  Self.Bindings.AddLocation(Self.GetTransportType, Address, Port);
 
   if WasRunning then
     Self.Start;
@@ -579,7 +581,7 @@ begin
   Result := 5000;
 end;
 
-function TIdSipTransport.FindBinding(Dest: TIdConnectionBindings): TIdSocketHandle;
+function TIdSipTransport.FindBinding(Dest: TIdConnectionBindings): TIdSipLocation;
 var
   DefaultPort:  Cardinal;
   I:            Integer;
@@ -608,18 +610,20 @@ begin
   Result := nil;
 
   for I := 0 to Self.Bindings.Count - 1 do begin
-    // Try use any address bound on LocalAddress.IPAddress
-    if (Self.Bindings[I].IP = LocalAddress) then begin
-      Result := Self.Bindings[I];
-    end;
-
-    // But if something's bound on LocalAddress.IPAddress AND uses the default
-    // port for this transport, use that instead.
-    if Assigned(Result) then begin
-      if    (Self.Bindings[I].IP = LocalAddress)
-        and (Cardinal(Self.Bindings[I].Port) = DefaultPort) then begin
+    if (Self.Bindings[I].Transport = Self.GetTransportType) then begin
+      // Try use any address bound on LocalAddress.IPAddress
+      if (Self.Bindings[I].IPAddress = LocalAddress) then begin
         Result := Self.Bindings[I];
-        Break;
+      end;
+
+      // But if something's bound on LocalAddress.IPAddress AND uses the default
+      // port for this transport, use that instead.
+      if Assigned(Result) then begin
+        if    (Self.Bindings[I].IPAddress = LocalAddress)
+          and (Cardinal(Self.Bindings[I].Port) = DefaultPort) then begin
+          Result := Self.Bindings[I];
+          Break;
+        end;
       end;
     end;
   end;
@@ -637,7 +641,7 @@ begin
   if (Self.BindingCount = 0) then
     Result := ''
   else
-    Result := Self.Bindings[0].IP;
+    Result := Self.Bindings[0].IPAddress;
 end;
 
 function TIdSipTransport.HasBinding(const Address: String; Port: Cardinal): Boolean;
@@ -671,7 +675,7 @@ var
   I: Integer;
 begin
   for I := 0 to Self.Bindings.Count - 1 do
-    Bindings.AddLocation(Self.GetTransportType, Self.Bindings[I].IP, Self.Bindings[I].Port);
+    Bindings.AddLocation(Self.Bindings[I]);
 end;
 
 procedure TIdSipTransport.ReceiveException(FailedMessage: TIdSipMessage;
@@ -793,8 +797,8 @@ end;
 
 procedure TIdSipTransport.SetFirstBinding(IPAddress: String; Port: Cardinal);
 begin
-  Self.Bindings[0].IP   := IPAddress;
-  Self.Bindings[0].Port := Port;
+  Self.Bindings[0].IPAddress := IPAddress;
+  Self.Bindings[0].Port      := Port;
 end;
 
 procedure TIdSipTransport.Start;
@@ -845,11 +849,11 @@ begin
   Result := Self.fAddress;
 end;
 
-function TIdSipTransport.GetBindings: TIdSocketHandles;
+function TIdSipTransport.GetBindings: TIdSipLocations;
 begin
-  Result := nil;
-  RaiseAbstractError(Self.ClassName, 'GetBindings');
+  Result := Self.fBindings;
 end;
+
 
 function TIdSipTransport.GetConserveConnections: Boolean;
 begin
@@ -865,10 +869,8 @@ function TIdSipTransport.IndexOfBinding(const Address: String; Port: Cardinal): 
 begin
   Result := 0;
 
-  // Indy uses an Integer to represent an unsigned value. We don't. Thus the
-  // unnecessary typecast.
   while (Result < Self.Bindings.Count) do begin
-    if (Self.Bindings[Result].IP = Address) and (Self.Bindings[Result].Port = Integer(Port)) then
+    if (Self.Bindings[Result].IPAddress = Address) and (Self.Bindings[Result].Port = Port) then
       Break
     else
       Inc(Result);
@@ -1194,7 +1196,7 @@ begin
   if not Result then begin
     // Or does it match a binding?
     while (I < Self.Bindings.Count) and not Result do begin
-      Result := Result or (Self.Bindings[I].IP = Via.SentBy);
+      Result := Result or (Self.Bindings[I].IPAddress = Via.SentBy);
 
       Inc(I);
     end;

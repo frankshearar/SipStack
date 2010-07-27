@@ -24,9 +24,10 @@ type
   TIdSipUDPTransport = class(TIdSipTransport)
   private
     Transport: TIdSipUdpServer;
+
+    function  FindActualBinding(Dest: TIdConnectionBindings): TIdSocketHandle;
   protected
     procedure DestroyServer; override;
-    function  GetBindings: TIdSocketHandles; override;
     procedure InstantiateServer; override;
     procedure SendMessage(M: TIdSipMessage;
                           Dest: TIdConnectionBindings); override;
@@ -99,7 +100,7 @@ constructor TIdSipUDPTransport.Create;
 begin
   inherited Create;
 
-  Self.Bindings.Add;
+  Self.Bindings.AddLocation(Self.GetTransportType, '127.0.0.1', Self.DefaultPort);
 end;
 
 function TIdSipUDPTransport.IsReliable: Boolean;
@@ -127,10 +128,22 @@ begin
 end;
 
 procedure TIdSipUDPTransport.Start;
+var
+  B: TIdSocketHandle;
+  I: Integer;
 begin
   inherited Start;
 
+  if Self.IsRunning then Exit;
+
   try
+    Self.Transport.Bindings.Clear;
+    for I := 0 to Self.Bindings.Count - 1 do begin
+      B := Self.Transport.Bindings.Add;
+      B.IP   := Self.Bindings[I].IPAddress;
+      B.Port := Self.Bindings[I].Port;
+    end;
+
     Self.Transport.Active := true;
   except
     on E: EIdException do
@@ -143,16 +156,65 @@ begin
   Self.Transport.Active := false;
 end;
 
+//* TIdSipUDPTransport Private methods *****************************************
+
+function TIdSipUDPTransport.FindActualBinding(Dest: TIdConnectionBindings): TIdSocketHandle;
+var
+  DefaultPort:  Cardinal;
+  I:            Integer;
+  LocalAddress: String;
+begin
+  // In a multihomed environment, Indy does the wrong thing when you invoke
+  // Send. It uses the first socket in its list of bindings, not the socket most
+  // appropriate to use to send to a target.
+  //
+  // Now we might have several bindings on the same IP address (say, 192.168.1.1
+  // on ports 5060, 15060 and 25060. All these bindings are equally appropriate
+  // because port numbers don't exist in the network (i.e., IP) layer, so we
+  // simply return the first one.
+
+  Self.Assert(Dest.Transport = Self.GetTransportType,
+              Format(TransportMismatch, [Self.GetTransportType, Dest.Transport]));
+  Self.Assert(Self.Bindings.Count > 0, NoBindings);
+
+  // A subtlety: this method will select the binding on the default port if
+  // it can.
+  DefaultPort  := TIdSipTransportRegistry.DefaultPortFor(Dest.Transport);
+  LocalAddress := Self.RoutingTable.GetBestLocalAddress(Dest.PeerIP);
+
+  // Try find the binding using the default port on the LocalAddress for this
+  // transport.
+  Result := nil;
+
+  for I := 0 to Self.Transport.Bindings.Count - 1 do begin
+    // Try use any address bound on LocalAddress.IPAddress
+    if (Self.Transport.Bindings[I].IP = LocalAddress) then begin
+      Result := Self.Transport.Bindings[I];
+    end;
+
+    // But if something's bound on LocalAddress.IPAddress AND uses the default
+    // port for this transport, use that instead.
+    if Assigned(Result) then begin
+      if    (Self.Transport.Bindings[I].IP = LocalAddress)
+        and (Cardinal(Self.Transport.Bindings[I].Port) = DefaultPort) then begin
+        Result := Self.Transport.Bindings[I];
+        Break;
+      end;
+    end;
+  end;
+
+  // Nothing appropriate found? Just use any old socket, and pray.
+  if (Result = nil) then
+    Result := Self.Transport.Bindings[0];
+
+  Self.Assert(Result <> nil, 'No binding found for the destination ' + Dest.AsString);
+end;
+
 //* TIdSipUDPTransport Protected methods ***************************************
 
 procedure TIdSipUDPTransport.DestroyServer;
 begin
   Self.Transport.Free;
-end;
-
-function TIdSipUDPTransport.GetBindings: TIdSocketHandles;
-begin
-  Result := Self.Transport.Bindings;
 end;
 
 procedure TIdSipUDPTransport.InstantiateServer;
@@ -169,7 +231,7 @@ var
   B: TIdSocketHandle;
   S: String;
 begin
-  B := Self.FindBinding(Dest);
+  B := Self.FindActualBinding(Dest);
 
   if Assigned(B) then begin
     Dest.LocalIP   := B.IP;

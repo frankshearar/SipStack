@@ -29,7 +29,6 @@ type
   private
     fACKCount:          Cardinal;
     fAutoDispatch:      Boolean;
-    fBindings:          TIdSocketHandles;
     fFailWith:          ExceptClass;
     fIsRunning:         Boolean;
     fLastACK:           TIdSipRequest;
@@ -39,7 +38,7 @@ type
     fSentResponseCount: Cardinal;
     fWriteLog:          Boolean;
 
-    procedure CheckNoOtherMockTransportUsesBindings(Bindings: TIdSocketHandles);
+    procedure CheckNoOtherMockTransportUsesBindings(Bindings: TIdSipLocations);
     function  CreateFakeBinding: TIdConnectionBindings;
     procedure DispatchRequest(R: TidSipRequest;
                               Dest: TIdConnectionBindings);
@@ -50,7 +49,7 @@ type
                                   Port: Cardinal): TIdSipMockTransport;
     procedure InitialiseBinding(Binding: TIdConnectionBindings;
                                 LocalBinding,
-                                PeerBinding: TIdSocketHandle;
+                                PeerBinding: TIdSipLocation;
                                 TransportType: String);
     procedure Log(Msg: String;
                   Direction: TIdMessageDirection);
@@ -60,7 +59,6 @@ type
     procedure SetWriteLog(const Value: Boolean);
     function  TransportAt(Index: Integer): TIdSipMockTransport;
   protected
-    function  GetBindings: TIdSocketHandles; override;
     procedure SendMessage(M: TIdSipMessage;
                           Dest: TIdConnectionBindings); override;
   public
@@ -204,13 +202,12 @@ begin
   inherited Create;
 
   Self.ResetSentRequestCount;
-  Self.fBindings  := TIdSocketHandles.Create(nil);
   Self.fLastACK   := TIdSipRequest.Create;
   Self.fRequests  := TIdSipRequestList.Create;
   Self.fResponses := TIdSipResponseList.Create;
 
   // All Indy servers instantiate with one binding.
-  Self.Bindings.Add;
+  Self.Bindings.AddLocation(Self.GetTransportType, '127.0.0.1', Self.DefaultPort);
 
   GAllTransports.Add(Self);
 
@@ -224,7 +221,6 @@ begin
   Self.fResponses.Free;
   Self.fRequests.Free;
   Self.LastACK.Free;
-  Self.Bindings.Free;
 
   inherited Destroy;
 end;
@@ -455,16 +451,11 @@ end;
 
 //* TIdSipMockTransport Protected methods **************************************
 
-function TIdSipMockTransport.GetBindings: TIdSocketHandles;
-begin
-  Result := Self.fBindings;
-end;
-
 procedure TIdSipMockTransport.SendMessage(M: TIdSipMessage;
                                           Dest: TIdConnectionBindings);
 var
   E:              Exception;
-  SendingBinding: TIdSocketHandle;
+  SendingBinding: TIdSipLocation;
 begin
   Assert(Self.BindingCount > 0,
          'This MockTransport has no bindings on which to send this message');
@@ -479,7 +470,7 @@ begin
     SendingBinding := Self.Bindings[0];
   end;
 
-  Dest.LocalIP   := SendingBinding.IP;
+  Dest.LocalIP   := SendingBinding.IPAddress;
   Dest.LocalPort := SendingBinding.Port;
 
   if M.LastHop.IsUnset then
@@ -503,17 +494,17 @@ end;
 
 //* TIdSipMockTransport Private methods ****************************************
 
-procedure TIdSipMockTransport.CheckNoOtherMockTransportUsesBindings(Bindings: TIdSocketHandles);
+procedure TIdSipMockTransport.CheckNoOtherMockTransportUsesBindings(Bindings: TIdSipLocations);
 var
   I: Integer;
   T: TIdSipTransport;
 begin
   for I := 0 to Bindings.Count - 1 do begin
-    T := TIdSipDebugTransportRegistry.TransportRunningOn(Self.GetTransportType, Bindings[I].IP, Bindings[I].Port);
+    T := TIdSipDebugTransportRegistry.TransportRunningOn(Self.GetTransportType, Bindings[I].IPAddress, Bindings[I].Port);
 
     if Assigned(T) and (T <> Self) and (T.IsRunning) then
       raise Exception.Create('There''s already a MockTransport running on '
-                           + Bindings[I].IP + ':' + IntToStr(Bindings[I].Port));
+                           + Bindings[I].IPAddress + ':' + IntToStr(Bindings[I].Port));
   end;
 end;
 
@@ -521,7 +512,7 @@ function TIdSipMockTransport.CreateFakeBinding: TIdConnectionBindings;
 begin
   Result := TIdConnectionBindings.Create;
 
-  Result.LocalIP   := Self.Bindings[0].IP;
+  Result.LocalIP   := Self.Bindings[0].IPAddress;
   Result.LocalPort := Self.Bindings[0].Port;
   Result.PeerIP    := Self.PeerIP;
   Result.PeerPort  := Self.PeerPort;
@@ -598,12 +589,12 @@ end;
 
 procedure TIdSipMockTransport.InitialiseBinding(Binding: TIdConnectionBindings;
                                                 LocalBinding,
-                                                PeerBinding: TIdSocketHandle;
+                                                PeerBinding: TIdSipLocation;
                                                 TransportType: String);
 begin
-  Binding.LocalIP   := LocalBinding.IP;
+  Binding.LocalIP   := LocalBinding.IPAddress;
   Binding.LocalPort := LocalBinding.Port;
-  Binding.PeerIP    := PeerBinding.IP;
+  Binding.PeerIP    := PeerBinding.IPAddress;
   Binding.PeerPort  := PeerBinding.Port;
   Binding.Transport := TransportType;
 end;

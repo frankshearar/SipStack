@@ -12,8 +12,8 @@ unit IdSipTcpTransport;
 interface
 
 uses
-  Classes, Contnrs, IdConnectionBindings, IdSipMessage, IdRegisteredObject,
-  IdSipTransport, IdSocketHandle, IdTCPConnection, IdTCPServer,
+  Classes, Contnrs, IdConnectionBindings, IdSipLocation, IdSipMessage,
+  IdRegisteredObject, IdSipTransport, IdTCPConnection, IdTCPServer,
   IdThreadableTcpClient, IdTimerQueue, SyncObjs, SysUtils;
 
 type
@@ -53,7 +53,6 @@ type
     function  CreateClient: TIdSipTcpClient;
     procedure ConnectionDisconnected(Sender: TObject);
     procedure DestroyServer; override;
-    function  GetBindings: TIdSocketHandles; override;
     procedure InstantiateServer; override;
     procedure SendMessage(Msg: TIdSipMessage;
                           Dest: TIdConnectionBindings); override;
@@ -402,7 +401,7 @@ type
 implementation
 
 uses
-  IdException, IdIndyUtils, IdSipDns, IdTcpClient;
+  IdException, IdIndyUtils, IdSipDns, IdSocketHandle, IdTcpClient;
 
 //******************************************************************************
 //* TIdSipTCPTransport                                                         *
@@ -430,7 +429,7 @@ begin
 
   Self.ConnectionTimeout := FiveSeconds;
 
-  Self.Bindings.Add;
+  Self.Bindings.AddLocation(Self.GetTransportType, '127.0.0.1', Self.DefaultPort);
 end;
 
 destructor TIdSipTCPTransport.Destroy;
@@ -508,10 +507,20 @@ begin
 end;
 
 procedure TIdSipTCPTransport.Start;
+var
+  B: TIdSocketHandle;
+  I: Integer;
 begin
   inherited Start;
 
   try
+    Self.Transport.Bindings.Clear;
+    for I := 0 to Self.Bindings.Count - 1 do begin
+      B := Self.Transport.Bindings.Add;
+      B.IP   := Self.Bindings[I].IPAddress;
+      B.Port := Self.Bindings[I].Port;
+    end;
+
     Self.Transport.Active := true;
   except
     on E: EIdException do
@@ -542,11 +551,6 @@ end;
 procedure TIdSipTCPTransport.DestroyServer;
 begin
   Self.Transport.Free;
-end;
-
-function TIdSipTCPTransport.GetBindings: TIdSocketHandles;
-begin
-  Result := Self.Transport.Bindings;
 end;
 
 procedure TIdSipTCPTransport.InstantiateServer;
@@ -669,7 +673,7 @@ begin
   Result := Self.DefaultPort;
 
   for I := 0 to Self.BindingCount - 1 do begin
-    if (Self.Bindings[I].IP = IPAddress) then begin
+    if (Self.Bindings[I].IPAddress = IPAddress) then begin
       Result := Self.Bindings[I].Port;
       Break;
     end;

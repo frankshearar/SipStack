@@ -899,7 +899,7 @@ procedure TestTIdSipMockTransport.CheckBinding(ExpectedIP: String;
                                                Destination,
                                                Msg: String);
 var
-  Binding: TIdSocketHandle;
+  Binding: TIdSipLocation;
   Dest:    TIdConnectionBindings;
 begin
   Dest := TIdConnectionBindings.Create;
@@ -909,8 +909,8 @@ begin
     Dest.PeerPort  := 5060;
     Binding := Self.MockTransport.FindBinding(Dest);
 
-    CheckEquals(ExpectedIP,   Binding.IP, Msg + ': IP address');
-    CheckEquals(ExpectedPort, Binding.Port, Msg + ': port');
+    CheckEquals(ExpectedIP,   Binding.IPAddress, Msg + ': IP address');
+    CheckEquals(ExpectedPort, Binding.Port,      Msg + ': port');
   finally
     Dest.Free;
   end;

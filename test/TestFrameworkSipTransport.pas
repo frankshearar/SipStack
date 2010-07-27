@@ -216,6 +216,8 @@ type
     procedure TestSendResponseFromNonStandardPort;
     procedure TestSendResponseUsesDestinationLocation;
     procedure TestSendResponseWithReceivedParam;
+    procedure TestStart;
+    procedure TestStop;
     procedure TestTortureTest16;
     procedure TestTortureTest17;
     procedure TestTortureTest19;
@@ -1866,6 +1868,19 @@ begin
   finally
     HighPortListener.Free;
   end;
+end;
+
+procedure TestTIdSipTransport.TestStart;
+begin
+  Self.LowPortTransport.Start;
+  Check(Self.LowPortTransport.IsRunning, 'Transport not started');
+end;
+
+procedure TestTIdSipTransport.TestStop;
+begin
+  Self.LowPortTransport.Start;
+  Self.LowPortTransport.Stop;
+  Check(not Self.LowPortTransport.IsRunning, 'Transport not stopped');
 end;
 
 procedure TestTIdSipTransport.TestTortureTest16;
