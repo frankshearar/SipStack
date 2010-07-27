@@ -1356,21 +1356,21 @@ procedure TestTIdSipTransports.TestAddAndCount;
 begin
   CheckEquals(0, Self.List.Count, 'Supposedly empty list');
 
-  Self.List.Add(TIdSipMockTransport.Create);
+  Self.List.Add(TIdSipMockTcpTransport.Create);
   CheckEquals(1, Self.List.Count, 'One Add');
 
-  Self.List.Add(TIdSipMockTransport.Create);
+  Self.List.Add(TIdSipMockUdpTransport.Create);
   CheckEquals(2, Self.List.Count, 'Two Adds');
 
-  Self.List.Add(TIdSipMockTransport.Create);
+  Self.List.Add(TIdSipMockTlsTransport.Create);
   CheckEquals(3, Self.List.Count, 'Three Adds');
 end;
 
 procedure TestTIdSipTransports.TestClear;
 begin
-  Self.List.Add(TIdSipMockTransport.Create);
-  Self.List.Add(TIdSipMockTransport.Create);
-  Self.List.Add(TIdSipMockTransport.Create);
+  Self.List.Add(TIdSipMockTcpTransport.Create);
+  Self.List.Add(TIdSipMockUdpTransport.Create);
+  Self.List.Add(TIdSipMockTlsTransport.Create);
 
   Self.List.Clear;
 
