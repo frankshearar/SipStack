@@ -500,13 +500,14 @@ constructor TIdSipTransport.Create;
 begin
   inherited Create;
 
-  Self.fBindings := TIdSipLocations.Create;
-
   Self.ConnectionListeners       := TIdNotificationList.Create;
   Self.TransportListeners        := TIdNotificationList.Create;
   Self.TransportSendingListeners := TIdNotificationList.Create;
 
   Self.InstantiateServer;
+
+  Self.fBindings := TIdSipLocations.Create;
+  Self.AddBinding('127.0.0.1', Self.DefaultPort);
 
   Self.Timeout  := Self.DefaultTimeout;
   Self.UseRport := false;

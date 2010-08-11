@@ -36,8 +36,6 @@ type
     class function GetTransportType: String; override;
     class function SrvPrefix: String; override;
 
-    constructor Create; override;
-
     function  IsReliable: Boolean; override;
     function  IsRunning: Boolean; override;
     procedure ReceiveRequest(Request: TIdSipRequest;
@@ -94,13 +92,6 @@ end;
 class function TIdSipUDPTransport.SrvPrefix: String;
 begin
   Result := SrvUdpPrefix;
-end;
-
-constructor TIdSipUDPTransport.Create;
-begin
-  inherited Create;
-
-  Self.Bindings.AddLocation(Self.GetTransportType, '127.0.0.1', Self.DefaultPort);
 end;
 
 function TIdSipUDPTransport.IsReliable: Boolean;
