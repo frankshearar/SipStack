@@ -30,6 +30,7 @@ type
                              Port: Cardinal); overload;
 
     procedure Assign(Src: TPersistent); override;
+    function  AsCompactString: String;
     function  AsString: String;
     function  Copy: TIdSipLocation;
     function  Equals(Other: TIdSipLocation): Boolean;
@@ -71,6 +72,8 @@ type
   end;
 
 const
+  IPv4CompactString = '%s:%d/%s';
+  IPv6CompactString = '[%s]:%d/%s';
   LocationTuple = '(location transport: %s ip-address: %s port: %d)';
 
 implementation
@@ -116,6 +119,14 @@ begin
   end
   else
     inherited Assign(Src);
+end;
+
+function TIdSipLocation.AsCompactString: String;
+begin
+  if (TIdIPAddressParser.IPVersion(Self.IPAddress) = Id_IPv6) then
+    Result := Format(IPv6CompactString, [Self.IPAddress, Self.Port, Lowercase(Self.Transport)])
+  else
+    Result := Format(IPv4CompactString, [Self.IPAddress, Self.Port, Lowercase(Self.Transport)]);
 end;
 
 function TIdSipLocation.AsString: String;

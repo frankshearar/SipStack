@@ -27,6 +27,7 @@ type
   published
     procedure TestAssign;
     procedure TestAsString;
+    procedure TestCompactString;
     procedure TestCopy;
     procedure TestCreate;
     procedure TestCreatePeerLocation;
@@ -122,6 +123,20 @@ begin
                      [Self.Loc.Transport, Self.Loc.IPAddress, Self.Loc.Port]),
               Self.Loc.AsString,
               'AsString');
+end;
+
+procedure TestTIdSipLocation.TestCompactString;
+begin
+  CheckEquals(Format(IPv4CompactString,
+                     [Self.Loc.IPAddress, Self.Loc.Port, Lowercase(Self.Loc.Transport)]),
+              Self.Loc.AsCompactString,
+              'IPv4 compact string');
+
+  Self.Loc.IPAddress := '::1';
+  CheckEquals(Format(IPv6CompactString,
+                     [Self.Loc.IPAddress, Self.Loc.Port, Lowercase(Self.Loc.Transport)]),
+              Self.Loc.AsCompactString,
+              'IPv6 compact string');
 end;
 
 procedure TestTIdSipLocation.TestCopy;
