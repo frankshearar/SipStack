@@ -233,6 +233,8 @@ begin
 
     S := M.AsString;
     B.SendTo(Dest.PeerIP, Dest.PeerPort, S[1], Length(S));
+
+    Self.NotifyOfSentMessage(M, Dest);
   end;
 end;
 

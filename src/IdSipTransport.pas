@@ -118,6 +118,8 @@ type
     procedure NotifyOfRejectedMessage(const Msg: String;
                                       const Reason: String;
                                       ReceivedFrom: TIdConnectionBindings);
+    procedure NotifyOfSentMessage(M: TIdSipMessage;
+                                  Connection: TIdConnectionBindings);
     procedure NotifyOfSentRequest(Request: TIdSipRequest;
                                   Binding: TIdConnectionBindings);
     procedure NotifyOfSentResponse(Response: TIdSipResponse;
@@ -1050,6 +1052,15 @@ begin
   end;
 end;
 
+procedure TIdSipTransport.NotifyOfSentMessage(M: TIdSipMessage;
+                                              Connection: TIdConnectionBindings);
+begin
+  if M.IsRequest then
+    Self.NotifyOfSentRequest(M as TIdSipRequest, Connection)
+  else if M.IsResponse then
+    Self.NotifyOfSentResponse(M as TIdSipResponse, Connection);
+end;
+
 procedure TIdSipTransport.NotifyOfSentRequest(Request: TIdSipRequest;
                                               Binding: TIdConnectionBindings);
 var
@@ -1149,8 +1160,6 @@ begin
 
     // We expect the subclass to fill in the local IP and port.
     Self.SendMessage(R, LocalBinding);
-
-    Self.NotifyOfSentRequest(R, LocalBinding);
   finally
     LocalBinding.Free;
   end;
@@ -1181,8 +1190,6 @@ begin
 
   // We expect the subclass to fill in the local IP and port.
   Self.SendMessage(R, Binding);
-
-  Self.NotifyOfSentResponse(R, Binding);
 end;
 
 function TIdSipTransport.SentByIsRecognised(Via: TIdSipViaHeader): Boolean;

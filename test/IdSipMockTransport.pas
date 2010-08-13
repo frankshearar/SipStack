@@ -487,6 +487,8 @@ begin
     // Never autodispatch a message that's "failed".
     Self.PossiblyAutoDispatch(M, Dest);
   end;
+
+  Self.NotifyOfSentMessage(M, Dest);
 end;
 
 //* TIdSipMockTransport Private methods ****************************************
