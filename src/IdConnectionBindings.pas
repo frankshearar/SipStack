@@ -39,6 +39,7 @@ type
     function  AsString: String;
     function  Copy: TIdConnectionBindings;
     function  Equals(Other: TIdConnectionBindings): Boolean;
+    function  HasSamePeer(Other: TIdConnectionBindings): Boolean;
 
     property LocalIP:   String   read fLocalIP write fLocalIP;
     property LocalPort: Cardinal read fLocalPort write fLocalPort;
@@ -141,6 +142,13 @@ begin
   Result := (Self.LocalIP = Other.LocalIP)
         and (Self.LocalPort = Other.LocalPort)
         and (Self.PeerIP = Other.PeerIP)
+        and (Self.PeerPort = Other.PeerPort)
+        and (Self.Transport = Other.Transport);
+end;
+
+function TIdConnectionBindings.HasSamePeer(Other: TIdConnectionBindings): Boolean;
+begin
+  Result := (Self.PeerIP = Other.PeerIP)
         and (Self.PeerPort = Other.PeerPort)
         and (Self.Transport = Other.Transport);
 end;

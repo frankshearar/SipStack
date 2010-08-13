@@ -28,6 +28,7 @@ type
     procedure TestCopy;
     procedure TestCreateWithParameters;
     procedure TestEquals;
+    procedure TestHasSamePeer;
   end;
 
   TestTIdConnectionBindingsSet = class(TTestCase)
@@ -217,6 +218,59 @@ begin
     Other.Transport := Self.Binding.Transport;
     Check(Other.Equals(Self.Binding),
           'LocalPort, LocalPort, PeerIP, PeerPort, Transport equal');
+
+    Other.LocalIP := Self.Binding.LocalIP + '1';
+    Check(Other.HasSamePeer(Self.Binding),
+          'LocalIP differs');
+
+    Other.LocalIP := Self.Binding.LocalIP;
+    Other.LocalPort := Self.Binding.LocalPort + 1;
+    Check(Other.HasSamePeer(Self.Binding),
+          'LocalIP, LocalPort differs');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TestTIdConnectionBindings.TestHasSamePeer;
+var
+  Other: TIdConnectionBindings;
+begin
+  Other := TIdConnectionBindings.Create;
+  try
+    Other.LocalIP   := Self.Binding.LocalIP + '1';
+    Other.LocalPort := Self.Binding.LocalPort + 1;
+    Other.PeerIP    := Self.Binding.PeerIP + '1';
+    Other.PeerPort  := Self.Binding.PeerPort + 1;
+
+    Check(not Other.HasSamePeer(Self.Binding),
+          'No values equal');
+
+    Other.LocalIP := Self.Binding.LocalIP;
+    Check(not Other.HasSamePeer(Self.Binding),
+          'LocalIP equal');
+
+    Other.LocalPort := Self.Binding.LocalPort;
+    Check(not Other.HasSamePeer(Self.Binding),
+          'LocalPort, LocalPort equal');
+
+    Other.PeerIP := Self.Binding.PeerIP;
+    Check(not Other.HasSamePeer(Self.Binding),
+          'LocalPort, LocalPort, PeerIP equal');
+
+    Other.PeerPort := Self.Binding.PeerPort;
+    Check(not Other.HasSamePeer(Self.Binding),
+          'LocalPort, LocalPort, PeerIP, PeerPort equal, transports not equal');
+
+    Other.Transport := Self.Binding.Transport;
+    Check(Other.HasSamePeer(Self.Binding),
+          'LocalPort, LocalPort, PeerIP, PeerPort, Transport equal');
+
+    Other.LocalIP   := Self.Binding.LocalIP + '1';
+    Check(Other.HasSamePeer(Self.Binding),
+          'LocalIP differs');
+
+
   finally
     Other.Free;
   end;
