@@ -206,9 +206,6 @@ begin
   Self.fRequests  := TIdSipRequestList.Create;
   Self.fResponses := TIdSipResponseList.Create;
 
-  // All Indy servers instantiate with one binding.
-  Self.Bindings.AddLocation(Self.GetTransportType, '127.0.0.1', Self.DefaultPort);
-
   GAllTransports.Add(Self);
 
   Self.AutoDispatch := false;
