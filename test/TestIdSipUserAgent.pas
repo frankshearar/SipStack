@@ -211,10 +211,6 @@ type
   public
     procedure SetUp; override;
     procedure TearDown; override;
-
-    procedure CheckPortFree(Address: String;
-                            Port: Cardinal;
-                            Msg: String);
   published
     procedure TestCreateUserAgentHandlesMultipleSpaces;
     procedure TestCreateUserAgentHandlesTabs;
@@ -2254,36 +2250,6 @@ begin
   inherited TearDown;
 end;
 
-procedure TestTIdSipStackConfigurator.CheckPortFree(Address: String;
-                                                    Port: Cardinal;
-                                                    Msg: String);
-var
-  Binding: TIdSocketHandle;
-  Server:  TIdUDPServer;
-  FailMsg: String;
-begin
-  FailMsg := 'Port ' + Address + ':' + IntToStr(Port) + ' is not free';
-  if (Msg <> '') then
-    FailMsg := Msg + ': ' + FailMsg;
-
-  Server := TIdUDPServer.Create(nil);
-  try
-    Binding := Server.Bindings.Add;
-    Binding.IP   := Address;
-    Binding.Port := Port;
-
-    try
-      Server.Active := true;
-    except
-      on EIdCouldNotBindSocket do begin
-        Fail(FailMsg);
-      end;
-    end;
-  finally
-    Server.Free;
-  end;
-end;
-
 //* TestTIdSipStackConfigurator Private methods ********************************
 
 function TestTIdSipStackConfigurator.ARecords: String;
@@ -2575,9 +2541,8 @@ begin
                  LocalAddress,
                  'You MUST have two IPs on this machine to complete this test!');
 
-  CheckPortFree(LocalAddress,
-                DefaultSipPort,
-                'Close down all SIP UAs before running this test.');
+  Check(IsPortFree(UdpTransport, LocalAddress, DefaultSipPort),
+        'Close down all SIP UAs before running this test.');
 
   Server := TIdUDPServer.Create(nil);
   try
@@ -2703,9 +2668,8 @@ var
   Bindings: TIdSipLocations;
   UA:       TIdSipUserAgent;
 begin
-  CheckPortFree(LocalAddress,
-                DefaultSipPort,
-                'Close down all SIP UAs before running this test.');
+  Check(IsPortFree(UdpTransport, LocalAddress, DefaultSipPort),
+        'Close down all SIP UAs before running this test.');
 
   Self.Configuration.Add('Listen: UDP AUTO:5060');
 

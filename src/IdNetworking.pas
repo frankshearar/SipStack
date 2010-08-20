@@ -24,6 +24,7 @@ function  GetBestLocalAddress(DestinationAddress: String): String;
 function  GetBestLocalAddressNT4(DestinationAddress: String): String;
 function  GetHostName: String;
 function  HtoNL(N: Cardinal): Cardinal;
+function  IsPortFree(Transport: String; Address: String; Port: Cardinal): Boolean;
 function  LocalAddress: String;
 procedure LocalAddresses(IPs: TStrings);
 function  NtoHL(N: Cardinal): Cardinal;
@@ -42,8 +43,8 @@ var
 implementation
 
 uses
-  IdGlobal, IdRoutingTable, IdSimpleParser, IdStack, IdUDPServer, SyncObjs,
-  SysUtils, Windows, Winsock;
+  IdGlobal, IdRoutingTable, IdSimpleParser, IdSocketHandle, IdStack,
+  IdTCPServer, IdUDPServer, SyncObjs, SysUtils, Windows, Winsock;
 
 const
   ANY_SIZE = 100;
@@ -402,6 +403,69 @@ begin
   // PROPERLY DECLARED htonl.
 
   Result := Cardinal(Winsock.htonl(Integer(N)));
+end;
+
+function IsPortFreeTCP(Address: String; Port: Cardinal): Boolean;
+var
+  Binding: TIdSocketHandle;
+  Server:  TIdTCPServer;
+begin
+  Server := TIdTCPServer.Create(nil);
+  try
+    Binding := Server.Bindings.Add;
+    Binding.IP   := Address;
+    Binding.Port := Port;
+
+    try
+      Server.Active := true;
+      Result := true;
+    except
+      on EIdCouldNotBindSocket do begin
+        Result := false;
+      end;
+    end;
+  finally
+    Server.Free;
+  end;
+end;
+
+function IsPortFreeUDP(Address: String; Port: Cardinal): Boolean;
+var
+  Binding: TIdSocketHandle;
+  Server:  TIdUDPServer;
+begin
+  Server := TIdUDPServer.Create(nil);
+  try
+    Binding := Server.Bindings.Add;
+    Binding.IP   := Address;
+    Binding.Port := Port;
+
+    try
+      Server.Active := true;
+      Result := true;
+    except
+      on EIdCouldNotBindSocket do begin
+        Result := false;
+      end;
+    end;
+  finally
+    Server.Free;
+  end;
+end;
+
+{Technically this is only useful for tests: there's an inherent
+ time-of-check-time-of-use race when you use this. Still, so many tests need
+ this functionality that it's expedient to put the function here.}
+function IsPortFree(Transport: String; Address: String; Port: Cardinal): Boolean;
+begin
+  if (Lowercase(Transport) = 'tcp') then
+    Result := IsPortFreeTCP(Address, Port)
+  else if (Lowercase(Transport) = 'udp') then
+    Result := IsPortFreeUDP(Address, Port)
+  else begin
+    // Be strict!
+    Result := false;
+  end;
 end;
 
 {Normally, the local machine address is automatically discovered when using the "LocalAddress" function.

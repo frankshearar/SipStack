@@ -33,6 +33,8 @@ type
     procedure TestGetBestLocalAddress;
     procedure TestGetHostName;
     procedure TestGetHostNameNoWinsock;
+    procedure TestIsPortFreeUDP;
+    procedure TestIsPortFreeTCP;
     procedure TestOnSameNetwork;
     procedure TestOnSameNetworkWithMixedAddresses;
     procedure TestOnSameNetworkWithNetmask;
@@ -44,7 +46,7 @@ implementation
 
 uses
   Classes, IdNetworking, IdSocketHandle, IdSimpleParser, IdSipMessage,
-  IdUdpServer, SysUtils, TypInfo, Windows, Winsock;
+  IdTcpServer, IdUdpServer, SysUtils, TypInfo, Windows, Winsock;
 
 function Suite: ITestSuite;
 begin
@@ -259,6 +261,56 @@ begin
   finally
     if (WinsockRunning <> WSANOTINITIALISED) then
       Self.RestartWinsock;
+  end;
+end;
+
+procedure TestFunctions.TestIsPortFreeUDP;
+const
+  IP   = '127.0.0.1';
+  Port = 1234;
+var
+  S: TIdUdpServer;
+begin
+  S := TIdUdpServer.Create(nil);
+  try
+    Check(IsPortFree(UdpTransport, IP, Port), 'Port not free?');
+
+    S.Bindings.Add;
+    S.Bindings[0].IP := IP;
+    S.Bindings[0].Port := Port;
+    S.Active := true;
+
+    Check(not IsPortFree(UdpTransport, IP, Port), 'Port free?');
+
+    S.Active := false;
+    Check(IsPortFree(UdpTransport, IP, Port), 'Port not free after server stopped');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestFunctions.TestIsPortFreeTCP;
+const
+  IP   = '127.0.0.1';
+  Port = 1234;
+var
+  S: TIdTcpServer;
+begin
+  S := TIdTcpServer.Create(nil);
+  try
+    Check(IsPortFree(TcpTransport, IP, Port), 'Port not free?');
+
+    S.Bindings.Add;
+    S.Bindings[0].IP := IP;
+    S.Bindings[0].Port := Port;
+    S.Active := true;
+
+    Check(not IsPortFree(TcpTransport, IP, Port), 'Port free?');
+
+    S.Active := false;
+    Check(IsPortFree(TcpTransport, IP, Port), 'Port not free after server stopped');
+  finally
+    S.Free;
   end;
 end;
 
