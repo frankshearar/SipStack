@@ -175,16 +175,19 @@ type
   // TIdWaits execute in BlockRunner's context.
   TIdThreadedTimerQueue = class(TIdTimerQueue)
   private
-    BlockRunner: TIdBlockRunnerThread;
-    fOnEmpty:    TIdTimerEmptyProc;
+    BlockRunner:     TIdBlockRunnerThread;
+    fOnEmpty:        TIdTimerEmptyProc;
+    TerminatedEvent: TEvent;
 
+    procedure NotifyOfTermination;
     procedure PossiblyNotifyOfEmpty;
     procedure Run;
   public
     procedure Resume; override;
     procedure Terminate; override;
+    procedure TerminateAndWaitFor(WaitEvent: TEvent);
 
-    property OnEmpty: TIdTimerEmptyProc read fOnEmpty write fOnEmpty;
+    property OnEmpty:      TIdTimerEmptyProc read fOnEmpty write fOnEmpty;
   end;
 
   // I provide debugging facilities for you to plug in to things that use
@@ -764,7 +767,20 @@ begin
   // Self.BlockRunner.Terminate here.
 end;
 
+procedure TIdThreadedTimerQueue.TerminateAndWaitFor(WaitEvent: TEvent);
+begin
+  // We I have finally terminated, I set WaitEvent.
+
+  Self.TerminatedEvent := WaitEvent;
+  Self.Terminate;
+end;
+
 //* TIdThreadedTimerQueue Private methods **************************************
+
+procedure TIdThreadedTimerQueue.NotifyOfTermination;
+begin
+  Self.TerminatedEvent.SetEvent;
+end;
 
 procedure TIdThreadedTimerQueue.PossiblyNotifyOfEmpty;
 begin
@@ -788,6 +804,8 @@ begin
 
       Self.PossiblyNotifyOfEmpty;
     end;
+
+    Self.NotifyOfTermination;
   finally
     Self.Free;
   end;

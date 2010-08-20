@@ -89,6 +89,7 @@ type
   published
     procedure TestOneEvent;
     procedure TestResume;
+    procedure TestTerminateAndWaitFor;
     procedure TestTwoEvents;
     procedure TestTwoOutOfOrderEvents;
     procedure TestWaitForEarliestEvent;
@@ -594,6 +595,25 @@ begin
     Self.WaitForSignaled(Self.EventOne, 'Event didn''t fire');
   finally
     NewTimer.Terminate;
+  end;
+end;
+
+procedure TestTIdThreadedTimerQueue.TestTerminateAndWaitFor;
+var
+  E:        TEvent;
+  NewTimer: TIdThreadedTimerQueue;
+  Success:  Boolean;
+begin
+  E := TSimpleEvent.Create;
+  try
+    NewTimer := TIdThreadedTimerQueue.Create(false);
+    NewTimer.TerminateAndWaitFor(E);
+
+    Success := wrSignaled = E.WaitFor(10*NewTimer.DefaultTimeout);
+
+    Check(Success, 'TerminateAndWaitFor failed');
+  finally
+    E.Free;
   end;
 end;
 
