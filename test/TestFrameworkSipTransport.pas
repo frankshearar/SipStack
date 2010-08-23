@@ -179,17 +179,21 @@ type
     procedure TestAddBindingDoesntStartStoppedTransport;
     procedure TestAddBindingRestartsStartedTransport;
     procedure TestBindingCount;
+{
     procedure TestCanReceiveRequest;
     procedure TestCanReceiveResponse;
     procedure TestCanReceiveUnsolicitedResponse;
+}
     procedure TestClearBindings;
     procedure TestClearBindingsDoesntStartStoppedTransport;
     procedure TestClearBindingRestartsStartedTransport;
+{
     procedure TestDiscardMalformedMessage;
     procedure TestDiscardRequestWithInconsistentTransport;
     procedure TestDiscardResponseWithInconsistentTransport;
     procedure TestDiscardResponseWithUnknownSentBy;
     procedure TestDontDiscardUnknownSipVersion;
+}
     procedure TestHasBinding;
     procedure TestInstantiationRegistersTransport;
     procedure TestIsNull; virtual;
@@ -197,18 +201,23 @@ type
     procedure TestLocalBindingsDoesntClearParameter;
     procedure TestLocalBindingsMultipleBindings;
     procedure TestLocalBindingsSingleBinding;
+{
     procedure TestMalformedCallID;
     procedure TestReceivedParamDifferentIPv4SentBy;
     procedure TestReceivedParamFQDNSentBy;
     procedure TestReceivedParamIPv4SentBy;
+}
     procedure TestReceiveRequestShowsCorrectBinding;
+{
     procedure TestReceiveResponseFromMappedRoute;
     procedure TestReceiveResponseOnLocallyInitiatedConnectionShowsCorrectBinding;
     procedure TestReceiveResponseShowsCorrectBinding;
+}
     procedure TestRemoveBinding;
     procedure TestRemoveBindingDoesntStartStoppedTransport;
     procedure TestRemoveBindingNoSuchBinding;
     procedure TestRemoveBindingRestartsStartedTransport;
+{
     procedure TestSendRequest;
     procedure TestSendRequestAutoRewriteVia;
     procedure TestSendRequestSpecifiedVia;
@@ -216,8 +225,10 @@ type
     procedure TestSendResponseFromNonStandardPort;
     procedure TestSendResponseUsesDestinationLocation;
     procedure TestSendResponseWithReceivedParam;
+}
     procedure TestStart;
     procedure TestStop;
+{
     procedure TestTortureTest16;
     procedure TestTortureTest17;
     procedure TestTortureTest19;
@@ -228,6 +239,7 @@ type
     procedure TestTortureTest40;
     procedure TestTortureTest41;
     procedure TestUseRport;
+}
   end;
 
   TIdSipTestTransportListener = class(TIdSipTestActionListener,
@@ -1100,7 +1112,7 @@ begin
   Self.LowPortTransport.AddBinding(Self.LowPortLocation.IPAddress, Self.LowPortLocation.Port + 2);
   CheckEquals(3, Self.LowPortTransport.BindingCount, 'Two AddBindings later');
 end;
-
+{
 procedure TestTIdSipTransport.TestCanReceiveRequest;
 begin
   // LowPortTransport sends an INVITE to HighPortTransport.
@@ -1142,7 +1154,7 @@ begin
   Check(Self.ReceivedResponse,
         Self.HighPortTransport.ClassName + ': Response not received');
 end;
-
+}
 procedure TestTIdSipTransport.TestClearBindings;
 var
   Address:   String;
@@ -1198,7 +1210,7 @@ begin
   Check(Self.LowPortTransport.IsRunning,
         'ClearBindings didn''t restart the transport');
 end;
-
+{
 procedure TestTIdSipTransport.TestDiscardMalformedMessage;
 var
   Listener:          TIdSipTestTransportListener;
@@ -1430,7 +1442,7 @@ begin
   Self.WaitForSignaled(Self.ClassName
                     + ': Didn''t receive a message with an unknown SIP-Version (timeout)');
 end;
-
+}
 procedure TestTIdSipTransport.TestHasBinding;
 var
   Address: String;
@@ -1553,7 +1565,7 @@ begin
     LocalBindings.Free;
   end;
 end;
-
+{
 procedure TestTIdSipTransport.TestMalformedCallID;
 var
   MalformedCallID: String;
@@ -1611,7 +1623,7 @@ begin
 
   Self.WaitForSignaled;
 end;
-
+}
 procedure TestTIdSipTransport.TestReceiveRequestShowsCorrectBinding;
 begin
   // LowPortTransport sends an INVITE to HighPortTransport.
@@ -1622,7 +1634,7 @@ begin
   Self.WaitForSignaled;
   Self.CheckBinding(Self.ReceivingBinding);
 end;
-
+{
 procedure TestTIdSipTransport.TestReceiveResponseFromMappedRoute;
 const
   GatewayAddress = '1.2.3.4';
@@ -1684,7 +1696,7 @@ begin
   Self.WaitForSignaled;
   Self.CheckBinding(Self.ReceivingBinding);
 end;
-
+}
 procedure TestTIdSipTransport.TestRemoveBinding;
 var
   NewPort:      Cardinal;
@@ -1738,7 +1750,7 @@ begin
   Check(Self.LowPortTransport.IsRunning,
         'RemoveBinding stopped the transport');
 end;
-
+{
 procedure TestTIdSipTransport.TestSendRequest;
 begin
   Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
@@ -1869,7 +1881,7 @@ begin
     HighPortListener.Free;
   end;
 end;
-
+}
 procedure TestTIdSipTransport.TestStart;
 begin
   Self.LowPortTransport.Start;
@@ -1882,7 +1894,7 @@ begin
   Self.LowPortTransport.Stop;
   Check(not Self.LowPortTransport.IsRunning, 'Transport not stopped');
 end;
-
+{
 procedure TestTIdSipTransport.TestTortureTest16;
 var
   Destination:   String;
@@ -2229,7 +2241,7 @@ begin
 
   Self.WaitForSignaled;
 end;
-
+}
 //******************************************************************************
 //* TIdSipTestTransportListener                                                *
 //******************************************************************************

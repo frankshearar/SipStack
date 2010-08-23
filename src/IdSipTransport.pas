@@ -419,17 +419,30 @@ type
     procedure Run(const Subject: IInterface); override;
   end;
 
-  EIdSipTransport = class(Exception)
+  EIdSipGeneralTransportException = class(Exception)
+  private
+    fTransport:  TIdSipTransport;
+  public
+    constructor Create(Transport: TIdSipTransport;
+                       const Msg: String);
+
+    property Transport:  TIdSipTransport read fTransport;
+  end;
+
+  EIdSipTransport = class(EIdSipGeneralTransportException)
   private
     fSipMessage: TIdSipMessage;
-    fTransport:  TIdSipTransport;
   public
     constructor Create(Transport: TIdSipTransport;
                        SipMessage: TIdSipMessage;
                        const Msg: String);
 
     property SipMessage: TIdSipMessage   read fSipMessage;
-    property Transport:  TIdSipTransport read fTransport;
+  end;
+
+  EIdSipFailedTransportShutdown = class(EIdSipGeneralTransportException)
+  public
+    constructor Create(Transport: TIdSipTransport);
   end;
 
   EUnknownTransport = class(EIdException);
@@ -533,7 +546,9 @@ var
   WasRunning: Boolean;
 begin
   WasRunning := Self.IsRunning;
-  Self.Stop;
+
+  if WasRunning then
+    Self.Stop;
 
   Self.Bindings.AddLocation(Self.GetTransportType, Address, Port);
 
@@ -1653,6 +1668,19 @@ begin
 end;
 
 //******************************************************************************
+//* EIdSipGeneralTransportException                                            *
+//******************************************************************************
+//* EIdSipGeneralTransportException Public methods *****************************
+
+constructor EIdSipGeneralTransportException.Create(Transport: TIdSipTransport;
+                                                   const Msg: String);
+begin
+  inherited Create(Msg);
+
+  Self.fTransport := Transport;
+end;
+
+//******************************************************************************
 //* EIdSipTransport                                                            *
 //******************************************************************************
 //* EIdSipTransport Public methods *********************************************
@@ -1661,10 +1689,19 @@ constructor EIdSipTransport.Create(Transport: TIdSipTransport;
                                    SipMessage: TIdSipMessage;
                                    const Msg: String);
 begin
-  inherited Create(Msg);
+  inherited Create(Transport, Msg);
 
   Self.fSipMessage := SipMessage;
-  Self.fTransport  := Transport;
+end;
+
+//******************************************************************************
+//* EIdSipFailedTransportShutdown                                              *
+//******************************************************************************
+//* EIdSipFailedTransportShutdown Public methods *******************************
+
+constructor EIdSipFailedTransportShutdown.Create(Transport: TIdSipTransport);
+begin
+  inherited Create(Transport, Format('Failed to shut down %s transport', [Transport.GetTransportType]));
 end;
 
 initialization

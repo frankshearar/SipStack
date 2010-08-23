@@ -15,7 +15,7 @@ uses
   Classes, IdSipTcpTransport, IdSipTransport, IdSSLOpenSSL, SysUtils;
 
 type
-  TIdSipTlsServer = class;
+//  TIdSipTlsServer = class;
 
   // I implement the Transport Layer Security (RFC 2249) connections for the SIP
   // stack.
@@ -25,27 +25,23 @@ type
     function  GetRootCertificate: TFileName;
     function  GetServerCertificate: TFileName;
     function  GetServerKey: TFileName;
-    function  TLS: TIdSipTlsServer;
+//    function  TLS: TIdSipTlsServer;
     procedure SetOnGetPassword(Value: TPasswordEvent);
     procedure SetRootCertificate(Value: TFileName);
     procedure SetServerCertificate(Value: TFileName);
     procedure SetServerKey(Value: TFileName);
-  protected
-    function  ServerType: TIdSipTcpServerClass; override;
   public
     class function DefaultPort: Cardinal; override;
     class function GetTransportType: String; override;
     class function IsSecure: Boolean; override;
     class function SrvPrefix: String; override;
 
-    function  ClientType: TIdSipTcpClientClass; override;
-
     property OnGetPassword:     TPasswordEvent read GetOnGetPassword write SetOnGetPassword;
     property RootCertificate:   TFileName      read GetRootCertificate write SetRootCertificate;
     property ServerCertificate: TFileName      read GetServerCertificate write SetServerCertificate;
     property ServerKey:         TFileName      read GetServerKey write SetServerKey;
   end;
-
+{
   TIdSipTlsServer = class(TIdSipTcpServer)
   private
     fOnGetPassword: TPasswordEvent;
@@ -76,7 +72,7 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
   end;
-
+}
 implementation
 
 uses
@@ -107,65 +103,53 @@ begin
   Result := SrvTlsPrefix;
 end;
 
-function TIdSipTLSTransport.ClientType: TIdSipTcpClientClass; 
-begin
-  Result := TIdSipTlsClient;
-end;
-
-//* TIdSipTLSTransport Protected methods ***************************************
-
-function TIdSipTLSTransport.ServerType: TIdSipTcpServerClass;
-begin
-  Result := TIdSipTlsServer;
-end;
-
 //* TIdSipTLSTransport Private methods *****************************************
 
 function TIdSipTLSTransport.GetOnGetPassword: TPasswordEvent;
 begin
-  Result := Self.TLS.OnGetPassword;
+//  Result := Self.TLS.OnGetPassword;
 end;
 
 function TIdSipTLSTransport.GetRootCertificate: TFileName;
 begin
-  Result := Self.TLS.RootCertificate;
+//  Result := Self.TLS.RootCertificate;
 end;
 
 function TIdSipTLSTransport.GetServerCertificate: TFileName;
 begin
-  Result := Self.TLS.ServerCertificate;
+//  Result := Self.TLS.ServerCertificate;
 end;
 
 function TIdSipTLSTransport.GetServerKey: TFileName;
 begin
-  Result := Self.TLS.ServerKey;
+//  Result := Self.TLS.ServerKey;
 end;
-
+{
 function TIdSipTLSTransport.TLS: TIdSipTlsServer;
 begin
   Result := Self.Transport as TIdSipTlsServer;
 end;
-
+}
 procedure TIdSipTLSTransport.SetOnGetPassword(Value: TPasswordEvent);
 begin
-  Self.TLS.OnGetPassword := Value;
+//  Self.TLS.OnGetPassword := Value;
 end;
 
 procedure TIdSipTLSTransport.SetRootCertificate(Value: TFileName);
 begin
-  Self.TLS.RootCertificate := Value;
+//  Self.TLS.RootCertificate := Value;
 end;
 
 procedure TIdSipTLSTransport.SetServerCertificate(Value: TFileName);
 begin
-  Self.TLS.ServerCertificate := Value;
+//  Self.TLS.ServerCertificate := Value;
 end;
 
 procedure TIdSipTLSTransport.SetServerKey(Value: TFileName);
 begin
-  Self.TLS.ServerKey := Value;
+//  Self.TLS.ServerKey := Value;
 end;
-
+{
 //******************************************************************************
 //* TIdSipTlsServer                                                            *
 //******************************************************************************
@@ -259,5 +243,5 @@ begin
 
   inherited Destroy;
 end;
-
+}
 end.
