@@ -12,7 +12,8 @@ unit TestIdSipTcpTransport;
 interface
 
 uses
-  IdConnectionBindings, IdRegisteredObject, IdSipLocation, IdSipMessage,
+  IdConnectionBindings, IdInterfacedObject, IdRegisteredObject, IdSipLocation,
+  IdSipMessage,
   IdSipMockTransport, IdSipTcpTransport, IdSipTransport, IdTimerQueue,
   IdTCPClient, IdTCPConnection, IdTCPServer, SyncObjs, SysUtils, TestFramework,
   TestFrameworkSip, TestFrameworkSipTransport, WinSock; // TODO REMOVE WINSOCK
@@ -254,6 +255,38 @@ type
     procedure TestRemoveWithMultipleRequests;
   end;
 
+  TIdSipConnectionTestListener = class(TIdInterfacedObject,
+                                       IIdSipTcpConnectionListener)
+  private
+    fAcceptFired:     Boolean;
+    fConnectFired:    Boolean;
+    fConnectionParam: TIdSipConnection;
+    fCloseFired:      Boolean;
+    fDisconnectFired: Boolean;
+    fOOBFired:        Boolean;
+    fReadFired:       Boolean;
+    fWriteFired:      Boolean;
+
+    procedure OnAccept(Connection: TIdSipConnection);
+    procedure OnConnect(Connection: TIdSipConnection);
+    procedure OnClose(Connection: TIdSipConnection);
+    procedure OnDisconnect(Connection: TIdSipConnection);
+    procedure OnOOB(Connection: TIdSipConnection);
+    procedure OnRead(Connection: TIdSipConnection);
+    procedure OnWrite(Connection: TIdSipConnection);
+  public
+    constructor Create; override;
+
+    property AcceptedFired:     Boolean          read fAcceptFired;
+    property ConnectedFired:    Boolean          read fConnectFired;
+    property ConnectionParam:   TIdSipConnection read fConnectionParam;
+    property ClosedFired:       Boolean          read fCloseFired;
+    property DisconnectedFired: Boolean          read fDisconnectFired;
+    property OOBFired:          Boolean          read fOOBFired;
+    property ReadFired:         Boolean          read fReadFired;
+    property WriteFired:        Boolean          read fWriteFired;
+  end;
+
   TIdSipConnectionTestCase = class(TTestCase)
   published
     procedure TestReceive; virtual;
@@ -266,16 +299,20 @@ type
     ReadEvent:    TEvent;
     ReadMsg:      TIdSipMessage;
     S:            TIdTcpServer;
+    SendMsg:      String;
     TestIP:       String;
     TestPort:     Cardinal;
 
-    procedure ReadMessage(Thread: TIdPeerThread);
     procedure NotifyOfConnections(Thread: TIdPeerThread);
+    procedure ReadMessage(Thread: TIdPeerThread);
+    procedure SendMessage(Thread: TIdPeerThread);
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
     procedure TestConnect;
+    procedure TestConnectNotifiesListeners;
+    procedure TestReceive; override;
     procedure TestSend;
   end;
 
@@ -299,9 +336,8 @@ type
     C:          TIdSipClientConnection;
     Connection: TIdSipServerConnection;
     S:          TIdSipListeningConnection;
-
-    TestIP:       String;
-    TestPort:     Cardinal;
+    TestIP:     String;
+    TestPort:   Cardinal;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -2047,9 +2083,71 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipConnectionTestListener                                               *
+//******************************************************************************
+//* TIdSipConnectionTestListener Private methods *******************************
+
+constructor TIdSipConnectionTestListener.Create;
+begin
+  inherited Create;
+
+  Self.fAcceptFired     := false;
+  Self.fConnectFired    := false;
+  Self.fConnectionParam := nil;
+  Self.fCloseFired      := false;
+  Self.fDisconnectFired := false;
+  Self.fOOBFired        := false;
+  Self.fReadFired       := false;
+  Self.fWriteFired      := false;
+end;
+
+procedure TIdSipConnectionTestListener.OnAccept(Connection: TIdSipConnection);
+begin
+  Self.fAcceptFired     := true;
+  Self.fConnectionParam := Connection;
+end;
+
+procedure TIdSipConnectionTestListener.OnConnect(Connection: TIdSipConnection);
+begin
+  Self.fConnectFired    := true;
+  Self.fConnectionParam := Connection;
+end;
+
+procedure TIdSipConnectionTestListener.OnClose(Connection: TIdSipConnection);
+begin
+  Self.fCloseFired      := true;
+  Self.fConnectionParam := Connection;
+end;
+
+procedure TIdSipConnectionTestListener.OnDisconnect(Connection: TIdSipConnection);
+begin
+  Self.fDisconnectFired := true;
+  Self.fConnectionParam := Connection;
+end;
+
+procedure TIdSipConnectionTestListener.OnOOB(Connection: TIdSipConnection);
+begin
+  Self.fOOBFired        := true;
+  Self.fConnectionParam := Connection;
+end;
+
+procedure TIdSipConnectionTestListener.OnRead(Connection: TIdSipConnection);
+begin
+  Self.fReadFired       := true;
+  Self.fConnectionParam := Connection;
+end;
+
+procedure TIdSipConnectionTestListener.OnWrite(Connection: TIdSipConnection);
+begin
+  Self.fWriteFired      := true;
+  Self.fConnectionParam := Connection;
+end;
+
+
+//******************************************************************************
 //* TIdSipConnectionTestCase                                                   *
 //******************************************************************************
-//* TIdSipConnectionTestCase Public methods ************************************
+//* TIdSipConnectionTestCase Published methods *********************************
 
 procedure TIdSipConnectionTestCase.TestReceive;
 begin
@@ -2073,6 +2171,7 @@ begin
   Self.S := TIdTCPServer.Create(nil);
   Self.ConnectEvent := TSimpleEvent.Create;
   Self.ReadEvent    := TSimpleEvent.Create;
+  Self.SendMsg      := BasicRequest;
 
   Self.S.Bindings.Add;
   Self.S.Bindings[0].IP   := Self.TestIP;
@@ -2095,6 +2194,11 @@ end;
 
 //* TestTIdSipClientConnection Private methods *********************************
 
+procedure TestTIdSipClientConnection.NotifyOfConnections(Thread: TIdPeerThread);
+begin
+  Self.ConnectEvent.SetEvent;
+end;
+
 procedure TestTIdSipClientConnection.ReadMessage(Thread: TIdPeerThread);
 var
   Reader: TIdSipTcpMessageReader;
@@ -2105,9 +2209,11 @@ begin
   Self.ReadEvent.SetEvent;
 end;
 
-procedure TestTIdSipClientConnection.NotifyOfConnections(Thread: TIdPeerThread);
+procedure TestTIdSipClientConnection.SendMessage(Thread: TIdPeerThread);
 begin
-  Self.ConnectEvent.SetEvent;
+  Thread.Connection.Write(Self.SendMsg);
+
+  Self.NotifyOfConnections(Thread);
 end;
 
 //* TestTIdSipClientConnection Published methods *******************************
@@ -2117,6 +2223,52 @@ begin
   Self.C.Connect(Self.TestIP, Self.TestPort);
 
   Check(wrSignaled = Self.ConnectEvent.WaitFor(OneSecond), 'Timeout waiting for connect');
+
+  Self.C.ProcessMessages;
+
+  CheckEquals(TcpTransport, Self.C.Binding.Transport, 'Transport not set');
+  CheckNotEquals('',        Self.C.Binding.LocalIP,   'LocalIP not set');
+  CheckNotEquals(0,         Self.C.Binding.LocalPort, 'LocalPort not set');
+end;
+
+procedure TestTIdSipClientConnection.TestConnectNotifiesListeners;
+var
+  L: TIdSipConnectionTestListener;
+begin
+  L := TIdSipConnectionTestListener.Create;
+  try
+    Self.C.AddListener(L);
+    Self.C.Connect(Self.TestIP, Self.TestPort);
+
+    Check(wrSignaled = Self.ConnectEvent.WaitFor(OneSecond), 'Timeout waiting for connect');
+
+    Self.C.ProcessMessages;
+
+    Check(L.ConnectedFired, 'Listener not notified');
+    Check(L.ConnectionParam = Self.C, 'Listener notified of wrong connection');
+  finally
+    L.Free;
+  end;
+end;
+
+procedure TestTIdSipClientConnection.TestReceive;
+var
+  Terminated: Boolean;
+  Recv:       TIdSipMessage;
+begin
+  Self.S.OnExecute := Self.SendMessage;
+
+  Self.C.Connect(Self.TestIP, Self.TestPort);
+  Check(wrSignaled = Self.ConnectEvent.WaitFor(OneSecond), 'Timeout waiting for connect');
+
+  Self.C.ProcessMessages;
+
+  Recv := Self.C.Receive(Terminated);
+  try
+    CheckEquals(Self.SendMsg, Recv.AsString, 'Received message doesn''t match sent message');
+  finally
+    Recv.Free;
+  end;
 end;
 
 procedure TestTIdSipClientConnection.TestSend;
