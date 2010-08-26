@@ -21,6 +21,17 @@ type
 
 function  BindingsToStr(Bindings: TIdSocketHandles): String;
 function  BoolToSockOpt(B: Boolean): Integer;
+
+// Use CreateTcpServer to avoid a race condition in Indy 9. If you create a
+// TIdTcpServer without giving it a ThreadMgr, it uses an ImplicitThreadMgr, a
+// lazily created TIdThreadMgr. When the server is freed, it frees this implicit
+// ThreadMgr. It's possible for the TIdListenerThread to then try release itself
+// by calling Server.ThreadMgr.Release(LThread). This creates a new ThreadMgr
+// and, because this new ThreadMgr has no reference to LThread, won't terminate
+// and free it. When your application shuts down, IdThread.WaitAllTerminated
+// will wait forever as GThreadCount will never reach zero. Symptom: the
+// application looks like it's shut down, but you can see the process just
+// sitting there.
 function  CreateTcpServer(ServerType: TIdTcpServerClass): TIdTcpServer;
 procedure KeepAliveSocket(C: TIdTCPConnection; KeepAlive: Boolean);
 procedure OpenOnFirstFreePort(S: TIdTcpServer;
@@ -35,15 +46,6 @@ implementation
 uses
   IdException, IdStackConsts, IdThreadMgr, IdThreadMgrDefault;
 
-// ThreadMgr avoids a race condition. If you create a TIdTcpServer without
-// giving it a ThreadMgr, it uses an ImplicitThreadMgr, a lazily created
-// TIdThreadMgr. When the server is freed, it frees this implicit ThreadMgr.
-// It's possible for the TIdListenerThread to then try release itself by calling
-// Server.ThreadMgr.Release(LThread). This creates a new ThreadMgr and, because
-// this new ThreadMgr has no reference to LThread, won't terminate and free it.
-// When your application shuts down, IdThread.WaitAllTerminated will wait
-// forever as GThreadCount will never reach zero. Symptom: the application looks
-// like it's shut down, but you can see the process just sitting there.
 var
   ThreadMgr: TIdThreadMgr;
 
