@@ -34,6 +34,7 @@ type
     function  AsString: String;
     function  Copy: TIdSipLocation;
     function  Equals(Other: TIdSipLocation): Boolean;
+    function  MatchesPeer(SocketDescription: TIdConnectionBindings): Boolean;
     function  IsLocalhost: Boolean;
 
     property Transport: String   read fTransport write fTransport;
@@ -144,6 +145,13 @@ begin
   Result := (Self.Transport = Other.Transport)
         and (Self.IPAddress = Other.IPAddress)
         and (Self.Port = Other.Port);
+end;
+
+function TIdSipLocation.MatchesPeer(SocketDescription: TIdConnectionBindings): Boolean;
+begin
+  Result := (Self.Transport = SocketDescription.Transport)
+        and (Self.IPAddress = SocketDescription.PeerIP)
+        and (Self.Port      = SocketDescription.PeerPort);
 end;
 
 function TIdSipLocation.IsLocalhost: Boolean;
