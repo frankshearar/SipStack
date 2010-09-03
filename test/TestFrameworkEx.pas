@@ -27,6 +27,7 @@ type
     procedure WaitForSignaled(Event: TEvent); overload;
     procedure WaitForSignaled(Event: TEvent; Timeout: Cardinal; Msg: String); overload;
     procedure WaitForSignaled(Event: TEvent; Msg: String); overload;
+    procedure WaitForSignaled(Events: array of TEvent; Msg: String); overload;
     procedure WaitForSignaled(Msg: String); overload;
     procedure WaitForTimeout(Msg: String); overload;
     procedure WaitForTimeout(Event: TEvent; Msg: String); overload;
@@ -47,7 +48,7 @@ type
 implementation
 
 uses
-  Math;
+  Math, Windows;
 
 //*******************************************************************************
 //* TThreadingTestCase                                                          *
@@ -164,6 +165,39 @@ end;
 procedure TThreadingTestCase.WaitForSignaled(Event: TEvent; Msg: String);
 begin
   Self.WaitForSignaled(Event, Self.DefaultTimeout, Msg);
+end;
+
+procedure TThreadingTestCase.WaitForSignaled(Events: array of TEvent; Msg: String);
+var
+  Error:     Integer;
+  Handles:   TWOHandleArray;
+  I:         Integer;
+  J:         Integer;
+  NumEvents: Cardinal;
+  RC:        Cardinal;
+begin
+  J := 0;
+  for I := Low(Events) to High(Events) do begin
+    Handles[J] := Events[I].Handle;
+    Inc(J);
+  end;
+
+  NumEvents := Length(Events);
+  RC := WaitForMultipleObjects(NumEvents, @Handles, false, Self.DefaultTimeout);
+  case RC of
+    WAIT_TIMEOUT: Fail(Msg + ' (timeout)');
+    WAIT_FAILED:  begin
+      Error := GetLastError;
+      Fail(Msg + Format(' (failed: %s (%d)', [SysErrorMessage(Error), Error]));
+    end;
+  else
+    if (RC <= WAIT_OBJECT_0 + NumEvents) then begin
+      // Yay! One of the events triggered!
+    end;
+    if (RC >= WAIT_ABANDONED_0) and (RC <= WAIT_ABANDONED_0 + NumEvents - 1) then
+      Fail(Msg + Format(' (abandoned %dth event)', [RC - WAIT_ABANDONED_0]));
+
+  end;
 end;
 
 procedure TThreadingTestCase.WaitForSignaled(Msg: String);

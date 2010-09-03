@@ -292,6 +292,24 @@ type
     property TransportID:  TRegisteredObjectID   read fTransportID write fTransportID;
   end;
 
+  // When I trigger, a Transport has finishes sending a message.
+  TIdSipSentMessageWait = class(TIdSipMessageWait)
+  private
+    fDestination: TIdConnectionBindings;
+    fTransportID: TRegisteredObjectID;
+
+    procedure SendMessage(O: TObject);
+    procedure SetDestination(Value: TIdConnectionBindings);
+  public
+    constructor Create; override;
+    destructor Destroy; override;
+
+    procedure Trigger; override;
+
+    property Destination: TIdConnectionBindings read fDestination write SetDestination;
+    property TransportID: TRegisteredObjectID   read fTransportID write fTransportID;
+  end;
+
   // I represent a collection of Transports. I own, and hence manage the
   // lifetimes of, all transports given to me via Add.
   TIdSipTransports = class(TObject)
@@ -1515,6 +1533,47 @@ end;
 procedure TIdSipReceiveMessageWait.SetReceivedFrom(Value: TIdConnectionBindings);
 begin
   Self.fReceivedFrom.Assign(Value);
+end;
+
+//******************************************************************************
+//* TIdSipSentMessageWait                                                      *
+//******************************************************************************
+//* TIdSipSentMessageWait Public methods ***************************************
+
+constructor TIdSipSentMessageWait.Create;
+begin
+  inherited Create;
+
+  Self.fDestination := TIdConnectionBindings.Create;
+end;
+
+destructor TIdSipSentMessageWait.Destroy;
+begin
+  Self.fDestination.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipSentMessageWait.Trigger;
+begin
+  TIdObjectRegistry.Singleton.WithExtantObjectDo(Self.TransportID, Self.SendMessage);
+end;
+
+//* TIdSipSentMessageWait Private methods **************************************
+
+procedure TIdSipSentMessageWait.SendMessage(O: TObject);
+var
+  T: TIdSipTransport;
+begin
+  if Assigned(O) and (O is TIdSipTransport) then begin
+    T := O as TIdSipTransport;
+    T.NotifyOfSentMessage(Self.Message, Self.Destination);
+  end;
+end;
+
+procedure TIdSipSentMessageWait.SetDestination(Value: TIdConnectionBindings);
+begin
+  Self.fDestination.Assign(Value);
 end;
 
 //******************************************************************************

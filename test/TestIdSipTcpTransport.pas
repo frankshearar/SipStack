@@ -63,6 +63,7 @@ type
     procedure TestAddConnection;
     procedure TestConserveConnectionsOutbound;
 }
+    procedure TestDiscardMalformedMessage; override;
     procedure TestGetTransportType;
     procedure TestIsReliable;
     procedure TestIsSecure;
@@ -261,18 +262,18 @@ type
     fAcceptFired:     Boolean;
     fConnectFired:    Boolean;
     fConnectionParam: TIdSipConnection;
-    fCloseFired:      Boolean;
     fDisconnectFired: Boolean;
     fOOBFired:        Boolean;
     fReadFired:       Boolean;
+    fSentMsgFired:    Boolean;
     fWriteFired:      Boolean;
 
     procedure OnAccept(Connection: TIdSipConnection);
     procedure OnConnect(Connection: TIdSipConnection);
-    procedure OnClose(Connection: TIdSipConnection);
     procedure OnDisconnect(Connection: TIdSipConnection);
     procedure OnOOB(Connection: TIdSipConnection);
     procedure OnRead(Connection: TIdSipConnection);
+    procedure OnSentMsg(Msg: TIdSipMessage; Connection: TIdSipConnection);
     procedure OnWrite(Connection: TIdSipConnection);
   public
     constructor Create; override;
@@ -280,14 +281,16 @@ type
     property AcceptedFired:     Boolean          read fAcceptFired;
     property ConnectedFired:    Boolean          read fConnectFired;
     property ConnectionParam:   TIdSipConnection read fConnectionParam;
-    property ClosedFired:       Boolean          read fCloseFired;
     property DisconnectedFired: Boolean          read fDisconnectFired;
     property OOBFired:          Boolean          read fOOBFired;
     property ReadFired:         Boolean          read fReadFired;
+    property SentMsgFired:      Boolean          read fSentMsgFired;
     property WriteFired:        Boolean          read fWriteFired;
   end;
 
   TIdSipConnectionTestCase = class(TTestCase)
+  protected
+    procedure WaitForConnect(C: TIdSipClientConnection);
   published
     procedure TestReceive; virtual;
   end;
@@ -328,7 +331,8 @@ type
     procedure TearDown; override;
   published
     procedure TestBind;
-    procedure TestListen;
+    procedure TestListenAndAccept;
+    procedure TestReceive; override;
   end;
 
   TestTIdSipServerConnection = class(TIdSipConnectionTestCase)
@@ -342,12 +346,20 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestBinding;
     procedure TestReceive; override;
   end;
 
   TestTIdSipTcpServer = class(TTestCase)
   private
-    Server: TIdSipTcpServer;
+    RecvEvent:      TEvent;
+    RecvRequest:    TIdSipMessage;
+    Request:        TIdSipMessage;
+    Server:         TIdSipTcpServer;
+    Remote:         TIdTcpServer;
+    RemoteLocation: TIdSipLocation;
+
+    procedure ReceiveMessage(Thread: TIdPeerThread);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -383,17 +395,13 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipTcpTransport unit tests');
-{
   Result.AddTest(TestTIdSipTCPTransport.Suite);
   Result.AddSuite(TestTIdSipConnectionTableEntry.Suite);
   Result.AddSuite(TestTIdSipConnectionTable.Suite);
-}
   Result.AddSuite(TestTIdSipClientConnection.Suite);
   Result.AddSuite(TestTIdSipListeningConnection.Suite);
   Result.AddSuite(TestTIdSipServerConnection.Suite);
-{
   Result.AddSuite(TestTIdSipTcpServer.Suite);
-}
 end;
 
 //******************************************************************************
@@ -694,6 +702,96 @@ begin
   end;
 end;
 }
+
+procedure TestTIdSipTCPTransport.TestDiscardMalformedMessage;
+var
+  Client:            TIdTcpClient;
+  Listener:          TIdSipTestTransportListener;
+  MangledSipVersion: String;
+begin
+  // We receive a malformed request.
+  // We want to:
+  // * make sure it doesn't pass up the stack
+  // * notify that we received a malformed message
+  // * return a 400 Bad Request.
+  //
+  // This test is functionally equivalent to its superclass implementation, but
+  // we require the sending connection to remain open for the test to work: if
+  // a UAC sends us a malformed request and disconnects, there's no point in
+  // making a return connection just to say "400 Bad Request".
+
+  Client := TIdTcpClient.Create(nil);
+  try
+    Client.Host := Self.HighPortLocation.IPAddress;
+    Client.Port := Self.HighPortLocation.Port;
+    Client.Connect(OneSecond);
+    Listener := TIdSipTestTransportListener.Create;
+    try
+      Self.HighPortTransport.AddTransportListener(Listener);
+      MangledSipVersion := 'SIP/;2.0';
+      Client.Write('INVITE sip:wintermute@tessier-ashpool.co.luna ' + MangledSipVersion + #13#10
+                 + 'Via: SIP/2.0/' + Self.HighPortTransport.GetTransportType + ' proxy.tessier-ashpool.co.luna;branch=z9hG4bK776asdhds'#13#10
+                 + 'Max-Forwards: 70'#13#10
+                 + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
+                 + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
+                 + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
+                 + 'CSeq: 314159 INVITE'#13#10
+                 + 'Contact: <sip:wintermute@tessier-ashpool.co.luna>'#13#10
+                 + 'Content-Type: text/plain'#13#10
+                 + 'Content-Length: 29'#13#10
+                 + #13#10
+                 + 'I am a message. Hear me roar!');
+
+      // We wait for the SendEvent event, because we always notify of a rejected
+      // message before we send the response. Thus, the test could fail because
+      // we didn't have enough time to register the sending of the 400 Bad
+      // Request.
+      Self.WaitForSignaled(Self.RejectedMessageEvent, 'Waiting for rejection notice');
+
+      // Check that we actually received the message.
+      Check(Self.RejectedMessage,
+            Self.HighPortTransport.ClassName
+          + ': Notification of message rejection not received');
+
+      CheckEquals(Self.HighPortLocation.IPAddress,
+                  Self.ReceivingBinding.LocalIP,
+                  Self.HighPortTransport.ClassName
+                + ': Receiving binding IP address not correctly recorded');
+      CheckEquals(Self.HighPortLocation.Port,
+                  Self.ReceivingBinding.LocalPort,
+                  Self.HighPortTransport.ClassName
+                + ': Receiving binding port not correctly recorded');
+      CheckEquals(Self.HighPortLocation.Transport,
+                  Self.ReceivingBinding.Transport,
+                  Self.HighPortTransport.ClassName
+                + ': Receiving binding transport not correctly recorded');
+
+      // Check that the transport didn't send the malformed request up the stack
+      Check(not Listener.ReceivedRequest,
+            Self.HighPortTransport.ClassName
+          + ': Transport passed malformed request up the stack');
+
+       Self.WaitForSignaled(Self.SendEvent, 'Waiting to send message');
+
+      // Did we send a 400 Bad Request?
+      CheckNotEquals(0,
+                     Self.LastSentResponse.StatusCode,
+                     'We didn''t send the "Bad Request" response');
+
+      // Check that the transport sends the 400 Bad Request.
+      CheckEquals(SIPBadRequest,
+                  Self.LastSentResponse.StatusCode,
+                  Self.HighPortTransport.ClassName
+                + ': "Bad Request" response');
+    finally
+      Self.HighPortTransport.RemoveTransportListener(Listener);
+      Listener.Free;
+    end;
+  finally
+    Client.Free;
+  end;
+end;
+
 procedure TestTIdSipTCPTransport.TestGetTransportType;
 begin
   CheckEquals(TcpTransport,
@@ -2094,7 +2192,6 @@ begin
   Self.fAcceptFired     := false;
   Self.fConnectFired    := false;
   Self.fConnectionParam := nil;
-  Self.fCloseFired      := false;
   Self.fDisconnectFired := false;
   Self.fOOBFired        := false;
   Self.fReadFired       := false;
@@ -2110,12 +2207,6 @@ end;
 procedure TIdSipConnectionTestListener.OnConnect(Connection: TIdSipConnection);
 begin
   Self.fConnectFired    := true;
-  Self.fConnectionParam := Connection;
-end;
-
-procedure TIdSipConnectionTestListener.OnClose(Connection: TIdSipConnection);
-begin
-  Self.fCloseFired      := true;
   Self.fConnectionParam := Connection;
 end;
 
@@ -2137,6 +2228,12 @@ begin
   Self.fConnectionParam := Connection;
 end;
 
+procedure TIdSipConnectionTestListener.OnSentMsg(Msg: TIdSipMessage; Connection: TIdSipConnection);
+begin
+  Self.fSentMsgFired    := true;
+  Self.fConnectionParam := Connection;
+end;
+
 procedure TIdSipConnectionTestListener.OnWrite(Connection: TIdSipConnection);
 begin
   Self.fWriteFired      := true;
@@ -2147,6 +2244,15 @@ end;
 //******************************************************************************
 //* TIdSipConnectionTestCase                                                   *
 //******************************************************************************
+//* TIdSipConnectionTestCase Protected methods *********************************
+
+procedure TIdSipConnectionTestCase.WaitForConnect(C: TIdSipClientConnection);
+begin
+  // TODO: hard-coded waits SUCK
+  Sleep(250);
+  C.ProcessMessages;
+end;
+
 //* TIdSipConnectionTestCase Published methods *********************************
 
 procedure TIdSipConnectionTestCase.TestReceive;
@@ -2168,7 +2274,7 @@ begin
   Self.Check(IsPortFree(TcpTransport, TestIP, TestPort), Format('Test requires %s:%d/tcp', [TestIP, TestPort]));
 
   Self.C := TIdSipClientConnection.Create;
-  Self.S := TIdTCPServer.Create(nil);
+  Self.S := CreateTcpServer(TIdTCPServer);
   Self.ConnectEvent := TSimpleEvent.Create;
   Self.ReadEvent    := TSimpleEvent.Create;
   Self.SendMsg      := BasicRequest;
@@ -2200,9 +2306,6 @@ begin
 end;
 
 procedure TestTIdSipClientConnection.ReadMessage(Thread: TIdPeerThread);
-var
-  Reader: TIdSipTcpMessageReader;
-  Buf: String;
 begin
   Self.ReadMsg := TIdSipMessage.ReadMessageFrom(Thread.Connection.AllData);
 
@@ -2229,6 +2332,9 @@ begin
   CheckEquals(TcpTransport, Self.C.Binding.Transport, 'Transport not set');
   CheckNotEquals('',        Self.C.Binding.LocalIP,   'LocalIP not set');
   CheckNotEquals(0,         Self.C.Binding.LocalPort, 'LocalPort not set');
+
+  CheckEquals(Self.S.Bindings[0].IP,   Self.C.Binding.PeerIP,   'PeerIP not set');
+  CheckEquals(Self.S.Bindings[0].Port, Self.C.Binding.PeerPort, 'PeerPort not set');
 end;
 
 procedure TestTIdSipClientConnection.TestConnectNotifiesListeners;
@@ -2330,7 +2436,7 @@ begin
   Self.Check(not IsPortFree(TcpTransport, TestIP, TestPort), 'Nothing''s listening on the socket');
 end;
 
-procedure TestTIdSipListeningConnection.TestListen;
+procedure TestTIdSipListeningConnection.TestListenAndAccept;
 var
   Connection: TIdSipServerConnection;
 begin
@@ -2338,10 +2444,20 @@ begin
   Self.S.Listen(5);
 
   Self.C.Connect(Self.TestIP, Self.TestPort);
+  Self.WaitForConnect(Self.C);
 
   Connection := Self.S.Accept;
   Check(Assigned(Connection), 'Accept returned nil');
 end;
+
+procedure TestTIdSipListeningConnection.TestReceive;
+var
+  AbnormalTermination: Boolean;
+begin
+  Self.ExpectedException := EIdSocketException;
+  Self.S.Receive(AbnormalTermination);
+end;
+
 
 //******************************************************************************
 //* TestTIdSipServerConnection                                                 *
@@ -2363,6 +2479,8 @@ begin
   Self.S.Listen(5);
 
   Self.C.Connect(Self.TestIP, Self.TestPort);
+  Self.WaitForConnect(Self.C);
+
 
   Self.Connection := Self.S.Accept;
   Check(Assigned(Connection), 'Accept returned nil');
@@ -2377,6 +2495,15 @@ begin
 end;
 
 //* TestTIdSipServerConnection Published methods *******************************
+
+procedure TestTIdSipServerConnection.TestBinding;
+begin
+  CheckEquals(Self.TestIP,              Self.Connection.Binding.LocalIP,   'LocalIP not set');
+  CheckEquals(Self.TestPort,            Self.Connection.Binding.LocalPort, 'LocalPort not set');
+  CheckEquals(Self.C.Binding.LocalIP,   Self.Connection.Binding.PeerIP,    'PeerIP not set');
+  CheckEquals(Self.C.Binding.LocalPort, Self.Connection.Binding.PeerPort,  'PeerPort not set');
+  CheckEquals(TcpTransport,             Self.Connection.Binding.Transport, 'Transport not set');
+end;
 
 procedure TestTIdSipServerConnection.TestReceive;
 var
@@ -2409,33 +2536,79 @@ end;
 //* TestTIdSipTcpServer Public methods *****************************************
 
 procedure TestTIdSipTcpServer.SetUp;
+const
+  FakeID: TRegisteredObjectID = 'Fake Transport ID';
 var
   DefaultPortLocalHost: TIdSipLocations;
 begin
   inherited SetUp;
 
+  Self.RecvEvent := TSimpleEvent.Create;
+  Self.Request   := TIdSipMessage.ReadMessageFrom(BasicRequest);
+
   DefaultPortLocalHost := TIdSipLocations.Create;
   try
     DefaultPortLocalHost.AddLocation(TcpTransport, '127.0.0.1', 5060);
 
-    Self.Server := TIdSipTcpServer.Create(DefaultPortLocalHost);
+    Self.Server := TIdSipTcpServer.Create(DefaultPortLocalHost, FakeID, FakeID);
   finally
     DefaultPortLocalHost.Free;
   end;
+
+  Self.Remote := CreateTcpServer(TIdTCPServer);
+  Self.Remote.OnExecute := Self.ReceiveMessage;
+  OpenOnFirstFreePort(Self.Remote, '127.0.0.1', 15060);
+
+  Self.RemoteLocation := TIdSipLocation.Create(TcpTransport,
+                                               Self.Remote.Bindings[0].IP,
+                                               Self.Remote.Bindings[0].Port);
 end;
 
 procedure TestTIdSipTcpServer.TearDown;
 begin
+  Self.RemoteLocation.Free;
+  Self.Remote.Free;
   Self.Server.Terminate;
+  Self.Request.Free;
+  Self.RecvRequest.Free;
+  Self.RecvEvent.Free;
 
   inherited TearDown;
+end;
+
+//* TestTIdSipTcpServer Private methods ****************************************
+
+procedure TestTIdSipTcpServer.ReceiveMessage(Thread: TIdPeerThread);
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create('');
+  try
+    Thread.Connection.Capture(S, '');
+    S.Seek(0, soFromBeginning);
+    Self.RecvRequest := TIdSipMessage.ReadMessageFrom(S);
+    Self.RecvRequest.Body := Thread.Connection.ReadString(Self.RecvRequest.ContentLength);
+  finally
+    S.Free;
+  end;
+  Self.RecvEvent.SetEvent;
 end;
 
 //* TestTIdSipTcpServer Published methods **************************************
 
 procedure TestTIdSipTcpServer.TestWrite;
+var
+  Wait: TIdSipTcpServerSendMessageWait;
 begin
-  Fail('ImplementMe');
+  Wait := TIdSipTcpServerSendMessageWait.Create;
+  Wait.Msg := Self.Request;
+  Wait.Server := Self.Server;
+  Wait.Destination := Self.RemoteLocation;
+  Self.Server.AddEvent(TriggerImmediately, Wait);
+
+  Check(wrSignaled = Self.RecvEvent.WaitFor(OneSecond), 'Timeout waiting for message');
+  Check(Assigned(Self.RecvRequest), 'No message received');
+  Check(Self.Request.Equals(Self.RecvRequest), 'Unexpected message received');
 end;
 
 initialization

@@ -33,6 +33,7 @@ type
     procedure TestCreatePeerLocation;
     procedure TestEquals;
     procedure TestIsLocalhost;
+    procedure TestMatchesLocal;
     procedure TestMatchesPeer;
   end;
 
@@ -225,6 +226,41 @@ begin
   // I'm really not sure about this!
   Self.Loc.IPAddress := '127.0.0.2';
   Check(not Self.Loc.IsLocalhost, '127.0.0.2');
+end;
+
+procedure TestTIdSipLocation.TestMatchesLocal;
+var
+  B: TIdConnectionBindings;
+begin
+  B := TIdConnectionBindings.Create('127.0.0.1', 1234, '1.2.3.4', 1271, TcpTransport);
+  try
+    Self.Loc.IPAddress := '127.0.0.1';
+    Self.Loc.Port      := 1;
+    Self.Loc.Transport := UdpTransport;
+    Check(not Self.Loc.MatchesLocal(B), 'No data in common');
+
+    Self.Loc.IPAddress := B.LocalIP;
+    Self.Loc.Port      := B.LocalPort;
+    Self.Loc.Transport := UdpTransport;
+    Check(not Self.Loc.MatchesLocal(B), 'Transport differs');
+
+    Self.Loc.IPAddress := B.LocalIP;
+    Self.Loc.Port      := B.LocalPort + 1;
+    Self.Loc.Transport := B.Transport;
+    Check(not Self.Loc.MatchesLocal(B), 'Port differs');
+
+    Self.Loc.IPAddress := TIdIPAddressParser.IncIPAddress(B.LocalIP);
+    Self.Loc.Port      := B.LocalPort;
+    Self.Loc.Transport := B.Transport;
+    Check(not Self.Loc.MatchesLocal(B), 'IP address differs');
+
+    Self.Loc.IPAddress := B.LocalIP;
+    Self.Loc.Port      := B.LocalPort;
+    Self.Loc.Transport := B.Transport;
+    Check(Self.Loc.MatchesLocal(B), 'Same local binding');
+  finally
+    B.Free;
+  end;
 end;
 
 procedure TestTIdSipLocation.TestMatchesPeer;

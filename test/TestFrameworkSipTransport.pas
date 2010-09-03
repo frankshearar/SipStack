@@ -14,7 +14,7 @@ interface
 uses
   IdConnectionBindings, IdInterfacedObject, IdRoutingTable, IdSipLocation,
   IdSipMessage, IdSipTransport, IdTimerQueue, SyncObjs, SysUtils,
-  TestFrameworkEx, TestFrameworkSip;
+  TestFramework, TestFrameworkEx, TestFrameworkSip;
 
 type
   TestTIdSipTransport = class;
@@ -53,14 +53,13 @@ type
   TestTIdSipTransport = class(TThreadingTestCase,
                               IIdSipTransportListener,
                               IIdSipTransportSendingListener)
-  private
-    LastSentResponse: TIdSipResponse;
   protected
     CheckingRequestEvent:   TIdSipRequestEvent;
     CheckingResponseEvent:  TIdSipResponseEvent;
     EmptyListEvent:         TEvent;
     FinishedTimer:          TEvent;
     HighPortLocation:       TIdSipLocation;
+    LastSentResponse:       TIdSipResponse;
     Lock:                   TCriticalSection;
     LogName:                String;
     LowPortLocation:        TIdSipLocation;
@@ -88,6 +87,7 @@ type
     procedure CheckCanReceiveResponse(Sender: TObject;
                                       R: TIdSipResponse;
                                       ReceivedFrom: TIdConnectionBindings);
+    procedure CheckDiscardMalformedMessage(MalformedMsg: String; ExpectedStatusText: String);
     procedure CheckDiscardResponseWithUnknownSentBy(Sender: TObject;
                                                     R: TIdSipResponse;
                                                     ReceivedFrom: TIdConnectionBindings);
@@ -179,21 +179,17 @@ type
     procedure TestAddBindingDoesntStartStoppedTransport;
     procedure TestAddBindingRestartsStartedTransport;
     procedure TestBindingCount;
-{
     procedure TestCanReceiveRequest;
     procedure TestCanReceiveResponse;
     procedure TestCanReceiveUnsolicitedResponse;
-}
     procedure TestClearBindings;
     procedure TestClearBindingsDoesntStartStoppedTransport;
     procedure TestClearBindingRestartsStartedTransport;
-{
-    procedure TestDiscardMalformedMessage;
+    procedure TestDiscardMalformedMessage; virtual;
     procedure TestDiscardRequestWithInconsistentTransport;
     procedure TestDiscardResponseWithInconsistentTransport;
     procedure TestDiscardResponseWithUnknownSentBy;
     procedure TestDontDiscardUnknownSipVersion;
-}
     procedure TestHasBinding;
     procedure TestInstantiationRegistersTransport;
     procedure TestIsNull; virtual;
@@ -201,23 +197,18 @@ type
     procedure TestLocalBindingsDoesntClearParameter;
     procedure TestLocalBindingsMultipleBindings;
     procedure TestLocalBindingsSingleBinding;
-{
     procedure TestMalformedCallID;
     procedure TestReceivedParamDifferentIPv4SentBy;
     procedure TestReceivedParamFQDNSentBy;
     procedure TestReceivedParamIPv4SentBy;
-}
     procedure TestReceiveRequestShowsCorrectBinding;
-{
     procedure TestReceiveResponseFromMappedRoute;
     procedure TestReceiveResponseOnLocallyInitiatedConnectionShowsCorrectBinding;
     procedure TestReceiveResponseShowsCorrectBinding;
-}
     procedure TestRemoveBinding;
     procedure TestRemoveBindingDoesntStartStoppedTransport;
     procedure TestRemoveBindingNoSuchBinding;
     procedure TestRemoveBindingRestartsStartedTransport;
-{
     procedure TestSendRequest;
     procedure TestSendRequestAutoRewriteVia;
     procedure TestSendRequestSpecifiedVia;
@@ -225,10 +216,8 @@ type
     procedure TestSendResponseFromNonStandardPort;
     procedure TestSendResponseUsesDestinationLocation;
     procedure TestSendResponseWithReceivedParam;
-}
     procedure TestStart;
     procedure TestStop;
-{
     procedure TestTortureTest16;
     procedure TestTortureTest17;
     procedure TestTortureTest19;
@@ -239,7 +228,24 @@ type
     procedure TestTortureTest40;
     procedure TestTortureTest41;
     procedure TestUseRport;
-}
+  end;
+
+  TIdSipTestTransportSendingListener = class;
+
+  TestTIdSipSentMessageWait = class(TTestCase)
+  private
+    Connection: TIdConnectionBindings;
+    Listener:   TIdSipTestTransportSendingListener;
+    Request:    TIdSipMessage;
+    Response:   TIdSipMessage;
+    Transport:  TIdSipTransport;
+    Wait:       TIdSipSentMessageWait;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTriggerForRequest;
+    procedure TestTriggerForResponse;
   end;
 
   TIdSipTestTransportListener = class(TIdSipTestActionListener,
@@ -352,11 +358,17 @@ type
 implementation
 
 uses
-  IdRegisteredObject, IdSimpleParser, IdSocketHandle, IdStack, IdTcpServer,
-  PluggableLogging, TestFramework, TestMessages;
+  IdIndyUtils, IdRegisteredObject, IdSimpleParser, IdSipMockTransport,
+  IdSocketHandle, IdStack, IdTcpServer, PluggableLogging, TestMessages;
 
 var
   ServerThatInstantiatesGStack: TIdTcpServer;
+
+function Suite: ITestSuite;
+begin
+  Result := TTestSuite.Create('IdSipTransport unit tests');
+  Result.AddTest(TestTIdSipSentMessageWait.Suite);
+end;
 
 //******************************************************************************
 //* TTransportTestTimerQueue                                                   *
@@ -597,6 +609,63 @@ begin
       Self.ExceptionType    := ExceptClass(E.ClassType);
       Self.ExceptionMessage := E.Message;
     end;
+  end;
+end;
+
+procedure TestTIdSipTransport.CheckDiscardMalformedMessage(MalformedMsg: String; ExpectedStatusText: String);
+var
+  Listener: TIdSipTestTransportListener;
+begin
+  Listener := TIdSipTestTransportListener.Create;
+  try
+    Self.HighPortTransport.AddTransportListener(Listener);
+    Self.SendMessage(MalformedMsg);
+
+    Self.WaitForSignaled(Self.RejectedMessageEvent, 'Waiting for rejection notice');
+
+    // Check that we actually received the message.
+    Check(Self.RejectedMessage,
+          Self.HighPortTransport.ClassName
+        + ': Notification of message rejection not received');
+
+    CheckEquals(Self.HighPortLocation.IPAddress,
+                Self.ReceivingBinding.LocalIP,
+                Self.HighPortTransport.ClassName
+              + ': Receiving binding IP address not correctly recorded');
+    CheckEquals(Self.HighPortLocation.Port,
+                Self.ReceivingBinding.LocalPort,
+                Self.HighPortTransport.ClassName
+              + ': Receiving binding port not correctly recorded');
+    CheckEquals(Self.HighPortLocation.Transport,
+                Self.ReceivingBinding.Transport,
+                Self.HighPortTransport.ClassName
+              + ': Receiving binding transport not correctly recorded');
+
+    // Check that the transport didn't send the malformed request up the stack
+    Check(not Listener.ReceivedRequest,
+          Self.HighPortTransport.ClassName
+        + ': Transport passed malformed request up the stack');
+
+    Self.WaitForSignaled(Self.SendEvent, 'Waiting for message send');
+
+    // Did we send a 400 Bad Request?
+    CheckNotEquals(0,
+                   Self.LastSentResponse.StatusCode,
+                   'We didn''t send the "Bad Request" response');
+
+    // Check that the transport sends the 400 Bad Request.
+    CheckEquals(SIPBadRequest,
+                Self.LastSentResponse.StatusCode,
+                Self.HighPortTransport.ClassName
+              + ': "Bad Request" response');
+
+    CheckEquals(ExpectedStatusText,
+                Self.LastSentResponse.StatusText,
+                Self.HighPortTransport.ClassName
+              + ': "Bad Request" Status-Text');
+  finally
+    Self.HighPortTransport.RemoveTransportListener(Listener);
+    Listener.Free;
   end;
 end;
 
@@ -1112,7 +1181,7 @@ begin
   Self.LowPortTransport.AddBinding(Self.LowPortLocation.IPAddress, Self.LowPortLocation.Port + 2);
   CheckEquals(3, Self.LowPortTransport.BindingCount, 'Two AddBindings later');
 end;
-{
+
 procedure TestTIdSipTransport.TestCanReceiveRequest;
 begin
   // LowPortTransport sends an INVITE to HighPortTransport.
@@ -1154,7 +1223,7 @@ begin
   Check(Self.ReceivedResponse,
         Self.HighPortTransport.ClassName + ': Response not received');
 end;
-}
+
 procedure TestTIdSipTransport.TestClearBindings;
 var
   Address:   String;
@@ -1210,17 +1279,20 @@ begin
   Check(Self.LowPortTransport.IsRunning,
         'ClearBindings didn''t restart the transport');
 end;
-{
+
 procedure TestTIdSipTransport.TestDiscardMalformedMessage;
 var
-  Listener:          TIdSipTestTransportListener;
   MangledSipVersion: String;
+  Msg:               TIdSipMessage;
 begin
-  Listener := TIdSipTestTransportListener.Create;
-  try
-    Self.HighPortTransport.AddTransportListener(Listener);
-    MangledSipVersion := 'SIP/;2.0';
-    Self.SendMessage('INVITE sip:wintermute@tessier-ashpool.co.luna ' + MangledSipVersion + #13#10
+  // We receive a malformed request.
+  // We want to:
+  // * make sure it doesn't pass up the stack
+  // * notify that we received a malformed message
+  // * return a 400 Bad Request.
+
+  MangledSipVersion := 'SIP/;2.0';
+  Msg := TIdSipMessage.ReadMessageFrom('INVITE sip:wintermute@tessier-ashpool.co.luna ' + MangledSipVersion + #13#10
                    + 'Via: SIP/2.0/' + Self.HighPortTransport.GetTransportType + ' proxy.tessier-ashpool.co.luna;branch=z9hG4bK776asdhds'#13#10
                    + 'Max-Forwards: 70'#13#10
                    + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
@@ -1232,57 +1304,16 @@ begin
                    + 'Content-Length: 29'#13#10
                    + #13#10
                    + 'I am a message. Hear me roar!');
-
-    // We wait for the SendEvent event, because we always notify of a rejected
-    // message before we send the response. Thus, the test could fail because
-    // we didn't have enough time to register the sending of the 400 Bad
-    // Request.
-    Self.WaitForSignaled(Self.SendEvent, 'Waiting to send message');
-
-    Check(not Self.ReceivedRequest,
-          Self.HighPortTransport.ClassName
-        + ': Somehow we received a mangled message');
-    Check(Self.RejectedMessage,
-          Self.HighPortTransport.ClassName
-        + ': Notification of message rejection not received');
-
-    CheckEquals(Self.HighPortLocation.IPAddress,
-                Self.ReceivingBinding.LocalIP,
-                Self.HighPortTransport.ClassName
-              + ': Receiving binding IP address not correctly recorded');
-    CheckEquals(Self.HighPortLocation.Port,
-                Self.ReceivingBinding.LocalPort,
-                Self.HighPortTransport.ClassName
-              + ': Receiving binding port not correctly recorded');
-    CheckEquals(Self.HighPortLocation.Transport,
-                Self.ReceivingBinding.Transport,
-                Self.HighPortTransport.ClassName
-              + ': Receiving binding transport not correctly recorded');
-
-    CheckNotEquals(0,
-                   Self.LastSentResponse.StatusCode,
-                   'We didn''t receive the "Bad Request" response');
-
-    // Check that the transport sends the 400 Bad Request.
-    CheckEquals(SIPBadRequest,
-                Self.LastSentResponse.StatusCode,
-                Self.HighPortTransport.ClassName
-              + ': "Bad Request" response');
-
-    // Check that the transport didn't send the malformed request up the stack
-    Check(not Listener.ReceivedRequest,
-          Self.HighPortTransport.ClassName
-        + ': Transport passed malformed request up the stack');
+  try
+    Self.CheckDiscardMalformedMessage(Msg.AsString, Msg.ParseFailReason);
   finally
-    Self.HighPortTransport.RemoveTransportListener(Listener);
-    Listener.Free;
+    Msg.Free;
   end;
 end;
 
 procedure TestTIdSipTransport.TestDiscardRequestWithInconsistentTransport;
 var
   InconsistentTransport: String;
-  Listener:              TIdSipTestTransportListener;
 begin
   // InconsistentTransport will now not match the transport type of the socket
   // from which the Transport will receive the message. In other words, a UDP
@@ -1290,10 +1321,7 @@ begin
   // return a 400 Bad Request.
   InconsistentTransport := Self.HighPortTransport.GetTransportType + '-Foo';
 
-  Listener := TIdSipTestTransportListener.Create;
-  try
-    Self.HighPortTransport.AddTransportListener(Listener);
-    Self.SendMessage('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
+  Self.CheckDiscardMalformedMessage('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
                    + 'Via: SIP/2.0/' + InconsistentTransport + ' proxy.tessier-ashpool.co.luna;branch=z9hG4bK776asdhds'#13#10
                    + 'Max-Forwards: 70'#13#10
                    + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
@@ -1304,48 +1332,8 @@ begin
                    + 'Content-Type: text/plain'#13#10
                    + 'Content-Length: 29'#13#10
                    + #13#10
-                   + 'I am a message. Hear me roar!');
-
-    // Self.SendEvent is set by OnSendResponse: that is, it is set after
-    // HighPortTransport has received the request and rejected it.               
-    Self.WaitForSignaled(Self.SendEvent,
-                         Self.HighPortTransport.ClassName
-                       + ': Waiting for send event');
-
-    Check(not Self.ReceivedRequest,
-          Self.HighPortTransport.ClassName
-        + ': Somehow we received a "malformed" message');
-    Check(Self.RejectedMessage,
-          Self.HighPortTransport.ClassName
-        + ': Notification of message rejection not received');
-   CheckEquals(ViaTransportMismatch,
-               Self.RejectedMessageReason,
-                Self.HighPortTransport.ClassName
-              + ': Rejection reason');
-
-    CheckNotEquals(0,
-                   Self.LastSentResponse.StatusCode,
-                   Self.HighPortTransport.ClassName
-                 + ': We didn''t receive the "Bad Request" response');
-
-    // Check that the transport sends the 400 Bad Request.
-    CheckEquals(SIPBadRequest,
-                Self.LastSentResponse.StatusCode,
-                Self.HighPortTransport.ClassName
-              + ': "Bad Request" response');
-    CheckEquals(ViaTransportMismatch,
-                Self.LastSentResponse.StatusText,
-                Self.HighPortTransport.ClassName
-              + ': Unexpected Status-Text in the response');
-
-    // Check that the transport didn't send the malformed request up the stack
-    Check(not Listener.ReceivedRequest,
-          Self.HighPortTransport.ClassName
-        + ': Transport passed malformed request up the stack');
-  finally
-    Self.HighPortTransport.RemoveTransportListener(Listener);
-    Listener.Free;
-  end;
+                   + 'I am a message. Hear me roar!',
+                   ViaTransportMismatch);
 end;
 
 procedure TestTIdSipTransport.TestDiscardResponseWithInconsistentTransport;
@@ -1390,7 +1378,7 @@ begin
 
     Check(not Listener.ReceivedResponse,
           Self.HighPortTransport.ClassName
-        + ': Transport passed "malformed" request up the stack');
+        + ': Transport passed "malformed" response up the stack');
   finally
     Self.HighPortTransport.RemoveTransportListener(Listener);
     Listener.Free;
@@ -1442,7 +1430,7 @@ begin
   Self.WaitForSignaled(Self.ClassName
                     + ': Didn''t receive a message with an unknown SIP-Version (timeout)');
 end;
-}
+
 procedure TestTIdSipTransport.TestHasBinding;
 var
   Address: String;
@@ -1565,7 +1553,7 @@ begin
     LocalBindings.Free;
   end;
 end;
-{
+
 procedure TestTIdSipTransport.TestMalformedCallID;
 var
   MalformedCallID: String;
@@ -1623,7 +1611,7 @@ begin
 
   Self.WaitForSignaled;
 end;
-}
+
 procedure TestTIdSipTransport.TestReceiveRequestShowsCorrectBinding;
 begin
   // LowPortTransport sends an INVITE to HighPortTransport.
@@ -1634,7 +1622,7 @@ begin
   Self.WaitForSignaled;
   Self.CheckBinding(Self.ReceivingBinding);
 end;
-{
+
 procedure TestTIdSipTransport.TestReceiveResponseFromMappedRoute;
 const
   GatewayAddress = '1.2.3.4';
@@ -1696,7 +1684,7 @@ begin
   Self.WaitForSignaled;
   Self.CheckBinding(Self.ReceivingBinding);
 end;
-}
+
 procedure TestTIdSipTransport.TestRemoveBinding;
 var
   NewPort:      Cardinal;
@@ -1750,7 +1738,7 @@ begin
   Check(Self.LowPortTransport.IsRunning,
         'RemoveBinding stopped the transport');
 end;
-{
+
 procedure TestTIdSipTransport.TestSendRequest;
 begin
   Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
@@ -1881,7 +1869,7 @@ begin
     HighPortListener.Free;
   end;
 end;
-}
+
 procedure TestTIdSipTransport.TestStart;
 begin
   Self.LowPortTransport.Start;
@@ -1894,7 +1882,7 @@ begin
   Self.LowPortTransport.Stop;
   Check(not Self.LowPortTransport.IsRunning, 'Transport not stopped');
 end;
-{
+
 procedure TestTIdSipTransport.TestTortureTest16;
 var
   Destination:   String;
@@ -1906,7 +1894,9 @@ begin
   //   When sent UDP, the server should respond with an error. With TCP,
   //   there's not much you can do but wait...
 
-  Self.DefaultTimeout := Self.HighPortTransport.Timeout * 2;
+  // Read timeouts can take a while: we want to wait a reasonably long time for
+  // the rejection notice. 
+  Self.DefaultTimeout := Self.HighPortTransport.Timeout * 4;
   Self.CheckingResponseEvent := Self.CheckForBadRequest;
 
   Destination := Self.HighPortLocation.IPAddress + ':' + IntToStr(Self.HighPortLocation.Port);
@@ -1932,7 +1922,7 @@ begin
 
   Self.SendFromLowTransport(StringReplace(TortureTest16, '%s', Destination, [rfReplaceAll]));
 
-  Self.WaitForSignaled(Self.RejectedMessageEvent);
+  Self.WaitForSignaled(Self.RejectedMessageEvent, 'Waiting for rejection notification');
 end;
 
 procedure TestTIdSipTransport.TestTortureTest17;
@@ -2020,7 +2010,7 @@ begin
   //   This INVITE is illegal because the Request-URI has been enclosed
   //   within in "<>".
   //   An intelligent server may be able to deal with this and fix up
-  //   athe Request-URI if acting as a Proxy. If not it should respond 400
+  //   the Request-URI if acting as a Proxy. If not it should respond 400
   //   with an appropriate reason phrase.
 
   Destination := Self.HighPortLocation.IPAddress + ':' + IntToStr(Self.HighPortLocation.Port);
@@ -2047,7 +2037,7 @@ begin
   Self.CheckingResponseEvent := Self.CheckForBadRequest;
   Self.SendFromLowTransport(StringReplace(TortureTest21, '%s', Destination, [rfReplaceAll]));
 
-  Self.WaitForSignaled(Self.RejectedMessageEvent);
+  Self.WaitForSignaled(Self.RejectedMessageEvent, 'Waiting for rejection notification');
 end;
 
 procedure TestTIdSipTransport.TestTortureTest22;
@@ -2085,7 +2075,7 @@ begin
   Self.CheckingResponseEvent := Self.CheckForBadRequest;
   Self.SendFromLowTransport(StringReplace(TortureTest22, '%s', Destination, [rfReplaceAll]));
 
-  Self.WaitForSignaled(Self.RejectedMessageEvent);
+  Self.WaitForSignaled(Self.RejectedMessageEvent, 'Waiting for rejection notification');
 end;
 
 procedure TestTIdSipTransport.TestTortureTest23;
@@ -2123,7 +2113,7 @@ begin
   Destination := Self.HighPortLocation.IPAddress + ':' + IntToStr(Self.HighPortLocation.Port);
   Self.SendFromLowTransport(StringReplace(TortureTest23, '%s', Destination, [rfReplaceAll]));
 
-  Self.WaitForSignaled(Self.RejectedMessageEvent);
+  Self.WaitForSignaled(Self.RejectedMessageEvent, 'Waiting for rejection notification');
 end;
 
 procedure TestTIdSipTransport.TestTortureTest35;
@@ -2158,7 +2148,7 @@ begin
   Self.CheckingResponseEvent := Self.CheckForBadRequest;
   Self.SendFromLowTransport(StringReplace(TortureTest35, '%s', Destination, [rfReplaceAll]));
 
-  Self.WaitForSignaled(Self.RejectedMessageEvent);
+  Self.WaitForSignaled(Self.RejectedMessageEvent, 'Waiting for rejection notification');
 end;
 
 procedure TestTIdSipTransport.TestTortureTest40;
@@ -2241,7 +2231,61 @@ begin
 
   Self.WaitForSignaled;
 end;
-}
+
+//******************************************************************************
+//* TestTIdSipSentMessageWait                                                  *
+//******************************************************************************
+//* TestTIdSipSentMessageWait Public methods ***********************************
+
+procedure TestTIdSipSentMessageWait.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Listener   := TIdSipTestTransportSendingListener.Create;
+  Self.Request    := TIdSipMessage.ReadMessageFrom(BasicRequest);
+  Self.Response   := TIdSipMessage.ReadMessageFrom(BasicResponse);
+  Self.Transport  := TIdSipMockTcpTransport.Create;
+  Self.Wait       := TIdSipSentMessageWait.Create;
+
+  Self.Connection := TIdConnectionBindings.Create('1.2.3.4', 1234, '4.3.2.1', 4321, Self.Transport.GetTransportType);
+
+  Self.Transport.AddTransportSendingListener(Self.Listener);
+
+  Self.Wait.TransportID := Self.Transport.ID;
+end;
+
+procedure TestTIdSipSentMessageWait.TearDown;
+begin
+  Self.Transport.RemoveTransportSendingListener(Self.Listener);
+
+  Self.Connection.Free;
+  Self.Wait.Free;
+  Self.Transport.Free;
+  Self.Response.Free;
+  Self.Request.Free;
+  Self.Listener.Free;
+
+  inherited TearDown;
+end;
+
+procedure TestTIdSipSentMessageWait.TestTriggerForRequest;
+begin
+  Self.Wait.Message := Self.Request.Copy;
+  Self.Wait.Trigger;
+
+  Check(Self.Listener.SentRequest, 'Listener not notified: message not sent');
+  Check(Self.Request.Equals(Self.Listener.RequestParam), 'Request parameter');
+end;
+
+procedure TestTIdSipSentMessageWait.TestTriggerForResponse;
+begin
+  Self.Wait.Message := Self.Response.Copy;
+  Self.Wait.Trigger;
+
+  Check(Self.Listener.SentResponse, 'Listener not notified: message not sent');
+  Check(Self.Response.Equals(Self.Listener.ResponseParam), 'Response parameter');
+end;
+
 //******************************************************************************
 //* TIdSipTestTransportListener                                                *
 //******************************************************************************
@@ -2434,7 +2478,9 @@ begin
 end;
 
 initialization
-  ServerThatInstantiatesGStack := TIdTCPServer.Create(nil);
+  ServerThatInstantiatesGStack := CreateTcpServer(TIdTCPServer);
+
+  RegisterTest('TCP transport', Suite);
 finalization
   ServerThatInstantiatesGStack.Free;
 end.
