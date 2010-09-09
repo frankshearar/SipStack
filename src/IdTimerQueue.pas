@@ -183,6 +183,8 @@ type
     procedure PossiblyNotifyOfEmpty;
     procedure Run;
   public
+    constructor Create(CreateSuspended: Boolean); override;
+
     procedure Resume; override;
     procedure Terminate; override;
     procedure TerminateAndWaitFor(WaitEvent: TEvent);
@@ -747,6 +749,13 @@ end;
 //******************************************************************************
 //* TIdThreadedTimerQueue Public methods ***************************************
 
+constructor TIdThreadedTimerQueue.Create(CreateSuspended: Boolean);
+begin
+  Self.TerminatedEvent := nil;
+  
+  inherited Create(CreateSuspended);
+end;
+
 procedure TIdThreadedTimerQueue.Resume;
 begin
   inherited Resume;
@@ -779,7 +788,8 @@ end;
 
 procedure TIdThreadedTimerQueue.NotifyOfTermination;
 begin
-  Self.TerminatedEvent.SetEvent;
+  if Assigned(Self.TerminatedEvent) then
+    Self.TerminatedEvent.SetEvent;
 end;
 
 procedure TIdThreadedTimerQueue.PossiblyNotifyOfEmpty;
