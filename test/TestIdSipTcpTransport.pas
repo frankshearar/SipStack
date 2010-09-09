@@ -63,7 +63,6 @@ type
     procedure TestAddConnection;
     procedure TestConserveConnectionsOutbound;
 }
-    procedure TestDiscardMalformedMessage; override;
     procedure TestGetTransportType;
     procedure TestIsReliable;
     procedure TestIsSecure;
@@ -525,22 +524,11 @@ begin
 end;
 
 procedure TestTIdSipTCPTransport.SendMessage(Msg: String);
-var
-  Client: TIdTcpClient;
 begin
-  Client := TIdTcpClient.Create(nil);
-  try
-    Client.Host := Self.HighPortLocation.IPAddress;
-    Client.Port := Self.HighPortLocation.Port;
-    Client.Connect(DefaultTimeout);
-    try
-      Client.Write(Msg);
-    finally
-      Client.DisconnectSocket;
-    end;
-  finally
-    Client.Free;
-  end;
+  Self.SipClient.Host := Self.HighPortLocation.IPAddress;
+  Self.SipClient.Port := Self.HighPortLocation.Port;
+  Self.SipClient.Connect(DefaultTimeout);
+  Self.SipClient.Write(Msg);
 end;
 
 function TestTIdSipTCPTransport.TransportType: TIdSipTransportClass;
@@ -702,7 +690,7 @@ begin
   end;
 end;
 }
-
+{
 procedure TestTIdSipTCPTransport.TestDiscardMalformedMessage;
 var
   Client:            TIdTcpClient;
@@ -722,14 +710,14 @@ begin
 
   Client := TIdTcpClient.Create(nil);
   try
-    Client.Host := Self.HighPortLocation.IPAddress;
-    Client.Port := Self.HighPortLocation.Port;
-    Client.Connect(OneSecond);
+    Self.SipClient.Host := Self.HighPortLocation.IPAddress;
+    Self.SipClient.Port := Self.HighPortLocation.Port;
+    Self.SipClient.Connect(OneSecond);
     Listener := TIdSipTestTransportListener.Create;
     try
       Self.HighPortTransport.AddTransportListener(Listener);
       MangledSipVersion := 'SIP/;2.0';
-      Client.Write('INVITE sip:wintermute@tessier-ashpool.co.luna ' + MangledSipVersion + #13#10
+      Self.SipClient.Write('INVITE sip:wintermute@tessier-ashpool.co.luna ' + MangledSipVersion + #13#10
                  + 'Via: SIP/2.0/' + Self.HighPortTransport.GetTransportType + ' proxy.tessier-ashpool.co.luna;branch=z9hG4bK776asdhds'#13#10
                  + 'Max-Forwards: 70'#13#10
                  + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
@@ -791,7 +779,7 @@ begin
     Client.Free;
   end;
 end;
-
+}
 procedure TestTIdSipTCPTransport.TestGetTransportType;
 begin
   CheckEquals(TcpTransport,
