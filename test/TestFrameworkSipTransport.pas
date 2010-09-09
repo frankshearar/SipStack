@@ -1758,6 +1758,7 @@ procedure TestTIdSipTransport.TestSendRequestAutoRewriteVia;
 begin
   Self.SentBy := 'talking-head.tessier-ashpool.co.luna';
   Self.Request.LastHop.SentBy := Self.SentBy;
+  Self.Request.LastHop.Port   := Self.LowPortLocation.Port + 1; // Some arbitrary NON-default port!
   Self.Request.LastHop.IsUnset := true;
   Self.CheckingRequestEvent := Self.CheckSendRequestAutoRewriteVia;
   Self.LowPortTransport.Send(Self.Request, Self.HighPortLocation);
