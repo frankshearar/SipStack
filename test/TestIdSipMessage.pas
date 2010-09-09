@@ -213,6 +213,7 @@ type
     procedure TestReplaces;
     procedure TestRequiresResponse;
     procedure TestRewriteLocationHeadersNoContact;
+    procedure TestRewriteLocationHeadersNonstandardPort;
     procedure TestRewriteLocationHeadersSetContact;
     procedure TestRewriteLocationHeadersUnsetContact;
     procedure TestSetMaxForwards;
@@ -3400,6 +3401,22 @@ begin
   Self.Request.RewriteLocationHeaders(Self.DefaultPortLocation);
 
   Check(Self.Request.Contacts.IsEmpty, 'Contact added by rewrite');
+end;
+
+procedure TestTIdSipRequest.TestRewriteLocationHeadersNonstandardPort;
+var
+  L: TIdSipLocation;
+begin
+  L := TIdSipLocation.Create('TCP', '127.0.0.1', 5060);
+  try
+    Self.Request.LastHop.Port := TIdSipTransportRegistry.DefaultPortFor(L.Transport) + 2;
+
+    Self.Request.RewriteLocationHeaders(L);
+
+    CheckEquals(L.Port, Self.Request.LastHop.Port, 'Via port not changed');
+  finally
+    L.Free;
+  end;
 end;
 
 procedure TestTIdSipRequest.TestRewriteLocationHeadersSetContact;

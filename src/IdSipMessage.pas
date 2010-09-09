@@ -9423,12 +9423,16 @@ begin
       Self.FirstContact.IsUnset := false;
     end;
   end;
-
+{
   Self.LastHop.SentBy    := Binding.LocalIP;
   Self.LastHop.Transport := Binding.Transport;
 
   if TIdSipTransportRegistry.NonstandardPort(Self.LastHop.Transport, Binding.LocalPort) then
     Self.LastHop.Port := Binding.LocalPort;
+}
+  Self.LastHop.SentBy    := Binding.LocalIP;
+  Self.LastHop.Transport := Binding.Transport;
+  Self.LastHop.Port      := Binding.LocalPort;
 end;
 
 function TIdSipRequest.WantsAllowEventsHeader: Boolean;
