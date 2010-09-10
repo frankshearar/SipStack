@@ -70,6 +70,7 @@ uses
   IdThreadableTcpClient in 'src\IdThreadableTcpClient.pas',
   IdTimerQueue in 'src\IdTimerQueue.pas',
   IdUnicode in 'src\IdUnicode.pas',
+  MessageQueues in 'src\MessageQueues.pas',
   PluggableLogging in 'src\PluggableLogging.pas',
   RuntimeSafety in 'src\RuntimeSafety.pas',
   SipConfigUtils in 'src\SipConfigUtils.pas',
