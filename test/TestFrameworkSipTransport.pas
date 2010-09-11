@@ -1363,7 +1363,7 @@ begin
                    + #13#10
                    + 'I am a message. Hear me roar!');
 
-    Self.WaitForSignaled(Self.RejectedMessageEvent);
+    Self.WaitForSignaled(Self.RejectedMessageEvent, 'Waiting for rejection notification');
 
     Check(not Self.ReceivedResponse,
           Self.HighPortTransport.ClassName
@@ -1396,7 +1396,7 @@ begin
   Self.Response.LastHop.Received := Self.LowPortLocation.IPAddress;
   Self.SendMessage(Self.Response.AsString);
 
-  Self.WaitForSignaled(Self.RejectedMessageEvent);
+  Self.WaitForSignaled(Self.RejectedMessageEvent, 'Waiting for rejection notification');
   Check(not Self.ReceivedResponse,
         Self.HighPortTransport.ClassName
       + ': Response not silently discarded');
@@ -1579,7 +1579,7 @@ begin
 
   Self.SendFromLowTransport(StringReplace(MalformedCallID, '%s', Self.HighPortLocation.IPAddress, [rfReplaceAll]));
 
-  Self.WaitForSignaled(Self.RejectedMessageEvent);
+  Self.WaitForSignaled(Self.RejectedMessageEvent, 'Waiting for rejection notification');
 end;
 
 procedure TestTIdSipTransport.TestReceivedParamDifferentIPv4SentBy;
@@ -1957,7 +1957,7 @@ begin
 
   Self.SendFromLowTransport(StringReplace(TortureTest17, '%s', Destination, [rfReplaceAll]));
 
-  Self.WaitForSignaled(Self.RejectedMessageEvent);
+  Self.WaitForSignaled(Self.RejectedMessageEvent, 'Waiting for rejection notification');
 end;
 
 procedure TestTIdSipTransport.TestTortureTest19;
@@ -1997,7 +1997,7 @@ begin
   Self.CheckingResponseEvent := Self.CheckForBadRequest;
   Self.SendFromLowTransport(StringReplace(TortureTest19, '%s', Destination, [rfReplaceAll]));
 
-  Self.WaitForSignaled(Self.RejectedMessageEvent);
+  Self.WaitForSignaled(Self.RejectedMessageEvent, 'Waiting for rejection notification');
   CheckEquals(Format(MalformedToken, [ToHeaderFull, StringReplace(MalformedTo, '%s', Destination, [rfReplaceAll])]),
               Self.RejectedMessageReason,
               'Message rejected for the wrong reason');
