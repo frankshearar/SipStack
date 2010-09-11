@@ -304,6 +304,7 @@ type
     SendMsg:      String;
     TestIP:       String;
     TestPort:     Cardinal;
+    TQ:           TIdDebugTimerQueue;
 
     procedure NotifyOfConnections(Thread: TIdPeerThread);
     procedure ReadMessage(Thread: TIdPeerThread);
@@ -2261,12 +2262,15 @@ begin
   Self.TestPort := 1234;
   Self.Check(IsPortFree(TcpTransport, TestIP, TestPort), Format('Test requires %s:%d/tcp', [TestIP, TestPort]));
 
+  Self.TQ := TIdDebugTimerQueue.Create(false);
+
   Self.C := TIdSipClientConnection.Create;
   Self.S := CreateTcpServer(TIdTCPServer);
   Self.ConnectEvent := TSimpleEvent.Create;
   Self.ReadEvent    := TSimpleEvent.Create;
   Self.SendMsg      := BasicRequest;
 
+  Self.C.ServerID := Self.TQ.ID;
   Self.S.Bindings.Add;
   Self.S.Bindings[0].IP   := Self.TestIP;
   Self.S.Bindings[0].Port := Self.TestPort;
@@ -2280,6 +2284,7 @@ begin
   Self.ConnectEvent.Free;
   Self.S.Free;
   Self.C.Free;
+  Self.TQ.Terminate;
 
   Self.ReadMsg.Free;
 
@@ -2327,22 +2332,24 @@ end;
 
 procedure TestTIdSipClientConnection.TestConnectNotifiesListeners;
 var
-  L: TIdSipConnectionTestListener;
+  OldEventCount: Integer;
+  W:             TIdSipTcpServerConnectWait;
 begin
-  L := TIdSipConnectionTestListener.Create;
-  try
-    Self.C.AddListener(L);
-    Self.C.Connect(Self.TestIP, Self.TestPort);
+  OldEventCount := Self.TQ.EventCount;
 
-    Check(wrSignaled = Self.ConnectEvent.WaitFor(OneSecond), 'Timeout waiting for connect');
+  Self.C.Connect(Self.TestIP, Self.TestPort);
 
-    Self.C.ProcessMessages;
+  Check(wrSignaled = Self.ConnectEvent.WaitFor(OneSecond), 'Timeout waiting for connect');
 
-    Check(L.ConnectedFired, 'Listener not notified');
-    Check(L.ConnectionParam = Self.C, 'Listener notified of wrong connection');
-  finally
-    L.Free;
-  end;
+  Self.C.ProcessMessages;
+
+  Check(Self.TQ.EventCount > OldEventCount, 'Not enough Waits scheduled');
+
+  Check(Assigned(Self.TQ.LastEventScheduled(TIdSipTcpServerConnectWait)), 'No Connect Wait scheduled');
+
+  W := Self.TQ.LastEventScheduled(TIdSipTcpServerConnectWait) as TIdSipTcpServerConnectWait;
+  CheckEquals(Self.TQ.ID, W.ServerID, 'Wrong ServerID');
+  CheckEquals(Self.C.Binding.AsString, W.Connection.AsString, 'Wrong Connection');
 end;
 
 procedure TestTIdSipClientConnection.TestReceive;

@@ -386,7 +386,13 @@ type
     // execute this Wait!
     fServer: IIdSipTcpServerInternalState;
     fServerID: TRegisteredObjectID;
+
+    procedure Run(O: TObject);
+  protected
+    procedure RunWait(S: TIdSipTcpServer); virtual;
   public
+    procedure Trigger; override;
+
     property Server:   IIdSipTcpServerInternalState read fServer write fServer;
     property ServerID: TRegisteredObjectID          read fServerID write fServerID;
   end;
@@ -396,12 +402,11 @@ type
     fConnection: TIdSipLocation;
 
     procedure SetConnection(Value: TIdSipLocation);
-    procedure RunAccept(O: TObject);
+  protected
+    procedure RunWait(S: TIdSipTcpServer); override;
   public
     constructor Create; override;
     destructor  Destroy; override;
-
-    procedure Trigger; override;
 
     property Connection: TIdSipLocation read fConnection write SetConnection;
   end;
@@ -422,71 +427,39 @@ type
   private
     fMsg: TIdSipMessage;
 
-    procedure RunSentMsg(O: TObject);
     procedure SetMsg(Value: TIdSipMessage);
+  protected
+    procedure RunWait(S: TIdSipTcpServer); override;
   public
     constructor Create; override;
     destructor  Destroy; override;
-
-    procedure Trigger; override;
 
     property Msg: TIdSipMessage read fMsg write SetMsg;
   end;
 
   TIdSipTcpServerConnectWait = class(TIdSipTcpServerConnectionWait)
-  private
-    procedure RunConnect(O: TObject);
-  public
-    procedure Trigger; override;
+  protected
+    procedure RunWait(S: TIdSipTcpServer); override;
   end;
 
   TIdSipTcpServerDisconnectWait = class(TIdSipTcpServerConnectionWait)
-  private
-    procedure RunDisconnect(O: TObject);
-  public
-    procedure Trigger; override;
+  protected
+    procedure RunWait(S: TIdSipTcpServer); override;
   end;
 
-  TIdSipTcpServerOOBWait = class(TIdSipTcpServerWait)
-  private
-    fConnection: TIdConnectionBindings;
-
-    procedure SetConnection(Value: TIdConnectionBindings);
-  public
-    constructor Create; override;
-    destructor  Destroy; override;
-
-    procedure Trigger; override;
-
-    property Connection: TIdConnectionBindings read fConnection write SetConnection;
+  TIdSipTcpServerOOBWait = class(TIdSipTcpServerConnectionWait)
+  protected
+    procedure RunWait(S: TIdSipTcpServer); override;
   end;
 
-  TIdSipTcpServerReadWait = class(TIdSipTcpServerWait)
-  private
-    fConnection: TIdConnectionBindings;
-
-    procedure SetConnection(Value: TIdConnectionBindings);
-  public
-    constructor Create; override;
-    destructor  Destroy; override;
-
-    procedure Trigger; override;
-
-    property Connection: TIdConnectionBindings read fConnection write SetConnection;
+  TIdSipTcpServerReadWait = class(TIdSipTcpServerConnectionWait)
+  protected
+    procedure RunWait(S: TIdSipTcpServer); override;
   end;
 
-  TIdSipTcpServerWriteWait = class(TIdSipTcpServerWait)
-  private
-    fConnection: TIdConnectionBindings;
-
-    procedure SetConnection(Value: TIdConnectionBindings);
-  public
-    constructor Create; override;
-    destructor  Destroy; override;
-
-    procedure Trigger; override;
-
-    property Connection: TIdConnectionBindings read fConnection write SetConnection;
+  TIdSipTcpServerWriteWait = class(TIdSipTcpServerConnectionWait)
+  protected
+    procedure RunWait(S: TIdSipTcpServer); override;
   end;
 
   TIdSipTcpServerSendMessageWait = class(TIdSipTcpServerWait)
@@ -1686,43 +1659,34 @@ end;
 
 procedure TIdSipConnection.OnOOB;
 var
-  Notification: TIdSipTcpConnectionOOBMethod;
+  Wait: TIdSipTcpServerOOBWait;
 begin
-  Notification := TIdSipTcpConnectionOOBMethod.Create;
-  try
-    Notification.Connection := Self;
-    Self.Listeners.Notify(Notification);
-  finally
-    Notification.Free;
-  end;
+  Wait := TIdSipTcpServerOOBWait.Create;
+  Wait.Connection := Self.Binding;
+  Wait.ServerID   := Self.ServerID;
+  TIdTimerQueue.DispatchEvent(Self.ServerID, TriggerImmediately, Wait);
 end;
 
 procedure TIdSipConnection.OnRead(Message: TCMSocketMessage);
 var
-  Notification: TIdSipTcpConnectionReadMethod;
+  Wait: TIdSipTcpServerReadWait;
 begin
-  Notification := TIdSipTcpConnectionReadMethod.Create;
-  try
-    Notification.Connection := Self;
-    Self.Listeners.Notify(Notification);
-  finally
-    Notification.Free;
-  end;
+  Wait := TIdSipTcpServerReadWait.Create;
+  Wait.Connection := Self.Binding;
+  Wait.ServerID   := Self.ServerID;
+  TIdTimerQueue.DispatchEvent(Self.ServerID, TriggerImmediately, Wait);
 end;
 
 procedure TIdSipConnection.OnWrite;
 var
-  Notification: TIdSipTcpConnectionWriteMethod;
+  Wait: TIdSipTcpServerWriteWait;
 begin
   // The socket's signalled that it's now ready to send data.
 
-  Notification := TIdSipTcpConnectionWriteMethod.Create;
-  try
-    Notification.Connection := Self;
-    Self.Listeners.Notify(Notification);
-  finally
-    Notification.Free;
-  end;
+  Wait := TIdSipTcpServerWriteWait.Create;
+  Wait.Connection := Self.Binding;
+  Wait.ServerID   := Self.ServerID;
+  TIdTimerQueue.DispatchEvent(Self.ServerID, TriggerImmediately, Wait);
 end;
 
 procedure TIdSipConnection.PopulateSockAddr(Location: TIdSipLocation; var Addr: TSockAddrIn);
@@ -2354,6 +2318,32 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipTcpServerWait                                                        *
+//******************************************************************************
+//* TIdSipTcpServerWait Public methods *****************************************
+
+procedure TIdSipTcpServerWait.Trigger;
+begin
+  TIdObjectRegistry.Singleton.WithExtantObjectDo(Self.ServerID, Self.Run);
+end;
+
+//* TIdSipTcpServerWait Private methods ****************************************
+
+procedure TIdSipTcpServerWait.Run(O: TObject);
+begin
+  if not (O is TIdSipTcpServer) then Exit;
+
+  Self.RunWait(O as TIdSipTcpServer);
+end;
+
+//* TIdSipTcpServerWait Protected methods **************************************
+
+procedure TIdSipTcpServerWait.RunWait(S: TIdSipTcpServer);
+begin
+  // By default, do nothing.
+end;
+
+//******************************************************************************
 //* TIdSipTcpServerAcceptWait                                                  *
 //******************************************************************************
 //* TIdSipTcpServerAcceptWait Public methods ***********************************
@@ -2372,9 +2362,11 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipTcpServerAcceptWait.Trigger;
+//* TIdSipTcpServerAcceptWait Protected methods ********************************
+
+procedure TIdSipTcpServerAcceptWait.RunWait(S: TIdSipTcpServer);
 begin
-  TIdObjectRegistry.Singleton.WithExtantObjectDo(Self.ServerID, Self.RunAccept);
+  S.Accept(Self.Connection);
 end;
 
 //* TIdSipTcpServerAcceptWait Private methods **********************************
@@ -2382,13 +2374,6 @@ end;
 procedure TIdSipTcpServerAcceptWait.SetConnection(Value: TIdSipLocation);
 begin
   Self.fConnection.Assign(Value);
-end;
-
-procedure TIdSipTcpServerAcceptWait.RunAccept(O: TObject);
-begin
-  if not (O is TIdSipTcpServer) then Exit;
-
-  (O as TIdSipTcpServer).Accept(Self.Connection);
 end;
 
 //******************************************************************************
@@ -2438,19 +2423,14 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipTcpServerConnectionSentMsgWait.Trigger;
+//* TIdSipTcpServerConnectionSentMsgWait Protected methods *********************
+
+procedure TIdSipTcpServerConnectionSentMsgWait.RunWait(S: TIdSipTcpServer);
 begin
-  TIdObjectRegistry.Singleton.WithExtantObjectDo(Self.ServerID, Self.RunSentMsg);
+  S.MessageSent(Self.Msg, Self.Connection);
 end;
 
 //* TIdSipTcpServerConnectionSentMsgWait Private methods ***********************
-
-procedure TIdSipTcpServerConnectionSentMsgWait.RunSentMsg(O: TObject);
-begin
-  if not (O is TIdSipTcpServer) then Exit;
-
-  (O as TIdSipTcpServer).MessageSent(Self.Msg, Self.Connection);
-end;
 
 procedure TIdSipTcpServerConnectionSentMsgWait.SetMsg(Value: TIdSipMessage);
 begin
@@ -2461,132 +2441,51 @@ end;
 //******************************************************************************
 //* TIdSipTcpServerConnectWait                                                 *
 //******************************************************************************
-//* TIdSipTcpServerConnectWait Public methods **********************************
+//* TIdSipTcpServerConnectWait Protected methods *******************************
 
-procedure TIdSipTcpServerConnectWait.Trigger;
+procedure TIdSipTcpServerConnectWait.RunWait(S: TIdSipTcpServer);
 begin
-  TIdObjectRegistry.Singleton.WithExtantObjectDo(Self.ServerID, Self.RunConnect);
-end;
-
-//* TIdSipTcpServerConnectWait Private methods *********************************
-
-procedure TIdSipTcpServerConnectWait.RunConnect(O: TObject);
-begin
-  if not (O is TIdSipTcpServer) then Exit;
-
-  (O as TIdSipTcpServer).Connect(Self.Connection);
+  S.Connect(Self.Connection);
 end;
 
 //******************************************************************************
 //* TIdSipTcpServerDisconnectWait                                              *
 //******************************************************************************
-//* TIdSipTcpServerDisconnectWait Public methods *******************************
+//* TIdSipTcpServerDisconnectWait Protected methods ****************************
 
-procedure TIdSipTcpServerDisconnectWait.Trigger;
+procedure TIdSipTcpServerDisconnectWait.RunWait(S: TIdSipTcpServer);
 begin
-  TIdObjectRegistry.Singleton.WithExtantObjectDo(Self.ServerID, Self.RunDisconnect);
-end;
-
-//* TIdSipTcpServerDisconnectWait Private methods ******************************
-
-procedure TIdSipTcpServerDisconnectWait.RunDisconnect(O: TObject);
-begin
-  if not (O is TIdSipTcpServer) then Exit;
-
-  (O as TIdSipTcpServer).Disconnect(Self.Connection);
+  S.Disconnect(Self.Connection);
 end;
 
 //******************************************************************************
 //* TIdSipTcpServerOOBWait                                                     *
 //******************************************************************************
-//* TIdSipTcpServerOOBWait Public methods **************************************
+//* TIdSipTcpServerOOBWait Protected methods ***********************************
 
-constructor TIdSipTcpServerOOBWait.Create;
+procedure TIdSipTcpServerOOBWait.RunWait(S: TIdSipTcpServer);
 begin
-  inherited Create;
-
-  Self.fConnection := TIdConnectionBindings.Create;
-end;
-
-destructor TIdSipTcpServerOOBWait.Destroy;
-begin
-  Self.fConnection.Free;
-
-  inherited Destroy;
-end;
-
-procedure TIdSipTcpServerOOBWait.Trigger;
-begin
-  Self.Server.OOB(Self.Connection);
-end;
-
-//* TIdSipTcpServerOOBWait Private methods *************************************
-
-procedure TIdSipTcpServerOOBWait.SetConnection(Value: TIdConnectionBindings);
-begin
-  Self.fConnection.Assign(Value);
+  S.OOB(Self.Connection);
 end;
 
 //******************************************************************************
 //* TIdSipTcpServerReadWait                                                    *
 //******************************************************************************
-//* TIdSipTcpServerReadWait Public methods *************************************
+//* TIdSipTcpServerReadWait Protected methods **********************************
 
-constructor TIdSipTcpServerReadWait.Create;
+procedure TIdSipTcpServerReadWait.RunWait(S: TIdSipTcpServer);
 begin
-  inherited Create;
-
-  Self.fConnection := TIdConnectionBindings.Create;
-end;
-
-destructor TIdSipTcpServerReadWait.Destroy;
-begin
-  Self.fConnection.Free;
-
-  inherited Destroy;
-end;
-
-procedure TIdSipTcpServerReadWait.Trigger;
-begin
-  Self.Server.Read(Self.Connection);
-end;
-
-//* TIdSipTcpServerReadWait Private methods ************************************
-
-procedure TIdSipTcpServerReadWait.SetConnection(Value: TIdConnectionBindings);
-begin
-  Self.fConnection.Assign(Value);
+  S.Read(Self.Connection);
 end;
 
 //******************************************************************************
 //* TIdSipTcpServerWriteWait                                                   *
 //******************************************************************************
-//* TIdSipTcpServerWriteWait Public methods ************************************
+//* TIdSipTcpServerWriteWait Protected methods *********************************
 
-constructor TIdSipTcpServerWriteWait.Create;
+procedure TIdSipTcpServerWriteWait.RunWait(S: TIdSipTcpServer);
 begin
-  inherited Create;
-
-  Self.fConnection := TIdConnectionBindings.Create;
-end;
-
-destructor TIdSipTcpServerWriteWait.Destroy;
-begin
-  Self.fConnection.Free;
-
-  inherited Destroy;
-end;
-
-procedure TIdSipTcpServerWriteWait.Trigger;
-begin
-  Self.Server.Write(Self.Connection);
-end;
-
-//* TIdSipTcpServerWriteWait Private methods ***********************************
-
-procedure TIdSipTcpServerWriteWait.SetConnection(Value: TIdConnectionBindings);
-begin
-  Self.fConnection.Assign(Value);
+  S.Write(Self.Connection);
 end;
 
 //******************************************************************************
@@ -2881,27 +2780,11 @@ begin
 end;
 
 procedure TIdSipTcpServer.OnOOB(Connection: TIdSipConnection);
-var
-  Wait: TIdSipTcpServerOOBWait;
 begin
-  // This executes in the context of the main application thread!
-
-  Wait := TIdSipTcpServerOOBWait.Create;
-  Wait.Server := Self;
-  Wait.Connection := Connection.Binding;
-  Self.AddEvent(TriggerImmediately, Wait);
 end;
 
 procedure TIdSipTcpServer.OnRead(Connection: TIdSipConnection);
-var
-  Wait: TIdSipTcpServerReadWait;
 begin
-  // This executes in the context of the main application thread!
-
-  Wait := TIdSipTcpServerReadWait.Create;
-  Wait.Server := Self;
-  Wait.Connection := Connection.Binding;
-  Self.AddEvent(TriggerImmediately, Wait);
 end;
 
 procedure TIdSipTcpServer.OnSentMsg(Msg: TIdSipMessage; Connection: TIdSipConnection);
@@ -2909,15 +2792,7 @@ begin
 end;
 
 procedure TIdSipTcpServer.OnWrite(Connection: TIdSipConnection);
-var
-  Wait: TIdSipTcpServerWriteWait;
 begin
-  // This executes in the context of the main application thread!
-
-  Wait := TIdSipTcpServerWriteWait.Create;
-  Wait.Server := Self;
-  Wait.Connection := Connection.Binding;
-  Self.AddEvent(TriggerImmediately, Wait);
 end;
 
 procedure TIdSipTcpServer.OOB(SocketDescription: TIdConnectionBindings);
