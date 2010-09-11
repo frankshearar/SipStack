@@ -2374,7 +2374,7 @@ begin
   Self.C.Connect(Self.TestIP, Self.TestPort);
   M := TIdSipMessage.ReadMessageFrom(BasicRequest);
   try
-    Self.C.Send(M);
+    Self.C.Queue(M);
 
     // This should be a no-op nearly all the time: we do this to ensure that we
     // write a complete message to the socket.
@@ -2501,7 +2501,7 @@ var
 begin
   Msg := TIdSipMessage.ReadMessageFrom(BasicRequest);
   try
-    Self.C.Send(Msg);
+    Self.C.Queue(Msg);
 
     // This should be a no-op nearly all the time: we do this to ensure that we
     // write a complete message to the socket.
