@@ -144,8 +144,11 @@ end;
 procedure TThreadingTestCase.WaitForSignaled(Event: TEvent; Timeout: Cardinal; Msg: String);
 var
   FullMsg: String;
+  RC:      TWaitResult;
+  ReturnCode: String;
 begin
-  if (wrSignaled <> Event.WaitFor(Timeout)) then begin
+  RC := Event.WaitFor(Timeout);
+  if (RC <> wrSignaled) then begin
     if (Self.ExceptionType <> Exception) then begin
       // We've timed out, and ExceptionType/Message contains details of the
       // exception that resulted in the timeout.
@@ -156,7 +159,16 @@ begin
       FullMsg := Msg;
     end;
 
-    raise Self.ExceptionType.Create(FullMsg);
+    case RC of
+      wrSignaled:  ReturnCode := 'wrSignaled';
+      wrTimeout:   ReturnCode := 'wrTimeout';
+      wrAbandoned: ReturnCode := 'wrAbandoned';
+      wrError:     ReturnCode := 'wrError';
+    else
+      ReturnCode := 'UNKNOWN';
+    end;
+
+    raise Self.ExceptionType.Create(FullMsg + ' (' + ReturnCode + ')');
   end;
 
   Event.ResetEvent;
