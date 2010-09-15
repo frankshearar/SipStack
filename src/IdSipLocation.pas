@@ -63,6 +63,7 @@ type
     function  AsString: String;
     function  AsStringWithPrefix(Prefix: String): String;
     function  Contains(Loc: TIdSipLocation): Boolean;
+    function  Copy: TIdSipLocations;
     function  First: TIdSipLocation;
     function  FirstAddressMatch(SearchLocation: TIdSipLocation): TIdSipLocation;
     function  FirstTransportMatch(SearchLocation: TIdSipLocation): TIdSipLocation;
@@ -262,7 +263,7 @@ begin
   for I := 0 to Self.Count - 1 do
     Result := Result + Prefix + Self[I].AsString + Terminator;
 
-  Result := Copy(Result, 1, Length(Result) - Length(Terminator));
+  Result := System.Copy(Result, 1, Length(Result) - Length(Terminator));
 end;
 
 function TIdSipLocations.Contains(Loc: TIdSipLocation): Boolean;
@@ -275,6 +276,16 @@ begin
 
     if Result then Break;
   end;
+end;
+
+function TIdSipLocations.Copy: TIdSipLocations;
+var
+  I: Integer;
+begin
+  Result := TIdSipLocations.Create;
+
+  for I := 0 to Self.Count - 1 do
+    Result.AddLocation(Self[I]);
 end;
 
 function TIdSipLocations.First: TIdSipLocation;
