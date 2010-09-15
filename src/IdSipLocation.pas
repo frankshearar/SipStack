@@ -69,6 +69,7 @@ type
     function  Last: TIdSipLocation;
     procedure RemoveFirst;
     procedure Remove(Location: TIdSipLocation);
+    procedure RemoveAll(Locations: TIdSipLocations);
 
     property Items[Index: Integer]: TIdSipLocation read GetLocation; default;
   end;
@@ -341,6 +342,14 @@ begin
   end;
 
   if Found then Self.List.Delete(I);
+end;
+
+procedure TIdSipLocations.RemoveAll(Locations: TIdSipLocations);
+var
+  I: Integer;
+begin
+  for I := 0 to Locations.Count - 1 do
+    Self.Remove(Locations[I]);
 end;
 
 //* TIdSipLocations Private methods ********************************************

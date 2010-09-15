@@ -51,6 +51,7 @@ type
     procedure TestAsString;
     procedure TestAsStringWithPrefix;
     procedure TestContains;
+    procedure TestCopy;
     procedure TestCount;
     procedure TestFirst;
     procedure TestFirstAddressMatch;
@@ -61,6 +62,7 @@ type
     procedure TestLast;
     procedure TestRemoveFirst;
     procedure TestRemove;
+    procedure TestRemoveAll;
     procedure TestRemoveDuplicateLocationsOnlyRemovesOne;
     procedure TestRemoveEquivalentLocation;
     procedure TestRemoveNonExtantLocationDoesNothing;
@@ -500,6 +502,29 @@ begin
   end;
 end;
 
+procedure TestTIdSipLocations.TestCopy;
+const
+  FirstAddress  = '0.0.0.1';
+  SecondAddress = '0.0.0.2';
+var
+  Copy: TIdSipLocations;
+  I:    Integer;
+begin
+  Self.Locs.AddLocation(TcpTransport, FirstAddress,  5060);
+  Self.Locs.AddLocation(TcpTransport, SecondAddress, 5060);
+
+  Copy := Self.Locs.Copy;
+  try
+    CheckEquals(Self.Locs.Count, Copy.Count, 'Not all locations copied');
+
+    for I := 0 to Self.Locs.Count - 1 do
+      CheckEquals(Self.Locs[I].AsCompactString, Copy[I].AsCompactString,
+                  Format('Entry %d not copied correctly', [I]));
+  finally
+    Copy.Free;
+  end;
+end;
+
 procedure TestTIdSipLocations.TestCount;
 var
   I: Integer;
@@ -675,6 +700,26 @@ begin
 
   CheckEquals(1, Self.Locs.Count, 'No location removed (#2)');
   CheckEquals(SecondAddress, Self.Locs.First.IPAddress, 'Wrong location removed (#2)');
+end;
+
+procedure TestTIdSipLocations.TestRemoveAll;
+const
+  FirstAddress  = '0.0.0.1';
+  SecondAddress = '0.0.0.2';
+var
+  Removals: TIdSipLocations;
+begin
+  Self.Locs.AddLocation(TcpTransport, FirstAddress,  5060);
+  Self.Locs.AddLocation(TcpTransport, SecondAddress, 5060);
+
+  Removals := Self.Locs.Copy;
+  try
+    Self.Locs.RemoveAll(Removals);
+
+    Check(Self.Locs.IsEmpty, 'Not all locations removed');
+  finally
+    Removals.Free;
+  end;
 end;
 
 procedure TestTIdSipLocations.TestRemoveDuplicateLocationsOnlyRemovesOne;

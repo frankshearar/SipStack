@@ -4244,9 +4244,7 @@ begin
   // sending to try the next location, we must ensure that we don't retry
   // sending the message to an already-attempted location.
 
-  // Don't try to contact any already-attempted locations!
-  while (not Targets.IsEmpty) and Self.AttemptedLocations.Contains(Targets.First) do
-    Targets.RemoveFirst;
+  Targets.RemoveAll(Self.AttemptedLocations);
 
   // It's possible that we've already tried ALL locations originally listed in
   // Targets. If so, there's nothing more to be done!
