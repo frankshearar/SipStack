@@ -498,7 +498,7 @@ begin
         'Something went wrong creating the TTransportTestTimerQueue');
 
   Self.HighPortLocation := Self.CopyFirstLocation(Self.HighPortTransport);
-  Self.LowPortLocation  :=  Self.CopyFirstLocation(Self.LowPortTransport);
+  Self.LowPortLocation  := Self.CopyFirstLocation(Self.LowPortTransport);
 
   Self.Request.LastHop.SentBy    := Self.LowPortLocation.IPAddress;
   Self.Request.LastHop.Transport := Self.LowPortLocation.Transport;
