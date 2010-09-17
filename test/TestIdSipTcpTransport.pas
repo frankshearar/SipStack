@@ -15,7 +15,7 @@ uses
   IdConnectionBindings, IdInterfacedObject, IdRegisteredObject, IdSipLocation,
   IdSipMessage,
   IdSipMockTransport, IdSipTcpTransport, IdSipTransport, IdTimerQueue,
-  IdTCPClient, IdTCPConnection, IdTCPServer, SyncObjs, SysUtils, TestFramework,
+  IdTCPClient, IdTCPConnection, IdTCPServer, SyncObjs, SysUtils, TestFramework, ScktComp,
   TestFrameworkSip, TestFrameworkSipTransport, WinSock; // TODO REMOVE WINSOCK
 
 type
@@ -59,24 +59,15 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
-{
-    procedure TestAddConnection;
     procedure TestConserveConnectionsOutbound;
-}
     procedure TestGetTransportType;
     procedure TestIsReliable;
     procedure TestIsSecure;
-{
     procedure TestNormalReadTimeoutDoesntNotify;
-    procedure TestNotifyOfConnectionInbound;
-    procedure TestNotifyOfConnectionOutbound;
-    procedure TestNotifyOfDisconnection;
     procedure TestSendRequestOverExistingConnection;
     procedure TestSendResponsesClosedConnection;
     procedure TestSendResponsesClosedConnectionReceivedParam;
     procedure TestSendResponsesOpenConnection;
-    procedure TestTransportExceptionSchedulesWait;
-}
   end;
 
   TIdSipRequestEvent = procedure(Sender: TObject;
@@ -255,38 +246,6 @@ type
     procedure TestRemoveWithMultipleRequests;
   end;
 
-  TIdSipConnectionTestListener = class(TIdInterfacedObject,
-                                       IIdSipTcpConnectionListener)
-  private
-    fAcceptFired:     Boolean;
-    fConnectFired:    Boolean;
-    fConnectionParam: TIdSipConnection;
-    fDisconnectFired: Boolean;
-    fOOBFired:        Boolean;
-    fReadFired:       Boolean;
-    fSentMsgFired:    Boolean;
-    fWriteFired:      Boolean;
-
-    procedure OnAccept(Connection: TIdSipConnection);
-    procedure OnConnect(Connection: TIdSipConnection);
-    procedure OnDisconnect(Connection: TIdSipConnection);
-    procedure OnOOB(Connection: TIdSipConnection);
-    procedure OnRead(Connection: TIdSipConnection);
-    procedure OnSentMsg(Msg: TIdSipMessage; Connection: TIdSipConnection);
-    procedure OnWrite(Connection: TIdSipConnection);
-  public
-    constructor Create; override;
-
-    property AcceptedFired:     Boolean          read fAcceptFired;
-    property ConnectedFired:    Boolean          read fConnectFired;
-    property ConnectionParam:   TIdSipConnection read fConnectionParam;
-    property DisconnectedFired: Boolean          read fDisconnectFired;
-    property OOBFired:          Boolean          read fOOBFired;
-    property ReadFired:         Boolean          read fReadFired;
-    property SentMsgFired:      Boolean          read fSentMsgFired;
-    property WriteFired:        Boolean          read fWriteFired;
-  end;
-
   TIdSipConnectionTestCase = class(TTestCase)
   protected
     procedure WaitForConnect(C: TIdSipClientConnection);
@@ -314,6 +273,8 @@ type
     procedure TearDown; override;
   published
     procedure TestConnect;
+    procedure TestConnectFail;
+    procedure TestConnectTimeout;
     procedure TestConnectNotifiesListeners;
     procedure TestReceive; override;
     procedure TestSend;
@@ -391,6 +352,9 @@ implementation
 uses
   Classes, IdException, IdGlobal, IdIndyUtils, IdNetworking, IdSimpleParser,
   IdSocketHandle, IdStack, IdThreadableTcpClient, TestMessages;
+
+const
+  FiveSeconds = 5000;
 
 function Suite: ITestSuite;
 begin
@@ -613,46 +577,6 @@ begin
 end;
 
 //* TestTIdSipTCPTransport Published methods ***********************************
-{
-procedure TestTIdSipTCPTransport.TestAddConnection;
-var
-  L:        TConnectionListener;
-  TcpTrans: TIdSipTcpTransport;
-begin
-  Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
-  TcpTrans := Self.HighPortTransport as TIdSipTcpTransport;
-
-  L := TConnectionListener.Create;
-  try
-    Self.HighPortTransport.AddConnectionListener(L);
-
-    Self.SipClient.Host := Self.HighPortLocation.IPAddress;
-    Self.SipClient.Port := Self.HighPortLocation.Port;
-
-    Self.SipClient.Connect(DefaultTimeout);
-    try
-      TcpTrans.AddConnection(Self.SipClient, Self.RecvdRequest);
-
-      Check(L.ConnectionOpened, 'Listeners not notified');
-      Check(TcpTrans = L.TransportParam, 'Transport param');
-
-      // We reverse the meaning of peer and local in the below because when
-      // TcpTrans adds its INBOUND connection, this OUTBOUND connection's
-      // meanings will be transposed. That is, SipClient's local ip/port is
-      // the TcpTrans.AddConnection's peer ip/port.
-      CheckEquals(Self.HighPortLocation.Transport,    L.ConnectionParam.Transport, 'Connection param; transport');
-      CheckEquals(Self.SipClient.Socket.Binding.IP,   L.ConnectionParam.LocalIP,    'Connection param; peer IP');
-      CheckEquals(Self.SipClient.Socket.Binding.Port, L.ConnectionParam.LocalPort,  'Connection param; peer port');
-      CheckEquals(Self.HighPortLocation.IPAddress,    L.ConnectionParam.PeerIP,   'Connection param; local IP');
-      CheckEquals(Self.HighPortLocation.Port,         L.ConnectionParam.PeerPort, 'Connection param; local port');
-    finally
-      Self.SipClient.Disconnect;
-    end;
-  finally
-    Self.HighPortTransport.RemoveConnectionListener(L);
-    L.Free;
-  end;
-end;
 
 procedure TestTIdSipTCPTransport.TestConserveConnectionsOutbound;
   function ShortAsString(B: TIdConnectionBindings): String;
@@ -690,97 +614,7 @@ begin
     FirstBinding.Free;
   end;
 end;
-}
-{
-procedure TestTIdSipTCPTransport.TestDiscardMalformedMessage;
-var
-  Client:            TIdTcpClient;
-  Listener:          TIdSipTestTransportListener;
-  MangledSipVersion: String;
-begin
-  // We receive a malformed request.
-  // We want to:
-  // * make sure it doesn't pass up the stack
-  // * notify that we received a malformed message
-  // * return a 400 Bad Request.
-  //
-  // This test is functionally equivalent to its superclass implementation, but
-  // we require the sending connection to remain open for the test to work: if
-  // a UAC sends us a malformed request and disconnects, there's no point in
-  // making a return connection just to say "400 Bad Request".
 
-  Client := TIdTcpClient.Create(nil);
-  try
-    Self.SipClient.Host := Self.HighPortLocation.IPAddress;
-    Self.SipClient.Port := Self.HighPortLocation.Port;
-    Self.SipClient.Connect(OneSecond);
-    Listener := TIdSipTestTransportListener.Create;
-    try
-      Self.HighPortTransport.AddTransportListener(Listener);
-      MangledSipVersion := 'SIP/;2.0';
-      Self.SipClient.Write('INVITE sip:wintermute@tessier-ashpool.co.luna ' + MangledSipVersion + #13#10
-                 + 'Via: SIP/2.0/' + Self.HighPortTransport.GetTransportType + ' proxy.tessier-ashpool.co.luna;branch=z9hG4bK776asdhds'#13#10
-                 + 'Max-Forwards: 70'#13#10
-                 + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
-                 + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
-                 + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
-                 + 'CSeq: 314159 INVITE'#13#10
-                 + 'Contact: <sip:wintermute@tessier-ashpool.co.luna>'#13#10
-                 + 'Content-Type: text/plain'#13#10
-                 + 'Content-Length: 29'#13#10
-                 + #13#10
-                 + 'I am a message. Hear me roar!');
-
-      // We wait for the SendEvent event, because we always notify of a rejected
-      // message before we send the response. Thus, the test could fail because
-      // we didn't have enough time to register the sending of the 400 Bad
-      // Request.
-      Self.WaitForSignaled(Self.RejectedMessageEvent, 'Waiting for rejection notice');
-
-      // Check that we actually received the message.
-      Check(Self.RejectedMessage,
-            Self.HighPortTransport.ClassName
-          + ': Notification of message rejection not received');
-
-      CheckEquals(Self.HighPortLocation.IPAddress,
-                  Self.ReceivingBinding.LocalIP,
-                  Self.HighPortTransport.ClassName
-                + ': Receiving binding IP address not correctly recorded');
-      CheckEquals(Self.HighPortLocation.Port,
-                  Self.ReceivingBinding.LocalPort,
-                  Self.HighPortTransport.ClassName
-                + ': Receiving binding port not correctly recorded');
-      CheckEquals(Self.HighPortLocation.Transport,
-                  Self.ReceivingBinding.Transport,
-                  Self.HighPortTransport.ClassName
-                + ': Receiving binding transport not correctly recorded');
-
-      // Check that the transport didn't send the malformed request up the stack
-      Check(not Listener.ReceivedRequest,
-            Self.HighPortTransport.ClassName
-          + ': Transport passed malformed request up the stack');
-
-       Self.WaitForSignaled(Self.SendEvent, 'Waiting to send message');
-
-      // Did we send a 400 Bad Request?
-      CheckNotEquals(0,
-                     Self.LastSentResponse.StatusCode,
-                     'We didn''t send the "Bad Request" response');
-
-      // Check that the transport sends the 400 Bad Request.
-      CheckEquals(SIPBadRequest,
-                  Self.LastSentResponse.StatusCode,
-                  Self.HighPortTransport.ClassName
-                + ': "Bad Request" response');
-    finally
-      Self.HighPortTransport.RemoveTransportListener(Listener);
-      Listener.Free;
-    end;
-  finally
-    Client.Free;
-  end;
-end;
-}
 procedure TestTIdSipTCPTransport.TestGetTransportType;
 begin
   CheckEquals(TcpTransport,
@@ -798,7 +632,7 @@ procedure TestTIdSipTCPTransport.TestIsSecure;
 begin
   Check(not Self.HighPortTransport.IsSecure, 'TCP transport marked as secure');
 end;
-{
+
 procedure TestTIdSipTCPTransport.TestNormalReadTimeoutDoesntNotify;
 var
   L: TIdSipTestTransportListener;
@@ -816,98 +650,12 @@ begin
 
     // Time out waiting for a message to arrive.
     Sleep(2*Self.DefaultTimeout);
+    Self.WaitForTimeout(Self.RejectedMessageEvent, 'Transport "rejected" a message that actually never arrived');
 
     // Show that there's no spurious "rejection" of a malformed message.
-    Check(not L.RejectedMessage, 'Transport "rejected" a message that actually never arrived');
+//    Check(not L.RejectedMessage, 'Transport "rejected" a message that actually never arrived');
   finally
     Self.LowPortTransport.RemoveTransportListener(L);
-    L.Free;
-  end;
-end;
-
-procedure TestTIdSipTCPTransport.TestNotifyOfConnectionInbound;
-var
-  L: TConnectionListener;
-begin
-  Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
-
-  L := TConnectionListener.Create;
-  try
-    Self.HighPortTransport.AddConnectionListener(L);
-    Self.LowPortTransport.Send(Self.Request, Self.HighPortLocation);
-    Self.WaitForSignaled;
-
-    Check(L.ConnectionOpened, 'Listeners not notified');
-    Check(Self.HighPortTransport = L.TransportParam, 'Transport param');
-
-    CheckEquals(Self.LowPortLocation.Transport,  L.ConnectionParam.Transport, 'Connection param; transport');
-    CheckEquals(Self.HighPortLocation.IPAddress, L.ConnectionParam.LocalIP,   'Connection param; local IP');
-    CheckEquals(Self.HighPortLocation.Port,      L.ConnectionParam.LocalPort, 'Connection param; local port');
-    CheckEquals(Self.LowPortLocation.IPAddress,  L.ConnectionParam.PeerIP,    'Connection param; peer IP');
-    CheckNotEquals(0,                            L.ConnectionParam.PeerPort,  'Connection param; peer port');    
-  finally
-    Self.HighPortTransport.RemoveConnectionListener(L);
-    L.Free;
-  end;
-end;
-
-procedure TestTIdSipTCPTransport.TestNotifyOfConnectionOutbound;
-var
-  L: TConnectionListener;
-begin
-  L := TConnectionListener.Create;
-  try
-    Self.HighPortTransport.AddConnectionListener(L);
-    Self.HighPortTransport.Send(Self.Request, Self.LowPortLocation);
-
-    Check(L.ConnectionOpened, 'Listeners not notified');
-    Check(Self.HighPortTransport = L.TransportParam, 'Transport param');
-
-    CheckEquals(Self.LowPortLocation.Transport,  L.ConnectionParam.Transport, 'Connection param; transport');
-    CheckEquals(Self.LowPortLocation.IPAddress,  L.ConnectionParam.PeerIP,    'Connection param; peer IP');
-    CheckEquals(Self.LowPortLocation.Port,       L.ConnectionParam.PeerPort,  'Connection param; peer port');
-    CheckEquals(Self.HighPortLocation.IPAddress, L.ConnectionParam.LocalIP,   'Connection param; local IP');
-    CheckNotEquals(0,                            L.ConnectionParam.LocalPort, 'Connection param; local port');
-  finally
-    Self.HighPortTransport.RemoveConnectionListener(L);
-    L.Free;
-  end;
-end;
-
-procedure TestTIdSipTCPTransport.TestNotifyOfDisconnection;
-var
-  L:         TEventConnectionListener;
-  LocalIP:   String;
-  LocalPort: Integer;
-begin
-  Self.SipClient.Host := Self.HighPortLocation.IPAddress;
-  Self.SipClient.Port := Self.HighPortLocation.Port;
-
-  L := TEventConnectionListener.Create;
-  try
-    Self.HighPortTransport.AddConnectionListener(L);
-
-    Self.SipClient.Connect(DefaultTimeout);
-    try
-      LocalIP   := Self.SipClient.Socket.Binding.IP;
-      LocalPort := Self.SipClient.Socket.Binding.Port;
-      Self.SipClient.Write(Self.Request.AsString);
-    finally
-      Self.SipClient.Disconnect;
-    end;
-
-    Self.WaitForSignaled(L.DisconnectionEvent, OneSecond, 'No disconnection event triggered');
-
-    Check(L.ConnectionClosed, 'Listeners not notified');
-    Check(Self.HighPortTransport = L.TransportParam, 'Transport param');
-
-    CheckEquals(Self.LowPortLocation.Transport,  L.ConnectionParam.Transport, 'Connection param; transport');
-    CheckEquals(LocalIP,                         L.ConnectionParam.PeerIP,    'Connection param; peer IP');
-    CheckEquals(LocalPort,                       L.ConnectionParam.PeerPort,  'Connection param; peer port');
-    CheckEquals(Self.HighPortLocation.IPAddress, L.ConnectionParam.LocalIP,   'Connection param; local IP');
-    CheckEquals(Self.HighPortLocation.Port,      L.ConnectionParam.LocalPort, 'Connection param; local port');
-  finally
-    Self.HighPortTransport.RemoveConnectionListener(L);
     L.Free;
   end;
 end;
@@ -1092,46 +840,6 @@ begin
     Request.Free;
   end;
 end;
-
-procedure TestTIdSipTCPTransport.TestTransportExceptionSchedulesWait;
-var
-  ExceptionWait: TIdSipMessageExceptionWait;
-  NoServer:      TIdSipLocation;
-  DebugTimer:    TIdDebugTimerQueue;
-  OldTimer:      TIdTimerQueue;
-begin
-  // This test demonstrates that should a transport-level exception occur in
-  // the sending of a message (there's no target server, in this case), that the
-  // notification of failure is scheduled as a Wait object, and not just
-  // propogated up the stack.
-
-  NoServer := TIdSipLocation.Create(Self.HighPortLocation.Transport,
-                                    Self.HighPortLocation.IPAddress,
-                                    Self.HighPortLocation.Port + 1);
-  try
-    CheckServerNotOnPort(NoServer.IPAddress, NoServer.Port, 'This test cannot work with something running on ' + NoServer.AsString);
-
-    DebugTimer := TIdDebugTimerQueue.Create(false);
-    try
-      OldTimer := Self.LowPortTransport.Timer;
-      Self.LowPortTransport.Timer := DebugTimer;
-      try
-        Self.LowPortTransport.Send(Self.Request, NoServer);
-
-        ExceptionWait := DebugTimer.LastEventScheduled(TIdSipMessageExceptionWait) as TIdSipMessageExceptionWait;
-        Check(ExceptionWait <> nil, 'No Wait scheduled');
-        Check(Self.Request.Equals(ExceptionWait.FailedMessage), 'Wait has incorrect message');
-      finally
-        Self.LowPortTransport.Timer := OldTimer;
-      end;
-    finally
-      DebugTimer.Free;
-    end;
-  finally
-    NoServer.Free;
-  end;
-end;
-}
 {
 //******************************************************************************
 //* TestTIdSipTcpServer                                                        *
@@ -1971,7 +1679,7 @@ begin
   Self.Server.Active := true;
 
   Self.Connection := TIdSipClientConnection.Create;
-  Self.Connection.Connect(Binding.IP, Binding.Port);
+  Self.Connection.Connect(Binding.IP, Binding.Port, FiveSeconds);
 end;
 
 procedure TestTIdSipConnectionTableEntry.TearDown;
@@ -2170,67 +1878,6 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipConnectionTestListener                                               *
-//******************************************************************************
-//* TIdSipConnectionTestListener Private methods *******************************
-
-constructor TIdSipConnectionTestListener.Create;
-begin
-  inherited Create;
-
-  Self.fAcceptFired     := false;
-  Self.fConnectFired    := false;
-  Self.fConnectionParam := nil;
-  Self.fDisconnectFired := false;
-  Self.fOOBFired        := false;
-  Self.fReadFired       := false;
-  Self.fWriteFired      := false;
-end;
-
-procedure TIdSipConnectionTestListener.OnAccept(Connection: TIdSipConnection);
-begin
-  Self.fAcceptFired     := true;
-  Self.fConnectionParam := Connection;
-end;
-
-procedure TIdSipConnectionTestListener.OnConnect(Connection: TIdSipConnection);
-begin
-  Self.fConnectFired    := true;
-  Self.fConnectionParam := Connection;
-end;
-
-procedure TIdSipConnectionTestListener.OnDisconnect(Connection: TIdSipConnection);
-begin
-  Self.fDisconnectFired := true;
-  Self.fConnectionParam := Connection;
-end;
-
-procedure TIdSipConnectionTestListener.OnOOB(Connection: TIdSipConnection);
-begin
-  Self.fOOBFired        := true;
-  Self.fConnectionParam := Connection;
-end;
-
-procedure TIdSipConnectionTestListener.OnRead(Connection: TIdSipConnection);
-begin
-  Self.fReadFired       := true;
-  Self.fConnectionParam := Connection;
-end;
-
-procedure TIdSipConnectionTestListener.OnSentMsg(Msg: TIdSipMessage; Connection: TIdSipConnection);
-begin
-  Self.fSentMsgFired    := true;
-  Self.fConnectionParam := Connection;
-end;
-
-procedure TIdSipConnectionTestListener.OnWrite(Connection: TIdSipConnection);
-begin
-  Self.fWriteFired      := true;
-  Self.fConnectionParam := Connection;
-end;
-
-
-//******************************************************************************
 //* TIdSipConnectionTestCase                                                   *
 //******************************************************************************
 //* TIdSipConnectionTestCase Protected methods *********************************
@@ -2316,7 +1963,7 @@ end;
 
 procedure TestTIdSipClientConnection.TestConnect;
 begin
-  Self.C.Connect(Self.TestIP, Self.TestPort);
+  Self.C.Connect(Self.TestIP, Self.TestPort, FiveSeconds);
 
   Check(wrSignaled = Self.ConnectEvent.WaitFor(OneSecond), 'Timeout waiting for connect');
 
@@ -2330,6 +1977,37 @@ begin
   CheckEquals(Self.S.Bindings[0].Port, Self.C.Binding.PeerPort, 'PeerPort not set');
 end;
 
+procedure TestTIdSipClientConnection.TestConnectFail;
+var
+  FreePort: Integer;
+begin
+  FreePort := Self.TestPort + 1;
+
+  Self.Check(IsPortFree(TcpTransport, Self.TestIP, FreePort), Format('Test requires %s:%d/tcp', [Self.TestIP, FreePort]));
+  Self.C.Connect(Self.TestIP, FreePort, FiveSeconds);
+
+  Self.C.ProcessMessages;
+
+  Check(not Self.C.Connected, 'Connection claims to be connected');
+end;
+
+procedure TestTIdSipClientConnection.TestConnectTimeout;
+const
+  Timeout = 500;
+var
+  FreePort:      Integer;
+  OldEventCount: Integer;
+begin
+  FreePort := Self.TestPort + 1;
+
+  OldEventCount := Self.TQ.EventCount;
+
+  Self.C.Connect(Self.TestIP, FreePort, Timeout);
+
+  Check(Self.TQ.EventCount > OldEventCount, 'No Wait scheduled');
+  Check(Assigned(Self.TQ.LastEventScheduled(TIdSipTcpConnectionCancelWait)), 'No Cancel Connect Wait scheduled');
+end;
+
 procedure TestTIdSipClientConnection.TestConnectNotifiesListeners;
 var
   OldEventCount: Integer;
@@ -2337,7 +2015,7 @@ var
 begin
   OldEventCount := Self.TQ.EventCount;
 
-  Self.C.Connect(Self.TestIP, Self.TestPort);
+  Self.C.Connect(Self.TestIP, Self.TestPort, FiveSeconds);
 
   Check(wrSignaled = Self.ConnectEvent.WaitFor(OneSecond), 'Timeout waiting for connect');
 
@@ -2349,7 +2027,7 @@ begin
 
   W := Self.TQ.LastEventScheduled(TIdSipTcpServerConnectWait) as TIdSipTcpServerConnectWait;
   CheckEquals(Self.TQ.ID, W.ServerID, 'Wrong ServerID');
-  CheckEquals(Self.C.Binding.AsString, W.Connection.AsString, 'Wrong Connection');
+  CheckEquals(Self.C.Handle, W.Handle, 'Wrong Handle');
 end;
 
 procedure TestTIdSipClientConnection.TestReceive;
@@ -2359,7 +2037,7 @@ var
 begin
   Self.S.OnExecute := Self.SendMessage;
 
-  Self.C.Connect(Self.TestIP, Self.TestPort);
+  Self.C.Connect(Self.TestIP, Self.TestPort, FiveSeconds);
   Check(wrSignaled = Self.ConnectEvent.WaitFor(OneSecond), 'Timeout waiting for connect');
 
   Self.C.ProcessMessages;
@@ -2378,7 +2056,7 @@ var
 begin
   Self.S.OnExecute := Self.ReadMessage;
 
-  Self.C.Connect(Self.TestIP, Self.TestPort);
+  Self.C.Connect(Self.TestIP, Self.TestPort, FiveSeconds);
   M := TIdSipMessage.ReadMessageFrom(BasicRequest);
   try
     Self.C.Queue(M);
@@ -2438,7 +2116,7 @@ begin
   Self.S.Bind(Self.TestIP, Self.TestPort);
   Self.S.Listen(5);
 
-  Self.C.Connect(Self.TestIP, Self.TestPort);
+  Self.C.Connect(Self.TestIP, Self.TestPort, FiveSeconds);
   Self.WaitForConnect(Self.C);
 
   Connection := Self.S.Accept;
@@ -2473,9 +2151,8 @@ begin
   Self.S.Bind(Self.TestIP, Self.TestPort);
   Self.S.Listen(5);
 
-  Self.C.Connect(Self.TestIP, Self.TestPort);
+  Self.C.Connect(Self.TestIP, Self.TestPort, FiveSeconds);
   Self.WaitForConnect(Self.C);
-
 
   Self.Connection := Self.S.Accept;
   Check(Assigned(Connection), 'Accept returned nil');
@@ -2597,7 +2274,7 @@ var
 begin
   Wait := TIdSipTcpServerSendMessageWait.Create;
   Wait.Msg := Self.Request;
-  Wait.Server := Self.Server;
+  Wait.ServerID := Self.Server.ID;
   Wait.Destination := Self.RemoteLocation;
   Self.Server.AddEvent(TriggerImmediately, Wait);
 
