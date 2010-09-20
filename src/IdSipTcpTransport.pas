@@ -144,6 +144,7 @@ type
     SendQueue:      TObjectList;
 
     procedure Capture(Dest: TStringStream; Delimiter: String);
+    function  CheckConnected: Boolean;
     procedure CMSocketMessage(var Message: TCMSocketMessage); message CM_SOCKETMESSAGE;
     function  FirstN(ByteCount: Integer): String;
     function  GetNextMessage: TIdSipMessage;
@@ -172,7 +173,7 @@ type
     procedure SetTransport(Value: String);
     procedure WndProc(var Message: TMessage);
   protected
-    fHandle:    TSocket;
+    fHandle: TSocket;
 
     procedure BeforeConnect; virtual;
     function  GetAdvertisedPort: Cardinal; virtual; // TODO: TPortNum
@@ -335,10 +336,7 @@ type
     procedure RunWait(S: TIdSipTcpServer); override;
   end;
 
-  TIdSipTcpServerConnectionWait = class(TIdSipTcpServerWait)
-  end;
-
-  TIdSipTcpServerConnectionSentMsgWait = class(TIdSipTcpServerConnectionWait)
+  TIdSipTcpServerConnectionSentMsgWait = class(TIdSipTcpServerWait)
   private
     fMsg: TIdSipMessage;
 
@@ -352,7 +350,7 @@ type
     property Msg: TIdSipMessage read fMsg write SetMsg;
   end;
 
-  TIdSipTcpServerConnectWait = class(TIdSipTcpServerConnectionWait)
+  TIdSipTcpServerConnectWait = class(TIdSipTcpServerWait)
   private
     fErrorCode: Integer;
   protected
@@ -361,22 +359,22 @@ type
     property ErrorCode: Integer read fErrorCode write fErrorCode;
   end;
 
-  TIdSipTcpServerDisconnectWait = class(TIdSipTcpServerConnectionWait)
+  TIdSipTcpServerDisconnectWait = class(TIdSipTcpServerWait)
   protected
     procedure RunWait(S: TIdSipTcpServer); override;
   end;
 
-  TIdSipTcpServerOOBWait = class(TIdSipTcpServerConnectionWait)
+  TIdSipTcpServerOOBWait = class(TIdSipTcpServerWait)
   protected
     procedure RunWait(S: TIdSipTcpServer); override;
   end;
 
-  TIdSipTcpServerReadWait = class(TIdSipTcpServerConnectionWait)
+  TIdSipTcpServerReadWait = class(TIdSipTcpServerWait)
   protected
     procedure RunWait(S: TIdSipTcpServer); override;
   end;
 
-  TIdSipTcpServerWriteWait = class(TIdSipTcpServerConnectionWait)
+  TIdSipTcpServerWriteWait = class(TIdSipTcpServerWait)
   protected
     procedure RunWait(S: TIdSipTcpServer); override;
   end;
@@ -1175,26 +1173,14 @@ begin
   // Return true iff we have nothing at all to send.
   // Notify when we finish sending a completed message.
 
-  if (not Self.Connected) then begin
-    // Maybe someone's trying to send data straight after connecting. If so, the
-    // FD_CONNECT may not yet have been processed.
-    Self.ProcessMessages;
+  Result := false;
 
-    if (not Self.Connected) then begin
-      // No FD_CONNECT. This socket's not connected.
-      //
-      // We return FALSE because there might be data buffered, but we're not yet
-      // in a position to send the data.
-      Result := false;
-      Exit;
-    end;
-  end;
+  if (not Self.CheckConnected) then Exit;
 
   // Our "owner" has signaled that it needs to configure some of our properties
   // after we've connected. We have connected, but they haven't finished
   // configuring us.
   if (not Self.Configured) then begin
-    Result := false;
     Exit;
   end;
 
@@ -1380,6 +1366,25 @@ begin
     S := Self.ReadLn;
     Dest.WriteString(S);
   until (S = Delimiter + CrLf);
+end;
+
+function TIdSipConnection.CheckConnected: Boolean;
+begin
+  Result := true;
+
+  if (not Self.Connected) then begin
+    // Maybe someone's trying to send data straight after connecting. If so, the
+    // FD_CONNECT may not yet have been processed.
+    Self.ProcessMessages;
+
+    if (not Self.Connected) then begin
+      // No FD_CONNECT. This socket's not connected.
+      //
+      // We return FALSE because there might be data buffered, but we're not yet
+      // in a position to send the data.
+      Result := false;
+    end;
+  end;
 end;
 
 procedure TIdSipConnection.CMSocketMessage(var Message: TCMSocketMessage);
