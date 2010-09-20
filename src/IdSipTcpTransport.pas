@@ -140,14 +140,10 @@ type
     fServerID:      TRegisteredObjectID;
     InternalBuffer: String;
     MessageQueue:   THandle;
-    SendBuffer:     String;
-    SendQueue:      TObjectList;
 
     procedure Capture(Dest: TStringStream; Delimiter: String);
-    function  CheckConnected: Boolean;
     procedure CMSocketMessage(var Message: TCMSocketMessage); message CM_SOCKETMESSAGE;
     function  FirstN(ByteCount: Integer): String;
-    function  GetNextMessage: TIdSipMessage;
     function  GetTransport: String;
     function  InternalBufferLength: Integer;
     procedure OnConnect(ErrorCode: Integer);
@@ -167,7 +163,6 @@ type
     function  ReadLn: String;
     procedure ReadStream(Dest: TStringStream; ByteCount: Integer);
     function  Recv: String;
-    function  SendBufferLength: Integer;
     procedure Select;
     procedure SetCurrentMsg(Msg: TIdSipMessage);
     procedure SetTransport(Value: String);
@@ -188,9 +183,7 @@ type
     procedure Close; virtual;
     function  Connected: Boolean;
     function  IsOutbound: Boolean; virtual;
-    function  PartialSend: Boolean; virtual;
     procedure ProcessMessages;
-    procedure Queue(Msg: TIdSipMessage); virtual;
     function  Receive(var AbnormalTermination: Boolean): TIdSipMessage;
 
     property AdvertisedPort: Cardinal              read GetAdvertisedPort;
@@ -205,12 +198,25 @@ type
   end;
 
   TIdSipSendingConnection = class(TIdSipConnection)
+  private
+    SendBuffer:     String;
+    SendQueue:      TObjectList;
+
+    function  CheckConnected: Boolean;
+    function  GetNextMessage: TIdSipMessage;
+    function  SendBufferLength: Integer;
+  public
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    function  PartialSend: Boolean; virtual;
+    procedure Queue(Msg: TIdSipMessage);
   end;
 
   TIdSipConnectionClass = class of TIdSipConnection;
 
   // I am a socket that connects to another machine.
-  TIdSipClientConnection = class(TIdSipConnection)
+  TIdSipClientConnection = class(TIdSipSendingConnection)
   private
     fAdvertisedPort: Cardinal; // TODO: TPortNum
 
@@ -226,7 +232,7 @@ type
   end;
 
   // I am a socket on the server side of a connection.
-  TIdSipServerConnection = class(TIdSipConnection)
+  TIdSipServerConnection = class(TIdSipSendingConnection)
   public
     constructor Create(Handle: TSocket; Binding: TIdConnectionBindings); overload;
   end;
@@ -236,17 +242,16 @@ type
   TIdSipListeningConnection = class(TIdSipConnection)
   private
     ServerLocation: TIdSipLocation;
+
+    procedure Bind(Location: TIdSipLocation);
   protected
     procedure OnAccept(ErrorCode: Integer); override;
   public
     destructor Destroy; override;
 
     function  Accept: TIdSipServerConnection;
-    procedure Bind(IP: String; Port: Cardinal); overload;
-    procedure Bind(Location: TIdSipLocation); overload;
-    procedure Listen(QueueLength: Cardinal);
-    function  PartialSend: Boolean; override;
-    procedure Queue(Msg: TIdSipMessage); override;
+    procedure Listen(IP: String; Port: Cardinal; QueueLength: Cardinal); overload;
+    procedure Listen(Location: TIdSipLocation; QueueLength: Cardinal); overload;
   end;
 
   // I relate a request with a TCP connection. I store a COPY of a request
@@ -255,15 +260,15 @@ type
   // these requests.
   TIdSipConnectionTableEntry = class(TObject)
   private
-    fConnection: TIdSipConnection;
+    fConnection: TIdSipSendingConnection;
     fRequest:    TIdSipRequest;
   public
-    constructor Create(Connection: TIdSipConnection;
+    constructor Create(Connection: TIdSipSendingConnection;
                        Request: TIdSipRequest); overload;
     destructor  Destroy; override;
 
-    property Connection: TIdSipConnection read fConnection;
-    property Request:    TIdSipRequest    read fRequest;
+    property Connection: TIdSipSendingConnection read fConnection;
+    property Request:    TIdSipRequest           read fRequest;
   end;
 
   // I represent a table containing ordered pairs of (TCP connection, Request).
@@ -282,15 +287,15 @@ type
     constructor Create;
     destructor  Destroy; override;
 
-    function  Add(Connection: TIdSipConnection;
+    function  Add(Connection: TIdSipSendingConnection;
                   Request:  TIdSipRequest): TIdSipConnectionTableEntry;
-    function  AnyConnectionTo(Destination: TIdSipLocation): TIdSipConnection;
-    function  ConnectionEntry(Connection: TIdSipConnection): TIdSipConnectionTableEntry;
-    function  ConnectionFor(Msg: TIdSipMessage): TIdSipConnection; overload;
-    function  ConnectionFor(S: TSocket): TIdSipConnection; overload;
-    function  ConnectionFor(Destination: TIdConnectionBindings): TIdSipConnection; overload;
+    function  AnyConnectionTo(Destination: TIdSipLocation): TIdSipSendingConnection;
+    function  ConnectionEntry(Connection: TIdSipSendingConnection): TIdSipConnectionTableEntry;
+    function  ConnectionFor(Msg: TIdSipMessage): TIdSipSendingConnection; overload;
+    function  ConnectionFor(S: TSocket): TIdSipSendingConnection; overload;
+    function  ConnectionFor(Destination: TIdConnectionBindings): TIdSipSendingConnection; overload;
     function  Count: Integer;
-    procedure Remove(Connection: TIdSipConnection);
+    procedure Remove(Connection: TIdSipSendingConnection);
 
     property Connection[Index: Integer]: TIdSipConnectionTableEntry read EntryAt; default;
   end;
@@ -436,8 +441,7 @@ type
     function  AddSocket(L: TObjectList; SocketType: TIdSipConnectionClass): TIdSipConnection;
     function  BindingCount: Integer;
     procedure CancelConnect(Handle: TIdConnectionHandle);
-    function  ClientFor(Handle: TIdConnectionHandle): TIdSipConnection; overload;
-    function  ClientFor(SocketDescription: TIdConnectionBindings): TIdSipConnection; overload;
+    function  ClientFor(Handle: TIdConnectionHandle): TIdSipSendingConnection; overload;
     procedure Connect(Handle: TIdConnectionHandle; ErrorCode: Integer);
     procedure Disconnect(Handle: TIdConnectionHandle; ErrorCode: Integer);
     function  FirstServerPortFor(IPAddress: String): Cardinal;
@@ -450,10 +454,10 @@ type
                                   Connection: TIdConnectionBindings);
     procedure OOB(Handle: TIdConnectionHandle; ErrorCode: Integer);
     procedure Read(Handle: TIdConnectionHandle; ErrorCode: Integer);
-    procedure RecordConnection(Socket: TIdSipConnection;
+    procedure RecordConnection(Socket: TIdSipSendingConnection;
                                Msg: TIdSipMessage;
                                Dest: TIdSipLocation); overload;
-    procedure RecordConnection(Socket: TIdSipConnection;
+    procedure RecordConnection(Socket: TIdSipSendingConnection;
                                Msg: TIdSipMessage); overload;
     procedure ProcessSocketEvents;
     procedure ScheduleProcessingSocketEvents;
@@ -1127,7 +1131,6 @@ begin
   Self.fCurrentMsg  := nil;
   Self.fHandle      := INVALID_SOCKET;
   Self.MessageQueue := CreateWindowHandle(Self.WndProc);
-  Self.SendQueue    := TObjectList.Create(true);
 
   // A sensible default value. Another value might be TlsTransport.
   Self.ReadTimeout := 500; // milliseconds
@@ -1140,7 +1143,6 @@ begin
 
   FreeAndNil(Self.fCurrentMsg);
 
-  Self.SendQueue.Free;
   DestroyWindowHandle(Self.MessageQueue);
   Self.fBinding.Free;
 
@@ -1165,56 +1167,6 @@ begin
   Result := false;
 end;
 
-function TIdSipConnection.PartialSend: Boolean;
-var
-  BytesWritten: Integer;
-  CompletedMsg: Boolean;
-begin
-  // Return true iff we have nothing at all to send.
-  // Notify when we finish sending a completed message.
-
-  Result := false;
-
-  if (not Self.CheckConnected) then Exit;
-
-  // Our "owner" has signaled that it needs to configure some of our properties
-  // after we've connected. We have connected, but they haven't finished
-  // configuring us.
-  if (not Self.Configured) then begin
-    Exit;
-  end;
-
-  // Nothing to do?
-  if (Self.SendBuffer = '') and not Assigned(Self.CurrentMsg) then begin
-    Result := true;
-    Exit;
-  end;
-
-  if not Assigned(Self.CurrentMsg) then begin
-    Self.SetCurrentMsg(Self.GetNextMessage);
-  end;
-
-  Self.RewriteLocationHeaders(Self.CurrentMsg);
-  Self.SendBuffer := Self.CurrentMsg.AsString;
-
-  Assert(Length(Self.SendBuffer) > 0, 'No data to send');
-  repeat
-    BytesWritten := WinSock.send(Self.Handle, Self.SendBuffer[1], Self.SendBufferLength, 0);
-    Delete(Self.SendBuffer, 1, BytesWritten)
-  until (BytesWritten = 0) or (BytesWritten = SOCKET_ERROR) or (Self.SendBuffer = '');
-
-  CompletedMsg := Self.SendBuffer = '';
-  Result := CompletedMsg and (Self.SendQueue.Count = 0);
-
-  if (BytesWritten = SOCKET_ERROR) then begin
-    Self.RaiseExceptionExceptWhen('send', [WSAENOTCONN, WSAENOBUFS]);
-  end;
-
-  if CompletedMsg then begin
-    Self.OnMessageSent(Self.CurrentMsg);
-  end;
-end;
-
 procedure TIdSipConnection.ProcessMessages;
 var
   Msg: TMsg;
@@ -1225,27 +1177,6 @@ begin
   // force the processing of these messages.
 
   while ProcessMessage(Msg) do {loop};
-end;
-
-procedure TIdSipConnection.Queue(Msg: TIdSipMessage);
-begin
-  // Queue up the message for sending, but nothing more. That way a caller can
-  // happily say
-  // Connect;
-  // Send(Msg1);
-  // Send(Msg2);
-  // Send(Msg3);
-  // and still adjust the connection as needed in the OnConnect notification
-  // such that this connection may still rewrite the location headers of Msg1,
-  // Msg2, Msg3 just before the messages are serialised to the socket.
-
-  Self.SendQueue.Add(Msg.Copy);
-
-  // If we still have to connect, we need the "current message" to be
-  // the message that has still yet to be sent.
-    Self.SetCurrentMsg(Self.GetNextMessage);
-
-  Self.PartialSend;
 end;
 
 function TIdSipConnection.Receive(var AbnormalTermination: Boolean): TIdSipMessage;
@@ -1368,25 +1299,6 @@ begin
   until (S = Delimiter + CrLf);
 end;
 
-function TIdSipConnection.CheckConnected: Boolean;
-begin
-  Result := true;
-
-  if (not Self.Connected) then begin
-    // Maybe someone's trying to send data straight after connecting. If so, the
-    // FD_CONNECT may not yet have been processed.
-    Self.ProcessMessages;
-
-    if (not Self.Connected) then begin
-      // No FD_CONNECT. This socket's not connected.
-      //
-      // We return FALSE because there might be data buffered, but we're not yet
-      // in a position to send the data.
-      Result := false;
-    end;
-  end;
-end;
-
 procedure TIdSipConnection.CMSocketMessage(var Message: TCMSocketMessage);
 var
   ErrorCode: Integer;
@@ -1413,12 +1325,6 @@ begin
   // Read and remove ByteCount bytes from the internal buffer.
   Result := Copy(Self.InternalBuffer, 1, ByteCount);
   Delete(Self.InternalBuffer, 1, ByteCount);
-end;
-
-function TIdSipConnection.GetNextMessage: TIdSipMessage;
-begin
-  Result := TIdSipMessage(Self.SendQueue[0]).Copy;
-  Self.SendQueue.Delete(0);
 end;
 
 function TIdSipConnection.GetTransport: String;
@@ -1649,6 +1555,12 @@ begin
 end;
 
 function TIdSipConnection.Recv: String;
+  function Store(Buf: array of Char; Count: Integer): String;
+  begin
+    Result := Copy(Buf, 1, Count);
+
+    Self.InternalBuffer := Self.InternalBuffer + Result;
+  end;
 const
   BufLen = 1024;
 var
@@ -1664,21 +1576,18 @@ begin
   if (BytesRead = SOCKET_ERROR) then begin
     ErrorCode := GetLastError(Self.Handle);
     case ErrorCode of
+      WSAEMSGSIZE: begin
+        // There's still unread data!
+        Result := Store(Buf, BytesRead) + Self.Recv;
+      end;
       WSAEWOULDBLOCK:;
       WSAETIMEDOUT: raise EIdReadTimeout.Create('Read timeout on socket ' + Self.Binding.AsString);
     else
       raise EIdSocketException.Create('recv', Error);
     end;
   end else begin
-    Result := Copy(Buf, 1, BytesRead);
-
-    Self.InternalBuffer := Self.InternalBuffer + Result;
+    Result := Store(Buf, BytesRead);
   end;
-end;
-
-function TIdSipConnection.SendBufferLength: Integer;
-begin
-  Result := Length(Self.SendBuffer);
 end;
 
 procedure TIdSipConnection.Select;
@@ -1711,6 +1620,128 @@ begin
     if Assigned(ApplicationHandleException) then
       ApplicationHandleException(Self);
   end;
+end;
+
+//******************************************************************************
+//* TIdSipSendingConnection                                                    *
+//******************************************************************************
+//* TIdSipSendingConnection Public methods *************************************
+
+constructor TIdSipSendingConnection.Create;
+begin
+  inherited Create;
+
+  Self.SendQueue := TObjectList.Create(true);
+end;
+
+destructor TIdSipSendingConnection.Destroy;
+begin
+  Self.SendQueue.Free;
+
+  inherited Destroy;
+end;
+
+function TIdSipSendingConnection.PartialSend: Boolean;
+var
+  BytesWritten: Integer;
+  CompletedMsg: Boolean;
+begin
+  // Return true iff we have nothing at all to send.
+  // Notify when we finish sending a completed message.
+
+  Result := false;
+
+  if (not Self.CheckConnected) then Exit;
+
+  // Our "owner" has signaled that it needs to configure some of our properties
+  // after we've connected. We have connected, but they haven't finished
+  // configuring us.
+  if (not Self.Configured) then begin
+    Exit;
+  end;
+
+  // Nothing to do?
+  if (Self.SendBuffer = '') and not Assigned(Self.CurrentMsg) then begin
+    Result := true;
+    Exit;
+  end;
+
+  if not Assigned(Self.CurrentMsg) then begin
+    Self.SetCurrentMsg(Self.GetNextMessage);
+  end;
+
+  Self.RewriteLocationHeaders(Self.CurrentMsg);
+  Self.SendBuffer := Self.CurrentMsg.AsString;
+
+  Assert(Length(Self.SendBuffer) > 0, 'No data to send');
+  repeat
+    BytesWritten := WinSock.send(Self.Handle, Self.SendBuffer[1], Self.SendBufferLength, 0);
+    Delete(Self.SendBuffer, 1, BytesWritten)
+  until (BytesWritten = 0) or (BytesWritten = SOCKET_ERROR) or (Self.SendBuffer = '');
+
+  CompletedMsg := Self.SendBuffer = '';
+  Result := CompletedMsg and (Self.SendQueue.Count = 0);
+
+  if (BytesWritten = SOCKET_ERROR) then begin
+    Self.RaiseExceptionExceptWhen('send', [WSAENOTCONN, WSAENOBUFS]);
+  end;
+
+  if CompletedMsg then begin
+    Self.OnMessageSent(Self.CurrentMsg);
+  end;
+end;
+
+procedure TIdSipSendingConnection.Queue(Msg: TIdSipMessage);
+begin
+  // Queue up the message for sending, but nothing more. That way a caller can
+  // happily say
+  // Connect;
+  // Send(Msg1);
+  // Send(Msg2);
+  // Send(Msg3);
+  // and still adjust the connection as needed in the OnConnect notification
+  // such that this connection may still rewrite the location headers of Msg1,
+  // Msg2, Msg3 just before the messages are serialised to the socket.
+
+  Self.SendQueue.Add(Msg.Copy);
+
+  // If we still have to connect, we need the "current message" to be
+  // the message that has still yet to be sent.
+    Self.SetCurrentMsg(Self.GetNextMessage);
+
+  Self.PartialSend;
+end;
+
+//* TIdSipSendingConnection Private methods *************************************
+
+function TIdSipSendingConnection.CheckConnected: Boolean;
+begin
+  Result := true;
+
+  if (not Self.Connected) then begin
+    // Maybe someone's trying to send data straight after connecting. If so, the
+    // FD_CONNECT may not yet have been processed.
+    Self.ProcessMessages;
+
+    if (not Self.Connected) then begin
+      // No FD_CONNECT. This socket's not connected.
+      //
+      // We return FALSE because there might be data buffered, but we're not yet
+      // in a position to send the data.
+      Result := false;
+    end;
+  end;
+end;
+
+function TIdSipSendingConnection.GetNextMessage: TIdSipMessage;
+begin
+  Result := TIdSipMessage(Self.SendQueue[0]).Copy;
+  Self.SendQueue.Delete(0);
+end;
+
+function TIdSipSendingConnection.SendBufferLength: Integer;
+begin
+  Result := Length(Self.SendBuffer);
 end;
 
 //******************************************************************************
@@ -1877,17 +1908,46 @@ begin
   end;
 end;
 
-procedure TIdSipListeningConnection.Bind(IP: String; Port: Cardinal);
+procedure TIdSipListeningConnection.Listen(IP: String; Port: Cardinal; QueueLength: Cardinal); 
 var
   L: TIdSipLocation;
 begin
   L := TIdSipLocation.Create(TcpTransport, IP, Port);
   try
-    Self.Bind(L);
+    Self.Listen(L, QueueLength);
   finally
     L.Free;
   end;
 end;
+
+procedure TIdSipListeningConnection.Listen(Location: TIdSipLocation; QueueLength: Cardinal);
+var
+  RC: Integer;
+begin
+  Self.Bind(Location);
+
+  RC := WinSock.listen(Self.Handle, QueueLength);
+  if (RC <> 0) then begin
+    raise EIdSocketException.Create(Self.ServerLocation.AsCompactString + ': listen', GetLastError(Self.Handle));
+  end;
+  Self.Select;
+end;
+
+//* TIdSipListeningConnection Protected methods ********************************
+
+procedure TIdSipListeningConnection.OnAccept(ErrorCode: Integer);
+var
+  Wait: TIdSipTcpServerAcceptWait;
+begin
+  Wait := TIdSipTcpServerAcceptWait.Create;
+  Wait.ErrorCode  := ErrorCode;
+  Wait.Handle     := Self.Handle;
+  Wait.ServerID   := Self.ServerID;
+
+  TIdTimerQueue.DispatchEvent(Self.ServerID, TriggerImmediately, Wait);
+end;
+
+//* TIdSipListeningConnection Private methods **********************************
 
 procedure TIdSipListeningConnection.Bind(Location: TIdSipLocation);
 var
@@ -1912,51 +1972,12 @@ begin
   Self.SetLocalBinding(A, Self.Binding);
 end;
 
-procedure TIdSipListeningConnection.Listen(QueueLength: Cardinal);
-var
-  RC: Integer;
-begin
-  if (Self.Handle = INVALID_SOCKET) then
-    raise Exception.Create('Call Bind() before Accept()');
-
-  RC := WinSock.listen(Self.Handle, QueueLength);
-  if (RC <> 0) then begin
-    raise EIdSocketException.Create(Self.ServerLocation.AsCompactString + ': listen', GetLastError(Self.Handle));
-  end;
-  Self.Select;
-end;
-
-function TIdSipListeningConnection.PartialSend: Boolean;
-begin
-  // Optimisation: Listening sockets by definition have nothing to send!
-  Result := true;
-end;
-
-procedure TIdSipListeningConnection.Queue(Msg: TIdSipMessage);
-begin
-  // You can't send messages down a listening connection.
-end;
-
-//* TIdSipListeningConnection Private methods **********************************
-
-procedure TIdSipListeningConnection.OnAccept(ErrorCode: Integer);
-var
-  Wait: TIdSipTcpServerAcceptWait;
-begin
-  Wait := TIdSipTcpServerAcceptWait.Create;
-  Wait.ErrorCode  := ErrorCode;
-  Wait.Handle     := Self.Handle;
-  Wait.ServerID   := Self.ServerID;
-
-  TIdTimerQueue.DispatchEvent(Self.ServerID, TriggerImmediately, Wait);
-end;
-
 //******************************************************************************
 //* TIdSipConnectionTableEntry                                                 *
 //******************************************************************************
 //* TIdSipConnectionTableEntry Public methods **********************************
 
-constructor TIdSipConnectionTableEntry.Create(Connection: TIdSipConnection;
+constructor TIdSipConnectionTableEntry.Create(Connection: TIdSipSendingConnection;
                                               Request: TIdSipRequest);
 begin
   inherited Create;
@@ -1992,7 +2013,7 @@ begin
   inherited Destroy;
 end;
 
-function TIdSipConnectionTable.Add(Connection: TIdSipConnection;
+function TIdSipConnectionTable.Add(Connection: TIdSipSendingConnection;
                                    Request:  TIdSipRequest): TIdSipConnectionTableEntry;
 begin
   Result := Self.FindEntry(Connection, Request);
@@ -2003,7 +2024,7 @@ begin
   end;
 end;
 
-function TIdSipConnectionTable.AnyConnectionTo(Destination: TIdSipLocation): TIdSipConnection;
+function TIdSipConnectionTable.AnyConnectionTo(Destination: TIdSipLocation): TIdSipSendingConnection;
 var
   B: TIdConnectionBindings;
   I: Integer;
@@ -2020,7 +2041,7 @@ begin
   end;
 end;
 
-function TIdSipConnectionTable.ConnectionEntry(Connection: TIdSipConnection): TIdSipConnectionTableEntry;
+function TIdSipConnectionTable.ConnectionEntry(Connection: TIdSipSendingConnection): TIdSipConnectionTableEntry;
 var
   I: Integer;
 begin
@@ -2033,7 +2054,7 @@ begin
   end;
 end;
 
-function TIdSipConnectionTable.ConnectionFor(Msg: TIdSipMessage): TIdSipConnection;
+function TIdSipConnectionTable.ConnectionFor(Msg: TIdSipMessage): TIdSipSendingConnection;
 var
   Count: Integer;
   I:     Integer;
@@ -2058,7 +2079,7 @@ begin
     Result := Self.EntryAt(I).Connection;
 end;
 
-function TIdSipConnectionTable.ConnectionFor(S: TSocket): TIdSipConnection;
+function TIdSipConnectionTable.ConnectionFor(S: TSocket): TIdSipSendingConnection;
 var
   I: Integer;
 begin
@@ -2071,7 +2092,7 @@ begin
   end;
 end;
 
-function TIdSipConnectionTable.ConnectionFor(Destination: TIdConnectionBindings): TIdSipConnection;
+function TIdSipConnectionTable.ConnectionFor(Destination: TIdConnectionBindings): TIdSipSendingConnection;
 var
   I: Integer;
   C: TIdSipConnectionTableEntry;
@@ -2092,7 +2113,7 @@ begin
   Result := Self.List.Count;
 end;
 
-procedure TIdSipConnectionTable.Remove(Connection: TIdSipConnection);
+procedure TIdSipConnectionTable.Remove(Connection: TIdSipSendingConnection);
 var
   I: Integer;
 begin
@@ -2459,32 +2480,16 @@ begin
   end;
 end;
 
-function TIdSipTcpServer.ClientFor(Handle: TIdConnectionHandle): TIdSipConnection;
+function TIdSipTcpServer.ClientFor(Handle: TIdConnectionHandle): TIdSipSendingConnection;
 var
   I: Integer;
-  S: TIdSipConnection;
+  S: TIdSipSendingConnection;
 begin
   Result := nil;
 
   for I := 0 to Self.Clients.Count - 1 do begin
-    S := TIdSipConnection(Self.Clients[I]);
+    S := TIdSipSendingConnection(Self.Clients[I]);
     if (S.Handle = Handle) then begin
-      Result := S;
-      Break;
-    end;
-  end;
-end;
-
-function TIdSipTcpServer.ClientFor(SocketDescription: TIdConnectionBindings): TIdSipConnection;
-var
-  I: Integer;
-  S: TIdSipConnection;
-begin
-  Result := nil;
-
-  for I := 0 to Self.Clients.Count - 1 do begin
-    S := TIdSipConnection(Self.Clients[I]);
-    if S.Binding.Equals(SocketDescription) then begin
       Result := S;
       Break;
     end;
@@ -2493,7 +2498,7 @@ end;
 
 procedure TIdSipTcpServer.Connect(Handle: TIdConnectionHandle; ErrorCode: Integer);
 var
-  Connection: TIdSipConnection;
+  Connection: TIdSipSendingConnection;
 begin
   // The Connection described by SocketDescription has just connected.
 
@@ -2529,7 +2534,7 @@ end;
 
 procedure TIdSipTcpServer.Disconnect(Handle: TIdConnectionHandle; ErrorCode: Integer);
 var
-  Connection: TIdSipConnection;
+  Connection: TIdSipSendingConnection;
 begin
   Connection := Self.ConnectionMap.ConnectionFor(Handle);
 
@@ -2570,7 +2575,7 @@ end;
 procedure TIdSipTcpServer.MessageSent(Msg: TIdSipMessage;
                                       Handle: TIdConnectionHandle);
 var
-  Connection: TIdSipConnection;
+  Connection: TIdSipSendingConnection;
 begin
   // We can only associate an outbound connection with a message now. We use an
   // asynchronous connect, so we only know the "location" data - Contact, etc. -
@@ -2625,7 +2630,7 @@ end;
 procedure TIdSipTcpServer.Read(Handle: TIdConnectionHandle; ErrorCode: Integer);
 var
   AbnormalTermination: Boolean;
-  Connection:          TIdSipConnection;
+  Connection:          TIdSipSendingConnection;
   Msg:                 TIdSipMessage;
 begin
   Connection := Self.ClientFor(Handle);
@@ -2644,7 +2649,7 @@ begin
   end;
 end;
 
-procedure TIdSipTcpServer.RecordConnection(Socket: TIdSipConnection;
+procedure TIdSipTcpServer.RecordConnection(Socket: TIdSipSendingConnection;
                                            Msg: TIdSipMessage;
                                            Dest: TIdSipLocation);
 var
@@ -2681,7 +2686,7 @@ begin
   end;
 end;
 
-procedure TIdSipTcpServer.RecordConnection(Socket: TIdSipConnection;
+procedure TIdSipTcpServer.RecordConnection(Socket: TIdSipSendingConnection;
                                            Msg: TIdSipMessage);
 var
   Peer: TIdSipLocation;
@@ -2723,7 +2728,7 @@ end;
 
 procedure TIdSipTcpServer.SendMessage(Msg: TIdSipMessage; Dest: TIdSipLocation);
 var
-  Connection:  TIdSipConnection;
+  Connection:  TIdSipSendingConnection;
 begin
   // Try send the response down the same connection on which we received the
   // request.
@@ -2784,8 +2789,7 @@ begin
       B := Self.Bindings[I];
 
       S := Self.AddSocket(Self.ListeningSockets, TIdSipListeningConnection) as TIdSipListeningConnection;
-      S.Bind(B);
-      S.Listen(Self.ListenQueue);
+      S.Listen(B, Self.ListenQueue);
     end;
 
     Self.ScheduleProcessingSocketEvents;
@@ -2798,7 +2802,7 @@ end;
 
 procedure TIdSipTcpServer.Write(Handle: TIdConnectionHandle; ErrorCode: Integer);
 var
-  Connection: TIdSipConnection;
+  Connection: TIdSipSendingConnection;
 begin
   Connection := Self.ConnectionMap.ConnectionFor(Handle);
 

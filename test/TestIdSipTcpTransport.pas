@@ -223,8 +223,8 @@ type
 
   TestTIdSipConnectionTable = class(TTestCaseSip)
   private
-    Connection:    TIdSipConnection;
-    NewConnection: TIdSipConnection;
+    Connection:    TIdSipSendingConnection;
+    NewConnection: TIdSipSendingConnection;
     NewReq:        TIdSipRequest;
     Req:           TIdSipRequest;
     Table:         TIdSipConnectionTable;
@@ -291,7 +291,6 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestBind;
     procedure TestListenAndAccept;
     procedure TestReceive; override;
   end;
@@ -1726,8 +1725,8 @@ const
 begin
   inherited SetUp;
 
-  Self.Connection    := TIdSipConnection.Create;
-  Self.NewConnection := TIdSipConnection.Create;
+  Self.Connection    := TIdSipSendingConnection.Create;
+  Self.NewConnection := TIdSipSendingConnection.Create;
   Self.NewReq        := TIdSipRequest.Create;
   Self.Req           := TIdSipRequest.Create;
   Self.Table         := TIdSipConnectionTable.Create;
@@ -2103,18 +2102,13 @@ end;
 
 //* TestTIdSipListeningConnection Published methods ****************************
 
-procedure TestTIdSipListeningConnection.TestBind;
-begin
-  Self.S.Bind(Self.TestIP, Self.TestPort);
-  Self.Check(not IsPortFree(TcpTransport, TestIP, TestPort), 'Nothing''s listening on the socket');
-end;
-
 procedure TestTIdSipListeningConnection.TestListenAndAccept;
 var
   Connection: TIdSipServerConnection;
 begin
-  Self.S.Bind(Self.TestIP, Self.TestPort);
-  Self.S.Listen(5);
+  Self.S.Listen(Self.TestIP, Self.TestPort, 5);
+
+  Self.Check(not IsPortFree(TcpTransport, TestIP, TestPort), 'Nothing''s listening on the socket');
 
   Self.C.Connect(Self.TestIP, Self.TestPort, FiveSeconds);
   Self.WaitForConnect(Self.C);
@@ -2148,8 +2142,7 @@ begin
   Self.C := TIdSipClientConnection.Create;
   Self.S := TIdSipListeningConnection.Create;
 
-  Self.S.Bind(Self.TestIP, Self.TestPort);
-  Self.S.Listen(5);
+  Self.S.Listen(Self.TestIP, Self.TestPort, 5);
 
   Self.C.Connect(Self.TestIP, Self.TestPort, FiveSeconds);
   Self.WaitForConnect(Self.C);
