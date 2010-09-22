@@ -181,6 +181,7 @@ type
     Port:                       Cardinal;
     ReceivedRequest:            TIdSipRequest;
     ReceivedPacket:             Boolean;
+    ReceivedPacketEvent:        TEvent;
     Server:                     TIdUdpServer;
 
     function  ARecords: String;
@@ -2203,8 +2204,19 @@ end;
 //* TestTIdSipStackConfigurator Public methods *********************************
 
 procedure TestTIdSipStackConfigurator.SetUp;
+var
+  NewRegistrarPort: Integer;
+  ServerPort:       Integer;
 begin
   inherited SetUp;
+
+  NewRegistrarPort := Self.Port + 11000;
+  ServerPort       := Self.Port + 10000;
+
+  Check(IsPortFree(UdpTransport, LocalAddress, NewRegistrarPort),
+        Format('This test requires port %s:%d/%s', [LocalAddress, NewRegistrarPort, Lowercase(UdpTransport)]));
+  Check(IsPortFree(UdpTransport, LocalAddress, ServerPort),
+        Format('This test requires port %s:%d/%s', [LocalAddress, ServerPort, Lowercase(UdpTransport)]));
 
   TIdSipTransportRegistry.RegisterTransportType(TcpTransport, TIdSipTCPTransport);
   TIdSipTransportRegistry.RegisterTransportType(UdpTransport, TIdSipUDPTransport);
@@ -2214,13 +2226,13 @@ begin
   Self.Port := Self.FirstFreeLocalIPv4Port(5060);
 
   Self.NewRegistrar := TIdUDPServer.Create(nil);
-  Self.NewRegistrar.DefaultPort   := Self.Port + 11000;
+  Self.NewRegistrar.DefaultPort   := NewRegistrarPort;
   Self.NewRegistrar.OnUDPRead     := Self.NoteReceiptOfPacketOldRegistrar;
   Self.NewRegistrar.ThreadedEvent := true;
   Self.NewRegistrar.Active        := true;
 
   Self.Server := TIdUDPServer.Create(nil);
-  Self.Server.DefaultPort   := Self.Port + 10000;
+  Self.Server.DefaultPort   := ServerPort;
   Self.Server.OnUDPRead     := Self.NoteReceiptOfPacket;
   Self.Server.ThreadedEvent := true;
   Self.Server.Active        := true;
@@ -2228,7 +2240,8 @@ begin
   TIdSipEventPackageRegistry.RegisterEvent(TIdSipTargetDialogPackage);
   TIdSipEventPackageRegistry.RegisterEvent(TIdSipReferPackage);
 
-  Self.ReceivedRequest := TIdSipRequest.Create;
+  Self.ReceivedPacketEvent := TSimpleEvent.Create;
+  Self.ReceivedRequest     := TIdSipRequest.Create;
 
   Self.NewRegistrarReceivedPacket := false;
   Self.ReceivedPacket             := false;
@@ -2240,6 +2253,7 @@ begin
   TIdSipEventPackageRegistry.UnregisterEvent(TIdSipTargetDialogPackage);
 
   Self.ReceivedRequest.Free;
+  Self.ReceivedPacketEvent.Free;
   Self.Server.Free;
   Self.NewRegistrar.Free;
   Self.NewRegistrarEvent.Free;
@@ -2398,7 +2412,7 @@ begin
     UA.StartAllTransports;
     Self.Timer.TriggerAllEventsOfType(TIdSipReregisterWait);
 
-    Self.WaitForSignaled('Waiting for REGISTER');
+    Self.WaitForSignaled(Self.ReceivedPacketEvent, 'Waiting for REGISTER');
     Check(Self.ReceivedPacket, 'No REGISTER sent to registrar');
     Check(Self.ReceivedRequest.FirstContact.HasParameter(SipInstanceParam),
           'REGISTER has no "sip.instance" parameter');
@@ -2451,7 +2465,7 @@ begin
   end;
 
   Self.ReceivedPacket := true;
-  Self.ThreadEvent.SetEvent;
+  Self.ReceivedPacketEvent.SetEvent;
 end;
 
 procedure TestTIdSipStackConfigurator.NoteReceiptOfPacketOldRegistrar(Sender: TObject;
@@ -2575,7 +2589,7 @@ var
 begin
   // Any network actions (like registering) can only happen once we've
   // configured the Transport layer. Same goes for configuring the NameServer.
-  Self.Configuration.Add(Format('Register: sip:%s:%d', [LocalAddress, Self.Server.DefaultPort]));
+  Self.Configuration.Add(Format('Register: sip:%s:%d', [LocalAddress{Self.Server.Bindings[0].IP}, Self.Server.DefaultPort]));
   Self.Configuration.Add('Listen: UDP 127.0.0.1:5060');
   Self.Configuration.Add('NameServer: MOCK');
 
@@ -2583,7 +2597,7 @@ begin
   try
     UA.StartAllTransports;
     Self.Timer.TriggerAllEventsOfType(TIdSipReregisterWait);
-    Self.WaitForSignaled('Waiting for REGISTER');
+    Self.WaitForSignaled(Self.ReceivedPacketEvent, 'Waiting for REGISTER');
     Check(Self.ReceivedPacket, 'No REGISTER received');
   finally
     UA.Free;
@@ -2826,10 +2840,12 @@ begin
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
     UA.StartAllTransports;
-    Self.Timer.TriggerAllEventsUpToFirst(TIdSipReregisterWait);
+
     Check(Assigned(UA.Locator),
           'Transaction-User has no Locator');
-    Self.WaitForSignaled('Waiting for DNS query');
+
+    Self.Timer.TriggerAllEventsUpToFirst(TIdSipReregisterWait);
+    Self.WaitForSignaled(Self.ReceivedPacketEvent, 'Waiting for DNS query');
     Check(Self.ReceivedPacket, 'No DNS query sent to name server');
 
     Check(Assigned(UA.Dispatcher.Locator),
@@ -3161,7 +3177,7 @@ begin
   try
     UA.StartAllTransports;
     Self.Timer.TriggerAllEventsOfType(TIdSipReregisterWait);
-    Self.WaitForSignaled('Waiting for REGISTER');
+    Self.WaitForSignaled(Self.ReceivedPacketEvent, 'Waiting for REGISTER');
     Check(Self.ReceivedPacket, 'No REGISTER sent to registrar');
   finally
     UA.Free;
@@ -3425,7 +3441,7 @@ begin
 
       Self.Timer.TriggerAllEventsOfType(TIdSipReregisterWait);
 
-      Self.WaitForSignaled('Waiting for REGISTER');
+      Self.WaitForSignaled(Self.ReceivedPacketEvent, 'Waiting for REGISTER');
       Check(Self.ReceivedPacket, 'No REGISTER sent to registrar');
       CheckEquals(Registrar, UA.RegisterModule.Registrar.AsString, 'Registrar not set');
     finally
@@ -3453,8 +3469,7 @@ begin
   try
     UA.StartAllTransports;
     Self.Timer.TriggerAllEventsUpToFirst(TIdSipReRegisterWait);
-    // This has the side effect of resetting ThreadEvent.
-    Self.WaitForSignaled('Waiting for REGISTER to old registrar');
+    Self.WaitForSignaled(Self.ReceivedPacketEvent, 'Waiting for REGISTER to old registrar');
 
     NewConfig := TStringList.Create;
     try
@@ -3466,7 +3481,7 @@ begin
       Self.Timer.TriggerAllEventsUpToFirst(TIdSipReRegisterWait);
       Self.Timer.TriggerAllEventsUpToFirst(TIdSipActionSendWait);
 
-      Self.WaitForSignaled('Waiting for unREGISTER to old registrar');
+      Self.WaitForSignaled(Self.ReceivedPacketEvent, 'Waiting for unREGISTER to old registrar');
       Check(Self.ReceivedPacket, 'No unREGISTER sent to old registrar');
 
       CheckEquals(NewRegistrar, UA.RegisterModule.Registrar.AsString, 'Registrar not set');
