@@ -12,7 +12,8 @@ unit IdSipTlsTransport;
 interface
 
 uses
-  Classes, IdSipTcpTransport, IdSipTransport, IdSSLOpenSSL, SysUtils;
+  Classes, IdConnectionBindings, IdSipTcpTransport, IdSipTransport,
+  IdSSLOpenSSL, SysUtils;
 
 type
 //  TIdSipTlsServer = class;
@@ -31,7 +32,7 @@ type
     procedure SetServerCertificate(Value: TFileName);
     procedure SetServerKey(Value: TFileName);
   public
-    class function DefaultPort: Cardinal; override;
+    class function DefaultPort: TPortNum; override;
     class function GetTransportType: String; override;
     class function IsSecure: Boolean; override;
     class function SrvPrefix: String; override;
@@ -83,7 +84,7 @@ uses
 //******************************************************************************
 //* TIdSipTLSTransport Public methods ******************************************
 
-class function TIdSipTLSTransport.DefaultPort: Cardinal;
+class function TIdSipTLSTransport.DefaultPort: TPortNum;
 begin
   Result := DefaultSipsPort;
 end;

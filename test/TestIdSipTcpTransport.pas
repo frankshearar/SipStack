@@ -44,7 +44,7 @@ type
     procedure CheckSendBindingSet(Binding: TIdConnectionBindings); override;
     function  CreateClient: TIdSipTcpClient; virtual;
     procedure CheckServerOnPort(const Host: String;
-                                Port: Cardinal;
+                                Port: TPortNum;
                                 const Msg: String); override;
     procedure DestroyClient(Client: TIdSipTcpClient); virtual;
     procedure OnReceiveRequest(Request: TIdSipRequest;
@@ -439,7 +439,7 @@ begin
 end;
 
 procedure TestTIdSipTCPTransport.CheckServerOnPort(const Host: String;
-                                                   Port: Cardinal;
+                                                   Port: TPortNum;
                                                    const Msg: String);
 var
   Client: TIdTcpClient;

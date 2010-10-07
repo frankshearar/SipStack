@@ -57,21 +57,21 @@ type
   // host (::1) and port 8000, or the address [::1:8000]?) 
   TIdSipHostAndPort = class(TObject)
   private
-    fDefaultPort:     Cardinal;
+    fDefaultPort:     TPortNum;
     fHost:            String;
-    fPort:            Cardinal;
+    fPort:            TPortNum;
     fPortIsSpecified: Boolean;
 
     function  GetValue: String;
-    procedure SetDefaultPort(const Value: Cardinal);
-    procedure SetPort(const Value: Cardinal);
+    procedure SetDefaultPort(const Value: TPortNum);
+    procedure SetPort(const Value: TPortNum);
     procedure SetValue(Value: String);
   public
     class function CouldContainIPv6Reference(const Token: String): Boolean;
 
-    property DefaultPort:     Cardinal read fDefaultPort write SetDefaultPort;
+    property DefaultPort:     TPortNum read fDefaultPort write SetDefaultPort;
     property Host:            String   read fHost write fHost;
-    property Port:            Cardinal read fPort write SetPort;
+    property Port:            TPortNum read fPort write SetPort;
     property PortIsSpecified: Boolean  read fPortIsSpecified write fPortIsSpecified;
     property Value:           String   read GetValue write SetValue;
   end;
@@ -194,11 +194,11 @@ type
     HostAndPort:      TIdSipHostAndPort;
 
     function  GetHost: String;
-    function  GetPort: Cardinal;
+    function  GetPort: TPortNum;
     procedure ParseFragment(Fragment: String);
     procedure ParseHierPart(HierPart: String);
     procedure SetHost(const Value: String);
-    procedure SetPort(const Value: Cardinal);
+    procedure SetPort(const Value: TPortNum);
   protected
     function  GetUri: String; virtual;
     function  HasAcceptableScheme: Boolean; virtual;
@@ -249,7 +249,7 @@ type
     property Host:            String   read GetHost write SetHost;
     property ParseFailReason: String   read fParseFailReason;
     property Path:            String   read fPath write fPath;
-    property Port:            Cardinal read GetPort write SetPort;
+    property Port:            TPortNum read GetPort write SetPort;
     property Query:           String   read fQuery write fQuery;
     property Scheme:          String   read fScheme write SetScheme;
     property UnparsedValue:   String   read fUnparsedValue;
@@ -333,7 +333,7 @@ type
     procedure ClearHeaders;
     procedure ClearParameters;
     function  CreateRequest: TIdSipRequest;
-    function  DefaultPort: Cardinal; virtual;
+    function  DefaultPort: TPortNum; virtual;
     function  DefaultTransport: String; virtual;
     function  Equals(Uri: TIdSipUri): Boolean;
     procedure EraseUserInfo; override;
@@ -409,6 +409,8 @@ type
     function  GetCardinalParam(const ParamName: String;
                                ValueIfNotPresent: Cardinal = 0): Cardinal;
     function  GetName: String; virtual;
+    function  GetPortNumParam(const ParamName: String;
+                              ValueIfNotPresent: TPortNum = 0): TPortNum;
     function  GetValue: String; virtual;
     procedure MarkAsInvalid(const Reason: String);
     procedure Parse(const Value: String); virtual;
@@ -417,6 +419,8 @@ type
                               Delimiter: String = ';');
     procedure SetCardinalParam(const ParamName: String;
                                Value: Cardinal);
+    procedure SetPortNumParam(const ParamName: String;
+                               Value: TPortNum);
     procedure SetName(const Value: String); virtual;
     procedure SetValue(const Value: String);
   public
@@ -1059,16 +1063,16 @@ type
     procedure AssertTTLWellFormed;
     function  GetBranch: String;
     function  GetMaddr: String;
-    function  GetPort: Cardinal;
+    function  GetPort: TPortNum;
     function  GetReceived: String;
-    function  GetRport: Cardinal;
+    function  GetRport: TPortNum;
     function  GetSentBy: String;
     function  GetTTL: Byte;
     procedure SetBranch(const Value: String);
     procedure SetMaddr(const Value: String);
-    procedure SetPort(Value: Cardinal);
+    procedure SetPort(Value: TPortNum);
     procedure SetReceived(const Value: String);
-    procedure SetRport(Value: Cardinal);
+    procedure SetRport(Value: TPortNum);
     procedure SetSentBy(const Value: String);
     procedure SetTransport(const Value: String);
     procedure SetTTL(Value: Byte);
@@ -1086,21 +1090,21 @@ type
     function  HasMaddr: Boolean;
     function  HasReceived: Boolean;
     function  HasRport: Boolean;
-    function  IsDefaultPortForTransport(Port: Cardinal;
+    function  IsDefaultPortForTransport(Port: TPortNum;
                                         const Transport: String): Boolean;
     function  IsRFC3261Branch: Boolean;
     procedure RemoveBranch;
     function  RoutingAddress: String;
-    function  RoutingPort: Cardinal;
+    function  RoutingPort: TPortNum;
     function  SrvQuery: String;
     function  UsesSecureTransport: Boolean;
 
     property Branch:     String   read GetBranch write SetBranch;
     property IsUnset:    Boolean  read fIsUnset write fIsUnset;
     property Maddr:      String   read GetMaddr write SetMaddr;
-    property Port:       Cardinal read GetPort write SetPort;
+    property Port:       TPortNum read GetPort write SetPort;
     property Received:   String   read GetReceived write SetReceived;
-    property Rport:      Cardinal read GetRport write SetRport;
+    property Rport:      TPortNum read GetRport write SetRport;
     property SentBy:     String   read GetSentBy write SetSentBy;
     property SipVersion: String   read fSipVersion write fSipVersion;
     property Transport:  String   read fTransport write SetTransport;
@@ -2527,10 +2531,10 @@ begin
   Result := Self.Host;
 
   if (Self.Port <> Self.DefaultPort) or Self.PortIsSpecified then
-    Result := Result + ':' + IntToStr(Self.Port);
+    Result := Result + ':' + PortNumToStr(Self.Port);
 end;
 
-procedure TIdSipHostAndPort.SetDefaultPort(const Value: Cardinal);
+procedure TIdSipHostAndPort.SetDefaultPort(const Value: TPortNum);
 begin
   Self.fDefaultPort := Value;
 
@@ -2540,7 +2544,7 @@ begin
   end;
 end;
 
-procedure TIdSipHostAndPort.SetPort(const Value: Cardinal);
+procedure TIdSipHostAndPort.SetPort(const Value: TPortNum);
 begin
   Self.fPort           := Value;
   Self.PortIsSpecified := true;
@@ -2583,7 +2587,7 @@ begin
     if not TIdSimpleParser.IsNumber(Value) then
       raise EParserError.Create('Malformed host/port: ' + OriginalValue);
 
-    Self.Port := StrToIntDef(Value, Self.DefaultPort);
+    Self.Port := StrToPortNumDef(Value, Self.DefaultPort);
     Self.PortIsSpecified := true;
   end;
 
@@ -3460,7 +3464,7 @@ begin
   Result := Self.HostAndPort.Host;
 end;
 
-function TIdUri.GetPort: Cardinal;
+function TIdUri.GetPort: TPortNum;
 begin
   Result := Self.HostAndPort.Port;
 end;
@@ -3505,7 +3509,7 @@ begin
   Self.HostAndPort.Host := Value;
 end;
 
-procedure TIdUri.SetPort(const Value: Cardinal);
+procedure TIdUri.SetPort(const Value: TPortNum);
 begin
   Self.HostAndPort.Port := Value;
 end;
@@ -3666,7 +3670,7 @@ begin
   end;
 end;
 
-function TIdSipUri.DefaultPort: Cardinal;
+function TIdSipUri.DefaultPort: TPortNum;
 begin
   if Self.IsSecure then
     Result := DefaultSipsPort
@@ -4296,6 +4300,15 @@ begin
   Result := fName;
 end;
 
+function TIdSipHeader.GetPortNumParam(const ParamName: String;
+                                      ValueIfNotPresent: TPortNum = 0): TPortNum;
+begin
+  if Self.HasParameter(ParamName) then
+    Result := StrToPortNum(Self.Params[ParamName])
+  else
+    Result := ValueIfNotPresent;
+end;
+
 function TIdSipHeader.GetValue: String;
 begin
   Result := fValue;
@@ -4346,6 +4359,12 @@ procedure TIdSipHeader.SetCardinalParam(const ParamName: String;
                                         Value: Cardinal);
 begin
   Self.Params[ParamName] := IntToStr(Value);
+end;
+
+procedure TIdSipHeader.SetPortNumParam(const ParamName: String;
+                                       Value: TPortNum);
+begin
+  Self.Params[ParamName] := PortNumToStr(Value);
 end;
 
 procedure TIdSipHeader.SetName(const Value: String);
@@ -6871,7 +6890,7 @@ begin
   Result := Self.HasParameter(RPortParam);
 end;
 
-function TIdSipViaHeader.IsDefaultPortForTransport(Port: Cardinal;
+function TIdSipViaHeader.IsDefaultPortForTransport(Port: TPortNum;
                                                    const Transport: String): Boolean;
 begin
   Result := TIdSipTransportRegistry.DefaultPortFor(Transport) = Port;
@@ -6900,7 +6919,7 @@ begin
     Result := Self.SentBy;
 end;
 
-function TIdSipViaHeader.RoutingPort: Cardinal;
+function TIdSipViaHeader.RoutingPort: TPortNum;
 begin
   if Self.HasRport then
     Result := Self.Rport
@@ -7029,7 +7048,7 @@ begin
     Result := '';
 end;
 
-function TIdSipViaHeader.GetPort: Cardinal;
+function TIdSipViaHeader.GetPort: TPortNum;
 begin
   Result := Self.HostAndPort.Port;
 end;
@@ -7042,9 +7061,9 @@ begin
     Result := '';
 end;
 
-function TIdSipViaHeader.GetRport: Cardinal;
+function TIdSipViaHeader.GetRport: TPortNum;
 begin
-  Result := Self.GetCardinalParam(RPortParam)
+  Result := Self.GetPortNumParam(RPortParam);
 end;
 
 function TIdSipViaHeader.GetSentBy: String;
@@ -7071,7 +7090,7 @@ begin
   Self.AssertMaddrWellFormed;
 end;
 
-procedure TIdSipViaHeader.SetPort(Value: Cardinal);
+procedure TIdSipViaHeader.SetPort(Value: TPortNum);
 begin
   Self.HostAndPort.Port := Value;
 end;
@@ -7090,9 +7109,9 @@ begin
   Self.AssertReceivedWellFormed;
 end;
 
-procedure TIdSipViaHeader.SetRport(Value: Cardinal);
+procedure TIdSipViaHeader.SetRport(Value: TPortNum);
 begin
-  Self.SetCardinalParam(RportParam, Value);
+  Self.SetPortNumParam(RportParam, Value);
 end;
 
 procedure TIdSipViaHeader.SetSentBy(const Value: String);

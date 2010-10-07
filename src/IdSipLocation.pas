@@ -19,7 +19,7 @@ type
   private
     fTransport: String;
     fIPAddress: String;
-    fPort:      Cardinal;
+    fPort:      TPortNum;
   protected
   protected
     procedure AssignTo(Dest: TPersistent); override;
@@ -27,7 +27,7 @@ type
     constructor CreatePeerLocation(Connection: TIdConnectionBindings);
     constructor Create(const Transport: String;
                        const IPAddress:   String;
-                             Port: Cardinal); overload;
+                             Port: TPortNum); overload;
 
     procedure Assign(Src: TPersistent); override;
     function  AsCompactString: String;
@@ -40,7 +40,7 @@ type
 
     property Transport: String   read fTransport write fTransport;
     property IPAddress: String   read fIPAddress write fIPAddress;
-    property Port:      Cardinal read fPort write fPort;
+    property Port:      TPortNum read fPort write fPort;
   end;
 
   TIdSipLocations = class(TIdBaseList)
@@ -50,16 +50,16 @@ type
     function  AddLocation(Location: TIdSipLocation): TIdSipLocation; overload;
     function  AddLocation(const Transport: String;
                           const Address: String;
-                          Port: Cardinal): TIdSipLocation; overload;
+                          Port: TPortNum): TIdSipLocation; overload;
     procedure AddLocations(Locations: TIdSipLocations);
     procedure AddLocationsFromNames(const Transport: String;
-                                    Port: Cardinal;
+                                    Port: TPortNum;
                                     Names: TIdDomainNameRecords);
     procedure AddLocationsFromSRVs(SRV: TIdSrvRecords);
     function  AddLocationToFront(Location: TIdSipLocation): TIdSipLocation; overload;
     function  AddLocationToFront(const Transport: String;
                                  const Address: String;
-                                 Port: Cardinal): TIdSipLocation; overload;
+                                 Port: TPortNum): TIdSipLocation; overload;
     function  AsString: String;
     function  AsStringWithPrefix(Prefix: String): String;
     function  Contains(Loc: TIdSipLocation): Boolean;
@@ -101,7 +101,7 @@ end;
 
 constructor TIdSipLocation.Create(const Transport: String;
                                   const IPAddress: String;
-                                  Port: Cardinal);
+                                  Port: TPortNum);
 begin
   inherited Create;
 
@@ -199,7 +199,7 @@ end;
 
 function TIdSipLocations.AddLocation(const Transport: String;
                                      const Address: String;
-                                     Port: Cardinal): TIdSipLocation;
+                                     Port: TPortNum): TIdSipLocation;
 begin
   Result := TIdSipLocation.Create(Transport, Address, Port);
   Self.List.Add(Result);
@@ -214,7 +214,7 @@ begin
 end;
 
 procedure TIdSipLocations.AddLocationsFromNames(const Transport: String;
-                                                Port: Cardinal;
+                                                Port: TPortNum;
                                                 Names: TIdDomainNameRecords);
 var
   I: Integer;
@@ -241,7 +241,7 @@ end;
 
 function TIdSipLocations.AddLocationToFront(const Transport: String;
                                             const Address: String;
-                                            Port: Cardinal): TIdSipLocation;
+                                            Port: TPortNum): TIdSipLocation;
 begin
   Result := TIdSipLocation.Create(Transport, Address, Port);
   Self.List.Insert(0, Result);

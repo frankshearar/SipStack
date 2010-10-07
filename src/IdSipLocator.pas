@@ -12,7 +12,8 @@ unit IdSipLocator;
 interface
 
 uses
-  Classes, Contnrs, IdSipDns, IdSipLocation, IdSipMessage, SysUtils;
+  Classes, Contnrs, IdConnectionBindings, IdSipDns, IdSipLocation, IdSipMessage,
+  SysUtils;
 
 // The classes below all encapsulate DNS lookups, or the SIP processing of these
 // lookups according to RFC 3263.
@@ -56,13 +57,13 @@ type
     procedure AddLocationsFromSRVsOrNames(Result: TIdSipLocations;
                                           const Transport: String;
                                           const Target: String;
-                                          Port: Cardinal;
+                                          Port: TPortNum;
                                           Srv: TIdSrvRecords;
                                           Names: TIdDomainNameRecords);
     procedure AddLocationsFromNameRecords(Result: TIdSipLocations;
                                           Transport,
                                           SentBy: String;
-                                          Port: Cardinal);
+                                          Port: TPortNum);
     function  ChooseSupportedTransport(TargetUri: TIdUri;
                                        Naptr: TIdNaptrRecords): String; 
     procedure ClearOutUnwantedNaptrRecords(TargetUri: TIdUri;
@@ -254,7 +255,7 @@ end;
 procedure TIdSipAbstractLocator.FindServersFor(Response: TIdSipResponse;
                                                Result: TIdSipLocations);
 var
-  Port:     Cardinal;
+  Port:     TPortNum;
   SentBy:   String;
   Services: TIdSrvRecords;
 begin
@@ -457,7 +458,7 @@ end;
 function TIdSipAbstractLocator.CreateLocationFromUri(AddressOfRecord: TIdSipUri): TIdSipLocation;
 var
   Address:   String;
-  Port:      Cardinal;
+  Port:      TPortNum;
   Transport: String;
 begin
   if AddressOfRecord.HasParameter(TransportParam) then begin
@@ -518,7 +519,7 @@ end;
 procedure TIdSipAbstractLocator.AddLocationsFromSRVsOrNames(Result: TIdSipLocations;
                                                             const Transport: String;
                                                             const Target: String;
-                                                            Port: Cardinal;
+                                                            Port: TPortNum;
                                                             Srv: TIdSrvRecords;
                                                             Names: TIdDomainNameRecords);
 begin
@@ -534,7 +535,7 @@ end;
 procedure TIdSipAbstractLocator.AddLocationsFromNameRecords(Result: TIdSipLocations;
                                                             Transport,
                                                             SentBy: String;
-                                                            Port: Cardinal);
+                                                            Port: TPortNum);
 var
   Names: TIdDomainNameRecords;
 begin

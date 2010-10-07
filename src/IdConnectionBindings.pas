@@ -15,6 +15,8 @@ uses
   Classes, Contnrs;
 
 type
+  TPortNum = type Cardinal;
+
   // I describe a socket. For connection oriented transports (TCP, say) I
   // describe the local and remote ip:ports; for connectionless transports
   // (UDP), I don't describe a connection, but I can tell you the sending
@@ -27,13 +29,13 @@ type
   TIdConnectionBindings = class(TPersistent)
   private
     fLocalIP:   String;
-    fLocalPort: Cardinal;
+    fLocalPort: TPortNum;
     fPeerIP:    String;
-    fPeerPort:  Cardinal;
+    fPeerPort:  TPortNum;
     fTransport: String;
   public
     constructor Create; overload;
-    constructor Create(LocalIP: String; LocalPort: Cardinal; PeerIP: String; PeerPort: Cardinal; Transport: String); overload;
+    constructor Create(LocalIP: String; LocalPort: TPortNum; PeerIP: String; PeerPort: TPortNum; Transport: String); overload;
 
     procedure Assign(Src: TPersistent); override;
     function  AsString: String;
@@ -42,9 +44,9 @@ type
     function  HasSamePeer(Other: TIdConnectionBindings): Boolean;
 
     property LocalIP:   String   read fLocalIP write fLocalIP;
-    property LocalPort: Cardinal read fLocalPort write fLocalPort;
+    property LocalPort: TPortNum read fLocalPort write fLocalPort;
     property PeerIP:    String   read fPeerIP write fPeerIP;
-    property PeerPort:  Cardinal read fPeerPort write fPeerPort;
+    property PeerPort:  TPortNum read fPeerPort write fPeerPort;
     property Transport: String   read fTransport write fTransport;
   end;
 
@@ -71,6 +73,11 @@ type
     property Bindings[Index: Integer]: TIdConnectionBindings read GetBindings; default;
   end;
 
+function IntToPortNum(I: Integer): TPortNum;
+function PortNumToStr(P: TPortNum): String;
+function StrToPortNum(S: String): TPortNum;
+function StrToPortNumDef(S: String; Default: TPortNum): TPortNum;
+
 // Miscellaneous constants
 const
   BindingTuple = '(connection-bindings local-ip: %s local-port: %d peer-ip: %s peer-port: %d transport: %s)';
@@ -86,6 +93,30 @@ const
   ItemNotFoundIndex = -1;
 
 //******************************************************************************
+//* Unit Public functions/procedures                                           *
+//******************************************************************************
+
+function IntToPortNum(I: Integer): TPortNum;
+begin
+  Result := TPortNum(I);
+end;
+
+function PortNumToStr(P: TPortNum): String;
+begin
+  Result := IntToStr(P);
+end;
+
+function StrToPortNum(S: String): TPortNum;
+begin
+  Result := StrToInt(S);
+end;
+
+function StrToPortNumDef(S: String; Default: TPortNum): TPortNum;
+begin
+  Result := StrToIntDef(S, Default);
+end;
+
+//******************************************************************************
 //* TIdConnectionBindings                                                      *
 //******************************************************************************
 //* TIdConnectionBindings Public methods ***************************************
@@ -95,7 +126,7 @@ begin
   inherited Create;
 end;
 
-constructor TIdConnectionBindings.Create(LocalIP: String; LocalPort: Cardinal; PeerIP: String; PeerPort: Cardinal; Transport: String); 
+constructor TIdConnectionBindings.Create(LocalIP: String; LocalPort: TPortNum; PeerIP: String; PeerPort: TPortNum; Transport: String); 
 begin
   inherited Create;
 

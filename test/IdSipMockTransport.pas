@@ -46,7 +46,7 @@ type
                                Dest: TIdConnectionBindings);
     function  FindTransport(const TransportType: String;
                             const Address: String;
-                                  Port: Cardinal): TIdSipMockTransport;
+                                  Port: TPortNum): TIdSipMockTransport;
     procedure InitialiseBinding(Binding: TIdConnectionBindings;
                                 LocalBinding,
                                 PeerBinding: TIdSipLocation;
@@ -62,7 +62,7 @@ type
     procedure SendMessage(M: TIdSipMessage;
                           Dest: TIdConnectionBindings); override;
   public
-    class function DefaultPort: Cardinal; override;
+    class function DefaultPort: TPortNum; override;
     class function GetTransportType: String; override;
     class function IsSecure: Boolean; override;
     class function MockedClass: TIdSipTransportClass; virtual;
@@ -89,7 +89,7 @@ type
     function  LastRequest: TIdSipRequest;
     function  LastResponse: TIdSipResponse;
     function  PeerIP: String;
-    function  PeerPort: Integer;
+    function  PeerPort: TPortNum;
     procedure RaiseException(E: ExceptClass);
     procedure ReceiveRequest(Request: TIdSipRequest;
                              ReceivedFrom: TIdConnectionBindings); override;
@@ -177,7 +177,7 @@ begin
   raise Exception.Create(Self.ClassName + ' must override TIdSipMockTransport.MockedClass');
 end;
 
-class function TIdSipMockTransport.DefaultPort: Cardinal;
+class function TIdSipMockTransport.DefaultPort: TPortNum;
 begin
   Result := Self.MockedClass.DefaultPort;
 end;
@@ -353,7 +353,7 @@ begin
   Result := '192.168.255.254';
 end;
 
-function TIdSipMockTransport.PeerPort: Integer;
+function TIdSipMockTransport.PeerPort: TPortNum;
 begin
   Result := 5060;
 end;
@@ -570,7 +570,7 @@ end;
 
 function TIdSipMockTransport.FindTransport(const TransportType: String;
                                            const Address: String;
-                                                 Port: Cardinal): TIdSipMockTransport;
+                                                 Port: TPortNum): TIdSipMockTransport;
 var
   I: Integer;
 begin

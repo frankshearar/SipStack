@@ -116,7 +116,7 @@ type
     procedure InitialiseRoutingTable;
   protected
     procedure CheckServerOnPort(const Host: String;
-                                Port: Cardinal;
+                                Port: TPortNum;
                                 const Msg: String); override;
     procedure SendMessage(Msg: String); override;
   public
@@ -839,7 +839,7 @@ end;
 //* TestTIdSipMockTransport Protected methods **********************************
 
 procedure TestTIdSipMockTransport.CheckServerOnPort(const Host: String;
-                                                    Port: Cardinal;
+                                                    Port: TPortNum;
                                                     const Msg: String);
 var
   Bindings: TIdSipLocations;

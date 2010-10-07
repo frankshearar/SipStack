@@ -13,7 +13,7 @@ unit IdNetworking;
 interface
 
 uses
-  Classes;
+  Classes, IdConnectionBindings;
 
 function  BestRouteIsDefaultRoute(DestinationIP, LocalIP: String): Boolean;
 function  BestRouteIsDefaultRouteNT4(DestinationIP, LocalIP: String): Boolean;
@@ -24,7 +24,7 @@ function  GetBestLocalAddress(DestinationAddress: String): String;
 function  GetBestLocalAddressNT4(DestinationAddress: String): String;
 function  GetHostName: String;
 function  HtoNL(N: Cardinal): Cardinal;
-function  IsPortFree(Transport: String; Address: String; Port: Cardinal): Boolean;
+function  IsPortFree(Transport: String; Address: String; Port: TPortNum): Boolean;
 function  LocalAddress: String;
 procedure LocalAddresses(IPs: TStrings);
 function  NtoHL(N: Cardinal): Cardinal;
@@ -405,7 +405,7 @@ begin
   Result := Cardinal(Winsock.htonl(Integer(N)));
 end;
 
-function IsPortFreeTCP(Address: String; Port: Cardinal): Boolean;
+function IsPortFreeTCP(Address: String; Port: TPortNum): Boolean;
 var
   Binding: TIdSocketHandle;
   Server:  TIdTCPServer;
@@ -429,7 +429,7 @@ begin
   end;
 end;
 
-function IsPortFreeUDP(Address: String; Port: Cardinal): Boolean;
+function IsPortFreeUDP(Address: String; Port: TPortNum): Boolean;
 var
   Binding: TIdSocketHandle;
   Server:  TIdUDPServer;
@@ -456,7 +456,7 @@ end;
 {Technically this is only useful for tests: there's an inherent
  time-of-check-time-of-use race when you use this. Still, so many tests need
  this functionality that it's expedient to put the function here.}
-function IsPortFree(Transport: String; Address: String; Port: Cardinal): Boolean;
+function IsPortFree(Transport: String; Address: String; Port: TPortNum): Boolean;
 begin
   if (Lowercase(Transport) = 'tcp') then
     Result := IsPortFreeTCP(Address, Port)
@@ -603,7 +603,7 @@ initialization
   RestoreARecordsFunc;
 finalization
   if WinsockStarted then
-    WSACleanup;
+    WSACleanup;                         
 
   WinsockLock.Free;
 end.

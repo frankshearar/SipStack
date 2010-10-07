@@ -12,10 +12,10 @@ unit IdSipUserAgent;
 interface
 
 uses
-  Contnrs, Classes, IdNotification, IdRegisteredObject, IdRoutingTable,
-  IdSipAuthentication, IdSipCore, IdSipInviteModule, IdSipLocator, IdSipMessage,
-  IdSipOptionsModule, IdSipRegistration, IdSipTransaction, IdSipTransport,
-  IdTimerQueue, Windows;
+  Contnrs, Classes, IdConnectionBindings, IdNotification, IdRegisteredObject,
+  IdRoutingTable, IdSipAuthentication, IdSipCore, IdSipInviteModule,
+  IdSipLocator, IdSipMessage, IdSipOptionsModule, IdSipRegistration,
+  IdSipTransaction, IdSipTransport, IdTimerQueue, Windows;
 
 type
   TIdSipUserAgent = class(TIdSipAbstractCore,
@@ -31,7 +31,7 @@ type
     HasRegistered:             Boolean;
 
     function  DefaultFrom: String;
-    function  DefaultPort(SecureTransport: Boolean): Cardinal;
+    function  DefaultPort(SecureTransport: Boolean): TPortNum;
     function  GetDoNotDisturb: Boolean;
     function  GetInitialResendInterval: Cardinal;
     function  GetProgressResendInterval: Cardinal;
@@ -300,14 +300,14 @@ type
   TIdSipPendingMappedRouteAction = class(TIdSipPendingCoreConfigurationAction)
   private
     fGateway:      String;
-    fMappedPort:   Cardinal;
+    fMappedPort:   TPortNum;
     fMask:         String;
     fNetwork:      String;
   public
     procedure Execute; override;
 
     property Gateway:    String   read fGateway write fGateway;
-    property MappedPort: Cardinal read fMappedPort write fMappedPort;
+    property MappedPort: TPortNum read fMappedPort write fMappedPort;
     property Mask:       String   read fMask write fMask;
     property Network:    String   read fNetwork write fNetwork;
   end;
@@ -367,7 +367,7 @@ type
   TIdSipPendingMockDnsSRVRecordAction = class(TIdSipPendingMockDnsAction)
   private
     fDomain:   String;
-    fPort:     Cardinal;
+    fPort:     TPortNum;
     fPriority: Cardinal;
     fService:  String;
     fTarget:   String;
@@ -376,7 +376,7 @@ type
     procedure Execute; override;
 
     property Domain:   String   read fDomain write fDomain;
-    property Port:     Cardinal read fPort write fPort;
+    property Port:     TPortNum read fPort write fPort;
     property Priority: Cardinal read fPriority write fPriority;
     property Service:  String   read fService write fService;
     property Target:   String   read fTarget write fTarget;
@@ -687,7 +687,7 @@ begin
   Result := 'unknown <sip:unknown@' + Self.HostName + '>';
 end;
 
-function TIdSipUserAgent.DefaultPort(SecureTransport: Boolean): Cardinal;
+function TIdSipUserAgent.DefaultPort(SecureTransport: Boolean): TPortNum;
 begin
   if SecureTransport then
     Result := DefaultSipsPort
@@ -1006,7 +1006,7 @@ procedure TIdSipStackConfigurator.AddMappedRoute(UserAgent: TIdSipAbstractCore;
                                                  const MappedRouteLine: String;
                                                  PendingActions: TObjectList);
 var
-  MappedPort:        Cardinal;
+  MappedPort:        TPortNum;
   Gateway:           String;
   Line:              String;
   MappedRouteAction: TIdSipPendingMappedRouteAction;
@@ -1036,7 +1036,7 @@ begin
   if (Port = '') then
     MappedPort := TIdSipTransportRegistry.DefaultPortFor(TcpTransport)
   else
-    MappedPort := StrToInt(Port);
+    MappedPort := StrToPortNum(Port);
 
   MappedRouteAction := TIdSipPendingMappedRouteAction.Create(UserAgent);
   MappedRouteAction.Network      := Network;
@@ -1249,7 +1249,7 @@ begin
 
   Pending := TIdSipPendingMockDnsSRVRecordAction.Create(UserAgent);
   Pending.Domain   := Domain;
-  Pending.Port     := StrToInt(Port);
+  Pending.Port     := StrToPortNum(Port);
   Pending.Priority := StrToInt(Priority);
   Pending.Service  := Service;
   Pending.Target   := Target;

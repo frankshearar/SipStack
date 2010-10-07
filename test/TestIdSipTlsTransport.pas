@@ -12,7 +12,7 @@ unit TestIdSipTlsTransport;
 interface
 
 uses
-  IdSipTransport, TestFrameworkSipTransport;
+  IdConnectionBindings, IdSipTransport, TestFrameworkSipTransport;
 
 type
   TestTIdSipTLSTransport = class(TestTIdSipTransport)
@@ -25,7 +25,7 @@ type
   public
     procedure SetUp; override;
 
-    function  DefaultPort: Cardinal; override;
+    function  DefaultPort: TPortNum; override;
   published
     procedure TestGetTransportType;
     procedure TestIsReliable;
@@ -65,7 +65,7 @@ begin
 }
 end;
 
-function TestTIdSipTLSTransport.DefaultPort: Cardinal;
+function TestTIdSipTLSTransport.DefaultPort: TPortNum;
 begin
   Result := DefaultSipsPort;
 end;

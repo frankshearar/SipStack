@@ -161,7 +161,7 @@ type
     fMediaType:        TIdSdpMediaType;
     fRTPMapAttributes: TIdSdpRTPMapAttributes;
     FormatList:        TStrings;
-    fPort:             Cardinal;
+    fPort:             TPortNum;
     fPortCount:        Cardinal;
     fProtocol:         String;
 
@@ -209,7 +209,7 @@ type
     property Key:                     TIdSdpKey              read GetKey;
     property MediaName:               String                 read fMediaName write fMediaName;
     property MediaType:               TIdSdpMediaType        read fMediaType write fMediaType;
-    property Port:                    Cardinal               read fPort write fPort;
+    property Port:                    TPortNum               read fPort write fPort;
     property PortCount:               Cardinal               read fPortCount write fPortCount;
     property RTPMapAttributes:        TIdSdpRTPMapAttributes read GetRTPMapAttributes;
     property Protocol:                String                 read fProtocol write fProtocol;
@@ -584,12 +584,12 @@ type
   private
     DataListeners:       TIdNotificationList;
     DataSendListeners:   TIdNotificationList;
-    fHighestAllowedPort: Cardinal;
+    fHighestAllowedPort: TPortNum;
     fIsOffer:            Boolean;
     fOnHold:             Boolean;
     fRemoteDescription:  TIdSdpMediaDescription;
     fLocalDescription:   TIdSdpMediaDescription;
-    fLowestAllowedPort:  Cardinal;
+    fLowestAllowedPort:  TPortNum;
     fTimer:              TIdTimerQueue;
     PreHoldDirection:    TIdSdpDirection;
 
@@ -598,7 +598,7 @@ type
     procedure SetDirection(Value: TIdSdpDirection);
     procedure SetLocalDescription(Value: TIdSdpMediaDescription);
     procedure SetRemoteDescription(const Value: TIdSdpMediaDescription);
-    function  SufficientPortsFree(Port: Cardinal): Boolean;
+    function  SufficientPortsFree(Port: TPortNum): Boolean;
   protected
     Factory: TIdSdpMediaStreamFactory;
 
@@ -607,10 +607,10 @@ type
     procedure BeforeSetLocalDescription(Value: TIdSdpMediaDescription); virtual;
     procedure BeforeSetRemoteDescription(Value: TIdSdpMediaDescription); virtual;
     procedure BindListeningStreams;
-    function  GetPort(Index: Integer): Cardinal; virtual;
+    function  GetPort(Index: Integer): TPortNum; virtual;
     procedure InitializeLocalServers; virtual;
     procedure InternalCreate; virtual;
-    function  NextPort(PreviousPort: Cardinal): Cardinal; virtual;
+    function  NextPort(PreviousPort: TPortNum): TPortNum; virtual;
     procedure NotifyOfData(Binding: TIdConnectionBindings; Data: TStream; Format: String);
     procedure NotifyOfSentData(Data: TStream; Format: String; LayerID: Integer);
     procedure ReallySendData(Data: TStream; Format: String; LayerID: Integer = 0); virtual;
@@ -623,7 +623,7 @@ type
 
     procedure AddDataListener(const Listener: IIdSdpMediaListener);
     procedure AddDataSendListener(const Listener: IIdSdpMediaSendListener);
-    function  AllowedPort(Port: Cardinal): Boolean;
+    function  AllowedPort(Port: TPortNum): Boolean;
     function  IsListening: Boolean; virtual;
     function  IsNull: Boolean; virtual;
     function  IsReceiver: Boolean;
@@ -641,13 +641,13 @@ type
     function  UsesBinding(Binding: TIdConnectionBindings): Boolean;
 
     property Direction:             TIdSdpDirection        read GetDirection write SetDirection;
-    property HighestAllowedPort:    Cardinal               read fHighestAllowedPort write fHighestAllowedPort;
+    property HighestAllowedPort:    TPortNum               read fHighestAllowedPort write fHighestAllowedPort;
     property IsOffer:               Boolean                read fIsOffer write fIsOffer;
     property LocalDescription:      TIdSdpMediaDescription read fLocalDescription write SetLocalDescription;
-    property LowestAllowedPort:     Cardinal               read fLowestAllowedPort write fLowestAllowedPort;
+    property LowestAllowedPort:     TPortNum               read fLowestAllowedPort write fLowestAllowedPort;
     property OnHold:                Boolean                read fOnHold;
     property PortCount:             Cardinal               read GetPortCount;
-    property Ports[Index: Integer]: Cardinal               read GetPort;
+    property Ports[Index: Integer]: TPortNum               read GetPort;
     property RemoteDescription:     TIdSdpMediaDescription read fRemoteDescription write SetRemoteDescription;
     property Timer:                 TIdTimerQueue          read fTimer write SetTimer;
   end;
@@ -698,10 +698,10 @@ type
     procedure AfterSetRemoteDescription(Value: TIdSdpMediaDescription); override;
     procedure BeforeSetLocalDescription(Value: TIdSdpMediaDescription); override;
     procedure BeforeSetRemoteDescription(Value: TIdSdpMediaDescription); override;
-    function  GetPort(Index: Integer): Cardinal; override;
+    function  GetPort(Index: Integer): TPortNum; override;
     procedure InitializeLocalServers; override;
     procedure InternalCreate; override;
-    function  NextPort(PreviousPort: Cardinal): Cardinal; override;
+    function  NextPort(PreviousPort: TPortNum): TPortNum; override;
     procedure ReallySendData(Data: TStream; Format: String; LayerID: Integer = 0); override;
     function  RequiredPorts: Cardinal; override;
     procedure SetTimer(Value: TIdTimerQueue); override;
@@ -713,7 +713,7 @@ type
     procedure AddRTPSendListener(const Listener: IIdRTPSendListener);
     function  IsListening: Boolean; override;
     procedure JoinSession; override;
-    function  MatchPort(Port: Cardinal): Boolean;
+    function  MatchPort(Port: TPortNum): Boolean;
 
     procedure RemoveRTPListener(const Listener: IIdRTPListener);
     procedure RemoveRTPSendListener(const Listener: IIdRTPSendListener);
@@ -770,8 +770,8 @@ type
   protected
     function  GetAddress: String; virtual;
     function  GetPeerAddress: String; virtual;
-    function  GetPeerPort: Cardinal; virtual;
-    function  GetPort: Cardinal; virtual;
+    function  GetPeerPort: TPortNum; virtual;
+    function  GetPort: TPortNum; virtual;
     procedure NotifyOfConnection;
     procedure NotifyOfDisconnection;
     procedure NotifyOfException(ExceptionType: ExceptClass; ExceptionMessage: String);
@@ -787,20 +787,20 @@ type
     destructor  Destroy; override;
 
     procedure AddDataListener(Listener: IIdSdpTcpConnectionListener);
-    procedure ConnectTo(PeerAddress: String; PeerPort: Cardinal); virtual;
+    procedure ConnectTo(PeerAddress: String; PeerPort: TPortNum); virtual;
     procedure Disconnect; virtual;
     function  IsActive: Boolean; virtual;
     function  IsConnected: Boolean; virtual;
     function  IsServer: Boolean; virtual;
-    procedure ListenOn(Address: String; Port: Cardinal); virtual;
+    procedure ListenOn(Address: String; Port: TPortNum); virtual;
     procedure ReceiveData(Data: TStream; ReceivedOn: TIdConnectionBindings); virtual;
     procedure RemoveDataListener(Listener: IIdSdpTcpConnectionListener);
     procedure SendData(Data: TStream); virtual;
 
     property Address:     String        read GetAddress;
-    property Port:        Cardinal      read GetPort;
+    property Port:        TPortNum      read GetPort;
     property PeerAddress: String        read GetPeerAddress;
-    property PeerPort:    Cardinal      read GetPeerPort;
+    property PeerPort:    TPortNum      read GetPeerPort;
     property Timeout:     Integer       read fTimeout write fTimeout;
     property Timer:       TIdTimerQueue read fTimer write SetTimer;
   end;
@@ -820,10 +820,10 @@ type
   public
     class function Singleton: TIdSdpTcpConnectionRegistry;
 
-    function ClientConnectedTo(Host: String; Port: Cardinal): TIdSdpBaseTcpConnection;
+    function ClientConnectedTo(Host: String; Port: TPortNum): TIdSdpBaseTcpConnection;
     function FindConnection(const ServerID: TRegisteredObjectID): TIdSdpBaseTcpConnection;
-    function ServerOn(Host: String; Port: Cardinal): TIdSdpBaseTcpConnection;
-    function ServerRunningOn(Host: String; Port: Cardinal): Boolean;
+    function ServerOn(Host: String; Port: TPortNum): TIdSdpBaseTcpConnection;
+    function ServerRunningOn(Host: String; Port: TPortNum): Boolean;
   end;
 
   // I represent a real TCP connection, but one that's a "holdconn" stream - a
@@ -832,15 +832,15 @@ type
   protected
     function  GetAddress: String; override;
     function  GetPeerAddress: String; override;
-    function  GetPeerPort: Cardinal; override;
-    function  GetPort: Cardinal; override;
+    function  GetPeerPort: TPortNum; override;
+    function  GetPort: TPortNum; override;
   public
-    procedure ConnectTo(PeerAddress: String; PeerPort: Cardinal); override;
+    procedure ConnectTo(PeerAddress: String; PeerPort: TPortNum); override;
     procedure SendData(Data: TStream); override;
     procedure Disconnect; override;
     function  IsActive: Boolean; override;
     function  IsConnected: Boolean; override;
-    procedure ListenOn(Address: String; Port: Cardinal); override;
+    procedure ListenOn(Address: String; Port: TPortNum); override;
     procedure ReceiveData(Data: TStream; ReceivedOn: TIdConnectionBindings); override;
   end;
 
@@ -900,18 +900,18 @@ type
   protected
     function  GetAddress: String; override;
     function  GetPeerAddress: String; override;
-    function  GetPeerPort: Cardinal; override;
-    function  GetPort: Cardinal; override;
+    function  GetPeerPort: TPortNum; override;
+    function  GetPort: TPortNum; override;
     procedure SetTimer(Value: TIdTimerQueue); override;
   public
     constructor Create; override;
     destructor  Destroy; override;
 
-    procedure ConnectTo(PeerAddress: String; PeerPort: Cardinal); override;
+    procedure ConnectTo(PeerAddress: String; PeerPort: TPortNum); override;
     procedure Disconnect; override;
     function  IsActive: Boolean; override;
     function  IsConnected: Boolean; override;
-    procedure ListenOn(Address: String; Port: Cardinal); override;
+    procedure ListenOn(Address: String; Port: TPortNum); override;
     procedure SendData(Data: TStream); override;
   end;
 
@@ -930,18 +930,18 @@ type
   protected
     function  GetAddress: String; override;
     function  GetPeerAddress: String; override;
-    function  GetPeerPort: Cardinal; override;
-    function  GetPort: Cardinal; override;
+    function  GetPeerPort: TPortNum; override;
+    function  GetPort: TPortNum; override;
   public
     constructor Create; override;
     destructor  Destroy; override;
 
-    procedure ConnectTo(PeerAddress: String; PeerPort: Cardinal); override;
+    procedure ConnectTo(PeerAddress: String; PeerPort: TPortNum); override;
     procedure Disconnect; override;
     function  IsActive: Boolean; override;
     function  IsConnected: Boolean; override;
     function  IsServer: Boolean; override;
-    procedure ListenOn(Address: String; Port: Cardinal); override;
+    procedure ListenOn(Address: String; Port: TPortNum); override;
     procedure SendData(Data: TStream); override;
   end;
 
@@ -954,15 +954,15 @@ type
     fIsServer:         Boolean;
     fListenOnCalled:   Boolean;
     fPeerAddress:      String;
-    fPeerPort:         Cardinal;
-    fPort:             Cardinal;
+    fPeerPort:         TPortNum;
+    fPort:             TPortNum;
     fReceivedData:     String;
     fSentData:         String;
   protected
     function GetAddress: String; override;
     function GetPeerAddress: String; override;
-    function GetPeerPort: Cardinal; override;
-    function GetPort: Cardinal; override;
+    function GetPeerPort: TPortNum; override;
+    function GetPort: TPortNum; override;
   public
     class function ClientConnectionType: TIdSdpBaseTcpConnectionClass; override;
     class function NullConnectionType: TIdSdpBaseTcpConnectionClass; override;
@@ -987,27 +987,27 @@ type
 
   TIdSdpMockTcpNullConnection = class(TIdSdpMockTcpConnection)
   public
-    procedure ConnectTo(PeerAddress: String; PeerPort: Cardinal); override;
+    procedure ConnectTo(PeerAddress: String; PeerPort: TPortNum); override;
     procedure ForceDisconnect; override;
-    procedure ListenOn(Address: String; Port: Cardinal); override;
+    procedure ListenOn(Address: String; Port: TPortNum); override;
     procedure ReceiveData(Data: TStream; ReceivedOn: TIdConnectionBindings); override;
     procedure RemotePartyAccepts; override;
   end;
 
   TIdSdpMockTcpClientConnection = class(TIdSdpMockTcpConnection)
   private
-    function EphemeralPort: Cardinal;
+    function EphemeralPort: TPortNum;
   public
-    procedure ConnectTo(PeerAddress: String; PeerPort: Cardinal); override;
+    procedure ConnectTo(PeerAddress: String; PeerPort: TPortNum); override;
     function  IsServer: Boolean; override;
-    procedure ListenOn(Address: String; Port: Cardinal); override;
+    procedure ListenOn(Address: String; Port: TPortNum); override;
   end;
 
   TIdSdpMockTcpServerConnection = class(TIdSdpMockTcpConnection)
   public
-    procedure ConnectTo(PeerAddress: String; PeerPort: Cardinal); override;
+    procedure ConnectTo(PeerAddress: String; PeerPort: TPortNum); override;
     function  IsServer: Boolean; override;
-    procedure ListenOn(Address: String; Port: Cardinal); override;
+    procedure ListenOn(Address: String; Port: TPortNum); override;
   end;
 
   TConnectionTypeArray = array[stActive..stUnknown, stActive..stUnknown] of TIdSdpBaseTcpConnectionClass;
@@ -1052,7 +1052,7 @@ type
   protected
     procedure AfterSetLocalDescription(Value: TIdSdpMediaDescription); override;
     procedure AfterSetRemoteDescription(Value: TIdSdpMediaDescription); override;
-    function  GetPort(Index: Integer): Cardinal; override;
+    function  GetPort(Index: Integer): TPortNum; override;
     procedure InitializeLocalServers; override;
     procedure InternalCreate; override;
     procedure ReallySendData(Data: TStream; Format: String; LayerID: Integer = 0); override;
@@ -1086,12 +1086,12 @@ type
   // use me to send (RTP) data to the remote peer.
   TIdSDPMultimediaSession = class(TObject)
   private
-    fHighestAllowedPort:  Cardinal;
+    fHighestAllowedPort:  TPortNum;
     Factory:              TIdSdpMediaStreamFactory;
     FirstLocalSessDesc:   Boolean;
     fIsOffer:             Boolean;
     fLocalMachineName:    String;
-    fLowestAllowedPort:   Cardinal;
+    fLowestAllowedPort:   TPortNum;
     fLocalSessionID:      String;
     fLocalSessionName:    String;
     fLocalSessionVersion: Int64;
@@ -1108,9 +1108,9 @@ type
     procedure SetIsOffer(Value: Boolean);
     function  GetStreams(Index: Integer): TIdSdpBaseMediaStream;
     procedure RecreateStreams(LocalDescription: TIdSdpPayload);
-    procedure SetHighestAllowedPort(Value: Cardinal);
+    procedure SetHighestAllowedPort(Value: TPortNum);
     procedure SetLocalMachineName(Value: String);
-    procedure SetLowestAllowedPort(Value: Cardinal);
+    procedure SetLowestAllowedPort(Value: TPortNum);
     procedure UpdateSessionVersion;
   public
     constructor Create(Profile: TIdRTPProfile; Factory: TIdSdpMediaStreamFactory; ExecutionContext: TIdTimerQueue);
@@ -1133,11 +1133,11 @@ type
     function  StreamCount: Integer;
     procedure TakeOffHold;
 
-    property HighestAllowedPort:      Cardinal              read fHighestAllowedPort write SetHighestAllowedPort;
+    property HighestAllowedPort:      TPortNum              read fHighestAllowedPort write SetHighestAllowedPort;
     property IsOffer:                 Boolean               read fIsOffer write SetIsOffer;
     property LocalMachineName:        String                read fLocalMachineName write SetLocalMachineName;
     property LocalSessionID:          String                read fLocalSessionID write fLocalSessionID;
-    property LowestAllowedPort:       Cardinal              read fLowestAllowedPort write SetLowestAllowedPort;
+    property LowestAllowedPort:       TPortNum              read fLowestAllowedPort write SetLowestAllowedPort;
     property OnHold:                  Boolean               read fOnHold;
     property LocalSessionName:        String                read fLocalSessionName write fLocalSessionName;
     property Streams[Index: Integer]: TIdSdpBaseMediaStream read GetStreams;
@@ -2289,7 +2289,7 @@ var
   I: Integer;
   S: String;
 begin
-  S := 'm=' + Self.MediaTypeAsString + ' ' + IntToStr(Self.Port);
+  S := 'm=' + Self.MediaTypeAsString + ' ' + PortNumToStr(Self.Port);
 
   if (Self.PortCount > 1) then
     S := S + '/' + IntToStr(PortCount);
@@ -4054,7 +4054,7 @@ begin
       raise EParserError.Create(Format(MalformedToken,
                                        [RSSDPMediaDescriptionName,
                                         Name + '=' + OriginalValue]));
-      NewMediaDesc.Port := StrToInt(Token);
+      NewMediaDesc.Port := StrToPortNum(Token);
 
     if (Count <> '') and not Self.IsNumber(Count) then
       raise EParserError.Create(Format(MalformedToken,
@@ -4484,7 +4484,7 @@ begin
   Self.DataSendListeners.AddListener(Listener);
 end;
 
-function TIdSdpBaseMediaStream.AllowedPort(Port: Cardinal): Boolean;
+function TIdSdpBaseMediaStream.AllowedPort(Port: TPortNum): Boolean;
 begin
   Result := (Self.LowestAllowedPort <= Port) and (Port <= Self.HighestAllowedPort);
 end;
@@ -4615,7 +4615,7 @@ begin
 end;
 
 procedure TIdSdpBaseMediaStream.BindListeningStreams;
-  procedure SetPort(Port: Cardinal);
+  procedure SetPort(Port: TPortNum);
   begin
     Self.LocalDescription.Port := Port;
     Self.InitializeLocalServers;
@@ -4650,7 +4650,7 @@ begin
     Self.LocalDescription.RefuseStream;
 end;
 
-function TIdSDPBaseMediaStream.GetPort(Index: Integer): Cardinal;
+function TIdSDPBaseMediaStream.GetPort(Index: Integer): TPortNum;
 begin
   Result := 0;
   RaiseAbstractError(Self.ClassName, 'GetPort');
@@ -4673,7 +4673,7 @@ begin
   Self.HighestAllowedPort := HighestPossiblePort;
 end;
 
-function TIdSdpBaseMediaStream.NextPort(PreviousPort: Cardinal): Cardinal;
+function TIdSdpBaseMediaStream.NextPort(PreviousPort: TPortNum): TPortNum;
 begin
   // Return the next port to use for this kind of stream. Some streams require
   // multiple ports!
@@ -4773,7 +4773,7 @@ begin
   Self.AfterSetRemoteDescription(Value);
 end;
 
-function TIdSdpBaseMediaStream.SufficientPortsFree(Port: Cardinal): Boolean;
+function TIdSdpBaseMediaStream.SufficientPortsFree(Port: TPortNum): Boolean;
 begin
   // Return true if there are enough ports free between Port and
   // HighestAllowedPort to start this stream. RTP, for instance, requires two
@@ -4823,7 +4823,7 @@ begin
     Self.ServerAt(I).Session.JoinSession;
 end;
 
-function TIdSDPMediaStream.MatchPort(Port: Cardinal): Boolean;
+function TIdSDPMediaStream.MatchPort(Port: TPortNum): Boolean;
 var
   I: Integer;
 begin
@@ -4898,7 +4898,7 @@ begin
 //                              Self.RemoteDescription.RTPMapAttributes);
 end;
 
-function TIdSDPMediaStream.GetPort(Index: Integer): Cardinal;
+function TIdSDPMediaStream.GetPort(Index: Integer): TPortNum;
 begin
   Result := Self.ServerAt(Index).RTPPort;
 end;
@@ -4915,7 +4915,7 @@ begin
   Self.Servers          := TObjectList.Create(true);
 end;
 
-function TIdSDPMediaStream.NextPort(PreviousPort: Cardinal): Cardinal;
+function TIdSDPMediaStream.NextPort(PreviousPort: TPortNum): TPortNum;
 begin
   Result := PreviousPort + 2; // One for the RTP socket, one for the RTCP socket.
 end;
@@ -4988,6 +4988,7 @@ begin
   // LayerID denotes a layer in an hierarchically encoded stream.
   Result := nil;
   I      := 0;
+
   while (Result = nil) and (I < Self.Servers.Count) do begin
     if (Self.ServerAt(I).RTPPort = LayerID) then
       Result := Self.ServerAt(I);
@@ -5252,7 +5253,7 @@ begin
   Self.DataListeners.AddListener(Listener);
 end;
 
-procedure TIdSdpBaseTcpConnection.ConnectTo(PeerAddress: String; PeerPort: Cardinal);
+procedure TIdSdpBaseTcpConnection.ConnectTo(PeerAddress: String; PeerPort: TPortNum);
 begin
   RaiseAbstractError(Self.ClassName, 'ConnectTo');
 end;
@@ -5290,7 +5291,7 @@ begin
   Result := false;
 end;
 
-procedure TIdSdpBaseTcpConnection.ListenOn(Address: String; Port: Cardinal);
+procedure TIdSdpBaseTcpConnection.ListenOn(Address: String; Port: TPortNum);
 begin
   RaiseAbstractError(Self.ClassName, 'ListenOn');
 end;
@@ -5339,13 +5340,13 @@ begin
   RaiseAbstractError(Self.ClassName, 'GetPeerAddress');
 end;
 
-function TIdSdpBaseTcpConnection.GetPeerPort: Cardinal;
+function TIdSdpBaseTcpConnection.GetPeerPort: TPortNum;
 begin
   Result := 0;
   RaiseAbstractError(Self.ClassName, 'GetPeerPort');
 end;
 
-function TIdSdpBaseTcpConnection.GetPort: Cardinal;
+function TIdSdpBaseTcpConnection.GetPort: TPortNum;
 begin
   Result := 0;
   RaiseAbstractError(Self.ClassName, 'GetPort');
@@ -5407,7 +5408,7 @@ begin
   // Make it look like this is a socket error; in a sense, it is!
 
   raise EIdSocketError.Create(Msg);
-end;  
+end;
 
 procedure TIdSdpBaseTcpConnection.ScheduleNotification(WaitTime: Cardinal; Wait: TIdWait);
 begin
@@ -5430,7 +5431,7 @@ begin
   Result := GSdpTcpConnectionRegistry;
 end;
 
-function TIdSdpTcpConnectionRegistry.ClientConnectedTo(Host: String; Port: Cardinal): TIdSdpBaseTcpConnection;
+function TIdSdpTcpConnectionRegistry.ClientConnectedTo(Host: String; Port: TPortNum): TIdSdpBaseTcpConnection;
 var
   I:      Integer;
   L:      TStrings;
@@ -5469,7 +5470,7 @@ begin
   Result := O as TIdSdpBaseTcpConnection;
 end;
 
-function TIdSdpTcpConnectionRegistry.ServerOn(Host: String; Port: Cardinal): TIdSdpBaseTcpConnection;
+function TIdSdpTcpConnectionRegistry.ServerOn(Host: String; Port: TPortNum): TIdSdpBaseTcpConnection;
 var
   I:      Integer;
   L:      TStrings;
@@ -5493,7 +5494,7 @@ begin
   end;
 end;
 
-function TIdSdpTcpConnectionRegistry.ServerRunningOn(Host: String; Port: Cardinal): Boolean;
+function TIdSdpTcpConnectionRegistry.ServerRunningOn(Host: String; Port: TPortNum): Boolean;
 var
   I:      Integer;
   L:      TStrings;
@@ -5531,7 +5532,7 @@ end;
 //******************************************************************************
 //* TIdSdpTcpNullConnection Public methods *************************************
 
-procedure TIdSdpTcpNullConnection.ConnectTo(PeerAddress: String; PeerPort: Cardinal);
+procedure TIdSdpTcpNullConnection.ConnectTo(PeerAddress: String; PeerPort: TPortNum);
 begin
   // Do nothing.
 end;
@@ -5556,7 +5557,7 @@ begin
   Result := false;
 end;
 
-procedure TIdSdpTcpNullConnection.ListenOn(Address: String; Port: Cardinal);
+procedure TIdSdpTcpNullConnection.ListenOn(Address: String; Port: TPortNum);
 begin
   // Do nothing.
 end;
@@ -5578,12 +5579,12 @@ begin
   Result := IPv4ZeroAddress;
 end;
 
-function TIdSdpTcpNullConnection.GetPeerPort: Cardinal;
+function TIdSdpTcpNullConnection.GetPeerPort: TPortNum;
 begin
   Result := TcpDiscardPort;
 end;
 
-function TIdSdpTcpNullConnection.GetPort: Cardinal;
+function TIdSdpTcpNullConnection.GetPort: TPortNum;
 begin
   Result := TcpDiscardPort;
 end;
@@ -5769,7 +5770,7 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSdpTcpClientConnection.ConnectTo(PeerAddress: String; PeerPort: Cardinal);
+procedure TIdSdpTcpClientConnection.ConnectTo(PeerAddress: String; PeerPort: TPortNum);
 begin
   // If we're already connected somewhere, disconnect, terminate the listening
   // thread. Then reconnect, and instantiate a new listening thread.
@@ -5826,7 +5827,7 @@ begin
   Result := Self.IsActive;
 end;
 
-procedure TIdSdpTcpClientConnection.ListenOn(Address: String; Port: Cardinal);
+procedure TIdSdpTcpClientConnection.ListenOn(Address: String; Port: TPortNum);
 begin
   Self.RaiseSocketError('Do not call ListenOn on a client connection');
 end;
@@ -5880,7 +5881,7 @@ begin
   end;
 end;
 
-function TIdSdpTcpClientConnection.GetPeerPort: Cardinal;
+function TIdSdpTcpClientConnection.GetPeerPort: TPortNum;
 begin
   Result := TcpDiscardPort;
 
@@ -5893,7 +5894,7 @@ begin
   end;
 end;
 
-function TIdSdpTcpClientConnection.GetPort: Cardinal;
+function TIdSdpTcpClientConnection.GetPort: TPortNum;
 begin
   Result := TcpDiscardPort;
 
@@ -6019,7 +6020,7 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSdpTcpServerConnection.ConnectTo(PeerAddress: String; PeerPort: Cardinal);
+procedure TIdSdpTcpServerConnection.ConnectTo(PeerAddress: String; PeerPort: TPortNum);
 begin
   Self.RaiseSocketError('Do not call ConnectTo on a server connection');
 end;
@@ -6068,7 +6069,7 @@ begin
   Result := true;
 end;
 
-procedure TIdSdpTcpServerConnection.ListenOn(Address: String; Port: Cardinal);
+procedure TIdSdpTcpServerConnection.ListenOn(Address: String; Port: TPortNum);
 var
   B: TIdSocketHandle;
 begin
@@ -6137,7 +6138,7 @@ begin
   end;
 end;
 
-function TIdSdpTcpServerConnection.GetPeerPort: Cardinal;
+function TIdSdpTcpServerConnection.GetPeerPort: TPortNum;
 var
   Connections: TList;
   C:           TIdTCPConnection;
@@ -6157,7 +6158,7 @@ begin
   end;
 end;
 
-function TIdSdpTcpServerConnection.GetPort: Cardinal;
+function TIdSdpTcpServerConnection.GetPort: TPortNum;
 begin
   if Self.Connection.Active and (Self.Connection.Bindings.Count > 0) then
     Result := Self.Connection.Bindings[0].Port
@@ -6330,12 +6331,12 @@ begin
   Result := Self.fPeerAddress;
 end;
 
-function TIdSdpMockTcpConnection.GetPeerPort: Cardinal;
+function TIdSdpMockTcpConnection.GetPeerPort: TPortNum;
 begin
   Result := Self.fPeerPort;
 end;
 
-function TIdSdpMockTcpConnection.GetPort: Cardinal;
+function TIdSdpMockTcpConnection.GetPort: TPortNum;
 begin
   Result := Self.fPort;
 end;
@@ -6345,7 +6346,7 @@ end;
 //******************************************************************************
 //* TIdSdpMockTcpNullConnection Public methods *********************************
 
-procedure TIdSdpMockTcpNullConnection.ConnectTo(PeerAddress: String; PeerPort: Cardinal);
+procedure TIdSdpMockTcpNullConnection.ConnectTo(PeerAddress: String; PeerPort: TPortNum);
 begin
   // Do nothing.
 end;
@@ -6355,7 +6356,7 @@ begin
   // Do nothing.
 end;
 
-procedure TIdSdpMockTcpNullConnection.ListenOn(Address: String; Port: Cardinal);
+procedure TIdSdpMockTcpNullConnection.ListenOn(Address: String; Port: TPortNum);
 begin
   // Do nothing.
 end;
@@ -6375,7 +6376,7 @@ end;
 //******************************************************************************
 //* TIdSdpMockTcpClientConnection Public methods *******************************
 
-procedure TIdSdpMockTcpClientConnection.ConnectTo(PeerAddress: String; PeerPort: Cardinal);
+procedure TIdSdpMockTcpClientConnection.ConnectTo(PeerAddress: String; PeerPort: TPortNum);
 begin
   Self.fAddress         := '127.0.0.1';
   Self.fConnectToCalled := true;
@@ -6391,14 +6392,14 @@ begin
   Result := false;
 end;
 
-procedure TIdSdpMockTcpClientConnection.ListenOn(Address: String; Port: Cardinal);
+procedure TIdSdpMockTcpClientConnection.ListenOn(Address: String; Port: TPortNum);
 begin
   Self.RaiseSocketError('Do not call ListenOn on a client connection');
 end;
 
 //* TIdSdpMockTcpClientConnection Private methods ******************************
 
-function TIdSdpMockTcpClientConnection.EphemeralPort: Cardinal;
+function TIdSdpMockTcpClientConnection.EphemeralPort: TPortNum;
 begin
   repeat
     Result := GRandomNumber.NextCardinal
@@ -6410,7 +6411,7 @@ end;
 //******************************************************************************
 //* TIdSdpMockTcpServerConnection Public methods *******************************
 
-procedure TIdSdpMockTcpServerConnection.ConnectTo(PeerAddress: String; PeerPort: Cardinal);
+procedure TIdSdpMockTcpServerConnection.ConnectTo(PeerAddress: String; PeerPort: TPortNum);
 begin
   Self.RaiseSocketError('Do not call ConnectTo on a server connection');
 end;
@@ -6420,7 +6421,7 @@ begin
   Result := true;
 end;
 
-procedure TIdSdpMockTcpServerConnection.ListenOn(Address: String; Port: Cardinal);
+procedure TIdSdpMockTcpServerConnection.ListenOn(Address: String; Port: TPortNum);
 begin
   Self.fAddress        := Address;
   Self.fIsActive       := true;
@@ -6502,7 +6503,7 @@ begin
   Self.PossiblyConnect(Self.HaveLocalDescription);
 end;
 
-function TIdSdpTcpMediaStream.GetPort(Index: Integer): Cardinal;
+function TIdSdpTcpMediaStream.GetPort(Index: Integer): TPortNum;
 begin
   Result := Self.ServerAt(Index).Port;
 end;
@@ -7221,7 +7222,7 @@ begin
     Self.CreateStream(LocalDescription.MediaDescriptions[I].Protocol);
 end;
 
-procedure TIdSDPMultimediaSession.SetHighestAllowedPort(Value: Cardinal);
+procedure TIdSDPMultimediaSession.SetHighestAllowedPort(Value: TPortNum);
 var
   I: Integer;
 begin
@@ -7241,7 +7242,7 @@ begin
   Self.fLocalMachineName := Value;
 end;
 
-procedure TIdSDPMultimediaSession.SetLowestAllowedPort(Value: Cardinal);
+procedure TIdSDPMultimediaSession.SetLowestAllowedPort(Value: TPortNum);
 var
   I: Integer;
 begin

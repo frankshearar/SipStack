@@ -704,7 +704,7 @@ type
     fBaseSeqNo:                   Word;
     fCanonicalName:               String;
     fControlAddress:              String;
-    fControlPort:                 Cardinal;
+    fControlPort:                 TPortNum;
     fCycles:                      Cardinal; // The (shifted) count of sequence number wraparounds
     fExpectedPrior:               Cardinal; // The previously calculated number of expected received packets
     fHasLeftSession:              Boolean;
@@ -727,7 +727,7 @@ type
     fSentControl:                 Boolean; // Have we ever sent RTCP packets?
     fSentData:                    Boolean; // Have we ever sent RTP packets?
     fSourceAddress:               String;
-    fSourcePort:                  Cardinal;
+    fSourcePort:                  TPortNum;
     fSyncSrcID:                   Cardinal;
 
     function  DefaultMaxDropout: Word;
@@ -757,7 +757,7 @@ type
 
     property CanonicalName:               String    read fCanonicalName write fCanonicalName;
     property ControlAddress:              String    read fControlAddress write fControlAddress;
-    property ControlPort:                 Cardinal  read fControlPort write fControlPort;
+    property ControlPort:                 TPortNum  read fControlPort write fControlPort;
     property HasLeftSession:              Boolean   read fHasLeftSession write fHasLeftSession;
     property HasSyncSrcID:                Boolean   read fHasSyncSrcID write fHasSyncSrcID;
     property IsSender:                    Boolean   read fIsSender write fIsSender;
@@ -768,7 +768,7 @@ type
     property SentControl:                 Boolean   read fSentControl write fSentControl;
     property SentData:                    Boolean   read fSentData write fSentData;
     property SourceAddress:               String    read fSourceAddress write fSourceAddress;
-    property SourcePort:                  Cardinal  read fSourcePort write fSourcePort;
+    property SourcePort:                  TPortNum  read fSourcePort write fSourcePort;
     property SyncSrcID:                   Cardinal  read fSyncSrcID write fSyncSrcID;
 
     // Sequence number validity, bytecounts, etc
@@ -802,18 +802,18 @@ type
     destructor  Destroy; override;
 
     function  Add(SSRC: Cardinal): TIdRTPMember;
-    function  AddReceiver(Host: String; Port: Cardinal): TIdRTPMember;
+    function  AddReceiver(Host: String; Port: TPortNum): TIdRTPMember;
     function  AddSender(SSRC: Cardinal): TIdRTPMember;
     procedure AdjustTransmissionTime(PreviousMemberCount: Cardinal;
                                      var NextTransmissionTime: TDateTime;
                                      var PreviousTransmissionTime: TDateTime);
     function  Contains(SSRC: Cardinal): Boolean;
-    function  ContainsReceiver(Host: String; Port: Cardinal): Boolean;
+    function  ContainsReceiver(Host: String; Port: TPortNum): Boolean;
     function  Count: Cardinal;
     function  DeterministicSendInterval(ForSender: Boolean;
                                         Session: TIdRTPSession): TDateTime;
     function  Find(SSRC: Cardinal): TIdRTPMember;
-    function  FindReceiver(Host: String; Port: Cardinal): TIdRTPMember;
+    function  FindReceiver(Host: String; Port: TPortNum): TIdRTPMember;
     function  MemberAt(Index: Cardinal): TIdRTPMember;
     function  MemberTimeout(Session: TIdRTPSession): TDateTime;
     function  ReceiverCount: Cardinal;
@@ -905,7 +905,7 @@ type
                                    Binding: TIdConnectionBindings);
     procedure RemoveListener(const Listener: IIdRTPListener);
     procedure SendPacket(const Host: String;
-                         Port: Cardinal;
+                         Port: TPortNum;
                          Packet: TIdRTPBasePacket);
   end;
 
@@ -925,9 +925,9 @@ type
   protected
     function  GetActive: Boolean; virtual;
     function  GetAddress: String; virtual;
-    function  GetDefaultPort: Integer; virtual;
-    function  GetRTCPPort: Cardinal; virtual;
-    function  GetRTPPort: Cardinal; virtual;
+    function  GetDefaultPort: TPortNum; virtual;
+    function  GetRTCPPort: TPortNum; virtual;
+    function  GetRTPPort: TPortNum; virtual;
     function  GetSession: TIdRTPSession; virtual;
     function  GetTimer: TIdTimerQueue; virtual;
     procedure NotifyListenersOfSentRTCP(Packet: TIdRTCPPacket;
@@ -940,11 +940,11 @@ type
                                    Binding: TIdConnectionBindings); virtual;
     procedure SetActive(Value: Boolean); virtual;
     procedure SetAddress(Value: String); virtual;
-    procedure SetDefaultPort(Value: Integer); virtual;
+    procedure SetDefaultPort(Value: TPortNum); virtual;
     procedure SetLocalProfile(Value: TIdRTPProfile); virtual;
     procedure SetRemoteProfile(Value: TIdRTPProfile); virtual;
-    procedure SetRTCPPort(Value: Cardinal); virtual;
-    procedure SetRTPPort(Value: Cardinal); virtual;
+    procedure SetRTCPPort(Value: TPortNum); virtual;
+    procedure SetRTPPort(Value: TPortNum); virtual;
     procedure SetTimer(Value: TIdTimerQueue); virtual;
   public
     constructor Create; override;
@@ -957,16 +957,16 @@ type
     procedure RemoveListener(const Listener: IIdRTPListener);
     procedure RemoveSendListener(const Listener: IIdRTPSendListener);
     procedure SendPacket(const Host: String;
-                         Port: Cardinal;
+                         Port: TPortNum;
                          Packet: TIdRTPBasePacket); virtual;
 
     property Active:        Boolean          read GetActive write SetActive;
     property Address:       String           read GetAddress write SetAddress;
-    property DefaultPort:   Integer          read GetDefaultPort write SetDefaultPort;
+    property DefaultPort:   TPortNum         read GetDefaultPort write SetDefaultPort;
     property LocalProfile:  TIdRTPProfile    read fLocalProfile write SetLocalProfile;
     property RemoteProfile: TIdRTPProfile    read fRemoteProfile write SetRemoteProfile;
-    property RTCPPort:      Cardinal         read GetRTCPPort write SetRTCPPort;
-    property RTPPort:       Cardinal         read GetRTPPort write SetRTPPort;
+    property RTCPPort:      TPortNum         read GetRTCPPort write SetRTCPPort;
+    property RTPPort:       TPortNum         read GetRTPPort write SetRTPPort;
     property Session:       TIdRTPSession    read GetSession;
     property Timer:         TIdTimerQueue    read GetTimer write SetTimer;
   end;
@@ -981,8 +981,8 @@ type
     class function GetAllServers: TStrings;
   public
     class function FindServer(const ServerID: TRegisteredObjectID): TIdBaseRTPAbstractPeer;
-    class function ServerOn(Host: String; Port: Cardinal): TIdBaseRTPAbstractPeer;
-    class function ServerRunningOn(Host: String; Port: Cardinal): Boolean;
+    class function ServerOn(Host: String; Port: TPortNum): TIdBaseRTPAbstractPeer;
+    class function ServerRunningOn(Host: String; Port: TPortNum): Boolean;
   end;
 
   TIdBaseRTPAbstractPeerClass = class of TIdBaseRTPAbstractPeer;
@@ -1060,7 +1060,7 @@ type
     function  AcceptableSSRC(SSRC: Cardinal): Boolean;
     procedure AddListener(const Listener: IIdRTPDataListener);
     function  AddMember(SSRC: Cardinal): TIdRTPMember;
-    function  AddReceiver(Host: String; Port: Cardinal): TIdRTPMember;
+    function  AddReceiver(Host: String; Port: TPortNum): TIdRTPMember;
     function  AddSender(SSRC: Cardinal): TIdRTPMember;
     function  CreateNextReport: TIdCompoundRTCPPacket;
     function  DeterministicSendInterval(ForSender: Boolean;
@@ -1068,7 +1068,7 @@ type
     procedure Initialize;
     function  IsMember(SSRC: Cardinal): Boolean; overload;
     function  IsMember(const Host: String;
-                       Port: Cardinal): Boolean; overload;
+                       Port: TPortNum): Boolean; overload;
     function  IsSender: Boolean; overload;
     function  IsSender(SSRC: Cardinal): Boolean; overload;
     procedure JoinSession;
@@ -1076,7 +1076,7 @@ type
     function  LockMembers: TIdRTPMemberTable;
     function  Member(SSRC: Cardinal): TIdRTPMember; overload;
     function  Member(const Host: String;
-                     Port: Cardinal): TIdRTPMember; overload;
+                     Port: TPortNum): TIdRTPMember; overload;
     function  MemberCount: Cardinal;
     function  NewSSRC: Cardinal;
     function  NextSequenceNo: TIdRTPSequenceNo;
@@ -4442,7 +4442,7 @@ begin
   end;
 end;
 
-function TIdRTPMemberTable.AddReceiver(Host: String; Port: Cardinal): TIdRTPMember;
+function TIdRTPMemberTable.AddReceiver(Host: String; Port: TPortNum): TIdRTPMember;
 begin
   // Sometimes we know we want to send data to someone even though they've not
   // sent us data first. For instance, when you set up a SIP session, you know
@@ -4507,7 +4507,7 @@ begin
   Result := Assigned(Self.Find(SSRC));
 end;
 
-function TIdRTPMemberTable.ContainsReceiver(Host: String; Port: Cardinal): Boolean;
+function TIdRTPMemberTable.ContainsReceiver(Host: String; Port: TPortNum): Boolean;
 begin
   Result := Assigned(Self.FindReceiver(Host, Port));
 end;
@@ -4540,7 +4540,7 @@ begin
   end;
 end;
 
-function TIdRTPMemberTable.FindReceiver(Host: String; Port: Cardinal): TIdRTPMember;
+function TIdRTPMemberTable.FindReceiver(Host: String; Port: TPortNum): TIdRTPMember;
 var
   I:      Cardinal;
   Member: TIdRTPMember;
@@ -4951,7 +4951,7 @@ begin
 end;
 
 procedure TIdBaseRTPAbstractPeer.SendPacket(const Host: String;
-                                            Port: Cardinal;
+                                            Port: TPortNum;
                                             Packet: TIdRTPBasePacket);
 begin
 end;
@@ -4968,17 +4968,17 @@ begin
   Result := '';
 end;
 
-function TIdBaseRTPAbstractPeer.GetDefaultPort: Integer;
+function TIdBaseRTPAbstractPeer.GetDefaultPort: TPortNum;
 begin
   Result := 0;
 end;
 
-function TIdBaseRTPAbstractPeer.GetRTCPPort: Cardinal;
+function TIdBaseRTPAbstractPeer.GetRTCPPort: TPortNum;
 begin
   Result := 0;
 end;
 
-function TIdBaseRTPAbstractPeer.GetRTPPort: Cardinal;
+function TIdBaseRTPAbstractPeer.GetRTPPort: TPortNum;
 begin
   Result := 0;
 end;
@@ -5063,7 +5063,7 @@ procedure TIdBaseRTPAbstractPeer.SetAddress(Value: String);
 begin
 end;
 
-procedure TIdBaseRTPAbstractPeer.SetDefaultPort(Value: Integer);
+procedure TIdBaseRTPAbstractPeer.SetDefaultPort(Value: TPortNum);
 begin
 end;
 
@@ -5079,11 +5079,11 @@ begin
   Self.Session.RemoteProfile := Value;
 end;
 
-procedure TIdBaseRTPAbstractPeer.SetRTCPPort(Value: Cardinal);
+procedure TIdBaseRTPAbstractPeer.SetRTCPPort(Value: TPortNum);
 begin
 end;
 
-procedure TIdBaseRTPAbstractPeer.SetRTPPort(Value: Cardinal);
+procedure TIdBaseRTPAbstractPeer.SetRTPPort(Value: TPortNum);
 begin
 end;
 
@@ -5146,7 +5146,7 @@ begin
   Result := O as TIdBaseRTPAbstractPeer;
 end;
 
-class function TIdRTPPeerRegistry.ServerOn(Host: String; Port: Cardinal): TIdBaseRTPAbstractPeer;
+class function TIdRTPPeerRegistry.ServerOn(Host: String; Port: TPortNum): TIdBaseRTPAbstractPeer;
 var
   I:      Integer;
   L:      TStrings;
@@ -5170,7 +5170,7 @@ begin
   end;
 end;
 
-class function TIdRTPPeerRegistry.ServerRunningOn(Host: String; Port: Cardinal): Boolean;
+class function TIdRTPPeerRegistry.ServerRunningOn(Host: String; Port: TPortNum): Boolean;
 var
   I:      Integer;
   L:      TStrings;
@@ -5270,7 +5270,7 @@ begin
   end;
 end;
 
-function TIdRTPSession.AddReceiver(Host: String; Port: Cardinal): TIdRTPMember;
+function TIdRTPSession.AddReceiver(Host: String; Port: TPortNum): TIdRTPMember;
 var
   MemberTable: TIdRTPMemberTable;
 begin
@@ -5380,7 +5380,7 @@ begin
 end;
 
 function TIdRTPSession.IsMember(const Host: String;
-                                Port: Cardinal): Boolean;
+                                Port: TPortNum): Boolean;
 begin
   Result := Assigned(Self.Member(Host, Port));
 end;
@@ -5447,7 +5447,7 @@ begin
 end;
 
 function TIdRTPSession.Member(const Host: String;
-                              Port: Cardinal): TIdRTPMember;
+                              Port: TPortNum): TIdRTPMember;
 var
   MemberTable: TIdRTPMemberTable;
 begin

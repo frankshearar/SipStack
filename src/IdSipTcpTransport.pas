@@ -171,7 +171,7 @@ type
     fHandle: TSocket;
 
     procedure BeforeConnect; virtual;
-    function  GetAdvertisedPort: Cardinal; virtual; // TODO: TPortNum
+    function  GetAdvertisedPort: TPortNum; virtual;
     procedure OnAccept(ErrorCode: Integer); virtual;
     procedure RewriteLocationHeaders(Msg: TIdSipMessage);
     procedure SetLocalBinding(Addr: TSockAddr; Binding: TIdConnectionBindings);
@@ -186,7 +186,7 @@ type
     procedure ProcessMessages;
     function  Receive(var AbnormalTermination: Boolean): TIdSipMessage;
 
-    property AdvertisedPort: Cardinal              read GetAdvertisedPort;
+    property AdvertisedPort: TPortNum              read GetAdvertisedPort;
     property Binding:        TIdConnectionBindings read fBinding;
     property Configured:     Boolean               read fConfigured write fConfigured;
     property CurrentMsg:     TIdSipMessage         read fCurrentMsg;
@@ -218,17 +218,17 @@ type
   // I am a socket that connects to another machine.
   TIdSipClientConnection = class(TIdSipSendingConnection)
   private
-    fAdvertisedPort: Cardinal; // TODO: TPortNum
+    fAdvertisedPort: TPortNum;
 
     procedure ScheduleConnectCancellation(Timeout: Cardinal);
   protected
     procedure BeforeConnect; override;
-    function  GetAdvertisedPort: Cardinal; override;
+    function  GetAdvertisedPort: TPortNum; override;
   public
-    procedure Connect(PeerIP: String; PeerPort: Cardinal; Timeout: Cardinal); overload;
+    procedure Connect(PeerIP: String; PeerPort: TPortNum; Timeout: Cardinal); overload;
     procedure Connect(Location: TIdSipLocation; Timeout: Cardinal); overload;
     function  IsOutbound: Boolean; override;
-    procedure SetAdvertisedPort(Value: Cardinal);
+    procedure SetAdvertisedPort(Value: TPortNum);
   end;
 
   // I am a socket on the server side of a connection.
@@ -250,7 +250,7 @@ type
     destructor Destroy; override;
 
     function  Accept: TIdSipServerConnection;
-    procedure Listen(IP: String; Port: Cardinal; QueueLength: Cardinal); overload;
+    procedure Listen(IP: String; Port: TPortNum; QueueLength: Cardinal); overload;
     procedure Listen(Location: TIdSipLocation; QueueLength: Cardinal); overload;
   end;
 
@@ -444,7 +444,7 @@ type
     function  ClientFor(Handle: TIdConnectionHandle): TIdSipSendingConnection; overload;
     procedure Connect(Handle: TIdConnectionHandle; ErrorCode: Integer);
     procedure Disconnect(Handle: TIdConnectionHandle; ErrorCode: Integer);
-    function  FirstServerPortFor(IPAddress: String): Cardinal;
+    function  FirstServerPortFor(IPAddress: String): TPortNum;
     function  ListeningSocket(Handle: TIdConnectionHandle): TIdSipListeningConnection;
     procedure MessageSent(Msg: TIdSipMessage;
                           Handle: TIdConnectionHandle);
@@ -1235,7 +1235,7 @@ begin
   // By default, do nothing.
 end;
 
-function TIdSipConnection.GetAdvertisedPort: Cardinal;
+function TIdSipConnection.GetAdvertisedPort: TPortNum;
 begin
   Result := Self.Binding.LocalPort;
 end;
@@ -1749,7 +1749,7 @@ end;
 //******************************************************************************
 //* TIdSipClientConnection Public methods **************************************
 
-procedure TIdSipClientConnection.Connect(PeerIP: String; PeerPort: Cardinal; Timeout: Cardinal);
+procedure TIdSipClientConnection.Connect(PeerIP: String; PeerPort: TPortNum; Timeout: Cardinal);
 var
   L: TIdSipLocation;
 begin
@@ -1789,7 +1789,7 @@ begin
   Result := true;
 end;
 
-procedure TIdSipClientConnection.SetAdvertisedPort(Value: Cardinal);
+procedure TIdSipClientConnection.SetAdvertisedPort(Value: TPortNum);
 begin
   Self.fAdvertisedPort := Value;
 end;
@@ -1812,7 +1812,7 @@ begin
   Self.Binding.Transport := TcpTransport;
 end;
 
-function TIdSipClientConnection.GetAdvertisedPort: Cardinal;
+function TIdSipClientConnection.GetAdvertisedPort: TPortNum;
 begin
   Result := Self.fAdvertisedPort;
 end;
@@ -1908,7 +1908,7 @@ begin
   end;
 end;
 
-procedure TIdSipListeningConnection.Listen(IP: String; Port: Cardinal; QueueLength: Cardinal); 
+procedure TIdSipListeningConnection.Listen(IP: String; Port: TPortNum; QueueLength: Cardinal);
 var
   L: TIdSipLocation;
 begin
@@ -2542,7 +2542,7 @@ begin
   Self.Clients.Remove(Connection);
 end;
 
-function TIdSipTcpServer.FirstServerPortFor(IPAddress: String): Cardinal;
+function TIdSipTcpServer.FirstServerPortFor(IPAddress: String): TPortNum;
 var
   I: Integer;
 begin

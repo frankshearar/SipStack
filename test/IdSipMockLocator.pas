@@ -12,7 +12,7 @@ unit IdSipMockLocator;
 interface
 
 uses
-  Classes, Contnrs, IdSipDns, IdSipLocator, IdSipMessage;
+  Classes, Contnrs, IdConnectionBindings, IdSipDns, IdSipLocator, IdSipMessage;
 
 type
   // I represent a version of a Locator used in tests. You can use me to set up
@@ -65,7 +65,7 @@ type
                      const Service: String;
                      Priority: Word;
                      Weight: Word;
-                     Port: Cardinal;
+                     Port: TPortNum;
                      const Target: String);
     procedure Clear;
     procedure RemoveNameRecords(const DomainName: String);
@@ -176,7 +176,7 @@ procedure TIdSipMockLocator.AddSRV(const Domain: String;
                                    const Service: String;
                                    Priority: Word;
                                    Weight: Word;
-                                   Port: Cardinal;
+                                   Port: TPortNum;
                                    const Target: String);
 var
   NewSrv: TIdSrvRecord;

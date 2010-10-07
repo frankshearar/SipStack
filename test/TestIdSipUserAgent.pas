@@ -832,7 +832,7 @@ begin
     // This makes sure that the INVITE goes to the localhost, and avoids any
     // influence from the Locator.
     Self.Destination.Address.Host := '127.0.0.1';
-    Self.Destination.Address.Port := 5060;
+    Self.Destination.Address.Port := DefaultSipPort;
 
     Self.MarkSentRequestCount;
     Self.Core.InviteModule.Call(Self.Core.From, Self.Destination, '', '').Send;
@@ -2205,8 +2205,8 @@ end;
 
 procedure TestTIdSipStackConfigurator.SetUp;
 var
-  NewRegistrarPort: Integer;
-  ServerPort:       Integer;
+  NewRegistrarPort: TPortNum;
+  ServerPort:       TPortNum;
 begin
   inherited SetUp;
 
@@ -3592,7 +3592,7 @@ procedure TestTIdSipStackConfigurator.TestUpdateConfigurationWithTransport;
 var
   Bindings:  TIdSipLocations;
   NewConfig: TStrings;
-  NewPort:   Cardinal;
+  NewPort:   TPortNum;
   UA:        TIdSipUserAgent;
 begin
   NewPort := Self.Port + 1;
@@ -3602,7 +3602,7 @@ begin
   try
     NewConfig := TStringList.Create;
     try
-      NewConfig.Add('Listen: TCP ' + Self.Address + ':' + IntToStr(NewPort));
+      NewConfig.Add('Listen: TCP ' + Self.Address + ':' + PortNumToStr(NewPort));
 
       Self.Conf.UpdateConfiguration(UA, NewConfig);
 

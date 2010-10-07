@@ -157,7 +157,7 @@ type
     procedure AddTransactionDispatcherListener(const Listener: IIdSipTransactionDispatcherListener);
     procedure AddTransportBinding(const Transport: String;
                                   const Address: String;
-                                  Port: Cardinal);
+                                  Port: TPortNum);
     procedure AddTransportListener(Listener: IIdSipTransportListener; Priority: Integer = 0);
     function  AddClientTransaction(InitialRequest: TIdSipRequest): TIdSipTransaction;
     procedure AddManagementListener(Listener: IIdSipTransportManagementListener);
@@ -751,7 +751,7 @@ end;
 
 procedure TIdSipTransactionDispatcher.AddTransportBinding(const Transport: String;
                                                           const Address: String;
-                                                          Port: Cardinal);
+                                                          Port: TPortNum);
 var
   I: Integer;
   T: TIdSipTransport;

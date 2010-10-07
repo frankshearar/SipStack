@@ -52,7 +52,7 @@ type
   // takes place in the context of the TimerQueue and not in the context of the
   // thread listening on the RTP or RTCP port.) In the typical production setup
   // then, if NotifyListeners is true you will receive every packet twice - once
-  // because of the NotificationList, and once because of the TIdWait event.  
+  // because of the NotificationList, and once because of the TIdWait event.
   TIdRTPServer = class(TIdBaseRTPAbstractPeer)
   private
     fNotifyListeners: Boolean;
@@ -65,21 +65,21 @@ type
                                     Binding: TIdConnectionBindings);
     procedure ReceiveRTCPInTimerContext(Packet: TIdRTCPPacket;
                                        Binding: TIdConnectionBindings);
-    procedure SetPort(Server: TIdUdpServer; Port: Cardinal);
+    procedure SetPort(Server: TIdUdpServer; Port: TPortNum);
   protected
     procedure DoUDPRead(Sender: TObject;
                         AData: TStream;
                         ABinding: TIdSocketHandle);
     function  GetActive: Boolean; override;
     function  GetAddress: String; override;
-    function  GetDefaultPort: Integer; override;
-    function  GetRTCPPort: Cardinal; override;
-    function  GetRTPPort: Cardinal; override;
+    function  GetDefaultPort: TPortNum; override;
+    function  GetRTCPPort: TPortNum; override;
+    function  GetRTPPort: TPortNum; override;
     procedure SetActive(Value: Boolean); override;
     procedure SetAddress(Value: String); override;
-    procedure SetDefaultPort(Value: Integer); override;
-    procedure SetRTCPPort(Value: Cardinal); override;
-    procedure SetRTPPort(Value: Cardinal); override;
+    procedure SetDefaultPort(Value: TPortNum); override;
+    procedure SetRTCPPort(Value: TPortNum); override;
+    procedure SetRTPPort(Value: TPortNum); override;
   public
     constructor Create; override;
     destructor  Destroy; override;
@@ -90,15 +90,15 @@ type
                    Port: Integer;
                    const Buffer: String); // This method only exists for some tests
     procedure SendPacket(const Host: String;
-                         Port: Cardinal;
+                         Port: TPortNum;
                          Packet: TIdRTPBasePacket); override;
   published
     property Active:          Boolean  read GetActive write SetActive;
     property Address:         String   read GetAddress write SetAddress;
-    property DefaultPort:     Integer  read GetDefaultPort write SetDefaultPort;
+    property DefaultPort:     TPortNum read GetDefaultPort write SetDefaultPort;
     property NotifyListeners: Boolean  read fNotifyListeners write fNotifyListeners;
-    property RTCPPort:        Cardinal read GetRTCPPort write SetRTCPPort;
-    property RTPPort:         Cardinal read GetRTPPort write SetRTPPort;
+    property RTCPPort:        TPortNum read GetRTCPPort write SetRTCPPort;
+    property RTPPort:         TPortNum read GetRTPPort write SetRTPPort;
   end;
 
 implementation
@@ -152,7 +152,7 @@ begin
 end;
 
 procedure TIdRTPServer.SendPacket(const Host: String;
-                                  Port: Cardinal;
+                                  Port: TPortNum;
                                   Packet: TIdRTPBasePacket);
 var
   Binding: TIdConnectionBindings;
@@ -172,12 +172,12 @@ begin
       if Packet.IsRTCP then begin
         Binding.LocalPort := Self.RTCPPort;
         Self.NotifyListenersOfSentRTCP(Packet as TIdRTCPPacket, Binding);
-        Self.RTCP.Send(Host, Port, S.DataString)
+        Self.RTCP.Send(Host, Integer(Port), S.DataString)
       end
       else begin
         Binding.LocalPort := Self.RTPPort;
         Self.NotifyListenersOfSentRTP(Packet as TIdRTPPacket, Binding);
-        Self.RTP.Send(Host, Port, S.DataString);
+        Self.RTP.Send(Host, Integer(Port), S.DataString);
       end;
     finally
       Binding.Free;
@@ -245,19 +245,19 @@ begin
   Result := Self.RTP.Bindings[0].IP;
 end;
 
-function TIdRTPServer.GetDefaultPort: Integer;
+function TIdRTPServer.GetDefaultPort: TPortNum;
 begin
   Result := Self.RTP.DefaultPort;
 end;
 
-function TIdRTPServer.GetRTCPPort: Cardinal;
+function TIdRTPServer.GetRTCPPort: TPortNum;
 begin
-  Result := Abs(Self.RTCP.DefaultPort);
+  Result := IntToPortNum(Self.RTCP.DefaultPort);
 end;
 
-function TIdRTPServer.GetRTPPort: Cardinal;
+function TIdRTPServer.GetRTPPort: TPortNum;
 begin
-  Result := Abs(Self.RTP.DefaultPort);
+  Result := IntToPortNum(Self.RTP.DefaultPort);
 end;
 
 procedure TIdRTPServer.ReceiveInTimerContext(Packet: TIdRTPBasePacket;
@@ -315,12 +315,12 @@ begin
   Self.RTCP.Bindings[0].IP := Value;
 end;
 
-procedure TIdRTPServer.SetDefaultPort(Value: Integer);
+procedure TIdRTPServer.SetDefaultPort(Value: TPortNum);
 begin
   Self.RTP.DefaultPort := Value;
 end;
 
-procedure TIdRTPServer.SetPort(Server: TIdUdpServer; Port: Cardinal);
+procedure TIdRTPServer.SetPort(Server: TIdUdpServer; Port: TPortNum);
 var
   ConvertedCardinal: Integer;
 begin
@@ -330,14 +330,14 @@ begin
   Server.Bindings[0].Port := ConvertedCardinal;
 end;
 
-procedure TIdRTPServer.SetRTCPPort(Value: Cardinal);
+procedure TIdRTPServer.SetRTCPPort(Value: TPortNum);
 begin
   Self.SetPort(Self.RTCP, Value);
 
   Self.ManuallySetRTCP := true;
 end;
 
-procedure TIdRTPServer.SetRTPPort(Value: Cardinal);
+procedure TIdRTPServer.SetRTPPort(Value: TPortNum);
 begin
   Self.SetPort(Self.RTP, Value);
 

@@ -12,7 +12,7 @@ unit IdSipTlsOverSctpTransport;
 interface
 
 uses
-  IdSipMessage, IdSipSctpTransport;
+  IdConnectionBindings, IdSipMessage, IdSipSctpTransport;
 
 type
   // RFC 3436
@@ -20,7 +20,7 @@ type
   // TLS over TCP is the only secure transport.
   TIdSipTlsOverSctpTransport = class(TIdSipSctpTransport)
   public
-    class function DefaultPort: Cardinal; override;
+    class function DefaultPort: TPortNum; override;
     class function GetTransportType: String; override;
     class function IsSecure: Boolean; override;
     class function SrvPrefix: String; override;
@@ -31,7 +31,7 @@ implementation
 uses
   IdSipDns;
 
-class function TIdSipTlsOverSctpTransport.DefaultPort: Cardinal;
+class function TIdSipTlsOverSctpTransport.DefaultPort: TPortNum;
 begin
   Result := DefaultSipsPort;
 end;

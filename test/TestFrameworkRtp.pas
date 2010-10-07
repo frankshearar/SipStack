@@ -26,13 +26,13 @@ type
   private
     fActive:               Boolean;
     fAddress:              String;
-    fDefaultPort:          Integer;
+    fDefaultPort:          TPortNum;
     fLastPacketHostTarget: String;
-    fLastPacketPortTarget: Cardinal;
+    fLastPacketPortTarget: TPortNum;
     fRTCPCount:            Cardinal;
-    fRTCPPort:             Cardinal;
+    fRTCPPort:             TPortNum;
     fRTPCount:             Cardinal;
-    fRTPPort:              Cardinal;
+    fRTPPort:              TPortNum;
     RTCPBuffer:            TObjectList;
     RTPBuffer:             TObjectList;
 
@@ -44,14 +44,14 @@ type
   protected
     function  GetActive: Boolean; override;
     function  GetAddress: String; override;
-    function  GetDefaultPort: Integer; override;
-    function  GetRTCPPort: Cardinal; override;
-    function  GetRTPPort: Cardinal; override;
+    function  GetDefaultPort: TPortNum; override;
+    function  GetRTCPPort: TPortNum; override;
+    function  GetRTPPort: TPortNum; override;
     procedure SetActive(Value: Boolean); override;
     procedure SetAddress(Value: String); override;
-    procedure SetDefaultPort(Value: Integer); override;
-    procedure SetRTCPPort(Value: Cardinal); override;
-    procedure SetRTPPort(Value: Cardinal); override;
+    procedure SetDefaultPort(Value: TPortNum); override;
+    procedure SetRTCPPort(Value: TPortNum); override;
+    procedure SetRTPPort(Value: TPortNum); override;
   public
     constructor Create; override;
     destructor  Destroy; override;
@@ -67,11 +67,11 @@ type
     procedure ReceivePacket(Packet: TIdRTPBasePacket;
                             Binding: TIdConnectionBindings); override;
     procedure SendPacket(const Host: String;
-                         Port: Cardinal;
+                         Port: TPortNum;
                          Packet: TIdRTPBasePacket); override;
 
     property LastPacketHostTarget: String        read fLastPacketHostTarget;
-    property LastPacketPortTarget: Cardinal      read fLastPacketPortTarget;
+    property LastPacketPortTarget: TPortNum      read fLastPacketPortTarget;
     property LastRTCP:             TIdRTCPPacket read GetLastRTCP;
     property LastRTP:              TIdRTPPacket  read GetLastRTP;
     property RTCPCount:            Cardinal      read GetRTCPCount;
@@ -282,7 +282,7 @@ begin
 end;
 
 procedure TIdMockRTPPeer.SendPacket(const Host: String;
-                                    Port: Cardinal;
+                                    Port: TPortNum;
                                     Packet: TIdRTPBasePacket);
 var
   Binding: TIdConnectionBindings;
@@ -329,17 +329,17 @@ begin
   Result := Self.fAddress;
 end;
 
-function TIdMockRTPPeer.GetDefaultPort: Integer;
+function TIdMockRTPPeer.GetDefaultPort: TPortNum;
 begin
   Result := Self.fDefaultPort;
 end;
 
-function TIdMockRTPPeer.GetRTCPPort: Cardinal;
+function TIdMockRTPPeer.GetRTCPPort: TPortNum;
 begin
   Result := Self.fRTCPPort;
 end;
 
-function TIdMockRTPPeer.GetRTPPort: Cardinal;
+function TIdMockRTPPeer.GetRTPPort: TPortNum;
 begin
   Result := Self.fRTPPort;
 end;
@@ -361,17 +361,17 @@ begin
   Self.fAddress := Value;
 end;
 
-procedure TIdMockRTPPeer.SetDefaultPort(Value: Integer);
+procedure TIdMockRTPPeer.SetDefaultPort(Value: TPortNum);
 begin
   Self.fDefaultPort := Value;
 end;
 
-procedure TIdMockRTPPeer.SetRTCPPort(Value: Cardinal);
+procedure TIdMockRTPPeer.SetRTCPPort(Value: TPortNum);
 begin
   Self.fRTCPPort := Value;
 end;
 
-procedure TIdMockRTPPeer.SetRTPPort(Value: Cardinal);
+procedure TIdMockRTPPeer.SetRTPPort(Value: TPortNum);
 begin
   Self.fRTPPort := Value;
 end;

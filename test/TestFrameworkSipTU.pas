@@ -110,9 +110,9 @@ begin
 
   Self.Binding := TIdConnectionBindings.Create;
   Self.Binding.LocalIP   := Self.LanIP;
-  Self.Binding.LocalPort := 5060;
+  Self.Binding.LocalPort := DefaultSipPort;
   Self.Binding.PeerIP    := Self.LanDestination;
-  Self.Binding.PeerPort  := 5060;
+  Self.Binding.PeerPort  := DefaultSipPort;
   Self.Binding.Transport := UdpTransport;
 
   Self.ActionFailed             := false;

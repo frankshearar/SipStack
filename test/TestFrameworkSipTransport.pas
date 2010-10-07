@@ -27,12 +27,12 @@ type
     procedure ConfigureTransport(Transport: TIdSipTransport;
                                  const HostName: String;
                                  const Address: String;
-                                 Port: Cardinal;
+                                 Port: TPortNum;
                                  TestCase: TestTIdSipTransport;
                                  LogName: String);
     procedure OpenOnFirstFreePort(Transport: TIdSipTransport;
                                   const Address: String;
-                                  Port: Cardinal);
+                                  Port: TPortNum);
 
   public
     constructor Create(TransportType: TIdSipTransportClass;
@@ -128,10 +128,10 @@ type
                                                    R: TIdSipResponse;
                                                    ReceivedFrom: TIdConnectionBindings);
     procedure CheckServerNotOnPort(const Host: String;
-                                   Port: Cardinal;
+                                   Port: TPortNum;
                                    const Msg: String);
     procedure CheckServerOnPort(const Host: String;
-                                Port: Cardinal;
+                                Port: TPortNum;
                                 const Msg: String); virtual;
     procedure CheckUseRport(Sender: TObject;
                             R: TIdSipRequest;
@@ -173,7 +173,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
 
-    function  DefaultPort: Cardinal; virtual;
+    function  DefaultPort: TPortNum; virtual;
   published
     procedure TestAddBinding;
     procedure TestAddBindingDoesntStartStoppedTransport;
@@ -420,7 +420,7 @@ end;
 procedure TTransportTestTimerQueue.ConfigureTransport(Transport: TIdSipTransport;
                                                       const HostName: String;
                                                       const Address: String;
-                                                      Port: Cardinal;
+                                                      Port: TPortNum;
                                                       TestCase: TestTIdSipTransport;
                                                       LogName: String);
 begin
@@ -437,7 +437,7 @@ end;
 
 procedure TTransportTestTimerQueue.OpenOnFirstFreePort(Transport: TIdSipTransport;
                                                        const Address: String;
-                                                       Port: Cardinal);
+                                                       Port: TPortNum);
 var
   PortStarted: Boolean;
 begin
@@ -560,7 +560,7 @@ begin
   end;
 end;
 
-function TestTIdSipTransport.DefaultPort: Cardinal;
+function TestTIdSipTransport.DefaultPort: TPortNum;
 begin
   Result := DefaultSipPort;
 end;
@@ -844,6 +844,10 @@ begin
     CheckHasPort(Self.LowPortTransport, ReceivedFrom.PeerIP, R.LastHop.Port,
                 Self.HighPortTransport.ClassName
              + ': Topmost Via header''s port must be one that can accept connections');
+    // For TCP transports, you will almost never have ReceivedFrom.PeerPort = R.LastHop.Port,
+    // but for UDP transports you could easily do so. This is because TCP client sockets
+    // usually use an ephemeral port, so you couldn't some time in the future send that socket
+    // a message: it's likely that that socket's gone.
 {
     CheckEquals(ReceivedFrom.PeerPort,
                 R.LastHop.Port,
@@ -913,7 +917,7 @@ begin
 end;
 
 procedure TestTIdSipTransport.CheckServerNotOnPort(const Host: String;
-                                                      Port: Cardinal;
+                                                      Port: TPortNum;
                                                       const Msg: String);
 var
   ServerRunning: Boolean;
@@ -927,11 +931,11 @@ begin
   end;
 
   if ServerRunning then
-    Fail('Server running on ' + Host + ':' + IntToStr(Port) + '; ' + Msg);
+    Fail('Server running on ' + Host + ':' + PortNumToStr(Port) + '; ' + Msg);
 end;
 
 procedure TestTIdSipTransport.CheckServerOnPort(const Host: String;
-                                                Port: Cardinal;
+                                                Port: TPortNum;
                                                 const Msg: String);
 begin
   Fail(Self.ClassName + ' must override CheckServerOnPort');
@@ -1137,8 +1141,8 @@ end;
 
 procedure TestTIdSipTransport.TestAddBinding;
 var
-  NewPort:      Cardinal;
-  OriginalPort: Cardinal;
+  NewPort:      TPortNum;
+  OriginalPort: TPortNum;
 begin
   OriginalPort := Self.LowPortLocation.Port;
   NewPort      := OriginalPort + 1;
@@ -1227,8 +1231,8 @@ end;
 procedure TestTIdSipTransport.TestClearBindings;
 var
   Address:   String;
-  FirstPort: Integer;
-  NewPort:   Integer;
+  FirstPort: TPortNum;
+  NewPort:   TPortNum;
 begin
   // If we remove all the bindings, then the TIdTCPServer will re-add one as
   // soon as you restart the server (which happens implicitly in ClearBindings).
@@ -1415,7 +1419,7 @@ begin
 
   Self.ExceptionMessage := 'Waiting for request to arrive';
 
-  Destination := Self.HighPortLocation.IPAddress + ':' + IntToStr(Self.HighPortLocation.Port);
+  Destination := Self.HighPortLocation.IPAddress + ':' + PortNumToStr(Self.HighPortLocation.Port);
 
   TortureTest41 := 'INVITE sip:t.watson@' + Destination + ' SIP/7.0'#13#10
                  + 'Via:     SIP/2.0/' + Self.HighPortTransport.GetTransportType + ' c.bell-tel.com;branch=z9hG4bKkdjuw'#13#10
@@ -1434,7 +1438,7 @@ end;
 procedure TestTIdSipTransport.TestHasBinding;
 var
   Address: String;
-  Port:    Cardinal;
+  Port:    TPortNum;
 begin
   Address := Self.LowPortLocation.IPAddress;
   Port    := Self.LowPortLocation.Port + 1;
@@ -1442,14 +1446,14 @@ begin
   Check(not Self.LowPortTransport.HasBinding(Address, Port),
         Self.LowPortTransport.ClassName
       + ': The server has, but shouldn''t, a binding on '
-      + Address + ':' + IntToStr(Port));
+      + Address + ':' + PortNumToStr(Port));
 
   Self.LowPortTransport.AddBinding(Address, Port);
 
   Check(Self.LowPortTransport.HasBinding(Address, Port),
         Self.LowPortTransport.ClassName
      +  ': The server doesn''t have, but should, a binding on '
-     + Address + ':' + IntToStr(Port));
+     + Address + ':' + PortNumToStr(Port));
 end;
 
 procedure TestTIdSipTransport.TestInstantiationRegistersTransport;
@@ -1687,22 +1691,22 @@ end;
 
 procedure TestTIdSipTransport.TestRemoveBinding;
 var
-  NewPort:      Cardinal;
-  OriginalPort: Cardinal;
+  NewPort:      TPortNum;
+  OriginalPort: TPortNum;
 begin
   OriginalPort := Self.LowPortLocation.Port;
   NewPort      := OriginalPort + 1;
 
   Self.CheckServerNotOnPort(Self.LowPortLocation.IPAddress,
                             NewPort,
-                            'Sanity check: nothing should be running on port ' + IntToStr(NewPort));
+                            'Sanity check: nothing should be running on port ' + PortNumToStr(NewPort));
 
   Self.LowPortTransport.AddBinding(Self.LowPortLocation.IPAddress, NewPort);
   Self.LowPortTransport.RemoveBinding(Self.LowPortLocation.IPAddress, NewPort);
 
   Self.CheckServerNotOnPort(Self.LowPortLocation.IPAddress,
                             NewPort,
-                            'Something running on port ' + IntToStr(NewPort)
+                            'Something running on port ' + PortNumToStr(NewPort)
                           + '; binding not removed');
 end;
 
@@ -1804,7 +1808,7 @@ procedure TestTIdSipTransport.TestSendResponseUsesDestinationLocation;
 begin
   // We mutate Self.Response to contain an unused port in the topmost Via. Then
   // we check that the transport uses the Location parameter for routing
-  // information (ignoring the Via header). 
+  // information (ignoring the Via header).
   Self.CheckingResponseEvent := Self.CheckCanReceiveResponse;
 
   Self.Response.LastHop.Port := Self.Response.LastHop.Port + 1;
@@ -1900,7 +1904,7 @@ begin
   Self.DefaultTimeout := Self.HighPortTransport.Timeout * 4;
   Self.CheckingResponseEvent := Self.CheckForBadRequest;
 
-  Destination := Self.HighPortLocation.IPAddress + ':' + IntToStr(Self.HighPortLocation.Port);
+  Destination := Self.HighPortLocation.IPAddress + ':' + PortNumToStr(Self.HighPortLocation.Port);
   TortureTest16 := 'INVITE sip:user@%s SIP/2.0'#13#10
                  + 'Max-Forwards: 80'#13#10
                  + 'To: sip:j.user@%s'#13#10
@@ -1908,7 +1912,7 @@ begin
                  + 'Call-ID: 0ha0isndaksdj@10.0.0.1'#13#10
                  + 'CSeq: 8 INVITE'#13#10
                  + 'Via: SIP/2.0/' + Self.HighPortTransport.GetTransportType + ' 135.180.130.133'#13#10
-                 + 'Contact: sip:' + Self.LowPortLocation.IPAddress + ':' + IntToStr(Self.LowPortLocation.Port) +  #13#10
+                 + 'Contact: sip:' + Self.LowPortLocation.IPAddress + ':' + PortNumToStr(Self.LowPortLocation.Port) +  #13#10
                  + 'Content-Type: application/sdp'#13#10
                  + 'Content-Length: 9999'#13#10
                  + #13#10
@@ -1935,7 +1939,7 @@ begin
   //
   //   The server should respond with an error.
 
-  Destination := Self.HighPortLocation.IPAddress + ':' + IntToStr(Self.HighPortLocation.Port);
+  Destination := Self.HighPortLocation.IPAddress + ':' + PortNumToStr(Self.HighPortLocation.Port);
 
   TortureTest17 := 'INVITE sip:user@%s SIP/2.0'#13#10
                  + 'Max-Forwards: 254'#13#10
@@ -1972,7 +1976,7 @@ begin
   //   The server can either return an error, or proxy it if it is
   //   successful parsing without the terminating quote.
 
-  Destination := Self.HighPortLocation.IPAddress + ':' + IntToStr(Self.HighPortLocation.Port);
+  Destination := Self.HighPortLocation.IPAddress + ':' + PortNumToStr(Self.HighPortLocation.Port);
   MalformedTo := '"Mr. J. User <sip:j.user@%s>';
 
   TortureTest19 := 'INVITE sip:user@%s SIP/2.0'#13#10
@@ -2014,7 +2018,7 @@ begin
   //   the Request-URI if acting as a Proxy. If not it should respond 400
   //   with an appropriate reason phrase.
 
-  Destination := Self.HighPortLocation.IPAddress + ':' + IntToStr(Self.HighPortLocation.Port);
+  Destination := Self.HighPortLocation.IPAddress + ':' + PortNumToStr(Self.HighPortLocation.Port);
 
   TortureTest21 := 'INVITE <sip:user@%s> SIP/2.0'#13#10
                  + 'To: sip:user@%s'#13#10
@@ -2052,7 +2056,7 @@ begin
   //   the Request-URI if acting as a Proxy. If not it should respond 400
   //   with an appropriate reason phrase.
 
-  Destination := Self.HighPortLocation.IPAddress + ':' + IntToStr(Self.HighPortLocation.Port);
+  Destination := Self.HighPortLocation.IPAddress + ':' + PortNumToStr(Self.HighPortLocation.Port);
 
   TortureTest22 := 'INVITE sip:user@%s; transport=udp SIP/2.0'#13#10
                  + 'To: sip:user@%s'#13#10
@@ -2111,7 +2115,7 @@ begin
 
   Self.CheckingResponseEvent := Self.CheckForBadRequest;
 
-  Destination := Self.HighPortLocation.IPAddress + ':' + IntToStr(Self.HighPortLocation.Port);
+  Destination := Self.HighPortLocation.IPAddress + ':' + PortNumToStr(Self.HighPortLocation.Port);
   Self.SendFromLowTransport(StringReplace(TortureTest23, '%s', Destination, [rfReplaceAll]));
 
   Self.WaitForSignaled(Self.RejectedMessageEvent, 'Waiting for rejection notification');
@@ -2127,7 +2131,7 @@ begin
   //   A server should respond 400 with an appropriate reason phrase if it
   //   can. It may just drop this message.
 
-  Destination := Self.HighPortLocation.IPAddress + ':' + IntToStr(Self.HighPortLocation.Port);
+  Destination := Self.HighPortLocation.IPAddress + ':' + PortNumToStr(Self.HighPortLocation.Port);
 
   TortureTest35 := 'OPTIONS sip:%s SIP/2.0'#13#10
                  + 'Via: SIP/2.0/' + Self.HighPortTransport.GetTransportType + ' %s'#13#10
@@ -2167,7 +2171,7 @@ begin
 
   Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
 
-  Destination := Self.HighPortLocation.IPAddress + ':' + IntToStr(Self.HighPortLocation.Port);
+  Destination := Self.HighPortLocation.IPAddress + ':' + PortNumToStr(Self.HighPortLocation.Port);
   TortureTest40 := 'INVITE sip:t.watson@%s SIP/2.0'#13#10
                 + 'Via:     SIP/2.0/' + Self.HighPortTransport.GetTransportType + ' c.bell-tel.com:5060;branch=z9hG4bKkdjuw'#13#10
                 + 'Max-Forwards:      70'#13#10
@@ -2192,7 +2196,7 @@ var
 begin
   Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
 
-  Destination := Self.HighPortLocation.IPAddress + ':' + IntToStr(Self.HighPortLocation.Port);
+  Destination := Self.HighPortLocation.IPAddress + ':' + PortNumToStr(Self.HighPortLocation.Port);
 
   //   This is an illegal INVITE as the SIP Protocol version is unknown.
   //

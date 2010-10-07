@@ -294,9 +294,9 @@ type
 
   // My subclasses allow you to extend the TIdSipStackInterface's interface
   // without cluttering up the core interface. Note that I give unrestricted
-  // access to the StackInterface's internal UserAgent. That means that you
-  // don't usually want to create my subclasses outside of Wait objects, because
-  // of concurrency issues.
+  // (and unsynchronised) access to the StackInterface's internal UserAgent.
+  // That means that you don't usually want to create my subclasses outside of
+  // Wait objects, because of concurrency issues.
   TIdSipStackInterfaceExtension = class(TObject)
   private
     fUserAgent: TIdSipUserAgent;

@@ -12,7 +12,8 @@ unit IdRoutingTable;
 interface
 
 uses
-  Classes, Contnrs, IdNetworking, IdSimpleParser, IdSipLocation, IdSystem;
+  Classes, Contnrs, IdConnectionBindings, IdNetworking, IdSimpleParser,
+  IdSipLocation, IdSystem;
 
 type
   // I represent an entry in this machine's routing table, or a "mapped
@@ -31,7 +32,7 @@ type
     fMask:             String;
     fMaskInetAddrIPv4: Cardinal;
     fMetric:           Cardinal;
-    fPort:             Cardinal;
+    fPort:             TPortNum;
 
     function  IsDefaultIPv6Route: Boolean;
     procedure SetDestination(Value: String);
@@ -58,7 +59,7 @@ type
     property Mask:             String   read fMask write SetMask;
     property MaskInetAddrIPv4: Cardinal read fMaskInetAddrIPv4 write SetMaskInetAddrIPv4;
     property Metric:           Cardinal read fMetric write fMetric;
-    property Port:             Cardinal read fPort write fPort;
+    property Port:             TPortNum read fPort write fPort;
   end;
 
   TIdRouteEntryClass = class of TIdRouteEntry;
@@ -86,16 +87,16 @@ type
     constructor Create; virtual;
     destructor  Destroy; override;
 
-    procedure AddMappedRoute(Destination, Mask, MappedAddress: String; MappedPort: Cardinal = 0);
+    procedure AddMappedRoute(Destination, Mask, MappedAddress: String; MappedPort: TPortNum = 0);
     procedure BestLocalAddress(LocalBindings: TIdSipLocations;
                                Destination: TIdSipLocation;
                                LocalAddress: TIdSipLocation);
     function  GetBestLocalAddress(DestinationIP: String): String; overload; virtual;
-    procedure GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation; DefaultPort: Cardinal); overload; virtual;
+    procedure GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation; DefaultPort: TPortNum); overload; virtual;
     function  HasRoute(Route: TIdRouteEntry): Boolean;
     function  HasRouteThrough(Gateway: String): Boolean;
     function  LocalOrMappedAddressFor(DestinationIP: String): String; overload;
-    procedure LocalOrMappedAddressFor(DestinationIP: String; LocalAddress: TIdSipLocation; DefaultPort: Cardinal = 0); overload;
+    procedure LocalOrMappedAddressFor(DestinationIP: String; LocalAddress: TIdSipLocation; DefaultPort: TPortNum = 0); overload;
     function  MappedAddressFor(DestinationIP: String): String; overload;
     procedure MappedAddressFor(DestinationIP: String; LocalAddress: TIdSipLocation); overload;
     procedure RemoveRoute(Destination, Mask, Gateway: String);
@@ -107,7 +108,7 @@ type
     function  BestRouteIsDefaultRoute(DestinationIP, LocalIP: String): Boolean; override;
   public
     function  GetBestLocalAddress(DestinationIP: String): String; overload; override;
-    procedure GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation; DefaultPort: Cardinal); overload; override;
+    procedure GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation; DefaultPort: TPortNum); overload; override;
   end;
 
   // Windows NT 4 doesn't support the IP Helper API's GetBestInterface function.
@@ -118,7 +119,7 @@ type
     function  BestRouteIsDefaultRoute(DestinationIP, LocalIP: String): Boolean; override;
    public
     function  GetBestLocalAddress(DestinationIP: String): String; overload; override;
-    procedure GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation; DefaultPort: Cardinal); overload; override;
+    procedure GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation; DefaultPort: TPortNum); overload; override;
   end;
 
   TIdMockRoutingTable = class(TIdRoutingTable)
@@ -140,7 +141,7 @@ type
     procedure AddOsRoute(Destination, Mask, Gateway: String; Metric: Cardinal; InterfaceIndex: String; LocalAddress: String); overload; //override;
     procedure AddOsRoute(Route: TIdRouteEntry); overload; //override;
     function  BestRouteIsDefaultRoute(DestinationIP, LocalIP: String): Boolean; override;
-    procedure GetBestLocalAddress(DestinationIP: String; Gateway: TIdSipLocation; DefaultPort: Cardinal); overload; override;
+    procedure GetBestLocalAddress(DestinationIP: String; Gateway: TIdSipLocation; DefaultPort: TPortNum); overload; override;
     procedure GetBestRoute(DestinationIP, LocalIP: String; Route: TIdRouteEntry);
     function  HasOsRoute(Route: TIdRouteEntry): Boolean;
     function  OsRouteCount: Integer;
@@ -534,7 +535,7 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdRoutingTable.AddMappedRoute(Destination, Mask, MappedAddress: String; MappedPort: Cardinal = 0);
+procedure TIdRoutingTable.AddMappedRoute(Destination, Mask, MappedAddress: String; MappedPort: TPortNum = 0);
 var
   NewRoute: TIdRouteEntry;
 begin
@@ -563,7 +564,7 @@ procedure TIdRoutingTable.BestLocalAddress(LocalBindings: TIdSipLocations;
                                            LocalAddress: TIdSipLocation);
 var
   ActualAddress: TIdSipLocation;
-  DefaultPort:   Cardinal;
+  DefaultPort:   TPortNum;
 begin
   // This function returns the best local address to use to contact Destination,
   // from a set of local bindings. That local address might be capable of
@@ -631,7 +632,7 @@ begin
   end;
 end;
 
-procedure TIdRoutingTable.GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation; DefaultPort: Cardinal);
+procedure TIdRoutingTable.GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation; DefaultPort: TPortNum);
 begin
   // Return the best local address needed to contact the machine at DestinationIP.
   // This version of the method allows one to specify ports. Since this class is
@@ -680,7 +681,7 @@ begin
   end;
 end;
 
-procedure TIdRoutingTable.LocalOrMappedAddressFor(DestinationIP: String; LocalAddress: TIdSipLocation; DefaultPort: Cardinal = 0);
+procedure TIdRoutingTable.LocalOrMappedAddressFor(DestinationIP: String; LocalAddress: TIdSipLocation; DefaultPort: TPortNum = 0);
 var
   LocalIP: String;
 begin
@@ -802,7 +803,7 @@ begin
   Result := IdNetworking.GetBestLocalAddress(DestinationIP);
 end;
 
-procedure TIdWindowsRoutingTable.GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation; DefaultPort: Cardinal);
+procedure TIdWindowsRoutingTable.GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation; DefaultPort: TPortNum);
 begin
   LocalLocation.IPAddress := IdNetworking.GetBestLocalAddress(DestinationIP);
   LocalLocation.Port      := DefaultPort;
@@ -825,7 +826,7 @@ begin
   Result := IdNetworking.GetBestLocalAddressNT4(DestinationIP);
 end;
 
-procedure TIdWindowsNT4RoutingTable.GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation; DefaultPort: Cardinal);
+procedure TIdWindowsNT4RoutingTable.GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation; DefaultPort: TPortNum);
 begin
   LocalLocation.IPAddress := IdNetworking.GetBestLocalAddressNT4(DestinationIP);
   LocalLocation.Port      := DefaultPort;
@@ -919,7 +920,7 @@ begin
   end;
 end;
 
-procedure TIdMockRoutingTable.GetBestLocalAddress(DestinationIP: String; Gateway: TIdSipLocation; DefaultPort: Cardinal);
+procedure TIdMockRoutingTable.GetBestLocalAddress(DestinationIP: String; Gateway: TIdSipLocation; DefaultPort: TPortNum);
 var
   Found: Boolean;
   I:     Integer;

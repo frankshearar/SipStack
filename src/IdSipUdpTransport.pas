@@ -151,7 +151,7 @@ end;
 
 function TIdSipUDPTransport.FindActualBinding(Dest: TIdConnectionBindings): TIdSocketHandle;
 var
-  DefaultPort:  Cardinal;
+  DefaultPort:  TPortNum;
   I:            Integer;
   LocalAddress: String;
 begin
@@ -337,9 +337,9 @@ begin
   Wait.Message   := Msg.Copy;
 
   Wait.ReceivedFrom.LocalIP   := Binding.IP;
-  Wait.ReceivedFrom.LocalPort := Binding.Port;
+  Wait.ReceivedFrom.LocalPort := IntToPortNum(Binding.Port);
   Wait.ReceivedFrom.PeerIP    := Binding.PeerIP;
-  Wait.ReceivedFrom.PeerPort  := Binding.PeerPort;
+  Wait.ReceivedFrom.PeerPort  := IntToPortNum(Binding.PeerPort);
   Wait.ReceivedFrom.Transport := Self.TransportType;
   Wait.TransportID            := Self.TransportID;
 

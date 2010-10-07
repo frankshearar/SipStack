@@ -35,7 +35,7 @@ type
                              ReceivedFrom: TIdConnectionBindings);
   protected
     procedure CheckServerOnPort(const Host: String;
-                                Port: Cardinal;
+                                Port: TPortNum;
                                 const Msg: String); override;
     procedure SendMessage(Msg: String); override;
     function  TransportType: TIdSipTransportClass; override;
@@ -136,7 +136,7 @@ end;
 //* TestTIdSipUDPTransport Protected methods ***********************************
 
 procedure TestTIdSipUDPTransport.CheckServerOnPort(const Host: String;
-                                                   Port: Cardinal;
+                                                   Port: TPortNum;
                                                    const Msg: String);
 var
   Binding: TIdSocketHandle;
@@ -157,7 +157,7 @@ begin
     finally
       Server.Free;
     end;
-    Fail('No server running on ' + Host + ': ' + IntToStr(Port) + '; ' + Msg);
+    Fail('No server running on ' + Host + ': ' + PortNumToStr(Port) + '; ' + Msg);
   except
     on EIdCouldNotBindSocket do;
   end;

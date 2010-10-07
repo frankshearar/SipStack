@@ -91,7 +91,7 @@ type
     function  GetBindings: TIdSipLocations; virtual;
     function  GetConserveConnections: Boolean; virtual;
     function  GetPort: Cardinal; virtual;
-    function  IndexOfBinding(const Address: String; Port: Cardinal): Integer;
+    function  IndexOfBinding(const Address: String; Port: TPortNum): Integer;
     procedure InstantiateServer; virtual;
     procedure Log(Description: String;
                   Severity: TSeverityLevel;
@@ -151,7 +151,7 @@ type
 
     property Bindings: TIdSipLocations read GetBindings;
   public
-    class function  DefaultPort: Cardinal; virtual;
+    class function  DefaultPort: TPortNum; virtual;
     class function  GetTransportType: String; virtual;
     class function  IsSecure: Boolean; virtual;
     class function  SrvPrefix: String; virtual;
@@ -161,8 +161,8 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
-    procedure AddBinding(const Address: String; Port: Cardinal); virtual;
-    procedure AddConnectionListener(Listener: IIdSipConnectionListener);
+    procedure AddBinding(const Address: String; Port: TPortNum); virtual;
+    procedure AddConnectionListener(const Listener: IIdSipConnectionListener);
     procedure AddTransportListener(const Listener: IIdSipTransportListener; Priority: Integer = 0);
     procedure AddTransportSendingListener(const Listener: IIdSipTransportSendingListener; Priority: Integer = 0);
     function  BindingCount: Integer;
@@ -170,7 +170,7 @@ type
     function  DefaultTimeout: Cardinal; virtual;
     function  FindBinding(Dest: TIdConnectionBindings): TIdSipLocation;
     function  FirstIPBound: String;
-    function  HasBinding(const Address: String; Port: Cardinal): Boolean;
+    function  HasBinding(const Address: String; Port: TPortNum): Boolean;
     function  IsMock: Boolean; virtual;
     function  IsNull: Boolean; virtual;
     function  IsReliable: Boolean; virtual;
@@ -183,13 +183,13 @@ type
                              ReceivedFrom: TIdConnectionBindings); virtual;
     procedure ReceiveResponse(Response: TIdSipResponse;
                               ReceivedFrom: TIdConnectionBindings); virtual;
-    procedure RemoveBinding(const Address: String; Port: Cardinal);
-    procedure RemoveConnectionListener(Listener: IIdSipConnectionListener);
+    procedure RemoveBinding(const Address: String; Port: TPortNum);
+    procedure RemoveConnectionListener(const Listener: IIdSipConnectionListener);
     procedure RemoveTransportListener(const Listener: IIdSipTransportListener);
     procedure RemoveTransportSendingListener(const Listener: IIdSipTransportSendingListener);
     procedure Send(Msg: TIdSipMessage;
                    Dest: TIdSipLocation);
-    procedure SetFirstBinding(IPAddress: String; Port: Cardinal);
+    procedure SetFirstBinding(IPAddress: String; Port: TPortNum);
     procedure Start; virtual;
     procedure Stop; virtual;
 
@@ -208,10 +208,10 @@ type
     class function TransportTypeAt(Index: Integer): TIdSipTransportClass;
     class function TransportTypeRegistry: TStrings;
   public
-    class function  DefaultPortFor(const Transport: String): Cardinal;
+    class function  DefaultPortFor(const Transport: String): TPortNum;
     class procedure InsecureTransports(Result: TStrings);
     class function  IsSecure(const Transport: String): Boolean;
-    class function  NonstandardPort(const Transport: String; Port: Cardinal): Boolean;
+    class function  NonstandardPort(const Transport: String; Port: TPortNum): Boolean;
     class procedure RegisterTransportType(const Name: String;
                                           const TransportType: TIdSipTransportClass);
     class procedure SecureTransports(Result: TStrings);
@@ -231,8 +231,8 @@ type
   private
     class function GetAllTransports: TStrings;
   public
-    class function TransportRunningOn(Host: String; Port: Cardinal): TIdSipTransport; overload;
-    class function TransportRunningOn(Transport, Host: String; Port: Cardinal): TIdSipTransport; overload;
+    class function TransportRunningOn(Host: String; Port: TPortNum): TIdSipTransport; overload;
+    class function TransportRunningOn(Transport, Host: String; Port: TPortNum): TIdSipTransport; overload;
     class function TransportCount: Integer;
   end;
 
@@ -495,7 +495,7 @@ var
 //******************************************************************************
 //* TIdSipTransport Public methods *********************************************
 
-class function TIdSipTransport.DefaultPort: Cardinal;
+class function TIdSipTransport.DefaultPort: TPortNum;
 begin
   Result := DefaultSipPort;
 end;
@@ -559,7 +559,7 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipTransport.AddBinding(const Address: String; Port: Cardinal);
+procedure TIdSipTransport.AddBinding(const Address: String; Port: TPortNum);
 var
   WasRunning: Boolean;
 begin
@@ -574,7 +574,7 @@ begin
     Self.Start;
 end;
 
-procedure TIdSipTransport.AddConnectionListener(Listener: IIdSipConnectionListener);
+procedure TIdSipTransport.AddConnectionListener(const Listener: IIdSipConnectionListener);
 begin
   Self.ConnectionListeners.AddListener(Listener);
 end;
@@ -619,7 +619,7 @@ end;
 
 function TIdSipTransport.FindBinding(Dest: TIdConnectionBindings): TIdSipLocation;
 var
-  DefaultPort:  Cardinal;
+  DefaultPort:  TPortNum;
   I:            Integer;
   LocalAddress: String;
 begin
@@ -656,7 +656,7 @@ begin
       // port for this transport, use that instead.
       if Assigned(Result) then begin
         if    (Self.Bindings[I].IPAddress = LocalAddress)
-          and (Cardinal(Self.Bindings[I].Port) = DefaultPort) then begin
+          and (Self.Bindings[I].Port = DefaultPort) then begin
           Result := Self.Bindings[I];
           Break;
         end;
@@ -680,7 +680,7 @@ begin
     Result := Self.Bindings[0].IPAddress;
 end;
 
-function TIdSipTransport.HasBinding(const Address: String; Port: Cardinal): Boolean;
+function TIdSipTransport.HasBinding(const Address: String; Port: TPortNum): Boolean;
 begin
   Result := Self.IndexOfBinding(Address, Port) <> ItemNotFoundIndex;
 end;
@@ -783,7 +783,7 @@ begin
 end;
 
 
-procedure TIdSipTransport.RemoveBinding(const Address: String; Port: Cardinal);
+procedure TIdSipTransport.RemoveBinding(const Address: String; Port: TPortNum);
 var
   Index:      Integer;
   WasRunning: Boolean;
@@ -800,7 +800,7 @@ begin
     Self.Start;
 end;
 
-procedure TIdSipTransport.RemoveConnectionListener(Listener: IIdSipConnectionListener);
+procedure TIdSipTransport.RemoveConnectionListener(const Listener: IIdSipConnectionListener);
 begin
   Self.ConnectionListeners.RemoveListener(Listener);
 end;
@@ -831,7 +831,7 @@ begin
   end;
 end;
 
-procedure TIdSipTransport.SetFirstBinding(IPAddress: String; Port: Cardinal);
+procedure TIdSipTransport.SetFirstBinding(IPAddress: String; Port: TPortNum);
 begin
   Self.Bindings[0].IPAddress := IPAddress;
   Self.Bindings[0].Port      := Port;
@@ -901,7 +901,7 @@ begin
   Result := Self.fPort;
 end;
 
-function TIdSipTransport.IndexOfBinding(const Address: String; Port: Cardinal): Integer;
+function TIdSipTransport.IndexOfBinding(const Address: String; Port: TPortNum): Integer;
 begin
   Result := 0;
 
@@ -1269,7 +1269,7 @@ end;
 //******************************************************************************
 //* TIdSipTransportRegistry Public methods *************************************
 
-class function TIdSipTransportRegistry.DefaultPortFor(const Transport: String): Cardinal;
+class function TIdSipTransportRegistry.DefaultPortFor(const Transport: String): TPortNum;
 var
   Index: Integer;
 begin
@@ -1296,7 +1296,7 @@ begin
   Result := Self.TransportTypeFor(Transport).IsSecure;
 end;
 
-class function TIdSipTransportRegistry.NonstandardPort(const Transport: String; Port: Cardinal): Boolean;
+class function TIdSipTransportRegistry.NonstandardPort(const Transport: String; Port: TPortNum): Boolean;
 begin
   Result := Self.TransportTypeFor(Transport).DefaultPort <> Port
 end;
@@ -1366,7 +1366,7 @@ end;
 //******************************************************************************
 //* TIdSipDebugTransportRegistry Public methods ********************************
 
-class function TIdSipDebugTransportRegistry.TransportRunningOn(Host: String; Port: Cardinal): TIdSipTransport;
+class function TIdSipDebugTransportRegistry.TransportRunningOn(Host: String; Port: TPortNum): TIdSipTransport;
 var
   I: Integer;
   L: TStrings;
@@ -1389,7 +1389,7 @@ begin
   end;
 end;
 
-class function TIdSipDebugTransportRegistry.TransportRunningOn(Transport, Host: String; Port: Cardinal): TIdSipTransport;
+class function TIdSipDebugTransportRegistry.TransportRunningOn(Transport, Host: String; Port: TPortNum): TIdSipTransport;
 var
   I: Integer;
   L: TStrings;

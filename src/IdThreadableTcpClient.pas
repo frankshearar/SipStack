@@ -95,9 +95,9 @@ procedure StoreBindings(C: TIdTCPConnection; TransportType: String; Dest: TIdCon
 begin
   if C.Connected then begin
     Dest.LocalIP   := C.Socket.Binding.IP;
-    Dest.LocalPort := C.Socket.Binding.Port;
+    Dest.LocalPort := IntToPortNum(C.Socket.Binding.Port);
     Dest.PeerIP    := C.Socket.Binding.PeerIP;
-    Dest.PeerPort  := C.Socket.Binding.PeerPort;
+    Dest.PeerPort  := IntToPortNum(C.Socket.Binding.PeerPort);
     Dest.Transport := TransportType;
   end;
 end;

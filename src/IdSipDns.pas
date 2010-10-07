@@ -12,7 +12,7 @@ unit IdSipDns;
 interface
 
 uses
-  Classes, Contnrs;
+  Classes, Contnrs, IdConnectionBindings;
 
 type
   TIdResourceRecord = class(TObject)
@@ -195,7 +195,7 @@ type
   private
     fDomain:      String;
     fNameRecords: TIdDomainNameRecords;
-    fPort:        Cardinal;
+    fPort:        TPortNum;
     fPriority:    Word;
     fService:     String;
     fTarget:      String;
@@ -205,7 +205,7 @@ type
                        const Service: String;
                        Priority: Word;
                        Weight: Word;
-                       Port: Cardinal;
+                       Port: TPortNum;
                        const Target: String);
     destructor  Destroy; override;
 
@@ -217,7 +217,7 @@ type
 
     property Domain:      String               read fDomain;
     property NameRecords: TIdDomainNameRecords read fNameRecords;
-    property Port:        Cardinal             read fPort;
+    property Port:        TPortNum             read fPort;
     property Priority:    Word                 read fPriority;
     property Service:     String               read fService;
     property Target:      String               read fTarget;
@@ -235,7 +235,7 @@ type
                   const Service: String;
                   Priority: Word;
                   Weight: Word;
-                  Port: Cardinal;
+                  Port: TPortNum;
                   const Target: String): TIdSrvRecord; overload;
     procedure AddNameRecord(const RecordType: String;
                             const Domain: String;
@@ -273,7 +273,7 @@ type
                            Service: String;
                            Priority: Word;
                            Weight: Word;
-                           Port: Cardinal;
+                           Port: TPortNum;
                            Target: String);
     procedure CollectAliases(Result: TIdDomainNameAliasRecords);
     procedure CollectNamePointerRecords(Result: TIdNaptrRecords);
@@ -969,7 +969,7 @@ constructor TIdSrvRecord.Create(const Domain: String;
                                 const Service: String;
                                 Priority: Word;
                                 Weight: Word;
-                                Port: Cardinal;
+                                Port: TPortNum;
                                 const Target: String);
 begin
   inherited Create;
@@ -1081,7 +1081,7 @@ function TIdSrvRecords.Add(const Domain: String;
                            const Service: String;
                            Priority: Word;
                            Weight: Word;
-                           Port: Cardinal;
+                           Port: TPortNum;
                            const Target: String): TIdSrvRecord;
 begin
   Result := TIdSrvRecord.Create(Domain,
@@ -1182,7 +1182,7 @@ procedure TIdResourceRecords.AddSRVRecord(Domain,
                                           Service: String;
                                           Priority: Word;
                                           Weight: Word;
-                                          Port: Cardinal;
+                                          Port: TPortNum;
                                           Target: String);
 begin
   Self.List.Add(TIdSrvRecord.Create(Domain, Service, Priority, Weight, Port, Target));
