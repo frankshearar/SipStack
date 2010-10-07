@@ -2,6 +2,7 @@ This library implements a Session Initiation Protocol stack. Sections
 of the source code also provide an RTP stack, SDP parsing facilities,
 and other useful things.
 
+
 USING THE STACK
 
 Instantiate a TIdSipStackInterface, giving a (Windows) window handle
@@ -14,7 +15,9 @@ When you want to perform actions (register with a registrar, make a
 call, etc.) you instantiate the action through the MakeFoo methods -
 MakeCall, etc. This in itself doesn't execute the action - you store
 the SipHandle of the action, and then use the Send method to execute
-the action.
+the action. (MakeFoo methods create internal structures. If you don't
+Terminate() them, you will leak memory.)
+
 
 BROAD STROKES
 
@@ -41,6 +44,7 @@ and so the TIdSipUserAgent decides whether or not to accept these
 messages. Handled messages, naturally, belong to existing
 transactions.
 
+
 CAVEAT
 
 The Delphi community almost exclusively uses procedure/function
@@ -49,8 +53,9 @@ variables to implement callbacks - TNotifyEvent, for instance.
 This library uses instead the Listener pattern. Objects that can
 notify us of interesting occurences allow us to register (and
 unregister) with them. For instance, with a TIdSipTransport we can
-attach any object that implements the IIdSipTransportListener
-interface, and receive notifications.
+use the AddTransportListener method to attach any object that
+implements the IIdSipTransportListener interface, and receive
+notifications.
 
 We use Listeners rather than Events because the event mechanism in the
 VCL (i.e., TNotifyEvent and company) only allows a single recipient of
@@ -74,6 +79,7 @@ reference counting objects that implement interfaces. Where possible,
 we inherit from TIdInterfacedObject, which implements QueryInterface,
 _AddRef and _Release, directly. Otherwise we implement these methods
 as necessary to ensure that reference counting doesn't.
+
 
 MESSAGE FLOW OF AN INBOUND CALL
 
@@ -104,13 +110,15 @@ When we want to hang up, we just call NewSession.Terminate. If we have
 multiple calls that we want to terminate all in one go, we can call
 UserAgent.TerminateAllCalls.
 
+
 MESSAGE FLOW STRUCTURE
 
-Each layer has a single point of access to the adjacent layers. The
-Transaction User layer communicates with the Transaction layer solely
-through TIdSipTransactionDispatcher, and the Transport layer objects
-send their messages up to the Transaction layer also through the
-TIdSipTransactionDispatcher.
+Each layer has a direct access to the next layer down. The Transaction
+User layer communicates with the Transaction layer solely through
+TIdSipTransactionDispatcher, and the Transaction layer communicates
+with a list of TIdSipTransports. Events percolate up layers through
+Listeners: for instance, a TIdSipTransactionDispatcher calls
+AddTransportListener on Transports it creates.
 
 Within the Transport layer, the TIdSipTransports talk to their
 contained servers (their TIdTcpServer, TIdUdpServer, etc.) to send or
@@ -167,6 +175,7 @@ Graphically, the stack looks something like this:
 | +------------------------------------------------+ |
 +----------------------------------------------------+
 
+
 THREADING MODEL
 
 If the layers are the skeleton of the stack, its heart is a
@@ -202,11 +211,11 @@ arbitrarily long period of time.
 The TIdTimerQueue stores the TIdWaits in order of execution time. The
 order for TIdWaits scheduled very close in time to each other (below
 the resolution of a TDateTime, in other words) is defined by the order
-in which the events are added). When a TIdWait is scheduled to
-execute, the TIdTimerQueue invokes that TIdWait's Trigger method. When
-it runs out of Waits, it goes to sleep until you schedule another
-TIdWait, or after some (configurable) amount of time. The default
-timeout value is one second.
+in which the events are added. When a TIdWait is scheduled to execute,
+the TIdTimerQueue invokes that TIdWait's Trigger method. When it runs
+out of Waits, it goes to sleep until you schedule another TIdWait, or
+after some (configurable) amount of time. The default timeout value is
+one second.
 
 TIdWait objects either store local copies of data they need, or if
 they have to refer to an external object, they store an ID that points
@@ -218,6 +227,11 @@ TIdSipClientInviteTransaction's Timer D) and destroy the transaction
 without trying to find all scheduled TIdWaits for that
 object.
 
+If you know the ID of a TIdTimerQueue, you may request it to run a
+TIdWait through TIdTimerQueue.DispatchEvent(ProcessID, MillisecsWait,
+Wait), allowing inter-TimerQueue communication. See TIdSipTcpServer
+for an example.
+
 Each port on which the stack listens has a thread that waits for
 messages to arrive. When those messages arrive, the servers bundle (a
 copy of) the message into a TIdSipReceiveMessageWait and schedule that
@@ -226,6 +240,7 @@ TIdWait in the TIdTimerQueue.
 In the case of the synchronization layer, when you send a message (say
 through MakeRegistration/Send), you're creating a TIdWait that is
 scheduled to run in the context of the TIdTimerQueue.
+
 
 THE SYNCHRONIZATION LAYER
 
@@ -236,6 +251,7 @@ context of the main thread (in which the VCL runs) through Windows'
 PostMessage function. Any messages bound for the network run in the
 context of the TIdTimerQueue. Thus, the synchronization layer
 synchronizes the stack thread and the main thread.
+
 
 THE TRANSACTION USER LAYER
 
@@ -262,21 +278,26 @@ a pointer to that new Action. We can then choose to listen to that
 Action, and receive success/failure/authentication challenge
 notifications.
 
+
 UNIT BREAKDOWN
 
 IdSipCore implements the highest layer in the SIP stack, the
 Transaction User layer. The TIdSipUserAgent farms out its behaviour to
 TIdSipAction classes - TIdSipSession, TIdSipRegistration,
 TIdSipOptions, for instance - and these classes manage the actual
-message flows of the Transaction User layer.
+message flows of the Transaction User layer. These classes are grouped
+into "message module" units. Actions around INVITEs go in
+IdSipInviteModule, registration actions in IdSipRegistration,
+subscription actions in IdSipSubscribeModule, and so on.
 
 IdSipTransaction implements all transactions and the transaction
 dispatcher. This provides the entire Transaction Layer.
 
-IdSipTransport implements the Transport Layer. SipTransports use Indy
-servers (TIdTCPServer, TIdUDPServer, etc) to bind to sockets, send
-data through the IP network, etc. SipTransports provide an
+IdSipTransport implements the Transport Layer. The TCP transport uses
+WinSock with non-blocking sockets and asynchronous notification. The
+UDP transport uses Indy 9.0. The TIdSipransport subclassess provide an
 encapsulated way to access network functionality.
+
 
 MESSAGE MODULES
 
@@ -303,3 +324,20 @@ first added) message module  would process the request.)
 If the core can find no accepting message module, it uses the
 TIdSipNullModule. This module accepts all requests, and does nothing
 with them.
+
+
+PATTERNS
+
+The stack makes extensive use of the Listener/Observer pattern, via
+the TIdNotificationList class and TIdNotification subclasses.
+
+The stack (or at least the Transaction-User layer) also makes
+extensive use of a translation of closures into Delphi. See
+TIdSipActionClosure. (Some people call these Function Objects.)
+
+A TIdWait is much like a future, that is, a closure (or Function
+Object) that we evaluate at some later time. TIdWaits don't generally
+return values.
+
+TIdWaits hold Weak References to stack-owned objects.
+

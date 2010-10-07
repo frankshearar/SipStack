@@ -31,9 +31,9 @@ INDENTATION AND SPACING
   convenient, we line up the conditions of the if statements to aid
   reading:
 
-       if Request.IsAck       then Self.ReceiveAck(Request)
-  else if Request.IsBye       then Self.ReceiveBye(Request)
-  else if Request.IsCancel    then Self.ReceiveCancel(Request)
+       if Request.IsAck    then Self.ReceiveAck(Request)
+  else if Request.IsBye    then Self.ReceiveBye(Request)
+  else if Request.IsCancel then Self.ReceiveCancel(Request)
 
 * We use spaces to tabulate property declarations:
 
@@ -53,14 +53,6 @@ INDENTATION AND SPACING
 
   We do try to avoid these sorts of lines if possible, using Introduce
   Explaining Variable, for instance.
-
-PATTERNS
-
-* The stack makes extensive use of the Listener/Observer pattern, via
-  the TIdNotificationList class and TIdNotification subclasses.
-* The stack (or at least the Transaction-User layer) also makes
-  extensive use of a translation of closures into Delphi. See
-  TIdSipActionClosure.
 
 COMMENTS
 
