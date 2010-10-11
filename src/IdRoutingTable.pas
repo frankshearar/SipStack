@@ -91,6 +91,7 @@ type
     procedure BestLocalAddress(LocalBindings: TIdSipLocations;
                                Destination: TIdSipLocation;
                                LocalAddress: TIdSipLocation);
+    function  Copy: TIdRoutingTable; virtual;
     function  GetBestLocalAddress(DestinationIP: String): String; overload; virtual;
     procedure GetBestLocalAddress(DestinationIP: String; LocalLocation: TIdSipLocation; DefaultPort: TPortNum); overload; virtual;
     function  HasRoute(Route: TIdRouteEntry): Boolean;
@@ -141,6 +142,7 @@ type
     procedure AddOsRoute(Destination, Mask, Gateway: String; Metric: Cardinal; InterfaceIndex: String; LocalAddress: String); overload; //override;
     procedure AddOsRoute(Route: TIdRouteEntry); overload; //override;
     function  BestRouteIsDefaultRoute(DestinationIP, LocalIP: String): Boolean; override;
+    function  Copy: TIdRoutingTable; override;
     procedure GetBestLocalAddress(DestinationIP: String; Gateway: TIdSipLocation; DefaultPort: TPortNum); overload; override;
     procedure GetBestRoute(DestinationIP, LocalIP: String; Route: TIdRouteEntry);
     function  HasOsRoute(Route: TIdRouteEntry): Boolean;
@@ -344,7 +346,7 @@ begin
   // Lowest metrics first.
   // Finally, "higher" gateways first. (*)
   //
-  // (*) This is an arbitrary choice.
+  // (*) This is an arbitrary choice, and ought to be configurable (TODO!).
   // (**) Semi-arbitrary. This choice of sorting means that the default route
   // is always last, but that's the only reason.
 
@@ -614,6 +616,11 @@ begin
   if Assigned(ActualAddress) then begin
     LocalAddress.Assign(ActualAddress)
   end;
+end;
+
+function TIdRoutingTable.Copy: TIdRoutingTable;
+begin
+  Result := TIdRoutingTableClass(Self.ClassType).Create;
 end;
 
 function TIdRoutingTable.GetBestLocalAddress(DestinationIP: String): String;
@@ -918,6 +925,23 @@ begin
   finally
     ProposedRoute.Free;
   end;
+end;
+
+function TIdMockRoutingTable.Copy: TIdRoutingTable;
+var
+  I:  Integer;
+  RT: TIdMockRoutingTable;
+begin
+  RT := inherited Copy as TIdMockRoutingTable;
+
+  for I := 0 to Self.OsRoutes.Count - 1 do
+    RT.AddOsRoute(TIdRouteEntry(Self.OsRoutes[I]));
+
+  // We access the private variables of RT simply because it's expedient.
+  // Naughty, naughty.
+  RT.LocalAddresses.AddStrings(Self.LocalAddresses);
+
+  Result := RT;
 end;
 
 procedure TIdMockRoutingTable.GetBestLocalAddress(DestinationIP: String; Gateway: TIdSipLocation; DefaultPort: TPortNum);

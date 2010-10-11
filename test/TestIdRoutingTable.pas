@@ -114,6 +114,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAddMappedRouteAndCount;
+    procedure TestCopy; virtual;
     procedure TestHasRoute;
     procedure TestHasRouteThrough;
     procedure TestBestLocalAddressForOnlyLanIPToOwnLanIP;
@@ -144,6 +145,7 @@ type
   published
     procedure TestAddDefaultOsRoute;
     procedure TestAddOsRouteAndCount;
+    procedure TestCopy; override;
     procedure TestRemoveAllOsRoutes;
   end;
 
@@ -908,6 +910,18 @@ begin
   CheckEquals(2, Self.RT.RouteCount, 'Two mapped routes');
 end;
 
+procedure TestTIdRoutingTable.TestCopy;
+var
+  NewRT: TIdRoutingTable;
+begin
+  NewRT := Self.RT.Copy;
+  try
+    CheckEquals(NewRT.ClassName, Self.RT.ClassName, 'Copy returned an instance of a different class');
+  finally
+    NewRT.Free;
+  end;
+end;
+
 procedure TestTIdRoutingTable.TestHasRoute;
 begin
   Check(not Self.RT.HasRoute(Self.RouteA), 'Empty table');
@@ -1418,6 +1432,19 @@ begin
   CheckEquals(1, Self.RT.OsRouteCount, 'No LAN route added');
   Self.RT.AddOsRoute('0.0.0.0', '0.0.0.0', '10.0.0.1', 1, '1', '10.0.0.6');
   CheckEquals(2, Self.RT.OsRouteCount, 'No default route added');
+end;
+
+procedure TestTIdMockRoutingTable.TestCopy;
+var
+  NewRT: TIdMockRoutingTable;
+begin
+  inherited TestCopy;
+
+  NewRT := Self.RT.Copy as TIdMockRoutingTable;
+  try
+  finally
+    NewRT.Free;
+  end;
 end;
 
 procedure TestTIdMockRoutingTable.TestRemoveAllOsRoutes;
